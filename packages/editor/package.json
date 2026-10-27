@@ -8,6 +8,7 @@
     ".": "./src/index.tsx",
     "./catalog": "./src/components/ui/item-catalog/catalog-items.tsx",
     "./locales": "./src/i18n/locales.ts",
+    "./locales/pseudo": "./src/i18n/pseudo-locale.ts",
     "./procedural-items": "./src/components/procedural-items/inspector.tsx",
     "./distribution": "./src/components/tools/distribution/distribution-public.ts"
   },

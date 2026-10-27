@@ -1,12 +1,12 @@
 import { createHash } from 'node:crypto'
-import { readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createCompiledCatalog, getCatalogs } from '@lingui/cli/api'
 import { getConfig } from '@lingui/conf'
 import { compileMessageOrThrow } from '@lingui/message-utils/compileMessage'
 import { type PoFile, type PoItem, parsePo, stringifyPo } from 'pofile-ts'
-import ts from 'typescript'
+import { checkLiterals } from './i18n-literals'
 
 export type SourceMessage = {
   id: string
@@ -52,17 +52,8 @@ const GLOSSARY_PATH = join(ROOT, 'i18n/glossary.json')
 const LINGUI_BIN = join(ROOT, 'node_modules/.bin/lingui')
 const TARGET_LOCALES = ['zh-CN', 'fr', 'es', 'ja'] as const
 const ALL_LOCALES = ['en', ...TARGET_LOCALES] as const
-const CONVERTED_SURFACES = [
-  'packages/editor/src/components/viewer',
-  'packages/editor/src/components/ui/build-panel/build-panel.tsx',
-]
-const SOURCE_GLOBS = [
-  'packages/core/src/**/*.{ts,tsx}',
-  'packages/viewer/src/**/*.{ts,tsx}',
-  'packages/editor/src/**/*.{ts,tsx}',
-  'packages/nodes/src/**/*.{ts,tsx}',
-  'apps/editor/**/*.{ts,tsx}',
-]
+/** Generated from English for layout and coverage testing; never shipped as a language. */
+export const PSEUDO_LOCALE = 'en-XA'
 const SOURCE_HASH_PREFIX = 'Source-Hash: '
 const REVIEW_PREFIX = 'Review: '
 const ENGLISH_PREFIX = 'English: '
@@ -524,7 +515,7 @@ function compiledCatalog(locale: string, sources: SourceMessage[]) {
 function writeCompiledCatalogs(strict = false): void {
   const sources = readSourceMessages()
   if (strict) {
-    const errors = checkCatalogMessages(sources, readJson<Glossary>(GLOSSARY_PATH))
+    const errors = checkCatalogMessages(sources, readJson<Glossary>(GLOSSARY_PATH), {})
     if (errors.length > 0) throw new Error(errors.join('\n'))
   }
   const compiled = ALL_LOCALES.map((locale) => [locale, compiledCatalog(locale, sources)] as const)
@@ -535,6 +526,147 @@ function writeCompiledCatalogs(strict = false): void {
   for (const [locale, result] of compiled) {
     writeFileSync(compiledCatalogPath(locale), result.source)
   }
+  writePseudoCatalog(sources)
+}
+
+const PSEUDO_LETTERS: Record<string, string> = Object.fromEntries(
+  [...'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'].map((letter, index) => [
+    letter,
+    [...'áƀçðéƒĝĥîĵķļɱñöþǫŕšţûṽŵẋýžÅƁÇÐÉƑĜĤÎĴĶĻṀÑÖÞǪŔŠŢÛṼŴẊÝŽ'][index]!,
+  ]),
+)
+
+/**
+ * en-XA: every letter accented and the text padded by about 30 %, wrapped in
+ * brackets so clipping shows. ICU arguments, plural/select keys, `#`, quoted
+ * literals and rich-text tags are copied unchanged.
+ */
+export function pseudoLocalize(message: string): string {
+  let index = 0
+  let letters = 0
+
+  const text = (end: (character: string) => boolean, inPlural: boolean): string => {
+    let out = ''
+    while (index < message.length) {
+      const character = message[index]!
+      if (end(character)) return out
+      if (character === "'") {
+        const next = message[index + 1]
+        if (next === "'") {
+          out += "''"
+          index += 2
+          continue
+        }
+        if (next === '{' || next === '}' || next === '#' || next === '<') {
+          const close = message.indexOf("'", index + 1)
+          const stop = close === -1 ? message.length : close + 1
+          out += message.slice(index, stop)
+          index = stop
+          continue
+        }
+      }
+      if (character === '{') {
+        out += argument()
+        continue
+      }
+      if (character === '<') {
+        const close = message.indexOf('>', index)
+        const stop = close === -1 ? message.length : close + 1
+        out += message.slice(index, stop)
+        index = stop
+        continue
+      }
+      if (character === '#' && inPlural) {
+        out += character
+        index += 1
+        continue
+      }
+      const mapped = PSEUDO_LETTERS[character]
+      if (mapped) letters += 1
+      out += mapped ?? character
+      index += 1
+    }
+    return out
+  }
+
+  const argument = (): string => {
+    const start = index
+    index += 1
+    const header = message.slice(index).match(/^\s*([^,}\s]+)\s*(?:,\s*(\w+)\s*)?/)
+    const type = header?.[2]
+    if (!(type === 'plural' || type === 'select' || type === 'selectordinal')) {
+      let depth = 1
+      while (index < message.length && depth > 0) {
+        if (message[index] === '{') depth += 1
+        if (message[index] === '}') depth -= 1
+        index += 1
+      }
+      return message.slice(start, index)
+    }
+    index += header![0].length
+    let out = message.slice(start, index)
+    if (message[index] === ',') {
+      out += ','
+      index += 1
+    }
+    while (index < message.length && message[index] !== '}') {
+      const open = message.indexOf('{', index)
+      if (open === -1) break
+      out += message.slice(index, open + 1)
+      index = open + 1
+      out += text((character) => character === '}', type !== 'select')
+      out += '}'
+      index += 1
+      const spaces = message.slice(index).match(/^\s*/)?.[0] ?? ''
+      if (message[index + spaces.length] === '}') {
+        out += spaces
+        index += spaces.length
+      }
+    }
+    out += '}'
+    index += 1
+    return out
+  }
+
+  const body = text(() => false, false)
+  if (letters === 0) return body
+  return `[${body} ${'~'.repeat(Math.max(1, Math.ceil(letters * 0.3)))}]`
+}
+
+function pseudoCatalog(sources: SourceMessage[]) {
+  const english = messagesForCompilation('en', sources)
+  return createCompiledCatalog(
+    PSEUDO_LOCALE,
+    Object.fromEntries(
+      Object.entries(english).map(([id, message]) => [id, pseudoLocalize(message)]),
+    ),
+    { namespace: 'ts', outputPrefix: '/*eslint-disable*/', strict: true },
+  )
+}
+
+function writePseudoCatalog(sources: SourceMessage[]): void {
+  const compiled = pseudoCatalog(sources)
+  if (compiled.errors.length > 0) {
+    throw new Error(
+      compiled.errors
+        .map(({ id, error }) => `${PSEUDO_LOCALE}: "${id}": ${error.message}`)
+        .join('\n'),
+    )
+  }
+  mkdirSync(dirname(compiledCatalogPath(PSEUDO_LOCALE)), { recursive: true })
+  writeFileSync(compiledCatalogPath(PSEUDO_LOCALE), compiled.source)
+}
+
+function checkPseudoCatalog(sources: SourceMessage[]): string[] {
+  const path = compiledCatalogPath(PSEUDO_LOCALE)
+  const compiled = pseudoCatalog(sources)
+  const errors = compiled.errors.map(
+    ({ id, error }) => `${PSEUDO_LOCALE}: failed to compile "${id}": ${error.message}`,
+  )
+  if (!existsSync(path) || compiled.source !== readFileSync(path, 'utf8')) {
+    errors.push(`${relative(ROOT, path)} is not synchronized; run bun run i18n:compile`)
+  }
+  return errors
 }
 
 export function extractCatalogs(): void {
@@ -581,64 +713,33 @@ function applyTranslations(
   }
 }
 
-function sourceFiles(): string[] {
-  const files = new Set<string>()
-  for (const pattern of SOURCE_GLOBS) {
-    const glob = new Bun.Glob(pattern)
-    for (const path of glob.scanSync({ cwd: ROOT, absolute: true, onlyFiles: true })) {
-      if (
-        path.includes('/node_modules/') ||
-        /\.test\.[tj]sx?$/.test(path) ||
-        path.includes('/__fixtures__/')
-      ) {
-        continue
-      }
-      files.add(path)
-    }
-  }
-  return [...files].sort()
+export type CatalogCheckOptions = {
+  /**
+   * Release sign-off: every bundled entry must be human-reviewed. Ordinary CI
+   * accepts AI drafts that are `fuzzy` + `Review: required`; they are kept out
+   * of the compiled packs, so the UI shows English until a person approves.
+   */
+  requireReviewed?: boolean
 }
 
-function bypassedLiterals(): string[] {
-  const warnings: string[] = []
-  const paths = sourceFiles().filter((path) =>
-    CONVERTED_SURFACES.some((surface) => {
-      const absolute = join(ROOT, surface)
-      return path === absolute || path.startsWith(`${absolute}/`)
+export function pendingReview(sources: SourceMessage[]): Record<string, number> {
+  return Object.fromEntries(
+    TARGET_LOCALES.map((locale) => {
+      const entries = readTranslationState(parsePo(readFileSync(catalogPath(locale), 'utf8')))
+      const pending = sources.filter((source) => {
+        const entry = entries[source.id]
+        return entry && (entry.fuzzy || entry.review !== 'human')
+      }).length
+      return [locale, pending]
     }),
   )
-
-  for (const path of paths) {
-    const source = ts.createSourceFile(
-      path,
-      readFileSync(path, 'utf8'),
-      ts.ScriptTarget.Latest,
-      true,
-      ts.ScriptKind.TSX,
-    )
-    const warning = (node: ts.Node, text: string) => {
-      if (!/[A-Za-z]{2}/.test(text)) return
-      const line = source.getLineAndCharacterOfPosition(node.getStart()).line + 1
-      warnings.push(`${relative(ROOT, path)}:${line}: "${text.trim()}"`)
-    }
-    const visit = (node: ts.Node): void => {
-      if (ts.isJsxText(node)) warning(node, node.text)
-      if (
-        ts.isJsxAttribute(node) &&
-        ['aria-label', 'title', 'placeholder', 'label', 'alt'].includes(node.name.text) &&
-        node.initializer &&
-        ts.isStringLiteral(node.initializer)
-      ) {
-        warning(node, node.initializer.text)
-      }
-      ts.forEachChild(node, visit)
-    }
-    visit(source)
-  }
-  return warnings
 }
 
-function checkCatalogMessages(sources: SourceMessage[], glossary: Glossary): string[] {
+function checkCatalogMessages(
+  sources: SourceMessage[],
+  glossary: Glossary,
+  options: CatalogCheckOptions = { requireReviewed: true },
+): string[] {
   const errors: string[] = []
   const sourceById = new Map(sources.map((source) => [source.id, source]))
   for (const source of sources) {
@@ -657,8 +758,13 @@ function checkCatalogMessages(sources: SourceMessage[], glossary: Glossary): str
       if (entry.sourceHash !== hashSource(source.message)) {
         errors.push(`${locale}: stale "${source.id}"`)
       }
-      if (entry.fuzzy || entry.review !== 'human') {
+      const awaitingReview = entry.fuzzy || entry.review !== 'human'
+      if (awaitingReview && options.requireReviewed) {
         errors.push(`${locale}: "${source.id}" still requires human review`)
+      } else if (awaitingReview && !(entry.fuzzy && entry.review === 'required')) {
+        errors.push(
+          `${locale}: "${source.id}" is unreviewed but not marked fuzzy + Review: required`,
+        )
       }
       for (const error of validateTranslation(
         source.message,
@@ -714,15 +820,16 @@ function checkCompiledCatalogs(sources: SourceMessage[]): string[] {
   })
 }
 
-export async function checkCatalogs(): Promise<string[]> {
+export async function checkCatalogs(options: CatalogCheckOptions = {}): Promise<string[]> {
   const sources = await extractSourceMessages()
   const catalogSources = readSourceMessages()
   const glossary = readJson<Glossary>(GLOSSARY_PATH)
   return [
     ...checkLinguiCatalogSync(),
     ...checkEnglishCatalog(sources, catalogSources),
-    ...checkCatalogMessages(sources, glossary),
+    ...checkCatalogMessages(sources, glossary, options),
     ...checkCompiledCatalogs(catalogSources),
+    ...checkPseudoCatalog(catalogSources),
   ]
 }
 
@@ -741,15 +848,28 @@ async function main(): Promise<void> {
   }
 
   if (command === 'check') {
-    const errors = await checkCatalogs()
-    for (const literal of bypassedLiterals()) {
-      console.warn(`[i18n warning] user-facing literal bypasses Lingui: ${literal}`)
-    }
+    const requireReviewed = process.argv.includes('--reviewed')
+    const errors = await checkCatalogs({ requireReviewed })
+    const literals = checkLiterals()
+    errors.push(...literals.errors.map((error) => `literal guard: ${error}`))
     if (errors.length > 0) {
       console.error(errors.map((error) => `[i18n] ${error}`).join('\n'))
       process.exitCode = 1
-    } else {
-      console.log(`Checked ${TARGET_LOCALES.length} complete bundled PO catalogs`)
+      return
+    }
+    const pending = Object.entries(pendingReview(readSourceMessages()))
+      .filter(([, count]) => count > 0)
+      .map(([locale, count]) => `${locale} ${count}`)
+    console.log(
+      `Checked ${TARGET_LOCALES.length} bundled PO catalogs and ${literals.total} legacy literal candidates` +
+        (pending.length > 0
+          ? `; awaiting human review (shown in English until approved): ${pending.join(', ')}`
+          : ''),
+    )
+    if (literals.improvable.length > 0) {
+      console.log(
+        `[i18n] ${literals.improvable.length} files are below their literal baseline; run bun run i18n:literals -- update`,
+      )
     }
     return
   }
@@ -781,7 +901,9 @@ async function main(): Promise<void> {
     return
   }
 
-  throw new Error('Usage: bun scripts/i18n.ts <extract|compile|check|translate> [locale...]')
+  throw new Error(
+    'Usage: bun scripts/i18n.ts <extract|compile|check [--reviewed]|translate> [locale...]',
+  )
 }
 
 if (import.meta.main) await main()

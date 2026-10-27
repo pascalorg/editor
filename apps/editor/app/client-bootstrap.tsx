@@ -11,9 +11,11 @@
 import '../lib/bootstrap'
 import { createI18n, defaultI18n, PascalI18nProvider } from '@pascal-app/core'
 import { registerBundledLocales } from '@pascal-app/editor/locales'
+import { registerPseudoLocale } from '@pascal-app/editor/locales/pseudo'
 import { type ReactNode, useEffect, useMemo } from 'react'
 
 registerBundledLocales()
+if (process.env.NODE_ENV !== 'production') registerPseudoLocale()
 
 export function ClientBootstrap({
   children,
