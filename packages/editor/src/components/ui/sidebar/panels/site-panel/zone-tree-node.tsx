@@ -8,13 +8,12 @@ import {
   useZoneSelected,
 } from './../../../../../lib/room-zone-routing'
 import { toggleZoneMembership } from './../../../../../lib/units'
-import { InlineRenameInput } from './inline-rename-input'
+import { RoomRenameInput } from './inline-rename-input'
 import { focusTreeNode, TreeNodeWrapper } from './tree-node'
 import { TreeNodeActions } from './tree-node-actions'
 import { ZoneMembershipCheckbox } from './zone-membership-checkbox'
 import { zoneDefaultName } from './default-names'
 import { nodeLabelDescriptor } from '../../../../../i18n/node-messages'
-import { displayRoomName } from '../../../../../lib/room-name-messages'
 
 interface ZoneTreeNodeProps {
   nodeId: ZoneNode['id']
@@ -31,7 +30,6 @@ export const ZoneTreeNode = memo(function ZoneTreeNode({
   const [isEditing, setIsEditing] = useState(false)
   const updateNode = useScene((state) => state.updateNode)
   const isVisible = useScene((s) => s.nodes[nodeId]?.visible !== false)
-  const storedName = useScene((s) => s.nodes[nodeId]?.name)
   const color = useScene((s) => (s.nodes[nodeId] as ZoneNode | undefined)?.color)
   const polygon = useScene((s) => (s.nodes[nodeId] as ZoneNode | undefined)?.polygon ?? [])
   const isSelected = useZoneSelected(nodeId)
@@ -85,9 +83,8 @@ export const ZoneTreeNode = memo(function ZoneTreeNode({
               unitName={focusedUnit.name || i18n._(nodeLabelDescriptor('unit', 'Unit'))}
             />
           )}
-          <InlineRenameInput
+          <RoomRenameInput
             defaultName={defaultName}
-            displayName={storedName ? displayRoomName(storedName, i18n) : undefined}
             isEditing={isEditing}
             nodeId={nodeId}
             onStartEditing={handleStartEditing}

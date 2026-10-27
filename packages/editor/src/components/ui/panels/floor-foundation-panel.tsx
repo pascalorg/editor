@@ -311,16 +311,16 @@ type Notice = {
 }
 
 export function moveTogetherLabel(count: number, lower: boolean, i18n: PascalI18n) {
-  const values = { count }
+  const values = { count, number: String(count) }
   return lower
     ? i18n._({
         id: 'editor.panels.floorFoundationPanel.lowerTogether',
-        message: '{count, plural, =2 {Lower both} other {Lower all #}}',
+        message: '{count, plural, =2 {Lower both} other {Lower all {number}}}',
         values,
       })
     : i18n._({
         id: 'editor.panels.floorFoundationPanel.raiseTogether',
-        message: '{count, plural, =2 {Raise both} other {Raise all #}}',
+        message: '{count, plural, =2 {Raise both} other {Raise all {number}}}',
         values,
       })
 }

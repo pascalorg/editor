@@ -815,8 +815,8 @@ function SystemSummaryPill({
             {formatMeasurement(summary.runLengthM, unit, metricNotation)} ·{' '}
             {i18n._({
               id: 'editor.floatingActionMenu.runCount',
-              message: '{count, plural, one {# run} other {# runs}}',
-              values: { count: summary.runCount },
+              message: '{count, plural, one {{number} run} other {{number} runs}}',
+              values: { count: summary.runCount, number: String(summary.runCount) },
             })}
           </span>
         </>

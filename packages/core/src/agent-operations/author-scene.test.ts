@@ -329,6 +329,48 @@ describe('author_scene', () => {
     ).toThrow()
   })
 
+  test('a conversion is kept in pieces live collaboration takes: plain JSON, none past 64 KB', () => {
+    // Four storeys of the bedroom, every source id its own.
+    const storeys = structuredClone(bedroom)
+    storeys.levels = [0, 1, 2, 3].map((index) => {
+      const level = structuredClone(bedroom.levels[0]!)
+      level.name = `Storey ${index + 1}`
+      level.elevation = index * 3
+      const suffix = (id: string) => `${id}-${index}`
+      for (const wall of level.walls ?? []) wall.id = suffix(wall.id)
+      for (const item of level.items ?? []) item.id = suffix(item.id)
+      return level
+    })
+    const compiled = Object.fromEntries(
+      storeys.levels.flatMap((level) => (level.items ?? []).map((item) => [item.id, bed])),
+    )
+    const outcome = authorScene(scaffold(), { payload: storeys, compiled }, { activeLevelId: null })
+    const values = [
+      ...(outcome.changes!.create ?? []).map((entry) => entry.node),
+      ...(outcome.changes!.update ?? []).map((entry) => entry.data),
+    ]
+    for (const value of values) {
+      expect(JSON.parse(JSON.stringify(value))).toEqual(value)
+      expect(JSON.stringify(value).length).toBeLessThan(62 * 1024)
+    }
+    const building = outcome.changes!.update!.find((entry) => entry.id === 'building_1')!
+    expect(building.data.metadata?.authorSceneState).toEqual({
+      version: 2,
+      buildingId: 'building_1',
+      seed: outcome.candidate.seed,
+    })
+    // Each storey lists what it holds, and each node carries the baseline it was written as.
+    const after = applySceneChanges(scaffold(), outcome.changes)
+    const levels = Object.values(after).filter((node) => node.type === 'level')
+    expect(levels).toHaveLength(4)
+    const listed = levels.flatMap(
+      (level) =>
+        (level.metadata as { authorSceneWritten: { ids: string[] } }).authorSceneWritten.ids,
+    )
+    expect(new Set(listed)).toEqual(new Set(Object.keys(outcome.candidate.nodes)))
+    for (const id of listed) expect(after[id]?.metadata?.authorSceneBase).toBeDefined()
+  })
+
   describe('a revision after Pascal rebuilt what it derives', () => {
     const floor = (script: string, artifact: string): CompiledGeometryScript => ({
       ...bed,

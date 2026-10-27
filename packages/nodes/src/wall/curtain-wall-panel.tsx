@@ -228,14 +228,15 @@ function GridSection({
           return vertical
             ? i18n._({
                 id: 'node.wall.curtain.rowSpacing',
-                message: '{count, plural, one {# row} other {# rows}} · {spacing} grid spacing',
-                values: { count: spans.length, spacing },
+                message:
+                  '{count, plural, one {{number} row} other {{number} rows}} · {spacing} grid spacing',
+                values: { count: spans.length, number: String(spans.length), spacing },
               })
             : i18n._({
                 id: 'node.wall.curtain.columnSpacing',
                 message:
-                  '{count, plural, one {# column} other {# columns}} · {spacing} grid spacing',
-                values: { count: spans.length, spacing },
+                  '{count, plural, one {{number} column} other {{number} columns}} · {spacing} grid spacing',
+                values: { count: spans.length, number: String(spans.length), spacing },
               })
         })()}
       </p>

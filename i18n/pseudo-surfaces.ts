@@ -90,6 +90,16 @@ async function openLayer(
   english: string | RegExp,
   options: { exact?: boolean } = {},
 ) {
+  await expandLayers(page)
+  const name =
+    typeof english !== 'string' || options.exact === false ? english : englishOrPseudo(english)
+  await page.getByText(name, { exact: true }).first().click()
+  await page.waitForTimeout(1200)
+  await expandInspector(page)
+}
+
+/** Opens the Scene panel and expands every row. */
+async function expandLayers(page: Page) {
   await openScenePanel(page)
   // Expand every row: the tree's chevrons are the small square buttons beside each name.
   for (let pass = 0; pass < 3; pass++) {
@@ -102,11 +112,6 @@ async function openLayer(
     }
     await page.waitForTimeout(700)
   }
-  const name =
-    typeof english !== 'string' || options.exact === false ? english : englishOrPseudo(english)
-  await page.getByText(name, { exact: true }).first().click()
-  await page.waitForTimeout(1200)
-  await expandInspector(page)
 }
 
 /** The inspector opens collapsed to its header on small viewports. */
@@ -347,6 +352,24 @@ export const surfaces: PseudoSurface[] = [
     name: 'layers-panel',
     path: apartmentPath,
     steps: openScenePanel,
+    scope: '[data-surface="site-panel"]',
+    data: apartmentData,
+  },
+  {
+    name: 'layer-room-rename',
+    path: apartmentPath,
+    steps: async (page) => {
+      await expandLayers(page)
+      // The template's "Bedroom 1" shows, and edits, as the catalog name in the UI language.
+      const row = page.getByText(`${pseudo('Bedroom')} 1`, { exact: true }).first()
+      await row.hover()
+      await row
+        .locator('xpath=..')
+        .getByRole('button', { name: pseudo('Rename'), exact: true })
+        .click()
+      await page.locator('[data-surface="site-panel"] input[type="text"]').first().waitFor()
+      await page.waitForTimeout(500)
+    },
     scope: '[data-surface="site-panel"]',
     data: apartmentData,
   },
