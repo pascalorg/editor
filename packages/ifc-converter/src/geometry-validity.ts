@@ -182,8 +182,10 @@ function recomputeNonFiniteNormals(
     const x = sums[slot * 3]!
     const y = sums[slot * 3 + 1]!
     const z = sums[slot * 3 + 2]!
+    // Coordinates past ~1e154 overflow the summed cross products: Infinity, not a direction.
     const length = Math.hypot(x, y, z)
-    const normal = length > 0 ? [x / length, y / length, z / length] : FALLBACK_NORMAL
+    const normal =
+      length > 0 && Number.isFinite(length) ? [x / length, y / length, z / length] : FALLBACK_NORMAL
     for (let axis = 0; axis < 3; axis++)
       normals[vertex * 3 + axis] = Math.round(normal[axis]! * 1000) / 1000 || 0
   }
