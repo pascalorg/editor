@@ -43,7 +43,7 @@ and note your edits; no separate permission is needed.
 
 ## Run the Editor Locally
 
-Node.js 22.13 or newer can create a persistent local Pascal installation without
+Node.js 22.23.4+ on 22.x, 24.22.1+ on 24.x, or 26.12.1+ can create a persistent local Pascal installation without
 cloning this repository:
 
 ```bash
@@ -126,6 +126,8 @@ The skills inspect the connected MCP tool schemas before using optional fields. 
 These workflows require a connected Pascal MCP server for their tool-backed actions. An OpenAI directory submission must therefore use **With MCP** and submit the production hosted MCP endpoint together with the skills. The repository package does not prove that the endpoint, OAuth flow, reviewer credentials, domain verification, or portal scan is ready for review.
 
 ### MCP Registry
+
+[![smithery badge](https://smithery.ai/badge/pascalapp/editor)](https://smithery.ai/servers/pascalapp/editor)
 
 [`server.json`](server.json) is Pascal's manifest for the official MCP Registry, named
 `app.pascal/editor`. It lists the `@pascal-app/mcp` npm package and the hosted Streamable HTTP

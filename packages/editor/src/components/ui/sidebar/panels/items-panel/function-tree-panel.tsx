@@ -1,6 +1,6 @@
 'use client'
 
-import type { AssetInput } from '@pascal-app/core'
+import { type AssetInput, type MessageDescriptor, usePascalI18n } from '@pascal-app/core'
 import { Root as TooltipRoot } from '@radix-ui/react-tooltip'
 import NextImage from 'next/image'
 import { useMemo, useState } from 'react'
@@ -21,10 +21,10 @@ export type FunctionTreeNode = {
   children: FunctionTreeNode[]
 }
 
-const SOURCE_CHIPS: Array<{ id: NonNullable<AssetInput['source']>; label: string }> = [
-  { id: 'library', label: 'Library' },
-  { id: 'community', label: 'Community' },
-  { id: 'mine', label: 'Mine' },
+const SOURCE_CHIPS: Array<{ id: NonNullable<AssetInput['source']>; label: MessageDescriptor }> = [
+  { id: 'library', label: /* i18n */ { id: 'editor.sidebar.panels.itemsPanel.functionTreePanel.library', message: 'Library' } },
+  { id: 'community', label: /* i18n */ { id: 'editor.sidebar.panels.itemsPanel.functionTreePanel.community', message: 'Community' } },
+  { id: 'mine', label: /* i18n */ { id: 'editor.sidebar.panels.itemsPanel.functionTreePanel.mine', message: 'Mine' } },
 ]
 
 /** Every slug at or below `node`, so a non-leaf selection matches descendants. */
@@ -64,6 +64,7 @@ export function FunctionTreePanel({
   leadingTile?: React.ReactNode
   emptyState?: React.ReactNode
 }) {
+  const i18n = usePascalI18n()
   const [activeRootSlug, setActiveRootSlug] = useState<string | null>(
     functionTree[0]?.slug ?? null,
   )
@@ -178,7 +179,7 @@ export function FunctionTreePanel({
               setSearch(e.target.value)
               onSearchChange?.(e.target.value)
             }}
-            placeholder="Search..."
+            placeholder={i18n._({ id: 'editor.sidebar.panels.itemsPanel.functionTreePanel.search', message: 'Search...' })}
             type="text"
             value={search}
           />
@@ -197,7 +198,7 @@ export function FunctionTreePanel({
                   onClick={() => setActiveSource(isActive ? null : chip.id)}
                   type="button"
                 >
-                  {chip.label}
+                  {i18n._(chip.label)}
                 </button>
               )
             })}
@@ -217,7 +218,7 @@ export function FunctionTreePanel({
               onClick={() => setActiveChildSlug(null)}
               type="button"
             >
-              All
+              {i18n._({ id: 'editor.sidebar.panels.itemsPanel.functionTreePanel.all', message: 'All' })}
             </button>
             {activeRoot.children.map((child) => {
               const isActive = activeChildSlug === child.slug
@@ -250,8 +251,7 @@ export function FunctionTreePanel({
         ) : isServerSearch && search && searchResults?.length === 0 ? (
           (emptyState ?? (
             <div className="flex h-full items-center justify-center text-muted-foreground text-xs">
-              No results for &ldquo;{search}&rdquo;
-            </div>
+              {i18n._({ id: 'editor.sidebar.panels.itemsPanel.functionTreePanel.noResultsForSearch', message: 'No results for “{search}”', values: { search } })}</div>
           ))
         ) : (
           <ItemCatalog

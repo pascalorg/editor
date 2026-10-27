@@ -4,6 +4,7 @@ import {
   type AnyNodeId,
   isFenceFeatureNode,
   RoofType as RoofTypeSchema,
+  usePascalI18n,
   useRegistryVersion,
   useScene,
 } from '@pascal-app/core'
@@ -33,6 +34,7 @@ import {
 } from './build-tab-state'
 
 export function useBuildToolOptions(): PanelToolOption[] {
+  const i18n = usePascalI18n()
   const mode = useEditor((state) => state.mode)
   const tool = useEditor((state) => state.tool)
   const defaults = useEditor((state) => state.toolDefaults.roof)
@@ -43,11 +45,11 @@ export function useBuildToolOptions(): PanelToolOption[] {
     return [
       {
         id: 'liquid-line-follow',
-        label: 'Follow lineset',
+        label: i18n._({ id: 'app.lib.buildPanelModel.followLineset', message: 'Follow lineset' }),
         value: follow ? 'on' : 'off',
         choices: [
-          { value: 'on', label: 'On' },
-          { value: 'off', label: 'Off' },
+          { value: 'on', label: i18n._({ id: 'app.lib.buildPanelModel.on', message: 'On' }) },
+          { value: 'off', label: i18n._({ id: 'app.lib.buildPanelModel.off', message: 'Off' }) },
         ],
         set: (value) => {
           if ((value === 'on') !== useLiquidLineToolOptions.getState().follow) toggleFollow()
@@ -61,14 +63,21 @@ export function useBuildToolOptions(): PanelToolOption[] {
   return [
     {
       id: 'roof-footprint-source',
-      label: 'Create from',
+      label: i18n._({ id: 'app.lib.buildPanelModel.createFrom', message: 'Create from' }),
       value: getRoofFootprintSource(roofType, defaults?.footprintSource),
       choices: getRoofFootprintSources(roofType).map((source) => ({
-        ...source,
+        value: source.value,
+        label: i18n._(source.label),
         description:
           source.value === 'room'
-            ? 'Hover a room to preview its boundary, then click to place.'
-            : 'Draw the roof footprint with two corner clicks.',
+            ? i18n._({
+                id: 'app.lib.buildPanelModel.hoverARoomToPreviewIts',
+                message: 'Hover a room to preview its boundary, then click to place.',
+              })
+            : i18n._({
+                id: 'app.lib.buildPanelModel.drawTheRoofFootprintWithTwo',
+                message: 'Draw the roof footprint with two corner clicks.',
+              }),
       })),
       set: (value) => activateRoofFootprintSource(getRoofFootprintSource(roofType, value)),
     },
@@ -76,6 +85,7 @@ export function useBuildToolOptions(): PanelToolOption[] {
 }
 
 export function useBuildPanelModel(): XRWandBuildModel {
+  const i18n = usePascalI18n()
   const mode = useEditor((state) => state.mode)
   const tool = useEditor((state) => state.tool)
   const selectedId = useViewer((state) => state.selection.selectedIds[0])
@@ -102,7 +112,7 @@ export function useBuildPanelModel(): XRWandBuildModel {
   const buildItems = collectBuildTypes(floorplanMode).map(
     (type): XRWandBuildItem => ({
       id: type.id,
-      label: type.label,
+      label: i18n._(type.label),
       icon: { src: type.iconSrc },
       active: type.mode
         ? mode === type.mode
@@ -129,7 +139,7 @@ export function useBuildPanelModel(): XRWandBuildModel {
     ...buildItems,
     {
       id: 'painting',
-      label: 'Painting',
+      label: i18n._({ id: 'app.lib.buildPanelModel.painting', message: 'Painting' }),
       icon: { src: '/icons/paint.webp' },
       active: mode === 'material-paint',
       onSelect: activatePaintMode,
@@ -139,16 +149,19 @@ export function useBuildPanelModel(): XRWandBuildModel {
     ? [
         ...ROOF_TYPE_OPTIONS.map((type) => ({
           id: `roof-${type.value}`,
-          label: type.label,
-          section: 'Roof type',
+          label: i18n._(type.label),
+          section: i18n._({ id: 'app.lib.buildPanelModel.roofType', message: 'Roof type' }),
           active: tool === 'roof' && roofType === type.value,
           onSelect: () => activateRoofType(type.value),
         })),
         ...features.map((feature) => ({
           id: feature.id,
-          label: feature.label,
+          label: i18n._(feature.label),
           icon: { src: feature.iconSrc },
-          section: 'Features & extensions',
+          section: i18n._({
+            id: 'app.lib.buildPanelModel.featuresExtensions',
+            message: 'Features & extensions',
+          }),
           active: feature.kind === tool,
           onSelect: () => activateRoofFeatureTool(feature),
         })),
@@ -157,8 +170,17 @@ export function useBuildPanelModel(): XRWandBuildModel {
       ? [
           ...(['gate', 'opening'] as const).map((kind) => ({
             id: `fence-add-${kind}`,
-            label: kind === 'gate' ? 'Add Gate' : 'Add Open Passage',
-            section: 'Gates & openings',
+            label:
+              kind === 'gate'
+                ? i18n._({ id: 'app.lib.buildPanelModel.addGate', message: 'Add Gate' })
+                : i18n._({
+                    id: 'app.lib.buildPanelModel.addOpenPassage',
+                    message: 'Add Open Passage',
+                  }),
+            section: i18n._({
+              id: 'app.lib.buildPanelModel.gatesOpenings',
+              message: 'Gates & openings',
+            }),
             active: false,
             onSelect: () => {
               activateFenceFeaturePlacement(kind)
@@ -169,9 +191,9 @@ export function useBuildPanelModel(): XRWandBuildModel {
         ? [
             ...MEP_ITEMS.map((item) => ({
               id: item.id,
-              label: item.label,
+              label: i18n._(item.label),
               icon: { src: item.iconSrc },
-              section: 'MEP',
+              section: i18n._({ id: 'app.lib.buildPanelModel.mep', message: 'MEP' }),
               active:
                 item.kind === 'duct-segment'
                   ? duct
@@ -184,8 +206,11 @@ export function useBuildPanelModel(): XRWandBuildModel {
               ? [
                   {
                     id: 'duct-fitting',
-                    label: 'Add Fitting',
-                    section: 'Duct',
+                    label: i18n._({
+                      id: 'app.lib.buildPanelModel.addFitting',
+                      message: 'Add Fitting',
+                    }),
+                    section: i18n._({ id: 'app.lib.buildPanelModel.duct', message: 'Duct' }),
                     icon: { src: '/icons/duct-fitting.webp' },
                     active: tool === 'duct-fitting',
                     onSelect: () =>
@@ -197,8 +222,11 @@ export function useBuildPanelModel(): XRWandBuildModel {
               ? [
                   {
                     id: 'pipe-fitting',
-                    label: 'Add Fitting',
-                    section: 'DWV Pipe',
+                    label: i18n._({
+                      id: 'app.lib.buildPanelModel.addFitting',
+                      message: 'Add Fitting',
+                    }),
+                    section: i18n._({ id: 'app.lib.buildPanelModel.dwvPipe', message: 'DWV Pipe' }),
                     icon: { src: '/icons/duct-fitting.webp' },
                     active: tool === 'pipe-fitting',
                     onSelect: () =>
@@ -206,8 +234,8 @@ export function useBuildPanelModel(): XRWandBuildModel {
                   },
                   {
                     id: 'pipe-trap',
-                    label: 'Add Trap',
-                    section: 'DWV Pipe',
+                    label: i18n._({ id: 'app.lib.buildPanelModel.addTrap', message: 'Add Trap' }),
+                    section: i18n._({ id: 'app.lib.buildPanelModel.dwvPipe', message: 'DWV Pipe' }),
                     icon: { src: '/icons/dwv-pipes.webp' },
                     active: tool === 'pipe-trap',
                     onSelect: () =>
@@ -220,8 +248,11 @@ export function useBuildPanelModel(): XRWandBuildModel {
           ? [
               {
                 id: 'modular-cabinet',
-                label: 'Modular Cabinet',
-                section: 'Kitchen',
+                label: i18n._({
+                  id: 'app.lib.buildPanelModel.modularCabinet',
+                  message: 'Modular Cabinet',
+                }),
+                section: i18n._({ id: 'app.lib.buildPanelModel.kitchen', message: 'Kitchen' }),
                 icon: { src: MODULAR_CABINET_ICON },
                 active: true,
                 onSelect: activateModularCabinetTool,
@@ -240,10 +271,20 @@ export function useBuildPanelModel(): XRWandBuildModel {
   return {
     items,
     secondaryItems,
-    secondaryTitle: roofActive ? 'Roof' : fenceActive ? 'Fence' : mepActive ? 'MEP' : 'Kitchen',
+    secondaryTitle: roofActive
+      ? i18n._({ id: 'app.lib.buildPanelModel.roof', message: 'Roof' })
+      : fenceActive
+        ? i18n._({ id: 'app.lib.buildPanelModel.fence', message: 'Fence' })
+        : mepActive
+          ? i18n._({ id: 'app.lib.buildPanelModel.mep', message: 'MEP' })
+          : i18n._({ id: 'app.lib.buildPanelModel.kitchen', message: 'Kitchen' }),
     section,
-    title: 'Build',
-    mark: `${items.length} tools`,
+    title: i18n._({ id: 'app.lib.buildPanelModel.build', message: 'Build' }),
+    mark: i18n._({
+      id: 'app.lib.buildPanelModel.toolCount',
+      message: '{count, plural, one {# tool} other {# tools}}',
+      values: { count: items.length },
+    }),
     page: 0,
     pageCount: 1,
     detailMode: mode === 'material-paint' ? 'paint' : undefined,

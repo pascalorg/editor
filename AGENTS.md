@@ -29,7 +29,7 @@ Public, open-source home of `@pascal-app/{core,viewer,editor,nodes,mcp,cli,ifc-c
 
 ## Commands
 
-`bun run ci` is exactly what CI runs (check, skills:validate, check-types, test, build). The git hooks (installed by `bun install`) are fast feedback: Biome on staged files, typecheck of the packages you changed.
+`bun run ci` is exactly what CI runs (check, i18n:check, skills:validate, check-types, test, build). Localization catalog and language-pack guidance lives in `i18n/README.md`. The git hooks (installed by `bun install`) are fast feedback: Biome on staged files, typecheck of the packages you changed.
 
 ## Working agreements
 
@@ -37,3 +37,4 @@ Public, open-source home of `@pascal-app/{core,viewer,editor,nodes,mcp,cli,ifc-c
 - No compatibility shims, dead code or speculative abstractions; comments only for a non-obvious *why*.
 - Old scenes must still load after your change (E-003).
 - Never cite private-repo plan paths from this repo (E-015).
+- A bot may merge its own PR once required CI is green and a review from a different bot, on the current head, approves with no unresolved P0/P1 comments. Anything touching auth, payments, secrets, infra, moderation, user data or schema migrations needs the Security bot's review; otherwise a Codex, Cursor or relevant fleet bot review is enough. A human is still required for secrets or keys, billing or spend, new access, sign-ins or 2FA, permanently deleting production data, and anything sent externally under a person's name. CI stays required: never weaken or skip checks.

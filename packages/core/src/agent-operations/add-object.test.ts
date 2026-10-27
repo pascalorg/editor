@@ -4,7 +4,14 @@ import { addObjectTool } from '../agent-tools'
 import { type AgentRefusal, isAgentRefusal } from '../agent-tools/refusal'
 import { type AnyNode, DoorNode, LevelNode, WallNode } from '../schema'
 import { ADD_OBJECT_CASES, compiledUnmeasured } from './__fixtures__/add-object-cases'
-import { addColumn, addObject, addWallOpening, applySceneChanges, rescriptOpening } from './index'
+import {
+  addColumn,
+  addObject,
+  addWallOpening,
+  applySceneChanges,
+  planPiece,
+  rescriptOpening,
+} from './index'
 
 // Layer 1 of 3: the core operation, handed the case's compile in place of a surface's.
 describe('add_object', () => {
@@ -107,4 +114,33 @@ describe('a scripted door, window or column that cannot be measured', () => {
       expect(refusal.message).toContain('call add_column again')
     })
   }
+})
+
+describe('planPiece', () => {
+  const piece = { description: 'A walnut stool', size: { width: 0.4, height: 0.5, depth: 0.4 } }
+  test('places a piece where its call asks, or only makes it', () => {
+    const placed = planPiece({ piece, position: [1, 0, 2], reason: 'Counter seating' })
+    expect(placed).toMatchObject({ mount: 'floor', size: [0.4, 0.5, 0.4] })
+    expect(placed.id).toMatch(/^piece_/)
+    expect(placed.place).toMatchObject({ position: [1, 0, 2], reason: 'Counter seating' })
+    expect(
+      planPiece({ piece: { ...piece, id: 'stool' }, reason: 'Counter seating' }),
+    ).toMatchObject({
+      id: 'stool',
+      place: null,
+    })
+  })
+
+  test('refuses a piece beside code, on an edit, or without its reason', () => {
+    const code = (input: Parameters<typeof planPiece>[0]) => {
+      try {
+        planPiece(input)
+      } catch (error) {
+        return (error as { code?: string }).code
+      }
+    }
+    expect(code({ piece, code: 'export default 1', reason: 'r' })).toBe('piece_with_code')
+    expect(code({ piece, nodeId: 'item_a', reason: 'r' })).toBe('piece_on_edit')
+    expect(code({ piece })).toBe('reason_required')
+  })
 })

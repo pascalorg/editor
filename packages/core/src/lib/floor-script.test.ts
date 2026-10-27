@@ -3,6 +3,7 @@ import { applySceneChanges } from '../agent-operations/apply-changes'
 import { setRoomFloorScript } from '../agent-operations/room-floor-script'
 import { isAgentRefusal } from '../agent-tools'
 import { setZoneIntent } from '../commands/structure'
+import { applyToScratch, structureChangeBatch } from '../commands/structure/shared'
 import {
   type AnyNode,
   type CompiledGeometryScript,
@@ -19,7 +20,7 @@ import {
   staleFinishScripts,
 } from './finish-script'
 import { floorPlatePaintRefusal } from './floor-plate-paint'
-import { type FloorScriptInputs, floorScriptInputs } from './floor-script'
+import { type FloorScriptInputs, floorScriptInputs, floorScriptSurface } from './floor-script'
 import { computePlateSurfacePartition, plateLevelContext } from './plate-surface'
 import { area } from './polygon-boolean'
 import type { SceneNodes } from './structure-kernel'
@@ -79,8 +80,8 @@ function fakeHost() {
         params: { plank: 0.18 },
         manifest: GeometryArtifactManifest.parse({
           bounds: {
-            min: [Math.min(...xs), inputs.elevation, Math.min(...zs)],
-            max: [Math.max(...xs), inputs.elevation + 0.01, Math.max(...zs)],
+            min: [Math.min(...xs), 0, Math.min(...zs)],
+            max: [Math.max(...xs), 0.01, Math.max(...zs)],
           },
           slots: [{ id: 'oak' }],
           triangles: 12,
@@ -130,12 +131,27 @@ function pushNorth(nodes: SceneNodes): SceneNodes {
 }
 
 describe("a room's floor script", () => {
-  test('is built for the floor inside the wall faces, at the plate top', () => {
+  test('is built for the floor inside the wall faces, its y = 0 standing on the plate top', () => {
     const nodes = room()
-    const inputs = floorScriptInputs(nodes, zoneOf(nodes).id)!
+    const zone = zoneOf(nodes)
+    const inputs = floorScriptInputs(nodes, zone.id)!
+    expect(Object.keys(inputs).sort()).toEqual(['holes', 'polygon'])
     expect(area([{ outer: inputs.polygon, holes: inputs.holes }])).toBeCloseTo(7.8 * 3.8, 3)
     const plate = Object.values(nodes).find((node): node is SlabNode => node.type === 'slab')!
-    expect(inputs.elevation).toBeCloseTo(plate.elevation ?? 0, 6)
+    expect(floorScriptSurface(nodes, zone.id)).toBeCloseTo(plate.elevation ?? 0, 6)
+  })
+
+  test('a raised floor moves the build up with its plate, without running the module again', async () => {
+    const { host, builds } = fakeHost()
+    const nodes: SceneNodes = await scripted(host)
+    const zone = zoneOf(nodes)
+    const plan = setZoneIntent(nodes, { zoneId: zone.id, patch: { floor: { elevation: 0.4 } } })
+    expect(plan.conflicts ?? []).toEqual([])
+    const raised = reconcile(applyToScratch(nodes, structureChangeBatch(plan.changes)), nodes)
+    expect(floorScriptSurface(raised, zone.id)).toBeCloseTo(0.4, 6)
+    expect(floorScriptInputs(raised, zone.id)).toEqual(floorScriptInputs(nodes, zone.id))
+    expect(staleFinishScripts(raised)).toEqual([])
+    expect(builds).toHaveLength(1)
   })
 
   test('compiles once, and again only after the reconcile re-derives its room', async () => {
@@ -197,6 +213,7 @@ describe("a room's floor script", () => {
     const compiled = await host.build({ nodeId: zone.id, code: '', params: {}, inputs })
     const off = reconcile({ ...nodes, [zone.id]: { ...zone, hasFloor: false } }, nodes)
     expect(floorScriptInputs(off, zone.id)).toBeNull()
+    expect(floorScriptSurface(off, zone.id)).toBeNull()
     expect(
       refusal(() =>
         setRoomFloorScript(off, { zoneId: zone.id, compiled, inputs }, { activeLevelId: LEVEL }),

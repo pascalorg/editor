@@ -1,6 +1,6 @@
 'use client'
 
-import { useHasPointAskHandler } from '@pascal-app/core'
+import { useHasPointAskHandler, usePascalI18n } from '@pascal-app/core'
 import { canPoint, enterPointMode, leavePointMode } from '../../../lib/point-ask/session'
 import { cn } from '../../../lib/utils'
 import useEditor from '../../../store/use-editor'
@@ -14,6 +14,7 @@ import { ActionButton } from './action-button'
  * the 2D plan and the walkthrough it is disabled and says so (v1 works in the 3D view).
  */
 export function PointAskButton() {
+  const i18n = usePascalI18n()
   const available = useHasPointAskHandler()
   const active = usePointAsk((s) => s.active)
   const sceneVisible = useEditor((s) => isViewVisible(s, VIEW_3D))
@@ -31,7 +32,7 @@ export function PointAskButton() {
       data-guide-target="mode-point-ask"
       disabled={unavailable}
       isActive={active}
-      label="Point and ask"
+      label={i18n._({ id: 'editor.actionMenu.pointAskButton.pointAndAsk', message: 'Point and ask' })}
       onClick={() => {
         if (active) leavePointMode()
         else if (canPoint()) enterPointMode(true)
@@ -39,7 +40,7 @@ export function PointAskButton() {
       shortcut="C"
       size="icon"
       tooltipContent={
-        unavailable ? <p>Point and ask works in the 3D view</p> : <p>Point and ask (C)</p>
+        unavailable ? <p>{i18n._({ id: 'editor.actionMenu.pointAskButton.pointAndAskWorksInThe', message: 'Point and ask works in the 3D view' })}</p> : <p>{i18n._({ id: 'editor.actionMenu.pointAskButton.pointAndAskC', message: 'Point and ask (C)' })}</p>
       }
       variant="ghost"
     >

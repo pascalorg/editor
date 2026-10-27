@@ -683,6 +683,52 @@ describe('temporal writes update slab support dependencies', () => {
     }
   })
 
+  test("a room's floor script laid, rebuilt or removed re-elevates what stands in the room", () => {
+    const level = LevelNode.parse({ id: 'level_finish' })
+    const zone = {
+      id: 'zone_finish',
+      type: 'zone',
+      object: 'node',
+      parentId: level.id,
+      visible: true,
+      metadata: {},
+      name: 'Living room',
+      polygon: SQUARE,
+      holes: [],
+    } as unknown as AnyNode & { floor?: unknown }
+    const rug = ItemNode.parse({
+      parentId: level.id,
+      position: [2, 0, 2],
+      asset: {
+        id: 'rug',
+        name: 'Rug',
+        category: 'rug',
+        thumbnail: '',
+        src: '/rug.glb',
+        dimensions: [0.2, 1, 0.2],
+      },
+    })
+    const elsewhere = { ...rug, id: 'item_elsewhere', position: [20, 0, 20] } as AnyNode
+    useScene.setState({
+      nodes: nodesFor(level, zone, rug, elsewhere),
+      dirtyNodes: new Set(),
+      readOnly: false,
+    })
+    stop = initSpatialGridSync()
+    const script = (height: number) => ({
+      manifest: { bounds: { min: [0, 0, 0], max: [4, height, 4] } },
+    })
+    for (const floor of [{ script: script(0.018) }, { script: script(0.012) }, {}]) {
+      useScene.getState().dirtyNodes.clear()
+      const current = useScene.getState().nodes[zone.id]!
+      useScene.setState({
+        nodes: { ...useScene.getState().nodes, [zone.id]: { ...current, floor } as AnyNode },
+      })
+      expect(useScene.getState().dirtyNodes.has(rug.id)).toBe(true)
+      expect(useScene.getState().dirtyNodes.has(elsewhere.id)).toBe(false)
+    }
+  })
+
   test('slab reparent and undo mark covering dependents below both parent levels', async () => {
     const levels = [0, 1, 2, 3].map((ordinal) =>
       makeLevel(`level_${ordinal}`, ordinal, 2.5, [

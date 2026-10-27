@@ -6,6 +6,7 @@ import {
   closestMeasurementFeatureBinding,
   collectAlignmentAnchors,
   emitter,
+  formatNumber,
   type GeometryContext,
   type MeasurementFeatureAnchor,
   type MeasurementSnapKind,
@@ -16,6 +17,7 @@ import {
   measurementPerimeter,
   measurementPrismVolume,
   nodeRegistry,
+  useLocale,
   useScene,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
@@ -27,9 +29,9 @@ import {
   formatLinearMeasurement,
   formatVolumeLabel,
   getLinearUnitLabel,
-  linearUnitToMeters,
   MEASUREMENT_ACTIVE_COLOR,
   metersToLinearUnit,
+  parseLinearMeasurementInput,
 } from '../../lib/measurements'
 import {
   clearSurfacePlanSnapFeedback,
@@ -77,6 +79,10 @@ export type ProjectedFloorplanSnap = {
 const MAX_REGISTERED_SNAP_ELEMENTS = 512
 const MAX_REGISTERED_SNAP_SEGMENTS = 4096
 const MAX_SAMPLED_PATH_SEGMENTS = 48
+
+export function formatMeasurementInputValue(value: number, locale: string): string {
+  return formatNumber(value, { locale, max: 3 })
+}
 const VERTEX_SNAP_DISTANCE_PX = 16
 const EDGE_SNAP_DISTANCE_PX = 10
 const SEMANTIC_FEATURE_SNAP_DISTANCE = 0.2
@@ -636,17 +642,22 @@ function FloorplanExtrusionControl({
   unitsPerPixel: number
 }) {
   const unit = useViewer((state) => state.unit)
+  const locale = useLocale()
   const extrusionHeight = useMeasurementDraft((state) => state.extrusionHeight)
   const points = useMeasurementDraft((state) => state.points)
   const baseNormal = useMeasurementDraft((state) => state.baseNormal)
   const [value, setValue] = useState(() =>
-    extrusionHeight === 0 ? '' : String(metersToLinearUnit(extrusionHeight, unit)),
+    extrusionHeight === 0
+      ? ''
+      : formatMeasurementInputValue(metersToLinearUnit(extrusionHeight, unit), locale),
   )
 
   useEffect(() => {
     const height = useMeasurementDraft.getState().extrusionHeight
-    setValue(height === 0 ? '' : String(Number(metersToLinearUnit(height, unit).toFixed(3))))
-  }, [unit])
+    setValue(
+      height === 0 ? '' : formatMeasurementInputValue(metersToLinearUnit(height, unit), locale),
+    )
+  }, [locale, unit])
 
   const width = 260 * unitsPerPixel
   const height = 72 * unitsPerPixel
@@ -654,12 +665,12 @@ function FloorplanExtrusionControl({
   const y = center[2] - height / 2
 
   const commit = () => {
-    const numericValue = Number.parseFloat(value)
-    if (!Number.isFinite(numericValue)) {
+    const meters = parseLinearMeasurementInput(value, unit, locale)
+    if (meters === null) {
       useMeasurementDraft.getState().setExtrusionHeight('2d', 0)
       return
     }
-    useMeasurementDraft.getState().setExtrusionHeight('2d', linearUnitToMeters(numericValue, unit))
+    useMeasurementDraft.getState().setExtrusionHeight('2d', meters)
     const draft = useMeasurementDraft.getState()
     if (draft.finishExtrusion('2d')) commitMeasurementDraft('2d')
   }
@@ -710,11 +721,9 @@ function FloorplanExtrusionControl({
               onChange={(event) => {
                 const next = event.target.value
                 setValue(next)
-                const numericValue = Number.parseFloat(next)
-                if (Number.isFinite(numericValue)) {
-                  useMeasurementDraft
-                    .getState()
-                    .setExtrusionHeight('2d', linearUnitToMeters(numericValue, unit))
+                const meters = parseLinearMeasurementInput(next, unit, locale)
+                if (meters !== null) {
+                  useMeasurementDraft.getState().setExtrusionHeight('2d', meters)
                 } else {
                   useMeasurementDraft.getState().setExtrusionHeight('2d', 0)
                 }
@@ -728,7 +737,7 @@ function FloorplanExtrusionControl({
               }}
               placeholder="0"
               step="0.1"
-              type="number"
+              type="text"
               value={value}
             />
             <span className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-muted-foreground text-xs">

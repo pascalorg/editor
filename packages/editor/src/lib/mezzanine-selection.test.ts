@@ -169,7 +169,9 @@ describe('mezzanine selection', () => {
     expect(gesture(hostId, ROOM_MOVE_DRAG_LABEL)).toBeNull()
     expect(gesture(mezzanineId, 'height')).toBeNull()
     expect(mezzanineGesture(null, nodes())).toBeNull()
-    expect(MEZZANINE_GESTURE_HINTS.move[0]!.label).toBe('Place inside the room')
+    expect(MEZZANINE_GESTURE_HINTS.move[0]!.label).toMatchObject({
+      message: 'Place inside the room',
+    })
   })
 
   test('the delete dialog speaks of the mezzanine, and of its items only when it has some', () => {

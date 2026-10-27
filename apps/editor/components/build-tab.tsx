@@ -4,6 +4,7 @@ import {
   type AnyNodeId,
   isFenceFeatureNode,
   RoofType as RoofTypeSchema,
+  usePascalI18n,
   useRegistryVersion,
   useScene,
 } from '@pascal-app/core'
@@ -59,6 +60,7 @@ const subscribeToClientMount = () => () => {}
  * with the kind's own `def.defaults()`. Painting has its own rail panel.
  */
 export function BuildTab() {
+  const i18n = usePascalI18n()
   const [mepOpen, setMepOpen] = useState(false)
   const [kitchenOpen, setKitchenOpen] = useState(false)
   const [buildSearch, setBuildSearch] = useState('')
@@ -181,13 +183,13 @@ export function BuildTab() {
       data-build-tool={type.id}
       iconSrc={type.iconSrc}
       key={type.id}
-      label={type.label}
+      label={i18n._(type.label)}
       onClick={() => {
         triggerSFX('sfx:menu-click')
         handleTypeClick(type)
       }}
       onMouseEnter={() => triggerSFX('sfx:menu-hover')}
-      title={type.label}
+      title={i18n._(type.label)}
     />
   )
   const typesIn = (section: NonNullable<BuildType['section']>) =>
@@ -195,14 +197,20 @@ export function BuildTab() {
   const advancedTypes = typesIn('advanced')
 
   return (
-    <div className="flex h-full flex-col gap-3 overflow-y-auto p-3">
+    <div className="flex h-full flex-col gap-3 overflow-y-auto p-3" data-surface="build-tab">
       <label className="sr-only" htmlFor="build-search">
-        Search build tools and kitchen items
+        {i18n._({
+          id: 'app.buildTab.searchBuildToolsAndKitchenItems',
+          message: 'Search build tools and kitchen items',
+        })}
       </label>
       <input
         id="build-search"
         type="search"
-        placeholder="Search tools, fridge, sink…"
+        placeholder={i18n._({
+          id: 'app.buildTab.searchToolsFridgeSink',
+          message: 'Search tools, fridge, sink…',
+        })}
         value={buildSearch}
         onChange={(event) => setBuildSearch(event.target.value)}
         className="h-9 w-full shrink-0 rounded-lg border border-border bg-background px-3 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -211,7 +219,13 @@ export function BuildTab() {
         <>
           <BuildToolGrid columns={4}>
             {buildTypes
-              .filter((type) => type.label.toLowerCase().includes(buildSearch.toLowerCase()))
+              .filter((type) => {
+                // The English name matches too, so shared or remembered terms work in any UI language.
+                const query = buildSearch.toLocaleLowerCase()
+                return [i18n._(type.label), type.label.message ?? ''].some((name) =>
+                  name.toLocaleLowerCase().includes(query),
+                )
+              })
               .map(renderTile)}
           </BuildToolGrid>
           <KitchenBrowser query={buildSearch} />
@@ -227,7 +241,7 @@ export function BuildTab() {
                 useEditor.getState().setMode('select')
               }}
             >
-              ← All build tools
+              {i18n._({ id: 'app.buildTab.allBuildTools', message: '← All build tools' })}
             </button>
           ) : (
             <div className="flex flex-col gap-3 [&>section+section]:border-border/60 [&>section+section]:border-t [&>section+section]:pt-3">
@@ -242,16 +256,29 @@ export function BuildTab() {
                     activateBuildTool('wall')
                 }}
               />
-              <BuildPanelSection id="add" title="Add to rooms">
+              <BuildPanelSection
+                id="add"
+                title={i18n._({ id: 'app.buildTab.addToRooms', message: 'Add to rooms' })}
+              >
                 <BuildToolGrid columns={4}>{typesIn('add').map(renderTile)}</BuildToolGrid>
               </BuildPanelSection>
-              <BuildPanelSection id="outdoor" title="Outdoor">
+              <BuildPanelSection
+                id="outdoor"
+                title={i18n._({ id: 'app.buildTab.outdoor', message: 'Outdoor' })}
+              >
                 <BuildToolGrid columns={4}>{typesIn('outdoor').map(renderTile)}</BuildToolGrid>
               </BuildPanelSection>
               <BuildPanelAdvancedSection
                 containsActiveTool={advancedTypes.some(isTypeActive)}
-                description="Rooms already create their floor and ceiling. Use these for platforms and one-off structure."
-                hint="Slab, ceiling, column…"
+                description={i18n._({
+                  id: 'app.buildTab.roomsAlreadyCreateTheirFloorAnd',
+                  message:
+                    'Rooms already create their floor and ceiling. Use these for platforms and one-off structure.',
+                })}
+                hint={i18n._({
+                  id: 'app.buildTab.slabCeilingColumn',
+                  message: 'Slab, ceiling, column…',
+                })}
               >
                 <BuildToolGrid columns={4}>{advancedTypes.map(renderTile)}</BuildToolGrid>
               </BuildPanelAdvancedSection>
@@ -266,7 +293,7 @@ export function BuildTab() {
             <div className="flex flex-col gap-3 border-border/60 border-t pt-3">
               <div className="flex flex-col gap-2">
                 <div className="px-0.5 pt-1 font-medium text-muted-foreground text-xs">
-                  Roof type
+                  {i18n._({ id: 'app.buildTab.roofType', message: 'Roof type' })}
                 </div>
                 <div className="grid grid-cols-2 gap-1.5">
                   {ROOF_TYPE_OPTIONS.map((roofType) => {
@@ -288,7 +315,7 @@ export function BuildTab() {
                         onMouseEnter={() => triggerSFX('sfx:menu-hover')}
                         type="button"
                       >
-                        {roofType.label}
+                        {i18n._(roofType.label)}
                       </button>
                     )
                   })}
@@ -306,14 +333,20 @@ export function BuildTab() {
               />
               {activeRoofType === 'conical' && (
                 <p className="border-border/50 border-t px-0.5 pt-3 text-[11px] text-muted-foreground leading-relaxed">
-                  Select a curved wall to match its radius and arc.
+                  {i18n._({
+                    id: 'app.buildTab.selectACurvedWallToMatch',
+                    message: 'Select a curved wall to match its radius and arc.',
+                  })}
                 </p>
               )}
 
               {roofFeatures.length > 0 ? (
                 <div className="flex flex-col gap-2 border-border/50 border-t pt-3">
                   <div className="px-0.5 font-medium text-muted-foreground text-xs">
-                    Features & extensions
+                    {i18n._({
+                      id: 'app.buildTab.featuresExtensions',
+                      message: 'Features & extensions',
+                    })}
                   </div>
                   <TooltipProvider delayDuration={0} disableHoverableContent>
                     <div
@@ -341,7 +374,7 @@ export function BuildTab() {
                                 type="button"
                               >
                                 <Image
-                                  alt={feature.label}
+                                  alt={i18n._(feature.label)}
                                   className="size-full object-contain transition-transform duration-200 group-hover:scale-110"
                                   height={48}
                                   src={feature.iconSrc}
@@ -350,7 +383,7 @@ export function BuildTab() {
                               </button>
                             </TooltipTrigger>
                             <TooltipContent className="pointer-events-none" side="top">
-                              {feature.label}
+                              {i18n._(feature.label)}
                             </TooltipContent>
                           </Tooltip>
                         )
@@ -362,28 +395,41 @@ export function BuildTab() {
             </div>
           ) : fenceContext ? (
             <div className="flex flex-col gap-3 border-border/50 border-t pt-3">
-              <div className="px-0.5 font-medium text-muted-foreground text-xs">Fence features</div>
+              <div className="px-0.5 font-medium text-muted-foreground text-xs">
+                {i18n._({ id: 'app.buildTab.fenceFeatures', message: 'Fence features' })}
+              </div>
               <BuildToolGrid columns={4}>
                 {(['gate', 'opening'] as const).map((kind) => (
                   <BuildToolTile
                     active={placingFenceFeature === kind}
                     iconSrc={kind === 'gate' ? '/icons/gate.webp' : '/icons/open-passage.webp'}
                     key={kind}
-                    label={kind === 'gate' ? 'Gate' : 'Opening'}
+                    label={
+                      kind === 'gate'
+                        ? i18n._({ id: 'app.buildTab.gate', message: 'Gate' })
+                        : i18n._({ id: 'app.buildTab.opening', message: 'Opening' })
+                    }
                     onClick={() => {
                       triggerSFX('sfx:menu-click')
                       activateFenceFeaturePlacement(kind)
                     }}
                     onMouseEnter={() => triggerSFX('sfx:menu-hover')}
-                    title={kind === 'gate' ? 'Add Gate' : 'Add Open Passage'}
+                    title={
+                      kind === 'gate'
+                        ? i18n._({ id: 'app.buildTab.addGate', message: 'Add Gate' })
+                        : i18n._({ id: 'app.buildTab.addOpenPassage', message: 'Add Open Passage' })
+                    }
                   />
                 ))}
               </BuildToolGrid>
               {selectedFenceFeature && (
                 <label className="flex items-center justify-between text-xs">
-                  Match fence style
+                  {i18n._({ id: 'app.buildTab.matchFenceStyle', message: 'Match fence style' })}
                   <input
-                    aria-label="Match fence style"
+                    aria-label={i18n._({
+                      id: 'app.buildTab.matchFenceStyle',
+                      message: 'Match fence style',
+                    })}
                     type="checkbox"
                     checked={selectedFenceFeature.matchFenceStyle !== false}
                     onChange={(event) =>
@@ -397,8 +443,11 @@ export function BuildTab() {
               {!!placingFenceFeature && (
                 <div className="space-y-2 text-xs">
                   <p>
-                    Hover a fence to preview. Click to place. Esc cancels. Leave room between
-                    openings.
+                    {i18n._({
+                      id: 'app.buildTab.hoverAFenceToPreviewClick',
+                      message:
+                        'Hover a fence to preview. Click to place. Esc cancels. Leave room between openings.',
+                    })}
                   </p>
                   {typeof fenceDefaults?.featurePlacementFeedback === 'string' && (
                     <p role="status" className="text-amber-400">
@@ -406,7 +455,7 @@ export function BuildTab() {
                     </p>
                   )}
                   <label className="flex items-center justify-between">
-                    Match fence style
+                    {i18n._({ id: 'app.buildTab.matchFenceStyle', message: 'Match fence style' })}
                     <input
                       type="checkbox"
                       checked={fenceDefaults?.featureMatchStyle !== false}
@@ -420,7 +469,7 @@ export function BuildTab() {
                   </label>
                   {fenceDefaults?.featureMatchStyle === false && placingFenceFeature === 'gate' && (
                     <label className="flex items-center justify-between">
-                      Gate style
+                      {i18n._({ id: 'app.buildTab.gateStyle', message: 'Gate style' })}
                       <select
                         className="rounded border bg-background p-1"
                         value={
@@ -435,16 +484,29 @@ export function BuildTab() {
                           })
                         }
                       >
-                        <option value="picket">Picket</option>
-                        <option value="slat">Vertical slats</option>
-                        <option value="horizontal">Horizontal boards</option>
-                        <option value="privacy">Solid privacy</option>
-                        <option value="rail">Open rails</option>
+                        <option value="picket">
+                          {i18n._({ id: 'app.buildTab.picket', message: 'Picket' })}
+                        </option>
+                        <option value="slat">
+                          {i18n._({ id: 'app.buildTab.verticalSlats', message: 'Vertical slats' })}
+                        </option>
+                        <option value="horizontal">
+                          {i18n._({
+                            id: 'app.buildTab.horizontalBoards',
+                            message: 'Horizontal boards',
+                          })}
+                        </option>
+                        <option value="privacy">
+                          {i18n._({ id: 'app.buildTab.solidPrivacy', message: 'Solid privacy' })}
+                        </option>
+                        <option value="rail">
+                          {i18n._({ id: 'app.buildTab.openRails', message: 'Open rails' })}
+                        </option>
                       </select>
                     </label>
                   )}
                   <label className="flex items-center justify-between">
-                    Opening width (m)
+                    {i18n._({ id: 'app.buildTab.openingWidthM', message: 'Opening width (m)' })}
                     <input
                       className="w-20 rounded border bg-background p-1"
                       type="number"
@@ -468,7 +530,7 @@ export function BuildTab() {
                   </label>
                   {placingFenceFeature === 'gate' && (
                     <label className="flex items-center justify-between">
-                      Leaves
+                      {i18n._({ id: 'app.buildTab.leaves', message: 'Leaves' })}
                       <select
                         className="rounded border bg-background p-1"
                         value={fenceDefaults?.featureLeafType === 'double' ? 'double' : 'single'}
@@ -479,23 +541,32 @@ export function BuildTab() {
                           })
                         }
                       >
-                        <option value="single">Single gate</option>
-                        <option value="double">Double gate</option>
+                        <option value="single">
+                          {i18n._({ id: 'app.buildTab.singleGate', message: 'Single gate' })}
+                        </option>
+                        <option value="double">
+                          {i18n._({ id: 'app.buildTab.doubleGate', message: 'Double gate' })}
+                        </option>
                       </select>
                     </label>
                   )}
                 </div>
               )}
               <p className="px-0.5 text-[11px] text-muted-foreground">
-                Choose Gate or Open Passage, then click its position on any fence. Find placed gates
-                and openings under their fence in the scene graph.
+                {i18n._({
+                  id: 'app.buildTab.chooseGateOrOpenPassageThen',
+                  message:
+                    'Choose Gate or Open Passage, then click its position on any fence. Find placed gates and openings under their fence in the scene graph.',
+                })}
               </p>
             </div>
           ) : isKitchenActive ? (
             <KitchenBrowser />
           ) : isMepActive ? (
             <div className="flex flex-col gap-2 border-border/60 border-t pt-3">
-              <div className="px-0.5 pt-1 font-medium text-muted-foreground text-xs">MEP</div>
+              <div className="px-0.5 pt-1 font-medium text-muted-foreground text-xs">
+                {i18n._({ id: 'app.buildTab.mep', message: 'MEP' })}
+              </div>
               <TooltipProvider delayDuration={0} disableHoverableContent>
                 <div
                   className="grid gap-1.5 px-0.5"
@@ -522,7 +593,7 @@ export function BuildTab() {
                             type="button"
                           >
                             <Image
-                              alt={item.label}
+                              alt={i18n._(item.label)}
                               className="size-full object-contain transition-transform duration-200 group-hover:scale-110"
                               height={48}
                               src={item.iconSrc}
@@ -531,7 +602,7 @@ export function BuildTab() {
                           </button>
                         </TooltipTrigger>
                         <TooltipContent className="pointer-events-none" side="top">
-                          {item.label}
+                          {i18n._(item.label)}
                         </TooltipContent>
                       </Tooltip>
                     )
@@ -565,7 +636,9 @@ export function BuildTab() {
 
               {liquidLineContext ? (
                 <div className="flex flex-col gap-1.5">
-                  <span className="text-muted-foreground text-xs">Liquid Line</span>
+                  <span className="text-muted-foreground text-xs">
+                    {i18n._({ id: 'app.buildTab.liquidLine', message: 'Liquid Line' })}
+                  </span>
                   <button
                     className={cn(
                       'flex items-center justify-between gap-2 rounded-lg px-3 py-2 text-sm transition-all duration-200',
@@ -580,13 +653,25 @@ export function BuildTab() {
                     onMouseEnter={() => triggerSFX('sfx:menu-hover')}
                     type="button"
                   >
-                    <span>Follow lineset</span>
-                    <span className="text-muted-foreground text-xs">{follow ? 'On' : 'Off'}</span>
+                    <span>
+                      {i18n._({ id: 'app.buildTab.followLineset', message: 'Follow lineset' })}
+                    </span>
+                    <span className="text-muted-foreground text-xs">
+                      {follow
+                        ? i18n._({ id: 'app.buildTab.on', message: 'On' })
+                        : i18n._({ id: 'app.buildTab.off', message: 'Off' })}
+                    </span>
                   </button>
                   <span className="px-1 text-[11px] text-muted-foreground">
                     {follow
-                      ? 'Click a lineset to lay the line beside it.'
-                      : 'Trace a line alongside an existing lineset (F).'}
+                      ? i18n._({
+                          id: 'app.buildTab.clickALinesetToLayThe',
+                          message: 'Click a lineset to lay the line beside it.',
+                        })
+                      : i18n._({
+                          id: 'app.buildTab.traceALineAlongsideAnExisting',
+                          message: 'Trace a line alongside an existing lineset (F).',
+                        })}
                   </span>
                 </div>
               ) : null}

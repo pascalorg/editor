@@ -1,5 +1,6 @@
 'use client'
 
+import { usePascalI18n } from '@pascal-app/core'
 import { AnimatePresence, motion } from 'motion/react'
 import { useReducedMotion } from '../../../hooks/use-reduced-motion'
 import useFollowPascal from '../../../store/use-follow-pascal'
@@ -9,6 +10,7 @@ import useFollowPascal from '../../../store/use-follow-pascal'
  * following. It comes up from where the toolbar is (origin-aware) and goes the same way.
  */
 export function FollowPascalPill() {
+  const i18n = usePascalI18n()
   const shows = useFollowPascal((state) => state.on && state.paused && state.building)
   const resume = useFollowPascal((state) => state.resume)
   const reduced = useReducedMotion()
@@ -24,7 +26,7 @@ export function FollowPascalPill() {
           transition={reduced ? { duration: 0.12 } : { type: 'spring', bounce: 0, duration: 0.3 }}
           type="button"
         >
-          Resume following
+          {i18n._({ id: 'editor.actionMenu.followPascalPill.resumeFollowing', message: 'Resume following' })}
         </motion.button>
       ) : null}
     </AnimatePresence>

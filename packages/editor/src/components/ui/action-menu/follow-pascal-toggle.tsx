@@ -1,5 +1,6 @@
 'use client'
 
+import { usePascalI18n } from '@pascal-app/core'
 import { Video } from 'lucide-react'
 import { cn } from '../../../lib/utils'
 import useFollowPascal from '../../../store/use-follow-pascal'
@@ -13,6 +14,7 @@ export function FollowPascalToggle({
   className?: string
   tooltipClassName?: string
 }) {
+  const i18n = usePascalI18n()
   const on = useFollowPascal((state) => state.on)
   const setOn = useFollowPascal((state) => state.setOn)
   return (
@@ -24,7 +26,11 @@ export function FollowPascalToggle({
           : 'hover:bg-black/4 hover:text-violet-600 dark:hover:text-violet-300',
         className,
       )}
-      label={`Follow Pascal: ${on ? 'On' : 'Off'}`}
+      label={
+        on
+          ? i18n._({ id: 'editor.actionMenu.followPascalToggle.on', message: 'Follow Pascal: On' })
+          : i18n._({ id: 'editor.actionMenu.followPascalToggle.off', message: 'Follow Pascal: Off' })
+      }
       onClick={() => setOn(!on)}
       size="icon"
       tooltipClassName={tooltipClassName}

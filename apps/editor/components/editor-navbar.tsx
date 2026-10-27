@@ -1,5 +1,6 @@
 'use client'
 
+import { usePascalI18n } from '@pascal-app/core'
 import { useEditor } from '@pascal-app/editor'
 import { Eye, Pencil, Share2 } from 'lucide-react'
 import Link from 'next/link'
@@ -15,6 +16,7 @@ interface EditorNavbarProps {
 }
 
 export function EditorNavbar({ sceneId, name, onRename }: EditorNavbarProps) {
+  const i18n = usePascalI18n()
   const [editing, setEditing] = useState(false)
   const [shareOpen, setShareOpen] = useState(false)
   const shareAnchorRef = useRef<HTMLDivElement>(null)
@@ -60,10 +62,10 @@ export function EditorNavbar({ sceneId, name, onRename }: EditorNavbarProps) {
     <nav className="flex h-12 shrink-0 items-center gap-2 border-border/30 border-b bg-sidebar px-2 lg:px-3">
       <div className="flex min-w-0 items-center gap-1.5 lg:gap-2">
         <Link
-          aria-label="All projects"
+          aria-label={i18n._({ id: 'app.editorNavbar.allProjects', message: 'All projects' })}
           className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-colors hover:bg-accent"
           href="/"
-          title="All projects"
+          title={i18n._({ id: 'app.editorNavbar.allProjects', message: 'All projects' })}
         >
           <PascalMark />
         </Link>
@@ -73,7 +75,7 @@ export function EditorNavbar({ sceneId, name, onRename }: EditorNavbarProps) {
         <div className="min-w-0 max-w-40 lg:max-w-72">
           {editing ? (
             <input
-              aria-label="Project name"
+              aria-label={i18n._({ id: 'app.editorNavbar.projectName', message: 'Project name' })}
               className="h-7 w-full rounded-md bg-accent/50 px-2 py-0 font-medium text-foreground text-sm outline-none ring-1 ring-primary/50 focus:ring-primary"
               maxLength={200}
               onBlur={commit}
@@ -86,7 +88,7 @@ export function EditorNavbar({ sceneId, name, onRename }: EditorNavbarProps) {
             <button
               className="group/title flex h-7 max-w-full items-center gap-1.5 rounded-md px-2 text-left transition-colors hover:bg-accent/50"
               onClick={startEditing}
-              title="Rename project"
+              title={i18n._({ id: 'app.editorNavbar.renameProject', message: 'Rename project' })}
               type="button"
             >
               <span className="truncate font-medium text-sm">{name}</span>
@@ -99,23 +101,29 @@ export function EditorNavbar({ sceneId, name, onRename }: EditorNavbarProps) {
       <div className="flex-1" />
 
       <button
+        aria-label={i18n._({ id: 'app.editorNavbar.preview', message: 'Preview' })}
         className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 font-medium text-sm transition-colors hover:bg-accent"
         onClick={() => useEditor.getState().setPreviewMode(true)}
         type="button"
       >
         <Eye className="h-4 w-4 shrink-0" />
-        <span className="hidden sm:inline">Preview</span>
+        <span className="hidden sm:inline">
+          {i18n._({ id: 'app.editorNavbar.preview', message: 'Preview' })}
+        </span>
       </button>
 
       <div className="relative" ref={shareAnchorRef}>
         <button
           aria-expanded={shareOpen}
+          aria-label={i18n._({ id: 'app.editorNavbar.share', message: 'Share' })}
           className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 font-medium text-sm transition-colors hover:bg-accent"
           onClick={() => setShareOpen((open) => !open)}
           type="button"
         >
           <Share2 className="h-4 w-4 shrink-0" />
-          <span className="hidden sm:inline">Share</span>
+          <span className="hidden sm:inline">
+            {i18n._({ id: 'app.editorNavbar.share', message: 'Share' })}
+          </span>
         </button>
         {shareOpen && (
           <SharePanel anchorRef={shareAnchorRef} onClose={closeShare} sceneId={sceneId} />

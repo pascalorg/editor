@@ -10,6 +10,7 @@ import {
   type WindowStyle,
 } from '../building/opening-style-presets'
 import { windowTakesStyle, windowTypeFields } from '../building/window-types'
+import { cutFloorOpening } from '../commands/structure/floor-opening'
 import { floorRoomFaces } from '../lib/floor-room-faces'
 import {
   matchScriptSlotsToLibrary,
@@ -17,6 +18,16 @@ import {
   scriptedSize,
   scriptSource,
 } from '../lib/geometry-script-node'
+import { exposedIntervals } from '../lib/level-footprints'
+import {
+  area,
+  containsPoint,
+  difference,
+  intersection,
+  type MultiPolygon,
+  union,
+} from '../lib/polygon-boolean'
+import { roundFloorElevation } from '../lib/room-floor-feasibility'
 import type { BoundaryNode } from '../lib/room-topology-index'
 import { detectSpacesForLevel } from '../lib/space-detection'
 import { reconcileSceneStructure } from '../lib/structure-reconcile'
@@ -27,30 +38,54 @@ import {
   type CeilingNode,
   ColumnNode,
   type CompiledGeometryScript,
+  CurtainWallConfig,
   DoorNode,
+  FenceNode,
+  type FloorOpeningNode,
   type GeometryArtifactManifest,
+  getActiveRoofHeight,
+  getSegmentSlopeFrame,
   LevelNode,
+  RoofNode,
+  RoofSegmentNode,
   type SceneMaterial,
   type SceneMaterialId,
   SlabNode,
+  type StairNode,
   type WallFace,
   WallNode,
   WindowNode,
   ZoneNode,
 } from '../schema'
 import { DoorType, WindowType } from '../schema/nodes/opening-types'
-import { resolveCeilingHeight } from '../services/level-height'
+import { MIN_SLAB_THICKNESS } from '../schema/nodes/slab'
+import { DEFAULT_LEVEL_HEIGHT, resolveCeilingHeight } from '../services/level-height'
+import { planRoofLevel } from '../services/roof-level'
 import { CEILING_DRAW_OFFSET } from '../services/storey'
+import { resolveRoofElevation } from '../systems/roof/roof-elevation'
+import { stairArrivalOpening } from '../systems/stair/stair-footprint'
+import {
+  getMaxWallCurveOffset,
+  getWallCenterlineSegments,
+  getWallCurveLength,
+  getWallSurfacePolygon,
+  isCurvedWall,
+  normalizeWallCurveOffset,
+} from '../systems/wall/wall-curve'
+import { getWallPlanFootprint, getWallThickness } from '../systems/wall/wall-footprint'
 import { getWallLocalFaceZ } from '../systems/wall/wall-frame'
+import { calculateLevelMiters } from '../systems/wall/wall-mitering'
 import { roomFaceCover } from '../systems/wall/wall-room-sides'
 import { migrateRoomZones } from '../utils/room-zone-migration'
 import { addObject } from './add-object'
+import { applySceneChanges } from './apply-changes'
 import { authoredSceneChanges } from './authored-scene-merge'
+import { createStair } from './create-stair'
 import { paint } from './paint'
 import { pointInPolygon, projectWorldPointToWallLocalX, type Vec2 } from './plan-geometry'
 import { resolveInlinePaintMaterial } from './scene-materials'
 import { queryNodes } from './scene-queries'
-import type { AgentContext, AgentOperationOutcome, SceneNodes } from './types'
+import type { AgentContext, AgentOperationOutcome, SceneChanges, SceneNodes } from './types'
 import { setWallSkirting } from './wall-skirting'
 
 /**
@@ -94,11 +129,19 @@ export type AuthorSceneReport = {
   walls: number
   doors: number
   windows: number
+  /** Doorways with no leaf. */
+  passages: number
   rooms: number
   roomsNamed: number
   slabs: number
   columns: number
   items: number
+  /** Stairs written, each with the floor opening it owns in the level above. */
+  stairs: number
+  /** Voids cut through a level's floor and the ceiling under it. */
+  voids: number
+  /** Pascal's own roof segments, on the building's roof level. */
+  roofSegments: number
   lights: number
   /** Rooms whose floor finish is their module, counted by the host that compiles them after the write. */
   floorScripts: number
@@ -112,11 +155,16 @@ export type AuthorSceneReport = {
   warnings: AuthorSceneDefect[]
   defects: AuthorSceneDefect[]
   notes: string[]
-  /** Payload ids, `wall/i` openings, `room/level/i`, and `light/level/i` ceiling points to nodes. */
+  /**
+   * Payload ids, `wall/i` openings, `room/level/i`, `stair/level/i`, `void/level/i` (its floor
+   * opening) and `light/level/i` ceiling points to nodes.
+   */
   ids: Record<string, string>
 }
 
 const JOIN_REACH = 0.3
+/** The deepest floor between storeys: a wall stopping this far under the floor above carries it. */
+const FLOOR_DEPTH = 0.5
 const THIN_SLAB = 0.02
 const MANY_SLABS = 20
 const MANY_REGIONS = 24
@@ -125,6 +173,15 @@ const GLASS = 'library:preset-glass'
 
 type Vec3 = [number, number, number]
 type AuthorSceneWall = NonNullable<AuthorScenePayload['levels'][number]['walls']>[number]
+type AuthorSceneRoom = AuthorScenePayload['levels'][number]['rooms'][number]
+/** A payload wall with its ends after the join rule. */
+type JoinedWall = {
+  spec: AuthorSceneWall
+  start: [number, number]
+  end: [number, number]
+  /** Its height as written: the payload's, or its storey's when it reaches into the floor above. */
+  height: number
+}
 
 /**
  * Explicit payload keys retain their identities across revisions; derived nodes use the
@@ -155,6 +212,15 @@ const dist = (a: readonly number[], b: readonly number[]) =>
 
 const metres = (value: number) => `${value.toFixed(2)} m`
 
+/** The value given most often, the first one on a tie; undefined for none. */
+const mostCommon = (values: readonly string[]): string | undefined => {
+  const counts = new Map<string, number>()
+  for (const value of values) counts.set(value, (counts.get(value) ?? 0) + 1)
+  let best: string | undefined
+  for (const [value, count] of counts) if (!best || count > counts.get(best)!) best = value
+  return best
+}
+
 /**
  * Where a wall end meets another wall's centerline: the projection onto that line, as long as it
  * lands on the wall or within reach past its ends. The line, not the segment, so a partition
@@ -167,6 +233,37 @@ function nearestOnSegment(p: readonly number[], a: readonly number[], b: readonl
     return { point: [p[0]!, p[1]!] as [number, number], distance: Number.POSITIVE_INFINITY }
   const q: [number, number] = [a[0]! + t * (b[0]! - a[0]!), a[1]! + t * (b[1]! - a[1]!)]
   return { point: q, distance: dist(p, q) }
+}
+
+/**
+ * The bend Pascal stores (`curveOffset`) for an arc from start to end through a plan point: the
+ * point's distance from the straight line, positive when it lies to the right looking from start
+ * to end (away from the wall's left normal).
+ */
+function bendThrough(start: Vec2, end: Vec2, through: readonly number[]) {
+  const [dx, dz] = [end[0] - start[0], end[1] - start[1]]
+  return ((through[0]! - start[0]) * dz - (through[1]! - start[1]) * dx) / (Math.hypot(dx, dz) || 1)
+}
+
+/** The same on a curved wall: the nearest point of its arc, so a partition meets the curve. */
+function nearestOnWall(p: readonly number[], wall: JoinedWall) {
+  if (!wall.spec.through) return nearestOnSegment(p, wall.start, wall.end)
+  const arc = {
+    start: wall.start,
+    end: wall.end,
+    curveOffset: bendThrough(wall.start, wall.end, wall.spec.through),
+  }
+  let best = { point: [p[0]!, p[1]!] as [number, number], distance: Number.POSITIVE_INFINITY }
+  for (const [a, b] of getWallCenterlineSegments(arc, 64)) {
+    const [dx, dz] = [b.x - a.x, b.y - a.y]
+    const t = ((p[0]! - a.x) * dx + (p[1]! - a.y) * dz) / (dx * dx + dz * dz || 1)
+    const q: [number, number] = [
+      a.x + Math.max(0, Math.min(1, t)) * dx,
+      a.y + Math.max(0, Math.min(1, t)) * dz,
+    ]
+    if (dist(p, q) < best.distance) best = { point: q, distance: dist(p, q) }
+  }
+  return best
 }
 
 const cross = (o: Vec2, a: Vec2, b: Vec2) =>
@@ -189,7 +286,16 @@ function polygonsOverlap(a: Vec2[], b: Vec2[]): boolean {
 }
 
 /** A wall's footprint, pulled in by a few millimetres so a slab meeting its face is not on it. */
-function wallFootprint(wall: { start: Vec2; end: Vec2; thickness: number }): Vec2[] {
+function wallFootprint(wall: {
+  start: Vec2
+  end: Vec2
+  thickness: number
+  curveOffset?: number
+}): Vec2[] {
+  if (wall.curveOffset)
+    return getWallSurfacePolygon({ ...wall, thickness: wall.thickness - 0.01 }).map(
+      ({ x, y }): Vec2 => [x, y],
+    )
   const inset = 0.005
   const [dx, dz] = [wall.end[0] - wall.start[0], wall.end[1] - wall.start[1]]
   const len = Math.hypot(dx, dz) || 1
@@ -294,12 +400,16 @@ export default function build({ THREE }) {
 export function authorSceneCeilingPoints(
   payload: AuthorScenePayload,
 ): { id: string; code: string }[] {
-  return payload.levels.flatMap((level, index) =>
-    level.lights.flatMap((light, i) =>
+  return payload.levels.flatMap((level, index) => [
+    ...level.lights.flatMap((light, i) =>
       light.fixture ? [] : [{ id: `light/${index}/${i}`, code: CEILING_POINT_CODE }],
     ),
-  )
+    // A room left with no light gets one at its seed.
+    ...level.rooms.map((_, i) => ({ id: roomLightId(index, i), code: CEILING_POINT_CODE })),
+  ])
 }
+
+const roomLightId = (level: number, room: number) => `light/${level}/room/${room}`
 
 /**
  * The rooms whose floor finish is a module, by their zone once the write made it: the host reads
@@ -332,10 +442,11 @@ export type AuthorSceneFaceScript = {
 
 /**
  * Which faces the payload's face modules build on, and why the others cannot be: a wall's own
- * `faceLeft` (face a) and `faceRight` (face b), then each room's `wallCode` on the faces its floor
- * meets (the spans of the room the zone was derived from, the faces `setWallSkirting` runs along),
- * where a wall's own module wins. A face with nothing to build on (a curved or curtain wall) or
- * that no room looks into is a `no_face` defect.
+ * `faceLeft` (face a) and `faceRight` (face b), its `faceOutside` on the faces no room of its level
+ * looks into, then each room's `wallCode` on the faces its floor meets (the spans of the room the
+ * zone was derived from, the faces `setWallSkirting` runs along), where a wall's own module wins.
+ * A face with nothing to build on (a curved or curtain wall), a left or right face no room looks
+ * into, or an outside module on a wall with rooms on both faces is a `no_face` defect.
  */
 function resolveFaceScripts(
   payload: AuthorScenePayload,
@@ -381,6 +492,25 @@ function resolveFaceScripts(
           })
         else add(spec.id, face, nodeId, module.code, module.toHeight)
       }
+      const outside = spec.faceOutside
+      if (!outside) continue
+      if (!wallFaceScriptInputs(nodes, nodeId, 'a', outside.toHeight)) {
+        defects.push({
+          id: `${spec.id}/outside`,
+          code: 'no_face',
+          message: `Wall ${spec.id} ${flat}: its outside face has nothing a script can build on and keeps its paint.`,
+        })
+        continue
+      }
+      const cover = roomFaceCover(nodes, nodeId)
+      const faces = (['a', 'b'] as const).filter((face) => cover[face] === 'none')
+      if (!faces.length)
+        defects.push({
+          id: `${spec.id}/outside`,
+          code: 'no_face',
+          message: `Rooms look into both faces of wall ${spec.id}: it has no outside face, so its faceOutside was not written.`,
+        })
+      for (const face of faces) add(spec.id, face, nodeId, outside.code, outside.toHeight)
     }
     const byRoom = new Map<string, { name: string; code: string; toHeight?: number }>()
     for (const [i, room] of level.rooms.entries()) {
@@ -546,6 +676,8 @@ export function authorScene(
       ['slab', level.slabs],
       ['column', level.columns],
       ['light', level.lights],
+      ['stair', level.stairs],
+      ['void', level.voids],
     ] as const)
       parts?.forEach((_, i) => {
         claimSourceKey(`${kind}/${index}/${i}`)
@@ -558,6 +690,7 @@ export function authorScene(
     }
     for (const item of level.items ?? []) claimSourceKey(item.id)
   })
+  for (const item of payload.roof?.items ?? []) claimSourceKey(item.id)
   const buildings = Object.values(scene).filter((n) => n.type === 'building')
   const selected =
     input.buildingId ?? (context.activeLevelId ? scene[context.activeLevelId]?.parentId : undefined)
@@ -605,11 +738,15 @@ export function authorScene(
     walls: 0,
     doors: 0,
     windows: 0,
+    passages: 0,
     rooms: 0,
     roomsNamed: 0,
     slabs: 0,
     columns: 0,
     items: 0,
+    stairs: 0,
+    voids: 0,
+    roofSegments: 0,
     lights: 0,
     floorScripts: 0,
     faceScripts: 0,
@@ -670,6 +807,10 @@ export function authorScene(
 
   const scaffoldIds = new Set(Object.keys(draft))
   const levelNodes: ReturnType<typeof LevelNode.parse>[] = []
+  const levelWalls: {
+    walls: JoinedWall[]
+    wallNodes: Map<string, JoinedWall & { node: WallNode }>
+  }[] = []
   const itemNodeIds = new Map<string, string>()
   const itemFrames = new Map<string, Frame>()
   const skirtings: {
@@ -679,8 +820,19 @@ export function authorScene(
     skirting: NonNullable<AuthorSceneWall['skirting']>
   }[] = []
   let untypedWindows = 0
+  /** By upper level index: the storey under it and the height of the tallest wall carrying it. */
+  const floorsAbove = new Map<number, { below: string; wallHeight: number; storey: number }>()
 
   payload.levels.forEach((level, index) => {
+    // A storey is as tall as the climb to the next level's floor; the top one, as its walls.
+    const above = payload.levels[index + 1]
+    const walled = Math.max(0, ...(level.walls ?? []).map((w) => w.height)) || DEFAULT_LEVEL_HEIGHT
+    if (above && above.elevation <= level.elevation)
+      say(
+        `"${above.name}" (elevation ${metres(above.elevation)}) is not above "${level.name}" (${metres(level.elevation)}): "${level.name}" is as tall as its walls, ${metres(walled)}`,
+      )
+    const storey =
+      above && above.elevation > level.elevation ? above.elevation - level.elevation : 0
     const levelNode = LevelNode.parse({
       object: 'node',
       type: 'level',
@@ -690,6 +842,7 @@ export function authorScene(
       metadata: { authorScene: { elevation: level.elevation } },
       name: level.name,
       level: index,
+      height: storey || walled,
       children: [],
     })
     draft[levelNode.id] = levelNode
@@ -701,18 +854,35 @@ export function authorScene(
     }
 
     // ---------- walls, joined ----------
-    const walls = (level.walls ?? []).map((w) => ({
+    // Walls keep their height; the floor above is built between the storeys, from the tallest wall
+    // carrying it up to its surface. A wall reaching into that floor stops under it, following the
+    // storey as a drawn wall does.
+    const reaches = (height: number) => storey > 0 && height > storey - MIN_SLAB_THICKNESS
+    const walls: JoinedWall[] = (level.walls ?? []).map((w) => ({
       spec: w,
       start: [...w.start] as [number, number],
       end: [...w.end] as [number, number],
+      height: reaches(w.height) ? storey : w.height,
     }))
+    const carrying = walls
+      .map((w) => w.spec.height)
+      .filter((height) => storey > 0 && !reaches(height) && height >= storey - FLOOR_DEPTH)
+    if (carrying.length)
+      floorsAbove.set(index + 1, { below: level.name, wallHeight: Math.max(...carrying), storey })
+    const stopped = [
+      ...new Set(walls.filter((w) => w.height !== w.spec.height).map((w) => w.spec.height)),
+    ]
+    if (stopped.length)
+      say(
+        `walls of "${level.name}" given ${stopped.map(metres).join(', ')} reach the floor of "${above!.name}", ${metres(storey)} up: they stop under it, following the storey`,
+      )
     for (const w of walls) {
       for (const end of ['start', 'end'] as const) {
         const pt = w[end]
         let best: { point: [number, number]; distance: number } | null = null
         for (const o of walls) {
           if (o === w) continue
-          const near = nearestOnSegment(pt, o.start, o.end)
+          const near = nearestOnWall(pt, o)
           if (near.distance < JOIN_REACH && (!best || near.distance < best.distance)) best = near
         }
         if (best && best.distance > 0.001) {
@@ -725,12 +895,21 @@ export function authorScene(
         }
       }
     }
-    const wallNodes = new Map<string, (typeof walls)[number] & { node: WallNode }>()
+    const wallNodes = new Map<string, JoinedWall & { node: WallNode }>()
     for (const w of walls) {
       if (dist(w.start, w.end) < 0.05) {
         defect(w.spec.id, 'wall_too_short', 'The wall is shorter than 5 cm after joining.')
         continue
       }
+      const bend = w.spec.through ? bendThrough(w.start, w.end, w.spec.through) : 0
+      const curve = bend ? normalizeWallCurveOffset(w, bend) : 0
+      if (w.spec.through && !curve)
+        say(`wall ${w.spec.id}: its through point is on the straight line: written straight`)
+      else if (Math.abs(bend) > getMaxWallCurveOffset(w) + 1e-9)
+        say(
+          `wall ${w.spec.id}: its through point stands ${metres(Math.abs(bend))} off the straight line, more than half its ${metres(dist(w.start, w.end))} span: written as a half circle, ${metres(Math.abs(curve))} out`,
+        )
+      const { curtain } = w.spec
       const node = WallNode.parse({
         object: 'node',
         type: 'wall',
@@ -741,8 +920,20 @@ export function authorScene(
         children: [],
         start: w.start,
         end: w.end,
-        height: w.spec.height,
+        ...(w.height === w.spec.height ? { height: w.spec.height } : {}),
         thickness: w.spec.thickness,
+        ...(curve ? { curveOffset: curve } : {}),
+        ...(curtain
+          ? {
+              wallType: 'curtain',
+              curtainWall: CurtainWallConfig.parse({
+                columns: {
+                  layout: 'maximum-spacing',
+                  spacing: Math.min(100, Math.max(0.2, curtain.spacing)),
+                },
+              }),
+            }
+          : {}),
       })
       place(node)
       wallNodes.set(w.spec.id, { ...w, node })
@@ -755,13 +946,21 @@ export function authorScene(
         })
       report.ids[w.spec.id] = node.id
       report.walls++
-      // ---------- its openings ----------
-      const length = dist(w.start, w.end)
+      // ---------- its openings: along the arc on a curved wall, as Pascal places them ----------
+      const length = curve ? getWallCurveLength(node) : dist(w.start, w.end)
       ;(w.spec.openings ?? []).forEach((o, i) => {
         const id = `${w.spec.id}/${i}`
+        const passage = o.kind === 'passage'
+        const kind = passage ? 'door' : o.kind
+        if (passage) {
+          const leaf = (['type', 'style', 'leaves', 'hinge', 'swing', 'code'] as const).filter(
+            (field) => o[field] !== undefined,
+          )
+          if (leaf.length) say(`passage ${id}: it has no leaf, its ${leaf.join(', ')} ignored`)
+        }
         // A module supplies geometry; the declared type still describes how the opening works.
         let compiled: CompiledGeometryScript | undefined
-        if (o.code) {
+        if (o.code && !passage) {
           compiled = input.compiled[id]
           if (!compiled) {
             defect(id, 'compile_failed', input.compileErrors?.[id] ?? 'The module did not compile.')
@@ -793,6 +992,19 @@ export function authorScene(
           )
           return
         }
+        // A door or window is flat, set on the arc at its centre: its ends leave the curve.
+        if (curve) {
+          const chord = dist(w.start, w.end)
+          const radius = (chord * chord) / (8 * Math.abs(curve)) + Math.abs(curve) / 2
+          const standoff = radius - Math.sqrt(Math.max(0, radius ** 2 - (width / 2) ** 2))
+          const half = w.spec.thickness / 2
+          if (standoff > half)
+            warn(
+              id,
+              'flat_on_arc',
+              `The ${metres(width)} ${o.kind} is flat on wall ${w.spec.id}, an arc of radius ${metres(radius)}: its ends stand ${metres(standoff)} off the curve, past the wall's faces. Set narrower ones side by side, at most ${metres(2 * Math.sqrt(radius ** 2 - (radius - half) ** 2))} wide.`,
+            )
+        }
         const x = Math.min(Math.max(o.along, width / 2), length - width / 2)
         if (Math.abs(x - o.along) > 0.01)
           say(
@@ -800,7 +1012,7 @@ export function authorScene(
           )
         const common = {
           object: 'node',
-          id: mint(o.kind, id),
+          id: mint(kind, id),
           parentId: node.id,
           visible: true,
           metadata: { authorScene: { id, color: o.color ?? null } },
@@ -809,6 +1021,8 @@ export function authorScene(
           height,
           rotation: [0, 0, 0],
           ...(o.name ? { name: o.name } : {}),
+          ...(o.shape ? { openingShape: o.shape } : {}),
+          ...(o.archHeight === undefined ? {} : { archHeight: Math.min(o.archHeight, height) }),
           ...(compiled
             ? {
                 source: scriptSource(compiled, { category: o.kind }),
@@ -817,7 +1031,15 @@ export function authorScene(
             : {}),
         }
         let opening: AnyNode
-        if (o.kind === 'door') {
+        if (passage) {
+          opening = DoorNode.parse({
+            ...common,
+            type: 'door',
+            position: [x, height / 2, 0],
+            openingKind: 'opening',
+          })
+          report.passages++
+        } else if (o.kind === 'door') {
           const type = o.type
           if (type && !isDoorType(type))
             defect(id, 'type_mismatch', `${type} is a window type; the door is written hinged.`)
@@ -868,7 +1090,7 @@ export function authorScene(
           })
           report.windows++
         }
-        const panel = o.kind === 'door' ? finishRef(o.color, id) : undefined
+        const panel = kind === 'door' ? finishRef(o.color, id) : undefined
         const frame = finishRef(o.frameColor ?? o.color, id)
         if (panel || frame)
           opening = {
@@ -901,14 +1123,21 @@ export function authorScene(
       // wall onto it. Pascal caps its walls itself.
       const lifted = [...wallNodes.values()].find(
         (w) =>
-          s.top > w.spec.height / 2 &&
-          polygonsOverlap(polygon, wallFootprint({ ...w, thickness: w.spec.thickness })),
+          s.top > w.height / 2 &&
+          polygonsOverlap(
+            polygon,
+            wallFootprint({
+              ...w,
+              thickness: w.spec.thickness,
+              curveOffset: w.node.curveOffset,
+            }),
+          ),
       )
       if (lifted) {
         defect(
           id,
           'slab_over_wall',
-          `${label} overlaps wall ${lifted.spec.id} with its top at ${metres(s.top)}, above half the wall's ${metres(lifted.spec.height)}: it would lift the wall onto it. Pascal builds a wall's cap itself; fold it into the wall.`,
+          `${label} overlaps wall ${lifted.spec.id} with its top at ${metres(s.top)}, above half the wall's ${metres(lifted.height)}: it would lift the wall onto it. Pascal builds a wall's cap itself; fold it into the wall.`,
         )
         return
       }
@@ -949,9 +1178,10 @@ export function authorScene(
         metadata: { authorScene: { color: c.color ?? null } },
         ...(c.name ? { name: c.name } : {}),
         position: [c.position[0], 0, c.position[1]],
-        crossSection: 'square',
+        crossSection: c.shape,
+        ...(c.shape === 'round' ? { radius: c.width / 2 } : {}),
         width: c.width,
-        depth: c.depth,
+        depth: c.shape === 'round' ? c.width : (c.depth ?? c.width),
         height: c.height,
         baseHeight: 0,
         capitalHeight: 0,
@@ -961,6 +1191,450 @@ export function authorScene(
       report.columns++
     })
 
+    levelWalls.push({ walls, wallNodes })
+  })
+  report.levels = levelNodes.length
+  if (untypedWindows)
+    say(
+      `${untypedWindows} window${untypedWindows === 1 ? ' has' : 's have'} no type: written fixed (cannot open); give type`,
+    )
+
+  // ---------- which face of each wall looks into a room: read from the plan, as the editor does ----------
+  for (const levelNode of levelNodes) {
+    const boundaries = Object.values(draft).filter(
+      (n): n is BoundaryNode =>
+        n.parentId === levelNode.id && (n.type === 'wall' || n.type === 'separator'),
+    )
+    for (const { wallId, ...sides } of detectSpacesForLevel(levelNode.id, boundaries).wallUpdates)
+      draft[wallId] = { ...draft[wallId], ...sides } as AnyNode
+  }
+
+  // ---------- rooms: Pascal's own derivation, then the payload's names and floors ----------
+  const { nodes: withZones, createdZoneIds } = migrateRoomZones(draft)
+  const zones = createdZoneIds.map((id) => ZoneNode.parse(withZones[id]))
+  for (const zone of zones) {
+    draft[zone.id] = zone
+    const level = draft[zone.parentId!] as AnyNode & { children: string[] }
+    draft[zone.parentId!] = { ...level, children: [...level.children, zone.id] } as AnyNode
+    report.rooms++
+  }
+  const joined = new Map<string, AuthorSceneRoom[]>()
+  payload.levels.forEach((level, index) => {
+    const levelNode = levelNodes[index]!
+    for (const [i, room] of level.rooms.entries()) {
+      const id = `room/${index}/${i}`
+      const zone = zones.find(
+        (z) => z.parentId === levelNode.id && pointInPolygon(room.seed as Vec2, z.polygon),
+      )
+      // Several seeds in one enclosure name one open-plan room, in the order given.
+      const sharing = zone && joined.get(zone.id)
+      if (sharing) {
+        sharing.push(room)
+        continue
+      }
+      if (!zone) {
+        defect(
+          id,
+          'room_not_enclosed',
+          `No closed room around (${room.seed[0]}, ${room.seed[1]}) "${room.name}": its walls do not meet.`,
+        )
+        continue
+      }
+      if (room.floorRegions.length > MANY_REGIONS)
+        warn(
+          id,
+          'many_regions',
+          `"${room.name}" has ${room.floorRegions.length} floor regions: regions are fixed polygons that do not follow a resize; use one floor finish.`,
+        )
+      const finish = finishRef(room.floor, id)
+      const regions = room.floorRegions.map((r, k) => ({
+        id: `region_${k}`,
+        polygon: r.polygon,
+        finish: finishRef(r.finish, id) ?? r.finish,
+      }))
+      draft[zone.id] = ZoneNode.parse({
+        ...zone,
+        name: room.name,
+        spaceRole: 'room',
+        ...(finish || regions.length
+          ? {
+              floor: {
+                ...zone.floor,
+                ...(finish ? { finish } : {}),
+                ...(regions.length ? { regions } : {}),
+              },
+            }
+          : {}),
+        metadata: { ...zone.metadata, authorScene: { seed: room.seed } },
+      })
+      joined.set(zone.id, [room])
+      report.ids[id] = zone.id
+      report.roomsNamed++
+    }
+  })
+  for (const [zoneId, rooms] of joined) {
+    if (rooms.length < 2) continue
+    const [first, ...rest] = rooms.map((room) => room.name)
+    // "Kitchen" joins as "kitchen"; a name that is not a capitalised word ("WC") stays as given.
+    const names = [
+      first!,
+      ...rest.map((name) => name.replace(/^([A-Z])(?=[a-z])/, (c) => c.toLowerCase())),
+    ]
+    const name = `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`
+    draft[zoneId] = { ...draft[zoneId], name } as AnyNode
+    report.roomsNamed += rest.length
+    const floors = rooms
+      .slice(1)
+      .filter((room) => room.floor || room.floorCode || room.floorRegions.length)
+    say(
+      `${rooms.map((room) => `"${room.name}"`).join(', ')} are one enclosure, no wall between them: one open-plan room, "${name}"${floors.length ? `, with the floor of "${first}"` : ''}`,
+    )
+  }
+
+  // ---------- floors and ceilings, as the editor derives them on load ----------
+  const levelIds = levelNodes.map((l) => l.id as `level_${string}`)
+  let written: Record<string, AnyNode> = {
+    ...reconcileSceneStructure({ nodes: draft, levelIds, mintId: (kind) => mint(kind) }).nodes,
+  }
+  // A room's plate and ceiling are named by its room, whose id follows its walls: a revision keeps
+  // an unchanged room's, and a room it adds brings its own with it (never another room's renamed).
+  const derivedIds = new Map<string, string>()
+  for (const node of Object.values(written)) {
+    const zones =
+      node.type === 'ceiling' && node.zoneId
+        ? [node.zoneId]
+        : node.type === 'slab' && node.plateRole === 'base'
+          ? [...(node.zoneIds ?? [])].sort()
+          : []
+    if (zones.length && !scaffoldIds.has(node.id))
+      derivedIds.set(node.id, mint(node.type, `${node.type}/${zones.join('+')}`))
+  }
+  if (derivedIds.size) {
+    let json = JSON.stringify(written)
+    for (const [from, to] of derivedIds) json = json.replaceAll(`"${from}"`, `"${to}"`)
+    written = JSON.parse(json)
+  }
+
+  // ---------- the floor between storeys: each upper plate keeps its top and reaches down to the walls ----------
+  for (const [index, { below, wallHeight, storey }] of floorsAbove) {
+    const plates = (levelId: string) =>
+      Object.values(written).filter(
+        (node): node is SlabNode =>
+          node.type === 'slab' && node.parentId === levelId && node.plateRole === 'base',
+      )
+    // The carrying walls stand on the floor below; their tops, in this level's frame, are its underside.
+    const lower = plates(levelNodes[index - 1]!.id)
+    const underside = (lower.length ? Math.max(...lower.map((p) => p.elevation)) : 0) + wallHeight
+    // Seen from outside, the band continues the cladding under it: the colour most of those walls
+    // wear outside paints the plate's edge and sides.
+    const outsides = (payload.levels[index - 1]!.walls ?? []).flatMap((w) =>
+      w.colorOutside ? [w.colorOutside] : [],
+    )
+    const cladding = mostCommon(outsides)
+    const bandRef = cladding && finishRef(cladding, `level/${index}/floor`)
+    const depths = new Set<number>()
+    for (const plate of plates(levelNodes[index]!.id)) {
+      const thickness = roundFloorElevation(plate.elevation - (underside - storey))
+      written[plate.id] = {
+        ...plate,
+        thickness,
+        ...(bandRef ? { slots: { ...plate.slots, edge: bandRef, side: bandRef } } : {}),
+      }
+      depths.add(thickness)
+    }
+    if (depths.size)
+      say(
+        `"${payload.levels[index]!.name}" stands on a ${[...depths].map(metres).join(', ')} floor over the ${metres(wallHeight)} walls of "${below}": its plate reaches down to their tops`,
+      )
+  }
+
+  /**
+   * The room a plan point of a level is in, its ceiling, and the height in that level's frame that
+   * ceiling hangs things from. Under an opening in the ceiling (a void, a stairwell) it is the
+   * ceiling above, the room's double height.
+   */
+  const ceilingAt = (
+    index: number,
+    x: number,
+    z: number,
+  ): { room: ZoneNode; ceiling: CeilingNode; height: number } | undefined => {
+    const levelId = levelNodes[index]!.id
+    const room = Object.values(written).find(
+      (node): node is ZoneNode =>
+        node.type === 'zone' &&
+        node.spaceRole === 'room' &&
+        node.parentId === levelId &&
+        pointInPolygon([x, z], node.polygon) &&
+        !node.holes.some((hole) => pointInPolygon([x, z], hole)),
+    )
+    const ceiling =
+      room &&
+      Object.values(written).find(
+        (node): node is CeilingNode =>
+          node.type === 'ceiling' && node.zoneId === room.id && node.parentId === levelId,
+      )
+    if (!room || !ceiling) return undefined
+    if (levelNodes[index + 1] && ceiling.holes.some((hole) => pointInPolygon([x, z], hole))) {
+      const above = ceilingAt(index + 1, x, z)
+      const climb = payload.levels[index + 1]!.elevation - payload.levels[index]!.elevation
+      if (above) return { ...above, height: above.height + climb }
+    }
+    return { room, ceiling, height: resolveCeilingHeight(ceiling, written) - CEILING_DRAW_OFFSET }
+  }
+
+  // ---------- stairs, as create_stair builds them: up to the next level, opening its floor ----------
+  let stairsWritten = false
+  payload.levels.forEach((level, index) => {
+    const levelNode = levelNodes[index]!
+    const upper = levelNodes[index + 1]
+    ;(level.stairs ?? []).forEach((stair, i) => {
+      const id = `stair/${index}/${i}`
+      if (!upper) {
+        defect(
+          id,
+          'no_level_above',
+          `A stair on "${level.name}", the top level, has nothing to rise to: give the level it reaches after this one in levels.`,
+        )
+        return
+      }
+      try {
+        const outcome = createStair(
+          written,
+          {
+            x: stair.start[0]!,
+            z: stair.start[1]!,
+            rotation: stair.rotation,
+            layout: stair.layout,
+            width: stair.width,
+            ...(stair.turn ? { turn: stair.turn } : {}),
+            ...(stair.length === undefined ? {} : { length: stair.length }),
+            ...(stair.steps === undefined ? {} : { steps: stair.steps }),
+            ...(stair.lowerSteps === undefined ? {} : { lowerSteps: stair.lowerSteps }),
+            ...(stair.name ? { name: stair.name } : {}),
+            levelId: levelNode.id,
+            toLevelId: upper.id,
+          },
+          { ...context, activeLevelId: levelNode.id },
+        )
+        const result = outcome.result as { slabHoleCut: boolean; message: string }
+        // create_stair mints fresh ids; the conversion's own keep the stair across revisions.
+        let json = JSON.stringify(outcome.changes)
+        ;(outcome.changes?.create ?? []).forEach(({ node }, k) => {
+          const kind = node.id.slice(0, node.id.indexOf('_'))
+          json = json.replaceAll(node.id, mint(kind, k ? `${id}/${k}` : id))
+        })
+        const changes = JSON.parse(json) as SceneChanges
+        const [made, ...rest] = changes.create!
+        changes.create = [
+          {
+            ...made!,
+            node: {
+              ...made!.node,
+              metadata: { ...made!.node.metadata, authorScene: { id } },
+            } as AnyNode,
+          },
+          ...rest,
+        ]
+        written = applySceneChanges(written, changes)
+        report.ids[id] = made!.node.id
+        report.stairs++
+        stairsWritten = true
+        if (result.slabHoleCut) say(`${id}: ${result.message}`)
+        else warn(id, 'no_floor_opening', result.message)
+      } catch (error) {
+        const e = error as { code?: string; message?: string }
+        defect(id, e.code ?? 'stair_refused', e.message ?? String(error))
+      }
+    })
+  })
+  /** The plan footprints of a level's walls as written, each grown by `grow` on both faces. */
+  const wallFootprints = (levelId: string, grow = 0) => {
+    const walls = Object.values(written).flatMap((node) =>
+      node.type === 'wall' && node.parentId === levelId
+        ? [grow ? { ...node, thickness: getWallThickness(node) + 2 * grow } : node]
+        : [],
+    )
+    const miters = calculateLevelMiters(walls)
+    return walls.map((wall) => getWallPlanFootprint(wall, miters).map(({ x, y }): Vec2 => [x, y]))
+  }
+
+  // ---------- voids: openings in a level's floor, the room below rising through them ----------
+  const voidCuts = new Map<number, MultiPolygon>()
+  const voidsCut: {
+    id: string
+    index: number
+    cut: MultiPolygon
+    railing: { height: number; color?: string } | null
+  }[] = []
+  payload.levels.forEach((level, index) => {
+    const levelNode = levelNodes[index]!
+    ;(level.voids ?? []).forEach((v, i) => {
+      const id = `void/${index}/${i}`
+      const label = v.name ? `"${v.name}"` : `void ${i}`
+      if (index === 0) {
+        defect(
+          id,
+          'no_level_below',
+          `${label} is in the floor of "${level.name}", the first level, with nothing under it to open onto: give it in the floor of the level above the room that rises through it.`,
+        )
+        return
+      }
+      // The cut stops at the faces of the walls standing on this floor, as the floor carries them,
+      // and at the floor's own edge (a void drawn past a curved outside wall).
+      const floor = union(
+        Object.values(written).flatMap((node) =>
+          node.type === 'slab' && node.parentId === levelNode.id && node.plateRole === 'base'
+            ? [node.polygon]
+            : [],
+        ),
+      )
+      const cut = intersection(
+        difference(v.polygon as Vec2[], union(wallFootprints(levelNode.id))),
+        floor,
+      ).filter((part) => area([part]) > 1e-4)
+      const opened = area(cut)
+      if (opened < 1e-4) {
+        defect(
+          id,
+          'no_floor',
+          `No floor of "${level.name}" lies under ${label} clear of its walls: there is nothing to open.`,
+        )
+        return
+      }
+      if (cut.some((part) => part.holes.length))
+        warn(
+          id,
+          'wall_in_void',
+          `A wall of "${level.name}" stands inside ${label}, over the opening around it: end the void at the wall, or move the wall.`,
+        )
+      let cutsCeiling = false
+      cut.forEach((part, k) => {
+        const plan = cutFloorOpening(written, {
+          levelId: levelNode.id,
+          polygon: part.outer,
+          drawnOn: 'floor',
+          mintId: () => mint('floor-opening', k ? `${id}/${k}` : id) as FloorOpeningNode['id'],
+        })
+        for (const change of plan.changes) {
+          if (change.op === 'create') {
+            const opening = change.node as FloorOpeningNode
+            cutsCeiling ||= opening.cutsAdjacent
+            written[opening.id] = {
+              ...opening,
+              name: v.name ?? 'Void',
+              metadata: { ...opening.metadata, authorScene: { id } },
+            }
+            if (!k) report.ids[id] = opening.id
+          } else if (change.op === 'update')
+            written[change.id] = { ...written[change.id], ...change.data } as AnyNode
+        }
+      })
+      report.voids++
+      say(
+        `${id}: the floor of "${level.name}" opened over ${opened.toFixed(1)} m², ${cutsCeiling ? `and the ceiling of "${payload.levels[index - 1]!.name}" under it` : `with no ceiling of "${payload.levels[index - 1]!.name}" under it`}`,
+      )
+      voidCuts.set(index, union([...(voidCuts.get(index) ?? []), ...cut]))
+      voidsCut.push({
+        id,
+        index,
+        cut,
+        railing: v.railing === null ? null : (v.railing ?? { height: 1.1 }),
+      })
+    })
+  })
+
+  // The openings the stairs and voids own cut the floor plates and ceilings they pass, as on load.
+  if (stairsWritten || report.voids)
+    written = {
+      ...reconcileSceneStructure({ nodes: written, levelIds, mintId: (kind) => mint(kind) }).nodes,
+    }
+
+  // ---------- each void's railing: along its open edges, on the floor, as the slab railing looks ----------
+  for (const { id, index, cut, railing } of voidsCut) {
+    const levelNode = levelNodes[index]!
+    // Inside the double height the floor's edge round the void continues the walls it rises
+    // between: it wears their inside paint, where the facade's edge keeps the cladding.
+    const insides = (payload.levels[index - 1]!.walls ?? []).flatMap((w) =>
+      w.colorInside ? [w.colorInside] : [],
+    )
+    const edge = finishRef(mostCommon(insides), id)
+    if (edge)
+      for (const zone of Object.values(written))
+        if (
+          zone.type === 'zone' &&
+          zone.parentId === levelNode.id &&
+          zone.spaceRole === 'room' &&
+          area(intersection(cut, zone.polygon)) > 1e-4
+        )
+          written[zone.id] = { ...zone, floorEdgeFinish: edge }
+    if (!railing) continue
+    // A run stops at a wall standing on the edge and where a stair arrives.
+    const arrivals = Object.values(written).flatMap((node) =>
+      node.type === 'stair' && node.toLevelId === levelNode.id
+        ? [stairArrivalOpening(node as StairNode, written)]
+        : [],
+    )
+    const cover = union([
+      ...wallFootprints(levelNode.id, 0.005),
+      ...arrivals.filter((ring) => ring.length >= 3),
+    ])
+    const runs = exposedIntervals(cut, [], cover).filter(
+      ({ start, end }) => dist(start, end) >= 0.1,
+    )
+    const plate = Object.values(written)
+      .filter(
+        (node): node is SlabNode =>
+          node.type === 'slab' && node.parentId === levelNode.id && node.plateRole === 'base',
+      )
+      .map((node) => ({ node, shared: area(intersection(cut, node.polygon)) }))
+      .sort((a, b) => b.shared - a.shared)[0]?.node
+    const fences = runs.map((run, k) =>
+      FenceNode.parse({
+        object: 'node',
+        id: mint('fence', `${id}/railing/${k}`),
+        parentId: levelNode.id,
+        visible: true,
+        metadata: { authorScene: { id } },
+        name: 'Railing',
+        start: run.start,
+        end: run.end,
+        height: railing.height,
+        style: 'rail',
+        baseStyle: 'floating',
+        baseHeight: 0,
+        postCap: 'none',
+        ...(plate ? { supportSlabId: plate.id } : {}),
+      }),
+    )
+    if (!fences.length) continue
+    const level = written[levelNode.id] as AnyNode & { children: string[] }
+    written[level.id] = {
+      ...level,
+      children: [...level.children, ...fences.map((f) => f.id)],
+    } as AnyNode
+    for (const fence of fences) written[fence.id] = fence
+    const finish = finishRef(railing.color, id)
+    if (finish)
+      try {
+        const { changes } = paint(
+          written,
+          { targets: fences.map((fence) => fence.id), material: finish },
+          paintContext(levelNode.id),
+        )
+        for (const u of changes?.update ?? [])
+          written[u.id] = { ...written[u.id], ...u.data } as AnyNode
+      } catch (error) {
+        defect(id, 'paint_refused', (error as Error).message)
+      }
+    say(
+      `${id}: a ${metres(railing.height)} railing along ${metres(runs.reduce((sum, run) => sum + dist(run.start, run.end), 0))} of its edges`,
+    )
+  }
+
+  // ---------- items, on their floors and ceilings, then each wall's paint ----------
+  payload.levels.forEach((level, index) => {
+    const levelNode = levelNodes[index]!
+    const { walls, wallNodes } = levelWalls[index]!
     // ---------- items, hosts first ----------
     const pending = [...(level.items ?? [])]
     let progress = true
@@ -981,6 +1655,12 @@ export function authorScene(
           )
           continue
         }
+        if (/^(stairs?|staircases?)$/i.test(item.category))
+          warn(
+            item.id,
+            'use_stairs',
+            `"${item.name}" is a stair written as an item: give it as its level's stairs, so it rises with the storey and opens the floor above.`,
+          )
         const world: Vec3 = [item.position[0]!, item.position[1]!, item.position[2]!]
         const yaw = (item.rotation * Math.PI) / 180
         let placed: {
@@ -992,11 +1672,19 @@ export function authorScene(
           wallT?: number
           frame: Frame
         }
+        if (hostWall && isCurvedWall(hostWall.node)) {
+          defect(
+            item.id,
+            'curved_host',
+            `Wall ${item.host} is curved: nothing hangs on a curved wall, as in the editor. Hang "${item.name}" on a straight wall, or stand it on the floor.`,
+          )
+          continue
+        }
         if (hostWall) {
           // On the wall as place_items puts a wall-side item there: along it from its start, the
           // payload's height for its bottom, on the face nearest the point, facing the room.
           const [width, height] = scriptedSize(compiled.manifest)
-          const wallHeight = hostWall.spec.height
+          const wallHeight = hostWall.height
           if (height > wallHeight) {
             defect(
               item.id,
@@ -1041,8 +1729,34 @@ export function authorScene(
               yaw: -Math.atan2(dz, dx) + (left ? 0 : Math.PI),
             },
           }
+        } else if (compiled.mount === 'ceiling' && !item.host) {
+          // From the ceiling of the room its plan point is in, its top on that ceiling.
+          const over = ceilingAt(index, world[0], world[2])
+          if (!over) {
+            defect(
+              item.id,
+              'no_ceiling',
+              `"${item.name}" hangs from a ceiling, and no room on "${level.name}" contains (${world[0]}, ${world[2]}): move it into a room, or build it with mount 'floor'.`,
+            )
+            continue
+          }
+          say(`${item.id}: hung from the ceiling of ${over.room.name}, ${metres(over.height)} up`)
+          placed = {
+            compiled,
+            parentId: over.ceiling.id,
+            position: [world[0], 0, world[2]],
+            rotation: item.rotation,
+            frame: { position: [world[0], over.height, world[2]], yaw },
+          }
         } else {
           const host = hostItemId ? itemFrames.get(item.host!) : undefined
+          const opening = voidCuts.get(index)
+          if (!host && opening && containsPoint(opening, [world[0], world[2]]))
+            warn(
+              item.id,
+              'over_void',
+              `"${item.name}" stands at (${world[0]}, ${world[2]}), over a void in the floor of "${level.name}": nothing is under it. Move it onto the floor.`,
+            )
           placed = {
             compiled,
             parentId: hostItemId ?? levelNode.id,
@@ -1053,7 +1767,7 @@ export function authorScene(
         }
         try {
           const outcome = addObject(
-            draft,
+            written,
             {
               compiled: { ...placed.compiled, nodeId: mint('item', item.id) },
               name: item.name,
@@ -1067,13 +1781,16 @@ export function authorScene(
             { ...context, activeLevelId: levelNode.id },
           )
           for (const { node, parentId } of outcome.changes?.create ?? []) {
-            draft[node.id] = {
+            written[node.id] = {
               ...node,
               slots: exactSlots(compiled, item.id),
               ...(placed.wallT === undefined ? {} : { wallT: placed.wallT }),
             } as AnyNode
-            const parent = draft[parentId ?? levelNode.id] as AnyNode & { children?: string[] }
-            parent.children = [...(parent.children ?? []), node.id]
+            const parent = written[parentId ?? levelNode.id] as AnyNode & { children?: string[] }
+            written[parent.id] = {
+              ...parent,
+              children: [...(parent.children ?? []), node.id],
+            } as AnyNode
             itemNodeIds.set(item.id, node.id)
             itemFrames.set(item.id, placed.frame)
             report.ids[item.id] = node.id
@@ -1089,14 +1806,51 @@ export function authorScene(
       defect(item.id, 'host_missing', `Its host ${item.host} was not placed.`)
 
     // ---------- wall paint, through the editor's paint: both faces, or each its own ----------
+    const inside: Record<'left' | 'right' | 'both' | 'neither', string[]> = {
+      left: [],
+      right: [],
+      both: [],
+      neither: [],
+    }
     for (const w of walls) {
       const node = wallNodes.get(w.spec.id)?.node
       if (!node) continue
-      const faces = {
-        a: w.spec.colorLeft ?? w.spec.color,
-        b: w.spec.colorRight ?? w.spec.color,
+      const coats: { role?: string; material: string }[] = []
+      if (w.spec.curtain) {
+        // Glass and mullions: no face to paint; its frame takes the colour.
+        const ignored = (
+          ['color', 'colorInside', 'colorOutside', 'colorLeft', 'colorRight'] as const
+        ).filter((field) => w.spec[field])
+        if (ignored.length)
+          say(
+            `wall ${w.spec.id}: a curtain wall has no faces to paint, its ${ignored.join(', ')} ignored; curtain.frameColor colours its frame`,
+          )
+        const frame = finishRef(w.spec.curtain.frameColor, w.spec.id)
+        if (frame) coats.push({ role: 'curtain-frame', material: frame })
       }
-      const coats: { role?: 'a' | 'b'; material: string }[] = []
+      const { colorInside, colorOutside } = w.spec.curtain ? {} : w.spec
+      // A face is inside when a room of this level stands on it, known once the rooms are derived.
+      const cover = colorInside || colorOutside ? roomFaceCover(written, node.id) : undefined
+      const meant = (face: WallFace) =>
+        cover && (cover[face] === 'none' ? colorOutside : colorInside)
+      if (cover) {
+        const faces = (['a', 'b'] as const).filter((face) => cover[face] !== 'none')
+        inside[
+          faces.length === 2
+            ? 'both'
+            : faces.length === 0
+              ? 'neither'
+              : faces[0] === 'a'
+                ? 'left'
+                : 'right'
+        ].push(w.spec.id)
+      }
+      const faces: Partial<Record<WallFace, string>> = w.spec.curtain
+        ? {}
+        : {
+            a: w.spec.colorLeft ?? meant('a') ?? w.spec.color,
+            b: w.spec.colorRight ?? meant('b') ?? w.spec.color,
+          }
       if (faces.a && faces.a === faces.b) {
         const ref = finishRef(faces.a, w.spec.id)
         if (ref) coats.push({ material: ref })
@@ -1108,109 +1862,28 @@ export function authorScene(
       for (const coat of coats) {
         try {
           const { changes } = paint(
-            draft,
+            written,
             { targets: [node.id], ...coat },
             paintContext(levelNode.id),
           )
           for (const u of changes?.update ?? [])
-            draft[u.id] = { ...draft[u.id], ...u.data } as AnyNode
+            written[u.id] = { ...written[u.id], ...u.data } as AnyNode
         } catch (error) {
           defect(w.spec.id, 'paint_refused', (error as Error).message)
         }
       }
     }
-  })
-  report.levels = levelNodes.length
-  if (untypedWindows)
-    say(
-      `${untypedWindows} window${untypedWindows === 1 ? ' has' : 's have'} no type: written fixed (cannot open); give type`,
-    )
-
-  // ---------- which face of each wall looks into a room: read from the plan, as the editor does ----------
-  for (const levelNode of levelNodes) {
-    const boundaries = Object.values(draft).filter(
-      (n): n is BoundaryNode =>
-        n.parentId === levelNode.id && (n.type === 'wall' || n.type === 'separator'),
-    )
-    for (const { wallId, ...sides } of detectSpacesForLevel(levelNode.id, boundaries).wallUpdates)
-      draft[wallId] = { ...draft[wallId], ...sides } as AnyNode
-  }
-
-  // ---------- rooms: Pascal's own derivation, then the payload's names and floors ----------
-  const { nodes: withZones, createdZoneIds } = migrateRoomZones(draft)
-  const zones = createdZoneIds.map((id) => ZoneNode.parse(withZones[id]))
-  for (const zone of zones) {
-    draft[zone.id] = zone
-    const level = draft[zone.parentId!] as AnyNode & { children: string[] }
-    draft[zone.parentId!] = { ...level, children: [...level.children, zone.id] } as AnyNode
-    report.rooms++
-  }
-  const claimed = new Map<string, string>()
-  payload.levels.forEach((level, index) => {
-    const levelNode = levelNodes[index]!
-    for (const [i, room] of level.rooms.entries()) {
-      const id = `room/${index}/${i}`
-      const zone = zones.find(
-        (z) => z.parentId === levelNode.id && pointInPolygon(room.seed as Vec2, z.polygon),
+    const resolved = [
+      inside.left.length && `the left face of ${inside.left.join(', ')}`,
+      inside.right.length && `the right face of ${inside.right.join(', ')}`,
+      inside.both.length && `both faces of ${inside.both.join(', ')}`,
+      inside.neither.length && `neither face of ${inside.neither.join(', ')}`,
+    ].filter(Boolean)
+    if (resolved.length)
+      say(
+        `colorInside / colorOutside on "${level.name}", left and right as seen from each wall's start to its end: inside is ${resolved.join('; ')}`,
       )
-      // Two seeds in one enclosure: the walls do not separate the rooms the payload names.
-      if (zone && claimed.has(zone.id)) {
-        defect(
-          id,
-          'room_shares_enclosure',
-          `"${room.name}" and "${claimed.get(zone.id)}" are one enclosure: no wall separates them.`,
-        )
-        continue
-      }
-      if (!zone) {
-        defect(
-          id,
-          'room_not_enclosed',
-          `No closed room around (${room.seed[0]}, ${room.seed[1]}) "${room.name}": its walls do not meet.`,
-        )
-        continue
-      }
-      if (room.floorRegions.length > MANY_REGIONS)
-        warn(
-          id,
-          'many_regions',
-          `"${room.name}" has ${room.floorRegions.length} floor regions: regions are fixed polygons that do not follow a resize; use one floor finish.`,
-        )
-      const finish = finishRef(room.floor, id)
-      const regions = room.floorRegions.map((r, k) => ({
-        id: `region_${k}`,
-        polygon: r.polygon,
-        finish: finishRef(r.finish, id) ?? r.finish,
-      }))
-      draft[zone.id] = ZoneNode.parse({
-        ...zone,
-        name: room.name,
-        spaceRole: 'room',
-        ...(finish || regions.length
-          ? {
-              floor: {
-                ...zone.floor,
-                ...(finish ? { finish } : {}),
-                ...(regions.length ? { regions } : {}),
-              },
-            }
-          : {}),
-        metadata: { ...zone.metadata, authorScene: { seed: room.seed } },
-      })
-      claimed.set(zone.id, room.name)
-      report.ids[id] = zone.id
-      report.roomsNamed++
-    }
   })
-
-  // ---------- floors and ceilings, as the editor derives them on load ----------
-  const structure = reconcileSceneStructure({
-    nodes: draft,
-    levelIds: levelNodes.map((l) => l.id as `level_${string}`),
-    mintId: (kind) => mint(kind),
-  })
-
-  const written = { ...structure.nodes }
 
   // ---------- skirting, native on each wall, along the faces its rooms stand on ----------
   for (const { id, nodeId, levelId, skirting } of skirtings) {
@@ -1248,28 +1921,46 @@ export function authorScene(
   // Ceilings exist only after structure reconciliation; lights can now use their room's host.
   payload.levels.forEach((level, index) => {
     const levelNode = levelNodes[index]!
-    for (const [i, light] of level.lights.entries()) {
-      const id = `light/${index}/${i}`
+    const entries: { id: string; light: (typeof level.lights)[number]; room?: string }[] =
+      level.lights.map((light, i) => ({ id: `light/${index}/${i}`, light }))
+    // A named room with no light of its own (none whose plan point is in it, given or built into
+    // an item) gets a plain ceiling light at its seed.
+    const lit: Vec2[] = [
+      ...level.lights.map((light): Vec2 => [light.position[0]!, light.position[2]!]),
+      ...(level.items ?? []).flatMap((item): Vec2[] => {
+        const frame = itemFrames.get(item.id)
+        return frame && input.compiled[item.id]?.manifest.lights?.length
+          ? [[frame.position[0], frame.position[2]]]
+          : []
+      }),
+    ]
+    const seen = new Set<string>()
+    level.rooms.forEach((room, i) => {
+      const zone = written[report.ids[`room/${index}/${i}`] ?? ''] as ZoneNode | undefined
+      if (!zone || seen.has(zone.id)) return
+      seen.add(zone.id)
+      const inside = (p: Vec2) =>
+        pointInPolygon(p, zone.polygon) && !zone.holes.some((hole) => pointInPolygon(p, hole))
+      if (lit.some(inside)) return
+      const over = ceilingAt(index, room.seed[0]!, room.seed[1]!)
+      if (!over) return
+      entries.push({
+        id: roomLightId(index, i),
+        light: {
+          position: [room.seed[0]!, over.height - 0.1, room.seed[1]!],
+          color: '#ffffff',
+          intensity: 1,
+        },
+        room: zone.name ?? room.name,
+      })
+    })
+    for (const { id, light, room: unlit } of entries) {
       const at: Vec3 = [light.position[0]!, light.position[1]!, light.position[2]!]
       let hostId = light.fixture ? itemNodeIds.get(light.fixture) : undefined
       let hostFrame = light.fixture ? itemFrames.get(light.fixture) : undefined
-      const room = !light.fixture
-        ? Object.values(written).find(
-            (node): node is ZoneNode =>
-              node.type === 'zone' &&
-              node.spaceRole === 'room' &&
-              node.parentId === levelNode.id &&
-              pointInPolygon([at[0], at[2]], node.polygon) &&
-              !node.holes.some((hole) => pointInPolygon([at[0], at[2]], hole)),
-          )
-        : undefined
-      const ceiling = room
-        ? Object.values(written).find(
-            (node): node is CeilingNode =>
-              node.type === 'ceiling' && node.zoneId === room.id && node.parentId === levelNode.id,
-          )
-        : undefined
-      if (ceiling) {
+      const over = light.fixture ? undefined : ceilingAt(index, at[0], at[2])
+      if (over) {
+        const { room, ceiling } = over
         const compiled = input.compiled[id]
         if (!compiled) {
           defect(
@@ -1284,7 +1975,7 @@ export function authorScene(
             written,
             {
               compiled: { ...compiled, nodeId: mint('item', id) },
-              name: `Ceiling point in ${room!.name}`,
+              name: `Ceiling point in ${room.name}`,
               category: 'light',
               reason: 'author_scene: ceiling point for a light without a fixture',
               parentId: ceiling.id,
@@ -1298,12 +1989,16 @@ export function authorScene(
           written[ceiling.id] = { ...ceiling, children: [...ceiling.children, node.id as never] }
           hostId = node.id
           hostFrame = {
-            position: [at[0], resolveCeilingHeight(ceiling, written) - CEILING_DRAW_OFFSET, at[2]],
+            position: [at[0], over.height, at[2]],
             yaw: 0,
           }
           report.ids[id] = node.id
           report.items++
-          say(`light at [${at.join(', ')}] has no fixture: a ceiling point in ${room!.name}`)
+          say(
+            unlit
+              ? `${unlit} had no light: a ceiling light at its centre`
+              : `light at [${at.join(', ')}] has no fixture: a ceiling point in ${room.name}`,
+          )
         } catch (error) {
           const e = error as { code?: string; message?: string }
           defect(id, e.code ?? 'item_refused', e.message ?? String(error))
@@ -1355,6 +2050,138 @@ export function authorScene(
       report.lights++
     }
   })
+
+  // ---------- the roof: on the building's roof level above the top storey, as create_roof puts it ----------
+  const roof = payload.roof
+  if (roof && (roof.segments.length || roof.items?.length)) {
+    const top = levelNodes.at(-1)!
+    const segments = roof.segments.map((spec, i) => {
+      const segment = RoofSegmentNode.parse({
+        roofType: spec.roofType,
+        width: spec.width,
+        depth: spec.depth,
+        wallHeight: 0,
+        rotation: (spec.rotation * Math.PI) / 180,
+        position: [spec.center[0], 0, spec.center[1]],
+        ...(spec.pitch !== undefined && { pitch: spec.pitch }),
+        ...(spec.gableOverhang !== undefined && { gableOverhang: spec.gableOverhang }),
+      })
+      // The overhang is asked in plan; the segment stores it along its slope (a barrel's, at its ends).
+      const overhang =
+        spec.roofType === 'barrel'
+          ? spec.overhang
+          : spec.overhang / getSegmentSlopeFrame(segment).cosTheta
+      return { ...segment, id: mint('rseg', `roof/segment/${i}`), overhang }
+    })
+    const peak = Math.max(0, ...segments.map((segment) => getActiveRoofHeight(segment)))
+    // Nothing stands above the payload's top level in its candidate: the plan is a roof level.
+    const plan = planRoofLevel(written, top.id, peak)
+    const created = plan.kind === 'roof' ? plan.create : null
+    const levelId = created ? mint('level', 'level/roof') : plan.levelId
+    if (created)
+      written = applySceneChanges(written, {
+        create: [{ node: { ...created, id: levelId } as AnyNode, parentId: building!.id }],
+      })
+    report.ids['level/roof'] = levelId
+    // A roof measured from the top storey's floor stands this much lower on the roof level.
+    const offset = plan.storeyOffset
+    let rises = peak
+    if (segments.length) {
+      const cx = segments.reduce((sum, s) => sum + s.position[0], 0) / segments.length
+      const cz = segments.reduce((sum, s) => sum + s.position[2], 0) / segments.length
+      const node = RoofNode.parse({
+        id: mint('roof', 'roof'),
+        name: roof.name ?? 'Roof',
+        parentId: levelId,
+        position: [cx, 0, cz],
+        rotation: 0,
+        support: { kind: 'walls' },
+        children: segments.map((segment) => segment.id),
+        metadata: { authorScene: { id: 'roof' } },
+      })
+      written = applySceneChanges(written, {
+        create: [
+          { node, parentId: levelId },
+          ...segments.map((segment) => ({
+            node: {
+              ...segment,
+              parentId: node.id,
+              position: [segment.position[0] - cx, 0, segment.position[2] - cz],
+            } as AnyNode,
+            parentId: node.id,
+          })),
+        ],
+      })
+      const elevation = resolveRoofElevation(written[node.id] as RoofNode, written)
+      written[node.id] = { ...node, position: [cx, elevation, cz] } as AnyNode
+      rises = elevation + peak
+      report.ids.roof = node.id
+      report.roofSegments = segments.length
+      for (const [role, color] of [
+        ['top', roof.color],
+        ['wall', roof.wallColor],
+      ] as const) {
+        const finish = finishRef(color, 'roof')
+        if (finish)
+          try {
+            const { changes } = paint(
+              written,
+              { targets: [node.id], material: finish, role },
+              paintContext(levelId),
+            )
+            for (const u of changes?.update ?? [])
+              written[u.id] = { ...written[u.id], ...u.data } as AnyNode
+          } catch (error) {
+            defect('roof', 'paint_refused', (error as Error).message)
+          }
+      }
+    }
+    for (const item of roof.items ?? []) {
+      const compiled = input.compiled[item.id]
+      if (!compiled) {
+        defect(
+          item.id,
+          'compile_failed',
+          input.compileErrors?.[item.id] ?? 'The module did not compile.',
+        )
+        continue
+      }
+      try {
+        const outcome = addObject(
+          written,
+          {
+            compiled: { ...compiled, nodeId: mint('item', item.id) },
+            name: item.name,
+            category: item.category,
+            reason: `author_scene: ${item.name}`,
+            position: [item.position[0]!, item.position[1]! + offset, item.position[2]!],
+            rotation: item.rotation,
+            parentId: levelId,
+            role: 'roof',
+          },
+          { ...context, activeLevelId: levelId },
+        )
+        for (const { node } of outcome.changes?.create ?? []) {
+          written = applySceneChanges(written, {
+            create: [
+              {
+                node: { ...node, slots: exactSlots(compiled, item.id) } as AnyNode,
+                parentId: levelId,
+              },
+            ],
+          })
+          report.ids[item.id] = node.id
+          report.items++
+          rises = Math.max(rises, item.position[1]! + offset + scriptedSize(compiled.manifest)[1])
+        }
+      } catch (error) {
+        const e = error as { code?: string; message?: string }
+        defect(item.id, e.code ?? 'item_refused', e.message ?? String(error))
+      }
+    }
+    // A roof level made for it is as tall as the roof rises over it.
+    if (created) written[levelId] = { ...written[levelId], height: Math.max(rises, 0.2) } as AnyNode
+  }
 
   const nodes = Object.fromEntries(Object.entries(written).filter(([id]) => !scaffoldIds.has(id)))
   const candidate: AuthorSceneState = {

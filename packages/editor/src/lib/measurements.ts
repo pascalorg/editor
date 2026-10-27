@@ -1,4 +1,4 @@
-import type { MeasurementPoint } from '@pascal-app/core'
+import { formatNumber, type MeasurementPoint, parseLocalizedNumber } from '@pascal-app/core'
 
 export type LinearUnit = 'metric' | 'imperial'
 export type MetricNotation = 'meters' | 'millimeters'
@@ -119,6 +119,15 @@ export function linearUnitToMeters(value: number, unit: LinearUnit): number {
   return unit === 'imperial' ? value * METERS_PER_FOOT : value
 }
 
+export function parseLinearMeasurementInput(
+  value: string,
+  unit: LinearUnit,
+  locale: string,
+): number | null {
+  const parsed = parseLocalizedNumber(value, locale)
+  return parsed === null ? null : linearUnitToMeters(parsed, unit)
+}
+
 export function linearControlValueToMeters(
   value: number,
   unit: LinearUnit,
@@ -153,7 +162,10 @@ export function formatAreaLabel(
 ): string {
   if (!Number.isFinite(squareMeters)) return '--'
 
-  return `${squareMetersToAreaUnit(squareMeters, unit).toFixed(fractionDigits)}${getAreaUnitLabel(unit)}`
+  return `${formatNumber(squareMetersToAreaUnit(squareMeters, unit), {
+    min: fractionDigits,
+    max: fractionDigits,
+  })}${getAreaUnitLabel(unit)}`
 }
 
 export function cubicMetersToVolumeUnit(cubicMeters: number, unit: LinearUnit): number {
@@ -171,7 +183,10 @@ export function formatVolumeLabel(
 ): string {
   if (!Number.isFinite(cubicMeters)) return '--'
 
-  return `${cubicMetersToVolumeUnit(cubicMeters, unit).toFixed(fractionDigits)}${getVolumeUnitLabel(unit)}`
+  return `${formatNumber(cubicMetersToVolumeUnit(cubicMeters, unit), {
+    min: fractionDigits,
+    max: fractionDigits,
+  })}${getVolumeUnitLabel(unit)}`
 }
 
 export function formatLinearMeasurement(
@@ -200,11 +215,11 @@ export function formatLinearMeasurement(
   if (metricNotation === 'millimeters') {
     const roundedMillimeters = Math.round(absoluteMeters * 1000)
     const sign = meters < 0 && roundedMillimeters !== 0 ? '-' : ''
-    return `${sign}${roundedMillimeters}mm`
+    return `${sign}${formatNumber(roundedMillimeters, { max: 0 })}mm`
   }
 
   const roundedMeters = Number.parseFloat(absoluteMeters.toFixed(2))
   const sign = meters < 0 && roundedMeters !== 0 ? '-' : ''
 
-  return `${sign}${roundedMeters}m`
+  return `${sign}${formatNumber(roundedMeters, { max: 2 })}m`
 }

@@ -55,11 +55,14 @@ import {
   type LevelDuplicatePreset,
 } from '@pascal-app/core/building'
 import {
-  getDefaultLevelName,
-  getLevelDisplayName,
+  formatNumber,
   roofLevelOrderBreach,
   servesAsRoofLevel,
+  useLocale,
+  usePascalI18n,
 } from '@pascal-app/core'
+import { authoredLevelName, localizedLevelName } from '../../i18n/level-name'
+import { messageWithSlot } from '../../i18n/message-slot'
 import { addStoreyBelow, addStoreyOnTop, setGroundFloor } from '../../lib/add-storey'
 import { deleteLevelWithFallbackSelection } from '../../lib/level-selection'
 import { unitMemberLevels, leaveUnitFocus } from '../../lib/units'
@@ -90,28 +93,31 @@ function LevelInlineRename({
   isEditing: boolean
   onStopEditing: () => void
 }) {
+  const i18n = usePascalI18n()
+  const locale = useLocale()
   const updateNode = useScene((s) => s.updateNode)
-  const defaultName = getDefaultLevelName(level.level)
-  const [value, setValue] = useState(level.name || '')
+  const defaultName = localizedLevelName({ level: level.level }, i18n, locale)
+  const authoredName = authoredLevelName(level)
+  const [value, setValue] = useState(authoredName ?? '')
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (isEditing) {
-      setValue(level.name || '')
+      setValue(authoredName ?? '')
       setTimeout(() => {
         inputRef.current?.focus()
         inputRef.current?.select()
       }, 0)
     }
-  }, [isEditing, level.name])
+  }, [isEditing, authoredName])
 
   const handleSave = useCallback(() => {
     const trimmed = value.trim()
-    if (trimmed !== level.name) {
+    if ((trimmed || undefined) !== authoredName) {
       updateNode(level.id, { name: trimmed || undefined })
     }
     onStopEditing()
-  }, [value, level.id, level.name, updateNode, onStopEditing])
+  }, [value, level.id, authoredName, updateNode, onStopEditing])
 
   if (!isEditing) return null
 
@@ -173,14 +179,19 @@ function LevelRow({
   const [duplicateDialogOpen, setDuplicateDialogOpen] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
   const updateNode = useScene((s) => s.updateNode)
+  const i18n = usePascalI18n()
+  const locale = useLocale()
   const { isImperial, toDisplay, displayUnit, precision: displayPrecision } = useLinearDisplay('m', 2)
 
   const storeyHeight = getStoredLevelHeight(level)
   // Decimal units keep the compact readout; integer millimeters must retain trailing zeroes.
-  const formattedStoreyHeight = toDisplay(storeyHeight).toFixed(displayPrecision)
-  const storeyHeightLabel = `${
-    displayPrecision > 0 ? formattedStoreyHeight.replace(/0$/, '') : formattedStoreyHeight
-  } ${displayUnit}`
+  const formattedStoreyHeight = formatNumber(toDisplay(storeyHeight), {
+    locale,
+    min: Math.max(0, displayPrecision - 1),
+    max: displayPrecision,
+  })
+  const storeyHeightLabel = `${formattedStoreyHeight} ${displayUnit}`
+  const levelName = localizedLevelName(level, i18n, locale)
   // Same rule as the site panel and command palette: the ordinal-0 ground
   // floor is the vertical model's zero anchor and must never be deletable.
   const canDeleteLevel = level.level !== 0
@@ -219,7 +230,7 @@ function LevelRow({
         >
           <button
             {...dragHandleProps}
-            aria-label={`Reorder ${getLevelDisplayName(level)}`}
+            aria-label={i18n._({ id: 'editor.floatingLevelSelector.reorderLevelname', message: 'Reorder {levelName}', values: { levelName } })}
             className={cn(
               'ml-0.5 flex h-6 w-4 shrink-0 cursor-grab touch-none items-center justify-center rounded-md text-muted-foreground/35 opacity-0 transition-colors hover:bg-black/4 dark:hover:bg-white/5 hover:text-foreground focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/50 group-hover/level:opacity-100',
               isDragging && 'cursor-grabbing opacity-100',
@@ -229,7 +240,7 @@ function LevelRow({
               dragHandleProps?.onClick?.(e)
             }}
             ref={dragHandleRef}
-            title="Drag to reorder"
+            title={i18n._({ id: 'editor.floatingLevelSelector.dragToReorder', message: 'Drag to reorder' })}
             type="button"
           >
             <GripVertical className="h-3.5 w-3.5" />
@@ -242,15 +253,15 @@ function LevelRow({
               e.stopPropagation()
               setIsEditing(true)
             }}
-            title={getLevelDisplayName(level)}
+            title={levelName}
             type="button"
           >
-            <span className="truncate">{getLevelDisplayName(level)}</span>
+            <span className="truncate">{levelName}</span>
             {unitDotColor && (
               <span
                 className="ml-1.5 h-1.5 w-1.5 shrink-0 rounded-full"
                 style={{ backgroundColor: unitDotColor }}
-                title="Focused unit has zones here"
+                title={i18n._({ id: 'editor.floatingLevelSelector.focusedUnitHasZonesHere', message: 'Focused unit has zones here' })}
               />
             )}
           </button>
@@ -261,7 +272,7 @@ function LevelRow({
               <button
                 className="mr-0.5 shrink-0 whitespace-nowrap rounded px-1 py-0.5 font-mono text-[10px] text-muted-foreground tabular-nums transition-colors hover:bg-black/4 hover:text-foreground dark:text-muted-foreground/50 dark:hover:bg-white/5 dark:hover:text-foreground"
                 onClick={(e) => e.stopPropagation()}
-                title="Level height"
+                title={i18n._({ id: 'editor.floatingLevelSelector.levelHeight', message: 'Level height' })}
                 type="button"
               >
                 {storeyHeightLabel}
@@ -275,7 +286,7 @@ function LevelRow({
               sideOffset={8}
             >
               <SliderControl
-                label="Level height"
+                label={i18n._({ id: 'editor.floatingLevelSelector.levelHeight', message: 'Level height' })}
                 max={20}
                 min={1}
                 onChange={(v) => updateNode(level.id, { height: v })}
@@ -301,14 +312,19 @@ function LevelRow({
           <Popover>
             <PopoverTrigger asChild>
               <button
-                className="flex h-5 w-4 shrink-0 items-center justify-center text-muted-foreground/40 opacity-0 transition-all hover:text-foreground group-hover/level:opacity-100"
+                aria-label={i18n._({
+                  id: 'editor.layers.levelOptions',
+                  message: '{levelName} options',
+                  values: { levelName },
+                })}
+                className="flex h-5 w-4 shrink-0 items-center justify-center text-muted-foreground/40 opacity-0 transition-all hover:text-foreground group-hover/level:opacity-100 focus-visible:opacity-100"
                 onClick={(e) => e.stopPropagation()}
                 type="button"
               >
                 <MoreVertical className="h-3 w-3" />
               </button>
             </PopoverTrigger>
-            <PopoverContent align="start" className="w-44 p-1" side="right" sideOffset={8}>
+            <PopoverContent align="start" className="w-max min-w-44 max-w-72 p-1" side="right" sideOffset={8}>
               <button
                 className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-muted-foreground text-xs transition-colors hover:bg-black/6 dark:hover:bg-white/10 hover:text-foreground"
                 onClick={(e) => {
@@ -318,7 +334,7 @@ function LevelRow({
                 type="button"
               >
                 <Copy className="h-3 w-3" />
-                Duplicate level
+                {i18n._({ id: 'editor.floatingLevelSelector.duplicateLevel', message: 'Duplicate level' })}
               </button>
               <button
                 className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-muted-foreground text-xs transition-colors hover:bg-black/6 dark:hover:bg-white/10 hover:text-foreground"
@@ -329,7 +345,7 @@ function LevelRow({
                 type="button"
               >
                 <Copy className="h-3 w-3" />
-                Duplicate with options...
+                {i18n._({ id: 'editor.floatingLevelSelector.duplicateWithOptions', message: 'Duplicate with options...' })}
               </button>
               <button
                 className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-muted-foreground text-xs transition-colors enabled:hover:bg-black/6 dark:enabled:hover:bg-white/10 enabled:hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
@@ -340,13 +356,13 @@ function LevelRow({
                 }}
                 title={
                   isGround
-                    ? 'This floor stands at grade'
-                    : 'Seat the building so this floor stands at grade; the floors under it are below grade'
+                    ? i18n._({ id: 'editor.floatingLevelSelector.thisFloorStandsAtGrade', message: 'This floor stands at grade' })
+                    : i18n._({ id: 'editor.floatingLevelSelector.seatTheBuildingSoThisFloor', message: 'Seat the building so this floor stands at grade; the floors under it are below grade' })
                 }
                 type="button"
               >
                 <ArrowDownToLine className="h-3 w-3" />
-                Set as ground floor
+                {i18n._({ id: 'editor.floatingLevelSelector.setAsGroundFloor', message: 'Set as ground floor' })}
               </button>
               {onPaste && (
                 <button
@@ -358,7 +374,7 @@ function LevelRow({
                   type="button"
                 >
                   <ClipboardPaste className="h-3 w-3" />
-                  Paste copied selection
+                  {i18n._({ id: 'editor.floatingLevelSelector.pasteCopiedSelection', message: 'Paste copied selection' })}
                 </button>
               )}
               <button
@@ -368,11 +384,11 @@ function LevelRow({
                   e.stopPropagation()
                   onRequestDelete()
                 }}
-                title={canDeleteLevel ? 'Delete level' : 'The ground level cannot be deleted'}
+                title={canDeleteLevel ? i18n._({ id: 'editor.floatingLevelSelector.deleteLevel', message: 'Delete level' }) : i18n._({ id: 'editor.floatingLevelSelector.theGroundLevelCannotBeDeleted', message: 'The ground level cannot be deleted' })}
                 type="button"
               >
                 <Trash2 className="h-3 w-3" />
-                Delete level
+                {i18n._({ id: 'editor.floatingLevelSelector.deleteLevel', message: 'Delete level' })}
               </button>
             </PopoverContent>
           </Popover>
@@ -466,9 +482,15 @@ type GroundLineState = {
  * a click seats the building.
  */
 function GroundLine({ ground, onSeat }: { ground: GroundLineState; onSeat: () => void }) {
+  const i18n = usePascalI18n()
   const { toDisplay, displayUnit, precision } = useLinearDisplay('m', 2)
   const over = toDisplay(ground.offset)
-  const label = `Ground · ${over > 0 ? '+' : ''}${over.toFixed(precision)}`
+  const label = i18n._({
+    id: 'editor.floatingLevelSelector.groundOffset',
+    message: 'Ground · {offset}',
+    values: { offset: `${over > 0 ? '+' : ''}${over.toFixed(precision)}` },
+  })
+  const distance = `${Math.abs(over).toFixed(precision)} ${displayUnit}`
   return (
     <div
       className="relative flex items-center gap-1.5 px-2 py-0.5"
@@ -477,7 +499,7 @@ function GroundLine({ ground, onSeat }: { ground: GroundLineState; onSeat: () =>
       {ground.seated ? (
         <span
           className="shrink-0 font-mono text-[10px] text-muted-foreground/70 tabular-nums"
-          title="Ground line: the levels under it are below grade"
+          title={i18n._({ id: 'editor.floatingLevelSelector.groundLineTheLevelsUnderIt', message: 'Ground line: the levels under it are below grade' })}
         >
           {label}
         </span>
@@ -485,7 +507,21 @@ function GroundLine({ ground, onSeat }: { ground: GroundLineState; onSeat: () =>
         <button
           className="shrink-0 rounded-full px-1.5 font-mono text-[10px] text-amber-400 tabular-nums transition-colors hover:bg-amber-400/10"
           onClick={onSeat}
-          title={`The ground floor stands ${Math.abs(toDisplay(ground.offset)).toFixed(precision)} ${displayUnit} ${ground.offset > 0 ? 'over' : 'under'} grade. Seat the ground floor 8 in over grade`}
+          title={
+            ground.offset > 0
+              ? i18n._({
+                  id: 'editor.floatingLevelSelector.groundFloorOverGrade',
+                  message:
+                    'The ground floor stands {distance} over grade. Seat the ground floor 8 in over grade',
+                  values: { distance },
+                })
+              : i18n._({
+                  id: 'editor.floatingLevelSelector.groundFloorUnderGrade',
+                  message:
+                    'The ground floor stands {distance} under grade. Seat the ground floor 8 in over grade',
+                  values: { distance },
+                })
+          }
           type="button"
         >
           {label}
@@ -504,6 +540,7 @@ function GroundLine({ ground, onSeat }: { ground: GroundLineState; onSeat: () =>
 // ── Unit focus chip: name + × to end focus, only while a unit is focused ────
 
 function UnitFocusChip() {
+  const i18n = usePascalI18n()
   const focusedUnitId = useViewer((s) => s.focusedUnitId)
   const focusedUnit = useScene((s) => {
     const unit = focusedUnitId ? s.nodes[focusedUnitId] : undefined
@@ -521,12 +558,12 @@ function UnitFocusChip() {
         className="h-2 w-2 shrink-0 rounded-full"
         style={{ backgroundColor: focusedUnit.color }}
       />
-      <span className="truncate">{focusedUnit.name || 'Unit'}</span>
+      <span className="truncate">{focusedUnit.name || i18n._({ id: 'editor.floatingLevelSelector.unit', message: 'Unit' })}</span>
       <button
-        aria-label="Exit unit focus"
+        aria-label={i18n._({ id: 'editor.floatingLevelSelector.exitUnitFocus', message: 'Exit unit focus' })}
         className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-black/6 dark:hover:bg-white/10 hover:text-foreground"
         onClick={() => leaveUnitFocus()}
-        title="Exit unit focus"
+        title={i18n._({ id: 'editor.floatingLevelSelector.exitUnitFocus', message: 'Exit unit focus' })}
         type="button"
       >
         <X className="h-3 w-3" />
@@ -538,6 +575,8 @@ function UnitFocusChip() {
 // ── Main component ──────────────────────────────────────────────────────────
 
 export function FloatingLevelSelector() {
+  const i18n = usePascalI18n()
+  const locale = useLocale()
   // Desktop's view bar is a row above the stage; mobile's floats over it.
   const isMobile = useIsMobile()
   const selectedBuildingId = useViewer((s) => s.selection.buildingId)
@@ -735,7 +774,10 @@ export function FloatingLevelSelector() {
 
   return (
     <>
-      <div className={cn('pointer-events-auto absolute left-3 z-20', isMobile ? 'top-14' : 'top-3')}>
+      <div
+        className={cn('pointer-events-auto absolute left-3 z-20', isMobile ? 'top-14' : 'top-3')}
+        data-surface="level-selector"
+      >
         <div className="relative">
           {/* Floating + at top edge: a floor on top, under the roof level when one tops the stack */}
           {!draggingLevelId && (
@@ -745,7 +787,7 @@ export function FloatingLevelSelector() {
               // read only from outside: nothing here depends on it.
               data-guide-target="level-add"
               onClick={handleAddAbove}
-              title={topIsRoofLevel ? 'Add a floor under the roof' : 'Add level above'}
+              title={topIsRoofLevel ? i18n._({ id: 'editor.floatingLevelSelector.addAFloorUnderTheRoof', message: 'Add a floor under the roof' }) : i18n._({ id: 'editor.floatingLevelSelector.addLevelAbove', message: 'Add level above' })}
               type="button"
             >
               <Plus className="h-2.5 w-2.5" />
@@ -757,7 +799,7 @@ export function FloatingLevelSelector() {
             <button
               className={cn(addButtonClass, 'bottom-0 translate-y-1/2')}
               onClick={handleAddBelow}
-              title="Add level below"
+              title={i18n._({ id: 'editor.floatingLevelSelector.addLevelBelow', message: 'Add level below' })}
               type="button"
             >
               <Plus className="h-2.5 w-2.5" />
@@ -816,7 +858,7 @@ export function FloatingLevelSelector() {
                         <button
                           className={cn(addButtonClass, 'bottom-0 translate-y-1/2')}
                           onClick={() => handleInsertBetween(sortedIndex - 1)}
-                          title="Insert level here"
+                          title={i18n._({ id: 'editor.floatingLevelSelector.insertLevelHere', message: 'Insert level here' })}
                           type="button"
                         >
                           <Plus className="h-2.5 w-2.5" />
@@ -840,11 +882,18 @@ export function FloatingLevelSelector() {
       <Dialog onOpenChange={(open) => !open && setDeletingLevel(null)} open={!!deletingLevel}>
         <DialogContent showCloseButton={false}>
           <DialogHeader>
-            <DialogTitle>Delete level</DialogTitle>
+            <DialogTitle>{i18n._({ id: 'editor.floatingLevelSelector.deleteLevel', message: 'Delete level' })}</DialogTitle>
             <DialogDescription>
-              Are you sure you want to delete{' '}
-              <strong>{deletingLevel ? getLevelDisplayName(deletingLevel) : ''}</strong>? All
-              walls, floors, and objects on this level will be permanently removed.
+              {messageWithSlot(
+                i18n,
+                /* i18n */ {
+                  id: 'editor.floatingLevelSelector.deleteLevelConfirm',
+                  message:
+                    'Are you sure you want to delete {levelName}? All walls, floors, and objects on this level will be permanently removed.',
+                },
+                'levelName',
+                <strong>{deletingLevel ? localizedLevelName(deletingLevel, i18n, locale) : ''}</strong>,
+              )}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -853,14 +902,14 @@ export function FloatingLevelSelector() {
               onClick={() => setDeletingLevel(null)}
               type="button"
             >
-              Cancel
+              {i18n._({ id: 'editor.floatingLevelSelector.cancel', message: 'Cancel' })}
             </button>
             <button
               className="rounded-full bg-red-600 px-4 py-2 text-sm text-white transition-colors hover:bg-red-700"
               onClick={handleConfirmDelete}
               type="button"
             >
-              Delete
+              {i18n._({ id: 'editor.floatingLevelSelector.delete', message: 'Delete' })}
             </button>
           </DialogFooter>
         </DialogContent>

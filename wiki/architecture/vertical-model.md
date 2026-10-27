@@ -220,7 +220,8 @@ the roof level to reuse, declare or create), `roofsOver` (the roofs over a store
 other level), `roofLevelOrderBreach` (a reorder putting a roof level under a storey it stood over),
 `servesAsRoofLevel` (the one test of a level's role, which `list_levels`, `verify_scene`, the
 agents' refusals and the editor's tools read) and `isRoofLevel` (declared). The agents'
-`create_roof` and the editor's roof tool (a room's footprint, a rectangle or cone drawn over a
+`create_roof`, `author_scene`'s `roof` (its segments, and its roof items classified
+`role: 'roof'`) and the editor's roof tool (a room's footprint, a rectangle or cone drawn over a
 walled storey, a cone over a curved wall) place roofs by it; `add_level`, the editor's "add a
 floor" and the stair tool's new upper floor insert under the roof level; the level selector, the
 chat's `reorder_level`, the capture app's REST reorder and `apply_patch` refuse an order
@@ -369,7 +370,9 @@ Three ways a kind's Y reaches the ground, in the order to prefer them:
 
 1. **`capabilities.floorPlaced`** — the resolver (`getFloorPlacedElevation`) elects per footprint
    between the overlapping slabs and the level base, and `FloorElevationSystem` writes the result to
-   the registered mesh every frame. Correct for anything that stands on a surface.
+   the registered mesh every frame. Correct for anything that stands on a surface. On a room's floor
+   plate where the room's floor script built a finish, the surface is that finish's top
+   (`floorFinishTopAt`), so things stand on the planks rather than in them.
 2. **`ctx.levelBaseAt(x, z)` in a pure `def.geometry` builder** — for kinds that bake their own
    vertical origin into the meshes (a fence's inner lift group). Calling it also *enrols* the kind in
    terrain invalidation: `noteLevelBaseConsumer` records the type on first build, and

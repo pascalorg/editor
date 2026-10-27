@@ -1,3 +1,4 @@
+import type { MessageDescriptor } from '@pascal-app/core'
 import { emitter } from '@pascal-app/core'
 import useEditor from '../store/use-editor'
 import type { ContinuationMode } from './continuation'
@@ -16,7 +17,7 @@ export type WallDrawVariantInfo = {
   /** Tile label. */
   label: string
   /** The name the HUD shows while the variant is armed. */
-  title: string
+  title: MessageDescriptor
   iconSrc: string
   /** Caption under the Rooms tiles: a bold lead, then the rest. */
   caption: { lead: string; rest: string }
@@ -27,7 +28,7 @@ export const WALL_DRAW_VARIANTS: readonly WallDrawVariantInfo[] = [
     id: 'rectangle',
     mode: 'rectangle',
     label: 'Rectangle',
-    title: 'Rectangle room',
+    title: /* i18n */ { id: 'editor.lib.wallDrawVariant.rectangleRoom', message: 'Rectangle room' },
     iconSrc: '/icons/room.webp',
     caption: {
       lead: 'Click two corners',
@@ -38,7 +39,7 @@ export const WALL_DRAW_VARIANTS: readonly WallDrawVariantInfo[] = [
     id: 'polygon',
     mode: 'room',
     label: 'Polygon',
-    title: 'Polygon room',
+    title: /* i18n */ { id: 'editor.lib.wallDrawVariant.polygonRoom', message: 'Polygon room' },
     iconSrc: '/icons/polygon-room.webp',
     caption: {
       lead: 'Click each corner,',
@@ -49,7 +50,7 @@ export const WALL_DRAW_VARIANTS: readonly WallDrawVariantInfo[] = [
     id: 'walls',
     mode: 'single',
     label: 'Walls',
-    title: 'Walls',
+    title: /* i18n */ { id: 'editor.lib.wallDrawVariant.walls', message: 'Walls' },
     iconSrc: '/icons/wall.webp',
     caption: {
       lead: 'Draw one wall at a time.',

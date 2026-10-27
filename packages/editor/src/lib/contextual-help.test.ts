@@ -1,5 +1,24 @@
 import { describe, expect, test } from 'bun:test'
-import { resolveRotateHandleHelpHints, resolveSelectModeHelpHints } from './contextual-help'
+import type { MessageDescriptor } from '@pascal-app/core'
+import {
+  type ContextualShortcutHint,
+  resolveRotateHandleHelpHints as rotateHints,
+  resolveSelectModeHelpHints as selectHints,
+} from './contextual-help'
+
+// Hints carry message descriptors; these tests read their English.
+const text = (value: MessageDescriptor | string) =>
+  typeof value === 'string' ? value : value.message
+const english = (hints: ContextualShortcutHint[]) =>
+  hints.map(({ label, subtitle, ...hint }) => ({
+    ...hint,
+    label: text(label),
+    ...(subtitle ? { subtitle: text(subtitle) } : {}),
+  }))
+const resolveRotateHandleHelpHints = (...args: Parameters<typeof rotateHints>) =>
+  english(rotateHints(...args))
+const resolveSelectModeHelpHints = (...args: Parameters<typeof selectHints>) =>
+  english(selectHints(...args))
 
 test('rotation advertises Alt as the temporary free-rotation override', () => {
   expect(resolveRotateHandleHelpHints(false)).toEqual([

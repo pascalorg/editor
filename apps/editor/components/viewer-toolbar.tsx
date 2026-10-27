@@ -1,6 +1,7 @@
 'use client'
 
 import { Icon as IconifyIcon } from '@iconify/react'
+import { type MessageDescriptor, usePascalI18n } from '@pascal-app/core'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -10,6 +11,7 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
+  sceneThemeName,
   useEditor,
   useFloorplanAnnotationVisibility,
   useFloorplanMode,
@@ -84,56 +86,143 @@ function ToolbarTooltip({ children, label }: { children: ReactNode; label: strin
 }
 
 const levelModeOrder = ['stacked', 'exploded', 'solo'] as const
-const levelModeLabels: Record<string, string> = {
-  manual: 'Stack',
-  stacked: 'Stack',
-  exploded: 'Exploded',
-  solo: 'Solo',
+const levelModeLabels: Record<string, MessageDescriptor> = {
+  manual: /* i18n */ { id: 'app.viewerToolbar.manual', message: 'Manual' },
+  stacked: /* i18n */ { id: 'app.viewerToolbar.stack', message: 'Stack' },
+  exploded: /* i18n */ { id: 'app.viewerToolbar.exploded', message: 'Exploded' },
+  solo: /* i18n */ { id: 'app.viewerToolbar.solo', message: 'Solo' },
 }
 
 const wallModeOrder = ['cutaway', 'up', 'down', 'translucent'] as const
-const wallModeConfig: Record<string, { icon: string; label: string }> = {
-  up: { icon: '/icons/room.webp', label: 'Full height' },
-  cutaway: { icon: '/icons/wallcut.webp', label: 'Cutaway' },
-  down: { icon: '/icons/walllow.webp', label: 'Low' },
-  translucent: { icon: '/icons/wall.webp', label: 'Translucent' },
+const wallModeConfig: Record<string, { icon: string; label: MessageDescriptor }> = {
+  up: {
+    icon: '/icons/room.webp',
+    label: /* i18n */ { id: 'app.viewerToolbar.fullHeight', message: 'Full height' },
+  },
+  cutaway: {
+    icon: '/icons/wallcut.webp',
+    label: /* i18n */ { id: 'app.viewerToolbar.cutaway', message: 'Cutaway' },
+  },
+  down: {
+    icon: '/icons/walllow.webp',
+    label: /* i18n */ { id: 'app.viewerToolbar.low', message: 'Low' },
+  },
+  translucent: {
+    icon: '/icons/wall.webp',
+    label: /* i18n */ { id: 'app.viewerToolbar.translucent', message: 'Translucent' },
+  },
 }
 
 const SHADING_OPTIONS = [
-  { id: 'solid', name: 'Solid', detail: 'Flat and fast — no ambient occlusion', icon: Box },
-  { id: 'rendered', name: 'Rendered', detail: 'Full ambient occlusion', icon: Sparkles },
+  {
+    id: 'solid',
+    name: /* i18n */ { id: 'app.viewerToolbar.solid', message: 'Solid' },
+    detail: /* i18n */ {
+      id: 'app.viewerToolbar.flatAndFastNoAmbientOcclusion',
+      message: 'Flat and fast — no ambient occlusion',
+    },
+    icon: Box,
+  },
+  {
+    id: 'rendered',
+    name: /* i18n */ { id: 'app.viewerToolbar.rendered', message: 'Rendered' },
+    detail: /* i18n */ {
+      id: 'app.viewerToolbar.fullAmbientOcclusion',
+      message: 'Full ambient occlusion',
+    },
+    icon: Sparkles,
+  },
 ] as const
 
 const FLOORPLAN_ANNOTATION_OPTIONS = [
-  { id: 'automaticDimensions', name: 'Automatic dimensions', icon: Ruler },
-  { id: 'manualDimensions', name: 'Manual dimensions', icon: Ruler },
-  { id: 'measurements', name: 'Measurements', icon: ScanLine },
-  { id: 'openingMarks', name: 'Door/window marks', icon: Tag },
-  { id: 'structuralGrids', name: 'Structural grids & column centers', icon: Grid2X2 },
-  { id: 'roomLabels', name: 'Room labels', icon: SquareUserRound },
-  { id: 'stairAnnotations', name: 'Stair annotations', icon: Footprints },
+  {
+    id: 'automaticDimensions',
+    name: /* i18n */ {
+      id: 'app.viewerToolbar.automaticDimensions',
+      message: 'Automatic dimensions',
+    },
+    icon: Ruler,
+  },
+  {
+    id: 'manualDimensions',
+    name: /* i18n */ { id: 'app.viewerToolbar.manualDimensions', message: 'Manual dimensions' },
+    icon: Ruler,
+  },
+  {
+    id: 'measurements',
+    name: /* i18n */ { id: 'app.viewerToolbar.measurements', message: 'Measurements' },
+    icon: ScanLine,
+  },
+  {
+    id: 'openingMarks',
+    name: /* i18n */ { id: 'app.viewerToolbar.doorWindowMarks', message: 'Door/window marks' },
+    icon: Tag,
+  },
+  {
+    id: 'structuralGrids',
+    name: /* i18n */ {
+      id: 'app.viewerToolbar.structuralGridsColumnCenters',
+      message: 'Structural grids & column centers',
+    },
+    icon: Grid2X2,
+  },
+  {
+    id: 'roomLabels',
+    name: /* i18n */ { id: 'app.viewerToolbar.roomLabels', message: 'Room labels' },
+    icon: SquareUserRound,
+  },
+  {
+    id: 'stairAnnotations',
+    name: /* i18n */ { id: 'app.viewerToolbar.stairAnnotations', message: 'Stair annotations' },
+    icon: Footprints,
+  },
 ] as const
 
 const FLOORPLAN_MODE_OPTIONS = [
   {
     id: 'default',
-    name: 'Default',
-    detail: 'Clean plan; dimensions appear with selection',
+    name: /* i18n */ { id: 'app.viewerToolbar.default', message: 'Default' },
+    detail: /* i18n */ {
+      id: 'app.viewerToolbar.cleanPlanDimensionsAppearWithSelection',
+      message: 'Clean plan; dimensions appear with selection',
+    },
   },
   {
     id: 'expert',
-    name: 'Expert',
-    detail: 'Full documentation and annotation controls',
+    name: /* i18n */ { id: 'app.viewerToolbar.expert', message: 'Expert' },
+    detail: /* i18n */ {
+      id: 'app.viewerToolbar.fullDocumentationAndAnnotationControls',
+      message: 'Full documentation and annotation controls',
+    },
   },
 ] as const
 
 const FLOORPLAN_WALL_DIMENSION_REFERENCE_OPTIONS = [
-  { id: 'finished-faces', name: 'Finished faces', detail: 'Full wall thickness' },
-  { id: 'centerline', name: 'Wall centerline', detail: 'Single wall axis' },
-  { id: 'stud-faces', name: 'Face of stud', detail: 'Structural core face' },
+  {
+    id: 'finished-faces',
+    name: /* i18n */ { id: 'app.viewerToolbar.finishedFaces', message: 'Finished faces' },
+    detail: /* i18n */ {
+      id: 'app.viewerToolbar.fullWallThickness',
+      message: 'Full wall thickness',
+    },
+  },
+  {
+    id: 'centerline',
+    name: /* i18n */ { id: 'app.viewerToolbar.wallCenterline', message: 'Wall centerline' },
+    detail: /* i18n */ { id: 'app.viewerToolbar.singleWallAxis', message: 'Single wall axis' },
+  },
+  {
+    id: 'stud-faces',
+    name: /* i18n */ { id: 'app.viewerToolbar.faceOfStud', message: 'Face of stud' },
+    detail: /* i18n */ {
+      id: 'app.viewerToolbar.structuralCoreFace',
+      message: 'Structural core face',
+    },
+  },
 ] as const
 
 function CollapseSidebarButton() {
+  const i18n = usePascalI18n()
   const isCollapsed = useSidebarStore((state) => state.isCollapsed)
   const setIsCollapsed = useSidebarStore((state) => state.setIsCollapsed)
 
@@ -143,9 +232,19 @@ function CollapseSidebarButton() {
 
   return (
     <div className={TOOLBAR_CONTAINER}>
-      <ToolbarTooltip label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}>
+      <ToolbarTooltip
+        label={
+          isCollapsed
+            ? i18n._({ id: 'app.viewerToolbar.expandSidebar', message: 'Expand sidebar' })
+            : i18n._({ id: 'app.viewerToolbar.collapseSidebar', message: 'Collapse sidebar' })
+        }
+      >
         <button
-          aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          aria-label={
+            isCollapsed
+              ? i18n._({ id: 'app.viewerToolbar.expandSidebar', message: 'Expand sidebar' })
+              : i18n._({ id: 'app.viewerToolbar.collapseSidebar', message: 'Collapse sidebar' })
+          }
           className={TOOLBAR_BTN}
           onClick={toggle}
           type="button"
@@ -162,6 +261,7 @@ function CollapseSidebarButton() {
 }
 
 function LevelModeToggle() {
+  const i18n = usePascalI18n()
   const levelMode = useViewer((state) => state.levelMode)
   const setLevelMode = useViewer((state) => state.setLevelMode)
   const isDefault = levelMode === 'stacked' || levelMode === 'manual'
@@ -177,7 +277,12 @@ function LevelModeToggle() {
     if (next) setLevelMode(next)
   }
 
-  const label = `Levels: ${levelMode === 'manual' ? 'Manual' : (levelModeLabels[levelMode] ?? 'Stack')}`
+  const modeLabel = i18n._(levelModeLabels[levelMode] ?? levelModeLabels.stacked!)
+  const label = i18n._({
+    id: 'app.viewerToolbar.levelsMode',
+    message: 'Levels: {mode}',
+    values: { mode: modeLabel },
+  })
 
   return (
     <ToolbarTooltip label={label}>
@@ -197,13 +302,18 @@ function LevelModeToggle() {
         ) : (
           <IconifyIcon height={14} icon="charm:stack-push" width={14} />
         )}
-        <span className="font-medium text-xs">{levelModeLabels[levelMode] ?? 'Stack'}</span>
+        <span className="font-medium text-xs">
+          {levelMode === 'manual'
+            ? i18n._({ id: 'app.viewerToolbar.stack', message: 'Stack' })
+            : modeLabel}
+        </span>
       </button>
     </ToolbarTooltip>
   )
 }
 
 function WallModeToggle() {
+  const i18n = usePascalI18n()
   const wallMode = useViewer((state) => state.wallMode)
   const setWallMode = useViewer((state) => state.setWallMode)
   const config = wallModeConfig[wallMode] ?? wallModeConfig.cutaway!
@@ -215,7 +325,13 @@ function WallModeToggle() {
   }
 
   return (
-    <ToolbarTooltip label={`Walls: ${config.label}`}>
+    <ToolbarTooltip
+      label={i18n._({
+        id: 'app.viewerToolbar.wallsLabel',
+        message: 'Walls: {label}',
+        values: { label: i18n._(config.label) },
+      })}
+    >
       <button
         className={cn(
           TOOLBAR_BTN,
@@ -228,7 +344,7 @@ function WallModeToggle() {
         type="button"
       >
         <Image alt="" className="h-4 w-4 object-contain" height={16} src={config.icon} width={16} />
-        <span className="font-medium text-xs">{config.label}</span>
+        <span className="font-medium text-xs">{i18n._(config.label)}</span>
       </button>
     </ToolbarTooltip>
   )
@@ -238,14 +354,33 @@ function WallModeToggle() {
 // camera projection, units, render mode, edges and scene theme.
 
 const EDGE_OPTIONS = [
-  { id: 'off', name: 'Off', detail: 'No edge lines' },
-  { id: 'soft', name: 'Soft', detail: 'Faint outline of major creases' },
-  { id: 'strong', name: 'Strong', detail: 'Crisp, opaque edge lines' },
-] as const satisfies readonly { id: EdgeMode; name: string; detail: string }[]
+  {
+    id: 'off',
+    name: /* i18n */ { id: 'app.viewerToolbar.off', message: 'Off' },
+    detail: /* i18n */ { id: 'app.viewerToolbar.noEdgeLines', message: 'No edge lines' },
+  },
+  {
+    id: 'soft',
+    name: /* i18n */ { id: 'app.viewerToolbar.soft', message: 'Soft' },
+    detail: /* i18n */ {
+      id: 'app.viewerToolbar.faintOutlineOfMajorCreases',
+      message: 'Faint outline of major creases',
+    },
+  },
+  {
+    id: 'strong',
+    name: /* i18n */ { id: 'app.viewerToolbar.strong', message: 'Strong' },
+    detail: /* i18n */ {
+      id: 'app.viewerToolbar.crispOpaqueEdgeLines',
+      message: 'Crisp, opaque edge lines',
+    },
+  },
+] as const satisfies readonly { id: EdgeMode; name: MessageDescriptor; detail: MessageDescriptor }[]
 
 const SUBMENU_CONTENT_CLASS = 'min-w-56 rounded-xl border-border/45 bg-popover/95 backdrop-blur-xl'
 
 function DisplayMenu() {
+  const i18n = usePascalI18n()
   const scene = useEditor(visibleScene)
   const showGrid = useViewer((state) => state.showGrid)
   const setShowGrid = useViewer((state) => state.setShowGrid)
@@ -291,27 +426,34 @@ function DisplayMenu() {
 
   return (
     <DropdownMenu>
-      <ToolbarTooltip label="Display settings">
+      <ToolbarTooltip
+        label={i18n._({ id: 'app.viewerToolbar.displaySettings', message: 'Display settings' })}
+      >
         <DropdownMenuTrigger asChild>
           <button
-            aria-label="Display settings"
+            aria-label={i18n._({
+              id: 'app.viewerToolbar.displaySettings',
+              message: 'Display settings',
+            })}
             className={cn(TOOLBAR_BTN, 'w-auto gap-1.5 px-2.5 text-foreground/90')}
             type="button"
           >
             <SlidersHorizontal className="h-3.5 w-3.5 shrink-0" />
-            <span className="font-medium text-xs">Display</span>
+            <span className="font-medium text-xs">
+              {i18n._({ id: 'app.viewerToolbar.display', message: 'Display' })}
+            </span>
           </button>
         </DropdownMenuTrigger>
       </ToolbarTooltip>
       <DropdownMenuContent
         align="end"
-        className="w-60 rounded-xl border-border/45 bg-popover/95 backdrop-blur-xl"
+        className="w-max min-w-60 max-w-80 rounded-xl border-border/45 bg-popover/95 backdrop-blur-xl"
         side="bottom"
         sideOffset={8}
       >
         <DropdownMenuItem onSelect={(e) => keepOpen(e, () => setShowGrid(!showGrid))}>
           <Grid2X2 className="h-4 w-4" />
-          <span>Grid</span>
+          <span>{i18n._({ id: 'app.viewerToolbar.grid', message: 'Grid' })}</span>
           {showGrid ? (
             <Eye className="ml-auto h-4 w-4 text-foreground" />
           ) : (
@@ -323,7 +465,11 @@ function DisplayMenu() {
             onSelect={(e) => keepOpen(e, () => setShowMeasurements(!showMeasurements))}
           >
             <Ruler className="h-4 w-4" />
-            <span>{scene === 'split' ? '3D measurements' : 'Measurements'}</span>
+            <span>
+              {scene === 'split'
+                ? i18n._({ id: 'app.viewerToolbar.n3dMeasurements', message: '3D measurements' })
+                : i18n._({ id: 'app.viewerToolbar.measurements', message: 'Measurements' })}
+            </span>
             {showMeasurements ? (
               <Eye className="ml-auto h-4 w-4 text-foreground" />
             ) : (
@@ -336,17 +482,21 @@ function DisplayMenu() {
             <DropdownMenuSub>
               <DropdownMenuSubTrigger>
                 <Layers3 className="h-4 w-4" />
-                <span>Floor plan mode</span>
+                <span>
+                  {i18n._({ id: 'app.viewerToolbar.floorPlanMode', message: 'Floor plan mode' })}
+                </span>
                 <span className="ml-auto text-muted-foreground text-xs">
-                  {floorplanMode === 'default' ? 'Default' : 'Expert'}
+                  {floorplanMode === 'default'
+                    ? i18n._({ id: 'app.viewerToolbar.default', message: 'Default' })
+                    : i18n._({ id: 'app.viewerToolbar.expert', message: 'Expert' })}
                 </span>
               </DropdownMenuSubTrigger>
               <DropdownMenuSubContent className={SUBMENU_CONTENT_CLASS}>
                 {FLOORPLAN_MODE_OPTIONS.map((option) => (
                   <DropdownMenuItem key={option.id} onSelect={() => setFloorplanMode(option.id)}>
                     <div className="flex flex-col">
-                      <span className="text-foreground">{option.name}</span>
-                      <span className="text-muted-foreground text-xs">{option.detail}</span>
+                      <span className="text-foreground">{i18n._(option.name)}</span>
+                      <span className="text-muted-foreground text-xs">{i18n._(option.detail)}</span>
                     </div>
                     {floorplanMode === option.id ? (
                       <Check className="ml-auto h-4 w-4 text-foreground" />
@@ -360,7 +510,12 @@ function DisplayMenu() {
                 <DropdownMenuSub>
                   <DropdownMenuSubTrigger>
                     <Layers3 className="h-4 w-4" />
-                    <span>Floor plan annotations</span>
+                    <span>
+                      {i18n._({
+                        id: 'app.viewerToolbar.floorPlanAnnotations',
+                        message: 'Floor plan annotations',
+                      })}
+                    </span>
                   </DropdownMenuSubTrigger>
                   <DropdownMenuSubContent className={SUBMENU_CONTENT_CLASS}>
                     {FLOORPLAN_ANNOTATION_OPTIONS.map((option) => {
@@ -374,7 +529,7 @@ function DisplayMenu() {
                           }
                         >
                           <OptionIcon className="h-4 w-4" />
-                          <span>{option.name}</span>
+                          <span>{i18n._(option.name)}</span>
                           {visible ? (
                             <Eye className="ml-auto h-4 w-4 text-foreground" />
                           ) : (
@@ -388,13 +543,20 @@ function DisplayMenu() {
                 <DropdownMenuSub>
                   <DropdownMenuSubTrigger>
                     <Ruler className="h-4 w-4" />
-                    <span>Wall dimensions</span>
+                    <span>
+                      {i18n._({
+                        id: 'app.viewerToolbar.wallDimensions',
+                        message: 'Wall dimensions',
+                      })}
+                    </span>
                     <span className="ml-auto text-muted-foreground text-xs">
-                      {
-                        FLOORPLAN_WALL_DIMENSION_REFERENCE_OPTIONS.find(
-                          (option) => option.id === wallDimensionReference,
-                        )?.name
-                      }
+                      {i18n._(
+                        (
+                          FLOORPLAN_WALL_DIMENSION_REFERENCE_OPTIONS.find(
+                            (option) => option.id === wallDimensionReference,
+                          ) ?? FLOORPLAN_WALL_DIMENSION_REFERENCE_OPTIONS[0]
+                        ).name,
+                      )}
                     </span>
                   </DropdownMenuSubTrigger>
                   <DropdownMenuSubContent className={SUBMENU_CONTENT_CLASS}>
@@ -406,8 +568,10 @@ function DisplayMenu() {
                         }
                       >
                         <div className="flex flex-col">
-                          <span className="text-foreground">{option.name}</span>
-                          <span className="text-muted-foreground text-xs">{option.detail}</span>
+                          <span className="text-foreground">{i18n._(option.name)}</span>
+                          <span className="text-muted-foreground text-xs">
+                            {i18n._(option.detail)}
+                          </span>
                         </div>
                         {wallDimensionReference === option.id ? (
                           <Check className="ml-auto h-4 w-4 text-foreground" />
@@ -422,15 +586,21 @@ function DisplayMenu() {
         ) : null}
         <DropdownMenuItem onSelect={(e) => keepOpen(e, () => setMagneticSnap(!magneticSnap))}>
           <Magnet className="h-4 w-4" />
-          <span>Magnetic snap</span>
+          <span>{i18n._({ id: 'app.viewerToolbar.magneticSnap', message: 'Magnetic snap' })}</span>
           <span className="ml-auto text-muted-foreground text-xs">
-            {magneticSnap ? 'On' : 'Off'}
+            {magneticSnap
+              ? i18n._({ id: 'app.viewerToolbar.on', message: 'On' })
+              : i18n._({ id: 'app.viewerToolbar.off', message: 'Off' })}
           </span>
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={(e) => keepOpen(e, () => setShadows(!shadows))}>
           <Contrast className="h-4 w-4" />
-          <span>Shadows</span>
-          <span className="ml-auto text-muted-foreground text-xs">{shadows ? 'On' : 'Off'}</span>
+          <span>{i18n._({ id: 'app.viewerToolbar.shadows', message: 'Shadows' })}</span>
+          <span className="ml-auto text-muted-foreground text-xs">
+            {shadows
+              ? i18n._({ id: 'app.viewerToolbar.on', message: 'On' })
+              : i18n._({ id: 'app.viewerToolbar.off', message: 'Off' })}
+          </span>
         </DropdownMenuItem>
         <DropdownMenuItem
           onSelect={(e) =>
@@ -444,9 +614,11 @@ function DisplayMenu() {
             icon={cameraMode === 'perspective' ? 'icon-park-outline:perspective' : 'vaadin:grid'}
             width={16}
           />
-          <span>Camera</span>
+          <span>{i18n._({ id: 'app.viewerToolbar.camera', message: 'Camera' })}</span>
           <span className="ml-auto text-muted-foreground text-xs">
-            {cameraMode === 'perspective' ? 'Perspective' : 'Orthographic'}
+            {cameraMode === 'perspective'
+              ? i18n._({ id: 'app.viewerToolbar.perspective', message: 'Perspective' })
+              : i18n._({ id: 'app.viewerToolbar.orthographic', message: 'Orthographic' })}
           </span>
         </DropdownMenuItem>
         <DropdownMenuSub>
@@ -454,13 +626,13 @@ function DisplayMenu() {
             <span className="flex h-4 w-4 items-center justify-center font-semibold text-[10px]">
               {unit === 'imperial' ? 'ft' : metricNotation === 'millimeters' ? 'mm' : 'm'}
             </span>
-            <span>Units</span>
+            <span>{i18n._({ id: 'app.viewerToolbar.units', message: 'Units' })}</span>
             <span className="ml-auto text-muted-foreground text-xs">
               {unit === 'imperial'
-                ? 'Feet & inches'
+                ? i18n._({ id: 'app.viewerToolbar.feetInches', message: 'Feet & inches' })
                 : metricNotation === 'millimeters'
-                  ? 'Millimeters'
-                  : 'Meters'}
+                  ? i18n._({ id: 'app.viewerToolbar.millimeters', message: 'Millimeters' })
+                  : i18n._({ id: 'app.viewerToolbar.meters', message: 'Meters' })}
             </span>
           </DropdownMenuSubTrigger>
           <DropdownMenuSubContent className={SUBMENU_CONTENT_CLASS}>
@@ -468,7 +640,7 @@ function DisplayMenu() {
               <span className="flex h-4 w-4 items-center justify-center font-semibold text-[10px]">
                 m
               </span>
-              <span>Meters</span>
+              <span>{i18n._({ id: 'app.viewerToolbar.meters', message: 'Meters' })}</span>
               {unit === 'metric' && metricNotation === 'meters' ? (
                 <Check className="ml-auto h-4 w-4 text-foreground" />
               ) : null}
@@ -477,7 +649,7 @@ function DisplayMenu() {
               <span className="flex h-4 w-4 items-center justify-center font-semibold text-[10px]">
                 mm
               </span>
-              <span>Millimeters</span>
+              <span>{i18n._({ id: 'app.viewerToolbar.millimeters', message: 'Millimeters' })}</span>
               {unit === 'metric' && metricNotation === 'millimeters' ? (
                 <Check className="ml-auto h-4 w-4 text-foreground" />
               ) : null}
@@ -486,7 +658,9 @@ function DisplayMenu() {
               <span className="flex h-4 w-4 items-center justify-center font-semibold text-[10px]">
                 ft
               </span>
-              <span>Feet & inches</span>
+              <span>
+                {i18n._({ id: 'app.viewerToolbar.feetInches', message: 'Feet & inches' })}
+              </span>
               {unit === 'imperial' ? <Check className="ml-auto h-4 w-4 text-foreground" /> : null}
             </DropdownMenuItem>
           </DropdownMenuSubContent>
@@ -497,8 +671,10 @@ function DisplayMenu() {
         <DropdownMenuSub>
           <DropdownMenuSubTrigger>
             <activeShading.icon className="h-4 w-4" />
-            <span>Render</span>
-            <span className="ml-auto text-muted-foreground text-xs">{activeShading.name}</span>
+            <span>{i18n._({ id: 'app.viewerToolbar.render', message: 'Render' })}</span>
+            <span className="ml-auto text-muted-foreground text-xs">
+              {i18n._(activeShading.name)}
+            </span>
           </DropdownMenuSubTrigger>
           <DropdownMenuSubContent className={SUBMENU_CONTENT_CLASS}>
             {SHADING_OPTIONS.map((option) => {
@@ -507,8 +683,8 @@ function DisplayMenu() {
                 <DropdownMenuItem key={option.id} onSelect={() => setShading(option.id)}>
                   <OptionIcon className="h-4 w-4" />
                   <div className="flex flex-col">
-                    <span className="text-foreground">{option.name}</span>
-                    <span className="text-muted-foreground text-xs">{option.detail}</span>
+                    <span className="text-foreground">{i18n._(option.name)}</span>
+                    <span className="text-muted-foreground text-xs">{i18n._(option.detail)}</span>
                   </div>
                   {shading === option.id ? (
                     <Check className="ml-auto h-4 w-4 text-foreground" />
@@ -522,15 +698,17 @@ function DisplayMenu() {
         <DropdownMenuSub>
           <DropdownMenuSubTrigger>
             <PenLine className="h-4 w-4" />
-            <span>Edges</span>
-            <span className="ml-auto text-muted-foreground text-xs">{activeEdges.name}</span>
+            <span>{i18n._({ id: 'app.viewerToolbar.edges', message: 'Edges' })}</span>
+            <span className="ml-auto text-muted-foreground text-xs">
+              {i18n._(activeEdges.name)}
+            </span>
           </DropdownMenuSubTrigger>
           <DropdownMenuSubContent className={SUBMENU_CONTENT_CLASS}>
             {EDGE_OPTIONS.map((option) => (
               <DropdownMenuItem key={option.id} onSelect={() => setEdges(option.id)}>
                 <div className="flex flex-col">
-                  <span className="text-foreground">{option.name}</span>
-                  <span className="text-muted-foreground text-xs">{option.detail}</span>
+                  <span className="text-foreground">{i18n._(option.name)}</span>
+                  <span className="text-muted-foreground text-xs">{i18n._(option.detail)}</span>
                 </div>
                 {edges === option.id ? <Check className="ml-auto h-4 w-4 text-foreground" /> : null}
               </DropdownMenuItem>
@@ -541,9 +719,9 @@ function DisplayMenu() {
         <DropdownMenuSub>
           <DropdownMenuSubTrigger>
             <SwatchBook className="h-4 w-4" />
-            <span>Scene theme</span>
+            <span>{i18n._({ id: 'app.viewerToolbar.sceneTheme', message: 'Scene theme' })}</span>
             <span className="ml-auto truncate text-muted-foreground text-xs">
-              {activeTheme.name}
+              {sceneThemeName(activeTheme.id, activeTheme.name, i18n)}
             </span>
           </DropdownMenuSubTrigger>
           <DropdownMenuSubContent className="min-w-48 rounded-xl border-border/45 bg-popover/95 backdrop-blur-xl">
@@ -561,7 +739,9 @@ function DisplayMenu() {
                       <span key={`${theme.id}-${index}`} style={{ backgroundColor: color }} />
                     ))}
                   </span>
-                  <span className="text-foreground">{theme.name}</span>
+                  <span className="text-foreground">
+                    {sceneThemeName(theme.id, theme.name, i18n)}
+                  </span>
                   {sceneTheme === theme.id ? (
                     <Check className="ml-auto h-4 w-4 text-foreground" />
                   ) : null}
@@ -576,6 +756,7 @@ function DisplayMenu() {
 }
 
 function WalkthroughButton() {
+  const i18n = usePascalI18n()
   const isFirstPersonMode = useEditor((state) => state.isFirstPersonMode)
   const setFirstPersonMode = useEditor((state) => state.setFirstPersonMode)
   const handleClick = useCallback(() => {
@@ -589,7 +770,7 @@ function WalkthroughButton() {
   }, [isFirstPersonMode, setFirstPersonMode])
 
   return (
-    <ToolbarTooltip label="Walkthrough">
+    <ToolbarTooltip label={i18n._({ id: 'app.viewerToolbar.walkthrough', message: 'Walkthrough' })}>
       <button
         className={cn(
           TOOLBAR_BTN,
@@ -605,15 +786,18 @@ function WalkthroughButton() {
 }
 
 function PreviewButton() {
+  const i18n = usePascalI18n()
   return (
-    <ToolbarTooltip label="Preview mode">
+    <ToolbarTooltip
+      label={i18n._({ id: 'app.viewerToolbar.previewMode', message: 'Preview mode' })}
+    >
       <button
         className="flex items-center gap-1.5 px-2.5 font-medium text-muted-foreground/80 text-xs transition-colors hover:bg-white/8 hover:text-foreground/90"
         onClick={() => useEditor.getState().setPreviewMode(true)}
         type="button"
       >
         <Eye className="h-3.5 w-3.5 shrink-0" />
-        <span>Preview</span>
+        <span>{i18n._({ id: 'app.viewerToolbar.preview', message: 'Preview' })}</span>
       </button>
     </ToolbarTooltip>
   )
@@ -662,7 +846,7 @@ export function EditorViewerToolbarRight({
   vrButton,
   vrActive = false,
   vrDisabled = false,
-  vrLabel = vrActive ? 'Exit VR' : 'Enter VR',
+  vrLabel,
 }: {
   onVRToggle?: () => void
   vrButton?: ReactNode
@@ -670,6 +854,12 @@ export function EditorViewerToolbarRight({
   vrDisabled?: boolean
   vrLabel?: string
 }) {
+  const i18n = usePascalI18n()
+  const label =
+    vrLabel ??
+    (vrActive
+      ? i18n._({ id: 'app.viewerToolbar.exitVr', message: 'Exit VR' })
+      : i18n._({ id: 'app.viewerToolbar.enterVr', message: 'Enter VR' }))
   return (
     <div className={TOOLBAR_CONTAINER}>
       <LevelModeToggle />
@@ -681,12 +871,7 @@ export function EditorViewerToolbarRight({
       {onVRToggle || vrButton
         ? (vrButton ??
           (onVRToggle ? (
-            <VRButton
-              active={vrActive}
-              disabled={vrDisabled}
-              label={vrLabel}
-              onToggle={onVRToggle}
-            />
+            <VRButton active={vrActive} disabled={vrDisabled} label={label} onToggle={onVRToggle} />
           ) : null))
         : null}
       <PreviewButton />

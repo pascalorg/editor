@@ -1,5 +1,6 @@
 'use client'
 
+import { type MessageDescriptor, usePascalI18n } from '@pascal-app/core'
 import { Plus } from 'lucide-react'
 import type { ComponentType, ReactNode } from 'react'
 import {
@@ -32,19 +33,19 @@ interface IconRailProps {
   className?: string
 }
 
-const sitePanel: { id: PanelId; iconSrc: string; label: string } = {
+const sitePanel: { id: PanelId; iconSrc: string; label: MessageDescriptor } = {
   id: 'site',
   iconSrc: '/icons/level.webp',
-  label: 'Site',
+  label: /* i18n */ { id: 'editor.sidebar.iconRail.site', message: 'Site' },
 }
 
-const settingsPanel: { id: PanelId; iconSrc: string; label: string } = {
+const settingsPanel: { id: PanelId; iconSrc: string; label: MessageDescriptor } = {
   id: 'settings',
   iconSrc: '/icons/settings.webp',
-  label: 'Settings',
+  label: /* i18n */ { id: 'editor.sidebar.iconRail.settings', message: 'Settings' },
 }
 
-const panels: { id: PanelId; iconSrc: string; label: string }[] = [sitePanel, settingsPanel]
+const panels: { id: PanelId; iconSrc: string; label: MessageDescriptor }[] = [sitePanel, settingsPanel]
 
 export function IconRail({
   activePanel,
@@ -53,6 +54,7 @@ export function IconRail({
   extraPanels,
   className,
 }: IconRailProps) {
+  const i18n = usePascalI18n()
   const regularExtraPanels = extraPanels?.filter((panel) => !panel.pluginId && panel.id !== 'plugins')
   const pluginPanels = extraPanels?.filter((panel) => panel.pluginId)
   const pluginsPanel = extraPanels?.find((panel) => panel.id === 'plugins')
@@ -113,7 +115,7 @@ export function IconRail({
                 type="button"
               >
                 <img
-                  alt={panel.label}
+                  alt={i18n._(panel.label)}
                   className={cn(
                     'h-6 w-6 object-contain transition-all',
                     !isActive && 'opacity-50 saturate-0',
@@ -122,7 +124,7 @@ export function IconRail({
                 />
               </button>
             </TooltipTrigger>
-            <TooltipContent side="right">{panel.label}</TooltipContent>
+            <TooltipContent side="right">{i18n._(panel.label)}</TooltipContent>
           </Tooltip>
         )
       })}
@@ -144,7 +146,7 @@ export function IconRail({
                 type="button"
               >
                 <img
-                  alt={panel.label}
+                  alt={i18n._(panel.label)}
                   className={cn(
                     'h-6 w-6 object-contain transition-all',
                     !isActive && 'opacity-50 saturate-0',
@@ -153,7 +155,7 @@ export function IconRail({
                 />
               </button>
             </TooltipTrigger>
-            <TooltipContent side="right">{panel.label}</TooltipContent>
+            <TooltipContent side="right">{i18n._(panel.label)}</TooltipContent>
           </Tooltip>
         )
       })}

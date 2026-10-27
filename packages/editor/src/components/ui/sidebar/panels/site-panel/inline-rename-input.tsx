@@ -1,4 +1,4 @@
-import { type AnyNodeId, useScene } from '@pascal-app/core'
+import { type AnyNodeId, usePascalI18n, useScene } from '@pascal-app/core'
 import { Pencil } from 'lucide-react'
 import { memo, useCallback, useEffect, useRef, useState } from 'react'
 import { cn } from './../../../../../lib/utils'
@@ -18,15 +18,19 @@ interface InlineRenameFieldProps {
 
 type InlineRenameInputProps = Omit<InlineRenameFieldProps, 'name' | 'onRename'> & {
   nodeId: AnyNodeId
+  /** The part of the stored name the user edits; a generated default edits as empty. */
+  editableName?: (name: string | undefined) => string | undefined
 }
 
 /** Renames a scene node through `updateNode`. */
 export const InlineRenameInput = memo(function InlineRenameInput({
   nodeId,
+  editableName,
   ...props
 }: InlineRenameInputProps) {
   const updateNode = useScene((s) => s.updateNode)
-  const name = useScene((s) => s.nodes[nodeId]?.name)
+  const stored = useScene((s) => s.nodes[nodeId]?.name)
+  const name = editableName ? editableName(stored) : stored
   const handleRename = useCallback(
     (next: string | undefined) => updateNode(nodeId, { name: next }),
     [nodeId, updateNode],
@@ -44,6 +48,7 @@ export const InlineRenameField = memo(function InlineRenameField({
   className,
   onStartEditing,
 }: InlineRenameFieldProps) {
+  const i18n = usePascalI18n()
   const [value, setValue] = useState(name || '')
   const inputRef = useRef<HTMLInputElement>(null)
   const inputSize = Math.max((value || defaultName).length, 1)
@@ -63,7 +68,7 @@ export const InlineRenameField = memo(function InlineRenameField({
 
   const handleSave = useCallback(() => {
     const trimmed = value.trim()
-    if (trimmed !== name) {
+    if ((trimmed || undefined) !== (name || undefined)) {
       onRename(trimmed || undefined)
     }
     onStopEditing()
@@ -87,6 +92,7 @@ export const InlineRenameField = memo(function InlineRenameField({
         </span>
         {onStartEditing && (
           <button
+            aria-label={i18n._({ id: 'editor.layers.rename', message: 'Rename' })}
             className="shrink-0 text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover/rename:opacity-100"
             onClick={(e) => {
               e.stopPropagation()

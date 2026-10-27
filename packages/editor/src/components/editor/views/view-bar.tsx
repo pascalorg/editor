@@ -1,5 +1,6 @@
 'use client'
 
+import { type MessageDescriptor, type PascalI18n, usePascalI18n } from '@pascal-app/core'
 import { type GroundMode, useViewer } from '@pascal-app/viewer'
 import { ArrowLeftRight, Check, Columns2, MoreHorizontal, Pin, PinOff, X } from 'lucide-react'
 import { type ReactNode, useEffect, useRef } from 'react'
@@ -7,7 +8,7 @@ import { useIsMobile } from '../../../hooks/use-mobile'
 import { type EditorViewDescriptor, isSceneView, isViewPinned } from '../../../lib/editor-views'
 import { cn } from '../../../lib/utils'
 import useEditor from '../../../store/use-editor'
-import type { ViewPaneIndex } from '../../../store/view-layout'
+import { VIEW_2D, VIEW_3D, type ViewPaneIndex } from '../../../store/view-layout'
 import { IconRefGlyph } from '../../ui/icon-ref'
 import {
   DropdownMenu,
@@ -30,7 +31,16 @@ const IDLE =
   'text-muted-foreground/70 hover:bg-black/5 dark:hover:bg-white/8 hover:text-muted-foreground'
 
 /** The views of one pane: its pinned views, the one it shows, and a menu with the rest. */
+/** Built-in views are named by the editor; host and plugin views bring their own label. */
+function viewLabel(view: EditorViewDescriptor, i18n: PascalI18n): string {
+  if (view.id === VIEW_3D) return i18n._({ id: 'editor.views.view3d', message: '3D' })
+  if (view.id === VIEW_2D) return i18n._({ id: 'editor.views.view2d', message: '2D' })
+  if (view.id === PLUGINS_VIEW_ID) return i18n._({ id: 'editor.views.plugins', message: 'Plugins' })
+  return view.label
+}
+
 export function ViewTabs({ pane, className }: { pane: ViewPaneIndex; className?: string }) {
+  const i18n = usePascalI18n()
   const layout = useActiveViewLayout()
   const views = useEditorViews()
   const pinnedViews = useEditor((s) => s.pinnedViews)
@@ -58,7 +68,11 @@ export function ViewTabs({ pane, className }: { pane: ViewPaneIndex; className?:
   return (
     <div className={cn(GROUP, 'min-w-0 shrink', className)}>
       <div
-        aria-label={`Pane ${pane + 1} views`}
+        aria-label={i18n._({
+          id: 'editor.views.viewBar.paneViews',
+          message: 'Pane {pane} views',
+          values: { pane: pane + 1 },
+        })}
         className="flex min-w-0 overflow-x-auto [scrollbar-width:none]"
         role="tablist"
         ref={tabList}
@@ -102,16 +116,20 @@ export function ViewTabs({ pane, className }: { pane: ViewPaneIndex; className?:
                 }
               }}
               tabIndex={view.id === current ? 0 : -1}
-              title={view.label}
+              title={viewLabel(view, i18n)}
               role="tab"
               type="button"
             >
               <IconRefGlyph icon={view.icon} size={14} />
-              <span className="max-w-36 truncate">{view.label}</span>
+              <span className="max-w-36 truncate">{viewLabel(view, i18n)}</span>
             </button>
             {view.onClose && (
               <button
-                aria-label={`Close ${view.label}`}
+                aria-label={i18n._({
+                  id: 'editor.views.viewBar.closeLabel',
+                  message: 'Close {label}',
+                  values: { label: viewLabel(view, i18n) },
+                })}
                 className="mr-1 flex size-6 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
                 onClick={view.onClose}
                 type="button"
@@ -128,9 +146,27 @@ export function ViewTabs({ pane, className }: { pane: ViewPaneIndex; className?:
 }
 
 const GROUND_MODES = [
-  { mode: 'auto', label: 'Auto', title: 'Veil the ground over a level below grade' },
-  { mode: 'solid', label: 'Solid', title: 'Keep the ground solid' },
-] as const satisfies ReadonlyArray<{ mode: GroundMode; label: string; title: string }>
+  {
+    mode: 'auto',
+    label: /* i18n */ { id: 'editor.views.viewBar.auto', message: 'Auto' },
+    title: /* i18n */ {
+      id: 'editor.views.viewBar.veilTheGroundOverALevel',
+      message: 'Veil the ground over a level below grade',
+    },
+  },
+  {
+    mode: 'solid',
+    label: /* i18n */ { id: 'editor.views.viewBar.solid', message: 'Solid' },
+    title: /* i18n */ {
+      id: 'editor.views.viewBar.keepTheGroundSolid',
+      message: 'Keep the ground solid',
+    },
+  },
+] as const satisfies ReadonlyArray<{
+  mode: GroundMode
+  label: MessageDescriptor
+  title: MessageDescriptor
+}>
 
 /**
  * Over a level below grade the ground is veiled so its rooms show, and the bar says so: the
@@ -139,6 +175,7 @@ const GROUND_MODES = [
  * a level at grade or only partly below it.
  */
 export function GroundModeToggle() {
+  const i18n = usePascalI18n()
   const belowGrade = useViewer((s) => s.belowGrade)
   const gradeStanding = useViewer((s) => s.gradeStanding)
   const groundWindowVeiled = useViewer((s) => s.groundWindowVeiled)
@@ -147,15 +184,31 @@ export function GroundModeToggle() {
   const veiled =
     groundMode === 'auto' &&
     ((belowGrade && gradeStanding !== 'partly-below-grade') || groundWindowVeiled)
-  const ground = veiled ? 'veiled' : 'solid'
-  const label =
+  const standing =
     gradeStanding === 'partly-below-grade'
-      ? `Partly below grade · ground ${ground}`
+      ? 'partly'
       : gradeStanding === 'below-grade'
-        ? `Below grade · ground ${ground}`
-        : `Ground ${ground}`
+        ? 'below'
+        : 'other'
+  const label = veiled
+    ? i18n._({
+        id: 'editor.views.viewBar.groundVeiled',
+        message:
+          '{standing, select, partly {Partly below grade · ground veiled} below {Below grade · ground veiled} other {Ground veiled}}',
+        values: { standing },
+      })
+    : i18n._({
+        id: 'editor.views.viewBar.groundSolid',
+        message:
+          '{standing, select, partly {Partly below grade · ground solid} below {Below grade · ground solid} other {Ground solid}}',
+        values: { standing },
+      })
   return (
-    <div aria-label="Ground" className={GROUP} role="group">
+    <div
+      aria-label={i18n._({ id: 'editor.views.viewBar.ground', message: 'Ground' })}
+      className={GROUP}
+      role="group"
+    >
       <span className="flex items-center px-2.5 text-muted-foreground text-xs">{label}</span>
       {GROUND_MODES.map(({ mode, label, title }) => (
         <button
@@ -163,10 +216,10 @@ export function GroundModeToggle() {
           className={cn(SEGMENT, groundMode === mode ? ACTIVE : IDLE)}
           key={mode}
           onClick={() => useViewer.getState().setGroundMode(mode)}
-          title={title}
+          title={i18n._(title)}
           type="button"
         >
-          {label}
+          {i18n._(label)}
         </button>
       ))}
     </div>
@@ -175,15 +228,16 @@ export function GroundModeToggle() {
 
 /** Split toggle and, split, the swap — at the right end of the last pane's bar. */
 function SplitControls() {
+  const i18n = usePascalI18n()
   const split = useActiveViewLayout().split
   return (
     <div className={GROUP}>
       {split && (
         <button
-          aria-label="Swap panes"
+          aria-label={i18n._({ id: 'editor.views.viewBar.swapPanes', message: 'Swap panes' })}
           className={cn(SEGMENT, IDLE, 'px-2')}
           onClick={() => useEditor.getState().swapPanes()}
-          title="Swap panes"
+          title={i18n._({ id: 'editor.views.viewBar.swapPanes', message: 'Swap panes' })}
           type="button"
         >
           <ArrowLeftRight className="h-3 w-3" />
@@ -193,11 +247,15 @@ function SplitControls() {
         aria-pressed={split}
         className={cn(SEGMENT, split ? ACTIVE : IDLE)}
         onClick={() => useEditor.getState().toggleSplit()}
-        title={split ? 'Close split (\\)' : 'Split (\\)'}
+        title={
+          split
+            ? i18n._({ id: 'editor.views.viewBar.closeSplit', message: 'Close split (\\)' })
+            : i18n._({ id: 'editor.views.viewBar.split', message: 'Split (\\)' })
+        }
         type="button"
       >
         <Columns2 className="h-3 w-3" />
-        <span>Split</span>
+        <span>{i18n._({ id: 'editor.views.viewBar.split2', message: 'Split' })}</span>
       </button>
     </div>
   )
@@ -272,6 +330,7 @@ function MoreViewsMenu({
   current: string
   views: EditorViewDescriptor[]
 }) {
+  const i18n = usePascalI18n()
   const pinnedViews = useEditor((s) => s.pinnedViews)
   const setPaneView = useEditor((s) => s.setPaneView)
   const setViewPinned = useEditor((s) => s.setViewPinned)
@@ -282,7 +341,7 @@ function MoreViewsMenu({
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <button
-          aria-label="More views"
+          aria-label={i18n._({ id: 'editor.views.viewBar.moreViews', message: 'More views' })}
           className={cn(SEGMENT, IDLE, 'shrink-0 px-2')}
           type="button"
         >
@@ -290,7 +349,9 @@ function MoreViewsMenu({
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-64">
-        <DropdownMenuLabel className="text-muted-foreground text-xs">Views</DropdownMenuLabel>
+        <DropdownMenuLabel className="text-muted-foreground text-xs">
+          {i18n._({ id: 'editor.views.viewBar.views', message: 'Views' })}
+        </DropdownMenuLabel>
         {listed.map((view) => {
           const pinned = isViewPinned(view, pinnedViews)
           return (
@@ -300,11 +361,23 @@ function MoreViewsMenu({
               onSelect={() => setPaneView(pane, view.id)}
             >
               <IconRefGlyph icon={view.icon} size={16} />
-              <span className="min-w-0 flex-1 truncate">{view.label}</span>
+              <span className="min-w-0 flex-1 truncate">{viewLabel(view, i18n)}</span>
               {view.id === current && <Check className="h-3.5 w-3.5 text-muted-foreground" />}
               {!isSceneView(view.id) && !view.onClose && !view.alwaysPinned && (
                 <button
-                  aria-label={pinned ? `Unpin ${view.label}` : `Pin ${view.label}`}
+                  aria-label={
+                    pinned
+                      ? i18n._({
+                          id: 'editor.views.viewBar.unpinLabel',
+                          message: 'Unpin {label}',
+                          values: { label: viewLabel(view, i18n) },
+                        })
+                      : i18n._({
+                          id: 'editor.views.viewBar.pinLabel',
+                          message: 'Pin {label}',
+                          values: { label: viewLabel(view, i18n) },
+                        })
+                  }
                   aria-pressed={pinned}
                   className={cn(
                     'flex h-6 w-6 items-center justify-center rounded-md transition-colors hover:bg-black/6 dark:hover:bg-white/10',
@@ -316,7 +389,17 @@ function MoreViewsMenu({
                     setViewPinned(view.id, !pinned)
                   }}
                   onPointerDown={(event) => event.stopPropagation()}
-                  title={pinned ? 'Unpin from the view bar' : 'Pin to the view bar'}
+                  title={
+                    pinned
+                      ? i18n._({
+                          id: 'editor.views.viewBar.unpinFromTheViewBar',
+                          message: 'Unpin from the view bar',
+                        })
+                      : i18n._({
+                          id: 'editor.views.viewBar.pinToTheViewBar',
+                          message: 'Pin to the view bar',
+                        })
+                  }
                   type="button"
                 >
                   {pinned ? <PinOff className="h-3.5 w-3.5" /> : <Pin className="h-3.5 w-3.5" />}
@@ -333,7 +416,9 @@ function MoreViewsMenu({
               onSelect={() => setPaneView(pane, PLUGINS_VIEW_ID)}
             >
               <img alt="" className="h-4 w-4 object-contain" src="/icons/plugins.webp" />
-              <span>Browse plugins</span>
+              <span>
+                {i18n._({ id: 'editor.views.viewBar.browsePlugins', message: 'Browse plugins' })}
+              </span>
             </DropdownMenuItem>
           </>
         )}

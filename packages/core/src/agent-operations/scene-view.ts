@@ -25,7 +25,9 @@ import type {
 import { getActiveRoofHeight } from '../schema'
 import { isCeilingGeometry, isRoofGeometry } from '../services/roof-level'
 import { EXPLODED_GAP, getLevelElevations } from '../services/storey'
+import { stairFootprintAABB } from '../systems/stair/stair-footprint'
 import { resolveWallExteriorSide } from '../systems/wall/wall-assembly'
+import { itemLevelHeightRange, itemPlanAabbInLevel } from './item-space'
 import { pointInPolygon } from './plan-geometry'
 import { queryNodes } from './scene-queries'
 
@@ -1005,10 +1007,62 @@ function roomMiddle(outline: Pt[], inRoom: (point: Pt) => boolean): Pt {
   return best
 }
 
+/** How far the eye keeps from a tall piece, so it never stands inside one or against its face. */
+const EYE_ITEM_CLEARANCE = 0.3
+
+/**
+ * The footprints, on the site and grown by EYE_ITEM_CLEARANCE, of what stands on a floor through a
+ * person's eye height (a wardrobe, a fridge, a bookcase, a stair): an eye inside one, or just behind
+ * one, sees a single flat panel. A bed or a counter under the eye does not block it. Pieces hosted
+ * by a wall or hung from a ceiling keep their own frames and are not read.
+ */
+function eyeObstacles(
+  nodes: Readonly<Record<string, AnyNode>>,
+  levelId: string,
+  eyeHeight: number,
+): Pt[][] {
+  const items = queryNodes(nodes, { type: 'item' })
+  const level = nodes[levelId as AnyNodeId]
+  // An item stands on the level through other items only: what the walk below can reach.
+  const byId = new Map<string, AnyNode>(
+    [...items, ...(level ? [level] : [])].map((node) => [node.id, node]),
+  )
+  const at = standingOf(nodes, levelId)
+  const m = EYE_ITEM_CLEARANCE
+  return [...queryNodes(nodes, { type: 'stair', parentId: levelId }), ...items].flatMap((node) => {
+    let box: { minX: number; maxX: number; minZ: number; maxZ: number } | null = null
+    if (node.type === 'stair') box = stairFootprintAABB(node, nodes)
+    else if (node.type === 'item') {
+      let parent = byId.get(node.parentId ?? '')
+      while (parent?.type === 'item') parent = byId.get(parent.parentId ?? '')
+      if (parent?.id !== levelId) return []
+      const height = itemLevelHeightRange(node, byId)
+      if (!height || height.max < eyeHeight - 0.4 || height.min > eyeHeight + 0.2) return []
+      box = itemPlanAabbInLevel(node, byId)
+    }
+    if (!box) return []
+    return [
+      (
+        [
+          [box.minX - m, box.minZ - m],
+          [box.maxX + m, box.minZ - m],
+          [box.maxX + m, box.maxZ + m],
+          [box.minX - m, box.maxZ + m],
+        ] as Pt[]
+      ).map((corner) => onSite(corner, at)),
+    ]
+  })
+}
+
+/** How far ahead the eye's line toward what it looks at must clear every tall piece. */
+const EYE_SIGHT_REACH = 2
+
 /**
  * A person standing in a room, looking across it: the eye a step in from the corner farthest from
  * what it looks at (or, given a side, from the corner on that side), at eye height, aimed at the
- * room's middle or at the target. Everything is on the site, in metres.
+ * room's middle or at the target. A step that lands in a tall piece (`blocked`) goes further in,
+ * else another corner is taken; a corner whose first EYE_SIGHT_REACH metres toward what it looks at
+ * cross one is taken only when no other sees past them. Everything is on the site, in metres.
  */
 function roomEyeView(
   outline: Pt[],
@@ -1019,29 +1073,51 @@ function roomEyeView(
     side,
     eyeHeight = ROOM_EYE_HEIGHT,
     fov = ROOM_FOV,
-  }: { aim?: V3; side?: Pt; eyeHeight?: number; fov?: number },
+    blocked = [],
+  }: { aim?: V3; side?: Pt; eyeHeight?: number; fov?: number; blocked?: Pt[][] },
 ): SceneViewPose {
   const inRoom = (point: Pt) =>
     pointInPolygon(point, outline, false) && !holes.some((hole) => pointInPolygon(point, hole))
+  const clear = (point: Pt) => !blocked.some((footprint) => pointInPolygon(point, footprint))
   const distance = (a: Pt, b: Pt) => Math.hypot(a[0] - b[0], a[1] - b[1])
   const middle = roomMiddle(outline, inRoom)
   const looksAt: Pt = aim ? [aim[0], aim[2]] : middle
-  let eye: Pt | undefined
-  let bestScore = Number.NEGATIVE_INFINITY
-  for (const corner of outline) {
-    const toMiddle = distance(corner, middle) || 1
-    const inward: Pt = [(middle[0] - corner[0]) / toMiddle, (middle[1] - corner[1]) / toMiddle]
-    // A step in from the corner, further in a room too narrow to hold the first.
-    const standing = [0.6, 1, 1.6]
-      .filter((step) => step <= toMiddle * 0.8)
-      .map((step): Pt => [corner[0] + inward[0] * step, corner[1] + inward[1] * step])
-      .find((point) => inRoom(point) && clearanceOf(outline, point) >= 0.25)
-    if (!standing) continue
-    const score = side
-      ? ((corner[0] - middle[0]) * side[0] + (corner[1] - middle[1]) * side[1]) / toMiddle
-      : distance(standing, looksAt)
-    if (score > bestScore) [eye, bestScore] = [standing, score]
+  const seesPast = (point: Pt) => {
+    const reach = Math.min(EYE_SIGHT_REACH, distance(point, looksAt))
+    const length = distance(point, looksAt) || 1
+    for (let r = 0.1; r <= reach; r += 0.1) {
+      const t = r / length
+      if (!clear([point[0] + (looksAt[0] - point[0]) * t, point[1] + (looksAt[1] - point[1]) * t]))
+        return false
+    }
+    return true
   }
+  const stand = (sighted: boolean) => {
+    let found: Pt | undefined
+    let bestScore = Number.NEGATIVE_INFINITY
+    for (const corner of outline) {
+      const toMiddle = distance(corner, middle) || 1
+      const inward: Pt = [(middle[0] - corner[0]) / toMiddle, (middle[1] - corner[1]) / toMiddle]
+      // A step in from the corner, further in a room too narrow to hold the first.
+      const standing = [0.6, 1, 1.6, 2.2, 3]
+        .filter((step) => step <= toMiddle * 0.8)
+        .map((step): Pt => [corner[0] + inward[0] * step, corner[1] + inward[1] * step])
+        .find(
+          (point) =>
+            inRoom(point) &&
+            clearanceOf(outline, point) >= 0.25 &&
+            clear(point) &&
+            (!sighted || seesPast(point)),
+        )
+      if (!standing) continue
+      const score = side
+        ? ((corner[0] - middle[0]) * side[0] + (corner[1] - middle[1]) * side[1]) / toMiddle
+        : distance(standing, looksAt)
+      if (score > bestScore) [found, bestScore] = [standing, score]
+    }
+    return found
+  }
+  const eye = stand(true) ?? stand(false)
   if (!eye) {
     // A room too small for a corner to stand in: from its middle, toward its farthest corner.
     const far = outline.reduce((a, b) => (distance(b, middle) > distance(a, middle) ? b : a))
@@ -1198,6 +1274,7 @@ export function sceneViewPlan(
         side: typeof from === 'string' ? (from === 'above' ? undefined : COMPASS[from]) : from,
         eyeHeight,
         fov,
+        blocked: eyeObstacles(nodes, room.parentId!, eyeHeight ?? ROOM_EYE_HEIGHT),
       }),
       size: sized(VIEW_SIZE.w, VIEW_SIZE.h, input.maxPx),
       ...extras,

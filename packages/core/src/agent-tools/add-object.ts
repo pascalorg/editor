@@ -22,7 +22,7 @@ Conventions (they make the object work in Pascal; follow them):
 - Motion: put THREE.AnimationClips on the returned group's .animations, as in any three.js project; tracks target <objectName>.<property> or <object.uuid>.<property> and may use any transform property (position, rotation, rotation[y], quaternion, scale); material and visibility tracks do not animate. A clip named open becomes the object's open/close control (close plays a clip named close, or open reversed); a clip named loop runs continuously; every other clip gets its own play toggle labelled with its name (name it for the person: "Twirl", "Music"). Write as many clips as the object needs.
 - Cuts: a mesh named cutout cuts only the mounted host; cut:wall, cut:ceiling and cut:slab require that host kind (floor items cut their support slab). The hidden cutter must reach the host; walls use its real shape, ceilings and slabs its through-hole footprint.
 - Sockets: an empty Object3D named anchor:<id> marks where other things attach.
-- No textures, network or DOM. At most 300k triangles, 32 materials, 60 m per side.
+- No textures, network or DOM. At most 300k triangles (every instance of an InstancedMesh counts), 32 materials, 60 m per side.
 
 Blender instead (language 'bpy'): when the shape is easier with Blender's modelling (bevelled or rounded edges, subdivision-smooth and organic forms, booleans, curves and text, solidify, array, screw and other modifiers), write a bpy module:
   import bpy, bmesh
@@ -33,7 +33,47 @@ The same conventions in Blender terms: metres, Z up, the front faces -Y (Blender
 
 Several objects: they do not depend on each other, so several add_object calls can go in one step, or in one run_batch call (a call per object; each is reported on its own with its receipt, and one that fails does not stop the others).
 
+From words instead of code: pass piece (what it is in your own words, its size and mount) with name, category and reason. Pascal's own model writes its module in the background under these conventions, compile-checked and repaired, many at a time; the call answers at once with the piece's id and status pending, so go on working. Where the host offers it; each piece spends credits. Given position (or parentId), the object is placed there when its module lands; given neither, it is only made, and author_scene items place it, as many times as they name its id (piece). A piece that fails comes back in author_scene's report.
+
 Edit: pass nodeId with new code and/or params (params alone rebuild the stored script; get_source provides the current code and params when needed); identity, placement, paint and the params you leave out are kept. The result lists the size, parts, slots, lights, animations and params.`
+
+const pieceLength = (axis: string) =>
+  measurement('length', 'm', { description: axis, positive: true })
+
+/** A piece Pascal's own model writes from its description (`add_object`'s `piece`). */
+export const objectPiece = z
+  .object({
+    description: z
+      .string()
+      .trim()
+      .min(1)
+      .max(2000)
+      .describe(
+        'The object in your own words: what it is, its form, materials, colours and details, as you would brief a modeller.',
+      ),
+    size: z
+      .object({
+        width: pieceLength('Along X.'),
+        height: pieceLength('Along Y.'),
+        depth: pieceLength('Along Z, its front toward +Z.'),
+      })
+      .describe('Its visible bounds in its own frame.'),
+    mount: z
+      .enum(['floor', 'wall-side', 'ceiling'])
+      .default('floor')
+      .describe(
+        'floor (default), wall-side (its back on a wall face) or ceiling (hanging, its top on the ceiling).',
+      ),
+    id: z
+      .string()
+      .regex(/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/)
+      .optional()
+      .describe(
+        'Your own id for it (letters, digits, - and _), which author_scene items name; default: one is made. A new piece with an id used before replaces it.',
+      ),
+  })
+  .strict()
+export type ObjectPiece = z.infer<typeof objectPiece>
 
 /** The `params` field every scripted tool shares (add_object, add_window, add_door, add_column). */
 export const scriptParams = z
@@ -59,7 +99,12 @@ export const addObjectTool = {
       .max(48_000)
       .optional()
       .describe(
-        'The module (see the tool description). Required to create; omit to rebuild an object with new params.',
+        'The module (see the tool description). Required to create, unless piece is given; omit to rebuild an object with new params.',
+      ),
+    piece: objectPiece
+      .optional()
+      .describe(
+        "Instead of code, to create: the object in words, written by Pascal's model in the background (see the tool description).",
       ),
     language: scriptLanguage,
     params: scriptParams,

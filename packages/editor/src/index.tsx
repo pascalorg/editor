@@ -2,11 +2,21 @@
 // own shells on top of `@pascal-app/editor` (community-app, embedders)
 // don't have to learn three separate package imports. The canonical
 // definitions still live in `@pascal-app/core` / `@pascal-app/viewer`.
+import { registerCompiledMessages as registerEditorMessages } from '@pascal-app/core'
+import { messages as editorEnglishMessages } from './i18n/locales/en/messages'
+
+// Published-package consumers need compiled English too: Lingui cannot
+// interpolate a raw fallback literal in production. Other bundled locales
+// remain explicitly host-registered through `@pascal-app/editor/locales`.
+registerEditorMessages('en', '', editorEnglishMessages)
+
 export {
   type ApplySceneSnapshotOptions,
   acquireSceneReadOnlyLease,
   applyScenePatch,
   applySceneSnapshot,
+  type CompiledTranslationMessages,
+  createI18n,
   DEFAULT_CURVED_STAIR_INNER_RADIUS,
   DEFAULT_CURVED_STAIR_SWEEP_ANGLE,
   DEFAULT_SPIRAL_SHOW_CENTER_COLUMN,
@@ -22,6 +32,16 @@ export {
   DEFAULT_STAIR_THICKNESS,
   DEFAULT_STAIR_TYPE,
   DEFAULT_STAIR_WIDTH,
+  defaultI18n,
+  formatLength,
+  formatNumber,
+  getLocale,
+  normalizeDecimalInput,
+  type PascalI18n,
+  PascalI18nProvider,
+  parseLocalizedNumber,
+  registerCompiledMessages,
+  registerMessages,
   type SceneCommit,
   type SceneCommitListener,
   type SceneCommitOrigin,
@@ -29,7 +49,15 @@ export {
   type SceneNodePatch,
   type ScenePatch,
   type SceneSnapshot,
+  setLocale,
+  subscribe,
   subscribeSceneCommits,
+  type TranslationMessage,
+  type TranslationMessages,
+  type TranslationParams,
+  translate,
+  useLocale,
+  usePascalI18n,
   useScene,
 } from '@pascal-app/core'
 export { useViewer } from '@pascal-app/viewer'
@@ -367,6 +395,17 @@ export { useReducedMotion } from './hooks/use-reduced-motion'
 export { useSelectedRoom } from './hooks/use-selected-room'
 export { type Selection, useSelection } from './hooks/use-selection'
 export {
+  messageSlug,
+  nodeDescriptionDescriptor,
+  nodeLabel,
+  nodeLabelDescriptor,
+  toolHintChipLabel,
+  toolHintDescriptor,
+  toolHintKey,
+  toolHintLabel,
+} from './i18n/node-messages'
+export { sceneThemeName } from './i18n/scene-theme-name'
+export {
   clearPlacementSurface,
   getPlacementSurface,
   type PlacementSurface,
@@ -695,6 +734,7 @@ export {
   measurementFloorplanPresentationColor,
   measurementPresentationColor,
   metersToLinearUnit,
+  parseLinearMeasurementInput,
   squareMetersToAreaUnit,
 } from './lib/measurements'
 export type {

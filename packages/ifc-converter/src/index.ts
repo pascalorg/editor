@@ -29,6 +29,12 @@ import { extractBeamGeometry } from './beam-geometry'
 import { type IfcConversionSimplificationOptions, simplifyConvertedSceneGraph } from './cleanup'
 import { importCollections } from './collections'
 import { doorGlazingStyle, doorStyleFromIfcOperation } from './door-semantics'
+import {
+  emptyConversionReport,
+  type IfcConversionReport,
+  isFiniteMatrix,
+  keepValidTriangles,
+} from './geometry-validity'
 import { nextId, seedIds } from './ids'
 import { applyRoomFirstStructure } from './room-first'
 import { selectStoreyForElevation } from './storey-semantics'
@@ -38,6 +44,7 @@ export type {
   IfcConversionSimplificationOptions,
   IfcConversionSimplificationStats,
 } from './cleanup'
+export { conversionReportHasIssues, type IfcConversionReport } from './geometry-validity'
 
 export type PascalNode = AnyNode
 
@@ -673,6 +680,7 @@ function extractImportedMeshPrimitives(
   originOffset: number[],
   levelElevation: number,
   swapYZ: boolean,
+  report: IfcConversionReport,
 ): ImportedMeshPrimitiveValue[] {
   let flatMesh: {
     geometries: { size: () => number; get: (index: number) => unknown }
@@ -693,6 +701,10 @@ function extractImportedMeshPrimitives(
         color?: { x?: number; y?: number; z?: number; w?: number }
       }
       const matrix = placed.flatTransformation
+      if (!isFiniteMatrix(matrix)) {
+        report.skippedGeometry.transforms++
+        continue
+      }
       const geometry = ifcApi.GetGeometry(modelID, placed.geometryExpressID)
       try {
         const vertices = ifcApi.GetVertexArray(
@@ -753,12 +765,13 @@ function extractImportedMeshPrimitives(
           )
         }
 
-        const indices = Array.from(sourceIndices)
-        if (positions.length >= 9 && indices.length >= 3) {
+        const mesh = keepValidTriangles(
+          { positions, normals, indices: Array.from(sourceIndices) },
+          report,
+        )
+        if (mesh) {
           primitives.push({
-            positions,
-            normals,
-            indices,
+            ...mesh,
             color: sourceColor(placed.color),
             opacity: Math.max(0, Math.min(1, placed.color?.w ?? 1)),
           })
@@ -851,6 +864,12 @@ export interface ConversionOptions {
   extrusionDepthIsHeight?: boolean
   swapProfileDimensions?: boolean
   wasmPath?: string
+  /**
+   * The URL to load one of web-ifc's wasm files from (`web-ifc.wasm`, or `web-ifc-mt.wasm` when
+   * the page is cross-origin isolated). Wins over `wasmPath`; lets a host serve a versioned or
+   * cache-busted URL.
+   */
+  locateWasmFile?: (fileName: string) => string
   simplify?: boolean | IfcConversionSimplificationOptions
   label?: string
 }
@@ -875,6 +894,16 @@ export async function convertIfcToPascal(
   onProgress?: (message: string, percent: number) => void,
   options?: ConversionOptions,
 ): Promise<PascalSceneGraph> {
+  return (await convertIfcToPascalWithReport(ifcData, onProgress, options)).scene
+}
+
+/** `convertIfcToPascal`, plus what the conversion had to skip or replace to finish. */
+export async function convertIfcToPascalWithReport(
+  ifcData: Uint8Array,
+  onProgress?: (message: string, percent: number) => void,
+  options?: ConversionOptions,
+): Promise<{ scene: PascalSceneGraph; report: IfcConversionReport }> {
+  const report = emptyConversionReport()
   const opts = {
     swapYZ: options?.swapYZ ?? true,
     extrusionDepthIsHeight: options?.extrusionDepthIsHeight ?? true,
@@ -897,7 +926,8 @@ export async function convertIfcToPascal(
   const ifcApi = new WebIFC.IfcAPI()
   ifcApi.SetWasmPath(opts.wasmPath, true)
 
-  await ifcApi.Init()
+  const locateWasmFile = options?.locateWasmFile
+  await ifcApi.Init(locateWasmFile ? (fileName: string) => locateWasmFile(fileName) : undefined)
   progress('Opening IFC model...', 10)
   const modelID = ifcApi.OpenModel(ifcData)
   seedIds(ifcData)
@@ -926,7 +956,9 @@ export async function convertIfcToPascal(
   progress('Analyzing spatial relationships...', 20)
 
   // Detect length unit → meters conversion factor
-  const unitFactor = getLengthUnitFactor(ifcApi, modelID)
+  const detectedUnitFactor = getLengthUnitFactor(ifcApi, modelID)
+  report.replaced.unitFactor = !(Number.isFinite(detectedUnitFactor) && detectedUnitFactor > 0)
+  const unitFactor = report.replaced.unitFactor ? 1 : detectedUnitFactor
 
   // Compute scene origin offset to center georeferenced models near (0,0,0)
   let originOffset: number[] = [0, 0, 0]
@@ -937,7 +969,9 @@ export async function convertIfcToPascal(
       const anchor = ifcApi.GetLine(modelID, anchorId)
       if (anchor.ObjectPlacement?.value) {
         const mat = resolveWorldTransform(ifcApi, modelID, anchor.ObjectPlacement.value)
-        originOffset = transformPoint3(mat, [0, 0, 0])
+        const offset = transformPoint3(mat, [0, 0, 0])
+        if (offset.every(Number.isFinite)) originOffset = offset
+        else report.replaced.originOffset = true
       }
     }
   } catch {
@@ -1148,9 +1182,14 @@ export async function convertIfcToPascal(
   }
 
   const importedPrimitivesByExpressId = new Map<number, ImportedMeshPrimitiveValue[]>()
+  // Elements whose every piece of geometry was unreadable: omitted, never rebuilt as a native
+  // node from their placement data.
+  const unreadableGeometry = new Set<number>()
   function importedMeshPrimitivesFor(expressId: number): ImportedMeshPrimitiveValue[] {
     const cached = importedPrimitivesByExpressId.get(expressId)
     if (cached) return cached
+    const { transforms, primitives: skippedPrimitives } = report.skippedGeometry
+    const skippedBefore = transforms + skippedPrimitives
     const primitives = extractImportedMeshPrimitives(
       ifcApi,
       modelID,
@@ -1159,7 +1198,13 @@ export async function convertIfcToPascal(
       originOffset,
       elementLevelElevation(expressId),
       opts.swapYZ,
+      report,
     )
+    const skippedAfter = report.skippedGeometry.transforms + report.skippedGeometry.primitives
+    if (primitives.length === 0 && skippedAfter > skippedBefore) {
+      unreadableGeometry.add(expressId)
+      report.skippedGeometry.elements++
+    }
     importedPrimitivesByExpressId.set(expressId, primitives)
     return primitives
   }
@@ -1346,6 +1391,11 @@ export async function convertIfcToPascal(
       }
     } else {
       elevation *= unitFactor
+    }
+    if (!Number.isFinite(elevation)) {
+      report.replaced.levelElevations++
+      const explicit = (storey.Elevation?.value ?? 0) * unitFactor
+      elevation = Number.isFinite(explicit) ? explicit : 0
     }
     storeyElevationByExpressId.set(storeyExpressID, elevation)
 
@@ -2065,13 +2115,10 @@ export async function convertIfcToPascal(
     // Pascal's storey-wide wall-support calculation. Preserve roofs and stair
     // landings as exact meshes: roofs may be sloped, while a local landing is
     // not a storey floor and must not raise adjacent wall bases.
+    const hasMesh = importedMeshPrimitivesFor(slabExpressID).length > 0
+    if (unreadableGeometry.has(slabExpressID)) continue
     const slabPredefinedType = String(slab.PredefinedType?.value ?? '').toUpperCase()
-    if (
-      (slabPredefinedType === 'ROOF' || slabPredefinedType === 'LANDING') &&
-      importedMeshPrimitivesFor(slabExpressID).length > 0
-    ) {
-      continue
-    }
+    if ((slabPredefinedType === 'ROOF' || slabPredefinedType === 'LANDING') && hasMesh) continue
 
     const levelElevation = elementLevelElevation(slabExpressID)
     let plan: ExtrudedPlan | null = null
@@ -2081,7 +2128,7 @@ export async function convertIfcToPascal(
       // mesh fallback below
     }
     // A sloped or tilted slab is not a Pascal floor; keep its exact mesh.
-    if (plan?.flat === false && importedMeshPrimitivesFor(slabExpressID).length > 0) continue
+    if (plan?.flat === false && hasMesh) continue
     if (!plan?.polygon) continue
 
     // Revit extrudes floors down from their top, other tools up from their
@@ -2916,8 +2963,11 @@ export async function convertIfcToPascal(
   progress('Complete!', 100)
 
   return {
-    nodes,
-    rootNodeIds: rootNodeIds as AnyNodeId[],
-    collections,
+    scene: {
+      nodes,
+      rootNodeIds: rootNodeIds as AnyNodeId[],
+      collections,
+    },
+    report,
   }
 }

@@ -113,6 +113,7 @@ export {
   type WallConstructionResolution,
 } from './hooks/spatial-grid/support-host-patch'
 export { useSpatialQuery } from './hooks/spatial-grid/use-spatial-query'
+export * from './i18n'
 export { createAngleAccumulator } from './lib/angle-accumulator'
 export {
   ARTIFACT_URL_PREFIX,
@@ -214,10 +215,12 @@ export {
   floorScriptPaintRefusal,
 } from './lib/floor-plate-paint'
 export {
+  FLOOR_SCRIPT_LIFT,
   type FloorScriptInputs,
   floorScriptInputs,
   floorScriptInputsKey,
   floorScriptRecord,
+  floorScriptSurface,
 } from './lib/floor-script'
 export {
   type FloorStepOverride,
@@ -664,6 +667,7 @@ export {
   type DerivedWriteOperation,
   derivedDeletionIntent,
   derivedFieldViolations,
+  filterDerivedNodeWrites,
   isDerivedNode,
 } from './store/derived-node-guard'
 export {

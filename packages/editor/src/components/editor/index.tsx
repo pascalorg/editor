@@ -3,12 +3,16 @@
 import { Icon } from '@iconify/react'
 import {
   acquireSceneReadOnlyLease,
+  createI18n,
   getCatalogMaterialById,
   getLibraryMaterialIdFromRef,
   getSceneMaterialIdFromRef,
   initSpaceDetectionSync,
   initSpatialGridSync,
+  type MessageDescriptor,
+  PascalI18nProvider,
   spatialGridManager,
+  usePascalI18n,
   useScene,
 } from '@pascal-app/core'
 import {
@@ -32,6 +36,7 @@ import {
   useCallback,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
 } from 'react'
@@ -41,6 +46,7 @@ import { type SaveStatus, useAutoSave } from '../../hooks/use-auto-save'
 import { useKeyboard } from '../../hooks/use-keyboard'
 import { useIsMobile } from '../../hooks/use-mobile'
 import { useSaveShortcut } from '../../hooks/use-save-shortcut'
+import { type HINT_KEY_NAMES, toolHintKey, toolHintKeyDescriptor } from '../../i18n/node-messages'
 import { useCeilingEditSessionOwner } from '../../lib/ceiling-edit-session'
 import { showsWholeBuilding, useEditorLevelDisplay } from '../../lib/editor-level-display'
 import { isSceneView } from '../../lib/editor-views'
@@ -202,6 +208,8 @@ function initializeEditorRuntime(): () => void {
   }
 }
 export interface EditorProps {
+  /** UI locale. Hosts may also call `setLocale` before mounting. */
+  locale?: string
   // Layout version — 'v1' (default) or 'v2' (navbar + two-column)
   layoutVersion?: 'v1' | 'v2'
   // Viewport edge the tool menu docks to (desktop only; mobile stays at the bottom)
@@ -315,12 +323,22 @@ export interface EditorProps {
 }
 
 function EditorSceneCrashFallback() {
+  const i18n = usePascalI18n()
   return (
     <div className="fixed inset-0 z-80 flex items-center justify-center bg-background/95 p-4 text-foreground">
       <div className="w-full max-w-md rounded-2xl border border-border/60 bg-background p-6 shadow-xl">
-        <h2 className="font-semibold text-lg">The editor scene failed to render</h2>
+        <h2 className="font-semibold text-lg">
+          {i18n._({
+            id: 'editor.theEditorSceneFailedToRender',
+            message: 'The editor scene failed to render',
+          })}
+        </h2>
         <p className="mt-2 text-muted-foreground text-sm">
-          You can retry the scene or return home without reloading the whole app shell.
+          {i18n._({
+            id: 'editor.youCanRetryTheSceneOr',
+            message:
+              'You can retry the scene or return home without reloading the whole app shell.',
+          })}
         </p>
         <div className="mt-4 flex items-center gap-2">
           <button
@@ -328,13 +346,13 @@ function EditorSceneCrashFallback() {
             onClick={() => window.location.reload()}
             type="button"
           >
-            Reload editor
+            {i18n._({ id: 'editor.reloadEditor', message: 'Reload editor' })}
           </button>
           <a
             className="rounded-md border border-border bg-background px-3 py-2 font-medium text-sm hover:bg-accent/40"
             href="/"
           >
-            Back to home
+            {i18n._({ id: 'editor.backToHome', message: 'Back to home' })}
           </a>
         </div>
       </div>
@@ -345,6 +363,7 @@ function EditorSceneCrashFallback() {
 // ── Sidebar slot: in-flow, resizable, collapses to a grab strip ──────────────
 
 function SidebarSlot({ children }: { children: ReactNode }) {
+  const i18n = usePascalI18n()
   const width = useSidebarStore((s) => s.width)
   const isCollapsed = useSidebarStore((s) => s.isCollapsed)
   const setIsCollapsed = useSidebarStore((s) => s.setIsCollapsed)
@@ -416,7 +435,7 @@ function SidebarSlot({ children }: { children: ReactNode }) {
           <div
             className="absolute inset-0 z-10 cursor-col-resize transition-colors hover:bg-primary/20"
             onPointerDown={handleGrabDown}
-            title="Expand sidebar"
+            title={i18n._({ id: 'editor.expandSidebar', message: 'Expand sidebar' })}
           />
         ) : (
           children
@@ -494,26 +513,29 @@ const CAMERA_CONTROL_HINTS: CameraControlHint[] = [
   { action: 'Zoom', keys: [{ value: 'Scroll' }] },
 ]
 
-const CAMERA_SHORTCUT_KEY_META: Record<string, { icon?: string; label: string; text?: string }> = {
+const CAMERA_SHORTCUT_KEY_META: Record<
+  string,
+  { icon?: string; label: MessageDescriptor; text?: string }
+> = {
   'Left click': {
     icon: 'ph:mouse-left-click-fill',
-    label: 'Left click',
+    label: hintKeyName('Left click'),
   },
   'Middle click': {
     icon: 'qlementine-icons:mouse-middle-button-16',
-    label: 'Middle click',
+    label: hintKeyName('Middle click'),
   },
   'Right click': {
     icon: 'ph:mouse-right-click-fill',
-    label: 'Right click',
+    label: hintKeyName('Right click'),
   },
   Scroll: {
     icon: 'qlementine-icons:mouse-middle-button-16',
-    label: 'Scroll wheel',
+    label: hintKeyName('Scroll wheel'),
   },
   Space: {
     icon: 'lucide:space',
-    label: 'Space',
+    label: hintKeyName('Space'),
   },
 }
 
@@ -544,8 +566,21 @@ function writeCameraControlsHintDismissed(dismissed: boolean) {
   } catch {}
 }
 
+/** Key names shared with the tool HUD (`editor.toolHint.key.*`). */
+function hintKeyName(key: (typeof HINT_KEY_NAMES)[number]): MessageDescriptor {
+  return toolHintKeyDescriptor(key) ?? { id: key, message: key }
+}
+
+const CAMERA_HINT_ACTION_LABELS: Record<CameraHintAction, MessageDescriptor> = {
+  Pan: /* i18n */ { id: 'editor.cameraHint.pan', message: 'Pan' },
+  Rotate: /* i18n */ { id: 'editor.cameraHint.rotate', message: 'Rotate' },
+  Zoom: /* i18n */ { id: 'editor.cameraHint.zoom', message: 'Zoom' },
+}
+
 function InlineShortcutKey({ shortcutKey }: { shortcutKey: ShortcutKey }) {
-  const meta = CAMERA_SHORTCUT_KEY_META[shortcutKey.value]
+  const i18n = usePascalI18n()
+  const entry = CAMERA_SHORTCUT_KEY_META[shortcutKey.value]
+  const meta = entry ? { ...entry, label: i18n._(entry.label) } : undefined
 
   if (meta?.icon) {
     return (
@@ -563,7 +598,7 @@ function InlineShortcutKey({ shortcutKey }: { shortcutKey: ShortcutKey }) {
 
   return (
     <span className="font-medium text-[11px] text-foreground/90">
-      {meta?.text ?? shortcutKey.value}
+      {meta?.text ?? toolHintKey(shortcutKey.value, i18n)}
     </span>
   )
 }
@@ -582,10 +617,11 @@ function ShortcutSequence({ keys }: { keys: ShortcutKey[] }) {
 }
 
 function CameraControlHintItem({ hint }: { hint: CameraControlHint }) {
+  const i18n = usePascalI18n()
   return (
     <div className="flex min-w-0 flex-col items-center gap-1.5 px-4 text-center first:pl-0 last:pr-0">
       <span className="font-medium text-[10px] text-muted-foreground/60 tracking-[0.03em]">
-        {hint.action}
+        {i18n._(CAMERA_HINT_ACTION_LABELS[hint.action])}
       </span>
       <div className="flex flex-wrap items-center justify-center gap-1.5">
         <ShortcutSequence keys={hint.keys} />
@@ -607,6 +643,7 @@ function ViewerCanvasControlsHint({
   belowTopMenu?: boolean
   onDismiss: () => void
 }) {
+  const i18n = usePascalI18n()
   const all = CAMERA_CONTROL_HINTS
   // A host teaching one gesture at a time narrows this to the one it is asking
   // for, and to nothing once it is done. Null — the default — is all of them.
@@ -626,7 +663,7 @@ function ViewerCanvasControlsHint({
       style={belowTopMenu ? { top: TOP_MENU_CLEARANCE } : undefined}
     >
       <section
-        aria-label="Camera controls hint"
+        aria-label={i18n._({ id: 'editor.cameraControlsHint', message: 'Camera controls hint' })}
         className="pointer-events-auto flex items-start gap-3 rounded-2xl border border-border/35 bg-background/90 px-3.5 py-2.5 shadow-elevation-4 backdrop-blur-xl"
       >
         <div
@@ -640,7 +677,10 @@ function ViewerCanvasControlsHint({
         <Tooltip>
           <TooltipTrigger asChild>
             <button
-              aria-label="Dismiss camera controls hint"
+              aria-label={i18n._({
+                id: 'editor.dismissCameraControlsHint',
+                message: 'Dismiss camera controls hint',
+              })}
               className="flex h-5 shrink-0 items-center justify-center self-center border-border/18 border-l pl-3 text-muted-foreground/70 transition-colors hover:text-foreground"
               onClick={onDismiss}
               type="button"
@@ -655,7 +695,7 @@ function ViewerCanvasControlsHint({
             </button>
           </TooltipTrigger>
           <TooltipContent side="bottom" sideOffset={8}>
-            Dismiss
+            {i18n._({ id: 'editor.dismiss', message: 'Dismiss' })}
           </TooltipContent>
         </Tooltip>
       </section>
@@ -1960,10 +2000,28 @@ function EditorContent({
   )
 }
 
-export default function Editor(props: EditorProps) {
+function EditorFrame(props: EditorProps) {
   return (
     <Profiler id="editor" onRender={recordEditorRender}>
       <EditorContent {...props} />
     </Profiler>
+  )
+}
+
+function LocalizedEditor(props: EditorProps & { locale: string }) {
+  const i18n = useMemo(() => createI18n({ locale: props.locale }), [props.locale])
+
+  return (
+    <PascalI18nProvider i18n={i18n}>
+      <EditorFrame {...props} />
+    </PascalI18nProvider>
+  )
+}
+
+export default function Editor(props: EditorProps) {
+  return props.locale ? (
+    <LocalizedEditor {...props} locale={props.locale} />
+  ) : (
+    <EditorFrame {...props} />
   )
 }

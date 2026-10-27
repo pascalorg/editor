@@ -66,6 +66,7 @@ export function ActionMenu({
       <TooltipProvider>
         <FollowPascalPill />
         <motion.div
+          data-surface="tool-dock"
           className={cn(
             'z-50',
             isMobile

@@ -1,5 +1,8 @@
 'use client'
 
+import { usePascalI18n } from '@pascal-app/core'
+import type { MessageDescriptor } from '@pascal-app/core'
+
 import { Icon } from '@iconify/react'
 import { type LucideIcon, Trash2 } from 'lucide-react'
 import Image from 'next/image'
@@ -17,7 +20,7 @@ type ControlConfig = {
   icon?: LucideIcon
   iconifyIcon?: string
   imageSrc?: string
-  label: string
+  label: MessageDescriptor
   shortcut?: string
   color: string
   activeColor: string
@@ -28,7 +31,7 @@ const controls: ControlConfig[] = [
   {
     id: 'select',
     imageSrc: '/icons/select.webp',
-    label: 'Select',
+    label: /* i18n */ { id: 'editor.actionMenu.controlModes.select', message: 'Select' },
     shortcut: 'V',
     color: 'hover:bg-blue-500/20 hover:text-blue-600 dark:hover:text-blue-400',
     activeColor: 'bg-blue-500/20 text-blue-600 dark:text-blue-400 dark:hover:text-accent-foreground',
@@ -36,7 +39,7 @@ const controls: ControlConfig[] = [
   {
     id: 'delete',
     icon: Trash2,
-    label: 'Delete',
+    label: /* i18n */ { id: 'editor.actionMenu.controlModes.delete', message: 'Delete' },
     shortcut: 'X',
     color: 'hover:bg-red-500/20 hover:text-red-600 dark:hover:text-red-400',
     activeColor: 'bg-red-500/20 text-red-600 dark:text-red-400 dark:hover:text-accent-foreground',
@@ -44,6 +47,7 @@ const controls: ControlConfig[] = [
 ]
 
 export function ControlModes() {
+  const i18n = usePascalI18n()
   const mode = useEditor((state) => state.mode)
   const selectionTool = useEditor((state) => state.floorplanSelectionTool)
   const armToolMode = useEditor((state) => state.armToolMode)
@@ -94,7 +98,7 @@ export function ControlModes() {
               // tour at this button. Nothing here reads it.
               data-guide-target={c.id === 'select' ? 'mode-select' : undefined}
               isActive={isActive}
-              label={c.label}
+              label={i18n._(c.label)}
               onClick={() => handleClick(c.id)}
               shortcut={c.shortcut}
               size="icon"
@@ -102,7 +106,7 @@ export function ControlModes() {
             >
               {c.imageSrc ? (
                 <Image
-                  alt={c.label}
+                  alt={i18n._(c.label)}
                   className={cn(
                     'h-[28px] w-[28px] object-contain transition-[opacity,filter] duration-200',
                     isActive

@@ -791,7 +791,14 @@ function classifySides(
             ],
       )
     const role = adjacent || neighbour ? ('riser' as const) : ('edge' as const)
-    const owner = role === 'riser' || plate.plateRole !== 'base' ? ownerId : undefined
+    // A base plate's side facing into one of its own holes (a void, a stairwell) belongs to the
+    // room around the hole, so it can wear that room's floor edge rather than the facade's.
+    const holeOwner =
+      plate.plateRole === 'base' &&
+      top.some(({ outer }) => containsPoint([{ outer, holes: [] }], outside))
+        ? zones.find((entry) => containsPoint(entry.polygon, inside))?.zone.id
+        : undefined
+    const owner = role === 'riser' || plate.plateRole !== 'base' ? ownerId : holeOwner
     // A door jamb's side of the step meets the aperture only at its edge, so
     // the doorway is looked for on both sides of the face too.
     const doorway =

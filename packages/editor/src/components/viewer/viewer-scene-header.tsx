@@ -1,10 +1,18 @@
 'use client'
 
-import { getLevelDisplayName, type LevelNode, sceneRegistry, useScene } from '@pascal-app/core'
+import {
+  type LevelNode,
+  type PascalI18n,
+  sceneRegistry,
+  useLocale,
+  usePascalI18n,
+  useScene,
+} from '@pascal-app/core'
 import { markPerfAction, useViewer } from '@pascal-app/viewer'
 import { ArrowLeft, ChevronRight, Layers } from 'lucide-react'
 import Link from 'next/link'
 import { type ReactNode, useMemo } from 'react'
+import { localizedLevelName } from '../../i18n/level-name'
 import { cn } from '../../lib/utils'
 import {
   applyViewerClick,
@@ -36,10 +44,10 @@ export type ViewerSceneHeaderProps = {
   source?: ViewerSource
 }
 
-const SECTION_TITLES: Record<ViewerSidebarSection['kind'], string> = {
-  units: 'Units',
-  rooms: 'Rooms',
-  zones: 'Zones',
+function sectionTitle(kind: ViewerSidebarSection['kind'], i18n: PascalI18n): string {
+  if (kind === 'units') return i18n._({ id: 'viewer.header.units', message: 'Units' })
+  if (kind === 'rooms') return i18n._({ id: 'viewer.header.rooms', message: 'Rooms' })
+  return i18n._({ id: 'viewer.header.zones', message: 'Zones' })
 }
 
 const parametricObject = (id: string) => sceneRegistry.nodes.get(id)
@@ -58,6 +66,8 @@ export const ViewerSceneHeader = ({
   stats,
   source: sourceProp,
 }: ViewerSceneHeaderProps) => {
+  const i18n = usePascalI18n()
+  const locale = useLocale()
   const sceneNodes = useScene((s) => s.nodes)
   const source = useMemo<ViewerSource>(
     () => sourceProp ?? { nodes: sceneNodes, objectFor: parametricObject },
@@ -113,7 +123,7 @@ export const ViewerSceneHeader = ({
         <div className="flex items-center gap-3 px-3 py-2.5">
           {onBack ? (
             <button
-              aria-label="Back"
+              aria-label={i18n._({ id: 'viewer.header.back', message: 'Back' })}
               className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md transition-colors hover:bg-white/10"
               onClick={onBack}
               type="button"
@@ -122,7 +132,7 @@ export const ViewerSceneHeader = ({
             </button>
           ) : backHref === null ? null : (
             <Link
-              aria-label="Back"
+              aria-label={i18n._({ id: 'viewer.header.back', message: 'Back' })}
               className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md transition-colors hover:bg-white/10"
               href={backHref}
               prefetch={false}
@@ -132,7 +142,7 @@ export const ViewerSceneHeader = ({
           )}
           <div className="min-w-0 flex-1">
             <div className="truncate font-medium text-foreground text-sm">
-              {projectName || 'Untitled'}
+              {projectName || i18n._({ id: 'viewer.header.untitled', message: 'Untitled' })}
             </div>
             {owner?.username && (
               <Link
@@ -151,7 +161,7 @@ export const ViewerSceneHeader = ({
 
         {crumbs.length > 0 && (
           <nav
-            aria-label="Selection"
+            aria-label={i18n._({ id: 'viewer.header.selection', message: 'Selection' })}
             className="flex flex-wrap items-center gap-x-1.5 gap-y-1 border-border/40 border-t px-3 py-2 text-xs"
             data-testid="viewer-breadcrumb"
           >
@@ -186,7 +196,7 @@ export const ViewerSceneHeader = ({
       {levels.length > 0 && (
         <div className="corner-smooth pointer-events-auto flex min-h-0 w-56 flex-col overflow-hidden rounded-2xl border border-border/40 bg-background/95 py-1 shadow-elevation-4 backdrop-blur-xl transition-colors duration-200 ease-out">
           <span className="px-3 py-2 font-medium text-[10px] text-muted-foreground uppercase tracking-wider">
-            Levels
+            {i18n._({ id: 'viewer.header.levels', message: 'Levels' })}
           </span>
           <div className="flex min-h-0 flex-col overflow-y-auto">
             {levels.map((lvl) => {
@@ -216,7 +226,7 @@ export const ViewerSceneHeader = ({
                         <Layers className="h-3.5 w-3.5" />
                       </span>
                       <div className="min-w-0 flex-1 truncate text-left">
-                        {getLevelDisplayName(lvl)}
+                        {localizedLevelName(lvl, i18n, locale)}
                       </div>
                     </div>
                   </button>
@@ -228,7 +238,7 @@ export const ViewerSceneHeader = ({
                         key={section.kind}
                       >
                         <span className="block px-3 pt-2 pb-1 pl-9 font-medium text-[10px] text-muted-foreground uppercase tracking-wider">
-                          {SECTION_TITLES[section.kind]}
+                          {sectionTitle(section.kind, i18n)}
                         </span>
                         {section.rows.map((row) => {
                           const active =
@@ -257,7 +267,7 @@ export const ViewerSceneHeader = ({
                               />
                               <span className="min-w-0 flex-1 truncate">{row.label}</span>
                               <span className="shrink-0 font-mono text-[11px] text-muted-foreground tabular-nums">
-                                {formatRoomArea(row.areaM2, unit)}
+                                {formatRoomArea(row.areaM2, unit, locale)}
                               </span>
                             </button>
                           )
