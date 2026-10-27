@@ -3153,15 +3153,15 @@ msgstr "{count, plural, one {# bouche} many {# bouches} other {# bouches}}"
 msgid "editor.floatingActionMenu.rTRotate"
 msgstr "R/T pivoter"
 
-# Source-Hash: 3744cfc0c0329bfe
-# Review: required
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
-# English: "{count, plural, one {# run} other {# runs}}"
+# Source-Hash: 6fb660d4eabe8d6a
+# Review: required
+# English: "{count, plural, one {{number} run} other {{number} runs}}"
 #: packages/editor/src/components/editor/floating-action-menu.tsx
 #, fuzzy
 msgid "editor.floatingActionMenu.runCount"
-msgstr "{count, plural, one {# tronçon} many {# tronçons} other {# tronçons}}"
+msgstr "{count, plural, one {{number} tronçon} many {{number} tronçons} other {{number} tronçons}}"
 
 # Source-Hash: 88e6c2e1c344b2fc
 # Review: required
@@ -10059,15 +10059,15 @@ msgstr "Plancher · {level}"
 msgid "editor.panels.floorFoundationPanel.kickerRestsOn"
 msgstr "Plancher · {level} · repose sur {below}"
 
-# Source-Hash: 9c4f0b8a0ce77eb6
-# Review: required
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
-# English: "{count, plural, =2 {Lower both} other {Lower all #}}"
+# Source-Hash: 648ef10535b0af73
+# Review: required
+# English: "{count, plural, =2 {Lower both} other {Lower all {number}}}"
 #: packages/editor/src/components/ui/panels/floor-foundation-panel.tsx
 #, fuzzy
 msgid "editor.panels.floorFoundationPanel.lowerTogether"
-msgstr "{count, plural, =2 {Abaisser les deux} one {Abaisser les #} many {Abaisser les #} other {Abaisser les #}}"
+msgstr "{count, plural, =2 {Abaisser les deux} one {Abaisser les {number}} many {Abaisser les {number}} other {Abaisser les {number}}}"
 
 # Source-Hash: c2fcc43bb7f1c5e2
 # Review: required
@@ -10099,15 +10099,15 @@ msgstr "Au sol"
 msgid "editor.panels.floorFoundationPanel.raisedOnAFoundation"
 msgstr "Surélevé sur une fondation"
 
-# Source-Hash: 9300990cffa6e7fd
-# Review: required
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
-# English: "{count, plural, =2 {Raise both} other {Raise all #}}"
+# Source-Hash: 769c3ca1ca0cd4f0
+# Review: required
+# English: "{count, plural, =2 {Raise both} other {Raise all {number}}}"
 #: packages/editor/src/components/ui/panels/floor-foundation-panel.tsx
 #, fuzzy
 msgid "editor.panels.floorFoundationPanel.raiseTogether"
-msgstr "{count, plural, =2 {Relever les deux} one {Relever les #} many {Relever les #} other {Relever les #}}"
+msgstr "{count, plural, =2 {Relever les deux} one {Relever les {number}} many {Relever les {number}} other {Relever les {number}}}"
 
 # Source-Hash: 719ae422da204ca7
 # Review: required
@@ -11650,15 +11650,15 @@ msgstr "Au sol"
 msgid "editor.panels.roomConstructionRows.onTheWallsBelow"
 msgstr "Sur les murs du dessous"
 
-# Source-Hash: 83faf0b88d701b62
-# Review: required
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
-# English: "{openSides, plural, one {# open side} other {# open sides}}"
+# Source-Hash: 2256aec0d5bdc3ea
+# Review: required
+# English: "{openSides, plural, one {{openSideCount} open side} other {{openSideCount} open sides}}"
 #: packages/editor/src/components/ui/panels/room-construction-rows.tsx
 #, fuzzy
 msgid "editor.panels.roomConstructionRows.openSides"
-msgstr "{openSides, plural, one {# côté ouvert} many {# côtés ouverts} other {# côtés ouverts}}"
+msgstr "{openSides, plural, one {{openSideCount} côté ouvert} many {{openSideCount} côtés ouverts} other {{openSideCount} côtés ouverts}}"
 
 # Source-Hash: f704520c5e5b92b2
 # Review: required
@@ -11670,15 +11670,15 @@ msgstr "{openSides, plural, one {# côté ouvert} many {# côtés ouverts} other
 msgid "editor.panels.roomConstructionRows.partialCovered"
 msgstr "Partiel · {coverage, number, percent} couvert"
 
-# Source-Hash: 8f064607b4f20171
-# Review: required
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
-# English: "Partial · {walls, plural, one {# wall} other {# walls}}, {openSides, plural, one {# open side} other {# open sides}}"
+# Source-Hash: b648bee0231a41cd
+# Review: required
+# English: "Partial · {walls, plural, one {{wallCount} wall} other {{wallCount} walls}}, {openSides, plural, one {{openSideCount} open side} other {{openSideCount} open sides}}"
 #: packages/editor/src/components/ui/panels/room-construction-rows.tsx
 #, fuzzy
 msgid "editor.panels.roomConstructionRows.partialWalls"
-msgstr "Partiel · {walls, plural, one {# mur} many {# murs} other {# murs}}, {openSides, plural, one {# côté ouvert} many {# côtés ouverts} other {# côtés ouverts}}"
+msgstr "Partiel · {walls, plural, one {{wallCount} mur} many {{wallCount} murs} other {{wallCount} murs}}, {openSides, plural, one {{openSideCount} côté ouvert} many {{openSideCount} côtés ouverts} other {{openSideCount} côtés ouverts}}"
 
 # Source-Hash: e503250e8ecb0030
 # Review: required
@@ -11760,15 +11760,15 @@ msgstr "la pièce voisine"
 msgid "editor.panels.roomConstructionRows.useExisting"
 msgstr "Utiliser l’existant"
 
-# Source-Hash: c5fd45fc8663eb92
-# Review: required
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
-# English: "{walls, plural, one {# wall} other {# walls}}"
+# Source-Hash: 9976021d9162cd5e
+# Review: required
+# English: "{walls, plural, one {{wallCount} wall} other {{wallCount} walls}}"
 #: packages/editor/src/components/ui/panels/room-construction-rows.tsx
 #, fuzzy
 msgid "editor.panels.roomConstructionRows.wallCount"
-msgstr "{walls, plural, one {# mur} many {# murs} other {# murs}}"
+msgstr "{walls, plural, one {{wallCount} mur} many {{wallCount} murs} other {{wallCount} murs}}"
 
 # Source-Hash: aac9a732d2159ccc
 # Review: required
@@ -14022,6 +14022,36 @@ msgstr "Plugins"
 #, fuzzy
 msgid "editor.sidebar.usePluginPanels.thisPanelHitAnErrorAnd"
 msgstr "Ce panneau a rencontré une erreur et a été déchargé pour cette session. Le reste de l’éditeur n’est pas affecté — rechargez pour réessayer."
+
+# Review: required
+# Source-Hash: 2ab3b6983e384ecc
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Ceiling attachment"
+#: packages/editor/src/components/ui/snap-target-badge.tsx
+#, fuzzy
+msgid "editor.snapTarget.ceiling"
+msgstr "Fixation au plafond"
+
+# Review: required
+# Source-Hash: 54a00bbb699e3778
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Roof attachment"
+#: packages/editor/src/components/ui/snap-target-badge.tsx
+#, fuzzy
+msgid "editor.snapTarget.roof"
+msgstr "Fixation à la toiture"
+
+# Review: required
+# Source-Hash: e45fee9c27f6ae69
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Wall attachment"
+#: packages/editor/src/components/ui/snap-target-badge.tsx
+#, fuzzy
+msgid "editor.snapTarget.wall"
+msgstr "Fixation murale"
 
 # Source-Hash: 834de1a7027c4da1
 # Review: required
@@ -17680,16 +17710,16 @@ msgstr "Trémie {number} (en cours de modification)"
 msgid "node.holeNumber"
 msgstr "Trémie {number}"
 
-# Source-Hash: 326aa862b7939c64
-# Review: required
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
-# English: "{area} m² · {count, plural, one {# pt} other {# pts}} · {source}"
+# Source-Hash: fd26f8df9d087c6b
+# Review: required
+# English: "{area} m² · {count, plural, one {{points} pt} other {{points} pts}} · {source}"
 #: packages/nodes/src/ceiling/panel.tsx
 #: packages/nodes/src/slab/panel.tsx
 #, fuzzy
 msgid "node.holeSummary"
-msgstr "{area} m² · {count, plural, one {# pt} many {# pts} other {# pts}} · {source}"
+msgstr "{area} m² · {count, plural, one {{points} pt} many {{points} pts} other {{points} pts}} · {source}"
 
 # Source-Hash: 50e9252d30f3fb4d
 # Review: required
@@ -18774,15 +18804,15 @@ msgstr "Personnalisé"
 msgid "node.roof.glazingPanelEditor.default"
 msgstr "Par défaut"
 
-# Source-Hash: 6748f7b7cb9a1852
-# Review: required
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
-# English: "{columns, plural, one {# column} other {# columns}} · {rows, plural, one {# row} other {# rows}}"
+# Source-Hash: 9ef92ad8ae49ed72
+# Review: required
+# English: "{columns, plural, one {{columnCount} column} other {{columnCount} columns}} · {rows, plural, one {{rowCount} row} other {{rowCount} rows}}"
 #: packages/nodes/src/roof/glazing-panel-editor.tsx
 #, fuzzy
 msgid "node.roof.glazingPanelEditor.grid"
-msgstr "{columns, plural, one {# colonne} many {# colonnes} other {# colonnes}} · {rows, plural, one {# rangée} many {# rangées} other {# rangées}}"
+msgstr "{columns, plural, one {{columnCount} colonne} many {{columnCount} colonnes} other {{columnCount} colonnes}} · {rows, plural, one {{rowCount} rangée} many {{rowCount} rangées} other {{rowCount} rangées}}"
 
 # Source-Hash: 11624abbcfdd5506
 # Review: required
@@ -20016,15 +20046,15 @@ msgstr "Les extrémités ouvertes et les branches séparées peuvent être voulu
 msgid "node.shared.systemCheckPanel.selectedConnectedSystem"
 msgstr "Réseau connecté sélectionné"
 
-# Source-Hash: 9d00acedc4ca2c86
-# Review: required
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
-# English: "Selected: {count, plural, one {# run} other {# runs}} · {length} m"
+# Source-Hash: 68355a98439229e2
+# Review: required
+# English: "Selected: {count, plural, one {{number} run} other {{number} runs}} · {length} m"
 #: packages/nodes/src/shared/system-check-panel.tsx
 #, fuzzy
 msgid "node.shared.systemCheckPanel.selectedRuns"
-msgstr "Sélection : {count, plural, one {# tronçon} many {# tronçons} other {# tronçons}} · {length} m"
+msgstr "Sélection : {count, plural, one {{number} tronçon} many {{number} tronçons} other {{number} tronçons}} · {length} m"
 
 # Source-Hash: e7a352627f8fcd45
 # Review: required
@@ -22946,15 +22976,15 @@ msgstr "Scinder le mur"
 msgid "node.wall.curtain.cell"
 msgstr "Colonne {column}, rangée {row} : {type, select, glass {vitrage} solid {plein} other {vide}}"
 
-# Source-Hash: be79f6b710fd4c9f
-# Review: required
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
-# English: "{count, plural, one {# column} other {# columns}} · {spacing} grid spacing"
+# Source-Hash: 904e9b269b68c670
+# Review: required
+# English: "{count, plural, one {{number} column} other {{number} columns}} · {spacing} grid spacing"
 #: packages/nodes/src/wall/curtain-wall-panel.tsx
 #, fuzzy
 msgid "node.wall.curtain.columnSpacing"
-msgstr "{count, plural, one {# colonne} many {# colonnes} other {# colonnes}} · trame de {spacing}"
+msgstr "{count, plural, one {{number} colonne} many {{number} colonnes} other {{number} colonnes}} · trame de {spacing}"
 
 # Source-Hash: 8b2b2f11fca9f077
 # Review: required
@@ -22966,15 +22996,15 @@ msgstr "{count, plural, one {# colonne} many {# colonnes} other {# colonnes}} ·
 msgid "node.wall.curtain.noPanels"
 msgstr "Aucun panneau"
 
-# Source-Hash: 6942f1a7c1448caa
-# Review: required
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
-# English: "{count, plural, one {# row} other {# rows}} · {spacing} grid spacing"
+# Source-Hash: 9f5d9775377b666e
+# Review: required
+# English: "{count, plural, one {{number} row} other {{number} rows}} · {spacing} grid spacing"
 #: packages/nodes/src/wall/curtain-wall-panel.tsx
 #, fuzzy
 msgid "node.wall.curtain.rowSpacing"
-msgstr "{count, plural, one {# rangée} many {# rangées} other {# rangées}} · trame de {spacing}"
+msgstr "{count, plural, one {{number} rangée} many {{number} rangées} other {{number} rangées}} · trame de {spacing}"
 
 # Source-Hash: 90638d5a19a4f0a9
 # Review: required
