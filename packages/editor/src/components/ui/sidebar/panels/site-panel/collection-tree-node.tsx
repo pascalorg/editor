@@ -6,7 +6,7 @@ import {
   findLevelAncestorId,
   type LevelNode,
   resolveBuildingForLevel,
-  useScene,
+  useScene, usePascalI18n,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { Layers, Trash2 } from 'lucide-react'
@@ -44,6 +44,7 @@ function useLiveMembers(collectionId: CollectionId) {
 
 /** Collections, listed under the level tree. Absent when the scene has none. */
 export const CollectionsSection = memo(function CollectionsSection() {
+  const i18n = usePascalI18n()
   const collectionIds = useScene(useShallow((s) => Object.keys(s.collections) as CollectionId[]))
   const [expanded, setExpanded] = useState(true)
 
@@ -58,7 +59,7 @@ export const CollectionsSection = memo(function CollectionsSection() {
         icon={<Layers className="h-3.5 w-3.5" />}
         label={
           <span className="flex items-center gap-1.5">
-            Collections
+            {i18n._({ id: 'editor.sidebar.panels.sitePanel.collectionTreeNode.collections', message: 'Collections' })}
             <span className="text-muted-foreground text-xs">{collectionIds.length}</span>
           </span>
         }
@@ -90,6 +91,7 @@ const CollectionTreeNode = memo(function CollectionTreeNode({
   depth,
   isLast,
 }: CollectionTreeNodeProps) {
+  const i18n = usePascalI18n()
   const [isEditing, setIsEditing] = useState(false)
   const [expanded, setExpanded] = useState(false)
   const name = useScene((s) => s.collections[collectionId]?.name)
@@ -147,7 +149,7 @@ const CollectionTreeNode = memo(function CollectionTreeNode({
             event.stopPropagation()
             deleteCollection(collectionId)
           }}
-          title="Delete collection"
+          title={i18n._({ id: 'editor.sidebar.panels.sitePanel.collectionTreeNode.deleteCollection', message: 'Delete collection' })}
           type="button"
         >
           <Trash2 className="h-3 w-3" />
@@ -159,7 +161,7 @@ const CollectionTreeNode = memo(function CollectionTreeNode({
       icon={
         <ColorDot
           color={color ?? '#6366f1'}
-          label="Collection colour"
+          label={i18n._({ id: 'editor.sidebar.panels.sitePanel.collectionTreeNode.collectionColour', message: 'Collection colour' })}
           onChange={(next) => updateCollection(collectionId, { color: next })}
         />
       }
@@ -169,7 +171,7 @@ const CollectionTreeNode = memo(function CollectionTreeNode({
       label={
         <span className="flex min-w-0 items-center gap-1.5">
           <InlineRenameField
-            defaultName="Collection"
+            defaultName={i18n._({ id: 'editor.layers.defaultName.collection', message: 'Collection' })}
             isEditing={isEditing}
             name={name}
             onRename={handleRename}

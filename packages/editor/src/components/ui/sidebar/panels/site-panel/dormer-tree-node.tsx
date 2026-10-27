@@ -1,4 +1,4 @@
-import { type AnyNodeId, type DormerNode, useScene } from '@pascal-app/core'
+import { type AnyNodeId, type DormerNode, useScene, usePascalI18n } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import Image from 'next/image'
 import { memo, useCallback, useState } from 'react'
@@ -7,6 +7,7 @@ import { SnapTargetIcon } from '../../../snap-target-badge'
 import { InlineRenameInput } from './inline-rename-input'
 import { focusTreeNode, handleTreeSelection, TreeNode, TreeNodeWrapper } from './tree-node'
 import { TreeNodeActions } from './tree-node-actions'
+import { nodeLabelDescriptor } from '../../../../../i18n/node-messages'
 
 interface DormerTreeNodeProps {
   nodeId: AnyNodeId
@@ -25,6 +26,7 @@ export const DormerTreeNode = memo(function DormerTreeNode({
   depth,
   isLast,
 }: DormerTreeNodeProps) {
+  const i18n = usePascalI18n()
   const [isEditing, setIsEditing] = useState(false)
   const [expanded, setExpanded] = useState(true)
   const isVisible = useScene((s) => s.nodes[nodeId]?.visible !== false)
@@ -50,7 +52,7 @@ export const DormerTreeNode = memo(function DormerTreeNode({
     [nodeId, setSelection],
   )
 
-  const defaultName = node?.name || 'Dormer'
+  const defaultName = node?.name || i18n._(nodeLabelDescriptor('dormer', 'Dormer'))
 
   return (
     <TreeNodeWrapper

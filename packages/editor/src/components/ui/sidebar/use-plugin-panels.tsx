@@ -1,7 +1,7 @@
 'use client'
 
 import { Icon } from '@iconify/react'
-import { type IconRef, useScene } from '@pascal-app/core'
+import { type IconRef, useScene, usePascalI18n } from '@pascal-app/core'
 import { Plus } from 'lucide-react'
 import {
   type ComponentType,
@@ -28,9 +28,8 @@ import type { ExtraPanel } from './icon-rail'
 // The rail's "+" puts the plugin directory on the stage, as a view in the
 // focused pane, and stays lit while it is there instead of leaving an
 // unrelated panel open beside it. `component` serves the v1 sidebar.
-const pluginsManagerPanel: ExtraPanel = {
+const pluginsManagerPanel: Omit<ExtraPanel, 'label'> = {
   id: 'plugins',
-  label: 'Plugins',
   icon: <img alt="" className="size-8 object-contain" src="/icons/plugins.webp" />,
   component: PluginsView,
   noPanel: true,
@@ -63,12 +62,12 @@ function renderIconRef(ref: IconRef): ReactNode {
 }
 
 function PluginPanelCrashed({ label }: { label: string }) {
+  const i18n = usePascalI18n()
   return (
     <div className="flex flex-col gap-2 p-4 text-sm">
-      <p className="font-medium text-sidebar-foreground">"{label}" plugin crashed</p>
+      <p className="font-medium text-sidebar-foreground">{i18n._({ id: 'editor.sidebar.usePluginPanels.labelPluginCrashed', message: '"{label}" plugin crashed', values: { label } })}</p>
       <p className="text-sidebar-foreground/50 text-xs">
-        This panel hit an error and was unloaded for this session. The rest of the editor is
-        unaffected — reload to try again.
+        {i18n._({ id: 'editor.sidebar.usePluginPanels.thisPanelHitAnErrorAnd', message: 'This panel hit an error and was unloaded for this session. The rest of the editor is unaffected — reload to try again.' })}
       </p>
     </div>
   )
@@ -83,13 +82,16 @@ function resolvePanelComponent(panel: EditorHostPanel): ComponentType {
   const cached = wrappedPanelCache.get(panel.component)
   if (cached) return cached
   const Lazy = lazy(panel.component)
-  const Wrapped: ComponentType = () => (
+  const Wrapped: ComponentType = () => {
+  const i18n = usePascalI18n()
+  return ((
     <ErrorBoundary fallback={<PluginPanelCrashed label={panel.label} />}>
-      <Suspense fallback={<div className="p-4 text-sidebar-foreground/50 text-sm">Loading…</div>}>
+      <Suspense fallback={<div className="p-4 text-sidebar-foreground/50 text-sm">{i18n._({ id: 'editor.sidebar.usePluginPanels.loading', message: 'Loading…' })}</div>}>
         <Lazy />
       </Suspense>
     </ErrorBoundary>
-  )
+  ))
+}
   Wrapped.displayName = `PluginPanel(${panel.id})`
   wrappedPanelCache.set(panel.component, Wrapped)
   return Wrapped
@@ -107,6 +109,7 @@ function resolvePanelComponent(panel: EditorHostPanel): ComponentType {
  * authoring panel like Nature doesn't ride into the studio rail.
  */
 export function useHostPanels(hostPanels?: ExtraPanel[]): ExtraPanel[] {
+  const i18n = usePascalI18n()
   const registered = useSyncExternalStore(
     editorHostPanelRegistry.subscribe,
     editorHostPanelRegistry.getSnapshot,
@@ -151,7 +154,13 @@ export function useHostPanels(hostPanels?: ExtraPanel[]): ExtraPanel[] {
       readOnly,
       workspaceMode,
     })
-      ? [{ ...pluginsManagerPanel, stageActive: pluginsViewShown }]
+      ? [
+          {
+            ...pluginsManagerPanel,
+            label: i18n._({ id: 'editor.sidebar.usePluginPanels.plugins', message: 'Plugins' }),
+            stageActive: pluginsViewShown,
+          },
+        ]
       : []
   return [...(hostPanels ?? []), ...fromRegistry, ...manager]
 }
