@@ -40,12 +40,23 @@ export function formatMetricInputValue(
   precision: number,
   locale: string,
 ): string {
-  return formatNumber(value, { locale, min: precision, max: precision })
+  return formatNumber(roundMetricValueForDisplay(value, precision), {
+    locale,
+    min: precision,
+    max: precision,
+  })
 }
 
-function roundToPrecision(value: number, precision: number): number {
-  const factor = 10 ** precision
-  return Math.round((value + Number.EPSILON) * factor) / factor
+export function roundMetricValueForDisplay(value: number, precision: number): number {
+  const rounded = Number(
+    formatNumber(value, {
+      locale: 'en',
+      min: precision,
+      max: precision,
+      useGrouping: false,
+    }),
+  )
+  return Number.isFinite(rounded) ? rounded : value
 }
 
 export function MetricControl({
@@ -80,7 +91,7 @@ export function MetricControl({
   )
   const roundStoredValueForDisplayPrecision = useCallback(
     (storedValue: number) =>
-      clamp(toStoredValue(roundToPrecision(toDisplayValue(storedValue), precision))),
+      clamp(toStoredValue(roundMetricValueForDisplay(toDisplayValue(storedValue), precision))),
     [clamp, precision, toDisplayValue, toStoredValue],
   )
 

@@ -680,7 +680,7 @@ function extractImportedMeshPrimitives(
   originOffset: number[],
   levelElevation: number,
   swapYZ: boolean,
-  skipped: IfcConversionReport['skippedGeometry'],
+  report: IfcConversionReport,
 ): ImportedMeshPrimitiveValue[] {
   let flatMesh: {
     geometries: { size: () => number; get: (index: number) => unknown }
@@ -702,7 +702,7 @@ function extractImportedMeshPrimitives(
       }
       const matrix = placed.flatTransformation
       if (!isFiniteMatrix(matrix)) {
-        skipped.transforms++
+        report.skippedGeometry.transforms++
         continue
       }
       const geometry = ifcApi.GetGeometry(modelID, placed.geometryExpressID)
@@ -767,7 +767,7 @@ function extractImportedMeshPrimitives(
 
         const mesh = keepValidTriangles(
           { positions, normals, indices: Array.from(sourceIndices) },
-          skipped,
+          report,
         )
         if (mesh) {
           primitives.push({
@@ -1198,7 +1198,7 @@ export async function convertIfcToPascalWithReport(
       originOffset,
       elementLevelElevation(expressId),
       opts.swapYZ,
-      report.skippedGeometry,
+      report,
     )
     const skippedAfter = report.skippedGeometry.transforms + report.skippedGeometry.primitives
     if (primitives.length === 0 && skippedAfter > skippedBefore) {

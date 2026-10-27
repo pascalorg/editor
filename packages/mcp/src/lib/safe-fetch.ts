@@ -1,6 +1,6 @@
 import type { LookupAddress } from 'node:dns'
 import { lookup as dnsLookup } from 'node:dns/promises'
-import { request as httpRequest, type IncomingMessage } from 'node:http'
+import { request as httpRequest, type IncomingMessage, STATUS_CODES } from 'node:http'
 import { request as httpsRequest } from 'node:https'
 import { isIP, type LookupFunction } from 'node:net'
 import { ProtocolError, ProtocolErrorCode } from '@modelcontextprotocol/server'
@@ -188,11 +188,17 @@ function blocked(
   console.error(
     `[pascal-mcp] safe_fetch_blocked ${JSON.stringify({ reason, url: loggableUrl(url), ...details, ...log })}`,
   )
-  return protocolError(reason, { url: url.toString(), ...details })
+  return protocolError(reason, { url: loggableUrl(url), ...details })
 }
 
 function protocolError(reason: string, details: Record<string, unknown>): never {
   throw new ProtocolError(ProtocolErrorCode.InvalidParams, reason, details)
+}
+
+/** A system error's code (`ENOTFOUND`, `ECONNRESET`), never its message, which can quote the URL. */
+function errorCode(err: unknown): string {
+  const code = (err as { code?: unknown } | null)?.code
+  return typeof code === 'string' && /^[A-Z0-9_]{1,64}$/.test(code) ? code : 'unknown'
 }
 
 function assertAllowedUrl(url: string): URL {
@@ -200,11 +206,13 @@ function assertAllowedUrl(url: string): URL {
   try {
     parsed = new URL(url)
   } catch {
-    return protocolError('invalid_url', { url })
+    return protocolError('invalid_url', {})
   }
   if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
     blocked('url_scheme_not_allowed', parsed, { protocol: parsed.protocol })
   }
+  // Node would send `user:pass@` as a Basic `Authorization` header.
+  if (parsed.username || parsed.password) blocked('url_credentials_not_allowed', parsed)
   const allowlist = allowedOriginsFrom(process.env[ALLOWED_ORIGINS_ENV])
   if (allowlist) {
     if (!allowlist.has(parsed.origin)) {
@@ -259,14 +267,14 @@ async function resolveCheckedAddresses(
     } catch (err) {
       if (signal.aborted) throw err
       return protocolError('dns_lookup_failed', {
-        url: url.toString(),
+        url: loggableUrl(url),
         ...details,
-        message: err instanceof Error ? err.message : String(err),
+        code: errorCode(err),
       })
     }
   }
   if (addresses.length === 0)
-    protocolError('dns_lookup_failed', { url: url.toString(), ...details })
+    protocolError('dns_lookup_failed', { url: loggableUrl(url), ...details, code: 'no_addresses' })
   const unsafe = addresses.find((a) => isBlockedAddress(a.address))
   if (unsafe) blocked('url_host_blocked', url, details, { address: unsafe.address })
   return addresses
@@ -356,11 +364,13 @@ export async function safeFetch(
   const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS
   const hops: string[] = []
   let current = urlStr
+  let inFlight: URL | undefined
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)
   try {
     for (let i = 0; i <= MAX_REDIRECTS; i++) {
       const parsed = assertAllowedUrl(current)
+      inFlight = parsed
       hops.push(parsed.toString())
       const addresses = await resolveCheckedAddresses(parsed, deps.resolve, controller.signal)
       const res = await deps.request(parsed, {
@@ -375,7 +385,7 @@ export async function safeFetch(
         res.destroy()
         const location = header(res, 'location')
         if (!location) {
-          protocolError('redirect_without_location', { url: parsed.toString(), status })
+          protocolError('redirect_without_location', { url: loggableUrl(parsed), status })
         }
         current = new URL(location, parsed).toString()
         continue
@@ -383,15 +393,16 @@ export async function safeFetch(
       if (status < 200 || status >= 300) {
         res.destroy()
         protocolError('fetch_failed', {
-          url: parsed.toString(),
+          url: loggableUrl(parsed),
           status,
-          statusText: res.statusMessage ?? '',
+          // The standard text, never the server's reason phrase, which can echo the URL.
+          statusText: STATUS_CODES[status] ?? '',
         })
       }
       const declared = Number(header(res, 'content-length') ?? Number.NaN)
       if (Number.isFinite(declared) && declared > maxBytes) {
         res.destroy()
-        protocolError('response_too_large', { url: parsed.toString(), declared, maxBytes })
+        protocolError('response_too_large', { url: loggableUrl(parsed), declared, maxBytes })
       }
       // Running cap so servers that lie about length still get bounded.
       const chunks: Buffer[] = []
@@ -401,7 +412,11 @@ export async function safeFetch(
         total += buf.byteLength
         if (total > maxBytes) {
           res.destroy()
-          protocolError('response_too_large', { url: parsed.toString(), received: total, maxBytes })
+          protocolError('response_too_large', {
+            url: loggableUrl(parsed),
+            received: total,
+            maxBytes,
+          })
         }
         chunks.push(buf)
       }
@@ -412,15 +427,20 @@ export async function safeFetch(
         hops,
       }
     }
-    return protocolError('too_many_redirects', { hops: hops.slice(0, MAX_REDIRECTS + 1) })
+    return protocolError('too_many_redirects', {
+      hops: hops.slice(0, MAX_REDIRECTS + 1).map((hop) => loggableUrl(new URL(hop))),
+    })
   } catch (err) {
     if (err instanceof ProtocolError) throw err
     if (controller.signal.aborted || (err as { name?: string }).name === 'AbortError') {
-      return protocolError('fetch_timeout', { url: urlStr, timeoutMs })
+      return protocolError('fetch_timeout', {
+        ...(inFlight ? { url: loggableUrl(inFlight) } : {}),
+        timeoutMs,
+      })
     }
     return protocolError('fetch_error', {
-      url: urlStr,
-      message: err instanceof Error ? err.message : String(err),
+      ...(inFlight ? { url: loggableUrl(inFlight) } : {}),
+      code: errorCode(err),
     })
   } finally {
     clearTimeout(timer)
