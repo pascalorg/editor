@@ -516,38 +516,45 @@ describe('safeFetch — origin allowlist', () => {
     }
   })
 
-  test('invalid entries are skipped with one warning each, valid ones still apply', async () => {
+  test('rejected entries are skipped and logged by index and reason, never by value', async () => {
     const warn = spyOn(console, 'warn').mockImplementation(() => {})
     try {
       const { deps } = fakeNetwork(dns, routes)
-      const raw = 'cdn.example.com, not a url,https://cdn.example.com,cdn.example.com:443'
+      const raw =
+        'cdn.example.com, not a url,https://cdn.example.com,user:hunter2@cdn.example.com, ftp://user:hunter2@cdn.example.com'
       await withAllowlist(raw, async () => {
         expect((await safeFetch('https://cdn.example.com/x', {}, deps)).buffer.toString()).toBe(
           'cdn',
         )
         await safeFetch('https://cdn.example.com/x', {}, deps)
       })
-      const entries = warn.mock.calls.map((args) => {
-        const line = String(args[0])
-        expect(line).toStartWith('[pascal-mcp] safe_fetch_allowlist_entry_ignored ')
-        return JSON.parse(line.slice(line.indexOf('{'))).entry
-      })
-      expect(entries).toEqual(['cdn.example.com', 'not a url', 'cdn.example.com:443'])
+      const lines = warn.mock.calls.map((args) => String(args[0]))
+      expect(lines).toEqual([
+        '[pascal] asset_allowlist_entry_ignored {"index":0,"reason":"not_a_url"}',
+        '[pascal] asset_allowlist_entry_ignored {"index":1,"reason":"not_a_url"}',
+        '[pascal] asset_allowlist_entry_ignored {"index":3,"reason":"scheme_not_allowed"}',
+        '[pascal] asset_allowlist_entry_ignored {"index":4,"reason":"scheme_not_allowed"}',
+      ])
+      for (const line of [...lines, ...errorLog.mock.calls.map((args) => String(args[0]))]) {
+        expect(line).not.toContain('hunter2')
+      }
     } finally {
       warn.mockRestore()
     }
   })
 
-  test('an allowlist with no valid entry blocks everything', async () => {
+  test('an allowlist with no valid entry, or only whitespace, blocks everything', async () => {
     const warn = spyOn(console, 'warn').mockImplementation(() => {})
     try {
       const { deps, resolved } = fakeNetwork(dns, routes)
-      await withAllowlist('cdn.example.com', () =>
-        expectBlocked(
-          safeFetch('https://cdn.example.com/x', {}, deps),
-          'url_origin_not_allowlisted',
-        ),
-      )
+      for (const value of ['cdn.example.com', '  ', ' , ', 'blob:https://cdn.example.com/x']) {
+        await withAllowlist(value, () =>
+          expectBlocked(
+            safeFetch('https://cdn.example.com/x', {}, deps),
+            'url_origin_not_allowlisted',
+          ),
+        )
+      }
       expect(resolved).toHaveLength(0)
     } finally {
       warn.mockRestore()
@@ -602,12 +609,15 @@ describe('safeFetch — ports and redirects', () => {
   })
 })
 
+/** One real event-loop turn: lets the runtime report unhandled rejections. */
+const nextTurn = () => new Promise<void>((resolve) => setImmediate(resolve))
+
 describe('safeFetch — DNS and the timeout', () => {
   test('a DNS answer or failure arriving after the timeout changes nothing', async () => {
-    jest.useFakeTimers()
     const unhandled: unknown[] = []
     const onUnhandled = (reason: unknown) => unhandled.push(reason)
     process.on('unhandledRejection', onUnhandled)
+    jest.useFakeTimers()
     try {
       const answers: {
         resolve: (addresses: LookupAddress[]) => void
@@ -627,18 +637,20 @@ describe('safeFetch — DNS and the timeout', () => {
         expect(err).toBeInstanceOf(ProtocolError)
         expect((err as Error).message).toContain('fetch_timeout')
       }
+      jest.useRealTimers()
       answers[0]!.resolve([{ address: PUBLIC_V4, family: 4 }])
       answers[1]!.reject(new Error('ENOTFOUND late.example'))
-      for (let i = 0; i < 10; i++) await Promise.resolve()
+      await nextTurn()
+      await nextTurn()
       expect(requests).toHaveLength(0)
       expect(unhandled).toEqual([])
     } finally {
-      process.off('unhandledRejection', onUnhandled)
       jest.useRealTimers()
+      process.off('unhandledRejection', onUnhandled)
     }
   })
 
-  test('the abort listener is removed as soon as each lookup settles', async () => {
+  test('the abort listener is gone before the lookup result is used', async () => {
     const added: unknown[] = []
     const removed: unknown[] = []
     const originalAdd = AbortSignal.prototype.addEventListener
@@ -657,19 +669,50 @@ describe('safeFetch — DNS and the timeout', () => {
       if (args[0] === 'abort') removed.push(args[1])
       return originalRemove.apply(this, args)
     })
+    // Listeners still attached at the moment safeFetch first reads each lookup's
+    // answer or error: the earliest point the result can be acted on.
+    const attachedWhenUsed: number[] = []
+    const observe = () => attachedWhenUsed.push(added.length - removed.length)
+    const answer = (address: string): LookupAddress => {
+      let seen = false
+      return {
+        get address() {
+          if (!seen) observe()
+          seen = true
+          return address
+        },
+        family: address.includes(':') ? 6 : 4,
+      }
+    }
+    const failure = () => {
+      const err = new Error('ENOTFOUND')
+      let seen = false
+      Object.defineProperty(err, 'message', {
+        get() {
+          if (!seen) observe()
+          seen = true
+          return 'ENOTFOUND'
+        },
+      })
+      return err
+    }
     try {
       const { deps } = fakeNetwork(
-        { 'a.example': [PUBLIC_V4], 'b.example': [PUBLIC_V6] },
+        {},
         {
           'https://a.example/x': () => response(302, { location: 'https://b.example/y' }),
           'https://b.example/y': () => response(200, {}, 'ok'),
         },
       )
+      deps.resolve = async (hostname) => {
+        if (hostname === 'a.example') return [answer(PUBLIC_V4)]
+        if (hostname === 'b.example') return [answer(PUBLIC_V6)]
+        throw failure()
+      }
       expect((await safeFetch('https://a.example/x', {}, deps)).buffer.toString()).toBe('ok')
-      expect(added).toHaveLength(2)
-      expect(removed).toEqual(added)
       await expectBlocked(safeFetch('https://missing.example/x', {}, deps), 'dns_lookup_failed')
       expect(added).toHaveLength(3)
+      expect(attachedWhenUsed).toEqual([0, 0, 0])
       expect(removed).toEqual(added)
     } finally {
       add.mockRestore()
