@@ -10,12 +10,15 @@ function git(args: string[]): string | undefined {
 
 /**
  * The revision a change is compared with. In a pull_request CI run the
- * checkout is GitHub's merge commit, whose first parent is the base tip;
- * locally it is the merge base with origin/main. `I18N_BASE_REF` overrides.
+ * checkout is GitHub's merge commit, whose first parent is the base tip; on a
+ * push CI sets `I18N_BASE_REF` to `github.event.before`, covering every commit
+ * of the push; locally it is the merge base with origin/main.
  */
 export function baseRevision(): string | undefined {
+  const configured = process.env.I18N_BASE_REF?.trim()
+  // A push that creates a branch reports an all-zero "before" commit.
   const requested =
-    process.env.I18N_BASE_REF ??
+    (configured && !/^0+$/.test(configured) ? configured : undefined) ??
     (process.env.GITHUB_EVENT_NAME === 'pull_request'
       ? 'HEAD^1'
       : git(['merge-base', 'HEAD', 'origin/main'])?.trim())
