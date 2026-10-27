@@ -1083,6 +1083,96 @@ msgstr "Appentis"
 msgid "app.lib.buildTabState.wall"
 msgstr "Mur"
 
+# Source-Hash: 8d17e7556ce142da
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Another session saved first — refresh?"
+#: apps/editor/components/scene-loader.tsx
+#, fuzzy
+msgid "app.sceneLoader.anotherSessionSavedFirstRefresh"
+msgstr "Une autre session a enregistré en premier — actualiser ?"
+
+# Source-Hash: 8f4b2028ad75465d
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Build"
+#: apps/editor/components/scene-loader.tsx
+#, fuzzy
+msgid "app.sceneLoader.build"
+msgstr "Construire"
+
+# Source-Hash: a2bd204e93e90598
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Dismiss"
+#: apps/editor/components/scene-loader.tsx
+#, fuzzy
+msgid "app.sceneLoader.dismiss"
+msgstr "Fermer"
+
+# Source-Hash: daebc0755d239c99
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Items"
+#: apps/editor/components/scene-loader.tsx
+#, fuzzy
+msgid "app.sceneLoader.items"
+msgstr "Objets"
+
+# Source-Hash: cf2e870fce0f2f51
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Paint"
+#: apps/editor/components/scene-loader.tsx
+#, fuzzy
+msgid "app.sceneLoader.paint"
+msgstr "Peindre"
+
+# Source-Hash: 854555777b69a4b1
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Reload"
+#: apps/editor/components/scene-loader.tsx
+#, fuzzy
+msgid "app.sceneLoader.reload"
+msgstr "Recharger"
+
+# Source-Hash: 8dc78e215a97d9fc
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Scene"
+#: apps/editor/components/scene-loader.tsx
+#, fuzzy
+msgid "app.sceneLoader.scene"
+msgstr "Scène"
+
+# Source-Hash: 83909f82446ee9c3
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Settings"
+#: apps/editor/components/scene-loader.tsx
+#, fuzzy
+msgid "app.sceneLoader.settings"
+msgstr "Paramètres"
+
+# Source-Hash: ee255fa26d076dcc
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Your changes haven't been saved. Reload to pick up the latest version."
+#: apps/editor/components/scene-loader.tsx
+#, fuzzy
+msgid "app.sceneLoader.yourChangesHavenTBeenSaved"
+msgstr "Vos modifications n’ont pas été enregistrées. Rechargez pour récupérer la dernière version."
+
 # Source-Hash: 703e1b4b9b715d3b
 # Review: required
 # AI-Provider: cursor-agent
@@ -3963,6 +4053,17 @@ msgstr "Pivoter"
 msgid "editor.helpers.registeredToolHelper.guidedConstraintsBypassed"
 msgstr "Contraintes guidées ignorées"
 
+# Source-Hash: 179b025e25f9a091
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Collapse"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/tree-node.tsx
+#, fuzzy
+msgid "editor.layers.collapse"
+msgstr "Réduire"
+
 # Source-Hash: dbeae4c43f49327f
 # Review: required
 # AI-Provider: cursor-agent
@@ -4072,6 +4173,60 @@ msgstr "Escalier ({count, plural, one {# segment} many {# segments} other {# seg
 #, fuzzy
 msgid "editor.layers.defaultName.zone"
 msgstr "Zone ({area})"
+
+# Source-Hash: 5cabcabb8bc14809
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Expand"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/tree-node.tsx
+#, fuzzy
+msgid "editor.layers.expand"
+msgstr "Développer"
+
+# Source-Hash: 6731e9dd94e8b268
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "{levelName} options"
+#: packages/editor/src/components/ui/floating-level-selector.tsx
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+#, fuzzy
+msgid "editor.layers.levelOptions"
+msgstr "Options de {levelName}"
+
+# Source-Hash: d6952b4e54d246dd
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Rename"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/inline-rename-input.tsx
+#, fuzzy
+msgid "editor.layers.rename"
+msgstr "Renommer"
+
+# Source-Hash: 21eafa019ad62fea
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "{role, select, room {Room colour} other {Zone colour}}"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/zone-tree-node.tsx
+#: packages/editor/src/components/ui/sidebar/panels/zone-panel/index.tsx
+#, fuzzy
+msgid "editor.layers.spaceColour"
+msgstr "{role, select, room {Couleur de la pièce} other {Couleur de la zone}}"
+
+# Source-Hash: f5de042416a2c04f
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Unit colour"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/unit-tree-node.tsx
+#, fuzzy
+msgid "editor.layers.unitColour"
+msgstr "Couleur du logement"
 
 # Source-Hash: c0774c185060fc13
 # Review: required

@@ -1083,6 +1083,96 @@ msgstr "单坡"
 msgid "app.lib.buildTabState.wall"
 msgstr "墙体"
 
+# Source-Hash: 8d17e7556ce142da
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Another session saved first — refresh?"
+#: apps/editor/components/scene-loader.tsx
+#, fuzzy
+msgid "app.sceneLoader.anotherSessionSavedFirstRefresh"
+msgstr "另一个会话已先保存——要刷新吗？"
+
+# Source-Hash: 8f4b2028ad75465d
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Build"
+#: apps/editor/components/scene-loader.tsx
+#, fuzzy
+msgid "app.sceneLoader.build"
+msgstr "建造"
+
+# Source-Hash: a2bd204e93e90598
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Dismiss"
+#: apps/editor/components/scene-loader.tsx
+#, fuzzy
+msgid "app.sceneLoader.dismiss"
+msgstr "关闭"
+
+# Source-Hash: daebc0755d239c99
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Items"
+#: apps/editor/components/scene-loader.tsx
+#, fuzzy
+msgid "app.sceneLoader.items"
+msgstr "物品"
+
+# Source-Hash: cf2e870fce0f2f51
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Paint"
+#: apps/editor/components/scene-loader.tsx
+#, fuzzy
+msgid "app.sceneLoader.paint"
+msgstr "涂装"
+
+# Source-Hash: 854555777b69a4b1
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Reload"
+#: apps/editor/components/scene-loader.tsx
+#, fuzzy
+msgid "app.sceneLoader.reload"
+msgstr "重新加载"
+
+# Source-Hash: 8dc78e215a97d9fc
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Scene"
+#: apps/editor/components/scene-loader.tsx
+#, fuzzy
+msgid "app.sceneLoader.scene"
+msgstr "场景"
+
+# Source-Hash: 83909f82446ee9c3
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Settings"
+#: apps/editor/components/scene-loader.tsx
+#, fuzzy
+msgid "app.sceneLoader.settings"
+msgstr "设置"
+
+# Source-Hash: ee255fa26d076dcc
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Your changes haven't been saved. Reload to pick up the latest version."
+#: apps/editor/components/scene-loader.tsx
+#, fuzzy
+msgid "app.sceneLoader.yourChangesHavenTBeenSaved"
+msgstr "你的更改尚未保存。重新加载以获取最新版本。"
+
 # Source-Hash: 703e1b4b9b715d3b
 # Review: required
 # AI-Provider: cursor-agent
@@ -3963,6 +4053,17 @@ msgstr "旋转"
 msgid "editor.helpers.registeredToolHelper.guidedConstraintsBypassed"
 msgstr "已绕过引导约束"
 
+# Source-Hash: 179b025e25f9a091
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Collapse"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/tree-node.tsx
+#, fuzzy
+msgid "editor.layers.collapse"
+msgstr "折叠"
+
 # Source-Hash: dbeae4c43f49327f
 # Review: required
 # AI-Provider: cursor-agent
@@ -4072,6 +4173,60 @@ msgstr "楼梯（{count, plural, other {# 个分段}}）"
 #, fuzzy
 msgid "editor.layers.defaultName.zone"
 msgstr "区域（{area}）"
+
+# Source-Hash: 5cabcabb8bc14809
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Expand"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/tree-node.tsx
+#, fuzzy
+msgid "editor.layers.expand"
+msgstr "展开"
+
+# Source-Hash: 6731e9dd94e8b268
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "{levelName} options"
+#: packages/editor/src/components/ui/floating-level-selector.tsx
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+#, fuzzy
+msgid "editor.layers.levelOptions"
+msgstr "{levelName}选项"
+
+# Source-Hash: d6952b4e54d246dd
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Rename"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/inline-rename-input.tsx
+#, fuzzy
+msgid "editor.layers.rename"
+msgstr "重命名"
+
+# Source-Hash: 21eafa019ad62fea
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "{role, select, room {Room colour} other {Zone colour}}"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/zone-tree-node.tsx
+#: packages/editor/src/components/ui/sidebar/panels/zone-panel/index.tsx
+#, fuzzy
+msgid "editor.layers.spaceColour"
+msgstr "{role, select, room {房间颜色} other {区域颜色}}"
+
+# Source-Hash: f5de042416a2c04f
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Unit colour"
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/unit-tree-node.tsx
+#, fuzzy
+msgid "editor.layers.unitColour"
+msgstr "单元颜色"
 
 # Source-Hash: c0774c185060fc13
 # Review: required

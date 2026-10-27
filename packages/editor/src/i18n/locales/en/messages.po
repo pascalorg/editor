@@ -435,6 +435,42 @@ msgstr "Shed"
 msgid "app.lib.buildTabState.wall"
 msgstr "Wall"
 
+#: apps/editor/components/scene-loader.tsx
+msgid "app.sceneLoader.anotherSessionSavedFirstRefresh"
+msgstr "Another session saved first — refresh?"
+
+#: apps/editor/components/scene-loader.tsx
+msgid "app.sceneLoader.build"
+msgstr "Build"
+
+#: apps/editor/components/scene-loader.tsx
+msgid "app.sceneLoader.dismiss"
+msgstr "Dismiss"
+
+#: apps/editor/components/scene-loader.tsx
+msgid "app.sceneLoader.items"
+msgstr "Items"
+
+#: apps/editor/components/scene-loader.tsx
+msgid "app.sceneLoader.paint"
+msgstr "Paint"
+
+#: apps/editor/components/scene-loader.tsx
+msgid "app.sceneLoader.reload"
+msgstr "Reload"
+
+#: apps/editor/components/scene-loader.tsx
+msgid "app.sceneLoader.scene"
+msgstr "Scene"
+
+#: apps/editor/components/scene-loader.tsx
+msgid "app.sceneLoader.settings"
+msgstr "Settings"
+
+#: apps/editor/components/scene-loader.tsx
+msgid "app.sceneLoader.yourChangesHavenTBeenSaved"
+msgstr "Your changes haven't been saved. Reload to pick up the latest version."
+
 #: apps/editor/components/share-panel.tsx
 msgid "app.sharePanel.anyoneWithTheLinkCanView"
 msgstr "Anyone with the link can view this project. They cannot edit it."
@@ -1611,6 +1647,11 @@ msgstr "Rotate"
 msgid "editor.helpers.registeredToolHelper.guidedConstraintsBypassed"
 msgstr "Guided constraints bypassed"
 
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/tree-node.tsx
+msgid "editor.layers.collapse"
+msgstr "Collapse"
+
 #: packages/editor/src/components/ui/sidebar/panels/site-panel/default-names.ts
 msgid "editor.layers.defaultName.ceiling"
 msgstr "Ceiling ({area})"
@@ -1654,6 +1695,30 @@ msgstr "Staircase ({count, plural, one {# segment} other {# segments}})"
 #: packages/editor/src/components/ui/sidebar/panels/site-panel/default-names.ts
 msgid "editor.layers.defaultName.zone"
 msgstr "Zone ({area})"
+
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/tree-node.tsx
+msgid "editor.layers.expand"
+msgstr "Expand"
+
+#: packages/editor/src/components/ui/floating-level-selector.tsx
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+msgid "editor.layers.levelOptions"
+msgstr "{levelName} options"
+
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/inline-rename-input.tsx
+msgid "editor.layers.rename"
+msgstr "Rename"
+
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/zone-tree-node.tsx
+#: packages/editor/src/components/ui/sidebar/panels/zone-panel/index.tsx
+msgid "editor.layers.spaceColour"
+msgstr "{role, select, room {Room colour} other {Zone colour}}"
+
+#: packages/editor/src/components/ui/sidebar/panels/site-panel/unit-tree-node.tsx
+msgid "editor.layers.unitColour"
+msgstr "Unit colour"
 
 #: packages/editor/src/components/ui/level-duplicate-dialog.tsx
 msgid "editor.levelDuplicateDialog.cancel"

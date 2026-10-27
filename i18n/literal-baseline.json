@@ -109,17 +109,6 @@
       "· Updated",
       "“{name}” will be removed from this editor, along with everything in it."
     ],
-    "apps/editor/components/scene-loader.tsx": [
-      "Another session saved first — refresh?",
-      "Build",
-      "Dismiss",
-      "Items",
-      "Paint",
-      "Reload",
-      "Scene",
-      "Settings",
-      "Your changes haven't been saved. Reload to pick up the latest version."
-    ],
     "packages/editor/src/components/editor-2d/floorplan-measurement-tool-layer.tsx": [
       "ALIGN ",
       "Create",
