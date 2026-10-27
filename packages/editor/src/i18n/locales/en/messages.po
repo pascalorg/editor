@@ -7,7 +7,7 @@ msgstr ""
 "X-Generator: @lingui/cli\n"
 "Language: en\n"
 
-#: apps/editor/components/app-shell.tsx
+#: apps/editor/components/app-home-link.tsx
 msgid "app.appShell.pascalHome"
 msgstr "Pascal home"
 

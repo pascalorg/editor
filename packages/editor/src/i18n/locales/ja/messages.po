@@ -18,7 +18,7 @@ msgstr ""
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
 # English: "Pascal home"
-#: apps/editor/components/app-shell.tsx
+#: apps/editor/components/app-home-link.tsx
 #, fuzzy
 msgid "app.appShell.pascalHome"
 msgstr "Pascal ホーム"
