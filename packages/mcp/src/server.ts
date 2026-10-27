@@ -18,7 +18,7 @@ import { registerPrompts } from './prompts'
 import { registerResources } from './resources'
 import type { SceneStore } from './storage/types'
 import { registerTools } from './tools'
-import type { GeometryScriptHost } from './tools/add-object'
+import type { GeometryScriptHost, ObjectMakerHost } from './tools/add-object'
 import { type AssetCatalog, cachedCatalog } from './tools/asset-catalog'
 import { registerHostedServiceTools } from './tools/hosted-services'
 import { normalizeToolSchemaDialect } from './tools/normalize-schema-dialect'
@@ -57,6 +57,8 @@ export type CreatePascalMcpServerOptions = {
   catalog?: AssetCatalog
   /** Runs and stores `add_object` modules; without it the tool answers `scripts_unavailable`. */
   geometryScripts?: GeometryScriptHost
+  /** Makes `add_object`'s pieces from words with the host's models; without it they are refused. */
+  objectMakers?: ObjectMakerHost
   /** Optional authenticated hosted services; local scene tools remain usable without them. */
   services?: HostedServiceExecutor
   /** Authenticated project file catalog; absent for a local scene without hosted files. */
@@ -87,6 +89,7 @@ export function createPascalMcpServer(opts: CreatePascalMcpServerOptions): McpSe
   registerTools(server, operations, {
     catalog,
     geometryScripts: opts.geometryScripts,
+    objectMakers: opts.objectMakers,
     sceneViews: opts.sceneViews,
     assetViews: opts.assetViews,
   })

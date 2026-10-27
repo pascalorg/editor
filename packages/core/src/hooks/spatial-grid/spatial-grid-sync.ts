@@ -127,6 +127,9 @@ export function initSpatialGridSync(): () => void {
           markCoveringDependentsBelow(levelId, state.nodes, markDirty)
         }
 
+        if (node.type === 'zone' && node.floor?.script)
+          markNodesOverlappingPolygon(levelId, node.polygon, state.nodes, markDirty)
+
         // A site arriving with terrain already on it (scene load, paste,
         // imported elevation data) is the same event as a stroke: ground exists
         // where flat ground was assumed.
@@ -147,6 +150,9 @@ export function initSpatialGridSync(): () => void {
           markNodesOverlappingSlab(node as SlabNode, state.nodes, markDirty, prevState.nodes)
           markCoveringDependentsBelow(levelId, state.nodes, markDirty)
         }
+
+        if (node.type === 'zone' && node.floor?.script)
+          markNodesOverlappingPolygon(levelId, node.polygon, state.nodes, markDirty)
 
         // Deleting a sculpted site drops the ground back to the datum, so its
         // contents have to come down with it.
@@ -195,6 +201,19 @@ export function initSpatialGridSync(): () => void {
             markDirty,
             prevState.nodes,
           )
+        }
+      } else if (node.type === 'zone' && prev.type === 'zone') {
+        // A room's floor script is the surface what stands on the room rests on.
+        if (
+          (node.floor?.script || prev.floor?.script) &&
+          (node.floor?.script !== prev.floor?.script ||
+            node.polygon !== prev.polygon ||
+            node.holes !== prev.holes)
+        ) {
+          const levelId = resolveLevelId(node, state.nodes)
+          markNodesOverlappingPolygon(levelId, prev.polygon, state.nodes, markDirty)
+          if (node.polygon !== prev.polygon)
+            markNodesOverlappingPolygon(levelId, node.polygon, state.nodes, markDirty)
         }
       } else if (node.type === 'level' && prev.type === 'level') {
         if (node.height !== prev.height) {

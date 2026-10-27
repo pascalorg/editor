@@ -28,6 +28,9 @@ const CONTACT_TOLERANCE = 0.002
 const ISSUE_LIMIT = 20
 const LIST_LIMIT = 16
 
+/** The MCP resource serving `describeDesignSchema`. */
+export const DESIGN_SCHEMA_URI = 'pascal://schema/design'
+
 const vec2 = z.tuple([z.number(), z.number()])
 const vec3 = z.tuple([z.number(), z.number(), z.number()])
 const BoundsSchema = z.object({ min: vec3, max: vec3, dimensions: vec3 })
@@ -49,6 +52,10 @@ export const DesignDiagnosticSchema = z.object({
   ]),
   path: z.string().optional(),
   message: z.string(),
+  /** Schema errors: what the design schema takes at `path`. */
+  expected: z.string().optional(),
+  /** Schema errors: the JSON found at `path`, or "nothing". */
+  received: z.string().optional(),
   /** How to fix it, for rule errors whose message alone does not say. */
   hint: z.string().optional(),
 })
@@ -151,6 +158,9 @@ export const DesignValidationSchema = z.object({
     })
     .nullable(),
   measurements: DesignMeasurementsSchema.nullable(),
+  /** A design that does not parse: where its whole schema is, and a valid design to start from. */
+  schemaUri: z.literal(DESIGN_SCHEMA_URI).optional(),
+  example: z.record(z.string(), z.unknown()).optional(),
 })
 
 export type DesignDiagnostic = z.infer<typeof DesignDiagnosticSchema>
@@ -285,12 +295,27 @@ let jsonSchema: Record<string, unknown> | undefined
 
 /** The design contract for agents, generated from `RecipeSchema` (not from the node, whose recipe is opaque). */
 export function describeDesignSchema(): DesignSchemaDescription {
+  return structuredClone({
+    version: 2,
+    schema: designJsonSchema(),
+    limits: RECIPE_LIMITS,
+    limitsV2: RECIPE_V2_LIMITS,
+    rules: DESIGN_RULES,
+    example: DESIGN_EXAMPLE,
+  })
+}
+
+function designJsonSchema(): Record<string, unknown> {
   if (!jsonSchema) {
-    const registry = z.registry<{ id: string; description: string }>()
+    const registry = z.registry<{ id?: string; description: string }>()
     registry.add(ExpressionSchema, {
       id: 'Expr',
       description:
         'A number, a parameter id, "index" (the 0-based repeat inside part.count) or {op, args}.',
+    })
+    registry.add(RecipeSchema.shape.mounting.unwrap(), {
+      description:
+        'A floor design leaves mounting out: it stands on the floor at y = 0. Wall-side and ceiling designs name their reference, a surface without part (see the mounting rules).',
     })
     jsonSchema = {
       title: 'Pascal design',
@@ -302,14 +327,7 @@ export function describeDesignSchema(): DesignSchemaDescription {
       >),
     }
   }
-  return structuredClone({
-    version: 2,
-    schema: jsonSchema,
-    limits: RECIPE_LIMITS,
-    limitsV2: RECIPE_V2_LIMITS,
-    rules: DESIGN_RULES,
-    example: DESIGN_EXAMPLE,
-  })
+  return jsonSchema
 }
 
 const EXPRESSION_KEYS = new Set([
@@ -360,12 +378,138 @@ function formatPath(path: readonly PropertyKey[]) {
   )
 }
 
+type JsonNode = Record<string, unknown>
+
+const jsonNode = (value: unknown): JsonNode | undefined =>
+  value && typeof value === 'object' && !Array.isArray(value) ? (value as JsonNode) : undefined
+
+const refName = (node: JsonNode) =>
+  typeof node.$ref === 'string' ? node.$ref.replace('#/$defs/', '') : undefined
+
+const deref = (node: JsonNode, root: JsonNode) =>
+  jsonNode(jsonNode(root.$defs)?.[refName(node) ?? '']) ?? node
+
+/** Whether the value's discriminating keys (a `const` or an `enum` there) allow this branch. */
+function fitsBranch(branch: JsonNode, value: unknown): boolean {
+  const properties = jsonNode(branch.properties)
+  const object = jsonNode(value)
+  if (!properties || !object) return true
+  return Object.entries(properties).every(([key, property]) => {
+    const node = jsonNode(property)
+    if (!node || !(key in object)) return true
+    if ('const' in node) return node.const === object[key]
+    return !Array.isArray(node.enum) || node.enum.includes(object[key])
+  })
+}
+
+/** A node's alternatives, narrowed to those the value fits when it fits any. */
+function branchesOf(node: JsonNode, root: JsonNode, value: unknown): JsonNode[] {
+  const resolved = deref(node, root)
+  const list = resolved.anyOf ?? resolved.oneOf
+  if (!Array.isArray(list) || refName(node)) return [resolved]
+  const all = list.flatMap((branch) => {
+    const child = jsonNode(branch)
+    return child ? branchesOf(child, root, value) : []
+  })
+  const fitting = all.filter((branch) => fitsBranch(branch, value))
+  return fitting.length ? fitting : all
+}
+
+/** The schema nodes at a path, whether the last step is optional, and the nearest description on the way. */
+function schemaAt(root: JsonNode, path: readonly PropertyKey[], raw: unknown) {
+  let nodes = [root]
+  let value = raw
+  let optional = false
+  let note: string | undefined
+  for (const key of path) {
+    const next: JsonNode[] = []
+    optional = false
+    for (const node of nodes.flatMap((candidate) => branchesOf(candidate, root, value))) {
+      const child =
+        typeof key === 'number'
+          ? jsonNode(Array.isArray(node.prefixItems) ? node.prefixItems[key] : node.items)
+          : jsonNode(jsonNode(node.properties)?.[String(key)])
+      if (!child) continue
+      if (typeof key !== 'number')
+        optional = !(Array.isArray(node.required) && node.required.includes(key))
+      next.push(child)
+    }
+    if (!next.length) return null
+    nodes = next
+    value = jsonNode(value) || Array.isArray(value) ? Reflect.get(value as object, key) : undefined
+    const described = nodes.find((node) => typeof node.description === 'string' && !refName(node))
+    if (described) note = described.description as string
+  }
+  return { nodes: nodes.flatMap((node) => branchesOf(node, root, value)), optional, note }
+}
+
+const unique = (list: string[]) => [...new Set(list)]
+
+/** A schema node in a line: its keys (`?` optional), values, item shape or type. */
+function summarize(node: JsonNode, root: JsonNode, depth = 0): string {
+  const ref = refName(node)
+  if (ref) return depth ? ref : summarize(deref(node, root), root, depth)
+  if ('const' in node) return JSON.stringify(node.const)
+  if (Array.isArray(node.enum)) return node.enum.map((value) => JSON.stringify(value)).join(' | ')
+  const list = node.anyOf ?? node.oneOf
+  if (Array.isArray(list)) {
+    if (depth === 0 && typeof node.description === 'string') return node.description
+    return unique(
+      list.flatMap((branch) => {
+        const child = jsonNode(branch)
+        return child ? [summarize(child, root, depth + 1)] : []
+      }),
+    ).join(' | ')
+  }
+  const required = Array.isArray(node.required) ? node.required : []
+  switch (node.type) {
+    case 'object': {
+      const keys = Object.keys(jsonNode(node.properties) ?? {})
+      if (depth > 1 || !keys.length) return 'an object'
+      return `an object with ${keys.map((key) => (required.includes(key) ? key : `${key}?`)).join(', ')}${node.additionalProperties === false ? ' and no other keys' : ''}`
+    }
+    case 'array': {
+      if (Array.isArray(node.prefixItems))
+        return `[${node.prefixItems.map((item) => summarize(jsonNode(item) ?? {}, root, depth + 1)).join(', ')}]`
+      const items = jsonNode(node.items)
+      const range =
+        typeof node.minItems === 'number' || typeof node.maxItems === 'number'
+          ? ` (${node.minItems ?? 0} to ${node.maxItems ?? 'any'} items)`
+          : ''
+      const item = items ? summarize(items, root, depth + 1).replace(/^an object\b/, 'objects') : ''
+      return `a list${item ? ` of ${item}` : ''}${range}`
+    }
+    case 'string':
+      return typeof node.pattern === 'string' ? `a string matching ${node.pattern}` : 'a string'
+    case 'number':
+    case 'integer':
+      return `${node.type === 'integer' ? 'an integer' : 'a number'}${typeof node.minimum === 'number' && typeof node.maximum === 'number' ? ` from ${node.minimum} to ${node.maximum}` : ''}`
+    case 'boolean':
+      return 'true or false'
+    default:
+      return 'anything'
+  }
+}
+
+/** What the design schema takes at a path, in a line: enough to fix it without probing. */
+function expectedAt(path: readonly PropertyKey[], raw: unknown): string | undefined {
+  const root = designJsonSchema()
+  const found = schemaAt(root, path, raw)
+  if (!found) return undefined
+  let text = unique(found.nodes.map((node) => summarize(node, root))).join(' | ')
+  const expr = jsonNode(jsonNode(root.$defs)?.Expr)
+  if (/\bExpr\b/.test(text) && typeof expr?.description === 'string')
+    text += `; Expr is ${expr.description}`
+  if (found.optional) text += '; optional'
+  if (found.note && !text.includes(found.note)) text += `. ${found.note}`
+  return text
+}
+
 function schemaDiagnostics(error: z.ZodError, raw: unknown): DesignDiagnostic[] {
   const diagnostics = error.issues.slice(0, ISSUE_LIMIT).map((issue): DesignDiagnostic => {
     let value = raw
     for (const key of issue.path)
       value = value && typeof value === 'object' ? Reflect.get(value, key) : undefined
-    const got = (JSON.stringify(value) ?? 'nothing').slice(0, 80)
     let message = issue.message
     if (issue.code === 'invalid_format' && issue.format === 'regex')
       message =
@@ -374,11 +518,14 @@ function schemaDiagnostics(error: z.ZodError, raw: unknown): DesignDiagnostic[] 
           : issue.path.some((key) => typeof key === 'string' && EXPRESSION_KEYS.has(key))
             ? 'expressions are a number, a parameter id, "index" or {op, args}; arithmetic strings are not supported'
             : 'IDs and references are lowercase snake_case matching ^[a-z][a-z0-9_]{0,47}$'
+    const expected = expectedAt(issue.path, raw)
     return {
       severity: 'error',
       code: 'schema',
       path: formatPath(issue.path) || undefined,
-      message: `${message} (got ${got})`,
+      message,
+      ...(expected && { expected }),
+      received: (JSON.stringify(value) ?? 'nothing').slice(0, 120),
       ...(/requires recipe version 2/.test(message) && {
         hint: 'Set "version": 2 (and keep the design under 24 KiB), or leave out the v2 feature.',
       }),
@@ -705,12 +852,19 @@ export function validateDesign(
     sweep: null,
     measurements: null,
   })
+  // A design that does not parse may have been written blind: its answer points at the schema
+  // and hands a valid design to start from, so one answer is enough to rewrite it.
+  const unparsed = (diagnostics: DesignDiagnostic[]): DesignValidation => ({
+    ...failed(diagnostics),
+    schemaUri: DESIGN_SCHEMA_URI,
+    example: DESIGN_EXAMPLE,
+  })
   let raw = input
   if (typeof input === 'string') {
     try {
       raw = JSON.parse(input)
     } catch (error) {
-      return failed([
+      return unparsed([
         { severity: 'error', code: 'invalid_json', message: `Not valid JSON: ${message(error)}` },
       ])
     }
@@ -733,18 +887,15 @@ export function validateDesign(
   try {
     recipe = parseRecipe(raw)
   } catch (error) {
-    return failed(
-      error instanceof z.ZodError
-        ? schemaDiagnostics(error, raw)
-        : [
-            {
-              severity: 'error',
-              code: 'rule',
-              message: message(error),
-              ...(ruleHint(message(error), raw) && { hint: ruleHint(message(error), raw) }),
-            },
-          ],
-    )
+    if (error instanceof z.ZodError) return unparsed(schemaDiagnostics(error, raw))
+    return failed([
+      {
+        severity: 'error',
+        code: 'rule',
+        message: message(error),
+        ...(ruleHint(message(error), raw) && { hint: ruleHint(message(error), raw) }),
+      },
+    ])
   }
 
   const diagnostics: DesignDiagnostic[] = []

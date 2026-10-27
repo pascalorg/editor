@@ -19,7 +19,11 @@ import { isCeilingGeometry } from '../services/roof-level'
 import { isRoofOnStoreyWalls } from '../services/roof-move'
 import { getStoredLevelHeight, getWallCoveringSlabs, getWallTop } from '../services/storey'
 import { getStoreyDatum } from '../services/storey-datum'
-import { computeSegmentTransforms, rotateXZ } from '../systems/stair/stair-footprint'
+import {
+  computeSegmentTransforms,
+  rotateXZ,
+  stairArrivalOpening,
+} from '../systems/stair/stair-footprint'
 import {
   resolveStairTotalRise,
   stairClimbsToNoStorey,
@@ -601,6 +605,46 @@ export const verifyScene: AgentOperation<VerifySceneInput | undefined> = (
             'stair_obstructed',
             `Wall ${wall.name ?? wall.id} obstructs stair ${stairName} on ${sourceName}`,
           )
+    }
+
+    // Where it arrives: inside a room of the floor it climbs to, no wall across its top step or
+    // standing in the opening it cuts.
+    const arrival = stairArrivalOpening(stair, nodes as Record<string, AnyNode>)
+    for (const targetLevelId of targetLevelIdsForStair(nodes, stair)) {
+      if (targetLevelId === sourceLevelId || arrival.length === 0) continue
+      const targetName = nodes[targetLevelId]?.name ?? targetLevelId
+      const target = onLevel(targetLevelId)
+      const zones = ofType(target, 'zone')
+      const centre: Vec2 = [
+        arrival.reduce((sum, [x]) => sum + x, 0) / arrival.length,
+        arrival.reduce((sum, [, z]) => sum + z, 0) / arrival.length,
+      ]
+      if (zones.length > 0 && !zones.some((zone) => pointInPolygon(centre, zone.polygon as Vec2[])))
+        report(
+          'stair_arrives_outside_room',
+          `Stair ${stairName} arrives on ${targetName} outside every room: move it so its top step lands in a hall or a room`,
+        )
+      const opened = target.filter(
+        (node): node is AnyNode & { type: 'floor-opening' } =>
+          node.type === 'floor-opening' && node.source === 'stair' && node.ownerId === stair.id,
+      )
+      for (const wall of ofType(target, 'wall')) {
+        const points = wallSamplePoints(wall)
+        if (points.some((point) => pointInPolygon(point, arrival as Vec2[], false)))
+          report(
+            'stair_arrival_blocked',
+            `Wall ${wall.name ?? wall.id} on ${targetName} crosses the top of stair ${stairName}`,
+          )
+        else if (
+          opened.some((opening) =>
+            points.some((point) => pointInPolygon(point, opening.polygon as Vec2[], false)),
+          )
+        )
+          report(
+            'stair_opening_wall',
+            `Wall ${wall.name ?? wall.id} on ${targetName} stands in the floor opening of stair ${stairName}`,
+          )
+      }
     }
 
     if ((stair.slabOpeningMode ?? 'none') !== 'destination') continue

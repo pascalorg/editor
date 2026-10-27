@@ -35,6 +35,7 @@ import { memo, useEffect, useMemo } from 'react'
 import * as THREE from 'three'
 import { mergeGeometries as mergeBufferGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { resolveWallOpeningCeiling } from '../shared/wall-opening-ceiling'
+import { skirtingFloorOpeningRanges } from './skirting-floor-gaps'
 import { treatmentMiterDataForProud, type WallTreatmentLevelData } from './treatment-level-data'
 
 const CURVE_SEGMENTS = 24
@@ -544,9 +545,11 @@ export function buildTrimGeometry(
   }
   const face = resolveTreatmentSideSign(node, side) > 0 ? 'a' : 'b'
   const faceScript = kind === 'skirting' ? node.finishScripts?.[face] : undefined
+  const floorGaps =
+    kind === 'skirting' ? skirtingFloorOpeningRanges(node, face, useScene.getState().nodes) : []
   const runs = bases.flatMap((base) => {
     const bottom = support ? base.elevation - support.elevation : yBottom
-    const openingRanges = trimOpeningRanges(node, childrenNodes, bottom, height)
+    const openingRanges = [...trimOpeningRanges(node, childrenNodes, bottom, height), ...floorGaps]
     if (support)
       for (const child of childrenNodes) {
         for (const run of wallDoorStepRuns(node, child, support.faceDatum, support.elevation))

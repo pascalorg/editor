@@ -1,4 +1,5 @@
 import { floorConstructionLift } from '../../lib/floor-construction-lift'
+import { floorFinishTopAt } from '../../lib/floor-script'
 import { levelBaseElevationAt } from '../../lib/terrain-support'
 import { nodeRegistry } from '../../registry'
 import type {
@@ -106,6 +107,11 @@ export function getFloorPlacedElevation({
     return groundLiftCache
   }
 
+  // A floor a room's script built (planks, tiles) is the walking surface on its plate: what stands
+  // there stands on the build's top, not inside it.
+  const onFloor = (slabId: string, elevation: number, at: [number, number, number]) =>
+    floorFinishTopAt(nodes, resolvedLevelId, slabId, at[0], at[2]) ?? finiteSlabElevation(elevation)
+
   // A persisted support host pins the elevation while it still exists and
   // overlaps a footprint — deterministic across stacked slabs. A stale
   // host (deleted or reshaped away) silently falls through to the
@@ -132,7 +138,8 @@ export function getFloorPlacedElevation({
           )
           .sort((a, b) => b.elevation - a.elevation)
         const covering = coverings[0]
-        if (covering) return finiteSlabElevation(covering.elevation)
+        if (covering)
+          return onFloor(covering.id, covering.elevation, footprint.position ?? position)
       }
       const hosted = activeSpatialGrid().getHostSlabElevationForFootprint(
         resolvedLevelId,
@@ -141,7 +148,7 @@ export function getFloorPlacedElevation({
         footprint.dimensions,
         footprint.rotation,
       )
-      if (hosted !== null) return finiteSlabElevation(hosted)
+      if (hosted !== null) return onFloor(supportSlabId, hosted, footprint.position ?? position)
     }
   }
 
@@ -165,7 +172,9 @@ export function getFloorPlacedElevation({
       maxElevation,
     )
     const elevation =
-      support.slabId === null ? groundLift() : finiteSlabElevation(support.elevation)
+      support.slabId === null
+        ? groundLift()
+        : onFloor(support.slabId, support.elevation, footprint.position ?? position)
     if (elevation > elected) {
       elected = elevation
     }

@@ -271,6 +271,28 @@ function addBox(
   parent.add(m)
 }
 
+/**
+ * How far the sill's top stands over the opening's bottom: level with it, the top would share the
+ * plane of the wall's reveal under the frame and of a face finish's cut edge, and flicker with them.
+ */
+const SILL_LIFT = 0.001
+
+/** The sill: a board under the opening, a little wider, standing out from the frame's front (+Z). */
+function addSill(parent: THREE.Object3D, node: WindowNode) {
+  const { width, height, frameDepth, sillDepth, sillThickness } = node
+  currentWindowSlot = 'frame'
+  addBox(
+    parent,
+    baseMaterial,
+    width + sillDepth * 0.4,
+    sillThickness,
+    sillDepth,
+    0,
+    -height / 2 - sillThickness / 2 + SILL_LIFT,
+    frameDepth / 2 + sillDepth / 2,
+  )
+}
+
 function addShape(
   parent: THREE.Object3D,
   material: THREE.Material,
@@ -606,8 +628,6 @@ function addRoundedWindowVisuals(node: WindowNode, mesh: THREE.Mesh) {
     columnDividerThickness,
     rowDividerThickness,
     sill,
-    sillDepth,
-    sillThickness,
   } = node
   const halfWidth = width / 2
   const bottom = -height / 2
@@ -695,21 +715,7 @@ function addRoundedWindowVisuals(node: WindowNode, mesh: THREE.Mesh) {
     }
   }
 
-  if (sill) {
-    const sillW = width + sillDepth * 0.4
-    const sillZ = frameDepth / 2 + sillDepth / 2
-    currentWindowSlot = 'frame'
-    addBox(
-      mesh,
-      baseMaterial,
-      sillW,
-      sillThickness,
-      sillDepth,
-      0,
-      -height / 2 - sillThickness / 2,
-      sillZ,
-    )
-  }
+  if (sill) addSill(mesh, node)
 }
 
 function addArchedWindowVisuals(node: WindowNode, mesh: THREE.Mesh) {
@@ -723,8 +729,6 @@ function addArchedWindowVisuals(node: WindowNode, mesh: THREE.Mesh) {
     columnDividerThickness,
     rowDividerThickness,
     sill,
-    sillDepth,
-    sillThickness,
   } = node
   const halfWidth = width / 2
   const bottom = -height / 2
@@ -810,21 +814,7 @@ function addArchedWindowVisuals(node: WindowNode, mesh: THREE.Mesh) {
     }
   }
 
-  if (sill) {
-    const sillW = width + sillDepth * 0.4
-    const sillZ = frameDepth / 2 + sillDepth / 2
-    currentWindowSlot = 'frame'
-    addBox(
-      mesh,
-      baseMaterial,
-      sillW,
-      sillThickness,
-      sillDepth,
-      0,
-      -height / 2 - sillThickness / 2,
-      sillZ,
-    )
-  }
+  if (sill) addSill(mesh, node)
 }
 
 function getWindowRenderOpenAmount(node: WindowNode) {
@@ -847,7 +837,7 @@ function isRectangleOnlyWindowType(node: WindowNode) {
 }
 
 function addSlidingWindowVisuals(node: WindowNode, mesh: THREE.Mesh) {
-  const { width, height, frameDepth, frameThickness, sill, sillDepth, sillThickness } = node
+  const { width, height, frameDepth, frameThickness, sill } = node
 
   const innerW = width - 2 * frameThickness
   const innerH = height - 2 * frameThickness
@@ -986,21 +976,7 @@ function addSlidingWindowVisuals(node: WindowNode, mesh: THREE.Mesh) {
     )
   }
 
-  if (sill) {
-    const sillW = width + sillDepth * 0.4
-    const sillZ = frameDepth / 2 + sillDepth / 2
-    currentWindowSlot = 'frame'
-    addBox(
-      mesh,
-      baseMaterial,
-      sillW,
-      sillThickness,
-      sillDepth,
-      0,
-      -height / 2 - sillThickness / 2,
-      sillZ,
-    )
-  }
+  if (sill) addSill(mesh, node)
 }
 
 function addRectCasementSash(
@@ -1327,7 +1303,7 @@ function addShapedFrenchCasementSash(
 }
 
 function addFrenchCasementWindowVisuals(node: WindowNode, mesh: THREE.Mesh) {
-  const { width, height, frameDepth, frameThickness, sill, sillDepth, sillThickness } = node
+  const { width, height, frameDepth, frameThickness, sill } = node
   const innerW = width - 2 * frameThickness
   const innerH = height - 2 * frameThickness
 
@@ -1402,25 +1378,11 @@ function addFrenchCasementWindowVisuals(node: WindowNode, mesh: THREE.Mesh) {
     addFrenchCasementHingeMarkers(mesh, innerW, innerH, frameThickness, frameDepth)
   }
 
-  if (sill) {
-    const sillW = width + sillDepth * 0.4
-    const sillZ = frameDepth / 2 + sillDepth / 2
-    currentWindowSlot = 'frame'
-    addBox(
-      mesh,
-      baseMaterial,
-      sillW,
-      sillThickness,
-      sillDepth,
-      0,
-      -height / 2 - sillThickness / 2,
-      sillZ,
-    )
-  }
+  if (sill) addSill(mesh, node)
 }
 
 function addShapedCasementWindowVisuals(node: WindowNode, mesh: THREE.Mesh) {
-  const { width, height, frameDepth, frameThickness, sill, sillDepth, sillThickness } = node
+  const { width, height, frameDepth, frameThickness, sill } = node
   const innerW = width - 2 * frameThickness
   const innerH = height - 2 * frameThickness
 
@@ -1487,21 +1449,7 @@ function addShapedCasementWindowVisuals(node: WindowNode, mesh: THREE.Mesh) {
       addFrenchCasementHingeMarkers(mesh, innerW, innerH, frameThickness, frameDepth)
     }
 
-    if (sill) {
-      const sillW = width + sillDepth * 0.4
-      const sillZ = frameDepth / 2 + sillDepth / 2
-      currentWindowSlot = 'frame'
-      addBox(
-        mesh,
-        baseMaterial,
-        sillW,
-        sillThickness,
-        sillDepth,
-        0,
-        -height / 2 - sillThickness / 2,
-        sillZ,
-      )
-    }
+    if (sill) addSill(mesh, node)
     return
   }
 
@@ -1612,25 +1560,11 @@ function addShapedCasementWindowVisuals(node: WindowNode, mesh: THREE.Mesh) {
     )
   }
 
-  if (sill) {
-    const sillW = width + sillDepth * 0.4
-    const sillZ = frameDepth / 2 + sillDepth / 2
-    currentWindowSlot = 'frame'
-    addBox(
-      mesh,
-      baseMaterial,
-      sillW,
-      sillThickness,
-      sillDepth,
-      0,
-      -height / 2 - sillThickness / 2,
-      sillZ,
-    )
-  }
+  if (sill) addSill(mesh, node)
 }
 
 function addCasementWindowVisuals(node: WindowNode, mesh: THREE.Mesh) {
-  const { width, height, frameDepth, frameThickness, sill, sillDepth, sillThickness } = node
+  const { width, height, frameDepth, frameThickness, sill } = node
 
   if (node.openingShape === 'rounded' || node.openingShape === 'arch') {
     addShapedCasementWindowVisuals(node, mesh)
@@ -1777,25 +1711,11 @@ function addCasementWindowVisuals(node: WindowNode, mesh: THREE.Mesh) {
     )
   }
 
-  if (sill) {
-    const sillW = width + sillDepth * 0.4
-    const sillZ = frameDepth / 2 + sillDepth / 2
-    currentWindowSlot = 'frame'
-    addBox(
-      mesh,
-      baseMaterial,
-      sillW,
-      sillThickness,
-      sillDepth,
-      0,
-      -height / 2 - sillThickness / 2,
-      sillZ,
-    )
-  }
+  if (sill) addSill(mesh, node)
 }
 
 function addAwningWindowVisuals(node: WindowNode, mesh: THREE.Mesh) {
-  const { width, height, frameDepth, frameThickness, sill, sillDepth, sillThickness } = node
+  const { width, height, frameDepth, frameThickness, sill } = node
 
   if (node.openingShape === 'rounded' || node.openingShape === 'arch') {
     addShapedAwningWindowVisuals(node, mesh)
@@ -1924,25 +1844,11 @@ function addAwningWindowVisuals(node: WindowNode, mesh: THREE.Mesh) {
     )
   }
 
-  if (sill) {
-    const sillW = width + sillDepth * 0.4
-    const sillZ = frameDepth / 2 + sillDepth / 2
-    currentWindowSlot = 'frame'
-    addBox(
-      mesh,
-      baseMaterial,
-      sillW,
-      sillThickness,
-      sillDepth,
-      0,
-      -height / 2 - sillThickness / 2,
-      sillZ,
-    )
-  }
+  if (sill) addSill(mesh, node)
 }
 
 function addShapedAwningWindowVisuals(node: WindowNode, mesh: THREE.Mesh) {
-  const { width, height, frameDepth, frameThickness, sill, sillDepth, sillThickness } = node
+  const { width, height, frameDepth, frameThickness, sill } = node
   const innerW = width - 2 * frameThickness
   const innerH = height - 2 * frameThickness
 
@@ -2067,25 +1973,11 @@ function addShapedAwningWindowVisuals(node: WindowNode, mesh: THREE.Mesh) {
     )
   }
 
-  if (sill) {
-    const sillW = width + sillDepth * 0.4
-    const sillZ = frameDepth / 2 + sillDepth / 2
-    currentWindowSlot = 'frame'
-    addBox(
-      mesh,
-      baseMaterial,
-      sillW,
-      sillThickness,
-      sillDepth,
-      0,
-      -height / 2 - sillThickness / 2,
-      sillZ,
-    )
-  }
+  if (sill) addSill(mesh, node)
 }
 
 function addHopperWindowVisuals(node: WindowNode, mesh: THREE.Mesh) {
-  const { width, height, frameDepth, frameThickness, sill, sillDepth, sillThickness } = node
+  const { width, height, frameDepth, frameThickness, sill } = node
 
   if (node.openingShape === 'rounded' || node.openingShape === 'arch') {
     addShapedHopperWindowVisuals(node, mesh)
@@ -2203,25 +2095,11 @@ function addHopperWindowVisuals(node: WindowNode, mesh: THREE.Mesh) {
     )
   }
 
-  if (sill) {
-    const sillW = width + sillDepth * 0.4
-    const sillZ = frameDepth / 2 + sillDepth / 2
-    currentWindowSlot = 'frame'
-    addBox(
-      mesh,
-      baseMaterial,
-      sillW,
-      sillThickness,
-      sillDepth,
-      0,
-      -height / 2 - sillThickness / 2,
-      sillZ,
-    )
-  }
+  if (sill) addSill(mesh, node)
 }
 
 function addShapedHopperWindowVisuals(node: WindowNode, mesh: THREE.Mesh) {
-  const { width, height, frameDepth, frameThickness, sill, sillDepth, sillThickness } = node
+  const { width, height, frameDepth, frameThickness, sill } = node
   const innerW = width - 2 * frameThickness
   const innerH = height - 2 * frameThickness
 
@@ -2345,21 +2223,7 @@ function addShapedHopperWindowVisuals(node: WindowNode, mesh: THREE.Mesh) {
     )
   }
 
-  if (sill) {
-    const sillW = width + sillDepth * 0.4
-    const sillZ = frameDepth / 2 + sillDepth / 2
-    currentWindowSlot = 'frame'
-    addBox(
-      mesh,
-      baseMaterial,
-      sillW,
-      sillThickness,
-      sillDepth,
-      0,
-      -height / 2 - sillThickness / 2,
-      sillZ,
-    )
-  }
+  if (sill) addSill(mesh, node)
 }
 
 function addHungSash(
@@ -2418,7 +2282,7 @@ function addHungSash(
 }
 
 function addSingleHungWindowVisuals(node: WindowNode, mesh: THREE.Mesh) {
-  const { width, height, frameDepth, frameThickness, sill, sillDepth, sillThickness } = node
+  const { width, height, frameDepth, frameThickness, sill } = node
 
   const innerW = width - 2 * frameThickness
   const innerH = height - 2 * frameThickness
@@ -2559,25 +2423,11 @@ function addSingleHungWindowVisuals(node: WindowNode, mesh: THREE.Mesh) {
     )
   }
 
-  if (sill) {
-    const sillW = width + sillDepth * 0.4
-    const sillZ = frameDepth / 2 + sillDepth / 2
-    currentWindowSlot = 'frame'
-    addBox(
-      mesh,
-      baseMaterial,
-      sillW,
-      sillThickness,
-      sillDepth,
-      0,
-      -height / 2 - sillThickness / 2,
-      sillZ,
-    )
-  }
+  if (sill) addSill(mesh, node)
 }
 
 function addDoubleHungWindowVisuals(node: WindowNode, mesh: THREE.Mesh) {
-  const { width, height, frameDepth, frameThickness, sill, sillDepth, sillThickness } = node
+  const { width, height, frameDepth, frameThickness, sill } = node
 
   const innerW = width - 2 * frameThickness
   const innerH = height - 2 * frameThickness
@@ -2719,25 +2569,11 @@ function addDoubleHungWindowVisuals(node: WindowNode, mesh: THREE.Mesh) {
     )
   }
 
-  if (sill) {
-    const sillW = width + sillDepth * 0.4
-    const sillZ = frameDepth / 2 + sillDepth / 2
-    currentWindowSlot = 'frame'
-    addBox(
-      mesh,
-      baseMaterial,
-      sillW,
-      sillThickness,
-      sillDepth,
-      0,
-      -height / 2 - sillThickness / 2,
-      sillZ,
-    )
-  }
+  if (sill) addSill(mesh, node)
 }
 
 function addBayWindowVisuals(node: WindowNode, mesh: THREE.Mesh) {
-  const { width, height, frameDepth, frameThickness, sill, sillDepth, sillThickness } = node
+  const { width, height, frameDepth, frameThickness, sill } = node
   const innerW = width - 2 * frameThickness
   const innerH = height - 2 * frameThickness
 
@@ -2927,25 +2763,11 @@ function addBayWindowVisuals(node: WindowNode, mesh: THREE.Mesh) {
     addBayCap(-innerH / 2)
   }
 
-  if (sill) {
-    const sillW = width + sillDepth * 0.4
-    const sillZ = frameDepth / 2 + sillDepth / 2
-    currentWindowSlot = 'frame'
-    addBox(
-      mesh,
-      baseMaterial,
-      sillW,
-      sillThickness,
-      sillDepth,
-      0,
-      -height / 2 - sillThickness / 2,
-      sillZ,
-    )
-  }
+  if (sill) addSill(mesh, node)
 }
 
 function addBowWindowVisuals(node: WindowNode, mesh: THREE.Mesh) {
-  const { width, height, frameDepth, frameThickness, sill, sillDepth, sillThickness } = node
+  const { width, height, frameDepth, frameThickness, sill } = node
   const innerW = width - 2 * frameThickness
   const innerH = height - 2 * frameThickness
 
@@ -3095,25 +2917,11 @@ function addBowWindowVisuals(node: WindowNode, mesh: THREE.Mesh) {
     }
   }
 
-  if (sill) {
-    const sillW = width + sillDepth * 0.4
-    const sillZ = frameDepth / 2 + sillDepth / 2
-    currentWindowSlot = 'frame'
-    addBox(
-      mesh,
-      baseMaterial,
-      sillW,
-      sillThickness,
-      sillDepth,
-      0,
-      -height / 2 - sillThickness / 2,
-      sillZ,
-    )
-  }
+  if (sill) addSill(mesh, node)
 }
 
 function addLouveredWindowVisuals(node: WindowNode, mesh: THREE.Mesh) {
-  const { width, height, frameDepth, frameThickness, sill, sillDepth, sillThickness } = node
+  const { width, height, frameDepth, frameThickness, sill } = node
 
   if (node.openingShape === 'rounded' || node.openingShape === 'arch') {
     addShapedLouveredWindowVisuals(node, mesh)
@@ -3220,25 +3028,11 @@ function addLouveredWindowVisuals(node: WindowNode, mesh: THREE.Mesh) {
     }
   }
 
-  if (sill) {
-    const sillW = width + sillDepth * 0.4
-    const sillZ = frameDepth / 2 + sillDepth / 2
-    currentWindowSlot = 'frame'
-    addBox(
-      mesh,
-      baseMaterial,
-      sillW,
-      sillThickness,
-      sillDepth,
-      0,
-      -height / 2 - sillThickness / 2,
-      sillZ,
-    )
-  }
+  if (sill) addSill(mesh, node)
 }
 
 function addShapedLouveredWindowVisuals(node: WindowNode, mesh: THREE.Mesh) {
-  const { width, height, frameDepth, frameThickness, sill, sillDepth, sillThickness } = node
+  const { width, height, frameDepth, frameThickness, sill } = node
   const halfWidth = width / 2
   const bottom = -height / 2
   const top = height / 2
@@ -3367,21 +3161,7 @@ function addShapedLouveredWindowVisuals(node: WindowNode, mesh: THREE.Mesh) {
     }
   }
 
-  if (sill) {
-    const sillW = width + sillDepth * 0.4
-    const sillZ = frameDepth / 2 + sillDepth / 2
-    currentWindowSlot = 'frame'
-    addBox(
-      mesh,
-      baseMaterial,
-      sillW,
-      sillThickness,
-      sillDepth,
-      0,
-      -height / 2 - sillThickness / 2,
-      sillZ,
-    )
-  }
+  if (sill) addSill(mesh, node)
 }
 
 /**
@@ -3445,8 +3225,6 @@ function updateWindowMesh(node: WindowNode, mesh: THREE.Mesh): boolean {
     columnDividerThickness,
     rowDividerThickness,
     sill,
-    sillDepth,
-    sillThickness,
     openingKind,
     openingShape,
     windowType,
@@ -3665,22 +3443,7 @@ function updateWindowMesh(node: WindowNode, mesh: THREE.Mesh): boolean {
   }
 
   // ── Sill ──
-  if (sill) {
-    const sillW = width + sillDepth * 0.4 // slightly wider than frame
-    // Protrudes from the front face of the frame (+Z)
-    const sillZ = frameDepth / 2 + sillDepth / 2
-    currentWindowSlot = 'frame'
-    addBox(
-      mesh,
-      baseMaterial,
-      sillW,
-      sillThickness,
-      sillDepth,
-      0,
-      -height / 2 - sillThickness / 2,
-      sillZ,
-    )
-  }
+  if (sill) addSill(mesh, node)
 
   syncWindowCutout(node, mesh)
   return true

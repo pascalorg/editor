@@ -131,7 +131,7 @@ const payload = {
 
 /**
  * A floor of four boards over the bounds of the room's floor, run 0.3 m past them, and one more
- * wholly outside it: Pascal cuts them to the floor.
+ * wholly outside it, laid from y = 0, the floor's surface: Pascal cuts them to the floor.
  */
 const BOARDS = `export default function build({ THREE, params }) {
   const xs = params.polygon.map((p) => p[0]), zs = params.polygon.map((p) => p[1])
@@ -141,7 +141,7 @@ const BOARDS = `export default function build({ THREE, params }) {
   const w = (x1 - x0) / 4
   for (let i = 0; i < 5; i++) {
     const b = new THREE.Mesh(new THREE.BoxGeometry(w, 0.01, z1 - z0), m)
-    b.position.set(x0 + w * (i + 0.5), params.elevation + 0.005, (z0 + z1) / 2)
+    b.position.set(x0 + w * (i + 0.5), 0.005, (z0 + z1) / 2)
     g.add(b)
   }
   return g
@@ -156,7 +156,7 @@ const GAPPED = `export default function build({ THREE, params }) {
   for (let row = 0; z0 + row * 0.2 < z1; row++)
     for (let x = x0 + (row % 2 ? 0.4 : 0); x < x1; x += 1.2) {
       const b = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.01, 0.2), m)
-      b.position.set(x + 0.6, params.elevation + 0.005, z0 + (row + 0.5) * 0.2)
+      b.position.set(x + 0.6, 0.005, z0 + (row + 0.5) * 0.2)
       g.add(b)
     }
   return g
@@ -302,7 +302,8 @@ describe('author_scene (MCP)', () => {
     expect(report.rooms).toBe(1)
     expect(report.items).toBe(3)
     expect(report.lights).toBe(1)
-    expect(report.itemsCompiled).toBe(4)
+    // The room's own ceiling point is compiled in case it had no light: it has one, so it is unused.
+    expect(report.itemsCompiled).toBe(5)
     expect(report.defects).toEqual([
       { id: 'bad', code: 'compile_failed', message: expect.stringContaining('Unsupported import') },
     ])
@@ -311,10 +312,11 @@ describe('author_scene (MCP)', () => {
     expect(report.defaults).toContain('door s/0: handle set opposite the hinge (left)')
     expect(report.snapped).toEqual([{ id: 'w', end: 'end', movedM: 0.1 }])
     expect(report.notes).toContain('The rug was left out.')
-    // Two artifacts per module (GLB + code): three items and the round window, plus the design's
-    // module and the adapter.
-    expect(stored.filter((s) => s.startsWith('model/gltf-binary'))).toHaveLength(4)
-    expect(stored.filter((s) => s.startsWith('text/javascript'))).toHaveLength(6)
+    // Two artifacts per module (GLB + code): three items, the round window and the ceiling point
+    // a room with no light would hang from (one, however many rooms), plus the design's module and
+    // the adapter.
+    expect(stored.filter((s) => s.startsWith('model/gltf-binary'))).toHaveLength(5)
+    expect(stored.filter((s) => s.startsWith('text/javascript'))).toHaveLength(7)
     // The light rides on its fixture through the bridge, not only in the operation's draft.
     const lamp = await client.callTool({ name: 'find_by_type', arguments: { type: 'item' } })
     expect(JSON.stringify(lamp.structuredContent ?? lamp.content)).toContain('Lamp')
@@ -459,7 +461,7 @@ export default function build({ THREE }) {
     expect(report.defects).toEqual([])
     expect(report.items).toBe(1)
     expect(report.lights).toBe(1)
-    expect(report.itemsCompiled).toBe(2)
+    expect(report.itemsCompiled).toBe(3)
     expect(report.defaults).toContain(
       'light at [0, 2.4, 0] has no fixture: a ceiling point in Bedroom',
     )
@@ -501,6 +503,61 @@ export default function build({ THREE }) {
     expect((replaced.structuredContent as { walls: number }).walls).toBe(4)
   })
 
+  test('a revision that divides a room writes the new rooms with their own floors and ceilings', async () => {
+    const first = await client.callTool({ name: 'author_scene', arguments: { payload } })
+    expect(first.isError).not.toBe(true)
+    const [level] = payload.levels
+    const divided = {
+      ...payload,
+      levels: [
+        {
+          ...level,
+          walls: [
+            ...level!.walls,
+            { id: 'mid', start: [-2, 0], end: [2, 0], height: 2.7, thickness: 0.1 },
+          ],
+          rooms: [
+            { name: 'Bedroom', seed: [0, -1] },
+            { name: 'Study', seed: [0, 1] },
+          ],
+        },
+      ],
+    }
+    const replaced = await client.callTool({
+      name: 'author_scene',
+      arguments: { payload: divided, replace: true },
+    })
+    expect(replaced.isError, JSON.stringify(replaced.content)).not.toBe(true)
+    const report = replaced.structuredContent as { rooms: number; roomsNamed: number }
+    expect([report.rooms, report.roomsNamed]).toEqual([2, 2])
+    const ceilingIds = async () =>
+      (
+        (await client.callTool({ name: 'find_by_type', arguments: { type: 'ceiling' } }))
+          .structuredContent as { results: { id: string }[] }
+      ).results.map((r) => r.id)
+    const ceilings = await ceilingIds()
+    expect(ceilings).toHaveLength(2)
+    // The same rooms, the wall between them moved: their ceilings follow it, as the editor's do.
+    const moved = structuredClone(divided)
+    moved.levels[0]!.walls.at(-1)!.start = [-2, 0.5]
+    moved.levels[0]!.walls.at(-1)!.end = [2, 0.5]
+    const revised = await client.callTool({
+      name: 'author_scene',
+      arguments: { payload: moved, replace: true },
+    })
+    expect(revised.isError, JSON.stringify(revised.content)).not.toBe(true)
+    expect((await ceilingIds()).sort()).toEqual([...ceilings].sort())
+    const zs = await Promise.all(
+      ceilings.map(async (id) => {
+        const got = await client.callTool({ name: 'get_node', arguments: { id } })
+        const { node } = JSON.parse((got.content as { text: string }[])[0]!.text)
+        return (node.polygon as [number, number][]).map(([, z]) => z)
+      }),
+    )
+    // Both meet on the moved wall's centerline, half a metre on.
+    expect(zs.map((z) => z.filter((v) => v === 0.5).length)).toEqual([2, 2])
+  })
+
   test("writes a wall's skirting and a room's floor script, readable with get_source", async () => {
     const level = payload.levels[0]!
     const design = {
@@ -537,11 +594,18 @@ export default function build({ THREE }) {
     expect(room.floor.script.language).toBe('three')
     expect(room.floor.script.manifest.slots.map((s: { id: string }) => s.id)).toEqual(['wood'])
     expect(room.floor.script.inputs).toEqual(expect.any(String))
+    // Built for the floor's outline alone, its y = 0 the floor's surface.
+    expect(Object.keys(builtFor.get(room.floor.script.artifact)!).sort()).toEqual([
+      'holes',
+      'polygon',
+    ])
     // The boards, laid past the floor, are cut to the room inside the walls' faces:
     // 4 m − 0.12 m by 5 m − 0.12 m.
     const { min, max } = room.floor.script.manifest.bounds
     expect(max[0] - min[0]).toBeCloseTo(3.88, 2)
     expect(max[2] - min[2]).toBeCloseTo(4.88, 2)
+    expect(min[1]).toBeCloseTo(0, 6)
+    expect(max[1]).toBeCloseTo(0.01, 6)
     const north = await read(report.ids.n!)
     expect(north.skirting).toMatchObject({ enabled: true, sides: 'a', height: 0.1, proud: 0.012 })
     expect(north.slots.aSkirting).toBe(north.slots.b)
@@ -635,7 +699,7 @@ export default function build({ THREE }) {
     expect(room.floor.script).toBeUndefined()
   })
 
-  test("writes a wall's face module and a room's wallCode on its faces, readable with get_source", async () => {
+  test("writes a wall's face modules and a room's wallCode on its faces, readable with get_source", async () => {
     const level = payload.levels[0]!
     const design = {
       ...payload,
@@ -644,7 +708,13 @@ export default function build({ THREE }) {
           ...level,
           items: [],
           lights: [],
-          walls: level.walls.map((w) => (w.id === 'e' ? { ...w, faceLeft: { code: TILES } } : w)),
+          walls: level.walls.map((w) =>
+            w.id === 'e'
+              ? { ...w, faceLeft: { code: TILES } }
+              : w.id === 'w'
+                ? { ...w, faceOutside: { code: TILES } }
+                : w,
+          ),
           rooms: [{ ...level.rooms[0]!, wallCode: PANEL, wallToHeight: 1.2 }],
         },
       ],
@@ -656,7 +726,7 @@ export default function build({ THREE }) {
       ids: Record<string, string>
     }
     expect(report.defects).toEqual([])
-    expect(report.faceScripts).toBe(4)
+    expect(report.faceScripts).toBe(5)
     const read = async (id: string) => {
       const got = await client.callTool({ name: 'get_node', arguments: { id } })
       return JSON.parse((got.content as { text: string }[])[0]!.text).node as Record<string, any>
@@ -678,7 +748,7 @@ export default function build({ THREE }) {
     expect(max[0]).toBeCloseTo(face.outline.x1, 4)
     // The first row stands half a joint (2 mm) off the floor; the top row is cut at the top.
     expect(min[1]).toBeCloseTo(0.002, 4)
-    expect(max[1]).toBeCloseTo(2.7, 4)
+    expect(max[1]).toBeCloseTo(face.outline.y1, 4)
     expect(max[2] - min[2]).toBeCloseTo(0.008, 3)
     expect(face.holes).toHaveLength(2)
     const inWindow = glbCentroids(artifacts.get(tiles.artifact)!).filter(([x, y]) =>
@@ -692,8 +762,13 @@ export default function build({ THREE }) {
       const wall = await read(report.ids[id]!)
       expect(wall.finishScripts.a.toHeight).toBe(1.2)
       expect(wall.finishScripts.a.manifest.bounds.max[1]).toBeCloseTo(1.2, 3)
-      expect(wall.finishScripts.b).toBeUndefined()
+      if (id !== 'w') expect(wall.finishScripts.b).toBeUndefined()
     }
+    // The west wall's outside face, the one no room looks into, is tiled to its top.
+    const outside = (await read(report.ids.w!)).finishScripts.b
+    expect(outside.toHeight).toBeUndefined()
+    const outsideFace = builtFor.get(outside.artifact) as { outline: { y1: number } }
+    expect(outside.manifest.bounds.max[1]).toBeCloseTo(outsideFace.outline.y1, 4)
     const source = await client.callTool({
       name: 'get_source',
       arguments: { nodeId: report.ids.e!, face: 'a' },

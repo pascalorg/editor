@@ -37,19 +37,32 @@ export async function compileAuthorScene(
   const modules: { id: string; code: string; kind: 'object' | 'window' | 'door' }[] = []
   for (const level of input.payload.levels) {
     for (const item of level.items ?? [])
-      modules.push({ id: item.id, code: item.code, kind: 'object' })
+      if (item.code) modules.push({ id: item.id, code: item.code, kind: 'object' })
     for (const wall of level.walls ?? [])
       wall.openings?.forEach((opening, index) => {
-        if (opening.code)
+        if (opening.code && opening.kind !== 'passage')
           modules.push({ id: `${wall.id}/${index}`, code: opening.code, kind: opening.kind })
       })
   }
+  for (const item of input.payload.roof?.items ?? [])
+    if (item.code) modules.push({ id: item.id, code: item.code, kind: 'object' })
   modules.push(
     ...authorSceneCeilingPoints(input.payload).map((point) => ({
       ...point,
       kind: 'object' as const,
     })),
   )
+  // A module placed at several spots (a piece, every ceiling point) is compiled once.
+  const builds = new Map<string, Promise<CompiledGeometryScript>>()
+  const build = (code: string, kind: 'object' | 'window' | 'door') => {
+    const key = `${kind}\n${code}`
+    let pending = builds.get(key)
+    if (!pending) {
+      pending = compile({ code, kind })
+      builds.set(key, pending)
+    }
+    return pending
+  }
   let cursor = 0
   await Promise.all(
     Array.from({ length: Math.min(4, modules.length) }, async () => {
@@ -57,7 +70,7 @@ export async function compileAuthorScene(
         const { id, code, kind } = modules[cursor++]!
         signal?.throwIfAborted()
         try {
-          compiled[id] = await compile({ code, kind })
+          compiled[id] = await build(code, kind)
         } catch (error) {
           signal?.throwIfAborted()
           compileErrors[id] = error instanceof Error ? error.message : String(error)

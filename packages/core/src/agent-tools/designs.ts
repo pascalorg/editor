@@ -20,7 +20,7 @@ export const validateDesignTool = {
   name: 'validate_design',
   title: 'Validate design',
   description:
-    'Check a design (procedural item recipe) without changing the scene. Returns `valid`, coded `diagnostics` with paths (errors block placement, warnings flag floating or unbalanced parts), the parameter `sweep`, and `measurements` at the given parameters: bounds, per-part bounds and instances, true triangle counts, draw groups per slot, datum contact and connected components. It is the authority: some rules are not expressible in pascal://schema/design. Repair and re-validate until `valid` is true. Version 2 designs validate fully but carry a design_version_not_enabled warning: placement accepts version 1 only until the next release.',
+    'Check a design (procedural item recipe) without changing the scene. Write it from pascal://schema/design (JSON Schema, rules and a valid example); a floor design has no mounting. Returns `valid`, coded `diagnostics` (errors block placement, warnings flag floating or unbalanced parts), the parameter `sweep`, and `measurements` at the given parameters: bounds, per-part bounds and instances, true triangle counts, draw groups per slot, datum contact and connected components. A design that does not match the schema gets every schema error at once, each with its `path`, what is `expected` there and what was `received`, plus `schemaUri` and a valid `example`: fix them all before calling again. Rules the schema cannot express are checked once it matches, each error with a `hint`. Version 2 designs validate fully but carry a design_version_not_enabled warning: placement accepts version 1 only until the next release.',
   input: { design, parameters },
   annotations: { readOnlyHint: true },
 }

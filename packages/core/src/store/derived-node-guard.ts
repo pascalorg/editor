@@ -75,6 +75,22 @@ const PROTECTED_FIELDS: Record<'slab' | 'ceiling', readonly string[]> = {
   ceiling: ['polygon', 'zoneId', 'boundary', 'autoFromWalls', 'parentId'],
 }
 
+/**
+ * What the reconciler rebuilds on a derived surface: its protected fields, the openings it records,
+ * and its holes but for the ones a person cut (`manualSurfaceHoles`).
+ */
+export function reconcilerOwnedFields(node: DerivedSurfaceNode): readonly string[] {
+  return [...PROTECTED_FIELDS[node.type], 'openingIds', 'holes', 'holeMetadata']
+}
+
+/** The holes a person cut into a surface, as against those Pascal cuts for rooms, openings and stairs. */
+export function manualSurfaceHoles(node: AnyNode) {
+  const surface = node as { holes?: unknown; holeMetadata?: unknown }
+  const holes = (surface.holes ?? []) as unknown[]
+  const metadata = (surface.holeMetadata ?? []) as (SurfaceHoleMetadata | undefined)[]
+  return holes.filter((_, index) => (metadata[index]?.source ?? 'manual') === 'manual')
+}
+
 function equal(a: unknown, b: unknown) {
   return JSON.stringify(a) === JSON.stringify(b)
 }
@@ -510,15 +526,15 @@ const createdNodes = (create: DerivedNodeChanges['create']) =>
 
 /**
  * Construction copied together with the level and rooms it stands for (a
- * duplicated level) stays derived: the reconciler adopts it for the copied
- * rooms, as it does a loaded scene's, instead of building a second plate
- * beside a manual copy.
+ * duplicated level), or together with the rooms it stands for on a level that
+ * stays (a conversion rewritten with a room more), stays derived: the
+ * reconciler adopts it for those rooms, as it does a loaded scene's, instead of
+ * building a second plate beside a manual copy.
  */
-function arrivesWithItsLevel(node: DerivedSurfaceNode, created: ReadonlyMap<string, AnyNode>) {
-  return (
-    created.get(node.parentId ?? '')?.type === 'level' &&
-    linkedZoneIds(node).every((id) => created.get(id)?.type === 'zone')
-  )
+function arrivesWithItsRooms(node: DerivedSurfaceNode, created: ReadonlyMap<string, AnyNode>) {
+  const zones = linkedZoneIds(node)
+  const withRooms = zones.every((id) => created.get(id)?.type === 'zone')
+  return withRooms && (created.get(node.parentId ?? '')?.type === 'level' || zones.length > 0)
 }
 
 function groundPlateRebases(nodes: Readonly<Record<string, AnyNode>>, changes: DerivedNodeChanges) {
@@ -580,7 +596,7 @@ export function filterDerivedNodeWrites<T extends DerivedNodeChanges>(
     ...changes,
     ...(changes.create && {
       create: changes.create.map((op) => {
-        if (!isDerivedNode(op.node) || arrivesWithItsLevel(op.node, created)) return op
+        if (!isDerivedNode(op.node) || arrivesWithItsRooms(op.node, created)) return op
         const node = { ...op.node } as Record<string, unknown>
         const fields = ['plateRole', 'boundary', 'zoneIds', 'zoneId', 'autoFromWalls']
         warnFilteredFields(
@@ -647,7 +663,7 @@ export function assertDerivedNodeWrites(
   const created = createdNodes(changes.create)
   const rebases = groundPlateRebases(nodes, changes)
   for (const { node } of changes.create ?? []) {
-    if (!isDerivedNode(node) || arrivesWithItsLevel(node, created)) continue
+    if (!isDerivedNode(node) || arrivesWithItsRooms(node, created)) continue
     throw new DerivedNodeWriteError(
       'create',
       node.id,
