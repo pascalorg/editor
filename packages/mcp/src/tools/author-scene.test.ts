@@ -313,10 +313,10 @@ describe('author_scene (MCP)', () => {
     expect(report.snapped).toEqual([{ id: 'w', end: 'end', movedM: 0.1 }])
     expect(report.notes).toContain('The rug was left out.')
     // Two artifacts per module (GLB + code): three items, the round window and the ceiling point
-    // a room with no light would hang from (one, however many rooms), plus the design's module and
-    // the adapter.
+    // a room with no light would hang from (one, however many rooms), plus the design's module, the
+    // adapter and the payload they answered.
     expect(stored.filter((s) => s.startsWith('model/gltf-binary'))).toHaveLength(5)
-    expect(stored.filter((s) => s.startsWith('text/javascript'))).toHaveLength(7)
+    expect(stored.filter((s) => s.startsWith('text/javascript'))).toHaveLength(8)
     // The light rides on its fixture through the bridge, not only in the operation's draft.
     const lamp = await client.callTool({ name: 'find_by_type', arguments: { type: 'item' } })
     expect(JSON.stringify(lamp.structuredContent ?? lamp.content)).toContain('Lamp')

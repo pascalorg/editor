@@ -831,13 +831,25 @@ export const METADATA_REFERENCES: readonly ExistingReference[] = [
     ...policy('node', 'internal', 'drop', 'strip'),
     remaps: ['clone-scene-graph', 'clone-level-subtree'],
     dependents: ['metadata.authorSceneState'],
-    note: 'The building that owns this conversion baseline; a partial copy cannot overwrite its source building.',
+    note: 'The building that owns this conversion; a partial copy cannot overwrite its source building.',
   }),
-  meta('authorSceneState.ids.*', {
+  meta('authorSceneWritten.ids[]', {
     ...policy('node', 'internal', 'drop', 'strip'),
     remaps: ['clone-scene-graph', 'clone-level-subtree'],
-    dependents: ['metadata.authorSceneState.nodes'],
-    note: 'Stable source-to-node identities and the corresponding authored baseline snapshot; whole graph clones remap the snapshot recursively.',
+    dependents: ['metadata.authorSceneWritten'],
+    note: 'On an authored level: the nodes the last conversion wrote there, so the next revision can tell a node the person deleted from one it never made.',
+  }),
+  meta('authorSceneWritten.keys.*', {
+    ...policy('node', 'internal', 'drop', 'strip'),
+    remaps: ['clone-scene-graph', 'clone-level-subtree'],
+    dependents: ['metadata.authorSceneWritten'],
+    note: 'On an authored level: stable source-to-node identities, so a revision keeps the nodes the person already edited.',
+  }),
+  meta('authorSceneBase.id', {
+    ...policy('node', 'internal', 'drop', 'strip'),
+    remaps: ['clone-scene-graph', 'clone-level-subtree'],
+    dependents: ['metadata.authorSceneBase'],
+    note: "The node as the last conversion wrote it, the base of the next revision's three-way merge; whole graph clones remap the snapshot recursively.",
   }),
   meta('managedByLeanTo', {
     ...policy('node', 'internal', 'cascade', 'strip'),
@@ -953,7 +965,7 @@ const described = (reason: string, paths: readonly string[]) =>
 export const METADATA_NON_REFERENCES: readonly { path: string; reason: string }[] = [
   { path: 'metadata.roomBoundary', reason: 'Boolean opt-out from room boundary detection.' },
   ...described(
-    "author_scene's provenance: the payload's own ids on walls and openings, a room's seed, a level's elevation, a slab's finish, a wall's colour, and on the building the stored payload, the report, the payload items waiting for an add_object piece (by payload id and piece id) and when it was written; none of it names a node.",
+    "author_scene's provenance: the payload's own ids on walls and openings, a room's seed, a level's elevation, a slab's finish, a wall's colour, and on the building the stored payload's script hash, the payload items waiting for an add_object piece (by payload id and piece id) and when it was written; none of it names a node.",
     [
       'authorScene',
       'authorScene.at',
@@ -963,8 +975,6 @@ export const METADATA_NON_REFERENCES: readonly { path: string; reason: string }[
       'authorScene.id',
       'authorScene.payload',
       'authorScene.pending',
-      'authorScene.report',
-      'authorScene.report.defects',
       'authorScene.seed',
     ],
   ),

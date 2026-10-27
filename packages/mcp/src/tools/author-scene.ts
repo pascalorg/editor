@@ -38,14 +38,14 @@ type Input = {
 }
 
 /**
- * What a conversion keeps on its building (`metadata.authorScene`): its module and adapter as
- * stored scripts, the payload with every module as its stored script (`<key>Script`) and every
- * piece by id, the items still waiting for their piece, and the report.
+ * What a conversion keeps on its building (`metadata.authorScene`): its module, adapter and
+ * payload as stored scripts, and the items still waiting for their piece. The payload is a file of
+ * the scene, not metadata: a house's runs past what one live collaboration change carries.
  */
 type StoredConversion = {
   module?: string
   adapter?: string
-  payload?: Record<string, unknown>
+  payload?: string
   pending?: AuthorScenePending[]
 }
 
@@ -169,19 +169,26 @@ export function registerAuthorScene(
         ...outcome.result,
         defects: [...pieces.defects, ...outcome.result.defects],
       }
+      const payloadText = storedPayloadText(await withScripts(source.payload))
+      const payloadScript = await host.storeArtifact({
+        sceneId: scene.id,
+        sha256: await sha256(payloadText),
+        bytes: new TextEncoder().encode(payloadText),
+        mimeType: GEOMETRY_SCRIPT_MIME_TYPES.three,
+        metadata: { kind: 'item' },
+      })
       const buildingUpdate = outcome.changes.update.find(
         (change) => change.id === outcome.buildingId,
       )!
-      buildingUpdate.data.metadata = {
-        ...buildingUpdate.data.metadata,
-        authorScene: {
-          ...provenance,
-          payload: await withScripts(source.payload),
-          pending: pieces.pending,
-          report,
-          at: new Date().toISOString(),
-        },
+      const stored: StoredConversion & { at: string } = {
+        ...provenance,
+        payload: payloadScript,
+        pending: pieces.pending,
+        at: new Date().toISOString(),
       }
+      buildingUpdate.data.metadata = JSON.parse(
+        JSON.stringify({ ...buildingUpdate.data.metadata, authorScene: stored }),
+      )
       // A revision's plates and ceilings follow its walls: what only the reconciler may change on
       // one that stays (its outline, its room) is left to the bridge's reconciliation after the
       // write, as in the editor; a new room's arrive with it.
@@ -340,12 +347,15 @@ async function sourceOf(
       }
     return result(parsed.data, texts)
   }
-  if (!stored?.payload)
+  if (typeof stored?.payload !== 'string')
     refuse(
       'nothing_to_write',
       'Pass a payload, or a module and its adapter: this scene holds no stored conversion to write again.',
     )
-  const rehydrated = (await withCode(stored.payload, readText)) as unknown
+  const rehydrated = (await withCode(
+    readStoredPayload(await readText(stored.payload)),
+    readText,
+  )) as unknown
   const parsed = authorScenePayload.safeParse(rehydrated)
   if (!parsed.success)
     refuse(
@@ -411,6 +421,21 @@ async function withPieces(
     },
     pending,
     defects,
+  }
+}
+
+const STORED_PAYLOAD_PREFIX = 'export default '
+
+/** The payload as a module of the scene, the one script type its files take. */
+const storedPayloadText = (payload: unknown) =>
+  `${STORED_PAYLOAD_PREFIX}${JSON.stringify(payload)}\n`
+
+function readStoredPayload(text: string): unknown {
+  if (!text.startsWith(STORED_PAYLOAD_PREFIX)) return undefined
+  try {
+    return JSON.parse(text.slice(STORED_PAYLOAD_PREFIX.length))
+  } catch {
+    return undefined
   }
 }
 
