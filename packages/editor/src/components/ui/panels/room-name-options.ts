@@ -1,6 +1,11 @@
-import type { AnyNode } from '@pascal-app/core'
+import { useScene } from '@pascal-app/core'
 import { numberedRoomName, type RoomNameSection } from '../../../lib/room-name-catalog'
-import { type DescriptorTranslator, storedRoomName } from '../../../lib/room-name-messages'
+import {
+  type DescriptorTranslator,
+  displayRoomName,
+  editedRoomName,
+} from '../../../lib/room-name-messages'
+import { renameRoom } from '../../../lib/room-structure-commands'
 
 export type RoomNameOption = {
   kind: 'typed' | 'suggestion'
@@ -17,9 +22,10 @@ export type RoomNameGroup = { id: string; title: string; options: RoomNameOption
  * The room-name combobox's rows. Until the user types, every section is listed
  * whole — the field's current name is not a filter. Typing keeps, in every
  * section, the names whose label or English name contains the text (ignoring
- * case and surrounding spaces), drops the sections left empty, and always puts
- * the typed text first as its own row. `options` is the flat order the
- * keyboard walks: the typed row, then each group's rows.
+ * case and surrounding spaces), drops the sections left empty, and puts the
+ * typed text first as its own row unless it is exactly an English catalog
+ * name. `options` is the flat order the keyboard walks: the typed row, then
+ * each group's rows.
  */
 export function roomNameOptions(
   typed: string,
@@ -51,15 +57,18 @@ export function roomNameOptions(
     })
     return options.length ? [{ id: section.id, title: section.title, options }] : []
   })
-  const typedRow: RoomNameOption | null = query
-    ? { kind: 'typed', value: typed, label: typed, match: null }
-    : null
+  const known = sections.some((section) => section.names.includes(typed))
+  const typedRow: RoomNameOption | null =
+    query && !known ? { kind: 'typed', value: typed, label: typed, match: null } : null
   const options = [...(typedRow ? [typedRow] : []), ...groups.flatMap((group) => group.options)]
-  const exact = options.findIndex(
-    (option) =>
-      option.kind === 'suggestion' &&
-      (option.value.toLowerCase() === query || option.label.toLowerCase() === query),
-  )
+  const suggestions = options.filter((option) => option.kind === 'suggestion')
+  // Labels can be shared ("Salon" for both Living room and Lounge): a label is
+  // only an exact match when no other name has it.
+  const byLabel = suggestions.filter((option) => option.label.toLowerCase() === query)
+  const exactRow =
+    suggestions.find((option) => option.value.toLowerCase() === query) ??
+    (byLabel.length === 1 ? byLabel[0] : undefined)
+  const exact = exactRow ? options.indexOf(exactRow) : -1
   return {
     typed: typedRow,
     groups,
@@ -69,17 +78,37 @@ export function roomNameOptions(
 }
 
 /**
- * What a pick writes to the scene: a suggestion's English catalog name, numbered
- * against the level's other rooms, in every UI language. Typed text is stored
- * as written, except a catalog name as displayed, which stores its English.
+ * The room panel's commit of its edited field, on blur or Enter (unless Enter
+ * picks a suggestion). `committed` is what the field last committed or showed;
+ * text still equal to it writes nothing.
  */
-export function pickedRoomName(
-  nodes: Record<string, AnyNode>,
+export function commitRoomNameEdit(
   zoneId: string,
+  name: string,
+  committed: string,
+  text: string,
+  i18n: DescriptorTranslator,
+) {
+  if (text === committed) return
+  const stored = editedRoomName(name, text, i18n)
+  if (stored !== name) renameRoom(zoneId, stored)
+}
+
+/**
+ * The room panel's pick of a row: a click, or Enter on a suggestion. A suggestion stores its English catalog name,
+ * numbered against the level's other rooms, in every UI language; the typed
+ * row stores the text exactly as typed. Returns what the field shows after it.
+ */
+export function commitRoomNamePick(
+  zoneId: string,
+  name: string,
   option: RoomNameOption,
   i18n: DescriptorTranslator,
 ): string {
-  return option.kind === 'typed'
-    ? storedRoomName(option.value, i18n)
-    : numberedRoomName(nodes, zoneId, option.value)
+  const stored =
+    option.kind === 'typed'
+      ? option.value
+      : numberedRoomName(useScene.getState().nodes, zoneId, option.value)
+  if (stored !== name) renameRoom(zoneId, stored)
+  return displayRoomName(stored, i18n)
 }

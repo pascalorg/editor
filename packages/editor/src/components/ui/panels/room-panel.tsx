@@ -28,7 +28,7 @@ import {
   roomNameSections,
   roomNameUseCount,
 } from '../../../lib/room-name-catalog'
-import { renameRoom, requestRoomDeletion } from '../../../lib/room-structure-commands'
+import { requestRoomDeletion } from '../../../lib/room-structure-commands'
 import { addZoneToNewUnit, assignZoneToUnit, zoneUnits } from '../../../lib/units'
 import { cn } from '../../../lib/utils'
 import useEditor from '../../../store/use-editor'
@@ -53,13 +53,17 @@ import {
   RoomConstructionRows,
   roomInsideHeight,
 } from './room-construction-rows'
-import { pickedRoomName, type RoomNameOption, roomNameOptions } from './room-name-options'
+import {
+  commitRoomNameEdit,
+  commitRoomNamePick,
+  type RoomNameOption,
+  roomNameOptions,
+} from './room-name-options'
 import { localizedLevelName } from '../../../i18n/level-name'
 import { messageWithSlot } from '../../../i18n/message-slot'
 import {
   displayRoomName,
   localizedRoomNameSections,
-  storedRoomName,
 } from '../../../lib/room-name-messages'
 
 /** "Room · Ground floor", "Mezzanine · in Kitchen", "Room · not enclosed". */
@@ -621,20 +625,14 @@ function RoomName({
   }
   const commit = () => {
     const next = valueRef.current
-    if (next === committedRef.current) return
+    const committed = committedRef.current
     committedRef.current = next
-    // The field shows catalog names translated: store the English one, as a pick does.
-    const stored = storedRoomName(next, i18n)
-    if (stored !== name) renameRoom(zoneId, stored)
+    commitRoomNameEdit(zoneId, name, committed, next, i18n)
   }
   const pick = (option: RoomNameOption) => {
-    // A suggestion stores the English catalog name, numbered against the level's rooms,
-    // whatever the UI language; typed text is stored as written.
-    const stored = pickedRoomName(nodes, zoneId, option, i18n)
-    const shown = displayRoomName(stored, i18n)
+    const shown = commitRoomNamePick(zoneId, name, option, i18n)
     type(shown)
     committedRef.current = shown
-    if (stored !== name) renameRoom(zoneId, stored)
     setOpen(false)
     setTyping(false)
     // A pick is the answer: the field lets go. To fine-tune the name, click it
@@ -658,7 +656,9 @@ function RoomName({
       event.preventDefault()
       event.stopPropagation()
       const chosen = expanded ? options[active] : undefined
-      if (chosen) pick(chosen)
+      // Enter on the typed row commits the field, as blur does; only a click
+      // on it uses the text exactly as typed.
+      if (chosen?.kind === 'suggestion') pick(chosen)
       else inputRef.current?.blur()
     } else if (event.key === 'Escape') {
       event.preventDefault()

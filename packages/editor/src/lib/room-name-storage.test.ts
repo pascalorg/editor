@@ -15,15 +15,21 @@ import {
 } from '@pascal-app/core'
 import { AGENT_OPERATIONS, applyAgentOutcome } from '@pascal-app/core/agent-operations'
 import { createAgentHost, liveSceneRuntime } from '@pascal-app/core/runtime'
-import { pickedRoomName, roomNameOptions } from '../components/ui/panels/room-name-options'
+import {
+  commitRoomNameEdit,
+  commitRoomNamePick,
+  roomNameOptions,
+} from '../components/ui/panels/room-name-options'
 import { roomNameSections } from './room-name-catalog'
-import { displayRoomName, localizedRoomNameSections, storedRoomName } from './room-name-messages'
+import { displayRoomName, localizedRoomNameSections } from './room-name-messages'
 import { applyRoomPlan, renameRoom } from './room-structure-commands'
 import { copySelectedNodesToEditorClipboard, pasteEditorClipboardToLevel } from './scene-clipboard'
 
 /**
- * Every path that writes a room name stores the same English in a French UI as
- * in English (what main stores): the UI only displays catalog names translated.
+ * Every path that writes a room name stores in a French UI what the same edit
+ * stores in English (what main stores): the UI only displays catalog names
+ * translated. The room panel is driven through the commit and pick functions
+ * its name field calls.
  */
 
 const levelId = 'level_names' as LevelNode['id']
@@ -44,6 +50,11 @@ beforeAll(async () => {
   await registerMessages('fr', '', {
     'editor.roomName.bedroom': 'Chambre',
     'editor.roomName.kitchen': 'Cuisine',
+    // Shared labels, as in the French drafts.
+    'editor.roomName.livingRoom': 'Salon',
+    'editor.roomName.lounge': 'Salon',
+    'editor.roomName.office': 'Bureau',
+    'editor.roomName.study': 'Bureau',
     'editor.roomName.section.sleeping': 'Nuit',
   })
   english = createI18n({ locale: 'en' })
@@ -102,57 +113,108 @@ function expectSameEnglish(write: (i18n: PascalI18n) => void) {
   return inEnglish
 }
 
-/** What the room panel stores for one pick, or for one edit of the field. */
-const pick = (i18n: PascalI18n, label: string) => {
-  const nodes = useScene.getState().nodes
-  const sections = localizedRoomNameSections(roomNameSections(nodes, 'zone_new'), i18n)
-  const option = roomNameOptions(label, sections).options.find(
+const sectionsFor = (i18n: PascalI18n, zoneId: string) =>
+  localizedRoomNameSections(roomNameSections(useScene.getState().nodes, zoneId), i18n)
+
+/** Types `text` in the panel field and picks the suggestion shown as `label`. */
+const pick = (i18n: PascalI18n, zoneId: string, text: string, label = text) => {
+  const option = roomNameOptions(text, sectionsFor(i18n, zoneId)).options.find(
     (row) => row.kind === 'suggestion' && row.label === label,
-  )!
-  renameRoom('zone_new', pickedRoomName(nodes, 'zone_new', option, i18n))
+  )
+  if (!option) throw new Error(`no suggestion shown as ${label}`)
+  commitRoomNamePick(zoneId, nameOf(zoneId) ?? '', option, i18n)
 }
+/** Types `text` in the panel field and clicks its 'Use "…"' row. */
+const useTyped = (i18n: PascalI18n, zoneId: string, text: string) => {
+  const typed = roomNameOptions(text, sectionsFor(i18n, zoneId)).typed
+  if (!typed) throw new Error(`no typed row for ${text}`)
+  commitRoomNamePick(zoneId, nameOf(zoneId) ?? '', typed, i18n)
+}
+/** Edits the field from what it shows, then blurs it or presses Enter on the typed row. */
 const edit = (i18n: PascalI18n, zoneId: string, draft: (shown: string) => string) => {
   const stored = nameOf(zoneId) ?? ''
-  const next = storedRoomName(draft(displayRoomName(stored, i18n)), i18n)
-  if (next !== stored) renameRoom(zoneId, next)
+  const shown = displayRoomName(stored, i18n)
+  commitRoomNameEdit(zoneId, stored, shown, draft(shown), i18n)
 }
+const named = (zoneId: string, name: string) => renameRoom(zoneId, name)
 
 describe('room names are stored in English whatever the UI language', () => {
   test('a suggestion pick', () => {
-    const names = expectSameEnglish((i18n) => pick(i18n, i18n === french ? 'Chambre' : 'Bedroom'))
+    const names = expectSameEnglish((i18n) =>
+      pick(i18n, 'zone_new', i18n === french ? 'Chambre' : 'Bedroom'),
+    )
     expect(names.zone_new).toBe('Bedroom 2')
   })
 
-  test('editing the panel field: renumbering, removing the number, free text', () => {
-    seed()
-    renameRoom('zone_new', 'Bedroom 2')
+  test('editing the field: renumbering, removing or adding the number', () => {
     const renumber = (i18n: PascalI18n) => {
-      renameRoom('zone_new', 'Bedroom 2')
+      named('zone_new', 'Bedroom 2')
       edit(i18n, 'zone_new', (shown) => shown.replace(/2$/, '3'))
     }
     expect(expectSameEnglish(renumber).zone_new).toBe('Bedroom 3')
     const unnumber = (i18n: PascalI18n) => {
-      renameRoom('zone_new', 'Bedroom 2')
+      named('zone_new', 'Bedroom 2')
       edit(i18n, 'zone_new', (shown) => shown.replace(/ 2$/, ''))
     }
     expect(expectSameEnglish(unnumber).zone_new).toBe('Bedroom')
-    const typed = (i18n: PascalI18n) => edit(i18n, 'zone_new', () => 'Atelier de Marie')
-    expect(expectSameEnglish(typed).zone_new).toBe('Atelier de Marie')
-    // An unchanged field writes nothing.
-    seed()
-    const before = useScene.getState().nodes
-    edit(french, 'zone_existing', (shown) => shown)
-    expect(useScene.getState().nodes).toBe(before)
+    const number = (i18n: PascalI18n) => edit(i18n, 'zone_existing', (shown) => `${shown} 2`)
+    expect(expectSameEnglish(number).zone_existing).toBe('Bedroom 2')
   })
 
-  test('typing exactly a translated name and using it as typed', () => {
-    const names = expectSameEnglish((i18n) => {
-      const nodes = useScene.getState().nodes
-      const sections = localizedRoomNameSections(roomNameSections(nodes, 'zone_new'), i18n)
-      const typedRow = roomNameOptions(i18n === french ? 'Cuisine' : 'Kitchen', sections).typed!
-      renameRoom('zone_new', pickedRoomName(nodes, 'zone_new', typedRow, i18n))
-    })
-    expect(names.zone_new).toBe('Kitchen')
+  test('a shared translation keeps the room its own name', () => {
+    // "Salon" is both Living room and Lounge; "Bureau" both Office and Study.
+    const lounge = (i18n: PascalI18n) => {
+      named('zone_new', 'Lounge 2')
+      edit(i18n, 'zone_new', (shown) => shown.replace(/2$/, '3'))
+    }
+    expect(expectSameEnglish(lounge).zone_new).toBe('Lounge 3')
+    const study = (i18n: PascalI18n) => {
+      named('zone_new', 'Study')
+      edit(i18n, 'zone_new', (shown) => `${shown} 2`)
+    }
+    expect(expectSameEnglish(study).zone_new).toBe('Study 2')
+  })
+
+  test('free text, including an exact translation, is stored as typed', () => {
+    const atelier = (i18n: PascalI18n) => edit(i18n, 'zone_new', () => 'Atelier de Marie')
+    expect(expectSameEnglish(atelier).zone_new).toBe('Atelier de Marie')
+    const cuisine = (i18n: PascalI18n) => edit(i18n, 'zone_existing', () => 'Cuisine')
+    expect(expectSameEnglish(cuisine).zone_existing).toBe('Cuisine')
+    // Another room's translation with a number is not this room's name.
+    const salon = (i18n: PascalI18n) => edit(i18n, 'zone_existing', () => 'Salon 2')
+    expect(expectSameEnglish(salon).zone_existing).toBe('Salon 2')
+  })
+
+  test("clicking 'Use' stores the text as typed; an English name has no 'Use' row", () => {
+    expect(storedBy('fr', (i18n) => useTyped(i18n, 'zone_new', 'Chambre')).zone_new).toBe('Chambre')
+    expect(storedBy('en', (i18n) => useTyped(i18n, 'zone_new', 'Chambre')).zone_new).toBe('Chambre')
+    expect(storedBy('fr', (i18n) => useTyped(i18n, 'zone_new', 'Cuisine')).zone_new).toBe('Cuisine')
+    for (const i18n of [english, french]) {
+      expect(roomNameOptions('Bedroom', sectionsFor(i18n, 'zone_new')).typed).toBeNull()
+    }
+  })
+
+  test('surrounding spaces are stored as typed', () => {
+    const trailing = (i18n: PascalI18n) => {
+      named('zone_new', 'Bedroom 2')
+      edit(i18n, 'zone_new', (shown) => shown.replace(/2$/, '3 '))
+    }
+    expect(expectSameEnglish(trailing).zone_new).toBe('Bedroom 3 ')
+    const padded = (i18n: PascalI18n) => {
+      named('zone_new', '  Bedroom 2  ')
+      edit(i18n, 'zone_new', (shown) => shown.replace('2', '3'))
+    }
+    expect(expectSameEnglish(padded).zone_new).toBe('  Bedroom 3  ')
+  })
+
+  test('an unchanged field writes nothing', () => {
+    for (const name of ['Bedroom', '  Bedroom 2  ', 'Lounge 2', 'Atelier']) {
+      seed()
+      named('zone_existing', name)
+      const before = useScene.getState().nodes
+      edit(french, 'zone_existing', (shown) => shown)
+      expect(useScene.getState().nodes).toBe(before)
+    }
   })
 
   test('creating a room', () => {

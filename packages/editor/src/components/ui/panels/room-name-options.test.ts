@@ -38,12 +38,12 @@ describe('roomNameOptions', () => {
     })
   })
 
-  test('free text is always offered first; an exact name is the active row', () => {
+  test('free text is offered first unless it is exactly a name, which is then active', () => {
     const { typed, options } = roomNameOptions('Wine cellar', SECTIONS)
     expect(typed).toEqual({ kind: 'typed', value: 'Wine cellar', label: 'Wine cellar', match: null })
     expect(options).toEqual([typed!])
     const exact = roomNameOptions('Kitchen', SECTIONS)
-    expect(exact.typed?.value).toBe('Kitchen')
+    expect(exact.typed).toBeNull()
     expect(exact.options[exact.active]).toMatchObject({ kind: 'suggestion', value: 'Kitchen' })
     // A case-only difference still offers the text as typed.
     expect(roomNameOptions('kitchen', SECTIONS).typed?.value).toBe('kitchen')

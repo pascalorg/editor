@@ -109,25 +109,39 @@ export function localizedRoomNameSections(
  * Anything else the user typed shows as written.
  */
 export function displayRoomName(name: string, i18n: DescriptorTranslator): string {
-  const match = /^(.*?)(\s+\d+)?$/.exec(name.trim())
-  const base = match?.[1]
-  // Own keys only: a room named "constructor" or "__proto__" is free text.
-  if (!(base && Object.hasOwn(ROOM_NAME_MESSAGES, base))) return name
-  return `${i18n._(ROOM_NAME_MESSAGES[base]!)}${match?.[2] ?? ''}`
+  const { lead, base, number, trail } = roomNameParts(name)
+  const label = catalogLabel(base, i18n)
+  return label === undefined ? name : `${lead}${label}${number}${trail}`
 }
 
 /**
- * What an edited name field stores. The field shows catalog names translated;
- * text that is exactly a catalog name as displayed, optionally followed by a
- * number ("Chambre 3"), stores that English name with the number ("Bedroom 3").
- * Any other text is stored as typed.
+ * What an edit of a room's name field stores. The field shows the room's own
+ * catalog name translated ("Lounge 2" as "Salon 2"); when the edit only
+ * changes, adds or removes that name's number ("Salon 3"), it stores the
+ * English name with the new number ("Lounge 3"), as editing it in English
+ * would. Any other text, an exact translation of a different name included, is
+ * stored exactly as typed.
  */
-export function storedRoomName(text: string, i18n: DescriptorTranslator): string {
-  const match = /^(.*?)(\s+\d+)?$/.exec(text)
-  const base = match?.[1]
-  if (!base) return text
-  for (const english of Object.keys(ROOM_NAME_MESSAGES)) {
-    if (i18n._(ROOM_NAME_MESSAGES[english]!) === base) return `${english}${match?.[2] ?? ''}`
+export function editedRoomName(stored: string, text: string, i18n: DescriptorTranslator): string {
+  const own = roomNameParts(stored).base
+  const label = catalogLabel(own, i18n)
+  const edited = roomNameParts(text)
+  if (label === undefined || edited.base !== label) return text
+  return `${edited.lead}${own}${edited.number}${edited.trail}`
+}
+
+function roomNameParts(name: string) {
+  const match = /^(\s*)(.*?)(\s+\d+)?(\s*)$/.exec(name)
+  return {
+    lead: match?.[1] ?? '',
+    base: match?.[2] ?? '',
+    number: match?.[3] ?? '',
+    trail: match?.[4] ?? '',
   }
-  return text
+}
+
+function catalogLabel(english: string, i18n: DescriptorTranslator): string | undefined {
+  // Own keys only: a room named "constructor" or "__proto__" is free text.
+  if (!(english && Object.hasOwn(ROOM_NAME_MESSAGES, english))) return undefined
+  return i18n._(ROOM_NAME_MESSAGES[english]!)
 }
