@@ -5,7 +5,7 @@ import { snapContextOf } from '../../../lib/snapping-mode'
 import { cornerHintRows } from '../../../store/use-corner-snap-hint'
 import { TooltipProvider } from '../primitives/tooltip'
 import { ContextualHelperPanel } from './contextual-helper-panel'
-import { ROOM_DIVIDE_HINTS } from './helper-manager'
+import { mezzanineHints, openingHints, ROOM_DIVIDE_HINTS } from './helper-manager'
 
 describe('Divide HUD', () => {
   test('uses the wall draft snapping context', () => {
@@ -28,7 +28,7 @@ describe('Divide HUD', () => {
       </TooltipProvider>,
     )
     expect(html).toContain('Snapping: Grid')
-    expect(html).toContain('Grid: 0.50 m')
+    expect(html).toContain('Grid: 0.50\u00a0m')
     for (const label of ['Add point', 'More shortcuts', 'Cancel'])
       expect(html).toContain(label)
     expect(html).toContain('aria-expanded="false"')
@@ -116,6 +116,20 @@ describe('HUD header', () => {
   })
 
   test('select mode is titled Select with its V key', () => {
-    expect(SELECT_HUD_TITLE).toMatchObject({ label: 'Select', shortcut: 'V' })
+    expect(SELECT_HUD_TITLE).toMatchObject({
+      label: expect.objectContaining({ message: 'Select' }),
+      shortcut: 'V',
+    })
+  })
+})
+
+describe('Cut opening HUD', () => {
+  test('names the drag gesture "Draw the opening", not the mezzanine', () => {
+    // The drag row folds under "More shortcuts", so read the rows the HUD is given.
+    const english = (hints: ReturnType<typeof openingHints>) =>
+      hints.map((hint) => (typeof hint.label === 'string' ? hint.label : hint.label.message))
+    expect(english(openingHints('rectangle'))).toContain('Draw the opening')
+    expect(english(openingHints('rectangle'))).not.toContain('Draw the mezzanine')
+    expect(english(mezzanineHints('rectangle'))).toContain('Draw the mezzanine')
   })
 })

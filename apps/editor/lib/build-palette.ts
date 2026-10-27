@@ -1,9 +1,10 @@
-import { emitter, nodeRegistry, type RoofType } from '@pascal-app/core'
+import { emitter, type MessageDescriptor, nodeRegistry, type RoofType } from '@pascal-app/core'
 import {
   CATALOG_ITEMS,
   type FloorplanMode,
   getFloorplanNodeExtension,
   isFloorplanToolAvailableInMode,
+  nodeLabelDescriptor,
   useEditor,
   useFloorplanMode,
 } from '@pascal-app/editor'
@@ -13,7 +14,7 @@ import { getRoofFootprintSource, type RoofFootprintSource } from '@/lib/build-ta
 
 export type BuildType = {
   id: string
-  label: string
+  label: MessageDescriptor
   iconSrc: string
   kind?: string
   paletteOrder?: number
@@ -27,80 +28,167 @@ export type BuildType = {
 
 export type MepItem = {
   id: string
-  label: string
+  label: MessageDescriptor
   iconSrc: string
   kind: string
 }
 
 export type RoofFeature = {
   id: string
-  label: string
+  label: MessageDescriptor
   iconSrc: string
   kind?: string
 }
 
 export const BASE_BUILD_TYPES: BuildType[] = [
-  { id: 'wall', label: 'Wall', iconSrc: '/icons/wall.webp', kind: 'wall' },
-  { id: 'fence', label: 'Fence', iconSrc: '/icons/fence.webp', kind: 'fence', section: 'outdoor' },
-  { id: 'slab', label: 'Slab', iconSrc: '/icons/floor.webp', kind: 'slab', section: 'advanced' },
+  {
+    id: 'wall',
+    label: /* i18n */ { id: 'app.lib.buildPalette.wall', message: 'Wall' },
+    iconSrc: '/icons/wall.webp',
+    kind: 'wall',
+  },
+  {
+    id: 'fence',
+    label: /* i18n */ { id: 'app.lib.buildPalette.fence', message: 'Fence' },
+    iconSrc: '/icons/fence.webp',
+    kind: 'fence',
+    section: 'outdoor',
+  },
+  {
+    id: 'slab',
+    label: /* i18n */ { id: 'app.lib.buildPalette.slab', message: 'Slab' },
+    iconSrc: '/icons/floor.webp',
+    kind: 'slab',
+    section: 'advanced',
+  },
   {
     id: 'ceiling',
-    label: 'Ceiling',
+    label: /* i18n */ { id: 'app.lib.buildPalette.ceiling', message: 'Ceiling' },
     iconSrc: '/icons/ceiling.webp',
     kind: 'ceiling',
     section: 'advanced',
   },
-  { id: 'roof', label: 'Roof', iconSrc: '/icons/roof.webp', kind: 'roof', section: 'add' },
-  { id: 'stair', label: 'Stairs', iconSrc: '/icons/stairs.webp', kind: 'stair', section: 'add' },
+  {
+    id: 'roof',
+    label: /* i18n */ { id: 'app.lib.buildPalette.roof', message: 'Roof' },
+    iconSrc: '/icons/roof.webp',
+    kind: 'roof',
+    section: 'add',
+  },
+  {
+    id: 'stair',
+    label: /* i18n */ { id: 'app.lib.buildPalette.stairs', message: 'Stairs' },
+    iconSrc: '/icons/stairs.webp',
+    kind: 'stair',
+    section: 'add',
+  },
   {
     id: 'elevator',
-    label: 'Elevator',
+    label: /* i18n */ { id: 'app.lib.buildPalette.elevator', message: 'Elevator' },
     iconSrc: '/icons/elevator.webp',
     kind: 'elevator',
     section: 'advanced',
   },
-  { id: 'door', label: 'Door', iconSrc: '/icons/door.webp', kind: 'door', section: 'add' },
-  { id: 'window', label: 'Window', iconSrc: '/icons/window.webp', kind: 'window', section: 'add' },
+  {
+    id: 'door',
+    label: /* i18n */ { id: 'app.lib.buildPalette.door', message: 'Door' },
+    iconSrc: '/icons/door.webp',
+    kind: 'door',
+    section: 'add',
+  },
+  {
+    id: 'window',
+    label: /* i18n */ { id: 'app.lib.buildPalette.window', message: 'Window' },
+    iconSrc: '/icons/window.webp',
+    kind: 'window',
+    section: 'add',
+  },
   {
     id: 'column',
-    label: 'Column',
+    label: /* i18n */ { id: 'app.lib.buildPalette.column', message: 'Column' },
     iconSrc: '/icons/column.webp',
     kind: 'column',
     section: 'advanced',
   },
-  { id: 'shelf', label: 'Shelf', iconSrc: '/icons/shelf.webp', kind: 'shelf', section: 'add' },
+  {
+    id: 'shelf',
+    label: /* i18n */ { id: 'app.lib.buildPalette.shelf', message: 'Shelf' },
+    iconSrc: '/icons/shelf.webp',
+    kind: 'shelf',
+    section: 'add',
+  },
   {
     id: 'spawn',
-    label: 'Spawn point',
+    label: /* i18n */ { id: 'app.lib.buildPalette.spawnPoint', message: 'Spawn point' },
     iconSrc: '/icons/spawn-point.webp',
     kind: 'spawn',
     section: 'advanced',
   },
-  { id: 'kitchen', label: 'Kitchen', iconSrc: '/icons/kitchen.webp', section: 'add' },
-  { id: 'mep', label: 'MEP', iconSrc: '/icons/HVAC.webp', section: 'advanced' },
+  {
+    id: 'kitchen',
+    label: /* i18n */ { id: 'app.lib.buildPalette.kitchen', message: 'Kitchen' },
+    iconSrc: '/icons/kitchen.webp',
+    section: 'add',
+  },
+  {
+    id: 'mep',
+    label: /* i18n */ { id: 'app.lib.buildPalette.mep', message: 'MEP' },
+    iconSrc: '/icons/HVAC.webp',
+    section: 'advanced',
+  },
   {
     id: 'terrain',
-    label: 'Terrain',
+    label: /* i18n */ { id: 'app.lib.buildPalette.terrain', message: 'Terrain' },
     iconSrc: '/icons/mesh.webp',
     mode: 'terrain-sculpt',
     section: 'outdoor',
   },
   // An outdoor room (no walls, no ceiling), drawn like a room; see `startTerraceDraft`.
-  { id: 'terrace', label: 'Terrace', iconSrc: '/icons/floor.webp', section: 'outdoor' },
+  {
+    id: 'terrace',
+    label: /* i18n */ { id: 'app.lib.buildPalette.terrace', message: 'Terrace' },
+    iconSrc: '/icons/floor.webp',
+    section: 'outdoor',
+  },
 ]
 
 export const MEP_ITEMS: MepItem[] = [
-  { id: 'duct-segment', label: 'Duct', iconSrc: '/icons/duct.webp', kind: 'duct-segment' },
+  {
+    id: 'duct-segment',
+    label: /* i18n */ { id: 'app.lib.buildPalette.duct', message: 'Duct' },
+    iconSrc: '/icons/duct.webp',
+    kind: 'duct-segment',
+  },
   {
     id: 'duct-terminal',
-    label: 'Register',
+    label: /* i18n */ { id: 'app.lib.buildPalette.register', message: 'Register' },
     iconSrc: '/icons/registers.webp',
     kind: 'duct-terminal',
   },
-  { id: 'hvac-equipment', label: 'HVAC Unit', iconSrc: '/icons/HVAC.webp', kind: 'hvac-equipment' },
-  { id: 'lineset', label: 'Lineset', iconSrc: '/icons/lineset.webp', kind: 'lineset' },
-  { id: 'liquid-line', label: 'Liquid Line', iconSrc: '/icons/lineset.webp', kind: 'liquid-line' },
-  { id: 'pipe-segment', label: 'DWV Pipe', iconSrc: '/icons/dwv-pipes.webp', kind: 'pipe-segment' },
+  {
+    id: 'hvac-equipment',
+    label: /* i18n */ { id: 'app.lib.buildPalette.hvacUnit', message: 'HVAC Unit' },
+    iconSrc: '/icons/HVAC.webp',
+    kind: 'hvac-equipment',
+  },
+  {
+    id: 'lineset',
+    label: /* i18n */ { id: 'app.lib.buildPalette.lineset', message: 'Lineset' },
+    iconSrc: '/icons/lineset.webp',
+    kind: 'lineset',
+  },
+  {
+    id: 'liquid-line',
+    label: /* i18n */ { id: 'app.lib.buildPalette.liquidLine', message: 'Liquid Line' },
+    iconSrc: '/icons/lineset.webp',
+    kind: 'liquid-line',
+  },
+  {
+    id: 'pipe-segment',
+    label: /* i18n */ { id: 'app.lib.buildPalette.dwvPipe', message: 'DWV Pipe' },
+    iconSrc: '/icons/dwv-pipes.webp',
+    kind: 'pipe-segment',
+  },
 ]
 
 export const MEP_TOOL_KINDS = new Set<string>([
@@ -136,7 +224,7 @@ export function collectBuildTypes(floorplanMode: FloorplanMode): BuildType[] {
     tools.push({
       id: kind,
       kind,
-      label: presentation.label,
+      label: nodeLabelDescriptor(kind, presentation.label),
       iconSrc: presentation.icon.kind === 'url' ? presentation.icon.src : '/icons/spawn-point.webp',
       paletteOrder: presentation.paletteOrder ?? Number.MAX_SAFE_INTEGER,
       section: 'advanced',
@@ -208,14 +296,14 @@ export function collectRoofFeatures(): RoofFeature[] {
     features.push({
       id: kind,
       kind,
-      label: definition.presentation?.label ?? kind,
+      label: nodeLabelDescriptor(kind, definition.presentation?.label ?? kind),
       iconSrc: icon?.kind === 'url' ? icon.src : '/icons/roof.webp',
     })
   }
   return features
 }
 
-export function activateRoofFeatureTool(feature: RoofFeature): void {
+export function activateRoofFeatureTool(feature: Pick<RoofFeature, 'kind'>): void {
   const editor = useEditor.getState()
   useViewer.getState().setSelection({ selectedIds: [], zoneId: null })
   editor.setPhase('building')

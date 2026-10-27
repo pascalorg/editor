@@ -15,6 +15,7 @@ import {
   resolveRevision,
 } from './i18n-git'
 import { checkRepositoryLiterals } from './i18n-literals'
+import { checkDefinitionMessages, writeDefinitionMessages } from './i18n-node-messages'
 
 export type SourceMessage = {
   id: string
@@ -1155,6 +1156,7 @@ export async function checkCatalogs(options: CatalogCheckOptions = {}): Promise<
   const catalogSources = readSourceMessages()
   const glossary = readJson<Glossary>(GLOSSARY_PATH)
   return [
+    ...(await checkDefinitionMessages()),
     ...checkLinguiCatalogSync(),
     ...checkEnglishCatalog(sources, catalogSources),
     ...checkCatalogMessages(sources, glossary, options),
@@ -1166,6 +1168,7 @@ export async function checkCatalogs(options: CatalogCheckOptions = {}): Promise<
 async function main(): Promise<void> {
   const command = process.argv[2]
   if (command === 'extract') {
+    await writeDefinitionMessages()
     extractCatalogs()
     console.log(`Extracted and compiled ${readSourceMessages().length} Lingui messages`)
     return
@@ -1242,6 +1245,7 @@ async function main(): Promise<void> {
   }
 
   if (command === 'translate') {
+    await writeDefinitionMessages()
     extractCatalogs()
     const requested = process.argv.slice(3)
     const locales = requested.length > 0 ? requested : [...TARGET_LOCALES]

@@ -1,6 +1,6 @@
 'use client'
 
-import { emitter } from '@pascal-app/core'
+import { emitter, usePascalI18n } from '@pascal-app/core'
 import Image from 'next/image'
 import useEditor from '../../../store/use-editor'
 import { visibleScene } from '../../../store/view-layout'
@@ -8,6 +8,7 @@ import { ActionButton } from './action-button'
 import { FollowPascalToggle } from './follow-pascal-toggle'
 
 export function CameraActions({ hideOrbit = false }: { hideOrbit?: boolean }) {
+  const i18n = usePascalI18n()
   // Orbit stays useful in 2D-only (it spins the synced floorplan view), but
   // top view only tilts the hidden 3D camera — pointless without the canvas.
   const is2dOnly = useEditor((s) => visibleScene(s) === '2d')
@@ -31,13 +32,13 @@ export function CameraActions({ hideOrbit = false }: { hideOrbit?: boolean }) {
           {/* Orbit CCW */}
           <ActionButton
             className="group hover:bg-black/4"
-            label="Orbit Left"
+            label={i18n._({ id: 'editor.actionMenu.cameraActions.orbitLeft', message: 'Orbit Left' })}
             onClick={orbitCCW}
             size="icon"
             variant="ghost"
           >
             <Image
-              alt="Orbit Left"
+              alt={i18n._({ id: 'editor.actionMenu.cameraActions.orbitLeft', message: 'Orbit Left' })}
               className="h-[28px] w-[28px] -scale-x-100 object-contain opacity-70 transition-opacity group-hover:opacity-100"
               height={28}
               src="/icons/rotate.webp"
@@ -48,13 +49,13 @@ export function CameraActions({ hideOrbit = false }: { hideOrbit?: boolean }) {
           {/* Orbit CW */}
           <ActionButton
             className="group hover:bg-black/4"
-            label="Orbit Right"
+            label={i18n._({ id: 'editor.actionMenu.cameraActions.orbitRight', message: 'Orbit Right' })}
             onClick={orbitCW}
             size="icon"
             variant="ghost"
           >
             <Image
-              alt="Orbit Right"
+              alt={i18n._({ id: 'editor.actionMenu.cameraActions.orbitRight', message: 'Orbit Right' })}
               className="h-[28px] w-[28px] object-contain opacity-70 transition-opacity group-hover:opacity-100"
               height={28}
               src="/icons/rotate.webp"
@@ -71,13 +72,13 @@ export function CameraActions({ hideOrbit = false }: { hideOrbit?: boolean }) {
       {!is2dOnly && (
         <ActionButton
           className="group hover:bg-black/4"
-          label="Top View"
+          label={i18n._({ id: 'editor.actionMenu.cameraActions.topView', message: 'Top View' })}
           onClick={goToTopView}
           size="icon"
           variant="ghost"
         >
           <Image
-            alt="Top View"
+            alt={i18n._({ id: 'editor.actionMenu.cameraActions.topView', message: 'Top View' })}
             className="h-[28px] w-[28px] object-contain opacity-70 transition-opacity group-hover:opacity-100"
             height={28}
             src="/icons/topview.webp"

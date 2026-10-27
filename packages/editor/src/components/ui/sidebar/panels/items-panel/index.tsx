@@ -1,5 +1,6 @@
 'use client'
 
+import { usePascalI18n } from '@pascal-app/core'
 import type { AssetInput } from '@pascal-app/core'
 import NextImage from 'next/image'
 import { useEffect, useState } from 'react'
@@ -98,6 +99,7 @@ function LegacyItemsPanel({
   showSourceFilter?: boolean
   showTagFilters?: boolean
 }) {
+  const i18n = usePascalI18n()
   const mode = useEditor((s) => s.mode)
   const catalogCategory = useEditor((s) => s.catalogCategory)
   const setMode = useEditor((s) => s.setMode)
@@ -215,13 +217,13 @@ function LegacyItemsPanel({
               type="button"
             >
               <NextImage
-                alt={cat.label}
+                alt={i18n._(cat.label)}
                 className={cn('size-7 object-contain', !isActive && 'opacity-60 grayscale')}
                 height={28}
                 src={cat.iconSrc}
                 width={28}
               />
-              <span className="font-medium text-[10px] leading-none">{cat.label}</span>
+              <span className="font-medium text-[10px] leading-none">{i18n._(cat.label)}</span>
             </button>
           )
         })}

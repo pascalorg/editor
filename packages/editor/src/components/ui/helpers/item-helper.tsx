@@ -1,3 +1,4 @@
+import { usePascalI18n } from '@pascal-app/core'
 import type { ContinuationContext } from '../../../lib/continuation'
 import type { HudTitle } from '../../../lib/hud-title'
 import type { SnapContext } from '../../../lib/snapping-mode'
@@ -33,17 +34,18 @@ export function ItemHelper({
   extraHints = [],
   replacesPlace = false,
 }: ItemHelperProps) {
+  const i18n = usePascalI18n()
   return (
     <ContextualHelperPanel
       continuationContext={continuationContext}
       notice={notice}
       hints={[
         // Where a click does something else (joining a corner), that row says so instead.
-        ...(replacesPlace ? [] : [{ keys: ['Left click'], label: 'Place' }]),
+        ...(replacesPlace ? [] : [{ keys: ['Left click'], label: i18n._({ id: 'editor.helpers.itemHelper.place', message: 'Place' }) }]),
         ...extraHints,
-        { keys: ['R', 'T'], label: 'Rotate' },
-        ...(showForce ? [{ keys: ['Alt'], label: 'Force place' }] : []),
-        { keys: [showEsc ? 'Esc' : 'Right click'], label: 'Cancel' },
+        { keys: ['R', 'T'], label: i18n._({ id: 'editor.helpers.itemHelper.rotate', message: 'Rotate' }) },
+        ...(showForce ? [{ keys: ['Alt'], label: i18n._({ id: 'editor.helpers.itemHelper.forcePlace', message: 'Force place' }) }] : []),
+        { keys: [showEsc ? 'Esc' : 'Right click'], label: i18n._({ id: 'editor.helpers.itemHelper.cancel', message: 'Cancel' }) },
       ]}
       snapContext={snapContext}
       title={title}
