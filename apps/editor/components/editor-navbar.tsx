@@ -101,6 +101,7 @@ export function EditorNavbar({ sceneId, name, onRename }: EditorNavbarProps) {
       <div className="flex-1" />
 
       <button
+        aria-label={i18n._({ id: 'app.editorNavbar.preview', message: 'Preview' })}
         className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 font-medium text-sm transition-colors hover:bg-accent"
         onClick={() => useEditor.getState().setPreviewMode(true)}
         type="button"
@@ -114,6 +115,7 @@ export function EditorNavbar({ sceneId, name, onRename }: EditorNavbarProps) {
       <div className="relative" ref={shareAnchorRef}>
         <button
           aria-expanded={shareOpen}
+          aria-label={i18n._({ id: 'app.editorNavbar.share', message: 'Share' })}
           className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 font-medium text-sm transition-colors hover:bg-accent"
           onClick={() => setShareOpen((open) => !open)}
           type="button"
