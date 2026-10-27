@@ -216,7 +216,51 @@ describe('parseAllowedOrigins', () => {
   })
 })
 
+describe('parseAllowedOrigins: credentials and wildcards', () => {
+  test('a full entry with credentials keeps its origin and reports the drop by index', () => {
+    const { origins, issues } = parseAllowedOrigins(
+      'https://a.example, https://user:secret@cdn.example.com/, https://:pw@b.example',
+    )
+    expect([...origins]).toEqual([
+      'https://a.example',
+      'https://cdn.example.com',
+      'https://b.example',
+    ])
+    expect(issues).toEqual([
+      { index: 1, reason: 'credentials_dropped' },
+      { index: 2, reason: 'credentials_dropped' },
+    ])
+  })
+
+  test('a wildcard host is rejected with a reason, not kept as a literal origin', () => {
+    const { origins, issues } = parseAllowedOrigins(
+      'https://*.example.com, https://cdn.example.com, http://cdn.*.example.com:8080',
+    )
+    expect([...origins]).toEqual(['https://cdn.example.com'])
+    expect(issues).toEqual([
+      { index: 0, reason: 'wildcard_not_supported' },
+      { index: 2, reason: 'wildcard_not_supported' },
+    ])
+  })
+})
+
 describe('allowedOriginsFrom', () => {
+  test('logs dropped credentials and wildcard entries by index, never the entry', () => {
+    const warn = spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      const raw = 'https://user:hunter2@cdn.example.com, https://*.hunter2.example'
+      expect([...(allowedOriginsFrom(raw) ?? [])]).toEqual(['https://cdn.example.com'])
+      const lines = warn.mock.calls.map((args) => String(args[0]))
+      expect(lines).toEqual([
+        '[pascal] asset_allowlist_entry_credentials_dropped {"index":0}',
+        '[pascal] asset_allowlist_entry_ignored {"index":1,"reason":"wildcard_not_supported"}',
+      ])
+      for (const line of lines) expect(line).not.toContain('hunter2')
+    } finally {
+      warn.mockRestore()
+    }
+  })
+
   test('warns once while the value is unchanged, without the entry text', () => {
     const warn = spyOn(console, 'warn').mockImplementation(() => {})
     try {
@@ -258,7 +302,7 @@ describe('allowedOriginsFrom', () => {
       expect(isValid('https://cdn.pascal.app/a.glb')).toBe(false)
       expect(isValid('https://assets.pascal.app/b.glb')).toBe(false)
       expect(warn.mock.calls.map((args) => String(args[0]))).toEqual([
-        '[pascal] asset_allowlist_has_no_https_entries: scene asset URLs accept only https: origins, so every one is rejected',
+        '[pascal] asset_allowlist_has_no_https_entries: scene asset URLs accept only https: origins, so every one is rejected (safeFetch still fetches the listed http: origins)',
       ])
 
       warn.mockClear()
