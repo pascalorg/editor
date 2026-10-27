@@ -1,4 +1,10 @@
-import type { AnyNode, AnyNodeId, CabinetModuleNode, CabinetNode } from '@pascal-app/core'
+import type {
+  AnyNode,
+  AnyNodeId,
+  CabinetModuleNode,
+  CabinetNode,
+  MessageDescriptor,
+} from '@pascal-app/core'
 import { CABINET_PRESETS, type CabinetPresetId } from './presets'
 
 export const KITCHEN_ITEMS = CABINET_PRESETS.map((preset) => ({
@@ -19,6 +25,35 @@ export const KITCHEN_ITEMS = CABINET_PRESETS.map((preset) => ({
     'cooktop-induction': 'electric induction hob stove cooktop',
   }[preset.id],
 }))
+
+/**
+ * Preset names in the UI language. The presets keep their English labels
+ * (agents and MCP read them); the kitchen picker and replace dialog show these.
+ */
+export const KITCHEN_ITEM_LABELS: Record<CabinetPresetId, MessageDescriptor> = {
+  'wall-cabinet': /* i18n */ { id: 'node.cabinet.preset.wallCabinet', message: 'Wall cabinet' },
+  'base-door': /* i18n */ { id: 'node.cabinet.preset.baseCabinet', message: 'Base cabinet' },
+  'drawer-base': /* i18n */ { id: 'node.cabinet.preset.drawerCabinet', message: 'Drawer cabinet' },
+  dishwasher: /* i18n */ { id: 'node.cabinet.preset.dishwasher', message: 'Dishwasher' },
+  'cooktop-gas': /* i18n */ { id: 'node.cabinet.preset.gasCooktop', message: 'Gas cooktop' },
+  'cooktop-induction': /* i18n */ {
+    id: 'node.cabinet.preset.inductionCooktop',
+    message: 'Induction cooktop',
+  },
+  'sink-base': /* i18n */ { id: 'node.cabinet.preset.sinkCabinet', message: 'Sink cabinet' },
+  'tall-pantry': /* i18n */ { id: 'node.cabinet.preset.tallPantry', message: 'Tall Pantry' },
+  'oven-tower': /* i18n */ { id: 'node.cabinet.preset.ovenTower', message: 'Oven Tower' },
+  'fridge-single': /* i18n */ { id: 'node.cabinet.preset.fridge', message: 'Fridge' },
+}
+
+export const KITCHEN_GROUP_TITLES: Record<'Cabinets' | 'Appliances & fixtures', MessageDescriptor> =
+  {
+    Cabinets: /* i18n */ { id: 'node.cabinet.kitchenGroup.cabinets', message: 'Cabinets' },
+    'Appliances & fixtures': /* i18n */ {
+      id: 'node.cabinet.kitchenGroup.appliances',
+      message: 'Appliances & fixtures',
+    },
+  }
 
 export function kitchenItemMatches(id: CabinetPresetId, query: string): boolean {
   const item = KITCHEN_ITEMS.find((entry) => entry.id === id)

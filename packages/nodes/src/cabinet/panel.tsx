@@ -6,7 +6,7 @@ import type {
   CabinetModuleNode as CabinetModuleNodeType,
   CabinetNode as CabinetNodeType,
 } from '@pascal-app/core'
-import { createSceneApi, useScene } from '@pascal-app/core'
+import { createSceneApi, formatFixed, usePascalI18n, useScene } from '@pascal-app/core'
 import {
   ActionButton,
   PanelSection,
@@ -27,7 +27,7 @@ import {
   onCabinetAnimationChange,
   stopCabinetAnimation,
 } from './interaction'
-import { kitchenPresetForModule } from './kitchen-catalog'
+import { KITCHEN_ITEM_LABELS, kitchenPresetForModule } from './kitchen-catalog'
 import { KitchenCollection } from './kitchen-collection'
 import { KitchenModuleActions } from './kitchen-module-actions'
 import { cabinetModulePanelContext } from './panel-context'
@@ -36,7 +36,7 @@ import {
   cabinetModuleSupportsTopFinish,
   cabinetModuleUsesFixedApplianceWidth,
 } from './panel-visibility'
-import { CABINET_PRESETS, type CabinetPresetId, cabinetPresetById } from './presets'
+import { CABINET_PRESETS, type CabinetPresetId } from './presets'
 import {
   CABINET_REVEAL_GAPS,
   type CabinetRevealGapId,
@@ -94,39 +94,54 @@ import {
 } from './widths'
 
 const HANDLE_STYLE_OPTIONS = [
-  { value: 'bar', label: 'Bar' },
-  { value: 'knob', label: 'Knob' },
-  { value: 'cutout', label: 'Cutout' },
-  { value: 'hole', label: 'Hole' },
-  { value: 'none', label: 'None' },
+  { value: 'bar', label: /* i18n */ { id: 'node.cabinet.panel.bar', message: 'Bar' } },
+  { value: 'knob', label: /* i18n */ { id: 'node.cabinet.panel.knob', message: 'Knob' } },
+  { value: 'cutout', label: /* i18n */ { id: 'node.cabinet.panel.cutout', message: 'Cutout' } },
+  { value: 'hole', label: /* i18n */ { id: 'node.cabinet.panel.hole', message: 'Hole' } },
+  { value: 'none', label: /* i18n */ { id: 'node.cabinet.panel.none', message: 'None' } },
 ] as const
 
 const HANDLE_POSITION_OPTIONS = [
-  { value: 'auto', label: 'Auto' },
-  { value: 'top', label: 'Top' },
-  { value: 'center', label: 'Center' },
+  { value: 'auto', label: /* i18n */ { id: 'node.cabinet.panel.auto', message: 'Auto' } },
+  { value: 'top', label: /* i18n */ { id: 'node.cabinet.panel.top', message: 'Top' } },
+  { value: 'center', label: /* i18n */ { id: 'node.cabinet.panel.center', message: 'Center' } },
 ] as const
 
 const FRONT_OVERLAY_OPTIONS = [
-  { value: 'full', label: 'Overlay' },
-  { value: 'inset', label: 'Inset' },
+  { value: 'full', label: /* i18n */ { id: 'node.cabinet.panel.overlay', message: 'Overlay' } },
+  { value: 'inset', label: /* i18n */ { id: 'node.cabinet.panel.inset', message: 'Inset' } },
 ] as const
 
 const FRONT_STYLE_OPTIONS = [
-  { value: 'slab', label: 'Slab' },
-  { value: 'shaker', label: 'Shaker' },
-  { value: 'raised-arch', label: 'Raised Arch' },
+  { value: 'slab', label: /* i18n */ { id: 'node.cabinet.panel.slab', message: 'Slab' } },
+  { value: 'shaker', label: /* i18n */ { id: 'node.cabinet.panel.shaker', message: 'Shaker' } },
+  {
+    value: 'raised-arch',
+    label: /* i18n */ { id: 'node.cabinet.panel.raisedArch', message: 'Raised Arch' },
+  },
 ] as const
 
 const CABINET_TIER_OPTIONS = [
-  { value: 'base', label: 'Base Cabinet' },
-  { value: 'tall', label: 'Tall Cabinet' },
+  {
+    value: 'base',
+    label: /* i18n */ { id: 'node.cabinet.panel.baseCabinet', message: 'Base Cabinet' },
+  },
+  {
+    value: 'tall',
+    label: /* i18n */ { id: 'node.cabinet.panel.tallCabinet', message: 'Tall Cabinet' },
+  },
 ] as const
 
 const TOP_FINISH_OPTIONS = [
-  { value: 'none', label: 'None' },
-  { value: 'top-cabinet', label: 'Top Cabinet' },
-  { value: 'trim', label: 'Trim / Soffit' },
+  { value: 'none', label: /* i18n */ { id: 'node.cabinet.panel.none', message: 'None' } },
+  {
+    value: 'top-cabinet',
+    label: /* i18n */ { id: 'node.cabinet.panel.topCabinet', message: 'Top Cabinet' },
+  },
+  {
+    value: 'trim',
+    label: /* i18n */ { id: 'node.cabinet.panel.trimSoffit', message: 'Trim / Soffit' },
+  },
 ] as const
 
 const EMPTY_MODULES: CabinetModuleNodeType[] = []
@@ -136,6 +151,7 @@ const REFLOW_REJECTED_MESSAGE =
   'No space in this run. No base cabinet can shrink enough to fit this item.'
 
 export default function CabinetPanel() {
+  const i18n = usePascalI18n()
   const selectedId = useViewer((s) => s.selection.selectedIds[0])
   const placementNotice = usePlacementNotice(selectedId)
   const setSelection = useViewer((s) => s.setSelection)
@@ -605,7 +621,7 @@ export default function CabinetPanel() {
     return (
       <PanelWrapper
         icon="/icons/item.webp"
-        title="Wall filler"
+        title={i18n._({ id: 'node.cabinet.panel.wallFiller', message: 'Wall filler' })}
         onBack={backToRun}
         onClose={close}
         width={320}
@@ -615,13 +631,18 @@ export default function CabinetPanel() {
             {placementNotice.line}
           </p>
         )}
-        <PanelSection title="Dimensions">
+        <PanelSection
+          title={i18n._({ id: 'node.cabinet.panel.dimensions', message: 'Dimensions' })}
+        >
           <p className="px-2 pb-3 text-xs text-muted-foreground">
-            Solid matching front between the cabinet and wall. Countertop and toe-kick continue
-            across this filler.
+            {i18n._({
+              id: 'node.cabinet.panel.solidMatchingFrontBetweenTheCabinet',
+              message:
+                'Solid matching front between the cabinet and wall. Countertop and toe-kick continue across this filler.',
+            })}
           </p>
           <SliderControl
-            label="Width"
+            label={i18n._({ id: 'node.cabinet.panel.width', message: 'Width' })}
             value={node.width}
             min={0.05}
             max={3}
@@ -630,7 +651,7 @@ export default function CabinetPanel() {
             onChange={(width) => updateNode({ width })}
           />
           <SliderControl
-            label="Height"
+            label={i18n._({ id: 'node.cabinet.panel.height', message: 'Height' })}
             value={node.carcassHeight}
             min={0.4}
             max={2.4}
@@ -650,8 +671,8 @@ export default function CabinetPanel() {
       onClose={close}
       title={
         node.type === 'cabinet-module'
-          ? cabinetPresetById(kitchenPresetForModule(node, parentRun)).label
-          : node.name || 'Kitchen run'
+          ? i18n._(KITCHEN_ITEM_LABELS[kitchenPresetForModule(node, parentRun)])
+          : node.name || i18n._({ id: 'node.cabinet.panel.kitchenRun', message: 'Kitchen run' })
       }
       width={320}
     >
@@ -660,11 +681,11 @@ export default function CabinetPanel() {
           {placementNotice.line}
         </p>
       )}
-      <PanelSection title="Dimensions">
+      <PanelSection title={i18n._({ id: 'node.cabinet.panel.dimensions', message: 'Dimensions' })}>
         {node.type === 'cabinet-module' && !isHoodOnlyNode && (
           <div className="space-y-1 px-1 pb-2">
             <div className="px-1 pb-1 text-[10px] uppercase tracking-wide text-muted-foreground">
-              Standard width
+              {i18n._({ id: 'node.cabinet.panel.standardWidth', message: 'Standard width' })}
             </div>
             <SegmentedControl
               disabled={usesFixedApplianceWidth}
@@ -685,7 +706,7 @@ export default function CabinetPanel() {
         {isWallCabinetModule && !isHoodOnlyNode && (
           <div className="space-y-1 px-1 pb-2">
             <div className="px-1 pb-1 text-[10px] uppercase tracking-wide text-muted-foreground">
-              Height preset
+              {i18n._({ id: 'node.cabinet.panel.heightPreset', message: 'Height preset' })}
             </div>
             <SegmentedControl
               mixed={wallHeightPreset === 'custom'}
@@ -702,12 +723,15 @@ export default function CabinetPanel() {
               value={wallHeightPreset === 'custom' ? '18' : wallHeightPreset}
             />
             <p className="px-1 pt-1 text-[10px] leading-4 text-muted-foreground">
-              Common wall-cabinet heights. Use the slider below for a custom height.
+              {i18n._({
+                id: 'node.cabinet.panel.commonWallCabinetHeightsUseThe',
+                message: 'Common wall-cabinet heights. Use the slider below for a custom height.',
+              })}
             </p>
           </div>
         )}
         <SliderControl
-          label="Width"
+          label={i18n._({ id: 'node.cabinet.panel.width', message: 'Width' })}
           max={3}
           min={0.3}
           onChange={(value) => updateNode({ width: value })}
@@ -719,7 +743,7 @@ export default function CabinetPanel() {
         {!isHoodOnlyNode && (
           <>
             <SliderControl
-              label="Depth"
+              label={i18n._({ id: 'node.cabinet.panel.depth', message: 'Depth' })}
               max={1.2}
               min={0.3}
               onChange={(value) => updateNode({ depth: value })}
@@ -729,7 +753,7 @@ export default function CabinetPanel() {
               value={node.depth}
             />
             <SliderControl
-              label="Height"
+              label={i18n._({ id: 'node.cabinet.panel.height', message: 'Height' })}
               max={
                 node.type === 'cabinet-module' && resolveCabinetType(node, parentRun) === 'tall'
                   ? 2.4
@@ -754,7 +778,9 @@ export default function CabinetPanel() {
 
       {planningReport &&
         (planningReport.errors.length > 0 || planningReport.warnings.length > 0) && (
-          <PanelSection title="Planning checks">
+          <PanelSection
+            title={i18n._({ id: 'node.cabinet.panel.planningChecks', message: 'Planning checks' })}
+          >
             <div className="space-y-1 px-1 pb-2 text-xs leading-5">
               {planningReport.errors.map((planningIssue) => (
                 <div
@@ -781,34 +807,52 @@ export default function CabinetPanel() {
       {!isHoodOnlyNode && (
         <>
           {isFridgeModule && (
-            <PanelSection title="Appliance front">
+            <PanelSection
+              title={i18n._({
+                id: 'node.cabinet.panel.applianceFront',
+                message: 'Appliance front',
+              })}
+            >
               <div className="space-y-2 px-1 pb-2">
                 <div>
                   <div className="px-1 pb-1 text-[10px] uppercase tracking-wide text-muted-foreground">
-                    Panel-ready
+                    {i18n._({ id: 'node.cabinet.panel.panelReady', message: 'Panel-ready' })}
                   </div>
                   <SegmentedControl
                     onChange={(value) => updateNode({ panelReady: value === 'on' })}
                     options={[
-                      { value: 'off', label: 'Appliance' },
-                      { value: 'on', label: 'Cabinet panel' },
+                      {
+                        value: 'off',
+                        label: i18n._({ id: 'node.cabinet.panel.appliance', message: 'Appliance' }),
+                      },
+                      {
+                        value: 'on',
+                        label: i18n._({
+                          id: 'node.cabinet.panel.cabinetPanel',
+                          message: 'Cabinet panel',
+                        }),
+                      },
                     ]}
                     value={node.panelReady ? 'on' : 'off'}
                   />
                 </div>
                 {node.panelReady && (
                   <p className="px-1 text-xs leading-5 text-muted-foreground">
-                    Uses the cabinet front style, reveal, handle, and front material settings below.
+                    {i18n._({
+                      id: 'node.cabinet.panel.usesTheCabinetFrontStyleReveal',
+                      message:
+                        'Uses the cabinet front style, reveal, handle, and front material settings below.',
+                    })}
                   </p>
                 )}
               </div>
             </PanelSection>
           )}
-          <PanelSection title="Finish">
+          <PanelSection title={i18n._({ id: 'node.cabinet.panel.finish', message: 'Finish' })}>
             <div className="space-y-2 px-1 pb-2">
               <div>
                 <div className="px-1 pb-1 text-[10px] uppercase tracking-wide text-muted-foreground">
-                  Style
+                  {i18n._({ id: 'node.cabinet.panel.style', message: 'Style' })}
                 </div>
                 <SegmentedControl
                   onChange={(value) =>
@@ -816,7 +860,7 @@ export default function CabinetPanel() {
                   }
                   options={FRONT_STYLE_OPTIONS.map((option) => ({
                     value: option.value,
-                    label: option.label,
+                    label: i18n._(option.label),
                   }))}
                   value={node.frontStyle ?? 'slab'}
                 />
@@ -824,11 +868,11 @@ export default function CabinetPanel() {
             </div>
           </PanelSection>
 
-          <PanelSection title="Handles">
+          <PanelSection title={i18n._({ id: 'node.cabinet.panel.handles', message: 'Handles' })}>
             <div className="space-y-2 px-1 pb-2">
               <div>
                 <div className="px-1 pb-1 text-[10px] uppercase tracking-wide text-muted-foreground">
-                  Style
+                  {i18n._({ id: 'node.cabinet.panel.style', message: 'Style' })}
                 </div>
                 <SegmentedControl
                   onChange={(value) =>
@@ -836,7 +880,7 @@ export default function CabinetPanel() {
                   }
                   options={HANDLE_STYLE_OPTIONS.map((option) => ({
                     value: option.value,
-                    label: option.label,
+                    label: i18n._(option.label),
                   }))}
                   value={node.handleStyle}
                 />
@@ -844,7 +888,7 @@ export default function CabinetPanel() {
               {(node.handleStyle === 'bar' || node.handleStyle === 'knob') && (
                 <div>
                   <div className="px-1 pb-1 text-[10px] uppercase tracking-wide text-muted-foreground">
-                    Position
+                    {i18n._({ id: 'node.cabinet.panel.position', message: 'Position' })}
                   </div>
                   <SegmentedControl
                     onChange={(value) =>
@@ -852,7 +896,7 @@ export default function CabinetPanel() {
                     }
                     options={HANDLE_POSITION_OPTIONS.map((option) => ({
                       value: option.value,
-                      label: option.label,
+                      label: i18n._(option.label),
                     }))}
                     value={node.handlePosition ?? 'auto'}
                   />
@@ -865,10 +909,19 @@ export default function CabinetPanel() {
       {node.type === 'cabinet-module' &&
         parentRun?.type === 'cabinet' &&
         cabinetModuleSupportsPresets(node) && (
-          <PanelSection title="Kitchen">
-            <ActionButton label="Edit kitchen run" onClick={backToRun} />
+          <PanelSection title={i18n._({ id: 'node.cabinet.panel.kitchen', message: 'Kitchen' })}>
+            <ActionButton
+              label={i18n._({
+                id: 'node.cabinet.panel.editKitchenRun',
+                message: 'Edit kitchen run',
+              })}
+              onClick={backToRun}
+            />
             <p className="px-1 py-2 text-xs text-muted-foreground">
-              Shared countertop, plinth, and finishes
+              {i18n._({
+                id: 'node.cabinet.panel.sharedCountertopPlinthAndFinishes',
+                message: 'Shared countertop, plinth, and finishes',
+              })}
             </p>
             {!parentIsModule && parentRun.runTier !== 'wall' && (
               <KitchenModuleActions
@@ -880,7 +933,9 @@ export default function CabinetPanel() {
             )}
             {(parentIsModule || parentRun.runTier === 'wall') && (
               <details className="px-1 py-2 text-xs">
-                <summary className="cursor-pointer">Replace with…</summary>
+                <summary className="cursor-pointer">
+                  {i18n._({ id: 'node.cabinet.panel.replaceWith', message: 'Replace with…' })}
+                </summary>
                 <KitchenCollection includeWall={false} onSelect={applyPreset} />
               </details>
             )}
@@ -889,16 +944,25 @@ export default function CabinetPanel() {
 
       <details className="group border-t border-border/50">
         <summary className="cursor-pointer px-3 py-3 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-          Advanced
+          {i18n._({ id: 'node.cabinet.panel.advanced', message: 'Advanced' })}
         </summary>
         <p className="px-3 pb-2 text-xs text-muted-foreground">
-          Cabinet construction, compartments, and opening preview.
+          {i18n._({
+            id: 'node.cabinet.panel.cabinetConstructionCompartmentsAndOpeningPreview',
+            message: 'Cabinet construction, compartments, and opening preview.',
+          })}
         </p>
         {!isHoodOnlyNode && (
-          <PanelSection title="Front construction" defaultExpanded={false}>
+          <PanelSection
+            title={i18n._({
+              id: 'node.cabinet.panel.frontConstruction',
+              message: 'Front construction',
+            })}
+            defaultExpanded={false}
+          >
             <div>
               <div className="px-1 pb-1 text-[10px] uppercase tracking-wide text-muted-foreground">
-                Mounting
+                {i18n._({ id: 'node.cabinet.panel.mounting', message: 'Mounting' })}
               </div>
               <SegmentedControl
                 onChange={(value) =>
@@ -906,14 +970,14 @@ export default function CabinetPanel() {
                 }
                 options={FRONT_OVERLAY_OPTIONS.map((option) => ({
                   value: option.value,
-                  label: option.label,
+                  label: i18n._(option.label),
                 }))}
                 value={node.frontOverlay ?? 'full'}
               />
             </div>
             <div>
               <div className="px-1 pb-1 text-[10px] uppercase tracking-wide text-muted-foreground">
-                Reveal gap
+                {i18n._({ id: 'node.cabinet.panel.revealGap', message: 'Reveal gap' })}
               </div>
               <SegmentedControl
                 mixed={cabinetRevealGapId(node.frontGap) === 'custom'}
@@ -936,7 +1000,10 @@ export default function CabinetPanel() {
           </PanelSection>
         )}
         {node.type === 'cabinet-module' && parentRun?.type === 'cabinet' && !isHoodOnlyNode && (
-          <PanelSection title="Cabinet Type" defaultExpanded={false}>
+          <PanelSection
+            title={i18n._({ id: 'node.cabinet.panel.cabinetType', message: 'Cabinet Type' })}
+            defaultExpanded={false}
+          >
             <div className="space-y-2 px-1 pb-2">
               <SegmentedControl
                 onChange={(value) => {
@@ -948,17 +1015,35 @@ export default function CabinetPanel() {
                 }}
                 options={CABINET_TIER_OPTIONS.map((option) => ({
                   value: option.value,
-                  label: option.label,
+                  label: i18n._(option.label),
                 }))}
                 value={resolveCabinetType(node, parentRun)}
               />
               {resolveCabinetType(node, parentRun) === 'base' &&
                 (hasWallCabinet ? (
-                  <ActionButton label="Remove wall cabinet" onClick={removeWallCabinet} />
+                  <ActionButton
+                    label={i18n._({
+                      id: 'node.cabinet.panel.removeWallCabinet',
+                      message: 'Remove wall cabinet',
+                    })}
+                    onClick={removeWallCabinet}
+                  />
                 ) : (
                   <>
-                    <ActionButton label="Add wall cabinet" onClick={addWallCabinetAbove} />
-                    <ActionButton label="Add chimney" onClick={addHoodAbove} />
+                    <ActionButton
+                      label={i18n._({
+                        id: 'node.cabinet.panel.addWallCabinet',
+                        message: 'Add wall cabinet',
+                      })}
+                      onClick={addWallCabinetAbove}
+                    />
+                    <ActionButton
+                      label={i18n._({
+                        id: 'node.cabinet.panel.addChimney',
+                        message: 'Add chimney',
+                      })}
+                      onClick={addHoodAbove}
+                    />
                   </>
                 ))}
             </div>
@@ -966,11 +1051,14 @@ export default function CabinetPanel() {
         )}
 
         {canAddTopFinish && (
-          <PanelSection title="Top / Ceiling" defaultExpanded={false}>
+          <PanelSection
+            title={i18n._({ id: 'node.cabinet.panel.topCeiling', message: 'Top / Ceiling' })}
+            defaultExpanded={false}
+          >
             <div className="space-y-2 px-1 pb-2">
               <div>
                 <div className="px-1 pb-1 text-[10px] uppercase tracking-wide text-muted-foreground">
-                  Finish
+                  {i18n._({ id: 'node.cabinet.panel.finish', message: 'Finish' })}
                 </div>
                 <SegmentedControl
                   onChange={(value) =>
@@ -982,7 +1070,7 @@ export default function CabinetPanel() {
                     })
                   }
                   options={TOP_FINISH_OPTIONS.map((option) => ({
-                    label: option.label,
+                    label: i18n._(option.label),
                     value: option.value,
                   }))}
                   value={node.topFinish ?? 'none'}
@@ -991,7 +1079,10 @@ export default function CabinetPanel() {
               {node.topFinish !== 'none' && (
                 <>
                   <ActionButton
-                    label="Fill to ceiling"
+                    label={i18n._({
+                      id: 'node.cabinet.panel.fillToCeiling',
+                      message: 'Fill to ceiling',
+                    })}
                     onClick={() =>
                       updateNode({
                         topFinishHeight: cabinetCeilingGap(
@@ -1002,7 +1093,7 @@ export default function CabinetPanel() {
                     }
                   />
                   <SliderControl
-                    label="Top height"
+                    label={i18n._({ id: 'node.cabinet.panel.topHeight', message: 'Top height' })}
                     max={1.2}
                     min={0}
                     onChange={(value) => updateNode({ topFinishHeight: value })}
@@ -1012,7 +1103,7 @@ export default function CabinetPanel() {
                     value={node.topFinishHeight}
                   />
                   <SliderControl
-                    label="Top depth"
+                    label={i18n._({ id: 'node.cabinet.panel.topDepth', message: 'Top depth' })}
                     max={1.2}
                     min={0.15}
                     onChange={(value) => updateNode({ topFinishDepth: value })}
@@ -1027,8 +1118,13 @@ export default function CabinetPanel() {
                 <div className="flex gap-1.5 px-1 text-xs leading-5 text-red-700 dark:text-red-300">
                   <AlertTriangle className="mt-1 h-3.5 w-3.5 shrink-0" />
                   <span>
-                    Finished height extends {(ceilingOverflow * 1000).toFixed(0)} mm above the
-                    ceiling.
+                    {i18n._({
+                      id: 'node.cabinet.panel.aboveCeiling',
+                      message: 'Finished height extends {overflow} mm above the ceiling.',
+                      values: {
+                        overflow: formatFixed(ceilingOverflow * 1000, 0, i18n.getLocale()),
+                      },
+                    })}
                   </span>
                 </div>
               )}
@@ -1037,11 +1133,13 @@ export default function CabinetPanel() {
         )}
 
         {!isHoodOnlyNode && (
-          <PanelSection title="Open Animation">
+          <PanelSection
+            title={i18n._({ id: 'node.cabinet.panel.openAnimation', message: 'Open Animation' })}
+          >
             <div className="flex items-center gap-2 px-1">
               <div className="min-w-0 flex-1">
                 <SliderControl
-                  label="Open"
+                  label={i18n._({ id: 'node.cabinet.panel.open', message: 'Open' })}
                   max={100}
                   min={0}
                   onChange={(value) => {
@@ -1056,10 +1154,10 @@ export default function CabinetPanel() {
               <button
                 aria-label={
                   isAnimating
-                    ? 'Stop animation'
+                    ? i18n._({ id: 'node.cabinet.panel.stopAnimation', message: 'Stop animation' })
                     : (node.operationState ?? 0) >= 0.99
-                      ? 'Close cabinet'
-                      : 'Open cabinet'
+                      ? i18n._({ id: 'node.cabinet.panel.closeCabinet', message: 'Close cabinet' })
+                      : i18n._({ id: 'node.cabinet.panel.openCabinet', message: 'Open cabinet' })
                 }
                 className="flex h-7 shrink-0 items-center gap-1.5 rounded-lg border border-border/40 bg-black/4 dark:bg-[#2C2C2E] px-2.5 text-[11px] font-medium text-foreground transition-colors hover:bg-black/8 dark:hover:bg-[#3e3e3e]"
                 onClick={() => {
@@ -1071,23 +1169,33 @@ export default function CabinetPanel() {
                 }}
                 title={
                   isAnimating
-                    ? 'Stop animation'
+                    ? i18n._({ id: 'node.cabinet.panel.stopAnimation', message: 'Stop animation' })
                     : (node.operationState ?? 0) >= 0.99
-                      ? 'Close cabinet'
-                      : 'Play animation'
+                      ? i18n._({ id: 'node.cabinet.panel.closeCabinet', message: 'Close cabinet' })
+                      : i18n._({
+                          id: 'node.cabinet.panel.playAnimation',
+                          message: 'Play animation',
+                        })
                 }
                 type="button"
               >
                 {isAnimating ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
                 <span>
-                  {isAnimating ? 'Stop' : (node.operationState ?? 0) >= 0.99 ? 'Close' : 'Play'}
+                  {isAnimating
+                    ? i18n._({ id: 'node.cabinet.panel.stop', message: 'Stop' })
+                    : (node.operationState ?? 0) >= 0.99
+                      ? i18n._({ id: 'node.cabinet.panel.close', message: 'Close' })
+                      : i18n._({ id: 'node.cabinet.panel.play', message: 'Play' })}
                 </span>
               </button>
             </div>
           </PanelSection>
         )}
 
-        <PanelSection title="Compartments" defaultExpanded={false}>
+        <PanelSection
+          title={i18n._({ id: 'node.cabinet.panel.compartments', message: 'Compartments' })}
+          defaultExpanded={false}
+        >
           {reflowNotice ? (
             <p
               aria-live="polite"
@@ -1122,7 +1230,10 @@ export default function CabinetPanel() {
           <div className="px-1 pb-1">
             <ActionButton
               icon={<Plus className="h-4 w-4" />}
-              label="Add compartment"
+              label={i18n._({
+                id: 'node.cabinet.panel.addCompartment',
+                message: 'Add compartment',
+              })}
               onClick={addCompartment}
             />
           </div>
