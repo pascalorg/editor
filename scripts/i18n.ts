@@ -789,10 +789,11 @@ export function checkTranslationEntries(
         errors.push(`${locale}: missing "${source.id}"`)
         continue
       }
-      if (entry.sourceHash !== hashSource(source.message)) {
+      const awaitingReview = entry.fuzzy || entry.review !== 'human'
+      const stale = entry.sourceHash !== hashSource(source.message)
+      if (stale && !(awaitingReview && !options.requireReviewed)) {
         errors.push(`${locale}: stale "${source.id}"`)
       }
-      const awaitingReview = entry.fuzzy || entry.review !== 'human'
       if (awaitingReview && options.requireReviewed) {
         errors.push(`${locale}: "${source.id}" still requires human review`)
       } else if (awaitingReview && !(entry.fuzzy && entry.review === 'required')) {
@@ -800,6 +801,9 @@ export function checkTranslationEntries(
           `${locale}: "${source.id}" is unreviewed but not marked fuzzy + Review: required`,
         )
       }
+      // A stale draft translates the previous English; it is never shipped and
+      // is compared with the current English when it is translated again.
+      if (stale && awaitingReview) continue
       for (const error of validateTranslation(
         source.message,
         entry.translation,
