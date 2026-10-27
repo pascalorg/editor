@@ -64,8 +64,9 @@ let allowlistCache: { raw: string; origins: ReadonlySet<string> } | null = null
 
 /**
  * The allowlist set in `raw` (the value of {@link ALLOWED_ORIGINS_ENV}), or
- * `undefined` when it is unset or empty. Rejected entries, and a value with no
- * valid entry at all, are warned about once per distinct value.
+ * `undefined` when it is unset or empty. Only the most recent value is cached,
+ * so its warnings (rejected entries, no valid entry, no https: entry) are
+ * logged when a value is first read and again whenever the value changes.
  */
 export function allowedOriginsFrom(raw: string | undefined): ReadonlySet<string> | undefined {
   if (!raw) return undefined
@@ -75,7 +76,11 @@ export function allowedOriginsFrom(raw: string | undefined): ReadonlySet<string>
     console.warn(`[pascal] asset_allowlist_entry_ignored ${JSON.stringify(issue)}`)
   }
   if (origins.size === 0) {
-    console.warn('[pascal] asset_allowlist_has_no_valid_entries: no https: origin is permitted')
+    console.warn('[pascal] asset_allowlist_has_no_valid_entries: no origin is permitted')
+  } else if (![...origins].some((origin) => origin.startsWith('https://'))) {
+    console.warn(
+      '[pascal] asset_allowlist_has_no_https_entries: scene asset URLs accept only https: origins, so every one is rejected',
+    )
   }
   allowlistCache = { raw, origins }
   return origins

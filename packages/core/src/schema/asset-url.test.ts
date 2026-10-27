@@ -217,7 +217,7 @@ describe('parseAllowedOrigins', () => {
 })
 
 describe('allowedOriginsFrom', () => {
-  test('warns once per distinct value, without the entry text', () => {
+  test('warns once while the value is unchanged, without the entry text', () => {
     const warn = spyOn(console, 'warn').mockImplementation(() => {})
     try {
       const raw = 'https://ok.example,user:secret@cdn.example.com, ftp://user:secret@files.example'
@@ -241,10 +241,34 @@ describe('allowedOriginsFrom', () => {
       expect(allowedOriginsFrom('')).toBeUndefined()
       expect(allowedOriginsFrom(' \t ')?.size).toBe(0)
       expect(warn.mock.calls.map((args) => String(args[0]))).toEqual([
-        '[pascal] asset_allowlist_has_no_valid_entries: no https: origin is permitted',
+        '[pascal] asset_allowlist_has_no_valid_entries: no origin is permitted',
       ])
     } finally {
       warn.mockRestore()
+    }
+  })
+
+  test('an allowlist of only http: entries warns once that no https: asset is accepted', () => {
+    const g = globalThis as { process?: { env?: Record<string, string | undefined> } }
+    if (!g.process?.env) return
+    const original = g.process.env[ALLOWED_ORIGINS_ENV]
+    const warn = spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      g.process.env[ALLOWED_ORIGINS_ENV] = 'http://cdn.pascal.app, http://assets.pascal.app'
+      expect(isValid('https://cdn.pascal.app/a.glb')).toBe(false)
+      expect(isValid('https://assets.pascal.app/b.glb')).toBe(false)
+      expect(warn.mock.calls.map((args) => String(args[0]))).toEqual([
+        '[pascal] asset_allowlist_has_no_https_entries: scene asset URLs accept only https: origins, so every one is rejected',
+      ])
+
+      warn.mockClear()
+      g.process.env[ALLOWED_ORIGINS_ENV] = 'http://cdn.pascal.app, https://assets.pascal.app'
+      expect(isValid('https://assets.pascal.app/b.glb')).toBe(true)
+      expect(warn).not.toHaveBeenCalled()
+    } finally {
+      warn.mockRestore()
+      if (original === undefined) delete g.process.env[ALLOWED_ORIGINS_ENV]
+      else g.process.env[ALLOWED_ORIGINS_ENV] = original
     }
   })
 })
