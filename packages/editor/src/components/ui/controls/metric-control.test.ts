@@ -43,3 +43,10 @@ test('metric write-back and display agree for values immediately below a half', 
   expect(roundMetricValueForDisplay(positive, 1)).toBe(1.2)
   expect(formatMetricInputValue(positive, 1, 'en')).toBe('1.2')
 })
+
+test('metric write-back preserves Intl rounding for binary-inexact decimal halves', () => {
+  expect(roundMetricValueForDisplay(-1.005, 2)).toBe(-1.01)
+  expect(formatMetricInputValue(-1.005, 2, 'en')).toBe('-1.01')
+  expect(roundMetricValueForDisplay(1.005, 2)).toBe(1.01)
+  expect(formatMetricInputValue(1.005, 2, 'en')).toBe('1.01')
+})

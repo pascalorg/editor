@@ -48,8 +48,15 @@ export function formatMetricInputValue(
 }
 
 export function roundMetricValueForDisplay(value: number, precision: number): number {
-  const factor = 10 ** precision
-  return (Math.sign(value) * Math.round(Math.abs(value) * factor)) / factor
+  const rounded = Number(
+    formatNumber(value, {
+      locale: 'en',
+      min: precision,
+      max: precision,
+      useGrouping: false,
+    }),
+  )
+  return Number.isFinite(rounded) ? rounded : value
 }
 
 export function MetricControl({
