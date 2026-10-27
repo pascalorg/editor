@@ -159,16 +159,25 @@ function lineOf(source: ts.SourceFile, node: ts.Node): number {
   return source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1
 }
 
+const IGNORE = /i18n-ignore:\s*\S/
+// A line holding only a comment: a line comment, a block comment, or a JSX {/* comment */}.
+const COMMENT_ONLY_LINE = /^\s*(?:\/\/|\/\*|\{\s*\/\*)/
+
+/**
+ * `i18n-ignore: <reason>` exempts a literal on its own line, or on the line
+ * after a comment-only line. A trailing ignore that exempts one line's literal
+ * does not reach the next line.
+ */
 function isIgnored(source: ts.SourceFile, node: ts.Node): boolean {
   const text = source.text
   const start = node.getStart(source)
   const lineStart = text.lastIndexOf('\n', start - 1) + 1
+  const lineEnd = text.indexOf('\n', start) === -1 ? text.length : text.indexOf('\n', start)
+  if (IGNORE.test(text.slice(lineStart, lineEnd))) return true
+  if (lineStart === 0) return false
   const previousLineStart = text.lastIndexOf('\n', lineStart - 2) + 1
-  const window = text.slice(
-    previousLineStart,
-    text.indexOf('\n', start) === -1 ? text.length : text.indexOf('\n', start),
-  )
-  return /i18n-ignore:\s*\S/.test(window)
+  const previousLine = text.slice(previousLineStart, lineStart - 1)
+  return COMMENT_ONLY_LINE.test(previousLine) && IGNORE.test(previousLine)
 }
 
 function isTranslationCall(node: ts.Node): boolean {

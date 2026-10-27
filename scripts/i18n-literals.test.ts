@@ -388,6 +388,23 @@ test('an i18n-ignore comment exempts data that only looks like copy', () => {
   expect(scanSource('packages/editor/src/components/credits.tsx', source, allowlist)).toEqual([])
 })
 
+test('a trailing i18n-ignore exempts only its own line', () => {
+  const source = `export function Credits() {
+  return (
+    <p>
+      <span title="Three.js" /> {/* i18n-ignore: library name */}
+      <span title="Delete everything" />
+    </p>
+  )
+}
+`
+  expect(
+    scanSource('packages/editor/src/components/credits.tsx', source, allowlist).map(
+      (found) => found.text,
+    ),
+  ).toEqual(['Delete everything'])
+})
+
 test('an i18n-ignore without a reason does not exempt anything', () => {
   const source = `export function Credits() {
   // i18n-ignore
