@@ -85,4 +85,64 @@ export const surfaces: PseudoSurface[] = [
     steps: (page) => openInEditor(page, 'More views'),
     scope: '[role="menu"]',
   },
+  { name: 'build-tab', path: editorPath, steps: openEditor, scope: '[data-surface="build-tab"]' },
+  {
+    name: 'tool-dock',
+    path: editorPath,
+    steps: openEditor,
+    scope: '[data-surface="tool-dock"]',
+  },
+  {
+    name: 'camera-hint',
+    path: editorPath,
+    steps: openEditor,
+    scope: `section[aria-label="${pseudoLocalize('Camera controls hint')}"]`,
+  },
+  {
+    name: 'wall-tool-hud',
+    path: editorPath,
+    steps: async (page) => {
+      await openEditor(page)
+      await page.locator('[data-build-tool="room-rectangle"]').click()
+      await page.mouse.move(900, 500)
+      await page.waitForTimeout(800)
+    },
+    scope: '[data-hud-card]',
+  },
+  {
+    name: 'door-tool-hud',
+    path: editorPath,
+    steps: async (page) => {
+      await openEditor(page)
+      await page.locator('[data-build-tool="door"]').click()
+      await page.mouse.move(900, 500)
+      await page.waitForTimeout(800)
+    },
+    scope: '[data-hud-card]',
+  },
+  {
+    name: 'measure-menu',
+    path: editorPath,
+    steps: (page) => openInEditor(page, 'Measurement options'),
+    scope: '[role="menu"], [role="dialog"]',
+  },
+  {
+    name: 'references-menu',
+    path: editorPath,
+    steps: (page) => openInEditor(page, 'Reference settings'),
+    scope: '[role="dialog"]',
+  },
+  {
+    name: 'mep-tools',
+    path: editorPath,
+    steps: async (page) => {
+      await openEditor(page)
+      await page.locator('section[data-build-group="advanced"] > button').click()
+      await page.locator('[data-build-tool="mep"]').click()
+      await page.waitForTimeout(600)
+    },
+    scope: '[data-surface="build-tab"]',
+    // A kind registered by the external @pascal-app/plugin-streetscape, which owns its copy.
+    data: ['Road'],
+  },
 ]
