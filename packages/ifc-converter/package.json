@@ -25,6 +25,7 @@
     "build": "tsc --build",
     "dev": "tsgo --build --watch",
     "test": "bun test tests",
+    "bench:normals": "bun run src/__bench__/normal-recompute.bench.ts",
     "prepublishOnly": "npm run build"
   },
   "dependencies": {
