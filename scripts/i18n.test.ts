@@ -1,12 +1,12 @@
 import { expect, test } from 'bun:test'
-import { readFileSync, writeFileSync } from 'node:fs'
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import type { CatalogType } from '@lingui/conf'
-import { parsePo } from 'pofile-ts'
+import { parsePo, stringifyPo } from 'pofile-ts'
 import linguiConfig from '../lingui.config'
 import {
-  checkCatalogs,
   escapePoCommentValue,
-  extractCatalogs,
   hashSource,
   refreshTranslations,
   type SourceMessage,
@@ -46,17 +46,91 @@ test('PO output is stable when an unrelated source line is added', async () => {
   expect(await serialize(10)).toBe(await serialize(11))
 })
 
-test('catalog checking does not rewrite PO or compiled catalogs', async () => {
-  const paths = [
-    ...new Bun.Glob('packages/editor/src/i18n/locales/*/messages.po').scanSync(),
-    ...new Bun.Glob('packages/editor/src/i18n/locales/*/messages.ts').scanSync(),
-  ]
-  const before = new Map(paths.map((path) => [path, readFileSync(path, 'utf8')]))
+const TARGETS = ['zh-CN', 'fr', 'es', 'ja'] as const
+const SAMPLE = `export const messages = [
+  /* i18n */ { id: 'viewer.camera.topView', message: 'Top view' },
+  /* i18n */ { id: 'editor.buildPanel.advanced', message: 'Advanced' },
+]
+`
 
-  expect(await checkCatalogs()).toEqual([])
-  expect(paths.map((path) => readFileSync(path, 'utf8'))).toEqual(
-    paths.map((path) => before.get(path)),
+/**
+ * A two-message project with the repository's Lingui config and glossary and
+ * fully reviewed catalogs, so the real commands run in seconds.
+ */
+function catalogProject(): string {
+  const root = mkdtempSync(join(tmpdir(), 'pascal-catalogs-'))
+  symlinkSync(join(process.cwd(), 'node_modules'), join(root, 'node_modules'))
+  writeFileSync(
+    join(root, 'lingui.config.ts'),
+    readFileSync('lingui.config.ts', 'utf8').replace(
+      /include: \[[^\]]*\]/,
+      "include: ['packages/editor/src']",
+    ),
   )
+  mkdirSync(join(root, 'i18n'))
+  cpSync('i18n/glossary.json', join(root, 'i18n/glossary.json'))
+  mkdirSync(join(root, 'packages/editor/src'), { recursive: true })
+  writeFileSync(join(root, 'packages/editor/src/sample.tsx'), SAMPLE)
+  for (const locale of ['en', ...TARGETS]) {
+    mkdirSync(join(root, `packages/editor/src/i18n/locales/${locale}`), { recursive: true })
+    writeFileSync(
+      join(root, `packages/editor/src/i18n/locales/${locale}/messages.po`),
+      'msgid ""\nmsgstr ""\n',
+    )
+  }
+  run(root, 'extract')
+  const reviewed: Record<string, string> = {
+    'viewer.camera.topView': 'Vue de dessus',
+    'editor.buildPanel.advanced': 'Avancé',
+  }
+  for (const locale of TARGETS) {
+    const path = join(root, `packages/editor/src/i18n/locales/${locale}/messages.po`)
+    const po = parsePo(readFileSync(path, 'utf8'))
+    for (const item of po.items) {
+      const english = item.msgid === 'viewer.camera.topView' ? 'Top view' : 'Advanced'
+      item.msgstr = [reviewed[item.msgid]!]
+      item.comments = [
+        `Source-Hash: ${hashSource(english)}`,
+        'Review: human',
+        `English: ${JSON.stringify(english)}`,
+      ]
+      delete item.flags.fuzzy
+    }
+    writeFileSync(path, stringifyPo(po, { foldLength: 0 }))
+  }
+  run(root, 'compile')
+  return root
+}
+
+function run(root: string, command: 'check' | 'compile' | 'extract') {
+  const result = Bun.spawnSync(['bun', join(process.cwd(), 'scripts/i18n.ts'), command], {
+    // Lingui resolves the config's paths against the working directory.
+    cwd: root,
+    env: {
+      ...process.env,
+      I18N_ROOT: root,
+      I18N_BASE_REF: '',
+      GITHUB_EVENT_NAME: '',
+      GITHUB_STEP_SUMMARY: '',
+    },
+    stdout: 'pipe',
+    stderr: 'pipe',
+  })
+  return { exitCode: result.exitCode, output: `${result.stdout}${result.stderr}` }
+}
+
+const catalogFiles = (root: string) =>
+  [...new Bun.Glob('packages/editor/src/i18n/locales/*/messages.{po,ts}').scanSync({ cwd: root })]
+    .sort()
+    .map((path) => [path, readFileSync(join(root, path), 'utf8')])
+
+test('catalog checking does not rewrite PO or compiled catalogs', () => {
+  const root = catalogProject()
+  const before = catalogFiles(root)
+  const { exitCode, output } = run(root, 'check')
+  expect(output).not.toContain('[i18n] ')
+  expect(exitCode).toBe(0)
+  expect(catalogFiles(root)).toEqual(before)
 }, 60_000)
 
 test('ICU plural validation follows the target locale categories', () => {
@@ -86,51 +160,33 @@ test('rich-text validation preserves attributed and self-closing tags', () => {
   )
 })
 
-test('source drift fails checking, then extraction updates English and flags translations', async () => {
-  const sourcePath = 'packages/editor/src/components/viewer/viewer-controls-bar.tsx'
-  const catalogPaths = [
-    ...new Bun.Glob('packages/editor/src/i18n/locales/*/messages.po').scanSync(),
-    ...new Bun.Glob('packages/editor/src/i18n/locales/*/messages.ts').scanSync(),
-  ]
-  const paths = [sourcePath, ...catalogPaths]
-  const before = new Map(paths.map((path) => [path, readFileSync(path, 'utf8')]))
-  const originalSource = before.get(sourcePath)
-  if (!originalSource) throw new Error(`Missing ${sourcePath}`)
+test('source drift fails checking, then extraction updates English and flags translations', () => {
+  const root = catalogProject()
+  const sample = join(root, 'packages/editor/src/sample.tsx')
+  writeFileSync(sample, SAMPLE.replace("message: 'Top view'", "message: 'Top view X'"))
 
-  try {
-    writeFileSync(
-      sourcePath,
-      originalSource.replaceAll("message: 'Top view'", "message: 'Top view X'"),
+  const check = run(root, 'check')
+  expect(check.exitCode).toBe(1)
+  expect(check.output).toContain('source drift "viewer.camera.topView"')
+
+  expect(run(root, 'extract').exitCode).toBe(0)
+  const catalog = (locale: string) =>
+    parsePo(
+      readFileSync(join(root, `packages/editor/src/i18n/locales/${locale}/messages.po`), 'utf8'),
     )
-
-    const errors = await checkCatalogs()
-    expect(errors.some((error) => error.includes('source drift "viewer.camera.topView"'))).toBe(
-      true,
-    )
-
-    extractCatalogs()
-
-    const english = parsePo(readFileSync('packages/editor/src/i18n/locales/en/messages.po', 'utf8'))
-    expect(english.items.find((item) => item.msgid === 'viewer.camera.topView')?.msgstr[0]).toBe(
-      'Top view X',
-    )
-
-    for (const locale of ['zh-CN', 'fr', 'es', 'ja']) {
-      const target = parsePo(
-        readFileSync(`packages/editor/src/i18n/locales/${locale}/messages.po`, 'utf8'),
-      )
-      const item = target.items.find((entry) => entry.msgid === 'viewer.camera.topView')
-      expect(item?.msgstr[0]).not.toBe('')
-      expect(item?.flags.fuzzy).toBe(true)
-      expect(item?.comments).toContain('Review: required')
-      expect(
-        readFileSync(`packages/editor/src/i18n/locales/${locale}/messages.ts`, 'utf8'),
-      ).not.toContain('\\"viewer.camera.topView\\"')
-    }
-  } finally {
-    for (const [path, contents] of before) writeFileSync(path, contents)
+  expect(
+    catalog('en').items.find((item) => item.msgid === 'viewer.camera.topView')?.msgstr[0],
+  ).toBe('Top view X')
+  for (const locale of TARGETS) {
+    const item = catalog(locale).items.find((entry) => entry.msgid === 'viewer.camera.topView')
+    expect(item?.msgstr[0]).toBe('Vue de dessus')
+    expect(item?.flags.fuzzy).toBe(true)
+    expect(item?.comments).toContain('Review: required')
+    expect(
+      readFileSync(join(root, `packages/editor/src/i18n/locales/${locale}/messages.ts`), 'utf8'),
+    ).not.toContain('\\"viewer.camera.topView\\"')
   }
-}, 120_000)
+}, 60_000)
 
 test('AI translation refreshes only missing and stale entries through a mocked provider', async () => {
   const sources: SourceMessage[] = [
