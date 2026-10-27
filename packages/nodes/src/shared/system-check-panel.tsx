@@ -140,12 +140,11 @@ export default function SystemCheckPanel({
                   message: 'Selected connected system',
                 })}
               >
-                {i18n._({ id: 'node.shared.systemCheckPanel.selected', message: 'Selected:' })}{' '}
-                {summary.runCount}{' '}
-                {summary.runCount === 1
-                  ? i18n._({ id: 'node.shared.systemCheckPanel.run', message: 'run' })
-                  : i18n._({ id: 'node.shared.systemCheckPanel.runs', message: 'runs' })}{' '}
-                · {summary.runLengthM.toFixed(1)} m
+                {i18n._({
+                  id: 'node.shared.systemCheckPanel.selectedRuns',
+                  message: 'Selected: {count, plural, one {# run} other {# runs}} · {length} m',
+                  values: { count: summary.runCount, length: summary.runLengthM.toFixed(1) },
+                })}
               </span>
             )}
           </div>

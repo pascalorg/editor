@@ -543,16 +543,27 @@ export default function StairPanel() {
           <div className="space-y-2 px-1 text-xs">
             {measurements.flights.map((flight, index) => (
               <div key={flight.nodeId}>
-                {i18n._({ id: 'node.stair.panel.flight', message: 'Flight' })} {index + 1}:{' '}
-                {flight.count} {i18n._({ id: 'node.stair.panel.risersR', message: 'risers · R' })}{' '}
-                {flight.riserHeight === null
-                  ? '—'
-                  : formatLinearMeasurement(flight.riserHeight, unit, metricNotation)}{' '}
-                · T{' '}
-                {flight.going === null
-                  ? '—'
-                  : formatLinearMeasurement(flight.going, unit, metricNotation)}{' '}
-                · {flight.slope === null ? '—' : `${((flight.slope * 180) / Math.PI).toFixed(1)}°`}
+                {i18n._({
+                  id: 'node.stair.panel.flightMeasurements',
+                  message:
+                    'Flight {number}: {count, plural, one {# riser} other {# risers}} · R {riser} · T {going} · {slope}',
+                  values: {
+                    number: index + 1,
+                    count: flight.count,
+                    riser:
+                      flight.riserHeight === null
+                        ? '—'
+                        : formatLinearMeasurement(flight.riserHeight, unit, metricNotation),
+                    going:
+                      flight.going === null
+                        ? '—'
+                        : formatLinearMeasurement(flight.going, unit, metricNotation),
+                    slope:
+                      flight.slope === null
+                        ? '—'
+                        : `${((flight.slope * 180) / Math.PI).toFixed(1)}°`,
+                  },
+                })}
               </div>
             ))}
             <div>
@@ -772,8 +783,11 @@ export default function StairPanel() {
             />
             {node.totalRise == null ? (
               <div className="px-1 text-[11px] text-muted-foreground">
-                {i18n._({ id: 'node.stair.panel.currently', message: 'Currently' })}{' '}
-                {formatLinearMeasurement(resolvedRise, unit, metricNotation)}
+                {i18n._({
+                  id: 'node.panel.currently',
+                  message: 'Currently {value}',
+                  values: { value: formatLinearMeasurement(resolvedRise, unit, metricNotation) },
+                })}
               </div>
             ) : (
               <MetricControl

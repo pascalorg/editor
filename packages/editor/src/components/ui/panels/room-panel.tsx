@@ -56,6 +56,7 @@ import {
 } from './room-construction-rows'
 import { type RoomNameOption, roomNameOptions } from './room-name-options'
 import { localizedLevelName } from '../../../i18n/level-name'
+import { messageWithSlot } from '../../../i18n/message-slot'
 import { localizedRoomNameSections } from '../../../lib/room-name-messages'
 
 /** "Room · Ground floor", "Mezzanine · in Kitchen", "Room · not enclosed". */
@@ -183,7 +184,11 @@ export function OpenRoomPanel({ zoneId, onClose }: { zoneId: string; onClose: ()
     >
       <div className="flex flex-col px-4 pt-3 pb-4 text-sm" data-open-room-panel={zoneId}>
         <p className="text-muted-foreground text-xs">
-          {formatAreaLabel(area([{ outer: zone.polygon, holes: zone.holes }]), unit, 2)}{' '}{i18n._({ id: 'editor.panels.roomPanel.closeItsWallsToBuildIts', message: '· Close its walls to build its floor and ceiling.' })}
+          {i18n._({
+            id: 'editor.panels.roomPanel.openRoomArea',
+            message: '{area} · Close its walls to build its floor and ceiling.',
+            values: { area: formatAreaLabel(area([{ outer: zone.polygon, holes: zone.holes }]), unit, 2) },
+          })}
         </p>
         <RoomUnitRow zoneId={zoneId} />
         <button
@@ -249,7 +254,13 @@ export function RoomUnitRow({ zoneId }: { zoneId: string }) {
           </DropdownMenuItem>
           {current && (
             <DropdownMenuItem onSelect={() => assignZoneToUnit(zoneId as ZoneNode['id'], null)}>
-              {i18n._({ id: 'editor.panels.roomPanel.removeFrom', message: 'Remove from' })}{' '}{current.name || i18n._({ id: 'editor.panels.roomPanel.unit2', message: 'unit' })}
+              {current.name
+                ? i18n._({
+                    id: 'editor.panels.roomPanel.removeFromUnitNamed',
+                    message: 'Remove from {unit}',
+                    values: { unit: current.name },
+                  })
+                : i18n._({ id: 'editor.panels.roomPanel.removeFromUnit', message: 'Remove from unit' })}
             </DropdownMenuItem>
           )}
         </DropdownMenuContent>
@@ -827,7 +838,14 @@ function RoomNameOptionLabel({ option }: { option: RoomNameOption }) {
   if (option.kind === 'typed') {
     return (
       <span className="min-w-0 flex-1 truncate">
-        <span className="text-muted-foreground">{i18n._({ id: 'editor.panels.roomPanel.use', message: 'Use' })}{' '}</span>“{option.value}”
+        {messageWithSlot(
+          i18n,
+          /* i18n */ { id: 'editor.panels.roomPanel.useTyped', message: '{use} “{name}”', values: { name: option.value } },
+          'use',
+          <span className="text-muted-foreground">
+            {i18n._({ id: 'editor.panels.roomPanel.use', message: 'Use' })}
+          </span>,
+        )}
       </span>
     )
   }

@@ -1017,7 +1017,11 @@ export default function DoorPanel() {
                   <div className="mb-2 flex flex-col gap-1" key={i}>
                     <div className="flex items-center justify-between pb-1">
                       <span className="font-medium text-foreground/80 dark:text-white/80 text-xs">
-                        {i18n._({ id: 'node.door.panel.segment', message: 'Segment' })} {i + 1}
+                        {i18n._({
+                          id: 'node.segmentNumber',
+                          message: 'Segment {number}',
+                          values: { number: i + 1 },
+                        })}
                       </span>
                     </div>
 

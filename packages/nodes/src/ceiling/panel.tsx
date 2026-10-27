@@ -305,8 +305,11 @@ export function CeilingPanel() {
         />
         {isFollows ? (
           <div className="px-1 text-[11px] text-muted-foreground">
-            {i18n._({ id: 'node.ceiling.panel.currently', message: 'Currently' })}{' '}
-            {formatLinearMeasurement(resolvedHeight, unit, metricNotation)}
+            {i18n._({
+              id: 'node.panel.currently',
+              message: 'Currently {value}',
+              values: { value: formatLinearMeasurement(resolvedHeight, unit, metricNotation) },
+            })}
           </div>
         ) : (
           <SliderControl
@@ -354,13 +357,10 @@ export function CeilingPanel() {
         {Number.isFinite(maxHeight) && (
           <div className="px-1 pb-1 text-[11px] text-muted-foreground">
             {i18n._({
-              id: 'node.ceiling.panel.limitedByTheLevelTo',
-              message: 'Limited by the level to',
-            })}{' '}
-            {formatLinearMeasurement(maxHeight, unit, metricNotation)}{' '}
-            {i18n._({
-              id: 'node.ceiling.panel.raiseTheLevelHeightForA',
-              message: '— raise the level height for a taller ceiling.',
+              id: 'node.ceiling.panel.limitedByLevel',
+              message:
+                'Limited by the level to {height} — raise the level height for a taller ceiling.',
+              values: { height: formatLinearMeasurement(maxHeight, unit, metricNotation) },
             })}
           </div>
         )}
@@ -399,16 +399,30 @@ export function CeilingPanel() {
                     <p
                       className={`font-medium text-xs ${isEditing ? 'text-primary' : 'text-foreground dark:text-white'}`}
                     >
-                      {i18n._({ id: 'node.ceiling.panel.hole', message: 'Hole' })} {index + 1}{' '}
-                      {isEditing &&
-                        i18n._({ id: 'node.ceiling.panel.editing', message: '(Editing)' })}
+                      {isEditing
+                        ? i18n._({
+                            id: 'node.holeEditing',
+                            message: 'Hole {number} (Editing)',
+                            values: { number: index + 1 },
+                          })
+                        : i18n._({
+                            id: 'node.holeNumber',
+                            message: 'Hole {number}',
+                            values: { number: index + 1 },
+                          })}
                     </p>
                     <p className="text-[10px] text-muted-foreground">
-                      {holeArea.toFixed(2)} m² · {hole.length}{' '}
-                      {i18n._({ id: 'node.ceiling.panel.pts', message: 'pts ·' })}{' '}
-                      {isAutoHole
-                        ? autoLabel
-                        : i18n._({ id: 'node.ceiling.panel.manual', message: 'Manual' })}
+                      {i18n._({
+                        id: 'node.holeSummary',
+                        message: '{area} m² · {count, plural, one {# pt} other {# pts}} · {source}',
+                        values: {
+                          area: holeArea.toFixed(2),
+                          count: hole.length,
+                          source: isAutoHole
+                            ? autoLabel
+                            : i18n._({ id: 'node.hole.manual', message: 'Manual' }),
+                        },
+                      })}
                     </p>
                   </div>
                   <div className="flex items-center gap-1">

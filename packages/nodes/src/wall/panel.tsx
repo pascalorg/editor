@@ -350,8 +350,11 @@ export default function WallPanel() {
         />
         {isPlaneBound ? (
           <div className="px-1 text-[11px] text-muted-foreground">
-            {i18n._({ id: 'node.wall.panel.currently', message: 'Currently' })}{' '}
-            {formatLinearMeasurement(height, unit)}
+            {i18n._({
+              id: 'node.panel.currently',
+              message: 'Currently {value}',
+              values: { value: formatLinearMeasurement(height, unit) },
+            })}
           </div>
         ) : (
           <SliderControl
@@ -404,8 +407,11 @@ export default function WallPanel() {
               {i18n._({ id: 'node.wall.panel.thickness', message: 'Thickness' })}
             </span>
             <span className="text-[11px] text-muted-foreground tabular-nums">
-              {formatLinearMeasurement(thickness, unit)}{' '}
-              {i18n._({ id: 'node.wall.panel.fromAssembly', message: '· from assembly' })}
+              {i18n._({
+                id: 'node.wall.panel.thicknessFromAssembly',
+                message: '{thickness} · from assembly',
+                values: { thickness: formatLinearMeasurement(thickness, unit) },
+              })}
             </span>
           </div>
         ) : (
@@ -599,7 +605,11 @@ function WallFaceScriptRow({ face, sha, wallId }: { face: WallFace; sha: string;
     <div className="flex flex-col gap-2" data-wall-face-script={face}>
       <div className="flex min-h-8 items-center justify-between gap-3">
         <span className="text-muted-foreground text-xs">
-          {i18n._({ id: 'node.wall.panel.side', message: 'Side' })} {face.toUpperCase()}
+          {i18n._({
+            id: 'node.wall.panel.sideFace',
+            message: 'Side {face}',
+            values: { face: face.toUpperCase() },
+          })}
         </span>
         <div className="flex items-center gap-1.5">
           <button

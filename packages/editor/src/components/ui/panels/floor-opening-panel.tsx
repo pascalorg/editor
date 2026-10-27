@@ -92,8 +92,17 @@ export function FloorOpeningPanel({ openingId }: { openingId: string }) {
     >
       <div className="flex flex-col gap-3 px-4 pt-3 pb-4 text-sm" data-floor-opening-panel={opening.id}>
         <p className="text-muted-foreground text-xs">
-          {formatAreaLabel(area([{ outer: opening.polygon, holes: [] }]), unit, 2)}
-          {owned ? i18n._({ id: 'editor.panels.floorOpeningPanel.shapeFollowsItsOwner', message: ' · Shape follows its owner.' }) : i18n._({ id: 'editor.panels.floorOpeningPanel.dragItsCornersToChangeThe', message: ' · Drag its corners to change the shape.' })}
+          {owned
+            ? i18n._({
+                id: 'editor.panels.floorOpeningPanel.areaOwned',
+                message: '{area} · Shape follows its owner.',
+                values: { area: formatAreaLabel(area([{ outer: opening.polygon, holes: [] }]), unit, 2) },
+              })
+            : i18n._({
+                id: 'editor.panels.floorOpeningPanel.areaDragCorners',
+                message: '{area} · Drag its corners to change the shape.',
+                values: { area: formatAreaLabel(area([{ outer: opening.polygon, holes: [] }]), unit, 2) },
+              })}
         </p>
         {owned && (
           <button
@@ -102,7 +111,9 @@ export function FloorOpeningPanel({ openingId }: { openingId: string }) {
             onClick={() => useViewer.getState().setSelection({ selectedIds: [opening.ownerId!] })}
             type="button"
           >
-            {i18n._({ id: 'editor.panels.floorOpeningPanel.ownedBy', message: 'Owned by' })}{' '}{opening.source === 'stair' ? i18n._({ id: 'editor.panels.floorOpeningPanel.staircase', message: 'Staircase' }) : i18n._({ id: 'editor.panels.floorOpeningPanel.elevator', message: 'Elevator' })}
+            {opening.source === 'stair'
+              ? i18n._({ id: 'editor.panels.floorOpeningPanel.ownedByStaircase', message: 'Owned by Staircase' })
+              : i18n._({ id: 'editor.panels.floorOpeningPanel.ownedByElevator', message: 'Owned by Elevator' })}
           </button>
         )}
         {hosted ? (

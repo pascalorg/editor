@@ -564,12 +564,16 @@ export default function WindowPanel() {
             <div className="flex flex-col gap-2 px-1 pb-1">
               <div className="flex items-center justify-between gap-2 text-xs">
                 <span className="text-muted-foreground">
-                  {i18n._({
-                    id: 'node.window.panel.wrapsTheCornerWith',
-                    message: 'Wraps the corner with',
-                  })}{' '}
-                  {corner.partner.name ||
-                    i18n._({ id: 'node.window.panel.itsPartner', message: 'its partner' })}
+                  {corner.partner.name
+                    ? i18n._({
+                        id: 'node.window.panel.wrapsTheCornerWithNamed',
+                        message: 'Wraps the corner with {partner}',
+                        values: { partner: corner.partner.name },
+                      })
+                    : i18n._({
+                        id: 'node.window.panel.wrapsTheCornerWithPartner',
+                        message: 'Wraps the corner with its partner',
+                      })}
                 </span>
                 <button
                   className={cn(

@@ -306,18 +306,12 @@ export default function RoofPanel() {
         <PanelSection title={i18n._({ id: 'node.roof.panel.level', message: 'Level' })}>
           <div className="flex flex-col gap-2 px-1 pb-1">
             <p className="text-muted-foreground text-xs">
-              {i18n._({ id: 'node.roof.panel.on', message: 'On' })} {levelMove.storey}{' '}
               {i18n._({
-                id: 'node.roof.panel.withItsWallsSoItHides',
+                id: 'node.roof.panel.onStoreyWalls',
                 message:
-                  "with its walls, so it hides that floor's plan in solo and exploded views.",
+                  "On {storey} with its walls, so it hides that floor's plan in solo and exploded views.{roofs, plural, =0 {} =1 {} other { The floor's # roofs move together.}}",
+                values: { storey: levelMove.storey, roofs: levelMove.roofs },
               })}
-              {levelMove.roofs > 1 &&
-                i18n._({
-                  id: 'node.roof.panel.theFloorSRoofsRoofsMove',
-                  message: " The floor's {roofs} roofs move together.",
-                  values: { roofs: levelMove.roofs },
-                })}
             </p>
             <button
               className="w-full rounded-full bg-foreground/[0.08] px-3 py-2 font-medium text-foreground text-xs transition-colors hover:bg-foreground/[0.14]"
@@ -400,8 +394,11 @@ export default function RoofPanel() {
         )}
         {node.support?.kind === 'walls' ? (
           <div className="px-1 text-[11px] text-muted-foreground">
-            {i18n._({ id: 'node.roof.panel.currently', message: 'Currently' })}{' '}
-            {formatLinearMeasurement(node.position[1], unit, metricNotation)}
+            {i18n._({
+              id: 'node.panel.currently',
+              message: 'Currently {value}',
+              values: { value: formatLinearMeasurement(node.position[1], unit, metricNotation) },
+            })}
           </div>
         ) : (
           <SliderControl

@@ -414,13 +414,19 @@ export function SiteNodePanel() {
         </label>
         {node.terrainContours ? (
           <p className="text-muted-foreground text-xs">
-            {node.terrainContours.lines.length}{' '}
-            {i18n._({ id: 'node.site.panel.surveyedLinesAt', message: 'surveyed lines at' })}{' '}
-            {node.terrainContours.intervalFt}{' '}
-            {i18n._({ id: 'node.site.panel.ft', message: 'ft (' })}
-            {node.terrainContours.datum}) —{' '}
-            {node.terrainContours.source ??
-              i18n._({ id: 'node.site.panel.survey', message: 'survey' })}
+            {i18n._({
+              id: 'node.site.panel.surveyedContours',
+              message:
+                '{count, plural, one {# surveyed line} other {# surveyed lines}} at {interval} ft ({datum}) — {source}',
+              values: {
+                count: node.terrainContours.lines.length,
+                interval: node.terrainContours.intervalFt,
+                datum: node.terrainContours.datum,
+                source:
+                  node.terrainContours.source ??
+                  i18n._({ id: 'node.site.panel.survey', message: 'survey' }),
+              },
+            })}
           </p>
         ) : (
           <p className="text-muted-foreground text-xs">

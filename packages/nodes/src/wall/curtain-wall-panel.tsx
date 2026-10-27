@@ -555,15 +555,14 @@ export function CurtainWallPanel({
         {effectiveThickness < config.glassThickness - 1e-6 && (
           <p className="text-[11px] text-muted-foreground">
             {i18n._({
-              id: 'node.wall.curtainWallPanel.effectiveThickness',
-              message: 'Effective thickness:',
-            })}{' '}
-            {unit === 'metric'
-              ? `${(effectiveThickness * 1000).toFixed(1)} mm`
-              : `${metersToLinearUnit(effectiveThickness, unit).toFixed(3)} ${getLinearUnitLabel(unit)}`}
-            {i18n._({
-              id: 'node.wall.curtainWallPanel.limitedByFrameDepth',
-              message: ', limited by frame depth.',
+              id: 'node.wall.curtainWallPanel.effectiveThicknessLimited',
+              message: 'Effective thickness: {thickness}, limited by frame depth.',
+              values: {
+                thickness:
+                  unit === 'metric'
+                    ? `${(effectiveThickness * 1000).toFixed(1)} mm`
+                    : `${metersToLinearUnit(effectiveThickness, unit).toFixed(3)} ${getLinearUnitLabel(unit)}`,
+              },
             })}
           </p>
         )}
@@ -699,8 +698,12 @@ export function CurtainWallPanel({
               </div>
             )}
             <p className="text-[11px] text-muted-foreground">
-              {i18n._({ id: 'node.wall.curtainWallPanel.column', message: 'Column' })} {column + 1}
-              {i18n._({ id: 'node.wall.curtainWallPanel.row', message: ', row' })} {row + 1} ·{' '}
+              {i18n._({
+                id: 'node.wall.curtainWallPanel.columnRow',
+                message: 'Column {column}, row {row}',
+                values: { column: column + 1, row: row + 1 },
+              })}{' '}
+              ·{' '}
               {overridden
                 ? i18n._({
                     id: 'node.wall.curtainWallPanel.customInfill',

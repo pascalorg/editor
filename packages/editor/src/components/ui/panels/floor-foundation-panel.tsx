@@ -521,7 +521,11 @@ export function FloorFoundationPanel({ node, onClose }: { node: SlabNode; onClos
           )}
           {upper && (
             <p className="px-0.5 text-muted-foreground text-xs" data-floor-top>
-              {i18n._({ id: 'editor.panels.floorFoundationPanel.floorTop', message: 'Floor top +' })}{length(floorTop)}
+              {i18n._({
+                id: 'editor.panels.floorFoundationPanel.floorTopAbove',
+                message: 'Floor top +{height}',
+                values: { height: length(floorTop) },
+              })}
             </p>
           )}
           <FinishSwatch
@@ -584,7 +588,11 @@ export function FloorFoundationPanel({ node, onClose }: { node: SlabNode; onClos
               </>
             )}
             <p className="px-0.5 text-muted-foreground text-xs" data-floor-top>
-              {i18n._({ id: 'editor.panels.floorFoundationPanel.floorTop2', message: 'Floor top' })}{' '}{length(floorTop)}
+              {i18n._({
+                id: 'editor.panels.floorFoundationPanel.floorTopValue',
+                message: 'Floor top {height}',
+                values: { height: length(floorTop) },
+              })}
             </p>
           </section>
         )}

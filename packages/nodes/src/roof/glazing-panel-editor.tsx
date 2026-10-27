@@ -96,14 +96,12 @@ export function GlazingPanelEditor({
         }}
       />
       <p className="py-1 text-[11px] text-muted-foreground">
-        {columns}{' '}
-        {columns === 1
-          ? i18n._({ id: 'node.roof.glazingPanelEditor.column', message: 'column' })
-          : i18n._({ id: 'node.roof.glazingPanelEditor.columns', message: 'columns' })}{' '}
-        · {rows}{' '}
-        {rows === 1
-          ? i18n._({ id: 'node.roof.glazingPanelEditor.row', message: 'row' })
-          : i18n._({ id: 'node.roof.glazingPanelEditor.rows', message: 'rows' })}
+        {i18n._({
+          id: 'node.roof.glazingPanelEditor.grid',
+          message:
+            '{columns, plural, one {# column} other {# columns}} · {rows, plural, one {# row} other {# rows}}',
+          values: { columns, rows },
+        })}
       </p>
       {columns > 1 && (
         <SliderControl

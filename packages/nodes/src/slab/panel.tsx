@@ -467,15 +467,30 @@ export function SlabPanel() {
                     <p
                       className={`font-medium text-xs ${isEditing ? 'text-primary' : 'text-foreground dark:text-white'}`}
                     >
-                      {i18n._({ id: 'node.slab.panel.hole', message: 'Hole' })} {index + 1}{' '}
-                      {isEditing && i18n._({ id: 'node.slab.panel.editing', message: '(Editing)' })}
+                      {isEditing
+                        ? i18n._({
+                            id: 'node.holeEditing',
+                            message: 'Hole {number} (Editing)',
+                            values: { number: index + 1 },
+                          })
+                        : i18n._({
+                            id: 'node.holeNumber',
+                            message: 'Hole {number}',
+                            values: { number: index + 1 },
+                          })}
                     </p>
                     <p className="text-[10px] text-muted-foreground">
-                      {holeArea.toFixed(2)} m² · {hole.length}{' '}
-                      {i18n._({ id: 'node.slab.panel.pts', message: 'pts ·' })}{' '}
-                      {isAutoHole
-                        ? autoLabel
-                        : i18n._({ id: 'node.slab.panel.manual', message: 'Manual' })}
+                      {i18n._({
+                        id: 'node.holeSummary',
+                        message: '{area} m² · {count, plural, one {# pt} other {# pts}} · {source}',
+                        values: {
+                          area: holeArea.toFixed(2),
+                          count: hole.length,
+                          source: isAutoHole
+                            ? autoLabel
+                            : i18n._({ id: 'node.hole.manual', message: 'Manual' }),
+                        },
+                      })}
                     </p>
                   </div>
                   <div className="flex items-center gap-1">
