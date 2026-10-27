@@ -162,8 +162,9 @@ function authoredBaseline(scene: SceneNodes, building: AnyNode) {
     return undefined
   const ids: Record<string, string> = {}
   const nodes: Record<string, AnyNode> = {}
-  for (const level of queryNodes(scene, { type: 'level', parentId: building.id })) {
-    const written = level.metadata?.authorSceneWritten as AuthorSceneWritten | undefined
+  // The building lists what it holds itself (its units); each level, what stands on it.
+  for (const holder of [building, ...queryNodes(scene, { type: 'level', parentId: building.id })]) {
+    const written = holder.metadata?.authorSceneWritten as AuthorSceneWritten | undefined
     if (!written) continue
     Object.assign(ids, written.keys)
     for (const id of written.ids) {
@@ -2307,23 +2308,26 @@ export function finalizeAuthorScene(
     )
   const changes = authoredSceneChanges(current, base, candidate.nodes)
 
-  // Each written node keeps its own baseline, and each written level the list of what it holds.
-  const levelOf = (id: string): string | undefined => {
+  // Each written node keeps its own baseline; each written level lists what stands on it and the
+  // building what it holds itself (its units), so a revision finds every node of the last one.
+  const holderOf = (id: string): string | undefined => {
     let node = candidate.nodes[id]
-    while (node && node.type !== 'level')
+    while (node && node.type !== 'level') {
+      if (node.parentId === building.id) return building.id
       node = node.parentId ? candidate.nodes[node.parentId] : undefined
+    }
     return node?.id
   }
   const keyOf = new Map(Object.entries(candidate.ids).map(([key, id]) => [id, key]))
   const writtenOn = new Map<string, AuthorSceneWritten>()
   for (const id of Object.keys(candidate.nodes)) {
-    const level = levelOf(id)
-    if (!level) continue
-    const written = writtenOn.get(level) ?? { ids: [], keys: {} }
+    const holder = holderOf(id)
+    if (!holder) continue
+    const written = writtenOn.get(holder) ?? { ids: [], keys: {} }
     written.ids.push(id)
     const key = keyOf.get(id)
     if (key) written.keys[key] = id
-    writtenOn.set(level, written)
+    writtenOn.set(holder, written)
   }
   const bookkeeping = (id: string): Record<string, unknown> => ({
     authorSceneBase: withoutBookkeeping(candidate.nodes[id]!),
@@ -2367,7 +2371,11 @@ export function finalizeAuthorScene(
     id: building.id,
     data: {
       ...updated.get(building.id)?.data,
-      metadata: { ...withoutBookkeeping(building).metadata, authorSceneState: state },
+      metadata: {
+        ...withoutBookkeeping(building).metadata,
+        authorSceneState: state,
+        ...(writtenOn.has(building.id) ? { authorSceneWritten: writtenOn.get(building.id) } : {}),
+      },
     } as Partial<AnyNode>,
   })
   return {
