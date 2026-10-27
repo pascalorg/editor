@@ -1021,12 +1021,17 @@ function eyeObstacles(
   levelId: string,
   eyeHeight: number,
 ): Pt[][] {
-  const byId = new Map<string, AnyNode>(Object.entries(nodes))
+  const items = queryNodes(nodes, { type: 'item' })
+  const level = nodes[levelId as AnyNodeId]
+  // An item stands on the level through other items only: what the walk below can reach.
+  const byId = new Map<string, AnyNode>(
+    [...items, ...(level ? [level] : [])].map((node) => [node.id, node]),
+  )
   const at = standingOf(nodes, levelId)
   const m = EYE_ITEM_CLEARANCE
-  return Object.values(nodes).flatMap((node) => {
+  return [...queryNodes(nodes, { type: 'stair', parentId: levelId }), ...items].flatMap((node) => {
     let box: { minX: number; maxX: number; minZ: number; maxZ: number } | null = null
-    if (node.type === 'stair' && node.parentId === levelId) box = stairFootprintAABB(node, nodes)
+    if (node.type === 'stair') box = stairFootprintAABB(node, nodes)
     else if (node.type === 'item') {
       let parent = byId.get(node.parentId ?? '')
       while (parent?.type === 'item') parent = byId.get(parent.parentId ?? '')
