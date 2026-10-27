@@ -123,6 +123,11 @@ import {
 } from '../../lib/keyboard-pan'
 import { measurementHint, parseMeasurement } from '../../lib/measurement-parser'
 import { formatLinearMeasurement, linearUnitToMeters } from '../../lib/measurements'
+import {
+  createGuideScaleReference,
+  formatReferenceScaleLabel,
+  type ReferenceScaleUnit,
+} from '../../lib/reference-scale'
 import { snapRegisteredDraftPoint } from '../../lib/registered-draft-snap'
 import { selectRoomFromHit } from '../../lib/room-selection-commands'
 import { enterBuildingFromPlanHit } from '../../lib/selection-routing'
@@ -527,8 +532,6 @@ type GuideTransformDraft = {
   scale: number
   rotation: number
 }
-
-export type ReferenceScaleUnit = 'meters' | 'centimeters' | 'feet' | 'inches'
 
 // The in-flight reference-scale measurement. Only the per-CLICK fields live
 // here (guide + start anchor); the rubber-band's moving END is the shared
@@ -2503,23 +2506,6 @@ function referenceScaleLengthHint(
   )
 }
 
-function getReferenceScaleUnitLabel(unit: ReferenceScaleUnit) {
-  switch (unit) {
-    case 'centimeters':
-      return 'cm'
-    case 'feet':
-      return 'ft'
-    case 'inches':
-      return 'in'
-    default:
-      return 'm'
-  }
-}
-
-function formatReferenceScaleLabel(value: number, unit: ReferenceScaleUnit, locale: string) {
-  return `${formatFloorplanNumber(value, locale)} ${getReferenceScaleUnitLabel(unit)}`
-}
-
 function getPolygonAreaAndCentroid(polygon: Point2D[]) {
   let cx = 0
   let cy = 0
@@ -3296,6 +3282,7 @@ function FloorplanReferenceScaleLayer({
   unit: 'metric' | 'imperial'
   unitsPerPixel: number
 }) {
+  const locale = useLocale()
   const visibleReferences = guides
     .filter((guide) => guideUi[guide.id]?.scaleReferenceVisible !== false)
     .map((guide) => guide.scaleReference)
@@ -3305,16 +3292,19 @@ function FloorplanReferenceScaleLayer({
 
   return (
     <>
-      {visibleReferences.map((reference, index) => (
-        <FloorplanReferenceScaleLine
-          end={reference.end}
-          key={`${reference.label}-${index}-${reference.start.join(',')}-${reference.end.join(',')}`}
-          label={reference.label}
-          palette={palette}
-          start={reference.start}
-          unitsPerPixel={unitsPerPixel}
-        />
-      ))}
+      {visibleReferences.map((reference, index) => {
+        const label = formatReferenceScaleLabel(reference, locale)
+        return (
+          <FloorplanReferenceScaleLine
+            end={reference.end}
+            key={`${index}-${reference.start.join(',')}-${reference.end.join(',')}`}
+            label={label}
+            palette={palette}
+            start={reference.start}
+            unitsPerPixel={unitsPerPixel}
+          />
+        )
+      })}
       {draft?.start && (
         <FloorplanReferenceScaleDraftLine
           palette={palette}
@@ -7215,14 +7205,17 @@ export function FloorplanPanel({
       {
         position: nextGuidePosition,
         scale: nextGuideScale,
-        scaleReference: {
-          start: pendingReferenceScale.start,
-          end: scaledEnd,
-          realLengthMeters,
-          measuredLengthUnits: scaledMeasuredLengthUnits,
-          metersPerUnit,
-          label: formatReferenceScaleLabel(displayLength, referenceScaleUnit, locale),
-        },
+        scaleReference: createGuideScaleReference(
+          {
+            start: pendingReferenceScale.start,
+            end: scaledEnd,
+            realLengthMeters,
+            measuredLengthUnits: scaledMeasuredLengthUnits,
+            metersPerUnit,
+          },
+          displayLength,
+          referenceScaleUnit,
+        ),
       } as Partial<GuideNode>,
     )
     setGuideLocked(pendingReferenceScale.guideId, true)
