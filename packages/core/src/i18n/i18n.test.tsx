@@ -6,6 +6,7 @@ import {
   defaultI18n,
   formatLength,
   formatNumber,
+  getLocale,
   LevelNode,
   levelDisplayNumber,
   PascalI18nProvider,
@@ -134,19 +135,29 @@ describe('message registry', () => {
     expect(localeChanges).toBe(1)
   })
 
-  test('keeps a scoped locale across catalog refreshes and accepts repeated global locale intent', async () => {
+  test('keeps a request-scoped locale across compiled catalog refreshes', () => {
+    setLocale('en')
     const scope = createI18n({ locale: 'fr' })
     const release = scope.retain()
+    const localeChanges: string[] = []
     const unsubscribe = defaultI18n.subscribeLocale((locale) => scope.setLocale(locale))
+    const stopRecording = defaultI18n.subscribeLocale((locale) => localeChanges.push(locale))
 
-    await registerMessages('fr', 'viewer', { 'test.catalog-refresh': 'Actualisé' })
+    registerCompiledMessages('fr', 'viewer', {
+      'test.catalog-refresh': ['Actualisé'],
+    })
+
+    expect(defaultI18n.getLocale()).toBe('en')
     expect(scope.getLocale()).toBe('fr')
     expect(scope._({ id: 'viewer.test.catalog-refresh', message: 'Refreshed' })).toBe('Actualisé')
+    expect(localeChanges).toEqual([])
 
-    setLocale('en')
-    expect(scope.getLocale()).toBe('en')
+    setLocale('ja')
+    expect(scope.getLocale()).toBe('ja')
+    expect(localeChanges).toEqual(['ja'])
 
     unsubscribe()
+    stopRecording()
     release()
     scope.destroy()
   })
@@ -253,6 +264,7 @@ describe('locale formatting', () => {
 })
 
 test('server rendering uses the selected locale for text and numbers', async () => {
+  setLocale('en')
   await registerMessages('fr', 'viewer', { greeting: 'Bonjour' })
   const scope = createI18n({ locale: 'fr' })
 
@@ -273,6 +285,8 @@ test('server rendering uses the selected locale for text and numbers', async () 
     </PascalI18nProvider>,
   )
 
+  expect(getLocale()).toBe('en')
+  expect(formatNumber(2.75, { max: 2 })).toBe('2.75')
   expect(serverHtml).toContain('Bonjour')
   expect(serverHtml).toContain('2,75')
   expect(serverHtml).not.toContain('Hello')
