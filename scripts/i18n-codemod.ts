@@ -4,8 +4,8 @@ import { fileURLToPath } from 'node:url'
 import { parsePo } from 'pofile-ts'
 import ts from 'typescript'
 import {
+  componentOwner,
   enclosingComponent,
-  normalizeJsxText,
   parseSource,
   placeholderName,
   type SentenceChild,
@@ -36,37 +36,18 @@ type Planned = {
   manual?: string
 }
 
-const ENTITIES: Record<string, string> = {
-  amp: '&',
-  apos: "'",
-  gt: '>',
-  hellip: '…',
-  ldquo: '“',
-  lsquo: '‘',
-  lt: '<',
-  mdash: '—',
-  middot: '·',
-  nbsp: '\u00a0',
-  ndash: '–',
-  quot: '"',
-  rdquo: '”',
-  rsquo: '’',
-  times: '×',
-}
-
-export function decodeEntities(text: string): string {
-  return text.replace(/&(#x?[0-9a-f]+|[a-z]+);/gi, (match, entity: string) => {
-    if (entity.startsWith('#x') || entity.startsWith('#X')) {
-      return String.fromCodePoint(Number.parseInt(entity.slice(2), 16))
-    }
-    if (entity.startsWith('#')) return String.fromCodePoint(Number.parseInt(entity.slice(1), 10))
-    return ENTITIES[entity.toLowerCase()] ?? match
-  })
-}
-
-/** Escapes ICU syntax characters that appear in literal copy. */
+/**
+ * Encodes literal copy as an ICU MessageFormat message that renders the same
+ * text: braces (with any apostrophes next to them) are quoted, and an
+ * apostrophe is doubled only where ICU would read it as syntax.
+ */
 export function icuLiteral(text: string): string {
-  return text.replace(/[{}]/g, (brace) => `'${brace}'`)
+  return text.replace(/[{}']*[{}][{}']*|'/g, (run, offset: number) => {
+    if (run !== "'") return `'${run.replace(/'/g, "''")}'`
+    const next = text[offset + 1]
+    const special = text[offset - 1] === "'" || next === "'" || next === '#' || next === '|'
+    return special ? "''" : "'"
+  })
 }
 
 function camel(words: string[]): string {
@@ -260,14 +241,69 @@ function importEdit(source: ts.SourceFile): Edit | undefined {
  * In the Next app a module without `'use client'` may render inside a server
  * component (pages, layouts, shared shells), where hooks crash the request.
  */
-function isServerOnly(path: string, source: ts.SourceFile): boolean {
-  if (!path.startsWith('apps/editor/')) return false
-  return !source.statements.some(
+function hasUseClient(source: ts.SourceFile): boolean {
+  return source.statements.some(
     (statement) =>
       ts.isExpressionStatement(statement) &&
       ts.isStringLiteral(statement.expression) &&
       statement.expression.text === 'use client',
   )
+}
+
+function resolveModule(from: string, specifier: string): string | undefined {
+  const base = join(dirname(from), specifier)
+  for (const candidate of [
+    base,
+    `${base}.tsx`,
+    `${base}.ts`,
+    join(base, 'index.tsx'),
+    join(base, 'index.ts'),
+  ]) {
+    if (/\.tsx?$/.test(candidate) && existsSync(join(ROOT, candidate))) return candidate
+  }
+  return undefined
+}
+
+let editorEntryModules: Set<string> | undefined
+
+/**
+ * Modules a host imports straight from `@pascal-app/editor` (the package
+ * `exports` and everything the entry barrel re-exports). A host may render
+ * those from a server component, so a module without `'use client'` cannot
+ * take a hook.
+ */
+export function editorEntryModuleSet(): Set<string> {
+  if (editorEntryModules) return editorEntryModules
+  const modules = new Set<string>()
+  const manifest = JSON.parse(readFileSync(join(ROOT, 'packages/editor/package.json'), 'utf8')) as {
+    exports: Record<string, string | Record<string, string>>
+  }
+  for (const target of Object.values(manifest.exports)) {
+    if (typeof target === 'string' && /\.tsx?$/.test(target)) {
+      modules.add(join('packages/editor', target))
+    }
+  }
+  const barrel = 'packages/editor/src/index.tsx'
+  const source = parseSource(barrel, readFileSync(join(ROOT, barrel), 'utf8'))
+  for (const statement of source.statements) {
+    if (
+      ts.isExportDeclaration(statement) &&
+      statement.moduleSpecifier &&
+      ts.isStringLiteral(statement.moduleSpecifier) &&
+      statement.moduleSpecifier.text.startsWith('.')
+    ) {
+      const resolved = resolveModule(barrel, statement.moduleSpecifier.text)
+      if (resolved) modules.add(resolved)
+    }
+  }
+  editorEntryModules = modules
+  return modules
+}
+
+function isServerOnly(path: string, source: ts.SourceFile): boolean {
+  if (hasUseClient(source)) return false
+  if (path.startsWith('apps/editor/')) return true
+  return editorEntryModuleSet().has(path)
 }
 
 function spacing(normalized: string): { lead: string; trail: string } {
@@ -297,6 +333,26 @@ function declaredIn(node: ts.Node): string | undefined {
  * value's type changes to `MessageDescriptor`; the type checker then points at
  * every consumer to update.
  */
+function isDescriptorObject(node: ts.Node): boolean {
+  if (!ts.isObjectLiteralExpression(node)) return false
+  const names = new Set(
+    node.properties.flatMap((property) =>
+      ts.isPropertyAssignment(property) && ts.isIdentifier(property.name)
+        ? [property.name.text]
+        : [],
+    ),
+  )
+  return names.has('id') && names.has('message')
+}
+
+function isTranslationCall(node: ts.Node): boolean {
+  return (
+    ts.isCallExpression(node) &&
+    ts.isPropertyAccessExpression(node.expression) &&
+    node.expression.name.text === '_'
+  )
+}
+
 function descriptorEdits(
   source: ts.SourceFile,
   path: string,
@@ -307,6 +363,8 @@ function descriptorEdits(
 ): Edit[] {
   const edits: Edit[] = []
   const visit = (node: ts.Node): void => {
+    // Already translated: an existing descriptor or i18n._ call is left alone.
+    if (isDescriptorObject(node) || isTranslationCall(node)) return
     if (
       ts.isPropertyAssignment(node) &&
       (ts.isIdentifier(node.name) || ts.isStringLiteral(node.name)) &&
@@ -358,12 +416,12 @@ export function convertSource(
 
   const owner = (node: ts.Node, message: string): ts.FunctionLikeDeclaration | undefined => {
     const line = source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1
-    const component = enclosingComponent(node)
+    const { owner: component, problem } = componentOwner(node)
     const manual = serverOnly
       ? 'may render in a server component: move the copy into a client leaf or pass the request scope'
       : component
         ? undefined
-        : 'outside a component or hook: needs a lazy descriptor or an i18n parameter'
+        : `${problem}: needs a lazy descriptor, an i18n parameter or the enclosing component's hook`
     if (manual) {
       planned.push({ path, line, message, manual })
       return undefined
@@ -386,7 +444,7 @@ export function convertSource(
     source,
     {
       jsxText(node, normalized) {
-        const message = icuLiteral(decodeEntities(normalized.trim()))
+        const message = icuLiteral(normalized.trim())
         const component = owner(node, message)
         if (!component) return
         components.add(component)
@@ -406,16 +464,18 @@ export function convertSource(
           children.flatMap((child) => (child.type === 'value' ? [child] : [])),
         )
         let index = 0
-        const raw = children
+        const message = children
           .map((child) => {
-            if (child.type === 'text') return icuLiteral(decodeEntities(child.text))
+            if (child.type !== 'value') return icuLiteral(child.text)
             const name = values.placeholders[index]
             index += 1
-            return `\u0000${name}\u0001`
+            return `{${name}}`
           })
           .join('')
-        const normalized = normalizeJsxText(raw)
-        const message = normalized.trim().replaceAll('\u0000', '{').replaceAll('\u0001', '}')
+          .trim()
+        const normalized = children
+          .map((child) => (child.type === 'value' ? 'x' : child.text))
+          .join('')
         const component = owner(element, message)
         if (!component) return
         components.add(component)
@@ -440,6 +500,14 @@ export function convertSource(
           start: node.getStart(source),
           end: node.end,
           text: directAttribute ? `{${call}}` : call,
+        })
+      },
+      concatenation(node, value) {
+        planned.push({
+          path,
+          line: source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1,
+          message: value,
+          manual: 'concatenated copy: write one message with placeholders',
         })
       },
       constant(node, value) {
