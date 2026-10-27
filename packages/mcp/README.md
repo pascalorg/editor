@@ -1,6 +1,6 @@
 # @pascal-app/mcp
 
-[![smithery badge](https://smithery.ai/badge/pascalapp/editor)](https://smithery.ai/servers/pascalapp/editor)
+Also listed on [Smithery](https://smithery.ai/servers/pascalapp/editor).
 
 Model Context Protocol server for the Pascal 3D editor. Drives the
 `@pascal-app/core` scene graph from any MCP-compatible AI host.
