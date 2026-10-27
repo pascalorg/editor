@@ -831,13 +831,25 @@ export const METADATA_REFERENCES: readonly ExistingReference[] = [
     ...policy('node', 'internal', 'drop', 'strip'),
     remaps: ['clone-scene-graph', 'clone-level-subtree'],
     dependents: ['metadata.authorSceneState'],
-    note: 'The building that owns this conversion baseline; a partial copy cannot overwrite its source building.',
+    note: 'The building that owns this conversion; a partial copy cannot overwrite its source building.',
   }),
-  meta('authorSceneState.ids.*', {
+  meta('authorSceneWritten.ids[]', {
     ...policy('node', 'internal', 'drop', 'strip'),
     remaps: ['clone-scene-graph', 'clone-level-subtree'],
-    dependents: ['metadata.authorSceneState.nodes'],
-    note: 'Stable source-to-node identities and the corresponding authored baseline snapshot; whole graph clones remap the snapshot recursively.',
+    dependents: ['metadata.authorSceneWritten'],
+    note: 'On an authored level: the nodes the last conversion wrote there, so the next revision can tell a node the person deleted from one it never made.',
+  }),
+  meta('authorSceneWritten.keys.*', {
+    ...policy('node', 'internal', 'drop', 'strip'),
+    remaps: ['clone-scene-graph', 'clone-level-subtree'],
+    dependents: ['metadata.authorSceneWritten'],
+    note: 'On an authored level: stable source-to-node identities, so a revision keeps the nodes the person already edited.',
+  }),
+  meta('authorSceneBase.id', {
+    ...policy('node', 'internal', 'drop', 'strip'),
+    remaps: ['clone-scene-graph', 'clone-level-subtree'],
+    dependents: ['metadata.authorSceneBase'],
+    note: "The node as the last conversion wrote it, the base of the next revision's three-way merge; whole graph clones remap the snapshot recursively.",
   }),
   meta('managedByLeanTo', {
     ...policy('node', 'internal', 'cascade', 'strip'),

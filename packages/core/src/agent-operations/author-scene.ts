@@ -114,12 +114,63 @@ export type AuthorSceneInput = {
   prepareOnly?: boolean
 }
 
-export type AuthorSceneState = {
-  version: 1
+/**
+ * What a conversion keeps between revisions, spread over the nodes it wrote so every save fits live
+ * collaboration (one shared change is at most 64 KB; a house's whole baseline is megabytes):
+ * - on its building, `authorSceneState`: the seed its identities come from;
+ * - on each level it wrote, `authorSceneWritten`: the nodes written under it and the source key of
+ *   each keyed one, so a node the person deleted stays deleted;
+ * - on each node it wrote, `authorSceneBase`: the node as written, the baseline a revision merges
+ *   the person's edits against.
+ */
+export type AuthorSceneState = { version: 2; buildingId: string; seed: string }
+type AuthorSceneWritten = { ids: string[]; keys: Record<string, string> }
+
+/** A conversion as computed, before it is spread over the scene (`finalizeAuthorScene`). */
+export type AuthorSceneCandidate = {
   buildingId: string
   seed: string
   ids: Record<string, string>
   nodes: Record<string, AnyNode>
+}
+
+const BOOKKEEPING = ['authorSceneBase', 'authorSceneWritten'] as const
+
+/** A value as live collaboration and storage keep it: no undefined, no non-finite number. */
+const plain = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T
+
+/** A node without the conversion's bookkeeping: what a person edits and a revision merges. */
+function withoutBookkeeping(node: AnyNode): AnyNode {
+  const metadata = node.metadata as Record<string, unknown> | undefined
+  if (!(metadata && BOOKKEEPING.some((key) => key in metadata))) return node
+  const kept = { ...metadata }
+  for (const key of BOOKKEEPING) delete kept[key]
+  return { ...node, metadata: kept } as AnyNode
+}
+
+/** A node the person deleted since the last conversion: present in the baseline, never read. */
+const DELETED = { type: 'deleted' } as unknown as AnyNode
+
+/**
+ * The last conversion of `building`, read back from its levels and nodes: its seed, its source-key
+ * identities, and the baseline of every node it wrote (a deleted one marked so).
+ */
+function authoredBaseline(scene: SceneNodes, building: AnyNode) {
+  const state = building.metadata?.authorSceneState as AuthorSceneState | undefined
+  if (!(state?.version === 2 && state.buildingId === building.id && typeof state.seed === 'string'))
+    return undefined
+  const ids: Record<string, string> = {}
+  const nodes: Record<string, AnyNode> = {}
+  for (const level of queryNodes(scene, { type: 'level', parentId: building.id })) {
+    const written = level.metadata?.authorSceneWritten as AuthorSceneWritten | undefined
+    if (!written) continue
+    Object.assign(ids, written.keys)
+    for (const id of written.ids) {
+      const node = scene[id as keyof typeof scene] as AnyNode | undefined
+      nodes[id] = (node?.metadata?.authorSceneBase as AnyNode | undefined) ?? DELETED
+    }
+  }
+  return { seed: state.seed, ids, nodes }
 }
 
 export type AuthorSceneDefect = { id: string; code: string; message: string }
@@ -655,7 +706,7 @@ export function authorScene(
   context: AgentContext,
 ): AgentOperationOutcome & {
   result: AuthorSceneReport
-  candidate: AuthorSceneState
+  candidate: AuthorSceneCandidate
   buildingId: string
 } {
   const { payload } = input
@@ -703,15 +754,7 @@ export function authorScene(
   const existingLevels = Object.values(scene).filter(
     (n) => n.type === 'level' && n.parentId === building.id,
   )
-  const saved = building.metadata?.authorSceneState as AuthorSceneState | undefined
-  const previous =
-    saved?.version === 1 &&
-    saved.buildingId === building.id &&
-    saved.nodes &&
-    saved.ids &&
-    typeof saved.seed === 'string'
-      ? saved
-      : undefined
+  const previous = authoredBaseline(scene, building)
   const converted = Boolean(previous) || existingLevels.some((l) => l.metadata?.authorScene)
   if (converted && !input.replace)
     refuse(
@@ -2183,14 +2226,10 @@ export function authorScene(
     if (created) written[levelId] = { ...written[levelId], height: Math.max(rises, 0.2) } as AnyNode
   }
 
-  const nodes = Object.fromEntries(Object.entries(written).filter(([id]) => !scaffoldIds.has(id)))
-  const candidate: AuthorSceneState = {
-    version: 1,
-    buildingId: building.id,
-    seed,
-    ids: report.ids,
-    nodes,
-  }
+  const nodes = plain(
+    Object.fromEntries(Object.entries(written).filter(([id]) => !scaffoldIds.has(id))),
+  )
+  const candidate: AuthorSceneCandidate = { buildingId: building.id, seed, ids: report.ids, nodes }
   const outcome = {
     result: report,
     candidate,
@@ -2205,33 +2244,95 @@ export function finalizeAuthorScene(
   scene: SceneNodes,
   outcome: AgentOperationOutcome & {
     result: AuthorSceneReport
-    candidate: AuthorSceneState
+    candidate: AuthorSceneCandidate
     buildingId: string
   },
 ) {
   const building = scene[outcome.buildingId]
   if (building?.type !== 'building') refuse('no_building', 'The target building no longer exists.')
-  const previous = building.metadata?.authorSceneState as AuthorSceneState | undefined
+  const { candidate } = outcome
+  const current = Object.fromEntries(
+    Object.entries(scene).map(([id, node]) => [id, withoutBookkeeping(node as AnyNode)]),
+  ) as SceneNodes
   const base =
-    previous?.nodes ??
+    authoredBaseline(scene, building)?.nodes ??
     Object.fromEntries(
-      Object.values(scene)
-        .filter((node) => node.type === 'level' && node.parentId === building.id)
-        .map((node) => [node.id, node]),
+      queryNodes(current, { type: 'level', parentId: building.id }).map((node) => [node.id, node]),
     )
-  const changes = authoredSceneChanges(scene, base, outcome.candidate.nodes)
+  const changes = authoredSceneChanges(current, base, candidate.nodes)
+
+  // Each written node keeps its own baseline, and each written level the list of what it holds.
+  const levelOf = (id: string): string | undefined => {
+    let node = candidate.nodes[id]
+    while (node && node.type !== 'level')
+      node = node.parentId ? candidate.nodes[node.parentId] : undefined
+    return node?.id
+  }
+  const keyOf = new Map(Object.entries(candidate.ids).map(([key, id]) => [id, key]))
+  const writtenOn = new Map<string, AuthorSceneWritten>()
+  for (const id of Object.keys(candidate.nodes)) {
+    const level = levelOf(id)
+    if (!level) continue
+    const written = writtenOn.get(level) ?? { ids: [], keys: {} }
+    written.ids.push(id)
+    const key = keyOf.get(id)
+    if (key) written.keys[key] = id
+    writtenOn.set(level, written)
+  }
+  const bookkeeping = (id: string): Record<string, unknown> => ({
+    authorSceneBase: withoutBookkeeping(candidate.nodes[id]!),
+    ...(writtenOn.has(id) ? { authorSceneWritten: writtenOn.get(id) } : {}),
+  })
+  const create = (changes.create ?? []).map((entry) =>
+    candidate.nodes[entry.node.id]
+      ? {
+          ...entry,
+          node: {
+            ...entry.node,
+            metadata: { ...entry.node.metadata, ...bookkeeping(entry.node.id) },
+          } as AnyNode,
+        }
+      : entry,
+  )
+  const created = new Set<string>(create.map((entry) => entry.node.id))
+  const removed = new Set(changes.delete ?? [])
+  const updated = new Map((changes.update ?? []).map((entry) => [entry.id, entry]))
+  for (const id of Object.keys(candidate.nodes)) {
+    const now = scene[id as keyof typeof scene] as AnyNode | undefined
+    if (created.has(id) || removed.has(id) || !now) continue
+    const kept = { ...bookkeeping(id) }
+    const stored = Object.fromEntries(
+      BOOKKEEPING.flatMap((key) =>
+        now.metadata && key in now.metadata ? [[key, now.metadata[key]]] : [],
+      ),
+    )
+    const entry = updated.get(id)
+    if (!entry && equalJson(stored, kept)) continue
+    const metadata = (entry?.data.metadata ??
+      current[id as keyof typeof current]?.metadata ??
+      {}) as Record<string, unknown>
+    updated.set(id, {
+      id,
+      data: { ...entry?.data, metadata: { ...metadata, ...kept } } as Partial<AnyNode>,
+    })
+  }
+  const state: AuthorSceneState = { version: 2, buildingId: building.id, seed: candidate.seed }
+  updated.set(building.id, {
+    id: building.id,
+    data: {
+      ...updated.get(building.id)?.data,
+      metadata: { ...withoutBookkeeping(building).metadata, authorSceneState: state },
+    } as Partial<AnyNode>,
+  })
   return {
     ...outcome,
     changes: {
       ...changes,
+      create,
       ...(outcome.changes?.materials ? { materials: outcome.changes.materials } : {}),
-      update: [
-        ...(changes.update ?? []),
-        {
-          id: building.id,
-          data: { metadata: { ...building.metadata, authorSceneState: outcome.candidate } },
-        },
-      ],
+      update: [...updated.values()],
     },
   }
 }
+
+const equalJson = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
