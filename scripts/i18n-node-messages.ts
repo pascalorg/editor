@@ -1,4 +1,12 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  writeFileSync,
+} from 'node:fs'
+import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { MessageDescriptor } from '@lingui/core'
@@ -37,10 +45,39 @@ type Definition = {
   affordanceHints?: Record<string, Hint[]>
 }
 
-export async function definitionDescriptors(): Promise<MessageDescriptor[]> {
-  const { builtinPlugin } = (await import('../packages/nodes/src/index')) as {
-    builtinPlugin: { nodes: Definition[] }
+type Manifest = {
+  name?: string
+  exports?: Record<string, string | { import?: string; default?: string }>
+}
+
+/**
+ * A tsconfig whose `paths` send every `@pascal-app/<pkg>[/<subpath>]` export to
+ * its TypeScript source instead of `dist/`, so the definitions load before any
+ * build: i18n:check runs ahead of the build in CI.
+ */
+function workspaceSourcesTsconfig(): string {
+  const paths: Record<string, string[]> = {}
+  for (const pkg of readdirSync(join(ROOT, 'packages'))) {
+    const manifestPath = join(ROOT, 'packages', pkg, 'package.json')
+    if (!existsSync(manifestPath)) continue
+    const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as Manifest
+    if (!manifest.name?.startsWith('@pascal-app/')) continue
+    for (const [subpath, target] of Object.entries(manifest.exports ?? {})) {
+      const file = typeof target === 'string' ? target : (target?.import ?? target?.default)
+      if (!file) continue
+      const source = file.replace(/^\.\/dist\//, './src/').replace(/\.js$/, '')
+      const resolved = [source, `${source}.ts`, `${source}.tsx`, `${source}/index.ts`]
+        .map((candidate) => join('packages', pkg, candidate))
+        .find((candidate) => /\.tsx?$/.test(candidate) && existsSync(join(ROOT, candidate)))
+      if (resolved) paths[`${manifest.name}${subpath.slice(1)}`] = [resolved]
+    }
   }
+  const path = join(mkdtempSync(join(tmpdir(), 'pascal-i18n-')), 'tsconfig.json')
+  writeFileSync(path, JSON.stringify({ compilerOptions: { baseUrl: ROOT, paths } }))
+  return path
+}
+
+function descriptorsOf(definitions: Definition[]): MessageDescriptor[] {
   const byId = new Map<string, MessageDescriptor>()
   const add = (descriptor: MessageDescriptor | undefined) => {
     if (!(descriptor?.message && /\p{L}{2}/u.test(descriptor.message))) return
@@ -61,7 +98,7 @@ export async function definitionDescriptors(): Promise<MessageDescriptor[]> {
     }
     if (hint.chip?.tooltip) add(toolHintDescriptor(hint.chip.tooltip))
   }
-  for (const definition of builtinPlugin.nodes) {
+  for (const definition of definitions) {
     const kind = definition.kind ?? definition.type
     if (!kind) continue
     const { label, description } = definition.presentation ?? {}
@@ -74,6 +111,23 @@ export async function definitionDescriptors(): Promise<MessageDescriptor[]> {
   }
   for (const key of HINT_KEY_NAMES) add(toolHintKeyDescriptor(key))
   return [...byId.values()].sort((a, b) => a.id.localeCompare(b.id))
+}
+
+/** Loads the built-in definitions from source in a child process and returns their descriptors. */
+export async function definitionDescriptors(): Promise<MessageDescriptor[]> {
+  const result = Bun.spawnSync(
+    [
+      process.execPath,
+      `--tsconfig-override=${workspaceSourcesTsconfig()}`,
+      fileURLToPath(import.meta.url),
+      '--emit-json',
+    ],
+    { cwd: ROOT, stdout: 'pipe', stderr: 'pipe' },
+  )
+  if (result.exitCode !== 0) {
+    throw new Error(`Could not load the node definitions:\n${result.stderr.toString()}`)
+  }
+  return JSON.parse(result.stdout.toString()) as MessageDescriptor[]
 }
 
 export function renderDefinitionMessages(descriptors: MessageDescriptor[]): string {
@@ -108,4 +162,11 @@ export async function checkDefinitionMessages(): Promise<string[]> {
     : [
         'packages/nodes/src/i18n/definition-messages.ts is not synchronized; run bun run i18n:extract',
       ]
+}
+
+if (import.meta.main && process.argv.includes('--emit-json')) {
+  const { builtinPlugin } = (await import('../packages/nodes/src/index')) as {
+    builtinPlugin: { nodes: Definition[] }
+  }
+  process.stdout.write(JSON.stringify(descriptorsOf(builtinPlugin.nodes)))
 }
