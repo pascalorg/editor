@@ -442,6 +442,18 @@ test('AI drafts pass ordinary checks but block the reviewed release gate', () =>
   )
 })
 
+test('after a wording change, extract leaves a passing draft and a reviewed stale entry fails', () => {
+  const reworded = { ...advanced, message: 'Advanced tools' }
+  const staleDraft = everyLocale(entry({ review: 'required', fuzzy: true }))
+  expect(checkTranslationEntries([reworded], staleDraft, {}, {})).toEqual([])
+  expect(checkTranslationEntries([reworded], staleDraft, {}, { requireReviewed: true })).toContain(
+    'fr: stale "editor.buildPanel.advanced"',
+  )
+  expect(checkTranslationEntries([reworded], everyLocale(entry({})), {}, {})).toContain(
+    'fr: stale "editor.buildPanel.advanced"',
+  )
+})
+
 test('a reviewed translation cannot fall back to draft while its English is unchanged', () => {
   const base = everyLocale(entry({}))
   expect(
