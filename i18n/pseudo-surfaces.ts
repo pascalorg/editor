@@ -292,7 +292,7 @@ export const surfaces: PseudoSurface[] = [
   {
     name: 'roof-panel',
     path: furnishedPath,
-    steps: (page) => openLayer(page, /^\[?(Roof|Ŕööƒ) \(1 /),
+    steps: (page) => openLayer(page, /^(Roof \(1 segment\)|\[Ŕööƒ \(1 šéĝɱéñţ\) ~+\])$/),
     scope: '[data-editor-inspector]',
     data: furnishedData,
   },
@@ -306,7 +306,7 @@ export const surfaces: PseudoSurface[] = [
   {
     name: 'stair-panel',
     path: furnishedPath,
-    steps: (page) => openLayer(page, /^\[?(Staircase|Šţáîŕçášé) \(1 /),
+    steps: (page) => openLayer(page, /^(Staircase \(1 segment\)|\[Šţáîŕçášé \(1 šéĝɱéñţ\) ~+\])$/),
     scope: '[data-editor-inspector]',
     data: furnishedData,
   },
