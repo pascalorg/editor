@@ -56,7 +56,11 @@ import {
 import { pickedRoomName, type RoomNameOption, roomNameOptions } from './room-name-options'
 import { localizedLevelName } from '../../../i18n/level-name'
 import { messageWithSlot } from '../../../i18n/message-slot'
-import { displayRoomName, localizedRoomNameSections } from '../../../lib/room-name-messages'
+import {
+  displayRoomName,
+  localizedRoomNameSections,
+  storedRoomName,
+} from '../../../lib/room-name-messages'
 
 /** "Room · Ground floor", "Mezzanine · in Kitchen", "Room · not enclosed". */
 export function roomKicker(
@@ -619,12 +623,14 @@ function RoomName({
     const next = valueRef.current
     if (next === committedRef.current) return
     committedRef.current = next
-    renameRoom(zoneId, next)
+    // The field shows catalog names translated: store the English one, as a pick does.
+    const stored = storedRoomName(next, i18n)
+    if (stored !== name) renameRoom(zoneId, stored)
   }
   const pick = (option: RoomNameOption) => {
     // A suggestion stores the English catalog name, numbered against the level's rooms,
     // whatever the UI language; typed text is stored as written.
-    const stored = pickedRoomName(nodes, zoneId, option)
+    const stored = pickedRoomName(nodes, zoneId, option, i18n)
     const shown = displayRoomName(stored, i18n)
     type(shown)
     committedRef.current = shown
@@ -748,9 +754,8 @@ function RoomName({
               type(event.target.value)
               setTyping(true)
               setOpen(true)
-              const next = roomNameOptions(event.target.value, sections, true)
               scrollToActive.current = true
-              setActive(next.typed && next.options.length > 1 ? 1 : 0)
+              setActive(roomNameOptions(event.target.value, sections, true).active)
             }}
             onFocus={() => {
               originalRef.current = valueRef.current

@@ -91,7 +91,9 @@ export function localizedRoomNameSections(
   i18n: DescriptorTranslator,
 ): RoomNameSection[] {
   return sections.map((section) => {
-    const title = ROOM_NAME_SECTION_TITLES[section.id]
+    const title = Object.hasOwn(ROOM_NAME_SECTION_TITLES, section.id)
+      ? ROOM_NAME_SECTION_TITLES[section.id]
+      : undefined
     return {
       ...section,
       title: title ? i18n._(title) : section.title,
@@ -108,6 +110,24 @@ export function localizedRoomNameSections(
  */
 export function displayRoomName(name: string, i18n: DescriptorTranslator): string {
   const match = /^(.*?)(\s+\d+)?$/.exec(name.trim())
-  const message = match?.[1] ? ROOM_NAME_MESSAGES[match[1]] : undefined
-  return message ? `${i18n._(message)}${match?.[2] ?? ''}` : name
+  const base = match?.[1]
+  // Own keys only: a room named "constructor" or "__proto__" is free text.
+  if (!(base && Object.hasOwn(ROOM_NAME_MESSAGES, base))) return name
+  return `${i18n._(ROOM_NAME_MESSAGES[base]!)}${match?.[2] ?? ''}`
+}
+
+/**
+ * What an edited name field stores. The field shows catalog names translated;
+ * text that is exactly a catalog name as displayed, optionally followed by a
+ * number ("Chambre 3"), stores that English name with the number ("Bedroom 3").
+ * Any other text is stored as typed.
+ */
+export function storedRoomName(text: string, i18n: DescriptorTranslator): string {
+  const match = /^(.*?)(\s+\d+)?$/.exec(text)
+  const base = match?.[1]
+  if (!base) return text
+  for (const english of Object.keys(ROOM_NAME_MESSAGES)) {
+    if (i18n._(ROOM_NAME_MESSAGES[english]!) === base) return `${english}${match?.[2] ?? ''}`
+  }
+  return text
 }
