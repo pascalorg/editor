@@ -12,6 +12,10 @@ import { fileURLToPath } from 'node:url'
 import type { MessageDescriptor } from '@lingui/core'
 import {
   HINT_KEY_NAMES,
+  inspectorActionDescriptor,
+  inspectorFieldDescriptor,
+  inspectorGroupDescriptor,
+  inspectorOptionDescriptor,
   nodeDescriptionDescriptor,
   nodeLabelDescriptor,
   toolHintChipDescriptor,
@@ -46,6 +50,10 @@ type Definition = {
   presentation?: { label?: string; description?: string }
   toolHints?: Hint[]
   affordanceHints?: Record<string, Hint[]>
+  parametrics?: {
+    groups?: { label?: string; fields?: { key?: string; kind?: string; options?: string[] }[] }[]
+    actions?: { label?: string }[]
+  }
 }
 
 type Manifest = {
@@ -110,6 +118,17 @@ function descriptorsOf(definitions: Definition[]): MessageDescriptor[] {
     for (const hint of definition.toolHints ?? []) addHint(hint)
     for (const hints of Object.values(definition.affordanceHints ?? {})) {
       for (const hint of hints) addHint(hint)
+    }
+    for (const group of definition.parametrics?.groups ?? []) {
+      if (group.label) add(inspectorGroupDescriptor(group.label))
+      for (const field of group.fields ?? []) {
+        if (field.kind === 'custom' || !field.key) continue
+        add(inspectorFieldDescriptor(field.key))
+        for (const option of field.options ?? []) add(inspectorOptionDescriptor(option))
+      }
+    }
+    for (const action of definition.parametrics?.actions ?? []) {
+      if (action.label) add(inspectorActionDescriptor(action.label))
     }
   }
   for (const key of HINT_KEY_NAMES) add(toolHintKeyDescriptor(key))

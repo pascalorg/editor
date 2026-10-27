@@ -1,4 +1,5 @@
 import type { MessageDescriptor, PascalI18n } from '@pascal-app/core'
+import { prettifyEnumValue, prettifyKey } from '../components/ui/panels/parametric-field-utils'
 
 /**
  * Display copy that node definitions carry (presentation labels, tool hints)
@@ -118,6 +119,35 @@ export function toolHintKeyDescriptor(key: string): MessageDescriptor | undefine
   }
   const message = literal(key)
   return { id: `editor.toolHint.key.${messageSlug(key)}.${messageHash(message)}`, message }
+}
+
+/**
+ * Auto-inspector copy (`def.parametrics`): group and action labels, and the
+ * field names and enum options it prettifies from keys. Shared across kinds,
+ * so "Dimensions" or "Height" is translated once.
+ */
+function inspectorMessage(scope: 'action' | 'field' | 'group' | 'option', english: string) {
+  const message = literal(english)
+  return {
+    id: `editor.inspector.${scope}.${messageSlug(english)}.${messageHash(message)}`,
+    message,
+  }
+}
+
+export function inspectorGroupDescriptor(label: string): MessageDescriptor {
+  return inspectorMessage('group', label)
+}
+
+export function inspectorActionDescriptor(label: string): MessageDescriptor {
+  return inspectorMessage('action', label)
+}
+
+export function inspectorFieldDescriptor(key: string): MessageDescriptor {
+  return inspectorMessage('field', prettifyKey(key))
+}
+
+export function inspectorOptionDescriptor(value: string): MessageDescriptor {
+  return inspectorMessage('option', prettifyEnumValue(value))
 }
 
 export function nodeLabel(kind: string, english: string, i18n: PascalI18n): string {
