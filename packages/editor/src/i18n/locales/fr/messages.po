@@ -11840,16 +11840,6 @@ msgstr "Trémie d’ascenseur"
 msgid "editor.panels.roomOpeningsField.noOpeningsYetCutOneFor"
 msgstr "Aucune ouverture pour l’instant. Découpez-en une pour une trémie d’escalier ou une trappe."
 
-# Source-Hash: f69c382f3e5d3cef
-# Review: required
-# AI-Provider: cursor-agent
-# AI-Model: claude-opus
-# English: "{count, plural, =0 {No openings} one {# opening} other {# openings}}"
-#: packages/editor/src/components/ui/panels/room-openings-field.tsx
-#, fuzzy
-msgid "editor.panels.roomOpeningsField.openingCount"
-msgstr "{count, plural, =0 {Aucune ouverture} one {# ouverture} many {# ouvertures} other {# ouvertures}}"
-
 # Source-Hash: 60fac94ffa614238
 # Review: required
 # AI-Provider: cursor-agent
@@ -11859,6 +11849,16 @@ msgstr "{count, plural, =0 {Aucune ouverture} one {# ouverture} many {# ouvertur
 #, fuzzy
 msgid "editor.panels.roomOpeningsField.openingNumber"
 msgstr "Ouverture {number}"
+
+# Source-Hash: 7aafbf90d659dcf6
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "{count, plural, =0 {No openings} one {{number} opening} other {{number} openings}}"
+#: packages/editor/src/components/ui/panels/room-openings-field.tsx
+#, fuzzy
+msgid "editor.panels.roomOpeningsField.openings"
+msgstr "{count, plural, =0 {Aucune ouverture} one {{number} ouverture} many {{number} ouvertures} other {{number} ouvertures}}"
 
 # Source-Hash: c1a1794d31990f5a
 # Review: required
@@ -12447,6 +12447,7 @@ msgstr "{current} · au niveau de {shared}"
 # AI-Model: claude-opus
 # English: "Room"
 #: packages/editor/src/components/editor/room-labels.tsx
+#: packages/editor/src/lib/viewer-selection.ts
 #, fuzzy
 msgid "editor.roomLabel.room"
 msgstr "Pièce"
@@ -12457,6 +12458,7 @@ msgstr "Pièce"
 # AI-Model: claude-opus
 # English: "Zone"
 #: packages/editor/src/components/editor/room-labels.tsx
+#: packages/editor/src/lib/viewer-selection.ts
 #, fuzzy
 msgid "editor.roomLabel.zone"
 msgstr "Zone"
@@ -23294,15 +23296,15 @@ msgstr "Jeu de vitrage"
 msgid "node.wall.curtainWallPanel.gridLimitedTo32PanelsPer"
 msgstr "Trame limitée à 32 panneaux par axe. L’espacement s’élargit pour ce mur."
 
-# Source-Hash: f07d8e0e4d35ea4e
+# Source-Hash: 1c63255b675bbcd8
 # Review: required
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
-# English: "{length, plural, one {# custom panel is outside this grid. It returns if the grid expands.} other {# custom panels are outside this grid. They return if the grid expands.}}"
+# English: "{length, plural, one {{number} custom panel is outside this grid. It returns if the grid expands.} other {{number} custom panels are outside this grid. They return if the grid expands.}}"
 #: packages/nodes/src/wall/curtain-wall-panel.tsx
 #, fuzzy
-msgid "node.wall.curtainWallPanel.hiddenCustomPanels"
-msgstr "{length, plural, one {# panneau personnalisé est hors de cette trame. Il revient si la trame s’agrandit.} many {# panneaux personnalisés sont hors de cette trame. Ils reviennent si la trame s’agrandit.} other {# panneaux personnalisés sont hors de cette trame. Ils reviennent si la trame s’agrandit.}}"
+msgid "node.wall.curtainWallPanel.hiddenCustomPanelCount"
+msgstr "{length, plural, one {{number} panneau personnalisé est hors de cette grille. Il réapparaît si la grille s’agrandit.} many {{number} panneaux personnalisés sont hors de cette grille. Ils réapparaissent si la grille s’agrandit.} other {{number} panneaux personnalisés sont hors de cette grille. Ils réapparaissent si la grille s’agrandit.}}"
 
 # Source-Hash: 84af317e818c10cf
 # Review: required

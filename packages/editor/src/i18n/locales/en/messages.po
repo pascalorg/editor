@@ -4767,12 +4767,12 @@ msgid "editor.panels.roomOpeningsField.noOpeningsYetCutOneFor"
 msgstr "No openings yet. Cut one for a stair void or a hatch."
 
 #: packages/editor/src/components/ui/panels/room-openings-field.tsx
-msgid "editor.panels.roomOpeningsField.openingCount"
-msgstr "{count, plural, =0 {No openings} one {# opening} other {# openings}}"
-
-#: packages/editor/src/components/ui/panels/room-openings-field.tsx
 msgid "editor.panels.roomOpeningsField.openingNumber"
 msgstr "Opening {number}"
+
+#: packages/editor/src/components/ui/panels/room-openings-field.tsx
+msgid "editor.panels.roomOpeningsField.openings"
+msgstr "{count, plural, =0 {No openings} one {{number} opening} other {{number} openings}}"
 
 #: packages/editor/src/components/ui/panels/room-openings-field.tsx
 msgid "editor.panels.roomOpeningsField.stairOpening"
@@ -5008,10 +5008,12 @@ msgid "editor.room.builtOn.levelWith"
 msgstr "{current} · level with {shared}"
 
 #: packages/editor/src/components/editor/room-labels.tsx
+#: packages/editor/src/lib/viewer-selection.ts
 msgid "editor.roomLabel.room"
 msgstr "Room"
 
 #: packages/editor/src/components/editor/room-labels.tsx
+#: packages/editor/src/lib/viewer-selection.ts
 msgid "editor.roomLabel.zone"
 msgstr "Zone"
 
@@ -9357,8 +9359,8 @@ msgid "node.wall.curtainWallPanel.gridLimitedTo32PanelsPer"
 msgstr "Grid limited to 32 panels per axis. Spacing expands to fit this wall."
 
 #: packages/nodes/src/wall/curtain-wall-panel.tsx
-msgid "node.wall.curtainWallPanel.hiddenCustomPanels"
-msgstr "{length, plural, one {# custom panel is outside this grid. It returns if the grid expands.} other {# custom panels are outside this grid. They return if the grid expands.}}"
+msgid "node.wall.curtainWallPanel.hiddenCustomPanelCount"
+msgstr "{length, plural, one {{number} custom panel is outside this grid. It returns if the grid expands.} other {{number} custom panels are outside this grid. They return if the grid expands.}}"
 
 #: packages/nodes/src/wall/curtain-wall-panel.tsx
 msgid "node.wall.curtainWallPanel.horizontalCaps"

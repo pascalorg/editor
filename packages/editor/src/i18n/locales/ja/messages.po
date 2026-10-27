@@ -11840,16 +11840,6 @@ msgstr "エレベーター開口"
 msgid "editor.panels.roomOpeningsField.noOpeningsYetCutOneFor"
 msgstr "開口はまだありません。階段の吹き抜けやハッチ用に切り抜いてください。"
 
-# Source-Hash: f69c382f3e5d3cef
-# Review: required
-# AI-Provider: cursor-agent
-# AI-Model: claude-opus
-# English: "{count, plural, =0 {No openings} one {# opening} other {# openings}}"
-#: packages/editor/src/components/ui/panels/room-openings-field.tsx
-#, fuzzy
-msgid "editor.panels.roomOpeningsField.openingCount"
-msgstr "{count, plural, =0 {開口なし} other {# 個の開口}}"
-
 # Source-Hash: 60fac94ffa614238
 # Review: required
 # AI-Provider: cursor-agent
@@ -11859,6 +11849,16 @@ msgstr "{count, plural, =0 {開口なし} other {# 個の開口}}"
 #, fuzzy
 msgid "editor.panels.roomOpeningsField.openingNumber"
 msgstr "開口 {number}"
+
+# Source-Hash: 7aafbf90d659dcf6
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "{count, plural, =0 {No openings} one {{number} opening} other {{number} openings}}"
+#: packages/editor/src/components/ui/panels/room-openings-field.tsx
+#, fuzzy
+msgid "editor.panels.roomOpeningsField.openings"
+msgstr "{count, plural, =0 {開口なし} other {開口 {number} 個}}"
 
 # Source-Hash: c1a1794d31990f5a
 # Review: required
@@ -12447,6 +12447,7 @@ msgstr "{current} · {shared}と同じ高さ"
 # AI-Model: claude-opus
 # English: "Room"
 #: packages/editor/src/components/editor/room-labels.tsx
+#: packages/editor/src/lib/viewer-selection.ts
 #, fuzzy
 msgid "editor.roomLabel.room"
 msgstr "部屋"
@@ -12457,6 +12458,7 @@ msgstr "部屋"
 # AI-Model: claude-opus
 # English: "Zone"
 #: packages/editor/src/components/editor/room-labels.tsx
+#: packages/editor/src/lib/viewer-selection.ts
 #, fuzzy
 msgid "editor.roomLabel.zone"
 msgstr "ゾーン"
@@ -23294,15 +23296,15 @@ msgstr "ガラスの隙間"
 msgid "node.wall.curtainWallPanel.gridLimitedTo32PanelsPer"
 msgstr "グリッドは各軸 32 パネルまでです。この壁に合わせて間隔が広がります。"
 
-# Source-Hash: f07d8e0e4d35ea4e
+# Source-Hash: 1c63255b675bbcd8
 # Review: required
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
-# English: "{length, plural, one {# custom panel is outside this grid. It returns if the grid expands.} other {# custom panels are outside this grid. They return if the grid expands.}}"
+# English: "{length, plural, one {{number} custom panel is outside this grid. It returns if the grid expands.} other {{number} custom panels are outside this grid. They return if the grid expands.}}"
 #: packages/nodes/src/wall/curtain-wall-panel.tsx
 #, fuzzy
-msgid "node.wall.curtainWallPanel.hiddenCustomPanels"
-msgstr "{length, plural, other {# 個のカスタムパネルがこのグリッドの外にあります。グリッドを広げると戻ります。}}"
+msgid "node.wall.curtainWallPanel.hiddenCustomPanelCount"
+msgstr "{length, plural, other {{number} 個のカスタムパネルがこのグリッドの外にあります。グリッドを広げると戻ります。}}"
 
 # Source-Hash: 84af317e818c10cf
 # Review: required
