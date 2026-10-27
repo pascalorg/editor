@@ -1,16 +1,16 @@
 import { registerBundledLocales } from '@pascal-app/editor/locales'
-import { registerPseudoLocale } from '@pascal-app/editor/locales/pseudo'
 import { Agentation } from 'agentation'
 import { GeistPixelSquare } from 'geist/font/pixel'
 import { Barlow } from 'next/font/google'
 import localFont from 'next/font/local'
 import { headers } from 'next/headers'
+import { registerDevLocales } from '@/lib/dev-locales'
 import { PASCAL_LOCALE_HEADER, resolveUiLocale } from '@/lib/ui-locale'
 import { ClientBootstrap } from './client-bootstrap'
 import './globals.css'
 
 registerBundledLocales()
-if (process.env.NODE_ENV !== 'production') registerPseudoLocale()
+registerDevLocales()
 
 const geistSans = localFont({
   src: './fonts/GeistVF.woff',
