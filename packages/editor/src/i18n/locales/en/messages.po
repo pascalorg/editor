@@ -7547,6 +7547,42 @@ msgid "node.fenceFeature.inspector.openRails"
 msgstr "Open rails"
 
 #: packages/nodes/src/fence-feature/inspector.tsx
+msgid "node.fenceFeature.inspector.option.cross"
+msgstr "Cross"
+
+#: packages/nodes/src/fence-feature/inspector.tsx
+msgid "node.fenceFeature.inspector.option.diagonal"
+msgstr "Diagonal"
+
+#: packages/nodes/src/fence-feature/inspector.tsx
+msgid "node.fenceFeature.inspector.option.doubleGate"
+msgstr "Double gate"
+
+#: packages/nodes/src/fence-feature/inspector.tsx
+msgid "node.fenceFeature.inspector.option.inward"
+msgstr "Inward"
+
+#: packages/nodes/src/fence-feature/inspector.tsx
+msgid "node.fenceFeature.inspector.option.left"
+msgstr "Left"
+
+#: packages/nodes/src/fence-feature/inspector.tsx
+msgid "node.fenceFeature.inspector.option.none"
+msgstr "None"
+
+#: packages/nodes/src/fence-feature/inspector.tsx
+msgid "node.fenceFeature.inspector.option.outward"
+msgstr "Outward"
+
+#: packages/nodes/src/fence-feature/inspector.tsx
+msgid "node.fenceFeature.inspector.option.right"
+msgstr "Right"
+
+#: packages/nodes/src/fence-feature/inspector.tsx
+msgid "node.fenceFeature.inspector.option.singleGate"
+msgstr "Single gate"
+
+#: packages/nodes/src/fence-feature/inspector.tsx
 msgid "node.fenceFeature.inspector.picket"
 msgstr "Picket"
 

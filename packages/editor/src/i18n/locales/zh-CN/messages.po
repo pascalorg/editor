@@ -18779,6 +18779,96 @@ msgid "node.fenceFeature.inspector.openRails"
 msgstr "开放栏杆"
 
 # Review: required
+# Source-Hash: d500c4b7827d3390
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Cross"
+#: packages/nodes/src/fence-feature/inspector.tsx
+#, fuzzy
+msgid "node.fenceFeature.inspector.option.cross"
+msgstr "十字"
+
+# Review: required
+# Source-Hash: 7420c0d2caee1c22
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Diagonal"
+#: packages/nodes/src/fence-feature/inspector.tsx
+#, fuzzy
+msgid "node.fenceFeature.inspector.option.diagonal"
+msgstr "斜撑"
+
+# Review: required
+# Source-Hash: 7308869944020839
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Double gate"
+#: packages/nodes/src/fence-feature/inspector.tsx
+#, fuzzy
+msgid "node.fenceFeature.inspector.option.doubleGate"
+msgstr "双开大门"
+
+# Review: required
+# Source-Hash: 1f4ad5ad3e1be222
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Inward"
+#: packages/nodes/src/fence-feature/inspector.tsx
+#, fuzzy
+msgid "node.fenceFeature.inspector.option.inward"
+msgstr "向内"
+
+# Review: required
+# Source-Hash: f365c6b6dd9ebab9
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Left"
+#: packages/nodes/src/fence-feature/inspector.tsx
+#, fuzzy
+msgid "node.fenceFeature.inspector.option.left"
+msgstr "左"
+
+# Review: required
+# Source-Hash: f2953d2931e36d0c
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "None"
+#: packages/nodes/src/fence-feature/inspector.tsx
+#, fuzzy
+msgid "node.fenceFeature.inspector.option.none"
+msgstr "无"
+
+# Review: required
+# Source-Hash: ccd8f06b8f8d27c9
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Outward"
+#: packages/nodes/src/fence-feature/inspector.tsx
+#, fuzzy
+msgid "node.fenceFeature.inspector.option.outward"
+msgstr "向外"
+
+# Review: required
+# Source-Hash: b34d5ee0f218221d
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Right"
+#: packages/nodes/src/fence-feature/inspector.tsx
+#, fuzzy
+msgid "node.fenceFeature.inspector.option.right"
+msgstr "右"
+
+# Review: required
+# Source-Hash: d327097d9ac1099f
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Single gate"
+#: packages/nodes/src/fence-feature/inspector.tsx
+#, fuzzy
+msgid "node.fenceFeature.inspector.option.singleGate"
+msgstr "单开大门"
+
+# Review: required
 # Source-Hash: 9295ddc2805b21e2
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus

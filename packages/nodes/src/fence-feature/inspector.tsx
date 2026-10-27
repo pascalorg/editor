@@ -24,7 +24,7 @@ export function FenceFeatureEditor({
   onUpdate: (patch: Partial<FenceFeatureNode>) => void
 }) {
   const i18n = usePascalI18n()
-  const [error, setError] = useState('')
+  const [blocked, setBlocked] = useState(false)
   const parentId = child.parentId as AnyNodeId | undefined
   const parent = useScene((s) => (parentId ? s.nodes[parentId] : undefined))
   const siblings = useScene(
@@ -55,22 +55,20 @@ export function FenceFeatureEditor({
       (patch.width !== undefined || patch.center !== undefined) &&
       !canPlaceFenceFeature(node, next)
     ) {
-      setError(
-        i18n._({
-          id: 'node.fenceFeature.inspector.keepTheOpeningInsideTheFence',
-          message: 'Keep the opening inside the fence and clear of other gates or passages.',
-        }),
-      )
+      setBlocked(true)
       return
     }
-    setError('')
+    setBlocked(false)
     onUpdate(patch)
   }
   return (
     <div className="space-y-2 text-xs">
-      {error && (
+      {blocked && (
         <p role="status" className="text-amber-500">
-          {error}
+          {i18n._({
+            id: 'node.fenceFeature.inspector.keepTheOpeningInsideTheFence',
+            message: 'Keep the opening inside the fence and clear of other gates or passages.',
+          })}
         </p>
       )}
       {features.map((feature) => {
@@ -84,8 +82,20 @@ export function FenceFeatureEditor({
                   label: i18n._({ id: 'node.fenceFeature.inspector.leaves', message: 'Leaves' }),
                   value: feature.leafType ?? 'single',
                   options: [
-                    ['single', 'Single gate'],
-                    ['double', 'Double gate'],
+                    [
+                      'single',
+                      i18n._({
+                        id: 'node.fenceFeature.inspector.option.singleGate',
+                        message: 'Single gate',
+                      }),
+                    ],
+                    [
+                      'double',
+                      i18n._({
+                        id: 'node.fenceFeature.inspector.option.doubleGate',
+                        message: 'Double gate',
+                      }),
+                    ],
                   ],
                 },
                 {
@@ -96,8 +106,14 @@ export function FenceFeatureEditor({
                   }),
                   value: feature.hinge ?? 'left',
                   options: [
-                    ['left', 'Left'],
-                    ['right', 'Right'],
+                    [
+                      'left',
+                      i18n._({ id: 'node.fenceFeature.inspector.option.left', message: 'Left' }),
+                    ],
+                    [
+                      'right',
+                      i18n._({ id: 'node.fenceFeature.inspector.option.right', message: 'Right' }),
+                    ],
                   ],
                 },
                 {
@@ -108,8 +124,20 @@ export function FenceFeatureEditor({
                   }),
                   value: feature.swing ?? 'inward',
                   options: [
-                    ['inward', 'Inward'],
-                    ['outward', 'Outward'],
+                    [
+                      'inward',
+                      i18n._({
+                        id: 'node.fenceFeature.inspector.option.inward',
+                        message: 'Inward',
+                      }),
+                    ],
+                    [
+                      'outward',
+                      i18n._({
+                        id: 'node.fenceFeature.inspector.option.outward',
+                        message: 'Outward',
+                      }),
+                    ],
                   ],
                 },
                 {
@@ -117,9 +145,21 @@ export function FenceFeatureEditor({
                   label: i18n._({ id: 'node.fenceFeature.inspector.bracing', message: 'Bracing' }),
                   value: feature.brace ?? 'none',
                   options: [
-                    ['none', 'None'],
-                    ['diagonal', 'Diagonal'],
-                    ['cross', 'Cross'],
+                    [
+                      'none',
+                      i18n._({ id: 'node.fenceFeature.inspector.option.none', message: 'None' }),
+                    ],
+                    [
+                      'diagonal',
+                      i18n._({
+                        id: 'node.fenceFeature.inspector.option.diagonal',
+                        message: 'Diagonal',
+                      }),
+                    ],
+                    [
+                      'cross',
+                      i18n._({ id: 'node.fenceFeature.inspector.option.cross', message: 'Cross' }),
+                    ],
                   ],
                 },
               ]
