@@ -11,6 +11,7 @@ export {
 export { Assembly, AssemblyLayer, AssemblyLayerId, LayerRole } from './assembly'
 // Asset URL allowlist
 export {
+  __resetAllowedOriginsCacheForTests,
   ALLOWED_ORIGINS_ENV,
   ALLOWED_SCHEMES,
   type AllowedOriginIssue,

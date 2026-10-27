@@ -17,7 +17,7 @@ const ALLOWED_SCHEMES = ['artifact:', 'asset:', 'blob:', 'https:', 'data:image/'
  * accepted, here and by the MCP server's `safeFetch`. Set to a comma-separated
  * list (e.g. `https://cdn.pascal.app`). When unset or empty, any `https:`
  * origin is permitted; when set, only listed origins are, and a value with no
- * valid entry (whitespace only, every entry malformed) permits none.
+ * valid entry (whitespace only, every entry malformed) permits no `https:` origin.
  */
 export const ALLOWED_ORIGINS_ENV = 'PASCAL_ALLOWED_ASSET_ORIGINS'
 
@@ -73,12 +73,17 @@ export function parseAllowedOrigins(raw: string): {
 
 let allowlistCache: { raw: string; origins: ReadonlySet<string> } | null = null
 
+/** Test-only: forget the cached allowlist so its warnings are logged again. */
+export function __resetAllowedOriginsCacheForTests(): void {
+  allowlistCache = null
+}
+
 /**
  * The allowlist set in `raw` (the value of {@link ALLOWED_ORIGINS_ENV}), or
  * `undefined` when it is unset or empty. Only the most recent value is cached,
  * so its warnings (skipped entries, dropped credentials, no valid entry, no
- * https: entry) are
- * logged when a value is first read and again whenever the value changes.
+ * https: entry) are logged when a value is first read and again whenever the
+ * value changes.
  */
 export function allowedOriginsFrom(raw: string | undefined): ReadonlySet<string> | undefined {
   if (!raw) return undefined
