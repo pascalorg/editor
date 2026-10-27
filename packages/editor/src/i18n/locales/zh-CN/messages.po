@@ -16864,6 +16864,16 @@ msgid "node.cabinet.kitchenModuleActions.insertsBeside"
 msgstr "{side, select, left {插入到所选物品的左侧。} other {插入到所选物品的右侧。}}"
 
 # Review: required
+# Source-Hash: f65332177316d11d
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "The kitchen changed. Select an item again to refresh the preview."
+#: packages/nodes/src/cabinet/kitchen-module-actions.tsx
+#, fuzzy
+msgid "node.cabinet.kitchenModuleActions.kitchenChanged"
+msgstr "厨房已更改。请重新选择物品以刷新预览。"
+
+# Review: required
 # Source-Hash: 5b6990b17111fd6b
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
@@ -18094,6 +18104,16 @@ msgid "node.cabinet.runPanel.equalizeWidths"
 msgstr "均分宽度"
 
 # Review: required
+# Source-Hash: ad8c948d883a0c9d
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "{side, select, left {Left: {width} mm} other {Right: {width} mm}}"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.fillerPlanSide"
+msgstr "{side, select, left {左侧：{width} mm} other {右侧：{width} mm}}"
+
+# Review: required
 # Source-Hash: 47ccd8c8b04475cd
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
@@ -18463,15 +18483,15 @@ msgstr "标准尺寸"
 msgid "node.cabinet.runPanel.style"
 msgstr "样式"
 
-# Review: required
-# Source-Hash: 7fc3751e46af1cc7
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
-# English: "{type, select, shelf {Shelf} drawer {Drawer} door {Door} oven {Oven} microwave {Microwave} dishwasher {Dishwasher} sink {Sink} other {{type}}}"
+# Source-Hash: e9d7ad9851d476d9
+# Review: required
+# English: "{type, select, shelf {Shelf} drawer {Drawer} door {Door} oven {Oven} microwave {Microwave} dishwasher {Dishwasher} sink {Sink} cooktop_gas {Gas cooktop} cooktop_induction {Induction cooktop} pull_out_pantry {Pull-out pantry} fridge_single {Fridge} fridge_double {Double fridge} fridge_top_freezer {Top-freezer fridge} fridge_bottom_freezer {Bottom-freezer fridge} hood_pyramid {Pyramid hood} hood_curved_glass {Curved glass hood} other {{raw}}}"
 #: packages/nodes/src/cabinet/run-panel.tsx
 #, fuzzy
 msgid "node.cabinet.runPanel.summaryCompartment"
-msgstr "{type, select, shelf {层板} drawer {抽屉} door {柜门} oven {烤箱} microwave {微波炉} dishwasher {洗碗机} sink {水槽} other {{type}}}"
+msgstr "{type, select, shelf {层板} drawer {抽屉} door {柜门} oven {烤箱} microwave {微波炉} dishwasher {洗碗机} sink {水槽} cooktop_gas {燃气灶} cooktop_induction {电磁炉} pull_out_pantry {拉出式储物架} fridge_single {冰箱} fridge_double {双门冰箱} fridge_top_freezer {上置冷冻冰箱} fridge_bottom_freezer {下置冷冻冰箱} hood_pyramid {金字塔形烟罩} hood_curved_glass {弧形玻璃烟罩} other {{raw}}}"
 
 # Review: required
 # Source-Hash: 98582c257f149d44

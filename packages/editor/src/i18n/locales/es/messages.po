@@ -16864,6 +16864,16 @@ msgid "node.cabinet.kitchenModuleActions.insertsBeside"
 msgstr "{side, select, left {Se inserta a la izquierda del elemento seleccionado.} other {Se inserta a la derecha del elemento seleccionado.}}"
 
 # Review: required
+# Source-Hash: f65332177316d11d
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "The kitchen changed. Select an item again to refresh the preview."
+#: packages/nodes/src/cabinet/kitchen-module-actions.tsx
+#, fuzzy
+msgid "node.cabinet.kitchenModuleActions.kitchenChanged"
+msgstr "La cocina ha cambiado. Vuelve a seleccionar un elemento para actualizar la vista previa."
+
+# Review: required
 # Source-Hash: 5b6990b17111fd6b
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
@@ -18094,6 +18104,16 @@ msgid "node.cabinet.runPanel.equalizeWidths"
 msgstr "Igualar anchos"
 
 # Review: required
+# Source-Hash: ad8c948d883a0c9d
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "{side, select, left {Left: {width} mm} other {Right: {width} mm}}"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.fillerPlanSide"
+msgstr "{side, select, left {Izquierda: {width} mm} other {Derecha: {width} mm}}"
+
+# Review: required
 # Source-Hash: 47ccd8c8b04475cd
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
@@ -18463,15 +18483,15 @@ msgstr "Dimensiones estándar"
 msgid "node.cabinet.runPanel.style"
 msgstr "Estilo"
 
-# Review: required
-# Source-Hash: 7fc3751e46af1cc7
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
-# English: "{type, select, shelf {Shelf} drawer {Drawer} door {Door} oven {Oven} microwave {Microwave} dishwasher {Dishwasher} sink {Sink} other {{type}}}"
+# Source-Hash: e9d7ad9851d476d9
+# Review: required
+# English: "{type, select, shelf {Shelf} drawer {Drawer} door {Door} oven {Oven} microwave {Microwave} dishwasher {Dishwasher} sink {Sink} cooktop_gas {Gas cooktop} cooktop_induction {Induction cooktop} pull_out_pantry {Pull-out pantry} fridge_single {Fridge} fridge_double {Double fridge} fridge_top_freezer {Top-freezer fridge} fridge_bottom_freezer {Bottom-freezer fridge} hood_pyramid {Pyramid hood} hood_curved_glass {Curved glass hood} other {{raw}}}"
 #: packages/nodes/src/cabinet/run-panel.tsx
 #, fuzzy
 msgid "node.cabinet.runPanel.summaryCompartment"
-msgstr "{type, select, shelf {Balda} drawer {Cajón} door {Puerta} oven {Horno} microwave {Microondas} dishwasher {Lavavajillas} sink {Fregadero} other {{type}}}"
+msgstr "{type, select, shelf {Balda} drawer {Cajón} door {Puerta} oven {Horno} microwave {Microondas} dishwasher {Lavavajillas} sink {Fregadero} cooktop_gas {Placa de gas} cooktop_induction {Placa de inducción} pull_out_pantry {Despensero extraíble} fridge_single {Frigorífico} fridge_double {Frigorífico doble} fridge_top_freezer {Frigorífico con congelador superior} fridge_bottom_freezer {Frigorífico con congelador inferior} hood_pyramid {Campana piramidal} hood_curved_glass {Campana de vidrio curvo} other {{raw}}}"
 
 # Review: required
 # Source-Hash: 98582c257f149d44

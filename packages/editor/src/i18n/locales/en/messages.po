@@ -6778,6 +6778,10 @@ msgid "node.cabinet.kitchenModuleActions.insertsBeside"
 msgstr "{side, select, left {Inserts on the left of the selected item.} other {Inserts on the right of the selected item.}}"
 
 #: packages/nodes/src/cabinet/kitchen-module-actions.tsx
+msgid "node.cabinet.kitchenModuleActions.kitchenChanged"
+msgstr "The kitchen changed. Select an item again to refresh the preview."
+
+#: packages/nodes/src/cabinet/kitchen-module-actions.tsx
 msgid "node.cabinet.kitchenModuleActions.kitchenRunPreviewHighlightedItemIs"
 msgstr "Kitchen run preview, highlighted item is the proposed change"
 
@@ -7270,6 +7274,10 @@ msgid "node.cabinet.runPanel.equalizeWidths"
 msgstr "Equalize widths"
 
 #: packages/nodes/src/cabinet/run-panel.tsx
+msgid "node.cabinet.runPanel.fillerPlanSide"
+msgstr "{side, select, left {Left: {width} mm} other {Right: {width} mm}}"
+
+#: packages/nodes/src/cabinet/run-panel.tsx
 msgid "node.cabinet.runPanel.finishAlign"
 msgstr "Finish & align"
 
@@ -7419,7 +7427,7 @@ msgstr "Style"
 
 #: packages/nodes/src/cabinet/run-panel.tsx
 msgid "node.cabinet.runPanel.summaryCompartment"
-msgstr "{type, select, shelf {Shelf} drawer {Drawer} door {Door} oven {Oven} microwave {Microwave} dishwasher {Dishwasher} sink {Sink} other {{type}}}"
+msgstr "{type, select, shelf {Shelf} drawer {Drawer} door {Door} oven {Oven} microwave {Microwave} dishwasher {Dishwasher} sink {Sink} cooktop_gas {Gas cooktop} cooktop_induction {Induction cooktop} pull_out_pantry {Pull-out pantry} fridge_single {Fridge} fridge_double {Double fridge} fridge_top_freezer {Top-freezer fridge} fridge_bottom_freezer {Bottom-freezer fridge} hood_pyramid {Pyramid hood} hood_curved_glass {Curved glass hood} other {{raw}}}"
 
 #: packages/nodes/src/cabinet/run-panel.tsx
 msgid "node.cabinet.runPanel.summaryCompartments"
