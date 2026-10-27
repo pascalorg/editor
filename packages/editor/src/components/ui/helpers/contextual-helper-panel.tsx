@@ -372,7 +372,25 @@ function PaintScopeChip() {
   const paintMode = usePaintRegionMode((s) => s.mode)
   const paintEraser = paintMode === 'erase'
   const picking = paintMode === 'pick'
-  const verb = picking ? 'Pick' : paintEraser ? 'Erase' : 'Paint'
+  const verb = picking ? 'pick' : paintEraser ? 'erase' : 'paint'
+  const scopeText = (scope: PaintScope) =>
+    ({
+      pick: i18n._({
+        id: 'editor.helpers.contextualHelperPanel.pickScope',
+        message: 'Pick: {scope}',
+        values: { scope: paintScopeLabel(scope, paintHover!) },
+      }),
+      erase: i18n._({
+        id: 'editor.helpers.contextualHelperPanel.eraseScope',
+        message: 'Erase: {scope}',
+        values: { scope: paintScopeLabel(scope, paintHover!) },
+      }),
+      paint: i18n._({
+        id: 'editor.helpers.contextualHelperPanel.paintScope',
+        message: 'Paint: {scope}',
+        values: { scope: paintScopeLabel(scope, paintHover!) },
+      }),
+    })[verb]
 
   // Nothing to paint with yet (no material picked, not erasing) → the first step
   // is choosing a material, so say that before anything about scope or hovering.
@@ -408,19 +426,27 @@ function PaintScopeChip() {
     return (
       <ChipRow
         icon={picking ? 'lucide:pipette' : PAINT_SCOPE_ICONS[effective]}
-        label={`${verb}: ${paintScopeLabel(picking ? 'single' : effective, paintHover)}`}
+        label={scopeText(picking ? 'single' : effective)}
       />
     )
   }
 
   return (
     <ChipRow
-      ariaLabel={`${verb} scope: ${paintScopeLabel(effective, paintHover)}`}
+      ariaLabel={
+        paintEraser
+          ? i18n._({ id: 'editor.helpers.contextualHelperPanel.eraseScopeLabel', message: 'Erase scope: {scope}', values: { scope: paintScopeLabel(effective, paintHover) } })
+          : i18n._({ id: 'editor.helpers.contextualHelperPanel.paintScopeLabel', message: 'Paint scope: {scope}', values: { scope: paintScopeLabel(effective, paintHover) } })
+      }
       icon={PAINT_SCOPE_ICONS[effective]}
-      label={`${verb}: ${paintScopeLabel(effective, paintHover)}`}
+      label={scopeText(effective)}
       onClick={() => cyclePaintScope()}
       shortcut="Shift"
-      tooltip={i18n._({ id: 'editor.helpers.contextualHelperPanel.verbScopeClickOrPressShift', message: '{verb} scope — click or press Shift to cycle', values: { verb } })}
+      tooltip={
+        paintEraser
+          ? i18n._({ id: 'editor.helpers.contextualHelperPanel.eraseScopeClickOrPressShift', message: 'Erase scope — click or press Shift to cycle' })
+          : i18n._({ id: 'editor.helpers.contextualHelperPanel.paintScopeClickOrPressShift', message: 'Paint scope — click or press Shift to cycle' })
+      }
     />
   )
 }

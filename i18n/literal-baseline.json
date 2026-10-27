@@ -116,8 +116,7 @@
       "Extrusion height"
     ],
     "packages/editor/src/components/editor-2d/floorplan-open-wall-ends-layer.tsx": [
-      "Wall end not joined",
-      "{?}{opacity:0.4}"
+      "Wall end not joined"
     ],
     "packages/editor/src/components/editor-2d/renderers/floorplan-dimension-edit-overlay.tsx": [
       "Cannot read \"{?}\""
@@ -353,9 +352,6 @@
       "Undo",
       "Undo anyway",
       "You've changed the scene since. Undoing also removes those changes."
-    ],
-    "packages/editor/src/components/point-ask/point-ask-layer.tsx": [
-      "{?}{?}\n.pa-layer[data-calm] .pa-hlabel{transform:none;transition-property:opacity}\n.pa-layer[data-calm] .pa-send,.pa-layer[data-calm] .pa-dict,.pa-layer[data-calm] .pa-btn,.pa-layer[data-calm] .pa-hold{transform:none;transition-property:opacity,color,background}\n.pa-layer[data-calm] .pa-pk,.pa-layer[data-calm] .pa-edgemark{transition:none}\n"
     ],
     "packages/editor/src/components/procedural-items/inspector.tsx": [
       "Adjust design",
@@ -935,9 +931,6 @@
       "3D print export failed.",
       "Export 3D print 3MF",
       "Export 3D print STL"
-    ],
-    "packages/editor/src/components/ui/sidebar/panels/site-panel/tree-node-drag.tsx": [
-      "* { cursor: grabbing !important; }"
     ],
     "packages/editor/src/components/ui/slider-demo.tsx": [
       "Temperature",

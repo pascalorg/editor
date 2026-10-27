@@ -72,6 +72,8 @@ const UI_PROPERTIES = new Set([
   'tooltip',
 ])
 
+const NON_COPY_ELEMENTS = new Set(['script', 'style'])
+
 const NOTIFY_CALLEES = new Set([
   'alert',
   'confirm',
@@ -578,6 +580,16 @@ export function visitUiLiterals(
 
   const visit = (node: ts.Node): void => {
     if (isTranslationCall(node)) return
+
+    // Stylesheets and scripts are code, not copy.
+    if (
+      ts.isJsxElement(node) &&
+      ts.isIdentifier(node.openingElement.tagName) &&
+      NON_COPY_ELEMENTS.has(node.openingElement.tagName.text)
+    ) {
+      ts.forEachChild(node.openingElement, visit)
+      return
+    }
 
     if (ts.isJsxElement(node)) {
       const sentence = sentenceChildren(node)

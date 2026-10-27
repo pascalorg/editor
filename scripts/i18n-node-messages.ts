@@ -28,7 +28,10 @@ import {
  * exists for extraction.
  */
 
-const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
+const ROOT = process.env.I18N_ROOT
+  ? resolve(process.env.I18N_ROOT)
+  : resolve(dirname(fileURLToPath(import.meta.url)), '..')
+const NODES_ENTRY = join(ROOT, 'packages/nodes/src/index.ts')
 export const DEFINITION_MESSAGES_PATH = join(ROOT, 'packages/nodes/src/i18n/definition-messages.ts')
 
 type Hint = {
@@ -148,11 +151,14 @@ export function renderDefinitionMessages(descriptors: MessageDescriptor[]): stri
 }
 
 export async function writeDefinitionMessages(): Promise<void> {
+  // A checkout without the built-in nodes has no definition copy.
+  if (!existsSync(NODES_ENTRY)) return
   mkdirSync(dirname(DEFINITION_MESSAGES_PATH), { recursive: true })
   writeFileSync(DEFINITION_MESSAGES_PATH, renderDefinitionMessages(await definitionDescriptors()))
 }
 
 export async function checkDefinitionMessages(): Promise<string[]> {
+  if (!existsSync(NODES_ENTRY)) return []
   const expected = renderDefinitionMessages(await definitionDescriptors())
   const current = existsSync(DEFINITION_MESSAGES_PATH)
     ? readFileSync(DEFINITION_MESSAGES_PATH, 'utf8')

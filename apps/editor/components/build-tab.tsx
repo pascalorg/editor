@@ -219,9 +219,13 @@ export function BuildTab() {
         <>
           <BuildToolGrid columns={4}>
             {buildTypes
-              .filter((type) =>
-                i18n._(type.label).toLocaleLowerCase().includes(buildSearch.toLocaleLowerCase()),
-              )
+              .filter((type) => {
+                // The English name matches too, so shared or remembered terms work in any UI language.
+                const query = buildSearch.toLocaleLowerCase()
+                return [i18n._(type.label), type.label.message ?? ''].some((name) =>
+                  name.toLocaleLowerCase().includes(query),
+                )
+              })
               .map(renderTile)}
           </BuildToolGrid>
           <KitchenBrowser query={buildSearch} />

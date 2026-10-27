@@ -213,6 +213,25 @@ export function List({ items }: { items: string[] }) {
   expect(planned[0]?.manual).toContain('inside a callback function')
 })
 
+test('stylesheets and scripts rendered in JSX are not copy', () => {
+  const source = `const CALM_CSS = \`.pa-layer[data-calm] .pa-hlabel{transform:none}\`
+export function Layer() {
+  return (
+    <div>
+      <style>{BASE_CSS + CALM_CSS}</style>
+      <script>{'window.ready = true'}</script>
+      <p>Point at something</p>
+    </div>
+  )
+}
+`
+  expect(
+    scanSource('packages/editor/src/components/layer.tsx', source, allowlist).map(
+      (found) => found.text,
+    ),
+  ).toEqual(['Point at something'])
+})
+
 test('a constant concatenated with a value is concatenated copy', () => {
   const source = `const LABEL = 'Save'
 export function Row({ name }: { name: string }) {

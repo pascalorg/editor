@@ -2551,16 +2551,6 @@ msgstr "Fenêtre"
 msgid "editor.actionMenu.structureTools.zone"
 msgstr "Zone"
 
-# Source-Hash: 43af78ba61aaa8ab
-# Review: required
-# AI-Provider: cursor-agent
-# AI-Model: claude-opus
-# English: "below"
-#: packages/editor/src/components/ui/action-menu/view-toggles.tsx
-#, fuzzy
-msgid "editor.actionMenu.viewToggles.below"
-msgstr "en dessous"
-
 # Source-Hash: cdf3f12939ba108c
 # Review: required
 # AI-Provider: cursor-agent
@@ -2680,6 +2670,16 @@ msgstr "Masquer le niveau de référence"
 #, fuzzy
 msgid "editor.actionMenu.viewToggles.hideScans"
 msgstr "Masquer les relevés 3D"
+
+# Source-Hash: 873620c284a5651f
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "{count} below"
+#: packages/editor/src/components/ui/action-menu/view-toggles.tsx
+#, fuzzy
+msgid "editor.actionMenu.viewToggles.levelsBelow"
+msgstr "{count} en dessous"
 
 # Source-Hash: 22a59ae72d8c9504
 # Review: required
@@ -3473,6 +3473,36 @@ msgstr "Enchaînement : {label}"
 msgid "editor.helpers.contextualHelperPanel.dragToDrawFence"
 msgstr "Faites glisser pour tracer la clôture"
 
+# Source-Hash: b52e874718af1916
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Erase: {scope}"
+#: packages/editor/src/components/ui/helpers/contextual-helper-panel.tsx
+#, fuzzy
+msgid "editor.helpers.contextualHelperPanel.eraseScope"
+msgstr "Effacer : {scope}"
+
+# Source-Hash: 61f7494abc319e66
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Erase scope — click or press Shift to cycle"
+#: packages/editor/src/components/ui/helpers/contextual-helper-panel.tsx
+#, fuzzy
+msgid "editor.helpers.contextualHelperPanel.eraseScopeClickOrPressShift"
+msgstr "Portée de l’effacement — cliquez ou appuyez sur Maj pour changer"
+
+# Source-Hash: 59993c163d68cc53
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Erase scope: {scope}"
+#: packages/editor/src/components/ui/helpers/contextual-helper-panel.tsx
+#, fuzzy
+msgid "editor.helpers.contextualHelperPanel.eraseScopeLabel"
+msgstr "Portée de l’effacement : {scope}"
+
 # Source-Hash: a4bdcbc6cab772bf
 # Review: required
 # AI-Provider: cursor-agent
@@ -3572,6 +3602,46 @@ msgstr "Survolez une surface pour prélever son matériau"
 #, fuzzy
 msgid "editor.helpers.contextualHelperPanel.moreShortcuts"
 msgstr "Plus de raccourcis"
+
+# Source-Hash: 476b8f5f9ee542e6
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Paint: {scope}"
+#: packages/editor/src/components/ui/helpers/contextual-helper-panel.tsx
+#, fuzzy
+msgid "editor.helpers.contextualHelperPanel.paintScope"
+msgstr "Peindre : {scope}"
+
+# Source-Hash: 9c09ce4c34122277
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Paint scope — click or press Shift to cycle"
+#: packages/editor/src/components/ui/helpers/contextual-helper-panel.tsx
+#, fuzzy
+msgid "editor.helpers.contextualHelperPanel.paintScopeClickOrPressShift"
+msgstr "Portée de la peinture — cliquez ou appuyez sur Maj pour changer"
+
+# Source-Hash: 7890aa81687f6654
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Paint scope: {scope}"
+#: packages/editor/src/components/ui/helpers/contextual-helper-panel.tsx
+#, fuzzy
+msgid "editor.helpers.contextualHelperPanel.paintScopeLabel"
+msgstr "Portée de la peinture : {scope}"
+
+# Source-Hash: a75b3abc0784b12b
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Pick: {scope}"
+#: packages/editor/src/components/ui/helpers/contextual-helper-panel.tsx
+#, fuzzy
+msgid "editor.helpers.contextualHelperPanel.pickScope"
+msgstr "Prélever : {scope}"
 
 # Source-Hash: 69c1044e6ea87ccf
 # Review: required
@@ -3692,16 +3762,6 @@ msgstr "Enchaînement de clôture droite — cliquez ou appuyez sur C pour bascu
 #, fuzzy
 msgid "editor.helpers.contextualHelperPanel.straightSingle"
 msgstr "Droite : simple"
-
-# Source-Hash: 83e56140165f2535
-# Review: required
-# AI-Provider: cursor-agent
-# AI-Model: claude-opus
-# English: "{verb} scope — click or press Shift to cycle"
-#: packages/editor/src/components/ui/helpers/contextual-helper-panel.tsx
-#, fuzzy
-msgid "editor.helpers.contextualHelperPanel.verbScopeClickOrPressShift"
-msgstr "Portée : {verb} — cliquez ou appuyez sur Maj pour changer"
 
 # Source-Hash: 9a56d90d461b4bca
 # Review: required
@@ -5805,7 +5865,7 @@ msgstr "La scène de l’éditeur n’a pas pu s’afficher"
 # English: "A curtain wall takes no corner window"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.aCurtainWallTakesNoCorner"
+msgid "editor.toolHint.aCurtainWallTakesNoCorner.1qxjv5i"
 msgstr "Un mur-rideau n’accepte pas de fenêtre d’angle"
 
 # Source-Hash: 97f5e044d46501fb
@@ -5815,7 +5875,7 @@ msgstr "Un mur-rideau n’accepte pas de fenêtre d’angle"
 # English: "A curved wall takes no corner window"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.aCurvedWallTakesNoCorner"
+msgid "editor.toolHint.aCurvedWallTakesNoCorner.1vdnaw5"
 msgstr "Un mur courbe n’accepte pas de fenêtre d’angle"
 
 # Source-Hash: 776d8ebece7fe1bb
@@ -5825,7 +5885,7 @@ msgstr "Un mur courbe n’accepte pas de fenêtre d’angle"
 # English: "Add a corner · click the first to close"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.addACornerClickTheFirst"
+msgid "editor.toolHint.addACornerClickTheFirst.o4r67t"
 msgstr "Ajouter un angle · cliquez sur le premier pour fermer"
 
 # Source-Hash: 6a0745dd047b149a
@@ -5835,7 +5895,7 @@ msgstr "Ajouter un angle · cliquez sur le premier pour fermer"
 # English: "Another opening is in the way at the corner"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.anotherOpeningIsInTheWay"
+msgid "editor.toolHint.anotherOpeningIsInTheWay.11l9dd0"
 msgstr "Une autre ouverture gêne à l’angle"
 
 # Source-Hash: 441124187e7da2fc
@@ -5845,7 +5905,7 @@ msgstr "Une autre ouverture gêne à l’angle"
 # English: "Auto hangers"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.autoHangers"
+msgid "editor.toolHint.autoHangers.10554ka"
 msgstr "Suspentes auto"
 
 # Source-Hash: 47a7f9a6a81156c3
@@ -5855,7 +5915,7 @@ msgstr "Suspentes auto"
 # English: "Auto hangers - click or press H to toggle"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.autoHangersClickOrPressH"
+msgid "editor.toolHint.autoHangersClickOrPressH.rwa3ka"
 msgstr "Suspentes auto - cliquez ou appuyez sur H pour basculer"
 
 # Source-Hash: d7944f31cba90e26
@@ -5865,7 +5925,7 @@ msgstr "Suspentes auto - cliquez ou appuyez sur H pour basculer"
 # English: "Auto hangers: Off"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.autoHangersOff"
+msgid "editor.toolHint.autoHangersOff.7yx01x"
 msgstr "Suspentes auto : désactivées"
 
 # Source-Hash: 295882d015d08742
@@ -5875,7 +5935,7 @@ msgstr "Suspentes auto : désactivées"
 # English: "Auto hangers: On"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.autoHangersOn"
+msgid "editor.toolHint.autoHangersOn.10b1umh"
 msgstr "Suspentes auto : activées"
 
 # Source-Hash: 8c039e5182b01c4d
@@ -5885,7 +5945,7 @@ msgstr "Suspentes auto : activées"
 # English: "Bypass snapping"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.bypassSnapping"
+msgid "editor.toolHint.bypassSnapping.w5lmdv"
 msgstr "Ignorer l’aimantation"
 
 # Source-Hash: c0774c185060fc13
@@ -5895,7 +5955,7 @@ msgstr "Ignorer l’aimantation"
 # English: "Cancel"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.cancel"
+msgid "editor.toolHint.cancel.ew9em3"
 msgstr "Annuler"
 
 # Source-Hash: 5b33b576fd30b74e
@@ -5905,7 +5965,7 @@ msgstr "Annuler"
 # English: "Cancel move"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.cancelMove"
+msgid "editor.toolHint.cancelMove.lvp31c"
 msgstr "Annuler le déplacement"
 
 # Source-Hash: 136fa29b9ae419bf
@@ -5915,7 +5975,7 @@ msgstr "Annuler le déplacement"
 # English: "Cancel run / exit"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.cancelRunExit"
+msgid "editor.toolHint.cancelRunExit.zqjf3h"
 msgstr "Annuler le tronçon / quitter"
 
 # Source-Hash: 75b406824be91ac2
@@ -5925,7 +5985,7 @@ msgstr "Annuler le tronçon / quitter"
 # English: "Cancel start point"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.cancelStartPoint"
+msgid "editor.toolHint.cancelStartPoint.1xbq2lh"
 msgstr "Annuler le point de départ"
 
 # Source-Hash: ffa5aaa1746303c4
@@ -5935,7 +5995,7 @@ msgstr "Annuler le point de départ"
 # English: "Corner window"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.cornerWindow"
+msgid "editor.toolHint.cornerWindow.1avkzpo"
 msgstr "Fenêtre d’angle"
 
 # Source-Hash: b0afdd855a02e4a7
@@ -5945,7 +6005,7 @@ msgstr "Fenêtre d’angle"
 # English: "Cuts"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.cuts"
+msgid "editor.toolHint.cuts.1y0axps"
 msgstr "Coupes"
 
 # Source-Hash: dc9fe7601cc525f8
@@ -5955,7 +6015,7 @@ msgstr "Coupes"
 # English: "Cuts: {value}"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.cutsValue"
+msgid "editor.toolHint.cutsValue.ouzhvb"
 msgstr "Coupes : {value}"
 
 # Source-Hash: a2e13bc4dc82624c
@@ -5965,7 +6025,7 @@ msgstr "Coupes : {value}"
 # English: "Cuts: {value}, even"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.cutsValueEven"
+msgid "editor.toolHint.cutsValueEven.1ngsz3"
 msgstr "Coupes : {value}, régulières"
 
 # Source-Hash: 04152b4cec726f34
@@ -5975,7 +6035,7 @@ msgstr "Coupes : {value}, régulières"
 # English: "Cycle mono / gable / butterfly"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.cycleMonoGableButterfly"
+msgid "editor.toolHint.cycleMonoGableButterfly.1poga3m"
 msgstr "Basculer un pan / deux pans / papillon"
 
 # Source-Hash: 4fb6c83edb6652b5
@@ -5985,7 +6045,7 @@ msgstr "Basculer un pan / deux pans / papillon"
 # English: "Cycle snapping mode"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.cycleSnappingMode"
+msgid "editor.toolHint.cycleSnappingMode.1ct0gn6"
 msgstr "Changer le mode d’aimantation"
 
 # Source-Hash: 5d550a3ac76279de
@@ -5995,7 +6055,7 @@ msgstr "Changer le mode d’aimantation"
 # English: "Door style — click or press L to cycle"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.doorStyleClickOrPressL"
+msgid "editor.toolHint.doorStyleClickOrPressL.33pe65"
 msgstr "Style de porte — cliquez ou appuyez sur L pour changer"
 
 # Source-Hash: 3272a7df5d7c6a9a
@@ -6005,7 +6065,7 @@ msgstr "Style de porte — cliquez ou appuyez sur L pour changer"
 # English: "Door type — click or press O to cycle"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.doorTypeClickOrPressO"
+msgid "editor.toolHint.doorTypeClickOrPressO.1hhh8gt"
 msgstr "Type de porte — cliquez ou appuyez sur O pour changer"
 
 # Source-Hash: 366222b4435eefda
@@ -6015,7 +6075,7 @@ msgstr "Type de porte — cliquez ou appuyez sur O pour changer"
 # English: "Drop downspout from outlet"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.dropDownspoutFromOutlet"
+msgid "editor.toolHint.dropDownspoutFromOutlet.1k4h1m4"
 msgstr "Descendre la descente depuis la sortie"
 
 # Source-Hash: 03f306371f345007
@@ -6025,7 +6085,7 @@ msgstr "Descendre la descente depuis la sortie"
 # English: "Duct diameter down / up"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.ductDiameterDownUp"
+msgid "editor.toolHint.ductDiameterDownUp.1wdz5vq"
 msgstr "Diamètre de gaine moins / plus"
 
 # Source-Hash: 7b4137e27f8327d9
@@ -6035,7 +6095,7 @@ msgstr "Diamètre de gaine moins / plus"
 # English: "End run / cancel"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.endRunCancel"
+msgid "editor.toolHint.endRunCancel.59dh2w"
 msgstr "Terminer le tronçon / annuler"
 
 # Source-Hash: 938aacb119b29dc1
@@ -6045,7 +6105,7 @@ msgstr "Terminer le tronçon / annuler"
 # English: "Exit"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.exit"
+msgid "editor.toolHint.exit.engmg5"
 msgstr "Quitter"
 
 # Source-Hash: 7cb4e0688cabcb00
@@ -6055,7 +6115,7 @@ msgstr "Quitter"
 # English: "Exit drawing"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.exitDrawing"
+msgid "editor.toolHint.exitDrawing.9noxyb"
 msgstr "Quitter le tracé"
 
 # Source-Hash: 47025a103c456125
@@ -6065,7 +6125,7 @@ msgstr "Quitter le tracé"
 # English: "Finish and continue"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.finishAndContinue"
+msgid "editor.toolHint.finishAndContinue.1gpfsks"
 msgstr "Terminer et continuer"
 
 # Source-Hash: 000918429b74128f
@@ -6075,7 +6135,7 @@ msgstr "Terminer et continuer"
 # English: "Finish ceiling"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.finishCeiling"
+msgid "editor.toolHint.finishCeiling.1c1lfel"
 msgstr "Terminer le plafond"
 
 # Source-Hash: 51a80a0dba5a6f30
@@ -6085,7 +6145,7 @@ msgstr "Terminer le plafond"
 # English: "Finish grid axis"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.finishGridAxis"
+msgid "editor.toolHint.finishGridAxis.1wvrfhr"
 msgstr "Terminer l’axe de trame"
 
 # Source-Hash: 87c7b98fc2e010e1
@@ -6095,7 +6155,7 @@ msgstr "Terminer l’axe de trame"
 # English: "Finish measurement"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.finishMeasurement"
+msgid "editor.toolHint.finishMeasurement.1e4gv16"
 msgstr "Terminer la mesure"
 
 # Source-Hash: 5e1a0af7dc506826
@@ -6105,7 +6165,7 @@ msgstr "Terminer la mesure"
 # English: "Finish multi-point witnesses"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.finishMultiPointWitnesses"
+msgid "editor.toolHint.finishMultiPointWitnesses.8wzskz"
 msgstr "Terminer les repères multipoints"
 
 # Source-Hash: 30fc0862501ba2e8
@@ -6115,7 +6175,7 @@ msgstr "Terminer les repères multipoints"
 # English: "Finish slab"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.finishSlab"
+msgid "editor.toolHint.finishSlab.xmnm8e"
 msgstr "Terminer la dalle"
 
 # Source-Hash: 66ed7c7598d3aa29
@@ -6125,7 +6185,7 @@ msgstr "Terminer la dalle"
 # English: "Flip side"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.flipSide"
+msgid "editor.toolHint.flipSide.172xku9"
 msgstr "Inverser le côté"
 
 # Source-Hash: f5717f6a0905ffab
@@ -6135,7 +6195,7 @@ msgstr "Inverser le côté"
 # English: "Follow: trace a lineset"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.followTraceALineset"
+msgid "editor.toolHint.followTraceALineset.mgquwe"
 msgstr "Suivre : longer une liaison frigorifique"
 
 # Source-Hash: ed7f3d8417a3e074
@@ -6145,7 +6205,7 @@ msgstr "Suivre : longer une liaison frigorifique"
 # English: "Force place"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.forcePlace"
+msgid "editor.toolHint.forcePlace.1hq1nr"
 msgstr "Forcer le placement"
 
 # Source-Hash: cc0c14065951444d
@@ -6155,7 +6215,7 @@ msgstr "Forcer le placement"
 # English: "Free placement"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.freePlacement"
+msgid "editor.toolHint.freePlacement.1nztdac"
 msgstr "Placement libre"
 
 # Source-Hash: f098a27096a9c1ea
@@ -6165,7 +6225,7 @@ msgstr "Placement libre"
 # English: "Go vertical ↕, click to place"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.goVerticalClickToPlace"
+msgid "editor.toolHint.goVerticalClickToPlace.dg8g6m"
 msgstr "Passer en vertical ↕, cliquez pour placer"
 
 # Source-Hash: fd47f1820d8799c8
@@ -6175,7 +6235,7 @@ msgstr "Passer en vertical ↕, cliquez pour placer"
 # English: "Highlight outlet"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.highlightOutlet"
+msgid "editor.toolHint.highlightOutlet.65hoq8"
 msgstr "Mettre en évidence la sortie"
 
 # Source-Hash: eb90058d0f856f67
@@ -6185,7 +6245,7 @@ msgstr "Mettre en évidence la sortie"
 # English: "Join as a corner window"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.joinAsACornerWindow"
+msgid "editor.toolHint.joinAsACornerWindow.jvdp4j"
 msgstr "Joindre en fenêtre d’angle"
 
 # Source-Hash: 225b3161f2e59757
@@ -6195,7 +6255,7 @@ msgstr "Joindre en fenêtre d’angle"
 # English: "Alt + drag"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.key.altDrag"
+msgid "editor.toolHint.key.altDrag.ai3wn9"
 msgstr "Alt + glisser"
 
 # Source-Hash: dd66f883b173fc72
@@ -6205,7 +6265,7 @@ msgstr "Alt + glisser"
 # English: "Backspace"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.key.backspace"
+msgid "editor.toolHint.key.backspace.qy6qx8"
 msgstr "Retour arrière"
 
 # Source-Hash: a18387bc0be54c32
@@ -6215,7 +6275,7 @@ msgstr "Retour arrière"
 # English: "Click"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.key.click"
+msgid "editor.toolHint.key.click.m8sun"
 msgstr "Clic"
 
 # Source-Hash: db9e60c1d30b8499
@@ -6225,7 +6285,7 @@ msgstr "Clic"
 # English: "Click again"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.key.clickAgain"
+msgid "editor.toolHint.key.clickAgain.190ws9j"
 msgstr "Cliquer à nouveau"
 
 # Source-Hash: f400330b9c9c12e8
@@ -6235,7 +6295,7 @@ msgstr "Cliquer à nouveau"
 # English: "Command"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.key.command"
+msgid "editor.toolHint.key.command.1j2mkia"
 msgstr "Commande"
 
 # Source-Hash: 976c63285a510b09
@@ -6245,7 +6305,7 @@ msgstr "Commande"
 # English: "Control"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.key.control"
+msgid "editor.toolHint.key.control.10fbl8e"
 msgstr "Contrôle"
 
 # Source-Hash: b26de372b4b0eaac
@@ -6255,7 +6315,7 @@ msgstr "Contrôle"
 # English: "Delete"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.key.delete"
+msgid "editor.toolHint.key.delete.oay2cq"
 msgstr "Supprimer"
 
 # Source-Hash: 88888c9d2719fa92
@@ -6265,7 +6325,7 @@ msgstr "Supprimer"
 # English: "Double click"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.key.doubleClick"
+msgid "editor.toolHint.key.doubleClick.vlma6o"
 msgstr "Double-clic"
 
 # Source-Hash: dfb85b2addb7b9fa
@@ -6275,7 +6335,7 @@ msgstr "Double-clic"
 # English: "Drag"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.key.drag"
+msgid "editor.toolHint.key.drag.8pwtpf"
 msgstr "Glisser"
 
 # Source-Hash: ed9140d42148c99b
@@ -6285,7 +6345,7 @@ msgstr "Glisser"
 # English: "Enter"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.key.enter"
+msgid "editor.toolHint.key.enter.1ctpui5"
 msgstr "Entrée"
 
 # Source-Hash: 9195fa8b9c8ebdfb
@@ -6295,7 +6355,7 @@ msgstr "Entrée"
 # English: "Hover"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.key.hover"
+msgid "editor.toolHint.key.hover.6xw79p"
 msgstr "Survoler"
 
 # Source-Hash: 2d78441b741bc562
@@ -6305,7 +6365,7 @@ msgstr "Survoler"
 # English: "Hover a duct end"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.key.hoverADuctEnd"
+msgid "editor.toolHint.key.hoverADuctEnd.19axr3b"
 msgstr "Survolez une extrémité de gaine"
 
 # Source-Hash: 6083405086f61c76
@@ -6315,7 +6375,7 @@ msgstr "Survolez une extrémité de gaine"
 # English: "Hover a pipe end"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.key.hoverAPipeEnd"
+msgid "editor.toolHint.key.hoverAPipeEnd.1jbum5f"
 msgstr "Survolez une extrémité de tuyau"
 
 # Source-Hash: a5a337eb76fdb066
@@ -6325,7 +6385,7 @@ msgstr "Survolez une extrémité de tuyau"
 # English: "Hover gutter"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.key.hoverGutter"
+msgid "editor.toolHint.key.hoverGutter.1dwcsno"
 msgstr "Survolez la gouttière"
 
 # Source-Hash: a58533594411e088
@@ -6335,7 +6395,7 @@ msgstr "Survolez la gouttière"
 # English: "Left click"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.key.leftClick"
+msgid "editor.toolHint.key.leftClick.s4gwfc"
 msgstr "Clic gauche"
 
 # Source-Hash: bc4ab608ec3d3b4f
@@ -6345,7 +6405,7 @@ msgstr "Clic gauche"
 # English: "Middle click"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.key.middleClick"
+msgid "editor.toolHint.key.middleClick.1jbaan4"
 msgstr "Clic central"
 
 # Source-Hash: 6791879c651108c7
@@ -6355,7 +6415,7 @@ msgstr "Clic central"
 # English: "Right click"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.key.rightClick"
+msgid "editor.toolHint.key.rightClick.1ovld0h"
 msgstr "Clic droit"
 
 # Source-Hash: c836b21b42198868
@@ -6365,7 +6425,7 @@ msgstr "Clic droit"
 # English: "R / Shift+R"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.key.rShiftR"
+msgid "editor.toolHint.key.rShiftR.13bnobh"
 msgstr "R / Maj+R"
 
 # Source-Hash: 9812aa06d8bb7544
@@ -6375,7 +6435,7 @@ msgstr "R / Maj+R"
 # English: "Scroll"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.key.scroll"
+msgid "editor.toolHint.key.scroll.ai6wr0"
 msgstr "Défilement"
 
 # Source-Hash: f2174536230657c8
@@ -6385,7 +6445,7 @@ msgstr "Défilement"
 # English: "Scroll wheel"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.key.scrollWheel"
+msgid "editor.toolHint.key.scrollWheel.18j0ix7"
 msgstr "Molette"
 
 # Source-Hash: 82dd231086d87f3b
@@ -6395,7 +6455,7 @@ msgstr "Molette"
 # English: "Space"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.key.space"
+msgid "editor.toolHint.key.space.1hrh82t"
 msgstr "Espace"
 
 # Source-Hash: 9e68aa2f472cad56
@@ -6405,7 +6465,7 @@ msgstr "Espace"
 # English: "Tab"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.key.tab"
+msgid "editor.toolHint.key.tab.1xsal0s"
 msgstr "Tab"
 
 # Source-Hash: 4b221b73f9496a49
@@ -6415,7 +6475,7 @@ msgstr "Tab"
 # English: "Mount: floor / ceiling / wall"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.mountFloorCeilingWall"
+msgid "editor.toolHint.mountFloorCeilingWall.32dxpv"
 msgstr "Pose : sol / plafond / mur"
 
 # Source-Hash: 225edfb1e45aed95
@@ -6425,7 +6485,7 @@ msgstr "Pose : sol / plafond / mur"
 # English: "No room for the matching window on the other wall"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.noRoomForTheMatchingWindow"
+msgid "editor.toolHint.noRoomForTheMatchingWindow.1755948"
 msgstr "Pas de place pour la fenêtre correspondante sur l’autre mur"
 
 # Source-Hash: a7045d6b678bcd13
@@ -6435,7 +6495,7 @@ msgstr "Pas de place pour la fenêtre correspondante sur l’autre mur"
 # English: "No wall meets here"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.noWallMeetsHere"
+msgid "editor.toolHint.noWallMeetsHere.19n99yc"
 msgstr "Aucun mur ne se rejoint ici"
 
 # Source-Hash: a639341dc21fed2c
@@ -6445,7 +6505,7 @@ msgstr "Aucun mur ne se rejoint ici"
 # English: "Number of cuts — scroll or click to change"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.numberOfCutsScrollOrClick"
+msgid "editor.toolHint.numberOfCutsScrollOrClick.1kqe84b"
 msgstr "Nombre de coupes — faites défiler ou cliquez pour modifier"
 
 # Source-Hash: af01bde3ae4b7e59
@@ -6455,7 +6515,7 @@ msgstr "Nombre de coupes — faites défiler ou cliquez pour modifier"
 # English: "Pick witness point"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.pickWitnessPoint"
+msgid "editor.toolHint.pickWitnessPoint.k3hgh1"
 msgstr "Choisir un point de repère"
 
 # Source-Hash: ecfd58576b28a9f6
@@ -6465,7 +6525,7 @@ msgstr "Choisir un point de repère"
 # English: "Pipe size down / up"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.pipeSizeDownUp"
+msgid "editor.toolHint.pipeSizeDownUp.wp04og"
 msgstr "Diamètre de tuyau moins / plus"
 
 # Source-Hash: 7a1eb7b64f06bad0
@@ -6475,7 +6535,7 @@ msgstr "Diamètre de tuyau moins / plus"
 # English: "Place and continue"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.placeAndContinue"
+msgid "editor.toolHint.placeAndContinue.qfwkrq"
 msgstr "Placer et continuer"
 
 # Source-Hash: c6cda39e2e4b5d3a
@@ -6485,7 +6545,7 @@ msgstr "Placer et continuer"
 # English: "Place block"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.placeBlock"
+msgid "editor.toolHint.placeBlock.1aylwrx"
 msgstr "Placer le bloc"
 
 # Source-Hash: 45a743c52a1d72de
@@ -6495,7 +6555,7 @@ msgstr "Placer le bloc"
 # English: "Place box vent on roof"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.placeBoxVentOnRoof"
+msgid "editor.toolHint.placeBoxVentOnRoof.kf88e5"
 msgstr "Placer l’aérateur sur le toit"
 
 # Source-Hash: 75142dd1d557efe2
@@ -6505,7 +6565,7 @@ msgstr "Placer l’aérateur sur le toit"
 # English: "Place cabinet"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.placeCabinet"
+msgid "editor.toolHint.placeCabinet.b0ouyk"
 msgstr "Placer le meuble"
 
 # Source-Hash: da603a713d4c9909
@@ -6515,7 +6575,7 @@ msgstr "Placer le meuble"
 # English: "Place canopy or set the next run point"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.placeCanopyOrSetTheNext"
+msgid "editor.toolHint.placeCanopyOrSetTheNext.12l7zf8"
 msgstr "Placer l’auvent ou le point suivant"
 
 # Source-Hash: 8b3a30c6b7a5612d
@@ -6525,7 +6585,7 @@ msgstr "Placer l’auvent ou le point suivant"
 # English: "Place chimney on roof"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.placeChimneyOnRoof"
+msgid "editor.toolHint.placeChimneyOnRoof.19dbqu"
 msgstr "Placer la cheminée sur le toit"
 
 # Source-Hash: 710d41e4e2f259fa
@@ -6535,7 +6595,7 @@ msgstr "Placer la cheminée sur le toit"
 # English: "Place column"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.placeColumn"
+msgid "editor.toolHint.placeColumn.1w2vq86"
 msgstr "Placer le poteau"
 
 # Source-Hash: ee1da4e12a71d9a9
@@ -6545,7 +6605,7 @@ msgstr "Placer le poteau"
 # English: "Place cupola on roof"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.placeCupolaOnRoof"
+msgid "editor.toolHint.placeCupolaOnRoof.ofx3bn"
 msgstr "Placer le lanterneau sur le toit"
 
 # Source-Hash: 19c1fe8c46d213a5
@@ -6555,7 +6615,7 @@ msgstr "Placer le lanterneau sur le toit"
 # English: "Place dimension line when needed"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.placeDimensionLineWhenNeeded"
+msgid "editor.toolHint.placeDimensionLineWhenNeeded.bjw2cj"
 msgstr "Placer la ligne de cote si nécessaire"
 
 # Source-Hash: 58f3e7efb6ea120b
@@ -6565,7 +6625,7 @@ msgstr "Placer la ligne de cote si nécessaire"
 # English: "Place door on wall"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.placeDoorOnWall"
+msgid "editor.toolHint.placeDoorOnWall.1jwadf"
 msgstr "Placer la porte sur le mur"
 
 # Source-Hash: de04e9d03d937c97
@@ -6575,7 +6635,7 @@ msgstr "Placer la porte sur le mur"
 # English: "Place dormer on roof"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.placeDormerOnRoof"
+msgid "editor.toolHint.placeDormerOnRoof.1w518a6"
 msgstr "Placer la lucarne sur le toit"
 
 # Source-Hash: c581645f2ee447c2
@@ -6585,7 +6645,7 @@ msgstr "Placer la lucarne sur le toit"
 # English: "Place elevator"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.placeElevator"
+msgid "editor.toolHint.placeElevator.1f65zva"
 msgstr "Placer l’ascenseur"
 
 # Source-Hash: 096b8d6482717358
@@ -6595,7 +6655,7 @@ msgstr "Placer l’ascenseur"
 # English: "Place eyebrow vent on roof"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.placeEyebrowVentOnRoof"
+msgid "editor.toolHint.placeEyebrowVentOnRoof.1h1tqxn"
 msgstr "Placer le chien-assis sur le toit"
 
 # Source-Hash: e8d42c1c8370773f
@@ -6605,7 +6665,7 @@ msgstr "Placer le chien-assis sur le toit"
 # English: "Place fitting"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.placeFitting"
+msgid "editor.toolHint.placeFitting.1pmx3vn"
 msgstr "Placer le raccord"
 
 # Source-Hash: 2340a4b70cb0d9ad
@@ -6615,7 +6675,7 @@ msgstr "Placer le raccord"
 # English: "Place gutter on roof eave"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.placeGutterOnRoofEave"
+msgid "editor.toolHint.placeGutterOnRoofEave.llwzf9"
 msgstr "Placer la gouttière sur l’égout du toit"
 
 # Source-Hash: 706a8eafb6212833
@@ -6625,7 +6685,7 @@ msgstr "Placer la gouttière sur l’égout du toit"
 # English: "Place item"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.placeItem"
+msgid "editor.toolHint.placeItem.teynf"
 msgstr "Placer l’élément"
 
 # Source-Hash: 1815c482e249932e
@@ -6635,7 +6695,7 @@ msgstr "Placer l’élément"
 # English: "Place it (locked to 45°)"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.placeItLockedTo45"
+msgid "editor.toolHint.placeItLockedTo45.16e4csk"
 msgstr "Placer (verrouillé à 45°)"
 
 # Source-Hash: 4a14340657532838
@@ -6645,7 +6705,7 @@ msgstr "Placer (verrouillé à 45°)"
 # English: "Place measurement point"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.placeMeasurementPoint"
+msgid "editor.toolHint.placeMeasurementPoint.bsatli"
 msgstr "Placer le point de mesure"
 
 # Source-Hash: b3be684ac62fbf53
@@ -6655,7 +6715,7 @@ msgstr "Placer le point de mesure"
 # English: "Placement"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.placement"
+msgid "editor.toolHint.placement.13lcvts"
 msgstr "Placement"
 
 # Source-Hash: 2bb2ce6276c69b1e
@@ -6665,7 +6725,7 @@ msgstr "Placement"
 # English: "Placement: Auto"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.placementAuto"
+msgid "editor.toolHint.placementAuto.1caa52d"
 msgstr "Placement : auto"
 
 # Source-Hash: ed78ac5354a1dcd8
@@ -6675,7 +6735,7 @@ msgstr "Placement : auto"
 # English: "Placement: Ground"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.placementGround"
+msgid "editor.toolHint.placementGround.1ruz145"
 msgstr "Placement : sol"
 
 # Source-Hash: a066a2c9d5e65a1a
@@ -6685,7 +6745,7 @@ msgstr "Placement : sol"
 # English: "Placement: Roof"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.placementRoof"
+msgid "editor.toolHint.placementRoof.renkw8"
 msgstr "Placement : toit"
 
 # Source-Hash: 8f74dbe5064c4c66
@@ -6695,7 +6755,7 @@ msgstr "Placement : toit"
 # English: "Placement surface - click or press P to cycle"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.placementSurfaceClickOrPressP"
+msgid "editor.toolHint.placementSurfaceClickOrPressP.w56h19"
 msgstr "Surface de placement - cliquez ou appuyez sur P pour changer"
 
 # Source-Hash: fe119955c925feaf
@@ -6705,7 +6765,7 @@ msgstr "Surface de placement - cliquez ou appuyez sur P pour changer"
 # English: "Placement type"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.placementType"
+msgid "editor.toolHint.placementType.1mdpl60"
 msgstr "Type de placement"
 
 # Source-Hash: 33043a35500168f5
@@ -6715,7 +6775,7 @@ msgstr "Type de placement"
 # English: "Placement type — click or press I to toggle"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.placementTypeClickOrPressI"
+msgid "editor.toolHint.placementTypeClickOrPressI.10cgxh2"
 msgstr "Type de placement — cliquez ou appuyez sur I pour basculer"
 
 # Source-Hash: 9945f412e6a9a446
@@ -6725,7 +6785,7 @@ msgstr "Type de placement — cliquez ou appuyez sur I pour basculer"
 # English: "Place on a fence"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.placeOnAFence"
+msgid "editor.toolHint.placeOnAFence.1dptstr"
 msgstr "Placer sur une clôture"
 
 # Source-Hash: 6708118775a7da7f
@@ -6735,7 +6795,7 @@ msgstr "Placer sur une clôture"
 # English: "Place register"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.placeRegister"
+msgid "editor.toolHint.placeRegister.1uebycd"
 msgstr "Placer la bouche"
 
 # Source-Hash: ebd2731f5c79306e
@@ -6745,7 +6805,7 @@ msgstr "Placer la bouche"
 # English: "Place ridge vent on roof"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.placeRidgeVentOnRoof"
+msgid "editor.toolHint.placeRidgeVentOnRoof.2tpd8r"
 msgstr "Placer la ventilation de faîtage sur le toit"
 
 # Source-Hash: 9b3c66a867c23326
@@ -6755,7 +6815,7 @@ msgstr "Placer la ventilation de faîtage sur le toit"
 # English: "Place shelf"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.placeShelf"
+msgid "editor.toolHint.placeShelf.y4l3iw"
 msgstr "Placer l’étagère"
 
 # Source-Hash: f11cf5c1c9fe862d
@@ -6765,7 +6825,7 @@ msgstr "Placer l’étagère"
 # English: "Place skylight on roof"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.placeSkylightOnRoof"
+msgid "editor.toolHint.placeSkylightOnRoof.e215pe"
 msgstr "Placer la fenêtre de toit"
 
 # Source-Hash: e989a58d6709cc16
@@ -6775,7 +6835,7 @@ msgstr "Placer la fenêtre de toit"
 # English: "Place solar panel array on roof"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.placeSolarPanelArrayOnRoof"
+msgid "editor.toolHint.placeSolarPanelArrayOnRoof.kk11fn"
 msgstr "Placer les panneaux solaires sur le toit"
 
 # Source-Hash: b67f7036d5180cf5
@@ -6785,7 +6845,7 @@ msgstr "Placer les panneaux solaires sur le toit"
 # English: "Place spawn point"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.placeSpawnPoint"
+msgid "editor.toolHint.placeSpawnPoint.205o25"
 msgstr "Placer le point d’apparition"
 
 # Source-Hash: 6c7f32a17e5636c3
@@ -6795,7 +6855,7 @@ msgstr "Placer le point d’apparition"
 # English: "Place stairs"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.placeStairs"
+msgid "editor.toolHint.placeStairs.zwxxu2"
 msgstr "Placer l’escalier"
 
 # Source-Hash: 641c0d3debd798a8
@@ -6805,7 +6865,7 @@ msgstr "Placer l’escalier"
 # English: "Place trap"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.placeTrap"
+msgid "editor.toolHint.placeTrap.1gxemn3"
 msgstr "Placer le siphon"
 
 # Source-Hash: 6f0a6f6c4b7588a0
@@ -6815,7 +6875,7 @@ msgstr "Placer le siphon"
 # English: "Place turbine vent on roof"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.placeTurbineVentOnRoof"
+msgid "editor.toolHint.placeTurbineVentOnRoof.1iqeluf"
 msgstr "Placer l’extracteur éolien sur le toit"
 
 # Source-Hash: e65cf5edb4f51ed5
@@ -6825,7 +6885,7 @@ msgstr "Placer l’extracteur éolien sur le toit"
 # English: "Place unit"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.placeUnit"
+msgid "editor.toolHint.placeUnit.8zkx4q"
 msgstr "Placer l’unité"
 
 # Source-Hash: 86ce1c730154f68b
@@ -6835,7 +6895,7 @@ msgstr "Placer l’unité"
 # English: "Place window on wall"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.placeWindowOnWall"
+msgid "editor.toolHint.placeWindowOnWall.1k3qnfb"
 msgstr "Placer la fenêtre sur le mur"
 
 # Source-Hash: 2b612180a7617901
@@ -6845,7 +6905,7 @@ msgstr "Placer la fenêtre sur le mur"
 # English: "Place without the corner snap"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.placeWithoutTheCornerSnap"
+msgid "editor.toolHint.placeWithoutTheCornerSnap.1nifqew"
 msgstr "Placer sans l’aimantation d’angle"
 
 # Source-Hash: 0dc6d121791696f7
@@ -6855,7 +6915,7 @@ msgstr "Placer sans l’aimantation d’angle"
 # English: "Remove last point"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.removeLastPoint"
+msgid "editor.toolHint.removeLastPoint.2dmdcx"
 msgstr "Retirer le dernier point"
 
 # Source-Hash: 8b74b1d962be10fc
@@ -6865,7 +6925,7 @@ msgstr "Retirer le dernier point"
 # English: "Remove last witness"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.removeLastWitness"
+msgid "editor.toolHint.removeLastWitness.1b6vvzw"
 msgstr "Retirer le dernier repère"
 
 # Source-Hash: 306d409f8a1cf480
@@ -6875,7 +6935,7 @@ msgstr "Retirer le dernier repère"
 # English: "Rotate"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.rotate"
+msgid "editor.toolHint.rotate.1thqa0a"
 msgstr "Pivoter"
 
 # Source-Hash: 8a665ecaeffa9308
@@ -6885,7 +6945,7 @@ msgstr "Pivoter"
 # English: "Rotate ±45°"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.rotate45"
+msgid "editor.toolHint.rotate45.9zq68u"
 msgstr "Pivoter de ±45°"
 
 # Source-Hash: be2240289aa74df5
@@ -6895,7 +6955,7 @@ msgstr "Pivoter de ±45°"
 # English: "Rotate ±45° (floor / ceiling)"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.rotate45FloorCeiling"
+msgid "editor.toolHint.rotate45FloorCeiling.m9t57d"
 msgstr "Pivoter de ±45° (sol / plafond)"
 
 # Source-Hash: d5fb78b07c0f8138
@@ -6905,7 +6965,7 @@ msgstr "Pivoter de ±45° (sol / plafond)"
 # English: "Rotate ghost ±15°"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.rotateGhost15"
+msgid "editor.toolHint.rotateGhost15.rsa52c"
 msgstr "Pivoter l’aperçu de ±15°"
 
 # Source-Hash: 912d340cd16e27fa
@@ -6915,7 +6975,7 @@ msgstr "Pivoter l’aperçu de ±15°"
 # English: "Rotate or flip the run side"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.rotateOrFlipTheRunSide"
+msgid "editor.toolHint.rotateOrFlipTheRunSide.t5ior7"
 msgstr "Pivoter ou inverser le côté de la rangée"
 
 # Source-Hash: ad1dc0b5536cceef
@@ -6925,7 +6985,7 @@ msgstr "Pivoter ou inverser le côté de la rangée"
 # English: "Rotate roof direction 90°"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.rotateRoofDirection90"
+msgid "editor.toolHint.rotateRoofDirection90.tvbji2"
 msgstr "Pivoter l’orientation du toit de 90°"
 
 # Source-Hash: fa24651e9e5f595a
@@ -6935,7 +6995,7 @@ msgstr "Pivoter l’orientation du toit de 90°"
 # English: "Rotate spawn point"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.rotateSpawnPoint"
+msgid "editor.toolHint.rotateSpawnPoint.1opcuu7"
 msgstr "Pivoter le point d’apparition"
 
 # Source-Hash: 2d693d87fe9b59e6
@@ -6945,7 +7005,7 @@ msgstr "Pivoter le point d’apparition"
 # English: "Round / rectangular / oval"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.roundRectangularOval"
+msgid "editor.toolHint.roundRectangularOval.e4nh6x"
 msgstr "Rond / rectangulaire / oblong"
 
 # Source-Hash: f7d2c9cdcc637c97
@@ -6955,7 +7015,7 @@ msgstr "Rond / rectangulaire / oblong"
 # English: "Set fence start / end"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.setFenceStartEnd"
+msgid "editor.toolHint.setFenceStartEnd.1phbwsq"
 msgstr "Définir le début / la fin de la clôture"
 
 # Source-Hash: c93ae898b4d59f6f
@@ -6965,7 +7025,7 @@ msgstr "Définir le début / la fin de la clôture"
 # English: "Set one corner, then the opposite"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.setOneCornerThenTheOpposite"
+msgid "editor.toolHint.setOneCornerThenTheOpposite.8tsl49"
 msgstr "Placez un angle, puis l’angle opposé"
 
 # Source-Hash: 4f55171f10c6ceeb
@@ -6975,7 +7035,7 @@ msgstr "Placez un angle, puis l’angle opposé"
 # English: "Set roof footprint"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.setRoofFootprint"
+msgid "editor.toolHint.setRoofFootprint.p50n0o"
 msgstr "Définir l’emprise du toit"
 
 # Source-Hash: 0243859b1d64c21e
@@ -6985,7 +7045,7 @@ msgstr "Définir l’emprise du toit"
 # English: "Set wall start / end"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.setWallStartEnd"
+msgid "editor.toolHint.setWallStartEnd.1r8ubcx"
 msgstr "Définir le début / la fin du mur"
 
 # Source-Hash: c2806cce9612fa50
@@ -6995,7 +7055,7 @@ msgstr "Définir le début / la fin du mur"
 # English: "Slope / level"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.slopeLevel"
+msgid "editor.toolHint.slopeLevel.ftqp67"
 msgstr "Pente / à plat"
 
 # Source-Hash: 06c0ec40606db679
@@ -7005,7 +7065,7 @@ msgstr "Pente / à plat"
 # English: "Snap onto the run"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.snapOntoTheRun"
+msgid "editor.toolHint.snapOntoTheRun.86yhmp"
 msgstr "Aimanter sur le tronçon"
 
 # Source-Hash: e214cccbac9c4fd2
@@ -7015,7 +7075,7 @@ msgstr "Aimanter sur le tronçon"
 # English: "Split at the marks"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.splitAtTheMarks"
+msgid "editor.toolHint.splitAtTheMarks.x5tpdd"
 msgstr "Diviser aux repères"
 
 # Source-Hash: 94455c35bfeac6b4
@@ -7025,7 +7085,7 @@ msgstr "Diviser aux repères"
 # English: "Start grid axis"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.startGridAxis"
+msgid "editor.toolHint.startGridAxis.k92yza"
 msgstr "Commencer l’axe de trame"
 
 # Source-Hash: 2edb4c29bbe7c513
@@ -7035,7 +7095,7 @@ msgstr "Commencer l’axe de trame"
 # English: "Start lineset"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.startLineset"
+msgid "editor.toolHint.startLineset.23q8dh"
 msgstr "Commencer la liaison frigorifique"
 
 # Source-Hash: 9e50f1b30e325208
@@ -7045,7 +7105,7 @@ msgstr "Commencer la liaison frigorifique"
 # English: "Start liquid line"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.startLiquidLine"
+msgid "editor.toolHint.startLiquidLine.1rlxsgd"
 msgstr "Commencer la ligne liquide"
 
 # Source-Hash: 877ddcb778c211cc
@@ -7055,7 +7115,7 @@ msgstr "Commencer la ligne liquide"
 # English: "Start run"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.startRun"
+msgid "editor.toolHint.startRun.r6fc5u"
 msgstr "Commencer le tronçon"
 
 # Source-Hash: 8a62bee64174bbc0
@@ -7065,7 +7125,7 @@ msgstr "Commencer le tronçon"
 # English: "Start segment"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.startSegment"
+msgid "editor.toolHint.startSegment.rolym6"
 msgstr "Commencer le segment"
 
 # Source-Hash: 6cc5dc51a8e66779
@@ -7075,7 +7135,7 @@ msgstr "Commencer le segment"
 # English: "Step back or cancel"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.stepBackOrCancel"
+msgid "editor.toolHint.stepBackOrCancel.zbfdkn"
 msgstr "Revenir en arrière ou annuler"
 
 # Source-Hash: 1a79a485d91f3f28
@@ -7085,7 +7145,7 @@ msgstr "Revenir en arrière ou annuler"
 # English: "Style"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.style"
+msgid "editor.toolHint.style.nf3vcm"
 msgstr "Style"
 
 # Source-Hash: 81f595b1c47c0080
@@ -7095,7 +7155,7 @@ msgstr "Style"
 # English: "Style: Barn"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.styleBarn"
+msgid "editor.toolHint.styleBarn.k9n1x"
 msgstr "Style : grange"
 
 # Source-Hash: 3a82c718fe215273
@@ -7105,7 +7165,7 @@ msgstr "Style : grange"
 # English: "Style: Casement"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.styleCasement"
+msgid "editor.toolHint.styleCasement.ziklec"
 msgstr "Style : battant"
 
 # Source-Hash: 072e3331d1d105c0
@@ -7115,7 +7175,7 @@ msgstr "Style : battant"
 # English: "Style: Craftsman"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.styleCraftsman"
+msgid "editor.toolHint.styleCraftsman.52e6a9"
 msgstr "Style : artisan"
 
 # Source-Hash: b64d07557dec1714
@@ -7125,7 +7185,7 @@ msgstr "Style : artisan"
 # English: "Style: Double-hung"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.styleDoubleHung"
+msgid "editor.toolHint.styleDoubleHung.1lg8pkg"
 msgstr "Style : guillotine double"
 
 # Source-Hash: 55ef8761a537637f
@@ -7135,7 +7195,7 @@ msgstr "Style : guillotine double"
 # English: "Style: French"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.styleFrench"
+msgid "editor.toolHint.styleFrench.1ue3j64"
 msgstr "Style : à la française"
 
 # Source-Hash: bc8a751d87536dc3
@@ -7145,7 +7205,7 @@ msgstr "Style : à la française"
 # English: "Style: Glass"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.styleGlass"
+msgid "editor.toolHint.styleGlass.qudnb4"
 msgstr "Style : vitré"
 
 # Source-Hash: 40c1eb0bc83e207d
@@ -7155,7 +7215,7 @@ msgstr "Style : vitré"
 # English: "Style: Grid"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.styleGrid"
+msgid "editor.toolHint.styleGrid.1vuq4po"
 msgstr "Style : petits bois"
 
 # Source-Hash: f516886bab2e7f10
@@ -7165,7 +7225,7 @@ msgstr "Style : petits bois"
 # English: "Style: Half-louvered"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.styleHalfLouvered"
+msgid "editor.toolHint.styleHalfLouvered.13b1few"
 msgstr "Style : demi-persienne"
 
 # Source-Hash: 64e4389a695371a2
@@ -7175,7 +7235,7 @@ msgstr "Style : demi-persienne"
 # English: "Style: Horizontal bands"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.styleHorizontalBands"
+msgid "editor.toolHint.styleHorizontalBands.12ethxk"
 msgstr "Style : bandes horizontales"
 
 # Source-Hash: ff6d226a425b00c0
@@ -7185,7 +7245,7 @@ msgstr "Style : bandes horizontales"
 # English: "Style: Modern"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.styleModern"
+msgid "editor.toolHint.styleModern.1fh8hhn"
 msgstr "Style : moderne"
 
 # Source-Hash: c6d17ba078ff47e7
@@ -7195,7 +7255,7 @@ msgstr "Style : moderne"
 # English: "Style: Panel"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.stylePanel"
+msgid "editor.toolHint.stylePanel.922jze"
 msgstr "Style : panneau"
 
 # Source-Hash: 5e6baad0d2ce3a62
@@ -7205,7 +7265,7 @@ msgstr "Style : panneau"
 # English: "Style: Paneled glass"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.stylePaneledGlass"
+msgid "editor.toolHint.stylePaneledGlass.17a17en"
 msgstr "Style : vitré à panneaux"
 
 # Source-Hash: 6314388e6832c252
@@ -7215,7 +7275,7 @@ msgstr "Style : vitré à panneaux"
 # English: "Style: Shaker"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.styleShaker"
+msgid "editor.toolHint.styleShaker.49z17k"
 msgstr "Style : shaker"
 
 # Source-Hash: a0f8e524f3ca121f
@@ -7225,7 +7285,7 @@ msgstr "Style : shaker"
 # English: "Style: Single"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.styleSingle"
+msgid "editor.toolHint.styleSingle.6f3cm0"
 msgstr "Style : simple"
 
 # Source-Hash: 368279df3a472c86
@@ -7235,7 +7295,7 @@ msgstr "Style : simple"
 # English: "Style: Six-panel"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.styleSixPanel"
+msgid "editor.toolHint.styleSixPanel.u49laj"
 msgstr "Style : six panneaux"
 
 # Source-Hash: 8f3c2571d8168fee
@@ -7245,7 +7305,7 @@ msgstr "Style : six panneaux"
 # English: "Style: Sliding"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.styleSliding"
+msgid "editor.toolHint.styleSliding.q81s0i"
 msgstr "Style : coulissant"
 
 # Source-Hash: aa9d9eb137ca38d4
@@ -7255,7 +7315,7 @@ msgstr "Style : coulissant"
 # English: "Style: Tall grid"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.styleTallGrid"
+msgid "editor.toolHint.styleTallGrid.1eotg3x"
 msgstr "Style : petits bois hauts"
 
 # Source-Hash: bc164648722b63e5
@@ -7265,7 +7325,7 @@ msgstr "Style : petits bois hauts"
 # English: "Style: Transom"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.styleTransom"
+msgid "editor.toolHint.styleTransom.kb9bh6"
 msgstr "Style : imposte"
 
 # Source-Hash: 9a218f0c9ceb4697
@@ -7275,7 +7335,7 @@ msgstr "Style : imposte"
 # English: "Style: Triple-hung"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.styleTripleHung"
+msgid "editor.toolHint.styleTripleHung.pxnqi3"
 msgstr "Style : guillotine triple"
 
 # Source-Hash: 9f6df1344bd3d694
@@ -7285,7 +7345,7 @@ msgstr "Style : guillotine triple"
 # English: "Style: Wide grid"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.styleWideGrid"
+msgid "editor.toolHint.styleWideGrid.12n27et"
 msgstr "Style : petits bois larges"
 
 # Source-Hash: 711d4050c0cb95d7
@@ -7295,7 +7355,7 @@ msgstr "Style : petits bois larges"
 # English: "Switch rotation axis (Y → X → Z)"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.switchRotationAxisYXZ"
+msgid "editor.toolHint.switchRotationAxisYXZ.15lohm6"
 msgstr "Changer l’axe de rotation (Y → X → Z)"
 
 # Source-Hash: d650c71e042c2598
@@ -7305,7 +7365,7 @@ msgstr "Changer l’axe de rotation (Y → X → Z)"
 # English: "The walls meet at too sharp or too flat an angle"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.theWallsMeetAtTooSharp"
+msgid "editor.toolHint.theWallsMeetAtTooSharp.kh3wi3"
 msgstr "Les murs se rejoignent selon un angle trop aigu ou trop plat"
 
 # Source-Hash: ab206ac56e65f190
@@ -7315,7 +7375,7 @@ msgstr "Les murs se rejoignent selon un angle trop aigu ou trop plat"
 # English: "The window waiting there is taller than this wall"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.theWindowWaitingThereIsTaller"
+msgid "editor.toolHint.theWindowWaitingThereIsTaller.1tqwez4"
 msgstr "La fenêtre prévue à cet endroit est plus haute que ce mur"
 
 # Source-Hash: 9c1f47138ed5c7ee
@@ -7325,7 +7385,7 @@ msgstr "La fenêtre prévue à cet endroit est plus haute que ce mur"
 # English: "Three or more walls meet here"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.threeOrMoreWallsMeetHere"
+msgid "editor.toolHint.threeOrMoreWallsMeetHere.rgifif"
 msgstr "Trois murs ou plus se rejoignent ici"
 
 # Source-Hash: c3ca56fa28e15f07
@@ -7335,7 +7395,7 @@ msgstr "Trois murs ou plus se rejoignent ici"
 # English: "Trace ceiling outline"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.traceCeilingOutline"
+msgid "editor.toolHint.traceCeilingOutline.1b639wv"
 msgstr "Tracer le contour du plafond"
 
 # Source-Hash: bdf71499d30a29de
@@ -7345,7 +7405,7 @@ msgstr "Tracer le contour du plafond"
 # English: "Trace slab outline"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.traceSlabOutline"
+msgid "editor.toolHint.traceSlabOutline.z0j2lc"
 msgstr "Tracer le contour de la dalle"
 
 # Source-Hash: c44f7ab8bbd24858
@@ -7355,7 +7415,7 @@ msgstr "Tracer le contour de la dalle"
 # English: "Type"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.type"
+msgid "editor.toolHint.type.1m2zofh"
 msgstr "Type"
 
 # Source-Hash: b54eaaff3349dcb1
@@ -7365,7 +7425,7 @@ msgstr "Type"
 # English: "Type: Awning"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.typeAwning"
+msgid "editor.toolHint.typeAwning.1cj59al"
 msgstr "Type : à l’italienne"
 
 # Source-Hash: f399572a27417c66
@@ -7375,7 +7435,7 @@ msgstr "Type : à l’italienne"
 # English: "Type: Barn"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.typeBarn"
+msgid "editor.toolHint.typeBarn.sbnygq"
 msgstr "Type : grange"
 
 # Source-Hash: a1df9782200b5f1e
@@ -7385,7 +7445,7 @@ msgstr "Type : grange"
 # English: "Type: Bay"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.typeBay"
+msgid "editor.toolHint.typeBay.1200hc1"
 msgstr "Type : oriel"
 
 # Source-Hash: ff069a390e8e3f66
@@ -7395,7 +7455,7 @@ msgstr "Type : oriel"
 # English: "Type: Bow"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.typeBow"
+msgid "editor.toolHint.typeBow.14s2t9p"
 msgstr "Type : bow-window"
 
 # Source-Hash: bdac5f3f2ea70fff
@@ -7405,7 +7465,7 @@ msgstr "Type : bow-window"
 # English: "Type: Cabinet"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.typeCabinet"
+msgid "editor.toolHint.typeCabinet.1r68je5"
 msgstr "Type : placard"
 
 # Source-Hash: e0754fc03997cbf9
@@ -7415,7 +7475,7 @@ msgstr "Type : placard"
 # English: "Type: Casement"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.typeCasement"
+msgid "editor.toolHint.typeCasement.176uo9j"
 msgstr "Type : battant"
 
 # Source-Hash: 47d873446d6e173b
@@ -7425,7 +7485,7 @@ msgstr "Type : battant"
 # English: "Type: Double"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.typeDouble"
+msgid "editor.toolHint.typeDouble.af7w4i"
 msgstr "Type : double"
 
 # Source-Hash: 5942e484513aaab5
@@ -7435,7 +7495,7 @@ msgstr "Type : double"
 # English: "Type: Double Hung"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.typeDoubleHung"
+msgid "editor.toolHint.typeDoubleHung.t482fu"
 msgstr "Type : guillotine double"
 
 # Source-Hash: f9497fbfceefda27
@@ -7445,7 +7505,7 @@ msgstr "Type : guillotine double"
 # English: "Type: Fixed"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.typeFixed"
+msgid "editor.toolHint.typeFixed.v1cjez"
 msgstr "Type : fixe"
 
 # Source-Hash: 0dcf07acc9cbf000
@@ -7455,7 +7515,7 @@ msgstr "Type : fixe"
 # English: "Type: Folding"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.typeFolding"
+msgid "editor.toolHint.typeFolding.sxxyng"
 msgstr "Type : pliante"
 
 # Source-Hash: bff7331f87f279aa
@@ -7465,7 +7525,7 @@ msgstr "Type : pliante"
 # English: "Type: French"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.typeFrench"
+msgid "editor.toolHint.typeFrench.1y57z1b"
 msgstr "Type : à la française"
 
 # Source-Hash: 9d2c3b82079eb769
@@ -7475,7 +7535,7 @@ msgstr "Type : à la française"
 # English: "Type: Hinged"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.typeHinged"
+msgid "editor.toolHint.typeHinged.1xrcfju"
 msgstr "Type : battante"
 
 # Source-Hash: b8001b90ff522838
@@ -7485,7 +7545,7 @@ msgstr "Type : battante"
 # English: "Type: Island"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.typeIsland"
+msgid "editor.toolHint.typeIsland.ufr3ce"
 msgstr "Type : îlot"
 
 # Source-Hash: 516833c5160d412e
@@ -7495,7 +7555,7 @@ msgstr "Type : îlot"
 # English: "Type: Louvered"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.typeLouvered"
+msgid "editor.toolHint.typeLouvered.oxl1cz"
 msgstr "Type : à persiennes"
 
 # Source-Hash: 291272bf848ad6ab
@@ -7505,7 +7565,7 @@ msgstr "Type : à persiennes"
 # English: "Type: Pocket"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.typePocket"
+msgid "editor.toolHint.typePocket.hc65x9"
 msgstr "Type : galandage"
 
 # Source-Hash: 46d0e53d6ae07c72
@@ -7515,7 +7575,7 @@ msgstr "Type : galandage"
 # English: "Type: Single Hung"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.typeSingleHung"
+msgid "editor.toolHint.typeSingleHung.p53pyl"
 msgstr "Type : guillotine simple"
 
 # Source-Hash: b11115b50df8faac
@@ -7525,7 +7585,7 @@ msgstr "Type : guillotine simple"
 # English: "Type: Sliding"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.typeSliding"
+msgid "editor.toolHint.typeSliding.nwmr3f"
 msgstr "Type : coulissante"
 
 # Source-Hash: bff0c1694ee0a37e
@@ -7535,7 +7595,7 @@ msgstr "Type : coulissante"
 # English: "Vertical stack ↕, click to place"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.verticalStackClickToPlace"
+msgid "editor.toolHint.verticalStackClickToPlace.ijcn4q"
 msgstr "Colonne verticale ↕, cliquez pour placer"
 
 # Source-Hash: bac471ee67af6412
@@ -7545,7 +7605,7 @@ msgstr "Colonne verticale ↕, cliquez pour placer"
 # English: "Waste / vent"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.wasteVent"
+msgid "editor.toolHint.wasteVent.1hvi3vj"
 msgstr "Évacuation / ventilation"
 
 # Source-Hash: 1c744b7e24fc786e
@@ -7555,7 +7615,7 @@ msgstr "Évacuation / ventilation"
 # English: "Window style — click or press L to cycle"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.windowStyleClickOrPressL"
+msgid "editor.toolHint.windowStyleClickOrPressL.ah7qm9"
 msgstr "Style de fenêtre — cliquez ou appuyez sur L pour changer"
 
 # Source-Hash: dd6f0ab314fea26c
@@ -7565,7 +7625,7 @@ msgstr "Style de fenêtre — cliquez ou appuyez sur L pour changer"
 # English: "Window type — click or press O to cycle"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.windowTypeClickOrPressO"
+msgid "editor.toolHint.windowTypeClickOrPressO.wv4x35"
 msgstr "Type de fenêtre — cliquez ou appuyez sur O pour changer"
 
 # Source-Hash: 9fc7a39bc32f287a

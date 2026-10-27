@@ -2551,16 +2551,6 @@ msgstr "窗"
 msgid "editor.actionMenu.structureTools.zone"
 msgstr "区域"
 
-# Source-Hash: 43af78ba61aaa8ab
-# Review: required
-# AI-Provider: cursor-agent
-# AI-Model: claude-opus
-# English: "below"
-#: packages/editor/src/components/ui/action-menu/view-toggles.tsx
-#, fuzzy
-msgid "editor.actionMenu.viewToggles.below"
-msgstr "下方"
-
 # Source-Hash: cdf3f12939ba108c
 # Review: required
 # AI-Provider: cursor-agent
@@ -2680,6 +2670,16 @@ msgstr "隐藏参考楼层"
 #, fuzzy
 msgid "editor.actionMenu.viewToggles.hideScans"
 msgstr "隐藏扫描模型"
+
+# Source-Hash: 873620c284a5651f
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "{count} below"
+#: packages/editor/src/components/ui/action-menu/view-toggles.tsx
+#, fuzzy
+msgid "editor.actionMenu.viewToggles.levelsBelow"
+msgstr "下方 {count} 层"
 
 # Source-Hash: 22a59ae72d8c9504
 # Review: required
@@ -3473,6 +3473,36 @@ msgstr "连续放置：{label}"
 msgid "editor.helpers.contextualHelperPanel.dragToDrawFence"
 msgstr "拖动绘制围栏"
 
+# Source-Hash: b52e874718af1916
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Erase: {scope}"
+#: packages/editor/src/components/ui/helpers/contextual-helper-panel.tsx
+#, fuzzy
+msgid "editor.helpers.contextualHelperPanel.eraseScope"
+msgstr "擦除：{scope}"
+
+# Source-Hash: 61f7494abc319e66
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Erase scope — click or press Shift to cycle"
+#: packages/editor/src/components/ui/helpers/contextual-helper-panel.tsx
+#, fuzzy
+msgid "editor.helpers.contextualHelperPanel.eraseScopeClickOrPressShift"
+msgstr "擦除范围 — 点击或按 Shift 切换"
+
+# Source-Hash: 59993c163d68cc53
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Erase scope: {scope}"
+#: packages/editor/src/components/ui/helpers/contextual-helper-panel.tsx
+#, fuzzy
+msgid "editor.helpers.contextualHelperPanel.eraseScopeLabel"
+msgstr "擦除范围：{scope}"
+
 # Source-Hash: a4bdcbc6cab772bf
 # Review: required
 # AI-Provider: cursor-agent
@@ -3572,6 +3602,46 @@ msgstr "悬停在表面上以拾取其材质"
 #, fuzzy
 msgid "editor.helpers.contextualHelperPanel.moreShortcuts"
 msgstr "更多快捷键"
+
+# Source-Hash: 476b8f5f9ee542e6
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Paint: {scope}"
+#: packages/editor/src/components/ui/helpers/contextual-helper-panel.tsx
+#, fuzzy
+msgid "editor.helpers.contextualHelperPanel.paintScope"
+msgstr "涂装：{scope}"
+
+# Source-Hash: 9c09ce4c34122277
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Paint scope — click or press Shift to cycle"
+#: packages/editor/src/components/ui/helpers/contextual-helper-panel.tsx
+#, fuzzy
+msgid "editor.helpers.contextualHelperPanel.paintScopeClickOrPressShift"
+msgstr "涂装范围 — 点击或按 Shift 切换"
+
+# Source-Hash: 7890aa81687f6654
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Paint scope: {scope}"
+#: packages/editor/src/components/ui/helpers/contextual-helper-panel.tsx
+#, fuzzy
+msgid "editor.helpers.contextualHelperPanel.paintScopeLabel"
+msgstr "涂装范围：{scope}"
+
+# Source-Hash: a75b3abc0784b12b
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Pick: {scope}"
+#: packages/editor/src/components/ui/helpers/contextual-helper-panel.tsx
+#, fuzzy
+msgid "editor.helpers.contextualHelperPanel.pickScope"
+msgstr "拾取：{scope}"
 
 # Source-Hash: 69c1044e6ea87ccf
 # Review: required
@@ -3692,16 +3762,6 @@ msgstr "直线围栏连续 — 点击或按 C 切换"
 #, fuzzy
 msgid "editor.helpers.contextualHelperPanel.straightSingle"
 msgstr "直线：单段"
-
-# Source-Hash: 83e56140165f2535
-# Review: required
-# AI-Provider: cursor-agent
-# AI-Model: claude-opus
-# English: "{verb} scope — click or press Shift to cycle"
-#: packages/editor/src/components/ui/helpers/contextual-helper-panel.tsx
-#, fuzzy
-msgid "editor.helpers.contextualHelperPanel.verbScopeClickOrPressShift"
-msgstr "{verb}范围 — 点击或按 Shift 切换"
 
 # Source-Hash: 9a56d90d461b4bca
 # Review: required
@@ -5805,7 +5865,7 @@ msgstr "编辑器场景渲染失败"
 # English: "A curtain wall takes no corner window"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.aCurtainWallTakesNoCorner"
+msgid "editor.toolHint.aCurtainWallTakesNoCorner.1qxjv5i"
 msgstr "幕墙不能设置转角窗"
 
 # Source-Hash: 97f5e044d46501fb
@@ -5815,7 +5875,7 @@ msgstr "幕墙不能设置转角窗"
 # English: "A curved wall takes no corner window"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.aCurvedWallTakesNoCorner"
+msgid "editor.toolHint.aCurvedWallTakesNoCorner.1vdnaw5"
 msgstr "曲面墙体不能设置转角窗"
 
 # Source-Hash: 776d8ebece7fe1bb
@@ -5825,7 +5885,7 @@ msgstr "曲面墙体不能设置转角窗"
 # English: "Add a corner · click the first to close"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.addACornerClickTheFirst"
+msgid "editor.toolHint.addACornerClickTheFirst.o4r67t"
 msgstr "添加转角 · 点击第一个点闭合"
 
 # Source-Hash: 6a0745dd047b149a
@@ -5835,7 +5895,7 @@ msgstr "添加转角 · 点击第一个点闭合"
 # English: "Another opening is in the way at the corner"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.anotherOpeningIsInTheWay"
+msgid "editor.toolHint.anotherOpeningIsInTheWay.11l9dd0"
 msgstr "转角处有另一个开口阻挡"
 
 # Source-Hash: 441124187e7da2fc
@@ -5845,7 +5905,7 @@ msgstr "转角处有另一个开口阻挡"
 # English: "Auto hangers"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.autoHangers"
+msgid "editor.toolHint.autoHangers.10554ka"
 msgstr "自动吊架"
 
 # Source-Hash: 47a7f9a6a81156c3
@@ -5855,7 +5915,7 @@ msgstr "自动吊架"
 # English: "Auto hangers - click or press H to toggle"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.autoHangersClickOrPressH"
+msgid "editor.toolHint.autoHangersClickOrPressH.rwa3ka"
 msgstr "自动吊架 - 点击或按 H 切换"
 
 # Source-Hash: d7944f31cba90e26
@@ -5865,7 +5925,7 @@ msgstr "自动吊架 - 点击或按 H 切换"
 # English: "Auto hangers: Off"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.autoHangersOff"
+msgid "editor.toolHint.autoHangersOff.7yx01x"
 msgstr "自动吊架：关"
 
 # Source-Hash: 295882d015d08742
@@ -5875,7 +5935,7 @@ msgstr "自动吊架：关"
 # English: "Auto hangers: On"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.autoHangersOn"
+msgid "editor.toolHint.autoHangersOn.10b1umh"
 msgstr "自动吊架：开"
 
 # Source-Hash: 8c039e5182b01c4d
@@ -5885,7 +5945,7 @@ msgstr "自动吊架：开"
 # English: "Bypass snapping"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.bypassSnapping"
+msgid "editor.toolHint.bypassSnapping.w5lmdv"
 msgstr "绕过吸附"
 
 # Source-Hash: c0774c185060fc13
@@ -5895,7 +5955,7 @@ msgstr "绕过吸附"
 # English: "Cancel"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.cancel"
+msgid "editor.toolHint.cancel.ew9em3"
 msgstr "取消"
 
 # Source-Hash: 5b33b576fd30b74e
@@ -5905,7 +5965,7 @@ msgstr "取消"
 # English: "Cancel move"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.cancelMove"
+msgid "editor.toolHint.cancelMove.lvp31c"
 msgstr "取消移动"
 
 # Source-Hash: 136fa29b9ae419bf
@@ -5915,7 +5975,7 @@ msgstr "取消移动"
 # English: "Cancel run / exit"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.cancelRunExit"
+msgid "editor.toolHint.cancelRunExit.zqjf3h"
 msgstr "取消管段 / 退出"
 
 # Source-Hash: 75b406824be91ac2
@@ -5925,7 +5985,7 @@ msgstr "取消管段 / 退出"
 # English: "Cancel start point"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.cancelStartPoint"
+msgid "editor.toolHint.cancelStartPoint.1xbq2lh"
 msgstr "取消起点"
 
 # Source-Hash: ffa5aaa1746303c4
@@ -5935,7 +5995,7 @@ msgstr "取消起点"
 # English: "Corner window"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.cornerWindow"
+msgid "editor.toolHint.cornerWindow.1avkzpo"
 msgstr "转角窗"
 
 # Source-Hash: b0afdd855a02e4a7
@@ -5945,7 +6005,7 @@ msgstr "转角窗"
 # English: "Cuts"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.cuts"
+msgid "editor.toolHint.cuts.1y0axps"
 msgstr "切分"
 
 # Source-Hash: dc9fe7601cc525f8
@@ -5955,7 +6015,7 @@ msgstr "切分"
 # English: "Cuts: {value}"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.cutsValue"
+msgid "editor.toolHint.cutsValue.ouzhvb"
 msgstr "切分：{value}"
 
 # Source-Hash: a2e13bc4dc82624c
@@ -5965,7 +6025,7 @@ msgstr "切分：{value}"
 # English: "Cuts: {value}, even"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.cutsValueEven"
+msgid "editor.toolHint.cutsValueEven.1ngsz3"
 msgstr "切分：{value}，均分"
 
 # Source-Hash: 04152b4cec726f34
@@ -5975,7 +6035,7 @@ msgstr "切分：{value}，均分"
 # English: "Cycle mono / gable / butterfly"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.cycleMonoGableButterfly"
+msgid "editor.toolHint.cycleMonoGableButterfly.1poga3m"
 msgstr "切换单坡 / 双坡 / 蝶形"
 
 # Source-Hash: 4fb6c83edb6652b5
@@ -5985,7 +6045,7 @@ msgstr "切换单坡 / 双坡 / 蝶形"
 # English: "Cycle snapping mode"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.cycleSnappingMode"
+msgid "editor.toolHint.cycleSnappingMode.1ct0gn6"
 msgstr "切换吸附模式"
 
 # Source-Hash: 5d550a3ac76279de
@@ -5995,7 +6055,7 @@ msgstr "切换吸附模式"
 # English: "Door style — click or press L to cycle"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.doorStyleClickOrPressL"
+msgid "editor.toolHint.doorStyleClickOrPressL.33pe65"
 msgstr "门样式 — 点击或按 L 切换"
 
 # Source-Hash: 3272a7df5d7c6a9a
@@ -6005,7 +6065,7 @@ msgstr "门样式 — 点击或按 L 切换"
 # English: "Door type — click or press O to cycle"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.doorTypeClickOrPressO"
+msgid "editor.toolHint.doorTypeClickOrPressO.1hhh8gt"
 msgstr "门类型 — 点击或按 O 切换"
 
 # Source-Hash: 366222b4435eefda
@@ -6015,7 +6075,7 @@ msgstr "门类型 — 点击或按 O 切换"
 # English: "Drop downspout from outlet"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.dropDownspoutFromOutlet"
+msgid "editor.toolHint.dropDownspoutFromOutlet.1k4h1m4"
 msgstr "从出水口引出落水管"
 
 # Source-Hash: 03f306371f345007
@@ -6025,7 +6085,7 @@ msgstr "从出水口引出落水管"
 # English: "Duct diameter down / up"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.ductDiameterDownUp"
+msgid "editor.toolHint.ductDiameterDownUp.1wdz5vq"
 msgstr "风管直径减小 / 增大"
 
 # Source-Hash: 7b4137e27f8327d9
@@ -6035,7 +6095,7 @@ msgstr "风管直径减小 / 增大"
 # English: "End run / cancel"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.endRunCancel"
+msgid "editor.toolHint.endRunCancel.59dh2w"
 msgstr "结束管段 / 取消"
 
 # Source-Hash: 938aacb119b29dc1
@@ -6045,7 +6105,7 @@ msgstr "结束管段 / 取消"
 # English: "Exit"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.exit"
+msgid "editor.toolHint.exit.engmg5"
 msgstr "退出"
 
 # Source-Hash: 7cb4e0688cabcb00
@@ -6055,7 +6115,7 @@ msgstr "退出"
 # English: "Exit drawing"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.exitDrawing"
+msgid "editor.toolHint.exitDrawing.9noxyb"
 msgstr "退出绘制"
 
 # Source-Hash: 47025a103c456125
@@ -6065,7 +6125,7 @@ msgstr "退出绘制"
 # English: "Finish and continue"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.finishAndContinue"
+msgid "editor.toolHint.finishAndContinue.1gpfsks"
 msgstr "完成并继续"
 
 # Source-Hash: 000918429b74128f
@@ -6075,7 +6135,7 @@ msgstr "完成并继续"
 # English: "Finish ceiling"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.finishCeiling"
+msgid "editor.toolHint.finishCeiling.1c1lfel"
 msgstr "完成天花板"
 
 # Source-Hash: 51a80a0dba5a6f30
@@ -6085,7 +6145,7 @@ msgstr "完成天花板"
 # English: "Finish grid axis"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.finishGridAxis"
+msgid "editor.toolHint.finishGridAxis.1wvrfhr"
 msgstr "完成轴线"
 
 # Source-Hash: 87c7b98fc2e010e1
@@ -6095,7 +6155,7 @@ msgstr "完成轴线"
 # English: "Finish measurement"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.finishMeasurement"
+msgid "editor.toolHint.finishMeasurement.1e4gv16"
 msgstr "完成测量"
 
 # Source-Hash: 5e1a0af7dc506826
@@ -6105,7 +6165,7 @@ msgstr "完成测量"
 # English: "Finish multi-point witnesses"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.finishMultiPointWitnesses"
+msgid "editor.toolHint.finishMultiPointWitnesses.8wzskz"
 msgstr "完成多点参照"
 
 # Source-Hash: 30fc0862501ba2e8
@@ -6115,7 +6175,7 @@ msgstr "完成多点参照"
 # English: "Finish slab"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.finishSlab"
+msgid "editor.toolHint.finishSlab.xmnm8e"
 msgstr "完成楼板"
 
 # Source-Hash: 66ed7c7598d3aa29
@@ -6125,7 +6185,7 @@ msgstr "完成楼板"
 # English: "Flip side"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.flipSide"
+msgid "editor.toolHint.flipSide.172xku9"
 msgstr "翻转方向"
 
 # Source-Hash: f5717f6a0905ffab
@@ -6135,7 +6195,7 @@ msgstr "翻转方向"
 # English: "Follow: trace a lineset"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.followTraceALineset"
+msgid "editor.toolHint.followTraceALineset.mgquwe"
 msgstr "跟随：沿冷媒管组布线"
 
 # Source-Hash: ed7f3d8417a3e074
@@ -6145,7 +6205,7 @@ msgstr "跟随：沿冷媒管组布线"
 # English: "Force place"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.forcePlace"
+msgid "editor.toolHint.forcePlace.1hq1nr"
 msgstr "强制放置"
 
 # Source-Hash: cc0c14065951444d
@@ -6155,7 +6215,7 @@ msgstr "强制放置"
 # English: "Free placement"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.freePlacement"
+msgid "editor.toolHint.freePlacement.1nztdac"
 msgstr "自由放置"
 
 # Source-Hash: f098a27096a9c1ea
@@ -6165,7 +6225,7 @@ msgstr "自由放置"
 # English: "Go vertical ↕, click to place"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.goVerticalClickToPlace"
+msgid "editor.toolHint.goVerticalClickToPlace.dg8g6m"
 msgstr "切换为竖向 ↕，点击放置"
 
 # Source-Hash: fd47f1820d8799c8
@@ -6175,7 +6235,7 @@ msgstr "切换为竖向 ↕，点击放置"
 # English: "Highlight outlet"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.highlightOutlet"
+msgid "editor.toolHint.highlightOutlet.65hoq8"
 msgstr "高亮出水口"
 
 # Source-Hash: eb90058d0f856f67
@@ -6185,7 +6245,7 @@ msgstr "高亮出水口"
 # English: "Join as a corner window"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.joinAsACornerWindow"
+msgid "editor.toolHint.joinAsACornerWindow.jvdp4j"
 msgstr "连接为转角窗"
 
 # Source-Hash: 225b3161f2e59757
@@ -6195,7 +6255,7 @@ msgstr "连接为转角窗"
 # English: "Alt + drag"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.key.altDrag"
+msgid "editor.toolHint.key.altDrag.ai3wn9"
 msgstr "Alt + 拖动"
 
 # Source-Hash: dd66f883b173fc72
@@ -6205,7 +6265,7 @@ msgstr "Alt + 拖动"
 # English: "Backspace"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.key.backspace"
+msgid "editor.toolHint.key.backspace.qy6qx8"
 msgstr "退格键"
 
 # Source-Hash: a18387bc0be54c32
@@ -6215,7 +6275,7 @@ msgstr "退格键"
 # English: "Click"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.key.click"
+msgid "editor.toolHint.key.click.m8sun"
 msgstr "点击"
 
 # Source-Hash: db9e60c1d30b8499
@@ -6225,7 +6285,7 @@ msgstr "点击"
 # English: "Click again"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.key.clickAgain"
+msgid "editor.toolHint.key.clickAgain.190ws9j"
 msgstr "再次点击"
 
 # Source-Hash: f400330b9c9c12e8
@@ -6235,7 +6295,7 @@ msgstr "再次点击"
 # English: "Command"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.key.command"
+msgid "editor.toolHint.key.command.1j2mkia"
 msgstr "Command"
 
 # Source-Hash: 976c63285a510b09
@@ -6245,7 +6305,7 @@ msgstr "Command"
 # English: "Control"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.key.control"
+msgid "editor.toolHint.key.control.10fbl8e"
 msgstr "Ctrl"
 
 # Source-Hash: b26de372b4b0eaac
@@ -6255,7 +6315,7 @@ msgstr "Ctrl"
 # English: "Delete"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.key.delete"
+msgid "editor.toolHint.key.delete.oay2cq"
 msgstr "删除"
 
 # Source-Hash: 88888c9d2719fa92
@@ -6265,7 +6325,7 @@ msgstr "删除"
 # English: "Double click"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.key.doubleClick"
+msgid "editor.toolHint.key.doubleClick.vlma6o"
 msgstr "双击"
 
 # Source-Hash: dfb85b2addb7b9fa
@@ -6275,7 +6335,7 @@ msgstr "双击"
 # English: "Drag"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.key.drag"
+msgid "editor.toolHint.key.drag.8pwtpf"
 msgstr "拖动"
 
 # Source-Hash: ed9140d42148c99b
@@ -6285,7 +6345,7 @@ msgstr "拖动"
 # English: "Enter"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.key.enter"
+msgid "editor.toolHint.key.enter.1ctpui5"
 msgstr "回车键"
 
 # Source-Hash: 9195fa8b9c8ebdfb
@@ -6295,7 +6355,7 @@ msgstr "回车键"
 # English: "Hover"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.key.hover"
+msgid "editor.toolHint.key.hover.6xw79p"
 msgstr "悬停"
 
 # Source-Hash: 2d78441b741bc562
@@ -6305,7 +6365,7 @@ msgstr "悬停"
 # English: "Hover a duct end"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.key.hoverADuctEnd"
+msgid "editor.toolHint.key.hoverADuctEnd.19axr3b"
 msgstr "悬停在风管端部"
 
 # Source-Hash: 6083405086f61c76
@@ -6315,7 +6375,7 @@ msgstr "悬停在风管端部"
 # English: "Hover a pipe end"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.key.hoverAPipeEnd"
+msgid "editor.toolHint.key.hoverAPipeEnd.1jbum5f"
 msgstr "悬停在管道端部"
 
 # Source-Hash: a5a337eb76fdb066
@@ -6325,7 +6385,7 @@ msgstr "悬停在管道端部"
 # English: "Hover gutter"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.key.hoverGutter"
+msgid "editor.toolHint.key.hoverGutter.1dwcsno"
 msgstr "悬停在檐沟上"
 
 # Source-Hash: a58533594411e088
@@ -6335,7 +6395,7 @@ msgstr "悬停在檐沟上"
 # English: "Left click"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.key.leftClick"
+msgid "editor.toolHint.key.leftClick.s4gwfc"
 msgstr "左键单击"
 
 # Source-Hash: bc4ab608ec3d3b4f
@@ -6345,7 +6405,7 @@ msgstr "左键单击"
 # English: "Middle click"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.key.middleClick"
+msgid "editor.toolHint.key.middleClick.1jbaan4"
 msgstr "中键单击"
 
 # Source-Hash: 6791879c651108c7
@@ -6355,7 +6415,7 @@ msgstr "中键单击"
 # English: "Right click"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.key.rightClick"
+msgid "editor.toolHint.key.rightClick.1ovld0h"
 msgstr "右键单击"
 
 # Source-Hash: c836b21b42198868
@@ -6365,7 +6425,7 @@ msgstr "右键单击"
 # English: "R / Shift+R"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.key.rShiftR"
+msgid "editor.toolHint.key.rShiftR.13bnobh"
 msgstr "R / Shift+R"
 
 # Source-Hash: 9812aa06d8bb7544
@@ -6375,7 +6435,7 @@ msgstr "R / Shift+R"
 # English: "Scroll"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.key.scroll"
+msgid "editor.toolHint.key.scroll.ai6wr0"
 msgstr "滚动"
 
 # Source-Hash: f2174536230657c8
@@ -6385,7 +6445,7 @@ msgstr "滚动"
 # English: "Scroll wheel"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.key.scrollWheel"
+msgid "editor.toolHint.key.scrollWheel.18j0ix7"
 msgstr "滚轮"
 
 # Source-Hash: 82dd231086d87f3b
@@ -6395,7 +6455,7 @@ msgstr "滚轮"
 # English: "Space"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.key.space"
+msgid "editor.toolHint.key.space.1hrh82t"
 msgstr "空格键"
 
 # Source-Hash: 9e68aa2f472cad56
@@ -6405,7 +6465,7 @@ msgstr "空格键"
 # English: "Tab"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.key.tab"
+msgid "editor.toolHint.key.tab.1xsal0s"
 msgstr "Tab 键"
 
 # Source-Hash: 4b221b73f9496a49
@@ -6415,7 +6475,7 @@ msgstr "Tab 键"
 # English: "Mount: floor / ceiling / wall"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.mountFloorCeilingWall"
+msgid "editor.toolHint.mountFloorCeilingWall.32dxpv"
 msgstr "安装位置：地面 / 天花板 / 墙体"
 
 # Source-Hash: 225edfb1e45aed95
@@ -6425,7 +6485,7 @@ msgstr "安装位置：地面 / 天花板 / 墙体"
 # English: "No room for the matching window on the other wall"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.noRoomForTheMatchingWindow"
+msgid "editor.toolHint.noRoomForTheMatchingWindow.1755948"
 msgstr "另一面墙上没有空间放置对应的窗"
 
 # Source-Hash: a7045d6b678bcd13
@@ -6435,7 +6495,7 @@ msgstr "另一面墙上没有空间放置对应的窗"
 # English: "No wall meets here"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.noWallMeetsHere"
+msgid "editor.toolHint.noWallMeetsHere.19n99yc"
 msgstr "此处没有相交的墙体"
 
 # Source-Hash: a639341dc21fed2c
@@ -6445,7 +6505,7 @@ msgstr "此处没有相交的墙体"
 # English: "Number of cuts — scroll or click to change"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.numberOfCutsScrollOrClick"
+msgid "editor.toolHint.numberOfCutsScrollOrClick.1kqe84b"
 msgstr "切分数量 — 滚动或点击更改"
 
 # Source-Hash: af01bde3ae4b7e59
@@ -6455,7 +6515,7 @@ msgstr "切分数量 — 滚动或点击更改"
 # English: "Pick witness point"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.pickWitnessPoint"
+msgid "editor.toolHint.pickWitnessPoint.k3hgh1"
 msgstr "拾取参照点"
 
 # Source-Hash: ecfd58576b28a9f6
@@ -6465,7 +6525,7 @@ msgstr "拾取参照点"
 # English: "Pipe size down / up"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.pipeSizeDownUp"
+msgid "editor.toolHint.pipeSizeDownUp.wp04og"
 msgstr "管径减小 / 增大"
 
 # Source-Hash: 7a1eb7b64f06bad0
@@ -6475,7 +6535,7 @@ msgstr "管径减小 / 增大"
 # English: "Place and continue"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.placeAndContinue"
+msgid "editor.toolHint.placeAndContinue.qfwkrq"
 msgstr "放置并继续"
 
 # Source-Hash: c6cda39e2e4b5d3a
@@ -6485,7 +6545,7 @@ msgstr "放置并继续"
 # English: "Place block"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.placeBlock"
+msgid "editor.toolHint.placeBlock.1aylwrx"
 msgstr "放置体块"
 
 # Source-Hash: 45a743c52a1d72de
@@ -6495,7 +6555,7 @@ msgstr "放置体块"
 # English: "Place box vent on roof"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.placeBoxVentOnRoof"
+msgid "editor.toolHint.placeBoxVentOnRoof.kf88e5"
 msgstr "在屋顶上放置箱式通风口"
 
 # Source-Hash: 75142dd1d557efe2
@@ -6505,7 +6565,7 @@ msgstr "在屋顶上放置箱式通风口"
 # English: "Place cabinet"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.placeCabinet"
+msgid "editor.toolHint.placeCabinet.b0ouyk"
 msgstr "放置橱柜"
 
 # Source-Hash: da603a713d4c9909
@@ -6515,7 +6575,7 @@ msgstr "放置橱柜"
 # English: "Place canopy or set the next run point"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.placeCanopyOrSetTheNext"
+msgid "editor.toolHint.placeCanopyOrSetTheNext.12l7zf8"
 msgstr "放置雨棚或设置下一个连续点"
 
 # Source-Hash: 8b3a30c6b7a5612d
@@ -6525,7 +6585,7 @@ msgstr "放置雨棚或设置下一个连续点"
 # English: "Place chimney on roof"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.placeChimneyOnRoof"
+msgid "editor.toolHint.placeChimneyOnRoof.19dbqu"
 msgstr "在屋顶上放置烟囱"
 
 # Source-Hash: 710d41e4e2f259fa
@@ -6535,7 +6595,7 @@ msgstr "在屋顶上放置烟囱"
 # English: "Place column"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.placeColumn"
+msgid "editor.toolHint.placeColumn.1w2vq86"
 msgstr "放置柱"
 
 # Source-Hash: ee1da4e12a71d9a9
@@ -6545,7 +6605,7 @@ msgstr "放置柱"
 # English: "Place cupola on roof"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.placeCupolaOnRoof"
+msgid "editor.toolHint.placeCupolaOnRoof.ofx3bn"
 msgstr "在屋顶上放置穹顶亭"
 
 # Source-Hash: 19c1fe8c46d213a5
@@ -6555,7 +6615,7 @@ msgstr "在屋顶上放置穹顶亭"
 # English: "Place dimension line when needed"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.placeDimensionLineWhenNeeded"
+msgid "editor.toolHint.placeDimensionLineWhenNeeded.bjw2cj"
 msgstr "需要时放置尺寸线"
 
 # Source-Hash: 58f3e7efb6ea120b
@@ -6565,7 +6625,7 @@ msgstr "需要时放置尺寸线"
 # English: "Place door on wall"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.placeDoorOnWall"
+msgid "editor.toolHint.placeDoorOnWall.1jwadf"
 msgstr "在墙体上放置门"
 
 # Source-Hash: de04e9d03d937c97
@@ -6575,7 +6635,7 @@ msgstr "在墙体上放置门"
 # English: "Place dormer on roof"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.placeDormerOnRoof"
+msgid "editor.toolHint.placeDormerOnRoof.1w518a6"
 msgstr "在屋顶上放置老虎窗"
 
 # Source-Hash: c581645f2ee447c2
@@ -6585,7 +6645,7 @@ msgstr "在屋顶上放置老虎窗"
 # English: "Place elevator"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.placeElevator"
+msgid "editor.toolHint.placeElevator.1f65zva"
 msgstr "放置电梯"
 
 # Source-Hash: 096b8d6482717358
@@ -6595,7 +6655,7 @@ msgstr "放置电梯"
 # English: "Place eyebrow vent on roof"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.placeEyebrowVentOnRoof"
+msgid "editor.toolHint.placeEyebrowVentOnRoof.1h1tqxn"
 msgstr "在屋顶上放置眉形通风口"
 
 # Source-Hash: e8d42c1c8370773f
@@ -6605,7 +6665,7 @@ msgstr "在屋顶上放置眉形通风口"
 # English: "Place fitting"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.placeFitting"
+msgid "editor.toolHint.placeFitting.1pmx3vn"
 msgstr "放置管件"
 
 # Source-Hash: 2340a4b70cb0d9ad
@@ -6615,7 +6675,7 @@ msgstr "放置管件"
 # English: "Place gutter on roof eave"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.placeGutterOnRoofEave"
+msgid "editor.toolHint.placeGutterOnRoofEave.llwzf9"
 msgstr "在屋檐上放置檐沟"
 
 # Source-Hash: 706a8eafb6212833
@@ -6625,7 +6685,7 @@ msgstr "在屋檐上放置檐沟"
 # English: "Place item"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.placeItem"
+msgid "editor.toolHint.placeItem.teynf"
 msgstr "放置物品"
 
 # Source-Hash: 1815c482e249932e
@@ -6635,7 +6695,7 @@ msgstr "放置物品"
 # English: "Place it (locked to 45°)"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.placeItLockedTo45"
+msgid "editor.toolHint.placeItLockedTo45.16e4csk"
 msgstr "放置（锁定为 45°）"
 
 # Source-Hash: 4a14340657532838
@@ -6645,7 +6705,7 @@ msgstr "放置（锁定为 45°）"
 # English: "Place measurement point"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.placeMeasurementPoint"
+msgid "editor.toolHint.placeMeasurementPoint.bsatli"
 msgstr "放置测量点"
 
 # Source-Hash: b3be684ac62fbf53
@@ -6655,7 +6715,7 @@ msgstr "放置测量点"
 # English: "Placement"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.placement"
+msgid "editor.toolHint.placement.13lcvts"
 msgstr "放置"
 
 # Source-Hash: 2bb2ce6276c69b1e
@@ -6665,7 +6725,7 @@ msgstr "放置"
 # English: "Placement: Auto"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.placementAuto"
+msgid "editor.toolHint.placementAuto.1caa52d"
 msgstr "放置：自动"
 
 # Source-Hash: ed78ac5354a1dcd8
@@ -6675,7 +6735,7 @@ msgstr "放置：自动"
 # English: "Placement: Ground"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.placementGround"
+msgid "editor.toolHint.placementGround.1ruz145"
 msgstr "放置：地面"
 
 # Source-Hash: a066a2c9d5e65a1a
@@ -6685,7 +6745,7 @@ msgstr "放置：地面"
 # English: "Placement: Roof"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.placementRoof"
+msgid "editor.toolHint.placementRoof.renkw8"
 msgstr "放置：屋顶"
 
 # Source-Hash: 8f74dbe5064c4c66
@@ -6695,7 +6755,7 @@ msgstr "放置：屋顶"
 # English: "Placement surface - click or press P to cycle"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.placementSurfaceClickOrPressP"
+msgid "editor.toolHint.placementSurfaceClickOrPressP.w56h19"
 msgstr "放置面 - 点击或按 P 切换"
 
 # Source-Hash: fe119955c925feaf
@@ -6705,7 +6765,7 @@ msgstr "放置面 - 点击或按 P 切换"
 # English: "Placement type"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.placementType"
+msgid "editor.toolHint.placementType.1mdpl60"
 msgstr "放置类型"
 
 # Source-Hash: 33043a35500168f5
@@ -6715,7 +6775,7 @@ msgstr "放置类型"
 # English: "Placement type — click or press I to toggle"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.placementTypeClickOrPressI"
+msgid "editor.toolHint.placementTypeClickOrPressI.10cgxh2"
 msgstr "放置类型 — 点击或按 I 切换"
 
 # Source-Hash: 9945f412e6a9a446
@@ -6725,7 +6785,7 @@ msgstr "放置类型 — 点击或按 I 切换"
 # English: "Place on a fence"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.placeOnAFence"
+msgid "editor.toolHint.placeOnAFence.1dptstr"
 msgstr "放置在围栏上"
 
 # Source-Hash: 6708118775a7da7f
@@ -6735,7 +6795,7 @@ msgstr "放置在围栏上"
 # English: "Place register"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.placeRegister"
+msgid "editor.toolHint.placeRegister.1uebycd"
 msgstr "放置风口"
 
 # Source-Hash: ebd2731f5c79306e
@@ -6745,7 +6805,7 @@ msgstr "放置风口"
 # English: "Place ridge vent on roof"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.placeRidgeVentOnRoof"
+msgid "editor.toolHint.placeRidgeVentOnRoof.2tpd8r"
 msgstr "在屋顶上放置屋脊通风口"
 
 # Source-Hash: 9b3c66a867c23326
@@ -6755,7 +6815,7 @@ msgstr "在屋顶上放置屋脊通风口"
 # English: "Place shelf"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.placeShelf"
+msgid "editor.toolHint.placeShelf.y4l3iw"
 msgstr "放置置物架"
 
 # Source-Hash: f11cf5c1c9fe862d
@@ -6765,7 +6825,7 @@ msgstr "放置置物架"
 # English: "Place skylight on roof"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.placeSkylightOnRoof"
+msgid "editor.toolHint.placeSkylightOnRoof.e215pe"
 msgstr "在屋顶上放置天窗"
 
 # Source-Hash: e989a58d6709cc16
@@ -6775,7 +6835,7 @@ msgstr "在屋顶上放置天窗"
 # English: "Place solar panel array on roof"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.placeSolarPanelArrayOnRoof"
+msgid "editor.toolHint.placeSolarPanelArrayOnRoof.kk11fn"
 msgstr "在屋顶上放置光伏板阵列"
 
 # Source-Hash: b67f7036d5180cf5
@@ -6785,7 +6845,7 @@ msgstr "在屋顶上放置光伏板阵列"
 # English: "Place spawn point"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.placeSpawnPoint"
+msgid "editor.toolHint.placeSpawnPoint.205o25"
 msgstr "放置出生点"
 
 # Source-Hash: 6c7f32a17e5636c3
@@ -6795,7 +6855,7 @@ msgstr "放置出生点"
 # English: "Place stairs"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.placeStairs"
+msgid "editor.toolHint.placeStairs.zwxxu2"
 msgstr "放置楼梯"
 
 # Source-Hash: 641c0d3debd798a8
@@ -6805,7 +6865,7 @@ msgstr "放置楼梯"
 # English: "Place trap"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.placeTrap"
+msgid "editor.toolHint.placeTrap.1gxemn3"
 msgstr "放置存水弯"
 
 # Source-Hash: 6f0a6f6c4b7588a0
@@ -6815,7 +6875,7 @@ msgstr "放置存水弯"
 # English: "Place turbine vent on roof"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.placeTurbineVentOnRoof"
+msgid "editor.toolHint.placeTurbineVentOnRoof.1iqeluf"
 msgstr "在屋顶上放置涡轮通风器"
 
 # Source-Hash: e65cf5edb4f51ed5
@@ -6825,7 +6885,7 @@ msgstr "在屋顶上放置涡轮通风器"
 # English: "Place unit"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.placeUnit"
+msgid "editor.toolHint.placeUnit.8zkx4q"
 msgstr "放置设备"
 
 # Source-Hash: 86ce1c730154f68b
@@ -6835,7 +6895,7 @@ msgstr "放置设备"
 # English: "Place window on wall"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.placeWindowOnWall"
+msgid "editor.toolHint.placeWindowOnWall.1k3qnfb"
 msgstr "在墙体上放置窗"
 
 # Source-Hash: 2b612180a7617901
@@ -6845,7 +6905,7 @@ msgstr "在墙体上放置窗"
 # English: "Place without the corner snap"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.placeWithoutTheCornerSnap"
+msgid "editor.toolHint.placeWithoutTheCornerSnap.1nifqew"
 msgstr "不使用转角吸附放置"
 
 # Source-Hash: 0dc6d121791696f7
@@ -6855,7 +6915,7 @@ msgstr "不使用转角吸附放置"
 # English: "Remove last point"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.removeLastPoint"
+msgid "editor.toolHint.removeLastPoint.2dmdcx"
 msgstr "移除最后一个点"
 
 # Source-Hash: 8b74b1d962be10fc
@@ -6865,7 +6925,7 @@ msgstr "移除最后一个点"
 # English: "Remove last witness"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.removeLastWitness"
+msgid "editor.toolHint.removeLastWitness.1b6vvzw"
 msgstr "移除最后一个参照"
 
 # Source-Hash: 306d409f8a1cf480
@@ -6875,7 +6935,7 @@ msgstr "移除最后一个参照"
 # English: "Rotate"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.rotate"
+msgid "editor.toolHint.rotate.1thqa0a"
 msgstr "旋转"
 
 # Source-Hash: 8a665ecaeffa9308
@@ -6885,7 +6945,7 @@ msgstr "旋转"
 # English: "Rotate ±45°"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.rotate45"
+msgid "editor.toolHint.rotate45.9zq68u"
 msgstr "旋转 ±45°"
 
 # Source-Hash: be2240289aa74df5
@@ -6895,7 +6955,7 @@ msgstr "旋转 ±45°"
 # English: "Rotate ±45° (floor / ceiling)"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.rotate45FloorCeiling"
+msgid "editor.toolHint.rotate45FloorCeiling.m9t57d"
 msgstr "旋转 ±45°（地面 / 天花板）"
 
 # Source-Hash: d5fb78b07c0f8138
@@ -6905,7 +6965,7 @@ msgstr "旋转 ±45°（地面 / 天花板）"
 # English: "Rotate ghost ±15°"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.rotateGhost15"
+msgid "editor.toolHint.rotateGhost15.rsa52c"
 msgstr "旋转预览 ±15°"
 
 # Source-Hash: 912d340cd16e27fa
@@ -6915,7 +6975,7 @@ msgstr "旋转预览 ±15°"
 # English: "Rotate or flip the run side"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.rotateOrFlipTheRunSide"
+msgid "editor.toolHint.rotateOrFlipTheRunSide.t5ior7"
 msgstr "旋转或翻转排布方向"
 
 # Source-Hash: ad1dc0b5536cceef
@@ -6925,7 +6985,7 @@ msgstr "旋转或翻转排布方向"
 # English: "Rotate roof direction 90°"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.rotateRoofDirection90"
+msgid "editor.toolHint.rotateRoofDirection90.tvbji2"
 msgstr "将屋顶方向旋转 90°"
 
 # Source-Hash: fa24651e9e5f595a
@@ -6935,7 +6995,7 @@ msgstr "将屋顶方向旋转 90°"
 # English: "Rotate spawn point"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.rotateSpawnPoint"
+msgid "editor.toolHint.rotateSpawnPoint.1opcuu7"
 msgstr "旋转出生点"
 
 # Source-Hash: 2d693d87fe9b59e6
@@ -6945,7 +7005,7 @@ msgstr "旋转出生点"
 # English: "Round / rectangular / oval"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.roundRectangularOval"
+msgid "editor.toolHint.roundRectangularOval.e4nh6x"
 msgstr "圆形 / 矩形 / 椭圆"
 
 # Source-Hash: f7d2c9cdcc637c97
@@ -6955,7 +7015,7 @@ msgstr "圆形 / 矩形 / 椭圆"
 # English: "Set fence start / end"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.setFenceStartEnd"
+msgid "editor.toolHint.setFenceStartEnd.1phbwsq"
 msgstr "设置围栏起点 / 终点"
 
 # Source-Hash: c93ae898b4d59f6f
@@ -6965,7 +7025,7 @@ msgstr "设置围栏起点 / 终点"
 # English: "Set one corner, then the opposite"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.setOneCornerThenTheOpposite"
+msgid "editor.toolHint.setOneCornerThenTheOpposite.8tsl49"
 msgstr "设置一个角，再设置对角"
 
 # Source-Hash: 4f55171f10c6ceeb
@@ -6975,7 +7035,7 @@ msgstr "设置一个角，再设置对角"
 # English: "Set roof footprint"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.setRoofFootprint"
+msgid "editor.toolHint.setRoofFootprint.p50n0o"
 msgstr "设置屋顶轮廓"
 
 # Source-Hash: 0243859b1d64c21e
@@ -6985,7 +7045,7 @@ msgstr "设置屋顶轮廓"
 # English: "Set wall start / end"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.setWallStartEnd"
+msgid "editor.toolHint.setWallStartEnd.1r8ubcx"
 msgstr "设置墙体起点 / 终点"
 
 # Source-Hash: c2806cce9612fa50
@@ -6995,7 +7055,7 @@ msgstr "设置墙体起点 / 终点"
 # English: "Slope / level"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.slopeLevel"
+msgid "editor.toolHint.slopeLevel.ftqp67"
 msgstr "坡度 / 水平"
 
 # Source-Hash: 06c0ec40606db679
@@ -7005,7 +7065,7 @@ msgstr "坡度 / 水平"
 # English: "Snap onto the run"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.snapOntoTheRun"
+msgid "editor.toolHint.snapOntoTheRun.86yhmp"
 msgstr "吸附到管段上"
 
 # Source-Hash: e214cccbac9c4fd2
@@ -7015,7 +7075,7 @@ msgstr "吸附到管段上"
 # English: "Split at the marks"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.splitAtTheMarks"
+msgid "editor.toolHint.splitAtTheMarks.x5tpdd"
 msgstr "在标记处分割"
 
 # Source-Hash: 94455c35bfeac6b4
@@ -7025,7 +7085,7 @@ msgstr "在标记处分割"
 # English: "Start grid axis"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.startGridAxis"
+msgid "editor.toolHint.startGridAxis.k92yza"
 msgstr "开始轴线"
 
 # Source-Hash: 2edb4c29bbe7c513
@@ -7035,7 +7095,7 @@ msgstr "开始轴线"
 # English: "Start lineset"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.startLineset"
+msgid "editor.toolHint.startLineset.23q8dh"
 msgstr "开始冷媒管组"
 
 # Source-Hash: 9e50f1b30e325208
@@ -7045,7 +7105,7 @@ msgstr "开始冷媒管组"
 # English: "Start liquid line"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.startLiquidLine"
+msgid "editor.toolHint.startLiquidLine.1rlxsgd"
 msgstr "开始液管"
 
 # Source-Hash: 877ddcb778c211cc
@@ -7055,7 +7115,7 @@ msgstr "开始液管"
 # English: "Start run"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.startRun"
+msgid "editor.toolHint.startRun.r6fc5u"
 msgstr "开始管段"
 
 # Source-Hash: 8a62bee64174bbc0
@@ -7065,7 +7125,7 @@ msgstr "开始管段"
 # English: "Start segment"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.startSegment"
+msgid "editor.toolHint.startSegment.rolym6"
 msgstr "开始分段"
 
 # Source-Hash: 6cc5dc51a8e66779
@@ -7075,7 +7135,7 @@ msgstr "开始分段"
 # English: "Step back or cancel"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.stepBackOrCancel"
+msgid "editor.toolHint.stepBackOrCancel.zbfdkn"
 msgstr "后退一步或取消"
 
 # Source-Hash: 1a79a485d91f3f28
@@ -7085,7 +7145,7 @@ msgstr "后退一步或取消"
 # English: "Style"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.style"
+msgid "editor.toolHint.style.nf3vcm"
 msgstr "样式"
 
 # Source-Hash: 81f595b1c47c0080
@@ -7095,7 +7155,7 @@ msgstr "样式"
 # English: "Style: Barn"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.styleBarn"
+msgid "editor.toolHint.styleBarn.k9n1x"
 msgstr "样式：谷仓门"
 
 # Source-Hash: 3a82c718fe215273
@@ -7105,7 +7165,7 @@ msgstr "样式：谷仓门"
 # English: "Style: Casement"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.styleCasement"
+msgid "editor.toolHint.styleCasement.ziklec"
 msgstr "样式：平开"
 
 # Source-Hash: 072e3331d1d105c0
@@ -7115,7 +7175,7 @@ msgstr "样式：平开"
 # English: "Style: Craftsman"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.styleCraftsman"
+msgid "editor.toolHint.styleCraftsman.52e6a9"
 msgstr "样式：工匠"
 
 # Source-Hash: b64d07557dec1714
@@ -7125,7 +7185,7 @@ msgstr "样式：工匠"
 # English: "Style: Double-hung"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.styleDoubleHung"
+msgid "editor.toolHint.styleDoubleHung.1lg8pkg"
 msgstr "样式：双悬"
 
 # Source-Hash: 55ef8761a537637f
@@ -7135,7 +7195,7 @@ msgstr "样式：双悬"
 # English: "Style: French"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.styleFrench"
+msgid "editor.toolHint.styleFrench.1ue3j64"
 msgstr "样式：法式"
 
 # Source-Hash: bc8a751d87536dc3
@@ -7145,7 +7205,7 @@ msgstr "样式：法式"
 # English: "Style: Glass"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.styleGlass"
+msgid "editor.toolHint.styleGlass.qudnb4"
 msgstr "样式：玻璃"
 
 # Source-Hash: 40c1eb0bc83e207d
@@ -7155,7 +7215,7 @@ msgstr "样式：玻璃"
 # English: "Style: Grid"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.styleGrid"
+msgid "editor.toolHint.styleGrid.1vuq4po"
 msgstr "样式：格栅"
 
 # Source-Hash: f516886bab2e7f10
@@ -7165,7 +7225,7 @@ msgstr "样式：格栅"
 # English: "Style: Half-louvered"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.styleHalfLouvered"
+msgid "editor.toolHint.styleHalfLouvered.13b1few"
 msgstr "样式：半百叶"
 
 # Source-Hash: 64e4389a695371a2
@@ -7175,7 +7235,7 @@ msgstr "样式：半百叶"
 # English: "Style: Horizontal bands"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.styleHorizontalBands"
+msgid "editor.toolHint.styleHorizontalBands.12ethxk"
 msgstr "样式：横向条纹"
 
 # Source-Hash: ff6d226a425b00c0
@@ -7185,7 +7245,7 @@ msgstr "样式：横向条纹"
 # English: "Style: Modern"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.styleModern"
+msgid "editor.toolHint.styleModern.1fh8hhn"
 msgstr "样式：现代"
 
 # Source-Hash: c6d17ba078ff47e7
@@ -7195,7 +7255,7 @@ msgstr "样式：现代"
 # English: "Style: Panel"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.stylePanel"
+msgid "editor.toolHint.stylePanel.922jze"
 msgstr "样式：镶板"
 
 # Source-Hash: 5e6baad0d2ce3a62
@@ -7205,7 +7265,7 @@ msgstr "样式：镶板"
 # English: "Style: Paneled glass"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.stylePaneledGlass"
+msgid "editor.toolHint.stylePaneledGlass.17a17en"
 msgstr "样式：镶板玻璃"
 
 # Source-Hash: 6314388e6832c252
@@ -7215,7 +7275,7 @@ msgstr "样式：镶板玻璃"
 # English: "Style: Shaker"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.styleShaker"
+msgid "editor.toolHint.styleShaker.49z17k"
 msgstr "样式：震颤派"
 
 # Source-Hash: a0f8e524f3ca121f
@@ -7225,7 +7285,7 @@ msgstr "样式：震颤派"
 # English: "Style: Single"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.styleSingle"
+msgid "editor.toolHint.styleSingle.6f3cm0"
 msgstr "样式：单扇"
 
 # Source-Hash: 368279df3a472c86
@@ -7235,7 +7295,7 @@ msgstr "样式：单扇"
 # English: "Style: Six-panel"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.styleSixPanel"
+msgid "editor.toolHint.styleSixPanel.u49laj"
 msgstr "样式：六镶板"
 
 # Source-Hash: 8f3c2571d8168fee
@@ -7245,7 +7305,7 @@ msgstr "样式：六镶板"
 # English: "Style: Sliding"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.styleSliding"
+msgid "editor.toolHint.styleSliding.q81s0i"
 msgstr "样式：推拉"
 
 # Source-Hash: aa9d9eb137ca38d4
@@ -7255,7 +7315,7 @@ msgstr "样式：推拉"
 # English: "Style: Tall grid"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.styleTallGrid"
+msgid "editor.toolHint.styleTallGrid.1eotg3x"
 msgstr "样式：高格栅"
 
 # Source-Hash: bc164648722b63e5
@@ -7265,7 +7325,7 @@ msgstr "样式：高格栅"
 # English: "Style: Transom"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.styleTransom"
+msgid "editor.toolHint.styleTransom.kb9bh6"
 msgstr "样式：带亮子"
 
 # Source-Hash: 9a218f0c9ceb4697
@@ -7275,7 +7335,7 @@ msgstr "样式：带亮子"
 # English: "Style: Triple-hung"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.styleTripleHung"
+msgid "editor.toolHint.styleTripleHung.pxnqi3"
 msgstr "样式：三悬"
 
 # Source-Hash: 9f6df1344bd3d694
@@ -7285,7 +7345,7 @@ msgstr "样式：三悬"
 # English: "Style: Wide grid"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.styleWideGrid"
+msgid "editor.toolHint.styleWideGrid.12n27et"
 msgstr "样式：宽格栅"
 
 # Source-Hash: 711d4050c0cb95d7
@@ -7295,7 +7355,7 @@ msgstr "样式：宽格栅"
 # English: "Switch rotation axis (Y → X → Z)"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.switchRotationAxisYXZ"
+msgid "editor.toolHint.switchRotationAxisYXZ.15lohm6"
 msgstr "切换旋转轴（Y → X → Z）"
 
 # Source-Hash: d650c71e042c2598
@@ -7305,7 +7365,7 @@ msgstr "切换旋转轴（Y → X → Z）"
 # English: "The walls meet at too sharp or too flat an angle"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.theWallsMeetAtTooSharp"
+msgid "editor.toolHint.theWallsMeetAtTooSharp.kh3wi3"
 msgstr "墙体相交的角度过尖或过平"
 
 # Source-Hash: ab206ac56e65f190
@@ -7315,7 +7375,7 @@ msgstr "墙体相交的角度过尖或过平"
 # English: "The window waiting there is taller than this wall"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.theWindowWaitingThereIsTaller"
+msgid "editor.toolHint.theWindowWaitingThereIsTaller.1tqwez4"
 msgstr "该处待放置的窗比这面墙体更高"
 
 # Source-Hash: 9c1f47138ed5c7ee
@@ -7325,7 +7385,7 @@ msgstr "该处待放置的窗比这面墙体更高"
 # English: "Three or more walls meet here"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.threeOrMoreWallsMeetHere"
+msgid "editor.toolHint.threeOrMoreWallsMeetHere.rgifif"
 msgstr "此处有三面或更多墙体相交"
 
 # Source-Hash: c3ca56fa28e15f07
@@ -7335,7 +7395,7 @@ msgstr "此处有三面或更多墙体相交"
 # English: "Trace ceiling outline"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.traceCeilingOutline"
+msgid "editor.toolHint.traceCeilingOutline.1b639wv"
 msgstr "描绘天花板轮廓"
 
 # Source-Hash: bdf71499d30a29de
@@ -7345,7 +7405,7 @@ msgstr "描绘天花板轮廓"
 # English: "Trace slab outline"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.traceSlabOutline"
+msgid "editor.toolHint.traceSlabOutline.z0j2lc"
 msgstr "描绘楼板轮廓"
 
 # Source-Hash: c44f7ab8bbd24858
@@ -7355,7 +7415,7 @@ msgstr "描绘楼板轮廓"
 # English: "Type"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.type"
+msgid "editor.toolHint.type.1m2zofh"
 msgstr "类型"
 
 # Source-Hash: b54eaaff3349dcb1
@@ -7365,7 +7425,7 @@ msgstr "类型"
 # English: "Type: Awning"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.typeAwning"
+msgid "editor.toolHint.typeAwning.1cj59al"
 msgstr "类型：上悬"
 
 # Source-Hash: f399572a27417c66
@@ -7375,7 +7435,7 @@ msgstr "类型：上悬"
 # English: "Type: Barn"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.typeBarn"
+msgid "editor.toolHint.typeBarn.sbnygq"
 msgstr "类型：谷仓门"
 
 # Source-Hash: a1df9782200b5f1e
@@ -7385,7 +7445,7 @@ msgstr "类型：谷仓门"
 # English: "Type: Bay"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.typeBay"
+msgid "editor.toolHint.typeBay.1200hc1"
 msgstr "类型：凸窗"
 
 # Source-Hash: ff069a390e8e3f66
@@ -7395,7 +7455,7 @@ msgstr "类型：凸窗"
 # English: "Type: Bow"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.typeBow"
+msgid "editor.toolHint.typeBow.14s2t9p"
 msgstr "类型：弧形凸窗"
 
 # Source-Hash: bdac5f3f2ea70fff
@@ -7405,7 +7465,7 @@ msgstr "类型：弧形凸窗"
 # English: "Type: Cabinet"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.typeCabinet"
+msgid "editor.toolHint.typeCabinet.1r68je5"
 msgstr "类型：柜门"
 
 # Source-Hash: e0754fc03997cbf9
@@ -7415,7 +7475,7 @@ msgstr "类型：柜门"
 # English: "Type: Casement"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.typeCasement"
+msgid "editor.toolHint.typeCasement.176uo9j"
 msgstr "类型：平开"
 
 # Source-Hash: 47d873446d6e173b
@@ -7425,7 +7485,7 @@ msgstr "类型：平开"
 # English: "Type: Double"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.typeDouble"
+msgid "editor.toolHint.typeDouble.af7w4i"
 msgstr "类型：双扇"
 
 # Source-Hash: 5942e484513aaab5
@@ -7435,7 +7495,7 @@ msgstr "类型：双扇"
 # English: "Type: Double Hung"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.typeDoubleHung"
+msgid "editor.toolHint.typeDoubleHung.t482fu"
 msgstr "类型：双悬"
 
 # Source-Hash: f9497fbfceefda27
@@ -7445,7 +7505,7 @@ msgstr "类型：双悬"
 # English: "Type: Fixed"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.typeFixed"
+msgid "editor.toolHint.typeFixed.v1cjez"
 msgstr "类型：固定"
 
 # Source-Hash: 0dcf07acc9cbf000
@@ -7455,7 +7515,7 @@ msgstr "类型：固定"
 # English: "Type: Folding"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.typeFolding"
+msgid "editor.toolHint.typeFolding.sxxyng"
 msgstr "类型：折叠"
 
 # Source-Hash: bff7331f87f279aa
@@ -7465,7 +7525,7 @@ msgstr "类型：折叠"
 # English: "Type: French"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.typeFrench"
+msgid "editor.toolHint.typeFrench.1y57z1b"
 msgstr "类型：法式"
 
 # Source-Hash: 9d2c3b82079eb769
@@ -7475,7 +7535,7 @@ msgstr "类型：法式"
 # English: "Type: Hinged"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.typeHinged"
+msgid "editor.toolHint.typeHinged.1xrcfju"
 msgstr "类型：铰链"
 
 # Source-Hash: b8001b90ff522838
@@ -7485,7 +7545,7 @@ msgstr "类型：铰链"
 # English: "Type: Island"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.typeIsland"
+msgid "editor.toolHint.typeIsland.ufr3ce"
 msgstr "类型：岛台"
 
 # Source-Hash: 516833c5160d412e
@@ -7495,7 +7555,7 @@ msgstr "类型：岛台"
 # English: "Type: Louvered"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.typeLouvered"
+msgid "editor.toolHint.typeLouvered.oxl1cz"
 msgstr "类型：百叶"
 
 # Source-Hash: 291272bf848ad6ab
@@ -7505,7 +7565,7 @@ msgstr "类型：百叶"
 # English: "Type: Pocket"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.typePocket"
+msgid "editor.toolHint.typePocket.hc65x9"
 msgstr "类型：内嵌推拉"
 
 # Source-Hash: 46d0e53d6ae07c72
@@ -7515,7 +7575,7 @@ msgstr "类型：内嵌推拉"
 # English: "Type: Single Hung"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.typeSingleHung"
+msgid "editor.toolHint.typeSingleHung.p53pyl"
 msgstr "类型：单悬"
 
 # Source-Hash: b11115b50df8faac
@@ -7525,7 +7585,7 @@ msgstr "类型：单悬"
 # English: "Type: Sliding"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.typeSliding"
+msgid "editor.toolHint.typeSliding.nwmr3f"
 msgstr "类型：推拉"
 
 # Source-Hash: bff0c1694ee0a37e
@@ -7535,7 +7595,7 @@ msgstr "类型：推拉"
 # English: "Vertical stack ↕, click to place"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.verticalStackClickToPlace"
+msgid "editor.toolHint.verticalStackClickToPlace.ijcn4q"
 msgstr "竖向立管 ↕，点击放置"
 
 # Source-Hash: bac471ee67af6412
@@ -7545,7 +7605,7 @@ msgstr "竖向立管 ↕，点击放置"
 # English: "Waste / vent"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.wasteVent"
+msgid "editor.toolHint.wasteVent.1hvi3vj"
 msgstr "污水 / 通气"
 
 # Source-Hash: 1c744b7e24fc786e
@@ -7555,7 +7615,7 @@ msgstr "污水 / 通气"
 # English: "Window style — click or press L to cycle"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.windowStyleClickOrPressL"
+msgid "editor.toolHint.windowStyleClickOrPressL.ah7qm9"
 msgstr "窗样式 — 点击或按 L 切换"
 
 # Source-Hash: dd6f0ab314fea26c
@@ -7565,7 +7625,7 @@ msgstr "窗样式 — 点击或按 L 切换"
 # English: "Window type — click or press O to cycle"
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
-msgid "editor.toolHint.windowTypeClickOrPressO"
+msgid "editor.toolHint.windowTypeClickOrPressO.wv4x35"
 msgstr "窗类型 — 点击或按 O 切换"
 
 # Source-Hash: 9fc7a39bc32f287a
