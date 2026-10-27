@@ -483,10 +483,12 @@ export function SlabPanel() {
                     <p className="text-[10px] text-muted-foreground">
                       {i18n._({
                         id: 'node.holeSummary',
-                        message: '{area} m² · {count, plural, one {# pt} other {# pts}} · {source}',
+                        message:
+                          '{area} m² · {count, plural, one {{points} pt} other {{points} pts}} · {source}',
                         values: {
                           area: formatFixed(holeArea, 2, i18n.getLocale()),
                           count: hole.length,
+                          points: String(hole.length),
                           source: isAutoHole
                             ? autoLabel
                             : i18n._({ id: 'node.hole.manual', message: 'Manual' }),
