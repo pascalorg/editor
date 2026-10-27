@@ -44,9 +44,34 @@ const MANAGED_LEAN_TO_LAYOUT_FIELDS = new Set<keyof ColumnNode>([
   'slots',
 ])
 
-const COLUMN_PRESET_OPTIONS = Object.entries(COLUMN_PRESETS).map(([value, preset]) => ({
+/** Preset names in the UI language; core's `COLUMN_PRESETS` labels stay English. */
+const COLUMN_PRESET_LABELS: Record<ColumnPresetId, MessageDescriptor> = {
+  basicPillar: /* i18n */ { id: 'node.column.preset.basicPillar', message: 'Straight Round' },
+  squarePillar: /* i18n */ { id: 'node.column.preset.squarePillar', message: 'Square Block' },
+  taperedPillar: /* i18n */ { id: 'node.column.preset.taperedPillar', message: 'Tapered Round' },
+  bulgedPillar: /* i18n */ { id: 'node.column.preset.bulgedPillar', message: 'Soft Bulged' },
+  hourglassPillar: /* i18n */ { id: 'node.column.preset.hourglassPillar', message: 'Hourglass' },
+  aFrameSupport: /* i18n */ { id: 'node.column.preset.aFrameSupport', message: 'A-Frame Support' },
+  yFrameSupport: /* i18n */ { id: 'node.column.preset.yFrameSupport', message: 'Y Support' },
+  vFrameSupport: /* i18n */ { id: 'node.column.preset.vFrameSupport', message: 'V Support' },
+  xBraceSupport: /* i18n */ { id: 'node.column.preset.xBraceSupport', message: 'X Brace' },
+  kBraceSupport: /* i18n */ { id: 'node.column.preset.kBraceSupport', message: 'K Brace' },
+  singleStrutSupport: /* i18n */ {
+    id: 'node.column.preset.singleStrutSupport',
+    message: 'Single Strut',
+  },
+  tripodSupport: /* i18n */ { id: 'node.column.preset.tripodSupport', message: 'Tripod Support' },
+  trestleSupport: /* i18n */ { id: 'node.column.preset.trestleSupport', message: 'Trestle Frame' },
+  portalFrameSupport: /* i18n */ {
+    id: 'node.column.preset.portalFrameSupport',
+    message: 'Portal Frame',
+  },
+  boxFrameSupport: /* i18n */ { id: 'node.column.preset.boxFrameSupport', message: 'Box Frame' },
+}
+
+const COLUMN_PRESET_OPTIONS = Object.keys(COLUMN_PRESETS).map((value) => ({
   value: value as ColumnPresetId,
-  label: preset.label,
+  label: COLUMN_PRESET_LABELS[value as ColumnPresetId],
 }))
 
 const COLUMN_PROPORTION_PRESETS = {
@@ -397,7 +422,7 @@ export default function ColumnPanel() {
               </option>
               {COLUMN_PRESET_OPTIONS.map((option) => (
                 <option key={option.value} value={option.value}>
-                  {option.label}
+                  {i18n._(option.label)}
                 </option>
               ))}
             </select>
