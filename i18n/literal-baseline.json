@@ -751,32 +751,6 @@
       "Vertex select (1)",
       "X-ray selection"
     ],
-    "packages/nodes/src/box-vent/panel.tsx": [
-      "Actions",
-      "Base Flange",
-      "Base Height",
-      "Base Inset",
-      "Box",
-      "Box Vent",
-      "Cap",
-      "Cap Height",
-      "Corner Bevel",
-      "Delete",
-      "Depth",
-      "Dimensions",
-      "Dome",
-      "Dome Curvature",
-      "Duplicate",
-      "Gap Height",
-      "Height",
-      "Hood Overhang",
-      "Move",
-      "Position",
-      "Rotation",
-      "Style",
-      "Top Taper",
-      "Width"
-    ],
     "packages/nodes/src/cabinet/compartment-card.tsx": [
       "Baskets",
       "Bottom",
@@ -1217,24 +1191,6 @@
       "{activeDrawingLabel} presentation",
       "{activeDrawingLabel} suppressed segments"
     ],
-    "packages/nodes/src/cupola/panel.tsx": [
-      "Actions",
-      "Cupola",
-      "Delete",
-      "Depth",
-      "Dimensions",
-      "Dome",
-      "Duplicate",
-      "Finial",
-      "Height",
-      "Move",
-      "No Finial",
-      "Position",
-      "Pyramid",
-      "Rotation",
-      "Style",
-      "Width"
-    ],
     "packages/nodes/src/dormer/panel-actions-section.tsx": [
       "Actions",
       "Delete",
@@ -1280,26 +1236,6 @@
       "Wall Height",
       "Width",
       "Windows"
-    ],
-    "packages/nodes/src/downspout/inspector-editors.tsx": [
-      "Position"
-    ],
-    "packages/nodes/src/duct-fitting/inspector-editors.tsx": [
-      "Swap W/H",
-      "Swap width and height"
-    ],
-    "packages/nodes/src/duct-fitting/tool.tsx": [
-      "Axis",
-      "Hover a duct face that fits the door",
-      "Place access door",
-      "R/T rotate",
-      "⌥ axis"
-    ],
-    "packages/nodes/src/duct-terminal/tool.tsx": [
-      "M surface",
-      "Mount {mountLabel}",
-      "R/T rotate",
-      "Snapped to duct"
     ],
     "packages/nodes/src/elevator/panel.tsx": [
       "Access",
@@ -1348,103 +1284,6 @@
       "Width",
       "Yaw"
     ],
-    "packages/nodes/src/eyebrow-vent/panel.tsx": [
-      "Actions",
-      "Back height",
-      "Delete",
-      "Depth",
-      "Dimensions",
-      "Duplicate",
-      "Eyebrow Vent",
-      "Half-round",
-      "Height",
-      "Louvers",
-      "Move",
-      "Position",
-      "Rotation",
-      "Scoop",
-      "Slant-box",
-      "Style",
-      "Width"
-    ],
-    "packages/nodes/src/fence-feature/actions.tsx": [
-      "Close",
-      "Open"
-    ],
-    "packages/nodes/src/fence-feature/inspector.tsx": [
-      "Board width",
-      "Bracing",
-      "Distance from start",
-      "Fence unavailable.",
-      "Frame width",
-      "Gate height",
-      "Gate style",
-      "Ground clearance",
-      "Hinge side",
-      "Hinges and latch",
-      "Horizontal boards",
-      "Infill spacing",
-      "Jamb posts",
-      "Keep the opening inside the fence and clear of other gates or passages.",
-      "Leaf thickness",
-      "Leaves",
-      "Left leaf proportion",
-      "Match fence height",
-      "Match fence style",
-      "Open rails",
-      "Opening angle",
-      "Opening width",
-      "Picket",
-      "Post height",
-      "Remove gate",
-      "Remove opening",
-      "Solid privacy",
-      "Swing direction",
-      "Vertical slats"
-    ],
-    "packages/nodes/src/fence/inspector-editors.tsx": [
-      "Add point after",
-      "Choose a slab or shaped surface on this level.",
-      "Choose a surface",
-      "Corner",
-      "Curve",
-      "Curved",
-      "Distribution controls {subject}. Spacing is measured between centers. The available width limits the count so pieces do not overlap.",
-      "Edit path",
-      "Extend path",
-      "Follow highest surface",
-      "Follow selected surface",
-      "Hold starting height",
-      "Join",
-      "Length",
-      "Picket rail projection",
-      "Point",
-      "Remove point",
-      "Set each span to straight or curved, then drag its points and curve handles in either view.",
-      "Smooth",
-      "Span to point",
-      "Straight",
-      "Surface",
-      "Surface behavior",
-      "points ·"
-    ],
-    "packages/nodes/src/fence/move-endpoint-tool.tsx": [
-      "Detach endpoint",
-      "Drag endpoint"
-    ],
-    "packages/nodes/src/gutter/downspouts-panel.tsx": [
-      "Add Downspout",
-      "Downspout {?}",
-      "Downspouts",
-      "Remove downspout"
-    ],
-    "packages/nodes/src/hvac-equipment/tool.tsx": [
-      "R/T rotate"
-    ],
-    "packages/nodes/src/liquid-line/tool.tsx": [
-      "Click to trace this lineset run",
-      "Follow: hover a lineset"
-    ],
     "packages/nodes/src/measurement/selection.tsx": [
       "Align "
     ],
@@ -1452,48 +1291,6 @@
       "Create",
       "Extrusion height",
       "Extrusion height"
-    ],
-    "packages/nodes/src/pipe-fitting/tool.tsx": [
-      "Axis",
-      "R/T rotate",
-      "⌥ axis"
-    ],
-    "packages/nodes/src/pipe-trap/tool.tsx": [
-      "R/T rotate",
-      "{diameter}\" Trap"
-    ],
-    "packages/nodes/src/ridge-vent/panel.tsx": [
-      "Actions",
-      "Delete",
-      "Dimensions",
-      "Duplicate",
-      "End Caps",
-      "Flanged",
-      "Height",
-      "Length",
-      "Move",
-      "Open",
-      "Position",
-      "Ridge Vent",
-      "Rotation",
-      "Shingled",
-      "Standard",
-      "Style",
-      "Width"
-    ],
-    "packages/nodes/src/shared/run-hanger-inspector.tsx": [
-      "Automatic support",
-      "Hanger",
-      "Hanger {?} position in metres",
-      "Hanger {?} support",
-      "Individual hangers",
-      "Missing support",
-      "No support within reach. Move the hanger or choose another host.",
-      "Position (m)",
-      "Positions are measured along each path segment. Changing spacing regenerates the numbered slots.",
-      "Reveal support",
-      "Skip",
-      "· segment"
     ],
     "packages/nodes/src/skylight/panel.tsx": [
       "Actions",
@@ -1562,27 +1359,6 @@
       "Position",
       "Spawn Point",
       "Yaw"
-    ],
-    "packages/nodes/src/turbine-vent/panel.tsx": [
-      "Actions",
-      "Cylinder",
-      "Delete",
-      "Diameter",
-      "Dimensions",
-      "Duplicate",
-      "Globe",
-      "Height",
-      "Motion",
-      "Move",
-      "Neck Height",
-      "Pause",
-      "Play",
-      "Position",
-      "Rotation",
-      "Spin Speed",
-      "Style",
-      "Turbine Vent",
-      "Vanes"
     ],
     "packages/nodes/src/wall/move-endpoint-tool.tsx": [
       "Alt to detach",
