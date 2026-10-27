@@ -206,7 +206,9 @@ function hookEdits(source: ts.SourceFile, component: ts.FunctionLikeDeclaration)
   if (!body) return []
   if (ts.isBlock(body)) {
     const at = body.getStart(source) + 1
-    return [{ start: at, end: at, text: `\n  const i18n = ${HOOK}()` }]
+    // Keep the body's own first statement on a line of its own.
+    const separator = /^[ \t]*\r?\n/.test(source.text.slice(at)) ? '' : '\n'
+    return [{ start: at, end: at, text: `\n  const i18n = ${HOOK}()${separator}` }]
   }
   return [
     {
@@ -341,6 +343,7 @@ export function convertSource(
   registry: IdRegistry,
   allow: Set<string>,
   targets: DescriptorTargets = {},
+  allKinds = path.endsWith('.tsx'),
 ): { output: string; planned: Planned[] } {
   const source = parseSource(path, text)
   const planned: Planned[] = []
@@ -435,6 +438,14 @@ export function convertSource(
           text: directAttribute ? `{${call}}` : call,
         })
       },
+      constant(node, value) {
+        planned.push({
+          path,
+          line: source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1,
+          message: value,
+          manual: `string constant ${node.text}: make it a descriptor or translate at the use`,
+        })
+      },
       template(node) {
         const names = node.templateSpans.map((span) => placeholderName(span.expression))
         const preview = [
@@ -475,6 +486,7 @@ export function convertSource(
       },
     },
     allow,
+    allKinds,
   )
 
   if (edits.length === 0) return { output: text, planned }
@@ -520,7 +532,14 @@ export async function convertFiles(args: string[]): Promise<void> {
   ])
   for (const path of [...files].sort()) {
     const text = readFileSync(join(ROOT, path), 'utf8')
-    const { output, planned } = convertSource(path, text, registry, allow, targets)
+    const { output, planned } = convertSource(
+      path,
+      text,
+      registry,
+      allow,
+      targets,
+      path.endsWith('.tsx') || explicit.includes(path),
+    )
     for (const item of planned) {
       if (item.manual) manual += 1
       else converted += 1

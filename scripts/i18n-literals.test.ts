@@ -1,10 +1,16 @@
 import { expect, test } from 'bun:test'
-import { readFileSync, writeFileSync } from 'node:fs'
 import { compileMessageOrThrow } from '@lingui/message-utils/compileMessage'
-import { parsePo, stringifyPo } from 'pofile-ts'
-import { checkCatalogs, pseudoLocalize } from './i18n'
+import {
+  checkTranslationEntries,
+  hashSource,
+  type LocaleEntries,
+  pseudoLocalize,
+  reviewRegressions,
+  type SourceMessage,
+} from './i18n'
 import { convertSource, IdRegistry, namespaceFor } from './i18n-codemod'
 import { type Candidate, checkLiterals, scanSource } from './i18n-literals'
+import { untranslatedWords } from './i18n-pseudo-audit'
 
 const allowlist = { texts: ['Pascal'], paths: {} }
 const convert = (path: string, source: string) =>
@@ -114,20 +120,40 @@ test('message IDs follow the owning package and path, disambiguating different c
   expect(registry.idFor('apps/editor/components/navbar.tsx', 'Share…')).toBe('app.navbar.share2')
 })
 
-test('the guard fails when a file gains copy and accepts progress', () => {
-  const candidate: Candidate = { kind: 'jsx-text', text: 'Hello', line: 1 }
+const candidate = (text: string): Candidate => ({ kind: 'jsx-text', text, line: 1 })
+
+test('the guard fails on copy the baseline does not list and reports progress', () => {
   const scan = new Map([
-    ['a.tsx', [candidate, candidate]],
-    ['new.tsx', [candidate]],
+    ['a.tsx', [candidate('Share'), candidate('Share')]],
+    ['new.tsx', [candidate('Hello')]],
   ])
   const { errors, improvable } = checkLiterals(scan, {
-    version: 1,
-    files: { 'a.tsx': 3, 'gone.tsx': 1 },
+    version: 2,
+    files: { 'a.tsx': ['Share', 'Share', 'Copy'], 'gone.tsx': ['Old'] },
   })
 
   expect(errors).toHaveLength(1)
-  expect(errors[0]).toContain('new.tsx: 1 untranslated user-visible literals (baseline 0)')
-  expect(improvable).toEqual(['a.tsx: 2 < 3', 'gone.tsx: 0 < 1'])
+  expect(errors[0]).toContain('new.tsx: untranslated user-visible literals not in the baseline')
+  expect(improvable).toEqual(['a.tsx: 1 fewer', 'gone.tsx: 1 fewer'])
+})
+
+test('swapping baselined copy for new copy fails even when the count is unchanged', () => {
+  const { errors } = checkLiterals(new Map([['a.tsx', [candidate('Delete everything now')]]]), {
+    version: 2,
+    files: { 'a.tsx': ['Share'] },
+  })
+  expect(errors[0]).toContain('"Delete everything now"')
+})
+
+test('the baseline may only shrink relative to the base branch', () => {
+  const { errors } = checkLiterals(
+    new Map([['a.tsx', [candidate('Share'), candidate('Copy')]]]),
+    { version: 2, files: { 'a.tsx': ['Copy', 'Share'] } },
+    { version: 2, files: { 'a.tsx': ['Share'] } },
+  )
+  expect(errors).toEqual([
+    'a.tsx: i18n/literal-baseline.json adds "Copy" relative to the base branch; the baseline may only shrink',
+  ])
 })
 
 test('an i18n-ignore comment exempts data that only looks like copy', () => {
@@ -143,6 +169,68 @@ test('an i18n-ignore comment exempts data that only looks like copy', () => {
   expect(scanSource('packages/editor/src/components/credits.tsx', source, allowlist)).toEqual([])
 })
 
+test('an i18n-ignore without a reason does not exempt anything', () => {
+  const source = `export function Credits() {
+  // i18n-ignore
+  return <p title="Made with Three.js" />
+}
+`
+  expect(scanSource('packages/editor/src/components/credits.tsx', source, allowlist)).toHaveLength(
+    1,
+  )
+})
+
+test('hyphenated labels and string constants rendered in JSX are copy', () => {
+  const source = `const DELETE_LABEL = 'Delete everything'
+const ICON = 'lucide:trash'
+
+export function Toolbar() {
+  return (
+    <div>
+      <button aria-label="zoom-in" title={ICON} />
+      <span>Read-only</span>
+      <span>{DELETE_LABEL}</span>
+    </div>
+  )
+}
+`
+  expect(
+    scanSource('packages/editor/src/components/toolbar.tsx', source, allowlist).map(
+      (found) => found.text,
+    ),
+  ).toEqual(['zoom-in', 'Read-only', 'Delete everything'])
+})
+
+test('a notification description is one candidate and one edit', () => {
+  const source = `export function Save() {
+  return <button onClick={() => toast.error('Failed', { description: 'Try again' })} />
+}
+`
+  const path = 'packages/editor/src/components/save.tsx'
+  expect(scanSource(path, source, allowlist).map((found) => found.text)).toEqual([
+    'Failed',
+    'Try again',
+  ])
+  const { output } = convert(path, source)
+  expect(output.match(/message: 'Try again'/g)).toHaveLength(1)
+})
+
+test('a one-line block body keeps its statement after the inserted hook', () => {
+  const source = `export function Empty() { return <p>No layers yet</p> }\n`
+  const { output } = convert('packages/editor/src/components/ui/sidebar/empty.tsx', source)
+  expect(output).toContain('const i18n = usePascalI18n()\n return <p>')
+  expect(() =>
+    scanSource('packages/editor/src/components/ui/sidebar/empty.tsx', output, allowlist),
+  ).not.toThrow()
+  expect(convert('packages/editor/src/components/ui/sidebar/empty.tsx', output).output).toBe(output)
+})
+
+test('the audit allowlist removes whole words only', () => {
+  expect(untranslatedWords('Find · 2 in', ['in'])).toEqual(['Find'])
+  expect(untranslatedWords('Pin', ['in'])).toEqual(['Pin'])
+  expect(untranslatedWords('[Ƒîñð] 2 in', ['in'])).toEqual([])
+})
+
 test('pseudo-localization accents every letter and keeps ICU structure', () => {
   const message = 'Delete {count, plural, one {# wall} other {# walls}} from <0>{level}</0>?'
   const pseudo = pseudoLocalize(message)
@@ -154,38 +242,48 @@ test('pseudo-localization accents every letter and keeps ICU structure', () => {
   expect(pseudoLocalize("It''s '{'literal'}'")).toBe("[Îţ''š '{'ļîţéŕáļ'}' ~~~]")
 })
 
-test('AI drafts pass ordinary checks but block the reviewed release gate', async () => {
-  const paths = [
-    ...new Bun.Glob('packages/editor/src/i18n/locales/*/messages.po').scanSync(),
-    ...new Bun.Glob('packages/editor/src/i18n/locales/*/messages.ts').scanSync(),
-  ]
-  const before = new Map(paths.map((path) => [path, readFileSync(path, 'utf8')]))
-  const catalog = 'packages/editor/src/i18n/locales/fr/messages.po'
-  const mark = (review: string, fuzzy: boolean) => {
-    const po = parsePo(before.get(catalog)!)
-    const item = po.items.find((entry) => entry.msgid === 'editor.buildPanel.advanced')!
-    item.comments = item.comments.map((comment) =>
-      comment.startsWith('Review: ') ? `Review: ${review}` : comment,
-    )
-    if (fuzzy) item.flags.fuzzy = true
-    writeFileSync(catalog, stringifyPo(po, { foldLength: 0 }))
-    Bun.spawnSync(['bun', 'scripts/i18n.ts', 'compile'], { stdout: 'ignore', stderr: 'ignore' })
-  }
-  try {
-    mark('required', true)
-    expect(await checkCatalogs()).toEqual([])
-    expect(readFileSync('packages/editor/src/i18n/locales/fr/messages.ts', 'utf8')).not.toContain(
-      'Avancé',
-    )
-    expect(await checkCatalogs({ requireReviewed: true })).toContain(
-      'fr: "editor.buildPanel.advanced" still requires human review',
-    )
+const advanced: SourceMessage = {
+  id: 'editor.buildPanel.advanced',
+  message: 'Advanced',
+  context: [],
+}
+const entry = (overrides: Partial<LocaleEntries[string][string]>) => ({
+  translation: 'Avancé',
+  sourceHash: hashSource('Advanced'),
+  review: 'human' as const,
+  fuzzy: false,
+  ...overrides,
+})
+const everyLocale = (value: ReturnType<typeof entry>): LocaleEntries =>
+  Object.fromEntries(
+    ['zh-CN', 'fr', 'es', 'ja'].map((locale) => [locale, { [advanced.id]: value }]),
+  )
 
-    mark('missing', false)
-    expect(await checkCatalogs()).toContain(
-      'fr: "editor.buildPanel.advanced" is unreviewed but not marked fuzzy + Review: required',
-    )
-  } finally {
-    for (const [path, contents] of before) writeFileSync(path, contents)
-  }
-}, 120_000)
+test('AI drafts pass ordinary checks but block the reviewed release gate', () => {
+  const drafts = everyLocale(entry({ review: 'required', fuzzy: true }))
+  expect(checkTranslationEntries([advanced], drafts, {}, {})).toEqual([])
+  expect(checkTranslationEntries([advanced], drafts, {}, { requireReviewed: true })).toContain(
+    'fr: "editor.buildPanel.advanced" still requires human review',
+  )
+  expect(
+    checkTranslationEntries([advanced], everyLocale(entry({ review: 'missing' })), {}, {}),
+  ).toContain(
+    'fr: "editor.buildPanel.advanced" is unreviewed but not marked fuzzy + Review: required',
+  )
+})
+
+test('a reviewed translation cannot fall back to draft while its English is unchanged', () => {
+  const base = everyLocale(entry({}))
+  expect(
+    reviewRegressions([advanced], everyLocale(entry({ review: 'required', fuzzy: true })), base),
+  ).toContain(
+    'fr: "editor.buildPanel.advanced" is reviewed on the base branch with the same English and must stay reviewed',
+  )
+  expect(
+    reviewRegressions([advanced], everyLocale(entry({ translation: 'Avancés' })), base),
+  ).toEqual([])
+  const reworded = { ...advanced, message: 'Advanced tools' }
+  expect(
+    reviewRegressions([reworded], everyLocale(entry({ review: 'required', fuzzy: true })), base),
+  ).toEqual([])
+})

@@ -33,7 +33,10 @@ function argument(name: string): string | undefined {
 export function untranslatedWords(text: string, allowed: readonly string[]): string[] {
   let rest = text
   for (const value of [...allowed].sort((a, b) => b.length - a.length)) {
-    if (value) rest = rest.split(value).join(' ')
+    if (!value) continue
+    // Whole words only: allowing the unit "in" must not hide "Find" or "Pin".
+    const escaped = value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    rest = rest.replace(new RegExp(`(?<![\\p{L}\\p{N}])${escaped}(?![\\p{L}\\p{N}])`, 'gu'), ' ')
   }
   return rest.match(/[A-Za-z]{2,}/g) ?? []
 }

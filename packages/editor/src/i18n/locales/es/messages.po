@@ -15,9 +15,9 @@ msgstr ""
 
 # Source-Hash: 8ffb1c5066e53a8d
 # Review: required
-# English: "Pascal home"
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
+# English: "Pascal home"
 #: apps/editor/components/app-shell.tsx
 #, fuzzy
 msgid "app.appShell.pascalHome"
@@ -25,9 +25,9 @@ msgstr "Inicio de Pascal"
 
 # Source-Hash: 2ee62be78ba76f53
 # Review: required
-# English: "All projects"
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
+# English: "All projects"
 #: apps/editor/components/editor-navbar.tsx
 #, fuzzy
 msgid "app.editorNavbar.allProjects"
@@ -35,9 +35,9 @@ msgstr "Todos los proyectos"
 
 # Source-Hash: 20226b68d5467072
 # Review: required
-# English: "Preview"
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
+# English: "Preview"
 #: apps/editor/components/editor-navbar.tsx
 #, fuzzy
 msgid "app.editorNavbar.preview"
@@ -45,9 +45,9 @@ msgstr "Vista previa"
 
 # Source-Hash: 9f2cbc9214c8f7b0
 # Review: required
-# English: "Project name"
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
+# English: "Project name"
 #: apps/editor/components/editor-navbar.tsx
 #, fuzzy
 msgid "app.editorNavbar.projectName"
@@ -55,9 +55,9 @@ msgstr "Nombre del proyecto"
 
 # Source-Hash: 150e143a84240eee
 # Review: required
-# English: "Rename project"
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
+# English: "Rename project"
 #: apps/editor/components/editor-navbar.tsx
 #, fuzzy
 msgid "app.editorNavbar.renameProject"
@@ -65,9 +65,9 @@ msgstr "Cambiar nombre del proyecto"
 
 # Source-Hash: 331e1584943b09b9
 # Review: required
-# English: "Share"
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
+# English: "Share"
 #: apps/editor/components/editor-navbar.tsx
 #, fuzzy
 msgid "app.editorNavbar.share"
@@ -75,9 +75,9 @@ msgstr "Compartir"
 
 # Source-Hash: 703e1b4b9b715d3b
 # Review: required
-# English: "Anyone with the link can view this project. They cannot edit it."
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
+# English: "Anyone with the link can view this project. They cannot edit it."
 #: apps/editor/components/share-panel.tsx
 #, fuzzy
 msgid "app.sharePanel.anyoneWithTheLinkCanView"
@@ -85,9 +85,9 @@ msgstr "Cualquier persona con el enlace puede ver este proyecto, pero no editarl
 
 # Source-Hash: 07e04484867c17d3
 # Review: required
-# English: "Copied"
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
+# English: "Copied"
 #: apps/editor/components/share-panel.tsx
 #, fuzzy
 msgid "app.sharePanel.copied"
@@ -95,9 +95,9 @@ msgstr "Copiado"
 
 # Source-Hash: 4f60d1e142affa9c
 # Review: required
-# English: "Copy"
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
+# English: "Copy"
 #: apps/editor/components/share-panel.tsx
 #, fuzzy
 msgid "app.sharePanel.copy"
@@ -105,9 +105,9 @@ msgstr "Copiar"
 
 # Source-Hash: 8ff50e1a9962a4db
 # Review: required
-# English: "Could not read the sharing state."
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
+# English: "Could not read the sharing state."
 #: apps/editor/components/share-panel.tsx
 #, fuzzy
 msgid "app.sharePanel.couldNotReadTheSharingState"
@@ -115,9 +115,9 @@ msgstr "No se pudo leer el estado de uso compartido."
 
 # Source-Hash: 791e281338a51483
 # Review: required
-# English: "Could not turn off the public link."
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
+# English: "Could not turn off the public link."
 #: apps/editor/components/share-panel.tsx
 #, fuzzy
 msgid "app.sharePanel.couldNotTurnOffThePublic"
@@ -125,9 +125,9 @@ msgstr "No se pudo desactivar el enlace público."
 
 # Source-Hash: 2c5ddecfd652ba63
 # Review: required
-# English: "Could not turn on the public link."
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
+# English: "Could not turn on the public link."
 #: apps/editor/components/share-panel.tsx
 #, fuzzy
 msgid "app.sharePanel.couldNotTurnOnThePublic"
@@ -135,9 +135,9 @@ msgstr "No se pudo activar el enlace público."
 
 # Source-Hash: 15e49d4da8765318
 # Review: required
-# English: "Embed code"
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
+# English: "Embed code"
 #: apps/editor/components/share-panel.tsx
 #, fuzzy
 msgid "app.sharePanel.embedCode"
@@ -145,9 +145,9 @@ msgstr "Código de inserción"
 
 # Source-Hash: d4523c2d303f99b0
 # Review: required
-# English: "Embed link"
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
+# English: "Embed link"
 #: apps/editor/components/share-panel.tsx
 #, fuzzy
 msgid "app.sharePanel.embedLink"
@@ -155,9 +155,9 @@ msgstr "Enlace de inserción"
 
 # Source-Hash: 252f2cbf5e1609a5
 # Review: required
-# English: "Hide controls"
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
+# English: "Hide controls"
 #: apps/editor/components/share-panel.tsx
 #, fuzzy
 msgid "app.sharePanel.hideControls"
@@ -165,9 +165,9 @@ msgstr "Ocultar controles"
 
 # Source-Hash: ba77c0610a63bb2b
 # Review: required
-# English: "Link"
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
+# English: "Link"
 #: apps/editor/components/share-panel.tsx
 #, fuzzy
 msgid "app.sharePanel.link"
@@ -175,9 +175,9 @@ msgstr "Enlace"
 
 # Source-Hash: a2560430aaec31d9
 # Review: required
-# English: "Only the 3D view, no header or toolbar."
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
+# English: "Only the 3D view, no header or toolbar."
 #: apps/editor/components/share-panel.tsx
 #, fuzzy
 msgid "app.sharePanel.onlyThe3dViewNoHeader"
@@ -185,9 +185,9 @@ msgstr "Solo la vista 3D, sin encabezado ni barra de herramientas."
 
 # Source-Hash: 3e52f04f92e08070
 # Review: required
-# English: "Open"
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
+# English: "Open"
 #: apps/editor/components/share-panel.tsx
 #, fuzzy
 msgid "app.sharePanel.open"
@@ -195,9 +195,9 @@ msgstr "Abrir"
 
 # Source-Hash: b34faaa5378056c6
 # Review: required
-# English: "Public link"
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
+# English: "Public link"
 #: apps/editor/components/share-panel.tsx
 #, fuzzy
 msgid "app.sharePanel.publicLink"
@@ -205,9 +205,9 @@ msgstr "Enlace público"
 
 # Source-Hash: 7525e8007fcab09b
 # Review: required
-# English: "Share project"
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
+# English: "Share project"
 #: apps/editor/components/share-panel.tsx
 #, fuzzy
 msgid "app.sharePanel.shareProject"
@@ -215,9 +215,9 @@ msgstr "Compartir proyecto"
 
 # Source-Hash: 3d3f438d5a49eba7
 # Review: required
-# English: "Automatic dimensions"
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
+# English: "Automatic dimensions"
 #: apps/editor/components/viewer-toolbar.tsx
 #, fuzzy
 msgid "app.viewerToolbar.automaticDimensions"
@@ -225,9 +225,9 @@ msgstr "Cotas automáticas"
 
 # Source-Hash: 14622745dbf93f4c
 # Review: required
-# English: "Camera"
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
+# English: "Camera"
 #: apps/editor/components/viewer-toolbar.tsx
 #, fuzzy
 msgid "app.viewerToolbar.camera"
@@ -235,9 +235,9 @@ msgstr "Cámara"
 
 # Source-Hash: e6bce525c47ba3ac
 # Review: required
-# English: "Clean plan; dimensions appear with selection"
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
+# English: "Clean plan; dimensions appear with selection"
 #: apps/editor/components/viewer-toolbar.tsx
 #, fuzzy
 msgid "app.viewerToolbar.cleanPlanDimensionsAppearWithSelection"
@@ -245,9 +245,9 @@ msgstr "Plano limpio; las cotas aparecen al seleccionar"
 
 # Source-Hash: 61ce356577cfb04a
 # Review: required
-# English: "Collapse sidebar"
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
+# English: "Collapse sidebar"
 #: apps/editor/components/viewer-toolbar.tsx
 #, fuzzy
 msgid "app.viewerToolbar.collapseSidebar"
@@ -255,9 +255,9 @@ msgstr "Contraer barra lateral"
 
 # Source-Hash: 2416a48df28d6205
 # Review: required
-# English: "Crisp, opaque edge lines"
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
+# English: "Crisp, opaque edge lines"
 #: apps/editor/components/viewer-toolbar.tsx
 #, fuzzy
 msgid "app.viewerToolbar.crispOpaqueEdgeLines"
@@ -265,9 +265,9 @@ msgstr "Aristas nítidas y opacas"
 
 # Source-Hash: 4da8b3678ed77b45
 # Review: required
-# English: "Cutaway"
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
+# English: "Cutaway"
 #: apps/editor/components/viewer-toolbar.tsx
 #, fuzzy
 msgid "app.viewerToolbar.cutaway"
@@ -275,9 +275,9 @@ msgstr "Corte"
 
 # Source-Hash: 4ca0e0e73229540c
 # Review: required
-# English: "Default"
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
+# English: "Default"
 #: apps/editor/components/viewer-toolbar.tsx
 #, fuzzy
 msgid "app.viewerToolbar.default"
@@ -285,9 +285,9 @@ msgstr "Predeterminado"
 
 # Source-Hash: a313661ef9dd0a65
 # Review: required
-# English: "Display"
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
+# English: "Display"
 #: apps/editor/components/viewer-toolbar.tsx
 #, fuzzy
 msgid "app.viewerToolbar.display"
@@ -295,9 +295,9 @@ msgstr "Visualización"
 
 # Source-Hash: d0db46f206a88e2e
 # Review: required
-# English: "Display settings"
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
+# English: "Display settings"
 #: apps/editor/components/viewer-toolbar.tsx
 #, fuzzy
 msgid "app.viewerToolbar.displaySettings"
@@ -305,9 +305,9 @@ msgstr "Ajustes de visualización"
 
 # Source-Hash: 0286962ab8e9cfcd
 # Review: required
-# English: "Door/window marks"
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
+# English: "Door/window marks"
 #: apps/editor/components/viewer-toolbar.tsx
 #, fuzzy
 msgid "app.viewerToolbar.doorWindowMarks"
@@ -315,9 +315,9 @@ msgstr "Marcas de puertas y ventanas"
 
 # Source-Hash: 027bbc8b7287c06a
 # Review: required
-# English: "Edges"
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
+# English: "Edges"
 #: apps/editor/components/viewer-toolbar.tsx
 #, fuzzy
 msgid "app.viewerToolbar.edges"
@@ -325,9 +325,9 @@ msgstr "Aristas"
 
 # Source-Hash: d86126c5d16c6238
 # Review: required
-# English: "Enter VR"
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
+# English: "Enter VR"
 #: apps/editor/components/viewer-toolbar.tsx
 #, fuzzy
 msgid "app.viewerToolbar.enterVr"
@@ -335,9 +335,9 @@ msgstr "Entrar en RV"
 
 # Source-Hash: eb99fb0b382e58cd
 # Review: required
-# English: "Exit VR"
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
+# English: "Exit VR"
 #: apps/editor/components/viewer-toolbar.tsx
 #, fuzzy
 msgid "app.viewerToolbar.exitVr"
@@ -345,9 +345,9 @@ msgstr "Salir de RV"
 
 # Source-Hash: aeac665749d3101d
 # Review: required
-# English: "Expand sidebar"
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
+# English: "Expand sidebar"
 #: apps/editor/components/viewer-toolbar.tsx
 #, fuzzy
 msgid "app.viewerToolbar.expandSidebar"
@@ -355,9 +355,9 @@ msgstr "Expandir barra lateral"
 
 # Source-Hash: 08c178ee733ff009
 # Review: required
-# English: "Expert"
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
+# English: "Expert"
 #: apps/editor/components/viewer-toolbar.tsx
 #, fuzzy
 msgid "app.viewerToolbar.expert"
@@ -365,9 +365,9 @@ msgstr "Experto"
 
 # Source-Hash: be12f8788f1f0a05
 # Review: required
-# English: "Exploded"
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
+# English: "Exploded"
 #: apps/editor/components/viewer-toolbar.tsx
 #, fuzzy
 msgid "app.viewerToolbar.exploded"
@@ -375,9 +375,9 @@ msgstr "Despiece"
 
 # Source-Hash: c6f865a366ef5755
 # Review: required
-# English: "Face of stud"
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
+# English: "Face of stud"
 #: apps/editor/components/viewer-toolbar.tsx
 #, fuzzy
 msgid "app.viewerToolbar.faceOfStud"
@@ -385,9 +385,9 @@ msgstr "Cara del montante"
 
 # Source-Hash: 0c583f1d4201293b
 # Review: required
-# English: "Faint outline of major creases"
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
+# English: "Faint outline of major creases"
 #: apps/editor/components/viewer-toolbar.tsx
 #, fuzzy
 msgid "app.viewerToolbar.faintOutlineOfMajorCreases"
@@ -395,9 +395,9 @@ msgstr "Contorno tenue de los pliegues principales"
 
 # Source-Hash: 08ecd5878b08139d
 # Review: required
-# English: "Feet & inches"
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
+# English: "Feet & inches"
 #: apps/editor/components/viewer-toolbar.tsx
 #, fuzzy
 msgid "app.viewerToolbar.feetInches"
@@ -405,9 +405,9 @@ msgstr "Pies y pulgadas"
 
 # Source-Hash: 43b8017fa821c46c
 # Review: required
-# English: "Finished faces"
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
+# English: "Finished faces"
 #: apps/editor/components/viewer-toolbar.tsx
 #, fuzzy
 msgid "app.viewerToolbar.finishedFaces"
@@ -415,9 +415,9 @@ msgstr "Caras acabadas"
 
 # Source-Hash: 8827df1cdeb02ed9
 # Review: required
-# English: "Flat and fast — no ambient occlusion"
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
+# English: "Flat and fast — no ambient occlusion"
 #: apps/editor/components/viewer-toolbar.tsx
 #, fuzzy
 msgid "app.viewerToolbar.flatAndFastNoAmbientOcclusion"
@@ -425,9 +425,9 @@ msgstr "Plano y rápido: sin oclusión ambiental"
 
 # Source-Hash: 060a718cdcff61b3
 # Review: required
-# English: "Floor plan annotations"
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
+# English: "Floor plan annotations"
 #: apps/editor/components/viewer-toolbar.tsx
 #, fuzzy
 msgid "app.viewerToolbar.floorPlanAnnotations"
@@ -435,9 +435,9 @@ msgstr "Anotaciones del plano de planta"
 
 # Source-Hash: 483171f79dc32ae5
 # Review: required
-# English: "Floor plan mode"
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
+# English: "Floor plan mode"
 #: apps/editor/components/viewer-toolbar.tsx
 #, fuzzy
 msgid "app.viewerToolbar.floorPlanMode"
@@ -445,9 +445,9 @@ msgstr "Modo plano de planta"
 
 # Source-Hash: 8bb9e54fc786ca77
 # Review: required
-# English: "Full ambient occlusion"
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
+# English: "Full ambient occlusion"
 #: apps/editor/components/viewer-toolbar.tsx
 #, fuzzy
 msgid "app.viewerToolbar.fullAmbientOcclusion"
@@ -455,9 +455,9 @@ msgstr "Oclusión ambiental completa"
 
 # Source-Hash: 91fd3544d9ce16bf
 # Review: required
-# English: "Full documentation and annotation controls"
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
+# English: "Full documentation and annotation controls"
 #: apps/editor/components/viewer-toolbar.tsx
 #, fuzzy
 msgid "app.viewerToolbar.fullDocumentationAndAnnotationControls"
@@ -465,9 +465,9 @@ msgstr "Documentación y anotaciones completas"
 
 # Source-Hash: 131bac2467f4fdf6
 # Review: required
-# English: "Full height"
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
+# English: "Full height"
 #: apps/editor/components/viewer-toolbar.tsx
 #, fuzzy
 msgid "app.viewerToolbar.fullHeight"
@@ -475,9 +475,9 @@ msgstr "Altura completa"
 
 # Source-Hash: c9838bc98cb35125
 # Review: required
-# English: "Full wall thickness"
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
+# English: "Full wall thickness"
 #: apps/editor/components/viewer-toolbar.tsx
 #, fuzzy
 msgid "app.viewerToolbar.fullWallThickness"
@@ -485,9 +485,9 @@ msgstr "Espesor total del muro"
 
 # Source-Hash: 7e4a0a38f694be6b
 # Review: required
-# English: "Grid"
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
+# English: "Grid"
 #: apps/editor/components/viewer-toolbar.tsx
 #, fuzzy
 msgid "app.viewerToolbar.grid"
@@ -495,9 +495,9 @@ msgstr "Cuadrícula"
 
 # Source-Hash: 4bf4a6861d7d633e
 # Review: required
-# English: "Levels: {mode}"
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
+# English: "Levels: {mode}"
 #: apps/editor/components/viewer-toolbar.tsx
 #, fuzzy
 msgid "app.viewerToolbar.levelsMode"
@@ -505,9 +505,9 @@ msgstr "Plantas: {mode}"
 
 # Source-Hash: 803532407fb5962b
 # Review: required
-# English: "Low"
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
+# English: "Low"
 #: apps/editor/components/viewer-toolbar.tsx
 #, fuzzy
 msgid "app.viewerToolbar.low"
@@ -515,9 +515,9 @@ msgstr "Bajo"
 
 # Source-Hash: 32f9a404c0bdce10
 # Review: required
-# English: "Magnetic snap"
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
+# English: "Magnetic snap"
 #: apps/editor/components/viewer-toolbar.tsx
 #, fuzzy
 msgid "app.viewerToolbar.magneticSnap"
@@ -525,9 +525,9 @@ msgstr "Ajuste magnético"
 
 # Source-Hash: 387082cd5f118bed
 # Review: required
-# English: "Manual"
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
+# English: "Manual"
 #: apps/editor/components/viewer-toolbar.tsx
 #, fuzzy
 msgid "app.viewerToolbar.manual"
@@ -535,9 +535,9 @@ msgstr "Manual"
 
 # Source-Hash: 2fb69122dd996c0a
 # Review: required
-# English: "Manual dimensions"
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
+# English: "Manual dimensions"
 #: apps/editor/components/viewer-toolbar.tsx
 #, fuzzy
 msgid "app.viewerToolbar.manualDimensions"
@@ -545,9 +545,9 @@ msgstr "Cotas manuales"
 
 # Source-Hash: c6aa74075f37313a
 # Review: required
-# English: "Measurements"
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
+# English: "Measurements"
 #: apps/editor/components/viewer-toolbar.tsx
 #, fuzzy
 msgid "app.viewerToolbar.measurements"
@@ -555,9 +555,9 @@ msgstr "Medidas"
 
 # Source-Hash: 0a39470be3b84536
 # Review: required
-# English: "Meters"
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
+# English: "Meters"
 #: apps/editor/components/viewer-toolbar.tsx
 #, fuzzy
 msgid "app.viewerToolbar.meters"
@@ -565,9 +565,9 @@ msgstr "Metros"
 
 # Source-Hash: 83cce6c521e71d01
 # Review: required
-# English: "Millimeters"
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
+# English: "Millimeters"
 #: apps/editor/components/viewer-toolbar.tsx
 #, fuzzy
 msgid "app.viewerToolbar.millimeters"
@@ -575,9 +575,9 @@ msgstr "Milímetros"
 
 # Source-Hash: b784527bb90b9c5e
 # Review: required
-# English: "3D measurements"
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
+# English: "3D measurements"
 #: apps/editor/components/viewer-toolbar.tsx
 #, fuzzy
 msgid "app.viewerToolbar.n3dMeasurements"
@@ -585,9 +585,9 @@ msgstr "Medidas 3D"
 
 # Source-Hash: 4ff58913a4492199
 # Review: required
-# English: "No edge lines"
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
+# English: "No edge lines"
 #: apps/editor/components/viewer-toolbar.tsx
 #, fuzzy
 msgid "app.viewerToolbar.noEdgeLines"
@@ -595,9 +595,9 @@ msgstr "Sin aristas"
 
 # Source-Hash: 50accd740fa2e736
 # Review: required
-# English: "Off"
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
+# English: "Off"
 #: apps/editor/components/viewer-toolbar.tsx
 #, fuzzy
 msgid "app.viewerToolbar.off"
@@ -605,9 +605,9 @@ msgstr "Desactivado"
 
 # Source-Hash: 9cc01faad79c28da
 # Review: required
-# English: "On"
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
+# English: "On"
 #: apps/editor/components/viewer-toolbar.tsx
 #, fuzzy
 msgid "app.viewerToolbar.on"
@@ -615,9 +615,9 @@ msgstr "Activado"
 
 # Source-Hash: ed59dd8ce7797a66
 # Review: required
-# English: "Orthographic"
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
+# English: "Orthographic"
 #: apps/editor/components/viewer-toolbar.tsx
 #, fuzzy
 msgid "app.viewerToolbar.orthographic"
@@ -625,9 +625,9 @@ msgstr "Ortográfica"
 
 # Source-Hash: 316e25993ff72b88
 # Review: required
-# English: "Perspective"
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
+# English: "Perspective"
 #: apps/editor/components/viewer-toolbar.tsx
 #, fuzzy
 msgid "app.viewerToolbar.perspective"
@@ -635,9 +635,9 @@ msgstr "Perspectiva"
 
 # Source-Hash: 20226b68d5467072
 # Review: required
-# English: "Preview"
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
+# English: "Preview"
 #: apps/editor/components/viewer-toolbar.tsx
 #, fuzzy
 msgid "app.viewerToolbar.preview"
@@ -645,9 +645,9 @@ msgstr "Vista previa"
 
 # Source-Hash: 34c20b72a42ca618
 # Review: required
-# English: "Preview mode"
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
+# English: "Preview mode"
 #: apps/editor/components/viewer-toolbar.tsx
 #, fuzzy
 msgid "app.viewerToolbar.previewMode"
@@ -655,9 +655,9 @@ msgstr "Modo de vista previa"
 
 # Source-Hash: 5e58af99d6d4fa6a
 # Review: required
-# English: "Render"
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
+# English: "Render"
 #: apps/editor/components/viewer-toolbar.tsx
 #, fuzzy
 msgid "app.viewerToolbar.render"
@@ -665,9 +665,9 @@ msgstr "Renderizado"
 
 # Source-Hash: f363702a10aedaeb
 # Review: required
-# English: "Rendered"
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
+# English: "Rendered"
 #: apps/editor/components/viewer-toolbar.tsx
 #, fuzzy
 msgid "app.viewerToolbar.rendered"
@@ -675,9 +675,9 @@ msgstr "Renderizado"
 
 # Source-Hash: 4959d5538efc595c
 # Review: required
-# English: "Room labels"
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
+# English: "Room labels"
 #: apps/editor/components/viewer-toolbar.tsx
 #, fuzzy
 msgid "app.viewerToolbar.roomLabels"
@@ -685,9 +685,9 @@ msgstr "Etiquetas de estancias"
 
 # Source-Hash: 82720864e5034398
 # Review: required
-# English: "Scene theme"
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
+# English: "Scene theme"
 #: apps/editor/components/viewer-toolbar.tsx
 #, fuzzy
 msgid "app.viewerToolbar.sceneTheme"
@@ -695,9 +695,9 @@ msgstr "Tema de la escena"
 
 # Source-Hash: 4c6bcb30b40047fc
 # Review: required
-# English: "Shadows"
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
+# English: "Shadows"
 #: apps/editor/components/viewer-toolbar.tsx
 #, fuzzy
 msgid "app.viewerToolbar.shadows"
@@ -705,9 +705,9 @@ msgstr "Sombras"
 
 # Source-Hash: 59dc62417b44931d
 # Review: required
-# English: "Single wall axis"
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
+# English: "Single wall axis"
 #: apps/editor/components/viewer-toolbar.tsx
 #, fuzzy
 msgid "app.viewerToolbar.singleWallAxis"
@@ -715,9 +715,9 @@ msgstr "Eje único del muro"
 
 # Source-Hash: d266d83ec490df4e
 # Review: required
-# English: "Soft"
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
+# English: "Soft"
 #: apps/editor/components/viewer-toolbar.tsx
 #, fuzzy
 msgid "app.viewerToolbar.soft"
@@ -725,9 +725,9 @@ msgstr "Suaves"
 
 # Source-Hash: ef3e765e692faf4c
 # Review: required
-# English: "Solid"
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
+# English: "Solid"
 #: apps/editor/components/viewer-toolbar.tsx
 #, fuzzy
 msgid "app.viewerToolbar.solid"
@@ -735,9 +735,9 @@ msgstr "Sólido"
 
 # Source-Hash: e9f59b513f2f45ac
 # Review: required
-# English: "Solo"
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
+# English: "Solo"
 #: apps/editor/components/viewer-toolbar.tsx
 #, fuzzy
 msgid "app.viewerToolbar.solo"
@@ -745,9 +745,9 @@ msgstr "Aislado"
 
 # Source-Hash: 481b7608ce12139b
 # Review: required
-# English: "Stack"
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
+# English: "Stack"
 #: apps/editor/components/viewer-toolbar.tsx
 #, fuzzy
 msgid "app.viewerToolbar.stack"
@@ -755,9 +755,9 @@ msgstr "Apilado"
 
 # Source-Hash: 61ad94ca68b0458e
 # Review: required
-# English: "Stair annotations"
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
+# English: "Stair annotations"
 #: apps/editor/components/viewer-toolbar.tsx
 #, fuzzy
 msgid "app.viewerToolbar.stairAnnotations"
@@ -765,9 +765,9 @@ msgstr "Anotaciones de escaleras"
 
 # Source-Hash: f82927a01d4c5e45
 # Review: required
-# English: "Strong"
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
+# English: "Strong"
 #: apps/editor/components/viewer-toolbar.tsx
 #, fuzzy
 msgid "app.viewerToolbar.strong"
@@ -775,9 +775,9 @@ msgstr "Marcadas"
 
 # Source-Hash: e1be031e67d95382
 # Review: required
-# English: "Structural core face"
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
+# English: "Structural core face"
 #: apps/editor/components/viewer-toolbar.tsx
 #, fuzzy
 msgid "app.viewerToolbar.structuralCoreFace"
@@ -785,9 +785,9 @@ msgstr "Cara del núcleo estructural"
 
 # Source-Hash: efc50964d7b0ec47
 # Review: required
-# English: "Structural grids & column centers"
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
+# English: "Structural grids & column centers"
 #: apps/editor/components/viewer-toolbar.tsx
 #, fuzzy
 msgid "app.viewerToolbar.structuralGridsColumnCenters"
@@ -795,9 +795,9 @@ msgstr "Ejes estructurales y centros de pilares"
 
 # Source-Hash: 5ce4f6b80cd30f86
 # Review: required
-# English: "Translucent"
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
+# English: "Translucent"
 #: apps/editor/components/viewer-toolbar.tsx
 #, fuzzy
 msgid "app.viewerToolbar.translucent"
@@ -805,9 +805,9 @@ msgstr "Translúcido"
 
 # Source-Hash: b404dded35241274
 # Review: required
-# English: "Units"
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
+# English: "Units"
 #: apps/editor/components/viewer-toolbar.tsx
 #, fuzzy
 msgid "app.viewerToolbar.units"
@@ -815,9 +815,9 @@ msgstr "Unidades"
 
 # Source-Hash: faf51e28b748e0d9
 # Review: required
-# English: "Walkthrough"
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
+# English: "Walkthrough"
 #: apps/editor/components/viewer-toolbar.tsx
 #, fuzzy
 msgid "app.viewerToolbar.walkthrough"
@@ -825,9 +825,9 @@ msgstr "Recorrido"
 
 # Source-Hash: 62281975e51da7e3
 # Review: required
-# English: "Wall centerline"
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
+# English: "Wall centerline"
 #: apps/editor/components/viewer-toolbar.tsx
 #, fuzzy
 msgid "app.viewerToolbar.wallCenterline"
@@ -835,9 +835,9 @@ msgstr "Eje del muro"
 
 # Source-Hash: ff145d7003118ec6
 # Review: required
-# English: "Wall dimensions"
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
+# English: "Wall dimensions"
 #: apps/editor/components/viewer-toolbar.tsx
 #, fuzzy
 msgid "app.viewerToolbar.wallDimensions"
@@ -845,9 +845,9 @@ msgstr "Cotas de muros"
 
 # Source-Hash: 13969d1d6e310aa4
 # Review: required
-# English: "Walls: {label}"
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
+# English: "Walls: {label}"
 #: apps/editor/components/viewer-toolbar.tsx
 #, fuzzy
 msgid "app.viewerToolbar.wallsLabel"
@@ -995,9 +995,9 @@ msgstr "Muros"
 
 # Source-Hash: 9fc7a39bc32f287a
 # Review: required
-# English: "Plugins"
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
+# English: "Plugins"
 #: packages/editor/src/components/editor/views/view-bar.tsx
 #, fuzzy
 msgid "editor.views.plugins"
@@ -1005,9 +1005,9 @@ msgstr "Complementos"
 
 # Source-Hash: c54f9bac358893d8
 # Review: required
-# English: "2D"
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
+# English: "2D"
 #: packages/editor/src/components/editor/views/view-bar.tsx
 #, fuzzy
 msgid "editor.views.view2d"
@@ -1015,9 +1015,9 @@ msgstr "2D"
 
 # Source-Hash: f78f2fa035f25f85
 # Review: required
-# English: "3D"
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
+# English: "3D"
 #: packages/editor/src/components/editor/views/view-bar.tsx
 #, fuzzy
 msgid "editor.views.view3d"
@@ -1025,9 +1025,9 @@ msgstr "3D"
 
 # Source-Hash: 05b65242d8c48791
 # Review: required
-# English: "Auto"
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
+# English: "Auto"
 #: packages/editor/src/components/editor/views/view-bar.tsx
 #, fuzzy
 msgid "editor.views.viewBar.auto"
@@ -1035,9 +1035,9 @@ msgstr "Auto"
 
 # Source-Hash: 7890c110650ad1e5
 # Review: required
-# English: "Browse plugins"
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
+# English: "Browse plugins"
 #: packages/editor/src/components/editor/views/view-bar.tsx
 #, fuzzy
 msgid "editor.views.viewBar.browsePlugins"
@@ -1045,9 +1045,9 @@ msgstr "Explorar complementos"
 
 # Source-Hash: 3b11e7af681a9dcd
 # Review: required
-# English: "Close {label}"
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
+# English: "Close {label}"
 #: packages/editor/src/components/editor/views/view-bar.tsx
 #, fuzzy
 msgid "editor.views.viewBar.closeLabel"
@@ -1055,9 +1055,9 @@ msgstr "Cerrar {label}"
 
 # Source-Hash: 3f00e92517e3f4a5
 # Review: required
-# English: "Close split (\\)"
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
+# English: "Close split (\\)"
 #: packages/editor/src/components/editor/views/view-bar.tsx
 #, fuzzy
 msgid "editor.views.viewBar.closeSplit"
@@ -1065,9 +1065,9 @@ msgstr "Cerrar vista dividida (\\)"
 
 # Source-Hash: 94cc8e9f1ee16edb
 # Review: required
-# English: "Ground"
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
+# English: "Ground"
 #: packages/editor/src/components/editor/views/view-bar.tsx
 #, fuzzy
 msgid "editor.views.viewBar.ground"
@@ -1075,9 +1075,9 @@ msgstr "Terreno"
 
 # Source-Hash: 0d472502a4d36e86
 # Review: required
-# English: "{standing, select, partly {Partly below grade · ground solid} below {Below grade · ground solid} other {Ground solid}}"
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
+# English: "{standing, select, partly {Partly below grade · ground solid} below {Below grade · ground solid} other {Ground solid}}"
 #: packages/editor/src/components/editor/views/view-bar.tsx
 #, fuzzy
 msgid "editor.views.viewBar.groundSolid"
@@ -1085,9 +1085,9 @@ msgstr "{standing, select, partly {Parcialmente bajo rasante · terreno sólido}
 
 # Source-Hash: 1b6798c307ac1b96
 # Review: required
-# English: "{standing, select, partly {Partly below grade · ground veiled} below {Below grade · ground veiled} other {Ground veiled}}"
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
+# English: "{standing, select, partly {Partly below grade · ground veiled} below {Below grade · ground veiled} other {Ground veiled}}"
 #: packages/editor/src/components/editor/views/view-bar.tsx
 #, fuzzy
 msgid "editor.views.viewBar.groundVeiled"
@@ -1095,9 +1095,9 @@ msgstr "{standing, select, partly {Parcialmente bajo rasante · terreno velado} 
 
 # Source-Hash: ebdc976a98e82626
 # Review: required
-# English: "Keep the ground solid"
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
+# English: "Keep the ground solid"
 #: packages/editor/src/components/editor/views/view-bar.tsx
 #, fuzzy
 msgid "editor.views.viewBar.keepTheGroundSolid"
@@ -1105,9 +1105,9 @@ msgstr "Mantener el terreno sólido"
 
 # Source-Hash: 5f827686a006d88c
 # Review: required
-# English: "More views"
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
+# English: "More views"
 #: packages/editor/src/components/editor/views/view-bar.tsx
 #, fuzzy
 msgid "editor.views.viewBar.moreViews"
@@ -1115,9 +1115,9 @@ msgstr "Más vistas"
 
 # Source-Hash: f175bbcf457ab73c
 # Review: required
-# English: "Pane {pane} views"
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
+# English: "Pane {pane} views"
 #: packages/editor/src/components/editor/views/view-bar.tsx
 #, fuzzy
 msgid "editor.views.viewBar.paneViews"
@@ -1125,9 +1125,9 @@ msgstr "Vistas del panel {pane}"
 
 # Source-Hash: 33c20cc33dce9a9b
 # Review: required
-# English: "Pin {label}"
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
+# English: "Pin {label}"
 #: packages/editor/src/components/editor/views/view-bar.tsx
 #, fuzzy
 msgid "editor.views.viewBar.pinLabel"
@@ -1135,9 +1135,9 @@ msgstr "Fijar {label}"
 
 # Source-Hash: 3f7231b1eb2f93f3
 # Review: required
-# English: "Pin to the view bar"
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
+# English: "Pin to the view bar"
 #: packages/editor/src/components/editor/views/view-bar.tsx
 #, fuzzy
 msgid "editor.views.viewBar.pinToTheViewBar"
@@ -1145,9 +1145,9 @@ msgstr "Fijar a la barra de vistas"
 
 # Source-Hash: ef3e765e692faf4c
 # Review: required
-# English: "Solid"
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
+# English: "Solid"
 #: packages/editor/src/components/editor/views/view-bar.tsx
 #, fuzzy
 msgid "editor.views.viewBar.solid"
@@ -1155,9 +1155,9 @@ msgstr "Sólido"
 
 # Source-Hash: 98f22f3f89f17686
 # Review: required
-# English: "Split (\\)"
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
+# English: "Split (\\)"
 #: packages/editor/src/components/editor/views/view-bar.tsx
 #, fuzzy
 msgid "editor.views.viewBar.split"
@@ -1165,9 +1165,9 @@ msgstr "Vista dividida (\\)"
 
 # Source-Hash: e4cd64b1680ac0d2
 # Review: required
-# English: "Split"
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
+# English: "Split"
 #: packages/editor/src/components/editor/views/view-bar.tsx
 #, fuzzy
 msgid "editor.views.viewBar.split2"
@@ -1175,9 +1175,9 @@ msgstr "Dividir"
 
 # Source-Hash: 15b0adc705923a27
 # Review: required
-# English: "Swap panes"
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
+# English: "Swap panes"
 #: packages/editor/src/components/editor/views/view-bar.tsx
 #, fuzzy
 msgid "editor.views.viewBar.swapPanes"
@@ -1185,9 +1185,9 @@ msgstr "Intercambiar paneles"
 
 # Source-Hash: 9781bcdb7a8549e2
 # Review: required
-# English: "Unpin from the view bar"
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
+# English: "Unpin from the view bar"
 #: packages/editor/src/components/editor/views/view-bar.tsx
 #, fuzzy
 msgid "editor.views.viewBar.unpinFromTheViewBar"
@@ -1195,9 +1195,9 @@ msgstr "Quitar de la barra de vistas"
 
 # Source-Hash: f667358dec4abdea
 # Review: required
-# English: "Unpin {label}"
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
+# English: "Unpin {label}"
 #: packages/editor/src/components/editor/views/view-bar.tsx
 #, fuzzy
 msgid "editor.views.viewBar.unpinLabel"
@@ -1205,9 +1205,9 @@ msgstr "Dejar de fijar {label}"
 
 # Source-Hash: e96581f0bbf9fa91
 # Review: required
-# English: "Veil the ground over a level below grade"
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
+# English: "Veil the ground over a level below grade"
 #: packages/editor/src/components/editor/views/view-bar.tsx
 #, fuzzy
 msgid "editor.views.viewBar.veilTheGroundOverALevel"
@@ -1215,9 +1215,9 @@ msgstr "Velar el terreno sobre una planta bajo rasante"
 
 # Source-Hash: fb82f09f8ed3059e
 # Review: required
-# English: "Views"
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
+# English: "Views"
 #: packages/editor/src/components/editor/views/view-bar.tsx
 #, fuzzy
 msgid "editor.views.viewBar.views"

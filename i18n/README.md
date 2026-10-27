@@ -50,11 +50,20 @@ that is not flagged `fuzzy` + `Review: required`, and new hardcoded UI
 literals (see the literal guard below). It is read-only: use `i18n:extract` or
 `i18n:compile` when catalogs need to be written.
 
-Drafts awaiting review are valid in ordinary CI but never published: compiled
-packs omit them, so that locale shows the English source until a reviewer
-removes `fuzzy` and sets `Review: human`. `i18n:check` prints how many entries
-each locale still has awaiting review. `bun scripts/i18n.ts check --reviewed`
-is the locale sign-off gate: it also fails on every draft.
+Ordinary CI allows drafts; releases are gated:
+
+- In a pull request, drafts awaiting review pass `i18n:check` but are never
+  shown: compiled packs omit them, so that locale shows the English source
+  until a reviewer removes `fuzzy` and sets `Review: human`. `i18n:check`
+  prints how many entries each locale still has awaiting review.
+- A translation that is `Review: human` on the base branch must stay reviewed
+  while its English is unchanged. A PR may edit it, but turning it back into a
+  draft fails CI. CI compares with the pull request's base commit; locally
+  `i18n:check` compares with the merge base of `origin/main`, or
+  `I18N_BASE_REF`.
+- The release workflow runs `bun scripts/i18n.ts check --reviewed` before
+  publishing, which fails on any draft. A package release therefore needs
+  every bundled translation reviewed by a fluent person.
 
 ## Literal guard and migration codemod
 
@@ -63,18 +72,24 @@ is the locale sign-off gate: it also fails on every draft.
 literals: JSX text, string-valued `aria-*`, `title`, `placeholder`, `alt`,
 `label`, `tooltip`, `description`… props, display keys (`label`, `title`,
 `placeholder`, `tooltip`…) in objects, and `toast`/`alert`/`confirm`/`setError`
-payloads (also in `.ts` modules). `i18n/literal-baseline.json` records how many
-legacy candidates each file still has. A file may not exceed its count, and a
-file missing from the baseline (every new file) must have none. When a PR
-converts copy, run `bun run i18n:literals -- update` to lower the baseline.
+payloads (also in `.ts` modules), including `const` strings rendered by name
+in JSX or a UI prop. Hyphenated words ("Read-only") count as copy; icon names,
+paths and snake_case keys do not. `i18n/literal-baseline.json` lists, per
+file, the legacy candidates by text. A file may only contain copy its entry
+lists, so adding or swapping a string fails, and a file missing from the
+baseline (every new file) must have none. When a PR converts copy, run
+`bun run i18n:literals -- update` to remove it from the baseline. The baseline
+may only shrink: CI fails when it lists anything the base branch's baseline
+does not.
 
-Not every literal is copy. Exemptions are explicit:
+Not every literal is copy. Exemptions are explicit and reviewed:
 
 - `i18n/literal-allowlist.json` lists exact strings that are never translated
-  (brands, file formats, unit symbols, key names) and developer-only paths,
-  each path with its reason.
+  (brands, file formats, unit symbols, modifier key names) and developer-only
+  paths, each path with its reason.
 - `// i18n-ignore: <reason>` (or `{/* i18n-ignore: <reason> */}` in JSX) on
-  the line before a literal exempts it, e.g. an authored or scene value.
+  the line before a literal exempts it, e.g. an authored or scene value. A
+  bare `i18n-ignore` without a reason exempts nothing.
 
 `bun run i18n:literals -- report [--files] [path…]` lists the remaining
 candidates per area or per line. The one-time migration codemod rewrites them:
@@ -111,8 +126,9 @@ lists every consumer to update. Review the diff, run `bun run i18n:extract`, and
 
 `en-XA` is generated from English on every extract/compile: letters are
 accented, text is ~30 % longer and bracketed (`[Šĥáŕé ~~]`), and ICU arguments
-and tags are kept. The standalone app registers it outside production builds
-(`@pascal-app/editor/locales/pseudo`), so `?lang=en-XA` shows at a glance
+and tags are kept. The standalone app registers it in development and test
+builds only (`apps/editor/lib/dev-locales.ts`; production bundles never include
+the catalog), so `?lang=en-XA` shows at a glance
 which copy bypasses the catalog and which controls clip longer text.
 
 With the app running (`bun dev`), the audit opens every surface in

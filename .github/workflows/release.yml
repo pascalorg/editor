@@ -102,6 +102,11 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      # Ordinary CI accepts AI drafts (fuzzy, shown in English); a release
+      # ships only when every bundled translation has a human review.
+      - name: Require reviewed translations
+        run: bun scripts/i18n.ts check --reviewed
+
       - name: Configure git
         run: |
           git config user.name "github-actions[bot]"
