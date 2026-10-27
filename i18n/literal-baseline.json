@@ -271,7 +271,7 @@
       "Click one end of a distance you know — e.g. a dimension printed on the plan",
       "Click the other end of that distance",
       "Drawn line",
-      "Enter a length greater than 0.",
+      "Enter a valid length to preview the scale.",
       "Enter the real-world length of the line you just drew. The image will resize to match it.",
       "Feet",
       "Image will scale {?}x from the first point.",
