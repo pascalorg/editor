@@ -6,10 +6,12 @@ import {
   type ElevatorNode,
   getLevelDisplayName,
   type LevelNode,
+  type MessageDescriptor,
   requestElevatorLevel,
   useInteractive,
   useLiveNodeOverrides,
   useLiveTransforms,
+  usePascalI18n,
   useScene,
 } from '@pascal-app/core'
 import {
@@ -98,29 +100,47 @@ type ElevatorMetricKey =
 type ElevatorAccessField = 'disabledLevelIds' | 'serviceOnlyLevelIds'
 
 const DOOR_STYLE_OPTIONS: Array<{
-  label: string
+  label: MessageDescriptor
   value: ElevatorNode['doorStyle']
 }> = [
-  { label: 'Center opening', value: 'center-opening' },
-  { label: 'Single left', value: 'single-left' },
-  { label: 'Single right', value: 'single-right' },
+  {
+    label: /* i18n */ { id: 'node.elevator.panel.centerOpening', message: 'Center opening' },
+    value: 'center-opening',
+  },
+  {
+    label: /* i18n */ { id: 'node.elevator.panel.singleLeft', message: 'Single left' },
+    value: 'single-left',
+  },
+  {
+    label: /* i18n */ { id: 'node.elevator.panel.singleRight', message: 'Single right' },
+    value: 'single-right',
+  },
 ]
 
 const DOOR_PANEL_STYLE_OPTIONS: Array<{
-  label: string
+  label: MessageDescriptor
   value: ElevatorNode['doorPanelStyle']
 }> = [
-  { label: 'Glass frame', value: 'glass-frame' },
-  { label: 'Solid panel', value: 'solid-panel' },
-  { label: 'Segmented panel', value: 'segmented-panel' },
+  {
+    label: /* i18n */ { id: 'node.elevator.panel.glassFrame', message: 'Glass frame' },
+    value: 'glass-frame',
+  },
+  {
+    label: /* i18n */ { id: 'node.elevator.panel.solidPanel', message: 'Solid panel' },
+    value: 'solid-panel',
+  },
+  {
+    label: /* i18n */ { id: 'node.elevator.panel.segmentedPanel', message: 'Segmented panel' },
+    value: 'segmented-panel',
+  },
 ]
 
 const SHAFT_STYLE_OPTIONS: Array<{
-  label: string
+  label: MessageDescriptor
   value: ElevatorNode['shaftStyle']
 }> = [
-  { label: 'Solid', value: 'solid' },
-  { label: 'Glass', value: 'glass' },
+  { label: /* i18n */ { id: 'node.elevator.panel.solid', message: 'Solid' }, value: 'solid' },
+  { label: /* i18n */ { id: 'node.elevator.panel.glass', message: 'Glass' }, value: 'glass' },
 ]
 
 function roundMeters(value: number) {
@@ -148,6 +168,7 @@ function degreesToRadians(degrees: number) {
 }
 
 export default function ElevatorPanel() {
+  const i18n = usePascalI18n()
   const selectedId = useViewer((s) => s.selection.selectedIds[0])
   const selectedCount = useViewer((s) => s.selection.selectedIds.length)
   const setSelection = useViewer((s) => s.setSelection)
@@ -448,27 +469,31 @@ export default function ElevatorPanel() {
     <PanelWrapper
       icon="/icons/elevator.webp"
       onClose={handleClose}
-      title={node.name || 'Elevator'}
+      title={node.name || i18n._({ id: 'node.elevator.panel.elevator', message: 'Elevator' })}
       width={300}
     >
-      <PanelSection title="Actions">
+      <PanelSection title={i18n._({ id: 'node.elevator.panel.actions', message: 'Actions' })}>
         <ActionGroup>
-          <ActionButton icon={<Move className="h-3.5 w-3.5" />} label="Move" onClick={handleMove} />
+          <ActionButton
+            icon={<Move className="h-3.5 w-3.5" />}
+            label={i18n._({ id: 'node.elevator.panel.move', message: 'Move' })}
+            onClick={handleMove}
+          />
           <ActionButton
             icon={<Copy className="h-3.5 w-3.5" />}
-            label="Duplicate"
+            label={i18n._({ id: 'node.elevator.panel.duplicate', message: 'Duplicate' })}
             onClick={handleDuplicate}
           />
           <ActionButton
             className="text-destructive hover:text-destructive"
             icon={<Trash2 className="h-3.5 w-3.5" />}
-            label="Delete"
+            label={i18n._({ id: 'node.elevator.panel.delete', message: 'Delete' })}
             onClick={handleDelete}
           />
         </ActionGroup>
       </PanelSection>
 
-      <PanelSection title="Position">
+      <PanelSection title={i18n._({ id: 'node.elevator.panel.position', message: 'Position' })}>
         <SliderControl
           label="X"
           onChange={(value) => {
@@ -527,9 +552,9 @@ export default function ElevatorPanel() {
         />
       </PanelSection>
 
-      <PanelSection title="Rotation">
+      <PanelSection title={i18n._({ id: 'node.elevator.panel.rotation', message: 'Rotation' })}>
         <SliderControl
-          label="Yaw"
+          label={i18n._({ id: 'node.elevator.panel.yaw', message: 'Yaw' })}
           max={180}
           min={-180}
           onChange={(degrees) => previewTransform(displayPosition, degreesToRadians(degrees))}
@@ -558,11 +583,11 @@ export default function ElevatorPanel() {
         </div>
       </PanelSection>
 
-      <PanelSection title="Service">
+      <PanelSection title={i18n._({ id: 'node.elevator.panel.service', message: 'Service' })}>
         <div className="grid grid-cols-2 gap-2">
           <div className="space-y-1.5">
             <div className="px-1 text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
-              From
+              {i18n._({ id: 'node.elevator.panel.from', message: 'From' })}
             </div>
             <select
               className="h-9 w-full rounded-lg border border-border/50 bg-black/4 dark:bg-[#2C2C2E] px-2 text-sm text-foreground"
@@ -579,7 +604,7 @@ export default function ElevatorPanel() {
 
           <div className="space-y-1.5">
             <div className="px-1 text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
-              To
+              {i18n._({ id: 'node.elevator.panel.to', message: 'To' })}
             </div>
             <select
               className="h-9 w-full rounded-lg border border-border/50 bg-black/4 dark:bg-[#2C2C2E] px-2 text-sm text-foreground"
@@ -597,7 +622,7 @@ export default function ElevatorPanel() {
 
         <div className="space-y-1.5">
           <div className="px-1 text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
-            Default Floor
+            {i18n._({ id: 'node.elevator.panel.defaultFloor', message: 'Default Floor' })}
           </div>
           <select
             className="h-9 w-full rounded-lg border border-border/50 bg-black/4 dark:bg-[#2C2C2E] px-3 text-sm text-foreground"
@@ -613,9 +638,9 @@ export default function ElevatorPanel() {
         </div>
       </PanelSection>
 
-      <PanelSection title="Cab">
+      <PanelSection title={i18n._({ id: 'node.elevator.panel.cab', message: 'Cab' })}>
         <MetricControl
-          label="Width"
+          label={i18n._({ id: 'node.elevator.panel.width', message: 'Width' })}
           max={4}
           min={0.8}
           onChange={(value) => previewMetric('width', value)}
@@ -627,7 +652,7 @@ export default function ElevatorPanel() {
           value={displayNode.width}
         />
         <MetricControl
-          label="Depth"
+          label={i18n._({ id: 'node.elevator.panel.depth', message: 'Depth' })}
           max={4}
           min={0.8}
           onChange={(value) => previewMetric('depth', value)}
@@ -639,7 +664,7 @@ export default function ElevatorPanel() {
           value={displayNode.depth}
         />
         <MetricControl
-          label="Cab Height"
+          label={i18n._({ id: 'node.elevator.panel.cabHeight', message: 'Cab Height' })}
           max={4}
           min={1.8}
           onChange={(value) => previewMetric('cabHeight', value)}
@@ -652,10 +677,10 @@ export default function ElevatorPanel() {
         />
       </PanelSection>
 
-      <PanelSection title="Shaft">
+      <PanelSection title={i18n._({ id: 'node.elevator.panel.shaft', message: 'Shaft' })}>
         <div className="space-y-1.5">
           <div className="px-1 text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
-            Shaft Style
+            {i18n._({ id: 'node.elevator.panel.shaftStyle', message: 'Shaft Style' })}
           </div>
           <select
             className="h-9 w-full rounded-lg border border-border/50 bg-black/4 dark:bg-[#2C2C2E] px-3 text-sm text-foreground"
@@ -666,13 +691,13 @@ export default function ElevatorPanel() {
           >
             {SHAFT_STYLE_OPTIONS.map((option) => (
               <option key={option.value} value={option.value}>
-                {option.label}
+                {i18n._(option.label)}
               </option>
             ))}
           </select>
         </div>
         <MetricControl
-          label="Shaft Width"
+          label={i18n._({ id: 'node.elevator.panel.shaftWidth', message: 'Shaft Width' })}
           max={5}
           min={displayNode.width}
           onChange={(value) => previewMetric('shaftWidth', Math.max(value, displayNode.width))}
@@ -684,7 +709,7 @@ export default function ElevatorPanel() {
           value={displayShaftWidth}
         />
         <MetricControl
-          label="Shaft Depth"
+          label={i18n._({ id: 'node.elevator.panel.shaftDepth', message: 'Shaft Depth' })}
           max={5}
           min={displayNode.depth}
           onChange={(value) => previewMetric('shaftDepth', Math.max(value, displayNode.depth))}
@@ -696,7 +721,7 @@ export default function ElevatorPanel() {
           value={displayShaftDepth}
         />
         <MetricControl
-          label="Wall Thickness"
+          label={i18n._({ id: 'node.elevator.panel.wallThickness', message: 'Wall Thickness' })}
           max={0.4}
           min={0.04}
           onChange={(value) => previewMetric('shaftWallThickness', value)}
@@ -709,10 +734,10 @@ export default function ElevatorPanel() {
         />
       </PanelSection>
 
-      <PanelSection title="Doors">
+      <PanelSection title={i18n._({ id: 'node.elevator.panel.doors', message: 'Doors' })}>
         <div className="space-y-1.5">
           <div className="px-1 text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
-            Opening Style
+            {i18n._({ id: 'node.elevator.panel.openingStyle', message: 'Opening Style' })}
           </div>
           <select
             className="h-9 w-full rounded-lg border border-border/50 bg-black/4 dark:bg-[#2C2C2E] px-3 text-sm text-foreground"
@@ -723,14 +748,14 @@ export default function ElevatorPanel() {
           >
             {DOOR_STYLE_OPTIONS.map((option) => (
               <option key={option.value} value={option.value}>
-                {option.label}
+                {i18n._(option.label)}
               </option>
             ))}
           </select>
         </div>
         <div className="space-y-1.5">
           <div className="px-1 text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
-            Door Type
+            {i18n._({ id: 'node.elevator.panel.doorType', message: 'Door Type' })}
           </div>
           <select
             className="h-9 w-full rounded-lg border border-border/50 bg-black/4 dark:bg-[#2C2C2E] px-3 text-sm text-foreground"
@@ -743,13 +768,13 @@ export default function ElevatorPanel() {
           >
             {DOOR_PANEL_STYLE_OPTIONS.map((option) => (
               <option key={option.value} value={option.value}>
-                {option.label}
+                {i18n._(option.label)}
               </option>
             ))}
           </select>
         </div>
         <MetricControl
-          label="Door Width"
+          label={i18n._({ id: 'node.elevator.panel.doorWidth', message: 'Door Width' })}
           max={Math.max(displayNode.width - 0.1, 0.5)}
           min={0.45}
           onChange={(value) => previewMetric('doorWidth', value)}
@@ -761,7 +786,7 @@ export default function ElevatorPanel() {
           value={displayNode.doorWidth}
         />
         <MetricControl
-          label="Door Height"
+          label={i18n._({ id: 'node.elevator.panel.doorHeight', message: 'Door Height' })}
           max={Math.max(displayNode.cabHeight - 0.1, 1.3)}
           min={1.2}
           onChange={(value) => previewMetric('doorHeight', value)}
@@ -774,7 +799,7 @@ export default function ElevatorPanel() {
         />
       </PanelSection>
 
-      <PanelSection title="Access">
+      <PanelSection title={i18n._({ id: 'node.elevator.panel.access', message: 'Access' })}>
         <div className="space-y-2">
           {servedLevels.map((level) => {
             const isDisabled = disabledLevelIds.has(level.id)
@@ -797,7 +822,7 @@ export default function ElevatorPanel() {
                     onClick={() => toggleLevelAccess('serviceOnlyLevelIds', level.id)}
                     type="button"
                   >
-                    Service
+                    {i18n._({ id: 'node.elevator.panel.service', message: 'Service' })}
                   </button>
                   <button
                     className={`rounded-md border px-2 py-1 text-[11px] transition-colors ${
@@ -808,7 +833,7 @@ export default function ElevatorPanel() {
                     onClick={() => toggleLevelAccess('disabledLevelIds', level.id)}
                     type="button"
                   >
-                    Disabled
+                    {i18n._({ id: 'node.elevator.panel.disabled', message: 'Disabled' })}
                   </button>
                 </div>
               </div>
@@ -817,7 +842,9 @@ export default function ElevatorPanel() {
         </div>
       </PanelSection>
 
-      <PanelSection title="Destination">
+      <PanelSection
+        title={i18n._({ id: 'node.elevator.panel.destination', message: 'Destination' })}
+      >
         <div className="grid grid-cols-2 gap-1.5">
           {servedLevels.map((level) => {
             const isActive = activeLevelId === level.id
@@ -842,16 +869,20 @@ export default function ElevatorPanel() {
                   <span className="truncate text-xs">{getLevelDisplayName(level)}</span>
                   {isDisabled ? (
                     <span className="mt-0.5 text-[10px] font-medium uppercase tracking-[0.12em] text-current/65">
-                      Disabled
+                      {i18n._({ id: 'node.elevator.panel.disabled', message: 'Disabled' })}
                     </span>
                   ) : isServiceOnly ? (
                     <span className="mt-0.5 text-[10px] font-medium uppercase tracking-[0.12em] text-current/65">
-                      Service
+                      {i18n._({ id: 'node.elevator.panel.service', message: 'Service' })}
                     </span>
                   ) : (
                     stopOrder && (
                       <span className="mt-0.5 text-[10px] font-medium uppercase tracking-[0.12em] text-current/65">
-                        Stop {stopOrder}
+                        {i18n._({
+                          id: 'node.elevator.panel.stopStoporder',
+                          message: 'Stop {stopOrder}',
+                          values: { stopOrder },
+                        })}
                       </span>
                     )
                   )}
@@ -869,9 +900,9 @@ export default function ElevatorPanel() {
         </div>
       </PanelSection>
 
-      <PanelSection title="Motion">
+      <PanelSection title={i18n._({ id: 'node.elevator.panel.motion', message: 'Motion' })}>
         <SliderControl
-          label="Speed"
+          label={i18n._({ id: 'node.elevator.panel.speed', message: 'Speed' })}
           max={8}
           min={0.5}
           onChange={(value) => handleUpdate({ speed: value })}
@@ -881,7 +912,7 @@ export default function ElevatorPanel() {
           value={node.speed}
         />
         <SliderControl
-          label="Door Time"
+          label={i18n._({ id: 'node.elevator.panel.doorTime', message: 'Door Time' })}
           max={2200}
           min={300}
           onChange={(value) => handleUpdate({ doorDurationMs: value })}
@@ -890,7 +921,7 @@ export default function ElevatorPanel() {
           value={node.doorDurationMs}
         />
         <SliderControl
-          label="Dwell"
+          label={i18n._({ id: 'node.elevator.panel.dwell', message: 'Dwell' })}
           max={5000}
           min={300}
           onChange={(value) => handleUpdate({ dwellMs: value })}

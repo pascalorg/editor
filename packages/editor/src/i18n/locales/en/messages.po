@@ -7714,6 +7714,202 @@ msgstr "Vertical masonry stack on a roof segment."
 msgid "node.chimney.label"
 msgstr "Chimney"
 
+#: packages/nodes/src/chimney/panel.tsx
+msgid "node.chimney.panel.aboveRidge"
+msgstr "Above Ridge"
+
+#: packages/nodes/src/chimney/panel.tsx
+msgid "node.chimney.panel.actions"
+msgstr "Actions"
+
+#: packages/nodes/src/chimney/panel.tsx
+msgid "node.chimney.panel.back"
+msgstr "Back"
+
+#: packages/nodes/src/chimney/panel.tsx
+msgid "node.chimney.panel.bands"
+msgstr "Bands"
+
+#: packages/nodes/src/chimney/panel.tsx
+msgid "node.chimney.panel.cap"
+msgstr "Cap"
+
+#: packages/nodes/src/chimney/panel.tsx
+msgid "node.chimney.panel.chimney"
+msgstr "Chimney"
+
+#: packages/nodes/src/chimney/panel.tsx
+msgid "node.chimney.panel.chimneyType"
+msgstr "Chimney Type"
+
+#: packages/nodes/src/chimney/panel.tsx
+msgid "node.chimney.panel.corbeled"
+msgstr "Corbeled"
+
+#: packages/nodes/src/chimney/panel.tsx
+msgid "node.chimney.panel.cornerBevel"
+msgstr "Corner Bevel"
+
+#: packages/nodes/src/chimney/panel.tsx
+msgid "node.chimney.panel.count"
+msgstr "Count"
+
+#: packages/nodes/src/chimney/panel.tsx
+msgid "node.chimney.panel.cricket"
+msgstr "Cricket"
+
+#: packages/nodes/src/chimney/panel.tsx
+msgid "node.chimney.panel.cutoutOffset"
+msgstr "Cutout Offset"
+
+#: packages/nodes/src/chimney/panel.tsx
+msgid "node.chimney.panel.delete"
+msgstr "Delete"
+
+#: packages/nodes/src/chimney/panel.tsx
+msgid "node.chimney.panel.depth"
+msgstr "Depth"
+
+#: packages/nodes/src/chimney/panel.tsx
+msgid "node.chimney.panel.diameter"
+msgstr "Diameter"
+
+#: packages/nodes/src/chimney/panel.tsx
+msgid "node.chimney.panel.double"
+msgstr "Double"
+
+#: packages/nodes/src/chimney/panel.tsx
+msgid "node.chimney.panel.extent"
+msgstr "Extent"
+
+#: packages/nodes/src/chimney/panel.tsx
+msgid "node.chimney.panel.flat"
+msgstr "Flat"
+
+#: packages/nodes/src/chimney/panel.tsx
+msgid "node.chimney.panel.flues"
+msgstr "Flues"
+
+#: packages/nodes/src/chimney/panel.tsx
+msgid "node.chimney.panel.footprint"
+msgstr "Footprint"
+
+#: packages/nodes/src/chimney/panel.tsx
+msgid "node.chimney.panel.front"
+msgstr "Front"
+
+#: packages/nodes/src/chimney/panel.tsx
+msgid "node.chimney.panel.height"
+msgstr "Height"
+
+#: packages/nodes/src/chimney/panel.tsx
+msgid "node.chimney.panel.hollowDepth"
+msgstr "Hollow Depth"
+
+#: packages/nodes/src/chimney/panel.tsx
+msgid "node.chimney.panel.length"
+msgstr "Length"
+
+#: packages/nodes/src/chimney/panel.tsx
+msgid "node.chimney.panel.none"
+msgstr "None"
+
+#: packages/nodes/src/chimney/panel.tsx
+msgid "node.chimney.panel.offset"
+msgstr "Offset"
+
+#: packages/nodes/src/chimney/panel.tsx
+msgid "node.chimney.panel.overhang"
+msgstr "Overhang"
+
+#: packages/nodes/src/chimney/panel.tsx
+msgid "node.chimney.panel.panels"
+msgstr "Panels"
+
+#: packages/nodes/src/chimney/panel.tsx
+msgid "node.chimney.panel.position"
+msgstr "Position"
+
+#: packages/nodes/src/chimney/panel.tsx
+msgid "node.chimney.panel.rectangular"
+msgstr "Rectangular"
+
+#: packages/nodes/src/chimney/panel.tsx
+msgid "node.chimney.panel.rotation"
+msgstr "Rotation"
+
+#: packages/nodes/src/chimney/panel.tsx
+msgid "node.chimney.panel.round"
+msgstr "Round"
+
+#: packages/nodes/src/chimney/panel.tsx
+msgid "node.chimney.panel.shoulder"
+msgstr "Shoulder"
+
+#: packages/nodes/src/chimney/panel.tsx
+msgid "node.chimney.panel.sideMargin"
+msgstr "Side Margin"
+
+#: packages/nodes/src/chimney/panel.tsx
+msgid "node.chimney.panel.simple"
+msgstr "Simple"
+
+#: packages/nodes/src/chimney/panel.tsx
+msgid "node.chimney.panel.single"
+msgstr "Single"
+
+#: packages/nodes/src/chimney/panel.tsx
+msgid "node.chimney.panel.sloped"
+msgstr "Sloped"
+
+#: packages/nodes/src/chimney/panel.tsx
+msgid "node.chimney.panel.spacing"
+msgstr "Spacing"
+
+#: packages/nodes/src/chimney/panel.tsx
+msgid "node.chimney.panel.square"
+msgstr "Square"
+
+#: packages/nodes/src/chimney/panel.tsx
+msgid "node.chimney.panel.stepped"
+msgstr "Stepped"
+
+#: packages/nodes/src/chimney/panel.tsx
+msgid "node.chimney.panel.style"
+msgstr "Style"
+
+#: packages/nodes/src/chimney/panel.tsx
+msgid "node.chimney.panel.tapered"
+msgstr "Tapered"
+
+#: packages/nodes/src/chimney/panel.tsx
+msgid "node.chimney.panel.thickness"
+msgstr "Thickness"
+
+#: packages/nodes/src/chimney/panel.tsx
+msgid "node.chimney.panel.topOffset"
+msgstr "Top Offset"
+
+#: packages/nodes/src/chimney/panel.tsx
+msgid "node.chimney.panel.wallThickness"
+msgstr "Wall Thickness"
+
+#: packages/nodes/src/chimney/panel.tsx
+msgid "node.chimney.panel.width"
+msgstr "Width"
+
+#: packages/nodes/src/chimney/panel.tsx
+msgid "node.chimney.preset.brick"
+msgstr "Brick"
+
+#: packages/nodes/src/chimney/panel.tsx
+msgid "node.chimney.preset.modern"
+msgstr "Modern"
+
+#: packages/nodes/src/chimney/panel.tsx
+msgid "node.chimney.preset.round"
+msgstr "Round"
+
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "node.column.description"
 msgstr "A parametric column with configurable cross-section, base, and capital."
@@ -7721,6 +7917,382 @@ msgstr "A parametric column with configurable cross-section, base, and capital."
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "node.column.label"
 msgstr "Column"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.actions"
+msgstr "Actions"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.aFrame"
+msgstr "A-Frame"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.applyPreset"
+msgstr "Apply preset..."
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.applyProportion"
+msgstr "Apply proportion..."
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.bottomDepth"
+msgstr "Bottom Depth"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.bottomHeight"
+msgstr "Bottom Height"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.bottomSpread"
+msgstr "Bottom Spread"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.bottomStepSpread"
+msgstr "Bottom Step Spread"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.bottomTiers"
+msgstr "Bottom Tiers"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.bottomWidth"
+msgstr "Bottom Width"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.boxFrame"
+msgstr "Box Frame"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.braceDepth"
+msgstr "Brace Depth"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.braceWidth"
+msgstr "Brace Width"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.bulge"
+msgstr "Bulge"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.bulged"
+msgstr "Bulged"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.column"
+msgstr "Column"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.connectorPlates"
+msgstr "Connector Plates"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.delete"
+msgstr "Delete"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.depth"
+msgstr "Depth"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.dimensions"
+msgstr "Dimensions"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.edgeSoftness"
+msgstr "Edge Softness"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.ends"
+msgstr "Ends"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.endWidth"
+msgstr "End Width"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.forkSpread"
+msgstr "Fork Spread"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.heavy"
+msgstr "Heavy"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.height"
+msgstr "Height"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.heightAndFootprintAreControlledBy"
+msgstr "Height and footprint are controlled by the lean-to extension. Rotate or change the support style here; resize from the parent lean-to."
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.hourglass"
+msgstr "Hourglass"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.kBrace"
+msgstr "K Brace"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.move"
+msgstr "Move"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.neckWidth"
+msgstr "Neck Width"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.noBottom"
+msgstr "No Bottom"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.noTop"
+msgstr "No Top"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.plinthThickness"
+msgstr "Plinth Thickness"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.portalFrame"
+msgstr "Portal Frame"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.preset"
+msgstr "Preset"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.rectangular"
+msgstr "Rectangular"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.ringPairs"
+msgstr "Ring Pairs"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.ringSpread"
+msgstr "Ring Spread"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.ringThickness"
+msgstr "Ring Thickness"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.round"
+msgstr "Round"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.roundBandWidth"
+msgstr "Round Band Width"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.roundedBottom"
+msgstr "Rounded Bottom"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.roundedTop"
+msgstr "Rounded Top"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.segmentTwist"
+msgstr "Segment Twist"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.shaft"
+msgstr "Shaft"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.shaftCornerRadius"
+msgstr "Shaft Corner Radius"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.shaftWidth"
+msgstr "Shaft Width"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.shape"
+msgstr "Shape"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.shortStout"
+msgstr "Short / Stout"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.simpleBlockBottom"
+msgstr "Simple Block Bottom"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.simpleTop"
+msgstr "Simple Top"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.singleStrut"
+msgstr "Single Strut"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.slender"
+msgstr "Slender"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.square"
+msgstr "Square"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.squarePlinthBottom"
+msgstr "Square Plinth Bottom"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.standard"
+msgstr "Standard"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.steppedBottom"
+msgstr "Stepped Bottom"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.steppedTop"
+msgstr "Stepped Top"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.straight"
+msgstr "Straight"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.taper"
+msgstr "Taper"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.tapered"
+msgstr "Tapered"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.topDepth"
+msgstr "Top Depth"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.topHeight"
+msgstr "Top Height"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.topSpread"
+msgstr "Top Spread"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.topStepSpread"
+msgstr "Top Step Spread"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.topTiers"
+msgstr "Top Tiers"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.topWidth"
+msgstr "Top Width"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.transform"
+msgstr "Transform"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.trestle"
+msgstr "Trestle"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.tripod"
+msgstr "Tripod"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.twistSegments"
+msgstr "Twist Segments"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.vertical"
+msgstr "Vertical"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.vSupport"
+msgstr "V Support"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.waist"
+msgstr "Waist"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.width"
+msgstr "Width"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.xBrace"
+msgstr "X Brace"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.yaw"
+msgstr "Yaw"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.panel.ySupport"
+msgstr "Y Support"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.preset.aFrameSupport"
+msgstr "A-Frame Support"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.preset.basicPillar"
+msgstr "Straight Round"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.preset.boxFrameSupport"
+msgstr "Box Frame"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.preset.bulgedPillar"
+msgstr "Soft Bulged"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.preset.hourglassPillar"
+msgstr "Hourglass"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.preset.kBraceSupport"
+msgstr "K Brace"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.preset.portalFrameSupport"
+msgstr "Portal Frame"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.preset.singleStrutSupport"
+msgstr "Single Strut"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.preset.squarePillar"
+msgstr "Square Block"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.preset.taperedPillar"
+msgstr "Tapered Round"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.preset.trestleSupport"
+msgstr "Trestle Frame"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.preset.tripodSupport"
+msgstr "Tripod Support"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.preset.vFrameSupport"
+msgstr "V Support"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.preset.xBraceSupport"
+msgstr "X Brace"
+
+#: packages/nodes/src/column/panel.tsx
+msgid "node.column.preset.yFrameSupport"
+msgstr "Y Support"
 
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "node.constructionDimension.description"
@@ -8165,6 +8737,174 @@ msgstr "A multi-level elevator shaft with configurable openings per level."
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "node.elevator.label"
 msgstr "Elevator"
+
+#: packages/nodes/src/elevator/panel.tsx
+msgid "node.elevator.panel.access"
+msgstr "Access"
+
+#: packages/nodes/src/elevator/panel.tsx
+msgid "node.elevator.panel.actions"
+msgstr "Actions"
+
+#: packages/nodes/src/elevator/panel.tsx
+msgid "node.elevator.panel.cab"
+msgstr "Cab"
+
+#: packages/nodes/src/elevator/panel.tsx
+msgid "node.elevator.panel.cabHeight"
+msgstr "Cab Height"
+
+#: packages/nodes/src/elevator/panel.tsx
+msgid "node.elevator.panel.centerOpening"
+msgstr "Center opening"
+
+#: packages/nodes/src/elevator/panel.tsx
+msgid "node.elevator.panel.defaultFloor"
+msgstr "Default Floor"
+
+#: packages/nodes/src/elevator/panel.tsx
+msgid "node.elevator.panel.delete"
+msgstr "Delete"
+
+#: packages/nodes/src/elevator/panel.tsx
+msgid "node.elevator.panel.depth"
+msgstr "Depth"
+
+#: packages/nodes/src/elevator/panel.tsx
+msgid "node.elevator.panel.destination"
+msgstr "Destination"
+
+#: packages/nodes/src/elevator/panel.tsx
+msgid "node.elevator.panel.disabled"
+msgstr "Disabled"
+
+#: packages/nodes/src/elevator/panel.tsx
+msgid "node.elevator.panel.doorHeight"
+msgstr "Door Height"
+
+#: packages/nodes/src/elevator/panel.tsx
+msgid "node.elevator.panel.doors"
+msgstr "Doors"
+
+#: packages/nodes/src/elevator/panel.tsx
+msgid "node.elevator.panel.doorTime"
+msgstr "Door Time"
+
+#: packages/nodes/src/elevator/panel.tsx
+msgid "node.elevator.panel.doorType"
+msgstr "Door Type"
+
+#: packages/nodes/src/elevator/panel.tsx
+msgid "node.elevator.panel.doorWidth"
+msgstr "Door Width"
+
+#: packages/nodes/src/elevator/panel.tsx
+msgid "node.elevator.panel.duplicate"
+msgstr "Duplicate"
+
+#: packages/nodes/src/elevator/panel.tsx
+msgid "node.elevator.panel.dwell"
+msgstr "Dwell"
+
+#: packages/nodes/src/elevator/panel.tsx
+msgid "node.elevator.panel.elevator"
+msgstr "Elevator"
+
+#: packages/nodes/src/elevator/panel.tsx
+msgid "node.elevator.panel.from"
+msgstr "From"
+
+#: packages/nodes/src/elevator/panel.tsx
+msgid "node.elevator.panel.glass"
+msgstr "Glass"
+
+#: packages/nodes/src/elevator/panel.tsx
+msgid "node.elevator.panel.glassFrame"
+msgstr "Glass frame"
+
+#: packages/nodes/src/elevator/panel.tsx
+msgid "node.elevator.panel.motion"
+msgstr "Motion"
+
+#: packages/nodes/src/elevator/panel.tsx
+msgid "node.elevator.panel.move"
+msgstr "Move"
+
+#: packages/nodes/src/elevator/panel.tsx
+msgid "node.elevator.panel.openingStyle"
+msgstr "Opening Style"
+
+#: packages/nodes/src/elevator/panel.tsx
+msgid "node.elevator.panel.position"
+msgstr "Position"
+
+#: packages/nodes/src/elevator/panel.tsx
+msgid "node.elevator.panel.rotation"
+msgstr "Rotation"
+
+#: packages/nodes/src/elevator/panel.tsx
+msgid "node.elevator.panel.segmentedPanel"
+msgstr "Segmented panel"
+
+#: packages/nodes/src/elevator/panel.tsx
+msgid "node.elevator.panel.service"
+msgstr "Service"
+
+#: packages/nodes/src/elevator/panel.tsx
+msgid "node.elevator.panel.shaft"
+msgstr "Shaft"
+
+#: packages/nodes/src/elevator/panel.tsx
+msgid "node.elevator.panel.shaftDepth"
+msgstr "Shaft Depth"
+
+#: packages/nodes/src/elevator/panel.tsx
+msgid "node.elevator.panel.shaftStyle"
+msgstr "Shaft Style"
+
+#: packages/nodes/src/elevator/panel.tsx
+msgid "node.elevator.panel.shaftWidth"
+msgstr "Shaft Width"
+
+#: packages/nodes/src/elevator/panel.tsx
+msgid "node.elevator.panel.singleLeft"
+msgstr "Single left"
+
+#: packages/nodes/src/elevator/panel.tsx
+msgid "node.elevator.panel.singleRight"
+msgstr "Single right"
+
+#: packages/nodes/src/elevator/panel.tsx
+msgid "node.elevator.panel.solid"
+msgstr "Solid"
+
+#: packages/nodes/src/elevator/panel.tsx
+msgid "node.elevator.panel.solidPanel"
+msgstr "Solid panel"
+
+#: packages/nodes/src/elevator/panel.tsx
+msgid "node.elevator.panel.speed"
+msgstr "Speed"
+
+#: packages/nodes/src/elevator/panel.tsx
+msgid "node.elevator.panel.stopStoporder"
+msgstr "Stop {stopOrder}"
+
+#: packages/nodes/src/elevator/panel.tsx
+msgid "node.elevator.panel.to"
+msgstr "To"
+
+#: packages/nodes/src/elevator/panel.tsx
+msgid "node.elevator.panel.wallThickness"
+msgstr "Wall Thickness"
+
+#: packages/nodes/src/elevator/panel.tsx
+msgid "node.elevator.panel.width"
+msgstr "Width"
+
+#: packages/nodes/src/elevator/panel.tsx
+msgid "node.elevator.panel.yaw"
+msgstr "Yaw"
 
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "node.eyebrowVent.description"

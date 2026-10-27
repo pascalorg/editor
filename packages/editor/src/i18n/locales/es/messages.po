@@ -19204,6 +19204,496 @@ msgstr "Chimenea vertical de obra sobre un faldón."
 msgid "node.chimney.label"
 msgstr "Chimenea"
 
+# Review: required
+# Source-Hash: dc393661f0038c2d
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Above Ridge"
+#: packages/nodes/src/chimney/panel.tsx
+#, fuzzy
+msgid "node.chimney.panel.aboveRidge"
+msgstr "Sobre la cumbrera"
+
+# Review: required
+# Source-Hash: aa6d82bdb3cc1d9a
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Actions"
+#: packages/nodes/src/chimney/panel.tsx
+#, fuzzy
+msgid "node.chimney.panel.actions"
+msgstr "Acciones"
+
+# Review: required
+# Source-Hash: 7ceade8f25b58fe9
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Back"
+#: packages/nodes/src/chimney/panel.tsx
+#, fuzzy
+msgid "node.chimney.panel.back"
+msgstr "Volver"
+
+# Review: required
+# Source-Hash: 0d42509b34b05dec
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Bands"
+#: packages/nodes/src/chimney/panel.tsx
+#, fuzzy
+msgid "node.chimney.panel.bands"
+msgstr "Bandas"
+
+# Review: required
+# Source-Hash: d52b53241789ee63
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Cap"
+#: packages/nodes/src/chimney/panel.tsx
+#, fuzzy
+msgid "node.chimney.panel.cap"
+msgstr "Remate"
+
+# Review: required
+# Source-Hash: 95169058fec6db14
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Chimney"
+#: packages/nodes/src/chimney/panel.tsx
+#, fuzzy
+msgid "node.chimney.panel.chimney"
+msgstr "Chimenea"
+
+# Review: required
+# Source-Hash: b619f366d2a1dfda
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Chimney Type"
+#: packages/nodes/src/chimney/panel.tsx
+#, fuzzy
+msgid "node.chimney.panel.chimneyType"
+msgstr "Tipo de chimenea"
+
+# Review: required
+# Source-Hash: 6786ac75cbe9af57
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Corbeled"
+#: packages/nodes/src/chimney/panel.tsx
+#, fuzzy
+msgid "node.chimney.panel.corbeled"
+msgstr "Con ménsulas"
+
+# Review: required
+# Source-Hash: 89eba9f077fba348
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Corner Bevel"
+#: packages/nodes/src/chimney/panel.tsx
+#, fuzzy
+msgid "node.chimney.panel.cornerBevel"
+msgstr "Chaflán de esquina"
+
+# Review: required
+# Source-Hash: 8a4beb9a57edc26e
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Count"
+#: packages/nodes/src/chimney/panel.tsx
+#, fuzzy
+msgid "node.chimney.panel.count"
+msgstr "Cantidad"
+
+# Review: required
+# Source-Hash: f8ba7d73d3006d57
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Cricket"
+#: packages/nodes/src/chimney/panel.tsx
+#, fuzzy
+msgid "node.chimney.panel.cricket"
+msgstr "Caballete desviador"
+
+# Review: required
+# Source-Hash: 14144df9e1364eea
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Cutout Offset"
+#: packages/nodes/src/chimney/panel.tsx
+#, fuzzy
+msgid "node.chimney.panel.cutoutOffset"
+msgstr "Desfase del recorte"
+
+# Review: required
+# Source-Hash: b26de372b4b0eaac
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Delete"
+#: packages/nodes/src/chimney/panel.tsx
+#, fuzzy
+msgid "node.chimney.panel.delete"
+msgstr "Eliminar"
+
+# Review: required
+# Source-Hash: 99ac4d03c3061f3a
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Depth"
+#: packages/nodes/src/chimney/panel.tsx
+#, fuzzy
+msgid "node.chimney.panel.depth"
+msgstr "Profundidad"
+
+# Review: required
+# Source-Hash: 016d8e70618916d4
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Diameter"
+#: packages/nodes/src/chimney/panel.tsx
+#, fuzzy
+msgid "node.chimney.panel.diameter"
+msgstr "Diámetro"
+
+# Review: required
+# Source-Hash: 3cd71355956a1821
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Double"
+#: packages/nodes/src/chimney/panel.tsx
+#, fuzzy
+msgid "node.chimney.panel.double"
+msgstr "Doble"
+
+# Review: required
+# Source-Hash: 150340cd05f4a6dd
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Extent"
+#: packages/nodes/src/chimney/panel.tsx
+#, fuzzy
+msgid "node.chimney.panel.extent"
+msgstr "Extensión"
+
+# Review: required
+# Source-Hash: 9cab4d4c95f63cdd
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Flat"
+#: packages/nodes/src/chimney/panel.tsx
+#, fuzzy
+msgid "node.chimney.panel.flat"
+msgstr "Plana"
+
+# Review: required
+# Source-Hash: f817c09ef0bb6d69
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Flues"
+#: packages/nodes/src/chimney/panel.tsx
+#, fuzzy
+msgid "node.chimney.panel.flues"
+msgstr "Conductos"
+
+# Review: required
+# Source-Hash: a3c10560fa3c1612
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Footprint"
+#: packages/nodes/src/chimney/panel.tsx
+#, fuzzy
+msgid "node.chimney.panel.footprint"
+msgstr "Huella"
+
+# Review: required
+# Source-Hash: e360f89d3c0ec456
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Front"
+#: packages/nodes/src/chimney/panel.tsx
+#, fuzzy
+msgid "node.chimney.panel.front"
+msgstr "Frente"
+
+# Review: required
+# Source-Hash: 646ef0fbcbc58edf
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Height"
+#: packages/nodes/src/chimney/panel.tsx
+#, fuzzy
+msgid "node.chimney.panel.height"
+msgstr "Altura"
+
+# Review: required
+# Source-Hash: 5b490bc19dddf201
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Hollow Depth"
+#: packages/nodes/src/chimney/panel.tsx
+#, fuzzy
+msgid "node.chimney.panel.hollowDepth"
+msgstr "Profundidad del hueco"
+
+# Review: required
+# Source-Hash: 643687bc3adaac76
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Length"
+#: packages/nodes/src/chimney/panel.tsx
+#, fuzzy
+msgid "node.chimney.panel.length"
+msgstr "Longitud"
+
+# Review: required
+# Source-Hash: f2953d2931e36d0c
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "None"
+#: packages/nodes/src/chimney/panel.tsx
+#, fuzzy
+msgid "node.chimney.panel.none"
+msgstr "Ninguno"
+
+# Review: required
+# Source-Hash: 0f0e13abf9b2bb67
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Offset"
+#: packages/nodes/src/chimney/panel.tsx
+#, fuzzy
+msgid "node.chimney.panel.offset"
+msgstr "Desfase"
+
+# Review: required
+# Source-Hash: 88540def2ce16ac5
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Overhang"
+#: packages/nodes/src/chimney/panel.tsx
+#, fuzzy
+msgid "node.chimney.panel.overhang"
+msgstr "Vuelo"
+
+# Review: required
+# Source-Hash: 6ce059aee1386f72
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Panels"
+#: packages/nodes/src/chimney/panel.tsx
+#, fuzzy
+msgid "node.chimney.panel.panels"
+msgstr "Paneles"
+
+# Review: required
+# Source-Hash: 9da0cbfad144d737
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Position"
+#: packages/nodes/src/chimney/panel.tsx
+#, fuzzy
+msgid "node.chimney.panel.position"
+msgstr "Posición"
+
+# Review: required
+# Source-Hash: f29fef1beeb25f22
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Rectangular"
+#: packages/nodes/src/chimney/panel.tsx
+#, fuzzy
+msgid "node.chimney.panel.rectangular"
+msgstr "Rectangular"
+
+# Review: required
+# Source-Hash: 01989595ee7c1dc0
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Rotation"
+#: packages/nodes/src/chimney/panel.tsx
+#, fuzzy
+msgid "node.chimney.panel.rotation"
+msgstr "Rotación"
+
+# Review: required
+# Source-Hash: ad0457800a1f0eb4
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Round"
+#: packages/nodes/src/chimney/panel.tsx
+#, fuzzy
+msgid "node.chimney.panel.round"
+msgstr "Redondo"
+
+# Review: required
+# Source-Hash: 8c6e3985459dacf9
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Shoulder"
+#: packages/nodes/src/chimney/panel.tsx
+#, fuzzy
+msgid "node.chimney.panel.shoulder"
+msgstr "Hombro"
+
+# Review: required
+# Source-Hash: 84b9195c73dd7a67
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Side Margin"
+#: packages/nodes/src/chimney/panel.tsx
+#, fuzzy
+msgid "node.chimney.panel.sideMargin"
+msgstr "Margen lateral"
+
+# Review: required
+# Source-Hash: a05a390ae205fdd8
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Simple"
+#: packages/nodes/src/chimney/panel.tsx
+#, fuzzy
+msgid "node.chimney.panel.simple"
+msgstr "Sencillo"
+
+# Review: required
+# Source-Hash: 62ab2eb3c775da95
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Single"
+#: packages/nodes/src/chimney/panel.tsx
+#, fuzzy
+msgid "node.chimney.panel.single"
+msgstr "Simple"
+
+# Review: required
+# Source-Hash: f6998707123fe72d
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Sloped"
+#: packages/nodes/src/chimney/panel.tsx
+#, fuzzy
+msgid "node.chimney.panel.sloped"
+msgstr "Inclinado"
+
+# Review: required
+# Source-Hash: e4698e83d02beb6c
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Spacing"
+#: packages/nodes/src/chimney/panel.tsx
+#, fuzzy
+msgid "node.chimney.panel.spacing"
+msgstr "Separación"
+
+# Review: required
+# Source-Hash: 39287346366fc206
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Square"
+#: packages/nodes/src/chimney/panel.tsx
+#, fuzzy
+msgid "node.chimney.panel.square"
+msgstr "Cuadrado"
+
+# Review: required
+# Source-Hash: 2c6b1cf17a973d67
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Stepped"
+#: packages/nodes/src/chimney/panel.tsx
+#, fuzzy
+msgid "node.chimney.panel.stepped"
+msgstr "Escalonado"
+
+# Review: required
+# Source-Hash: 1a79a485d91f3f28
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Style"
+#: packages/nodes/src/chimney/panel.tsx
+#, fuzzy
+msgid "node.chimney.panel.style"
+msgstr "Estilo"
+
+# Review: required
+# Source-Hash: f86f1f22230596b7
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Tapered"
+#: packages/nodes/src/chimney/panel.tsx
+#, fuzzy
+msgid "node.chimney.panel.tapered"
+msgstr "Ahusado"
+
+# Review: required
+# Source-Hash: fdbb503f0941bd56
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Thickness"
+#: packages/nodes/src/chimney/panel.tsx
+#, fuzzy
+msgid "node.chimney.panel.thickness"
+msgstr "Espesor"
+
+# Review: required
+# Source-Hash: 14b162761ce18fe9
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Top Offset"
+#: packages/nodes/src/chimney/panel.tsx
+#, fuzzy
+msgid "node.chimney.panel.topOffset"
+msgstr "Desfase superior"
+
+# Review: required
+# Source-Hash: 1a5ccd607c400d76
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Wall Thickness"
+#: packages/nodes/src/chimney/panel.tsx
+#, fuzzy
+msgid "node.chimney.panel.wallThickness"
+msgstr "Grosor de pared"
+
+# Review: required
+# Source-Hash: 3a0ccd6c46877a87
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Width"
+#: packages/nodes/src/chimney/panel.tsx
+#, fuzzy
+msgid "node.chimney.panel.width"
+msgstr "Ancho"
+
+# Review: required
+# Source-Hash: abff67400a76e5eb
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Brick"
+#: packages/nodes/src/chimney/panel.tsx
+#, fuzzy
+msgid "node.chimney.preset.brick"
+msgstr "Ladrillo"
+
+# Review: required
+# Source-Hash: f6cbdaa17e989b91
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Modern"
+#: packages/nodes/src/chimney/panel.tsx
+#, fuzzy
+msgid "node.chimney.preset.modern"
+msgstr "Moderno"
+
+# Review: required
+# Source-Hash: ad0457800a1f0eb4
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Round"
+#: packages/nodes/src/chimney/panel.tsx
+#, fuzzy
+msgid "node.chimney.preset.round"
+msgstr "Redondo"
+
 # Source-Hash: 6a06e628257f3393
 # Review: required
 # AI-Provider: cursor-agent
@@ -19223,6 +19713,946 @@ msgstr "Pilar paramétrico con sección, basa y capitel configurables."
 #, fuzzy
 msgid "node.column.label"
 msgstr "Pilar"
+
+# Review: required
+# Source-Hash: aa6d82bdb3cc1d9a
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Actions"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.actions"
+msgstr "Acciones"
+
+# Review: required
+# Source-Hash: 14b21685d375581a
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "A-Frame"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.aFrame"
+msgstr "Marco en A"
+
+# Review: required
+# Source-Hash: 4007d88108e25c2b
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Apply preset..."
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.applyPreset"
+msgstr "Aplicar ajuste predefinido…"
+
+# Review: required
+# Source-Hash: dbfe7c561383c964
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Apply proportion..."
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.applyProportion"
+msgstr "Aplicar proporción…"
+
+# Review: required
+# Source-Hash: 1f3fd938f0b26c9f
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Bottom Depth"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.bottomDepth"
+msgstr "Fondo inferior"
+
+# Review: required
+# Source-Hash: 85576e19cd3da914
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Bottom Height"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.bottomHeight"
+msgstr "Altura inferior"
+
+# Review: required
+# Source-Hash: 4df0bbb04744a810
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Bottom Spread"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.bottomSpread"
+msgstr "Apertura inferior"
+
+# Review: required
+# Source-Hash: 67479fecb980a441
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Bottom Step Spread"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.bottomStepSpread"
+msgstr "Separación de escalones inferiores"
+
+# Review: required
+# Source-Hash: 6ea977c42202ca24
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Bottom Tiers"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.bottomTiers"
+msgstr "Escalones inferiores"
+
+# Review: required
+# Source-Hash: 709ca788827f8a94
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Bottom Width"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.bottomWidth"
+msgstr "Ancho inferior"
+
+# Review: required
+# Source-Hash: 39d33008c81fc075
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Box Frame"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.boxFrame"
+msgstr "Marco cerrado"
+
+# Review: required
+# Source-Hash: 381b1f481f747677
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Brace Depth"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.braceDepth"
+msgstr "Fondo del arriostramiento"
+
+# Review: required
+# Source-Hash: 8509b09b4ecdd6b6
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Brace Width"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.braceWidth"
+msgstr "Ancho del arriostramiento"
+
+# Review: required
+# Source-Hash: 08558dd786f45281
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Bulge"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.bulge"
+msgstr "Abombamiento"
+
+# Review: required
+# Source-Hash: 663b9a9e6a469b02
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Bulged"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.bulged"
+msgstr "Abombada"
+
+# Review: required
+# Source-Hash: 3530ac1f4046cd22
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Column"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.column"
+msgstr "Pilar"
+
+# Review: required
+# Source-Hash: ca0a856f04460bd5
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Connector Plates"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.connectorPlates"
+msgstr "Placas de unión"
+
+# Review: required
+# Source-Hash: b26de372b4b0eaac
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Delete"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.delete"
+msgstr "Eliminar"
+
+# Review: required
+# Source-Hash: 99ac4d03c3061f3a
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Depth"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.depth"
+msgstr "Profundidad"
+
+# Review: required
+# Source-Hash: 12df69f42beb0643
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Dimensions"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.dimensions"
+msgstr "Dimensiones"
+
+# Review: required
+# Source-Hash: b963a08f0d540014
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Edge Softness"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.edgeSoftness"
+msgstr "Suavizado de aristas"
+
+# Review: required
+# Source-Hash: 82b3db356639ef92
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Ends"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.ends"
+msgstr "Extremos"
+
+# Review: required
+# Source-Hash: 646c3cd99df3e285
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "End Width"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.endWidth"
+msgstr "Ancho del extremo"
+
+# Review: required
+# Source-Hash: 02e229bca2a2b5f1
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Fork Spread"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.forkSpread"
+msgstr "Apertura de la horquilla"
+
+# Review: required
+# Source-Hash: fdebfac05413abcf
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Heavy"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.heavy"
+msgstr "Robusta"
+
+# Review: required
+# Source-Hash: 646ef0fbcbc58edf
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Height"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.height"
+msgstr "Altura"
+
+# Review: required
+# Source-Hash: 957fae84ed52a2e3
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Height and footprint are controlled by the lean-to extension. Rotate or change the support style here; resize from the parent lean-to."
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.heightAndFootprintAreControlledBy"
+msgstr "La altura y la huella las controla la extensión de un agua. Gira o cambia el estilo de soporte aquí; cambia el tamaño desde la extensión principal."
+
+# Review: required
+# Source-Hash: bb851e93088b73a2
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Hourglass"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.hourglass"
+msgstr "Reloj de arena"
+
+# Review: required
+# Source-Hash: 9cc75129edee59ad
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "K Brace"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.kBrace"
+msgstr "Arriostramiento en K"
+
+# Review: required
+# Source-Hash: bd02c614454fbd2b
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Move"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.move"
+msgstr "Mover"
+
+# Review: required
+# Source-Hash: 6dc190abd3f22787
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Neck Width"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.neckWidth"
+msgstr "Ancho del cuello"
+
+# Review: required
+# Source-Hash: 7dba7ed55eeba18f
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "No Bottom"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.noBottom"
+msgstr "Sin base"
+
+# Review: required
+# Source-Hash: 682d71815bb20e94
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "No Top"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.noTop"
+msgstr "Sin capitel"
+
+# Review: required
+# Source-Hash: 4da8688437f64db8
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Plinth Thickness"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.plinthThickness"
+msgstr "Grosor del plinto"
+
+# Review: required
+# Source-Hash: 0bf453b4882c663c
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Portal Frame"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.portalFrame"
+msgstr "Pórtico"
+
+# Review: required
+# Source-Hash: 441f7f652ea6a0d8
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Preset"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.preset"
+msgstr "Preajuste"
+
+# Review: required
+# Source-Hash: f29fef1beeb25f22
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Rectangular"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.rectangular"
+msgstr "Rectangular"
+
+# Review: required
+# Source-Hash: 23b9d290b165cd49
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Ring Pairs"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.ringPairs"
+msgstr "Pares de anillos"
+
+# Review: required
+# Source-Hash: 8db82d731a19651e
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Ring Spread"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.ringSpread"
+msgstr "Separación de anillos"
+
+# Review: required
+# Source-Hash: bdb524a15d9e1509
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Ring Thickness"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.ringThickness"
+msgstr "Grosor de anillos"
+
+# Review: required
+# Source-Hash: ad0457800a1f0eb4
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Round"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.round"
+msgstr "Redondo"
+
+# Review: required
+# Source-Hash: baa84a2d17095dcf
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Round Band Width"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.roundBandWidth"
+msgstr "Ancho de la banda redonda"
+
+# Review: required
+# Source-Hash: 5f1f67fb0ca59a6d
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Rounded Bottom"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.roundedBottom"
+msgstr "Base redondeada"
+
+# Review: required
+# Source-Hash: 446816980ed0da27
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Rounded Top"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.roundedTop"
+msgstr "Capitel redondeado"
+
+# Review: required
+# Source-Hash: 9e554c26be80f0d0
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Segment Twist"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.segmentTwist"
+msgstr "Torsión de segmentos"
+
+# Review: required
+# Source-Hash: 4fc63ad21de30103
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Shaft"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.shaft"
+msgstr "Hueco"
+
+# Review: required
+# Source-Hash: 9bc3a704a9a96b3a
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Shaft Corner Radius"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.shaftCornerRadius"
+msgstr "Radio de esquina del fuste"
+
+# Review: required
+# Source-Hash: 3dab61aeb47e504d
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Shaft Width"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.shaftWidth"
+msgstr "Ancho del fuste"
+
+# Review: required
+# Source-Hash: 85ea1d3c8b749680
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Shape"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.shape"
+msgstr "Forma"
+
+# Review: required
+# Source-Hash: 49a2ce13016d4073
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Short / Stout"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.shortStout"
+msgstr "Corta / Gruesa"
+
+# Review: required
+# Source-Hash: 4637a9a61638cc66
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Simple Block Bottom"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.simpleBlockBottom"
+msgstr "Base de bloque simple"
+
+# Review: required
+# Source-Hash: 9278f9b4a48208b0
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Simple Top"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.simpleTop"
+msgstr "Capitel simple"
+
+# Review: required
+# Source-Hash: 9099890734ae1238
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Single Strut"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.singleStrut"
+msgstr "Puntal único"
+
+# Review: required
+# Source-Hash: d87ce271009ce063
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Slender"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.slender"
+msgstr "Esbelta"
+
+# Review: required
+# Source-Hash: 39287346366fc206
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Square"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.square"
+msgstr "Cuadrado"
+
+# Review: required
+# Source-Hash: 2dc84759d8df709d
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Square Plinth Bottom"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.squarePlinthBottom"
+msgstr "Base de plinto cuadrado"
+
+# Review: required
+# Source-Hash: d998c212030bc7c2
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Standard"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.standard"
+msgstr "Estándar"
+
+# Review: required
+# Source-Hash: 01a6393135e0fb10
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Stepped Bottom"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.steppedBottom"
+msgstr "Base escalonada"
+
+# Review: required
+# Source-Hash: 3d7e443797d4146e
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Stepped Top"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.steppedTop"
+msgstr "Capitel escalonado"
+
+# Review: required
+# Source-Hash: 4ee35f740730ae87
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Straight"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.straight"
+msgstr "Recto"
+
+# Review: required
+# Source-Hash: 6063ae2877faa35d
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Taper"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.taper"
+msgstr "Ahusamiento"
+
+# Review: required
+# Source-Hash: f86f1f22230596b7
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Tapered"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.tapered"
+msgstr "Ahusado"
+
+# Review: required
+# Source-Hash: 3e7ec47626ee3f22
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Top Depth"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.topDepth"
+msgstr "Fondo superior"
+
+# Review: required
+# Source-Hash: 0ca9047731784f56
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Top Height"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.topHeight"
+msgstr "Altura superior"
+
+# Review: required
+# Source-Hash: 3d8a2be83b5b536a
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Top Spread"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.topSpread"
+msgstr "Apertura superior"
+
+# Review: required
+# Source-Hash: f4ae0dc639dbc220
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Top Step Spread"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.topStepSpread"
+msgstr "Separación de escalones superiores"
+
+# Review: required
+# Source-Hash: 8acc4e843934b086
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Top Tiers"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.topTiers"
+msgstr "Escalones superiores"
+
+# Review: required
+# Source-Hash: a50eb6400611a57c
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Top Width"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.topWidth"
+msgstr "Ancho superior"
+
+# Review: required
+# Source-Hash: f425799b82e085ed
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Transform"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.transform"
+msgstr "Transformación"
+
+# Review: required
+# Source-Hash: 952fd1ef187c6646
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Trestle"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.trestle"
+msgstr "Caballete"
+
+# Review: required
+# Source-Hash: 7430dad59aaf98f4
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Tripod"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.tripod"
+msgstr "Trípode"
+
+# Review: required
+# Source-Hash: 0db559f22647ec73
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Twist Segments"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.twistSegments"
+msgstr "Segmentos de torsión"
+
+# Review: required
+# Source-Hash: 8038a34ffebf4932
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Vertical"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.vertical"
+msgstr "Vertical"
+
+# Review: required
+# Source-Hash: f24cc343d79acc10
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "V Support"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.vSupport"
+msgstr "Soporte en V"
+
+# Review: required
+# Source-Hash: 44dda7136b93c8ee
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Waist"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.waist"
+msgstr "Losa"
+
+# Review: required
+# Source-Hash: 3a0ccd6c46877a87
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Width"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.width"
+msgstr "Ancho"
+
+# Review: required
+# Source-Hash: 4e6640dfff42cea4
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "X Brace"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.xBrace"
+msgstr "Cruz de San Andrés"
+
+# Review: required
+# Source-Hash: fefc9b1cfb26b5a8
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Yaw"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.yaw"
+msgstr "Guiñada"
+
+# Review: required
+# Source-Hash: 86259690e332b66d
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Y Support"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.ySupport"
+msgstr "Soporte en Y"
+
+# Review: required
+# Source-Hash: bf2baf3d7b55f0df
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "A-Frame Support"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.preset.aFrameSupport"
+msgstr "Soporte en A"
+
+# Review: required
+# Source-Hash: 51cf77bb359cee43
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Straight Round"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.preset.basicPillar"
+msgstr "Redonda recta"
+
+# Review: required
+# Source-Hash: 39d33008c81fc075
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Box Frame"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.preset.boxFrameSupport"
+msgstr "Marco cerrado"
+
+# Review: required
+# Source-Hash: 4f22058e862d1f81
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Soft Bulged"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.preset.bulgedPillar"
+msgstr "Ligeramente abombada"
+
+# Review: required
+# Source-Hash: bb851e93088b73a2
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Hourglass"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.preset.hourglassPillar"
+msgstr "Reloj de arena"
+
+# Review: required
+# Source-Hash: 9cc75129edee59ad
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "K Brace"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.preset.kBraceSupport"
+msgstr "Arriostramiento en K"
+
+# Review: required
+# Source-Hash: 0bf453b4882c663c
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Portal Frame"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.preset.portalFrameSupport"
+msgstr "Pórtico"
+
+# Review: required
+# Source-Hash: 9099890734ae1238
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Single Strut"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.preset.singleStrutSupport"
+msgstr "Puntal único"
+
+# Review: required
+# Source-Hash: 0c13af329b9b57cd
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Square Block"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.preset.squarePillar"
+msgstr "Bloque cuadrado"
+
+# Review: required
+# Source-Hash: 4c294bad84924665
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Tapered Round"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.preset.taperedPillar"
+msgstr "Redonda ahusada"
+
+# Review: required
+# Source-Hash: 360e405bfd74a379
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Trestle Frame"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.preset.trestleSupport"
+msgstr "Marco de caballete"
+
+# Review: required
+# Source-Hash: 4589103259b4fc4d
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Tripod Support"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.preset.tripodSupport"
+msgstr "Soporte trípode"
+
+# Review: required
+# Source-Hash: f24cc343d79acc10
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "V Support"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.preset.vFrameSupport"
+msgstr "Soporte en V"
+
+# Review: required
+# Source-Hash: 4e6640dfff42cea4
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "X Brace"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.preset.xBraceSupport"
+msgstr "Cruz de San Andrés"
+
+# Review: required
+# Source-Hash: 86259690e332b66d
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Y Support"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.preset.yFrameSupport"
+msgstr "Soporte en Y"
 
 # Source-Hash: 895766ad1b766c2e
 # Review: required
@@ -20327,6 +21757,426 @@ msgstr "Hueco de ascensor de varias plantas con aberturas configurables por plan
 #, fuzzy
 msgid "node.elevator.label"
 msgstr "Ascensor"
+
+# Review: required
+# Source-Hash: 7e6d5f138e315bdb
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Access"
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.access"
+msgstr "Acceso"
+
+# Review: required
+# Source-Hash: aa6d82bdb3cc1d9a
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Actions"
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.actions"
+msgstr "Acciones"
+
+# Review: required
+# Source-Hash: fdf7108a011bd94b
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Cab"
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.cab"
+msgstr "Cabina"
+
+# Review: required
+# Source-Hash: 2d0ab44f3820f22c
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Cab Height"
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.cabHeight"
+msgstr "Altura de cabina"
+
+# Review: required
+# Source-Hash: 65f410261609060b
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Center opening"
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.centerOpening"
+msgstr "Apertura central"
+
+# Review: required
+# Source-Hash: c5433f4d3ea8a8a7
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Default Floor"
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.defaultFloor"
+msgstr "Planta predeterminada"
+
+# Review: required
+# Source-Hash: b26de372b4b0eaac
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Delete"
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.delete"
+msgstr "Eliminar"
+
+# Review: required
+# Source-Hash: 99ac4d03c3061f3a
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Depth"
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.depth"
+msgstr "Profundidad"
+
+# Review: required
+# Source-Hash: 748877ae309c313c
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Destination"
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.destination"
+msgstr "Destino"
+
+# Review: required
+# Source-Hash: 3bff69bd74544339
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Disabled"
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.disabled"
+msgstr "Desactivado"
+
+# Review: required
+# Source-Hash: d8baf402fa9c52f0
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Door Height"
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.doorHeight"
+msgstr "Altura de puerta"
+
+# Review: required
+# Source-Hash: 20f60b98de67849b
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Doors"
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.doors"
+msgstr "Puertas"
+
+# Review: required
+# Source-Hash: eb0d4023a513b16c
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Door Time"
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.doorTime"
+msgstr "Tiempo de puerta"
+
+# Review: required
+# Source-Hash: b3e001acdb1f869d
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Door Type"
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.doorType"
+msgstr "Tipo de puerta"
+
+# Review: required
+# Source-Hash: c6203a69fdf44065
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Door Width"
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.doorWidth"
+msgstr "Ancho de puerta"
+
+# Review: required
+# Source-Hash: 34dc96fe77a31e51
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Duplicate"
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.duplicate"
+msgstr "Duplicar"
+
+# Review: required
+# Source-Hash: eb3abe5340b26138
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Dwell"
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.dwell"
+msgstr "Tiempo de parada"
+
+# Review: required
+# Source-Hash: ab5cbab7be160a1c
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Elevator"
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.elevator"
+msgstr "Ascensor"
+
+# Review: required
+# Source-Hash: 702140636ff3977a
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "From"
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.from"
+msgstr "Desde"
+
+# Review: required
+# Source-Hash: 8ab91094cf650204
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Glass"
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.glass"
+msgstr "Vidrio"
+
+# Review: required
+# Source-Hash: 88810658a2b97bc6
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Glass frame"
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.glassFrame"
+msgstr "Marco de vidrio"
+
+# Review: required
+# Source-Hash: c0ff16d77ebc9593
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Motion"
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.motion"
+msgstr "Movimiento"
+
+# Review: required
+# Source-Hash: bd02c614454fbd2b
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Move"
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.move"
+msgstr "Mover"
+
+# Review: required
+# Source-Hash: 825ac8855353a4e1
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Opening Style"
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.openingStyle"
+msgstr "Tipo de apertura"
+
+# Review: required
+# Source-Hash: 9da0cbfad144d737
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Position"
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.position"
+msgstr "Posición"
+
+# Review: required
+# Source-Hash: 01989595ee7c1dc0
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Rotation"
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.rotation"
+msgstr "Rotación"
+
+# Review: required
+# Source-Hash: f9a95d8407fafda4
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Segmented panel"
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.segmentedPanel"
+msgstr "Panel segmentado"
+
+# Review: required
+# Source-Hash: aa7b49b13f96057f
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Service"
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.service"
+msgstr "Servicio"
+
+# Review: required
+# Source-Hash: 4fc63ad21de30103
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Shaft"
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.shaft"
+msgstr "Hueco"
+
+# Review: required
+# Source-Hash: 6605ade39317cd42
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Shaft Depth"
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.shaftDepth"
+msgstr "Fondo del hueco"
+
+# Review: required
+# Source-Hash: b28db5a3a48fe52e
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Shaft Style"
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.shaftStyle"
+msgstr "Estilo del hueco"
+
+# Review: required
+# Source-Hash: 3dab61aeb47e504d
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Shaft Width"
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.shaftWidth"
+msgstr "Ancho del hueco"
+
+# Review: required
+# Source-Hash: aee3b2bd78c87d0b
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Single left"
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.singleLeft"
+msgstr "Simple izquierda"
+
+# Review: required
+# Source-Hash: cc43ffbef4ac7ae0
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Single right"
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.singleRight"
+msgstr "Simple derecha"
+
+# Review: required
+# Source-Hash: ef3e765e692faf4c
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Solid"
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.solid"
+msgstr "Sólido"
+
+# Review: required
+# Source-Hash: 8008b6f17089beaf
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Solid panel"
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.solidPanel"
+msgstr "Panel opaco"
+
+# Review: required
+# Source-Hash: 3b006be0b1f0493f
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Speed"
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.speed"
+msgstr "Velocidad"
+
+# Review: required
+# Source-Hash: 6d37a1679fa3708e
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Stop {stopOrder}"
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.stopStoporder"
+msgstr "Parada {stopOrder}"
+
+# Review: required
+# Source-Hash: b3214a20e45a7aed
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "To"
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.to"
+msgstr "Hasta"
+
+# Review: required
+# Source-Hash: 1a5ccd607c400d76
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Wall Thickness"
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.wallThickness"
+msgstr "Grosor de pared"
+
+# Review: required
+# Source-Hash: 3a0ccd6c46877a87
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Width"
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.width"
+msgstr "Ancho"
+
+# Review: required
+# Source-Hash: fefc9b1cfb26b5a8
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Yaw"
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.yaw"
+msgstr "Guiñada"
 
 # Source-Hash: 7b22c91cf520e161
 # Review: required

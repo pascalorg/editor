@@ -6,6 +6,8 @@ import { cabinetPresetById } from '../packages/nodes/src/cabinet/presets'
 import {
   CabinetModuleNode,
   CabinetNode,
+  ChimneyNode,
+  ColumnNode,
   RoofNode,
   RoofSegmentNode,
   StairNode,
@@ -101,6 +103,27 @@ const kitchenPath = async (base: string) =>
   `/project/${await auditScene(base, 'kitchen', kitchenScene())}`
 // Preset module names are stored scene data, like room names.
 const kitchenData = [...furnishedData, 'Base Cabinet', 'Sink Base']
+
+/** The furnished scene plus a column, and a chimney on the roof. */
+function structuresScene() {
+  const graph = furnishedScene() as unknown as {
+    nodes: Record<string, { children?: string[] }>
+  }
+  const chimney = ChimneyNode.parse({
+    id: 'chimney_audit',
+    parentId: 'rseg_audit',
+    roofSegmentId: 'rseg_audit',
+    position: [1, 0, 1.5],
+  })
+  const column = ColumnNode.parse({ id: 'column_audit', parentId: 'level_0', position: [6, 0, 6] })
+  for (const node of [chimney, column]) graph.nodes[node.id] = node
+  graph.nodes.rseg_audit?.children?.push(chimney.id)
+  graph.nodes.level_0?.children?.push(column.id)
+  return graph as unknown as SceneGraph
+}
+
+const structuresPath = async (base: string) =>
+  `/project/${await auditScene(base, 'structures', structuresScene())}`
 
 const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
@@ -381,6 +404,20 @@ export const surfaces: PseudoSurface[] = [
       await page.waitForTimeout(600)
     },
     scope: '[data-node-action-menu], [role="tooltip"]',
+  },
+  {
+    name: 'column-panel',
+    path: structuresPath,
+    steps: (page) => openLayer(page, 'Column'),
+    scope: '[data-editor-inspector]',
+    data: furnishedData,
+  },
+  {
+    name: 'chimney-panel',
+    path: structuresPath,
+    steps: (page) => openLayer(page, 'Chimney'),
+    scope: '[data-editor-inspector]',
+    data: furnishedData,
   },
   {
     name: 'icon-rail',

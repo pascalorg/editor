@@ -5,10 +5,12 @@ import {
   type AnyNodeId,
   type ChimneyNode,
   getActiveRoofHeight,
+  type MessageDescriptor,
   type RoofNode,
   type RoofSegmentNode,
   sceneRegistry,
   useLiveNodeOverrides,
+  usePascalI18n,
   useScene,
 } from '@pascal-app/core'
 import {
@@ -26,7 +28,6 @@ import { useCallback, useMemo, useState } from 'react'
 import { Vector3 } from 'three'
 import {
   CHIMNEY_PRESET_KEYS,
-  CHIMNEY_PRESET_LABELS,
   type ChimneyPresetKey,
   chimneyPresets,
   detectActiveChimneyPreset,
@@ -39,16 +40,27 @@ const cn = (...classes: Array<string | false | undefined | null>): string =>
 
 type ChimneyType = 'cap' | 'flues' | 'shoulder' | 'bands' | 'cricket' | 'panels'
 
-const CHIMNEY_TYPE_OPTIONS: Array<{ label: string; value: ChimneyType }> = [
-  { label: 'Cap', value: 'cap' },
-  { label: 'Flues', value: 'flues' },
-  { label: 'Shoulder', value: 'shoulder' },
-  { label: 'Bands', value: 'bands' },
-  { label: 'Cricket', value: 'cricket' },
-  { label: 'Panels', value: 'panels' },
+const CHIMNEY_TYPE_OPTIONS: Array<{ label: MessageDescriptor; value: ChimneyType }> = [
+  { label: /* i18n */ { id: 'node.chimney.panel.cap', message: 'Cap' }, value: 'cap' },
+  { label: /* i18n */ { id: 'node.chimney.panel.flues', message: 'Flues' }, value: 'flues' },
+  {
+    label: /* i18n */ { id: 'node.chimney.panel.shoulder', message: 'Shoulder' },
+    value: 'shoulder',
+  },
+  { label: /* i18n */ { id: 'node.chimney.panel.bands', message: 'Bands' }, value: 'bands' },
+  { label: /* i18n */ { id: 'node.chimney.panel.cricket', message: 'Cricket' }, value: 'cricket' },
+  { label: /* i18n */ { id: 'node.chimney.panel.panels', message: 'Panels' }, value: 'panels' },
 ]
 
+/** Preset names in the UI language; `CHIMNEY_PRESET_LABELS` stay English. */
+const CHIMNEY_STYLE_LABELS: Record<ChimneyPresetKey, MessageDescriptor> = {
+  brick: /* i18n */ { id: 'node.chimney.preset.brick', message: 'Brick' },
+  modern: /* i18n */ { id: 'node.chimney.preset.modern', message: 'Modern' },
+  round: /* i18n */ { id: 'node.chimney.preset.round', message: 'Round' },
+}
+
 export default function ChimneyPanel() {
+  const i18n = usePascalI18n()
   const [chimneyType, setChimneyType] = useState<ChimneyType>('cap')
   const selectedId = useViewer((s) => s.selection.selectedIds[0])
   const setSelection = useViewer((s) => s.setSelection)
@@ -342,14 +354,14 @@ export default function ChimneyPanel() {
       icon="/icons/roof.webp"
       onBack={node.roofSegmentId ? handleBack : undefined}
       onClose={handleClose}
-      title={node.name || 'Chimney'}
+      title={node.name || i18n._({ id: 'node.chimney.panel.chimney', message: 'Chimney' })}
       width={300}
     >
-      <PanelSection title="Style">
+      <PanelSection title={i18n._({ id: 'node.chimney.panel.style', message: 'Style' })}>
         <SegmentedControl
           onChange={(v) => applyPreset(v as ChimneyPresetKey)}
           options={CHIMNEY_PRESET_KEYS.map((k) => ({
-            label: CHIMNEY_PRESET_LABELS[k],
+            label: i18n._(CHIMNEY_STYLE_LABELS[k]),
             value: k,
           }))}
           // Empty string when no preset matches — nothing highlighted,
@@ -358,17 +370,24 @@ export default function ChimneyPanel() {
         />
       </PanelSection>
 
-      <PanelSection title="Footprint">
+      <PanelSection title={i18n._({ id: 'node.chimney.panel.footprint', message: 'Footprint' })}>
         <SegmentedControl
           onChange={(v) => handleUpdate({ bodyShape: v })}
           options={[
-            { label: 'Square', value: 'square' },
-            { label: 'Round', value: 'round' },
+            {
+              label: i18n._({ id: 'node.chimney.panel.square', message: 'Square' }),
+              value: 'square',
+            },
+            { label: i18n._({ id: 'node.chimney.panel.round', message: 'Round' }), value: 'round' },
           ]}
           value={node.bodyShape ?? 'square'}
         />
         <SliderControl
-          label={(node.bodyShape ?? 'square') === 'round' ? 'Diameter' : 'Width'}
+          label={
+            (node.bodyShape ?? 'square') === 'round'
+              ? i18n._({ id: 'node.chimney.panel.diameter', message: 'Diameter' })
+              : i18n._({ id: 'node.chimney.panel.width', message: 'Width' })
+          }
           max={1000}
           min={0.2}
           onChange={(v) => previewProp({ width: v })}
@@ -381,7 +400,7 @@ export default function ChimneyPanel() {
         />
         {(node.bodyShape ?? 'square') !== 'round' && (
           <SliderControl
-            label="Depth"
+            label={i18n._({ id: 'node.chimney.panel.depth', message: 'Depth' })}
             max={1000}
             min={0.2}
             onChange={(v) => previewProp({ depth: v })}
@@ -394,7 +413,7 @@ export default function ChimneyPanel() {
           />
         )}
         <SliderControl
-          label="Hollow Depth"
+          label={i18n._({ id: 'node.chimney.panel.hollowDepth', message: 'Hollow Depth' })}
           max={3}
           min={0}
           onChange={(v) => previewProp({ bodyHollowDepth: v })}
@@ -406,7 +425,7 @@ export default function ChimneyPanel() {
           value={node.bodyHollowDepth ?? 0.6}
         />
         <SliderControl
-          label="Wall Thickness"
+          label={i18n._({ id: 'node.chimney.panel.wallThickness', message: 'Wall Thickness' })}
           max={0.3}
           min={0}
           onChange={(v) => previewProp({ bodyHollowMargin: v })}
@@ -419,7 +438,7 @@ export default function ChimneyPanel() {
         />
         {(node.bodyShape ?? 'square') !== 'round' && (
           <SliderControl
-            label="Corner Bevel"
+            label={i18n._({ id: 'node.chimney.panel.cornerBevel', message: 'Corner Bevel' })}
             max={Math.max(0, Math.min(node.width, node.depth) / 2 - 0.005)}
             min={0}
             onChange={(v) => previewProp({ cornerBevel: v })}
@@ -433,9 +452,9 @@ export default function ChimneyPanel() {
         )}
       </PanelSection>
 
-      <PanelSection title="Height">
+      <PanelSection title={i18n._({ id: 'node.chimney.panel.height', message: 'Height' })}>
         <SliderControl
-          label="Above Ridge"
+          label={i18n._({ id: 'node.chimney.panel.aboveRidge', message: 'Above Ridge' })}
           max={1000}
           min={0.1}
           onChange={(v) => previewProp({ heightAboveRidge: v })}
@@ -447,7 +466,7 @@ export default function ChimneyPanel() {
           value={node.heightAboveRidge}
         />
         <SliderControl
-          label="Cutout Offset"
+          label={i18n._({ id: 'node.chimney.panel.cutoutOffset', message: 'Cutout Offset' })}
           max={0.5}
           min={0}
           onChange={(v) => previewProp({ cutoutOffset: v })}
@@ -460,7 +479,7 @@ export default function ChimneyPanel() {
         />
       </PanelSection>
 
-      <PanelSection title="Position">
+      <PanelSection title={i18n._({ id: 'node.chimney.panel.position', message: 'Position' })}>
         <SliderControl
           label="X"
           max={Math.round(worldMaxX * 10) / 10}
@@ -497,7 +516,7 @@ export default function ChimneyPanel() {
           value={worldZ_now}
         />
         <SliderControl
-          label="Rotation"
+          label={i18n._({ id: 'node.chimney.panel.rotation', message: 'Rotation' })}
           max={180}
           min={-180}
           onChange={(degrees) => {
@@ -523,7 +542,9 @@ export default function ChimneyPanel() {
         />
       </PanelSection>
 
-      <PanelSection title="Chimney Type">
+      <PanelSection
+        title={i18n._({ id: 'node.chimney.panel.chimneyType', message: 'Chimney Type' })}
+      >
         <div className="grid grid-cols-2 gap-1.5 px-1 pt-1">
           {CHIMNEY_TYPE_OPTIONS.filter((option) => {
             // Cricket and Panels both rely on a flat face — hide them for
@@ -546,7 +567,7 @@ export default function ChimneyPanel() {
                 onClick={() => setChimneyType(option.value)}
                 type="button"
               >
-                <span className="truncate font-medium">{option.label}</span>
+                <span className="min-w-0 break-words font-medium">{i18n._(option.label)}</span>
               </button>
             )
           })}
@@ -558,17 +579,29 @@ export default function ChimneyPanel() {
               className="mt-2"
               onChange={(v) => handleUpdate({ cap: v !== 'none', capShape: v })}
               options={[
-                { label: 'None', value: 'none' },
-                { label: 'Sloped', value: 'sloped' },
-                { label: 'Flat', value: 'flat' },
-                { label: 'Stepped', value: 'stepped' },
+                {
+                  label: i18n._({ id: 'node.chimney.panel.none', message: 'None' }),
+                  value: 'none',
+                },
+                {
+                  label: i18n._({ id: 'node.chimney.panel.sloped', message: 'Sloped' }),
+                  value: 'sloped',
+                },
+                {
+                  label: i18n._({ id: 'node.chimney.panel.flat', message: 'Flat' }),
+                  value: 'flat',
+                },
+                {
+                  label: i18n._({ id: 'node.chimney.panel.stepped', message: 'Stepped' }),
+                  value: 'stepped',
+                },
               ]}
               value={node.capShape ?? 'sloped'}
             />
             {(node.capShape ?? 'sloped') !== 'none' && (
               <>
                 <SliderControl
-                  label="Overhang"
+                  label={i18n._({ id: 'node.chimney.panel.overhang', message: 'Overhang' })}
                   max={0.2}
                   min={0}
                   onChange={(v) => previewProp({ capOverhang: v })}
@@ -580,7 +613,7 @@ export default function ChimneyPanel() {
                   value={node.capOverhang ?? 0.04}
                 />
                 <SliderControl
-                  label="Thickness"
+                  label={i18n._({ id: 'node.chimney.panel.thickness', message: 'Thickness' })}
                   max={0.3}
                   min={0.02}
                   onChange={(v) => previewProp({ capThickness: v })}
@@ -602,16 +635,25 @@ export default function ChimneyPanel() {
               className="mt-2"
               onChange={(v) => handleUpdate({ shoulderStyle: v })}
               options={[
-                { label: 'None', value: 'none' },
-                { label: 'Tapered', value: 'tapered' },
-                { label: 'Corbeled', value: 'corbeled' },
+                {
+                  label: i18n._({ id: 'node.chimney.panel.none', message: 'None' }),
+                  value: 'none',
+                },
+                {
+                  label: i18n._({ id: 'node.chimney.panel.tapered', message: 'Tapered' }),
+                  value: 'tapered',
+                },
+                {
+                  label: i18n._({ id: 'node.chimney.panel.corbeled', message: 'Corbeled' }),
+                  value: 'corbeled',
+                },
               ]}
               value={node.shoulderStyle ?? 'none'}
             />
             {(node.shoulderStyle ?? 'none') !== 'none' && (
               <>
                 <SliderControl
-                  label="Height"
+                  label={i18n._({ id: 'node.chimney.panel.height', message: 'Height' })}
                   max={3}
                   min={0.1}
                   onChange={(v) => previewProp({ shoulderHeight: v })}
@@ -623,7 +665,7 @@ export default function ChimneyPanel() {
                   value={node.shoulderHeight ?? 0.5}
                 />
                 <SliderControl
-                  label="Extent"
+                  label={i18n._({ id: 'node.chimney.panel.extent', message: 'Extent' })}
                   max={0.5}
                   min={0}
                   onChange={(v) => previewProp({ shoulderExtent: v })}
@@ -642,7 +684,7 @@ export default function ChimneyPanel() {
         {chimneyType === 'flues' && (
           <>
             <SliderControl
-              label="Count"
+              label={i18n._({ id: 'node.chimney.panel.count', message: 'Count' })}
               max={4}
               min={0}
               onChange={(v) => previewProp({ flueCount: Math.round(v) })}
@@ -658,13 +700,19 @@ export default function ChimneyPanel() {
                 <SegmentedControl
                   onChange={(v) => handleUpdate({ flueShape: v })}
                   options={[
-                    { label: 'Round', value: 'round' },
-                    { label: 'Square', value: 'square' },
+                    {
+                      label: i18n._({ id: 'node.chimney.panel.round', message: 'Round' }),
+                      value: 'round',
+                    },
+                    {
+                      label: i18n._({ id: 'node.chimney.panel.square', message: 'Square' }),
+                      value: 'square',
+                    },
                   ]}
                   value={node.flueShape ?? 'round'}
                 />
                 <SliderControl
-                  label="Diameter"
+                  label={i18n._({ id: 'node.chimney.panel.diameter', message: 'Diameter' })}
                   max={Math.max(0.4, node.width)}
                   min={0.05}
                   onChange={(v) => previewProp({ flueDiameter: v })}
@@ -676,7 +724,7 @@ export default function ChimneyPanel() {
                   value={node.flueDiameter ?? 0.22}
                 />
                 <SliderControl
-                  label="Height"
+                  label={i18n._({ id: 'node.chimney.panel.height', message: 'Height' })}
                   max={1.5}
                   min={0.05}
                   onChange={(v) => previewProp({ flueHeight: v })}
@@ -689,7 +737,7 @@ export default function ChimneyPanel() {
                 />
                 {(node.flueCount ?? 1) > 1 && (
                   <SliderControl
-                    label="Spacing"
+                    label={i18n._({ id: 'node.chimney.panel.spacing', message: 'Spacing' })}
                     max={1}
                     min={0}
                     onChange={(v) => previewProp({ flueSpacing: v })}
@@ -701,7 +749,10 @@ export default function ChimneyPanel() {
                   />
                 )}
                 <SliderControl
-                  label="Wall Thickness"
+                  label={i18n._({
+                    id: 'node.chimney.panel.wallThickness',
+                    message: 'Wall Thickness',
+                  })}
                   max={Math.max(0.1, (node.flueDiameter ?? 0.22) / 2 - 0.01)}
                   min={0}
                   onChange={(v) => previewProp({ flueWallThickness: v })}
@@ -723,16 +774,25 @@ export default function ChimneyPanel() {
               className="mt-2"
               onChange={(v) => handleUpdate({ bandStyle: v })}
               options={[
-                { label: 'None', value: 'none' },
-                { label: 'Single', value: 'single' },
-                { label: 'Double', value: 'double' },
+                {
+                  label: i18n._({ id: 'node.chimney.panel.none', message: 'None' }),
+                  value: 'none',
+                },
+                {
+                  label: i18n._({ id: 'node.chimney.panel.single', message: 'Single' }),
+                  value: 'single',
+                },
+                {
+                  label: i18n._({ id: 'node.chimney.panel.double', message: 'Double' }),
+                  value: 'double',
+                },
               ]}
               value={node.bandStyle ?? 'none'}
             />
             {(node.bandStyle ?? 'none') !== 'none' && (
               <>
                 <SliderControl
-                  label="Thickness"
+                  label={i18n._({ id: 'node.chimney.panel.thickness', message: 'Thickness' })}
                   max={0.4}
                   min={0.02}
                   onChange={(v) => previewProp({ bandHeight: v })}
@@ -744,7 +804,7 @@ export default function ChimneyPanel() {
                   value={node.bandHeight ?? 0.1}
                 />
                 <SliderControl
-                  label="Extent"
+                  label={i18n._({ id: 'node.chimney.panel.extent', message: 'Extent' })}
                   max={0.2}
                   min={0}
                   onChange={(v) => previewProp({ bandExtent: v })}
@@ -756,7 +816,7 @@ export default function ChimneyPanel() {
                   value={node.bandExtent ?? 0.04}
                 />
                 <SliderControl
-                  label="Offset"
+                  label={i18n._({ id: 'node.chimney.panel.offset', message: 'Offset' })}
                   max={3}
                   min={0}
                   onChange={(v) => previewProp({ bandOffset: v })}
@@ -778,8 +838,14 @@ export default function ChimneyPanel() {
               className="mt-2"
               onChange={(v) => handleUpdate({ cricketStyle: v })}
               options={[
-                { label: 'None', value: 'none' },
-                { label: 'Simple', value: 'simple' },
+                {
+                  label: i18n._({ id: 'node.chimney.panel.none', message: 'None' }),
+                  value: 'none',
+                },
+                {
+                  label: i18n._({ id: 'node.chimney.panel.simple', message: 'Simple' }),
+                  value: 'simple',
+                },
               ]}
               value={node.cricketStyle ?? 'none'}
             />
@@ -789,13 +855,19 @@ export default function ChimneyPanel() {
                   className="mt-2"
                   onChange={(v) => handleUpdate({ cricketSide: v })}
                   options={[
-                    { label: 'Front', value: 'front' },
-                    { label: 'Back', value: 'back' },
+                    {
+                      label: i18n._({ id: 'node.chimney.panel.front', message: 'Front' }),
+                      value: 'front',
+                    },
+                    {
+                      label: i18n._({ id: 'node.chimney.panel.back', message: 'Back' }),
+                      value: 'back',
+                    },
                   ]}
                   value={node.cricketSide ?? 'front'}
                 />
                 <SliderControl
-                  label="Length"
+                  label={i18n._({ id: 'node.chimney.panel.length', message: 'Length' })}
                   max={2}
                   min={0.1}
                   onChange={(v) => previewProp({ cricketLength: v })}
@@ -807,7 +879,7 @@ export default function ChimneyPanel() {
                   value={node.cricketLength ?? 0.6}
                 />
                 <SliderControl
-                  label="Height"
+                  label={i18n._({ id: 'node.chimney.panel.height', message: 'Height' })}
                   max={1.5}
                   min={0.05}
                   onChange={(v) => previewProp({ cricketHeight: v })}
@@ -829,15 +901,21 @@ export default function ChimneyPanel() {
               className="mt-2"
               onChange={(v) => handleUpdate({ panelStyle: v })}
               options={[
-                { label: 'None', value: 'none' },
-                { label: 'Rectangular', value: 'rectangular' },
+                {
+                  label: i18n._({ id: 'node.chimney.panel.none', message: 'None' }),
+                  value: 'none',
+                },
+                {
+                  label: i18n._({ id: 'node.chimney.panel.rectangular', message: 'Rectangular' }),
+                  value: 'rectangular',
+                },
               ]}
               value={node.panelStyle ?? 'none'}
             />
             {(node.panelStyle ?? 'none') !== 'none' && (
               <>
                 <SliderControl
-                  label="Depth"
+                  label={i18n._({ id: 'node.chimney.panel.depth', message: 'Depth' })}
                   max={0.15}
                   min={0.005}
                   onChange={(v) => previewProp({ panelDepth: v })}
@@ -849,7 +927,7 @@ export default function ChimneyPanel() {
                   value={node.panelDepth ?? 0.03}
                 />
                 <SliderControl
-                  label="Height"
+                  label={i18n._({ id: 'node.chimney.panel.height', message: 'Height' })}
                   max={3}
                   min={0.1}
                   onChange={(v) => previewProp({ panelHeight: v })}
@@ -861,7 +939,7 @@ export default function ChimneyPanel() {
                   value={node.panelHeight ?? 0.8}
                 />
                 <SliderControl
-                  label="Top Offset"
+                  label={i18n._({ id: 'node.chimney.panel.topOffset', message: 'Top Offset' })}
                   max={2}
                   min={0}
                   onChange={(v) => previewProp({ panelOffsetTop: v })}
@@ -873,7 +951,7 @@ export default function ChimneyPanel() {
                   value={node.panelOffsetTop ?? 0.15}
                 />
                 <SliderControl
-                  label="Side Margin"
+                  label={i18n._({ id: 'node.chimney.panel.sideMargin', message: 'Side Margin' })}
                   max={Math.max(0.5, node.width / 2 - 0.05)}
                   min={0.02}
                   onChange={(v) => previewProp({ panelMargin: v })}
@@ -890,12 +968,12 @@ export default function ChimneyPanel() {
         )}
       </PanelSection>
 
-      <PanelSection title="Actions">
+      <PanelSection title={i18n._({ id: 'node.chimney.panel.actions', message: 'Actions' })}>
         <ActionGroup>
           <ActionButton
             className="hover:bg-red-500/20"
             icon={<Trash2 className="h-3.5 w-3.5 text-red-600 dark:text-red-400" />}
-            label="Delete"
+            label={i18n._({ id: 'node.chimney.panel.delete', message: 'Delete' })}
             onClick={handleDelete}
           />
         </ActionGroup>
