@@ -4,6 +4,7 @@ import { request as httpRequest, type IncomingMessage } from 'node:http'
 import { request as httpsRequest } from 'node:https'
 import { isIP, type LookupFunction } from 'node:net'
 import { ProtocolError, ProtocolErrorCode } from '@modelcontextprotocol/server'
+import { ALLOWED_ORIGINS_ENV, allowedOriginsFrom } from '@pascal-app/core/schema'
 
 /**
  * SSRF-safe fetch for user-supplied URLs (image URLs in vision tools).
@@ -18,6 +19,7 @@ import { ProtocolError, ProtocolErrorCode } from '@modelcontextprotocol/server'
  *   answer that changes between check and connect cannot reach a private host
  * - optional origin allowlist via `PASCAL_ALLOWED_ASSET_ORIGINS` (comma-separated)
  *   - listed origins skip the port limit: an allowlisted origin may name any port
+ *   - parsed by core's `allowedOriginsFrom`, the same reading as scene asset URLs
  * - max body size (default 20 MB) and request timeout (default 10 s)
  *
  * Used by photo_to_scene / analyze_floorplan_image / analyze_room_photo.
@@ -193,36 +195,6 @@ function protocolError(reason: string, details: Record<string, unknown>): never 
   throw new ProtocolError(ProtocolErrorCode.InvalidParams, reason, details)
 }
 
-let allowlistCache: { raw: string; origins: Set<string> } | null = null
-
-/**
- * Parses the allowlist into normalised origins, so `https://CDN.example.com:443/`
- * matches `https://cdn.example.com`. Entries that are not URLs with an origin
- * are skipped with a warning; an allowlist with no valid entry blocks everything.
- * Cached per raw value so each bad entry warns once, not on every fetch.
- */
-function allowedOrigins(raw: string): Set<string> {
-  if (allowlistCache?.raw === raw) return allowlistCache.origins
-  const origins = new Set<string>()
-  for (const entry of raw.split(',')) {
-    const trimmed = entry.trim()
-    if (!trimmed) continue
-    let origin = 'null'
-    try {
-      origin = new URL(trimmed).origin
-    } catch {}
-    if (origin === 'null') {
-      console.warn(
-        `[pascal-mcp] safe_fetch_allowlist_entry_ignored ${JSON.stringify({ entry: trimmed })}`,
-      )
-    } else {
-      origins.add(origin)
-    }
-  }
-  allowlistCache = { raw, origins }
-  return origins
-}
-
 function assertAllowedUrl(url: string): URL {
   let parsed: URL
   try {
@@ -233,9 +205,9 @@ function assertAllowedUrl(url: string): URL {
   if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
     blocked('url_scheme_not_allowed', parsed, { protocol: parsed.protocol })
   }
-  const allowEnv = process.env.PASCAL_ALLOWED_ASSET_ORIGINS
-  if (allowEnv) {
-    if (!allowedOrigins(allowEnv).has(parsed.origin)) {
+  const allowlist = allowedOriginsFrom(process.env[ALLOWED_ORIGINS_ENV])
+  if (allowlist) {
+    if (!allowlist.has(parsed.origin)) {
       blocked('url_origin_not_allowlisted', parsed, { origin: parsed.origin })
     }
   } else if (!ALLOWED_PORTS.has(parsed.port)) {

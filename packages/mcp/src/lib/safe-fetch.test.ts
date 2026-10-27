@@ -516,38 +516,45 @@ describe('safeFetch — origin allowlist', () => {
     }
   })
 
-  test('invalid entries are skipped with one warning each, valid ones still apply', async () => {
+  test('rejected entries are skipped and logged by index and reason, never by value', async () => {
     const warn = spyOn(console, 'warn').mockImplementation(() => {})
     try {
       const { deps } = fakeNetwork(dns, routes)
-      const raw = 'cdn.example.com, not a url,https://cdn.example.com,cdn.example.com:443'
+      const raw =
+        'cdn.example.com, not a url,https://cdn.example.com,user:hunter2@cdn.example.com, ftp://user:hunter2@cdn.example.com'
       await withAllowlist(raw, async () => {
         expect((await safeFetch('https://cdn.example.com/x', {}, deps)).buffer.toString()).toBe(
           'cdn',
         )
         await safeFetch('https://cdn.example.com/x', {}, deps)
       })
-      const entries = warn.mock.calls.map((args) => {
-        const line = String(args[0])
-        expect(line).toStartWith('[pascal-mcp] safe_fetch_allowlist_entry_ignored ')
-        return JSON.parse(line.slice(line.indexOf('{'))).entry
-      })
-      expect(entries).toEqual(['cdn.example.com', 'not a url', 'cdn.example.com:443'])
+      const lines = warn.mock.calls.map((args) => String(args[0]))
+      expect(lines).toEqual([
+        '[pascal] asset_allowlist_entry_ignored {"index":0,"reason":"not_a_url"}',
+        '[pascal] asset_allowlist_entry_ignored {"index":1,"reason":"not_a_url"}',
+        '[pascal] asset_allowlist_entry_ignored {"index":3,"reason":"scheme_not_allowed"}',
+        '[pascal] asset_allowlist_entry_ignored {"index":4,"reason":"scheme_not_allowed"}',
+      ])
+      for (const line of [...lines, ...errorLog.mock.calls.map((args) => String(args[0]))]) {
+        expect(line).not.toContain('hunter2')
+      }
     } finally {
       warn.mockRestore()
     }
   })
 
-  test('an allowlist with no valid entry blocks everything', async () => {
+  test('an allowlist with no valid entry, or only whitespace, blocks everything', async () => {
     const warn = spyOn(console, 'warn').mockImplementation(() => {})
     try {
       const { deps, resolved } = fakeNetwork(dns, routes)
-      await withAllowlist('cdn.example.com', () =>
-        expectBlocked(
-          safeFetch('https://cdn.example.com/x', {}, deps),
-          'url_origin_not_allowlisted',
-        ),
-      )
+      for (const value of ['cdn.example.com', '  ', ' , ', 'blob:https://cdn.example.com/x']) {
+        await withAllowlist(value, () =>
+          expectBlocked(
+            safeFetch('https://cdn.example.com/x', {}, deps),
+            'url_origin_not_allowlisted',
+          ),
+        )
+      }
       expect(resolved).toHaveLength(0)
     } finally {
       warn.mockRestore()
