@@ -6,7 +6,8 @@ import { createCompiledCatalog, getCatalogs } from '@lingui/cli/api'
 import { getConfig } from '@lingui/conf'
 import { compileMessageOrThrow } from '@lingui/message-utils/compileMessage'
 import { type PoFile, type PoItem, parsePo, stringifyPo } from 'pofile-ts'
-import { checkLiterals } from './i18n-literals'
+import { baseRevision, readAtRevision } from './i18n-git'
+import { checkRepositoryLiterals } from './i18n-literals'
 
 export type SourceMessage = {
   id: string
@@ -515,7 +516,12 @@ function compiledCatalog(locale: string, sources: SourceMessage[]) {
 function writeCompiledCatalogs(strict = false): void {
   const sources = readSourceMessages()
   if (strict) {
-    const errors = checkCatalogMessages(sources, readJson<Glossary>(GLOSSARY_PATH), {})
+    const errors = checkTranslationEntries(
+      sources,
+      readLocaleEntries((path) => readFileSync(path, 'utf8')),
+      readJson<Glossary>(GLOSSARY_PATH),
+      {},
+    )
     if (errors.length > 0) throw new Error(errors.join('\n'))
   }
   const compiled = ALL_LOCALES.map((locale) => [locale, compiledCatalog(locale, sources)] as const)
@@ -735,8 +741,21 @@ export function pendingReview(sources: SourceMessage[]): Record<string, number> 
   )
 }
 
-function checkCatalogMessages(
+export type LocaleEntries = Record<string, Record<string, TranslationEntry>>
+
+function readLocaleEntries(read: (path: string) => string | undefined): LocaleEntries {
+  const entries: LocaleEntries = {}
+  for (const locale of TARGET_LOCALES) {
+    const text = read(catalogPath(locale))
+    if (text !== undefined) entries[locale] = readTranslationState(parsePo(text))
+  }
+  return entries
+}
+
+/** Pure completeness/validity/review rules for the bundled target catalogs. */
+export function checkTranslationEntries(
   sources: SourceMessage[],
+  entriesByLocale: LocaleEntries,
   glossary: Glossary,
   options: CatalogCheckOptions = { requireReviewed: true },
 ): string[] {
@@ -747,8 +766,7 @@ function checkCatalogMessages(
   }
 
   for (const locale of TARGET_LOCALES) {
-    const po = parsePo(readFileSync(catalogPath(locale), 'utf8'))
-    const entries = readTranslationState(po)
+    const entries = entriesByLocale[locale] ?? {}
     for (const source of sources) {
       const entry = entries[source.id]
       if (!entry?.translation) {
@@ -778,6 +796,59 @@ function checkCatalogMessages(
     for (const id of Object.keys(entries)) {
       if (!sourceById.has(id)) errors.push(`${locale}: obsolete "${id}"`)
     }
+  }
+  return errors
+}
+
+/**
+ * A translation a person approved on the base branch stays approved while its
+ * English is unchanged: a PR may edit it (still `Review: human`) but never
+ * send it back to draft, which would silently drop it from the shipped pack.
+ */
+export function reviewRegressions(
+  sources: SourceMessage[],
+  current: LocaleEntries,
+  base: LocaleEntries,
+): string[] {
+  const errors: string[] = []
+  for (const locale of TARGET_LOCALES) {
+    for (const source of sources) {
+      const before = base[locale]?.[source.id]
+      if (
+        !before?.translation ||
+        before.fuzzy ||
+        before.review !== 'human' ||
+        before.sourceHash !== hashSource(source.message)
+      ) {
+        continue
+      }
+      const after = current[locale]?.[source.id]
+      if (!after?.translation || after.fuzzy || after.review !== 'human') {
+        errors.push(
+          `${locale}: "${source.id}" is reviewed on the base branch with the same English and must stay reviewed`,
+        )
+      }
+    }
+  }
+  return errors
+}
+
+function checkCatalogMessages(
+  sources: SourceMessage[],
+  glossary: Glossary,
+  options: CatalogCheckOptions = { requireReviewed: true },
+): string[] {
+  const current = readLocaleEntries((path) => readFileSync(path, 'utf8'))
+  const errors = checkTranslationEntries(sources, current, glossary, options)
+  const base = baseRevision()
+  if (base) {
+    errors.push(
+      ...reviewRegressions(
+        sources,
+        current,
+        readLocaleEntries((path) => readAtRevision(base, path)),
+      ),
+    )
   }
   return errors
 }
@@ -850,7 +921,7 @@ async function main(): Promise<void> {
   if (command === 'check') {
     const requireReviewed = process.argv.includes('--reviewed')
     const errors = await checkCatalogs({ requireReviewed })
-    const literals = checkLiterals()
+    const literals = checkRepositoryLiterals()
     errors.push(...literals.errors.map((error) => `literal guard: ${error}`))
     if (errors.length > 0) {
       console.error(errors.map((error) => `[i18n] ${error}`).join('\n'))

@@ -57,7 +57,12 @@ jobs:
     permissions:
       contents: read
     steps:
+      # Depth 2 keeps the pull request merge commit's first parent (the base
+      # tip), which i18n:check compares reviewed translations and the literal
+      # baseline against.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
 
       # Read from `packageManager` in package.json, so CI runs the same bun as
       # contributors and a bun release cannot change the gate on its own.
