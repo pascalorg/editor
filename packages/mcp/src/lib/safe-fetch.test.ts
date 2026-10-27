@@ -3,6 +3,7 @@ import type { LookupAddress } from 'node:dns'
 import { createServer, request as httpRequest, type IncomingMessage } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { Readable } from 'node:stream'
+import { finished } from 'node:stream/promises'
 import { ProtocolError } from '@modelcontextprotocol/server'
 import {
   isBlockedAddress,
@@ -12,7 +13,7 @@ import {
   safeFetch,
 } from './safe-fetch'
 
-const PUBLIC_V4 = '203.0.113.10'
+const PUBLIC_V4 = '93.184.215.14'
 const PUBLIC_V6 = '2606:4700::1111'
 
 function response(
@@ -23,6 +24,22 @@ function response(
   const res = Readable.from(body ? [Buffer.from(body)] : []) as unknown as IncomingMessage
   Object.assign(res, { statusCode: status, statusMessage: '', headers })
   return res
+}
+
+/** A 16 MB response body that records how many bytes anyone pulled from it. */
+function largeResponse(status: number, headers: Record<string, string> = {}) {
+  const chunk = Buffer.alloc(64 * 1024)
+  let remaining = 256
+  const state = { bytesRead: 0, res: null as unknown as IncomingMessage }
+  state.res = new Readable({
+    read() {
+      if (remaining-- <= 0) return this.push(null)
+      state.bytesRead += chunk.byteLength
+      this.push(chunk)
+    },
+  }) as unknown as IncomingMessage
+  Object.assign(state.res, { statusCode: status, statusMessage: '', headers })
+  return state
 }
 
 /** Fake network: `dns` maps hostnames to answers, `routes` maps URLs to responses. */
@@ -87,7 +104,15 @@ describe('isBlockedAddress', () => {
     ['IPv4-compatible and translated', ['::7f00:1', '::127.0.0.1', '::ffff:0:a00:1']],
     ['6to4 and Teredo', ['2002:7f00:1::', '2002:a9fe:a9fe::1', '2001:0:4136:e378::1']],
     ['multicast / reserved / broadcast', ['224.0.0.1', '240.0.0.1', '255.255.255.255', 'ff02::1']],
-    ['other special use', ['192.0.0.1', '198.18.0.1', '100::1', 'fec0::1']],
+    ['other special use', ['192.0.0.1', '192.0.0.255', '198.18.0.1', '100::1', 'fec0::1']],
+    [
+      'documentation and test nets',
+      ['192.0.2.1', '198.51.100.7', '203.0.113.10', '2001:db8::1', '3fff:fff::1'],
+    ],
+    [
+      'other non-global IANA special-purpose',
+      ['192.88.99.1', '100:0:0:1::1', '2001:2::1', '5f00::1', '2002:c000:201::'],
+    ],
     ['zone ids and brackets', ['fe80::1%eth0', '[::1]', '[::ffff:7f00:1]']],
     ['not an address', ['', 'example.com', '1.2.3', '::ffff:1.2.3.4.5']],
   ]
@@ -109,6 +134,16 @@ describe('isBlockedAddress', () => {
       '::ffff:808:808',
       '2002:808:808::1',
       PUBLIC_V6,
+      // Only 192.0.0.0/24 and 192.0.2.0/24 are reserved within 192.0.0.0/16.
+      '192.0.1.1',
+      '192.0.3.1',
+      '192.0.255.1',
+      // Globally reachable entries in the special-purpose registries.
+      '192.31.196.1',
+      '192.52.193.1',
+      '192.175.48.1',
+      '2001:4:112::1',
+      '3fff:1000::1',
     ]) {
       expect([address, isBlockedAddress(address)]).toEqual([address, false])
     }
@@ -270,6 +305,57 @@ describe('safeFetch — SSRF protection', () => {
       address: '10.0.0.7',
     })
     expect(lines[1]).toContain('"reason":"url_scheme_not_allowed"')
+  })
+
+  test('logs blocked URLs without query, fragment or userinfo', async () => {
+    const { deps } = fakeNetwork({ 'a.example': ['10.0.0.7'] })
+    const secretUrl = (scheme: string) =>
+      `${scheme}://user:hunter2@a.example/img.png?X-Amz-Signature=s3cr3t&token=t0k3n#frag`
+    await expectBlocked(safeFetch(secretUrl('http'), {}, deps))
+    await expectBlocked(safeFetch(secretUrl('ftp')), 'url_scheme_not_allowed')
+    const prev = process.env.PASCAL_ALLOWED_ASSET_ORIGINS
+    process.env.PASCAL_ALLOWED_ASSET_ORIGINS = 'https://cdn.example.com'
+    try {
+      await expectBlocked(safeFetch(secretUrl('https')), 'url_origin_not_allowlisted')
+    } finally {
+      if (prev === undefined) delete process.env.PASCAL_ALLOWED_ASSET_ORIGINS
+      else process.env.PASCAL_ALLOWED_ASSET_ORIGINS = prev
+    }
+    const lines = errorLog.mock.calls.map((args) => String(args[0]))
+    expect(lines).toHaveLength(3)
+    const logged = lines.map((line) => JSON.parse(line.slice(line.indexOf('{'))).url)
+    expect(logged).toEqual([
+      'http://a.example/img.png',
+      'ftp://a.example/img.png',
+      'https://a.example/img.png',
+    ])
+    for (const line of lines) {
+      for (const secret of ['s3cr3t', 't0k3n', 'frag', 'hunter2', 'user', '?']) {
+        expect(line).not.toContain(secret)
+      }
+    }
+  })
+
+  test('never reads redirect or error bodies', async () => {
+    const redirect = largeResponse(302, { location: 'http://b.example/final' })
+    const failure = largeResponse(500)
+    const { deps } = fakeNetwork(
+      { 'a.example': [PUBLIC_V4], 'b.example': [PUBLIC_V4] },
+      {
+        'http://a.example/redirect': () => redirect.res,
+        'http://b.example/final': () => response(200, {}, 'ok'),
+        'http://a.example/error': () => failure.res,
+      },
+    )
+    const result = await safeFetch('http://a.example/redirect', {}, deps)
+    expect(result.buffer.toString()).toBe('ok')
+    await expectBlocked(safeFetch('http://a.example/error', {}, deps), 'fetch_failed')
+    // Settles on destroy, or only after a full drain if the body were read.
+    await Promise.all([redirect.res, failure.res].map((res) => finished(res).catch(() => {})))
+    expect(redirect.res.destroyed).toBe(true)
+    expect(failure.res.destroyed).toBe(true)
+    expect(redirect.bytesRead).toBe(0)
+    expect(failure.bytesRead).toBe(0)
   })
 
   test('rejects malformed URL', async () => {
