@@ -1,12 +1,12 @@
 import { createHash } from 'node:crypto'
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createCompiledCatalog, getCatalogs } from '@lingui/cli/api'
 import { getConfig } from '@lingui/conf'
 import { compileMessageOrThrow } from '@lingui/message-utils/compileMessage'
 import { type PoFile, type PoItem, parsePo, stringifyPo } from 'pofile-ts'
-import { baseRevision, readAtRevision } from './i18n-git'
+import { baseRevision, lastReleaseTag, readAtRevision } from './i18n-git'
 import { checkRepositoryLiterals } from './i18n-literals'
 
 export type SourceMessage = {
@@ -48,7 +48,9 @@ type Glossary = {
 type CompiledToken = string | [name: string, type?: string, choices?: unknown]
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
-const CATALOG_ROOT = join(ROOT, 'packages/editor/src/i18n/locales')
+const CATALOG_ROOT = process.env.I18N_CATALOG_ROOT
+  ? resolve(process.env.I18N_CATALOG_ROOT)
+  : join(ROOT, 'packages/editor/src/i18n/locales')
 const GLOSSARY_PATH = join(ROOT, 'i18n/glossary.json')
 const LINGUI_BIN = join(ROOT, 'node_modules/.bin/lingui')
 const TARGET_LOCALES = ['zh-CN', 'fr', 'es', 'ja'] as const
@@ -847,24 +849,110 @@ export function reviewRegressions(
   return errors
 }
 
+function isApproved(entry: TranslationEntry | undefined, source: SourceMessage): boolean {
+  return Boolean(
+    entry?.translation &&
+      !entry.fuzzy &&
+      entry.review === 'human' &&
+      entry.sourceHash === hashSource(source.message),
+  )
+}
+
+/** The compiled module a browser loads for one locale, as message IDs. */
+export function readCompiledPack(locale: string): Record<string, unknown> {
+  const text = readFileSync(compiledCatalogPath(locale), 'utf8')
+  const literal = text.match(/JSON\.parse\(("(?:[^"\\]|\\.)*")\)/)?.[1]
+  if (!literal)
+    throw new Error(`${relative(ROOT, compiledCatalogPath(locale))} has no compiled messages`)
+  return JSON.parse(JSON.parse(literal) as string) as Record<string, unknown>
+}
+
+/**
+ * Inspects the shipped packs themselves: a draft (fuzzy, `Review: required`,
+ * unreviewed or stale) must never be compiled in, whatever produced the file.
+ */
+export function packLeaks(
+  sources: SourceMessage[],
+  current: LocaleEntries,
+  packs: Record<string, Record<string, unknown>>,
+): string[] {
+  const byId = new Map(sources.map((source) => [source.id, source]))
+  const errors: string[] = []
+  for (const locale of TARGET_LOCALES) {
+    for (const id of Object.keys(packs[locale] ?? {})) {
+      const source = byId.get(id)
+      if (!source || !isApproved(current[locale]?.[id], source)) {
+        errors.push(`${locale}: compiled pack ships unreviewed "${id}"`)
+      }
+    }
+  }
+  return errors
+}
+
+export function draftCounts(
+  sources: SourceMessage[],
+  current: LocaleEntries,
+): Record<string, number> {
+  return Object.fromEntries(
+    TARGET_LOCALES.map((locale) => [
+      locale,
+      sources.filter((source) => !isApproved(current[locale]?.[source.id], source)).length,
+    ]),
+  )
+}
+
+function writeJobSummary(sources: SourceMessage[], current: LocaleEntries, base?: string): void {
+  const path = process.env.GITHUB_STEP_SUMMARY
+  if (!path) return
+  const counts = draftCounts(sources, current)
+  const rows = TARGET_LOCALES.map((locale) => `| ${locale} | ${counts[locale]} |`)
+  appendFileSync(
+    path,
+    [
+      '### Translations awaiting review',
+      '',
+      `Drafts ship as English until reviewed. ${sources.length} messages${base ? `; compared with ${base.slice(0, 12)}` : ''}.`,
+      '',
+      '| Locale | Drafts |',
+      '| --- | --- |',
+      ...rows,
+      '',
+    ].join('\n'),
+  )
+}
+
+function currentEntries(): LocaleEntries {
+  return readLocaleEntries((path) => readFileSync(path, 'utf8'))
+}
+
+function compiledPacks(): Record<string, Record<string, unknown>> {
+  return Object.fromEntries(TARGET_LOCALES.map((locale) => [locale, readCompiledPack(locale)]))
+}
+
+/** Regression and leak checks shared by `check` (CI) and `release-check` (release). */
+export function releaseCheck(sources: SourceMessage[], base: LocaleEntries | undefined): string[] {
+  const current = currentEntries()
+  return [
+    ...(base ? reviewRegressions(sources, current, base) : []),
+    ...packLeaks(sources, current, compiledPacks()),
+  ]
+}
+
 function checkCatalogMessages(
   sources: SourceMessage[],
   glossary: Glossary,
   options: CatalogCheckOptions = { requireReviewed: true },
 ): string[] {
-  const current = readLocaleEntries((path) => readFileSync(path, 'utf8'))
-  const errors = checkTranslationEntries(sources, current, glossary, options)
+  const current = currentEntries()
   const base = baseRevision()
-  if (base) {
-    errors.push(
-      ...reviewRegressions(
-        sources,
-        current,
-        readLocaleEntries((path) => readAtRevision(base, path)),
-      ),
-    )
-  }
-  return errors
+  writeJobSummary(sources, current, base)
+  return [
+    ...checkTranslationEntries(sources, current, glossary, options),
+    ...releaseCheck(
+      sources,
+      base ? readLocaleEntries((path) => readAtRevision(base, path)) : undefined,
+    ),
+  ]
 }
 
 function checkEnglishCatalog(
@@ -932,6 +1020,38 @@ async function main(): Promise<void> {
     return
   }
 
+  if (command === 'release-check') {
+    const flag = (name: string) => {
+      const index = process.argv.indexOf(`--${name}`)
+      return index === -1 ? undefined : process.argv[index + 1]
+    }
+    const baseDir = flag('base-dir')
+    const revision = baseDir ? undefined : (flag('base') ?? lastReleaseTag() ?? baseRevision())
+    if (!(baseDir || revision)) {
+      throw new Error(
+        'release-check needs a base: the last v* tag, --base <rev> or --base-dir <dir>',
+      )
+    }
+    const base = baseDir
+      ? readLocaleEntries((path) => {
+          const file = join(resolve(baseDir), relative(CATALOG_ROOT, path))
+          return existsSync(file) ? readFileSync(file, 'utf8') : undefined
+        })
+      : readLocaleEntries((path) => readAtRevision(revision!, path))
+    const sources = readSourceMessages()
+    writeJobSummary(sources, currentEntries(), revision)
+    const errors = releaseCheck(sources, base)
+    if (errors.length > 0) {
+      console.error(errors.map((error) => `[i18n] ${error}`).join('\n'))
+      process.exitCode = 1
+      return
+    }
+    console.log(
+      `No reviewed translation regressed against ${baseDir ?? revision} and no draft is compiled in`,
+    )
+    return
+  }
+
   if (command === 'check') {
     const requireReviewed = process.argv.includes('--reviewed')
     const errors = await checkCatalogs({ requireReviewed })
@@ -987,7 +1107,7 @@ async function main(): Promise<void> {
   }
 
   throw new Error(
-    'Usage: bun scripts/i18n.ts <extract|compile|check [--reviewed]|translate> [locale...]',
+    'Usage: bun scripts/i18n.ts <extract|compile|check [--reviewed]|release-check [--base <rev>|--base-dir <dir>]|translate> [locale...]',
   )
 }
 

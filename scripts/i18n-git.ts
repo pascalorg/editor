@@ -33,3 +33,9 @@ export function baseRevision(): string | undefined {
 export function readAtRevision(revision: string, path: string): string | undefined {
   return git(['show', `${revision}:${relative(ROOT, path)}`])
 }
+
+/** The newest `v*` release tag reachable from HEAD, as a commit. */
+export function lastReleaseTag(): string | undefined {
+  const tag = git(['describe', '--tags', '--abbrev=0', '--match', 'v[0-9]*', 'HEAD'])?.trim()
+  return tag ? git(['rev-parse', '--verify', '--quiet', `${tag}^{commit}`])?.trim() : undefined
+}

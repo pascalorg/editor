@@ -1,5 +1,9 @@
 import { expect, test } from 'bun:test'
+import { cpSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { compileMessageOrThrow } from '@lingui/message-utils/compileMessage'
+import { parsePo, stringifyPo } from 'pofile-ts'
 import {
   annotatedState,
   checkTranslationEntries,
@@ -344,4 +348,74 @@ test('extraction never approves a newly filled translation by itself', () => {
   expect(annotatedState({ ...pasted, review: 'human', sourceHash: hash }, 'Avancé', hash)).toBe(
     undefined,
   )
+})
+
+const LOCALES_DIR = 'packages/editor/src/i18n/locales'
+
+/** A copy of the real catalogs to run the release job against, edited per case. */
+function catalogFixture(edit: (root: string) => void): { current: string; base: string } {
+  const root = mkdtempSync(join(tmpdir(), 'pascal-i18n-'))
+  const base = join(root, 'base')
+  const current = join(root, 'current')
+  cpSync(LOCALES_DIR, base, { recursive: true })
+  cpSync(LOCALES_DIR, current, { recursive: true })
+  edit(current)
+  return { current, base }
+}
+
+function releaseCheckJob(fixture: { current: string; base: string }) {
+  const result = Bun.spawnSync(
+    ['bun', 'scripts/i18n.ts', 'release-check', '--base-dir', fixture.base],
+    {
+      env: { ...process.env, I18N_CATALOG_ROOT: fixture.current, GITHUB_STEP_SUMMARY: '' },
+      stdout: 'pipe',
+      stderr: 'pipe',
+    },
+  )
+  return { exitCode: result.exitCode, output: `${result.stdout}${result.stderr}` }
+}
+
+function markDraft(root: string, id: string): void {
+  const path = join(root, 'fr/messages.po')
+  const po = parsePo(readFileSync(path, 'utf8'))
+  const item = po.items.find((entry) => entry.msgid === id)
+  if (!item) throw new Error(`fixture entry ${id} moved`)
+  item.comments = item.comments.map((comment) =>
+    comment.startsWith('Review: ') ? 'Review: required' : comment,
+  )
+  item.flags.fuzzy = true
+  writeFileSync(path, stringifyPo(po, { foldLength: 0 }))
+}
+
+test('the release job passes on unchanged catalogs', () => {
+  expect(releaseCheckJob(catalogFixture(() => {})).exitCode).toBe(0)
+})
+
+test('the release job fails when a reviewed entry becomes a draft with the same English', () => {
+  const { exitCode, output } = releaseCheckJob(
+    catalogFixture((root) => markDraft(root, 'editor.buildPanel.advanced')),
+  )
+  expect(exitCode).toBe(1)
+  expect(output).toContain(
+    'fr: "editor.buildPanel.advanced" is reviewed on the base branch with the same English and must stay reviewed',
+  )
+})
+
+test('the release job fails when a compiled pack ships a draft', () => {
+  const { exitCode, output } = releaseCheckJob(
+    catalogFixture((root) => {
+      const path = join(root, 'fr/messages.ts')
+      const pack = readFileSync(path, 'utf8')
+      const draftId = parsePo(readFileSync(join(root, 'fr/messages.po'), 'utf8')).items.find(
+        (item) => item.flags.fuzzy,
+      )?.msgid
+      if (!draftId) throw new Error('fixture has no draft')
+      writeFileSync(
+        path,
+        pack.replace('JSON.parse("{', `JSON.parse("{\\"${draftId}\\":[\\"Brouillon\\"],`),
+      )
+    }),
+  )
+  expect(exitCode).toBe(1)
+  expect(output).toMatch(/fr: compiled pack ships unreviewed "[^"]+"/)
 })
