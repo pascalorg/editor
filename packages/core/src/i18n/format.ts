@@ -92,8 +92,14 @@ export function formatNumber(value: number, options: NumberFormatOptions = {}): 
   }
 }
 
-/** Names in a sentence ("Kitchen, Hall"), with the locale's separators. */
+/**
+ * Names listed in a sentence. English keeps the plain comma list the editor has
+ * always written ("Kitchen, Hall, Bath"); other locales use their own list
+ * separators and conjunction (Japanese "Kitchen、Hall、Bath", French
+ * "Kitchen, Hall et Bath"), which a comma join gets wrong.
+ */
 export function formatList(items: readonly string[], locale = 'en'): string {
+  if (/^en\b/i.test(locale)) return items.join(', ')
   try {
     return new Intl.ListFormat([locale, 'en'], { type: 'conjunction' }).format(items)
   } catch {
