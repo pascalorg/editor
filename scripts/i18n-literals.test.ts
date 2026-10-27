@@ -13,8 +13,14 @@ import {
   reviewRegressions,
   type SourceMessage,
 } from './i18n'
-import { convertSource, IdRegistry, namespaceFor } from './i18n-codemod'
-import { type Candidate, checkLiterals, scanSource } from './i18n-literals'
+import {
+  convertSource,
+  editorEntryModuleSet,
+  IdRegistry,
+  icuLiteral,
+  namespaceFor,
+} from './i18n-codemod'
+import { type Candidate, checkAllowlistGrowth, checkLiterals, scanSource } from './i18n-literals'
 import { untranslatedWords } from './i18n-pseudo-audit'
 
 const allowlist = { texts: ['Pascal'], paths: {} }
@@ -103,6 +109,71 @@ const ROUTES = [{ name: 'home' }]
   expect(output).toContain('ROUTES = [{ name: /* i18n */')
 })
 
+test('hooks are never placed in named callbacks or async functions', () => {
+  const source = `'use client'
+export function List({ items }: { items: string[] }) {
+  return <ul>{items.map(function Row(item) { return <li key={item}>Remove item</li> })}</ul>
+}
+export async function Page() {
+  return <p>Loading projects</p>
+}
+`
+  const { output, planned } = convert('packages/editor/src/components/list.tsx', source)
+  expect(output).toBe(source)
+  expect(planned.map((item) => item.manual)).toEqual([
+    expect.stringContaining('inside a callback function'),
+    expect.stringContaining('inside an async function'),
+  ])
+})
+
+test('package entry modules without use client are left for a person', () => {
+  const [entry] = [...editorEntryModuleSet()].filter((path) => path.endsWith('.tsx'))
+  if (!entry) throw new Error('the editor entry exports no .tsx module')
+  const source = `export function Badge() {\n  return <span>New feature</span>\n}\n`
+  expect(convert(entry, source).planned[0]?.manual).toContain('server component')
+  expect(convert(entry, `'use client'\n${source}`).planned[0]?.manual).toBeUndefined()
+})
+
+test('a second --vars pass leaves existing descriptors alone', () => {
+  const source = `const LABELS: Record<string, string> = { up: 'Full height' }\n`
+  const targets = { variables: new Set(['LABELS']) }
+  const once = convertSource(
+    'apps/editor/components/t.tsx',
+    source,
+    new IdRegistry(),
+    new Set(),
+    targets,
+  ).output
+  const twice = convertSource(
+    'apps/editor/components/t.tsx',
+    once,
+    new IdRegistry(),
+    new Set(),
+    targets,
+  ).output
+  expect(once).toContain("/* i18n */ { id: 'app.t.fullHeight', message: 'Full height' }")
+  expect(twice).toBe(once)
+})
+
+test('ICU encoding and entity decoding render the original text', () => {
+  for (const text of [
+    'Use {}',
+    "Don't",
+    "a '{'",
+    "''",
+    'x}{y',
+    "{'}",
+    "it's {x} isn't",
+    "a'#b",
+    "'|'",
+  ]) {
+    expect((compileMessageOrThrow(icuLiteral(text)) as string[]).join('')).toBe(text)
+  }
+  const source = `'use client'\nexport function T() {\n  return <p>Use {'{}'} &amp; it&apos;s&nbsp;done&hellip;</p>\n}\n`
+  const message = convert('packages/editor/src/components/t.tsx', source).planned[0]?.message ?? ''
+  expect((compileMessageOrThrow(message) as string[]).join('')).toBe("Use {} & it's\u00a0done…")
+})
+
 test('app modules without use client are left for a person', () => {
   const source = `export function AppHeader() {
   return <a aria-label="Pascal home" href="/" />
@@ -166,9 +237,64 @@ test('the baseline may only shrink relative to the base branch', () => {
     { version: 2, files: { 'a.tsx': ['Copy', 'Share'] } },
     { version: 2, files: { 'a.tsx': ['Share'] } },
   )
-  expect(errors).toEqual([
-    'a.tsx: i18n/literal-baseline.json adds "Copy" relative to the base branch; the baseline may only shrink',
+  expect(errors).toHaveLength(1)
+  expect(errors[0]).toContain('"Copy" (a.tsx)')
+})
+
+test('copy that moves with a git mv, a split or an extraction does not grow the baseline', () => {
+  const scan = new Map([
+    ['new.tsx', [candidate('Share'), candidate('Copy')]],
+    ['extracted.tsx', [candidate('Delete')]],
   ])
+  const baseline = {
+    version: 2 as const,
+    files: { 'new.tsx': ['Copy', 'Share'], 'extracted.tsx': ['Delete'] },
+  }
+  const base = { version: 2 as const, files: { 'old.tsx': ['Copy', 'Delete', 'Share'] } }
+  expect(checkLiterals(scan, baseline, base).errors).toEqual([])
+
+  const duplicated = { version: 2 as const, files: { ...baseline.files, 'copy.tsx': ['Share'] } }
+  expect(checkLiterals(scan, duplicated, base).errors[0]).toContain('"Share" (new.tsx, copy.tsx)')
+})
+
+test('the allowlist may not gain exemptions relative to the base', () => {
+  expect(
+    checkAllowlistGrowth(
+      {
+        texts: ['Pascal', 'Delete'],
+        paths: { 'apps/editor/app/dev/': 'dev', 'packages/x/': 'why' },
+      },
+      { texts: ['Pascal'], paths: { 'apps/editor/app/dev/': 'dev' } },
+    ),
+  ).toEqual([
+    'i18n/literal-allowlist.json adds the text "Delete"; exempt one use with i18n-ignore: <reason> instead',
+    'i18n/literal-allowlist.json adds the path "packages/x/"; exempting a path needs a reviewed exception',
+  ])
+  expect(checkAllowlistGrowth({ texts: ['Pascal'], paths: {} }, undefined)).toEqual([])
+})
+
+test('equivalent JSX spellings scan to the same rendered text', () => {
+  const texts = (body: string) =>
+    scanSource(
+      'packages/editor/src/components/share.tsx',
+      `export function Share() {\n  return <p>${body}</p>\n}\n`,
+      allowlist,
+    ).map((found) => found.text)
+  expect(texts("Share{' '}project")).toEqual(['Share project'])
+  expect(texts('Share project')).toEqual(['Share project'])
+  expect(texts('Tom&nbsp;&amp;&hellip;')).toEqual(['Tom\u00a0&…'])
+})
+
+test('constants rendered inside a sentence and concatenated copy are scanned', () => {
+  const scan = (label: string) =>
+    scanSource(
+      'packages/editor/src/components/when.tsx',
+      `const LABEL = '${label}'\nexport function When({ name }: { name: string }) {\n  return (\n    <div>\n      <p>{LABEL} now</p>\n      <span>{'Delete ' + name}</span>\n    </div>\n  )\n}\n`,
+      allowlist,
+    )
+  expect(scan('Save').map((found) => found.text)).toEqual(['Save now', 'Delete {?}'])
+  expect(scan('Publish')[0]?.text).toBe('Publish now')
+  expect(scan('Save')[1]?.manual).toContain('concatenated copy')
 })
 
 test('an i18n-ignore comment exempts data that only looks like copy', () => {
@@ -330,6 +456,24 @@ test('a reviewed translation cannot fall back to draft while its English is unch
   expect(
     reviewRegressions([reworded], everyLocale(entry({ review: 'required', fuzzy: true })), base),
   ).toEqual([])
+})
+
+test('renaming a reviewed ID with the same English needs a carried-over or new review', () => {
+  const renamed = { ...advanced, id: 'editor.buildPanel.advancedTools' }
+  const base = everyLocale(entry({}))
+  const drafted: LocaleEntries = Object.fromEntries(
+    ['zh-CN', 'fr', 'es', 'ja'].map((locale) => [
+      locale,
+      { [renamed.id]: entry({ review: 'required', fuzzy: true }) },
+    ]),
+  )
+  expect(reviewRegressions([renamed], drafted, base)).toContain(
+    'fr: "editor.buildPanel.advancedTools" replaces the reviewed "editor.buildPanel.advanced" with the same English; carry the reviewed translation over (Review: human) or review it again',
+  )
+  const carried: LocaleEntries = Object.fromEntries(
+    ['zh-CN', 'fr', 'es', 'ja'].map((locale) => [locale, { [renamed.id]: entry({}) }]),
+  )
+  expect(reviewRegressions([renamed], carried, base)).toEqual([])
 })
 
 test('extraction never approves a newly filled translation by itself', () => {

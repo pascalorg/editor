@@ -58,8 +58,11 @@ CI and releases allow drafts, never regressions:
   prints how many entries each locale still has awaiting review.
 - A translation that is `Review: human` on the base branch must stay reviewed
   while its English is unchanged. A PR may edit it, but turning it back into a
-  draft fails CI. CI compares with the pull request's base commit; locally
-  `i18n:check` compares with the merge base of `origin/main`, or
+  draft fails CI. Renaming a reviewed ID while keeping its English fails too,
+  until the reviewed translation is carried over or reviewed again: the same
+  English in a new place is not approved automatically. CI compares with the
+  pull request's base commit, or on a push with the commit before the push;
+  locally `i18n:check` compares with the merge base of `origin/main`, or
   `I18N_BASE_REF`.
 - Releases ship drafts as English until they are reviewed.
 - `bun scripts/i18n.ts release-check` runs in the release workflow and, as part
@@ -79,16 +82,20 @@ literals: JSX text, string-valued `aria-*`, `title`, `placeholder`, `alt`,
 `label`, `tooltip`, `description`… props, display keys (`label`, `title`,
 `placeholder`, `tooltip`…) in objects, and `toast`/`alert`/`confirm`/`setError`
 payloads (also in `.ts` modules), including `const` strings rendered by name
-in JSX or a UI prop. Hyphenated words ("Read-only") count as copy; icon names,
-paths and snake_case keys do not. `i18n/literal-baseline.json` lists, per
+in JSX, a UI prop or inside a sentence, and copy built with `+`. Hyphenated
+words ("Read-only") count as copy; icon names, paths and snake_case keys do
+not. JSX text is recorded as it renders (whitespace rules, entities, `{' '}`
+joins), so equivalent spellings match. `i18n/literal-baseline.json` lists, per
 file, the legacy candidates by text. A file may only contain copy its entry
 lists, so adding or swapping a string fails, and a file missing from the
 baseline (every new file) must have none. When a PR converts copy, run
 `bun run i18n:literals -- update` to remove it from the baseline. The baseline
-may only shrink: CI fails when it lists anything the base branch's baseline
-does not.
+may only shrink, measured across the repository: CI fails when it lists a text
+more often than the base branch's baseline does. Copy that moves with a
+renamed, split or extracted file therefore passes after `update`.
 
-Not every literal is copy. Exemptions are explicit and reviewed:
+Not every literal is copy. Exemptions are explicit and reviewed; the allowlist,
+like the baseline, may not gain entries relative to the base:
 
 - `i18n/literal-allowlist.json` lists exact strings that are never translated
   (brands, file formats, unit symbols, modifier key names) and developer-only
@@ -110,10 +117,14 @@ notification payloads into `i18n._({ id, message, values })`. Adjacent text and
 simple interpolations become one message (`Shared with {count} people`). It
 adds `const i18n = usePascalI18n()` to the owning component or hook and the
 import. IDs follow the owning package and path (`app.editorNavbar.share`,
-`editor.sidebar.sitePanel.addLevel`, `node.roofSegment.inspector.pitch`). The
-codemod does not rewrite module-level data (unless asked, below), server components or complex
-template interpolations. It lists them as `MANUAL` for a person to
-restructure. A second run changes nothing.
+`editor.sidebar.sitePanel.addLevel`, `node.roofSegment.inspector.pitch`).
+Copy is ICU-encoded so the message renders exactly the original text. The
+codemod leaves these for a person and lists them as `MANUAL`: module-level data
+(unless asked, below), complex template interpolations, concatenated copy,
+string constants, copy inside named callbacks or async functions, and modules a
+host can render on the server (app modules and editor package entry exports
+without `'use client'`). A second run changes nothing, including a repeated
+`--vars` pass.
 
 Module data (option arrays, label maps) cannot call a hook. Name its keys or
 variables and the codemod turns those values into lazy descriptors that Lingui
