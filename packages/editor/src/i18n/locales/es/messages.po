@@ -9679,6 +9679,126 @@ msgstr "Estancia rectangular"
 msgid "editor.lib.wallDrawVariant.walls"
 msgstr "Muros"
 
+# Review: required
+# Source-Hash: c2626e1fbf89b3c9
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "{action, select, close {Close} open {Open} stop {Stop} other {Play}}"
+#: packages/editor/src/components/editor/registry-action-contributions.tsx
+#, fuzzy
+msgid "editor.mechanismAction"
+msgstr "{action, select, close {Cerrar} open {Abrir} stop {Detener} other {Reproducir}}"
+
+# Review: required
+# Source-Hash: f08fbb462e9afc0e
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Curve"
+#: packages/editor/src/components/editor/node-action-menu.tsx
+#, fuzzy
+msgid "editor.nodeActionMenu.curve"
+msgstr "Curva"
+
+# Review: required
+# Source-Hash: 5af05fb6661e4d6a
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Cut out"
+#: packages/editor/src/components/editor/node-action-menu.tsx
+#, fuzzy
+msgid "editor.nodeActionMenu.cutOut"
+msgstr "Recortar"
+
+# Review: required
+# Source-Hash: b26de372b4b0eaac
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Delete"
+#: packages/editor/src/components/editor/node-action-menu.tsx
+#, fuzzy
+msgid "editor.nodeActionMenu.delete"
+msgstr "Eliminar"
+
+# Review: required
+# Source-Hash: 34dc96fe77a31e51
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Duplicate"
+#: packages/editor/src/components/editor/node-action-menu.tsx
+#, fuzzy
+msgid "editor.nodeActionMenu.duplicate"
+msgstr "Duplicar"
+
+# Review: required
+# Source-Hash: 94b212bd79c05141
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Edit mesh"
+#: packages/editor/src/components/editor/node-action-menu.tsx
+#, fuzzy
+msgid "editor.nodeActionMenu.editMesh"
+msgstr "Editar malla"
+
+# Review: required
+# Source-Hash: ce90cf37224f73cd
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Find in catalog"
+#: packages/editor/src/components/editor/node-action-menu.tsx
+#, fuzzy
+msgid "editor.nodeActionMenu.findInCatalog"
+msgstr "Buscar en el catálogo"
+
+# Review: required
+# Source-Hash: d5e550c345e7161c
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Group selection"
+#: packages/editor/src/components/editor/node-action-menu.tsx
+#, fuzzy
+msgid "editor.nodeActionMenu.groupSelection"
+msgstr "Agrupar selección"
+
+# Review: required
+# Source-Hash: bd02c614454fbd2b
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Move"
+#: packages/editor/src/components/editor/node-action-menu.tsx
+#, fuzzy
+msgid "editor.nodeActionMenu.move"
+msgstr "Mover"
+
+# Review: required
+# Source-Hash: 473a9d4463761107
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Rotate left"
+#: packages/editor/src/components/editor/node-action-menu.tsx
+#, fuzzy
+msgid "editor.nodeActionMenu.rotateLeft"
+msgstr "Girar a la izquierda"
+
+# Review: required
+# Source-Hash: b1bf4e65c8d8c8ef
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Rotate right"
+#: packages/editor/src/components/editor/node-action-menu.tsx
+#, fuzzy
+msgid "editor.nodeActionMenu.rotateRight"
+msgstr "Girar a la derecha"
+
+# Review: required
+# Source-Hash: 6f4dbbc4a3f58fca
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Ungroup selection"
+#: packages/editor/src/components/editor/node-action-menu.tsx
+#, fuzzy
+msgid "editor.nodeActionMenu.ungroupSelection"
+msgstr "Desagrupar selección"
+
 # Source-Hash: 4275c05172abd7fb
 # Review: required
 # AI-Provider: cursor-agent
@@ -11420,15 +11540,15 @@ msgstr "A {height}"
 msgid "editor.panels.roomConstructionRows.closeWithWalls"
 msgstr "Cerrar con muros"
 
-# Source-Hash: d704b34f1e8c6b1f
-# Review: required
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
-# English: "{ambiguous, select, yes {Floor is several drawn slabs, mostly {name}} other {Floor is a drawn slab: {name}}}{shared, plural, =0 {} one { (shared with # room)} other { (shared with # rooms)}}"
+# Source-Hash: 75c84b4f21aefde4
+# Review: required
+# English: "{ambiguous, select, yes {Floor is several drawn slabs, mostly {name}} other {Floor is a drawn slab: {name}}}{shared, plural, =0 {} one { (shared with {sharedCount} room)} other { (shared with {sharedCount} rooms)}}"
 #: packages/editor/src/components/ui/panels/room-construction-rows.tsx
 #, fuzzy
 msgid "editor.panels.roomConstructionRows.drawnFloor"
-msgstr "{ambiguous, select, yes {El suelo son varios forjados dibujados, sobre todo {name}} other {El suelo es un forjado dibujado: {name}}}{shared, plural, =0 {} one { (compartido con # estancia)} many { (compartido con # estancias)} other { (compartido con # estancias)}}"
+msgstr "{ambiguous, select, yes {El suelo son varios forjados dibujados, sobre todo {name}} other {El suelo es un forjado dibujado: {name}}}{shared, plural, =0 {} one { (compartido con {sharedCount} estancia)} many { (compartido con {sharedCount} estancias)} other { (compartido con {sharedCount} estancias)}}"
 
 # Source-Hash: 97e0fab8ffda6d6c
 # Review: required
@@ -12090,15 +12210,15 @@ msgstr "Ninguno"
 msgid "editor.panels.roomPanel.notEnoughHeadroom"
 msgstr "Altura libre insuficiente"
 
-# Source-Hash: 92f7bc961d784f6a
-# Review: required
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
-# English: "{doors, plural, one {# door} other {# doors}} · {windows, plural, one {# window} other {# windows}}"
+# Source-Hash: 81a6770092b05d48
+# Review: required
+# English: "{doors, plural, one {{doorCount} door} other {{doorCount} doors}} · {windows, plural, one {{windowCount} window} other {{windowCount} windows}}"
 #: packages/editor/src/components/ui/panels/room-panel.tsx
 #, fuzzy
 msgid "editor.panels.roomPanel.openingCounts"
-msgstr "{doors, plural, one {# puerta} many {# puertas} other {# puertas}} · {windows, plural, one {# ventana} many {# ventanas} other {# ventanas}}"
+msgstr "{doors, plural, one {{doorCount} puerta} many {{doorCount} puertas} other {{doorCount} puertas}} · {windows, plural, one {{windowCount} ventana} many {{windowCount} ventanas} other {{windowCount} ventanas}}"
 
 # Source-Hash: a8cd9507ce472a48
 # Review: required
@@ -12401,6 +12521,116 @@ msgstr "Eliminar región"
 msgid "editor.panels.wallRegionList.paintRegions"
 msgstr "Regiones de pintura"
 
+# Review: required
+# Source-Hash: 89ee318aad485f83
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Adjust design"
+#: packages/editor/src/components/procedural-items/inspector.tsx
+#, fuzzy
+msgid "editor.proceduralItems.inspector.adjustDesign"
+msgstr "Ajustar diseño"
+
+# Review: required
+# Source-Hash: 7ceade8f25b58fe9
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Back"
+#: packages/editor/src/components/procedural-items/inspector.tsx
+#, fuzzy
+msgid "editor.proceduralItems.inspector.back"
+msgstr "Volver"
+
+# Review: required
+# Source-Hash: ba9b68175315e177
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Edit parts"
+#: packages/editor/src/components/procedural-items/inspector.tsx
+#, fuzzy
+msgid "editor.proceduralItems.inspector.editParts"
+msgstr "Editar piezas"
+
+# Review: required
+# Source-Hash: 07c62820f014ed6c
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Invalid attachment"
+#: packages/editor/src/components/procedural-items/inspector.tsx
+#, fuzzy
+msgid "editor.proceduralItems.inspector.invalidAttachment"
+msgstr "Fijación no válida"
+
+# Review: required
+# Source-Hash: f862aea8d7957c55
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Invalid edit"
+#: packages/editor/src/components/procedural-items/inspector.tsx
+#, fuzzy
+msgid "editor.proceduralItems.inspector.invalidEdit"
+msgstr "Edición no válida"
+
+# Review: required
+# Source-Hash: 190cf30b8edd8dd1
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Invalid placement"
+#: packages/editor/src/components/procedural-items/inspector.tsx
+#, fuzzy
+msgid "editor.proceduralItems.inspector.invalidPlacement"
+msgstr "Colocación no válida"
+
+# Review: required
+# Source-Hash: 45bd2ec690cc48dc
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Invalid position"
+#: packages/editor/src/components/procedural-items/inspector.tsx
+#, fuzzy
+msgid "editor.proceduralItems.inspector.invalidPosition"
+msgstr "Posición no válida"
+
+# Review: required
+# Source-Hash: faccab895717c598
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Invalid reset"
+#: packages/editor/src/components/procedural-items/inspector.tsx
+#, fuzzy
+msgid "editor.proceduralItems.inspector.invalidReset"
+msgstr "Restablecimiento no válido"
+
+# Review: required
+# Source-Hash: 28fe6e9deddde6e8
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "pos"
+#: packages/editor/src/components/procedural-items/inspector.tsx
+#, fuzzy
+msgid "editor.proceduralItems.inspector.pos"
+msgstr "pos"
+
+# Review: required
+# Source-Hash: 9da0cbfad144d737
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Position"
+#: packages/editor/src/components/procedural-items/inspector.tsx
+#, fuzzy
+msgid "editor.proceduralItems.inspector.position"
+msgstr "Posición"
+
+# Review: required
+# Source-Hash: 3fce677837d5a876
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Reset this part"
+#: packages/editor/src/components/procedural-items/inspector.tsx
+#, fuzzy
+msgid "editor.proceduralItems.inspector.resetThisPart"
+msgstr "Restablecer esta pieza"
+
 # Source-Hash: 5eab376947d29a50
 # Review: required
 # AI-Provider: cursor-agent
@@ -12410,6 +12640,97 @@ msgstr "Regiones de pintura"
 #, fuzzy
 msgid "editor.reloadEditor"
 msgstr "Recargar el editor"
+
+# Review: required
+# Source-Hash: 1063f1e315258b20
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Close riser diagram"
+#: packages/editor/src/components/editor/riser-diagram-panel.tsx
+#, fuzzy
+msgid "editor.riserDiagramPanel.close"
+msgstr "Cerrar diagrama de bajantes"
+
+# Review: required
+# Source-Hash: c2d59ee62035974c
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "DWV plumbing isometric"
+#: packages/editor/src/components/editor/riser-diagram-panel.tsx
+#, fuzzy
+msgid "editor.riserDiagramPanel.dwvPlumbingIsometric"
+msgstr "Isometría de saneamiento y ventilación"
+
+# Review: required
+# Source-Hash: 3501a7c8a93d3b19
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "DWV riser diagram"
+#: packages/editor/src/components/editor/riser-diagram-panel.tsx
+#, fuzzy
+msgid "editor.riserDiagramPanel.dwvRiserDiagram"
+msgstr "Diagrama de bajantes de saneamiento"
+
+# Review: required
+# Source-Hash: 225e3e3dc3bb01ee
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "No drain, waste, or vent pipes yet. Draw plumbing to see the riser diagram."
+#: packages/editor/src/components/editor/riser-diagram-panel.tsx
+#, fuzzy
+msgid "editor.riserDiagramPanel.noDrainWasteOrVentPipes"
+msgstr "Aún no hay tuberías de desagüe, saneamiento ni ventilación. Dibuja la fontanería para ver el diagrama de bajantes."
+
+# Review: required
+# Source-Hash: bc8e172ba55160ae
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Riser Diagram"
+#: packages/editor/src/components/editor/riser-diagram-panel.tsx
+#, fuzzy
+msgid "editor.riserDiagramPanel.riserDiagram"
+msgstr "Diagrama de bajantes"
+
+# Review: required
+# Source-Hash: 6a1132961f17f320
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "{diameter}\" P-trap"
+#: packages/editor/src/components/editor/riser-diagram-panel.tsx
+#, fuzzy
+msgid "editor.riserDiagramPanel.trap"
+msgstr "Sifón de {diameter}\""
+
+# Review: required
+# Source-Hash: 04bc0909a133a7e9
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Vent"
+#: packages/editor/src/components/editor/riser-diagram-panel.tsx
+#, fuzzy
+msgid "editor.riserDiagramPanel.vent"
+msgstr "Ventilación"
+
+# Review: required
+# Source-Hash: 02f3eef9f0fb6d9e
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "{diameter}\" VTR"
+#. Vent through roof: where a plumbing vent stack exits the roof.
+#: packages/editor/src/components/editor/riser-diagram-panel.tsx
+#, fuzzy
+msgid "editor.riserDiagramPanel.ventTermination"
+msgstr "Salida a cubierta de {diameter}\""
+
+# Review: required
+# Source-Hash: 29d8590334492601
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Waste"
+#: packages/editor/src/components/editor/riser-diagram-panel.tsx
+#, fuzzy
+msgid "editor.riserDiagramPanel.waste"
+msgstr "Desagüe"
 
 # Source-Hash: 0f8d128255bf4afa
 # Review: required
@@ -15833,6 +16154,36 @@ msgstr "Estilo de ventana: haz clic o pulsa L para cambiar"
 msgid "editor.toolHint.windowTypeClickOrPressO.wv4x35"
 msgstr "Tipo de ventana: haz clic o pulsa O para cambiar"
 
+# Review: required
+# Source-Hash: a48c4b2e4d71b08d
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Length: {field} m"
+#: packages/editor/src/components/tools/distribution/distribution-run-tool.tsx
+#, fuzzy
+msgid "editor.tools.distribution.distributionRunTool.lengthField"
+msgstr "Longitud: {field} m"
+
+# Review: required
+# Source-Hash: e53695d6669245c7
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Tab: direction"
+#: packages/editor/src/components/tools/distribution/distribution-run-tool.tsx
+#, fuzzy
+msgid "editor.tools.distribution.distributionRunTool.tabDirection"
+msgstr "Tab: dirección"
+
+# Review: required
+# Source-Hash: abb1d8c8bfb41acf
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "type a length"
+#: packages/editor/src/components/tools/distribution/distribution-run-tool.tsx
+#, fuzzy
+msgid "editor.tools.distribution.distributionRunTool.typeALength"
+msgstr "escribe una longitud"
+
 # Source-Hash: 9fc7a39bc32f287a
 # Review: required
 # AI-Provider: cursor-agent
@@ -19124,15 +19475,15 @@ msgstr "Mover a {level}"
 msgid "node.roof.panel.moveToTheRoofLevel"
 msgstr "Mover a la planta de cubierta"
 
-# Source-Hash: cbdb8b34db71e987
-# Review: required
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
-# English: "On {storey} with its walls, so it hides that floor's plan in solo and exploded views.{roofs, plural, =0 {} =1 {} other { The floor's # roofs move together.}}"
+# Source-Hash: 0939fad1cb1831f0
+# Review: required
+# English: "On {storey} with its walls, so it hides that floor's plan in solo and exploded views.{roofs, plural, =0 {} =1 {} other { The floor's {roofCount} roofs move together.}}"
 #: packages/nodes/src/roof/panel.tsx
 #, fuzzy
 msgid "node.roof.panel.onStoreyWalls"
-msgstr "En {storey} con sus muros, así que oculta el plano de esa planta en las vistas aislada y explosionada.{roofs, plural, =0 {} =1 {} one {} many { Las # cubiertas de la planta se mueven juntas.} other { Las # cubiertas de la planta se mueven juntas.}}"
+msgstr "En {storey} con sus muros, así que oculta el plano de esa planta en las vistas aislada y explosionada.{roofs, plural, =0 {} =1 {} one {} many { Las {roofCount} cubiertas de la planta se mueven juntas.} other { Las {roofCount} cubiertas de la planta se mueven juntas.}}"
 
 # Source-Hash: 9da0cbfad144d737
 # Review: required
@@ -20506,15 +20857,15 @@ msgstr "Dirección postal"
 msgid "node.site.panel.survey"
 msgstr "levantamiento"
 
-# Source-Hash: fd19a2f0a6b9e85d
-# Review: required
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
-# English: "{count, plural, one {# surveyed line} other {# surveyed lines}} at {interval} ft ({datum}) — {source}"
+# Source-Hash: 2177f21713b01a24
+# Review: required
+# English: "{count, plural, one {{lineCount} surveyed line} other {{lineCount} surveyed lines}} at {interval} ft ({datum}) — {source}"
 #: packages/nodes/src/site/panel.tsx
 #, fuzzy
 msgid "node.site.panel.surveyedContours"
-msgstr "{count, plural, one {# línea topográfica} many {# líneas topográficas} other {# líneas topográficas}} cada {interval} ft ({datum}) — {source}"
+msgstr "{count, plural, one {{lineCount} línea topográfica} many {{lineCount} líneas topográficas} other {{lineCount} líneas topográficas}} cada {interval} ft ({datum}) — {source}"
 
 # Source-Hash: d457508edd5bb8cf
 # Review: required
@@ -21586,15 +21937,15 @@ msgstr "Ajustar al suelo"
 msgid "node.stair.panel.fitUniformRisers"
 msgstr "Ajustar contrahuellas uniformes"
 
-# Source-Hash: 22dd5d2975d836a0
-# Review: required
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
-# English: "Flight {number}: {count, plural, one {# riser} other {# risers}} · R {riser} · T {going} · {slope}"
+# Source-Hash: 4d365dbc1fb92b90
+# Review: required
+# English: "Flight {number}: {count, plural, one {{riserCount} riser} other {{riserCount} risers}} · R {riser} · T {going} · {slope}"
 #: packages/nodes/src/stair/panel.tsx
 #, fuzzy
 msgid "node.stair.panel.flightMeasurements"
-msgstr "Tramo {number}: {count, plural, one {# contrahuella} many {# contrahuellas} other {# contrahuellas}} · CH {riser} · H {going} · {slope}"
+msgstr "Tramo {number}: {count, plural, one {{riserCount} contrahuella} many {{riserCount} contrahuellas} other {{riserCount} contrahuellas}} · CH {riser} · H {going} · {slope}"
 
 # Source-Hash: 6e946bd1acd94637
 # Review: required

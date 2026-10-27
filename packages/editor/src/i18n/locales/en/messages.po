@@ -3901,6 +3901,54 @@ msgstr "Rectangle room"
 msgid "editor.lib.wallDrawVariant.walls"
 msgstr "Walls"
 
+#: packages/editor/src/components/editor/registry-action-contributions.tsx
+msgid "editor.mechanismAction"
+msgstr "{action, select, close {Close} open {Open} stop {Stop} other {Play}}"
+
+#: packages/editor/src/components/editor/node-action-menu.tsx
+msgid "editor.nodeActionMenu.curve"
+msgstr "Curve"
+
+#: packages/editor/src/components/editor/node-action-menu.tsx
+msgid "editor.nodeActionMenu.cutOut"
+msgstr "Cut out"
+
+#: packages/editor/src/components/editor/node-action-menu.tsx
+msgid "editor.nodeActionMenu.delete"
+msgstr "Delete"
+
+#: packages/editor/src/components/editor/node-action-menu.tsx
+msgid "editor.nodeActionMenu.duplicate"
+msgstr "Duplicate"
+
+#: packages/editor/src/components/editor/node-action-menu.tsx
+msgid "editor.nodeActionMenu.editMesh"
+msgstr "Edit mesh"
+
+#: packages/editor/src/components/editor/node-action-menu.tsx
+msgid "editor.nodeActionMenu.findInCatalog"
+msgstr "Find in catalog"
+
+#: packages/editor/src/components/editor/node-action-menu.tsx
+msgid "editor.nodeActionMenu.groupSelection"
+msgstr "Group selection"
+
+#: packages/editor/src/components/editor/node-action-menu.tsx
+msgid "editor.nodeActionMenu.move"
+msgstr "Move"
+
+#: packages/editor/src/components/editor/node-action-menu.tsx
+msgid "editor.nodeActionMenu.rotateLeft"
+msgstr "Rotate left"
+
+#: packages/editor/src/components/editor/node-action-menu.tsx
+msgid "editor.nodeActionMenu.rotateRight"
+msgstr "Rotate right"
+
+#: packages/editor/src/components/editor/node-action-menu.tsx
+msgid "editor.nodeActionMenu.ungroupSelection"
+msgstr "Ungroup selection"
+
 #: packages/editor/src/components/ui/panels/node-display.ts
 msgid "editor.nodeDisplay.ceiling"
 msgstr "Ceiling"
@@ -4600,7 +4648,7 @@ msgstr "Close with walls"
 
 #: packages/editor/src/components/ui/panels/room-construction-rows.tsx
 msgid "editor.panels.roomConstructionRows.drawnFloor"
-msgstr "{ambiguous, select, yes {Floor is several drawn slabs, mostly {name}} other {Floor is a drawn slab: {name}}}{shared, plural, =0 {} one { (shared with # room)} other { (shared with # rooms)}}"
+msgstr "{ambiguous, select, yes {Floor is several drawn slabs, mostly {name}} other {Floor is a drawn slab: {name}}}{shared, plural, =0 {} one { (shared with {sharedCount} room)} other { (shared with {sharedCount} rooms)}}"
 
 #: packages/editor/src/components/ui/panels/room-construction-rows.tsx
 msgid "editor.panels.roomConstructionRows.drawnFloorSwitchHint"
@@ -4868,7 +4916,7 @@ msgstr "Not enough headroom"
 
 #: packages/editor/src/components/ui/panels/room-panel.tsx
 msgid "editor.panels.roomPanel.openingCounts"
-msgstr "{doors, plural, one {# door} other {# doors}} · {windows, plural, one {# window} other {# windows}}"
+msgstr "{doors, plural, one {{doorCount} door} other {{doorCount} doors}} · {windows, plural, one {{windowCount} window} other {{windowCount} windows}}"
 
 #: packages/editor/src/components/ui/panels/room-panel.tsx
 msgid "editor.panels.roomPanel.openRoomArea"
@@ -4991,9 +5039,90 @@ msgstr "Delete region"
 msgid "editor.panels.wallRegionList.paintRegions"
 msgstr "Paint regions"
 
+#: packages/editor/src/components/procedural-items/inspector.tsx
+msgid "editor.proceduralItems.inspector.adjustDesign"
+msgstr "Adjust design"
+
+#: packages/editor/src/components/procedural-items/inspector.tsx
+msgid "editor.proceduralItems.inspector.back"
+msgstr "Back"
+
+#: packages/editor/src/components/procedural-items/inspector.tsx
+msgid "editor.proceduralItems.inspector.editParts"
+msgstr "Edit parts"
+
+#: packages/editor/src/components/procedural-items/inspector.tsx
+msgid "editor.proceduralItems.inspector.invalidAttachment"
+msgstr "Invalid attachment"
+
+#: packages/editor/src/components/procedural-items/inspector.tsx
+msgid "editor.proceduralItems.inspector.invalidEdit"
+msgstr "Invalid edit"
+
+#: packages/editor/src/components/procedural-items/inspector.tsx
+msgid "editor.proceduralItems.inspector.invalidPlacement"
+msgstr "Invalid placement"
+
+#: packages/editor/src/components/procedural-items/inspector.tsx
+msgid "editor.proceduralItems.inspector.invalidPosition"
+msgstr "Invalid position"
+
+#: packages/editor/src/components/procedural-items/inspector.tsx
+msgid "editor.proceduralItems.inspector.invalidReset"
+msgstr "Invalid reset"
+
+#: packages/editor/src/components/procedural-items/inspector.tsx
+msgid "editor.proceduralItems.inspector.pos"
+msgstr "pos"
+
+#: packages/editor/src/components/procedural-items/inspector.tsx
+msgid "editor.proceduralItems.inspector.position"
+msgstr "Position"
+
+#: packages/editor/src/components/procedural-items/inspector.tsx
+msgid "editor.proceduralItems.inspector.resetThisPart"
+msgstr "Reset this part"
+
 #: packages/editor/src/components/editor/index.tsx
 msgid "editor.reloadEditor"
 msgstr "Reload editor"
+
+#: packages/editor/src/components/editor/riser-diagram-panel.tsx
+msgid "editor.riserDiagramPanel.close"
+msgstr "Close riser diagram"
+
+#: packages/editor/src/components/editor/riser-diagram-panel.tsx
+msgid "editor.riserDiagramPanel.dwvPlumbingIsometric"
+msgstr "DWV plumbing isometric"
+
+#: packages/editor/src/components/editor/riser-diagram-panel.tsx
+msgid "editor.riserDiagramPanel.dwvRiserDiagram"
+msgstr "DWV riser diagram"
+
+#: packages/editor/src/components/editor/riser-diagram-panel.tsx
+msgid "editor.riserDiagramPanel.noDrainWasteOrVentPipes"
+msgstr "No drain, waste, or vent pipes yet. Draw plumbing to see the riser diagram."
+
+#: packages/editor/src/components/editor/riser-diagram-panel.tsx
+msgid "editor.riserDiagramPanel.riserDiagram"
+msgstr "Riser Diagram"
+
+#: packages/editor/src/components/editor/riser-diagram-panel.tsx
+msgid "editor.riserDiagramPanel.trap"
+msgstr "{diameter}\" P-trap"
+
+#: packages/editor/src/components/editor/riser-diagram-panel.tsx
+msgid "editor.riserDiagramPanel.vent"
+msgstr "Vent"
+
+#. Vent through roof: where a plumbing vent stack exits the roof.
+#: packages/editor/src/components/editor/riser-diagram-panel.tsx
+msgid "editor.riserDiagramPanel.ventTermination"
+msgstr "{diameter}\" VTR"
+
+#: packages/editor/src/components/editor/riser-diagram-panel.tsx
+msgid "editor.riserDiagramPanel.waste"
+msgstr "Waste"
 
 #: packages/editor/src/lib/room-built-on.ts
 msgid "editor.room.builtOn.above"
@@ -6365,6 +6494,18 @@ msgstr "Window style — click or press L to cycle"
 msgid "editor.toolHint.windowTypeClickOrPressO.wv4x35"
 msgstr "Window type — click or press O to cycle"
 
+#: packages/editor/src/components/tools/distribution/distribution-run-tool.tsx
+msgid "editor.tools.distribution.distributionRunTool.lengthField"
+msgstr "Length: {field} m"
+
+#: packages/editor/src/components/tools/distribution/distribution-run-tool.tsx
+msgid "editor.tools.distribution.distributionRunTool.tabDirection"
+msgstr "Tab: direction"
+
+#: packages/editor/src/components/tools/distribution/distribution-run-tool.tsx
+msgid "editor.tools.distribution.distributionRunTool.typeALength"
+msgstr "type a length"
+
 #: packages/editor/src/components/editor/views/view-bar.tsx
 msgid "editor.views.plugins"
 msgstr "Plugins"
@@ -7690,7 +7831,7 @@ msgstr "Move to the roof level"
 
 #: packages/nodes/src/roof/panel.tsx
 msgid "node.roof.panel.onStoreyWalls"
-msgstr "On {storey} with its walls, so it hides that floor's plan in solo and exploded views.{roofs, plural, =0 {} =1 {} other { The floor's # roofs move together.}}"
+msgstr "On {storey} with its walls, so it hides that floor's plan in solo and exploded views.{roofs, plural, =0 {} =1 {} other { The floor's {roofCount} roofs move together.}}"
 
 #: packages/nodes/src/roof/panel.tsx
 msgid "node.roof.panel.position"
@@ -8244,7 +8385,7 @@ msgstr "survey"
 
 #: packages/nodes/src/site/panel.tsx
 msgid "node.site.panel.surveyedContours"
-msgstr "{count, plural, one {# surveyed line} other {# surveyed lines}} at {interval} ft ({datum}) — {source}"
+msgstr "{count, plural, one {{lineCount} surveyed line} other {{lineCount} surveyed lines}} at {interval} ft ({datum}) — {source}"
 
 #: packages/nodes/src/site/panel.tsx
 msgid "node.site.panel.terrain"
@@ -8676,7 +8817,7 @@ msgstr "Fit uniform risers"
 
 #: packages/nodes/src/stair/panel.tsx
 msgid "node.stair.panel.flightMeasurements"
-msgstr "Flight {number}: {count, plural, one {# riser} other {# risers}} · R {riser} · T {going} · {slope}"
+msgstr "Flight {number}: {count, plural, one {{riserCount} riser} other {{riserCount} risers}} · R {riser} · T {going} · {slope}"
 
 #: packages/nodes/src/stair/panel.tsx
 msgid "node.stair.panel.floorsCeilingsAndStairsOnly"
