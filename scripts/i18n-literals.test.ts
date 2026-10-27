@@ -99,6 +99,16 @@ const ROUTES = [{ name: 'home' }]
   expect(output).toContain('ROUTES = [{ name: /* i18n */')
 })
 
+test('app modules without use client are left for a person', () => {
+  const source = `export function AppHeader() {
+  return <a aria-label="Pascal home" href="/" />
+}
+`
+  const { output, planned } = convert('apps/editor/components/app-shell.tsx', source)
+  expect(output).toBe(source)
+  expect(planned[0]?.manual).toContain('server component')
+})
+
 test('an expression-bodied component gains a block body for the hook', () => {
   const source = `export const Empty = () => <p>No layers yet</p>\n`
   const { output } = convert('packages/editor/src/components/ui/sidebar/empty.tsx', source)

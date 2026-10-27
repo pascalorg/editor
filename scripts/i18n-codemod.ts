@@ -256,8 +256,12 @@ function importEdit(source: ts.SourceFile): Edit | undefined {
   }
 }
 
+/**
+ * In the Next app a module without `'use client'` may render inside a server
+ * component (pages, layouts, shared shells), where hooks crash the request.
+ */
 function isServerOnly(path: string, source: ts.SourceFile): boolean {
-  if (!path.startsWith('apps/editor/app/')) return false
+  if (!path.startsWith('apps/editor/')) return false
   return !source.statements.some(
     (statement) =>
       ts.isExpressionStatement(statement) &&
@@ -356,7 +360,7 @@ export function convertSource(
     const line = source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1
     const component = enclosingComponent(node)
     const manual = serverOnly
-      ? 'server component: pass the request scope instead of a hook'
+      ? 'may render in a server component: move the copy into a client leaf or pass the request scope'
       : component
         ? undefined
         : 'outside a component or hook: needs a lazy descriptor or an i18n parameter'
