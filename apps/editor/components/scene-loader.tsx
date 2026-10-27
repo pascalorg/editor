@@ -3,7 +3,7 @@
 // Node registry bootstrap is loaded once at the root via
 // `<ClientBootstrap>` in `app/layout.tsx` — no per-page side-effect
 // import here.
-import { type MessageDescriptor, useLocale, usePascalI18n } from '@pascal-app/core'
+import { type MessageDescriptor, usePascalI18n } from '@pascal-app/core'
 import {
   applySceneGraphToEditor,
   Editor,
@@ -180,11 +180,11 @@ export function SceneLoader(props: SceneLoaderProps) {
 
 function SceneEditor({ initialScene, meta: initialMeta }: SceneLoaderProps) {
   const i18n = usePascalI18n()
-  const locale = useLocale()
-  // biome-ignore lint/correctness/useExhaustiveDependencies: labels re-translate when the locale changes
+  const catalogVersion = i18n.getVersion()
+  // biome-ignore lint/correctness/useExhaustiveDependencies: labels re-translate on a locale switch or a late registerMessages
   const sidebarTabs = useMemo(
     () => SIDEBAR_TABS.map((tab) => ({ ...tab, label: i18n._(tab.label) })),
-    [i18n, locale],
+    [i18n, catalogVersion],
   )
   // A rename must reach the autosave body, which sends `meta.name`.
   const [renamedTo, setRenamedTo] = useState<string | null>(null)

@@ -56,7 +56,6 @@ import {
 } from '@pascal-app/core/building'
 import {
   formatNumber,
-  getDefaultLevelName,
   roofLevelOrderBreach,
   servesAsRoofLevel,
   useLocale,
@@ -94,8 +93,10 @@ function LevelInlineRename({
   isEditing: boolean
   onStopEditing: () => void
 }) {
+  const i18n = usePascalI18n()
+  const locale = useLocale()
   const updateNode = useScene((s) => s.updateNode)
-  const defaultName = getDefaultLevelName(level.level)
+  const defaultName = localizedLevelName({ level: level.level }, i18n, locale)
   const [value, setValue] = useState(level.name || '')
   const inputRef = useRef<HTMLInputElement>(null)
 
