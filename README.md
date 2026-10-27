@@ -134,8 +134,8 @@ These workflows require a connected Pascal MCP server for their tool-backed acti
 endpoint, which signs in with OAuth. Its version is the `@pascal-app/mcp` package version:
 `bun scripts/sync-agent-versions.ts` rewrites it, and the Cursor plugin's CLI pin, from the
 package versions, and CI fails when they drift. Each stable release publishes it to the registry
-after npm has the package. The signing key is CI's own `pascal.app` DNS key, held only in the
-`mcp-registry` environment, which a repository admin sets up first; see
+after npm has the package. The signing key is CI's own `pascal.app` DNS key, stored only as a secret of
+the `mcp-registry` environment (limited to `main`), never as a repository secret; see
 [wiki/npm-release.md](wiki/npm-release.md#mcp-registry).
 
 ## Using Published Packages

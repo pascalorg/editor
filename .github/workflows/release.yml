@@ -57,6 +57,7 @@ jobs:
     outputs:
       version: ${{ steps.version.outputs.version }}
       channel: ${{ steps.version.outputs.channel }}
+      mcp-version: ${{ steps.version.outputs.mcp-version }}
     env:
       # Verbose npm logs show the OIDC token exchange and the registry's
       # rejection reason when trusted publishing is misconfigured; tokens are
@@ -236,6 +237,7 @@ jobs:
         run: |
           echo "version=$RELEASE_VERSION" >> "$GITHUB_OUTPUT"
           echo "channel=$NPM_TAG" >> "$GITHUB_OUTPUT"
+          echo "mcp-version=$(jq -r '.version' packages/mcp/package.json)" >> "$GITHUB_OUTPUT"
 
       # OIDC trusted publishing can only mint a token for a package that already
       # exists on npm with a trusted publisher. A package that was never
@@ -440,15 +442,20 @@ jobs:
           gh release upload "$TAG" "$ARCHIVE" "$ARCHIVE.sha256" --clobber
           echo "🌐 Uploaded $(basename "$ARCHIVE") to $TAG"
 
-  # A beta leaves server.json on the last stable version, which is already listed.
+  # A beta, or a bump=none rerun of one, leaves server.json on the last stable version,
+  # which is already listed.
   mcp-registry:
     needs: release
-    if: inputs.dry-run == false && needs.release.outputs.channel == 'latest'
+    if: >-
+      inputs.dry-run == false
+      && needs.release.outputs.channel == 'latest'
+      && needs.release.outputs.mcp-version != ''
+      && !contains(needs.release.outputs.mcp-version, '-')
     permissions:
       contents: read
     uses: ./.github/workflows/mcp-registry.yml
     with:
-      version: ${{ needs.release.outputs.version }}
+      version: ${{ needs.release.outputs.mcp-version }}
       publish: true
     secrets:
       MCP_REGISTRY_PRIVATE_KEY: ${{ secrets.MCP_REGISTRY_PRIVATE_KEY }}
