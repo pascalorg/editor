@@ -54,4 +54,27 @@ export const surfaces: PseudoSurface[] = [
   { name: 'home', path: '/', data: ['Project #1'] },
   { name: 'settings', path: '/settings' },
   { name: 'editor', path: editorPath, steps: openEditor, data: ['Project #1'] },
+  { name: 'navbar', path: editorPath, steps: openEditor, scope: 'nav', data: ['Project #1'] },
+  {
+    name: 'share-panel',
+    path: editorPath,
+    steps: async (page) => {
+      await openEditor(page)
+      await page.locator('nav button[aria-expanded]').click()
+      await page.waitForTimeout(800)
+    },
+    scope: 'nav [role="dialog"]',
+  },
+  {
+    name: 'display-menu',
+    path: editorPath,
+    steps: (page) => openInEditor(page, 'Display settings'),
+    scope: '[role="menu"]',
+  },
+  {
+    name: 'more-views',
+    path: editorPath,
+    steps: (page) => openInEditor(page, 'More views'),
+    scope: '[role="menu"]',
+  },
 ]

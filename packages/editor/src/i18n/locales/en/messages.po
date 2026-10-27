@@ -7,6 +7,342 @@ msgstr ""
 "X-Generator: @lingui/cli\n"
 "Language: en\n"
 
+#: apps/editor/components/app-shell.tsx
+msgid "app.appShell.pascalHome"
+msgstr "Pascal home"
+
+#: apps/editor/components/editor-navbar.tsx
+msgid "app.editorNavbar.allProjects"
+msgstr "All projects"
+
+#: apps/editor/components/editor-navbar.tsx
+msgid "app.editorNavbar.preview"
+msgstr "Preview"
+
+#: apps/editor/components/editor-navbar.tsx
+msgid "app.editorNavbar.projectName"
+msgstr "Project name"
+
+#: apps/editor/components/editor-navbar.tsx
+msgid "app.editorNavbar.renameProject"
+msgstr "Rename project"
+
+#: apps/editor/components/editor-navbar.tsx
+msgid "app.editorNavbar.share"
+msgstr "Share"
+
+#: apps/editor/components/share-panel.tsx
+msgid "app.sharePanel.anyoneWithTheLinkCanView"
+msgstr "Anyone with the link can view this project. They cannot edit it."
+
+#: apps/editor/components/share-panel.tsx
+msgid "app.sharePanel.copied"
+msgstr "Copied"
+
+#: apps/editor/components/share-panel.tsx
+msgid "app.sharePanel.copy"
+msgstr "Copy"
+
+#: apps/editor/components/share-panel.tsx
+msgid "app.sharePanel.couldNotReadTheSharingState"
+msgstr "Could not read the sharing state."
+
+#: apps/editor/components/share-panel.tsx
+msgid "app.sharePanel.couldNotTurnOffThePublic"
+msgstr "Could not turn off the public link."
+
+#: apps/editor/components/share-panel.tsx
+msgid "app.sharePanel.couldNotTurnOnThePublic"
+msgstr "Could not turn on the public link."
+
+#: apps/editor/components/share-panel.tsx
+msgid "app.sharePanel.embedCode"
+msgstr "Embed code"
+
+#: apps/editor/components/share-panel.tsx
+msgid "app.sharePanel.embedLink"
+msgstr "Embed link"
+
+#: apps/editor/components/share-panel.tsx
+msgid "app.sharePanel.hideControls"
+msgstr "Hide controls"
+
+#: apps/editor/components/share-panel.tsx
+msgid "app.sharePanel.link"
+msgstr "Link"
+
+#: apps/editor/components/share-panel.tsx
+msgid "app.sharePanel.onlyThe3dViewNoHeader"
+msgstr "Only the 3D view, no header or toolbar."
+
+#: apps/editor/components/share-panel.tsx
+msgid "app.sharePanel.open"
+msgstr "Open"
+
+#: apps/editor/components/share-panel.tsx
+msgid "app.sharePanel.publicLink"
+msgstr "Public link"
+
+#: apps/editor/components/share-panel.tsx
+msgid "app.sharePanel.shareProject"
+msgstr "Share project"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.automaticDimensions"
+msgstr "Automatic dimensions"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.camera"
+msgstr "Camera"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.cleanPlanDimensionsAppearWithSelection"
+msgstr "Clean plan; dimensions appear with selection"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.collapseSidebar"
+msgstr "Collapse sidebar"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.crispOpaqueEdgeLines"
+msgstr "Crisp, opaque edge lines"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.cutaway"
+msgstr "Cutaway"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.default"
+msgstr "Default"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.display"
+msgstr "Display"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.displaySettings"
+msgstr "Display settings"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.doorWindowMarks"
+msgstr "Door/window marks"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.edges"
+msgstr "Edges"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.enterVr"
+msgstr "Enter VR"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.exitVr"
+msgstr "Exit VR"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.expandSidebar"
+msgstr "Expand sidebar"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.expert"
+msgstr "Expert"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.exploded"
+msgstr "Exploded"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.faceOfStud"
+msgstr "Face of stud"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.faintOutlineOfMajorCreases"
+msgstr "Faint outline of major creases"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.feetInches"
+msgstr "Feet & inches"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.finishedFaces"
+msgstr "Finished faces"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.flatAndFastNoAmbientOcclusion"
+msgstr "Flat and fast — no ambient occlusion"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.floorPlanAnnotations"
+msgstr "Floor plan annotations"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.floorPlanMode"
+msgstr "Floor plan mode"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.fullAmbientOcclusion"
+msgstr "Full ambient occlusion"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.fullDocumentationAndAnnotationControls"
+msgstr "Full documentation and annotation controls"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.fullHeight"
+msgstr "Full height"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.fullWallThickness"
+msgstr "Full wall thickness"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.grid"
+msgstr "Grid"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.levelsMode"
+msgstr "Levels: {mode}"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.low"
+msgstr "Low"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.magneticSnap"
+msgstr "Magnetic snap"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.manual"
+msgstr "Manual"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.manualDimensions"
+msgstr "Manual dimensions"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.measurements"
+msgstr "Measurements"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.meters"
+msgstr "Meters"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.millimeters"
+msgstr "Millimeters"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.n3dMeasurements"
+msgstr "3D measurements"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.noEdgeLines"
+msgstr "No edge lines"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.off"
+msgstr "Off"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.on"
+msgstr "On"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.orthographic"
+msgstr "Orthographic"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.perspective"
+msgstr "Perspective"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.preview"
+msgstr "Preview"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.previewMode"
+msgstr "Preview mode"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.render"
+msgstr "Render"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.rendered"
+msgstr "Rendered"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.roomLabels"
+msgstr "Room labels"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.sceneTheme"
+msgstr "Scene theme"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.shadows"
+msgstr "Shadows"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.singleWallAxis"
+msgstr "Single wall axis"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.soft"
+msgstr "Soft"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.solid"
+msgstr "Solid"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.solo"
+msgstr "Solo"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.stack"
+msgstr "Stack"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.stairAnnotations"
+msgstr "Stair annotations"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.strong"
+msgstr "Strong"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.structuralCoreFace"
+msgstr "Structural core face"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.structuralGridsColumnCenters"
+msgstr "Structural grids & column centers"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.translucent"
+msgstr "Translucent"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.units"
+msgstr "Units"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.walkthrough"
+msgstr "Walkthrough"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.wallCenterline"
+msgstr "Wall centerline"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.wallDimensions"
+msgstr "Wall dimensions"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.wallsLabel"
+msgstr "Walls: {label}"
+
 #: packages/editor/src/i18n/level-name.ts
 msgid "core.level.basement"
 msgstr "Basement"
@@ -86,6 +422,98 @@ msgstr "Draw one wall at a time."
 #: packages/editor/src/components/ui/build-panel/build-panel.tsx
 msgid "editor.buildPanel.rooms.walls.title"
 msgstr "Walls"
+
+#: packages/editor/src/components/editor/views/view-bar.tsx
+msgid "editor.views.plugins"
+msgstr "Plugins"
+
+#: packages/editor/src/components/editor/views/view-bar.tsx
+msgid "editor.views.view2d"
+msgstr "2D"
+
+#: packages/editor/src/components/editor/views/view-bar.tsx
+msgid "editor.views.view3d"
+msgstr "3D"
+
+#: packages/editor/src/components/editor/views/view-bar.tsx
+msgid "editor.views.viewBar.auto"
+msgstr "Auto"
+
+#: packages/editor/src/components/editor/views/view-bar.tsx
+msgid "editor.views.viewBar.browsePlugins"
+msgstr "Browse plugins"
+
+#: packages/editor/src/components/editor/views/view-bar.tsx
+msgid "editor.views.viewBar.closeLabel"
+msgstr "Close {label}"
+
+#: packages/editor/src/components/editor/views/view-bar.tsx
+msgid "editor.views.viewBar.closeSplit"
+msgstr "Close split (\\)"
+
+#: packages/editor/src/components/editor/views/view-bar.tsx
+msgid "editor.views.viewBar.ground"
+msgstr "Ground"
+
+#: packages/editor/src/components/editor/views/view-bar.tsx
+msgid "editor.views.viewBar.groundSolid"
+msgstr "{standing, select, partly {Partly below grade · ground solid} below {Below grade · ground solid} other {Ground solid}}"
+
+#: packages/editor/src/components/editor/views/view-bar.tsx
+msgid "editor.views.viewBar.groundVeiled"
+msgstr "{standing, select, partly {Partly below grade · ground veiled} below {Below grade · ground veiled} other {Ground veiled}}"
+
+#: packages/editor/src/components/editor/views/view-bar.tsx
+msgid "editor.views.viewBar.keepTheGroundSolid"
+msgstr "Keep the ground solid"
+
+#: packages/editor/src/components/editor/views/view-bar.tsx
+msgid "editor.views.viewBar.moreViews"
+msgstr "More views"
+
+#: packages/editor/src/components/editor/views/view-bar.tsx
+msgid "editor.views.viewBar.paneViews"
+msgstr "Pane {pane} views"
+
+#: packages/editor/src/components/editor/views/view-bar.tsx
+msgid "editor.views.viewBar.pinLabel"
+msgstr "Pin {label}"
+
+#: packages/editor/src/components/editor/views/view-bar.tsx
+msgid "editor.views.viewBar.pinToTheViewBar"
+msgstr "Pin to the view bar"
+
+#: packages/editor/src/components/editor/views/view-bar.tsx
+msgid "editor.views.viewBar.solid"
+msgstr "Solid"
+
+#: packages/editor/src/components/editor/views/view-bar.tsx
+msgid "editor.views.viewBar.split"
+msgstr "Split (\\)"
+
+#: packages/editor/src/components/editor/views/view-bar.tsx
+msgid "editor.views.viewBar.split2"
+msgstr "Split"
+
+#: packages/editor/src/components/editor/views/view-bar.tsx
+msgid "editor.views.viewBar.swapPanes"
+msgstr "Swap panes"
+
+#: packages/editor/src/components/editor/views/view-bar.tsx
+msgid "editor.views.viewBar.unpinFromTheViewBar"
+msgstr "Unpin from the view bar"
+
+#: packages/editor/src/components/editor/views/view-bar.tsx
+msgid "editor.views.viewBar.unpinLabel"
+msgstr "Unpin {label}"
+
+#: packages/editor/src/components/editor/views/view-bar.tsx
+msgid "editor.views.viewBar.veilTheGroundOverALevel"
+msgstr "Veil the ground over a level below grade"
+
+#: packages/editor/src/components/editor/views/view-bar.tsx
+msgid "editor.views.viewBar.views"
+msgstr "Views"
 
 #: packages/editor/src/components/viewer/viewer-controls-bar.tsx
 msgid "viewer.camera.orbitLeft"
@@ -275,31 +703,31 @@ msgstr "Viewer layout"
 msgid "viewer.stage.split"
 msgstr "Split"
 
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/editor/src/i18n/scene-theme-name.ts
 msgid "viewer.theme.blueprint"
 msgstr "Blueprint"
 
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/editor/src/i18n/scene-theme-name.ts
 msgid "viewer.theme.mediterranean"
 msgstr "Mediterranean"
 
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/editor/src/i18n/scene-theme-name.ts
 msgid "viewer.theme.night"
 msgstr "Night"
 
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/editor/src/i18n/scene-theme-name.ts
 msgid "viewer.theme.overcast"
 msgstr "Overcast"
 
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/editor/src/i18n/scene-theme-name.ts
 msgid "viewer.theme.paper"
 msgstr "Paper"
 
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/editor/src/i18n/scene-theme-name.ts
 msgid "viewer.theme.studio"
 msgstr "Studio"
 
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/editor/src/i18n/scene-theme-name.ts
 msgid "viewer.theme.sunset"
 msgstr "Sunset"
 
@@ -307,11 +735,11 @@ msgstr "Sunset"
 msgid "viewer.theme.title"
 msgstr "Scene theme"
 
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/editor/src/i18n/scene-theme-name.ts
 msgid "viewer.theme.twilight"
 msgstr "Twilight"
 
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/editor/src/i18n/scene-theme-name.ts
 msgid "viewer.theme.verdant"
 msgstr "Verdant"
 
