@@ -4,11 +4,13 @@ import { GeistPixelSquare } from 'geist/font/pixel'
 import { Barlow } from 'next/font/google'
 import localFont from 'next/font/local'
 import { headers } from 'next/headers'
+import { registerDevLocales } from '@/lib/dev-locales'
 import { PASCAL_LOCALE_HEADER, resolveUiLocale } from '@/lib/ui-locale'
 import { ClientBootstrap } from './client-bootstrap'
 import './globals.css'
 
 registerBundledLocales()
+registerDevLocales()
 
 const geistSans = localFont({
   src: './fonts/GeistVF.woff',

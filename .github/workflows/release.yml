@@ -102,6 +102,14 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      # Drafts ship as English until reviewed. A release fails only when an
+      # entry reviewed at the latest @pascal-app/editor@* tag (the package
+      # that ships the catalogs; tagged below) became a draft with the same
+      # English, or when a compiled pack contains a draft. The full-history
+      # checkout above makes the tags available.
+      - name: Check translation review regressions and shipped packs
+        run: bun scripts/i18n.ts release-check
+
       - name: Configure git
         run: |
           git config user.name "github-actions[bot]"

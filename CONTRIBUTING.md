@@ -60,6 +60,22 @@ and reports inflated counts. `bun run test` goes through Turborepo, which
 builds workspace dependencies first (several packages import theirs from
 `dist/`) and runs each package's own scoped test script.
 
+### User-visible text
+
+Every string a person reads in the editor (labels, tooltips, `aria-label`,
+`title`, placeholders, menus, dialogs, errors) goes through the i18n catalog:
+
+```tsx
+const i18n = usePascalI18n()
+<button title={i18n._({ id: 'app.editorNavbar.share', message: 'Share' })} />
+```
+
+`bun run i18n:check` (part of `bun run ci`) fails when a file gains a
+hardcoded user-visible literal. Run `bun run i18n:extract` after changing copy.
+Scene data, MCP/agent text and developer errors stay English. See
+[`i18n/README.md`](i18n/README.md) for catalogs, translation review, the
+migration codemod and the pseudo-locale screenshot audit.
+
 ### Project structure
 
 | Package | What it does |

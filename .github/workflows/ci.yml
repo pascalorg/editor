@@ -57,7 +57,12 @@ jobs:
     permissions:
       contents: read
     steps:
+      # Depth 2 keeps the pull request merge commit's first parent (the base
+      # tip), which i18n:check compares reviewed translations and the literal
+      # baseline against.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
 
       # Read from `packageManager` in package.json, so CI runs the same bun as
       # contributors and a bun release cannot change the gate on its own.
@@ -80,7 +85,20 @@ jobs:
       - name: Lint & format check
         run: bun run check
 
+      # A push compares with the commit before it (every commit of a
+      # multi-commit push); the shallow checkout lacks it, so fetch it.
+      - name: Fetch the pre-push commit for localization checks
+        if: github.event_name == 'push' && !startsWith(github.event.before, '0000000')
+        env:
+          BEFORE: ${{ github.event.before }}
+        run: git fetch --no-tags --depth=1 origin "$BEFORE"
+
+      # Includes the review-regression check against the PR base (or the
+      # pre-push commit) and the scan of the compiled packs for drafts; draft
+      # counts go to the job summary.
       - name: Check localization catalogs
+        env:
+          I18N_BASE_REF: ${{ github.event_name == 'push' && github.event.before || '' }}
         run: bun run i18n:check
 
       - name: Validate agent skills and plugin packages

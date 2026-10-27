@@ -1,3 +1,4 @@
+export type { MessageDescriptor } from '@lingui/core'
 export {
   formatLength,
   formatNumber,

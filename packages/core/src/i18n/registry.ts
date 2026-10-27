@@ -178,8 +178,7 @@ export class PascalI18n {
   _(id: string, values?: Values, options?: MessageOptions): string
   _(idOrDescriptor: string | MessageDescriptor, values?: Values, options?: MessageOptions): string {
     const id = typeof idOrDescriptor === 'string' ? idOrDescriptor : idOrDescriptor.id
-    const translated =
-      this.locale === 'en' || Object.prototype.hasOwnProperty.call(this.i18n.messages, id)
+    const translated = this.locale === 'en' || Object.hasOwn(this.i18n.messages, id)
     const runtime = translated ? this.i18n : this.englishI18n
     if (!translated) warnMissing(id, this.locale)
     return typeof idOrDescriptor === 'string'
