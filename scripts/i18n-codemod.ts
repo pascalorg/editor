@@ -100,8 +100,9 @@ export function namespaceFor(path: string): string {
   const segments = rest
     .filter((segment) => !['components', 'ui', 'app', 'src', 'index'].includes(segment))
     .map(segmentName)
+  return [...prefix, ...segments]
     .filter((segment, index, all) => segment && segment !== all[index - 1])
-  return [...prefix, ...segments].join('.')
+    .join('.')
 }
 
 export function slugFor(message: string): string {
