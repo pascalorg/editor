@@ -1251,6 +1251,19 @@ msgstr "{count, plural, one {# run} other {# runs}}"
 msgid "editor.floatingActionMenu.system"
 msgstr "System"
 
+#: packages/editor/src/i18n/floor-footprint-name.ts
+msgid "editor.floorFootprint.area"
+msgstr "Floor area"
+
+#: packages/editor/src/i18n/floor-footprint-name.ts
+msgid "editor.floorFootprint.room"
+msgstr "{room} floor"
+
+#: packages/editor/src/components/ui/panels/room-construction-rows.tsx
+#: packages/editor/src/i18n/floor-footprint-name.ts
+msgid "editor.floorFootprint.shared"
+msgstr "Shared floor"
+
 #: packages/editor/src/components/ui/helpers/building-helper.tsx
 msgid "editor.helpers.buildingHelper.cancel"
 msgstr "Cancel"
@@ -1535,6 +1548,1874 @@ msgstr "Rotate"
 msgid "editor.helpers.registeredToolHelper.guidedConstraintsBypassed"
 msgstr "Guided constraints bypassed"
 
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.angle.g10zaw"
+msgstr "Angle"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.armLengthM.1jclqgw"
+msgstr "Arm length m"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.attachmentSide.6n9s5v"
+msgstr "Attachment side"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.autoHangers.10554ka"
+msgstr "Auto hangers"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.autoMiterCorners.zxr5lt"
+msgstr "Auto miter corners"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.autoSpan.1gas9r6"
+msgstr "Auto span"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.backRatio.1ughd99"
+msgstr "Back ratio"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.baseHeight.1hs4zdf"
+msgstr "Base height"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.baseStyle.24vty5"
+msgstr "Base style"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.beamHeight.1kq0oh1"
+msgstr "Beam height"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.beamWidth.1q1mzbe"
+msgstr "Beam width"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.bodyShape.arvkuw"
+msgstr "Body shape"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.bracketStyle.1vvoptm"
+msgstr "Bracket style"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.branchAngle.v56zme"
+msgstr "Branch angle"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.cabHeight.1yn34mk"
+msgstr "Cab height"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.canopyForm.1czzggp"
+msgstr "Canopy form"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.cap.s0thej"
+msgstr "Cap"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.capOverhang.kxxz9j"
+msgstr "Cap overhang"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.capShape.17mbxhu"
+msgstr "Cap shape"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.capThickness.u835q9"
+msgstr "Cap thickness"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.carcassHeight.1aks0zy"
+msgstr "Carcass height"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.cleanoutStyle.127zz6z"
+msgstr "Cleanout style"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.collarDiameter.1d5k28r"
+msgstr "Collar diameter"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.collarHeight.1dqwsrf"
+msgstr "Collar height"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.collarShape.1gacv11"
+msgstr "Collar shape"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.collarWidth.qvc9ik"
+msgstr "Collar width"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.columns.1sy73ks"
+msgstr "Columns"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.conicalFullCircle.1pgkpz5"
+msgstr "Conical full circle"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.connectionMode.1nty478"
+msgstr "Connection mode"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.connectionOffset.2m70s8"
+msgstr "Connection offset"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.cornerBevel.16iniho"
+msgstr "Corner bevel"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.coveringType.95yd3k"
+msgstr "Covering type"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.cricketHeight.pok31n"
+msgstr "Cricket height"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.cricketLength.i2aht8"
+msgstr "Cricket length"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.cricketSide.1xnwil7"
+msgstr "Cricket side"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.cricketStyle.10j0lat"
+msgstr "Cricket style"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.curb.5xi2ol"
+msgstr "Curb"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.curbHeight.1yn97sg"
+msgstr "Curb height"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.curveOffset.l4xhvr"
+msgstr "Curve offset"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.damperAngle.h5fxn7"
+msgstr "Damper angle"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.deckThickness.4jmqze"
+msgstr "Deck thickness"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.defaultLevelId.xmrjzp"
+msgstr "Default level id"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.depth.1lu11u2"
+msgstr "Depth"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.diameter.s3robe"
+msgstr "Diameter"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.diameter2.pm6cl4"
+msgstr "Diameter2"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.doorDurationMs.13nx909"
+msgstr "Door duration ms"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.doorHeight.92r9k4"
+msgstr "Door height"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.doorPanelStyle.2qog4q"
+msgstr "Door panel style"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.doorStyle.gerpos"
+msgstr "Door style"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.doorWidth.sy732l"
+msgstr "Door width"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.downspoutEnabled.1gn00nv"
+msgstr "Downspout enabled"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.downspoutPosition.fxcsop"
+msgstr "Downspout position"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.ductMaterial.i8eonq"
+msgstr "Duct material"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.dutchGabletRake.6paydp"
+msgstr "Dutch gablet rake"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.dutchHipHeightRatio.1etnwgg"
+msgstr "Dutch hip height ratio"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.dutchHipWidthRatio.1dopfvb"
+msgstr "Dutch hip width ratio"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.dutchTopRakeThickness.1w9khxt"
+msgstr "Dutch top rake thickness"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.dutchWaistLengthRatio.agtoxw"
+msgstr "Dutch waist length ratio"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.dwellMs.1lkk0o5"
+msgstr "Dwell ms"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.edgeInset.1obeimx"
+msgstr "Edge inset"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.elevation.4jbp44"
+msgstr "Elevation"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.endCapLeft.19jel4v"
+msgstr "End cap left"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.endCapRight.lhse9c"
+msgstr "End cap right"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.endCaps.4fsb5b"
+msgstr "End caps"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.endPost.1guwsk0"
+msgstr "End post"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.equipmentType.1mc2ywt"
+msgstr "Equipment type"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.fillToFloor.1oppnkf"
+msgstr "Fill to floor"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.finial.1ertf4s"
+msgstr "Finial"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.fittingType.18mz17s"
+msgstr "Fitting type"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.flashingHeight.3e8nn6"
+msgstr "Flashing height"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.flashingProjection.hhf0fk"
+msgstr "Flashing projection"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.flueCount.j3t2ci"
+msgstr "Flue count"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.flueDiameter.cjhubg"
+msgstr "Flue diameter"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.flueHeight.1dhc4y4"
+msgstr "Flue height"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.flueShape.1ealiy4"
+msgstr "Flue shape"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.flueSpacing.exhzco"
+msgstr "Flue spacing"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.footingStyle.e3btg6"
+msgstr "Footing style"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.frameDepth.1934a5n"
+msgstr "Frame depth"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.frameThickness.1agxzd8"
+msgstr "Frame thickness"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.framingStrategy.3jx9qe"
+msgstr "Framing strategy"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.fromLevelId.15ieejs"
+msgstr "From level id"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.gableOverhang.2z0obw"
+msgstr "Gable overhang"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.gambrelLowerHeightRatio.wqq7lg"
+msgstr "Gambrel lower height ratio"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.gambrelLowerWidthRatio.uvyb1v"
+msgstr "Gambrel lower width ratio"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.gapX.wjxa7"
+msgstr "Gap x"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.gapY.mkbl8"
+msgstr "Gap y"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.glassThickness.s97b0x"
+msgstr "Glass thickness"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.groundClearance.4os7f0"
+msgstr "Ground clearance"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.guardInfill.16heiig"
+msgstr "Guard infill"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.gutterEnabled.1oxiltf"
+msgstr "Gutter enabled"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.gutterProfile.1ngzqi3"
+msgstr "Gutter profile"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.gutterSize.jgavtz"
+msgstr "Gutter size"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.hangerMaxReach.1869epv"
+msgstr "Hanger max reach"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.hangerSpacing.i2b5d7"
+msgstr "Hanger spacing"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.hangerStyle.l7v7gb"
+msgstr "Hanger style"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.height.7puwki"
+msgstr "Height"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.height2.7b3jlc"
+msgstr "Height2"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.heightAboveRidge.1k99brk"
+msgstr "Height above ridge"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.highEdgeHeight.1s7v90t"
+msgstr "High edge height"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.highOverhang.67w55d"
+msgstr "High overhang"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.highSideMode.1rc1r5j"
+msgstr "High side mode"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.hoodOverhang.1q1hcin"
+msgstr "Hood overhang"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.infillPlacement.11dxzpo"
+msgstr "Infill placement"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.inletShape.ypayh2"
+msgstr "Inlet shape"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.innerRadius.1fkmg0j"
+msgstr "Inner radius"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.insulated.iwziey"
+msgstr "Insulated"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.insulationR.663ufx"
+msgstr "Insulation r"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.lanternHeight.oz7zpm"
+msgstr "Lantern height"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.lanternTopScale.hkmpp2"
+msgstr "Lantern top scale"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.ledgerDepth.7av8k9"
+msgstr "Ledger depth"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.ledgerHeight.zo2oif"
+msgstr "Ledger height"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.ledgerVerticalOffset.1athbgt"
+msgstr "Ledger vertical offset"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.leftEndCondition.1syqlaw"
+msgstr "Left end condition"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.leftOverhang.1ydl9ma"
+msgstr "Left overhang"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.length.1kpdcfp"
+msgstr "Length"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.liquidDiameter.w3pk7c"
+msgstr "Liquid diameter"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.louverCount.lhw2gr"
+msgstr "Louver count"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.lowBeamInset.1g7yw5l"
+msgstr "Low beam inset"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.lowEdgeHeight.47mae1"
+msgstr "Low edge height"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.lowOverhang.t4nz1h"
+msgstr "Low overhang"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.mansardSteepHeightRatio.1hbb8rq"
+msgstr "Mansard steep height ratio"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.mansardSteepWidthRatio.6xk6vd"
+msgstr "Mansard steep width ratio"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.matchHostRoofMaterial.s56zwj"
+msgstr "Match host roof material"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.matchHostRoofStructure.bojht3"
+msgstr "Match host roof structure"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.mount.h80tay"
+msgstr "Mount"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.mountingType.1xvin1e"
+msgstr "Mounting type"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.neckHeight.19ym8n1"
+msgstr "Neck height"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.opacity.1pmpfd2"
+msgstr "Opacity"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.openingAngle.brhi7c"
+msgstr "Opening angle"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.openingOffset.wpoqt6"
+msgstr "Opening offset"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.openingSide.18l2iwe"
+msgstr "Opening side"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.operationState.1lwrz07"
+msgstr "Operation state"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.outletShape.lgpqhx"
+msgstr "Outlet shape"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.overhang.b5ljpv"
+msgstr "Overhang"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.panelHeight.1kf31vk"
+msgstr "Panel height"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.panelWidth.946581"
+msgstr "Panel width"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.patternAlignment.jd1ht0"
+msgstr "Pattern alignment"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.patternCount.1r37pve"
+msgstr "Pattern count"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.patternDistribution.fmam51"
+msgstr "Pattern distribution"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.patternRemainder.i47p5y"
+msgstr "Pattern remainder"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.picketProfile.1xgzuyc"
+msgstr "Picket profile"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.picketRailCount.atgt6w"
+msgstr "Picket rail count"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.picketSpacing.p8d98w"
+msgstr "Picket spacing"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.picketTop.1tskplu"
+msgstr "Picket top"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.picketTopClearance.16eq1k0"
+msgstr "Picket top clearance"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.picketVariation.f7vl1c"
+msgstr "Picket variation"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.picketWidth.3fr3rh"
+msgstr "Picket width"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.pipeMaterial.1ggc2wy"
+msgstr "Pipe material"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.pitch.xe6ekx"
+msgstr "Pitch"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.position.1quewx6"
+msgstr "Position"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.postBracing.crq8nn"
+msgstr "Post bracing"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.postCap.1xcvxrv"
+msgstr "Post cap"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.postCount.22r56c"
+msgstr "Post count"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.postDepth.1ko6j1m"
+msgstr "Post depth"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.postInset.le36li"
+msgstr "Post inset"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.postLayoutMode.16jre62"
+msgstr "Post layout mode"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.postSize.1jodxek"
+msgstr "Post size"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.postSpacing.voppfi"
+msgstr "Post spacing"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.postThrough.1abgu4a"
+msgstr "Post through"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.postWidth.rk26fz"
+msgstr "Post width"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.profile.1kwlci6"
+msgstr "Profile"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.projection.jhtig0"
+msgstr "Projection"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.purlinHeight.eo9cjm"
+msgstr "Purlin height"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.purlinSpacing.4gbzb2"
+msgstr "Purlin spacing"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.purlinWidth.r6tu3j"
+msgstr "Purlin width"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.rafterEndInset.14c0wy5"
+msgstr "Rafter end inset"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.rafterHeight.1e1n99w"
+msgstr "Rafter height"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.rafterSpacing.19subc0"
+msgstr "Rafter spacing"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.rafterWidth.eksj4t"
+msgstr "Rafter width"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.railingHeight.6wf4bm"
+msgstr "Railing height"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.railingMode.ov7xpu"
+msgstr "Railing mode"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.railingStyle.1nyd2u"
+msgstr "Railing style"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.resizeLock.b2hbr0"
+msgstr "Resize lock"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.returnDiameter.166ozhe"
+msgstr "Return diameter"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.returnHeight.b9sq6y"
+msgstr "Return height"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.returnShape.1e3a27i"
+msgstr "Return shape"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.returnWidth.z9r3h3"
+msgstr "Return width"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.rightEndCondition.tjlw3l"
+msgstr "Right end condition"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.rightOverhang.yqbeft"
+msgstr "Right overhang"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.roofHeight.1uhy6qy"
+msgstr "Roof height"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.roofStyle.pawqfy"
+msgstr "Roof style"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.roofThickness.1xlr3rx"
+msgstr "Roof thickness"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.roofType.1m9kv5h"
+msgstr "Roof type"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.rotation.ly2rj"
+msgstr "Rotation"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.rows.1ba1neg"
+msgstr "Rows"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.scale.b6rpxt"
+msgstr "Scale"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.seamDetail.197za48"
+msgstr "Seam detail"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.segmentType.l667sy"
+msgstr "Segment type"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.shaftStyle.1i5ampa"
+msgstr "Shaft style"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.shaftWallThickness.bduslr"
+msgstr "Shaft wall thickness"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.shape.iq9t52"
+msgstr "Shape"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.shape2.fi0nx8"
+msgstr "Shape2"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.shedHighSide.bzzddg"
+msgstr "Shed high side"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.shingleThickness.1hn5wxr"
+msgstr "Shingle thickness"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.shoulderExtent.11j8uiv"
+msgstr "Shoulder extent"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.shoulderHeight.xyqn6g"
+msgstr "Shoulder height"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.shoulderStyle.1hkcv2w"
+msgstr "Shoulder style"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.showCenterColumn.1uggg45"
+msgstr "Show center column"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.showInfill.33rv7u"
+msgstr "Show infill"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.showStepSupports.1kg8h8m"
+msgstr "Show step supports"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.sideFlashing.cv744o"
+msgstr "Side flashing"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.size.1a4x3zw"
+msgstr "Size"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.skylightType.1a5vj3i"
+msgstr "Skylight type"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.slabOpeningMode.g4f730"
+msgstr "Slab opening mode"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.slatGap.slmk93"
+msgstr "Slat gap"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.slideDirection.1527q13"
+msgstr "Slide direction"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.span.1bmmuw1"
+msgstr "Span"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.speed.2w2xwg"
+msgstr "Speed"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.spinSpeed.1ozx746"
+msgstr "Spin speed"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.stairType.1u05e02"
+msgstr "Stair type"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.standoff.4wv2g0"
+msgstr "Standoff"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.standoffHeight.1qdnff"
+msgstr "Standoff height"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.startPost.1ood9kv"
+msgstr "Start post"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.stepCount.nzorrw"
+msgstr "Step count"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.strapSpacing.1cyt3dc"
+msgstr "Strap spacing"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.strapStyle.fh1oy4"
+msgstr "Strap style"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.style.nf3vcm"
+msgstr "Style"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.suctionDiameter.nutxtj"
+msgstr "Suction diameter"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.supplyDiameter.h5ldh5"
+msgstr "Supply diameter"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.supplyHeight.zy6ru1"
+msgstr "Supply height"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.supplyShape.k39wnb"
+msgstr "Supply shape"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.supplyWidth.g66axi"
+msgstr "Supply width"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.supportOffset.1w4cocr"
+msgstr "Support offset"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.sweepAngle.ucmmlw"
+msgstr "Sweep angle"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.system.13qbhrw"
+msgstr "System"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.terminal.1501knl"
+msgstr "Terminal"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.terminalType.1ne8lgb"
+msgstr "Terminal type"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.thickness.1l8hu45"
+msgstr "Thickness"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.tiltAngle.1312yw1"
+msgstr "Tilt angle"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.toLevelId.8i5qx7"
+msgstr "To level id"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.topLandingDepth.ki7gk2"
+msgstr "Top landing depth"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.topLandingMode.zk0h7e"
+msgstr "Top landing mode"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.topRailHeight.fscisv"
+msgstr "Top rail height"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.transitionMode.f3evgt"
+msgstr "Transition mode"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.transitionWidth.rtgz3m"
+msgstr "Transition width"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.vaneCount.55vtye"
+msgstr "Vane count"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.wallHeight.18vmh5c"
+msgstr "Wall height"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.wallShell.vqsyhv"
+msgstr "Wall shell"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.wallSkirtHeight.1uea2ad"
+msgstr "Wall skirt height"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.wallThickness.17wn4iv"
+msgstr "Wall thickness"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.width.gfxz9b"
+msgstr "Width"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.width2.1nqawvr"
+msgstr "Width2"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.withBack.1ay8nus"
+msgstr "With back"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.withBottom.1x1z1vo"
+msgstr "With bottom"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.field.withSides.uq066x"
+msgstr "With sides"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.group.advanced.qwfkor"
+msgstr "Advanced"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.group.air.15jotdj"
+msgstr "Air"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.group.appearance.dli9wf"
+msgstr "Appearance"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.group.body.ign4wl"
+msgstr "Body"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.group.cab.o4z1ox"
+msgstr "Cab"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.group.cabinet.rzvymr"
+msgstr "Cabinet"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.group.cap.s0thej"
+msgstr "Cap"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.group.collar.1am2iqo"
+msgstr "Collar"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.group.connection.2r1h4p"
+msgstr "Connection"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.group.connections.ai4w8u"
+msgstr "Connections"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.group.construction.j6p9kc"
+msgstr "Construction"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.group.cricket.6iwg8g"
+msgstr "Cricket"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.group.curb.5xi2ol"
+msgstr "Curb"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.group.curvePoints.ztdcnn"
+msgstr "Curve points"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.group.dimensions.pewa8g"
+msgstr "Dimensions"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.group.doors.18w2kpa"
+msgstr "Doors"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.group.dormer.1fjs5tq"
+msgstr "Dormer"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.group.dormerRoof.u9uy2g"
+msgstr "Dormer roof"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.group.drainage.7easy0"
+msgstr "Drainage"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.group.elevation.4jbp44"
+msgstr "Elevation"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.group.endCaps.4fsb5b"
+msgstr "End caps"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.group.equipment.1xtq0ev"
+msgstr "Equipment"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.group.face.1531fr0"
+msgstr "Face"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.group.fitting.171z1r4"
+msgstr "Fitting"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.group.flues.nq6pye"
+msgstr "Flues"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.group.footprint.g8q2pg"
+msgstr "Footprint"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.group.frame.q7q9fq"
+msgstr "Frame"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.group.geometry.a21os1"
+msgstr "Geometry"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.group.grid.d8gwxd"
+msgstr "Grid"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.group.hangers.agnfzn"
+msgstr "Hangers"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.group.hardware.1nygwm1"
+msgstr "Hardware"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.group.hungWall.1ftr1gz"
+msgstr "Hung wall"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.group.insulation.1kyo5e7"
+msgstr "Insulation"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.group.lantern.1h7o2xb"
+msgstr "Lantern"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.group.levels.1s6yaru"
+msgstr "Levels"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.group.line.166mv5z"
+msgstr "Line"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.group.lines.12bghr0"
+msgstr "Lines"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.group.motion.1be7sjr"
+msgstr "Motion"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.group.mounting.feutd2"
+msgstr "Mounting"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.group.opening.dfet3"
+msgstr "Opening"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.group.panelDimensions.b59qe6"
+msgstr "Panel dimensions"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.group.patternDistribution.fmam51"
+msgstr "Pattern distribution"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.group.placement.13lcvts"
+msgstr "Placement"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.group.position.1quewx6"
+msgstr "Position"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.group.profile.1kwlci6"
+msgstr "Profile"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.group.railing.19a5bnr"
+msgstr "Railing"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.group.return.1klrjrz"
+msgstr "Return"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.group.settings.ktdb8o"
+msgstr "Settings"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.group.shaft.mad9cv"
+msgstr "Shaft"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.group.shape.iq9t52"
+msgstr "Shape"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.group.shoulder.1nyfx25"
+msgstr "Shoulder"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.group.size.1a4x3zw"
+msgstr "Size"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.group.structure.gezdra"
+msgstr "Structure"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.group.style.nf3vcm"
+msgstr "Style"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.group.supply.1oy2zwu"
+msgstr "Supply"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.group.surface.wtamqk"
+msgstr "Surface"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.group.terminal.1501knl"
+msgstr "Terminal"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.group.topology.18t8dyc"
+msgstr "Topology"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.group.transform.1c55ayj"
+msgstr "Transform"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.group.trap.1qc7vhe"
+msgstr "Trap"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.group.type.1m2zofh"
+msgstr "Type"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.abs.132mz8b"
+msgstr "Abs"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.accessPanel.13sptb5"
+msgstr "Access panel"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.airHandler.1crnyg3"
+msgstr "Air handler"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.alternating.5jashi"
+msgstr "Alternating"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.arched.14188w0"
+msgstr "Arched"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.auto.540b06"
+msgstr "Auto"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.automatic.r122ro"
+msgstr "Automatic"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.back.1hzmxtu"
+msgstr "Back"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.balusters.1j3w6ng"
+msgstr "Balusters"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.band.160umau"
+msgstr "Band"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.basePlate.17fcg8k"
+msgstr "Base plate"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.boards.u14hig"
+msgstr "Boards"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.bookshelf.ls0zqk"
+msgstr "Bookshelf"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.both.mkyb42"
+msgstr "Both"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.bottom.9mpruy"
+msgstr "Bottom"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.box.1nbjcuq"
+msgstr "Box"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.break.17spnvc"
+msgstr "Break"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.butterfly.pvv0g4"
+msgstr "Butterfly"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.cable.fp50zq"
+msgstr "Cable"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.castIron.1q2z4qk"
+msgstr "Cast iron"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.ceiling.1t2zaqo"
+msgstr "Ceiling"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.center.kzdxno"
+msgstr "Center"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.centerOpening.bn1rvw"
+msgstr "Center opening"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.cleanout.lww8bm"
+msgstr "Cleanout"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.concretePad.m1zdij"
+msgstr "Concrete pad"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.condenser.a74nps"
+msgstr "Condenser"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.corbeled.bovs4v"
+msgstr "Corbeled"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.count.1qoi4r8"
+msgstr "Count"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.coupling.111aap2"
+msgstr "Coupling"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.coveringSpecific.1h9fo8w"
+msgstr "Covering specific"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.cross.1elubzv"
+msgstr "Cross"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.cubby.ivq4qc"
+msgstr "Cubby"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.curved.6noz1s"
+msgstr "Curved"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.cylinder.eol6vj"
+msgstr "Cylinder"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.damper.wgri80"
+msgstr "Damper"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.destination.gfzm1r"
+msgstr "Destination"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.diffuser.1igj0jh"
+msgstr "Diffuser"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.dogEar.xhtvjt"
+msgstr "Dog ear"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.dome.1c87e56"
+msgstr "Dome"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.double.13h5354"
+msgstr "Double"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.ductBoard.lc3o4t"
+msgstr "Duct board"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.dutch.1djx429"
+msgstr "Dutch"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.elbow.1flup74"
+msgstr "Elbow"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.end.1llf32i"
+msgstr "End"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.endCap.1p4v4na"
+msgstr "End cap"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.equalFit.11vw52c"
+msgstr "Equal fit"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.fixedCount.1o3dznu"
+msgstr "Fixed count"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.fixedSpacing.hl4dr4"
+msgstr "Fixed spacing"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.flat.ly0bei"
+msgstr "Flat"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.flex.ktpamq"
+msgstr "Flex"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.floating.1oadpln"
+msgstr "Floating"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.floor.q9caf1"
+msgstr "Floor"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.flush.olwwu5"
+msgstr "Flush"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.front.uhugl4"
+msgstr "Front"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.furnace.w0mzpf"
+msgstr "Furnace"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.gable.1ekyx6"
+msgstr "Gable"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.gambrel.1yo90d9"
+msgstr "Gambrel"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.generic.1074oey"
+msgstr "Generic"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.glass.163tc5n"
+msgstr "Glass"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.glassFrame.jp9s3m"
+msgstr "Glass frame"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.globe.1avkqoy"
+msgstr "Globe"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.grounded.jwoq73"
+msgstr "Grounded"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.guard.1m575se"
+msgstr "Guard"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.halfRound.m5hob0"
+msgstr "Half round"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.hidden.gp48rd"
+msgstr "Hidden"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.hip.r0jnjy"
+msgstr "Hip"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.horizontal.tyapah"
+msgstr "Horizontal"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.include.1a27vnr"
+msgstr "Include"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.independentHighBeam.1tn0zvy"
+msgstr "Independent high beam"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.industrial.8sd9u"
+msgstr "Industrial"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.inline.1uh05lg"
+msgstr "Inline"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.integrated.1xd9lv0"
+msgstr "Integrated"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.joined.1x2o8ds"
+msgstr "Joined"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.kickout.vt8s6p"
+msgstr "Kickout"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.knee.186hcui"
+msgstr "Knee"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.kStyle.m8kfwz"
+msgstr "K style"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.landing.tyqarg"
+msgstr "Landing"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.lantern.1h7o2xb"
+msgstr "Lantern"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.leave.1xf0sbk"
+msgstr "Leave"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.left.14n06mo"
+msgstr "Left"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.level.i4lhtp"
+msgstr "Level"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.lowProfile.1h9lgzg"
+msgstr "Low profile"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.mansard.dwzck9"
+msgstr "Mansard"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.manual.1wu7r43"
+msgstr "Manual"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.maximumSpacing.n1fzl4"
+msgstr "Maximum spacing"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.metal.1az9fgc"
+msgstr "Metal"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.metalPanel.1xdz476"
+msgstr "Metal panel"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.minimal.fwmiwg"
+msgstr "Minimal"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.mono.oszvd6"
+msgstr "Mono"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.none.deku7v"
+msgstr "None"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.omit.okcs7w"
+msgstr "Omit"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.open.n6hn1l"
+msgstr "Open"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.opening.dfet3"
+msgstr "Opening"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.openRack.mvt1x0"
+msgstr "Open rack"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.oval.1jiqzxx"
+msgstr "Oval"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.picket.zyeoy1"
+msgstr "Picket"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.pointed.effedk"
+msgstr "Pointed"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.postAndRail.lajk2u"
+msgstr "Post and rail"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.preserveHighEdge.y6ywf0"
+msgstr "Preserve high edge"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.preserveLowEdge.196m5pk"
+msgstr "Preserve low edge"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.preservePitch.1uq973r"
+msgstr "Preserve pitch"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.privacy.1th4hrb"
+msgstr "Privacy"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.purlins.od124c"
+msgstr "Purlins"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.pvc.1oc4u2w"
+msgstr "Pvc"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.pyramid.17ucsqv"
+msgstr "Pyramid"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.rafters.16tzbby"
+msgstr "Rafters"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.rail.39zqc9"
+msgstr "Rail"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.raised.4kyx9h"
+msgstr "Raised"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.rect.tpfvaf"
+msgstr "Rect"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.reducer.18byt67"
+msgstr "Reducer"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.return.1klrjrz"
+msgstr "Return"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.returnGrille.r28ncm"
+msgstr "Return grille"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.right.8humpx"
+msgstr "Right"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.round.1vx0wyj"
+msgstr "Round"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.rounded.199nwpm"
+msgstr "Rounded"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.sanitaryTee.oro3d4"
+msgstr "Sanitary tee"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.scalloped.1eltba0"
+msgstr "Scalloped"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.scoop.qy5zdv"
+msgstr "Scoop"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.segmentedPanel.5r3hwl"
+msgstr "Segmented panel"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.shed.6t994v"
+msgstr "Shed"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.sheetMetal.l164lv"
+msgstr "Sheet metal"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.shingle.pfmynh"
+msgstr "Shingle"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.shingled.1nm9inf"
+msgstr "Shingled"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.simple.12mfu73"
+msgstr "Simple"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.single.1uzxurt"
+msgstr "Single"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.singleLeft.1atdh02"
+msgstr "Single left"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.singleRight.1axbu67"
+msgstr "Single right"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.slantBox.1ta99vy"
+msgstr "Slant box"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.slat.1p9njbz"
+msgstr "Slat"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.sliding.cd0jox"
+msgstr "Sliding"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.slope.1bn2qw"
+msgstr "Slope"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.sloped.lo4sh0"
+msgstr "Sloped"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.solid.o4uy6s"
+msgstr "Solid"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.solidPanel.2yaw62"
+msgstr "Solid panel"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.spiral.91hcl4"
+msgstr "Spiral"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.splash.1uke4cm"
+msgstr "Splash"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.spread.1g1zysu"
+msgstr "Spread"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.square.1xl1lk6"
+msgstr "Square"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.stair.1xf86e"
+msgstr "Stair"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.standard.vuco"
+msgstr "Standard"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.start.30xvgf"
+msgstr "Start"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.step.jtn9kf"
+msgstr "Step"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.stepped.naxzh0"
+msgstr "Stepped"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.straight.lxqbfr"
+msgstr "Straight"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.strap.14q0ps9"
+msgstr "Strap"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.supply.1oy2zwu"
+msgstr "Supply"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.supplyRegister.1lzdbbn"
+msgstr "Supply register"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.tapered.3y5blo"
+msgstr "Tapered"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.targetSpacing.14uibc9"
+msgstr "Target spacing"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.tee.7d6tjp"
+msgstr "Tee"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.tilted.6n0u5j"
+msgstr "Tilted"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.top.2nypcs"
+msgstr "Top"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.transition.1rziz9e"
+msgstr "Transition"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.vent.xda5j2"
+msgstr "Vent"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.walkOn.1n5sg9l"
+msgstr "Walk on"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.wall.blj585"
+msgstr "Wall"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.wallAbutment.lza941"
+msgstr "Wall abutment"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.wallLedger.5m8ana"
+msgstr "Wall ledger"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.wallShelf.yiozfl"
+msgstr "Wall shelf"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.waste.3xrp79"
+msgstr "Waste"
+
+#: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.inspector.option.wye.14vupc8"
+msgstr "Wye"
+
 #: packages/editor/src/lib/contextual-help.ts
 msgid "editor.lib.contextualHelp.addOrRemoveObjectsFromThe"
 msgstr "Add or remove objects from the selection"
@@ -1751,9 +3632,1367 @@ msgstr "Rectangle room"
 msgid "editor.lib.wallDrawVariant.walls"
 msgstr "Walls"
 
+#: packages/editor/src/components/ui/panels/node-display.ts
+msgid "editor.nodeDisplay.ceiling"
+msgstr "Ceiling"
+
+#: packages/editor/src/components/ui/panels/node-display.ts
+msgid "editor.nodeDisplay.column"
+msgstr "Column"
+
+#: packages/editor/src/components/ui/panels/node-display.ts
+msgid "editor.nodeDisplay.door"
+msgstr "Door"
+
+#: packages/editor/src/components/ui/panels/node-display.ts
+msgid "editor.nodeDisplay.elevator"
+msgstr "Elevator"
+
+#: packages/editor/src/components/ui/panels/node-display.ts
+msgid "editor.nodeDisplay.fence"
+msgstr "Fence"
+
+#: packages/editor/src/components/ui/panels/node-display.ts
+msgid "editor.nodeDisplay.guide"
+msgstr "Guide image"
+
+#: packages/editor/src/components/ui/panels/node-display.ts
+msgid "editor.nodeDisplay.item"
+msgstr "Item"
+
+#: packages/editor/src/components/ui/panels/node-display.ts
+msgid "editor.nodeDisplay.roof"
+msgstr "Roof"
+
+#: packages/editor/src/components/ui/panels/node-display.ts
+msgid "editor.nodeDisplay.roofSegment"
+msgstr "Roof segment"
+
+#: packages/editor/src/components/ui/panels/node-display.ts
+msgid "editor.nodeDisplay.room"
+msgstr "Room"
+
+#: packages/editor/src/components/ui/panels/node-display.ts
+msgid "editor.nodeDisplay.scan"
+msgstr "3D Scan"
+
+#: packages/editor/src/components/ui/panels/node-display.ts
+msgid "editor.nodeDisplay.selection"
+msgstr "Selection"
+
+#: packages/editor/src/components/ui/panels/node-display.ts
+msgid "editor.nodeDisplay.slab"
+msgstr "Slab"
+
+#: packages/editor/src/components/ui/panels/node-display.ts
+msgid "editor.nodeDisplay.stair"
+msgstr "Stair"
+
+#: packages/editor/src/components/ui/panels/node-display.ts
+msgid "editor.nodeDisplay.stairSegment"
+msgstr "Stair segment"
+
+#: packages/editor/src/components/ui/panels/node-display.ts
+msgid "editor.nodeDisplay.wall"
+msgstr "Wall"
+
+#: packages/editor/src/components/ui/panels/node-display.ts
+msgid "editor.nodeDisplay.window"
+msgstr "Window"
+
+#: packages/editor/src/components/ui/panels/node-display.ts
+msgid "editor.nodeDisplay.zone"
+msgstr "Zone"
+
+#: packages/editor/src/components/ui/panels/collections/collections-popover.tsx
+msgid "editor.panels.collections.collectionsPopover.cancel"
+msgstr "Cancel"
+
+#: packages/editor/src/components/ui/panels/collections/collections-popover.tsx
+msgid "editor.panels.collections.collectionsPopover.collectionName"
+msgstr "Collection name…"
+
+#: packages/editor/src/components/ui/panels/collections/collections-popover.tsx
+msgid "editor.panels.collections.collectionsPopover.collections"
+msgstr "Collections"
+
+#: packages/editor/src/components/ui/panels/collections/collections-popover.tsx
+msgid "editor.panels.collections.collectionsPopover.delete"
+msgstr "Delete"
+
+#: packages/editor/src/components/ui/panels/collections/collections-popover.tsx
+msgid "editor.panels.collections.collectionsPopover.deleteName"
+msgstr "Delete \"{name}\"?"
+
+#: packages/editor/src/components/ui/panels/collections/collections-popover.tsx
+msgid "editor.panels.collections.collectionsPopover.new"
+msgstr "New"
+
+#: packages/editor/src/components/ui/panels/collections/collections-popover.tsx
+msgid "editor.panels.collections.collectionsPopover.noCollectionsYetCreateOneTo"
+msgstr "No collections yet. Create one to group elements together."
+
+#: packages/editor/src/components/ui/panels/collections/collections-popover.tsx
+msgid "editor.panels.collections.collectionsPopover.rename"
+msgstr "Rename"
+
+#: packages/editor/src/components/ui/panels/floor-foundation-panel.tsx
+msgid "editor.panels.floorFoundationPanel.aThickerFloorGrowsUpwardThe"
+msgstr "A thicker floor grows upward: the rooms below keep their height."
+
+#: packages/editor/src/components/ui/panels/floor-foundation-panel.tsx
+msgid "editor.panels.floorFoundationPanel.edgeFinish"
+msgstr "Edge finish"
+
+#: packages/editor/src/components/ui/panels/floor-foundation-panel.tsx
+msgid "editor.panels.floorFoundationPanel.floorPlate"
+msgstr "Floor plate"
+
+#: packages/editor/src/components/ui/panels/floor-foundation-panel.tsx
+msgid "editor.panels.floorFoundationPanel.floorPlateThicknesslabelThickRestingOn"
+msgstr "Floor plate {thicknessLabel} thick, resting on the walls below"
+
+#: packages/editor/src/components/ui/panels/floor-foundation-panel.tsx
+msgid "editor.panels.floorFoundationPanel.floorThickness"
+msgstr "Floor thickness"
+
+#: packages/editor/src/components/ui/panels/floor-foundation-panel.tsx
+msgid "editor.panels.floorFoundationPanel.floorTopAbove"
+msgstr "Floor top +{height}"
+
+#: packages/editor/src/components/ui/panels/floor-foundation-panel.tsx
+msgid "editor.panels.floorFoundationPanel.floorTopValue"
+msgstr "Floor top {height}"
+
+#: packages/editor/src/components/ui/panels/floor-foundation-panel.tsx
+msgid "editor.panels.floorFoundationPanel.foundationFinish"
+msgstr "Foundation finish"
+
+#: packages/editor/src/components/ui/panels/floor-foundation-panel.tsx
+msgid "editor.panels.floorFoundationPanel.foundationHeight"
+msgstr "Foundation height"
+
+#: packages/editor/src/components/ui/panels/floor-foundation-panel.tsx
+msgid "editor.panels.floorFoundationPanel.kicker"
+msgstr "Floor plate"
+
+#: packages/editor/src/components/ui/panels/floor-foundation-panel.tsx
+msgid "editor.panels.floorFoundationPanel.kickerLevel"
+msgstr "Floor plate · {level}"
+
+#: packages/editor/src/components/ui/panels/floor-foundation-panel.tsx
+msgid "editor.panels.floorFoundationPanel.kickerRestsOn"
+msgstr "Floor plate · {level} · rests on {below}"
+
+#: packages/editor/src/components/ui/panels/floor-foundation-panel.tsx
+msgid "editor.panels.floorFoundationPanel.lowerTogether"
+msgstr "{count, plural, =2 {Lower both} other {Lower all #}}"
+
+#: packages/editor/src/components/ui/panels/floor-foundation-panel.tsx
+msgid "editor.panels.floorFoundationPanel.notToScale"
+msgstr "Not to scale"
+
+#: packages/editor/src/components/ui/panels/floor-foundation-panel.tsx
+msgid "editor.panels.floorFoundationPanel.onTheGround"
+msgstr "On the ground"
+
+#: packages/editor/src/components/ui/panels/floor-foundation-panel.tsx
+msgid "editor.panels.floorFoundationPanel.raisedOnAFoundation"
+msgstr "Raised on a foundation"
+
+#: packages/editor/src/components/ui/panels/floor-foundation-panel.tsx
+msgid "editor.panels.floorFoundationPanel.raiseTogether"
+msgstr "{count, plural, =2 {Raise both} other {Raise all #}}"
+
+#: packages/editor/src/components/ui/panels/floor-foundation-panel.tsx
+msgid "editor.panels.floorFoundationPanel.section.floorPlate"
+msgstr "Floor plate · {thickness}"
+
+#: packages/editor/src/components/ui/panels/floor-foundation-panel.tsx
+msgid "editor.panels.floorFoundationPanel.section.floorTop"
+msgstr "Floor top"
+
+#: packages/editor/src/components/ui/panels/floor-foundation-panel.tsx
+msgid "editor.panels.floorFoundationPanel.section.foundation"
+msgstr "Foundation"
+
+#: packages/editor/src/components/ui/panels/floor-foundation-panel.tsx
+msgid "editor.panels.floorFoundationPanel.section.foundationKind"
+msgstr "Foundation · {foundation}"
+
+#: packages/editor/src/components/ui/panels/floor-foundation-panel.tsx
+msgid "editor.panels.floorFoundationPanel.section.ground"
+msgstr "Ground"
+
+#: packages/editor/src/components/ui/panels/floor-foundation-panel.tsx
+msgid "editor.panels.floorFoundationPanel.section.slab"
+msgstr "Slab · {thickness}"
+
+#: packages/editor/src/components/ui/panels/floor-foundation-panel.tsx
+msgid "editor.panels.floorFoundationPanel.section.wallsBelow"
+msgstr "Walls below"
+
+#: packages/editor/src/components/ui/panels/floor-foundation-panel.tsx
+msgid "editor.panels.floorFoundationPanel.sectionOnGround"
+msgstr "Slab {thickness} thick on the ground, floor top {top} above the ground"
+
+#: packages/editor/src/components/ui/panels/floor-foundation-panel.tsx
+msgid "editor.panels.floorFoundationPanel.sectionRaised"
+msgstr "Slab {thickness} thick on a {foundation} foundation, floor top {top} above the ground"
+
+#: packages/editor/src/components/ui/panels/floor-foundation-panel.tsx
+msgid "editor.panels.floorFoundationPanel.slab"
+msgstr "Slab"
+
+#: packages/editor/src/components/ui/panels/floor-foundation-panel.tsx
+msgid "editor.panels.floorFoundationPanel.slabThickness"
+msgstr "Slab thickness"
+
+#: packages/editor/src/components/ui/panels/floor-foundation-panel.tsx
+msgid "editor.panels.floorFoundationPanel.theFloorSOutsideEdgeAll"
+msgstr "The floor's outside edge, all around the footprint."
+
+#: packages/editor/src/components/ui/panels/floor-foundation-panel.tsx
+msgid "editor.panels.floorFoundationPanel.theFoundationStandsOnTheGround"
+msgstr "The foundation stands on the ground; the slab sits on it."
+
+#: packages/editor/src/components/ui/panels/floor-foundation-panel.tsx
+msgid "editor.panels.floorFoundationPanel.theSlabSitsOnTheFoundation"
+msgstr "The slab sits on the foundation (or the ground): a thicker slab raises the floor top and everything on it."
+
+#: packages/editor/src/components/ui/panels/floor-foundation-panel.tsx
+msgid "editor.panels.floorFoundationPanel.underTheFloor"
+msgstr "Under the floor"
+
+#: packages/editor/src/components/ui/panels/floor-opening-panel.tsx
+msgid "editor.panels.floorOpeningPanel.aHatchInTheMezzanineIt"
+msgstr "A hatch in the mezzanine: it cuts only the mezzanine’s floor."
+
+#: packages/editor/src/components/ui/panels/floor-opening-panel.tsx
+msgid "editor.panels.floorOpeningPanel.alsoCutTheCeilingBelow"
+msgstr "Also cut the ceiling below"
+
+#: packages/editor/src/components/ui/panels/floor-opening-panel.tsx
+msgid "editor.panels.floorOpeningPanel.alsoCutTheFloorAbove"
+msgstr "Also cut the floor above"
+
+#: packages/editor/src/components/ui/panels/floor-opening-panel.tsx
+msgid "editor.panels.floorOpeningPanel.areaDragCorners"
+msgstr "{area} · Drag its corners to change the shape."
+
+#: packages/editor/src/components/ui/panels/floor-opening-panel.tsx
+msgid "editor.panels.floorOpeningPanel.areaOwned"
+msgstr "{area} · Shape follows its owner."
+
+#: packages/editor/src/components/ui/panels/floor-opening-panel.tsx
+msgid "editor.panels.floorOpeningPanel.delete"
+msgstr "Delete"
+
+#: packages/editor/src/components/ui/panels/floor-opening-panel.tsx
+msgid "editor.panels.floorOpeningPanel.done"
+msgstr "Done"
+
+#: packages/editor/src/components/ui/panels/floor-opening-panel.tsx
+msgid "editor.panels.floorOpeningPanel.kicker"
+msgstr "Opening"
+
+#: packages/editor/src/components/ui/panels/floor-opening-panel.tsx
+msgid "editor.panels.floorOpeningPanel.kickerLevel"
+msgstr "Opening · {level}"
+
+#: packages/editor/src/components/ui/panels/floor-opening-panel.tsx
+msgid "editor.panels.floorOpeningPanel.kickerRoom"
+msgstr "Opening · in {room}"
+
+#: packages/editor/src/components/ui/panels/floor-opening-panel.tsx
+msgid "editor.panels.floorOpeningPanel.kickerRoomLevel"
+msgstr "Opening · in {room} · {level}"
+
+#: packages/editor/src/components/ui/panels/floor-opening-panel.tsx
+msgid "editor.panels.floorOpeningPanel.oneVoidWith"
+msgstr "On {level}, as one void with this opening."
+
+#: packages/editor/src/components/ui/panels/floor-opening-panel.tsx
+msgid "editor.panels.floorOpeningPanel.ownedByElevator"
+msgstr "Owned by Elevator"
+
+#: packages/editor/src/components/ui/panels/floor-opening-panel.tsx
+msgid "editor.panels.floorOpeningPanel.ownedByStaircase"
+msgstr "Owned by Staircase"
+
+#: packages/editor/src/components/ui/panels/floor-opening-panel.tsx
+msgid "editor.panels.floorOpeningPanel.thereIsNoFloorAboveThis"
+msgstr "There is no floor above this storey."
+
+#: packages/editor/src/components/ui/panels/floor-opening-panel.tsx
+msgid "editor.panels.floorOpeningPanel.thereIsNoStoreyBelow"
+msgstr "There is no storey below."
+
+#: packages/editor/src/components/ui/panels/floor-opening-panel.tsx
+msgid "editor.panels.floorOpeningPanel.title"
+msgstr "{source, select, stair {Stair opening} elevator {Elevator opening} ceiling {Ceiling opening} other {Floor opening}}"
+
+#: packages/editor/src/components/ui/panels/multi-selection-panel.tsx
+msgid "editor.panels.mergeRefusal.alreadyJoined"
+msgstr "One of them already wraps another corner. Unwrap it first."
+
+#: packages/editor/src/components/ui/panels/multi-selection-panel.tsx
+msgid "editor.panels.mergeRefusal.cannotMerge"
+msgstr "These windows cannot be merged."
+
+#: packages/editor/src/components/ui/panels/multi-selection-panel.tsx
+msgid "editor.panels.mergeRefusal.cornerAngle"
+msgstr "Their walls meet at too sharp or too flat an angle for a corner window."
+
+#: packages/editor/src/components/ui/panels/multi-selection-panel.tsx
+msgid "editor.panels.mergeRefusal.heightExceedsWall"
+msgstr "The window selected first is taller than the other wall. Select the other one first."
+
+#: packages/editor/src/components/ui/panels/multi-selection-panel.tsx
+msgid "editor.panels.mergeRefusal.kindBetween"
+msgstr "A {kind} is between them."
+
+#: packages/editor/src/components/ui/panels/multi-selection-panel.tsx
+msgid "editor.panels.mergeRefusal.kindOverlap"
+msgstr "Sliding them to the corner would overlap a {kind}."
+
+#: packages/editor/src/components/ui/panels/multi-selection-panel.tsx
+msgid "editor.panels.mergeRefusal.notAdjacent"
+msgstr "They are too far apart. Windows merge with at most {reach} between them."
+
+#: packages/editor/src/components/ui/panels/multi-selection-panel.tsx
+msgid "editor.panels.mergeRefusal.notAtCorner"
+msgstr "One of them is too far from the corner. A window joins one within {reach} of it."
+
+#: packages/editor/src/components/ui/panels/multi-selection-panel.tsx
+msgid "editor.panels.mergeRefusal.notOnWall"
+msgstr "A roof or dormer window cannot join another window."
+
+#: packages/editor/src/components/ui/panels/multi-selection-panel.tsx
+msgid "editor.panels.mergeRefusal.somethingBetween"
+msgstr "There is something between them."
+
+#: packages/editor/src/components/ui/panels/multi-selection-panel.tsx
+msgid "editor.panels.mergeRefusal.somethingOverlap"
+msgstr "Sliding them to the corner would overlap something."
+
+#: packages/editor/src/components/ui/panels/multi-selection-panel.tsx
+msgid "editor.panels.mergeRefusal.wallsNotMeeting"
+msgstr "Their walls do not meet at a corner."
+
+#: packages/editor/src/components/ui/panels/multi-height-mode.tsx
+#: packages/editor/src/components/ui/panels/parametric-field-control.tsx
+msgid "editor.panels.mixed"
+msgstr "Mixed"
+
+#: packages/editor/src/components/ui/panels/mobile-panel-sheet.tsx
+msgid "editor.panels.mobilePanelSheet.close"
+msgstr "Close"
+
+#: packages/editor/src/components/ui/panels/mobile-selection-bar.tsx
+msgid "editor.panels.mobileSelectionBar.delete"
+msgstr "Delete"
+
+#: packages/editor/src/components/ui/panels/mobile-selection-bar.tsx
+msgid "editor.panels.mobileSelectionBar.duplicate"
+msgstr "Duplicate"
+
+#: packages/editor/src/components/ui/panels/mobile-selection-bar.tsx
+msgid "editor.panels.mobileSelectionBar.editProperties"
+msgstr "Edit properties"
+
+#: packages/editor/src/components/ui/panels/mobile-selection-bar.tsx
+msgid "editor.panels.mobileSelectionBar.editResolvedlabel"
+msgstr "Edit {resolvedLabel}"
+
+#: packages/editor/src/components/ui/panels/mobile-selection-bar.tsx
+msgid "editor.panels.mobileSelectionBar.move"
+msgstr "Move"
+
+#: packages/editor/src/components/ui/panels/multi-height-mode.tsx
+msgid "editor.panels.multiHeightMode.currentlyCurrentlabel"
+msgstr "Currently {currentLabel}"
+
+#: packages/editor/src/components/ui/panels/multi-height-mode.tsx
+msgid "editor.panels.multiHeightMode.customHeight"
+msgstr "Custom height"
+
+#: packages/editor/src/components/ui/panels/multi-height-mode.tsx
+msgid "editor.panels.multiHeightMode.followsLevel"
+msgstr "Follows level"
+
+#: packages/editor/src/components/ui/panels/multi-height-mode.tsx
+msgid "editor.panels.multiHeightMode.height"
+msgstr "Height"
+
+#: packages/editor/src/components/ui/panels/multi-height-mode.tsx
+msgid "editor.panels.multiHeightMode.top"
+msgstr "Top"
+
+#: packages/editor/src/components/ui/panels/multi-parametric-inspector.tsx
+msgid "editor.panels.multiParametricInspector.labelSessionOnlyPlainClickReselects"
+msgstr "{label} (session only). Plain click reselects all members. Not saved with the project."
+
+#: packages/editor/src/components/ui/panels/multi-selection-panel.tsx
+msgid "editor.panels.multiSelectionPanel.delete"
+msgstr "Delete"
+
+#: packages/editor/src/components/ui/panels/multi-selection-panel.tsx
+msgid "editor.panels.multiSelectionPanel.duplicate"
+msgstr "Duplicate"
+
+#: packages/editor/src/components/ui/panels/multi-selection-panel.tsx
+msgid "editor.panels.multiSelectionPanel.group"
+msgstr "Group"
+
+#: packages/editor/src/components/ui/panels/multi-selection-panel.tsx
+msgid "editor.panels.multiSelectionPanel.groupCtrlCmdG"
+msgstr "Group (Ctrl/Cmd+G)"
+
+#: packages/editor/src/components/ui/panels/multi-selection-panel.tsx
+msgid "editor.panels.multiSelectionPanel.labelSessionOnlyPlainClickReselects"
+msgstr "{label} (session only). Plain click reselects all members. Not saved with the project."
+
+#: packages/editor/src/components/ui/panels/multi-selection-panel.tsx
+msgid "editor.panels.multiSelectionPanel.lengthSelected"
+msgstr "{length} selected"
+
+#: packages/editor/src/components/ui/panels/multi-selection-panel.tsx
+msgid "editor.panels.multiSelectionPanel.mergeWindows"
+msgstr "Merge windows"
+
+#: packages/editor/src/components/ui/panels/multi-selection-panel.tsx
+msgid "editor.panels.multiSelectionPanel.mergeWindowsIntoACornerWindow"
+msgstr "Merge windows into a corner window: both take the height, sill and type of the one you selected first"
+
+#: packages/editor/src/components/ui/panels/multi-selection-panel.tsx
+msgid "editor.panels.multiSelectionPanel.mergeWindowsIntoOneAcrossBoth"
+msgstr "Merge windows into one across both: it keeps the type and style of the one you selected first"
+
+#: packages/editor/src/components/ui/panels/multi-selection-panel.tsx
+msgid "editor.panels.multiSelectionPanel.selectBuilding"
+msgstr "Select building"
+
+#: packages/editor/src/components/ui/panels/multi-selection-panel.tsx
+msgid "editor.panels.multiSelectionPanel.selectTheWholeBuildingToMove"
+msgstr "Select the whole building to move all its levels"
+
+#: packages/editor/src/components/ui/panels/multi-selection-panel.tsx
+msgid "editor.panels.multiSelectionPanel.ungroup"
+msgstr "Ungroup"
+
+#: packages/editor/src/components/ui/panels/multi-selection-panel.tsx
+msgid "editor.panels.multiSelectionPanel.ungroupCtrlCmdShiftG"
+msgstr "Ungroup (Ctrl/Cmd+Shift+G)"
+
+#: packages/editor/src/components/ui/panels/multi-selection-panel.tsx
+msgid "editor.panels.multiSelectionPanel.unwrapTheCorner"
+msgstr "Unwrap the corner"
+
+#: packages/editor/src/components/ui/panels/multi-selection-panel.tsx
+msgid "editor.panels.multiSelectionPanel.unwrapTheCornerBothWindowsStay"
+msgstr "Unwrap the corner: both windows stay, each framed at the corner"
+
+#: packages/editor/src/components/ui/panels/panel-manager.tsx
+msgid "editor.panels.panelManager.selection"
+msgstr "Selection"
+
+#: packages/editor/src/components/ui/panels/panel-wrapper.tsx
+msgid "editor.panels.panelWrapper.closeTitle"
+msgstr "Close {title}"
+
+#: packages/editor/src/components/ui/panels/panel-wrapper.tsx
+msgid "editor.panels.panelWrapper.collapsePanel"
+msgstr "Collapse panel"
+
+#: packages/editor/src/components/ui/panels/panel-wrapper.tsx
+msgid "editor.panels.panelWrapper.collections"
+msgstr "Collections"
+
+#: packages/editor/src/components/ui/panels/panel-wrapper.tsx
+msgid "editor.panels.panelWrapper.expandPanel"
+msgstr "Expand panel"
+
+#: packages/editor/src/components/ui/panels/panel-wrapper.tsx
+msgid "editor.panels.panelWrapper.manageCollections"
+msgstr "Manage collections…"
+
+#: packages/editor/src/components/ui/panels/panel-wrapper.tsx
+msgid "editor.panels.panelWrapper.openTitle"
+msgstr "Open {title}"
+
+#: packages/editor/src/components/ui/panels/panel-wrapper.tsx
+msgid "editor.panels.panelWrapper.titleHitAnErrorAndWas"
+msgstr "“{title}” hit an error and was unloaded for this session."
+
+#: packages/editor/src/components/ui/panels/parametric-field-control.tsx
+msgid "editor.panels.parametricFieldControl.mixed"
+msgstr "Mixed"
+
+#: packages/editor/src/components/ui/panels/parametric-inspector.tsx
+msgid "editor.panels.parametricInspector.actions"
+msgstr "Actions"
+
+#: packages/editor/src/components/ui/panels/parametric-inspector.tsx
+msgid "editor.panels.parametricInspector.delete"
+msgstr "Delete"
+
+#: packages/editor/src/components/ui/panels/parametric-inspector.tsx
+msgid "editor.panels.parametricInspector.deleteWithContents"
+msgstr "Delete with contents"
+
+#: packages/editor/src/components/ui/panels/parametric-inspector.tsx
+msgid "editor.panels.parametricInspector.move"
+msgstr "Move"
+
+#: packages/editor/src/components/ui/panels/reference-panel.tsx
+msgid "editor.panels.referencePanel.cancel"
+msgstr "Cancel"
+
+#: packages/editor/src/components/ui/panels/reference-panel.tsx
+msgid "editor.panels.referencePanel.capture"
+msgstr "Capture"
+
+#: packages/editor/src/components/ui/panels/reference-panel.tsx
+msgid "editor.panels.referencePanel.center"
+msgstr "Center"
+
+#: packages/editor/src/components/ui/panels/reference-panel.tsx
+msgid "editor.panels.referencePanel.clearScale"
+msgstr "Clear Scale"
+
+#: packages/editor/src/components/ui/panels/reference-panel.tsx
+msgid "editor.panels.referencePanel.clickBothEndsOfAKnown"
+msgstr "Click both ends of a known distance on the plan, then type its real length."
+
+#: packages/editor/src/components/ui/panels/reference-panel.tsx
+msgid "editor.panels.referencePanel.delete"
+msgstr "Delete"
+
+#: packages/editor/src/components/ui/panels/reference-panel.tsx
+msgid "editor.panels.referencePanel.drawALineOverAKnown"
+msgstr "Draw a line over a known dimension on the plan, then type its real length to scale the image exactly."
+
+#: packages/editor/src/components/ui/panels/reference-panel.tsx
+msgid "editor.panels.referencePanel.editScale"
+msgstr "Edit Scale"
+
+#: packages/editor/src/components/ui/panels/reference-panel.tsx
+msgid "editor.panels.referencePanel.guideImage"
+msgstr "Guide Image"
+
+#: packages/editor/src/components/ui/panels/reference-panel.tsx
+msgid "editor.panels.referencePanel.hide"
+msgstr "Hide"
+
+#: packages/editor/src/components/ui/panels/reference-panel.tsx
+msgid "editor.panels.referencePanel.hideScale"
+msgstr "Hide Scale"
+
+#: packages/editor/src/components/ui/panels/reference-panel.tsx
+msgid "editor.panels.referencePanel.image"
+msgstr "Image"
+
+#: packages/editor/src/components/ui/panels/reference-panel.tsx
+msgid "editor.panels.referencePanel.lock"
+msgstr "Lock"
+
+#: packages/editor/src/components/ui/panels/reference-panel.tsx
+msgid "editor.panels.referencePanel.move"
+msgstr "Move"
+
+#: packages/editor/src/components/ui/panels/reference-panel.tsx
+msgid "editor.panels.referencePanel.opacity"
+msgstr "Opacity"
+
+#: packages/editor/src/components/ui/panels/reference-panel.tsx
+msgid "editor.panels.referencePanel.overlayImageUnavailableReplaceTheImage"
+msgstr "Overlay image unavailable. Replace the image to restore it."
+
+#: packages/editor/src/components/ui/panels/reference-panel.tsx
+msgid "editor.panels.referencePanel.pos"
+msgstr "pos"
+
+#: packages/editor/src/components/ui/panels/reference-panel.tsx
+msgid "editor.panels.referencePanel.position"
+msgstr "Position"
+
+#: packages/editor/src/components/ui/panels/reference-panel.tsx
+msgid "editor.panels.referencePanel.quickActions"
+msgstr "Quick Actions"
+
+#: packages/editor/src/components/ui/panels/reference-panel.tsx
+msgid "editor.panels.referencePanel.referenceScale"
+msgstr "Reference Scale"
+
+#: packages/editor/src/components/ui/panels/reference-panel.tsx
+msgid "editor.panels.referencePanel.replace"
+msgstr "Replace"
+
+#: packages/editor/src/components/ui/panels/reference-panel.tsx
+msgid "editor.panels.referencePanel.replacing"
+msgstr "Replacing..."
+
+#: packages/editor/src/components/ui/panels/reference-panel.tsx
+msgid "editor.panels.referencePanel.resetImageScale"
+msgstr "Reset Image Scale"
+
+#: packages/editor/src/components/ui/panels/reference-panel.tsx
+msgid "editor.panels.referencePanel.resetRotation"
+msgstr "Reset Rotation"
+
+#: packages/editor/src/components/ui/panels/reference-panel.tsx
+msgid "editor.panels.referencePanel.rot"
+msgstr "rot"
+
+#: packages/editor/src/components/ui/panels/reference-panel.tsx
+msgid "editor.panels.referencePanel.rotation"
+msgstr "Rotation"
+
+#: packages/editor/src/components/ui/panels/reference-panel.tsx
+msgid "editor.panels.referencePanel.scale"
+msgstr "scale"
+
+#: packages/editor/src/components/ui/panels/reference-panel.tsx
+msgid "editor.panels.referencePanel.scaled"
+msgstr "Scaled · {scale}"
+
+#: packages/editor/src/components/ui/panels/reference-panel.tsx
+msgid "editor.panels.referencePanel.scaledHidden"
+msgstr "Scaled (hidden) · {scale}"
+
+#: packages/editor/src/components/ui/panels/reference-panel.tsx
+msgid "editor.panels.referencePanel.scaleOpacity"
+msgstr "Scale & Opacity"
+
+#: packages/editor/src/components/ui/panels/reference-panel.tsx
+msgid "editor.panels.referencePanel.setScale"
+msgstr "Set Scale"
+
+#: packages/editor/src/components/ui/panels/reference-panel.tsx
+msgid "editor.panels.referencePanel.show"
+msgstr "Show"
+
+#: packages/editor/src/components/ui/panels/reference-panel.tsx
+msgid "editor.panels.referencePanel.showScale"
+msgstr "Show Scale"
+
+#: packages/editor/src/components/ui/panels/reference-panel.tsx
+msgid "editor.panels.referencePanel.uncalibrated"
+msgstr "Uncalibrated"
+
+#: packages/editor/src/components/ui/panels/reference-panel.tsx
+msgid "editor.panels.referencePanel.unlock"
+msgstr "Unlock"
+
+#: packages/editor/src/components/ui/panels/reference-panel.tsx
+msgid "editor.panels.referencePanel.xyz"
+msgstr "XYZ"
+
+#: packages/editor/src/components/ui/panels/room-construction-rows.tsx
+msgid "editor.panels.roomConstructionRows.addMezzanine"
+msgstr "+ Add mezzanine"
+
+#: packages/editor/src/components/ui/panels/room-construction-rows.tsx
+msgid "editor.panels.roomConstructionRows.aDrawnSlabSetItsThickness"
+msgstr "A drawn slab: set its thickness and finishes here. It has no footprint height or foundation."
+
+#: packages/editor/src/components/ui/panels/room-construction-rows.tsx
+msgid "editor.panels.roomConstructionRows.atFloorLevel"
+msgstr "At floor level"
+
+#: packages/editor/src/components/ui/panels/room-construction-rows.tsx
+msgid "editor.panels.roomConstructionRows.builtOn"
+msgstr "Built on"
+
+#: packages/editor/src/components/ui/panels/room-construction-rows.tsx
+msgid "editor.panels.roomConstructionRows.builtWith"
+msgstr "Built with"
+
+#: packages/editor/src/components/ui/panels/room-construction-rows.tsx
+msgid "editor.panels.roomConstructionRows.ceiling"
+msgstr "Ceiling"
+
+#: packages/editor/src/components/ui/panels/room-construction-rows.tsx
+msgid "editor.panels.roomConstructionRows.ceilingAt"
+msgstr "At {height}"
+
+#: packages/editor/src/components/ui/panels/room-construction-rows.tsx
+msgid "editor.panels.roomConstructionRows.closeWithWalls"
+msgstr "Close with walls"
+
+#: packages/editor/src/components/ui/panels/room-construction-rows.tsx
+msgid "editor.panels.roomConstructionRows.drawnFloor"
+msgstr "{ambiguous, select, yes {Floor is several drawn slabs, mostly {name}} other {Floor is a drawn slab: {name}}}{shared, plural, =0 {} one { (shared with # room)} other { (shared with # rooms)}}"
+
+#: packages/editor/src/components/ui/panels/room-construction-rows.tsx
+msgid "editor.panels.roomConstructionRows.drawnFloorSwitchHint"
+msgstr "This floor is a drawn slab: select it to edit or delete it."
+
+#: packages/editor/src/components/ui/panels/room-construction-rows.tsx
+msgid "editor.panels.roomConstructionRows.drawnSlab"
+msgstr "Drawn slab"
+
+#: packages/editor/src/components/ui/panels/room-construction-rows.tsx
+msgid "editor.panels.roomConstructionRows.drawnSlabAt"
+msgstr "Drawn slab at {height}"
+
+#: packages/editor/src/components/ui/panels/room-construction-rows.tsx
+msgid "editor.panels.roomConstructionRows.editShape"
+msgstr "Edit shape"
+
+#: packages/editor/src/components/ui/panels/room-construction-rows.tsx
+msgid "editor.panels.roomConstructionRows.flatAtWallHeight"
+msgstr "Flat, at wall height"
+
+#: packages/editor/src/components/ui/panels/room-construction-rows.tsx
+msgid "editor.panels.roomConstructionRows.floor"
+msgstr "Floor"
+
+#: packages/editor/src/components/ui/panels/room-construction-rows.tsx
+msgid "editor.panels.roomConstructionRows.floorDown"
+msgstr "{distance} down"
+
+#: packages/editor/src/components/ui/panels/room-construction-rows.tsx
+msgid "editor.panels.roomConstructionRows.floorThickness"
+msgstr "Floor thickness"
+
+#: packages/editor/src/components/ui/panels/room-construction-rows.tsx
+msgid "editor.panels.roomConstructionRows.floorUp"
+msgstr "{distance} up"
+
+#: packages/editor/src/components/ui/panels/room-construction-rows.tsx
+msgid "editor.panels.roomConstructionRows.handDrawnCeiling"
+msgstr "Hand-drawn ceiling"
+
+#: packages/editor/src/components/ui/panels/room-construction-rows.tsx
+msgid "editor.panels.roomConstructionRows.height"
+msgstr "Height"
+
+#: packages/editor/src/components/ui/panels/room-construction-rows.tsx
+msgid "editor.panels.roomConstructionRows.includeFloor"
+msgstr "Include floor"
+
+#: packages/editor/src/components/ui/panels/room-construction-rows.tsx
+msgid "editor.panels.roomConstructionRows.includePart"
+msgstr "{part, select, floor {Include floor} walls {Include walls} other {Include ceiling}}"
+
+#: packages/editor/src/components/ui/panels/room-construction-rows.tsx
+msgid "editor.panels.roomConstructionRows.includeWalls"
+msgstr "Include walls"
+
+#: packages/editor/src/components/ui/panels/room-construction-rows.tsx
+msgid "editor.panels.roomConstructionRows.keepOutsideDimensions"
+msgstr "Keep outside dimensions"
+
+#: packages/editor/src/components/ui/panels/room-construction-rows.tsx
+msgid "editor.panels.roomConstructionRows.lowered"
+msgstr "Lowered {lift}"
+
+#: packages/editor/src/components/ui/panels/room-construction-rows.tsx
+msgid "editor.panels.roomConstructionRows.newFloor"
+msgstr "+ New floor"
+
+#: packages/editor/src/components/ui/panels/room-construction-rows.tsx
+msgid "editor.panels.roomConstructionRows.noFloor"
+msgstr "No floor"
+
+#: packages/editor/src/components/ui/panels/room-construction-rows.tsx
+msgid "editor.panels.roomConstructionRows.nothingToChange"
+msgstr "Nothing to change."
+
+#: packages/editor/src/components/ui/panels/room-construction-rows.tsx
+msgid "editor.panels.roomConstructionRows.notIncluded"
+msgstr "Not included"
+
+#: packages/editor/src/components/ui/panels/room-construction-rows.tsx
+msgid "editor.panels.roomConstructionRows.onTheGround"
+msgstr "On the ground"
+
+#: packages/editor/src/components/ui/panels/room-construction-rows.tsx
+msgid "editor.panels.roomConstructionRows.onTheWallsBelow"
+msgstr "On the walls below"
+
+#: packages/editor/src/components/ui/panels/room-construction-rows.tsx
+msgid "editor.panels.roomConstructionRows.openSides"
+msgstr "{openSides, plural, one {# open side} other {# open sides}}"
+
+#: packages/editor/src/components/ui/panels/room-construction-rows.tsx
+msgid "editor.panels.roomConstructionRows.partialCovered"
+msgstr "Partial · {coverage, number, percent} covered"
+
+#: packages/editor/src/components/ui/panels/room-construction-rows.tsx
+msgid "editor.panels.roomConstructionRows.partialWalls"
+msgstr "Partial · {walls, plural, one {# wall} other {# walls}}, {openSides, plural, one {# open side} other {# open sides}}"
+
+#: packages/editor/src/components/ui/panels/room-construction-rows.tsx
+msgid "editor.panels.roomConstructionRows.raised"
+msgstr "Raised {lift}"
+
+#: packages/editor/src/components/ui/panels/room-construction-rows.tsx
+msgid "editor.panels.roomConstructionRows.replace"
+msgstr "Replace"
+
+#: packages/editor/src/components/ui/panels/room-construction-rows.tsx
+msgid "editor.panels.roomConstructionRows.select"
+msgstr "Select"
+
+#: packages/editor/src/components/ui/panels/room-construction-rows.tsx
+msgid "editor.panels.roomConstructionRows.shape"
+msgstr "Shape"
+
+#: packages/editor/src/components/ui/panels/room-construction-rows.tsx
+msgid "editor.panels.roomConstructionRows.sharedWallsNote"
+msgstr "Turning walls off keeps the ones shared with {rooms}."
+
+#: packages/editor/src/components/ui/panels/room-construction-rows.tsx
+msgid "editor.panels.roomConstructionRows.sitsOnPreset"
+msgstr "Sits on: {name} · {preset}"
+
+#: packages/editor/src/components/ui/panels/room-construction-rows.tsx
+msgid "editor.panels.roomConstructionRows.useExisting"
+msgstr "Use existing"
+
+#: packages/editor/src/components/ui/panels/room-construction-rows.tsx
+msgid "editor.panels.roomConstructionRows.wallCount"
+msgstr "{walls, plural, one {# wall} other {# walls}}"
+
+#: packages/editor/src/components/ui/panels/room-construction-rows.tsx
+msgid "editor.panels.roomConstructionRows.walls"
+msgstr "Walls"
+
+#: packages/editor/src/components/ui/panels/room-construction-rows.tsx
+msgid "editor.panels.roomConstructionRows.wallsThickenInwardSoTheBuilding"
+msgstr "Walls thicken inward, so the building's outer size stays the same."
+
+#: packages/editor/src/components/ui/panels/room-openings-field.tsx
+msgid "editor.panels.roomOpeningsField.cutOpening"
+msgstr "Cut opening"
+
+#: packages/editor/src/components/ui/panels/room-openings-field.tsx
+msgid "editor.panels.roomOpeningsField.done"
+msgstr "Done"
+
+#: packages/editor/src/components/ui/panels/room-openings-field.tsx
+msgid "editor.panels.roomOpeningsField.editFloor"
+msgstr "Edit floor"
+
+#: packages/editor/src/components/ui/panels/room-openings-field.tsx
+msgid "editor.panels.roomOpeningsField.elevatorOpening"
+msgstr "Elevator opening"
+
+#: packages/editor/src/components/ui/panels/room-openings-field.tsx
+msgid "editor.panels.roomOpeningsField.noOpenings"
+msgstr "No openings"
+
+#: packages/editor/src/components/ui/panels/room-openings-field.tsx
+msgid "editor.panels.roomOpeningsField.noOpeningsYetCutOneFor"
+msgstr "No openings yet. Cut one for a stair void or a hatch."
+
+#: packages/editor/src/components/ui/panels/room-openings-field.tsx
+msgid "editor.panels.roomOpeningsField.openingNumber"
+msgstr "Opening {number}"
+
+#: packages/editor/src/components/ui/panels/room-openings-field.tsx
+msgid "editor.panels.roomOpeningsField.stairOpening"
+msgstr "Stair opening"
+
+#: packages/editor/src/components/ui/panels/room-panel.tsx
+msgid "editor.panels.roomPanel.addStairs"
+msgstr "Add stairs"
+
+#: packages/editor/src/components/ui/panels/room-panel.tsx
+msgid "editor.panels.roomPanel.addToAUnit"
+msgstr "Add to a unit"
+
+#: packages/editor/src/components/ui/panels/room-panel.tsx
+msgid "editor.panels.roomPanel.area"
+msgstr "Area"
+
+#: packages/editor/src/components/ui/panels/room-panel.tsx
+msgid "editor.panels.roomPanel.browse"
+msgstr "Browse"
+
+#: packages/editor/src/components/ui/panels/room-panel.tsx
+msgid "editor.panels.roomPanel.builtWith"
+msgstr "Built with"
+
+#: packages/editor/src/components/ui/panels/room-panel.tsx
+msgid "editor.panels.roomPanel.ceiling"
+msgstr "Ceiling"
+
+#: packages/editor/src/components/ui/panels/room-panel.tsx
+msgid "editor.panels.roomPanel.deleteRoom"
+msgstr "Delete room"
+
+#: packages/editor/src/components/ui/panels/room-panel.tsx
+msgid "editor.panels.roomPanel.editShape"
+msgstr "Edit shape"
+
+#: packages/editor/src/components/ui/panels/room-panel.tsx
+msgid "editor.panels.roomPanel.floor"
+msgstr "Floor"
+
+#: packages/editor/src/components/ui/panels/room-panel.tsx
+msgid "editor.panels.roomPanel.headroom"
+msgstr "{height} headroom"
+
+#: packages/editor/src/components/ui/panels/room-panel.tsx
+msgid "editor.panels.roomPanel.height"
+msgstr "Height"
+
+#: packages/editor/src/components/ui/panels/room-panel.tsx
+msgid "editor.panels.roomPanel.hideCode"
+msgstr "Hide code"
+
+#: packages/editor/src/components/ui/panels/room-panel.tsx
+msgid "editor.panels.roomPanel.kickerLevel"
+msgstr "Room · {level}"
+
+#: packages/editor/src/components/ui/panels/room-panel.tsx
+msgid "editor.panels.roomPanel.kickerMezzanineIn"
+msgstr "Mezzanine · in {room}"
+
+#: packages/editor/src/components/ui/panels/room-panel.tsx
+msgid "editor.panels.roomPanel.kickerNotEnclosed"
+msgstr "Room · not enclosed"
+
+#: packages/editor/src/components/ui/panels/room-panel.tsx
+msgid "editor.panels.roomPanel.loading"
+msgstr "Loading…"
+
+#: packages/editor/src/components/ui/panels/room-panel.tsx
+msgid "editor.panels.roomPanel.mezzanine"
+msgstr "Mezzanine"
+
+#: packages/editor/src/components/ui/panels/room-panel.tsx
+msgid "editor.panels.roomPanel.mezzanineName"
+msgstr "Mezzanine name"
+
+#: packages/editor/src/components/ui/panels/room-panel.tsx
+msgid "editor.panels.roomPanel.mezzanineNames"
+msgstr "Mezzanine names"
+
+#: packages/editor/src/components/ui/panels/room-panel.tsx
+msgid "editor.panels.roomPanel.newUnit"
+msgstr "New unit"
+
+#: packages/editor/src/components/ui/panels/room-panel.tsx
+msgid "editor.panels.roomPanel.none"
+msgstr "None"
+
+#: packages/editor/src/components/ui/panels/room-panel.tsx
+msgid "editor.panels.roomPanel.notEnoughHeadroom"
+msgstr "Not enough headroom"
+
+#: packages/editor/src/components/ui/panels/room-panel.tsx
+msgid "editor.panels.roomPanel.openRoomArea"
+msgstr "{area} · Close its walls to build its floor and ceiling."
+
+#: packages/editor/src/components/ui/panels/room-panel.tsx
+msgid "editor.panels.roomPanel.overTheMezzanine"
+msgstr "Over the mezzanine"
+
+#: packages/editor/src/components/ui/panels/room-panel.tsx
+msgid "editor.panels.roomPanel.perimeter"
+msgstr "Perimeter"
+
+#: packages/editor/src/components/ui/panels/room-panel.tsx
+msgid "editor.panels.roomPanel.pick"
+msgstr "Pick"
+
+#: packages/editor/src/components/ui/panels/room-panel.tsx
+msgid "editor.panels.roomPanel.pickingItAddsANumber"
+msgstr "Picking it adds a number"
+
+#: packages/editor/src/components/ui/panels/room-panel.tsx
+msgid "editor.panels.roomPanel.remove"
+msgstr "Remove"
+
+#: packages/editor/src/components/ui/panels/room-panel.tsx
+msgid "editor.panels.roomPanel.removeFromUnit"
+msgstr "Remove from unit"
+
+#: packages/editor/src/components/ui/panels/room-panel.tsx
+msgid "editor.panels.roomPanel.removeFromUnitNamed"
+msgstr "Remove from {unit}"
+
+#: packages/editor/src/components/ui/panels/room-panel.tsx
+msgid "editor.panels.roomPanel.rename"
+msgstr "Rename"
+
+#: packages/editor/src/components/ui/panels/room-panel.tsx
+msgid "editor.panels.roomPanel.renameNamed"
+msgstr "{name} · Rename"
+
+#: packages/editor/src/components/ui/panels/room-panel.tsx
+msgid "editor.panels.roomPanel.revert"
+msgstr "Revert"
+
+#: packages/editor/src/components/ui/panels/room-panel.tsx
+msgid "editor.panels.roomPanel.room"
+msgstr "Room"
+
+#: packages/editor/src/components/ui/panels/room-panel.tsx
+msgid "editor.panels.roomPanel.roomColourUsedInThePlan"
+msgstr "Room colour — used in the plan and labels"
+
+#: packages/editor/src/components/ui/panels/room-panel.tsx
+msgid "editor.panels.roomPanel.roomName"
+msgstr "Room name"
+
+#: packages/editor/src/components/ui/panels/room-panel.tsx
+msgid "editor.panels.roomPanel.roomNames"
+msgstr "Room names"
+
+#: packages/editor/src/components/ui/panels/room-panel.tsx
+msgid "editor.panels.roomPanel.scriptedFinish"
+msgstr "Scripted finish"
+
+#: packages/editor/src/components/ui/panels/room-panel.tsx
+msgid "editor.panels.roomPanel.shape"
+msgstr "Shape"
+
+#: packages/editor/src/components/ui/panels/room-panel.tsx
+msgid "editor.panels.roomPanel.showMezzanineNames"
+msgstr "Show mezzanine names"
+
+#: packages/editor/src/components/ui/panels/room-panel.tsx
+msgid "editor.panels.roomPanel.showRoomNames"
+msgstr "Show room names"
+
+#: packages/editor/src/components/ui/panels/room-panel.tsx
+msgid "editor.panels.roomPanel.stairs"
+msgstr "Stairs"
+
+#: packages/editor/src/components/ui/panels/room-panel.tsx
+msgid "editor.panels.roomPanel.unit"
+msgstr "Unit"
+
+#: packages/editor/src/components/ui/panels/room-panel.tsx
+msgid "editor.panels.roomPanel.use"
+msgstr "Use"
+
+#: packages/editor/src/components/ui/panels/room-panel.tsx
+msgid "editor.panels.roomPanel.usedOnThisLevel"
+msgstr "{used} on this level"
+
+#: packages/editor/src/components/ui/panels/room-panel.tsx
+msgid "editor.panels.roomPanel.useTyped"
+msgstr "{use} “{name}”"
+
+#: packages/editor/src/components/ui/panels/room-panel.tsx
+msgid "editor.panels.roomPanel.viewCode"
+msgstr "View code"
+
+#: packages/editor/src/components/ui/panels/room-panel.tsx
+#: packages/nodes/src/wall/panel.tsx
+msgid "editor.panels.scriptUnreadable"
+msgstr "The script could not be read."
+
+#: packages/editor/src/components/ui/panels/shape-choice.tsx
+msgid "editor.panels.shapeChoice.polygon"
+msgstr "Polygon"
+
+#: packages/editor/src/components/ui/panels/shape-choice.tsx
+msgid "editor.panels.shapeChoice.rectangle"
+msgstr "Rectangle"
+
+#: packages/editor/src/components/ui/panels/wall-region-list.tsx
+msgid "editor.panels.wallRegionList.deleteRegion"
+msgstr "Delete region"
+
+#: packages/editor/src/components/ui/panels/wall-region-list.tsx
+msgid "editor.panels.wallRegionList.paintRegions"
+msgstr "Paint regions"
+
 #: packages/editor/src/components/editor/index.tsx
 msgid "editor.reloadEditor"
 msgstr "Reload editor"
+
+#: packages/editor/src/lib/room-built-on.ts
+msgid "editor.room.builtOn.above"
+msgstr "{current} · {distance} above {shared}"
+
+#: packages/editor/src/lib/room-built-on.ts
+msgid "editor.room.builtOn.below"
+msgstr "{current} · {distance} below {shared}"
+
+#: packages/editor/src/lib/room-built-on.ts
+msgid "editor.room.builtOn.levelWith"
+msgstr "{current} · level with {shared}"
+
+#: packages/editor/src/lib/room-name-messages.ts
+msgid "editor.roomName.attic"
+msgstr "Attic"
+
+#: packages/editor/src/lib/room-name-messages.ts
+msgid "editor.roomName.balcony"
+msgstr "Balcony"
+
+#: packages/editor/src/lib/room-name-messages.ts
+msgid "editor.roomName.basement"
+msgstr "Basement"
+
+#: packages/editor/src/lib/room-name-messages.ts
+msgid "editor.roomName.bathroom"
+msgstr "Bathroom"
+
+#: packages/editor/src/lib/room-name-messages.ts
+msgid "editor.roomName.bedroom"
+msgstr "Bedroom"
+
+#: packages/editor/src/lib/room-name-messages.ts
+msgid "editor.roomName.boilerRoom"
+msgstr "Boiler room"
+
+#: packages/editor/src/lib/room-name-messages.ts
+msgid "editor.roomName.carport"
+msgstr "Carport"
+
+#: packages/editor/src/lib/room-name-messages.ts
+msgid "editor.roomName.cellar"
+msgstr "Cellar"
+
+#: packages/editor/src/lib/room-name-messages.ts
+msgid "editor.roomName.closet"
+msgstr "Closet"
+
+#: packages/editor/src/lib/room-name-messages.ts
+msgid "editor.roomName.corridor"
+msgstr "Corridor"
+
+#: packages/editor/src/lib/room-name-messages.ts
+msgid "editor.roomName.courtyard"
+msgstr "Courtyard"
+
+#: packages/editor/src/lib/room-name-messages.ts
+msgid "editor.roomName.deck"
+msgstr "Deck"
+
+#: packages/editor/src/lib/room-name-messages.ts
+msgid "editor.roomName.den"
+msgstr "Den"
+
+#: packages/editor/src/lib/room-name-messages.ts
+msgid "editor.roomName.diningRoom"
+msgstr "Dining room"
+
+#: packages/editor/src/lib/room-name-messages.ts
+msgid "editor.roomName.dressingRoom"
+msgstr "Dressing room"
+
+#: packages/editor/src/lib/room-name-messages.ts
+msgid "editor.roomName.enSuite"
+msgstr "En-suite"
+
+#: packages/editor/src/lib/room-name-messages.ts
+msgid "editor.roomName.entrance"
+msgstr "Entrance"
+
+#: packages/editor/src/lib/room-name-messages.ts
+msgid "editor.roomName.familyRoom"
+msgstr "Family room"
+
+#: packages/editor/src/lib/room-name-messages.ts
+msgid "editor.roomName.gallery"
+msgstr "Gallery"
+
+#: packages/editor/src/lib/room-name-messages.ts
+msgid "editor.roomName.gamesRoom"
+msgstr "Games room"
+
+#: packages/editor/src/lib/room-name-messages.ts
+msgid "editor.roomName.garage"
+msgstr "Garage"
+
+#: packages/editor/src/lib/room-name-messages.ts
+msgid "editor.roomName.garden"
+msgstr "Garden"
+
+#: packages/editor/src/lib/room-name-messages.ts
+msgid "editor.roomName.gardenShed"
+msgstr "Garden shed"
+
+#: packages/editor/src/lib/room-name-messages.ts
+msgid "editor.roomName.guestRoom"
+msgstr "Guest room"
+
+#: packages/editor/src/lib/room-name-messages.ts
+msgid "editor.roomName.gym"
+msgstr "Gym"
+
+#: packages/editor/src/lib/room-name-messages.ts
+msgid "editor.roomName.hallway"
+msgstr "Hallway"
+
+#: packages/editor/src/lib/room-name-messages.ts
+msgid "editor.roomName.homeCinema"
+msgstr "Home cinema"
+
+#: packages/editor/src/lib/room-name-messages.ts
+msgid "editor.roomName.kidsRoom"
+msgstr "Kids' room"
+
+#: packages/editor/src/lib/room-name-messages.ts
+msgid "editor.roomName.kitchen"
+msgstr "Kitchen"
+
+#: packages/editor/src/lib/room-name-messages.ts
+msgid "editor.roomName.kitchenette"
+msgstr "Kitchenette"
+
+#: packages/editor/src/lib/room-name-messages.ts
+msgid "editor.roomName.landing"
+msgstr "Landing"
+
+#: packages/editor/src/lib/room-name-messages.ts
+msgid "editor.roomName.laundry"
+msgstr "Laundry"
+
+#: packages/editor/src/lib/room-name-messages.ts
+msgid "editor.roomName.library"
+msgstr "Library"
+
+#: packages/editor/src/lib/room-name-messages.ts
+msgid "editor.roomName.livingRoom"
+msgstr "Living room"
+
+#: packages/editor/src/lib/room-name-messages.ts
+msgid "editor.roomName.loft"
+msgstr "Loft"
+
+#: packages/editor/src/lib/room-name-messages.ts
+msgid "editor.roomName.lounge"
+msgstr "Lounge"
+
+#: packages/editor/src/lib/room-name-messages.ts
+msgid "editor.roomName.mezzanine"
+msgstr "Mezzanine"
+
+#: packages/editor/src/lib/room-name-messages.ts
+msgid "editor.roomName.mudroom"
+msgstr "Mudroom"
+
+#: packages/editor/src/lib/room-name-messages.ts
+msgid "editor.roomName.nursery"
+msgstr "Nursery"
+
+#: packages/editor/src/lib/room-name-messages.ts
+msgid "editor.roomName.office"
+msgstr "Office"
+
+#: packages/editor/src/lib/room-name-messages.ts
+msgid "editor.roomName.pantry"
+msgstr "Pantry"
+
+#: packages/editor/src/lib/room-name-messages.ts
+msgid "editor.roomName.patio"
+msgstr "Patio"
+
+#: packages/editor/src/lib/room-name-messages.ts
+msgid "editor.roomName.playroom"
+msgstr "Playroom"
+
+#: packages/editor/src/lib/room-name-messages.ts
+msgid "editor.roomName.poolArea"
+msgstr "Pool area"
+
+#: packages/editor/src/lib/room-name-messages.ts
+msgid "editor.roomName.porch"
+msgstr "Porch"
+
+#: packages/editor/src/lib/room-name-messages.ts
+msgid "editor.roomName.powderRoom"
+msgstr "Powder room"
+
+#: packages/editor/src/lib/room-name-messages.ts
+msgid "editor.roomName.primaryBedroom"
+msgstr "Primary bedroom"
+
+#: packages/editor/src/lib/room-name-messages.ts
+msgid "editor.roomName.readingNook"
+msgstr "Reading nook"
+
+#: packages/editor/src/lib/room-name-messages.ts
+msgid "editor.roomName.section.bathrooms"
+msgstr "Bathrooms"
+
+#: packages/editor/src/lib/room-name-messages.ts
+msgid "editor.roomName.section.circulation"
+msgstr "Circulation"
+
+#: packages/editor/src/lib/room-name-messages.ts
+msgid "editor.roomName.section.living"
+msgstr "Living"
+
+#: packages/editor/src/lib/room-name-messages.ts
+msgid "editor.roomName.section.mezzanine"
+msgstr "Mezzanine"
+
+#: packages/editor/src/lib/room-name-messages.ts
+msgid "editor.roomName.section.outdoor"
+msgstr "Outdoor"
+
+#: packages/editor/src/lib/room-name-messages.ts
+msgid "editor.roomName.section.sleeping"
+msgstr "Sleeping"
+
+#: packages/editor/src/lib/room-name-messages.ts
+msgid "editor.roomName.section.utility"
+msgstr "Utility & storage"
+
+#: packages/editor/src/lib/room-name-messages.ts
+msgid "editor.roomName.section.work"
+msgstr "Work & hobbies"
+
+#: packages/editor/src/lib/room-name-messages.ts
+msgid "editor.roomName.showerRoom"
+msgstr "Shower room"
+
+#: packages/editor/src/lib/room-name-messages.ts
+msgid "editor.roomName.stairwell"
+msgstr "Stairwell"
+
+#: packages/editor/src/lib/room-name-messages.ts
+msgid "editor.roomName.storage"
+msgstr "Storage"
+
+#: packages/editor/src/lib/room-name-messages.ts
+msgid "editor.roomName.studio"
+msgstr "Studio"
+
+#: packages/editor/src/lib/room-name-messages.ts
+msgid "editor.roomName.study"
+msgstr "Study"
+
+#: packages/editor/src/lib/room-name-messages.ts
+msgid "editor.roomName.sunroom"
+msgstr "Sunroom"
+
+#: packages/editor/src/lib/room-name-messages.ts
+msgid "editor.roomName.terrace"
+msgstr "Terrace"
+
+#: packages/editor/src/lib/room-name-messages.ts
+msgid "editor.roomName.toilet"
+msgstr "Toilet"
+
+#: packages/editor/src/lib/room-name-messages.ts
+msgid "editor.roomName.utilityRoom"
+msgstr "Utility room"
+
+#: packages/editor/src/lib/room-name-messages.ts
+msgid "editor.roomName.veranda"
+msgstr "Veranda"
+
+#: packages/editor/src/lib/room-name-messages.ts
+msgid "editor.roomName.walkInCloset"
+msgstr "Walk-in closet"
+
+#: packages/editor/src/lib/room-name-messages.ts
+msgid "editor.roomName.workshop"
+msgstr "Workshop"
 
 #: packages/editor/src/components/editor/index.tsx
 msgid "editor.theEditorSceneFailedToRender"
@@ -2611,6 +5850,90 @@ msgstr "A polygon-bounded ceiling surface that hosts ceiling-mounted items."
 msgid "node.ceiling.label"
 msgstr "Ceiling"
 
+#: packages/nodes/src/ceiling/panel.tsx
+msgid "node.ceiling.panel.addHole"
+msgstr "Add Hole"
+
+#: packages/nodes/src/ceiling/panel.tsx
+msgid "node.ceiling.panel.area"
+msgstr "Area"
+
+#: packages/nodes/src/ceiling/panel.tsx
+msgid "node.ceiling.panel.auto"
+msgstr "Auto"
+
+#: packages/nodes/src/ceiling/panel.tsx
+msgid "node.ceiling.panel.ceiling"
+msgstr "Ceiling"
+
+#: packages/nodes/src/ceiling/panel.tsx
+msgid "node.ceiling.panel.customHeight"
+msgstr "Custom height"
+
+#: packages/nodes/src/ceiling/panel.tsx
+msgid "node.ceiling.panel.cutOpening"
+msgstr "Cut opening"
+
+#: packages/nodes/src/ceiling/panel.tsx
+msgid "node.ceiling.panel.done"
+msgstr "Done"
+
+#: packages/nodes/src/ceiling/panel.tsx
+msgid "node.ceiling.panel.followsLevel"
+msgstr "Follows level"
+
+#: packages/nodes/src/ceiling/panel.tsx
+msgid "node.ceiling.panel.height"
+msgstr "Height"
+
+#: packages/nodes/src/ceiling/panel.tsx
+msgid "node.ceiling.panel.high30m"
+msgstr "High (3.0m)"
+
+#: packages/nodes/src/ceiling/panel.tsx
+msgid "node.ceiling.panel.high90"
+msgstr "High (9'0\")"
+
+#: packages/nodes/src/ceiling/panel.tsx
+msgid "node.ceiling.panel.holes"
+msgstr "Holes"
+
+#: packages/nodes/src/ceiling/panel.tsx
+msgid "node.ceiling.panel.info"
+msgstr "Info"
+
+#: packages/nodes/src/ceiling/panel.tsx
+msgid "node.ceiling.panel.limitedByLevel"
+msgstr "Limited by the level to {height} — raise the level height for a taller ceiling."
+
+#: packages/nodes/src/ceiling/panel.tsx
+msgid "node.ceiling.panel.low24m"
+msgstr "Low (2.4m)"
+
+#: packages/nodes/src/ceiling/panel.tsx
+msgid "node.ceiling.panel.low80"
+msgstr "Low (8'0\")"
+
+#: packages/nodes/src/ceiling/panel.tsx
+msgid "node.ceiling.panel.move"
+msgstr "Move"
+
+#: packages/nodes/src/ceiling/panel.tsx
+msgid "node.ceiling.panel.noHoles"
+msgstr "No holes"
+
+#: packages/nodes/src/ceiling/panel.tsx
+msgid "node.ceiling.panel.standard25m"
+msgstr "Standard (2.5m)"
+
+#: packages/nodes/src/ceiling/panel.tsx
+msgid "node.ceiling.panel.standard86"
+msgstr "Standard (8'6\")"
+
+#: packages/nodes/src/ceiling/panel.tsx
+msgid "node.ceiling.panel.tallerThanLevel"
+msgstr "Taller than this level ({available} available). Raise the level height first."
+
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "node.chimney.description"
 msgstr "Vertical masonry stack on a roof segment."
@@ -2635,6 +5958,24 @@ msgstr "Associative linear, curved, circular, angular, or coordinate plan dimens
 msgid "node.constructionDimension.label"
 msgstr "Construction Dimension"
 
+#: packages/nodes/src/window/panel.tsx
+msgid "node.cornerRadius.bottomLeft"
+msgstr "Bottom Left"
+
+#: packages/nodes/src/window/panel.tsx
+msgid "node.cornerRadius.bottomRight"
+msgstr "Bottom Right"
+
+#: packages/nodes/src/door/panel.tsx
+#: packages/nodes/src/window/panel.tsx
+msgid "node.cornerRadius.topLeft"
+msgstr "Top Left"
+
+#: packages/nodes/src/door/panel.tsx
+#: packages/nodes/src/window/panel.tsx
+msgid "node.cornerRadius.topRight"
+msgstr "Top Right"
+
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "node.cupola.description"
 msgstr "Louvered roof lantern with a dome or pyramid cap and optional finial."
@@ -2643,6 +5984,24 @@ msgstr "Louvered roof lantern with a dome or pyramid cap and optional finial."
 msgid "node.cupola.label"
 msgstr "Cupola"
 
+#: packages/nodes/src/ceiling/panel.tsx
+#: packages/nodes/src/slab/panel.tsx
+msgid "node.cutout.autoElevator"
+msgstr "Auto elevator cutout"
+
+#: packages/nodes/src/ceiling/panel.tsx
+#: packages/nodes/src/slab/panel.tsx
+msgid "node.cutout.autoStair"
+msgstr "Auto stair cutout"
+
+#: packages/nodes/src/slab/panel.tsx
+msgid "node.cutout.opening"
+msgstr "Opening"
+
+#: packages/nodes/src/slab/panel.tsx
+msgid "node.cutout.room"
+msgstr "Room cutout"
+
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "node.door.description"
 msgstr "A door cut into a wall. Animated open/close state."
@@ -2650,6 +6009,302 @@ msgstr "A door cut into a wall. Animated open/close state."
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "node.door.label"
 msgstr "Door"
+
+#: packages/nodes/src/door/panel.tsx
+msgid "node.door.panel.actions"
+msgstr "Actions"
+
+#: packages/nodes/src/door/panel.tsx
+msgid "node.door.panel.addSegment"
+msgstr "+ Add Segment"
+
+#: packages/nodes/src/door/panel.tsx
+msgid "node.door.panel.all"
+msgstr "All"
+
+#: packages/nodes/src/door/panel.tsx
+msgid "node.door.panel.arch"
+msgstr "Arch"
+
+#: packages/nodes/src/door/panel.tsx
+msgid "node.door.panel.archHeight"
+msgstr "Arch Height"
+
+#: packages/nodes/src/door/panel.tsx
+msgid "node.door.panel.barHeight"
+msgstr "Bar Height"
+
+#: packages/nodes/src/door/panel.tsx
+msgid "node.door.panel.columns"
+msgstr "Columns"
+
+#: packages/nodes/src/door/panel.tsx
+msgid "node.door.panel.contentPadding"
+msgstr "Content Padding"
+
+#: packages/nodes/src/door/panel.tsx
+msgid "node.door.panel.cornerRadius"
+msgstr "Corner Radius"
+
+#: packages/nodes/src/door/panel.tsx
+msgid "node.door.panel.customTheSegmentsMatchNoStyle"
+msgstr "Custom: the segments match no style."
+
+#: packages/nodes/src/door/panel.tsx
+msgid "node.door.panel.delete"
+msgstr "Delete"
+
+#: packages/nodes/src/door/panel.tsx
+msgid "node.door.panel.depth"
+msgstr "Depth"
+
+#: packages/nodes/src/door/panel.tsx
+msgid "node.door.panel.dimensions"
+msgstr "Dimensions"
+
+#: packages/nodes/src/door/panel.tsx
+msgid "node.door.panel.direction"
+msgstr "Direction"
+
+#: packages/nodes/src/door/panel.tsx
+msgid "node.door.panel.divider"
+msgstr "Divider"
+
+#: packages/nodes/src/door/panel.tsx
+msgid "node.door.panel.door"
+msgstr "Door"
+
+#: packages/nodes/src/door/panel.tsx
+msgid "node.door.panel.doorCloser"
+msgstr "Door Closer"
+
+#: packages/nodes/src/door/panel.tsx
+msgid "node.door.panel.duplicate"
+msgstr "Duplicate"
+
+#: packages/nodes/src/door/panel.tsx
+msgid "node.door.panel.empty"
+msgstr "Empty"
+
+#: packages/nodes/src/door/panel.tsx
+msgid "node.door.panel.enableHandle"
+msgstr "Enable Handle"
+
+#: packages/nodes/src/door/panel.tsx
+msgid "node.door.panel.enableThreshold"
+msgstr "Enable Threshold"
+
+#: packages/nodes/src/door/panel.tsx
+msgid "node.door.panel.flipSide"
+msgstr "Flip Side"
+
+#: packages/nodes/src/door/panel.tsx
+msgid "node.door.panel.fold"
+msgstr "Fold"
+
+#: packages/nodes/src/door/panel.tsx
+msgid "node.door.panel.frame"
+msgstr "Frame"
+
+#: packages/nodes/src/door/panel.tsx
+msgid "node.door.panel.garage"
+msgstr "Garage"
+
+#: packages/nodes/src/door/panel.tsx
+msgid "node.door.panel.glass"
+msgstr "Glass"
+
+#: packages/nodes/src/door/panel.tsx
+msgid "node.door.panel.handle"
+msgstr "Handle"
+
+#: packages/nodes/src/door/panel.tsx
+msgid "node.door.panel.handleSide"
+msgstr "Handle Side"
+
+#: packages/nodes/src/door/panel.tsx
+msgid "node.door.panel.hardware"
+msgstr "Hardware"
+
+#: packages/nodes/src/door/panel.tsx
+msgid "node.door.panel.height"
+msgstr "Height"
+
+#: packages/nodes/src/door/panel.tsx
+msgid "node.door.panel.hingesSide"
+msgstr "Hinges Side"
+
+#: packages/nodes/src/door/panel.tsx
+msgid "node.door.panel.horizontal"
+msgstr "Horizontal"
+
+#: packages/nodes/src/door/panel.tsx
+msgid "node.door.panel.individual"
+msgstr "Individual"
+
+#: packages/nodes/src/door/panel.tsx
+msgid "node.door.panel.inset"
+msgstr "Inset"
+
+#: packages/nodes/src/door/panel.tsx
+msgid "node.door.panel.inward"
+msgstr "Inward"
+
+#: packages/nodes/src/door/panel.tsx
+msgid "node.door.panel.left"
+msgstr "Left"
+
+#: packages/nodes/src/door/panel.tsx
+msgid "node.door.panel.move"
+msgstr "Move"
+
+#: packages/nodes/src/door/panel.tsx
+msgid "node.door.panel.open"
+msgstr "Open"
+
+#: packages/nodes/src/door/panel.tsx
+msgid "node.door.panel.opening"
+msgstr "Opening"
+
+#: packages/nodes/src/door/panel.tsx
+msgid "node.door.panel.openingShape"
+msgstr "Opening Shape"
+
+#: packages/nodes/src/door/panel.tsx
+msgid "node.door.panel.outward"
+msgstr "Outward"
+
+#: packages/nodes/src/door/panel.tsx
+msgid "node.door.panel.panel"
+msgstr "Panel"
+
+#: packages/nodes/src/door/panel.tsx
+msgid "node.door.panel.panels"
+msgstr "Panels"
+
+#: packages/nodes/src/door/panel.tsx
+msgid "node.door.panel.panicBar"
+msgstr "Panic Bar"
+
+#: packages/nodes/src/door/panel.tsx
+msgid "node.door.panel.pocket"
+msgstr "Pocket"
+
+#: packages/nodes/src/door/panel.tsx
+msgid "node.door.panel.position"
+msgstr "Position"
+
+#: packages/nodes/src/door/panel.tsx
+msgid "node.door.panel.rail"
+msgstr "Rail"
+
+#: packages/nodes/src/door/panel.tsx
+msgid "node.door.panel.rect"
+msgstr "Rect"
+
+#: packages/nodes/src/door/panel.tsx
+msgid "node.door.panel.remove"
+msgstr "- Remove"
+
+#: packages/nodes/src/door/panel.tsx
+msgid "node.door.panel.revealRadius"
+msgstr "Reveal Radius"
+
+#: packages/nodes/src/door/panel.tsx
+msgid "node.door.panel.right"
+msgstr "Right"
+
+#: packages/nodes/src/door/panel.tsx
+msgid "node.door.panel.rounded"
+msgstr "Rounded"
+
+#: packages/nodes/src/door/panel.tsx
+msgid "node.door.panel.segments"
+msgstr "Segments"
+
+#: packages/nodes/src/door/panel.tsx
+msgid "node.door.panel.sizeIsLimitedToTheWall"
+msgstr "Size is limited to the wall, including clearance for the opening frame."
+
+#: packages/nodes/src/door/panel.tsx
+msgid "node.door.panel.slide"
+msgstr "Slide"
+
+#: packages/nodes/src/door/panel.tsx
+msgid "node.door.panel.style"
+msgstr "Style"
+
+#: packages/nodes/src/door/panel.tsx
+msgid "node.door.panel.swing"
+msgstr "Swing"
+
+#: packages/nodes/src/door/panel.tsx
+msgid "node.door.panel.thickness"
+msgstr "Thickness"
+
+#: packages/nodes/src/door/panel.tsx
+msgid "node.door.panel.threshold"
+msgstr "Threshold"
+
+#: packages/nodes/src/door/panel.tsx
+msgid "node.door.panel.topShape"
+msgstr "Top Shape"
+
+#: packages/nodes/src/door/panel.tsx
+msgid "node.door.panel.type"
+msgstr "Type"
+
+#: packages/nodes/src/door/panel.tsx
+msgid "node.door.panel.vertical"
+msgstr "Vertical"
+
+#: packages/nodes/src/door/panel.tsx
+msgid "node.door.panel.wall"
+msgstr "wall"
+
+#: packages/nodes/src/door/panel.tsx
+msgid "node.door.panel.width"
+msgstr "Width"
+
+#: packages/nodes/src/door/panel.tsx
+msgid "node.door.type.barn"
+msgstr "Barn"
+
+#: packages/nodes/src/door/panel.tsx
+msgid "node.door.type.double"
+msgstr "Double"
+
+#: packages/nodes/src/door/panel.tsx
+msgid "node.door.type.folding"
+msgstr "Folding"
+
+#: packages/nodes/src/door/panel.tsx
+msgid "node.door.type.french"
+msgstr "French"
+
+#: packages/nodes/src/door/panel.tsx
+msgid "node.door.type.garageRollup"
+msgstr "Roll-up"
+
+#: packages/nodes/src/door/panel.tsx
+msgid "node.door.type.garageSectional"
+msgstr "Sectional"
+
+#: packages/nodes/src/door/panel.tsx
+msgid "node.door.type.garageTiltup"
+msgstr "Tilt-up"
+
+#: packages/nodes/src/door/panel.tsx
+msgid "node.door.type.hinged"
+msgstr "Hinged"
+
+#: packages/nodes/src/door/panel.tsx
+msgid "node.door.type.pocket"
+msgstr "Pocket"
+
+#: packages/nodes/src/door/panel.tsx
+msgid "node.door.type.sliding"
+msgstr "Sliding"
 
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "node.dormer.description"
@@ -2751,6 +6406,26 @@ msgstr "Rain-water channel running along the eave of a roof segment."
 msgid "node.gutter.label"
 msgstr "Gutter"
 
+#: packages/nodes/src/ceiling/panel.tsx
+#: packages/nodes/src/slab/panel.tsx
+msgid "node.hole.manual"
+msgstr "Manual"
+
+#: packages/nodes/src/ceiling/panel.tsx
+#: packages/nodes/src/slab/panel.tsx
+msgid "node.holeEditing"
+msgstr "Hole {number} (Editing)"
+
+#: packages/nodes/src/ceiling/panel.tsx
+#: packages/nodes/src/slab/panel.tsx
+msgid "node.holeNumber"
+msgstr "Hole {number}"
+
+#: packages/nodes/src/ceiling/panel.tsx
+#: packages/nodes/src/slab/panel.tsx
+msgid "node.holeSummary"
+msgstr "{area} m² · {count, plural, one {# pt} other {# pts}} · {source}"
+
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "node.hvacEquipment.description"
 msgstr "Furnace, air handler, or condenser — duct runs connect to its supply/return collars."
@@ -2774,6 +6449,62 @@ msgstr "A catalog-backed item (furniture, fixtures, decorations)."
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "node.item.label"
 msgstr "Item"
+
+#: packages/nodes/src/item/panel.tsx
+msgid "node.item.panel.actions"
+msgstr "Actions"
+
+#: packages/nodes/src/item/panel.tsx
+msgid "node.item.panel.delete"
+msgstr "Delete"
+
+#: packages/nodes/src/item/panel.tsx
+msgid "node.item.panel.dimensions"
+msgstr "Dimensions"
+
+#: packages/nodes/src/item/panel.tsx
+msgid "node.item.panel.duplicate"
+msgstr "Duplicate"
+
+#: packages/nodes/src/item/panel.tsx
+msgid "node.item.panel.info"
+msgstr "Info"
+
+#: packages/nodes/src/item/panel.tsx
+msgid "node.item.panel.move"
+msgstr "Move"
+
+#: packages/nodes/src/item/panel.tsx
+msgid "node.item.panel.pos"
+msgstr "pos"
+
+#: packages/nodes/src/item/panel.tsx
+msgid "node.item.panel.position"
+msgstr "Position"
+
+#: packages/nodes/src/item/panel.tsx
+msgid "node.item.panel.rot"
+msgstr "rot"
+
+#: packages/nodes/src/item/panel.tsx
+msgid "node.item.panel.rotation"
+msgstr "Rotation"
+
+#: packages/nodes/src/item/panel.tsx
+msgid "node.item.panel.scale"
+msgstr "Scale"
+
+#: packages/nodes/src/item/panel.tsx
+msgid "node.item.panel.scale2"
+msgstr "scale"
+
+#: packages/nodes/src/item/panel.tsx
+msgid "node.item.panel.uniformScale"
+msgstr "Uniform Scale"
+
+#: packages/nodes/src/item/panel.tsx
+msgid "node.item.panel.xyz"
+msgstr "XYZ"
 
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "node.leanToExtension.description"
@@ -2815,6 +6546,17 @@ msgstr "A persistent distance, angle, area, perimeter, or volume annotation."
 msgid "node.measurement.label"
 msgstr "Measurement"
 
+#: packages/nodes/src/roof/panel.tsx
+msgid "node.numberedName"
+msgstr "{kind} {number}"
+
+#: packages/nodes/src/ceiling/panel.tsx
+#: packages/nodes/src/roof/panel.tsx
+#: packages/nodes/src/stair/panel.tsx
+#: packages/nodes/src/wall/panel.tsx
+msgid "node.panel.currently"
+msgstr "Currently {value}"
+
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "node.pipeFitting.description"
 msgstr "DWV joint — elbow bend, 45° wye, or sanitary tee."
@@ -2855,13 +6597,349 @@ msgstr "Ventilation strip running along the ridge of a roof segment."
 msgid "node.ridgeVent.label"
 msgstr "Ridge Vent"
 
+#: packages/nodes/src/roof/barrel-panel.tsx
+msgid "node.roof.barrelPanel.archBays"
+msgstr "Arch bays"
+
+#: packages/nodes/src/roof/barrel-panel.tsx
+msgid "node.roof.barrelPanel.barrelArch"
+msgstr "Barrel arch"
+
+#: packages/nodes/src/roof/barrel-panel.tsx
+msgid "node.roof.barrelPanel.flatPanesFollowACircularArch"
+msgstr "Flat panes follow a circular arch. Rise is measured from the eaves."
+
+#: packages/nodes/src/roof/barrel-panel.tsx
+msgid "node.roof.barrelPanel.rise"
+msgstr "Rise"
+
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "node.roof.description"
 msgstr "A pitched / hip / gable roof composed of one or more segments."
 
+#: packages/nodes/src/roof/glazing-panel-editor.tsx
+msgid "node.roof.glazing.face.archBay"
+msgstr "Arch bay {number}"
+
+#: packages/nodes/src/roof/glazing-panel-editor.tsx
+msgid "node.roof.glazing.face.back"
+msgstr "Back slope"
+
+#: packages/nodes/src/roof/glazing-panel-editor.tsx
+msgid "node.roof.glazing.face.endLeft"
+msgstr "Left end"
+
+#: packages/nodes/src/roof/glazing-panel-editor.tsx
+msgid "node.roof.glazing.face.endRight"
+msgstr "Right end"
+
+#: packages/nodes/src/roof/glazing-panel-editor.tsx
+msgid "node.roof.glazing.face.front"
+msgstr "Front slope"
+
+#: packages/nodes/src/roof/glazing-panel-editor.tsx
+msgid "node.roof.glazing.face.slope"
+msgstr "Shed slope"
+
+#: packages/nodes/src/roof/glazing-panel.tsx
+msgid "node.roof.glazingPanel.changesApplyToAllLengthRoof"
+msgstr "Changes apply to all {length} roof segments."
+
+#: packages/nodes/src/roof/glazing-panel.tsx
+msgid "node.roof.glazingPanel.chooseOneRoofSystemToEdit"
+msgstr "Choose one roof system to edit settings for all selected segments."
+
+#: packages/nodes/src/roof/glazing-panel.tsx
+msgid "node.roof.glazingPanel.closeTheRoofEnds"
+msgstr "Close the roof ends"
+
+#: packages/nodes/src/roof/glazing-panel.tsx
+msgid "node.roof.glazingPanel.defaultPanelInfill"
+msgstr "Default panel infill"
+
+#: packages/nodes/src/roof/glazing-panel.tsx
+msgid "node.roof.glazingPanel.dividesEachRoofFaceIntoColumns"
+msgstr "Divides each roof face into columns."
+
+#: packages/nodes/src/roof/glazing-panel.tsx
+msgid "node.roof.glazingPanel.dividesTheLengthOfEachArch"
+msgstr "Divides the length of each arch bay into columns."
+
+#: packages/nodes/src/roof/glazing-panel.tsx
+msgid "node.roof.glazingPanel.endInfillFillsTheSpaceAbove"
+msgstr "End infill fills the space above the walls. Edit room walls and ceilings separately."
+
+#: packages/nodes/src/roof/glazing-panel.tsx
+msgid "node.roof.glazingPanel.frameColor"
+msgstr "Frame color"
+
+#: packages/nodes/src/roof/glazing-panel.tsx
+msgid "node.roof.glazingPanel.frameDepth"
+msgstr "Frame depth"
+
+#: packages/nodes/src/roof/glazing-panel.tsx
+msgid "node.roof.glazingPanel.frameWidth"
+msgstr "Frame width"
+
+#: packages/nodes/src/roof/glazing-panel.tsx
+msgid "node.roof.glazingPanel.framing"
+msgstr "Framing"
+
+#: packages/nodes/src/roof/glazing-panel.tsx
+msgid "node.roof.glazingPanel.glass"
+msgstr "Glass"
+
+#: packages/nodes/src/roof/glazing-panel.tsx
+msgid "node.roof.glazingPanel.glassTint"
+msgstr "Glass tint"
+
+#: packages/nodes/src/roof/glazing-panel.tsx
+msgid "node.roof.glazingPanel.glazed"
+msgstr "Glazed"
+
+#: packages/nodes/src/roof/glazing-panel.tsx
+msgid "node.roof.glazingPanel.glazingIsAvailableForGableStraight"
+msgstr "Glazing is available for gable, straight shed, and barrel roofs."
+
+#: packages/nodes/src/roof/glazing-panel.tsx
+msgid "node.roof.glazingPanel.gridAcrossTheRoof"
+msgstr "Grid across the roof"
+
+#: packages/nodes/src/roof/glazing-panel.tsx
+msgid "node.roof.glazingPanel.gridAlongTheLength"
+msgstr "Grid along the length"
+
+#: packages/nodes/src/roof/glazing-panel.tsx
+msgid "node.roof.glazingPanel.gridAlongTheSlope"
+msgstr "Grid along the slope"
+
+#: packages/nodes/src/roof/glazing-panel.tsx
+msgid "node.roof.glazingPanel.gridWithinEachArchBay"
+msgstr "Grid within each arch bay"
+
+#: packages/nodes/src/roof/glazing-panel.tsx
+msgid "node.roof.glazingPanel.infill"
+msgstr "Infill"
+
+#: packages/nodes/src/roof/glazing-panel.tsx
+msgid "node.roof.glazingPanel.opacity"
+msgstr "Opacity"
+
+#: packages/nodes/src/roof/glazing-panel.tsx
+msgid "node.roof.glazingPanel.paneThickness"
+msgstr "Pane thickness"
+
+#: packages/nodes/src/roof/glazing-panel.tsx
+msgid "node.roof.glazingPanel.roofSystem"
+msgstr "Roof system"
+
+#: packages/nodes/src/roof/glazing-panel.tsx
+msgid "node.roof.glazingPanel.roughness"
+msgstr "Roughness"
+
+#: packages/nodes/src/roof/glazing-panel.tsx
+msgid "node.roof.glazingPanel.spacingIsMeasuredOnTheSlope"
+msgstr "Spacing is measured on the slope, not its horizontal projection."
+
+#: packages/nodes/src/roof/glazing-panel.tsx
+msgid "node.roof.glazingPanel.standard"
+msgstr "Standard"
+
+#: packages/nodes/src/roof/glazing-panel.tsx
+msgid "node.roof.glazingPanel.subdividesEachFlatArchBayArch"
+msgstr "Subdivides each flat arch bay. Arch bays controls the divisions around the curve."
+
+#: packages/nodes/src/roof/glazing-panel-editor.tsx
+msgid "node.roof.glazingPanelEditor.chooseAPanelToOverrideIts"
+msgstr "Choose a panel to override its default infill."
+
+#: packages/nodes/src/roof/glazing-panel-editor.tsx
+msgid "node.roof.glazingPanelEditor.column2"
+msgstr "Column"
+
+#: packages/nodes/src/roof/glazing-panel-editor.tsx
+msgid "node.roof.glazingPanelEditor.custom"
+msgstr "Custom"
+
+#: packages/nodes/src/roof/glazing-panel-editor.tsx
+msgid "node.roof.glazingPanelEditor.default"
+msgstr "Default"
+
+#: packages/nodes/src/roof/glazing-panel-editor.tsx
+msgid "node.roof.glazingPanelEditor.grid"
+msgstr "{columns, plural, one {# column} other {# columns}} · {rows, plural, one {# row} other {# rows}}"
+
+#: packages/nodes/src/roof/glazing-panel-editor.tsx
+msgid "node.roof.glazingPanelEditor.individualPanels"
+msgstr "Individual panels"
+
+#: packages/nodes/src/roof/glazing-panel-editor.tsx
+msgid "node.roof.glazingPanelEditor.panelInfill"
+msgstr "Panel infill"
+
+#: packages/nodes/src/roof/glazing-panel-editor.tsx
+msgid "node.roof.glazingPanelEditor.resetToDefault"
+msgstr "Reset to default"
+
+#: packages/nodes/src/roof/glazing-panel-editor.tsx
+msgid "node.roof.glazingPanelEditor.roofFace"
+msgstr "Roof face"
+
+#: packages/nodes/src/roof/glazing-panel-editor.tsx
+msgid "node.roof.glazingPanelEditor.row2"
+msgstr "Row"
+
+#: packages/nodes/src/roof/glazing-panel-editor.tsx
+msgid "node.roof.glazingPanelEditor.selectedPanelInfill"
+msgstr "Selected panel infill"
+
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "node.roof.label"
 msgstr "Roof"
+
+#: packages/nodes/src/roof/panel.tsx
+msgid "node.roof.panel.actions"
+msgstr "Actions"
+
+#: packages/nodes/src/roof/panel.tsx
+msgid "node.roof.panel.addChimney"
+msgstr "Add Chimney"
+
+#: packages/nodes/src/roof/panel.tsx
+msgid "node.roof.panel.addCupola"
+msgstr "Add Cupola"
+
+#: packages/nodes/src/roof/panel.tsx
+msgid "node.roof.panel.addDormer"
+msgstr "Add Dormer"
+
+#: packages/nodes/src/roof/panel.tsx
+msgid "node.roof.panel.addEyebrowVent"
+msgstr "Add Eyebrow Vent"
+
+#: packages/nodes/src/roof/panel.tsx
+msgid "node.roof.panel.addGutter"
+msgstr "Add Gutter"
+
+#: packages/nodes/src/roof/panel.tsx
+msgid "node.roof.panel.addSkylight"
+msgstr "Add Skylight"
+
+#: packages/nodes/src/roof/panel.tsx
+msgid "node.roof.panel.addSolarPanel"
+msgstr "Add Solar Panel"
+
+#: packages/nodes/src/roof/panel.tsx
+msgid "node.roof.panel.addVent"
+msgstr "Add Vent"
+
+#: packages/nodes/src/roof/panel.tsx
+msgid "node.roof.panel.box"
+msgstr "Box"
+
+#: packages/nodes/src/roof/panel.tsx
+msgid "node.roof.panel.boxVent"
+msgstr "box vent"
+
+#: packages/nodes/src/roof/panel.tsx
+msgid "node.roof.panel.chimney"
+msgstr "chimney"
+
+#: packages/nodes/src/roof/panel.tsx
+msgid "node.roof.panel.custom"
+msgstr "Custom"
+
+#: packages/nodes/src/roof/panel.tsx
+msgid "node.roof.panel.delete"
+msgstr "Delete"
+
+#: packages/nodes/src/roof/panel.tsx
+msgid "node.roof.panel.dormer"
+msgstr "dormer"
+
+#: packages/nodes/src/roof/panel.tsx
+msgid "node.roof.panel.drawSegment"
+msgstr "Draw Segment"
+
+#: packages/nodes/src/roof/panel.tsx
+msgid "node.roof.panel.duplicate"
+msgstr "Duplicate"
+
+#: packages/nodes/src/roof/panel.tsx
+msgid "node.roof.panel.elements"
+msgstr "Elements"
+
+#: packages/nodes/src/roof/panel.tsx
+msgid "node.roof.panel.followsWalls"
+msgstr "Follows walls"
+
+#: packages/nodes/src/roof/panel.tsx
+msgid "node.roof.panel.gutter"
+msgstr "gutter"
+
+#: packages/nodes/src/roof/panel.tsx
+msgid "node.roof.panel.level"
+msgstr "Level"
+
+#: packages/nodes/src/roof/panel.tsx
+msgid "node.roof.panel.move"
+msgstr "Move"
+
+#: packages/nodes/src/roof/panel.tsx
+msgid "node.roof.panel.moveToLevel"
+msgstr "Move to {level}"
+
+#: packages/nodes/src/roof/panel.tsx
+msgid "node.roof.panel.moveToTheRoofLevel"
+msgstr "Move to the roof level"
+
+#: packages/nodes/src/roof/panel.tsx
+msgid "node.roof.panel.onStoreyWalls"
+msgstr "On {storey} with its walls, so it hides that floor's plan in solo and exploded views.{roofs, plural, =0 {} =1 {} other { The floor's # roofs move together.}}"
+
+#: packages/nodes/src/roof/panel.tsx
+msgid "node.roof.panel.position"
+msgstr "Position"
+
+#: packages/nodes/src/roof/panel.tsx
+msgid "node.roof.panel.ridge"
+msgstr "Ridge"
+
+#: packages/nodes/src/roof/panel.tsx
+msgid "node.roof.panel.ridgeVent"
+msgstr "ridge vent"
+
+#: packages/nodes/src/roof/panel.tsx
+msgid "node.roof.panel.roof"
+msgstr "Roof"
+
+#: packages/nodes/src/roof/panel.tsx
+msgid "node.roof.panel.rotation"
+msgstr "Rotation"
+
+#: packages/nodes/src/roof/panel.tsx
+msgid "node.roof.panel.segments"
+msgstr "Segments"
+
+#: packages/nodes/src/roof/panel.tsx
+msgid "node.roof.panel.segmentType"
+msgstr "{roofType, select, hip {Hip} gable {Gable} shed {Shed} gambrel {Gambrel} dutch {Dutch} mansard {Mansard} flat {Flat} conical {Conical} barrel {Barrel} other {Roof}}"
+
+#: packages/nodes/src/roof/panel.tsx
+msgid "node.roof.panel.skylight"
+msgstr "skylight"
+
+#: packages/nodes/src/roof/panel.tsx
+msgid "node.roof.panel.solarPanel"
+msgstr "solar panel"
+
+#: packages/nodes/src/roof/panel.tsx
+msgid "node.roof.panel.turbine"
+msgstr "Turbine"
+
+#: packages/nodes/src/roof/panel.tsx
+msgid "node.roof.panel.turbineVent"
+msgstr "turbine vent"
 
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "node.roofSegment.description"
@@ -2871,6 +6949,226 @@ msgstr "A single pitched plane of a parent roof."
 msgid "node.roofSegment.label"
 msgstr "Roof Segment"
 
+#: packages/nodes/src/roof-segment/panel.tsx
+msgid "node.roofSegment.panel.actions"
+msgstr "Actions"
+
+#: packages/nodes/src/roof-segment/panel.tsx
+msgid "node.roofSegment.panel.angle"
+msgstr "Angle"
+
+#: packages/nodes/src/roof-segment/panel.tsx
+msgid "node.roofSegment.panel.arc"
+msgstr "Arc"
+
+#: packages/nodes/src/roof-segment/panel.tsx
+msgid "node.roofSegment.panel.autoGutters"
+msgstr "Auto gutters"
+
+#: packages/nodes/src/roof-segment/panel.tsx
+msgid "node.roofSegment.panel.autoRidgeVent"
+msgstr "Auto ridge vent"
+
+#: packages/nodes/src/roof-segment/panel.tsx
+msgid "node.roofSegment.panel.barrel"
+msgstr "Barrel"
+
+#: packages/nodes/src/roof-segment/panel.tsx
+msgid "node.roofSegment.panel.clippedVersion"
+msgstr "Clipped version"
+
+#: packages/nodes/src/roof-segment/panel.tsx
+msgid "node.roofSegment.panel.conical"
+msgstr "Conical"
+
+#: packages/nodes/src/roof-segment/panel.tsx
+msgid "node.roofSegment.panel.conicalShape"
+msgstr "Conical Shape"
+
+#: packages/nodes/src/roof-segment/panel.tsx
+msgid "node.roofSegment.panel.deckThick"
+msgstr "Deck Thick."
+
+#: packages/nodes/src/roof-segment/panel.tsx
+msgid "node.roofSegment.panel.delete"
+msgstr "Delete"
+
+#: packages/nodes/src/roof-segment/panel.tsx
+msgid "node.roofSegment.panel.depth"
+msgstr "Depth"
+
+#: packages/nodes/src/roof-segment/panel.tsx
+msgid "node.roofSegment.panel.diameter"
+msgstr "Diameter"
+
+#: packages/nodes/src/roof-segment/panel.tsx
+msgid "node.roofSegment.panel.doneEditing"
+msgstr "Done editing"
+
+#: packages/nodes/src/roof-segment/panel.tsx
+msgid "node.roofSegment.panel.drainage"
+msgstr "Drainage"
+
+#: packages/nodes/src/roof-segment/panel.tsx
+msgid "node.roofSegment.panel.duplicate"
+msgstr "Duplicate"
+
+#: packages/nodes/src/roof-segment/panel.tsx
+msgid "node.roofSegment.panel.dutch"
+msgstr "Dutch"
+
+#: packages/nodes/src/roof-segment/panel.tsx
+msgid "node.roofSegment.panel.eaveOverhang"
+msgstr "Eave overhang"
+
+#: packages/nodes/src/roof-segment/panel.tsx
+msgid "node.roofSegment.panel.editFootprint"
+msgstr "Edit footprint"
+
+#: packages/nodes/src/roof-segment/panel.tsx
+msgid "node.roofSegment.panel.endOverhang"
+msgstr "End overhang"
+
+#: packages/nodes/src/roof-segment/panel.tsx
+msgid "node.roofSegment.panel.fascia"
+msgstr "Fascia"
+
+#: packages/nodes/src/roof-segment/panel.tsx
+msgid "node.roofSegment.panel.fasciaHeight"
+msgstr "Fascia height"
+
+#: packages/nodes/src/roof-segment/panel.tsx
+msgid "node.roofSegment.panel.flat"
+msgstr "Flat"
+
+#: packages/nodes/src/roof-segment/panel.tsx
+msgid "node.roofSegment.panel.footprint"
+msgstr "Footprint"
+
+#: packages/nodes/src/roof-segment/panel.tsx
+msgid "node.roofSegment.panel.gable"
+msgstr "Gable"
+
+#: packages/nodes/src/roof-segment/panel.tsx
+msgid "node.roofSegment.panel.gableOverhang"
+msgstr "Gable overhang"
+
+#: packages/nodes/src/roof-segment/panel.tsx
+msgid "node.roofSegment.panel.gambrel"
+msgstr "Gambrel"
+
+#: packages/nodes/src/roof-segment/panel.tsx
+msgid "node.roofSegment.panel.hip"
+msgstr "Hip"
+
+#: packages/nodes/src/roof-segment/panel.tsx
+msgid "node.roofSegment.panel.kinkDepth"
+msgstr "Kink Depth"
+
+#: packages/nodes/src/roof-segment/panel.tsx
+msgid "node.roofSegment.panel.kinkHeight"
+msgstr "Kink Height"
+
+#: packages/nodes/src/roof-segment/panel.tsx
+msgid "node.roofSegment.panel.length"
+msgstr "Length"
+
+#: packages/nodes/src/roof-segment/panel.tsx
+msgid "node.roofSegment.panel.mansard"
+msgstr "Mansard"
+
+#: packages/nodes/src/roof-segment/panel.tsx
+msgid "node.roofSegment.panel.move"
+msgstr "Move"
+
+#: packages/nodes/src/roof-segment/panel.tsx
+msgid "node.roofSegment.panel.pitch"
+msgstr "Pitch"
+
+#: packages/nodes/src/roof-segment/panel.tsx
+msgid "node.roofSegment.panel.position"
+msgstr "Position"
+
+#: packages/nodes/src/roof-segment/panel.tsx
+msgid "node.roofSegment.panel.reset"
+msgstr "Reset"
+
+#: packages/nodes/src/roof-segment/panel.tsx
+msgid "node.roofSegment.panel.roofSegment"
+msgstr "Roof Segment"
+
+#: packages/nodes/src/roof-segment/panel.tsx
+msgid "node.roofSegment.panel.roofType"
+msgstr "Roof Type"
+
+#: packages/nodes/src/roof-segment/panel.tsx
+msgid "node.roofSegment.panel.rotation"
+msgstr "Rotation"
+
+#: packages/nodes/src/roof-segment/panel.tsx
+msgid "node.roofSegment.panel.shape"
+msgstr "Shape"
+
+#: packages/nodes/src/roof-segment/panel.tsx
+msgid "node.roofSegment.panel.shed"
+msgstr "Shed"
+
+#: packages/nodes/src/roof-segment/panel.tsx
+msgid "node.roofSegment.panel.shingleThick"
+msgstr "Shingle Thick."
+
+#: packages/nodes/src/roof-segment/panel.tsx
+msgid "node.roofSegment.panel.span"
+msgstr "Span"
+
+#: packages/nodes/src/roof-segment/panel.tsx
+msgid "node.roofSegment.panel.startAngle"
+msgstr "Start Angle"
+
+#: packages/nodes/src/roof-segment/panel.tsx
+msgid "node.roofSegment.panel.structure"
+msgstr "Structure"
+
+#: packages/nodes/src/roof-segment/panel.tsx
+msgid "node.roofSegment.panel.topRakeLength"
+msgstr "Top Rake Length"
+
+#: packages/nodes/src/roof-segment/panel.tsx
+msgid "node.roofSegment.panel.topRakeThick"
+msgstr "Top Rake Thick."
+
+#: packages/nodes/src/roof-segment/panel.tsx
+msgid "node.roofSegment.panel.trim"
+msgstr "Trim"
+
+#: packages/nodes/src/roof-segment/panel.tsx
+msgid "node.roofSegment.panel.waistHeight"
+msgstr "Waist Height"
+
+#: packages/nodes/src/roof-segment/panel.tsx
+msgid "node.roofSegment.panel.waistLength"
+msgstr "Waist Length"
+
+#: packages/nodes/src/roof-segment/panel.tsx
+msgid "node.roofSegment.panel.waistWidth"
+msgstr "Waist Width"
+
+#: packages/nodes/src/roof-segment/panel.tsx
+msgid "node.roofSegment.panel.wall"
+msgstr "Wall"
+
+#: packages/nodes/src/roof-segment/panel.tsx
+msgid "node.roofSegment.panel.wallHeight"
+msgstr "Wall Height"
+
+#: packages/nodes/src/roof-segment/panel.tsx
+msgid "node.roofSegment.panel.wallThick"
+msgstr "Wall Thick."
+
+#: packages/nodes/src/roof-segment/panel.tsx
+msgid "node.roofSegment.panel.width"
+msgstr "Width"
+
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "node.scan.description"
 msgstr "A captured session with optional mesh, motion, media, and sensor data."
@@ -2879,9 +7177,115 @@ msgstr "A captured session with optional mesh, motion, media, and sensor data."
 msgid "node.scan.label"
 msgstr "Capture"
 
+#: packages/nodes/src/door/panel.tsx
+#: packages/nodes/src/roof/panel.tsx
+#: packages/nodes/src/stair/panel.tsx
+msgid "node.segmentNumber"
+msgstr "Segment {number}"
+
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "node.separator.label"
 msgstr "Separator"
+
+#: packages/nodes/src/shared/system-check-panel.tsx
+msgid "node.shared.systemCheckPanel.aboutTheseChecks"
+msgstr "About these checks"
+
+#: packages/nodes/src/shared/system-check-panel.tsx
+msgid "node.shared.systemCheckPanel.allFindings"
+msgstr "All findings"
+
+#: packages/nodes/src/shared/system-check-panel.tsx
+msgid "node.shared.systemCheckPanel.allSystems"
+msgstr "All systems"
+
+#: packages/nodes/src/shared/system-check-panel.tsx
+msgid "node.shared.systemCheckPanel.connections"
+msgstr "Connections"
+
+#: packages/nodes/src/shared/system-check-panel.tsx
+msgid "node.shared.systemCheckPanel.drainage"
+msgstr "Drainage"
+
+#: packages/nodes/src/shared/system-check-panel.tsx
+msgid "node.shared.systemCheckPanel.error"
+msgstr "Error"
+
+#: packages/nodes/src/shared/system-check-panel.tsx
+msgid "node.shared.systemCheckPanel.errors"
+msgstr "Errors"
+
+#: packages/nodes/src/shared/system-check-panel.tsx
+msgid "node.shared.systemCheckPanel.filterSystemChecks"
+msgstr "Filter system checks"
+
+#: packages/nodes/src/shared/system-check-panel.tsx
+msgid "node.shared.systemCheckPanel.hangers"
+msgstr "Hangers"
+
+#: packages/nodes/src/shared/system-check-panel.tsx
+msgid "node.shared.systemCheckPanel.intersections"
+msgstr "Intersections"
+
+#: packages/nodes/src/shared/system-check-panel.tsx
+msgid "node.shared.systemCheckPanel.locate"
+msgstr "Locate {name} ({id})"
+
+#: packages/nodes/src/shared/system-check-panel.tsx
+msgid "node.shared.systemCheckPanel.missingItem"
+msgstr "Missing item"
+
+#: packages/nodes/src/shared/system-check-panel.tsx
+msgid "node.shared.systemCheckPanel.noFindings"
+msgstr "No findings"
+
+#: packages/nodes/src/shared/system-check-panel.tsx
+msgid "node.shared.systemCheckPanel.noFindingsInThisCategory"
+msgstr "No findings in this category"
+
+#: packages/nodes/src/shared/system-check-panel.tsx
+msgid "node.shared.systemCheckPanel.openEnds"
+msgstr "Open ends"
+
+#: packages/nodes/src/shared/system-check-panel.tsx
+msgid "node.shared.systemCheckPanel.openEndsAndSeparateBranchesMay"
+msgstr "Open ends and separate branches may be intentional. Intersection checks use bounding boxes; inspect openings and clearances."
+
+#: packages/nodes/src/shared/system-check-panel.tsx
+msgid "node.shared.systemCheckPanel.selectedConnectedSystem"
+msgstr "Selected connected system"
+
+#: packages/nodes/src/shared/system-check-panel.tsx
+msgid "node.shared.systemCheckPanel.selectedRuns"
+msgstr "Selected: {count, plural, one {# run} other {# runs}} · {length} m"
+
+#: packages/nodes/src/shared/system-check-panel.tsx
+msgid "node.shared.systemCheckPanel.separateBranches"
+msgstr "Separate branches"
+
+#: packages/nodes/src/shared/system-check-panel.tsx
+msgid "node.shared.systemCheckPanel.showAllFindings"
+msgstr "Show all findings"
+
+#: packages/nodes/src/shared/system-check-panel.tsx
+msgid "node.shared.systemCheckPanel.systemChecks"
+msgstr "System checks"
+
+#: packages/nodes/src/shared/system-check-panel.tsx
+msgid "node.shared.systemCheckPanel.systemFinding"
+msgstr "System finding"
+
+#: packages/nodes/src/shared/system-check-panel.tsx
+msgid "node.shared.systemCheckPanel.systemFindings"
+msgstr "System findings"
+
+#: packages/nodes/src/shared/system-check-panel.tsx
+msgid "node.shared.systemCheckPanel.warning"
+msgstr "Warning"
+
+#: packages/nodes/src/shared/system-check-panel.tsx
+msgid "node.shared.systemCheckPanel.warnings"
+msgstr "Warnings"
 
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "node.shelf.description"
@@ -2899,6 +7303,182 @@ msgstr "The top-level container holding buildings, zones, and the property bound
 msgid "node.site.label"
 msgstr "Site"
 
+#: packages/nodes/src/site/panel.tsx
+msgid "node.site.panel.address"
+msgstr "Address"
+
+#: packages/nodes/src/site/panel.tsx
+msgid "node.site.panel.apn"
+msgstr "APN"
+
+#: packages/nodes/src/site/panel.tsx
+msgid "node.site.panel.autoMostNorthFacingEdge"
+msgstr "Auto — most north-facing edge"
+
+#: packages/nodes/src/site/panel.tsx
+msgid "node.site.panel.contourIntervalSitePlanAnd3d"
+msgstr "Contour interval (site plan and 3D)"
+
+#: packages/nodes/src/site/panel.tsx
+msgid "node.site.panel.county"
+msgstr "County"
+
+#: packages/nodes/src/site/panel.tsx
+msgid "node.site.panel.eGRs60"
+msgstr "e.g. RS-60"
+
+#: packages/nodes/src/site/panel.tsx
+msgid "node.site.panel.eGTampaLdc27156"
+msgstr "e.g. Tampa LDC §27-156"
+
+#: packages/nodes/src/site/panel.tsx
+msgid "node.site.panel.every12In"
+msgstr "every 12 in"
+
+#: packages/nodes/src/site/panel.tsx
+msgid "node.site.panel.every24In"
+msgstr "every 24 in"
+
+#: packages/nodes/src/site/panel.tsx
+msgid "node.site.panel.every6In"
+msgstr "every 6 in"
+
+#: packages/nodes/src/site/panel.tsx
+msgid "node.site.panel.finding"
+msgstr "Finding…"
+
+#: packages/nodes/src/site/panel.tsx
+msgid "node.site.panel.findParcel"
+msgstr "Find parcel"
+
+#: packages/nodes/src/site/panel.tsx
+msgid "node.site.panel.frontStreetEdge"
+msgstr "Front (street) edge"
+
+#: packages/nodes/src/site/panel.tsx
+msgid "node.site.panel.lookingUpTheParcel"
+msgstr "Looking up the parcel and the streets around it…"
+
+#: packages/nodes/src/site/panel.tsx
+msgid "node.site.panel.lotArea"
+msgstr "Lot area"
+
+#: packages/nodes/src/site/panel.tsx
+msgid "node.site.panel.n1200WCassStTampaFl"
+msgstr "1200 W Cass St, Tampa, FL"
+
+#: packages/nodes/src/site/panel.tsx
+msgid "node.site.panel.none"
+msgstr "none"
+
+#: packages/nodes/src/site/panel.tsx
+msgid "node.site.panel.northRotation"
+msgstr "North rotation"
+
+#: packages/nodes/src/site/panel.tsx
+msgid "node.site.panel.noSurveyedLinesContoursAreDrawn"
+msgstr "No surveyed lines — contours are drawn from the sculpted ground."
+
+#: packages/nodes/src/site/panel.tsx
+msgid "node.site.panel.orientation"
+msgstr "Orientation"
+
+#: packages/nodes/src/site/panel.tsx
+msgid "node.site.panel.parcel"
+msgstr "Parcel"
+
+#: packages/nodes/src/site/panel.tsx
+msgid "node.site.panel.parcelLookupFailed"
+msgstr "Parcel lookup failed."
+
+#: packages/nodes/src/site/panel.tsx
+msgid "node.site.panel.projectLook"
+msgstr "Project look"
+
+#: packages/nodes/src/site/panel.tsx
+msgid "node.site.panel.saveCurrentLook"
+msgstr "Save current look"
+
+#: packages/nodes/src/site/panel.tsx
+msgid "node.site.panel.saveTheCurrentLightingAndDisplay"
+msgstr "Save the current lighting and display as this project's default. Personal display changes stay in this browser."
+
+#: packages/nodes/src/site/panel.tsx
+msgid "node.site.panel.setbacks"
+msgstr "Setbacks"
+
+#: packages/nodes/src/site/panel.tsx
+msgid "node.site.panel.showGround"
+msgstr "Show ground"
+
+#: packages/nodes/src/site/panel.tsx
+msgid "node.site.panel.showTheContourLinesIn3d"
+msgstr "Show the contour lines in 3D"
+
+#: packages/nodes/src/site/panel.tsx
+msgid "node.site.panel.side"
+msgstr "side"
+
+#: packages/nodes/src/site/panel.tsx
+msgid "node.site.panel.site"
+msgstr "Site"
+
+#: packages/nodes/src/site/panel.tsx
+msgid "node.site.panel.source"
+msgstr "Source"
+
+#: packages/nodes/src/site/panel.tsx
+msgid "node.site.panel.sourceCitation"
+msgstr "Source / citation"
+
+#: packages/nodes/src/site/panel.tsx
+msgid "node.site.panel.streetAddress"
+msgstr "Street address"
+
+#: packages/nodes/src/site/panel.tsx
+msgid "node.site.panel.survey"
+msgstr "survey"
+
+#: packages/nodes/src/site/panel.tsx
+msgid "node.site.panel.surveyedContours"
+msgstr "{count, plural, one {# surveyed line} other {# surveyed lines}} at {interval} ft ({datum}) — {source}"
+
+#: packages/nodes/src/site/panel.tsx
+msgid "node.site.panel.terrain"
+msgstr "Terrain"
+
+#: packages/nodes/src/site/panel.tsx
+msgid "node.site.panel.typeAnAddressFirst"
+msgstr "Type an address first."
+
+#: packages/nodes/src/site/panel.tsx
+msgid "node.site.panel.useProjectLook"
+msgstr "Use project look"
+
+#: packages/nodes/src/site/panel.tsx
+msgid "node.site.panel.zone"
+msgstr "Zone"
+
+#: packages/nodes/src/site/panel.tsx
+msgid "node.site.setback.front"
+msgstr "Front"
+
+#: packages/nodes/src/site/panel.tsx
+msgid "node.site.setback.leftOverride"
+msgstr "Left (override)"
+
+#: packages/nodes/src/site/panel.tsx
+msgid "node.site.setback.rear"
+msgstr "Rear"
+
+#: packages/nodes/src/site/panel.tsx
+msgid "node.site.setback.rightOverride"
+msgstr "Right (override)"
+
+#: packages/nodes/src/site/panel.tsx
+msgid "node.site.setback.side"
+msgstr "Side"
+
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "node.skylight.description"
 msgstr "Framed glass opening on a roof segment."
@@ -2914,6 +7494,126 @@ msgstr "A polygon-bounded floor surface that hosts items on top."
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "node.slab.label"
 msgstr "Slab"
+
+#: packages/nodes/src/slab/panel.tsx
+msgid "node.slab.panel.addHole"
+msgstr "Add Hole"
+
+#: packages/nodes/src/slab/panel.tsx
+msgid "node.slab.panel.area"
+msgstr "Area"
+
+#: packages/nodes/src/slab/panel.tsx
+msgid "node.slab.panel.auto"
+msgstr "Auto"
+
+#: packages/nodes/src/slab/panel.tsx
+msgid "node.slab.panel.base"
+msgstr "Base"
+
+#: packages/nodes/src/slab/panel.tsx
+msgid "node.slab.panel.cutHatch"
+msgstr "Cut hatch"
+
+#: packages/nodes/src/slab/panel.tsx
+msgid "node.slab.panel.cutOpening"
+msgstr "Cut opening"
+
+#: packages/nodes/src/slab/panel.tsx
+msgid "node.slab.panel.depth"
+msgstr "Depth"
+
+#: packages/nodes/src/slab/panel.tsx
+msgid "node.slab.panel.done"
+msgstr "Done"
+
+#: packages/nodes/src/slab/panel.tsx
+msgid "node.slab.panel.elevation"
+msgstr "Elevation"
+
+#: packages/nodes/src/slab/panel.tsx
+msgid "node.slab.panel.extendsThePerimeterDownToTerrain"
+msgstr "Extends the perimeter down to terrain. The flat surface, base, and thickness stay unchanged."
+
+#: packages/nodes/src/slab/panel.tsx
+msgid "node.slab.panel.fixed"
+msgstr "Fixed"
+
+#: packages/nodes/src/slab/panel.tsx
+msgid "node.slab.panel.floor"
+msgstr "Floor"
+
+#: packages/nodes/src/slab/panel.tsx
+msgid "node.slab.panel.followsTerrain"
+msgstr "Follows terrain"
+
+#: packages/nodes/src/slab/panel.tsx
+msgid "node.slab.panel.foundation"
+msgstr "Foundation"
+
+#: packages/nodes/src/slab/panel.tsx
+msgid "node.slab.panel.holes"
+msgstr "Holes"
+
+#: packages/nodes/src/slab/panel.tsx
+msgid "node.slab.panel.info"
+msgstr "Info"
+
+#: packages/nodes/src/slab/panel.tsx
+msgid "node.slab.panel.move"
+msgstr "Move"
+
+#: packages/nodes/src/slab/panel.tsx
+msgid "node.slab.panel.noHoles"
+msgstr "No holes"
+
+#: packages/nodes/src/slab/panel.tsx
+msgid "node.slab.panel.rim"
+msgstr "Rim"
+
+#: packages/nodes/src/slab/panel.tsx
+msgid "node.slab.panel.slab"
+msgstr "Slab"
+
+#: packages/nodes/src/slab/panel.tsx
+msgid "node.slab.panel.standard2"
+msgstr "Standard (2\")"
+
+#: packages/nodes/src/slab/panel.tsx
+msgid "node.slab.panel.standard5cm"
+msgstr "Standard (5cm)"
+
+#: packages/nodes/src/slab/panel.tsx
+msgid "node.slab.panel.sunken15cm"
+msgstr "Sunken (15cm)"
+
+#: packages/nodes/src/slab/panel.tsx
+msgid "node.slab.panel.sunken6"
+msgstr "Sunken (6\")"
+
+#: packages/nodes/src/slab/panel.tsx
+msgid "node.slab.panel.surface"
+msgstr "Surface"
+
+#: packages/nodes/src/slab/panel.tsx
+msgid "node.slab.panel.thick15cm"
+msgstr "Thick (15cm)"
+
+#: packages/nodes/src/slab/panel.tsx
+msgid "node.slab.panel.thick6"
+msgstr "Thick (6\")"
+
+#: packages/nodes/src/slab/panel.tsx
+msgid "node.slab.panel.thickness"
+msgstr "Thickness"
+
+#: packages/nodes/src/slab/panel.tsx
+msgid "node.slab.panel.thin1"
+msgstr "Thin (1\")"
+
+#: packages/nodes/src/slab/panel.tsx
+msgid "node.slab.panel.thin2cm"
+msgstr "Thin (2cm)"
 
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "node.solarPanel.description"
@@ -2939,6 +7639,350 @@ msgstr "A stair composed of one or more flights with configurable treads, risers
 msgid "node.stair.label"
 msgstr "Stair"
 
+#: packages/nodes/src/stair/panel.tsx
+msgid "node.stair.layout.straight"
+msgstr "Straight"
+
+#: packages/nodes/src/stair/panel.tsx
+msgid "node.stair.layout.turn"
+msgstr "{layout} turn"
+
+#: packages/nodes/src/stair/panel.tsx
+msgid "node.stair.panel.actions"
+msgstr "Actions"
+
+#: packages/nodes/src/stair/panel.tsx
+msgid "node.stair.panel.addFlight"
+msgstr "Add flight"
+
+#: packages/nodes/src/stair/panel.tsx
+msgid "node.stair.panel.addLanding"
+msgstr "Add landing"
+
+#: packages/nodes/src/stair/panel.tsx
+msgid "node.stair.panel.applyLabelLayout"
+msgstr "Apply {label} layout"
+
+#: packages/nodes/src/stair/panel.tsx
+msgid "node.stair.panel.autoCutout"
+msgstr "Auto Cutout"
+
+#: packages/nodes/src/stair/panel.tsx
+msgid "node.stair.panel.balusters"
+msgstr "Balusters"
+
+#: packages/nodes/src/stair/panel.tsx
+msgid "node.stair.panel.boards"
+msgstr "Boards"
+
+#: packages/nodes/src/stair/panel.tsx
+msgid "node.stair.panel.both"
+msgstr "Both"
+
+#: packages/nodes/src/stair/panel.tsx
+msgid "node.stair.panel.cable"
+msgstr "Cable"
+
+#: packages/nodes/src/stair/panel.tsx
+msgid "node.stair.panel.centerColumn"
+msgstr "Center Column"
+
+#: packages/nodes/src/stair/panel.tsx
+msgid "node.stair.panel.clockwise"
+msgstr "Clockwise"
+
+#: packages/nodes/src/stair/panel.tsx
+msgid "node.stair.panel.connectedTo"
+msgstr "Connected to {surface}. Move the stair to connect to another edge."
+
+#: packages/nodes/src/stair/panel.tsx
+msgid "node.stair.panel.connectedToSurface"
+msgstr "Connected to a surface. Move the stair to connect to another edge."
+
+#: packages/nodes/src/stair/panel.tsx
+msgid "node.stair.panel.construction"
+msgstr "Construction"
+
+#: packages/nodes/src/stair/panel.tsx
+msgid "node.stair.panel.counterclockwise"
+msgstr "Counterclockwise"
+
+#: packages/nodes/src/stair/panel.tsx
+msgid "node.stair.panel.curved"
+msgstr "Curved"
+
+#: packages/nodes/src/stair/panel.tsx
+msgid "node.stair.panel.customRise"
+msgstr "Custom rise"
+
+#: packages/nodes/src/stair/panel.tsx
+msgid "node.stair.panel.deck"
+msgstr "Deck"
+
+#: packages/nodes/src/stair/panel.tsx
+msgid "node.stair.panel.delete"
+msgstr "Delete"
+
+#: packages/nodes/src/stair/panel.tsx
+msgid "node.stair.panel.designTargets"
+msgstr "Design targets"
+
+#: packages/nodes/src/stair/panel.tsx
+msgid "node.stair.panel.destination"
+msgstr "Destination"
+
+#: packages/nodes/src/stair/panel.tsx
+msgid "node.stair.panel.dragNearADeckPatioConcrete"
+msgstr "Drag near a deck, patio, concrete slab, or landing edge to fit the stair."
+
+#: packages/nodes/src/stair/panel.tsx
+msgid "node.stair.panel.duplicate"
+msgstr "Duplicate"
+
+#: packages/nodes/src/stair/panel.tsx
+msgid "node.stair.panel.equalAngle"
+msgstr "Equal angle"
+
+#: packages/nodes/src/stair/panel.tsx
+msgid "node.stair.panel.equalGoing"
+msgstr "Equal going"
+
+#: packages/nodes/src/stair/panel.tsx
+msgid "node.stair.panel.fitRisersAndGoing"
+msgstr "Fit risers and going"
+
+#: packages/nodes/src/stair/panel.tsx
+msgid "node.stair.panel.fitToFloor"
+msgstr "Fit To Floor"
+
+#: packages/nodes/src/stair/panel.tsx
+msgid "node.stair.panel.fitUniformRisers"
+msgstr "Fit uniform risers"
+
+#: packages/nodes/src/stair/panel.tsx
+msgid "node.stair.panel.flightMeasurements"
+msgstr "Flight {number}: {count, plural, one {# riser} other {# risers}} · R {riser} · T {going} · {slope}"
+
+#: packages/nodes/src/stair/panel.tsx
+msgid "node.stair.panel.floorsCeilingsAndStairsOnly"
+msgstr "Floors, ceilings and stairs only."
+
+#: packages/nodes/src/stair/panel.tsx
+msgid "node.stair.panel.followsDeck"
+msgstr "Follows deck"
+
+#: packages/nodes/src/stair/panel.tsx
+msgid "node.stair.panel.followsLevel"
+msgstr "Follows level"
+
+#: packages/nodes/src/stair/panel.tsx
+msgid "node.stair.panel.fromLevel"
+msgstr "From Level"
+
+#: packages/nodes/src/stair/panel.tsx
+msgid "node.stair.panel.geometry"
+msgstr "Geometry"
+
+#: packages/nodes/src/stair/panel.tsx
+msgid "node.stair.panel.glass"
+msgstr "Glass"
+
+#: packages/nodes/src/stair/panel.tsx
+msgid "node.stair.panel.headroom"
+msgstr "Headroom:"
+
+#: packages/nodes/src/stair/panel.tsx
+msgid "node.stair.panel.height"
+msgstr "Height"
+
+#: packages/nodes/src/stair/panel.tsx
+msgid "node.stair.panel.innerGap"
+msgstr "Inner gap"
+
+#: packages/nodes/src/stair/panel.tsx
+msgid "node.stair.panel.innerRadius"
+msgstr "Inner Radius"
+
+#: packages/nodes/src/stair/panel.tsx
+msgid "node.stair.panel.integrated"
+msgstr "Integrated"
+
+#: packages/nodes/src/stair/panel.tsx
+msgid "node.stair.panel.landing"
+msgstr "Landing"
+
+#: packages/nodes/src/stair/panel.tsx
+msgid "node.stair.panel.layout"
+msgstr "Layout"
+
+#: packages/nodes/src/stair/panel.tsx
+msgid "node.stair.panel.left"
+msgstr "Left"
+
+#: packages/nodes/src/stair/panel.tsx
+msgid "node.stair.panel.leftTurn"
+msgstr "Left turn"
+
+#: packages/nodes/src/stair/panel.tsx
+msgid "node.stair.panel.measurements"
+msgstr "Measurements"
+
+#: packages/nodes/src/stair/panel.tsx
+msgid "node.stair.panel.metal"
+msgstr "Metal"
+
+#: packages/nodes/src/stair/panel.tsx
+msgid "node.stair.panel.move"
+msgstr "Move"
+
+#: packages/nodes/src/stair/panel.tsx
+msgid "node.stair.panel.movingThisStairKeepsItsCurrent"
+msgstr "Moving this stair keeps its current rise, steps, and run."
+
+#: packages/nodes/src/stair/panel.tsx
+msgid "node.stair.panel.none"
+msgstr "None"
+
+#: packages/nodes/src/stair/panel.tsx
+msgid "node.stair.panel.noOverheadSurface"
+msgstr "No overhead surface"
+
+#: packages/nodes/src/stair/panel.tsx
+msgid "node.stair.panel.notEvaluated"
+msgstr "Not evaluated"
+
+#: packages/nodes/src/stair/panel.tsx
+msgid "node.stair.panel.opening"
+msgstr "Opening"
+
+#: packages/nodes/src/stair/panel.tsx
+msgid "node.stair.panel.openingOffset"
+msgstr "Opening Offset"
+
+#: packages/nodes/src/stair/panel.tsx
+msgid "node.stair.panel.position"
+msgstr "Position"
+
+#: packages/nodes/src/stair/panel.tsx
+msgid "node.stair.panel.postRail"
+msgstr "Post & rail"
+
+#: packages/nodes/src/stair/panel.tsx
+msgid "node.stair.panel.railing"
+msgstr "Railing"
+
+#: packages/nodes/src/stair/panel.tsx
+msgid "node.stair.panel.right"
+msgstr "Right"
+
+#: packages/nodes/src/stair/panel.tsx
+msgid "node.stair.panel.rightTurn"
+msgstr "Right turn"
+
+#: packages/nodes/src/stair/panel.tsx
+msgid "node.stair.panel.rise"
+msgstr "Rise"
+
+#: packages/nodes/src/stair/panel.tsx
+msgid "node.stair.panel.rotation"
+msgstr "Rotation"
+
+#: packages/nodes/src/stair/panel.tsx
+msgid "node.stair.panel.segments"
+msgstr "Segments"
+
+#: packages/nodes/src/stair/panel.tsx
+msgid "node.stair.panel.segmentType"
+msgstr "{type, select, landing {Landing} other {Stair}}"
+
+#: packages/nodes/src/stair/panel.tsx
+msgid "node.stair.panel.sizing"
+msgstr "Sizing"
+
+#: packages/nodes/src/stair/panel.tsx
+msgid "node.stair.panel.snapToNearbySurfaces"
+msgstr "Snap to nearby surfaces"
+
+#: packages/nodes/src/stair/panel.tsx
+msgid "node.stair.panel.spiral"
+msgstr "Spiral"
+
+#: packages/nodes/src/stair/panel.tsx
+msgid "node.stair.panel.staircase"
+msgstr "Staircase"
+
+#: packages/nodes/src/stair/panel.tsx
+msgid "node.stair.panel.steps"
+msgstr "Steps"
+
+#: packages/nodes/src/stair/panel.tsx
+msgid "node.stair.panel.stepSupports"
+msgstr "Step Supports"
+
+#: packages/nodes/src/stair/panel.tsx
+msgid "node.stair.panel.straight"
+msgstr "Straight"
+
+#: packages/nodes/src/stair/panel.tsx
+msgid "node.stair.panel.style"
+msgstr "Style"
+
+#: packages/nodes/src/stair/panel.tsx
+msgid "node.stair.panel.surfaceConnection"
+msgstr "Surface connection"
+
+#: packages/nodes/src/stair/panel.tsx
+msgid "node.stair.panel.sweep"
+msgstr "Sweep"
+
+#: packages/nodes/src/stair/panel.tsx
+msgid "node.stair.panel.targetGoing"
+msgstr "Target going"
+
+#: packages/nodes/src/stair/panel.tsx
+msgid "node.stair.panel.targetHeadroom"
+msgstr "Target headroom"
+
+#: packages/nodes/src/stair/panel.tsx
+msgid "node.stair.panel.targetMaxRiser"
+msgstr "Target max riser"
+
+#: packages/nodes/src/stair/panel.tsx
+msgid "node.stair.panel.targetMinimumGoing"
+msgstr "Target minimum going"
+
+#: packages/nodes/src/stair/panel.tsx
+msgid "node.stair.panel.thickness"
+msgstr "Thickness"
+
+#: packages/nodes/src/stair/panel.tsx
+msgid "node.stair.panel.to"
+msgstr "To"
+
+#: packages/nodes/src/stair/panel.tsx
+msgid "node.stair.panel.topLanding"
+msgstr "Top Landing"
+
+#: packages/nodes/src/stair/panel.tsx
+msgid "node.stair.panel.type"
+msgstr "Type"
+
+#: packages/nodes/src/stair/panel.tsx
+msgid "node.stair.panel.unavailable"
+msgstr "Unavailable"
+
+#: packages/nodes/src/stair/panel.tsx
+msgid "node.stair.panel.walkingLineOffset"
+msgstr "Walking line offset"
+
+#: packages/nodes/src/stair/panel.tsx
+msgid "node.stair.panel.width"
+msgstr "Width"
+
+#: packages/nodes/src/stair/panel.tsx
+msgid "node.stair.panel.winder"
+msgstr "Winder"
+
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "node.stairSegment.description"
 msgstr "A single flight of a parent stair."
@@ -2946,6 +7990,134 @@ msgstr "A single flight of a parent stair."
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "node.stairSegment.label"
 msgstr "Stair Segment"
+
+#: packages/nodes/src/stair-segment/panel.tsx
+msgid "node.stairSegment.panel.actions"
+msgstr "Actions"
+
+#: packages/nodes/src/stair-segment/panel.tsx
+msgid "node.stairSegment.panel.attachment"
+msgstr "Attachment"
+
+#: packages/nodes/src/stair-segment/panel.tsx
+msgid "node.stairSegment.panel.delete"
+msgstr "Delete"
+
+#: packages/nodes/src/stair-segment/panel.tsx
+msgid "node.stairSegment.panel.dimensions"
+msgstr "Dimensions"
+
+#: packages/nodes/src/stair-segment/panel.tsx
+msgid "node.stairSegment.panel.duplicate"
+msgstr "Duplicate"
+
+#: packages/nodes/src/stair-segment/panel.tsx
+msgid "node.stairSegment.panel.editingSwitchesTheStairToCustom"
+msgstr "Editing switches the stair to Custom rise"
+
+#: packages/nodes/src/stair-segment/panel.tsx
+msgid "node.stairSegment.panel.equalAngle"
+msgstr "Equal angle"
+
+#: packages/nodes/src/stair-segment/panel.tsx
+msgid "node.stairSegment.panel.equalGoing"
+msgstr "Equal going"
+
+#: packages/nodes/src/stair-segment/panel.tsx
+msgid "node.stairSegment.panel.fillToFloor"
+msgstr "Fill to floor"
+
+#: packages/nodes/src/stair-segment/panel.tsx
+msgid "node.stairSegment.panel.flight"
+msgstr "Flight"
+
+#: packages/nodes/src/stair-segment/panel.tsx
+msgid "node.stairSegment.panel.flightShape"
+msgstr "Flight shape"
+
+#: packages/nodes/src/stair-segment/panel.tsx
+msgid "node.stairSegment.panel.front"
+msgstr "Front"
+
+#: packages/nodes/src/stair-segment/panel.tsx
+msgid "node.stairSegment.panel.height"
+msgstr "Height"
+
+#: packages/nodes/src/stair-segment/panel.tsx
+msgid "node.stairSegment.panel.innerGap"
+msgstr "Inner gap"
+
+#: packages/nodes/src/stair-segment/panel.tsx
+msgid "node.stairSegment.panel.landing"
+msgstr "Landing"
+
+#: packages/nodes/src/stair-segment/panel.tsx
+msgid "node.stairSegment.panel.left"
+msgstr "Left"
+
+#: packages/nodes/src/stair-segment/panel.tsx
+msgid "node.stairSegment.panel.leftTurn"
+msgstr "Left turn"
+
+#: packages/nodes/src/stair-segment/panel.tsx
+msgid "node.stairSegment.panel.length"
+msgstr "Length"
+
+#: packages/nodes/src/stair-segment/panel.tsx
+msgid "node.stairSegment.panel.move"
+msgstr "Move"
+
+#: packages/nodes/src/stair-segment/panel.tsx
+msgid "node.stairSegment.panel.position"
+msgstr "Position"
+
+#: packages/nodes/src/stair-segment/panel.tsx
+msgid "node.stairSegment.panel.right"
+msgstr "Right"
+
+#: packages/nodes/src/stair-segment/panel.tsx
+msgid "node.stairSegment.panel.rightTurn"
+msgstr "Right turn"
+
+#: packages/nodes/src/stair-segment/panel.tsx
+msgid "node.stairSegment.panel.rotation"
+msgstr "Rotation"
+
+#: packages/nodes/src/stair-segment/panel.tsx
+msgid "node.stairSegment.panel.stairSegment"
+msgstr "Stair Segment"
+
+#: packages/nodes/src/stair-segment/panel.tsx
+msgid "node.stairSegment.panel.steps"
+msgstr "Steps"
+
+#: packages/nodes/src/stair-segment/panel.tsx
+msgid "node.stairSegment.panel.straight"
+msgstr "Straight"
+
+#: packages/nodes/src/stair-segment/panel.tsx
+msgid "node.stairSegment.panel.structure"
+msgstr "Structure"
+
+#: packages/nodes/src/stair-segment/panel.tsx
+msgid "node.stairSegment.panel.thickness"
+msgstr "Thickness"
+
+#: packages/nodes/src/stair-segment/panel.tsx
+msgid "node.stairSegment.panel.type"
+msgstr "Type"
+
+#: packages/nodes/src/stair-segment/panel.tsx
+msgid "node.stairSegment.panel.walkingLineOffset"
+msgstr "Walking line offset"
+
+#: packages/nodes/src/stair-segment/panel.tsx
+msgid "node.stairSegment.panel.width"
+msgstr "Width"
+
+#: packages/nodes/src/stair-segment/panel.tsx
+msgid "node.stairSegment.panel.winder"
+msgstr "Winder"
 
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "node.structuralGrid.description"
@@ -2967,9 +8139,369 @@ msgstr "Turbine Vent"
 msgid "node.unit.description"
 msgstr "A named group of zones forming one apartment, hotel room or commercial lot."
 
+#: packages/nodes/src/unit/unit-panel.tsx
+msgid "node.unit.kind.apartment"
+msgstr "Apartment"
+
+#: packages/nodes/src/unit/unit-panel.tsx
+msgid "node.unit.kind.commercial"
+msgstr "Commercial"
+
+#: packages/nodes/src/unit/unit-panel.tsx
+msgid "node.unit.kind.common"
+msgstr "Common"
+
+#: packages/nodes/src/unit/unit-panel.tsx
+msgid "node.unit.kind.hotelRoom"
+msgstr "Hotel room"
+
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "node.unit.label"
 msgstr "Unit"
+
+#: packages/nodes/src/unit/unit-panel.tsx
+msgid "node.unit.panel.nonAdjacentLevels"
+msgstr "Members sit on levels that are not adjacent."
+
+#: packages/nodes/src/unit/unit-panel.tsx
+msgid "node.unit.panel.noZonesAssigned"
+msgstr "No zones assigned yet."
+
+#: packages/nodes/src/unit/unit-panel.tsx
+msgid "node.unit.panel.removeMember"
+msgstr "Remove {name} from unit"
+
+#: packages/nodes/src/unit/unit-panel.tsx
+msgid "node.unit.panel.removeZone"
+msgstr "Remove zone from unit"
+
+#: packages/nodes/src/unit/unit-panel.tsx
+msgid "node.unit.unitPanel.actions"
+msgstr "Actions"
+
+#: packages/nodes/src/unit/unit-panel.tsx
+msgid "node.unit.unitPanel.color"
+msgstr "Color"
+
+#: packages/nodes/src/unit/unit-panel.tsx
+msgid "node.unit.unitPanel.delete"
+msgstr "Delete"
+
+#: packages/nodes/src/unit/unit-panel.tsx
+msgid "node.unit.unitPanel.focus"
+msgstr "Focus"
+
+#: packages/nodes/src/unit/unit-panel.tsx
+msgid "node.unit.unitPanel.grossArea"
+msgstr "Gross area"
+
+#: packages/nodes/src/unit/unit-panel.tsx
+msgid "node.unit.unitPanel.kind"
+msgstr "Kind"
+
+#: packages/nodes/src/unit/unit-panel.tsx
+msgid "node.unit.unitPanel.levels"
+msgstr "Levels"
+
+#: packages/nodes/src/unit/unit-panel.tsx
+msgid "node.unit.unitPanel.members"
+msgstr "Members"
+
+#: packages/nodes/src/unit/unit-panel.tsx
+msgid "node.unit.unitPanel.name"
+msgstr "Name"
+
+#: packages/nodes/src/unit/unit-panel.tsx
+msgid "node.unit.unitPanel.noRoomsYetPickThisUnit"
+msgstr "No rooms yet. Pick this unit from a room's panel, or draw zones while it is focused."
+
+#: packages/nodes/src/unit/unit-panel.tsx
+msgid "node.unit.unitPanel.report"
+msgstr "Report"
+
+#: packages/nodes/src/unit/unit-panel.tsx
+msgid "node.unit.unitPanel.unit"
+msgstr "Unit"
+
+#: packages/nodes/src/wall/curtain-wall-panel.tsx
+msgid "node.wall.curtain.cell"
+msgstr "Column {column}, row {row}: {type, select, glass {glass} solid {solid} other {empty}}"
+
+#: packages/nodes/src/wall/curtain-wall-panel.tsx
+msgid "node.wall.curtain.columnSpacing"
+msgstr "{count, plural, one {# column} other {# columns}} · {spacing} grid spacing"
+
+#: packages/nodes/src/wall/curtain-wall-panel.tsx
+msgid "node.wall.curtain.noPanels"
+msgstr "No panels"
+
+#: packages/nodes/src/wall/curtain-wall-panel.tsx
+msgid "node.wall.curtain.rowSpacing"
+msgstr "{count, plural, one {# row} other {# rows}} · {spacing} grid spacing"
+
+#: packages/nodes/src/wall/curtain-wall-panel.tsx
+msgid "node.wall.curtainWallPanel.applyTint"
+msgstr "Apply tint"
+
+#: packages/nodes/src/wall/curtain-wall-panel.tsx
+msgid "node.wall.curtainWallPanel.borderOpeningFrame"
+msgstr "Border / opening frame"
+
+#: packages/nodes/src/wall/curtain-wall-panel.tsx
+msgid "node.wall.curtainWallPanel.bottom"
+msgstr "Bottom"
+
+#: packages/nodes/src/wall/curtain-wall-panel.tsx
+msgid "node.wall.curtainWallPanel.bottomRow"
+msgstr "Bottom row"
+
+#: packages/nodes/src/wall/curtain-wall-panel.tsx
+msgid "node.wall.curtainWallPanel.cancelTint"
+msgstr "Cancel tint"
+
+#: packages/nodes/src/wall/curtain-wall-panel.tsx
+msgid "node.wall.curtainWallPanel.center"
+msgstr "Center"
+
+#: packages/nodes/src/wall/curtain-wall-panel.tsx
+msgid "node.wall.curtainWallPanel.chooseACellOrEnterIts"
+msgstr "Choose a cell or enter its column and row. Use arrow keys to move between cells. Columns run from the wall start; rows count upward."
+
+#: packages/nodes/src/wall/curtain-wall-panel.tsx
+msgid "node.wall.curtainWallPanel.clearHiddenOverrides"
+msgstr "Clear hidden overrides"
+
+#: packages/nodes/src/wall/curtain-wall-panel.tsx
+msgid "node.wall.curtainWallPanel.column"
+msgstr "Column"
+
+#: packages/nodes/src/wall/curtain-wall-panel.tsx
+msgid "node.wall.curtainWallPanel.columnLayout"
+msgstr "Column layout"
+
+#: packages/nodes/src/wall/curtain-wall-panel.tsx
+msgid "node.wall.curtainWallPanel.columnRow"
+msgstr "Column {column}, row {row}"
+
+#: packages/nodes/src/wall/curtain-wall-panel.tsx
+msgid "node.wall.curtainWallPanel.construction"
+msgstr "Construction"
+
+#: packages/nodes/src/wall/curtain-wall-panel.tsx
+msgid "node.wall.curtainWallPanel.continuousMullionsAndTransomsAssembledAlong"
+msgstr "Continuous mullions and transoms assembled along the wall."
+
+#: packages/nodes/src/wall/curtain-wall-panel.tsx
+msgid "node.wall.curtainWallPanel.curtainWallPanelSelection"
+msgstr "Curtain wall panel selection"
+
+#: packages/nodes/src/wall/curtain-wall-panel.tsx
+msgid "node.wall.curtainWallPanel.customInfill"
+msgstr "Custom infill"
+
+#: packages/nodes/src/wall/curtain-wall-panel.tsx
+msgid "node.wall.curtainWallPanel.defaultPanel"
+msgstr "Default panel"
+
+#: packages/nodes/src/wall/curtain-wall-panel.tsx
+msgid "node.wall.curtainWallPanel.editIndividualPanels"
+msgstr "Edit individual panels"
+
+#: packages/nodes/src/wall/curtain-wall-panel.tsx
+msgid "node.wall.curtainWallPanel.effectiveThicknessLimited"
+msgstr "Effective thickness: {thickness}, limited by frame depth."
+
+#: packages/nodes/src/wall/curtain-wall-panel.tsx
+msgid "node.wall.curtainWallPanel.empty"
+msgstr "Empty"
+
+#: packages/nodes/src/wall/curtain-wall-panel.tsx
+msgid "node.wall.curtainWallPanel.enablePanelEditing"
+msgstr "Enable panel editing"
+
+#: packages/nodes/src/wall/curtain-wall-panel.tsx
+msgid "node.wall.curtainWallPanel.end"
+msgstr "End"
+
+#: packages/nodes/src/wall/curtain-wall-panel.tsx
+msgid "node.wall.curtainWallPanel.fixedSpacing"
+msgstr "Fixed spacing"
+
+#: packages/nodes/src/wall/curtain-wall-panel.tsx
+msgid "node.wall.curtainWallPanel.followingWallDefaults"
+msgstr "Following wall defaults"
+
+#: packages/nodes/src/wall/curtain-wall-panel.tsx
+msgid "node.wall.curtainWallPanel.frameDimensions"
+msgstr "Frame dimensions"
+
+#: packages/nodes/src/wall/curtain-wall-panel.tsx
+msgid "node.wall.curtainWallPanel.framing"
+msgstr "Framing"
+
+#: packages/nodes/src/wall/curtain-wall-panel.tsx
+msgid "node.wall.curtainWallPanel.fullyCapped"
+msgstr "Fully capped"
+
+#: packages/nodes/src/wall/curtain-wall-panel.tsx
+msgid "node.wall.curtainWallPanel.glass"
+msgstr "Glass"
+
+#: packages/nodes/src/wall/curtain-wall-panel.tsx
+msgid "node.wall.curtainWallPanel.glassAppearance"
+msgstr "Glass appearance"
+
+#: packages/nodes/src/wall/curtain-wall-panel.tsx
+msgid "node.wall.curtainWallPanel.glassAppearanceIsControlledByThe"
+msgstr "Glass appearance is controlled by the paint tool."
+
+#: packages/nodes/src/wall/curtain-wall-panel.tsx
+msgid "node.wall.curtainWallPanel.glassTint"
+msgstr "Glass tint"
+
+#: packages/nodes/src/wall/curtain-wall-panel.tsx
+msgid "node.wall.curtainWallPanel.glazingGap"
+msgstr "Glazing gap"
+
+#: packages/nodes/src/wall/curtain-wall-panel.tsx
+msgid "node.wall.curtainWallPanel.gridLimitedTo32PanelsPer"
+msgstr "Grid limited to 32 panels per axis. Spacing expands to fit this wall."
+
+#: packages/nodes/src/wall/curtain-wall-panel.tsx
+msgid "node.wall.curtainWallPanel.horizontalCaps"
+msgstr "Horizontal caps"
+
+#: packages/nodes/src/wall/curtain-wall-panel.tsx
+msgid "node.wall.curtainWallPanel.horizontalFrameWidth"
+msgstr "Horizontal frame width"
+
+#: packages/nodes/src/wall/curtain-wall-panel.tsx
+msgid "node.wall.curtainWallPanel.layout"
+msgstr "Layout"
+
+#: packages/nodes/src/wall/curtain-wall-panel.tsx
+msgid "node.wall.curtainWallPanel.lengthCustomPanelsAreOutsideThis"
+msgstr "{length} custom panels are outside this grid. They return if the grid expands."
+
+#: packages/nodes/src/wall/curtain-wall-panel.tsx
+msgid "node.wall.curtainWallPanel.lowRoughnessIsSmoothHighRoughness"
+msgstr "Low roughness is smooth; high roughness gives a matte surface in rendered shading."
+
+#: packages/nodes/src/wall/curtain-wall-panel.tsx
+msgid "node.wall.curtainWallPanel.maximumSpacing"
+msgstr "Maximum spacing"
+
+#: packages/nodes/src/wall/curtain-wall-panel.tsx
+msgid "node.wall.curtainWallPanel.moduleJointWidth"
+msgstr "Module joint width"
+
+#: packages/nodes/src/wall/curtain-wall-panel.tsx
+msgid "node.wall.curtainWallPanel.none"
+msgstr "None"
+
+#: packages/nodes/src/wall/curtain-wall-panel.tsx
+msgid "node.wall.curtainWallPanel.opacity"
+msgstr "Opacity"
+
+#: packages/nodes/src/wall/curtain-wall-panel.tsx
+msgid "node.wall.curtainWallPanel.opaqueBand"
+msgstr "Opaque band"
+
+#: packages/nodes/src/wall/curtain-wall-panel.tsx
+msgid "node.wall.curtainWallPanel.opaqueBandsReplaceAFullRow"
+msgstr "Opaque bands replace a full row with solid panels. Apply their finish with the paint tool."
+
+#: packages/nodes/src/wall/curtain-wall-panel.tsx
+msgid "node.wall.curtainWallPanel.panelCount"
+msgstr "Panel count"
+
+#: packages/nodes/src/wall/curtain-wall-panel.tsx
+msgid "node.wall.curtainWallPanel.panelInfill"
+msgstr "Panel infill"
+
+#: packages/nodes/src/wall/curtain-wall-panel.tsx
+msgid "node.wall.curtainWallPanel.panels"
+msgstr "Panels"
+
+#: packages/nodes/src/wall/curtain-wall-panel.tsx
+msgid "node.wall.curtainWallPanel.panelThickness"
+msgstr "Panel thickness"
+
+#: packages/nodes/src/wall/curtain-wall-panel.tsx
+msgid "node.wall.curtainWallPanel.resetThisPanel"
+msgstr "Reset this panel"
+
+#: packages/nodes/src/wall/curtain-wall-panel.tsx
+msgid "node.wall.curtainWallPanel.row2"
+msgstr "Row"
+
+#: packages/nodes/src/wall/curtain-wall-panel.tsx
+msgid "node.wall.curtainWallPanel.rowLayout"
+msgstr "Row layout"
+
+#: packages/nodes/src/wall/curtain-wall-panel.tsx
+msgid "node.wall.curtainWallPanel.separateFramedModulesWithJointsBetween"
+msgstr "Separate framed modules with joints between units."
+
+#: packages/nodes/src/wall/curtain-wall-panel.tsx
+msgid "node.wall.curtainWallPanel.solid"
+msgstr "Solid"
+
+#: packages/nodes/src/wall/curtain-wall-panel.tsx
+msgid "node.wall.curtainWallPanel.spacing"
+msgstr "Spacing"
+
+#: packages/nodes/src/wall/curtain-wall-panel.tsx
+msgid "node.wall.curtainWallPanel.start"
+msgstr "Start"
+
+#: packages/nodes/src/wall/curtain-wall-panel.tsx
+msgid "node.wall.curtainWallPanel.stickBuilt"
+msgstr "Stick-built"
+
+#: packages/nodes/src/wall/curtain-wall-panel.tsx
+msgid "node.wall.curtainWallPanel.structuralGlazing"
+msgstr "Structural glazing"
+
+#: packages/nodes/src/wall/curtain-wall-panel.tsx
+msgid "node.wall.curtainWallPanel.surfaceRoughness"
+msgstr "Surface roughness"
+
+#: packages/nodes/src/wall/curtain-wall-panel.tsx
+msgid "node.wall.curtainWallPanel.top"
+msgstr "Top"
+
+#: packages/nodes/src/wall/curtain-wall-panel.tsx
+msgid "node.wall.curtainWallPanel.topRow"
+msgstr "Top row"
+
+#: packages/nodes/src/wall/curtain-wall-panel.tsx
+msgid "node.wall.curtainWallPanel.uncappedMembersSitBehindTheGlazing"
+msgstr "Uncapped members sit behind the glazing."
+
+#: packages/nodes/src/wall/curtain-wall-panel.tsx
+msgid "node.wall.curtainWallPanel.unitized"
+msgstr "Unitized"
+
+#: packages/nodes/src/wall/curtain-wall-panel.tsx
+msgid "node.wall.curtainWallPanel.useGlassSettingsInstead"
+msgstr "Use glass settings instead"
+
+#: packages/nodes/src/wall/curtain-wall-panel.tsx
+msgid "node.wall.curtainWallPanel.useTheDoorOrWindowTool"
+msgstr "Use the Door or Window tool to add an opening through the wall."
+
+#: packages/nodes/src/wall/curtain-wall-panel.tsx
+msgid "node.wall.curtainWallPanel.verticalCaps"
+msgstr "Vertical caps"
+
+#: packages/nodes/src/wall/curtain-wall-panel.tsx
+msgid "node.wall.curtainWallPanel.verticalFrameWidth"
+msgstr "Vertical frame width"
+
+#: packages/nodes/src/wall/curtain-wall-panel.tsx
+msgid "node.wall.curtainWallPanel.wallSystem"
+msgstr "Wall system"
 
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "node.wall.description"
@@ -2979,6 +8511,306 @@ msgstr "A straight or curved wall segment. Hosts doors, windows, lean-to extensi
 msgid "node.wall.label"
 msgstr "Wall"
 
+#: packages/nodes/src/wall/panel.tsx
+msgid "node.wall.panel.actions"
+msgstr "Actions"
+
+#: packages/nodes/src/wall/panel.tsx
+msgid "node.wall.panel.assembly"
+msgstr "Assembly"
+
+#: packages/nodes/src/wall/panel.tsx
+msgid "node.wall.panel.auto"
+msgstr "Auto"
+
+#: packages/nodes/src/wall/panel.tsx
+msgid "node.wall.panel.both"
+msgstr "Both"
+
+#: packages/nodes/src/wall/panel.tsx
+msgid "node.wall.panel.bottom"
+msgstr "Bottom"
+
+#: packages/nodes/src/wall/panel.tsx
+msgid "node.wall.panel.brickVeneer"
+msgstr "Brick veneer"
+
+#: packages/nodes/src/wall/panel.tsx
+msgid "node.wall.panel.chairRail"
+msgstr "Chair rail"
+
+#: packages/nodes/src/wall/panel.tsx
+msgid "node.wall.panel.cmu"
+msgstr "CMU"
+
+#: packages/nodes/src/wall/panel.tsx
+msgid "node.wall.panel.colonial"
+msgstr "Colonial"
+
+#: packages/nodes/src/wall/panel.tsx
+msgid "node.wall.panel.cove"
+msgstr "Cove"
+
+#: packages/nodes/src/wall/panel.tsx
+msgid "node.wall.panel.craft"
+msgstr "Craft"
+
+#: packages/nodes/src/wall/panel.tsx
+msgid "node.wall.panel.crownMolding"
+msgstr "Crown molding"
+
+#: packages/nodes/src/wall/panel.tsx
+msgid "node.wall.panel.curtainWall"
+msgstr "Curtain wall"
+
+#: packages/nodes/src/wall/panel.tsx
+msgid "node.wall.panel.curve"
+msgstr "Curve"
+
+#: packages/nodes/src/wall/panel.tsx
+msgid "node.wall.panel.custom"
+msgstr "Custom"
+
+#: packages/nodes/src/wall/panel.tsx
+msgid "node.wall.panel.customHeight"
+msgstr "Custom height"
+
+#: packages/nodes/src/wall/panel.tsx
+msgid "node.wall.panel.depth"
+msgstr "Depth"
+
+#: packages/nodes/src/wall/panel.tsx
+msgid "node.wall.panel.dimensions"
+msgstr "Dimensions"
+
+#: packages/nodes/src/wall/panel.tsx
+msgid "node.wall.panel.drywall"
+msgstr "Drywall"
+
+#: packages/nodes/src/wall/panel.tsx
+msgid "node.wall.panel.extendsDownwardToMeetTheTerrain"
+msgstr "Extends downward to meet the terrain. Height and top stay unchanged."
+
+#: packages/nodes/src/wall/panel.tsx
+msgid "node.wall.panel.exterior"
+msgstr "Exterior"
+
+#: packages/nodes/src/wall/panel.tsx
+msgid "node.wall.panel.fiberCement"
+msgstr "Fiber cement"
+
+#: packages/nodes/src/wall/panel.tsx
+msgid "node.wall.panel.fillToTerrain"
+msgstr "Fill to terrain"
+
+#: packages/nodes/src/wall/panel.tsx
+msgid "node.wall.panel.flat"
+msgstr "Flat"
+
+#: packages/nodes/src/wall/panel.tsx
+msgid "node.wall.panel.followsLevel"
+msgstr "Follows level"
+
+#: packages/nodes/src/wall/panel.tsx
+msgid "node.wall.panel.frameDepth"
+msgstr "Frame depth"
+
+#: packages/nodes/src/wall/panel.tsx
+msgid "node.wall.panel.framing"
+msgstr "Framing"
+
+#: packages/nodes/src/wall/panel.tsx
+msgid "node.wall.panel.gypsum"
+msgstr "Gypsum"
+
+#: packages/nodes/src/wall/panel.tsx
+msgid "node.wall.panel.height"
+msgstr "Height"
+
+#: packages/nodes/src/wall/panel.tsx
+msgid "node.wall.panel.hideCode"
+msgstr "Hide code"
+
+#: packages/nodes/src/wall/panel.tsx
+msgid "node.wall.panel.icf"
+msgstr "ICF"
+
+#: packages/nodes/src/wall/panel.tsx
+msgid "node.wall.panel.interior"
+msgstr "Interior"
+
+#: packages/nodes/src/wall/panel.tsx
+msgid "node.wall.panel.lapSiding"
+msgstr "Lap siding"
+
+#: packages/nodes/src/wall/panel.tsx
+msgid "node.wall.panel.layered"
+msgstr "Layered"
+
+#: packages/nodes/src/wall/panel.tsx
+msgid "node.wall.panel.layerThicknessesFollowThe2021Irc"
+msgstr "Layer thicknesses follow the 2021 IRC assembly data. Drafting aid, not engineering — verify with the authority having jurisdiction."
+
+#: packages/nodes/src/wall/panel.tsx
+msgid "node.wall.panel.length"
+msgstr "Length"
+
+#: packages/nodes/src/wall/panel.tsx
+msgid "node.wall.panel.loading"
+msgstr "Loading…"
+
+#: packages/nodes/src/wall/panel.tsx
+msgid "node.wall.panel.modern"
+msgstr "Modern"
+
+#: packages/nodes/src/wall/panel.tsx
+msgid "node.wall.panel.none"
+msgstr "None"
+
+#: packages/nodes/src/wall/panel.tsx
+msgid "node.wall.panel.noneSingleLayer"
+msgstr "None (single layer)"
+
+#: packages/nodes/src/wall/panel.tsx
+msgid "node.wall.panel.offset"
+msgstr "Offset"
+
+#: packages/nodes/src/wall/panel.tsx
+msgid "node.wall.panel.ogee"
+msgstr "Ogee"
+
+#: packages/nodes/src/wall/panel.tsx
+msgid "node.wall.panel.osb"
+msgstr "OSB"
+
+#: packages/nodes/src/wall/panel.tsx
+msgid "node.wall.panel.partitionTheInteriorFinishIsApplied"
+msgstr "Partition: the interior finish is applied to both faces."
+
+#: packages/nodes/src/wall/panel.tsx
+msgid "node.wall.panel.picture"
+msgstr "Picture"
+
+#: packages/nodes/src/wall/panel.tsx
+msgid "node.wall.panel.plaster"
+msgstr "Plaster"
+
+#: packages/nodes/src/wall/panel.tsx
+msgid "node.wall.panel.plywood"
+msgstr "Plywood"
+
+#: packages/nodes/src/wall/panel.tsx
+msgid "node.wall.panel.preset"
+msgstr "Preset"
+
+#: packages/nodes/src/wall/panel.tsx
+msgid "node.wall.panel.reference"
+msgstr "Reference"
+
+#: packages/nodes/src/wall/panel.tsx
+msgid "node.wall.panel.remove"
+msgstr "Remove"
+
+#: packages/nodes/src/wall/panel.tsx
+msgid "node.wall.panel.round"
+msgstr "Round"
+
+#: packages/nodes/src/wall/panel.tsx
+msgid "node.wall.panel.scriptedFinish"
+msgstr "Scripted finish"
+
+#: packages/nodes/src/wall/panel.tsx
+msgid "node.wall.panel.sheathing"
+msgstr "Sheathing"
+
+#: packages/nodes/src/wall/panel.tsx
+msgid "node.wall.panel.shoe"
+msgstr "Shoe"
+
+#: packages/nodes/src/wall/panel.tsx
+msgid "node.wall.panel.sideA"
+msgstr "Side A"
+
+#: packages/nodes/src/wall/panel.tsx
+msgid "node.wall.panel.sideB"
+msgstr "Side B"
+
+#: packages/nodes/src/wall/panel.tsx
+msgid "node.wall.panel.sideFace"
+msgstr "Side {face}"
+
+#: packages/nodes/src/wall/panel.tsx
+msgid "node.wall.panel.skirting"
+msgstr "Skirting"
+
+#: packages/nodes/src/wall/panel.tsx
+msgid "node.wall.panel.standard"
+msgstr "Standard"
+
+#: packages/nodes/src/wall/panel.tsx
+msgid "node.wall.panel.steelStuds"
+msgstr "Steel studs"
+
+#: packages/nodes/src/wall/panel.tsx
+msgid "node.wall.panel.step"
+msgstr "Step"
+
+#: packages/nodes/src/wall/panel.tsx
+msgid "node.wall.panel.stoneVeneer"
+msgstr "Stone veneer"
+
+#: packages/nodes/src/wall/panel.tsx
+msgid "node.wall.panel.stucco"
+msgstr "Stucco"
+
+#: packages/nodes/src/wall/panel.tsx
+msgid "node.wall.panel.thickness"
+msgstr "Thickness"
+
+#: packages/nodes/src/wall/panel.tsx
+msgid "node.wall.panel.thicknessFromAssembly"
+msgstr "{thickness} · from assembly"
+
+#: packages/nodes/src/wall/panel.tsx
+msgid "node.wall.panel.top"
+msgstr "Top"
+
+#: packages/nodes/src/wall/panel.tsx
+msgid "node.wall.panel.totalThickness"
+msgstr "Total thickness"
+
+#: packages/nodes/src/wall/panel.tsx
+msgid "node.wall.panel.unverifiedPresetnote"
+msgstr "Unverified: {presetNote}"
+
+#: packages/nodes/src/wall/panel.tsx
+msgid "node.wall.panel.viewCode"
+msgstr "View code"
+
+#: packages/nodes/src/wall/panel.tsx
+msgid "node.wall.panel.wall"
+msgstr "Wall"
+
+#: packages/nodes/src/wall/panel.tsx
+msgid "node.wall.panel.wallType"
+msgstr "Wall type"
+
+#: packages/nodes/src/wall/panel.tsx
+msgid "node.wall.panel.whichFaceIsOutsideIsUndetermined"
+msgstr "Which face is outside is undetermined (no room detected on either side) — the exterior layers are drawn on side B."
+
+#: packages/nodes/src/wall/panel.tsx
+msgid "node.wall.panel.woodStuds"
+msgstr "Wood studs"
+
+#: packages/nodes/src/wall/panel.tsx
+msgid "node.wall.trim.hide"
+msgstr "{trim, select, skirting {Hide skirting} crown {Hide crown molding} other {Hide chair rail}}"
+
+#: packages/nodes/src/wall/panel.tsx
+msgid "node.wall.trim.show"
+msgstr "{trim, select, skirting {Show skirting} crown {Show crown molding} other {Show chair rail}}"
+
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "node.window.description"
 msgstr "A window cut into a wall. Animated open/close for opening windows."
@@ -2987,6 +8819,238 @@ msgstr "A window cut into a wall. Animated open/close for opening windows."
 msgid "node.window.label"
 msgstr "Window"
 
+#: packages/nodes/src/window/panel.tsx
+msgid "node.window.operation.raise"
+msgstr "Raise"
+
+#: packages/nodes/src/window/panel.tsx
+msgid "node.window.operation.slats"
+msgstr "Slats"
+
+#: packages/nodes/src/window/panel.tsx
+msgid "node.window.operation.slide"
+msgstr "Slide"
+
+#: packages/nodes/src/window/panel.tsx
+msgid "node.window.operation.swing"
+msgstr "Swing"
+
+#: packages/nodes/src/window/panel.tsx
+msgid "node.window.operation.tilt"
+msgstr "Tilt"
+
+#: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.actions"
+msgstr "Actions"
+
+#: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.all"
+msgstr "All"
+
+#: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.arch"
+msgstr "Arch"
+
+#: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.archHeight"
+msgstr "Arch Height"
+
+#: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.columns"
+msgstr "Columns"
+
+#: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.colWidths"
+msgstr "Col Widths"
+
+#: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.corner"
+msgstr "Corner"
+
+#: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.cornerPost"
+msgstr "Corner post"
+
+#: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.cornerRadius"
+msgstr "Corner Radius"
+
+#: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.customThePanesMatchNoStyle"
+msgstr "Custom: the panes match no style."
+
+#: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.delete"
+msgstr "Delete"
+
+#: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.depth"
+msgstr "Depth"
+
+#: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.dimensions"
+msgstr "Dimensions"
+
+#: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.divider"
+msgstr "Divider"
+
+#: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.down"
+msgstr "Down"
+
+#: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.duplicate"
+msgstr "Duplicate"
+
+#: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.enableSill"
+msgstr "Enable Sill"
+
+#: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.flipSide"
+msgstr "Flip Side"
+
+#: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.frame"
+msgstr "Frame"
+
+#: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.french"
+msgstr "French"
+
+#: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.fusedGlass"
+msgstr "Fused glass"
+
+#: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.grid"
+msgstr "Grid"
+
+#: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.height"
+msgstr "Height"
+
+#: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.individual"
+msgstr "Individual"
+
+#: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.left"
+msgstr "Left"
+
+#: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.move"
+msgstr "Move"
+
+#: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.opening"
+msgstr "Opening"
+
+#: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.openingShape"
+msgstr "Opening Shape"
+
+#: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.otherSide"
+msgstr "Other side"
+
+#: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.pos"
+msgstr "pos"
+
+#: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.position"
+msgstr "Position"
+
+#: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.rect"
+msgstr "Rect"
+
+#: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.revealRadius"
+msgstr "Reveal Radius"
+
+#: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.right"
+msgstr "Right"
+
+#: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.rounded"
+msgstr "Rounded"
+
+#: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.rowHeights"
+msgstr "Row Heights"
+
+#: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.rows"
+msgstr "Rows"
+
+#: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.sill"
+msgstr "Sill"
+
+#: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.single"
+msgstr "Single"
+
+#: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.sizeIsLimitedToTheWall"
+msgstr "Size is limited to the wall, including clearance for the opening frame."
+
+#: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.style"
+msgstr "Style"
+
+#: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.thickness"
+msgstr "Thickness"
+
+#: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.thisSide"
+msgstr "This side"
+
+#: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.topShape"
+msgstr "Top Shape"
+
+#: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.type"
+msgstr "Type"
+
+#: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.unwrap"
+msgstr "Unwrap"
+
+#: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.up"
+msgstr "Up"
+
+#: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.width"
+msgstr "Width"
+
+#: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.window"
+msgstr "Window"
+
+#: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.windowType"
+msgstr "Window Type"
+
+#: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.wrapsTheCornerWithNamed"
+msgstr "Wraps the corner with {partner}"
+
+#: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.wrapsTheCornerWithPartner"
+msgstr "Wraps the corner with its partner"
+
+#: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.wrapTheCorner"
+msgstr "Wrap the corner"
+
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "node.zone.description"
 msgstr "A polygonal site zone (lawn, water, paving) with a TSL gradient material."
@@ -2994,6 +9058,54 @@ msgstr "A polygonal site zone (lawn, water, paving) with a TSL gradient material
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "node.zone.label"
 msgstr "Zone"
+
+#: packages/nodes/src/zone/quantities-panel.tsx
+msgid "node.zone.quantitiesPanel.enclosedRoom"
+msgstr "Enclosed room"
+
+#: packages/nodes/src/zone/quantities-panel.tsx
+msgid "node.zone.quantitiesPanel.floorSurface"
+msgstr "Floor surface"
+
+#: packages/nodes/src/zone/quantities-panel.tsx
+msgid "node.zone.quantitiesPanel.footprintOnly"
+msgstr "Footprint only"
+
+#: packages/nodes/src/zone/quantities-panel.tsx
+msgid "node.zone.quantitiesPanel.none"
+msgstr "None"
+
+#: packages/nodes/src/zone/quantities-panel.tsx
+msgid "node.zone.quantitiesPanel.notProven"
+msgstr "Not proven"
+
+#: packages/nodes/src/zone/quantities-panel.tsx
+msgid "node.zone.quantitiesPanel.roomQuantities"
+msgstr "Room quantities"
+
+#: packages/nodes/src/zone/quantities-panel.tsx
+msgid "node.zone.quantitiesPanel.topViewWithZoneEdgeDimensions"
+msgstr "Top view with zone edge dimensions"
+
+#: packages/nodes/src/zone/quantities-panel.tsx
+msgid "node.zone.quantitiesPanel.unit"
+msgstr "Unit"
+
+#: packages/nodes/src/zone/quantities-panel.tsx
+msgid "node.zone.quantitiesPanel.volume"
+msgstr "Volume"
+
+#: packages/nodes/src/zone/quantities-panel.tsx
+msgid "node.zone.quantitiesPanel.wallSurface"
+msgstr "Wall surface"
+
+#: packages/nodes/src/zone/quantities-panel.tsx
+msgid "node.zone.quantitiesPanel.zoneBoundaryUnavailable"
+msgstr "Zone boundary unavailable"
+
+#: packages/nodes/src/zone/quantities-panel.tsx
+msgid "node.zone.quantitiesPanel.zoneQuantities"
+msgstr "Zone quantities"
 
 #: packages/editor/src/components/viewer/viewer-controls-bar.tsx
 msgid "viewer.camera.orbitLeft"
