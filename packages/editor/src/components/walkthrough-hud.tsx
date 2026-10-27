@@ -1,6 +1,8 @@
 'use client'
 
+import { usePascalI18n } from '@pascal-app/core'
 import type { ReactNode } from 'react'
+import { displayRoomName } from '../lib/room-name-messages'
 import { cn } from '../lib/utils'
 import type { WalkthroughInteract } from '../store/use-first-person-hud'
 
@@ -63,7 +65,7 @@ export function WalkthroughHud({
         )}
         {zoneLabel && (
           <div className="corner-smooth rounded-full border border-border/40 bg-background/80 px-3 py-1 font-medium text-sm shadow-elevation-3 backdrop-blur-xl">
-            {zoneLabel}
+            <WalkthroughZoneName name={zoneLabel} />
           </div>
         )}
         {children}
@@ -117,4 +119,10 @@ export function WalkthroughHud({
       )}
     </div>
   )
+}
+
+/** The room the walker is in, in the UI language (the scene keeps its stored name). */
+function WalkthroughZoneName({ name }: { name: string }) {
+  const i18n = usePascalI18n()
+  return displayRoomName(name, i18n)
 }

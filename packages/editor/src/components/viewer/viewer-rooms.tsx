@@ -4,6 +4,7 @@ import {
   type AnyNode,
   buildUnitReport,
   sceneRegistry,
+  usePascalI18n,
   useScene,
   type ZoneNode,
 } from '@pascal-app/core'
@@ -38,6 +39,7 @@ import {
  * mounted at all, so they never catch a click.
  */
 export function ViewerRooms({ source }: { source: ViewerSource }) {
+  const i18n = usePascalI18n()
   useEffect(() => {
     const before = useViewer.getState().showZones
     useViewer.getState().setShowZones(false)
@@ -119,7 +121,7 @@ export function ViewerRooms({ source }: { source: ViewerSource }) {
               <RoomPillDetail
                 areaM2={entry.area}
                 color={zone.color}
-                name={zoneLabel(zone)}
+                name={zoneLabel(zone, i18n)}
                 view="3d"
                 zoneId={zone.id}
               />
@@ -138,7 +140,7 @@ export function ViewerRooms({ source }: { source: ViewerSource }) {
                   areaM2={entry.area}
                   color={zone.color}
                   elements={elements}
-                  name={zoneLabel(zone)}
+                  name={zoneLabel(zone, i18n)}
                   onClick={() => selectViewerRoom(zone.id, source)}
                   onHover={() => useViewer.getState().setHoveredId(zone.id)}
                   onLeave={() => {

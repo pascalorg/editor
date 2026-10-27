@@ -1,13 +1,17 @@
 'use client'
 
 import {
+  type AnyNode,
   type AnyNodeId,
-  floorFootprintName,
   floorFootprintSupportClass,
+  formatList,
   floorPlateAtGroundContact,
   MIN_GROUND_FLOOR_THICKNESS,
   MIN_SLAB_THICKNESS,
   roomDrawnFloor,
+  type PascalI18n,
+  useLocale,
+  usePascalI18n,
   useScene,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
@@ -27,7 +31,7 @@ import {
 import { formatLinearMeasurement } from '../../../lib/measurements'
 import { startMezzanineDraft } from '../../../lib/mezzanine-draft'
 import { resolveRoomAssemblyHeights } from '../../../lib/room-assembly-overlay'
-import { roomBuiltOn, separateFloorSummary } from '../../../lib/room-built-on'
+import { type FloorChoice, roomBuiltOn, separateFloorSummary } from '../../../lib/room-built-on'
 import type { RoomConstructionState } from '../../../lib/room-construction'
 import { roomConstructionState } from '../../../lib/room-construction'
 import {
@@ -60,8 +64,12 @@ import {
 } from '../primitives/dropdown-menu'
 import { Switch } from '../primitives/switch'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../primitives/tooltip'
+import { localizedFloorFootprintName } from '../../../i18n/floor-footprint-name'
+import { messageWithSlot } from '../../../i18n/message-slot'
+import { nodeLabel } from '../../../i18n/node-messages'
 import { RoomOpeningsField } from './room-openings-field'
 import { ShapeChoice } from './shape-choice'
+import { displayRoomName } from '../../../lib/room-name-messages'
 
 /** The buttons a row offers — derived together with its presence. */
 export function constructionActions(state: RoomConstructionState, part: RoomConstructionPart) {
@@ -84,12 +92,22 @@ export function wallsSwitch(state: RoomConstructionState) {
   }
 }
 
+/** A "Built on" choice in the UI language: its plate's footprint name, or the shared floor. */
+function floorChoiceName(
+  nodes: Readonly<Record<string, AnyNode>>,
+  choice: Pick<FloorChoice, 'plateId' | 'name'>,
+  i18n: PascalI18n,
+): string {
+  const plate = choice.plateId ? nodes[choice.plateId] : undefined
+  if (plate?.type === 'slab') return localizedFloorFootprintName(nodes, plate, i18n)
+  return choice.plateId
+    ? choice.name
+    : i18n._({ id: 'editor.floorFootprint.shared', message: 'Shared floor' })
+}
+
 export const pill =
   'rounded-full border border-border/50 px-2.5 py-0.5 text-xs transition-colors hover:bg-accent disabled:pointer-events-none disabled:opacity-50'
 
-const count = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`
-
-export const DRAWN_FLOOR_SWITCH_HINT = 'This floor is a drawn slab: select it to edit or delete it.'
 
 /**
  * One "Built with" row: its icon, name and one-line summary, a chevron that
@@ -122,6 +140,7 @@ export function ConstructionPart({
   /** The settings the chevron opens; none means the row does not open. */
   children?: ReactNode
 }) {
+  const i18n = usePascalI18n()
   const opens = on && !!children
   const open = opens && expanded
   return (
@@ -151,7 +170,7 @@ export function ConstructionPart({
           <span className="flex min-w-0 flex-1 flex-col">
             <span className="font-medium text-[13px] text-foreground">{label}</span>
             <span className="text-pretty text-muted-foreground text-xs">
-              {on ? meta : 'Not included'}
+              {on ? meta : i18n._({ id: 'editor.panels.roomConstructionRows.notIncluded', message: 'Not included' })}
             </span>
           </span>
           {opens && (
@@ -198,6 +217,7 @@ export function FloorHeightField({
   /** Allowed heights, in the same relative terms. */
   bounds?: { min: number; max: number } | null
 }) {
+  const i18n = usePascalI18n()
   const height = useScene((scene) => roomRelativeFloorHeight(scene.nodes, zoneId))
   const unit = useViewer((s) => s.unit)
   const metricNotation = useViewer((s) => s.metricNotation)
@@ -208,7 +228,7 @@ export function FloorHeightField({
     <div className="flex flex-col gap-1">
       <MetricControl
         className="h-8 text-xs"
-        label="Height"
+        label={i18n._({ id: 'editor.panels.roomConstructionRows.height', message: 'Height' })}
         max={bounds?.max}
         min={bounds?.min ?? -3}
         onChange={setDraft}
@@ -238,6 +258,7 @@ export function FloorHeightField({
  * how many other rooms stand on it) and selects it, as the tree would.
  */
 export function DrawnFloorRow({ zoneId }: { zoneId: string }) {
+  const i18n = usePascalI18n()
   const floor = useScene(
     useShallow((scene) => {
       const drawn = roomDrawnFloor(scene.nodes, zoneId)
@@ -255,9 +276,17 @@ export function DrawnFloorRow({ zoneId }: { zoneId: string }) {
   return (
     <div className="flex min-h-7 items-center justify-between gap-3" data-drawn-floor={floor.id}>
       <span className="min-w-0">
-        {floor.ambiguous ? 'Floor is several drawn slabs, mostly ' : 'Floor is a drawn slab: '}
-        <span className="text-foreground">{floor.name}</span>
-        {floor.shared > 0 && ` (shared with ${count(floor.shared, 'room')})`}
+        {messageWithSlot(
+          i18n,
+          /* i18n */ {
+            id: 'editor.panels.roomConstructionRows.drawnFloor',
+            message:
+              '{ambiguous, select, yes {Floor is several drawn slabs, mostly {name}} other {Floor is a drawn slab: {name}}}{shared, plural, =0 {} one { (shared with # room)} other { (shared with # rooms)}}',
+            values: { ambiguous: floor.ambiguous ? 'yes' : 'no', shared: floor.shared },
+          },
+          'name',
+          <span className="text-foreground">{floor.name}</span>,
+        )}
       </span>
       <button
         className={cn(pill, 'shrink-0')}
@@ -265,7 +294,7 @@ export function DrawnFloorRow({ zoneId }: { zoneId: string }) {
         onClick={() => openFloorFoundation(floor.id)}
         type="button"
       >
-        Select
+        {i18n._({ id: 'editor.panels.roomConstructionRows.select', message: 'Select' })}
       </button>
     </div>
   )
@@ -279,6 +308,7 @@ export function DrawnFloorRow({ zoneId }: { zoneId: string }) {
  * right here.
  */
 export function BuiltOnField({ zoneId }: { zoneId: string }) {
+  const i18n = usePascalI18n()
   const nodes = useScene((scene) => scene.nodes)
   const model = useMemo(() => roomBuiltOn(nodes, zoneId), [nodes, zoneId])
   const [error, setError] = useState<string | null>(null)
@@ -289,16 +319,16 @@ export function BuiltOnField({ zoneId }: { zoneId: string }) {
   }
   return (
     <div className="flex flex-col gap-1" data-built-on={model.current.key ?? 'shared'}>
-      <PartField label="Built on">
+      <PartField label={i18n._({ id: 'editor.panels.roomConstructionRows.builtOn', message: 'Built on' })}>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button
-              aria-label="Built on"
+              aria-label={i18n._({ id: 'editor.panels.roomConstructionRows.builtOn', message: 'Built on' })}
               className="flex min-w-0 items-center gap-1.5 rounded-full border border-border/50 px-2.5 py-0.5 text-foreground text-xs transition-colors hover:bg-accent"
               data-built-on-trigger
               type="button"
             >
-              <span className="truncate">{model.current.name}</span>
+              <span className="truncate">{floorChoiceName(nodes, model.current, i18n)}</span>
               <ChevronDown className="size-3 shrink-0 text-muted-foreground" />
             </button>
           </DropdownMenuTrigger>
@@ -311,13 +341,13 @@ export function BuiltOnField({ zoneId }: { zoneId: string }) {
                   if (choice.plateId !== model.current.plateId) choose(choice.key)
                 }}
               >
-                <span className="flex-1 truncate">{choice.name}</span>
+                <span className="flex-1 truncate">{floorChoiceName(nodes, choice, i18n)}</span>
                 {choice.plateId === model.current.plateId && <Check className="size-3.5" />}
               </DropdownMenuItem>
             ))}
             <DropdownMenuSeparator />
             <DropdownMenuItem data-built-on-choice="new" onSelect={() => choose('new')}>
-              + New floor
+              {i18n._({ id: 'editor.panels.roomConstructionRows.newFloor', message: '+ New floor' })}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -356,6 +386,7 @@ export function roomInsideHeight(
  * rather than naming the footprint next to it.
  */
 function SitsOn({ zoneId, noFloor }: { zoneId: string; noFloor: boolean }) {
+  const i18n = usePascalI18n()
   const unit = useViewer((s) => s.unit)
   const metricNotation = useViewer((s) => s.metricNotation)
   const summary = useScene(
@@ -365,30 +396,33 @@ function SitsOn({ zoneId, noFloor }: { zoneId: string; noFloor: boolean }) {
       if (plate.plateRole !== 'base')
         return {
           id: plate.id as string,
-          name: plate.name?.trim() || 'Slab',
+          name: plate.name?.trim() || nodeLabel('slab', 'Slab', i18n),
           drawn: true,
           lift: 0,
           supported: false,
         }
       return {
         id: plate.id as string,
-        name: floorFootprintName(scene.nodes, plate),
+        name: localizedFloorFootprintName(scene.nodes, plate, i18n),
         drawn: false,
         ...footprintStanding(scene.nodes, plate),
       }
     }),
   )
+  const lift = formatLinearMeasurement(Math.abs(summary.lift), unit, metricNotation)
   const preset = summary.drawn
-    ? 'Drawn slab'
+    ? i18n._({ id: 'editor.panels.roomConstructionRows.drawnSlab', message: 'Drawn slab' })
     : Math.abs(summary.lift) > 0.005
-      ? `${summary.lift > 0 ? 'Raised' : 'Lowered'} ${formatLinearMeasurement(Math.abs(summary.lift), unit, metricNotation)}`
+      ? summary.lift > 0
+        ? i18n._({ id: 'editor.panels.roomConstructionRows.raised', message: 'Raised {lift}', values: { lift } })
+        : i18n._({ id: 'editor.panels.roomConstructionRows.lowered', message: 'Lowered {lift}', values: { lift } })
       : summary.supported
-        ? 'On the walls below'
-        : 'On the ground'
+        ? i18n._({ id: 'editor.panels.roomConstructionRows.onTheWallsBelow', message: 'On the walls below' })
+        : i18n._({ id: 'editor.panels.roomConstructionRows.onTheGround', message: 'On the ground' })
   if (noFloor)
     return (
       <span className="mb-2 ml-[42px] text-muted-foreground text-xs" data-sits-on="none">
-        No floor
+        {i18n._({ id: 'editor.panels.roomConstructionRows.noFloor', message: 'No floor' })}
       </span>
     )
   if (!summary.id) return null
@@ -400,7 +434,16 @@ function SitsOn({ zoneId, noFloor }: { zoneId: string; noFloor: boolean }) {
       type="button"
     >
       <span>
-        Sits on: <span className="text-foreground">{summary.name}</span> · {preset}
+        {messageWithSlot(
+          i18n,
+          /* i18n */ {
+            id: 'editor.panels.roomConstructionRows.sitsOnPreset',
+            message: 'Sits on: {name} · {preset}',
+            values: { preset },
+          },
+          'name',
+          <span className="text-foreground">{summary.name}</span>,
+        )}
       </span>
       <ChevronRight className="size-3 shrink-0" />
     </button>
@@ -414,6 +457,7 @@ function SitsOn({ zoneId, noFloor }: { zoneId: string; noFloor: boolean }) {
  * no footprint height or foundation, and says so.
  */
 export function RoomFloorConstructionField({ zoneId }: { zoneId: string }) {
+  const i18n = usePascalI18n()
   const owner = useScene(
     useShallow((scene) => {
       // Several drawn slabs show in the room: no one thickness to edit here.
@@ -440,7 +484,7 @@ export function RoomFloorConstructionField({ zoneId }: { zoneId: string }) {
     <div className="flex flex-col gap-1" data-room-floor-construction={owner.id}>
       <MetricControl
         className="h-8 text-xs"
-        label="Floor thickness"
+        label={i18n._({ id: 'editor.panels.roomConstructionRows.floorThickness', message: 'Floor thickness' })}
         max={1}
         min={owner.min}
         onChange={setDraft}
@@ -456,8 +500,7 @@ export function RoomFloorConstructionField({ zoneId }: { zoneId: string }) {
       />
       {owner.drawn && (
         <p data-drawn-slab-note>
-          A drawn slab: set its thickness and finishes here. It has no footprint height or
-          foundation.
+          {i18n._({ id: 'editor.panels.roomConstructionRows.aDrawnSlabSetItsThickness', message: 'A drawn slab: set its thickness and finishes here. It has no footprint height or foundation.' })}
         </p>
       )}
       {error && (
@@ -495,7 +538,7 @@ function sharingRoomNames(
     node.id !== zoneId &&
     node.spaceRole === 'room' &&
     node.boundaryWallIds.some((id) => wallIds.includes(id))
-      ? [node.name?.trim() || 'the next room']
+      ? [node.name?.trim() ?? '']
       : [],
   )
 }
@@ -505,6 +548,8 @@ function sharingRoomNames(
  * with its switch, and its settings a chevron away. Then Add mezzanine.
  */
 export function RoomConstructionRows({ room }: { room: RoomSelectionRecord }) {
+  const i18n = usePascalI18n()
+  const locale = useLocale()
   const zoneId = room.zoneId
   const state = useScene((scene) => roomConstructionState(scene.nodes, zoneId))
   const nodes = useScene((scene) => scene.nodes)
@@ -514,7 +559,10 @@ export function RoomConstructionRows({ room }: { room: RoomSelectionRecord }) {
   const [message, setMessage] = useState<{ text: string; conflict: boolean } | null>(null)
   if (!state) return null
   const length = (meters: number) => formatLinearMeasurement(meters, unit, metricNotation)
-  const report = (result: RoomConstructionResult, unchanged = 'Nothing to change.') =>
+  const report = (
+    result: RoomConstructionResult,
+    unchanged = i18n._({ id: 'editor.panels.roomConstructionRows.nothingToChange', message: 'Nothing to change.' }),
+  ) =>
     setMessage(
       result.status === 'conflict'
         ? { text: result.message, conflict: true }
@@ -525,14 +573,14 @@ export function RoomConstructionRows({ room }: { room: RoomSelectionRecord }) {
   const toggle = (part: RoomConstructionPart) => () =>
     setExpanded((current) => (current === part ? null : part))
   const drawnFloor = roomDrawnFloor(nodes, zoneId)
-  const partSwitch = (part: RoomConstructionPart, label: string) => {
+  const partSwitch = (part: RoomConstructionPart) => {
     const { state: presence, actions } = state[part]
     if (part === 'walls') {
       const walls = wallsSwitch(state)
       return (
         <Switch
           aria-checked={walls.mixed ? 'mixed' : walls.checked}
-          aria-label="Include walls"
+          aria-label={i18n._({ id: 'editor.panels.roomConstructionRows.includeWalls', message: 'Include walls' })}
           checked={walls.checked}
           className={cn(
             walls.mixed && 'data-[state=unchecked]:bg-primary/45 [&>span]:translate-x-2!',
@@ -561,7 +609,7 @@ export function RoomConstructionRows({ room }: { room: RoomSelectionRecord }) {
               data-drawn-floor-switch
             >
               <Switch
-                aria-label="Include floor"
+                aria-label={i18n._({ id: 'editor.panels.roomConstructionRows.includeFloor', message: 'Include floor' })}
                 checked={state.floor.intent}
                 className="disabled:pointer-events-none"
                 disabled={!actions.add}
@@ -571,7 +619,10 @@ export function RoomConstructionRows({ room }: { room: RoomSelectionRecord }) {
           </TooltipTrigger>
           {!actions.add && (
             <TooltipContent side="top" sideOffset={6}>
-              {DRAWN_FLOOR_SWITCH_HINT}
+              {i18n._({
+                id: 'editor.panels.roomConstructionRows.drawnFloorSwitchHint',
+                message: 'This floor is a drawn slab: select it to edit or delete it.',
+              })}
             </TooltipContent>
           )}
         </Tooltip>
@@ -580,7 +631,11 @@ export function RoomConstructionRows({ room }: { room: RoomSelectionRecord }) {
     const on = presence !== 'absent'
     return (
       <Switch
-        aria-label={`Include ${label.toLowerCase()}`}
+        aria-label={i18n._({
+          id: 'editor.panels.roomConstructionRows.includePart',
+          message: '{part, select, floor {Include floor} walls {Include walls} other {Include ceiling}}',
+          values: { part },
+        })}
         checked={on}
         disabled={on ? !actions.remove : !actions.add}
         onCheckedChange={(next) =>
@@ -595,17 +650,40 @@ export function RoomConstructionRows({ room }: { room: RoomSelectionRecord }) {
   const builtOn = roomBuiltOn(nodes, zoneId)
   const floorMeta =
     state.floor.state === 'partial'
-      ? `Partial · ${Math.round(state.floor.coverage * 100)}% covered`
+      ? i18n._({
+          id: 'editor.panels.roomConstructionRows.partialCovered',
+          message: 'Partial · {coverage, number, percent} covered',
+          values: { coverage: state.floor.coverage },
+        })
       : drawnSlab?.type === 'slab'
-        ? `Drawn slab at ${length(drawnSlab.elevation)}`
+        ? i18n._({
+            id: 'editor.panels.roomConstructionRows.drawnSlabAt',
+            message: 'Drawn slab at {height}',
+            values: { height: length(drawnSlab.elevation) },
+          })
         : builtOn && builtOn.current.key !== null
           ? separateFloorSummary(
-              { ...builtOn, offset: separateFloorOffset(nodes, zoneId) },
+              {
+                current: { name: floorChoiceName(nodes, builtOn.current, i18n) },
+                shared: builtOn.shared && { name: floorChoiceName(nodes, builtOn.shared, i18n) },
+                offset: separateFloorOffset(nodes, zoneId),
+              },
               length,
+              i18n,
             )
           : Math.abs(floorElevation) < 0.005
-            ? 'At floor level'
-            : `${length(Math.abs(floorElevation))} ${floorElevation > 0 ? 'up' : 'down'}`
+            ? i18n._({ id: 'editor.panels.roomConstructionRows.atFloorLevel', message: 'At floor level' })
+            : floorElevation > 0
+              ? i18n._({
+                  id: 'editor.panels.roomConstructionRows.floorUp',
+                  message: '{distance} up',
+                  values: { distance: length(Math.abs(floorElevation)) },
+                })
+              : i18n._({
+                  id: 'editor.panels.roomConstructionRows.floorDown',
+                  message: '{distance} down',
+                  values: { distance: length(Math.abs(floorElevation)) },
+                })
   // A room on its own floor moves within its plate's range (on the ground, its foundation's).
   const ownBounds = ownFloorElevationBounds(nodes, zoneId)
   const floorBase = ownBounds ? roomFloorBase(nodes, zoneId) : 0
@@ -619,27 +697,40 @@ export function RoomConstructionRows({ room }: { room: RoomSelectionRecord }) {
   const shared = sharingRoomNames(nodes, zoneId, state.walls.sharedWallIds)
   const wallsMeta =
     state.walls.state === 'partial'
-      ? `Partial · ${count(wallIds.length, 'wall')}, ${count(openSides, 'open side')}`
-      : count(wallIds.length, 'wall')
+      ? i18n._({
+          id: 'editor.panels.roomConstructionRows.partialWalls',
+          message:
+            'Partial · {walls, plural, one {# wall} other {# walls}}, {openSides, plural, one {# open side} other {# open sides}}',
+          values: { walls: wallIds.length, openSides },
+        })
+      : i18n._({
+          id: 'editor.panels.roomConstructionRows.wallCount',
+          message: '{walls, plural, one {# wall} other {# walls}}',
+          values: { walls: wallIds.length },
+        })
   const locked = roomOutsideFacesLocked(nodes, wallIds)
 
   const ceilingHeight = state.ceiling.ceilingId ? roomInsideHeight(room, nodes).ceiling : null
   const ceilingMeta =
     state.ceiling.state === 'partial'
-      ? 'Hand-drawn ceiling'
+      ? i18n._({ id: 'editor.panels.roomConstructionRows.handDrawnCeiling', message: 'Hand-drawn ceiling' })
       : ceilingHeight !== null
-        ? `At ${length(ceilingHeight)}`
-        : 'Flat, at wall height'
+        ? i18n._({
+            id: 'editor.panels.roomConstructionRows.ceilingAt',
+            message: 'At {height}',
+            values: { height: length(ceilingHeight) },
+          })
+        : i18n._({ id: 'editor.panels.roomConstructionRows.flatAtWallHeight', message: 'Flat, at wall height' })
 
   return (
     <div className="flex flex-col" data-room-construction={zoneId}>
-      <h3 className="mt-4 mb-1.5 font-medium text-muted-foreground text-xs">Built with</h3>
+      <h3 className="mt-4 mb-1.5 font-medium text-muted-foreground text-xs">{i18n._({ id: 'editor.panels.roomConstructionRows.builtWith', message: 'Built with' })}</h3>
       <div className="flex flex-col gap-1">
         <ConstructionPart
-          control={partSwitch('floor', 'Floor')}
+          control={partSwitch('floor')}
           expanded={expanded === 'floor'}
           icon="/icons/floor.webp"
-          label="Floor"
+          label={i18n._({ id: 'editor.panels.roomConstructionRows.floor', message: 'Floor' })}
           meta={floorMeta}
           on={state.floor.state !== 'absent'}
           footer={<SitsOn noFloor={state.floor.state === 'absent'} zoneId={zoneId} />}
@@ -656,44 +747,70 @@ export function RoomConstructionRows({ room }: { room: RoomSelectionRecord }) {
           <RoomOpeningsField surface="floor" zoneId={zoneId} />
         </ConstructionPart>
         <ConstructionPart
-          control={partSwitch('walls', 'Walls')}
+          control={partSwitch('walls')}
           expanded={expanded === 'walls'}
           icon="/icons/wall.webp"
-          label="Walls"
+          label={i18n._({ id: 'editor.panels.roomConstructionRows.walls', message: 'Walls' })}
           meta={wallsMeta}
           on={state.walls.state !== 'absent'}
           onToggleExpanded={toggle('walls')}
           part="walls"
         >
-          <PartField label="Walls">
+          <PartField label={i18n._({ id: 'editor.panels.roomConstructionRows.walls', message: 'Walls' })}>
             <span className="font-mono text-foreground tabular-nums">{wallIds.length}</span>
           </PartField>
           {state.walls.state === 'partial' && state.walls.actions.add && (
-            <PartField label={`${count(openSides, 'open side')}`}>
+            <PartField
+              label={i18n._({
+                id: 'editor.panels.roomConstructionRows.openSides',
+                message: '{openSides, plural, one {# open side} other {# open sides}}',
+                values: { openSides },
+              })}
+            >
               <button
                 className={pill}
                 onClick={() => report(addRoomConstruction(zoneId, 'walls'))}
                 type="button"
               >
-                Close with walls
+                {i18n._({ id: 'editor.panels.roomConstructionRows.closeWithWalls', message: 'Close with walls' })}
               </button>
             </PartField>
           )}
           {shared.length > 0 && (
             <p data-shared-walls-note>
-              Turning walls off keeps the ones shared with {[...new Set(shared)].join(', ')}.
+              {i18n._({
+                id: 'editor.panels.roomConstructionRows.sharedWallsNote',
+                message: 'Turning walls off keeps the ones shared with {rooms}.',
+                values: {
+                  rooms: formatList(
+                    [
+                      ...new Set(
+                        shared.map((name) =>
+                          name
+                            ? displayRoomName(name, i18n)
+                            : i18n._({
+                                id: 'editor.panels.roomConstructionRows.theNextRoom',
+                                message: 'the next room',
+                              }),
+                        ),
+                      ),
+                    ],
+                    locale,
+                  ),
+                },
+              })}
             </p>
           )}
           {locked !== null && (
             <div className="mt-1 flex items-start gap-3" data-lock-outside-faces>
               <span className="flex flex-1 flex-col gap-0.5">
                 <span className="font-medium text-[13px] text-foreground">
-                  Keep outside dimensions
+                  {i18n._({ id: 'editor.panels.roomConstructionRows.keepOutsideDimensions', message: 'Keep outside dimensions' })}
                 </span>
-                <span>Walls thicken inward, so the building's outer size stays the same.</span>
+                <span>{i18n._({ id: 'editor.panels.roomConstructionRows.wallsThickenInwardSoTheBuilding', message: 'Walls thicken inward, so the building\'s outer size stays the same.' })}</span>
               </span>
               <Switch
-                aria-label="Keep outside dimensions"
+                aria-label={i18n._({ id: 'editor.panels.roomConstructionRows.keepOutsideDimensions', message: 'Keep outside dimensions' })}
                 checked={locked}
                 onCheckedChange={(next) =>
                   report(next ? lockRoomOutsideFaces(zoneId) : unlockRoomOutsideFaces(wallIds))
@@ -703,40 +820,40 @@ export function RoomConstructionRows({ room }: { room: RoomSelectionRecord }) {
           )}
         </ConstructionPart>
         <ConstructionPart
-          control={partSwitch('ceiling', 'Ceiling')}
+          control={partSwitch('ceiling')}
           expanded={expanded === 'ceiling'}
           icon="/icons/ceiling.webp"
-          label="Ceiling"
+          label={i18n._({ id: 'editor.panels.roomConstructionRows.ceiling', message: 'Ceiling' })}
           meta={ceilingMeta}
           on={state.ceiling.state !== 'absent'}
           onToggleExpanded={toggle('ceiling')}
           part="ceiling"
         >
           {ceilingHeight !== null && (
-            <PartField label="Height">
+            <PartField label={i18n._({ id: 'editor.panels.roomConstructionRows.height', message: 'Height' })}>
               <span className="font-mono text-foreground tabular-nums">
                 {length(ceilingHeight)}
               </span>
             </PartField>
           )}
           {state.ceiling.ceilingId && (
-            <PartField label="Shape">
+            <PartField label={i18n._({ id: 'editor.panels.roomConstructionRows.shape', message: 'Shape' })}>
               <button className={pill} onClick={() => startCeilingEdit(zoneId)} type="button">
-                Edit shape
+                {i18n._({ id: 'editor.panels.roomConstructionRows.editShape', message: 'Edit shape' })}
               </button>
             </PartField>
           )}
           {state.ceiling.ceilingId && <RoomOpeningsField surface="ceiling" zoneId={zoneId} />}
           {(state.ceiling.actions.useExisting || state.ceiling.actions.replace) && (
             <div className="flex items-center gap-2" data-construction-manual-ceiling>
-              <span className="flex-1">Hand-drawn ceiling</span>
+              <span className="flex-1">{i18n._({ id: 'editor.panels.roomConstructionRows.handDrawnCeiling', message: 'Hand-drawn ceiling' })}</span>
               {state.ceiling.actions.useExisting && (
                 <button
                   className={pill}
                   onClick={() => report(adoptExistingCeiling(zoneId))}
                   type="button"
                 >
-                  Use existing
+                  {i18n._({ id: 'editor.panels.roomConstructionRows.useExisting', message: 'Use existing' })}
                 </button>
               )}
               {state.ceiling.actions.replace && (
@@ -745,7 +862,7 @@ export function RoomConstructionRows({ room }: { room: RoomSelectionRecord }) {
                   onClick={() => report(replaceRoomCeiling(zoneId))}
                   type="button"
                 >
-                  Replace
+                  {i18n._({ id: 'editor.panels.roomConstructionRows.replace', message: 'Replace' })}
                 </button>
               )}
             </div>
@@ -766,7 +883,7 @@ export function RoomConstructionRows({ room }: { room: RoomSelectionRecord }) {
       <ShapeChoice
         className="mt-3 rounded-full border border-border border-dashed py-1.5 pr-1.5 pl-3.5 font-medium text-[13px] text-foreground"
         data="add-mezzanine"
-        label="+ Add mezzanine"
+        label={i18n._({ id: 'editor.panels.roomConstructionRows.addMezzanine', message: '+ Add mezzanine' })}
         onPick={(shape) => startMezzanineDraft(zoneId, shape)}
       />
     </div>

@@ -7,11 +7,15 @@ import {
   writeFileSync,
 } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, join, resolve } from 'node:path'
+import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { MessageDescriptor } from '@lingui/core'
 import {
   HINT_KEY_NAMES,
+  inspectorActionDescriptor,
+  inspectorFieldDescriptor,
+  inspectorGroupDescriptor,
+  inspectorOptionDescriptor,
   nodeDescriptionDescriptor,
   nodeLabelDescriptor,
   toolHintChipDescriptor,
@@ -46,6 +50,10 @@ type Definition = {
   presentation?: { label?: string; description?: string }
   toolHints?: Hint[]
   affordanceHints?: Record<string, Hint[]>
+  parametrics?: {
+    groups?: { label?: string; fields?: { key?: string; kind?: string; options?: string[] }[] }[]
+    actions?: { label?: string }[]
+  }
 }
 
 type Manifest = {
@@ -111,6 +119,17 @@ function descriptorsOf(definitions: Definition[]): MessageDescriptor[] {
     for (const hints of Object.values(definition.affordanceHints ?? {})) {
       for (const hint of hints) addHint(hint)
     }
+    for (const group of definition.parametrics?.groups ?? []) {
+      if (group.label) add(inspectorGroupDescriptor(group.label))
+      for (const field of group.fields ?? []) {
+        if (field.kind === 'custom' || !field.key) continue
+        add(inspectorFieldDescriptor(field.key))
+        for (const option of field.options ?? []) add(inspectorOptionDescriptor(option))
+      }
+    }
+    for (const action of definition.parametrics?.actions ?? []) {
+      if (action.label) add(inspectorActionDescriptor(action.label))
+    }
   }
   for (const key of HINT_KEY_NAMES) add(toolHintKeyDescriptor(key))
   return [...byId.values()].sort((a, b) => a.id.localeCompare(b.id))
@@ -150,15 +169,30 @@ export function renderDefinitionMessages(descriptors: MessageDescriptor[]): stri
   ].join('\n')
 }
 
+/**
+ * Only the tests' temporary catalog projects (`I18N_ROOT`) lack the built-in
+ * nodes; in a real checkout a missing entry means the definitions moved, and
+ * skipping would silently let their copy fall out of the catalogs.
+ */
+export function hasNodeDefinitions(
+  entry = NODES_ENTRY,
+  temporaryRoot = Boolean(process.env.I18N_ROOT),
+): boolean {
+  if (existsSync(entry)) return true
+  if (temporaryRoot) return false
+  throw new Error(
+    `${relative(ROOT, entry)} is missing; update NODES_ENTRY in scripts/i18n-node-messages.ts`,
+  )
+}
+
 export async function writeDefinitionMessages(): Promise<void> {
-  // A checkout without the built-in nodes has no definition copy.
-  if (!existsSync(NODES_ENTRY)) return
+  if (!hasNodeDefinitions()) return
   mkdirSync(dirname(DEFINITION_MESSAGES_PATH), { recursive: true })
   writeFileSync(DEFINITION_MESSAGES_PATH, renderDefinitionMessages(await definitionDescriptors()))
 }
 
 export async function checkDefinitionMessages(): Promise<string[]> {
-  if (!existsSync(NODES_ENTRY)) return []
+  if (!hasNodeDefinitions()) return []
   const expected = renderDefinitionMessages(await definitionDescriptors())
   const current = existsSync(DEFINITION_MESSAGES_PATH)
     ? readFileSync(DEFINITION_MESSAGES_PATH, 'utf8')

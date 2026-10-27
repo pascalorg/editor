@@ -6,6 +6,8 @@ import {
   getLibraryMaterialIdFromRef,
   getSceneMaterialIdFromRef,
   nodeRegistry,
+  type PascalI18n,
+  usePascalI18n,
   useScene,
 } from '@pascal-app/core'
 import { useState } from 'react'
@@ -16,12 +18,20 @@ type Swatch = { label: string; color: string | null; image: string | null }
 
 /** How a finish reference reads in a panel: its catalog tile, its colour, or its scene material. */
 function useFinishSwatch(ref: string | undefined, fallback: string): Swatch {
+  const i18n = usePascalI18n()
   const materials = useScene((state) => state.materials)
-  if (!ref) return { ...describe(fallback, materials), label: 'Default' }
-  return describe(ref, materials)
+  if (!ref) return { ...describe(fallback, materials, i18n), label: defaultLabel(i18n) }
+  return describe(ref, materials, i18n)
 }
 
-function describe(ref: string, materials: ReturnType<typeof useScene.getState>['materials']) {
+const defaultLabel = (i18n: PascalI18n) =>
+  i18n._({ id: 'editor.controls.finishSwatch.default', message: 'Default' })
+
+function describe(
+  ref: string,
+  materials: ReturnType<typeof useScene.getState>['materials'],
+  i18n: PascalI18n,
+) {
   const library = getCatalogMaterialById(getLibraryMaterialIdFromRef(ref) ?? undefined)
   if (library)
     return {
@@ -33,7 +43,7 @@ function describe(ref: string, materials: ReturnType<typeof useScene.getState>['
   const scene = sceneId ? materials[sceneId as keyof typeof materials] : undefined
   if (scene) return { label: scene.name, color: scene.material.properties?.color ?? null, image: null }
   if (ref.startsWith('#')) return { label: ref.toUpperCase(), color: ref, image: null }
-  return { label: 'Default', color: null, image: null }
+  return { label: defaultLabel(i18n), color: null, image: null }
 }
 
 /**
@@ -70,6 +80,7 @@ export function FinishSwatch({
   /** Tooltip on the row. */
   hint?: string
 }) {
+  const i18n = usePascalI18n()
   const [open, setOpen] = useState(false)
   const swatch = useFinishSwatch(value, fallback)
   return (
@@ -78,7 +89,11 @@ export function FinishSwatch({
       <Popover onOpenChange={setOpen} open={open}>
         <PopoverTrigger asChild>
           <button
-            aria-label={`${label}: ${swatch.label}`}
+            aria-label={i18n._({
+              id: 'editor.controls.finishSwatch.ariaLabel',
+              message: '{label}: {finish}',
+              values: { label, finish: swatch.label },
+            })}
             className="flex min-w-0 items-center gap-2 rounded-full border border-border/50 py-0.5 pr-2.5 pl-1 text-xs transition-colors hover:bg-accent"
             data-finish-swatch={label}
             type="button"

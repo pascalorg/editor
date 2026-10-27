@@ -4,7 +4,7 @@ import {
   type AnyNodeId,
   useLiveNodeOverrides,
   useScene,
-  type WallFaceRegion,
+  type WallFaceRegion, usePascalI18n,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { Trash2 } from 'lucide-react'
@@ -25,6 +25,7 @@ const ROW_ACTION_CLASS =
 
 /** The wall panel's "Paint regions" section: one row per region, select or delete. */
 export function WallPaintRegionList({ wallId }: { wallId: string }) {
+  const i18n = usePascalI18n()
   const nodes = useScene((state) => state.nodes)
   const materials = useScene((state) => state.materials)
   const unit = useViewer((state) => state.unit)
@@ -48,7 +49,7 @@ export function WallPaintRegionList({ wallId }: { wallId: string }) {
   return (
     // Focus inside this list still lets Delete target the active region.
     <div className="contents" data-wall-region-list={wallId}>
-      <PanelSection title="Paint regions">
+      <PanelSection title={i18n._({ id: 'editor.panels.wallRegionList.paintRegions', message: 'Paint regions' })}>
         <div className="flex flex-col gap-1">
           {rows.map((row) => {
             const isActive = active?.wallId === wallId && active.regionId === row.id
@@ -85,13 +86,13 @@ export function WallPaintRegionList({ wallId }: { wallId: string }) {
                   </span>
                 </button>
                 <button
-                  aria-label="Delete region"
+                  aria-label={i18n._({ id: 'editor.panels.wallRegionList.deleteRegion', message: 'Delete region' })}
                   className={ROW_ACTION_CLASS}
                   onClick={() => {
                     if (isActive) setActive(null)
                     if (removeWallRegion(wallId, row.id)) sfxEmitter.emit('sfx:structure-delete')
                   }}
-                  title="Delete region"
+                  title={i18n._({ id: 'editor.panels.wallRegionList.deleteRegion', message: 'Delete region' })}
                   type="button"
                 >
                   <Trash2 className="h-3 w-3" />

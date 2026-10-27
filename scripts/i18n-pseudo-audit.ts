@@ -158,7 +158,13 @@ async function main(): Promise<void> {
   })
   const findings: Finding[] = []
   try {
-    const context = await browser.newContext({ deviceScaleFactor: 1 })
+    // The editor picks metric or imperial from the timezone (and the locale region):
+    // pin both so units, and so the accepted data such as areas, match on every machine.
+    const context = await browser.newContext({
+      deviceScaleFactor: 1,
+      locale: 'en-GB',
+      timezoneId: 'UTC',
+    })
     const page = await context.newPage()
     for (const surface of selected) {
       const result = await auditSurface(page, base, surface, out)

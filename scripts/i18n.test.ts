@@ -14,6 +14,7 @@ import {
   type TranslationProvider,
   validateTranslation,
 } from './i18n'
+import { hasNodeDefinitions } from './i18n-node-messages'
 
 test('AI review notes cannot inject physical PO lines', () => {
   const escaped = escapePoCommentValue('Check wording.\nmsgid "injected"\r\nmsgstr "value"')
@@ -274,4 +275,11 @@ test('translation validation applies the checked-in glossary', () => {
       terms: { ceiling: { 'zh-CN': '天花板' } },
     }),
   ).toContain('expected glossary term "天花板" for "ceiling"')
+})
+
+test('a missing nodes entry skips the definition check only in a temporary catalog project', () => {
+  const missing = join(tmpdir(), 'pascal-no-nodes', 'packages/nodes/src/index.ts')
+  expect(hasNodeDefinitions(missing, true)).toBe(false)
+  expect(() => hasNodeDefinitions(missing, false)).toThrow(/is missing/)
+  expect(hasNodeDefinitions()).toBe(true)
 })

@@ -17,6 +17,7 @@ import { InlineRenameInput } from './inline-rename-input'
 import { TreeNodeWrapper } from './tree-node'
 import { nodeLabelDescriptor } from '../../../../../i18n/node-messages'
 import { localizedLevelName } from '../../../../../i18n/level-name'
+import { displayRoomName } from '../../../../../lib/room-name-messages'
 
 type UnitWarningCode = ReturnType<typeof unitWarnings>[number]['code']
 
@@ -97,7 +98,7 @@ export const UnitZoneRow = memo(function UnitZoneRow({
       keepIconColor
       label={
         <span className="flex min-w-0 items-baseline gap-1.5">
-          <span className="truncate">{zone.name || (zone.spaceRole === 'room' ? i18n._({ id: 'editor.sidebar.panels.sitePanel.unitTreeNode.room', message: 'Room' }) : i18n._({ id: 'editor.sidebar.panels.sitePanel.unitTreeNode.zone', message: 'Zone' }))}</span>
+          <span className="truncate">{(zone.name && displayRoomName(zone.name, i18n)) || (zone.spaceRole === 'room' ? i18n._({ id: 'editor.sidebar.panels.sitePanel.unitTreeNode.room', message: 'Room' }) : i18n._({ id: 'editor.sidebar.panels.sitePanel.unitTreeNode.zone', message: 'Zone' }))}</span>
           {levelLabel && (
             <span className="shrink-0 text-muted-foreground text-xs">{levelLabel}</span>
           )}

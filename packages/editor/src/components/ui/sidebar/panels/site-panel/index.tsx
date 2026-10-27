@@ -88,6 +88,7 @@ import { TreeNodeDragProvider } from './tree-node-drag'
 import { zoneDefaultName } from './default-names'
 import { nodeLabelDescriptor } from '../../../../../i18n/node-messages'
 import { authoredLevelName, localizedLevelName } from '../../../../../i18n/level-name'
+import { displayRoomName } from '../../../../../lib/room-name-messages'
 
 // ============================================================================
 // PROPERTY LINE SECTION
@@ -1299,6 +1300,7 @@ const ZoneItem = memo(function ZoneItem({
       <div className="min-w-0 flex-1 pr-1">
         <InlineRenameInput
           defaultName={defaultName}
+          displayName={zone.name ? displayRoomName(zone.name, i18n) : undefined}
           isEditing={isEditing}
           nodeId={zone.id}
           onStartEditing={() => setIsEditing(true)}

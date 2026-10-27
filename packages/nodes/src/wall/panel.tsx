@@ -14,6 +14,7 @@ import {
   getMaxWallCurveOffset,
   getWallAssemblyPreset,
   getWallCurveLength,
+  type MessageDescriptor,
   normalizeWallCurveOffset,
   resolveWallAssembly,
   runAsSingleSceneHistoryStep,
@@ -22,6 +23,7 @@ import {
   STUCCO_3_COAT,
   terrainSupportLift,
   useLiveNodeOverrides,
+  usePascalI18n,
   useScene,
   WALL_ASSEMBLY_PRESETS,
   WALL_CHAIR_RAIL_DEFAULT,
@@ -68,7 +70,7 @@ import { resolveWallOpeningCeiling } from '../shared/wall-opening-ceiling'
 import { CurtainWallPanel } from './curtain-wall-panel'
 import { hasWallCurveBlockingChildren } from './curve-eligibility'
 import { buildWallLengthPatch } from './length-patch'
-import { wallReferenceModel } from './panel-model'
+import { type WallReferenceValue, wallReferenceModel } from './panel-model'
 import { createWallPropertyPreview } from './property-preview'
 
 /**
@@ -89,36 +91,57 @@ function wallBaseRepairPatch(n: WallNode): Partial<WallNode> {
   }
 }
 
+const WALL_REFERENCE_LABELS: Record<WallReferenceValue, MessageDescriptor> = {
+  outside: /* i18n */ { id: 'node.wall.reference.outside', message: 'Outside face' },
+  center: /* i18n */ { id: 'node.wall.reference.center', message: 'Center' },
+  inside: /* i18n */ { id: 'node.wall.reference.inside', message: 'Inside face' },
+  left: /* i18n */ { id: 'node.wall.reference.left', message: 'Left' },
+  right: /* i18n */ { id: 'node.wall.reference.right', message: 'Right' },
+}
+
 type WallTrimKey = 'skirting' | 'crown' | 'chairRail'
 
 const WALL_TRIM_PROFILE_OPTIONS: Record<
   WallTrimKey,
-  Array<{ label: string; value: WallTrimProfile }>
+  Array<{ label: MessageDescriptor; value: WallTrimProfile }>
 > = {
   skirting: [
-    { label: 'Flat', value: 'flat' },
-    { label: 'Modern', value: 'base-modern' },
-    { label: 'Colonial', value: 'base-colonial' },
-    { label: 'Shoe', value: 'base-shoe' },
-    { label: 'Ogee', value: 'base-ogee' },
+    { label: /* i18n */ { id: 'node.wall.panel.flat', message: 'Flat' }, value: 'flat' },
+    { label: /* i18n */ { id: 'node.wall.panel.modern', message: 'Modern' }, value: 'base-modern' },
+    {
+      label: /* i18n */ { id: 'node.wall.panel.colonial', message: 'Colonial' },
+      value: 'base-colonial',
+    },
+    { label: /* i18n */ { id: 'node.wall.panel.shoe', message: 'Shoe' }, value: 'base-shoe' },
+    { label: /* i18n */ { id: 'node.wall.panel.ogee', message: 'Ogee' }, value: 'base-ogee' },
   ],
   crown: [
-    { label: 'Flat', value: 'flat' },
-    { label: 'Cove', value: 'crown-cove' },
-    { label: 'Ogee', value: 'crown-ogee' },
-    { label: 'Craft', value: 'crown-craftsman' },
-    { label: 'Layered', value: 'crown-layered' },
+    { label: /* i18n */ { id: 'node.wall.panel.flat', message: 'Flat' }, value: 'flat' },
+    { label: /* i18n */ { id: 'node.wall.panel.cove', message: 'Cove' }, value: 'crown-cove' },
+    { label: /* i18n */ { id: 'node.wall.panel.ogee', message: 'Ogee' }, value: 'crown-ogee' },
+    {
+      label: /* i18n */ { id: 'node.wall.panel.craft', message: 'Craft' },
+      value: 'crown-craftsman',
+    },
+    {
+      label: /* i18n */ { id: 'node.wall.panel.layered', message: 'Layered' },
+      value: 'crown-layered',
+    },
   ],
   chairRail: [
-    { label: 'Flat', value: 'flat' },
-    { label: 'Round', value: 'rail-rounded' },
-    { label: 'Ogee', value: 'rail-ogee' },
-    { label: 'Picture', value: 'rail-picture' },
-    { label: 'Step', value: 'rail-stepped' },
+    { label: /* i18n */ { id: 'node.wall.panel.flat', message: 'Flat' }, value: 'flat' },
+    { label: /* i18n */ { id: 'node.wall.panel.round', message: 'Round' }, value: 'rail-rounded' },
+    { label: /* i18n */ { id: 'node.wall.panel.ogee', message: 'Ogee' }, value: 'rail-ogee' },
+    {
+      label: /* i18n */ { id: 'node.wall.panel.picture', message: 'Picture' },
+      value: 'rail-picture',
+    },
+    { label: /* i18n */ { id: 'node.wall.panel.step', message: 'Step' }, value: 'rail-stepped' },
   ],
 }
 
 export default function WallPanel() {
+  const i18n = usePascalI18n()
   const selectedId = useViewer((s) => s.selection.selectedIds[0])
   const unit = useViewer((s) => s.unit)
   const setSelection = useViewer((s) => s.setSelection)
@@ -278,26 +301,32 @@ export default function WallPanel() {
     <PanelWrapper
       icon="/icons/wall.webp"
       onClose={handleClose}
-      title={node.name || 'Wall'}
+      title={node.name || i18n._({ id: 'node.wall.panel.wall', message: 'Wall' })}
       width={280}
     >
-      <PanelSection title="Wall type">
+      <PanelSection title={i18n._({ id: 'node.wall.panel.wallType', message: 'Wall type' })}>
         <SegmentedControl
           onChange={(wallType) => handleUpdate({ wallType })}
           options={[
-            { label: 'Standard', value: 'standard' },
-            { label: 'Curtain wall', value: 'curtain' },
+            {
+              label: i18n._({ id: 'node.wall.panel.standard', message: 'Standard' }),
+              value: 'standard',
+            },
+            {
+              label: i18n._({ id: 'node.wall.panel.curtainWall', message: 'Curtain wall' }),
+              value: 'curtain',
+            },
           ]}
           value={node.wallType ?? 'standard'}
         />
       </PanelSection>
-      <PanelSection title="Dimensions">
+      <PanelSection title={i18n._({ id: 'node.wall.panel.dimensions', message: 'Dimensions' })}>
         <SliderControl
           onCommit={handleCommit}
           onCancel={handleCancel}
           restoreOnCommit={false}
           previewWhileTyping
-          label="Length"
+          label={i18n._({ id: 'node.wall.panel.length', message: 'Length' })}
           max={metersToLinearUnit(1000, unit)}
           min={metersToLinearUnit(0.1, unit)}
           onChange={(value) =>
@@ -311,19 +340,29 @@ export default function WallPanel() {
           value={displayLength}
         />
         <div className="px-1 font-medium text-[10px] text-muted-foreground/80 uppercase tracking-wider">
-          Top
+          {i18n._({ id: 'node.wall.panel.top', message: 'Top' })}
         </div>
         <SegmentedControl
           onChange={handleTopModeChange}
           options={[
-            { label: 'Follows level', value: 'storey' },
-            { label: 'Custom height', value: 'custom' },
+            {
+              label: i18n._({ id: 'node.wall.panel.followsLevel', message: 'Follows level' }),
+              value: 'storey',
+            },
+            {
+              label: i18n._({ id: 'node.wall.panel.customHeight', message: 'Custom height' }),
+              value: 'custom',
+            },
           ]}
           value={isPlaneBound ? 'storey' : 'custom'}
         />
         {isPlaneBound ? (
           <div className="px-1 text-[11px] text-muted-foreground">
-            Currently {formatLinearMeasurement(height, unit)}
+            {i18n._({
+              id: 'node.panel.currently',
+              message: 'Currently {value}',
+              values: { value: formatLinearMeasurement(height, unit) },
+            })}
           </div>
         ) : (
           <SliderControl
@@ -331,7 +370,7 @@ export default function WallPanel() {
             onCancel={handleCancel}
             restoreOnCommit={false}
             previewWhileTyping
-            label="Height"
+            label={i18n._({ id: 'node.wall.panel.height', message: 'Height' })}
             max={metersToLinearUnit(1000, unit)}
             min={metersToLinearUnit(0.1, unit)}
             onChange={(v) =>
@@ -346,19 +385,25 @@ export default function WallPanel() {
           />
         )}
         <div className="px-1 font-medium text-[10px] text-muted-foreground/80 uppercase tracking-wider">
-          Bottom
+          {i18n._({ id: 'node.wall.panel.bottom', message: 'Bottom' })}
         </div>
         <SegmentedControl
           onChange={handleInfillChange}
           options={[
-            { label: 'Auto', value: 'auto' },
-            { label: 'Fill to terrain', value: 'terrain' },
+            { label: i18n._({ id: 'node.wall.panel.auto', message: 'Auto' }), value: 'auto' },
+            {
+              label: i18n._({ id: 'node.wall.panel.fillToTerrain', message: 'Fill to terrain' }),
+              value: 'terrain',
+            },
           ]}
           value={followsTerrain ? 'terrain' : 'auto'}
         />
         {followsTerrain && (
           <div className="px-1 text-[11px] text-muted-foreground">
-            Extends downward to meet the terrain. Height and top stay unchanged.
+            {i18n._({
+              id: 'node.wall.panel.extendsDownwardToMeetTheTerrain',
+              message: 'Extends downward to meet the terrain. Height and top stay unchanged.',
+            })}
           </div>
         )}
         {node.assembly && node.wallType !== 'curtain' ? (
@@ -367,10 +412,14 @@ export default function WallPanel() {
           // section is the only place thickness changes.
           <div className="flex items-center justify-between px-2 py-1.5">
             <span className="font-medium text-[10px] text-muted-foreground uppercase tracking-wider">
-              Thickness
+              {i18n._({ id: 'node.wall.panel.thickness', message: 'Thickness' })}
             </span>
             <span className="text-[11px] text-muted-foreground tabular-nums">
-              {formatLinearMeasurement(thickness, unit)} · from assembly
+              {i18n._({
+                id: 'node.wall.panel.thicknessFromAssembly',
+                message: '{thickness} · from assembly',
+                values: { thickness: formatLinearMeasurement(thickness, unit) },
+              })}
             </span>
           </div>
         ) : (
@@ -379,7 +428,11 @@ export default function WallPanel() {
             onCancel={handleCancel}
             restoreOnCommit={false}
             previewWhileTyping
-            label={node.wallType === 'curtain' ? 'Frame depth' : 'Thickness'}
+            label={
+              node.wallType === 'curtain'
+                ? i18n._({ id: 'node.wall.panel.frameDepth', message: 'Frame depth' })
+                : i18n._({ id: 'node.wall.panel.thickness', message: 'Thickness' })
+            }
             max={metersToLinearUnit(1000, unit)}
             min={metersToLinearUnit(0.05, unit)}
             onChange={(v) =>
@@ -396,12 +449,17 @@ export default function WallPanel() {
             value={Math.round(displayThickness * 1000) / 1000}
           />
         )}
-        <div className="px-1 font-medium text-[10px] text-muted-foreground/80">Reference</div>
+        <div className="px-1 font-medium text-[10px] text-muted-foreground/80">
+          {i18n._({ id: 'node.wall.panel.reference', message: 'Reference' })}
+        </div>
         {reference && (
           <SegmentedControl
             mixed={reference.value === null}
             onChange={(value) => reference.apply(value)}
-            options={reference.options}
+            options={reference.options.map((option) => ({
+              ...option,
+              label: i18n._(WALL_REFERENCE_LABELS[option.value]),
+            }))}
             value={reference.value ?? 'center'}
           />
         )}
@@ -411,7 +469,7 @@ export default function WallPanel() {
             onCancel={handleCancel}
             restoreOnCommit={false}
             previewWhileTyping
-            label="Curve"
+            label={i18n._({ id: 'node.wall.panel.curve', message: 'Curve' })}
             max={Math.max(metersToLinearUnit(0.01, unit), displayMaxCurveOffset)}
             min={-Math.max(metersToLinearUnit(0.01, unit), displayMaxCurveOffset)}
             onChange={(v) =>
@@ -455,7 +513,7 @@ export default function WallPanel() {
           <WallTrimSection
             node={node}
             onUpdate={handleUpdate}
-            title="Skirting"
+            title={i18n._({ id: 'node.wall.panel.skirting', message: 'Skirting' })}
             trimKey="skirting"
             trimValue={skirting}
             unit={unit}
@@ -465,7 +523,7 @@ export default function WallPanel() {
           <WallTrimSection
             node={node}
             onUpdate={handleUpdate}
-            title="Crown molding"
+            title={i18n._({ id: 'node.wall.panel.crownMolding', message: 'Crown molding' })}
             trimKey="crown"
             trimValue={crown}
             unit={unit}
@@ -475,7 +533,7 @@ export default function WallPanel() {
           <WallTrimSection
             node={node}
             onUpdate={handleUpdate}
-            title="Chair rail"
+            title={i18n._({ id: 'node.wall.panel.chairRail', message: 'Chair rail' })}
             trimKey="chairRail"
             trimValue={chairRail}
             unit={unit}
@@ -486,11 +544,11 @@ export default function WallPanel() {
       )}
 
       {!hasWallChildrenBlockingCurve && (
-        <PanelSection title="Actions">
+        <PanelSection title={i18n._({ id: 'node.wall.panel.actions', message: 'Actions' })}>
           <ActionGroup>
             <ActionButton
               icon={<Spline className="h-3.5 w-3.5" />}
-              label="Curve"
+              label={i18n._({ id: 'node.wall.panel.curve', message: 'Curve' })}
               onClick={handleCurve}
             />
           </ActionGroup>
@@ -505,6 +563,7 @@ export default function WallPanel() {
  * its code to read and a way to take it off, back to the face's own finish.
  */
 function WallFaceScriptSection({ wallId }: { wallId: string }) {
+  const i18n = usePascalI18n()
   const shas = useScene(
     useShallow((scene) => {
       const wall = scene.nodes[wallId as AnyNodeId]
@@ -515,7 +574,9 @@ function WallFaceScriptSection({ wallId }: { wallId: string }) {
   )
   if (!(shas[0] || shas[1])) return null
   return (
-    <PanelSection title="Scripted finish">
+    <PanelSection
+      title={i18n._({ id: 'node.wall.panel.scriptedFinish', message: 'Scripted finish' })}
+    >
       {(['a', 'b'] as const).map((face, index) => {
         const sha = shas[index]
         return sha ? <WallFaceScriptRow face={face} key={face} sha={sha} wallId={wallId} /> : null
@@ -525,14 +586,19 @@ function WallFaceScriptSection({ wallId }: { wallId: string }) {
 }
 
 function WallFaceScriptRow({ face, sha, wallId }: { face: WallFace; sha: string; wallId: string }) {
+  const i18n = usePascalI18n()
   const [code, setCode] = useState<{ sha: string; text: string } | null>(null)
   const [open, setOpen] = useState(false)
+  const unreadable = i18n._({
+    id: 'editor.panels.scriptUnreadable',
+    message: 'The script could not be read.',
+  })
   const toggleCode = () => {
     setOpen((shown) => !shown)
     if (code?.sha === sha) return
     finishScriptCode(sha).then(
-      (text) => setCode({ sha, text: text ?? 'The script could not be read.' }),
-      () => setCode({ sha, text: 'The script could not be read.' }),
+      (text) => setCode({ sha, text: text ?? unreadable }),
+      () => setCode({ sha, text: unreadable }),
     )
   }
   const remove = () => {
@@ -549,27 +615,37 @@ function WallFaceScriptRow({ face, sha, wallId }: { face: WallFace; sha: string;
   return (
     <div className="flex flex-col gap-2" data-wall-face-script={face}>
       <div className="flex min-h-8 items-center justify-between gap-3">
-        <span className="text-muted-foreground text-xs">Side {face.toUpperCase()}</span>
+        <span className="text-muted-foreground text-xs">
+          {i18n._({
+            id: 'node.wall.panel.sideFace',
+            message: 'Side {face}',
+            values: { face: face.toUpperCase() },
+          })}
+        </span>
         <div className="flex items-center gap-1.5">
           <button
             className="rounded-full border border-border/50 px-2.5 py-0.5 text-xs transition-colors hover:bg-accent"
             onClick={toggleCode}
             type="button"
           >
-            {open ? 'Hide code' : 'View code'}
+            {open
+              ? i18n._({ id: 'node.wall.panel.hideCode', message: 'Hide code' })
+              : i18n._({ id: 'node.wall.panel.viewCode', message: 'View code' })}
           </button>
           <button
             className="rounded-full border border-border/50 px-2.5 py-0.5 text-xs transition-colors hover:bg-accent"
             onClick={remove}
             type="button"
           >
-            Remove
+            {i18n._({ id: 'node.wall.panel.remove', message: 'Remove' })}
           </button>
         </div>
       </div>
       {open && (
         <pre className="max-h-60 overflow-auto whitespace-pre rounded-lg border border-border/50 p-2 font-mono text-[11px] text-foreground">
-          {code?.sha === sha ? code.text : 'Loading…'}
+          {code?.sha === sha
+            ? code.text
+            : i18n._({ id: 'node.wall.panel.loading', message: 'Loading…' })}
         </pre>
       )}
     </div>
@@ -595,6 +671,7 @@ function WallTrimSection({
   unitLabel: string
   wallHeightMeters: number
 }) {
+  const i18n = usePascalI18n()
   const updateTrim = (patch: Partial<NonNullable<WallNode['skirting']>>) =>
     onUpdate(wallTrimPatch(node, trimKey, patch))
   const profileOptions = WALL_TRIM_PROFILE_OPTIONS[trimKey]
@@ -606,7 +683,21 @@ function WallTrimSection({
     <PanelSection title={title}>
       <ActionGroup>
         <ActionButton
-          label={trimValue.enabled ? `Hide ${title.toLowerCase()}` : `Show ${title.toLowerCase()}`}
+          label={
+            trimValue.enabled
+              ? i18n._({
+                  id: 'node.wall.trim.hide',
+                  message:
+                    '{trim, select, skirting {Hide skirting} crown {Hide crown molding} other {Hide chair rail}}',
+                  values: { trim: trimKey },
+                })
+              : i18n._({
+                  id: 'node.wall.trim.show',
+                  message:
+                    '{trim, select, skirting {Show skirting} crown {Show crown molding} other {Show chair rail}}',
+                  values: { trim: trimKey },
+                })
+          }
           onClick={() => updateTrim({ enabled: !trimValue.enabled })}
         />
       </ActionGroup>
@@ -615,9 +706,9 @@ function WallTrimSection({
           <SegmentedControl
             onChange={(next) => updateTrim({ sides: next as any })}
             options={[
-              { label: 'Side A', value: 'a' },
-              { label: 'Side B', value: 'b' },
-              { label: 'Both', value: 'both' },
+              { label: i18n._({ id: 'node.wall.panel.sideA', message: 'Side A' }), value: 'a' },
+              { label: i18n._({ id: 'node.wall.panel.sideB', message: 'Side B' }), value: 'b' },
+              { label: i18n._({ id: 'node.wall.panel.both', message: 'Both' }), value: 'both' },
             ]}
             value={
               trimValue.sides === 'interior'
@@ -629,11 +720,11 @@ function WallTrimSection({
           />
           <SegmentedControl
             onChange={(next) => updateTrim({ profile: next })}
-            options={profileOptions}
+            options={profileOptions.map((option) => ({ ...option, label: i18n._(option.label) }))}
             value={selectedProfile}
           />
           <SliderControl
-            label="Height"
+            label={i18n._({ id: 'node.wall.panel.height', message: 'Height' })}
             max={metersToLinearUnit(Math.max(0.05, wallHeightMeters), unit)}
             min={metersToLinearUnit(0.01, unit)}
             onChange={(value) =>
@@ -650,7 +741,7 @@ function WallTrimSection({
             value={metersToLinearUnit(trimValue.height, unit)}
           />
           <SliderControl
-            label="Depth"
+            label={i18n._({ id: 'node.wall.panel.depth', message: 'Depth' })}
             max={metersToLinearUnit(0.2, unit)}
             min={metersToLinearUnit(0.001, unit)}
             onChange={(value) =>
@@ -668,7 +759,7 @@ function WallTrimSection({
           />
           {trimKey === 'chairRail' && (
             <SliderControl
-              label="Offset"
+              label={i18n._({ id: 'node.wall.panel.offset', message: 'Offset' })}
               max={metersToLinearUnit(Math.max(0.05, wallHeightMeters - trimValue.height), unit)}
               min={metersToLinearUnit(0, unit)}
               onChange={(value) =>
@@ -813,33 +904,49 @@ function ThicknessInput({
   )
 }
 
-const EXTERIOR_FINISH_OPTIONS: Array<{ value: WallAssemblyExteriorFinish; label: string }> = [
-  { value: 'none', label: 'None' },
-  { value: 'siding', label: 'Lap siding' },
-  { value: 'fiber-cement', label: 'Fiber cement' },
-  { value: 'stucco', label: 'Stucco' },
-  { value: 'brick', label: 'Brick veneer' },
-  { value: 'stone', label: 'Stone veneer' },
+const EXTERIOR_FINISH_OPTIONS: Array<{
+  value: WallAssemblyExteriorFinish
+  label: MessageDescriptor
+}> = [
+  { value: 'none', label: /* i18n */ { id: 'node.wall.panel.none', message: 'None' } },
+  { value: 'siding', label: /* i18n */ { id: 'node.wall.panel.lapSiding', message: 'Lap siding' } },
+  {
+    value: 'fiber-cement',
+    label: /* i18n */ { id: 'node.wall.panel.fiberCement', message: 'Fiber cement' },
+  },
+  { value: 'stucco', label: /* i18n */ { id: 'node.wall.panel.stucco', message: 'Stucco' } },
+  {
+    value: 'brick',
+    label: /* i18n */ { id: 'node.wall.panel.brickVeneer', message: 'Brick veneer' },
+  },
+  {
+    value: 'stone',
+    label: /* i18n */ { id: 'node.wall.panel.stoneVeneer', message: 'Stone veneer' },
+  },
 ]
 
-const SHEATHING_OPTIONS: Array<{ value: WallAssemblySheathingMaterial; label: string }> = [
-  { value: 'none', label: 'None' },
-  { value: 'osb', label: 'OSB' },
-  { value: 'plywood', label: 'Plywood' },
-  { value: 'gypsum', label: 'Gypsum' },
+const SHEATHING_OPTIONS: Array<{ value: WallAssemblySheathingMaterial; label: MessageDescriptor }> =
+  [
+    { value: 'none', label: /* i18n */ { id: 'node.wall.panel.none', message: 'None' } },
+    { value: 'osb', label: /* i18n */ { id: 'node.wall.panel.osb', message: 'OSB' } },
+    { value: 'plywood', label: /* i18n */ { id: 'node.wall.panel.plywood', message: 'Plywood' } },
+    { value: 'gypsum', label: /* i18n */ { id: 'node.wall.panel.gypsum', message: 'Gypsum' } },
+  ]
+
+const FRAMING_OPTIONS: Array<{ value: WallAssemblyFramingKind; label: MessageDescriptor }> = [
+  { value: 'wood', label: /* i18n */ { id: 'node.wall.panel.woodStuds', message: 'Wood studs' } },
+  { value: 'lgs', label: /* i18n */ { id: 'node.wall.panel.steelStuds', message: 'Steel studs' } },
+  { value: 'cmu', label: /* i18n */ { id: 'node.wall.panel.cmu', message: 'CMU' } },
+  { value: 'icf', label: /* i18n */ { id: 'node.wall.panel.icf', message: 'ICF' } },
 ]
 
-const FRAMING_OPTIONS: Array<{ value: WallAssemblyFramingKind; label: string }> = [
-  { value: 'wood', label: 'Wood studs' },
-  { value: 'lgs', label: 'Steel studs' },
-  { value: 'cmu', label: 'CMU' },
-  { value: 'icf', label: 'ICF' },
-]
-
-const INTERIOR_FINISH_OPTIONS: Array<{ value: WallAssemblyInteriorFinish; label: string }> = [
-  { value: 'none', label: 'None' },
-  { value: 'drywall', label: 'Drywall' },
-  { value: 'plaster', label: 'Plaster' },
+const INTERIOR_FINISH_OPTIONS: Array<{
+  value: WallAssemblyInteriorFinish
+  label: MessageDescriptor
+}> = [
+  { value: 'none', label: /* i18n */ { id: 'node.wall.panel.none', message: 'None' } },
+  { value: 'drywall', label: /* i18n */ { id: 'node.wall.panel.drywall', message: 'Drywall' } },
+  { value: 'plaster', label: /* i18n */ { id: 'node.wall.panel.plaster', message: 'Plaster' } },
 ]
 
 /** Cited default thickness for a finish the user just switched to. */
@@ -861,6 +968,7 @@ function WallAssemblySection({
   onUpdate: (updates: Partial<WallNode>) => void
   unit: 'metric' | 'imperial'
 }) {
+  const i18n = usePascalI18n()
   const stack = node.assembly
   // The cladding / sheathing / framing / interior editor works on the WS5 view
   // of the F2 stack; a stack it cannot express is listed read-only.
@@ -878,8 +986,8 @@ function WallAssemblySection({
   }
 
   return (
-    <PanelSection title="Assembly">
-      <LayerRow label="Preset">
+    <PanelSection title={i18n._({ id: 'node.wall.panel.assembly', message: 'Assembly' })}>
+      <LayerRow label={i18n._({ id: 'node.wall.panel.preset', message: 'Preset' })}>
         <select
           className={SELECT_CLASS}
           onChange={(event) => {
@@ -893,7 +1001,11 @@ function WallAssemblySection({
           }}
           value={stack?.presetId ?? ''}
         >
-          <option value="">{stack ? 'Custom' : 'None (single layer)'}</option>
+          <option value="">
+            {stack
+              ? i18n._({ id: 'node.wall.panel.custom', message: 'Custom' })
+              : i18n._({ id: 'node.wall.panel.noneSingleLayer', message: 'None (single layer)' })}
+          </option>
           {WALL_ASSEMBLY_PRESETS.map((preset) => (
             <option key={preset.id} value={preset.id}>
               {preset.label}
@@ -904,7 +1016,7 @@ function WallAssemblySection({
 
       {assembly && (
         <>
-          <LayerRow label="Exterior">
+          <LayerRow label={i18n._({ id: 'node.wall.panel.exterior', message: 'Exterior' })}>
             <select
               className={SELECT_CLASS}
               onChange={(event) => {
@@ -918,7 +1030,7 @@ function WallAssemblySection({
             >
               {EXTERIOR_FINISH_OPTIONS.map((option) => (
                 <option key={option.value} value={option.value}>
-                  {option.label}
+                  {i18n._(option.label)}
                 </option>
               ))}
             </select>
@@ -936,7 +1048,7 @@ function WallAssemblySection({
             )}
           </LayerRow>
 
-          <LayerRow label="Sheathing">
+          <LayerRow label={i18n._({ id: 'node.wall.panel.sheathing', message: 'Sheathing' })}>
             <select
               className={SELECT_CLASS}
               onChange={(event) => {
@@ -958,7 +1070,7 @@ function WallAssemblySection({
             >
               {SHEATHING_OPTIONS.map((option) => (
                 <option key={option.value} value={option.value}>
-                  {option.label}
+                  {i18n._(option.label)}
                 </option>
               ))}
             </select>
@@ -976,7 +1088,7 @@ function WallAssemblySection({
             )}
           </LayerRow>
 
-          <LayerRow label="Framing">
+          <LayerRow label={i18n._({ id: 'node.wall.panel.framing', message: 'Framing' })}>
             <select
               className={SELECT_CLASS}
               onChange={(event) =>
@@ -992,7 +1104,7 @@ function WallAssemblySection({
             >
               {FRAMING_OPTIONS.map((option) => (
                 <option key={option.value} value={option.value}>
-                  {option.label}
+                  {i18n._(option.label)}
                 </option>
               ))}
             </select>
@@ -1005,7 +1117,7 @@ function WallAssemblySection({
             />
           </LayerRow>
 
-          <LayerRow label="Interior">
+          <LayerRow label={i18n._({ id: 'node.wall.panel.interior', message: 'Interior' })}>
             <select
               className={SELECT_CLASS}
               onChange={(event) => {
@@ -1022,7 +1134,7 @@ function WallAssemblySection({
             >
               {INTERIOR_FINISH_OPTIONS.map((option) => (
                 <option key={option.value} value={option.value}>
-                  {option.label}
+                  {i18n._(option.label)}
                 </option>
               ))}
             </select>
@@ -1042,7 +1154,7 @@ function WallAssemblySection({
 
           <div className="flex items-center justify-between px-2 py-1.5">
             <span className="font-medium text-[10px] text-muted-foreground uppercase tracking-wide">
-              Total thickness
+              {i18n._({ id: 'node.wall.panel.totalThickness', message: 'Total thickness' })}
             </span>
             <span className="font-medium text-[11px] text-foreground tabular-nums">
               {formatLayerThickness(assemblyThickness(stack!), unit)}
@@ -1051,23 +1163,36 @@ function WallAssemblySection({
 
           {resolved.kind === 'partition' && (
             <div className="px-2 pb-1.5 text-[10px] text-muted-foreground">
-              Partition: the interior finish is applied to both faces.
+              {i18n._({
+                id: 'node.wall.panel.partitionTheInteriorFinishIsApplied',
+                message: 'Partition: the interior finish is applied to both faces.',
+              })}
             </div>
           )}
           {resolved.kind === 'envelope' && resolved.exteriorSide == null && (
             <div className="px-2 pb-1.5 text-[10px] text-muted-foreground">
-              Which face is outside is undetermined (no room detected on either side) — the exterior
-              layers are drawn on side B.
+              {i18n._({
+                id: 'node.wall.panel.whichFaceIsOutsideIsUndetermined',
+                message:
+                  'Which face is outside is undetermined (no room detected on either side) — the exterior layers are drawn on side B.',
+              })}
             </div>
           )}
           {presetNote && (
             <div className="px-2 pb-2 text-[10px] text-amber-600 dark:text-amber-400">
-              Unverified: {presetNote}
+              {i18n._({
+                id: 'node.wall.panel.unverifiedPresetnote',
+                message: 'Unverified: {presetNote}',
+                values: { presetNote },
+              })}
             </div>
           )}
           <div className="px-2 pb-2 text-[10px] text-muted-foreground">
-            Layer thicknesses follow the 2021 IRC assembly data. Drafting aid, not engineering —
-            verify with the authority having jurisdiction.
+            {i18n._({
+              id: 'node.wall.panel.layerThicknessesFollowThe2021Irc',
+              message:
+                'Layer thicknesses follow the 2021 IRC assembly data. Drafting aid, not engineering — verify with the authority having jurisdiction.',
+            })}
           </div>
         </>
       )}
@@ -1082,7 +1207,7 @@ function WallAssemblySection({
           ))}
           <div className="flex items-center justify-between px-2 py-1.5">
             <span className="font-medium text-[10px] text-muted-foreground uppercase tracking-wide">
-              Total thickness
+              {i18n._({ id: 'node.wall.panel.totalThickness', message: 'Total thickness' })}
             </span>
             <span className="font-medium text-[11px] text-foreground tabular-nums">
               {formatLayerThickness(assemblyThickness(stack), unit)}

@@ -92,6 +92,32 @@ export function formatNumber(value: number, options: NumberFormatOptions = {}): 
   }
 }
 
+/**
+ * `value.toFixed(digits)` in the locale's notation: the same rounding as
+ * `toFixed` (so "2.55" stays "2.5"), then the locale's decimal separator, no
+ * grouping, and "-0.00" as "0.00".
+ */
+export function formatFixed(value: number, digits: number, locale = 'en'): string {
+  if (!Number.isFinite(value)) return '--'
+  const rounded = Number(value.toFixed(digits))
+  return formatNumber(Object.is(rounded, -0) ? 0 : rounded, { min: digits, max: digits, locale })
+}
+
+/**
+ * Names listed in a sentence. English keeps the plain comma list the editor has
+ * always written ("Kitchen, Hall, Bath"); other locales use their own list
+ * separators and conjunction (Japanese "Kitchen、Hall、Bath", French
+ * "Kitchen, Hall et Bath"), which a comma join gets wrong.
+ */
+export function formatList(items: readonly string[], locale = 'en'): string {
+  if (/^en\b/i.test(locale)) return items.join(', ')
+  try {
+    return new Intl.ListFormat([locale, 'en'], { type: 'conjunction' }).format(items)
+  } catch {
+    return items.join(', ')
+  }
+}
+
 export function formatLength(
   meters: number,
   unit: LengthUnit,

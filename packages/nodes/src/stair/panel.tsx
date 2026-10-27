@@ -6,6 +6,7 @@ import {
   getBoundarySurfaces,
   getLevelDisplayName,
   type LevelNode,
+  type MessageDescriptor,
   measureStair,
   planStairPreset,
   planStairRiseEdit,
@@ -24,6 +25,7 @@ import {
   type StairSlabOpeningMode,
   type StairTopLandingMode,
   type StairType,
+  usePascalI18n,
   useRegistryVersion,
   useScene,
 } from '@pascal-app/core'
@@ -55,35 +57,102 @@ import { getStairDestinationUpdates } from './destination'
 import { StairRailingControls } from './railing-controls'
 import { getStairTypeChange } from './stair-type'
 
-const RAILING_MODE_OPTIONS: { label: string; value: StairRailingMode }[] = [
-  { label: 'None', value: 'none' },
-  { label: 'Left', value: 'left' },
-  { label: 'Right', value: 'right' },
-  { label: 'Both', value: 'both' },
+/** Core's stair diagnostics in the UI language; codes without fixed text show core's message. */
+const STAIR_DIAGNOSTIC_MESSAGES: Partial<Record<string, MessageDescriptor>> = {
+  'invalid-rise': /* i18n */ {
+    id: 'node.stair.diagnostic.invalidRise',
+    message: 'The destination must be above the stair base.',
+  },
+  'landing-overlap': /* i18n */ {
+    id: 'node.stair.diagnostic.landingOverlap',
+    message:
+      'Landing depth exceeds a full circle at the walking line; the visible landing is limited to one circle.',
+  },
+  'narrow-winder-end': /* i18n */ {
+    id: 'node.stair.diagnostic.narrowWinderEnd',
+    message: 'The narrow end of a winder tread is below 0.10 m; check the intended stair use.',
+  },
+  'invalid-flight': /* i18n */ {
+    id: 'node.stair.diagnostic.invalidFlight',
+    message: 'Flight dimensions and integer riser count must be positive.',
+  },
+  'riser-target': /* i18n */ {
+    id: 'node.stair.diagnostic.riserTarget',
+    message: 'Riser height exceeds the design target.',
+  },
+  'going-target': /* i18n */ {
+    id: 'node.stair.diagnostic.goingTarget',
+    message: 'Going is below the design target.',
+  },
+  'comfort-target': /* i18n */ {
+    id: 'node.stair.diagnostic.comfortTarget',
+    message: 'Two risers plus going is outside the 0.60–0.65 m design range.',
+  },
+  'nonuniform-risers': /* i18n */ {
+    id: 'node.stair.diagnostic.nonuniformRisers',
+    message:
+      'Flight riser heights differ. Use uniform-riser repair only if this is a proposed design.',
+  },
+  'raised-landing': /* i18n */ {
+    id: 'node.stair.diagnostic.raisedLanding',
+    message: 'A landing has a stored rise; inspect its transition before repair.',
+  },
+  'arrival-mismatch': /* i18n */ {
+    id: 'node.stair.diagnostic.arrivalMismatch',
+    message: 'The flight chain does not reach the declared destination.',
+  },
+  'headroom-unresolved': /* i18n */ {
+    id: 'node.stair.diagnostic.headroomUnresolved',
+    message:
+      'Detailed headroom could not be evaluated: check riser counts and the surface query budget.',
+  },
+  'headroom-target': /* i18n */ {
+    id: 'node.stair.diagnostic.headroomTarget',
+    message: 'Overhead surfaces leave less than the target headroom.',
+  },
+}
+
+const RAILING_MODE_OPTIONS: { label: MessageDescriptor; value: StairRailingMode }[] = [
+  { label: /* i18n */ { id: 'node.stair.panel.none', message: 'None' }, value: 'none' },
+  { label: /* i18n */ { id: 'node.stair.panel.left', message: 'Left' }, value: 'left' },
+  { label: /* i18n */ { id: 'node.stair.panel.right', message: 'Right' }, value: 'right' },
+  { label: /* i18n */ { id: 'node.stair.panel.both', message: 'Both' }, value: 'both' },
 ]
-const RAILING_STYLE_OPTIONS: { label: string; value: StairRailingStyle }[] = [
-  { label: 'Balusters', value: 'balusters' },
-  { label: 'Post & rail', value: 'post-and-rail' },
-  { label: 'Cable', value: 'cable' },
-  { label: 'Boards', value: 'boards' },
-  { label: 'Glass', value: 'glass' },
-  { label: 'Metal', value: 'metal' },
+const RAILING_STYLE_OPTIONS: { label: MessageDescriptor; value: StairRailingStyle }[] = [
+  {
+    label: /* i18n */ { id: 'node.stair.panel.balusters', message: 'Balusters' },
+    value: 'balusters',
+  },
+  {
+    label: /* i18n */ { id: 'node.stair.panel.postRail', message: 'Post & rail' },
+    value: 'post-and-rail',
+  },
+  { label: /* i18n */ { id: 'node.stair.panel.cable', message: 'Cable' }, value: 'cable' },
+  { label: /* i18n */ { id: 'node.stair.panel.boards', message: 'Boards' }, value: 'boards' },
+  { label: /* i18n */ { id: 'node.stair.panel.glass', message: 'Glass' }, value: 'glass' },
+  { label: /* i18n */ { id: 'node.stair.panel.metal', message: 'Metal' }, value: 'metal' },
 ]
 
-const STAIR_TYPE_OPTIONS: { label: string; value: StairType }[] = [
-  { label: 'Straight', value: 'straight' },
-  { label: 'Curved', value: 'curved' },
-  { label: 'Spiral', value: 'spiral' },
+const STAIR_TYPE_OPTIONS: { label: MessageDescriptor; value: StairType }[] = [
+  { label: /* i18n */ { id: 'node.stair.panel.straight', message: 'Straight' }, value: 'straight' },
+  { label: /* i18n */ { id: 'node.stair.panel.curved', message: 'Curved' }, value: 'curved' },
+  { label: /* i18n */ { id: 'node.stair.panel.spiral', message: 'Spiral' }, value: 'spiral' },
 ]
 
-const TOP_LANDING_MODE_OPTIONS: { label: string; value: StairTopLandingMode }[] = [
-  { label: 'None', value: 'none' },
-  { label: 'Integrated', value: 'integrated' },
+const TOP_LANDING_MODE_OPTIONS: { label: MessageDescriptor; value: StairTopLandingMode }[] = [
+  { label: /* i18n */ { id: 'node.stair.panel.none', message: 'None' }, value: 'none' },
+  {
+    label: /* i18n */ { id: 'node.stair.panel.integrated', message: 'Integrated' },
+    value: 'integrated',
+  },
 ]
 
-const STAIR_SLAB_OPENING_OPTIONS: { label: string; value: StairSlabOpeningMode }[] = [
-  { label: 'None', value: 'none' },
-  { label: 'Destination', value: 'destination' },
+const STAIR_SLAB_OPENING_OPTIONS: { label: MessageDescriptor; value: StairSlabOpeningMode }[] = [
+  { label: /* i18n */ { id: 'node.stair.panel.none', message: 'None' }, value: 'none' },
+  {
+    label: /* i18n */ { id: 'node.stair.panel.destination', message: 'Destination' },
+    value: 'destination',
+  },
 ]
 
 // Slabs at least this high off the storey floor read as decks (mezzanines) —
@@ -91,6 +160,7 @@ const STAIR_SLAB_OPENING_OPTIONS: { label: string; value: StairSlabOpeningMode }
 const DECK_DESTINATION_MIN_ELEVATION = 0.5
 
 export default function StairPanel() {
+  const i18n = usePascalI18n()
   const selectedId = useViewer((s) => s.selection.selectedIds[0])
   const selectedCount = useViewer((s) => s.selection.selectedIds.length)
   const unit = useViewer((s) => s.unit)
@@ -390,38 +460,50 @@ export default function StairPanel() {
     <PanelWrapper
       icon="/icons/stairs.webp"
       onClose={handleClose}
-      title={node.name || 'Staircase'}
+      title={node.name || i18n._({ id: 'node.stair.panel.staircase', message: 'Staircase' })}
       width={300}
     >
-      <PanelSection title="Type">
+      <PanelSection title={i18n._({ id: 'node.stair.panel.type', message: 'Type' })}>
         <SegmentedControl
           onChange={handleStairTypeChange}
-          options={STAIR_TYPE_OPTIONS}
+          options={STAIR_TYPE_OPTIONS.map((option) => ({ ...option, label: i18n._(option.label) }))}
           value={node.stairType ?? 'straight'}
         />
       </PanelSection>
 
-      <PanelSection title="Layout">
+      <PanelSection title={i18n._({ id: 'node.stair.panel.layout', message: 'Layout' })}>
         <SegmentedControl
           value={presetTurn}
           onChange={setPresetTurn}
           options={[
-            { label: 'Left turn', value: 'left' },
-            { label: 'Right turn', value: 'right' },
+            {
+              label: i18n._({ id: 'node.stair.panel.leftTurn', message: 'Left turn' }),
+              value: 'left',
+            },
+            {
+              label: i18n._({ id: 'node.stair.panel.rightTurn', message: 'Right turn' }),
+              value: 'right',
+            },
           ]}
         />
         <SegmentedControl
           value={turningStrategy}
           onChange={setTurningStrategy}
           options={[
-            { label: 'Landing', value: 'landing' },
-            { label: 'Winder', value: 'winder' },
+            {
+              label: i18n._({ id: 'node.stair.panel.landing', message: 'Landing' }),
+              value: 'landing',
+            },
+            {
+              label: i18n._({ id: 'node.stair.panel.winder', message: 'Winder' }),
+              value: 'winder',
+            },
           ]}
         />
         {turningStrategy === 'winder' && (
           <>
             <MetricControl
-              label="Inner gap"
+              label={i18n._({ id: 'node.stair.panel.innerGap', message: 'Inner gap' })}
               unit="m"
               min={0}
               step={0.05}
@@ -430,7 +512,10 @@ export default function StairPanel() {
               onChange={setInnerGap}
             />
             <MetricControl
-              label="Walking line offset"
+              label={i18n._({
+                id: 'node.stair.panel.walkingLineOffset',
+                message: 'Walking line offset',
+              })}
               unit="m"
               min={0.001}
               step={0.05}
@@ -442,8 +527,14 @@ export default function StairPanel() {
               value={division}
               onChange={setDivision}
               options={[
-                { label: 'Equal going', value: 'equal-going' },
-                { label: 'Equal angle', value: 'equal-angle' },
+                {
+                  label: i18n._({ id: 'node.stair.panel.equalGoing', message: 'Equal going' }),
+                  value: 'equal-going',
+                },
+                {
+                  label: i18n._({ id: 'node.stair.panel.equalAngle', message: 'Equal angle' }),
+                  value: 'equal-angle',
+                },
               ]}
             />
           </>
@@ -451,12 +542,22 @@ export default function StairPanel() {
         <div className="grid grid-cols-3 gap-2">
           {layoutOptions.map((option) => {
             const label =
-              option.layout === 'straight' ? 'Straight' : `${option.layout.toUpperCase()} turn`
+              option.layout === 'straight'
+                ? i18n._({ id: 'node.stair.layout.straight', message: 'Straight' })
+                : i18n._({
+                    id: 'node.stair.layout.turn',
+                    message: '{layout} turn',
+                    values: { layout: option.layout.toUpperCase() },
+                  })
             return (
               <button
                 key={option.layout}
                 type="button"
-                aria-label={`Apply ${label} layout`}
+                aria-label={i18n._({
+                  id: 'node.stair.panel.applyLabelLayout',
+                  message: 'Apply {label} layout',
+                  values: { label },
+                })}
                 disabled={!option.footprint}
                 onClick={() => applyPreset(option.layout)}
                 className="flex min-h-24 flex-col items-center justify-center gap-2 rounded-lg border border-border/60 bg-muted/30 px-1 py-3 text-foreground transition-colors hover:border-foreground/40 hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40"
@@ -481,7 +582,7 @@ export default function StairPanel() {
                 <span className="text-center text-[11px] leading-tight text-muted-foreground">
                   {option.footprint
                     ? `${formatLinearMeasurement(option.footprint.width, unit, metricNotation)} × ${formatLinearMeasurement(option.footprint.length, unit, metricNotation)}`
-                    : 'Unavailable'}
+                    : i18n._({ id: 'node.stair.panel.unavailable', message: 'Unavailable' })}
                 </span>
               </button>
             )
@@ -489,51 +590,78 @@ export default function StairPanel() {
         </div>
       </PanelSection>
 
-      <PanelSection title="Sizing">
+      <PanelSection title={i18n._({ id: 'node.stair.panel.sizing', message: 'Sizing' })}>
         <details className="px-1 text-xs">
-          <summary className="cursor-pointer py-2 text-muted-foreground">Measurements</summary>
+          <summary className="cursor-pointer py-2 text-muted-foreground">
+            {i18n._({ id: 'node.stair.panel.measurements', message: 'Measurements' })}
+          </summary>
           <div className="space-y-2 px-1 text-xs">
             {measurements.flights.map((flight, index) => (
               <div key={flight.nodeId}>
-                Flight {index + 1}: {flight.count} risers · R{' '}
-                {flight.riserHeight === null
-                  ? '—'
-                  : formatLinearMeasurement(flight.riserHeight, unit, metricNotation)}{' '}
-                · T{' '}
-                {flight.going === null
-                  ? '—'
-                  : formatLinearMeasurement(flight.going, unit, metricNotation)}{' '}
-                · {flight.slope === null ? '—' : `${((flight.slope * 180) / Math.PI).toFixed(1)}°`}
+                {i18n._({
+                  id: 'node.stair.panel.flightMeasurements',
+                  message:
+                    'Flight {number}: {count, plural, one {# riser} other {# risers}} · R {riser} · T {going} · {slope}',
+                  values: {
+                    number: index + 1,
+                    count: flight.count,
+                    riser:
+                      flight.riserHeight === null
+                        ? '—'
+                        : formatLinearMeasurement(flight.riserHeight, unit, metricNotation),
+                    going:
+                      flight.going === null
+                        ? '—'
+                        : formatLinearMeasurement(flight.going, unit, metricNotation),
+                    slope:
+                      flight.slope === null
+                        ? '—'
+                        : `${((flight.slope * 180) / Math.PI).toFixed(1)}°`,
+                  },
+                })}
               </div>
             ))}
             <div>
-              Headroom:{' '}
+              {i18n._({ id: 'node.stair.panel.headroom', message: 'Headroom:' })}{' '}
               {measurements.headroom.status === 'unresolved'
-                ? 'Not evaluated'
+                ? i18n._({ id: 'node.stair.panel.notEvaluated', message: 'Not evaluated' })
                 : measurements.headroom.minimum === null
-                  ? 'No overhead surface'
+                  ? i18n._({
+                      id: 'node.stair.panel.noOverheadSurface',
+                      message: 'No overhead surface',
+                    })
                   : formatLinearMeasurement(measurements.headroom.minimum, unit, metricNotation)}
             </div>
-            <div className="text-muted-foreground">Floors, ceilings and stairs only.</div>
+            <div className="text-muted-foreground">
+              {i18n._({
+                id: 'node.stair.panel.floorsCeilingsAndStairsOnly',
+                message: 'Floors, ceilings and stairs only.',
+              })}
+            </div>
           </div>
         </details>
-        {[...new Set(measurements.diagnostics.map((diagnostic) => diagnostic.message))].map(
-          (message) => (
-            <div
-              key={message}
-              role="status"
-              className="rounded-lg bg-muted/40 px-3 py-2 text-xs text-muted-foreground"
-            >
-              {message}
-            </div>
+        {[
+          ...new Set(
+            measurements.diagnostics.map((diagnostic) => {
+              const message = STAIR_DIAGNOSTIC_MESSAGES[diagnostic.code]
+              return message ? i18n._(message) : diagnostic.message
+            }),
           ),
-        )}
+        ].map((message) => (
+          <div
+            key={message}
+            role="status"
+            className="rounded-lg bg-muted/40 px-3 py-2 text-xs text-muted-foreground"
+          >
+            {message}
+          </div>
+        ))}
         <details className="space-y-3">
           <summary className="cursor-pointer px-1 py-2 text-xs text-muted-foreground">
-            Design targets
+            {i18n._({ id: 'node.stair.panel.designTargets', message: 'Design targets' })}
           </summary>
           <MetricControl
-            label="Target max riser"
+            label={i18n._({ id: 'node.stair.panel.targetMaxRiser', message: 'Target max riser' })}
             unit="m"
             precision={3}
             step={0.005}
@@ -544,7 +672,10 @@ export default function StairPanel() {
             }
           />
           <MetricControl
-            label="Target minimum going"
+            label={i18n._({
+              id: 'node.stair.panel.targetMinimumGoing',
+              message: 'Target minimum going',
+            })}
             unit="m"
             precision={3}
             step={0.01}
@@ -555,7 +686,7 @@ export default function StairPanel() {
             }
           />
           <MetricControl
-            label="Target going"
+            label={i18n._({ id: 'node.stair.panel.targetGoing', message: 'Target going' })}
             unit="m"
             precision={3}
             step={0.01}
@@ -566,7 +697,7 @@ export default function StairPanel() {
             }
           />
           <MetricControl
-            label="Target headroom"
+            label={i18n._({ id: 'node.stair.panel.targetHeadroom', message: 'Target headroom' })}
             unit="m"
             precision={2}
             step={0.05}
@@ -579,48 +710,77 @@ export default function StairPanel() {
         </details>
         <ActionButton
           className="flex-none"
-          label="Fit uniform risers"
+          label={i18n._({ id: 'node.stair.panel.fitUniformRisers', message: 'Fit uniform risers' })}
           onClick={() => applySizing(false)}
         />
         <ActionButton
           className="flex-none"
-          label="Fit risers and going"
+          label={i18n._({
+            id: 'node.stair.panel.fitRisersAndGoing',
+            message: 'Fit risers and going',
+          })}
           onClick={() => applySizing(true)}
         />
       </PanelSection>
       {node.stairType === 'straight' &&
         (boundarySurfaces.length > 0 || node.destinationSurfaceId) && (
-          <PanelSection title="Surface connection">
+          <PanelSection
+            title={i18n._({
+              id: 'node.stair.panel.surfaceConnection',
+              message: 'Surface connection',
+            })}
+          >
             <div className="space-y-2">
               <ToggleControl
                 checked={node.autoSurfaceSnap !== false}
-                label="Snap to nearby surfaces"
+                label={i18n._({
+                  id: 'node.stair.panel.snapToNearbySurfaces',
+                  message: 'Snap to nearby surfaces',
+                })}
                 onChange={(checked) => handleUpdate({ autoSurfaceSnap: checked })}
               />
               <p className="px-1 text-[11px] text-muted-foreground">
                 {node.autoSurfaceSnap !== false
                   ? connectedSurface
-                    ? `Connected to ${connectedSurface.name || 'surface'}. Move the stair to connect to another edge.`
-                    : 'Drag near a deck, patio, concrete slab, or landing edge to fit the stair.'
-                  : 'Moving this stair keeps its current rise, steps, and run.'}
+                    ? connectedSurface.name
+                      ? i18n._({
+                          id: 'node.stair.panel.connectedTo',
+                          message:
+                            'Connected to {surface}. Move the stair to connect to another edge.',
+                          values: { surface: connectedSurface.name },
+                        })
+                      : i18n._({
+                          id: 'node.stair.panel.connectedToSurface',
+                          message:
+                            'Connected to a surface. Move the stair to connect to another edge.',
+                        })
+                    : i18n._({
+                        id: 'node.stair.panel.dragNearADeckPatioConcrete',
+                        message:
+                          'Drag near a deck, patio, concrete slab, or landing edge to fit the stair.',
+                      })
+                  : i18n._({
+                      id: 'node.stair.panel.movingThisStairKeepsItsCurrent',
+                      message: 'Moving this stair keeps its current rise, steps, and run.',
+                    })}
               </p>
             </div>
           </PanelSection>
         )}
 
-      <PanelSection title="Opening">
+      <PanelSection title={i18n._({ id: 'node.stair.panel.opening', message: 'Opening' })}>
         <div className="space-y-3">
           {attachedDeck ? null : (
             <ToggleControl
               checked={(node.slabOpeningMode ?? 'none') === 'destination'}
-              label="Auto Cutout"
+              label={i18n._({ id: 'node.stair.panel.autoCutout', message: 'Auto Cutout' })}
               onChange={handleAutoCutoutChange}
             />
           )}
 
           <div className="space-y-1.5">
             <div className="px-1 text-[11px] text-muted-foreground uppercase tracking-[0.14em]">
-              From Level
+              {i18n._({ id: 'node.stair.panel.fromLevel', message: 'From Level' })}
             </div>
             <select
               className="h-9 w-full rounded-lg border border-border/50 bg-black/4 dark:bg-[#2C2C2E] px-3 text-foreground text-sm"
@@ -637,7 +797,7 @@ export default function StairPanel() {
 
           <div className="space-y-1.5">
             <div className="px-1 text-[11px] text-muted-foreground uppercase tracking-[0.14em]">
-              To
+              {i18n._({ id: 'node.stair.panel.to', message: 'To' })}
             </div>
             <select
               className="h-9 w-full rounded-lg border border-border/50 bg-black/4 dark:bg-[#2C2C2E] px-3 text-foreground text-sm"
@@ -651,7 +811,7 @@ export default function StairPanel() {
               ))}
               {candidateDecks.map((deck) => (
                 <option key={deck.id} value={deck.id}>
-                  {deck.name || 'Deck'}
+                  {deck.name || i18n._({ id: 'node.stair.panel.deck', message: 'Deck' })}
                 </option>
               ))}
             </select>
@@ -659,7 +819,7 @@ export default function StairPanel() {
 
           <div className="space-y-1.5">
             <div className="px-1 text-[11px] text-muted-foreground uppercase tracking-[0.14em]">
-              Rise
+              {i18n._({ id: 'node.stair.panel.rise', message: 'Rise' })}
             </div>
             <SegmentedControl
               onChange={(value) =>
@@ -668,18 +828,30 @@ export default function StairPanel() {
                 )
               }
               options={[
-                { label: attachedDeck ? 'Follows deck' : 'Follows level', value: 'follows' },
-                { label: 'Custom rise', value: 'custom' },
+                {
+                  label: attachedDeck
+                    ? i18n._({ id: 'node.stair.panel.followsDeck', message: 'Follows deck' })
+                    : i18n._({ id: 'node.stair.panel.followsLevel', message: 'Follows level' }),
+                  value: 'follows',
+                },
+                {
+                  label: i18n._({ id: 'node.stair.panel.customRise', message: 'Custom rise' }),
+                  value: 'custom',
+                },
               ]}
               value={node.totalRise == null ? 'follows' : 'custom'}
             />
             {node.totalRise == null ? (
               <div className="px-1 text-[11px] text-muted-foreground">
-                Currently {formatLinearMeasurement(resolvedRise, unit, metricNotation)}
+                {i18n._({
+                  id: 'node.panel.currently',
+                  message: 'Currently {value}',
+                  values: { value: formatLinearMeasurement(resolvedRise, unit, metricNotation) },
+                })}
               </div>
             ) : (
               <MetricControl
-                label="Rise"
+                label={i18n._({ id: 'node.stair.panel.rise', message: 'Rise' })}
                 min={minimumRise}
                 onChange={(value) => handleUpdate({ totalRise: value })}
                 precision={2}
@@ -700,13 +872,19 @@ export default function StairPanel() {
             <>
               <SegmentedControl
                 onChange={(value) => handleAutoCutoutChange(value === 'destination')}
-                options={STAIR_SLAB_OPENING_OPTIONS}
+                options={STAIR_SLAB_OPENING_OPTIONS.map((option) => ({
+                  ...option,
+                  label: i18n._(option.label),
+                }))}
                 value={node.slabOpeningMode ?? 'none'}
               />
 
               {(node.slabOpeningMode ?? 'none') === 'destination' ? (
                 <MetricControl
-                  label="Opening Offset"
+                  label={i18n._({
+                    id: 'node.stair.panel.openingOffset',
+                    message: 'Opening Offset',
+                  })}
                   min={0}
                   onChange={(value) => handleUpdate({ openingOffset: value })}
                   precision={2}
@@ -722,17 +900,20 @@ export default function StairPanel() {
             <>
               <div className="space-y-1.5">
                 <div className="px-1 text-[11px] text-muted-foreground uppercase tracking-[0.14em]">
-                  Landing
+                  {i18n._({ id: 'node.stair.panel.landing', message: 'Landing' })}
                 </div>
                 <SegmentedControl
                   onChange={(value) => handleUpdate({ topLandingMode: value })}
-                  options={TOP_LANDING_MODE_OPTIONS}
+                  options={TOP_LANDING_MODE_OPTIONS.map((option) => ({
+                    ...option,
+                    label: i18n._(option.label),
+                  }))}
                   value={node.topLandingMode ?? 'none'}
                 />
               </div>
               {(node.topLandingMode ?? 'none') === 'integrated' && (
                 <MetricControl
-                  label="Top Landing"
+                  label={i18n._({ id: 'node.stair.panel.topLanding', message: 'Top Landing' })}
                   max={Math.PI * 2 * resolveStairArcDimensions(node, resolvedRise).walkingRadius}
                   min={0.001}
                   onChange={(value) => handleUpdate({ topLandingDepth: value })}
@@ -748,7 +929,7 @@ export default function StairPanel() {
       </PanelSection>
 
       {node.stairType === 'straight' && (
-        <PanelSection title="Segments">
+        <PanelSection title={i18n._({ id: 'node.stair.panel.segments', message: 'Segments' })}>
           <div className="flex flex-col gap-1">
             {segments.map((seg, i) => (
               <button
@@ -757,20 +938,33 @@ export default function StairPanel() {
                 onClick={() => handleSelectSegment(seg.id)}
                 type="button"
               >
-                <span className="truncate">{seg.name || `Segment ${i + 1}`}</span>
-                <span className="text-muted-foreground text-xs capitalize">{seg.segmentType}</span>
+                <span className="truncate">
+                  {seg.name ||
+                    i18n._({
+                      id: 'node.segmentNumber',
+                      message: 'Segment {number}',
+                      values: { number: i + 1 },
+                    })}
+                </span>
+                <span className="text-muted-foreground text-xs">
+                  {i18n._({
+                    id: 'node.stair.panel.segmentType',
+                    message: '{type, select, landing {Landing} other {Stair}}',
+                    values: { type: seg.segmentType },
+                  })}
+                </span>
               </button>
             ))}
           </div>
           <div className="flex gap-1.5">
             <ActionButton
               icon={<Plus className="h-3.5 w-3.5" />}
-              label="Add flight"
+              label={i18n._({ id: 'node.stair.panel.addFlight', message: 'Add flight' })}
               onClick={handleAddFlight}
             />
             <ActionButton
               icon={<Plus className="h-3.5 w-3.5" />}
-              label="Add landing"
+              label={i18n._({ id: 'node.stair.panel.addLanding', message: 'Add landing' })}
               onClick={handleAddLanding}
             />
           </div>
@@ -778,9 +972,9 @@ export default function StairPanel() {
       )}
 
       {(node.stairType === 'curved' || node.stairType === 'spiral') && (
-        <PanelSection title="Geometry">
+        <PanelSection title={i18n._({ id: 'node.stair.panel.geometry', message: 'Geometry' })}>
           <MetricControl
-            label="Width"
+            label={i18n._({ id: 'node.stair.panel.width', message: 'Width' })}
             min={0.001}
             onChange={(value) => handleUpdate({ width: value })}
             precision={2}
@@ -789,7 +983,7 @@ export default function StairPanel() {
             value={node.width ?? 1}
           />
           <MetricControl
-            label="Steps"
+            label={i18n._({ id: 'node.stair.panel.steps', message: 'Steps' })}
             min={2}
             onChange={(value) => handleUpdate({ stepCount: Math.max(2, Math.round(value)) })}
             precision={0}
@@ -800,13 +994,13 @@ export default function StairPanel() {
           {node.stairType !== 'spiral' && (
             <ToggleControl
               checked={node.fillToFloor ?? true}
-              label="Fit To Floor"
+              label={i18n._({ id: 'node.stair.panel.fitToFloor', message: 'Fit To Floor' })}
               onChange={(checked) => handleUpdate({ fillToFloor: checked })}
             />
           )}
           {(node.stairType === 'spiral' || !(node.fillToFloor ?? true)) && (
             <MetricControl
-              label="Thickness"
+              label={i18n._({ id: 'node.stair.panel.thickness', message: 'Thickness' })}
               min={0.001}
               onChange={(value) => handleUpdate({ thickness: value })}
               precision={2}
@@ -816,7 +1010,7 @@ export default function StairPanel() {
             />
           )}
           <MetricControl
-            label="Inner Radius"
+            label={i18n._({ id: 'node.stair.panel.innerRadius', message: 'Inner Radius' })}
             min={0.001}
             onChange={(value) => handleUpdate({ innerRadius: value })}
             precision={2}
@@ -832,12 +1026,21 @@ export default function StairPanel() {
               })
             }
             options={[
-              { label: 'Clockwise', value: 'positive' },
-              { label: 'Counterclockwise', value: 'negative' },
+              {
+                label: i18n._({ id: 'node.stair.panel.clockwise', message: 'Clockwise' }),
+                value: 'positive',
+              },
+              {
+                label: i18n._({
+                  id: 'node.stair.panel.counterclockwise',
+                  message: 'Counterclockwise',
+                }),
+                value: 'negative',
+              },
             ]}
           />
           <SliderControl
-            label="Sweep"
+            label={i18n._({ id: 'node.stair.panel.sweep', message: 'Sweep' })}
             min={0.01}
             onChange={(degrees) =>
               handleUpdate({
@@ -853,12 +1056,12 @@ export default function StairPanel() {
             <>
               <ToggleControl
                 checked={node.showCenterColumn ?? true}
-                label="Center Column"
+                label={i18n._({ id: 'node.stair.panel.centerColumn', message: 'Center Column' })}
                 onChange={(checked) => handleUpdate({ showCenterColumn: checked })}
               />
               <ToggleControl
                 checked={node.showStepSupports ?? true}
-                label="Step Supports"
+                label={i18n._({ id: 'node.stair.panel.stepSupports', message: 'Step Supports' })}
                 onChange={(checked) => handleUpdate({ showStepSupports: checked })}
               />
             </>
@@ -866,13 +1069,15 @@ export default function StairPanel() {
         </PanelSection>
       )}
 
-      <PanelSection title="Construction">
+      <PanelSection
+        title={i18n._({ id: 'node.stair.panel.construction', message: 'Construction' })}
+      >
         <StairConstructionControls
           node={node}
           onChange={(construction) => handleUpdate({ construction })}
         />
       </PanelSection>
-      <PanelSection title="Position">
+      <PanelSection title={i18n._({ id: 'node.stair.panel.position', message: 'Position' })}>
         <SliderControl
           label="X"
           onChange={(v) => {
@@ -910,7 +1115,7 @@ export default function StairPanel() {
           value={node.position[2]}
         />
         <SliderControl
-          label="Rotation"
+          label={i18n._({ id: 'node.stair.panel.rotation', message: 'Rotation' })}
           max={180}
           min={-180}
           onChange={(degrees) => {
@@ -939,28 +1144,34 @@ export default function StairPanel() {
         </div>
       </PanelSection>
 
-      <PanelSection title="Railing">
+      <PanelSection title={i18n._({ id: 'node.stair.panel.railing', message: 'Railing' })}>
         <StairRailingControls node={node} onChange={handleUpdate} />
         <SegmentedControl
           onChange={(value) => handleUpdate({ railingMode: value })}
-          options={RAILING_MODE_OPTIONS}
+          options={RAILING_MODE_OPTIONS.map((option) => ({
+            ...option,
+            label: i18n._(option.label),
+          }))}
           value={node.railingMode ?? 'none'}
         />
         {(node.railingMode ?? 'none') !== 'none' && (
           <>
             <SelectControl
-              label="Style"
+              label={i18n._({ id: 'node.stair.panel.style', message: 'Style' })}
               onChange={(value) =>
                 handleUpdate({
                   railingStyle: value,
                   ...(value === 'glass' || value === 'metal' ? { railingPath: 'continuous' } : {}),
                 })
               }
-              options={RAILING_STYLE_OPTIONS}
+              options={RAILING_STYLE_OPTIONS.map((option) => ({
+                ...option,
+                label: i18n._(option.label),
+              }))}
               value={node.railingStyle ?? 'balusters'}
             />
             <SliderControl
-              label="Height"
+              label={i18n._({ id: 'node.stair.panel.height', message: 'Height' })}
               min={0.001}
               onChange={(value) => handleUpdate({ railingHeight: value })}
               precision={2}
@@ -972,18 +1183,22 @@ export default function StairPanel() {
         )}
       </PanelSection>
 
-      <PanelSection title="Actions">
+      <PanelSection title={i18n._({ id: 'node.stair.panel.actions', message: 'Actions' })}>
         <ActionGroup>
-          <ActionButton icon={<Move className="h-3.5 w-3.5" />} label="Move" onClick={handleMove} />
+          <ActionButton
+            icon={<Move className="h-3.5 w-3.5" />}
+            label={i18n._({ id: 'node.stair.panel.move', message: 'Move' })}
+            onClick={handleMove}
+          />
           <ActionButton
             icon={<Copy className="h-3.5 w-3.5" />}
-            label="Duplicate"
+            label={i18n._({ id: 'node.stair.panel.duplicate', message: 'Duplicate' })}
             onClick={handleDuplicate}
           />
           <ActionButton
             className="hover:bg-red-500/20"
             icon={<Trash2 className="h-3.5 w-3.5 text-red-600 dark:text-red-400" />}
-            label="Delete"
+            label={i18n._({ id: 'node.stair.panel.delete', message: 'Delete' })}
             onClick={handleDelete}
           />
         </ActionGroup>

@@ -3,6 +3,7 @@ import {
   type AnyNode,
   type AnyNodeId,
   BuildingNode,
+  createI18n,
   createZone,
   floorFootprintSupportClass,
   generateId,
@@ -35,6 +36,8 @@ import {
   thickFloorAdvice,
 } from './floor-footprints'
 import { applyRoomPlan } from './room-structure-commands'
+
+const english = createI18n()
 
 const GROUND = 'level_support_ground'
 const UPPER = 'level_support_upper'
@@ -98,8 +101,10 @@ describe('Floor & foundation support class (point 5)', () => {
   })
 
   test('the kicker says where the plate is and what it rests on', () => {
-    expect(floorPlateKicker(nodes(), plateOf(GROUND, 'Living'))).toBe('Floor plate · Ground floor')
-    expect(floorPlateKicker(nodes(), plateOf(UPPER, 'Bedroom'))).toBe(
+    expect(floorPlateKicker(nodes(), plateOf(GROUND, 'Living'), english, 'en')).toBe(
+      'Floor plate · Ground floor',
+    )
+    expect(floorPlateKicker(nodes(), plateOf(UPPER, 'Bedroom'), english, 'en')).toBe(
       'Floor plate · Floor 1 · rests on Ground floor',
     )
   })
@@ -183,7 +188,6 @@ describe('Floor & foundation panel (point 5)', () => {
     expect(ground).toMatchObject({ upper: false, preset: 'ground', underFloor: true, minHeight: 0 })
     const upper = floorFoundationModel(nodes(), plateOf(UPPER, 'Bedroom'))
     expect(upper).toMatchObject({ upper: true, underFloor: false, thickFloor: false })
-    expect(upper.kicker).toBe('Floor plate · Floor 1 · rests on Ground floor')
   })
 
   test('on the ground the two inputs are slab thickness and foundation height; the top follows', () => {

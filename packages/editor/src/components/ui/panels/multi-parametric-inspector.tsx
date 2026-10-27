@@ -6,7 +6,7 @@ import {
   nodeRegistry,
   type ParamField,
   type ParametricDescriptor,
-  useScene,
+  useScene, usePascalI18n,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useMemo } from 'react'
@@ -32,8 +32,10 @@ import { getTypeDisplay } from './node-display'
 import { ParametricFieldControl } from './parametric-field-control'
 import { PanelWrapper } from './panel-wrapper'
 import { formatSelectionBreakdown } from './selection-breakdown'
+import { inspectorGroupDescriptor } from '../../../i18n/node-messages'
 
 export function MultiParametricInspector({ footer }: { footer?: React.ReactNode }) {
+  const i18n = usePascalI18n()
   const selectedIds = useViewer((s) => s.selection.selectedIds)
   const setSelection = useViewer((s) => s.setSelection)
   const nodeIds = useScene(
@@ -62,16 +64,14 @@ export function MultiParametricInspector({ footer }: { footer?: React.ReactNode 
 
   if (nodeIds.length < 2 || !nodeType || !parametrics) return null
 
-  const display = getTypeDisplay(nodeType)
+  const display = getTypeDisplay(nodeType, i18n)
   const title = matchedGroup ? `${matchedGroup.label} · ${breakdown}` : breakdown || display.label
 
   return (
     <PanelWrapper footer={footer} icon={display.icon} onClose={handleClose} title={title} width={320}>
       {matchedGroup && (
         <div className="border-border/50 border-b px-3 py-2 text-muted-foreground text-xs">
-          {matchedGroup.label} (session only). Plain click reselects all members. Not saved with the
-          project.
-        </div>
+          {i18n._({ id: 'editor.panels.multiParametricInspector.labelSessionOnlyPlainClickReselects', message: '{label} (session only). Plain click reselects all members. Not saved with the project.', values: { label: matchedGroup.label } })}</div>
       )}
       {parametrics.groups.map((group, gi) => (
         <MultiGroupFields
@@ -81,7 +81,7 @@ export function MultiParametricInspector({ footer }: { footer?: React.ReactNode 
           nodeIds={nodeIds}
           nodeType={nodeType}
           parametrics={parametrics}
-          title={group.label}
+          title={i18n._(inspectorGroupDescriptor(group.label))}
         >
           {hasKindControls ? (
             <MultiKindControls nodeIds={nodeIds} nodeType={nodeType} section={group.label} />

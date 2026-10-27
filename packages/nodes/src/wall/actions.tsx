@@ -3,6 +3,7 @@ import {
   type AnyNodeId,
   planWallMerge,
   runAsSingleSceneHistoryStep,
+  usePascalI18n,
   useScene,
 } from '@pascal-app/core'
 import {
@@ -32,6 +33,7 @@ export default function WallActions() {
 }
 
 function SplitWallAction() {
+  const i18n = usePascalI18n()
   const selected = useViewer((s) => s.selection.selectedIds)
   const wall = useScene((s) =>
     selected.length === 1 ? s.nodes[selected[0] as AnyNodeId] : undefined,
@@ -41,8 +43,8 @@ function SplitWallAction() {
   return (
     <button
       type="button"
-      aria-label="Split wall"
-      title="Split wall"
+      aria-label={i18n._({ id: 'node.wall.actions.splitWall', message: 'Split wall' })}
+      title={i18n._({ id: 'node.wall.actions.splitWall', message: 'Split wall' })}
       disabled={readOnly}
       className={BUTTON}
       onClick={(event) => {
@@ -57,6 +59,7 @@ function SplitWallAction() {
 
 /** Joins selected walls that continue each other into one — the inverse of Split. */
 function MergeWallsAction() {
+  const i18n = usePascalI18n()
   const selected = useViewer((s) => s.selection.selectedIds) as AnyNodeId[]
   const nodes = useScene((s) => s.nodes)
   const readOnly = useScene((s) => s.readOnly)
@@ -75,8 +78,10 @@ function MergeWallsAction() {
   const button = (
     <button
       type="button"
-      aria-label="Merge walls"
-      title={reason ? undefined : 'Merge walls'}
+      aria-label={i18n._({ id: 'node.wall.actions.mergeWalls', message: 'Merge walls' })}
+      title={
+        reason ? undefined : i18n._({ id: 'node.wall.actions.mergeWalls', message: 'Merge walls' })
+      }
       disabled={readOnly || reason !== null}
       className={BUTTON}
       onClick={(event) => {

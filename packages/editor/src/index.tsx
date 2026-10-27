@@ -394,6 +394,7 @@ export { usePlacementNotice } from './hooks/use-placement-notice'
 export { useReducedMotion } from './hooks/use-reduced-motion'
 export { useSelectedRoom } from './hooks/use-selected-room'
 export { type Selection, useSelection } from './hooks/use-selection'
+export { localizedLevelName } from './i18n/level-name'
 export {
   messageSlug,
   nodeDescriptionDescriptor,
@@ -814,6 +815,7 @@ export { clearRoofDuplicateMetadata, duplicateRoofSubtree } from './lib/roof-dup
 // placement coordinator's roof-wall strategy.
 export { hasRoofFaceChildOverlap, type RoofWallHit, resolveRoofWallHit } from './lib/roof-wall-hit'
 export { WALL_PUSH_AFFORDANCE, type WallPushArrowPayload } from './lib/room-handle-drag'
+export { displayRoomName } from './lib/room-name-messages'
 export type { RoomKey, RoomSelectionRecord } from './lib/room-selection'
 export { popRoomSelection, selectRoom } from './lib/room-selection-commands'
 export {

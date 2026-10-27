@@ -67,6 +67,7 @@ export const ViewerSceneHeader = ({
   source: sourceProp,
 }: ViewerSceneHeaderProps) => {
   const i18n = usePascalI18n()
+  const catalogVersion = i18n.getVersion()
   const locale = useLocale()
   const sceneNodes = useScene((s) => s.nodes)
   const source = useMemo<ViewerSource>(
@@ -80,10 +81,10 @@ export const ViewerSceneHeader = ({
 
   const crumbs = useMemo(
     () =>
-      viewerBreadcrumb(selection, focusedUnitId, nodes, (nodeId, levelId) =>
+      viewerBreadcrumb(selection, focusedUnitId, nodes, i18n, (nodeId, levelId) =>
         roomOfObject(nodeId, levelId, source),
       ),
-    [selection, focusedUnitId, nodes, source],
+    [selection, focusedUnitId, nodes, source, i18n, locale, catalogVersion],
   )
   const buildingId = crumbs.find((crumb) => crumb.kind === 'building')?.id ?? null
   // Highest first so the list reads top-down like a building section.
@@ -96,8 +97,8 @@ export const ViewerSceneHeader = ({
       .sort((a, b) => b.level - a.level)
   }, [buildingId, nodes])
   const sections = useMemo(
-    () => (selection.levelId ? viewerSidebarSections(selection.levelId, nodes) : []),
-    [selection.levelId, nodes],
+    () => (selection.levelId ? viewerSidebarSections(selection.levelId, nodes, i18n) : []),
+    [selection.levelId, nodes, i18n, locale, catalogVersion],
   )
 
   const handleCrumb = (crumb: ViewerCrumb) => {

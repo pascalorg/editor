@@ -5,8 +5,8 @@ import {
   adjacentLevelId,
   area,
   floorOpeningHints,
-  getLevelDisplayName,
-  useScene,
+  useScene, usePascalI18n,
+  useLocale,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import {
@@ -18,6 +18,9 @@ import { formatAreaLabel } from '../../../lib/measurements'
 import { Button } from '../primitives/button'
 import { Switch } from '../primitives/switch'
 import { PanelWrapper } from './panel-wrapper'
+import { localizedLevelName } from '../../../i18n/level-name'
+import { nodeLabel } from '../../../i18n/node-messages'
+import { displayRoomName } from '../../../lib/room-name-messages'
 
 /**
  * A floor (or ceiling) opening: where it is, what it cuts, and the switch for
@@ -27,6 +30,8 @@ import { PanelWrapper } from './panel-wrapper'
  * handles in the scene. Done and Delete return to the room.
  */
 export function FloorOpeningPanel({ openingId }: { openingId: string }) {
+  const i18n = usePascalI18n()
+  const locale = useLocale()
   const nodes = useScene((state) => state.nodes)
   const unit = useViewer((s) => s.unit)
   const readOnly = useScene((state) => state.readOnly)
@@ -35,7 +40,13 @@ export function FloorOpeningPanel({ openingId }: { openingId: string }) {
   const onCeiling = opening.drawnOn === 'ceiling'
   const zoneId = openingRoom(nodes, opening)
   const zone = zoneId ? nodes[zoneId as AnyNodeId] : undefined
-  const roomName = zone?.type === 'zone' ? zone.name?.trim() || 'Room' : null
+  const storedRoomName = zone?.type === 'zone' ? zone.name?.trim() : undefined
+  const roomName =
+    zone?.type !== 'zone'
+      ? null
+      : storedRoomName
+        ? displayRoomName(storedRoomName, i18n)
+        : i18n._({ id: 'editor.panels.floorOpeningPanel.room', message: 'Room' })
   const level = opening.parentId ? nodes[opening.parentId as AnyNodeId] : undefined
   const adjacentId = opening.parentId
     ? adjacentLevelId(nodes, opening.parentId, onCeiling ? 1 : -1)
@@ -47,19 +58,35 @@ export function FloorOpeningPanel({ openingId }: { openingId: string }) {
     !!opening.ownerId &&
     nodes[opening.ownerId as AnyNodeId]?.type === opening.source
   const hints = floorOpeningHints(nodes, opening)
-  const title = opening.source === 'stair'
-    ? 'Stair opening'
-    : opening.source === 'elevator'
-      ? 'Elevator opening'
-      : onCeiling ? 'Ceiling opening' : 'Floor opening'
-  const kicker = [
-    'Opening',
-    roomName ? `in ${roomName}` : null,
-    level?.type === 'level' ? getLevelDisplayName(level) : null,
-  ]
-    .filter(Boolean)
-    .join(' · ')
-  const switchLabel = onCeiling ? 'Also cut the floor above' : 'Also cut the ceiling below'
+  const title = i18n._({
+    id: 'editor.panels.floorOpeningPanel.title',
+    message:
+      '{source, select, stair {Stair opening} elevator {Elevator opening} ceiling {Ceiling opening} other {Floor opening}}',
+    values: { source: opening.source === 'stair' || opening.source === 'elevator' ? opening.source : onCeiling ? 'ceiling' : 'floor' },
+  })
+  const levelName = level?.type === 'level' ? localizedLevelName(level, i18n, locale) : null
+  const kicker = roomName
+    ? levelName
+      ? i18n._({
+          id: 'editor.panels.floorOpeningPanel.kickerRoomLevel',
+          message: 'Opening · in {room} · {level}',
+          values: { room: roomName, level: levelName },
+        })
+      : i18n._({
+          id: 'editor.panels.floorOpeningPanel.kickerRoom',
+          message: 'Opening · in {room}',
+          values: { room: roomName },
+        })
+    : levelName
+      ? i18n._({
+          id: 'editor.panels.floorOpeningPanel.kickerLevel',
+          message: 'Opening · {level}',
+          values: { level: levelName },
+        })
+      : i18n._({ id: 'editor.panels.floorOpeningPanel.kicker', message: 'Opening' })
+  const switchLabel = onCeiling
+    ? i18n._({ id: 'editor.panels.floorOpeningPanel.alsoCutTheFloorAbove', message: 'Also cut the floor above' })
+    : i18n._({ id: 'editor.panels.floorOpeningPanel.alsoCutTheCeilingBelow', message: 'Also cut the ceiling below' })
   const setAdjacent = (next: boolean) =>
     useScene.getState().updateNode(opening.id, { cutsAdjacent: next })
 
@@ -72,8 +99,17 @@ export function FloorOpeningPanel({ openingId }: { openingId: string }) {
     >
       <div className="flex flex-col gap-3 px-4 pt-3 pb-4 text-sm" data-floor-opening-panel={opening.id}>
         <p className="text-muted-foreground text-xs">
-          {formatAreaLabel(area([{ outer: opening.polygon, holes: [] }]), unit, 2)}
-          {owned ? ' · Shape follows its owner.' : ' · Drag its corners to change the shape.'}
+          {owned
+            ? i18n._({
+                id: 'editor.panels.floorOpeningPanel.areaOwned',
+                message: '{area} · Shape follows its owner.',
+                values: { area: formatAreaLabel(area([{ outer: opening.polygon, holes: [] }]), unit, 2) },
+              })
+            : i18n._({
+                id: 'editor.panels.floorOpeningPanel.areaDragCorners',
+                message: '{area} · Drag its corners to change the shape.',
+                values: { area: formatAreaLabel(area([{ outer: opening.polygon, holes: [] }]), unit, 2) },
+              })}
         </p>
         {owned && (
           <button
@@ -82,12 +118,14 @@ export function FloorOpeningPanel({ openingId }: { openingId: string }) {
             onClick={() => useViewer.getState().setSelection({ selectedIds: [opening.ownerId!] })}
             type="button"
           >
-            Owned by {opening.source === 'stair' ? 'Staircase' : 'Elevator'}
+            {opening.source === 'stair'
+              ? i18n._({ id: 'editor.panels.floorOpeningPanel.ownedByStaircase', message: 'Owned by Staircase' })
+              : i18n._({ id: 'editor.panels.floorOpeningPanel.ownedByElevator', message: 'Owned by Elevator' })}
           </button>
         )}
         {hosted ? (
           <p className="text-muted-foreground text-xs" data-opening-hosted>
-            A hatch in the mezzanine: it cuts only the mezzanine’s floor.
+            {i18n._({ id: 'editor.panels.floorOpeningPanel.aHatchInTheMezzanineIt', message: 'A hatch in the mezzanine: it cuts only the mezzanine’s floor.' })}
           </p>
         ) : owned ? null : (
           <label className="flex items-start gap-3" data-opening-adjacent>
@@ -95,10 +133,14 @@ export function FloorOpeningPanel({ openingId }: { openingId: string }) {
               <span className="font-medium text-[13px] text-foreground">{switchLabel}</span>
               <span className="text-muted-foreground text-xs">
                 {adjacent?.type === 'level'
-                  ? `On ${getLevelDisplayName(adjacent)}, as one void with this opening.`
+                  ? i18n._({
+                      id: 'editor.panels.floorOpeningPanel.oneVoidWith',
+                      message: 'On {level}, as one void with this opening.',
+                      values: { level: localizedLevelName(adjacent, i18n, locale) },
+                    })
                   : onCeiling
-                    ? 'There is no floor above this storey.'
-                    : 'There is no storey below.'}
+                    ? i18n._({ id: 'editor.panels.floorOpeningPanel.thereIsNoFloorAboveThis', message: 'There is no floor above this storey.' })
+                    : i18n._({ id: 'editor.panels.floorOpeningPanel.thereIsNoStoreyBelow', message: 'There is no storey below.' })}
               </span>
             </span>
             <Switch
@@ -123,7 +165,7 @@ export function FloorOpeningPanel({ openingId }: { openingId: string }) {
             type="button"
             variant="outline"
           >
-            Done
+            {i18n._({ id: 'editor.panels.floorOpeningPanel.done', message: 'Done' })}
           </Button>
           {!owned && <Button
             className="flex-1 rounded-full"
@@ -134,7 +176,7 @@ export function FloorOpeningPanel({ openingId }: { openingId: string }) {
             type="button"
             variant="outline"
           >
-            Delete
+            {i18n._({ id: 'editor.panels.floorOpeningPanel.delete', message: 'Delete' })}
           </Button>}
         </div>
       </div>

@@ -1,6 +1,6 @@
 'use client'
 
-import { type AnyNode, type SiteNode, useScene } from '@pascal-app/core'
+import { type AnyNode, type SiteNode, usePascalI18n, useScene } from '@pascal-app/core'
 import {
   ActionButton,
   ActionGroup,
@@ -35,6 +35,7 @@ interface Suggestion {
  * (`setParcelProvider`) and is hidden when the host has none.
  */
 export function SiteNodePanel() {
+  const i18n = usePascalI18n()
   const selectedId = useViewer((s) => s.selection.selectedIds[0])
   // The selected site node, else THE site node: the sidebar's Site header
   // mounts this panel directly, where nothing may be selected.
@@ -107,11 +108,18 @@ export function SiteNodePanel() {
     if (!node) return
     const address = query.trim()
     if (!address) {
-      setStatus('Type an address first.')
+      setStatus(
+        i18n._({ id: 'node.site.panel.typeAnAddressFirst', message: 'Type an address first.' }),
+      )
       return
     }
     setBusy(true)
-    setStatus('Looking up the parcel and the streets around it…')
+    setStatus(
+      i18n._({
+        id: 'node.site.panel.lookingUpTheParcel',
+        message: 'Looking up the parcel and the streets around it…',
+      }),
+    )
     try {
       const result = await dropInLot(
         {
@@ -127,11 +135,15 @@ export function SiteNodePanel() {
       )
       setStatus(result.message)
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : 'Parcel lookup failed.')
+      setStatus(
+        error instanceof Error
+          ? error.message
+          : i18n._({ id: 'node.site.panel.parcelLookupFailed', message: 'Parcel lookup failed.' }),
+      )
     } finally {
       setBusy(false)
     }
-  }, [node, picked, query])
+  }, [node, picked, query, i18n])
 
   if (!node) return null
 
@@ -171,7 +183,7 @@ export function SiteNodePanel() {
               },
             })
           }}
-          placeholder={optional ? 'side' : '0'}
+          placeholder={optional ? i18n._({ id: 'node.site.panel.side', message: 'side' }) : '0'}
         />
         <span className="text-muted-foreground text-xs">ft</span>
       </span>
@@ -179,18 +191,23 @@ export function SiteNodePanel() {
   )
 
   return (
-    <PanelWrapper title="Site">
+    <PanelWrapper title={i18n._({ id: 'node.site.panel.site', message: 'Site' })}>
       {parcelProvider ? (
-        <PanelSection title="Address">
+        <PanelSection title={i18n._({ id: 'node.site.panel.address', message: 'Address' })}>
           <label className="space-y-1 text-sm">
-            <span className="text-muted-foreground">Street address</span>
+            <span className="text-muted-foreground">
+              {i18n._({ id: 'node.site.panel.streetAddress', message: 'Street address' })}
+            </span>
             <input
               className="w-full rounded-md border border-border/70 bg-background px-2 py-1.5 text-foreground"
               onChange={(event) => {
                 setQuery(event.target.value)
                 setPicked(null)
               }}
-              placeholder="1200 W Cass St, Tampa, FL"
+              placeholder={i18n._({
+                id: 'node.site.panel.n1200WCassStTampaFl',
+                message: '1200 W Cass St, Tampa, FL',
+              })}
               value={query}
             />
           </label>
@@ -218,7 +235,11 @@ export function SiteNodePanel() {
             <ActionButton
               disabled={busy}
               icon={<Search className="size-4" />}
-              label={busy ? 'Finding…' : 'Find parcel'}
+              label={
+                busy
+                  ? i18n._({ id: 'node.site.panel.finding', message: 'Finding…' })
+                  : i18n._({ id: 'node.site.panel.findParcel', message: 'Find parcel' })
+              }
               onClick={findParcel}
             />
           </ActionGroup>
@@ -227,18 +248,27 @@ export function SiteNodePanel() {
       ) : null}
 
       {node.parcel ? (
-        <PanelSection title="Parcel">
-          <Row label="APN" value={node.parcel.apn || '—'} />
-          <Row label="County" value={node.parcel.county || '—'} />
+        <PanelSection title={i18n._({ id: 'node.site.panel.parcel', message: 'Parcel' })}>
           <Row
-            label="Lot area"
+            label={i18n._({ id: 'node.site.panel.apn', message: 'APN' })}
+            value={node.parcel.apn || '—'}
+          />
+          <Row
+            label={i18n._({ id: 'node.site.panel.county', message: 'County' })}
+            value={node.parcel.county || '—'}
+          />
+          <Row
+            label={i18n._({ id: 'node.site.panel.lotArea', message: 'Lot area' })}
             value={
               node.parcel.lotAreaSqFt
                 ? `${Math.round(node.parcel.lotAreaSqFt).toLocaleString()} sq ft`
                 : '—'
             }
           />
-          <Row label="Source" value={node.parcel.layer || node.parcel.source || '—'} />
+          <Row
+            label={i18n._({ id: 'node.site.panel.source', message: 'Source' })}
+            value={node.parcel.layer || node.parcel.source || '—'}
+          />
           {node.parcel.notes?.length ? (
             <p className="text-muted-foreground text-xs leading-snug">
               {node.parcel.notes.join(' ')}
@@ -247,42 +277,60 @@ export function SiteNodePanel() {
         </PanelSection>
       ) : null}
 
-      <PanelSection title="Setbacks">
-        {setbackField('front', 'Front')}
-        {setbackField('side', 'Side')}
-        {setbackField('rear', 'Rear')}
-        {setbackField('left', 'Left (override)', true)}
-        {setbackField('right', 'Right (override)', true)}
+      <PanelSection title={i18n._({ id: 'node.site.panel.setbacks', message: 'Setbacks' })}>
+        {setbackField('front', i18n._({ id: 'node.site.setback.front', message: 'Front' }))}
+        {setbackField('side', i18n._({ id: 'node.site.setback.side', message: 'Side' }))}
+        {setbackField('rear', i18n._({ id: 'node.site.setback.rear', message: 'Rear' }))}
+        {setbackField(
+          'left',
+          i18n._({ id: 'node.site.setback.leftOverride', message: 'Left (override)' }),
+          true,
+        )}
+        {setbackField(
+          'right',
+          i18n._({ id: 'node.site.setback.rightOverride', message: 'Right (override)' }),
+          true,
+        )}
         <label className="space-y-1 text-sm">
-          <span className="text-muted-foreground">Source / citation</span>
+          <span className="text-muted-foreground">
+            {i18n._({ id: 'node.site.panel.sourceCitation', message: 'Source / citation' })}
+          </span>
           <input
             className="w-full rounded-md border border-border/70 bg-background px-2 py-1.5 text-foreground"
             defaultValue={node.setbacksSource ?? ''}
             key={node.setbacksSource ?? ''}
             onBlur={(event) => update({ setbacksSource: event.target.value || undefined })}
-            placeholder="e.g. Tampa LDC §27-156"
+            placeholder={i18n._({
+              id: 'node.site.panel.eGTampaLdc27156',
+              message: 'e.g. Tampa LDC §27-156',
+            })}
           />
         </label>
         <label className="space-y-1 text-sm">
-          <span className="text-muted-foreground">Zone</span>
+          <span className="text-muted-foreground">
+            {i18n._({ id: 'node.site.panel.zone', message: 'Zone' })}
+          </span>
           <input
             className="w-full rounded-md border border-border/70 bg-background px-2 py-1.5 text-foreground"
             defaultValue={node.zone ?? ''}
             key={node.zone ?? ''}
             onBlur={(event) => update({ zone: event.target.value || undefined })}
-            placeholder="e.g. RS-60"
+            placeholder={i18n._({ id: 'node.site.panel.eGRs60', message: 'e.g. RS-60' })}
           />
         </label>
       </PanelSection>
 
-      <PanelSection title="Project look">
+      <PanelSection title={i18n._({ id: 'node.site.panel.projectLook', message: 'Project look' })}>
         <p className="text-muted-foreground text-xs">
-          Save the current lighting and display as this project's default. Personal display changes
-          stay in this browser.
+          {i18n._({
+            id: 'node.site.panel.saveTheCurrentLightingAndDisplay',
+            message:
+              "Save the current lighting and display as this project's default. Personal display changes stay in this browser.",
+          })}
         </p>
         <ActionGroup>
           <ActionButton
-            label="Save current look"
+            label={i18n._({ id: 'node.site.panel.saveCurrentLook', message: 'Save current look' })}
             onClick={() => {
               const viewer = useViewer.getState()
               const look = viewer.sceneAppearance
@@ -310,32 +358,45 @@ export function SiteNodePanel() {
             }}
           />
           <ActionButton
-            label="Use project look"
+            label={i18n._({ id: 'node.site.panel.useProjectLook', message: 'Use project look' })}
             onClick={() => useViewer.getState().resetProjectLook()}
           />
         </ActionGroup>
       </PanelSection>
 
-      <PanelSection title="Terrain">
+      <PanelSection title={i18n._({ id: 'node.site.panel.terrain', message: 'Terrain' })}>
         <label className="flex items-center gap-2 text-sm">
           <input
             checked={node.showGround !== false}
             onChange={(event) => update({ showGround: event.target.checked })}
             type="checkbox"
           />
-          <span className="text-muted-foreground">Show ground</span>
+          <span className="text-muted-foreground">
+            {i18n._({ id: 'node.site.panel.showGround', message: 'Show ground' })}
+          </span>
         </label>
         <label className="space-y-1 text-sm">
-          <span className="text-muted-foreground">Contour interval (site plan and 3D)</span>
+          <span className="text-muted-foreground">
+            {i18n._({
+              id: 'node.site.panel.contourIntervalSitePlanAnd3d',
+              message: 'Contour interval (site plan and 3D)',
+            })}
+          </span>
           <select
             className="w-full rounded-md border border-border/70 bg-background px-2 py-1.5 text-foreground"
             onChange={(event) => update({ contourIntervalIn: Number(event.target.value) })}
             value={String(node.contourIntervalIn ?? 12)}
           >
-            <option value="0">none</option>
-            <option value="6">every 6 in</option>
-            <option value="12">every 12 in</option>
-            <option value="24">every 24 in</option>
+            <option value="0">{i18n._({ id: 'node.site.panel.none', message: 'none' })}</option>
+            <option value="6">
+              {i18n._({ id: 'node.site.panel.every6In', message: 'every 6 in' })}
+            </option>
+            <option value="12">
+              {i18n._({ id: 'node.site.panel.every12In', message: 'every 12 in' })}
+            </option>
+            <option value="24">
+              {i18n._({ id: 'node.site.panel.every24In', message: 'every 24 in' })}
+            </option>
           </select>
         </label>
         <label className="flex items-center gap-2 text-sm">
@@ -344,23 +405,44 @@ export function SiteNodePanel() {
             onChange={(event) => update({ contours3d: event.target.checked })}
             type="checkbox"
           />
-          <span className="text-muted-foreground">Show the contour lines in 3D</span>
+          <span className="text-muted-foreground">
+            {i18n._({
+              id: 'node.site.panel.showTheContourLinesIn3d',
+              message: 'Show the contour lines in 3D',
+            })}
+          </span>
         </label>
         {node.terrainContours ? (
           <p className="text-muted-foreground text-xs">
-            {node.terrainContours.lines.length} surveyed lines at {node.terrainContours.intervalFt}{' '}
-            ft ({node.terrainContours.datum}) — {node.terrainContours.source ?? 'survey'}
+            {i18n._({
+              id: 'node.site.panel.surveyedContours',
+              message:
+                '{count, plural, one {# surveyed line} other {# surveyed lines}} at {interval} ft ({datum}) — {source}',
+              values: {
+                count: node.terrainContours.lines.length,
+                interval: node.terrainContours.intervalFt,
+                datum: node.terrainContours.datum,
+                source:
+                  node.terrainContours.source ??
+                  i18n._({ id: 'node.site.panel.survey', message: 'survey' }),
+              },
+            })}
           </p>
         ) : (
           <p className="text-muted-foreground text-xs">
-            No surveyed lines — contours are drawn from the sculpted ground.
+            {i18n._({
+              id: 'node.site.panel.noSurveyedLinesContoursAreDrawn',
+              message: 'No surveyed lines — contours are drawn from the sculpted ground.',
+            })}
           </p>
         )}
       </PanelSection>
 
-      <PanelSection title="Orientation">
+      <PanelSection title={i18n._({ id: 'node.site.panel.orientation', message: 'Orientation' })}>
         <label className="space-y-1 text-sm">
-          <span className="text-muted-foreground">Front (street) edge</span>
+          <span className="text-muted-foreground">
+            {i18n._({ id: 'node.site.panel.frontStreetEdge', message: 'Front (street) edge' })}
+          </span>
           <select
             className="w-full rounded-md border border-border/70 bg-background px-2 py-1.5 text-foreground"
             onChange={(event) =>
@@ -370,7 +452,12 @@ export function SiteNodePanel() {
             }
             value={node.frontEdge == null ? '' : String(node.frontEdge)}
           >
-            <option value="">Auto — most north-facing edge</option>
+            <option value="">
+              {i18n._({
+                id: 'node.site.panel.autoMostNorthFacingEdge',
+                message: 'Auto — most north-facing edge',
+              })}
+            </option>
             {edges.map((edge) => (
               <option key={edge.index} value={String(edge.index)}>
                 {edge.label}
@@ -379,7 +466,9 @@ export function SiteNodePanel() {
           </select>
         </label>
         <label className="flex items-center justify-between gap-3 text-sm">
-          <span className="text-muted-foreground">North rotation</span>
+          <span className="text-muted-foreground">
+            {i18n._({ id: 'node.site.panel.northRotation', message: 'North rotation' })}
+          </span>
           <span className="flex items-center gap-1">
             <input
               className="w-20 rounded-md border border-border/70 bg-background px-2 py-1 text-right text-foreground"

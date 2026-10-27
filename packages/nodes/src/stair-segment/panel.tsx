@@ -5,12 +5,14 @@ import {
   type AnyNodeId,
   type AttachmentSide,
   DEFAULT_LEVEL_HEIGHT,
+  type MessageDescriptor,
   planStairFlightHeightEdit,
   resolveStairTotalRise,
   type StairSegmentNode,
   type StairSegmentType,
   stairSegmentConstructionError,
   stairSegmentDetailError,
+  usePascalI18n,
   useScene,
 } from '@pascal-app/core'
 import {
@@ -30,18 +32,22 @@ import { Copy, Move, Trash2 } from 'lucide-react'
 import { useCallback } from 'react'
 import { StairConstructionControls } from '../stair/construction-controls'
 
-const SEGMENT_TYPE_OPTIONS: { label: string; value: StairSegmentType }[] = [
-  { label: 'Flight', value: 'stair' },
-  { label: 'Landing', value: 'landing' },
+const SEGMENT_TYPE_OPTIONS: { label: MessageDescriptor; value: StairSegmentType }[] = [
+  { label: /* i18n */ { id: 'node.stairSegment.panel.flight', message: 'Flight' }, value: 'stair' },
+  {
+    label: /* i18n */ { id: 'node.stairSegment.panel.landing', message: 'Landing' },
+    value: 'landing',
+  },
 ]
 
-const ATTACHMENT_SIDE_OPTIONS: { label: string; value: AttachmentSide }[] = [
-  { label: 'Front', value: 'front' },
-  { label: 'Left', value: 'left' },
-  { label: 'Right', value: 'right' },
+const ATTACHMENT_SIDE_OPTIONS: { label: MessageDescriptor; value: AttachmentSide }[] = [
+  { label: /* i18n */ { id: 'node.stairSegment.panel.front', message: 'Front' }, value: 'front' },
+  { label: /* i18n */ { id: 'node.stairSegment.panel.left', message: 'Left' }, value: 'left' },
+  { label: /* i18n */ { id: 'node.stairSegment.panel.right', message: 'Right' }, value: 'right' },
 ]
 
 export default function StairSegmentPanel() {
+  const i18n = usePascalI18n()
   const selectedId = useViewer((s) => s.selection.selectedIds[0])
   const setSelection = useViewer((s) => s.setSelection)
   const updateNode = useScene((s) => s.updateNode)
@@ -147,10 +153,13 @@ export default function StairSegmentPanel() {
       icon="/icons/stairs.webp"
       onBack={handleBack}
       onClose={handleClose}
-      title={node.name || 'Stair Segment'}
+      title={
+        node.name ||
+        i18n._({ id: 'node.stairSegment.panel.stairSegment', message: 'Stair Segment' })
+      }
       width={300}
     >
-      <PanelSection title="Type">
+      <PanelSection title={i18n._({ id: 'node.stairSegment.panel.type', message: 'Type' })}>
         <SegmentedControl
           onChange={(v) => {
             const updates: Partial<StairSegmentNode> = { segmentType: v }
@@ -166,16 +175,24 @@ export default function StairSegmentPanel() {
             }
             handleUpdate(updates)
           }}
-          options={SEGMENT_TYPE_OPTIONS}
+          options={SEGMENT_TYPE_OPTIONS.map((option) => ({
+            ...option,
+            label: i18n._(option.label),
+          }))}
           value={node.segmentType}
         />
       </PanelSection>
 
       {!isFirstSegment && (
-        <PanelSection title="Attachment">
+        <PanelSection
+          title={i18n._({ id: 'node.stairSegment.panel.attachment', message: 'Attachment' })}
+        >
           <SegmentedControl
             onChange={(v) => handleUpdate({ attachmentSide: v })}
-            options={ATTACHMENT_SIDE_OPTIONS}
+            options={ATTACHMENT_SIDE_OPTIONS.map((option) => ({
+              ...option,
+              label: i18n._(option.label),
+            }))}
             value={node.attachmentSide}
           />
         </PanelSection>
@@ -187,7 +204,9 @@ export default function StairSegmentPanel() {
         </div>
       ) : null}
       {node.segmentType === 'stair' && (
-        <PanelSection title="Flight shape">
+        <PanelSection
+          title={i18n._({ id: 'node.stairSegment.panel.flightShape', message: 'Flight shape' })}
+        >
           <SegmentedControl
             value={node.winder ? 'winder' : 'straight'}
             onChange={(value) =>
@@ -204,8 +223,14 @@ export default function StairSegmentPanel() {
               })
             }
             options={[
-              { label: 'Straight', value: 'straight' },
-              { label: 'Winder', value: 'winder' },
+              {
+                label: i18n._({ id: 'node.stairSegment.panel.straight', message: 'Straight' }),
+                value: 'straight',
+              },
+              {
+                label: i18n._({ id: 'node.stairSegment.panel.winder', message: 'Winder' }),
+                value: 'winder',
+              },
             ]}
           />
           {node.winder && (
@@ -214,12 +239,21 @@ export default function StairSegmentPanel() {
                 value={node.winder.turn}
                 onChange={(turn) => handleUpdate({ winder: { ...node.winder!, turn } })}
                 options={[
-                  { label: 'Left turn', value: 'left' },
-                  { label: 'Right turn', value: 'right' },
+                  {
+                    label: i18n._({ id: 'node.stairSegment.panel.leftTurn', message: 'Left turn' }),
+                    value: 'left',
+                  },
+                  {
+                    label: i18n._({
+                      id: 'node.stairSegment.panel.rightTurn',
+                      message: 'Right turn',
+                    }),
+                    value: 'right',
+                  },
                 ]}
               />
               <SliderControl
-                label="Inner gap"
+                label={i18n._({ id: 'node.stairSegment.panel.innerGap', message: 'Inner gap' })}
                 unit="m"
                 min={0}
                 precision={2}
@@ -228,7 +262,10 @@ export default function StairSegmentPanel() {
                 onChange={(innerGap) => handleUpdate({ winder: { ...node.winder!, innerGap } })}
               />
               <SliderControl
-                label="Walking line offset"
+                label={i18n._({
+                  id: 'node.stairSegment.panel.walkingLineOffset',
+                  message: 'Walking line offset',
+                })}
                 unit="m"
                 min={0.001}
                 max={node.width}
@@ -243,17 +280,31 @@ export default function StairSegmentPanel() {
                 value={node.winder.division}
                 onChange={(division) => handleUpdate({ winder: { ...node.winder!, division } })}
                 options={[
-                  { label: 'Equal going', value: 'equal-going' },
-                  { label: 'Equal angle', value: 'equal-angle' },
+                  {
+                    label: i18n._({
+                      id: 'node.stairSegment.panel.equalGoing',
+                      message: 'Equal going',
+                    }),
+                    value: 'equal-going',
+                  },
+                  {
+                    label: i18n._({
+                      id: 'node.stairSegment.panel.equalAngle',
+                      message: 'Equal angle',
+                    }),
+                    value: 'equal-angle',
+                  },
                 ]}
               />
             </>
           )}
         </PanelSection>
       )}
-      <PanelSection title="Dimensions">
+      <PanelSection
+        title={i18n._({ id: 'node.stairSegment.panel.dimensions', message: 'Dimensions' })}
+      >
         <SliderControl
-          label="Width"
+          label={i18n._({ id: 'node.stairSegment.panel.width', message: 'Width' })}
           min={0.001}
           onChange={(v) => handleUpdate({ width: v })}
           precision={2}
@@ -263,7 +314,7 @@ export default function StairSegmentPanel() {
         />
         {!node.winder && (
           <SliderControl
-            label="Length"
+            label={i18n._({ id: 'node.stairSegment.panel.length', message: 'Length' })}
             min={0.001}
             onChange={(v) => handleUpdate({ length: v })}
             precision={2}
@@ -275,7 +326,7 @@ export default function StairSegmentPanel() {
         {node.segmentType === 'stair' && (
           <>
             <SliderControl
-              label="Height"
+              label={i18n._({ id: 'node.stairSegment.panel.height', message: 'Height' })}
               min={0.001}
               onChange={handleFlightHeightChange}
               precision={2}
@@ -285,11 +336,14 @@ export default function StairSegmentPanel() {
             />
             {parentFollowsLevel && (
               <div className="px-1 text-[11px] text-muted-foreground">
-                Editing switches the stair to Custom rise
+                {i18n._({
+                  id: 'node.stairSegment.panel.editingSwitchesTheStairToCustom',
+                  message: 'Editing switches the stair to Custom rise',
+                })}
               </div>
             )}
             <SliderControl
-              label="Steps"
+              label={i18n._({ id: 'node.stairSegment.panel.steps', message: 'Steps' })}
               min={2}
               onChange={(v) => handleUpdate({ stepCount: Math.round(v) })}
               precision={0}
@@ -301,7 +355,9 @@ export default function StairSegmentPanel() {
         )}
       </PanelSection>
 
-      <PanelSection title="Structure">
+      <PanelSection
+        title={i18n._({ id: 'node.stairSegment.panel.structure', message: 'Structure' })}
+      >
         <div className="space-y-3">
           <StairConstructionControls
             node={node}
@@ -311,13 +367,16 @@ export default function StairSegmentPanel() {
           {!(node.construction ?? parentConstruction) ? (
             <ToggleControl
               checked={node.fillToFloor}
-              label="Fill to floor"
+              label={i18n._({
+                id: 'node.stairSegment.panel.fillToFloor',
+                message: 'Fill to floor',
+              })}
               onChange={(checked) => handleUpdate({ fillToFloor: checked })}
             />
           ) : null}
           {!(node.construction ?? parentConstruction) && !node.fillToFloor && (
             <SliderControl
-              label="Thickness"
+              label={i18n._({ id: 'node.stairSegment.panel.thickness', message: 'Thickness' })}
               min={0.001}
               onChange={(v) => handleUpdate({ thickness: v })}
               precision={2}
@@ -329,7 +388,7 @@ export default function StairSegmentPanel() {
         </div>
       </PanelSection>
 
-      <PanelSection title="Position">
+      <PanelSection title={i18n._({ id: 'node.stairSegment.panel.position', message: 'Position' })}>
         <SliderControl
           label="X"
           onChange={(v) => {
@@ -367,7 +426,7 @@ export default function StairSegmentPanel() {
           value={node.position[2]}
         />
         <SliderControl
-          label="Rotation"
+          label={i18n._({ id: 'node.stairSegment.panel.rotation', message: 'Rotation' })}
           max={180}
           min={-180}
           onChange={(degrees) => {
@@ -396,18 +455,22 @@ export default function StairSegmentPanel() {
         </div>
       </PanelSection>
 
-      <PanelSection title="Actions">
+      <PanelSection title={i18n._({ id: 'node.stairSegment.panel.actions', message: 'Actions' })}>
         <ActionGroup>
-          <ActionButton icon={<Move className="h-3.5 w-3.5" />} label="Move" onClick={handleMove} />
+          <ActionButton
+            icon={<Move className="h-3.5 w-3.5" />}
+            label={i18n._({ id: 'node.stairSegment.panel.move', message: 'Move' })}
+            onClick={handleMove}
+          />
           <ActionButton
             icon={<Copy className="h-3.5 w-3.5" />}
-            label="Duplicate"
+            label={i18n._({ id: 'node.stairSegment.panel.duplicate', message: 'Duplicate' })}
             onClick={handleDuplicate}
           />
           <ActionButton
             className="hover:bg-red-500/20"
             icon={<Trash2 className="h-3.5 w-3.5 text-red-600 dark:text-red-400" />}
-            label="Delete"
+            label={i18n._({ id: 'node.stairSegment.panel.delete', message: 'Delete' })}
             onClick={handleDelete}
           />
         </ActionGroup>

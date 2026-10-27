@@ -8,7 +8,7 @@ import {
   type IconRef,
   type InspectorExtension,
   useRegistryVersion,
-  useScene,
+  useScene, usePascalI18n,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { ChevronDown, ChevronLeft, GripHorizontal, RotateCcw, X } from 'lucide-react'
@@ -119,6 +119,7 @@ export function PanelWrapper({
   className,
   width = 320, // default width
 }: PanelWrapperProps) {
+  const i18n = usePascalI18n()
   const isMobile = useIsMobile()
   const inStack = useInRightStack()
   const contextFooter = useContext(InspectorFooterContext)
@@ -341,6 +342,7 @@ export function PanelWrapper({
           <div className={cn('flex min-w-0 items-center gap-2', titleContent && 'flex-1 pr-2')}>
             {onBack && (
               <button
+                aria-label={i18n._({ id: 'editor.panels.panelWrapper.back', message: 'Back' })}
                 className="mr-1 flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-black/8 dark:hover:bg-[#3e3e3e] hover:text-foreground"
                 onClick={onBack}
                 type="button"
@@ -388,6 +390,7 @@ export function PanelWrapper({
           <div className="flex items-center gap-1">
             {onReset && (
               <button
+                aria-label={i18n._({ id: 'editor.panels.panelWrapper.reset', message: 'Reset' })}
                 className="flex h-7 w-7 items-center justify-center rounded-md bg-black/4 dark:bg-[#2C2C2E] text-muted-foreground transition-colors hover:bg-black/8 dark:hover:bg-[#3e3e3e] hover:text-foreground"
                 onClick={onReset}
                 type="button"
@@ -404,7 +407,7 @@ export function PanelWrapper({
               const isActive = !collapsed && activeExtensionId === extension.id
               return (
                 <button
-                  aria-label={isActive ? `Close ${extension.title}` : `Open ${extension.title}`}
+                  aria-label={isActive ? i18n._({ id: 'editor.panels.panelWrapper.closeTitle', message: 'Close {title}', values: { title: extension.title } }) : i18n._({ id: 'editor.panels.panelWrapper.openTitle', message: 'Open {title}', values: { title: extension.title } })}
                   aria-pressed={isActive}
                   className={cn(
                     'flex h-7 w-7 items-center justify-center rounded-md transition-colors',
@@ -425,7 +428,7 @@ export function PanelWrapper({
             })}
             <button
               aria-expanded={!collapsed}
-              aria-label={collapsed ? 'Expand panel' : 'Collapse panel'}
+              aria-label={collapsed ? i18n._({ id: 'editor.panels.panelWrapper.expandPanel', message: 'Expand panel' }) : i18n._({ id: 'editor.panels.panelWrapper.collapsePanel', message: 'Collapse panel' })}
               className="flex h-7 w-7 items-center justify-center rounded-md bg-black/4 dark:bg-[#2C2C2E] text-muted-foreground transition-colors hover:bg-black/8 dark:hover:bg-[#3e3e3e] hover:text-foreground"
               onClick={handleCardToggle}
               type="button"
@@ -436,6 +439,7 @@ export function PanelWrapper({
             </button>
             {onClose && (
               <button
+                aria-label={i18n._({ id: 'editor.panels.panelWrapper.close', message: 'Close' })}
                 className="flex h-7 w-7 items-center justify-center rounded-md bg-black/4 dark:bg-[#2C2C2E] text-muted-foreground transition-colors hover:bg-black/8 dark:hover:bg-[#3e3e3e] hover:text-foreground"
                 onClick={onClose}
                 type="button"
@@ -473,10 +477,10 @@ export function PanelWrapper({
               )}
               {children}
               {inspectedIds.length > 0 && (
-                <PanelSection title="Collections">
+                <PanelSection title={i18n._({ id: 'editor.panels.panelWrapper.collections', message: 'Collections' })}>
                   <ActionGroup>
                     <CollectionsPopover nodeIds={inspectedIds}>
-                      <ActionButton label="Manage collections…" />
+                      <ActionButton label={i18n._({ id: 'editor.panels.panelWrapper.manageCollections', message: 'Manage collections…' })} />
                     </CollectionsPopover>
                   </ActionGroup>
                 </PanelSection>
@@ -582,14 +586,14 @@ function InspectorExtensionContent({
   extension: InspectorExtension
   nodeId: AnyNodeId
 }) {
+  const i18n = usePascalI18n()
   const node = useScene((s) => s.nodes[nodeId])
   if (!node) return null
   const Extension = resolveExtensionComponent(extension)
   return (
     <ErrorBoundary fallback={
       <p className="p-1 text-muted-foreground text-xs">
-        “{extension.title}” hit an error and was unloaded for this session.
-      </p>
+        {i18n._({ id: 'editor.panels.panelWrapper.titleHitAnErrorAndWas', message: '“{title}” hit an error and was unloaded for this session.', values: { title: extension.title } })}</p>
     }>
       <Suspense fallback={null}>
         <Extension node={node} />

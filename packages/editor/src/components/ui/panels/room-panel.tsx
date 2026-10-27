@@ -4,10 +4,11 @@ import {
   type AnyNode,
   type AnyNodeId,
   area,
-  getLevelDisplayName,
   runAsSingleSceneHistoryStep,
   useScene,
-  type ZoneNode,
+  type ZoneNode, usePascalI18n,
+  type PascalI18n,
+  useLocale,
 } from '@pascal-app/core'
 import { setRoomFloorScript } from '@pascal-app/core/agent-operations'
 import { useViewer } from '@pascal-app/viewer'
@@ -23,12 +24,11 @@ import { mezzanineElevationBounds } from '../../../lib/room-handle-drag'
 import type { RoomSelectionRecord } from '../../../lib/room-selection'
 import {
   baseRoomName,
-  numberedRoomName,
   type RoomNameSection,
   roomNameSections,
   roomNameUseCount,
 } from '../../../lib/room-name-catalog'
-import { renameRoom, requestRoomDeletion } from '../../../lib/room-structure-commands'
+import { requestRoomDeletion } from '../../../lib/room-structure-commands'
 import { addZoneToNewUnit, assignZoneToUnit, zoneUnits } from '../../../lib/units'
 import { cn } from '../../../lib/utils'
 import useEditor from '../../../store/use-editor'
@@ -53,23 +53,49 @@ import {
   RoomConstructionRows,
   roomInsideHeight,
 } from './room-construction-rows'
-import { type RoomNameOption, roomNameOptions } from './room-name-options'
+import {
+  commitRoomNameEdit,
+  commitRoomNamePick,
+  type RoomNameOption,
+  roomNameOptions,
+} from './room-name-options'
+import { localizedLevelName } from '../../../i18n/level-name'
+import { messageWithSlot } from '../../../i18n/message-slot'
+import {
+  displayRoomName,
+  localizedRoomNameSections,
+} from '../../../lib/room-name-messages'
 
 /** "Room · Ground floor", "Mezzanine · in Kitchen", "Room · not enclosed". */
 export function roomKicker(
   nodes: Record<string, AnyNode>,
   zoneId: string,
+  i18n: PascalI18n,
+  locale: string,
   options: { mezzanine?: boolean; open?: boolean } = {},
 ): string {
   const zone = nodes[zoneId]
   if (options.mezzanine && zone?.type === 'zone') {
     const host = zone.hostZoneId ? nodes[zone.hostZoneId] : undefined
     const hostName = host?.type === 'zone' ? host.name?.trim() : ''
-    return hostName ? `Mezzanine · in ${hostName}` : 'Mezzanine'
+    return hostName
+      ? i18n._({
+          id: 'editor.panels.roomPanel.kickerMezzanineIn',
+          message: 'Mezzanine · in {room}',
+          values: { room: displayRoomName(hostName, i18n) },
+        })
+      : i18n._({ id: 'editor.panels.roomPanel.mezzanine', message: 'Mezzanine' })
   }
-  if (options.open) return 'Room · not enclosed'
+  if (options.open)
+    return i18n._({ id: 'editor.panels.roomPanel.kickerNotEnclosed', message: 'Room · not enclosed' })
   const level = zone?.parentId ? nodes[zone.parentId] : undefined
-  return level?.type === 'level' ? `Room · ${getLevelDisplayName(level)}` : 'Room'
+  return level?.type === 'level'
+    ? i18n._({
+        id: 'editor.panels.roomPanel.kickerLevel',
+        message: 'Room · {level}',
+        values: { level: localizedLevelName(level, i18n, locale) },
+      })
+    : i18n._({ id: 'editor.panels.roomPanel.room', message: 'Room' })
 }
 
 export function RoomPanel({
@@ -79,8 +105,15 @@ export function RoomPanel({
   room: RoomSelectionRecord
   onClose?: () => void
 }) {
+  const i18n = usePascalI18n()
+  const locale = useLocale()
   const nodes = useScene((state) => state.nodes)
-  const sections = useMemo(() => roomNameSections(nodes, room.zoneId), [nodes, room.zoneId])
+  const catalogVersion = i18n.getVersion()
+  const sections = useMemo(
+    () => localizedRoomNameSections(roomNameSections(nodes, room.zoneId), i18n),
+    // biome-ignore lint/correctness/useExhaustiveDependencies: re-translate on a catalog change
+    [i18n, catalogVersion, nodes, room.zoneId],
+  )
   const name = useScene((state) => state.nodes[room.zoneId as AnyNodeId]?.name ?? '')
   const visible = useInteractionScope(
     (state) => resolveOverlayPolicy(state.scope).conflictingControls === 'shown',
@@ -89,9 +122,9 @@ export function RoomPanel({
   const mezzanine = !!room.mezzanine
   return (
     <PanelWrapper
-      kicker={roomKicker(nodes, room.zoneId, { mezzanine })}
+      kicker={roomKicker(nodes, room.zoneId, i18n, locale, { mezzanine })}
       onClose={onClose}
-      title={name.trim() || (mezzanine ? 'Mezzanine' : 'Room')}
+      title={(name.trim() && displayRoomName(name, i18n)) || (mezzanine ? i18n._({ id: 'editor.panels.roomPanel.mezzanine', message: 'Mezzanine' }) : i18n._({ id: 'editor.panels.roomPanel.room', message: 'Room' }))}
       titleContent={
         <div className="flex min-w-0 flex-1 items-center gap-2">
           <RoomColorDot zoneId={room.zoneId} />
@@ -125,17 +158,27 @@ export function RoomPanel({
  * needs no closed outline — its name, its unit, deleting it.
  */
 export function OpenRoomPanel({ zoneId, onClose }: { zoneId: string; onClose: () => void }) {
+  const i18n = usePascalI18n()
+  const locale = useLocale()
   const nodes = useScene((state) => state.nodes)
-  const sections = useMemo(() => roomNameSections(nodes, zoneId), [nodes, zoneId])
+  const catalogVersion = i18n.getVersion()
+  const sections = useMemo(
+    () => localizedRoomNameSections(roomNameSections(nodes, zoneId), i18n),
+    // biome-ignore lint/correctness/useExhaustiveDependencies: re-translate on a catalog change
+    [i18n, catalogVersion, nodes, zoneId],
+  )
   const name = useScene((state) => state.nodes[zoneId as AnyNodeId]?.name ?? '')
   const unit = useViewer((s) => s.unit)
   const zone = nodes[zoneId as AnyNodeId]
   if (zone?.type !== 'zone') return null
   return (
     <PanelWrapper
-      kicker={roomKicker(nodes, zoneId, { open: true })}
+      kicker={roomKicker(nodes, zoneId, i18n, locale, { open: true })}
       onClose={onClose}
-      title={name.trim() || 'Room'}
+      title={
+        (name.trim() && displayRoomName(name, i18n)) ||
+        i18n._({ id: 'editor.panels.roomPanel.room', message: 'Room' })
+      }
       titleContent={
         <div className="flex min-w-0 flex-1 items-center gap-2">
           <RoomColorDot zoneId={zoneId} />
@@ -151,8 +194,11 @@ export function OpenRoomPanel({ zoneId, onClose }: { zoneId: string; onClose: ()
     >
       <div className="flex flex-col px-4 pt-3 pb-4 text-sm" data-open-room-panel={zoneId}>
         <p className="text-muted-foreground text-xs">
-          {formatAreaLabel(area([{ outer: zone.polygon, holes: zone.holes }]), unit, 2)} · Close
-          its walls to build its floor and ceiling.
+          {i18n._({
+            id: 'editor.panels.roomPanel.openRoomArea',
+            message: '{area} · Close its walls to build its floor and ceiling.',
+            values: { area: formatAreaLabel(area([{ outer: zone.polygon, holes: zone.holes }]), unit, 2) },
+          })}
         </p>
         <RoomUnitRow zoneId={zoneId} />
         <button
@@ -161,7 +207,7 @@ export function OpenRoomPanel({ zoneId, onClose }: { zoneId: string; onClose: ()
           onClick={() => requestRoomDeletion(zoneId)}
           type="button"
         >
-          Delete room
+          {i18n._({ id: 'editor.panels.roomPanel.deleteRoom', message: 'Delete room' })}
         </button>
       </div>
     </PanelWrapper>
@@ -170,16 +216,17 @@ export function OpenRoomPanel({ zoneId, onClose }: { zoneId: string; onClose: ()
 
 /** "Unit: Flat A ›" — which unit the room belongs to; change it, add it to one, or take it out. */
 export function RoomUnitRow({ zoneId }: { zoneId: string }) {
+  const i18n = usePascalI18n()
   const nodes = useScene((scene) => scene.nodes)
   const { buildingId, units, current } = useMemo(() => zoneUnits(nodes, zoneId), [nodes, zoneId])
   if (!buildingId) return null
   return (
     <div className="mt-3 flex min-h-8 items-center justify-between gap-3" data-room-unit={zoneId}>
-      <span className="text-muted-foreground text-xs">Unit</span>
+      <span className="text-muted-foreground text-xs">{i18n._({ id: 'editor.panels.roomPanel.unit', message: 'Unit' })}</span>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <button
-            aria-label="Unit"
+            aria-label={i18n._({ id: 'editor.panels.roomPanel.unit', message: 'Unit' })}
             className="flex min-w-0 items-center gap-1.5 rounded-full border border-border/50 px-2.5 py-0.5 text-xs transition-colors hover:bg-accent"
             type="button"
           >
@@ -191,7 +238,7 @@ export function RoomUnitRow({ zoneId }: { zoneId: string }) {
               />
             )}
             <span className="truncate">
-              {current ? current.name || 'Unit' : units.length ? 'None' : 'Add to a unit'}
+              {current ? current.name || i18n._({ id: 'editor.panels.roomPanel.unit', message: 'Unit' }) : units.length ? i18n._({ id: 'editor.panels.roomPanel.none', message: 'None' }) : i18n._({ id: 'editor.panels.roomPanel.addToAUnit', message: 'Add to a unit' })}
             </span>
             <ChevronDown className="size-3 shrink-0 text-muted-foreground" />
           </button>
@@ -207,17 +254,23 @@ export function RoomUnitRow({ zoneId }: { zoneId: string }) {
                 className="size-2 shrink-0 rounded-full"
                 style={{ backgroundColor: unit.color }}
               />
-              <span className="flex-1 truncate">{unit.name || 'Unit'}</span>
+              <span className="flex-1 truncate">{unit.name || i18n._({ id: 'editor.panels.roomPanel.unit', message: 'Unit' })}</span>
               {unit.id === current?.id && <Check className="size-3.5" />}
             </DropdownMenuItem>
           ))}
           {units.length > 0 && <DropdownMenuSeparator />}
           <DropdownMenuItem onSelect={() => addZoneToNewUnit(zoneId as ZoneNode['id'])}>
-            New unit
+            {i18n._({ id: 'editor.panels.roomPanel.newUnit', message: 'New unit' })}
           </DropdownMenuItem>
           {current && (
             <DropdownMenuItem onSelect={() => assignZoneToUnit(zoneId as ZoneNode['id'], null)}>
-              Remove from {current.name || 'unit'}
+              {current.name
+                ? i18n._({
+                    id: 'editor.panels.roomPanel.removeFromUnitNamed',
+                    message: 'Remove from {unit}',
+                    values: { unit: current.name },
+                  })
+                : i18n._({ id: 'editor.panels.roomPanel.removeFromUnit', message: 'Remove from unit' })}
             </DropdownMenuItem>
           )}
         </DropdownMenuContent>
@@ -231,6 +284,7 @@ export function RoomUnitRow({ zoneId }: { zoneId: string }) {
  * with its code to read and a way to take it off, back to the floor's own finish.
  */
 function RoomFloorScriptRow({ zoneId }: { zoneId: string }) {
+  const i18n = usePascalI18n()
   const sha = useScene((scene) => {
     const zone = scene.nodes[zoneId as AnyNodeId]
     return zone?.type === 'zone' ? zone.floor?.script?.script : undefined
@@ -238,12 +292,16 @@ function RoomFloorScriptRow({ zoneId }: { zoneId: string }) {
   const [code, setCode] = useState<{ sha: string; text: string } | null>(null)
   const [open, setOpen] = useState(false)
   if (!sha) return null
+  const unreadable = i18n._({
+    id: 'editor.panels.scriptUnreadable',
+    message: 'The script could not be read.',
+  })
   const toggleCode = () => {
     setOpen((shown) => !shown)
     if (code?.sha === sha) return
     finishScriptCode(sha).then(
-      (text) => setCode({ sha, text: text ?? 'The script could not be read.' }),
-      () => setCode({ sha, text: 'The script could not be read.' }),
+      (text) => setCode({ sha, text: text ?? unreadable }),
+      () => setCode({ sha, text: unreadable }),
     )
   }
   const remove = () => {
@@ -260,38 +318,37 @@ function RoomFloorScriptRow({ zoneId }: { zoneId: string }) {
   return (
     <div className="mt-3 flex flex-col gap-2" data-room-floor-script={zoneId}>
       <div className="flex min-h-8 items-center justify-between gap-3">
-        <span className="text-muted-foreground text-xs">Scripted finish</span>
+        <span className="text-muted-foreground text-xs">{i18n._({ id: 'editor.panels.roomPanel.scriptedFinish', message: 'Scripted finish' })}</span>
         <div className="flex items-center gap-1.5">
           <button
             className="rounded-full border border-border/50 px-2.5 py-0.5 text-xs transition-colors hover:bg-accent"
             onClick={toggleCode}
             type="button"
           >
-            {open ? 'Hide code' : 'View code'}
+            {open ? i18n._({ id: 'editor.panels.roomPanel.hideCode', message: 'Hide code' }) : i18n._({ id: 'editor.panels.roomPanel.viewCode', message: 'View code' })}
           </button>
           <button
             className="rounded-full border border-border/50 px-2.5 py-0.5 text-xs transition-colors hover:bg-accent"
             onClick={remove}
             type="button"
           >
-            Remove
+            {i18n._({ id: 'editor.panels.roomPanel.remove', message: 'Remove' })}
           </button>
         </div>
       </div>
       {open && (
         <pre className="max-h-60 overflow-auto whitespace-pre rounded-lg border border-border/50 p-2 font-mono text-[11px] text-foreground">
-          {code?.sha === sha ? code.text : 'Loading…'}
+          {code?.sha === sha ? code.text : i18n._({ id: 'editor.panels.roomPanel.loading', message: 'Loading…' })}
         </pre>
       )}
     </div>
   )
 }
 
-const count = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`
-
 /** "2 doors · 3 windows" (the level is in the kicker). */
 function RoomSubline({ room }: { room: RoomSelectionRecord }) {
-  const text = useScene((scene) => {
+  const i18n = usePascalI18n()
+  const counts = useScene((scene) => {
     const walls = new Set(room.boundaryWallIds)
     let doors = 0
     let windows = 0
@@ -302,7 +359,14 @@ function RoomSubline({ room }: { room: RoomSelectionRecord }) {
       if (node.type === 'door') doors++
       else windows++
     }
-    return `${count(doors, 'door')} · ${count(windows, 'window')}`
+    return `${doors}:${windows}`
+  })
+  const [doors, windows] = counts.split(':').map(Number)
+  const text = i18n._({
+    id: 'editor.panels.roomPanel.openingCounts',
+    message:
+      '{doors, plural, one {# door} other {# doors}} · {windows, plural, one {# window} other {# windows}}',
+    values: { doors, windows },
   })
   return (
     <p className="text-muted-foreground text-xs" data-room-subline>
@@ -323,6 +387,7 @@ function ringPerimeter(ring: readonly (readonly [number, number])[]) {
 
 /** Area, perimeter and inside height, in the user's units. */
 function RoomStats({ room }: { room: RoomSelectionRecord }) {
+  const i18n = usePascalI18n()
   const unit = useViewer((s) => s.unit)
   const metricNotation = useViewer((s) => s.metricNotation)
   const nodes = useScene((scene) => scene.nodes)
@@ -333,10 +398,10 @@ function RoomStats({ room }: { room: RoomSelectionRecord }) {
       : 0
   const { height } = roomInsideHeight(room, nodes)
   const stats = [
-    { label: 'Area', value: formatAreaLabel(room.area, unit, 2) },
-    { label: 'Perimeter', value: formatLinearMeasurement(perimeter, unit, metricNotation) },
+    { label: i18n._({ id: 'editor.panels.roomPanel.area', message: 'Area' }), value: formatAreaLabel(room.area, unit, 2) },
+    { label: i18n._({ id: 'editor.panels.roomPanel.perimeter', message: 'Perimeter' }), value: formatLinearMeasurement(perimeter, unit, metricNotation) },
     {
-      label: 'Height',
+      label: i18n._({ id: 'editor.panels.roomPanel.height', message: 'Height' }),
       value: height === null ? '—' : formatLinearMeasurement(height, unit, metricNotation),
     },
   ]
@@ -363,6 +428,7 @@ function RoomStats({ room }: { room: RoomSelectionRecord }) {
  * it when there is headroom. No walls of its own, so no walls row.
  */
 function MezzanineRows({ room }: { room: RoomSelectionRecord }) {
+  const i18n = usePascalI18n()
   const zoneId = room.zoneId
   const nodes = useScene((scene) => scene.nodes)
   const unit = useViewer((s) => s.unit)
@@ -385,12 +451,12 @@ function MezzanineRows({ room }: { room: RoomSelectionRecord }) {
     setExpanded((current) => (current === part ? null : part))
   return (
     <div className="flex flex-col" data-mezzanine-rows={zoneId}>
-      <h3 className="mt-4 mb-1.5 font-medium text-muted-foreground text-xs">Built with</h3>
+      <h3 className="mt-4 mb-1.5 font-medium text-muted-foreground text-xs">{i18n._({ id: 'editor.panels.roomPanel.builtWith', message: 'Built with' })}</h3>
       <div className="flex flex-col gap-1">
         <ConstructionPart
           expanded={expanded === 'floor'}
           icon="/icons/floor.webp"
-          label="Floor"
+          label={i18n._({ id: 'editor.panels.roomPanel.floor', message: 'Floor' })}
           meta={`${length(elevation)} up`}
           on
           onToggleExpanded={toggle('floor')}
@@ -410,12 +476,12 @@ function MezzanineRows({ room }: { room: RoomSelectionRecord }) {
               }}
               type="button"
             >
-              Add stairs
+              {i18n._({ id: 'editor.panels.roomPanel.addStairs', message: 'Add stairs' })}
             </button>
           }
           expanded={false}
           icon="/icons/stairs.webp"
-          label="Stairs"
+          label={i18n._({ id: 'editor.panels.roomPanel.stairs', message: 'Stairs' })}
           meta="Up from the floor below"
           on
           onToggleExpanded={() => {}}
@@ -424,22 +490,26 @@ function MezzanineRows({ room }: { room: RoomSelectionRecord }) {
         <ConstructionPart
           expanded={expanded === 'ceiling'}
           icon="/icons/ceiling.webp"
-          label="Ceiling"
+          label={i18n._({ id: 'editor.panels.roomPanel.ceiling', message: 'Ceiling' })}
           meta={
             hasCeiling
               ? ceiling === null
-                ? 'Over the mezzanine'
-                : `${length(ceiling)} headroom`
-              : 'Not enough headroom'
+                ? i18n._({ id: 'editor.panels.roomPanel.overTheMezzanine', message: 'Over the mezzanine' })
+                : i18n._({
+                    id: 'editor.panels.roomPanel.headroom',
+                    message: '{height} headroom',
+                    values: { height: length(ceiling) },
+                  })
+              : i18n._({ id: 'editor.panels.roomPanel.notEnoughHeadroom', message: 'Not enough headroom' })
           }
           on
           onToggleExpanded={toggle('ceiling')}
           part="ceiling"
         >
           {hasCeiling ? (
-            <PartField label="Shape">
+            <PartField label={i18n._({ id: 'editor.panels.roomPanel.shape', message: 'Shape' })}>
               <button className={pill} onClick={() => startCeilingEdit(zoneId)} type="button">
-                Edit shape
+                {i18n._({ id: 'editor.panels.roomPanel.editShape', message: 'Edit shape' })}
               </button>
             </PartField>
           ) : undefined}
@@ -459,6 +529,7 @@ function MezzanineRows({ room }: { room: RoomSelectionRecord }) {
  * the label tint, never a finish (finishes are painted).
  */
 function RoomColorDot({ zoneId }: { zoneId: string }) {
+  const i18n = usePascalI18n()
   const color = useScene((state) => {
     const zone = state.nodes[zoneId as AnyNodeId]
     return zone?.type === 'zone' ? zone.color : undefined
@@ -466,7 +537,7 @@ function RoomColorDot({ zoneId }: { zoneId: string }) {
   return (
     <ColorDot
       color={color ?? '#3b82f6'}
-      label="Room colour — used in the plan and labels"
+      label={i18n._({ id: 'editor.panels.roomPanel.roomColourUsedInThePlan', message: 'Room colour — used in the plan and labels' })}
       onChange={(next) => useScene.getState().updateNode(zoneId as AnyNodeId, { color: next })}
       side="bottom"
     />
@@ -492,30 +563,33 @@ function RoomName({
   sections: readonly RoomNameSection[]
   mezzanine: boolean
 }) {
+  const i18n = usePascalI18n()
   const nodes = useScene((state) => state.nodes)
-  const [value, setValue] = useState(name)
+  // The field shows the name in the UI language; the scene keeps what was stored.
+  const display = displayRoomName(name, i18n)
+  const [value, setValue] = useState(display)
   const [open, setOpen] = useState(false)
   const [typing, setTyping] = useState(false)
   const [active, setActive] = useState(-1)
-  const valueRef = useRef(name)
+  const valueRef = useRef(display)
   // Enter/click commit and then blur, and blur commits too; this keeps it one rename.
-  const committedRef = useRef(name)
-  const originalRef = useRef(name)
+  const committedRef = useRef(display)
+  const originalRef = useRef(display)
   const inputRef = useRef<HTMLInputElement>(null)
   const listId = useId()
   const { typed: typedRow, groups, options } = roomNameOptions(value, sections, typing)
   const expanded = open && options.length > 0
   const activeId = expanded && options[active] ? `${listId}-${active}` : undefined
-  const current = baseRoomName(value).toLowerCase()
+  const current = baseRoomName(name).toLowerCase()
 
   // A rename from elsewhere (undo, a collaborator, the plan) lands in the field
   // unless the user is editing it (the field stays mounted across renames).
   useEffect(() => {
     if (document.activeElement === inputRef.current) return
-    valueRef.current = name
-    committedRef.current = name
-    setValue(name)
-  }, [name])
+    valueRef.current = display
+    committedRef.current = display
+    setValue(display)
+  }, [display])
 
   // Opening and the arrow keys bring the active row into view; the pointer
   // only highlights (scrolling under it would move the row being clicked).
@@ -541,7 +615,7 @@ function RoomName({
     setTyping(false)
     setOpen(true)
     const all = roomNameOptions(valueRef.current, sections, false).options
-    const here = baseRoomName(valueRef.current).toLowerCase()
+    const here = baseRoomName(name).toLowerCase()
     scrollToActive.current = true
     setActive(Math.max(0, all.findIndex((option) => option.value.toLowerCase() === here)))
   }
@@ -551,15 +625,14 @@ function RoomName({
   }
   const commit = () => {
     const next = valueRef.current
-    if (next === committedRef.current) return
+    const committed = committedRef.current
     committedRef.current = next
-    renameRoom(zoneId, next)
+    commitRoomNameEdit(zoneId, name, committed, next, i18n)
   }
   const pick = (option: RoomNameOption) => {
-    const next =
-      option.kind === 'typed' ? option.value : numberedRoomName(nodes, zoneId, option.value)
-    type(next)
-    commit()
+    const shown = commitRoomNamePick(zoneId, name, option, i18n)
+    type(shown)
+    committedRef.current = shown
     setOpen(false)
     setTyping(false)
     // A pick is the answer: the field lets go. To fine-tune the name, click it
@@ -583,7 +656,9 @@ function RoomName({
       event.preventDefault()
       event.stopPropagation()
       const chosen = expanded ? options[active] : undefined
-      if (chosen) pick(chosen)
+      // Enter on the typed row commits the field, as blur does; only a click
+      // on it uses the text exactly as typed.
+      if (chosen?.kind === 'suggestion') pick(chosen)
       else inputRef.current?.blur()
     } else if (event.key === 'Escape') {
       event.preventDefault()
@@ -624,10 +699,9 @@ function RoomName({
         ) : used > 0 ? (
           <span
             className="shrink-0 whitespace-nowrap font-mono text-[11px] text-muted-foreground"
-            title="Picking it adds a number"
+            title={i18n._({ id: 'editor.panels.roomPanel.pickingItAddsANumber', message: 'Picking it adds a number' })}
           >
-            {used} on this level
-          </span>
+            {i18n._({ id: 'editor.panels.roomPanel.usedOnThisLevel', message: '{used} on this level', values: { used } })}</span>
         ) : null}
       </div>
     )
@@ -645,19 +719,27 @@ function RoomName({
           )}
           data-guide-target="room-name"
           data-room-name-combobox
-          title={name.trim() ? `${name.trim()} · Rename` : 'Rename'}
+          title={
+            name.trim()
+              ? i18n._({
+                  id: 'editor.panels.roomPanel.renameNamed',
+                  message: '{name} · Rename',
+                  values: { name: displayRoomName(name, i18n) },
+                })
+              : i18n._({ id: 'editor.panels.roomPanel.rename', message: 'Rename' })
+          }
         >
           <input
             aria-activedescendant={activeId}
             aria-autocomplete="list"
             aria-controls={expanded ? listId : undefined}
             aria-expanded={expanded}
-            aria-label={mezzanine ? 'Mezzanine name' : 'Room name'}
+            aria-label={mezzanine ? i18n._({ id: 'editor.panels.roomPanel.mezzanineName', message: 'Mezzanine name' }) : i18n._({ id: 'editor.panels.roomPanel.roomName', message: 'Room name' })}
             autoComplete="off"
             className="min-w-0 flex-1 text-ellipsis bg-transparent p-0 font-semibold text-foreground text-sm leading-snug tracking-tight outline-none placeholder:text-foreground"
             data-room-name
             maxLength={40}
-            placeholder={mezzanine ? 'Mezzanine' : 'Room'}
+            placeholder={mezzanine ? i18n._({ id: 'editor.panels.roomPanel.mezzanine', message: 'Mezzanine' }) : i18n._({ id: 'editor.panels.roomPanel.room', message: 'Room' })}
             ref={inputRef}
             role="combobox"
             spellCheck={false}
@@ -672,9 +754,8 @@ function RoomName({
               type(event.target.value)
               setTyping(true)
               setOpen(true)
-              const next = roomNameOptions(event.target.value, sections, true)
               scrollToActive.current = true
-              setActive(next.typed && next.options.length > 1 ? 1 : 0)
+              setActive(roomNameOptions(event.target.value, sections, true).active)
             }}
             onFocus={() => {
               originalRef.current = valueRef.current
@@ -689,7 +770,7 @@ function RoomName({
             }}
           />
           <button
-            aria-label={mezzanine ? 'Show mezzanine names' : 'Show room names'}
+            aria-label={mezzanine ? i18n._({ id: 'editor.panels.roomPanel.showMezzanineNames', message: 'Show mezzanine names' }) : i18n._({ id: 'editor.panels.roomPanel.showRoomNames', message: 'Show room names' })}
             className="grid size-6 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
             data-room-name-open
             tabIndex={-1}
@@ -712,7 +793,7 @@ function RoomName({
       </PopoverAnchor>
       <PopoverContent
         align="start"
-        aria-label={mezzanine ? 'Mezzanine names' : 'Room names'}
+        aria-label={mezzanine ? i18n._({ id: 'editor.panels.roomPanel.mezzanineNames', message: 'Mezzanine names' }) : i18n._({ id: 'editor.panels.roomPanel.roomNames', message: 'Room names' })}
         className="flex max-h-85 w-(--radix-popover-trigger-width) min-w-60 flex-col overflow-hidden p-0"
         id={listId}
         role="listbox"
@@ -752,12 +833,12 @@ function RoomName({
         <div className="flex shrink-0 flex-wrap gap-x-3 gap-y-1 border-border border-t px-3 py-2 text-[11px] text-muted-foreground">
           {(
             [
-              [['↑', '↓'], 'Browse'],
-              [['Enter'], 'Pick'],
-              [['Esc'], 'Revert'],
+              [['↑', '↓'], i18n._({ id: 'editor.panels.roomPanel.browse', message: 'Browse' })],
+              [['Enter'], i18n._({ id: 'editor.panels.roomPanel.pick', message: 'Pick' })],
+              [['Esc'], i18n._({ id: 'editor.panels.roomPanel.revert', message: 'Revert' })],
             ] as const
           ).map(([keys, action]) => (
-            <span className="flex items-center gap-1" key={action}>
+            <span className="flex items-center gap-1" key={keys[0]}>
               {keys.map((key) => (
                 <ShortcutToken className="h-4 min-w-4 justify-center px-1 text-[9.5px]" key={key} value={key} />
               ))}
@@ -771,20 +852,28 @@ function RoomName({
 }
 
 function RoomNameOptionLabel({ option }: { option: RoomNameOption }) {
+  const i18n = usePascalI18n()
   if (option.kind === 'typed') {
     return (
       <span className="min-w-0 flex-1 truncate">
-        <span className="text-muted-foreground">Use </span>“{option.value}”
+        {messageWithSlot(
+          i18n,
+          /* i18n */ { id: 'editor.panels.roomPanel.useTyped', message: '{use} “{name}”', values: { name: option.value } },
+          'use',
+          <span className="text-muted-foreground">
+            {i18n._({ id: 'editor.panels.roomPanel.use', message: 'Use' })}
+          </span>,
+        )}
       </span>
     )
   }
-  const { value, match } = option
-  if (!match) return <span className="min-w-0 flex-1 truncate">{value}</span>
+  const { label, match } = option
+  if (!match) return <span className="min-w-0 flex-1 truncate">{label}</span>
   return (
     <span className="min-w-0 flex-1 truncate">
-      {value.slice(0, match.start)}
-      <span className="font-semibold underline decoration-muted-foreground underline-offset-3">{value.slice(match.start, match.end)}</span>
-      {value.slice(match.end)}
+      {label.slice(0, match.start)}
+      <span className="font-semibold underline decoration-muted-foreground underline-offset-3">{label.slice(match.start, match.end)}</span>
+      {label.slice(match.end)}
     </span>
   )
 }

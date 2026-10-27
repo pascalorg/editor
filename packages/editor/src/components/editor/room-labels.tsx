@@ -8,11 +8,13 @@ import {
   DEFAULT_LEVEL_HEIGHT,
   emitter,
   formatNumber,
+  type PascalI18n,
   type Polygon,
   polygonInteriorPoint,
   type Ring,
   sceneRegistry,
   useLocale,
+  usePascalI18n,
   useScene,
   type ZoneNode,
 } from '@pascal-app/core'
@@ -49,13 +51,9 @@ import { useShallow } from 'zustand/react/shallow'
 import { useRoomRecords } from '../../hooks/use-selected-room'
 import { getAreaUnitLabel, type LinearUnit, squareMetersToAreaUnit } from '../../lib/measurements'
 import { roomFloorElevation } from '../../lib/room-handle-drag'
+import { displayRoomName } from '../../lib/room-name-messages'
 import type { RoomSelectionRecord } from '../../lib/room-selection'
-import {
-  clickZoneArea,
-  hoverZoneArea,
-  leaveZoneArea,
-  zoneKindLabel,
-} from '../../lib/room-zone-routing'
+import { clickZoneArea, hoverZoneArea, leaveZoneArea } from '../../lib/room-zone-routing'
 import { selectionModifiersFromEvent } from '../../lib/selection-routing'
 import useEditor from '../../store/use-editor'
 import useInteractionScope from '../../store/use-interaction-scope'
@@ -1252,7 +1250,13 @@ function useLabelZone(zoneId: string) {
   return zone && zone.visible !== false ? zone : null
 }
 
-const labelName = (zone: ZoneNode) => zone.name?.trim() || zoneKindLabel(zone)
+const labelName = (zone: ZoneNode, i18n: PascalI18n) => {
+  const name = zone.name?.trim()
+  if (name) return displayRoomName(name, i18n)
+  return zone.spaceRole === 'room'
+    ? i18n._({ id: 'editor.roomLabel.room', message: 'Room' })
+    : i18n._({ id: 'editor.roomLabel.zone', message: 'Zone' })
+}
 
 /**
  * One room's pill in the editor. Hover and click take the same rule as the
@@ -1268,6 +1272,7 @@ function RoomPill({
   view: '2d' | '3d'
   elements: Map<string, HTMLElement>
 }) {
+  const i18n = usePascalI18n()
   const zone = useLabelZone(entry.zoneId)
   // A pill that disappears under the cursor (its click selected something)
   // fires no leave: end the hover it set.
@@ -1278,7 +1283,7 @@ function RoomPill({
       areaM2={entry.area}
       color={zone.color}
       elements={elements}
-      name={labelName(zone)}
+      name={labelName(zone, i18n)}
       onClick={(event) => clickZoneArea(entry.zoneId, selectionModifiersFromEvent(event))}
       onHover={(event) => hoverZoneArea(entry.zoneId, selectionModifiersFromEvent(event))}
       onLeave={() => leaveZoneArea(entry.zoneId)}
@@ -1289,13 +1294,14 @@ function RoomPill({
 }
 
 function RoomDetail({ entry, view }: { entry: LabelEntry; view: '2d' | '3d' }) {
+  const i18n = usePascalI18n()
   const zone = useLabelZone(entry.zoneId)
   if (!zone) return null
   return (
     <RoomPillDetail
       areaM2={entry.area}
       color={zone.color}
-      name={labelName(zone)}
+      name={labelName(zone, i18n)}
       view={view}
       zoneId={entry.zoneId}
     />
