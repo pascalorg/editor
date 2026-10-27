@@ -8375,6 +8375,14 @@ msgid "node.door.panel.archHeight"
 msgstr "Arch Height"
 
 #: packages/nodes/src/door/panel.tsx
+msgid "node.door.panel.auto"
+msgstr "Auto"
+
+#: packages/nodes/src/door/panel.tsx
+msgid "node.door.panel.autoFollowsTheWall"
+msgstr "Auto follows the wall"
+
+#: packages/nodes/src/door/panel.tsx
 msgid "node.door.panel.barHeight"
 msgstr "Bar Height"
 
@@ -8449,6 +8457,10 @@ msgstr "Fold"
 #: packages/nodes/src/door/panel.tsx
 msgid "node.door.panel.frame"
 msgstr "Frame"
+
+#: packages/nodes/src/door/panel.tsx
+msgid "node.door.panel.frameDepthAuto"
+msgstr "Depth (auto)"
 
 #: packages/nodes/src/door/panel.tsx
 msgid "node.door.panel.garage"
@@ -11732,6 +11744,14 @@ msgid "node.window.panel.archHeight"
 msgstr "Arch Height"
 
 #: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.auto"
+msgstr "Auto"
+
+#: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.autoFollowsTheWall"
+msgstr "Auto follows the wall"
+
+#: packages/nodes/src/window/panel.tsx
 msgid "node.window.panel.columns"
 msgstr "Columns"
 
@@ -11790,6 +11810,10 @@ msgstr "Flip Side"
 #: packages/nodes/src/window/panel.tsx
 msgid "node.window.panel.frame"
 msgstr "Frame"
+
+#: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.frameDepthAuto"
+msgstr "Depth (auto)"
 
 #: packages/nodes/src/window/panel.tsx
 msgid "node.window.panel.french"
