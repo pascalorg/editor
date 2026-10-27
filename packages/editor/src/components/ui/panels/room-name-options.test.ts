@@ -40,7 +40,7 @@ describe('roomNameOptions', () => {
 
   test('free text is always offered first unless it is exactly a name', () => {
     const { typed, options } = roomNameOptions('Wine cellar', SECTIONS)
-    expect(typed).toEqual({ kind: 'typed', value: 'Wine cellar', match: null })
+    expect(typed).toEqual({ kind: 'typed', value: 'Wine cellar', label: 'Wine cellar', match: null })
     expect(options).toEqual([typed!])
     expect(roomNameOptions('Kitchen', SECTIONS).typed).toBeNull()
     // A case-only difference still offers the text as typed.

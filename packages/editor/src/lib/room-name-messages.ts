@@ -1,11 +1,14 @@
-import type { MessageDescriptor, PascalI18n } from '@pascal-app/core'
+import type { MessageDescriptor } from '@pascal-app/core'
 import type { RoomNameSection } from './room-name-catalog'
 
 /**
  * The room-name catalog in the UI language. The catalog stays English (it is
- * matched and numbered as data); the combobox shows and stores these.
+ * matched, numbered and stored as data); the combobox and room labels show these.
  * `room-name-catalog.test.ts` fails when a catalog name has no entry here.
  */
+/** Anything that translates a descriptor: a `PascalI18n`, or a stand-in in tests. */
+export type DescriptorTranslator = { _(descriptor: MessageDescriptor): string }
+
 export const ROOM_NAME_SECTION_TITLES: Record<string, MessageDescriptor> = {
   living: /* i18n */ { id: 'editor.roomName.section.living', message: 'Living' },
   sleeping: /* i18n */ { id: 'editor.roomName.section.sleeping', message: 'Sleeping' },
@@ -85,17 +88,26 @@ export const ROOM_NAME_MESSAGES: Record<string, MessageDescriptor> = {
 
 export function localizedRoomNameSections(
   sections: readonly RoomNameSection[],
-  i18n: PascalI18n,
+  i18n: DescriptorTranslator,
 ): RoomNameSection[] {
   return sections.map((section) => {
     const title = ROOM_NAME_SECTION_TITLES[section.id]
     return {
       ...section,
       title: title ? i18n._(title) : section.title,
-      names: section.names.map((name) => {
-        const message = ROOM_NAME_MESSAGES[name]
-        return message ? i18n._(message) : name
-      }),
+      labels: section.names.map((name) => displayRoomName(name, i18n)),
     }
   })
+}
+
+/**
+ * A room name in the UI language. Catalog names stay English in the scene
+ * (numbering, MCP and exports read them); a catalog name with the number the
+ * picker adds shows translated with that number ("Bedroom 2" → "Chambre 2").
+ * Anything else the user typed shows as written.
+ */
+export function displayRoomName(name: string, i18n: DescriptorTranslator): string {
+  const match = /^(.*?)(\s+\d+)?$/.exec(name.trim())
+  const message = match?.[1] ? ROOM_NAME_MESSAGES[match[1]] : undefined
+  return message ? `${i18n._(message)}${match?.[2] ?? ''}` : name
 }

@@ -1,8 +1,12 @@
-import type { RoomNameSection } from '../../../lib/room-name-catalog'
+import type { AnyNode } from '@pascal-app/core'
+import { numberedRoomName, type RoomNameSection } from '../../../lib/room-name-catalog'
 
 export type RoomNameOption = {
   kind: 'typed' | 'suggestion'
+  /** What a pick stores: the English catalog name, or the typed text as written. */
   value: string
+  /** What the row shows and the search matches, in the UI language. */
+  label: string
   match: { start: number; end: number } | null
 }
 
@@ -23,25 +27,41 @@ export function roomNameOptions(
 ): { typed: RoomNameOption | null; groups: RoomNameGroup[]; options: RoomNameOption[] } {
   const query = filtering ? typed.trim().toLowerCase() : ''
   const groups = sections.flatMap((section) => {
-    const options = section.names.flatMap((value): RoomNameOption[] => {
-      const start = query ? value.toLowerCase().indexOf(query) : -1
+    const options = section.names.flatMap((value, index): RoomNameOption[] => {
+      const label = section.labels?.[index] ?? value
+      const start = query ? label.toLowerCase().indexOf(query) : -1
       if (query && start < 0) return []
       return [
         {
           kind: 'suggestion',
           value,
+          label,
           match: start >= 0 ? { start, end: start + query.length } : null,
         },
       ]
     })
     return options.length ? [{ id: section.id, title: section.title, options }] : []
   })
-  const known = sections.some((section) => section.names.includes(typed))
+  const known = sections.some(
+    (section) => section.names.includes(typed) || !!section.labels?.includes(typed),
+  )
   const typedRow: RoomNameOption | null =
-    query && !known ? { kind: 'typed', value: typed, match: null } : null
+    query && !known ? { kind: 'typed', value: typed, label: typed, match: null } : null
   return {
     typed: typedRow,
     groups,
     options: [...(typedRow ? [typedRow] : []), ...groups.flatMap((group) => group.options)],
   }
+}
+
+/**
+ * What a pick writes to the scene: a suggestion's English catalog name, numbered
+ * against the level's other rooms, in every UI language; typed text as written.
+ */
+export function pickedRoomName(
+  nodes: Record<string, AnyNode>,
+  zoneId: string,
+  option: RoomNameOption,
+): string {
+  return option.kind === 'typed' ? option.value : numberedRoomName(nodes, zoneId, option.value)
 }

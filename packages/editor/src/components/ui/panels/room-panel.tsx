@@ -24,7 +24,6 @@ import { mezzanineElevationBounds } from '../../../lib/room-handle-drag'
 import type { RoomSelectionRecord } from '../../../lib/room-selection'
 import {
   baseRoomName,
-  numberedRoomName,
   type RoomNameSection,
   roomNameSections,
   roomNameUseCount,
@@ -54,10 +53,10 @@ import {
   RoomConstructionRows,
   roomInsideHeight,
 } from './room-construction-rows'
-import { type RoomNameOption, roomNameOptions } from './room-name-options'
+import { pickedRoomName, type RoomNameOption, roomNameOptions } from './room-name-options'
 import { localizedLevelName } from '../../../i18n/level-name'
 import { messageWithSlot } from '../../../i18n/message-slot'
-import { localizedRoomNameSections } from '../../../lib/room-name-messages'
+import { displayRoomName, localizedRoomNameSections } from '../../../lib/room-name-messages'
 
 /** "Room · Ground floor", "Mezzanine · in Kitchen", "Room · not enclosed". */
 export function roomKicker(
@@ -555,29 +554,31 @@ function RoomName({
 }) {
   const i18n = usePascalI18n()
   const nodes = useScene((state) => state.nodes)
-  const [value, setValue] = useState(name)
+  // The field shows the name in the UI language; the scene keeps what was stored.
+  const display = displayRoomName(name, i18n)
+  const [value, setValue] = useState(display)
   const [open, setOpen] = useState(false)
   const [typing, setTyping] = useState(false)
   const [active, setActive] = useState(-1)
-  const valueRef = useRef(name)
+  const valueRef = useRef(display)
   // Enter/click commit and then blur, and blur commits too; this keeps it one rename.
-  const committedRef = useRef(name)
-  const originalRef = useRef(name)
+  const committedRef = useRef(display)
+  const originalRef = useRef(display)
   const inputRef = useRef<HTMLInputElement>(null)
   const listId = useId()
   const { typed: typedRow, groups, options } = roomNameOptions(value, sections, typing)
   const expanded = open && options.length > 0
   const activeId = expanded && options[active] ? `${listId}-${active}` : undefined
-  const current = baseRoomName(value).toLowerCase()
+  const current = baseRoomName(name).toLowerCase()
 
   // A rename from elsewhere (undo, a collaborator, the plan) lands in the field
   // unless the user is editing it (the field stays mounted across renames).
   useEffect(() => {
     if (document.activeElement === inputRef.current) return
-    valueRef.current = name
-    committedRef.current = name
-    setValue(name)
-  }, [name])
+    valueRef.current = display
+    committedRef.current = display
+    setValue(display)
+  }, [display])
 
   // Opening and the arrow keys bring the active row into view; the pointer
   // only highlights (scrolling under it would move the row being clicked).
@@ -603,7 +604,7 @@ function RoomName({
     setTyping(false)
     setOpen(true)
     const all = roomNameOptions(valueRef.current, sections, false).options
-    const here = baseRoomName(valueRef.current).toLowerCase()
+    const here = baseRoomName(name).toLowerCase()
     scrollToActive.current = true
     setActive(Math.max(0, all.findIndex((option) => option.value.toLowerCase() === here)))
   }
@@ -618,10 +619,13 @@ function RoomName({
     renameRoom(zoneId, next)
   }
   const pick = (option: RoomNameOption) => {
-    const next =
-      option.kind === 'typed' ? option.value : numberedRoomName(nodes, zoneId, option.value)
-    type(next)
-    commit()
+    // A suggestion stores the English catalog name, numbered against the level's rooms,
+    // whatever the UI language; typed text is stored as written.
+    const stored = pickedRoomName(nodes, zoneId, option)
+    const shown = displayRoomName(stored, i18n)
+    type(shown)
+    committedRef.current = shown
+    if (stored !== name) renameRoom(zoneId, stored)
     setOpen(false)
     setTyping(false)
     // A pick is the answer: the field lets go. To fine-tune the name, click it
@@ -855,13 +859,13 @@ function RoomNameOptionLabel({ option }: { option: RoomNameOption }) {
       </span>
     )
   }
-  const { value, match } = option
-  if (!match) return <span className="min-w-0 flex-1 truncate">{value}</span>
+  const { label, match } = option
+  if (!match) return <span className="min-w-0 flex-1 truncate">{label}</span>
   return (
     <span className="min-w-0 flex-1 truncate">
-      {value.slice(0, match.start)}
-      <span className="font-semibold underline decoration-muted-foreground underline-offset-3">{value.slice(match.start, match.end)}</span>
-      {value.slice(match.end)}
+      {label.slice(0, match.start)}
+      <span className="font-semibold underline decoration-muted-foreground underline-offset-3">{label.slice(match.start, match.end)}</span>
+      {label.slice(match.end)}
     </span>
   )
 }
