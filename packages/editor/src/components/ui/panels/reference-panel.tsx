@@ -6,6 +6,7 @@ import {
   loadAssetUrl,
   type ScanNode,
   saveAsset,
+  useLocale,
   useScene,
 } from '@pascal-app/core'
 import {
@@ -23,6 +24,7 @@ import {
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { guideEmitter } from '../../../lib/guide-events'
 import { getGuideImageName } from '../../../lib/local-guide-image'
+import { formatReferenceScaleLabel } from '../../../lib/reference-scale'
 import { cn } from '../../../lib/utils'
 import useEditor from '../../../store/use-editor'
 import { isViewVisible, VIEW_2D } from '../../../store/view-layout'
@@ -33,16 +35,20 @@ import { PanelWrapper } from './panel-wrapper'
 
 type ReferenceNode = ScanNode | GuideNode
 
-function getScaleStatus(guide: GuideNode, scaleReferenceVisible: boolean) {
+function getScaleStatus(guide: GuideNode, scaleReferenceVisible: boolean, locale: string) {
   const reference = guide.scaleReference
   if (!reference) {
     return 'Uncalibrated'
   }
 
-  return `${scaleReferenceVisible ? 'Scaled' : 'Scaled (hidden)'} · ${reference.label}`
+  return `${scaleReferenceVisible ? 'Scaled' : 'Scaled (hidden)'} · ${formatReferenceScaleLabel(
+    reference,
+    locale,
+  )}`
 }
 
 export function ReferencePanel() {
+  const locale = useLocale()
   const selectedReferenceId = useEditor((s) => s.selectedReferenceId)
   const setSelectedReferenceId = useEditor((s) => s.setSelectedReferenceId)
   const guideUi = useEditor((s) =>
@@ -173,7 +179,7 @@ export function ReferencePanel() {
   const isScan = node.type === 'scan'
   const guideLocked = !isScan && guideUi?.locked === true
   const scaleReferenceVisible = !isScan && guideUi?.scaleReferenceVisible !== false
-  const scaleStatus = isScan ? null : getScaleStatus(node, scaleReferenceVisible)
+  const scaleStatus = isScan ? null : getScaleStatus(node, scaleReferenceVisible, locale)
 
   return (
     <PanelWrapper

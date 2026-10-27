@@ -123,6 +123,13 @@ import {
 } from '../../lib/keyboard-pan'
 import { measurementHint, parseMeasurement } from '../../lib/measurement-parser'
 import { formatLinearMeasurement, linearUnitToMeters } from '../../lib/measurements'
+import {
+  createGuideScaleReference,
+  formatReferenceScaleLabel,
+  isValidReferenceScaleDisplayLength,
+  MAX_REFERENCE_SCALE_DISPLAY_LENGTH,
+  type ReferenceScaleUnit,
+} from '../../lib/reference-scale'
 import { snapRegisteredDraftPoint } from '../../lib/registered-draft-snap'
 import { selectRoomFromHit } from '../../lib/room-selection-commands'
 import { enterBuildingFromPlanHit } from '../../lib/selection-routing'
@@ -527,8 +534,6 @@ type GuideTransformDraft = {
   scale: number
   rotation: number
 }
-
-export type ReferenceScaleUnit = 'meters' | 'centimeters' | 'feet' | 'inches'
 
 // The in-flight reference-scale measurement. Only the per-CLICK fields live
 // here (guide + start anchor); the rubber-band's moving END is the shared
@@ -2484,6 +2489,23 @@ export function parseReferenceScaleLength(
   )
 }
 
+export function getReferenceScaleInputError(
+  raw: string,
+  unit: ReferenceScaleUnit,
+  locale: string,
+): string | null {
+  if (raw.trim() === '') return 'Enter the real length of the line.'
+  const displayLength = parseReferenceScaleLength(raw, unit, locale)
+  if (displayLength === null || Number.isNaN(displayLength)) {
+    return `Enter a length like 3.5, 180cm or 5'11".`
+  }
+  if (!(displayLength > 0)) return 'Length must be greater than 0.'
+  if (!isValidReferenceScaleDisplayLength(displayLength)) {
+    return `Length must be at most ${formatFloorplanNumber(MAX_REFERENCE_SCALE_DISPLAY_LENGTH, locale)} ${REFERENCE_SCALE_LINGO_UNIT[unit]}.`
+  }
+  return null
+}
+
 function referenceScaleLengthHint(
   raw: string,
   unit: ReferenceScaleUnit,
@@ -2501,23 +2523,6 @@ function referenceScaleLengthHint(
       precision: 2,
     },
   )
-}
-
-function getReferenceScaleUnitLabel(unit: ReferenceScaleUnit) {
-  switch (unit) {
-    case 'centimeters':
-      return 'cm'
-    case 'feet':
-      return 'ft'
-    case 'inches':
-      return 'in'
-    default:
-      return 'm'
-  }
-}
-
-function formatReferenceScaleLabel(value: number, unit: ReferenceScaleUnit, locale: string) {
-  return `${formatFloorplanNumber(value, locale)} ${getReferenceScaleUnitLabel(unit)}`
 }
 
 function getPolygonAreaAndCentroid(polygon: Point2D[]) {
@@ -3296,6 +3301,7 @@ function FloorplanReferenceScaleLayer({
   unit: 'metric' | 'imperial'
   unitsPerPixel: number
 }) {
+  const locale = useLocale()
   const visibleReferences = guides
     .filter((guide) => guideUi[guide.id]?.scaleReferenceVisible !== false)
     .map((guide) => guide.scaleReference)
@@ -3305,16 +3311,19 @@ function FloorplanReferenceScaleLayer({
 
   return (
     <>
-      {visibleReferences.map((reference, index) => (
-        <FloorplanReferenceScaleLine
-          end={reference.end}
-          key={`${reference.label}-${index}-${reference.start.join(',')}-${reference.end.join(',')}`}
-          label={reference.label}
-          palette={palette}
-          start={reference.start}
-          unitsPerPixel={unitsPerPixel}
-        />
-      ))}
+      {visibleReferences.map((reference, index) => {
+        const label = formatReferenceScaleLabel(reference, locale)
+        return (
+          <FloorplanReferenceScaleLine
+            end={reference.end}
+            key={`${index}-${reference.start.join(',')}-${reference.end.join(',')}`}
+            label={label}
+            palette={palette}
+            start={reference.start}
+            unitsPerPixel={unitsPerPixel}
+          />
+        )
+      })}
       {draft?.start && (
         <FloorplanReferenceScaleDraftLine
           palette={palette}
@@ -7178,7 +7187,7 @@ export function FloorplanPanel({
     }
 
     const displayLength = parseReferenceScaleLength(referenceScaleValue, referenceScaleUnit, locale)
-    if (!(displayLength && displayLength > 0)) {
+    if (displayLength === null || !isValidReferenceScaleDisplayLength(displayLength)) {
       return
     }
 
@@ -7215,14 +7224,17 @@ export function FloorplanPanel({
       {
         position: nextGuidePosition,
         scale: nextGuideScale,
-        scaleReference: {
-          start: pendingReferenceScale.start,
-          end: scaledEnd,
-          realLengthMeters,
-          measuredLengthUnits: scaledMeasuredLengthUnits,
-          metersPerUnit,
-          label: formatReferenceScaleLabel(displayLength, referenceScaleUnit, locale),
-        },
+        scaleReference: createGuideScaleReference(
+          {
+            start: pendingReferenceScale.start,
+            end: scaledEnd,
+            realLengthMeters,
+            measuredLengthUnits: scaledMeasuredLengthUnits,
+            metersPerUnit,
+          },
+          displayLength,
+          referenceScaleUnit,
+        ),
       } as Partial<GuideNode>,
     )
     setGuideLocked(pendingReferenceScale.guideId, true)
@@ -11225,7 +11237,7 @@ export function FloorplanPanel({
   const pendingReferenceDisplayLength =
     parseReferenceScaleLength(referenceScaleValue, referenceScaleUnit, locale) ?? Number.NaN
   const pendingReferenceRealLengthMeters =
-    pendingReferenceScale && pendingReferenceDisplayLength > 0
+    pendingReferenceScale && isValidReferenceScaleDisplayLength(pendingReferenceDisplayLength)
       ? convertReferenceLengthToMeters(pendingReferenceDisplayLength, referenceScaleUnit)
       : null
   const pendingReferenceMetersPerUnit =
@@ -11236,14 +11248,11 @@ export function FloorplanPanel({
     pendingReferenceScale && pendingReferenceRealLengthMeters
       ? pendingReferenceRealLengthMeters / pendingReferenceScale.measuredLengthUnits
       : null
-  const referenceScaleInputError =
-    referenceScaleValue.trim() === ''
-      ? 'Enter the real length of the line.'
-      : Number.isNaN(pendingReferenceDisplayLength)
-        ? `Enter a length like 3.5, 180cm or 5'11".`
-        : pendingReferenceDisplayLength > 0
-          ? null
-          : 'Length must be greater than 0.'
+  const referenceScaleInputError = getReferenceScaleInputError(
+    referenceScaleValue,
+    referenceScaleUnit,
+    locale,
+  )
   const referenceScaleHint = referenceScaleInputError
     ? null
     : referenceScaleLengthHint(referenceScaleValue, referenceScaleUnit, locale)
@@ -11402,7 +11411,7 @@ export function FloorplanPanel({
             <div className="mt-3 rounded-lg bg-muted/45 px-3 py-2 text-muted-foreground text-xs">
               {pendingReferenceImageScaleFactor
                 ? `Image will scale ${formatFloorplanNumber(pendingReferenceImageScaleFactor, locale, 3)}x from the first point.`
-                : 'Enter a length greater than 0.'}
+                : 'Enter a valid length to preview the scale.'}
             </div>
 
             <div className="mt-4 flex justify-end gap-2">

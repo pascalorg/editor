@@ -454,6 +454,26 @@ function writePo(path: string, po: PoFile): void {
   writeFileSync(path, stringifyPo(po, { foldLength: 0 }))
 }
 
+/**
+ * Review state extraction writes for one target entry, or undefined to keep
+ * it. A newly filled translation is a draft unless a person already marked it
+ * `Review: human` without `fuzzy`; extraction never approves copy itself.
+ */
+export function annotatedState(
+  prior: TranslationEntry | undefined,
+  translation: string,
+  sourceHash: string,
+): Pick<TranslationEntry, 'sourceHash' | 'review' | 'fuzzy'> | undefined {
+  if (!translation) return { sourceHash: undefined, review: 'missing', fuzzy: false }
+  if (prior?.sourceHash && prior.sourceHash !== sourceHash) {
+    return { sourceHash: prior.sourceHash, review: 'required', fuzzy: true }
+  }
+  if (prior?.sourceHash) return undefined
+  return prior?.review === 'human' && !prior.fuzzy
+    ? { sourceHash, review: 'human', fuzzy: false }
+    : { sourceHash, review: 'required', fuzzy: true }
+}
+
 function annotateCatalogs(
   previous: Map<(typeof TARGET_LOCALES)[number], Record<string, TranslationEntry>>,
 ): void {
@@ -469,18 +489,12 @@ function annotateCatalogs(
       replaceComment(item, ENGLISH_PREFIX, JSON.stringify(source.message))
       const sourceHash = hashSource(source.message)
       const prior = previous.get(locale)?.[item.msgid]
-      if (!item.msgstr[0]) {
-        replaceComment(item, SOURCE_HASH_PREFIX)
-        replaceComment(item, REVIEW_PREFIX, 'missing')
-        delete item.flags.fuzzy
-      } else if (prior?.sourceHash && prior.sourceHash !== sourceHash) {
-        replaceComment(item, SOURCE_HASH_PREFIX, prior.sourceHash)
-        replaceComment(item, REVIEW_PREFIX, 'required')
-        item.flags.fuzzy = true
-      } else if (!prior?.sourceHash) {
-        replaceComment(item, SOURCE_HASH_PREFIX, sourceHash)
-        replaceComment(item, REVIEW_PREFIX, 'human')
-        delete item.flags.fuzzy
+      const state = annotatedState(prior, item.msgstr[0] ?? '', sourceHash)
+      if (state) {
+        replaceComment(item, SOURCE_HASH_PREFIX, state.sourceHash)
+        replaceComment(item, REVIEW_PREFIX, state.review)
+        if (state.fuzzy) item.flags.fuzzy = true
+        else delete item.flags.fuzzy
       }
     }
     writePo(path, po)

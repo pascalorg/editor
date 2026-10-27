@@ -5,6 +5,7 @@ import type { AddressInfo } from 'node:net'
 import { Readable } from 'node:stream'
 import { finished } from 'node:stream/promises'
 import { ProtocolError } from '@modelcontextprotocol/server'
+import { __resetAllowedOriginsCacheForTests } from '@pascal-app/core/schema'
 import {
   isBlockedAddress,
   type PinnedRequestInit,
@@ -20,9 +21,10 @@ function response(
   status: number,
   headers: Record<string, string> = {},
   body = '',
+  statusMessage = '',
 ): IncomingMessage {
   const res = Readable.from(body ? [Buffer.from(body)] : []) as unknown as IncomingMessage
-  Object.assign(res, { statusCode: status, statusMessage: '', headers })
+  Object.assign(res, { statusCode: status, statusMessage, headers })
   return res
 }
 
@@ -83,6 +85,7 @@ async function expectBlocked(promise: Promise<unknown>, reason = 'url_host_block
 let errorLog: ReturnType<typeof spyOn>
 beforeEach(() => {
   errorLog = spyOn(console, 'error').mockImplementation(() => {})
+  __resetAllowedOriginsCacheForTests()
 })
 afterEach(() => {
   errorLog.mockRestore()
@@ -331,24 +334,24 @@ describe('safeFetch — SSRF protection', () => {
 
   test('logs blocked URLs without query, fragment or userinfo', async () => {
     const { deps } = fakeNetwork({ 'a.example': ['10.0.0.7'] })
-    const secretUrl = (scheme: string) =>
-      `${scheme}://user:hunter2@a.example/img.png?X-Amz-Signature=s3cr3t&token=t0k3n#frag`
+    const query = '?X-Amz-Signature=s3cr3t&token=t0k3n#frag'
+    const secretUrl = (scheme: string) => `${scheme}://a.example/img.png${query}`
     await expectBlocked(safeFetch(secretUrl('http'), {}, deps))
     await expectBlocked(safeFetch(secretUrl('ftp')), 'url_scheme_not_allowed')
-    const prev = process.env.PASCAL_ALLOWED_ASSET_ORIGINS
-    process.env.PASCAL_ALLOWED_ASSET_ORIGINS = 'https://cdn.example.com'
-    try {
-      await expectBlocked(safeFetch(secretUrl('https')), 'url_origin_not_allowlisted')
-    } finally {
-      if (prev === undefined) delete process.env.PASCAL_ALLOWED_ASSET_ORIGINS
-      else process.env.PASCAL_ALLOWED_ASSET_ORIGINS = prev
-    }
+    await expectBlocked(
+      safeFetch(`https://user:hunter2@a.example/img.png${query}`),
+      'url_credentials_not_allowed',
+    )
+    await withAllowlist('https://cdn.example.com', () =>
+      expectBlocked(safeFetch(secretUrl('https')), 'url_origin_not_allowlisted'),
+    )
     const lines = errorLog.mock.calls.map((args) => String(args[0]))
-    expect(lines).toHaveLength(3)
+    expect(lines).toHaveLength(4)
     const logged = lines.map((line) => JSON.parse(line.slice(line.indexOf('{'))).url)
     expect(logged).toEqual([
       'http://a.example/img.png',
       'ftp://a.example',
+      'https://a.example/img.png',
       'https://a.example/img.png',
     ])
     for (const line of lines) {
@@ -613,7 +616,7 @@ describe('safeFetch — ports and redirects', () => {
 const nextTurn = () => new Promise<void>((resolve) => setImmediate(resolve))
 
 describe('safeFetch — DNS and the timeout', () => {
-  test('a DNS answer or failure arriving after the timeout changes nothing', async () => {
+  test('a DNS answer (even a rebinding to loopback) or failure after the timeout changes nothing', async () => {
     const unhandled: unknown[] = []
     const onUnhandled = (reason: unknown) => unhandled.push(reason)
     process.on('unhandledRejection', onUnhandled)
@@ -638,11 +641,13 @@ describe('safeFetch — DNS and the timeout', () => {
         expect((err as Error).message).toContain('fetch_timeout')
       }
       jest.useRealTimers()
-      answers[0]!.resolve([{ address: PUBLIC_V4, family: 4 }])
+      // A rebinding answer: had safeFetch still been waiting, it would block or pin it.
+      answers[0]!.resolve([{ address: '127.0.0.1', family: 4 }])
       answers[1]!.reject(new Error('ENOTFOUND late.example'))
       await nextTurn()
       await nextTurn()
       expect(requests).toHaveLength(0)
+      expect(errorLog.mock.calls.map((args) => String(args[0]))).toEqual([])
       expect(unhandled).toEqual([])
     } finally {
       jest.useRealTimers()
@@ -687,7 +692,7 @@ describe('safeFetch — DNS and the timeout', () => {
     const failure = () => {
       const err = new Error('ENOTFOUND')
       let seen = false
-      Object.defineProperty(err, 'message', {
+      Object.defineProperty(err, 'code', {
         get() {
           if (!seen) observe()
           seen = true
@@ -751,5 +756,143 @@ describe('pinnedLookup', () => {
     const lookup = pinnedLookup([{ address: PUBLIC_V4, family: 4 }])
     const err = await new Promise((resolve) => lookup('x', { family: 6 }, (e) => resolve(e)))
     expect(err).toBeInstanceOf(Error)
+  })
+})
+
+describe('safeFetch — request credentials', () => {
+  test('URLs with userinfo are refused before any lookup, on the first hop or a redirect', async () => {
+    const { deps, resolved, requests } = fakeNetwork(
+      { 'a.example': [PUBLIC_V4] },
+      { 'https://a.example/r': () => response(302, { location: 'https://u:p@a.example/next' }) },
+    )
+    for (const url of [
+      'https://user:hunter2@a.example/x',
+      'https://user@a.example/x',
+      'https://:pw@a.example/x',
+    ]) {
+      await expectBlocked(safeFetch(url, {}, deps), 'url_credentials_not_allowed')
+    }
+    expect(resolved).toHaveLength(0)
+    await expectBlocked(safeFetch('https://a.example/r', {}, deps), 'url_credentials_not_allowed')
+    expect(requests.map((r) => r.url)).toEqual(['https://a.example/r'])
+  })
+})
+
+describe('safeFetch — error data is redacted at the source', () => {
+  const Q = '?token=s3cr3t&X-Amz-Signature=s3cr3t#frag'
+  const at = (path: string) => `https://a.example${path}${Q}`
+  const hanging = (init: PinnedRequestInit) =>
+    new Promise<IncomingMessage>((_, reject) =>
+      init.signal.addEventListener('abort', () =>
+        reject(Object.assign(new Error(`aborted ${at('/x')}`), { name: 'AbortError' })),
+      ),
+    )
+  const net = () => {
+    const network = fakeNetwork(
+      { 'a.example': [PUBLIC_V4], 'private.example': ['10.0.0.1'], 'empty.example': [] },
+      {
+        [at('/redirect-nowhere')]: () => response(302),
+        [at('/fail')]: () => response(500),
+        [at('/echo')]: () => response(403, {}, '', `Forbidden ${at('/echo')} user:hunter2@`),
+        [at('/declared')]: () => response(200, { 'content-length': '100' }),
+        [at('/streamed')]: () => response(200, {}, 'x'.repeat(100)),
+        [at('/loop')]: () => response(302, { location: at('/loop') }),
+      },
+    )
+    const { resolve, request } = network.deps
+    network.deps.resolve = async (hostname) => {
+      if (hostname === 'gone.example') {
+        throw Object.assign(new Error(`getaddrinfo ENOTFOUND gone.example ${Q}`), {
+          code: 'ENOTFOUND',
+        })
+      }
+      return resolve(hostname)
+    }
+    network.deps.request = async (url, init) => {
+      if (url.pathname === '/hang') return hanging(init)
+      if (url.pathname === '/refused') {
+        throw Object.assign(new Error(`connect ECONNREFUSED ${url.toString()}`), {
+          code: 'ECONNREFUSED',
+        })
+      }
+      return request(url, init)
+    }
+    return network.deps
+  }
+
+  const cases: [reason: string, run: () => Promise<unknown>][] = [
+    ['invalid_url', () => safeFetch(`http://exa mple.com/x${Q}`)],
+    ['url_scheme_not_allowed', () => safeFetch(`ftp://a.example/x${Q}`)],
+    ['url_credentials_not_allowed', () => safeFetch(`https://user:hunter2@a.example/x${Q}`)],
+    [
+      'url_origin_not_allowlisted',
+      () => withAllowlist('https://cdn.example.com', () => safeFetch(at('/x'))),
+    ],
+    ['url_port_not_allowed', () => safeFetch(`https://a.example:8080/x${Q}`)],
+    ['url_host_blocked', () => safeFetch(`http://localhost/x${Q}`)],
+    ['url_host_blocked', () => safeFetch(`https://private.example/x${Q}`, {}, net())],
+    ['dns_lookup_failed', () => safeFetch(`https://gone.example/x${Q}`, {}, net())],
+    ['dns_lookup_failed', () => safeFetch(`https://empty.example/x${Q}`, {}, net())],
+    ['redirect_without_location', () => safeFetch(at('/redirect-nowhere'), {}, net())],
+    ['fetch_failed', () => safeFetch(at('/fail'), {}, net())],
+    ['fetch_failed', () => safeFetch(at('/echo'), {}, net())],
+    ['response_too_large', () => safeFetch(at('/declared'), { maxBytes: 10 }, net())],
+    ['response_too_large', () => safeFetch(at('/streamed'), { maxBytes: 10 }, net())],
+    ['too_many_redirects', () => safeFetch(at('/loop'), {}, net())],
+    ['fetch_error', () => safeFetch(at('/refused'), {}, net())],
+    [
+      'fetch_timeout',
+      async () => {
+        jest.useFakeTimers()
+        try {
+          const pending = safeFetch(at('/hang'), { timeoutMs: 1_000 }, net()).catch((e) => e)
+          await Promise.resolve()
+          await Promise.resolve()
+          jest.advanceTimersByTime(1_000)
+          throw await pending
+        } finally {
+          jest.useRealTimers()
+        }
+      },
+    ],
+  ]
+
+  for (const [reason, run] of cases) {
+    test(`${reason}: no query string, fragment or userinfo in the error data`, async () => {
+      const err = await run().catch((e) => e)
+      expect(err).toBeInstanceOf(ProtocolError)
+      expect((err as Error).message).toContain(reason)
+      const data = JSON.stringify((err as ProtocolError).data)
+      for (const leak of ['s3cr3t', 'hunter2', 'token=', '?', '#', '@']) {
+        expect([reason, data, data.includes(leak)]).toEqual([reason, data, false])
+      }
+    })
+  }
+
+  test("a failed response reports the standard status text, not the server's reason phrase", async () => {
+    const err = await safeFetch(at('/echo'), {}, net()).catch((e) => e)
+    expect((err as ProtocolError).data).toEqual({
+      url: 'https://a.example/echo',
+      status: 403,
+      statusText: 'Forbidden',
+    })
+  })
+
+  test('network failures report a code, not their message', async () => {
+    const dns = await safeFetch(`https://gone.example/x${Q}`, {}, net()).catch((e) => e)
+    expect((dns as ProtocolError).data).toEqual({
+      url: 'https://gone.example/x',
+      hostname: 'gone.example',
+      code: 'ENOTFOUND',
+    })
+    const fetchErr = await safeFetch(at('/refused'), {}, net()).catch((e) => e)
+    expect((fetchErr as ProtocolError).data).toEqual({
+      url: 'https://a.example/refused',
+      code: 'ECONNREFUSED',
+    })
+    const loop = await safeFetch(at('/loop'), {}, net()).catch((e) => e)
+    expect((loop as ProtocolError).data).toEqual({
+      hops: Array.from({ length: 4 }, () => 'https://a.example/loop'),
+    })
   })
 })

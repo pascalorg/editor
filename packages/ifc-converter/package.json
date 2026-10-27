@@ -19,12 +19,15 @@
   },
   "files": [
     "dist",
+    "!dist/__bench__",
     "README.md"
   ],
   "scripts": {
     "build": "tsc --build",
+    "check-types": "tsc -p tsconfig.bench.json --pretty false",
     "dev": "tsgo --build --watch",
     "test": "bun test tests",
+    "bench:normals": "bun run src/__bench__/normal-recompute.bench.ts",
     "prepublishOnly": "npm run build"
   },
   "dependencies": {

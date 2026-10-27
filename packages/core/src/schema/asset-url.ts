@@ -17,14 +17,18 @@ const ALLOWED_SCHEMES = ['artifact:', 'asset:', 'blob:', 'https:', 'data:image/'
  * accepted, here and by the MCP server's `safeFetch`. Set to a comma-separated
  * list (e.g. `https://cdn.pascal.app`). When unset or empty, any `https:`
  * origin is permitted; when set, only listed origins are, and a value with no
- * valid entry (whitespace only, every entry malformed) permits none.
+ * valid entry (whitespace only, every entry malformed) permits no `https:` origin.
  */
 export const ALLOWED_ORIGINS_ENV = 'PASCAL_ALLOWED_ASSET_ORIGINS'
 
 export type AllowedOriginIssue = {
   /** Position of the entry in the comma-separated list, from 0. */
   index: number
-  reason: 'not_a_url' | 'scheme_not_allowed'
+  /**
+   * `credentials_dropped`: the entry is kept for its origin, its userinfo is not.
+   * Every other reason means the entry was skipped.
+   */
+  reason: 'not_a_url' | 'scheme_not_allowed' | 'wildcard_not_supported' | 'credentials_dropped'
 }
 
 /**
@@ -32,8 +36,10 @@ export type AllowedOriginIssue = {
  * so `https://CDN.example.com:443/` and `https://cdn.example.com` are the same
  * entry. Only `http:` and `https:` entries count: other schemes either have no
  * origin or, like `blob:https://…`, borrow one they were not meant to grant.
- * Rejected entries are reported by position and reason only, never by value,
- * since a malformed entry may still carry credentials (`user:secret@host`).
+ * Wildcard hosts (`https://*.example.com`) are not patterns, so they are
+ * rejected rather than kept as an origin that never matches. Issues are
+ * reported by position and reason only, never by value, since an entry may
+ * carry credentials (`https://user:secret@host`).
  */
 export function parseAllowedOrigins(raw: string): {
   origins: Set<string>
@@ -55,6 +61,11 @@ export function parseAllowedOrigins(raw: string): {
       issues.push({ index, reason: 'scheme_not_allowed' })
       return
     }
+    if (parsed.hostname.includes('*')) {
+      issues.push({ index, reason: 'wildcard_not_supported' })
+      return
+    }
+    if (parsed.username || parsed.password) issues.push({ index, reason: 'credentials_dropped' })
     origins.add(parsed.origin)
   })
   return { origins, issues }
@@ -62,20 +73,37 @@ export function parseAllowedOrigins(raw: string): {
 
 let allowlistCache: { raw: string; origins: ReadonlySet<string> } | null = null
 
+/** Test-only: forget the cached allowlist so its warnings are logged again. */
+export function __resetAllowedOriginsCacheForTests(): void {
+  allowlistCache = null
+}
+
 /**
  * The allowlist set in `raw` (the value of {@link ALLOWED_ORIGINS_ENV}), or
- * `undefined` when it is unset or empty. Rejected entries, and a value with no
- * valid entry at all, are warned about once per distinct value.
+ * `undefined` when it is unset or empty. Only the most recent value is cached,
+ * so its warnings (skipped entries, dropped credentials, no valid entry, no
+ * https: entry) are logged when a value is first read and again whenever the
+ * value changes.
  */
 export function allowedOriginsFrom(raw: string | undefined): ReadonlySet<string> | undefined {
   if (!raw) return undefined
   if (allowlistCache?.raw === raw) return allowlistCache.origins
   const { origins, issues } = parseAllowedOrigins(raw)
   for (const issue of issues) {
-    console.warn(`[pascal] asset_allowlist_entry_ignored ${JSON.stringify(issue)}`)
+    if (issue.reason === 'credentials_dropped') {
+      console.warn(
+        `[pascal] asset_allowlist_entry_credentials_dropped ${JSON.stringify({ index: issue.index })}`,
+      )
+    } else {
+      console.warn(`[pascal] asset_allowlist_entry_ignored ${JSON.stringify(issue)}`)
+    }
   }
   if (origins.size === 0) {
-    console.warn('[pascal] asset_allowlist_has_no_valid_entries: no https: origin is permitted')
+    console.warn('[pascal] asset_allowlist_has_no_valid_entries: no origin is permitted')
+  } else if (![...origins].some((origin) => origin.startsWith('https://'))) {
+    console.warn(
+      '[pascal] asset_allowlist_has_no_https_entries: scene asset URLs accept only https: origins, so every one is rejected (safeFetch still fetches the listed http: origins)',
+    )
   }
   allowlistCache = { raw, origins }
   return origins
