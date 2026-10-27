@@ -331,24 +331,24 @@ describe('safeFetch — SSRF protection', () => {
 
   test('logs blocked URLs without query, fragment or userinfo', async () => {
     const { deps } = fakeNetwork({ 'a.example': ['10.0.0.7'] })
-    const secretUrl = (scheme: string) =>
-      `${scheme}://user:hunter2@a.example/img.png?X-Amz-Signature=s3cr3t&token=t0k3n#frag`
+    const query = '?X-Amz-Signature=s3cr3t&token=t0k3n#frag'
+    const secretUrl = (scheme: string) => `${scheme}://a.example/img.png${query}`
     await expectBlocked(safeFetch(secretUrl('http'), {}, deps))
     await expectBlocked(safeFetch(secretUrl('ftp')), 'url_scheme_not_allowed')
-    const prev = process.env.PASCAL_ALLOWED_ASSET_ORIGINS
-    process.env.PASCAL_ALLOWED_ASSET_ORIGINS = 'https://cdn.example.com'
-    try {
-      await expectBlocked(safeFetch(secretUrl('https')), 'url_origin_not_allowlisted')
-    } finally {
-      if (prev === undefined) delete process.env.PASCAL_ALLOWED_ASSET_ORIGINS
-      else process.env.PASCAL_ALLOWED_ASSET_ORIGINS = prev
-    }
+    await expectBlocked(
+      safeFetch(`https://user:hunter2@a.example/img.png${query}`),
+      'url_credentials_not_allowed',
+    )
+    await withAllowlist('https://cdn.example.com', () =>
+      expectBlocked(safeFetch(secretUrl('https')), 'url_origin_not_allowlisted'),
+    )
     const lines = errorLog.mock.calls.map((args) => String(args[0]))
-    expect(lines).toHaveLength(3)
+    expect(lines).toHaveLength(4)
     const logged = lines.map((line) => JSON.parse(line.slice(line.indexOf('{'))).url)
     expect(logged).toEqual([
       'http://a.example/img.png',
       'ftp://a.example',
+      'https://a.example/img.png',
       'https://a.example/img.png',
     ])
     for (const line of lines) {
@@ -753,5 +753,24 @@ describe('pinnedLookup', () => {
     const lookup = pinnedLookup([{ address: PUBLIC_V4, family: 4 }])
     const err = await new Promise((resolve) => lookup('x', { family: 6 }, (e) => resolve(e)))
     expect(err).toBeInstanceOf(Error)
+  })
+})
+
+describe('safeFetch — request credentials', () => {
+  test('URLs with userinfo are refused before any lookup, on the first hop or a redirect', async () => {
+    const { deps, resolved, requests } = fakeNetwork(
+      { 'a.example': [PUBLIC_V4] },
+      { 'https://a.example/r': () => response(302, { location: 'https://u:p@a.example/next' }) },
+    )
+    for (const url of [
+      'https://user:hunter2@a.example/x',
+      'https://user@a.example/x',
+      'https://:pw@a.example/x',
+    ]) {
+      await expectBlocked(safeFetch(url, {}, deps), 'url_credentials_not_allowed')
+    }
+    expect(resolved).toHaveLength(0)
+    await expectBlocked(safeFetch('https://a.example/r', {}, deps), 'url_credentials_not_allowed')
+    expect(requests.map((r) => r.url)).toEqual(['https://a.example/r'])
   })
 })

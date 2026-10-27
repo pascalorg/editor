@@ -205,6 +205,8 @@ function assertAllowedUrl(url: string): URL {
   if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
     blocked('url_scheme_not_allowed', parsed, { protocol: parsed.protocol })
   }
+  // Node would send `user:pass@` as a Basic `Authorization` header.
+  if (parsed.username || parsed.password) blocked('url_credentials_not_allowed', parsed)
   const allowlist = allowedOriginsFrom(process.env[ALLOWED_ORIGINS_ENV])
   if (allowlist) {
     if (!allowlist.has(parsed.origin)) {
