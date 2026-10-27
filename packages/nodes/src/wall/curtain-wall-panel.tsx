@@ -5,7 +5,7 @@ import {
   type CurtainPanelType,
   type CurtainWallConfig,
   curtainGridPositions,
-  formatNumber,
+  formatFixed,
   getCurtainWallConfig,
   getEffectiveNode,
   getWallCurveLength,
@@ -224,7 +224,7 @@ function GridSection({
             return i18n._({ id: 'node.wall.curtain.noPanels', message: 'No panels' })
           const min = metersToLinearUnit(Math.min(...spans), unit)
           const max = metersToLinearUnit(Math.max(...spans), unit)
-          const spacing = `${formatNumber(min, { min: 2, max: 2, locale: i18n.getLocale() })}${max - min > 0.005 ? `–${formatNumber(max, { min: 2, max: 2, locale: i18n.getLocale() })}` : ''} ${getLinearUnitLabel(unit)}`
+          const spacing = `${formatFixed(min, 2, i18n.getLocale())}${max - min > 0.005 ? `–${formatFixed(max, 2, i18n.getLocale())}` : ''} ${getLinearUnitLabel(unit)}`
           return vertical
             ? i18n._({
                 id: 'node.wall.curtain.rowSpacing',
@@ -561,8 +561,8 @@ export function CurtainWallPanel({
               values: {
                 thickness:
                   unit === 'metric'
-                    ? `${formatNumber(effectiveThickness * 1000, { min: 1, max: 1, locale: i18n.getLocale() })} mm`
-                    : `${formatNumber(metersToLinearUnit(effectiveThickness, unit), { min: 3, max: 3, locale: i18n.getLocale() })} ${getLinearUnitLabel(unit)}`,
+                    ? `${formatFixed(effectiveThickness * 1000, 1, i18n.getLocale())} mm`
+                    : `${formatFixed(metersToLinearUnit(effectiveThickness, unit), 3, i18n.getLocale())} ${getLinearUnitLabel(unit)}`,
               },
             })}
           </p>
@@ -674,10 +674,13 @@ export function CurtainWallPanel({
               <div className="space-y-2 text-[11px] text-muted-foreground">
                 <p>
                   {i18n._({
-                    id: 'node.wall.curtainWallPanel.hiddenCustomPanels',
+                    id: 'node.wall.curtainWallPanel.hiddenCustomPanelCount',
                     message:
-                      '{length, plural, one {# custom panel is outside this grid. It returns if the grid expands.} other {# custom panels are outside this grid. They return if the grid expands.}}',
-                    values: { length: hiddenOverrides.length },
+                      '{length, plural, one {{number} custom panel is outside this grid. It returns if the grid expands.} other {{number} custom panels are outside this grid. They return if the grid expands.}}',
+                    values: {
+                      length: hiddenOverrides.length,
+                      number: String(hiddenOverrides.length),
+                    },
                   })}
                 </p>
                 <button

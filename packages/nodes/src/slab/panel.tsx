@@ -2,7 +2,7 @@
 
 import {
   type AnyNode,
-  formatNumber,
+  formatFixed,
   isDerivedNode,
   MIN_SLAB_THICKNESS,
   type SlabNode,
@@ -485,11 +485,7 @@ export function SlabPanel() {
                         id: 'node.holeSummary',
                         message: '{area} m² · {count, plural, one {# pt} other {# pts}} · {source}',
                         values: {
-                          area: formatNumber(holeArea, {
-                            min: 2,
-                            max: 2,
-                            locale: i18n.getLocale(),
-                          }),
+                          area: formatFixed(holeArea, 2, i18n.getLocale()),
                           count: hole.length,
                           source: isAutoHole
                             ? autoLabel

@@ -3,7 +3,7 @@
 import {
   type AnyNode,
   type CeilingNode,
-  formatNumber,
+  formatFixed,
   resolveCeilingHeight,
   usePascalI18n,
   useScene,
@@ -417,11 +417,7 @@ export function CeilingPanel() {
                         id: 'node.holeSummary',
                         message: '{area} m² · {count, plural, one {# pt} other {# pts}} · {source}',
                         values: {
-                          area: formatNumber(holeArea, {
-                            min: 2,
-                            max: 2,
-                            locale: i18n.getLocale(),
-                          }),
+                          area: formatFixed(holeArea, 2, i18n.getLocale()),
                           count: hole.length,
                           source: isAutoHole
                             ? autoLabel

@@ -38,9 +38,10 @@ export function RoomOpeningsField({
     [nodes, zoneId, surface],
   )
   const openingCount = i18n._({
-    id: 'editor.panels.roomOpeningsField.openingCount',
-    message: '{count, plural, =0 {No openings} one {# opening} other {# openings}}',
-    values: { count: openings.length },
+    id: 'editor.panels.roomOpeningsField.openings',
+    // {number} rather than #: counts are written without grouping, as before ("1000 openings").
+    message: '{count, plural, =0 {No openings} one {{number} opening} other {{number} openings}}',
+    values: { count: openings.length, number: String(openings.length) },
   })
   const editing = useFloorEditSession((s) => surface === 'floor' && s.session?.zoneId === zoneId)
   const cut = (

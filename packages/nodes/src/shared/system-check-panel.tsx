@@ -4,7 +4,7 @@ import {
   type AnyNode,
   type AnyNodeId,
   emitter,
-  formatNumber,
+  formatFixed,
   getLevelElevations,
   summarizeSystemFor,
   usePascalI18n,
@@ -146,11 +146,7 @@ export default function SystemCheckPanel({
                   message: 'Selected: {count, plural, one {# run} other {# runs}} · {length} m',
                   values: {
                     count: summary.runCount,
-                    length: formatNumber(summary.runLengthM, {
-                      min: 1,
-                      max: 1,
-                      locale: i18n.getLocale(),
-                    }),
+                    length: formatFixed(summary.runLengthM, 1, i18n.getLocale()),
                   },
                 })}
               </span>
