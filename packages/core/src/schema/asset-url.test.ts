@@ -1,5 +1,6 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { ALLOWED_ORIGINS_ENV, AssetUrl } from './asset-url'
+import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test'
+import { ALLOWED_ORIGINS_ENV, AssetUrl, allowedOriginsFrom, parseAllowedOrigins } from './asset-url'
+import { GuideNode } from './nodes/guide'
 
 function isValid(url: string): boolean {
   return AssetUrl.safeParse(url).success
@@ -133,5 +134,117 @@ describe('AssetUrl', () => {
       expect(isValid('https://cdn.pascal.app:8443/x')).toBe(true)
       expect(isValid('https://cdn.pascal.app/x')).toBe(false)
     })
+
+    test('entries with a trailing slash, uppercase or :443 still admit scene assets on that CDN', () => {
+      if (!g.process?.env) return
+      for (const entry of [
+        'https://cdn.pascal.app/',
+        'HTTPS://CDN.PASCAL.APP',
+        'https://cdn.pascal.app:443',
+      ]) {
+        g.process.env[ALLOWED_ORIGINS_ENV] = entry
+        const guide = GuideNode.safeParse({ url: 'https://cdn.pascal.app/plans/ground.png' })
+        expect([entry, guide.success]).toEqual([entry, true])
+        expect([entry, isValid('https://cdn.other.com/a.glb')]).toEqual([entry, false])
+      }
+    })
+
+    test('a whitespace-only or all-invalid allowlist admits no https origin', () => {
+      if (!g.process?.env) return
+      const warn = spyOn(console, 'warn').mockImplementation(() => {})
+      try {
+        for (const value of ['   ', ' , ', 'cdn.pascal.app']) {
+          g.process.env[ALLOWED_ORIGINS_ENV] = value
+          expect([value, isValid('https://cdn.pascal.app/a.glb')]).toEqual([value, false])
+          expect([value, isValid('asset://x')]).toEqual([value, true])
+        }
+      } finally {
+        warn.mockRestore()
+      }
+    })
+  })
+})
+
+describe('parseAllowedOrigins', () => {
+  test('normalises entries to their origin', () => {
+    const { origins, issues } = parseAllowedOrigins(
+      ' https://CDN.example.com:443/assets/ , http://Local.example:80/, https://cdn.example.com:8443,,',
+    )
+    expect([...origins]).toEqual([
+      'https://cdn.example.com',
+      'http://local.example',
+      'https://cdn.example.com:8443',
+    ])
+    expect(issues).toEqual([])
+  })
+
+  test('whitespace-only input has no valid entries and nothing to report', () => {
+    for (const raw of ['', '   ', ' , ,\t']) {
+      const { origins, issues } = parseAllowedOrigins(raw)
+      expect([raw, origins.size, issues]).toEqual([raw, 0, []])
+    }
+  })
+
+  test('rejects a blob: entry, even though it borrows an https origin', () => {
+    expect(new URL('blob:https://cdn.example.com/x').origin).toBe('https://cdn.example.com')
+    const { origins, issues } = parseAllowedOrigins('blob:https://cdn.example.com/x')
+    expect(origins.size).toBe(0)
+    expect(issues).toEqual([{ index: 0, reason: 'scheme_not_allowed' }])
+  })
+
+  test('rejects an ftp: entry', () => {
+    const { origins, issues } = parseAllowedOrigins('https://a.example, ftp://files.example')
+    expect([...origins]).toEqual(['https://a.example'])
+    expect(issues).toEqual([{ index: 1, reason: 'scheme_not_allowed' }])
+  })
+
+  test('rejects a ws: entry', () => {
+    const { origins, issues } = parseAllowedOrigins('ws://socket.example')
+    expect(origins.size).toBe(0)
+    expect(issues).toEqual([{ index: 0, reason: 'scheme_not_allowed' }])
+  })
+
+  test('reports malformed entries by index and reason only, never by value', () => {
+    const { issues } = parseAllowedOrigins(
+      'https://ok.example, user:secret@cdn.example.com, https://user:secret@, cdn.example.com',
+    )
+    expect(issues).toEqual([
+      { index: 1, reason: 'scheme_not_allowed' },
+      { index: 2, reason: 'not_a_url' },
+      { index: 3, reason: 'not_a_url' },
+    ])
+  })
+})
+
+describe('allowedOriginsFrom', () => {
+  test('warns once per distinct value, without the entry text', () => {
+    const warn = spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      const raw = 'https://ok.example,user:secret@cdn.example.com, ftp://user:secret@files.example'
+      expect([...(allowedOriginsFrom(raw) ?? [])]).toEqual(['https://ok.example'])
+      allowedOriginsFrom(raw)
+      const lines = warn.mock.calls.map((args) => String(args[0]))
+      expect(lines).toEqual([
+        '[pascal] asset_allowlist_entry_ignored {"index":1,"reason":"scheme_not_allowed"}',
+        '[pascal] asset_allowlist_entry_ignored {"index":2,"reason":"scheme_not_allowed"}',
+      ])
+      for (const line of lines) expect(line).not.toContain('secret')
+    } finally {
+      warn.mockRestore()
+    }
+  })
+
+  test('unset or empty means no allowlist; whitespace-only means an empty one', () => {
+    const warn = spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      expect(allowedOriginsFrom(undefined)).toBeUndefined()
+      expect(allowedOriginsFrom('')).toBeUndefined()
+      expect(allowedOriginsFrom(' \t ')?.size).toBe(0)
+      expect(warn.mock.calls.map((args) => String(args[0]))).toEqual([
+        '[pascal] asset_allowlist_has_no_valid_entries: no https: origin is permitted',
+      ])
+    } finally {
+      warn.mockRestore()
+    }
   })
 })
