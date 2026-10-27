@@ -30,7 +30,6 @@ import {
   type WallEvent,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
-import { Html } from '@react-three/drei'
 import { useFrame, useThree } from '@react-three/fiber'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
@@ -74,6 +73,7 @@ import useEditor, {
 import useFacingPose from '../../../store/use-facing-pose'
 import { getMovingNode } from '../../../store/use-interaction-scope'
 import usePlacementPreview from '../../../store/use-placement-preview'
+import { Html } from '../../editor/localized-html'
 import {
   createItemSurfaceGridDispatch,
   createItemSurfacePointerArbitration,

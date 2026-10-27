@@ -1,20 +1,14 @@
 'use client'
 
-import {
-  type AnyNodeId,
-  type CabinetNode,
-  emitter,
-  resolveLevelId,
-  usePascalI18n,
-  useScene,
-} from '@pascal-app/core'
+import { type AnyNodeId, emitter, resolveLevelId, usePascalI18n, useScene } from '@pascal-app/core'
 import { useCommandPalette, useCommandRegistry, useEditor } from '@pascal-app/editor'
 import {
   beginKitchenPlacement,
   findKitchenItems,
+  KITCHEN_ITEM_LABELS,
   KITCHEN_ITEMS,
   KitchenCollection,
-  kitchenPresetForModule,
+  kitchenPresetForPlacedModule,
 } from '@pascal-app/nodes'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect } from 'react'
@@ -45,7 +39,11 @@ export function KitchenBrowser({ query = '' }: { query?: string }) {
   const mode = useEditor((state) => state.mode)
   // Read the scene only while a query asks for placed items.
   const matches = useScene(
-    useShallow((state) => (query.trim() ? findKitchenItems(state.nodes, query) : NO_ITEMS)),
+    useShallow((state) =>
+      query.trim()
+        ? findKitchenItems(state.nodes, query, (id) => i18n._(KITCHEN_ITEM_LABELS[id]))
+        : NO_ITEMS,
+    ),
   )
   const active = KITCHEN_ITEMS.find((item) => item.id === defaults?.kitchenPreset)
   return (
@@ -108,6 +106,8 @@ export function KitchenBrowser({ query = '' }: { query?: string }) {
 
 export function KitchenCommands() {
   const i18n = usePascalI18n()
+  // The commands bake translated labels; a locale or catalog change re-registers them.
+  const catalogVersion = i18n.getVersion()
   const register = useCommandRegistry((state) => state.register)
   // Always mounted: the placed items are read only while the palette is open to list them.
   const paletteOpen = useCommandPalette((state) => state.open)
@@ -122,27 +122,22 @@ export function KitchenCommands() {
           label: i18n._({
             id: 'app.kitchenBrowser.addLabel',
             message: 'Add {label}',
-            values: { label: item.label },
+            values: { label: i18n._(KITCHEN_ITEM_LABELS[item.id]) },
           }),
           group: i18n._({ id: 'app.kitchenBrowser.groupAdd', message: 'Kitchen · Add' }),
           keywords: item.keywords.split(' '),
           execute: () => beginKitchenPlacement(item.id),
         })),
       ),
-    [register, i18n],
+    [register, i18n, catalogVersion],
   )
   useEffect(
     () =>
       register(
         modules.map((node) => {
-          const nodes = useScene.getState().nodes
-          const parent = node.parentId ? nodes[node.parentId as AnyNodeId] : undefined
           const preset =
             node.type === 'cabinet-module'
-              ? kitchenPresetForModule(
-                  node,
-                  parent?.type === 'cabinet' ? (parent as CabinetNode) : undefined,
-                )
+              ? kitchenPresetForPlacedModule(useScene.getState().nodes, node)
               : 'base-door'
           const item = KITCHEN_ITEMS.find((entry) => entry.id === preset)!
           return {
@@ -150,7 +145,7 @@ export function KitchenCommands() {
             label: i18n._({
               id: 'app.kitchenBrowser.findName',
               message: 'Find {name}',
-              values: { name: node.name || item.label },
+              values: { name: node.name || i18n._(KITCHEN_ITEM_LABELS[item.id]) },
             }),
             group: i18n._({
               id: 'app.kitchenBrowser.groupInThisProject',
@@ -161,7 +156,7 @@ export function KitchenCommands() {
           }
         }),
       ),
-    [register, modules, i18n],
+    [register, modules, i18n, catalogVersion],
   )
   return null
 }

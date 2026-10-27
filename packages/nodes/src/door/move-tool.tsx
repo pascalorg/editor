@@ -6,10 +6,13 @@ import {
   emitter,
   type GridEvent,
   getOpeningWallPlacement,
+  getWallThickness,
   holdHiddenWallPointerEvents,
   isCurvedWall,
   type RoofEvent,
   type RoofNode,
+  resolveHostedOpeningFrameDepth,
+  resolveOpeningFrameDepth,
   runSceneHistoryDraftWrite,
   sceneRegistry,
   spatialGridManager,
@@ -473,7 +476,7 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
           ghostWorldPos[2],
         ],
         rotationY: ghostYaw,
-        depth: movingDoorNode.frameDepth ?? 0.07,
+        depth: resolveOpeningFrameDepth(movingDoorNode, getWallThickness(target.wallNode)),
       })
       // Publish the wall surface so the snap grid tilts into the wall plane at
       // the opening (its outward normal is the door's facing, +Z by `ghostYaw`).
@@ -1122,7 +1125,7 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
     const boxGeo = new BoxGeometry(
       movingDoorNode.width,
       movingDoorNode.height,
-      movingDoorNode.frameDepth ?? 0.07,
+      resolveHostedOpeningFrameDepth(movingDoorNode, useScene.getState().nodes),
     )
     const geo = new EdgesGeometry(boxGeo)
     boxGeo.dispose()

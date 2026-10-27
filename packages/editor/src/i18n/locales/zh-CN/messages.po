@@ -9679,6 +9679,126 @@ msgstr "矩形房间"
 msgid "editor.lib.wallDrawVariant.walls"
 msgstr "墙体"
 
+# Review: required
+# Source-Hash: c2626e1fbf89b3c9
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "{action, select, close {Close} open {Open} stop {Stop} other {Play}}"
+#: packages/editor/src/components/editor/registry-action-contributions.tsx
+#, fuzzy
+msgid "editor.mechanismAction"
+msgstr "{action, select, close {关闭} open {打开} stop {停止} other {播放}}"
+
+# Review: required
+# Source-Hash: f08fbb462e9afc0e
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Curve"
+#: packages/editor/src/components/editor/node-action-menu.tsx
+#, fuzzy
+msgid "editor.nodeActionMenu.curve"
+msgstr "曲线"
+
+# Review: required
+# Source-Hash: 5af05fb6661e4d6a
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Cut out"
+#: packages/editor/src/components/editor/node-action-menu.tsx
+#, fuzzy
+msgid "editor.nodeActionMenu.cutOut"
+msgstr "挖空"
+
+# Review: required
+# Source-Hash: b26de372b4b0eaac
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Delete"
+#: packages/editor/src/components/editor/node-action-menu.tsx
+#, fuzzy
+msgid "editor.nodeActionMenu.delete"
+msgstr "删除"
+
+# Review: required
+# Source-Hash: 34dc96fe77a31e51
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Duplicate"
+#: packages/editor/src/components/editor/node-action-menu.tsx
+#, fuzzy
+msgid "editor.nodeActionMenu.duplicate"
+msgstr "复制"
+
+# Review: required
+# Source-Hash: 94b212bd79c05141
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Edit mesh"
+#: packages/editor/src/components/editor/node-action-menu.tsx
+#, fuzzy
+msgid "editor.nodeActionMenu.editMesh"
+msgstr "编辑网格"
+
+# Review: required
+# Source-Hash: ce90cf37224f73cd
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Find in catalog"
+#: packages/editor/src/components/editor/node-action-menu.tsx
+#, fuzzy
+msgid "editor.nodeActionMenu.findInCatalog"
+msgstr "在目录中查找"
+
+# Review: required
+# Source-Hash: d5e550c345e7161c
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Group selection"
+#: packages/editor/src/components/editor/node-action-menu.tsx
+#, fuzzy
+msgid "editor.nodeActionMenu.groupSelection"
+msgstr "将所选编组"
+
+# Review: required
+# Source-Hash: bd02c614454fbd2b
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Move"
+#: packages/editor/src/components/editor/node-action-menu.tsx
+#, fuzzy
+msgid "editor.nodeActionMenu.move"
+msgstr "移动"
+
+# Review: required
+# Source-Hash: 473a9d4463761107
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Rotate left"
+#: packages/editor/src/components/editor/node-action-menu.tsx
+#, fuzzy
+msgid "editor.nodeActionMenu.rotateLeft"
+msgstr "向左旋转"
+
+# Review: required
+# Source-Hash: b1bf4e65c8d8c8ef
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Rotate right"
+#: packages/editor/src/components/editor/node-action-menu.tsx
+#, fuzzy
+msgid "editor.nodeActionMenu.rotateRight"
+msgstr "向右旋转"
+
+# Review: required
+# Source-Hash: 6f4dbbc4a3f58fca
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Ungroup selection"
+#: packages/editor/src/components/editor/node-action-menu.tsx
+#, fuzzy
+msgid "editor.nodeActionMenu.ungroupSelection"
+msgstr "取消所选编组"
+
 # Source-Hash: 4275c05172abd7fb
 # Review: required
 # AI-Provider: cursor-agent
@@ -11420,15 +11540,15 @@ msgstr "位于 {height}"
 msgid "editor.panels.roomConstructionRows.closeWithWalls"
 msgstr "用墙体封闭"
 
-# Source-Hash: d704b34f1e8c6b1f
-# Review: required
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
-# English: "{ambiguous, select, yes {Floor is several drawn slabs, mostly {name}} other {Floor is a drawn slab: {name}}}{shared, plural, =0 {} one { (shared with # room)} other { (shared with # rooms)}}"
+# Source-Hash: 75c84b4f21aefde4
+# Review: required
+# English: "{ambiguous, select, yes {Floor is several drawn slabs, mostly {name}} other {Floor is a drawn slab: {name}}}{shared, plural, =0 {} one { (shared with {sharedCount} room)} other { (shared with {sharedCount} rooms)}}"
 #: packages/editor/src/components/ui/panels/room-construction-rows.tsx
 #, fuzzy
 msgid "editor.panels.roomConstructionRows.drawnFloor"
-msgstr "{ambiguous, select, yes {楼板由多块绘制楼板组成，主要是{name}} other {楼板是一块绘制楼板：{name}}}{shared, plural, =0 {} other {（与 # 个房间共用）}}"
+msgstr "{ambiguous, select, yes {楼板由多块绘制楼板组成，主要是{name}} other {楼板是一块绘制楼板：{name}}}{shared, plural, =0 {} other {（与 {sharedCount} 个房间共用）}}"
 
 # Source-Hash: 97e0fab8ffda6d6c
 # Review: required
@@ -12090,15 +12210,15 @@ msgstr "无"
 msgid "editor.panels.roomPanel.notEnoughHeadroom"
 msgstr "净空不足"
 
-# Source-Hash: 92f7bc961d784f6a
-# Review: required
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
-# English: "{doors, plural, one {# door} other {# doors}} · {windows, plural, one {# window} other {# windows}}"
+# Source-Hash: 81a6770092b05d48
+# Review: required
+# English: "{doors, plural, one {{doorCount} door} other {{doorCount} doors}} · {windows, plural, one {{windowCount} window} other {{windowCount} windows}}"
 #: packages/editor/src/components/ui/panels/room-panel.tsx
 #, fuzzy
 msgid "editor.panels.roomPanel.openingCounts"
-msgstr "{doors, plural, other {# 扇门}} · {windows, plural, other {# 扇窗}}"
+msgstr "{doors, plural, other {{doorCount} 扇门}} · {windows, plural, other {{windowCount} 扇窗}}"
 
 # Source-Hash: a8cd9507ce472a48
 # Review: required
@@ -12401,6 +12521,116 @@ msgstr "删除区域"
 msgid "editor.panels.wallRegionList.paintRegions"
 msgstr "涂刷区域"
 
+# Review: required
+# Source-Hash: 89ee318aad485f83
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Adjust design"
+#: packages/editor/src/components/procedural-items/inspector.tsx
+#, fuzzy
+msgid "editor.proceduralItems.inspector.adjustDesign"
+msgstr "调整设计"
+
+# Review: required
+# Source-Hash: 7ceade8f25b58fe9
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Back"
+#: packages/editor/src/components/procedural-items/inspector.tsx
+#, fuzzy
+msgid "editor.proceduralItems.inspector.back"
+msgstr "返回"
+
+# Review: required
+# Source-Hash: ba9b68175315e177
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Edit parts"
+#: packages/editor/src/components/procedural-items/inspector.tsx
+#, fuzzy
+msgid "editor.proceduralItems.inspector.editParts"
+msgstr "编辑部件"
+
+# Review: required
+# Source-Hash: 07c62820f014ed6c
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Invalid attachment"
+#: packages/editor/src/components/procedural-items/inspector.tsx
+#, fuzzy
+msgid "editor.proceduralItems.inspector.invalidAttachment"
+msgstr "附着无效"
+
+# Review: required
+# Source-Hash: f862aea8d7957c55
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Invalid edit"
+#: packages/editor/src/components/procedural-items/inspector.tsx
+#, fuzzy
+msgid "editor.proceduralItems.inspector.invalidEdit"
+msgstr "编辑无效"
+
+# Review: required
+# Source-Hash: 190cf30b8edd8dd1
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Invalid placement"
+#: packages/editor/src/components/procedural-items/inspector.tsx
+#, fuzzy
+msgid "editor.proceduralItems.inspector.invalidPlacement"
+msgstr "放置无效"
+
+# Review: required
+# Source-Hash: 45bd2ec690cc48dc
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Invalid position"
+#: packages/editor/src/components/procedural-items/inspector.tsx
+#, fuzzy
+msgid "editor.proceduralItems.inspector.invalidPosition"
+msgstr "位置无效"
+
+# Review: required
+# Source-Hash: faccab895717c598
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Invalid reset"
+#: packages/editor/src/components/procedural-items/inspector.tsx
+#, fuzzy
+msgid "editor.proceduralItems.inspector.invalidReset"
+msgstr "重置无效"
+
+# Review: required
+# Source-Hash: 28fe6e9deddde6e8
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "pos"
+#: packages/editor/src/components/procedural-items/inspector.tsx
+#, fuzzy
+msgid "editor.proceduralItems.inspector.pos"
+msgstr "位置"
+
+# Review: required
+# Source-Hash: 9da0cbfad144d737
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Position"
+#: packages/editor/src/components/procedural-items/inspector.tsx
+#, fuzzy
+msgid "editor.proceduralItems.inspector.position"
+msgstr "位置"
+
+# Review: required
+# Source-Hash: 3fce677837d5a876
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Reset this part"
+#: packages/editor/src/components/procedural-items/inspector.tsx
+#, fuzzy
+msgid "editor.proceduralItems.inspector.resetThisPart"
+msgstr "重置此部件"
+
 # Source-Hash: 5eab376947d29a50
 # Review: required
 # AI-Provider: cursor-agent
@@ -12410,6 +12640,97 @@ msgstr "涂刷区域"
 #, fuzzy
 msgid "editor.reloadEditor"
 msgstr "重新加载编辑器"
+
+# Review: required
+# Source-Hash: 1063f1e315258b20
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Close riser diagram"
+#: packages/editor/src/components/editor/riser-diagram-panel.tsx
+#, fuzzy
+msgid "editor.riserDiagramPanel.close"
+msgstr "关闭立管图"
+
+# Review: required
+# Source-Hash: c2d59ee62035974c
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "DWV plumbing isometric"
+#: packages/editor/src/components/editor/riser-diagram-panel.tsx
+#, fuzzy
+msgid "editor.riserDiagramPanel.dwvPlumbingIsometric"
+msgstr "排水与通气管道轴测图"
+
+# Review: required
+# Source-Hash: 3501a7c8a93d3b19
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "DWV riser diagram"
+#: packages/editor/src/components/editor/riser-diagram-panel.tsx
+#, fuzzy
+msgid "editor.riserDiagramPanel.dwvRiserDiagram"
+msgstr "排水通气立管图"
+
+# Review: required
+# Source-Hash: 225e3e3dc3bb01ee
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "No drain, waste, or vent pipes yet. Draw plumbing to see the riser diagram."
+#: packages/editor/src/components/editor/riser-diagram-panel.tsx
+#, fuzzy
+msgid "editor.riserDiagramPanel.noDrainWasteOrVentPipes"
+msgstr "尚无排水、污水或通气管道。绘制管道后即可查看立管图。"
+
+# Review: required
+# Source-Hash: bc8e172ba55160ae
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Riser Diagram"
+#: packages/editor/src/components/editor/riser-diagram-panel.tsx
+#, fuzzy
+msgid "editor.riserDiagramPanel.riserDiagram"
+msgstr "立管图"
+
+# Review: required
+# Source-Hash: 6a1132961f17f320
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "{diameter}\" P-trap"
+#: packages/editor/src/components/editor/riser-diagram-panel.tsx
+#, fuzzy
+msgid "editor.riserDiagramPanel.trap"
+msgstr "{diameter}\" 存水弯"
+
+# Review: required
+# Source-Hash: 04bc0909a133a7e9
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Vent"
+#: packages/editor/src/components/editor/riser-diagram-panel.tsx
+#, fuzzy
+msgid "editor.riserDiagramPanel.vent"
+msgstr "通风口"
+
+# Review: required
+# Source-Hash: 02f3eef9f0fb6d9e
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "{diameter}\" VTR"
+#. Vent through roof: where a plumbing vent stack exits the roof.
+#: packages/editor/src/components/editor/riser-diagram-panel.tsx
+#, fuzzy
+msgid "editor.riserDiagramPanel.ventTermination"
+msgstr "{diameter}\" 出屋面通气口"
+
+# Review: required
+# Source-Hash: 29d8590334492601
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Waste"
+#: packages/editor/src/components/editor/riser-diagram-panel.tsx
+#, fuzzy
+msgid "editor.riserDiagramPanel.waste"
+msgstr "排污"
 
 # Source-Hash: 0f8d128255bf4afa
 # Review: required
@@ -15833,6 +16154,36 @@ msgstr "窗样式 — 点击或按 L 切换"
 msgid "editor.toolHint.windowTypeClickOrPressO.wv4x35"
 msgstr "窗类型 — 点击或按 O 切换"
 
+# Review: required
+# Source-Hash: a48c4b2e4d71b08d
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Length: {field} m"
+#: packages/editor/src/components/tools/distribution/distribution-run-tool.tsx
+#, fuzzy
+msgid "editor.tools.distribution.distributionRunTool.lengthField"
+msgstr "长度：{field} m"
+
+# Review: required
+# Source-Hash: e53695d6669245c7
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Tab: direction"
+#: packages/editor/src/components/tools/distribution/distribution-run-tool.tsx
+#, fuzzy
+msgid "editor.tools.distribution.distributionRunTool.tabDirection"
+msgstr "Tab：方向"
+
+# Review: required
+# Source-Hash: abb1d8c8bfb41acf
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "type a length"
+#: packages/editor/src/components/tools/distribution/distribution-run-tool.tsx
+#, fuzzy
+msgid "editor.tools.distribution.distributionRunTool.typeALength"
+msgstr "输入长度"
+
 # Source-Hash: 9fc7a39bc32f287a
 # Review: required
 # AI-Provider: cursor-agent
@@ -16373,6 +16724,446 @@ msgstr "包含一个或多个楼层的建筑容器。"
 msgid "node.building.label"
 msgstr "建筑"
 
+# Review: required
+# Source-Hash: 5a8274cbe3034558
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Baskets"
+#: packages/nodes/src/cabinet/compartment-card.tsx
+#, fuzzy
+msgid "node.cabinet.compartmentCard.baskets"
+msgstr "拉篮"
+
+# Review: required
+# Source-Hash: b3a163b453896bef
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Bottom"
+#: packages/nodes/src/cabinet/compartment-card.tsx
+#, fuzzy
+msgid "node.cabinet.compartmentCard.bottom"
+msgstr "底部"
+
+# Review: required
+# Source-Hash: 486501f027037732
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Bottom Freezer"
+#: packages/nodes/src/cabinet/compartment-card.tsx
+#, fuzzy
+msgid "node.cabinet.compartmentCard.bottomFreezer"
+msgstr "下置冷冻"
+
+# Review: required
+# Source-Hash: 375acc0016b3aa14
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Bowls"
+#: packages/nodes/src/cabinet/compartment-card.tsx
+#, fuzzy
+msgid "node.cabinet.compartmentCard.bowls"
+msgstr "水槽"
+
+# Review: required
+# Source-Hash: 8449b59bf054c27d
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Burners on"
+#: packages/nodes/src/cabinet/compartment-card.tsx
+#, fuzzy
+msgid "node.cabinet.compartmentCard.burnersOn"
+msgstr "点火"
+
+# Review: required
+# Source-Hash: 95169058fec6db14
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Chimney"
+#: packages/nodes/src/cabinet/compartment-card.tsx
+#, fuzzy
+msgid "node.cabinet.compartmentCard.chimney"
+msgstr "烟囱"
+
+# Review: required
+# Source-Hash: a6b76187db231ae7
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Decrease {label}"
+#: packages/nodes/src/cabinet/compartment-card.tsx
+#, fuzzy
+msgid "node.cabinet.compartmentCard.decrease"
+msgstr "减少{label}"
+
+# Review: required
+# Source-Hash: 787e10f5db16904e
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Door"
+#: packages/nodes/src/cabinet/compartment-card.tsx
+#, fuzzy
+msgid "node.cabinet.compartmentCard.door"
+msgstr "门"
+
+# Review: required
+# Source-Hash: 3cd71355956a1821
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Double"
+#: packages/nodes/src/cabinet/compartment-card.tsx
+#, fuzzy
+msgid "node.cabinet.compartmentCard.double"
+msgstr "双扇"
+
+# Review: required
+# Source-Hash: 63fe49d73892aac8
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Drawer"
+#: packages/nodes/src/cabinet/compartment-card.tsx
+#, fuzzy
+msgid "node.cabinet.compartmentCard.drawer"
+msgstr "抽屉"
+
+# Review: required
+# Source-Hash: f98242a5dacd33f3
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Drawers"
+#: packages/nodes/src/cabinet/compartment-card.tsx
+#, fuzzy
+msgid "node.cabinet.compartmentCard.drawers"
+msgstr "抽屉"
+
+# Review: required
+# Source-Hash: 3af5347c94ae6443
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Flip hinge"
+#: packages/nodes/src/cabinet/compartment-card.tsx
+#, fuzzy
+msgid "node.cabinet.compartmentCard.flipHinge"
+msgstr "翻转铰链"
+
+# Review: required
+# Source-Hash: c930f681e61c029c
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Flip the door hinge to the opposite side"
+#: packages/nodes/src/cabinet/compartment-card.tsx
+#, fuzzy
+msgid "node.cabinet.compartmentCard.flipTheDoorHingeToThe"
+msgstr "将门铰链翻转到另一侧"
+
+# Review: required
+# Source-Hash: 85724031c91952a3
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Fridge"
+#: packages/nodes/src/cabinet/compartment-card.tsx
+#, fuzzy
+msgid "node.cabinet.compartmentCard.fridge"
+msgstr "冰箱"
+
+# Review: required
+# Source-Hash: e67f11024d683ea9
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Gas"
+#: packages/nodes/src/cabinet/compartment-card.tsx
+#, fuzzy
+msgid "node.cabinet.compartmentCard.gas"
+msgstr "燃气"
+
+# Review: required
+# Source-Hash: 8ab91094cf650204
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Glass"
+#: packages/nodes/src/cabinet/compartment-card.tsx
+#, fuzzy
+msgid "node.cabinet.compartmentCard.glass"
+msgstr "玻璃"
+
+# Review: required
+# Source-Hash: 646ef0fbcbc58edf
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Height"
+#: packages/nodes/src/cabinet/compartment-card.tsx
+#, fuzzy
+msgid "node.cabinet.compartmentCard.height"
+msgstr "高度"
+
+# Review: required
+# Source-Hash: 6f434b84c8b59b8c
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Hob"
+#: packages/nodes/src/cabinet/compartment-card.tsx
+#, fuzzy
+msgid "node.cabinet.compartmentCard.hob"
+msgstr "灶台"
+
+# Review: required
+# Source-Hash: d52570d41b4df776
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Increase {label}"
+#: packages/nodes/src/cabinet/compartment-card.tsx
+#, fuzzy
+msgid "node.cabinet.compartmentCard.increase"
+msgstr "增加{label}"
+
+# Review: required
+# Source-Hash: d298f259163e868e
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Induction"
+#: packages/nodes/src/cabinet/compartment-card.tsx
+#, fuzzy
+msgid "node.cabinet.compartmentCard.induction"
+msgstr "电磁"
+
+# Review: required
+# Source-Hash: 54800340a0eeab23
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Layout"
+#: packages/nodes/src/cabinet/compartment-card.tsx
+#, fuzzy
+msgid "node.cabinet.compartmentCard.layout"
+msgstr "布局"
+
+# Review: required
+# Source-Hash: f365c6b6dd9ebab9
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Left"
+#: packages/nodes/src/cabinet/compartment-card.tsx
+#, fuzzy
+msgid "node.cabinet.compartmentCard.left"
+msgstr "左"
+
+# Review: required
+# Source-Hash: 12ade82be3830a0b
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Micro"
+#: packages/nodes/src/cabinet/compartment-card.tsx
+#, fuzzy
+msgid "node.cabinet.compartmentCard.micro"
+msgstr "微波炉"
+
+# Review: required
+# Source-Hash: a06a50e63f0c240e
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Move down"
+#: packages/nodes/src/cabinet/compartment-card.tsx
+#, fuzzy
+msgid "node.cabinet.compartmentCard.moveDown"
+msgstr "下移"
+
+# Review: required
+# Source-Hash: d49ea60a2312df2f
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Move up"
+#: packages/nodes/src/cabinet/compartment-card.tsx
+#, fuzzy
+msgid "node.cabinet.compartmentCard.moveUp"
+msgstr "上移"
+
+# Review: required
+# Source-Hash: 596023c8b9a8f2e4
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Oven"
+#: packages/nodes/src/cabinet/compartment-card.tsx
+#, fuzzy
+msgid "node.cabinet.compartmentCard.oven"
+msgstr "烤箱"
+
+# Review: required
+# Source-Hash: 83b20797fb0a01a0
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Pullout"
+#: packages/nodes/src/cabinet/compartment-card.tsx
+#, fuzzy
+msgid "node.cabinet.compartmentCard.pullout"
+msgstr "拉出式"
+
+# Review: required
+# Source-Hash: 43c251f465b647ce
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Rack"
+#: packages/nodes/src/cabinet/compartment-card.tsx
+#, fuzzy
+msgid "node.cabinet.compartmentCard.rack"
+msgstr "置物架"
+
+# Review: required
+# Source-Hash: 3c2b3026d37cbcc2
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Remove compartment"
+#: packages/nodes/src/cabinet/compartment-card.tsx
+#, fuzzy
+msgid "node.cabinet.compartmentCard.removeCompartment"
+msgstr "移除隔间"
+
+# Review: required
+# Source-Hash: b34d5ee0f218221d
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Right"
+#: packages/nodes/src/cabinet/compartment-card.tsx
+#, fuzzy
+msgid "node.cabinet.compartmentCard.right"
+msgstr "右"
+
+# Review: required
+# Source-Hash: d7145f84f8e0e3fe
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Shelf"
+#: packages/nodes/src/cabinet/compartment-card.tsx
+#, fuzzy
+msgid "node.cabinet.compartmentCard.shelf"
+msgstr "置物架"
+
+# Review: required
+# Source-Hash: 5fbb88f1f079b6db
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Shelves"
+#: packages/nodes/src/cabinet/compartment-card.tsx
+#, fuzzy
+msgid "node.cabinet.compartmentCard.shelves"
+msgstr "层板"
+
+# Review: required
+# Source-Hash: 47173085127029f0
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Shelves inside"
+#: packages/nodes/src/cabinet/compartment-card.tsx
+#, fuzzy
+msgid "node.cabinet.compartmentCard.shelvesInside"
+msgstr "内部层板"
+
+# Review: required
+# Source-Hash: 62ab2eb3c775da95
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Single"
+#: packages/nodes/src/cabinet/compartment-card.tsx
+#, fuzzy
+msgid "node.cabinet.compartmentCard.single"
+msgstr "单扇"
+
+# Review: required
+# Source-Hash: 522a7535fc93fb4f
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Sink"
+#: packages/nodes/src/cabinet/compartment-card.tsx
+#, fuzzy
+msgid "node.cabinet.compartmentCard.sink"
+msgstr "水槽"
+
+# Review: required
+# Source-Hash: 1a79a485d91f3f28
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Style"
+#: packages/nodes/src/cabinet/compartment-card.tsx
+#, fuzzy
+msgid "node.cabinet.compartmentCard.style"
+msgstr "样式"
+
+# Review: required
+# Source-Hash: 78a454b7ac7a3cd9
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Surface"
+#: packages/nodes/src/cabinet/compartment-card.tsx
+#, fuzzy
+msgid "node.cabinet.compartmentCard.surface"
+msgstr "表面"
+
+# Review: required
+# Source-Hash: 27644f0497fd9849
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Top"
+#: packages/nodes/src/cabinet/compartment-card.tsx
+#, fuzzy
+msgid "node.cabinet.compartmentCard.top"
+msgstr "顶部"
+
+# Review: required
+# Source-Hash: eaadfd2d19b27d87
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Top Freezer"
+#: packages/nodes/src/cabinet/compartment-card.tsx
+#, fuzzy
+msgid "node.cabinet.compartmentCard.topFreezer"
+msgstr "上置冷冻"
+
+# Review: required
+# Source-Hash: 04f3a3462ef5d247
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Top grate"
+#: packages/nodes/src/cabinet/compartment-card.tsx
+#, fuzzy
+msgid "node.cabinet.compartmentCard.topGrate"
+msgstr "顶部炉架"
+
+# Review: required
+# Source-Hash: 4a616e1d2ca55bd5
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Tray"
+#: packages/nodes/src/cabinet/compartment-card.tsx
+#, fuzzy
+msgid "node.cabinet.compartmentCard.tray"
+msgstr "托盘"
+
+# Review: required
+# Source-Hash: c44f7ab8bbd24858
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Type"
+#: packages/nodes/src/cabinet/compartment-card.tsx
+#, fuzzy
+msgid "node.cabinet.compartmentCard.type"
+msgstr "类型"
+
+# Review: required
+# Source-Hash: 6c4de540d19316ab
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Washer"
+#: packages/nodes/src/cabinet/compartment-card.tsx
+#, fuzzy
+msgid "node.cabinet.compartmentCard.washer"
+msgstr "洗碗机"
+
+# Review: required
+# Source-Hash: 5211a0caf3518125
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Wire"
+#: packages/nodes/src/cabinet/compartment-card.tsx
+#, fuzzy
+msgid "node.cabinet.compartmentCard.wire"
+msgstr "金属丝"
+
 # Source-Hash: 693a0d8896f5cc43
 # Review: required
 # AI-Provider: cursor-agent
@@ -16383,6 +17174,406 @@ msgstr "建筑"
 msgid "node.cabinet.description"
 msgstr "可配置的参数化地柜。"
 
+# Review: required
+# Source-Hash: b0568ea943addd5b
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Bottom freezer"
+#: packages/nodes/src/cabinet/essential-controls.tsx
+#, fuzzy
+msgid "node.cabinet.essentialControls.bottomFreezer"
+msgstr "下置冷冻"
+
+# Review: required
+# Source-Hash: da78819903ae0863
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Cooktop type"
+#: packages/nodes/src/cabinet/essential-controls.tsx
+#, fuzzy
+msgid "node.cabinet.essentialControls.cooktopType"
+msgstr "灶台类型"
+
+# Review: required
+# Source-Hash: c608188f58ed1cfc
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Door direction"
+#: packages/nodes/src/cabinet/essential-controls.tsx
+#, fuzzy
+msgid "node.cabinet.essentialControls.doorDirection"
+msgstr "开门方向"
+
+# Review: required
+# Source-Hash: 3cd71355956a1821
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Double"
+#: packages/nodes/src/cabinet/essential-controls.tsx
+#, fuzzy
+msgid "node.cabinet.essentialControls.double"
+msgstr "双扇"
+
+# Review: required
+# Source-Hash: f7fb8f6393cc4cfc
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Fridge type"
+#: packages/nodes/src/cabinet/essential-controls.tsx
+#, fuzzy
+msgid "node.cabinet.essentialControls.fridgeType"
+msgstr "冰箱类型"
+
+# Review: required
+# Source-Hash: e67f11024d683ea9
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Gas"
+#: packages/nodes/src/cabinet/essential-controls.tsx
+#, fuzzy
+msgid "node.cabinet.essentialControls.gas"
+msgstr "燃气"
+
+# Review: required
+# Source-Hash: 8ab91094cf650204
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Glass"
+#: packages/nodes/src/cabinet/essential-controls.tsx
+#, fuzzy
+msgid "node.cabinet.essentialControls.glass"
+msgstr "玻璃"
+
+# Review: required
+# Source-Hash: d298f259163e868e
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Induction"
+#: packages/nodes/src/cabinet/essential-controls.tsx
+#, fuzzy
+msgid "node.cabinet.essentialControls.induction"
+msgstr "电磁"
+
+# Review: required
+# Source-Hash: 76df477d42cec629
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Item options"
+#: packages/nodes/src/cabinet/essential-controls.tsx
+#, fuzzy
+msgid "node.cabinet.essentialControls.itemOptions"
+msgstr "物品选项"
+
+# Review: required
+# Source-Hash: bca1b184af1c0c4b
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Left hinge"
+#: packages/nodes/src/cabinet/essential-controls.tsx
+#, fuzzy
+msgid "node.cabinet.essentialControls.leftHinge"
+msgstr "左铰链"
+
+# Review: required
+# Source-Hash: e32da7429c85f1a5
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Right hinge"
+#: packages/nodes/src/cabinet/essential-controls.tsx
+#, fuzzy
+msgid "node.cabinet.essentialControls.rightHinge"
+msgstr "右铰链"
+
+# Review: required
+# Source-Hash: 62ab2eb3c775da95
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Single"
+#: packages/nodes/src/cabinet/essential-controls.tsx
+#, fuzzy
+msgid "node.cabinet.essentialControls.single"
+msgstr "单扇"
+
+# Review: required
+# Source-Hash: 4bc3042055df1e85
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Sink layout"
+#: packages/nodes/src/cabinet/essential-controls.tsx
+#, fuzzy
+msgid "node.cabinet.essentialControls.sinkLayout"
+msgstr "水槽布局"
+
+# Review: required
+# Source-Hash: 29cffe75281dbea6
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Top freezer"
+#: packages/nodes/src/cabinet/essential-controls.tsx
+#, fuzzy
+msgid "node.cabinet.essentialControls.topFreezer"
+msgstr "上置冷冻"
+
+# Review: required
+# Source-Hash: 09c2cb2ea7b1be3c
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Choose {label}"
+#: packages/nodes/src/cabinet/kitchen-collection.tsx
+#, fuzzy
+msgid "node.cabinet.kitchenCollection.chooseLabel"
+msgstr "选择{label}"
+
+# Review: required
+# Source-Hash: 1dd2cac6488ddc30
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "No kitchen items match. Try “fridge”, “sink”, or “cabinet”."
+#: packages/nodes/src/cabinet/kitchen-collection.tsx
+#, fuzzy
+msgid "node.cabinet.kitchenCollection.noKitchenItemsMatchTryFridge"
+msgstr "没有匹配的厨房物品。试试“冰箱”“水槽”或“橱柜”。"
+
+# Review: required
+# Source-Hash: 6752675ca6280ddd
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Search fridge, sink, cabinets…"
+#: packages/nodes/src/cabinet/kitchen-collection.tsx
+#, fuzzy
+msgid "node.cabinet.kitchenCollection.searchFridgeSinkCabinets"
+msgstr "搜索冰箱、水槽、橱柜…"
+
+# Review: required
+# Source-Hash: fe3c6d57a07c323d
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Search kitchen items"
+#: packages/nodes/src/cabinet/kitchen-collection.tsx
+#, fuzzy
+msgid "node.cabinet.kitchenCollection.searchKitchenItems"
+msgstr "搜索厨房物品"
+
+# Review: required
+# Source-Hash: d44a46146db2e44c
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Appliances & fixtures"
+#: packages/nodes/src/cabinet/kitchen-catalog.ts
+#, fuzzy
+msgid "node.cabinet.kitchenGroup.appliances"
+msgstr "电器与设施"
+
+# Review: required
+# Source-Hash: d4d3ad7c099b6513
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Cabinets"
+#: packages/nodes/src/cabinet/kitchen-catalog.ts
+#, fuzzy
+msgid "node.cabinet.kitchenGroup.cabinets"
+msgstr "橱柜"
+
+# Review: required
+# Source-Hash: 465db52f98c2d94f
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Add beside"
+#: packages/nodes/src/cabinet/kitchen-module-actions.tsx
+#, fuzzy
+msgid "node.cabinet.kitchenModuleActions.addBeside"
+msgstr "在旁边添加"
+
+# Review: required
+# Source-Hash: 9733e2ad85deb6d5
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Add beside selected item"
+#: packages/nodes/src/cabinet/kitchen-module-actions.tsx
+#, fuzzy
+msgid "node.cabinet.kitchenModuleActions.addBesideSelectedItem"
+msgstr "在所选物品旁添加"
+
+# Review: required
+# Source-Hash: 4b2f676fb4c9ec63
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Add {label}"
+#: packages/nodes/src/cabinet/kitchen-module-actions.tsx
+#, fuzzy
+msgid "node.cabinet.kitchenModuleActions.addLabel"
+msgstr "添加{label}"
+
+# Review: required
+# Source-Hash: 5122b8e9b4ec6a00
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "An upper cabinet attached to this item will be removed to make room."
+#: packages/nodes/src/cabinet/kitchen-module-actions.tsx
+#, fuzzy
+msgid "node.cabinet.kitchenModuleActions.anUpperCabinetAttachedToThis"
+msgstr "附着在此物品上的吊柜将被移除以腾出空间。"
+
+# Review: required
+# Source-Hash: 5737c4567e0f6863
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Cabinet"
+#: packages/nodes/src/cabinet/kitchen-module-actions.tsx
+#, fuzzy
+msgid "node.cabinet.kitchenModuleActions.cabinet"
+msgstr "柜体"
+
+# Review: required
+# Source-Hash: c0774c185060fc13
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Cancel"
+#: packages/nodes/src/cabinet/kitchen-module-actions.tsx
+#, fuzzy
+msgid "node.cabinet.kitchenModuleActions.cancel"
+msgstr "取消"
+
+# Review: required
+# Source-Hash: f42912b116015f58
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "This {width} item cannot fit within the current run and its wall or corner limits. Move an end cabinet or free space, then try again."
+#: packages/nodes/src/cabinet/kitchen-module-actions.tsx
+#, fuzzy
+msgid "node.cabinet.kitchenModuleActions.cannotFit"
+msgstr "这个 {width} 的物品无法放入当前橱柜组及其墙体或转角限制内。请移动端部橱柜或腾出空间后重试。"
+
+# Review: required
+# Source-Hash: b7eeb26a356d03c3
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "{side, select, left {Inserts on the left of the selected item.} other {Inserts on the right of the selected item.}}"
+#: packages/nodes/src/cabinet/kitchen-module-actions.tsx
+#, fuzzy
+msgid "node.cabinet.kitchenModuleActions.insertsBeside"
+msgstr "{side, select, left {插入到所选物品的左侧。} other {插入到所选物品的右侧。}}"
+
+# Review: required
+# Source-Hash: f65332177316d11d
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "The kitchen changed. Select an item again to refresh the preview."
+#: packages/nodes/src/cabinet/kitchen-module-actions.tsx
+#, fuzzy
+msgid "node.cabinet.kitchenModuleActions.kitchenChanged"
+msgstr "厨房已更改。请重新选择物品以刷新预览。"
+
+# Review: required
+# Source-Hash: 5b6990b17111fd6b
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Kitchen run preview, highlighted item is the proposed change"
+#: packages/nodes/src/cabinet/kitchen-module-actions.tsx
+#, fuzzy
+msgid "node.cabinet.kitchenModuleActions.kitchenRunPreviewHighlightedItemIs"
+msgstr "厨房橱柜组预览，高亮的物品为拟议更改"
+
+# Review: required
+# Source-Hash: cb59562ba7eb1d25
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Left side"
+#: packages/nodes/src/cabinet/kitchen-module-actions.tsx
+#, fuzzy
+msgid "node.cabinet.kitchenModuleActions.leftSide"
+msgstr "左侧"
+
+# Review: required
+# Source-Hash: 766354d53f17d78c
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "{name}: moves {distance}"
+#: packages/nodes/src/cabinet/kitchen-module-actions.tsx
+#, fuzzy
+msgid "node.cabinet.kitchenModuleActions.moved"
+msgstr "{name}：移动 {distance}"
+
+# Review: required
+# Source-Hash: df1083d9ffc2c59d
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "{name}: {width}"
+#: packages/nodes/src/cabinet/kitchen-module-actions.tsx
+#, fuzzy
+msgid "node.cabinet.kitchenModuleActions.previewItem"
+msgstr "{name}：{width}"
+
+# Review: required
+# Source-Hash: ada7fbece9ca9e3c
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Replace selected item"
+#: packages/nodes/src/cabinet/kitchen-module-actions.tsx
+#, fuzzy
+msgid "node.cabinet.kitchenModuleActions.replaceSelectedItem"
+msgstr "替换所选物品"
+
+# Review: required
+# Source-Hash: ab8b52d2704537d2
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Replaces only the selected item."
+#: packages/nodes/src/cabinet/kitchen-module-actions.tsx
+#, fuzzy
+msgid "node.cabinet.kitchenModuleActions.replacesOnlyTheSelectedItem"
+msgstr "仅替换所选物品。"
+
+# Review: required
+# Source-Hash: 03cb6dea6e4a4c5e
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Replace with…"
+#: packages/nodes/src/cabinet/kitchen-module-actions.tsx
+#, fuzzy
+msgid "node.cabinet.kitchenModuleActions.replaceWith"
+msgstr "替换为…"
+
+# Review: required
+# Source-Hash: 948fe657641f298c
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Replace with {label}"
+#: packages/nodes/src/cabinet/kitchen-module-actions.tsx
+#, fuzzy
+msgid "node.cabinet.kitchenModuleActions.replaceWithLabel"
+msgstr "替换为{label}"
+
+# Review: required
+# Source-Hash: 154f9fa86b7670ba
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "{name}: {before} → {after}"
+#: packages/nodes/src/cabinet/kitchen-module-actions.tsx
+#, fuzzy
+msgid "node.cabinet.kitchenModuleActions.resized"
+msgstr "{name}：{before} → {after}"
+
+# Review: required
+# Source-Hash: 4ecc493400fb6aa2
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Right side"
+#: packages/nodes/src/cabinet/kitchen-module-actions.tsx
+#, fuzzy
+msgid "node.cabinet.kitchenModuleActions.rightSide"
+msgstr "右侧"
+
+# Review: required
+# Source-Hash: f2c30e7e21cf27e6
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Unable to update this kitchen."
+#: packages/nodes/src/cabinet/kitchen-module-actions.tsx
+#, fuzzy
+msgid "node.cabinet.kitchenModuleActions.unableToUpdateThisKitchen"
+msgstr "无法更新此厨房。"
+
 # Source-Hash: 2e6d8cda361c648d
 # Review: required
 # AI-Provider: cursor-agent
@@ -16392,6 +17583,1596 @@ msgstr "可配置的参数化地柜。"
 #, fuzzy
 msgid "node.cabinet.label"
 msgstr "组合橱柜"
+
+# Review: required
+# Source-Hash: 740e0a4e4afa78ea
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Finished height extends {overflow} mm above the ceiling."
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.aboveCeiling"
+msgstr "完成高度超出天花板 {overflow} mm。"
+
+# Review: required
+# Source-Hash: e3b4d2ed4f6f5efb
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Add chimney"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.addChimney"
+msgstr "添加烟罩"
+
+# Review: required
+# Source-Hash: 90bdc92c0a91d060
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Add compartment"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.addCompartment"
+msgstr "添加隔间"
+
+# Review: required
+# Source-Hash: ece05d9b6f4b616d
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Add wall cabinet"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.addWallCabinet"
+msgstr "添加吊柜"
+
+# Review: required
+# Source-Hash: f571cb2d06ae01ae
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Advanced"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.advanced"
+msgstr "高级"
+
+# Review: required
+# Source-Hash: 7f4dcb90defe1ac2
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Appliance"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.appliance"
+msgstr "电器"
+
+# Review: required
+# Source-Hash: bd5e3f533412ff6a
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Appliance front"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.applianceFront"
+msgstr "电器面板"
+
+# Review: required
+# Source-Hash: 05b65242d8c48791
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Auto"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.auto"
+msgstr "自动"
+
+# Review: required
+# Source-Hash: 9cf3754f15467c50
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Bar"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.bar"
+msgstr "拉手条"
+
+# Review: required
+# Source-Hash: 133893b177bd05d6
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Base Cabinet"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.baseCabinet"
+msgstr "地柜"
+
+# Review: required
+# Source-Hash: d63f16df2c754126
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Cabinet construction, compartments, and opening preview."
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.cabinetConstructionCompartmentsAndOpeningPreview"
+msgstr "橱柜构造、隔间和开启预览。"
+
+# Review: required
+# Source-Hash: d62dc35dac835228
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Cabinet panel"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.cabinetPanel"
+msgstr "橱柜面板"
+
+# Review: required
+# Source-Hash: 81caf4809d58b5f5
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Cabinet Type"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.cabinetType"
+msgstr "橱柜类型"
+
+# Review: required
+# Source-Hash: 5211341ed18f33f6
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Center"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.center"
+msgstr "居中"
+
+# Review: required
+# Source-Hash: d7cf5045c01b2eb9
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Close"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.close"
+msgstr "关闭"
+
+# Review: required
+# Source-Hash: cf29134333e47184
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Close cabinet"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.closeCabinet"
+msgstr "关闭橱柜"
+
+# Review: required
+# Source-Hash: b1ab1ba948bb77b0
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Common wall-cabinet heights. Use the slider below for a custom height."
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.commonWallCabinetHeightsUseThe"
+msgstr "常用吊柜高度。如需自定义高度，请使用下方滑块。"
+
+# Review: required
+# Source-Hash: fe9e63d5c5087386
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Compartments"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.compartments"
+msgstr "隔间"
+
+# Review: required
+# Source-Hash: 7984b1c42abd9c02
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Cutout"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.cutout"
+msgstr "开槽"
+
+# Review: required
+# Source-Hash: 99ac4d03c3061f3a
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Depth"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.depth"
+msgstr "深度"
+
+# Review: required
+# Source-Hash: 12df69f42beb0643
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Dimensions"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.dimensions"
+msgstr "尺寸"
+
+# Review: required
+# Source-Hash: 82c9ea6f403fc934
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Edit kitchen run"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.editKitchenRun"
+msgstr "编辑厨房橱柜组"
+
+# Review: required
+# Source-Hash: 7e9bbeb035fc73e2
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Fill to ceiling"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.fillToCeiling"
+msgstr "填充至天花板"
+
+# Review: required
+# Source-Hash: b3907da0ad234f10
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Finish"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.finish"
+msgstr "完成"
+
+# Review: required
+# Source-Hash: c1796152935221ef
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Front construction"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.frontConstruction"
+msgstr "面板构造"
+
+# Review: required
+# Source-Hash: 58884f99d64e6d00
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Handles"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.handles"
+msgstr "拉手"
+
+# Review: required
+# Source-Hash: 646ef0fbcbc58edf
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Height"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.height"
+msgstr "高度"
+
+# Review: required
+# Source-Hash: d73589d7c04b1121
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Height preset"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.heightPreset"
+msgstr "预设高度"
+
+# Review: required
+# Source-Hash: 590bfdd02dcdb857
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Hole"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.hole"
+msgstr "孔"
+
+# Review: required
+# Source-Hash: 3db1dea825785a30
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Inset"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.inset"
+msgstr "内嵌"
+
+# Review: required
+# Source-Hash: 1176d2568d093bf1
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Kitchen"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.kitchen"
+msgstr "厨房"
+
+# Review: required
+# Source-Hash: a74f10dadc92c8bb
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Kitchen run"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.kitchenRun"
+msgstr "厨房橱柜组"
+
+# Review: required
+# Source-Hash: 103e15b39c909210
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Knob"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.knob"
+msgstr "旋钮拉手"
+
+# Review: required
+# Source-Hash: 81d365ccef73068c
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Mounting"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.mounting"
+msgstr "安装方式"
+
+# Review: required
+# Source-Hash: f2953d2931e36d0c
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "None"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.none"
+msgstr "无"
+
+# Review: required
+# Source-Hash: 3e52f04f92e08070
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Open"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.open"
+msgstr "打开"
+
+# Review: required
+# Source-Hash: b8ecc16c07d66f42
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Open Animation"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.openAnimation"
+msgstr "开启动画"
+
+# Review: required
+# Source-Hash: 2d4adbbd70c3ae6a
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Open cabinet"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.openCabinet"
+msgstr "打开橱柜"
+
+# Review: required
+# Source-Hash: 9c215dc512e57fa4
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Overlay"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.overlay"
+msgstr "盖门"
+
+# Review: required
+# Source-Hash: a35b7357943a5cae
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Panel-ready"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.panelReady"
+msgstr "可装面板"
+
+# Review: required
+# Source-Hash: 3d0d4eee59177824
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Planning checks"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.planningChecks"
+msgstr "规划检查"
+
+# Review: required
+# Source-Hash: c7b10382e01914ad
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Play"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.play"
+msgstr "播放"
+
+# Review: required
+# Source-Hash: c530f8af9dfd846f
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Play animation"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.playAnimation"
+msgstr "播放动画"
+
+# Review: required
+# Source-Hash: 9da0cbfad144d737
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Position"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.position"
+msgstr "位置"
+
+# Review: required
+# Source-Hash: efca749fc4463623
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Raised Arch"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.raisedArch"
+msgstr "凸起拱形"
+
+# Review: required
+# Source-Hash: a8639a97ab07cd59
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Remove wall cabinet"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.removeWallCabinet"
+msgstr "移除吊柜"
+
+# Review: required
+# Source-Hash: 03cb6dea6e4a4c5e
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Replace with…"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.replaceWith"
+msgstr "替换为…"
+
+# Review: required
+# Source-Hash: 5d6956c21fde6418
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Reveal gap"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.revealGap"
+msgstr "缝隙"
+
+# Review: required
+# Source-Hash: 5b68e435b7210876
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Shaker"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.shaker"
+msgstr "夏克风"
+
+# Review: required
+# Source-Hash: c378ed346bf83375
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Shared countertop, plinth, and finishes"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.sharedCountertopPlinthAndFinishes"
+msgstr "共用台面、踢脚和饰面"
+
+# Review: required
+# Source-Hash: 8775bc8dc9593964
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Slab"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.slab"
+msgstr "楼板"
+
+# Review: required
+# Source-Hash: 8606fe2c60764a95
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Solid matching front between the cabinet and wall. Countertop and toe-kick continue across this filler."
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.solidMatchingFrontBetweenTheCabinet"
+msgstr "橱柜与墙之间的同款实心面板。台面和踢脚会延续到此填充板上。"
+
+# Review: required
+# Source-Hash: 5a4d5353cc496a63
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Standard width"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.standardWidth"
+msgstr "标准宽度"
+
+# Review: required
+# Source-Hash: 4a784e3e95a08715
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Stop"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.stop"
+msgstr "停止"
+
+# Review: required
+# Source-Hash: 72c9fcd7a0eb5380
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Stop animation"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.stopAnimation"
+msgstr "停止动画"
+
+# Review: required
+# Source-Hash: 1a79a485d91f3f28
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Style"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.style"
+msgstr "样式"
+
+# Review: required
+# Source-Hash: bfd618690e0c2f24
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Tall Cabinet"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.tallCabinet"
+msgstr "高柜"
+
+# Review: required
+# Source-Hash: 27644f0497fd9849
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Top"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.top"
+msgstr "顶部"
+
+# Review: required
+# Source-Hash: d09654ebd12a538a
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Top Cabinet"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.topCabinet"
+msgstr "顶柜"
+
+# Review: required
+# Source-Hash: bc19e7805b3e3703
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Top / Ceiling"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.topCeiling"
+msgstr "顶部 / 天花板"
+
+# Review: required
+# Source-Hash: 29ea8a68eed99925
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Top depth"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.topDepth"
+msgstr "顶部深度"
+
+# Review: required
+# Source-Hash: 2d40f591e7dcbf5a
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Top height"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.topHeight"
+msgstr "顶部高度"
+
+# Review: required
+# Source-Hash: 3b878d6015c03945
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Trim / Soffit"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.trimSoffit"
+msgstr "饰条 / 吊顶"
+
+# Review: required
+# Source-Hash: a6e5be20001e8d26
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Uses the cabinet front style, reveal, handle, and front material settings below."
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.usesTheCabinetFrontStyleReveal"
+msgstr "使用下方的橱柜面板样式、缝隙、拉手和面板材质设置。"
+
+# Review: required
+# Source-Hash: cd55643590c64a42
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Wall filler"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.wallFiller"
+msgstr "靠墙填充板"
+
+# Review: required
+# Source-Hash: 3a0ccd6c46877a87
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Width"
+#: packages/nodes/src/cabinet/panel.tsx
+#, fuzzy
+msgid "node.cabinet.panel.width"
+msgstr "宽度"
+
+# Review: required
+# Source-Hash: 4ef03cfd6782316b
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Base cabinet"
+#: packages/nodes/src/cabinet/kitchen-catalog.ts
+#, fuzzy
+msgid "node.cabinet.preset.baseCabinet"
+msgstr "地柜"
+
+# Review: required
+# Source-Hash: d353fff221a78228
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Dishwasher"
+#: packages/nodes/src/cabinet/kitchen-catalog.ts
+#, fuzzy
+msgid "node.cabinet.preset.dishwasher"
+msgstr "洗碗机"
+
+# Review: required
+# Source-Hash: ecb596567b8b7179
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Drawer cabinet"
+#: packages/nodes/src/cabinet/kitchen-catalog.ts
+#, fuzzy
+msgid "node.cabinet.preset.drawerCabinet"
+msgstr "抽屉柜"
+
+# Review: required
+# Source-Hash: 85724031c91952a3
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Fridge"
+#: packages/nodes/src/cabinet/kitchen-catalog.ts
+#, fuzzy
+msgid "node.cabinet.preset.fridge"
+msgstr "冰箱"
+
+# Review: required
+# Source-Hash: 72d587d58b645a81
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Gas cooktop"
+#: packages/nodes/src/cabinet/kitchen-catalog.ts
+#, fuzzy
+msgid "node.cabinet.preset.gasCooktop"
+msgstr "燃气灶"
+
+# Review: required
+# Source-Hash: 6b02c36e6aac2cd6
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Induction cooktop"
+#: packages/nodes/src/cabinet/kitchen-catalog.ts
+#, fuzzy
+msgid "node.cabinet.preset.inductionCooktop"
+msgstr "电磁炉"
+
+# Review: required
+# Source-Hash: d5fcb790aef707bf
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Oven Tower"
+#: packages/nodes/src/cabinet/kitchen-catalog.ts
+#, fuzzy
+msgid "node.cabinet.preset.ovenTower"
+msgstr "烤箱高柜"
+
+# Review: required
+# Source-Hash: edd4d1ab7525dcaa
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Sink cabinet"
+#: packages/nodes/src/cabinet/kitchen-catalog.ts
+#, fuzzy
+msgid "node.cabinet.preset.sinkCabinet"
+msgstr "水槽柜"
+
+# Review: required
+# Source-Hash: 9b7427a8954f618b
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Tall Pantry"
+#: packages/nodes/src/cabinet/kitchen-catalog.ts
+#, fuzzy
+msgid "node.cabinet.preset.tallPantry"
+msgstr "高储物柜"
+
+# Review: required
+# Source-Hash: 3bd9629eb17cc572
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Wall cabinet"
+#: packages/nodes/src/cabinet/kitchen-catalog.ts
+#, fuzzy
+msgid "node.cabinet.preset.wallCabinet"
+msgstr "吊柜"
+
+# Review: required
+# Source-Hash: 7c40d26770eede82
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Add left"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.addLeft"
+msgstr "向左添加"
+
+# Review: required
+# Source-Hash: 25082cdf77e219c3
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Add right"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.addRight"
+msgstr "向右添加"
+
+# Review: required
+# Source-Hash: 4b1204c1b706f618
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Align cabinets & handles"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.alignCabinetsHandles"
+msgstr "对齐橱柜和拉手"
+
+# Review: required
+# Source-Hash: 8c73c7a9406db5ad
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Applies depth, carcass, plinth, and countertop thickness to this run."
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.appliesDepthCarcassPlinthAndCountertop"
+msgstr "将深度、柜体、踢脚和台面厚度应用到此橱柜组。"
+
+# Review: required
+# Source-Hash: ef576e6c8f9ebe5f
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "{count, plural, one {Create {number} module copy} other {Create {number} module copies}}"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.arrayCreate"
+msgstr "{count, plural, other {创建 {number} 个模块副本}}"
+
+# Review: required
+# Source-Hash: 0eec3888096306a1
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "{count, plural, one {Create {number} {name} copy} other {Create {number} {name} copies}}"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.arrayCreateNamed"
+msgstr "{count, plural, other {创建 {number} 个{name}副本}}"
+
+# Review: required
+# Source-Hash: 8cdc0b808b551d3a
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Choose a copy count from 1 to 20 and spacing from 0 to 2 m"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.arrayInvalidOptions"
+msgstr "请选择 1 到 20 的副本数量和 0 到 2 m 的间距"
+
+# Review: required
+# Source-Hash: cb89fe4161e87d68
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "There is not enough room in this run for the requested array"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.arrayNoRoom"
+msgstr "此橱柜组空间不足以容纳所需阵列"
+
+# Review: required
+# Source-Hash: 075d027345689724
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Choose a standard or appliance module as the source"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.arrayNoSource"
+msgstr "请选择一个标准模块或电器模块作为源"
+
+# Review: required
+# Source-Hash: 05b65242d8c48791
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Auto"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.auto"
+msgstr "自动"
+
+# Review: required
+# Source-Hash: 7ceade8f25b58fe9
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Back"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.back"
+msgstr "返回"
+
+# Review: required
+# Source-Hash: b2c3a03bf67a97a7
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Balances standard base cabinets while keeping appliance and corner-filler widths fixed."
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.balancesStandardBaseCabinetsWhileKeeping"
+msgstr "平衡标准地柜宽度，同时保持电器和转角填充板宽度不变。"
+
+# Review: required
+# Source-Hash: 9cf3754f15467c50
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Bar"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.bar"
+msgstr "拉手条"
+
+# Review: required
+# Source-Hash: ccec5da17ca39eee
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Bar counter"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.barCounter"
+msgstr "吧台"
+
+# Review: required
+# Source-Hash: 97c1605fff221752
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Bar depth"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.barDepth"
+msgstr "吧台深度"
+
+# Review: required
+# Source-Hash: 9514a6ddebdca34e
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Bar height"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.barHeight"
+msgstr "吧台高度"
+
+# Review: required
+# Source-Hash: 7af3b69b4b5aeb19
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Carcass height"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.carcassHeight"
+msgstr "柜体高度"
+
+# Review: required
+# Source-Hash: 5211341ed18f33f6
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Center"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.center"
+msgstr "居中"
+
+# Review: required
+# Source-Hash: b1ab1ba948bb77b0
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Common wall-cabinet heights. Use the slider below for a custom height."
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.commonWallCabinetHeightsUseThe"
+msgstr "常用吊柜高度。如需自定义高度，请使用下方滑块。"
+
+# Review: required
+# Source-Hash: 88ccc87b9b45a464
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Copies"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.copies"
+msgstr "副本"
+
+# Review: required
+# Source-Hash: d215c489b8385d9f
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Copies include the source cabinet structure and any attached wall cabinet. Existing modules stay fixed; the requested array must fit in the available run space."
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.copiesIncludeTheSourceCabinetStructure"
+msgstr "副本包含源橱柜结构及其附着的吊柜。现有模块保持不动；所需阵列必须能放入橱柜组的可用空间。"
+
+# Review: required
+# Source-Hash: 221d1b64649b08f8
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Corner fillers cannot be used as array sources"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.cornerFillersCannotBeUsedAs"
+msgstr "转角填充板不能用作阵列源"
+
+# Review: required
+# Source-Hash: d8d1bc5a0f9fa0cd
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Countertop depth"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.countertopDepth"
+msgstr "台面深度"
+
+# Review: required
+# Source-Hash: 10bba4a11996c84b
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Countertop height"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.countertopHeight"
+msgstr "台面高度"
+
+# Review: required
+# Source-Hash: 8abdfbc1798d9eaa
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Create array"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.createArray"
+msgstr "创建阵列"
+
+# Review: required
+# Source-Hash: 7984b1c42abd9c02
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Cutout"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.cutout"
+msgstr "开槽"
+
+# Review: required
+# Source-Hash: 555240ffcca44233
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Delete {name}"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.deleteModule"
+msgstr "删除{name}"
+
+# Review: required
+# Source-Hash: 99ac4d03c3061f3a
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Depth"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.depth"
+msgstr "深度"
+
+# Review: required
+# Source-Hash: 76cd03300faa9b2b
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Direction"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.direction"
+msgstr "方向"
+
+# Review: required
+# Source-Hash: 5ca5884d3ff7edf4
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Duplicate along run"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.duplicateAlongRun"
+msgstr "沿橱柜组复制"
+
+# Review: required
+# Source-Hash: a834f687290afc10
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Equalize all resizeable standard base cabinets in this run"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.equalizeAll"
+msgstr "均分此橱柜组中所有可调宽度的标准地柜"
+
+# Review: required
+# Source-Hash: 24da8a2de2c6e345
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "The resizeable cabinet widths are already equal"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.equalizeAlreadyEqual"
+msgstr "可调宽度的橱柜已经等宽"
+
+# Review: required
+# Source-Hash: c38a4faef2097b73
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "At least two standard base cabinets are required"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.equalizeNeedsTwo"
+msgstr "至少需要两个标准地柜"
+
+# Review: required
+# Source-Hash: 61f15ae24419430c
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "The available run width cannot satisfy the cabinet width limits"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.equalizeNoFit"
+msgstr "橱柜组的可用宽度无法满足橱柜宽度限制"
+
+# Review: required
+# Source-Hash: 7617bb3b455dcdda
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Equalize widths"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.equalizeWidths"
+msgstr "均分宽度"
+
+# Review: required
+# Source-Hash: ad8c948d883a0c9d
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "{side, select, left {Left: {width} mm} other {Right: {width} mm}}"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.fillerPlanSide"
+msgstr "{side, select, left {左侧：{width} mm} other {右侧：{width} mm}}"
+
+# Review: required
+# Source-Hash: 47ccd8c8b04475cd
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Finish & align"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.finishAlign"
+msgstr "饰面与对齐"
+
+# Review: required
+# Source-Hash: 855892e18c74153a
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Finished back"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.finishedBack"
+msgstr "背面饰面"
+
+# Review: required
+# Source-Hash: 7ab47aea30c73663
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Finished exposed ends"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.finishedExposedEnds"
+msgstr "外露端饰面"
+
+# Review: required
+# Source-Hash: c9356f25caf33eec
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Fits 50–150 mm gaps at run ends beside perpendicular walls."
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.fits50150MmGapsAt"
+msgstr "填补橱柜组两端靠垂直墙处 50–150 mm 的缝隙。"
+
+# Review: required
+# Source-Hash: b6f541bc28e38d2f
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Fit wall fillers"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.fitWallFillers"
+msgstr "适配靠墙填充板"
+
+# Review: required
+# Source-Hash: 2af738f010ce28f0
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Fronts"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.fronts"
+msgstr "面板"
+
+# Review: required
+# Source-Hash: 58884f99d64e6d00
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Handles"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.handles"
+msgstr "拉手"
+
+# Review: required
+# Source-Hash: d73589d7c04b1121
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Height preset"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.heightPreset"
+msgstr "预设高度"
+
+# Review: required
+# Source-Hash: 590bfdd02dcdb857
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Hole"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.hole"
+msgstr "孔"
+
+# Review: required
+# Source-Hash: 3db1dea825785a30
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Inset"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.inset"
+msgstr "内嵌"
+
+# Review: required
+# Source-Hash: 2997c230c529590d
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Island & Bar"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.islandBar"
+msgstr "岛台与吧台"
+
+# Review: required
+# Source-Hash: a74f10dadc92c8bb
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Kitchen run"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.kitchenRun"
+msgstr "厨房橱柜组"
+
+# Review: required
+# Source-Hash: 103e15b39c909210
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Knob"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.knob"
+msgstr "旋钮拉手"
+
+# Review: required
+# Source-Hash: f365c6b6dd9ebab9
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Left"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.left"
+msgstr "左"
+
+# Review: required
+# Source-Hash: 3c88a1840043e15a
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Match base heights, backs, reveals and handles. Align upper cabinets; preserve tall appliances and custom compartments."
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.matchBaseHeightsBacksRevealsAnd"
+msgstr "统一地柜高度、背板、缝隙和拉手。对齐吊柜；保留高电器和自定义隔间。"
+
+# Review: required
+# Source-Hash: b112e31fe44cc94b
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Metric · 600 mm"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.metricProfile"
+msgstr "公制 · 600 mm"
+
+# Review: required
+# Source-Hash: 4739f6315c5e8680
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Module {number}"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.moduleNumber"
+msgstr "模块 {number}"
+
+# Review: required
+# Source-Hash: b8801184e07e4815
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Modules"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.modules"
+msgstr "模块"
+
+# Review: required
+# Source-Hash: 81d365ccef73068c
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Mounting"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.mounting"
+msgstr "安装方式"
+
+# Review: required
+# Source-Hash: a3914bd96488175c
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "No eligible module"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.noEligibleModule"
+msgstr "没有可用模块"
+
+# Review: required
+# Source-Hash: f2953d2931e36d0c
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "None"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.none"
+msgstr "无"
+
+# Review: required
+# Source-Hash: 9c215dc512e57fa4
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Overlay"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.overlay"
+msgstr "盖门"
+
+# Review: required
+# Source-Hash: 49fb05dfafd6001d
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Plinth height"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.plinthHeight"
+msgstr "踢脚高度"
+
+# Review: required
+# Source-Hash: 9da0cbfad144d737
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Position"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.position"
+msgstr "位置"
+
+# Review: required
+# Source-Hash: efca749fc4463623
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Raised Arch"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.raisedArch"
+msgstr "凸起拱形"
+
+# Review: required
+# Source-Hash: 5d6956c21fde6418
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Reveal gap"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.revealGap"
+msgstr "缝隙"
+
+# Review: required
+# Source-Hash: b34d5ee0f218221d
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Right"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.right"
+msgstr "右"
+
+# Review: required
+# Source-Hash: e022da49ae8b4aef
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Seating overhang"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.seatingOverhang"
+msgstr "座位悬挑"
+
+# Review: required
+# Source-Hash: 5b68e435b7210876
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Shaker"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.shaker"
+msgstr "夏克风"
+
+# Review: required
+# Source-Hash: cba29b18ce666b0a
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Shared Plinth & Countertop"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.sharedPlinthCountertop"
+msgstr "共用踢脚与台面"
+
+# Review: required
+# Source-Hash: f7d577c4064c16ff
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Show countertop"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.showCountertop"
+msgstr "显示台面"
+
+# Review: required
+# Source-Hash: 5d98e04dfd2e0a83
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Show plinth"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.showPlinth"
+msgstr "显示踢脚"
+
+# Review: required
+# Source-Hash: 8775bc8dc9593964
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Slab"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.slab"
+msgstr "楼板"
+
+# Review: required
+# Source-Hash: 5bdc0a959203c52e
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Source module"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.sourceModule"
+msgstr "源模块"
+
+# Review: required
+# Source-Hash: e4698e83d02beb6c
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Spacing"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.spacing"
+msgstr "间距"
+
+# Review: required
+# Source-Hash: 40e3105cbe68d163
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Standard dimensions"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.standardDimensions"
+msgstr "标准尺寸"
+
+# Review: required
+# Source-Hash: 1a79a485d91f3f28
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Style"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.style"
+msgstr "样式"
+
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# Source-Hash: e9d7ad9851d476d9
+# Review: required
+# English: "{type, select, shelf {Shelf} drawer {Drawer} door {Door} oven {Oven} microwave {Microwave} dishwasher {Dishwasher} sink {Sink} cooktop_gas {Gas cooktop} cooktop_induction {Induction cooktop} pull_out_pantry {Pull-out pantry} fridge_single {Fridge} fridge_double {Double fridge} fridge_top_freezer {Top-freezer fridge} fridge_bottom_freezer {Bottom-freezer fridge} hood_pyramid {Pyramid hood} hood_curved_glass {Curved glass hood} other {{raw}}}"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.summaryCompartment"
+msgstr "{type, select, shelf {层板} drawer {抽屉} door {柜门} oven {烤箱} microwave {微波炉} dishwasher {洗碗机} sink {水槽} cooktop_gas {燃气灶} cooktop_induction {电磁炉} pull_out_pantry {拉出式储物架} fridge_single {冰箱} fridge_double {双门冰箱} fridge_top_freezer {上置冷冻冰箱} fridge_bottom_freezer {下置冷冻冰箱} hood_pyramid {金字塔形烟罩} hood_curved_glass {弧形玻璃烟罩} other {{raw}}}"
+
+# Review: required
+# Source-Hash: 98582c257f149d44
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "{count, plural, one {{number} compartment} other {{number} compartments}}"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.summaryCompartments"
+msgstr "{count, plural, other {{number} 个隔间}}"
+
+# Review: required
+# Source-Hash: 65b1cbba3b92c5b2
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Empty"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.summaryEmpty"
+msgstr "空"
+
+# Review: required
+# Source-Hash: 5db8b868684cf9f3
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Tall cabinet"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.summaryTall"
+msgstr "高柜"
+
+# Review: required
+# Source-Hash: 27644f0497fd9849
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Top"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.top"
+msgstr "顶部"
+
+# Review: required
+# Source-Hash: 88c85283afe0c0bc
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Unable to finish this kitchen run."
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.unableToFinish"
+msgstr "无法完成此厨房橱柜组。"
+
+# Review: required
+# Source-Hash: 8f668fb3e1a1696a
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Use {name} as array source"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.useAsArraySource"
+msgstr "将{name}用作阵列源"
+
+# Review: required
+# Source-Hash: 9308a109d017dcd6
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Use this module as the array source"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.useThisModuleAsTheArray"
+msgstr "将此模块用作阵列源"
+
+# Review: required
+# Source-Hash: 1ce253a4d11bfa68
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "US · 24 in"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.usProfile"
+msgstr "美制 · 24 in"
+
+# Review: required
+# Source-Hash: a2d852b2c5629796
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Waterfall ends"
+#: packages/nodes/src/cabinet/run-panel.tsx
+#, fuzzy
+msgid "node.cabinet.runPanel.waterfallEnds"
+msgstr "瀑布式侧板"
 
 # Source-Hash: ffc8d80e438f40b7
 # Review: required
@@ -16663,6 +19444,496 @@ msgstr "屋面上的竖向砌体烟囱。"
 msgid "node.chimney.label"
 msgstr "烟囱"
 
+# Review: required
+# Source-Hash: dc393661f0038c2d
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Above Ridge"
+#: packages/nodes/src/chimney/panel.tsx
+#, fuzzy
+msgid "node.chimney.panel.aboveRidge"
+msgstr "高出屋脊"
+
+# Review: required
+# Source-Hash: aa6d82bdb3cc1d9a
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Actions"
+#: packages/nodes/src/chimney/panel.tsx
+#, fuzzy
+msgid "node.chimney.panel.actions"
+msgstr "操作"
+
+# Review: required
+# Source-Hash: 7ceade8f25b58fe9
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Back"
+#: packages/nodes/src/chimney/panel.tsx
+#, fuzzy
+msgid "node.chimney.panel.back"
+msgstr "返回"
+
+# Review: required
+# Source-Hash: 0d42509b34b05dec
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Bands"
+#: packages/nodes/src/chimney/panel.tsx
+#, fuzzy
+msgid "node.chimney.panel.bands"
+msgstr "腰线"
+
+# Review: required
+# Source-Hash: d52b53241789ee63
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Cap"
+#: packages/nodes/src/chimney/panel.tsx
+#, fuzzy
+msgid "node.chimney.panel.cap"
+msgstr "顶盖"
+
+# Review: required
+# Source-Hash: 95169058fec6db14
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Chimney"
+#: packages/nodes/src/chimney/panel.tsx
+#, fuzzy
+msgid "node.chimney.panel.chimney"
+msgstr "烟囱"
+
+# Review: required
+# Source-Hash: b619f366d2a1dfda
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Chimney Type"
+#: packages/nodes/src/chimney/panel.tsx
+#, fuzzy
+msgid "node.chimney.panel.chimneyType"
+msgstr "烟囱类型"
+
+# Review: required
+# Source-Hash: 6786ac75cbe9af57
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Corbeled"
+#: packages/nodes/src/chimney/panel.tsx
+#, fuzzy
+msgid "node.chimney.panel.corbeled"
+msgstr "叠涩"
+
+# Review: required
+# Source-Hash: 89eba9f077fba348
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Corner Bevel"
+#: packages/nodes/src/chimney/panel.tsx
+#, fuzzy
+msgid "node.chimney.panel.cornerBevel"
+msgstr "转角倒角"
+
+# Review: required
+# Source-Hash: 8a4beb9a57edc26e
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Count"
+#: packages/nodes/src/chimney/panel.tsx
+#, fuzzy
+msgid "node.chimney.panel.count"
+msgstr "数量"
+
+# Review: required
+# Source-Hash: f8ba7d73d3006d57
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Cricket"
+#: packages/nodes/src/chimney/panel.tsx
+#, fuzzy
+msgid "node.chimney.panel.cricket"
+msgstr "泛水坡"
+
+# Review: required
+# Source-Hash: 14144df9e1364eea
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Cutout Offset"
+#: packages/nodes/src/chimney/panel.tsx
+#, fuzzy
+msgid "node.chimney.panel.cutoutOffset"
+msgstr "开洞偏移"
+
+# Review: required
+# Source-Hash: b26de372b4b0eaac
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Delete"
+#: packages/nodes/src/chimney/panel.tsx
+#, fuzzy
+msgid "node.chimney.panel.delete"
+msgstr "删除"
+
+# Review: required
+# Source-Hash: 99ac4d03c3061f3a
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Depth"
+#: packages/nodes/src/chimney/panel.tsx
+#, fuzzy
+msgid "node.chimney.panel.depth"
+msgstr "深度"
+
+# Review: required
+# Source-Hash: 016d8e70618916d4
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Diameter"
+#: packages/nodes/src/chimney/panel.tsx
+#, fuzzy
+msgid "node.chimney.panel.diameter"
+msgstr "直径"
+
+# Review: required
+# Source-Hash: 3cd71355956a1821
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Double"
+#: packages/nodes/src/chimney/panel.tsx
+#, fuzzy
+msgid "node.chimney.panel.double"
+msgstr "双扇"
+
+# Review: required
+# Source-Hash: 150340cd05f4a6dd
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Extent"
+#: packages/nodes/src/chimney/panel.tsx
+#, fuzzy
+msgid "node.chimney.panel.extent"
+msgstr "范围"
+
+# Review: required
+# Source-Hash: 9cab4d4c95f63cdd
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Flat"
+#: packages/nodes/src/chimney/panel.tsx
+#, fuzzy
+msgid "node.chimney.panel.flat"
+msgstr "平屋顶"
+
+# Review: required
+# Source-Hash: f817c09ef0bb6d69
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Flues"
+#: packages/nodes/src/chimney/panel.tsx
+#, fuzzy
+msgid "node.chimney.panel.flues"
+msgstr "烟道"
+
+# Review: required
+# Source-Hash: a3c10560fa3c1612
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Footprint"
+#: packages/nodes/src/chimney/panel.tsx
+#, fuzzy
+msgid "node.chimney.panel.footprint"
+msgstr "基底"
+
+# Review: required
+# Source-Hash: e360f89d3c0ec456
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Front"
+#: packages/nodes/src/chimney/panel.tsx
+#, fuzzy
+msgid "node.chimney.panel.front"
+msgstr "前"
+
+# Review: required
+# Source-Hash: 646ef0fbcbc58edf
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Height"
+#: packages/nodes/src/chimney/panel.tsx
+#, fuzzy
+msgid "node.chimney.panel.height"
+msgstr "高度"
+
+# Review: required
+# Source-Hash: 5b490bc19dddf201
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Hollow Depth"
+#: packages/nodes/src/chimney/panel.tsx
+#, fuzzy
+msgid "node.chimney.panel.hollowDepth"
+msgstr "凹槽深度"
+
+# Review: required
+# Source-Hash: 643687bc3adaac76
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Length"
+#: packages/nodes/src/chimney/panel.tsx
+#, fuzzy
+msgid "node.chimney.panel.length"
+msgstr "长度"
+
+# Review: required
+# Source-Hash: f2953d2931e36d0c
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "None"
+#: packages/nodes/src/chimney/panel.tsx
+#, fuzzy
+msgid "node.chimney.panel.none"
+msgstr "无"
+
+# Review: required
+# Source-Hash: 0f0e13abf9b2bb67
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Offset"
+#: packages/nodes/src/chimney/panel.tsx
+#, fuzzy
+msgid "node.chimney.panel.offset"
+msgstr "偏移"
+
+# Review: required
+# Source-Hash: 88540def2ce16ac5
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Overhang"
+#: packages/nodes/src/chimney/panel.tsx
+#, fuzzy
+msgid "node.chimney.panel.overhang"
+msgstr "出挑"
+
+# Review: required
+# Source-Hash: 6ce059aee1386f72
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Panels"
+#: packages/nodes/src/chimney/panel.tsx
+#, fuzzy
+msgid "node.chimney.panel.panels"
+msgstr "面板"
+
+# Review: required
+# Source-Hash: 9da0cbfad144d737
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Position"
+#: packages/nodes/src/chimney/panel.tsx
+#, fuzzy
+msgid "node.chimney.panel.position"
+msgstr "位置"
+
+# Review: required
+# Source-Hash: f29fef1beeb25f22
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Rectangular"
+#: packages/nodes/src/chimney/panel.tsx
+#, fuzzy
+msgid "node.chimney.panel.rectangular"
+msgstr "矩形"
+
+# Review: required
+# Source-Hash: 01989595ee7c1dc0
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Rotation"
+#: packages/nodes/src/chimney/panel.tsx
+#, fuzzy
+msgid "node.chimney.panel.rotation"
+msgstr "旋转"
+
+# Review: required
+# Source-Hash: ad0457800a1f0eb4
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Round"
+#: packages/nodes/src/chimney/panel.tsx
+#, fuzzy
+msgid "node.chimney.panel.round"
+msgstr "圆形"
+
+# Review: required
+# Source-Hash: 8c6e3985459dacf9
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Shoulder"
+#: packages/nodes/src/chimney/panel.tsx
+#, fuzzy
+msgid "node.chimney.panel.shoulder"
+msgstr "肩部"
+
+# Review: required
+# Source-Hash: 84b9195c73dd7a67
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Side Margin"
+#: packages/nodes/src/chimney/panel.tsx
+#, fuzzy
+msgid "node.chimney.panel.sideMargin"
+msgstr "侧边距"
+
+# Review: required
+# Source-Hash: a05a390ae205fdd8
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Simple"
+#: packages/nodes/src/chimney/panel.tsx
+#, fuzzy
+msgid "node.chimney.panel.simple"
+msgstr "简单"
+
+# Review: required
+# Source-Hash: 62ab2eb3c775da95
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Single"
+#: packages/nodes/src/chimney/panel.tsx
+#, fuzzy
+msgid "node.chimney.panel.single"
+msgstr "单扇"
+
+# Review: required
+# Source-Hash: f6998707123fe72d
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Sloped"
+#: packages/nodes/src/chimney/panel.tsx
+#, fuzzy
+msgid "node.chimney.panel.sloped"
+msgstr "倾斜"
+
+# Review: required
+# Source-Hash: e4698e83d02beb6c
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Spacing"
+#: packages/nodes/src/chimney/panel.tsx
+#, fuzzy
+msgid "node.chimney.panel.spacing"
+msgstr "间距"
+
+# Review: required
+# Source-Hash: 39287346366fc206
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Square"
+#: packages/nodes/src/chimney/panel.tsx
+#, fuzzy
+msgid "node.chimney.panel.square"
+msgstr "方形"
+
+# Review: required
+# Source-Hash: 2c6b1cf17a973d67
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Stepped"
+#: packages/nodes/src/chimney/panel.tsx
+#, fuzzy
+msgid "node.chimney.panel.stepped"
+msgstr "阶梯式"
+
+# Review: required
+# Source-Hash: 1a79a485d91f3f28
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Style"
+#: packages/nodes/src/chimney/panel.tsx
+#, fuzzy
+msgid "node.chimney.panel.style"
+msgstr "样式"
+
+# Review: required
+# Source-Hash: f86f1f22230596b7
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Tapered"
+#: packages/nodes/src/chimney/panel.tsx
+#, fuzzy
+msgid "node.chimney.panel.tapered"
+msgstr "锥形"
+
+# Review: required
+# Source-Hash: fdbb503f0941bd56
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Thickness"
+#: packages/nodes/src/chimney/panel.tsx
+#, fuzzy
+msgid "node.chimney.panel.thickness"
+msgstr "厚度"
+
+# Review: required
+# Source-Hash: 14b162761ce18fe9
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Top Offset"
+#: packages/nodes/src/chimney/panel.tsx
+#, fuzzy
+msgid "node.chimney.panel.topOffset"
+msgstr "顶部偏移"
+
+# Review: required
+# Source-Hash: 1a5ccd607c400d76
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Wall Thickness"
+#: packages/nodes/src/chimney/panel.tsx
+#, fuzzy
+msgid "node.chimney.panel.wallThickness"
+msgstr "壁厚"
+
+# Review: required
+# Source-Hash: 3a0ccd6c46877a87
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Width"
+#: packages/nodes/src/chimney/panel.tsx
+#, fuzzy
+msgid "node.chimney.panel.width"
+msgstr "宽度"
+
+# Review: required
+# Source-Hash: abff67400a76e5eb
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Brick"
+#: packages/nodes/src/chimney/panel.tsx
+#, fuzzy
+msgid "node.chimney.preset.brick"
+msgstr "砖砌"
+
+# Review: required
+# Source-Hash: f6cbdaa17e989b91
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Modern"
+#: packages/nodes/src/chimney/panel.tsx
+#, fuzzy
+msgid "node.chimney.preset.modern"
+msgstr "现代"
+
+# Review: required
+# Source-Hash: ad0457800a1f0eb4
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Round"
+#: packages/nodes/src/chimney/panel.tsx
+#, fuzzy
+msgid "node.chimney.preset.round"
+msgstr "圆形"
+
 # Source-Hash: 6a06e628257f3393
 # Review: required
 # AI-Provider: cursor-agent
@@ -16682,6 +19953,946 @@ msgstr "截面、柱础和柱头可配置的参数化柱。"
 #, fuzzy
 msgid "node.column.label"
 msgstr "柱"
+
+# Review: required
+# Source-Hash: aa6d82bdb3cc1d9a
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Actions"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.actions"
+msgstr "操作"
+
+# Review: required
+# Source-Hash: 14b21685d375581a
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "A-Frame"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.aFrame"
+msgstr "A 字架"
+
+# Review: required
+# Source-Hash: 4007d88108e25c2b
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Apply preset..."
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.applyPreset"
+msgstr "应用预设…"
+
+# Review: required
+# Source-Hash: dbfe7c561383c964
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Apply proportion..."
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.applyProportion"
+msgstr "应用比例…"
+
+# Review: required
+# Source-Hash: 1f3fd938f0b26c9f
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Bottom Depth"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.bottomDepth"
+msgstr "底部深度"
+
+# Review: required
+# Source-Hash: 85576e19cd3da914
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Bottom Height"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.bottomHeight"
+msgstr "底部高度"
+
+# Review: required
+# Source-Hash: 4df0bbb04744a810
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Bottom Spread"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.bottomSpread"
+msgstr "底部张开"
+
+# Review: required
+# Source-Hash: 67479fecb980a441
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Bottom Step Spread"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.bottomStepSpread"
+msgstr "底部台阶间距"
+
+# Review: required
+# Source-Hash: 6ea977c42202ca24
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Bottom Tiers"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.bottomTiers"
+msgstr "底部层数"
+
+# Review: required
+# Source-Hash: 709ca788827f8a94
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Bottom Width"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.bottomWidth"
+msgstr "底部宽度"
+
+# Review: required
+# Source-Hash: 39d33008c81fc075
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Box Frame"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.boxFrame"
+msgstr "箱形框架"
+
+# Review: required
+# Source-Hash: 381b1f481f747677
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Brace Depth"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.braceDepth"
+msgstr "支撑深度"
+
+# Review: required
+# Source-Hash: 8509b09b4ecdd6b6
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Brace Width"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.braceWidth"
+msgstr "支撑宽度"
+
+# Review: required
+# Source-Hash: 08558dd786f45281
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Bulge"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.bulge"
+msgstr "凸起"
+
+# Review: required
+# Source-Hash: 663b9a9e6a469b02
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Bulged"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.bulged"
+msgstr "鼓形"
+
+# Review: required
+# Source-Hash: 3530ac1f4046cd22
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Column"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.column"
+msgstr "柱"
+
+# Review: required
+# Source-Hash: ca0a856f04460bd5
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Connector Plates"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.connectorPlates"
+msgstr "连接板"
+
+# Review: required
+# Source-Hash: b26de372b4b0eaac
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Delete"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.delete"
+msgstr "删除"
+
+# Review: required
+# Source-Hash: 99ac4d03c3061f3a
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Depth"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.depth"
+msgstr "深度"
+
+# Review: required
+# Source-Hash: 12df69f42beb0643
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Dimensions"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.dimensions"
+msgstr "尺寸"
+
+# Review: required
+# Source-Hash: b963a08f0d540014
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Edge Softness"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.edgeSoftness"
+msgstr "边缘柔化"
+
+# Review: required
+# Source-Hash: 82b3db356639ef92
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Ends"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.ends"
+msgstr "端部"
+
+# Review: required
+# Source-Hash: 646c3cd99df3e285
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "End Width"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.endWidth"
+msgstr "端部宽度"
+
+# Review: required
+# Source-Hash: 02e229bca2a2b5f1
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Fork Spread"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.forkSpread"
+msgstr "分叉张开"
+
+# Review: required
+# Source-Hash: fdebfac05413abcf
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Heavy"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.heavy"
+msgstr "粗重"
+
+# Review: required
+# Source-Hash: 646ef0fbcbc58edf
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Height"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.height"
+msgstr "高度"
+
+# Review: required
+# Source-Hash: 957fae84ed52a2e3
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Height and footprint are controlled by the lean-to extension. Rotate or change the support style here; resize from the parent lean-to."
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.heightAndFootprintAreControlledBy"
+msgstr "高度和占地由单坡扩建控制。可在此旋转或更改支撑样式；请在所属单坡扩建中调整尺寸。"
+
+# Review: required
+# Source-Hash: bb851e93088b73a2
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Hourglass"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.hourglass"
+msgstr "沙漏形"
+
+# Review: required
+# Source-Hash: 9cc75129edee59ad
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "K Brace"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.kBrace"
+msgstr "K 形支撑"
+
+# Review: required
+# Source-Hash: bd02c614454fbd2b
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Move"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.move"
+msgstr "移动"
+
+# Review: required
+# Source-Hash: 6dc190abd3f22787
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Neck Width"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.neckWidth"
+msgstr "颈部宽度"
+
+# Review: required
+# Source-Hash: 7dba7ed55eeba18f
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "No Bottom"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.noBottom"
+msgstr "无底座"
+
+# Review: required
+# Source-Hash: 682d71815bb20e94
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "No Top"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.noTop"
+msgstr "无柱头"
+
+# Review: required
+# Source-Hash: 4da8688437f64db8
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Plinth Thickness"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.plinthThickness"
+msgstr "柱基厚度"
+
+# Review: required
+# Source-Hash: 0bf453b4882c663c
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Portal Frame"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.portalFrame"
+msgstr "门式框架"
+
+# Review: required
+# Source-Hash: 441f7f652ea6a0d8
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Preset"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.preset"
+msgstr "预设"
+
+# Review: required
+# Source-Hash: f29fef1beeb25f22
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Rectangular"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.rectangular"
+msgstr "矩形"
+
+# Review: required
+# Source-Hash: 23b9d290b165cd49
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Ring Pairs"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.ringPairs"
+msgstr "环对数"
+
+# Review: required
+# Source-Hash: 8db82d731a19651e
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Ring Spread"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.ringSpread"
+msgstr "环间距"
+
+# Review: required
+# Source-Hash: bdb524a15d9e1509
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Ring Thickness"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.ringThickness"
+msgstr "环厚度"
+
+# Review: required
+# Source-Hash: ad0457800a1f0eb4
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Round"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.round"
+msgstr "圆形"
+
+# Review: required
+# Source-Hash: baa84a2d17095dcf
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Round Band Width"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.roundBandWidth"
+msgstr "圆环带宽度"
+
+# Review: required
+# Source-Hash: 5f1f67fb0ca59a6d
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Rounded Bottom"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.roundedBottom"
+msgstr "圆形底座"
+
+# Review: required
+# Source-Hash: 446816980ed0da27
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Rounded Top"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.roundedTop"
+msgstr "圆形柱头"
+
+# Review: required
+# Source-Hash: 9e554c26be80f0d0
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Segment Twist"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.segmentTwist"
+msgstr "分段扭转"
+
+# Review: required
+# Source-Hash: 4fc63ad21de30103
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Shaft"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.shaft"
+msgstr "井道"
+
+# Review: required
+# Source-Hash: 9bc3a704a9a96b3a
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Shaft Corner Radius"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.shaftCornerRadius"
+msgstr "柱身圆角半径"
+
+# Review: required
+# Source-Hash: 3dab61aeb47e504d
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Shaft Width"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.shaftWidth"
+msgstr "柱身宽度"
+
+# Review: required
+# Source-Hash: 85ea1d3c8b749680
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Shape"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.shape"
+msgstr "形状"
+
+# Review: required
+# Source-Hash: 49a2ce13016d4073
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Short / Stout"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.shortStout"
+msgstr "短粗"
+
+# Review: required
+# Source-Hash: 4637a9a61638cc66
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Simple Block Bottom"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.simpleBlockBottom"
+msgstr "简单块状底座"
+
+# Review: required
+# Source-Hash: 9278f9b4a48208b0
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Simple Top"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.simpleTop"
+msgstr "简单柱头"
+
+# Review: required
+# Source-Hash: 9099890734ae1238
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Single Strut"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.singleStrut"
+msgstr "单撑杆"
+
+# Review: required
+# Source-Hash: d87ce271009ce063
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Slender"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.slender"
+msgstr "纤细"
+
+# Review: required
+# Source-Hash: 39287346366fc206
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Square"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.square"
+msgstr "方形"
+
+# Review: required
+# Source-Hash: 2dc84759d8df709d
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Square Plinth Bottom"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.squarePlinthBottom"
+msgstr "方形柱基底座"
+
+# Review: required
+# Source-Hash: d998c212030bc7c2
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Standard"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.standard"
+msgstr "标准"
+
+# Review: required
+# Source-Hash: 01a6393135e0fb10
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Stepped Bottom"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.steppedBottom"
+msgstr "阶梯底座"
+
+# Review: required
+# Source-Hash: 3d7e443797d4146e
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Stepped Top"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.steppedTop"
+msgstr "阶梯柱头"
+
+# Review: required
+# Source-Hash: 4ee35f740730ae87
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Straight"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.straight"
+msgstr "直跑"
+
+# Review: required
+# Source-Hash: 6063ae2877faa35d
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Taper"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.taper"
+msgstr "收分"
+
+# Review: required
+# Source-Hash: f86f1f22230596b7
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Tapered"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.tapered"
+msgstr "锥形"
+
+# Review: required
+# Source-Hash: 3e7ec47626ee3f22
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Top Depth"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.topDepth"
+msgstr "顶部深度"
+
+# Review: required
+# Source-Hash: 0ca9047731784f56
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Top Height"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.topHeight"
+msgstr "顶部高度"
+
+# Review: required
+# Source-Hash: 3d8a2be83b5b536a
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Top Spread"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.topSpread"
+msgstr "顶部张开"
+
+# Review: required
+# Source-Hash: f4ae0dc639dbc220
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Top Step Spread"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.topStepSpread"
+msgstr "顶部台阶间距"
+
+# Review: required
+# Source-Hash: 8acc4e843934b086
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Top Tiers"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.topTiers"
+msgstr "顶部层数"
+
+# Review: required
+# Source-Hash: a50eb6400611a57c
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Top Width"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.topWidth"
+msgstr "顶部宽度"
+
+# Review: required
+# Source-Hash: f425799b82e085ed
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Transform"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.transform"
+msgstr "变换"
+
+# Review: required
+# Source-Hash: 952fd1ef187c6646
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Trestle"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.trestle"
+msgstr "支架"
+
+# Review: required
+# Source-Hash: 7430dad59aaf98f4
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Tripod"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.tripod"
+msgstr "三脚"
+
+# Review: required
+# Source-Hash: 0db559f22647ec73
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Twist Segments"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.twistSegments"
+msgstr "扭转分段"
+
+# Review: required
+# Source-Hash: 8038a34ffebf4932
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Vertical"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.vertical"
+msgstr "垂直"
+
+# Review: required
+# Source-Hash: f24cc343d79acc10
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "V Support"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.vSupport"
+msgstr "V 形支撑"
+
+# Review: required
+# Source-Hash: 44dda7136b93c8ee
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Waist"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.waist"
+msgstr "板式"
+
+# Review: required
+# Source-Hash: 3a0ccd6c46877a87
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Width"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.width"
+msgstr "宽度"
+
+# Review: required
+# Source-Hash: 4e6640dfff42cea4
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "X Brace"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.xBrace"
+msgstr "X 形支撑"
+
+# Review: required
+# Source-Hash: fefc9b1cfb26b5a8
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Yaw"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.yaw"
+msgstr "偏航"
+
+# Review: required
+# Source-Hash: 86259690e332b66d
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Y Support"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.panel.ySupport"
+msgstr "Y 形支撑"
+
+# Review: required
+# Source-Hash: bf2baf3d7b55f0df
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "A-Frame Support"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.preset.aFrameSupport"
+msgstr "A 字支撑"
+
+# Review: required
+# Source-Hash: 51cf77bb359cee43
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Straight Round"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.preset.basicPillar"
+msgstr "直圆柱"
+
+# Review: required
+# Source-Hash: 39d33008c81fc075
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Box Frame"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.preset.boxFrameSupport"
+msgstr "箱形框架"
+
+# Review: required
+# Source-Hash: 4f22058e862d1f81
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Soft Bulged"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.preset.bulgedPillar"
+msgstr "微鼓形"
+
+# Review: required
+# Source-Hash: bb851e93088b73a2
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Hourglass"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.preset.hourglassPillar"
+msgstr "沙漏形"
+
+# Review: required
+# Source-Hash: 9cc75129edee59ad
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "K Brace"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.preset.kBraceSupport"
+msgstr "K 形支撑"
+
+# Review: required
+# Source-Hash: 0bf453b4882c663c
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Portal Frame"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.preset.portalFrameSupport"
+msgstr "门式框架"
+
+# Review: required
+# Source-Hash: 9099890734ae1238
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Single Strut"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.preset.singleStrutSupport"
+msgstr "单撑杆"
+
+# Review: required
+# Source-Hash: 0c13af329b9b57cd
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Square Block"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.preset.squarePillar"
+msgstr "方柱"
+
+# Review: required
+# Source-Hash: 4c294bad84924665
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Tapered Round"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.preset.taperedPillar"
+msgstr "收分圆柱"
+
+# Review: required
+# Source-Hash: 360e405bfd74a379
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Trestle Frame"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.preset.trestleSupport"
+msgstr "支架框架"
+
+# Review: required
+# Source-Hash: 4589103259b4fc4d
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Tripod Support"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.preset.tripodSupport"
+msgstr "三脚支撑"
+
+# Review: required
+# Source-Hash: f24cc343d79acc10
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "V Support"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.preset.vFrameSupport"
+msgstr "V 形支撑"
+
+# Review: required
+# Source-Hash: 4e6640dfff42cea4
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "X Brace"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.preset.xBraceSupport"
+msgstr "X 形支撑"
+
+# Review: required
+# Source-Hash: 86259690e332b66d
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Y Support"
+#: packages/nodes/src/column/panel.tsx
+#, fuzzy
+msgid "node.column.preset.yFrameSupport"
+msgstr "Y 形支撑"
 
 # Source-Hash: 895766ad1b766c2e
 # Review: required
@@ -17037,6 +21248,26 @@ msgstr "拱形"
 msgid "node.door.panel.archHeight"
 msgstr "拱高"
 
+# Source-Hash: 05b65242d8c48791
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-fable-5-1
+# English: "Auto"
+#: packages/nodes/src/door/panel.tsx
+#, fuzzy
+msgid "node.door.panel.auto"
+msgstr "自动"
+
+# Source-Hash: 8a04486ba122ea7d
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-fable-5-1
+# English: "Auto follows the wall"
+#: packages/nodes/src/door/panel.tsx
+#, fuzzy
+msgid "node.door.panel.autoFollowsTheWall"
+msgstr "自动跟随墙体"
+
 # Source-Hash: 387773c8aa2820a4
 # Review: required
 # AI-Provider: cursor-agent
@@ -17226,6 +21457,16 @@ msgstr "折叠"
 #, fuzzy
 msgid "node.door.panel.frame"
 msgstr "框架"
+
+# Source-Hash: 0cce8ae784f78478
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-fable-5-1
+# English: "Depth (auto)"
+#: packages/nodes/src/door/panel.tsx
+#, fuzzy
+msgid "node.door.panel.frameDepthAuto"
+msgstr "深度（自动）"
 
 # Source-Hash: 53aa825a4737190a
 # Review: required
@@ -17847,6 +22088,376 @@ msgstr "屋面上的房屋形凸出部分。"
 msgid "node.dormer.label"
 msgstr "老虎窗"
 
+# Review: required
+# Source-Hash: 99ac4d03c3061f3a
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Depth"
+#: packages/nodes/src/dormer/panel.tsx
+#, fuzzy
+msgid "node.dormer.panel.depth"
+msgstr "深度"
+
+# Review: required
+# Source-Hash: 12df69f42beb0643
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Dimensions"
+#: packages/nodes/src/dormer/panel.tsx
+#, fuzzy
+msgid "node.dormer.panel.dimensions"
+msgstr "尺寸"
+
+# Review: required
+# Source-Hash: 6b6f8068bbc4c902
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Dormer"
+#: packages/nodes/src/dormer/panel.tsx
+#, fuzzy
+msgid "node.dormer.panel.dormer"
+msgstr "老虎窗"
+
+# Review: required
+# Source-Hash: 6949d667043bee0b
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Dutch"
+#: packages/nodes/src/dormer/panel.tsx
+#, fuzzy
+msgid "node.dormer.panel.dutch"
+msgstr "荷兰式"
+
+# Review: required
+# Source-Hash: 9cab4d4c95f63cdd
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Flat"
+#: packages/nodes/src/dormer/panel.tsx
+#, fuzzy
+msgid "node.dormer.panel.flat"
+msgstr "平屋顶"
+
+# Review: required
+# Source-Hash: deaffa095d126dfe
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Gable"
+#: packages/nodes/src/dormer/panel.tsx
+#, fuzzy
+msgid "node.dormer.panel.gable"
+msgstr "双坡"
+
+# Review: required
+# Source-Hash: 7f53d9ffca39984a
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Gambrel"
+#: packages/nodes/src/dormer/panel.tsx
+#, fuzzy
+msgid "node.dormer.panel.gambrel"
+msgstr "复折式"
+
+# Review: required
+# Source-Hash: 9eda0ea8d447066d
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Hip"
+#: packages/nodes/src/dormer/panel.tsx
+#, fuzzy
+msgid "node.dormer.panel.hip"
+msgstr "四坡"
+
+# Review: required
+# Source-Hash: 7f7bb0e875af3260
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Mansard"
+#: packages/nodes/src/dormer/panel.tsx
+#, fuzzy
+msgid "node.dormer.panel.mansard"
+msgstr "孟莎式"
+
+# Review: required
+# Source-Hash: 53af9efc7eca6594
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Pitch Direction"
+#: packages/nodes/src/dormer/panel.tsx
+#, fuzzy
+msgid "node.dormer.panel.pitchDirection"
+msgstr "坡向"
+
+# Review: required
+# Source-Hash: 6c39ef7125494c4a
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Pitch Rise"
+#: packages/nodes/src/dormer/panel.tsx
+#, fuzzy
+msgid "node.dormer.panel.pitchRise"
+msgstr "坡度高差"
+
+# Review: required
+# Source-Hash: 96336d4b0820b977
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Rise Back"
+#: packages/nodes/src/dormer/panel.tsx
+#, fuzzy
+msgid "node.dormer.panel.riseBack"
+msgstr "向后升高"
+
+# Review: required
+# Source-Hash: ee3d45f8b756d029
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Rise Front"
+#: packages/nodes/src/dormer/panel.tsx
+#, fuzzy
+msgid "node.dormer.panel.riseFront"
+msgstr "向前升高"
+
+# Review: required
+# Source-Hash: 5e0622f3b09c9326
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Roof Height"
+#: packages/nodes/src/dormer/panel.tsx
+#, fuzzy
+msgid "node.dormer.panel.roofHeight"
+msgstr "屋顶高度"
+
+# Review: required
+# Source-Hash: 19ab9527ae7889f4
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Roof Type"
+#: packages/nodes/src/dormer/panel.tsx
+#, fuzzy
+msgid "node.dormer.panel.roofType"
+msgstr "屋顶类型"
+
+# Review: required
+# Source-Hash: dba6a7b56cf7083f
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Section"
+#: packages/nodes/src/dormer/panel.tsx
+#, fuzzy
+msgid "node.dormer.panel.section"
+msgstr "部分"
+
+# Review: required
+# Source-Hash: c8d0df27faa3feaa
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Shed"
+#: packages/nodes/src/dormer/panel.tsx
+#, fuzzy
+msgid "node.dormer.panel.shed"
+msgstr "单坡"
+
+# Review: required
+# Source-Hash: e0f973edce3e4ca8
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Wall Height"
+#: packages/nodes/src/dormer/panel.tsx
+#, fuzzy
+msgid "node.dormer.panel.wallHeight"
+msgstr "墙高"
+
+# Review: required
+# Source-Hash: 3a0ccd6c46877a87
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Width"
+#: packages/nodes/src/dormer/panel.tsx
+#, fuzzy
+msgid "node.dormer.panel.width"
+msgstr "宽度"
+
+# Review: required
+# Source-Hash: 0b1d1e9a36456a50
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Windows"
+#: packages/nodes/src/dormer/panel.tsx
+#, fuzzy
+msgid "node.dormer.panel.windows"
+msgstr "窗户"
+
+# Review: required
+# Source-Hash: aa6d82bdb3cc1d9a
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Actions"
+#: packages/nodes/src/dormer/panel-actions-section.tsx
+#, fuzzy
+msgid "node.dormer.panelActionsSection.actions"
+msgstr "操作"
+
+# Review: required
+# Source-Hash: b26de372b4b0eaac
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Delete"
+#: packages/nodes/src/dormer/panel-actions-section.tsx
+#, fuzzy
+msgid "node.dormer.panelActionsSection.delete"
+msgstr "删除"
+
+# Review: required
+# Source-Hash: 34dc96fe77a31e51
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Duplicate"
+#: packages/nodes/src/dormer/panel-actions-section.tsx
+#, fuzzy
+msgid "node.dormer.panelActionsSection.duplicate"
+msgstr "复制"
+
+# Review: required
+# Source-Hash: bd02c614454fbd2b
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Move"
+#: packages/nodes/src/dormer/panel-actions-section.tsx
+#, fuzzy
+msgid "node.dormer.panelActionsSection.move"
+msgstr "移动"
+
+# Review: required
+# Source-Hash: 9da0cbfad144d737
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Position"
+#: packages/nodes/src/dormer/panel-position-section.tsx
+#, fuzzy
+msgid "node.dormer.panelPositionSection.position"
+msgstr "位置"
+
+# Review: required
+# Source-Hash: 01989595ee7c1dc0
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Rotation"
+#: packages/nodes/src/dormer/panel-position-section.tsx
+#, fuzzy
+msgid "node.dormer.panelPositionSection.rotation"
+msgstr "旋转"
+
+# Review: required
+# Source-Hash: 7b19d21b9ad868c7
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Add Window"
+#: packages/nodes/src/dormer/panel-windows-section.tsx
+#, fuzzy
+msgid "node.dormer.panelWindowsSection.addWindow"
+msgstr "添加窗户"
+
+# Review: required
+# Source-Hash: 70d7cc5a6422feaa
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Edit {name}"
+#: packages/nodes/src/dormer/panel-windows-section.tsx
+#, fuzzy
+msgid "node.dormer.panelWindowsSection.editNamed"
+msgstr "编辑{name}"
+
+# Review: required
+# Source-Hash: b6648f023e6c83dc
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Edit window"
+#: packages/nodes/src/dormer/panel-windows-section.tsx
+#, fuzzy
+msgid "node.dormer.panelWindowsSection.editWindow"
+msgstr "编辑窗户"
+
+# Review: required
+# Source-Hash: 4649baf9753aeb74
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Increase the dormer width to add another window."
+#: packages/nodes/src/dormer/panel-windows-section.tsx
+#, fuzzy
+msgid "node.dormer.panelWindowsSection.increaseTheDormerWidthToAdd"
+msgstr "增加老虎窗宽度才能再添加一扇窗。"
+
+# Review: required
+# Source-Hash: bd02c614454fbd2b
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Move"
+#: packages/nodes/src/dormer/panel-windows-section.tsx
+#, fuzzy
+msgid "node.dormer.panelWindowsSection.move"
+msgstr "移动"
+
+# Review: required
+# Source-Hash: c24226954309d83e
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Move {name}"
+#: packages/nodes/src/dormer/panel-windows-section.tsx
+#, fuzzy
+msgid "node.dormer.panelWindowsSection.moveNamed"
+msgstr "移动{name}"
+
+# Review: required
+# Source-Hash: f07faaf0d5e43eef
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Move window"
+#: packages/nodes/src/dormer/panel-windows-section.tsx
+#, fuzzy
+msgid "node.dormer.panelWindowsSection.moveWindow"
+msgstr "移动窗户"
+
+# Review: required
+# Source-Hash: d2816490ea93d363
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "No windows"
+#: packages/nodes/src/dormer/panel-windows-section.tsx
+#, fuzzy
+msgid "node.dormer.panelWindowsSection.noWindows"
+msgstr "没有窗户"
+
+# Review: required
+# Source-Hash: 5cbb24f8b1ce7fb7
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Window {number}"
+#: packages/nodes/src/dormer/panel-windows-section.tsx
+#, fuzzy
+msgid "node.dormer.panelWindowsSection.windowNumber"
+msgstr "窗户 {number}"
+
+# Review: required
+# Source-Hash: 9ca7d951240907cd
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Windows ({length})"
+#: packages/nodes/src/dormer/panel-windows-section.tsx
+#, fuzzy
+msgid "node.dormer.panelWindowsSection.windowsLength"
+msgstr "窗户（{length}）"
+
+# Review: required
+# Source-Hash: f975c4759607806a
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "{face, select, back {Back} left {Left} right {Right} other {Front}} · {width} × {height} m"
+#: packages/nodes/src/dormer/panel-windows-section.tsx
+#, fuzzy
+msgid "node.dormer.panelWindowsSection.windowSummary"
+msgstr "{face, select, back {背面} left {左侧} right {右侧} other {正面}} · {width} × {height} m"
+
 # Source-Hash: b46392d2ea865760
 # Review: required
 # AI-Provider: cursor-agent
@@ -18067,6 +22678,426 @@ msgstr "跨多个楼层的电梯井，每层开口可配置。"
 #, fuzzy
 msgid "node.elevator.label"
 msgstr "电梯"
+
+# Review: required
+# Source-Hash: 7e6d5f138e315bdb
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Access"
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.access"
+msgstr "通行"
+
+# Review: required
+# Source-Hash: aa6d82bdb3cc1d9a
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Actions"
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.actions"
+msgstr "操作"
+
+# Review: required
+# Source-Hash: fdf7108a011bd94b
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Cab"
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.cab"
+msgstr "轿厢"
+
+# Review: required
+# Source-Hash: 2d0ab44f3820f22c
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Cab Height"
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.cabHeight"
+msgstr "轿厢高度"
+
+# Review: required
+# Source-Hash: 65f410261609060b
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Center opening"
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.centerOpening"
+msgstr "中开"
+
+# Review: required
+# Source-Hash: c5433f4d3ea8a8a7
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Default Floor"
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.defaultFloor"
+msgstr "默认楼层"
+
+# Review: required
+# Source-Hash: b26de372b4b0eaac
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Delete"
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.delete"
+msgstr "删除"
+
+# Review: required
+# Source-Hash: 99ac4d03c3061f3a
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Depth"
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.depth"
+msgstr "深度"
+
+# Review: required
+# Source-Hash: 748877ae309c313c
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Destination"
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.destination"
+msgstr "目标"
+
+# Review: required
+# Source-Hash: 3bff69bd74544339
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Disabled"
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.disabled"
+msgstr "已停用"
+
+# Review: required
+# Source-Hash: d8baf402fa9c52f0
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Door Height"
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.doorHeight"
+msgstr "门高度"
+
+# Review: required
+# Source-Hash: 20f60b98de67849b
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Doors"
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.doors"
+msgstr "门"
+
+# Review: required
+# Source-Hash: eb0d4023a513b16c
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Door Time"
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.doorTime"
+msgstr "开门时间"
+
+# Review: required
+# Source-Hash: b3e001acdb1f869d
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Door Type"
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.doorType"
+msgstr "门类型"
+
+# Review: required
+# Source-Hash: c6203a69fdf44065
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Door Width"
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.doorWidth"
+msgstr "门宽度"
+
+# Review: required
+# Source-Hash: 34dc96fe77a31e51
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Duplicate"
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.duplicate"
+msgstr "复制"
+
+# Review: required
+# Source-Hash: eb3abe5340b26138
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Dwell"
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.dwell"
+msgstr "停靠时间"
+
+# Review: required
+# Source-Hash: ab5cbab7be160a1c
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Elevator"
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.elevator"
+msgstr "电梯"
+
+# Review: required
+# Source-Hash: 702140636ff3977a
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "From"
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.from"
+msgstr "起始"
+
+# Review: required
+# Source-Hash: 8ab91094cf650204
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Glass"
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.glass"
+msgstr "玻璃"
+
+# Review: required
+# Source-Hash: 88810658a2b97bc6
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Glass frame"
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.glassFrame"
+msgstr "玻璃框"
+
+# Review: required
+# Source-Hash: c0ff16d77ebc9593
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Motion"
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.motion"
+msgstr "运动"
+
+# Review: required
+# Source-Hash: bd02c614454fbd2b
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Move"
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.move"
+msgstr "移动"
+
+# Review: required
+# Source-Hash: 825ac8855353a4e1
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Opening Style"
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.openingStyle"
+msgstr "开门方式"
+
+# Review: required
+# Source-Hash: 9da0cbfad144d737
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Position"
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.position"
+msgstr "位置"
+
+# Review: required
+# Source-Hash: 01989595ee7c1dc0
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Rotation"
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.rotation"
+msgstr "旋转"
+
+# Review: required
+# Source-Hash: f9a95d8407fafda4
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Segmented panel"
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.segmentedPanel"
+msgstr "分段面板"
+
+# Review: required
+# Source-Hash: aa7b49b13f96057f
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Service"
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.service"
+msgstr "服务"
+
+# Review: required
+# Source-Hash: 4fc63ad21de30103
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Shaft"
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.shaft"
+msgstr "井道"
+
+# Review: required
+# Source-Hash: 6605ade39317cd42
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Shaft Depth"
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.shaftDepth"
+msgstr "井道深度"
+
+# Review: required
+# Source-Hash: b28db5a3a48fe52e
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Shaft Style"
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.shaftStyle"
+msgstr "井道样式"
+
+# Review: required
+# Source-Hash: 3dab61aeb47e504d
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Shaft Width"
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.shaftWidth"
+msgstr "井道宽度"
+
+# Review: required
+# Source-Hash: aee3b2bd78c87d0b
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Single left"
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.singleLeft"
+msgstr "单扇左开"
+
+# Review: required
+# Source-Hash: cc43ffbef4ac7ae0
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Single right"
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.singleRight"
+msgstr "单扇右开"
+
+# Review: required
+# Source-Hash: ef3e765e692faf4c
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Solid"
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.solid"
+msgstr "实体"
+
+# Review: required
+# Source-Hash: 8008b6f17089beaf
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Solid panel"
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.solidPanel"
+msgstr "实板"
+
+# Review: required
+# Source-Hash: 3b006be0b1f0493f
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Speed"
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.speed"
+msgstr "速度"
+
+# Review: required
+# Source-Hash: 6d37a1679fa3708e
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Stop {stopOrder}"
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.stopStoporder"
+msgstr "停靠站 {stopOrder}"
+
+# Review: required
+# Source-Hash: b3214a20e45a7aed
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "To"
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.to"
+msgstr "至"
+
+# Review: required
+# Source-Hash: 1a5ccd607c400d76
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Wall Thickness"
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.wallThickness"
+msgstr "壁厚"
+
+# Review: required
+# Source-Hash: 3a0ccd6c46877a87
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Width"
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.width"
+msgstr "宽度"
+
+# Review: required
+# Source-Hash: fefc9b1cfb26b5a8
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Yaw"
+#: packages/nodes/src/elevator/panel.tsx
+#, fuzzy
+msgid "node.elevator.panel.yaw"
+msgstr "偏航"
 
 # Source-Hash: 7b22c91cf520e161
 # Review: required
@@ -20765,15 +25796,15 @@ msgstr "移到{level}"
 msgid "node.roof.panel.moveToTheRoofLevel"
 msgstr "移到屋顶楼层"
 
-# Source-Hash: cbdb8b34db71e987
-# Review: required
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
-# English: "On {storey} with its walls, so it hides that floor's plan in solo and exploded views.{roofs, plural, =0 {} =1 {} other { The floor's # roofs move together.}}"
+# Source-Hash: 0939fad1cb1831f0
+# Review: required
+# English: "On {storey} with its walls, so it hides that floor's plan in solo and exploded views.{roofs, plural, =0 {} =1 {} other { The floor's {roofCount} roofs move together.}}"
 #: packages/nodes/src/roof/panel.tsx
 #, fuzzy
 msgid "node.roof.panel.onStoreyWalls"
-msgstr "与其墙体同在{storey}，因此在单独和分解视图中会遮挡该层平面。{roofs, plural, =0 {} =1 {} other { 该层的 # 个屋顶会一起移动。}}"
+msgstr "与其墙体同在{storey}，因此在单独和分解视图中会遮挡该层平面。{roofs, plural, =0 {} =1 {} other { 该层的 {roofCount} 个屋顶会一起移动。}}"
 
 # Source-Hash: 9da0cbfad144d737
 # Review: required
@@ -22257,15 +27288,15 @@ msgstr "街道地址"
 msgid "node.site.panel.survey"
 msgstr "测量"
 
-# Source-Hash: fd19a2f0a6b9e85d
-# Review: required
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
-# English: "{count, plural, one {# surveyed line} other {# surveyed lines}} at {interval} ft ({datum}) — {source}"
+# Source-Hash: 2177f21713b01a24
+# Review: required
+# English: "{count, plural, one {{lineCount} surveyed line} other {{lineCount} surveyed lines}} at {interval} ft ({datum}) — {source}"
 #: packages/nodes/src/site/panel.tsx
 #, fuzzy
 msgid "node.site.panel.surveyedContours"
-msgstr "{count, plural, other {# 条测量线}}，间距 {interval} ft（{datum}）— {source}"
+msgstr "{count, plural, other {{lineCount} 条测量线}}，间距 {interval} ft（{datum}）— {source}"
 
 # Source-Hash: d457508edd5bb8cf
 # Review: required
@@ -22376,6 +27407,366 @@ msgstr "屋面上带框的玻璃开口。"
 #, fuzzy
 msgid "node.skylight.label"
 msgstr "天窗"
+
+# Review: required
+# Source-Hash: aa6d82bdb3cc1d9a
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Actions"
+#: packages/nodes/src/skylight/panel.tsx
+#, fuzzy
+msgid "node.skylight.panel.actions"
+msgstr "操作"
+
+# Review: required
+# Source-Hash: f1113261ad2797de
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Along X"
+#: packages/nodes/src/skylight/panel.tsx
+#, fuzzy
+msgid "node.skylight.panel.alongX"
+msgstr "沿 X"
+
+# Review: required
+# Source-Hash: 5b84b1c644493370
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Along Z"
+#: packages/nodes/src/skylight/panel.tsx
+#, fuzzy
+msgid "node.skylight.panel.alongZ"
+msgstr "沿 Z"
+
+# Review: required
+# Source-Hash: b3a163b453896bef
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Bottom"
+#: packages/nodes/src/skylight/panel.tsx
+#, fuzzy
+msgid "node.skylight.panel.bottom"
+msgstr "底部"
+
+# Review: required
+# Source-Hash: b8ff053666ee326b
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Curb"
+#: packages/nodes/src/skylight/panel.tsx
+#, fuzzy
+msgid "node.skylight.panel.curb"
+msgstr "路缘"
+
+# Review: required
+# Source-Hash: 14144df9e1364eea
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Cutout Offset"
+#: packages/nodes/src/skylight/panel.tsx
+#, fuzzy
+msgid "node.skylight.panel.cutoutOffset"
+msgstr "开洞偏移"
+
+# Review: required
+# Source-Hash: b26de372b4b0eaac
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Delete"
+#: packages/nodes/src/skylight/panel.tsx
+#, fuzzy
+msgid "node.skylight.panel.delete"
+msgstr "删除"
+
+# Review: required
+# Source-Hash: 99ac4d03c3061f3a
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Depth"
+#: packages/nodes/src/skylight/panel.tsx
+#, fuzzy
+msgid "node.skylight.panel.depth"
+msgstr "深度"
+
+# Review: required
+# Source-Hash: 12df69f42beb0643
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Dimensions"
+#: packages/nodes/src/skylight/panel.tsx
+#, fuzzy
+msgid "node.skylight.panel.dimensions"
+msgstr "尺寸"
+
+# Review: required
+# Source-Hash: ce3a6c03765dbbd8
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Frame"
+#: packages/nodes/src/skylight/panel.tsx
+#, fuzzy
+msgid "node.skylight.panel.frame"
+msgstr "框架"
+
+# Review: required
+# Source-Hash: 911ea36eb835f3a6
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Glass Thickness"
+#: packages/nodes/src/skylight/panel.tsx
+#, fuzzy
+msgid "node.skylight.panel.glassThickness"
+msgstr "玻璃厚度"
+
+# Review: required
+# Source-Hash: 646ef0fbcbc58edf
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Height"
+#: packages/nodes/src/skylight/panel.tsx
+#, fuzzy
+msgid "node.skylight.panel.height"
+msgstr "高度"
+
+# Review: required
+# Source-Hash: d56303913961984f
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Lantern Height"
+#: packages/nodes/src/skylight/panel.tsx
+#, fuzzy
+msgid "node.skylight.panel.lanternHeight"
+msgstr "采光亭高度"
+
+# Review: required
+# Source-Hash: f365c6b6dd9ebab9
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Left"
+#: packages/nodes/src/skylight/panel.tsx
+#, fuzzy
+msgid "node.skylight.panel.left"
+msgstr "左"
+
+# Review: required
+# Source-Hash: f3e9604e3b85510f
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Motor"
+#: packages/nodes/src/skylight/panel.tsx
+#, fuzzy
+msgid "node.skylight.panel.motor"
+msgstr "电机"
+
+# Review: required
+# Source-Hash: a025444e0f500725
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Motor Housing"
+#: packages/nodes/src/skylight/panel.tsx
+#, fuzzy
+msgid "node.skylight.panel.motorHousing"
+msgstr "电机外壳"
+
+# Review: required
+# Source-Hash: b2cbc4e2e5545a6c
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "No"
+#: packages/nodes/src/skylight/panel.tsx
+#, fuzzy
+msgid "node.skylight.panel.no"
+msgstr "否"
+
+# Review: required
+# Source-Hash: a8e0b9fe5cfb4e3e
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "No Motor"
+#: packages/nodes/src/skylight/panel.tsx
+#, fuzzy
+msgid "node.skylight.panel.noMotor"
+msgstr "无电机"
+
+# Review: required
+# Source-Hash: 3e52f04f92e08070
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Open"
+#: packages/nodes/src/skylight/panel.tsx
+#, fuzzy
+msgid "node.skylight.panel.open"
+msgstr "打开"
+
+# Review: required
+# Source-Hash: 9bfc55f879926fe6
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Opening Angle"
+#: packages/nodes/src/skylight/panel.tsx
+#, fuzzy
+msgid "node.skylight.panel.openingAngle"
+msgstr "开启角度"
+
+# Review: required
+# Source-Hash: 9da0cbfad144d737
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Position"
+#: packages/nodes/src/skylight/panel.tsx
+#, fuzzy
+msgid "node.skylight.panel.position"
+msgstr "位置"
+
+# Review: required
+# Source-Hash: b34d5ee0f218221d
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Right"
+#: packages/nodes/src/skylight/panel.tsx
+#, fuzzy
+msgid "node.skylight.panel.right"
+msgstr "右"
+
+# Review: required
+# Source-Hash: 01989595ee7c1dc0
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Rotation"
+#: packages/nodes/src/skylight/panel.tsx
+#, fuzzy
+msgid "node.skylight.panel.rotation"
+msgstr "旋转"
+
+# Review: required
+# Source-Hash: 358826fbdeaf72b9
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Skylight"
+#: packages/nodes/src/skylight/panel.tsx
+#, fuzzy
+msgid "node.skylight.panel.skylight"
+msgstr "天窗"
+
+# Review: required
+# Source-Hash: fdbb503f0941bd56
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Thickness"
+#: packages/nodes/src/skylight/panel.tsx
+#, fuzzy
+msgid "node.skylight.panel.thickness"
+msgstr "厚度"
+
+# Review: required
+# Source-Hash: 27644f0497fd9849
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Top"
+#: packages/nodes/src/skylight/panel.tsx
+#, fuzzy
+msgid "node.skylight.panel.top"
+msgstr "顶部"
+
+# Review: required
+# Source-Hash: 75991d106eb93dae
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Top Scale"
+#: packages/nodes/src/skylight/panel.tsx
+#, fuzzy
+msgid "node.skylight.panel.topScale"
+msgstr "顶部缩放"
+
+# Review: required
+# Source-Hash: 3272a61417949895
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Track Width"
+#: packages/nodes/src/skylight/panel.tsx
+#, fuzzy
+msgid "node.skylight.panel.trackWidth"
+msgstr "轨道宽度"
+
+# Review: required
+# Source-Hash: c44f7ab8bbd24858
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Type"
+#: packages/nodes/src/skylight/panel.tsx
+#, fuzzy
+msgid "node.skylight.panel.type"
+msgstr "类型"
+
+# Review: required
+# Source-Hash: 3a0ccd6c46877a87
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Width"
+#: packages/nodes/src/skylight/panel.tsx
+#, fuzzy
+msgid "node.skylight.panel.width"
+msgstr "宽度"
+
+# Review: required
+# Source-Hash: 184fda5c980b9d9c
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Yes"
+#: packages/nodes/src/skylight/panel.tsx
+#, fuzzy
+msgid "node.skylight.panel.yes"
+msgstr "是"
+
+# Review: required
+# Source-Hash: 445aacf307de133d
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Flat roof skylight"
+#: packages/nodes/src/skylight/panel.tsx
+#, fuzzy
+msgid "node.skylight.type.flat"
+msgstr "平屋顶天窗"
+
+# Review: required
+# Source-Hash: 446176b7c5d8b284
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Roof lantern"
+#: packages/nodes/src/skylight/panel.tsx
+#, fuzzy
+msgid "node.skylight.type.lantern"
+msgstr "屋顶采光亭"
+
+# Review: required
+# Source-Hash: a6559387f108518f
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Opening skylight"
+#: packages/nodes/src/skylight/panel.tsx
+#, fuzzy
+msgid "node.skylight.type.opening"
+msgstr "可开启天窗"
+
+# Review: required
+# Source-Hash: 379436bb5a74867a
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Sliding skylight"
+#: packages/nodes/src/skylight/panel.tsx
+#, fuzzy
+msgid "node.skylight.type.sliding"
+msgstr "推拉天窗"
+
+# Review: required
+# Source-Hash: d26ac61f593fe1bf
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Walk-on rooflight"
+#: packages/nodes/src/skylight/panel.tsx
+#, fuzzy
+msgid "node.skylight.type.walkOn"
+msgstr "可上人天窗"
 
 # Source-Hash: ad8f8036d34f6cea
 # Review: required
@@ -22716,6 +28107,276 @@ msgstr "安装在屋面上的光伏板阵列。"
 #, fuzzy
 msgid "node.solarPanel.label"
 msgstr "光伏板"
+
+# Review: required
+# Source-Hash: aa6d82bdb3cc1d9a
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Actions"
+#: packages/nodes/src/solar-panel/panel.tsx
+#, fuzzy
+msgid "node.solarPanel.panel.actions"
+msgstr "操作"
+
+# Review: required
+# Source-Hash: 2184867946897298
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Array"
+#: packages/nodes/src/solar-panel/panel.tsx
+#, fuzzy
+msgid "node.solarPanel.panel.array"
+msgstr "阵列"
+
+# Review: required
+# Source-Hash: 6eaa0e2a78d44d59
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Auto-fit to roof"
+#: packages/nodes/src/solar-panel/panel.tsx
+#, fuzzy
+msgid "node.solarPanel.panel.autoFitToRoof"
+msgstr "自动适配屋顶"
+
+# Review: required
+# Source-Hash: 30edd1c180aac9b4
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Columns"
+#: packages/nodes/src/solar-panel/panel.tsx
+#, fuzzy
+msgid "node.solarPanel.panel.columns"
+msgstr "列"
+
+# Review: required
+# Source-Hash: d1c6dd6335337cc1
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Custom — dimensions don't match any preset"
+#: packages/nodes/src/solar-panel/panel.tsx
+#, fuzzy
+msgid "node.solarPanel.panel.customDimensionsDonTMatchAny"
+msgstr "自定义——尺寸与任何预设都不匹配"
+
+# Review: required
+# Source-Hash: b26de372b4b0eaac
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Delete"
+#: packages/nodes/src/solar-panel/panel.tsx
+#, fuzzy
+msgid "node.solarPanel.panel.delete"
+msgstr "删除"
+
+# Review: required
+# Source-Hash: fe9356b1d0e0396b
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Flip orientation"
+#: packages/nodes/src/solar-panel/panel.tsx
+#, fuzzy
+msgid "node.solarPanel.panel.flipOrientation"
+msgstr "翻转方向"
+
+# Review: required
+# Source-Hash: eaaa20f3b603140f
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Flush"
+#: packages/nodes/src/solar-panel/panel.tsx
+#, fuzzy
+msgid "node.solarPanel.panel.flush"
+msgstr "齐平"
+
+# Review: required
+# Source-Hash: fd413477f1a9e5ed
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Frame depth"
+#: packages/nodes/src/solar-panel/panel.tsx
+#, fuzzy
+msgid "node.solarPanel.panel.frameDepth"
+msgstr "框架深度"
+
+# Review: required
+# Source-Hash: 6aa2318fa815e5f2
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Frame thickness"
+#: packages/nodes/src/solar-panel/panel.tsx
+#, fuzzy
+msgid "node.solarPanel.panel.frameThickness"
+msgstr "框架厚度"
+
+# Review: required
+# Source-Hash: c5657f721eae3dff
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Gap X"
+#: packages/nodes/src/solar-panel/panel.tsx
+#, fuzzy
+msgid "node.solarPanel.panel.gapX"
+msgstr "X 间距"
+
+# Review: required
+# Source-Hash: e6e3b393aa7c0d98
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Gap Y"
+#: packages/nodes/src/solar-panel/panel.tsx
+#, fuzzy
+msgid "node.solarPanel.panel.gapY"
+msgstr "Y 间距"
+
+# Review: required
+# Source-Hash: 646ef0fbcbc58edf
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Height"
+#: packages/nodes/src/solar-panel/panel.tsx
+#, fuzzy
+msgid "node.solarPanel.panel.height"
+msgstr "高度"
+
+# Review: required
+# Source-Hash: 81d365ccef73068c
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Mounting"
+#: packages/nodes/src/solar-panel/panel.tsx
+#, fuzzy
+msgid "node.solarPanel.panel.mounting"
+msgstr "安装方式"
+
+# Review: required
+# Source-Hash: 482469f5a0873f73
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Panel"
+#: packages/nodes/src/solar-panel/panel.tsx
+#, fuzzy
+msgid "node.solarPanel.panel.panel"
+msgstr "面板"
+
+# Review: required
+# Source-Hash: 441f7f652ea6a0d8
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Preset"
+#: packages/nodes/src/solar-panel/panel.tsx
+#, fuzzy
+msgid "node.solarPanel.panel.preset"
+msgstr "预设"
+
+# Review: required
+# Source-Hash: c913b494c3901a17
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Rows"
+#: packages/nodes/src/solar-panel/panel.tsx
+#, fuzzy
+msgid "node.solarPanel.panel.rows"
+msgstr "行"
+
+# Review: required
+# Source-Hash: a4dba2b2675dbba0
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Setbacks too large to fit a panel."
+#: packages/nodes/src/solar-panel/panel.tsx
+#, fuzzy
+msgid "node.solarPanel.panel.setbacksTooLarge"
+msgstr "退界过大，无法放下面板。"
+
+# Review: required
+# Source-Hash: 4d18446ff8eaa680
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Solar Panel"
+#: packages/nodes/src/solar-panel/panel.tsx
+#, fuzzy
+msgid "node.solarPanel.panel.solarPanel"
+msgstr "光伏板"
+
+# Review: required
+# Source-Hash: 0af6194a8b8d8be6
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Standoff"
+#: packages/nodes/src/solar-panel/panel.tsx
+#, fuzzy
+msgid "node.solarPanel.panel.standoff"
+msgstr "支脚"
+
+# Review: required
+# Source-Hash: 58cb60c14826f1d0
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Tilt angle"
+#: packages/nodes/src/solar-panel/panel.tsx
+#, fuzzy
+msgid "node.solarPanel.panel.tiltAngle"
+msgstr "倾斜角度"
+
+# Review: required
+# Source-Hash: 787005b26aec58a3
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Tilted"
+#: packages/nodes/src/solar-panel/panel.tsx
+#, fuzzy
+msgid "node.solarPanel.panel.tilted"
+msgstr "倾斜"
+
+# Review: required
+# Source-Hash: 3a0ccd6c46877a87
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Width"
+#: packages/nodes/src/solar-panel/panel.tsx
+#, fuzzy
+msgid "node.solarPanel.panel.width"
+msgstr "宽度"
+
+# Review: required
+# Source-Hash: cd53f16290b67f7f
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Compact"
+#: packages/nodes/src/solar-panel/panel.tsx
+#, fuzzy
+msgid "node.solarPanel.preset.compact"
+msgstr "紧凑型"
+
+# Review: required
+# Source-Hash: 317ebe2aa996af70
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Frameless"
+#: packages/nodes/src/solar-panel/panel.tsx
+#, fuzzy
+msgid "node.solarPanel.preset.frameless"
+msgstr "无边框"
+
+# Review: required
+# Source-Hash: 46660ad432e19312
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Residential"
+#: packages/nodes/src/solar-panel/panel.tsx
+#, fuzzy
+msgid "node.solarPanel.preset.residential"
+msgstr "住宅型"
+
+# Review: required
+# Source-Hash: b33386b8fe3725fa
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Residential Large"
+#: packages/nodes/src/solar-panel/panel.tsx
+#, fuzzy
+msgid "node.solarPanel.preset.residentialLarge"
+msgstr "大尺寸住宅型"
 
 # Source-Hash: 638f17c80f424dd3
 # Review: required
@@ -23337,15 +28998,15 @@ msgstr "贴合楼面"
 msgid "node.stair.panel.fitUniformRisers"
 msgstr "适配均匀踢面"
 
-# Source-Hash: 22dd5d2975d836a0
-# Review: required
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
-# English: "Flight {number}: {count, plural, one {# riser} other {# risers}} · R {riser} · T {going} · {slope}"
+# Source-Hash: 4d365dbc1fb92b90
+# Review: required
+# English: "Flight {number}: {count, plural, one {{riserCount} riser} other {{riserCount} risers}} · R {riser} · T {going} · {slope}"
 #: packages/nodes/src/stair/panel.tsx
 #, fuzzy
 msgid "node.stair.panel.flightMeasurements"
-msgstr "梯段 {number}：{count, plural, other {# 级踢面}} · 踢面高 {riser} · 踏面宽 {going} · {slope}"
+msgstr "梯段 {number}：{count, plural, other {{riserCount} 级踢面}} · 踢面高 {riser} · 踏面宽 {going} · {slope}"
 
 # Source-Hash: 6e946bd1acd94637
 # Review: required
@@ -26537,6 +32198,26 @@ msgstr "拱形"
 msgid "node.window.panel.archHeight"
 msgstr "拱高"
 
+# Source-Hash: 05b65242d8c48791
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-fable-5-1
+# English: "Auto"
+#: packages/nodes/src/window/panel.tsx
+#, fuzzy
+msgid "node.window.panel.auto"
+msgstr "自动"
+
+# Source-Hash: 8a04486ba122ea7d
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-fable-5-1
+# English: "Auto follows the wall"
+#: packages/nodes/src/window/panel.tsx
+#, fuzzy
+msgid "node.window.panel.autoFollowsTheWall"
+msgstr "自动跟随墙体"
+
 # Source-Hash: 30edd1c180aac9b4
 # Review: required
 # AI-Provider: cursor-agent
@@ -26686,6 +32367,16 @@ msgstr "翻转方向"
 #, fuzzy
 msgid "node.window.panel.frame"
 msgstr "框架"
+
+# Source-Hash: 0cce8ae784f78478
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-fable-5-1
+# English: "Depth (auto)"
+#: packages/nodes/src/window/panel.tsx
+#, fuzzy
+msgid "node.window.panel.frameDepthAuto"
+msgstr "深度（自动）"
 
 # Source-Hash: 092033938ca2debb
 # Review: required

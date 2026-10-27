@@ -1,5 +1,5 @@
 'use client'
-import { type AnyNodeId, useLiveNodeOverrides, useScene } from '@pascal-app/core'
+import { type AnyNodeId, useLiveNodeOverrides, usePascalI18n, useScene } from '@pascal-app/core'
 import {
   ProceduralItemNode,
   snapParameters,
@@ -22,6 +22,7 @@ export function ProceduralInspector({
   partId: string | null
   onPartChange: (id: string | null) => void
 }) {
+  const i18n = usePascalI18n()
   const committed = useScene((s) => s.nodes[nodeId as AnyNodeId]) as unknown as
     | ProceduralItemNode
     | undefined
@@ -42,14 +43,24 @@ export function ProceduralInspector({
     const parameters = commit ? snapParameters(node.recipe, values) : values
     const parsed = ProceduralItemNode.safeParse({ ...node, parameters })
     if (!parsed.success) {
-      setError(parsed.error.issues[0]?.message ?? 'Invalid edit')
+      setError(
+        parsed.error.issues[0]?.message ??
+          i18n._({ id: 'editor.proceduralItems.inspector.invalidEdit', message: 'Invalid edit' }),
+      )
       if (commit) useLiveNodeOverrides.getState().clear(nodeId as AnyNodeId)
       return
     }
     try {
       validateProceduralRelations({ ...node, parameters }, useScene.getState().nodes)
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Invalid attachment')
+      setError(
+        e instanceof Error
+          ? e.message
+          : i18n._({
+              id: 'editor.proceduralItems.inspector.invalidAttachment',
+              message: 'Invalid attachment',
+            }),
+      )
       if (commit) useLiveNodeOverrides.getState().clear(nodeId as AnyNodeId)
       return
     }
@@ -64,7 +75,12 @@ export function ProceduralInspector({
     <div className="space-y-5">
       <div className="flex items-center justify-between">
         <h2 className="font-semibold text-lg">
-          {partId ? node.recipe.parts.find((p) => p.id === partId)?.label : 'Adjust design'}
+          {partId
+            ? node.recipe.parts.find((p) => p.id === partId)?.label
+            : i18n._({
+                id: 'editor.proceduralItems.inspector.adjustDesign',
+                message: 'Adjust design',
+              })}
         </h2>
         {partId && (
           <button
@@ -72,7 +88,7 @@ export function ProceduralInspector({
             onClick={() => onPartChange(null)}
             type="button"
           >
-            Back
+            {i18n._({ id: 'editor.proceduralItems.inspector.back', message: 'Back' })}
           </button>
         )}
       </div>
@@ -128,11 +144,21 @@ export function ProceduralInspector({
               useScene.getState().updateNode(nodeId as AnyNodeId, { parameters } as never)
               setError('')
             } catch (e) {
-              setError(e instanceof Error ? e.message : 'Invalid reset')
+              setError(
+                e instanceof Error
+                  ? e.message
+                  : i18n._({
+                      id: 'editor.proceduralItems.inspector.invalidReset',
+                      message: 'Invalid reset',
+                    }),
+              )
             }
           }}
         >
-          Reset this part
+          {i18n._({
+            id: 'editor.proceduralItems.inspector.resetThisPart',
+            message: 'Reset this part',
+          })}
         </button>
       )}
       {error && (
@@ -142,7 +168,9 @@ export function ProceduralInspector({
       )}
       {!partId && node.recipe.parameters.some((p) => p.part) && (
         <div>
-          <h3 className="mb-2 font-medium text-sm">Edit parts</h3>
+          <h3 className="mb-2 font-medium text-sm">
+            {i18n._({ id: 'editor.proceduralItems.inspector.editParts', message: 'Edit parts' })}
+          </h3>
           <div className="flex flex-wrap gap-2">
             {node.recipe.parts
               .filter((part) => node.recipe.parameters.some((p) => p.part === part.id))
@@ -188,13 +216,21 @@ function ProceduralPanel({ node }: { node: ProceduralItemNode }) {
 }
 
 function ProceduralPlacementControls({ node }: { node: ProceduralItemNode }) {
+  const i18n = usePascalI18n()
   const [error, setError] = useState('')
   const update = (patch: Partial<ProceduralItemNode>) => {
     try {
       useScene.getState().updateNode(node.id as AnyNodeId, patch as never)
       setError('')
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Invalid placement')
+      setError(
+        e instanceof Error
+          ? e.message
+          : i18n._({
+              id: 'editor.proceduralItems.inspector.invalidPlacement',
+              message: 'Invalid placement',
+            }),
+      )
     }
   }
   const changePosition = (index: number, value: number, commit: boolean) => {
@@ -213,18 +249,29 @@ function ProceduralPlacementControls({ node }: { node: ProceduralItemNode }) {
       setError('')
     } catch (e) {
       if (commit) useLiveNodeOverrides.getState().clear(node.id as AnyNodeId)
-      setError(e instanceof Error ? e.message : 'Invalid position')
+      setError(
+        e instanceof Error
+          ? e.message
+          : i18n._({
+              id: 'editor.proceduralItems.inspector.invalidPosition',
+              message: 'Invalid position',
+            }),
+      )
     }
   }
   return (
-    <PanelSection title="Position">
+    <PanelSection
+      title={i18n._({ id: 'editor.proceduralItems.inspector.position', message: 'Position' })}
+    >
       {(['X', 'Y', 'Z'] as const).map((axis, index) => (
         <SliderControl
           key={axis}
           label={
             <>
               {axis}
-              <sub className="ml-[1px] text-[11px] opacity-70">pos</sub>
+              <sub className="ml-[1px] text-[11px] opacity-70">
+                {i18n._({ id: 'editor.proceduralItems.inspector.pos', message: 'pos' })}
+              </sub>
             </>
           }
           value={node.position[index]!}

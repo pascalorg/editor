@@ -3,12 +3,14 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  formatFixed,
+  type MessageDescriptor,
   type RoofSegmentNode,
-  SOLAR_PANEL_PRESET_LABELS,
   SOLAR_PANEL_PRESETS,
   type SolarPanelNode,
   type SolarPanelPresetKey,
   useLiveNodeOverrides,
+  usePascalI18n,
   useScene,
 } from '@pascal-app/core'
 import {
@@ -37,11 +39,27 @@ const PRESET_OWNED_FIELDS: ReadonlyArray<keyof SolarPanelNode> = [
   'frameDepth',
 ]
 
-const PRESET_CARDS: { key: SolarPanelPresetKey; label: string }[] = [
-  { key: 'residential', label: SOLAR_PANEL_PRESET_LABELS.residential },
-  { key: 'residential-large', label: SOLAR_PANEL_PRESET_LABELS['residential-large'] },
-  { key: 'compact', label: SOLAR_PANEL_PRESET_LABELS.compact },
-  { key: 'frameless', label: SOLAR_PANEL_PRESET_LABELS.frameless },
+// Preset names in the UI language; core's `SOLAR_PANEL_PRESET_LABELS` stay English.
+const PRESET_CARDS: { key: SolarPanelPresetKey; label: MessageDescriptor }[] = [
+  {
+    key: 'residential',
+    label: /* i18n */ { id: 'node.solarPanel.preset.residential', message: 'Residential' },
+  },
+  {
+    key: 'residential-large',
+    label: /* i18n */ {
+      id: 'node.solarPanel.preset.residentialLarge',
+      message: 'Residential Large',
+    },
+  },
+  {
+    key: 'compact',
+    label: /* i18n */ { id: 'node.solarPanel.preset.compact', message: 'Compact' },
+  },
+  {
+    key: 'frameless',
+    label: /* i18n */ { id: 'node.solarPanel.preset.frameless', message: 'Frameless' },
+  },
 ]
 
 function dimsTouchedByUpdate(updates: Partial<SolarPanelNode>): boolean {
@@ -56,6 +74,7 @@ function num(value: unknown, fallback: number): number {
 }
 
 export default function SolarPanelPanel() {
+  const i18n = usePascalI18n()
   const selectedId = useViewer((s) => s.selection.selectedIds[0])
   const setSelection = useViewer((s) => s.setSelection)
   const updateNode = useScene((s) => s.updateNode)
@@ -145,12 +164,17 @@ export default function SolarPanelPanel() {
     if (!(selectedId && node && segment)) return
     const fit = computeAutoFit(segment, node)
     if (!fit) {
-      setAutoFitMessage('Setbacks too large to fit a panel.')
+      setAutoFitMessage(
+        i18n._({
+          id: 'node.solarPanel.panel.setbacksTooLarge',
+          message: 'Setbacks too large to fit a panel.',
+        }),
+      )
       return
     }
     updateNode(selectedId as AnyNode['id'], { rows: fit.rows, columns: fit.columns })
     setAutoFitMessage(null)
-  }, [selectedId, node, segment, updateNode])
+  }, [selectedId, node, segment, updateNode, i18n])
 
   const handleDelete = useCallback(() => {
     if (!(selectedId && node)) return
@@ -177,17 +201,20 @@ export default function SolarPanelPanel() {
   if (!(node && node.type === 'solar-panel' && selectedId)) return null
 
   const activePreset = node.panelTypePreset
-  const formatDims = (w: number, h: number) => `${w.toFixed(2)} × ${h.toFixed(2)} m`
+  const formatDims = (w: number, h: number) =>
+    `${formatFixed(w, 2, i18n.getLocale())} × ${formatFixed(h, 2, i18n.getLocale())} m`
 
   return (
     <PanelWrapper
       icon="/icons/roof.webp"
       onBack={node.roofSegmentId ? handleBack : undefined}
       onClose={handleClose}
-      title={node.name || 'Solar Panel'}
+      title={
+        node.name || i18n._({ id: 'node.solarPanel.panel.solarPanel', message: 'Solar Panel' })
+      }
       width={300}
     >
-      <PanelSection title="Preset">
+      <PanelSection title={i18n._({ id: 'node.solarPanel.panel.preset', message: 'Preset' })}>
         <div className="grid grid-cols-2 gap-1.5 px-1 pt-1">
           {PRESET_CARDS.map((card) => {
             const dims = SOLAR_PANEL_PRESETS[card.key]
@@ -206,7 +233,7 @@ export default function SolarPanelPanel() {
               >
                 <span className="flex items-center gap-1.5 font-medium">
                   <LayoutGrid className="h-3.5 w-3.5 shrink-0" />
-                  <span className="truncate">{card.label}</span>
+                  <span className="min-w-0 break-words">{i18n._(card.label)}</span>
                 </span>
                 <span className="pl-[20px] text-[10px] tabular-nums opacity-70">
                   {formatDims(dims.panelWidth, dims.panelHeight)}
@@ -217,14 +244,17 @@ export default function SolarPanelPanel() {
         </div>
         {!activePreset && (
           <p className="px-1 pt-1 text-[11px] text-muted-foreground">
-            Custom — dimensions don't match any preset
+            {i18n._({
+              id: 'node.solarPanel.panel.customDimensionsDonTMatchAny',
+              message: "Custom — dimensions don't match any preset",
+            })}
           </p>
         )}
       </PanelSection>
 
-      <PanelSection title="Array">
+      <PanelSection title={i18n._({ id: 'node.solarPanel.panel.array', message: 'Array' })}>
         <SliderControl
-          label="Rows"
+          label={i18n._({ id: 'node.solarPanel.panel.rows', message: 'Rows' })}
           max={20}
           min={1}
           onChange={(v) => previewProp({ rows: Math.round(v) })}
@@ -235,7 +265,7 @@ export default function SolarPanelPanel() {
           value={num(node.rows, 4)}
         />
         <SliderControl
-          label="Columns"
+          label={i18n._({ id: 'node.solarPanel.panel.columns', message: 'Columns' })}
           max={20}
           min={1}
           onChange={(v) => previewProp({ columns: Math.round(v) })}
@@ -246,7 +276,7 @@ export default function SolarPanelPanel() {
           value={num(node.columns, 5)}
         />
         <SliderControl
-          label="Gap X"
+          label={i18n._({ id: 'node.solarPanel.panel.gapX', message: 'Gap X' })}
           max={0.2}
           min={0}
           onChange={(v) => previewProp({ gapX: v })}
@@ -258,7 +288,7 @@ export default function SolarPanelPanel() {
           value={num(node.gapX, 0.02)}
         />
         <SliderControl
-          label="Gap Y"
+          label={i18n._({ id: 'node.solarPanel.panel.gapY', message: 'Gap Y' })}
           max={0.2}
           min={0}
           onChange={(v) => previewProp({ gapY: v })}
@@ -270,16 +300,23 @@ export default function SolarPanelPanel() {
           value={num(node.gapY, 0.02)}
         />
         <ActionGroup>
-          <ActionButton disabled={!segment} label="Auto-fit to roof" onClick={handleAutoFit} />
+          <ActionButton
+            disabled={!segment}
+            label={i18n._({
+              id: 'node.solarPanel.panel.autoFitToRoof',
+              message: 'Auto-fit to roof',
+            })}
+            onClick={handleAutoFit}
+          />
         </ActionGroup>
         {autoFitMessage ? (
           <p className="px-1 text-amber-700 dark:text-amber-400 text-xs">{autoFitMessage}</p>
         ) : null}
       </PanelSection>
 
-      <PanelSection title="Panel">
+      <PanelSection title={i18n._({ id: 'node.solarPanel.panel.panel', message: 'Panel' })}>
         <SliderControl
-          label="Width"
+          label={i18n._({ id: 'node.solarPanel.panel.width', message: 'Width' })}
           max={1000}
           min={0.3}
           onChange={(v) => previewProp({ panelWidth: v })}
@@ -291,7 +328,7 @@ export default function SolarPanelPanel() {
           value={num(node.panelWidth, 1)}
         />
         <SliderControl
-          label="Height"
+          label={i18n._({ id: 'node.solarPanel.panel.height', message: 'Height' })}
           max={1000}
           min={0.3}
           onChange={(v) => previewProp({ panelHeight: v })}
@@ -303,10 +340,16 @@ export default function SolarPanelPanel() {
           value={num(node.panelHeight, 1.65)}
         />
         <ActionGroup>
-          <ActionButton label="Flip orientation" onClick={handleFlip} />
+          <ActionButton
+            label={i18n._({
+              id: 'node.solarPanel.panel.flipOrientation',
+              message: 'Flip orientation',
+            })}
+            onClick={handleFlip}
+          />
         </ActionGroup>
         <SliderControl
-          label="Frame thickness"
+          label={i18n._({ id: 'node.solarPanel.panel.frameThickness', message: 'Frame thickness' })}
           max={0.1}
           min={0.005}
           onChange={(v) => previewProp({ frameThickness: v })}
@@ -318,7 +361,7 @@ export default function SolarPanelPanel() {
           value={num(node.frameThickness, 0.04)}
         />
         <SliderControl
-          label="Frame depth"
+          label={i18n._({ id: 'node.solarPanel.panel.frameDepth', message: 'Frame depth' })}
           max={0.1}
           min={0.005}
           onChange={(v) => previewProp({ frameDepth: v })}
@@ -331,18 +374,24 @@ export default function SolarPanelPanel() {
         />
       </PanelSection>
 
-      <PanelSection title="Mounting">
+      <PanelSection title={i18n._({ id: 'node.solarPanel.panel.mounting', message: 'Mounting' })}>
         <SegmentedControl
           onChange={(v) => handleUpdate({ mountingType: v })}
           options={[
-            { label: 'Flush', value: 'flush' },
-            { label: 'Tilted', value: 'tilted' },
+            {
+              label: i18n._({ id: 'node.solarPanel.panel.flush', message: 'Flush' }),
+              value: 'flush',
+            },
+            {
+              label: i18n._({ id: 'node.solarPanel.panel.tilted', message: 'Tilted' }),
+              value: 'tilted',
+            },
           ]}
           value={node.mountingType ?? 'flush'}
         />
         {node.mountingType === 'tilted' && (
           <SliderControl
-            label="Tilt angle"
+            label={i18n._({ id: 'node.solarPanel.panel.tiltAngle', message: 'Tilt angle' })}
             max={45}
             min={0}
             onChange={(v) => previewProp({ tiltAngle: v })}
@@ -355,7 +404,7 @@ export default function SolarPanelPanel() {
           />
         )}
         <SliderControl
-          label="Standoff"
+          label={i18n._({ id: 'node.solarPanel.panel.standoff', message: 'Standoff' })}
           max={0.3}
           min={0}
           onChange={(v) => previewProp({ standoffHeight: v })}
@@ -368,12 +417,12 @@ export default function SolarPanelPanel() {
         />
       </PanelSection>
 
-      <PanelSection title="Actions">
+      <PanelSection title={i18n._({ id: 'node.solarPanel.panel.actions', message: 'Actions' })}>
         <ActionGroup>
           <ActionButton
             className="hover:bg-red-500/20"
             icon={<Trash2 className="h-3.5 w-3.5 text-red-600 dark:text-red-400" />}
-            label="Delete"
+            label={i18n._({ id: 'node.solarPanel.panel.delete', message: 'Delete' })}
             onClick={handleDelete}
           />
         </ActionGroup>

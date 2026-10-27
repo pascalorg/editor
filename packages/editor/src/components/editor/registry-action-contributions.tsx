@@ -8,6 +8,7 @@ import {
   nodeRegistry,
   toggleMechanism,
   useInteractive,
+  usePascalI18n,
   useScene,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
@@ -70,7 +71,12 @@ export function MechanismButton({
   mechanism: MechanismCapability
   running: boolean
 }) {
-  const label = mechanism.icon ? (running ? 'Close' : 'Open') : running ? 'Stop' : 'Play'
+  const i18n = usePascalI18n()
+  const label = i18n._({
+    id: 'editor.mechanismAction',
+    message: '{action, select, close {Close} open {Open} stop {Stop} other {Play}}',
+    values: { action: mechanism.icon ? (running ? 'close' : 'open') : running ? 'stop' : 'play' },
+  })
   return (
     <ActionMenuButton
       keys={['E']}

@@ -4,7 +4,9 @@ import {
   type AnyNode,
   type AnyNodeId,
   type DoorNode,
+  isAutoFrameDepth,
   type MessageDescriptor,
+  resolveHostedOpeningFrameDepth,
   scriptImages,
   useInteractive,
   usePascalI18n,
@@ -103,6 +105,8 @@ export default function DoorPanel() {
   const node = useScene((s) =>
     selectedId ? (s.nodes[selectedId as AnyNode['id']] as DoorNode | undefined) : undefined,
   )
+  // The depth the frame renders at: explicit, or the host wall's thickness plus the lip.
+  const frameDepth = useScene((s) => (node ? resolveHostedOpeningFrameDepth(node, s.nodes) : 0))
   // Stable handler refs ("Custom panels" in wiki/architecture/node-definitions.md).
   // Without them, the 29+ SliderControls in this panel would loop on drag.
   const handleUpdate = useCallback(
@@ -813,15 +817,36 @@ export default function DoorPanel() {
                 value={node.frameThickness}
               />
               <SliderControl
-                label={i18n._({ id: 'node.door.panel.depth', message: 'Depth' })}
-                max={0.3}
+                label={
+                  isAutoFrameDepth(node)
+                    ? i18n._({ id: 'node.door.panel.frameDepthAuto', message: 'Depth (auto)' })
+                    : i18n._({ id: 'node.door.panel.depth', message: 'Depth' })
+                }
+                max={0.5}
                 min={0.01}
                 onChange={(v) => handleUpdate({ frameDepth: v })}
                 precision={3}
                 step={0.01}
                 unit="m"
-                value={node.frameDepth}
+                value={frameDepth}
               />
+              {!isAutoFrameDepth(node) && (
+                <div className="flex items-center justify-between px-2 text-muted-foreground text-xs">
+                  <span>
+                    {i18n._({
+                      id: 'node.door.panel.autoFollowsTheWall',
+                      message: 'Auto follows the wall',
+                    })}
+                  </span>
+                  <button
+                    className="rounded-full border border-border/50 px-2.5 py-0.5 transition-colors hover:bg-accent"
+                    onClick={() => handleUpdate({ frameDepth: undefined })}
+                    type="button"
+                  >
+                    {i18n._({ id: 'node.door.panel.auto', message: 'Auto' })}
+                  </button>
+                </div>
+              )}
             </PanelSection>
           )}
 

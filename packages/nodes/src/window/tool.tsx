@@ -4,6 +4,7 @@ import {
   beginSceneHistoryDraft,
   type CornerSnap,
   createSnapEaser,
+  DEFAULT_WALL_THICKNESS,
   type DormerEvent,
   type DormerNode,
   dormerWallFacePointToDormer,
@@ -11,11 +12,13 @@ import {
   evaluateCorner,
   type GridEvent,
   getEffectiveNode,
+  getWallThickness,
   holdHiddenWallPointerEvents,
   isCurvedWall,
   prefersReducedMotion,
   type RoofEvent,
   type RoofNode,
+  resolveOpeningFrameDepth,
   runAsSingleSceneHistoryStep,
   sceneRegistry,
   spatialGridManager,
@@ -151,11 +154,6 @@ const WindowTool: React.FC = () => {
       }),
     [fallbackPose?.side, placedType, placedStyle],
   )
-  // The frame depth is a fixed parse default (the `side` flip doesn't change
-  // it); a ref lets the facing-pose publish inside the setup effect read it
-  // without re-subscribing every event listener.
-  const frameDepthRef = useRef(ghostStub.frameDepth)
-
   useEffect(() => {
     useScene.temporal.getState().pause()
 
@@ -306,6 +304,7 @@ const WindowTool: React.FC = () => {
       cursorRotationY: number,
       valid: boolean,
       indicatorYOffset: number,
+      hostThickness: number,
     ) => {
       setFallbackPose(null)
       const group = cursorGroupRef.current
@@ -320,7 +319,10 @@ const WindowTool: React.FC = () => {
       useFacingPose.getState().set({
         position: [worldPosition[0], worldPosition[1] + indicatorYOffset, worldPosition[2]],
         rotationY: cursorRotationY,
-        depth: frameDepthRef.current,
+        depth: resolveOpeningFrameDepth(
+          { frameDepth: draftRef.current?.frameDepth },
+          hostThickness,
+        ),
       })
     }
 
@@ -423,7 +425,13 @@ const WindowTool: React.FC = () => {
         new Vector3(...worldPosition),
         getDormerWindowWorldNormal(event, target),
       )
-      updateCursor(worldPosition, getDormerWindowWorldYaw(event, target), target.valid, 0)
+      updateCursor(
+        worldPosition,
+        getDormerWindowWorldYaw(event, target),
+        target.valid,
+        0,
+        DEFAULT_WALL_THICKNESS,
+      )
     }
 
     // Sill alignment (snap + guide): a sibling sill/centre/top wins over the
@@ -609,6 +617,7 @@ const WindowTool: React.FC = () => {
         cursorRotationY,
         valid,
         -clampedY,
+        getWallThickness(wall),
       )
 
       if (draftRef.current) {
@@ -671,7 +680,6 @@ const WindowTool: React.FC = () => {
         casementStyle: draft.casementStyle,
         hingesSide: draft.hingesSide,
         frameThickness: draft.frameThickness,
-        frameDepth: draft.frameDepth,
         columnRatios: draft.columnRatios,
         rowRatios: draft.rowRatios,
         columnDividerThickness: draft.columnDividerThickness,
@@ -737,7 +745,6 @@ const WindowTool: React.FC = () => {
         cornerRadius: draft.cornerRadius,
         archHeight: draft.archHeight,
         frameThickness: draft.frameThickness,
-        frameDepth: draft.frameDepth,
         columnRatios: draft.columnRatios,
         rowRatios: draft.rowRatios,
         columnDividerThickness: draft.columnDividerThickness,
@@ -1002,7 +1009,14 @@ const WindowTool: React.FC = () => {
 
     const updateRoofCursor = (target: RoofWallOpeningTarget, roof: RoofNode) => {
       const pose = getRoofWallOpeningCursorPose(target, roof)
-      if (pose) updateCursor(pose.position, pose.rotationY, target.valid, -target.position[1])
+      if (pose)
+        updateCursor(
+          pose.position,
+          pose.rotationY,
+          target.valid,
+          -target.position[1],
+          DEFAULT_WALL_THICKNESS,
+        )
     }
 
     const onRoofHover = (event: RoofEvent) => {
@@ -1084,7 +1098,6 @@ const WindowTool: React.FC = () => {
         casementStyle: draft.casementStyle,
         hingesSide: draft.hingesSide,
         frameThickness: draft.frameThickness,
-        frameDepth: draft.frameDepth,
         columnRatios: draft.columnRatios,
         rowRatios: draft.rowRatios,
         columnDividerThickness: draft.columnDividerThickness,
@@ -1246,7 +1259,11 @@ const WindowTool: React.FC = () => {
   // dispose on unmount rather than reallocating (and orphaning) an EdgesGeometry
   // on every re-render during placement.
   const edgesGeo = useMemo(() => {
-    const boxGeo = new BoxGeometry(FALLBACK_WIDTH, FALLBACK_HEIGHT, 0.07)
+    const boxGeo = new BoxGeometry(
+      FALLBACK_WIDTH,
+      FALLBACK_HEIGHT,
+      resolveOpeningFrameDepth({}, DEFAULT_WALL_THICKNESS),
+    )
     const geo = new EdgesGeometry(boxGeo)
     boxGeo.dispose()
     return geo

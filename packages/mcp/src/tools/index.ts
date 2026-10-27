@@ -14,17 +14,14 @@ import { registerAuthorScene } from './author-scene'
 import { registerCheckCollisions } from './check-collisions'
 import { registerClearScene } from './clear-scene'
 import { registerConstructionTools } from './construction-tools'
-import { registerCreateUnit } from './create-unit'
 import { registerExportGlb } from './export-glb'
 import { registerExportJson } from './export-json'
 import { registerGetScene } from './get-scene'
-import { registerListUnits } from './list-units'
 import { registerMeasure } from './measure'
 import { registerPhotoToSceneTool } from './photo-to-scene'
 import { registerRedo } from './redo'
 import { registerRoomTools } from './room-tools'
 import { registerSceneLifecycleTools } from './scene-lifecycle'
-import { registerSetUnitMembers } from './set-unit-members'
 import { registerSetZone } from './set-zone'
 import { type PlanReadingHosts, registerSharedTools } from './shared-tools'
 import { registerTemplateTools } from './templates'
@@ -69,9 +66,6 @@ export function registerTools(
   registerRoomTools(server, operations, geometryScripts)
   registerApplyPatch(server, operations)
   registerClearScene(server, operations)
-  registerCreateUnit(server, operations)
-  registerSetUnitMembers(server, operations)
-  registerListUnits(server, operations)
   registerSetZone(server, operations)
   registerUndo(server, operations)
   registerRedo(server, operations)

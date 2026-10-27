@@ -3,6 +3,7 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  type MessageDescriptor,
   type RoofNode,
   type RoofSegmentNode,
   SKYLIGHT_TYPE_ORDER,
@@ -11,6 +12,7 @@ import {
   type SkylightType,
   sceneRegistry,
   useLiveNodeOverrides,
+  usePascalI18n,
   useScene,
 } from '@pascal-app/core'
 import {
@@ -30,7 +32,17 @@ import { Vector3 } from 'three'
 const cn = (...classes: Array<string | false | undefined | null>): string =>
   classes.filter(Boolean).join(' ')
 
+/** Preset names in the UI language; core's `SKYLIGHT_TYPE_PRESETS` labels stay English. */
+const SKYLIGHT_TYPE_LABELS: Record<SkylightType, MessageDescriptor> = {
+  flat: /* i18n */ { id: 'node.skylight.type.flat', message: 'Flat roof skylight' },
+  'walk-on': /* i18n */ { id: 'node.skylight.type.walkOn', message: 'Walk-on rooflight' },
+  lantern: /* i18n */ { id: 'node.skylight.type.lantern', message: 'Roof lantern' },
+  opening: /* i18n */ { id: 'node.skylight.type.opening', message: 'Opening skylight' },
+  sliding: /* i18n */ { id: 'node.skylight.type.sliding', message: 'Sliding skylight' },
+}
+
 export default function SkylightPanel() {
+  const i18n = usePascalI18n()
   const selectedId = useViewer((s) => s.selection.selectedIds[0])
   const setSelection = useViewer((s) => s.setSelection)
   const updateNode = useScene((s) => s.updateNode)
@@ -261,10 +273,10 @@ export default function SkylightPanel() {
       icon="/icons/roof.webp"
       onBack={node.roofSegmentId ? handleBack : undefined}
       onClose={handleClose}
-      title={node.name || 'Skylight'}
+      title={node.name || i18n._({ id: 'node.skylight.panel.skylight', message: 'Skylight' })}
       width={300}
     >
-      <PanelSection title="Type">
+      <PanelSection title={i18n._({ id: 'node.skylight.panel.type', message: 'Type' })}>
         <div className="grid grid-cols-2 gap-2 px-1 pt-1">
           {SKYLIGHT_TYPE_ORDER.map((skylightType) => {
             const isSelected = activeSkylightType === skylightType
@@ -280,15 +292,15 @@ export default function SkylightPanel() {
                 onClick={() => handleTypeChange(skylightType)}
                 type="button"
               >
-                <span className="min-w-0 truncate font-medium">
-                  {SKYLIGHT_TYPE_PRESETS[skylightType].label}
+                <span className="min-w-0 break-words font-medium">
+                  {i18n._(SKYLIGHT_TYPE_LABELS[skylightType])}
                 </span>
               </button>
             )
           })}
         </div>
         <SliderControl
-          label="Glass Thickness"
+          label={i18n._({ id: 'node.skylight.panel.glassThickness', message: 'Glass Thickness' })}
           max={0.05}
           min={0.002}
           onChange={(v) => previewProp({ glassThickness: v })}
@@ -302,7 +314,7 @@ export default function SkylightPanel() {
         {activeSkylightType === 'lantern' && (
           <>
             <SliderControl
-              label="Lantern Height"
+              label={i18n._({ id: 'node.skylight.panel.lanternHeight', message: 'Lantern Height' })}
               max={1.0}
               min={0.05}
               onChange={(v) => previewProp({ lanternHeight: v })}
@@ -314,7 +326,7 @@ export default function SkylightPanel() {
               value={node.lanternHeight ?? 0.25}
             />
             <SliderControl
-              label="Top Scale"
+              label={i18n._({ id: 'node.skylight.panel.topScale', message: 'Top Scale' })}
               max={0.95}
               min={0}
               onChange={(v) => previewProp({ lanternTopScale: v })}
@@ -330,7 +342,7 @@ export default function SkylightPanel() {
         {activeSkylightType === 'opening' && (
           <>
             <SliderControl
-              label="Open"
+              label={i18n._({ id: 'node.skylight.panel.open', message: 'Open' })}
               max={1}
               min={0}
               onChange={(v) => previewProp({ operationState: v })}
@@ -342,7 +354,7 @@ export default function SkylightPanel() {
               value={Math.round((node.operationState ?? 0) * 100) / 100}
             />
             <SliderControl
-              label="Opening Angle"
+              label={i18n._({ id: 'node.skylight.panel.openingAngle', message: 'Opening Angle' })}
               max={80}
               min={0}
               onChange={(deg) => previewProp({ openingAngle: (deg * Math.PI) / 180 })}
@@ -356,24 +368,39 @@ export default function SkylightPanel() {
             <SegmentedControl
               onChange={(v) => commitProp({ openingSide: v as SkylightNode['openingSide'] })}
               options={[
-                { label: 'Top', value: 'top' },
-                { label: 'Bottom', value: 'bottom' },
-                { label: 'Left', value: 'left' },
-                { label: 'Right', value: 'right' },
+                { label: i18n._({ id: 'node.skylight.panel.top', message: 'Top' }), value: 'top' },
+                {
+                  label: i18n._({ id: 'node.skylight.panel.bottom', message: 'Bottom' }),
+                  value: 'bottom',
+                },
+                {
+                  label: i18n._({ id: 'node.skylight.panel.left', message: 'Left' }),
+                  value: 'left',
+                },
+                {
+                  label: i18n._({ id: 'node.skylight.panel.right', message: 'Right' }),
+                  value: 'right',
+                },
               ]}
               value={(node.openingSide ?? 'top') as any}
             />
             <SegmentedControl
               onChange={(v) => commitProp({ motorHousing: v === 'yes' })}
               options={[
-                { label: 'Motor', value: 'yes' },
-                { label: 'No Motor', value: 'no' },
+                {
+                  label: i18n._({ id: 'node.skylight.panel.motor', message: 'Motor' }),
+                  value: 'yes',
+                },
+                {
+                  label: i18n._({ id: 'node.skylight.panel.noMotor', message: 'No Motor' }),
+                  value: 'no',
+                },
               ]}
               value={(node.motorHousing ?? false) ? 'yes' : 'no'}
             />
             {(node.motorHousing ?? false) && (
               <SliderControl
-                label="Motor Housing"
+                label={i18n._({ id: 'node.skylight.panel.motorHousing', message: 'Motor Housing' })}
                 max={0.2}
                 min={0.03}
                 onChange={(v) => previewProp({ motorHousingSize: v })}
@@ -390,7 +417,7 @@ export default function SkylightPanel() {
         {activeSkylightType === 'sliding' && (
           <>
             <SliderControl
-              label="Open"
+              label={i18n._({ id: 'node.skylight.panel.open', message: 'Open' })}
               max={1}
               min={0}
               onChange={(v) => previewProp({ operationState: v })}
@@ -404,13 +431,19 @@ export default function SkylightPanel() {
             <SegmentedControl
               onChange={(v) => commitProp({ slideDirection: v as SkylightNode['slideDirection'] })}
               options={[
-                { label: 'Along Z', value: 'z' },
-                { label: 'Along X', value: 'x' },
+                {
+                  label: i18n._({ id: 'node.skylight.panel.alongZ', message: 'Along Z' }),
+                  value: 'z',
+                },
+                {
+                  label: i18n._({ id: 'node.skylight.panel.alongX', message: 'Along X' }),
+                  value: 'x',
+                },
               ]}
               value={(node.slideDirection ?? 'z') as any}
             />
             <SliderControl
-              label="Track Width"
+              label={i18n._({ id: 'node.skylight.panel.trackWidth', message: 'Track Width' })}
               max={0.12}
               min={0.02}
               onChange={(v) => previewProp({ trackWidth: v })}
@@ -425,9 +458,9 @@ export default function SkylightPanel() {
         )}
       </PanelSection>
 
-      <PanelSection title="Dimensions">
+      <PanelSection title={i18n._({ id: 'node.skylight.panel.dimensions', message: 'Dimensions' })}>
         <SliderControl
-          label="Width"
+          label={i18n._({ id: 'node.skylight.panel.width', message: 'Width' })}
           max={1000}
           min={0.3}
           onChange={(v) => previewProp({ width: v })}
@@ -439,7 +472,7 @@ export default function SkylightPanel() {
           value={node.width}
         />
         <SliderControl
-          label="Height"
+          label={i18n._({ id: 'node.skylight.panel.height', message: 'Height' })}
           max={1000}
           min={0.3}
           onChange={(v) => previewProp({ height: v })}
@@ -452,9 +485,9 @@ export default function SkylightPanel() {
         />
       </PanelSection>
 
-      <PanelSection title="Frame">
+      <PanelSection title={i18n._({ id: 'node.skylight.panel.frame', message: 'Frame' })}>
         <SliderControl
-          label="Thickness"
+          label={i18n._({ id: 'node.skylight.panel.thickness', message: 'Thickness' })}
           max={0.2}
           min={0.02}
           onChange={(v) => previewProp({ frameThickness: v })}
@@ -466,7 +499,7 @@ export default function SkylightPanel() {
           value={node.frameThickness ?? 0.05}
         />
         <SliderControl
-          label="Depth"
+          label={i18n._({ id: 'node.skylight.panel.depth', message: 'Depth' })}
           max={0.3}
           min={0.02}
           onChange={(v) => previewProp({ frameDepth: v })}
@@ -478,7 +511,7 @@ export default function SkylightPanel() {
           value={node.frameDepth ?? 0.08}
         />
         <SliderControl
-          label="Cutout Offset"
+          label={i18n._({ id: 'node.skylight.panel.cutoutOffset', message: 'Cutout Offset' })}
           max={0.2}
           min={0}
           onChange={(v) => previewProp({ cutoutOffset: v })}
@@ -491,18 +524,18 @@ export default function SkylightPanel() {
         />
       </PanelSection>
 
-      <PanelSection title="Curb">
+      <PanelSection title={i18n._({ id: 'node.skylight.panel.curb', message: 'Curb' })}>
         <SegmentedControl
           onChange={(v) => handleUpdate({ curb: v === 'yes' })}
           options={[
-            { label: 'Yes', value: 'yes' },
-            { label: 'No', value: 'no' },
+            { label: i18n._({ id: 'node.skylight.panel.yes', message: 'Yes' }), value: 'yes' },
+            { label: i18n._({ id: 'node.skylight.panel.no', message: 'No' }), value: 'no' },
           ]}
           value={(node.curb ?? false) ? 'yes' : 'no'}
         />
         {(node.curb ?? false) && (
           <SliderControl
-            label="Height"
+            label={i18n._({ id: 'node.skylight.panel.height', message: 'Height' })}
             max={0.3}
             min={0.02}
             onChange={(v) => previewProp({ curbHeight: v })}
@@ -516,7 +549,7 @@ export default function SkylightPanel() {
         )}
       </PanelSection>
 
-      <PanelSection title="Position">
+      <PanelSection title={i18n._({ id: 'node.skylight.panel.position', message: 'Position' })}>
         <SliderControl
           label="X"
           max={Math.round(worldMaxX * 10) / 10}
@@ -550,7 +583,7 @@ export default function SkylightPanel() {
           value={worldZ_now}
         />
         <SliderControl
-          label="Rotation"
+          label={i18n._({ id: 'node.skylight.panel.rotation', message: 'Rotation' })}
           max={180}
           min={-180}
           onChange={(degrees) => {
@@ -569,12 +602,12 @@ export default function SkylightPanel() {
         />
       </PanelSection>
 
-      <PanelSection title="Actions">
+      <PanelSection title={i18n._({ id: 'node.skylight.panel.actions', message: 'Actions' })}>
         <ActionGroup>
           <ActionButton
             className="hover:bg-red-500/20"
             icon={<Trash2 className="h-3.5 w-3.5 text-red-600 dark:text-red-400" />}
-            label="Delete"
+            label={i18n._({ id: 'node.skylight.panel.delete', message: 'Delete' })}
             onClick={handleDelete}
           />
         </ActionGroup>

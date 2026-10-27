@@ -1,7 +1,6 @@
 'use client'
 
 import { useViewer } from '@pascal-app/viewer'
-import { Html } from '@react-three/drei'
 import { memo, useEffect, useLayoutEffect, useMemo } from 'react'
 import { BufferGeometry, Float32BufferAttribute, Line as ThreeLine } from 'three'
 import { LineBasicNodeMaterial } from 'three/webgpu'
@@ -10,6 +9,7 @@ import useOpeningGuides, {
   type OpeningGuide3D,
   type OpeningGuideVec3,
 } from '../../store/use-opening-guides'
+import { Html } from './localized-html'
 import { formatMeasurement } from './measurement-pill'
 
 const DIMENSION_COLOR = 0x81_8c_f8 // indigo — a neutral measurement
