@@ -58,7 +58,15 @@ function ZoneItem({ zone }: { zone: ZoneNode }) {
       onClick={handleClick}
     >
       <span className="mr-2">
-        <ColorDot color={zone.color} onChange={handleColorChange} />
+        <ColorDot
+          color={zone.color}
+          label={i18n._({
+            id: 'editor.layers.spaceColour',
+            message: '{role, select, room {Room colour} other {Zone colour}}',
+            values: { role: zone.spaceRole ?? 'generic' },
+          })}
+          onChange={handleColorChange}
+        />
       </span>
       <Hexagon className="mr-1.5 h-3.5 w-3.5 shrink-0" />
       <span className="flex-1 truncate">{zone.name}</span>

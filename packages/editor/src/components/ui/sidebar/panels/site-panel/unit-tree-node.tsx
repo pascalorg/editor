@@ -180,6 +180,7 @@ export const UnitTreeNode = memo(function UnitTreeNode({
       icon={
         <ColorDot
           color={color ?? '#f59e0b'}
+          label={i18n._({ id: 'editor.layers.unitColour', message: 'Unit colour' })}
           onChange={(next) => updateNode(unitId, { color: next })}
         />
       }

@@ -836,7 +836,14 @@ const LevelItem = memo(function LevelItem({
 
         <div className="relative z-20 flex h-8 items-center pr-1 pl-[28px]">
           <button
+            aria-expanded={isExpanded}
+            aria-label={
+              isExpanded
+                ? i18n._({ id: 'editor.layers.collapse', message: 'Collapse' })
+                : i18n._({ id: 'editor.layers.expand', message: 'Expand' })
+            }
             className="z-20 flex h-4 w-4 shrink-0 cursor-pointer items-center justify-center bg-inherit"
+            type="button"
             onClick={(e) => {
               e.stopPropagation()
               if (isSelected) {
@@ -941,6 +948,11 @@ const LevelItem = memo(function LevelItem({
         <Popover>
           <PopoverTrigger asChild>
             <button
+              aria-label={i18n._({
+                id: 'editor.layers.levelOptions',
+                message: '{levelName} options',
+                values: { levelName: localizedLevelName(level, i18n, locale) },
+              })}
               className={cn(
                 'mr-1 flex h-6 w-6 shrink-0 cursor-pointer items-center justify-center rounded-md opacity-0 transition-colors group-hover/level:opacity-100',
                 selectedLevelId === level.id
@@ -952,7 +964,7 @@ const LevelItem = memo(function LevelItem({
               <MoreHorizontal className="h-3.5 w-3.5" />
             </button>
           </PopoverTrigger>
-          <PopoverContent align="start" className="w-48 p-1" side="right">
+          <PopoverContent align="start" className="w-max min-w-48 max-w-72 p-1" side="right">
             <button
               className="flex w-full cursor-pointer items-center gap-2 rounded px-3 py-1.5 text-left text-sm transition-colors hover:bg-accent"
               onClick={() => handleDuplicateLevel()}
@@ -1273,7 +1285,15 @@ const ZoneItem = memo(function ZoneItem({
         />
       )}
       <span className={cn('mr-2', !isSelected && 'opacity-40')}>
-        <ColorDot color={zone.color} onChange={handleColorChange} />
+        <ColorDot
+          color={zone.color}
+          label={i18n._({
+            id: 'editor.layers.spaceColour',
+            message: '{role, select, room {Room colour} other {Zone colour}}',
+            values: { role: zone.spaceRole ?? 'generic' },
+          })}
+          onChange={handleColorChange}
+        />
       </span>
       <div className="min-w-0 flex-1 pr-1">
         <InlineRenameInput
@@ -1347,8 +1367,10 @@ const ZoneItem = memo(function ZoneItem({
           </PopoverContent>
         </Popover>
         <button
-          className="flex h-6 w-6 cursor-pointer items-center justify-center rounded-md text-muted-foreground opacity-0 transition-colors hover:bg-black/5 hover:text-foreground group-hover/row:opacity-100 dark:hover:bg-white/10"
+          aria-label={i18n._({ id: 'editor.sidebar.panels.sitePanel.delete', message: 'Delete' })}
+          className="flex h-6 w-6 cursor-pointer items-center justify-center rounded-md text-muted-foreground opacity-0 transition-colors hover:bg-black/5 hover:text-foreground group-hover/row:opacity-100 focus-visible:opacity-100 dark:hover:bg-white/10"
           onClick={handleDelete}
+          type="button"
         >
           <Trash2 className="h-3 w-3" />
         </button>
@@ -1731,7 +1753,7 @@ export function SitePanel({ projectId, onUploadAsset, onDeleteAsset }: SitePanel
 
   return (
     <LayoutGroup>
-      <div className="flex h-full flex-col">
+      <div className="flex h-full flex-col" data-surface="site-panel">
         {/* Site Header */}
         {siteNode && (
           <motion.div

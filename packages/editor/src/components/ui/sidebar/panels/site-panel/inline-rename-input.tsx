@@ -1,4 +1,4 @@
-import { type AnyNodeId, useScene } from '@pascal-app/core'
+import { type AnyNodeId, usePascalI18n, useScene } from '@pascal-app/core'
 import { Pencil } from 'lucide-react'
 import { memo, useCallback, useEffect, useRef, useState } from 'react'
 import { cn } from './../../../../../lib/utils'
@@ -44,6 +44,7 @@ export const InlineRenameField = memo(function InlineRenameField({
   className,
   onStartEditing,
 }: InlineRenameFieldProps) {
+  const i18n = usePascalI18n()
   const [value, setValue] = useState(name || '')
   const inputRef = useRef<HTMLInputElement>(null)
   const inputSize = Math.max((value || defaultName).length, 1)
@@ -87,6 +88,7 @@ export const InlineRenameField = memo(function InlineRenameField({
         </span>
         {onStartEditing && (
           <button
+            aria-label={i18n._({ id: 'editor.layers.rename', message: 'Rename' })}
             className="shrink-0 text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover/rename:opacity-100"
             onClick={(e) => {
               e.stopPropagation()

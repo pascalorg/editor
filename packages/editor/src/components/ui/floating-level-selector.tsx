@@ -310,14 +310,19 @@ function LevelRow({
           <Popover>
             <PopoverTrigger asChild>
               <button
-                className="flex h-5 w-4 shrink-0 items-center justify-center text-muted-foreground/40 opacity-0 transition-all hover:text-foreground group-hover/level:opacity-100"
+                aria-label={i18n._({
+                  id: 'editor.layers.levelOptions',
+                  message: '{levelName} options',
+                  values: { levelName },
+                })}
+                className="flex h-5 w-4 shrink-0 items-center justify-center text-muted-foreground/40 opacity-0 transition-all hover:text-foreground group-hover/level:opacity-100 focus-visible:opacity-100"
                 onClick={(e) => e.stopPropagation()}
                 type="button"
               >
                 <MoreVertical className="h-3 w-3" />
               </button>
             </PopoverTrigger>
-            <PopoverContent align="start" className="w-44 p-1" side="right" sideOffset={8}>
+            <PopoverContent align="start" className="w-max min-w-44 max-w-72 p-1" side="right" sideOffset={8}>
               <button
                 className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-muted-foreground text-xs transition-colors hover:bg-black/6 dark:hover:bg-white/10 hover:text-foreground"
                 onClick={(e) => {
@@ -767,7 +772,10 @@ export function FloatingLevelSelector() {
 
   return (
     <>
-      <div className={cn('pointer-events-auto absolute left-3 z-20', isMobile ? 'top-14' : 'top-3')}>
+      <div
+        className={cn('pointer-events-auto absolute left-3 z-20', isMobile ? 'top-14' : 'top-3')}
+        data-surface="level-selector"
+      >
         <div className="relative">
           {/* Floating + at top edge: a floor on top, under the roof level when one tops the stack */}
           {!draggingLevelId && (

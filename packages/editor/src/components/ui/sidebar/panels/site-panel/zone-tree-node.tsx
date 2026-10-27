@@ -59,7 +59,15 @@ export const ZoneTreeNode = memo(function ZoneTreeNode({
       expanded={false}
       hasChildren={false}
       icon={
-        <ColorDot color={color ?? '#3b82f6'} onChange={(c) => updateNode(nodeId, { color: c })} />
+        <ColorDot
+          color={color ?? '#3b82f6'}
+          label={i18n._({
+            id: 'editor.layers.spaceColour',
+            message: '{role, select, room {Room colour} other {Zone colour}}',
+            values: { role: spaceRole ?? 'generic' },
+          })}
+          onChange={(c) => updateNode(nodeId, { color: c })}
+        />
       }
       isHovered={isHovered}
       isLast={isLast}
