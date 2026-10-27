@@ -11,6 +11,11 @@
       "import": "./dist/index.js",
       "default": "./dist/index.js"
     },
+    "./i18n": {
+      "types": "./dist/i18n/index.d.ts",
+      "import": "./dist/i18n/index.js",
+      "default": "./dist/i18n/index.js"
+    },
     "./clone-scene-graph": {
       "types": "./dist/utils/clone-scene-graph.d.ts",
       "import": "./dist/utils/clone-scene-graph.js",
@@ -153,6 +158,8 @@
     "three": "^0.186"
   },
   "dependencies": {
+    "@lingui/core": "6.10.1",
+    "@lingui/message-utils": "6.10.1",
     "@pascal-app/lingo": "^0.5.0",
     "dedent": "^1.7.2",
     "idb-keyval": "^6.3.0",

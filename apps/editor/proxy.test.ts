@@ -1,6 +1,8 @@
 import { afterEach, expect, test } from 'bun:test'
+import { readdirSync } from 'node:fs'
 import { unstable_doesMiddlewareMatch } from 'next/experimental/testing/server'
 import { issueSession, SESSION_COOKIE } from './lib/self-host-auth'
+import { resolveUiLocale } from './lib/ui-locale'
 import { config, gateRequest } from './proxy'
 
 const OLD_ENV = { ...process.env }
@@ -31,10 +33,10 @@ test('an unconfigured network host sends pages to setup and APIs to 503', async 
 test('a password gates pages behind login and keeps the requested path', () => {
   process.env.PASCAL_ADMIN_PASSWORD = 'secret'
 
-  const response = gateRequest(request('/project/abc?tab=build'))
+  const response = gateRequest(request('/project/abc?tab=build&lang=fr'))
   expect(response?.status).toBe(307)
   expect(response?.headers.get('location')).toBe(
-    'https://pascal.example/login?next=%2Fproject%2Fabc%3Ftab%3Dbuild',
+    'https://pascal.example/login?next=%2Fproject%2Fabc%3Ftab%3Dbuild%26lang%3Dfr',
   )
   expect(gateRequest(request('/api/plugins/mint/session'))?.status).toBe(401)
 })
@@ -107,6 +109,25 @@ test('Next and public/ static assets skip the proxy', () => {
   }
 })
 
+test('the proxy exclusion list stays aligned with public/ and app/ folders', () => {
+  const topLevelFolders = (relativePath: string) =>
+    readdirSync(new URL(relativePath, import.meta.url), { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name)
+      .sort()
+  const publicFolders = topLevelFolders('./public/')
+  const appFolders = topLevelFolders('./app/')
+
+  for (const folder of publicFolders) {
+    const path = `/${folder}/__proxy-drift-check__`
+    expect([folder, unstable_doesMiddlewareMatch({ config, url: path })]).toEqual([folder, false])
+  }
+  for (const folder of appFolders.filter((folder) => !publicFolders.includes(folder))) {
+    const path = `/${folder}/__proxy-drift-check__`
+    expect([folder, unstable_doesMiddlewareMatch({ config, url: path })]).toEqual([folder, true])
+  }
+})
+
 test('loopback and an upstream proxy are open', () => {
   delete process.env.PASCAL_ADMIN_PASSWORD
   const loopback = new Request('http://localhost:3002/', {
@@ -115,4 +136,11 @@ test('loopback and an upstream proxy are open', () => {
   expect(gateRequest(loopback)).toBeNull()
   process.env.PASCAL_AUTH = 'proxy'
   expect(gateRequest(request('/'))).toBeNull()
+})
+
+test('UI locale canonicalization is deterministic for server rendering', () => {
+  expect(resolveUiLocale('fr')).toBe('fr')
+  expect(resolveUiLocale('zh-hans-cn')).toBe('zh-Hans-CN')
+  expect(resolveUiLocale('')).toBe('en')
+  expect(resolveUiLocale('not_a_locale')).toBe('en')
 })

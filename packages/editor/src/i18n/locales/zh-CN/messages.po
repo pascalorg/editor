@@ -1,0 +1,609 @@
+msgid ""
+msgstr ""
+"POT-Creation-Date: 2026-10-26 22:28+0000\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"X-Generator: @lingui/cli\n"
+"Language: zh-CN\n"
+"Project-Id-Version: \n"
+"Report-Msgid-Bugs-To: \n"
+"PO-Revision-Date: \n"
+"Last-Translator: \n"
+"Language-Team: \n"
+"Plural-Forms: \n"
+
+# Source-Hash: 8caa959c0ae800c3
+# Review: human
+# English: "Basement"
+#: packages/editor/src/i18n/level-name.ts
+msgid "core.level.basement"
+msgstr "地下层"
+
+# Source-Hash: 14927085ee91ba05
+# Review: human
+# English: "Basement {number}"
+#: packages/editor/src/i18n/level-name.ts
+msgid "core.level.basementNumber"
+msgstr "地下 {number} 层"
+
+# Source-Hash: e59074a7b9b3f56e
+# Review: human
+# English: "Floor {number}"
+#: packages/editor/src/i18n/level-name.ts
+msgid "core.level.floorNumber"
+msgstr "{number} 层"
+
+# Source-Hash: cde3efc9b7ddfa41
+# Review: human
+# English: "Ground floor"
+#: packages/editor/src/i18n/level-name.ts
+msgid "core.level.groundFloor"
+msgstr "首层"
+
+# Source-Hash: f571cb2d06ae01ae
+# Review: human
+# English: "Advanced"
+#: packages/editor/src/components/ui/build-panel/build-panel.tsx
+msgid "editor.buildPanel.advanced"
+msgstr "高级"
+
+# Source-Hash: fb40866c2d6db5fb
+# Review: human
+# English: "walls · floor · ceiling"
+#: packages/editor/src/components/ui/build-panel/build-panel.tsx
+msgid "editor.buildPanel.rooms.hint"
+msgstr "墙体 · 楼板 · 天花板"
+
+# Source-Hash: 271039bd919dc4c1
+# Review: human
+# English: "Pick a shape to start. Every room brings its own walls, floor and ceiling."
+#: packages/editor/src/components/ui/build-panel/build-panel.tsx
+msgid "editor.buildPanel.rooms.idle"
+msgstr "选择一种形状开始绘制。每个房间都会同时创建墙体、楼板和天花板。"
+
+# Source-Hash: ae2800b6c9e2b6ed
+# Review: human
+# English: "{lead} then the first one again to close. For L-shapes and angled rooms."
+#: packages/editor/src/components/ui/build-panel/build-panel.tsx
+msgid "editor.buildPanel.rooms.polygon.caption"
+msgstr "{lead}然后再次点击起点闭合。适用于 L 形和斜角房间。"
+
+# Source-Hash: 4e186fc057733162
+# Review: human
+# English: "Polygon"
+#: packages/editor/src/components/ui/build-panel/build-panel.tsx
+msgid "editor.buildPanel.rooms.polygon.label"
+msgstr "多边形"
+
+# Source-Hash: 345e3aca3879b5c5
+# Review: human
+# English: "Click each corner,"
+#: packages/editor/src/components/ui/build-panel/build-panel.tsx
+msgid "editor.buildPanel.rooms.polygon.lead"
+msgstr "依次点击各个角点，"
+
+# Source-Hash: 8ec6152e139b0e3f
+# Review: human
+# English: "Polygon room"
+#: packages/editor/src/components/ui/build-panel/build-panel.tsx
+msgid "editor.buildPanel.rooms.polygon.title"
+msgstr "多边形房间"
+
+# Source-Hash: 9b46295eedcbedae
+# Review: human
+# English: "{lead} on the grid. Walls, floor and ceiling are created together."
+#: packages/editor/src/components/ui/build-panel/build-panel.tsx
+msgid "editor.buildPanel.rooms.rectangle.caption"
+msgstr "在网格上{lead}。墙体、楼板和天花板将一并创建。"
+
+# Source-Hash: 2c2c20272b0370cc
+# Review: human
+# English: "Rectangle"
+#: packages/editor/src/components/ui/build-panel/build-panel.tsx
+msgid "editor.buildPanel.rooms.rectangle.label"
+msgstr "矩形"
+
+# Source-Hash: 060faa48e299d7c9
+# Review: human
+# English: "Click two corners"
+#: packages/editor/src/components/ui/build-panel/build-panel.tsx
+msgid "editor.buildPanel.rooms.rectangle.lead"
+msgstr "点击两个对角点"
+
+# Source-Hash: 83a45603ac7f41e8
+# Review: human
+# English: "Rectangle room"
+#: packages/editor/src/components/ui/build-panel/build-panel.tsx
+msgid "editor.buildPanel.rooms.rectangle.title"
+msgstr "矩形房间"
+
+# Source-Hash: 3e7408ed44676176
+# Review: human
+# English: "Rooms"
+#: packages/editor/src/components/ui/build-panel/build-panel.tsx
+msgid "editor.buildPanel.rooms.title"
+msgstr "房间"
+
+# Source-Hash: 8a21a03c4acf396b
+# Review: human
+# English: "{lead} Close a loop and it becomes a room; leave it open for partitions."
+#: packages/editor/src/components/ui/build-panel/build-panel.tsx
+msgid "editor.buildPanel.rooms.walls.caption"
+msgstr "{lead}闭合轮廓后会形成房间；保持开口可绘制隔墙。"
+
+# Source-Hash: aac9a732d2159ccc
+# Review: human
+# English: "Walls"
+#: packages/editor/src/components/ui/build-panel/build-panel.tsx
+msgid "editor.buildPanel.rooms.walls.label"
+msgstr "墙体"
+
+# Source-Hash: 9843edd68426fa2d
+# Review: human
+# English: "Draw one wall at a time."
+#: packages/editor/src/components/ui/build-panel/build-panel.tsx
+msgid "editor.buildPanel.rooms.walls.lead"
+msgstr "逐面绘制墙体。"
+
+# Source-Hash: aac9a732d2159ccc
+# Review: human
+# English: "Walls"
+#: packages/editor/src/components/ui/build-panel/build-panel.tsx
+msgid "editor.buildPanel.rooms.walls.title"
+msgstr "墙体"
+
+# Source-Hash: 8bf25afa3cb8baea
+# Review: human
+# English: "Orbit left"
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+msgid "viewer.camera.orbitLeft"
+msgstr "向左旋转"
+
+# Source-Hash: b9cc64c1d1bb0d46
+# Review: human
+# English: "Orbit right"
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+msgid "viewer.camera.orbitRight"
+msgstr "向右旋转"
+
+# Source-Hash: 1ab1eb3a14f4b0e0
+# Review: human
+# English: "Top view"
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+msgid "viewer.camera.topView"
+msgstr "俯视图"
+
+# Source-Hash: 50accd740fa2e736
+# Review: human
+# English: "Off"
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+msgid "viewer.common.off"
+msgstr "关闭"
+
+# Source-Hash: 9cc01faad79c28da
+# Review: human
+# English: "On"
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+msgid "viewer.common.on"
+msgstr "开启"
+
+# Source-Hash: 14622745dbf93f4c
+# Review: human
+# English: "Camera"
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+msgid "viewer.display.camera"
+msgstr "相机"
+
+# Source-Hash: d3d478fa6c6d7ddc
+# Review: human
+# English: "Colored"
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+msgid "viewer.display.colored"
+msgstr "彩色"
+
+# Source-Hash: 82b74c4f5ef43336
+# Review: human
+# English: "Colors"
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+msgid "viewer.display.colors"
+msgstr "颜色"
+
+# Source-Hash: 50accd740fa2e736
+# Review: human
+# English: "Off"
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+msgid "viewer.display.edges.off"
+msgstr "关闭"
+
+# Source-Hash: 4ff58913a4492199
+# Review: human
+# English: "No edge lines"
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+msgid "viewer.display.edges.offDetail"
+msgstr "不显示边线"
+
+# Source-Hash: d266d83ec490df4e
+# Review: human
+# English: "Soft"
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+msgid "viewer.display.edges.soft"
+msgstr "柔和"
+
+# Source-Hash: 0c583f1d4201293b
+# Review: human
+# English: "Faint outline of major creases"
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+msgid "viewer.display.edges.softDetail"
+msgstr "淡化显示主要折线"
+
+# Source-Hash: f82927a01d4c5e45
+# Review: human
+# English: "Strong"
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+msgid "viewer.display.edges.strong"
+msgstr "清晰"
+
+# Source-Hash: 2416a48df28d6205
+# Review: human
+# English: "Crisp, opaque edge lines"
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+msgid "viewer.display.edges.strongDetail"
+msgstr "清晰、不透明的边线"
+
+# Source-Hash: 027bbc8b7287c06a
+# Review: human
+# English: "Edges"
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+msgid "viewer.display.edges.title"
+msgstr "边线"
+
+# Source-Hash: ecde2f7c26914be3
+# Review: human
+# English: "Monochrome"
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+msgid "viewer.display.monochrome"
+msgstr "单色"
+
+# Source-Hash: ed59dd8ce7797a66
+# Review: human
+# English: "Orthographic"
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+msgid "viewer.display.orthographic"
+msgstr "正交"
+
+# Source-Hash: 316e25993ff72b88
+# Review: human
+# English: "Perspective"
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+msgid "viewer.display.perspective"
+msgstr "透视"
+
+# Source-Hash: f363702a10aedaeb
+# Review: human
+# English: "Rendered"
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+msgid "viewer.display.render.rendered"
+msgstr "渲染效果"
+
+# Source-Hash: 8bb9e54fc786ca77
+# Review: human
+# English: "Full ambient occlusion"
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+msgid "viewer.display.render.renderedDetail"
+msgstr "完整环境光遮蔽"
+
+# Source-Hash: ef3e765e692faf4c
+# Review: human
+# English: "Solid"
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+msgid "viewer.display.render.solid"
+msgstr "实体"
+
+# Source-Hash: 8827df1cdeb02ed9
+# Review: human
+# English: "Flat and fast — no ambient occlusion"
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+msgid "viewer.display.render.solidDetail"
+msgstr "平整快速，不启用环境光遮蔽"
+
+# Source-Hash: 5e58af99d6d4fa6a
+# Review: human
+# English: "Render"
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+msgid "viewer.display.render.title"
+msgstr "渲染"
+
+# Source-Hash: 4c6bcb30b40047fc
+# Review: human
+# English: "Shadows"
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+msgid "viewer.display.shadows"
+msgstr "阴影"
+
+# Source-Hash: d0db46f206a88e2e
+# Review: human
+# English: "Display settings"
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+msgid "viewer.display.title"
+msgstr "显示设置"
+
+# Source-Hash: 2bdf83801d4a40af
+# Review: human
+# English: "Align view to north"
+#: packages/editor/src/components/viewer/floorplan-compass-button.tsx
+msgid "viewer.floorplan.alignNorth"
+msgstr "视图对齐北向"
+
+# Source-Hash: 286a757d8b52bb02
+# Review: human
+# English: "No floor plans are available for this scene."
+#: packages/editor/src/components/viewer/floorplan-preview.tsx
+msgid "viewer.floorplan.empty"
+msgstr "此场景没有可用的平面图。"
+
+# Source-Hash: bf63c679ab94dbcd
+# Review: human
+# English: "Fit floor plan"
+#: packages/editor/src/components/viewer/floorplan-preview.tsx
+msgid "viewer.floorplan.fit"
+msgstr "适合窗口"
+
+# Source-Hash: d7148fa065bc709b
+# Review: human
+# English: "Floor"
+#: packages/editor/src/components/viewer/floorplan-preview.tsx
+msgid "viewer.floorplan.floor"
+msgstr "楼层"
+
+# Source-Hash: fee6203bb9046929
+# Review: human
+# English: "Floor plan"
+#: packages/editor/src/components/viewer/floorplan-preview.tsx
+msgid "viewer.floorplan.floorPlan"
+msgstr "平面图"
+
+# Source-Hash: 28b255b7bf5f1084
+# Review: human
+# English: "{floor} 2D view"
+#: packages/editor/src/components/viewer/floorplan-preview.tsx
+msgid "viewer.floorplan.viewLabel"
+msgstr "{floor}二维视图"
+
+# Source-Hash: d17804412f8dd081
+# Review: human
+# English: "Zoom in"
+#: packages/editor/src/components/viewer/floorplan-preview.tsx
+msgid "viewer.floorplan.zoomIn"
+msgstr "放大"
+
+# Source-Hash: 23b012a283b2c14a
+# Review: human
+# English: "Zoom out"
+#: packages/editor/src/components/viewer/floorplan-preview.tsx
+msgid "viewer.floorplan.zoomOut"
+msgstr "缩小"
+
+# Source-Hash: 7ceade8f25b58fe9
+# Review: human
+# English: "Back"
+#: packages/editor/src/components/viewer/viewer-scene-header.tsx
+msgid "viewer.header.back"
+msgstr "返回"
+
+# Source-Hash: cc3d601d59e2e26c
+# Review: human
+# English: "Levels"
+#: packages/editor/src/components/viewer/viewer-scene-header.tsx
+msgid "viewer.header.levels"
+msgstr "楼层"
+
+# Source-Hash: 3e7408ed44676176
+# Review: human
+# English: "Rooms"
+#: packages/editor/src/components/viewer/viewer-scene-header.tsx
+msgid "viewer.header.rooms"
+msgstr "房间"
+
+# Source-Hash: 170b2049ef0f9131
+# Review: human
+# English: "Selection"
+#: packages/editor/src/components/viewer/viewer-scene-header.tsx
+msgid "viewer.header.selection"
+msgstr "当前选择"
+
+# Source-Hash: b404dded35241274
+# Review: human
+# English: "Units"
+#: packages/editor/src/components/viewer/viewer-scene-header.tsx
+msgid "viewer.header.units"
+msgstr "单元"
+
+# Source-Hash: 6547a4c0c368042a
+# Review: human
+# English: "Untitled"
+#: packages/editor/src/components/viewer/viewer-scene-header.tsx
+msgid "viewer.header.untitled"
+msgstr "未命名"
+
+# Source-Hash: 665db49a26f81425
+# Review: human
+# English: "Zones"
+#: packages/editor/src/components/viewer/viewer-scene-header.tsx
+msgid "viewer.header.zones"
+msgstr "分区"
+
+# Source-Hash: be12f8788f1f0a05
+# Review: human
+# English: "Exploded"
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+msgid "viewer.levels.exploded"
+msgstr "分解"
+
+# Source-Hash: 4bf4a6861d7d633e
+# Review: human
+# English: "Levels: {mode}"
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+msgid "viewer.levels.label"
+msgstr "楼层：{mode}"
+
+# Source-Hash: 387082cd5f118bed
+# Review: human
+# English: "Manual"
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+msgid "viewer.levels.manual"
+msgstr "手动"
+
+# Source-Hash: e9f59b513f2f45ac
+# Review: human
+# English: "Solo"
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+msgid "viewer.levels.solo"
+msgstr "单层"
+
+# Source-Hash: c203c84eee18c0f6
+# Review: human
+# English: "Stacked"
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+msgid "viewer.levels.stacked"
+msgstr "叠层"
+
+# Source-Hash: 9dd21ca47cffa3b8
+# Review: human
+# English: "Viewer layout"
+#: packages/editor/src/components/viewer/viewer-stage-switcher.tsx
+msgid "viewer.stage.layout"
+msgstr "视图布局"
+
+# Source-Hash: e4cd64b1680ac0d2
+# Review: human
+# English: "Split"
+#: packages/editor/src/components/viewer/viewer-stage-switcher.tsx
+msgid "viewer.stage.split"
+msgstr "分屏"
+
+# Source-Hash: f14b89d713d2528a
+# Review: human
+# English: "Blueprint"
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+msgid "viewer.theme.blueprint"
+msgstr "蓝图"
+
+# Source-Hash: 142bcb2841f423c5
+# Review: human
+# English: "Mediterranean"
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+msgid "viewer.theme.mediterranean"
+msgstr "地中海"
+
+# Source-Hash: b399942ec5d7e1ba
+# Review: human
+# English: "Night"
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+msgid "viewer.theme.night"
+msgstr "夜景"
+
+# Source-Hash: f512d1b947b8ae5a
+# Review: human
+# English: "Overcast"
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+msgid "viewer.theme.overcast"
+msgstr "阴天"
+
+# Source-Hash: 583542b3bc837192
+# Review: human
+# English: "Paper"
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+msgid "viewer.theme.paper"
+msgstr "纸面"
+
+# Source-Hash: 7abc2dc6e39b1747
+# Review: human
+# English: "Studio"
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+msgid "viewer.theme.studio"
+msgstr "影棚"
+
+# Source-Hash: efe94d3ec8d8c44e
+# Review: human
+# English: "Sunset"
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+msgid "viewer.theme.sunset"
+msgstr "日落"
+
+# Source-Hash: 82720864e5034398
+# Review: human
+# English: "Scene theme"
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+msgid "viewer.theme.title"
+msgstr "场景主题"
+
+# Source-Hash: 4c10ea0aa0e2ea41
+# Review: human
+# English: "Twilight"
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+msgid "viewer.theme.twilight"
+msgstr "暮色"
+
+# Source-Hash: f9592fb0672740c0
+# Review: human
+# English: "Verdant"
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+msgid "viewer.theme.verdant"
+msgstr "绿意"
+
+# Source-Hash: 892d5dd34372028b
+# Review: human
+# English: "Guides"
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+msgid "viewer.visibility.guides"
+msgstr "参考图"
+
+# Source-Hash: 3260bfa69cca50e5
+# Review: human
+# English: "Scans"
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+msgid "viewer.visibility.scans"
+msgstr "扫描模型"
+
+# Source-Hash: 2cefbb554eadbb6e
+# Review: human
+# English: "Visibility"
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+msgid "viewer.visibility.title"
+msgstr "可见性"
+
+# Source-Hash: 31afd9dee47ba943
+# Review: human
+# English: "Walkthrough: {state}"
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+msgid "viewer.walkthrough.label"
+msgstr "漫游：{state}"
+
+# Source-Hash: 4da8b3678ed77b45
+# Review: human
+# English: "Cutaway"
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+msgid "viewer.walls.cutaway"
+msgstr "剖切墙"
+
+# Source-Hash: 131bac2467f4fdf6
+# Review: human
+# English: "Full height"
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+msgid "viewer.walls.fullHeight"
+msgstr "全高墙"
+
+# Source-Hash: 32f3d058cf2526d2
+# Review: human
+# English: "Walls: {mode}"
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+msgid "viewer.walls.label"
+msgstr "墙体：{mode}"
+
+# Source-Hash: 803532407fb5962b
+# Review: human
+# English: "Low"
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+msgid "viewer.walls.low"
+msgstr "矮墙"

@@ -1,0 +1,348 @@
+msgid ""
+msgstr ""
+"POT-Creation-Date: 2026-10-26 22:28+0000\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"X-Generator: @lingui/cli\n"
+"Language: en\n"
+
+#: packages/editor/src/i18n/level-name.ts
+msgid "core.level.basement"
+msgstr "Basement"
+
+#: packages/editor/src/i18n/level-name.ts
+msgid "core.level.basementNumber"
+msgstr "Basement {number}"
+
+#: packages/editor/src/i18n/level-name.ts
+msgid "core.level.floorNumber"
+msgstr "Floor {number}"
+
+#: packages/editor/src/i18n/level-name.ts
+msgid "core.level.groundFloor"
+msgstr "Ground floor"
+
+#: packages/editor/src/components/ui/build-panel/build-panel.tsx
+msgid "editor.buildPanel.advanced"
+msgstr "Advanced"
+
+#: packages/editor/src/components/ui/build-panel/build-panel.tsx
+msgid "editor.buildPanel.rooms.hint"
+msgstr "walls · floor · ceiling"
+
+#: packages/editor/src/components/ui/build-panel/build-panel.tsx
+msgid "editor.buildPanel.rooms.idle"
+msgstr "Pick a shape to start. Every room brings its own walls, floor and ceiling."
+
+#: packages/editor/src/components/ui/build-panel/build-panel.tsx
+msgid "editor.buildPanel.rooms.polygon.caption"
+msgstr "{lead} then the first one again to close. For L-shapes and angled rooms."
+
+#: packages/editor/src/components/ui/build-panel/build-panel.tsx
+msgid "editor.buildPanel.rooms.polygon.label"
+msgstr "Polygon"
+
+#: packages/editor/src/components/ui/build-panel/build-panel.tsx
+msgid "editor.buildPanel.rooms.polygon.lead"
+msgstr "Click each corner,"
+
+#: packages/editor/src/components/ui/build-panel/build-panel.tsx
+msgid "editor.buildPanel.rooms.polygon.title"
+msgstr "Polygon room"
+
+#: packages/editor/src/components/ui/build-panel/build-panel.tsx
+msgid "editor.buildPanel.rooms.rectangle.caption"
+msgstr "{lead} on the grid. Walls, floor and ceiling are created together."
+
+#: packages/editor/src/components/ui/build-panel/build-panel.tsx
+msgid "editor.buildPanel.rooms.rectangle.label"
+msgstr "Rectangle"
+
+#: packages/editor/src/components/ui/build-panel/build-panel.tsx
+msgid "editor.buildPanel.rooms.rectangle.lead"
+msgstr "Click two corners"
+
+#: packages/editor/src/components/ui/build-panel/build-panel.tsx
+msgid "editor.buildPanel.rooms.rectangle.title"
+msgstr "Rectangle room"
+
+#: packages/editor/src/components/ui/build-panel/build-panel.tsx
+msgid "editor.buildPanel.rooms.title"
+msgstr "Rooms"
+
+#: packages/editor/src/components/ui/build-panel/build-panel.tsx
+msgid "editor.buildPanel.rooms.walls.caption"
+msgstr "{lead} Close a loop and it becomes a room; leave it open for partitions."
+
+#: packages/editor/src/components/ui/build-panel/build-panel.tsx
+msgid "editor.buildPanel.rooms.walls.label"
+msgstr "Walls"
+
+#: packages/editor/src/components/ui/build-panel/build-panel.tsx
+msgid "editor.buildPanel.rooms.walls.lead"
+msgstr "Draw one wall at a time."
+
+#: packages/editor/src/components/ui/build-panel/build-panel.tsx
+msgid "editor.buildPanel.rooms.walls.title"
+msgstr "Walls"
+
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+msgid "viewer.camera.orbitLeft"
+msgstr "Orbit left"
+
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+msgid "viewer.camera.orbitRight"
+msgstr "Orbit right"
+
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+msgid "viewer.camera.topView"
+msgstr "Top view"
+
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+msgid "viewer.common.off"
+msgstr "Off"
+
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+msgid "viewer.common.on"
+msgstr "On"
+
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+msgid "viewer.display.camera"
+msgstr "Camera"
+
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+msgid "viewer.display.colored"
+msgstr "Colored"
+
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+msgid "viewer.display.colors"
+msgstr "Colors"
+
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+msgid "viewer.display.edges.off"
+msgstr "Off"
+
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+msgid "viewer.display.edges.offDetail"
+msgstr "No edge lines"
+
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+msgid "viewer.display.edges.soft"
+msgstr "Soft"
+
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+msgid "viewer.display.edges.softDetail"
+msgstr "Faint outline of major creases"
+
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+msgid "viewer.display.edges.strong"
+msgstr "Strong"
+
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+msgid "viewer.display.edges.strongDetail"
+msgstr "Crisp, opaque edge lines"
+
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+msgid "viewer.display.edges.title"
+msgstr "Edges"
+
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+msgid "viewer.display.monochrome"
+msgstr "Monochrome"
+
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+msgid "viewer.display.orthographic"
+msgstr "Orthographic"
+
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+msgid "viewer.display.perspective"
+msgstr "Perspective"
+
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+msgid "viewer.display.render.rendered"
+msgstr "Rendered"
+
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+msgid "viewer.display.render.renderedDetail"
+msgstr "Full ambient occlusion"
+
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+msgid "viewer.display.render.solid"
+msgstr "Solid"
+
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+msgid "viewer.display.render.solidDetail"
+msgstr "Flat and fast — no ambient occlusion"
+
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+msgid "viewer.display.render.title"
+msgstr "Render"
+
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+msgid "viewer.display.shadows"
+msgstr "Shadows"
+
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+msgid "viewer.display.title"
+msgstr "Display settings"
+
+#: packages/editor/src/components/viewer/floorplan-compass-button.tsx
+msgid "viewer.floorplan.alignNorth"
+msgstr "Align view to north"
+
+#: packages/editor/src/components/viewer/floorplan-preview.tsx
+msgid "viewer.floorplan.empty"
+msgstr "No floor plans are available for this scene."
+
+#: packages/editor/src/components/viewer/floorplan-preview.tsx
+msgid "viewer.floorplan.fit"
+msgstr "Fit floor plan"
+
+#: packages/editor/src/components/viewer/floorplan-preview.tsx
+msgid "viewer.floorplan.floor"
+msgstr "Floor"
+
+#: packages/editor/src/components/viewer/floorplan-preview.tsx
+msgid "viewer.floorplan.floorPlan"
+msgstr "Floor plan"
+
+#: packages/editor/src/components/viewer/floorplan-preview.tsx
+msgid "viewer.floorplan.viewLabel"
+msgstr "{floor} 2D view"
+
+#: packages/editor/src/components/viewer/floorplan-preview.tsx
+msgid "viewer.floorplan.zoomIn"
+msgstr "Zoom in"
+
+#: packages/editor/src/components/viewer/floorplan-preview.tsx
+msgid "viewer.floorplan.zoomOut"
+msgstr "Zoom out"
+
+#: packages/editor/src/components/viewer/viewer-scene-header.tsx
+msgid "viewer.header.back"
+msgstr "Back"
+
+#: packages/editor/src/components/viewer/viewer-scene-header.tsx
+msgid "viewer.header.levels"
+msgstr "Levels"
+
+#: packages/editor/src/components/viewer/viewer-scene-header.tsx
+msgid "viewer.header.rooms"
+msgstr "Rooms"
+
+#: packages/editor/src/components/viewer/viewer-scene-header.tsx
+msgid "viewer.header.selection"
+msgstr "Selection"
+
+#: packages/editor/src/components/viewer/viewer-scene-header.tsx
+msgid "viewer.header.units"
+msgstr "Units"
+
+#: packages/editor/src/components/viewer/viewer-scene-header.tsx
+msgid "viewer.header.untitled"
+msgstr "Untitled"
+
+#: packages/editor/src/components/viewer/viewer-scene-header.tsx
+msgid "viewer.header.zones"
+msgstr "Zones"
+
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+msgid "viewer.levels.exploded"
+msgstr "Exploded"
+
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+msgid "viewer.levels.label"
+msgstr "Levels: {mode}"
+
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+msgid "viewer.levels.manual"
+msgstr "Manual"
+
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+msgid "viewer.levels.solo"
+msgstr "Solo"
+
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+msgid "viewer.levels.stacked"
+msgstr "Stacked"
+
+#: packages/editor/src/components/viewer/viewer-stage-switcher.tsx
+msgid "viewer.stage.layout"
+msgstr "Viewer layout"
+
+#: packages/editor/src/components/viewer/viewer-stage-switcher.tsx
+msgid "viewer.stage.split"
+msgstr "Split"
+
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+msgid "viewer.theme.blueprint"
+msgstr "Blueprint"
+
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+msgid "viewer.theme.mediterranean"
+msgstr "Mediterranean"
+
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+msgid "viewer.theme.night"
+msgstr "Night"
+
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+msgid "viewer.theme.overcast"
+msgstr "Overcast"
+
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+msgid "viewer.theme.paper"
+msgstr "Paper"
+
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+msgid "viewer.theme.studio"
+msgstr "Studio"
+
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+msgid "viewer.theme.sunset"
+msgstr "Sunset"
+
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+msgid "viewer.theme.title"
+msgstr "Scene theme"
+
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+msgid "viewer.theme.twilight"
+msgstr "Twilight"
+
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+msgid "viewer.theme.verdant"
+msgstr "Verdant"
+
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+msgid "viewer.visibility.guides"
+msgstr "Guides"
+
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+msgid "viewer.visibility.scans"
+msgstr "Scans"
+
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+msgid "viewer.visibility.title"
+msgstr "Visibility"
+
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+msgid "viewer.walkthrough.label"
+msgstr "Walkthrough: {state}"
+
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+msgid "viewer.walls.cutaway"
+msgstr "Cutaway"
+
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+msgid "viewer.walls.fullHeight"
+msgstr "Full height"
+
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+msgid "viewer.walls.label"
+msgstr "Walls: {mode}"
+
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+msgid "viewer.walls.low"
+msgstr "Low"

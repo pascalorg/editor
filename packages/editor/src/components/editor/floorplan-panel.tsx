@@ -50,6 +50,7 @@ import {
   useInteractive,
   useLiveNodeOverrides,
   useLiveTransforms,
+  useLocale,
   useScene,
   type WallNode,
   WallNode as WallNodeSchema,
@@ -526,7 +527,7 @@ type GuideTransformDraft = {
   rotation: number
 }
 
-type ReferenceScaleUnit = 'meters' | 'centimeters' | 'feet' | 'inches'
+export type ReferenceScaleUnit = 'meters' | 'centimeters' | 'feet' | 'inches'
 
 // The in-flight reference-scale measurement. Only the per-CLICK fields live
 // here (guide + start anchor); the rubber-band's moving END is the shared
@@ -2465,22 +2466,35 @@ const REFERENCE_SCALE_LINGO_UNIT: Record<ReferenceScaleUnit, 'm' | 'cm' | 'ft' |
 /** Lingo-parse the free-text real-length input in the dropdown's unit — a
  * bare number means the dropdown unit, while `180cm`, `1m80` or `5'11"`
  * override it. Returns `null` when the text isn't a readable length. */
-function parseReferenceScaleLength(raw: string, unit: ReferenceScaleUnit): number | null {
+export function parseReferenceScaleLength(
+  raw: string,
+  unit: ReferenceScaleUnit,
+  locale: string,
+): number | null {
   const unitId = REFERENCE_SCALE_LINGO_UNIT[unit]
   return parseMeasurement(
     raw,
     { kind: 'length', unitId },
-    { bareUnit: unitId, system: unit === 'feet' || unit === 'inches' ? 'us' : 'metric' },
+    {
+      bareUnit: unitId,
+      locale,
+      system: unit === 'feet' || unit === 'inches' ? 'us' : 'metric',
+    },
   )
 }
 
-function referenceScaleLengthHint(raw: string, unit: ReferenceScaleUnit): string | null {
+function referenceScaleLengthHint(
+  raw: string,
+  unit: ReferenceScaleUnit,
+  locale: string,
+): string | null {
   const unitId = REFERENCE_SCALE_LINGO_UNIT[unit]
   return measurementHint(
     raw,
     { kind: 'length', unitId },
     {
       bareUnit: unitId,
+      locale,
       system: unit === 'feet' || unit === 'inches' ? 'us' : 'metric',
       displayUnit: unitId,
       precision: 2,
@@ -4838,6 +4852,7 @@ export function FloorplanPanel({
   floorplanSceneSlot?: ReactNode
 }) {
   useFloorplanCameraSyncBridge()
+  const locale = useLocale()
   const viewportHostRef = useRef<HTMLDivElement>(null)
   const svgRef = useRef<SVGSVGElement>(null)
   const floorplanBackgroundRef = useRef<SVGRectElement>(null)
@@ -7161,7 +7176,7 @@ export function FloorplanPanel({
       return
     }
 
-    const displayLength = parseReferenceScaleLength(referenceScaleValue, referenceScaleUnit)
+    const displayLength = parseReferenceScaleLength(referenceScaleValue, referenceScaleUnit, locale)
     if (!(displayLength && displayLength > 0)) {
       return
     }
@@ -7215,6 +7230,7 @@ export function FloorplanPanel({
     setPendingReferenceScale(null)
   }, [
     guideById,
+    locale,
     pendingReferenceScale,
     referenceScaleUnit,
     referenceScaleValue,
@@ -11205,7 +11221,7 @@ export function FloorplanPanel({
     isPanning || isRotatingFloorplan ? 'grabbing' : isSpacePanPressed ? 'grab' : null
   const isFloorplanNavigationOverlayVisible = isSpacePanPressed || isPanning || isRotatingFloorplan
   const pendingReferenceDisplayLength =
-    parseReferenceScaleLength(referenceScaleValue, referenceScaleUnit) ?? Number.NaN
+    parseReferenceScaleLength(referenceScaleValue, referenceScaleUnit, locale) ?? Number.NaN
   const pendingReferenceRealLengthMeters =
     pendingReferenceScale && pendingReferenceDisplayLength > 0
       ? convertReferenceLengthToMeters(pendingReferenceDisplayLength, referenceScaleUnit)
@@ -11228,7 +11244,7 @@ export function FloorplanPanel({
           : 'Length must be greater than 0.'
   const referenceScaleHint = referenceScaleInputError
     ? null
-    : referenceScaleLengthHint(referenceScaleValue, referenceScaleUnit)
+    : referenceScaleLengthHint(referenceScaleValue, referenceScaleUnit, locale)
   return (
     <div
       className="pointer-events-auto flex h-full w-full flex-col overflow-hidden bg-background/95"

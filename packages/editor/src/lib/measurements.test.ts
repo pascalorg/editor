@@ -18,6 +18,7 @@ import {
   measurementFloorplanPresentationColor,
   measurementPresentationColor,
   metersToLinearUnit,
+  parseLinearMeasurementInput,
   squareMetersToAreaUnit,
 } from './measurements'
 
@@ -129,6 +130,11 @@ describe('linear measurements', () => {
     expect(linearControlValueToMeters(3.5, 'metric')).toBe(3.5)
   })
 
+  test('parses floor-plan measurement input with the scoped locale', () => {
+    expect(parseLinearMeasurementInput('2,75', 'metric', 'fr')).toBe(2.75)
+    expect(parseLinearMeasurementInput('2,75', 'metric', 'en')).toBeNull()
+  })
+
   test('clamps numeric control input after converting to meters', () => {
     expect(linearControlValueToMeters(0.1, 'imperial', { minMeters: 0.1 })).toBe(0.1)
     expect(linearControlValueToMeters(0.3, 'imperial', { minMeters: 0.1 })).toBe(0.1)
@@ -211,5 +217,16 @@ describe('typed measurement fields', () => {
     }
     expect(measurementHint('180cm', length)).toBe('= 1.80 m')
     expect(measurementHint('6', length)).toBeNull()
+  })
+
+  test('only treats the active locale decimal separator as a plain decimal', () => {
+    const length = { kind: 'length', unitId: 'm' } as const
+
+    expect(measurementHint('1,000', length, { locale: 'en' })).not.toBeNull()
+    expect(measurementHint('-1,000', length, { locale: 'en' })).not.toBeNull()
+    expect(measurementHint('1,5', length, { locale: 'en' })).not.toBeNull()
+
+    expect(measurementHint('1,5', length, { locale: 'fr' })).toBeNull()
+    expect(parseMeasurement('2,75 m', length, { locale: 'fr' })).toBe(2.75)
   })
 })

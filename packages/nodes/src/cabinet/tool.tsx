@@ -18,6 +18,7 @@ import {
   resolveSupportSlabPatch,
   runAsSingleSceneHistoryStep,
   spatialGridManager,
+  useLocale,
   useScene,
   type WallEvent,
   type WallNode,
@@ -36,7 +37,6 @@ import {
   movementSfxStepKey,
   PlacementBox,
   PlacementDimensionGuides,
-  parseMeasurement,
   publishPlacementSurface,
   triggerSFX,
   useAlignmentGuides,
@@ -78,6 +78,7 @@ import {
   cabinetModuleDefinition,
   cabinetRunFootprint,
 } from './definition'
+import { parseCabinetDimensionInput } from './dimension-input'
 import { buildCabinetGeometry } from './geometry'
 import { applyCabinetModuleInsertion, cabinetModuleForRunInsertion } from './insertion'
 import { resolveCabinetNeighborPlacement } from './neighbor-placement'
@@ -410,6 +411,7 @@ const CabinetPlacementTool = () => {
   const activeLevelId = useViewer((s) => s.selection.levelId)
   const unit = useViewer((s) => s.unit)
   const metricNotation = useViewer((s) => s.metricNotation)
+  const locale = useLocale()
   const activeDimensionId = usePlacementPreview((s) => s.activeDimensionId)
   const dimensionInput = usePlacementPreview((s) => s.dimensionInput)
   const [placement, setPlacement] = useState<CabinetPlacement | null>(null)
@@ -1641,14 +1643,11 @@ const CabinetPlacementTool = () => {
       if (!(editor.activeDimensionId && editor.dimensionInput && current)) {
         return false
       }
-      const value = parseMeasurement(
-        editor.dimensionInput,
-        { kind: 'length', unitId: 'm' },
-        {
-          bareUnit: unit === 'imperial' ? 'in' : metricNotation === 'millimeters' ? 'mm' : 'm',
-          system: unit === 'imperial' ? 'imperial' : 'metric',
-        },
-      )
+      const value = parseCabinetDimensionInput(editor.dimensionInput, {
+        locale,
+        metricNotation,
+        unit,
+      })
       if (value === null) return false
       if (!current.stretch) {
         const sizeField =

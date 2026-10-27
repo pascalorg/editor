@@ -13,8 +13,12 @@
     "checks": "bun run check && bun run check-types",
     "check:fix": "biome check --write",
     "check-types": "turbo run check-types",
-    "test": "turbo run test",
-    "ci": "bun run check && bun run skills:validate && bun run check-types && bun run test && bun run build",
+    "i18n:check": "bun scripts/i18n.ts check",
+    "i18n:compile": "bun scripts/i18n.ts compile",
+    "i18n:extract": "bun scripts/i18n.ts extract",
+    "i18n:translate": "bun scripts/i18n.ts translate",
+    "test": "turbo run test && bun test scripts/i18n.test.ts apps/editor/proxy.test.ts",
+    "ci": "bun run check && bun run i18n:check && bun run skills:validate && bun run check-types && bun run test && bun run build",
     "postinstall": "([ -n \"$CI\" ] || [ ! -e .git ] || git config core.hooksPath .githooks)",
     "skills:validate": "bun scripts/validate-skills.ts && bun scripts/sync-agent-versions.ts --check && bun test scripts/sync-agent-versions.test.ts scripts/cursor-plugin-policy.test.ts scripts/clawhub-ignore-policy.test.ts scripts/claude-mcp-config-policy.test.ts scripts/openai-tool-annotation-policy.test.ts scripts/path-containment.test.ts scripts/public-skill-discovery-policy.test.ts",
     "kill": "lsof -ti:3002 | xargs kill -9 2>/dev/null || echo 'No processes found on port 3002'",
@@ -26,14 +30,23 @@
     "release:major": "gh workflow run release.yml -f bump=major"
   },
   "devDependencies": {
+    "@ai-sdk/anthropic": "^4.0.89",
+    "@ai-sdk/openai": "^4.0.103",
     "@biomejs/biome": "^2.6.3",
+    "@lingui/cli": "6.10.1",
+    "@lingui/conf": "6.10.1",
+    "@lingui/format-po": "6.10.1",
+    "@lingui/message-utils": "6.10.1",
     "@typescript/native-preview": "7.0.0-dev.20260707.2",
     "@typescript/typescript6": "6.0.2",
+    "ai": "^7.0.154",
     "dotenv-cli": "^11.0.0",
     "fast-xml-parser": "^5.11.2",
+    "pofile-ts": "^4.0.3",
     "turbo": "^2.11.10",
     "typescript": "npm:@typescript/typescript6@6.0.2",
-    "ultracite": "^8.1.0"
+    "ultracite": "^8.1.0",
+    "zod": "^4.6.7"
   },
   "engines": {
     "node": "^22.23.4 || ^24.22.1 || >=26.12.1"

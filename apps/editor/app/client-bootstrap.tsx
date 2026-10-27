@@ -9,18 +9,39 @@
 // `loaded` guard inside `../lib/bootstrap` keeps the side effect
 // idempotent under HMR.
 import '../lib/bootstrap'
-import { type ReactNode, useEffect } from 'react'
+import { createI18n, defaultI18n, PascalI18nProvider } from '@pascal-app/core'
+import { registerBundledLocales } from '@pascal-app/editor/locales'
+import { type ReactNode, useEffect, useMemo } from 'react'
+
+registerBundledLocales()
 
 export function ClientBootstrap({
   children,
   enableDevDiagnostics,
+  locale,
 }: {
   children: ReactNode
   enableDevDiagnostics: boolean
+  locale: string
 }) {
+  const i18n = useMemo(() => createI18n({ locale }), [locale])
+
   useEffect(() => {
     if (!enableDevDiagnostics) return
     import('react-scan').then(({ scan }) => scan({ enabled: true }))
   }, [enableDevDiagnostics])
-  return children
+
+  useEffect(() => {
+    const syncDocumentLocale = () => {
+      document.documentElement.lang = i18n.getLocale()
+    }
+    syncDocumentLocale()
+    return i18n.subscribe(syncDocumentLocale)
+  }, [i18n])
+
+  useEffect(() => {
+    return defaultI18n.subscribeLocale((nextLocale) => i18n.setLocale(nextLocale))
+  }, [i18n])
+
+  return <PascalI18nProvider i18n={i18n}>{children}</PascalI18nProvider>
 }
