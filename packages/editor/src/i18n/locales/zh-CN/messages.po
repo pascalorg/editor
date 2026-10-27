@@ -10399,6 +10399,16 @@ msgstr "归属于电梯"
 msgid "editor.panels.floorOpeningPanel.ownedByStaircase"
 msgstr "归属于楼梯"
 
+# Source-Hash: 612dcd5bf06a79c4
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Room"
+#: packages/editor/src/components/ui/panels/floor-opening-panel.tsx
+#, fuzzy
+msgid "editor.panels.floorOpeningPanel.room"
+msgstr "房间"
+
 # Source-Hash: 1405b914a324b153
 # Review: required
 # AI-Provider: cursor-agent
@@ -10439,6 +10449,16 @@ msgstr "{source, select, stair {楼梯开洞} elevator {电梯开洞} ceiling {�
 msgid "editor.panels.mergeRefusal.alreadyJoined"
 msgstr "其中一扇已包住另一个转角。请先解除。"
 
+# Source-Hash: dd87eb1983876459
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "{kind, select, item {There is an item between them.} door {There is a door between them.} window {There is a window between them.} shelf {There is a shelf between them.} other {There is something between them.}}"
+#: packages/editor/src/components/ui/panels/multi-selection-panel.tsx
+#, fuzzy
+msgid "editor.panels.mergeRefusal.between"
+msgstr "{kind, select, item {它们之间有一个物品。} door {它们之间有一扇门。} window {它们之间有一扇窗。} shelf {它们之间有一个搁板。} other {它们之间有其他对象。}}"
+
 # Source-Hash: 58aea0b9789ae280
 # Review: required
 # AI-Provider: cursor-agent
@@ -10468,26 +10488,6 @@ msgstr "它们的墙体相交角度过锐或过钝，无法做转角窗。"
 #, fuzzy
 msgid "editor.panels.mergeRefusal.heightExceedsWall"
 msgstr "先选中的窗户比另一面墙高。请先选择另一扇。"
-
-# Source-Hash: 31f857e6bb29c9f0
-# Review: required
-# AI-Provider: cursor-agent
-# AI-Model: claude-opus
-# English: "A {kind} is between them."
-#: packages/editor/src/components/ui/panels/multi-selection-panel.tsx
-#, fuzzy
-msgid "editor.panels.mergeRefusal.kindBetween"
-msgstr "它们之间有{kind}。"
-
-# Source-Hash: c0b1a7276f3aca4e
-# Review: required
-# AI-Provider: cursor-agent
-# AI-Model: claude-opus
-# English: "Sliding them to the corner would overlap a {kind}."
-#: packages/editor/src/components/ui/panels/multi-selection-panel.tsx
-#, fuzzy
-msgid "editor.panels.mergeRefusal.kindOverlap"
-msgstr "将它们滑到转角会与{kind}重叠。"
 
 # Source-Hash: 7c97fb4af929d4db
 # Review: required
@@ -10519,25 +10519,15 @@ msgstr "其中一扇离转角太远。窗户只能与 {reach} 以内的窗合并
 msgid "editor.panels.mergeRefusal.notOnWall"
 msgstr "屋顶窗或老虎窗不能与其他窗合并。"
 
-# Source-Hash: 3c3486ba8d9b0e4c
+# Source-Hash: eaad567d5e4257dc
 # Review: required
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
-# English: "There is something between them."
+# English: "{kind, select, item {Sliding them to the corner would overlap an item.} door {Sliding them to the corner would overlap a door.} window {Sliding them to the corner would overlap a window.} shelf {Sliding them to the corner would overlap a shelf.} other {Sliding them to the corner would overlap something.}}"
 #: packages/editor/src/components/ui/panels/multi-selection-panel.tsx
 #, fuzzy
-msgid "editor.panels.mergeRefusal.somethingBetween"
-msgstr "它们之间有其他对象。"
-
-# Source-Hash: e1e67d4f391d90e8
-# Review: required
-# AI-Provider: cursor-agent
-# AI-Model: claude-opus
-# English: "Sliding them to the corner would overlap something."
-#: packages/editor/src/components/ui/panels/multi-selection-panel.tsx
-#, fuzzy
-msgid "editor.panels.mergeRefusal.somethingOverlap"
-msgstr "将它们滑到转角会与其他对象重叠。"
+msgid "editor.panels.mergeRefusal.overlap"
+msgstr "{kind, select, item {将它们滑到转角会与一个物品重叠。} door {将它们滑到转角会与一扇门重叠。} window {将它们滑到转角会与一扇窗重叠。} shelf {将它们滑到转角会与一个搁板重叠。} other {将它们滑到转角会与其他对象重叠。}}"
 
 # Source-Hash: ecb092821ed5b5e8
 # Review: required
@@ -11750,6 +11740,16 @@ msgstr "关闭墙体时会保留与{rooms}共用的墙体。"
 msgid "editor.panels.roomConstructionRows.sitsOnPreset"
 msgstr "支承于：{name} · {preset}"
 
+# Source-Hash: a17a79e835fa2064
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "the next room"
+#: packages/editor/src/components/ui/panels/room-construction-rows.tsx
+#, fuzzy
+msgid "editor.panels.roomConstructionRows.theNextRoom"
+msgstr "相邻房间"
+
 # Source-Hash: ebae699e0cb18ea6
 # Review: required
 # AI-Provider: cursor-agent
@@ -11830,16 +11830,6 @@ msgstr "编辑楼板"
 msgid "editor.panels.roomOpeningsField.elevatorOpening"
 msgstr "电梯开洞"
 
-# Source-Hash: 3853aa1b5baaf66f
-# Review: required
-# AI-Provider: cursor-agent
-# AI-Model: claude-opus
-# English: "No openings"
-#: packages/editor/src/components/ui/panels/room-openings-field.tsx
-#, fuzzy
-msgid "editor.panels.roomOpeningsField.noOpenings"
-msgstr "无开洞"
-
 # Source-Hash: eafea43e795f3708
 # Review: required
 # AI-Provider: cursor-agent
@@ -11849,6 +11839,16 @@ msgstr "无开洞"
 #, fuzzy
 msgid "editor.panels.roomOpeningsField.noOpeningsYetCutOneFor"
 msgstr "暂无开洞。可为楼梯洞口或检修口开一个。"
+
+# Source-Hash: f69c382f3e5d3cef
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "{count, plural, =0 {No openings} one {# opening} other {# openings}}"
+#: packages/editor/src/components/ui/panels/room-openings-field.tsx
+#, fuzzy
+msgid "editor.panels.roomOpeningsField.openingCount"
+msgstr "{count, plural, =0 {无开洞} other {# 个开洞}}"
 
 # Source-Hash: 60fac94ffa614238
 # Review: required
@@ -12440,6 +12440,26 @@ msgstr "{current} · 低于{shared} {distance}"
 #, fuzzy
 msgid "editor.room.builtOn.levelWith"
 msgstr "{current} · 与{shared}齐平"
+
+# Source-Hash: 612dcd5bf06a79c4
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Room"
+#: packages/editor/src/components/editor/room-labels.tsx
+#, fuzzy
+msgid "editor.roomLabel.room"
+msgstr "房间"
+
+# Source-Hash: a107b4d76d6972e3
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Zone"
+#: packages/editor/src/components/editor/room-labels.tsx
+#, fuzzy
+msgid "editor.roomLabel.zone"
+msgstr "区域"
 
 # Source-Hash: 7da15e7c88dab485
 # Review: required
@@ -22714,6 +22734,26 @@ msgstr "酒店客房"
 msgid "node.unit.label"
 msgstr "单元"
 
+# Source-Hash: 612dcd5bf06a79c4
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Room"
+#: packages/nodes/src/unit/unit-panel.tsx
+#, fuzzy
+msgid "node.unit.panel.memberRoom"
+msgstr "房间"
+
+# Source-Hash: a107b4d76d6972e3
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Zone"
+#: packages/nodes/src/unit/unit-panel.tsx
+#, fuzzy
+msgid "node.unit.panel.memberZone"
+msgstr "区域"
+
 # Source-Hash: e25d5b5630b9d8df
 # Review: required
 # AI-Provider: cursor-agent
@@ -23254,6 +23294,16 @@ msgstr "玻璃间隙"
 msgid "node.wall.curtainWallPanel.gridLimitedTo32PanelsPer"
 msgstr "网格每个方向最多 32 个面板。间距会扩大以适应此墙体。"
 
+# Source-Hash: f07d8e0e4d35ea4e
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "{length, plural, one {# custom panel is outside this grid. It returns if the grid expands.} other {# custom panels are outside this grid. They return if the grid expands.}}"
+#: packages/nodes/src/wall/curtain-wall-panel.tsx
+#, fuzzy
+msgid "node.wall.curtainWallPanel.hiddenCustomPanels"
+msgstr "{length, plural, other {有 # 个自定义面板超出此网格。网格扩大后会恢复。}}"
+
 # Source-Hash: 84af317e818c10cf
 # Review: required
 # AI-Provider: cursor-agent
@@ -23283,16 +23333,6 @@ msgstr "水平框架宽度"
 #, fuzzy
 msgid "node.wall.curtainWallPanel.layout"
 msgstr "布局"
-
-# Source-Hash: 0ba84c24b734f79f
-# Review: required
-# AI-Provider: cursor-agent
-# AI-Model: claude-opus
-# English: "{length} custom panels are outside this grid. They return if the grid expands."
-#: packages/nodes/src/wall/curtain-wall-panel.tsx
-#, fuzzy
-msgid "node.wall.curtainWallPanel.lengthCustomPanelsAreOutsideThis"
-msgstr "{length} 个自定义面板超出此网格。网格扩大后会恢复。"
 
 # Source-Hash: fc37833ef19c8feb
 # Review: required

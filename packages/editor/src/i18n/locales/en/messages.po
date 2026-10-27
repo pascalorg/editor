@@ -4190,6 +4190,10 @@ msgid "editor.panels.floorOpeningPanel.ownedByStaircase"
 msgstr "Owned by Staircase"
 
 #: packages/editor/src/components/ui/panels/floor-opening-panel.tsx
+msgid "editor.panels.floorOpeningPanel.room"
+msgstr "Room"
+
+#: packages/editor/src/components/ui/panels/floor-opening-panel.tsx
 msgid "editor.panels.floorOpeningPanel.thereIsNoFloorAboveThis"
 msgstr "There is no floor above this storey."
 
@@ -4206,6 +4210,10 @@ msgid "editor.panels.mergeRefusal.alreadyJoined"
 msgstr "One of them already wraps another corner. Unwrap it first."
 
 #: packages/editor/src/components/ui/panels/multi-selection-panel.tsx
+msgid "editor.panels.mergeRefusal.between"
+msgstr "{kind, select, item {There is an item between them.} door {There is a door between them.} window {There is a window between them.} shelf {There is a shelf between them.} other {There is something between them.}}"
+
+#: packages/editor/src/components/ui/panels/multi-selection-panel.tsx
 msgid "editor.panels.mergeRefusal.cannotMerge"
 msgstr "These windows cannot be merged."
 
@@ -4216,14 +4224,6 @@ msgstr "Their walls meet at too sharp or too flat an angle for a corner window."
 #: packages/editor/src/components/ui/panels/multi-selection-panel.tsx
 msgid "editor.panels.mergeRefusal.heightExceedsWall"
 msgstr "The window selected first is taller than the other wall. Select the other one first."
-
-#: packages/editor/src/components/ui/panels/multi-selection-panel.tsx
-msgid "editor.panels.mergeRefusal.kindBetween"
-msgstr "A {kind} is between them."
-
-#: packages/editor/src/components/ui/panels/multi-selection-panel.tsx
-msgid "editor.panels.mergeRefusal.kindOverlap"
-msgstr "Sliding them to the corner would overlap a {kind}."
 
 #: packages/editor/src/components/ui/panels/multi-selection-panel.tsx
 msgid "editor.panels.mergeRefusal.notAdjacent"
@@ -4238,12 +4238,8 @@ msgid "editor.panels.mergeRefusal.notOnWall"
 msgstr "A roof or dormer window cannot join another window."
 
 #: packages/editor/src/components/ui/panels/multi-selection-panel.tsx
-msgid "editor.panels.mergeRefusal.somethingBetween"
-msgstr "There is something between them."
-
-#: packages/editor/src/components/ui/panels/multi-selection-panel.tsx
-msgid "editor.panels.mergeRefusal.somethingOverlap"
-msgstr "Sliding them to the corner would overlap something."
+msgid "editor.panels.mergeRefusal.overlap"
+msgstr "{kind, select, item {Sliding them to the corner would overlap an item.} door {Sliding them to the corner would overlap a door.} window {Sliding them to the corner would overlap a window.} shelf {Sliding them to the corner would overlap a shelf.} other {Sliding them to the corner would overlap something.}}"
 
 #: packages/editor/src/components/ui/panels/multi-selection-panel.tsx
 msgid "editor.panels.mergeRefusal.wallsNotMeeting"
@@ -4731,6 +4727,10 @@ msgid "editor.panels.roomConstructionRows.sitsOnPreset"
 msgstr "Sits on: {name} · {preset}"
 
 #: packages/editor/src/components/ui/panels/room-construction-rows.tsx
+msgid "editor.panels.roomConstructionRows.theNextRoom"
+msgstr "the next room"
+
+#: packages/editor/src/components/ui/panels/room-construction-rows.tsx
 msgid "editor.panels.roomConstructionRows.useExisting"
 msgstr "Use existing"
 
@@ -4763,12 +4763,12 @@ msgid "editor.panels.roomOpeningsField.elevatorOpening"
 msgstr "Elevator opening"
 
 #: packages/editor/src/components/ui/panels/room-openings-field.tsx
-msgid "editor.panels.roomOpeningsField.noOpenings"
-msgstr "No openings"
-
-#: packages/editor/src/components/ui/panels/room-openings-field.tsx
 msgid "editor.panels.roomOpeningsField.noOpeningsYetCutOneFor"
 msgstr "No openings yet. Cut one for a stair void or a hatch."
+
+#: packages/editor/src/components/ui/panels/room-openings-field.tsx
+msgid "editor.panels.roomOpeningsField.openingCount"
+msgstr "{count, plural, =0 {No openings} one {# opening} other {# openings}}"
 
 #: packages/editor/src/components/ui/panels/room-openings-field.tsx
 msgid "editor.panels.roomOpeningsField.openingNumber"
@@ -5006,6 +5006,14 @@ msgstr "{current} · {distance} below {shared}"
 #: packages/editor/src/lib/room-built-on.ts
 msgid "editor.room.builtOn.levelWith"
 msgstr "{current} · level with {shared}"
+
+#: packages/editor/src/components/editor/room-labels.tsx
+msgid "editor.roomLabel.room"
+msgstr "Room"
+
+#: packages/editor/src/components/editor/room-labels.tsx
+msgid "editor.roomLabel.zone"
+msgstr "Zone"
 
 #: packages/editor/src/lib/room-name-messages.ts
 msgid "editor.roomName.attic"
@@ -9125,6 +9133,14 @@ msgid "node.unit.label"
 msgstr "Unit"
 
 #: packages/nodes/src/unit/unit-panel.tsx
+msgid "node.unit.panel.memberRoom"
+msgstr "Room"
+
+#: packages/nodes/src/unit/unit-panel.tsx
+msgid "node.unit.panel.memberZone"
+msgstr "Zone"
+
+#: packages/nodes/src/unit/unit-panel.tsx
 msgid "node.unit.panel.nonAdjacentLevels"
 msgstr "Members sit on levels that are not adjacent."
 
@@ -9341,6 +9357,10 @@ msgid "node.wall.curtainWallPanel.gridLimitedTo32PanelsPer"
 msgstr "Grid limited to 32 panels per axis. Spacing expands to fit this wall."
 
 #: packages/nodes/src/wall/curtain-wall-panel.tsx
+msgid "node.wall.curtainWallPanel.hiddenCustomPanels"
+msgstr "{length, plural, one {# custom panel is outside this grid. It returns if the grid expands.} other {# custom panels are outside this grid. They return if the grid expands.}}"
+
+#: packages/nodes/src/wall/curtain-wall-panel.tsx
 msgid "node.wall.curtainWallPanel.horizontalCaps"
 msgstr "Horizontal caps"
 
@@ -9351,10 +9371,6 @@ msgstr "Horizontal frame width"
 #: packages/nodes/src/wall/curtain-wall-panel.tsx
 msgid "node.wall.curtainWallPanel.layout"
 msgstr "Layout"
-
-#: packages/nodes/src/wall/curtain-wall-panel.tsx
-msgid "node.wall.curtainWallPanel.lengthCustomPanelsAreOutsideThis"
-msgstr "{length} custom panels are outside this grid. They return if the grid expands."
 
 #: packages/nodes/src/wall/curtain-wall-panel.tsx
 msgid "node.wall.curtainWallPanel.lowRoughnessIsSmoothHighRoughness"

@@ -10399,6 +10399,16 @@ msgstr "エレベーターに属する"
 msgid "editor.panels.floorOpeningPanel.ownedByStaircase"
 msgstr "階段に属する"
 
+# Source-Hash: 612dcd5bf06a79c4
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Room"
+#: packages/editor/src/components/ui/panels/floor-opening-panel.tsx
+#, fuzzy
+msgid "editor.panels.floorOpeningPanel.room"
+msgstr "部屋"
+
 # Source-Hash: 1405b914a324b153
 # Review: required
 # AI-Provider: cursor-agent
@@ -10439,6 +10449,16 @@ msgstr "{source, select, stair {階段の開口} elevator {エレベーターの
 msgid "editor.panels.mergeRefusal.alreadyJoined"
 msgstr "どちらかがすでに別のコーナーを回っています。先に解除してください。"
 
+# Source-Hash: dd87eb1983876459
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "{kind, select, item {There is an item between them.} door {There is a door between them.} window {There is a window between them.} shelf {There is a shelf between them.} other {There is something between them.}}"
+#: packages/editor/src/components/ui/panels/multi-selection-panel.tsx
+#, fuzzy
+msgid "editor.panels.mergeRefusal.between"
+msgstr "{kind, select, item {間にアイテムがあります。} door {間にドアがあります。} window {間に窓があります。} shelf {間に棚があります。} other {間に何かがあります。}}"
+
 # Source-Hash: 58aea0b9789ae280
 # Review: required
 # AI-Provider: cursor-agent
@@ -10468,26 +10488,6 @@ msgstr "壁の角度が鋭すぎるか平らすぎて、コーナー窓にでき
 #, fuzzy
 msgid "editor.panels.mergeRefusal.heightExceedsWall"
 msgstr "最初に選んだ窓がもう一方の壁より高いです。先にもう一方を選んでください。"
-
-# Source-Hash: 31f857e6bb29c9f0
-# Review: required
-# AI-Provider: cursor-agent
-# AI-Model: claude-opus
-# English: "A {kind} is between them."
-#: packages/editor/src/components/ui/panels/multi-selection-panel.tsx
-#, fuzzy
-msgid "editor.panels.mergeRefusal.kindBetween"
-msgstr "間に{kind}があります。"
-
-# Source-Hash: c0b1a7276f3aca4e
-# Review: required
-# AI-Provider: cursor-agent
-# AI-Model: claude-opus
-# English: "Sliding them to the corner would overlap a {kind}."
-#: packages/editor/src/components/ui/panels/multi-selection-panel.tsx
-#, fuzzy
-msgid "editor.panels.mergeRefusal.kindOverlap"
-msgstr "コーナーまでずらすと{kind}と重なります。"
 
 # Source-Hash: 7c97fb4af929d4db
 # Review: required
@@ -10519,25 +10519,15 @@ msgstr "どちらかがコーナーから離れすぎています。窓は {reac
 msgid "editor.panels.mergeRefusal.notOnWall"
 msgstr "屋根窓やドーマー窓は他の窓と結合できません。"
 
-# Source-Hash: 3c3486ba8d9b0e4c
+# Source-Hash: eaad567d5e4257dc
 # Review: required
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus
-# English: "There is something between them."
+# English: "{kind, select, item {Sliding them to the corner would overlap an item.} door {Sliding them to the corner would overlap a door.} window {Sliding them to the corner would overlap a window.} shelf {Sliding them to the corner would overlap a shelf.} other {Sliding them to the corner would overlap something.}}"
 #: packages/editor/src/components/ui/panels/multi-selection-panel.tsx
 #, fuzzy
-msgid "editor.panels.mergeRefusal.somethingBetween"
-msgstr "間に何かがあります。"
-
-# Source-Hash: e1e67d4f391d90e8
-# Review: required
-# AI-Provider: cursor-agent
-# AI-Model: claude-opus
-# English: "Sliding them to the corner would overlap something."
-#: packages/editor/src/components/ui/panels/multi-selection-panel.tsx
-#, fuzzy
-msgid "editor.panels.mergeRefusal.somethingOverlap"
-msgstr "コーナーまでずらすと何かと重なります。"
+msgid "editor.panels.mergeRefusal.overlap"
+msgstr "{kind, select, item {コーナーまでずらすとアイテムと重なります。} door {コーナーまでずらすとドアと重なります。} window {コーナーまでずらすと窓と重なります。} shelf {コーナーまでずらすと棚と重なります。} other {コーナーまでずらすと何かと重なります。}}"
 
 # Source-Hash: ecb092821ed5b5e8
 # Review: required
@@ -11750,6 +11740,16 @@ msgstr "壁をオフにしても、{rooms}と共有する壁は残ります。"
 msgid "editor.panels.roomConstructionRows.sitsOnPreset"
 msgstr "設置先：{name} · {preset}"
 
+# Source-Hash: a17a79e835fa2064
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "the next room"
+#: packages/editor/src/components/ui/panels/room-construction-rows.tsx
+#, fuzzy
+msgid "editor.panels.roomConstructionRows.theNextRoom"
+msgstr "隣の部屋"
+
 # Source-Hash: ebae699e0cb18ea6
 # Review: required
 # AI-Provider: cursor-agent
@@ -11830,16 +11830,6 @@ msgstr "床を編集"
 msgid "editor.panels.roomOpeningsField.elevatorOpening"
 msgstr "エレベーター開口"
 
-# Source-Hash: 3853aa1b5baaf66f
-# Review: required
-# AI-Provider: cursor-agent
-# AI-Model: claude-opus
-# English: "No openings"
-#: packages/editor/src/components/ui/panels/room-openings-field.tsx
-#, fuzzy
-msgid "editor.panels.roomOpeningsField.noOpenings"
-msgstr "開口なし"
-
 # Source-Hash: eafea43e795f3708
 # Review: required
 # AI-Provider: cursor-agent
@@ -11849,6 +11839,16 @@ msgstr "開口なし"
 #, fuzzy
 msgid "editor.panels.roomOpeningsField.noOpeningsYetCutOneFor"
 msgstr "開口はまだありません。階段の吹き抜けやハッチ用に切り抜いてください。"
+
+# Source-Hash: f69c382f3e5d3cef
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "{count, plural, =0 {No openings} one {# opening} other {# openings}}"
+#: packages/editor/src/components/ui/panels/room-openings-field.tsx
+#, fuzzy
+msgid "editor.panels.roomOpeningsField.openingCount"
+msgstr "{count, plural, =0 {開口なし} other {# 個の開口}}"
 
 # Source-Hash: 60fac94ffa614238
 # Review: required
@@ -12440,6 +12440,26 @@ msgstr "{current} · {shared}より {distance} 下"
 #, fuzzy
 msgid "editor.room.builtOn.levelWith"
 msgstr "{current} · {shared}と同じ高さ"
+
+# Source-Hash: 612dcd5bf06a79c4
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Room"
+#: packages/editor/src/components/editor/room-labels.tsx
+#, fuzzy
+msgid "editor.roomLabel.room"
+msgstr "部屋"
+
+# Source-Hash: a107b4d76d6972e3
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Zone"
+#: packages/editor/src/components/editor/room-labels.tsx
+#, fuzzy
+msgid "editor.roomLabel.zone"
+msgstr "ゾーン"
 
 # Source-Hash: 7da15e7c88dab485
 # Review: required
@@ -22714,6 +22734,26 @@ msgstr "ホテル客室"
 msgid "node.unit.label"
 msgstr "住戸"
 
+# Source-Hash: 612dcd5bf06a79c4
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Room"
+#: packages/nodes/src/unit/unit-panel.tsx
+#, fuzzy
+msgid "node.unit.panel.memberRoom"
+msgstr "部屋"
+
+# Source-Hash: a107b4d76d6972e3
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Zone"
+#: packages/nodes/src/unit/unit-panel.tsx
+#, fuzzy
+msgid "node.unit.panel.memberZone"
+msgstr "ゾーン"
+
 # Source-Hash: e25d5b5630b9d8df
 # Review: required
 # AI-Provider: cursor-agent
@@ -23254,6 +23294,16 @@ msgstr "ガラスの隙間"
 msgid "node.wall.curtainWallPanel.gridLimitedTo32PanelsPer"
 msgstr "グリッドは各軸 32 パネルまでです。この壁に合わせて間隔が広がります。"
 
+# Source-Hash: f07d8e0e4d35ea4e
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "{length, plural, one {# custom panel is outside this grid. It returns if the grid expands.} other {# custom panels are outside this grid. They return if the grid expands.}}"
+#: packages/nodes/src/wall/curtain-wall-panel.tsx
+#, fuzzy
+msgid "node.wall.curtainWallPanel.hiddenCustomPanels"
+msgstr "{length, plural, other {# 個のカスタムパネルがこのグリッドの外にあります。グリッドを広げると戻ります。}}"
+
 # Source-Hash: 84af317e818c10cf
 # Review: required
 # AI-Provider: cursor-agent
@@ -23283,16 +23333,6 @@ msgstr "水平枠の幅"
 #, fuzzy
 msgid "node.wall.curtainWallPanel.layout"
 msgstr "レイアウト"
-
-# Source-Hash: 0ba84c24b734f79f
-# Review: required
-# AI-Provider: cursor-agent
-# AI-Model: claude-opus
-# English: "{length} custom panels are outside this grid. They return if the grid expands."
-#: packages/nodes/src/wall/curtain-wall-panel.tsx
-#, fuzzy
-msgid "node.wall.curtainWallPanel.lengthCustomPanelsAreOutsideThis"
-msgstr "{length} 個のカスタムパネルがこのグリッドの外にあります。グリッドを広げると戻ります。"
 
 # Source-Hash: fc37833ef19c8feb
 # Review: required
