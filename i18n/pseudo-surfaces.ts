@@ -1,4 +1,5 @@
 import type { Page } from 'playwright-core'
+import { DormerNode, SkylightNode, SolarPanelNode } from '../packages/core/src/schema'
 import type { SceneGraph } from '@pascal-app/core/clone-scene-graph'
 import { template as twoBedroom } from '../packages/mcp/src/templates/two-bedroom'
 import { pseudoLocalize } from '../scripts/i18n'
@@ -154,6 +155,25 @@ export async function openInEditor(page: Page, name: string): Promise<void> {
   await page.getByRole('button', { name: pseudo(name), exact: true }).first().click()
   await page.waitForTimeout(500)
 }
+
+/** The furnished scene plus a dormer, a skylight and a solar panel on the roof segment. */
+function roofFeaturesScene() {
+  const graph = furnishedScene() as unknown as {
+    nodes: Record<string, { children?: string[] }>
+  }
+  const onRoof = { parentId: 'rseg_audit', roofSegmentId: 'rseg_audit' }
+  const features = [
+    DormerNode.parse({ id: 'dormer_audit', ...onRoof, position: [0, 0, -1.5] }),
+    SkylightNode.parse({ id: 'skylight_audit', ...onRoof, position: [-1, 0, 1.5] }),
+    SolarPanelNode.parse({ id: 'solarpanel_audit', ...onRoof, position: [1, 0, -1.5] }),
+  ]
+  for (const node of features) graph.nodes[node.id] = node
+  graph.nodes.rseg_audit?.children?.push(...features.map((node) => node.id))
+  return graph as unknown as SceneGraph
+}
+
+const roofFeaturesPath = async (base: string) =>
+  `/project/${await auditScene(base, 'roof-features', roofFeaturesScene())}`
 
 export const surfaces: PseudoSurface[] = [
   { name: 'home', path: '/', data: ['Project #1'] },
@@ -403,5 +423,26 @@ export const surfaces: PseudoSurface[] = [
       await page.waitForTimeout(2500)
     },
     scope: '[role="dialog"]',
+  },
+  {
+    name: 'dormer-panel',
+    path: roofFeaturesPath,
+    steps: (page) => openLayer(page, 'Dormer'),
+    scope: '[data-editor-inspector]',
+    data: furnishedData,
+  },
+  {
+    name: 'skylight-panel',
+    path: roofFeaturesPath,
+    steps: (page) => openLayer(page, 'Skylight'),
+    scope: '[data-editor-inspector]',
+    data: furnishedData,
+  },
+  {
+    name: 'solar-panel-panel',
+    path: roofFeaturesPath,
+    steps: (page) => openLayer(page, 'Solar Panel'),
+    scope: '[data-editor-inspector]',
+    data: furnishedData,
   },
 ]
