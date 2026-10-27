@@ -28,6 +28,8 @@ export type TranslationEntry = {
   review: 'human' | 'required' | 'missing'
   fuzzy: boolean
   reviewNotes?: string
+  /** Declared with a `renamed-from: <old id>` descriptor comment (`#.` in the PO). */
+  renamedFrom?: string
 }
 
 export type TranslationRequest = {
@@ -141,6 +143,13 @@ async function extractSourceMessages(): Promise<SourceMessage[]> {
   return [...messages.values()].sort((left, right) => left.id.localeCompare(right.id))
 }
 
+const RENAMED_FROM_PREFIX = 'renamed-from:'
+
+function renamedFrom(item: PoItem): string | undefined {
+  const comment = item.extractedComments.find((value) => value.startsWith(RENAMED_FROM_PREFIX))
+  return comment?.slice(RENAMED_FROM_PREFIX.length).trim() || undefined
+}
+
 function readTranslationState(po: PoFile): Record<string, TranslationEntry> {
   return Object.fromEntries(
     po.items
@@ -155,6 +164,7 @@ function readTranslationState(po: PoFile): Record<string, TranslationEntry> {
             review: review === 'human' || review === 'required' ? review : 'missing',
             fuzzy: Boolean(item.flags.fuzzy),
             reviewNotes: commentValue(item, REVIEW_NOTES_PREFIX),
+            renamedFrom: renamedFrom(item),
           } satisfies TranslationEntry,
         ]
       }),
@@ -500,6 +510,22 @@ function annotateCatalogs(
       replaceComment(item, ENGLISH_PREFIX, JSON.stringify(source.message))
       const sourceHash = hashSource(source.message)
       const prior = previous.get(locale)?.[item.msgid]
+      const declared = renamedFrom(item)
+      const origin = declared ? previous.get(locale)?.[declared] : undefined
+      if (
+        !item.msgstr[0] &&
+        origin?.translation &&
+        origin.review === 'human' &&
+        !origin.fuzzy &&
+        origin.sourceHash === sourceHash
+      ) {
+        // A declared rename with unchanged English keeps its reviewed translation.
+        item.msgstr = [origin.translation]
+        replaceComment(item, SOURCE_HASH_PREFIX, sourceHash)
+        replaceComment(item, REVIEW_PREFIX, 'human')
+        delete item.flags.fuzzy
+        continue
+      }
       const state = annotatedState(prior, item.msgstr[0] ?? '', sourceHash)
       if (state) {
         replaceComment(item, SOURCE_HASH_PREFIX, state.sourceHash)
@@ -858,25 +884,62 @@ export function reviewRegressions(
         )
       }
     }
-    // A reviewed ID that disappears while a new ID carries the same English is
-    // a rename. Identical English alone does not approve the new context, so
-    // the translation must be carried over deliberately or reviewed again.
+    // A declared rename must arrive with the reviewed translation;
+    // `i18n:extract` carries it over when the English is unchanged.
     const sourceIds = new Set(sources.map((source) => source.id))
+    for (const source of sources) {
+      const after = current[locale]?.[source.id]
+      const removedId = after?.renamedFrom
+      if (!removedId || sourceIds.has(removedId)) continue
+      const before = base[locale]?.[removedId]
+      if (
+        !before?.translation ||
+        before.fuzzy ||
+        before.review !== 'human' ||
+        before.sourceHash !== hashSource(source.message)
+      ) {
+        continue
+      }
+      const carried =
+        after.translation === before.translation && after.review === 'human' && !after.fuzzy
+      if (!carried) {
+        errors.push(
+          `${locale}: "${source.id}" is declared renamed-from "${removedId}", whose reviewed translation was not carried over; run bun run i18n:extract`,
+        )
+      }
+    }
+  }
+  return errors
+}
+
+/**
+ * Reviewed IDs removed while a new, undeclared ID has the same English. That
+ * may be a rename or an unrelated addition; a missed carry-over only falls back
+ * to English, so it is reported, not enforced.
+ */
+export function possibleRenames(
+  sources: SourceMessage[],
+  current: LocaleEntries,
+  base: LocaleEntries,
+): string[] {
+  const sourceIds = new Set(sources.map((source) => source.id))
+  const pairs = new Set<string>()
+  for (const locale of TARGET_LOCALES) {
     const baseEntries = base[locale] ?? {}
     for (const [removedId, before] of Object.entries(baseEntries)) {
       if (sourceIds.has(removedId) || before.fuzzy || before.review !== 'human') continue
       for (const source of sources) {
         if (source.id in baseEntries || hashSource(source.message) !== before.sourceHash) continue
         const after = current[locale]?.[source.id]
-        if (!after?.translation || after.fuzzy || after.review !== 'human') {
-          errors.push(
-            `${locale}: "${source.id}" replaces the reviewed "${removedId}" with the same English; carry the reviewed translation over (Review: human) or review it again`,
-          )
-        }
+        if (after?.renamedFrom || (after?.review === 'human' && !after.fuzzy)) continue
+        pairs.add(`"${removedId}" → "${source.id}"`)
       }
     }
   }
-  return errors
+  return [...pairs].map(
+    (pair) =>
+      `possible rename ${pair} (same English): carry over the translation if intended with comment: 'renamed-from: <old id>' and bun run i18n:extract`,
+  )
 }
 
 function isApproved(entry: TranslationEntry | undefined, source: SourceMessage): boolean {
@@ -931,7 +994,12 @@ export function draftCounts(
   )
 }
 
-function writeJobSummary(sources: SourceMessage[], current: LocaleEntries, base?: string): void {
+function writeJobSummary(
+  sources: SourceMessage[],
+  current: LocaleEntries,
+  base?: string,
+  warnings: string[] = [],
+): void {
   const path = process.env.GITHUB_STEP_SUMMARY
   if (!path) return
   const counts = draftCounts(sources, current)
@@ -947,6 +1015,9 @@ function writeJobSummary(sources: SourceMessage[], current: LocaleEntries, base?
       '| --- | --- |',
       ...rows,
       '',
+      ...(warnings.length > 0
+        ? ['**Warnings**', '', ...warnings.map((warning) => `- ${warning}`), '']
+        : []),
     ].join('\n'),
   )
 }
@@ -960,12 +1031,18 @@ function compiledPacks(): Record<string, Record<string, unknown>> {
 }
 
 /** Regression and leak checks shared by `check` (CI) and `release-check` (release). */
-export function releaseCheck(sources: SourceMessage[], base: LocaleEntries | undefined): string[] {
+export function releaseCheck(
+  sources: SourceMessage[],
+  base: LocaleEntries | undefined,
+): { errors: string[]; warnings: string[] } {
   const current = currentEntries()
-  return [
-    ...(base ? reviewRegressions(sources, current, base) : []),
-    ...packLeaks(sources, current, compiledPacks()),
-  ]
+  return {
+    errors: [
+      ...(base ? reviewRegressions(sources, current, base) : []),
+      ...packLeaks(sources, current, compiledPacks()),
+    ],
+    warnings: base ? possibleRenames(sources, current, base) : [],
+  }
 }
 
 /** The package whose release carries the bundled catalogs. */
@@ -1022,14 +1099,17 @@ function checkCatalogMessages(
 ): string[] {
   const current = currentEntries()
   const base = baseRevision()
-  writeJobSummary(sources, current, base?.slice(0, 12))
-  return [
-    ...checkTranslationEntries(sources, current, glossary, options),
-    ...releaseCheck(
-      sources,
-      base ? readLocaleEntries((path) => readAtRevision(base, path)) : undefined,
-    ),
-  ]
+  const release = releaseCheck(
+    sources,
+    base ? readLocaleEntries((path) => readAtRevision(base, path)) : undefined,
+  )
+  reportWarnings(release.warnings)
+  writeJobSummary(sources, current, base?.slice(0, 12), release.warnings)
+  return [...checkTranslationEntries(sources, current, glossary, options), ...release.errors]
+}
+
+function reportWarnings(warnings: string[]): void {
+  for (const warning of warnings) console.warn(`[i18n warning] ${warning}`)
 }
 
 function checkEnglishCatalog(
@@ -1120,8 +1200,9 @@ async function main(): Promise<void> {
         })
       : readLocaleEntries((path) => readAtRevision(revision!, path))
     const sources = readSourceMessages()
-    writeJobSummary(sources, currentEntries(), resolved?.label)
-    const errors = releaseCheck(sources, base)
+    const { errors, warnings } = releaseCheck(sources, base)
+    reportWarnings(warnings)
+    writeJobSummary(sources, currentEntries(), resolved?.label ?? baseDir, warnings)
     if (errors.length > 0) {
       console.error(errors.map((error) => `[i18n] ${error}`).join('\n'))
       process.exitCode = 1
