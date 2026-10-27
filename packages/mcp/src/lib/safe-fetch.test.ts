@@ -613,7 +613,7 @@ describe('safeFetch — ports and redirects', () => {
 const nextTurn = () => new Promise<void>((resolve) => setImmediate(resolve))
 
 describe('safeFetch — DNS and the timeout', () => {
-  test('a DNS answer or failure arriving after the timeout changes nothing', async () => {
+  test('a DNS answer (even a rebinding to loopback) or failure after the timeout changes nothing', async () => {
     const unhandled: unknown[] = []
     const onUnhandled = (reason: unknown) => unhandled.push(reason)
     process.on('unhandledRejection', onUnhandled)
@@ -638,11 +638,13 @@ describe('safeFetch — DNS and the timeout', () => {
         expect((err as Error).message).toContain('fetch_timeout')
       }
       jest.useRealTimers()
-      answers[0]!.resolve([{ address: PUBLIC_V4, family: 4 }])
+      // A rebinding answer: had safeFetch still been waiting, it would block or pin it.
+      answers[0]!.resolve([{ address: '127.0.0.1', family: 4 }])
       answers[1]!.reject(new Error('ENOTFOUND late.example'))
       await nextTurn()
       await nextTurn()
       expect(requests).toHaveLength(0)
+      expect(errorLog.mock.calls.map((args) => String(args[0]))).toEqual([])
       expect(unhandled).toEqual([])
     } finally {
       jest.useRealTimers()
