@@ -22,7 +22,7 @@ export const doorParametrics: ParametricDescriptor<DoorNode> = {
       label: 'Frame',
       fields: [
         { key: 'frameThickness', kind: 'number', unit: 'm', min: 0.01, max: 0.2, step: 0.005 },
-        { key: 'frameDepth', kind: 'number', unit: 'm', min: 0.01, max: 0.3, step: 0.005 },
+        { key: 'frameDepth', kind: 'number', unit: 'm', min: 0.01, max: 0.5, step: 0.005 },
       ],
     },
   ],

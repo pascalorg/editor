@@ -6,7 +6,12 @@ import type {
   WallNode,
   WindowNode,
 } from '@pascal-app/core'
-import { getOpeningFloorDatum, getWallLocalFaceZ, wallSupportForNodes } from '@pascal-app/core'
+import {
+  getOpeningFloorDatum,
+  getWallLocalFaceZ,
+  resolveHostedOpeningFrameDepth,
+  wallSupportForNodes,
+} from '@pascal-app/core'
 import {
   type FloorplanSchedule,
   resolveMarkDetail,
@@ -114,7 +119,7 @@ export function buildDoorFloorplanSchedule(args: {
         size: formatSize(door.width, door.height, args.unit, args.profile ?? 'document'),
         roughOpening: formatRoughOpening(door, args.unit, args.profile ?? 'document'),
         operation: doorOperation(door),
-        frame: `${formatConstructionLength(door.frameThickness, args.unit, args.profile ?? 'document')} / ${formatConstructionLength(door.frameDepth, args.unit, args.profile ?? 'document')}`,
+        frame: `${formatConstructionLength(door.frameThickness, args.unit, args.profile ?? 'document')} / ${formatConstructionLength(resolveHostedOpeningFrameDepth(door, args.nodes), args.unit, args.profile ?? 'document')}`,
         hardware: doorHardware(door),
       },
     })),

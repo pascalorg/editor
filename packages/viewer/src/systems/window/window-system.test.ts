@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { WindowNode, WindowType } from '@pascal-app/core'
+import { OPENING_FRAME_LIP, useScene, WallNode, WindowNode, WindowType } from '@pascal-app/core'
 import * as THREE from 'three'
 import { buildWindowPreviewMesh } from './window-system'
 
@@ -54,5 +54,72 @@ describe("a window's faces at the edges of its opening", () => {
       }
     })
     expect(inPlane).toEqual([])
+  })
+})
+
+/**
+ * A window's frame used to be 0.07 m deep whatever its wall, so a thicker wall showed its cut faces
+ * around the frame. Left unset, the depth follows the host wall: its thickness plus a lip on each
+ * face, and the sill still starts at the frame's front face.
+ */
+describe("a window's frame depth follows its wall", () => {
+  function windowOn(wallThickness: number, patch: Partial<WindowNode> = {}) {
+    const wall = WallNode.parse({
+      id: `wall_window_frame_${wallThickness}`,
+      start: [0, 0],
+      end: [4, 0],
+      thickness: wallThickness,
+    })
+    const node = WindowNode.parse({
+      id: 'window_frame_test',
+      parentId: wall.id,
+      wallId: wall.id,
+      position: [2, 1.5, 0],
+      width: 1.2,
+      height: 1,
+      sill: true,
+      ...patch,
+    })
+    const previous = useScene.getState().nodes
+    useScene.setState({ nodes: { ...previous, [wall.id]: wall } })
+    const mesh = buildWindowPreviewMesh(node)
+    useScene.setState({ nodes: previous })
+    mesh.updateWorldMatrix(true, true)
+    return { node, mesh }
+  }
+
+  function hitboxDepth(mesh: THREE.Mesh): number {
+    return (mesh.geometry as THREE.BoxGeometry).parameters.depth
+  }
+
+  /** The sill: the box under the opening, wider than the window, in the window's own frame. */
+  function sillBox(mesh: THREE.Mesh, node: WindowNode): THREE.Box3 | undefined {
+    const toWindow = mesh.matrixWorld.clone().invert()
+    let found: THREE.Box3 | undefined
+    mesh.traverse((object) => {
+      const part = object as THREE.Mesh
+      if (!part.isMesh || part === mesh) return
+      const box = new THREE.Box3().setFromObject(part).applyMatrix4(toWindow)
+      if (box.max.y <= -node.height / 2 + 0.002 && box.max.x - box.min.x > node.width) found = box
+    })
+    return found
+  }
+
+  test('a window with no frame depth in a 0.2 m wall gets a 0.22 m frame', () => {
+    const { mesh } = windowOn(0.2)
+    expect(hitboxDepth(mesh)).toBeCloseTo(0.2 + OPENING_FRAME_LIP * 2, 9)
+  })
+
+  test('an explicit 0.07 m frame stays 0.07 m in a 0.2 m wall', () => {
+    expect(hitboxDepth(windowOn(0.2, { frameDepth: 0.07 }).mesh)).toBeCloseTo(0.07, 9)
+  })
+
+  test('the sill stands out from the resolved frame front', () => {
+    const { mesh, node } = windowOn(0.2)
+    const sill = sillBox(mesh, node)
+    expect(sill).toBeDefined()
+    // The frame's front face is at +0.11; the sill starts there and runs outward.
+    expect(sill!.min.z).toBeCloseTo(0.11, 6)
+    expect(sill!.max.z).toBeCloseTo(0.11 + node.sillDepth, 6)
   })
 })

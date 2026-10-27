@@ -1,5 +1,5 @@
 import type { AnyNode, AnyNodeId, DoorNode, WallNode, WindowNode, ZoneNode } from '@pascal-app/core'
-import { deriveZoneQuantityReport } from '@pascal-app/core'
+import { deriveZoneQuantityReport, resolveHostedOpeningFrameDepth } from '@pascal-app/core'
 import { collectFloorplanSchedules } from './floorplan-export'
 import type { FloorplanSchedule } from './floorplan-extension'
 import { resolveMarkDetail } from './marks'
@@ -150,7 +150,7 @@ function openingRow(
         ? `${formatScheduleLength(opening.roughOpeningWidth, unit)} x ${formatScheduleLength(opening.roughOpeningHeight, unit)}`
         : null,
     material: openingMaterial(opening),
-    frame: openingFrame(opening, unit),
+    frame: openingFrame(opening, nodes, unit),
     hardware: opening.type === 'door' ? doorHardware(opening as DoorNode) : null,
     count: 1,
     remarks: remarks.join('; '),
@@ -190,10 +190,14 @@ function openingMaterial(opening: DoorNode | WindowNode): string | null {
   return null
 }
 
-function openingFrame(opening: DoorNode | WindowNode, unit: ScheduleUnit): string | null {
-  const thickness = (opening as DoorNode).frameThickness
-  const depth = (opening as DoorNode).frameDepth
-  if (typeof thickness !== 'number' || typeof depth !== 'number') return null
+function openingFrame(
+  opening: DoorNode | WindowNode,
+  nodes: Readonly<Record<string, AnyNode>>,
+  unit: ScheduleUnit,
+): string | null {
+  const thickness = opening.frameThickness
+  if (typeof thickness !== 'number') return null
+  const depth = resolveHostedOpeningFrameDepth(opening, nodes)
   return `${formatScheduleLength(thickness, unit)} / ${formatScheduleLength(depth, unit)}`
 }
 

@@ -2,13 +2,16 @@ import {
   type AnyNode,
   type AnyNodeId,
   beginSceneHistoryDraft,
+  DEFAULT_WALL_THICKNESS,
   DoorNode,
   emitter,
   type GridEvent,
+  getWallThickness,
   holdHiddenWallPointerEvents,
   isCurvedWall,
   type RoofEvent,
   type RoofNode,
+  resolveOpeningFrameDepth,
   sceneRegistry,
   spatialGridManager,
   useScene,
@@ -112,11 +115,6 @@ const DoorTool: React.FC = () => {
       }),
     [fallbackPose?.side, placedType, placedStyle],
   )
-  // The frame depth is a fixed parse default (the `side` flip doesn't change
-  // it); a ref lets the facing-pose publish inside the setup effect read it
-  // without re-subscribing every event listener.
-  const frameDepthRef = useRef(ghostStub.frameDepth)
-
   useEffect(() => {
     useScene.temporal.getState().pause()
 
@@ -244,6 +242,7 @@ const DoorTool: React.FC = () => {
       cursorRotationY: number,
       valid: boolean,
       indicatorYOffset: number,
+      hostThickness: number,
     ) => {
       setFallbackPose(null)
       const group = cursorGroupRef.current
@@ -258,7 +257,10 @@ const DoorTool: React.FC = () => {
       useFacingPose.getState().set({
         position: [worldPosition[0], worldPosition[1] + indicatorYOffset, worldPosition[2]],
         rotationY: cursorRotationY,
-        depth: frameDepthRef.current,
+        depth: resolveOpeningFrameDepth(
+          { frameDepth: draftRef.current?.frameDepth },
+          hostThickness,
+        ),
       })
     }
 
@@ -412,6 +414,7 @@ const DoorTool: React.FC = () => {
         cursorRotationY,
         valid,
         -clampedY,
+        getWallThickness(wall),
       )
 
       if (draftRef.current) {
@@ -473,7 +476,6 @@ const DoorTool: React.FC = () => {
         trackStyle: draft.trackStyle,
         garagePanelCount: draft.garagePanelCount,
         frameThickness: draft.frameThickness,
-        frameDepth: draft.frameDepth,
         threshold: draft.threshold,
         thresholdHeight: draft.thresholdHeight,
         hingesSide: draft.hingesSide,
@@ -629,7 +631,14 @@ const DoorTool: React.FC = () => {
 
     const updateRoofCursor = (target: RoofWallOpeningTarget, roof: RoofNode) => {
       const pose = getRoofWallOpeningCursorPose(target, roof)
-      if (pose) updateCursor(pose.position, pose.rotationY, target.valid, -target.position[1])
+      if (pose)
+        updateCursor(
+          pose.position,
+          pose.rotationY,
+          target.valid,
+          -target.position[1],
+          DEFAULT_WALL_THICKNESS,
+        )
     }
 
     const onRoofHover = (event: RoofEvent) => {
@@ -712,7 +721,6 @@ const DoorTool: React.FC = () => {
         trackStyle: draft.trackStyle,
         garagePanelCount: draft.garagePanelCount,
         frameThickness: draft.frameThickness,
-        frameDepth: draft.frameDepth,
         threshold: draft.threshold,
         thresholdHeight: draft.thresholdHeight,
         hingesSide: draft.hingesSide,
@@ -847,7 +855,11 @@ const DoorTool: React.FC = () => {
   // unmount rather than reallocating (and orphaning) an EdgesGeometry on every
   // re-render during placement.
   const edgesGeo = useMemo(() => {
-    const boxGeo = new BoxGeometry(FALLBACK_WIDTH, FALLBACK_HEIGHT, 0.07)
+    const boxGeo = new BoxGeometry(
+      FALLBACK_WIDTH,
+      FALLBACK_HEIGHT,
+      resolveOpeningFrameDepth({}, DEFAULT_WALL_THICKNESS),
+    )
     const geo = new EdgesGeometry(boxGeo)
     boxGeo.dispose()
     return geo
