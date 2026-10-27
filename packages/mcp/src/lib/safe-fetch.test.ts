@@ -348,7 +348,7 @@ describe('safeFetch — SSRF protection', () => {
     const logged = lines.map((line) => JSON.parse(line.slice(line.indexOf('{'))).url)
     expect(logged).toEqual([
       'http://a.example/img.png',
-      'ftp://a.example/img.png',
+      'ftp://a.example',
       'https://a.example/img.png',
     ])
     for (const line of lines) {
@@ -356,6 +356,22 @@ describe('safeFetch — SSRF protection', () => {
         expect(line).not.toContain(secret)
       }
     }
+  })
+
+  test('truncates long logged paths and logs only scheme and host for other schemes', async () => {
+    const { deps } = fakeNetwork({ 'a.example': ['10.0.0.7'] })
+    const longPath = `/${'p'.repeat(500)}`
+    await expectBlocked(safeFetch(`http://a.example${longPath}`, {}, deps))
+    await expectBlocked(
+      safeFetch(`data:image/png;base64,${'A'.repeat(500)}`),
+      'url_scheme_not_allowed',
+    )
+    await expectBlocked(safeFetch('javascript:alert(document.cookie)'), 'url_scheme_not_allowed')
+    const logged = errorLog.mock.calls.map((args) => {
+      const line = String(args[0])
+      return JSON.parse(line.slice(line.indexOf('{'))).url as string
+    })
+    expect(logged).toEqual([`http://a.example${longPath.slice(0, 128)}…`, 'data:', 'javascript:'])
   })
 
   test('never reads redirect or error bodies', async () => {

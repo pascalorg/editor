@@ -156,9 +156,22 @@ function isLocalHostname(hostname: string): boolean {
   )
 }
 
-/** Scheme, host and path only: query strings can carry presigned tokens, userinfo carries credentials. */
+const MAX_LOGGED_PATH = 128
+
+/**
+ * Scheme, host and a truncated path only: query strings can carry presigned
+ * tokens, userinfo carries credentials. Non-http(s) URLs (`data:`,
+ * `javascript:`) carry their payload in the path, so they log scheme and host.
+ */
 export function loggableUrl(url: URL): string {
-  return `${url.protocol}//${url.host}${url.pathname}`
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+    return url.host ? `${url.protocol}//${url.host}` : url.protocol
+  }
+  const path =
+    url.pathname.length > MAX_LOGGED_PATH
+      ? `${url.pathname.slice(0, MAX_LOGGED_PATH)}…`
+      : url.pathname
+  return `${url.protocol}//${url.host}${path}`
 }
 
 function blocked(
