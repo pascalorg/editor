@@ -7,7 +7,6 @@ import {
   resolveBuildingForLevel,
   runAsSingleSceneHistoryStep,
   useScene, usePascalI18n,
-  nodeRegistry,
   type PascalI18n,
 } from '@pascal-app/core'
 import { unwrapCorner, windowMergeOffer } from '@pascal-app/core/building'
@@ -31,7 +30,6 @@ import useSessionGroups, {
 import { ActionButton, ActionGroup } from '../controls/action-button'
 import { PanelWrapper } from './panel-wrapper'
 import { formatSelectionBreakdown } from './selection-breakdown'
-import { nodeLabel } from '../../../i18n/node-messages'
 
 /** The building holding the level, when the selection is everything selectable on it. */
 function useWholeLevelBuildingId(selectedIds: readonly string[]) {
@@ -65,9 +63,8 @@ function mergeRefusalNote(
   const { blockingId, limit } = refusal.details as { blockingId?: string; limit?: number }
   const reach = length(limit ?? 0)
   const blocking = nodes[blockingId ?? '']
-  const blockingKind = blocking
-    ? nodeLabel(blocking.type, nodeRegistry.get(blocking.type)?.presentation?.label ?? blocking.type, i18n)
-    : undefined
+  // A wall's children: the openings and wall-hosted items the merge can run into.
+  const kind = blocking?.type ?? 'unknown'
   switch (refusal.code) {
     case 'window_already_joined':
       return i18n._({
@@ -86,16 +83,12 @@ function mergeRefusalNote(
         values: { reach },
       })
     case 'opening_between':
-      return blockingKind
-        ? i18n._({
-            id: 'editor.panels.mergeRefusal.kindBetween',
-            message: 'A {kind} is between them.',
-            values: { kind: blockingKind.toLocaleLowerCase(i18n.getLocale()) },
-          })
-        : i18n._({
-            id: 'editor.panels.mergeRefusal.somethingBetween',
-            message: 'There is something between them.',
-          })
+      return i18n._({
+        id: 'editor.panels.mergeRefusal.between',
+        message:
+          '{kind, select, item {There is an item between them.} door {There is a door between them.} window {There is a window between them.} shelf {There is a shelf between them.} other {There is something between them.}}',
+        values: { kind },
+      })
     case 'walls_not_meeting':
       return i18n._({
         id: 'editor.panels.mergeRefusal.wallsNotMeeting',
@@ -119,16 +112,12 @@ function mergeRefusalNote(
           'The window selected first is taller than the other wall. Select the other one first.',
       })
     case 'opening_overlap':
-      return blockingKind
-        ? i18n._({
-            id: 'editor.panels.mergeRefusal.kindOverlap',
-            message: 'Sliding them to the corner would overlap a {kind}.',
-            values: { kind: blockingKind.toLocaleLowerCase(i18n.getLocale()) },
-          })
-        : i18n._({
-            id: 'editor.panels.mergeRefusal.somethingOverlap',
-            message: 'Sliding them to the corner would overlap something.',
-          })
+      return i18n._({
+        id: 'editor.panels.mergeRefusal.overlap',
+        message:
+          '{kind, select, item {Sliding them to the corner would overlap an item.} door {Sliding them to the corner would overlap a door.} window {Sliding them to the corner would overlap a window.} shelf {Sliding them to the corner would overlap a shelf.} other {Sliding them to the corner would overlap something.}}',
+        values: { kind },
+      })
     default:
       return i18n._({
         id: 'editor.panels.mergeRefusal.cannotMerge',

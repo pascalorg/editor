@@ -15,8 +15,6 @@ import { formatAreaLabel } from '../../../lib/measurements'
 import { pill } from './room-construction-rows'
 import { ShapeChoice } from './shape-choice'
 
-const count = (n: number) => `${n} ${n === 1 ? 'opening' : 'openings'}`
-
 /**
  * A room's openings through its floor (or its ceiling), inside the row's
  * settings. The floor has "Edit floor": a session that outlines the openings
@@ -39,6 +37,11 @@ export function RoomOpeningsField({
     () => roomSurfaceOpenings(nodes, zoneId, surface),
     [nodes, zoneId, surface],
   )
+  const openingCount = i18n._({
+    id: 'editor.panels.roomOpeningsField.openingCount',
+    message: '{count, plural, =0 {No openings} one {# opening} other {# openings}}',
+    values: { count: openings.length },
+  })
   const editing = useFloorEditSession((s) => surface === 'floor' && s.session?.zoneId === zoneId)
   const cut = (
     <ShapeChoice
@@ -51,14 +54,14 @@ export function RoomOpeningsField({
   if (surface === 'ceiling')
     return (
       <div className="flex flex-col gap-1" data-room-openings={surface}>
-        {openings.length > 0 && <span>{count(openings.length)}</span>}
+        {openings.length > 0 && <span>{openingCount}</span>}
         {cut}
       </div>
     )
   if (!editing)
     return (
       <div className="flex min-h-7 items-center justify-between gap-3" data-room-openings={surface}>
-        <span>{openings.length ? count(openings.length) : i18n._({ id: 'editor.panels.roomOpeningsField.noOpenings', message: 'No openings' })}</span>
+        <span>{openingCount}</span>
         <button
           className={pill}
           data-edit-floor
