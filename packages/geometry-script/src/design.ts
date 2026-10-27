@@ -15,7 +15,7 @@ export type BuiltDesign = {
   missingAddons: string[]
 }
 
-/** What `addons` holds: three's addons Pascal's compiler carries (Arena's contract names them all). */
+/** What `addons` holds: the three.js addons Pascal's compiler carries. */
 const ADDONS: Record<string, unknown> = {
   ...(LIB.BufferGeometryUtils as Record<string, unknown>),
   ...(LIB.ParametricFunctions as Record<string, unknown>),

@@ -88,8 +88,11 @@ export default async function adapt({ source, run }) {
     ).rejects.toThrow('must return the author_scene payload')
     const huge = `export default async function adapt({ THREE, toModule }) {
       const group = new THREE.Group()
-      for (let i = 0; i < 400; i++) group.add(new THREE.Mesh(new THREE.TorusKnotGeometry(1, 0.2, 64 + i, 8)))
-      group.children.forEach((m, i) => m.geometry.translate(i, 0, 0))
+      for (let i = 0; i < 1500; i++) {
+        const mesh = new THREE.Mesh(new THREE.BoxGeometry(1 + i / 1000, 1, 1))
+        mesh.position.x = i
+        group.add(mesh)
+      }
       return toModule(group)
     }`
     await expect(runAdapter({ adapter: huge, design: DESIGN })).rejects.toThrow(

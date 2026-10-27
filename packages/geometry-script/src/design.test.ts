@@ -56,7 +56,7 @@ describe('buildDesign', () => {
     expect(missingAddons).toEqual([])
   })
 
-  test("runs Pascal Arena's build({ THREE, scene, addons }) and names the addons Pascal lacks", async () => {
+  test('runs a build({ THREE, scene, addons }) module and names the addons Pascal lacks', async () => {
     const code = `export function build({ THREE, scene, addons }) {
       const merged = addons.mergeGeometries([new THREE.BoxGeometry(1, 1, 1)])
       scene.add(new THREE.Mesh(merged, new THREE.MeshStandardMaterial()))
