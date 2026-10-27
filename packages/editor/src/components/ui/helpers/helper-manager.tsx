@@ -173,13 +173,15 @@ export function paintRegionHints(
     { keys: ['Esc'], label: /* i18n */ { id: 'editor.helpers.helperManager.cancel', message: 'Cancel' } },
   ]
 }
+const DRAW_MEZZANINE = /* i18n */ { id: 'editor.helpers.helperManager.drawTheMezzanine', message: 'Draw the mezzanine' }
+const DRAW_OPENING = /* i18n */ { id: 'editor.helpers.helperManager.drawTheOpening', message: 'Draw the opening' }
 // "Add mezzanine": the outline gesture for the shape picked in the room panel,
 // then Esc; the snapping chip sits below.
 export function mezzanineHints(shape: MezzanineShape): ContextualShortcutHint[] {
   return shape === 'rectangle'
     ? [
         { keys: ['Left click'], label: /* i18n */ { id: 'editor.helpers.helperManager.setOneCornerThenTheOpposite', message: 'Set one corner, then the opposite' } },
-        { keys: ['Drag'], label: /* i18n */ { id: 'editor.helpers.helperManager.drawTheMezzanine', message: 'Draw the mezzanine' } },
+        { keys: ['Drag'], label: DRAW_MEZZANINE },
         { keys: ['Esc'], label: /* i18n */ { id: 'editor.helpers.helperManager.cancel', message: 'Cancel' } },
       ]
     : [
@@ -192,7 +194,7 @@ export function mezzanineHints(shape: MezzanineShape): ContextualShortcutHint[] 
 /** "Cut opening": the outline gesture for the chosen shape, then Esc. */
 export function openingHints(shape: OpeningShape): ContextualShortcutHint[] {
   return mezzanineHints(shape).map((hint) =>
-    hint.label === 'Draw the mezzanine' ? { ...hint, label: /* i18n */ { id: 'editor.helpers.helperManager.drawTheOpening', message: 'Draw the opening' } } : hint,
+    typeof hint.label !== 'string' && hint.label.id === DRAW_MEZZANINE.id ? { ...hint, label: DRAW_OPENING } : hint,
   )
 }
 const TERRACE_CHIP_HINTS = [TERRACE_SHAPE_HINT]
