@@ -577,7 +577,7 @@ function RoomName({
   const originalRef = useRef(display)
   const inputRef = useRef<HTMLInputElement>(null)
   const listId = useId()
-  const { typed: typedRow, groups, options } = roomNameOptions(value, sections, typing)
+  const { typed: typedRow, groups, options } = roomNameOptions(value, sections, typing, name)
   const expanded = open && options.length > 0
   const activeId = expanded && options[active] ? `${listId}-${active}` : undefined
   const current = baseRoomName(name).toLowerCase()
@@ -755,7 +755,7 @@ function RoomName({
               setTyping(true)
               setOpen(true)
               scrollToActive.current = true
-              setActive(roomNameOptions(event.target.value, sections, true).active)
+              setActive(roomNameOptions(event.target.value, sections, true, name).active)
             }}
             onFocus={() => {
               originalRef.current = valueRef.current

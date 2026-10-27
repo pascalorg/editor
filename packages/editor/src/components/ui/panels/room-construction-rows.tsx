@@ -700,13 +700,18 @@ export function RoomConstructionRows({ room }: { room: RoomSelectionRecord }) {
       ? i18n._({
           id: 'editor.panels.roomConstructionRows.partialWalls',
           message:
-            'Partial · {walls, plural, one {# wall} other {# walls}}, {openSides, plural, one {# open side} other {# open sides}}',
-          values: { walls: wallIds.length, openSides },
+            'Partial · {walls, plural, one {{wallCount} wall} other {{wallCount} walls}}, {openSides, plural, one {{openSideCount} open side} other {{openSideCount} open sides}}',
+          values: {
+            walls: wallIds.length,
+            openSides,
+            wallCount: String(wallIds.length),
+            openSideCount: String(openSides),
+          },
         })
       : i18n._({
           id: 'editor.panels.roomConstructionRows.wallCount',
-          message: '{walls, plural, one {# wall} other {# walls}}',
-          values: { walls: wallIds.length },
+          message: '{walls, plural, one {{wallCount} wall} other {{wallCount} walls}}',
+          values: { walls: wallIds.length, wallCount: String(wallIds.length) },
         })
   const locked = roomOutsideFacesLocked(nodes, wallIds)
 
@@ -763,8 +768,9 @@ export function RoomConstructionRows({ room }: { room: RoomSelectionRecord }) {
             <PartField
               label={i18n._({
                 id: 'editor.panels.roomConstructionRows.openSides',
-                message: '{openSides, plural, one {# open side} other {# open sides}}',
-                values: { openSides },
+                message:
+                  '{openSides, plural, one {{openSideCount} open side} other {{openSideCount} open sides}}',
+                values: { openSides, openSideCount: String(openSides) },
               })}
             >
               <button

@@ -18,6 +18,7 @@ import { createAgentHost, liveSceneRuntime } from '@pascal-app/core/runtime'
 import {
   commitRoomNameEdit,
   commitRoomNamePick,
+  commitTreeRoomRename,
   roomNameOptions,
 } from '../components/ui/panels/room-name-options'
 import { roomNameSections } from './room-name-catalog'
@@ -136,6 +137,14 @@ const edit = (i18n: PascalI18n, zoneId: string, draft: (shown: string) => string
   const shown = displayRoomName(stored, i18n)
   commitRoomNameEdit(zoneId, stored, shown, draft(shown), i18n)
 }
+/** Types `text` in the panel field and presses Enter: the active row, as the field does. */
+const enter = (i18n: PascalI18n, zoneId: string, text: string) => {
+  const stored = nameOf(zoneId) ?? ''
+  const { options, active } = roomNameOptions(text, sectionsFor(i18n, zoneId), true, stored)
+  const chosen = options[active]
+  if (chosen?.kind === 'suggestion') commitRoomNamePick(zoneId, stored, chosen, i18n)
+  else commitRoomNameEdit(zoneId, stored, displayRoomName(stored, i18n), text, i18n)
+}
 const named = (zoneId: string, name: string) => renameRoom(zoneId, name)
 
 describe('room names are stored in English whatever the UI language', () => {
@@ -175,6 +184,20 @@ describe('room names are stored in English whatever the UI language', () => {
     expect(expectSameEnglish(study).zone_new).toBe('Study 2')
   })
 
+  test('Enter on a shared label keeps the room its own entry', () => {
+    // "Salon" is shown for both Living room and Lounge; Enter on a Lounge keeps Lounge.
+    const lounge = (i18n: PascalI18n) => {
+      named('zone_new', 'Lounge')
+      enter(i18n, 'zone_new', displayRoomName('Lounge', i18n))
+    }
+    expect(expectSameEnglish(lounge).zone_new).toBe('Lounge')
+    const living = (i18n: PascalI18n) => {
+      named('zone_new', 'Living room')
+      enter(i18n, 'zone_new', displayRoomName('Living room', i18n))
+    }
+    expect(expectSameEnglish(living).zone_new).toBe('Living room')
+  })
+
   test('free text, including an exact translation, is stored as typed', () => {
     const atelier = (i18n: PascalI18n) => edit(i18n, 'zone_new', () => 'Atelier de Marie')
     expect(expectSameEnglish(atelier).zone_new).toBe('Atelier de Marie')
@@ -205,6 +228,29 @@ describe('room names are stored in English whatever the UI language', () => {
       edit(i18n, 'zone_new', (shown) => shown.replace('2', '3'))
     }
     expect(expectSameEnglish(padded).zone_new).toBe('  Bedroom 3  ')
+  })
+
+  test('the layer tree rename edits the shown name and stores the English', () => {
+    /** The tree field shows `displayRoomName`, and passes the trimmed text or undefined. */
+    const treeEdit = (i18n: PascalI18n, zoneId: string, draft: (shown: string) => string) => {
+      const shown = displayRoomName(nameOf(zoneId) ?? '', i18n)
+      const text = draft(shown).trim()
+      if (text !== shown) commitTreeRoomRename(zoneId, text || undefined, i18n)
+    }
+    const renumber = (i18n: PascalI18n) => {
+      named('zone_new', 'Lounge 2')
+      treeEdit(i18n, 'zone_new', (shown) => shown.replace(/2$/, '3'))
+    }
+    expect(expectSameEnglish(renumber).zone_new).toBe('Lounge 3')
+    const padded = (i18n: PascalI18n) => {
+      named('zone_new', '  Kitchen ')
+      treeEdit(i18n, 'zone_new', (shown) => shown)
+    }
+    expect(expectSameEnglish(padded).zone_new).toBe('Kitchen')
+    const free = (i18n: PascalI18n) => treeEdit(i18n, 'zone_existing', () => ' Atelier ')
+    expect(expectSameEnglish(free).zone_existing).toBe('Atelier')
+    const cleared = (i18n: PascalI18n) => treeEdit(i18n, 'zone_existing', () => '')
+    expect(expectSameEnglish(cleared).zone_existing).toBeUndefined()
   })
 
   test('an unchanged field writes nothing', () => {

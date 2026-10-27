@@ -143,9 +143,11 @@ export default function SystemCheckPanel({
               >
                 {i18n._({
                   id: 'node.shared.systemCheckPanel.selectedRuns',
-                  message: 'Selected: {count, plural, one {# run} other {# runs}} · {length} m',
+                  message:
+                    'Selected: {count, plural, one {{number} run} other {{number} runs}} · {length} m',
                   values: {
                     count: summary.runCount,
+                    number: String(summary.runCount),
                     length: formatFixed(summary.runLengthM, 1, i18n.getLocale()),
                   },
                 })}

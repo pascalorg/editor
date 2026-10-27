@@ -49,6 +49,37 @@ describe('roomNameOptions', () => {
     expect(roomNameOptions('kitchen', SECTIONS).typed?.value).toBe('kitchen')
   })
 
+  test('an exact English name wins over names that contain it', () => {
+    const storage: RoomNameSection[] = [
+      { id: 'utility', title: 'Utility', names: ['Walk-in closet', 'Closet'] },
+    ]
+    for (const typed of ['Closet', 'closet']) {
+      const { options, active } = roomNameOptions(typed, storage)
+      expect(options[active]?.value).toBe('Closet')
+    }
+  })
+
+  test('a shared label is exact only for the room’s own entry', () => {
+    const shared: RoomNameSection[] = [
+      {
+        id: 'living',
+        title: 'Séjour',
+        names: ['Living room', 'Kitchen', 'Lounge'],
+        labels: ['Salon', 'Cuisine', 'Salon'],
+      },
+    ]
+    const activeValue = (current: string) => {
+      const { options, active } = roomNameOptions('Salon', shared, true, current)
+      return options[active]?.value
+    }
+    expect(activeValue('Lounge')).toBe('Lounge')
+    expect(activeValue('Lounge 2')).toBe('Lounge')
+    expect(activeValue('Living room')).toBe('Living room')
+    // Any other room falls back to the first suggestion.
+    expect(activeValue('Kitchen')).toBe('Living room')
+    expect(activeValue('')).toBe('Living room')
+  })
+
   test('the keyboard order is the typed row, then the groups in order', () => {
     const { groups, options } = roomNameOptions('e', SECTIONS)
     expect(options.slice(1)).toEqual(groups.flatMap((g) => g.options))

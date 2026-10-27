@@ -99,8 +99,8 @@ export function GlazingPanelEditor({
         {i18n._({
           id: 'node.roof.glazingPanelEditor.grid',
           message:
-            '{columns, plural, one {# column} other {# columns}} · {rows, plural, one {# row} other {# rows}}',
-          values: { columns, rows },
+            '{columns, plural, one {{columnCount} column} other {{columnCount} columns}} · {rows, plural, one {{rowCount} row} other {{rowCount} rows}}',
+          values: { columns, rows, columnCount: String(columns), rowCount: String(rows) },
         })}
       </p>
       {columns > 1 && (

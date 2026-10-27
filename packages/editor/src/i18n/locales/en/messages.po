@@ -1289,7 +1289,7 @@ msgstr "R/T rotate"
 
 #: packages/editor/src/components/editor/floating-action-menu.tsx
 msgid "editor.floatingActionMenu.runCount"
-msgstr "{count, plural, one {# run} other {# runs}}"
+msgstr "{count, plural, one {{number} run} other {{number} runs}}"
 
 #: packages/editor/src/components/editor/floating-action-menu.tsx
 msgid "editor.floatingActionMenu.system"
@@ -4055,7 +4055,7 @@ msgstr "Floor plate · {level} · rests on {below}"
 
 #: packages/editor/src/components/ui/panels/floor-foundation-panel.tsx
 msgid "editor.panels.floorFoundationPanel.lowerTogether"
-msgstr "{count, plural, =2 {Lower both} other {Lower all #}}"
+msgstr "{count, plural, =2 {Lower both} other {Lower all {number}}}"
 
 #: packages/editor/src/components/ui/panels/floor-foundation-panel.tsx
 msgid "editor.panels.floorFoundationPanel.notToScale"
@@ -4071,7 +4071,7 @@ msgstr "Raised on a foundation"
 
 #: packages/editor/src/components/ui/panels/floor-foundation-panel.tsx
 msgid "editor.panels.floorFoundationPanel.raiseTogether"
-msgstr "{count, plural, =2 {Raise both} other {Raise all #}}"
+msgstr "{count, plural, =2 {Raise both} other {Raise all {number}}}"
 
 #: packages/editor/src/components/ui/panels/floor-foundation-panel.tsx
 msgid "editor.panels.floorFoundationPanel.section.floorPlate"
@@ -4692,7 +4692,7 @@ msgstr "On the walls below"
 
 #: packages/editor/src/components/ui/panels/room-construction-rows.tsx
 msgid "editor.panels.roomConstructionRows.openSides"
-msgstr "{openSides, plural, one {# open side} other {# open sides}}"
+msgstr "{openSides, plural, one {{openSideCount} open side} other {{openSideCount} open sides}}"
 
 #: packages/editor/src/components/ui/panels/room-construction-rows.tsx
 msgid "editor.panels.roomConstructionRows.partialCovered"
@@ -4700,7 +4700,7 @@ msgstr "Partial · {coverage, number, percent} covered"
 
 #: packages/editor/src/components/ui/panels/room-construction-rows.tsx
 msgid "editor.panels.roomConstructionRows.partialWalls"
-msgstr "Partial · {walls, plural, one {# wall} other {# walls}}, {openSides, plural, one {# open side} other {# open sides}}"
+msgstr "Partial · {walls, plural, one {{wallCount} wall} other {{wallCount} walls}}, {openSides, plural, one {{openSideCount} open side} other {{openSideCount} open sides}}"
 
 #: packages/editor/src/components/ui/panels/room-construction-rows.tsx
 msgid "editor.panels.roomConstructionRows.raised"
@@ -4736,7 +4736,7 @@ msgstr "Use existing"
 
 #: packages/editor/src/components/ui/panels/room-construction-rows.tsx
 msgid "editor.panels.roomConstructionRows.wallCount"
-msgstr "{walls, plural, one {# wall} other {# walls}}"
+msgstr "{walls, plural, one {{wallCount} wall} other {{wallCount} walls}}"
 
 #: packages/editor/src/components/ui/panels/room-construction-rows.tsx
 msgid "editor.panels.roomConstructionRows.walls"
@@ -5640,6 +5640,18 @@ msgstr "Plugins"
 #: packages/editor/src/components/ui/sidebar/use-plugin-panels.tsx
 msgid "editor.sidebar.usePluginPanels.thisPanelHitAnErrorAnd"
 msgstr "This panel hit an error and was unloaded for this session. The rest of the editor is unaffected — reload to try again."
+
+#: packages/editor/src/components/ui/snap-target-badge.tsx
+msgid "editor.snapTarget.ceiling"
+msgstr "Ceiling attachment"
+
+#: packages/editor/src/components/ui/snap-target-badge.tsx
+msgid "editor.snapTarget.roof"
+msgstr "Roof attachment"
+
+#: packages/editor/src/components/ui/snap-target-badge.tsx
+msgid "editor.snapTarget.wall"
+msgstr "Wall attachment"
 
 #: packages/editor/src/components/editor/index.tsx
 msgid "editor.theEditorSceneFailedToRender"
@@ -7111,7 +7123,7 @@ msgstr "Hole {number}"
 #: packages/nodes/src/ceiling/panel.tsx
 #: packages/nodes/src/slab/panel.tsx
 msgid "node.holeSummary"
-msgstr "{area} m² · {count, plural, one {# pt} other {# pts}} · {source}"
+msgstr "{area} m² · {count, plural, one {{points} pt} other {{points} pts}} · {source}"
 
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "node.hvacEquipment.description"
@@ -7550,7 +7562,7 @@ msgstr "Default"
 
 #: packages/nodes/src/roof/glazing-panel-editor.tsx
 msgid "node.roof.glazingPanelEditor.grid"
-msgstr "{columns, plural, one {# column} other {# columns}} · {rows, plural, one {# row} other {# rows}}"
+msgstr "{columns, plural, one {{columnCount} column} other {{columnCount} columns}} · {rows, plural, one {{rowCount} row} other {{rowCount} rows}}"
 
 #: packages/nodes/src/roof/glazing-panel-editor.tsx
 msgid "node.roof.glazingPanelEditor.individualPanels"
@@ -8048,7 +8060,7 @@ msgstr "Selected connected system"
 
 #: packages/nodes/src/shared/system-check-panel.tsx
 msgid "node.shared.systemCheckPanel.selectedRuns"
-msgstr "Selected: {count, plural, one {# run} other {# runs}} · {length} m"
+msgstr "Selected: {count, plural, one {{number} run} other {{number} runs}} · {length} m"
 
 #: packages/nodes/src/shared/system-check-panel.tsx
 msgid "node.shared.systemCheckPanel.separateBranches"
@@ -9220,7 +9232,7 @@ msgstr "Column {column}, row {row}: {type, select, glass {glass} solid {solid} o
 
 #: packages/nodes/src/wall/curtain-wall-panel.tsx
 msgid "node.wall.curtain.columnSpacing"
-msgstr "{count, plural, one {# column} other {# columns}} · {spacing} grid spacing"
+msgstr "{count, plural, one {{number} column} other {{number} columns}} · {spacing} grid spacing"
 
 #: packages/nodes/src/wall/curtain-wall-panel.tsx
 msgid "node.wall.curtain.noPanels"
@@ -9228,7 +9240,7 @@ msgstr "No panels"
 
 #: packages/nodes/src/wall/curtain-wall-panel.tsx
 msgid "node.wall.curtain.rowSpacing"
-msgstr "{count, plural, one {# row} other {# rows}} · {spacing} grid spacing"
+msgstr "{count, plural, one {{number} row} other {{number} rows}} · {spacing} grid spacing"
 
 #: packages/nodes/src/wall/curtain-wall-panel.tsx
 msgid "node.wall.curtainWallPanel.applyTint"

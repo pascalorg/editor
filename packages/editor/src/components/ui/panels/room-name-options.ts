@@ -1,5 +1,9 @@
-import { useScene } from '@pascal-app/core'
-import { numberedRoomName, type RoomNameSection } from '../../../lib/room-name-catalog'
+import { type AnyNodeId, useScene } from '@pascal-app/core'
+import {
+  baseRoomName,
+  numberedRoomName,
+  type RoomNameSection,
+} from '../../../lib/room-name-catalog'
 import {
   type DescriptorTranslator,
   displayRoomName,
@@ -25,12 +29,13 @@ export type RoomNameGroup = { id: string; title: string; options: RoomNameOption
  * case and surrounding spaces), drops the sections left empty, and puts the
  * typed text first as its own row unless it is exactly an English catalog
  * name. `options` is the flat order the keyboard walks: the typed row, then
- * each group's rows.
+ * each group's rows. `current` is the room's stored name.
  */
 export function roomNameOptions(
   typed: string,
   sections: readonly RoomNameSection[],
   filtering = true,
+  current = '',
 ): {
   typed: RoomNameOption | null
   groups: RoomNameGroup[]
@@ -62,12 +67,15 @@ export function roomNameOptions(
     query && !known ? { kind: 'typed', value: typed, label: typed, match: null } : null
   const options = [...(typedRow ? [typedRow] : []), ...groups.flatMap((group) => group.options)]
   const suggestions = options.filter((option) => option.kind === 'suggestion')
-  // Labels can be shared ("Salon" for both Living room and Lounge): a label is
-  // only an exact match when no other name has it.
+  // Labels can be shared ("Salon" for both Living room and Lounge): a shared
+  // label is only an exact match for the room's own name.
+  const own = baseRoomName(current).toLowerCase()
   const byLabel = suggestions.filter((option) => option.label.toLowerCase() === query)
   const exactRow =
     suggestions.find((option) => option.value.toLowerCase() === query) ??
-    (byLabel.length === 1 ? byLabel[0] : undefined)
+    (byLabel.length === 1
+      ? byLabel[0]
+      : byLabel.find((option) => option.value.toLowerCase() === own))
   const exact = exactRow ? options.indexOf(exactRow) : -1
   return {
     typed: typedRow,
@@ -78,9 +86,10 @@ export function roomNameOptions(
 }
 
 /**
- * The room panel's commit of its edited field, on blur or Enter (unless Enter
- * picks a suggestion). `committed` is what the field last committed or showed;
- * text still equal to it writes nothing.
+ * The commit of an edited room-name field, on blur or Enter (unless Enter
+ * picks a suggestion): the room panel's, and the layer tree's with its own
+ * `write`. `committed` is what the field last committed or showed; text still
+ * equal to it writes nothing.
  */
 export function commitRoomNameEdit(
   zoneId: string,
@@ -88,10 +97,33 @@ export function commitRoomNameEdit(
   committed: string,
   text: string,
   i18n: DescriptorTranslator,
+  write: (zoneId: string, name: string) => void = renameRoom,
 ) {
   if (text === committed) return
   const stored = editedRoomName(name, text, i18n)
-  if (stored !== name) renameRoom(zoneId, stored)
+  if (stored !== name) write(zoneId, stored)
+}
+
+/**
+ * The layer tree's rename of a room or zone. Its field shows the name as
+ * `displayRoomName` does and passes the trimmed text, or `undefined` when
+ * cleared; it writes through `updateNode`, as main's tree does.
+ */
+export function commitTreeRoomRename(
+  zoneId: string,
+  text: string | undefined,
+  i18n: DescriptorTranslator,
+) {
+  const { nodes, updateNode } = useScene.getState()
+  const id = zoneId as AnyNodeId
+  const name = nodes[id]?.name ?? ''
+  if (text === undefined) {
+    updateNode(id, { name: undefined })
+    return
+  }
+  commitRoomNameEdit(zoneId, name, displayRoomName(name, i18n), text, i18n, (_, stored) =>
+    updateNode(id, { name: stored }),
+  )
 }
 
 /**

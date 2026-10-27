@@ -1,7 +1,9 @@
 import { type AnyNodeId, usePascalI18n, useScene } from '@pascal-app/core'
 import { Pencil } from 'lucide-react'
 import { memo, useCallback, useEffect, useRef, useState } from 'react'
+import { displayRoomName } from './../../../../../lib/room-name-messages'
 import { cn } from './../../../../../lib/utils'
+import { commitTreeRoomRename } from './../../../panels/room-name-options'
 
 interface InlineRenameFieldProps {
   name: string | undefined
@@ -36,6 +38,30 @@ export const InlineRenameInput = memo(function InlineRenameInput({
     [nodeId, updateNode],
   )
   return <InlineRenameField {...props} name={name} onRename={handleRename} />
+})
+
+/**
+ * Renames a room or zone from the layer tree. The field edits the name in the
+ * UI language, as the room panel shows it, and stores what an edit there
+ * stores: a catalog name stays English ("Salon 3" on a Lounge stores "Lounge 3").
+ */
+export const RoomRenameInput = memo(function RoomRenameInput({
+  nodeId,
+  ...props
+}: Omit<InlineRenameInputProps, 'editableName' | 'displayName'>) {
+  const i18n = usePascalI18n()
+  const stored = useScene((s) => s.nodes[nodeId]?.name)
+  const handleRename = useCallback(
+    (next: string | undefined) => commitTreeRoomRename(nodeId, next, i18n),
+    [nodeId, i18n],
+  )
+  return (
+    <InlineRenameField
+      {...props}
+      name={stored ? displayRoomName(stored, i18n) : stored}
+      onRename={handleRename}
+    />
+  )
 })
 
 export const InlineRenameField = memo(function InlineRenameField({
@@ -108,6 +134,7 @@ export const InlineRenameField = memo(function InlineRenameField({
 
   return (
     <input
+      aria-label={i18n._({ id: 'editor.layers.rename', message: 'Rename' })}
       className={cn(
         'm-0 h-5 min-w-[1ch] max-w-full flex-none rounded-none border-primary/50 border-b bg-transparent px-0 py-0 text-foreground text-sm outline-none focus:border-primary',
         className,
