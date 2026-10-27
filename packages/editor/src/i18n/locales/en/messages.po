@@ -8710,6 +8710,154 @@ msgstr "House-shaped protrusion on a roof segment."
 msgid "node.dormer.label"
 msgstr "Dormer"
 
+#: packages/nodes/src/dormer/panel.tsx
+msgid "node.dormer.panel.depth"
+msgstr "Depth"
+
+#: packages/nodes/src/dormer/panel.tsx
+msgid "node.dormer.panel.dimensions"
+msgstr "Dimensions"
+
+#: packages/nodes/src/dormer/panel.tsx
+msgid "node.dormer.panel.dormer"
+msgstr "Dormer"
+
+#: packages/nodes/src/dormer/panel.tsx
+msgid "node.dormer.panel.dutch"
+msgstr "Dutch"
+
+#: packages/nodes/src/dormer/panel.tsx
+msgid "node.dormer.panel.flat"
+msgstr "Flat"
+
+#: packages/nodes/src/dormer/panel.tsx
+msgid "node.dormer.panel.gable"
+msgstr "Gable"
+
+#: packages/nodes/src/dormer/panel.tsx
+msgid "node.dormer.panel.gambrel"
+msgstr "Gambrel"
+
+#: packages/nodes/src/dormer/panel.tsx
+msgid "node.dormer.panel.hip"
+msgstr "Hip"
+
+#: packages/nodes/src/dormer/panel.tsx
+msgid "node.dormer.panel.mansard"
+msgstr "Mansard"
+
+#: packages/nodes/src/dormer/panel.tsx
+msgid "node.dormer.panel.pitchDirection"
+msgstr "Pitch Direction"
+
+#: packages/nodes/src/dormer/panel.tsx
+msgid "node.dormer.panel.pitchRise"
+msgstr "Pitch Rise"
+
+#: packages/nodes/src/dormer/panel.tsx
+msgid "node.dormer.panel.riseBack"
+msgstr "Rise Back"
+
+#: packages/nodes/src/dormer/panel.tsx
+msgid "node.dormer.panel.riseFront"
+msgstr "Rise Front"
+
+#: packages/nodes/src/dormer/panel.tsx
+msgid "node.dormer.panel.roofHeight"
+msgstr "Roof Height"
+
+#: packages/nodes/src/dormer/panel.tsx
+msgid "node.dormer.panel.roofType"
+msgstr "Roof Type"
+
+#: packages/nodes/src/dormer/panel.tsx
+msgid "node.dormer.panel.section"
+msgstr "Section"
+
+#: packages/nodes/src/dormer/panel.tsx
+msgid "node.dormer.panel.shed"
+msgstr "Shed"
+
+#: packages/nodes/src/dormer/panel.tsx
+msgid "node.dormer.panel.wallHeight"
+msgstr "Wall Height"
+
+#: packages/nodes/src/dormer/panel.tsx
+msgid "node.dormer.panel.width"
+msgstr "Width"
+
+#: packages/nodes/src/dormer/panel.tsx
+msgid "node.dormer.panel.windows"
+msgstr "Windows"
+
+#: packages/nodes/src/dormer/panel-actions-section.tsx
+msgid "node.dormer.panelActionsSection.actions"
+msgstr "Actions"
+
+#: packages/nodes/src/dormer/panel-actions-section.tsx
+msgid "node.dormer.panelActionsSection.delete"
+msgstr "Delete"
+
+#: packages/nodes/src/dormer/panel-actions-section.tsx
+msgid "node.dormer.panelActionsSection.duplicate"
+msgstr "Duplicate"
+
+#: packages/nodes/src/dormer/panel-actions-section.tsx
+msgid "node.dormer.panelActionsSection.move"
+msgstr "Move"
+
+#: packages/nodes/src/dormer/panel-position-section.tsx
+msgid "node.dormer.panelPositionSection.position"
+msgstr "Position"
+
+#: packages/nodes/src/dormer/panel-position-section.tsx
+msgid "node.dormer.panelPositionSection.rotation"
+msgstr "Rotation"
+
+#: packages/nodes/src/dormer/panel-windows-section.tsx
+msgid "node.dormer.panelWindowsSection.addWindow"
+msgstr "Add Window"
+
+#: packages/nodes/src/dormer/panel-windows-section.tsx
+msgid "node.dormer.panelWindowsSection.editNamed"
+msgstr "Edit {name}"
+
+#: packages/nodes/src/dormer/panel-windows-section.tsx
+msgid "node.dormer.panelWindowsSection.editWindow"
+msgstr "Edit window"
+
+#: packages/nodes/src/dormer/panel-windows-section.tsx
+msgid "node.dormer.panelWindowsSection.increaseTheDormerWidthToAdd"
+msgstr "Increase the dormer width to add another window."
+
+#: packages/nodes/src/dormer/panel-windows-section.tsx
+msgid "node.dormer.panelWindowsSection.move"
+msgstr "Move"
+
+#: packages/nodes/src/dormer/panel-windows-section.tsx
+msgid "node.dormer.panelWindowsSection.moveNamed"
+msgstr "Move {name}"
+
+#: packages/nodes/src/dormer/panel-windows-section.tsx
+msgid "node.dormer.panelWindowsSection.moveWindow"
+msgstr "Move window"
+
+#: packages/nodes/src/dormer/panel-windows-section.tsx
+msgid "node.dormer.panelWindowsSection.noWindows"
+msgstr "No windows"
+
+#: packages/nodes/src/dormer/panel-windows-section.tsx
+msgid "node.dormer.panelWindowsSection.windowNumber"
+msgstr "Window {number}"
+
+#: packages/nodes/src/dormer/panel-windows-section.tsx
+msgid "node.dormer.panelWindowsSection.windowsLength"
+msgstr "Windows ({length})"
+
+#: packages/nodes/src/dormer/panel-windows-section.tsx
+msgid "node.dormer.panelWindowsSection.windowSummary"
+msgstr "{face, select, back {Back} left {Left} right {Right} other {Front}} · {width} × {height} m"
+
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "node.downspout.description"
 msgstr "Vertical drop pipe from a gutter outlet to the ground."
@@ -10155,6 +10303,150 @@ msgstr "Framed glass opening on a roof segment."
 msgid "node.skylight.label"
 msgstr "Skylight"
 
+#: packages/nodes/src/skylight/panel.tsx
+msgid "node.skylight.panel.actions"
+msgstr "Actions"
+
+#: packages/nodes/src/skylight/panel.tsx
+msgid "node.skylight.panel.alongX"
+msgstr "Along X"
+
+#: packages/nodes/src/skylight/panel.tsx
+msgid "node.skylight.panel.alongZ"
+msgstr "Along Z"
+
+#: packages/nodes/src/skylight/panel.tsx
+msgid "node.skylight.panel.bottom"
+msgstr "Bottom"
+
+#: packages/nodes/src/skylight/panel.tsx
+msgid "node.skylight.panel.curb"
+msgstr "Curb"
+
+#: packages/nodes/src/skylight/panel.tsx
+msgid "node.skylight.panel.cutoutOffset"
+msgstr "Cutout Offset"
+
+#: packages/nodes/src/skylight/panel.tsx
+msgid "node.skylight.panel.delete"
+msgstr "Delete"
+
+#: packages/nodes/src/skylight/panel.tsx
+msgid "node.skylight.panel.depth"
+msgstr "Depth"
+
+#: packages/nodes/src/skylight/panel.tsx
+msgid "node.skylight.panel.dimensions"
+msgstr "Dimensions"
+
+#: packages/nodes/src/skylight/panel.tsx
+msgid "node.skylight.panel.frame"
+msgstr "Frame"
+
+#: packages/nodes/src/skylight/panel.tsx
+msgid "node.skylight.panel.glassThickness"
+msgstr "Glass Thickness"
+
+#: packages/nodes/src/skylight/panel.tsx
+msgid "node.skylight.panel.height"
+msgstr "Height"
+
+#: packages/nodes/src/skylight/panel.tsx
+msgid "node.skylight.panel.lanternHeight"
+msgstr "Lantern Height"
+
+#: packages/nodes/src/skylight/panel.tsx
+msgid "node.skylight.panel.left"
+msgstr "Left"
+
+#: packages/nodes/src/skylight/panel.tsx
+msgid "node.skylight.panel.motor"
+msgstr "Motor"
+
+#: packages/nodes/src/skylight/panel.tsx
+msgid "node.skylight.panel.motorHousing"
+msgstr "Motor Housing"
+
+#: packages/nodes/src/skylight/panel.tsx
+msgid "node.skylight.panel.no"
+msgstr "No"
+
+#: packages/nodes/src/skylight/panel.tsx
+msgid "node.skylight.panel.noMotor"
+msgstr "No Motor"
+
+#: packages/nodes/src/skylight/panel.tsx
+msgid "node.skylight.panel.open"
+msgstr "Open"
+
+#: packages/nodes/src/skylight/panel.tsx
+msgid "node.skylight.panel.openingAngle"
+msgstr "Opening Angle"
+
+#: packages/nodes/src/skylight/panel.tsx
+msgid "node.skylight.panel.position"
+msgstr "Position"
+
+#: packages/nodes/src/skylight/panel.tsx
+msgid "node.skylight.panel.right"
+msgstr "Right"
+
+#: packages/nodes/src/skylight/panel.tsx
+msgid "node.skylight.panel.rotation"
+msgstr "Rotation"
+
+#: packages/nodes/src/skylight/panel.tsx
+msgid "node.skylight.panel.skylight"
+msgstr "Skylight"
+
+#: packages/nodes/src/skylight/panel.tsx
+msgid "node.skylight.panel.thickness"
+msgstr "Thickness"
+
+#: packages/nodes/src/skylight/panel.tsx
+msgid "node.skylight.panel.top"
+msgstr "Top"
+
+#: packages/nodes/src/skylight/panel.tsx
+msgid "node.skylight.panel.topScale"
+msgstr "Top Scale"
+
+#: packages/nodes/src/skylight/panel.tsx
+msgid "node.skylight.panel.trackWidth"
+msgstr "Track Width"
+
+#: packages/nodes/src/skylight/panel.tsx
+msgid "node.skylight.panel.type"
+msgstr "Type"
+
+#: packages/nodes/src/skylight/panel.tsx
+msgid "node.skylight.panel.width"
+msgstr "Width"
+
+#: packages/nodes/src/skylight/panel.tsx
+msgid "node.skylight.panel.yes"
+msgstr "Yes"
+
+#: packages/nodes/src/skylight/panel.tsx
+msgid "node.skylight.type.flat"
+msgstr "Flat roof skylight"
+
+#: packages/nodes/src/skylight/panel.tsx
+msgid "node.skylight.type.lantern"
+msgstr "Roof lantern"
+
+#: packages/nodes/src/skylight/panel.tsx
+msgid "node.skylight.type.opening"
+msgstr "Opening skylight"
+
+#: packages/nodes/src/skylight/panel.tsx
+msgid "node.skylight.type.sliding"
+msgstr "Sliding skylight"
+
+#: packages/nodes/src/skylight/panel.tsx
+msgid "node.skylight.type.walkOn"
+msgstr "Walk-on rooflight"
+
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "node.slab.description"
 msgstr "A polygon-bounded floor surface that hosts items on top."
@@ -10290,6 +10582,114 @@ msgstr "Grid of photovoltaic panels mounted on a roof segment."
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "node.solarPanel.label"
 msgstr "Solar Panel"
+
+#: packages/nodes/src/solar-panel/panel.tsx
+msgid "node.solarPanel.panel.actions"
+msgstr "Actions"
+
+#: packages/nodes/src/solar-panel/panel.tsx
+msgid "node.solarPanel.panel.array"
+msgstr "Array"
+
+#: packages/nodes/src/solar-panel/panel.tsx
+msgid "node.solarPanel.panel.autoFitToRoof"
+msgstr "Auto-fit to roof"
+
+#: packages/nodes/src/solar-panel/panel.tsx
+msgid "node.solarPanel.panel.columns"
+msgstr "Columns"
+
+#: packages/nodes/src/solar-panel/panel.tsx
+msgid "node.solarPanel.panel.customDimensionsDonTMatchAny"
+msgstr "Custom — dimensions don't match any preset"
+
+#: packages/nodes/src/solar-panel/panel.tsx
+msgid "node.solarPanel.panel.delete"
+msgstr "Delete"
+
+#: packages/nodes/src/solar-panel/panel.tsx
+msgid "node.solarPanel.panel.flipOrientation"
+msgstr "Flip orientation"
+
+#: packages/nodes/src/solar-panel/panel.tsx
+msgid "node.solarPanel.panel.flush"
+msgstr "Flush"
+
+#: packages/nodes/src/solar-panel/panel.tsx
+msgid "node.solarPanel.panel.frameDepth"
+msgstr "Frame depth"
+
+#: packages/nodes/src/solar-panel/panel.tsx
+msgid "node.solarPanel.panel.frameThickness"
+msgstr "Frame thickness"
+
+#: packages/nodes/src/solar-panel/panel.tsx
+msgid "node.solarPanel.panel.gapX"
+msgstr "Gap X"
+
+#: packages/nodes/src/solar-panel/panel.tsx
+msgid "node.solarPanel.panel.gapY"
+msgstr "Gap Y"
+
+#: packages/nodes/src/solar-panel/panel.tsx
+msgid "node.solarPanel.panel.height"
+msgstr "Height"
+
+#: packages/nodes/src/solar-panel/panel.tsx
+msgid "node.solarPanel.panel.mounting"
+msgstr "Mounting"
+
+#: packages/nodes/src/solar-panel/panel.tsx
+msgid "node.solarPanel.panel.panel"
+msgstr "Panel"
+
+#: packages/nodes/src/solar-panel/panel.tsx
+msgid "node.solarPanel.panel.preset"
+msgstr "Preset"
+
+#: packages/nodes/src/solar-panel/panel.tsx
+msgid "node.solarPanel.panel.rows"
+msgstr "Rows"
+
+#: packages/nodes/src/solar-panel/panel.tsx
+msgid "node.solarPanel.panel.setbacksTooLarge"
+msgstr "Setbacks too large to fit a panel."
+
+#: packages/nodes/src/solar-panel/panel.tsx
+msgid "node.solarPanel.panel.solarPanel"
+msgstr "Solar Panel"
+
+#: packages/nodes/src/solar-panel/panel.tsx
+msgid "node.solarPanel.panel.standoff"
+msgstr "Standoff"
+
+#: packages/nodes/src/solar-panel/panel.tsx
+msgid "node.solarPanel.panel.tiltAngle"
+msgstr "Tilt angle"
+
+#: packages/nodes/src/solar-panel/panel.tsx
+msgid "node.solarPanel.panel.tilted"
+msgstr "Tilted"
+
+#: packages/nodes/src/solar-panel/panel.tsx
+msgid "node.solarPanel.panel.width"
+msgstr "Width"
+
+#: packages/nodes/src/solar-panel/panel.tsx
+msgid "node.solarPanel.preset.compact"
+msgstr "Compact"
+
+#: packages/nodes/src/solar-panel/panel.tsx
+msgid "node.solarPanel.preset.frameless"
+msgstr "Frameless"
+
+#: packages/nodes/src/solar-panel/panel.tsx
+msgid "node.solarPanel.preset.residential"
+msgstr "Residential"
+
+#: packages/nodes/src/solar-panel/panel.tsx
+msgid "node.solarPanel.preset.residentialLarge"
+msgstr "Residential Large"
 
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "node.spawn.description"

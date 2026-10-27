@@ -21688,6 +21688,376 @@ msgstr "Saliente con forma de casa en un faldón."
 msgid "node.dormer.label"
 msgstr "Buhardilla"
 
+# Review: required
+# Source-Hash: 99ac4d03c3061f3a
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Depth"
+#: packages/nodes/src/dormer/panel.tsx
+#, fuzzy
+msgid "node.dormer.panel.depth"
+msgstr "Profundidad"
+
+# Review: required
+# Source-Hash: 12df69f42beb0643
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Dimensions"
+#: packages/nodes/src/dormer/panel.tsx
+#, fuzzy
+msgid "node.dormer.panel.dimensions"
+msgstr "Dimensiones"
+
+# Review: required
+# Source-Hash: 6b6f8068bbc4c902
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Dormer"
+#: packages/nodes/src/dormer/panel.tsx
+#, fuzzy
+msgid "node.dormer.panel.dormer"
+msgstr "Buhardilla"
+
+# Review: required
+# Source-Hash: 6949d667043bee0b
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Dutch"
+#: packages/nodes/src/dormer/panel.tsx
+#, fuzzy
+msgid "node.dormer.panel.dutch"
+msgstr "Holandesa"
+
+# Review: required
+# Source-Hash: 9cab4d4c95f63cdd
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Flat"
+#: packages/nodes/src/dormer/panel.tsx
+#, fuzzy
+msgid "node.dormer.panel.flat"
+msgstr "Plana"
+
+# Review: required
+# Source-Hash: deaffa095d126dfe
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Gable"
+#: packages/nodes/src/dormer/panel.tsx
+#, fuzzy
+msgid "node.dormer.panel.gable"
+msgstr "Dos aguas"
+
+# Review: required
+# Source-Hash: 7f53d9ffca39984a
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Gambrel"
+#: packages/nodes/src/dormer/panel.tsx
+#, fuzzy
+msgid "node.dormer.panel.gambrel"
+msgstr "Holandés de buhardilla"
+
+# Review: required
+# Source-Hash: 9eda0ea8d447066d
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Hip"
+#: packages/nodes/src/dormer/panel.tsx
+#, fuzzy
+msgid "node.dormer.panel.hip"
+msgstr "Cuatro aguas"
+
+# Review: required
+# Source-Hash: 7f7bb0e875af3260
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Mansard"
+#: packages/nodes/src/dormer/panel.tsx
+#, fuzzy
+msgid "node.dormer.panel.mansard"
+msgstr "Mansarda"
+
+# Review: required
+# Source-Hash: 53af9efc7eca6594
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Pitch Direction"
+#: packages/nodes/src/dormer/panel.tsx
+#, fuzzy
+msgid "node.dormer.panel.pitchDirection"
+msgstr "Dirección de la pendiente"
+
+# Review: required
+# Source-Hash: 6c39ef7125494c4a
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Pitch Rise"
+#: packages/nodes/src/dormer/panel.tsx
+#, fuzzy
+msgid "node.dormer.panel.pitchRise"
+msgstr "Altura de la pendiente"
+
+# Review: required
+# Source-Hash: 96336d4b0820b977
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Rise Back"
+#: packages/nodes/src/dormer/panel.tsx
+#, fuzzy
+msgid "node.dormer.panel.riseBack"
+msgstr "Sube hacia atrás"
+
+# Review: required
+# Source-Hash: ee3d45f8b756d029
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Rise Front"
+#: packages/nodes/src/dormer/panel.tsx
+#, fuzzy
+msgid "node.dormer.panel.riseFront"
+msgstr "Sube hacia delante"
+
+# Review: required
+# Source-Hash: 5e0622f3b09c9326
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Roof Height"
+#: packages/nodes/src/dormer/panel.tsx
+#, fuzzy
+msgid "node.dormer.panel.roofHeight"
+msgstr "Altura de cubierta"
+
+# Review: required
+# Source-Hash: 19ab9527ae7889f4
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Roof Type"
+#: packages/nodes/src/dormer/panel.tsx
+#, fuzzy
+msgid "node.dormer.panel.roofType"
+msgstr "Tipo de cubierta"
+
+# Review: required
+# Source-Hash: dba6a7b56cf7083f
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Section"
+#: packages/nodes/src/dormer/panel.tsx
+#, fuzzy
+msgid "node.dormer.panel.section"
+msgstr "Sección"
+
+# Review: required
+# Source-Hash: c8d0df27faa3feaa
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Shed"
+#: packages/nodes/src/dormer/panel.tsx
+#, fuzzy
+msgid "node.dormer.panel.shed"
+msgstr "Un agua"
+
+# Review: required
+# Source-Hash: e0f973edce3e4ca8
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Wall Height"
+#: packages/nodes/src/dormer/panel.tsx
+#, fuzzy
+msgid "node.dormer.panel.wallHeight"
+msgstr "Altura del muro"
+
+# Review: required
+# Source-Hash: 3a0ccd6c46877a87
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Width"
+#: packages/nodes/src/dormer/panel.tsx
+#, fuzzy
+msgid "node.dormer.panel.width"
+msgstr "Ancho"
+
+# Review: required
+# Source-Hash: 0b1d1e9a36456a50
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Windows"
+#: packages/nodes/src/dormer/panel.tsx
+#, fuzzy
+msgid "node.dormer.panel.windows"
+msgstr "Ventanas"
+
+# Review: required
+# Source-Hash: aa6d82bdb3cc1d9a
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Actions"
+#: packages/nodes/src/dormer/panel-actions-section.tsx
+#, fuzzy
+msgid "node.dormer.panelActionsSection.actions"
+msgstr "Acciones"
+
+# Review: required
+# Source-Hash: b26de372b4b0eaac
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Delete"
+#: packages/nodes/src/dormer/panel-actions-section.tsx
+#, fuzzy
+msgid "node.dormer.panelActionsSection.delete"
+msgstr "Eliminar"
+
+# Review: required
+# Source-Hash: 34dc96fe77a31e51
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Duplicate"
+#: packages/nodes/src/dormer/panel-actions-section.tsx
+#, fuzzy
+msgid "node.dormer.panelActionsSection.duplicate"
+msgstr "Duplicar"
+
+# Review: required
+# Source-Hash: bd02c614454fbd2b
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Move"
+#: packages/nodes/src/dormer/panel-actions-section.tsx
+#, fuzzy
+msgid "node.dormer.panelActionsSection.move"
+msgstr "Mover"
+
+# Review: required
+# Source-Hash: 9da0cbfad144d737
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Position"
+#: packages/nodes/src/dormer/panel-position-section.tsx
+#, fuzzy
+msgid "node.dormer.panelPositionSection.position"
+msgstr "Posición"
+
+# Review: required
+# Source-Hash: 01989595ee7c1dc0
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Rotation"
+#: packages/nodes/src/dormer/panel-position-section.tsx
+#, fuzzy
+msgid "node.dormer.panelPositionSection.rotation"
+msgstr "Rotación"
+
+# Review: required
+# Source-Hash: 7b19d21b9ad868c7
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Add Window"
+#: packages/nodes/src/dormer/panel-windows-section.tsx
+#, fuzzy
+msgid "node.dormer.panelWindowsSection.addWindow"
+msgstr "Añadir ventana"
+
+# Review: required
+# Source-Hash: 70d7cc5a6422feaa
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Edit {name}"
+#: packages/nodes/src/dormer/panel-windows-section.tsx
+#, fuzzy
+msgid "node.dormer.panelWindowsSection.editNamed"
+msgstr "Editar {name}"
+
+# Review: required
+# Source-Hash: b6648f023e6c83dc
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Edit window"
+#: packages/nodes/src/dormer/panel-windows-section.tsx
+#, fuzzy
+msgid "node.dormer.panelWindowsSection.editWindow"
+msgstr "Editar ventana"
+
+# Review: required
+# Source-Hash: 4649baf9753aeb74
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Increase the dormer width to add another window."
+#: packages/nodes/src/dormer/panel-windows-section.tsx
+#, fuzzy
+msgid "node.dormer.panelWindowsSection.increaseTheDormerWidthToAdd"
+msgstr "Aumenta el ancho de la buhardilla para añadir otra ventana."
+
+# Review: required
+# Source-Hash: bd02c614454fbd2b
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Move"
+#: packages/nodes/src/dormer/panel-windows-section.tsx
+#, fuzzy
+msgid "node.dormer.panelWindowsSection.move"
+msgstr "Mover"
+
+# Review: required
+# Source-Hash: c24226954309d83e
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Move {name}"
+#: packages/nodes/src/dormer/panel-windows-section.tsx
+#, fuzzy
+msgid "node.dormer.panelWindowsSection.moveNamed"
+msgstr "Mover {name}"
+
+# Review: required
+# Source-Hash: f07faaf0d5e43eef
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Move window"
+#: packages/nodes/src/dormer/panel-windows-section.tsx
+#, fuzzy
+msgid "node.dormer.panelWindowsSection.moveWindow"
+msgstr "Mover ventana"
+
+# Review: required
+# Source-Hash: d2816490ea93d363
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "No windows"
+#: packages/nodes/src/dormer/panel-windows-section.tsx
+#, fuzzy
+msgid "node.dormer.panelWindowsSection.noWindows"
+msgstr "Sin ventanas"
+
+# Review: required
+# Source-Hash: 5cbb24f8b1ce7fb7
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Window {number}"
+#: packages/nodes/src/dormer/panel-windows-section.tsx
+#, fuzzy
+msgid "node.dormer.panelWindowsSection.windowNumber"
+msgstr "Ventana {number}"
+
+# Review: required
+# Source-Hash: 9ca7d951240907cd
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Windows ({length})"
+#: packages/nodes/src/dormer/panel-windows-section.tsx
+#, fuzzy
+msgid "node.dormer.panelWindowsSection.windowsLength"
+msgstr "Ventanas ({length})"
+
+# Review: required
+# Source-Hash: f975c4759607806a
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "{face, select, back {Back} left {Left} right {Right} other {Front}} · {width} × {height} m"
+#: packages/nodes/src/dormer/panel-windows-section.tsx
+#, fuzzy
+msgid "node.dormer.panelWindowsSection.windowSummary"
+msgstr "{face, select, back {Trasera} left {Izquierda} right {Derecha} other {Frontal}} · {width} × {height} m"
+
 # Source-Hash: b46392d2ea865760
 # Review: required
 # AI-Provider: cursor-agent
@@ -25287,6 +25657,366 @@ msgstr "Abertura acristalada con marco en un faldón."
 msgid "node.skylight.label"
 msgstr "Claraboya"
 
+# Review: required
+# Source-Hash: aa6d82bdb3cc1d9a
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Actions"
+#: packages/nodes/src/skylight/panel.tsx
+#, fuzzy
+msgid "node.skylight.panel.actions"
+msgstr "Acciones"
+
+# Review: required
+# Source-Hash: f1113261ad2797de
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Along X"
+#: packages/nodes/src/skylight/panel.tsx
+#, fuzzy
+msgid "node.skylight.panel.alongX"
+msgstr "Según X"
+
+# Review: required
+# Source-Hash: 5b84b1c644493370
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Along Z"
+#: packages/nodes/src/skylight/panel.tsx
+#, fuzzy
+msgid "node.skylight.panel.alongZ"
+msgstr "Según Z"
+
+# Review: required
+# Source-Hash: b3a163b453896bef
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Bottom"
+#: packages/nodes/src/skylight/panel.tsx
+#, fuzzy
+msgid "node.skylight.panel.bottom"
+msgstr "Inferior"
+
+# Review: required
+# Source-Hash: b8ff053666ee326b
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Curb"
+#: packages/nodes/src/skylight/panel.tsx
+#, fuzzy
+msgid "node.skylight.panel.curb"
+msgstr "Bordillo"
+
+# Review: required
+# Source-Hash: 14144df9e1364eea
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Cutout Offset"
+#: packages/nodes/src/skylight/panel.tsx
+#, fuzzy
+msgid "node.skylight.panel.cutoutOffset"
+msgstr "Desfase del recorte"
+
+# Review: required
+# Source-Hash: b26de372b4b0eaac
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Delete"
+#: packages/nodes/src/skylight/panel.tsx
+#, fuzzy
+msgid "node.skylight.panel.delete"
+msgstr "Eliminar"
+
+# Review: required
+# Source-Hash: 99ac4d03c3061f3a
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Depth"
+#: packages/nodes/src/skylight/panel.tsx
+#, fuzzy
+msgid "node.skylight.panel.depth"
+msgstr "Profundidad"
+
+# Review: required
+# Source-Hash: 12df69f42beb0643
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Dimensions"
+#: packages/nodes/src/skylight/panel.tsx
+#, fuzzy
+msgid "node.skylight.panel.dimensions"
+msgstr "Dimensiones"
+
+# Review: required
+# Source-Hash: ce3a6c03765dbbd8
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Frame"
+#: packages/nodes/src/skylight/panel.tsx
+#, fuzzy
+msgid "node.skylight.panel.frame"
+msgstr "Marco"
+
+# Review: required
+# Source-Hash: 911ea36eb835f3a6
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Glass Thickness"
+#: packages/nodes/src/skylight/panel.tsx
+#, fuzzy
+msgid "node.skylight.panel.glassThickness"
+msgstr "Grosor del vidrio"
+
+# Review: required
+# Source-Hash: 646ef0fbcbc58edf
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Height"
+#: packages/nodes/src/skylight/panel.tsx
+#, fuzzy
+msgid "node.skylight.panel.height"
+msgstr "Altura"
+
+# Review: required
+# Source-Hash: d56303913961984f
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Lantern Height"
+#: packages/nodes/src/skylight/panel.tsx
+#, fuzzy
+msgid "node.skylight.panel.lanternHeight"
+msgstr "Altura del lucernario"
+
+# Review: required
+# Source-Hash: f365c6b6dd9ebab9
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Left"
+#: packages/nodes/src/skylight/panel.tsx
+#, fuzzy
+msgid "node.skylight.panel.left"
+msgstr "Izquierda"
+
+# Review: required
+# Source-Hash: f3e9604e3b85510f
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Motor"
+#: packages/nodes/src/skylight/panel.tsx
+#, fuzzy
+msgid "node.skylight.panel.motor"
+msgstr "Motor"
+
+# Review: required
+# Source-Hash: a025444e0f500725
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Motor Housing"
+#: packages/nodes/src/skylight/panel.tsx
+#, fuzzy
+msgid "node.skylight.panel.motorHousing"
+msgstr "Carcasa del motor"
+
+# Review: required
+# Source-Hash: b2cbc4e2e5545a6c
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "No"
+#: packages/nodes/src/skylight/panel.tsx
+#, fuzzy
+msgid "node.skylight.panel.no"
+msgstr "No"
+
+# Review: required
+# Source-Hash: a8e0b9fe5cfb4e3e
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "No Motor"
+#: packages/nodes/src/skylight/panel.tsx
+#, fuzzy
+msgid "node.skylight.panel.noMotor"
+msgstr "Sin motor"
+
+# Review: required
+# Source-Hash: 3e52f04f92e08070
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Open"
+#: packages/nodes/src/skylight/panel.tsx
+#, fuzzy
+msgid "node.skylight.panel.open"
+msgstr "Abrir"
+
+# Review: required
+# Source-Hash: 9bfc55f879926fe6
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Opening Angle"
+#: packages/nodes/src/skylight/panel.tsx
+#, fuzzy
+msgid "node.skylight.panel.openingAngle"
+msgstr "Ángulo de apertura"
+
+# Review: required
+# Source-Hash: 9da0cbfad144d737
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Position"
+#: packages/nodes/src/skylight/panel.tsx
+#, fuzzy
+msgid "node.skylight.panel.position"
+msgstr "Posición"
+
+# Review: required
+# Source-Hash: b34d5ee0f218221d
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Right"
+#: packages/nodes/src/skylight/panel.tsx
+#, fuzzy
+msgid "node.skylight.panel.right"
+msgstr "Derecha"
+
+# Review: required
+# Source-Hash: 01989595ee7c1dc0
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Rotation"
+#: packages/nodes/src/skylight/panel.tsx
+#, fuzzy
+msgid "node.skylight.panel.rotation"
+msgstr "Rotación"
+
+# Review: required
+# Source-Hash: 358826fbdeaf72b9
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Skylight"
+#: packages/nodes/src/skylight/panel.tsx
+#, fuzzy
+msgid "node.skylight.panel.skylight"
+msgstr "Claraboya"
+
+# Review: required
+# Source-Hash: fdbb503f0941bd56
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Thickness"
+#: packages/nodes/src/skylight/panel.tsx
+#, fuzzy
+msgid "node.skylight.panel.thickness"
+msgstr "Espesor"
+
+# Review: required
+# Source-Hash: 27644f0497fd9849
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Top"
+#: packages/nodes/src/skylight/panel.tsx
+#, fuzzy
+msgid "node.skylight.panel.top"
+msgstr "Superior"
+
+# Review: required
+# Source-Hash: 75991d106eb93dae
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Top Scale"
+#: packages/nodes/src/skylight/panel.tsx
+#, fuzzy
+msgid "node.skylight.panel.topScale"
+msgstr "Escala superior"
+
+# Review: required
+# Source-Hash: 3272a61417949895
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Track Width"
+#: packages/nodes/src/skylight/panel.tsx
+#, fuzzy
+msgid "node.skylight.panel.trackWidth"
+msgstr "Ancho del riel"
+
+# Review: required
+# Source-Hash: c44f7ab8bbd24858
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Type"
+#: packages/nodes/src/skylight/panel.tsx
+#, fuzzy
+msgid "node.skylight.panel.type"
+msgstr "Tipo"
+
+# Review: required
+# Source-Hash: 3a0ccd6c46877a87
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Width"
+#: packages/nodes/src/skylight/panel.tsx
+#, fuzzy
+msgid "node.skylight.panel.width"
+msgstr "Ancho"
+
+# Review: required
+# Source-Hash: 184fda5c980b9d9c
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Yes"
+#: packages/nodes/src/skylight/panel.tsx
+#, fuzzy
+msgid "node.skylight.panel.yes"
+msgstr "Sí"
+
+# Review: required
+# Source-Hash: 445aacf307de133d
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Flat roof skylight"
+#: packages/nodes/src/skylight/panel.tsx
+#, fuzzy
+msgid "node.skylight.type.flat"
+msgstr "Claraboya para cubierta plana"
+
+# Review: required
+# Source-Hash: 446176b7c5d8b284
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Roof lantern"
+#: packages/nodes/src/skylight/panel.tsx
+#, fuzzy
+msgid "node.skylight.type.lantern"
+msgstr "Linterna de cubierta"
+
+# Review: required
+# Source-Hash: a6559387f108518f
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Opening skylight"
+#: packages/nodes/src/skylight/panel.tsx
+#, fuzzy
+msgid "node.skylight.type.opening"
+msgstr "Claraboya practicable"
+
+# Review: required
+# Source-Hash: 379436bb5a74867a
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Sliding skylight"
+#: packages/nodes/src/skylight/panel.tsx
+#, fuzzy
+msgid "node.skylight.type.sliding"
+msgstr "Claraboya corredera"
+
+# Review: required
+# Source-Hash: d26ac61f593fe1bf
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Walk-on rooflight"
+#: packages/nodes/src/skylight/panel.tsx
+#, fuzzy
+msgid "node.skylight.type.walkOn"
+msgstr "Claraboya transitable"
+
 # Source-Hash: ad8f8036d34f6cea
 # Review: required
 # AI-Provider: cursor-agent
@@ -25626,6 +26356,276 @@ msgstr "Conjunto de paneles fotovoltaicos montados en un faldón."
 #, fuzzy
 msgid "node.solarPanel.label"
 msgstr "Panel solar"
+
+# Review: required
+# Source-Hash: aa6d82bdb3cc1d9a
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Actions"
+#: packages/nodes/src/solar-panel/panel.tsx
+#, fuzzy
+msgid "node.solarPanel.panel.actions"
+msgstr "Acciones"
+
+# Review: required
+# Source-Hash: 2184867946897298
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Array"
+#: packages/nodes/src/solar-panel/panel.tsx
+#, fuzzy
+msgid "node.solarPanel.panel.array"
+msgstr "Matriz"
+
+# Review: required
+# Source-Hash: 6eaa0e2a78d44d59
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Auto-fit to roof"
+#: packages/nodes/src/solar-panel/panel.tsx
+#, fuzzy
+msgid "node.solarPanel.panel.autoFitToRoof"
+msgstr "Ajustar a la cubierta"
+
+# Review: required
+# Source-Hash: 30edd1c180aac9b4
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Columns"
+#: packages/nodes/src/solar-panel/panel.tsx
+#, fuzzy
+msgid "node.solarPanel.panel.columns"
+msgstr "Columnas"
+
+# Review: required
+# Source-Hash: d1c6dd6335337cc1
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Custom — dimensions don't match any preset"
+#: packages/nodes/src/solar-panel/panel.tsx
+#, fuzzy
+msgid "node.solarPanel.panel.customDimensionsDonTMatchAny"
+msgstr "Personalizado: las dimensiones no coinciden con ningún ajuste predefinido"
+
+# Review: required
+# Source-Hash: b26de372b4b0eaac
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Delete"
+#: packages/nodes/src/solar-panel/panel.tsx
+#, fuzzy
+msgid "node.solarPanel.panel.delete"
+msgstr "Eliminar"
+
+# Review: required
+# Source-Hash: fe9356b1d0e0396b
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Flip orientation"
+#: packages/nodes/src/solar-panel/panel.tsx
+#, fuzzy
+msgid "node.solarPanel.panel.flipOrientation"
+msgstr "Invertir orientación"
+
+# Review: required
+# Source-Hash: eaaa20f3b603140f
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Flush"
+#: packages/nodes/src/solar-panel/panel.tsx
+#, fuzzy
+msgid "node.solarPanel.panel.flush"
+msgstr "Enrasado"
+
+# Review: required
+# Source-Hash: fd413477f1a9e5ed
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Frame depth"
+#: packages/nodes/src/solar-panel/panel.tsx
+#, fuzzy
+msgid "node.solarPanel.panel.frameDepth"
+msgstr "Profundidad del marco"
+
+# Review: required
+# Source-Hash: 6aa2318fa815e5f2
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Frame thickness"
+#: packages/nodes/src/solar-panel/panel.tsx
+#, fuzzy
+msgid "node.solarPanel.panel.frameThickness"
+msgstr "Espesor del marco"
+
+# Review: required
+# Source-Hash: c5657f721eae3dff
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Gap X"
+#: packages/nodes/src/solar-panel/panel.tsx
+#, fuzzy
+msgid "node.solarPanel.panel.gapX"
+msgstr "Separación X"
+
+# Review: required
+# Source-Hash: e6e3b393aa7c0d98
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Gap Y"
+#: packages/nodes/src/solar-panel/panel.tsx
+#, fuzzy
+msgid "node.solarPanel.panel.gapY"
+msgstr "Separación Y"
+
+# Review: required
+# Source-Hash: 646ef0fbcbc58edf
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Height"
+#: packages/nodes/src/solar-panel/panel.tsx
+#, fuzzy
+msgid "node.solarPanel.panel.height"
+msgstr "Altura"
+
+# Review: required
+# Source-Hash: 81d365ccef73068c
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Mounting"
+#: packages/nodes/src/solar-panel/panel.tsx
+#, fuzzy
+msgid "node.solarPanel.panel.mounting"
+msgstr "Montaje"
+
+# Review: required
+# Source-Hash: 482469f5a0873f73
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Panel"
+#: packages/nodes/src/solar-panel/panel.tsx
+#, fuzzy
+msgid "node.solarPanel.panel.panel"
+msgstr "Panel"
+
+# Review: required
+# Source-Hash: 441f7f652ea6a0d8
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Preset"
+#: packages/nodes/src/solar-panel/panel.tsx
+#, fuzzy
+msgid "node.solarPanel.panel.preset"
+msgstr "Preajuste"
+
+# Review: required
+# Source-Hash: c913b494c3901a17
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Rows"
+#: packages/nodes/src/solar-panel/panel.tsx
+#, fuzzy
+msgid "node.solarPanel.panel.rows"
+msgstr "Filas"
+
+# Review: required
+# Source-Hash: a4dba2b2675dbba0
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Setbacks too large to fit a panel."
+#: packages/nodes/src/solar-panel/panel.tsx
+#, fuzzy
+msgid "node.solarPanel.panel.setbacksTooLarge"
+msgstr "Retranqueos demasiado grandes para colocar un panel."
+
+# Review: required
+# Source-Hash: 4d18446ff8eaa680
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Solar Panel"
+#: packages/nodes/src/solar-panel/panel.tsx
+#, fuzzy
+msgid "node.solarPanel.panel.solarPanel"
+msgstr "Panel solar"
+
+# Review: required
+# Source-Hash: 0af6194a8b8d8be6
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Standoff"
+#: packages/nodes/src/solar-panel/panel.tsx
+#, fuzzy
+msgid "node.solarPanel.panel.standoff"
+msgstr "Separador"
+
+# Review: required
+# Source-Hash: 58cb60c14826f1d0
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Tilt angle"
+#: packages/nodes/src/solar-panel/panel.tsx
+#, fuzzy
+msgid "node.solarPanel.panel.tiltAngle"
+msgstr "Ángulo de inclinación"
+
+# Review: required
+# Source-Hash: 787005b26aec58a3
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Tilted"
+#: packages/nodes/src/solar-panel/panel.tsx
+#, fuzzy
+msgid "node.solarPanel.panel.tilted"
+msgstr "Inclinado"
+
+# Review: required
+# Source-Hash: 3a0ccd6c46877a87
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Width"
+#: packages/nodes/src/solar-panel/panel.tsx
+#, fuzzy
+msgid "node.solarPanel.panel.width"
+msgstr "Ancho"
+
+# Review: required
+# Source-Hash: cd53f16290b67f7f
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Compact"
+#: packages/nodes/src/solar-panel/panel.tsx
+#, fuzzy
+msgid "node.solarPanel.preset.compact"
+msgstr "Compacto"
+
+# Review: required
+# Source-Hash: 317ebe2aa996af70
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Frameless"
+#: packages/nodes/src/solar-panel/panel.tsx
+#, fuzzy
+msgid "node.solarPanel.preset.frameless"
+msgstr "Sin marco"
+
+# Review: required
+# Source-Hash: 46660ad432e19312
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Residential"
+#: packages/nodes/src/solar-panel/panel.tsx
+#, fuzzy
+msgid "node.solarPanel.preset.residential"
+msgstr "Residencial"
+
+# Review: required
+# Source-Hash: b33386b8fe3725fa
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Residential Large"
+#: packages/nodes/src/solar-panel/panel.tsx
+#, fuzzy
+msgid "node.solarPanel.preset.residentialLarge"
+msgstr "Residencial grande"
 
 # Source-Hash: 638f17c80f424dd3
 # Review: required
