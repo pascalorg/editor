@@ -6618,6 +6618,102 @@ msgstr "Small louvered exhaust vent that sits on a roof slope."
 msgid "node.boxVent.label"
 msgstr "Box Vent"
 
+#: packages/nodes/src/box-vent/panel.tsx
+msgid "node.boxVent.panel.actions"
+msgstr "Actions"
+
+#: packages/nodes/src/box-vent/panel.tsx
+msgid "node.boxVent.panel.baseFlange"
+msgstr "Base Flange"
+
+#: packages/nodes/src/box-vent/panel.tsx
+msgid "node.boxVent.panel.baseHeight"
+msgstr "Base Height"
+
+#: packages/nodes/src/box-vent/panel.tsx
+msgid "node.boxVent.panel.baseInset"
+msgstr "Base Inset"
+
+#: packages/nodes/src/box-vent/panel.tsx
+msgid "node.boxVent.panel.box"
+msgstr "Box"
+
+#: packages/nodes/src/box-vent/panel.tsx
+msgid "node.boxVent.panel.boxVent"
+msgstr "Box Vent"
+
+#: packages/nodes/src/box-vent/panel.tsx
+msgid "node.boxVent.panel.cap"
+msgstr "Cap"
+
+#: packages/nodes/src/box-vent/panel.tsx
+msgid "node.boxVent.panel.capHeight"
+msgstr "Cap Height"
+
+#: packages/nodes/src/box-vent/panel.tsx
+msgid "node.boxVent.panel.cornerBevel"
+msgstr "Corner Bevel"
+
+#: packages/nodes/src/box-vent/panel.tsx
+msgid "node.boxVent.panel.delete"
+msgstr "Delete"
+
+#: packages/nodes/src/box-vent/panel.tsx
+msgid "node.boxVent.panel.depth"
+msgstr "Depth"
+
+#: packages/nodes/src/box-vent/panel.tsx
+msgid "node.boxVent.panel.dimensions"
+msgstr "Dimensions"
+
+#: packages/nodes/src/box-vent/panel.tsx
+msgid "node.boxVent.panel.dome"
+msgstr "Dome"
+
+#: packages/nodes/src/box-vent/panel.tsx
+msgid "node.boxVent.panel.domeCurvature"
+msgstr "Dome Curvature"
+
+#: packages/nodes/src/box-vent/panel.tsx
+msgid "node.boxVent.panel.duplicate"
+msgstr "Duplicate"
+
+#: packages/nodes/src/box-vent/panel.tsx
+msgid "node.boxVent.panel.gapHeight"
+msgstr "Gap Height"
+
+#: packages/nodes/src/box-vent/panel.tsx
+msgid "node.boxVent.panel.height"
+msgstr "Height"
+
+#: packages/nodes/src/box-vent/panel.tsx
+msgid "node.boxVent.panel.hoodOverhang"
+msgstr "Hood Overhang"
+
+#: packages/nodes/src/box-vent/panel.tsx
+msgid "node.boxVent.panel.move"
+msgstr "Move"
+
+#: packages/nodes/src/box-vent/panel.tsx
+msgid "node.boxVent.panel.position"
+msgstr "Position"
+
+#: packages/nodes/src/box-vent/panel.tsx
+msgid "node.boxVent.panel.rotation"
+msgstr "Rotation"
+
+#: packages/nodes/src/box-vent/panel.tsx
+msgid "node.boxVent.panel.style"
+msgstr "Style"
+
+#: packages/nodes/src/box-vent/panel.tsx
+msgid "node.boxVent.panel.topTaper"
+msgstr "Top Taper"
+
+#: packages/nodes/src/box-vent/panel.tsx
+msgid "node.boxVent.panel.width"
+msgstr "Width"
+
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "node.building.description"
 msgstr "A building container holding one or more levels."
@@ -8328,6 +8424,70 @@ msgstr "Louvered roof lantern with a dome or pyramid cap and optional finial."
 msgid "node.cupola.label"
 msgstr "Cupola"
 
+#: packages/nodes/src/cupola/panel.tsx
+msgid "node.cupola.panel.actions"
+msgstr "Actions"
+
+#: packages/nodes/src/cupola/panel.tsx
+msgid "node.cupola.panel.cupola"
+msgstr "Cupola"
+
+#: packages/nodes/src/cupola/panel.tsx
+msgid "node.cupola.panel.delete"
+msgstr "Delete"
+
+#: packages/nodes/src/cupola/panel.tsx
+msgid "node.cupola.panel.depth"
+msgstr "Depth"
+
+#: packages/nodes/src/cupola/panel.tsx
+msgid "node.cupola.panel.dimensions"
+msgstr "Dimensions"
+
+#: packages/nodes/src/cupola/panel.tsx
+msgid "node.cupola.panel.dome"
+msgstr "Dome"
+
+#: packages/nodes/src/cupola/panel.tsx
+msgid "node.cupola.panel.duplicate"
+msgstr "Duplicate"
+
+#: packages/nodes/src/cupola/panel.tsx
+msgid "node.cupola.panel.finial"
+msgstr "Finial"
+
+#: packages/nodes/src/cupola/panel.tsx
+msgid "node.cupola.panel.height"
+msgstr "Height"
+
+#: packages/nodes/src/cupola/panel.tsx
+msgid "node.cupola.panel.move"
+msgstr "Move"
+
+#: packages/nodes/src/cupola/panel.tsx
+msgid "node.cupola.panel.noFinial"
+msgstr "No Finial"
+
+#: packages/nodes/src/cupola/panel.tsx
+msgid "node.cupola.panel.position"
+msgstr "Position"
+
+#: packages/nodes/src/cupola/panel.tsx
+msgid "node.cupola.panel.pyramid"
+msgstr "Pyramid"
+
+#: packages/nodes/src/cupola/panel.tsx
+msgid "node.cupola.panel.rotation"
+msgstr "Rotation"
+
+#: packages/nodes/src/cupola/panel.tsx
+msgid "node.cupola.panel.style"
+msgstr "Style"
+
+#: packages/nodes/src/cupola/panel.tsx
+msgid "node.cupola.panel.width"
+msgstr "Width"
+
 #: packages/nodes/src/ceiling/panel.tsx
 #: packages/nodes/src/slab/panel.tsx
 msgid "node.cutout.autoElevator"
@@ -8862,6 +9022,10 @@ msgstr "{face, select, back {Back} left {Left} right {Right} other {Front}} · {
 msgid "node.downspout.description"
 msgstr "Vertical drop pipe from a gutter outlet to the ground."
 
+#: packages/nodes/src/downspout/inspector-editors.tsx
+msgid "node.downspout.inspectorEditors.position"
+msgstr "Position"
+
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "node.downspout.label"
 msgstr "Downspout"
@@ -8870,9 +9034,37 @@ msgstr "Downspout"
 msgid "node.ductFitting.description"
 msgstr "Elbow, tee, reducer, or square-to-round transition connecting duct runs."
 
+#: packages/nodes/src/duct-fitting/inspector-editors.tsx
+msgid "node.ductFitting.inspectorEditors.swapWH"
+msgstr "Swap W/H"
+
+#: packages/nodes/src/duct-fitting/inspector-editors.tsx
+msgid "node.ductFitting.inspectorEditors.swapWidthAndHeight"
+msgstr "Swap width and height"
+
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "node.ductFitting.label"
 msgstr "Duct Fitting"
+
+#: packages/nodes/src/duct-fitting/tool.tsx
+msgid "node.ductFitting.tool.axis"
+msgstr "Axis"
+
+#: packages/nodes/src/duct-fitting/tool.tsx
+msgid "node.ductFitting.tool.axis2"
+msgstr "⌥ axis"
+
+#: packages/nodes/src/duct-fitting/tool.tsx
+msgid "node.ductFitting.tool.hoverADuctFaceThatFits"
+msgstr "Hover a duct face that fits the door"
+
+#: packages/nodes/src/duct-fitting/tool.tsx
+msgid "node.ductFitting.tool.placeAccessDoor"
+msgstr "Place access door"
+
+#: packages/nodes/src/duct-fitting/tool.tsx
+msgid "node.ductFitting.tool.rTRotate"
+msgstr "R/T rotate"
 
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "node.ductSegment.description"
@@ -8889,6 +9081,23 @@ msgstr "Duct terminal — supply register, ceiling diffuser, or return grille. D
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "node.ductTerminal.label"
 msgstr "Register"
+
+#: packages/nodes/src/duct-terminal/tool.tsx
+msgid "node.ductTerminal.tool.mount"
+msgstr "{mount, select, floor {Mount Floor} ceiling {Mount Ceiling} wall {Mount Wall} other {Mount {label}}}"
+
+#. Key hint: pressing M switches the mounting surface.
+#: packages/nodes/src/duct-terminal/tool.tsx
+msgid "node.ductTerminal.tool.mSurface"
+msgstr "M surface"
+
+#: packages/nodes/src/duct-terminal/tool.tsx
+msgid "node.ductTerminal.tool.rTRotate"
+msgstr "R/T rotate"
+
+#: packages/nodes/src/duct-terminal/tool.tsx
+msgid "node.ductTerminal.tool.snappedToDuct"
+msgstr "Snapped to duct"
 
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "node.elevator.description"
@@ -9074,13 +9283,345 @@ msgstr "Low curved lens-shaped roof vent with a louvered front."
 msgid "node.eyebrowVent.label"
 msgstr "Eyebrow Vent"
 
+#: packages/nodes/src/eyebrow-vent/panel.tsx
+msgid "node.eyebrowVent.panel.actions"
+msgstr "Actions"
+
+#: packages/nodes/src/eyebrow-vent/panel.tsx
+msgid "node.eyebrowVent.panel.backHeight"
+msgstr "Back height"
+
+#: packages/nodes/src/eyebrow-vent/panel.tsx
+msgid "node.eyebrowVent.panel.delete"
+msgstr "Delete"
+
+#: packages/nodes/src/eyebrow-vent/panel.tsx
+msgid "node.eyebrowVent.panel.depth"
+msgstr "Depth"
+
+#: packages/nodes/src/eyebrow-vent/panel.tsx
+msgid "node.eyebrowVent.panel.dimensions"
+msgstr "Dimensions"
+
+#: packages/nodes/src/eyebrow-vent/panel.tsx
+msgid "node.eyebrowVent.panel.duplicate"
+msgstr "Duplicate"
+
+#: packages/nodes/src/eyebrow-vent/panel.tsx
+msgid "node.eyebrowVent.panel.eyebrowVent"
+msgstr "Eyebrow Vent"
+
+#: packages/nodes/src/eyebrow-vent/panel.tsx
+msgid "node.eyebrowVent.panel.halfRound"
+msgstr "Half-round"
+
+#: packages/nodes/src/eyebrow-vent/panel.tsx
+msgid "node.eyebrowVent.panel.height"
+msgstr "Height"
+
+#: packages/nodes/src/eyebrow-vent/panel.tsx
+msgid "node.eyebrowVent.panel.louvers"
+msgstr "Louvers"
+
+#: packages/nodes/src/eyebrow-vent/panel.tsx
+msgid "node.eyebrowVent.panel.move"
+msgstr "Move"
+
+#: packages/nodes/src/eyebrow-vent/panel.tsx
+msgid "node.eyebrowVent.panel.position"
+msgstr "Position"
+
+#: packages/nodes/src/eyebrow-vent/panel.tsx
+msgid "node.eyebrowVent.panel.rotation"
+msgstr "Rotation"
+
+#: packages/nodes/src/eyebrow-vent/panel.tsx
+msgid "node.eyebrowVent.panel.scoop"
+msgstr "Scoop"
+
+#: packages/nodes/src/eyebrow-vent/panel.tsx
+msgid "node.eyebrowVent.panel.slantBox"
+msgstr "Slant-box"
+
+#: packages/nodes/src/eyebrow-vent/panel.tsx
+msgid "node.eyebrowVent.panel.style"
+msgstr "Style"
+
+#: packages/nodes/src/eyebrow-vent/panel.tsx
+msgid "node.eyebrowVent.panel.width"
+msgstr "Width"
+
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "node.fence.description"
 msgstr "A straight or curved fence segment with configurable posts and infill."
 
+#: packages/nodes/src/fence/inspector-editors.tsx
+msgid "node.fence.inspectorEditors.addPointAfter"
+msgstr "Add point after"
+
+#: packages/nodes/src/fence/inspector-editors.tsx
+msgid "node.fence.inspectorEditors.chooseASlabOrShapedSurface"
+msgstr "Choose a slab or shaped surface on this level."
+
+#: packages/nodes/src/fence/inspector-editors.tsx
+msgid "node.fence.inspectorEditors.chooseASurface"
+msgstr "Choose a surface"
+
+#: packages/nodes/src/fence/inspector-editors.tsx
+msgid "node.fence.inspectorEditors.corner"
+msgstr "Corner"
+
+#: packages/nodes/src/fence/inspector-editors.tsx
+msgid "node.fence.inspectorEditors.curve"
+msgstr "Curve"
+
+#: packages/nodes/src/fence/inspector-editors.tsx
+msgid "node.fence.inspectorEditors.curved"
+msgstr "Curved"
+
+#: packages/nodes/src/fence/inspector-editors.tsx
+msgid "node.fence.inspectorEditors.distributionInfo"
+msgstr "{style, select, picket {Distribution controls pickets in each bay between posts.} horizontal {Distribution controls posts along the full fence.} other {Distribution controls infill pieces between the two end posts.}} Spacing is measured between centers. The available width limits the count so pieces do not overlap."
+
+#: packages/nodes/src/fence/inspector-editors.tsx
+msgid "node.fence.inspectorEditors.editPath"
+msgstr "Edit path"
+
+#: packages/nodes/src/fence/inspector-editors.tsx
+msgid "node.fence.inspectorEditors.extendPath"
+msgstr "Extend path"
+
+#: packages/nodes/src/fence/inspector-editors.tsx
+msgid "node.fence.inspectorEditors.followHighestSurface"
+msgstr "Follow highest surface"
+
+#: packages/nodes/src/fence/inspector-editors.tsx
+msgid "node.fence.inspectorEditors.followSelectedSurface"
+msgstr "Follow selected surface"
+
+#: packages/nodes/src/fence/inspector-editors.tsx
+msgid "node.fence.inspectorEditors.holdStartingHeight"
+msgstr "Hold starting height"
+
+#: packages/nodes/src/fence/inspector-editors.tsx
+msgid "node.fence.inspectorEditors.join"
+msgstr "Join"
+
+#: packages/nodes/src/fence/inspector-editors.tsx
+msgid "node.fence.inspectorEditors.length"
+msgstr "Length"
+
+#: packages/nodes/src/fence/inspector-editors.tsx
+msgid "node.fence.inspectorEditors.pathSummary"
+msgstr "{count, plural, one {{number} point} other {{number} points}} · {length} m"
+
+#: packages/nodes/src/fence/inspector-editors.tsx
+msgid "node.fence.inspectorEditors.picketRailProjection"
+msgstr "Picket rail projection"
+
+#: packages/nodes/src/fence/inspector-editors.tsx
+msgid "node.fence.inspectorEditors.point"
+msgstr "Point"
+
+#: packages/nodes/src/fence/inspector-editors.tsx
+msgid "node.fence.inspectorEditors.removePoint"
+msgstr "Remove point"
+
+#: packages/nodes/src/fence/inspector-editors.tsx
+msgid "node.fence.inspectorEditors.setEachSpanToStraightOr"
+msgstr "Set each span to straight or curved, then drag its points and curve handles in either view."
+
+#: packages/nodes/src/fence/inspector-editors.tsx
+msgid "node.fence.inspectorEditors.smooth"
+msgstr "Smooth"
+
+#: packages/nodes/src/fence/inspector-editors.tsx
+msgid "node.fence.inspectorEditors.spanToPointNumber"
+msgstr "Span to point {number}"
+
+#: packages/nodes/src/fence/inspector-editors.tsx
+msgid "node.fence.inspectorEditors.straight"
+msgstr "Straight"
+
+#: packages/nodes/src/fence/inspector-editors.tsx
+msgid "node.fence.inspectorEditors.surface"
+msgstr "Surface"
+
+#: packages/nodes/src/fence/inspector-editors.tsx
+msgid "node.fence.inspectorEditors.surfaceBehavior"
+msgstr "Surface behavior"
+
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "node.fence.label"
 msgstr "Fence"
+
+#: packages/nodes/src/fence/move-endpoint-tool.tsx
+msgid "node.fence.moveEndpointTool.detachEndpoint"
+msgstr "Detach endpoint"
+
+#: packages/nodes/src/fence/move-endpoint-tool.tsx
+msgid "node.fence.moveEndpointTool.dragEndpoint"
+msgstr "Drag endpoint"
+
+#: packages/nodes/src/fence-feature/actions.tsx
+msgid "node.fenceFeature.actions.close"
+msgstr "Close"
+
+#: packages/nodes/src/fence-feature/actions.tsx
+msgid "node.fenceFeature.actions.open"
+msgstr "Open"
+
+#: packages/nodes/src/fence-feature/inspector.tsx
+msgid "node.fenceFeature.inspector.boardWidth"
+msgstr "Board width"
+
+#: packages/nodes/src/fence-feature/inspector.tsx
+msgid "node.fenceFeature.inspector.bracing"
+msgstr "Bracing"
+
+#: packages/nodes/src/fence-feature/inspector.tsx
+msgid "node.fenceFeature.inspector.distanceFromStart"
+msgstr "Distance from start"
+
+#: packages/nodes/src/fence-feature/inspector.tsx
+msgid "node.fenceFeature.inspector.fenceUnavailable"
+msgstr "Fence unavailable."
+
+#: packages/nodes/src/fence-feature/inspector.tsx
+msgid "node.fenceFeature.inspector.frameWidth"
+msgstr "Frame width"
+
+#: packages/nodes/src/fence-feature/inspector.tsx
+msgid "node.fenceFeature.inspector.gateHeight"
+msgstr "Gate height"
+
+#: packages/nodes/src/fence-feature/inspector.tsx
+msgid "node.fenceFeature.inspector.gateStyle"
+msgstr "Gate style"
+
+#: packages/nodes/src/fence-feature/inspector.tsx
+msgid "node.fenceFeature.inspector.groundClearance"
+msgstr "Ground clearance"
+
+#: packages/nodes/src/fence-feature/inspector.tsx
+msgid "node.fenceFeature.inspector.hingesAndLatch"
+msgstr "Hinges and latch"
+
+#: packages/nodes/src/fence-feature/inspector.tsx
+msgid "node.fenceFeature.inspector.hingeSide"
+msgstr "Hinge side"
+
+#: packages/nodes/src/fence-feature/inspector.tsx
+msgid "node.fenceFeature.inspector.horizontalBoards"
+msgstr "Horizontal boards"
+
+#: packages/nodes/src/fence-feature/inspector.tsx
+msgid "node.fenceFeature.inspector.infillSpacing"
+msgstr "Infill spacing"
+
+#: packages/nodes/src/fence-feature/inspector.tsx
+msgid "node.fenceFeature.inspector.jambPosts"
+msgstr "Jamb posts"
+
+#: packages/nodes/src/fence-feature/inspector.tsx
+msgid "node.fenceFeature.inspector.keepTheOpeningInsideTheFence"
+msgstr "Keep the opening inside the fence and clear of other gates or passages."
+
+#: packages/nodes/src/fence-feature/inspector.tsx
+msgid "node.fenceFeature.inspector.leafThickness"
+msgstr "Leaf thickness"
+
+#: packages/nodes/src/fence-feature/inspector.tsx
+msgid "node.fenceFeature.inspector.leaves"
+msgstr "Leaves"
+
+#: packages/nodes/src/fence-feature/inspector.tsx
+msgid "node.fenceFeature.inspector.leftLeafProportion"
+msgstr "Left leaf proportion"
+
+#: packages/nodes/src/fence-feature/inspector.tsx
+msgid "node.fenceFeature.inspector.matchFenceHeight"
+msgstr "Match fence height"
+
+#: packages/nodes/src/fence-feature/inspector.tsx
+msgid "node.fenceFeature.inspector.matchFenceStyle"
+msgstr "Match fence style"
+
+#: packages/nodes/src/fence-feature/inspector.tsx
+msgid "node.fenceFeature.inspector.openingAngle"
+msgstr "Opening angle"
+
+#: packages/nodes/src/fence-feature/inspector.tsx
+msgid "node.fenceFeature.inspector.openingWidth"
+msgstr "Opening width"
+
+#: packages/nodes/src/fence-feature/inspector.tsx
+msgid "node.fenceFeature.inspector.openRails"
+msgstr "Open rails"
+
+#: packages/nodes/src/fence-feature/inspector.tsx
+msgid "node.fenceFeature.inspector.option.cross"
+msgstr "Cross"
+
+#: packages/nodes/src/fence-feature/inspector.tsx
+msgid "node.fenceFeature.inspector.option.diagonal"
+msgstr "Diagonal"
+
+#: packages/nodes/src/fence-feature/inspector.tsx
+msgid "node.fenceFeature.inspector.option.doubleGate"
+msgstr "Double gate"
+
+#: packages/nodes/src/fence-feature/inspector.tsx
+msgid "node.fenceFeature.inspector.option.inward"
+msgstr "Inward"
+
+#: packages/nodes/src/fence-feature/inspector.tsx
+msgid "node.fenceFeature.inspector.option.left"
+msgstr "Left"
+
+#: packages/nodes/src/fence-feature/inspector.tsx
+msgid "node.fenceFeature.inspector.option.none"
+msgstr "None"
+
+#: packages/nodes/src/fence-feature/inspector.tsx
+msgid "node.fenceFeature.inspector.option.outward"
+msgstr "Outward"
+
+#: packages/nodes/src/fence-feature/inspector.tsx
+msgid "node.fenceFeature.inspector.option.right"
+msgstr "Right"
+
+#: packages/nodes/src/fence-feature/inspector.tsx
+msgid "node.fenceFeature.inspector.option.singleGate"
+msgstr "Single gate"
+
+#: packages/nodes/src/fence-feature/inspector.tsx
+msgid "node.fenceFeature.inspector.picket"
+msgstr "Picket"
+
+#: packages/nodes/src/fence-feature/inspector.tsx
+msgid "node.fenceFeature.inspector.postHeight"
+msgstr "Post height"
+
+#: packages/nodes/src/fence-feature/inspector.tsx
+msgid "node.fenceFeature.inspector.removeGate"
+msgstr "Remove gate"
+
+#: packages/nodes/src/fence-feature/inspector.tsx
+msgid "node.fenceFeature.inspector.removeOpening"
+msgstr "Remove opening"
+
+#: packages/nodes/src/fence-feature/inspector.tsx
+msgid "node.fenceFeature.inspector.solidPrivacy"
+msgstr "Solid privacy"
+
+#: packages/nodes/src/fence-feature/inspector.tsx
+msgid "node.fenceFeature.inspector.swingDirection"
+msgstr "Swing direction"
+
+#: packages/nodes/src/fence-feature/inspector.tsx
+msgid "node.fenceFeature.inspector.verticalSlats"
+msgstr "Vertical slats"
 
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "node.fenceGate.description"
@@ -9114,6 +9655,22 @@ msgstr "Guide"
 msgid "node.gutter.description"
 msgstr "Rain-water channel running along the eave of a roof segment."
 
+#: packages/nodes/src/gutter/downspouts-panel.tsx
+msgid "node.gutter.downspoutsPanel.addDownspout"
+msgstr "Add Downspout"
+
+#: packages/nodes/src/gutter/downspouts-panel.tsx
+msgid "node.gutter.downspoutsPanel.downspoutNumber"
+msgstr "Downspout {number}"
+
+#: packages/nodes/src/gutter/downspouts-panel.tsx
+msgid "node.gutter.downspoutsPanel.downspouts"
+msgstr "Downspouts"
+
+#: packages/nodes/src/gutter/downspouts-panel.tsx
+msgid "node.gutter.downspoutsPanel.removeDownspout"
+msgstr "Remove downspout"
+
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "node.gutter.label"
 msgstr "Gutter"
@@ -9145,6 +9702,10 @@ msgstr "Furnace, air handler, or condenser — duct runs connect to its supply/r
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "node.hvacEquipment.label"
 msgstr "HVAC Unit"
+
+#: packages/nodes/src/hvac-equipment/tool.tsx
+msgid "node.hvacEquipment.tool.rTRotate"
+msgstr "R/T rotate"
 
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "node.importedMesh.description"
@@ -9278,6 +9839,14 @@ msgstr "Standalone refrigerant liquid line — a thin bare-copper run; Follow mo
 msgid "node.liquidLine.label"
 msgstr "Liquid Line"
 
+#: packages/nodes/src/liquid-line/tool.tsx
+msgid "node.liquidLine.tool.clickToTraceThisLinesetRun"
+msgstr "Click to trace this lineset run"
+
+#: packages/nodes/src/liquid-line/tool.tsx
+msgid "node.liquidLine.tool.followHoverALineset"
+msgstr "Follow: hover a lineset"
+
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "node.measurement.description"
 msgstr "A persistent distance, angle, area, perimeter, or volume annotation."
@@ -9305,6 +9874,18 @@ msgstr "DWV joint — elbow bend, 45° wye, or sanitary tee."
 msgid "node.pipeFitting.label"
 msgstr "Pipe Fitting"
 
+#: packages/nodes/src/pipe-fitting/tool.tsx
+msgid "node.pipeFitting.tool.axis"
+msgstr "Axis"
+
+#: packages/nodes/src/pipe-fitting/tool.tsx
+msgid "node.pipeFitting.tool.axis2"
+msgstr "⌥ axis"
+
+#: packages/nodes/src/pipe-fitting/tool.tsx
+msgid "node.pipeFitting.tool.rTRotate"
+msgstr "R/T rotate"
+
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "node.pipeSegment.description"
 msgstr "Drain / waste / vent pipe run — draw level or toggle a ¼″ per foot fall with S."
@@ -9321,6 +9902,14 @@ msgstr "DWV P-trap — water seal on the waste line. The trap arm runs to the ve
 msgid "node.pipeTrap.label"
 msgstr "Trap"
 
+#: packages/nodes/src/pipe-trap/tool.tsx
+msgid "node.pipeTrap.tool.diameterTrap"
+msgstr "{diameter}\" Trap"
+
+#: packages/nodes/src/pipe-trap/tool.tsx
+msgid "node.pipeTrap.tool.rTRotate"
+msgstr "R/T rotate"
+
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "node.proceduralItem.description"
 msgstr "Experimental editable recipe"
@@ -9336,6 +9925,74 @@ msgstr "Ventilation strip running along the ridge of a roof segment."
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "node.ridgeVent.label"
 msgstr "Ridge Vent"
+
+#: packages/nodes/src/ridge-vent/panel.tsx
+msgid "node.ridgeVent.panel.actions"
+msgstr "Actions"
+
+#: packages/nodes/src/ridge-vent/panel.tsx
+msgid "node.ridgeVent.panel.delete"
+msgstr "Delete"
+
+#: packages/nodes/src/ridge-vent/panel.tsx
+msgid "node.ridgeVent.panel.dimensions"
+msgstr "Dimensions"
+
+#: packages/nodes/src/ridge-vent/panel.tsx
+msgid "node.ridgeVent.panel.duplicate"
+msgstr "Duplicate"
+
+#: packages/nodes/src/ridge-vent/panel.tsx
+msgid "node.ridgeVent.panel.endCaps"
+msgstr "End Caps"
+
+#: packages/nodes/src/ridge-vent/panel.tsx
+msgid "node.ridgeVent.panel.flanged"
+msgstr "Flanged"
+
+#: packages/nodes/src/ridge-vent/panel.tsx
+msgid "node.ridgeVent.panel.height"
+msgstr "Height"
+
+#: packages/nodes/src/ridge-vent/panel.tsx
+msgid "node.ridgeVent.panel.length"
+msgstr "Length"
+
+#: packages/nodes/src/ridge-vent/panel.tsx
+msgid "node.ridgeVent.panel.move"
+msgstr "Move"
+
+#: packages/nodes/src/ridge-vent/panel.tsx
+msgid "node.ridgeVent.panel.open"
+msgstr "Open"
+
+#: packages/nodes/src/ridge-vent/panel.tsx
+msgid "node.ridgeVent.panel.position"
+msgstr "Position"
+
+#: packages/nodes/src/ridge-vent/panel.tsx
+msgid "node.ridgeVent.panel.ridgeVent"
+msgstr "Ridge Vent"
+
+#: packages/nodes/src/ridge-vent/panel.tsx
+msgid "node.ridgeVent.panel.rotation"
+msgstr "Rotation"
+
+#: packages/nodes/src/ridge-vent/panel.tsx
+msgid "node.ridgeVent.panel.shingled"
+msgstr "Shingled"
+
+#: packages/nodes/src/ridge-vent/panel.tsx
+msgid "node.ridgeVent.panel.standard"
+msgstr "Standard"
+
+#: packages/nodes/src/ridge-vent/panel.tsx
+msgid "node.ridgeVent.panel.style"
+msgstr "Style"
+
+#: packages/nodes/src/ridge-vent/panel.tsx
+msgid "node.ridgeVent.panel.width"
+msgstr "Width"
 
 #: packages/nodes/src/roof/barrel-panel.tsx
 msgid "node.roof.barrelPanel.archBays"
@@ -10002,6 +10659,50 @@ msgstr "Turn light off"
 #: packages/nodes/src/shared/item-interaction-actions.tsx
 msgid "node.shared.itemInteractionActions.turnLightOn"
 msgstr "Turn light on"
+
+#: packages/nodes/src/shared/run-hanger-inspector.tsx
+msgid "node.shared.runHangerInspector.automaticSupport"
+msgstr "Automatic support"
+
+#: packages/nodes/src/shared/run-hanger-inspector.tsx
+msgid "node.shared.runHangerInspector.hangerOnSegment"
+msgstr "Hanger {number} · segment {segment}"
+
+#: packages/nodes/src/shared/run-hanger-inspector.tsx
+msgid "node.shared.runHangerInspector.individualHangers"
+msgstr "Individual hangers"
+
+#: packages/nodes/src/shared/run-hanger-inspector.tsx
+msgid "node.shared.runHangerInspector.missingSupport"
+msgstr "Missing support"
+
+#: packages/nodes/src/shared/run-hanger-inspector.tsx
+msgid "node.shared.runHangerInspector.noSupportWithinReachMoveThe"
+msgstr "No support within reach. Move the hanger or choose another host."
+
+#: packages/nodes/src/shared/run-hanger-inspector.tsx
+msgid "node.shared.runHangerInspector.positionLabel"
+msgstr "Hanger {number} position in metres"
+
+#: packages/nodes/src/shared/run-hanger-inspector.tsx
+msgid "node.shared.runHangerInspector.positionM"
+msgstr "Position (m)"
+
+#: packages/nodes/src/shared/run-hanger-inspector.tsx
+msgid "node.shared.runHangerInspector.positionsAreMeasuredAlongEachPath"
+msgstr "Positions are measured along each path segment. Changing spacing regenerates the numbered slots."
+
+#: packages/nodes/src/shared/run-hanger-inspector.tsx
+msgid "node.shared.runHangerInspector.revealSupport"
+msgstr "Reveal support"
+
+#: packages/nodes/src/shared/run-hanger-inspector.tsx
+msgid "node.shared.runHangerInspector.skip"
+msgstr "Skip"
+
+#: packages/nodes/src/shared/run-hanger-inspector.tsx
+msgid "node.shared.runHangerInspector.supportLabel"
+msgstr "Hanger {number} support"
 
 #: packages/nodes/src/shared/system-check-panel.tsx
 msgid "node.shared.systemCheckPanel.aboutTheseChecks"
@@ -11386,6 +12087,82 @@ msgstr "Wind-driven spinning whirlybird exhaust vent for a roof slope."
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "node.turbineVent.label"
 msgstr "Turbine Vent"
+
+#: packages/nodes/src/turbine-vent/panel.tsx
+msgid "node.turbineVent.panel.actions"
+msgstr "Actions"
+
+#: packages/nodes/src/turbine-vent/panel.tsx
+msgid "node.turbineVent.panel.cylinder"
+msgstr "Cylinder"
+
+#: packages/nodes/src/turbine-vent/panel.tsx
+msgid "node.turbineVent.panel.delete"
+msgstr "Delete"
+
+#: packages/nodes/src/turbine-vent/panel.tsx
+msgid "node.turbineVent.panel.diameter"
+msgstr "Diameter"
+
+#: packages/nodes/src/turbine-vent/panel.tsx
+msgid "node.turbineVent.panel.dimensions"
+msgstr "Dimensions"
+
+#: packages/nodes/src/turbine-vent/panel.tsx
+msgid "node.turbineVent.panel.duplicate"
+msgstr "Duplicate"
+
+#: packages/nodes/src/turbine-vent/panel.tsx
+msgid "node.turbineVent.panel.globe"
+msgstr "Globe"
+
+#: packages/nodes/src/turbine-vent/panel.tsx
+msgid "node.turbineVent.panel.height"
+msgstr "Height"
+
+#: packages/nodes/src/turbine-vent/panel.tsx
+msgid "node.turbineVent.panel.motion"
+msgstr "Motion"
+
+#: packages/nodes/src/turbine-vent/panel.tsx
+msgid "node.turbineVent.panel.move"
+msgstr "Move"
+
+#: packages/nodes/src/turbine-vent/panel.tsx
+msgid "node.turbineVent.panel.neckHeight"
+msgstr "Neck Height"
+
+#: packages/nodes/src/turbine-vent/panel.tsx
+msgid "node.turbineVent.panel.pause"
+msgstr "Pause"
+
+#: packages/nodes/src/turbine-vent/panel.tsx
+msgid "node.turbineVent.panel.play"
+msgstr "Play"
+
+#: packages/nodes/src/turbine-vent/panel.tsx
+msgid "node.turbineVent.panel.position"
+msgstr "Position"
+
+#: packages/nodes/src/turbine-vent/panel.tsx
+msgid "node.turbineVent.panel.rotation"
+msgstr "Rotation"
+
+#: packages/nodes/src/turbine-vent/panel.tsx
+msgid "node.turbineVent.panel.spinSpeed"
+msgstr "Spin Speed"
+
+#: packages/nodes/src/turbine-vent/panel.tsx
+msgid "node.turbineVent.panel.style"
+msgstr "Style"
+
+#: packages/nodes/src/turbine-vent/panel.tsx
+msgid "node.turbineVent.panel.turbineVent"
+msgstr "Turbine Vent"
+
+#: packages/nodes/src/turbine-vent/panel.tsx
+msgid "node.turbineVent.panel.vanes"
+msgstr "Vanes"
 
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "node.unit.description"

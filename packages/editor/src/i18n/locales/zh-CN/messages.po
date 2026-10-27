@@ -16464,6 +16464,246 @@ msgstr "位于屋面坡上的小型百叶排气口。"
 msgid "node.boxVent.label"
 msgstr "箱式通风口"
 
+# Review: required
+# Source-Hash: aa6d82bdb3cc1d9a
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Actions"
+#: packages/nodes/src/box-vent/panel.tsx
+#, fuzzy
+msgid "node.boxVent.panel.actions"
+msgstr "操作"
+
+# Review: required
+# Source-Hash: c0e9837e67038e92
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Base Flange"
+#: packages/nodes/src/box-vent/panel.tsx
+#, fuzzy
+msgid "node.boxVent.panel.baseFlange"
+msgstr "底座法兰"
+
+# Review: required
+# Source-Hash: fa9118f6f4f020d7
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Base Height"
+#: packages/nodes/src/box-vent/panel.tsx
+#, fuzzy
+msgid "node.boxVent.panel.baseHeight"
+msgstr "底座高度"
+
+# Review: required
+# Source-Hash: 0869f5a92dabb4e1
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Base Inset"
+#: packages/nodes/src/box-vent/panel.tsx
+#, fuzzy
+msgid "node.boxVent.panel.baseInset"
+msgstr "底座内缩"
+
+# Review: required
+# Source-Hash: e9a89a5e4ac8cd61
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Box"
+#: packages/nodes/src/box-vent/panel.tsx
+#, fuzzy
+msgid "node.boxVent.panel.box"
+msgstr "盒形"
+
+# Review: required
+# Source-Hash: f736ca24e84825c3
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Box Vent"
+#: packages/nodes/src/box-vent/panel.tsx
+#, fuzzy
+msgid "node.boxVent.panel.boxVent"
+msgstr "箱式通风口"
+
+# Review: required
+# Source-Hash: d52b53241789ee63
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Cap"
+#: packages/nodes/src/box-vent/panel.tsx
+#, fuzzy
+msgid "node.boxVent.panel.cap"
+msgstr "顶盖"
+
+# Review: required
+# Source-Hash: 0ce3b53766b550e7
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Cap Height"
+#: packages/nodes/src/box-vent/panel.tsx
+#, fuzzy
+msgid "node.boxVent.panel.capHeight"
+msgstr "顶盖高度"
+
+# Review: required
+# Source-Hash: 89eba9f077fba348
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Corner Bevel"
+#: packages/nodes/src/box-vent/panel.tsx
+#, fuzzy
+msgid "node.boxVent.panel.cornerBevel"
+msgstr "转角倒角"
+
+# Review: required
+# Source-Hash: b26de372b4b0eaac
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Delete"
+#: packages/nodes/src/box-vent/panel.tsx
+#, fuzzy
+msgid "node.boxVent.panel.delete"
+msgstr "删除"
+
+# Review: required
+# Source-Hash: 99ac4d03c3061f3a
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Depth"
+#: packages/nodes/src/box-vent/panel.tsx
+#, fuzzy
+msgid "node.boxVent.panel.depth"
+msgstr "深度"
+
+# Review: required
+# Source-Hash: 12df69f42beb0643
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Dimensions"
+#: packages/nodes/src/box-vent/panel.tsx
+#, fuzzy
+msgid "node.boxVent.panel.dimensions"
+msgstr "尺寸"
+
+# Review: required
+# Source-Hash: de47e23eb81efe02
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Dome"
+#: packages/nodes/src/box-vent/panel.tsx
+#, fuzzy
+msgid "node.boxVent.panel.dome"
+msgstr "穹顶"
+
+# Review: required
+# Source-Hash: 1c5c81aa21193d07
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Dome Curvature"
+#: packages/nodes/src/box-vent/panel.tsx
+#, fuzzy
+msgid "node.boxVent.panel.domeCurvature"
+msgstr "穹顶曲率"
+
+# Review: required
+# Source-Hash: 34dc96fe77a31e51
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Duplicate"
+#: packages/nodes/src/box-vent/panel.tsx
+#, fuzzy
+msgid "node.boxVent.panel.duplicate"
+msgstr "复制"
+
+# Review: required
+# Source-Hash: 8cac057f7ae6804d
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Gap Height"
+#: packages/nodes/src/box-vent/panel.tsx
+#, fuzzy
+msgid "node.boxVent.panel.gapHeight"
+msgstr "缝隙高度"
+
+# Review: required
+# Source-Hash: 646ef0fbcbc58edf
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Height"
+#: packages/nodes/src/box-vent/panel.tsx
+#, fuzzy
+msgid "node.boxVent.panel.height"
+msgstr "高度"
+
+# Review: required
+# Source-Hash: 8a9c2ea0783a0e53
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Hood Overhang"
+#: packages/nodes/src/box-vent/panel.tsx
+#, fuzzy
+msgid "node.boxVent.panel.hoodOverhang"
+msgstr "罩檐悬挑"
+
+# Review: required
+# Source-Hash: bd02c614454fbd2b
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Move"
+#: packages/nodes/src/box-vent/panel.tsx
+#, fuzzy
+msgid "node.boxVent.panel.move"
+msgstr "移动"
+
+# Review: required
+# Source-Hash: 9da0cbfad144d737
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Position"
+#: packages/nodes/src/box-vent/panel.tsx
+#, fuzzy
+msgid "node.boxVent.panel.position"
+msgstr "位置"
+
+# Review: required
+# Source-Hash: 01989595ee7c1dc0
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Rotation"
+#: packages/nodes/src/box-vent/panel.tsx
+#, fuzzy
+msgid "node.boxVent.panel.rotation"
+msgstr "旋转"
+
+# Review: required
+# Source-Hash: 1a79a485d91f3f28
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Style"
+#: packages/nodes/src/box-vent/panel.tsx
+#, fuzzy
+msgid "node.boxVent.panel.style"
+msgstr "样式"
+
+# Review: required
+# Source-Hash: 71d82d47e11d2564
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Top Taper"
+#: packages/nodes/src/box-vent/panel.tsx
+#, fuzzy
+msgid "node.boxVent.panel.topTaper"
+msgstr "顶部收分"
+
+# Review: required
+# Source-Hash: 3a0ccd6c46877a87
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Width"
+#: packages/nodes/src/box-vent/panel.tsx
+#, fuzzy
+msgid "node.boxVent.panel.width"
+msgstr "宽度"
+
 # Source-Hash: f49d8836ae037dde
 # Review: required
 # AI-Provider: cursor-agent
@@ -20736,6 +20976,166 @@ msgstr "带百叶的屋顶亭，配圆顶或金字塔顶，可选尖顶饰。"
 msgid "node.cupola.label"
 msgstr "穹顶亭"
 
+# Review: required
+# Source-Hash: aa6d82bdb3cc1d9a
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Actions"
+#: packages/nodes/src/cupola/panel.tsx
+#, fuzzy
+msgid "node.cupola.panel.actions"
+msgstr "操作"
+
+# Review: required
+# Source-Hash: e679dd19f96eba0a
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Cupola"
+#: packages/nodes/src/cupola/panel.tsx
+#, fuzzy
+msgid "node.cupola.panel.cupola"
+msgstr "穹顶亭"
+
+# Review: required
+# Source-Hash: b26de372b4b0eaac
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Delete"
+#: packages/nodes/src/cupola/panel.tsx
+#, fuzzy
+msgid "node.cupola.panel.delete"
+msgstr "删除"
+
+# Review: required
+# Source-Hash: 99ac4d03c3061f3a
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Depth"
+#: packages/nodes/src/cupola/panel.tsx
+#, fuzzy
+msgid "node.cupola.panel.depth"
+msgstr "深度"
+
+# Review: required
+# Source-Hash: 12df69f42beb0643
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Dimensions"
+#: packages/nodes/src/cupola/panel.tsx
+#, fuzzy
+msgid "node.cupola.panel.dimensions"
+msgstr "尺寸"
+
+# Review: required
+# Source-Hash: de47e23eb81efe02
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Dome"
+#: packages/nodes/src/cupola/panel.tsx
+#, fuzzy
+msgid "node.cupola.panel.dome"
+msgstr "穹顶"
+
+# Review: required
+# Source-Hash: 34dc96fe77a31e51
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Duplicate"
+#: packages/nodes/src/cupola/panel.tsx
+#, fuzzy
+msgid "node.cupola.panel.duplicate"
+msgstr "复制"
+
+# Review: required
+# Source-Hash: 1cfe33235b30b1d8
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Finial"
+#: packages/nodes/src/cupola/panel.tsx
+#, fuzzy
+msgid "node.cupola.panel.finial"
+msgstr "尖顶饰"
+
+# Review: required
+# Source-Hash: 646ef0fbcbc58edf
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Height"
+#: packages/nodes/src/cupola/panel.tsx
+#, fuzzy
+msgid "node.cupola.panel.height"
+msgstr "高度"
+
+# Review: required
+# Source-Hash: bd02c614454fbd2b
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Move"
+#: packages/nodes/src/cupola/panel.tsx
+#, fuzzy
+msgid "node.cupola.panel.move"
+msgstr "移动"
+
+# Review: required
+# Source-Hash: b5e0cb318d484d0c
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "No Finial"
+#: packages/nodes/src/cupola/panel.tsx
+#, fuzzy
+msgid "node.cupola.panel.noFinial"
+msgstr "无尖顶饰"
+
+# Review: required
+# Source-Hash: 9da0cbfad144d737
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Position"
+#: packages/nodes/src/cupola/panel.tsx
+#, fuzzy
+msgid "node.cupola.panel.position"
+msgstr "位置"
+
+# Review: required
+# Source-Hash: 47587b825e9a696b
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Pyramid"
+#: packages/nodes/src/cupola/panel.tsx
+#, fuzzy
+msgid "node.cupola.panel.pyramid"
+msgstr "金字塔形"
+
+# Review: required
+# Source-Hash: 01989595ee7c1dc0
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Rotation"
+#: packages/nodes/src/cupola/panel.tsx
+#, fuzzy
+msgid "node.cupola.panel.rotation"
+msgstr "旋转"
+
+# Review: required
+# Source-Hash: 1a79a485d91f3f28
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Style"
+#: packages/nodes/src/cupola/panel.tsx
+#, fuzzy
+msgid "node.cupola.panel.style"
+msgstr "样式"
+
+# Review: required
+# Source-Hash: 3a0ccd6c46877a87
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Width"
+#: packages/nodes/src/cupola/panel.tsx
+#, fuzzy
+msgid "node.cupola.panel.width"
+msgstr "宽度"
+
 # Source-Hash: 5d4ccdf13668fab4
 # Review: required
 # AI-Provider: cursor-agent
@@ -22068,6 +22468,16 @@ msgstr "{face, select, back {背面} left {左侧} right {右侧} other {正面}
 msgid "node.downspout.description"
 msgstr "从檐沟出水口到地面的竖向落水管。"
 
+# Review: required
+# Source-Hash: 9da0cbfad144d737
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Position"
+#: packages/nodes/src/downspout/inspector-editors.tsx
+#, fuzzy
+msgid "node.downspout.inspectorEditors.position"
+msgstr "位置"
+
 # Source-Hash: 1a1ec08a311f1b35
 # Review: required
 # AI-Provider: cursor-agent
@@ -22088,6 +22498,26 @@ msgstr "落水管"
 msgid "node.ductFitting.description"
 msgstr "连接风管的弯头、三通、变径或方圆变径。"
 
+# Review: required
+# Source-Hash: 7323a0fc9efb077f
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Swap W/H"
+#: packages/nodes/src/duct-fitting/inspector-editors.tsx
+#, fuzzy
+msgid "node.ductFitting.inspectorEditors.swapWH"
+msgstr "交换宽/高"
+
+# Review: required
+# Source-Hash: 064b36c4fc5deb87
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Swap width and height"
+#: packages/nodes/src/duct-fitting/inspector-editors.tsx
+#, fuzzy
+msgid "node.ductFitting.inspectorEditors.swapWidthAndHeight"
+msgstr "交换宽度和高度"
+
 # Source-Hash: 6d0c3833d87535e4
 # Review: required
 # AI-Provider: cursor-agent
@@ -22097,6 +22527,56 @@ msgstr "连接风管的弯头、三通、变径或方圆变径。"
 #, fuzzy
 msgid "node.ductFitting.label"
 msgstr "风管配件"
+
+# Review: required
+# Source-Hash: dd86efcab72fc5c7
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Axis"
+#: packages/nodes/src/duct-fitting/tool.tsx
+#, fuzzy
+msgid "node.ductFitting.tool.axis"
+msgstr "轴"
+
+# Review: required
+# Source-Hash: 5232a826549f915e
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "⌥ axis"
+#: packages/nodes/src/duct-fitting/tool.tsx
+#, fuzzy
+msgid "node.ductFitting.tool.axis2"
+msgstr "⌥ 轴"
+
+# Review: required
+# Source-Hash: 880b34f6fc0ae854
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Hover a duct face that fits the door"
+#: packages/nodes/src/duct-fitting/tool.tsx
+#, fuzzy
+msgid "node.ductFitting.tool.hoverADuctFaceThatFits"
+msgstr "悬停到可容纳检修门的风管面上"
+
+# Review: required
+# Source-Hash: 706f5b43a1d4a84a
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Place access door"
+#: packages/nodes/src/duct-fitting/tool.tsx
+#, fuzzy
+msgid "node.ductFitting.tool.placeAccessDoor"
+msgstr "放置检修门"
+
+# Review: required
+# Source-Hash: 8fb180251a321cef
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "R/T rotate"
+#: packages/nodes/src/duct-fitting/tool.tsx
+#, fuzzy
+msgid "node.ductFitting.tool.rTRotate"
+msgstr "R/T 旋转"
 
 # Source-Hash: 09eb45a9b35d1a9f
 # Review: required
@@ -22137,6 +22617,47 @@ msgstr "风口 — 送风口、散流器或回风格栅。风管在其接口处�
 #, fuzzy
 msgid "node.ductTerminal.label"
 msgstr "风口"
+
+# Review: required
+# Source-Hash: 83c665eafcf43a68
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "{mount, select, floor {Mount Floor} ceiling {Mount Ceiling} wall {Mount Wall} other {Mount {label}}}"
+#: packages/nodes/src/duct-terminal/tool.tsx
+#, fuzzy
+msgid "node.ductTerminal.tool.mount"
+msgstr "{mount, select, floor {安装：地面} ceiling {安装：天花板} wall {安装：墙面} other {安装：{label}}}"
+
+# Review: required
+# Source-Hash: f067dd52ea051385
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "M surface"
+#. Key hint: pressing M switches the mounting surface.
+#: packages/nodes/src/duct-terminal/tool.tsx
+#, fuzzy
+msgid "node.ductTerminal.tool.mSurface"
+msgstr "M 表面"
+
+# Review: required
+# Source-Hash: 8fb180251a321cef
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "R/T rotate"
+#: packages/nodes/src/duct-terminal/tool.tsx
+#, fuzzy
+msgid "node.ductTerminal.tool.rTRotate"
+msgstr "R/T 旋转"
+
+# Review: required
+# Source-Hash: 98446855908ee71d
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Snapped to duct"
+#: packages/nodes/src/duct-terminal/tool.tsx
+#, fuzzy
+msgid "node.ductTerminal.tool.snappedToDuct"
+msgstr "已吸附到风管"
 
 # Source-Hash: d0afa386e65cd3a4
 # Review: required
@@ -22598,6 +23119,176 @@ msgstr "低矮的弧形透镜状屋顶通风口，前部带百叶。"
 msgid "node.eyebrowVent.label"
 msgstr "眉形通风口"
 
+# Review: required
+# Source-Hash: aa6d82bdb3cc1d9a
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Actions"
+#: packages/nodes/src/eyebrow-vent/panel.tsx
+#, fuzzy
+msgid "node.eyebrowVent.panel.actions"
+msgstr "操作"
+
+# Review: required
+# Source-Hash: abc97377800a8333
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Back height"
+#: packages/nodes/src/eyebrow-vent/panel.tsx
+#, fuzzy
+msgid "node.eyebrowVent.panel.backHeight"
+msgstr "后部高度"
+
+# Review: required
+# Source-Hash: b26de372b4b0eaac
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Delete"
+#: packages/nodes/src/eyebrow-vent/panel.tsx
+#, fuzzy
+msgid "node.eyebrowVent.panel.delete"
+msgstr "删除"
+
+# Review: required
+# Source-Hash: 99ac4d03c3061f3a
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Depth"
+#: packages/nodes/src/eyebrow-vent/panel.tsx
+#, fuzzy
+msgid "node.eyebrowVent.panel.depth"
+msgstr "深度"
+
+# Review: required
+# Source-Hash: 12df69f42beb0643
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Dimensions"
+#: packages/nodes/src/eyebrow-vent/panel.tsx
+#, fuzzy
+msgid "node.eyebrowVent.panel.dimensions"
+msgstr "尺寸"
+
+# Review: required
+# Source-Hash: 34dc96fe77a31e51
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Duplicate"
+#: packages/nodes/src/eyebrow-vent/panel.tsx
+#, fuzzy
+msgid "node.eyebrowVent.panel.duplicate"
+msgstr "复制"
+
+# Review: required
+# Source-Hash: 654b29319185ac66
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Eyebrow Vent"
+#: packages/nodes/src/eyebrow-vent/panel.tsx
+#, fuzzy
+msgid "node.eyebrowVent.panel.eyebrowVent"
+msgstr "眉形通风口"
+
+# Review: required
+# Source-Hash: a2d107a5deaa01f4
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Half-round"
+#: packages/nodes/src/eyebrow-vent/panel.tsx
+#, fuzzy
+msgid "node.eyebrowVent.panel.halfRound"
+msgstr "半圆"
+
+# Review: required
+# Source-Hash: 646ef0fbcbc58edf
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Height"
+#: packages/nodes/src/eyebrow-vent/panel.tsx
+#, fuzzy
+msgid "node.eyebrowVent.panel.height"
+msgstr "高度"
+
+# Review: required
+# Source-Hash: 318192f27a774fb7
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Louvers"
+#: packages/nodes/src/eyebrow-vent/panel.tsx
+#, fuzzy
+msgid "node.eyebrowVent.panel.louvers"
+msgstr "百叶"
+
+# Review: required
+# Source-Hash: bd02c614454fbd2b
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Move"
+#: packages/nodes/src/eyebrow-vent/panel.tsx
+#, fuzzy
+msgid "node.eyebrowVent.panel.move"
+msgstr "移动"
+
+# Review: required
+# Source-Hash: 9da0cbfad144d737
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Position"
+#: packages/nodes/src/eyebrow-vent/panel.tsx
+#, fuzzy
+msgid "node.eyebrowVent.panel.position"
+msgstr "位置"
+
+# Review: required
+# Source-Hash: 01989595ee7c1dc0
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Rotation"
+#: packages/nodes/src/eyebrow-vent/panel.tsx
+#, fuzzy
+msgid "node.eyebrowVent.panel.rotation"
+msgstr "旋转"
+
+# Review: required
+# Source-Hash: e16f85e4bebfefb1
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Scoop"
+#: packages/nodes/src/eyebrow-vent/panel.tsx
+#, fuzzy
+msgid "node.eyebrowVent.panel.scoop"
+msgstr "勺形"
+
+# Review: required
+# Source-Hash: ec53d40877e11b62
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Slant-box"
+#: packages/nodes/src/eyebrow-vent/panel.tsx
+#, fuzzy
+msgid "node.eyebrowVent.panel.slantBox"
+msgstr "斜箱"
+
+# Review: required
+# Source-Hash: 1a79a485d91f3f28
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Style"
+#: packages/nodes/src/eyebrow-vent/panel.tsx
+#, fuzzy
+msgid "node.eyebrowVent.panel.style"
+msgstr "样式"
+
+# Review: required
+# Source-Hash: 3a0ccd6c46877a87
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Width"
+#: packages/nodes/src/eyebrow-vent/panel.tsx
+#, fuzzy
+msgid "node.eyebrowVent.panel.width"
+msgstr "宽度"
+
 # Source-Hash: 20032fe9430f610d
 # Review: required
 # AI-Provider: cursor-agent
@@ -22608,6 +23299,246 @@ msgstr "眉形通风口"
 msgid "node.fence.description"
 msgstr "立柱和填充可配置的直线或曲线围栏段。"
 
+# Review: required
+# Source-Hash: 6f84b85097bc1ffc
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Add point after"
+#: packages/nodes/src/fence/inspector-editors.tsx
+#, fuzzy
+msgid "node.fence.inspectorEditors.addPointAfter"
+msgstr "在后面添加点"
+
+# Review: required
+# Source-Hash: 1a15ab3101e2d166
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Choose a slab or shaped surface on this level."
+#: packages/nodes/src/fence/inspector-editors.tsx
+#, fuzzy
+msgid "node.fence.inspectorEditors.chooseASlabOrShapedSurface"
+msgstr "请在此楼层选择一块楼板或造型表面。"
+
+# Review: required
+# Source-Hash: 78a5625401384000
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Choose a surface"
+#: packages/nodes/src/fence/inspector-editors.tsx
+#, fuzzy
+msgid "node.fence.inspectorEditors.chooseASurface"
+msgstr "选择表面"
+
+# Review: required
+# Source-Hash: 2ee121dca87bb64a
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Corner"
+#: packages/nodes/src/fence/inspector-editors.tsx
+#, fuzzy
+msgid "node.fence.inspectorEditors.corner"
+msgstr "转角"
+
+# Review: required
+# Source-Hash: f08fbb462e9afc0e
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Curve"
+#: packages/nodes/src/fence/inspector-editors.tsx
+#, fuzzy
+msgid "node.fence.inspectorEditors.curve"
+msgstr "曲线"
+
+# Review: required
+# Source-Hash: a028e08962c388e0
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Curved"
+#: packages/nodes/src/fence/inspector-editors.tsx
+#, fuzzy
+msgid "node.fence.inspectorEditors.curved"
+msgstr "弧形"
+
+# Review: required
+# Source-Hash: 81b75058b7843a0c
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "{style, select, picket {Distribution controls pickets in each bay between posts.} horizontal {Distribution controls posts along the full fence.} other {Distribution controls infill pieces between the two end posts.}} Spacing is measured between centers. The available width limits the count so pieces do not overlap."
+#: packages/nodes/src/fence/inspector-editors.tsx
+#, fuzzy
+msgid "node.fence.inspectorEditors.distributionInfo"
+msgstr "{style, select, picket {分布控制各柱间开间内的栅条。} horizontal {分布控制整段围栏上的立柱。} other {分布控制两端立柱之间的填充件。}}间距按中心计算。可用宽度会限制数量，避免构件重叠。"
+
+# Review: required
+# Source-Hash: fbc8f54b0e3fdeb1
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Edit path"
+#: packages/nodes/src/fence/inspector-editors.tsx
+#, fuzzy
+msgid "node.fence.inspectorEditors.editPath"
+msgstr "编辑路径"
+
+# Review: required
+# Source-Hash: 55686db44529c013
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Extend path"
+#: packages/nodes/src/fence/inspector-editors.tsx
+#, fuzzy
+msgid "node.fence.inspectorEditors.extendPath"
+msgstr "延长路径"
+
+# Review: required
+# Source-Hash: 0bf0f27e631aa98d
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Follow highest surface"
+#: packages/nodes/src/fence/inspector-editors.tsx
+#, fuzzy
+msgid "node.fence.inspectorEditors.followHighestSurface"
+msgstr "跟随最高表面"
+
+# Review: required
+# Source-Hash: e0b381fcb05a65c4
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Follow selected surface"
+#: packages/nodes/src/fence/inspector-editors.tsx
+#, fuzzy
+msgid "node.fence.inspectorEditors.followSelectedSurface"
+msgstr "跟随所选表面"
+
+# Review: required
+# Source-Hash: c418d97f803af8dd
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Hold starting height"
+#: packages/nodes/src/fence/inspector-editors.tsx
+#, fuzzy
+msgid "node.fence.inspectorEditors.holdStartingHeight"
+msgstr "保持起始高度"
+
+# Review: required
+# Source-Hash: 295ca9336dc1935b
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Join"
+#: packages/nodes/src/fence/inspector-editors.tsx
+#, fuzzy
+msgid "node.fence.inspectorEditors.join"
+msgstr "连接"
+
+# Review: required
+# Source-Hash: 643687bc3adaac76
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Length"
+#: packages/nodes/src/fence/inspector-editors.tsx
+#, fuzzy
+msgid "node.fence.inspectorEditors.length"
+msgstr "长度"
+
+# Review: required
+# Source-Hash: 1fedc8a2f2ea6887
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "{count, plural, one {{number} point} other {{number} points}} · {length} m"
+#: packages/nodes/src/fence/inspector-editors.tsx
+#, fuzzy
+msgid "node.fence.inspectorEditors.pathSummary"
+msgstr "{count, plural, other {{number} 个点}} · {length} m"
+
+# Review: required
+# Source-Hash: c96d499e11181429
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Picket rail projection"
+#: packages/nodes/src/fence/inspector-editors.tsx
+#, fuzzy
+msgid "node.fence.inspectorEditors.picketRailProjection"
+msgstr "栅条相对横杆的凸出"
+
+# Review: required
+# Source-Hash: a1880fca8372d06f
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Point"
+#: packages/nodes/src/fence/inspector-editors.tsx
+#, fuzzy
+msgid "node.fence.inspectorEditors.point"
+msgstr "点"
+
+# Review: required
+# Source-Hash: 39bc6254b5307f53
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Remove point"
+#: packages/nodes/src/fence/inspector-editors.tsx
+#, fuzzy
+msgid "node.fence.inspectorEditors.removePoint"
+msgstr "移除点"
+
+# Review: required
+# Source-Hash: ea56af3a0d7a65e4
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Set each span to straight or curved, then drag its points and curve handles in either view."
+#: packages/nodes/src/fence/inspector-editors.tsx
+#, fuzzy
+msgid "node.fence.inspectorEditors.setEachSpanToStraightOr"
+msgstr "将每段设为直线或曲线，然后在任一视图中拖动其点和曲线控制柄。"
+
+# Review: required
+# Source-Hash: 354c8bc5c8da5a6e
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Smooth"
+#: packages/nodes/src/fence/inspector-editors.tsx
+#, fuzzy
+msgid "node.fence.inspectorEditors.smooth"
+msgstr "平滑"
+
+# Review: required
+# Source-Hash: 3c700cc1299a150f
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Span to point {number}"
+#: packages/nodes/src/fence/inspector-editors.tsx
+#, fuzzy
+msgid "node.fence.inspectorEditors.spanToPointNumber"
+msgstr "至点 {number} 的分段"
+
+# Review: required
+# Source-Hash: 4ee35f740730ae87
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Straight"
+#: packages/nodes/src/fence/inspector-editors.tsx
+#, fuzzy
+msgid "node.fence.inspectorEditors.straight"
+msgstr "直跑"
+
+# Review: required
+# Source-Hash: 78a454b7ac7a3cd9
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Surface"
+#: packages/nodes/src/fence/inspector-editors.tsx
+#, fuzzy
+msgid "node.fence.inspectorEditors.surface"
+msgstr "表面"
+
+# Review: required
+# Source-Hash: ab2de0428c093018
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Surface behavior"
+#: packages/nodes/src/fence/inspector-editors.tsx
+#, fuzzy
+msgid "node.fence.inspectorEditors.surfaceBehavior"
+msgstr "表面行为"
+
 # Source-Hash: 02042fde61b5aa11
 # Review: required
 # AI-Provider: cursor-agent
@@ -22617,6 +23548,426 @@ msgstr "立柱和填充可配置的直线或曲线围栏段。"
 #, fuzzy
 msgid "node.fence.label"
 msgstr "围栏"
+
+# Review: required
+# Source-Hash: 3e07a9889c1bd7f9
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Detach endpoint"
+#: packages/nodes/src/fence/move-endpoint-tool.tsx
+#, fuzzy
+msgid "node.fence.moveEndpointTool.detachEndpoint"
+msgstr "分离端点"
+
+# Review: required
+# Source-Hash: 7a3ce9fec6370e3e
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Drag endpoint"
+#: packages/nodes/src/fence/move-endpoint-tool.tsx
+#, fuzzy
+msgid "node.fence.moveEndpointTool.dragEndpoint"
+msgstr "拖动端点"
+
+# Review: required
+# Source-Hash: d7cf5045c01b2eb9
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Close"
+#: packages/nodes/src/fence-feature/actions.tsx
+#, fuzzy
+msgid "node.fenceFeature.actions.close"
+msgstr "关闭"
+
+# Review: required
+# Source-Hash: 3e52f04f92e08070
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Open"
+#: packages/nodes/src/fence-feature/actions.tsx
+#, fuzzy
+msgid "node.fenceFeature.actions.open"
+msgstr "打开"
+
+# Review: required
+# Source-Hash: fc4cf2bc034fc547
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Board width"
+#: packages/nodes/src/fence-feature/inspector.tsx
+#, fuzzy
+msgid "node.fenceFeature.inspector.boardWidth"
+msgstr "板宽"
+
+# Review: required
+# Source-Hash: f3b11e5b2dd3b25f
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Bracing"
+#: packages/nodes/src/fence-feature/inspector.tsx
+#, fuzzy
+msgid "node.fenceFeature.inspector.bracing"
+msgstr "斜撑"
+
+# Review: required
+# Source-Hash: d09ec3d9565734c3
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Distance from start"
+#: packages/nodes/src/fence-feature/inspector.tsx
+#, fuzzy
+msgid "node.fenceFeature.inspector.distanceFromStart"
+msgstr "距起点距离"
+
+# Review: required
+# Source-Hash: dcd803eaf3796298
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Fence unavailable."
+#: packages/nodes/src/fence-feature/inspector.tsx
+#, fuzzy
+msgid "node.fenceFeature.inspector.fenceUnavailable"
+msgstr "围栏不可用。"
+
+# Review: required
+# Source-Hash: 3519d91b7bda18a5
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Frame width"
+#: packages/nodes/src/fence-feature/inspector.tsx
+#, fuzzy
+msgid "node.fenceFeature.inspector.frameWidth"
+msgstr "框架宽度"
+
+# Review: required
+# Source-Hash: cb18554b2420e700
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Gate height"
+#: packages/nodes/src/fence-feature/inspector.tsx
+#, fuzzy
+msgid "node.fenceFeature.inspector.gateHeight"
+msgstr "门高度"
+
+# Review: required
+# Source-Hash: 54098b5ee574737a
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Gate style"
+#: packages/nodes/src/fence-feature/inspector.tsx
+#, fuzzy
+msgid "node.fenceFeature.inspector.gateStyle"
+msgstr "大门样式"
+
+# Review: required
+# Source-Hash: 4fc3e60be28f60d5
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Ground clearance"
+#: packages/nodes/src/fence-feature/inspector.tsx
+#, fuzzy
+msgid "node.fenceFeature.inspector.groundClearance"
+msgstr "离地间隙"
+
+# Review: required
+# Source-Hash: 916f2e07bf082795
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Hinges and latch"
+#: packages/nodes/src/fence-feature/inspector.tsx
+#, fuzzy
+msgid "node.fenceFeature.inspector.hingesAndLatch"
+msgstr "铰链与门闩"
+
+# Review: required
+# Source-Hash: 5bd2e597fbb2a2c9
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Hinge side"
+#: packages/nodes/src/fence-feature/inspector.tsx
+#, fuzzy
+msgid "node.fenceFeature.inspector.hingeSide"
+msgstr "铰链侧"
+
+# Review: required
+# Source-Hash: 8fec7e969045a8e7
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Horizontal boards"
+#: packages/nodes/src/fence-feature/inspector.tsx
+#, fuzzy
+msgid "node.fenceFeature.inspector.horizontalBoards"
+msgstr "横向板条"
+
+# Review: required
+# Source-Hash: f4addad87cc4223e
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Infill spacing"
+#: packages/nodes/src/fence-feature/inspector.tsx
+#, fuzzy
+msgid "node.fenceFeature.inspector.infillSpacing"
+msgstr "填充间距"
+
+# Review: required
+# Source-Hash: cdec08b292742b20
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Jamb posts"
+#: packages/nodes/src/fence-feature/inspector.tsx
+#, fuzzy
+msgid "node.fenceFeature.inspector.jambPosts"
+msgstr "门框立柱"
+
+# Review: required
+# Source-Hash: ef88410453ee7414
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Keep the opening inside the fence and clear of other gates or passages."
+#: packages/nodes/src/fence-feature/inspector.tsx
+#, fuzzy
+msgid "node.fenceFeature.inspector.keepTheOpeningInsideTheFence"
+msgstr "请将开口保持在围栏内，并避开其他门或通道。"
+
+# Review: required
+# Source-Hash: 67cd0171b226fedb
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Leaf thickness"
+#: packages/nodes/src/fence-feature/inspector.tsx
+#, fuzzy
+msgid "node.fenceFeature.inspector.leafThickness"
+msgstr "门扇厚度"
+
+# Review: required
+# Source-Hash: c390ba248e629b9e
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Leaves"
+#: packages/nodes/src/fence-feature/inspector.tsx
+#, fuzzy
+msgid "node.fenceFeature.inspector.leaves"
+msgstr "门扇"
+
+# Review: required
+# Source-Hash: d7bb934589475512
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Left leaf proportion"
+#: packages/nodes/src/fence-feature/inspector.tsx
+#, fuzzy
+msgid "node.fenceFeature.inspector.leftLeafProportion"
+msgstr "左门扇比例"
+
+# Review: required
+# Source-Hash: aa9fe0ebace8957d
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Match fence height"
+#: packages/nodes/src/fence-feature/inspector.tsx
+#, fuzzy
+msgid "node.fenceFeature.inspector.matchFenceHeight"
+msgstr "与围栏同高"
+
+# Review: required
+# Source-Hash: c15c1af69ec5c1eb
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Match fence style"
+#: packages/nodes/src/fence-feature/inspector.tsx
+#, fuzzy
+msgid "node.fenceFeature.inspector.matchFenceStyle"
+msgstr "匹配围栏样式"
+
+# Review: required
+# Source-Hash: 51b7ab6a0a78d90a
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Opening angle"
+#: packages/nodes/src/fence-feature/inspector.tsx
+#, fuzzy
+msgid "node.fenceFeature.inspector.openingAngle"
+msgstr "开启角度"
+
+# Review: required
+# Source-Hash: d2e20300c07aa722
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Opening width"
+#: packages/nodes/src/fence-feature/inspector.tsx
+#, fuzzy
+msgid "node.fenceFeature.inspector.openingWidth"
+msgstr "开口宽度"
+
+# Review: required
+# Source-Hash: 6b108fb1d0eb8f9d
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Open rails"
+#: packages/nodes/src/fence-feature/inspector.tsx
+#, fuzzy
+msgid "node.fenceFeature.inspector.openRails"
+msgstr "开放栏杆"
+
+# Review: required
+# Source-Hash: d500c4b7827d3390
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Cross"
+#: packages/nodes/src/fence-feature/inspector.tsx
+#, fuzzy
+msgid "node.fenceFeature.inspector.option.cross"
+msgstr "十字"
+
+# Review: required
+# Source-Hash: 7420c0d2caee1c22
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Diagonal"
+#: packages/nodes/src/fence-feature/inspector.tsx
+#, fuzzy
+msgid "node.fenceFeature.inspector.option.diagonal"
+msgstr "斜撑"
+
+# Review: required
+# Source-Hash: 7308869944020839
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Double gate"
+#: packages/nodes/src/fence-feature/inspector.tsx
+#, fuzzy
+msgid "node.fenceFeature.inspector.option.doubleGate"
+msgstr "双开大门"
+
+# Review: required
+# Source-Hash: 1f4ad5ad3e1be222
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Inward"
+#: packages/nodes/src/fence-feature/inspector.tsx
+#, fuzzy
+msgid "node.fenceFeature.inspector.option.inward"
+msgstr "向内"
+
+# Review: required
+# Source-Hash: f365c6b6dd9ebab9
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Left"
+#: packages/nodes/src/fence-feature/inspector.tsx
+#, fuzzy
+msgid "node.fenceFeature.inspector.option.left"
+msgstr "左"
+
+# Review: required
+# Source-Hash: f2953d2931e36d0c
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "None"
+#: packages/nodes/src/fence-feature/inspector.tsx
+#, fuzzy
+msgid "node.fenceFeature.inspector.option.none"
+msgstr "无"
+
+# Review: required
+# Source-Hash: ccd8f06b8f8d27c9
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Outward"
+#: packages/nodes/src/fence-feature/inspector.tsx
+#, fuzzy
+msgid "node.fenceFeature.inspector.option.outward"
+msgstr "向外"
+
+# Review: required
+# Source-Hash: b34d5ee0f218221d
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Right"
+#: packages/nodes/src/fence-feature/inspector.tsx
+#, fuzzy
+msgid "node.fenceFeature.inspector.option.right"
+msgstr "右"
+
+# Review: required
+# Source-Hash: d327097d9ac1099f
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Single gate"
+#: packages/nodes/src/fence-feature/inspector.tsx
+#, fuzzy
+msgid "node.fenceFeature.inspector.option.singleGate"
+msgstr "单开大门"
+
+# Review: required
+# Source-Hash: 9295ddc2805b21e2
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Picket"
+#: packages/nodes/src/fence-feature/inspector.tsx
+#, fuzzy
+msgid "node.fenceFeature.inspector.picket"
+msgstr "尖桩"
+
+# Review: required
+# Source-Hash: 8dd5999b235f60ab
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Post height"
+#: packages/nodes/src/fence-feature/inspector.tsx
+#, fuzzy
+msgid "node.fenceFeature.inspector.postHeight"
+msgstr "立柱高度"
+
+# Review: required
+# Source-Hash: 90bcd7a8123ec343
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Remove gate"
+#: packages/nodes/src/fence-feature/inspector.tsx
+#, fuzzy
+msgid "node.fenceFeature.inspector.removeGate"
+msgstr "移除大门"
+
+# Review: required
+# Source-Hash: 7e3505710613543f
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Remove opening"
+#: packages/nodes/src/fence-feature/inspector.tsx
+#, fuzzy
+msgid "node.fenceFeature.inspector.removeOpening"
+msgstr "移除开口"
+
+# Review: required
+# Source-Hash: af6f8885fe0fa4e9
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Solid privacy"
+#: packages/nodes/src/fence-feature/inspector.tsx
+#, fuzzy
+msgid "node.fenceFeature.inspector.solidPrivacy"
+msgstr "实心遮挡"
+
+# Review: required
+# Source-Hash: 1a7048255c3bdfcb
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Swing direction"
+#: packages/nodes/src/fence-feature/inspector.tsx
+#, fuzzy
+msgid "node.fenceFeature.inspector.swingDirection"
+msgstr "开启方向"
+
+# Review: required
+# Source-Hash: eba3df14a2de0812
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Vertical slats"
+#: packages/nodes/src/fence-feature/inspector.tsx
+#, fuzzy
+msgid "node.fenceFeature.inspector.verticalSlats"
+msgstr "竖向板条"
 
 # Source-Hash: df61821ed00852d8
 # Review: required
@@ -22698,6 +24049,46 @@ msgstr "参考图"
 msgid "node.gutter.description"
 msgstr "沿屋面檐口布置的雨水槽。"
 
+# Review: required
+# Source-Hash: fc7d4ecf973db135
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Add Downspout"
+#: packages/nodes/src/gutter/downspouts-panel.tsx
+#, fuzzy
+msgid "node.gutter.downspoutsPanel.addDownspout"
+msgstr "添加落水管"
+
+# Review: required
+# Source-Hash: 9b9929bac2c39bca
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Downspout {number}"
+#: packages/nodes/src/gutter/downspouts-panel.tsx
+#, fuzzy
+msgid "node.gutter.downspoutsPanel.downspoutNumber"
+msgstr "落水管 {number}"
+
+# Review: required
+# Source-Hash: fc34d45725838141
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Downspouts"
+#: packages/nodes/src/gutter/downspouts-panel.tsx
+#, fuzzy
+msgid "node.gutter.downspoutsPanel.downspouts"
+msgstr "落水管"
+
+# Review: required
+# Source-Hash: ac329c74056f0616
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Remove downspout"
+#: packages/nodes/src/gutter/downspouts-panel.tsx
+#, fuzzy
+msgid "node.gutter.downspoutsPanel.removeDownspout"
+msgstr "移除落水管"
+
 # Source-Hash: 14ba981da3627ae2
 # Review: required
 # AI-Provider: cursor-agent
@@ -22771,6 +24162,16 @@ msgstr "暖风炉、空气处理机或冷凝机组 — 风管连接到其送风 
 #, fuzzy
 msgid "node.hvacEquipment.label"
 msgstr "暖通设备"
+
+# Review: required
+# Source-Hash: 8fb180251a321cef
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "R/T rotate"
+#: packages/nodes/src/hvac-equipment/tool.tsx
+#, fuzzy
+msgid "node.hvacEquipment.tool.rTRotate"
+msgstr "R/T 旋转"
 
 # Source-Hash: f24a1089d9256460
 # Review: required
@@ -23102,6 +24503,26 @@ msgstr "独立冷媒液管 — 细的裸铜管；跟随模式会沿现有冷媒�
 msgid "node.liquidLine.label"
 msgstr "液管"
 
+# Review: required
+# Source-Hash: 601aaf23ce5a9279
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Click to trace this lineset run"
+#: packages/nodes/src/liquid-line/tool.tsx
+#, fuzzy
+msgid "node.liquidLine.tool.clickToTraceThisLinesetRun"
+msgstr "点击以追踪此冷媒管段"
+
+# Review: required
+# Source-Hash: 77df017af9260468
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Follow: hover a lineset"
+#: packages/nodes/src/liquid-line/tool.tsx
+#, fuzzy
+msgid "node.liquidLine.tool.followHoverALineset"
+msgstr "跟随：悬停到冷媒管上"
+
 # Source-Hash: ff4e3bb72267859e
 # Review: required
 # AI-Provider: cursor-agent
@@ -23165,6 +24586,36 @@ msgstr "排水管件 — 弯头、45° 斜三通或卫生三通。"
 msgid "node.pipeFitting.label"
 msgstr "管件"
 
+# Review: required
+# Source-Hash: dd86efcab72fc5c7
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Axis"
+#: packages/nodes/src/pipe-fitting/tool.tsx
+#, fuzzy
+msgid "node.pipeFitting.tool.axis"
+msgstr "轴"
+
+# Review: required
+# Source-Hash: 5232a826549f915e
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "⌥ axis"
+#: packages/nodes/src/pipe-fitting/tool.tsx
+#, fuzzy
+msgid "node.pipeFitting.tool.axis2"
+msgstr "⌥ 轴"
+
+# Review: required
+# Source-Hash: 8fb180251a321cef
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "R/T rotate"
+#: packages/nodes/src/pipe-fitting/tool.tsx
+#, fuzzy
+msgid "node.pipeFitting.tool.rTRotate"
+msgstr "R/T 旋转"
+
 # Source-Hash: a0bb4762aa66fa3e
 # Review: required
 # AI-Provider: cursor-agent
@@ -23205,6 +24656,26 @@ msgstr "排水 P 型存水弯 — 污水管上的水封。存水弯臂通向通�
 msgid "node.pipeTrap.label"
 msgstr "存水弯"
 
+# Review: required
+# Source-Hash: 73078bc0f5d686fa
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "{diameter}\" Trap"
+#: packages/nodes/src/pipe-trap/tool.tsx
+#, fuzzy
+msgid "node.pipeTrap.tool.diameterTrap"
+msgstr "{diameter}\" 存水弯"
+
+# Review: required
+# Source-Hash: 8fb180251a321cef
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "R/T rotate"
+#: packages/nodes/src/pipe-trap/tool.tsx
+#, fuzzy
+msgid "node.pipeTrap.tool.rTRotate"
+msgstr "R/T 旋转"
+
 # Source-Hash: 0efe82436b915f6d
 # Review: required
 # AI-Provider: cursor-agent
@@ -23244,6 +24715,176 @@ msgstr "沿屋面屋脊布置的通风条。"
 #, fuzzy
 msgid "node.ridgeVent.label"
 msgstr "屋脊通风口"
+
+# Review: required
+# Source-Hash: aa6d82bdb3cc1d9a
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Actions"
+#: packages/nodes/src/ridge-vent/panel.tsx
+#, fuzzy
+msgid "node.ridgeVent.panel.actions"
+msgstr "操作"
+
+# Review: required
+# Source-Hash: b26de372b4b0eaac
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Delete"
+#: packages/nodes/src/ridge-vent/panel.tsx
+#, fuzzy
+msgid "node.ridgeVent.panel.delete"
+msgstr "删除"
+
+# Review: required
+# Source-Hash: 12df69f42beb0643
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Dimensions"
+#: packages/nodes/src/ridge-vent/panel.tsx
+#, fuzzy
+msgid "node.ridgeVent.panel.dimensions"
+msgstr "尺寸"
+
+# Review: required
+# Source-Hash: 34dc96fe77a31e51
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Duplicate"
+#: packages/nodes/src/ridge-vent/panel.tsx
+#, fuzzy
+msgid "node.ridgeVent.panel.duplicate"
+msgstr "复制"
+
+# Review: required
+# Source-Hash: 18bf817325c1c537
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "End Caps"
+#: packages/nodes/src/ridge-vent/panel.tsx
+#, fuzzy
+msgid "node.ridgeVent.panel.endCaps"
+msgstr "端盖"
+
+# Review: required
+# Source-Hash: 466f817a0102d4a5
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Flanged"
+#: packages/nodes/src/ridge-vent/panel.tsx
+#, fuzzy
+msgid "node.ridgeVent.panel.flanged"
+msgstr "带法兰"
+
+# Review: required
+# Source-Hash: 646ef0fbcbc58edf
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Height"
+#: packages/nodes/src/ridge-vent/panel.tsx
+#, fuzzy
+msgid "node.ridgeVent.panel.height"
+msgstr "高度"
+
+# Review: required
+# Source-Hash: 643687bc3adaac76
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Length"
+#: packages/nodes/src/ridge-vent/panel.tsx
+#, fuzzy
+msgid "node.ridgeVent.panel.length"
+msgstr "长度"
+
+# Review: required
+# Source-Hash: bd02c614454fbd2b
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Move"
+#: packages/nodes/src/ridge-vent/panel.tsx
+#, fuzzy
+msgid "node.ridgeVent.panel.move"
+msgstr "移动"
+
+# Review: required
+# Source-Hash: 3e52f04f92e08070
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Open"
+#: packages/nodes/src/ridge-vent/panel.tsx
+#, fuzzy
+msgid "node.ridgeVent.panel.open"
+msgstr "打开"
+
+# Review: required
+# Source-Hash: 9da0cbfad144d737
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Position"
+#: packages/nodes/src/ridge-vent/panel.tsx
+#, fuzzy
+msgid "node.ridgeVent.panel.position"
+msgstr "位置"
+
+# Review: required
+# Source-Hash: 54b74080f33c8c4e
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Ridge Vent"
+#: packages/nodes/src/ridge-vent/panel.tsx
+#, fuzzy
+msgid "node.ridgeVent.panel.ridgeVent"
+msgstr "屋脊通风口"
+
+# Review: required
+# Source-Hash: 01989595ee7c1dc0
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Rotation"
+#: packages/nodes/src/ridge-vent/panel.tsx
+#, fuzzy
+msgid "node.ridgeVent.panel.rotation"
+msgstr "旋转"
+
+# Review: required
+# Source-Hash: e9046e9823b400a0
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Shingled"
+#: packages/nodes/src/ridge-vent/panel.tsx
+#, fuzzy
+msgid "node.ridgeVent.panel.shingled"
+msgstr "瓦片铺设"
+
+# Review: required
+# Source-Hash: d998c212030bc7c2
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Standard"
+#: packages/nodes/src/ridge-vent/panel.tsx
+#, fuzzy
+msgid "node.ridgeVent.panel.standard"
+msgstr "标准"
+
+# Review: required
+# Source-Hash: 1a79a485d91f3f28
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Style"
+#: packages/nodes/src/ridge-vent/panel.tsx
+#, fuzzy
+msgid "node.ridgeVent.panel.style"
+msgstr "样式"
+
+# Review: required
+# Source-Hash: 3a0ccd6c46877a87
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Width"
+#: packages/nodes/src/ridge-vent/panel.tsx
+#, fuzzy
+msgid "node.ridgeVent.panel.width"
+msgstr "宽度"
 
 # Source-Hash: c6d3976b4eb80586
 # Review: required
@@ -24906,6 +26547,116 @@ msgstr "关灯"
 #, fuzzy
 msgid "node.shared.itemInteractionActions.turnLightOn"
 msgstr "开灯"
+
+# Review: required
+# Source-Hash: ee1c8bc3e27fb550
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Automatic support"
+#: packages/nodes/src/shared/run-hanger-inspector.tsx
+#, fuzzy
+msgid "node.shared.runHangerInspector.automaticSupport"
+msgstr "自动支撑"
+
+# Review: required
+# Source-Hash: 1353e40320c72a99
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Hanger {number} · segment {segment}"
+#: packages/nodes/src/shared/run-hanger-inspector.tsx
+#, fuzzy
+msgid "node.shared.runHangerInspector.hangerOnSegment"
+msgstr "吊架 {number} · 第 {segment} 段"
+
+# Review: required
+# Source-Hash: 737ced90d0454197
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Individual hangers"
+#: packages/nodes/src/shared/run-hanger-inspector.tsx
+#, fuzzy
+msgid "node.shared.runHangerInspector.individualHangers"
+msgstr "单个吊架"
+
+# Review: required
+# Source-Hash: e6b17b09ed91c8c2
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Missing support"
+#: packages/nodes/src/shared/run-hanger-inspector.tsx
+#, fuzzy
+msgid "node.shared.runHangerInspector.missingSupport"
+msgstr "缺少支撑"
+
+# Review: required
+# Source-Hash: c895c3c603382ec9
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "No support within reach. Move the hanger or choose another host."
+#: packages/nodes/src/shared/run-hanger-inspector.tsx
+#, fuzzy
+msgid "node.shared.runHangerInspector.noSupportWithinReachMoveThe"
+msgstr "附近没有可用支撑。请移动吊架或选择其他承托构件。"
+
+# Review: required
+# Source-Hash: 6ce526cb7444be36
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Hanger {number} position in metres"
+#: packages/nodes/src/shared/run-hanger-inspector.tsx
+#, fuzzy
+msgid "node.shared.runHangerInspector.positionLabel"
+msgstr "吊架 {number} 的位置（米）"
+
+# Review: required
+# Source-Hash: cbd36c4b82a55539
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Position (m)"
+#: packages/nodes/src/shared/run-hanger-inspector.tsx
+#, fuzzy
+msgid "node.shared.runHangerInspector.positionM"
+msgstr "位置（m）"
+
+# Review: required
+# Source-Hash: b629c4f8388fd36f
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Positions are measured along each path segment. Changing spacing regenerates the numbered slots."
+#: packages/nodes/src/shared/run-hanger-inspector.tsx
+#, fuzzy
+msgid "node.shared.runHangerInspector.positionsAreMeasuredAlongEachPath"
+msgstr "位置沿各路径段测量。更改间距会重新生成编号位置。"
+
+# Review: required
+# Source-Hash: c21cfbdb64e53388
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Reveal support"
+#: packages/nodes/src/shared/run-hanger-inspector.tsx
+#, fuzzy
+msgid "node.shared.runHangerInspector.revealSupport"
+msgstr "显示支撑"
+
+# Review: required
+# Source-Hash: 9d5e4440db18e477
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Skip"
+#: packages/nodes/src/shared/run-hanger-inspector.tsx
+#, fuzzy
+msgid "node.shared.runHangerInspector.skip"
+msgstr "跳过"
+
+# Review: required
+# Source-Hash: 1b184f78bf989931
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Hanger {number} support"
+#: packages/nodes/src/shared/run-hanger-inspector.tsx
+#, fuzzy
+msgid "node.shared.runHangerInspector.supportLabel"
+msgstr "吊架 {number} 的支撑"
 
 # Source-Hash: b2d703d283baf64a
 # Review: required
@@ -28366,6 +30117,196 @@ msgstr "用于屋面坡的风力旋转排气扇。"
 #, fuzzy
 msgid "node.turbineVent.label"
 msgstr "涡轮通风器"
+
+# Review: required
+# Source-Hash: aa6d82bdb3cc1d9a
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Actions"
+#: packages/nodes/src/turbine-vent/panel.tsx
+#, fuzzy
+msgid "node.turbineVent.panel.actions"
+msgstr "操作"
+
+# Review: required
+# Source-Hash: c65f02bcdc3231d6
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Cylinder"
+#: packages/nodes/src/turbine-vent/panel.tsx
+#, fuzzy
+msgid "node.turbineVent.panel.cylinder"
+msgstr "圆柱"
+
+# Review: required
+# Source-Hash: b26de372b4b0eaac
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Delete"
+#: packages/nodes/src/turbine-vent/panel.tsx
+#, fuzzy
+msgid "node.turbineVent.panel.delete"
+msgstr "删除"
+
+# Review: required
+# Source-Hash: 016d8e70618916d4
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Diameter"
+#: packages/nodes/src/turbine-vent/panel.tsx
+#, fuzzy
+msgid "node.turbineVent.panel.diameter"
+msgstr "直径"
+
+# Review: required
+# Source-Hash: 12df69f42beb0643
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Dimensions"
+#: packages/nodes/src/turbine-vent/panel.tsx
+#, fuzzy
+msgid "node.turbineVent.panel.dimensions"
+msgstr "尺寸"
+
+# Review: required
+# Source-Hash: 34dc96fe77a31e51
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Duplicate"
+#: packages/nodes/src/turbine-vent/panel.tsx
+#, fuzzy
+msgid "node.turbineVent.panel.duplicate"
+msgstr "复制"
+
+# Review: required
+# Source-Hash: 2d4223f80dc3945c
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Globe"
+#: packages/nodes/src/turbine-vent/panel.tsx
+#, fuzzy
+msgid "node.turbineVent.panel.globe"
+msgstr "球形"
+
+# Review: required
+# Source-Hash: 646ef0fbcbc58edf
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Height"
+#: packages/nodes/src/turbine-vent/panel.tsx
+#, fuzzy
+msgid "node.turbineVent.panel.height"
+msgstr "高度"
+
+# Review: required
+# Source-Hash: c0ff16d77ebc9593
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Motion"
+#: packages/nodes/src/turbine-vent/panel.tsx
+#, fuzzy
+msgid "node.turbineVent.panel.motion"
+msgstr "运动"
+
+# Review: required
+# Source-Hash: bd02c614454fbd2b
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Move"
+#: packages/nodes/src/turbine-vent/panel.tsx
+#, fuzzy
+msgid "node.turbineVent.panel.move"
+msgstr "移动"
+
+# Review: required
+# Source-Hash: 6faf9532dcbfe4bc
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Neck Height"
+#: packages/nodes/src/turbine-vent/panel.tsx
+#, fuzzy
+msgid "node.turbineVent.panel.neckHeight"
+msgstr "颈部高度"
+
+# Review: required
+# Source-Hash: 1550d72740e66f77
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Pause"
+#: packages/nodes/src/turbine-vent/panel.tsx
+#, fuzzy
+msgid "node.turbineVent.panel.pause"
+msgstr "暂停"
+
+# Review: required
+# Source-Hash: c7b10382e01914ad
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Play"
+#: packages/nodes/src/turbine-vent/panel.tsx
+#, fuzzy
+msgid "node.turbineVent.panel.play"
+msgstr "播放"
+
+# Review: required
+# Source-Hash: 9da0cbfad144d737
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Position"
+#: packages/nodes/src/turbine-vent/panel.tsx
+#, fuzzy
+msgid "node.turbineVent.panel.position"
+msgstr "位置"
+
+# Review: required
+# Source-Hash: 01989595ee7c1dc0
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Rotation"
+#: packages/nodes/src/turbine-vent/panel.tsx
+#, fuzzy
+msgid "node.turbineVent.panel.rotation"
+msgstr "旋转"
+
+# Review: required
+# Source-Hash: bf553d40ce68834d
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Spin Speed"
+#: packages/nodes/src/turbine-vent/panel.tsx
+#, fuzzy
+msgid "node.turbineVent.panel.spinSpeed"
+msgstr "转速"
+
+# Review: required
+# Source-Hash: 1a79a485d91f3f28
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Style"
+#: packages/nodes/src/turbine-vent/panel.tsx
+#, fuzzy
+msgid "node.turbineVent.panel.style"
+msgstr "样式"
+
+# Review: required
+# Source-Hash: 4a855abb962f5e7a
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Turbine Vent"
+#: packages/nodes/src/turbine-vent/panel.tsx
+#, fuzzy
+msgid "node.turbineVent.panel.turbineVent"
+msgstr "涡轮通风器"
+
+# Review: required
+# Source-Hash: 80cef0dce71e121f
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus
+# English: "Vanes"
+#: packages/nodes/src/turbine-vent/panel.tsx
+#, fuzzy
+msgid "node.turbineVent.panel.vanes"
+msgstr "叶片"
 
 # Source-Hash: e3d2aaaf5c72bc3b
 # Review: required

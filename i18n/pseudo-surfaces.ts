@@ -1,18 +1,26 @@
 import type { Page } from 'playwright-core'
-import { DormerNode, SkylightNode, SolarPanelNode } from '../packages/core/src/schema'
 import type { SceneGraph } from '@pascal-app/core/clone-scene-graph'
 import { template as twoBedroom } from '../packages/mcp/src/templates/two-bedroom'
 import { pseudoLocalize } from '../scripts/i18n'
 import { cabinetPresetById } from '../packages/nodes/src/cabinet/presets'
 import {
+  BoxVentNode,
   CabinetModuleNode,
   CabinetNode,
   ChimneyNode,
   ColumnNode,
+  CupolaNode,
+  DormerNode,
+  EyebrowVentNode,
+  FenceNode,
+  RidgeVentNode,
   RoofNode,
   RoofSegmentNode,
+  SkylightNode,
+  SolarPanelNode,
   StairNode,
   StairSegmentNode,
+  TurbineVentNode,
 } from '../packages/core/src/schema'
 
 /**
@@ -184,6 +192,29 @@ export const apartmentPath = async (base: string) =>
   `/project/${await auditScene(base, 'two-bedroom', twoBedroom)}`
 const apartmentData = ['Project #1', 'Living / Kitchen', 'Bedroom 1', 'Bedroom 2', 'Bath']
 
+/** The furnished scene plus the five roof vents on its roof segment and a garden fence. */
+function ventsAndFenceScene() {
+  const graph = furnishedScene() as unknown as {
+    nodes: Record<string, { children?: string[] }>
+  }
+  const onRoof = { parentId: 'rseg_audit', roofSegmentId: 'rseg_audit' }
+  const vents = [
+    BoxVentNode.parse({ id: 'bvent_audit', ...onRoof, position: [-1, 0, -1.5] }),
+    RidgeVentNode.parse({ id: 'rvent_audit', ...onRoof, position: [0, 0, 0] }),
+    TurbineVentNode.parse({ id: 'tvent_audit', ...onRoof, position: [1, 0, -1.5] }),
+    EyebrowVentNode.parse({ id: 'eyebrow-vent_audit', ...onRoof, position: [-1, 0, 1.5] }),
+    CupolaNode.parse({ id: 'cupola_audit', ...onRoof, position: [1, 0, 1.5] }),
+  ]
+  const fence = FenceNode.parse({ id: 'fence_audit', parentId: 'level_0', start: [-2, 12], end: [6, 12] })
+  for (const node of [...vents, fence]) graph.nodes[node.id] = node
+  graph.nodes.rseg_audit?.children?.push(...vents.map((node) => node.id))
+  graph.nodes.level_0?.children?.push(fence.id)
+  return graph as unknown as SceneGraph
+}
+
+const ventsAndFencePath = async (base: string) =>
+  `/project/${await auditScene(base, 'vents-fence', ventsAndFenceScene())}`
+
 async function openLevelMenu(page: Page, row = 0): Promise<void> {
   const level = page.locator('[data-surface="level-selector"] .group\\/level').nth(row)
   await level.hover()
@@ -324,6 +355,49 @@ export const surfaces: PseudoSurface[] = [
     scope: '[data-surface="build-tab"]',
     // A kind registered by the external @pascal-app/plugin-streetscape, which owns its copy.
     data: ['Road'],
+  },
+  {
+    name: 'box-vent-panel',
+    path: ventsAndFencePath,
+    steps: (page) => openLayer(page, 'Box Vent'),
+    scope: '[data-editor-inspector]',
+    data: furnishedData,
+  },
+  {
+    name: 'ridge-vent-panel',
+    path: ventsAndFencePath,
+    steps: (page) => openLayer(page, 'Ridge Vent'),
+    scope: '[data-editor-inspector]',
+    data: furnishedData,
+  },
+  {
+    name: 'turbine-vent-panel',
+    path: ventsAndFencePath,
+    steps: (page) => openLayer(page, 'Turbine Vent'),
+    scope: '[data-editor-inspector]',
+    // The spin-speed unit symbol.
+    data: [...furnishedData, 'rad/s'],
+  },
+  {
+    name: 'eyebrow-vent-panel',
+    path: ventsAndFencePath,
+    steps: (page) => openLayer(page, 'Eyebrow Vent'),
+    scope: '[data-editor-inspector]',
+    data: furnishedData,
+  },
+  {
+    name: 'cupola-panel',
+    path: ventsAndFencePath,
+    steps: (page) => openLayer(page, 'Cupola'),
+    scope: '[data-editor-inspector]',
+    data: furnishedData,
+  },
+  {
+    name: 'fence-panel',
+    path: ventsAndFencePath,
+    steps: (page) => openLayer(page, 'Fence'),
+    scope: '[data-editor-inspector]',
+    data: furnishedData,
   },
   {
     name: 'room-panel',

@@ -1,11 +1,12 @@
 'use client'
 
-import { type AnyNodeId, emitter, useScene } from '@pascal-app/core'
+import { type AnyNodeId, emitter, usePascalI18n, useScene } from '@pascal-app/core'
 import { useMemo } from 'react'
 import { planRunHangerSlots, type SupportedRun } from './run-hangers'
 import SystemCheckPanel from './system-check-panel'
 
 export default function RunHangerInspector({ node }: { node: SupportedRun }) {
+  const i18n = usePascalI18n()
   const nodes = useScene((state) => state.nodes)
   const slots = useMemo(() => planRunHangerSlots(node, nodes), [node, nodes])
   if (!node.autoHangers) return <SystemCheckPanel nodeId={node.id} nodes={nodes} />
@@ -28,10 +29,18 @@ export default function RunHangerInspector({ node }: { node: SupportedRun }) {
     <>
       <SystemCheckPanel nodeId={node.id} nodes={nodes} />
       <section className="space-y-2 border-t pt-3">
-        <h3 className="text-sm font-medium">Individual hangers</h3>
+        <h3 className="text-sm font-medium">
+          {i18n._({
+            id: 'node.shared.runHangerInspector.individualHangers',
+            message: 'Individual hangers',
+          })}
+        </h3>
         <p className="text-xs text-muted-foreground">
-          Positions are measured along each path segment. Changing spacing regenerates the numbered
-          slots.
+          {i18n._({
+            id: 'node.shared.runHangerInspector.positionsAreMeasuredAlongEachPath',
+            message:
+              'Positions are measured along each path segment. Changing spacing regenerates the numbered slots.',
+          })}
         </p>
         <div className="max-h-72 space-y-3 overflow-y-auto">
           {slots.map((slot, index) => {
@@ -43,7 +52,11 @@ export default function RunHangerInspector({ node }: { node: SupportedRun }) {
               <div key={slot.id} className="space-y-1 rounded border p-2 text-xs">
                 <div className="flex justify-between">
                   <span>
-                    Hanger {index + 1} · segment {slot.segmentIndex + 1}
+                    {i18n._({
+                      id: 'node.shared.runHangerInspector.hangerOnSegment',
+                      message: 'Hanger {number} · segment {segment}',
+                      values: { number: index + 1, segment: slot.segmentIndex + 1 },
+                    })}
                   </span>
                   <label>
                     <input
@@ -51,19 +64,29 @@ export default function RunHangerInspector({ node }: { node: SupportedRun }) {
                       checked={slot.skipped}
                       onChange={(event) => update(slot.id, { skipped: event.target.checked })}
                     />{' '}
-                    Skip
+                    {i18n._({ id: 'node.shared.runHangerInspector.skip', message: 'Skip' })}
                   </label>
                 </div>
                 {!slot.skipped && !slot.hanger && (
                   <p role="status" className="text-amber-600 dark:text-amber-400">
-                    No support within reach. Move the hanger or choose another host.
+                    {i18n._({
+                      id: 'node.shared.runHangerInspector.noSupportWithinReachMoveThe',
+                      message: 'No support within reach. Move the hanger or choose another host.',
+                    })}
                   </p>
                 )}
                 <label className="flex justify-between">
-                  Position (m)
+                  {i18n._({
+                    id: 'node.shared.runHangerInspector.positionM',
+                    message: 'Position (m)',
+                  })}
                   <input
                     key={`${slot.id}:${slot.fraction}`}
-                    aria-label={`Hanger ${index + 1} position in metres`}
+                    aria-label={i18n._({
+                      id: 'node.shared.runHangerInspector.positionLabel',
+                      message: 'Hanger {number} position in metres',
+                      values: { number: index + 1 },
+                    })}
                     type="number"
                     min={0}
                     max={length}
@@ -84,14 +107,28 @@ export default function RunHangerInspector({ node }: { node: SupportedRun }) {
                   />
                 </label>
                 <select
-                  aria-label={`Hanger ${index + 1} support`}
+                  aria-label={i18n._({
+                    id: 'node.shared.runHangerInspector.supportLabel',
+                    message: 'Hanger {number} support',
+                    values: { number: index + 1 },
+                  })}
                   value={hostId}
                   className="w-full bg-background"
                   onChange={(event) => update(slot.id, { hostId: event.target.value })}
                 >
-                  <option value="">Automatic support</option>
+                  <option value="">
+                    {i18n._({
+                      id: 'node.shared.runHangerInspector.automaticSupport',
+                      message: 'Automatic support',
+                    })}
+                  </option>
                   {hostId && !hosts.some((host) => host.id === hostId) && (
-                    <option value={hostId}>Missing support</option>
+                    <option value={hostId}>
+                      {i18n._({
+                        id: 'node.shared.runHangerInspector.missingSupport',
+                        message: 'Missing support',
+                      })}
+                    </option>
                   )}
                   {hosts.map((host) => (
                     <option key={host.id} value={host.id}>
@@ -109,7 +146,10 @@ export default function RunHangerInspector({ node }: { node: SupportedRun }) {
                       })
                     }
                   >
-                    Reveal support
+                    {i18n._({
+                      id: 'node.shared.runHangerInspector.revealSupport',
+                      message: 'Reveal support',
+                    })}
                   </button>
                 )}
               </div>

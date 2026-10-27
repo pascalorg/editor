@@ -8,6 +8,7 @@ import {
   fenceFeatureData,
   fenceWithFeatures,
   getFenceCenterlineLength,
+  usePascalI18n,
   useScene,
 } from '@pascal-app/core'
 import { ActionButton, SliderControl, ToggleControl } from '@pascal-app/editor'
@@ -22,7 +23,8 @@ export function FenceFeatureEditor({
   node: FenceFeatureNode
   onUpdate: (patch: Partial<FenceFeatureNode>) => void
 }) {
-  const [error, setError] = useState('')
+  const i18n = usePascalI18n()
+  const [blocked, setBlocked] = useState(false)
   const parentId = child.parentId as AnyNodeId | undefined
   const parent = useScene((s) => (parentId ? s.nodes[parentId] : undefined))
   const siblings = useScene(
@@ -33,7 +35,15 @@ export function FenceFeatureEditor({
         : []
     }),
   )
-  if (parent?.type !== 'fence') return <p>Fence unavailable.</p>
+  if (parent?.type !== 'fence')
+    return (
+      <p>
+        {i18n._({
+          id: 'node.fenceFeature.inspector.fenceUnavailable',
+          message: 'Fence unavailable.',
+        })}
+      </p>
+    )
   const node = fenceWithFeatures(parent, siblings)
   const features = [fenceFeatureData(child)]
   const length = getFenceCenterlineLength(node)
@@ -45,17 +55,20 @@ export function FenceFeatureEditor({
       (patch.width !== undefined || patch.center !== undefined) &&
       !canPlaceFenceFeature(node, next)
     ) {
-      setError('Keep the opening inside the fence and clear of other gates or passages.')
+      setBlocked(true)
       return
     }
-    setError('')
+    setBlocked(false)
     onUpdate(patch)
   }
   return (
     <div className="space-y-2 text-xs">
-      {error && (
+      {blocked && (
         <p role="status" className="text-amber-500">
-          {error}
+          {i18n._({
+            id: 'node.fenceFeature.inspector.keepTheOpeningInsideTheFence',
+            message: 'Keep the opening inside the fence and clear of other gates or passages.',
+          })}
         </p>
       )}
       {features.map((feature) => {
@@ -66,39 +79,87 @@ export function FenceFeatureEditor({
             ? [
                 {
                   key: 'leafType',
-                  label: 'Leaves',
+                  label: i18n._({ id: 'node.fenceFeature.inspector.leaves', message: 'Leaves' }),
                   value: feature.leafType ?? 'single',
                   options: [
-                    ['single', 'Single gate'],
-                    ['double', 'Double gate'],
+                    [
+                      'single',
+                      i18n._({
+                        id: 'node.fenceFeature.inspector.option.singleGate',
+                        message: 'Single gate',
+                      }),
+                    ],
+                    [
+                      'double',
+                      i18n._({
+                        id: 'node.fenceFeature.inspector.option.doubleGate',
+                        message: 'Double gate',
+                      }),
+                    ],
                   ],
                 },
                 {
                   key: 'hinge',
-                  label: 'Hinge side',
+                  label: i18n._({
+                    id: 'node.fenceFeature.inspector.hingeSide',
+                    message: 'Hinge side',
+                  }),
                   value: feature.hinge ?? 'left',
                   options: [
-                    ['left', 'Left'],
-                    ['right', 'Right'],
+                    [
+                      'left',
+                      i18n._({ id: 'node.fenceFeature.inspector.option.left', message: 'Left' }),
+                    ],
+                    [
+                      'right',
+                      i18n._({ id: 'node.fenceFeature.inspector.option.right', message: 'Right' }),
+                    ],
                   ],
                 },
                 {
                   key: 'swing',
-                  label: 'Swing direction',
+                  label: i18n._({
+                    id: 'node.fenceFeature.inspector.swingDirection',
+                    message: 'Swing direction',
+                  }),
                   value: feature.swing ?? 'inward',
                   options: [
-                    ['inward', 'Inward'],
-                    ['outward', 'Outward'],
+                    [
+                      'inward',
+                      i18n._({
+                        id: 'node.fenceFeature.inspector.option.inward',
+                        message: 'Inward',
+                      }),
+                    ],
+                    [
+                      'outward',
+                      i18n._({
+                        id: 'node.fenceFeature.inspector.option.outward',
+                        message: 'Outward',
+                      }),
+                    ],
                   ],
                 },
                 {
                   key: 'brace',
-                  label: 'Bracing',
+                  label: i18n._({ id: 'node.fenceFeature.inspector.bracing', message: 'Bracing' }),
                   value: feature.brace ?? 'none',
                   options: [
-                    ['none', 'None'],
-                    ['diagonal', 'Diagonal'],
-                    ['cross', 'Cross'],
+                    [
+                      'none',
+                      i18n._({ id: 'node.fenceFeature.inspector.option.none', message: 'None' }),
+                    ],
+                    [
+                      'diagonal',
+                      i18n._({
+                        id: 'node.fenceFeature.inspector.option.diagonal',
+                        message: 'Diagonal',
+                      }),
+                    ],
+                    [
+                      'cross',
+                      i18n._({ id: 'node.fenceFeature.inspector.option.cross', message: 'Cross' }),
+                    ],
                   ],
                 },
               ]
@@ -107,7 +168,10 @@ export function FenceFeatureEditor({
         const numbers = [
           {
             key: 'center',
-            label: 'Distance from start',
+            label: i18n._({
+              id: 'node.fenceFeature.inspector.distanceFromStart',
+              message: 'Distance from start',
+            }),
             value: feature.center,
             min: 0,
             max: length,
@@ -116,7 +180,10 @@ export function FenceFeatureEditor({
           },
           {
             key: 'width',
-            label: 'Opening width',
+            label: i18n._({
+              id: 'node.fenceFeature.inspector.openingWidth',
+              message: 'Opening width',
+            }),
             value: feature.width,
             min: 0.35,
             max: length,
@@ -125,7 +192,9 @@ export function FenceFeatureEditor({
           },
           {
             key: 'height',
-            label: gate ? 'Gate height' : 'Post height',
+            label: gate
+              ? i18n._({ id: 'node.fenceFeature.inspector.gateHeight', message: 'Gate height' })
+              : i18n._({ id: 'node.fenceFeature.inspector.postHeight', message: 'Post height' }),
             value: height,
             min: 0.3,
             max: 1000,
@@ -136,7 +205,10 @@ export function FenceFeatureEditor({
             ? [
                 {
                   key: 'clearance',
-                  label: 'Ground clearance',
+                  label: i18n._({
+                    id: 'node.fenceFeature.inspector.groundClearance',
+                    message: 'Ground clearance',
+                  }),
                   value: bottom,
                   min: 0,
                   max: 1000,
@@ -145,7 +217,10 @@ export function FenceFeatureEditor({
                 },
                 {
                   key: 'openAngle',
-                  label: 'Opening angle',
+                  label: i18n._({
+                    id: 'node.fenceFeature.inspector.openingAngle',
+                    message: 'Opening angle',
+                  }),
                   value: feature.openAngle ?? 0,
                   min: 0,
                   max: 170,
@@ -154,7 +229,10 @@ export function FenceFeatureEditor({
                 },
                 {
                   key: 'thickness',
-                  label: 'Leaf thickness',
+                  label: i18n._({
+                    id: 'node.fenceFeature.inspector.leafThickness',
+                    message: 'Leaf thickness',
+                  }),
                   value: feature.thickness ?? 0.06,
                   min: 0.02,
                   max: 0.3,
@@ -163,7 +241,10 @@ export function FenceFeatureEditor({
                 },
                 {
                   key: 'frameWidth',
-                  label: 'Frame width',
+                  label: i18n._({
+                    id: 'node.fenceFeature.inspector.frameWidth',
+                    message: 'Frame width',
+                  }),
                   value: feature.frameWidth ?? 0.055,
                   min: 0.025,
                   max: 0.2,
@@ -172,7 +253,10 @@ export function FenceFeatureEditor({
                 },
                 {
                   key: 'spacing',
-                  label: 'Infill spacing',
+                  label: i18n._({
+                    id: 'node.fenceFeature.inspector.infillSpacing',
+                    message: 'Infill spacing',
+                  }),
                   value: feature.spacing ?? 0.15,
                   min: 0.04,
                   max: 1000,
@@ -181,7 +265,10 @@ export function FenceFeatureEditor({
                 },
                 {
                   key: 'boardWidth',
-                  label: 'Board width',
+                  label: i18n._({
+                    id: 'node.fenceFeature.inspector.boardWidth',
+                    message: 'Board width',
+                  }),
                   value: feature.boardWidth ?? 0.055,
                   min: 0.02,
                   max: 0.3,
@@ -192,7 +279,10 @@ export function FenceFeatureEditor({
                   ? [
                       {
                         key: 'leafSplit',
-                        label: 'Left leaf proportion',
+                        label: i18n._({
+                          id: 'node.fenceFeature.inspector.leftLeafProportion',
+                          message: 'Left leaf proportion',
+                        }),
                         value: feature.leafSplit ?? 0.5,
                         min: 0.2,
                         max: 0.8,
@@ -208,7 +298,10 @@ export function FenceFeatureEditor({
           <div key={feature.id}>
             <div className="mt-2 space-y-2">
               <ToggleControl
-                label="Match fence style"
+                label={i18n._({
+                  id: 'node.fenceFeature.inspector.matchFenceStyle',
+                  message: 'Match fence style',
+                })}
                 checked={feature.matchFenceStyle !== false}
                 onChange={(checked) =>
                   update(feature.id, {
@@ -220,7 +313,10 @@ export function FenceFeatureEditor({
                 }
               />
               <ToggleControl
-                label="Match fence height"
+                label={i18n._({
+                  id: 'node.fenceFeature.inspector.matchFenceHeight',
+                  message: 'Match fence height',
+                })}
                 checked={feature.matchFenceHeight ?? feature.matchFenceStyle !== false}
                 onChange={(checked) =>
                   update(feature.id, {
@@ -232,7 +328,7 @@ export function FenceFeatureEditor({
               />
               {gate && feature.matchFenceStyle === false && (
                 <label className="flex min-h-9 items-center justify-between gap-3 text-xs text-muted-foreground">
-                  Gate style
+                  {i18n._({ id: 'node.fenceFeature.inspector.gateStyle', message: 'Gate style' })}
                   <select
                     className="h-8 min-w-0 max-w-40 rounded-lg border border-border/50 bg-black/4 dark:bg-[#2C2C2E] px-2 text-xs text-foreground outline-none transition-colors hover:bg-black/8 dark:hover:bg-[#3e3e3e] focus-visible:ring-2 focus-visible:ring-ring"
                     value={feature.style && feature.style !== 'match' ? feature.style : 'picket'}
@@ -241,11 +337,33 @@ export function FenceFeatureEditor({
                       if (style.success) update(feature.id, { style: style.data })
                     }}
                   >
-                    <option value="picket">Picket</option>
-                    <option value="slat">Vertical slats</option>
-                    <option value="horizontal">Horizontal boards</option>
-                    <option value="privacy">Solid privacy</option>
-                    <option value="rail">Open rails</option>
+                    <option value="picket">
+                      {i18n._({ id: 'node.fenceFeature.inspector.picket', message: 'Picket' })}
+                    </option>
+                    <option value="slat">
+                      {i18n._({
+                        id: 'node.fenceFeature.inspector.verticalSlats',
+                        message: 'Vertical slats',
+                      })}
+                    </option>
+                    <option value="horizontal">
+                      {i18n._({
+                        id: 'node.fenceFeature.inspector.horizontalBoards',
+                        message: 'Horizontal boards',
+                      })}
+                    </option>
+                    <option value="privacy">
+                      {i18n._({
+                        id: 'node.fenceFeature.inspector.solidPrivacy',
+                        message: 'Solid privacy',
+                      })}
+                    </option>
+                    <option value="rail">
+                      {i18n._({
+                        id: 'node.fenceFeature.inspector.openRails',
+                        message: 'Open rails',
+                      })}
+                    </option>
                   </select>
                 </label>
               )}
@@ -304,20 +422,36 @@ export function FenceFeatureEditor({
                   />
                 ))}
               <ToggleControl
-                label="Jamb posts"
+                label={i18n._({
+                  id: 'node.fenceFeature.inspector.jambPosts',
+                  message: 'Jamb posts',
+                })}
                 checked={feature.showPosts !== false}
                 onChange={(checked) => update(feature.id, { showPosts: checked })}
               />
               {gate && (
                 <ToggleControl
-                  label="Hinges and latch"
+                  label={i18n._({
+                    id: 'node.fenceFeature.inspector.hingesAndLatch',
+                    message: 'Hinges and latch',
+                  })}
                   checked={feature.showHardware !== false}
                   onChange={(checked) => update(feature.id, { showHardware: checked })}
                 />
               )}
               <ActionButton
                 type="button"
-                label={gate ? 'Remove gate' : 'Remove opening'}
+                label={
+                  gate
+                    ? i18n._({
+                        id: 'node.fenceFeature.inspector.removeGate',
+                        message: 'Remove gate',
+                      })
+                    : i18n._({
+                        id: 'node.fenceFeature.inspector.removeOpening',
+                        message: 'Remove opening',
+                      })
+                }
                 className="w-full text-destructive hover:text-destructive"
                 onClick={() => useScene.getState().deleteNode(child.id)}
               />

@@ -7,6 +7,7 @@ import {
   type GutterNode,
   generateId,
   type RoofSegmentNode,
+  usePascalI18n,
   useScene,
 } from '@pascal-app/core'
 import { ActionButton, ActionGroup, PanelSection, triggerSFX } from '@pascal-app/editor'
@@ -56,6 +57,7 @@ function nextOutletOffset(gutter: GutterNode): number {
  * on it, and each row's ✕ removes both the downspout and its outlet.
  */
 export default function DownspoutsPanel() {
+  const i18n = usePascalI18n()
   const selectedId = useViewer((s) => s.selection.selectedIds[0]) as AnyNodeId | undefined
   const setSelection = useViewer((s) => s.setSelection)
 
@@ -128,7 +130,9 @@ export default function DownspoutsPanel() {
   }
 
   return (
-    <PanelSection title="Downspouts">
+    <PanelSection
+      title={i18n._({ id: 'node.gutter.downspoutsPanel.downspouts', message: 'Downspouts' })}
+    >
       <div className="flex flex-col gap-1">
         {downspouts.map((d, i) => (
           <div
@@ -140,10 +144,18 @@ export default function DownspoutsPanel() {
               onClick={() => handleSelectDownspout(d.id as AnyNodeId)}
               type="button"
             >
-              {d.name || `Downspout ${i + 1}`}
+              {d.name ||
+                i18n._({
+                  id: 'node.gutter.downspoutsPanel.downspoutNumber',
+                  message: 'Downspout {number}',
+                  values: { number: i + 1 },
+                })}
             </button>
             <button
-              aria-label="Remove downspout"
+              aria-label={i18n._({
+                id: 'node.gutter.downspoutsPanel.removeDownspout',
+                message: 'Remove downspout',
+              })}
               className="ml-2 text-muted-foreground text-xs transition-colors hover:text-red-600 dark:hover:text-red-400"
               onClick={() => handleRemove(d)}
               type="button"
@@ -153,7 +165,13 @@ export default function DownspoutsPanel() {
           </div>
         ))}
         <ActionGroup>
-          <ActionButton label="Add Downspout" onClick={handleAddDownspout} />
+          <ActionButton
+            label={i18n._({
+              id: 'node.gutter.downspoutsPanel.addDownspout',
+              message: 'Add Downspout',
+            })}
+            onClick={handleAddDownspout}
+          />
         </ActionGroup>
       </div>
     </PanelSection>
