@@ -138,8 +138,9 @@ paths, `https://…`, and `http://localhost|127.0.0.1/…`. Optional origin
 narrowing via `process.env.PASCAL_ALLOWED_ASSET_ORIGINS` (comma-separated),
 read by core's shared parser (`parseAllowedOrigins` / `allowedOriginsFrom` in
 `@pascal-app/core/schema`), which `safeFetch` in this package uses too: each
-`http:` or `https:` entry is normalised to its origin, other entries are skipped
-with a warning naming only their index and reason, and a value with no valid
+`http:` or `https:` entry is normalised to its origin (credentials dropped),
+other schemes and wildcard hosts are skipped, warnings name only the entry's
+index and reason, and a value with no valid
 entry (whitespace only included) admits nothing. Unset or empty means no
 allowlist. Rejects `javascript:`, `file:`, `ftp:`, `ws:`, `data:text/html`,
 `data:application/*`, link-local / private IPs over bare `http`, empty strings,
