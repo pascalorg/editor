@@ -689,7 +689,7 @@ describe('safeFetch — DNS and the timeout', () => {
     const failure = () => {
       const err = new Error('ENOTFOUND')
       let seen = false
-      Object.defineProperty(err, 'message', {
+      Object.defineProperty(err, 'code', {
         get() {
           if (!seen) observe()
           seen = true
@@ -772,5 +772,113 @@ describe('safeFetch — request credentials', () => {
     expect(resolved).toHaveLength(0)
     await expectBlocked(safeFetch('https://a.example/r', {}, deps), 'url_credentials_not_allowed')
     expect(requests.map((r) => r.url)).toEqual(['https://a.example/r'])
+  })
+})
+
+describe('safeFetch — error data is redacted at the source', () => {
+  const Q = '?token=s3cr3t&X-Amz-Signature=s3cr3t#frag'
+  const at = (path: string) => `https://a.example${path}${Q}`
+  const hanging = (init: PinnedRequestInit) =>
+    new Promise<IncomingMessage>((_, reject) =>
+      init.signal.addEventListener('abort', () =>
+        reject(Object.assign(new Error(`aborted ${at('/x')}`), { name: 'AbortError' })),
+      ),
+    )
+  const net = () => {
+    const network = fakeNetwork(
+      { 'a.example': [PUBLIC_V4], 'private.example': ['10.0.0.1'], 'empty.example': [] },
+      {
+        [at('/redirect-nowhere')]: () => response(302),
+        [at('/fail')]: () => response(500),
+        [at('/declared')]: () => response(200, { 'content-length': '100' }),
+        [at('/streamed')]: () => response(200, {}, 'x'.repeat(100)),
+        [at('/loop')]: () => response(302, { location: at('/loop') }),
+      },
+    )
+    const { resolve, request } = network.deps
+    network.deps.resolve = async (hostname) => {
+      if (hostname === 'gone.example') {
+        throw Object.assign(new Error(`getaddrinfo ENOTFOUND gone.example ${Q}`), {
+          code: 'ENOTFOUND',
+        })
+      }
+      return resolve(hostname)
+    }
+    network.deps.request = async (url, init) => {
+      if (url.pathname === '/hang') return hanging(init)
+      if (url.pathname === '/refused') {
+        throw Object.assign(new Error(`connect ECONNREFUSED ${url.toString()}`), {
+          code: 'ECONNREFUSED',
+        })
+      }
+      return request(url, init)
+    }
+    return network.deps
+  }
+
+  const cases: [reason: string, run: () => Promise<unknown>][] = [
+    ['invalid_url', () => safeFetch(`http://exa mple.com/x${Q}`)],
+    ['url_scheme_not_allowed', () => safeFetch(`ftp://a.example/x${Q}`)],
+    ['url_credentials_not_allowed', () => safeFetch(`https://user:hunter2@a.example/x${Q}`)],
+    [
+      'url_origin_not_allowlisted',
+      () => withAllowlist('https://cdn.example.com', () => safeFetch(at('/x'))),
+    ],
+    ['url_port_not_allowed', () => safeFetch(`https://a.example:8080/x${Q}`)],
+    ['url_host_blocked', () => safeFetch(`http://localhost/x${Q}`)],
+    ['url_host_blocked', () => safeFetch(`https://private.example/x${Q}`, {}, net())],
+    ['dns_lookup_failed', () => safeFetch(`https://gone.example/x${Q}`, {}, net())],
+    ['dns_lookup_failed', () => safeFetch(`https://empty.example/x${Q}`, {}, net())],
+    ['redirect_without_location', () => safeFetch(at('/redirect-nowhere'), {}, net())],
+    ['fetch_failed', () => safeFetch(at('/fail'), {}, net())],
+    ['response_too_large', () => safeFetch(at('/declared'), { maxBytes: 10 }, net())],
+    ['response_too_large', () => safeFetch(at('/streamed'), { maxBytes: 10 }, net())],
+    ['too_many_redirects', () => safeFetch(at('/loop'), {}, net())],
+    ['fetch_error', () => safeFetch(at('/refused'), {}, net())],
+    [
+      'fetch_timeout',
+      async () => {
+        jest.useFakeTimers()
+        try {
+          const pending = safeFetch(at('/hang'), { timeoutMs: 1_000 }, net()).catch((e) => e)
+          await Promise.resolve()
+          await Promise.resolve()
+          jest.advanceTimersByTime(1_000)
+          throw await pending
+        } finally {
+          jest.useRealTimers()
+        }
+      },
+    ],
+  ]
+
+  for (const [reason, run] of cases) {
+    test(`${reason}: no query string, fragment or userinfo in the error data`, async () => {
+      const err = await run().catch((e) => e)
+      expect(err).toBeInstanceOf(ProtocolError)
+      expect((err as Error).message).toContain(reason)
+      const data = JSON.stringify((err as ProtocolError).data)
+      for (const leak of ['s3cr3t', 'hunter2', 'token=', '?', '#', '@']) {
+        expect([reason, data, data.includes(leak)]).toEqual([reason, data, false])
+      }
+    })
+  }
+
+  test('network failures report a code, not their message', async () => {
+    const dns = await safeFetch(`https://gone.example/x${Q}`, {}, net()).catch((e) => e)
+    expect((dns as ProtocolError).data).toEqual({
+      url: 'https://gone.example/x',
+      hostname: 'gone.example',
+      code: 'ENOTFOUND',
+    })
+    const fetchErr = await safeFetch(at('/refused'), {}, net()).catch((e) => e)
+    expect((fetchErr as ProtocolError).data).toEqual({
+      url: 'https://a.example/refused',
+      code: 'ECONNREFUSED',
+    })
+    const loop = await safeFetch(at('/loop'), {}, net()).catch((e) => e)
+    expect((loop as ProtocolError).data).toEqual({
+      hops: Array.from({ length: 4 }, () => 'https://a.example/loop'),
+    })
   })
 })
