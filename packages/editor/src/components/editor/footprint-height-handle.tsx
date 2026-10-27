@@ -10,7 +10,6 @@ import {
   useScene,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
-import { Html } from '@react-three/drei'
 import { type ThreeEvent, useFrame, useThree } from '@react-three/fiber'
 import { useRef, useState } from 'react'
 import { type Group, Plane, Vector2, Vector3 } from 'three'
@@ -26,6 +25,7 @@ import { runRoomHandleDrag } from '../../lib/room-handle-drag'
 import useEditor, { isGridSnapActive } from '../../store/use-editor'
 import useInteractionScope from '../../store/use-interaction-scope'
 import { suppressBoxSelectForPointer } from '../tools/select/box-select-state'
+import { Html } from './localized-html'
 import { ElevationArrows, outlineCentroid, useHandleScale } from './room-handles'
 
 export const FOOTPRINT_HEIGHT_DRAG_LABEL = 'footprint-height'

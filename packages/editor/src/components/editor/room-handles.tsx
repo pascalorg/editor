@@ -8,7 +8,6 @@ import {
   useScene,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
-import { Html } from '@react-three/drei'
 import { type ThreeEvent, useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
@@ -54,6 +53,7 @@ import useEditor, { isGridSnapActive, isMagneticSnapActive } from '../../store/u
 import { suppressBoxSelectForPointer } from '../tools/select/box-select-state'
 import { ARROW_COLOR, ARROW_SCALE, HandleArrow } from './handles/handle-arrow'
 import { resolveResizeSnapValue } from './handles/resize-snap'
+import { Html } from './localized-html'
 import { formatMeasurement } from './measurement-pill'
 import { WallPushArrow } from './wall-push-arrow'
 

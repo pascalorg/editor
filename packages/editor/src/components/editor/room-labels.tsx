@@ -19,7 +19,6 @@ import {
   type ZoneNode,
 } from '@pascal-app/core'
 import { timeSpan, useViewer } from '@pascal-app/viewer'
-import { Html } from '@react-three/drei'
 import { useFrame, useThree } from '@react-three/fiber'
 import {
   createContext,
@@ -58,6 +57,7 @@ import { selectionModifiersFromEvent } from '../../lib/selection-routing'
 import useEditor from '../../store/use-editor'
 import useInteractionScope from '../../store/use-interaction-scope'
 import { isViewVisible, VIEW_2D, VIEW_3D } from '../../store/view-layout'
+import { Html } from './localized-html'
 
 const CONTEXT_TYPES = new Set(['site', 'building', 'level'])
 

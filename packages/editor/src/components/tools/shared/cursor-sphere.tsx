@@ -1,5 +1,4 @@
 import { type MessageDescriptor, usePascalI18n } from '@pascal-app/core'
-import { Html } from '@react-three/drei'
 import type { ThreeElements } from '@react-three/fiber'
 import { forwardRef } from 'react'
 import { CircleGeometry, CylinderGeometry, type Group, SphereGeometry } from 'three'
@@ -9,6 +8,7 @@ import { EDITOR_LAYER } from '../../../lib/constants'
 import { wallCursorIcon } from '../../../lib/tool-cursor-icon'
 import useEditor from '../../../store/use-editor'
 import useWallSnapIndicator from '../../../store/use-wall-snap-indicator'
+import { Html } from '../../editor/localized-html'
 
 interface CursorSphereProps extends Omit<ThreeElements['group'], 'ref'> {
   color?: string

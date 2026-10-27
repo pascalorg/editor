@@ -19,7 +19,6 @@ import {
   type WallNode,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
-import { Html } from '@react-three/drei'
 import { createPortal, type ThreeEvent, useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
@@ -61,6 +60,7 @@ import useInteractionScope, {
 import { suppressBoxSelectForPointer } from '../tools/select/box-select-state'
 import { resolveResizeSnapValue } from './handles/resize-snap'
 import { type HandleDragControls, useHandleDrag } from './handles/use-handle-drag'
+import { Html } from './localized-html'
 import { MeasurementPill } from './measurement-pill'
 import {
   createArrowHitAreaGeometry,

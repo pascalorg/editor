@@ -2,7 +2,6 @@
 
 import '../../../three-types'
 
-import { Html } from '@react-three/drei'
 import { useEffect, useMemo } from 'react'
 import { PlaneGeometry } from 'three'
 import { distance, smoothstep, uv, vec2 } from 'three/tsl'
@@ -13,6 +12,7 @@ import {
   type LinearUnit,
   type MetricNotation,
 } from '../../../lib/measurements'
+import { Html } from '../../editor/localized-html'
 import { createLineGeometry, getBoxEdgePoints } from './placement-box-geometry'
 
 const VALID_COLOR = 0x22_c5_5e // green-500
