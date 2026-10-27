@@ -1,26 +1,26 @@
 import type { Page } from 'playwright-core'
-import { DormerNode, SkylightNode, SolarPanelNode } from '../packages/core/src/schema'
 import type { SceneGraph } from '@pascal-app/core/clone-scene-graph'
 import { template as twoBedroom } from '../packages/mcp/src/templates/two-bedroom'
-import {
-  BoxVentNode,
-  CupolaNode,
-  EyebrowVentNode,
-  FenceNode,
-  RidgeVentNode,
-  TurbineVentNode,
-} from '../packages/core/src/schema'
 import { pseudoLocalize } from '../scripts/i18n'
 import { cabinetPresetById } from '../packages/nodes/src/cabinet/presets'
 import {
+  BoxVentNode,
   CabinetModuleNode,
   CabinetNode,
   ChimneyNode,
   ColumnNode,
+  CupolaNode,
+  DormerNode,
+  EyebrowVentNode,
+  FenceNode,
+  RidgeVentNode,
   RoofNode,
   RoofSegmentNode,
+  SkylightNode,
+  SolarPanelNode,
   StairNode,
   StairSegmentNode,
+  TurbineVentNode,
 } from '../packages/core/src/schema'
 
 /**
