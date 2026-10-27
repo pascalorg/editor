@@ -13,6 +13,18 @@ const Core106GuideScaleReference = z.object({
   label: z.string(),
 })
 
+function runtimeScaleReference(overrides: Record<string, unknown> = {}): GuideScaleReference {
+  return {
+    start: [0, 0],
+    end: [1, 0],
+    realLengthMeters: 2.75,
+    measuredLengthUnits: 1,
+    metersPerUnit: 2.75,
+    label: '2.75 m',
+    ...overrides,
+  } as unknown as GuideScaleReference
+}
+
 test('floor-plan reference scales parse with the scoped locale', () => {
   expect(parseReferenceScaleLength('1,000', 'meters', 'fr')).toBe(1)
   expect(parseReferenceScaleLength('1,000', 'meters', 'en')).toBe(1000)
@@ -76,4 +88,79 @@ test('reference-scale scenes remain compatible and format numeric and legacy lab
       'fr',
     ),
   ).toBe('Known span')
+})
+
+test('oversized legacy reference labels bypass parsing within the input budget', () => {
+  const label = `${'1, '.repeat(34_000)}?`
+  const reference = runtimeScaleReference({ label })
+  const startedAt = performance.now()
+  const formatted = formatReferenceScaleLabel(reference, 'en')
+  const elapsed = performance.now() - startedAt
+
+  expect(formatted).toBe(label)
+  expect(elapsed).toBeLessThan(50)
+})
+
+test('reference-scale labels tolerate malformed persisted values', () => {
+  expect(formatReferenceScaleLabel(runtimeScaleReference({ label: 42 }), 'en')).toBe('42')
+  expect(formatReferenceScaleLabel(runtimeScaleReference({ label: null }), 'en')).toBe('')
+  expect(
+    formatReferenceScaleLabel(
+      runtimeScaleReference({
+        displayLength: 2.75,
+        displayUnit: '__proto__',
+        label: 'fallback',
+      }),
+      'en',
+    ),
+  ).toBe('fallback')
+  expect(
+    formatReferenceScaleLabel(
+      runtimeScaleReference({
+        displayLength: 2.75,
+        displayUnit: 'constructor',
+        label: 'fallback',
+      }),
+      'en',
+    ),
+  ).toBe('fallback')
+  expect(
+    formatReferenceScaleLabel(
+      runtimeScaleReference({
+        displayLength: Number.POSITIVE_INFINITY,
+        displayUnit: 'meters',
+        label: 'fallback',
+      }),
+      'en',
+    ),
+  ).toBe('fallback')
+  expect(
+    formatReferenceScaleLabel(
+      runtimeScaleReference({
+        displayLength: Number.NaN,
+        displayUnit: 'meters',
+        label: 'fallback',
+      }),
+      'en',
+    ),
+  ).toBe('fallback')
+})
+
+test('reference-scale schema caps persisted display lengths', () => {
+  expect(
+    GuideScaleReference.safeParse(
+      runtimeScaleReference({
+        displayLength: 1_000_000,
+        displayUnit: 'meters',
+      }),
+    ).success,
+  ).toBe(true)
+  expect(
+    GuideScaleReference.safeParse(
+      runtimeScaleReference({
+        displayLength: 1_000_001,
+        displayUnit: 'meters',
+      }),
+    ).success,
+  ).toBe(false)
 })

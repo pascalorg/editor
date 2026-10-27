@@ -13,11 +13,16 @@ function formatScaleValue(value: number, unit: string, locale: string): string {
   return `${formatNumber(value, { locale, max: 2 })} ${unit}`
 }
 
+function getReferenceScaleUnitLabel(unit: unknown): string | null {
+  if (typeof unit !== 'string' || !Object.hasOwn(REFERENCE_SCALE_UNIT_LABELS, unit)) return null
+  return REFERENCE_SCALE_UNIT_LABELS[unit as ReferenceScaleUnit]
+}
+
 function parseLegacyScaleLabel(label: string): { unit: string; value: number } | null {
-  const match = label.trim().match(/^([+−-]?[\d\s\u00a0\u202f.,]+)\s*(m|cm|ft|in)$/i)
+  const match = label.trim().match(/^([+−-]?[\d.,]+(?:[\s\u00a0\u202f][\d.,]+)*)\s*(m|cm|ft|in)$/i)
   if (!match) return null
 
-  const compact = match[1]!.replace(/[ \u00a0\u202f]/g, '').replace('−', '-')
+  const compact = match[1]!.replace(/[\s\u00a0\u202f]/g, '').replace('−', '-')
   const lastDot = compact.lastIndexOf('.')
   const lastComma = compact.lastIndexOf(',')
   const separatorIndex = Math.max(lastDot, lastComma)
@@ -52,14 +57,19 @@ export function createGuideScaleReference(
 }
 
 export function formatReferenceScaleLabel(reference: GuideScaleReference, locale: string): string {
-  if (reference.displayLength !== undefined && reference.displayUnit !== undefined) {
-    return formatScaleValue(
-      reference.displayLength,
-      REFERENCE_SCALE_UNIT_LABELS[reference.displayUnit],
-      locale,
-    )
+  const unitLabel = getReferenceScaleUnitLabel(reference.displayUnit)
+  if (
+    typeof reference.displayLength === 'number' &&
+    Number.isFinite(reference.displayLength) &&
+    unitLabel
+  ) {
+    return formatScaleValue(reference.displayLength, unitLabel, locale)
   }
 
-  const parsed = parseLegacyScaleLabel(reference.label)
-  return parsed ? formatScaleValue(parsed.value, parsed.unit, locale) : reference.label
+  const label: unknown = reference.label
+  if (typeof label !== 'string') return label == null ? '' : String(label)
+  if (label.length > 64) return label
+
+  const parsed = parseLegacyScaleLabel(label)
+  return parsed ? formatScaleValue(parsed.value, parsed.unit, locale) : label
 }
