@@ -3,7 +3,7 @@ name: open-pr
 description: Open or update a pull request on pascalorg/editor from the current branch, describing only what the branch actually did. Use when the user asks to open/create a PR, push and PR, or ship a branch in the editor repo.
 metadata:
   internal: true
-allowed-tools: Bash(git *) Bash(gh *) Read
+allowed-tools: Bash(git *) Bash(gh *) Read Write
 ---
 
 Open (or refresh) a pull request against `pascalorg/editor` from the current branch.
