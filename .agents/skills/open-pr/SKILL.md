@@ -3,7 +3,7 @@ name: open-pr
 description: Open or update a pull request on pascalorg/editor from the current branch, describing only what the branch actually did. Use when the user asks to open/create a PR, push and PR, or ship a branch in the editor repo.
 metadata:
   internal: true
-allowed-tools: Bash(git *) Bash(gh *) Read
+allowed-tools: Bash(git *) Bash(gh *) Read Write
 ---
 
 Open (or refresh) a pull request against `pascalorg/editor` from the current branch.
@@ -20,7 +20,7 @@ git diff --stat "$base"..HEAD
 
 The PR describes **only** these commits and this diff. Work that arrived by merging `main`, reverted commits, and patch-equivalent cherry-picks are not this PR's claims. If a file in the diff has no commit on the branch explaining it, stop and ask.
 
-Run `bun run check-types` when the change is non-trivial; never claim a check you did not run.
+Run relevant local checks; reuse checks that already cover the change. CI runs the required suite. Never claim a check you did not run.
 
 ## 2. Body = the repo template
 
@@ -40,7 +40,7 @@ git push -u origin HEAD
 gh pr view --json number,url,body 2>/dev/null     # existing PR?
 ```
 
-- None → `gh pr create --title … --body "$(cat <<'EOF' … EOF)"`.
+- None → write the description to a file, then `gh pr create --title … --body-file <file>`.
 - Exists → `gh pr edit <n> --body …`: rebuild "What" and "How to test" from the current branch, keep the media section and the reviewer's checklist ticks verbatim, keep any extra sections at the end. Change the title only if the scope changed.
 
 End the body with the attribution lines the session asks for, if any.
