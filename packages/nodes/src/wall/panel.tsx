@@ -1135,7 +1135,7 @@ function WallAssemblySection({
                 </option>
                 {studSpacing.sizes.map((spacing) => (
                   <option key={spacingKey(spacing)} value={spacingKey(spacing)}>
-                    {formatSpacing(spacing, unit)}
+                    {formatSpacing(spacing, unit, i18n)}
                   </option>
                 ))}
               </select>

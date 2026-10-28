@@ -2,6 +2,8 @@
 
 import {
   type AnyNodeId,
+  type MessageDescriptor,
+  type PascalI18n,
   resolveStairStringerLayout,
   resolveStairStructure,
   STAIR_STRINGER_SPACINGS_IN,
@@ -10,6 +12,7 @@ import {
   StairStructure,
   type StairStructureType,
   type StairTreadStock,
+  usePascalI18n,
   useScene,
 } from '@pascal-app/core'
 import { formatLinearMeasurement, MetricControl, SelectControl } from '@pascal-app/editor'
@@ -20,18 +23,52 @@ const IN = 0.0254
 /** The concrete a poured flight is painted when it carries no paint of its own. */
 const CONCRETE_PRESET = 'library:concrete-raw'
 
-const STRUCTURE_OPTIONS: { label: string; value: StairStructureType | 'none' }[] = [
-  { label: 'Original body', value: 'none' },
-  { label: 'Wood stringers', value: 'wood-stringers' },
-  { label: 'Concrete', value: 'concrete' },
-  { label: 'Steel stringers', value: 'steel-stringers' },
+const STRUCTURE_OPTIONS: { label: MessageDescriptor; value: StairStructureType | 'none' }[] = [
+  {
+    label: /* i18n */ { id: 'node.stair.structureControls.originalBody', message: 'Original body' },
+    value: 'none',
+  },
+  {
+    label: /* i18n */ {
+      id: 'node.stair.structureControls.woodStringers',
+      message: 'Wood stringers',
+    },
+    value: 'wood-stringers',
+  },
+  {
+    label: /* i18n */ { id: 'node.stair.structureControls.concrete', message: 'Concrete' },
+    value: 'concrete',
+  },
+  {
+    label: /* i18n */ {
+      id: 'node.stair.structureControls.steelStringers',
+      message: 'Steel stringers',
+    },
+    value: 'steel-stringers',
+  },
 ]
 
-const TREAD_LABELS: Record<StairTreadStock, string> = {
-  '2x6-pair': 'Two 2x6',
-  '5/4x6-pair': 'Two 5/4x6',
-  '2x12': 'One 2x12',
-  'plywood-finish': 'Plywood + finish',
+/** The lumber a tread is cut from; the trade size is a value, not copy. */
+const TREAD_LABELS: Record<StairTreadStock, MessageDescriptor> = {
+  '2x6-pair': /* i18n */ {
+    id: 'node.stair.structureControls.twoStock',
+    message: 'Two {stock}',
+    values: { stock: '2x6' },
+  },
+  '5/4x6-pair': /* i18n */ {
+    id: 'node.stair.structureControls.twoStock',
+    message: 'Two {stock}',
+    values: { stock: '5/4x6' },
+  },
+  '2x12': /* i18n */ {
+    id: 'node.stair.structureControls.oneStock',
+    message: 'One {stock}',
+    values: { stock: '2x12' },
+  },
+  'plywood-finish': /* i18n */ {
+    id: 'node.stair.structureControls.plywoodFinish',
+    message: 'Plywood + finish',
+  },
 }
 
 type Choice = 'auto' | 'yes' | 'no'
@@ -39,6 +76,51 @@ const choiceOf = (value: boolean | undefined): Choice =>
   value === undefined ? 'auto' : value ? 'yes' : 'no'
 const choiceValue = (choice: Choice): boolean | undefined =>
   choice === 'auto' ? undefined : choice === 'yes'
+
+/** A flight's stringers as the status line reads them: `3 stringers at 1' 4" o.c. (auto)`. */
+function stringerLayoutLine(
+  layout: { count: number; steel: boolean; auto: boolean },
+  spacing: string,
+  i18n: PascalI18n,
+): string {
+  const values = { count: layout.count, spacing }
+  let line: string
+  if (layout.steel)
+    line =
+      layout.count > 1
+        ? i18n._({
+            id: 'node.stair.structureControls.countSteelChannelsAtSpacing',
+            message:
+              '{count, plural, one {# steel channel at {spacing} o.c.} other {# steel channels at {spacing} o.c.}}',
+            values,
+          })
+        : i18n._({
+            id: 'node.stair.structureControls.countSteelChannels',
+            message: '{count, plural, one {# steel channel} other {# steel channels}}',
+            values,
+          })
+  else
+    line =
+      layout.count > 1
+        ? i18n._({
+            id: 'node.stair.structureControls.countStringersAtSpacing',
+            message:
+              '{count, plural, one {# stringer at {spacing} o.c.} other {# stringers at {spacing} o.c.}}',
+            values,
+          })
+        : i18n._({
+            id: 'node.stair.structureControls.countStringers',
+            message: '{count, plural, one {# stringer} other {# stringers}}',
+            values,
+          })
+  if (!layout.auto) return line
+  return i18n._({
+    id: 'node.stair.structureControls.layoutAuto',
+    message: '{layout} (auto)',
+    comment: 'The stringer count was chosen automatically, not set by hand.',
+    values: { layout: line },
+  })
+}
 
 /**
  * How the stair is built (its stringers, with the code's numbers behind them):
@@ -55,6 +137,7 @@ export function StairStructureControls({
   segments: readonly StairSegmentNode[]
   onUpdate: (patch: Partial<StairNode>) => void
 }) {
+  const i18n = usePascalI18n()
   const unit = useViewer((state) => state.unit)
   const metricNotation = useViewer((state) => state.metricNotation)
   const resolved = resolveStairStructure(node)
@@ -105,9 +188,9 @@ export function StairStructureControls({
   return (
     <div className="space-y-3">
       <SelectControl
-        label="Structure"
+        label={i18n._({ id: 'node.stair.structureControls.structure', message: 'Structure' })}
         value={resolved?.type ?? 'none'}
-        options={STRUCTURE_OPTIONS}
+        options={STRUCTURE_OPTIONS.map((option) => ({ ...option, label: i18n._(option.label) }))}
         onChange={setType}
       />
       {resolved && structure ? (
@@ -115,7 +198,10 @@ export function StairStructureControls({
           {wood ? (
             <>
               <SelectControl
-                label="Stringers"
+                label={i18n._({
+                  id: 'node.stair.structureControls.stringers',
+                  message: 'Stringers',
+                })}
                 value={structure.stringerStock}
                 options={[
                   { label: '2x12', value: '2x12' },
@@ -124,19 +210,38 @@ export function StairStructureControls({
                 onChange={(stringerStock) => update({ stringerStock })}
               />
               <SelectControl
-                label="Stringer type"
+                label={i18n._({
+                  id: 'node.stair.structureControls.stringerType',
+                  message: 'Stringer type',
+                })}
                 value={structure.stringerType}
                 options={[
-                  { label: 'Cut', value: 'cut' },
-                  { label: 'Housed sides', value: 'housed' },
+                  {
+                    label: i18n._({ id: 'node.stair.structureControls.cut', message: 'Cut' }),
+                    value: 'cut',
+                  },
+                  {
+                    label: i18n._({
+                      id: 'node.stair.structureControls.housedSides',
+                      message: 'Housed sides',
+                    }),
+                    value: 'housed',
+                  },
                 ]}
                 onChange={(stringerType) => update({ stringerType })}
               />
               <SelectControl
-                label="Max spacing"
+                label={i18n._({
+                  id: 'node.stair.structureControls.maxSpacing',
+                  message: 'Max spacing',
+                })}
                 value={String(spacingIn)}
                 options={spacings.map((inches) => ({
-                  label: `${inches} in o.c.`,
+                  label: i18n._({
+                    id: 'node.stair.structureControls.inchesInOC',
+                    message: '{inches} in o.c.',
+                    values: { inches },
+                  }),
                   value: String(inches),
                 }))}
                 onChange={(value) => update({ stringerSpacing: Number(value) * IN })}
@@ -146,12 +251,22 @@ export function StairStructureControls({
           {resolved.type !== 'concrete' && first ? (
             <>
               <SelectControl
-                label="Stringer count"
+                label={i18n._({
+                  id: 'node.stair.structureControls.stringerCount',
+                  message: 'Stringer count',
+                })}
                 value={
                   structure.stringerCount === undefined ? 'auto' : String(structure.stringerCount)
                 }
                 options={[
-                  { label: `Auto (${autoCount})`, value: 'auto' },
+                  {
+                    label: i18n._({
+                      id: 'node.stair.structureControls.autoAutocount',
+                      message: 'Auto ({autoCount})',
+                      values: { autoCount },
+                    }),
+                    value: 'auto',
+                  },
                   ...[2, 3, 4, 5, 6, 7, 8].map((count) => ({
                     label: String(count),
                     value: String(count),
@@ -162,12 +277,19 @@ export function StairStructureControls({
                 }
               />
               <SelectControl
-                label="Treads"
+                label={i18n._({ id: 'node.stair.structureControls.treads', message: 'Treads' })}
                 value={structure.treadStock ?? 'auto'}
                 options={[
-                  { label: `Auto (${TREAD_LABELS[resolved.treadStock]})`, value: 'auto' },
+                  {
+                    label: i18n._({
+                      id: 'node.stair.structureControls.autoTreads',
+                      message: 'Auto ({treads})',
+                      values: { treads: i18n._(TREAD_LABELS[resolved.treadStock]) },
+                    }),
+                    value: 'auto',
+                  },
                   ...(Object.keys(TREAD_LABELS) as StairTreadStock[]).map((stock) => ({
-                    label: TREAD_LABELS[stock],
+                    label: i18n._(TREAD_LABELS[stock]),
                     value: stock,
                   })),
                 ]}
@@ -176,26 +298,66 @@ export function StairStructureControls({
                 }
               />
               <SelectControl
-                label="Risers"
+                label={i18n._({ id: 'node.stair.structureControls.risers', message: 'Risers' })}
                 value={choiceOf(structure.closedRisers)}
                 options={[
-                  { label: `Auto (${resolved.closedRisers ? 'closed' : 'open'})`, value: 'auto' },
-                  { label: 'Closed (1x8 boards)', value: 'yes' },
-                  { label: 'Open', value: 'no' },
+                  {
+                    label: resolved.closedRisers
+                      ? i18n._({
+                          id: 'node.stair.structureControls.autoClosed',
+                          message: 'Auto (closed)',
+                        })
+                      : i18n._({
+                          id: 'node.stair.structureControls.autoOpen',
+                          message: 'Auto (open)',
+                        }),
+                    value: 'auto',
+                  },
+                  {
+                    label: i18n._({
+                      id: 'node.stair.structureControls.closed1x8Boards',
+                      message: 'Closed (1x8 boards)',
+                    }),
+                    value: 'yes',
+                  },
+                  {
+                    label: i18n._({ id: 'node.stair.structureControls.open', message: 'Open' }),
+                    value: 'no',
+                  },
                 ]}
                 onChange={(value) => update({ closedRisers: choiceValue(value as Choice) })}
               />
               {wood ? (
                 <SelectControl
-                  label="Lumber"
+                  label={i18n._({ id: 'node.stair.structureControls.lumber', message: 'Lumber' })}
                   value={choiceOf(structure.treated)}
                   options={[
                     {
-                      label: `Auto (${resolved.treated ? 'pressure-treated' : 'untreated'})`,
+                      label: resolved.treated
+                        ? i18n._({
+                            id: 'node.stair.structureControls.autoPressureTreated',
+                            message: 'Auto (pressure-treated)',
+                          })
+                        : i18n._({
+                            id: 'node.stair.structureControls.autoUntreated',
+                            message: 'Auto (untreated)',
+                          }),
                       value: 'auto',
                     },
-                    { label: 'Pressure-treated', value: 'yes' },
-                    { label: 'Untreated', value: 'no' },
+                    {
+                      label: i18n._({
+                        id: 'node.stair.structureControls.pressureTreated',
+                        message: 'Pressure-treated',
+                      }),
+                      value: 'yes',
+                    },
+                    {
+                      label: i18n._({
+                        id: 'node.stair.structureControls.untreated',
+                        message: 'Untreated',
+                      }),
+                      value: 'no',
+                    },
                   ]}
                   onChange={(value) => update({ treated: choiceValue(value as Choice) })}
                 />
@@ -203,7 +365,7 @@ export function StairStructureControls({
             </>
           ) : null}
           <MetricControl
-            label="Nosing"
+            label={i18n._({ id: 'node.stair.structureControls.nosing', message: 'Nosing' })}
             min={0}
             max={0.1}
             value={resolved.nosing}
@@ -214,18 +376,31 @@ export function StairStructureControls({
           />
           <div role="status" className="space-y-1 px-1 text-[11px] text-muted-foreground">
             {resolved.type === 'concrete' ? (
-              <div>A solid poured flight on a footing; risers closed, no stringers.</div>
+              <div>
+                {i18n._({
+                  id: 'node.stair.structureControls.aSolidPouredFlightOnA',
+                  message: 'A solid poured flight on a footing; risers closed, no stringers.',
+                })}
+              </div>
             ) : (
-              layouts.map(({ width, layout }, index) => (
-                <div key={`${index}-${width}`}>
-                  {layouts.length > 1 ? `Flight ${index + 1}: ` : ''}
-                  {layout.count} {layout.steel ? 'steel channels' : 'stringers'}
-                  {layout.count > 1
-                    ? ` at ${formatLinearMeasurement(layout.spacing, unit, metricNotation)} o.c.`
-                    : ''}
-                  {layout.auto ? ' (auto)' : ''}
-                </div>
-              ))
+              layouts.map(({ width, layout }, index) => {
+                const line = stringerLayoutLine(
+                  layout,
+                  formatLinearMeasurement(layout.spacing, unit, metricNotation),
+                  i18n,
+                )
+                return (
+                  <div key={`${index}-${width}`}>
+                    {layouts.length > 1
+                      ? i18n._({
+                          id: 'node.stair.structureControls.flightLayout',
+                          message: 'Flight {number}: {layout}',
+                          values: { number: index + 1, layout: line },
+                        })
+                      : line}
+                  </div>
+                )
+              })
             )}
           </div>
         </>

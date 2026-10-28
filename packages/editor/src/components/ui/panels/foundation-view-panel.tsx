@@ -5,9 +5,11 @@ import {
   buildingFoundationOf,
   type FoundationNode,
   foundationViewOf,
+  type MessageDescriptor,
   nodeRegistry,
   type ToolOption,
   traceFoundationOutlines,
+  usePascalI18n,
   useScene,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
@@ -48,6 +50,7 @@ function useFootingCount(buildingId: string): number {
  * (a porch slab) are not the house's and stay either way.
  */
 function OutlineSection({ buildingId }: { buildingId: string }) {
+  const i18n = usePascalI18n()
   const nodes = useScene((state) => state.nodes)
   const own = useMemo(() => houseFoundationOutlines(nodes, buildingId).length, [nodes, buildingId])
   const traceable = useMemo(
@@ -56,17 +59,39 @@ function OutlineSection({ buildingId }: { buildingId: string }) {
   )
   return (
     <section className="flex flex-col gap-1.5" data-foundation-outline>
-      <h3 className={HEADING}>Outline</h3>
+      <h3 className={HEADING}>
+        {i18n._({ id: 'editor.panels.foundationViewPanel.outline', message: 'Outline' })}
+      </h3>
       <SegmentedControl
         onChange={(source: 'walls' | 'own') =>
-          source === 'own' ? editFoundationOutline(buildingId) : followWallsForFoundation(buildingId)
+          source === 'own'
+            ? editFoundationOutline(buildingId)
+            : followWallsForFoundation(buildingId)
         }
         options={[
-          { label: 'Follow the walls', value: 'walls' },
+          {
+            label: i18n._({
+              id: 'editor.panels.foundationViewPanel.followTheWalls',
+              message: 'Follow the walls',
+            }),
+            value: 'walls',
+          },
           {
             label: (
-              <span title={traceable || own > 0 ? undefined : 'Close the outside walls into a loop first, or draw one'}>
-                Edit it myself
+              <span
+                title={
+                  traceable || own > 0
+                    ? undefined
+                    : i18n._({
+                        id: 'editor.panels.foundationViewPanel.closeTheOutsideWallsIntoA',
+                        message: 'Close the outside walls into a loop first, or draw one',
+                      })
+                }
+              >
+                {i18n._({
+                  id: 'editor.panels.foundationViewPanel.editItMyself',
+                  message: 'Edit it myself',
+                })}
               </span>
             ),
             value: 'own',
@@ -77,19 +102,32 @@ function OutlineSection({ buildingId }: { buildingId: string }) {
       />
       <p className={NOTE}>
         {own === 0
-          ? 'Traced from the outside walls: it moves when they do.'
-          : 'Its own: drag its corners and sides in the plan or in 3D. Moving the walls leaves it be.'}
+          ? i18n._({
+              id: 'editor.panels.foundationViewPanel.tracedFromTheOutsideWallsIt',
+              message: 'Traced from the outside walls: it moves when they do.',
+            })
+          : i18n._({
+              id: 'editor.panels.foundationViewPanel.itsOwnDragItsCornersAnd',
+              message:
+                'Its own: drag its corners and sides in the plan or in 3D. Moving the walls leaves it be.',
+            })}
       </p>
       {own > 0 && traceable && (
         <Button
           className={`self-start ${ACTION}`}
           onClick={() => traceFoundationFromWalls(buildingId)}
           size="sm"
-          title="Set the outline back to the outside faces of the walls, keeping it your own"
+          title={i18n._({
+            id: 'editor.panels.foundationViewPanel.setTheOutlineBackToThe',
+            message: 'Set the outline back to the outside faces of the walls, keeping it your own',
+          })}
           type="button"
           variant="outline"
         >
-          Re-trace from walls
+          {i18n._({
+            id: 'editor.panels.foundationViewPanel.reTraceFromWalls',
+            message: 'Re-trace from walls',
+          })}
         </Button>
       )}
     </section>
@@ -105,6 +143,7 @@ const NO_VALUE = () => ''
  * lit, with what it draws and how.
  */
 function DrawSection({ buildingId }: { buildingId: string }) {
+  const i18n = usePascalI18n()
   const option: ToolOption | undefined = nodeRegistry
     .get('foundation')
     ?.toolOptions?.find((candidate) => candidate.id === 'draw')
@@ -121,7 +160,9 @@ function DrawSection({ buildingId }: { buildingId: string }) {
   const active = armed ? option.choices.find((choice) => choice.value === value) : undefined
   return (
     <section className="flex flex-col gap-1.5" data-foundation-draw>
-      <h3 className={HEADING}>Draw</h3>
+      <h3 className={HEADING}>
+        {i18n._({ id: 'editor.panels.foundationViewPanel.draw', message: 'Draw' })}
+      </h3>
       <div className="grid grid-cols-3 gap-1.5">
         {option.choices.map((choice) => {
           const selected = choice === active
@@ -151,29 +192,75 @@ function DrawSection({ buildingId }: { buildingId: string }) {
       </div>
       <p className={NOTE}>
         {active
-          ? `${active.description}.${active.value === 'strip' || active.value === 'pad' ? '' : ' Click its corners; click the first again, or press Enter, to close it.'}`
+          ? active.value === 'strip' || active.value === 'pad'
+            ? `${active.description}.`
+            : `${active.description}. ${i18n._({
+                id: 'editor.panels.foundationViewPanel.clickItsCornersClickTheFirst',
+                message: 'Click its corners; click the first again, or press Enter, to close it.',
+              })}`
           : footings === 0
-            ? 'Outlines of slabs and raised floors (porches, patios, a garage pad), and footings under interior bearing walls and posts.'
-            : `${footings} ${footings === 1 ? 'footing' : 'footings'} drawn: click one in the plan to size or move it.`}
+            ? i18n._({
+                id: 'editor.panels.foundationViewPanel.outlinesOfSlabsAndRaisedFloors',
+                message:
+                  'Outlines of slabs and raised floors (porches, patios, a garage pad), and footings under interior bearing walls and posts.',
+              })
+            : i18n._({
+                id: 'editor.panels.foundationViewPanel.footingsDrawn',
+                message:
+                  '{footings, plural, one {# footing} other {# footings}} drawn: click one in the plan to size or move it.',
+                values: { footings },
+              })}
       </p>
     </section>
   )
 }
 
-const CONSTRUCTIONS: { label: string; value: FoundationNode['construction'] }[] = [
-  { label: 'The house’s', value: 'building' },
-  { label: 'Slab', value: 'slab' },
-  { label: 'Raised floor', value: 'raised' },
+const CONSTRUCTIONS: ReadonlyArray<{
+  label: MessageDescriptor
+  value: FoundationNode['construction']
+}> = [
+  {
+    label: /* i18n */ {
+      id: 'editor.panels.foundationViewPanel.theHouses',
+      message: 'The house’s',
+      comment:
+        'What a picked foundation outline pours: the house’s own foundation, as against a slab or raised floor of its own.',
+    },
+    value: 'building',
+  },
+  {
+    label: /* i18n */ { id: 'editor.panels.foundationViewPanel.slab', message: 'Slab' },
+    value: 'slab',
+  },
+  {
+    label: /* i18n */ {
+      id: 'editor.panels.foundationViewPanel.raisedFloor',
+      message: 'Raised floor',
+    },
+    value: 'raised',
+  },
 ]
 
-const CONSTRUCTION_NOTES: Record<FoundationNode['construction'], string> = {
-  building: 'The house’s own foundation, poured as the house’s settings below say, in place of the walls’ outline.',
-  slab: 'A slab of its own (a porch, a patio, a garage pad), the ground held 8 in under its top all round.',
-  raised: 'A raised floor on a stem wall of its own.',
+const CONSTRUCTION_NOTES: Record<FoundationNode['construction'], MessageDescriptor> = {
+  building: /* i18n */ {
+    id: 'editor.panels.foundationViewPanel.theHousesOwnFoundation',
+    message:
+      'The house’s own foundation, poured as the house’s settings below say, in place of the walls’ outline.',
+  },
+  slab: /* i18n */ {
+    id: 'editor.panels.foundationViewPanel.aSlabOfItsOwn',
+    message:
+      'A slab of its own (a porch, a patio, a garage pad), the ground held 8 in under its top all round.',
+  },
+  raised: /* i18n */ {
+    id: 'editor.panels.foundationViewPanel.aRaisedFloorOnAStem',
+    message: 'A raised floor on a stem wall of its own.',
+  },
 }
 
 /** A picked foundation outline: what it pours, how far its top sits under the house's floor, and deleting it. */
 function PickedOutlineSection({ outline }: { outline: FoundationNode }) {
+  const i18n = usePascalI18n()
   const imperial = useViewer((state) => state.unit) === 'imperial'
   const [draft, setDraft] = useState<number | null>(null)
   const update = (data: Partial<FoundationNode>) =>
@@ -182,23 +269,36 @@ function PickedOutlineSection({ outline }: { outline: FoundationNode }) {
   const fromShown = (shown: number) => (imperial ? shown * IN : shown)
   return (
     <section className="flex flex-col gap-1.5" data-foundation-picked={outline.id}>
-      <h3 className={HEADING}>{outline.name || 'This outline'}</h3>
+      <h3 className={HEADING}>
+        {outline.name ||
+          i18n._({ id: 'editor.panels.foundationViewPanel.thisOutline', message: 'This outline' })}
+      </h3>
       <SegmentedControl
         onChange={(construction: FoundationNode['construction']) =>
           update(construction === 'building' ? { construction, drop: 0 } : { construction })
         }
-        options={CONSTRUCTIONS}
+        options={CONSTRUCTIONS.map((option) => ({
+          label: i18n._(option.label),
+          value: option.value,
+        }))}
         value={outline.construction}
       />
-      <p className={NOTE}>{CONSTRUCTION_NOTES[outline.construction]}</p>
+      <p className={NOTE}>{i18n._(CONSTRUCTION_NOTES[outline.construction])}</p>
       {outline.construction !== 'building' && (
         <div
           data-foundation-drop
-          title="How far its top sits under the house’s floor: a porch slab steps down from the door"
+          title={i18n._({
+            id: 'editor.panels.foundationViewPanel.howFarItsTopSitsUnder',
+            message:
+              'How far its top sits under the house’s floor: a porch slab steps down from the door',
+          })}
         >
           <MetricControl
             className="h-9 text-xs"
-            label="Top under the floor"
+            label={i18n._({
+              id: 'editor.panels.foundationViewPanel.topUnderTheFloor',
+              message: 'Top under the floor',
+            })}
             max={toShown(1.2)}
             min={0}
             onChange={(next) => setDraft(next)}
@@ -224,7 +324,10 @@ function PickedOutlineSection({ outline }: { outline: FoundationNode }) {
         type="button"
         variant="outline"
       >
-        Delete this outline
+        {i18n._({
+          id: 'editor.panels.foundationViewPanel.deleteThisOutline',
+          message: 'Delete this outline',
+        })}
       </Button>
     </section>
   )
@@ -239,6 +342,7 @@ function PickedOutlineSection({ outline }: { outline: FoundationNode }) {
  * `onClose` (an outline's panel lets the outline go).
  */
 export function FoundationViewPanel({ onClose }: { onClose?: () => void } = {}) {
+  const i18n = usePascalI18n()
   const buildingId = useViewer((state) => state.selection.buildingId)
   const pickedId = useViewer((state) =>
     state.selection.selectedIds.length === 1 ? state.selection.selectedIds[0] : null,
@@ -262,13 +366,23 @@ export function FoundationViewPanel({ onClose }: { onClose?: () => void } = {}) 
       icon="/icons/floor.webp"
       kicker={building.name || undefined}
       onClose={onClose ?? (() => setFoundationView(false))}
-      title="Foundation"
+      title={i18n._({ id: 'editor.panels.foundationViewPanel.foundation', message: 'Foundation' })}
     >
       <div className="flex flex-col gap-3 px-4 pt-3 pb-4 text-sm" data-foundation-view-panel>
         {picked && <PickedOutlineSection outline={picked} />}
         {on && <OutlineSection buildingId={building.id} />}
         {on && <DrawSection buildingId={building.id} />}
-        <BuildingFoundationSection building={building} heading={on ? 'House foundation' : false} />
+        <BuildingFoundationSection
+          building={building}
+          heading={
+            on
+              ? i18n._({
+                  id: 'editor.panels.foundationViewPanel.houseFoundation',
+                  message: 'House foundation',
+                })
+              : false
+          }
+        />
       </div>
     </PanelWrapper>
   )

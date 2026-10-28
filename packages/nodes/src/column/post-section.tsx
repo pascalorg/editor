@@ -13,6 +13,7 @@ import {
   framingPostHeightLimit,
   framingPostSize,
   framingPostTopAt,
+  usePascalI18n,
   useScene,
 } from '@pascal-app/core'
 import {
@@ -69,6 +70,7 @@ export function FramingPostSection({
   node: ColumnNode
   onUpdate: (updates: Partial<ColumnNode>) => void
 }) {
+  const i18n = usePascalI18n()
   const unit = useViewer((state) => state.unit)
   const metricNotation = useViewer((state) => state.metricNotation)
   const nodes = useScene((state) => state.nodes)
@@ -83,7 +85,7 @@ export function FramingPostSection({
   const fitBeam = fit?.beamId ? nodes[fit.beamId as AnyNodeId] : undefined
 
   return (
-    <PanelSection title="Post">
+    <PanelSection title={i18n._({ id: 'node.column.postSection.post', message: 'Post' })}>
       <SegmentedControl
         onChange={(next: string) => {
           if (next !== CUSTOM) onUpdate(framingPostSizePatch(node, next as FramingPostSize))
@@ -93,7 +95,14 @@ export function FramingPostSection({
             label: value,
             value,
           })),
-          ...(size === CUSTOM ? [{ label: 'Custom', value: CUSTOM }] : []),
+          ...(size === CUSTOM
+            ? [
+                {
+                  label: i18n._({ id: 'node.column.postSection.custom', message: 'Custom' }),
+                  value: CUSTOM,
+                },
+              ]
+            : []),
         ]}
         value={size}
       />
@@ -115,13 +124,19 @@ export function FramingPostSection({
           })
         }
         options={[
-          { label: 'Treated', value: 'treated' },
-          { label: 'Untreated', value: 'untreated' },
+          {
+            label: i18n._({ id: 'node.column.postSection.treated', message: 'Treated' }),
+            value: 'treated',
+          },
+          {
+            label: i18n._({ id: 'node.column.postSection.untreated', message: 'Untreated' }),
+            value: 'untreated',
+          },
         ]}
         value={treated ? 'treated' : 'untreated'}
       />
       <MetricControl
-        label="Height"
+        label={i18n._({ id: 'node.column.postSection.height', message: 'Height' })}
         min={0.3}
         onChange={(height) => onUpdate({ height })}
         precision={3}
@@ -137,8 +152,16 @@ export function FramingPostSection({
           type="button"
         >
           {fitBeam
-            ? `Fit to the beam over it (${length(fit.height)})`
-            : `Fit to the ceiling plane (${length(fit.height)})`}
+            ? i18n._({
+                id: 'node.column.postSection.fitToTheBeamOverIt',
+                message: 'Fit to the beam over it ({height})',
+                values: { height: length(fit.height) },
+              })
+            : i18n._({
+                id: 'node.column.postSection.fitToTheCeilingPlane',
+                message: 'Fit to the ceiling plane ({height})',
+                values: { height: length(fit.height) },
+              })}
         </button>
       )}
       {limit && (
@@ -146,17 +169,24 @@ export function FramingPostSection({
           className="rounded-lg bg-accent/30 px-2.5 py-2 text-muted-foreground text-xs"
           role="status"
         >
-          A {limit.size} deck post stands no taller than {length(limit.limit)} (IRC Table R507.4, by
-          species and the area it carries): check it, or use the next size up.
+          {i18n._({
+            id: 'node.column.postSection.aSizeDeckPostStandsNo',
+            message:
+              'A {size} deck post stands no taller than {limit} (IRC Table R507.4, by species and the area it carries): check it, or use the next size up.',
+            values: { size: limit.size, limit: length(limit.limit) },
+          })}
         </p>
       )}
       <button
         className="self-start rounded-full border border-border/50 px-3 py-1 text-muted-foreground text-xs hover:text-foreground"
         onClick={() => onUpdate({ role: undefined, postBase: undefined })}
-        title="Keep its shape and style it as a column"
+        title={i18n._({
+          id: 'node.column.postSection.keepItsShapeAndStyleIt',
+          message: 'Keep its shape and style it as a column',
+        })}
         type="button"
       >
-        Make it a column
+        {i18n._({ id: 'node.column.postSection.makeItAColumn', message: 'Make it a column' })}
       </button>
     </PanelSection>
   )

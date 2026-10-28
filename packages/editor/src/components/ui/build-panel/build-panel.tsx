@@ -610,6 +610,7 @@ export function BuildPanelWallTypes() {
             </div>
             {placement === 'exterior' && cladding && claddingProducts.length > 0 ? (
               <WallFinishPicker
+                finish={cladding}
                 label={i18n._(CLADDING_LABEL[cladding] ?? CLADDING_FALLBACK_LABEL)}
                 onChange={(ref) => setWallCladding(cladding, ref)}
                 products={claddingProducts}
@@ -618,6 +619,7 @@ export function BuildPanelWallTypes() {
             ) : null}
             {placement === 'interior' ? (
               <WallFinishPicker
+                finish="paint"
                 label={i18n._({
                   id: 'editor.buildPanel.wallTypes.drywallPaint',
                   message: 'Drywall paint',

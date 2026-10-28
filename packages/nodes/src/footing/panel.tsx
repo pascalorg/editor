@@ -9,6 +9,7 @@ import {
   type FootingShape,
   footingDesign,
   footingPlan,
+  usePascalI18n,
   useScene,
 } from '@pascal-app/core'
 import {
@@ -124,6 +125,7 @@ export function footingDepthPatch(
 }
 
 export default function FootingPanel() {
+  const i18n = usePascalI18n()
   const selectedId = useViewer((state) => state.selection.selectedIds[0])
   const setSelection = useViewer((state) => state.setSelection)
   const unit = useViewer((state) => state.unit)
@@ -150,36 +152,43 @@ export default function FootingPanel() {
     <PanelWrapper
       icon="/icons/floor.webp"
       onClose={() => setSelection({ selectedIds: [] })}
-      title={footing.name ?? 'Footing'}
+      title={footing.name ?? i18n._({ id: 'node.footing.panel.footing', message: 'Footing' })}
       width={300}
     >
-      <PanelSection title="Footing">
+      <PanelSection title={i18n._({ id: 'node.footing.panel.footing', message: 'Footing' })}>
         <SegmentedControl
           onChange={(shape: FootingShape) => update(reshaped(footing, shape))}
           options={[
-            { label: 'Strip', value: 'strip' },
-            { label: 'Pad', value: 'pad' },
+            { label: i18n._({ id: 'node.footing.panel.strip', message: 'Strip' }), value: 'strip' },
+            { label: i18n._({ id: 'node.footing.panel.pad', message: 'Pad' }), value: 'pad' },
           ]}
           value={footing.shape}
         />
-        <SizeField label="Width" onCommit={(width) => update({ width })} value={footing.width} />
+        <SizeField
+          label={i18n._({ id: 'node.footing.panel.width', message: 'Width' })}
+          onCommit={(width) => update({ width })}
+          value={footing.width}
+        />
         {footing.shape === 'pad' && (
           <SizeField
-            label="Length"
+            label={i18n._({ id: 'node.footing.panel.length', message: 'Length' })}
             onCommit={(length) => update({ length })}
             value={footing.length ?? footing.width}
           />
         )}
         <SizeField
-          label="Thickness"
+          label={i18n._({ id: 'node.footing.panel.thickness', message: 'Thickness' })}
           onCommit={(thickness) => update({ thickness })}
           value={footing.thickness}
         />
         <SizeField
           label={
             footing.depth !== undefined || underSlab
-              ? 'Depth under grade'
-              : "Depth under grade (building's)"
+              ? i18n._({ id: 'node.footing.panel.depthUnderGrade', message: 'Depth under grade' })
+              : i18n._({
+                  id: 'node.footing.panel.depthUnderGradeBuildingS',
+                  message: "Depth under grade (building's)",
+                })
           }
           min={Math.max(0.01, reach)}
           onCommit={(depth) => update(footingDepthPatch(depth, reach, underSlab))}
@@ -187,12 +196,21 @@ export default function FootingPanel() {
         />
         {reach > 0.01 && (
           <p className="px-0.5 text-muted-foreground text-xs" data-footing-reach>
-            At least {length(reach)}:{' '}
+            {i18n._({ id: 'node.footing.panel.atLeast', message: 'At least' })} {length(reach)}:{' '}
             {design?.foundation.support === 'piles'
-              ? 'the grade beam reaches this far.'
+              ? i18n._({
+                  id: 'node.footing.panel.theGradeBeamReachesThisFar',
+                  message: 'the grade beam reaches this far.',
+                })
               : design?.foundation.type === 'raised'
-                ? 'the footing’s thickness under the floor reaches this far.'
-                : 'the slab and the footing’s thickness reach this far.'}
+                ? i18n._({
+                    id: 'node.footing.panel.theFootingSThicknessUnderThe',
+                    message: 'the footing’s thickness under the floor reaches this far.',
+                  })
+                : i18n._({
+                    id: 'node.footing.panel.theSlabAndTheFootingS',
+                    message: 'the slab and the footing’s thickness reach this far.',
+                  })}
           </p>
         )}
         {footing.depth !== undefined && (
@@ -201,21 +219,43 @@ export default function FootingPanel() {
             onClick={() => update({ depth: undefined })}
             type="button"
           >
-            {underSlab ? 'Clear the depth' : "Use the building's depth"}
+            {underSlab
+              ? i18n._({ id: 'node.footing.panel.clearTheDepth', message: 'Clear the depth' })
+              : i18n._({
+                  id: 'node.footing.panel.useTheBuildingSDepth',
+                  message: "Use the building's depth",
+                })}
           </button>
         )}
         {design && (
           <p className="px-0.5 text-muted-foreground text-xs" data-footing-readout>
-            Top {against(design.topY)}, bottom {against(design.bottomY)}.{' '}
+            {i18n._({ id: 'node.footing.panel.top', message: 'Top' })} {against(design.topY)}
+            {i18n._({ id: 'node.footing.panel.bottom', message: ', bottom' })}{' '}
+            {against(design.bottomY)}.{' '}
             {design.foundation.support === 'piles'
               ? footing.shape === 'strip'
-                ? 'A grade beam on piles, as the building is.'
-                : 'A pile cap on one pile, as the building is.'
+                ? i18n._({
+                    id: 'node.footing.panel.aGradeBeamOnPilesAs',
+                    message: 'A grade beam on piles, as the building is.',
+                  })
+                : i18n._({
+                    id: 'node.footing.panel.aPileCapOnOnePile',
+                    message: 'A pile cap on one pile, as the building is.',
+                  })
               : design.foundation.type === 'slab'
-                ? 'A thickened slab under the floor slab.'
+                ? i18n._({
+                    id: 'node.footing.panel.aThickenedSlabUnderTheFloor',
+                    message: 'A thickened slab under the floor slab.',
+                  })
                 : footing.shape === 'strip'
-                  ? 'A stem wall carries the floor.'
-                  : 'A pier carries the floor.'}
+                  ? i18n._({
+                      id: 'node.footing.panel.aStemWallCarriesTheFloor',
+                      message: 'A stem wall carries the floor.',
+                    })
+                  : i18n._({
+                      id: 'node.footing.panel.aPierCarriesTheFloor',
+                      message: 'A pier carries the floor.',
+                    })}
           </p>
         )}
         {small && (
@@ -223,15 +263,18 @@ export default function FootingPanel() {
             className="rounded-lg bg-accent/30 px-2.5 py-2 text-muted-foreground text-xs"
             role="status"
           >
-            IRC R403.1 asks a footing at least 12 in wide and 6 in thick.
+            {i18n._({
+              id: 'node.footing.panel.ircR4031AsksAFooting',
+              message: 'IRC R403.1 asks a footing at least 12 in wide and 6 in thick.',
+            })}
           </p>
         )}
       </PanelSection>
-      <PanelSection title="Actions">
+      <PanelSection title={i18n._({ id: 'node.footing.panel.actions', message: 'Actions' })}>
         <ActionGroup>
           <ActionButton
             icon={<Trash2 className="h-3.5 w-3.5" />}
-            label="Delete"
+            label={i18n._({ id: 'node.footing.panel.delete', message: 'Delete' })}
             onClick={() => {
               useScene.getState().deleteNode(footing.id)
               setSelection({ selectedIds: [] })

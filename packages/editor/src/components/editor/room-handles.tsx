@@ -6,6 +6,7 @@ import {
   type Point,
   roomDrawnFloor,
   sceneRegistry,
+  usePascalI18n,
   useScene,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
@@ -437,6 +438,7 @@ function RoomDimensionLines3D({
   /** The selected wall the dimensions run from: set, each value can be typed to move it. */
   wallId?: string
 }) {
+  const i18n = usePascalI18n()
   const unit = useViewer((s) => s.unit)
   const metricNotation = useViewer((s) => s.metricNotation)
   const editable = useDimensionEditAllowed() && !!wallId
@@ -501,7 +503,14 @@ function RoomDimensionLines3D({
               role={editable ? 'button' : undefined}
               style={{ textShadow: DIMENSION_LABEL_OUTLINE }}
               tabIndex={editable ? 0 : undefined}
-              title={editable ? 'Type a size to move the wall' : undefined}
+              title={
+                editable
+                  ? i18n._({
+                      id: 'editor.roomHandles.typeASizeToMoveThe',
+                      message: 'Type a size to move the wall',
+                    })
+                  : undefined
+              }
             >
               {formatMeasurement(dimension.distance, unit, metricNotation)}
             </div>
@@ -530,12 +539,19 @@ function DimensionValueInput({
   unit: 'metric' | 'imperial'
   wallId: string
 }) {
+  const i18n = usePascalI18n()
   const [draft, setDraft] = useState(initial)
   const [error, setError] = useState<string | null>(null)
   const commit = () => {
     const nextLength = parseDimensionInput(draft, unit)
     if (nextLength === null) {
-      setError(`Cannot read "${draft.trim()}"`)
+      setError(
+        i18n._({
+          id: 'editor.roomHandles.cannotReadInput',
+          message: 'Cannot read "{input}"',
+          values: { input: draft.trim() },
+        }),
+      )
       return
     }
     const outcome = commitDimensionValue({
@@ -559,7 +575,7 @@ function DimensionValueInput({
       <input
         // biome-ignore lint/a11y/noAutofocus: the box opens on a click to be typed in
         autoFocus
-        aria-label="Dimension value"
+        aria-label={i18n._({ id: 'editor.roomHandles.dimensionValue', message: 'Dimension value' })}
         className="w-full rounded-sm border border-primary bg-card px-1 py-0.5 text-center font-mono text-foreground text-xs shadow-sm outline-none"
         onBlur={onClose}
         onChange={(event) => {
@@ -683,6 +699,7 @@ function MezzanineEdgeArrow({
 }
 
 export function RoomHandleDragPreview3D() {
+  const i18n = usePascalI18n()
   const drag = useRoomHandleDrag((s) => s.drag)
   const unit = useViewer((s) => s.unit)
   const metricNotation = useViewer((s) => s.metricNotation)
@@ -773,7 +790,9 @@ export function RoomHandleDragPreview3D() {
         />
         <Html center position={[ax, drag.value + 0.35, az]} zIndexRange={[25, 0]}>
           <div className={PILL}>
-            <span className="font-medium text-foreground">Floor</span>
+            <span className="font-medium text-foreground">
+              {i18n._({ id: 'editor.roomHandles.floor', message: 'Floor' })}
+            </span>
             <span className="text-muted-foreground">
               {formatMeasurement(
                 drag.value - roomFloorBase(useScene.getState().nodes, drag.zoneId),

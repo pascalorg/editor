@@ -7,6 +7,7 @@ import {
   RAILING_GUARD_HEIGHT_TALL,
   RAILING_SPHERE_LIMIT,
   type RailingWallConfig,
+  usePascalI18n,
   type WallNode,
 } from '@pascal-app/core'
 import {
@@ -44,6 +45,7 @@ type Props = {
  * on an imperial plan, where feet would show a 1½ in baluster as 0.13.
  */
 export function RailingWallPanel({ node, unit, onUpdate, onPreview, onCommit, onCancel }: Props) {
+  const i18n = usePascalI18n()
   const config = getRailingWallConfig(node)
   const height = getRailingWallHeight(node)
   const imperial = unit === 'imperial'
@@ -81,15 +83,17 @@ export function RailingWallPanel({ node, unit, onUpdate, onPreview, onCommit, on
 
   return (
     <>
-      <PanelSection title="Railing">
+      <PanelSection
+        title={i18n._({ id: 'node.wall.railingWallPanel.railing', message: 'Railing' })}
+      >
         <SelectControl
-          label="Style"
+          label={i18n._({ id: 'node.wall.railingWallPanel.style', message: 'Style' })}
           onChange={(style) => update(railingStylePatch(style))}
           options={RAILING_STYLE_OPTIONS}
           value={config.style}
         />
         <div className="px-1 font-medium text-[10px] text-muted-foreground/80 uppercase tracking-wider">
-          Height
+          {i18n._({ id: 'node.wall.railingWallPanel.height', message: 'Height' })}
         </div>
         <SegmentedControl
           mixed={preset === null}
@@ -97,23 +101,33 @@ export function RailingWallPanel({ node, unit, onUpdate, onPreview, onCommit, on
             onUpdate({ height: next === '42' ? RAILING_GUARD_HEIGHT_TALL : RAILING_GUARD_HEIGHT })
           }
           options={[
-            { label: '36 in', value: '36' },
-            { label: '42 in', value: '42' },
+            {
+              label: i18n._({ id: 'node.wall.railingWallPanel.n36In', message: '36 in' }),
+              value: '36',
+            },
+            {
+              label: i18n._({ id: 'node.wall.railingWallPanel.n42In', message: '42 in' }),
+              value: '42',
+            },
           ]}
           value={preset ?? '36'}
         />
         {length('Height', height, 0.1, (meters) => onPreview({ height: meters }))}
         {RAILING_CAPPED_STYLES.has(config.style) && (
-          <ToggleControl checked={config.cap} label="2x6 cap" onChange={(cap) => update({ cap })} />
+          <ToggleControl
+            checked={config.cap}
+            label={i18n._({ id: 'node.wall.railingWallPanel.n2x6Cap', message: '2x6 cap' })}
+            onChange={(cap) => update({ cap })}
+          />
         )}
       </PanelSection>
-      <PanelSection title="Posts">
+      <PanelSection title={i18n._({ id: 'node.wall.railingWallPanel.posts', message: 'Posts' })}>
         {length('Max spacing', config.postSpacing, 0.1, (postSpacing) =>
           update({ postSpacing }, true),
         )}
         {length('Post size', config.postSize, 0.01, (postSize) => update({ postSize }, true))}
       </PanelSection>
-      <PanelSection title="Infill">
+      <PanelSection title={i18n._({ id: 'node.wall.railingWallPanel.infill', message: 'Infill' })}>
         {length(infill.size, config.infillSize, 0.003, (infillSize) =>
           update({ infillSize }, true),
         )}
@@ -124,7 +138,10 @@ export function RailingWallPanel({ node, unit, onUpdate, onPreview, onCommit, on
         )}
         {opensPastSphere && (
           <p className="px-1 text-[11px] text-muted-foreground">
-            A guard's openings must not pass a 4 in sphere (IRC R312.1.3).
+            {i18n._({
+              id: 'node.wall.railingWallPanel.aGuardSOpeningsMustNot',
+              message: "A guard's openings must not pass a 4 in sphere (IRC R312.1.3).",
+            })}
           </p>
         )}
       </PanelSection>

@@ -502,7 +502,7 @@ function GroundLine({ ground, onSeat }: { ground: GroundLineState; onSeat: () =>
   })
   const distance = `${Math.abs(over).toFixed(precision)} ${displayUnit}`
   // What the click does, by the foundation's own seat rule.
-  const action = groundSeatAction(ground.rule, ground.askedIn)
+  const action = groundSeatAction(ground.rule, ground.askedIn, i18n)
   return (
     <div
       className="relative flex items-center gap-1.5 px-2 py-0.5"

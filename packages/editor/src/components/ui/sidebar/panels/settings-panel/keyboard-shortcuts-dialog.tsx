@@ -1,3 +1,4 @@
+import { type MessageDescriptor, usePascalI18n } from '@pascal-app/core'
 import { Keyboard } from 'lucide-react'
 import { Button } from './../../../../../components/ui/primitives/button'
 import {
@@ -21,13 +22,16 @@ type Shortcut = {
 }
 
 type ShortcutCategory = {
-  title: string
+  title: MessageDescriptor
   shortcuts: Shortcut[]
 }
 
 const SHORTCUT_CATEGORIES: ShortcutCategory[] = [
   {
-    title: 'Editor Navigation',
+    title: /* i18n */ {
+      id: 'editor.sidebar.panels.settingsPanel.keyboardShortcutsDialog.editorNavigation',
+      message: 'Editor Navigation',
+    },
     shortcuts: [
       { keys: ['1'], action: 'Switch to Site' },
       { keys: ['2'], action: 'Switch to Building' },
@@ -46,7 +50,10 @@ const SHORTCUT_CATEGORIES: ShortcutCategory[] = [
     ],
   },
   {
-    title: 'Modes & History',
+    title: /* i18n */ {
+      id: 'editor.sidebar.panels.settingsPanel.keyboardShortcutsDialog.modesHistory',
+      message: 'Modes & History',
+    },
     shortcuts: [
       { keys: TOOL_SHORTCUT_KEYS.select, action: 'Switch to Select mode' },
       { keys: TOOL_SHORTCUT_KEYS.wall, action: 'Switch to Build mode, drawing a rectangle room' },
@@ -66,7 +73,10 @@ const SHORTCUT_CATEGORIES: ShortcutCategory[] = [
     ],
   },
   {
-    title: 'Build Tools',
+    title: /* i18n */ {
+      id: 'editor.sidebar.panels.settingsPanel.keyboardShortcutsDialog.buildTools',
+      message: 'Build Tools',
+    },
     shortcuts: [
       {
         keys: TOOL_SHORTCUT_KEYS['exterior-wall'],
@@ -93,7 +103,10 @@ const SHORTCUT_CATEGORIES: ShortcutCategory[] = [
     ],
   },
   {
-    title: 'Selection',
+    title: /* i18n */ {
+      id: 'editor.sidebar.panels.settingsPanel.keyboardShortcutsDialog.selection',
+      message: 'Selection',
+    },
     shortcuts: [
       {
         keys: ['Cmd/Ctrl', 'C'],
@@ -158,7 +171,10 @@ const SHORTCUT_CATEGORIES: ShortcutCategory[] = [
     ],
   },
   {
-    title: 'Direct Manipulation',
+    title: /* i18n */ {
+      id: 'editor.sidebar.panels.settingsPanel.keyboardShortcutsDialog.directManipulation',
+      message: 'Direct Manipulation',
+    },
     shortcuts: [
       {
         keys: ['Cmd/Ctrl', 'Left click'],
@@ -178,7 +194,10 @@ const SHORTCUT_CATEGORIES: ShortcutCategory[] = [
     ],
   },
   {
-    title: 'Drawing Tools',
+    title: /* i18n */ {
+      id: 'editor.sidebar.panels.settingsPanel.keyboardShortcutsDialog.drawingTools',
+      message: 'Drawing Tools',
+    },
     shortcuts: [
       // Shift and Ctrl each mean one thing held and another tapped, and only
       // the hold was documented — which read as the taps not existing. Both
@@ -206,7 +225,10 @@ const SHORTCUT_CATEGORIES: ShortcutCategory[] = [
     ],
   },
   {
-    title: 'Item Placement',
+    title: /* i18n */ {
+      id: 'editor.sidebar.panels.settingsPanel.keyboardShortcutsDialog.itemPlacement',
+      message: 'Item Placement',
+    },
     shortcuts: [
       {
         keys: ['R', 'T'],
@@ -225,7 +247,10 @@ const SHORTCUT_CATEGORIES: ShortcutCategory[] = [
     ],
   },
   {
-    title: 'Camera',
+    title: /* i18n */ {
+      id: 'editor.sidebar.panels.settingsPanel.keyboardShortcutsDialog.camera',
+      message: 'Camera',
+    },
     shortcuts: [
       {
         keys: ['W', 'A', 'S', 'D'],
@@ -260,32 +285,44 @@ function ShortcutKeys({ keys }: { keys: readonly string[] }) {
 }
 
 export function KeyboardShortcutsDialog() {
+  const i18n = usePascalI18n()
   return (
     <Dialog>
       <DialogTrigger asChild>
         <Button className="w-full justify-start gap-2" variant="outline">
           <Keyboard className="size-4" />
-          Keyboard shortcuts
+          {i18n._({
+            id: 'editor.sidebar.panels.settingsPanel.keyboardShortcutsDialog.keyboardShortcuts',
+            message: 'Keyboard shortcuts',
+          })}
         </Button>
       </DialogTrigger>
       <DialogContent className="flex max-h-[85vh] flex-col overflow-hidden p-0 sm:max-w-3xl">
         <DialogHeader className="shrink-0 border-b px-6 py-4">
-          <DialogTitle>Keyboard shortcuts</DialogTitle>
+          <DialogTitle>
+            {i18n._({
+              id: 'editor.sidebar.panels.settingsPanel.keyboardShortcutsDialog.keyboardShortcuts',
+              message: 'Keyboard shortcuts',
+            })}
+          </DialogTitle>
           <DialogDescription>
-            Shortcuts are context-aware. Guided constraints are enabled by default; hold Shift
-            during an active gesture to build freely.
+            {i18n._({
+              id: 'editor.sidebar.panels.settingsPanel.keyboardShortcutsDialog.shortcutsAreContextAwareGuidedConstraints',
+              message:
+                'Shortcuts are context-aware. Guided constraints are enabled by default; hold Shift during an active gesture to build freely.',
+            })}
           </DialogDescription>
         </DialogHeader>
 
         <div className="flex-1 space-y-5 overflow-y-auto px-6 py-4">
           {SHORTCUT_CATEGORIES.map((category) => (
-            <section className="space-y-2" key={category.title}>
-              <h3 className="font-medium text-sm">{category.title}</h3>
+            <section className="space-y-2" key={category.title.id}>
+              <h3 className="font-medium text-sm">{i18n._(category.title)}</h3>
               <div className="overflow-hidden rounded-md border border-border/80">
                 {category.shortcuts.map((shortcut, index) => (
                   <div
                     className="grid grid-cols-[minmax(130px,220px)_1fr] gap-3 px-3 py-2"
-                    key={`${category.title}-${shortcut.action}`}
+                    key={`${category.title.id}-${shortcut.action}`}
                   >
                     <ShortcutKeys keys={shortcut.keys} />
                     <div>

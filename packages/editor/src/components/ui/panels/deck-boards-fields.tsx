@@ -10,7 +10,9 @@ import {
   deckBoardSettings,
   deckJoistSpacingLimit,
   inchFractionLabel,
+  type MessageDescriptor,
   setZoneIntent,
+  usePascalI18n,
   useScene,
 } from '@pascal-app/core'
 import type { ReactNode } from 'react'
@@ -30,17 +32,26 @@ const GAP_OPTIONS = DECK_BOARD_GAPS.map((gap, index) => ({
   value: String(index),
 }))
 
-const RUN_OPTIONS: ReadonlyArray<{ label: string; value: DeckBoardDirection }> = [
-  { label: 'Along house', value: 'parallel' },
-  { label: 'Diagonal', value: 'diagonal' },
-  { label: 'Out from house', value: 'perpendicular' },
+const RUN_OPTIONS: ReadonlyArray<{ label: MessageDescriptor; value: DeckBoardDirection }> = [
+  {
+    label: /* i18n */ {
+      id: 'editor.panels.deckBoardsFields.alongHouse',
+      message: 'Along house',
+    },
+    value: 'parallel',
+  },
+  {
+    label: /* i18n */ { id: 'editor.panels.deckBoardsFields.diagonal', message: 'Diagonal' },
+    value: 'diagonal',
+  },
+  {
+    label: /* i18n */ {
+      id: 'editor.panels.deckBoardsFields.outFromHouse',
+      message: 'Out from house',
+    },
+    value: 'perpendicular',
+  },
 ]
-
-const RUN_HINTS: Record<DeckBoardDirection, string> = {
-  parallel: 'along the house, on joists square to it',
-  diagonal: 'at 45° to the house',
-  perpendicular: 'out from the house, on joists along it, carried by beams square to the house',
-}
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -58,6 +69,7 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
  * along the house on beams square to it under boards run out from it.
  */
 export function DeckBoardsFields({ zoneId }: { zoneId: string }) {
+  const i18n = usePascalI18n()
   const deck = useScene(
     useShallow((scene) => {
       const zone = scene.nodes[zoneId as AnyNodeId]
@@ -76,15 +88,17 @@ export function DeckBoardsFields({ zoneId }: { zoneId: string }) {
       className="mt-3 flex flex-col gap-1.5 text-muted-foreground text-xs"
       data-deck-boards={deck.boardSize}
     >
-      <h3 className="font-medium text-xs">Deck boards</h3>
-      <Field label="Boards">
+      <h3 className="font-medium text-xs">
+        {i18n._({ id: 'editor.panels.deckBoardsFields.deckBoards', message: 'Deck boards' })}
+      </h3>
+      <Field label={i18n._({ id: 'editor.panels.deckBoardsFields.boards', message: 'Boards' })}>
         <SegmentedControl
           onChange={(boardSize: DeckBoardSize) => set({ boardSize })}
           options={BOARD_OPTIONS}
           value={deck.boardSize}
         />
       </Field>
-      <Field label="Gap">
+      <Field label={i18n._({ id: 'editor.panels.deckBoardsFields.gap', message: 'Gap' })}>
         <SegmentedControl
           mixed={gap < 0}
           onChange={(index: string) => set({ gap: DECK_BOARD_GAPS[Number(index)] })}
@@ -92,15 +106,30 @@ export function DeckBoardsFields({ zoneId }: { zoneId: string }) {
           value={String(Math.max(gap, 0))}
         />
       </Field>
-      <Field label="Run">
+      <Field label={i18n._({ id: 'editor.panels.deckBoardsFields.run', message: 'Run' })}>
         <SegmentedControl
           onChange={(direction: DeckBoardDirection) => set({ direction })}
-          options={[...RUN_OPTIONS]}
+          options={RUN_OPTIONS.map((option) => ({
+            label: i18n._(option.label),
+            value: option.value,
+          }))}
           value={deck.direction}
         />
       </Field>
       <p>
-        {`${stock.label} boards ${inchFractionLabel(stock.thickness)} × ${inchFractionLabel(stock.width)} in, ${inchFractionLabel(deck.gap)} in apart, ${RUN_HINTS[deck.direction]}; joists ${Math.round(spacing / IN)} in on centre.`}
+        {i18n._({
+          id: 'editor.panels.deckBoardsFields.boardsSummary',
+          message:
+            '{label} boards {thickness} × {width} in, {gap} in apart, {direction, select, parallel {along the house, on joists square to it} diagonal {at 45° to the house} other {out from the house, on joists along it, carried by beams square to the house}}; joists {spacing} in on centre.',
+          values: {
+            label: stock.label,
+            thickness: inchFractionLabel(stock.thickness),
+            width: inchFractionLabel(stock.width),
+            gap: inchFractionLabel(deck.gap),
+            direction: deck.direction,
+            spacing: Math.round(spacing / IN),
+          },
+        })}
       </p>
     </div>
   )

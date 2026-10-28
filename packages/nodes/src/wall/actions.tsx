@@ -1,6 +1,7 @@
 'use client'
 import {
   type AnyNodeId,
+  type MessageDescriptor,
   planWallMerge,
   runAsSingleSceneHistoryStep,
   usePascalI18n,
@@ -37,21 +38,42 @@ export default function WallActions() {
 
 const DIMENSION_FACES: Record<
   FloorplanWallDimensionFaces,
-  { label: string; title: string; next: FloorplanWallDimensionFaces }
+  { label: MessageDescriptor; title: MessageDescriptor; next: FloorplanWallDimensionFaces }
 > = {
   both: {
-    label: 'ID+OD',
-    title: 'Dimensions to the interior and exterior faces. Click for interior only',
+    label: /* i18n */ {
+      id: 'node.wall.actions.idOd',
+      message: 'ID+OD',
+      comment: 'Short button text: ID is the interior dimension, OD the outside dimension.',
+    },
+    title: /* i18n */ {
+      id: 'node.wall.actions.dimensionsToTheInteriorAndExterior',
+      message: 'Dimensions to the interior and exterior faces. Click for interior only',
+    },
     next: 'interior',
   },
   interior: {
-    label: 'ID',
-    title: 'Dimensions to the interior faces (room size). Click for exterior only',
+    label: /* i18n */ {
+      id: 'node.wall.actions.id',
+      message: 'ID',
+      comment: 'Short button text: interior dimension, measured to the interior faces.',
+    },
+    title: /* i18n */ {
+      id: 'node.wall.actions.dimensionsToTheInteriorFacesRoom',
+      message: 'Dimensions to the interior faces (room size). Click for exterior only',
+    },
     next: 'exterior',
   },
   exterior: {
-    label: 'OD',
-    title: 'Dimensions to the exterior faces (outside size). Click for both',
+    label: /* i18n */ {
+      id: 'node.wall.actions.od',
+      message: 'OD',
+      comment: 'Short button text: outside dimension, measured to the exterior faces.',
+    },
+    title: /* i18n */ {
+      id: 'node.wall.actions.dimensionsToTheExteriorFacesOutside',
+      message: 'Dimensions to the exterior faces (outside size). Click for both',
+    },
     next: 'both',
   },
 }
@@ -62,6 +84,7 @@ const DIMENSION_FACES: Record<
  * 2D and 3D. A display preference, kept per browser; it changes no geometry.
  */
 function DimensionFacesAction() {
+  const i18n = usePascalI18n()
   const selected = useViewer((s) => s.selection.selectedIds)
   const wall = useScene((s) =>
     selected.length === 1 ? s.nodes[selected[0] as AnyNodeId] : undefined,
@@ -72,18 +95,19 @@ function DimensionFacesAction() {
   // A partition between two rooms has no outside: its dimensions read the same either way.
   if (wall.frontSide === 'interior' && wall.backSide === 'interior') return null
   const option = DIMENSION_FACES[faces]
+  const title = i18n._(option.title)
   return (
     <button
       type="button"
-      aria-label={option.title}
-      title={option.title}
+      aria-label={title}
+      title={title}
       className={`${BUTTON} min-w-8 font-medium text-xs tabular-nums`}
       onClick={(event) => {
         event.stopPropagation()
         setFaces(option.next)
       }}
     >
-      {option.label}
+      {i18n._(option.label)}
     </button>
   )
 }
@@ -119,18 +143,26 @@ function MergeWallsAction() {
   const selected = useViewer((s) => s.selection.selectedIds) as AnyNodeId[]
   const nodes = useScene((s) => s.nodes)
   const readOnly = useScene((s) => s.readOnly)
-  // null: not a wall selection (render nothing); otherwise why it can't merge, or null.
+  // null: not a wall selection (render nothing); otherwise why it can't merge (undefined when the
+  // plan gave no reason of its own), or null.
   const merge = useMemo(() => {
     if (selected.length < 2 || selected.some((id) => nodes[id]?.type !== 'wall')) return null
     try {
       planWallMerge(nodes, selected)
       return { reason: null }
     } catch (error) {
-      return { reason: error instanceof Error ? error.message : 'These walls cannot be merged.' }
+      return { reason: error instanceof Error ? error.message : undefined }
     }
   }, [nodes, selected])
   if (!merge) return null
-  const { reason } = merge
+  // Worded here rather than in the memo, so a change of language reaches it.
+  const reason =
+    merge.reason === undefined
+      ? i18n._({
+          id: 'node.wall.actions.theseWallsCannotBeMerged',
+          message: 'These walls cannot be merged.',
+        })
+      : merge.reason
   const button = (
     <button
       type="button"

@@ -678,7 +678,7 @@ export function FloorFoundationPanel({ node, onClose }: { node: SlabNode; onClos
         <FloorSection
           foundationHeight={upper ? 0 : height}
           foundationLabel={length(height)}
-          layers={upper ? floorSectionLayers(buildUp, unit) : undefined}
+          layers={upper ? floorSectionLayers(buildUp, unit, i18n) : undefined}
           raised={preset === 'raised'}
           supported={upper}
           thickness={plate.thickness}

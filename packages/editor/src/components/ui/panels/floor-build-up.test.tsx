@@ -3,6 +3,7 @@ import {
   type AnyNode,
   BuildingNode,
   buildingFoundationOf,
+  createI18n,
   createZone,
   DEFAULT_FLOOR_BUILD_UP,
   DEFAULT_RAISED_FLOOR_BUILD_UP,
@@ -40,6 +41,7 @@ import {
 import { FloorPlateBuildUp, FloorSection } from './floor-foundation-panel'
 
 const IN = 0.0254
+const english = createI18n()
 const GROUND = 'level_build_up_ground'
 const UPPER = 'level_build_up_upper'
 const BUILDING = 'building_build_up'
@@ -215,11 +217,11 @@ describe('Floor build-up rows (the floor plate panel)', () => {
       }),
     )
     expect(markup).toMatch(/data-floor-layer-name="flooring"[^>]*value="Brazilian cherry"/)
-    const drawn = floorSectionLayers(bedroom().buildUp!, 'imperial')
+    const drawn = floorSectionLayers(bedroom().buildUp!, 'imperial', english)
     expect(drawn[0]).toMatchObject({ key: 'flooring', name: 'Brazilian cherry', size: '3/4"' })
     const cleared = renameFloorLayer(named, 'flooring', '')
     expect(cleared.flooring).toEqual(DEFAULT_FLOOR_BUILD_UP.flooring)
-    expect(floorSectionLayers(cleared, 'imperial')[0]!.name).toBe('Hardwood')
+    expect(floorSectionLayers(cleared, 'imperial', english)[0]!.name).toBe('Hardwood')
   })
 
   test('a thickness scrub previews live and lands with the layers as one undo step', () => {
@@ -307,7 +309,7 @@ describe('Section drawings', () => {
     const markup = render(
       createElement(FoundationSectionDrawing, {
         foundation,
-        framing: floorSectionLayers(foundation.floorBuildUp, 'imperial', true),
+        framing: floorSectionLayers(foundation.floorBuildUp, 'imperial', english, true),
         length,
       }),
     )
@@ -376,7 +378,7 @@ describe('Section drawings', () => {
     const withoutFlooring = render(
       createElement(FoundationSectionDrawing, {
         foundation: raised,
-        framing: floorSectionLayers(raised.floorBuildUp, 'imperial', true),
+        framing: floorSectionLayers(raised.floorBuildUp, 'imperial', english, true),
         length,
       }),
     )
@@ -402,7 +404,7 @@ describe('Section drawings', () => {
   })
 
   test('the floor plate draws as its layers top down; a layer that is off is not drawn', () => {
-    const section = (layers = floorSectionLayers(DEFAULT_FLOOR_BUILD_UP, 'imperial')) =>
+    const section = (layers = floorSectionLayers(DEFAULT_FLOOR_BUILD_UP, 'imperial', english)) =>
       render(
         createElement(FloorSection, {
           layers,
@@ -427,7 +429,11 @@ describe('Section drawings', () => {
       expect(markup).toContain(`data-section-layer="${layer}"`)
     expect(markup).toContain('Not to scale')
     const exposed = section(
-      floorSectionLayers(switchFloorLayer(DEFAULT_FLOOR_BUILD_UP, 'ceiling', false), 'imperial'),
+      floorSectionLayers(
+        switchFloorLayer(DEFAULT_FLOOR_BUILD_UP, 'ceiling', false),
+        'imperial',
+        english,
+      ),
     )
     expect(exposed).not.toContain('data-section-layer="ceiling"')
     expect(exposed).not.toContain('Drywall ceiling')

@@ -6,6 +6,8 @@ import {
   type CeilingNode,
   ceilingBuildUpThickness,
   LUMBER_DEPTH,
+  type MessageDescriptor,
+  usePascalI18n,
 } from '@pascal-app/core'
 import { PanelSection, SelectControl } from '@pascal-app/editor'
 import {
@@ -26,10 +28,25 @@ import {
 
 const INCH = 0.0254
 
-const FRAMING_OPTIONS: { label: string; value: CeilingFraming['system'] | typeof NONE }[] = [
-  { label: 'None', value: NONE },
-  { label: 'Ceiling joists', value: 'joists' },
-  { label: 'Truss bottom chords', value: 'truss-chords' },
+const FRAMING_OPTIONS: {
+  label: MessageDescriptor
+  value: CeilingFraming['system'] | typeof NONE
+}[] = [
+  { label: /* i18n */ { id: 'node.ceiling.buildUpSection.none', message: 'None' }, value: NONE },
+  {
+    label: /* i18n */ {
+      id: 'node.ceiling.buildUpSection.ceilingJoists',
+      message: 'Ceiling joists',
+    },
+    value: 'joists',
+  },
+  {
+    label: /* i18n */ {
+      id: 'node.ceiling.buildUpSection.trussBottomChords',
+      message: 'Truss bottom chords',
+    },
+    value: 'truss-chords',
+  },
 ]
 
 const NEW_FRAMING: Record<CeilingFraming['system'], CeilingFraming> = {
@@ -46,6 +63,7 @@ export function CeilingBuildUpSection({
   onUpdate: (patch: Partial<CeilingNode>) => void
   unit: 'metric' | 'imperial'
 }) {
+  const i18n = usePascalI18n()
   const buildUp = node.buildUp
   const edit = (change: Partial<CeilingBuildUp>) => {
     if (buildUp) onUpdate({ buildUp: editedBuildUp(buildUp, change) })
@@ -53,9 +71,9 @@ export function CeilingBuildUpSection({
   const framing = buildUp?.framing
 
   return (
-    <PanelSection title="Layers">
+    <PanelSection title={i18n._({ id: 'node.ceiling.buildUpSection.layers', message: 'Layers' })}>
       <SelectControl
-        label="Preset"
+        label={i18n._({ id: 'node.ceiling.buildUpSection.preset', message: 'Preset' })}
         onChange={(id) => {
           const patch = ceilingBuildUpPresetPatch(id)
           if (patch) onUpdate(patch)
@@ -66,13 +84,13 @@ export function CeilingBuildUpSection({
       {buildUp && (
         <>
           <FinishFields
-            label="Finish"
+            label={i18n._({ id: 'node.ceiling.buildUpSection.finish', message: 'Finish' })}
             layer={buildUp.finish}
             onChange={(finish) => edit({ finish })}
             unit={unit}
           />
           <SelectControl
-            label="Framing"
+            label={i18n._({ id: 'node.ceiling.buildUpSection.framing', message: 'Framing' })}
             onChange={(system) =>
               edit({
                 framing:
@@ -83,20 +101,27 @@ export function CeilingBuildUpSection({
                       : NEW_FRAMING[system],
               })
             }
-            options={FRAMING_OPTIONS}
+            options={FRAMING_OPTIONS.map((option) => ({ ...option, label: i18n._(option.label) }))}
             value={framing?.system ?? NONE}
           />
           {framing && (
             <FramingSizeFields
               framing={framing}
               onChange={(change) => edit({ framing: { ...framing, ...change } })}
-              sizeLabel={framing.system === 'joists' ? 'Joists' : 'Bottom chord'}
+              sizeLabel={
+                framing.system === 'joists'
+                  ? i18n._({ id: 'node.ceiling.buildUpSection.joists', message: 'Joists' })
+                  : i18n._({
+                      id: 'node.ceiling.buildUpSection.bottomChord',
+                      message: 'Bottom chord',
+                    })
+              }
               unit={unit}
             />
           )}
           <PanelFields
             added={0.75 * INCH}
-            label="Decking"
+            label={i18n._({ id: 'node.ceiling.buildUpSection.decking', message: 'Decking' })}
             layer={buildUp.decking}
             onChange={(decking) => edit({ decking })}
             optional
@@ -109,11 +134,14 @@ export function CeilingBuildUpSection({
             unit={unit}
           />
           <BuildUpReadout
-            label="Thickness"
+            label={i18n._({ id: 'node.ceiling.buildUpSection.thickness', message: 'Thickness' })}
             value={formatLayerDepth(ceilingBuildUpThickness(buildUp), unit)}
           />
           <div className="px-1 text-[11px] text-muted-foreground">
-            The height is the finished underside; the layers rise from it.
+            {i18n._({
+              id: 'node.ceiling.buildUpSection.theHeightIsTheFinishedUnderside',
+              message: 'The height is the finished underside; the layers rise from it.',
+            })}
           </div>
         </>
       )}

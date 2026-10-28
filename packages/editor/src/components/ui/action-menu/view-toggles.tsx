@@ -1018,6 +1018,7 @@ export function adjacentWallsToggle(
  * blue for the level below (on a roof level, the top storey), magenta for the level above.
  */
 function AdjacentWallsControl() {
+  const i18n = usePascalI18n()
   const popupSide = useActionMenuPopupSide()
   const levelId = useViewer((s) => s.selection.levelId)
   const { shown: showBelow, setShown: setShowBelow } = useWallsBelowSetting(levelId)
@@ -1030,7 +1031,7 @@ function AdjacentWallsControl() {
   const rows = [
     {
       key: 'below',
-      label: 'Walls below',
+      label: i18n._({ id: 'editor.actionMenu.viewToggles.wallsBelow', message: 'Walls below' }),
       level: names.below,
       checked: showBelow,
       set: setShowBelow,
@@ -1038,7 +1039,7 @@ function AdjacentWallsControl() {
     },
     {
       key: 'above',
-      label: 'Walls above',
+      label: i18n._({ id: 'editor.actionMenu.viewToggles.wallsAbove', message: 'Walls above' }),
       level: names.above,
       checked: showAbove,
       set: setShowAbove,
@@ -1057,7 +1058,7 @@ function AdjacentWallsControl() {
               : 'opacity-60 grayscale hover:bg-black/4 hover:opacity-100 hover:grayscale-0',
           )}
           disabled={!available}
-          label={active ? 'Walls below and above: shown' : 'Show walls below and above'}
+          label={active ? i18n._({ id: 'editor.actionMenu.viewToggles.wallsBelowAndAboveShown', message: 'Walls below and above: shown' }) : i18n._({ id: 'editor.actionMenu.viewToggles.showWallsBelowAndAbove', message: 'Show walls below and above' })}
           onClick={() => {
             const next = adjacentWallsToggle(active, names)
             if (next.below !== undefined) setShowBelow(next.below)
@@ -1071,7 +1072,7 @@ function AdjacentWallsControl() {
         <PopoverTrigger asChild>
           <button
             aria-expanded={isOpen}
-            aria-label="Walls below and above settings"
+            aria-label={i18n._({ id: 'editor.actionMenu.viewToggles.wallsBelowAndAboveSettings', message: 'Walls below and above settings' })}
             className={cn(
               'flex h-11 w-6 items-center justify-center rounded-r-lg transition-colors',
               active
@@ -1093,10 +1094,9 @@ function AdjacentWallsControl() {
       >
         <div className="space-y-3" data-adjacent-walls-settings>
           <div>
-            <p className="font-medium text-foreground text-sm">Walls below and above</p>
+            <p className="font-medium text-foreground text-sm">{i18n._({ id: 'editor.actionMenu.viewToggles.wallsBelowAndAbove', message: 'Walls below and above' })}</p>
             <p className="text-muted-foreground text-xs">
-              Dashed outlines of the neighbouring levels’ walls, to line walls up and check a roof
-              against the walls under it.
+              {i18n._({ id: 'editor.actionMenu.viewToggles.dashedOutlinesOfTheNeighbouringLevels', message: 'Dashed outlines of the neighbouring levels’ walls, to line walls up and check a roof against the walls under it.' })}
             </p>
           </div>
           {rows.map((row) => (
@@ -1109,7 +1109,7 @@ function AdjacentWallsControl() {
               <span className="flex min-w-0 flex-1 flex-col">
                 <span className="text-foreground text-sm">{row.label}</span>
                 <span className="truncate text-muted-foreground text-xs">
-                  {row.level ?? (row.key === 'below' ? 'No level below' : 'No level above')}
+                  {row.level ?? (row.key === 'below' ? i18n._({ id: 'editor.actionMenu.viewToggles.noLevelBelow', message: 'No level below' }) : i18n._({ id: 'editor.actionMenu.viewToggles.noLevelAbove', message: 'No level above' }))}
                 </span>
               </span>
               <Switch

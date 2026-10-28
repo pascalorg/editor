@@ -484,7 +484,7 @@ function DisplayMenu() {
         {scene === '3d' || scene === 'split' ? (
           <DropdownMenuItem onSelect={(e) => keepOpen(e, () => setShowCeilings(!showCeilings))}>
             <Layers2 className="h-4 w-4" />
-            <span>Ceilings</span>
+            <span>{i18n._({ id: 'app.viewerToolbar.ceilings', message: 'Ceilings' })}</span>
             {showCeilings ? (
               <Eye className="ml-auto h-4 w-4 text-foreground" />
             ) : (

@@ -13,6 +13,7 @@ import {
   beamTopElevation,
   beamTopReferencePatch,
   DEFAULT_FRAMING_POST_SIZE,
+  usePascalI18n,
   useScene,
 } from '@pascal-app/core'
 import {
@@ -85,6 +86,7 @@ export function beamPliesPatch(beam: Pick<BeamNode, 'width' | 'plies'>, plies: n
  * and posts under it at each end and every 8 ft.
  */
 export default function BeamPanel() {
+  const i18n = usePascalI18n()
   const selectedId = useViewer((state) => state.selection.selectedIds[0])
   const setSelection = useViewer((state) => state.setSelection)
   const unit = useViewer((state) => state.unit)
@@ -104,12 +106,18 @@ export default function BeamPanel() {
     <PanelWrapper
       icon="/icons/beam.svg"
       onClose={() => setSelection({ selectedIds: [] })}
-      title={beam.name ?? 'Beam'}
+      title={beam.name ?? i18n._({ id: 'node.beam.panel.beam', message: 'Beam' })}
       width={300}
     >
-      <PanelSection title={`Beam ${beamSizeLabel(beam)}`}>
+      <PanelSection
+        title={i18n._({
+          id: 'node.beam.panel.beamSize',
+          message: 'Beam {size}',
+          values: { size: beamSizeLabel(beam) },
+        })}
+      >
         <SelectControl
-          label="Size"
+          label={i18n._({ id: 'node.beam.panel.size', message: 'Size' })}
           onChange={(id: string) => {
             if (id !== CUSTOM) update(beamSizePresetPatch(beam, id))
           }}
@@ -117,41 +125,51 @@ export default function BeamPanel() {
           value={size}
         />
         <SelectControl
-          label="Material"
+          label={i18n._({ id: 'node.beam.panel.material', message: 'Material' })}
           onChange={(material: string) => update({ material: material as BeamMaterial })}
           options={BEAM_MATERIAL_OPTIONS}
           value={beam.material}
         />
         <InchField
-          label="Width"
+          label={i18n._({ id: 'node.beam.panel.width', message: 'Width' })}
           onCommit={(width) => update({ width, size: undefined })}
           value={beam.width}
         />
         <InchField
-          label="Depth"
+          label={i18n._({ id: 'node.beam.panel.depth', message: 'Depth' })}
           onCommit={(depth) => update({ depth, size: undefined })}
           value={beam.depth}
         />
         <SegmentedControl
           onChange={(plies: string) => update(beamPliesPatch(beam, Number(plies)))}
           options={['1', '2', '3', '4'].map((plies) => ({
-            label: plies === '1' ? '1 ply' : `${plies} plies`,
+            label:
+              plies === '1'
+                ? i18n._({ id: 'node.beam.panel.n1Ply', message: '1 ply' })
+                : i18n._({
+                    id: 'node.beam.panel.pliesPlies',
+                    message: '{plies} plies',
+                    values: { plies },
+                  }),
             value: plies,
           }))}
           value={String(beam.plies)}
         />
       </PanelSection>
-      <PanelSection title="Placement">
+      <PanelSection title={i18n._({ id: 'node.beam.panel.placement', message: 'Placement' })}>
         <SegmentedControl
           onChange={(placement: BeamPlacement) => update({ placement })}
           options={[
-            { label: 'Dropped', value: 'dropped' },
-            { label: 'Flush', value: 'flush' },
+            {
+              label: i18n._({ id: 'node.beam.panel.dropped', message: 'Dropped' }),
+              value: 'dropped',
+            },
+            { label: i18n._({ id: 'node.beam.panel.flush', message: 'Flush' }), value: 'flush' },
           ]}
           value={beam.placement}
         />
         <SelectControl
-          label="Top"
+          label={i18n._({ id: 'node.beam.panel.top', message: 'Top' })}
           onChange={(reference: string) => {
             if (reference !== CUSTOM)
               update(beamTopReferencePatch(nodes, beam, reference as BeamTopReference))
@@ -160,7 +178,7 @@ export default function BeamPanel() {
           value={top}
         />
         <MetricControl
-          label="Top elevation"
+          label={i18n._({ id: 'node.beam.panel.topElevation', message: 'Top elevation' })}
           onChange={(value) => update({ topElevation: value })}
           precision={3}
           step={0.01}
@@ -168,8 +186,16 @@ export default function BeamPanel() {
           value={topY}
         />
         <p className="px-0.5 text-muted-foreground text-xs" data-beam-readout>
-          {length(beamPlan(beam).length)} long; its underside {length(topY - beam.depth)} over the
-          floor, the ceiling plane {length(plane)}.
+          {i18n._({
+            id: 'node.beam.panel.lengthLongItsUnderside',
+            message:
+              '{length} long; its underside {underside} over the floor, the ceiling plane {plane}.',
+            values: {
+              length: length(beamPlan(beam).length),
+              underside: length(topY - beam.depth),
+              plane: length(plane),
+            },
+          })}
         </p>
         {beam.topElevation !== undefined && (
           <button
@@ -177,15 +203,18 @@ export default function BeamPanel() {
             onClick={() => update({ topElevation: undefined })}
             type="button"
           >
-            Follow the ceiling plane
+            {i18n._({
+              id: 'node.beam.panel.followTheCeilingPlane',
+              message: 'Follow the ceiling plane',
+            })}
           </button>
         )}
       </PanelSection>
-      <PanelSection title="Actions">
+      <PanelSection title={i18n._({ id: 'node.beam.panel.actions', message: 'Actions' })}>
         <ActionGroup>
           <ActionButton
             icon={<Columns2 className="h-3.5 w-3.5" />}
-            label="Add posts"
+            label={i18n._({ id: 'node.beam.panel.addPosts', message: 'Add posts' })}
             onClick={() => {
               const posts = beam.parentId
                 ? framingPostsUnderBeam({
@@ -210,7 +239,7 @@ export default function BeamPanel() {
           />
           <ActionButton
             icon={<Move className="h-3.5 w-3.5" />}
-            label="Move"
+            label={i18n._({ id: 'node.beam.panel.move', message: 'Move' })}
             onClick={() => {
               triggerSFX('sfx:item-pick')
               useEditor.getState().setMovingNode(beam)
@@ -218,7 +247,7 @@ export default function BeamPanel() {
           />
           <ActionButton
             icon={<Trash2 className="h-3.5 w-3.5" />}
-            label="Delete"
+            label={i18n._({ id: 'node.beam.panel.delete', message: 'Delete' })}
             onClick={() => {
               useScene.getState().deleteNode(beam.id)
               setSelection({ selectedIds: [] })

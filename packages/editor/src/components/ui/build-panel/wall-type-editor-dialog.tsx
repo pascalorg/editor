@@ -8,10 +8,12 @@ import {
   FIBER_CEMENT,
   GYPSUM_HALF,
   GYPSUM_SHEATHING,
+  type MessageDescriptor,
   newWallTypeId,
   SIDING_LAP,
   STONE_VENEER_UNVERIFIED,
   STUCCO_3_COAT,
+  usePascalI18n,
   WALL_TYPE_CORES,
   type WallTypeCore,
   type WallTypeDefinition,
@@ -61,13 +63,22 @@ type DraftLayer = {
 
 const IN = 0.0254
 
-const ROLE_LABEL: Record<DraftRole, string> = {
-  finish: 'Finish',
-  air: 'Air space',
-  sheathing: 'Sheathing',
-  insulation: 'Insulation',
-  core: 'Framing core',
-  lining: 'Lining',
+const ROLE_LABEL: Record<DraftRole, MessageDescriptor> = {
+  finish: /* i18n */ { id: 'editor.buildPanel.wallTypeEditorDialog.finish', message: 'Finish' },
+  air: /* i18n */ { id: 'editor.buildPanel.wallTypeEditorDialog.airSpace', message: 'Air space' },
+  sheathing: /* i18n */ {
+    id: 'editor.buildPanel.wallTypeEditorDialog.sheathing',
+    message: 'Sheathing',
+  },
+  insulation: /* i18n */ {
+    id: 'editor.buildPanel.wallTypeEditorDialog.insulation',
+    message: 'Insulation',
+  },
+  core: /* i18n */ {
+    id: 'editor.buildPanel.wallTypeEditorDialog.framingCore',
+    message: 'Framing core',
+  },
+  lining: /* i18n */ { id: 'editor.buildPanel.wallTypeEditorDialog.lining', message: 'Lining' },
 }
 
 /**
@@ -77,28 +88,115 @@ const ROLE_LABEL: Record<DraftRole, string> = {
  */
 const LAYER_MATERIALS: Record<
   Exclude<DraftRole, 'core'>,
-  ReadonlyArray<{ value: string; label: string; thickness: number }>
+  ReadonlyArray<{ value: string; label: MessageDescriptor; thickness: number }>
 > = {
   finish: [
-    { value: 'siding', label: 'Lap siding', thickness: SIDING_LAP },
-    { value: 'fiber-cement', label: 'Fiber cement', thickness: FIBER_CEMENT },
-    { value: 'stucco', label: 'Stucco', thickness: STUCCO_3_COAT },
-    { value: 'brick', label: 'Brick veneer', thickness: BRICK_VENEER },
-    { value: 'stone', label: 'Stone veneer', thickness: STONE_VENEER_UNVERIFIED },
+    {
+      value: 'siding',
+      label: /* i18n */ {
+        id: 'editor.buildPanel.wallTypeEditorDialog.lapSiding',
+        message: 'Lap siding',
+      },
+      thickness: SIDING_LAP,
+    },
+    {
+      value: 'fiber-cement',
+      label: /* i18n */ {
+        id: 'editor.buildPanel.wallTypeEditorDialog.fiberCement',
+        message: 'Fiber cement',
+      },
+      thickness: FIBER_CEMENT,
+    },
+    {
+      value: 'stucco',
+      label: /* i18n */ { id: 'editor.buildPanel.wallTypeEditorDialog.stucco', message: 'Stucco' },
+      thickness: STUCCO_3_COAT,
+    },
+    {
+      value: 'brick',
+      label: /* i18n */ {
+        id: 'editor.buildPanel.wallTypeEditorDialog.brickVeneer',
+        message: 'Brick veneer',
+      },
+      thickness: BRICK_VENEER,
+    },
+    {
+      value: 'stone',
+      label: /* i18n */ {
+        id: 'editor.buildPanel.wallTypeEditorDialog.stoneVeneer',
+        message: 'Stone veneer',
+      },
+      thickness: STONE_VENEER_UNVERIFIED,
+    },
   ],
-  air: [{ value: 'air', label: 'Air space', thickness: BRICK_AIR_SPACE }],
+  air: [
+    {
+      value: 'air',
+      label: /* i18n */ {
+        id: 'editor.buildPanel.wallTypeEditorDialog.airSpace',
+        message: 'Air space',
+      },
+      thickness: BRICK_AIR_SPACE,
+    },
+  ],
   sheathing: [
-    { value: 'osb', label: 'OSB', thickness: WSP_SHEATHING },
-    { value: 'plywood', label: 'Plywood', thickness: WSP_SHEATHING },
-    { value: 'gypsum', label: 'Gypsum sheathing', thickness: GYPSUM_SHEATHING },
+    {
+      value: 'osb',
+      label: /* i18n */ { id: 'editor.buildPanel.wallTypeEditorDialog.osb', message: 'OSB' },
+      thickness: WSP_SHEATHING,
+    },
+    {
+      value: 'plywood',
+      label: /* i18n */ {
+        id: 'editor.buildPanel.wallTypeEditorDialog.plywood',
+        message: 'Plywood',
+      },
+      thickness: WSP_SHEATHING,
+    },
+    {
+      value: 'gypsum',
+      label: /* i18n */ {
+        id: 'editor.buildPanel.wallTypeEditorDialog.gypsumSheathing',
+        message: 'Gypsum sheathing',
+      },
+      thickness: GYPSUM_SHEATHING,
+    },
   ],
   insulation: [
-    { value: 'rigid-foam', label: 'Rigid foam', thickness: 1 * IN },
-    { value: 'mineral-wool', label: 'Mineral wool board', thickness: 1.5 * IN },
+    {
+      value: 'rigid-foam',
+      label: /* i18n */ {
+        id: 'editor.buildPanel.wallTypeEditorDialog.rigidFoam',
+        message: 'Rigid foam',
+      },
+      thickness: 1 * IN,
+    },
+    {
+      value: 'mineral-wool',
+      label: /* i18n */ {
+        id: 'editor.buildPanel.wallTypeEditorDialog.mineralWoolBoard',
+        message: 'Mineral wool board',
+      },
+      thickness: 1.5 * IN,
+    },
   ],
   lining: [
-    { value: 'drywall', label: 'Drywall', thickness: GYPSUM_HALF },
-    { value: 'plaster', label: 'Plaster', thickness: STUCCO_3_COAT },
+    {
+      value: 'drywall',
+      label: /* i18n */ {
+        id: 'editor.buildPanel.wallTypeEditorDialog.drywall',
+        message: 'Drywall',
+      },
+      thickness: GYPSUM_HALF,
+    },
+    {
+      value: 'plaster',
+      label: /* i18n */ {
+        id: 'editor.buildPanel.wallTypeEditorDialog.plaster',
+        message: 'Plaster',
+      },
+      thickness: STUCCO_3_COAT,
+    },
   ],
 }
 
@@ -151,7 +249,11 @@ function initialLayers(request: WallTypeEditorRequest): DraftLayer[] {
           coreLayer(DEFAULT_CORE.exterior),
           layerOf('lining', 'drywall'),
         ]
-      : [layerOf('lining', 'drywall'), coreLayer(DEFAULT_CORE.interior), layerOf('lining', 'drywall')]
+      : [
+          layerOf('lining', 'drywall'),
+          coreLayer(DEFAULT_CORE.interior),
+          layerOf('lining', 'drywall'),
+        ]
   }
   const core = wallTypeCoreOf(request.assembly) ?? DEFAULT_CORE[request.placement]
   const layers = request.assembly.layers.map((layer): DraftLayer => {
@@ -219,10 +321,14 @@ function ThicknessField({
   onCommit: (metres: number) => void
   unit: LinearUnit
 }) {
+  const i18n = usePascalI18n()
   const [draft, setDraft] = useState<string | null>(null)
   return (
     <input
-      aria-label="Thickness"
+      aria-label={i18n._({
+        id: 'editor.buildPanel.wallTypeEditorDialog.thickness',
+        message: 'Thickness',
+      })}
       className={cn(FIELD_CLASS, 'text-right tabular-nums')}
       onBlur={() => {
         if (draft != null) {
@@ -245,10 +351,19 @@ function ThicknessField({
   )
 }
 
-const TITLE: Record<WallTypeEditorRequest['mode'], string> = {
-  new: 'New wall type',
-  edit: 'Edit wall type',
-  duplicate: 'Duplicate wall type',
+const TITLE: Record<WallTypeEditorRequest['mode'], MessageDescriptor> = {
+  new: /* i18n */ {
+    id: 'editor.buildPanel.wallTypeEditorDialog.newWallType',
+    message: 'New wall type',
+  },
+  edit: /* i18n */ {
+    id: 'editor.buildPanel.wallTypeEditorDialog.editWallType',
+    message: 'Edit wall type',
+  },
+  duplicate: /* i18n */ {
+    id: 'editor.buildPanel.wallTypeEditorDialog.duplicateWallType',
+    message: 'Duplicate wall type',
+  },
 }
 
 /**
@@ -268,6 +383,7 @@ export function WallTypeEditorDialog({
   onSaved: (type: WallTypeDefinition) => void
   request: WallTypeEditorRequest | null
 }) {
+  const i18n = usePascalI18n()
   const unit = useViewer((state) => state.unit)
   const [name, setName] = useState('')
   const [layers, setLayers] = useState<DraftLayer[]>([])
@@ -297,10 +413,16 @@ export function WallTypeEditorDialog({
   const canSave = trimmed.length > 0 && layers.every((layer) => layer.thickness > 0)
   // A wall type's stack holds `WALL_TYPE_LAYER_LIMIT` layers at most; past it the type would not save.
   const full = layers.length >= WALL_TYPE_LAYER_LIMIT
-  const fullReason = `A wall type holds at most ${WALL_TYPE_LAYER_LIMIT} layers.`
+  const fullReason = i18n._({
+    id: 'editor.buildPanel.wallTypeEditorDialog.aWallTypeHoldsAtMost',
+    message: 'A wall type holds at most {limit, plural, one {# layer} other {# layers}}.',
+    values: { limit: WALL_TYPE_LAYER_LIMIT },
+  })
 
   const update = (key: number, patch: Partial<DraftLayer>) =>
-    setLayers((current) => current.map((layer) => (layer.key === key ? { ...layer, ...patch } : layer)))
+    setLayers((current) =>
+      current.map((layer) => (layer.key === key ? { ...layer, ...patch } : layer)),
+    )
   const move = (index: number, by: -1 | 1) =>
     setLayers((current) => {
       const target = index + by
@@ -336,15 +458,27 @@ export function WallTypeEditorDialog({
     >
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>{request ? TITLE[request.mode] : 'Wall type'}</DialogTitle>
+          <DialogTitle>
+            {request
+              ? i18n._(TITLE[request.mode])
+              : i18n._({
+                  id: 'editor.buildPanel.wallTypeEditorDialog.wallType',
+                  message: 'Wall type',
+                })}
+          </DialogTitle>
           <DialogDescription>
-            List the layers from the outside in, around one framing core. Walls already drawn
-            keep their layers; walls drawn from now on use the saved type.
+            {i18n._({
+              id: 'editor.buildPanel.wallTypeEditorDialog.listTheLayersFromTheOutside',
+              message:
+                'List the layers from the outside in, around one framing core. Walls already drawn keep their layers; walls drawn from now on use the saved type.',
+            })}
           </DialogDescription>
         </DialogHeader>
 
         <label className="flex flex-col gap-1 text-xs">
-          <span className="text-muted-foreground">Name</span>
+          <span className="text-muted-foreground">
+            {i18n._({ id: 'editor.buildPanel.wallTypeEditorDialog.name', message: 'Name' })}
+          </span>
           <input
             className={FIELD_CLASS}
             maxLength={60}
@@ -355,13 +489,25 @@ export function WallTypeEditorDialog({
 
         <div className="flex flex-col gap-1">
           <div className="grid grid-cols-[7.5rem_1fr_5.5rem_4.75rem] gap-1.5 px-0.5 text-[11px] text-muted-foreground">
-            <span>Layer</span>
-            <span>Material</span>
-            <span className="text-right">Thickness</span>
+            <span>
+              {i18n._({ id: 'editor.buildPanel.wallTypeEditorDialog.layer', message: 'Layer' })}
+            </span>
+            <span>
+              {i18n._({
+                id: 'editor.buildPanel.wallTypeEditorDialog.material',
+                message: 'Material',
+              })}
+            </span>
+            <span className="text-right">
+              {i18n._({
+                id: 'editor.buildPanel.wallTypeEditorDialog.thickness',
+                message: 'Thickness',
+              })}
+            </span>
             <span />
           </div>
           <div className="px-0.5 text-[10px] text-muted-foreground uppercase tracking-wide">
-            Outside
+            {i18n._({ id: 'editor.buildPanel.wallTypeEditorDialog.outside', message: 'Outside' })}
           </div>
           {layers.map((layer, index) => (
             <div
@@ -370,10 +516,13 @@ export function WallTypeEditorDialog({
               key={layer.key}
             >
               {layer.role === 'core' ? (
-                <span className="px-0.5 font-medium text-xs">{ROLE_LABEL.core}</span>
+                <span className="px-0.5 font-medium text-xs">{i18n._(ROLE_LABEL.core)}</span>
               ) : (
                 <select
-                  aria-label="Layer role"
+                  aria-label={i18n._({
+                    id: 'editor.buildPanel.wallTypeEditorDialog.layerRole',
+                    message: 'Layer role',
+                  })}
                   className={FIELD_CLASS}
                   onChange={(event) => {
                     const role = event.target.value as Exclude<DraftRole, 'core'>
@@ -388,19 +537,21 @@ export function WallTypeEditorDialog({
                 >
                   {ADDABLE_ROLES.map((role) => (
                     <option key={role} value={role}>
-                      {ROLE_LABEL[role]}
+                      {i18n._(ROLE_LABEL[role])}
                     </option>
                   ))}
                 </select>
               )}
               {layer.role === 'core' ? (
                 <select
-                  aria-label="Framing core"
+                  aria-label={i18n._({
+                    id: 'editor.buildPanel.wallTypeEditorDialog.framingCore',
+                    message: 'Framing core',
+                  })}
                   className={FIELD_CLASS}
                   onChange={(event) => {
                     const core = WALL_TYPE_CORES.find((entry) => entry.id === event.target.value)
-                    if (core)
-                      update(layer.key, { material: core.id, thickness: core.thickness })
+                    if (core) update(layer.key, { material: core.id, thickness: core.thickness })
                   }}
                   value={layer.material}
                 >
@@ -412,7 +563,10 @@ export function WallTypeEditorDialog({
                 </select>
               ) : (
                 <select
-                  aria-label="Material"
+                  aria-label={i18n._({
+                    id: 'editor.buildPanel.wallTypeEditorDialog.material',
+                    message: 'Material',
+                  })}
                   className={FIELD_CLASS}
                   disabled={layer.role === 'air'}
                   onChange={(event) => {
@@ -426,7 +580,7 @@ export function WallTypeEditorDialog({
                 >
                   {LAYER_MATERIALS[layer.role as Exclude<DraftRole, 'core'>].map((option) => (
                     <option key={option.value} value={option.value}>
-                      {option.label}
+                      {i18n._(option.label)}
                     </option>
                   ))}
                   {LAYER_MATERIALS[layer.role as Exclude<DraftRole, 'core'>].some(
@@ -449,7 +603,10 @@ export function WallTypeEditorDialog({
               )}
               <div className="flex items-center justify-end gap-0.5">
                 <button
-                  aria-label="Move out"
+                  aria-label={i18n._({
+                    id: 'editor.buildPanel.wallTypeEditorDialog.moveOut',
+                    message: 'Move out',
+                  })}
                   className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-30"
                   disabled={index === 0}
                   onClick={() => move(index, -1)}
@@ -458,7 +615,10 @@ export function WallTypeEditorDialog({
                   <ArrowUp className="size-3.5" />
                 </button>
                 <button
-                  aria-label="Move in"
+                  aria-label={i18n._({
+                    id: 'editor.buildPanel.wallTypeEditorDialog.moveIn',
+                    message: 'Move in',
+                  })}
                   className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-30"
                   disabled={index === layers.length - 1}
                   onClick={() => move(index, 1)}
@@ -467,14 +627,24 @@ export function WallTypeEditorDialog({
                   <ArrowDown className="size-3.5" />
                 </button>
                 <button
-                  aria-label="Remove layer"
+                  aria-label={i18n._({
+                    id: 'editor.buildPanel.wallTypeEditorDialog.removeLayer',
+                    message: 'Remove layer',
+                  })}
                   className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-30"
                   // The core stays: a wall type frames around exactly one.
                   disabled={layer.role === 'core'}
                   onClick={() =>
                     setLayers((current) => current.filter((entry) => entry.key !== layer.key))
                   }
-                  title={layer.role === 'core' ? 'Every wall type has one framing core' : undefined}
+                  title={
+                    layer.role === 'core'
+                      ? i18n._({
+                          id: 'editor.buildPanel.wallTypeEditorDialog.everyWallTypeHasOneFraming',
+                          message: 'Every wall type has one framing core',
+                        })
+                      : undefined
+                  }
                   type="button"
                 >
                   <X className="size-3.5" />
@@ -483,10 +653,12 @@ export function WallTypeEditorDialog({
             </div>
           ))}
           <div className="px-0.5 text-[10px] text-muted-foreground uppercase tracking-wide">
-            Inside
+            {i18n._({ id: 'editor.buildPanel.wallTypeEditorDialog.inside', message: 'Inside' })}
           </div>
           <div className="flex flex-wrap items-center gap-1.5 pt-1">
-            <span className="text-[11px] text-muted-foreground">Add</span>
+            <span className="text-[11px] text-muted-foreground">
+              {i18n._({ id: 'editor.buildPanel.wallTypeEditorDialog.add', message: 'Add' })}
+            </span>
             {ADDABLE_ROLES.map((role) => (
               <button
                 className="flex items-center gap-1 rounded-full border border-border/60 px-2 py-0.5 text-[11px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
@@ -504,12 +676,16 @@ export function WallTypeEditorDialog({
                 type="button"
               >
                 <Plus className="size-3" />
-                {ROLE_LABEL[role]}
+                {i18n._(ROLE_LABEL[role])}
               </button>
             ))}
             {full ? (
               <span className="text-[11px] text-muted-foreground" data-wall-type-layers-full>
-                {fullReason} Remove one to add another.
+                {i18n._({
+                  id: 'editor.buildPanel.wallTypeEditorDialog.fullreasonRemoveOneToAddAnother',
+                  message: '{fullReason} Remove one to add another.',
+                  values: { fullReason },
+                })}
               </span>
             ) : null}
           </div>
@@ -518,11 +694,21 @@ export function WallTypeEditorDialog({
         <div className="flex items-baseline justify-between gap-3 rounded-lg bg-black/4 px-3 py-2 dark:bg-muted/40">
           <span className="text-muted-foreground text-xs">
             {placement === 'exterior'
-              ? 'Lists under Exterior: it has a cladding side.'
-              : 'Lists under Interior: both faces match.'}
+              ? i18n._({
+                  id: 'editor.buildPanel.wallTypeEditorDialog.listsUnderExteriorItHasA',
+                  message: 'Lists under Exterior: it has a cladding side.',
+                })
+              : i18n._({
+                  id: 'editor.buildPanel.wallTypeEditorDialog.listsUnderInteriorBothFacesMatch',
+                  message: 'Lists under Interior: both faces match.',
+                })}
           </span>
           <span className="font-medium text-sm tabular-nums">
-            Total {formatLayerThickness(total, unit)}
+            {i18n._({
+              id: 'editor.buildPanel.wallTypeEditorDialog.totalThickness',
+              message: 'Total {thickness}',
+              values: { thickness: formatLayerThickness(total, unit) },
+            })}
           </span>
         </div>
         {failure ? (
@@ -531,10 +717,13 @@ export function WallTypeEditorDialog({
 
         <DialogFooter>
           <Button onClick={onClose} variant="outline">
-            Cancel
+            {i18n._({ id: 'editor.buildPanel.wallTypeEditorDialog.cancel', message: 'Cancel' })}
           </Button>
           <Button disabled={!canSave} onClick={save}>
-            Save wall type
+            {i18n._({
+              id: 'editor.buildPanel.wallTypeEditorDialog.saveWallType',
+              message: 'Save wall type',
+            })}
           </Button>
         </DialogFooter>
       </DialogContent>

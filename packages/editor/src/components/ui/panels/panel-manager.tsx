@@ -175,13 +175,14 @@ function MobilePanelLayer({
 
 /** The foundation view's panel on a phone: its sheet open while the view is; closing it leaves the view. */
 function MobileFoundationLayer() {
+  const i18n = usePascalI18n()
   const setFoundationView = useViewer((s) => s.setFoundationView)
   return (
     <MobilePanelSheet
       icon="/icons/floor.webp"
       onClose={() => setFoundationView(false)}
       open={true}
-      title="Foundation"
+      title={i18n._({ id: 'editor.panels.panelManager.foundation', message: 'Foundation' })}
     >
       <FoundationViewPanel />
     </MobilePanelSheet>

@@ -219,9 +219,6 @@
       "Lower the floor",
       "Raise the floor"
     ],
-    "packages/editor/src/components/editor/room-handles.tsx": [
-      "Floor"
-    ],
     "packages/editor/src/components/editor/snapshot-capture-overlay.tsx": [
       " freezes this exact camera angle as a reusable reference for renders & videos.",
       "Area",
@@ -599,18 +596,6 @@
       "Warning: {modelExportWarning}",
       "file…",
       "running in an open Blender."
-    ],
-    "packages/editor/src/components/ui/sidebar/panels/settings-panel/keyboard-shortcuts-dialog.tsx": [
-      "Camera",
-      "Direct Manipulation",
-      "Drawing Tools",
-      "Editor Navigation",
-      "Item Placement",
-      "Keyboard shortcuts",
-      "Keyboard shortcuts",
-      "Modes & History",
-      "Selection",
-      "Shortcuts are context-aware. Guided constraints are enabled by default; hold Shift during an active gesture to build freely."
     ],
     "packages/editor/src/components/ui/sidebar/panels/settings-panel/load-build-dialog.tsx": [
       "Buildings",

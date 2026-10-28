@@ -6,7 +6,7 @@ import {
   getLevelAbove,
   getLevelBelow,
   getLevelDisplayName,
-  useScene,
+  useScene, usePascalI18n,
 } from '@pascal-app/core'
 import { buildExteriorWallCopy, levelExteriorWalls } from '@pascal-app/core/building'
 import { useViewer } from '@pascal-app/viewer'
@@ -80,6 +80,7 @@ export function acceptExteriorWallCopy(offer: Offer): number {
  * way: it goes when answered or when another level is picked, and hides once the level has walls.
  */
 export function LevelWallCopyPrompt() {
+  const i18n = usePascalI18n()
   const offer = useLevelWallCopyOffer((state) => state.offer)
   const activeLevelId = useViewer((state) => state.selection.levelId)
   const sourceName = useScene((state) => {
@@ -101,11 +102,9 @@ export function LevelWallCopyPrompt() {
       role="status"
     >
       <p className="font-medium text-foreground text-sm">
-        Copy exterior walls from the level {offer.direction}?
-      </p>
+        {i18n._({ id: 'editor.levelWallCopyPrompt.copyExteriorWallsFromTheLevel', message: 'Copy exterior walls from the level {direction}?', values: { direction: offer.direction } })}</p>
       <p className="mt-0.5 text-muted-foreground">
-        {sourceName}’s outside walls, in place, so this level lines up with it.
-      </p>
+        {i18n._({ id: 'editor.levelWallCopyPrompt.sourcenameSOutsideWallsInPlace', message: '{sourceName}’s outside walls, in place, so this level lines up with it.', values: { sourceName } })}</p>
       <div className="mt-2.5 flex gap-2">
         <button
           className="flex-1 rounded-full bg-foreground px-3 py-1.5 font-medium text-background transition-opacity hover:opacity-90"
@@ -113,14 +112,14 @@ export function LevelWallCopyPrompt() {
           onClick={() => acceptExteriorWallCopy(offer)}
           type="button"
         >
-          Copy
+          {i18n._({ id: 'editor.levelWallCopyPrompt.copy', message: 'Copy' })}
         </button>
         <button
           className="flex-1 rounded-full border border-border px-3 py-1.5 text-foreground transition-colors hover:bg-accent"
           onClick={dismissExteriorWallCopy}
           type="button"
         >
-          No thanks
+          {i18n._({ id: 'editor.levelWallCopyPrompt.noThanks', message: 'No thanks' })}
         </button>
       </div>
     </div>

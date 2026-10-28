@@ -26,12 +26,15 @@ import {
   type IJoistDepth,
   type InteriorFinishKind,
   LUMBER_DEPTH,
+  type MessageDescriptor,
   type NominalLumber,
   type PanelKind,
+  type PascalI18n,
   PLASTER_THICKNESS,
   SLAB_EDGE_TAPER_IN,
   SUBFLOOR_THICKNESSES,
   slabEdgeTaper,
+  usePascalI18n,
   useScene,
   WOOD_PLANK_THICKNESS,
 } from '@pascal-app/core'
@@ -77,26 +80,54 @@ export function slabEdgeTaperOf(foundation: BuildingFoundation): number {
 }
 
 /** The numbers each kind of foundation is sized by, in the order it is built, top down. */
-function fieldsFor(foundation: BuildingFoundation): Field[] {
+function fieldsFor(foundation: BuildingFoundation, i18n: PascalI18n): Field[] {
   const piles = foundation.support === 'piles'
   const raised = foundation.type === 'raised'
   const floor: Field = {
     key: 'ffAboveGradeIn',
-    label: 'Finish floor over grade',
-    hint: 'Measured over the highest grade under the outside walls. The foundation grows down the slope from there.',
+    label: i18n._({
+      id: 'editor.panels.buildingFoundationSection.finishFloorOverGrade',
+      message: 'Finish floor over grade',
+    }),
+    hint: i18n._({
+      id: 'editor.panels.buildingFoundationSection.finishFloorOverGradeHint',
+      message:
+        'Measured over the highest grade under the outside walls. The foundation grows down the slope from there.',
+    }),
   }
   const top: Field = {
     key: 'topAboveGradeIn',
-    label: raised ? 'Stem top over grade' : 'Slab top over grade',
+    label: raised
+      ? i18n._({
+          id: 'editor.panels.buildingFoundationSection.stemTopOverGrade',
+          message: 'Stem top over grade',
+        })
+      : i18n._({
+          id: 'editor.panels.buildingFoundationSection.slabTopOverGrade',
+          message: 'Slab top over grade',
+        }),
     hint: raised
-      ? 'IRC R317.1 keeps wood framing 8 in off the ground.'
-      : 'The ground round the slab is graded to this on every side: filled where it falls away, cut where it rises (IRC R317.1: 8 in).',
+      ? i18n._({
+          id: 'editor.panels.buildingFoundationSection.stemTopOverGradeHint',
+          message: 'IRC R317.1 keeps wood framing 8 in off the ground.',
+        })
+      : i18n._({
+          id: 'editor.panels.buildingFoundationSection.slabTopOverGradeHint',
+          message:
+            'The ground round the slab is graded to this on every side: filled where it falls away, cut where it rises (IRC R317.1: 8 in).',
+        }),
   }
   // Where the floor's layers go (`RaisedFloorFraming`): the depth is theirs and the sill's.
   const framing: Field = {
     key: 'floorFramingDepthIn',
-    label: 'Floor framing',
-    hint: 'Floor top down to the stem: flooring, subfloor, joists, sill.',
+    label: i18n._({
+      id: 'editor.panels.buildingFoundationSection.floorFraming',
+      message: 'Floor framing',
+    }),
+    hint: i18n._({
+      id: 'editor.panels.buildingFoundationSection.floorFramingHint',
+      message: 'Floor top down to the stem: flooring, subfloor, joists, sill.',
+    }),
   }
   // A slab's grade is held at its edge all round (fill on the low side), so only a raised floor steps.
   const steps: Field[] =
@@ -107,38 +138,107 @@ function fieldsFor(foundation: BuildingFoundation): Field[] {
             : [
                 {
                   key: 'maxStemIn',
-                  label: 'Tallest stem before stepping',
-                  hint: 'A side whose stem would stand taller out of the ground steps down the slope: its stem drops to its top over grade, a cripple wall over it.',
+                  label: i18n._({
+                    id: 'editor.panels.buildingFoundationSection.tallestStemBeforeStepping',
+                    message: 'Tallest stem before stepping',
+                  }),
+                  hint: i18n._({
+                    id: 'editor.panels.buildingFoundationSection.tallestStemBeforeSteppingHint',
+                    message:
+                      'A side whose stem would stand taller out of the ground steps down the slope: its stem drops to its top over grade, a cripple wall over it.',
+                  }),
                 } as Field,
               ]),
-          { key: 'stepHeightIn', label: 'Step height' },
+          {
+            key: 'stepHeightIn',
+            label: i18n._({
+              id: 'editor.panels.buildingFoundationSection.stepHeight',
+              message: 'Step height',
+            }),
+          },
           {
             key: 'minStepRunIn',
-            label: 'Least step run',
-            hint: 'IRC R403.1.5: the top of a footing is level; it steps where the ground falls.',
+            label: i18n._({
+              id: 'editor.panels.buildingFoundationSection.leastStepRun',
+              message: 'Least step run',
+            }),
+            hint: i18n._({
+              id: 'editor.panels.buildingFoundationSection.leastStepRunHint',
+              message:
+                'IRC R403.1.5: the top of a footing is level; it steps where the ground falls.',
+            }),
           },
         ]
       : []
   const crawl: Field = {
     key: 'crawlClearanceIn',
-    label: 'Crawl space under joists',
-    hint: 'Measured from the underside of the joists, which bear on the sill (IRC R317.1: 18 in to the dirt). The crawl space is dug out to it.',
+    label: i18n._({
+      id: 'editor.panels.buildingFoundationSection.crawlSpaceUnderJoists',
+      message: 'Crawl space under joists',
+    }),
+    hint: i18n._({
+      id: 'editor.panels.buildingFoundationSection.crawlSpaceUnderJoistsHint',
+      message:
+        'Measured from the underside of the joists, which bear on the sill (IRC R317.1: 18 in to the dirt). The crawl space is dug out to it.',
+    }),
   }
+  const slab = i18n._({ id: 'editor.panels.buildingFoundationSection.slab', message: 'Slab' })
   if (piles)
     return [
       floor,
       top,
-      ...(raised ? [framing, crawl] : [{ key: 'slabThicknessIn', label: 'Slab' } as Field]),
-      { key: 'gradeBeamWidthIn', label: 'Grade beam width' },
-      { key: 'gradeBeamDepthIn', label: 'Grade beam depth' },
+      ...(raised ? [framing, crawl] : [{ key: 'slabThicknessIn', label: slab } as Field]),
+      {
+        key: 'gradeBeamWidthIn',
+        label: i18n._({
+          id: 'editor.panels.buildingFoundationSection.gradeBeamWidth',
+          message: 'Grade beam width',
+        }),
+      },
+      {
+        key: 'gradeBeamDepthIn',
+        label: i18n._({
+          id: 'editor.panels.buildingFoundationSection.gradeBeamDepth',
+          message: 'Grade beam depth',
+        }),
+      },
       {
         key: 'footingDepthIn',
-        label: 'Least depth under grade',
-        hint: 'The beam goes at least this far under grade (IRC R403.1.4: 12 in, or the frost line); a deeper beam goes further.',
+        label: i18n._({
+          id: 'editor.panels.buildingFoundationSection.leastDepthUnderGrade',
+          message: 'Least depth under grade',
+        }),
+        hint: i18n._({
+          id: 'editor.panels.buildingFoundationSection.leastDepthUnderGradeHint',
+          message:
+            'The beam goes at least this far under grade (IRC R403.1.4: 12 in, or the frost line); a deeper beam goes further.',
+        }),
       },
-      { key: 'pileDiameterIn', label: 'Pile diameter', hint: 'Piles are sized by the engineer.' },
-      { key: 'pileSpacingIn', label: 'Pile spacing' },
-      { key: 'pileLengthIn', label: 'Pile length' },
+      {
+        key: 'pileDiameterIn',
+        label: i18n._({
+          id: 'editor.panels.buildingFoundationSection.pileDiameter',
+          message: 'Pile diameter',
+        }),
+        hint: i18n._({
+          id: 'editor.panels.buildingFoundationSection.pileDiameterHint',
+          message: 'Piles are sized by the engineer.',
+        }),
+      },
+      {
+        key: 'pileSpacingIn',
+        label: i18n._({
+          id: 'editor.panels.buildingFoundationSection.pileSpacing',
+          message: 'Pile spacing',
+        }),
+      },
+      {
+        key: 'pileLengthIn',
+        label: i18n._({
+          id: 'editor.panels.buildingFoundationSection.pileLength',
+          message: 'Pile length',
+        }),
+      },
       ...steps,
     ]
   if (raised)
@@ -147,30 +247,86 @@ function fieldsFor(foundation: BuildingFoundation): Field[] {
       top,
       framing,
       crawl,
-      { key: 'stemThicknessIn', label: 'Stem wall', hint: 'Table R404.1.2: 6 in for one storey, 8 in for more.' },
+      {
+        key: 'stemThicknessIn',
+        label: i18n._({
+          id: 'editor.panels.buildingFoundationSection.stemWall',
+          message: 'Stem wall',
+        }),
+        hint: i18n._({
+          id: 'editor.panels.buildingFoundationSection.stemWallHint',
+          message: 'Table R404.1.2: 6 in for one storey, 8 in for more.',
+        }),
+      },
       {
         key: 'footingWidthIn',
-        label: 'Footing width',
-        hint: 'Table R403.1(1), 1500 psf soil: 12, 15, 23 in for 1, 2, 3 storeys.',
+        label: i18n._({
+          id: 'editor.panels.buildingFoundationSection.footingWidth',
+          message: 'Footing width',
+        }),
+        hint: i18n._({
+          id: 'editor.panels.buildingFoundationSection.footingWidthHint',
+          message: 'Table R403.1(1), 1500 psf soil: 12, 15, 23 in for 1, 2, 3 storeys.',
+        }),
       },
-      { key: 'footingThicknessIn', label: 'Footing thickness' },
+      {
+        key: 'footingThicknessIn',
+        label: i18n._({
+          id: 'editor.panels.buildingFoundationSection.footingThickness',
+          message: 'Footing thickness',
+        }),
+      },
       {
         key: 'footingDepthIn',
-        label: 'Footing under grade',
-        hint: 'IRC R403.1.4: at least 12 in under the ground beside it, outside and in the dug-out crawl space; deeper to the frost line.',
+        label: i18n._({
+          id: 'editor.panels.buildingFoundationSection.footingUnderGrade',
+          message: 'Footing under grade',
+        }),
+        hint: i18n._({
+          id: 'editor.panels.buildingFoundationSection.footingUnderGradeHint',
+          message:
+            'IRC R403.1.4: at least 12 in under the ground beside it, outside and in the dug-out crawl space; deeper to the frost line.',
+        }),
       },
       ...steps,
     ]
   return [
     floor,
     top,
-    { key: 'slabThicknessIn', label: 'Slab', hint: 'IRC R506.1 asks 3½ in at least.' },
-    { key: 'edgeDepthIn', label: 'Edge under grade', hint: 'IRC R403.1.4: at least 12 in, or the frost line.' },
-    { key: 'edgeWidthIn', label: 'Edge width' },
+    {
+      key: 'slabThicknessIn',
+      label: slab,
+      hint: i18n._({
+        id: 'editor.panels.buildingFoundationSection.slabHint',
+        message: 'IRC R506.1 asks 3½ in at least.',
+      }),
+    },
+    {
+      key: 'edgeDepthIn',
+      label: i18n._({
+        id: 'editor.panels.buildingFoundationSection.edgeUnderGrade',
+        message: 'Edge under grade',
+      }),
+      hint: i18n._({
+        id: 'editor.panels.buildingFoundationSection.edgeUnderGradeHint',
+        message: 'IRC R403.1.4: at least 12 in, or the frost line.',
+      }),
+    },
+    {
+      key: 'edgeWidthIn',
+      label: i18n._({
+        id: 'editor.panels.buildingFoundationSection.edgeWidth',
+        message: 'Edge width',
+      }),
+    },
     {
       key: 'edgeTaperIn',
-      label: 'Taper',
-      hint: 'The edge’s inside face stands plumb from its bottom, then tapers in at 45° to the slab. Auto runs it half the edge’s depth under the slab, 6 to 12 in, so a deeper edge grows plumb, not wider.',
+      label: i18n._({ id: 'editor.panels.buildingFoundationSection.taper', message: 'Taper' }),
+      hint: i18n._({
+        id: 'editor.panels.buildingFoundationSection.taperHint',
+        message:
+          'The edge’s inside face stands plumb from its bottom, then tapers in at 45° to the slab. Auto runs it half the edge’s depth under the slab, 6 to 12 in, so a deeper edge grows plumb, not wider.',
+      }),
     },
     ...steps,
   ]
@@ -181,27 +337,62 @@ function fieldsFor(foundation: BuildingFoundation): Field[] {
  * the walls, footing and slab it pours (none where the basement's walls are its own: they stand on
  * their own footing, its floor its own plates).
  */
-function basementFieldsFor(ownWalls: boolean): Field[] {
+function basementFieldsFor(ownWalls: boolean, i18n: PascalI18n): Field[] {
   const top: Field = {
     key: 'basementTopAboveGradeIn',
-    label: 'Basement wall top over grade',
-    hint: 'Measured over the highest grade along the house: the sill and the floor framing sit on it, 8 in off the ground at least (IRC R317.1). Set it higher for a daylight basement.',
+    label: i18n._({
+      id: 'editor.panels.buildingFoundationSection.basementWallTopOverGrade',
+      message: 'Basement wall top over grade',
+    }),
+    hint: i18n._({
+      id: 'editor.panels.buildingFoundationSection.basementWallTopOverGradeHint',
+      message:
+        'Measured over the highest grade along the house: the sill and the floor framing sit on it, 8 in off the ground at least (IRC R317.1). Set it higher for a daylight basement.',
+    }),
   }
   if (ownWalls) return [top]
   return [
     top,
     {
       key: 'basementWallThicknessIn',
-      label: 'Basement wall',
-      hint: 'Poured concrete: 8 in for most basements (IRC Table R404.1.2(1)).',
+      label: i18n._({
+        id: 'editor.panels.buildingFoundationSection.basementWall',
+        message: 'Basement wall',
+      }),
+      hint: i18n._({
+        id: 'editor.panels.buildingFoundationSection.basementWallHint',
+        message: 'Poured concrete: 8 in for most basements (IRC Table R404.1.2(1)).',
+      }),
     },
     {
       key: 'footingWidthIn',
-      label: 'Footing width',
-      hint: 'Table R403.1(1), 1500 psf soil: 12, 15, 23 in for 1, 2, 3 storeys.',
+      label: i18n._({
+        id: 'editor.panels.buildingFoundationSection.footingWidth',
+        message: 'Footing width',
+      }),
+      hint: i18n._({
+        id: 'editor.panels.buildingFoundationSection.footingWidthHint',
+        message: 'Table R403.1(1), 1500 psf soil: 12, 15, 23 in for 1, 2, 3 storeys.',
+      }),
     },
-    { key: 'footingThicknessIn', label: 'Footing thickness' },
-    { key: 'slabThicknessIn', label: 'Basement slab', hint: 'IRC R506.1 asks 3½ in at least.' },
+    {
+      key: 'footingThicknessIn',
+      label: i18n._({
+        id: 'editor.panels.buildingFoundationSection.footingThickness',
+        message: 'Footing thickness',
+      }),
+    },
+    {
+      key: 'slabThicknessIn',
+      label: i18n._({
+        id: 'editor.panels.buildingFoundationSection.basementSlab',
+        message: 'Basement slab',
+      }),
+      hint: i18n._({
+        id: 'editor.panels.buildingFoundationSection.slabHint',
+        message: 'IRC R506.1 asks 3½ in at least.',
+      }),
+    },
   ]
 }
 
@@ -259,11 +450,12 @@ function EdgeTaperNumber({
   foundation: BuildingFoundation
   onCommit: (edgeTaperIn: number | undefined) => void
 }) {
+  const i18n = usePascalI18n()
   const auto = foundation.edgeTaperIn === null
   return (
     <div className="flex flex-col gap-1">
       <FoundationNumber
-        field={auto ? { ...field, label: `${field.label} (auto)` } : field}
+        field={auto ? { ...field, label: i18n._({ id: 'editor.panels.buildingFoundationSection.labelAuto', message: '{label} (auto)', values: { label: field.label } }) } : field}
         min={Number.NEGATIVE_INFINITY}
         onCommit={onCommit}
         value={foundation.edgeTaperIn ?? slabEdgeTaperOf(foundation) / IN}
@@ -273,10 +465,10 @@ function EdgeTaperNumber({
           className="self-start rounded-full border border-border/50 px-3 py-1 text-muted-foreground text-xs hover:text-foreground"
           data-foundation-taper-auto
           onClick={() => onCommit(undefined)}
-          title="Half the edge’s depth under the slab, 6 to 12 in"
+          title={i18n._({ id: 'editor.panels.buildingFoundationSection.halfTheEdgeSDepthUnder', message: 'Half the edge’s depth under the slab, 6 to 12 in' })}
           type="button"
         >
-          Auto
+          {i18n._({ id: 'editor.panels.buildingFoundationSection.auto', message: 'Auto' })}
         </button>
       )}
     </div>
@@ -284,29 +476,131 @@ function EdgeTaperNumber({
 }
 
 /** A spacing on centre, as the roof's framing reads: `16" o.c.` or `406 mm o.c.`. */
-function formatSpacing(metres: number, unit: LinearUnit): string {
-  if (unit === 'imperial') return `${formatLayerThickness(metres, unit)} o.c.`
-  return `${Math.round(metres * 1000)} mm o.c.`
+function formatSpacing(metres: number, unit: LinearUnit, i18n: PascalI18n): string {
+  const spacing =
+    unit === 'imperial' ? formatLayerThickness(metres, unit) : `${Math.round(metres * 1000)} mm`
+  return i18n._({
+    id: 'editor.panels.buildingFoundationSection.spacingOnCentre',
+    message: '{spacing} o.c.',
+    values: { spacing },
+  })
 }
 
-const FLOORING_OPTIONS: { label: string; value: FlooringKind }[] = [
-  { label: 'Hardwood', value: 'hardwood' },
-  { label: 'Engineered wood', value: 'engineered-wood' },
-  { label: 'Laminate', value: 'laminate' },
-  { label: 'Vinyl plank', value: 'vinyl-plank' },
-  { label: 'Ceramic tile', value: 'ceramic-tile' },
-  { label: 'Carpet', value: 'carpet' },
+/** A layer's kinds, each with the name the panel gives it (`value` is the record's). */
+type KindOption<T extends string> = { label: MessageDescriptor; value: T }
+
+const FLOORING_OPTIONS: KindOption<FlooringKind>[] = [
+  {
+    label: /* i18n */ {
+      id: 'editor.panels.buildingFoundationSection.hardwood',
+      message: 'Hardwood',
+    },
+    value: 'hardwood',
+  },
+  {
+    label: /* i18n */ {
+      id: 'editor.panels.buildingFoundationSection.engineeredWood',
+      message: 'Engineered wood',
+    },
+    value: 'engineered-wood',
+  },
+  {
+    label: /* i18n */ {
+      id: 'editor.panels.buildingFoundationSection.laminate',
+      message: 'Laminate',
+    },
+    value: 'laminate',
+  },
+  {
+    label: /* i18n */ {
+      id: 'editor.panels.buildingFoundationSection.vinylPlank',
+      message: 'Vinyl plank',
+    },
+    value: 'vinyl-plank',
+  },
+  {
+    label: /* i18n */ {
+      id: 'editor.panels.buildingFoundationSection.ceramicTile',
+      message: 'Ceramic tile',
+    },
+    value: 'ceramic-tile',
+  },
+  {
+    label: /* i18n */ { id: 'editor.panels.buildingFoundationSection.carpet', message: 'Carpet' },
+    value: 'carpet',
+  },
 ]
 
-const PANEL_OPTIONS: { label: string; value: PanelKind }[] = [
-  { label: 'Plywood', value: 'plywood' },
-  { label: 'OSB', value: 'osb' },
+const PANEL_OPTIONS: KindOption<PanelKind>[] = [
+  {
+    label: /* i18n */ { id: 'editor.panels.buildingFoundationSection.plywood', message: 'Plywood' },
+    value: 'plywood',
+  },
+  {
+    label: /* i18n */ { id: 'editor.panels.buildingFoundationSection.osb', message: 'OSB' },
+    value: 'osb',
+  },
 ]
 
-const CEILING_OPTIONS: { label: string; value: InteriorFinishKind }[] = [
-  { label: 'Drywall', value: 'drywall' },
-  { label: 'Plaster', value: 'plaster' },
-  { label: 'Wood plank', value: 'wood-plank' },
+const CEILING_OPTIONS: KindOption<InteriorFinishKind>[] = [
+  {
+    label: /* i18n */ { id: 'editor.panels.buildingFoundationSection.drywall', message: 'Drywall' },
+    value: 'drywall',
+  },
+  {
+    label: /* i18n */ { id: 'editor.panels.buildingFoundationSection.plaster', message: 'Plaster' },
+    value: 'plaster',
+  },
+  {
+    label: /* i18n */ {
+      id: 'editor.panels.buildingFoundationSection.woodPlank',
+      message: 'Wood plank',
+    },
+    value: 'wood-plank',
+  },
+]
+
+/** An unnamed subfloor as a section calls it out, by its panel. */
+const SUBFLOOR_NAMES: KindOption<PanelKind>[] = [
+  {
+    label: /* i18n */ {
+      id: 'editor.panels.buildingFoundationSection.plywoodSubfloor',
+      message: 'Plywood subfloor',
+    },
+    value: 'plywood',
+  },
+  {
+    label: /* i18n */ {
+      id: 'editor.panels.buildingFoundationSection.osbSubfloor',
+      message: 'OSB subfloor',
+    },
+    value: 'osb',
+  },
+]
+
+/** An unnamed ceiling as a section calls it out, by its finish. */
+const CEILING_NAMES: KindOption<InteriorFinishKind>[] = [
+  {
+    label: /* i18n */ {
+      id: 'editor.panels.buildingFoundationSection.drywallCeiling',
+      message: 'Drywall ceiling',
+    },
+    value: 'drywall',
+  },
+  {
+    label: /* i18n */ {
+      id: 'editor.panels.buildingFoundationSection.plasterCeiling',
+      message: 'Plaster ceiling',
+    },
+    value: 'plaster',
+  },
+  {
+    label: /* i18n */ {
+      id: 'editor.panels.buildingFoundationSection.woodPlankCeiling',
+      message: 'Wood plank ceiling',
+    },
+    value: 'wood-plank',
+  },
 ]
 
 const CEILING_THICKNESS: Record<InteriorFinishKind, number> = {
@@ -315,18 +609,37 @@ const CEILING_THICKNESS: Record<InteriorFinishKind, number> = {
   'wood-plank': WOOD_PLANK_THICKNESS,
 }
 
-const labelOf = <T extends string>(options: { label: string; value: T }[], value: T) =>
-  options.find((option) => option.value === value)?.label ?? value
+/** A kind's name in the panel's language; the kind itself where `options` has none. */
+const labelOf = <T extends string>(
+  options: readonly KindOption<T>[],
+  value: T,
+  i18n: PascalI18n,
+): string => {
+  const label = options.find((option) => option.value === value)?.label
+  return label ? i18n._(label) : value
+}
+
+/** Kinds as a select offers them, named in the panel's language. */
+const optionsOf = <T extends string>(options: readonly KindOption<T>[], i18n: PascalI18n) =>
+  options.map((option) => ({ label: i18n._(option.label), value: option.value }))
 
 /** A floor's joist sizes: lumber by its nominal size and dressed depth, I-joists by their depth. */
-function structureSizeOptions(system: FloorStructure['system'], unit: LinearUnit) {
+function structureSizeOptions(
+  system: FloorStructure['system'],
+  unit: LinearUnit,
+  i18n: PascalI18n,
+) {
   return system === 'joists'
     ? (Object.keys(LUMBER_DEPTH) as NominalLumber[]).map((size) => ({
         label: `${size} (${formatLayerThickness(LUMBER_DEPTH[size], unit)})`,
         value: size as string,
       }))
     : (Object.keys(I_JOIST_DEPTH) as IJoistDepth[]).map((size) => ({
-        label: `${formatLayerThickness(I_JOIST_DEPTH[size], unit)} I-joist`,
+        label: i18n._({
+          id: 'editor.panels.buildingFoundationSection.depthIJoist',
+          message: '{depth} I-joist',
+          values: { depth: formatLayerThickness(I_JOIST_DEPTH[size], unit) },
+        }),
         value: size as string,
       }))
 }
@@ -339,11 +652,13 @@ export type SectionLayer = { key: string; name: string; thickness: number; size:
 
 /**
  * A framed floor's layers as its section draws them, top down, each named as the person named its
- * material, else by its kind; `sill` adds the sill a raised floor's joists bear on.
+ * material, else by its kind (in the panel's language); `sill` adds the sill a raised floor's
+ * joists bear on.
  */
 export function floorSectionLayers(
   buildUp: FloorBuildUp,
   unit: LinearUnit,
+  i18n: PascalI18n,
   sill = false,
 ): SectionLayer[] {
   const layer = (key: string, name: string, thickness: number): SectionLayer => ({
@@ -355,32 +670,52 @@ export function floorSectionLayers(
   const { flooring, sheathing, structure, ceiling } = buildUp
   return [
     ...(flooring
-      ? [layer('flooring', flooring.name ?? labelOf(FLOORING_OPTIONS, flooring.kind), flooring.thickness)]
+      ? [
+          layer(
+            'flooring',
+            flooring.name ?? labelOf(FLOORING_OPTIONS, flooring.kind, i18n),
+            flooring.thickness,
+          ),
+        ]
       : []),
     ...(sheathing
       ? [
           layer(
             'sheathing',
-            sheathing.name ?? `${labelOf(PANEL_OPTIONS, sheathing.kind)} subfloor`,
+            sheathing.name ?? labelOf(SUBFLOOR_NAMES, sheathing.kind, i18n),
             sheathing.thickness,
           ),
         ]
       : []),
     layer(
       'joists',
-      structure.system === 'joists' ? `${structure.size} joists` : 'I-joists',
+      structure.system === 'joists'
+        ? i18n._({
+            id: 'editor.panels.buildingFoundationSection.sizeJoists',
+            message: '{size} joists',
+            values: { size: structure.size },
+          })
+        : i18n._({ id: 'editor.panels.buildingFoundationSection.iJoists', message: 'I-joists' }),
       floorStructureDepth(structure),
     ),
     ...(ceiling
       ? [
           layer(
             'ceiling',
-            ceiling.name ?? `${labelOf(CEILING_OPTIONS, ceiling.kind)} ceiling`,
+            ceiling.name ?? labelOf(CEILING_NAMES, ceiling.kind, i18n),
             ceiling.thickness,
           ),
         ]
       : []),
-    ...(sill ? [layer('sill', 'Sill', FOUNDATION_SILL_IN * IN)] : []),
+    ...(sill
+      ? [
+          layer(
+            'sill',
+            i18n._({ id: 'editor.panels.buildingFoundationSection.sill', message: 'Sill' }),
+            FOUNDATION_SILL_IN * IN,
+          ),
+        ]
+      : []),
   ]
 }
 
@@ -451,6 +786,7 @@ export function FoundationSectionDrawing({
   /** A raised floor's framing, top down to its sill (`floorSectionLayers`); absent, it is one band. */
   framing?: readonly SectionLayer[]
 }) {
+  const i18n = usePascalI18n()
   const raised = foundation.type === 'raised'
   const piles = foundation.support === 'piles'
   const m = (inches: number) => inches * IN
@@ -514,11 +850,27 @@ export function FoundationSectionDrawing({
         [px, beamBottom],
       ],
     })
-    labels.push({ key: 'beam', y: (top + beamBottom) / 2, text: `Grade beam ${length(beam)} × ${length(top - beamBottom)}` })
+    labels.push({
+      key: 'beam',
+      y: (top + beamBottom) / 2,
+      text: i18n._({
+        id: 'editor.panels.buildingFoundationSection.gradeBeamWidthDepth',
+        message: 'Grade beam {width} × {depth}',
+        values: { width: length(beam), depth: length(top - beamBottom) },
+      }),
+    })
     labels.push({
       key: 'pile',
       y: beamBottom - pileShown / 2,
-      text: `Pile ${length(pile)} @ ${length(m(foundation.pileSpacingIn))}, ${length(m(foundation.pileLengthIn))} deep`,
+      text: i18n._({
+        id: 'editor.panels.buildingFoundationSection.pileDiameterSpacingDeep',
+        message: 'Pile {diameter} @ {spacing}, {length} deep',
+        values: {
+          diameter: length(pile),
+          spacing: length(m(foundation.pileSpacingIn)),
+          length: length(m(foundation.pileLengthIn)),
+        },
+      }),
     })
   } else if (raised) {
     const stem = m(foundation.stemThicknessIn)
@@ -545,8 +897,24 @@ export function FoundationSectionDrawing({
         [0, top],
       ],
     })
-    labels.push({ key: 'stem', y: (top + Math.max(0, bottom + thick)) / 2, text: `Stem wall ${length(stem)}` })
-    labels.push({ key: 'footing', y: bottom + thick / 2, text: `Footing ${length(footing)} × ${length(thick)}` })
+    labels.push({
+      key: 'stem',
+      y: (top + Math.max(0, bottom + thick)) / 2,
+      text: i18n._({
+        id: 'editor.panels.buildingFoundationSection.stemWallThickness',
+        message: 'Stem wall {thickness}',
+        values: { thickness: length(stem) },
+      }),
+    })
+    labels.push({
+      key: 'footing',
+      y: bottom + thick / 2,
+      text: i18n._({
+        id: 'editor.panels.buildingFoundationSection.footingWidthThickness',
+        message: 'Footing {width} × {thickness}',
+        values: { width: length(footing), thickness: length(thick) },
+      }),
+    })
   } else {
     // The edge's inside face plumb from its square bottom, then in at 45° to the slab's underside.
     const slab = m(foundation.slabThicknessIn)
@@ -566,15 +934,47 @@ export function FoundationSectionDrawing({
         [0, floor],
       ],
     })
-    labels.push({ key: 'slab', y: floor - slab / 2, text: `Slab ${length(slab)}` })
-    labels.push({ key: 'taper', y: floor - slab - taper / 2, text: `Taper ${length(taper)} at 45°` })
-    labels.push({ key: 'edge', y: bottom + 0.04, text: `Edge ${length(edge)} wide` })
+    labels.push({
+      key: 'slab',
+      y: floor - slab / 2,
+      text: i18n._({
+        id: 'editor.panels.buildingFoundationSection.slabThickness',
+        message: 'Slab {thickness}',
+        values: { thickness: length(slab) },
+      }),
+    })
+    labels.push({
+      key: 'taper',
+      y: floor - slab - taper / 2,
+      text: i18n._({
+        id: 'editor.panels.buildingFoundationSection.taperAt45',
+        message: 'Taper {taper} at 45°',
+        values: { taper: length(taper) },
+      }),
+    })
+    labels.push({
+      key: 'edge',
+      y: bottom + 0.04,
+      text: i18n._({
+        id: 'editor.panels.buildingFoundationSection.edgeWidthWide',
+        message: 'Edge {width} wide',
+        values: { width: length(edge) },
+      }),
+    })
   }
   // The wall stands on the subfloor; the finished floor runs inside it.
   let wallBase = floor
   if (raised) {
     const layers = framing ?? [
-      { key: 'framing', name: 'Floor framing', thickness: floor - top, size: length(floor - top) },
+      {
+        key: 'framing',
+        name: i18n._({
+          id: 'editor.panels.buildingFoundationSection.floorFraming',
+          message: 'Floor framing',
+        }),
+        thickness: floor - top,
+        size: length(floor - top),
+      },
     ]
     // Top down from the floor: the sill only under the wall, on the stem (or beam) it is bolted to.
     let y = floor
@@ -618,20 +1018,90 @@ export function FoundationSectionDrawing({
   // out under the grade, chained under the crawl's own height.
   const inCrawl = raised && !piles && crawl < 0
   const depthTo = raised && !piles ? crawl : 0
-  const depth = { key: 'depth', from: bottom, to: depthTo, text: `${length(depthTo - bottom)} down` }
+  const depth = {
+    key: 'depth',
+    from: bottom,
+    to: depthTo,
+    text: i18n._({
+      id: 'editor.panels.buildingFoundationSection.depthDown',
+      message: '{depth} down',
+      values: { depth: length(depthTo - bottom) },
+    }),
+  }
   const outside = [
-    { key: 'floor', from: 0, to: floor, text: `${length(floor)} FF` },
-    ...(raised ? [{ key: 'top', from: 0, to: top, text: `${length(top)} top` }] : []),
+    {
+      key: 'floor',
+      from: 0,
+      to: floor,
+      text: i18n._({
+        id: 'editor.panels.buildingFoundationSection.heightFinishFloor',
+        message: '{height} FF',
+        values: { height: length(floor) },
+      }),
+    },
+    ...(raised
+      ? [
+          {
+            key: 'top',
+            from: 0,
+            to: top,
+            text: i18n._({
+              id: 'editor.panels.buildingFoundationSection.heightTop',
+              message: '{height} top',
+              values: { height: length(top) },
+            }),
+          },
+        ]
+      : []),
     ...(inCrawl ? [] : [depth]),
   ]
   const crawlX = (sx(perimeter) + sx(reach)) / 2
   const dims: Dim[] = [
     ...outside.map((dim, index) => ({ ...dim, x: 10 + index * 18 })),
     ...(raised
-      ? [{ key: 'crawl', from: crawl, to: underside, text: `${length(underside - crawl)} crawl`, x: crawlX }]
+      ? [
+          {
+            key: 'crawl',
+            from: crawl,
+            to: underside,
+            text: i18n._({
+              id: 'editor.panels.buildingFoundationSection.heightCrawl',
+              message: '{height} crawl',
+              values: { height: length(underside - crawl) },
+            }),
+            x: crawlX,
+          },
+        ]
       : []),
     ...(inCrawl ? [{ ...depth, x: crawlX, extend: footingInside }] : []),
   ]
+  // What the drawing shows, for assistive technology.
+  const sectionValues = { floor: length(floor), crawl: length(underside - crawl) }
+  const sectionLabel = raised
+    ? piles
+      ? i18n._({
+          id: 'editor.panels.buildingFoundationSection.sectionRaisedFloorOnPiles',
+          message:
+            'Foundation section: raised floor on a stem wall on piles, finish floor {floor} over grade, crawl space {crawl} under the joists',
+          values: sectionValues,
+        })
+      : i18n._({
+          id: 'editor.panels.buildingFoundationSection.sectionRaisedFloor',
+          message:
+            'Foundation section: raised floor on a stem wall, finish floor {floor} over grade, crawl space {crawl} under the joists',
+          values: sectionValues,
+        })
+    : piles
+      ? i18n._({
+          id: 'editor.panels.buildingFoundationSection.sectionSlabOnGradeOnPiles',
+          message: 'Foundation section: slab on grade on piles, finish floor {floor} over grade',
+          values: sectionValues,
+        })
+      : i18n._({
+          id: 'editor.panels.buildingFoundationSection.sectionSlabOnGrade',
+          message: 'Foundation section: slab on grade, finish floor {floor} over grade',
+          values: sectionValues,
+        })
   const toPath = (points: Array<[number, number]>) =>
     points.map(([x, y]) => `${sx(x).toFixed(1)},${sy(y).toFixed(1)}`).join(' ')
   const placed = stackLabels(
@@ -644,7 +1114,7 @@ export function FoundationSectionDrawing({
   return (
     <figure className="flex flex-col gap-1" data-foundation-section={foundation.type}>
       <svg
-        aria-label={`Foundation section: ${raised ? 'raised floor on a stem wall' : 'slab on grade'}${piles ? ' on piles' : ''}, finish floor ${length(floor)} over grade${raised ? `, crawl space ${length(underside - crawl)} under the joists` : ''}`}
+        aria-label={sectionLabel}
         className="h-auto w-full text-muted-foreground"
         role="img"
         viewBox={`0 0 ${width} ${height}`}
@@ -746,7 +1216,7 @@ export function FoundationSectionDrawing({
         ))}
       </svg>
       <figcaption className="text-right text-[10px] text-muted-foreground/70">
-        At the high side of the ground, to scale
+        {i18n._({ id: 'editor.panels.buildingFoundationSection.atTheHighSideOfThe', message: 'At the high side of the ground, to scale' })}
       </figcaption>
     </figure>
   )
@@ -771,6 +1241,7 @@ export function BasementSectionDrawing({
   basement: BasementReport
   length: (meters: number) => string
 }) {
+  const i18n = usePascalI18n()
   const m = (inches: number) => inches * IN
   // Metres, the grade at 0, up positive; the wall's outside face at x 0, the basement to the right.
   const top = m(foundation.basementTopAboveGradeIn)
@@ -819,14 +1290,51 @@ export function BasementSectionDrawing({
     { key: 'wall', className: 'fill-muted stroke-current', points: box(0, framed, m(5.5), houseWall) },
   ]
   const labels = [
-    { key: 'framing', y: (top + framed) / 2, text: `Floor framing and sill ${length(framed - top)}` },
+    {
+      key: 'framing',
+      y: (top + framed) / 2,
+      text: i18n._({
+        id: 'editor.panels.buildingFoundationSection.floorFramingAndSill',
+        message: 'Floor framing and sill {depth}',
+        values: { depth: length(framed - top) },
+      }),
+    },
     {
       key: 'basement-wall',
       y: (top + floor) / 2,
-      text: basement.ownWalls ? 'Basement wall (its own)' : `Basement wall ${length(wall)}`,
+      text: basement.ownWalls
+        ? i18n._({
+            id: 'editor.panels.buildingFoundationSection.basementWallItsOwn',
+            message: 'Basement wall (its own)',
+          })
+        : i18n._({
+            id: 'editor.panels.buildingFoundationSection.basementWallThickness',
+            message: 'Basement wall {thickness}',
+            values: { thickness: length(wall) },
+          }),
     },
-    ...(basement.ownWalls ? [] : [{ key: 'slab', y: floor - slab / 2, text: `Slab ${length(slab)}` }]),
-    { key: 'footing', y: bottom + thick / 2, text: `Footing ${length(footing)} × ${length(thick)}` },
+    ...(basement.ownWalls
+      ? []
+      : [
+          {
+            key: 'slab',
+            y: floor - slab / 2,
+            text: i18n._({
+              id: 'editor.panels.buildingFoundationSection.slabThickness',
+              message: 'Slab {thickness}',
+              values: { thickness: length(slab) },
+            }),
+          },
+        ]),
+    {
+      key: 'footing',
+      y: bottom + thick / 2,
+      text: i18n._({
+        id: 'editor.panels.buildingFoundationSection.footingWidthThickness',
+        message: 'Footing {width} × {thickness}',
+        values: { width: length(footing), thickness: length(thick) },
+      }),
+    },
   ]
   const placed = stackLabels(
     labels.map((label) => sy(label.y)),
@@ -835,9 +1343,36 @@ export function BasementSectionDrawing({
     height - 6,
   )
   const dims = [
-    { key: 'top', from: 0, to: top, text: `${length(top)} top` },
-    { key: 'deep', from: floor, to: 0, text: `${length(-floor)} deep` },
-    { key: 'down', from: bottom, to: 0, text: `${length(-bottom)} down` },
+    {
+      key: 'top',
+      from: 0,
+      to: top,
+      text: i18n._({
+        id: 'editor.panels.buildingFoundationSection.heightTop',
+        message: '{height} top',
+        values: { height: length(top) },
+      }),
+    },
+    {
+      key: 'deep',
+      from: floor,
+      to: 0,
+      text: i18n._({
+        id: 'editor.panels.buildingFoundationSection.depthDeep',
+        message: '{depth} deep',
+        values: { depth: length(-floor) },
+      }),
+    },
+    {
+      key: 'down',
+      from: bottom,
+      to: 0,
+      text: i18n._({
+        id: 'editor.panels.buildingFoundationSection.depthDown',
+        message: '{depth} down',
+        values: { depth: length(-bottom) },
+      }),
+    },
   ].map((dim, index) => ({ ...dim, x: 10 + index * 18 }))
   const toPath = (points: Array<[number, number]>) =>
     points.map(([x, y]) => `${sx(x).toFixed(1)},${sy(y).toFixed(1)}`).join(' ')
@@ -845,7 +1380,12 @@ export function BasementSectionDrawing({
   return (
     <figure className="flex flex-col gap-1" data-foundation-section="basement">
       <svg
-        aria-label={`Foundation section: basement, its wall's top ${length(top)} over grade, its floor ${length(-floor)} under it`}
+        aria-label={i18n._({
+          id: 'editor.panels.buildingFoundationSection.sectionBasement',
+          message:
+            "Foundation section: basement, its wall's top {top} over grade, its floor {floor} under it",
+          values: { top: length(top), floor: length(-floor) },
+        })}
         className="h-auto w-full text-muted-foreground"
         role="img"
         viewBox={`0 0 ${width} ${height}`}
@@ -915,7 +1455,7 @@ export function BasementSectionDrawing({
         ))}
       </svg>
       <figcaption className="text-right text-[10px] text-muted-foreground/70">
-        At the high side of the ground, to scale; the dashed line is the grade
+        {i18n._({ id: 'editor.panels.buildingFoundationSection.atTheHighSideOfThe2', message: 'At the high side of the ground, to scale; the dashed line is the grade' })}
       </figcaption>
     </figure>
   )
@@ -974,6 +1514,7 @@ function LayerThickness({
   onPreview: (metres: number) => void
   onCommit: (metres: number) => void
 }) {
+  const i18n = usePascalI18n()
   const imperial = unit === 'imperial'
   const toShown = (value: number) => (imperial ? value / IN : value)
   const fromShown = (shown: number) => Math.round((imperial ? shown * IN : shown) * 1e6) / 1e6
@@ -981,7 +1522,7 @@ function LayerThickness({
     <div data-floor-layer-thickness={layer}>
       <MetricControl
         className="h-9 text-xs"
-        label="Thickness"
+        label={i18n._({ id: 'editor.panels.buildingFoundationSection.thickness', message: 'Thickness' })}
         max={toShown(max)}
         min={toShown(min)}
         onChange={(next) => onPreview(fromShown(next))}
@@ -1018,6 +1559,7 @@ function FloorLayerHead({
   kind?: string
   onRename?: (name: string) => void
 }) {
+  const i18n = usePascalI18n()
   const [draft, setDraft] = useState<string | null>(null)
   const dropped = useRef(false)
   const commit = () => {
@@ -1056,10 +1598,10 @@ function FloorLayerHead({
         {title}
       </span>
       {!on ? (
-        <span className="ml-auto text-[11px] text-muted-foreground/60">Off</span>
+        <span className="ml-auto text-[11px] text-muted-foreground/60">{i18n._({ id: 'editor.panels.buildingFoundationSection.off', message: 'Off' })}</span>
       ) : onRename ? (
         <input
-          aria-label={`${title} material`}
+          aria-label={i18n._({ id: 'editor.panels.buildingFoundationSection.titleMaterial', message: '{title} material', values: { title } })}
           className="ml-auto min-w-0 flex-1 truncate rounded-md border border-transparent bg-transparent px-1.5 py-0.5 text-right text-foreground text-xs outline-none transition-colors placeholder:text-foreground hover:bg-accent/50 focus:border-ring/60 focus:bg-accent/40"
           data-floor-layer-name={layer}
           maxLength={60}
@@ -1074,7 +1616,7 @@ function FloorLayerHead({
           }}
           placeholder={kind}
           spellCheck={false}
-          title="Name the material"
+          title={i18n._({ id: 'editor.panels.buildingFoundationSection.nameTheMaterial', message: 'Name the material' })}
           type="text"
           value={draft ?? name ?? ''}
         />
@@ -1111,6 +1653,7 @@ export function FloorBuildUpFields({
   onCommit: (buildUp: FloorBuildUp) => void
   onPreview?: (buildUp: FloorBuildUp) => void
 }) {
+  const i18n = usePascalI18n()
   // A scrub shows its build-up here until it lands.
   const [draft, setDraft] = useState<FloorBuildUp | null>(null)
   const shown = draft ?? buildUp
@@ -1151,26 +1694,30 @@ export function FloorBuildUpFields({
     <div className="flex flex-col gap-1" data-floor-build-up>
       <SelectControl
         className="h-9 text-xs"
-        label="Preset"
+        label={i18n._({ id: 'editor.panels.buildingFoundationSection.preset', message: 'Preset' })}
         onChange={(id) => {
           // A copy: picked again, a preset still lands (an older floor takes its layers).
           const picked = presets.find((entry) => entry.id === id)
           if (picked) commit({ ...picked.buildUp })
         }}
         options={[
-          ...(preset === CUSTOM ? [{ label: 'Custom', value: CUSTOM }] : []),
+          ...(preset === CUSTOM ? [{ label: i18n._({ id: 'editor.panels.buildingFoundationSection.custom', message: 'Custom' }), value: CUSTOM }] : []),
           ...presets.map((entry) => ({ label: entry.label, value: entry.id })),
         ]}
         value={preset}
       />
-      {head('flooring', 'Flooring', flooring && labelOf(FLOORING_OPTIONS, flooring.kind))}
+      {head(
+        'flooring',
+        i18n._({ id: 'editor.panels.buildingFoundationSection.flooring', message: 'Flooring' }),
+        flooring && labelOf(FLOORING_OPTIONS, flooring.kind, i18n),
+      )}
       {flooring && (
         <>
           <SelectControl
             className="h-9 text-xs"
-            label="Kind"
+            label={i18n._({ id: 'editor.panels.buildingFoundationSection.kind', message: 'Kind' })}
             onChange={(kind) => edit({ flooring: { kind, thickness: FLOORING_THICKNESS[kind] } })}
-            options={FLOORING_OPTIONS}
+            options={optionsOf(FLOORING_OPTIONS, i18n)}
             value={flooring.kind}
           />
           <LayerThickness
@@ -1184,64 +1731,76 @@ export function FloorBuildUpFields({
           />
         </>
       )}
-      {head('sheathing', 'Subfloor sheathing', sheathing && labelOf(PANEL_OPTIONS, sheathing.kind))}
+      {head(
+        'sheathing',
+        i18n._({
+          id: 'editor.panels.buildingFoundationSection.subfloorSheathing',
+          message: 'Subfloor sheathing',
+        }),
+        sheathing && labelOf(PANEL_OPTIONS, sheathing.kind, i18n),
+      )}
       {sheathing && (
         <>
           <SelectControl
             className="h-9 text-xs"
-            label="Panel"
+            label={i18n._({ id: 'editor.panels.buildingFoundationSection.panel', message: 'Panel' })}
             onChange={(kind) => edit({ sheathing: { kind, thickness: sheathing.thickness } })}
-            options={PANEL_OPTIONS}
+            options={optionsOf(PANEL_OPTIONS, i18n)}
             value={sheathing.kind}
           />
           <SizeSelect
             format={(value) => formatLayerThickness(value, unit)}
-            label="Thickness"
+            label={i18n._({ id: 'editor.panels.buildingFoundationSection.thickness', message: 'Thickness' })}
             onChange={(thickness) => edit({ sheathing: { ...sheathing, thickness } })}
             sizes={SUBFLOOR_THICKNESSES}
             value={sheathing.thickness}
           />
         </>
       )}
-      <FloorLayerHead layer="joists" on title="Joists" />
+      <FloorLayerHead layer="joists" on title={i18n._({ id: 'editor.panels.buildingFoundationSection.joists', message: 'Joists' })} />
       <SegmentedControl
         onChange={(system: FloorStructure['system']) =>
           edit({ structure: floorStructureAs(structure, system) })
         }
         options={[
-          { label: 'Lumber', value: 'joists' },
-          { label: 'I-joists', value: 'i-joists' },
+          { label: i18n._({ id: 'editor.panels.buildingFoundationSection.lumber', message: 'Lumber' }), value: 'joists' },
+          { label: i18n._({ id: 'editor.panels.buildingFoundationSection.iJoists', message: 'I-joists' }), value: 'i-joists' },
         ]}
         value={structure.system}
       />
       <SelectControl
         className="h-9 text-xs"
-        label="Size"
+        label={i18n._({ id: 'editor.panels.buildingFoundationSection.size', message: 'Size' })}
         onChange={(size) => edit({ structure: { ...structure, size } as FloorStructure })}
-        options={structureSizeOptions(structure.system, unit)}
+        options={structureSizeOptions(structure.system, unit, i18n)}
         value={structure.size as string}
       />
       <SizeSelect
-        format={(value) => formatSpacing(value, unit)}
-        label="Spacing"
+        format={(value) => formatSpacing(value, unit, i18n)}
+        label={i18n._({ id: 'editor.panels.buildingFoundationSection.spacing', message: 'Spacing' })}
         onChange={(spacing) => edit({ structure: { ...structure, spacing } })}
         sizes={FRAMING_SPACINGS}
         value={structure.spacing}
       />
-      {ceiling && head('ceiling', 'Ceiling', hung && labelOf(CEILING_OPTIONS, hung.kind))}
+      {ceiling &&
+        head(
+          'ceiling',
+          i18n._({ id: 'editor.panels.buildingFoundationSection.ceiling', message: 'Ceiling' }),
+          hung && labelOf(CEILING_OPTIONS, hung.kind, i18n),
+        )}
       {hung && (
         <>
           <SelectControl
             className="h-9 text-xs"
-            label="Finish"
+            label={i18n._({ id: 'editor.panels.buildingFoundationSection.finish', message: 'Finish' })}
             onChange={(kind) => edit({ ceiling: { kind, thickness: CEILING_THICKNESS[kind] } })}
-            options={CEILING_OPTIONS}
+            options={optionsOf(CEILING_OPTIONS, i18n)}
             value={hung.kind}
           />
           {hung.kind === 'drywall' && (
             <SizeSelect
               format={(value) => formatLayerThickness(value, unit)}
-              label="Thickness"
+              label={i18n._({ id: 'editor.panels.buildingFoundationSection.thickness', message: 'Thickness' })}
               onChange={(thickness) => edit({ ceiling: { ...hung, thickness } })}
               sizes={DRYWALL_THICKNESSES}
               value={hung.thickness}
@@ -1272,6 +1831,7 @@ export function RaisedFloorFraming({
   unit: LinearUnit
   onCommit: (floorBuildUp: FloorBuildUp) => void
 }) {
+  const i18n = usePascalI18n()
   const framing = foundation.floorFramingDepthIn * IN
   const layered = floorBuildUpThickness(foundation.floorBuildUp) + FOUNDATION_SILL_IN * IN
   // Written only when it changes: an older record's depth stays until a layer does.
@@ -1281,7 +1841,7 @@ export function RaisedFloorFraming({
   return (
     <div className="flex flex-col gap-1" data-raised-floor-framing>
       <p className="px-0.5 pt-1 font-medium text-[10px] text-muted-foreground uppercase tracking-wider">
-        Floor framing
+        {i18n._({ id: 'editor.panels.buildingFoundationSection.floorFraming', message: 'Floor framing' })}
       </p>
       <FloorBuildUpFields
         buildUp={foundation.floorBuildUp}
@@ -1292,13 +1852,23 @@ export function RaisedFloorFraming({
         unit={unit}
       />
       <p className="px-0.5 text-muted-foreground text-xs" data-floor-framing-total>
-        Floor framing {formatLayerDepth(framing, unit)}, sill{' '}
-        {formatLayerThickness(FOUNDATION_SILL_IN * IN, unit)} included
+        {i18n._({
+          id: 'editor.panels.buildingFoundationSection.floorFramingSillIncluded',
+          message: 'Floor framing {depth}, sill {sill} included',
+          values: {
+            depth: formatLayerDepth(framing, unit),
+            sill: formatLayerThickness(FOUNDATION_SILL_IN * IN, unit),
+          },
+        })}
       </p>
       {Math.abs(framing - layered) > 1e-4 && (
         <p className="px-0.5 text-muted-foreground text-xs" data-floor-framing-follows>
-          Its layers make {formatLayerDepth(layered, unit)} with the sill; the framing follows them
-          once a layer is set.
+          {i18n._({
+            id: 'editor.panels.buildingFoundationSection.itsLayersMakeWithTheSill',
+            message:
+              'Its layers make {depth} with the sill; the framing follows them once a layer is set.',
+            values: { depth: formatLayerDepth(layered, unit) },
+          })}
         </p>
       )}
     </div>
@@ -1321,6 +1891,7 @@ export function BuildingFoundationSection({
   building: BuildingNode
   heading?: boolean | string
 }) {
+  const i18n = usePascalI18n()
   const nodes = useScene((state) => state.nodes)
   const unit = useViewer((state) => state.unit)
   const metricNotation = useViewer((state) => state.metricNotation)
@@ -1331,7 +1902,7 @@ export function BuildingFoundationSection({
     ? designedFoundationReport(nodes, building.id)
     : null
   const apply = (patch: BuildingFoundationRecord) => applyBuildingFoundation(building.id, patch)
-  const advice = report ? foundationAdvice(report, length) : []
+  const advice = report ? foundationAdvice(report, length, i18n) : []
   // Over a basement the type and its sizes wait for the basement to go: its walls' are shown.
   const basement = report?.basement
   // A raised floor is drawn layer by layer once its framing is its layers' (an older record that
@@ -1347,24 +1918,30 @@ export function BuildingFoundationSection({
     <section className="flex flex-col gap-1.5" data-building-foundation={building.id}>
       {heading && (
         <h3 className="font-medium text-muted-foreground text-xs">
-          {heading === true ? 'Foundation' : heading}
+          {heading === true ? i18n._({ id: 'editor.panels.buildingFoundationSection.foundation', message: 'Foundation' }) : heading}
         </h3>
       )}
       <ToggleControl
         checked={foundation.enabled}
-        label="Draw the foundation"
+        label={i18n._({ id: 'editor.panels.buildingFoundationSection.drawTheFoundation', message: 'Draw the foundation' })}
         onChange={(enabled) => apply({ enabled })}
       />
       {foundation.enabled && basement && report && (
         <>
           <p className="px-0.5 text-muted-foreground text-xs" data-foundation-basement>
-            The house stands on its basement, cut into the ground: the ground round it is left as
-            it lies.{' '}
+            {i18n._({ id: 'editor.panels.buildingFoundationSection.theHouseStandsOnItsBasement', message: 'The house stands on its basement, cut into the ground: the ground round it is left as it lies.' })}{' '}
             {basement.ownWalls
-              ? 'Its walls are the basement’s own, on their footing.'
-              : 'Its walls are poured under the house’s outside walls.'}{' '}
-            Delete the basement and it stands on its{' '}
-            {foundation.type === 'raised' ? 'raised floor' : 'slab'} again.
+              ? i18n._({ id: 'editor.panels.buildingFoundationSection.itsWallsAreTheBasementS', message: 'Its walls are the basement’s own, on their footing.' })
+              : i18n._({ id: 'editor.panels.buildingFoundationSection.itsWallsArePouredUnderThe', message: 'Its walls are poured under the house’s outside walls.' })}{' '}
+            {foundation.type === 'raised'
+              ? i18n._({
+                  id: 'editor.panels.buildingFoundationSection.deleteTheBasementRaisedFloor',
+                  message: 'Delete the basement and it stands on its raised floor again.',
+                })
+              : i18n._({
+                  id: 'editor.panels.buildingFoundationSection.deleteTheBasementSlab',
+                  message: 'Delete the basement and it stands on its slab again.',
+                })}
           </p>
           <BasementSectionDrawing
             basement={basement}
@@ -1372,7 +1949,7 @@ export function BuildingFoundationSection({
             length={length}
             report={report}
           />
-          {basementFieldsFor(basement.ownWalls).map((field) => (
+          {basementFieldsFor(basement.ownWalls, i18n).map((field) => (
             <FoundationNumber
               field={field}
               key={field.key}
@@ -1388,29 +1965,29 @@ export function BuildingFoundationSection({
           <SegmentedControl
             onChange={(type: BuildingFoundation['type']) => apply({ type })}
             options={[
-              { label: 'Slab on grade', value: 'slab' },
-              { label: 'Raised floor', value: 'raised' },
+              { label: i18n._({ id: 'editor.panels.buildingFoundationSection.slabOnGrade', message: 'Slab on grade' }), value: 'slab' },
+              { label: i18n._({ id: 'editor.panels.buildingFoundationSection.raisedFloor', message: 'Raised floor' }), value: 'raised' },
             ]}
             value={foundation.type}
           />
           <SegmentedControl
             onChange={(support: BuildingFoundation['support']) => apply({ support })}
             options={[
-              { label: foundation.type === 'raised' ? 'Stem wall and footing' : 'Turned-down edge', value: 'footing' },
-              { label: 'Grade beam on piles', value: 'piles' },
+              { label: foundation.type === 'raised' ? i18n._({ id: 'editor.panels.buildingFoundationSection.stemWallAndFooting', message: 'Stem wall and footing' }) : i18n._({ id: 'editor.panels.buildingFoundationSection.turnedDownEdge', message: 'Turned-down edge' }), value: 'footing' },
+              { label: i18n._({ id: 'editor.panels.buildingFoundationSection.gradeBeamOnPiles', message: 'Grade beam on piles' }), value: 'piles' },
             ]}
             value={foundation.support}
           />
           <FoundationSectionDrawing
             framing={
               foundation.type === 'raised' && layered
-                ? floorSectionLayers(foundation.floorBuildUp, unit, true)
+                ? floorSectionLayers(foundation.floorBuildUp, unit, i18n, true)
                 : undefined
             }
             foundation={foundation}
             length={length}
           />
-          {fieldsFor(foundation).map((field) =>
+          {fieldsFor(foundation, i18n).map((field) =>
             field.key === 'floorFramingDepthIn' ? (
               // The floor's layers write the record's build-up; the depth (and the house's seat
               // over the ground) follows them in the same step.
@@ -1440,15 +2017,15 @@ export function BuildingFoundationSection({
           {foundation.type === 'raised' && (
             <ToggleControl
               checked={foundation.stepped}
-              label="Step down the slope"
+              label={i18n._({ id: 'editor.panels.buildingFoundationSection.stepDownTheSlope', message: 'Step down the slope' })}
               onChange={(stepped) => apply({ stepped })}
             />
           )}
           {!report && (
             <p className="px-0.5 text-muted-foreground text-xs" data-foundation-open>
               {standsOnBasement(nodes, building.id)
-                ? 'The house stands on a basement: its walls are the foundation walls, so only their footing is drawn.'
-                : 'Close the outside walls into a loop to draw the foundation under them.'}
+                ? i18n._({ id: 'editor.panels.buildingFoundationSection.theHouseStandsOnABasement', message: 'The house stands on a basement: its walls are the foundation walls, so only their footing is drawn.' })
+                : i18n._({ id: 'editor.panels.buildingFoundationSection.closeTheOutsideWallsIntoA', message: 'Close the outside walls into a loop to draw the foundation under them.' })}
             </p>
           )}
         </>

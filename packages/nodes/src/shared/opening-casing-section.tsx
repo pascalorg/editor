@@ -4,6 +4,7 @@ import {
   type DoorNode,
   openingCasingWidth,
   resolveOpeningCasingHost,
+  usePascalI18n,
   useScene,
   type WindowNode,
 } from '@pascal-app/core'
@@ -32,6 +33,7 @@ export function OpeningCasingSection({
   node: DoorNode | WindowNode
   onUpdate: (patch: CasingPatch) => void
 }) {
+  const i18n = usePascalI18n()
   // Its own component, so the whole scene it reads for the face names
   // re-renders this section alone, not the panel around it.
   const nodes = useScene((state) => state.nodes)
@@ -48,7 +50,9 @@ export function OpeningCasingSection({
   const toShown = (meters: number) => (imperial ? meters / INCH : meters)
 
   return (
-    <PanelSection title="Casing">
+    <PanelSection
+      title={i18n._({ id: 'node.shared.openingCasingSection.casing', message: 'Casing' })}
+    >
       <ToggleControl
         checked={faceA}
         label={labels.a}
@@ -61,7 +65,7 @@ export function OpeningCasingSection({
       />
       {(faceA || faceB) && (
         <SliderControl
-          label="Width"
+          label={i18n._({ id: 'node.shared.openingCasingSection.width', message: 'Width' })}
           max={toShown(MAX_CASING_WIDTH)}
           min={toShown(MIN_CASING_WIDTH)}
           onChange={(value) => {

@@ -1,5 +1,5 @@
 'use client'
-import { type AnyNodeId, type DoorNode, useScene } from '@pascal-app/core'
+import { type AnyNodeId, type DoorNode, usePascalI18n, useScene } from '@pascal-app/core'
 import { ActionMenuButton, triggerSFX } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { ArrowLeftRight, ArrowUpDown } from 'lucide-react'
@@ -18,6 +18,7 @@ function applyDoorPatch(door: DoorNode, patch: Partial<DoorNode>) {
  * side without opening the panel's Swing section. One undo step each.
  */
 export default function DoorActions() {
+  const i18n = usePascalI18n()
   const selected = useViewer((s) => s.selection.selectedIds)
   const door = useScene((s) => {
     const node = selected.length === 1 ? s.nodes[selected[0] as AnyNodeId] : undefined
@@ -29,7 +30,7 @@ export default function DoorActions() {
     <>
       {canSwapDoorHinge(door) ? (
         <ActionMenuButton
-          label="Swap hinge side"
+          label={i18n._({ id: 'node.door.actions.swapHingeSide', message: 'Swap hinge side' })}
           onClick={(event) => {
             event.stopPropagation()
             applyDoorPatch(door, swapDoorHingePatch(door))
@@ -39,7 +40,7 @@ export default function DoorActions() {
         </ActionMenuButton>
       ) : null}
       <ActionMenuButton
-        label="Swap swing side"
+        label={i18n._({ id: 'node.door.actions.swapSwingSide', message: 'Swap swing side' })}
         onClick={(event) => {
           event.stopPropagation()
           applyDoorPatch(door, swapDoorSwingPatch(door))

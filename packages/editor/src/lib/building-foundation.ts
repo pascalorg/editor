@@ -11,6 +11,7 @@ import {
   getLevelElevations,
   groundLevelOf,
   levelGradeStanding,
+  type PascalI18n,
   type SlabNode,
   upperFloorHeightControl,
   useScene,
@@ -87,19 +88,39 @@ export function standsOnBasement(nodes: Record<string, AnyNode>, buildingId: str
  * seats it (`groundSeat`): the construction's floor height over grade, or the designed
  * foundation's own over the high side of the ground. `askedIn` in inches.
  */
-export function groundSeatAction(rule: GroundSeatRule, askedIn: number): string {
-  const asked = `${Math.round(askedIn * 100) / 100} in`
+export function groundSeatAction(rule: GroundSeatRule, askedIn: number, i18n: PascalI18n): string {
+  const values = { asked: `${Math.round(askedIn * 100) / 100} in` }
   switch (rule) {
     case 'basement':
-      return `Seat the basement wall’s top ${asked} over the high side of the ground`
+      return i18n._({
+        id: 'editor.lib.buildingFoundation.seatBasementWallTop',
+        message: 'Seat the basement wall’s top {asked} over the high side of the ground',
+        values,
+      })
     case 'raised':
-      return `Seat the raised floor’s top ${asked} over the high side of the ground`
+      return i18n._({
+        id: 'editor.lib.buildingFoundation.seatRaisedFloorTop',
+        message: 'Seat the raised floor’s top {asked} over the high side of the ground',
+        values,
+      })
     case 'piles':
-      return `Seat the floor’s top ${asked} over the high side of the ground`
+      return i18n._({
+        id: 'editor.lib.buildingFoundation.seatFloorTop',
+        message: 'Seat the floor’s top {asked} over the high side of the ground',
+        values,
+      })
     case 'slab':
-      return `Seat the slab’s top ${asked} over the high side of the ground`
+      return i18n._({
+        id: 'editor.lib.buildingFoundation.seatSlabTop',
+        message: 'Seat the slab’s top {asked} over the high side of the ground',
+        values,
+      })
     default:
-      return `Seat the ground floor ${asked} over grade`
+      return i18n._({
+        id: 'editor.lib.buildingFoundation.seatGroundFloor',
+        message: 'Seat the ground floor {asked} over grade',
+        values,
+      })
   }
 }
 
@@ -121,19 +142,42 @@ export type FoundationAdvice = {
 export function foundationAdvice(
   report: DesignedFoundationReport,
   length: (meters: number) => string,
+  i18n: PascalI18n,
 ): FoundationAdvice[] {
-  if (report.basement) return basementAdvice(report, report.basement, length)
+  if (report.basement) return basementAdvice(report, report.basement, length, i18n)
   const { foundation } = report
   const advice: FoundationAdvice[] = []
   const floorOver = report.floorTopY - report.highestGradeY
   const asked = foundation.ffAboveGradeIn * IN
-  if (Math.abs(floorOver - asked) > 0.5 * IN)
+  if (Math.abs(floorOver - asked) > 0.5 * IN) {
+    const values = { distance: length(Math.abs(floorOver)), asked: length(asked) }
     advice.push({
       key: 'seat',
       tone: 'warning',
-      text: `The floor stands ${length(Math.abs(floorOver))} ${floorOver < 0 ? 'under' : 'over'} the high side of the ground; the foundation is set for ${length(asked)} over it.`,
-      fix: { label: `Seat it at ${length(asked)}`, patch: {} },
+      text:
+        floorOver < 0
+          ? i18n._({
+              id: 'editor.lib.buildingFoundation.floorUnderTheGround',
+              message:
+                'The floor stands {distance} under the high side of the ground; the foundation is set for {asked} over it.',
+              values,
+            })
+          : i18n._({
+              id: 'editor.lib.buildingFoundation.floorOverTheGround',
+              message:
+                'The floor stands {distance} over the high side of the ground; the foundation is set for {asked} over it.',
+              values,
+            }),
+      fix: {
+        label: i18n._({
+          id: 'editor.lib.buildingFoundation.seatItAt',
+          message: 'Seat it at {asked}',
+          values,
+        }),
+        patch: {},
+      },
     })
+  }
   const least = foundation.topAboveGradeIn * IN
   // The ground is cut down round the stem wall's top (a slab's, filled and cut, below).
   const cutOver = report.stemTopY === null ? 0 : report.highestGradeY - (report.stemTopY - least)
@@ -141,29 +185,74 @@ export function foundationAdvice(
     advice.push({
       key: 'top',
       tone: 'note',
-      text: `The ground is cut ${length(cutOver)} on the high side to hold the stem wall’s top ${length(least)} over it (IRC R317.1). Raising the floor cuts less.`,
-      fix: { label: 'Raise the floor', patch: { ffAboveGradeIn: foundation.ffMinIn } },
+      text: i18n._({
+        id: 'editor.lib.buildingFoundation.groundCutRoundTheStem',
+        message:
+          'The ground is cut {cut} on the high side to hold the stem wall’s top {least} over it (IRC R317.1). Raising the floor cuts less.',
+        values: { cut: length(cutOver), least: length(least) },
+      }),
+      fix: {
+        label: i18n._({
+          id: 'editor.lib.buildingFoundation.raiseTheFloor',
+          message: 'Raise the floor',
+        }),
+        patch: { ffAboveGradeIn: foundation.ffMinIn },
+      },
     })
   const footingWidthIn = buildingFoundationDefaults(foundation.storeys).footingWidthIn
   const piles = foundation.support === 'piles'
   const raised = foundation.type === 'raised'
   const depth = raised ? foundation.footingDepthIn : foundation.edgeDepthIn
-  if (!piles && depth < 12)
+  if (!piles && depth < 12) {
+    const values = { depth: length(depth * IN), least: length(12 * IN) }
     advice.push({
       key: 'depth',
       tone: 'warning',
-      text: `The ${raised ? 'footing' : 'slab edge'}’s bottom is ${length(depth * IN)} under grade: keep it ${length(12 * IN)} at least, or the frost line (IRC R403.1.4).`,
+      text: raised
+        ? i18n._({
+            id: 'editor.lib.buildingFoundation.footingTooShallow',
+            message:
+              'The footing’s bottom is {depth} under grade: keep it {least} at least, or the frost line (IRC R403.1.4).',
+            values,
+          })
+        : i18n._({
+            id: 'editor.lib.buildingFoundation.slabEdgeTooShallow',
+            message:
+              'The slab edge’s bottom is {depth} under grade: keep it {least} at least, or the frost line (IRC R403.1.4).',
+            values,
+          }),
       fix: {
-        label: `Set it ${length(12 * IN)} deep`,
+        label: i18n._({
+          id: 'editor.lib.buildingFoundation.setItDeep',
+          message: 'Set it {depth} deep',
+          values: { depth: length(12 * IN) },
+        }),
         patch: raised ? { footingDepthIn: 12 } : { edgeDepthIn: 12 },
       },
     })
+  }
   if (raised && !piles && foundation.footingWidthIn < footingWidthIn)
     advice.push({
       key: 'footing-width',
       tone: 'warning',
-      text: `The footing is ${length(foundation.footingWidthIn * IN)} wide: ${foundation.storeys === 1 ? 'one storey asks' : `${foundation.storeys} storeys ask`} ${length(footingWidthIn * IN)} on 1500 psf soil (IRC Table R403.1(1)).`,
-      fix: { label: `Widen it to ${length(footingWidthIn * IN)}`, patch: { footingWidthIn } },
+      text: i18n._({
+        id: 'editor.lib.buildingFoundation.footingTooNarrow',
+        message:
+          'The footing is {width} wide: {storeys, plural, one {one storey asks} other {# storeys ask}} {asked} on 1500 psf soil (IRC Table R403.1(1)).',
+        values: {
+          width: length(foundation.footingWidthIn * IN),
+          storeys: foundation.storeys,
+          asked: length(footingWidthIn * IN),
+        },
+      }),
+      fix: {
+        label: i18n._({
+          id: 'editor.lib.buildingFoundation.widenItTo',
+          message: 'Widen it to {width}',
+          values: { width: length(footingWidthIn * IN) },
+        }),
+        patch: { footingWidthIn },
+      },
     })
   if (report.stemTopY !== null && report.crawlY !== null) {
     // The crawl space is dug out to its clearance under the joists, where the ground stands higher.
@@ -173,25 +262,69 @@ export function foundationAdvice(
       advice.push({
         key: 'crawl',
         tone: 'note',
-        text: `Crawl space: dug out up to ${length(dug)} for ${length(clearance)} under the joists (IRC R317.1).`,
+        text: i18n._({
+          id: 'editor.lib.buildingFoundation.crawlSpaceDugOut',
+          message:
+            'Crawl space: dug out up to {dug} for {clearance} under the joists (IRC R317.1).',
+          values: { dug: length(dug), clearance: length(clearance) },
+        }),
       })
   }
   if (report.cripples > 0)
     advice.push({
       key: 'cripple',
       tone: 'note',
-      text: `Past ${length(foundation.maxStemIn * IN)} of stem out of the ground the stem drops to ${length(least)} over grade: ${report.cripples} ${report.cripples === 1 ? 'cripple wall' : 'cripple walls'} over it, up to ${length(report.tallestCripple)} tall.`,
+      text: i18n._({
+        id: 'editor.lib.buildingFoundation.crippleWalls',
+        message:
+          'Past {stem} of stem out of the ground the stem drops to {least} over grade: {cripples, plural, one {# cripple wall} other {# cripple walls}} over it, up to {tallest} tall.',
+        values: {
+          stem: length(foundation.maxStemIn * IN),
+          least: length(least),
+          cripples: report.cripples,
+          tallest: length(report.tallestCripple),
+        },
+      }),
     })
   if (report.steps > 0) {
     const step = foundation.stepHeightIn * IN
-    const riser =
-      report.tallestStep > step + 0.25 * IN
-        ? `up to ${length(report.tallestStep)} a step`
-        : `${length(step)} a step`
+    const upTo = report.tallestStep > step + 0.25 * IN
+    const values = {
+      fall: length(report.highestGradeY - report.lowestGradeY),
+      steps: report.steps,
+      riser: length(upTo ? report.tallestStep : step),
+    }
     advice.push({
       key: 'steps',
       tone: 'note',
-      text: `The ground falls ${length(report.highestGradeY - report.lowestGradeY)} across the house: the ${report.stemTopY === null ? 'slab edge' : 'footing'} steps ${report.steps} ${report.steps === 1 ? 'time' : 'times'} along its steepest side, ${riser}.`,
+      text:
+        report.stemTopY === null
+          ? upTo
+            ? i18n._({
+                id: 'editor.lib.buildingFoundation.slabEdgeStepsUpTo',
+                message:
+                  'The ground falls {fall} across the house: the slab edge steps {steps, plural, one {# time} other {# times}} along its steepest side, up to {riser} a step.',
+                values,
+              })
+            : i18n._({
+                id: 'editor.lib.buildingFoundation.slabEdgeSteps',
+                message:
+                  'The ground falls {fall} across the house: the slab edge steps {steps, plural, one {# time} other {# times}} along its steepest side, {riser} a step.',
+                values,
+              })
+          : upTo
+            ? i18n._({
+                id: 'editor.lib.buildingFoundation.footingStepsUpTo',
+                message:
+                  'The ground falls {fall} across the house: the footing steps {steps, plural, one {# time} other {# times}} along its steepest side, up to {riser} a step.',
+                values,
+              })
+            : i18n._({
+                id: 'editor.lib.buildingFoundation.footingSteps',
+                message:
+                  'The ground falls {fall} across the house: the footing steps {steps, plural, one {# time} other {# times}} along its steepest side, {riser} a step.',
+                values,
+              }),
     })
   }
   if (report.stemTopY === null) {
@@ -200,26 +333,98 @@ export function foundationAdvice(
     const fill = pad - report.lowestGradeY
     const cut = report.highestGradeY - pad
     const sloped = report.highestGradeY - report.lowestGradeY > 0.5 * IN
-    const works = [
-      fill > 0.5 * IN &&
-        (sloped ? `filled up to ${length(fill)} on the low side` : `filled ${length(fill)}`),
-      cut > 0.5 * IN && (sloped ? `cut ${length(cut)} on the high side` : `cut ${length(cut)}`),
-    ].filter(Boolean)
-    if (works.length > 0)
+    const grading = slabGrading(fill > 0.5 * IN, cut > 0.5 * IN, sloped, i18n, {
+      least: length(least),
+      fill: length(fill),
+      cut: length(cut),
+    })
+    if (grading)
       advice.push({
         key: 'grading',
         tone: 'note',
-        text: `The ground is held ${length(least)} under the slab’s top on every side: ${works.join(', ')}.`,
+        text: grading,
       })
     if (fill > 24 * IN)
       advice.push({
         key: 'exposed',
         tone: 'warning',
-        text: `That is ${length(fill)} of fill${sloped ? ' on the low side' : ''}. A raised floor on a stem wall suits ${sloped ? 'this slope' : 'a floor this high'}.`,
-        fix: { label: 'Raise it on a stem wall', patch: { type: 'raised' } },
+        text: sloped
+          ? i18n._({
+              id: 'editor.lib.buildingFoundation.deepFillOnASlope',
+              message:
+                'That is {fill} of fill on the low side. A raised floor on a stem wall suits this slope.',
+              values: { fill: length(fill) },
+            })
+          : i18n._({
+              id: 'editor.lib.buildingFoundation.deepFill',
+              message:
+                'That is {fill} of fill. A raised floor on a stem wall suits a floor this high.',
+              values: { fill: length(fill) },
+            }),
+        fix: {
+          label: i18n._({
+            id: 'editor.lib.buildingFoundation.raiseItOnAStemWall',
+            message: 'Raise it on a stem wall',
+          }),
+          patch: { type: 'raised' },
+        },
       })
   }
   return advice
+}
+
+/**
+ * How the ground round a slab is graded to hold it `least` under its top: filled on the low side,
+ * cut on the high side, or both (on flat ground, by how much only). `null` when it is neither.
+ */
+function slabGrading(
+  filled: boolean,
+  cut: boolean,
+  sloped: boolean,
+  i18n: PascalI18n,
+  values: { least: string; fill: string; cut: string },
+): string | null {
+  if (filled && cut)
+    return sloped
+      ? i18n._({
+          id: 'editor.lib.buildingFoundation.gradingFilledAndCutOnASlope',
+          message:
+            'The ground is held {least} under the slab’s top on every side: filled up to {fill} on the low side, cut {cut} on the high side.',
+          values,
+        })
+      : i18n._({
+          id: 'editor.lib.buildingFoundation.gradingFilledAndCut',
+          message:
+            'The ground is held {least} under the slab’s top on every side: filled {fill}, cut {cut}.',
+          values,
+        })
+  if (filled)
+    return sloped
+      ? i18n._({
+          id: 'editor.lib.buildingFoundation.gradingFilledOnASlope',
+          message:
+            'The ground is held {least} under the slab’s top on every side: filled up to {fill} on the low side.',
+          values,
+        })
+      : i18n._({
+          id: 'editor.lib.buildingFoundation.gradingFilled',
+          message: 'The ground is held {least} under the slab’s top on every side: filled {fill}.',
+          values,
+        })
+  if (cut)
+    return sloped
+      ? i18n._({
+          id: 'editor.lib.buildingFoundation.gradingCutOnASlope',
+          message:
+            'The ground is held {least} under the slab’s top on every side: cut {cut} on the high side.',
+          values,
+        })
+      : i18n._({
+          id: 'editor.lib.buildingFoundation.gradingCut',
+          message: 'The ground is held {least} under the slab’s top on every side: cut {cut}.',
+          values,
+        })
+  return null
 }
 
 /**
@@ -232,29 +437,69 @@ function basementAdvice(
   report: DesignedFoundationReport,
   basement: BasementReport,
   length: (meters: number) => string,
+  i18n: PascalI18n,
 ): FoundationAdvice[] {
   const { foundation } = report
   const advice: FoundationAdvice[] = []
   const over = basement.wallTopY - report.highestGradeY
   const asked = foundation.basementTopAboveGradeIn * IN
-  if (Math.abs(over - asked) > 0.5 * IN)
+  if (Math.abs(over - asked) > 0.5 * IN) {
+    const values = { distance: length(Math.abs(over)), asked: length(asked) }
     advice.push({
       key: 'seat',
       tone: 'warning',
-      text: `The basement wall’s top stands ${length(Math.abs(over))} ${over < 0 ? 'under' : 'over'} the high side of the ground; the foundation is set for ${length(asked)} over it.`,
-      fix: { label: `Seat it at ${length(asked)}`, patch: {} },
+      text:
+        over < 0
+          ? i18n._({
+              id: 'editor.lib.buildingFoundation.basementTopUnderTheGround',
+              message:
+                'The basement wall’s top stands {distance} under the high side of the ground; the foundation is set for {asked} over it.',
+              values,
+            })
+          : i18n._({
+              id: 'editor.lib.buildingFoundation.basementTopOverTheGround',
+              message:
+                'The basement wall’s top stands {distance} over the high side of the ground; the foundation is set for {asked} over it.',
+              values,
+            }),
+      fix: {
+        label: i18n._({
+          id: 'editor.lib.buildingFoundation.seatItAt',
+          message: 'Seat it at {asked}',
+          values,
+        }),
+        patch: {},
+      },
     })
+  }
   if (foundation.basementTopAboveGradeIn < 8)
     advice.push({
       key: 'basement-top',
       tone: 'warning',
-      text: `The sill and the floor framing sit ${length(asked)} over the ground: keep them ${length(8 * IN)} off it at least (IRC R317.1).`,
-      fix: { label: `Set it ${length(8 * IN)}`, patch: { basementTopAboveGradeIn: 8 } },
+      text: i18n._({
+        id: 'editor.lib.buildingFoundation.sillTooNearTheGround',
+        message:
+          'The sill and the floor framing sit {height} over the ground: keep them {least} off it at least (IRC R317.1).',
+        values: { height: length(asked), least: length(8 * IN) },
+      }),
+      fix: {
+        label: i18n._({
+          id: 'editor.lib.buildingFoundation.setIt',
+          message: 'Set it {height}',
+          values: { height: length(8 * IN) },
+        }),
+        patch: { basementTopAboveGradeIn: 8 },
+      },
     })
   advice.push({
     key: 'excavation',
     tone: 'note',
-    text: `Cut ${length(report.highestGradeY - basement.excavationY)} into the ground on the high side, dug out inside the walls’ outside faces; the ground round the house is left as it lies.`,
+    text: i18n._({
+      id: 'editor.lib.buildingFoundation.basementExcavation',
+      message:
+        'Cut {depth} into the ground on the high side, dug out inside the walls’ outside faces; the ground round the house is left as it lies.',
+      values: { depth: length(report.highestGradeY - basement.excavationY) },
+    }),
   })
   const fall = report.highestGradeY - report.lowestGradeY
   const exposed = basement.wallTopY - report.lowestGradeY
@@ -262,7 +507,12 @@ function basementAdvice(
     advice.push({
       key: 'daylight',
       tone: 'note',
-      text: `The ground falls ${length(fall)} across the house: the downhill walls stand up to ${length(exposed)} out of it.`,
+      text: i18n._({
+        id: 'editor.lib.buildingFoundation.daylightWalls',
+        message:
+          'The ground falls {fall} across the house: the downhill walls stand up to {exposed} out of it.',
+        values: { fall: length(fall), exposed: length(exposed) },
+      }),
     })
   return advice
 }

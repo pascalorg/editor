@@ -5,7 +5,9 @@ import {
   getLibraryMaterialIdFromRef,
   getMaterialSwatch,
   type MaterialCatalogItem,
+  type PascalI18n,
   toLibraryMaterialRef,
+  usePascalI18n,
 } from '@pascal-app/core'
 import { ChevronDown, Copy, Pencil, Plus, Trash2 } from 'lucide-react'
 import { Fragment, useState } from 'react'
@@ -53,6 +55,7 @@ export function WallTypeSelect({
   options: readonly WallTypeOption[]
   value: WallTypeId
 }) {
+  const i18n = usePascalI18n()
   const current = options.find((option) => option.id === value)?.label
   const blocked = newWallTypeBlockedReason(useProjectWallTypes())
   return (
@@ -87,7 +90,10 @@ export function WallTypeSelect({
         <DropdownMenuSeparator />
         <DropdownMenuItem disabled={!!blocked} onSelect={onNew}>
           <Plus />
-          New wall type…
+          {i18n._({
+            id: 'editor.buildPanel.wallTypeControls.newWallType',
+            message: 'New wall type…',
+          })}
         </DropdownMenuItem>
         {blocked ? (
           <p className="max-w-64 px-2 pt-1 pb-1.5 text-[11px] text-muted-foreground leading-snug">
@@ -117,34 +123,50 @@ export function WallTypeActions({
   onDuplicate?: () => void
   onEdit?: () => void
 }) {
+  const i18n = usePascalI18n()
   const projectTypes = useProjectWallTypes()
   const blocked = onDuplicate ? newWallTypeBlockedReason(projectTypes) : null
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <button
-          aria-label={`Edit or duplicate ${label}`}
+          aria-label={i18n._({
+            id: 'editor.buildPanel.wallTypeControls.editOrDuplicateLabel',
+            message: 'Edit or duplicate {label}',
+            values: { label },
+          })}
           className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-border/50 bg-black/4 text-muted-foreground transition-colors hover:bg-black/8 hover:text-foreground data-[state=open]:bg-black/8 dark:bg-[#2C2C2E] dark:hover:bg-[#3e3e3e]"
-          title="Edit or duplicate this wall type"
+          title={i18n._({
+            id: 'editor.buildPanel.wallTypeControls.editOrDuplicateThisWallType',
+            message: 'Edit or duplicate this wall type',
+          })}
           type="button"
         >
           <Pencil className="size-3.5" />
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-56">
-        <DropdownMenuLabel className="truncate text-muted-foreground text-xs">{label}</DropdownMenuLabel>
+        <DropdownMenuLabel className="truncate text-muted-foreground text-xs">
+          {label}
+        </DropdownMenuLabel>
         <DropdownMenuItem disabled={!onEdit} onSelect={onEdit}>
           <Pencil />
-          Edit layers…
+          {i18n._({ id: 'editor.buildPanel.wallTypeControls.editLayers', message: 'Edit layers…' })}
         </DropdownMenuItem>
         <DropdownMenuItem disabled={!onDuplicate || !!blocked} onSelect={onDuplicate}>
           <Copy />
-          Duplicate as a new type…
+          {i18n._({
+            id: 'editor.buildPanel.wallTypeControls.duplicateAsANewType',
+            message: 'Duplicate as a new type…',
+          })}
         </DropdownMenuItem>
         {onDelete ? (
           <DropdownMenuItem onSelect={onDelete} variant="destructive">
             <Trash2 />
-            Delete from this project
+            {i18n._({
+              id: 'editor.buildPanel.wallTypeControls.deleteFromThisProject',
+              message: 'Delete from this project',
+            })}
           </DropdownMenuItem>
         ) : null}
         {blocked ? (
@@ -153,7 +175,10 @@ export function WallTypeActions({
           </p>
         ) : onEdit ? null : (
           <p className="px-2 pt-1 pb-1.5 text-[11px] text-muted-foreground leading-snug">
-            Presets stay as cited. Duplicate one to change its layers.
+            {i18n._({
+              id: 'editor.buildPanel.wallTypeControls.presetsStayAsCitedDuplicateOne',
+              message: 'Presets stay as cited. Duplicate one to change its layers.',
+            })}
           </p>
         )}
       </DropdownMenuContent>
@@ -161,36 +186,51 @@ export function WallTypeActions({
   )
 }
 
-function swatchOf(ref: string): { label: string; style: ReturnType<typeof materialSwatchStyle> } {
+function swatchOf(
+  ref: string,
+  i18n: PascalI18n,
+): { label: string; style: ReturnType<typeof materialSwatchStyle> } {
   const item = getCatalogMaterialById(getLibraryMaterialIdFromRef(ref) ?? undefined)
-  if (!item) return { label: ref.startsWith('#') ? ref.toUpperCase() : 'Default', style: {} }
+  if (!item) {
+    return {
+      label: ref.startsWith('#')
+        ? ref.toUpperCase()
+        : i18n._({ id: 'editor.buildPanel.wallTypeControls.default', message: 'Default' }),
+      style: {},
+    }
+  }
   return { label: item.label, style: materialSwatchStyle(getMaterialSwatch(item)) }
 }
 
 /**
  * A finish new walls are drawn with: the swatch and name of the pick, and a grid of
- * the products it can be (a cladding kind's, or the flat paint colours).
+ * the products it can be (a cladding kind's, or the flat paint colours). `finish` is
+ * the stable key of what it sets (the cladding kind, or `paint`), written to
+ * `data-wall-finish` for tests and scripts, as the label is translated.
  */
 export function WallFinishPicker({
+  finish,
   label,
   onChange,
   products,
   value,
 }: {
+  finish: string
   label: string
   onChange: (ref: string) => void
   products: readonly MaterialCatalogItem[]
   value: string
 }) {
+  const i18n = usePascalI18n()
   const [open, setOpen] = useState(false)
-  const swatch = swatchOf(value)
+  const swatch = swatchOf(value, i18n)
   return (
     <Popover onOpenChange={setOpen} open={open}>
       <PopoverTrigger asChild>
         <button
           aria-label={`${label}: ${swatch.label}`}
           className={TRIGGER_CLASS}
-          data-wall-finish={label}
+          data-wall-finish={finish}
           type="button"
         >
           <span className="select-none text-muted-foreground transition-colors group-hover:text-foreground">

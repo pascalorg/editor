@@ -2,6 +2,8 @@
 
 import {
   LUMBER_DEPTH,
+  type MessageDescriptor,
+  type PascalI18n,
   ROOFING_THICKNESS,
   type RoofBuildUp,
   type RoofingKind,
@@ -10,6 +12,7 @@ import {
   roofBuildUpPatch,
   UNDERLAYMENT_THICKNESS,
   type UnderlaymentKind,
+  usePascalI18n,
 } from '@pascal-app/core'
 import { ActionButton, PanelSection, SegmentedControl, SelectControl } from '@pascal-app/editor'
 import { useState } from 'react'
@@ -20,6 +23,7 @@ import {
   FramingSizeFields,
   formatSpacing,
   InsulationFields,
+  LAYER_KIND_LABELS,
   NONE,
   PanelFields,
 } from '../shared/build-up-controls'
@@ -33,37 +37,87 @@ import {
   roofBuildUpPresetValue,
 } from './panel-model'
 
-const ROOFING_OPTIONS: { label: string; value: RoofingKind }[] = [
-  { label: 'Asphalt 3-tab', value: 'asphalt-3-tab' },
-  { label: 'Architectural shingle', value: 'architectural-shingle' },
-  { label: 'Standing-seam metal', value: 'standing-seam-metal' },
-  { label: 'Concrete tile', value: 'concrete-tile' },
-  { label: 'Clay tile', value: 'clay-tile' },
-  { label: 'Wood shake', value: 'wood-shake' },
-  { label: 'Slate', value: 'slate' },
+const ROOFING_OPTIONS: { label: MessageDescriptor; value: RoofingKind }[] = [
+  {
+    label: /* i18n */ {
+      id: 'node.roofSegment.buildUpSection.asphalt3Tab',
+      message: 'Asphalt 3-tab',
+    },
+    value: 'asphalt-3-tab',
+  },
+  {
+    label: /* i18n */ {
+      id: 'node.roofSegment.buildUpSection.architecturalShingle',
+      message: 'Architectural shingle',
+    },
+    value: 'architectural-shingle',
+  },
+  {
+    label: /* i18n */ {
+      id: 'node.roofSegment.buildUpSection.standingSeamMetal',
+      message: 'Standing-seam metal',
+    },
+    value: 'standing-seam-metal',
+  },
+  {
+    label: /* i18n */ {
+      id: 'node.roofSegment.buildUpSection.concreteTile',
+      message: 'Concrete tile',
+    },
+    value: 'concrete-tile',
+  },
+  {
+    label: /* i18n */ { id: 'node.roofSegment.buildUpSection.clayTile', message: 'Clay tile' },
+    value: 'clay-tile',
+  },
+  {
+    label: /* i18n */ { id: 'node.roofSegment.buildUpSection.woodShake', message: 'Wood shake' },
+    value: 'wood-shake',
+  },
+  {
+    label: /* i18n */ { id: 'node.roofSegment.buildUpSection.slate', message: 'Slate' },
+    value: 'slate',
+  },
 ]
 
-const UNDERLAYMENT_OPTIONS: { label: string; value: UnderlaymentKind | typeof NONE }[] = [
-  { label: 'None', value: NONE },
-  { label: '#15 felt', value: 'felt-15' },
-  { label: '#30 felt', value: 'felt-30' },
-  { label: 'Synthetic', value: 'synthetic' },
-  { label: 'Ice and water shield', value: 'ice-and-water' },
-]
+const UNDERLAYMENT_OPTIONS: { label: MessageDescriptor; value: UnderlaymentKind | typeof NONE }[] =
+  [
+    {
+      label: /* i18n */ { id: 'node.roofSegment.buildUpSection.none', message: 'None' },
+      value: NONE,
+    },
+    {
+      label: /* i18n */ { id: 'node.roofSegment.buildUpSection.n15Felt', message: '#15 felt' },
+      value: 'felt-15',
+    },
+    {
+      label: /* i18n */ { id: 'node.roofSegment.buildUpSection.n30Felt', message: '#30 felt' },
+      value: 'felt-30',
+    },
+    {
+      label: /* i18n */ { id: 'node.roofSegment.buildUpSection.synthetic', message: 'Synthetic' },
+      value: 'synthetic',
+    },
+    {
+      label: /* i18n */ {
+        id: 'node.roofSegment.buildUpSection.iceAndWaterShield',
+        message: 'Ice and water shield',
+      },
+      value: 'ice-and-water',
+    },
+  ]
 
 /** What each kind is called where the layer has no name of its own. */
-const KIND_LABELS: Record<string, string> = {
+const KIND_LABELS: Record<string, MessageDescriptor> = {
   ...Object.fromEntries(
     [...ROOFING_OPTIONS, ...UNDERLAYMENT_OPTIONS].map((o) => [o.value, o.label]),
   ),
-  osb: 'OSB',
-  plywood: 'Plywood',
-  batt: 'Batt',
-  blown: 'Blown',
-  rigid: 'Rigid board',
-  drywall: 'Drywall',
-  plaster: 'Plaster',
-  'wood-plank': 'Wood plank',
+  ...LAYER_KIND_LABELS,
+}
+
+const kindLabel = (kind: string, i18n: PascalI18n) => {
+  const label = KIND_LABELS[kind]
+  return label ? i18n._(label) : kind
 }
 
 type NamedLayerKey = 'roofing' | 'underlayment' | 'sheathing' | 'insulation' | 'finish'
@@ -81,6 +135,7 @@ function LayerNameField({
   layer: { kind: string; name?: string }
   onCommit: (name: string) => void
 }) {
+  const i18n = usePascalI18n()
   const [draft, setDraft] = useState<string | null>(null)
   return (
     <label className="flex h-10 w-full items-center justify-between gap-2 rounded-lg border border-border/50 bg-black/4 px-3 text-sm dark:bg-[#2C2C2E]">
@@ -100,7 +155,7 @@ function LayerNameField({
             event.currentTarget.blur()
           }
         }}
-        placeholder={KIND_LABELS[layer.kind] ?? layer.kind}
+        placeholder={kindLabel(layer.kind, i18n)}
         spellCheck={false}
         value={draft ?? layer.name ?? ''}
       />
@@ -109,8 +164,8 @@ function LayerNameField({
 }
 
 /** A layer as a line of the readout: its name, else its kind's. */
-const layerLabel = (layer: { kind: string; name?: string }) =>
-  layer.name ?? KIND_LABELS[layer.kind] ?? layer.kind
+const layerLabel = (layer: { kind: string; name?: string }, i18n: PascalI18n) =>
+  layer.name ?? kindLabel(layer.kind, i18n)
 
 /**
  * A plane without layers draws its deck and shingle thicknesses as they are. The readout says
@@ -126,27 +181,47 @@ function DrawnLayers({
   onUpdate: (patch: Partial<RoofSegmentNode>) => void
   unit: 'metric' | 'imperial'
 }) {
+  const i18n = usePascalI18n()
   const drawn = roofBuildUpOfDeck(node.deckThickness)
   const { structure } = drawn
   return (
     <>
-      <BuildUpReadout label="Roofing" value={layerLabel(drawn.roofing)} />
+      <BuildUpReadout
+        label={i18n._({ id: 'node.roofSegment.buildUpSection.roofing', message: 'Roofing' })}
+        value={layerLabel(drawn.roofing, i18n)}
+      />
       {drawn.underlayment && (
-        <BuildUpReadout label="Underlayment" value={layerLabel(drawn.underlayment)} />
+        <BuildUpReadout
+          label={i18n._({
+            id: 'node.roofSegment.buildUpSection.underlayment',
+            message: 'Underlayment',
+          })}
+          value={layerLabel(drawn.underlayment, i18n)}
+        />
       )}
       <BuildUpReadout
-        label="Sheathing"
-        value={`${layerLabel(drawn.sheathing)} ${formatLayerThickness(drawn.sheathing.thickness, unit)}`}
+        label={i18n._({ id: 'node.roofSegment.buildUpSection.sheathing', message: 'Sheathing' })}
+        value={`${layerLabel(drawn.sheathing, i18n)} ${formatLayerThickness(drawn.sheathing.thickness, unit)}`}
       />
       <BuildUpReadout
-        label={structure.system === 'trusses' ? 'Trusses' : 'Rafters'}
-        value={`${structure.size} @ ${formatSpacing(structure.spacing, unit)}`}
+        label={
+          structure.system === 'trusses'
+            ? i18n._({ id: 'node.roofSegment.buildUpSection.trusses', message: 'Trusses' })
+            : i18n._({ id: 'node.roofSegment.buildUpSection.rafters', message: 'Rafters' })
+        }
+        value={`${structure.size} @ ${formatSpacing(structure.spacing, unit, i18n)}`}
       />
-      <BuildUpReadout label="Deck" value={formatLayerDepth(node.deckThickness, unit)} />
-      <BuildUpReadout label="Covering" value={formatLayerDepth(node.shingleThickness, unit)} />
+      <BuildUpReadout
+        label={i18n._({ id: 'node.roofSegment.buildUpSection.deck', message: 'Deck' })}
+        value={formatLayerDepth(node.deckThickness, unit)}
+      />
+      <BuildUpReadout
+        label={i18n._({ id: 'node.roofSegment.buildUpSection.covering', message: 'Covering' })}
+        value={formatLayerDepth(node.shingleThickness, unit)}
+      />
       <ActionButton
         className="rounded-full"
-        label="Edit layers"
+        label={i18n._({ id: 'node.roofSegment.buildUpSection.editLayers', message: 'Edit layers' })}
         onClick={() => onUpdate(roofBuildUpPatch(drawn))}
       />
     </>
@@ -165,6 +240,7 @@ export function RoofBuildUpSection({
   onUpdate: (patch: Partial<RoofSegmentNode>) => void
   unit: 'metric' | 'imperial'
 }) {
+  const i18n = usePascalI18n()
   const buildUp = node.buildUp
   const edit = (change: Partial<RoofBuildUp>) => {
     if (buildUp) onUpdate(roofBuildUpPatch(editedBuildUp(buildUp, change)))
@@ -177,9 +253,11 @@ export function RoofBuildUpSection({
   const depths = buildUp ? roofBuildUpDepths(buildUp) : null
 
   return (
-    <PanelSection title="Layers">
+    <PanelSection
+      title={i18n._({ id: 'node.roofSegment.buildUpSection.layers', message: 'Layers' })}
+    >
       <SelectControl
-        label="Preset"
+        label={i18n._({ id: 'node.roofSegment.buildUpSection.preset', message: 'Preset' })}
         onChange={(id) => {
           const patch = roofBuildUpPresetPatch(id)
           if (patch) onUpdate(patch)
@@ -191,36 +269,51 @@ export function RoofBuildUpSection({
       {buildUp && depths && (
         <>
           <SelectControl
-            label="Roofing"
+            label={i18n._({ id: 'node.roofSegment.buildUpSection.roofing', message: 'Roofing' })}
             onChange={(kind) => edit({ roofing: { kind, thickness: ROOFING_THICKNESS[kind] } })}
-            options={ROOFING_OPTIONS}
+            options={ROOFING_OPTIONS.map((option) => ({ ...option, label: i18n._(option.label) }))}
             value={buildUp.roofing.kind}
           />
           <LayerNameField
-            label="Roofing name"
+            label={i18n._({
+              id: 'node.roofSegment.buildUpSection.roofingName',
+              message: 'Roofing name',
+            })}
             layer={buildUp.roofing}
             onCommit={(name) => rename('roofing', name)}
           />
           <SelectControl
-            label="Underlayment"
+            label={i18n._({
+              id: 'node.roofSegment.buildUpSection.underlayment',
+              message: 'Underlayment',
+            })}
             onChange={(kind) =>
               edit({
                 underlayment:
                   kind === NONE ? undefined : { kind, thickness: UNDERLAYMENT_THICKNESS[kind] },
               })
             }
-            options={UNDERLAYMENT_OPTIONS}
+            options={UNDERLAYMENT_OPTIONS.map((option) => ({
+              ...option,
+              label: i18n._(option.label),
+            }))}
             value={buildUp.underlayment?.kind ?? NONE}
           />
           {buildUp.underlayment && (
             <LayerNameField
-              label="Underlayment name"
+              label={i18n._({
+                id: 'node.roofSegment.buildUpSection.underlaymentName',
+                message: 'Underlayment name',
+              })}
               layer={buildUp.underlayment}
               onCommit={(name) => rename('underlayment', name)}
             />
           )}
           <PanelFields
-            label="Sheathing"
+            label={i18n._({
+              id: 'node.roofSegment.buildUpSection.sheathing',
+              message: 'Sheathing',
+            })}
             layer={buildUp.sheathing}
             onChange={(sheathing) =>
               sheathing && edit({ sheathing: keptName(buildUp.sheathing, sheathing) })
@@ -228,22 +321,41 @@ export function RoofBuildUpSection({
             unit={unit}
           />
           <LayerNameField
-            label="Sheathing name"
+            label={i18n._({
+              id: 'node.roofSegment.buildUpSection.sheathingName',
+              message: 'Sheathing name',
+            })}
             layer={buildUp.sheathing}
             onCommit={(name) => rename('sheathing', name)}
           />
           <SegmentedControl
             onChange={(system) => edit({ structure: { ...buildUp.structure, system } })}
             options={[
-              { label: 'Rafters', value: 'rafters' },
-              { label: 'Trusses', value: 'trusses' },
+              {
+                label: i18n._({
+                  id: 'node.roofSegment.buildUpSection.rafters',
+                  message: 'Rafters',
+                }),
+                value: 'rafters',
+              },
+              {
+                label: i18n._({
+                  id: 'node.roofSegment.buildUpSection.trusses',
+                  message: 'Trusses',
+                }),
+                value: 'trusses',
+              },
             ]}
             value={buildUp.structure.system}
           />
           <FramingSizeFields
             framing={buildUp.structure}
             onChange={(change) => edit({ structure: { ...buildUp.structure, ...change } })}
-            sizeLabel={buildUp.structure.system === 'trusses' ? 'Top chord' : 'Rafters'}
+            sizeLabel={
+              buildUp.structure.system === 'trusses'
+                ? i18n._({ id: 'node.roofSegment.buildUpSection.topChord', message: 'Top chord' })
+                : i18n._({ id: 'node.roofSegment.buildUpSection.rafters', message: 'Rafters' })
+            }
             unit={unit}
           />
           <InsulationFields
@@ -256,30 +368,48 @@ export function RoofBuildUpSection({
           />
           {buildUp.insulation && (
             <LayerNameField
-              label="Insulation name"
+              label={i18n._({
+                id: 'node.roofSegment.buildUpSection.insulationName',
+                message: 'Insulation name',
+              })}
               layer={buildUp.insulation}
               onCommit={(name) => rename('insulation', name)}
             />
           )}
           <FinishFields
-            label="Interior finish"
+            label={i18n._({
+              id: 'node.roofSegment.buildUpSection.interiorFinish',
+              message: 'Interior finish',
+            })}
             layer={buildUp.finish}
             onChange={(finish) => edit({ finish: keptName(buildUp.finish, finish) })}
             unit={unit}
           />
           {buildUp.finish && (
             <LayerNameField
-              label="Finish name"
+              label={i18n._({
+                id: 'node.roofSegment.buildUpSection.finishName',
+                message: 'Finish name',
+              })}
               layer={buildUp.finish}
               onCommit={(name) => rename('finish', name)}
             />
           )}
-          <BuildUpReadout label="Deck" value={formatLayerDepth(depths.deck, unit)} />
-          <BuildUpReadout label="Covering" value={formatLayerDepth(depths.covering, unit)} />
+          <BuildUpReadout
+            label={i18n._({ id: 'node.roofSegment.buildUpSection.deck', message: 'Deck' })}
+            value={formatLayerDepth(depths.deck, unit)}
+          />
+          <BuildUpReadout
+            label={i18n._({ id: 'node.roofSegment.buildUpSection.covering', message: 'Covering' })}
+            value={formatLayerDepth(depths.covering, unit)}
+          />
           {onApplyToRoof && (
             <ActionButton
               className="rounded-full"
-              label="Apply to all planes of this roof"
+              label={i18n._({
+                id: 'node.roofSegment.buildUpSection.applyToAllPlanesOfThis',
+                message: 'Apply to all planes of this roof',
+              })}
               onClick={onApplyToRoof}
             />
           )}

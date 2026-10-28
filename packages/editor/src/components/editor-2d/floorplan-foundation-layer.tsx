@@ -10,6 +10,7 @@ import {
   getWallPlanFootprint,
   traceFoundationOutlines,
   union,
+  usePascalI18n,
   useScene,
   type WallNode,
 } from '@pascal-app/core'
@@ -120,6 +121,7 @@ function Shape({ shape }: { shape: FoundationPlanShape }) {
  * drag (`editFoundationOutline`). Dimensioned all round (`foundationDimensionStrings`).
  */
 export const FloorplanFoundationLayer = memo(function FloorplanFoundationLayer() {
+  const i18n = usePascalI18n()
   const on = useViewer((state) => state.foundationView)
   const buildingId = useViewer((state) => state.selection.buildingId)
   const selecting = useEditor((state) => state.mode === 'select')
@@ -183,7 +185,12 @@ export const FloorplanFoundationLayer = memo(function FloorplanFoundationLayer()
           style={{ cursor: 'pointer' }}
           vectorEffect="non-scaling-stroke"
         >
-          <title>Click to edit the foundation’s outline</title>
+          <title>
+            {i18n._({
+              id: 'editor.editor2d.floorplanFoundationLayer.clickToEditTheFoundationS',
+              message: 'Click to edit the foundation’s outline',
+            })}
+          </title>
         </path>
       )}
     </>
