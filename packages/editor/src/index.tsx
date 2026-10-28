@@ -304,6 +304,8 @@ export { applyMultiHeightMode } from './components/ui/panels/multi-height-mode'
 // a kind-owned panel and need PanelWrapper for the chrome.
 export { PanelWrapper } from './components/ui/panels/panel-wrapper'
 export { ParametricInspector as Inspector } from './components/ui/panels/parametric-inspector'
+// A floor's script (a room's, a slab's): its code to read and a way to take it off.
+export { ScriptedFinishRow } from './components/ui/panels/room-panel'
 export { ShapeChoice } from './components/ui/panels/shape-choice'
 export { WallPaintRegionList } from './components/ui/panels/wall-region-list'
 export { PALETTE_COLORS } from './components/ui/primitives/color-dot'

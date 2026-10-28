@@ -2,13 +2,14 @@ import { z } from 'zod'
 import { DOOR_STYLES, WINDOW_STYLES } from '../building/opening-style-presets'
 import { DoorType, WindowType } from '../schema/nodes/opening-types'
 import { RoofType } from '../schema/nodes/roof-types'
+import { StairRailingMode, StairRailingStyle } from '../schema/nodes/stair-types'
 import { measurement, roofPitch } from './measurement'
 import { NodeId } from './node-id'
 import { unitKind } from './units'
 
 const DESCRIPTION = `Turn a whole design you wrote as free three.js into an editable Pascal scene, in one call. You read your own module however you like (its source, running it and reading the objects, both) and hand over a conversion payload: levels, walls (straight, curved or glass) with their openings, rooms (each naming its unit in a building of several dwellings or tenancies: a condo, an apartment building, a hotel; a room naming none is common area), slabs, voids, columns, railings, stairs, every piece of furniture as an authored object with its own module, and lights. Pascal does the rest server-side: compiles and stores each item, places it, derives the rooms and their floors, paints, runs its checks, saves, and answers with a gate report you iterate against. Nothing you hand over is silently dropped: what cannot be placed comes back by name with a reason, and what Pascal corrected (a wall end snapped onto the centerline it meets) is listed.
 
-Coordinates: metres, plan x/z, Y up, each level's floor at y = 0 in its own frame. A wall is its centerline; walls meet where centerlines meet, so end a partition on the centerline of the wall it runs into. An opening's 'along' is measured from the wall's start to the opening's centre; give each opening its type (how it opens) and style (its look), or its own module for a shape they cannot express. An item's position is where its bottom centre stands, except a ceiling item's (mount 'ceiling': a pendant, a ceiling light): it hangs from the ceiling of the room containing its plan position, its top on that ceiling, and its y is not read. A rug, a mat or a runner is an item lying on the room's floor. What stands on a floor stands on its finish: on a room with a floorCode, on the top of its planks or tiles, so its y stays 0. Its module follows the add_object contract (metres, Y up, built in its installed orientation; at most 300k triangles and 32 materials per item; name materials slot_<finish>; drawers, doors and lids as animation clips; a THREE light named light:<id> where a bulb is). A hex colour is written as an exact material, one per distinct colour. Pascal builds a wall's cap, the floor plate and the ceiling itself: fold a module's caps, underlays and floor planks into the wall, the room's floor finish and the room (say so in notes), never into slabs or regions: baseboards are the wall's skirting, a plank or tile floor is the room's floorCode, tiles, panelling or boards on a wall are its faceLeft / faceRight (or the room's wallCode), cladding, brick or battens outside its faceOutside; a slab is a terrace, a platform, a balcony; a stair is its level's stairs, which open the floor above; the roof over the top level is roof, Pascal's own segments when its shape is one of theirs, else your geometry as roof items, both on the building's roof level above the top storey. Pascal draws what bold architecture needs natively: a curved wall is one wall with the point its arc passes through, through (never a run of short straight ones), a glass front a curtain wall, a double-height room a void in the floor of the level above it (its ceiling opens with it, a railing along its edges), an archway a passage with an arch shape. Paint a wall by what its faces look onto, colorInside and colorOutside: which face is inside is Pascal's to find. Build the building as it is built: a wall at its real height, nothing lowered or removed for viewing.
+Coordinates: metres, plan x/z, Y up, each level's floor at y = 0 in its own frame. A wall is its centerline; walls meet where centerlines meet, so end a partition on the centerline of the wall it runs into. An opening's 'along' is measured from the wall's start to the opening's centre; give each opening its type (how it opens) and style (its look), or its own module for a shape they cannot express. An item's position is where its bottom centre stands, except a ceiling item's (mount 'ceiling': a pendant, a ceiling light): it hangs from the ceiling of the room containing its plan position, its top on that ceiling, and its y is not read. A rug, a mat or a runner is an item lying on the room's floor. What stands on a floor stands on its finish: on a room with a floorCode, on the top of its planks or tiles, so its y stays 0. Its module follows the add_object contract (metres, Y up, built in its installed orientation; at most 300k triangles and 32 materials per item; name materials slot_<finish>; drawers, doors and lids as animation clips; a THREE light named light:<id> where a bulb is). A hex colour is written as an exact material, one per distinct colour. Pascal builds a wall's cap, the floor plate and the ceiling itself: fold a module's caps, underlays and floor planks into the wall, the room's floor finish and the room (say so in notes), never into slabs or regions: baseboards are the wall's skirting, a plank or tile floor is the room's floorCode (a terrace's decking or paving its slab's surfaceCode), tiles, panelling or boards on a wall are its faceLeft / faceRight (or the room's wallCode), cladding, brick or battens outside its faceOutside; a slab is a terrace, a platform, a balcony; a stair is its level's stairs, which open the floor above; the roof over the top level is roof, Pascal's own segments when its shape is one of theirs, else your geometry as roof items, both on the building's roof level above the top storey. Pascal draws what bold architecture needs natively: a curved wall is one wall with the point its arc passes through, through (never a run of short straight ones), a glass front a curtain wall, a double-height room a void in the floor of the level above it (its ceiling opens with it, a railing along its edges), an archway a passage with an arch shape. Paint a wall by what its faces look onto, colorInside and colorOutside: which face is inside is Pascal's to find. Build the building as it is built: a wall at its real height, nothing lowered or removed for viewing.
 
 Hand over the payload, or your module and its adapter, the program that reads the module and returns the payload: Pascal runs the adapter (one that throws comes back with its error, and nothing is written). An item names its piece instead of code when add_object makes it from words; one still being made is written when it lands, with no call from you. Pieces made from words are written many at a time while you go on, so furniture made that way does not lengthen your turn the way pieces you write yourself do.
 
@@ -276,21 +277,34 @@ export const authorSceneSlab = z.object({
     },
   ),
   finish: z.string().optional().describe('library:<id> or #rrggbb (an exact colour).'),
+  surfaceCode: z
+    .string()
+    .min(1)
+    .max(48_000)
+    .optional()
+    .describe(
+      "A three.js module that builds the slab's surface finish (a terrace's decking or paving, a platform's boards): it receives params.polygon ([[x, z], …]) and params.holes ([[[x, z], …], …]), the slab's outline in level plan x/z, metres, and lays the boards or slabs out from y = 0, the slab's top. Pascal cuts the build to the polygon and its holes, so a row may run past the edges, and stands what is placed on the slab on the build's top. Pascal rebuilds it when the slab changes; finish stays the fallback and the sides keep theirs. The report warns when the build leaves part of the slab uncovered.",
+    ),
   railing: z
     .array(
       z.object({
         start: plan('start'),
         end: plan('end'),
         height: length('Railing height (default 1.1 m).', { default: 1.1, positive: true }),
+        color: z.string().optional().describe('#rrggbb or library:<id> (default white).'),
       }),
     )
     .optional()
-    .describe('Railing runs on this slab (a balcony).'),
+    .describe('Railing runs standing on this slab (a balcony).'),
 })
 
 export const authorSceneColumn = z.object({
   name: z.string().max(80).optional(),
   position: plan('centre'),
+  rotation: measurement('angle', 'deg', {
+    default: 0,
+    description: 'Turn about the vertical axis (default 0): at 0 its width runs along x.',
+  }),
   shape: z
     .enum(['square', 'round'])
     .default('square')
@@ -298,7 +312,20 @@ export const authorSceneColumn = z.object({
   width: length('Column width.', { positive: true }),
   depth: length('Column depth (default: its width).', { positive: true }).optional(),
   height: length('Column height.', { positive: true }),
-  color: z.string().optional(),
+  color: z
+    .string()
+    .optional()
+    .describe(
+      "Its finish, #rrggbb written as an exact material, or library:<id> (default: Pascal's plaster). A column built by code keeps its module's colours.",
+    ),
+  code: z
+    .string()
+    .min(1)
+    .max(48_000)
+    .optional()
+    .describe(
+      "A three.js module for a column shape and width cannot express (a timber post with brackets, a fluted or tapered pier, a steel section): the add_column code contract, mount 'floor', built standing from y = 0 with its bottom centre on position; what it builds sets its width, depth and height, so shape, width, depth and height are not read. Compiled and stored as an item's module is.",
+    ),
 })
 
 export const authorSceneItem = z.object({
@@ -371,6 +398,20 @@ export const authorSceneStair = z.object({
     .min(1)
     .optional()
     .describe("An L or U's risers up to its landing; the rest climb after it (default half)."),
+  railing: StairRailingMode.optional().describe(
+    'Which sides have a railing, looking up the flight (default both): none, left, right or both.',
+  ),
+  railingStyle: StairRailingStyle.optional().describe(
+    'How the railings are built (default balusters): post-and-rail, cable, boards, glass or metal.',
+  ),
+  color: z
+    .string()
+    .optional()
+    .describe(
+      "The flight's finish, treads and body, #rrggbb written as an exact material, or library:<id> (default: wood treads on a light grey body).",
+    ),
+  treads: z.string().optional().describe("The treads' finish, over color; same forms."),
+  railingColor: z.string().optional().describe("The railings' finish; same forms."),
 })
 
 export const authorSceneLight = z.object({

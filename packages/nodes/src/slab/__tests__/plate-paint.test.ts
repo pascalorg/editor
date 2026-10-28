@@ -381,3 +381,26 @@ test("a floor built by a script refuses the room's paint, which its script owns"
   expect(useScene.getState().nodes).toBe(before)
   expect(useScene.temporal.getState().pastStates).toHaveLength(0)
 })
+
+test("a slab's surface built by its script refuses paint on its top, which its script owns", () => {
+  const surfaceScript = ZoneFloorScript.parse({
+    kind: 'script',
+    script: 'a'.repeat(64),
+    artifact: 'b'.repeat(64),
+    inputs: 'key',
+    manifest: { bounds: { min: [0, 0, 0], max: [2, 0.02, 2] }, triangles: 2 },
+  })
+  manual = { ...manual, surfaceScript }
+  useScene.setState({ nodes: { ...useScene.getState().nodes, [manual.id]: manual } })
+  useScene.temporal.getState().clear()
+  const before = useScene.getState().nodes
+  expect(
+    slabPaint.commit({ node: manual, role: 'surface', material: undefined, materialPreset: TILE }),
+  ).toMatchObject({ status: 'refused', code: 'floor-built-by-script' })
+  expect(useScene.getState().nodes).toBe(before)
+  expect(useScene.temporal.getState().pastStates).toHaveLength(0)
+  expect(
+    slabPaint.commit({ node: manual, role: 'side', material: undefined, materialPreset: TILE }),
+  ).toBeUndefined()
+  expect((useScene.getState().nodes[manual.id] as SlabNode).slots?.side).toBe(TILE)
+})

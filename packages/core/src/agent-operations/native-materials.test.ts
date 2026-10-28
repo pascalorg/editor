@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { AGENT_TOOL_CONTRACTS } from '../agent-tools'
 import { isAgentRefusal } from '../agent-tools/refusal'
 import { slotPaintMaterial } from '../lib/slots'
-import { ColumnNode, RoofNode, RoofSegmentNode, type SceneMaterial } from '../schema'
+import { type AnyNode, ColumnNode, RoofNode, RoofSegmentNode, type SceneMaterial } from '../schema'
 import {
   EXPECTED_MOUNTAIN_MATERIAL,
   expectPreserved,
@@ -183,6 +183,57 @@ describe('native custom paint: contract v1.1', () => {
     expect(Object.keys(registryAfter(materials, second.changes))).toHaveLength(2)
     const serialized = JSON.parse(JSON.stringify(registryAfter(materials, second.changes)))
     expect(serialized[outcome.changes!.materials![0]!.id].material.texture).toEqual(texture)
+  })
+
+  test('texture offset, normal and bump maps are kept, and another offset is another material', () => {
+    const { nodes } = nativeMaterialScene()
+    const texture = {
+      url: '/material/stone/slate.jpg',
+      repeat: [2, 2],
+      offset: [0.25, 0],
+      normalMap: '/material/stone/slate-normal.jpg',
+      normalScale: 0.8,
+      bumpMap: '/material/stone/slate-height.jpg',
+      bumpScale: 0.3,
+    }
+    const outcome = run(
+      'paint',
+      nodes,
+      { ...mountainPaint(), material: { ...MOUNTAIN_MATERIAL, texture } },
+      {},
+    )
+    expect(outcome.changes!.materials![0]!.material.texture).toEqual(texture)
+    const materials = registryAfter({}, outcome.changes)
+    const second = run(
+      'paint',
+      applySceneChanges(nodes, outcome.changes!),
+      {
+        ...mountainPaint(['wall_material_east']),
+        material: { ...MOUNTAIN_MATERIAL, texture: { ...texture, offset: [0.5, 0] } },
+      },
+      materials,
+    )
+    expect(Object.keys(registryAfter(materials, second.changes))).toHaveLength(2)
+  })
+
+  test('an exact colour is that colour as a matte scene material, reused; exact without a colour is refused', () => {
+    const { nodes } = nativeMaterialScene()
+    const exact = { targets: ['wall_material_south'], color: '#3A5F8C', exact: true }
+    const outcome = run('paint', nodes, exact, {})
+    const [material] = outcome.changes!.materials!
+    expect(material).toMatchObject({
+      name: '#3a5f8c',
+      material: { properties: { color: '#3a5f8c', roughness: 0.9, metalness: 0 } },
+    })
+    const wall = applySceneChanges(nodes, outcome.changes!).wall_material_south as AnyNode & {
+      slots: Record<string, string>
+    }
+    expect(wall.slots.a).toBe(`scene:${material!.id}`)
+    const again = run('paint', nodes, exact, registryAfter({}, outcome.changes))
+    expect(again.changes!.materials).toBeUndefined()
+    expect(refusal(() => run('paint', nodes, { ...mountainPaint(), exact: true }, {})).code).toBe(
+      'invalid_exact',
+    )
   })
 
   test('undefined registry is an unsupported host, not permission to author an orphan', () => {

@@ -19,12 +19,27 @@ export function floorScriptPaintRefusal(
     }
 }
 
+/** Why a slab's top cannot be painted: its own surface script builds it, and owns its colours. */
+export function slabSurfaceScriptPaintRefusal(
+  slab: AnyNode | undefined,
+  role: string,
+): FloorPlatePaintRefusal | undefined {
+  if (slab?.type === 'slab' && slab.surfaceScript && role === 'surface')
+    return {
+      status: 'refused',
+      code: 'floor-built-by-script',
+      message: `${slab.name?.trim() || 'This slab'}'s surface is built by a script, which owns its colours. Remove the script to paint the surface.`,
+    }
+}
+
 export function floorPlatePaintRefusal(
   nodes: Readonly<Record<string, AnyNode>>,
   node: AnyNode,
   role: string,
 ): FloorPlatePaintRefusal | undefined {
   if (node.type !== 'slab') return
+  const scripted = slabSurfaceScriptPaintRefusal(node, role)
+  if (scripted) return scripted
   const room = parseRoomFinishRole(role)
   if (room) return floorScriptPaintRefusal(nodes[room.zoneId])
   if (node.plateRole !== 'base' || role !== 'surface') return

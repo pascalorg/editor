@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { BaseNode, nodeType, objectId } from '../base'
 import { MaterialSchema } from '../material'
 import { SurfaceHoleMetadata } from './surface-hole-metadata'
+import { ZoneFloorScript } from './zone'
 
 // Edit-time floor for `thickness` — a thinner slab z-fights the ceiling's
 // −0.01 underside offset. Applies to edits only; migration writes legacy
@@ -64,6 +65,7 @@ export const SlabNode = BaseNode.extend({
   zoneIds: z.array(z.string()).optional(),
   associatedZoneIds: z.array(z.string()).optional(),
   autoFromWalls: z.boolean().default(false),
+  surfaceScript: ZoneFloorScript.optional(),
 }).describe(
   dedent`
   Slab node - used to represent a slab/floor in the building
@@ -80,6 +82,7 @@ export const SlabNode = BaseNode.extend({
   - recessedRimElevation: optional rim anchor for a raised/lowered recess; absent means the level plane
   - fillToTerrain: manual slabs only; extends a solid slab's perimeter downward to terrain without changing its flat top or authored thickness
   - autoFromWalls: whether the slab is automatically generated from a closed wall loop
+  - surfaceScript: a three.js module that builds a standalone slab's surface finish (decking, tiles, paving) for its polygon, drawn over its top; it owns the surface's colours. A room's floor plate has none: its room's floor.script builds there
   `,
 )
 

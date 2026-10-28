@@ -1,7 +1,8 @@
 import type { AnyNode, CompiledGeometryScript, SlabNode, ZoneFloorScript } from '../schema'
 import { DEFAULT_SLAB_ELEVATION } from '../schema/nodes/slab'
+import { liftedManualSlab } from './floor-construction-lift'
 import { scriptSource } from './geometry-script-node'
-import { levelWallCover, plateLevelContext } from './plate-surface'
+import { isFloorPlate, levelWallCover, plateLevelContext } from './plate-surface'
 import {
   area,
   containsPoint,
@@ -17,11 +18,12 @@ import { scriptInputsKey } from './script-inputs-key'
 type SceneNodes = Readonly<Record<string, AnyNode>>
 
 /**
- * What a room's floor script is built for, in metres: the room's walking floor (its outline inside
- * the wall faces, on its floor plate) as `polygon` with its `holes`, in the level's plan x/z. The
- * build's y = 0 is the floor's surface: the module lays its boards from there up, Pascal stands the
- * build on the plate's top (`floorScriptSurface`) and cuts it to the polygon less its holes. A plate
- * raised or lowered moves the build without running the module again.
+ * What a floor script is built for, in metres: a room's walking floor (its outline inside the wall
+ * faces, on its floor plate) or a standalone slab's top, as `polygon` with its `holes`, in the
+ * level's plan x/z. The build's y = 0 is the floor's surface: the module lays its boards from there
+ * up, Pascal stands the build on the plate's or the slab's top (`floorScriptSurface`,
+ * `slabScriptSurface`) and cuts it to the polygon less its holes. A floor raised or lowered moves
+ * the build without running the module again.
  */
 export type FloorScriptInputs = {
   polygon: [number, number][]
@@ -58,10 +60,10 @@ export function floorScriptSurface(nodes: SceneNodes, zoneId: string): number | 
 }
 
 /**
- * Where a plan point standing on `slabId` finds a room's floor finish its script built: the top of
- * that build, in level coordinates, so a rug or a sofa stands on the boards rather than in them.
- * Null where no script builds on that plate there. Reads the level's children, and its slabs only
- * once a scripted room holds the point.
+ * Where a plan point standing on `slabId` finds a floor finish a script built (a room's on its
+ * plate, or the slab's own surface script): the top of that build, in level coordinates, so a rug
+ * or a sofa stands on the boards rather than in them. Null where no script builds on that slab
+ * there. Reads the level's children, and its slabs only once a scripted room holds the point.
  */
 export function floorFinishTopAt(
   nodes: SceneNodes,
@@ -70,6 +72,13 @@ export function floorFinishTopAt(
   x: number,
   z: number,
 ): number | null {
+  const slab = nodes[slabId]
+  if (slab?.type === 'slab' && slab.surfaceScript) {
+    const top = slabScriptSurface(nodes, slab.id)
+    if (top === null || !containsPoint([{ outer: slab.polygon, holes: slab.holes ?? [] }], [x, z]))
+      return null
+    return top + FLOOR_SCRIPT_LIFT + Math.max(0, slab.surfaceScript.manifest.bounds.max[1])
+  }
   const level = nodes[levelId]
   if (level?.type !== 'level') return null
   let slabs: SlabNode[] | undefined
@@ -118,12 +127,42 @@ export function floorScriptInputs(nodes: SceneNodes, zoneId: string): FloorScrip
   return inputs
 }
 
+/**
+ * A floor plate Pascal builds from rooms has no surface script of its own: each room's floor script
+ * builds there. Any other slab (a terrace, a platform, a plinth) is built for its own outline.
+ */
+export function slabSurfaceScriptInputs(
+  nodes: SceneNodes,
+  slabId: string,
+): FloorScriptInputs | null {
+  const slab = nodes[slabId]
+  if (slab?.type !== 'slab' || isFloorPlate(slab) || slab.polygon.length < 3) return null
+  return {
+    polygon: roundRing(slab.polygon),
+    holes: (slab.holes ?? []).filter((hole) => hole.length >= 3).map(roundRing),
+  }
+}
+
+/**
+ * The height, in level coordinates, of the top a slab's surface script stands on (the slab's top,
+ * lifted with the footprint it stands in as its geometry is), where the build's y = 0 is drawn;
+ * null when the slab has no surface a script builds on.
+ */
+export function slabScriptSurface(nodes: SceneNodes, slabId: string): number | null {
+  const slab = nodes[slabId]
+  if (slab?.type !== 'slab' || !slabSurfaceScriptInputs(nodes, slabId)) return null
+  return liftedManualSlab(nodes, slab).elevation
+}
+
 /** The key a floor script keeps of the floor it was built for (`ZoneFloorScript.inputs`). */
 export function floorScriptInputsKey(inputs: FloorScriptInputs): string {
   return scriptInputsKey(JSON.stringify([inputs.polygon, inputs.holes]))
 }
 
-/** A compile as the zone keeps it: its script source and the key of the floor it was built for. */
+/**
+ * A compile as the zone (or the slab) keeps it: its script source and the key of the floor it was
+ * built for.
+ */
 export function floorScriptRecord(
   compiled: CompiledGeometryScript,
   inputs: FloorScriptInputs,

@@ -217,6 +217,7 @@ export {
   type FloorPlatePaintRefusal,
   floorPlatePaintRefusal,
   floorScriptPaintRefusal,
+  slabSurfaceScriptPaintRefusal,
 } from './lib/floor-plate-paint'
 export {
   FLOOR_SCRIPT_LIFT,
@@ -225,6 +226,8 @@ export {
   floorScriptInputsKey,
   floorScriptRecord,
   floorScriptSurface,
+  slabScriptSurface,
+  slabSurfaceScriptInputs,
 } from './lib/floor-script'
 export {
   type FloorStepOverride,

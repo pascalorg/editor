@@ -32,6 +32,7 @@ import type { BoundaryNode } from '../lib/room-topology-index'
 import { detectSpacesForLevel } from '../lib/space-detection'
 import { reconcileSceneStructure } from '../lib/structure-reconcile'
 import { wallFaceScriptInputs } from '../lib/wall-face-script'
+import { nodeSlotDeclarations } from '../node-slots'
 import { nearestLibraryColorRef } from '../procedural-items/library-colors'
 import {
   type AnyNode,
@@ -84,7 +85,7 @@ import { authoredSceneChanges } from './authored-scene-merge'
 import { createStair } from './create-stair'
 import { paint } from './paint'
 import { pointInPolygon, projectWorldPointToWallLocalX, type Vec2 } from './plan-geometry'
-import { resolveInlinePaintMaterial } from './scene-materials'
+import { type ColorSurface, exactColorMaterial, exactScriptSlots, MATTE } from './scene-materials'
 import { queryNodes } from './scene-queries'
 import type { AgentContext, AgentOperationOutcome, SceneChanges, SceneNodes } from './types'
 import { setWallSkirting } from './wall-skirting'
@@ -198,7 +199,10 @@ export type AuthorSceneReport = {
   /** Units under the building, one per distinct name the rooms and the payload give. */
   units: number
   lights: number
-  /** Rooms whose floor finish is their module, counted by the host that compiles them after the write. */
+  /**
+   * Rooms whose floor finish and slabs whose surface finish is their module, counted by the host
+   * that compiles them after the write.
+   */
   floorScripts: number
   /** Wall faces whose finish is a module, counted by the host that compiles them after the write. */
   faceScripts: number
@@ -224,7 +228,6 @@ const THIN_SLAB = 0.02
 const MANY_SLABS = 20
 const MANY_REGIONS = 24
 const HEX = /^#[0-9a-f]{6}$/i
-const GLASS = 'library:preset-glass'
 
 type Vec3 = [number, number, number]
 type AuthorSceneWall = NonNullable<AuthorScenePayload['levels'][number]['walls']>[number]
@@ -382,10 +385,6 @@ function toLocal(frame: Frame, world: Vec3): Vec3 {
   return [c * dx - s * dz, dy, s * dx + c * dz]
 }
 
-/** How a colour's surface reflects: a module's own values, or a matte paint for a payload colour. */
-type Surface = { roughness: number; metalness: number }
-const MATTE: Surface = { roughness: 0.9, metalness: 0 }
-
 /**
  * The finish a payload value writes. A library or scene ref passes through; a hex colour is kept
  * as an exact native material, one scene material per distinct colour and surface across the
@@ -401,32 +400,16 @@ function finishPool(context: AgentContext, say: (sentence: string) => void) {
   return {
     materials,
     created,
-    ref(value: string, surface: Surface = MATTE): { ref: string } | { error: string } {
+    ref(value: string, surface: ColorSurface = MATTE): { ref: string } | { error: string } {
       if (value.startsWith('library:') || value.startsWith('scene:')) return { ref: value }
       if (!HEX.test(value)) return { error: `${value} is no colour: give #rrggbb or library:<id>.` }
-      const hex = value.toLowerCase()
       if (!materials) {
         if (!snapped)
           say('this host keeps no scene materials: colours written as the nearest library colour')
         snapped = true
-        return { ref: nearestLibraryColorRef(hex)!.ref }
+        return { ref: nearestLibraryColorRef(value)!.ref }
       }
-      const resolved = resolveInlinePaintMaterial(
-        materials,
-        {
-          properties: {
-            color: hex,
-            roughness: surface.roughness,
-            metalness: surface.metalness,
-            opacity: 1,
-            transparent: false,
-            side: 'front',
-          },
-        },
-        surface.roughness === MATTE.roughness && surface.metalness === MATTE.metalness
-          ? hex
-          : `${hex}, roughness ${+surface.roughness.toFixed(2)}, metalness ${+surface.metalness.toFixed(2)}`,
-      )
+      const resolved = exactColorMaterial(materials, value, surface)
       if (resolved.created) {
         materials[resolved.sceneMaterial.id as SceneMaterialId] = resolved.sceneMaterial
         created.push(resolved.sceneMaterial)
@@ -481,6 +464,26 @@ export function authorSceneFloorScripts(
       const roomId = `room/${index}/${i}`
       const zoneId = report.ids[roomId]
       return room.floorCode && zoneId ? [{ roomId, zoneId, code: room.floorCode }] : []
+    }),
+  )
+}
+
+/**
+ * The slabs whose surface finish is a module, by their node once the write made them: the host
+ * reads each slab's surface (`slabSurfaceScriptInputs`), compiles the module for it and writes it
+ * with `setSlabSurfaceScript`, as it does a room's floor module.
+ */
+export function authorSceneSlabScripts(
+  payload: AuthorScenePayload,
+  report: Pick<AuthorSceneReport, 'ids'>,
+): { slabId: string; nodeId: string; name: string; code: string }[] {
+  return payload.levels.flatMap((level, index) =>
+    (level.slabs ?? []).flatMap((slab, i) => {
+      const slabId = `slab/${index}/${i}`
+      const nodeId = report.ids[slabId]
+      return slab.surfaceCode && nodeId
+        ? [{ slabId, nodeId, name: slab.name ?? slabId, code: slab.surfaceCode }]
+        : []
     }),
   )
 }
@@ -815,7 +818,7 @@ export function authorScene(
   const finishRef = (
     value: string | undefined,
     id: string,
-    surface?: Surface,
+    surface?: ColorSurface,
   ): string | undefined => {
     if (!value) return undefined
     const got = finishes.ref(value, surface)
@@ -825,21 +828,12 @@ export function authorScene(
     }
     return got.ref
   }
-  const exactSlots = (compiled: CompiledGeometryScript, id: string) => {
-    const slots = matchScriptSlotsToLibrary(compiled.manifest)
-    for (const slot of compiled.manifest.slots) {
-      // Glass keeps the glass add_object writes, drawn see-through and letting light pass. A
-      // scene material carries no emission, so an emissive slot keeps the module's own material
-      // (the library match leaves it alone) and a bulb stays lit.
-      if (!slot.color || slot.emissive || slots[slot.id] === GLASS) continue
-      const ref = finishRef(slot.color, id, {
-        roughness: slot.roughness ?? MATTE.roughness,
-        metalness: slot.metalness ?? MATTE.metalness,
-      })
-      if (ref) slots[slot.id] = ref
-    }
-    return slots
-  }
+  const exactSlots = (compiled: CompiledGeometryScript, id: string) =>
+    exactScriptSlots(
+      compiled.manifest,
+      matchScriptSlotsToLibrary(compiled.manifest),
+      (hex, surface) => finishRef(hex, id, surface),
+    )
   const paintContext = (levelId: string): AgentContext => ({
     ...context,
     activeLevelId: levelId,
@@ -1209,34 +1203,106 @@ export function authorScene(
         elevation: s.top,
         thickness: s.thickness,
         ...(finish ? { slots: { surface: finish } } : {}),
-        ...(s.railing?.length
-          ? { railing: s.railing.map((r) => ({ start: r.start, end: r.end })) }
-          : {}),
       })
       place(node)
       report.ids[id] = node.id
       report.slabs++
+      // Railings are fences standing on the slab, so each keeps its height and its own finish.
+      ;(s.railing ?? []).forEach((r, k) => {
+        const railId = `${id}/railing/${k}`
+        let fence: AnyNode = FenceNode.parse({
+          object: 'node',
+          id: mint('fence', railId),
+          parentId: levelNode.id,
+          visible: true,
+          metadata: { authorScene: { id: railId } },
+          name: 'Railing',
+          start: r.start,
+          end: r.end,
+          height: r.height,
+          style: 'rail',
+          baseStyle: 'floating',
+          baseHeight: 0,
+          postCap: 'none',
+          supportSlabId: node.id,
+        })
+        const railFinish = finishRef(r.color, railId)
+        if (railFinish)
+          fence = {
+            ...fence,
+            slots: Object.fromEntries(
+              (nodeSlotDeclarations(fence) ?? []).map((slot) => [slot.slotId, railFinish]),
+            ),
+          } as AnyNode
+        place(fence)
+      })
     })
     ;(level.columns ?? []).forEach((c, i) => {
-      const node = ColumnNode.parse({
+      const id = `column/${index}/${i}`
+      let compiled: CompiledGeometryScript | undefined
+      if (c.code) {
+        compiled = input.compiled[id]
+        if (!compiled) {
+          defect(id, 'compile_failed', input.compileErrors?.[id] ?? 'The module did not compile.')
+          return
+        }
+        if (compiled.mount !== 'floor') {
+          defect(
+            id,
+            'wrong_mount',
+            `A column's module uses mount 'floor', not '${compiled.mount}'.`,
+          )
+          return
+        }
+        try {
+          requireMeasured(compiled, { label: c.name ?? id, tool: 'author_scene' })
+        } catch (error) {
+          const e = error as { code?: string; message?: string }
+          defect(id, e.code ?? 'unmeasurable_object', e.message ?? String(error))
+          return
+        }
+        if (c.color)
+          say(`column ${id}: built by its module, which keeps its own colours; color ignored`)
+      }
+      const size = compiled && scriptedSize(compiled.manifest)
+      let node = ColumnNode.parse({
         object: 'node',
         type: 'column',
-        id: mint('column', `column/${index}/${i}`),
+        id: mint('column', id),
         parentId: levelNode.id,
         visible: true,
-        metadata: { authorScene: { color: c.color ?? null } },
+        metadata: { authorScene: { id } },
         ...(c.name ? { name: c.name } : {}),
         position: [c.position[0], 0, c.position[1]],
-        crossSection: c.shape,
-        ...(c.shape === 'round' ? { radius: c.width / 2 } : {}),
-        width: c.width,
-        depth: c.shape === 'round' ? c.width : (c.depth ?? c.width),
-        height: c.height,
-        baseHeight: 0,
-        capitalHeight: 0,
+        rotation: (c.rotation * Math.PI) / 180,
+        ...(compiled && size
+          ? {
+              source: scriptSource(compiled, { category: 'column' }),
+              slots: exactSlots(compiled, id),
+              width: size[0],
+              height: size[1],
+              depth: size[2],
+            }
+          : {
+              crossSection: c.shape,
+              ...(c.shape === 'round' ? { radius: c.width / 2 } : {}),
+              width: c.width,
+              depth: c.shape === 'round' ? c.width : (c.depth ?? c.width),
+              height: c.height,
+              baseHeight: 0,
+              capitalHeight: 0,
+            }),
       })
+      const finish = !compiled && finishRef(c.color, id)
+      if (finish)
+        node = {
+          ...node,
+          slots: Object.fromEntries(
+            (nodeSlotDeclarations(node) ?? []).map((slot) => [slot.slotId, finish]),
+          ),
+        }
       place(node)
-      report.ids[`column/${index}/${i}`] = node.id
+      report.ids[id] = node.id
       report.columns++
     })
 
@@ -1500,6 +1566,8 @@ export function authorScene(
             ...(stair.length === undefined ? {} : { length: stair.length }),
             ...(stair.steps === undefined ? {} : { steps: stair.steps }),
             ...(stair.lowerSteps === undefined ? {} : { lowerSteps: stair.lowerSteps }),
+            ...(stair.railing ? { railingMode: stair.railing } : {}),
+            ...(stair.railingStyle ? { railingStyle: stair.railingStyle } : {}),
             ...(stair.name ? { name: stair.name } : {}),
             levelId: levelNode.id,
             toLevelId: upper.id,
@@ -1526,6 +1594,33 @@ export function authorScene(
           ...rest,
         ]
         written = applySceneChanges(written, changes)
+        const finishes = [
+          ['body', stair.color],
+          ['treads', stair.treads ?? stair.color],
+          ['railing', stair.railingColor],
+        ] as const
+        for (const [role, color] of finishes) {
+          const finish = finishRef(color, id)
+          if (!finish) continue
+          if (
+            !nodeSlotDeclarations(written[made!.node.id]!)?.some((slot) => slot.slotId === role)
+          ) {
+            say(
+              `${id}: it has no ${role}, its ${role === 'railing' ? 'railingColor' : 'color'} ignored`,
+            )
+            continue
+          }
+          try {
+            const { changes } = paint(
+              written,
+              { targets: [made!.node.id], material: finish, role },
+              paintContext(levelNode.id),
+            )
+            written = applySceneChanges(written, changes!)
+          } catch (error) {
+            defect(id, 'paint_refused', (error as Error).message)
+          }
+        }
         report.ids[id] = made!.node.id
         report.stairs++
         stairsWritten = true
