@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { Client, InMemoryTransport } from '@modelcontextprotocol/client'
 import type { PlannedPiece } from '@pascal-app/core/agent-operations'
+import { AgentRefusal } from '@pascal-app/core/agent-tools'
 import { compileGeometryScript } from '@pascal-app/geometry-script'
 import { runAdapter } from '@pascal-app/geometry-script/adapter'
 import { SceneBridge } from '../bridge/scene-bridge'
@@ -67,6 +68,7 @@ describe('author_scene sources (MCP)', () => {
   const artifacts = new Map<string, Uint8Array>()
   const pieces = new Map<string, PieceState>()
   const started: PlannedPiece[] = []
+  const files = new Map<string, string>()
   const host: GeometryScriptHost = {
     compile: async ({ code, inputs }) => {
       const { glb, ...compiled } = await compileGeometryScript({ code, inputs })
@@ -99,6 +101,7 @@ describe('author_scene sources (MCP)', () => {
 
   beforeEach(async () => {
     artifacts.clear()
+    files.clear()
     started.length = 0
     pieces.clear()
     pieces.set('chair', { status: 'made', code: CHAIR })
@@ -114,6 +117,11 @@ describe('author_scene sources (MCP)', () => {
       operations,
       geometryScripts: host,
       objectMakers: makers,
+      readFile: async ({ fileId }) => {
+        const text = files.get(fileId)
+        if (text === undefined) throw new AgentRefusal('file_request_failed', 'File not found')
+        return new TextEncoder().encode(text)
+      },
     })
     const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
     client = new Client({ name: 'test', version: '0' })
@@ -161,6 +169,65 @@ describe('author_scene sources (MCP)', () => {
       'levels.0.name',
     )
     expect((await call('get_walls', {})).body).not.toMatchObject({ walls: [{}] })
+  })
+
+  test('reads the payload from a project file, and answers one that is not a payload', async () => {
+    const walls = (
+      [
+        ['n', [-1.9, -2], [1.9, -2]],
+        ['s', [-1.9, 2], [1.9, 2]],
+        ['e', [2, -1.9], [2, 1.9]],
+        ['w', [-2, -1.9], [-2, 1.9]],
+      ] as const
+    ).map(([id, start, end]) => ({ id, start, end, height: 2.7, thickness: 0.2 }))
+    files.set(
+      'asset_house',
+      JSON.stringify({
+        levels: [
+          {
+            name: 'Ground floor',
+            walls,
+            rooms: [{ name: 'Studio', seed: [0, 0] }],
+            items: [
+              {
+                id: 'chair',
+                name: 'Chair',
+                category: 'chair',
+                piece: 'chair',
+                position: [1, 0, 1],
+              },
+            ],
+          },
+        ],
+      }),
+    )
+    const written = await call('author_scene', { payloadFile: 'asset_house' })
+    expect(written.isError).toBe(false)
+    expect(written.body.walls).toBe(4)
+    expect(written.body.ids.chair).toBeDefined()
+    // Written again from what it stored, as a payload given inline is.
+    expect((await call('author_scene', { replace: true })).isError).toBe(false)
+
+    files.set('asset_text', 'not json')
+    expect(await call('author_scene', { payloadFile: 'asset_text' })).toMatchObject({
+      isError: true,
+      body: { code: 'payload_invalid' },
+    })
+    files.set('asset_wrong', JSON.stringify({ levels: [{ walls: 'none' }] }))
+    expect(await call('author_scene', { payloadFile: 'asset_wrong' })).toMatchObject({
+      isError: true,
+      body: { code: 'payload_invalid' },
+    })
+    expect(await call('author_scene', { payloadFile: 'asset_gone' })).toMatchObject({
+      isError: true,
+      body: { code: 'file_request_failed' },
+    })
+    expect(
+      await call('author_scene', {
+        payloadFile: 'asset_house',
+        payload: JSON.parse(files.get('asset_house')!),
+      }),
+    ).toMatchObject({ isError: true, body: { code: 'payload_twice' } })
   })
 
   test('revises by edits against the stored module, and refuses an edit it cannot place', async () => {

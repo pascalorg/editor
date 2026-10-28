@@ -40,3 +40,14 @@ export async function executeProjectFileTool(
   signal?.throwIfAborted()
   return execute({ name: contract.name, projectId, input, signal })
 }
+
+/**
+ * A project file's bytes, for a caller who may edit the project: `author_scene`'s payload by
+ * reference. Refuses a missing file or one over maxBytes.
+ */
+export type ProjectFileReader = (request: {
+  projectId?: string
+  fileId: string
+  maxBytes: number
+  signal?: AbortSignal
+}) => Promise<Uint8Array>

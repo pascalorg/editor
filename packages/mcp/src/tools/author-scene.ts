@@ -6,6 +6,7 @@ import {
   type AuthorScenePending,
   achievedChanges,
   authorSceneChecks,
+  type ProjectFileReader,
   type SceneNodes,
   verifyScene,
 } from '@pascal-app/core/agent-operations'
@@ -29,6 +30,7 @@ import { toPatches } from './shared-tools'
 type Edit = { in: 'module' | 'adapter'; find: string; replace: string }
 type Input = {
   payload?: AuthorScenePayload
+  payloadFile?: string
   module?: string
   adapter?: string
   edits?: Edit[]
@@ -49,6 +51,9 @@ type StoredConversion = {
   pending?: AuthorScenePending[]
 }
 
+/** The largest payload file read: a house with its modules inline runs to a few MiB. */
+const PAYLOAD_FILE_MAX_BYTES = 32 * 1024 * 1024
+
 /** Payload keys holding a module's text; stored as `<key>Script`, the script's hash. */
 const CODE_KEYS = new Set(['code', 'floorCode', 'wallCode'])
 
@@ -64,6 +69,7 @@ export function registerAuthorScene(
   bridge: SceneOperations,
   host: GeometryScriptHost | undefined,
   makers?: ObjectMakerHost,
+  readFile?: ProjectFileReader,
 ): void {
   server.registerTool(
     authorSceneTool.name,
@@ -108,7 +114,28 @@ export function registerAuthorScene(
 
       let source: Awaited<ReturnType<typeof sourceOf>>
       try {
-        source = await sourceOf(args, storedConversion(before, args.buildingId), host, readText)
+        const readPayloadFile = async (fileId: string) => {
+          if (!readFile)
+            refuse(
+              'files_unavailable',
+              'This Pascal server keeps no project files: pass the payload itself.',
+            )
+          return new TextDecoder().decode(
+            await readFile({
+              projectId: scene.projectId ?? undefined,
+              fileId,
+              maxBytes: PAYLOAD_FILE_MAX_BYTES,
+              signal: host.signal,
+            }),
+          )
+        }
+        source = await sourceOf(
+          args,
+          storedConversion(before, args.buildingId),
+          host,
+          readText,
+          readPayloadFile,
+        )
       } catch (error) {
         if (isAgentRefusal(error)) return refusalResult(error)
         return toolError(error instanceof Error ? error.message : String(error), {
@@ -250,8 +277,9 @@ function storedConversion(nodes: SceneNodes, buildingId?: string): StoredConvers
 }
 
 /**
- * The payload to write, with the module and adapter it came from: given; answered by the adapter on
- * the module (each the one given or stored, changed by the edits); or the stored conversion again.
+ * The payload to write, with the module and adapter it came from: given, or read from its project
+ * file; answered by the adapter on the module (each the one given or stored, changed by the edits);
+ * or the stored conversion again.
  * An adapter that throws, or answers no valid payload, is answered with why, and nothing is written.
  */
 async function sourceOf(
@@ -259,6 +287,7 @@ async function sourceOf(
   stored: StoredConversion | undefined,
   host: GeometryScriptHost,
   readText: (sha256: string) => Promise<string>,
+  readPayloadFile: (fileId: string) => Promise<string>,
 ) {
   const edits = args.edits ?? []
   const changed = {
@@ -271,13 +300,30 @@ async function sourceOf(
     changed,
     stored: { module: stored?.module, adapter: stored?.adapter },
   })
-  if (args.payload) {
+  if (args.payload && args.payloadFile)
+    refuse('payload_twice', 'Pass the payload or its payloadFile, not both.')
+  if (args.payload || args.payloadFile) {
     if (edits.length)
       refuse(
         'edits_with_payload',
         'Edits change the module or the adapter Pascal runs: leave the payload out to have it run.',
       )
-    return result(args.payload, { module: args.module, adapter: args.adapter })
+    const texts = { module: args.module, adapter: args.adapter }
+    if (args.payload) return result(args.payload, texts)
+    let answered: unknown
+    try {
+      answered = JSON.parse(await readPayloadFile(args.payloadFile!))
+    } catch (error) {
+      if (!(error instanceof SyntaxError)) throw error
+      return {
+        failed: toolError(`The payload file is not JSON: ${error.message}`, {
+          code: 'payload_invalid',
+          mutationApplied: false,
+        }),
+      }
+    }
+    const parsed = parsedPayload(answered, 'The payload file')
+    return 'failed' in parsed ? parsed : result(parsed.payload, texts)
   }
   if (args.module !== undefined || args.adapter !== undefined || edits.length) {
     const texts = {
@@ -328,24 +374,8 @@ async function sourceOf(
         ),
       }
     }
-    const parsed = authorScenePayload.safeParse(answered)
-    if (!parsed.success)
-      return {
-        failed: toolError(
-          `Your adapter's payload does not match author_scene's: ${parsed.error.issues
-            .slice(0, 12)
-            .map((issue) => `${issue.path.join('.')}: ${issue.message}`)
-            .join('; ')}`,
-          {
-            code: 'payload_invalid',
-            mutationApplied: false,
-            issues: parsed.error.issues
-              .slice(0, 40)
-              .map((issue) => ({ path: issue.path.join('.'), message: issue.message })),
-          },
-        ),
-      }
-    return result(parsed.data, texts)
+    const parsed = parsedPayload(answered, "Your adapter's payload")
+    return 'failed' in parsed ? parsed : result(parsed.payload, texts)
   }
   if (typeof stored?.payload !== 'string')
     refuse(
@@ -363,6 +393,30 @@ async function sourceOf(
       'The stored conversion could not be read back: pass the payload, or the module and its adapter.',
     )
   return result(parsed.data, {})
+}
+
+/** A payload read from an adapter or a file, or why it does not match author_scene's. */
+function parsedPayload(
+  value: unknown,
+  what: string,
+): { payload: AuthorScenePayload } | { failed: ReturnType<typeof toolError> } {
+  const parsed = authorScenePayload.safeParse(value)
+  if (parsed.success) return { payload: parsed.data }
+  return {
+    failed: toolError(
+      `${what} does not match author_scene's: ${parsed.error.issues
+        .slice(0, 12)
+        .map((issue) => `${issue.path.join('.')}: ${issue.message}`)
+        .join('; ')}`,
+      {
+        code: 'payload_invalid',
+        mutationApplied: false,
+        issues: parsed.error.issues
+          .slice(0, 40)
+          .map((issue) => ({ path: issue.path.join('.'), message: issue.message })),
+      },
+    ),
+  }
 }
 
 type PayloadItem = NonNullable<AuthorScenePayload['levels'][number]['items']>[number]

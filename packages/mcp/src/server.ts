@@ -7,6 +7,7 @@ import {
 } from '@modelcontextprotocol/server'
 import {
   type HostedServiceExecutor,
+  type ProjectFileReader,
   type ProjectFileToolExecutor,
   recordMade,
   type SceneNodes,
@@ -63,6 +64,8 @@ export type CreatePascalMcpServerOptions = {
   services?: HostedServiceExecutor
   /** Authenticated project file catalog; absent for a local scene without hosted files. */
   files?: ProjectFileToolExecutor
+  /** Reads a project file's bytes (author_scene's payloadFile); absent without hosted files. */
+  readFile?: ProjectFileReader
   /** Asks an editor open on the project for a picture (`view_scene`); without it, refused. */
   sceneViews?: SceneViewHost
   /** Reads catalog items' pictures and surfaces before view_assets and paint. */
@@ -90,6 +93,7 @@ export function createPascalMcpServer(opts: CreatePascalMcpServerOptions): McpSe
     catalog,
     geometryScripts: opts.geometryScripts,
     objectMakers: opts.objectMakers,
+    readFile: opts.readFile,
     sceneViews: opts.sceneViews,
     assetViews: opts.assetViews,
   })

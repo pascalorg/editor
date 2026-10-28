@@ -27,7 +27,7 @@ export const paintTool = {
       .union([z.string().min(1), MaterialSchema])
       .optional()
       .describe(
-        "A library:<id> or scene:<id> ref, or a native material kept as a scene material: properties color, roughness, metalness; texture { url, repeat [u, v] (tiles per metre), offset [u, v] (in tiles), normalMap, normalScale, bumpMap, bumpScale }, its maps sharing the image's repeat and offset. Surfaces are laid in level metres: a floor, a slab's top or a ceiling at u = plan x, v = −z; a wall face at u = x for a wall running along x (−x on its face turned to −z), z for one running along z (−z on its face turned to −x), v = 1 − the height above the level's floor. A joint at c along u or v: offset = frac(−c × repeat).",
+        "A library:<id> or scene:<id> ref, or a native material kept as a scene material: properties color, roughness, metalness; texture { url (https, or artifact://<sha256> of an image stored with the project), repeat [u, v] (tiles per metre), offset [u, v] (in tiles), normalMap, normalScale, bumpMap, bumpScale }, its maps sharing the image's repeat and offset. Surfaces are laid in level metres: a floor, a slab's top or a ceiling at u = plan x, v = −z; a wall face at u = x for a wall running along x (−x on its face turned to −z), z for one running along z (−z on its face turned to −x), v = 1 − the height above the level's floor. A joint at c along u or v: offset = frac(−c × repeat).",
       ),
     materialName: z
       .string()

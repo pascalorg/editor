@@ -1,4 +1,5 @@
 import type { McpServer } from '@modelcontextprotocol/server'
+import type { ProjectFileReader } from '@pascal-app/core/agent-operations'
 import type { SceneOperations } from '../operations'
 import { registerAddColumn } from './add-column'
 import {
@@ -43,13 +44,15 @@ export type ToolHosts = PlanReadingHosts & {
   geometryScripts?: GeometryScriptHost
   /** Makes add_object's pieces from words; without it a piece is refused `pieces_unavailable`. */
   objectMakers?: ObjectMakerHost
+  /** Reads author_scene's payloadFile; without it the tool refuses one `files_unavailable`. */
+  readFile?: ProjectFileReader
   sceneViews?: SceneViewHost
 }
 
 export function registerTools(
   server: McpServer,
   operations: SceneOperations,
-  { catalog, geometryScripts, objectMakers, sceneViews, assetViews }: ToolHosts = {},
+  { catalog, geometryScripts, objectMakers, readFile, sceneViews, assetViews }: ToolHosts = {},
 ): void {
   registerGetScene(server, operations)
   registerSharedTools(server, operations, catalog, {
@@ -58,7 +61,7 @@ export function registerTools(
   })
   registerAddColumn(server, operations, geometryScripts)
   registerAddObject(server, operations, geometryScripts, objectMakers)
-  registerAuthorScene(server, operations, geometryScripts, objectMakers)
+  registerAuthorScene(server, operations, geometryScripts, objectMakers, readFile)
   registerGetSource(server, operations, geometryScripts)
   registerMeasure(server, operations)
   registerViewScene(server, operations, sceneViews)
