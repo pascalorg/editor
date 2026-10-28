@@ -6,6 +6,7 @@ import type { CatalogType } from '@lingui/conf'
 import { parsePo, stringifyPo } from 'pofile-ts'
 import linguiConfig from '../lingui.config'
 import {
+  configuredProvider,
   escapePoCommentValue,
   hashSource,
   refreshTranslations,
@@ -15,6 +16,32 @@ import {
   validateTranslation,
 } from './i18n'
 import { hasNodeDefinitions } from './i18n-node-messages'
+
+test('MiniMax translation provider uses its API key and default model', async () => {
+  const previous = {
+    provider: process.env.I18N_PROVIDER,
+    model: process.env.I18N_MODEL,
+    apiKey: process.env.MINIMAX_API_KEY,
+  }
+  process.env.I18N_PROVIDER = 'minimax'
+  delete process.env.I18N_MODEL
+  process.env.MINIMAX_API_KEY = 'test-key'
+
+  try {
+    const provider = await configuredProvider()
+    expect({ name: provider.name, model: provider.model }).toEqual({
+      name: 'minimax',
+      model: 'MiniMax-M3.1-Flash',
+    })
+  } finally {
+    if (previous.provider === undefined) delete process.env.I18N_PROVIDER
+    else process.env.I18N_PROVIDER = previous.provider
+    if (previous.model === undefined) delete process.env.I18N_MODEL
+    else process.env.I18N_MODEL = previous.model
+    if (previous.apiKey === undefined) delete process.env.MINIMAX_API_KEY
+    else process.env.MINIMAX_API_KEY = previous.apiKey
+  }
+})
 
 test('AI review notes cannot inject physical PO lines', () => {
   const escaped = escapePoCommentValue('Check wording.\nmsgid "injected"\r\nmsgstr "value"')
