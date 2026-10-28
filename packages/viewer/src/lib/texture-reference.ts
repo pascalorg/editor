@@ -33,16 +33,18 @@ const STORAGE_BUCKET_BY_KIND = {
   'project-asset': 'project-assets',
 } as const
 
-let cachedStorageOrigin: string | null | undefined
+// Keyed by the URL it was read from, so a texture stamped before the env is set never pins a
+// null origin for the rest of the process.
+let cachedStorageOrigin: { url: string | undefined; origin: string | null } | undefined
 function pascalStorageOrigin(): string | null {
-  if (cachedStorageOrigin !== undefined) return cachedStorageOrigin
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  if (cachedStorageOrigin && cachedStorageOrigin.url === url) return cachedStorageOrigin.origin
+  let origin: string | null = null
   try {
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-    cachedStorageOrigin = url ? new URL(url).origin : null
-  } catch {
-    cachedStorageOrigin = null
-  }
-  return cachedStorageOrigin
+    origin = url ? new URL(url).origin : null
+  } catch {}
+  cachedStorageOrigin = { url, origin }
+  return origin
 }
 
 /** Static catalog materials ship in the app's public dir and resolve through
