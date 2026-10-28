@@ -3,7 +3,11 @@ import { z } from 'zod'
 import { addObjectTool } from '../agent-tools'
 import { type AgentRefusal, isAgentRefusal } from '../agent-tools/refusal'
 import { type AnyNode, DoorNode, LevelNode, WallNode } from '../schema'
-import { ADD_OBJECT_CASES, compiledUnmeasured } from './__fixtures__/add-object-cases'
+import {
+  ADD_OBJECT_CASES,
+  compiledSolid,
+  compiledUnmeasured,
+} from './__fixtures__/add-object-cases'
 import {
   addColumn,
   addObject,
@@ -41,6 +45,60 @@ describe('add_object', () => {
         expect(JSON.stringify(outcome.result)).toContain(text)
     })
   }
+})
+
+// A module's colours are shown as the library finishes they match unless exact keeps them as written.
+describe('add_object exact', () => {
+  const level = LevelNode.parse({ id: 'level_0', parentId: 'building_main', level: 0 })
+  const solid = compiledSolid([0.8, 0.75, 0.8])
+  const compiled = {
+    ...solid,
+    manifest: {
+      ...solid.manifest,
+      slots: [
+        { id: 'top', color: '#2e5e4e', roughness: 0.3, metalness: 0 },
+        { id: 'legs', color: '#c0c0c0', roughness: 0.2, metalness: 1 },
+        { id: 'glass', color: '#ffffff', transparent: true },
+        { id: 'bulb', color: '#fff4d6', emissive: true },
+      ],
+    },
+  } as typeof solid
+  const input = (extra: Record<string, unknown>) => ({
+    ...z
+      .object(addObjectTool.input)
+      .parse({ code: 'x', name: 'Table', reason: 'Pascal has no lacquered table.', ...extra }),
+    compiled,
+  })
+
+  test('keeps each colour with its surface as a scene material; glass and a glowing slot keep theirs', () => {
+    const nodes = { [level.id]: level } as Record<string, AnyNode>
+    const outcome = addObject(nodes, input({ exact: true }), {
+      activeLevelId: level.id,
+      materials: {},
+    })
+    const materials = outcome.changes!.materials!
+    expect(materials.map((m) => m.name).sort()).toEqual([
+      '#2e5e4e, roughness 0.3, metalness 0',
+      '#c0c0c0, roughness 0.2, metalness 1',
+    ])
+    const item = outcome.changes!.create![0]!.node as AnyNode & { slots: Record<string, string> }
+    const ref = (name: string) => `scene:${materials.find((m) => m.name.startsWith(name))!.id}`
+    expect(item.slots).toEqual({
+      top: ref('#2e5e4e'),
+      legs: ref('#c0c0c0'),
+      glass: 'library:preset-glass',
+    })
+    // Without exact the colours are the library's; a host without scene materials refuses exact.
+    const matched = addObject(nodes, input({}), { activeLevelId: level.id, materials: {} })
+    expect(matched.changes!.materials).toBeUndefined()
+    let error: unknown
+    try {
+      addObject(nodes, input({ exact: true }), { activeLevelId: level.id })
+    } catch (thrown) {
+      error = thrown
+    }
+    expect((error as AgentRefusal).code).toBe('materials_unavailable')
+  })
 })
 
 // The compile's bounds are the size of everything a script builds: a door, a window or a column

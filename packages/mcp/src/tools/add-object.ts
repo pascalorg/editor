@@ -56,7 +56,7 @@ export type GeometryScriptHost = {
     code: string
     language: GeometryScriptLanguage
     params?: Record<string, GeometryScriptParamValue>
-    /** What the host builds it for (a room's floor, y = 0 its surface; a wall's face: `floorScriptInputs`, `wallFaceScriptInputs`), kept in the host's frame. */
+    /** What the host builds it for (a room's floor or a slab's top, y = 0 its surface; a wall's face: `floorScriptInputs`, `slabSurfaceScriptInputs`, `wallFaceScriptInputs`), kept in the host's frame. */
     inputs?: Record<string, unknown>
   }): Promise<CompiledGeometryScript & { glb: Uint8Array }>
   storeArtifact(input: {
@@ -312,7 +312,12 @@ export function registerAddObject(
           addObject(
             nodes,
             { ...args, compiled },
-            { activeLevelId: bridge.activeLevelId?.() ?? null },
+            {
+              activeLevelId: bridge.activeLevelId?.() ?? null,
+              ...(bridge.supportsMaterialUpserts && bridge.getMaterials
+                ? { materials: bridge.getMaterials() }
+                : {}),
+            },
           ),
         )
       } catch (error) {

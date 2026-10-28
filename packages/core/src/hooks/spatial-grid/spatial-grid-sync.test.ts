@@ -729,6 +729,45 @@ describe('temporal writes update slab support dependencies', () => {
     }
   })
 
+  test("a slab's surface script laid, rebuilt or removed re-elevates what stands on it", () => {
+    const level = LevelNode.parse({ id: 'level_surface' })
+    const terrace = makeSlab('slab_surface', level.id)
+    const chair = ItemNode.parse({
+      parentId: level.id,
+      position: [2, 0, 2],
+      asset: {
+        id: 'chair',
+        name: 'Chair',
+        category: 'chair',
+        thumbnail: '',
+        src: '/chair.glb',
+        dimensions: [0.2, 1, 0.2],
+      },
+    })
+    const elsewhere = { ...chair, id: 'item_elsewhere', position: [20, 0, 20] } as AnyNode
+    useScene.setState({
+      nodes: nodesFor(level, terrace, chair, elsewhere),
+      dirtyNodes: new Set(),
+      readOnly: false,
+    })
+    stop = initSpatialGridSync()
+    const script = (height: number) => ({
+      manifest: { bounds: { min: [0, 0, 0], max: [4, height, 4] } },
+    })
+    for (const surfaceScript of [script(0.025), script(0.02), undefined]) {
+      useScene.getState().dirtyNodes.clear()
+      const current = useScene.getState().nodes[terrace.id]!
+      useScene.setState({
+        nodes: {
+          ...useScene.getState().nodes,
+          [terrace.id]: { ...current, surfaceScript } as AnyNode,
+        },
+      })
+      expect(useScene.getState().dirtyNodes.has(chair.id)).toBe(true)
+      expect(useScene.getState().dirtyNodes.has(elsewhere.id)).toBe(false)
+    }
+  })
+
   test('slab reparent and undo mark covering dependents below both parent levels', async () => {
     const levels = [0, 1, 2, 3].map((ordinal) =>
       makeLevel(`level_${ordinal}`, ordinal, 2.5, [

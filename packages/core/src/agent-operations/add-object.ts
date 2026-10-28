@@ -22,12 +22,15 @@ import {
   type GeometryScriptParamValue,
   generateId,
   ItemNode,
+  type SceneMaterial,
+  type SceneMaterialId,
   type SlabNode,
   type WallFace,
 } from '../schema'
 import { achievedChanges } from './achieved'
 import { targetLevel } from './level-target'
 import { roofLevelRefusal } from './roof-writes'
+import { exactColorMaterial, exactScriptSlots } from './scene-materials'
 import { queryNodes } from './scene-queries'
 import type { AgentOperation, BatchedObject, SceneNodes } from './types'
 
@@ -43,6 +46,8 @@ export type AddObjectInput = {
   /** Degrees about Y, as the contract parses it. */
   rotation?: number
   side?: 'front' | 'back'
+  /** The module's slot colours as written, not their library matches. */
+  exact?: boolean
   name?: string
   description?: string
   tags?: string[]
@@ -308,6 +313,19 @@ export const addObject: AgentOperation<AddObjectInput> = (nodes, input, context)
   requireMeasured(compiled, { label: input.name, nodeId: input.nodeId, tool: 'add_object' })
   const rotation: Vec3 | undefined =
     input.rotation === undefined ? undefined : [0, (input.rotation * Math.PI) / 180, 0]
+  const createdMaterials: SceneMaterial[] = []
+  const slotsOf = (matched: Record<string, string>) => {
+    if (!input.exact) return matched
+    const materials = { ...context.materials }
+    return exactScriptSlots(compiled.manifest, matched, (hex, surface) => {
+      const resolved = exactColorMaterial(context.materials && materials, hex, surface)
+      if (resolved.created) {
+        materials[resolved.sceneMaterial.id as SceneMaterialId] = resolved.sceneMaterial
+        createdMaterials.push(resolved.sceneMaterial)
+      }
+      return resolved.ref
+    })
+  }
 
   if (input.nodeId) {
     if (nodes[input.nodeId]?.type === 'column')
@@ -331,10 +349,8 @@ export const addObject: AgentOperation<AddObjectInput> = (nodes, input, context)
       rotation: rotation ?? previous.rotation,
       ...(input.side === undefined ? {} : { side: input.side }),
       source: scriptSource(compiled, itemSourceMeta(input), previous.source),
-      slots: matchScriptSlotsToLibrary(
-        compiled.manifest,
-        previous.slots,
-        previous.source?.manifest,
+      slots: slotsOf(
+        matchScriptSlotsToLibrary(compiled.manifest, previous.slots, previous.source?.manifest),
       ),
       asset: scriptAsset(compiled, input, previous.asset),
       ...(input.reason ? { metadata: { ...previous.metadata, reason: input.reason } } : {}),
@@ -358,6 +374,7 @@ export const addObject: AgentOperation<AddObjectInput> = (nodes, input, context)
           { id: next.id, data: next },
           ...resettled.map(({ id, position }) => ({ id, data: { position } })),
         ],
+        ...(createdMaterials.length ? { materials: createdMaterials } : {}),
       },
     }
   }
@@ -399,7 +416,7 @@ export const addObject: AgentOperation<AddObjectInput> = (nodes, input, context)
       0,
     ],
     source: scriptSource(compiled, itemSourceMeta(input)),
-    slots: matchScriptSlotsToLibrary(compiled.manifest),
+    slots: slotsOf(matchScriptSlotsToLibrary(compiled.manifest)),
     asset,
     metadata: { reason: input.reason, ...(input.role ? { role: input.role } : {}) },
   })
@@ -413,7 +430,10 @@ export const addObject: AgentOperation<AddObjectInput> = (nodes, input, context)
     .join(' ')
   return {
     result: { ...summary(node, compiled, []), ...(hint ? { hint } : {}) },
-    changes: { create: [{ node, parentId: parent.id }] },
+    changes: {
+      create: [{ node, parentId: parent.id }],
+      ...(createdMaterials.length ? { materials: createdMaterials } : {}),
+    },
   }
 }
 
@@ -653,17 +673,21 @@ export function scriptedFieldRefusal(node: AnyNode, data: Record<string, unknown
   return `${node.id} is built from a script, so ${fields.join(', ')} ${fields.length === 1 ? 'comes' : 'come'} from it: rebuild it with ${tool} with nodeId and params (get_source shows them); nothing was changed.`
 }
 
-/** What `get_source` reads: a scripted node, a room's floor script, or a wall face's script. */
+/**
+ * What `get_source` reads: a scripted node, a room's floor script, a slab's surface script, or a
+ * wall face's script.
+ */
 export type ScriptReadable = Pick<ScriptedNode, 'name' | 'source'> & {
   id: string
-  type: ScriptedNode['type'] | 'zone' | 'wall'
+  type: ScriptedNode['type'] | 'zone' | 'slab' | 'wall'
   /** The wall face whose script it is. */
   face?: WallFace
 }
 
 /**
  * The script `get_source` reads at `nodeId`: an authored object's, a room's floor script by its
- * zone id, or a wall's face script (`face`, which a wall with one scripted face may leave out).
+ * zone id, a slab's surface script by its slab id, or a wall's face script (`face`, which a wall
+ * with one scripted face may leave out).
  */
 export function readableScript(
   nodes: Record<string, AnyNode>,
@@ -696,6 +720,11 @@ export function readableScript(
         },
       )
     return { id: node.id, type: 'wall', name: node.name, source, face: read }
+  }
+  if (node?.type === 'slab') {
+    if (!node.surfaceScript)
+      refuse('not_authored', `${node.name || nodeId} has no surface script.`, { id: nodeId })
+    return { id: node.id, type: 'slab', name: node.name, source: node.surfaceScript }
   }
   if (node?.type !== 'zone') return authoredObject(nodes, nodeId)
   if (!node.floor?.script)

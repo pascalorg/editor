@@ -620,6 +620,63 @@ export default function build({ THREE }) {
     })
   })
 
+  test("writes a terrace's surface script and a column built by its module, in its exact colours", async () => {
+    const level = payload.levels[0]!
+    const post = `export default function build({ THREE }) {
+  const m = new THREE.MeshStandardMaterial({ color: '#6b4a2f', roughness: 0.8 }); m.name = 'slot_timber'
+  const p = new THREE.Mesh(new THREE.BoxGeometry(0.2, 2.6, 0.2), m)
+  p.position.y = 1.3
+  return p
+}`
+    const design = {
+      ...payload,
+      levels: [
+        {
+          ...level,
+          items: [],
+          lights: [],
+          slabs: [
+            {
+              name: 'Terrace',
+              polygon: [
+                [3, -2],
+                [6, -2],
+                [6, 2],
+                [3, 2],
+              ],
+              top: 0.3,
+              thickness: 0.3,
+              surfaceCode: BOARDS,
+            },
+          ],
+          columns: [{ position: [4.5, 0], width: 0.2, height: 2.6, code: post }],
+        },
+      ],
+    }
+    const response = await client.callTool({ name: 'author_scene', arguments: { payload: design } })
+    const report = response.structuredContent as {
+      floorScripts: number
+      defects: unknown[]
+      ids: Record<string, string>
+    }
+    expect(report.defects).toEqual([])
+    expect(report.floorScripts).toBe(1)
+    const read = async (id: string) => {
+      const got = await client.callTool({ name: 'get_node', arguments: { id } })
+      return JSON.parse((got.content as { text: string }[])[0]!.text).node as Record<string, any>
+    }
+    const slab = await read(report.ids['slab/0/0']!)
+    expect(slab.surfaceScript.language).toBe('three')
+    // Built for the slab's own outline, cut to it.
+    const { min, max } = slab.surfaceScript.manifest.bounds
+    expect(max[0] - min[0]).toBeCloseTo(3, 2)
+    expect(max[2] - min[2]).toBeCloseTo(4, 2)
+    const column = await read(report.ids['column/0/0']!)
+    expect(column.source.manifest.slots.map((s: { id: string }) => s.id)).toEqual(['timber'])
+    expect(column.height).toBeCloseTo(2.6, 6)
+    expect(column.slots.timber).toMatch(/^scene:/)
+  })
+
   test('a floor module that leaves a strip bare is written, with a warning that says how much and where', async () => {
     const level = payload.levels[0]!
     const design = {

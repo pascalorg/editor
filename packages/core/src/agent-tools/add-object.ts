@@ -16,7 +16,7 @@ One object is one feature that changes together: a table, a bench, a porch, a ra
 
 Conventions (they make the object work in Pascal; follow them):
 - Metres, Y up, modelled in its installed orientation. Floor and wall mounts put the bottom-centre of the visible bounds at the placement point. Ceiling mounts put the top-centre there: visible geometry extends down in negative local Y, with its top at Y = 0. Wall-side mounts put the bottom-centre of the back face there (back at Z = 0, facing +Z). Normalization translates geometry; it does not flip it.
-- Paint: name every material slot_<finish> (slot_trim, slot_frame, slot_metal) and reuse one material per finish; a material named "glass" renders as glass.
+- Paint: name every material slot_<finish> (slot_trim, slot_frame, slot_metal) and reuse one material per finish; a material named "glass" renders as glass. A slot's colour is shown as the library finish it matches (wood, metal, the nearest flat colour); exact: true keeps each colour as written.
 - Parts: name the few groups a person would point at part:<id> (part:column_left, part:canopy, part:landing), usually 2–24, a group per part, not every mesh. Set userData.type on parts someone would look for: column, beam, slab, roof, railing, panel, trim, step, light.
 - Lights: add a THREE.PointLight or SpotLight named light:<id> where the bulb is; it becomes a switchable light.
 - Motion: put THREE.AnimationClips on the returned group's .animations, as in any three.js project; tracks target <objectName>.<property> or <object.uuid>.<property> and may use any transform property (position, rotation, rotation[y], quaternion, scale); material and visibility tracks do not animate. A clip named open becomes the object's open/close control (close plays a clip named close, or open reversed); a clip named loop runs continuously; every other clip gets its own play toggle labelled with its name (name it for the person: "Twirl", "Music"). Write as many clips as the object needs.
@@ -129,6 +129,12 @@ export const addObjectTool = {
       .enum(['front', 'back'])
       .optional()
       .describe('Which wall face a wall-side object sits on.'),
+    exact: z
+      .boolean()
+      .optional()
+      .describe(
+        "Keep the module's slot colours exactly as written, with their roughness and metalness, instead of the library finishes they match (glass stays glass, a glowing slot its own material). On an edit, the module's colours replace the slots' paint.",
+      ),
     ...geometryMetaFields,
     name: geometryMetaFields.name.describe('What the user would call it ("Low oak table").'),
     category: geometryMetaFields.category.describe(
@@ -149,10 +155,10 @@ export const getSourceTool = {
   name: 'get_source',
   title: 'Read object script',
   description:
-    "The module (three.js or Blender bpy, named by language) an object (or a window, door or column built from code) runs, with its params and their current values; a room's id reads its floor script, the module that builds its floor finish; a wall's id with face reads that face's script (face may be left out when only one face has one). Optional source evidence when the current module is needed. An edited module can be passed back with the same nodeId: to add_object for an object, to add_window / add_door / add_column for their respective kinds.",
+    "The module (three.js or Blender bpy, named by language) an object (or a window, door or column built from code) runs, with its params and their current values; a room's id reads its floor script, the module that builds its floor finish; a slab's id reads its surface script, the module that builds its top's finish; a wall's id with face reads that face's script (face may be left out when only one face has one). Optional source evidence when the current module is needed. An edited module can be passed back with the same nodeId: to add_object for an object, to add_window / add_door / add_column for their respective kinds.",
   input: {
     nodeId: NodeId.describe(
-      'An object, window, door or column built from code, a room with a floor script, or a wall with a face script.',
+      'An object, window, door or column built from code, a room with a floor script, a slab with a surface script, or a wall with a face script.',
     ),
     face: z
       .enum(['a', 'b'])

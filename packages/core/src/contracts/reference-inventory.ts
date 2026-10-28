@@ -91,13 +91,21 @@ const MATERIAL_FIELDS = [
   'wallMaterial',
 ] as const
 
+/** A `MaterialSchema.texture`'s maps, each an asset URL. */
+const TEXTURE_MAPS = ['url', 'normalMap', 'bumpMap'] as const
+
+const textureRows = (material: string) =>
+  TEXTURE_MAPS.map((map) =>
+    row({
+      kind: '*',
+      path: `${material}.texture.${map}`,
+      ...policy('asset', 'content', 'freeze', 'keep'),
+      note: 'Texture by URL; a dangling URL renders the material without that map.',
+    }),
+  )
+
 const materialRows = MATERIAL_FIELDS.flatMap((field) => [
-  row({
-    kind: '*',
-    path: `${field}.texture.url`,
-    ...policy('asset', 'content', 'freeze', 'keep'),
-    note: 'Texture by URL; a dangling URL renders the untextured material.',
-  }),
+  ...textureRows(field),
   row({
     kind: '*',
     path: `${field}Preset`,
@@ -602,13 +610,8 @@ export const EXISTING_REFERENCES: readonly ExistingReference[] = [
     note: 'Library material; `#rrggbb` values are literal colours.',
   }),
   ...materialRows,
-  ...(['legacyFaceMaterials.a', 'legacyFaceMaterials.b', 'foundation'] as const).map((prefix) =>
-    row({
-      kind: '*',
-      path: `${prefix}.material.texture.url`,
-      ...policy('asset', 'content', 'freeze', 'keep'),
-      note: 'Texture by URL; a dangling URL renders the untextured material.',
-    }),
+  ...(['legacyFaceMaterials.a', 'legacyFaceMaterials.b', 'foundation'] as const).flatMap((prefix) =>
+    textureRows(`${prefix}.material`),
   ),
   ...(['legacyFaceMaterials.a', 'legacyFaceMaterials.b'] as const).map((prefix) =>
     row({
@@ -754,7 +757,8 @@ export const NON_REFERENCES: readonly { kind: string; path: string; reason: stri
   },
   { kind: 'procedural-item', path: 'parameters.@key', reason: 'Recipe parameter name.' },
   // Scripted nodes (an authored item, or a window or door built from code) share one `source`;
-  // a room's floor script keeps the same record on its zone, a wall face's script on its wall.
+  // a room's floor script keeps the same record on its zone, a slab's surface script on its slab,
+  // a wall face's script on its wall.
   ...(
     [
       ['item', 'source'],
@@ -762,6 +766,7 @@ export const NON_REFERENCES: readonly { kind: string; path: string; reason: stri
       ['door', 'source'],
       ['column', 'source'],
       ['zone', 'floor.script'],
+      ['slab', 'surfaceScript'],
       ['wall', 'finishScripts.a'],
       ['wall', 'finishScripts.b'],
     ] as const

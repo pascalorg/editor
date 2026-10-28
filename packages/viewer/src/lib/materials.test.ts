@@ -2,7 +2,7 @@
 // depend on @types/bun so the import type is unresolved at compile time.
 import { describe, expect, test } from 'bun:test'
 import { MaterialProperties, type MaterialSchema } from '@pascal-app/core'
-import { MeshPhysicalMaterial, MeshStandardMaterial } from 'three'
+import { MeshPhysicalMaterial, MeshStandardMaterial, NoColorSpace, SRGBColorSpace } from 'three'
 import { MeshLambertNodeMaterial, MeshStandardNodeMaterial } from 'three/webgpu'
 import {
   createMaterial as createSceneMaterial,
@@ -41,6 +41,58 @@ describe('legacy texture repeat values', () => {
     expect(getTextureKey(materialWithRepeat({ x: 2, y: 3 }))).not.toBe(
       getTextureKey(materialWithRepeat({ x: 4, y: 5 })),
     )
+  })
+})
+
+describe('native texture placement', () => {
+  const placed = (offset: [number, number]): MaterialSchema => ({
+    texture: {
+      url: 'https://example.com/tile.png',
+      repeat: [2, 2],
+      offset,
+      normalMap: 'https://example.com/tile-normal.png',
+      normalScale: 0.5,
+      bumpMap: 'https://example.com/tile-height.png',
+    },
+  })
+
+  // TextureLoader creates an <img>; no request is made in this runtime.
+  function withImageStub<T>(run: () => T): T {
+    const previous = globalThis.document
+    globalThis.document = {
+      createElementNS: () => ({ addEventListener() {}, removeEventListener() {} }),
+    } as unknown as Document
+    try {
+      return run()
+    } finally {
+      globalThis.document = previous
+    }
+  }
+
+  test('offset, normal and bump maps share the albedo placement; maps stay linear', () => {
+    const material = withImageStub(() =>
+      createMaterial(placed([0.25, 0.5]), 'rendered'),
+    ) as MeshStandardNodeMaterial
+    for (const map of [material.map, material.normalMap, material.bumpMap]) {
+      expect(map?.offset.toArray()).toEqual([0.25, 0.5])
+      expect(map?.repeat.toArray()).toEqual([2, 2])
+    }
+    expect(material.map?.colorSpace).toBe(SRGBColorSpace)
+    expect(material.normalMap?.colorSpace).toBe(NoColorSpace)
+    expect(material.bumpMap?.colorSpace).toBe(NoColorSpace)
+    expect(material.normalScale.toArray()).toEqual([0.5, 0.5])
+    expect(material.bumpScale).toBe(1)
+  })
+
+  test('a different offset is a different texture and material', () => {
+    expect(getTextureKey(placed([0, 0]))).not.toBe(getTextureKey(placed([0.5, 0])))
+    const [first, second] = withImageStub(() => [
+      createMaterial(placed([0, 0]), 'rendered') as MeshStandardNodeMaterial,
+      createMaterial(placed([0.5, 0]), 'rendered') as MeshStandardNodeMaterial,
+    ])
+    expect(first).not.toBe(second)
+    expect(first.map).not.toBe(second.map)
+    expect(second.map?.offset.toArray()).toEqual([0.5, 0])
   })
 })
 

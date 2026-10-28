@@ -17,6 +17,7 @@ import {
   authorSceneChecks,
   authorSceneFaceScripts,
   authorSceneFloorScripts,
+  authorSceneSlabScripts,
   finalizeAuthorScene,
   setRoomFloorScript,
   verifyScene,
@@ -1584,6 +1585,35 @@ describe('author_scene', () => {
     expect(authorSceneFloorScripts(bedroom, outcome.result)).toEqual([])
   })
 
+  test('slabs with a surface module are listed by their node for the host to compile', () => {
+    const decking = 'export default function build({ THREE }) { return new THREE.Group() }'
+    const terrace = {
+      polygon: [
+        [3, -2],
+        [6, -2],
+        [6, 2],
+        [3, 2],
+      ],
+    }
+    const payload = authorScenePayload.parse({
+      levels: [
+        {
+          name: 'Ground floor',
+          slabs: [{ ...terrace, name: 'Deck', surfaceCode: decking }, terrace],
+        },
+      ],
+    })
+    const outcome = run(payload, {})
+    expect(authorSceneSlabScripts(payload, outcome.result)).toEqual([
+      {
+        slabId: 'slab/0/0',
+        nodeId: outcome.result.ids['slab/0/0']!,
+        name: 'Deck',
+        code: decking,
+      },
+    ])
+  })
+
   test("wall face modules are listed by face; a room's wallCode covers the faces it looks into, a wall's own module over it", () => {
     const tiles = 'export default function build({ THREE }) { return new THREE.Group() }'
     const panels = 'export default function build({ THREE }) { return new THREE.Mesh() }'
@@ -2683,6 +2713,139 @@ describe('author_scene', () => {
       radius: 0.15,
       width: 0.3,
     })
+  })
+
+  test('a column takes its colour exactly on every surface, its rotation, or its own module and its colours', () => {
+    const post: CompiledGeometryScript = {
+      ...bed,
+      manifest: {
+        ...bed.manifest,
+        bounds: { min: [-0.1, 0, -0.15], max: [0.1, 2.6, 0.15] },
+        slots: [{ id: 'timber', color: '#6b4a2f' }],
+      } as unknown as CompiledGeometryScript['manifest'],
+    }
+    const payload = authorScenePayload.parse({
+      levels: [
+        {
+          name: 'Ground floor',
+          columns: [
+            { position: [0, 0], width: 0.3, height: 2.7, color: '#b85c38', rotation: 90 },
+            {
+              position: [2, 0],
+              width: 0.3,
+              height: 2.7,
+              code: 'export default () => {}',
+              color: '#ffffff',
+            },
+          ],
+        },
+      ],
+    })
+    const outcome = run(payload, { 'column/0/1': post }, {})
+    expect(outcome.result.defects).toEqual([])
+    const terracotta = outcome.changes!.materials!.find((m) => m.name === '#b85c38')!
+    const plain = byAuthorId(outcome, 'column/0/0')
+    expect(plain.rotation).toBeCloseTo(Math.PI / 2, 9)
+    expect(Object.keys(plain.slots).sort()).toEqual(['base', 'capital', 'shaft'])
+    for (const ref of Object.values(plain.slots)) expect(ref).toBe(`scene:${terracotta.id}`)
+    const scripted = byAuthorId(outcome, 'column/0/1')
+    expect(scripted.source.manifest.slots).toEqual([{ id: 'timber', color: '#6b4a2f' }])
+    expect([scripted.width, scripted.height, scripted.depth]).toEqual([0.2, 2.6, 0.3])
+    const timber = outcome.changes!.materials!.find((m) => m.name.startsWith('#6b4a2f'))!
+    expect(scripted.slots).toEqual({ timber: `scene:${timber.id}` })
+    expect(outcome.result.defaults).toContain(
+      'column column/0/1: built by its module, which keeps its own colours; color ignored',
+    )
+    // A module that did not compile is a defect, by the column's id.
+    expect(run(payload, {}, {}).result.defects.map((d) => [d.id, d.code])).toEqual([
+      ['column/0/1', 'compile_failed'],
+    ])
+  })
+
+  test("a slab's railing stands on it at its own height and in its own colour", () => {
+    const payload = authorScenePayload.parse({
+      levels: [
+        {
+          name: 'Ground floor',
+          slabs: [
+            {
+              name: 'Deck',
+              polygon: [
+                [0, 0],
+                [4, 0],
+                [4, 3],
+                [0, 3],
+              ],
+              top: 0.6,
+              thickness: 0.3,
+              railing: [{ start: [0, 3], end: [4, 3], height: 0.9, color: '#20262b' }],
+            },
+          ],
+        },
+      ],
+    })
+    const outcome = run(payload, {}, {})
+    expect(outcome.result.defects).toEqual([])
+    const slab = byAuthorId(outcome, 'slab/0/0')
+    expect(slab.railing).toBeUndefined()
+    const fence = nodesOf(outcome).find((n) => n.type === 'fence') as AnyNode & Record<string, any>
+    expect(fence).toMatchObject({ start: [0, 3], end: [4, 3], height: 0.9, supportSlabId: slab.id })
+    const iron = outcome.changes!.materials!.find((m) => m.name === '#20262b')!
+    expect(Object.values(fence.slots).length).toBeGreaterThan(0)
+    for (const ref of Object.values(fence.slots)) expect(ref).toBe(`scene:${iron.id}`)
+  })
+
+  test("a stair takes its railing sides and style, and its flight's, treads' and railings' finishes", () => {
+    const storey = (prefix: string) =>
+      bedroom.levels[0]!.walls!.map((w) => ({ ...w, id: `${prefix}${w.id}`, openings: [] }))
+    const payload = authorScenePayload.parse({
+      levels: [
+        {
+          name: 'Ground floor',
+          walls: storey(''),
+          rooms: [{ name: 'Hall', seed: [0, 0] }],
+          stairs: [
+            {
+              start: [-1.2, -2.3],
+              width: 1,
+              railing: 'right',
+              railingStyle: 'glass',
+              color: '#f4f1ea',
+              treads: 'library:wood-woodplank48',
+              railingColor: '#111111',
+            },
+          ],
+        },
+        {
+          name: 'First floor',
+          elevation: 3,
+          walls: storey('up-'),
+          rooms: [{ name: 'Landing', seed: [0, 0] }],
+        },
+      ],
+    })
+    const outcome = run(payload, {}, {})
+    expect(outcome.result.defects).toEqual([])
+    const stair = byAuthorId(outcome, 'stair/0/0')
+    expect(stair).toMatchObject({ railingMode: 'right', railingStyle: 'glass' })
+    const named = (name: string) =>
+      `scene:${outcome.changes!.materials!.find((m) => m.name === name)!.id}`
+    expect(stair.slots).toMatchObject({
+      body: named('#f4f1ea'),
+      treads: 'library:wood-woodplank48',
+      railing: named('#111111'),
+    })
+    // No railing: its colour has nothing to paint, and is said.
+    const bare = authorScenePayload.parse({
+      ...payload,
+      levels: [
+        { ...payload.levels[0]!, stairs: [{ ...payload.levels[0]!.stairs![0]!, railing: 'none' }] },
+        payload.levels[1]!,
+      ],
+    })
+    expect(run(bare, {}, {}).result.defaults).toContain(
+      'stair/0/0: it has no railing, its railingColor ignored',
+    )
   })
 })
 

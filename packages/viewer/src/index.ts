@@ -12,6 +12,9 @@ export { ErrorBoundary } from './components/error-boundary'
 // `@pascal-app/nodes/<kind>/renderer.tsx` and are loaded by the registry
 // — no per-kind re-exports needed.
 export { NodeRenderer } from './components/renderers/node-renderer'
+// The generic renderer of a kind that ships `def.geometry`, for a kind's renderer that draws
+// something beside its built group.
+export { ParametricNodeRenderer } from './components/renderers/parametric-node-renderer'
 export {
   default as Viewer,
   pendingSceneBuildCount,

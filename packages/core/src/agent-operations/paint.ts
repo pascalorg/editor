@@ -1,4 +1,5 @@
 import { refuse } from '../agent-tools/refusal'
+import { slabSurfaceScriptPaintRefusal } from '../lib/floor-plate-paint'
 import { wallFaceScriptPaintRefusal } from '../lib/wall-face-script'
 import type { MaterialSurface } from '../material-kinds'
 import { GLAZED_ROOF_SLOTS, nodeSlotDeclarations } from '../node-slots'
@@ -20,14 +21,15 @@ import { buildWallFinishLayout, getWallLevelZones } from '../systems/wall/wall-f
 import { planWallPaint } from '../systems/wall/wall-paint-plan'
 import { roomFaceCover } from '../systems/wall/wall-room-sides'
 import { finishSurface, requireMaterialRef } from './material-refs'
-import { resolveInlinePaintMaterial } from './scene-materials'
+import { exactColorMaterial, resolveInlinePaintMaterial } from './scene-materials'
 import type { AgentContext, AgentOperation, SceneNodes } from './types'
 
 /**
  * `paint`: a finish in one call, as the editor's Paint gives it. Through patches an agent once took
  * five tries to paint a pier grey: `material: {color}` was stored as `{}`, `materialPreset: null`
  * was refused and an unknown preset fell back to grey. A colour is the nearest of the library's
- * flat colours, said with how near; a native material is kept as a scene material. Slots are
+ * flat colours, said with how near, or kept as given with exact; a native material is kept as a
+ * scene material. Slots are
  * written as the editor's slot paint writes them, a wall's faces through its paint plan, a roof's
  * role through its role field, on the roof: a roof shows one finish per surface, so a segment's
  * finish goes on its roof.
@@ -39,6 +41,7 @@ type PaintInput = {
   color?: string
   material?: string | MaterialSchema
   materialName?: string
+  exact?: boolean
   erase?: true
 }
 
@@ -92,7 +95,13 @@ function finishOf(
     )
   if (input.materialName !== undefined && typeof input.material !== 'object')
     refuse('invalid_material_name', 'materialName names a native material only.')
+  if (input.exact && !input.color)
+    refuse('invalid_exact', 'exact keeps a color as given: give color.')
   if (input.erase) return { ref: undefined }
+  if (input.color && input.exact) {
+    const { ref, sceneMaterial, created } = exactColorMaterial(context.materials, input.color)
+    return { ref, sceneMaterial, created }
+  }
   if (input.color) {
     const match = nearestLibraryColorRef(input.color)
     if (!match) refuse('invalid_color', `${input.color} is no colour: give #rrggbb.`)
@@ -376,6 +385,12 @@ export const paint: AgentOperation<PaintInput> = (nodes, input, context) => {
           keptParts.push(`${id} ${face}: ${parts.map((region) => region.id).join(', ')}`)
         continue
       }
+      const scripted = slabSurfaceScriptPaintRefusal(target, role)
+      if (scripted)
+        refuse('surface_built_by_script', `${scripted.message} Nothing was painted.`, {
+          target: id,
+          role,
+        })
       const next = { ...((target as AnyNode & { slots?: Record<string, string> }).slots ?? {}) }
       if (ref) next[role] = ref
       else delete next[role]

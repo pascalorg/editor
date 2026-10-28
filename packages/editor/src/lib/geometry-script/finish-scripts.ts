@@ -17,9 +17,9 @@ import {
 import { compileGeometryScriptInWorker } from './client'
 
 /**
- * Runs a finish script (a room's floor, a wall's face) in the sandbox for what it finishes and
- * stores the GLB and the module text, answering the compile with the stored hashes
- * (`setRoomFloorScript` and `setWallFaceScript` take it with its `inputs`).
+ * Runs a finish script (a room's floor, a slab's surface, a wall's face) in the sandbox for what it
+ * finishes and stores the GLB and the module text, answering the compile with the stored hashes
+ * (`setRoomFloorScript`, `setSlabSurfaceScript` and `setWallFaceScript` take it with its `inputs`).
  */
 export async function compileAndStoreFinishScript(
   input: FinishScriptTarget & {
@@ -65,10 +65,10 @@ const SETTLE_MS = 150
 
 /**
  * Keeps every finish script built for what it finishes: after a scene change settles, each script
- * whose room's floor the structure re-derived, or whose wall face changed, runs again in the
- * sandbox. The new build is written outside history, as the reconcile's derived writes are, and
- * only while its floor or face is still the one it was built for; undo brings back the room or
- * wall and the script built for it together.
+ * whose room's floor the structure re-derived, whose slab was reshaped, or whose wall face changed,
+ * runs again in the sandbox. The new build is written outside history, as the reconcile's derived
+ * writes are, and only while its floor or face is still the one it was built for; undo brings back
+ * the room, slab or wall and the script built for it together.
  */
 export function initFinishScriptRefresh(): () => void {
   let timer: ReturnType<typeof setTimeout> | null = null

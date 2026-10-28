@@ -10,7 +10,7 @@ import {
   type PascalI18n,
   useLocale,
 } from '@pascal-app/core'
-import { setRoomFloorScript } from '@pascal-app/core/agent-operations'
+import { type SceneChanges, setRoomFloorScript } from '@pascal-app/core/agent-operations'
 import { useViewer } from '@pascal-app/viewer'
 import { Check, ChevronDown, Plus } from 'lucide-react'
 import { type KeyboardEvent, useEffect, useId, useMemo, useRef, useState } from 'react'
@@ -279,19 +279,41 @@ export function RoomUnitRow({ zoneId }: { zoneId: string }) {
   )
 }
 
-/**
- * "Scripted finish": a floor a script builds (it owns the floor's colours, so Paint leaves it),
- * with its code to read and a way to take it off, back to the floor's own finish.
- */
+/** The room's floor a script builds, with its code to read and a way to take it off. */
 function RoomFloorScriptRow({ zoneId }: { zoneId: string }) {
-  const i18n = usePascalI18n()
   const sha = useScene((scene) => {
     const zone = scene.nodes[zoneId as AnyNodeId]
     return zone?.type === 'zone' ? zone.floor?.script?.script : undefined
   })
+  if (!sha) return null
+  return (
+    <ScriptedFinishRow
+      data-room-floor-script={zoneId}
+      remove={() =>
+        setRoomFloorScript(
+          useScene.getState().nodes,
+          { zoneId, remove: true },
+          { activeLevelId: null },
+        ).changes
+      }
+      sha={sha}
+    />
+  )
+}
+
+/**
+ * "Scripted finish": a floor a script builds (a room's floor, a slab's surface; it owns the floor's
+ * colours, so Paint leaves it), with its code to read and a way to take it off, back to the floor's
+ * own finish: `remove` answers the removal's changes, applied as one undo step.
+ */
+export function ScriptedFinishRow({
+  sha,
+  remove,
+  ...attributes
+}: { sha: string; remove: () => SceneChanges | undefined } & Record<`data-${string}`, string>) {
+  const i18n = usePascalI18n()
   const [code, setCode] = useState<{ sha: string; text: string } | null>(null)
   const [open, setOpen] = useState(false)
-  if (!sha) return null
   const unreadable = i18n._({
     id: 'editor.panels.scriptUnreadable',
     message: 'The script could not be read.',
@@ -304,19 +326,15 @@ function RoomFloorScriptRow({ zoneId }: { zoneId: string }) {
       () => setCode({ sha, text: unreadable }),
     )
   }
-  const remove = () => {
-    const { changes } = setRoomFloorScript(
-      useScene.getState().nodes,
-      { zoneId, remove: true },
-      { activeLevelId: null },
-    )
+  const removeScript = () => {
+    const changes = remove()
     runAsSingleSceneHistoryStep(useScene, () => {
       for (const { id, data } of changes?.update ?? [])
         useScene.getState().updateNode(id as AnyNodeId, data)
     })
   }
   return (
-    <div className="mt-3 flex flex-col gap-2" data-room-floor-script={zoneId}>
+    <div className="mt-3 flex flex-col gap-2" {...attributes}>
       <div className="flex min-h-8 items-center justify-between gap-3">
         <span className="text-muted-foreground text-xs">{i18n._({ id: 'editor.panels.roomPanel.scriptedFinish', message: 'Scripted finish' })}</span>
         <div className="flex items-center gap-1.5">
@@ -329,7 +347,7 @@ function RoomFloorScriptRow({ zoneId }: { zoneId: string }) {
           </button>
           <button
             className="rounded-full border border-border/50 px-2.5 py-0.5 text-xs transition-colors hover:bg-accent"
-            onClick={remove}
+            onClick={removeScript}
             type="button"
           >
             {i18n._({ id: 'editor.panels.roomPanel.remove', message: 'Remove' })}

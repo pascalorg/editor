@@ -1,4 +1,4 @@
-import { floorScriptInputs, wallFaceScriptInputs } from '@pascal-app/core'
+import { floorScriptInputs, slabSurfaceScriptInputs, wallFaceScriptInputs } from '@pascal-app/core'
 import {
   type AgentContext,
   applySceneChanges,
@@ -7,9 +7,11 @@ import {
   authorSceneFaceScripts,
   authorSceneFinishGaps,
   authorSceneFloorScripts,
+  authorSceneSlabScripts,
   finalizeAuthorScene,
   type SceneNodes,
   setRoomFloorScript,
+  setSlabSurfaceScript,
   setWallFaceScript,
 } from '@pascal-app/core/agent-operations'
 import type { AuthorScenePayload } from '@pascal-app/core/agent-tools'
@@ -17,10 +19,12 @@ import type { CompiledGeometryScript } from '@pascal-app/core/schema'
 
 export type AuthorSceneCompile = (input: {
   code: string
-  kind: 'object' | 'window' | 'door' | 'floor' | 'wall-face'
+  kind: 'object' | 'window' | 'door' | 'column' | 'floor' | 'wall-face'
   inputs?: Record<string, unknown>
   nodeId?: string
 }) => Promise<CompiledGeometryScript>
+
+type ModuleKind = 'object' | 'window' | 'door' | 'column'
 
 /** Build and validate a complete candidate before either host changes the live scene. */
 export async function compileAuthorScene(
@@ -34,8 +38,12 @@ export async function compileAuthorScene(
   authorScene(nodes, { ...input, compiled: {}, prepareOnly: true }, context)
   const compiled: Record<string, CompiledGeometryScript> = {}
   const compileErrors: Record<string, string> = {}
-  const modules: { id: string; code: string; kind: 'object' | 'window' | 'door' }[] = []
-  for (const level of input.payload.levels) {
+  const modules: { id: string; code: string; kind: ModuleKind }[] = []
+  input.payload.levels.forEach((level, levelIndex) => {
+    level.columns?.forEach((column, i) => {
+      if (column.code)
+        modules.push({ id: `column/${levelIndex}/${i}`, code: column.code, kind: 'column' })
+    })
     for (const item of level.items ?? [])
       if (item.code) modules.push({ id: item.id, code: item.code, kind: 'object' })
     for (const wall of level.walls ?? [])
@@ -43,7 +51,7 @@ export async function compileAuthorScene(
         if (opening.code && opening.kind !== 'passage')
           modules.push({ id: `${wall.id}/${index}`, code: opening.code, kind: opening.kind })
       })
-  }
+  })
   for (const item of input.payload.roof?.items ?? [])
     if (item.code) modules.push({ id: item.id, code: item.code, kind: 'object' })
   modules.push(
@@ -54,7 +62,7 @@ export async function compileAuthorScene(
   )
   // A module placed at several spots (a piece, every ceiling point) is compiled once.
   const builds = new Map<string, Promise<CompiledGeometryScript>>()
-  const build = (code: string, kind: 'object' | 'window' | 'door') => {
+  const build = (code: string, kind: ModuleKind) => {
     const key = `${kind}\n${code}`
     let pending = builds.get(key)
     if (!pending) {
@@ -106,6 +114,35 @@ export async function compileAuthorScene(
         id: roomId,
         code: 'floor_script_failed',
         message: `${error instanceof Error ? error.message : String(error)} (the room keeps its floor finish)`,
+      })
+    }
+  }
+  for (const { slabId, nodeId, name, code } of authorSceneSlabScripts(
+    input.payload,
+    outcome.result,
+  )) {
+    signal?.throwIfAborted()
+    try {
+      const inputs = slabSurfaceScriptInputs(candidate, nodeId)
+      if (!inputs) throw new Error('The slab has no surface to build on.')
+      const built = await compile({ code, kind: 'floor', nodeId, inputs })
+      candidate = applySceneChanges(
+        candidate,
+        setSlabSurfaceScript(candidate, { slabId: nodeId, compiled: built, inputs }, context)
+          .changes,
+      )
+      outcome.result.floorScripts++
+      const gaps = authorSceneFinishGaps(slabId, built.manifest, {
+        room: name,
+        polygon: inputs.polygon,
+      })
+      if (gaps) outcome.result.warnings.push(gaps)
+    } catch (error) {
+      signal?.throwIfAborted()
+      outcome.result.defects.push({
+        id: slabId,
+        code: 'floor_script_failed',
+        message: `${error instanceof Error ? error.message : String(error)} (the slab keeps its finish)`,
       })
     }
   }

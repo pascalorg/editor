@@ -9,6 +9,7 @@ import {
   usePascalI18n,
   useScene,
 } from '@pascal-app/core'
+import { setSlabSurfaceScript } from '@pascal-app/core/agent-operations'
 import {
   ActionButton,
   ActionGroup,
@@ -16,6 +17,7 @@ import {
   holeEditScope,
   PanelSection,
   PanelWrapper,
+  ScriptedFinishRow,
   SegmentedControl,
   ShapeChoice,
   SliderControl,
@@ -576,6 +578,7 @@ export function SlabPanel() {
           )}
         </div>
       </PanelSection>
+      <SlabSurfaceScriptRow slabId={node.id} />
       <ActionGroup>
         <ActionButton
           icon={<Move className="h-3.5 w-3.5" />}
@@ -584,6 +587,30 @@ export function SlabPanel() {
         />
       </ActionGroup>
     </PanelWrapper>
+  )
+}
+
+/** The slab's surface a script builds, with its code to read and a way to take it off. */
+function SlabSurfaceScriptRow({ slabId }: { slabId: string }) {
+  const sha = useScene((scene) => {
+    const slab = scene.nodes[slabId as AnyNode['id']]
+    return slab?.type === 'slab' ? slab.surfaceScript?.script : undefined
+  })
+  if (!sha) return null
+  return (
+    <div className="border-border/50 border-b px-3 pb-3">
+      <ScriptedFinishRow
+        data-slab-surface-script={slabId}
+        remove={() =>
+          setSlabSurfaceScript(
+            useScene.getState().nodes,
+            { slabId, remove: true },
+            { activeLevelId: null },
+          ).changes
+        }
+        sha={sha}
+      />
+    </div>
   )
 }
 

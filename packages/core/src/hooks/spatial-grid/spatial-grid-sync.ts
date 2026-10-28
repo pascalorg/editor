@@ -427,7 +427,8 @@ export function markSlabChangeDependents(
     next.elevation !== previous.elevation ||
     next.holes !== previous.holes
 
-  if (supportChanged) {
+  // A slab's surface script is the surface what stands on the slab rests on.
+  if (supportChanged || next.surfaceScript !== previous.surfaceScript) {
     markNodesOverlappingSlab(previous, nodes, markDirty, previousNodes)
     markNodesOverlappingSlab(next, nodes, markDirty)
   }
