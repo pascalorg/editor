@@ -65,7 +65,7 @@ const CATALOG_ROOT = process.env.I18N_CATALOG_ROOT
   : join(ROOT, 'packages/editor/src/i18n/locales')
 const GLOSSARY_PATH = join(ROOT, 'i18n/glossary.json')
 const LINGUI_BIN = join(ROOT, 'node_modules/.bin/lingui')
-const TARGET_LOCALES = ['zh-CN', 'fr', 'es', 'ja'] as const
+const TARGET_LOCALES = ['zh-CN', 'fr', 'es', 'ja', 'tr'] as const
 const ALL_LOCALES = ['en', ...TARGET_LOCALES] as const
 /** Generated from English for layout and coverage testing; never shipped as a language. */
 export const PSEUDO_LOCALE = 'en-XA'
