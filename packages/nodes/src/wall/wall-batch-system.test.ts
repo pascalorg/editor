@@ -11,6 +11,7 @@ import {
   Object3D,
 } from 'three'
 import { revealAllBatchedHolds } from '../shared/node-batch/candidates'
+import { setWallMaterialsResolver } from './materials-resolver'
 import {
   collectTintedWalls,
   collectWallBatchCandidates,
@@ -263,6 +264,29 @@ describe('WallBatchSystem capture holds', () => {
 test('merged wall batches are stripped from GLB exports', () => {
   const { batch } = setupBatchedLevel()
   expect(batch.userData.pascalExport).toBe('strip')
+})
+
+test('a host resolver swap re-sews a batched level from the new materials', () => {
+  const { batch, root, walls } = setupBatchedLevel()
+  const restyled = new MeshBasicMaterial()
+  try {
+    // The swap re-renders each wall's cutout with the new set; the merged mesh
+    // still holds the old one until the level is sewn again.
+    setWallMaterialsResolver(viewerExports.getMaterialsForWall)
+    for (const wall of walls) wall.material = [restyled]
+    nowMs = 200
+    runFrame()
+    nowMs = 381
+    runFrame()
+
+    const sewn = root.children.find((child) => child.name === 'wall-batch') as Mesh | undefined
+    expect(sewn).toBeDefined()
+    expect(sewn).not.toBe(batch)
+    expect([sewn!.material].flat()).toContain(restyled)
+  } finally {
+    setWallMaterialsResolver(null)
+    restyled.dispose()
+  }
 })
 
 test('wall batches keep waiting for pending neighbours even after the dirty census is clean', () => {
