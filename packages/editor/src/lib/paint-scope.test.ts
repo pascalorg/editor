@@ -790,3 +790,55 @@ describe('generated floor plates: scopes per surface', () => {
     expect(paintScopeRole(manual, 'surface', 'room')).toBe('surface')
   })
 })
+
+describe('a surface that declares its own scopes', () => {
+  it('offers its scopes and labels and paints the role it names for the scope', () => {
+    const kind = 'paint-surface-scope-test'
+    if (!nodeRegistry.has(kind))
+      registerNode({
+        kind,
+        schemaVersion: 1,
+        schema: z.object({ type: z.literal(kind) }) as never,
+        category: 'structure',
+        defaults: () => ({}),
+        capabilities: {
+          paint: {
+            resolveRole: () => null,
+            buildPatch: () => ({}),
+            applyPreview: () => null,
+            roleLabel: (_node: AnyNode, role: string) => (role === 'end:1' ? 'This end' : null),
+            scopes: (_node: AnyNode, role: string) =>
+              role === 'end:1'
+                ? {
+                    scopes: ['single', 'matching'],
+                    labels: { matching: 'Every end' },
+                    roleFor: (scope: PaintScope) => (scope === 'matching' ? 'ends:all' : role),
+                  }
+                : null,
+          },
+        },
+        floorplanScope: 'level',
+        renderer: { kind: 'parametric', module: async () => ({ default: () => null }) },
+      } as unknown as AnyNodeDefinition)
+    const node = { id: 'scoped_1', type: kind } as unknown as AnyNode
+    const hover = paintHoverInfo(node, 'end:1', [])
+    expect(hover.scopes).toEqual(['single', 'matching'])
+    expect(paintScopeLabel('single', hover)).toBe('This end')
+    expect(paintScopeLabel('matching', hover)).toBe('Every end')
+    const targets = (scope: PaintScope) =>
+      resolvePaintScopeTargets({
+        node,
+        role: 'end:1',
+        scope,
+        nodes: { scoped_1: node },
+        spaces: {},
+        slotRolesOf: () => [],
+      }).map((target) => `${target.nodeId}:${target.role}`)
+    expect(targets('single')).toEqual(['scoped_1:end:1'])
+    expect(targets('matching')).toEqual(['scoped_1:ends:all'])
+    // a scope the surface does not offer paints the surface alone
+    expect(targets('room')).toEqual(['scoped_1:end:1'])
+    // other roles of the kind keep the derived set
+    expect(availablePaintScopes({ node, slotRoles: [], role: 'side' })).toEqual(['single'])
+  })
+})

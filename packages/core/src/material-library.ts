@@ -2166,6 +2166,41 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     },
   },
   {
+    // The default interior wall paint (`DEFAULT_INTERIOR_WALL_PAINT`): Light grey's
+    // colour under its own name. Listed after it, so a nearest-colour snap still
+    // lands on Light grey.
+    id: 'preset-seattlegrey',
+    label: 'Seattle grey',
+    category: 'colors',
+    description: 'Cool light grey interior wall paint',
+    previewColor: '#d8d6d1',
+    preset: {
+      maps: {},
+      mapProperties: {
+        color: '#d8d6d1',
+        roughness: 0.9,
+        metalness: 0,
+        repeatX: 1,
+        repeatY: 1,
+        rotation: 0,
+        wrapS: 'Repeat',
+        wrapT: 'Repeat',
+        normalScaleX: 1,
+        normalScaleY: 1,
+        emissiveIntensity: 1,
+        displacementScale: 0.02,
+        transparent: false,
+        flipY: true,
+        bumpScale: 1,
+        emissiveColor: '#000000',
+        aoMapIntensity: 1,
+        side: 0,
+        opacity: 1,
+        lightMapIntensity: 1,
+      },
+    },
+  },
+  {
     id: 'preset-greige',
     label: 'Greige',
     category: 'colors',
@@ -4248,12 +4283,14 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
    * board-and-batten — so imported exterior walls could be color-true only as
    * flat paint. One white seamless albedo per profile,
    * tinted per entry via mapProperties.color (same mechanism the flat color
-   * presets use), keeps this to two textures for twelve finishes.
+   * presets use), keeps this to two textures for every finish. Painted wood /
+   * fiber-cement and vinyl differ by sheen (roughness). The `siding` category
+   * keeps them apart from wood flooring; ids are stable scene references.
    */
   {
     id: 'siding-lap-white',
     label: 'Lap siding — white',
-    category: 'wood',
+    category: 'siding',
     surfaces: ['wall', 'outdoor'],
     description: 'Exterior clapboard lap siding, painted white',
     previewColor: '#e9e9e9',
@@ -4288,7 +4325,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
   {
     id: 'siding-lap-greige',
     label: 'Lap siding — greige',
-    category: 'wood',
+    category: 'siding',
     surfaces: ['wall', 'outdoor'],
     description: 'Exterior clapboard lap siding, painted greige',
     previewColor: '#c8c1b8',
@@ -4323,7 +4360,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
   {
     id: 'siding-lap-gray',
     label: 'Lap siding — gray',
-    category: 'wood',
+    category: 'siding',
     surfaces: ['wall', 'outdoor'],
     description: 'Exterior clapboard lap siding, painted gray',
     previewColor: '#8b8a86',
@@ -4358,7 +4395,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
   {
     id: 'siding-lap-sage',
     label: 'Lap siding — sage',
-    category: 'wood',
+    category: 'siding',
     surfaces: ['wall', 'outdoor'],
     description: 'Exterior clapboard lap siding, painted sage',
     previewColor: '#bcc5b2',
@@ -4393,7 +4430,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
   {
     id: 'siding-lap-cedar',
     label: 'Lap siding — cedar',
-    category: 'wood',
+    category: 'siding',
     surfaces: ['wall', 'outdoor'],
     description: 'Exterior clapboard lap siding, stained cedar',
     previewColor: '#b5825a',
@@ -4428,7 +4465,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
   {
     id: 'siding-lap-forest',
     label: 'Lap siding — forest',
-    category: 'wood',
+    category: 'siding',
     surfaces: ['wall', 'outdoor'],
     description: 'Exterior clapboard lap siding, painted forest',
     previewColor: '#4f6b57',
@@ -4463,7 +4500,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
   {
     id: 'siding-lap-navy',
     label: 'Lap siding — navy',
-    category: 'wood',
+    category: 'siding',
     surfaces: ['wall', 'outdoor'],
     description: 'Exterior clapboard lap siding, painted navy',
     previewColor: '#2f4865',
@@ -4498,7 +4535,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
   {
     id: 'siding-lap-yellow',
     label: 'Lap siding — yellow',
-    category: 'wood',
+    category: 'siding',
     surfaces: ['wall', 'outdoor'],
     description: 'Exterior clapboard lap siding, painted yellow',
     previewColor: '#f2e3b3',
@@ -4533,7 +4570,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
   {
     id: 'siding-lap-nearblack',
     label: 'Lap siding — nearblack',
-    category: 'wood',
+    category: 'siding',
     surfaces: ['wall', 'outdoor'],
     description: 'Exterior clapboard lap siding, painted nearblack',
     previewColor: '#232322',
@@ -4568,7 +4605,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
   {
     id: 'siding-lap-clay',
     label: 'Lap siding — clay',
-    category: 'wood',
+    category: 'siding',
     surfaces: ['wall', 'outdoor'],
     description: 'Exterior clapboard lap siding, painted clay',
     previewColor: '#8f4a2e',
@@ -4603,7 +4640,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
   {
     id: 'siding-batten-cream',
     label: 'Board & batten — cream',
-    category: 'wood',
+    category: 'siding',
     surfaces: ['wall', 'outdoor'],
     description: 'Exterior board-and-batten siding, painted cream',
     previewColor: '#efe3cc',
@@ -4638,7 +4675,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
   {
     id: 'siding-batten-sand',
     label: 'Board & batten — sand',
-    category: 'wood',
+    category: 'siding',
     surfaces: ['wall', 'outdoor'],
     description: 'Exterior board-and-batten siding, painted sand',
     previewColor: '#ddccae',
@@ -4673,7 +4710,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
   {
     id: 'siding-batten-charcoal',
     label: 'Board & batten — charcoal',
-    category: 'wood',
+    category: 'siding',
     surfaces: ['wall', 'outdoor'],
     description: 'Exterior board-and-batten siding, painted charcoal',
     previewColor: '#4e5257',
@@ -4708,7 +4745,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
   {
     id: 'siding-batten-olive',
     label: 'Board & batten — olive',
-    category: 'wood',
+    category: 'siding',
     surfaces: ['wall', 'outdoor'],
     description: 'Exterior board-and-batten siding, painted olive',
     previewColor: '#8d9368',
@@ -4719,6 +4756,146 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
       mapProperties: {
         color: '#8d9368',
         roughness: 0.85,
+        metalness: 0,
+        repeatX: 1,
+        repeatY: 1,
+        rotation: 0,
+        wrapS: 'Repeat',
+        wrapT: 'Repeat',
+        normalScaleX: 1,
+        normalScaleY: 1,
+        emissiveIntensity: 1,
+        displacementScale: 0.02,
+        bumpScale: 1,
+        transparent: false,
+        flipY: true,
+        emissiveColor: '#000000',
+        aoMapIntensity: 1,
+        side: 0,
+        opacity: 1,
+        lightMapIntensity: 1,
+      },
+    },
+  },
+  {
+    id: 'siding-vinyl-white',
+    label: 'Vinyl lap siding — white',
+    category: 'siding',
+    surfaces: ['wall', 'outdoor'],
+    description: 'Exterior vinyl lap siding, white, with a low sheen',
+    previewColor: '#ecebe6',
+    preset: {
+      maps: {
+        albedoMap: '/material/siding/lap_albedo_512.webp',
+      },
+      mapProperties: {
+        color: '#ecebe6',
+        roughness: 0.55,
+        metalness: 0,
+        repeatX: 1,
+        repeatY: 1,
+        rotation: 0,
+        wrapS: 'Repeat',
+        wrapT: 'Repeat',
+        normalScaleX: 1,
+        normalScaleY: 1,
+        emissiveIntensity: 1,
+        displacementScale: 0.02,
+        bumpScale: 1,
+        transparent: false,
+        flipY: true,
+        emissiveColor: '#000000',
+        aoMapIntensity: 1,
+        side: 0,
+        opacity: 1,
+        lightMapIntensity: 1,
+      },
+    },
+  },
+  {
+    id: 'siding-vinyl-almond',
+    label: 'Vinyl lap siding — almond',
+    category: 'siding',
+    surfaces: ['wall', 'outdoor'],
+    description: 'Exterior vinyl lap siding, almond, with a low sheen',
+    previewColor: '#ddd2bd',
+    preset: {
+      maps: {
+        albedoMap: '/material/siding/lap_albedo_512.webp',
+      },
+      mapProperties: {
+        color: '#ddd2bd',
+        roughness: 0.55,
+        metalness: 0,
+        repeatX: 1,
+        repeatY: 1,
+        rotation: 0,
+        wrapS: 'Repeat',
+        wrapT: 'Repeat',
+        normalScaleX: 1,
+        normalScaleY: 1,
+        emissiveIntensity: 1,
+        displacementScale: 0.02,
+        bumpScale: 1,
+        transparent: false,
+        flipY: true,
+        emissiveColor: '#000000',
+        aoMapIntensity: 1,
+        side: 0,
+        opacity: 1,
+        lightMapIntensity: 1,
+      },
+    },
+  },
+  {
+    id: 'siding-vinyl-gray',
+    label: 'Vinyl lap siding — gray',
+    category: 'siding',
+    surfaces: ['wall', 'outdoor'],
+    description: 'Exterior vinyl lap siding, gray, with a low sheen',
+    previewColor: '#a3a6a4',
+    preset: {
+      maps: {
+        albedoMap: '/material/siding/lap_albedo_512.webp',
+      },
+      mapProperties: {
+        color: '#a3a6a4',
+        roughness: 0.55,
+        metalness: 0,
+        repeatX: 1,
+        repeatY: 1,
+        rotation: 0,
+        wrapS: 'Repeat',
+        wrapT: 'Repeat',
+        normalScaleX: 1,
+        normalScaleY: 1,
+        emissiveIntensity: 1,
+        displacementScale: 0.02,
+        bumpScale: 1,
+        transparent: false,
+        flipY: true,
+        emissiveColor: '#000000',
+        aoMapIntensity: 1,
+        side: 0,
+        opacity: 1,
+        lightMapIntensity: 1,
+      },
+    },
+  },
+  {
+    id: 'siding-vinyl-vertical-white',
+    label: 'Vinyl vertical siding — white',
+    category: 'siding',
+    surfaces: ['wall', 'outdoor'],
+    description: 'Exterior vinyl board-and-batten style vertical siding, white, with a low sheen',
+    previewColor: '#ecebe6',
+    preset: {
+      maps: {
+        albedoMap: '/material/siding/batten_albedo_512.webp',
+      },
+      mapProperties: {
+        color: '#ecebe6',
+        roughness: 0.55,
         metalness: 0,
         repeatX: 1,
         repeatY: 1,
@@ -4795,6 +4972,36 @@ export function getMaterialsForCategory(category: MaterialCategory): MaterialCat
     if (item.category === category && !STATIC_CATALOG_IDS.has(item.id)) items.push(item)
   }
   return items
+}
+
+/** How a catalog material reads as a small flat swatch (a tile, a chip, a cursor badge). */
+export type MaterialSwatch = {
+  color: string
+  imageUrl: string | null
+  /**
+   * The image is a white albedo the colour tints, as the 3D material does
+   * (`mapProperties.color` × map): draw it multiplied over `color`.
+   */
+  tinted: boolean
+}
+
+const BROWSER_IMAGE = /\.(?:webp|png|jpe?g|avif|gif)(?:[?#]|$)/i
+
+/**
+ * A catalog material's swatch: its thumbnail; else its albedo when a browser can
+ * show it, tinted by the material's colour (a siding's lap or batten relief in its
+ * paint colour rather than a flat chip); else its preview colour.
+ */
+export function getMaterialSwatch(item: MaterialCatalogItem): MaterialSwatch {
+  const tint = item.preset.mapProperties.color
+  const color = item.previewColor ?? tint ?? '#f3f4f6'
+  if (item.previewThumbnailUrl) return { color, imageUrl: item.previewThumbnailUrl, tinted: false }
+  const albedo = item.preset.maps.albedoMap
+  if (albedo && BROWSER_IMAGE.test(albedo)) {
+    const tinted = !!tint && tint.toLowerCase() !== '#ffffff'
+    return { color: tinted ? tint : color, imageUrl: albedo, tinted }
+  }
+  return { color, imageUrl: null, tinted: false }
 }
 
 /** A community material's id (`mtl_…`, as the host's database mints them), well formed. */

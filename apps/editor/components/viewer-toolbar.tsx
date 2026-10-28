@@ -12,6 +12,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
   sceneThemeName,
+  useCeilingsSetting,
   useEditor,
   useFloorplanAnnotationVisibility,
   useFloorplanMode,
@@ -35,6 +36,7 @@ import {
   EyeOff,
   Footprints,
   Grid2X2,
+  Layers2,
   Layers3,
   Magnet,
   PenLine,
@@ -382,6 +384,8 @@ const SUBMENU_CONTENT_CLASS = 'min-w-56 rounded-xl border-border/45 bg-popover/9
 function DisplayMenu() {
   const i18n = usePascalI18n()
   const scene = useEditor(visibleScene)
+  const levelId = useViewer((state) => state.selection.levelId)
+  const { shown: showCeilings, setShown: setShowCeilings } = useCeilingsSetting(levelId)
   const showGrid = useViewer((state) => state.showGrid)
   const setShowGrid = useViewer((state) => state.setShowGrid)
   const showMeasurements = useViewer((state) => state.showMeasurements)
@@ -471,6 +475,17 @@ function DisplayMenu() {
                 : i18n._({ id: 'app.viewerToolbar.measurements', message: 'Measurements' })}
             </span>
             {showMeasurements ? (
+              <Eye className="ml-auto h-4 w-4 text-foreground" />
+            ) : (
+              <EyeOff className="ml-auto h-4 w-4 text-muted-foreground" />
+            )}
+          </DropdownMenuItem>
+        ) : null}
+        {scene === '3d' || scene === 'split' ? (
+          <DropdownMenuItem onSelect={(e) => keepOpen(e, () => setShowCeilings(!showCeilings))}>
+            <Layers2 className="h-4 w-4" />
+            <span>Ceilings</span>
+            {showCeilings ? (
               <Eye className="ml-auto h-4 w-4 text-foreground" />
             ) : (
               <EyeOff className="ml-auto h-4 w-4 text-muted-foreground" />

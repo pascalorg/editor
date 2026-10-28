@@ -5,7 +5,12 @@ import { snapContextOf } from '../../../lib/snapping-mode'
 import { cornerHintRows } from '../../../store/use-corner-snap-hint'
 import { TooltipProvider } from '../primitives/tooltip'
 import { ContextualHelperPanel } from './contextual-helper-panel'
-import { mezzanineHints, openingHints, ROOM_DIVIDE_HINTS } from './helper-manager'
+import {
+  mezzanineHints,
+  openingHints,
+  ROOM_DIVIDE_HINTS,
+  toolHintsOwnPlacing,
+} from './helper-manager'
 
 describe('Divide HUD', () => {
   test('uses the wall draft snapping context', () => {
@@ -131,5 +136,36 @@ describe('Cut opening HUD', () => {
     expect(english(openingHints('rectangle'))).toContain('Draw the opening')
     expect(english(openingHints('rectangle'))).not.toContain('Draw the mezzanine')
     expect(english(mezzanineHints('rectangle'))).toContain('Draw the mezzanine')
+  })
+})
+
+// The roof tool holds its draft in a placing scope, so the HUD read "Move roof · Left click: Place"
+// while a click set a footprint corner; the tool's own hints say what the click does.
+describe('a registry tool holding its draft', () => {
+  const placing = (driver: 'registry-tool' | 'move-tool', nodeType = 'roof') => ({
+    kind: 'placing' as const,
+    node: { id: 'roof_draft', type: nodeType } as never,
+    nodeId: 'roof_draft',
+    nodeType,
+    view: '3d' as const,
+    pressDrag: false,
+    driver,
+  })
+
+  test("shows the armed tool's hints", () => {
+    expect(toolHintsOwnPlacing(placing('registry-tool'), 'roof', 3)).toBe(true)
+  })
+
+  test('leaves a move, a catalog placement or a tool with no hints to the move rows', () => {
+    expect(toolHintsOwnPlacing(placing('move-tool'), 'roof', 3)).toBe(false)
+    expect(toolHintsOwnPlacing(placing('registry-tool', 'item'), 'roof', 3)).toBe(false)
+    expect(toolHintsOwnPlacing(placing('registry-tool'), 'roof', 0)).toBe(false)
+    expect(
+      toolHintsOwnPlacing(
+        { kind: 'moving', node: { id: 'r', type: 'roof' } as never, nodeId: 'r', nodeType: 'roof', view: '3d' },
+        'roof',
+        3,
+      ),
+    ).toBe(false)
   })
 })

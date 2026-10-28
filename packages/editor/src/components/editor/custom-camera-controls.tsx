@@ -62,6 +62,7 @@ import {
   orbitFloorMinY,
   overviewEyeY,
 } from '../../lib/orbit-floor-clearance'
+import { orbitNearPlane } from '../../lib/orbit-near-plane'
 import { editorOwnsOneFingerDrag } from '../../lib/touch-gesture-priority'
 import { frameViewerCamera } from '../../lib/viewer-selection'
 import { publishCameraPose } from '../../store/camera-pose-store'
@@ -766,8 +767,16 @@ export const CustomCameraControls = ({ paused = false }: { paused?: boolean }) =
   }, [camera, isFirstPersonMode, viewportSize])
 
   const handleCameraUpdate = useCallback(() => {
+    const control = controls.current
+    if (control && isPerspectiveCamera(camera)) {
+      const near = orbitNearPlane(control.distance)
+      if (Math.abs(camera.near - near) > 1e-4) {
+        camera.near = near
+        camera.updateProjectionMatrix()
+      }
+    }
     publishCurrentPose()
-  }, [publishCurrentPose])
+  }, [camera, publishCurrentPose])
 
   useEffect(() => {
     publishInitialCameraPose(publishCurrentPose)
@@ -1054,7 +1063,10 @@ export const CustomCameraControls = ({ paused = false }: { paused?: boolean }) =
       updateNavigationCursor()
     }
 
-    const onWheel = () => {
+    const onWheel = (event: WheelEvent) => {
+      // Zooming in carries on past the closest orbit, the target with it; zooming out stops at
+      // the farthest, or the eye would drift off the site. Seen before the controls' own listener.
+      if (controls.current) controls.current.infinityDolly = event.deltaY < 0
       beginLocalCameraInteraction()
       cameraDraggingLifecycle.scheduleEnd()
     }
@@ -1452,13 +1464,12 @@ export const CustomCameraControls = ({ paused = false }: { paused?: boolean }) =
     }
   }, [cameraDraggingLifecycle])
 
-  // Preset capture mode frames a single subtree (often a 0.3–2m preset),
-  // so the default 2m minDistance prevents the user from getting close
-  // enough to compose a good thumbnail. Relax the clamp to 0.5m while
-  // capturing presets; reset on exit so general editing keeps the looser
-  // navigation guardrails.
+  // The wheel dollies toward the cursor and, at the closest orbit, carries the
+  // target on (infinity dolly), so the eye goes right up to a window's trim
+  // or through a doorway rather than stopping short of the orbit's pivot.
+  // Preset capture frames a single small subtree and orbits it closer still.
   const isPresetCapture = captureMode.mode === 'preset'
-  const minDistance = isPresetCapture ? 0.5 : 2
+  const minDistance = isPresetCapture ? 0.25 : 0.5
   // Over modeled or mapped surroundings (a neighbourhood instead of the
   // horizon disc) the camera may pull back far enough to take it all in.
   const groundReplaced = useSceneGroundReplacement()
@@ -1471,6 +1482,7 @@ export const CustomCameraControls = ({ paused = false }: { paused?: boolean }) =
   return (
     <CameraControls
       azimuthRotateSpeed={ORBIT_ROTATE_SPEED}
+      dollyToCursor
       makeDefault
       maxDistance={maxDistance}
       impl={FloorAwareCameraControls}

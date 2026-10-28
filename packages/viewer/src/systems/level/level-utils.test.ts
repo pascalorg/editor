@@ -46,9 +46,15 @@ describe('resolveLevelVisibility', () => {
     ).toEqual({ visible: false, shadowOnly: false })
   })
 
-  test('the level display hides the levels above the selected one as shadow casters', () => {
+  // A roof hidden to see into the floor below left its shadow, eaves and all, on the model.
+  test("the editor's level display hides the levels above outright, shadows included", () => {
     const base = { hideAbove: true, hasSelectedLevel: true, selectedIndex: 1 }
-    expect(decide({ ...base, index: 2 })).toEqual({ visible: true, shadowOnly: true })
+    expect(decide({ ...base, index: 2 })).toEqual({ visible: false, shadowOnly: false })
+    // the published viewer keeps them casting
+    expect(decide({ ...base, index: 2, hiddenAboveCastShadows: true })).toEqual({
+      visible: true,
+      shadowOnly: true,
+    })
     expect(decide({ ...base, index: 1, isSelected: true })).toEqual({
       visible: true,
       shadowOnly: false,
@@ -85,7 +91,7 @@ describe('resolveLevelVisibility', () => {
 
   test('a level a construction reveal is playing on shows whatever the display hides', () => {
     const above = { hideAbove: true, hasSelectedLevel: true, selectedIndex: 0, index: 1 }
-    expect(decide(above)).toEqual({ visible: true, shadowOnly: true })
+    expect(decide(above)).toEqual({ visible: false, shadowOnly: false })
     expect(decide({ ...above, revealing: true })).toEqual({ visible: true, shadowOnly: false })
     expect(
       decide({

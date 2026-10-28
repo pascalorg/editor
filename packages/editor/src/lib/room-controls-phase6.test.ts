@@ -17,6 +17,7 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { createElement } from 'react'
 import { roomTransformSource } from '../components/editor/room-controls'
+import { commitDimensionValue } from '../components/editor-2d/renderers/floorplan-dimension-edit-overlay'
 import { getRoomSelectionIndex } from '../hooks/use-selected-room'
 import useEditor from '../store/use-editor'
 import useInteractionScope from '../store/use-interaction-scope'
@@ -34,6 +35,7 @@ import {
   roomFloorElevation,
   roomPushHandles,
   runRoomHandleDrag,
+  selectedWallDimensions,
 } from './room-handle-drag'
 import { applyRoomPlan, renameRoom } from './room-structure-commands'
 import {
@@ -374,6 +376,45 @@ describe('room handles (elevation, push/pull)', () => {
     expect(moved.start[0]).toBeCloseTo(7)
     expect(moved.end[0]).toBeCloseTo(7)
     expect(useScene.temporal.getState().pastStates).toHaveLength(1)
+  })
+
+  test('a selected wall shows its room width and outside size, and typing either moves the wall', () => {
+    const east = () =>
+      Object.values(useScene.getState().nodes).find(
+        (n): n is WallNode => n.type === 'wall' && n.start[0] === n.end[0] && n.start[0] > 3,
+      )!
+    const wall = east()
+    const thickness = wall.thickness ?? 0.1
+    const dimensions = selectedWallDimensions(useScene.getState().nodes, wall, 'both')
+    const interior = dimensions.find((d) => d.faces === 'interior')!
+    const exterior = dimensions.find((d) => d.faces === 'exterior')!
+    // The 6 m room between centrelines: face to face inside, outer face to outer face outside.
+    expect(interior.distance).toBeCloseTo(6 - thickness)
+    expect(exterior.distance).toBeCloseTo(6 + thickness)
+    expect(selectedWallDimensions(useScene.getState().nodes, wall, 'interior')).toEqual([interior])
+    expect(selectedWallDimensions(useScene.getState().nodes, wall, 'exterior')).toEqual([exterior])
+
+    // Type 10' ID: the wall moves out until the room is exactly that wide, one undo step.
+    const target = (d: typeof interior) => ({
+      ownerNodeId: wall.id as AnyNodeId,
+      witnessStart: d.from,
+      witnessEnd: d.to,
+      value: d.distance,
+    })
+    expect(commitDimensionValue({ target: target(interior), nextLength: 3.048 })).toEqual({
+      ok: true,
+    })
+    // The west face sits half a thickness inside x = 0; the east centreline half outside its face.
+    expect(east().start[0]).toBeCloseTo(3.048 + thickness)
+    expect(useScene.temporal.getState().pastStates).toHaveLength(1)
+    const after = selectedWallDimensions(useScene.getState().nodes, east(), 'both')
+    expect(after.find((d) => d.faces === 'interior')!.distance).toBeCloseTo(3.048)
+
+    // Type the outside size: the same wall moves so the building reads it.
+    const outside = after.find((d) => d.faces === 'exterior')!
+    expect(commitDimensionValue({ target: target(outside), nextLength: 5 })).toEqual({ ok: true })
+    expect(east().start[0]).toBeCloseTo(5 - thickness)
+    expect(useScene.temporal.getState().pastStates).toHaveLength(2)
   })
 
   test('a partial span splits off and moves only the room-facing piece, openings stay put', () => {

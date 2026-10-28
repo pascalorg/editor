@@ -162,9 +162,9 @@ function chosenStyle(door: DoorNode): DoorStyle | undefined {
 }
 
 /**
- * The door panel's Type row: the type's fields and size, the door kept on the floor, and a style
- * the person chose kept (a modern door made sliding stays modern; a plain one made French takes
- * the French glazing).
+ * The door panel's Type row: the type's fields and size, the door kept on the floor it stands on
+ * (its sill where it was: a garage's slab, the house's floor), and a style the person chose kept
+ * (a modern door made sliding stays modern; a plain one made French takes the French glazing).
  */
 export function doorTypeChange(door: DoorNode, type: DoorType): Partial<DoorNode> {
   const { width, height } = DOOR_TYPE_SIZES[type]
@@ -173,7 +173,7 @@ export function doorTypeChange(door: DoorNode, type: DoorType): Partial<DoorNode
     ...doorTypeFields(type, door),
     width,
     height,
-    position: [door.position[0], height / 2, door.position[2]],
+    position: [door.position[0], door.position[1] - door.height / 2 + height / 2, door.position[2]],
     ...(kept ? doorStyleLook(kept) : {}),
   }
 }

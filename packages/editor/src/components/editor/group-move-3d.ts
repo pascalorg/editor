@@ -27,7 +27,6 @@ import useEditor, {
 import useInteractionScope from '../../store/use-interaction-scope'
 import { useFloorplanGroupDrag } from '../editor-2d/floorplan-group-move'
 import { suppressBoxSelectForPointer } from '../tools/select/box-select-state'
-import { startGroupPickUp } from './group-actions'
 import {
   classifyParticipant,
   collectParticipants,
@@ -46,8 +45,8 @@ import { swallowNextClick } from './handles/use-handle-drag'
 // 3D sibling of the 2D floorplan group move (and successor of the removed
 // group-move gizmo cross): pressing any selected element's body in a
 // multi-selection and dragging past the threshold slides the whole selection
-// on the ground plane; a plain click (no drag) enters the group pick-up,
-// parity with the single-item click-to-move. Shares the group participant
+// on the ground plane; a plain click (no drag) only selects, never picks the
+// group up. Shares the group participant
 // snapshot, welded junctions, snapping entry points, live override previews,
 // and single-undo commit with the 2D session.
 
@@ -70,6 +69,8 @@ export function armGroupMove3d(args: {
   camera: Camera
   raycaster: Raycaster
   domElement: HTMLCanvasElement
+  /** A plain click keeps the selection (the group box) instead of selecting the pressed member. */
+  keepSelectionOnClick?: boolean
 }): boolean {
   const { nodeId, clientX, clientY, pointerId, camera, raycaster, domElement } = args
   const { selectedIds, levelId } = useViewer.getState().selection
@@ -330,14 +331,15 @@ export function armGroupMove3d(args: {
   const onUp = (e: PointerEvent) => {
     if (e.pointerId !== pointerId) return
     if (!session) {
-      // Plain click — enter the group pick-up, parity with the single-item
-      // click-to-move. Eat the click so the selection manager's click
-      // handling doesn't collapse the multi-selection underneath it.
+      // Plain click: no move. On a member the selection manager's click
+      // handling selects it, as a click on any other node would; on the group
+      // box the click is eaten so the selection stays, as in the plan.
       removeListeners()
-      swallowNextClick()
-      useViewer.getState().setInputDragging(true)
-      setTimeout(() => useViewer.getState().setInputDragging(false), 0)
-      startGroupPickUp()
+      if (args.keepSelectionOnClick) {
+        swallowNextClick()
+        useViewer.getState().setInputDragging(true)
+        setTimeout(() => useViewer.getState().setInputDragging(false), 0)
+      }
       return
     }
     swallowNextClick()

@@ -30,4 +30,10 @@ describe("the door panel's Type row", () => {
     const garage = doorTypeChange(door(), 'garage-sectional')
     expect(garage.position).toEqual([1, 1.2, 0])
   })
+
+  test('keeps a door set down on a garage slab on the slab', () => {
+    // Its sill 0.6 m under the house floor (`doorSillFloorOf`): made a sectional door, it stays there.
+    const garage = doorTypeChange(door({ position: [1, 0.45, 0] }), 'garage-sectional')
+    expect(garage.position![1] - garage.height! / 2).toBeCloseTo(-0.6, 9)
+  })
 })

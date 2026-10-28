@@ -21,6 +21,7 @@ import useEditor, { isMagneticSnapActive } from '../store/use-editor'
 import { useFloorplanDraftPreview } from '../store/use-floorplan-draft-preview'
 import { visibleScene } from '../store/view-layout'
 import { sfxEmitter } from './sfx-bus'
+import { getDrawnWallTypes } from './wall-draw-variant'
 
 /**
  * A Polygon room is draft state until it completes: its corners live in
@@ -130,6 +131,7 @@ function planPolygon(
   let last: WallNode | undefined
   const joinRadius = isMagneticSnapActive() ? WALL_JOIN_SNAP_RADIUS : WALL_CONNECT_SNAP_RADIUS
   const wallDefaults = useEditor.getState().toolDefaults.wall ?? {}
+  const wallTypes = getDrawnWallTypes()
   for (let index = 0; index < corners.length - 1; index++) {
     const result = planWallInsertion(virtual, {
       levelId,
@@ -137,6 +139,7 @@ function planPolygon(
       end: corners[index + 1]!,
       joinRadius,
       wallDefaults,
+      wallTypes,
     })
     if (!result.ok) continue
     const draftBefore = [...draftIds].flatMap((id) => {

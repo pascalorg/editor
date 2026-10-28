@@ -2,6 +2,7 @@ import dedent from 'dedent'
 import { z } from 'zod'
 import type { ProceduralItemNode } from '../../procedural-items/node'
 import { BaseNode, nodeType, objectId } from '../base'
+import type { BeamNode } from './beam'
 import type { BlockNode } from './block'
 import type { CeilingNode } from './ceiling'
 import type { ColumnNode } from './column'
@@ -11,6 +12,8 @@ import type { DuctSegmentNode } from './duct-segment'
 import type { DuctTerminalNode } from './duct-terminal'
 import type { FenceNode } from './fence'
 import type { FloorOpeningNode } from './floor-opening'
+import type { FootingNode } from './footing'
+import type { FoundationNode } from './foundation'
 import type { GuideNode } from './guide'
 import type { HvacEquipmentNode } from './hvac-equipment'
 import type { ImportedMeshNode } from './imported-mesh'
@@ -36,8 +39,11 @@ type CoreLevelChildId =
   | WallNode['id']
   | SeparatorNode['id']
   | FloorOpeningNode['id']
+  | FootingNode['id']
+  | FoundationNode['id']
   | FenceNode['id']
   | ColumnNode['id']
+  | BeamNode['id']
   | ConstructionDimensionNode['id']
   | BlockNode['id']
   | StructuralGridNode['id']

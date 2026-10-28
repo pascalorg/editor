@@ -14,6 +14,7 @@ import {
   getRoofMaterialArray,
   isRevealAssembling,
   levelWallCladdingRef,
+  levelWallFaceRef,
   NodeRenderer,
   subscribeRevealAssembling,
   useNodeEvents,
@@ -122,6 +123,8 @@ export const RoofRenderer = ({ node: rawNode }: { node: RoofNode }) => {
 
   // The gable band is clad like the walls below it (their assemblies).
   const wallCladdingRef = useScene((state) => levelWallCladdingRef(state.nodes, node))
+  // The heel band, under the eaves, is wall: it shows what the walls below show outside.
+  const wallFaceRef = useScene((state) => levelWallFaceRef(state.nodes, node))
   const sceneMaterials = useScene((state) => state.materials)
   const customMaterial = useMemo(
     () =>
@@ -133,8 +136,18 @@ export const RoofRenderer = ({ node: rawNode }: { node: RoofNode }) => {
         sceneTheme,
         wallCladdingRef,
         sceneMaterials,
+        wallFaceRef,
       ),
-    [node, shading, textures, colorPreset, sceneTheme, wallCladdingRef, sceneMaterials],
+    [
+      node,
+      shading,
+      textures,
+      colorPreset,
+      sceneTheme,
+      wallCladdingRef,
+      sceneMaterials,
+      wallFaceRef,
+    ],
   )
 
   const material = debugColors

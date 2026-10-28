@@ -7,6 +7,7 @@ import {
   coveredBelowGradeFootprints,
   groundPitFloorY,
   intersection,
+  isExcavation,
   type SiteNode,
   sightTriangle,
   siteFrontEdge,
@@ -57,6 +58,7 @@ import {
   vec2,
 } from 'three/tsl'
 import { MeshLambertNodeMaterial } from 'three/webgpu'
+import { FoundationViewShell } from './foundation-view-shell'
 import { GenericFoundation } from './generic-foundation'
 import {
   GroundHole,
@@ -68,6 +70,7 @@ import {
   GroundVeil,
   gradeRingGeometry,
   gradeRingMaterial,
+  groundSheer,
   groundVeilMaterial,
   horizonVeilMaterial,
   noopRaycast,
@@ -87,7 +90,7 @@ import {
   updateDrapedHeights,
 } from './terrain-drape'
 import { HORIZON_PLANE_Y, terrainBlockBase } from './terrain-geometry'
-import { TerrainRenderer } from './terrain-renderer'
+import { TerrainRenderer, useGradingPads } from './terrain-renderer'
 
 const Y_OFFSET = 0.01
 
@@ -255,6 +258,9 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
     state.hideLevelsAboveSelection ? state.selection.levelId : null,
   )
   const belowGrade = useViewer((state) => state.belowGrade)
+  const framingOnly = useViewer((state) => state.framingOnly)
+  const foundationView = useViewer((state) => state.foundationView)
+  const walkthroughMode = useViewer((state) => state.walkthroughMode)
   const groundMode = useViewer((state) => state.groundMode)
   const buriedCache = useRef<{
     all: [number, number][][]
@@ -423,15 +429,22 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
   // the level shown does the rest as it does. The one case it closes: the level display has the
   // storeys away over a level below grade and the person keeps the ground Solid, nothing covers
   // it then and Solid asks for solid ground. Clipped to the lot, as a hole past its line breaks
-  // the triangulation.
+  // the triangulation. A basement's dig (its walls' outside faces, `designedBasement`) is open the
+  // same way, so the ground meets its walls as it lies and never shows inside them.
   const coverOpen = !(belowGrade && groundMode === 'solid')
+  const pads = useGradingPads()
+  const dug = useMemo(
+    () => pads.filter(isExcavation).map((pad) => pad.outline as [number, number][]),
+    [pads],
+  )
   const holes = useMemo(() => {
-    if (!coverOpen || buried.covered.length === 0 || !polygonPoints || polygonPoints.length < 3)
+    const open = [...buried.covered, ...dug]
+    if (!coverOpen || open.length === 0 || !polygonPoints || polygonPoints.length < 3)
       return slabPolygons
-    const inLot = intersection(union(buried.covered), polygonPoints as [number, number][])
+    const inLot = intersection(union(open), polygonPoints as [number, number][])
     const covered = inLot.filter((piece) => piece.holes.length === 0).map((piece) => piece.outer)
     return covered.length > 0 ? [...slabPolygons, ...covered] : slabPolygons
-  }, [coverOpen, buried.covered, polygonPoints, slabPolygons])
+  }, [coverOpen, buried.covered, dug, polygonPoints, slabPolygons])
 
   const gradeRings = useMemo(
     () => buried.shown.map((outline) => gradeRingGeometry(outline, persistedField)),
@@ -688,8 +701,11 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
   // backdrop rather than part of the parcel, so `visible` does not hide it.
   // `showGround` hides both ground and horizon when authored geometry supplies them, unless a level
   // below grade is shown: the level display hides that geometry then, and the ground stands in.
+  // Framing only and the foundation view keep only their veils, so the foundation shows under grade
+  // against it.
   const showSiteSurfaces = node.visible !== false
   const showGround = siteGroundShown(node, { belowGrade })
+  const sheer = groundSheer({ framingOnly, foundationView, walkthroughMode })
 
   if (!(node && lineGeometry)) {
     return null
@@ -699,6 +715,7 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
     <group ref={ref} {...handlers}>
       <GroundWindowSystem />
       <GenericFoundation />
+      <FoundationViewShell />
       <GroundHole
         drawnFloorY={buried.drawnFloorY}
         floorY={buried.floorY}
@@ -719,6 +736,7 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
           holes={holes}
           material={groundMaterial}
           polygon={polygonPoints}
+          sheer={sheer}
           site={node}
           veil={groundVeil}
         />
@@ -727,14 +745,16 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
       {/* Ground fill: site polygon with slab holes, occludes below-grade geometry */}
       {showSiteSurfaces && showGround && groundGeometry && !showTerrain && (
         <>
-          <mesh
-            geometry={groundGeometry}
-            material={groundMaterial}
-            position={GROUND_FILL_POSITION}
-            receiveShadow
-            rotation={FLAT_ON_THE_GROUND}
-            userData={{ [SITE_GROUND]: 'solid' }}
-          />
+          {!sheer && (
+            <mesh
+              geometry={groundGeometry}
+              material={groundMaterial}
+              position={GROUND_FILL_POSITION}
+              receiveShadow
+              rotation={FLAT_ON_THE_GROUND}
+              userData={{ [SITE_GROUND]: 'solid' }}
+            />
+          )}
           <GroundVeil
             geometry={groundGeometry}
             material={groundVeil}
@@ -745,7 +765,7 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
       )}
 
       {/* Infinite-ground presentation disc fading into the sky at the horizon */}
-      {showGround && !immersiveXR && horizonGeometry && horizonMaterial && fadeBounds && (
+      {showGround && !sheer && !immersiveXR && horizonGeometry && horizonMaterial && fadeBounds && (
         <mesh
           geometry={horizonGeometry}
           material={horizonMaterial}

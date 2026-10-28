@@ -1,7 +1,8 @@
 import { describe, expect, test } from 'bun:test'
 import { type AgentRefusal, isAgentRefusal } from '../agent-tools/refusal'
 import { addDoorTool, addWindowTool } from '../agent-tools/wall-openings'
-import { openingScene, WALL_OPENING_CASES } from './__fixtures__/wall-opening-cases'
+import { type LevelNode, RAILING_GUARD_HEIGHT, railingWallDefaults, WallNode } from '../schema'
+import { OPENING_SCENE, openingScene, WALL_OPENING_CASES } from './__fixtures__/wall-opening-cases'
 import { placedDoorFace, planWallOpening } from './wall-openings'
 
 // Layer 1 of 3: the operation both agent surfaces call. The cases are the spec.
@@ -78,5 +79,48 @@ describe('the face a door placed by hand takes', () => {
   test('the face hovered on a wall that does not know its outside', () => {
     expect(placedDoorFace(wallOf('wall_main'), 'back')).toBe('back')
     expect(placedDoorFace(wallOf('wall_main'), 'front')).toBe('front')
+  })
+})
+
+// Not a shared case: a railing's openings are gaps in its guard.
+describe('an opening on a railing', () => {
+  const railed = () => {
+    const { nodes } = openingScene()
+    const railing = WallNode.parse({
+      id: 'wall_railing',
+      parentId: OPENING_SCENE.levelId,
+      start: [0, 20],
+      end: [4, 20],
+      ...railingWallDefaults(),
+    })
+    const level = nodes[OPENING_SCENE.levelId] as LevelNode
+    return {
+      ...nodes,
+      [railing.id]: railing,
+      [level.id]: { ...level, children: [...level.children, railing.id] },
+    }
+  }
+
+  test('a door is a gap as tall as the guard, standing on the floor, with no casing or threshold', () => {
+    const planned = planWallOpening(railed(), { kind: 'door', wallId: 'wall_railing', t: 0.5 })
+    expect(planned.node).toMatchObject({
+      openingKind: 'opening',
+      height: RAILING_GUARD_HEIGHT,
+      threshold: false,
+      casingFaceA: false,
+      casingFaceB: false,
+    })
+    expect(planned.node.position[1]).toBeCloseTo(RAILING_GUARD_HEIGHT / 2, 6)
+  })
+
+  test('a window is refused: a guard has nothing for it to fill', () => {
+    let error: unknown
+    try {
+      planWallOpening(railed(), { kind: 'window', wallId: 'wall_railing', t: 0.5 })
+    } catch (thrown) {
+      error = thrown
+    }
+    expect(isAgentRefusal(error)).toBe(true)
+    expect((error as AgentRefusal).code).toBe('railing_window')
   })
 })

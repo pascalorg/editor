@@ -14,6 +14,7 @@ import {
   DraftMeasurementLabel,
   EDITOR_LAYER,
   formatLinearMeasurement,
+  getDrawnWallTypes,
   isMagneticSnapActive,
   markToolCancelConsumed,
   NO_RAYCAST,
@@ -26,6 +27,7 @@ import {
   useInteractionScope,
   useLinearDisplay,
   useRegistryToolContext,
+  useWallSegmentDraftThickness,
   useWallSnapIndicator,
 } from '@pascal-app/editor'
 import { getSceneTheme, useViewer } from '@pascal-app/viewer'
@@ -53,7 +55,7 @@ export default function RectangleWallTool() {
     activeLevelId && s.nodes[activeLevelId]?.type === 'level' ? s.nodes[activeLevelId].height : 3,
   )
   const height = typeof defaults?.height === 'number' ? defaults.height : (levelHeight ?? 3)
-  const thickness = typeof defaults?.thickness === 'number' ? defaults.thickness : 0.1
+  const thicknessOf = useWallSegmentDraftThickness(0.1)
   useEffect(() => {
     if (!activeLevelId) return
     setDraft(null)
@@ -69,6 +71,8 @@ export default function RectangleWallTool() {
           (n): n is WallNode => n.type === 'wall' && n.parentId === activeLevelId,
         ),
         magnetic: isMagneticSnapActive(),
+        // A corner aimed into an existing wall's body joins it.
+        captureWallBodies: true,
       })
       useWallSnapIndicator.getState().set(
         result.snap
@@ -143,6 +147,7 @@ export default function RectangleWallTool() {
             preferredSupportSlabId: plane?.supportSlabId,
             constructionHeight: height,
           },
+          getDrawnWallTypes(),
         )
         cancel()
         triggerSFX('sfx:structure-build')
@@ -214,7 +219,7 @@ export default function RectangleWallTool() {
             position={[(a[0] + b[0]) / 2, draft!.y + height / 2, (a[1] + b[1]) / 2]}
             rotation={[0, -Math.atan2(b[1] - a[1], b[0] - a[0]), 0]}
           >
-            <boxGeometry args={[Math.hypot(b[0] - a[0], b[1] - a[1]), height, thickness]} />
+            <boxGeometry args={[Math.hypot(b[0] - a[0], b[1] - a[1]), height, thicknessOf(a, b)]} />
             <meshBasicMaterial
               color={message ? '#ef4444' : '#818cf8'}
               depthTest={false}

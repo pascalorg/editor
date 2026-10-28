@@ -244,9 +244,8 @@ export function snapFenceDraftPoint(args: {
   step?: number
   /**
    * Optional grid-snap function. When provided, replaces the default
-   * local-axis snap — lets the 2D floor-plan keep snapping to the
-   * world XZ grid even when the building is rotated. Wall / fence
-   * endpoint snap precedence is preserved.
+   * local-axis snap (the floor plan passes its building-grid snap, the
+   * same lattice). Wall / fence endpoint snap precedence is preserved.
    */
   gridSnap?: (point: FencePlanPoint) => FencePlanPoint
 }): FencePlanPoint {
@@ -280,9 +279,8 @@ export function snapFenceDraftPoint(args: {
     if (rawTarget) return rawTarget
   }
 
-  // The angle path snaps the distance ALONG the 15° ray — a scalar, the
-  // same in world and local frames — so the `gridSnap` world-grid override
-  // only applies when the angle lock is off.
+  // The angle path snaps the distance ALONG the 15° ray from `start`, so the
+  // `gridSnap` override only applies when the angle lock is off.
   const basePoint: FencePlanPoint =
     start && angleSnap
       ? [...snapPointAlongAngleRay(start, point, DEFAULT_ANGLE_STEP, gridStep)]

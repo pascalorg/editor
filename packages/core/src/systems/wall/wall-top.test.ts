@@ -36,6 +36,11 @@ describe('resolveWallTop', () => {
     expect(resolveWallTop({}, 3, -0.4)).toBe(3)
   })
 
+  test('a railing never follows its storey: its own height, else a 36 in guard, over its base', () => {
+    expect(resolveWallTop({ wallType: 'railing', height: 1.0668 }, 1.0668, 0.2)).toBeCloseTo(1.2668)
+    expect(resolveWallTop({ wallType: 'railing' }, 3, 0.2)).toBeCloseTo(0.2 + 0.9144)
+  })
+
   test('an authored storey-height wall ends at the covering underside, not its support plus height', () => {
     expect(resolveWallTop({ height: 3.6 }, 3.6, 0.05)).toBeCloseTo(3.6)
     expect(resolveWallEffectiveHeight({ height: 3.6 }, 3.6, 0.05)).toBeCloseTo(3.55)

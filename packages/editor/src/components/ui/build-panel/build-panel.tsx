@@ -1,13 +1,41 @@
 'use client'
 
-import { type PascalI18n, usePascalI18n } from '@pascal-app/core'
+import {
+  type MessageDescriptor,
+  type PascalI18n,
+  usePascalI18n,
+  WALL_FINISH_LIBRARY_REF,
+  wallAssemblyCladding,
+  wallCladdingProducts,
+  wallPaintProducts,
+} from '@pascal-app/core'
 import { ChevronRight } from 'lucide-react'
 import { type ComponentPropsWithoutRef, type ReactNode, useEffect, useState } from 'react'
+import { messageWithSlot } from '../../../i18n/message-slot'
+import { armWallLineTool, armWallTypeTool, withToolShortcut } from '../../../lib/tool-shortcuts'
 import { cn } from '../../../lib/utils'
 import {
+  setWallTypeOverride,
+  useWallLineKind,
+  useWallTypeOverridePlacement,
   WALL_DRAW_VARIANTS,
   type WallDrawVariant,
+  type WallLineKind,
 } from '../../../lib/wall-draw-variant'
+import {
+  availableWallType,
+  deleteProjectWallType,
+  resolveWallType,
+  useProjectWallTypes,
+  WALL_LINE_TOOLS,
+  WALL_TYPE_TOOLS,
+  type WallTypePlacement,
+  wallTypeOptions,
+  wallTypePlacementOf,
+} from '../../../lib/wall-type'
+import useEditor from '../../../store/use-editor'
+import { WallFinishPicker, WallTypeActions, WallTypeSelect } from './wall-type-controls'
+import { type WallTypeEditorRequest, WallTypeEditorDialog } from './wall-type-editor-dialog'
 
 /**
  * The Build panel's grouped layout (Rooms / Add to rooms / Outdoor / Advanced),
@@ -213,24 +241,49 @@ export function BuildPanelCaption({ caption, lead }: { caption: string; lead?: s
 }
 
 /**
- * The Rooms group: one large tile per wall drawing variant, and the armed
- * variant's caption. `activeVariant` is null while the wall tool is not armed.
+ * The Rooms group: one large tile per wall drawing variant, then the Exterior
+ * wall and Interior wall tiles (single walls of one type, `WALL_TYPE_TOOLS`), the
+ * Invisible wall tile (`WALL_LINE_TOOLS`), and the armed tile's caption.
+ * `activeVariant` is null while the wall tool is not armed.
  */
 export function BuildPanelRoomsSection({
   activeVariant,
   onHover,
   onSelect,
+  onSelectWallTool,
+  onSelectWallLineTool,
   tileProps,
 }: {
   activeVariant: WallDrawVariant | null
   onHover?: (variant: WallDrawVariant) => void
   onSelect: (variant: WallDrawVariant) => void
+  /**
+   * Arms the Exterior or Interior wall tool the way the host arms its tiles;
+   * absent = as its shortcut does (`armWallTypeTool`).
+   */
+  onSelectWallTool?: (placement: WallTypePlacement) => void
+  /** Arms the Invisible wall (or Railing) tool the way the host arms its tiles; absent = `armWallLineTool`. */
+  onSelectWallLineTool?: (kind: WallLineKind) => void
   /** Extra attributes per tile (e.g. a host's guide-target hook). */
   tileProps?: (variant: WallDrawVariant) => Record<string, string | undefined>
 }) {
   const i18n = usePascalI18n()
-  const active = WALL_DRAW_VARIANTS.find((variant) => variant.id === activeVariant)
+  // Exterior and Interior wall draw the Walls shape with one type: their tile is lit, not Walls.
+  const forced = useWallTypeOverridePlacement()
+  const lineKind = useWallLineKind()
+  const wallTool = activeVariant
+    ? WALL_TYPE_TOOLS.find((tool) => tool.placement === forced)
+    : undefined
+  const lineTool = activeVariant ? WALL_LINE_TOOLS.find((tool) => tool.kind === lineKind) : undefined
+  const litVariant = wallTool || lineTool ? null : activeVariant
+  const active = WALL_DRAW_VARIANTS.find((variant) => variant.id === litVariant)
   const activeMessages = active ? roomVariantMessages(active.id, i18n) : null
+  // The Exterior / Interior wall and line tools draw like Walls: their caption opens with its lead.
+  const toolCaption = wallTool
+    ? wallTypeToolMessages(wallTool.placement, i18n).caption
+    : lineTool
+      ? wallLineToolMessages(lineTool.kind, i18n).caption
+      : null
   return (
     <BuildPanelSection
       hint={i18n._({
@@ -245,12 +298,15 @@ export function BuildPanelRoomsSection({
           const messages = roomVariantMessages(variant.id, i18n)
           return (
             <BuildToolTile
-              active={variant.id === activeVariant}
+              active={variant.id === litVariant}
               data-build-tool={`room-${variant.id}`}
               iconSrc={variant.iconSrc}
               key={variant.id}
               label={messages.label}
-              onClick={() => onSelect(variant.id)}
+              onClick={() => {
+                setWallTypeOverride(null)
+                onSelect(variant.id)
+              }}
               onMouseEnter={() => onHover?.(variant.id)}
               size="lg"
               title={messages.title}
@@ -258,9 +314,48 @@ export function BuildPanelRoomsSection({
             />
           )
         })}
+        {WALL_TYPE_TOOLS.map((tool) => {
+          const messages = wallTypeToolMessages(tool.placement, i18n)
+          return (
+            <BuildToolTile
+              active={wallTool?.placement === tool.placement}
+              data-build-tool={`wall-${tool.placement}`}
+              iconSrc={tool.iconSrc}
+              key={tool.placement}
+              label={messages.label}
+              onClick={() => {
+                if (onSelectWallTool) onSelectWallTool(tool.placement)
+                else armWallTypeTool(tool.placement)
+              }}
+              onMouseEnter={() => onHover?.('walls')}
+              size="lg"
+              title={withToolShortcut(messages.title, tool.shortcut)}
+            />
+          )
+        })}
+        {WALL_LINE_TOOLS.map((tool) => {
+          const messages = wallLineToolMessages(tool.kind, i18n)
+          return (
+            <BuildToolTile
+              active={lineTool?.kind === tool.kind}
+              data-build-tool={`wall-${tool.kind}`}
+              iconSrc={tool.iconSrc}
+              key={tool.kind}
+              label={messages.label}
+              onClick={() => {
+                if (onSelectWallLineTool) onSelectWallLineTool(tool.kind)
+                else armWallLineTool(tool.kind)
+              }}
+              onMouseEnter={() => onHover?.('walls')}
+              size="lg"
+              title={messages.title}
+            />
+          )
+        })}
       </BuildToolGrid>
       <BuildPanelCaption
         caption={
+          toolCaption ??
           activeMessages?.caption ??
           i18n._({
             id: 'editor.buildPanel.rooms.idle',
@@ -268,8 +363,9 @@ export function BuildPanelRoomsSection({
               'Pick a shape to start. Every room brings its own walls, floor and ceiling.',
           })
         }
-        lead={activeMessages?.lead}
+        lead={toolCaption ? roomVariantMessages('walls', i18n).lead : activeMessages?.lead}
       />
+      <BuildPanelWallTypes />
     </BuildPanelSection>
   )
 }
@@ -302,11 +398,12 @@ function roomVariantMessages(variant: WallDrawVariant, i18n: PascalI18n) {
       title: i18n._({ id: 'editor.buildPanel.rooms.walls.title', message: 'Walls' }),
       lead: i18n._({
         id: 'editor.buildPanel.rooms.walls.lead',
-        message: 'Draw one wall at a time.',
+        message: 'Click each corner;',
       }),
       caption: i18n._({
         id: 'editor.buildPanel.rooms.walls.caption',
-        message: '{lead} Close a loop and it becomes a room; leave it open for partitions.',
+        message:
+          '{lead} every wall starts where the last ended. Esc or double-click ends the run; close a loop and it becomes a room.',
         values: { lead: CAPTION_LEAD_MARKER },
       }),
     }
@@ -327,4 +424,251 @@ function roomVariantMessages(variant: WallDrawVariant, i18n: PascalI18n) {
       values: { lead: CAPTION_LEAD_MARKER },
     }),
   }
+}
+
+/**
+ * The Exterior and Interior wall tiles (`WALL_TYPE_TOOLS`): their name, tooltip, and the caption
+ * while one is armed, after the Walls lead.
+ */
+function wallTypeToolMessages(placement: WallTypePlacement, i18n: PascalI18n) {
+  if (placement === 'interior') {
+    return {
+      label: i18n._({ id: 'editor.buildPanel.rooms.interiorWall.label', message: 'Interior wall' }),
+      title: i18n._({
+        id: 'editor.buildPanel.rooms.interiorWall.title',
+        message: 'Interior walls: every wall drawn takes the interior type and paint',
+      }),
+      caption: i18n._({
+        id: 'editor.buildPanel.rooms.interiorWall.caption',
+        message:
+          '{lead} every wall takes the interior type, wherever it lands. Esc or double-click ends the run.',
+        values: { lead: CAPTION_LEAD_MARKER },
+      }),
+    }
+  }
+  return {
+    label: i18n._({ id: 'editor.buildPanel.rooms.exteriorWall.label', message: 'Exterior wall' }),
+    title: i18n._({
+      id: 'editor.buildPanel.rooms.exteriorWall.title',
+      message: 'Exterior walls: every wall drawn takes the exterior type and cladding',
+    }),
+    caption: i18n._({
+      id: 'editor.buildPanel.rooms.exteriorWall.caption',
+      message:
+        '{lead} every wall takes the exterior type, wherever it lands. Esc or double-click ends the run.',
+      values: { lead: CAPTION_LEAD_MARKER },
+    }),
+  }
+}
+
+/**
+ * The Invisible wall and Railing tiles (`WALL_LINE_TOOLS`): their name, tooltip, and the caption
+ * while one is armed, after the Walls lead.
+ */
+function wallLineToolMessages(kind: WallLineKind, i18n: PascalI18n) {
+  if (kind === 'railing') {
+    return {
+      label: i18n._({ id: 'editor.buildPanel.rooms.railing.label', message: 'Railing' }),
+      title: i18n._({
+        id: 'editor.buildPanel.rooms.railing.title',
+        message:
+          'Railings: a 36 in guard drawn like walls, posts at most 6 ft apart. Rooms close on it and it takes openings; style and height in the wall panel.',
+      }),
+      caption: i18n._({
+        id: 'editor.buildPanel.rooms.railing.caption',
+        message:
+          '{lead} every line is a railing: a guard rooms close on, with no studs, siding or footing. Place a door on it for an opening. Esc or double-click ends the run.',
+        values: { lead: CAPTION_LEAD_MARKER },
+      }),
+    }
+  }
+  return {
+    label: i18n._({
+      id: 'editor.buildPanel.rooms.invisibleWall.label',
+      message: 'Invisible wall',
+    }),
+    title: i18n._({
+      id: 'editor.buildPanel.rooms.invisibleWall.title',
+      message:
+        'Invisible walls: divide a room or close off a porch without building a wall. Rooms close on them; they never cut a wall.',
+    }),
+    caption: i18n._({
+      id: 'editor.buildPanel.rooms.invisibleWall.caption',
+      message:
+        '{lead} every line is an invisible wall: rooms close on it, nothing is built. Closed off outside the house, a room becomes a porch. Esc or double-click ends the run.',
+      values: { lead: CAPTION_LEAD_MARKER },
+    }),
+  }
+}
+
+const WALL_TYPE_ROWS: ReadonlyArray<{ placement: WallTypePlacement; label: MessageDescriptor }> = [
+  {
+    placement: 'exterior',
+    label: /* i18n */ { id: 'editor.buildPanel.wallTypes.exterior', message: 'Exterior' },
+  },
+  {
+    placement: 'interior',
+    label: /* i18n */ { id: 'editor.buildPanel.wallTypes.interior', message: 'Interior' },
+  },
+]
+
+/** The cladding picker's name for each kind: what a builder calls the stuff on the wall. */
+const CLADDING_LABEL: Record<string, MessageDescriptor> = {
+  siding: /* i18n */ { id: 'editor.buildPanel.wallTypes.siding', message: 'Siding' },
+  'fiber-cement': /* i18n */ {
+    id: 'editor.buildPanel.wallTypes.fiberCement',
+    message: 'Fiber cement',
+  },
+  stucco: /* i18n */ { id: 'editor.buildPanel.wallTypes.stucco', message: 'Stucco' },
+  brick: /* i18n */ { id: 'editor.buildPanel.wallTypes.brick', message: 'Brick' },
+  stone: /* i18n */ { id: 'editor.buildPanel.wallTypes.stone', message: 'Stone' },
+}
+
+/** A cladding kind the picker has no name for. */
+const CLADDING_FALLBACK_LABEL = /* i18n */ {
+  id: 'editor.buildPanel.wallTypes.cladding',
+  message: 'Cladding',
+}
+
+/**
+ * The wall types Rectangle, Polygon and Walls draw with, picked before drawing
+ * and kept with the editor preferences: the exterior type for the outline and
+ * open runs, the interior type for walls drawn inside a room. Each list holds
+ * the types that build its kind of wall, the project's own among them, and
+ * "New wall type…"; the pencil edits a project type or duplicates any. Beside
+ * them, the finishes new walls get: the exterior type's cladding product and
+ * the paint on every drywall face. While the Exterior or Interior wall tool is
+ * armed only its row shows, as that tool's settings.
+ */
+export function BuildPanelWallTypes() {
+  const i18n = usePascalI18n()
+  const wallTypes = useEditor((state) => state.wallTypes)
+  const wallFinishes = useEditor((state) => state.wallFinishes)
+  const setWallType = useEditor((state) => state.setWallType)
+  const setWallCladding = useEditor((state) => state.setWallCladding)
+  const setWallPaint = useEditor((state) => state.setWallPaint)
+  const projectTypes = useProjectWallTypes()
+  const [editing, setEditing] = useState<WallTypeEditorRequest | null>(null)
+  // Set by the Exterior / Interior wall tools: every wall takes that type.
+  const forced = useWallTypeOverridePlacement()
+  const rows = forced ? WALL_TYPE_ROWS.filter((row) => row.placement === forced) : WALL_TYPE_ROWS
+  return (
+    <div className="mt-2 flex flex-col gap-1.5" data-build-group="wall-types">
+      {rows.map(({ placement, label }) => {
+        const id = availableWallType(wallTypes[placement], placement, projectTypes)
+        const type = resolveWallType(id, projectTypes)
+        const cladding = type ? wallAssemblyCladding(type.assembly) : undefined
+        const claddingProducts = wallCladdingProducts(cladding)
+        return (
+          <div
+            className={cn(
+              'flex flex-col gap-1.5',
+              forced === placement && '-m-1 rounded-xl p-1 ring-1 ring-primary/50',
+            )}
+            data-wall-type-row={placement}
+            key={placement}
+          >
+            <div className="flex gap-1.5">
+              <WallTypeSelect
+                className="flex-1"
+                label={i18n._(label)}
+                onChange={(next) => setWallType(placement, next)}
+                onNew={() => setEditing({ mode: 'new', placement })}
+                options={wallTypeOptions(placement, projectTypes, id)}
+                value={id}
+              />
+              <WallTypeActions
+                label={
+                  type?.label ??
+                  i18n._({ id: 'editor.buildPanel.wallTypes.plainWall', message: 'Plain wall' })
+                }
+                onDelete={type?.project ? () => deleteProjectWallType(id) : undefined}
+                onDuplicate={
+                  type
+                    ? () =>
+                        setEditing({
+                          mode: 'duplicate',
+                          placement,
+                          label: type.label,
+                          assembly: type.assembly,
+                        })
+                    : undefined
+                }
+                onEdit={
+                  type?.project
+                    ? () =>
+                        setEditing({
+                          mode: 'edit',
+                          placement,
+                          id,
+                          label: type.label,
+                          assembly: type.assembly,
+                        })
+                    : undefined
+                }
+              />
+            </div>
+            {placement === 'exterior' && cladding && claddingProducts.length > 0 ? (
+              <WallFinishPicker
+                label={i18n._(CLADDING_LABEL[cladding] ?? CLADDING_FALLBACK_LABEL)}
+                onChange={(ref) => setWallCladding(cladding, ref)}
+                products={claddingProducts}
+                value={wallFinishes.cladding[cladding] ?? WALL_FINISH_LIBRARY_REF[cladding] ?? ''}
+              />
+            ) : null}
+            {placement === 'interior' ? (
+              <WallFinishPicker
+                label={i18n._({
+                  id: 'editor.buildPanel.wallTypes.drywallPaint',
+                  message: 'Drywall paint',
+                })}
+                onChange={setWallPaint}
+                products={wallPaintProducts()}
+                value={wallFinishes.paint}
+              />
+            ) : null}
+          </div>
+        )
+      })}
+      <p className="px-0.5 text-[11px] text-muted-foreground leading-relaxed">
+        {forced
+          ? messageWithSlot(
+              i18n,
+              forced === 'interior'
+                ? /* i18n */ {
+                    id: 'editor.buildPanel.wallTypes.forcedInterior',
+                    message:
+                      '{drawing} Every wall takes the interior type until you pick a shape or leave the tool.',
+                  }
+                : /* i18n */ {
+                    id: 'editor.buildPanel.wallTypes.forcedExterior',
+                    message:
+                      '{drawing} Every wall takes the exterior type until you pick a shape or leave the tool.',
+                  },
+              'drawing',
+              <span className="font-medium text-foreground">
+                {forced === 'interior'
+                  ? i18n._({
+                      id: 'editor.buildPanel.wallTypes.drawingInterior',
+                      message: 'Drawing: Interior walls.',
+                    })
+                  : i18n._({
+                      id: 'editor.buildPanel.wallTypes.drawingExterior',
+                      message: 'Drawing: Exterior walls.',
+                    })}
+              </span>,
+            )
+          : i18n._({
+              id: 'editor.buildPanel.wallTypes.hint',
+              message:
+                'New walls use the exterior type and cladding; walls drawn inside a room use the interior type. Every drywall face gets the paint.',
+            })}
+      </p>
+      <WallTypeEditorDialog
+        onClose={() => setEditing(null)}
+        onSaved={(type) => setWallType(wallTypePlacementOf(type.assembly), type.id)}
+        request={editing}
+      />
+    </div>
+  )
 }

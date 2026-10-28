@@ -7,6 +7,8 @@ import {
   type ChimneyNode,
   type DormerNode,
   type GutterNode,
+  getRoofSegmentDeckReach,
+  getSegmentSlopeFrame,
   isRoofOnStoreyWalls,
   type LevelNode,
   type PascalI18n,
@@ -15,6 +17,7 @@ import {
   type RoofNode,
   type RoofSegmentNode,
   roofLevelAbove,
+  roofTypeHasRakes,
   type SkylightNode,
   type SolarPanelNode,
   type TurbineVentNode,
@@ -221,6 +224,19 @@ export default function RoofPanel() {
     [selectedId],
   )
 
+  // The eaves are each segment's: the roof's sliders set them on all of its segments at once.
+  const handleSegmentsUpdate = useCallback(
+    (patch: (segment: RoofSegmentNode) => Partial<RoofSegmentNode> | null) => {
+      if (!selectedId) return
+      const update = segments.flatMap((segment) => {
+        const data = patch(segment)
+        return data ? [{ id: segment.id as AnyNodeId, data: data as Partial<AnyNode> }] : []
+      })
+      if (update.length > 0) commitSeatedRoofEdit(update, selectedId as AnyNodeId)
+    },
+    [segments, selectedId],
+  )
+
   const handleClose = useCallback(() => {
     setSelection({ selectedIds: [] })
   }, [setSelection])
@@ -294,6 +310,12 @@ export default function RoofPanel() {
 
   if (!(node && node.type === 'roof' && selectedId)) return null
 
+  // Shown as the segment panel shows them: in plan, past the walls' outside faces.
+  const eaveSegment = segments.find((segment) => segment.roofType !== 'barrel')
+  const rakedSegment = segments.find((segment) => roofTypeHasRakes(segment.roofType))
+  const overhangPastWall = (segment: RoofSegmentNode, axis: 'x' | 'z') =>
+    getRoofSegmentDeckReach(segment)[axis] - segment.wallThickness / 2
+
   return (
     <PanelWrapper
       icon="/icons/roof.webp"
@@ -364,6 +386,43 @@ export default function RoofPanel() {
           />
         </ActionGroup>
       </PanelSection>
+
+      {eaveSegment && (
+        <PanelSection title={i18n._({ id: 'node.roof.panel.eaves', message: 'Eaves' })}>
+          <SliderControl
+            label={i18n._({ id: 'node.roof.panel.eaveOverhang', message: 'Eave overhang' })}
+            max={1}
+            min={0}
+            onChange={(v) =>
+              handleSegmentsUpdate((segment) =>
+                segment.roofType === 'barrel'
+                  ? null
+                  : { overhang: v / getSegmentSlopeFrame(segment).cosTheta },
+              )
+            }
+            precision={2}
+            step={0.05}
+            unit="m"
+            value={overhangPastWall(eaveSegment, 'z')}
+          />
+          {rakedSegment && (
+            <SliderControl
+              label={i18n._({ id: 'node.roof.panel.gableOverhang', message: 'Gable overhang' })}
+              max={3}
+              min={0}
+              onChange={(v) =>
+                handleSegmentsUpdate((segment) =>
+                  roofTypeHasRakes(segment.roofType) ? { gableOverhang: v } : null,
+                )
+              }
+              precision={2}
+              step={0.05}
+              unit="m"
+              value={overhangPastWall(rakedSegment, 'x')}
+            />
+          )}
+        </PanelSection>
+      )}
 
       <PanelSection title={i18n._({ id: 'node.roof.panel.position', message: 'Position' })}>
         <SliderControl

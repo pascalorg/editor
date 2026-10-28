@@ -10,6 +10,7 @@ import {
   LevelNode,
   nodeType,
   objectId,
+  railingWallDefaults,
   SiteNode,
   SlabNode,
   WallNode,
@@ -27,6 +28,10 @@ const { footingThickness, footingBelowGrade, stemThickness } = FOUNDATION_STANDA
 
 type Nodes = Record<AnyNodeId, AnyNode>
 const keyed = (nodes: AnyNode[]) => Object.fromEntries(nodes.map((n) => [n.id, n])) as Nodes
+
+// The designed foundation is on unless switched off: these houses switch it off, to stand on the
+// generic one under test.
+const GENERIC = { metadata: { foundation: { enabled: false } } }
 
 /** A 10 × 8 m ring of walls on `level`, 0.1 m thick unless told. */
 function ring(level: string, extra: Partial<WallNode> = {}, thickness = 0.1) {
@@ -60,7 +65,7 @@ function flatHouse({ slab, wallExtra, thickness, terrain }: House = {}) {
   const walls = ring('level_g', wallExtra, thickness)
   return keyed([
     SiteNode.parse({ id: 'site_a', children: ['building_a'], ...(terrain ? { terrain } : {}) }),
-    BuildingNode.parse({ id: 'building_a', parentId: 'site_a', children: ['level_g'] }),
+    BuildingNode.parse({ ...GENERIC, id: 'building_a', parentId: 'site_a', children: ['level_g'] }),
     LevelNode.parse({
       id: 'level_g',
       parentId: 'building_a',
@@ -104,7 +109,7 @@ function houseOverBasement(basementWalls = 4) {
       elevation: 0.2,
     })
   return keyed([
-    BuildingNode.parse({ id: 'building_a', children: ['level_b', 'level_g'] }),
+    BuildingNode.parse({ ...GENERIC, id: 'building_a', children: ['level_b', 'level_g'] }),
     LevelNode.parse({
       id: 'level_b',
       parentId: 'building_a',
@@ -131,7 +136,7 @@ function twoStoreys(groundWalls = 4) {
   const ground = ring('level_g').slice(0, groundWalls)
   const upper = ring('level_u')
   return keyed([
-    BuildingNode.parse({ id: 'building_a', children: ['level_g', 'level_u'] }),
+    BuildingNode.parse({ ...GENERIC, id: 'building_a', children: ['level_g', 'level_u'] }),
     LevelNode.parse({
       id: 'level_g',
       parentId: 'building_a',
@@ -251,6 +256,7 @@ function seatedBasement(slab: Partial<SlabNode> = {}) {
   return keyed([
     SiteNode.parse({ id: 'site_a', children: ['building_a'] }),
     BuildingNode.parse({
+      ...GENERIC,
       id: 'building_a',
       parentId: 'site_a',
       position: [0, -2.697, 0],
@@ -439,7 +445,7 @@ test('a plugin that steps aside from a picture gives the generic foundation back
 
 test('a level with no walls draws nothing, and a hidden wall is not carried', () => {
   const none = keyed([
-    BuildingNode.parse({ id: 'building_a', children: ['level_g'] }),
+    BuildingNode.parse({ ...GENERIC, id: 'building_a', children: ['level_g'] }),
     LevelNode.parse({ id: 'level_g', parentId: 'building_a', level: 0, children: [] }),
   ])
   expect(genericFoundation(none)).toEqual([])
@@ -459,6 +465,59 @@ test('a hidden building carries no foundation', () => {
 test('the answer is worked out once per scene state', () => {
   const nodes = flatHouse()
   expect(genericFoundation(nodes)).toBe(genericFoundation(nodes))
+})
+
+/** `house` with a 3 × 4 m deck off its east wall, fenced by three railings. */
+function withRailedDeck(house: Nodes): Nodes {
+  const corners: Array<[number, number]> = [
+    [10, 2],
+    [13, 2],
+    [13, 6],
+    [10, 6],
+  ]
+  const railings = corners.slice(1).map((end, index) =>
+    WallNode.parse({
+      id: `wall_deck_${index}`,
+      parentId: 'level_g',
+      start: corners[index],
+      end,
+      ...railingWallDefaults(),
+    }),
+  )
+  const level = house['level_g' as AnyNodeId] as LevelNode
+  return keyed([
+    ...Object.values(house),
+    { ...level, children: [...level.children, ...railings.map((wall) => wall.id)] },
+    ...railings,
+  ])
+}
+
+/** The furthest east any member reaches: its run's ends and its slab outline. */
+const eastmost = (members: FoundationMember[]) =>
+  Math.max(
+    ...members.flatMap((member) => [
+      member.from[0],
+      member.to[0],
+      ...(member.outline ?? []).map(([x]) => x),
+    ]),
+  )
+
+test('a railing carries no foundation: a deck it fences adds none, a ring of railings stands on none', () => {
+  const generic = genericFoundation(withRailedDeck(flatHouse()))
+  expect(ofKind(generic, 'footing')).toHaveLength(4)
+  expect(ofKind(generic, 'stem')).toHaveLength(4)
+  expect(eastmost(generic)).toBeLessThan(10.5)
+
+  // The designed foundation (on unless switched off) follows the same outline.
+  const house = flatHouse()
+  const building = house['building_a' as AnyNodeId] as BuildingNode
+  const designed = genericFoundation(
+    withRailedDeck({ ...house, building_a: { ...building, metadata: {} } } as Nodes),
+  )
+  expect(designed.length).toBeGreaterThan(0)
+  expect(eastmost(designed)).toBeLessThan(10.5)
+
+  expect(genericFoundation(flatHouse({ wallExtra: railingWallDefaults() }))).toEqual([])
 })
 
 afterEach(() => nodeRegistry._reset())

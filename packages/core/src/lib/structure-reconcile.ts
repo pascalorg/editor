@@ -15,8 +15,11 @@ import {
   type SceneNodes,
   type StructureEvent,
 } from './structure-kernel'
+import { surfaceIntentZoneIds } from './surface-intent'
 
-export type StructureIdFactory = (kind: 'zone' | 'ceiling' | 'slab' | 'separator') => string
+export type StructureIdFactory = (
+  kind: 'zone' | 'ceiling' | 'slab' | 'separator' | 'column' | 'beam',
+) => string
 export type SceneStructureInput = {
   nodes: SceneNodes
   levelIds?: string[]
@@ -126,6 +129,7 @@ export function reconcileSceneStructure({
     if (draft[levelId]?.type !== 'level') return
     const children = levelChildren(draft, levelId)
     const previousChildren = previousNodes ? levelChildren(previousNodes, levelId) : []
+    const plates = children.filter((node) => node.type === 'slab')
     for (const surface of previousChildren) {
       if (
         (surface.type !== 'ceiling' && surface.type !== 'slab') ||
@@ -133,8 +137,8 @@ export function reconcileSceneStructure({
         draft[surface.id]
       )
         continue
-      const ids = surface.type === 'ceiling' ? [surface.zoneId] : (surface.zoneIds ?? [])
-      for (const id of ids) {
+      // The rooms it was the floor or ceiling of: a porch on a plate of its own keeps its floor.
+      for (const id of surfaceIntentZoneIds(surface, plates)) {
         const zone = id ? draft[id] : undefined
         if (zone?.type === 'zone')
           draft[zone.id] = {

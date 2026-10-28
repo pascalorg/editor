@@ -50,6 +50,9 @@ import { roomFloorPlate } from './room-floor-plate'
  * needs and never runs per frame.
  */
 
+/** What a room on a slab of its own (`floor.foundation: 'slab'`, a garage) shows with no finish of its own. */
+export const SLAB_ROOM_FLOOR_FINISH = 'library:concrete-raw'
+
 /** A zone floor finish: a `MaterialRef` string, or an inline legacy material. */
 export type PlateFinish = string | Record<string, unknown>
 
@@ -224,6 +227,7 @@ function zoneSignature(zones: readonly ZoneNode[]): string {
       zone.polygon,
       zone.holes,
       zone.floor?.finish ?? null,
+      zone.floor?.foundation ?? null,
       zone.floor?.script !== undefined,
       zone.floorStepFinish,
       zone.floorStepOverrides ?? null,
@@ -483,7 +487,9 @@ function partitionTop(
   }
   for (const zone of zones) {
     const clear = clearByZone.get(zone.id)
-    const finish = zone.floor?.finish
+    // A room on a slab of its own (a garage) is bare concrete until a finish is chosen for it.
+    const finish =
+      zone.floor?.finish ?? (zone.floor?.foundation === 'slab' ? SLAB_ROOM_FLOOR_FINISH : undefined)
     // A scripted floor is the room's own cell, so a hit on it names the room its script belongs to.
     if (!clear || (finish === undefined && !zone.floor?.script && !plate.plateRole)) continue
     candidates.push({ role: roomFinishRole(zone.id), finish, polygons: clear })

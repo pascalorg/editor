@@ -1,5 +1,6 @@
 import {
   type AnyNodeId,
+  type DrawnWallTypes,
   planWallRectangle,
   resolveWallConstruction,
   runAsSingleSceneHistoryStep,
@@ -15,10 +16,17 @@ export function createWallRectangle(
   end: WallPlanPoint,
   defaults: Partial<WallNode> = {},
   options?: WallConstructionOptions,
+  wallTypes?: DrawnWallTypes,
 ) {
   const scene = useScene.getState()
   if (scene.readOnly) throw Error('This scene is read-only.')
-  const plan = planWallRectangle(scene.nodes, { levelId, start, end, wallDefaults: defaults })
+  const plan = planWallRectangle(scene.nodes, {
+    levelId,
+    start,
+    end,
+    wallDefaults: defaults,
+    wallTypes,
+  })
   if (!plan.changes.create.length && !plan.changes.update.length && !plan.changes.delete.length)
     return []
   const construction = resolveWallConstruction(scene.nodes, levelId, plan.walls, options)

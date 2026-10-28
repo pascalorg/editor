@@ -27,7 +27,7 @@ const BOX_PAD = 0.06
  * the multi-selection's transformable participants that doubles as the
  * group's whole-volume drag
  * handle — move cursor across it, press-drag anywhere on it slides the group,
- * a plain click picks it up. Holding a selection modifier passes the press
+ * a plain click keeps the selection. Holding a selection modifier passes the press
  * through so members inside can still be toggled. Rides the live drag delta
  * so it tracks the group mid-gesture.
  */
@@ -141,6 +141,7 @@ export function GroupSelectionBox3D() {
       camera,
       raycaster,
       domElement: gl.domElement,
+      keepSelectionOnClick: true,
     })
     // Own the press: deeper hits (members, ground) must not also select.
     if (armed) event.stopPropagation()

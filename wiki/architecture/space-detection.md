@@ -19,6 +19,14 @@ cuts overlapping room ceilings, and keeps wall support unchanged. See
 Deleting an auto plate explicitly writes `hasFloor: false` on its linked zones; removing a
 manual cover allows an eligible room to join a generated plate again.
 
+A host can opt new upper floors into a framed thickness (`newUpperFloorThickness` on
+`initSpaceDetectionSync`; the editor passes `DEFAULT_UPPER_FLOOR_THICKNESS`, about 14 in). A
+base plate the reconciler just created, still at the schema's 0.05 m and standing on rooms
+below, takes that thickness on a level with no floor yet, or its level's existing floor
+thickness otherwise. It is written through `setFloorFoundation` (underside held, the storeys
+above ride up) inside the same edit, so one undo removes both. Agent-authored commits,
+loads, remote and undone scenes are never thickened, so a saved floor keeps its thickness.
+
 A room drawn where walls already enclose one (every polygon edge on a wall) names that room
 instead of stacking a second zone on it (`walledRoomAt`, by the reconciler's adoption
 rule), as long as it still has the "Room N" name the reconciler gave it. `create_room` does the

@@ -13,6 +13,7 @@ import { useViewer } from '@pascal-app/viewer'
 import { type ThreeEvent, useFrame, useThree } from '@react-three/fiber'
 import { useRef, useState } from 'react'
 import { type Group, Plane, Vector2, Vector3 } from 'three'
+import { floorHeldByDesignedFoundation } from '../../lib/building-foundation'
 import {
   beginFootprintHeightPreview,
   footprintHeightMinimum,
@@ -35,7 +36,10 @@ const PILL =
 const NOTICE =
   'pointer-events-none max-w-72 rounded-full border border-border/60 bg-background/95 px-3 py-1 text-center text-muted-foreground text-xs shadow-md backdrop-blur-md'
 
-/** The selected footprint floor (base plate), when it is the one selection in select mode. */
+/**
+ * The selected footprint floor (base plate), when it is the one selection in select mode and its
+ * height is its own.
+ */
 function useSelectedFootprint(): SlabNode | null {
   const selectedId = useViewer((s) =>
     s.selection.selectedIds.length === 1 ? s.selection.selectedIds[0] : null,
@@ -50,7 +54,10 @@ function useSelectedFootprint(): SlabNode | null {
     const node = selectedId ? s.nodes[selectedId as AnyNodeId] : undefined
     return node?.type === 'slab' && node.plateRole === 'base' ? node : null
   })
-  return enabled && idle ? plate : null
+  // The Foundation section's finish floor sets this floor's height: dragging the plate's own would
+  // lift the floor off its seat.
+  const held = useScene((s) => (plate ? floorHeldByDesignedFoundation(s.nodes, plate) : false))
+  return enabled && idle && !held ? plate : null
 }
 
 /**

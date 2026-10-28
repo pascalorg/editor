@@ -127,6 +127,44 @@ describe('wall endpoint floorplan affordance', () => {
     expect((useScene.getState().nodes[lower.id] as typeof lower).start).toEqual([0, 1])
     expect((useScene.getState().nodes[upper.id] as typeof upper).start).toEqual([0, 0])
   })
+
+  test('a wall T-joined on another does not fold onto its line when dragged into its body', () => {
+    // `wall_stem` stands on `wall_host`'s line at [2, 0]; its free end is
+    // dragged down into the host's body, 8 cm off the line.
+    const host = WallNode.parse({
+      id: 'wall_host',
+      parentId: 'level_main',
+      start: [0, 0],
+      end: [4, 0],
+      thickness: 0.2,
+    })
+    const stem = WallNode.parse({
+      id: 'wall_stem',
+      parentId: 'level_main',
+      start: [2, 0],
+      end: [2, 3],
+    })
+    useScene.setState({ nodes: { [host.id]: host, [stem.id]: stem } as never })
+
+    const session = wallMoveEndpointAffordance.start({
+      node: stem,
+      payload: { wallId: stem.id, endpoint: 'end' },
+      nodes: useScene.getState().nodes,
+      initialPlanPoint: [2, 3],
+      gridSnapStep: 0.1,
+    })
+    session.apply({ planPoint: [2.5, 0.08], modifiers })
+
+    // As in 3D, the fixed corner is the segment's start: a segment that runs
+    // alongside the host isn't captured into its body.
+    expect(useLiveNodeOverrides.getState().get(stem.id as AnyNodeId)?.end).toEqual([2.5, 0.08])
+    expect(session.canCommit()).toBe(true)
+    session.commit?.()
+    const committed = useScene.getState().nodes[stem.id] as typeof stem
+    expect(committed.start).toEqual([2, 0])
+    expect(committed.end).toEqual([2.5, 0.08])
+    expect(Object.keys(useScene.getState().nodes).sort()).toEqual(['wall_host', 'wall_stem'])
+  })
 })
 
 describe('wall thickness floorplan affordance', () => {

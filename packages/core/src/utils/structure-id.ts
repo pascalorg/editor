@@ -51,6 +51,10 @@ function remapReferences<T extends object>(value: T, ids: Map<string, string>): 
   // Only newly minted rooms are remapped; pick their colour from the final id before persistence.
   if (fields.type === 'zone' && typeof fields.id === 'string' && ids.has(fields.id))
     changes.color = zoneColorForSeed(ids.get(fields.id)!)
+  // A porch's post or beam names its porch (`lib/porch-framing-sync`).
+  const metadata = fields.metadata as { porchOf?: unknown } | undefined
+  if (typeof metadata?.porchOf === 'string' && ids.has(metadata.porchOf))
+    changes.metadata = { ...metadata, porchOf: ids.get(metadata.porchOf) }
   for (const key of ['children', 'zoneIds', 'members']) {
     const references = fields[key]
     if (Array.isArray(references) && references.some((id) => ids.has(id))) {

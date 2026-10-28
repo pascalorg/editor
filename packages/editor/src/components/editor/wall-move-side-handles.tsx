@@ -70,6 +70,7 @@ import {
   NO_RAYCAST,
   useInvisibleHitAreaMaterial,
 } from './node-arrow-handles'
+import { WallPullGrip } from './wall-pull-grip'
 import { WallPushArrow } from './wall-push-arrow'
 
 const HANDLE_OFFSET = 0.27
@@ -251,6 +252,9 @@ function WallMoveSideHandlesForWall({ wall }: { wall: WallNode }) {
         />
         <WallCornerLeaderHandle endpoint="start" wall={effectiveWall} />
         <WallCornerLeaderHandle endpoint="end" wall={effectiveWall} />
+        {/* Past each end, the grip that pulls the next wall out of it. */}
+        <WallPullGrip endpoint="start" wall={effectiveWall} />
+        <WallPullGrip endpoint="end" wall={effectiveWall} />
       </group>
       <WallBaseElevationHandle
         baseElevation={baseElevation}

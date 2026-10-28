@@ -17,8 +17,9 @@ export const CONTINUATION_PROFILES: Record<
   }
 > = {
   // The wall tool's drawing mode: a chain that closes into a room ('room', the
-  // Build panel's Polygon), one wall per two clicks ('single', Walls), or a
-  // two-corner box of four walls ('rectangle', Rectangle).
+  // Build panel's Polygon), a run of walls committed one by one, each starting
+  // where the last ended ('single', Walls), or a two-corner box of four walls
+  // ('rectangle', Rectangle).
   wall: {
     options: ['room', 'single', 'rectangle'],
     default: 'room',

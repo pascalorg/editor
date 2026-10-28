@@ -12,9 +12,10 @@ import {
   ShortcutToken,
   shortcutDisplayValue,
 } from './../../../../../components/ui/primitives/shortcut-token'
+import { TOOL_SHORTCUT_KEYS } from './../../../../../lib/tool-shortcuts'
 
 type Shortcut = {
-  keys: string[]
+  keys: readonly string[]
   action: string
   note?: string
 }
@@ -31,8 +32,8 @@ const SHORTCUT_CATEGORIES: ShortcutCategory[] = [
       { keys: ['1'], action: 'Switch to Site' },
       { keys: ['2'], action: 'Switch to Building' },
       { keys: ['\\'], action: 'Open or close the split view' },
-      { keys: ['F'], action: 'Open the items catalog with the item tool' },
-      { keys: ['Z'], action: 'Draw a zone' },
+      { keys: TOOL_SHORTCUT_KEYS.item, action: 'Open the items catalog with the item tool' },
+      { keys: TOOL_SHORTCUT_KEYS.zone, action: 'Draw a zone' },
       {
         keys: ['Cmd/Ctrl', 'Arrow Up'],
         action: 'Select next level in the active building',
@@ -47,10 +48,12 @@ const SHORTCUT_CATEGORIES: ShortcutCategory[] = [
   {
     title: 'Modes & History',
     shortcuts: [
-      { keys: ['V'], action: 'Switch to Select mode' },
-      { keys: ['B'], action: 'Switch to Build mode' },
-      { keys: ['M'], action: 'Activate the last measurement tool' },
-      { keys: ['X'], action: 'Switch to Delete mode' },
+      { keys: TOOL_SHORTCUT_KEYS.select, action: 'Switch to Select mode' },
+      { keys: TOOL_SHORTCUT_KEYS.wall, action: 'Switch to Build mode, drawing a rectangle room' },
+      { keys: TOOL_SHORTCUT_KEYS.measurement, action: 'Activate the last measurement tool' },
+      { keys: TOOL_SHORTCUT_KEYS.paint, action: 'Switch to Paint mode' },
+      { keys: TOOL_SHORTCUT_KEYS.terrain, action: 'Sculpt the ground (terrain)' },
+      { keys: TOOL_SHORTCUT_KEYS.delete, action: 'Switch to Delete mode' },
       {
         keys: ['Esc'],
         action: 'Cancel the active tool and return to Select mode',
@@ -60,6 +63,33 @@ const SHORTCUT_CATEGORIES: ShortcutCategory[] = [
       { keys: ['Cmd/Ctrl', 'Z'], action: 'Undo' },
       { keys: ['Cmd/Ctrl', 'Shift', 'Z'], action: 'Redo' },
       { keys: ['Cmd/Ctrl', 'S'], action: 'Save' },
+    ],
+  },
+  {
+    title: 'Build Tools',
+    shortcuts: [
+      {
+        keys: TOOL_SHORTCUT_KEYS['exterior-wall'],
+        action: 'Draw exterior walls',
+        note: 'Draws with the Walls shape, each wall with the exterior wall type picked in the Build panel. E alone still opens or closes the selected door or window.',
+      },
+      {
+        keys: TOOL_SHORTCUT_KEYS['interior-wall'],
+        action: 'Draw interior walls',
+        note: 'Draws with the Walls shape, each wall with the interior wall type picked in the Build panel.',
+      },
+      {
+        keys: TOOL_SHORTCUT_KEYS.door,
+        action: 'Place a door',
+        note: 'D alone pans the view. While placing, the door swings toward the side of the wall the cursor is on; R flips it.',
+      },
+      { keys: TOOL_SHORTCUT_KEYS.window, action: 'Place a window', note: 'W alone pans the view.' },
+      { keys: TOOL_SHORTCUT_KEYS.stair, action: 'Place stairs', note: 'S alone pans the view.' },
+      {
+        keys: TOOL_SHORTCUT_KEYS.roof,
+        action: 'Draw a roof',
+        note: "R alone still rotates or flips the selection, and while placing it stays the placement's own R.",
+      },
     ],
   },
   {
@@ -78,8 +108,7 @@ const SHORTCUT_CATEGORIES: ShortcutCategory[] = [
       {
         keys: ['Cmd/Ctrl', 'V'],
         action: 'Paste and place copied objects',
-        note:
-          'Carries a preview under the cursor. Click to place it, or press Escape to cancel.',
+        note: 'Carries a preview under the cursor. Click to place it, or press Escape to cancel.',
       },
       {
         keys: ['Cmd/Ctrl', 'Left click'],
@@ -92,10 +121,9 @@ const SHORTCUT_CATEGORIES: ShortcutCategory[] = [
         note: 'In the scene graph, Shift-click selects the visible range like a file browser.',
       },
       {
-        keys: ['Left click'],
+        keys: ['Left drag'],
         action: 'Move the whole multi-selection',
-        note:
-          'With 2+ objects selected, in 2D and 3D alike: drag the selection (or its dashed box) to slide it; click it to pick it up and place with the next click.',
+        note: 'With 2+ objects selected, in 2D and 3D alike: drag the selection (or its dashed box) to slide it. A click alone never starts a move; use Move in the action menu to pick it up.',
       },
       {
         keys: ['R', 'T'],
@@ -105,13 +133,22 @@ const SHORTCUT_CATEGORIES: ShortcutCategory[] = [
       {
         keys: ['Cmd/Ctrl', 'G'],
         action: 'Group the multi-selection (session only)',
-        note:
-          'Editor-only. Plain click a member later to reselect the whole group. Not saved with the project.',
+        note: 'Editor-only. Plain click a member later to reselect the whole group. Not saved with the project.',
       },
       {
         keys: ['Cmd/Ctrl', 'Shift', 'G'],
         action: 'Ungroup the session selection',
         note: 'Keeps the current selection; only dissolves the session group.',
+      },
+      {
+        keys: ['Arrow keys'],
+        action: 'Nudge the selected wall 1 in (1 cm in metric)',
+        note: 'In the floor plan. Stops where it lines up with a parallel wall; joined walls follow.',
+      },
+      {
+        keys: ['Tab'],
+        action: 'Select the next object under the pointer',
+        note: 'In the floor plan, for walls that overlap or hide under another. Shift+Tab goes back.',
       },
       {
         keys: ['Esc'],
@@ -177,7 +214,8 @@ const SHORTCUT_CATEGORIES: ShortcutCategory[] = [
       },
       {
         keys: ['E'],
-        action: 'Operate the selected node — doors, windows, and cabinet doors/drawers animate open/closed',
+        action:
+          'Operate the selected node — doors, windows, and cabinet doors/drawers animate open/closed',
       },
       {
         keys: ['Shift'],
@@ -192,7 +230,7 @@ const SHORTCUT_CATEGORIES: ShortcutCategory[] = [
       {
         keys: ['W', 'A', 'S', 'D'],
         action: 'Pan camera',
-        note: 'Moves in screen space, similar to dragging the camera view.',
+        note: 'Moves in screen space, similar to dragging the camera view. With Shift, W, S and D place a window, stairs and a door instead.',
       },
       {
         keys: ['Middle click'],
@@ -208,7 +246,7 @@ const SHORTCUT_CATEGORIES: ShortcutCategory[] = [
   },
 ]
 
-function ShortcutKeys({ keys }: { keys: string[] }) {
+function ShortcutKeys({ keys }: { keys: readonly string[] }) {
   return (
     <div className="flex flex-wrap items-center gap-1">
       {keys.map((key, index) => (

@@ -9,9 +9,9 @@ import { generateRoofSegmentGeometry } from './roof-system'
  * roof segment that covers it, through the viewer's own roof geometry. The planes' geometry is the
  * plane tools' arithmetic: an outline the walls' outside faces grown by the overhangs, a surface
  * rising from each outline edge at the pitch from `eaveHeight − overhang × pitch` there, and a slab
- * the thickness deep, square to the slope. One difference is the segment's own drawing: under its
- * eaves the deck is boxed level 5 cm under its edge (the fascia covers that edge), where a plane's
- * slab kept its slope to the edge, so the depth is compared over the house, 1 m in from its walls.
+ * the thickness deep, square to the slope. One difference is the segment's own drawing: its eaves are
+ * cut and boarded by the plane's eave rule (core's `roofSegmentEaveProfile`), where a plane's slab
+ * kept its slope to the edge, so the depth is compared over the house, 1 m in from its walls.
  */
 
 const COVERING = 3

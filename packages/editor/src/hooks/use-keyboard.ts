@@ -34,12 +34,19 @@ import { isActive } from '../lib/interaction/scope'
 import { paintRegionModeActive } from '../lib/paint-region-mode'
 import { popRoomSelection } from '../lib/room-selection-commands'
 import { copySelectedNodesToEditorClipboard } from '../lib/scene-clipboard'
+import { cycleSelectionAtPointer, trackSelectionCyclePointer } from '../lib/selection-cycle'
 import { sfxEmitter } from '../lib/sfx-bus'
 import { openSidebarPanel } from '../lib/sidebar-panel'
 import { activeSiteNode, clampBrushRadius } from '../lib/terrain-sculpt'
+import {
+  armToolShortcut,
+  subscribeWallTypeOverrideReset,
+  toolShortcutForKey,
+} from '../lib/tool-shortcuts'
 import { isTypingTarget } from '../lib/typing-target'
 import { leaveUnitFocus } from '../lib/units'
 import { selectWallDrawVariant } from '../lib/wall-draw-variant'
+import { isWallNudgeKey, nudgeSelectedWall } from '../lib/wall-nudge'
 import useDeleteConfirmation from '../store/use-delete-confirmation'
 import useEditor, { getActiveContinuationContext, getActiveSnapContext } from '../store/use-editor'
 import useInteractionScope, {
@@ -48,6 +55,14 @@ import useInteractionScope, {
 } from '../store/use-interaction-scope'
 import { groupCurrentSelection, ungroupCurrentSelection } from '../store/use-session-groups'
 import { activeViewLayout } from '../store/view-layout'
+
+const pickKeyFields = (e: KeyboardEvent) => ({
+  code: e.code,
+  shiftKey: e.shiftKey,
+  metaKey: e.metaKey,
+  ctrlKey: e.ctrlKey,
+  altKey: e.altKey,
+})
 
 export function hasSceneKeyboardFocus(): boolean {
   const layout = activeViewLayout(useEditor.getState())
@@ -257,6 +272,8 @@ export const isToolOwnedRotation = () => {
     (editor.tool === 'door' ||
       editor.tool === 'window' ||
       editor.tool === 'roof' ||
+      editor.tool === 'stair' ||
+      editor.tool === 'elevator' ||
       // The item tool is mounted for the build mode, but it only owns R/T
       // when a catalog item is actually selected and a placement draft can
       // exist. Without this check, selecting an existing item in the 2D plan
@@ -312,6 +329,7 @@ export const useKeyboard = ({
     if (disabled) {
       return
     }
+    trackSelectionCyclePointer()
 
     // True while an active placement tool owns R/T. Door/window tools flip the
     // draft, item / lean-to placement rotates its draft, and the roof tool turns
@@ -467,6 +485,19 @@ export const useKeyboard = ({
         }
       }
 
+      // Drafting tools on a key: I, and Shift with D / W / S / R / E where the
+      // bare key pans, rotates or operates (lib/tool-shortcuts). An armed
+      // placement keeps Shift+R as its own R.
+      const toolShortcut = isVersionPreviewMode
+        ? null
+        : toolShortcutForKey({ ...pickKeyFields(e), repeat: false })
+      if (toolShortcut && !(toolShortcut === 'roof' && isToolOwnedRotation())) {
+        e.preventDefault()
+        // A held chord repeats: arm once, and never let a repeat fall through to bare R / E.
+        if (!e.repeat) armToolShortcut(toolShortcut)
+        return
+      }
+
       if (e.key === 'Escape') {
         e.preventDefault()
 
@@ -585,6 +616,31 @@ export const useKeyboard = ({
             }
           }
         }
+      } else if (isWallNudgeKey(e.key) && !e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey) {
+        // Bare arrows nudge a selected wall an inch in the floor plan.
+        const editor = useEditor.getState()
+        if (
+          isVersionPreviewMode ||
+          editor.mode !== 'select' ||
+          useInteractionScope.getState().scope.kind !== 'idle' ||
+          editor.isFirstPersonMode
+        ) {
+          return
+        }
+        if (nudgeSelectedWall(e.key)) e.preventDefault()
+      } else if (e.key === 'Tab' && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        // Tab steps the selection to the next object under the pointer in the
+        // floor plan (Shift+Tab back): a wall hidden under another is reachable.
+        const editor = useEditor.getState()
+        if (
+          isVersionPreviewMode ||
+          editor.mode !== 'select' ||
+          useInteractionScope.getState().scope.kind !== 'idle' ||
+          editor.isFirstPersonMode
+        ) {
+          return
+        }
+        if (cycleSelectionAtPointer(e.shiftKey)) e.preventDefault()
       } else if (
         (e.key === 'r' || e.key === 'R') &&
         !e.metaKey &&
@@ -600,7 +656,7 @@ export const useKeyboard = ({
         // open/close toggle lives on E. Windows still use R to toggle
         // their open/closed state.
         //
-        // Skipped while an item, door, window, or roof placement owns rotation.
+        // Skipped while a placement tool (item, door, window, roof, stair…) owns rotation.
         // The user can still have a node selected during placement; without this
         // guard both the draft and the selection would rotate.
         //
@@ -847,7 +903,9 @@ export const useKeyboard = ({
     window.addEventListener('keydown', handleSessionGroupKeyDown, true)
     window.addEventListener('keydown', handleKeyDown)
     window.addEventListener('keyup', handleKeyUp)
+    const unsubscribeWallTypeOverride = subscribeWallTypeOverrideReset()
     return () => {
+      unsubscribeWallTypeOverride()
       window.removeEventListener('keydown', handleSessionGroupKeyDown, true)
       window.removeEventListener('keydown', handleKeyDown)
       window.removeEventListener('keyup', handleKeyUp)

@@ -7,6 +7,7 @@ import {
   scriptSource,
 } from '../lib/geometry-script-node'
 import { wallSupportForNodes } from '../lib/opening-floor-datum'
+import { doorSillFloorOf } from '../lib/slab-room'
 import {
   type AnyNode,
   type AnyNodeId,
@@ -20,6 +21,7 @@ import {
 } from '../schema'
 import { getCurtainWallConfig } from '../schema/nodes/curtain-wall'
 import type { DoorType, WindowType } from '../schema/nodes/opening-types'
+import { isRailingWall, railingOpeningFields } from '../schema/nodes/railing-wall'
 import { getWallTop } from '../services/storey'
 import { resolveWallExteriorSide } from '../systems/wall/wall-assembly'
 import { getWallCurveLength, isCurvedWall } from '../systems/wall/wall-curve'
@@ -62,17 +64,22 @@ export function resolveWallOpeningCeiling(
 const openingMargin = (wall: WallNode) =>
   wall.wallType === 'curtain' ? getCurtainWallConfig(wall).perimeterWidth : 0
 
-/** A door's centre: slid along the wall to stay on it, standing on the floor. */
+/**
+ * A door's centre: slid along the wall to stay on it, standing on the floor it opens from
+ * (`doorSillFloorOf`: a garage's slab in its walls to the outside, given the scene).
+ */
 export function clampDoorToWall(
   wall: WallNode,
   localX: number,
   width: number,
   height: number,
+  nodes?: Readonly<Record<AnyNodeId, AnyNode>>,
 ): { clampedX: number; clampedY: number } {
   const margin = openingMargin(wall)
   const length = getWallCurveLength(wall)
   const clampedX = Math.max(margin + width / 2, Math.min(length - margin - width / 2, localX))
-  return { clampedX, clampedY: height / 2 }
+  const floor = nodes ? doorSillFloorOf(nodes as Record<AnyNodeId, AnyNode>, wall) : 0
+  return { clampedX, clampedY: floor + height / 2 }
 }
 
 /** A window's centre: slid to stay on the wall, and between the floor and the wall's ceiling. */
@@ -285,6 +292,14 @@ export function planWallOpening(nodes: Nodes, input: WallOpeningInput) {
       `Wall ${wallId} is curved; doors and windows go on straight walls, as in the editor.`,
       { wallId },
     )
+  // A railing's openings are gaps in its guard: a door becomes one, a window has none to fill.
+  if (kind === 'window' && isRailingWall(wall))
+    refuse(
+      'railing_window',
+      `Wall ${wallId} is a railing: it takes a door, which becomes a gap in the guard, not a window.`,
+      { wallId },
+    )
+  const railingGap = kind === 'door' && isRailingWall(wall) ? railingOpeningFields(wall) : null
 
   const { t, position } = input
   if (t !== undefined && position !== undefined && Math.abs(t - position) > 1e-9)
@@ -316,7 +331,7 @@ export function planWallOpening(nodes: Nodes, input: WallOpeningInput) {
   if (compiled) requireMeasured(compiled, { label: `A ${kind}`, tool: `add_${kind}` })
   const [scriptedWidth, scriptedHeight] = compiled ? scriptedSize(compiled.manifest) : []
   const width = scriptedWidth ?? input.width ?? DEFAULTS[kind].width
-  const height = scriptedHeight ?? input.height ?? DEFAULTS[kind].height
+  const height = railingGap?.height ?? scriptedHeight ?? input.height ?? DEFAULTS[kind].height
   const wallLength = lengthOf(wall)
   if (wallLength < width)
     refuse(
@@ -330,13 +345,13 @@ export function planWallOpening(nodes: Nodes, input: WallOpeningInput) {
   // below stands one that is too tall on the floor and reports it clamped.
   const rawY =
     kind === 'door'
-      ? height / 2
+      ? doorSillFloorOf(nodes as Record<AnyNodeId, AnyNode>, wall) + height / 2
       : input.sillHeight === undefined
         ? resolveWallOpeningCeiling(wall, nodes as Record<AnyNodeId, AnyNode>) / 2
         : input.sillHeight + height / 2
   const { clampedX, clampedY } =
     kind === 'door'
-      ? clampDoorToWall(wall, rawX, width, height)
+      ? clampDoorToWall(wall, rawX, width, height, nodes as Record<AnyNodeId, AnyNode>)
       : clampWindowToWall(wall, rawX, rawY, width, height, nodes as Record<AnyNodeId, AnyNode>)
 
   if (!input.force) {
@@ -390,6 +405,7 @@ export function planWallOpening(nodes: Nodes, input: WallOpeningInput) {
           ...(input.style ? doorStyleLook(input.style as DoorStyle) : {}),
           ...(input.doorType ? { doorType: input.doorType } : {}),
           ...(input.openingKind ? { openingKind: input.openingKind } : {}),
+          ...railingGap,
         })
       : WindowNode.parse({
           ...base,

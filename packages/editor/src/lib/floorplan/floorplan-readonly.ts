@@ -1,6 +1,7 @@
 import type { AnyNode, AnyNodeId, FloorplanPalette, GeometryContext } from '@pascal-app/core'
 import {
   createFloorplanContextExtensions,
+  type FloorplanWallDimensionFaces,
   type FloorplanWallDimensionReference,
 } from './floorplan-extension'
 
@@ -15,6 +16,7 @@ export type FloorplanViewState = {
   /** Room labels drawn as screen pills (see `FloorplanContextExtension.roomLabelOverlay`). */
   roomLabelOverlay?: boolean
   wallDimensionReference?: FloorplanWallDimensionReference
+  wallDimensionFaces?: FloorplanWallDimensionFaces
   highlighted: boolean
   hovered: boolean
   moving: boolean
@@ -66,6 +68,7 @@ export function buildFloorplanContext(
       drafting: viewState.drafting === true,
       roomLabelOverlay: viewState.roomLabelOverlay === true,
       wallDimensionReference: viewState.wallDimensionReference,
+      wallDimensionFaces: viewState.wallDimensionFaces,
     }),
     viewState: viewState.palette
       ? {
@@ -88,6 +91,8 @@ export function floorplanLayerRank(type: string): number {
       return 0
     case 'slab':
     case 'ceiling':
+    // Under the footings drawn inside it, which stay pickable over it.
+    case 'foundation':
       return 1
     default:
       return 2

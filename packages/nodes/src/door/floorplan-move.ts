@@ -18,6 +18,7 @@ import {
   usePlacementPreview,
 } from '@pascal-app/editor'
 import { createFloorplanCursorResolver } from '../shared/floorplan-cursor'
+import { movedOpeningCasingFaces } from '../shared/opening-casing-move'
 import { openingPlaneOffsetOnWall } from '../shared/opening-plane-offset'
 import { getOpeningHostLevelId, getRoofHostedOpeningPlanPoint } from '../shared/roof-opening-host'
 import {
@@ -83,6 +84,8 @@ export const doorFloorplanMoveTarget: FloorplanMoveTarget<DoorNode> = ({ node })
     roofSegmentId: undefined
     roofFace: undefined
     visible: true
+    casingFaceA: boolean
+    casingFaceB: boolean
   } | null = null
 
   // R flips the door's facing (front ↔ back) mid-placement. `apply` re-derives
@@ -210,7 +213,14 @@ export const doorFloorplanMoveTarget: FloorplanMoveTarget<DoorNode> = ({ node })
             nodes,
           })
       const snappedLocalX = neighborX ?? snapToHalf(hit.localX)
-      const { clampedX, clampedY } = clampToWall(hit.wall, snappedLocalX, node.width, node.height)
+      // On a garage's wall to the outside the door comes down to its slab (`doorSillFloorOf`).
+      const { clampedX, clampedY } = clampToWall(
+        hit.wall,
+        snappedLocalX,
+        node.width,
+        node.height,
+        nodes,
+      )
 
       // One click per real position step, keyed on the SNAPPED along-wall value
       // so it ticks only when the door actually moves to a new cell.
@@ -219,6 +229,8 @@ export const doorFloorplanMoveTarget: FloorplanMoveTarget<DoorNode> = ({ node })
       // Apply the R-flip on top of the wall-derived side.
       const side: DoorNode['side'] = flipped ? (hit.side === 'front' ? 'back' : 'front') : hit.side
       const itemRotation = hit.itemRotation + (flipped ? Math.PI : 0)
+      // Another wall may be drawn the other way round: the casing keeps to its side.
+      const casing = movedOpeningCasingFaces(node, hit.wall.id, [0, itemRotation, 0], nodes)
 
       lastValid = {
         // Same-wall moves keep the wall-local plane offset; another host resets it.
@@ -232,6 +244,7 @@ export const doorFloorplanMoveTarget: FloorplanMoveTarget<DoorNode> = ({ node })
         roofSegmentId: undefined,
         roofFace: undefined,
         visible: true,
+        ...casing,
       }
 
       setLiveOverride(`wall:${hit.wall.id}:${side}`, {
@@ -241,6 +254,7 @@ export const doorFloorplanMoveTarget: FloorplanMoveTarget<DoorNode> = ({ node })
         roofSegmentId: undefined,
         roofFace: undefined,
         visible: true,
+        ...casing,
       })
       useLiveTransforms.getState().set(nodeId, {
         position: lastValid.position,

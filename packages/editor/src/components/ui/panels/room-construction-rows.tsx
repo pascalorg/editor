@@ -3,12 +3,22 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  BEAM_SIZE_PRESETS,
+  buildingFoundationOf,
   floorFootprintSupportClass,
   formatList,
   floorPlateAtGroundContact,
+  getLevelElevations,
   MIN_GROUND_FLOOR_THICKNESS,
   MIN_SLAB_THICKNESS,
+  type MessageDescriptor,
+  type OutdoorRoomType,
+  type PorchFramingSettings,
+  porchFramingSettings,
+  porchPartOf,
   roomDrawnFloor,
+  roomFoundationOf,
+  setZoneIntent,
   type PascalI18n,
   useLocale,
   usePascalI18n,
@@ -19,6 +29,7 @@ import { Check, ChevronDown, ChevronRight } from 'lucide-react'
 import Image from 'next/image'
 import { type ReactNode, useMemo, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
+import { floorHeldByDesignedFoundation } from '../../../lib/building-foundation'
 import { startCeilingEdit } from '../../../lib/ceiling-edit-session'
 import {
   applyRoomFloorConstruction,
@@ -54,7 +65,9 @@ import {
 import { ownFloorElevationBounds } from '../../../lib/room-handle-drag'
 import type { RoomSelectionRecord } from '../../../lib/room-selection'
 import { cn } from '../../../lib/utils'
+import { applyRoomPlan } from '../../../lib/room-structure-commands'
 import { MetricControl } from '../controls/metric-control'
+import { SegmentedControl } from '../controls/segmented-control'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -67,6 +80,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '../primitives/tooltip'
 import { localizedFloorFootprintName } from '../../../i18n/floor-footprint-name'
 import { messageWithSlot } from '../../../i18n/message-slot'
 import { nodeLabel } from '../../../i18n/node-messages'
+import { DeckBoardsFields } from './deck-boards-fields'
 import { RoomOpeningsField } from './room-openings-field'
 import { ShapeChoice } from './shape-choice'
 import { displayRoomName } from '../../../lib/room-name-messages'
@@ -396,7 +410,8 @@ function SitsOn({ zoneId, noFloor }: { zoneId: string; noFloor: boolean }) {
   const summary = useScene(
     useShallow((scene) => {
       const plate = roomFloorOwner(scene.nodes, zoneId) ?? roomFootprint(scene.nodes, zoneId)
-      if (!plate) return { id: '', name: '', drawn: false, lift: 0, supported: false }
+      if (!plate)
+        return { id: '', name: '', drawn: false, lift: 0, supported: false, designed: false }
       if (plate.plateRole !== 'base')
         return {
           id: plate.id as string,
@@ -404,6 +419,7 @@ function SitsOn({ zoneId, noFloor }: { zoneId: string; noFloor: boolean }) {
           drawn: true,
           lift: 0,
           supported: false,
+          designed: false,
         }
       return {
         id: plate.id as string,
@@ -422,7 +438,12 @@ function SitsOn({ zoneId, noFloor }: { zoneId: string; noFloor: boolean }) {
         : i18n._({ id: 'editor.panels.roomConstructionRows.lowered', message: 'Lowered {lift}', values: { lift } })
       : summary.supported
         ? i18n._({ id: 'editor.panels.roomConstructionRows.onTheWallsBelow', message: 'On the walls below' })
-        : i18n._({ id: 'editor.panels.roomConstructionRows.onTheGround', message: 'On the ground' })
+        : summary.designed
+          ? i18n._({
+              id: 'editor.panels.roomConstructionRows.onTheFoundation',
+              message: 'On the foundation',
+            })
+          : i18n._({ id: 'editor.panels.roomConstructionRows.onTheGround', message: 'On the ground' })
   if (noFloor)
     return (
       <span className="mb-2 ml-[42px] text-muted-foreground text-xs" data-sits-on="none">
@@ -431,27 +452,349 @@ function SitsOn({ zoneId, noFloor }: { zoneId: string; noFloor: boolean }) {
     )
   if (!summary.id) return null
   return (
-    <button
-      className="mb-2 ml-[42px] flex items-center gap-1 text-left text-muted-foreground text-xs transition-colors hover:text-foreground"
-      data-sits-on={summary.id}
-      onClick={() => openFloorFoundation(summary.id)}
-      type="button"
-    >
-      <span>
-        {messageWithSlot(
-          i18n,
-          /* i18n */ {
-            id: 'editor.panels.roomConstructionRows.sitsOnPreset',
-            message: 'Sits on: {name} · {preset}',
-            values: { preset },
-          },
-          'name',
-          <span className="text-foreground">{summary.name}</span>,
-        )}
-      </span>
-      <ChevronRight className="size-3 shrink-0" />
-    </button>
+    <>
+      <button
+        className="mb-2 ml-[42px] flex items-center gap-1 text-left text-muted-foreground text-xs transition-colors hover:text-foreground"
+        data-sits-on={summary.id}
+        onClick={() => openFloorFoundation(summary.id)}
+        type="button"
+      >
+        <span>
+          {messageWithSlot(
+            i18n,
+            /* i18n */ {
+              id: 'editor.panels.roomConstructionRows.sitsOnPreset',
+              message: 'Sits on: {name} · {preset}',
+              values: { preset },
+            },
+            'name',
+            <span className="text-foreground">{summary.name}</span>,
+          )}
+        </span>
+        <ChevronRight className="size-3 shrink-0" />
+      </button>
+      <RoomFoundationChoice zoneId={zoneId} />
+    </>
   )
+}
+
+/**
+ * "Raised floor | Slab": what the room's floor stands on in a raised house (`floor.foundation`,
+ * through core's `setZoneIntent`): on the house's raised floor, or on a slab on grade of its own
+ * (a garage, which its name picks), its floor coming down onto it in the same step. Shown where
+ * the building's designed foundation is a raised floor, or the room already chose.
+ */
+export function RoomFoundationChoice({ zoneId }: { zoneId: string }) {
+  const i18n = usePascalI18n()
+  const choice = useScene(
+    useShallow((scene) => {
+      const zone = scene.nodes[zoneId as AnyNodeId]
+      if (zone?.type !== 'zone') return null
+      const resolved = roomFoundationOf(scene.nodes, zone)
+      const building = resolved && zone.parentId ? buildingOfLevel(scene.nodes, zone.parentId) : null
+      const type = building ? buildingFoundationOf(scene.nodes, building)?.type : null
+      if (!resolved || (type !== 'raised' && zone.floor?.foundation === undefined)) return null
+      return { value: resolved, chosen: zone.floor?.foundation !== undefined }
+    }),
+  )
+  if (!choice) return null
+  return (
+    <div className="mb-2 ml-[42px] flex flex-col gap-1" data-room-foundation={choice.value}>
+      <SegmentedControl
+        onChange={(foundation: 'raised' | 'slab') =>
+          applyRoomPlan(
+            setZoneIntent(useScene.getState().nodes, { zoneId, patch: { floor: { foundation } } }),
+          )
+        }
+        options={[
+          {
+            label: i18n._({
+              id: 'editor.panels.roomConstructionRows.raisedFloor',
+              message: 'Raised floor',
+            }),
+            value: 'raised',
+          },
+          {
+            label: i18n._({ id: 'editor.panels.roomConstructionRows.slab', message: 'Slab' }),
+            value: 'slab',
+          },
+        ]}
+        value={choice.value}
+      />
+    </div>
+  )
+}
+
+const ROOM_TYPE_OPTIONS: ReadonlyArray<{
+  label: MessageDescriptor
+  value: 'room' | OutdoorRoomType
+}> = [
+  {
+    label: /* i18n */ { id: 'editor.panels.roomConstructionRows.roomTypeRoom', message: 'Room' },
+    value: 'room',
+  },
+  {
+    label: /* i18n */ { id: 'editor.panels.roomConstructionRows.roomTypePorch', message: 'Porch' },
+    value: 'porch',
+  },
+  {
+    label: /* i18n */ { id: 'editor.panels.roomConstructionRows.roomTypeDeck', message: 'Deck' },
+    value: 'deck',
+  },
+  {
+    label: /* i18n */ { id: 'editor.panels.roomConstructionRows.roomTypePatio', message: 'Patio' },
+    value: 'patio',
+  },
+]
+
+const ROOM_TYPE_HINTS: Record<'room' | OutdoorRoomType, MessageDescriptor> = {
+  room: /* i18n */ {
+    id: 'editor.panels.roomConstructionRows.roomTypeRoomHint',
+    message: 'An ordinary room inside the house.',
+  },
+  porch: /* i18n */ {
+    id: 'editor.panels.roomConstructionRows.roomTypePorchHint',
+    message:
+      'Outdoors under a ceiling: a concrete slab 1½ in down from the house, ceiling at the house’s.',
+  },
+  deck: /* i18n */ {
+    id: 'editor.panels.roomConstructionRows.roomTypeDeckHint',
+    message:
+      'Outdoors: deck boards on a wood frame and posts, 1 in down from the house; no ceiling.',
+  },
+  patio: /* i18n */ {
+    id: 'editor.panels.roomConstructionRows.roomTypePatioHint',
+    message: 'Outdoors and open: a concrete slab 1½ in down from the house, no ceiling.',
+  },
+}
+
+/**
+ * "Room | Porch | Deck | Patio": the room type (`roomType`, through core's
+ * `setZoneIntent`). A porch, deck or patio is outdoors whatever covers it, steps its floor down
+ * from the house's and takes its floor and ceiling defaults in the same step; each stays
+ * adjustable below.
+ */
+export function RoomTypeChoice({ zoneId }: { zoneId: string }) {
+  const i18n = usePascalI18n()
+  const value = useScene((scene) => {
+    const zone = scene.nodes[zoneId as AnyNodeId]
+    return zone?.type === 'zone' ? (zone.roomType ?? 'room') : null
+  })
+  if (!value) return null
+  return (
+    <div className="mt-3 flex flex-col gap-1" data-room-type={value}>
+      <h3 className="font-medium text-muted-foreground text-xs">
+        {i18n._({ id: 'editor.panels.roomConstructionRows.roomType', message: 'Room type' })}
+      </h3>
+      <SegmentedControl
+        onChange={(next: 'room' | OutdoorRoomType) =>
+          applyRoomPlan(
+            setZoneIntent(useScene.getState().nodes, {
+              zoneId,
+              patch: { roomType: next === 'room' ? null : next },
+            }),
+          )
+        }
+        options={ROOM_TYPE_OPTIONS.map((option) => ({
+          label: i18n._(option.label),
+          value: option.value,
+        }))}
+        value={value}
+      />
+      <p className="text-muted-foreground text-xs">{i18n._(ROOM_TYPE_HINTS[value])}</p>
+    </div>
+  )
+}
+
+const POST_SIZE_OPTIONS: ReadonlyArray<{
+  label: string
+  value: PorchFramingSettings['postSize']
+}> = [
+  { label: '4x4', value: '4x4' },
+  { label: '6x6', value: '6x6' },
+  { label: '8x8', value: '8x8' },
+]
+
+type PorchFramingMode = 'off' | 'auto' | 'manual'
+
+/**
+ * A covered porch's posts and beam (`porchFraming`, through core's `setZoneIntent`), and a deck's
+ * or patio's once switched on, to carry a roof over it (Off by default): while Automatic the
+ * structure kernel keeps a post on each outside corner, more at most the spacing apart, and a beam
+ * along each open side under the ceiling. A size or the spacing rebuilds them; a post or beam
+ * edited by hand turns the room to Manual, and Automatic rebuilds them again.
+ */
+export function PorchFramingFields({ zoneId }: { zoneId: string }) {
+  const i18n = usePascalI18n()
+  const porch = useScene(
+    useShallow((scene) => {
+      const zone = scene.nodes[zoneId as AnyNodeId]
+      if (zone?.type !== 'zone') return null
+      const optional = zone.roomType === 'deck' || zone.roomType === 'patio'
+      if (!(optional || (zone.roomType === 'porch' && zone.hasCeiling !== false))) return null
+      const level = zone.parentId ? scene.nodes[zone.parentId as AnyNodeId] : undefined
+      let posts = 0
+      let beams = 0
+      for (const id of level?.type === 'level' ? level.children : []) {
+        const node = scene.nodes[id as AnyNodeId]
+        if (porchPartOf(node)?.porchOf !== zoneId) continue
+        if (node?.type === 'column') posts++
+        else beams++
+      }
+      const auto = zone.porchFraming?.auto
+      const mode: PorchFramingMode =
+        auto === false ? 'manual' : optional && auto !== true ? 'off' : 'auto'
+      return {
+        mode,
+        optional,
+        room: zone.roomType ?? 'porch',
+        ...porchFramingSettings(zone),
+        posts,
+        beams,
+      }
+    }),
+  )
+  const [spacing, setSpacing] = useState<number | null>(null)
+  if (!porch) return null
+  const set = (porchFraming: NonNullable<Parameters<typeof setZoneIntent>[1]['patch']['porchFraming']>) =>
+    applyRoomPlan(setZoneIntent(useScene.getState().nodes, { zoneId, patch: { porchFraming } }))
+  const beam = BEAM_SIZE_PRESETS.find((preset) => preset.id === porch.beamSize)
+  return (
+    <div className="mt-3 flex flex-col gap-1.5" data-porch-framing={porch.mode}>
+      <h3 className="font-medium text-muted-foreground text-xs">
+        {i18n._({ id: 'editor.panels.roomConstructionRows.postsAndBeam', message: 'Posts and beam' })}
+      </h3>
+      <SegmentedControl
+        onChange={(next: PorchFramingMode) =>
+          set({ auto: next === 'off' ? null : next === 'auto' })
+        }
+        options={[
+          ...(porch.optional
+            ? [
+                {
+                  label: i18n._({
+                    id: 'editor.panels.roomConstructionRows.framingOff',
+                    message: 'Off',
+                  }),
+                  value: 'off' as const,
+                },
+              ]
+            : []),
+          {
+            label: i18n._({
+              id: 'editor.panels.roomConstructionRows.framingAutomatic',
+              message: 'Automatic',
+            }),
+            value: 'auto' as const,
+          },
+          {
+            label: i18n._({
+              id: 'editor.panels.roomConstructionRows.framingManual',
+              message: 'Manual',
+            }),
+            value: 'manual' as const,
+          },
+        ]}
+        value={porch.mode}
+      />
+      <p className="text-muted-foreground text-xs">
+        {porch.mode === 'off'
+          ? i18n._({
+              id: 'editor.panels.roomConstructionRows.framingOffHint',
+              message:
+                'None. Automatic puts a post on each outside corner and a beam on them, to carry a roof over {room, select, deck {the deck} patio {the patio} other {the porch}}.',
+              values: { room: porch.room },
+            })
+          : porch.mode === 'auto'
+            ? i18n._({
+                id: 'editor.panels.roomConstructionRows.framingAutoHint',
+                message:
+                  '{posts, plural, one {{postCount} post} other {{postCount} posts}} and {beams, plural, one {{beamCount} beam} other {{beamCount} beams}}, a post on each outside corner, kept with {room, select, deck {the deck} patio {the patio} other {the porch}}.',
+                values: {
+                  posts: porch.posts,
+                  postCount: String(porch.posts),
+                  beams: porch.beams,
+                  beamCount: String(porch.beams),
+                  room: porch.room,
+                },
+              })
+            : i18n._({
+                id: 'editor.panels.roomConstructionRows.framingManualHint',
+                message: 'Kept as you edited them. Automatic rebuilds them from these settings.',
+              })}
+      </p>
+      {porch.mode !== 'off' && (
+        <>
+          <PartField
+            label={i18n._({ id: 'editor.panels.roomConstructionRows.postSize', message: 'Post size' })}
+          >
+            <SegmentedControl
+              onChange={(postSize: PorchFramingSettings['postSize']) => set({ postSize })}
+              options={[...POST_SIZE_OPTIONS]}
+              value={porch.postSize}
+            />
+          </PartField>
+          <MetricControl
+            className="h-8 text-xs"
+            label={i18n._({
+              id: 'editor.panels.roomConstructionRows.postSpacingMax',
+              message: 'Post spacing (max)',
+            })}
+            max={6}
+            min={0.6}
+            onChange={setSpacing}
+            onCommit={(value) => {
+              setSpacing(null)
+              if (Math.abs(value - porch.postSpacing) > 1e-6) set({ postSpacing: value })
+            }}
+            precision={2}
+            step={0.05}
+            unit="m"
+            value={spacing ?? porch.postSpacing}
+          />
+          <PartField
+            label={i18n._({ id: 'editor.panels.roomConstructionRows.beam', message: 'Beam' })}
+          >
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  aria-label={i18n._({
+                    id: 'editor.panels.roomConstructionRows.beamSize',
+                    message: 'Beam size',
+                  })}
+                  className="flex min-w-0 items-center gap-1.5 rounded-full border border-border/50 px-2.5 py-0.5 text-foreground text-xs transition-colors hover:bg-accent"
+                  data-porch-beam-size
+                  type="button"
+                >
+                  <span className="truncate">{beam?.label ?? porch.beamSize}</span>
+                  <ChevronDown className="size-3 shrink-0 text-muted-foreground" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="max-h-72 min-w-40 overflow-y-auto">
+                {BEAM_SIZE_PRESETS.map((preset) => (
+                  <DropdownMenuItem
+                    data-porch-beam-choice={preset.id}
+                    key={preset.id}
+                    onSelect={() => {
+                      if (preset.id !== porch.beamSize) set({ beamSize: preset.id })
+                    }}
+                  >
+                    <span className="flex-1 truncate">{preset.label}</span>
+                    {preset.id === porch.beamSize && <Check className="size-3.5" />}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </PartField>
+        </>
+      )}
+    </div>
+  )
+}
+
+/** The building a level stands in. */
+function buildingOfLevel(nodes: Record<AnyNodeId, AnyNode>, levelId: string): string | null {
+  return getLevelElevations(nodes).get(levelId as AnyNodeId)?.buildingId ?? null
 }
 
 /**
@@ -520,7 +863,7 @@ export function RoomFloorConstructionField({ zoneId }: { zoneId: string }) {
  * How a footprint stands: on the ground, its foundation height ("Raised 0.30 m"
  * or on the ground); upstairs, its lift above resting on the walls below.
  */
-function footprintStanding(
+export function footprintStanding(
   nodes: Record<string, import('@pascal-app/core').AnyNode>,
   plate: import('@pascal-app/core').SlabNode,
 ) {
@@ -528,6 +871,8 @@ function footprintStanding(
   return {
     supported,
     lift: supported ? floorLift(nodes, plate) : foundationHeight(nodes, plate),
+    // The building's designed foundation carries a floor on the ground.
+    designed: floorHeldByDesignedFoundation(nodes, plate),
   }
 }
 
@@ -733,6 +1078,9 @@ export function RoomConstructionRows({ room }: { room: RoomSelectionRecord }) {
 
   return (
     <div className="flex flex-col" data-room-construction={zoneId}>
+      <RoomTypeChoice zoneId={zoneId} />
+      <DeckBoardsFields zoneId={zoneId} />
+      <PorchFramingFields zoneId={zoneId} />
       <h3 className="mt-4 mb-1.5 font-medium text-muted-foreground text-xs">{i18n._({ id: 'editor.panels.roomConstructionRows.builtWith', message: 'Built with' })}</h3>
       <div className="flex flex-col gap-1">
         <ConstructionPart

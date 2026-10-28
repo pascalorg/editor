@@ -136,7 +136,8 @@ export function getOpeningCutoutBottomPadding(opening: OpeningCutoutNode, bottom
   return bottom < 0.005 && hasFlatOpeningCutoutBottom(opening) ? OPENING_CUTOUT_BOTTOM_PADDING : 0
 }
 
-function getRoundedOpeningRadii(
+/** The corner radii a rounded opening's cutout is cut with, clamped to fit `width` × `height`. */
+export function getRoundedOpeningRadii(
   opening: OpeningCutoutNode,
   width: number,
   height: number,

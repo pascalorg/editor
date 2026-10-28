@@ -4,8 +4,10 @@ import { Icon } from '@iconify/react'
 import {
   acquireSceneReadOnlyLease,
   createI18n,
+  DEFAULT_UPPER_FLOOR_THICKNESS,
   getCatalogMaterialById,
   getLibraryMaterialIdFromRef,
+  getMaterialSwatch,
   getSceneMaterialIdFromRef,
   initSpaceDetectionSync,
   initSpatialGridSync,
@@ -77,7 +79,7 @@ import useSessionGroups from '../../store/use-session-groups'
 import { paneOfView, VIEW_2D, VIEW_3D, type ViewPaneIndex } from '../../store/view-layout'
 import { PointAskLayer } from '../point-ask/point-ask-layer'
 import { CeilingSelectionAffordanceSystem } from '../systems/ceiling/ceiling-selection-affordance-system'
-import { CeilingSystem } from '../systems/ceiling/ceiling-system'
+import { CeilingSystem, CeilingTopsSync } from '../systems/ceiling/ceiling-system'
 import { RoofEditSystem } from '../systems/roof/roof-edit-system'
 import { SelectionAffordanceManager } from '../systems/selection-affordance-manager'
 import { StairEditSystem } from '../systems/stair/stair-edit-system'
@@ -190,7 +192,10 @@ const EDITOR_DEFAULT_RENDER = { shading: 'solid' } as const
  */
 function initializeEditorRuntime(): () => void {
   const unsubscribeSpatialGrid = initSpatialGridSync()
-  const unsubscribeSpaceDetection = initSpaceDetectionSync(useScene, useEditor)
+  // Floors a person draws over rooms below are born framed-floor thick; agent writes are not.
+  const unsubscribeSpaceDetection = initSpaceDetectionSync(useScene, useEditor, {
+    newUpperFloorThickness: DEFAULT_UPPER_FLOOR_THICKNESS,
+  })
   const stopFinishScriptRefresh = initFinishScriptRefresh()
   initSFXBus()
 
@@ -773,7 +778,17 @@ function getActivePaintMaterialSwatchImageUrl(
   const catalogId =
     getLibraryMaterialIdFromRef(material?.materialPreset) ?? material?.material?.id ?? undefined
   const catalogMaterial = getCatalogMaterialById(catalogId)
-  return catalogMaterial?.previewThumbnailUrl ?? catalogMaterial?.preset.maps.albedoMap
+  return catalogMaterial ? (getMaterialSwatch(catalogMaterial).imageUrl ?? undefined) : undefined
+}
+
+/** Whether the badge's image is a white albedo its colour tints (a siding's profile). */
+function isActivePaintMaterialSwatchTinted(material: ActivePaintMaterial | null) {
+  if (material?.material?.texture?.url || getSceneMaterialIdFromRef(material?.materialPreset))
+    return false
+  const catalogId =
+    getLibraryMaterialIdFromRef(material?.materialPreset) ?? material?.material?.id ?? undefined
+  const catalogMaterial = getCatalogMaterialById(catalogId)
+  return catalogMaterial ? getMaterialSwatch(catalogMaterial).tinted : false
 }
 
 function PaintCursorBadge({
@@ -781,6 +796,7 @@ function PaintCursorBadge({
   state,
   swatchColor,
   swatchImageUrl,
+  swatchTinted = false,
   isEraser,
   isPicker = false,
 }: {
@@ -788,6 +804,8 @@ function PaintCursorBadge({
   state: PaintCursorBadgeState
   swatchColor: string
   swatchImageUrl?: string
+  /** Multiply the image by the colour (a tinted albedo). */
+  swatchTinted?: boolean
   isEraser: boolean
   /** The eyedropper: the swatch is what a click would take. */
   isPicker?: boolean
@@ -861,6 +879,7 @@ function PaintCursorBadge({
                 backgroundImage: swatchImageUrl
                   ? `url(${JSON.stringify(swatchImageUrl)})`
                   : undefined,
+                backgroundBlendMode: swatchImageUrl && swatchTinted ? 'multiply' : undefined,
                 opacity: state === 'aim' ? 0.55 : 1,
               }}
             />
@@ -1124,6 +1143,7 @@ function PaintCursorLayer({
   const swatchMaterial = picking ? picked : activePaintMaterial
   const swatchColor = getActivePaintMaterialSwatchColor(swatchMaterial, sceneMaterials)
   const swatchImageUrl = getActivePaintMaterialSwatchImageUrl(swatchMaterial, sceneMaterials)
+  const swatchTinted = isActivePaintMaterialSwatchTinted(swatchMaterial)
 
   if (!active || !position) return null
 
@@ -1139,6 +1159,7 @@ function PaintCursorLayer({
         state={badgeState}
         swatchColor={swatchColor}
         swatchImageUrl={swatchImageUrl}
+        swatchTinted={swatchTinted}
       />
     </div>
   )
@@ -1367,6 +1388,7 @@ const ViewerCanvas = memo(function ViewerCanvas({
             const viewId = layout.panes[pane]
             return (
               <div
+                aria-busy={isSceneDataLoading}
                 className="relative min-w-0 overflow-hidden"
                 data-view-pane={pane}
                 key={viewId}
@@ -1375,6 +1397,9 @@ const ViewerCanvas = memo(function ViewerCanvas({
                 style={paneStyle(pane)}
               >
                 <HostView key={viewId} view={views.find((view) => view.id === viewId)} />
+                {/* A restored pane's plugin is known only once the project has loaded: until
+                    then it would read "This view isn't available". */}
+                {isSceneDataLoading && loadingOverlay}
               </div>
             )
           })}
@@ -1866,6 +1891,7 @@ function EditorContent({
     return (
       <>
         <FloorplanModeCoordinator />
+        <CeilingTopsSync />
         {!isLoading && isPreviewMode ? (
           <PreviewStage
             isFirstPersonMode={isFirstPersonMode}
@@ -1952,6 +1978,7 @@ function EditorContent({
   return (
     <div className="flex h-full w-full gap-3 bg-neutral-100 p-3 text-foreground">
       <FloorplanModeCoordinator />
+      <CeilingTopsSync />
       {!isLoading && isPreviewMode ? (
         <PreviewStage
           isFirstPersonMode={isFirstPersonMode}

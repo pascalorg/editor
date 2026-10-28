@@ -2,6 +2,7 @@ import type { AnyNode, AnyNodeId, WallNode } from '../../schema'
 import { getWallCurveFrameAt, getWallCurveLength } from './wall-curve'
 import type { WallPlanPoint } from './wall-move'
 import {
+  type DrawnWallTypes,
   planWallInsertion,
   planWallSplitAtPoint,
   uncoveredWallSegments,
@@ -35,6 +36,7 @@ export function planWallRectangle(
     start: WallPlanPoint
     end: WallPlanPoint
     wallDefaults?: Partial<WallNode>
+    wallTypes?: DrawnWallTypes
   },
 ): { changes: WallTopologyChanges; walls: WallNode[] } {
   if (nodes[args.levelId]?.type !== 'level') throw Error('Select an editable floor.')

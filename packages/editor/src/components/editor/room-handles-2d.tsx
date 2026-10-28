@@ -1,10 +1,19 @@
 'use client'
 
-import { type FloorplanGeometry, type Point, roomDrawnFloor, useScene } from '@pascal-app/core'
+import {
+  type AnyNode,
+  type AnyNodeId,
+  type FloorplanGeometry,
+  nodeRegistry,
+  type Point,
+  roomDrawnFloor,
+  useScene,
+} from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { Minus, Plus } from 'lucide-react'
 import { type PointerEvent as ReactPointerEvent, useMemo, useState } from 'react'
-import { useSelectedRoom } from '../../hooks/use-selected-room'
+import { useRoomRecords, useSelectedRoom } from '../../hooks/use-selected-room'
+import { getFloorplanNodeExtension } from '../../lib/floorplan/floorplan-extension'
 import { formatLinearMeasurement, MEASUREMENT_FLOORPLAN_COLOR } from '../../lib/measurements'
 import {
   commitRoomFloorElevation,
@@ -21,8 +30,9 @@ import {
   useRoomHandleDrag,
   type WallPushHandle,
 } from '../../lib/room-handle-drag'
-import type { RoomDimension } from '../../lib/room-push-dimensions'
+import type { RoomDimension, WallSelectionDimension } from '../../lib/room-push-dimensions'
 import useEditor from '../../store/use-editor'
+import useFloorplanAnnotationVisibility from '../../store/use-floorplan-annotation-visibility'
 import useInteractionScope from '../../store/use-interaction-scope'
 import { useFloorplanRender } from '../editor-2d/floorplan-render-context'
 import { FloorplanGeometryRenderer } from '../editor-2d/renderers/floorplan-geometry-renderer'
@@ -158,9 +168,10 @@ function startArrow(event: ReactPointerEvent<SVGPathElement>, run: () => unknown
 
 /**
  * The selected room's arrows on the plan: one push/pull chevron per boundary
- * span (on the far face, along the normal the handle supplies) and, for a
- * mezzanine, one per plate edge. Mounted after every node's handles so a
- * wall outline never takes the press. The drags are the 3D arrows' own.
+ * wall span (on the far face, along the normal the handle supplies), one per
+ * straight edge of invisible walls and, for a mezzanine, one per plate edge.
+ * Mounted after every node's handles so a wall outline never takes the press.
+ * The drags are the 3D arrows' own.
  */
 export function RoomHandles2D({ levelId }: { levelId: string | null }) {
   const room = useRoomControls()
@@ -349,6 +360,90 @@ export function RoomHandleDragPreview2D({ levelId }: { levelId: string | null })
       )}
       <PlanRoomDimensions dimensions={plan.dimensions} />
       <PlanReadout at={at} refused={!!plan.message} text={text} />
+    </g>
+  )
+}
+
+/**
+ * The sole selected node's temporary dimensions while nothing is in progress,
+ * from its kind's `selectionDimensions` (a wall: the room widths its push
+ * shows and, for an exterior wall, the outside size, as the dimension-faces
+ * preference asks). Shared by the plan and the 3D view; typing into one
+ * drives the node. Recomputed only when the node itself or its level's rooms
+ * change (the room index keeps its records while unrelated nodes edit).
+ */
+export function useSelectedWallDimensions(): {
+  node: AnyNode
+  dimensions: readonly WallSelectionDimension[]
+} | null {
+  const nodeId = useViewer((s) =>
+    s.selection.selectedIds.length === 1 ? s.selection.selectedIds[0] : null,
+  )
+  const node = useScene((s) => (nodeId ? s.nodes[nodeId as AnyNodeId] : undefined))
+  const enabled = useEditor((s) => s.mode === 'select')
+  const idle = useInteractionScope((s) => s.scope.kind === 'idle')
+  const dragging = useRoomHandleDrag((s) => s.drag !== null)
+  const faces = useFloorplanAnnotationVisibility((s) => s.wallDimensionFaces)
+  const build = node
+    ? getFloorplanNodeExtension(nodeRegistry.get(node.type))?.selectionDimensions
+    : undefined
+  const rooms = useRoomRecords(build ? (node?.parentId ?? null) : null)
+  return useMemo(() => {
+    if (!node || !build || !enabled || !idle || dragging) return null
+    // `rooms` is the invalidation key: it changes when the level's room
+    // topology, slabs, ceilings or zones do.
+    if (!rooms) return null
+    const dimensions = build({ node, nodes: useScene.getState().nodes, faces })
+    return dimensions.length ? { node, dimensions } : null
+  }, [build, dragging, enabled, faces, idle, node, rooms])
+}
+
+/**
+ * The selected wall's temporary dimensions on the plan, drawn as the push
+ * drag draws its room widths (indigo line, end dots). Each is a `dimension`
+ * owned by the wall, so a click on its value opens the plan's type-a-value
+ * box (`FloorplanDimensionEditOverlay`) and the typed size slides the wall.
+ */
+export function SelectedWallDimensions2D({ levelId }: { levelId: string | null }) {
+  const selection = useSelectedWallDimensions()
+  const context = useFloorplanRender()
+  const unit = useViewer((s) => s.unit)
+  const metricNotation = useViewer((s) => s.metricNotation)
+  const geometry = useMemo<FloorplanGeometry | null>(() => {
+    if (!selection) return null
+    return {
+      kind: 'group',
+      children: selection.dimensions.map(({ from, to, distance }): FloorplanGeometry => {
+        const length = Math.hypot(to[0] - from[0], to[1] - from[1]) || 1
+        return {
+          kind: 'dimension',
+          start: from,
+          end: to,
+          offsetNormal: [-(to[1] - from[1]) / length, (to[0] - from[0]) / length],
+          offsetDistance: 0,
+          extensionOvershoot: 0,
+          extensionStartGap: 0,
+          terminator: 'dot',
+          text: formatLinearMeasurement(distance, unit, metricNotation),
+          stroke: MEASUREMENT_FLOORPLAN_COLOR,
+        }
+      }),
+    }
+  }, [metricNotation, selection, unit])
+  if (!selection || !geometry || selection.node.parentId !== levelId) return null
+  return (
+    <g
+      data-node-id={selection.node.id}
+      data-selected-wall-dimensions-2d=""
+      // A press on a value is the type-a-value box's, not the plan's marquee or pan.
+      onPointerDown={(event) => event.stopPropagation()}
+    >
+      <FloorplanGeometryRenderer
+        geometry={geometry}
+        pointerEventsOverride="none"
+        sceneRotationDeg={context?.sceneRotationDeg ?? 0}
+        screenUnitsPerPixel={context?.unitsPerPixel}
+      />
     </g>
   )
 }

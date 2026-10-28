@@ -1,6 +1,16 @@
 'use client'
 
-import { type Ring, type SiteNode, terrainFieldOf, useLiveTerrain } from '@pascal-app/core'
+import {
+  foundationGradingPads,
+  type GradingPad,
+  gradeTerrainField,
+  isExcavation,
+  type Ring,
+  type SiteNode,
+  terrainFieldOf,
+  useLiveTerrain,
+  useScene,
+} from '@pascal-app/core'
 import { SITE_GROUND } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef } from 'react'
 import type { Material } from 'three'
@@ -16,7 +26,23 @@ import {
 } from './terrain-mesh'
 
 /**
- * Renders the site's sculpted ground.
+ * The buildings' grading pads (`foundationGradingPads`: slab pads, raised floors' cuts and crawl
+ * spaces, basements' digs), one array while they stay as they were.
+ */
+export function useGradingPads(): readonly GradingPad[] {
+  const kept = useRef<{ key: string; pads: readonly GradingPad[] }>({ key: '[]', pads: [] })
+  return useScene((state) => {
+    const pads = foundationGradingPads(state.nodes)
+    const key = JSON.stringify(pads)
+    if (key !== kept.current.key) kept.current = { key, pads }
+    return kept.current.pads
+  })
+}
+
+/**
+ * Renders the site's sculpted ground, graded to the slabs' building pads (`gradeTerrainField`): the
+ * ground filled or cut so every slab stands its exposure over it all round. Round a basement it
+ * lies as it was, open over the dig (`holes`).
  *
  * Mounted by `SiteRenderer` only when the site has terrain (or a stroke is in
  * flight), so a scene that never touched terrain mounts nothing at all and pays
@@ -37,6 +63,7 @@ import {
 export const TerrainRenderer = ({
   material,
   veil,
+  sheer = false,
   site,
   holes,
   polygon,
@@ -45,6 +72,8 @@ export const TerrainRenderer = ({
   material: Material
   /** The veil drawn in the ground's place over a level below grade, owned there too. */
   veil: Material
+  /** The veil alone, the solid ground stepped aside (`groundSheer`). */
+  sheer?: boolean
   site: SiteNode
   holes: Ring[]
   /**
@@ -63,12 +92,17 @@ export const TerrainRenderer = ({
     [site.id, site.terrain],
   )
 
+  // The ground as built: filled and cut to the slabs' building pads round the houses. A basement's
+  // dig is not graded in: the ground stands open over it (one of `holes`), cut plumb at its walls.
+  const pads = useGradingPads()
+  const graded = useMemo(() => pads.filter((pad) => !isExcavation(pad)), [pads])
   const target = useMemo(() => {
-    const field = useLiveTerrain.getState().fieldOf(site.id) ?? persistedField
-    if (!field) return null
+    const natural = useLiveTerrain.getState().fieldOf(site.id) ?? persistedField
+    if (!natural) return null
+    const field = gradeTerrainField(natural, graded)
     const ring = polygon && polygon.length >= 3 ? skirtRing(field, polygon) : null
     return createTerrainGeometry(field, holes, ring && ring.length >= 6 ? ring : null)
-  }, [persistedField, site.id, holes, polygon])
+  }, [persistedField, site.id, holes, polygon, graded])
 
   // The surface (and the cut edges round recessed slabs) stop at the property
   // line; the skirt keeps the plain material — it *is* the line.
@@ -128,23 +162,27 @@ export const TerrainRenderer = ({
 
   return (
     <>
-      <mesh
-        castShadow
-        geometry={target.geometry}
-        material={surfaceMaterial}
-        receiveShadow
-        userData={{ [SITE_GROUND]: 'solid' }}
-      />
+      {!sheer && (
+        <mesh
+          castShadow
+          geometry={target.geometry}
+          material={surfaceMaterial}
+          receiveShadow
+          userData={{ [SITE_GROUND]: 'solid' }}
+        />
+      )}
       <GroundVeil geometry={target.geometry} material={surfaceVeil} />
       {target.holeBoundary && (
         <>
-          <mesh
-            castShadow
-            geometry={target.holeBoundary.geometry}
-            material={surfaceMaterial}
-            receiveShadow
-            userData={{ [SITE_GROUND]: 'solid' }}
-          />
+          {!sheer && (
+            <mesh
+              castShadow
+              geometry={target.holeBoundary.geometry}
+              material={surfaceMaterial}
+              receiveShadow
+              userData={{ [SITE_GROUND]: 'solid' }}
+            />
+          )}
           <GroundVeil geometry={target.holeBoundary.geometry} material={surfaceVeil} />
         </>
       )}
@@ -155,12 +193,14 @@ export const TerrainRenderer = ({
         round the lot. `receiveShadow` for the same reason the surface has it — a raised edge
         is lit ground that a building next to it should darken.
       */}
-      <mesh
-        geometry={target.skirt.geometry}
-        material={material}
-        receiveShadow
-        userData={{ [SITE_GROUND]: 'solid' }}
-      />
+      {!sheer && (
+        <mesh
+          geometry={target.skirt.geometry}
+          material={material}
+          receiveShadow
+          userData={{ [SITE_GROUND]: 'solid' }}
+        />
+      )}
       <GroundVeil geometry={target.skirt.geometry} material={veil} />
     </>
   )

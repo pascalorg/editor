@@ -20,6 +20,7 @@ import { columnFloorplanMoveTarget } from './floorplan-move'
 import { columnHostedPolicy } from './hosted-resize'
 import { columnPaint } from './paint'
 import { columnParametrics } from './parametrics'
+import { columnPlaceOption, postBaseOption } from './post-options'
 import { ColumnNode } from './schema'
 import { columnSurfaceProvider } from './surface'
 
@@ -439,6 +440,8 @@ export const columnDefinition: NodeDefinition<typeof ColumnNode> = {
   // bare sphere the legacy editor-side `ColumnTool` showed. `ToolManager`'s
   // registry-first path mounts this and skips the legacy `<ColumnTool>`.
   tool: () => import('./tool'),
+  // One family with the Post tool: a column, or a framing post that stands up to the beam over it.
+  toolOptions: [columnPlaceOption, postBaseOption],
   toolHints: [
     { key: 'Left click', label: 'Place column' },
     { key: 'Esc', label: 'Cancel' },

@@ -25,6 +25,7 @@ import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useSelectedRoom, useZoneRoom } from '../../../hooks/use-selected-room'
 import { FloorOpeningPanel } from './floor-opening-panel'
+import { FoundationViewPanel } from './foundation-view-panel'
 import { OpenRoomPanel, RoomPanel } from './room-panel'
 import { useIsMobile } from '../../../hooks/use-mobile'
 import { shouldShowEditingControls } from '../../../lib/interaction/overlay-policy'
@@ -172,6 +173,21 @@ function MobilePanelLayer({
   )
 }
 
+/** The foundation view's panel on a phone: its sheet open while the view is; closing it leaves the view. */
+function MobileFoundationLayer() {
+  const setFoundationView = useViewer((s) => s.setFoundationView)
+  return (
+    <MobilePanelSheet
+      icon="/icons/floor.webp"
+      onClose={() => setFoundationView(false)}
+      open={true}
+      title="Foundation"
+    >
+      <FoundationViewPanel />
+    </MobilePanelSheet>
+  )
+}
+
 function MobileMultiPanelLayer({
   breakdown,
   panel,
@@ -225,6 +241,7 @@ export function PanelManager({
   const selectedIds = useViewer((s) => s.selection.selectedIds)
   const selectedZoneId = useViewer((s) => s.selection.zoneId)
   const setSelection = useViewer((s) => s.setSelection)
+  const foundationView = useViewer((s) => s.foundationView)
   const selectedReferenceId = useEditor((s) => s.selectedReferenceId)
   const readOnly = useScene((s) => s.readOnly)
   // Only subscribe to the *type* of the single-selected node — string primitive
@@ -305,6 +322,12 @@ export function PanelManager({
       ) : (
         <OpenRoomPanel key={panelZoneId} onClose={closeZone} zoneId={panelZoneId} />
       )
+    }
+
+    // The level list's Foundation row with nothing picked: the foundation's settings. A footing
+    // picked in the view shows its own panel.
+    if (foundationView && selectedIds.length === 0 && !selectedReferenceId) {
+      return isMobile ? <MobileFoundationLayer /> : <FoundationViewPanel />
     }
 
     if (isMobile) {

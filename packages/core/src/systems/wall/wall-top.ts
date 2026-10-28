@@ -1,3 +1,4 @@
+import { RAILING_GUARD_HEIGHT } from '../../schema/nodes/railing-wall'
 import type { WallNode } from '../../schema/nodes/wall'
 
 /**
@@ -10,9 +11,11 @@ import type { WallNode } from '../../schema/nodes/wall'
 export const MIN_WALL_HEIGHT = 0.5
 
 export function wallFollowsStorey(
-  wall: Pick<WallNode, 'height' | 'supportSlabId'>,
+  wall: Pick<WallNode, 'height' | 'supportSlabId' | 'wallType'>,
   authoredStoreyHeight: number | null,
 ): boolean {
+  // A railing is a guard as tall as itself, never the storey (36 in when it says nothing).
+  if (wall.wallType === 'railing') return false
   return (
     wall.height == null ||
     (authoredStoreyHeight !== null &&
@@ -34,13 +37,14 @@ export function wallFollowsStorey(
  * Returns the top in level-local Y (same frame as `electedBase`).
  */
 export function resolveWallTop(
-  wall: Pick<WallNode, 'height' | 'supportSlabId'>,
+  wall: Pick<WallNode, 'height' | 'supportSlabId' | 'wallType'>,
   storeyHeight: number,
   electedBase: number,
   authoredStoreyHeight: number | null = storeyHeight,
 ): number {
   if (wallFollowsStorey(wall, authoredStoreyHeight)) return storeyHeight
-  return electedBase + wall.height!
+  // Only a railing reaches here with no height of its own.
+  return electedBase + (wall.height ?? RAILING_GUARD_HEIGHT)
 }
 
 /**

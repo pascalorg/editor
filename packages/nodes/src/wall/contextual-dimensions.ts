@@ -8,7 +8,11 @@ import {
   isCurvedWall,
   type WallNode,
 } from '@pascal-app/core'
-import { formatLinearMeasurement, readFloorplanMetricNotationOverride } from '@pascal-app/editor'
+import {
+  formatLinearMeasurement,
+  readFloorplanContext,
+  readFloorplanMetricNotationOverride,
+} from '@pascal-app/editor'
 
 type WallHostedOpening = {
   position: readonly [number, number, number]
@@ -90,6 +94,7 @@ function pointSegmentDistance(
 }
 
 function structuralFaceProjections(
+  /** A point on the measured line (the centerline or one face) at the wall's start. */
   wallStart: FloorplanPoint,
   wallTangent: FloorplanPoint,
   connectedWall: WallNode,
@@ -161,6 +166,92 @@ function wallStudFaceSpan(
   return { start, end, length: Math.max(0, endProjection - startProjection) }
 }
 
+type FaceSpan = { end: FloorplanPoint; length: number; start: FloorplanPoint }
+
+function nearPlanPoint(left: FloorplanPoint, right: FloorplanPoint): boolean {
+  return Math.hypot(left[0] - right[0], left[1] - right[1]) <= WALL_CONNECTION_TOLERANCE
+}
+
+/**
+ * One face of a straight wall, from end to end. `inner` stops at the near
+ * face of each connected wall (an interior face, the room size); `outer`
+ * runs on to the far face of a wall that turns the corner with it (an
+ * exterior face, the outside size). A wall that only abuts another (a T)
+ * stops at its near face either way, and a free end at the end cap.
+ */
+function wallFaceSpan(
+  wall: WallNode,
+  side: 'a' | 'b',
+  siblings: GeometryContext['siblings'],
+  reach: 'inner' | 'outer',
+): FaceSpan | null {
+  const dx = wall.end[0] - wall.start[0]
+  const dy = wall.end[1] - wall.start[1]
+  const length = Math.hypot(dx, dy)
+  if (length <= 1e-6) return null
+  const tangent: FloorplanPoint = [dx / length, dy / length]
+  const offset = getWallFaceOffsets(wall)[side]
+  const origin: FloorplanPoint = [
+    wall.start[0] - tangent[1] * offset,
+    wall.start[1] + tangent[0] * offset,
+  ]
+
+  const resolveEnd = (endpoint: FloorplanPoint, atStart: boolean): number => {
+    const rest = atStart ? 0 : length
+    let near: number | null = null
+    let far: number | null = null
+    for (const sibling of siblings) {
+      if (sibling.type !== 'wall' || sibling.id === wall.id) continue
+      if (pointSegmentDistance(endpoint, sibling.start, sibling.end) > WALL_CONNECTION_TOLERANCE) {
+        continue
+      }
+      const corner = nearPlanPoint(endpoint, sibling.start) || nearPlanPoint(endpoint, sibling.end)
+      for (const projection of structuralFaceProjections(origin, tangent, sibling)) {
+        const inward = atStart ? projection : length - projection
+        if (inward > 0 && inward < length) {
+          if (near === null || inward > (atStart ? near : length - near)) near = projection
+        } else if (corner && inward < 0 && inward > -length) {
+          if (far === null || inward < (atStart ? far : length - far)) far = projection
+        }
+      }
+    }
+    if (reach === 'outer' && far !== null) return far
+    return near ?? rest
+  }
+
+  const startProjection = resolveEnd(wall.start, true)
+  const endProjection = resolveEnd(wall.end, false)
+  if (endProjection - startProjection <= 1e-6) return null
+  return {
+    start: [origin[0] + tangent[0] * startProjection, origin[1] + tangent[1] * startProjection],
+    end: [origin[0] + tangent[0] * endProjection, origin[1] + tangent[1] * endProjection],
+    length: endProjection - startProjection,
+  }
+}
+
+function faceDimension(
+  span: FaceSpan,
+  offsetNormal: FloorplanPoint,
+  ctx: GeometryContext,
+): FloorplanGeometry {
+  return {
+    kind: 'dimension',
+    start: span.start,
+    end: span.end,
+    offsetNormal,
+    offsetDistance: 0.34,
+    extensionOvershoot: 0.08,
+    text: formatLength(span.length, ctx),
+    stroke: selectedStroke(ctx),
+  }
+}
+
+/**
+ * A selected wall's length, to its faces rather than its centerline: the
+ * interior face (ID) on the room side and the exterior face (OD) outside, as
+ * the dimension-faces preference asks. An interior partition has no outside,
+ * so it shows its clear span between the walls it runs to.
+ */
 export function buildWallContextualDimensions(
   node: WallNode,
   ctx: GeometryContext,
@@ -189,27 +280,30 @@ export function buildWallContextualDimensions(
   const dy = node.end[1] - node.start[1]
   const chordLength = Math.hypot(dx, dy)
   if (chordLength <= 1e-6) return null
-  const offsetNormal = contextualWallDimensionNormal(
-    node,
-    [-dy / chordLength, dx / chordLength],
-    ctx.siblings,
-  )
-  const span =
-    node.frontSide === 'interior' && node.backSide === 'interior'
-      ? wallStudFaceSpan(node, ctx.siblings)
-      : { start: node.start, end: node.end, length: chordLength }
-  if (span.length <= 1e-6) return null
-
-  return {
-    kind: 'dimension',
-    start: span.start,
-    end: span.end,
-    offsetNormal,
-    offsetDistance: 0.34,
-    extensionOvershoot: 0.08,
-    text: formatLength(span.length, ctx),
-    stroke: selectedStroke(ctx),
+  const front: FloorplanPoint = [-dy / chordLength, dx / chordLength]
+  const offsetNormal = contextualWallDimensionNormal(node, front, ctx.siblings)
+  if (node.frontSide === 'interior' && node.backSide === 'interior') {
+    const span = wallStudFaceSpan(node, ctx.siblings)
+    return span.length <= 1e-6 ? null : faceDimension(span, offsetNormal, ctx)
   }
+
+  // `offsetNormal` points out of the wall's exterior (or its best guess at it).
+  const exteriorSide = offsetNormal[0] * front[0] + offsetNormal[1] * front[1] > 0 ? 'a' : 'b'
+  const interiorNormal: FloorplanPoint = [cleanZero(-offsetNormal[0]), cleanZero(-offsetNormal[1])]
+  const faces = readFloorplanContext(ctx).wallDimensionFaces
+  const inner = wallFaceSpan(node, exteriorSide === 'a' ? 'b' : 'a', ctx.siblings, 'inner')
+  const outer = wallFaceSpan(node, exteriorSide, ctx.siblings, 'outer')
+  const interior = faces === 'exterior' ? null : inner
+  const exterior = faces === 'interior' ? null : outer
+  if (interior && exterior && Math.abs(interior.length - exterior.length) < 0.001) {
+    return faceDimension(exterior, offsetNormal, ctx)
+  }
+  const children = [
+    ...(interior ? [faceDimension(interior, interiorNormal, ctx)] : []),
+    ...(exterior ? [faceDimension(exterior, offsetNormal, ctx)] : []),
+  ]
+  if (children.length === 0) return null
+  return children.length === 1 ? children[0]! : { kind: 'group', children }
 }
 
 export function buildWallHostedOpeningContextualDimensions(

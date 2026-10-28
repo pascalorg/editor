@@ -88,11 +88,14 @@ type FaceFrame = {
   top: number
 }
 
-/** A wall whose faces a script can build on: straight, not a curtain wall, standing on a level. */
+/**
+ * A wall whose faces a script can build on: straight, not a curtain wall or a railing (neither has
+ * faces), standing on a level.
+ */
 function scriptableWall(nodes: SceneNodes, wallId: string): WallNode | null {
   const wall = nodes[wallId]
   if (wall?.type !== 'wall' || !wall.parentId) return null
-  if (wall.wallType === 'curtain' || isCurvedWall(wall)) return null
+  if (wall.wallType === 'curtain' || wall.wallType === 'railing' || isCurvedWall(wall)) return null
   return Math.hypot(wall.end[0] - wall.start[0], wall.end[1] - wall.start[1]) < EPS ? null : wall
 }
 

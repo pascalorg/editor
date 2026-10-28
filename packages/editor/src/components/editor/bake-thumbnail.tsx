@@ -47,8 +47,9 @@ const THUMBNAIL_BACKDROP = { inner: '#FAFAFA', outer: '#E4E4E4' }
 const THUMBNAIL_SHADOW_CATCHER_OPACITY = 0.7
 /** Soft shade hugging the ground-floor walls so the building never floats. */
 const THUMBNAIL_WALL_CONTACT = { opacity: 0.5, spreadM: 0.9 }
-/** Unpainted walls render as smooth plaster rather than the screw-dotted
- *  prepared-drywall default, which reads as unfinished at card size. */
+/** A roof's unpainted trim and gable bands render as smooth plaster rather
+ *  than the screw-dotted prepared-drywall default, which reads as unfinished
+ *  at card size. Unpainted walls already wear the interior paint. */
 const THUMBNAIL_SLOT_DEFAULT_OVERRIDES = {
   'library:concrete-drywall': 'library:concrete-plaster',
 } as const

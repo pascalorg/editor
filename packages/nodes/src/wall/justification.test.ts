@@ -87,7 +87,9 @@ test('floorplan wall body, hover polygon, face dots and side arrows follow justi
         (child) => child.kind === 'endpoint-handle' && child.affordance === 'thickness',
       )
       expect(dots.map((dot) => dot.kind === 'endpoint-handle' && dot.point[1])).toEqual([0.2, 0])
-      const arrows = geometry.children.filter((child) => child.kind === 'move-arrow')
+      const arrows = geometry.children.filter(
+        (child) => child.kind === 'move-arrow' && child.variant !== 'pull',
+      )
       expect(arrows).toHaveLength(2)
       expect(arrows[0]).toMatchObject({ point: [2, 0.28500000000000003] })
       expect(arrows[1]).toMatchObject({ point: [2, -0.05] })

@@ -238,6 +238,38 @@ type ViewerState = {
   showZones: boolean
   setShowZones: (show: boolean) => void
 
+  /**
+   * Ceilings also draw their upper face, so they read as solid from above: a roof seen over closed
+   * rooms. Off, a camera above looks into the rooms, the ceiling showing only from below. The
+   * editor drives it from its Ceilings display setting; not persisted.
+   */
+  showCeilingTops: boolean
+  setShowCeilingTops: (show: boolean) => void
+  /**
+   * The house as its frame: a framing plugin draws the studs, plates, headers, joists and rafters of
+   * every storey and hides the shell over them; the foundation stays, and the site's ground thins
+   * to its faint veil so the foundation under grade shows against it. Not persisted.
+   */
+  framingOnly: boolean
+  setFramingOnly: (on: boolean) => void
+  /**
+   * The frame in the finished house: a framing plugin draws the studs, joists and rafters with the
+   * shell left as it is, and the framed floors and roof decks draw open where their joists and
+   * rafters are, so the frame shows where it is exposed (a crawl space, a basement with no ceiling,
+   * the attic) and stays hidden inside the walls and the finished floors and ceilings. Framing only
+   * wins while both are on. Not persisted.
+   */
+  framingShown: boolean
+  setFramingShown: (on: boolean) => void
+  /**
+   * The building's foundation as its own view, the level list's Foundation row: the plan draws the
+   * foundation under the level's ghosted walls, and the 3D view hides the house over it and thins
+   * the ground to its veil, leaving the concrete and the footings. Ends when another level or
+   * building is selected, and with the project. Not persisted.
+   */
+  foundationView: boolean
+  setFoundationView: (on: boolean) => void
+
   transparentBackground: boolean
   setTransparentBackground: (transparent: boolean) => void
 
@@ -707,6 +739,17 @@ const useViewer = create<ViewerState>()(
       showZones: true,
       setShowZones: (show) => set({ showZones: show }),
 
+      showCeilingTops: false,
+      setShowCeilingTops: (show) => set({ showCeilingTops: show }),
+      framingOnly: false,
+      setFramingOnly: (on) => set({ framingOnly: on }),
+      framingShown: false,
+      setFramingShown: (on) =>
+        set((state) => (state.framingShown === on ? state : { framingShown: on })),
+      foundationView: false,
+      setFoundationView: (on) =>
+        set((state) => (state.foundationView === on ? state : { foundationView: on })),
+
       transparentBackground: false,
       setTransparentBackground: (transparent) => set({ transparentBackground: transparent }),
 
@@ -724,6 +767,9 @@ const useViewer = create<ViewerState>()(
             projectPreferences,
             projectPresentation: undefined,
             previewSceneTheme: null,
+            framingOnly: false,
+            framingShown: false,
+            foundationView: false,
             showScans: prefs.showScans ?? true,
             showGuides: prefs.showGuides ?? true,
             showGrid: prefs.showGrid ?? true,
@@ -750,7 +796,18 @@ const useViewer = create<ViewerState>()(
             if (updates.selectedIds === undefined) newSelection.selectedIds = []
           }
 
-          return { selection: newSelection, previewSelectedIds: [] }
+          // The foundation view belongs to its building's foundation level: another level or
+          // building ends it.
+          const leftFoundation =
+            state.foundationView &&
+            (newSelection.buildingId !== state.selection.buildingId ||
+              newSelection.levelId !== state.selection.levelId)
+
+          return {
+            selection: newSelection,
+            previewSelectedIds: [],
+            ...(leftFoundation ? { foundationView: false } : {}),
+          }
         }),
 
       resetSelection: () =>
@@ -762,6 +819,7 @@ const useViewer = create<ViewerState>()(
             selectedIds: [],
           },
           previewSelectedIds: [],
+          foundationView: false,
         }),
 
       outliner: { selectedObjects: [], hoveredObjects: [] },

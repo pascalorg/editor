@@ -170,6 +170,24 @@ describe('by hand: wrap, keep in step, unwrap', () => {
     })
   })
 
+  test('its partner takes its casing, each face on the same side of the corner', () => {
+    const { nodes, window } = plain()
+    const cased = { ...window, casingWidth: 0.1, casingFaceA: true, casingFaceB: false }
+    const casingOf = (partner: WindowNode | null) => [
+      partner?.casingWidth,
+      partner?.casingFaceA,
+      partner?.casingFaceB,
+    ]
+    // wall_a runs into the corner and wall_b on out of it: their `a` faces are on one side.
+    const onward = wrapCorner({ ...nodes, [window.id]: cased }, window.id).create
+    expect(casingOf(onward)).toEqual([0.1, true, false])
+    // wall_b drawn back into the corner: its `a` is on the side of wall_a's `b`.
+    const wallB = nodes.wall_b as WallNode
+    const reversed = { ...wallB, start: wallB.end, end: wallB.start }
+    const back = wrapCorner({ ...nodes, wall_b: reversed, [window.id]: cased }, window.id).create
+    expect(casingOf(back)).toEqual([0.1, false, true])
+  })
+
   // A window a few cm short of the corner still has a Corner section to wrap it.
   const onWall = (id: string, wall: string, x: number, width = 1.2) =>
     WindowNode.parse({

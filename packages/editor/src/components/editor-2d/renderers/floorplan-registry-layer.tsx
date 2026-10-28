@@ -78,6 +78,7 @@ import { resolveNodeForDrawingType } from '../../../lib/floorplan/drawing-coordi
 import {
   createFloorplanContextExtensions,
   type FloorplanAnnotationRole,
+  type FloorplanWallDimensionFaces,
   type FloorplanWallDimensionReference,
   getFloorplanNodeExtension,
   readFloorplanGeometryMetadata,
@@ -115,6 +116,11 @@ import { createSessionWrites, type SessionWrites } from '../../../lib/session-wr
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import { clearSurfacePlanSnapFeedback } from '../../../lib/surface-plan-snap'
 import { paintZoneMembership } from '../../../lib/units'
+import {
+  startWallPull,
+  WALL_PULL_AFFORDANCE,
+  type WallPullGripPayload,
+} from '../../../lib/wall-pull'
 import useDirectManipulationFeedback from '../../../store/use-direct-manipulation-feedback'
 import useDrawingView from '../../../store/use-drawing-view'
 import useEditor, { isAngleSnapActive, type Mode } from '../../../store/use-editor'
@@ -128,9 +134,12 @@ import useInteractionScope, {
 import { expandSessionSelectionForNode } from '../../../store/use-session-groups'
 import { isViewVisible, VIEW_2D } from '../../../store/view-layout'
 import { FloorRegionControls2D } from '../../editor/floor-region-controls'
-import { startGroupPickUp } from '../../editor/group-actions'
 import { classifyParticipant } from '../../editor/group-transform-shared'
-import { RoomHandleDragPreview2D, RoomHandles2D } from '../../editor/room-handles-2d'
+import {
+  RoomHandleDragPreview2D,
+  RoomHandles2D,
+  SelectedWallDimensions2D,
+} from '../../editor/room-handles-2d'
 import { RoomHighlight2D } from '../../editor/room-highlight'
 import { RoomLabels2D } from '../../editor/room-labels'
 import { suppressBoxSelectForPointer } from '../../tools/select/box-select-state'
@@ -199,6 +208,15 @@ const DIRECT_DRAG_THRESHOLD_PX = 4
 const DIRECT_ROTATE_EPSILON = 1e-6
 const DIRECT_ROTATE_RADIANS_PER_PIXEL = Math.PI / 180
 const MAX_HANDLE_UNITS_PER_PIXEL = 0.015
+// A wall end's pull grip, in screen pixels out from the end along the wall:
+// clear of the end's move grip (its hit ring reaches ~17 px), a short dashed
+// leader, then a round button with an outward arrow.
+const PULL_GRIP_LEADER_START_PX = 9
+const PULL_GRIP_CENTER_PX = 30
+const PULL_GRIP_RADIUS_PX = 10
+const PULL_GRIP_HIT_RADIUS_PX = 13
+const PULL_GRIP_FILL = '#10b981' // emerald-500
+const PULL_GRIP_HOVER_FILL = '#059669' // emerald-600
 
 export function resolveFloorplanHandleUnitsPerPixel(unitsPerPixel: number): number {
   return Math.min(unitsPerPixel, MAX_HANDLE_UNITS_PER_PIXEL)
@@ -388,6 +406,7 @@ type NodeDeps = {
   unit: 'metric' | 'imperial'
   metricNotation: 'meters' | 'millimeters'
   wallDimensionReference: FloorplanWallDimensionReference
+  wallDimensionFaces?: FloorplanWallDimensionFaces
   selected: boolean
   highlighted: boolean
   hovered: boolean
@@ -497,6 +516,20 @@ export function floorplanEntryYieldsToTool(state: {
   return state.mode === 'build' || state.openingPlacement
 }
 
+/**
+ * Whether an entry draws its node without edit handles or dimension chrome: a member of a
+ * multi-selection, a ceiling outside its edit session, or anything while a build tool is armed (a
+ * selected roof keeps its selection for a new plane to join it, but a press near its eave must
+ * draw, not resize it).
+ */
+export function floorplanEntryStripsHandles(state: {
+  mode: Mode
+  multiSelected: boolean
+  ceilingWithoutSession: boolean
+}): boolean {
+  return state.multiSelected || state.ceilingWithoutSession || state.mode === 'build'
+}
+
 function floorplanEntryYieldsToToolNow(): boolean {
   const { mode, tool } = useEditor.getState()
   const movingNode = getMovingNode()
@@ -520,6 +553,7 @@ const NO_MEMBER_IDS: readonly string[] = []
 export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
   const selectedLevelId = useViewer((s) => s.selection.levelId)
   const selectedBuildingId = useViewer((s) => s.selection.buildingId)
+  const foundationView = useViewer((s) => s.foundationView)
   const unit = useViewer((s) => s.unit)
   const metricNotation = useViewer((s) => s.metricNotation)
   const setSelection = useViewer((s) => s.setSelection)
@@ -610,6 +644,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
   const drawingType = useDrawingView((s) => s.drawingType)
   const annotationVisibility = useFloorplanAnnotationVisibility((s) => s.visibility)
   const wallDimensionReference = useFloorplanAnnotationVisibility((s) => s.wallDimensionReference)
+  const wallDimensionFaces = useFloorplanAnnotationVisibility((s) => s.wallDimensionFaces)
   const floorplanMode = useFloorplanMode((s) => s.mode)
   const effectiveWallDimensionReference = resolveFloorplanWallDimensionReference(
     floorplanMode,
@@ -970,20 +1005,28 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
 
   // Photoshop-style group drag: plain pointer-down on a transformable member
   // of a multi-selection slides the whole selection rigidly; a plain click
-  // (no drag) enters the group pick-up instead — parity with the single-item
-  // click-to-move (clicking outside still deselects). Modified clicks
+  // (no drag) selects the pressed member alone — a click never picks
+  // anything up (clicking outside still deselects). Modified clicks
   // (selection toggle) and Cmd-drag / direct-rotate keep their existing
   // paths. `immediate` engages without the drag threshold — the move-handle
   // dot's pick-up semantics.
   const startGroupMoveDrag = useCallback(
-    (id: AnyNodeId, event: ReactPointerEvent<SVGGElement>, immediate = false): boolean => {
+    (
+      id: AnyNodeId,
+      event: ReactPointerEvent<SVGGElement>,
+      immediate = false,
+      selectOnClick = true,
+    ): boolean => {
       if (event.button !== 0) return false
       if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return false
       if (movingNode) return false
       if (useEditor.getState().mode === 'delete') return false
       const started = startFloorplanGroupMove(id, event, {
         immediate,
-        onClickFallthrough: immediate ? undefined : () => startGroupPickUp(),
+        onClickFallthrough:
+          immediate || !selectOnClick
+            ? undefined
+            : () => applyEntrySelection(id, { shouldToggle: false, isolateMember: false }),
       })
       if (!started) return false
       event.preventDefault()
@@ -991,7 +1034,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
       suppressBoxSelectForPointer(event)
       return true
     },
-    [movingNode],
+    [applyEntrySelection, movingNode],
   )
 
   // Move-handle dot variant — routes the dot through the group session when
@@ -1002,7 +1045,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
   )
 
   // The dashed selection box is itself the group's drag handle: a press
-  // anywhere inside it slides the group (or picks it up on a plain click),
+  // anywhere inside it slides the group (a plain click keeps the selection),
   // anchored on the first transformable member.
   const handleGroupBoxPointerDown = useCallback(
     (event: ReactPointerEvent<SVGGElement>) => {
@@ -1013,7 +1056,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
           classifyParticipant(sceneNodes[id as AnyNodeId], currentLevelId, sceneNodes) !== null,
       )
       if (!anchor) return
-      startGroupMoveDrag(anchor as AnyNodeId, event)
+      startGroupMoveDrag(anchor as AnyNodeId, event, false, false)
     },
     [startGroupMoveDrag],
   )
@@ -1299,6 +1342,16 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
         runFloorplanWallPush(payload, event.clientX, event.clientY)
         return
       }
+      // A wall end's pull grip opens the Walls run at that end; the plan's
+      // wall draft then follows the pointer and the release places the wall.
+      if (affordance === WALL_PULL_AFFORDANCE) {
+        event.preventDefault()
+        event.stopPropagation()
+        suppressBoxSelectForPointer(event)
+        const grip = payload as WallPullGripPayload
+        startWallPull({ wallId: grip.wallId, endpoint: grip.endpoint, origin: '2d' })
+        return
+      }
 
       const sceneNodes = useScene.getState().nodes
       const node = sceneNodes[nodeId]
@@ -1580,7 +1633,13 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
     }
   }, [])
 
-  const entries = floorplanData.entries
+  // The foundation view keeps the foundation's outlines and footings live and leaves the rest of
+  // the level to the foundation layer's ghosted walls; a level plan shows no foundation outline.
+  const entries = floorplanData.entries.filter((entry) =>
+    foundationView
+      ? entry.node.type === 'footing' || entry.node.type === 'foundation'
+      : entry.node.type !== 'foundation',
+  )
   if (entries.length === 0) return null
 
   const palette = renderCtx?.palette
@@ -1620,6 +1679,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
         unit={unit}
         metricNotation={metricNotation}
         wallDimensionReference={effectiveWallDimensionReference}
+        wallDimensionFaces={wallDimensionFaces}
         visibilityRootId={
           entry.visibilityRootId ?? (entry.ctxOverrides ? undefined : (levelId as AnyNodeId))
         }
@@ -1653,9 +1713,13 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
           higher-rank kinds (slabs, then walls / items / shelves) layer
           on top in the expected document-order z-stack. */}
       <g className="floorplan-registry-base">{renderEntries('base')}</g>
-      <RoomHighlight2D levelId={levelId} />
-      <RoomLabels2D levelId={levelId} />
-      <FloorRegionControls2D levelId={levelId} />
+      {!foundationView && (
+        <>
+          <RoomHighlight2D levelId={levelId} />
+          <RoomLabels2D levelId={levelId} />
+          <FloorRegionControls2D levelId={levelId} />
+        </>
+      )}
       {/* Overlay pass — interactive handles (vertex / midpoint / edge /
           move) and labels (text / dimensions). Painted after every base
           entry so polygon-editor chrome on a selected slab stays above
@@ -1667,8 +1731,13 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
       {/* Handles pass — every grabbable handle above every node's overlay,
           so a neighbour's outline never covers a selected wall's corner. */}
       <g className="floorplan-registry-handles">{renderEntries('handles')}</g>
-      <RoomHandles2D levelId={levelId} />
-      <RoomHandleDragPreview2D levelId={levelId} />
+      {!foundationView && (
+        <>
+          <RoomHandles2D levelId={levelId} />
+          <RoomHandleDragPreview2D levelId={levelId} />
+          <SelectedWallDimensions2D levelId={levelId} />
+        </>
+      )}
       <FloorplanAnnotationLayoutResolver active={floorplanVisible} />
       {/* Click-to-type dimension labels. Portals its HTML input to
           document.body, so mounting it inside the SVG tree is safe. */}
@@ -1710,6 +1779,7 @@ function FloorplanAnnotationLayoutResolver({ active }: { active: boolean }) {
   const wallDimensionReference = useFloorplanAnnotationVisibility(
     (state) => state.wallDimensionReference,
   )
+  const wallDimensionFaces = useFloorplanAnnotationVisibility((state) => state.wallDimensionFaces)
   const floorplanMode = useFloorplanMode((state) => state.mode)
   const layoutInputs = useMemo(
     () => ({
@@ -1719,6 +1789,7 @@ function FloorplanAnnotationLayoutResolver({ active }: { active: boolean }) {
       interactionIdle,
       settledLayoutEpoch,
       wallDimensionReference,
+      wallDimensionFaces,
       floorplanMode,
     }),
     [
@@ -1728,6 +1799,7 @@ function FloorplanAnnotationLayoutResolver({ active }: { active: boolean }) {
       interactionIdle,
       settledLayoutEpoch,
       wallDimensionReference,
+      wallDimensionFaces,
       floorplanMode,
     ],
   )
@@ -1997,6 +2069,7 @@ type FloorplanRegistryEntryProps = {
   unit: 'metric' | 'imperial'
   metricNotation: 'meters' | 'millimeters'
   wallDimensionReference: FloorplanWallDimensionReference
+  wallDimensionFaces: FloorplanWallDimensionFaces
   visibilityRootId: AnyNodeId | undefined
 }
 
@@ -2033,6 +2106,7 @@ const FloorplanRegistryEntry = memo(function FloorplanRegistryEntry({
   unit,
   metricNotation,
   wallDimensionReference,
+  wallDimensionFaces,
   visibilityRootId,
 }: FloorplanRegistryEntryProps): React.ReactElement | null {
   // A node an agent just built is drawn on its construction-reveal turn, as in 3D.
@@ -2049,7 +2123,12 @@ const FloorplanRegistryEntry = memo(function FloorplanRegistryEntry({
   const ceilingWithoutSession = useCeilingEditSession(
     (state) => node.type === 'ceiling' && state.session?.ceilingId !== nodeId,
   )
-  const suppressHandles = multiSelected || ceilingWithoutSession
+  const mode = useEditor((state) => state.mode)
+  const suppressHandles = floorplanEntryStripsHandles({
+    mode,
+    multiSelected,
+    ceilingWithoutSession,
+  })
   const selectedLevelId = useViewer((state) => state.selection.levelId)
   const selectionProxyId = resolveSelectionProxyId(
     node,
@@ -2221,6 +2300,7 @@ const FloorplanRegistryEntry = memo(function FloorplanRegistryEntry({
     unit,
     metricNotation,
     wallDimensionReference,
+    wallDimensionFaces,
     visibilityRootId,
   })
   const rawGeometry = cacheEntry ? cacheEntry[pass] : null
@@ -2294,6 +2374,7 @@ type BuildFloorplanEntryGeometryArgs = {
   unit: 'metric' | 'imperial'
   metricNotation: 'meters' | 'millimeters'
   wallDimensionReference: FloorplanWallDimensionReference
+  wallDimensionFaces?: FloorplanWallDimensionFaces
   visibilityRootId: AnyNodeId | undefined
 }
 
@@ -2354,6 +2435,7 @@ export function buildFloorplanEntryGeometry({
   unit,
   metricNotation,
   wallDimensionReference,
+  wallDimensionFaces,
   visibilityRootId,
 }: BuildFloorplanEntryGeometryArgs): CacheEntry | null {
   const def = nodeRegistry.get(node.type)
@@ -2382,6 +2464,7 @@ export function buildFloorplanEntryGeometry({
     unit,
     metricNotation,
     wallDimensionReference,
+    wallDimensionFaces,
     selected,
     highlighted,
     hovered,
@@ -2469,6 +2552,7 @@ export function buildFloorplanEntryGeometry({
     metricNotation,
     roomLabelOverlay: true,
     wallDimensionReference,
+    wallDimensionFaces,
     highlighted,
     hovered,
     moving,
@@ -2495,6 +2579,7 @@ export function buildFloorplanEntryGeometry({
           purpose: 'edit',
           roomLabelOverlay: true,
           wallDimensionReference,
+          wallDimensionFaces,
         }),
         viewState: palette
           ? {
@@ -2641,6 +2726,87 @@ export const InteractiveGeometry = memo(function InteractiveGeometry({
   const handleUnitsPerPixel = resolveFloorplanHandleUnitsPerPixel(unitsPerPixel)
 
   return renderInteractive(geometry, 0)
+
+  /**
+   * A wall end's "pull to continue" grip: screen-sized, just past the end
+   * along the wall, emerald so it reads apart from the end's move grip.
+   */
+  function renderPullGrip(
+    g: Extract<FloorplanGeometry, { kind: 'move-arrow' }>,
+    keyHint: number,
+  ): React.ReactElement {
+    const handleId = `${makeHandleId(nodeId, g.payload)}:pull`
+    const isHovered = hoveredHandleId === handleId
+    const k = handleUnitsPerPixel
+    const c = PULL_GRIP_CENTER_PX * k
+    const r = PULL_GRIP_RADIUS_PX * (isHovered ? 1.12 : 1) * k
+    // Outward arrow inside the button: shaft then head, tip along +x.
+    const arrowD = [
+      `M ${c - 5.5 * k},${-1.4 * k}`,
+      `L ${c + 0.5 * k},${-1.4 * k}`,
+      `L ${c + 0.5 * k},${-4.6 * k}`,
+      `L ${c + 6 * k},0`,
+      `L ${c + 0.5 * k},${4.6 * k}`,
+      `L ${c + 0.5 * k},${1.4 * k}`,
+      `L ${c - 5.5 * k},${1.4 * k}`,
+      'Z',
+    ].join(' ')
+    const affordance = g.affordance
+    const payload = g.payload
+    return (
+      <g
+        data-wall-pull-grip={
+          typeof payload === 'object' && payload && 'endpoint' in payload
+            ? String((payload as { endpoint: unknown }).endpoint)
+            : ''
+        }
+        key={keyHint}
+        onClick={(e) => e.stopPropagation()}
+        transform={`translate(${g.point[0]} ${g.point[1]}) rotate(${(g.angle * 180) / Math.PI})`}
+      >
+        <line
+          pointerEvents="none"
+          stroke={PULL_GRIP_FILL}
+          strokeDasharray={`${3 * k} ${2.5 * k}`}
+          strokeLinecap="round"
+          strokeWidth={1.5 * k}
+          x1={PULL_GRIP_LEADER_START_PX * k}
+          x2={c - r}
+          y1={0}
+          y2={0}
+        />
+        <circle
+          cx={c}
+          cy={0}
+          fill={isHovered ? PULL_GRIP_HOVER_FILL : PULL_GRIP_FILL}
+          pointerEvents="none"
+          r={r}
+          stroke="#ffffff"
+          strokeWidth={1.5 * k}
+        />
+        <path d={arrowD} fill="#ffffff" pointerEvents="none" />
+        <circle
+          cx={c}
+          cy={0}
+          fill="transparent"
+          onPointerDown={(e) => {
+            if (affordance) {
+              onHandlePointerDown(affordance, payload, e as ReactPointerEvent<SVGGElement>)
+            }
+          }}
+          onPointerEnter={() => onHandleHoverChange(handleId)}
+          onPointerLeave={() => onHandleHoverChange(null)}
+          // Fill only: the default stroke is a plan metre wide, and would take
+          // the press meant for the end's move grip.
+          pointerEvents="fill"
+          r={PULL_GRIP_HIT_RADIUS_PX * k}
+          style={{ cursor: 'grab' }}
+        >
+          {g.title ? <title>{g.title}</title> : null}
+        </circle>
+      </g>
+    )
+  }
 
   function renderInteractive(g: FloorplanGeometry, keyHint: number): React.ReactElement {
     switch (g.kind) {
@@ -2914,7 +3080,8 @@ export const InteractiveGeometry = memo(function InteractiveGeometry({
         const head1 = `M ${t1x} ${t1y} L ${b1ax} ${b1ay} L ${b1bx} ${b1by} Z`
         const head2 = `M ${t2x} ${t2y} L ${b2ax} ${b2ay} L ${b2bx} ${b2by} Z`
         const fill = isHovered ? '#a5b4fc' : '#8381ed'
-        const strokeWidthPx = isHovered ? 2.4 : 1.8
+        const scale = g.scale ?? 1
+        const strokeWidthPx = (isHovered ? 2.4 : 1.8) * Math.sqrt(scale)
         const angleDeg = (g.angle * 180) / Math.PI
         const affordance = g.affordance
         const payload = g.payload
@@ -2923,7 +3090,7 @@ export const InteractiveGeometry = memo(function InteractiveGeometry({
           <g
             key={keyHint}
             onClick={(e) => e.stopPropagation()}
-            transform={`translate(${g.point[0]} ${g.point[1]}) rotate(${angleDeg})`}
+            transform={`translate(${g.point[0]} ${g.point[1]}) rotate(${angleDeg}) scale(${scale})`}
           >
             <path
               d={arcPath}
@@ -2978,6 +3145,7 @@ export const InteractiveGeometry = memo(function InteractiveGeometry({
       }
       case 'move-arrow': {
         if (!palette) return <></>
+        if (g.variant === 'pull') return renderPullGrip(g, keyHint)
         // Affordance-routed arrows (door width-resize) get a per-payload
         // handle id so each side can hover independently; default
         // (move-flow) arrows share the node's :move id like the dot.
@@ -2987,13 +3155,14 @@ export const InteractiveGeometry = memo(function InteractiveGeometry({
         // so it shrinks on zoom-out and grows on zoom-in, matching the
         // wall it accompanies. Composed of a rectangular shaft + triangular
         // head, drawn as a single path for a clean fill + stroke outline.
-        const sl = 0.1 // shaft length (shortened body)
-        const hl = 0.12 // head length
-        const sh = 0.04 // shaft half-height
-        const hh = 0.1 // head half-height
+        const k = g.scale ?? 1
+        const sl = 0.1 * k // shaft length (shortened body)
+        const hl = 0.12 * k // head length
+        const sh = 0.04 * k // shaft half-height
+        const hh = 0.1 * k // head half-height
         // Inset the shaft start so the arrow sits a little off the wall
         // body (matches the 3D `HANDLE_OFFSET`).
-        const bi = 0.03 // base inset
+        const bi = 0.03 * k // base inset
         const arrowD = `M ${bi},${-sh} L ${bi + sl},${-sh} L ${bi + sl},${-hh} L ${bi + sl + hl},0 L ${bi + sl},${hh} L ${bi + sl},${sh} L ${bi},${sh} Z`
         // Indigo palette to match the 3D wall push arrows
         // (`ARROW_COLOR` / `ARROW_HOVER_COLOR`) and the corner-sphere
@@ -3764,6 +3933,7 @@ function nodeDepsEqual(a: NodeDeps, b: NodeDeps): boolean {
     'unit',
     'metricNotation',
     'wallDimensionReference',
+    'wallDimensionFaces',
     'selected',
     'highlighted',
     'hovered',

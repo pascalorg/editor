@@ -1,5 +1,6 @@
 import z from 'zod'
 import { ProceduralItemNode } from '../procedural-items/node'
+import { BeamNode } from './nodes/beam'
 import { BlockNode } from './nodes/block'
 import { BoxVentNode } from './nodes/box-vent'
 import { BuildingNode } from './nodes/building'
@@ -20,6 +21,8 @@ import { EyebrowVentNode } from './nodes/eyebrow-vent'
 import { FenceNode } from './nodes/fence'
 import { FenceGateNode, FenceOpeningNode } from './nodes/fence-feature'
 import { FloorOpeningNode } from './nodes/floor-opening'
+import { FootingNode } from './nodes/footing'
+import { FoundationNode } from './nodes/foundation'
 import { GuideNode } from './nodes/guide'
 import { GutterNode } from './nodes/gutter'
 import { HvacEquipmentNode } from './nodes/hvac-equipment'
@@ -95,12 +98,15 @@ export const AnyNode = nodeUnion([
   LevelNode,
   LeanToExtensionNode,
   ColumnNode,
+  BeamNode,
   ConstructionDimensionNode,
   BlockNode,
   StructuralGridNode,
   WallNode,
   SeparatorNode,
   FloorOpeningNode,
+  FootingNode,
+  FoundationNode,
   FenceNode,
   FenceGateNode,
   FenceOpeningNode,

@@ -573,15 +573,33 @@ function expand(region: Polygon, offset: number): Polygon[] {
         ],
         holes: [],
       })
-      pieces.push({
-        outer: Array.from({ length: 12 }, (_, j) => [
-          p[0] + Math.cos((j * TAU) / 12) * offset,
-          p[1] + Math.sin((j * TAU) / 12) * offset,
-        ]),
-        holes: [],
-      })
+      pieces.push(...squareCorner(ring[(i + ring.length - 1) % ring.length]!, p, q, offset))
     }
   return union(pieces)
+}
+
+/**
+ * The corner pieces at `p` (between edges `prev → p` and `p → next`) on both sides of the ring:
+ * a mitred, square-cornered join, so a rectangular flight's opening widens to a rectangle, not a
+ * rounded box. A corner sharper than ~60° is bevelled instead of mitred to a spike.
+ */
+function squareCorner(prev: Ring[number], p: Ring[number], next: Ring[number], offset: number) {
+  const unitNormal = (a: Ring[number], b: Ring[number]): [number, number] | null => {
+    const length = Math.hypot(b[0] - a[0], b[1] - a[1])
+    return length ? [-(b[1] - a[1]) / length, (b[0] - a[0]) / length] : null
+  }
+  const n1 = unitNormal(prev, p)
+  const n2 = unitNormal(p, next)
+  if (!(n1 && n2)) return []
+  const dot = n1[0] * n2[0] + n1[1] * n2[1]
+  return [1, -1].map((side): Polygon => {
+    const a: [number, number] = [p[0] + side * n1[0] * offset, p[1] + side * n1[1] * offset]
+    const b: [number, number] = [p[0] + side * n2[0] * offset, p[1] + side * n2[1] * offset]
+    if (1 + dot < 0.5) return { outer: [p, a, b], holes: [] }
+    const scale = (side * offset) / (1 + dot)
+    const miter: [number, number] = [p[0] + (n1[0] + n2[0]) * scale, p[1] + (n1[1] + n2[1]) * scale]
+    return { outer: [p, a, miter, b], holes: [] }
+  })
 }
 
 /** Surface-hole rings cannot contain islands; split annular cuts while preserving their centre. */

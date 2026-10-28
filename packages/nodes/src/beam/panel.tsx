@@ -1,0 +1,231 @@
+'use client'
+
+import {
+  type AnyNodeId,
+  type BeamMaterial,
+  type BeamNode,
+  type BeamPlacement,
+  type BeamTopReference,
+  beamCeilingPlane,
+  beamPlan,
+  beamSizeLabel,
+  beamSizePresetPatch,
+  beamTopElevation,
+  beamTopReferencePatch,
+  DEFAULT_FRAMING_POST_SIZE,
+  useScene,
+} from '@pascal-app/core'
+import {
+  ActionButton,
+  ActionGroup,
+  formatLinearMeasurement,
+  MetricControl,
+  PanelSection,
+  PanelWrapper,
+  SegmentedControl,
+  SelectControl,
+  triggerSFX,
+  useEditor,
+} from '@pascal-app/editor'
+import { useViewer } from '@pascal-app/viewer'
+import { Columns2, Move, Trash2 } from 'lucide-react'
+import { useState } from 'react'
+import { electedPostFoot, framingPostsUnderBeam } from '../column/post-placement'
+import {
+  BEAM_MATERIAL_OPTIONS,
+  beamSizeOptions,
+  beamSizeValue,
+  beamTopOptions,
+  beamTopValue,
+} from './panel-model'
+
+const IN = 0.0254
+const CUSTOM = 'custom'
+
+/** A section size in metres, shown in inches on an imperial plan (feet would show 7-1/2 in as 0.63). */
+function InchField({
+  label,
+  value,
+  onCommit,
+}: {
+  label: string
+  value: number
+  onCommit: (meters: number) => void
+}) {
+  const [draft, setDraft] = useState<number | null>(null)
+  const imperial = useViewer((state) => state.unit) === 'imperial'
+  const toShown = (meters: number) => (imperial ? meters / IN : meters)
+  return (
+    <MetricControl
+      className="h-9 text-xs"
+      label={label}
+      min={toShown(0.01)}
+      onChange={(next) => setDraft(next)}
+      onCommit={(next) => {
+        setDraft(null)
+        onCommit(imperial ? next * IN : next)
+      }}
+      precision={imperial ? 3 : 4}
+      restoreOnCommit={false}
+      step={imperial ? 0.25 : 0.005}
+      unit={imperial ? 'in' : 'm'}
+      value={draft ?? toShown(value)}
+    />
+  )
+}
+
+/** The fields a ply count writes: as many plies of the same board, the width growing with them. */
+export function beamPliesPatch(beam: Pick<BeamNode, 'width' | 'plies'>, plies: number) {
+  return { plies, width: (beam.width / beam.plies) * plies }
+}
+
+/**
+ * A beam's panel: its size (a stock size, or a width, depth and plies of its own), what it is made
+ * of, how the joists meet it and where its top is, with its length and underside; Move, Delete,
+ * and posts under it at each end and every 8 ft.
+ */
+export default function BeamPanel() {
+  const selectedId = useViewer((state) => state.selection.selectedIds[0])
+  const setSelection = useViewer((state) => state.setSelection)
+  const unit = useViewer((state) => state.unit)
+  const metricNotation = useViewer((state) => state.metricNotation)
+  const nodes = useScene((state) => state.nodes)
+  const beam = selectedId ? nodes[selectedId as AnyNodeId] : undefined
+  if (beam?.type !== 'beam') return null
+
+  const update = (patch: Partial<BeamNode>) => useScene.getState().updateNode(beam.id, patch)
+  const length = (meters: number) => formatLinearMeasurement(meters, unit, metricNotation)
+  const size = beamSizeValue(beam)
+  const top = beamTopValue(nodes, beam)
+  const topY = beamTopElevation(nodes, beam)
+  const plane = beamCeilingPlane(nodes, beam)
+
+  return (
+    <PanelWrapper
+      icon="/icons/beam.svg"
+      onClose={() => setSelection({ selectedIds: [] })}
+      title={beam.name ?? 'Beam'}
+      width={300}
+    >
+      <PanelSection title={`Beam ${beamSizeLabel(beam)}`}>
+        <SelectControl
+          label="Size"
+          onChange={(id: string) => {
+            if (id !== CUSTOM) update(beamSizePresetPatch(beam, id))
+          }}
+          options={beamSizeOptions(size)}
+          value={size}
+        />
+        <SelectControl
+          label="Material"
+          onChange={(material: string) => update({ material: material as BeamMaterial })}
+          options={BEAM_MATERIAL_OPTIONS}
+          value={beam.material}
+        />
+        <InchField
+          label="Width"
+          onCommit={(width) => update({ width, size: undefined })}
+          value={beam.width}
+        />
+        <InchField
+          label="Depth"
+          onCommit={(depth) => update({ depth, size: undefined })}
+          value={beam.depth}
+        />
+        <SegmentedControl
+          onChange={(plies: string) => update(beamPliesPatch(beam, Number(plies)))}
+          options={['1', '2', '3', '4'].map((plies) => ({
+            label: plies === '1' ? '1 ply' : `${plies} plies`,
+            value: plies,
+          }))}
+          value={String(beam.plies)}
+        />
+      </PanelSection>
+      <PanelSection title="Placement">
+        <SegmentedControl
+          onChange={(placement: BeamPlacement) => update({ placement })}
+          options={[
+            { label: 'Dropped', value: 'dropped' },
+            { label: 'Flush', value: 'flush' },
+          ]}
+          value={beam.placement}
+        />
+        <SelectControl
+          label="Top"
+          onChange={(reference: string) => {
+            if (reference !== CUSTOM)
+              update(beamTopReferencePatch(nodes, beam, reference as BeamTopReference))
+          }}
+          options={beamTopOptions(top)}
+          value={top}
+        />
+        <MetricControl
+          label="Top elevation"
+          onChange={(value) => update({ topElevation: value })}
+          precision={3}
+          step={0.01}
+          unit="m"
+          value={topY}
+        />
+        <p className="px-0.5 text-muted-foreground text-xs" data-beam-readout>
+          {length(beamPlan(beam).length)} long; its underside {length(topY - beam.depth)} over the
+          floor, the ceiling plane {length(plane)}.
+        </p>
+        {beam.topElevation !== undefined && (
+          <button
+            className="self-start rounded-full border border-border/50 px-3 py-1 text-muted-foreground text-xs hover:text-foreground"
+            onClick={() => update({ topElevation: undefined })}
+            type="button"
+          >
+            Follow the ceiling plane
+          </button>
+        )}
+      </PanelSection>
+      <PanelSection title="Actions">
+        <ActionGroup>
+          <ActionButton
+            icon={<Columns2 className="h-3.5 w-3.5" />}
+            label="Add posts"
+            onClick={() => {
+              const posts = beam.parentId
+                ? framingPostsUnderBeam({
+                    nodes,
+                    beam,
+                    choices: { size: DEFAULT_FRAMING_POST_SIZE, base: 'none' },
+                    foot: electedPostFoot(nodes, beam.parentId),
+                  })
+                : []
+              if (posts.length === 0) return
+              const standing = Object.values(nodes).filter(
+                (node) => node.type === 'column' && node.role === 'post',
+              ).length
+              useScene.getState().createNodes(
+                posts.map((post, index) => ({
+                  node: { ...post, name: `Post ${standing + index + 1}` },
+                  parentId: beam.parentId as AnyNodeId,
+                })),
+              )
+              triggerSFX('sfx:structure-build')
+            }}
+          />
+          <ActionButton
+            icon={<Move className="h-3.5 w-3.5" />}
+            label="Move"
+            onClick={() => {
+              triggerSFX('sfx:item-pick')
+              useEditor.getState().setMovingNode(beam)
+            }}
+          />
+          <ActionButton
+            icon={<Trash2 className="h-3.5 w-3.5" />}
+            label="Delete"
+            onClick={() => {
+              useScene.getState().deleteNode(beam.id)
+              setSelection({ selectedIds: [] })
+            }}
+          />
+        </ActionGroup>
+      </PanelSection>
+    </PanelWrapper>
+  )
+}

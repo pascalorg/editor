@@ -574,6 +574,8 @@ export function GlbScene({
             selectedIndex: selectedIdx >= 0 ? selectedIdx : undefined,
             nodeVisible: true,
             revealing: false,
+            // the published viewer keeps the levels above casting their shadows, as before
+            hiddenAboveCastShadows: true,
           })
       if (shadowOnly) applyShadowOnly(node)
       else clearShadowOnly(node)

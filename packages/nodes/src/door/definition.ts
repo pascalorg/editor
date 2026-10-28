@@ -223,6 +223,8 @@ export const doorDefinition: NodeDefinition<typeof DoorNode> = {
     'pascal:editor/floorplan': {
       contextualDimensions: buildDoorContextualDimensions,
       schedule: buildDoorFloorplanSchedule,
+      // Swap hinge / swing side from the action bar, in 2D and 3D.
+      actionMenu: { actions: () => import('./actions') },
     } satisfies FloorplanNodeExtension<DoorNodeType>,
   },
   surfaceRole: 'joinery',

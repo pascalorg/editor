@@ -47,6 +47,7 @@ import { Copy, FlipHorizontal2, Move, Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useMemo } from 'react'
 import { AuthoredParams } from '../item/authored-params'
 import { constrainCurtainOpening, curtainOpeningLimits } from '../shared/curtain-opening-limits'
+import { OpeningCasingSection } from '../shared/opening-casing-section'
 import { WINDOW_STYLE_MESSAGES, WINDOW_TYPE_MESSAGES } from '../shared/opening-labels'
 import { createOpeningPropertyPreview } from '../shared/opening-property-preview'
 import { openingPropertyPreviewHost } from '../shared/opening-property-preview-host'
@@ -1157,6 +1158,8 @@ export default function WindowPanel() {
           )}
         </>
       )}
+
+      <OpeningCasingSection node={node} onUpdate={handleUpdate} />
 
       <PanelSection title={i18n._({ id: 'node.window.panel.actions', message: 'Actions' })}>
         <ActionGroup>

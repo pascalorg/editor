@@ -106,11 +106,25 @@ describe('explicit wall merge', () => {
     ).toThrow('These walls have a different height.')
   })
 
-  test('refuses anything that would change the layout', () => {
+  test('merges a straight run across a T: the wall meeting it stays on its body', () => {
     const a = wall([0, 0], [4, 0])
     const b = wall([4, 0], [8, 0])
     const tee = wall([4, 0], [4, 3])
-    expect(() => planWallMerge(map([a, b, tee]), [a.id, b.id])).toThrow('Another wall')
+    const { changes, wallId } = planWallMerge(map([a, b, tee]), [a.id, b.id])
+    const merged = changes.update.find((op) => op.id === wallId)!.data as Partial<WallNode>
+    expect([merged.start, merged.end]).toEqual([
+      [0, 0],
+      [8, 0],
+    ])
+    expect(changes.update.some((op) => op.id === tee.id)).toBe(false)
+    expect(changes.delete).toHaveLength(1)
+  })
+
+  test('refuses anything that would change the layout', () => {
+    const a = wall([0, 0], [4, 0])
+    const b = wall([4, 0], [8, 0])
+    const along = wall([4, 0], [6, 0])
+    expect(() => planWallMerge(map([a, b, along]), [a.id, b.id])).toThrow('Another wall')
     const corner = wall([4, 0], [4, 4])
     expect(() => planWallMerge(map([a, corner]), [a.id, corner.id])).toThrow('straight line')
     const thick = wall([4, 0], [8, 0], { thickness: 0.3 })
@@ -200,6 +214,7 @@ describe('explicit wall merge through the store', () => {
         rotation: [0, 0.25, 0],
         hingesSide: 'left',
         handleSide: 'right',
+        casingFaceB: false,
       })
       kept.children = keptWindows.map((w) => w.id)
       absorbed.children = [absorbedWindow.id, absorbedDoor.id]
@@ -219,6 +234,8 @@ describe('explicit wall merge through the store', () => {
       expect(door.rotation[1]).toBeCloseTo(0.25 - Math.PI)
       expect(door.hingesSide).toBe('left')
       expect(door.handleSide).toBe('right')
+      // Its casing, kept per wall face, stays on the same side of the wall.
+      expect([door.casingFaceA, door.casingFaceB]).toEqual([false, true])
       // The kept wall's own openings keep their side and their world place.
       const keptFirst = nodes[keptWindows[0]!.id] as WindowNode
       expect(keptFirst.side).toBeUndefined()

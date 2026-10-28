@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { DoorNode, OPENING_FRAME_LIP, useScene, WallNode } from '@pascal-app/core'
 import * as THREE from 'three'
+import { OPENING_CASING_MESH_NAME } from '../wall/opening-casing-geometry'
 import { buildDoorPreviewMesh } from './door-system'
 
 /**
@@ -37,14 +38,23 @@ function hitboxDepth(mesh: THREE.Mesh): number {
   return box.parameters.depth
 }
 
-/** The deepest extent of the door's frame posts, in the door's own frame. */
+/**
+ * The deepest extent of the door's frame posts, in the door's own frame. The casing shares the
+ * frame's paint but is trim on the wall faces, so it is left out.
+ */
 function frameExtent(mesh: THREE.Mesh): { min: number; max: number } {
   mesh.updateWorldMatrix(true, true)
   const toDoor = mesh.matrixWorld.clone().invert()
   const extent = { min: Number.POSITIVE_INFINITY, max: Number.NEGATIVE_INFINITY }
   mesh.traverse((object) => {
     const part = object as THREE.Mesh
-    if (!part.isMesh || part === mesh || part.name === 'cutout' || part.userData.slotId !== 'frame')
+    if (
+      !part.isMesh ||
+      part === mesh ||
+      part.name === 'cutout' ||
+      part.name === OPENING_CASING_MESH_NAME ||
+      part.userData.slotId !== 'frame'
+    )
       return
     const box = new THREE.Box3().setFromObject(part).applyMatrix4(toDoor)
     extent.min = Math.min(extent.min, box.min.z)

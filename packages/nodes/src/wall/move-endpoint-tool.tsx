@@ -405,6 +405,7 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
         start: fixedPoint,
         angleSnap: isAngleSnapActive(),
         magnetic: isMagneticSnapActive(),
+        captureWallBodies: true,
       })
       const snappedPoint = snapResult.point
 

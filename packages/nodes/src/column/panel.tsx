@@ -27,6 +27,7 @@ import { useCallback } from 'react'
 
 import { AuthoredParams } from '../item/authored-params'
 import { planColumnEdit } from './hosted-resize'
+import { FramingPostSection } from './post-section'
 
 const SELECT_CLASS =
   'h-10 w-full rounded-lg border border-border/50 bg-black/4 dark:bg-[#2C2C2E] px-3 text-sm text-foreground outline-none transition-colors hover:bg-black/8 dark:hover:bg-[#3e3e3e] focus:ring-1 focus:ring-border'
@@ -404,7 +405,10 @@ export default function ColumnPanel() {
       title={node.name || i18n._({ id: 'node.column.panel.column', message: 'Column' })}
       width={300}
     >
-      {node.source ? (
+      {/* A framing post is a sawn post, not a styled column: its own short section. */}
+      {node.role === 'post' ? (
+        <FramingPostSection node={node} onUpdate={handleUpdate} />
+      ) : node.source ? (
         <AuthoredParams node={node} />
       ) : (
         <>

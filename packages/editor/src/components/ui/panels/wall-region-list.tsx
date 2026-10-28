@@ -76,6 +76,7 @@ export function WallPaintRegionList({ wallId }: { wallId: string }) {
                       backgroundImage: row.finish.imageUrl
                         ? `url(${row.finish.imageUrl})`
                         : undefined,
+                      backgroundBlendMode: row.finish.tinted ? 'multiply' : undefined,
                     }}
                   />
                   <span className="flex min-w-0 flex-col leading-tight">
@@ -100,9 +101,7 @@ export function WallPaintRegionList({ wallId }: { wallId: string }) {
               </div>
             )
           })}
-          {capNotice && (
-            <div className="px-1 text-[11px] text-muted-foreground">{capNotice}</div>
-          )}
+          {capNotice && <div className="px-1 text-[11px] text-muted-foreground">{capNotice}</div>}
         </div>
       </PanelSection>
     </div>

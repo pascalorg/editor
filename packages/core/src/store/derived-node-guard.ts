@@ -6,6 +6,7 @@ import {
 import { expandFloorIntentChanges, floorIntentConflicts } from '../lib/floor-intent-changes'
 import { ownFloorIntentChanges } from '../lib/own-floor-intent'
 import { type Ring, union } from '../lib/polygon-boolean'
+import { surfaceIntentZoneIds } from '../lib/surface-intent'
 import type { AnyNode, AnyNodeId, CeilingNode, SlabNode, ZoneNode } from '../schema'
 import { FloorOpeningNode, generateId } from '../schema'
 import { DEFAULT_SLAB_ELEVATION } from '../schema/nodes/slab'
@@ -708,8 +709,9 @@ function linkedZoneIds(node: DerivedSurfaceNode): string[] {
  * Explicit deletion of derived construction is an intent edit, not a refusal:
  * removing a room's auto ceiling means "this room has no ceiling"
  * (`hasCeiling: false`), removing its plate means "no floor" (`hasFloor:
- * false`). Returns the zone updates that record it, so the reconciler does not
- * simply rebuild what the user deleted.
+ * false`) for the rooms it is the floor of (`surfaceIntentZoneIds`). Returns
+ * the zone updates that record it, so the reconciler does not simply rebuild
+ * what the user deleted.
  *
  * Cascaded descendants (deleting the level that owns the plate) carry no
  * intent — the zone is going away with them.
@@ -720,11 +722,15 @@ export function derivedDeletionIntent(
 ): { id: AnyNodeId; data: Partial<AnyNode> }[] {
   const deleted = new Set<AnyNodeId>(ids)
   const intent = new Map<AnyNodeId, Partial<ZoneNode>>()
+  // The plates still standing after the delete: a room on one of its own keeps its floor.
+  const plates = Object.values(nodes).filter(
+    (node) => node.type === 'slab' && !deleted.has(node.id as AnyNodeId),
+  )
   for (const id of ids) {
     const node = nodes[id]
     if (!isDerivedNode(node)) continue
     const field = node.type === 'ceiling' ? 'hasCeiling' : 'hasFloor'
-    for (const zoneId of linkedZoneIds(node)) {
+    for (const zoneId of surfaceIntentZoneIds(node, plates)) {
       const zone = nodes[zoneId]
       if (zone?.type !== 'zone' || deleted.has(zone.id)) continue
       if (zone[field] === false) continue

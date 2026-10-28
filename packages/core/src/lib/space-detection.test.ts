@@ -1,10 +1,17 @@
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { AGENT_OPERATIONS, applyAgentOutcome } from '../agent-operations'
+import { createZone } from '../commands/structure/create-zone'
+import { structureChangeBatch } from '../commands/structure/shared'
 import { findOpenWallEnds, SeparatorNode } from '../index'
-import { BuildingNode, CeilingNode, LevelNode, SlabNode, WallNode } from '../schema'
+import { BuildingNode, CeilingNode, generateId, LevelNode, SlabNode, WallNode } from '../schema'
+import { DEFAULT_UPPER_FLOOR_THICKNESS } from '../schema/nodes/slab'
 import type { AnyNode, AnyNodeId } from '../schema/types'
+import { resolveCeilingHeight } from '../services/level-height'
+import { getWallPlaneTop } from '../services/storey'
 import {
+  runAsSceneCommitAuthor,
   runWithSceneCommitNodeIds,
   type SceneCommit,
   subscribeSceneCommits,
@@ -2223,5 +2230,154 @@ describe('wallClosesRoom', () => {
     expect(wallClosesRoom([...bigRoom, bayLeft, bayBottom], bayBottom)).toBe(false)
     // The final side lands on the interior of the big room's bottom wall.
     expect(wallClosesRoom([...bigRoom, bayLeft, bayBottom, bayRight], bayRight)).toBe(true)
+  })
+})
+
+describe('a new storey floor', () => {
+  test('a floor over rooms below is framed, 13⅛ in thick, lifts its own storey, keeps the ceiling below, and is one undo step with the room', () => {
+    const building = BuildingNode.parse({ children: [] })
+    const ground = LevelNode.parse({ parentId: building.id, level: 0, height: 2.819 })
+    const upper = LevelNode.parse({ parentId: building.id, level: 1, height: 2.819 })
+    building.children = [ground.id, upper.id]
+    const previousSceneState = useScene.getState()
+    useScene.setState({
+      nodes: { [building.id]: building, [ground.id]: ground, [upper.id]: upper },
+      rootNodeIds: [building.id],
+      dirtyNodes: new Set<AnyNodeId>(),
+      collections: {},
+      materials: {},
+      installedPlugins: [],
+      readOnly: false,
+    } as never)
+    clearSceneHistory()
+    const stopDetection = initSpaceDetectionSync(useScene, createEditorStoreStub(), {
+      newUpperFloorThickness: DEFAULT_UPPER_FLOOR_THICKNESS,
+    })
+    const nodes = () => useScene.getState().nodes as Record<string, AnyNode>
+    const plateOn = (levelId: string) =>
+      Object.values(nodes()).find(
+        (node): node is SlabNode =>
+          node.type === 'slab' && node.plateRole === 'base' && node.parentId === levelId,
+      )
+    const ceilingOn = (levelId: string) =>
+      Object.values(nodes()).find(
+        (node): node is CeilingNode => node.type === 'ceiling' && node.parentId === levelId,
+      )!
+    const addRoom = (levelId: string, x = 0, width = 8) =>
+      useScene.getState().applyNodeChanges(
+        structureChangeBatch(
+          createZone(nodes(), {
+            levelId,
+            polygon: [
+              [x, 0],
+              [x + width, 0],
+              [x + width, 5],
+              [x, 5],
+            ],
+            enclose: true,
+            mintId: generateId,
+          }).changes,
+        ),
+      )
+    try {
+      addRoom(ground.id, 0, 30)
+      expect(plateOn(ground.id)?.thickness).toBe(0.05)
+      const ceilingBelow = resolveCeilingHeight(ceilingOn(ground.id), nodes())
+      clearSceneHistory()
+      addRoom(upper.id)
+      expect(plateOn(upper.id)).toMatchObject({
+        thickness: DEFAULT_UPPER_FLOOR_THICKNESS,
+        elevation: DEFAULT_UPPER_FLOOR_THICKNESS,
+      })
+      const wall = Object.values(nodes()).find(
+        (node): node is WallNode => node.type === 'wall' && node.parentId === upper.id,
+      )!
+      expect(getWallPlaneTop(wall, upper.id, nodes())).toBeCloseTo(
+        2.819 + DEFAULT_UPPER_FLOOR_THICKNESS - 0.05,
+        6,
+      )
+      expect(resolveCeilingHeight(ceilingOn(ground.id), nodes())).toBeCloseTo(ceilingBelow, 6)
+      expect(useScene.temporal.getState().pastStates).toHaveLength(1)
+      // A second room upstairs gets the same floor.
+      addRoom(upper.id, 20)
+      const upstairs = Object.values(nodes()).filter(
+        (node): node is SlabNode =>
+          node.type === 'slab' && node.plateRole === 'base' && node.parentId === upper.id,
+      )
+      expect(upstairs.map((plate) => [plate.thickness, plate.elevation])).toEqual([
+        [DEFAULT_UPPER_FLOOR_THICKNESS, DEFAULT_UPPER_FLOOR_THICKNESS],
+        [DEFAULT_UPPER_FLOOR_THICKNESS, DEFAULT_UPPER_FLOOR_THICKNESS],
+      ])
+      useScene.temporal.getState().undo()
+      useScene.temporal.getState().undo()
+      expect(plateOn(upper.id)).toBeUndefined()
+    } finally {
+      stopDetection()
+      useScene.setState(previousSceneState, true)
+      clearSceneHistory()
+    }
+  })
+
+  test('rooms an agent builds, or a host without the editor opt-in, keep the 0.05 m floor', () => {
+    for (const host of ['agent', 'headless'] as const) {
+      const building = BuildingNode.parse({ children: [] })
+      const ground = LevelNode.parse({ parentId: building.id, level: 0, height: 2.819 })
+      const upper = LevelNode.parse({ parentId: building.id, level: 1, height: 2.819 })
+      building.children = [ground.id, upper.id]
+      const previousSceneState = useScene.getState()
+      useScene.setState({
+        nodes: { [building.id]: building, [ground.id]: ground, [upper.id]: upper },
+        rootNodeIds: [building.id],
+        dirtyNodes: new Set<AnyNodeId>(),
+        collections: {},
+        materials: {},
+        installedPlugins: [],
+        readOnly: false,
+      } as never)
+      clearSceneHistory()
+      const stopDetection = initSpaceDetectionSync(
+        useScene,
+        createEditorStoreStub(),
+        host === 'agent' ? { newUpperFloorThickness: DEFAULT_UPPER_FLOOR_THICKNESS } : {},
+      )
+      const nodes = () => useScene.getState().nodes as Record<string, AnyNode>
+      const build = (levelId: string) =>
+        applyAgentOutcome(
+          AGENT_OPERATIONS.create_room!(
+            nodes(),
+            {
+              levelId,
+              name: 'Room',
+              polygon: [
+                [0, 0],
+                [8, 0],
+                [8, 5],
+                [0, 5],
+              ],
+            } as never,
+            { activeLevelId: levelId },
+          ),
+          {
+            applyChanges: (changes) => useScene.getState().applyNodeChanges(changes as never),
+            reconcile: () => {},
+            getNodes: nodes,
+          } as never,
+        )
+      try {
+        runAsSceneCommitAuthor('agent', () => {
+          build(ground.id)
+          build(upper.id)
+        })
+        const plate = Object.values(nodes()).find(
+          (node): node is SlabNode =>
+            node.type === 'slab' && node.plateRole === 'base' && node.parentId === upper.id,
+        )
+        expect(plate).toMatchObject({ thickness: 0.05, elevation: 0.05 })
+      } finally {
+        stopDetection()
+        useScene.setState(previousSceneState, true)
+        clearSceneHistory()
+      }
+    }
   })
 })

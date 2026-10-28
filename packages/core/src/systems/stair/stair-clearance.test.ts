@@ -172,3 +172,36 @@ test('intermediate slab cuts stop above the floating body and hidden flights ret
   expect(surfaces[0]?.walkingLine[0][2]).toBeCloseTo(5)
   expect(surfaces[0]?.top).toBeCloseTo(3.2)
 })
+
+test('a widened straight-flight opening stays a square-cornered rectangle', () => {
+  const building = BuildingNode.parse({})
+  const ground = LevelNode.parse({ parentId: building.id, level: 0, height: 3 })
+  const upper = LevelNode.parse({ parentId: building.id, level: 1 })
+  const flight = StairSegmentNode.parse({ height: 3, length: 4, stepCount: 15, width: 1 })
+  const stair = StairNode.parse({
+    parentId: ground.id,
+    fromLevelId: ground.id,
+    toLevelId: upper.id,
+    children: [flight.id],
+    totalRise: 3,
+    slabOpeningMode: 'destination',
+    openingOffset: 0.2,
+  })
+  const nodes: Record<string, AnyNode> = Object.fromEntries(
+    [building, ground, upper, stair, { ...flight, parentId: stair.id }].map((node) => [
+      node.id,
+      node,
+    ]),
+  )
+  const [ring, ...rest] = stairClearanceOpening(stair, nodes, 2.8, 0.2, 3)!
+  expect(rest).toEqual([])
+  expect(ring).toHaveLength(4)
+  const xs = ring!.map(([x]) => x)
+  expect(Math.min(...xs)).toBeCloseTo(-0.7)
+  expect(Math.max(...xs)).toBeCloseTo(0.7)
+  for (const [i, a] of ring!.entries()) {
+    const b = ring![(i + 1) % 4]!
+    const c = ring![(i + 2) % 4]!
+    expect((b[0] - a[0]) * (c[0] - b[0]) + (b[1] - a[1]) * (c[1] - b[1])).toBeCloseTo(0)
+  }
+})

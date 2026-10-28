@@ -9,10 +9,12 @@ import {
 import {
   captureElementActionOrigin,
   completeElementAction,
+  type FloorplanWallDimensionFaces,
   Tooltip,
   TooltipContent,
   TooltipTrigger,
   triggerSFX,
+  useFloorplanAnnotationVisibility,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { FoldHorizontal, Scissors } from 'lucide-react'
@@ -22,13 +24,67 @@ import { openWallSplit } from './split-session'
 const BUTTON =
   'tooltip-trigger rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-50'
 
-/** The wall's action-menu contributions: Split (one wall) and Merge (several). */
+/** The wall's action-menu contributions: Split and dimension faces (one wall), Merge (several). */
 export default function WallActions() {
   return (
     <>
       <SplitWallAction />
+      <DimensionFacesAction />
       <MergeWallsAction />
     </>
+  )
+}
+
+const DIMENSION_FACES: Record<
+  FloorplanWallDimensionFaces,
+  { label: string; title: string; next: FloorplanWallDimensionFaces }
+> = {
+  both: {
+    label: 'ID+OD',
+    title: 'Dimensions to the interior and exterior faces. Click for interior only',
+    next: 'interior',
+  },
+  interior: {
+    label: 'ID',
+    title: 'Dimensions to the interior faces (room size). Click for exterior only',
+    next: 'exterior',
+  },
+  exterior: {
+    label: 'OD',
+    title: 'Dimensions to the exterior faces (outside size). Click for both',
+    next: 'both',
+  },
+}
+
+/**
+ * What a selected wall's dimensions measure to — interior faces, exterior
+ * faces or both — for its length and its temporary room and outside sizes, in
+ * 2D and 3D. A display preference, kept per browser; it changes no geometry.
+ */
+function DimensionFacesAction() {
+  const selected = useViewer((s) => s.selection.selectedIds)
+  const wall = useScene((s) =>
+    selected.length === 1 ? s.nodes[selected[0] as AnyNodeId] : undefined,
+  )
+  const faces = useFloorplanAnnotationVisibility((s) => s.wallDimensionFaces)
+  const setFaces = useFloorplanAnnotationVisibility((s) => s.setWallDimensionFaces)
+  if (wall?.type !== 'wall') return null
+  // A partition between two rooms has no outside: its dimensions read the same either way.
+  if (wall.frontSide === 'interior' && wall.backSide === 'interior') return null
+  const option = DIMENSION_FACES[faces]
+  return (
+    <button
+      type="button"
+      aria-label={option.title}
+      title={option.title}
+      className={`${BUTTON} min-w-8 font-medium text-xs tabular-nums`}
+      onClick={(event) => {
+        event.stopPropagation()
+        setFaces(option.next)
+      }}
+    >
+      {option.label}
+    </button>
   )
 }
 

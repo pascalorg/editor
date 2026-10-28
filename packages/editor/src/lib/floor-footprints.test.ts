@@ -3,19 +3,26 @@ import {
   type AnyNode,
   applySceneOperationPatch,
   BuildingNode,
+  type CeilingNode,
   clearSceneHistory,
   createI18n,
   createZone,
   floorFootprintName,
   generateId,
+  getLevelElevations,
+  getOpeningFloorDatum,
+  getWallPlaneTop,
   ItemNode,
   initSpaceDetectionSync,
   LevelNode,
+  resolveCeilingHeight,
   type SceneCommit,
   type SlabNode,
   SlabNode as SlabSchema,
   subscribeSceneCommits,
   useScene,
+  type WallNode,
+  WindowNode,
   ZoneNode,
 } from '@pascal-app/core'
 import { moveTogetherLabel } from '../components/ui/panels/floor-foundation-panel'
@@ -327,6 +334,82 @@ describe('floor footprints', () => {
     expect(roomRelativeFloorHeight(nodes(), livingId)).toBeCloseTo(0.15)
     const zone = nodes()[livingId]
     expect(zone?.type === 'zone' ? zone.floor?.elevation : null).toBeCloseTo(floor + 0.15)
+  })
+
+  test("the room's Floor thickness lifts what stands on that floor, upstairs and down, like Floor & foundation", () => {
+    // A room on the raised Shared floor, a storey over it, and a room up there.
+    const building = nodes()['building_footprints' as never] as BuildingNode
+    const upper = LevelNode.parse({ id: 'level_footprints_up', parentId: building.id, level: 1 })
+    useScene.getState().applyNodeChanges({
+      create: [{ node: upper, parentId: building.id as never }],
+      update: [],
+      delete: [],
+    })
+    const upstairs = createZone(nodes(), {
+      levelId: upper.id,
+      polygon: [
+        [0, 0],
+        [9, 0],
+        [9, 5],
+        [0, 5],
+      ],
+      enclose: true,
+      mintId: generateId,
+      name: 'Upstairs',
+    })
+    applyRoomPlan(upstairs)
+    const upperWall = Object.values(nodes()).find(
+      (node): node is WallNode => node.type === 'wall' && node.parentId === upper.id,
+    )!
+    const opening = WindowNode.parse({ parentId: upperWall.id, position: [2, 1, 0] })
+    useScene.getState().createNode(opening, upperWall.id as never)
+    expect(applyFloorFoundation(house.id, { foundationHeight: 0.254 })).toBeNull()
+    const ceilingOn = (levelId: string) =>
+      Object.values(nodes()).find(
+        (node): node is CeilingNode => node.type === 'ceiling' && node.parentId === levelId,
+      )!
+    const groundWall = Object.values(nodes()).find(
+      (node): node is WallNode => node.type === 'wall' && node.parentId === LEVEL,
+    )!
+    const measure = () => {
+      const graph = nodes()
+      const wall = graph[upperWall.id] as WallNode
+      return {
+        upperBase: getLevelElevations(graph).get(upper.id)!.baseY,
+        upperWallTop: getWallPlaneTop(wall, upper.id, graph),
+        window: getOpeningFloorDatum(wall, graph[opening.id] as WindowNode, graph),
+        upperCeiling: resolveCeilingHeight(ceilingOn(upper.id), graph),
+        groundWallTop: getWallPlaneTop(graph[groundWall.id] as WallNode, LEVEL, graph),
+        groundCeiling: resolveCeilingHeight(ceilingOn(LEVEL), graph),
+      }
+    }
+
+    // Thicker ground floor: its own walls and ceiling and the whole storey above go up.
+    let before = measure()
+    let delta = 0.3 - (nodes()[house.id] as SlabNode).thickness
+    clearSceneHistory()
+    expect(applyRoomFloorConstruction(livingId, { thickness: 0.3 })).toBeNull()
+    expect(history()).toBe(1)
+    let after = measure()
+    expect(after.groundWallTop).toBeCloseTo(before.groundWallTop + delta, 6)
+    expect(after.groundCeiling).toBeCloseTo(before.groundCeiling + delta, 6)
+    expect(after.upperBase).toBeCloseTo(before.upperBase + delta, 6)
+    expect(after.upperWallTop).toBeCloseTo(before.upperWallTop, 6)
+
+    // Thicker upstairs floor: that storey's walls, window and ceiling rise; the ceiling below holds.
+    const upperRoom = upstairs.zoneId
+    const upperPlate = roomFloorOwner(nodes(), upperRoom)!
+    before = measure()
+    delta = 0.45 - upperPlate.thickness
+    clearSceneHistory()
+    expect(applyRoomFloorConstruction(upperRoom, { thickness: 0.45 })).toBeNull()
+    expect(history()).toBe(1)
+    after = measure()
+    expect(after.upperWallTop).toBeCloseTo(before.upperWallTop + delta, 6)
+    expect(after.window).toBeCloseTo(before.window + delta, 6)
+    expect(after.upperCeiling).toBeCloseTo(before.upperCeiling + delta, 6)
+    expect(after.groundCeiling).toBeCloseTo(before.groundCeiling, 6)
+    expect(after.groundWallTop).toBeCloseTo(before.groundWallTop, 6)
   })
 
   test('a refused room height says why and changes nothing', () => {

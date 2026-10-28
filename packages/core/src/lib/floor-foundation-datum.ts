@@ -1,11 +1,20 @@
-import type { AnyNode, SlabNode } from '../schema'
+import type { AnyNode, BuildingNode, SlabNode } from '../schema'
 import { DEFAULT_SLAB_ELEVATION, MIN_SLAB_THICKNESS } from '../schema/nodes/slab'
+import { BELOW_GRADE_TOLERANCE, getAuthoredLevelElevations } from '../services/storey'
 import { wallOverlapsSlabFootprint } from '../systems/slab/slab-support'
 import { getWallArcData } from '../systems/wall/wall-curve'
 import { wallOpeningBand } from './floor-opening-footprints'
 import { area, containsPoint, difference, intersection, union } from './polygon-boolean'
 import { automaticRoomBaseElevations } from './room-floor-feasibility'
-import { isLevelAtSiteDatum } from './terrain-support-query'
+import { heightAt } from './terrain-field'
+import { persistedTerrainFieldOf } from './terrain-source-persisted'
+import {
+  isLevelAtSiteDatum,
+  isSiteDatum,
+  levelLocalToWorldXZ,
+  SITE_DATUM_EPSILON,
+  SITE_DATUM_Y,
+} from './terrain-support-query'
 
 const heights = new WeakMap<
   object,
@@ -97,9 +106,72 @@ export function floorPlateAtGroundContact(
 ): boolean {
   return (
     !!plate.parentId &&
-    isLevelAtSiteDatum(nodes as Record<string, AnyNode>, plate.parentId) &&
+    isGroundStorey(nodes, plate.parentId) &&
     floorFootprintSupportClass(nodes, plate) === 'ground-bearing'
   )
+}
+
+const groundStoreys = new WeakMap<object, Set<string>>()
+
+/**
+ * The storey a building stands on the ground with: the one at the site datum, or the base of the
+ * stack of a building placed off it. Seating the house on its foundation (or "Set as ground
+ * floor") moves the building up, or down onto ground lower than the datum, and its ground floor
+ * still bears on what is under it, not on walls; a storey lifted by its own base elevation stands
+ * on nothing, and one moved down under the ground is a basement. Authored elevations only: the
+ * displaced ones are built from this answer.
+ */
+function isGroundStorey(nodes: Readonly<Record<string, AnyNode>>, levelId: string): boolean {
+  let ids = groundStoreys.get(nodes)
+  if (!ids) {
+    ids = new Set()
+    for (const [id, elevation] of getAuthoredLevelElevations(nodes)) {
+      const building = elevation.buildingId ? nodes[elevation.buildingId] : undefined
+      if (
+        isLevelAtSiteDatum(nodes as Record<string, AnyNode>, id) ||
+        (building?.type === 'building' &&
+          isSiteDatum(elevation.baseY) &&
+          (building.position[1] > SITE_DATUM_Y + SITE_DATUM_EPSILON ||
+            !buriedUnderGround(nodes, building, id)))
+      )
+        ids.add(id)
+    }
+    groundStoreys.set(nodes, ids)
+  }
+  return ids.has(levelId)
+}
+
+/**
+ * The ground stands over the floor tops of the base of `building`'s stack, past the below-grade
+ * tolerance, all across its floor plates. The tops, not the bare base: a ground floor raised on its
+ * own foundation in a house moved down onto lower ground still stands on that ground.
+ */
+function buriedUnderGround(
+  nodes: Readonly<Record<string, AnyNode>>,
+  building: BuildingNode,
+  levelId: string,
+): boolean {
+  const planeY = building.position[1]
+  const level = nodes[levelId]
+  const plates =
+    level?.type === 'level'
+      ? level.children.flatMap((childId) => {
+          const plate = nodes[childId]
+          return plate?.type === 'slab' && plate.plateRole === 'base' ? [plate] : []
+        })
+      : []
+  const corners = plates.length
+    ? plates.flatMap((plate) =>
+        plate.polygon.map(([x, z]) => [x, z, plate.floorHeight ?? plate.elevation] as const),
+      )
+    : [[0, 0, 0] as const]
+  const site = building.parentId ? nodes[building.parentId] : undefined
+  const field = site?.type === 'site' ? persistedTerrainFieldOf(site) : null
+  return corners.every(([x, z, top]) => {
+    if (!field) return SITE_DATUM_Y - (planeY + top) > BELOW_GRADE_TOLERANCE
+    const [worldX, worldZ] = levelLocalToWorldXZ(building, x, z)
+    return heightAt(field, worldX, worldZ) - (planeY + top) > BELOW_GRADE_TOLERANCE
+  })
 }
 
 export function floorPlateHoldsUnderside(

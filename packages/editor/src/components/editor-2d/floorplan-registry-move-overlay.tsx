@@ -388,7 +388,13 @@ export function FloorplanRegistryMoveOverlay() {
             endTransientMarkers()
           })
           sfxEmitter.emit('sfx:item-place')
-          useViewer.getState().setSelection({ selectedIds: initialAffectedIds })
+          // The moved node stays selected, as after a 3D move: the joined walls and
+          // rooms a wall move reshapes are part of its write, not a pick.
+          useViewer.getState().setSelection({
+            selectedIds: useScene.getState().nodes[movingNode.id]
+              ? [movingNode.id]
+              : initialAffectedIds,
+          })
           return
         }
 

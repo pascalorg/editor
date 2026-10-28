@@ -4,8 +4,10 @@ import {
   fitRoofFootprint,
   LevelNode,
   resolveRoomRoofFootprint,
+  SeparatorNode,
   type WallEvent,
   WallNode,
+  ZoneNode,
 } from '@pascal-app/core'
 import {
   isStandardRoofWallEligible,
@@ -13,6 +15,9 @@ import {
   resolveRoofFootprintElevation,
   resolveRoofFootprintWorldElevation,
   resolveRoofWallTopWorldElevation,
+  roofEdgeAnchors,
+  roofFootprintPreviewIds,
+  roofSnapEdges,
   subscribeToConicalRoofWallClicks,
 } from './roof-footprint'
 
@@ -272,5 +277,129 @@ describe('roof footprint sources', () => {
 
     expect(previewed).toEqual([])
     expect(selected).toEqual([])
+  })
+})
+
+const RAIL = 3.5 * 0.0254
+const H = RAIL / 2
+const r6 = (value: number) => Math.round(value * 1e6) / 1e6
+
+// A porch 6 m along a 0.2 m house wall at z 0, 2.5 m deep: invisible walls or railings round it.
+function porchLevel(open: 'separators' | 'railings') {
+  const level = LevelNode.parse({ id: 'level_porch', level: 0 })
+  const house = WallNode.parse({
+    id: 'wall_house',
+    parentId: level.id,
+    start: [0, 0],
+    end: [10, 0],
+    thickness: 0.2,
+  })
+  const sides: Array<[[number, number], [number, number]]> = [
+    [
+      [2, 0],
+      [2, -2.5],
+    ],
+    [
+      [2, -2.5],
+      [8, -2.5],
+    ],
+    [
+      [8, -2.5],
+      [8, 0],
+    ],
+  ]
+  const edges = sides.map(([start, end], i) =>
+    open === 'separators'
+      ? SeparatorNode.parse({ id: `separator_${i}`, parentId: level.id, start, end })
+      : WallNode.parse({
+          id: `wall_rail${i}`,
+          parentId: level.id,
+          start,
+          end,
+          wallType: 'railing',
+          thickness: RAIL,
+        }),
+  )
+  const zone = ZoneNode.parse({
+    id: 'zone_porch',
+    parentId: level.id,
+    name: 'Porch',
+    roomType: open === 'separators' ? 'porch' : 'deck',
+    polygon: [
+      [2, 0],
+      [2, -2.5],
+      [8, -2.5],
+      [8, 0],
+    ],
+  })
+  level.children = [house, ...edges, zone].map((node) => node.id) as LevelNode['children']
+  return Object.fromEntries([level, house, ...edges, zone].map((node) => [node.id, node]))
+}
+
+const ends = (wall: WallNode) => [...wall.start, ...wall.end].map(r6)
+
+describe("the rooms' edges a drawn roof snaps to", () => {
+  test("a porch's invisible walls snap as walls do, on their lines", () => {
+    const { references, faced } = roofSnapEdges(porchLevel('separators'), ['level_porch'])
+    expect(references.map((reference) => reference.id)).toEqual([
+      'separator_0',
+      'separator_1',
+      'separator_2',
+    ])
+    expect(references.map(ends)).toEqual([
+      [2, 0, 2, -2.5],
+      [2, -2.5, 8, -2.5],
+      [8, -2.5, 8, 0],
+    ])
+    expect(references.every((reference) => isStandardRoofWallEligible(reference))).toBe(true)
+    expect(faced.size).toBe(0)
+  })
+
+  test("a deck's railings snap at their outside faces, post corner to post corner", () => {
+    const { references, faced } = roofSnapEdges(porchLevel('railings'), ['level_porch'])
+    expect(references.map(ends)).toEqual([
+      [2 - H, 0, 2 - H, -2.5 - H].map(r6),
+      [2 - H, -2.5 - H, 8 + H, -2.5 - H].map(r6),
+      [8 + H, -2.5 - H, 8 + H, 0].map(r6),
+    ])
+    expect([...faced].sort()).toEqual(['wall_rail0', 'wall_rail1', 'wall_rail2'])
+  })
+
+  test("a porch's corners and invisible walls' ends line a drawn roof up", () => {
+    const deck = roofEdgeAnchors(porchLevel('railings'), ['level_porch'])
+    const corner = deck.find((anchor) => anchor.nodeId === 'zone_porch' && anchor.x > 8)
+    expect(corner && [r6(corner.x), r6(corner.z)]).toEqual([r6(8 + H), r6(-2.5 - H)])
+    const porch = roofEdgeAnchors(porchLevel('separators'), ['level_porch'])
+    expect(porch).toContainEqual({ nodeId: 'separator_1', kind: 'center', x: 5, z: -2.5 })
+    expect(porch).toContainEqual({ nodeId: 'separator_0', kind: 'corner', x: 2, z: -2.5 })
+  })
+
+  test('the Room pick lights up a porch with its edges, a room with its walls', () => {
+    const porch = resolveRoomRoofFootprint('level_porch', porchLevel('separators'), [5, -1])
+    expect(roofFootprintPreviewIds(porch).sort()).toEqual([
+      'separator_0',
+      'separator_1',
+      'separator_2',
+      'wall_house',
+    ])
+    expect(roofFootprintPreviewIds(null)).toEqual([])
+  })
+
+  test("a railing's top never sets its roof's height", () => {
+    const nodes = porchLevel('railings')
+    const target = fitRoofFootprint(
+      'deck',
+      [
+        [2, 0],
+        [2, -2.5],
+        [8, -2.5],
+        [8, 0],
+      ],
+      ['wall_rail1' as WallNode['id']],
+    )!
+    const railing = { ...nodes.wall_rail1, height: 0.9 } as WallNode
+    expect(
+      resolveRoofFootprintElevation('level_porch', target, { ...nodes, wall_rail1: railing }),
+    ).toBe(0)
   })
 })

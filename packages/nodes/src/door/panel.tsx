@@ -31,6 +31,7 @@ import { Copy, DoorOpen, FlipHorizontal2, Move, Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useMemo } from 'react'
 import { AuthoredParams } from '../item/authored-params'
 import { constrainCurtainOpening, curtainOpeningLimits } from '../shared/curtain-opening-limits'
+import { OpeningCasingSection } from '../shared/opening-casing-section'
 import { DOOR_STYLE_MESSAGES } from '../shared/opening-labels'
 import { createOpeningPropertyPreview } from '../shared/opening-property-preview'
 import { openingPropertyPreviewHost } from '../shared/opening-property-preview-host'
@@ -213,9 +214,10 @@ export default function DoorPanel() {
   if (!(node && node.type === 'door' && selectedId)) return null
 
   const limits = curtainOpeningLimits(node, useScene.getState().nodes)
+  // The sill stays where it stands (a garage's slab, the house's floor); the head moves.
   const heightUpdates = (height: number): Partial<DoorNode> => ({
     height,
-    position: [node.position[0], height / 2, node.position[2]],
+    position: [node.position[0], node.position[1] - node.height / 2 + height / 2, node.position[2]],
     handleHeight: scaleHandleHeight(node.handleHeight, node.height, height),
   })
   const hSum = node.segments.reduce((s, seg) => s + seg.heightRatio, 0)
@@ -1197,6 +1199,8 @@ export default function DoorPanel() {
           )}
         </>
       )}
+
+      <OpeningCasingSection node={node} onUpdate={handleUpdate} />
 
       <PanelSection title={i18n._({ id: 'node.door.panel.actions', message: 'Actions' })}>
         <ActionGroup>

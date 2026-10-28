@@ -656,6 +656,16 @@ export type FloorplanGeometry =
        */
       affordance?: string
       payload?: unknown
+      /** The arrow this many times its usual size (a big outline's side push); 1 by default. */
+      scale?: number
+      /**
+       * `pull`: a wall end's "pull to continue" grip — a screen-sized arrow a
+       * few pixels past `point` (the wall end) along `angle`, in its own colour,
+       * so it reads apart from the end's move grip.
+       */
+      variant?: 'pull'
+      /** Tooltip shown while the pointer rests on the arrow. */
+      title?: string
     }
   /**
    * Curved two-headed rotation arrow — the 2D counterpart of the 3D
@@ -685,6 +695,8 @@ export type FloorplanGeometry =
        * already compute the pivot to place the handle should pass it through.
        */
       pivot?: FloorplanPoint
+      /** Size against the default icon (1), for a node far larger than the handle, like a roof. */
+      scale?: number
     }
   /**
    * Centered length / distance label. Renders as a small rounded
@@ -1950,6 +1962,17 @@ export type SlotDeclaration = {
   default?: string
 }
 
+/** How far one paint click spreads: the editor's painter application scopes. */
+export type PaintScopeId = 'single' | 'object' | 'matching' | 'room'
+
+/** A surface's own scope set — see `PaintCapability.scopes`. */
+export type PaintSurfaceScopes = {
+  scopes: PaintScopeId[]
+  labels?: Partial<Record<PaintScopeId, string>>
+  /** The role a click paints under `scope`; the hovered role when omitted. */
+  roleFor?: (scope: PaintScopeId) => string
+}
+
 export type PaintCapability = {
   /**
    * Material-picker target represented by this paint capability. Omit when
@@ -1975,6 +1998,15 @@ export type PaintCapability = {
    * back to the user as the raw id. Return `null` to keep the derived label.
    */
   roleLabel?: (node: AnyNode, role: string) => string | null
+  /**
+   * Optional: the application scopes a surface offers itself, in place of the
+   * derived set (`single`, plus `object` / `matching` / `room` from the node's
+   * slots, asset and `roomScope`). `labels` names a scope over its generic
+   * label; `roleFor` is the role a click paints under a wider scope (a roof
+   * gable's `matching` paints every gable of the roof). Return `null` to keep
+   * the derived set.
+   */
+  scopes?: (node: AnyNode, role: string) => PaintSurfaceScopes | null
   /**
    * Build the node-update patch that applies the new material at
    * `role`. Returned partial is merged into the node by the editor.
@@ -2986,6 +3018,15 @@ export type ParamField<N> =
       min?: number
       max?: number
       step?: number
+      /** Shown when the node omits the key (an optional field with a schema-level fallback). */
+      default?: number
+      /**
+       * The nodes the field edits. A multi-selection shows it while any selected
+       * node qualifies and reads and writes only those; a single node that does
+       * not qualify hides it. Unlike `visibleIf`, one non-qualifying node does
+       * not hide it for the whole selection.
+       */
+      appliesTo?: (n: N) => boolean
       visibleIf?: (n: N) => boolean
       customEditor?: ComponentType
     }

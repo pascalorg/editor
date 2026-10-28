@@ -1,14 +1,19 @@
+import { setFloorFoundation } from '../commands/structure/set-floor-foundation'
+import { structureChangeBatch } from '../commands/structure/shared'
 import {
   type AnyNode,
   type AnyNodeId,
+  type SlabNode,
   type WallNode,
   ZoneNode,
   type ZoneNode as ZoneNodeType,
 } from '../schema'
 import { generateId } from '../schema/base'
+import { SlabNode as SlabSchema } from '../schema/nodes/slab'
 import { findLevelAboveId, getLevelBelow, getLevelElevations } from '../services/storey'
 import { isSettlingDocument } from '../store/document-settling'
 import {
+  activeSceneCommitAuthor,
   activeSceneCommitNodeIds,
   getSceneHistoryPauseDepth,
   isRestoringSceneHistory,
@@ -23,8 +28,12 @@ import {
   sceneEnvironmentOf,
 } from '../store/scene-environment'
 import { getClampedWallCurveOffset } from '../systems/wall/wall-curve'
+import { floorFootprintSupportClass } from './floor-foundation-datum'
 import { changedLevelConstructionDisplacements } from './floor-foundation-stack'
 import { createFloorOpeningIndex, floorOpeningTargets } from './floor-opening-intent'
+import { area } from './polygon-boolean'
+import { porchPartOf, porchPartSignature } from './porch-framing-sync'
+import { railingFencedRoomIds, railingWallIds } from './railing-rooms'
 import {
   type ExtractedRoom,
   extractRooms,
@@ -69,6 +78,12 @@ export type SpaceTopologyReconcileEvent = {
 export type SpaceDetectionSyncOptions = {
   mintId?: StructureIdFactory
   onTopologyReconcile?: (event: SpaceTopologyReconcileEvent) => void
+  /**
+   * The editor's opt-in for floors a person draws: a new floor over rooms below is born this thick
+   * (`DEFAULT_UPPER_FLOOR_THICKNESS`). Off by default, and never for writes an agent authors, so
+   * programmatic builds keep the elevations they asked for.
+   */
+  newUpperFloorThickness?: number
 }
 
 type WallSideUpdate = {
@@ -145,6 +160,9 @@ function zoneGeometrySignature(zone: ZoneNodeType) {
     zone.wallMaterial,
     zone.wallOverrides,
     zone.seed,
+    // A porch's type and framing settings rebuild its posts and beam.
+    zone.roomType,
+    zone.porchFraming,
     // A drawn zone's outline is intent (it may be adopted); a room's outline is
     // derived, and an edit to it must be re-derived here as the hosted path does.
     // The kernel's own write is not a change: the baseline is taken after it.
@@ -164,11 +182,19 @@ function levelStructureSnapshots(nodes: Record<string, any>) {
   const zonesByLevel = new Map<string, ZoneNodeType[]>()
   const slabElevationsByLevel = new Map<string, string[]>()
   const coveringUndersidesByLevel = new Map<string, string[]>()
+  const porchPartsByLevel = new Map<string, string[]>()
   const floorOpenings: Extract<AnyNode, { type: 'floor-opening' }>[] = []
 
   for (const node of Object.values(nodes)) {
     if (!(node && typeof node === 'object' && 'parentId' in node && node.parentId)) continue
     const levelId = (node as any).parentId as string
+    // A porch's own post or beam moved, resized or deleted by hand hands its framing over.
+    const porchPart = porchPartSignature(node)
+    if (porchPart) {
+      const parts = porchPartsByLevel.get(levelId) ?? []
+      parts.push(porchPart)
+      porchPartsByLevel.set(levelId, parts)
+    }
     if (node.type === 'stair' && nodes[node.deckSlabId]?.support === 'open') {
       const target = nodes[node.deckSlabId].parentId
       const arrivals = arrivalsByLevel.get(target) ?? []
@@ -271,6 +297,7 @@ function levelStructureSnapshots(nodes: Record<string, any>) {
     ...zonesByLevel.keys(),
     ...separatorsByLevel.keys(),
     ...openingsByLevel.keys(),
+    ...porchPartsByLevel.keys(),
   ])
   for (const levelId of levelIds) {
     const walls = wallsByLevel.get(levelId) ?? []
@@ -284,7 +311,7 @@ function levelStructureSnapshots(nodes: Record<string, any>) {
       : ''
     snapshots.set(
       levelId,
-      `${(arrivalsByLevel.get(levelId) ?? []).sort().join('|')}#${(separatorsByLevel.get(levelId) ?? []).sort().join('|')}#${storeyKey}#${levelWallSnapshot(walls, nodes, levelId)}##${zones.map(zoneGeometrySignature).sort().join('||')}##${slabKey}##${aboveSlabKey}##${(ceilingIdsByLevel.get(levelId) ?? []).sort().join('|')}##${(openingsByLevel.get(levelId) ?? []).sort().join('|')}`,
+      `${(arrivalsByLevel.get(levelId) ?? []).sort().join('|')}#${(separatorsByLevel.get(levelId) ?? []).sort().join('|')}#${storeyKey}#${levelWallSnapshot(walls, nodes, levelId)}##${zones.map(zoneGeometrySignature).sort().join('||')}##${slabKey}##${aboveSlabKey}##${(ceilingIdsByLevel.get(levelId) ?? []).sort().join('|')}##${(openingsByLevel.get(levelId) ?? []).sort().join('|')}##${(porchPartsByLevel.get(levelId) ?? []).sort().join('|')}`,
     )
   }
 
@@ -418,6 +445,10 @@ function fallbackLevelIdsForCandidates(
       } else if (node.type === 'door' || node.type === 'window') {
         const wall = nodes[node.parentId]
         if (wall?.parentId) levelIds.add(wall.parentId)
+      } else if (porchPartOf(node)) {
+        // A porch's own post or beam edited by hand: the kernel hands its framing over.
+        if (porchPartSignature(before[id]) !== porchPartSignature(current[id]) && node.parentId)
+          levelIds.add(node.parentId)
       } else if (node.type === 'slab') {
         const old = before[id],
           next = current[id]
@@ -459,12 +490,12 @@ function detectSpacesFromWalls(levelId: string, boundaries: BoundaryNode[]) {
   const rooms = extractRooms(boundaries)
   const walls = boundaries.filter((boundary): boundary is WallNode => boundary.type === 'wall')
   const roomPolygons = rooms.map((room) => room.polygon)
+  const spans = rooms.flatMap((room) => room.spans)
+  // A room a railing fences off from the outside (a deck's guard) is outside.
+  const fenced = railingFencedRoomIds(spans, railingWallIds(walls))
   const wallUpdates: WallSideUpdate[] = walls.map((wall) => ({
     wallId: wall.id,
-    ...classifyWallSides(
-      wall,
-      rooms.flatMap((room) => room.spans),
-    ),
+    ...classifyWallSides(wall, spans, fenced),
   }))
 
   return {
@@ -526,8 +557,88 @@ function syncSceneStructure(
   sceneStore: any,
   previousNodes: SceneNodes,
   mintId: StructureIdFactory,
+  newUpperFloorThickness?: number,
 ) {
-  applyStructureReconciliation(sceneStore, { levelIds, previousNodes, mintId })
+  const patches = applyStructureReconciliation(sceneStore, { levelIds, previousNodes, mintId })
+  if (newUpperFloorThickness !== undefined && activeSceneCommitAuthor() !== 'agent')
+    thickenNewUpperFloors(patches, sceneStore, previousNodes, mintId, newUpperFloorThickness)
+}
+
+const SCHEMA_SLAB_THICKNESS = SlabSchema.shape.thickness.parse(undefined)
+
+const isBasePlate = (node: AnyNode | undefined): node is SlabNode =>
+  node?.type === 'slab' && node.plateRole === 'base'
+
+/**
+ * A storey's floor over rooms below is born a framed floor, not the 0.05 m
+ * schema default: a plate the reconciler just created, standing on rooms below,
+ * takes the editor's opt-in thickness (`newUpperFloorThickness`) on a level that
+ * had no floor yet, and
+ * the thickness of that level's floor on one that has (so a second room upstairs
+ * matches the first, and an older 0.05 m floor stays as it was). It is written
+ * as the Floor thickness control writes it — underside held on the walls below,
+ * so this storey and the ones above ride up and the ceilings below stay — inside
+ * the edit that made the room, so one undo takes both back. Loaded, remote and
+ * undone scenes never reach here, so a saved floor keeps its thickness.
+ */
+function thickenNewUpperFloors(
+  patches: ReturnType<typeof applyStructureReconciliation>,
+  sceneStore: any,
+  previousNodes: SceneNodes,
+  mintId: StructureIdFactory,
+  firstFloorThickness: number,
+) {
+  for (const patch of patches) {
+    if (patch.op !== 'create' || !isBasePlate(patch.node as AnyNode)) continue
+    const nodes = sceneStore.getState().nodes as SceneNodes
+    const plate = nodes[patch.node.id as AnyNodeId]
+    if (!isBasePlate(plate) || !plate.parentId) continue
+    // A plate that took its construction from an earlier one keeps it.
+    if (Math.abs(plate.thickness - SCHEMA_SLAB_THICKNESS) > 1e-6) continue
+    if (floorFootprintSupportClass(nodes, plate) !== 'supported') continue
+    const thickness = newFloorThickness(nodes, previousNodes, plate, firstFloorThickness)
+    if (thickness === null || Math.abs(thickness - plate.thickness) < 1e-6) continue
+    const plan = setFloorFoundation(nodes, { slabId: plate.id, patch: { thickness } })
+    const { applyNodeChanges } = sceneStore.getState()
+    if (plan.conflicts?.length || !plan.changes.length || typeof applyNodeChanges !== 'function')
+      continue
+    applyNodeChanges(structureChangeBatch(plan.changes))
+    const level = nodes[plate.parentId as AnyNodeId]
+    const building = level?.parentId ? nodes[level.parentId as AnyNodeId] : undefined
+    applyStructureReconciliation(sceneStore, {
+      levelIds:
+        building?.type === 'building'
+          ? (building.children as string[]).filter((id) => nodes[id as AnyNodeId]?.type === 'level')
+          : [plate.parentId],
+      previousNodes: nodes,
+      mintId,
+    })
+  }
+}
+
+/** The thickness a new supported floor plate takes on its level, or null to leave it. */
+function newFloorThickness(
+  nodes: SceneNodes,
+  previousNodes: SceneNodes,
+  plate: SlabNode,
+  firstFloorThickness: number,
+): number | null {
+  const before = Object.values(previousNodes).filter(
+    (node): node is SlabNode => isBasePlate(node) && node.parentId === plate.parentId,
+  )
+  if (!before.length) return firstFloorThickness
+  const sibling = before
+    .map((node) => nodes[node.id as AnyNodeId])
+    .filter(
+      (node): node is SlabNode =>
+        isBasePlate(node) && floorFootprintSupportClass(nodes, node) === 'supported',
+    )
+    .sort(
+      (a, b) =>
+        area([{ outer: b.polygon, holes: b.holes ?? [] }]) -
+          area([{ outer: a.polygon, holes: a.holes ?? [] }]) || a.id.localeCompare(b.id),
+    )[0]
+  return sibling ? sibling.thickness : null
 }
 
 function publishSpaces(levelIds: string[], nodes: SceneNodes, editorStore: any) {
@@ -668,7 +779,13 @@ export function initSpaceDetectionSync(
       pauseSceneHistory(sceneStore)
       try {
         const levels = [...new Set([...changedWalls.keys(), ...fallbackLevels])]
-        syncSceneStructure(levels, sceneStore, previousNodes, mintId)
+        syncSceneStructure(
+          levels,
+          sceneStore,
+          previousNodes,
+          mintId,
+          options.newUpperFloorThickness,
+        )
         publishSpaces(levels, sceneStore.getState().nodes, editorStore)
         for (const [levelId, wallIds] of changedWalls) {
           const topologyDelta = topologyIndex.applyWallDelta(levelId, wallIds, previousNodes, nodes)
@@ -721,7 +838,13 @@ export function initSpaceDetectionSync(
     isProcessing = true
     pauseSceneHistory(sceneStore)
     try {
-      syncSceneStructure([...levelsToUpdate], sceneStore, previousNodes, mintId)
+      syncSceneStructure(
+        [...levelsToUpdate],
+        sceneStore,
+        previousNodes,
+        mintId,
+        options.newUpperFloorThickness,
+      )
       publishSpaces([...levelsToUpdate], sceneStore.getState().nodes, editorStore)
     } finally {
       resumeSceneHistory(sceneStore)
@@ -749,7 +872,7 @@ export function initSpaceDetectionSync(
     isProcessing = true
     pauseSceneHistory(sceneStore)
     try {
-      syncSceneStructure(levels, sceneStore, previousNodes, mintId)
+      syncSceneStructure(levels, sceneStore, previousNodes, mintId, options.newUpperFloorThickness)
       publishSpaces(levels, sceneStore.getState().nodes, editorStore)
       for (const id of levels) topologyIndex.rebuildLevel(id, sceneStore.getState().nodes)
       previousNodes = sceneStore.getState().nodes

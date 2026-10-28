@@ -168,6 +168,39 @@ In Select mode, 3D and 2D canvas selection share the same modifier vocabulary:
 - `Ctrl/Meta + right-drag` on a selected rotatable object starts direct rotation from the
   canvas. Rotation snaps to the default angle increment unless Shift is held during the
   drag.
+- A click only selects (or drills from room to element). Clicking an already-selected
+  object again, in either view, never picks it up: a move starts from a drag (of the
+  object or the dashed group box) or **Move** in the action menu. A plain click on a session group's dashed
+  box keeps the selection; a click on a member selects it (`group-move-3d.ts`,
+  `startGroupMoveDrag` in the registry layer).
+- In the 2D plan a wall hit selects the wall, and only a room interior selects the room
+  (the wall's floor-plan extension declares `planHitSelectsNode`, which `resolvePlanRoomHit`
+  reads). 3D stays room-first (E-012): a wall face
+  there selects its room first, then drills into the wall.
+
+### Selected-wall dimensions
+
+With exactly one node selected in Select mode and no interaction scope running, both views
+show its kind's `selectionDimensions` (floor-plan extension). The wall's are the push drag's
+dimensions without dragging (`selectedWallDimensions` in
+`lib/room-handle-drag.ts`, from `wallSelectionDimensions` in `lib/room-push-dimensions.ts`):
+each room width the wall bounds, face to face, and, for a wall with rooms on one side only,
+the outside size to the far face of the farthest parallel wall it connects to. A wall between
+two rooms shows room widths only. The plan draws them in `SelectedWallDimensions2D` under the
+wall's `data-node-id`, so `FloorplanDimensionEditOverlay` makes each one typeable; 3D
+labels (`SelectedWallDimensions3D`) open an inline input. Both commit through
+`commitDimensionValue`: a dimension perpendicular to a straight wall with one witness on it
+resolves to a `wall-offset` drive and moves the wall by `commitRoomPush`, so joined walls stay
+attached and the move is one undo step. Input parses with `parseDimensionInput`
+(`12' 6"`, `3.2 m`, bare numbers in the display unit).
+
+The wall's own length dimension in the plan measures faces, not the centerline
+(`buildWallContextualDimensions` in `nodes/src/wall/contextual-dimensions.ts`): ID along the
+room-facing face between the connected walls' inner faces, OD along the exterior face to the
+corner walls' outer faces. `useFloorplanAnnotationVisibility.wallDimensionFaces`
+(`interior` / `exterior` / `both`, default `both`, persisted) picks which show; the wall
+action menu's ID+OD / ID / OD button cycles it. A wall with no exterior side keeps one
+face-to-face span and shows no button.
 
 The floating helper in `packages/editor/src/components/ui/helpers/helper-manager.tsx`
 mirrors these rules from current selection state and held modifiers. Keep that helper and

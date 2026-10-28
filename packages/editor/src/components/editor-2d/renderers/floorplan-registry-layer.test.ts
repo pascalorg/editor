@@ -24,6 +24,7 @@ import {
   collectFloorplanLinkedLevelNodes,
   computeAffectedSiblingIds,
   floorplanAffordanceReshapeScope,
+  floorplanEntryStripsHandles,
   floorplanEntryYieldsToTool,
   floorplanHandleDoubleClickAffordance,
   InteractiveGeometry,
@@ -792,6 +793,17 @@ describe('floorplan entry routing while a tool is active', () => {
     expect(floorplanEntryYieldsToTool({ mode: 'select', openingPlacement: true })).toBe(true)
     expect(floorplanEntryYieldsToTool({ mode: 'select', openingPlacement: false })).toBe(false)
     expect(floorplanEntryYieldsToTool({ mode: 'delete', openingPlacement: false })).toBe(false)
+  })
+
+  // A roof plane selected before arming the roof tool kept its live corner and edge handles: a
+  // click near its eave resized it instead of drawing.
+  test('a selected node shows no edit handles while a build tool is armed', () => {
+    const entry = { multiSelected: false, ceilingWithoutSession: false }
+    expect(floorplanEntryStripsHandles({ ...entry, mode: 'select' })).toBe(false)
+    expect(floorplanEntryStripsHandles({ ...entry, mode: 'build' })).toBe(true)
+    expect(floorplanEntryStripsHandles({ ...entry, mode: 'select', multiSelected: true })).toBe(
+      true,
+    )
   })
 })
 

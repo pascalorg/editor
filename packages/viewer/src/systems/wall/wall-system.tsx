@@ -6,6 +6,10 @@ import {
   cornerPair,
   DEFAULT_LEVEL_HEIGHT,
   type DoorNode,
+  type FoundationRimStep,
+  foundationRimBottoms,
+  foundationRimSteps,
+  foundationSharedStemTops,
   getAdjacentWallIds,
   getEffectiveNode,
   getOpeningWallCut,
@@ -371,7 +375,10 @@ export type WallFinishContext = {
   faceBase: Record<'a' | 'b', WallFaceBaseRun[]> | null
   /** The palette's finish refs (material indices 3..): the layout's, then the foundation's. */
   refs: readonly string[]
-  /** The underpinning's stemwall: triangles below local y `top` take material `index`. */
+  /**
+   * The concrete under the wall: the underpinning's stemwall, or the house's stem under a wall a
+   * slab room shares with it. Triangles below local y `top` take material `index`.
+   */
   foundation: { index: number; top: number } | null
 }
 
@@ -612,8 +619,11 @@ function splitGeometryAtPlanes(
 
 /** Split planes a finish layout needs, in wall-local coordinates. */
 function getWallFinishSplitPlanes(finish: WallFinishContext): { x: number[]; y: number[] } {
-  const { layout, faceBase } = finish
-  if (layout.plain) return { x: [], y: [] }
+  const { layout, faceBase, foundation } = finish
+  // A face running down past the concrete's top (a garage's walls to its slab, the wall it
+  // shares with the house) turns to concrete there.
+  const under = foundation ? [foundation.top] : []
+  if (layout.plain) return { x: [], y: under }
   const x = [...layout.uSplits]
   const bases = new Set<number>([0])
   if (faceBase && layout.vSplits.length > 0) {
@@ -626,7 +636,7 @@ function getWallFinishSplitPlanes(finish: WallFinishContext): { x: number[]; y: 
     }
   }
   const y = [...bases].flatMap((base) => layout.vSplits.map((v) => base + v))
-  return { x, y }
+  return { x, y: [...y, ...under] }
 }
 
 // ============================================================================
@@ -837,8 +847,60 @@ export function markWallsForZoneFinishChanges(): void {
   }
 }
 
+let foundationRimNodes: Record<AnyNodeId, AnyNode> | null = null
+let foundationRims: ReadonlyMap<string, string> = new Map()
+
+/**
+ * A designed raised foundation carries each exterior wall's finish down over the floor framing to
+ * its stem (`foundationRimBottom`), and further down over a cripple wall (`foundationRimSteps`),
+ * and bares its stem under a wall a slab room shares with the house (`foundationSharedStemTops`);
+ * the walls whose rim or stem it moved, set or took away rebuild.
+ */
+export function markWallsForFoundationRims(): void {
+  const state = useScene.getState()
+  const nodes = state.nodes
+  if (nodes === foundationRimNodes) return
+  foundationRimNodes = nodes
+  const previous = foundationRims
+  const bottoms = foundationRimBottoms(nodes)
+  const stems = foundationSharedStemTops(nodes)
+  if (bottoms.size === 0 && stems.size === 0 && previous.size === 0) return
+  const steps = foundationRimSteps(nodes)
+  const current = new Map<string, string>()
+  for (const [id, bottom] of bottoms)
+    current.set(id, `${bottom}${steps.has(id) ? JSON.stringify(steps.get(id)) : ''}`)
+  for (const [id, top] of stems) current.set(id, `${current.get(id) ?? ''} stem ${top}`)
+  foundationRims = current
+  const changed = new Set<string>()
+  for (const [id, rim] of current) if (previous.get(id) !== rim) changed.add(id)
+  for (const id of previous.keys()) if (!current.has(id)) changed.add(id)
+  for (const id of changed) {
+    const wall = nodes[id as AnyNodeId]
+    if (wall?.type !== 'wall') continue
+    state.markDirty(wall.id)
+    for (const child of wall.children) state.markDirty(child)
+  }
+}
+
+/**
+ * The wall as its geometry draws it: one a designed raised foundation carries, with no
+ * underpinning of its own, takes its finish down to the stem's top (`baseY`, the wall's base,
+ * level-local).
+ */
+function withFoundationRim(
+  wall: WallNode,
+  nodes: Record<AnyNodeId, AnyNode>,
+  baseY: number,
+): WallNode {
+  if (wall.underpinning) return wall
+  const bottom = foundationRimBottoms(nodes).get(wall.id)
+  if (bottom === undefined || baseY - bottom < 1e-4) return wall
+  return { ...wall, underpinning: { rim: baseY - bottom, stem: 0 } }
+}
+
 function consumeWallBuildFrame(initialBuild: boolean, geometryAdapter?: WallGeometryAdapter) {
   markWallsForZoneFinishChanges()
+  markWallsForFoundationRims()
   const clearDirty = useScene.getState().clearDirty
   // Self-heal: any registered wall still on its mount-time placeholder
   // geometry with NO dirty mark gets re-marked, so a lost mark (system
@@ -1171,8 +1233,9 @@ function updateWallGeometry(
         containsPoint(fillMasks, [x, z]) ? slabElevation : terrainSupportLift(nodes, levelId, x, z)
     : undefined
 
+  const drawn = withFoundationRim(node, nodes, slabElevation)
   const builtGeo = generateExtrudedWall(
-    node,
+    drawn,
     prepared.envelopeChildren,
     miterData,
     slabElevation,
@@ -1370,12 +1433,63 @@ function buildWallTerrainFillGeometry(
   return buildTerrainPerimeterFillGeometry(localPoints, bottomY, 0)
 }
 
+/** How far across a wall's line its perimeter reaches a rim step drawn on the stem's line. */
+const RIM_STEP_REACH = 0.6
+/** The rim's bottom jumps over this much perimeter where a step begins or ends. */
+const RIM_STEP_JOG = 1e-3
+
+/** Where along a step's line a plan point lies, 0 at `a`, 1 at `b`; `null` off to its side. */
+function alongRimStep(step: FoundationRimStep, point: Point2D): number | null {
+  const dx = step.b[0] - step.a[0]
+  const dz = step.b[1] - step.a[1]
+  const length2 = dx * dx + dz * dz
+  if (length2 < 1e-12) return null
+  const px = point.x - step.a[0]
+  const pz = point.y - step.a[1]
+  if (Math.abs(px * dz - pz * dx) / Math.sqrt(length2) > RIM_STEP_REACH) return null
+  return (px * dx + pz * dz) / length2
+}
+
+/**
+ * The perimeter with two points a hair apart wherever a rim step begins or ends along it, so the
+ * rim's bottom drops there as the stem under it does, square, not over a sample's run.
+ */
+function withRimStepBreaks(points: Point2D[], steps: readonly FoundationRimStep[]): Point2D[] {
+  if (steps.length === 0) return points
+  const out: Point2D[] = []
+  for (let index = 0; index < points.length; index += 1) {
+    const start = points[index]!
+    const end = points[(index + 1) % points.length]!
+    out.push(start)
+    const length = Math.hypot(end.x - start.x, end.y - start.y)
+    if (length < 1e-9) continue
+    const cuts: number[] = []
+    for (const step of steps)
+      for (const at of [0, 1]) {
+        const s = alongRimStep(step, start)
+        const e = alongRimStep(step, end)
+        if (s === null || e === null || (s - at) * (e - at) >= 0) continue
+        cuts.push((at - s) / (e - s))
+      }
+    const jog = RIM_STEP_JOG / 2 / length
+    for (const t of cuts.sort((a, b) => a - b))
+      for (const u of [t - jog, t + jog])
+        if (u > 0 && u < 1)
+          out.push({ x: start.x + (end.x - start.x) * u, y: start.y + (end.y - start.y) * u })
+  }
+  return out
+}
+
 /**
  * The underpinning under a wall (`WallNode.underpinning`): a skirt of the
  * wall's own faces `rim` deep below the base, then the stemwall skirt from
  * there down `stem` more — or to the terrain wherever that is lower when
  * the wall also fills to terrain. Two fills, split at the rim depth, so the
  * material groups can paint the stem concrete and the rim in the finish.
+ * Over a cripple wall (`rimSteps`, level-local) the rim runs down to the
+ * stepped-down stem's top. A door set down past the base (a garage's on its
+ * slab, `rimGaps`) opens through the rim as well: the rim stands in pieces
+ * between such doors, each closed at the door's jambs.
  */
 function buildWallUnderpinningGeometry(
   perimeter: Point2D[],
@@ -1384,21 +1498,29 @@ function buildWallUnderpinningGeometry(
   wall: Pick<WallNode, 'underpinning'>,
   terrainBottomAt: WallTerrainBottomSampler | undefined,
   curved = false,
+  rimSteps: readonly FoundationRimStep[] = [],
+  rimGaps: ReadonlyArray<readonly [number, number]> = [],
 ): THREE.BufferGeometry[] {
   const underpinning = wall.underpinning
   if (!underpinning) return []
-  const worldPoints = densifyClosedWallPerimeter(perimeter)
+  const worldPoints = withRimStepBreaks(densifyClosedWallPerimeter(perimeter), rimSteps)
   if (worldPoints.length < 3) return []
   const localPoints = worldPoints.map(worldToLocal)
   const rimBottom = -underpinning.rim
+  const rimAt = (point: Point2D) => {
+    let bottom = rimBottom
+    for (const step of rimSteps) {
+      const t = alongRimStep(step, point)
+      if (t !== null && t >= 0 && t <= 1) bottom = Math.min(bottom, step.bottom - wallBaseElevation)
+    }
+    return bottom
+  }
   const fills: THREE.BufferGeometry[] = []
-  if (underpinning.rim > 1e-6) {
-    const rim = buildTerrainPerimeterFillGeometry(
-      localPoints,
-      worldPoints.map(() => rimBottom),
-      0,
-    )
-    if (rim) fills.push(rim)
+  if (underpinning.rim > 1e-6 || rimSteps.length > 0) {
+    for (const piece of perimeterBetweenGaps(worldPoints, localPoints, curved ? [] : rimGaps)) {
+      const rim = buildTerrainPerimeterFillGeometry(piece.local, piece.world.map(rimAt), 0)
+      if (rim) fills.push(rim)
+    }
   }
   const stemBottom = worldPoints.map((point) => {
     let y = rimBottom - underpinning.stem
@@ -1419,6 +1541,62 @@ function buildWallUnderpinningGeometry(
     }
   }
   return fills
+}
+
+type PerimeterPoint = { world: Point2D; local: { x: number; z: number } }
+
+/** The perimeter clipped to one side of the plane across the wall at local x `plane`. */
+function clipPerimeterAt(
+  points: readonly PerimeterPoint[],
+  plane: number,
+  keepAbove: boolean,
+): PerimeterPoint[] {
+  if (!Number.isFinite(plane)) return [...points]
+  const inside = (point: PerimeterPoint) =>
+    keepAbove ? point.local.x >= plane : point.local.x <= plane
+  const out: PerimeterPoint[] = []
+  for (let index = 0; index < points.length; index += 1) {
+    const current = points[index]!
+    const previous = points[(index + points.length - 1) % points.length]!
+    if (inside(current) !== inside(previous)) {
+      const t = (plane - previous.local.x) / (current.local.x - previous.local.x)
+      out.push({
+        world: {
+          x: previous.world.x + (current.world.x - previous.world.x) * t,
+          y: previous.world.y + (current.world.y - previous.world.y) * t,
+        },
+        local: { x: plane, z: previous.local.z + (current.local.z - previous.local.z) * t },
+      })
+    }
+    if (inside(current)) out.push(current)
+  }
+  return out
+}
+
+/**
+ * The closed perimeter (world and wall-local, point for point) cut into the pieces standing
+ * between `gaps`, wall-local x spans: each piece closed across the wall at a gap's edge.
+ */
+function perimeterBetweenGaps(
+  world: readonly Point2D[],
+  local: readonly { x: number; z: number }[],
+  gaps: ReadonlyArray<readonly [number, number]>,
+): Array<{ world: Point2D[]; local: { x: number; z: number }[] }> {
+  if (gaps.length === 0) return [{ world: [...world], local: [...local] }]
+  const between: Array<[number, number]> = []
+  let from = Number.NEGATIVE_INFINITY
+  for (const [start, end] of [...gaps].sort((p, q) => p[0] - q[0])) {
+    if (start > from) between.push([from, start])
+    from = Math.max(from, end)
+  }
+  between.push([from, Number.POSITIVE_INFINITY])
+  const points = world.map((point, index) => ({ world: point, local: local[index]! }))
+  return between.flatMap(([low, high]) => {
+    const piece = clipPerimeterAt(clipPerimeterAt(points, low, true), high, false)
+    return piece.length >= 3
+      ? [{ world: piece.map((point) => point.world), local: piece.map((point) => point.local) }]
+      : []
+  })
 }
 
 /**
@@ -1532,13 +1710,26 @@ function buildWallFinishContext(
     | { a: readonly WallSlabSupportSegment[]; b: readonly WallSlabSupportSegment[] }
     | undefined,
   slabElevation: number,
+  rimSteps: readonly FoundationRimStep[] = [],
+  sharedStemTop?: number,
 ): WallFinishContext {
   const refs = [...layout.refs]
   let foundation: WallFinishContext['foundation'] = null
   if (wall.underpinning) {
     const ref = wall.slots?.foundation ?? WALL_SURFACE_SLOT_DEFAULTS.foundation
     if (!refs.includes(ref)) refs.push(ref)
-    foundation = { index: 3 + refs.indexOf(ref), top: -wall.underpinning.rim }
+    // Over a cripple wall the rim runs further down, in the finish all the way.
+    const top = Math.min(
+      -wall.underpinning.rim,
+      ...rimSteps.map((step) => step.bottom - slabElevation),
+    )
+    foundation = { index: 3 + refs.indexOf(ref), top }
+  } else if (sharedStemTop !== undefined) {
+    // A wall a garage shares with a raised house: its face down to the garage's slab is the
+    // house's stem under the sill line, its finish from there up.
+    const ref = wall.slots?.foundation ?? WALL_SURFACE_SLOT_DEFAULTS.foundation
+    if (!refs.includes(ref)) refs.push(ref)
+    foundation = { index: 3 + refs.indexOf(ref), top: sharedStemTop - slabElevation }
   }
   if (!faceBase || layout.plain) return { layout, faceBase: null, refs, foundation }
   const runs = (segments: readonly WallSlabSupportSegment[]) =>
@@ -1641,7 +1832,22 @@ export function generateExtrudedWall(
   // Convert polygon to local coordinates
   const localPoints = polyPoints.map(worldToLocal)
   const boundaryEdges = buildTaggedWallBoundaryEdges(wallNode, localPoints, miterData)
-  const finish = buildWallFinishContext(wallNode, finishLayout, faceDatum, slabElevation)
+  // A designed raised foundation's cripple walls: the rim runs down over them (`foundationRimSteps`).
+  const rimSteps = wallNode.underpinning
+    ? (foundationRimSteps(sceneNodes as Record<AnyNodeId, AnyNode>).get(wallNode.id) ?? [])
+    : []
+  // The house's stem bared under a wall a garage shares with it (`foundationSharedStemTops`).
+  const sharedStemTop = foundationSharedStemTops(sceneNodes as Record<AnyNodeId, AnyNode>).get(
+    wallNode.id,
+  )
+  const finish = buildWallFinishContext(
+    wallNode,
+    finishLayout,
+    faceDatum,
+    slabElevation,
+    rimSteps,
+    sharedStemTop,
+  )
   const finishPlanes = getWallFinishSplitPlanes(finish)
   // An underpinned wall's stem skirt reaches the terrain itself; the plain
   // terrain fill is for a wall with no underpinning.
@@ -1652,6 +1858,17 @@ export function generateExtrudedWall(
     wallNode,
     terrainBottomAt,
     isCurvedWall(wallNode),
+    rimSteps,
+    wallNode.underpinning
+      ? openingSpansUnderBase(
+          wallNode,
+          childrenNodes,
+          faceDatum,
+          slabElevation,
+          sceneNodes,
+          baseSegments,
+        )
+      : [],
   )
   const terrainFill =
     terrainBottomAt && !wallNode.underpinning
@@ -1899,6 +2116,75 @@ function withWallFinishData(
   return geometry
 }
 
+/** The scene a wall's openings are cut in: the wall and its children as they are drawn. */
+function openingCutNodes(
+  wallNode: WallNode,
+  childrenNodes: AnyNode[],
+  sceneNodes: Readonly<Record<string, AnyNode>>,
+): Readonly<Record<string, AnyNode>> {
+  return {
+    ...sceneNodes,
+    [wallNode.id]: wallNode,
+    ...Object.fromEntries(childrenNodes.map((node) => [node.id, node])),
+  }
+}
+
+/** The wall's support as its geometry was built on it, for `getOpeningWallCut`. */
+function openingCutSupport(
+  faceBase:
+    | { a: readonly WallSlabSupportSegment[]; b: readonly WallSlabSupportSegment[] }
+    | undefined,
+  elevation: number,
+  baseSegments: readonly WallSlabSupportSegment[],
+): WallSlabSupport {
+  const datum = faceBase ?? {
+    a: [{ start: 0, end: 1, elevation }],
+    b: [{ start: 0, end: 1, elevation }],
+  }
+  return {
+    elevation,
+    electedSlabId: null,
+    baseElevation: elevation,
+    baseSegments: [...baseSegments],
+    faceDatum: { a: [...datum.a], b: [...datum.b] },
+    faceBottom: {
+      a: resolveWallFaceBottom(datum.a, baseSegments, elevation),
+      b: resolveWallFaceBottom(datum.b, baseSegments, elevation),
+    },
+  }
+}
+
+/**
+ * The wall-local x spans of the wall's doors and windows whose cut runs down past its base (a
+ * garage's doors, set down on its slab): its underpinning's rim stands aside there.
+ */
+function openingSpansUnderBase(
+  wallNode: WallNode,
+  childrenNodes: AnyNode[],
+  faceBase:
+    | { a: readonly WallSlabSupportSegment[]; b: readonly WallSlabSupportSegment[] }
+    | undefined,
+  elevation: number,
+  sceneNodes: Readonly<Record<string, AnyNode>>,
+  baseSegments: readonly WallSlabSupportSegment[],
+): Array<[number, number]> {
+  if (isCurvedWall(wallNode)) return []
+  const nodes = openingCutNodes(wallNode, childrenNodes, sceneNodes)
+  const support = openingCutSupport(faceBase, elevation, baseSegments)
+  return childrenNodes.flatMap((child) => {
+    if (child.type !== 'door' && child.type !== 'window') return []
+    const bottom = getOpeningWallCut(wallNode, child, nodes, support).bottom
+    return bottom < elevation - 1e-4
+      ? [
+          [child.position[0] - child.width / 2, child.position[0] + child.width / 2] as [
+            number,
+            number,
+          ],
+        ]
+      : []
+  })
+}
+
 /**
  * Collects opening and item cutout brushes for CSG subtraction. Door/window
  * cuts come directly from node geometry; item proxy meshes are transformed
@@ -1981,26 +2267,8 @@ function collectCutoutBrushes(
     // authored item (below); without one, or until it loads, its outline.
     const scriptedCutout = child.type !== 'item' && child.source && cutterMeshes.length > 0
     if ((child.type === 'door' || child.type === 'window') && !scriptedCutout) {
-      const nodes = {
-        ...sceneNodes,
-        [wallNode.id]: wallNode,
-        ...Object.fromEntries(childrenNodes.map((node) => [node.id, node])),
-      }
-      const datum = faceBase ?? {
-        a: [{ start: 0, end: 1, elevation }],
-        b: [{ start: 0, end: 1, elevation }],
-      }
-      const support: WallSlabSupport = {
-        elevation,
-        electedSlabId: null,
-        baseElevation: elevation,
-        baseSegments: [...baseSegments],
-        faceDatum: { a: [...datum.a], b: [...datum.b] },
-        faceBottom: {
-          a: resolveWallFaceBottom(datum.a, baseSegments, elevation),
-          b: resolveWallFaceBottom(datum.b, baseSegments, elevation),
-        },
-      }
+      const nodes = openingCutNodes(wallNode, childrenNodes, sceneNodes)
+      const support = openingCutSupport(faceBase, elevation, baseSegments)
       const cut = getOpeningWallCut(wallNode, child, nodes, support)
       // The cutter must overshoot the faces it cuts through; `cut.aperture` is
       // clipped to the wall's own footprint (the doorway floor), so extruding it

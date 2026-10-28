@@ -1,4 +1,5 @@
 import type { AnyNodeDefinition, Plugin } from '@pascal-app/core'
+import { beamDefinition } from './beam'
 import { blockDefinition } from './block/definition'
 import { boxVentDefinition } from './box-vent'
 import { buildingDefinition } from './building'
@@ -19,6 +20,8 @@ import { eyebrowVentDefinition } from './eyebrow-vent'
 import { fenceDefinition } from './fence'
 import { fenceGateDefinition, fenceOpeningDefinition } from './fence-feature/definition'
 import { floorOpeningDefinition } from './floor-opening/definition'
+import { footingDefinition } from './footing'
+import { foundationDefinition } from './foundation'
 import { guideDefinition } from './guide'
 import { gutterDefinition } from './gutter'
 import { hvacEquipmentDefinition } from './hvac-equipment'
@@ -96,6 +99,9 @@ export const builtinPlugin: Plugin = {
     // Stage A — wrap-exports the legacy renderer + system. Legacy
     // panels / move tools / floorplan branches still serve these.
     columnDefinition as unknown as AnyNodeDefinition,
+    beamDefinition as unknown as AnyNodeDefinition,
+    footingDefinition as unknown as AnyNodeDefinition,
+    foundationDefinition as unknown as AnyNodeDefinition,
     elevatorDefinition as unknown as AnyNodeDefinition,
     unitDefinition as unknown as AnyNodeDefinition,
     roofDefinition as unknown as AnyNodeDefinition,
@@ -137,6 +143,8 @@ export const builtinPlugin: Plugin = {
   ],
 }
 
+export { beamDefinition } from './beam'
+export { useBeamDraft } from './beam/draft-settings'
 export {
   applyBlockCommand,
   type BlockCommand,
@@ -177,6 +185,13 @@ export {
 export { ceilingDefinition } from './ceiling'
 export { chimneyDefinition } from './chimney'
 export { columnDefinition } from './column'
+export {
+  armFramingPostTool,
+  type FramingPostToolChoices,
+  framingPostsUnderBeam,
+  framingPostToolChoices,
+  framingPostToolDefaults,
+} from './column/post-placement'
 export { constructionDimensionDefinition } from './construction-dimension'
 export { cupolaDefinition } from './cupola'
 export { doorDefinition } from './door'
@@ -190,6 +205,8 @@ export { eyebrowVentDefinition } from './eyebrow-vent'
 export { beginFenceFeaturePlacement, fenceDefinition } from './fence'
 export { fenceGateDefinition, fenceOpeningDefinition } from './fence-feature/definition'
 export { floorOpeningDefinition } from './floor-opening/definition'
+export { footingDefinition } from './footing'
+export { foundationDefinition } from './foundation'
 export { guideDefinition } from './guide'
 export { gutterDefinition } from './gutter'
 export { hvacEquipmentDefinition } from './hvac-equipment'

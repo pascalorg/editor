@@ -61,7 +61,9 @@ const hiddenMeshesByNode = new Map<string, Mesh[]>()
  * variant, a cutout group) — and at any HOSTED child node's registered group:
  * an item can host other items (a shelf's books), whose groups mount inside
  * the host's. Packing those would freeze the child at the host's join pose
- * with no release of its own (it is not a store member).
+ * with no release of its own (it is not a store member). A ceiling's cap draws
+ * itself: it shows and hides with a viewer flag that rebuilds nothing, so a
+ * batched copy would stay drawn after it hides.
  */
 function collectMeshes(object: Object3D, out: Mesh[], hostedRoots: ReadonlySet<Object3D>): void {
   if (object.visible === false || hostedRoots.has(object)) return
@@ -70,6 +72,7 @@ function collectMeshes(object: Object3D, out: Mesh[], hostedRoots: ReadonlySet<O
     mesh.isMesh &&
     mesh.name !== 'cutout' &&
     mesh.name !== 'ceiling-grid' &&
+    mesh.name !== 'ceiling-cap' &&
     mesh.layers.isEnabled(SCENE_LAYER)
   ) {
     out.push(mesh)

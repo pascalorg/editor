@@ -222,6 +222,11 @@ export const ToolManager: React.FC = () => {
     | CeilingNode['id']
     | undefined
 
+  // A foundation outline picked in the foundation view
+  const selectedFoundationId = selectedIds.find(
+    (id) => nodes[id as AnyNodeId]?.type === 'foundation',
+  )
+
   // Site boundary handles normally share one 2D/3D rule. Sculpt is the deliberate
   // 3D exception: the brush only owns this canvas, where PolygonEditor can hand
   // off its pointer before a boundary drag starts.
@@ -272,6 +277,13 @@ export const ToolManager: React.FC = () => {
     editingHole.nodeId === selectedCeilingId &&
     ((nodes[selectedCeilingId as AnyNodeId] as CeilingNode).holeMetadata?.[editingHole.holeIndex]
       ?.source ?? 'manual') === 'manual' &&
+    !isFloorplanDrivenReshape
+
+  // A foundation outline drags its corners and sides as a slab does
+  const showFoundationBoundaryEditor =
+    mode === 'select' &&
+    isSoleSelection &&
+    selectedFoundationId !== undefined &&
     !isFloorplanDrivenReshape
 
   // Show zone boundary editor in select mode with a zone selected
@@ -365,6 +377,16 @@ export const ToolManager: React.FC = () => {
             return Registry ? (
               <Suspense fallback={null}>
                 <Registry holeIndex={editingHole.holeIndex} slabId={selectedSlabId} />
+              </Suspense>
+            ) : null
+          })()}
+        {showFoundationBoundaryEditor &&
+          selectedFoundationId &&
+          (() => {
+            const Registry = getRegistryAffordanceTool('foundation', 'boundary-edit')
+            return Registry ? (
+              <Suspense fallback={null}>
+                <Registry foundationId={selectedFoundationId} />
               </Suspense>
             ) : null
           })()}

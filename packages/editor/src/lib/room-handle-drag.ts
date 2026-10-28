@@ -17,12 +17,16 @@ import {
   planWallDivision,
   resolveMovedWallSupportSlabPatch,
   runAsSingleSceneHistoryStep,
+  SEPARATOR_JOIN_REACH,
+  type SeparatorNode,
+  type SeparatorSpan,
   type StructureNodes,
   type StructurePlan,
   setRoomFloorConstruction,
   setWallGeometry,
   setZoneEdges,
   setZoneIntent,
+  translateSeparators,
   upperFloorHeightControl,
   useLiveNodeOverrides,
   useScene,
@@ -46,13 +50,25 @@ import { roomOwnPlate } from './room-built-on'
 import {
   mezzanineEdgeDimensions,
   type RoomDimension,
+  separatorEdgeDimensionRooms,
+  type WallDimensionFaces,
+  type WallSelectionDimension,
   wallPushDimensionRooms,
   wallPushDimensions,
+  wallSelectionDimensions,
 } from './room-push-dimensions'
 import { applyRoomPlan } from './room-structure-commands'
+import { levelSeparatorLines, separatorWallLine } from './separator-lines'
 import { sfxEmitter } from './sfx-bus'
 import { type SpatialPointerId, spatialPointerInput } from './spatial-pointer-input'
 import { isTypingTarget } from './typing-target'
+import {
+  nearestWallParallelTarget,
+  publishWallParallelGuide,
+  type WallParallelTarget,
+  wallParallelTargets,
+} from './wall-parallel-snap'
+import { isWallRunFree } from './wall-run-snap'
 
 export const ROOM_ELEVATION_DRAG_LABEL = 'room-elevation'
 /** Scope label of every wall push: a selected wall's side arrow and a room's boundary arrow. */
@@ -129,9 +145,16 @@ export function roomFloorElevation(nodes: Nodes, zoneId: string): number {
 /**
  * The stretch of a wall a push moves: `[0, 1]` is the whole wall (its
  * neighbours follow through the junction planner), anything shorter is split
- * off first and only that piece moves.
+ * off first and only that piece moves. An edge of invisible walls carries its
+ * stretches in `separators` (`wallId` is the first one's): they move as one
+ * line, the invisible walls joined to them following (`translateSeparators`).
  */
-export type WallPushSpan = { wallId: string; t0: number; t1: number }
+export type WallPushSpan = {
+  wallId: string
+  t0: number
+  t1: number
+  separators?: readonly SeparatorSpan[]
+}
 
 /** One push/pull arrow: a selected wall's side arrow or a room's boundary arrow. */
 export type WallPushHandle = WallPushSpan & {
@@ -191,22 +214,27 @@ export function wallPushHandles(wall: WallNode, nodes: Nodes): WallPushHandle[] 
   })
 }
 
+type BoundarySpanRef = {
+  boundaryId: string
+  kind: string
+  face: 'a' | 'b'
+  t0: number
+  t1: number
+}
+
 /**
  * One push/pull arrow per boundary wall span of the room, outside the wall's
  * far face, pointing away from the room — where the wall's own side arrow for
- * that face sits. `face` is the wall face the room lies on (`a` = front).
+ * that face sits. `face` is the wall face the room lies on (`a` = front). Its
+ * invisible walls get one arrow per straight edge (`separatorEdges`), lying
+ * at `floor` (the room's floor height), where their dashed line is drawn.
  */
 export function roomPushHandles(
   nodes: Nodes,
-  spans: ReadonlyArray<{
-    boundaryId: string
-    kind: string
-    face: 'a' | 'b'
-    t0: number
-    t1: number
-  }>,
+  spans: ReadonlyArray<BoundarySpanRef>,
+  floor = 0,
 ): WallPushHandle[] {
-  return spans.flatMap((span) => {
+  const walls = spans.flatMap((span) => {
     const wall = nodes[span.boundaryId]
     if (span.kind !== 'wall' || wall?.type !== 'wall') return []
     const handle = wallPushHandle(
@@ -218,6 +246,145 @@ export function roomPushHandles(
     )
     return handle ? [handle] : []
   })
+  const edges = separatorEdges(nodes, spans).map((edge) => {
+    const first = edge.members[0]!
+    return separatorPushHandle(
+      edge,
+      edge.outward,
+      floor,
+      `${first.separatorId}:${edge.face}:${first.t0.toFixed(4)}`,
+    )
+  })
+  return [...walls, ...edges]
+}
+
+/** How far outside an invisible wall (m) its push arrow sits, as a mezzanine edge's does. */
+const SEPARATOR_ARROW_OFFSET = 0.3
+/** Its 3D arrow's lift over the floor: where the invisible wall's dashed line is drawn. */
+const SEPARATOR_ARROW_LIFT = 0.02
+/** An invisible-wall edge shorter than this (m) gets no arrow, as a mezzanine edge. */
+const SEPARATOR_EDGE_MIN_LENGTH = 0.2
+/** Stretches this far off each other's line (m) still run along one edge. */
+const EDGE_IN_LINE = 0.01
+
+type SeparatorEdge = {
+  /** The stretches along the edge, in order. */
+  members: SeparatorSpan[]
+  start: Point
+  end: Point
+  /** Away from the room. */
+  outward: Point
+  face: 'a' | 'b'
+}
+
+/**
+ * A room's invisible-wall stretches gathered into its straight edges: stretches
+ * end to end on one line, the room on the same side, are one edge and push as
+ * one (an edge drawn in two pieces, or broken where another one meets it). Ends
+ * meet as far as the room graph joins them (`SEPARATOR_JOIN_REACH`).
+ */
+function separatorEdges(nodes: Nodes, spans: ReadonlyArray<BoundarySpanRef>): SeparatorEdge[] {
+  const pieces = spans.flatMap((span): SeparatorEdge[] => {
+    const separator = nodes[span.boundaryId]
+    if (span.kind !== 'separator' || separator?.type !== 'separator') return []
+    const dx = separator.end[0] - separator.start[0]
+    const dz = separator.end[1] - separator.start[1]
+    const length = Math.hypot(dx, dz)
+    if (length < 1e-6 || span.t1 - span.t0 < WHOLE) return []
+    // Face `a` is the +normal side: the arrow points the other way, off the room.
+    const sign = span.face === 'a' ? -1 : 1
+    const at = (t: number): Point => [separator.start[0] + dx * t, separator.start[1] + dz * t]
+    return [
+      {
+        members: [{ separatorId: separator.id, t0: span.t0, t1: span.t1 }],
+        start: at(span.t0),
+        end: at(span.t1),
+        outward: [(-dz / length) * sign, (dx / length) * sign],
+        face: span.face,
+      },
+    ]
+  })
+  const across = (edge: SeparatorEdge, [x, z]: Point) =>
+    Math.abs((x - edge.start[0]) * edge.outward[0] + (z - edge.start[1]) * edge.outward[1])
+  const joins = (a: SeparatorEdge, b: SeparatorEdge) =>
+    a.outward[0] * b.outward[0] + a.outward[1] * b.outward[1] > 1 - 1e-4 &&
+    across(a, b.start) < EDGE_IN_LINE &&
+    across(a, b.end) < EDGE_IN_LINE &&
+    [a.start, a.end].some((p) =>
+      [b.start, b.end].some((q) => Math.hypot(p[0] - q[0], p[1] - q[1]) <= SEPARATOR_JOIN_REACH),
+    )
+  let groups: SeparatorEdge[][] = []
+  for (const piece of pieces) {
+    const touching = groups.filter((group) => group.some((other) => joins(piece, other)))
+    groups = [...groups.filter((group) => !touching.includes(group)), [piece, ...touching.flat()]]
+  }
+  return groups.flatMap((group): SeparatorEdge[] => {
+    const { outward, face } = group[0]!
+    const dir: Point = [outward[1], -outward[0]]
+    const along = ([x, z]: Point) => x * dir[0] + z * dir[1]
+    const ends = group
+      .flatMap((piece) => [piece.start, piece.end])
+      .sort((p, q) => along(p) - along(q))
+    const start = ends[0]!
+    const end = ends.at(-1)!
+    if (Math.hypot(end[0] - start[0], end[1] - start[1]) < SEPARATOR_EDGE_MIN_LENGTH) return []
+    const middle = (piece: SeparatorEdge) => along(piece.start) + along(piece.end)
+    const members = [...group].sort((p, q) => middle(p) - middle(q)).flatMap((p) => p.members)
+    return [{ members, start, end, outward, face }]
+  })
+}
+
+function separatorPushHandle(
+  edge: Pick<SeparatorEdge, 'members' | 'start' | 'end'>,
+  outward: Point,
+  floor: number,
+  key: string,
+): WallPushHandle {
+  const first = edge.members[0]!
+  const middle: Point = [(edge.start[0] + edge.end[0]) / 2, (edge.start[1] + edge.end[1]) / 2]
+  return {
+    key,
+    wallId: first.separatorId,
+    t0: first.t0,
+    t1: first.t1,
+    separators: edge.members,
+    position: [
+      middle[0] + outward[0] * SEPARATOR_ARROW_OFFSET,
+      middle[1] + outward[1] * SEPARATOR_ARROW_OFFSET,
+    ],
+    height: floor + SEPARATOR_ARROW_LIFT,
+    outward,
+    line: middle[0] * outward[0] + middle[1] * outward[1],
+  }
+}
+
+/**
+ * A selected invisible wall's two side arrows, one off each side, at `floor`:
+ * each pushes the whole separator, the ones joined to it following.
+ */
+export function separatorPushHandles(separator: SeparatorNode, floor = 0): WallPushHandle[] {
+  const dx = separator.end[0] - separator.start[0]
+  const dz = separator.end[1] - separator.start[1]
+  const length = Math.hypot(dx, dz)
+  if (length < 1e-6) return []
+  const edge = {
+    members: [{ separatorId: separator.id, t0: 0, t1: 1 }],
+    start: separator.start,
+    end: separator.end,
+  }
+  return (['a', 'b'] as const).map((side) => {
+    const sign = side === 'a' ? 1 : -1
+    const outward: Point = [(-dz / length) * sign, (dx / length) * sign]
+    return separatorPushHandle(edge, outward, floor, `${separator.id}:${side}`)
+  })
+}
+
+/** The floor an invisible wall lies on: the walking surface of a room it closes, else 0. */
+export function separatorFloorElevation(nodes: Nodes, separatorId: string): number {
+  const zone = Object.values(nodes).find(
+    (node) => node.type === 'zone' && node.boundarySeparatorIds.includes(separatorId),
+  )
+  return zone ? roomFloorElevation(nodes, zone.id) : 0
 }
 
 /**
@@ -294,7 +461,8 @@ function diffNodes(before: Scratch, after: Scratch): NodeChange[] {
  * Pushes the room's stretch of a wall `distance` along `outward`. A span that
  * covers the whole wall moves the wall; a partial span is split off at its
  * ends first (hosted openings stay on their pieces) and only that piece moves,
- * bridged back to the rest by the junction planner. One plan, one undo step.
+ * bridged back to the rest by the junction planner. An edge of invisible walls
+ * moves as one line (`translateSeparators`). One plan, one undo step.
  */
 export function planRoomPush(
   nodes: StructureNodes,
@@ -303,6 +471,12 @@ export function planRoomPush(
   distance: number,
   mintId: (kind: 'zone' | 'wall' | 'separator') => string = generateId,
 ): StructurePlan {
+  if (span.separators?.length)
+    return translateSeparators(nodes, {
+      spans: span.separators,
+      offset: [outward[0] * distance, outward[1] * distance],
+      mintId,
+    })
   const wall = nodes[span.wallId]
   if (wall?.type !== 'wall') throw Error('Select a wall.')
   const shift = ([x, z]: Point): Point => [x + outward[0] * distance, z + outward[1] * distance]
@@ -388,13 +562,17 @@ function clearPushPreview() {
 function previewSurfaces(nodes: Nodes, levelId: string, after: Scratch) {
   if (surfacePreview?.levelId !== levelId || surfacePreview.nodes !== nodes)
     surfacePreview = { levelId, nodes, run: createLevelStructurePreview(levelId, nodes) }
-  const walls = Object.values(after).filter(
-    (node): node is WallNode => node.type === 'wall' && node.parentId === levelId,
-  )
+  const level = Object.values(after).filter((node) => node.parentId === levelId)
   return surfacePreview
-    .run(walls)
+    .run(
+      level.filter((node): node is WallNode => node.type === 'wall'),
+      level.filter((node): node is SeparatorNode => node.type === 'separator'),
+    )
     .map((patch) => [patch.id as AnyNodeId, patch.data as Partial<AnyNode>] as const)
 }
+
+/** The ghost of an invisible wall a push would create (a jog): a thin strip on the floor. */
+const SEPARATOR_GHOST = { thickness: 0.03, height: 0.04 }
 
 /**
  * Shows the push live: the plan's updates to existing walls — and the room
@@ -427,8 +605,11 @@ export function previewRoomPush(
     .setMany(updates.map(([id, data]) => [id, data] as [AnyNodeId, Partial<AnyNode>]))
   previewIds = updates.map(([id]) => id)
   for (const id of previewIds) useScene.getState().markDirty(id as AnyNodeId)
-  const ghosts = plan.changes.flatMap((change): RoomPushGhost[] =>
-    change.op === 'create' && change.node.type === 'wall'
+  const ghosts = plan.changes.flatMap((change): RoomPushGhost[] => {
+    if (change.op !== 'create') return []
+    if (change.node.type === 'separator')
+      return [{ start: change.node.start, end: change.node.end, ...SEPARATOR_GHOST }]
+    return change.node.type === 'wall'
       ? [
           {
             start: change.node.start,
@@ -437,8 +618,8 @@ export function previewRoomPush(
             height: getWallEffectiveHeightForNodes(change.node, nodes),
           },
         ]
-      : [],
-  )
+      : []
+  })
   // The floor plan draws the same pieces through its bridge-ghost layer.
   if (ghosts.length) {
     useWallMoveGhosts.getState().setBridges(
@@ -716,12 +897,13 @@ export function cancelRoomHandleDrag() {
 /**
  * Runs one handle drag on window listeners, independent of the handle's own
  * mount (handles hide while any scope is active). `sample` maps a pointer to
- * the drag's value (`spatial.sample` a controller ray, for a spatial pointer);
- * release commits, Escape / ⌘Z / the gesture owner cancel. Cleanup runs
+ * the drag's value (`spatial.sample` a controller ray, for a spatial pointer):
+ * a distance or a height, or a plan point for an end dragged across the floor.
+ * Release commits, Escape / ⌘Z / the gesture owner cancel. Cleanup runs
  * exactly once whatever happens, and releases only this drag's own scope;
  * nothing republishes a preview after it.
  */
-export function runRoomHandleDrag({
+export function runRoomHandleDrag<T = number>({
   label,
   nodeId,
   zoneId,
@@ -738,9 +920,9 @@ export function runRoomHandleDrag({
   zoneId?: string
   levelId: string
   requires: string[]
-  sample: (clientX: number, clientY: number) => number | null
-  spatial?: { pointerId: SpatialPointerId; sample: (ray: Ray) => number | null }
-  onValue: (value: number) => void
+  sample: (clientX: number, clientY: number) => T | null
+  spatial?: { pointerId: SpatialPointerId; sample: (ray: Ray) => T | null }
+  onValue: (value: T) => void
   onCommit: () => void
   onCancel: () => void
 }) {
@@ -891,10 +1073,20 @@ export function runWallPushDrag({
   spatial?: { pointerId: SpatialPointerId; along: (ray: Ray) => number | null }
 }) {
   const nodes = useScene.getState().nodes
-  const wall = nodes[handle.wallId as AnyNodeId]
-  if (wall?.type !== 'wall') return null
-  const base = getWallBaseElevationForNodes(wall, nodes)
+  const boundary = nodes[handle.wallId as AnyNodeId]
+  // An edge of invisible walls is measured, and lines up, as the one line it moves as.
+  const edge = handle.separators?.length ? separatorEdgeLine(nodes, handle.separators) : null
+  const wall = edge ?? (boundary?.type === 'wall' ? boundary : null)
+  if (!wall) return null
+  const base =
+    wall.type === 'wall'
+      ? getWallBaseElevationForNodes(wall, nodes)
+      : handle.height - SEPARATOR_ARROW_LIFT
   const rooms = pushDimensionRooms(nodes, levelId, handle, base)
+  const levelWalls = Object.values(nodes).filter(
+    (node): node is WallNode => node.type === 'wall' && node.parentId === levelId,
+  )
+  const moving = new Set([handle.wallId, ...(handle.separators ?? []).map((s) => s.separatorId)])
   let distance = 0
   let blocked = false
   let ghosts: RoomPushGhost[] = []
@@ -921,15 +1113,49 @@ export function runWallPushDrag({
         message,
       },
     })
-  const toDistance = (at: number | null) =>
-    at === null ? null : snapPushDistance(handle.line, at - from)
+  // The pushed wall lines up with the parallel walls on its level
+  // (`wall-parallel-snap`) before the grid; Alt pushes it free. Invisible walls
+  // line up with the walls and with the level's other invisible walls.
+  const lineUpTargets =
+    wall.type === 'wall'
+      ? wallParallelTargets(wall, handle.outward, levelWalls)
+      : wallParallelTargets(separatorWallLine(wall), handle.outward, [
+          ...levelWalls,
+          ...levelSeparatorLines(nodes, levelId, moving),
+        ])
+  let lineUp: WallParallelTarget | null = null
+  let altHeld = false
+  const trackAlt = (event: KeyboardEvent | PointerEvent) => {
+    altHeld = event.altKey
+  }
+  window.addEventListener('pointermove', trackAlt, true)
+  window.addEventListener('keydown', trackAlt, true)
+  window.addEventListener('keyup', trackAlt, true)
+  const stopLineUp = () => {
+    window.removeEventListener('pointermove', trackAlt, true)
+    window.removeEventListener('keydown', trackAlt, true)
+    window.removeEventListener('keyup', trackAlt, true)
+    if (lineUp) publishWallParallelGuide(null)
+    lineUp = null
+  }
+  const toDistance = (at: number | null) => {
+    if (at === null) return null
+    const raw = at - from
+    const next = isWallRunFree({ altKey: altHeld })
+      ? null
+      : nearestWallParallelTarget(lineUpTargets, handle.line + raw)
+    if (next !== lineUp) publishWallParallelGuide(next)
+    lineUp = next
+    if (next) return next.position - handle.line
+    return isWallRunFree({ altKey: altHeld }) ? raw : snapPushDistance(handle.line, raw)
+  }
   publish()
   return runRoomHandleDrag({
     label: WALL_PUSH_DRAG_LABEL,
     nodeId: handle.wallId,
     zoneId,
     levelId,
-    requires: zoneId ? [zoneId, handle.wallId] : [handle.wallId],
+    requires: zoneId ? [zoneId, ...moving] : [...moving],
     sample: (x, y) => toDistance(along(x, y)),
     spatial: spatial && {
       pointerId: spatial.pointerId,
@@ -945,10 +1171,14 @@ export function runWallPushDrag({
       publish(preview.code ? "Can't move this wall there" : undefined)
     },
     onCommit: () => {
+      stopLineUp()
       if (blocked) endRoomPushPreview()
       else commitRoomPush(handle, handle.outward, distance)
     },
-    onCancel: () => endRoomPushPreview(),
+    onCancel: () => {
+      stopLineUp()
+      endRoomPushPreview()
+    },
   })
 }
 
@@ -960,9 +1190,74 @@ function pushDimensionRooms(nodes: Nodes, levelId: string, span: WallPushSpan, b
   const index = getRoomSelectionIndex(levelId)
   const records = index.update(nodes)
   const topology = index.topology.getLevelTopology(levelId)
-  return wallPushDimensionRooms(topology?.rooms ?? [], span, (roomId) => {
+  const elevationOf = (roomId: string) => {
     const zoneId = records.find((record) => record.id === roomId)?.zoneId
     return zoneId ? roomFloorElevation(nodes, zoneId) : base
+  }
+  const edge = span.separators?.length ? separatorEdgeLine(nodes, span.separators) : null
+  return edge && span.separators
+    ? separatorEdgeDimensionRooms(
+        topology?.rooms ?? [],
+        { line: edge, separators: span.separators },
+        (id) => nodes[id],
+        elevationOf,
+      )
+    : wallPushDimensionRooms(topology?.rooms ?? [], span, elevationOf)
+}
+
+/**
+ * The one line an edge of invisible walls pushes as: its first separator,
+ * running from the edge's first end to its last.
+ */
+function separatorEdgeLine(nodes: Nodes, spans: readonly SeparatorSpan[]): SeparatorNode | null {
+  const first = nodes[spans[0]?.separatorId as AnyNodeId]
+  if (first?.type !== 'separator') return null
+  const dx = first.end[0] - first.start[0]
+  const dz = first.end[1] - first.start[1]
+  const length = Math.hypot(dx, dz)
+  if (length < 1e-6) return null
+  const along = ([x, z]: Point) =>
+    ((x - first.start[0]) * dx + (z - first.start[1]) * dz) / (length * length)
+  let lo = Number.POSITIVE_INFINITY
+  let hi = Number.NEGATIVE_INFINITY
+  for (const span of spans) {
+    const separator = nodes[span.separatorId as AnyNodeId]
+    if (separator?.type !== 'separator') return null
+    for (const t of [span.t0, span.t1]) {
+      const u = along([
+        separator.start[0] + (separator.end[0] - separator.start[0]) * t,
+        separator.start[1] + (separator.end[1] - separator.start[1]) * t,
+      ])
+      lo = Math.min(lo, u)
+      hi = Math.max(hi, u)
+    }
+  }
+  const at = (u: number): Point => [first.start[0] + dx * u, first.start[1] + dz * u]
+  return { ...first, start: at(lo), end: at(hi) }
+}
+
+/**
+ * A selected wall's temporary dimensions as the scene stands: the room widths
+ * its push shows, before any push, plus the outside size for an exterior wall.
+ */
+export function selectedWallDimensions(
+  nodes: Nodes,
+  wall: WallNode,
+  faces: WallDimensionFaces,
+): WallSelectionDimension[] {
+  const levelId = wall.parentId
+  if (!levelId) return []
+  const base = getWallBaseElevationForNodes(wall, nodes)
+  const walls = Object.values(nodes).filter(
+    (node): node is WallNode => node.type === 'wall' && node.parentId === levelId,
+  )
+  return wallSelectionDimensions({
+    rooms: pushDimensionRooms(nodes, levelId, { wallId: wall.id, t0: 0, t1: 1 }, base),
+    wall,
+    walls,
+    faces,
+    resolve: (id) => nodes[id],
+    baseElevation: base,
   })
 }
 
@@ -986,6 +1281,7 @@ export function wallPointAt(wall: WallNode, t: number): Point {
  */
 export const WALL_PUSH_AFFORDANCE = 'wall-push'
 
+/** A wall's or an invisible wall's side arrow: `wallId` is either. */
 export type WallPushArrowPayload = { wallId: string; side: 'a' | 'b' }
 
 type PlanPointer = (clientX: number, clientY: number) => readonly [number, number] | null
@@ -1001,8 +1297,9 @@ function planAlong(position: Point, outward: Point, toPlan: PlanPointer) {
 }
 
 /**
- * A floor-plan wall arrow: the 3D arrow's handle (`wallPushHandles`), drag
- * (`runWallPushDrag`) and commit, with the pointer read in plan coordinates.
+ * A floor-plan wall arrow: the 3D arrow's handle (`wallPushHandles`, or a
+ * selected invisible wall's `separatorPushHandles`), drag (`runWallPushDrag`)
+ * and commit, with the pointer read in plan coordinates.
  */
 export function runFloorplanWallPush(
   payload: unknown,
@@ -1013,8 +1310,12 @@ export function runFloorplanWallPush(
   const { wallId, side } = (payload ?? {}) as Partial<WallPushArrowPayload>
   const nodes = useScene.getState().nodes
   const wall = wallId ? nodes[wallId as AnyNodeId] : undefined
-  if (wall?.type !== 'wall' || !wall.parentId) return null
-  const handle = wallPushHandles(wall, nodes).find((h) => h.key === `${wall.id}:${side}`)
+  if ((wall?.type !== 'wall' && wall?.type !== 'separator') || !wall.parentId) return null
+  const handles =
+    wall.type === 'wall'
+      ? wallPushHandles(wall, nodes)
+      : separatorPushHandles(wall, separatorFloorElevation(nodes, wall.id))
+  const handle = handles.find((h) => h.key === `${wall.id}:${side}`)
   if (!handle) return null
   return runFloorplanRoomPush({ handle, levelId: wall.parentId, clientX, clientY, toPlan })
 }

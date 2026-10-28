@@ -209,7 +209,16 @@ describe('wall treatment miters', () => {
       'a',
       trim,
       'skirting',
-      [{ type: 'door', width: 1, height: 2, position: [1.5, 1, 0] }],
+      [
+        {
+          type: 'door',
+          width: 1,
+          height: 2,
+          position: [1.5, 1, 0],
+          casingFaceA: false,
+          casingFaceB: false,
+        },
+      ],
       treatmentLevelData([node]),
     )
     expect(geometry).not.toBeNull()
@@ -220,6 +229,50 @@ describe('wall treatment miters', () => {
     expect(xs.some((x) => Math.abs(x - 2) < 1e-6)).toBe(true)
     expect(xs.every((x) => x <= 1 + 1e-6 || x >= 2 - 1e-6)).toBe(true)
     geometry.dispose()
+  })
+
+  // A door 1 m wide at 1.5 m, cased 0.1 m wide on face a only: its legs run from 0.9 to 1 and
+  // from 2 to 2.1 on that face.
+  const xsAround = (
+    side: 'a' | 'b',
+    kind: 'skirting' | 'chairRail',
+    opening: { type: string; height: number; position: [number, number, number] },
+  ) => {
+    const node = wall('A', [0, 0], [3, 0])
+    const geometry = buildTrimGeometry(
+      node,
+      side,
+      { ...trim, offsetY: 0.9 },
+      kind,
+      [{ ...opening, width: 1, casingWidth: 0.1, casingFaceA: true, casingFaceB: false }],
+      treatmentLevelData([node]),
+    )
+    if (!geometry) throw new Error('expected trim geometry')
+    const xs = allPositions(geometry).map((point) => point.x)
+    geometry.dispose()
+    return xs
+  }
+  const breaksAt = (xs: number[], from: number, to: number) =>
+    xs.some((x) => Math.abs(x - from) < 1e-6) &&
+    xs.some((x) => Math.abs(x - to) < 1e-6) &&
+    xs.every((x) => x <= from + 1e-6 || x >= to - 1e-6)
+
+  test('stops against the casing legs on a cased face, at the cutout on the other', () => {
+    const door = { type: 'door', height: 2, position: [1.5, 1, 0] as [number, number, number] }
+    expect(breaksAt(xsAround('a', 'skirting', door), 0.9, 2.1)).toBe(true)
+    expect(breaksAt(xsAround('b', 'skirting', door), 1, 2)).toBe(true)
+  })
+
+  test("a chair rail stops against a window's bottom board, though the cutout is above it", () => {
+    // Sill at 1.02 m: the bottom board runs 0.92 to 1.02 m, the chair rail 0.9 to 1 m.
+    const window = {
+      type: 'window',
+      height: 1.2,
+      position: [1.5, 1.62, 0] as [number, number, number],
+    }
+    expect(breaksAt(xsAround('a', 'chairRail', window), 0.9, 2.1)).toBe(true)
+    // Face b has no casing: the rail runs whole, end to end of the wall.
+    expect(xsAround('b', 'chairRail', window).every((x) => x < 1e-6 || x > 3 - 1e-6)).toBe(true)
   })
 
   test('runs on under a window and breaks only under one that reaches the floor', () => {

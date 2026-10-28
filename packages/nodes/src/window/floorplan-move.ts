@@ -21,6 +21,7 @@ import {
   usePlacementPreview,
 } from '@pascal-app/editor'
 import { createFloorplanCursorResolver } from '../shared/floorplan-cursor'
+import { movedOpeningCasingFaces } from '../shared/opening-casing-move'
 import { openingPlaneOffsetOnWall } from '../shared/opening-plane-offset'
 import { getOpeningHostLevelId, getRoofHostedOpeningPlanPoint } from '../shared/roof-opening-host'
 import {
@@ -86,6 +87,8 @@ export const windowFloorplanMoveTarget: FloorplanMoveTarget<WindowNode> = ({ nod
     roofSegmentId: undefined
     roofFace: undefined
     visible: true
+    casingFaceA: boolean
+    casingFaceB: boolean
   } | null = null
 
   // R flips the window's facing (front ↔ back) mid-placement — see
@@ -251,6 +254,8 @@ export const windowFloorplanMoveTarget: FloorplanMoveTarget<WindowNode> = ({ nod
           : 'front'
         : hit.side
       const itemRotation = hit.itemRotation + (flipped ? Math.PI : 0)
+      // Another wall may be drawn the other way round: the casing keeps to its side.
+      const casing = movedOpeningCasingFaces(node, hit.wall.id, [0, itemRotation, 0], nodes)
 
       lastValid = {
         // Same-wall moves keep the wall-local plane offset; another host resets it.
@@ -264,6 +269,7 @@ export const windowFloorplanMoveTarget: FloorplanMoveTarget<WindowNode> = ({ nod
         roofSegmentId: undefined,
         roofFace: undefined,
         visible: true,
+        ...casing,
       }
 
       setLiveOverride(`wall:${hit.wall.id}:${side}`, {
@@ -273,6 +279,7 @@ export const windowFloorplanMoveTarget: FloorplanMoveTarget<WindowNode> = ({ nod
         roofSegmentId: undefined,
         roofFace: undefined,
         visible: true,
+        ...casing,
       })
       useLiveTransforms.getState().set(nodeId, {
         position: lastValid.position,

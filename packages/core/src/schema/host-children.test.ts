@@ -41,7 +41,10 @@ test('frozen pre-slice corpus covers every kind predating separators', () => {
         kind !== 'separator' &&
         kind !== 'floor-opening' &&
         kind !== 'fence-gate' &&
-        kind !== 'fence-opening',
+        kind !== 'fence-opening' &&
+        kind !== 'footing' &&
+        kind !== 'foundation' &&
+        kind !== 'beam',
     ).sort(),
   )
 })
@@ -53,7 +56,14 @@ test.each(baseline)(
       saved.type === 'zone'
         ? { ...expected, boundarySeparatorIds: [], holes: [] }
         : saved.type === 'door' || saved.type === 'window'
-          ? { ...expected, floorThresholdVersion: 1 }
+          ? {
+              ...expected,
+              floorThresholdVersion: 1,
+              // Saved before casing: cased on both faces, 2 in wide.
+              casingFaceA: true,
+              casingFaceB: true,
+              casingWidth: 0.0508,
+            }
           : saved.type === 'fence'
             ? {
                 ...expected,

@@ -7,16 +7,23 @@ import {
   cutterContextNodes,
   FenceNode,
   FOUNDATION_SLOT_DEFAULT,
+  floorBuildUpMatches,
+  floorBuildUpOf,
+  floorLayerDepths,
   type GeometryContext,
   getLevelElevations,
   getMaterialPresetByRef,
   getRenderableSlabPolygon,
+  gradedTerrainFieldOf,
   intersection,
+  isBuildingFoundationOn,
+  isDeckSlab,
   isFloorPlate,
   type LevelNode,
   levelBaseElevationAt,
   liftedManualSlab,
   type MaterialSchema,
+  OUTDOOR_ROOM_DEFAULTS,
   type PlateSurfacePartition,
   type PlateTopCell,
   parseFloorStepRole,
@@ -46,11 +53,19 @@ import {
   registerMaterialCacheCleanup,
   resolveMaterialRef,
   resolveSlotDefaultMaterial,
+  useViewer,
 } from '@pascal-app/viewer'
 import { type BufferGeometry, FrontSide, Group, type Material, Mesh, type Texture } from 'three'
 import { generateFenceSlotGeometries } from '../fence/geometry-parts'
 import { creaseCrossings } from '../site/terrain-drape'
-import { clipPlateTerrainFill, splitPlateFaces, splitSlabFacesByFacing } from './surface-split'
+import { buildDeckGeometry } from './deck-geometry'
+import {
+  clipPlateTerrainFill,
+  hollowSlabFaces,
+  type SlabCavity,
+  splitPlateFaces,
+  splitSlabFacesByFacing,
+} from './surface-split'
 
 /**
  * Stage B builder for slab. Reuses `generateSlabGeometry` (pure
@@ -171,7 +186,38 @@ function getLegacySlabMaterial(node: SlabNode, shading: RenderShading): Material
   return material
 }
 
-function terrainFillContext(ctx: GeometryContext | undefined, foundation: boolean) {
+function designedFoundationUnder(ctx: GeometryContext | undefined): boolean {
+  const level = ctx?.parent
+  if (level?.type !== 'level' || !level.parentId) return false
+  return isBuildingFoundationOn(ctx?.resolve<BuildingNode>(level.parentId as AnyNodeId))
+}
+
+/**
+ * The plank flooring decks were given before they had boards (the old deck room default, and the
+ * porch generator's decks): laid on each board it reads as flooring, so boards still carrying it
+ * draw the deck default's plain grain.
+ */
+const LEGACY_DECK_FINISH = 'library:wood-floorplank1'
+
+/**
+ * A porch or patio slab outside the house (a plate the structure kernel tags `metadata.floor:
+ * 'porch-slab'`): it stands down in the ground, its edge drawn down to the ground the house's
+ * foundation grades round it (`foundationGradingPads`), never floating over it.
+ */
+function isOutdoorGroundSlab(node: SlabNode): boolean {
+  return (
+    isFloorPlate(node) &&
+    node.plateRole !== 'base' &&
+    node.support !== 'open' &&
+    (node.metadata as Record<string, unknown> | undefined)?.floor === 'porch-slab'
+  )
+}
+
+/**
+ * The ground a skirt runs down to: the site's terrain, or (`graded`) the terrain as drawn, graded to
+ * the buildings' foundations, for a slab that stands in that graded ground.
+ */
+function terrainFillContext(ctx: GeometryContext | undefined, foundation: boolean, graded = false) {
   if (!ctx) return null
   const level = ctx.parent
   if (level?.type !== 'level' || !level.parentId) return null
@@ -179,7 +225,9 @@ function terrainFillContext(ctx: GeometryContext | undefined, foundation: boolea
   if (building?.type !== 'building' || !building.parentId) return null
   const site = ctx.resolve<SiteNode>(building.parentId as AnyNodeId)
   if (site?.type !== 'site') return null
-  const field = terrainFieldOf(site)
+  const field = graded
+    ? gradedTerrainFieldOf(useScene.getState().nodes, site)
+    : terrainFieldOf(site)
 
   const nodes: Record<string, AnyNode> = {
     [site.id]: site,
@@ -207,8 +255,9 @@ function buildSlabTerrainFillGeometry(
   polygon: Array<[number, number]>,
   ctx: GeometryContext | undefined,
   partition: PlateSurfacePartition | null,
+  outdoor = false,
 ): BufferGeometry | null {
-  const terrain = terrainFillContext(ctx, node.plateRole === 'base')
+  const terrain = terrainFillContext(ctx, node.plateRole === 'base' || outdoor, outdoor)
   if (!terrain || polygon.length < 3) return null
 
   let area2 = 0
@@ -304,6 +353,39 @@ function platePartitionOf(
   return computePlateSurfacePartition(node, { ...context, platform })
 }
 
+/**
+ * The joist band of a floor framed inside its slab, as Bones frames it: a slab whose thickness is
+ * its layers' (`floorBuildUpMatches`), neither a pool, a platform nor a sunken plate, on a storey
+ * with one under it (a lowest storey's floor stands on the ground or its foundation, with no joists
+ * in it). Null for every other slab, and for a band with no depth.
+ */
+export function slabFramingCavity(
+  node: SlabNode,
+  ctx: Pick<GeometryContext, 'parent' | 'resolve'> | undefined,
+): SlabCavity | null {
+  if (node.recessed || (node.plateRole !== undefined && node.plateRole !== 'base')) return null
+  if (!floorBuildUpMatches(node)) return null
+  const level = ctx?.parent
+  if (!ctx || level?.type !== 'level' || !level.parentId) return null
+  const building = ctx.resolve<AnyNode>(level.parentId as AnyNodeId)
+  if (building?.type !== 'building') return null
+  const overStorey = building.children.some((id) => {
+    const other = ctx.resolve<AnyNode>(id as AnyNodeId)
+    return other?.type === 'level' && other.level < level.level
+  })
+  if (!overStorey) return null
+  const { flooring, sheathing, ceiling } = floorLayerDepths(floorBuildUpOf(node))
+  const elevation = node.elevation ?? 0.05
+  const top = elevation - flooring - sheathing
+  const bottom = elevation - node.thickness + ceiling
+  return top - bottom > 1e-4 ? { top, bottom, ceiling: ceiling > 1e-6 } : null
+}
+
+/**
+ * `framingShown`: the viewer's "Framing" (`useViewer.framingShown`, read when the generic geometry
+ * system builds; the slab system rebuilds the framed floors when it flips). A floor framed inside
+ * its slab (`slabFramingCavity`) then opens its joist band.
+ */
 export function buildSlabGeometry(
   node: SlabNode,
   ctx?: GeometryContext,
@@ -311,6 +393,7 @@ export function buildSlabGeometry(
   textures = true,
   colorPreset: ColorPreset = 'clay',
   sceneTheme?: string,
+  framingShown = useViewer.getState().framingShown,
 ): Group {
   if (ctx) node = withHostedCutterHoles(node, cutterContextNodes(node, ctx))
   if (ctx && !node.plateRole && !node.autoFromWalls)
@@ -356,7 +439,53 @@ export function buildSlabGeometry(
         return false
       }),
     )
-  const merged = generateSlabGeometry(node, polygonContext, platform ? levelBaseAt : undefined)
+  // A deck is its boards on its frame (`buildDeckGeometry`), never a solid slab.
+  if (isDeckSlab(node))
+    return buildDeckGeometry(node, ctx, {
+      polygon,
+      partition: platePartitionOf(node, ctx, node.plateRole === 'platform'),
+      boardMaterial: (cell) =>
+        (cell ? cell.finish : (node.slots?.surface ?? node.materialPreset)) === LEGACY_DECK_FINISH
+          ? getPlateCellMaterial(
+              node,
+              {
+                role: cell?.role ?? 'surface',
+                finish: OUTDOOR_ROOM_DEFAULTS.deck.finish,
+                materialKey: plateFinishKey(OUTDOOR_ROOM_DEFAULTS.deck.finish),
+                polygons: cell?.polygons ?? [],
+              },
+              shading,
+              textures,
+              colorPreset,
+              sceneTheme,
+              ctx?.materials,
+            )
+          : cell
+            ? getPlateCellMaterial(
+                node,
+                cell,
+                shading,
+                textures,
+                colorPreset,
+                sceneTheme,
+                ctx?.materials,
+              )
+            : getSlabSlotMaterial(
+                node,
+                'surface',
+                shading,
+                textures,
+                colorPreset,
+                sceneTheme,
+                ctx?.materials,
+              ),
+      look: { shading, textures, colorPreset, sceneTheme },
+    })
+  const solid = generateSlabGeometry(node, polygonContext, platform ? levelBaseAt : undefined)
+  // With the frame shown, a floor framed inside its slab opens its joist band.
+  const cavity = framingShown && !platform ? slabFramingCavity(node, ctx) : null
+  const hollow = cavity ? hollowSlabFaces(solid, cavity) : null
+  const merged = hollow?.body ?? solid
   const elevation = node.elevation ?? 0.05
   const partition = platePartitionOf(node, ctx, platform || node.plateRole === 'platform')
 
@@ -471,11 +600,25 @@ export function buildSlabGeometry(
       )
     }
   }
+  if (hollow) {
+    // the open band's faces: the subfloor's underside, the ceiling's top, the rim turned in
+    const slotId: SlabSlotId = partition ? 'underside' : 'side'
+    addMesh(
+      hollow.cavity,
+      slotId,
+      getSlabSlotMaterial(node, slotId, shading, textures, colorPreset, sceneTheme, ctx?.materials),
+    )
+  }
   merged.dispose()
+  if (merged !== solid) solid.dispose()
 
-  const foundation = node.plateRole === 'base' && node.foundation?.type === 'solid'
+  // A building standing on its designed foundation draws that under the plate, not this skirt.
+  const foundation =
+    node.plateRole === 'base' && node.foundation?.type === 'solid' && !designedFoundationUnder(ctx)
+  // A porch or patio slab runs down into the ground beside the house, whatever stands under it.
+  const outdoor = isOutdoorGroundSlab(node)
   if (
-    (foundation || (!node.plateRole && node.fillToTerrain)) &&
+    (foundation || outdoor || (!node.plateRole && node.fillToTerrain)) &&
     !node.recessed &&
     !platform &&
     group.children.length > 0
@@ -485,10 +628,11 @@ export function buildSlabGeometry(
       getRenderableSlabPolygon(node, polygonContext),
       ctx,
       partition,
+      outdoor,
     )
     if (terrainFill) {
-      // The skirt hangs below the plate perimeter and always faces out.
-      const slotId: SlabSlotId = foundation ? 'foundation' : partition ? 'edge' : 'side'
+      // The skirt hangs below the plate perimeter and always faces out: the slab's concrete.
+      const slotId: SlabSlotId = foundation || outdoor ? 'foundation' : partition ? 'edge' : 'side'
       addMesh(
         terrainFill,
         slotId,

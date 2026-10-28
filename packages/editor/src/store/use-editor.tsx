@@ -65,6 +65,16 @@ import {
   snapContextOf,
   snappingModesFor,
 } from '../lib/snapping-mode'
+import {
+  DEFAULT_WALL_FINISHES,
+  DEFAULT_WALL_TYPES,
+  normalizeWallFinishes,
+  normalizeWallTypes,
+  type WallFinishes,
+  type WallTypeId,
+  type WallTypePlacement,
+  type WallTypes,
+} from '../lib/wall-type'
 import { cameraPoseStore } from './camera-pose-store'
 import { publishNavigationSyncPoseToStore } from './navigation-sync-pose-store'
 import useInteractionScope from './use-interaction-scope'
@@ -521,6 +531,15 @@ type EditorState = {
   setContinuation: (context: ContinuationContext, mode: ContinuationMode) => void
   cycleContinuation: (context: ContinuationContext) => ContinuationMode
   getContinuation: (context: ContinuationContext) => ContinuationMode
+  // The wall types new walls are drawn with (`lib/wall-type.ts`), picked in the
+  // Build panel's Rooms group. Persisted.
+  wallTypes: WallTypes
+  setWallType: (placement: WallTypePlacement, id: WallTypeId) => void
+  // The finishes picked beside them: a cladding product per cladding kind and
+  // the drywall paint (`WallFinishes`). Persisted.
+  wallFinishes: WallFinishes
+  setWallCladding: (kind: string, ref: string) => void
+  setWallPaint: (ref: string) => void
   showReferenceFloor: boolean
   toggleReferenceFloor: () => void
   setShowReferenceFloor: (show: boolean) => void
@@ -528,6 +547,24 @@ type EditorState = {
   setReferenceFloorOffset: (offset: number) => void
   referenceFloorOpacity: number
   setReferenceFloorOpacity: (opacity: number) => void
+  // The 2D plan's dashed outlines of the walls on the level below / above
+  // the active one. "Below" is set apart for the roof plan, where it traces
+  // the top storey's walls the roof is checked against and starts on, and the
+  // floor plans, where it starts off (`useWallsBelowSetting`). Persisted.
+  showWallsBelow: boolean
+  setShowWallsBelow: (show: boolean) => void
+  showRoofWallsBelow: boolean
+  setShowRoofWallsBelow: (show: boolean) => void
+  showWallsAbove: boolean
+  setShowWallsAbove: (show: boolean) => void
+  // Ceilings drawn solid from above as well as from below. Set apart like
+  // "Walls below": on for the roof level, where the roof is checked over closed
+  // rooms, off for the floor plans, where the camera looks into the rooms
+  // (`useCeilingsSetting`). Persisted.
+  showCeilings: boolean
+  setShowCeilings: (show: boolean) => void
+  showRoofCeilings: boolean
+  setShowRoofCeilings: (show: boolean) => void
   // Development-only camera debug flag for inspecting underside geometry
   allowUndergroundCamera: boolean
   setAllowUndergroundCamera: (enabled: boolean) => void
@@ -602,9 +639,16 @@ type PersistedEditorLayoutState = Pick<
   | 'lastMeasurementKind'
   | 'snappingModeByContext'
   | 'continuationByContext'
+  | 'wallTypes'
+  | 'wallFinishes'
   | 'showReferenceFloor'
   | 'referenceFloorOffset'
   | 'referenceFloorOpacity'
+  | 'showWallsBelow'
+  | 'showRoofWallsBelow'
+  | 'showWallsAbove'
+  | 'showCeilings'
+  | 'showRoofCeilings'
 >
 type PersistedEditorState = PersistedEditorUiState & PersistedEditorLayoutState
 
@@ -637,9 +681,16 @@ export const DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE: PersistedEditorLayoutState =
     cabinet: CONTINUATION_PROFILES.cabinet.default,
     canopy: CONTINUATION_PROFILES.canopy.default,
   },
+  wallTypes: DEFAULT_WALL_TYPES,
+  wallFinishes: DEFAULT_WALL_FINISHES,
   showReferenceFloor: false,
   referenceFloorOffset: 1,
   referenceFloorOpacity: 0.35,
+  showWallsBelow: false,
+  showRoofWallsBelow: true,
+  showWallsAbove: false,
+  showCeilings: false,
+  showRoofCeilings: true,
 }
 
 const GRID_SNAP_STEPS: GridSnapStep[] = [0.5, 0.25, 0.1, 0.05]
@@ -889,6 +940,8 @@ export function normalizePersistedEditorLayoutState(
       rotation: migrateSnappingMode(state?.snappingModeByContext?.rotation, 'rotation'),
     },
     continuationByContext: normalizeContinuationByContext(state),
+    wallTypes: normalizeWallTypes(state?.wallTypes),
+    wallFinishes: normalizeWallFinishes(state?.wallFinishes),
     showReferenceFloor: state?.showReferenceFloor === true,
     referenceFloorOffset:
       typeof state?.referenceFloorOffset === 'number' && state.referenceFloorOffset >= 1
@@ -899,6 +952,11 @@ export function normalizePersistedEditorLayoutState(
       Number.isFinite(state.referenceFloorOpacity)
         ? Math.min(0.8, Math.max(0.1, state.referenceFloorOpacity))
         : DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.referenceFloorOpacity,
+    showWallsBelow: state?.showWallsBelow === true,
+    showRoofWallsBelow: state?.showRoofWallsBelow !== false,
+    showWallsAbove: state?.showWallsAbove === true,
+    showCeilings: state?.showCeilings === true,
+    showRoofCeilings: state?.showRoofCeilings !== false,
   }
 }
 
@@ -1558,6 +1616,23 @@ const useEditor = create<EditorState>()(
         const current = get().continuationByContext[context]
         return migrateContinuationMode(current, context) ?? CONTINUATION_PROFILES[context].default
       },
+      wallTypes: DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.wallTypes,
+      setWallType: (placement, id) =>
+        set((state) => ({
+          wallTypes: normalizeWallTypes({ ...state.wallTypes, [placement]: id }),
+        })),
+      wallFinishes: DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.wallFinishes,
+      setWallCladding: (kind, ref) =>
+        set((state) => ({
+          wallFinishes: normalizeWallFinishes({
+            ...state.wallFinishes,
+            cladding: { ...state.wallFinishes.cladding, [kind]: ref },
+          }),
+        })),
+      setWallPaint: (ref) =>
+        set((state) => ({
+          wallFinishes: normalizeWallFinishes({ ...state.wallFinishes, paint: ref }),
+        })),
       showReferenceFloor: DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.showReferenceFloor,
       toggleReferenceFloor: () =>
         set((state) => ({ showReferenceFloor: !state.showReferenceFloor })),
@@ -1568,6 +1643,16 @@ const useEditor = create<EditorState>()(
       referenceFloorOpacity: DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.referenceFloorOpacity,
       setReferenceFloorOpacity: (opacity) =>
         set({ referenceFloorOpacity: Math.min(0.8, Math.max(0.1, opacity)) }),
+      showWallsBelow: DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.showWallsBelow,
+      setShowWallsBelow: (show) => set({ showWallsBelow: show }),
+      showRoofWallsBelow: DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.showRoofWallsBelow,
+      setShowRoofWallsBelow: (show) => set({ showRoofWallsBelow: show }),
+      showWallsAbove: DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.showWallsAbove,
+      setShowWallsAbove: (show) => set({ showWallsAbove: show }),
+      showCeilings: DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.showCeilings,
+      setShowCeilings: (show) => set({ showCeilings: show }),
+      showRoofCeilings: DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.showRoofCeilings,
+      setShowRoofCeilings: (show) => set({ showRoofCeilings: show }),
       allowUndergroundCamera: false,
       setAllowUndergroundCamera: (enabled) => set({ allowUndergroundCamera: enabled }),
       show2dVoronoi: false,
@@ -1669,9 +1754,16 @@ const useEditor = create<EditorState>()(
         lastMeasurementKind: state.lastMeasurementKind,
         snappingModeByContext: state.snappingModeByContext,
         continuationByContext: state.continuationByContext,
+        wallTypes: state.wallTypes,
+        wallFinishes: state.wallFinishes,
         showReferenceFloor: state.showReferenceFloor,
         referenceFloorOffset: state.referenceFloorOffset,
         referenceFloorOpacity: state.referenceFloorOpacity,
+        showWallsBelow: state.showWallsBelow,
+        showRoofWallsBelow: state.showRoofWallsBelow,
+        showWallsAbove: state.showWallsAbove,
+        showCeilings: state.showCeilings,
+        showRoofCeilings: state.showRoofCeilings,
       }),
       skipHydration: true,
     },

@@ -6,6 +6,7 @@ import {
   type NodeEvent,
 } from '@pascal-app/core'
 import type { ThreeEvent } from '@react-three/fiber'
+import { hiddenByFoundationView } from '../lib/foundation-view-hidden'
 import useViewer from '../store/use-viewer'
 
 // Derive `{ node, event }` per kind directly from the `AnyNode`
@@ -17,6 +18,9 @@ type NodeByKind<K extends AnyNodeType> = Extract<AnyNode, { type: K }>
 
 export function useNodeEvents<K extends AnyNodeType>(node: NodeByKind<K>, type: K) {
   const emit = (suffix: EventSuffix, e: ThreeEvent<PointerEvent>) => {
+    // The foundation view hides the house over the foundation: what it hides takes no pointer, and
+    // the event goes on to whatever is behind it (no stopPropagation).
+    if (hiddenByFoundationView(node.id)) return
     const eventKey = `${type}:${suffix}` as `${K}:${EventSuffix}`
     const localPoint = e.object.worldToLocal(e.point.clone())
     const payload: NodeEvent<NodeByKind<K>> = {

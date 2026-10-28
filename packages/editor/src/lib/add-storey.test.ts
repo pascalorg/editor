@@ -3,13 +3,18 @@ import {
   type AnyNode,
   type AnyNodeId,
   BuildingNode,
+  designedFoundationReport,
+  groundSeat,
   LevelNode,
   levelFloorWorldY,
   levelGradeStanding,
   RoofNode,
+  SlabNode,
   useScene,
+  WallNode,
 } from '@pascal-app/core'
 import { addStoreyBelow, addStoreyOnTop, setGroundFloor } from './add-storey'
+import { deleteLevelWithFallbackSelection } from './level-selection'
 
 // The editor's "add a floor" on a roofed house: the new storey goes under the roof, not over it.
 const BUILDING = 'building_add-storey' as BuildingNode['id']
@@ -59,7 +64,8 @@ describe('addStoreyOnTop', () => {
   })
 })
 
-// The editor's "add a basement": under the lowest storey, the building staying where it stands.
+// The editor's "add a basement": under the lowest storey, the building staying where it stands
+// while no foundation is designed under it (no walls drawn).
 describe('addStoreyBelow', () => {
   beforeEach(() => {
     useScene.temporal.getState().clear()
@@ -119,6 +125,102 @@ describe('addStoreyBelow', () => {
     useScene.temporal.getState().undo()
     expect(useScene.getState().nodes[basement.id as AnyNodeId]).toBeUndefined()
     expect(floorOf('level_ground')).toBe(0)
+  })
+
+  test('deleted again, even made taller first, it leaves the floors where they stand, in one undo step', () => {
+    const basement = addStoreyBelow(BUILDING)
+    useScene
+      .getState()
+      .applyNodeChanges({ update: [{ id: basement.id, data: { height: 2.7432 } }] })
+    const standing = [floorOf('level_ground'), floorOf('level_roof')]
+    const steps = useScene.temporal.getState().pastStates.length
+    deleteLevelWithFallbackSelection(basement.id as AnyNodeId)
+    expect(useScene.getState().nodes[basement.id as AnyNodeId]).toBeUndefined()
+    expect([floorOf('level_ground'), floorOf('level_roof')]).toEqual(standing)
+    expect(useScene.temporal.getState().pastStates).toHaveLength(steps + 1)
+    useScene.temporal.getState().undo()
+    expect(useScene.getState().nodes[basement.id as AnyNodeId]).toBeDefined()
+    expect([floorOf('level_ground'), floorOf('level_roof')]).toEqual(standing)
+  })
+})
+
+// A house drawn with walls stands on its designed foundation (on by default): a basement added
+// under it seats it on the basement, and deleting the basement seats it on its slab again.
+describe('addStoreyBelow on a designed foundation', () => {
+  const corners: Array<[number, number]> = [
+    [0, 0],
+    [10, 0],
+    [10, 8],
+    [0, 8],
+  ]
+  beforeEach(() => {
+    useScene.temporal.getState().clear()
+    useScene.temporal.getState().resume()
+    seed()
+    const walls = corners.map((start, index) =>
+      WallNode.parse({
+        id: `wall_${index}`,
+        parentId: 'level_ground',
+        start,
+        end: corners[(index + 1) % 4],
+        thickness: 0.15,
+      }),
+    )
+    const plate = SlabNode.parse({
+      id: 'slab_ground',
+      parentId: 'level_ground',
+      plateRole: 'base',
+      polygon: corners,
+      elevation: 0.05,
+      thickness: 0.05,
+    })
+    const nodes = useScene.getState().nodes
+    useScene.setState({
+      nodes: {
+        ...nodes,
+        level_ground: {
+          ...nodes['level_ground' as AnyNodeId],
+          children: [...walls.map((wall) => wall.id), plate.id],
+        },
+        [plate.id]: plate,
+        ...Object.fromEntries(walls.map((wall) => [wall.id, wall])),
+      } as never,
+    })
+    useScene.temporal.getState().clear()
+  })
+
+  const report = () => designedFoundationReport(useScene.getState().nodes, BUILDING)!
+  const heightY = () =>
+    (useScene.getState().nodes[BUILDING as AnyNodeId] as BuildingNode).position[1]
+
+  test('seats the house with the basement walls’ top 8 in over grade, in the same undo step', () => {
+    expect(report().basement).toBeUndefined()
+    const steps = useScene.temporal.getState().pastStates.length
+    const basement = addStoreyBelow(BUILDING)
+    expect(useScene.temporal.getState().pastStates).toHaveLength(steps + 1)
+    const seated = report()
+    expect(seated.levelId).toBe(basement.id)
+    expect(seated.basement!.wallTopY - seated.highestGradeY).toBeCloseTo(8 * 0.0254, 6)
+    expect(heightY()).toBeGreaterThan(0.3)
+    expect(groundSeat(useScene.getState().nodes, BUILDING)).toMatchObject({
+      rule: 'basement',
+      seated: true,
+    })
+    useScene.temporal.getState().undo()
+    expect(heightY()).toBe(0)
+    expect(useScene.getState().nodes[basement.id as AnyNodeId]).toBeUndefined()
+  })
+
+  test('deleted again, the house comes down onto its slab, seated 8 in over grade', () => {
+    const basement = addStoreyBelow(BUILDING)
+    deleteLevelWithFallbackSelection(basement.id as AnyNodeId)
+    const slab = report()
+    expect(slab.basement).toBeUndefined()
+    expect(slab.floorTopY - slab.highestGradeY).toBeCloseTo(8 * 0.0254, 6)
+    expect(groundSeat(useScene.getState().nodes, BUILDING)).toMatchObject({
+      rule: 'slab',
+      atFoundationTop: true,
+    })
   })
 })
 

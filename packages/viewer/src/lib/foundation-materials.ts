@@ -31,11 +31,16 @@ const JOINT_SOFTNESS = 0.05
 const BLOCK_COLORS = { light: '#97978f', dark: '#827f78' } as const
 const MORTAR_COLOR = '#b5b3aa'
 const CONCRETE_COLORS = { light: '#8a8a86', dark: '#6f6e6a' } as const
+/** Framing lumber: a stud every 16 in on centre, 1½ in thick, the sheathing-coloured bays between. */
+const STUD_SPACING = 16 * INCH
+const STUD_THICKNESS = 1.5 * INCH
+const LUMBER_COLORS = { stud: '#b98d5a', bay: '#cfae7f' } as const
 
 /** The flat colour each structure reads as where only a colour is wanted (the cutaway palette). */
 export const STRUCTURE_COLORS = {
   cmu: BLOCK_COLORS.light,
   concrete: CONCRETE_COLORS.light,
+  wood: LUMBER_COLORS.bay,
 } as const
 
 // TSL's own typings widen a float to a vec4 here, so the pieces are untyped.
@@ -87,6 +92,17 @@ export function masonryMaterial(
   // The top of a run is the plain block, whatever course the shader finds there.
   const flat = step(float(0.5), normalLocal.y.abs())
   material.colorNode = mix(patterned, block, flat)
+  return material
+}
+
+/**
+ * A wood-framed wall seen bare (a raised floor's cripple wall): studs every 16 in on centre along
+ * the run (`along`, the foundation's own attribute), the bays between them lighter.
+ */
+export function framingMaterial(along: any = attribute<'float'>('along', 'float')) {
+  const material = new MeshLambertNodeMaterial({ side: FrontSide })
+  const stud: any = jointMask(fract(along.div(STUD_SPACING)), STUD_THICKNESS / STUD_SPACING)
+  material.colorNode = mix(color(LUMBER_COLORS.stud), color(LUMBER_COLORS.bay), stud)
   return material
 }
 

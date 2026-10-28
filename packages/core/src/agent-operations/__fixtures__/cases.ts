@@ -279,7 +279,7 @@ export function finishReadbackScene(): SceneGraph {
   const wall = scene.nodes.wall_ground as WallNode
   scene.nodes.wall_ground = {
     ...wall,
-    slots: { a: 'library:concrete-drywall' },
+    slots: { a: 'library:preset-seattlegrey' },
     faceRegions: [{ id: 'wainscot', face: 'a', v1: 0.9, finish: 'library:wood' }],
   }
   scene.nodes.wall_side = {
@@ -510,8 +510,8 @@ export const GET_WALLS_CASES: AgentToolCase[] = [
             resolvedHeight: 2.5,
             heightIsExplicit: true,
             wallFaceChains: {
-              a: { kind: 'default', ref: 'library:concrete-drywall' },
-              b: { kind: 'default', ref: 'library:concrete-drywall' },
+              a: { kind: 'default', ref: 'library:preset-seattlegrey' },
+              b: { kind: 'default', ref: 'library:preset-seattlegrey' },
             },
             openings: [
               { id: 'door_ground', type: 'door' },
@@ -524,8 +524,8 @@ export const GET_WALLS_CASES: AgentToolCase[] = [
             resolvedHeight: 2.8,
             heightIsExplicit: false,
             wallFaceChains: {
-              a: { kind: 'default', ref: 'library:concrete-drywall' },
-              b: { kind: 'default', ref: 'library:concrete-drywall' },
+              a: { kind: 'default', ref: 'library:preset-seattlegrey' },
+              b: { kind: 'default', ref: 'library:preset-seattlegrey' },
             },
             openings: [],
           },
@@ -581,8 +581,8 @@ export const FINISH_READBACK_CASES: AgentToolCase[] = [
           {
             id: 'wall_ground',
             wallFaceChains: {
-              a: { kind: 'ref', ref: 'library:concrete-drywall' },
-              b: { kind: 'default', ref: 'library:concrete-drywall' },
+              a: { kind: 'ref', ref: 'library:preset-seattlegrey' },
+              b: { kind: 'default', ref: 'library:preset-seattlegrey' },
             },
           },
           {
@@ -629,8 +629,8 @@ export const FINISH_READBACK_CASES: AgentToolCase[] = [
           {
             id: 'wall_upper',
             wallFaceChains: {
-              a: { kind: 'default', ref: 'library:concrete-drywall' },
-              b: { kind: 'default', ref: 'library:concrete-drywall' },
+              a: { kind: 'default', ref: 'library:preset-seattlegrey' },
+              b: { kind: 'default', ref: 'library:preset-seattlegrey' },
             },
           },
         ],

@@ -8,6 +8,7 @@ import type {
   SceneApi,
 } from '@pascal-app/core'
 import type { ComponentType } from 'react'
+import type { WallSelectionDimension } from '../room-push-dimensions'
 
 export const FLOORPLAN_NODE_EXTENSION_KEY = 'pascal:editor/floorplan'
 export const FLOORPLAN_GEOMETRY_METADATA_KEY = 'pascal:editor/floorplan'
@@ -18,6 +19,18 @@ export type FloorplanMetricNotation = 'meters' | 'millimeters'
 export type FloorplanToolMode = 'default' | 'expert'
 export type FloorplanWallDimensionReference = 'finished-faces' | 'centerline' | 'stud-faces'
 export const DEFAULT_FLOORPLAN_WALL_DIMENSION_REFERENCE = 'finished-faces'
+/**
+ * Which faces a selected wall's temporary dimensions measure to: the interior
+ * faces (ID, the room size), the exterior faces (OD, the outside size) or both.
+ */
+export type FloorplanWallDimensionFaces = 'interior' | 'exterior' | 'both'
+export const DEFAULT_FLOORPLAN_WALL_DIMENSION_FACES: FloorplanWallDimensionFaces = 'both'
+
+export function normalizeFloorplanWallDimensionFaces(value: unknown): FloorplanWallDimensionFaces {
+  return value === 'interior' || value === 'exterior'
+    ? value
+    : DEFAULT_FLOORPLAN_WALL_DIMENSION_FACES
+}
 export type FloorplanAnnotationRole =
   | 'automatic-dimension'
   | 'contextual-dimension'
@@ -67,6 +80,23 @@ export type FloorplanNodeExtension<N extends AnyNode = AnyNode> = {
   preferredView?: '2d' | '3d'
   referencedSelectionAnnotationRole?: FloorplanAnnotationRole
   contextualDimensions?: (node: N, ctx: GeometryContext) => FloorplanGeometry | null
+  /**
+   * A plan hit on this kind selects the node itself, not the room it bounds
+   * (3D stays room-first). For thin boundary bands whose rooms are clickable
+   * on either side of them.
+   */
+  planHitSelectsNode?: boolean
+  /**
+   * Temporary dimensions shown while this node is the sole selection in
+   * Select mode, in 2D and 3D (level-local plan points). Each is typeable:
+   * `commitDimensionValue` drives the node so it reads the typed value.
+   * Recomputed when the node or its level's rooms change.
+   */
+  selectionDimensions?: (args: {
+    node: N
+    nodes: Readonly<Record<AnyNodeId, AnyNode>>
+    faces: FloorplanWallDimensionFaces
+  }) => readonly WallSelectionDimension[]
   actionMenu?: {
     canCurve?: (args: { node: N; nodes: Readonly<Record<AnyNodeId, AnyNode>> }) => boolean
     /** Buttons the kind adds to the selection's action menu (2D and 3D); each decides its own visibility. */
@@ -131,6 +161,7 @@ type FloorplanContextExtension = {
   roomLabelOverlay: boolean
   metricNotation: FloorplanMetricNotation
   wallDimensionReference: FloorplanWallDimensionReference
+  wallDimensionFaces: FloorplanWallDimensionFaces
 }
 
 export function normalizeFloorplanWallDimensionReference(
@@ -188,6 +219,7 @@ export function createFloorplanContextExtensions(
       wallDimensionReference: normalizeFloorplanWallDimensionReference(
         values.wallDimensionReference,
       ),
+      wallDimensionFaces: normalizeFloorplanWallDimensionFaces(values.wallDimensionFaces),
     } satisfies FloorplanContextExtension,
   }
 }
@@ -205,6 +237,7 @@ export function readFloorplanContext(ctx: GeometryContext): FloorplanContextExte
       wallDimensionReference: normalizeFloorplanWallDimensionReference(
         extension.wallDimensionReference,
       ),
+      wallDimensionFaces: normalizeFloorplanWallDimensionFaces(extension.wallDimensionFaces),
     }
   }
   return {
@@ -214,6 +247,7 @@ export function readFloorplanContext(ctx: GeometryContext): FloorplanContextExte
     roomLabelOverlay: false,
     metricNotation: 'meters',
     wallDimensionReference: DEFAULT_FLOORPLAN_WALL_DIMENSION_REFERENCE,
+    wallDimensionFaces: DEFAULT_FLOORPLAN_WALL_DIMENSION_FACES,
   }
 }
 

@@ -8,6 +8,7 @@ import type {
 } from '@pascal-app/core'
 import { cornerPair, getWallBodyCenterOffset } from '@pascal-app/core'
 import { floorplanGeometryMetadata, readFloorplanContext } from '@pascal-app/editor'
+import { buildOpeningCasingPlan } from '../shared/opening-casing'
 import {
   buildOpeningMarkAnnotation,
   type OpeningFloorplanLevelData,
@@ -87,6 +88,8 @@ function cornerMitre(node: WindowNode, wall: WallNode, ctx: GeometryContext) {
  *   2. Inset inner outline — the "glass pane" frame inside the cutout.
  *   3. Center mullion line down the middle of the opening, along the
  *      wall direction — the legacy's standard glass divider.
+ *   4. Casing legs standing proud of each cased wall face beside the
+ *      cutout (`buildOpeningCasingPlan`).
  *
  * Skipped vs the full legacy for now: arched / rounded opening shape
  * variants, multi-pane mullion grids.
@@ -264,6 +267,22 @@ export function buildWindowFloorplan(
           vectorEffect: 'non-scaling-stroke',
         },
       ]
+
+  // Casing legs on the wall faces beside the cutout, as the 3D window has them.
+  const casing = buildOpeningCasingPlan(
+    node,
+    wall,
+    drafting
+      ? { fill: '#ffffff', stroke: '#1f2937', strokeWidth: 0.006 }
+      : {
+          fill: fillColor,
+          stroke: accentColor,
+          strokeWidth: showSelectedChrome || isHovered ? 1.3 : 1,
+          vectorEffect: 'non-scaling-stroke',
+        },
+    mitre?.end,
+  )
+  if (casing) children.push(casing)
 
   // Move handle — orange dot at the window center. Only when selected.
   if (isSelected) {

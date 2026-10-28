@@ -287,7 +287,7 @@ describe('wall paint roles', () => {
     expect(nodes()[wall.id].slots?.a).toBeUndefined()
     expect(nodes()[wall.id].faceRegions).toBeUndefined()
     expect(nodes().zone_room.wallOverrides).toEqual([
-      { wallId: wall.id, face: 'a', finish: 'library:concrete-drywall' },
+      { wallId: wall.id, face: 'a', finish: 'library:preset-seattlegrey' },
     ])
     expect(nodes().zone_room.wallMaterial).toBe('library:new-room')
     expect(

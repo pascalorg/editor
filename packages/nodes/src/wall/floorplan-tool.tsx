@@ -7,6 +7,7 @@ import {
 } from '@pascal-app/core'
 import {
   type FloorplanToolContext,
+  getDrawnWallTypes,
   markToolCancelConsumed,
   triggerSFX,
   useEditor,
@@ -86,6 +87,7 @@ function RectangleFloorplanTool({ activeLevelId }: FloorplanToolContext) {
           point,
           useEditor.getState().toolDefaults.wall ?? {},
           construction,
+          getDrawnWallTypes(),
         )
         cancel()
         triggerSFX('sfx:structure-build')

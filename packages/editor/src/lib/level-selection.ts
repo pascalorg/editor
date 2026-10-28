@@ -1,5 +1,6 @@
 import type { AnyNodeId, BuildingNode, LevelNode } from '@pascal-app/core'
-import { findLevelAncestorId, useScene } from '@pascal-app/core'
+import { findLevelAncestorId, runAsSingleSceneHistoryStep, useScene } from '@pascal-app/core'
+import { buildLevelRemovalChanges } from '@pascal-app/core/building'
 import { useViewer } from '@pascal-app/viewer'
 
 function getAdjacentLevelIdForDeletion(levelId: AnyNodeId): LevelNode['id'] | null {
@@ -19,11 +20,20 @@ function getAdjacentLevelIdForDeletion(levelId: AnyNodeId): LevelNode['id'] | nu
   return siblingLevelIds[currentIndex - 1] ?? siblingLevelIds[currentIndex + 1] ?? null
 }
 
+/**
+ * Deletes a level, the building standing as it did (`buildLevelRemovalChanges`: the floors over a
+ * deleted basement stay put, a ground floor seated on its foundation stays seated), in one undo
+ * step, and moves the selection off it.
+ */
 export function deleteLevelWithFallbackSelection(levelId: AnyNodeId) {
   const isSelectedLevel = useViewer.getState().selection.levelId === levelId
   const nextLevelId = getAdjacentLevelIdForDeletion(levelId)
 
-  useScene.getState().deleteNode(levelId)
+  const update = buildLevelRemovalChanges({ nodes: useScene.getState().nodes, levelId })
+  runAsSingleSceneHistoryStep(useScene, () => {
+    useScene.getState().deleteNode(levelId)
+    if (update.length > 0) useScene.getState().applyNodeChanges({ update })
+  })
 
   if (isSelectedLevel) {
     useViewer.getState().setSelection({ levelId: nextLevelId })

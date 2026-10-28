@@ -15,7 +15,6 @@ import {
   type NodeEvent,
   nodeRegistry,
   type RoofEvent,
-  type RoofNode,
   type RoofSegmentEvent,
   type RoofSegmentNode,
   resolveLevelId,
@@ -29,7 +28,11 @@ import {
   useScene,
   wallFaceScriptPaintRefusal,
 } from '@pascal-app/core'
-import { getRoofMaterialArray, registerMaterialCacheCleanup, useViewer } from '@pascal-app/viewer'
+import {
+  ROOF_HEEL_MATERIAL_INDEX,
+  registerMaterialCacheCleanup,
+  useViewer,
+} from '@pascal-app/viewer'
 import { useThree } from '@react-three/fiber'
 import { useCallback, useEffect, useRef } from 'react'
 import { type BufferGeometry, Color, type Material, type Mesh, type Object3D, Vector3 } from 'three'
@@ -43,7 +46,6 @@ import {
   canDirectMoveNode,
   canDirectRotateNode,
   pointerEventHitsEditorHandle,
-  resolveDirectManipulationNode,
   resolveDirectRotationDragDelta,
   resolveDirectRotationPatch,
   shouldStartDirectMoveDrag,
@@ -57,7 +59,6 @@ import {
 import { selectionEnabled } from '../../lib/interaction/scope'
 import {
   type ActivePaintMaterial,
-  buildRoofSurfaceMaterialPatch,
   hasActivePaintMaterial,
   resolveActivePaintMaterialFromSelection,
 } from '../../lib/material-paint'
@@ -90,7 +91,6 @@ import {
   paintScopeRole,
   paintSurfaceLabel,
   resolvePaintScopeTargets,
-  slotDisplayLabel,
   type WallPaintHit,
 } from '../../lib/paint-scope'
 import {
@@ -248,9 +248,10 @@ function resolveStairMaterialTarget(
 
 function resolveRoofMaterialTarget(
   event: RoofEvent | RoofSegmentEvent,
-): 'top' | 'edge' | 'wall' | null {
+): 'top' | 'edge' | 'wall' | 'heel' | null {
   const materialIndex = getIntersectionMaterialIndex(getEventObject(event), event.faceIndex)
   if (materialIndex === 3) return 'top'
+  if (materialIndex === ROOF_HEEL_MATERIAL_INDEX) return 'heel'
   if (materialIndex === 0) return 'edge'
   if (materialIndex === 1 || materialIndex === 2) return 'wall'
 
@@ -451,47 +452,12 @@ function resolveSelectModeNodeTarget(event: NodeEvent, drill = false): AnyNode {
   return event.node
 }
 
-function previewMeshMaterial(mesh: Mesh, material: Material | Material[]): PaintPreviewCleanup {
-  const previousMaterial = mesh.material
-  mesh.material = material
-  return () => {
-    mesh.material = previousMaterial
-  }
-}
-
 function previewCursor(cursor: string): PaintPreviewCleanup {
   const previousCursor = document.body.style.cursor
   document.body.style.cursor = cursor
   return () => {
     document.body.style.cursor = previousCursor
   }
-}
-
-function applyRoofPaintPreview(
-  node: RoofNode,
-  role: 'top' | 'edge' | 'wall',
-  material: ActivePaintMaterial,
-): PaintPreviewCleanup | null {
-  const root = getRegisteredNodeObject(node.id)
-  const mesh = root?.getObjectByName('merged-roof') as Mesh | undefined
-  if (!mesh) return null
-
-  const previewNode = {
-    ...node,
-    ...buildRoofSurfaceMaterialPatch(node, role, material.material, material.materialPreset),
-  }
-  const previewMaterial = getRoofMaterialArray(
-    previewNode,
-    useViewer.getState().shading,
-    useViewer.getState().textures,
-    useViewer.getState().colorPreset,
-    useViewer.getState().sceneTheme,
-    null,
-    useScene.getState().materials,
-  )
-  if (!previewMaterial) return null
-
-  return previewMeshMaterial(mesh, previewMaterial)
 }
 
 // Chimney + dormer paint dispatch lives on their NodeDefinition's
@@ -892,9 +858,7 @@ export const SelectionManager = () => {
 
       // Registry-driven paint dispatch — kinds that declare
       // `capabilities.paint` route hover / click / preview through
-      // their definition. Wall, chimney, and dormer use this; legacy
-      // roof / stair / single-surface arms below stay until they
-      // migrate too.
+      // their definition (wall, chimney, dormer, roof, …).
       const paintCap = nodeRegistry.get(node.type)?.capabilities?.paint
       if (paintCap) {
         const materialIndex = getIntersectionMaterialIndex(getEventObject(event), event.faceIndex)
@@ -1063,51 +1027,7 @@ export const SelectionManager = () => {
         }
       }
 
-      // A segment paints through its definition's `capabilities.paint`; the merged shell's hit is
-      // the roof's, and fans to it.
-      if (node.type === 'roof') {
-        const role = resolveRoofMaterialTarget(event as RoofEvent)
-        if (isPaintPicking()) return pickInteraction(node, role, event, null)
-        const compatible = role !== null && paintEnabled
-        return {
-          key: `roof:${node.id}:${role ?? 'unsupported'}:${eraser ? 'erase' : 'paint'}`,
-          hoveredId: node.id as AnyNodeId,
-          hoverMode: compatible ? (eraser ? 'erase-ready' : 'paint-ready') : 'paint-disabled',
-          // Roof isn't on the slot model (role-specific fields, custom commit),
-          // so it offers only the single surface — but still labels it.
-          paintHover:
-            compatible && role
-              ? {
-                  scopes: ['single'],
-                  slotLabel: slotDisplayLabel(node, role),
-                  nodeNoun: 'roof',
-                }
-              : null,
-          apply:
-            compatible && role
-              ? () => {
-                  useScene
-                    .getState()
-                    .updateNode(
-                      node.id as AnyNodeId,
-                      buildRoofSurfaceMaterialPatch(
-                        node,
-                        role,
-                        paintSpec.material,
-                        paintSpec.materialPreset,
-                      ),
-                    )
-                }
-              : null,
-          preview:
-            compatible && role
-              ? () => applyRoofPaintPreview(node, role, paintSpec)
-              : () => previewCursor('not-allowed'),
-        }
-      }
-
-      // Only `roof` reaches a legacy paint arm (above) — every
-      // other paintable kind declares `capabilities.paint` and returns from the
+      // Every paintable kind declares `capabilities.paint` and returns from the
       // registry-driven dispatch at the top of this function.
 
       const disabledNodeTypes = ['zone']
@@ -1478,8 +1398,8 @@ export const SelectionManager = () => {
     }
   }, [isCurveReshape, mode, movingNode, camera, raycaster, glDomElement, registryVersion])
 
-  // Move cursor over the selected movable node: the visual cue that clicking it
-  // picks it up (replaces the removed move-cross gizmo). Reacts only when the
+  // Move cursor over the selected movable node: the visual cue that dragging it
+  // moves it (replaces the removed move-cross gizmo). Reacts only when the
   // hovered/selected node changes (not on every camera move) so it doesn't fight
   // the rotate/resize gizmos' own hover cursors. Clears only the cursor it owns.
   useEffect(() => {
@@ -1521,7 +1441,7 @@ export const SelectionManager = () => {
     }
   }, [mode, glDomElement])
 
-  // While a node is actively being moved (click-to-move / Move button, or a
+  // While a node is actively being moved (a drag, the Move button, or a
   // fresh preset placement), show a grabbing hand. Mode-independent: presets
   // move in build mode. Overrides the hover 'move' cursor (which bails while a
   // movingNode exists), and clears back to the canvas's custom cursor on drop.
@@ -1741,9 +1661,9 @@ export const SelectionManager = () => {
         // Reset the handled flag after a short delay so the grid:click that the
         // SAME DOM click also raycasts is ignored (it fires synchronously, before
         // this 50ms macrotask). Scheduled here — right after the flag is set — so
-        // EVERY branch below clears it, including the click-to-move early return
-        // (which previously skipped the reset and left empty-click deselect stuck
-        // until the next normal select).
+        // EVERY branch below clears it, including the room early return (which
+        // would otherwise leave empty-click deselect stuck until the next
+        // normal select).
         setTimeout(() => {
           clickHandledRef.current = false
         }, 50)
@@ -1778,35 +1698,9 @@ export const SelectionManager = () => {
             .endIf((sc) => sc.kind === 'reshaping' && sc.reshape === 'hole')
         }
 
-        // Click-to-move: clicking the already-selected sole movable node with
-        // no modifiers picks it up instead of re-selecting — the move-cross
-        // gizmo's old job, now on the node body. `setMovingNode` arms the
-        // registry move tool in click-to-commit mode, exactly like the floating
-        // Move button. The first (selecting) click can't hit this because the
-        // node isn't yet in `selectedIdsBeforeRouting`.
-        const nativeEvent = event.nativeEvent
-        const hasModifier =
-          nativeEvent.altKey || nativeEvent.shiftKey || isCommandModifier(nativeEvent)
-        const isAlreadySole =
-          selectedIdsBeforeRouting.length === 1 && selectedIdsBeforeRouting[0] === nodeToSelect.id
-        if (
-          useEditor.getState().mode !== 'delete' &&
-          !hasModifier &&
-          isAlreadySole &&
-          !expandSessionSelectionForNode(nodeToSelect.id) &&
-          !getMovingNode() &&
-          canDirectMoveNode(nodeToSelect)
-        ) {
-          // The move tool mounts before the browser's click that ends this
-          // gesture, which would otherwise commit the node where it stands.
-          swallowNextClick()
-          sfxEmitter.emit('sfx:item-pick')
-          const moveTarget = resolveDirectManipulationNode(nodeToSelect, useScene.getState().nodes)
-          useEditor.getState().setMovingNode(moveTarget as never)
-          useViewer.getState().setSelection({ selectedIds: [] })
-          return
-        }
-
+        // A repeated plain click only selects (or cycles, through
+        // `resolveCanvasSelectionNode` above): it never picks the node up.
+        // Moving takes an explicit drag, the Move action or its shortcut.
         activeStrategy.handleSelect(
           nodeToSelect,
           event.nativeEvent,

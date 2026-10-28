@@ -23,8 +23,10 @@ import {
   useFloorplanMode,
   useTerraceDraft,
   useWallDrawVariant,
+  wallVariantTooltip,
+  withToolShortcut,
 } from '@pascal-app/editor'
-import { useLiquidLineToolOptions } from '@pascal-app/nodes'
+import { framingPostToolChoices, useLiquidLineToolOptions } from '@pascal-app/nodes'
 import { useViewer } from '@pascal-app/viewer'
 import Image from 'next/image'
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
@@ -37,6 +39,7 @@ import {
 import {
   activateBuildTool,
   activateFenceFeaturePlacement,
+  activatePostTool,
   activateRoofFeatureTool,
   activateRoofType,
   activateTerrainSculptMode,
@@ -65,6 +68,8 @@ export function BuildTab() {
   const [kitchenOpen, setKitchenOpen] = useState(false)
   const [buildSearch, setBuildSearch] = useState('')
   const activeTool = useEditor((s) => s.tool)
+  // The column tool placing framing posts lights the Post tile, not Column.
+  const postArmed = useEditor((s) => framingPostToolChoices(s.toolDefaults.column) !== null)
   const selectedId = useViewer((s) => s.selection.selectedIds[0])
   const selectedFenceFeature = useScene((s) => {
     const selected = selectedId ? s.nodes[selectedId as AnyNodeId] : undefined
@@ -133,6 +138,8 @@ export function BuildTab() {
     if (type.id === 'roof')
       return mode === 'build' && (activeTool === 'roof' || isRoofFeatureActive)
     if (type.id === 'fence' && selectedFence) return true
+    if (type.kind === 'column')
+      return mode === 'build' && activeTool === 'column' && (type.id === 'post') === postArmed
     return mode === 'build' && activeTool === type.kind
   }
 
@@ -154,6 +161,8 @@ export function BuildTab() {
         useEditor.getState().setMode('select')
       } else if (type.id === 'terrace') {
         startTerraceDraft()
+      } else if (type.id === 'post') {
+        activatePostTool()
       } else if (type.kind) {
         activateBuildTool(type.kind)
       }
@@ -189,7 +198,7 @@ export function BuildTab() {
         handleTypeClick(type)
       }}
       onMouseEnter={() => triggerSFX('sfx:menu-hover')}
-      title={i18n._(type.label)}
+      title={withToolShortcut(i18n._(type.label), type.id)}
     />
   )
   const typesIn = (section: NonNullable<BuildType['section']>) =>
@@ -255,6 +264,7 @@ export function BuildTab() {
                   if (!(editor.mode === 'build' && editor.tool === 'wall'))
                     activateBuildTool('wall')
                 }}
+                tileProps={(variant) => ({ title: wallVariantTooltip(variant, i18n) })}
               />
               <BuildPanelSection
                 id="add"
@@ -281,6 +291,10 @@ export function BuildTab() {
                 })}
               >
                 <BuildToolGrid columns={4}>{advancedTypes.map(renderTile)}</BuildToolGrid>
+                <ToolOptionsPanel
+                  className="border-border/50 border-t pt-3"
+                  kind={advancedTypes.find(isTypeActive)?.kind}
+                />
               </BuildPanelAdvancedSection>
             </div>
           )}

@@ -621,3 +621,60 @@ test('a scene with no level below grade has no hole and no pit', async () => {
   expect(pitParts(plain.scene.instance as Object3D)).toHaveLength(0)
   await plain.unmount()
 })
+
+// Framing only took the whole ground away: the stepped footings and the stem stood in the sky with
+// no grade to read them against.
+test.each([false, true])(
+  'in framing only the solid ground steps aside and its veil shows where grade is; the walkthrough keeps it solid (terrain: %p)',
+  async (withTerrain) => {
+    const site = lot(withTerrain)
+    setNodes([site])
+    const renderer = await create(<SiteRenderer node={site} />)
+    const scene = renderer.scene.instance as Object3D
+    const settle = async (state: Partial<ReturnType<typeof useViewer.getState>>) =>
+      act(async () => {
+        useViewer.setState(state)
+        await renderer.advanceFrames(3, 0.05)
+      })
+    await settle({ framingOnly: true, walkthroughMode: false, belowGrade: false })
+    expect(ground(scene, 'solid').filter(drawn)).toHaveLength(0)
+    const sheets = veilsOf(scene).sheets.filter(drawn)
+    // The lot's ground and the horizon past it.
+    expect(sheets.length).toBeGreaterThanOrEqual(2)
+    expect(useViewer.getState().groundWindowVeiled).toBe(false)
+    // The veil is never picked: a click reaches the footing under it.
+    expect(groundPickedAt(scene)).toHaveLength(0)
+
+    await settle({ walkthroughMode: true })
+    expect(ground(scene, 'solid').length).toBeGreaterThan(0)
+    expect(ground(scene, 'solid').every(drawn)).toBe(true)
+    expect(ground(scene, 'veil').some(drawn)).toBe(false)
+    await renderer.unmount()
+  },
+)
+
+// The level list's Foundation row: the concrete under grade is what it shows, without Bones.
+test.each([false, true])(
+  'the foundation view veils the ground as framing only does, and gives it back after (terrain: %p)',
+  async (withTerrain) => {
+    const site = lot(withTerrain)
+    setNodes([site])
+    const renderer = await create(<SiteRenderer node={site} />)
+    const scene = renderer.scene.instance as Object3D
+    const settle = async (state: Partial<ReturnType<typeof useViewer.getState>>) =>
+      act(async () => {
+        useViewer.setState(state)
+        await renderer.advanceFrames(3, 0.05)
+      })
+    await settle({ foundationView: true, framingOnly: false, walkthroughMode: false })
+    expect(ground(scene, 'solid').filter(drawn)).toHaveLength(0)
+    expect(veilsOf(scene).sheets.filter(drawn).length).toBeGreaterThanOrEqual(2)
+    expect(groundPickedAt(scene)).toHaveLength(0)
+
+    await settle({ foundationView: false })
+    expect(ground(scene, 'solid').length).toBeGreaterThan(0)
+    expect(ground(scene, 'solid').every(drawn)).toBe(true)
+    expect(veilsOf(scene).sheets.some(drawn)).toBe(false)
+    await renderer.unmount()
+  },
+)

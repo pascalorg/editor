@@ -65,19 +65,28 @@ export const PANEL_MODEL_EXTENSION = 'pascal:editor/panel-model'
 /**
  * A control the multi-selection inspector renders for every selected node of
  * a kind at once (derived settings the raw parametrics can't express). `value`
- * null means the selection is mixed: no option shows as active.
+ * null means the selection is mixed: no option shows as active. `segmented`
+ * suits a few short options, `select` a longer list; `readout` only shows a
+ * value the selection cannot edit here.
  */
 export type MultiPanelControl = {
   id: string
-  kind: 'segmented'
-  /** The parametrics group title the control sits in. */
+  /**
+   * The section the control sits in: a parametrics group title, or a section
+   * of its own, shown after the groups in the order controls name them.
+   */
   section: string
   label: string
-  options: ReadonlyArray<{ value: string; label: string }>
-  value: string | null
-  /** Applies to every selected node in one undo step. */
-  onChange: (value: string) => void
-}
+} & (
+  | {
+      kind: 'segmented' | 'select'
+      options: ReadonlyArray<{ value: string; label: string }>
+      value: string | null
+      /** Applies to every selected node in one undo step. */
+      onChange: (value: string) => void
+    }
+  | { kind: 'readout'; value: string; detail?: string }
+)
 
 export type NodePanelModel<N extends AnyNode = AnyNode> = {
   rows: (context: {

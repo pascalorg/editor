@@ -228,6 +228,12 @@ A plugin that pours the real foundation takes the level over under the ground. `
 
 The shown level's own materials are never touched. A capture (the agent's pictures, the hero shot) renders from its own camera with `gl.render`, so the composite pieces are not in it; `temporarilyWithoutAmbiance()` (held by the thumbnail generator's set-up and the hero bake) also closes the hole, lets the sky light and the fill go back to what they were, and restores them after.
 
+## Library categories and swatches
+
+A catalog material's `category` (`MATERIAL_CATEGORIES` in `packages/core/src/material-kinds.ts`) is the Paint panel tab it sits under and the `kind` agents search by. Exterior siding (lap, board-and-batten, vinyl) is its own `siding` category, apart from `wood` (flooring, planks, parquet); moving an entry between categories never changes its id, which scenes store as `library:<id>`. A host whose server code does not import core keeps its own copy of the list: a new category goes there too.
+
+A swatch (the picker tile, a panel's finish chip, the paint cursor badge, a wall region row) comes from `getMaterialSwatch(item)`: the thumbnail when the entry has one; else its albedo when a browser can show it (`.webp`, `.png`, `.jpg`), multiplied by `mapProperties.color` (`materialSwatchStyle` in the editor, `background-blend-mode: multiply`) exactly as the 3D material tints its map, so a siding reads as its lap or batten relief in its paint colour rather than a flat chip; else the flat preview colour. A KTX2 albedo is not browser-readable: such an entry needs a `previewThumbnailUrl`.
+
 ## Adding a theme
 
 Append a `SceneTheme` to `SCENE_THEMES` with all required fields. `clayTints` is a `Partial` — any role you omit falls back to the active `colorPreset`. The theme pickers (toolbar + community overlay) render a 2×2 swatch from `clayTints` over `background`, so populate at least `wall`/`roof`/`floor`/`glazing` for a good swatch.

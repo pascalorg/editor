@@ -51,6 +51,8 @@ export const AssemblyLayer = z.object({
   thickness: z.number().finite().nonnegative(),
   /** Body only, at most one: the structural layer (framing, block), the one generators frame. */
   core: z.literal(true).optional(),
+  /** The core layer's framing members on centre, metres (studs at 16 in); absent = the framer's own. */
+  spacing: z.number().finite().positive().optional(),
   /**
    * What the layer is built of, as a construction-material kind
    * (`stucco`, `siding`, `osb`, `wood`, `cmu`, `drywall`, …). A label for
@@ -122,6 +124,17 @@ export const Assembly = z
       })
     }
 
+    for (const [list, layers] of lists) {
+      layers.forEach((layer, index) => {
+        if (layer.spacing !== undefined && !layer.core) {
+          ctx.addIssue({
+            code: 'custom',
+            message: 'Only the core layer has a framing spacing',
+            path: [list, index, 'spacing'],
+          })
+        }
+      })
+    }
     assembly.layers.forEach((layer, index) => {
       if (layer.core && !STRUCTURAL_ROLES.has(layer.role)) {
         ctx.addIssue({

@@ -1,3 +1,4 @@
+import { useEditor } from '@pascal-app/editor'
 import { create } from 'zustand'
 
 export type RoofPlacementMode = 'auto' | 'ground' | 'roof'
@@ -5,35 +6,36 @@ export type RoofPlacementMode = 'auto' | 'ground' | 'roof'
 const MODES: RoofPlacementMode[] = ['auto', 'ground', 'roof']
 
 type RoofPlacementModeState = {
-  conical: boolean
   mode: RoofPlacementMode
   cycleMode: () => void
-  setConical: (conical: boolean) => void
 }
 
 const useRoofPlacementMode = create<RoofPlacementModeState>((set, get) => ({
-  conical: false,
   mode: 'auto',
   cycleMode: () => {
     const current = MODES.indexOf(get().mode)
     set({ mode: MODES[(current + 1) % MODES.length] ?? 'auto' })
   },
-  setConical: (conical) => set({ conical }),
 }))
 
+// Read from the roof type the tool is armed with, not from whichever roof tool mounted: in a
+// 2D-only session the 3D tool never mounts, and the HUD showed a cone the standard rows.
+const isConicalRoof = (state: ReturnType<typeof useEditor.getState>) =>
+  state.toolDefaults.roof?.roofType === 'conical'
+
 const subscribeToRoofKind = (onChange: () => void) =>
-  useRoofPlacementMode.subscribe((state, previous) => {
-    if (state.conical !== previous.conical) onChange()
+  useEditor.subscribe((state, previous) => {
+    if (isConicalRoof(state) !== isConicalRoof(previous)) onChange()
   })
 
 export const conicalRoofToolHintVisibility = {
   subscribe: subscribeToRoofKind,
-  value: () => useRoofPlacementMode.getState().conical,
+  value: () => isConicalRoof(useEditor.getState()),
 }
 
 export const standardRoofToolHintVisibility = {
   subscribe: subscribeToRoofKind,
-  value: () => !useRoofPlacementMode.getState().conical,
+  value: () => !isConicalRoof(useEditor.getState()),
 }
 
 export default useRoofPlacementMode

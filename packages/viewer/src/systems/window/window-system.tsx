@@ -5,6 +5,7 @@ import {
   getEffectiveNode,
   getOpeningWallPlacement,
   getWallThickness,
+  resolveOpeningCasingHost,
   resolveOpeningFrameDepth,
   type SceneMaterial,
   type SceneMaterialId,
@@ -32,6 +33,7 @@ import {
 import { timeSpan } from '../../lib/perf-tracks'
 import { settleScriptedOpening } from '../../lib/scripted-opening'
 import useViewer from '../../store/use-viewer'
+import { buildOpeningCasingMeshes } from '../wall/opening-casing-geometry'
 import { getOpeningCutoutProxyDepth } from '../wall/opening-cutout-geometry'
 import { cornerFrameStale, FUSED_CORNER_SIDE } from './corner-frame'
 
@@ -3232,6 +3234,9 @@ function updateWindowMesh(rawNode: WindowNode, mesh: THREE.Mesh): boolean {
   baseMaterial = resolveWindowSlotMaterial(node, 'frame')
   glassMaterial = resolveWindowSlotMaterial(node, 'glass')
 
+  // The casing sits on the wall faces around the opening, whatever fills it.
+  addWindowCasing(node, mesh)
+
   const {
     width,
     height,
@@ -3464,6 +3469,27 @@ function updateWindowMesh(rawNode: WindowNode, mesh: THREE.Mesh): boolean {
 
   syncWindowCutout(node, mesh)
   return true
+}
+
+/**
+ * The window's casing on the faces of its wall (or gable) around the cutout,
+ * painted with the frame. Read from the live host, so it stays on the faces
+ * while the wall's thickness is dragged.
+ */
+function addWindowCasing(node: WindowNode, mesh: THREE.Mesh) {
+  const nodes = useScene.getState().nodes
+  const hostId = node.roofSegmentId ?? node.parentId
+  const hostNode = hostId ? nodes[hostId as AnyNodeId] : undefined
+  const host = resolveOpeningCasingHost(
+    node,
+    nodes,
+    hostNode ? getEffectiveNode(hostNode) : undefined,
+  )
+  if (!host) return
+  for (const casing of buildOpeningCasingMeshes(node, host, baseMaterial)) {
+    casing.userData.slotId = 'frame'
+    mesh.add(casing)
+  }
 }
 
 function syncWindowCutout(node: RenderWindowNode, mesh: THREE.Mesh) {

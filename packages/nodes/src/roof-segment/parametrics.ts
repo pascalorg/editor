@@ -141,6 +141,8 @@ export const roofSegmentParametrics: ParametricDescriptor<RoofSegmentNode> = {
           min: 0.04,
           max: 0.3,
           step: 0.01,
+          // Layers set it: edited here it would part from them.
+          visibleIf: (node) => !node.buildUp,
         },
         { key: 'overhang', kind: 'number', unit: 'm', min: 0, max: 1, step: 0.05 },
         {
@@ -161,6 +163,8 @@ export const roofSegmentParametrics: ParametricDescriptor<RoofSegmentNode> = {
           min: 0.02,
           max: 0.3,
           step: 0.01,
+          // Layers set it: edited here it would part from them.
+          visibleIf: (node) => !node.buildUp,
         },
         {
           key: 'wallShell',

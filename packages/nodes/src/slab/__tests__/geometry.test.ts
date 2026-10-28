@@ -240,6 +240,37 @@ describe('buildSlabGeometry', () => {
     expect(fill.geometry.boundingBox?.min.y).toBeCloseTo(0)
     expect(fill.geometry.boundingBox?.max.y).toBeCloseTo(0.3)
   })
+
+  test('a porch or patio slab outside the house runs its concrete edge down to the ground', () => {
+    const site = SiteNode.parse({ id: 'site_test', children: ['building_test'] })
+    const porch = SlabNode.parse({
+      plateRole: 'sunken',
+      boundary: 'auto',
+      elevation: 0.4,
+      thickness: 0.1,
+      metadata: { floor: 'porch-slab' },
+      polygon: [
+        [0, 0],
+        [2, 0],
+        [2, 1],
+        [0, 1],
+      ],
+    })
+    const skirt = meshesOf(buildSlabGeometry(porch, geometryContext(site), 'solid', false)).find(
+      (mesh) => mesh.userData.slotId === 'foundation',
+    )!
+    expect(skirt).toBeDefined()
+    skirt.geometry.computeBoundingBox()
+    expect(skirt.geometry.boundingBox?.min.y).toBeCloseTo(0)
+    expect(skirt.geometry.boundingBox?.max.y).toBeCloseTo(0.3)
+    // A plate a step down inside the house stays as it is.
+    const sunken = { ...porch, metadata: {} }
+    expect(
+      meshesOf(buildSlabGeometry(sunken, geometryContext(site), 'solid', false)).some(
+        (mesh) => mesh.userData.slotId === 'foundation',
+      ),
+    ).toBe(false)
+  })
 })
 
 describe('buildSlabGeometry on empty and collapsed polygons', () => {

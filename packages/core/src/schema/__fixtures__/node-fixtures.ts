@@ -12,6 +12,7 @@ import { AnyNode, type AnyNodeType, nodeKindOf } from '../types'
 
 /** Fields a kind requires beyond the defaults its own schema fills in. */
 export const NODE_REQUIRED_FIELDS: Record<string, Record<string, unknown>> = {
+  beam: { start: [0, 0], end: [4, 0] },
   ceiling: {
     polygon: [
       [0, 0],

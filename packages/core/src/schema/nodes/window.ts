@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { BaseNode, nodeType, objectId } from '../base'
 import { GeometryScriptSource } from '../geometry-source'
 import { MaterialSchema } from '../material'
-import { WindowType } from './opening-types'
+import { DEFAULT_OPENING_CASING_WIDTH, WindowType } from './opening-types'
 
 export { WindowType } from './opening-types'
 
@@ -118,14 +118,25 @@ export const WindowNode = BaseNode.extend({
   sill: z.boolean().default(true),
   sillDepth: z.number().default(0.08),
   sillThickness: z.number().default(0.03),
+
+  // Casing: flat boards on the finished faces of the host wall around the
+  // opening, never inside it, so the wall cutout stays width × height. The
+  // faces are the host's `a` / `b` (WallFace), not the unit's own front and
+  // back, so flipping the window leaves its casing where it is. Saves from
+  // before casing load with it on both faces.
+  casingFaceA: z.boolean().default(true),
+  casingFaceB: z.boolean().default(true),
+  casingWidth: z.number().positive().default(DEFAULT_OPENING_CASING_WIDTH),
 }).describe(dedent`Window node - a parametric window placed on a wall
   - position: center of the window in wall-local coordinate system
-  - width/height: overall outer dimensions
+  - width/height: overall outer dimensions, which are also the wall cutout
   - windowType: explicit window family, defaulting old windows to fixed
   - frameThickness: width of the frame members
   - frameDepth: how deep the frame sits within the wall
   - columnRatios/rowRatios: pane division ratios
   - sill: whether to show a window sill
+  - casingFaceA/casingFaceB: picture-frame casing on the host wall's face a / b, around the cutout
+  - casingWidth: face width of the casing boards (2 in by default)
   - corner: joined to a window on the other wall at this wall's start or end (a corner window)
 `)
 

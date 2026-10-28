@@ -9,8 +9,10 @@ import {
   getWallThickness,
   holdHiddenWallPointerEvents,
   isCurvedWall,
+  isRailingWall,
   type RoofEvent,
   type RoofNode,
+  railingOpeningFields,
   resolveOpeningFrameDepth,
   sceneRegistry,
   spatialGridManager,
@@ -56,6 +58,7 @@ import {
 import { clampToWall, hasWallChildOverlap, wallLocalToWorld } from './door-math'
 import { placedDoorFields, useDoorPlacement } from './placement'
 import DoorPreview from './preview'
+import { placementSwing } from './swing'
 
 const edgeMaterial = new LineBasicNodeMaterial({
   color: 0xef_44_44,
@@ -76,7 +79,7 @@ type HostKind = 'wall' | 'roof' | null
  * Door tool — places DoorNodes on walls and on roof-segment wall faces
  * (the generated base walls under a roof, including coplanar gable ends).
  * Doors always sit at floor level (clampedY = height/2 — segment base for
- * roof-hosted doors).
+ * roof-hosted doors), a garage's slab in its walls to the outside.
  *
  * The ghost follows the cursor everywhere (like moving an item): over open
  * floor it floats as an invalid (unplaceable) ghost; the moment the cursor
@@ -329,7 +332,14 @@ const DoorTool: React.FC = () => {
         candidates: alignmentCandidates,
         applySnap,
       })
-      const { clampedX, clampedY } = clampToWall(wall, localX, width, height)
+      // A door in a garage's wall to the outside stands on its slab (`doorSillFloorOf`).
+      const { clampedX, clampedY } = clampToWall(
+        wall,
+        localX,
+        width,
+        height,
+        useScene.getState().nodes,
+      )
       const valid = !hasWallChildOverlap(
         wall.id,
         useScene.getState().nodes,
@@ -351,10 +361,11 @@ const DoorTool: React.FC = () => {
       rawLocalX: number
       side: 'front' | 'back'
       itemRotation: number
+      swingSide: 'front' | 'back'
       cursorRotationY: number
       applySnap: boolean
     }) => {
-      const { wall, rawLocalX, side, itemRotation, cursorRotationY, applySnap } = args
+      const { wall, rawLocalX, side, itemRotation, swingSide, cursorRotationY, applySnap } = args
       const placed = placedDoorFields()
       const width = draftRef.current?.width ?? placed.width ?? 0.9
       const height = draftRef.current?.height ?? placed.height ?? 2.1
@@ -381,12 +392,15 @@ const DoorTool: React.FC = () => {
         applySnap,
         draftRef.current.id,
       )
+      // The leaf swings into the side the cursor is on (R sends it to the other side).
+      const swingDirection = placementSwing(draftRef.current, itemRotation, swingSide)
 
       if (wall.id === draftRef.current.parentId) {
         useScene.getState().updateNode(draftRef.current.id, {
           position: [clampedX, clampedY, 0],
           rotation: [0, itemRotation, 0],
           side,
+          swingDirection,
         })
         markHostDirty(wall.id)
       } else {
@@ -394,6 +408,7 @@ const DoorTool: React.FC = () => {
           position: [clampedX, clampedY, 0],
           rotation: [0, itemRotation, 0],
           side,
+          swingDirection,
           parentId: wall.id,
           wallId: wall.id,
           // The draft may arrive from a roof-segment face hover.
@@ -413,7 +428,7 @@ const DoorTool: React.FC = () => {
         ),
         cursorRotationY,
         valid,
-        -clampedY,
+        -height / 2,
         getWallThickness(wall),
       )
 
@@ -441,6 +456,7 @@ const DoorTool: React.FC = () => {
       clampedY: number,
       side: 'front' | 'back',
       itemRotation: number,
+      swingSide: 'front' | 'back',
     ) => {
       const draft = draftRef.current
       if (!draft) return
@@ -459,9 +475,15 @@ const DoorTool: React.FC = () => {
         return w?.parentId === levelId
       }).length
 
+      // On a railing the door becomes a gap in the guard, as tall as the guard.
+      const railingGap = isRailingWall(wall) ? railingOpeningFields(wall) : null
       const node = DoorNode.parse({
-        name: `Door ${doorCount + 1}`,
-        position: [clampedX, clampedY, 0],
+        name: `${railingGap ? 'Opening' : 'Door'} ${doorCount + 1}`,
+        position: [
+          clampedX,
+          railingGap ? clampedY + (railingGap.height - draft.height) / 2 : clampedY,
+          0,
+        ],
         rotation: [0, itemRotation, 0],
         side,
         wallId: wall.id,
@@ -479,7 +501,7 @@ const DoorTool: React.FC = () => {
         threshold: draft.threshold,
         thresholdHeight: draft.thresholdHeight,
         hingesSide: draft.hingesSide,
-        swingDirection: draft.swingDirection,
+        swingDirection: placementSwing(draft, itemRotation, swingSide),
         segments: draft.segments,
         contentPadding: draft.contentPadding,
         handle: draft.handle,
@@ -488,6 +510,7 @@ const DoorTool: React.FC = () => {
         doorCloser: draft.doorCloser,
         panicBar: draft.panicBar,
         panicBarHeight: draft.panicBarHeight,
+        ...railingGap,
       })
 
       useScene.getState().createNode(node, wall.id as AnyNodeId)
@@ -519,8 +542,11 @@ const DoorTool: React.FC = () => {
       }
       lastWallEvent = event
 
-      // An outside wall's door faces out whichever face is hovered, as add_door places it.
-      const faceSide = placedDoorFace(event.node, getSideFromNormal(event.normal))
+      // An outside wall's door faces out whichever face is hovered, as add_door places it; the
+      // leaf still swings into the hovered side (R flips facing and swing together).
+      const hovered = getSideFromNormal(event.normal)
+      const swingSide = sideFlip ? (hovered === 'front' ? 'back' : 'front') : hovered
+      const faceSide = placedDoorFace(event.node, hovered)
       const side = sideFlip ? (faceSide === 'front' ? 'back' : 'front') : faceSide
       const flipOffset = sideFlip ? Math.PI : 0
       const itemRotation = (faceSide === 'back' ? Math.PI : 0) + flipOffset
@@ -536,6 +562,7 @@ const DoorTool: React.FC = () => {
         rawLocalX: event.localPosition[0],
         side,
         itemRotation,
+        swingSide,
         cursorRotationY: cursorRotation,
         applySnap: isMagneticSnapActive(),
       })
@@ -552,7 +579,9 @@ const DoorTool: React.FC = () => {
         return
       }
 
-      const faceSide = placedDoorFace(event.node, getSideFromNormal(event.normal))
+      const hovered = getSideFromNormal(event.normal)
+      const swingSide = sideFlip ? (hovered === 'front' ? 'back' : 'front') : hovered
+      const faceSide = placedDoorFace(event.node, hovered)
       const side = sideFlip ? (faceSide === 'front' ? 'back' : 'front') : faceSide
       const itemRotation = (faceSide === 'back' ? Math.PI : 0) + (sideFlip ? Math.PI : 0)
       const { clampedX, clampedY, valid } = resolveWallPlacement(
@@ -566,7 +595,7 @@ const DoorTool: React.FC = () => {
       // Alt force-places over a collision (the draft stays red as a warning).
       if (!valid && event.nativeEvent?.altKey !== true) return
 
-      commitDoorAtWall(event.node, clampedX, clampedY, side, itemRotation)
+      commitDoorAtWall(event.node, clampedX, clampedY, side, itemRotation, swingSide)
       event.stopPropagation()
     }
 

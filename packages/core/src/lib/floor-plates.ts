@@ -4,6 +4,7 @@ import type { SurfaceHoleMetadata } from '../schema/nodes/surface-hole-metadata'
 import type { ZoneNode } from '../schema/nodes/zone'
 import { stairArrivalOpening } from '../systems/stair/stair-footprint'
 import { omitUndefined } from '../utils/omit-undefined'
+import { deckBoardSettings, deckBoardThickness } from './deck-boards'
 import {
   automaticFloorHeight,
   floorPlateHoldsUnderside,
@@ -16,8 +17,10 @@ import {
   exposedIntervals,
   plateFootprint,
   roomClearPolygon,
+  roomRailingFootprints,
   roomWallFootprints,
 } from './level-footprints'
+import { isOutdoorRoomType, OUTDOOR_ROOM_DEFAULTS } from './outdoor-room'
 import { area, difference, intersection, type Polygon, union } from './polygon-boolean'
 import type { TopologyRoom } from './room-topology-index'
 import { autoRoomVerticalPlacements } from './room-vertical-placement'
@@ -427,13 +430,25 @@ export function buildFloorPlates({
   const componentOf = (room: PlateRoom) =>
     components.find((component) => component.members.includes(room))
   const baseOf = (room: PlateRoom) => componentOf(room)?.elevation ?? DEFAULT_SLAB_ELEVATION
-  const elevationOf = (room: PlateRoom) => intent.get(room.zone.id) ?? baseOf(room)
+  // A room stepped down from the floor it shares (a porch, `floor.drop`) follows that floor.
+  const elevationOf = (room: PlateRoom) =>
+    intent.get(room.zone.id) ?? baseOf(room) - (room.zone.floor?.drop ?? 0)
   const thresholds = floorOpeningFootprints(grounded, elevationOf, nodes ?? {})
   const interiors = new Map(
     grounded.map((room) => [
       room.zone.id,
       union([
-        Math.abs(elevationOf(room) - baseOf(room)) >= 0.001 - 1e-9 ? roomClearPolygon(room) : [],
+        Math.abs(elevationOf(room) - baseOf(room)) >= 0.001 - 1e-9
+          ? // A room on a slab of its own (a garage) takes its walls' footprints with it: the
+            // house's floor stops at them, never running under its walls or through its doors.
+            room.zone.floor?.foundation === 'slab'
+            ? union([...roomClearPolygon(room), ...roomWallFootprints([room])])
+            : // A porch or deck a step down takes its railings: they stand on its own floor, and
+              // the house's floor stops at the house wall rather than ringing it under them.
+              isOutdoorRoomType(room.zone.roomType)
+              ? union([...roomClearPolygon(room), ...roomRailingFootprints(room)])
+              : roomClearPolygon(room)
+          : [],
         ...(thresholds.get(room.zone.id) ?? []),
       ]),
     ]),
@@ -894,7 +909,7 @@ export function buildFloorPlates({
       }))
     }
     if (plate.plateRole === 'base') delete (plate as Partial<SlabNode>).fillToTerrain
-    return omitUndefined(plate)
+    return omitUndefined(withOutdoorFloorTag(plate, group.members))
   })
   const plateIds = new Set(plates.map((plate) => plate.id))
   const retired = existing.filter((slab) => !used.has(slab.id) && !plateIds.has(slab.id))
@@ -909,6 +924,40 @@ export function buildFloorPlates({
     remap.set(slab.id, best ? plates[best.index]!.id : undefined)
   }
   return { plates, retired, remap }
+}
+
+// The framing plugin's slab kinds an outdoor room's plate is tagged with (`OutdoorRoomDefaults`).
+const OUTDOOR_FLOOR_TAGS = new Set(['porch-slab', 'deck'])
+
+/**
+ * A plate standing alone under one outdoor room (a porch, deck or patio stepped down from the
+ * house) is tagged for the framing plugin, as a drawn porch slab or deck is: `metadata.floor`
+ * (and, for a deck, its boards' thickness in `metadata.decking`, `lib/deck-boards`). Any other
+ * plate loses a tag it was given that way.
+ */
+function withOutdoorFloorTag(plate: SlabNode, members: readonly PlateRoom[]): SlabNode {
+  const type = members.length === 1 ? members[0]!.zone.roomType : undefined
+  const {
+    floor: tag,
+    decking: _decking,
+    ...rest
+  } = (plate.metadata ?? {}) as Record<string, unknown>
+  const outdoor = plate.plateRole !== 'base' && isOutdoorRoomType(type)
+  if (!outdoor) {
+    if (!(typeof tag === 'string' && OUTDOOR_FLOOR_TAGS.has(tag))) return plate
+    return { ...plate, metadata: rest }
+  }
+  const floorTag = OUTDOOR_ROOM_DEFAULTS[type].floorTag
+  return {
+    ...plate,
+    metadata: {
+      ...rest,
+      floor: floorTag,
+      ...(floorTag === 'deck'
+        ? { decking: deckBoardThickness(deckBoardSettings(members[0]!.zone)) }
+        : {}),
+    },
+  }
 }
 
 const warnedLevels = new Set<string>()

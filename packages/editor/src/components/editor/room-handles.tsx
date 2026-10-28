@@ -1,6 +1,7 @@
 'use client'
 
 import {
+  type AnyNodeId,
   clampRoomFloorHandle,
   type Point,
   roomDrawnFloor,
@@ -32,6 +33,7 @@ import {
   publishStructuralElevationGuide,
   resolveStructuralElevationSnap,
 } from '../../lib/elevation-guides'
+import { parseDimensionInput } from '../../lib/floorplan/dimension-drive'
 import { formatLinearMeasurement, MEASUREMENT_ACTIVE_COLOR } from '../../lib/measurements'
 import { commitRoomFloorElevation, roomFloorBase } from '../../lib/room-construction-commands'
 import {
@@ -50,11 +52,16 @@ import {
 import type { RoomDimension } from '../../lib/room-push-dimensions'
 import type { RoomSelectionRecord } from '../../lib/room-selection'
 import useEditor, { isGridSnapActive, isMagneticSnapActive } from '../../store/use-editor'
+import {
+  commitDimensionValue,
+  useDimensionEditAllowed,
+} from '../editor-2d/renderers/floorplan-dimension-edit-overlay'
 import { suppressBoxSelectForPointer } from '../tools/select/box-select-state'
 import { ARROW_COLOR, ARROW_SCALE, HandleArrow } from './handles/handle-arrow'
 import { resolveResizeSnapValue } from './handles/resize-snap'
 import { Html } from './localized-html'
 import { formatMeasurement } from './measurement-pill'
+import { useSelectedWallDimensions } from './room-handles-2d'
 import { WallPushArrow } from './wall-push-arrow'
 
 const PILL =
@@ -295,8 +302,9 @@ export function ElevationArrows({
 
 /**
  * A selected room's 3D handles: the floor elevation tracker at its centroid
- * and one push/pull arrow outside every boundary wall. Rendered in the level
- * frame by `RoomControls3D`, only while nothing else is in progress.
+ * and one push/pull arrow outside every boundary wall and every straight edge
+ * of invisible walls. Rendered in the level frame by `RoomControls3D`, only
+ * while nothing else is in progress.
  */
 export function RoomHandles3D({ room }: { room: RoomSelectionRecord }) {
   const nodes = useScene((s) => s.nodes)
@@ -307,7 +315,11 @@ export function RoomHandles3D({ room }: { room: RoomSelectionRecord }) {
     () => outlineCentroid([room.polygon as Point[], ...(room.holes as Point[][])]),
     [room.polygon, room.holes],
   )
-  const handles = useMemo(() => roomPushHandles(nodes, room.spans), [nodes, room.spans])
+  // Its invisible walls' arrows lie on its floor, where their dashed lines are drawn.
+  const handles = useMemo(
+    () => roomPushHandles(nodes, room.spans, elevation),
+    [nodes, room.spans, elevation],
+  )
   // A mezzanine has no walls: its plate edges carry the push arrows instead.
   const edges = useMemo(
     () => (room.mezzanine ? mezzanineEdgeHandles(nodes, room.zoneId) : []),
@@ -414,9 +426,21 @@ const DIMENSION_LABEL_OUTLINE = [
  * above its room's floor and drawn over the walls, closed by cross ticks, with
  * the measurement's outlined label — apart from the moved-distance pill.
  */
-function RoomDimensionLines3D({ dimensions }: { dimensions: RoomDimension[] }) {
+function RoomDimensionLines3D({
+  dimensions,
+  hidden = false,
+  wallId,
+}: {
+  dimensions: readonly RoomDimension[]
+  /** Hides the labels while keeping their drei `Html` roots mounted. */
+  hidden?: boolean
+  /** The selected wall the dimensions run from: set, each value can be typed to move it. */
+  wallId?: string
+}) {
   const unit = useViewer((s) => s.unit)
   const metricNotation = useViewer((s) => s.metricNotation)
+  const editable = useDimensionEditAllowed() && !!wallId
+  const [editing, setEditing] = useState<string | null>(null)
   const geometry = useMemo(() => {
     if (!dimensions.length) return null
     const positions: number[] = []
@@ -450,18 +474,153 @@ function RoomDimensionLines3D({ dimensions }: { dimensions: RoomDimension[] }) {
             dimension.elevation,
             (dimension.from[1] + dimension.to[1]) / 2,
           ]}
-          style={{ pointerEvents: 'none' }}
+          style={{ display: hidden ? 'none' : undefined, pointerEvents: 'none' }}
           zIndexRange={[20, 0]}
         >
-          <div
-            className="-translate-y-3 whitespace-nowrap font-medium text-base text-white"
-            data-room-dimension-3d
-            style={{ textShadow: DIMENSION_LABEL_OUTLINE }}
-          >
-            {formatMeasurement(dimension.distance, unit, metricNotation)}
-          </div>
+          {editable && wallId && !hidden && editing === dimension.key ? (
+            <DimensionValueInput
+              dimension={dimension}
+              initial={formatMeasurement(dimension.distance, unit, metricNotation)}
+              onClose={() => setEditing(null)}
+              unit={unit}
+              wallId={wallId}
+            />
+          ) : (
+            <div
+              className={`-translate-y-3 whitespace-nowrap font-medium text-base text-white ${editable ? 'pointer-events-auto cursor-text' : ''}`}
+              data-room-dimension-3d
+              onClick={editable ? () => setEditing(dimension.key) : undefined}
+              onKeyDown={
+                editable
+                  ? (event) => {
+                      if (event.key === 'Enter') setEditing(dimension.key)
+                    }
+                  : undefined
+              }
+              onPointerDown={editable ? (event) => event.stopPropagation() : undefined}
+              role={editable ? 'button' : undefined}
+              style={{ textShadow: DIMENSION_LABEL_OUTLINE }}
+              tabIndex={editable ? 0 : undefined}
+              title={editable ? 'Type a size to move the wall' : undefined}
+            >
+              {formatMeasurement(dimension.distance, unit, metricNotation)}
+            </div>
+          )}
         </Html>
       ))}
+    </group>
+  )
+}
+
+/**
+ * A temporary dimension's value, typed: Enter moves the selected wall so the
+ * dimension reads it (`commitDimensionValue`, one undo step), Esc or a click
+ * away leaves it. Feet-inches, metric and bare numbers parse as in the plan.
+ */
+function DimensionValueInput({
+  dimension,
+  initial,
+  onClose,
+  unit,
+  wallId,
+}: {
+  dimension: RoomDimension
+  initial: string
+  onClose: () => void
+  unit: 'metric' | 'imperial'
+  wallId: string
+}) {
+  const [draft, setDraft] = useState(initial)
+  const [error, setError] = useState<string | null>(null)
+  const commit = () => {
+    const nextLength = parseDimensionInput(draft, unit)
+    if (nextLength === null) {
+      setError(`Cannot read "${draft.trim()}"`)
+      return
+    }
+    const outcome = commitDimensionValue({
+      target: {
+        ownerNodeId: wallId as AnyNodeId,
+        witnessStart: dimension.from,
+        witnessEnd: dimension.to,
+        value: dimension.distance,
+      },
+      nextLength,
+      unit,
+    })
+    if (outcome.ok) onClose()
+    else setError(outcome.reason)
+  }
+  return (
+    <div
+      className="pointer-events-auto -translate-y-3 w-24"
+      onPointerDown={(event) => event.stopPropagation()}
+    >
+      <input
+        // biome-ignore lint/a11y/noAutofocus: the box opens on a click to be typed in
+        autoFocus
+        aria-label="Dimension value"
+        className="w-full rounded-sm border border-primary bg-card px-1 py-0.5 text-center font-mono text-foreground text-xs shadow-sm outline-none"
+        onBlur={onClose}
+        onChange={(event) => {
+          setDraft(event.target.value)
+          setError(null)
+        }}
+        onFocus={(event) => event.target.select()}
+        onKeyDown={(event) => {
+          event.stopPropagation()
+          if (event.key === 'Enter') {
+            event.preventDefault()
+            commit()
+          } else if (event.key === 'Escape') {
+            event.preventDefault()
+            onClose()
+          }
+        }}
+        spellCheck={false}
+        value={draft}
+      />
+      {error ? (
+        <div className="mt-0.5 whitespace-nowrap rounded-sm bg-card px-1 text-[10px] text-destructive shadow-sm">
+          {error}
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
+/**
+ * The sole selected wall's temporary dimensions in 3D, the plan's twin
+ * (`SelectedWallDimensions2D`): the room widths its push shows and the
+ * outside size, drawn as the push draws them, in the wall's level frame.
+ */
+export function SelectedWallDimensions3D() {
+  const selection = useSelectedWallDimensions()
+  const isFloorplanHovered = useEditor((s) => s.isFloorplanHovered)
+  const levelId = selection?.node.parentId ?? null
+  const root = useRef<Group>(null)
+  useFrame(() => {
+    const level = levelId ? sceneRegistry.nodes.get(levelId) : null
+    if (!root.current) return
+    root.current.visible = !!level && !isFloorplanHovered
+    if (level) {
+      level.updateWorldMatrix(true, false)
+      root.current.matrix.copy(level.matrixWorld)
+    }
+  })
+  // The labels are DOM (drei `Html`); with no document (a headless
+  // renderer) there is nothing to draw them into.
+  if (!selection || typeof document === 'undefined') return null
+  // Hovering the plan hides the dimensions rather than unmounting them: drei
+  // `Html` unmounts its DOM root synchronously, which React reports as an error
+  // when it happens inside a render.
+  return (
+    <group matrixAutoUpdate={false} ref={root}>
+      <RoomDimensionLines3D
+        dimensions={selection.dimensions}
+        hidden={isFloorplanHovered}
+        wallId={selection.node.id}
+      />
     </group>
   )
 }

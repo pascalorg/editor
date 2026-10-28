@@ -18,6 +18,13 @@ import { useSidebarStore } from '../components/ui/primitives/sidebar'
 import { runRedo, runUndo } from '../lib/history'
 import { meshEditScope } from '../lib/interaction/scope'
 import { setSidebarTabIds } from '../lib/sidebar-panel'
+import {
+  armToolShortcut,
+  subscribeWallTypeOverrideReset,
+  toolShortcutForKey,
+  withToolShortcut,
+} from '../lib/tool-shortcuts'
+import { getWallTypeOverride } from '../lib/wall-draw-variant'
 import useEditor from '../store/use-editor'
 import useInteractionScope from '../store/use-interaction-scope'
 import {
@@ -161,6 +168,14 @@ describe('rotation shortcut ownership', () => {
   test('leaves R and T to the active lean-to placement tool', () => {
     useEditor.getState().armToolMode({ mode: 'build', tool: 'lean-to-extension' })
 
+    expect(isToolOwnedRotation()).toBe(true)
+  })
+
+  test('leaves R and T, and so Shift+R, to the stair and elevator placement tools', () => {
+    useEditor.getState().armToolMode({ mode: 'build', tool: 'stair' })
+    expect(isToolOwnedRotation()).toBe(true)
+
+    useEditor.getState().armToolMode({ mode: 'build', tool: 'elevator' })
     expect(isToolOwnedRotation()).toBe(true)
   })
 
@@ -471,5 +486,102 @@ describe('B and P open their panel', () => {
     useEditor.getState().setActiveSidebarPanel('items')
     armPaintFromShortcut()
     expect(useEditor.getState().activeSidebarPanel).toBe('build')
+  })
+})
+
+describe('drafting tool shortcuts', () => {
+  const press = (code: string, mods: Partial<KeyboardEvent> = {}) =>
+    toolShortcutForKey({
+      code,
+      shiftKey: false,
+      metaKey: false,
+      ctrlKey: false,
+      altKey: false,
+      repeat: false,
+      ...mods,
+    })
+
+  afterEach(() => {
+    setSidebarTabIds([])
+    useInteractionScope.getState().endIf(() => true)
+    useEditor.getState().setContinuation('wall', 'room')
+    useEditor.getState().armToolMode({ mode: 'select' })
+  })
+
+  test('keep the bare keys they would collide with: pan, rotate and operate', () => {
+    expect(press('KeyD', { shiftKey: true })).toBe('door')
+    expect(press('KeyW', { shiftKey: true })).toBe('window')
+    expect(press('KeyS', { shiftKey: true })).toBe('stair')
+    expect(press('KeyR', { shiftKey: true })).toBe('roof')
+    expect(press('KeyE', { shiftKey: true })).toBe('exterior-wall')
+    expect(press('KeyI')).toBe('interior-wall')
+    for (const code of ['KeyD', 'KeyW', 'KeyS', 'KeyR', 'KeyE', 'KeyA'])
+      expect(press(code)).toBeNull()
+    expect(press('KeyD', { shiftKey: true, ctrlKey: true })).toBeNull()
+    expect(press('KeyD', { shiftKey: true, repeat: true })).toBeNull()
+  })
+
+  test('stand down while a gesture holds Shift', () => {
+    useInteractionScope.getState().begin({ kind: 'box-select' })
+    expect(press('KeyD', { shiftKey: true })).toBeNull()
+    expect(press('KeyI')).toBe('interior-wall')
+  })
+
+  test('arm their tool with the Build panel showing, and name their key in tooltips', () => {
+    setSidebarTabIds(['build', 'items'])
+    useEditor.getState().setActiveSidebarPanel('items')
+    for (const [id, tool] of [
+      ['door', 'door'],
+      ['window', 'window'],
+      ['stair', 'stair'],
+      ['roof', 'roof'],
+    ] as const) {
+      armToolShortcut(id)
+      expect(useEditor.getState().mode).toBe('build')
+      expect(useEditor.getState().tool).toBe(tool)
+      expect(useEditor.getState().activeSidebarPanel).toBe('build')
+    }
+    expect(withToolShortcut('Door', 'door')).toBe('Door (Shift+D)')
+    expect(withToolShortcut('Wall', 'wall')).toBe('Wall (B)')
+    expect(withToolShortcut('Fence', 'fence')).toBe('Fence')
+  })
+
+  test('exterior and interior walls draw single walls of one type until the wall tool is left', () => {
+    const unsubscribe = subscribeWallTypeOverrideReset()
+    try {
+      armToolShortcut('interior-wall')
+      expect(useEditor.getState().tool).toBe('wall')
+      expect(useEditor.getState().getContinuation('wall')).toBe('single')
+      expect(getWallTypeOverride()).toBe('interior')
+      armToolShortcut('exterior-wall')
+      expect(getWallTypeOverride()).toBe('exterior')
+      armWallToolFromShortcut()
+      expect(getWallTypeOverride()).toBeNull()
+      armToolShortcut('interior-wall')
+      useEditor.getState().armToolMode({ mode: 'select' })
+      expect(getWallTypeOverride()).toBeNull()
+    } finally {
+      unsubscribe()
+    }
+  })
+
+  test('leave the saved Rooms shape as it was once their walls end', () => {
+    const unsubscribe = subscribeWallTypeOverrideReset()
+    try {
+      useEditor.getState().setContinuation('wall', 'rectangle')
+      armToolShortcut('interior-wall')
+      armToolShortcut('exterior-wall')
+      expect(useEditor.getState().getContinuation('wall')).toBe('single')
+      useEditor.getState().armToolMode({ mode: 'select' })
+      expect(useEditor.getState().getContinuation('wall')).toBe('rectangle')
+
+      // A shape picked while drawing is the user's choice, and stays.
+      armToolShortcut('interior-wall')
+      useEditor.getState().setContinuation('wall', 'room')
+      useEditor.getState().armToolMode({ mode: 'select' })
+      expect(useEditor.getState().getContinuation('wall')).toBe('room')
+    } finally {
+      unsubscribe()
+    }
   })
 })

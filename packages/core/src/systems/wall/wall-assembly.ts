@@ -44,9 +44,15 @@
  * faces and no cladding or sheathing is drawn (see `resolveWallAssembly`).
  */
 
-import type { WallNode } from '../../schema'
+import {
+  getLibraryMaterialIdFromRef,
+  getMaterialsForCategory,
+  type MaterialCatalogItem,
+} from '../../material-library'
+import type { AnyNode, WallNode } from '../../schema'
 import type { Assembly, AssemblyLayer } from '../../schema/assembly'
-import { WallAssembly } from '../../schema/nodes/wall'
+import { DEFAULT_INTERIOR_WALL_PAINT, WallAssembly, type WallFace } from '../../schema/nodes/wall'
+import { WallTypeDefinition } from '../../schema/wall-type'
 import { DEFAULT_WALL_THICKNESS } from './wall-footprint'
 import { type Point2D, pointToKey, type WallMiterData } from './wall-mitering'
 
@@ -74,6 +80,19 @@ export const GYPSUM_SHEATHING = inches(0.5)
 export const STUD_2X4 = inches(3.5)
 /** 2x6 stud, actual 5-1/2 in. Same source as STUD_2X4. */
 export const STUD_2X6 = inches(5.5)
+/** 2x8 stud, actual 7-1/4 in: the PS 20 dressed size the IRC lumber tables assume. */
+export const STUD_2X8 = inches(7.25)
+/**
+ * Steel stud webs, 3-1/2, 5-1/2 and 8 in: members 350S162, 550S162 and 800S162, whose designation
+ * leads with the web depth in hundredths of an inch (AISI S201, the designations 2021 IRC R603
+ * uses).
+ */
+export const LGS_STUD_350 = inches(3.5)
+export const LGS_STUD_550 = inches(5.5)
+export const LGS_STUD_800 = inches(8)
+/** Stud spacings the 2021 IRC stud tables are written for, 16 and 24 in on centre (Table R602.3(5)). */
+export const STUD_SPACING_16 = inches(16)
+export const STUD_SPACING_24 = inches(24)
 /** Vinyl / wood lap siding bounding depth, 3/4 in. 2021 IRC R703.11 / R703.5 + Table R703.3(1). */
 export const SIDING_LAP = inches(0.75)
 /** Fiber cement lap board, 5/16 in board. 2021 IRC R703.10.2 + Table R703.3(1). */
@@ -229,6 +248,7 @@ export function wallAssemblyFromLegacy(legacy: WallAssembly): Assembly {
     core: true,
     material: legacy.framing.kind,
     thickness: legacy.framing.depth,
+    ...(legacy.framing.spacing !== undefined ? { spacing: legacy.framing.spacing } : {}),
   })
   if (interior) layers.push({ id: 'interior', ...interior })
   return {
@@ -290,6 +310,7 @@ export function wallAssemblyToLegacy(assembly: Assembly): WallAssembly | null {
   legacy.framing = {
     kind: framing.material as WallAssembly['framing']['kind'],
     depth: framing.thickness,
+    ...(framing.spacing !== undefined ? { spacing: framing.spacing } : {}),
   }
   const lining = take('lining')
   if (layers.length > 0) return null
@@ -316,6 +337,7 @@ export function wallAssemblyToLegacy(assembly: Assembly): WallAssembly | null {
       restored.role === layer.role &&
       restored.core === layer.core &&
       restored.material === layer.material &&
+      restored.spacing === layer.spacing &&
       Math.abs(restored.thickness - layer.thickness) < 1e-12
     )
   })
@@ -353,6 +375,10 @@ const INTERIOR_FINISH_LABEL: Record<string, string> = {
   plaster: 'plaster',
   none: 'none',
 }
+const INSULATION_LABEL: Record<string, string> = {
+  'rigid-foam': 'rigid foam insulation',
+  'mineral-wool': 'mineral wool board',
+}
 
 /** An F2 layer as the WS5 drawing role and its inspector / poché label. */
 function drawnLayer(layer: AssemblyLayer): { role: WallAssemblyLayerRole; material: string } {
@@ -374,9 +400,14 @@ function drawnLayer(layer: AssemblyLayer): { role: WallAssemblyLayerRole; materi
     case 'substrate':
     case 'membrane':
     case 'underlay':
+    // Continuous insulation is a board on the face of the frame, drawn as one.
+    case 'insulation':
       return {
         role: 'sheathing',
-        material: (material && SHEATHING_LABEL[material]) ?? material ?? layer.role,
+        material:
+          (material && (SHEATHING_LABEL[material] ?? INSULATION_LABEL[material])) ??
+          material ??
+          layer.role,
       }
     default:
       return {
@@ -635,13 +666,271 @@ export function wallAssemblyFraming(
   return { depth: core.thickness, ...(core.material ? { kind: core.material } : {}) }
 }
 
-/** `library:` ref for the wall's assembly cladding, or null when it has none. */
+/**
+ * `library:` ref for the wall's assembly cladding, or null when it has none: the product picked
+ * for its cladding layer while drafting (`wallAssemblyFinishSlots`), else the kind's own
+ * (`WALL_FINISH_LIBRARY_REF`). A picked product that no longer dresses the cladding (the layer
+ * changed from siding to stucco since) gives way to the kind's own.
+ */
 export function wallAssemblyFinishRef(
-  wall: Pick<WallNode, 'assembly' | 'frontSide' | 'backSide'>,
+  wall: Pick<WallNode, 'assembly' | 'frontSide' | 'backSide' | 'slots'>,
 ): string | null {
-  const finish = wallAssemblyExteriorFinish(wall)
-  if (!finish) return null
+  const layer = layersOutsideIn(wall).layers.find((layer) => layer.role === 'finish')
+  const finish = layer?.material
+  if (!(layer && finish)) return null
+  const picked = wall.slots?.[assemblyLayerSlotKey(layer)]
+  if (isWallCladdingProduct(finish, picked)) return picked!
   return WALL_FINISH_LIBRARY_REF[finish] ?? null
+}
+
+/**
+ * The finish the wall's assembly gives one geometric face (`a` is the +normal face) where the
+ * face has no paint of its own: on the exterior face its cladding (`wallAssemblyFinishRef`), on a
+ * lined face the paint picked for that lining while drafting. Null where the assembly says
+ * nothing, and the face shows the wall's slot default.
+ */
+export function wallAssemblyFaceFinish(
+  wall: Pick<WallNode, 'assembly' | 'frontSide' | 'backSide' | 'slots'>,
+  face: WallFace,
+): string | null {
+  const { layers, exteriorSideResolved } = layersOutsideIn(wall)
+  const exterior = face === (exteriorSideResolved === 1 ? 'a' : 'b')
+  if (exterior) {
+    const cladding = wallAssemblyFinishRef(wall)
+    if (cladding) return cladding
+  }
+  const drawn = layers.filter((layer) => layer.thickness > 0)
+  const outer = exterior ? drawn[0] : drawn[drawn.length - 1]
+  if (outer?.role !== 'lining') return null
+  return wall.slots?.[assemblyLayerSlotKey(outer)] ?? null
+}
+
+// ============================================================================
+// FINISHES PICKED WHILE DRAFTING
+// ============================================================================
+
+/** The `slots` key a layer's look is kept under: its own `slot`, else `layer:<id>` (`AssemblyLayer.slot`). */
+export function assemblyLayerSlotKey(layer: Pick<AssemblyLayer, 'id' | 'slot'>): string {
+  return layer.slot ?? `layer:${layer.id}`
+}
+
+/** An outdoor wall finish: a brick or stone made for a wall outside, not a floor tile. */
+const outdoorWall = (item: MaterialCatalogItem) =>
+  !!item.surfaces?.includes('wall') && item.surfaces.includes('outdoor')
+
+/** Which catalog finishes dress each cladding kind. */
+const CLADDING_PRODUCTS: Record<string, () => MaterialCatalogItem[]> = {
+  siding: () => getMaterialsForCategory('siding'),
+  'fiber-cement': () => getMaterialsForCategory('siding'),
+  // The textured coat, then the flat colours of an integrally coloured or painted finish coat.
+  stucco: () => [
+    ...getMaterialsForCategory('concrete').filter((item) => item.id.includes('stucco')),
+    ...getMaterialsForCategory('colors'),
+  ],
+  brick: () => getMaterialsForCategory('brick').filter(outdoorWall),
+  stone: () => getMaterialsForCategory('stone').filter(outdoorWall),
+}
+
+/**
+ * The catalog products a cladding kind (`siding`, `stucco`, `brick`, …) can be finished with,
+ * the kind's own (`WALL_FINISH_LIBRARY_REF`) among them: what the drafting finish picker offers
+ * for a wall type with that cladding. Empty for a kind with none (`none`, an unknown kind).
+ */
+export function wallCladdingProducts(kind: string | undefined): MaterialCatalogItem[] {
+  return (kind && CLADDING_PRODUCTS[kind]?.()) || []
+}
+
+/** Whether `ref` is a `library:` product `wallCladdingProducts(kind)` lists. */
+export function isWallCladdingProduct(kind: string | undefined, ref: string | undefined): boolean {
+  const id = getLibraryMaterialIdFromRef(ref)
+  return !!id && wallCladdingProducts(kind).some((item) => item.id === id)
+}
+
+/** The paints a wall's lining can be finished with while drafting: the catalog's flat colours. */
+export function wallPaintProducts(): MaterialCatalogItem[] {
+  return getMaterialsForCategory('colors')
+}
+
+/** The cladding kind a stack is finished with outside (`siding`, `stucco`, …), if any. */
+export function wallAssemblyCladding(assembly: Assembly): string | undefined {
+  return assembly.layers.find((layer) => layer.role === 'finish' && layer.thickness > 0)?.material
+}
+
+/**
+ * Whether a stack builds an exterior wall, read from its own layers: it has a cladding side — a
+ * finish or sheathing layer, or a lining on one face only (block or framing left bare outside).
+ * A stack lined on both faces, or bare on both, is a partition.
+ */
+export function isExteriorWallAssembly(assembly: Assembly): boolean {
+  const layers = [...assembly.layers, ...(assembly.backing ?? [])].filter(
+    (layer) => layer.thickness > 0,
+  )
+  if (layers.some((layer) => layer.role === 'finish' || layer.role === 'sheathing')) return true
+  return (layers[0]?.role === 'lining') !== (layers[layers.length - 1]?.role === 'lining')
+}
+
+/**
+ * The `slots` a wall drawn with `assembly` carries for the finishes picked while drafting: the
+ * cladding product on its exterior finish layer and the paint on every lining. They follow the
+ * layers, not a geometric face, so the cladding stays outside and the paint inside however the
+ * wall's rooms are detected later (`wallAssemblyFaceFinish` reads them back). A pick that is the
+ * layer's own default (`WALL_FINISH_LIBRARY_REF`, `DEFAULT_INTERIOR_WALL_PAINT`) is left out, and
+ * a product that does not dress the stack's cladding is never written.
+ */
+export function wallAssemblyFinishSlots(
+  assembly: Assembly,
+  picks: { cladding?: string | null; paint?: string | null },
+): Record<string, string> {
+  const slots: Record<string, string> = {}
+  const cladding = assembly.layers.find((layer) => layer.role === 'finish' && layer.thickness > 0)
+  const kind = cladding?.material
+  if (
+    cladding &&
+    picks.cladding &&
+    picks.cladding !== WALL_FINISH_LIBRARY_REF[kind ?? ''] &&
+    isWallCladdingProduct(kind, picks.cladding)
+  )
+    slots[assemblyLayerSlotKey(cladding)] = picks.cladding
+  if (picks.paint && picks.paint !== DEFAULT_INTERIOR_WALL_PAINT) {
+    for (const layer of assembly.layers)
+      if (layer.role === 'lining') slots[assemblyLayerSlotKey(layer)] = picks.paint
+  }
+  return slots
+}
+
+// ============================================================================
+// PROJECT WALL TYPES
+// ============================================================================
+
+export type WallTypeCore = {
+  id: string
+  label: string
+  /** The core layer's construction kind, as the framers read it (`wallAssemblyFraming`). */
+  material: 'wood' | 'lgs' | 'cmu'
+  thickness: number
+  /** Studs on centre, metres; absent for block. */
+  spacing?: number
+}
+
+/**
+ * The framing cores a project wall type is built around: wood studs (2x4, 2x6, 2x8) and steel
+ * studs (the 3-1/2, 5-1/2 and 8 in webs the framers size steel walls by) at 16 or 24 in on
+ * centre, or an 8 in block. The core's depth and spacing are what a framer studs the wall at.
+ */
+export const WALL_TYPE_CORES: readonly WallTypeCore[] = [
+  ...(
+    [
+      ['2x4', STUD_2X4],
+      ['2x6', STUD_2X6],
+      ['2x8', STUD_2X8],
+    ] as const
+  ).flatMap(([size, thickness]) =>
+    ([16, 24] as const).map((oc) => ({
+      id: `wood-${size}-${oc}`,
+      label: `${size} wood studs @ ${oc}" o.c.`,
+      material: 'wood' as const,
+      thickness,
+      spacing: oc === 16 ? STUD_SPACING_16 : STUD_SPACING_24,
+    })),
+  ),
+  ...(
+    [
+      ['3-1/2"', '350', LGS_STUD_350],
+      ['5-1/2"', '550', LGS_STUD_550],
+      ['8"', '800', LGS_STUD_800],
+    ] as const
+  ).flatMap(([depth, web, thickness]) =>
+    ([16, 24] as const).map((oc) => ({
+      id: `lgs-${web}-${oc}`,
+      label: `${depth} steel studs @ ${oc}" o.c.`,
+      material: 'lgs' as const,
+      thickness,
+      spacing: oc === 16 ? STUD_SPACING_16 : STUD_SPACING_24,
+    })),
+  ),
+  { id: 'cmu-8', label: 'CMU 8" block', material: 'cmu', thickness: CMU_8_ACTUAL },
+]
+
+const near = (a: number, b: number) => Math.abs(a - b) < 1e-6
+
+/**
+ * The listed core a stack is built around, or undefined for one off the list. A core with no
+ * spacing of its own (every preset's: the framer's default) reads as the 16 in one.
+ */
+export function wallTypeCoreOf(assembly: Assembly): WallTypeCore | undefined {
+  const core = assembly.layers.find((layer) => layer.core)
+  if (!core) return undefined
+  const spacing = core.spacing ?? STUD_SPACING_16
+  return WALL_TYPE_CORES.find(
+    (option) =>
+      option.material === core.material &&
+      near(option.thickness, core.thickness) &&
+      (option.spacing === undefined || near(option.spacing, spacing)),
+  )
+}
+
+/** The id each layer role takes in a project wall type, as the presets name them. */
+const WALL_TYPE_LAYER_ID: Partial<Record<AssemblyLayer['role'], string>> = {
+  finish: 'exterior',
+  air: 'air-space',
+  sheathing: 'sheathing',
+  structure: 'framing',
+}
+
+/**
+ * A project wall type's stack from its layers listed outside-in, with ids as the presets give
+ * them (`exterior`, `sheathing`, `framing`, `interior`, a lining outside the core
+ * `interior-back`, a repeat numbered `-2`, `-3`…), so a stack the inspector's cladding /
+ * sheathing / framing / interior rows can express stays editable there.
+ */
+export function wallTypeAssembly(
+  id: string,
+  layers: readonly Omit<AssemblyLayer, 'id'>[],
+): Assembly {
+  const coreIndex = layers.findIndex((layer) => layer.core)
+  const used = new Set<string>()
+  return {
+    layers: layers.map((layer, index) => {
+      const base =
+        layer.role === 'lining'
+          ? index < coreIndex
+            ? 'interior-back'
+            : 'interior'
+          : (WALL_TYPE_LAYER_ID[layer.role] ?? layer.role)
+      let layerId = base
+      for (let n = 2; used.has(layerId); n += 1) layerId = `${base}-${n}`
+      used.add(layerId)
+      return { id: layerId, ...layer }
+    }),
+    face: 'exterior',
+    presetId: id,
+  }
+}
+
+/**
+ * The project's own wall types: those saved on its site (`SiteNode.wallTypes`), in their saved
+ * order. A scene is loaded without parsing, so an entry that does not parse, or repeats an id, is
+ * skipped rather than trusted.
+ */
+export function projectWallTypes(
+  nodes: Readonly<Record<string, AnyNode | undefined>>,
+  rootNodeIds: readonly string[],
+): WallTypeDefinition[] {
+  const site = rootNodeIds.map((id) => nodes[id]).find((node) => node?.type === 'site')
+  return parseWallTypes(site?.type === 'site' ? site.wallTypes : undefined)
+}
+
+/** A saved `SiteNode.wallTypes` list as `projectWallTypes` reads it: parsed, first id wins. */
+export function parseWallTypes(saved: unknown): WallTypeDefinition[] {
+  const seen = new Set<string>()
+  const types: WallTypeDefinition[] = []
+  for (const entry of Array.isArray(saved) ? saved : []) {
+    const parsed = WallTypeDefinition.safeParse(entry)
+    if (!parsed.success || seen.has(parsed.data.id)) continue
+    seen.add(parsed.data.id)
+    types.push(parsed.data)
+  }
+  return types
 }
 
 /** The structural cores that are left bare where nothing covers them: block and cast concrete. */

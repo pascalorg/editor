@@ -1,21 +1,30 @@
 import {
   type AnyNodeId,
   DEFAULT_ANGLE_STEP,
+  finishWallEdit,
+  generateId,
+  planSeparatorInsertion,
   planWallInsertion,
   planWallSplitAtPoint,
+  railingWallDefaults,
   resolveWallConstruction,
   runAsSingleSceneHistoryStep,
+  type SeparatorNode,
+  sameWallConstruction,
   snapPointAlongAngleRay,
   useScene,
   type WallConstructionOptions,
   type WallNode,
+  wallsRunAlong,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import { resolveSnapFlags } from '../../../lib/snapping-mode'
+import { getDrawnWallTypes, getWallLineKind } from '../../../lib/wall-draw-variant'
 import useEditor, { getActiveSnappingMode, isMagneticSnapActive } from '../../../store/use-editor'
 import {
   distanceSquared,
+  findWallBodySnapTarget,
   findWallSnapTarget,
   findWallSpecialPointSnap,
   WALL_CONNECT_SNAP_RADIUS,
@@ -109,14 +118,30 @@ type SnapWallDraftArgs = {
    */
   magnetic?: boolean
   /**
-   * Optional grid-snap override. Lets the caller route grid snapping
-   * through a world-XZ aligned snap (so a rotated building's draft
-   * lands on the visible grid). When omitted, falls back to the
-   * local-axis grid at `step`.
+   * Optional grid-snap override, in the caller's plan frame. When omitted,
+   * falls back to the building-local grid at `step` — the lattice the wall
+   * tools draft on, square to the house however the building is turned.
    */
   gridSnap?: (point: WallPlanPoint) => WallPlanPoint
   /** Optional magnetic snap radii. Omitted means wall tools keep their defaults. */
   snapRadii?: WallSnapRadii
+  /**
+   * The point is a wall end (drawn or dragged): in the non-magnetic modes an
+   * end aimed into another wall's drawn body, or within the connect radius of
+   * either face, lands on that wall's reference line — where the wall
+   * topology T-joins it — ahead of the grid / angle placement, keeping the
+   * segment's direction from `start` (see `findWallBodySnapTarget`). Without
+   * it the grid quantises an end aimed at a face to the nearest lattice point,
+   * a fraction short of the face, and the end stays open with a gap.
+   */
+  captureWallBodies?: boolean
+  /**
+   * The walls `captureWallBodies` may join an end into; `walls` when omitted.
+   * A body capture T-joins the wall, so a caller that adds reference walls it
+   * can't join (the floor below) keeps them out of this list while they still
+   * serve the corner and edge snaps.
+   */
+  bodyWalls?: WallNode[]
 }
 
 export function snapWallDraftPointDetailed(args: SnapWallDraftArgs): WallDraftSnapResult {
@@ -131,6 +156,8 @@ export function snapWallDraftPointDetailed(args: SnapWallDraftArgs): WallDraftSn
     magnetic = true,
     gridSnap,
     snapRadii,
+    captureWallBodies = false,
+    bodyWalls = walls,
   } = args
 
   if (bypassSnap) return { point, snap: null, targetWallIds: [] }
@@ -144,9 +171,8 @@ export function snapWallDraftPointDetailed(args: SnapWallDraftArgs): WallDraftSn
   }
 
   const step = overrideStep ?? getSegmentGridStep()
-  // The angle path snaps the distance ALONG the 15° ray — a scalar, the
-  // same in world and local frames — so the `gridSnap` world-grid override
-  // only applies when the angle lock is off.
+  // The angle path snaps the distance ALONG the 15° ray from `start`, so the
+  // `gridSnap` override only applies when the angle lock is off.
   const basePoint: WallPlanPoint =
     start && angleSnap
       ? [...snapPointAlongAngleRay(start, point, DEFAULT_ANGLE_STEP, step)]
@@ -182,6 +208,30 @@ export function snapWallDraftPointDetailed(args: SnapWallDraftArgs): WallDraftSn
   }
   const connectSpecial = findWallSpecialPointSnap(basePoint, walls, ignoreWallIds, connectRadii)
   if (connectSpecial) return connectSpecial
+  // A wall end aimed into a wall's body joins it, whichever lattice point or
+  // ray station the mode picked near its face.
+  const bodySnap = captureWallBodies
+    ? findWallBodySnapTarget(point, bodyWalls, {
+        ignoreWallIds,
+        placed: basePoint,
+        start,
+        margin: WALL_CONNECT_SNAP_RADIUS,
+      })
+    : null
+  if (bodySnap) {
+    // An end aimed into a corner block joins the corner, and reads as one.
+    const atCorner = bodyWalls.some(
+      (wall) =>
+        !ignoreWallIds?.includes(wall.id) &&
+        (distanceSquared(bodySnap, wall.start) <= 1e-12 ||
+          distanceSquared(bodySnap, wall.end) <= 1e-12),
+    )
+    return {
+      point: bodySnap,
+      snap: atCorner ? 'endpoint' : 'wall',
+      targetWallIds: wallIdsAtSnapPoint(bodySnap, walls, ignoreWallIds),
+    }
+  }
   const connectWall = findWallSnapTarget(basePoint, walls, {
     ignoreWallIds,
     radius: WALL_CONNECT_SNAP_RADIUS,
@@ -205,6 +255,36 @@ export function isSegmentLongEnough(start: WallPlanPoint, end: WallPlanPoint): b
   return distanceSquared(start, end) >= WALL_MIN_LENGTH * WALL_MIN_LENGTH
 }
 
+/**
+ * An invisible wall drawn `start` → `end` on the current level (the Invisible wall tile, a room
+ * divider): room separators, each end joined to a wall it lands on and broken
+ * either side of a wall it crosses (`planSeparatorInsertion`), as one undo step. Rooms close on
+ * it; a room it closes off outside the house becomes a porch. The last piece, for the run to go
+ * on from its end; null when it would be too short.
+ */
+export function createInvisibleWallOnCurrentLevel(
+  start: WallPlanPoint,
+  end: WallPlanPoint,
+): SeparatorNode | null {
+  const currentLevelId = useViewer.getState().selection.levelId
+  const { nodes, applyNodeChanges } = useScene.getState()
+  if (!(currentLevelId && isSegmentLongEnough(start, end))) return null
+  const joinRadius = isMagneticSnapActive() ? WALL_JOIN_SNAP_RADIUS : WALL_CONNECT_SNAP_RADIUS
+  return runAsSingleSceneHistoryStep(useScene, () => {
+    const plan = planSeparatorInsertion(nodes, {
+      levelId: currentLevelId as AnyNodeId,
+      start,
+      end,
+      joinRadius,
+      mintId: () => generateId('separator'),
+    })
+    if (!plan) return null
+    applyNodeChanges(plan.changes)
+    sfxEmitter.emit('sfx:structure-build')
+    return plan.separators.at(-1) ?? null
+  })
+}
+
 export function createWallOnCurrentLevel(
   start: WallPlanPoint,
   end: WallPlanPoint,
@@ -220,13 +300,37 @@ export function createWallOnCurrentLevel(
   const joinRadius = isMagneticSnapActive() ? WALL_JOIN_SNAP_RADIUS : WALL_CONNECT_SNAP_RADIUS
 
   return runAsSingleSceneHistoryStep(useScene, () => {
-    const result = planWallInsertion(nodes, {
+    // The Railing tile draws railings: a guard of their own, not the Build panel's wall types.
+    const railing = getWallLineKind() === 'railing'
+    const insertion = {
       levelId: currentLevelId as AnyNodeId,
       start,
       end,
       joinRadius,
-      wallDefaults: useEditor.getState().toolDefaults.wall ?? {},
-    })
+      wallDefaults: railing
+        ? railingWallDefaults()
+        : (useEditor.getState().toolDefaults.wall ?? {}),
+      wallTypes: railing ? undefined : getDrawnWallTypes(),
+      // A wall drawn into another meets its inside face and leaves it whole,
+      // as a framed partition does; the split tool breaks a wall on purpose.
+      keepHostsWhole: true,
+    }
+    let result = planWallInsertion(nodes, insertion)
+    if (!result.ok && result.reason === 'covered-existing-wall') {
+      // Drawn over walls built another way (an outside wall over an inside
+      // jog), the new wall takes their stretch over; over walls built the
+      // same, it would change nothing, so it stays refused.
+      const replacing = planWallInsertion(nodes, { ...insertion, replaceCovered: true })
+      if (
+        replacing.ok &&
+        replacing.plan.insertedWalls.some((wall) =>
+          wallsRunAlong(nodes, { ...wall, parentId: currentLevelId } as WallNode).some(
+            (covered) => !sameWallConstruction(covered, wall),
+          ),
+        )
+      )
+        result = replacing
+    }
     if (!result.ok) return null
     const { plan } = result
 
@@ -237,20 +341,28 @@ export function createWallOnCurrentLevel(
     const sourceAlreadyUpdated = sourceUpdate
       ? plan.changes.update.some((operation) => operation.id === sourceUpdate.id)
       : false
-    applyNodeChanges({
-      ...plan.changes,
-      update: plan.changes.update
-        .map((operation) =>
-          sourceUpdate?.id === operation.id
-            ? { ...operation, data: { ...operation.data, ...sourceUpdate.data } }
-            : operation,
-        )
-        .concat(sourceUpdate && !sourceAlreadyUpdated ? [sourceUpdate] : []),
-      create: plan.changes.create.map((operation) => ({
-        ...operation,
-        node: finalizedWallsById.get(operation.node.id as WallNode['id']) ?? operation.node,
-      })),
-    })
+    // A wall drawn along part of a parallel wall takes that stretch over, so
+    // drawing on from a wall never doubles the one it runs along.
+    applyNodeChanges(
+      finishWallEdit(
+        nodes,
+        {
+          ...plan.changes,
+          update: plan.changes.update
+            .map((operation) =>
+              sourceUpdate?.id === operation.id
+                ? { ...operation, data: { ...operation.data, ...sourceUpdate.data } }
+                : operation,
+            )
+            .concat(sourceUpdate && !sourceAlreadyUpdated ? [sourceUpdate] : []),
+          create: plan.changes.create.map((operation) => ({
+            ...operation,
+            node: finalizedWallsById.get(operation.node.id as WallNode['id']) ?? operation.node,
+          })),
+        },
+        { winnerIds: finalizedWalls.map((wall) => wall.id), mintId: () => generateId('wall') },
+      ),
+    )
     sfxEmitter.emit('sfx:structure-build')
 
     const terminalWall = finalizedWalls.at(-1)!

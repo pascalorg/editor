@@ -146,6 +146,28 @@ export function buildColumnFloorplan(
       metadata: floorplanGeometryMetadata({ annotationRole: 'column-center' }),
     },
   )
+  // A framing post reads as a framing plan draws one: its own square (not its base's) crossed
+  // corner to corner.
+  if (node.role === 'post') {
+    const square = getRotatedRectanglePolygon(
+      { x: centerX, y: centerZ },
+      node.width,
+      node.depth,
+      -node.rotation,
+    )
+    for (const [a, b] of [[square[0]!, square[2]!] as const, [square[1]!, square[3]!] as const])
+      children.push({
+        kind: 'line',
+        x1: a.x,
+        y1: a.y,
+        x2: b.x,
+        y2: b.y,
+        stroke,
+        strokeWidth: 0.9,
+        vectorEffect: 'non-scaling-stroke',
+        pointerEvents: 'none',
+      })
+  }
 
   const levelData = ctx.levelData as ColumnFloorplanLevelData | undefined
   const gridReference = resolveStructuralGridReference(

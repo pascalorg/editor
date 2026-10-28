@@ -40,6 +40,7 @@ const SHARED = [
   'sill',
   'sillDepth',
   'sillThickness',
+  'casingWidth',
 ] as const
 
 export type WindowMerge = {

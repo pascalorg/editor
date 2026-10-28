@@ -15,6 +15,7 @@ import { useFrame } from '@react-three/fiber'
 import { useEffect } from 'react'
 import { curtainWallGeometryAdapter } from './curtain-wall-adapter'
 import { getCurtainAwareWallMaterials } from './curtain-wall-materials'
+import { withRailingWalls } from './railing-wall-adapter'
 import {
   buildWallTreatmentLevelData,
   clearWallTreatmentMiterCache,
@@ -174,12 +175,17 @@ const WallTreatmentMiterSystem = () => {
  *  - **`WallBatchSystem`** — once a level stops changing, sews its opaque
  *    walls into one mesh per material set so a floor costs a handful of
  *    draw calls instead of one per wall face run.
+ *
+ * Curtain walls and railings build their own mesh through the geometry
+ * adapter: a glazed grid, an open guard.
  */
+const wallGeometryAdapter = withRailingWalls(curtainWallGeometryAdapter)
+
 const WallSystems = () => {
   return (
     <>
       <WallTreatmentMiterSystem />
-      <WallSystem geometryAdapter={curtainWallGeometryAdapter} />
+      <WallSystem geometryAdapter={wallGeometryAdapter} />
       <WallCutout materialResolver={getCurtainAwareWallMaterials} />
       <WallBatchSystem />
     </>

@@ -98,6 +98,7 @@ type GeometryContext = {
 - **Shelf, spawn, item, column, fence segment** — builder reads only `node`. `ctx` argument unused.
 - **Wall** — `ctx.siblings` for corner mitering with adjacent walls. `ctx.children` for cutout footprints (doors / windows hosted on the wall).
 - **Door / window** — `ctx.parent` for parent-wall thickness, so the frame depth lines up with the wall it's cut into.
+- **Roof** — `ctx.children` (its segments) and `ctx.siblings` (the level's other roofs) for the merged outline and the ridges, hips and valleys. The editor plan outlines the eave and rake and runs those lines out to them, as the 3D shows the roof from above; a drafted sheet outlines the wall line and dashes the overhang. The roof projects its segments' and siblings' live overrides and transforms (`floorplanSiblingOverrides`), and a segment's live edit rebuilds every roof on its level (`floorplanAffectedIds`), so the plan follows a move, resize or turn as it happens. Selected or moved, the roof draws each segment's wall line too. Moving a roof or a segment, in the plan or in 3D, catches its wall line on the centre lines of its level's and the storey below's walls (`roof/wall-catch.ts`; a wall drawn by a face at its body's centre) in grid and lines, and a segment's side arrows catch the dragged side the same way, ahead of the grid; Alt and off move it freely. A segment drawn, moved or sized onto walls takes their thickness for its gable and heel walls (`bearingWallThickness`), so they stand flush with the walls below. A porch's, deck's or patio's invisible walls and railings are edges, not walls (`RoofEdgeLine`): drawing snaps to the invisible walls' lines and the railings' outside faces (`roofSnapEdges`), a move or side arrow catches the segment's outer face on them, a segment drawn or picked out to them is set in by half its wall thickness so its outer face stands there (`settleRoofOnEdges`), and Room over such a room roofs its outside edge (core's `outdoorRoomRoofOutline`); they give no wall thickness, and no roof sits on a railing's top. A segment's layers (`buildUp`, below) set its deck and covering thickness, so every reader of `deckThickness` and `shingleThickness` (the roof system, prints, sections) draws the build-up.
 
 `GeometryContext` exists so builders stay pure (no `useScene` import, no store mutation) and trivially unit-testable. The generic `<GeometrySystem>` builds `ctx` from the current scene snapshot once per dirty node; the cost is a few `Map.get` calls.
 
@@ -505,6 +506,8 @@ type PaintCapability = {
 }
 ```
 
+**`scopes`** *(optional)* replaces the derived scope set for one surface: `{ scopes, labels?, roleFor? }`, where `roleFor(scope)` names the role a click paints under that scope. The roof's merged shell uses it for a gable (`nodes/src/roof/paint.ts`): `single` paints `gable-left:<segmentId>` (that segment's gable alone), `matching` ("All gables") paints `gables:all` (the roof's edge, every segment's own gable cleared). A wider-scope role carries a `:` so the fan-out routes it through the kind's `commit`.
+
 Implement the capability in a `paint.ts` file next to `definition.ts`. Keep it pure — no `useScene`, no store mutation. Reference implementations: `packages/nodes/src/chimney/paint.ts` (body/top split), `packages/nodes/src/wall/paint.ts` (interior/exterior + normal-based disambiguation).
 
 ```ts
@@ -536,6 +539,15 @@ type AssemblyHostConfig = {
 | `wall` (declared in `nodes/src/wall/definition.ts`) | `front` (+n) or the exterior face (`face: 'exterior'`) | `thickness` | The layer sum; `wallAssemblyPatch` writes both. The Architect's WS5 helpers (`resolveWallAssembly`, `wallAssemblyFinishRef`, `wallAssemblyFraming`, the presets) read F2. Scenes saved with the WS5 `WallAssembly` shape are converted on load by `migrateLegacyWallAssemblies` (`wallAssemblyFromLegacy`: exterior → `finish`, sheathing → `sheathing`, framing → the `core` structure layer, interior → `lining`), and the inspector edits through `wallAssemblyToLegacy`, a WS5 view plugin readers can use too. |
 
 Each kind declares its own host in its definition; core ships none. `resolveAssemblyStack(assembly, host)` returns each layer's depth and thickness exactly as declared, and, on a host that accepts backing, the backing layers with their depth from the body's far face (a ceiling with no body and insulation backing resolves), never throwing; a stored thickness that disagrees with the sum is reported as `assembly.thickness-mismatch`. `getWallLayerBands(wall, assembly, miters)` slices the mitred plan footprint into one band per layer (`back`/`front` offsets from the centreline along +n, and the footprint ∩ strip rings); it draws no bands on a mismatch.
+
+**Typed build-ups: roof planes and ceilings.** A roof segment and a ceiling store their layers as product choices, not an F2 list: `buildUp` (`RoofBuildUp`, `CeilingBuildUp` in `core/src/schema/build-up.ts`), so a framing tool reads the structure it frames (system, lumber size, spacing on centre) and the inspector edits choices. Absent, a node draws as it always did.
+
+| Node | Layers | Derived | Rule |
+|---|---|---|---|
+| `roof-segment` | outside in: roofing, underlayment, sheathing, structure (rafters or trusses: size, spacing), insulation, interior finish | `deckThickness` = finish + framing + rigid insulation + sheathing; `shingleThickness` = roofing + underlayment (`roofBuildUpDepths`) | Writers set both with the layers through `roofBuildUpPatch`; while layers are set, the panel shows the two as readouts. Batt and blown fill the cavity (deeper than the framing, they set it); rigid board adds. |
+| `ceiling` | bottom up from `height`, the finished underside: finish, framing (joists or truss bottom chords), decking, insulation | the thickness (`ceilingBuildUpThickness`) | The underside stays at the height. With ceiling tops shown, the cap stands on the layers, stopped `CEILING_CLAMP_MARGIN` short of a floor slab above (`ceilingCapLift`). |
+
+Presets (`ROOF_BUILD_UP_PRESETS`, `CEILING_BUILD_UP_PRESETS`) carry their `presetId`; editing a layer clears it. The first roof preset is a 0.100 m deck, the deck of a plane without layers. Both kinds' panel models offer the preset to a multi-selection, in one undo step; the plane panel also applies its layers to the other planes of its roof.
 
 ---
 

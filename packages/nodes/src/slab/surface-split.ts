@@ -186,6 +186,21 @@ function clipTriangleBySlab(
   from: number,
   to: number,
 ): Triangle[] {
+  return clipTriangleBetween(
+    triangle,
+    (vertex) => (vertex.x - origin[0]) * dirX + (vertex.z - origin[1]) * dirZ,
+    from,
+    to,
+  )
+}
+
+/** Clip a triangle to `from <= measure(vertex) <= to`, `measure` linear over the triangle. */
+function clipTriangleBetween(
+  triangle: Triangle,
+  measure: (vertex: Vertex) => number,
+  from: number,
+  to: number,
+): Triangle[] {
   let polygon: Vertex[] = [...triangle]
   for (const [limit, keepGreater] of [
     [from, true],
@@ -194,8 +209,8 @@ function clipTriangleBySlab(
     const next: Vertex[] = []
     for (const [index, current] of polygon.entries()) {
       const previous = polygon[(index + polygon.length - 1) % polygon.length]!
-      const sPrevious = (previous.x - origin[0]) * dirX + (previous.z - origin[1]) * dirZ - limit
-      const sCurrent = (current.x - origin[0]) * dirX + (current.z - origin[1]) * dirZ - limit
+      const sPrevious = measure(previous) - limit
+      const sCurrent = measure(current) - limit
       const insidePrevious = keepGreater ? sPrevious >= 0 : sPrevious <= 0
       const insideCurrent = keepGreater ? sCurrent >= 0 : sCurrent <= 0
       if (insidePrevious !== insideCurrent) {
@@ -255,6 +270,73 @@ export function splitSlabFacesByFacing(geometry: BufferGeometry): {
     ;(faceNormalY(triangle) > TOP_NORMAL_THRESHOLD ? top : side).push(triangle)
   }
   return { top: buildGeometry(top, withUv), side: buildGeometry(side, withUv) }
+}
+
+/**
+ * The joist band of a floor framed inside its slab, open while the frame is shown: `top` is the
+ * subfloor's underside, `bottom` the top of the ceiling hung under the joists, or the slab's
+ * underside when it has none (`ceiling` false).
+ */
+export type SlabCavity = { top: number; bottom: number; ceiling: boolean }
+
+/** Whether the point lies on a triangle's plan (inclusive). */
+function planContains(triangle: Triangle, x: number, z: number): boolean {
+  const [a, b, c] = triangle
+  const d1 = (x - b.x) * (a.z - b.z) - (a.x - b.x) * (z - b.z)
+  const d2 = (x - c.x) * (b.z - c.z) - (b.x - c.x) * (z - c.z)
+  const d3 = (x - a.x) * (c.z - a.z) - (c.x - a.x) * (z - a.z)
+  const negative = d1 < 0 || d2 < 0 || d3 < 0
+  const positive = d1 > 0 || d2 > 0 || d3 > 0
+  return !(negative && positive)
+}
+
+/** Whether a vertical face looks out of the slab: the slab's top covers the plan just behind it. */
+function facesOut(triangle: Triangle, tops: readonly Triangle[]): boolean {
+  const [a, b, c] = triangle
+  const nx = (b.y - a.y) * (c.z - a.z) - (b.z - a.z) * (c.y - a.y)
+  const nz = (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x)
+  const length = Math.hypot(nx, nz)
+  if (length < 1e-12) return false
+  const x = (a.x + b.x + c.x) / 3 - (nx / length) * 0.002
+  const z = (a.z + b.z + c.z) / 3 - (nz / length) * 0.002
+  return tops.some((top) => planContains(top, x, z))
+}
+
+/**
+ * Open a solid slab buffer's joist band. `body` is the buffer as drawn, less its underside when no
+ * ceiling hangs under the joists (they show from below); its outer and hole faces keep their whole
+ * height, the rim closing the band from outside. `cavity` is what the open band shows: the
+ * subfloor's underside, the ceiling's top, and the band's height of every outward face turned in,
+ * so the floor reads closed from inside it too.
+ */
+export function hollowSlabFaces(
+  geometry: BufferGeometry,
+  cavity: SlabCavity,
+): { body: BufferGeometry; cavity: BufferGeometry } {
+  const withUv = geometry.getAttribute('uv') !== undefined
+  const triangles = readTriangles(geometry)
+  const tops = triangles.filter((triangle) => faceNormalY(triangle) > TOP_NORMAL_THRESHOLD)
+  const body: Triangle[] = []
+  const inside: Triangle[] = []
+  // a cap moved to `y`, turned to face the other way
+  const capAt = (triangle: Triangle, y: number) =>
+    reverse(triangle.map((vertex) => ({ ...vertex, y })) as Triangle)
+  for (const triangle of triangles) {
+    const normalY = faceNormalY(triangle)
+    if (normalY < -TOP_NORMAL_THRESHOLD) {
+      if (!cavity.ceiling) continue
+      body.push(triangle)
+      inside.push(capAt(triangle, cavity.bottom))
+      continue
+    }
+    body.push(triangle)
+    if (normalY > TOP_NORMAL_THRESHOLD) inside.push(capAt(triangle, cavity.top))
+    else if (Math.abs(normalY) < 1e-3 && facesOut(triangle, tops))
+      inside.push(
+        ...clipTriangleBetween(reverse(triangle), (vertex) => vertex.y, cavity.bottom, cavity.top),
+      )
+  }
+  return { body: buildGeometry(body, withUv), cavity: buildGeometry(inside, withUv) }
 }
 
 /**

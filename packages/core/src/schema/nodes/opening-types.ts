@@ -39,6 +39,14 @@ export const defaultDoorSegments = () => [
 /** A new door's leaf margin [x, y] (m). */
 export const DEFAULT_DOOR_CONTENT_PADDING: [number, number] = [0.04, 0.04]
 
+const INCH = 0.0254
+
+/** A door's or window's casing face width when none is given: 2 in boards (m). */
+export const DEFAULT_OPENING_CASING_WIDTH = 2 * INCH
+
+/** How far casing stands proud of the finished wall face: 3/4 in stock, like skirting (m). */
+export const OPENING_CASING_PROUD = 0.75 * INCH
+
 export const WindowType = z.enum([
   'fixed',
   'sliding',
