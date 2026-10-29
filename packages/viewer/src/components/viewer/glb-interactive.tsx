@@ -255,7 +255,6 @@ export function GlbInteractive({
   identity,
   zones,
   actions,
-  levelOrder,
 }: {
   items: GlbInteractiveItem[]
   identity: Map<string, Object3D>
@@ -263,9 +262,6 @@ export function GlbInteractive({
   /** Baked animation actions keyed by clip name — ambient item loops play from
    *  `<pascalId>: loop`. */
   actions: Record<string, AnimationAction | null>
-  /** Level pascalIds bottom-to-top, so the light pool can prefer ground-floor
-   *  lights when nothing is focused (mirrors the parametric level factor). */
-  levelOrder: string[]
 }) {
   const scene = useThree((state) => state.scene)
   useLayoutEffect(() => {
@@ -300,10 +296,6 @@ export function GlbInteractive({
   )
 
   const lightRegs = useMemo(() => buildGlbLightRegs(items, identity), [items, identity])
-  const levelIndexById = useMemo(
-    () => new Map(levelOrder.map((id, i) => [id, i] as const)),
-    [levelOrder],
-  )
 
   // Project the zone's baked-local polygon into world space so focused zone
   // membership still works after level stacking moves its parent.
@@ -324,7 +316,7 @@ export function GlbInteractive({
 
   return (
     <>
-      <GlbItemLights levelIndexById={levelIndexById} regs={lightRegs} />
+      <GlbItemLights regs={lightRegs} />
       {animationItems.map((item) =>
         item.scripted ? (
           <GlbScriptedClips actions={actions} item={item} key={item.pascalId} />
@@ -402,8 +394,6 @@ export type GlbLightReg = PooledLight & {
   levelId: string | null
 }
 
-const _dir = new Vector3()
-const _lightWorld = new Vector3()
 const _quaternion = new Quaternion()
 
 /** The nearest level-identity ancestor's pascalId, for the level factor. */
@@ -426,51 +416,24 @@ function isRendered(object: Object3D): boolean {
   return true
 }
 
-function scoreReg(
-  reg: GlbLightReg,
-  camPos: Vector3,
-  camFwd: Vector3,
-  selectedLevelId: string | null,
-  levelMode: string,
-  levelIndexById: Map<string, number>,
-): number {
-  if (!reg.isOn() || !isRendered(reg.object)) return Number.POSITIVE_INFINITY
-  if (selectedLevelId && reg.levelId !== selectedLevelId && levelMode === 'solo')
-    return Number.POSITIVE_INFINITY
-  reg.getWorldPosition(_lightWorld)
-  _dir.copy(_lightWorld).sub(camPos).normalize()
-  const angular = 1 - camFwd.dot(_dir)
-  const dist = camPos.distanceTo(_lightWorld) / 200
-  let levelPenalty = 0
-  if (selectedLevelId) {
-    if (reg.levelId !== selectedLevelId) levelPenalty = levelMode === 'solo' ? 100 : 0.8
-  } else if (reg.levelId && (levelIndexById.get(reg.levelId) ?? 0) !== 0) {
-    levelPenalty = 0.3
-  }
-  return angular * 0.7 + dist * 0.3 + levelPenalty
+// A light on another storey than the focused one counts for this much of what it adds.
+const OTHER_LEVEL_WEIGHT = 0.25
+
+/** 0 while the light cannot be seen lit (off, hidden, on a hidden level), else its level factor. */
+function regWeight(reg: GlbLightReg, selectedLevelId: string | null, levelMode: string): number {
+  if (!reg.isOn() || !isRendered(reg.object)) return 0
+  if (!selectedLevelId || reg.levelId === selectedLevelId) return 1
+  return levelMode === 'solo' ? 0 : OTHER_LEVEL_WEIGHT
 }
 
-function GlbItemLights({
-  regs,
-  levelIndexById,
-}: {
-  regs: GlbLightReg[]
-  levelIndexById: Map<string, number>
-}) {
+function GlbItemLights({ regs }: { regs: GlbLightReg[] }) {
   return (
     <PooledLights<GlbLightReg>
       getLights={() => regs}
       intensity={(reg) => (reg.isOn() && isRendered(reg.object) ? reg.getIntensity() : 0)}
-      score={(reg, camPos, camFwd) => {
+      weight={(reg) => {
         const viewer = useViewer.getState()
-        return scoreReg(
-          reg,
-          camPos,
-          camFwd,
-          viewer.selection.levelId,
-          viewer.levelMode,
-          levelIndexById,
-        )
+        return regWeight(reg, viewer.selection.levelId, viewer.levelMode)
       }}
     />
   )

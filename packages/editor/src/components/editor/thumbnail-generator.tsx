@@ -16,6 +16,7 @@ import {
   GRID_LAYER,
   heroCameraPose,
   holdLiveFrame,
+  itemLightsForCapture,
   pendingSceneBuildCount,
   presentLevelsForCapture,
   refreshIsolation,
@@ -995,6 +996,9 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
               } else if (snapLevels || pose || cameraPose) {
                 exteriorGroundForCapture(restore, Boolean(cameraPose || pose), thumbnailCamera)
               }
+              // Last, with the camera where the picture is taken from: the item lights that
+              // matter to it, at full strength.
+              restore(itemLightsForCapture(scene, thumbnailCamera))
             }
             // The scene pass is a FRAME-updated node: it renders once per node
             // frame, and only the animation loop advances that frame. With the

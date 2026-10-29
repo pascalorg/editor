@@ -386,6 +386,7 @@ export {
 // manages item-mounted light sources.
 export { ItemSystem } from './systems/item/item-system'
 export { ItemLightSystem } from './systems/item-light/item-light-system'
+export { itemLightsForCapture } from './systems/item-light/pooled-lights'
 export { LevelSystem } from './systems/level/level-system'
 export {
   EXPLODED_GAP,
