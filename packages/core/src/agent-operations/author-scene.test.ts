@@ -744,6 +744,51 @@ describe('author_scene', () => {
     )
   })
 
+  test("a spotlight keeps its aim in its fixture's frame, with its shadows and glow", () => {
+    const payload = authorScenePayload.parse({
+      levels: [
+        {
+          name: 'Ground floor',
+          items: [
+            {
+              id: 'sconce',
+              name: 'Sconce',
+              category: 'light',
+              code: '// sconce',
+              position: [0, 0, 0],
+              rotation: 90,
+            },
+          ],
+          lights: [
+            {
+              position: [1, 2, 0],
+              target: [2, 2, 0],
+              fixture: 'sconce',
+              shadows: true,
+              glow: { size: 0.2 },
+            },
+            { position: [0, 2, 0], fixture: 'sconce', angle: 30 },
+          ],
+        },
+      ],
+    })
+    const outcome = run(payload, { sconce: bed }, {})
+    expect(outcome.result.defects).toEqual([])
+    const [aimed, down] = byAuthorId(outcome, 'sconce').asset.interactive.effects
+    // The target is 1 m along +x from the bulb, as the bulb is from the fixture: both turn alike.
+    expect(aimed.spot.direction[0]).toBeCloseTo(aimed.offset[0], 4)
+    expect(aimed.spot.direction[1]).toBeCloseTo(0, 4)
+    expect(aimed.spot.direction[2]).toBeCloseTo(aimed.offset[2], 4)
+    expect(Math.abs(aimed.offset[2])).toBeCloseTo(1, 4)
+    expect(aimed).toMatchObject({
+      spot: { angle: 60, softness: 0.4 },
+      shadows: true,
+      glow: { size: 0.2, strength: 1 },
+    })
+    expect(down.spot).toEqual({ direction: [0, -1, 0], angle: 30, softness: 0.4 })
+    expect(down.shadows).toBeUndefined()
+  })
+
   test('a ceiling point whose module failed is reported by the light id', () => {
     const payload = authorScenePayload.parse({
       ...bedroom,

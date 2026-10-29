@@ -385,6 +385,32 @@ function toLocal(frame: Frame, world: Vec3): Vec3 {
   return [c * dx - s * dz, dy, s * dx + c * dz]
 }
 
+type PayloadLight = AuthorScenePayload['levels'][number]['lights'][number]
+
+/**
+ * A payload light's beam in its host's frame (so it turns with the host), or none for a point
+ * light. A target on the light itself points it down.
+ */
+function lightSpot(light: PayloadLight, at: Vec3, host: Frame) {
+  if (!light.direction && !light.target && light.angle === undefined) return undefined
+  let [x, y, z] = light.target
+    ? [light.target[0]! - at[0], light.target[1]! - at[1], light.target[2]! - at[2]]
+    : (light.direction ?? [0, -1, 0])
+  let length = Math.hypot(x!, y!, z!)
+  if (length < 1e-6) [x, y, z, length] = [0, -1, 0, 1]
+  const [c, s] = [Math.cos(host.yaw), Math.sin(host.yaw)]
+  const round = (v: number) => Math.round(v * 1e4) / 1e4
+  return {
+    direction: [
+      round((c * x! - s * z!) / length),
+      round(y! / length),
+      round((s * x! + c * z!) / length),
+    ] as Vec3,
+    angle: light.angle ?? 60,
+    softness: light.softness ?? 0.4,
+  }
+}
+
 /**
  * The finish a payload value writes. A library or scene ref passes through; a hex colour is kept
  * as an exact native material, one scene material per distinct colour and surface across the
@@ -2226,6 +2252,9 @@ export function authorScene(
           color: light.color,
           intensityRange: [0, light.intensity],
           offset: toLocal(hostFrame!, at),
+          spot: lightSpot(light, at, hostFrame!),
+          shadows: light.shadows,
+          glow: light.glow,
         },
       ]
       written[hostNode.id] = {

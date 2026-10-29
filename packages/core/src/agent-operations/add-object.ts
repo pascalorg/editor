@@ -6,6 +6,7 @@ import { artifactUrl } from '../lib/artifact-store'
 import {
   isScriptedNode,
   matchScriptSlotsToLibrary,
+  rebuiltInteractive,
   requireMeasured,
   type ScriptedNode,
   scriptedSize,
@@ -80,12 +81,15 @@ const HOSTS: Record<GeometryScriptMount, readonly AnyNode['type'][]> = {
 function scriptAsset(
   compiled: CompiledGeometryScript,
   input: AddObjectInput,
-  previous: ItemNode['asset'] | undefined,
+  previousNode: ItemNode | undefined,
 ): ItemNode['asset'] {
+  const previous = previousNode?.asset
   const { min, max } = compiled.manifest.bounds
   const restingHeight = geometryRestingHeight(compiled.manifest)
   const attachTo = ATTACH[compiled.mount]
-  const interactive = scriptInteractive(compiled.manifest)
+  const interactive = previousNode
+    ? rebuiltInteractive(compiled.manifest, previousNode)
+    : scriptInteractive(compiled.manifest)
   return {
     id: `script_${compiled.sha256.slice(0, 16)}`,
     category: input.category ?? previous?.category ?? 'object',
@@ -352,7 +356,7 @@ export const addObject: AgentOperation<AddObjectInput> = (nodes, input, context)
       slots: slotsOf(
         matchScriptSlotsToLibrary(compiled.manifest, previous.slots, previous.source?.manifest),
       ),
-      asset: scriptAsset(compiled, input, previous.asset),
+      asset: scriptAsset(compiled, input, previous),
       ...(input.reason ? { metadata: { ...previous.metadata, reason: input.reason } } : {}),
     })
     // Children resting on or hanging from the object follow its new geometry.

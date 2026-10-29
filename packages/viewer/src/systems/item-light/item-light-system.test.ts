@@ -4,10 +4,11 @@ import { sceneRegistry, useScene } from '@pascal-app/core'
 import { useThree } from '@react-three/fiber'
 import { act, create } from '@react-three/test-renderer'
 import { createElement } from 'react'
-import { Group, type PointLight } from 'three'
+import { Group, type PointLight, type SpotLight, Vector3 } from 'three'
 import { useItemLightPool } from '../../store/use-item-light-pool'
 import useViewer from '../../store/use-viewer'
 import { ItemLightSystem } from './item-light-system'
+import { glowDarkness } from './pooled-lights'
 
 let previousViewerState = useViewer.getState()
 
@@ -148,4 +149,73 @@ test('a baked owner suppresses the native pool on its canvas', async () => {
   } finally {
     await renderer.unmount()
   }
+})
+
+test('a spot with shadows takes a shadow slot, aimed; one without shines from the spot pool; both glow', async () => {
+  const id = 'item_sconce' as AnyNodeId
+  const item = new Group()
+  sceneRegistry.nodes.set(id, item)
+  useScene.setState({
+    nodes: { [id]: { id, type: 'item', visible: true, parentId: null } } as unknown as Record<
+      AnyNodeId,
+      AnyNode
+    >,
+  })
+  const pool = useItemLightPool.getState()
+  const spot = (key: string, shadows: boolean) =>
+    pool.register({
+      key,
+      nodeId: id,
+      color: '#ffd9a0',
+      distance: 4,
+      spot: { direction: [0, 1, 0], angle: 60, softness: 0.5 },
+      shadows,
+      glow: { size: 0.2, strength: 1 },
+      peak: 2,
+      getWorldPosition: (out) => {
+        out.set(1, 2, 3)
+        return true
+      },
+      getWorldDirection: (out) => {
+        out.set(0, 1, 0)
+      },
+      getIntensity: () => 2,
+      isEligible: () => true,
+    })
+  spot('wash', true)
+  spot('accent', false)
+  // As a saved scene stores it: no strength, which is 1.
+  useItemLightPool.getState().registrations.get('accent')!.glow = { size: 0.2 }
+  const renderer = await create(createElement(ItemLightSystem))
+  try {
+    // The first tick asks for the spot, shadow and glow pools; they mount on the next render.
+    await act(async () => renderer.advanceFrames(1, 1 / 30))
+    await renderer.advanceFrames(20, 1 / 30)
+    const spots = renderer.scene
+      .findAllByType('SpotLight')
+      .map((entry) => entry.instance as SpotLight)
+    const lit = spots.filter((light) => light.intensity > 0)
+    expect(lit.map((light) => light.castShadow).sort()).toEqual([false, true])
+    for (const light of lit) {
+      expect(light.angle).toBeCloseTo(Math.PI / 6)
+      expect(light.penumbra).toBe(0.5)
+      expect(light.target.position.toArray()).toEqual([1, 3, 3])
+    }
+    const glows = renderer.scene.findAll((entry) => entry.instance.name === 'light-glows')
+    const sprite = glows[0]!.instance as unknown as {
+      count: number
+      material: { colorNode: { value: { array: Float32Array } } }
+    }
+    expect(sprite.count).toBe(2)
+    expect([...sprite.material.colorNode.value.array.slice(0, 6)].every(Number.isFinite)).toBe(true)
+  } finally {
+    await renderer.unmount()
+  }
+})
+
+test('a glow shows at night and nearly vanishes under a high sun', () => {
+  expect(glowDarkness(null, 'dark')).toBe(1)
+  expect(glowDarkness(null, 'light')).toBeLessThan(0.1)
+  expect(glowDarkness(new Vector3(0, -1, 0), 'light')).toBe(1)
+  expect(glowDarkness(new Vector3(1, 1, 0), 'dark')).toBeLessThan(0.1)
 })

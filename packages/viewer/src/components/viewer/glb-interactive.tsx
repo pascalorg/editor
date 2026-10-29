@@ -10,9 +10,8 @@ import {
   type SceneGraph,
   type ScriptedNode,
   type SliderControl,
-  scriptedOrigin,
+  scriptedInteractive,
   scriptedSize,
-  scriptInteractive,
   useInteractive,
 } from '@pascal-app/core'
 import {
@@ -21,14 +20,14 @@ import {
   type ProceduralItemNode,
 } from '@pascal-app/core/procedural-items'
 import { Html } from '@react-three/drei'
-import { createPortal, useFrame, useThree } from '@react-three/fiber'
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { createPortal, useThree } from '@react-three/fiber'
+import { useEffect, useLayoutEffect, useMemo, useState } from 'react'
 import {
   type AnimationAction,
   LoopRepeat,
   MathUtils,
   type Object3D,
-  type PointLight,
+  Quaternion,
   Vector3,
 } from 'three'
 import { useShallow } from 'zustand/react/shallow'
@@ -43,6 +42,7 @@ import useViewer from '../../store/use-viewer'
 import { ControlWidget } from '../../systems/interactive/control-widget'
 import { proceduralControlDescriptors } from '../../systems/interactive/procedural-controls'
 import { type ScriptedClipActions, ScriptedClips } from '../../systems/interactive/scripted-clips'
+import { type PooledLight, PooledLights } from '../../systems/item-light/pooled-lights'
 
 /** An interactive item recovered from the scene graph so the baked GLB can be
  *  re-lit / re-animated by joining on `pascalId`. The GLB carries the geometry
@@ -109,7 +109,7 @@ export function buildGlbInteractiveItems(
     // emitted, as in the editor.
     if (isScriptedNode(raw as AnyNode)) {
       const scripted = raw as ScriptedNode
-      const interactive = scriptInteractive(scripted.source.manifest, scriptedOrigin(scripted))
+      const interactive = scriptedInteractive(scripted)
       if (!interactive) continue
       const [, height] = scriptedSize(scripted.source.manifest)
       items.push({
@@ -176,6 +176,7 @@ export function buildGlbLightRegs(
             const anchor = motion ?? object
             anchor.updateWorldMatrix(true, false)
             out.copy(local).applyMatrix4(anchor.matrixWorld)
+            return true
           },
           getIntensity: () => light.intensity,
           isOn: () =>
@@ -197,6 +198,14 @@ export function buildGlbLightRegs(
         object,
         color: effect.color,
         distance: effect.distance ?? 0,
+        spot: effect.spot,
+        shadows: effect.shadows,
+        glow: effect.glow,
+        peak: effect.intensityRange[1],
+        getWorldDirection: (out) => {
+          out.set(...(effect.spot?.direction ?? [0, -1, 0])).normalize()
+          out.applyQuaternion(object.getWorldQuaternion(_quaternion))
+        },
         getWorldPosition: (out) => {
           object.updateWorldMatrix(true, false)
           if (item.scripted) {
@@ -208,10 +217,11 @@ export function buildGlbLightRegs(
                 effect.offset[2] * scale[2],
               )
               .applyMatrix4(object.matrixWorld)
-            return
+            return true
           }
           object.getWorldPosition(out)
           out.set(out.x + effect.offset[0], out.y + effect.offset[1], out.z + effect.offset[2])
+          return true
         },
         getIntensity: () => {
           const values = useInteractive.getState().items[item.pascalId]?.controlValues
@@ -380,36 +390,21 @@ function GlbProceduralEmission({ item, object }: { item: GlbInteractiveItem; obj
 
 // ── Pooled item lights ──────────────────────────────────────────────────────
 //
-// Mirrors the parametric `ItemLightSystem`: a fixed pool of point lights is
-// assigned to the nearest/most-visible lit items each tick (camera-proximity
-// scored, with hysteresis), snapped to the item's world position + offset, and
-// faded in/out on reassignment. Mounting a light per item instead would blow
-// the renderer's light budget on a large house.
+// The same pools as the parametric `ItemLightSystem`, fed from the baked
+// Object3Ds: mounting a light per item instead would blow the renderer's light
+// budget on a large house.
 
-const POOL_SIZE = 12
-const REASSIGN_INTERVAL = 0.2
-const HYSTERESIS = 0.15
-const CAM_MOVE_DIST = 0.5
-const CAM_ROT_DOT = 0.995
-
-export type GlbLightReg = {
-  key: string
+export type GlbLightReg = PooledLight & {
   nodeId: AnyNodeId
   object: Object3D
-  color: string
-  distance: number
-  getWorldPosition: (out: Vector3) => void
   getIntensity: () => number
   isOn: () => boolean
   levelId: string | null
 }
 
-type SlotRuntime = { key: string | null; pendingKey: string | null; isFadingOut: boolean }
-
-const _camPos = new Vector3()
-const _camFwd = new Vector3()
 const _dir = new Vector3()
 const _lightWorld = new Vector3()
+const _quaternion = new Quaternion()
 
 /** The nearest level-identity ancestor's pascalId, for the level factor. */
 function findLevelId(object: Object3D): string | null {
@@ -433,6 +428,8 @@ function isRendered(object: Object3D): boolean {
 
 function scoreReg(
   reg: GlbLightReg,
+  camPos: Vector3,
+  camFwd: Vector3,
   selectedLevelId: string | null,
   levelMode: string,
   levelIndexById: Map<string, number>,
@@ -441,9 +438,9 @@ function scoreReg(
   if (selectedLevelId && reg.levelId !== selectedLevelId && levelMode === 'solo')
     return Number.POSITIVE_INFINITY
   reg.getWorldPosition(_lightWorld)
-  _dir.copy(_lightWorld).sub(_camPos).normalize()
-  const angular = 1 - _camFwd.dot(_dir)
-  const dist = _camPos.distanceTo(_lightWorld) / 200
+  _dir.copy(_lightWorld).sub(camPos).normalize()
+  const angular = 1 - camFwd.dot(_dir)
+  const dist = camPos.distanceTo(_lightWorld) / 200
   let levelPenalty = 0
   if (selectedLevelId) {
     if (reg.levelId !== selectedLevelId) levelPenalty = levelMode === 'solo' ? 100 : 0.8
@@ -460,170 +457,22 @@ function GlbItemLights({
   regs: GlbLightReg[]
   levelIndexById: Map<string, number>
 }) {
-  const lightRefs = useRef<Array<PointLight | null>>(Array.from({ length: POOL_SIZE }, () => null))
-  const slots = useRef<SlotRuntime[]>(
-    Array.from({ length: POOL_SIZE }, () => ({ key: null, pendingKey: null, isFadingOut: false })),
-  )
-  const reassignTimer = useRef(0)
-  const prevCamPos = useRef(new Vector3())
-  const prevCamFwd = useRef(new Vector3(0, 0, -1))
-  const regByKey = useMemo(() => new Map(regs.map((r) => [r.key as string, r])), [regs])
-
-  useFrame(({ camera }, delta) => {
-    const dt = Math.min(delta, 0.1)
-    camera.getWorldPosition(_camPos)
-    camera.getWorldDirection(_camFwd)
-
-    const camMoved =
-      _camPos.distanceTo(prevCamPos.current) > CAM_MOVE_DIST ||
-      _camFwd.dot(prevCamFwd.current) < CAM_ROT_DOT
-    reassignTimer.current -= delta
-
-    if (reassignTimer.current <= 0 || camMoved) {
-      reassignTimer.current = REASSIGN_INTERVAL
-      prevCamPos.current.copy(_camPos)
-      prevCamFwd.current.copy(_camFwd)
-      const viewer = useViewer.getState()
-      const selectedLevelId = viewer.selection.levelId
-      const levelMode = viewer.levelMode
-
-      const scored = regs.map((reg) => ({
-        key: reg.key as string,
-        score: scoreReg(reg, selectedLevelId, levelMode, levelIndexById),
-      }))
-      scored.sort((a, b) => a.score - b.score)
-      const scoreByKey = new Map(scored.map((s) => [s.key, s.score] as const))
-      const desired = scored
-        .filter((s) => Number.isFinite(s.score))
-        .slice(0, POOL_SIZE)
-        .map((s) => s.key)
-
-      const currentlyAssigned = new Map<string, number>()
-      for (let i = 0; i < POOL_SIZE; i++) {
-        const s = slots.current[i]
-        const k = s?.key ?? s?.pendingKey
-        if (k) currentlyAssigned.set(k, i)
-      }
-
-      const usedSlots = new Set<number>()
-      const assignedKeys = new Set<string>()
-      // Pass 1: keep existing slots whose key is still wanted.
-      for (const key of desired) {
-        const existingSlot = currentlyAssigned.get(key)
-        if (existingSlot !== undefined && !usedSlots.has(existingSlot)) {
-          usedSlots.add(existingSlot)
-          assignedKeys.add(key)
-        }
-      }
-      // Pass 2: assign the rest to free slots, evicting only on a clear win.
-      let freeSlot = 0
-      for (const key of desired) {
-        if (assignedKeys.has(key)) continue
-        while (freeSlot < POOL_SIZE && usedSlots.has(freeSlot)) freeSlot++
-        if (freeSlot >= POOL_SIZE) break
-
-        const freeSlotData = slots.current[freeSlot]
-        const currentKey = freeSlotData ? (freeSlotData.key ?? freeSlotData.pendingKey) : null
-        if (currentKey && !desired.includes(currentKey)) {
-          const currentScore = scoreByKey.get(currentKey) ?? Number.POSITIVE_INFINITY
-          const newScore = scoreByKey.get(key) ?? 0
-          if (currentScore - newScore < HYSTERESIS) {
-            freeSlot++
-            continue
-          }
-        }
-
-        usedSlots.add(freeSlot)
-        assignedKeys.add(key)
-        const slot = slots.current[freeSlot]
-        if (slot && slot.key !== key) {
-          slot.pendingKey = key
-          slot.isFadingOut = slot.key !== null
-          if (!slot.isFadingOut) {
-            slot.key = key
-            slot.pendingKey = null
-            const light = lightRefs.current[freeSlot]
-            const reg = regByKey.get(key)
-            if (light && reg) {
-              light.color.set(reg.color)
-              light.distance = reg.distance
-            }
-          }
-        }
-        freeSlot++
-      }
-
-      // Retire slots whose key is no longer wanted.
-      for (let i = 0; i < POOL_SIZE; i++) {
-        if (!usedSlots.has(i)) {
-          const slot = slots.current[i]
-          if (slot?.key && !desired.includes(slot.key)) {
-            slot.pendingKey = null
-            slot.isFadingOut = true
-          }
-        }
-      }
-    }
-
-    // Per-frame: fade, snap position, and track intensity from control state.
-    // The pool lights stay permanently `visible` — only `intensity` is animated
-    // (an idle light just lerps to 0). Toggling `visible` would change the
-    // active-light count, which forces the WebGPU renderer to recompile every
-    // material's lighting node — a hard frame-time spike on every reassignment
-    // (i.e. on every camera move). Keeping the count fixed avoids that entirely.
-    for (let i = 0; i < POOL_SIZE; i++) {
-      const light = lightRefs.current[i]
-      const slot = slots.current[i]
-      if (!(light && slot)) continue
-
-      if (slot.isFadingOut) {
-        light.intensity = MathUtils.lerp(light.intensity, 0, dt * 12)
-        if (light.intensity < 0.01) {
-          light.intensity = 0
-          slot.isFadingOut = false
-          slot.key = slot.pendingKey
-          slot.pendingKey = null
-          if (slot.key) {
-            const reg = regByKey.get(slot.key)
-            if (reg) {
-              light.color.set(reg.color)
-              light.distance = reg.distance
-            }
-          }
-        }
-        continue
-      }
-
-      if (!slot.key) {
-        light.intensity = MathUtils.lerp(light.intensity, 0, dt * 12)
-        continue
-      }
-      const reg = regByKey.get(slot.key)
-      if (!reg) {
-        slot.key = null
-        continue
-      }
-
-      reg.getWorldPosition(_lightWorld)
-      light.position.copy(_lightWorld)
-      const targetIntensity = reg.isOn() && isRendered(reg.object) ? reg.getIntensity() : 0
-      light.intensity = MathUtils.lerp(light.intensity, targetIntensity, dt * 12)
-    }
-  }, 6)
-
   return (
-    <>
-      {Array.from({ length: POOL_SIZE }, (_, i) => (
-        <pointLight
-          castShadow={false}
-          intensity={0}
-          key={i}
-          ref={(el) => {
-            lightRefs.current[i] = el
-          }}
-        />
-      ))}
-    </>
+    <PooledLights<GlbLightReg>
+      getLights={() => regs}
+      intensity={(reg) => (reg.isOn() && isRendered(reg.object) ? reg.getIntensity() : 0)}
+      score={(reg, camPos, camFwd) => {
+        const viewer = useViewer.getState()
+        return scoreReg(
+          reg,
+          camPos,
+          camFwd,
+          viewer.selection.levelId,
+          viewer.levelMode,
+          levelIndexById,
+        )
+      }}
+    />
   )
 }
 

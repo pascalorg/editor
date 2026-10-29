@@ -54,6 +54,8 @@ export {
   GeometryScriptParamValue,
   GeometryScriptSource,
   isGeometryScriptMimeType,
+  LightGlow,
+  LightSpot,
 } from './geometry-source'
 export type {
   MaterialMapProperties,

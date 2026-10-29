@@ -6,18 +6,17 @@ import {
   sceneRegistry,
   useInteractive,
 } from '@pascal-app/core'
-import type { Object3D, Vector3 } from 'three'
+import { type Object3D, Quaternion } from 'three'
 import { create } from 'zustand'
+import type { PooledLight } from '../systems/item-light/pooled-lights'
 
-export type LightSource = {
-  key: string
+export type LightSource = PooledLight & {
   nodeId: AnyNodeId
-  color: string
-  distance: number
-  getWorldPosition: (out: Vector3) => boolean
   getIntensity: () => number
   isEligible: () => boolean
 }
+
+const _quaternion = new Quaternion()
 
 export function catalogLightSource(
   key: string,
@@ -34,6 +33,15 @@ export function catalogLightSource(
     nodeId,
     color: effect.color,
     distance: effect.distance ?? 0,
+    spot: effect.spot,
+    shadows: effect.shadows,
+    glow: effect.glow,
+    peak: effect.intensityRange[1],
+    getWorldDirection: (out) => {
+      const object = sceneRegistry.nodes.get(nodeId)
+      out.set(...(effect.spot?.direction ?? [0, -1, 0])).normalize()
+      if (object) out.applyQuaternion(object.getWorldQuaternion(_quaternion))
+    },
     getWorldPosition: (out) => {
       const object = sceneRegistry.nodes.get(nodeId)
       if (!object) return false

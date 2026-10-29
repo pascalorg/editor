@@ -149,6 +149,41 @@ export function requireMeasured(
 }
 
 /**
+ * A scripted node's controls and effects. An item carries its own: its module's, then any lights
+ * author_scene hung on it. A window, door or column has only its module's.
+ */
+export function scriptedInteractive(node: ScriptedNode): ItemNode['asset']['interactive'] {
+  if (node.type === 'item' && node.asset.interactive) return node.asset.interactive
+  return scriptInteractive(node.source.manifest, scriptedOrigin(node))
+}
+
+/**
+ * The interactive of an item rebuilt from `manifest`: the new module's controls and effects, and
+ * the lights author_scene hung on the previous build (the effects after its module's own), so a
+ * rebuild keeps them.
+ */
+export function rebuiltInteractive(
+  manifest: CompiledGeometryScript['manifest'],
+  previous: Pick<ItemNode, 'asset' | 'source'>,
+): ItemNode['asset']['interactive'] {
+  const next = scriptInteractive(manifest)
+  const own = previous.source
+    ? (scriptInteractive(previous.source.manifest)?.effects.length ?? 0)
+    : 0
+  const hung = (previous.asset.interactive?.effects ?? [])
+    .slice(own)
+    .filter((effect) => effect.kind === 'light')
+  if (hung.length === 0) return next
+  const controls = next?.controls ?? []
+  return {
+    controls: controls.some((control) => control.kind === 'toggle')
+      ? controls
+      : [...controls, { kind: 'toggle', label: 'Lights', default: true }],
+    effects: [...(next?.effects ?? []), ...hung],
+  }
+}
+
+/**
  * Where the script's origin (the bottom centre of what it built) sits in the
  * node's own frame: a window or door is placed by its centre.
  */
@@ -201,6 +236,9 @@ export function scriptInteractive(
           light.position[1] + origin[1],
           light.position[2] + origin[2],
         ],
+        spot: light.spot,
+        shadows: light.shadows,
+        glow: light.glow,
       })
     }
   }

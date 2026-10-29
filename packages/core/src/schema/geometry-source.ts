@@ -22,6 +22,27 @@ export const isGeometryScriptMimeType = (mimeType: string) =>
 const finite = z.number().finite()
 const vec3 = z.tuple([finite, finite, finite])
 
+/**
+ * A spotlight's beam: where it points (in the object's frame), its full cone in degrees and how
+ * soft its edge is (0 a hard edge, 1 fully feathered).
+ */
+export const LightSpot = z.object({
+  direction: vec3.refine((v) => Math.hypot(...v) > 1e-6, 'A spot needs a direction'),
+  angle: z.number().min(1).max(179),
+  softness: z.number().min(0).max(1),
+})
+export type LightSpot = z.infer<typeof LightSpot>
+
+/**
+ * The soft halo drawn around a lamp itself, in the light's colour: its size across in metres and
+ * its strength. It shows more the darker the scene is.
+ */
+export const LightGlow = z.object({
+  size: z.number().positive().max(5),
+  strength: z.number().nonnegative().max(10).default(1),
+})
+export type LightGlow = z.infer<typeof LightGlow>
+
 export const GeometryScriptParamValue = z.union([finite, z.boolean(), z.string()])
 export type GeometryScriptParamValue = z.infer<typeof GeometryScriptParamValue>
 
@@ -93,6 +114,9 @@ export const GeometryArtifactManifest = z.object({
         color: z.string(),
         intensity: finite,
         distance: finite.optional(),
+        spot: LightSpot.optional(),
+        shadows: z.boolean().optional(),
+        glow: LightGlow.optional(),
       }),
     )
     .default([]),

@@ -161,3 +161,41 @@ test('a scripted window opens and lights from its base, and a music box plays it
   expect(out.x).toBeCloseTo(0.3)
   expect(out.z).toBeCloseTo(0.2)
 })
+
+test('an authored object lights what author_scene hung on it, as in the editor', () => {
+  const lamp = { position: [0, 0.3, 0], color: '#ffcf95', intensity: 2 }
+  const items = buildGlbInteractiveItems({
+    nodes: {
+      item_sconce: {
+        type: 'item',
+        asset: {
+          name: 'Sconce',
+          interactive: {
+            controls: [{ kind: 'toggle', label: 'Lights', default: true }],
+            effects: [
+              { kind: 'light', color: '#ffcf95', intensityRange: [0, 2], offset: [0, 0.3, 0] },
+              {
+                kind: 'light',
+                color: '#ffffff',
+                intensityRange: [0, 4],
+                offset: [0, 0.5, 0.1],
+                spot: { direction: [0, 1, 0], angle: 60, softness: 0.4 },
+                glow: { size: 0.2, strength: 1 },
+              },
+            ],
+          },
+        },
+        source: {
+          manifest: {
+            bounds: { min: [-0.1, 0, -0.1], max: [0.1, 0.6, 0.1] },
+            lights: [lamp],
+            animations: [],
+          },
+        },
+      },
+    },
+  } as unknown as SceneGraph)
+  const regs = buildGlbLightRegs(items, new Map([['item_sconce', new Group()]]))
+  expect(regs).toHaveLength(2)
+  expect(regs[1]).toMatchObject({ spot: { angle: 60 }, glow: { size: 0.2 } })
+})
