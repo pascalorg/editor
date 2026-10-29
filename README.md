@@ -10,7 +10,7 @@ WebGPU. Run it in the browser or from the CLI, and connect AI agents through MCP
 [![Discord](https://img.shields.io/badge/Discord-Join%20Server-5865F2?logo=discord&logoColor=white)](https://discord.gg/XRKsDcpqgS)
 [![X (Twitter)](https://img.shields.io/badge/follow-%40pascal-black?logo=x&logoColor=white)](https://x.com/pascal)
 
-https://github.com/user-attachments/assets/8b50e7cf-cebe-4579-9cf3-8786b35f7b6b
+https://github.com/user-attachments/assets/063c0891-9ae5-4173-bd08-a101d9c3352b
 
 ## A first look at Pascal Next
 
