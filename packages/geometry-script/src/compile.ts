@@ -7,7 +7,11 @@ import type {
   GeometryScriptParamValue,
 } from '@pascal-app/core'
 import { type Ring, union } from '@pascal-app/core/polygon-boolean'
-import { GEOMETRY_MANIFEST_MAX_BYTES, GEOMETRY_SCRIPT_MAX_BYTES } from '@pascal-app/core/schema'
+import {
+  GEOMETRY_MANIFEST_MAX_BYTES,
+  GEOMETRY_SCRIPT_MAX_BYTES,
+  LightGlow,
+} from '@pascal-app/core/schema'
 import * as THREE from 'three'
 import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js'
 import { ConvexGeometry } from 'three/examples/jsm/geometries/ConvexGeometry.js'
@@ -309,6 +313,40 @@ const round = (v: number) => Math.round(v * 1e6) / 1e6
 const vec = (v: THREE.Vector3): [number, number, number] => [round(v.x), round(v.y), round(v.z)]
 
 /**
+ * A SpotLight's beam in the artifact frame. A target the script never added to the scene is a
+ * point in the script's own frame, as three.js reads an unparented target in world space.
+ */
+function readSpot(light: THREE.SpotLight, root: THREE.Object3D, id: string) {
+  const from = light.getWorldPosition(new THREE.Vector3())
+  let to: THREE.Vector3
+  if (light.target.parent) to = light.target.getWorldPosition(new THREE.Vector3())
+  else {
+    let frame: THREE.Object3D = light
+    while (frame.parent && frame.parent !== root) frame = frame.parent
+    to = frame.parent ? frame.localToWorld(light.target.position.clone()) : light.target.position
+  }
+  const direction = to.sub(from)
+  if (direction.lengthSq() < 1e-12) throw new Error(`Spot light "${id}" targets its own position`)
+  direction.normalize()
+  return {
+    direction: vec(direction),
+    angle: Math.min(179, Math.max(1, round(THREE.MathUtils.radToDeg(light.angle * 2)))),
+    softness: Math.min(1, Math.max(0, round(light.penumbra))),
+  }
+}
+
+/** `userData.glow = { size, strength }` (strength defaults to 1). */
+function readGlow(value: unknown, id: string) {
+  if (value === undefined) return undefined
+  const glow = LightGlow.safeParse(value)
+  if (!glow.success)
+    throw new Error(
+      `Light "${id}": glow must be { size: metres across (0–5), strength: 0–10 }, got ${JSON.stringify(value)}`,
+    )
+  return glow.data
+}
+
+/**
  * Reads the naming conventions into the manifest and rewrites the output so
  * they survive glTF: GLTFLoader strips ':' from node names, so convention ids
  * move to `userData.pascal`, materials get `slot_<id>` names, and lights
@@ -379,6 +417,16 @@ function readConventions(root: THREE.Object3D) {
         color,
         intensity,
         distance,
+        spot: (light as unknown as THREE.SpotLight).isSpotLight
+          ? readSpot(light as unknown as THREE.SpotLight, root, lightId)
+          : undefined,
+        shadows:
+          typeof userData.shadows === 'boolean'
+            ? userData.shadows
+            : light.isLight && light.castShadow
+              ? true
+              : undefined,
+        glow: readGlow(userData.glow, lightId),
       })
       toRemove.push(object)
       return

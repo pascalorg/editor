@@ -328,6 +328,8 @@ export const NOTATION_CASES: NotationCase[] = [
  */
 export const NOT_LENGTHS = new Set([
   'author_scene.payload.levels[].lights[].intensity',
+  'author_scene.payload.levels[].lights[].softness',
+  'author_scene.payload.levels[].lights[].glow.strength',
   // Coordinates, in level metres.
   'add_column.x',
   'add_column.y',

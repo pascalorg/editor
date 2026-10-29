@@ -4,6 +4,7 @@ import {
   CEILING_DRAW_OFFSET,
   matchScriptSlotsToLibrary,
   resolveCeilingHeight,
+  scriptInteractive,
   scriptSource,
 } from '@pascal-app/core'
 import {
@@ -134,6 +135,54 @@ export default function build() {
     expect(manifest.triangles).toBe(2)
     expect(material.side).toBe(FrontSide)
     expect(mesh.geometry.getAttribute('normal').getZ(0)).toBeCloseTo(-1)
+  })
+})
+
+const SCONCE = (glow: string) => `
+import * as THREE from 'three'
+export default function build() {
+  const g = new THREE.Group()
+  const body = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.3, 0.1), new THREE.MeshStandardMaterial())
+  body.position.set(2, 1.5, 0)
+  g.add(body)
+  const wash = new THREE.SpotLight('#ffd9a0', 3, 4, Math.PI / 6, 0.5)
+  wash.name = 'light:wash'
+  wash.position.set(2, 1.6, 0.05)
+  wash.target.position.set(2, 3, 0.05)
+  wash.castShadow = true
+  wash.userData.glow = ${glow}
+  g.add(wash)
+  return g
+}
+`
+
+describe('lights', () => {
+  test('a spot keeps its aim, cone, softness, shadows and glow', async () => {
+    const { manifest } = await compileGeometryScript({ code: SCONCE('{ size: 0.15 }') })
+    expect(manifest.lights).toEqual([
+      {
+        id: 'wash',
+        position: expect.any(Array),
+        color: '#ffd9a0',
+        intensity: 3,
+        distance: 4,
+        spot: { direction: [0, 1, 0], angle: 60, softness: 0.5 },
+        shadows: true,
+        glow: { size: 0.15, strength: 1 },
+      },
+    ])
+    expect(scriptInteractive(manifest)?.effects[0]).toMatchObject({
+      kind: 'light',
+      spot: { direction: [0, 1, 0], angle: 60 },
+      shadows: true,
+      glow: { size: 0.15 },
+    })
+  })
+
+  test('a glow without a size is refused, naming the light', async () => {
+    await expect(compileGeometryScript({ code: SCONCE('{ strength: 2 }') })).rejects.toThrow(
+      'Light "wash": glow must be',
+    )
   })
 })
 

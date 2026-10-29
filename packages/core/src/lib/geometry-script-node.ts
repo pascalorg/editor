@@ -201,6 +201,9 @@ export function scriptInteractive(
           light.position[1] + origin[1],
           light.position[2] + origin[2],
         ],
+        spot: light.spot,
+        shadows: light.shadows,
+        glow: light.glow,
       })
     }
   }

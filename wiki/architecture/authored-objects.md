@@ -52,7 +52,7 @@ MOUNT = "floor"
 def build(params): ...  # adds objects to the empty scene it is given
 ```
 
-`bpy/runner.py` runs the module in a fresh empty scene, resolves `PARAMS` the way `resolveParams` does, and exports everything in the scene as a GLB (modifiers applied, Y up, no images). `compileBlenderBuild` (`@pascal-app/geometry-script/blender`) loads that GLB and hands it to the same `finishBuild` a three.js build goes through, so the manifest, limits and conventions are one implementation; it re-resolves the params and refuses a run that used other values. It runs no model code, so any host may call it. The conventions in Blender terms: Z up and the front faces −Y (Blender's Front view, which the glTF export turns into +Z); convention names are object names, `userData` is custom properties, `slot_<id>` is a material name; a clip is one action, assigned to every object it moves; a light's brightness is its `intensity` custom property (default 2), since Blender's watts do not map onto Pascal's lights. A material whose shader still has the default base colour takes its viewport `diffuse_color`.
+`bpy/runner.py` runs the module in a fresh empty scene, resolves `PARAMS` the way `resolveParams` does, and exports everything in the scene as a GLB (modifiers applied, Y up, no images). `compileBlenderBuild` (`@pascal-app/geometry-script/blender`) loads that GLB and hands it to the same `finishBuild` a three.js build goes through, so the manifest, limits and conventions are one implementation; it re-resolves the params and refuses a run that used other values. It runs no model code, so any host may call it. The conventions in Blender terms: Z up and the front faces −Y (Blender's Front view, which the glTF export turns into +Z); convention names are object names, `userData` is custom properties, `slot_<id>` is a material name; a clip is one action, assigned to every object it moves; a light's brightness is its `intensity` custom property (default 2), since Blender's watts do not map onto Pascal's lights; a Spot light keeps its cone and blend, and the `shadows` and `glow` custom properties carry the rest. A material whose shader still has the default base colour takes its viewport `diffuse_color`.
 
 Blender cannot run in a browser, so a bpy module is built by its host: the editor calls the `BlenderScriptBuilder` the host configured (`configureBlenderScriptBuilder`) and refuses bpy without one; a params-only rebuild goes the same way. `runBlenderLocally` (`@pascal-app/geometry-script/blender-local`) runs a local Blender binary with no sandbox, for a developer's own machine.
 
@@ -62,7 +62,7 @@ Blender cannot run in a browser, so a bpy module is built by its host: the edito
 | --- | --- |
 | material `slot_<id>` | paint slot (other materials become slots by name) |
 | object `part:<id>`, `userData.type` | addressable, typed part with bounds (`find_by_type`) |
-| a three.js light, or `light:<id>` | switchable light effect |
+| a three.js light, or `light:<id>` | switchable light effect; a `SpotLight` keeps its aim, cone and penumbra, `castShadow` (or `userData.shadows`) casts shadows, `userData.glow = { size, strength }` draws a halo at the lamp |
 | mesh `cutout` / `cut:wall` / `cut:ceiling` / `cut:slab` | a cutter applied only to the object’s bound host |
 | empty `anchor:<id>` | socket |
 | mesh `collider` | walkthrough proxy (hidden) |
