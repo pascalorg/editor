@@ -2986,6 +2986,7 @@ msgstr "Importer un relevé 3D ou une image guide"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Walls above"
+#: apps/editor/components/viewer-toolbar.tsx
 #: packages/editor/src/components/ui/action-menu/view-toggles.tsx
 #, fuzzy
 msgid "editor.actionMenu.viewToggles.wallsAbove"
@@ -2996,6 +2997,7 @@ msgstr "Murs du dessus"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Walls below"
+#: apps/editor/components/viewer-toolbar.tsx
 #: packages/editor/src/components/ui/action-menu/view-toggles.tsx
 #, fuzzy
 msgid "editor.actionMenu.viewToggles.wallsBelow"

@@ -1199,10 +1199,12 @@ msgstr "Show walls below and above"
 msgid "editor.actionMenu.viewToggles.uploadScanOrGuideImage"
 msgstr "Upload scan or guide image"
 
+#: apps/editor/components/viewer-toolbar.tsx
 #: packages/editor/src/components/ui/action-menu/view-toggles.tsx
 msgid "editor.actionMenu.viewToggles.wallsAbove"
 msgstr "Walls above"
 
+#: apps/editor/components/viewer-toolbar.tsx
 #: packages/editor/src/components/ui/action-menu/view-toggles.tsx
 msgid "editor.actionMenu.viewToggles.wallsBelow"
 msgstr "Walls below"

@@ -17,6 +17,7 @@ import {
   useFloorplanAnnotationVisibility,
   useFloorplanMode,
   useSidebarStore,
+  useWallsBelowSetting,
   visibleScene,
 } from '@pascal-app/editor'
 import {
@@ -44,6 +45,7 @@ import {
   ScanLine,
   SlidersHorizontal,
   Sparkles,
+  SquareDashed,
   SquareUserRound,
   SwatchBook,
   Tag,
@@ -386,6 +388,10 @@ function DisplayMenu() {
   const scene = useEditor(visibleScene)
   const levelId = useViewer((state) => state.selection.levelId)
   const { shown: showCeilings, setShown: setShowCeilings } = useCeilingsSetting(levelId)
+  // The dashed walls of the levels below and above, on the plan.
+  const { shown: showWallsBelow, setShown: setShowWallsBelow } = useWallsBelowSetting(levelId)
+  const showWallsAbove = useEditor((state) => state.showWallsAbove)
+  const setShowWallsAbove = useEditor((state) => state.setShowWallsAbove)
   const showGrid = useViewer((state) => state.showGrid)
   const setShowGrid = useViewer((state) => state.setShowGrid)
   const showMeasurements = useViewer((state) => state.showMeasurements)
@@ -494,6 +500,32 @@ function DisplayMenu() {
         ) : null}
         {scene === '2d' || scene === 'split' ? (
           <>
+            <DropdownMenuItem
+              onSelect={(e) => keepOpen(e, () => setShowWallsBelow(!showWallsBelow))}
+            >
+              <SquareDashed className="h-4 w-4" />
+              <span>
+                {i18n._({ id: 'editor.actionMenu.viewToggles.wallsBelow', message: 'Walls below' })}
+              </span>
+              {showWallsBelow ? (
+                <Eye className="ml-auto h-4 w-4 text-foreground" />
+              ) : (
+                <EyeOff className="ml-auto h-4 w-4 text-muted-foreground" />
+              )}
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onSelect={(e) => keepOpen(e, () => setShowWallsAbove(!showWallsAbove))}
+            >
+              <SquareDashed className="h-4 w-4" />
+              <span>
+                {i18n._({ id: 'editor.actionMenu.viewToggles.wallsAbove', message: 'Walls above' })}
+              </span>
+              {showWallsAbove ? (
+                <Eye className="ml-auto h-4 w-4 text-foreground" />
+              ) : (
+                <EyeOff className="ml-auto h-4 w-4 text-muted-foreground" />
+              )}
+            </DropdownMenuItem>
             <DropdownMenuSub>
               <DropdownMenuSubTrigger>
                 <Layers3 className="h-4 w-4" />
