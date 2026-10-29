@@ -7,9 +7,9 @@ import {
   pointInPolygon,
   type ScriptedNode,
   sceneRegistry,
+  scriptedInteractive,
   scriptedOrigin,
   scriptedSize,
-  scriptInteractive,
   useInteractive,
   useScene,
   type ZoneNode,
@@ -51,7 +51,7 @@ export const InteractiveSystem = () => {
       Object.values(state.nodes)
         .filter(
           (n): n is ItemNode | ProceduralItemNode | ScriptedNode =>
-            (isScriptedNode(n) && scriptInteractive(n.source.manifest) != null) ||
+            (isScriptedNode(n) && scriptedInteractive(n) != null) ||
             (n.type === 'item' && n.asset.interactive != null) ||
             (n.type === 'procedural-item' &&
               (operableParts(n.recipe).length > 0 || n.recipe.parts.some((part) => part.light))),
@@ -118,7 +118,7 @@ const ItemControlsOverlay = ({
   let descriptors: ControlDescriptor[] = []
   let height = 0
   const interactive = isScriptedNode(node)
-    ? scriptInteractive(node.source.manifest, scriptedOrigin(node))
+    ? scriptedInteractive(node)
     : node?.type === 'item'
       ? node.asset.interactive
       : undefined

@@ -10,9 +10,8 @@ import {
   type SceneGraph,
   type ScriptedNode,
   type SliderControl,
-  scriptedOrigin,
+  scriptedInteractive,
   scriptedSize,
-  scriptInteractive,
   useInteractive,
 } from '@pascal-app/core'
 import {
@@ -110,7 +109,7 @@ export function buildGlbInteractiveItems(
     // emitted, as in the editor.
     if (isScriptedNode(raw as AnyNode)) {
       const scripted = raw as ScriptedNode
-      const interactive = scriptInteractive(scripted.source.manifest, scriptedOrigin(scripted))
+      const interactive = scriptedInteractive(scripted)
       if (!interactive) continue
       const [, height] = scriptedSize(scripted.source.manifest)
       items.push({

@@ -47,6 +47,45 @@ describe('add_object', () => {
   }
 })
 
+// author_scene hangs lights on an authored fixture after its module's own; a rebuild keeps them.
+test("a rebuilt object keeps the lights hung on it after its new module's own", () => {
+  const level = LevelNode.parse({ id: 'level_0', parentId: 'building_main', level: 0 })
+  const solid = compiledSolid([0.3, 0.6, 0.3])
+  const bulb = (intensity: number) => ({
+    id: 'bulb',
+    position: [0, 0.5, 0],
+    color: '#ffcf95',
+    intensity,
+  })
+  const compiled = (intensity: number) =>
+    ({ ...solid, manifest: { ...solid.manifest, lights: [bulb(intensity)] } }) as typeof solid
+  const input = (extra: Record<string, unknown>, intensity: number) => ({
+    ...z.object(addObjectTool.input).parse({ code: 'x', name: 'Lamp', reason: 'r', ...extra }),
+    compiled: compiled(intensity),
+  })
+  let nodes = { [level.id]: level } as Record<string, AnyNode>
+  const created = addObject(nodes, input({}, 2), { activeLevelId: level.id })
+  nodes = applySceneChanges(nodes, created.changes)
+  const lamp = nodes[created.result.nodeId] as AnyNode & { asset: any }
+  const hung = {
+    kind: 'light',
+    color: '#ffffff',
+    intensityRange: [0, 4],
+    offset: [0, 0.6, 0.1],
+    spot: { direction: [0, 1, 0], angle: 60, softness: 0.4 },
+  }
+  lamp.asset.interactive.effects.push(hung)
+  const rebuilt = addObject(nodes, input({ nodeId: lamp.id }, 3), { activeLevelId: level.id })
+  const after = applySceneChanges(nodes, rebuilt.changes)[lamp.id] as AnyNode & { asset: any }
+  expect(after.asset.interactive.effects).toMatchObject([
+    { kind: 'light', intensityRange: [0, 3] },
+    hung,
+  ])
+  expect(after.asset.interactive.controls).toEqual([
+    { kind: 'toggle', label: 'Lights', default: true },
+  ])
+})
+
 // A module's colours are shown as the library finishes they match unless exact keeps them as written.
 describe('add_object exact', () => {
   const level = LevelNode.parse({ id: 'level_0', parentId: 'building_main', level: 0 })
