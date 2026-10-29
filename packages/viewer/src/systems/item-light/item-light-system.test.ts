@@ -184,6 +184,8 @@ test('a spot with shadows takes a shadow slot, aimed; one without shines from th
     })
   spot('wash', true)
   spot('accent', false)
+  // As a saved scene stores it: no strength, which is 1.
+  useItemLightPool.getState().registrations.get('accent')!.glow = { size: 0.2 }
   const renderer = await create(createElement(ItemLightSystem))
   try {
     // The first tick asks for the spot, shadow and glow pools; they mount on the next render.
@@ -200,7 +202,12 @@ test('a spot with shadows takes a shadow slot, aimed; one without shines from th
       expect(light.target.position.toArray()).toEqual([1, 3, 3])
     }
     const glows = renderer.scene.findAll((entry) => entry.instance.name === 'light-glows')
-    expect((glows[0]!.instance as unknown as { count: number }).count).toBe(2)
+    const sprite = glows[0]!.instance as unknown as {
+      count: number
+      material: { colorNode: { value: { array: Float32Array } } }
+    }
+    expect(sprite.count).toBe(2)
+    expect([...sprite.material.colorNode.value.array.slice(0, 6)].every(Number.isFinite)).toBe(true)
   } finally {
     await renderer.unmount()
   }

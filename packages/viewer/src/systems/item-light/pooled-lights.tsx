@@ -1,6 +1,6 @@
 'use client'
 
-import type { LightGlow, LightSpot } from '@pascal-app/core'
+import type { LightSpot } from '@pascal-app/core'
 import { useFrame } from '@react-three/fiber'
 import { useMemo, useRef, useState } from 'react'
 import { float, instancedDynamicBufferAttribute, smoothstep, uv } from 'three/tsl'
@@ -26,7 +26,8 @@ export type PooledLight = {
   distance: number
   spot?: LightSpot
   shadows?: boolean
-  glow?: LightGlow
+  // A saved scene is not parsed on load, so a glow may come without its default strength.
+  glow?: { size: number; strength?: number }
   /** Its fully-on intensity, so its glow dims with it. */
   peak?: number
   /** Where it shines from; false while its object is not mounted. */
@@ -338,7 +339,9 @@ export function PooledLights<T extends PooledLight>({ getLights, score, intensit
         Math.min(light.glow.size / 2, _dir.length() / 2) / (_dir.length() || 1),
       )
       const level = light.peak ? Math.min(1, now / light.peak) : 1
-      _color.set(light.color).multiplyScalar(GLOW_GAIN * light.glow.strength * level * darkness)
+      _color
+        .set(light.color)
+        .multiplyScalar(GLOW_GAIN * (light.glow.strength ?? 1) * level * darkness)
       glows.positions.setXYZ(count, _pos.x, _pos.y, _pos.z)
       glows.colors.setXYZ(count, _color.r, _color.g, _color.b)
       glows.sizes.setX(count, light.glow.size)
