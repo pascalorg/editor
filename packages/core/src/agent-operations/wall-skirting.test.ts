@@ -94,6 +94,12 @@ describe('setWallSkirting', () => {
     ])
   })
 
+  test('refuses skirting on a railing', () => {
+    const nodes = room()
+    nodes.wall_0 = { ...nodes.wall_0, wallType: 'railing' } as WallNode
+    expect(refusal(() => run(nodes, { wallIds: ['wall_0'], faces: 'both' }))).toBe('railing_wall')
+  })
+
   test('refuses a size that is no length, and a node that is no wall', () => {
     expect(refusal(() => run(room(), { wallIds: ['wall_0'], height: 0 }))).toBe('invalid_size')
     expect(refusal(() => run(room(), { wallIds: ['level_skirting'] }))).toBe('target_not_found')

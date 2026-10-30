@@ -239,6 +239,7 @@ describe('pascal://agent-guide', () => {
     'roof_mixed_in_storey',
     'room_named_by_person',
     'scene_wipe_blocked',
+    'unknown_wall_type',
   ]
   // Hosted-only tools: the hosted server registers them beside the package's.
   const HOSTED_ONLY_TOOLS = [

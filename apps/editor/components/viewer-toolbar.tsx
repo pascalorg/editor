@@ -5,17 +5,22 @@ import { type MessageDescriptor, usePascalI18n } from '@pascal-app/core'
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuSub,
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
+  type FloorplanWallDimensionFaces,
   sceneThemeName,
+  useCeilingsSetting,
   useEditor,
   useFloorplanAnnotationVisibility,
   useFloorplanMode,
   useSidebarStore,
+  useWallsBelowSetting,
   visibleScene,
 } from '@pascal-app/editor'
 import {
@@ -26,7 +31,10 @@ import {
   useViewer,
 } from '@pascal-app/viewer'
 import {
+  ArrowDown,
+  ArrowUp,
   Box,
+  BrickWall,
   Check,
   ChevronsLeft,
   ChevronsRight,
@@ -35,10 +43,14 @@ import {
   EyeOff,
   Footprints,
   Grid2X2,
+  Layers,
+  Layers2,
   Layers3,
+  Link2,
   Magnet,
   PenLine,
   Ruler,
+  RulerDimensionLine,
   ScanLine,
   SlidersHorizontal,
   Sparkles,
@@ -49,6 +61,7 @@ import {
 import Image from 'next/image'
 import { type ReactNode, useCallback } from 'react'
 import { flushSync } from 'react-dom'
+import { displayMenuLayout } from '@/lib/display-menu'
 import { cn } from '@/lib/utils'
 import { Tooltip, TooltipContent, TooltipTrigger } from './toolbar-tooltip'
 
@@ -197,30 +210,6 @@ const FLOORPLAN_MODE_OPTIONS = [
   },
 ] as const
 
-const FLOORPLAN_WALL_DIMENSION_REFERENCE_OPTIONS = [
-  {
-    id: 'finished-faces',
-    name: /* i18n */ { id: 'app.viewerToolbar.finishedFaces', message: 'Finished faces' },
-    detail: /* i18n */ {
-      id: 'app.viewerToolbar.fullWallThickness',
-      message: 'Full wall thickness',
-    },
-  },
-  {
-    id: 'centerline',
-    name: /* i18n */ { id: 'app.viewerToolbar.wallCenterline', message: 'Wall centerline' },
-    detail: /* i18n */ { id: 'app.viewerToolbar.singleWallAxis', message: 'Single wall axis' },
-  },
-  {
-    id: 'stud-faces',
-    name: /* i18n */ { id: 'app.viewerToolbar.faceOfStud', message: 'Face of stud' },
-    detail: /* i18n */ {
-      id: 'app.viewerToolbar.structuralCoreFace',
-      message: 'Structural core face',
-    },
-  },
-] as const
-
 function CollapseSidebarButton() {
   const i18n = usePascalI18n()
   const isCollapsed = useSidebarStore((state) => state.isCollapsed)
@@ -350,8 +339,8 @@ function WallModeToggle() {
   )
 }
 
-// One dropdown that gathers every "how the scene looks" control: grid, shadows,
-// camera projection, units, render mode, edges and scene theme.
+// One dropdown that gathers every "how the views look" control, grouped by what
+// it changes: both views (Show, Dimensions, Editing), the plan, or the 3D scene.
 
 const EDGE_OPTIONS = [
   {
@@ -379,9 +368,102 @@ const EDGE_OPTIONS = [
 
 const SUBMENU_CONTENT_CLASS = 'min-w-56 rounded-xl border-border/45 bg-popover/95 backdrop-blur-xl'
 
+/** Display → Measure walls: the faces wall dimensions measure to, with the line that explains each. */
+const MEASURE_WALLS_OPTIONS = [
+  {
+    id: 'interior',
+    name: /* i18n */ { id: 'app.viewerToolbar.inside', message: 'Inside' },
+    tag: /* i18n */ {
+      id: 'app.viewerToolbar.id',
+      message: 'ID',
+      comment: 'Short for inside dimension: measured between the inside faces of walls.',
+    },
+    detail: /* i18n */ {
+      id: 'app.viewerToolbar.roomSizesInsideFaceToInsideFace',
+      message: 'Room sizes, inside face to inside face',
+    },
+  },
+  {
+    id: 'exterior',
+    name: /* i18n */ { id: 'app.viewerToolbar.outside', message: 'Outside' },
+    tag: /* i18n */ {
+      id: 'app.viewerToolbar.od',
+      message: 'OD',
+      comment: 'Short for outside dimension: measured between the outside faces of walls.',
+    },
+    detail: /* i18n */ {
+      id: 'app.viewerToolbar.overallSizeOutsideFaceToOutsideFace',
+      message: 'Overall size, outside face to outside face',
+    },
+  },
+  {
+    id: 'both',
+    name: /* i18n */ { id: 'app.viewerToolbar.both', message: 'Both' },
+    tag: /* i18n */ {
+      id: 'app.viewerToolbar.idOd',
+      message: 'ID + OD',
+      comment: 'Inside and outside dimensions together.',
+    },
+    detail: /* i18n */ {
+      id: 'app.viewerToolbar.roomSizesInsideOverallSizeOutside',
+      message: 'Room sizes inside, overall size outside',
+    },
+  },
+] as const satisfies readonly {
+  id: FloorplanWallDimensionFaces
+  name: MessageDescriptor
+  tag: MessageDescriptor
+  detail: MessageDescriptor
+}[]
+
+// Keep the menu open when flipping a toggle.
+function keepOpen(event: Event, fn: () => void) {
+  event.preventDefault()
+  fn()
+}
+
+/** One titled group of the Display menu; `tag` names the only view it changes. */
+function DisplayGroup({
+  label,
+  tag,
+  children,
+}: {
+  label: string
+  tag?: string
+  children: ReactNode
+}) {
+  return (
+    <DropdownMenuGroup>
+      <DropdownMenuLabel className="flex items-center gap-2 px-2 pt-2 pb-1 font-semibold text-[10px] text-muted-foreground uppercase tracking-wider">
+        <span>{label}</span>
+        {tag ? (
+          <span className="ml-auto rounded border border-border/60 px-1 font-medium text-[10px] normal-case tracking-normal">
+            {tag}
+          </span>
+        ) : null}
+      </DropdownMenuLabel>
+      {children}
+    </DropdownMenuGroup>
+  )
+}
+
+function ShownIcon({ shown }: { shown: boolean }) {
+  return shown ? (
+    <Eye className="ml-auto h-4 w-4 text-foreground" />
+  ) : (
+    <EyeOff className="ml-auto h-4 w-4 text-muted-foreground" />
+  )
+}
+
 function DisplayMenu() {
   const i18n = usePascalI18n()
-  const scene = useEditor(visibleScene)
+  const layout = displayMenuLayout(useEditor(visibleScene))
+  const levelId = useViewer((state) => state.selection.levelId)
+  const { shown: showCeilings, setShown: setShowCeilings } = useCeilingsSetting(levelId)
+  // The dashed walls of the levels below and above, on the plan.
+  const { shown: showWallsBelow, setShown: setShowWallsBelow } = useWallsBelowSetting(levelId)
+  const showWallsAbove = useEditor((state) => state.showWallsAbove)
+  const setShowWallsAbove = useEditor((state) => state.setShowWallsAbove)
   const showGrid = useViewer((state) => state.showGrid)
   const setShowGrid = useViewer((state) => state.setShowGrid)
   const showMeasurements = useViewer((state) => state.showMeasurements)
@@ -404,11 +486,11 @@ function DisplayMenu() {
   const setMagneticSnap = useEditor((state) => state.setMagneticSnap)
   const annotationVisibility = useFloorplanAnnotationVisibility((state) => state.visibility)
   const setAnnotationCategory = useFloorplanAnnotationVisibility((state) => state.setCategory)
-  const wallDimensionReference = useFloorplanAnnotationVisibility(
-    (state) => state.wallDimensionReference,
-  )
-  const setWallDimensionReference = useFloorplanAnnotationVisibility(
-    (state) => state.setWallDimensionReference,
+  const showDimensions = useFloorplanAnnotationVisibility((state) => state.showDimensions)
+  const setShowDimensions = useFloorplanAnnotationVisibility((state) => state.setShowDimensions)
+  const wallDimensionFaces = useFloorplanAnnotationVisibility((state) => state.wallDimensionFaces)
+  const setWallDimensionFaces = useFloorplanAnnotationVisibility(
+    (state) => state.setWallDimensionFaces,
   )
   const floorplanMode = useFloorplanMode((state) => state.mode)
   const setFloorplanMode = useFloorplanMode((state) => state.setMode)
@@ -417,12 +499,31 @@ function DisplayMenu() {
     SHADING_OPTIONS.find((option) => option.id === shading) ?? SHADING_OPTIONS[0]
   const activeEdges = EDGE_OPTIONS.find((option) => option.id === edges) ?? EDGE_OPTIONS[0]
   const activeTheme = getSceneTheme(sceneTheme)
-
-  // Keep the menu open when flipping a toggle.
-  const keepOpen = (event: Event, fn: () => void) => {
-    event.preventDefault()
-    fn()
-  }
+  const activeMeasureWalls =
+    MEASURE_WALLS_OPTIONS.find((option) => option.id === wallDimensionFaces) ??
+    MEASURE_WALLS_OPTIONS[2]
+  const onLabel = i18n._({ id: 'app.viewerToolbar.on', message: 'On' })
+  const offLabel = i18n._({ id: 'app.viewerToolbar.off', message: 'Off' })
+  const planOnly = i18n._({ id: 'app.viewerToolbar.n2dOnly', message: '2D only' })
+  const sceneOnly = i18n._({ id: 'app.viewerToolbar.n3dOnly', message: '3D only' })
+  const otherLevelChips = [
+    {
+      id: 'below',
+      shown: showWallsBelow,
+      toggle: () => setShowWallsBelow(!showWallsBelow),
+      icon: ArrowDown,
+      name: i18n._({ id: 'app.viewerToolbar.below', message: 'Below' }),
+      label: i18n._({ id: 'editor.actionMenu.viewToggles.wallsBelow', message: 'Walls below' }),
+    },
+    {
+      id: 'above',
+      shown: showWallsAbove,
+      toggle: () => setShowWallsAbove(!showWallsAbove),
+      icon: ArrowUp,
+      name: i18n._({ id: 'app.viewerToolbar.above', message: 'Above' }),
+      label: i18n._({ id: 'editor.actionMenu.viewToggles.wallsAbove', message: 'Walls above' }),
+    },
+  ]
 
   return (
     <DropdownMenu>
@@ -447,69 +548,208 @@ function DisplayMenu() {
       </ToolbarTooltip>
       <DropdownMenuContent
         align="end"
-        className="w-max min-w-60 max-w-80 rounded-xl border-border/45 bg-popover/95 backdrop-blur-xl"
+        className="w-80 rounded-xl border-border/45 bg-popover/95 backdrop-blur-xl"
         side="bottom"
         sideOffset={8}
       >
-        <DropdownMenuItem onSelect={(e) => keepOpen(e, () => setShowGrid(!showGrid))}>
-          <Grid2X2 className="h-4 w-4" />
-          <span>{i18n._({ id: 'app.viewerToolbar.grid', message: 'Grid' })}</span>
-          {showGrid ? (
-            <Eye className="ml-auto h-4 w-4 text-foreground" />
-          ) : (
-            <EyeOff className="ml-auto h-4 w-4 text-muted-foreground" />
-          )}
-        </DropdownMenuItem>
-        {scene === '3d' || scene === 'split' ? (
-          <DropdownMenuItem
-            onSelect={(e) => keepOpen(e, () => setShowMeasurements(!showMeasurements))}
-          >
-            <Ruler className="h-4 w-4" />
-            <span>
-              {scene === 'split'
-                ? i18n._({ id: 'app.viewerToolbar.n3dMeasurements', message: '3D measurements' })
-                : i18n._({ id: 'app.viewerToolbar.measurements', message: 'Measurements' })}
-            </span>
-            {showMeasurements ? (
-              <Eye className="ml-auto h-4 w-4 text-foreground" />
-            ) : (
-              <EyeOff className="ml-auto h-4 w-4 text-muted-foreground" />
-            )}
+        <div className="px-2 pt-1.5 pb-1">
+          <p className="font-medium text-foreground text-sm">
+            {i18n._({ id: 'app.viewerToolbar.display', message: 'Display' })}
+          </p>
+          <p className="flex items-center gap-1 text-muted-foreground text-xs">
+            <Link2 className="h-3 w-3 shrink-0" />
+            {layout.scope === 'shared'
+              ? i18n._({ id: 'app.viewerToolbar.sharedBy2dAnd3d', message: 'Shared by 2D and 3D' })
+              : layout.scope === '2d'
+                ? planOnly
+                : sceneOnly}
+          </p>
+        </div>
+
+        <DropdownMenuSeparator />
+        <DisplayGroup label={i18n._({ id: 'app.viewerToolbar.show', message: 'Show' })}>
+          <DropdownMenuItem onSelect={(e) => keepOpen(e, () => setShowGrid(!showGrid))}>
+            <Grid2X2 className="h-4 w-4" />
+            <span>{i18n._({ id: 'app.viewerToolbar.grid', message: 'Grid' })}</span>
+            <ShownIcon shown={showGrid} />
           </DropdownMenuItem>
-        ) : null}
-        {scene === '2d' || scene === 'split' ? (
-          <>
-            <DropdownMenuSub>
-              <DropdownMenuSubTrigger>
-                <Layers3 className="h-4 w-4" />
-                <span>
-                  {i18n._({ id: 'app.viewerToolbar.floorPlanMode', message: 'Floor plan mode' })}
+          {layout.otherLevels ? (
+            <div className="flex items-center gap-2 px-2 py-1.5">
+              <Layers className="h-4 w-4 shrink-0 text-muted-foreground" />
+              <div className="flex min-w-0 flex-1 flex-col">
+                <span className="text-sm">
+                  {i18n._({ id: 'app.viewerToolbar.otherLevels', message: 'Other levels' })}
                 </span>
-                <span className="ml-auto text-muted-foreground text-xs">
-                  {floorplanMode === 'default'
-                    ? i18n._({ id: 'app.viewerToolbar.default', message: 'Default' })
-                    : i18n._({ id: 'app.viewerToolbar.expert', message: 'Expert' })}
+                <span className="text-muted-foreground text-xs">
+                  {i18n._({
+                    id: 'app.viewerToolbar.ghostedForReference',
+                    message: 'Ghosted for reference',
+                  })}
                 </span>
-              </DropdownMenuSubTrigger>
-              <DropdownMenuSubContent className={SUBMENU_CONTENT_CLASS}>
-                {FLOORPLAN_MODE_OPTIONS.map((option) => (
-                  <DropdownMenuItem key={option.id} onSelect={() => setFloorplanMode(option.id)}>
-                    <div className="flex flex-col">
-                      <span className="text-foreground">{i18n._(option.name)}</span>
-                      <span className="text-muted-foreground text-xs">{i18n._(option.detail)}</span>
-                    </div>
-                    {floorplanMode === option.id ? (
-                      <Check className="ml-auto h-4 w-4 text-foreground" />
-                    ) : null}
+              </div>
+              {otherLevelChips.map((chip) => (
+                <DropdownMenuItem
+                  aria-checked={chip.shown}
+                  aria-label={chip.label}
+                  className={cn(
+                    'gap-1 rounded-md border px-1.5 py-0.5 text-xs',
+                    chip.shown
+                      ? 'border-border bg-accent text-foreground [&_svg]:text-foreground'
+                      : 'border-border/50 text-muted-foreground',
+                  )}
+                  key={chip.id}
+                  onSelect={(e) => keepOpen(e, chip.toggle)}
+                  role="menuitemcheckbox"
+                >
+                  <chip.icon className="size-3" />
+                  {chip.name}
+                </DropdownMenuItem>
+              ))}
+            </div>
+          ) : null}
+        </DisplayGroup>
+
+        <DropdownMenuSeparator />
+        <DisplayGroup label={i18n._({ id: 'app.viewerToolbar.dimensions', message: 'Dimensions' })}>
+          <DropdownMenuItem onSelect={(e) => keepOpen(e, () => setShowDimensions(!showDimensions))}>
+            <RulerDimensionLine className="h-4 w-4" />
+            <span>{i18n._({ id: 'app.viewerToolbar.dimensions', message: 'Dimensions' })}</span>
+            <ShownIcon shown={showDimensions} />
+          </DropdownMenuItem>
+          <div className="px-2 py-1.5">
+            <div className="flex items-center gap-2 pb-1.5 text-sm" id="display-measure-walls">
+              <BrickWall className="h-4 w-4 shrink-0 text-muted-foreground" />
+              {i18n._({ id: 'app.viewerToolbar.measureWalls', message: 'Measure walls' })}
+            </div>
+            <div
+              aria-labelledby="display-measure-walls"
+              className="grid grid-cols-3 gap-0.5 rounded-lg border border-border/50 bg-muted/40 p-0.5"
+              role="group"
+            >
+              {MEASURE_WALLS_OPTIONS.map((option) => {
+                const checked = wallDimensionFaces === option.id
+                return (
+                  <DropdownMenuItem
+                    aria-checked={checked}
+                    className={cn(
+                      'flex-col items-center justify-center gap-0 rounded-md px-1 py-1 text-xs',
+                      checked
+                        ? 'bg-accent text-foreground shadow-sm ring-1 ring-border'
+                        : 'text-muted-foreground',
+                    )}
+                    disabled={!showDimensions}
+                    key={option.id}
+                    onSelect={(e) => keepOpen(e, () => setWallDimensionFaces(option.id))}
+                    role="menuitemradio"
+                  >
+                    <span className="font-medium">{i18n._(option.name)}</span>
+                    <span
+                      className={cn(
+                        'font-mono text-[10px]',
+                        checked ? 'text-primary' : 'text-muted-foreground',
+                      )}
+                    >
+                      {i18n._(option.tag)}
+                    </span>
                   </DropdownMenuItem>
-                ))}
-              </DropdownMenuSubContent>
-            </DropdownMenuSub>
-            {floorplanMode === 'expert' ? (
-              <>
+                )
+              })}
+            </div>
+            <p className="pt-1.5 text-muted-foreground text-xs">
+              {showDimensions
+                ? i18n._(activeMeasureWalls.detail)
+                : i18n._({
+                    id: 'app.viewerToolbar.turnOnDimensionsToShowThem',
+                    message: 'Turn on Dimensions to show them',
+                  })}
+            </p>
+          </div>
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger>
+              <Ruler className="h-4 w-4" />
+              <span>{i18n._({ id: 'app.viewerToolbar.units', message: 'Units' })}</span>
+              <span className="ml-auto text-muted-foreground text-xs">
+                {unit === 'imperial'
+                  ? i18n._({ id: 'app.viewerToolbar.feetInches', message: 'Feet & inches' })
+                  : metricNotation === 'millimeters'
+                    ? i18n._({ id: 'app.viewerToolbar.millimeters', message: 'Millimeters' })
+                    : i18n._({ id: 'app.viewerToolbar.meters', message: 'Meters' })}
+              </span>
+            </DropdownMenuSubTrigger>
+            <DropdownMenuSubContent className={SUBMENU_CONTENT_CLASS}>
+              <DropdownMenuItem onSelect={() => setMetricNotation('meters')}>
+                <span className="flex h-4 w-4 items-center justify-center font-semibold text-[10px]">
+                  m
+                </span>
+                <span>{i18n._({ id: 'app.viewerToolbar.meters', message: 'Meters' })}</span>
+                {unit === 'metric' && metricNotation === 'meters' ? (
+                  <Check className="ml-auto h-4 w-4 text-foreground" />
+                ) : null}
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => setMetricNotation('millimeters')}>
+                <span className="flex h-4 w-4 items-center justify-center font-semibold text-[10px]">
+                  mm
+                </span>
+                <span>
+                  {i18n._({ id: 'app.viewerToolbar.millimeters', message: 'Millimeters' })}
+                </span>
+                {unit === 'metric' && metricNotation === 'millimeters' ? (
+                  <Check className="ml-auto h-4 w-4 text-foreground" />
+                ) : null}
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => setUnit('imperial')}>
+                <span className="flex h-4 w-4 items-center justify-center font-semibold text-[10px]">
+                  ft
+                </span>
+                <span>
+                  {i18n._({ id: 'app.viewerToolbar.feetInches', message: 'Feet & inches' })}
+                </span>
+                {unit === 'imperial' ? <Check className="ml-auto h-4 w-4 text-foreground" /> : null}
+              </DropdownMenuItem>
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
+        </DisplayGroup>
+
+        {layout.plan ? (
+          <>
+            <DropdownMenuSeparator />
+            <DisplayGroup
+              label={i18n._({ id: 'app.viewerToolbar.plan', message: 'Plan' })}
+              tag={layout.viewTags ? planOnly : undefined}
+            >
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger>
+                  <Layers3 className="h-4 w-4" />
+                  <span>
+                    {i18n._({ id: 'app.viewerToolbar.floorPlanMode', message: 'Floor plan mode' })}
+                  </span>
+                  <span className="ml-auto text-muted-foreground text-xs">
+                    {floorplanMode === 'default'
+                      ? i18n._({ id: 'app.viewerToolbar.default', message: 'Default' })
+                      : i18n._({ id: 'app.viewerToolbar.expert', message: 'Expert' })}
+                  </span>
+                </DropdownMenuSubTrigger>
+                <DropdownMenuSubContent className={SUBMENU_CONTENT_CLASS}>
+                  {FLOORPLAN_MODE_OPTIONS.map((option) => (
+                    <DropdownMenuItem key={option.id} onSelect={() => setFloorplanMode(option.id)}>
+                      <div className="flex flex-col">
+                        <span className="text-foreground">{i18n._(option.name)}</span>
+                        <span className="text-muted-foreground text-xs">
+                          {i18n._(option.detail)}
+                        </span>
+                      </div>
+                      {floorplanMode === option.id ? (
+                        <Check className="ml-auto h-4 w-4 text-foreground" />
+                      ) : null}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
+              {/* Default draws a fixed clean set: the categories only apply in Expert. */}
+              {floorplanMode === 'expert' ? (
                 <DropdownMenuSub>
                   <DropdownMenuSubTrigger>
-                    <Layers3 className="h-4 w-4" />
+                    <Tag className="h-4 w-4" />
                     <span>
                       {i18n._({
                         id: 'app.viewerToolbar.floorPlanAnnotations',
@@ -530,226 +770,170 @@ function DisplayMenu() {
                         >
                           <OptionIcon className="h-4 w-4" />
                           <span>{i18n._(option.name)}</span>
-                          {visible ? (
-                            <Eye className="ml-auto h-4 w-4 text-foreground" />
-                          ) : (
-                            <EyeOff className="ml-auto h-4 w-4 text-muted-foreground" />
-                          )}
+                          <ShownIcon shown={visible} />
                         </DropdownMenuItem>
                       )
                     })}
                   </DropdownMenuSubContent>
                 </DropdownMenuSub>
-                <DropdownMenuSub>
-                  <DropdownMenuSubTrigger>
-                    <Ruler className="h-4 w-4" />
-                    <span>
-                      {i18n._({
-                        id: 'app.viewerToolbar.wallDimensions',
-                        message: 'Wall dimensions',
-                      })}
-                    </span>
-                    <span className="ml-auto text-muted-foreground text-xs">
-                      {i18n._(
-                        (
-                          FLOORPLAN_WALL_DIMENSION_REFERENCE_OPTIONS.find(
-                            (option) => option.id === wallDimensionReference,
-                          ) ?? FLOORPLAN_WALL_DIMENSION_REFERENCE_OPTIONS[0]
-                        ).name,
-                      )}
-                    </span>
-                  </DropdownMenuSubTrigger>
-                  <DropdownMenuSubContent className={SUBMENU_CONTENT_CLASS}>
-                    {FLOORPLAN_WALL_DIMENSION_REFERENCE_OPTIONS.map((option) => (
-                      <DropdownMenuItem
-                        key={option.id}
-                        onSelect={(event) =>
-                          keepOpen(event, () => setWallDimensionReference(option.id))
-                        }
-                      >
+              ) : null}
+            </DisplayGroup>
+          </>
+        ) : null}
+
+        {layout.scene ? (
+          <>
+            <DropdownMenuSeparator />
+            <DisplayGroup
+              label={i18n._({ id: 'app.viewerToolbar.scene', message: 'Scene' })}
+              tag={layout.viewTags ? sceneOnly : undefined}
+            >
+              <DropdownMenuItem onSelect={(e) => keepOpen(e, () => setShowCeilings(!showCeilings))}>
+                <Layers2 className="h-4 w-4" />
+                <span>{i18n._({ id: 'app.viewerToolbar.ceilings', message: 'Ceilings' })}</span>
+                <ShownIcon shown={showCeilings} />
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onSelect={(e) => keepOpen(e, () => setShowMeasurements(!showMeasurements))}
+              >
+                <ScanLine className="h-4 w-4" />
+                <span>
+                  {i18n._({ id: 'app.viewerToolbar.measurements', message: 'Measurements' })}
+                </span>
+                <ShownIcon shown={showMeasurements} />
+              </DropdownMenuItem>
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger>
+                  <activeShading.icon className="h-4 w-4" />
+                  <span>{i18n._({ id: 'app.viewerToolbar.render', message: 'Render' })}</span>
+                  <span className="ml-auto text-muted-foreground text-xs">
+                    {i18n._(activeShading.name)}
+                  </span>
+                </DropdownMenuSubTrigger>
+                <DropdownMenuSubContent className={SUBMENU_CONTENT_CLASS}>
+                  {SHADING_OPTIONS.map((option) => {
+                    const OptionIcon = option.icon
+                    return (
+                      <DropdownMenuItem key={option.id} onSelect={() => setShading(option.id)}>
+                        <OptionIcon className="h-4 w-4" />
                         <div className="flex flex-col">
                           <span className="text-foreground">{i18n._(option.name)}</span>
                           <span className="text-muted-foreground text-xs">
                             {i18n._(option.detail)}
                           </span>
                         </div>
-                        {wallDimensionReference === option.id ? (
+                        {shading === option.id ? (
                           <Check className="ml-auto h-4 w-4 text-foreground" />
                         ) : null}
                       </DropdownMenuItem>
-                    ))}
-                  </DropdownMenuSubContent>
-                </DropdownMenuSub>
-              </>
-            ) : null}
+                    )
+                  })}
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger>
+                  <PenLine className="h-4 w-4" />
+                  <span>{i18n._({ id: 'app.viewerToolbar.edges', message: 'Edges' })}</span>
+                  <span className="ml-auto text-muted-foreground text-xs">
+                    {i18n._(activeEdges.name)}
+                  </span>
+                </DropdownMenuSubTrigger>
+                <DropdownMenuSubContent className={SUBMENU_CONTENT_CLASS}>
+                  {EDGE_OPTIONS.map((option) => (
+                    <DropdownMenuItem key={option.id} onSelect={() => setEdges(option.id)}>
+                      <div className="flex flex-col">
+                        <span className="text-foreground">{i18n._(option.name)}</span>
+                        <span className="text-muted-foreground text-xs">
+                          {i18n._(option.detail)}
+                        </span>
+                      </div>
+                      {edges === option.id ? (
+                        <Check className="ml-auto h-4 w-4 text-foreground" />
+                      ) : null}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
+              <DropdownMenuItem onSelect={(e) => keepOpen(e, () => setShadows(!shadows))}>
+                <Contrast className="h-4 w-4" />
+                <span>{i18n._({ id: 'app.viewerToolbar.shadows', message: 'Shadows' })}</span>
+                <span className="ml-auto text-muted-foreground text-xs">
+                  {shadows ? onLabel : offLabel}
+                </span>
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onSelect={(e) =>
+                  keepOpen(e, () =>
+                    setCameraMode(cameraMode === 'perspective' ? 'orthographic' : 'perspective'),
+                  )
+                }
+              >
+                <IconifyIcon
+                  height={16}
+                  icon={
+                    cameraMode === 'perspective' ? 'icon-park-outline:perspective' : 'vaadin:grid'
+                  }
+                  width={16}
+                />
+                <span>{i18n._({ id: 'app.viewerToolbar.camera', message: 'Camera' })}</span>
+                <span className="ml-auto text-muted-foreground text-xs">
+                  {cameraMode === 'perspective'
+                    ? i18n._({ id: 'app.viewerToolbar.perspective', message: 'Perspective' })
+                    : i18n._({ id: 'app.viewerToolbar.orthographic', message: 'Orthographic' })}
+                </span>
+              </DropdownMenuItem>
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger>
+                  <SwatchBook className="h-4 w-4" />
+                  <span>
+                    {i18n._({ id: 'app.viewerToolbar.sceneTheme', message: 'Scene theme' })}
+                  </span>
+                  <span className="ml-auto truncate text-muted-foreground text-xs">
+                    {sceneThemeName(activeTheme.id, activeTheme.name, i18n)}
+                  </span>
+                </DropdownMenuSubTrigger>
+                <DropdownMenuSubContent className="min-w-48 rounded-xl border-border/45 bg-popover/95 backdrop-blur-xl">
+                  {SCENE_THEMES.map((theme) => {
+                    const swatches = (['wall', 'roof', 'floor', 'glazing'] as const).map(
+                      (role) => theme.clayTints?.[role] ?? CLAY_PALETTE[role],
+                    )
+                    return (
+                      <DropdownMenuItem key={theme.id} onSelect={() => setSceneTheme(theme.id)}>
+                        <span
+                          className="grid h-5 w-5 shrink-0 grid-cols-2 overflow-hidden rounded-sm border border-black/10"
+                          style={{ backgroundColor: theme.background }}
+                        >
+                          {swatches.map((color, index) => (
+                            <span key={`${theme.id}-${index}`} style={{ backgroundColor: color }} />
+                          ))}
+                        </span>
+                        <span className="text-foreground">
+                          {sceneThemeName(theme.id, theme.name, i18n)}
+                        </span>
+                        {sceneTheme === theme.id ? (
+                          <Check className="ml-auto h-4 w-4 text-foreground" />
+                        ) : null}
+                      </DropdownMenuItem>
+                    )
+                  })}
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
+            </DisplayGroup>
           </>
         ) : null}
-        <DropdownMenuItem onSelect={(e) => keepOpen(e, () => setMagneticSnap(!magneticSnap))}>
-          <Magnet className="h-4 w-4" />
-          <span>{i18n._({ id: 'app.viewerToolbar.magneticSnap', message: 'Magnetic snap' })}</span>
-          <span className="ml-auto text-muted-foreground text-xs">
-            {magneticSnap
-              ? i18n._({ id: 'app.viewerToolbar.on', message: 'On' })
-              : i18n._({ id: 'app.viewerToolbar.off', message: 'Off' })}
-          </span>
-        </DropdownMenuItem>
-        <DropdownMenuItem onSelect={(e) => keepOpen(e, () => setShadows(!shadows))}>
-          <Contrast className="h-4 w-4" />
-          <span>{i18n._({ id: 'app.viewerToolbar.shadows', message: 'Shadows' })}</span>
-          <span className="ml-auto text-muted-foreground text-xs">
-            {shadows
-              ? i18n._({ id: 'app.viewerToolbar.on', message: 'On' })
-              : i18n._({ id: 'app.viewerToolbar.off', message: 'Off' })}
-          </span>
-        </DropdownMenuItem>
-        <DropdownMenuItem
-          onSelect={(e) =>
-            keepOpen(e, () =>
-              setCameraMode(cameraMode === 'perspective' ? 'orthographic' : 'perspective'),
-            )
-          }
-        >
-          <IconifyIcon
-            height={16}
-            icon={cameraMode === 'perspective' ? 'icon-park-outline:perspective' : 'vaadin:grid'}
-            width={16}
-          />
-          <span>{i18n._({ id: 'app.viewerToolbar.camera', message: 'Camera' })}</span>
-          <span className="ml-auto text-muted-foreground text-xs">
-            {cameraMode === 'perspective'
-              ? i18n._({ id: 'app.viewerToolbar.perspective', message: 'Perspective' })
-              : i18n._({ id: 'app.viewerToolbar.orthographic', message: 'Orthographic' })}
-          </span>
-        </DropdownMenuItem>
-        <DropdownMenuSub>
-          <DropdownMenuSubTrigger>
-            <span className="flex h-4 w-4 items-center justify-center font-semibold text-[10px]">
-              {unit === 'imperial' ? 'ft' : metricNotation === 'millimeters' ? 'mm' : 'm'}
-            </span>
-            <span>{i18n._({ id: 'app.viewerToolbar.units', message: 'Units' })}</span>
-            <span className="ml-auto text-muted-foreground text-xs">
-              {unit === 'imperial'
-                ? i18n._({ id: 'app.viewerToolbar.feetInches', message: 'Feet & inches' })
-                : metricNotation === 'millimeters'
-                  ? i18n._({ id: 'app.viewerToolbar.millimeters', message: 'Millimeters' })
-                  : i18n._({ id: 'app.viewerToolbar.meters', message: 'Meters' })}
-            </span>
-          </DropdownMenuSubTrigger>
-          <DropdownMenuSubContent className={SUBMENU_CONTENT_CLASS}>
-            <DropdownMenuItem onSelect={() => setMetricNotation('meters')}>
-              <span className="flex h-4 w-4 items-center justify-center font-semibold text-[10px]">
-                m
-              </span>
-              <span>{i18n._({ id: 'app.viewerToolbar.meters', message: 'Meters' })}</span>
-              {unit === 'metric' && metricNotation === 'meters' ? (
-                <Check className="ml-auto h-4 w-4 text-foreground" />
-              ) : null}
-            </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => setMetricNotation('millimeters')}>
-              <span className="flex h-4 w-4 items-center justify-center font-semibold text-[10px]">
-                mm
-              </span>
-              <span>{i18n._({ id: 'app.viewerToolbar.millimeters', message: 'Millimeters' })}</span>
-              {unit === 'metric' && metricNotation === 'millimeters' ? (
-                <Check className="ml-auto h-4 w-4 text-foreground" />
-              ) : null}
-            </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => setUnit('imperial')}>
-              <span className="flex h-4 w-4 items-center justify-center font-semibold text-[10px]">
-                ft
-              </span>
-              <span>
-                {i18n._({ id: 'app.viewerToolbar.feetInches', message: 'Feet & inches' })}
-              </span>
-              {unit === 'imperial' ? <Check className="ml-auto h-4 w-4 text-foreground" /> : null}
-            </DropdownMenuItem>
-          </DropdownMenuSubContent>
-        </DropdownMenuSub>
 
         <DropdownMenuSeparator />
-
-        <DropdownMenuSub>
-          <DropdownMenuSubTrigger>
-            <activeShading.icon className="h-4 w-4" />
-            <span>{i18n._({ id: 'app.viewerToolbar.render', message: 'Render' })}</span>
+        <DisplayGroup label={i18n._({ id: 'app.viewerToolbar.editing', message: 'Editing' })}>
+          <DropdownMenuItem onSelect={(e) => keepOpen(e, () => setMagneticSnap(!magneticSnap))}>
+            <Magnet className="h-4 w-4" />
+            <span>
+              {i18n._({ id: 'app.viewerToolbar.magneticSnap', message: 'Magnetic snap' })}
+            </span>
             <span className="ml-auto text-muted-foreground text-xs">
-              {i18n._(activeShading.name)}
+              {magneticSnap ? onLabel : offLabel}
             </span>
-          </DropdownMenuSubTrigger>
-          <DropdownMenuSubContent className={SUBMENU_CONTENT_CLASS}>
-            {SHADING_OPTIONS.map((option) => {
-              const OptionIcon = option.icon
-              return (
-                <DropdownMenuItem key={option.id} onSelect={() => setShading(option.id)}>
-                  <OptionIcon className="h-4 w-4" />
-                  <div className="flex flex-col">
-                    <span className="text-foreground">{i18n._(option.name)}</span>
-                    <span className="text-muted-foreground text-xs">{i18n._(option.detail)}</span>
-                  </div>
-                  {shading === option.id ? (
-                    <Check className="ml-auto h-4 w-4 text-foreground" />
-                  ) : null}
-                </DropdownMenuItem>
-              )
-            })}
-          </DropdownMenuSubContent>
-        </DropdownMenuSub>
-
-        <DropdownMenuSub>
-          <DropdownMenuSubTrigger>
-            <PenLine className="h-4 w-4" />
-            <span>{i18n._({ id: 'app.viewerToolbar.edges', message: 'Edges' })}</span>
-            <span className="ml-auto text-muted-foreground text-xs">
-              {i18n._(activeEdges.name)}
-            </span>
-          </DropdownMenuSubTrigger>
-          <DropdownMenuSubContent className={SUBMENU_CONTENT_CLASS}>
-            {EDGE_OPTIONS.map((option) => (
-              <DropdownMenuItem key={option.id} onSelect={() => setEdges(option.id)}>
-                <div className="flex flex-col">
-                  <span className="text-foreground">{i18n._(option.name)}</span>
-                  <span className="text-muted-foreground text-xs">{i18n._(option.detail)}</span>
-                </div>
-                {edges === option.id ? <Check className="ml-auto h-4 w-4 text-foreground" /> : null}
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuSubContent>
-        </DropdownMenuSub>
-
-        <DropdownMenuSub>
-          <DropdownMenuSubTrigger>
-            <SwatchBook className="h-4 w-4" />
-            <span>{i18n._({ id: 'app.viewerToolbar.sceneTheme', message: 'Scene theme' })}</span>
-            <span className="ml-auto truncate text-muted-foreground text-xs">
-              {sceneThemeName(activeTheme.id, activeTheme.name, i18n)}
-            </span>
-          </DropdownMenuSubTrigger>
-          <DropdownMenuSubContent className="min-w-48 rounded-xl border-border/45 bg-popover/95 backdrop-blur-xl">
-            {SCENE_THEMES.map((theme) => {
-              const swatches = (['wall', 'roof', 'floor', 'glazing'] as const).map(
-                (role) => theme.clayTints?.[role] ?? CLAY_PALETTE[role],
-              )
-              return (
-                <DropdownMenuItem key={theme.id} onSelect={() => setSceneTheme(theme.id)}>
-                  <span
-                    className="grid h-5 w-5 shrink-0 grid-cols-2 overflow-hidden rounded-sm border border-black/10"
-                    style={{ backgroundColor: theme.background }}
-                  >
-                    {swatches.map((color, index) => (
-                      <span key={`${theme.id}-${index}`} style={{ backgroundColor: color }} />
-                    ))}
-                  </span>
-                  <span className="text-foreground">
-                    {sceneThemeName(theme.id, theme.name, i18n)}
-                  </span>
-                  {sceneTheme === theme.id ? (
-                    <Check className="ml-auto h-4 w-4 text-foreground" />
-                  ) : null}
-                </DropdownMenuItem>
-              )
-            })}
-          </DropdownMenuSubContent>
-        </DropdownMenuSub>
+          </DropdownMenuItem>
+        </DisplayGroup>
       </DropdownMenuContent>
     </DropdownMenu>
   )

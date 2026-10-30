@@ -60,6 +60,12 @@ export type PolygonAffordanceSnapContext<N extends PolygonShape & { id: AnyNodeI
   modifiers: FloorplanAffordanceModifiers
   holeIndex?: number
   mode: PolygonAffordanceMode
+  /**
+   * `move-vertex` / `add-vertex`: the ring as the drag found it (the new vertex inserted) and the
+   * dragged vertex's index in it, so a resolver can square the vertex to its neighbours.
+   */
+  ring?: ReadonlyArray<readonly [number, number]>
+  vertexIndex?: number
 }
 
 export type PolygonEdgeSnapContext<N extends PolygonShape & { id: AnyNodeId }> = {
@@ -84,6 +90,13 @@ export type PolygonAffordanceOptions<N extends PolygonShape & { id: AnyNodeId }>
    * translated edge, or `null` to keep the candidate.
    */
   snapEdge?: (context: PolygonEdgeSnapContext<N>) => [[number, number], [number, number]] | null
+  /**
+   * `move-edge`: the sides beside the dragged one keep their own angle, running on to meet it
+   * where it goes; a side in line with it (a side split in two) gets a square jog instead, so
+   * pulling out part of a side makes a bump-out. Off, both ends of the side translate square to
+   * it and its neighbours pivot on their far ends.
+   */
+  keepNeighbourAngles?: boolean
 }
 
 type PolygonShape = {
@@ -177,6 +190,8 @@ export function createPolygonVertexAffordance<N extends PolygonShape & { id: Any
             modifiers,
             holeIndex,
             mode: 'move-vertex',
+            ring: originalRing,
+            vertexIndex,
           })
           const nextRing: [number, number][] = originalRing.map((p, i) =>
             i === vertexIndex ? [snapped[0], snapped[1]] : p,
@@ -261,6 +276,8 @@ export function createPolygonAddVertexAffordance<N extends PolygonShape & { id: 
             modifiers,
             holeIndex,
             mode: 'add-vertex',
+            ring: initialRing,
+            vertexIndex: newVertexIndex,
           })
           const nextRing: [number, number][] = initialRing.map((p, i) =>
             i === newVertexIndex ? [snapped[0], snapped[1]] : p,
@@ -323,6 +340,61 @@ export function createPolygonDeleteVertexAffordance<N extends PolygonShape & { i
       }
     },
   }
+}
+
+/** A neighbouring side within this sine of the dragged one's line is in line with it (a split side). */
+const IN_LINE_SINE = 0.05
+
+/**
+ * `ring` with edge `edgeIndex` moved `distance` along `normal`, its neighbours keeping their angles
+ * (`keepNeighbourAngles`): each end goes where the neighbouring side's line meets the moved edge's,
+ * and a neighbour in line with the edge keeps its vertex, a square jog joining it to the moved end.
+ */
+export function movedEdgeKeepingNeighbours(
+  ring: ReadonlyArray<readonly [number, number]>,
+  edgeIndex: number,
+  normal: readonly [number, number],
+  distance: number,
+): [number, number][] {
+  const copy = ring.map(([x, y]) => [x, y] as [number, number])
+  const count = ring.length
+  // Under a millimetre the side has not moved: no jog a hair long.
+  if (count < 3 || Math.abs(distance) < 1e-3) return copy
+  const startIndex = edgeIndex
+  const endIndex = (edgeIndex + 1) % count
+  const start = ring[startIndex]!
+  const end = ring[endIndex]!
+  const moved = (p: readonly [number, number]): [number, number] => [
+    p[0] + normal[0] * distance,
+    p[1] + normal[1] * distance,
+  ]
+  /** Where the side from `neighbour` to `vertex` meets the moved edge; `null` in line with it. */
+  const meet = (vertex: readonly [number, number], neighbour: readonly [number, number]) => {
+    const dx = vertex[0] - neighbour[0]
+    const dy = vertex[1] - neighbour[1]
+    const length = Math.hypot(dx, dy)
+    if (length < 1e-9) return null
+    const along = (dx * normal[0] + dy * normal[1]) / length
+    if (Math.abs(along) < IN_LINE_SINE) return null
+    const target = moved(start)
+    const t =
+      ((target[0] - neighbour[0]) * normal[0] + (target[1] - neighbour[1]) * normal[1]) /
+      (along * length)
+    return [neighbour[0] + dx * t, neighbour[1] + dy * t] as [number, number]
+  }
+  const startMeet = meet(start, ring[(startIndex - 1 + count) % count]!)
+  const endMeet = meet(end, ring[(endIndex + 1) % count]!)
+  const startPoints: [number, number][] = startMeet
+    ? [startMeet]
+    : [[start[0], start[1]], moved(start)]
+  const endPoints: [number, number][] = endMeet ? [endMeet] : [moved(end), [end[0], end[1]]]
+  const out: [number, number][] = []
+  for (let i = 0; i < count; i++) {
+    if (i === startIndex) out.push(...startPoints)
+    else if (i === endIndex) out.push(...endPoints)
+    else out.push(copy[i]!)
+  }
+  return out
 }
 
 /**
@@ -437,12 +509,19 @@ export function createPolygonMoveEdgeAffordance<N extends PolygonShape & { id: A
                 (snappedEdge[0][1] - startVertex[1]) * normalY
             }
           }
-          const nextRing: [number, number][] = originalRing.map((p, i) => {
-            if (i === edgeStartIndex || i === edgeEndIndex) {
-              return [p[0] + normalX * normalDistance, p[1] + normalY * normalDistance]
-            }
-            return [p[0], p[1]] as [number, number]
-          })
+          const nextRing: [number, number][] = options?.keepNeighbourAngles
+            ? movedEdgeKeepingNeighbours(
+                originalRing,
+                edgeIndex,
+                [normalX, normalY],
+                normalDistance,
+              )
+            : originalRing.map((p, i) => {
+                if (i === edgeStartIndex || i === edgeEndIndex) {
+                  return [p[0] + normalX * normalDistance, p[1] + normalY * normalDistance]
+                }
+                return [p[0], p[1]] as [number, number]
+              })
           const patch = buildRingPatch(node, holeIndex, nextRing, options?.boundaryCommitData)
           commitRingPatch(node.id, holeIndex, patch)
         },

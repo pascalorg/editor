@@ -37,13 +37,20 @@ export function initializeStairOpeningSync() {
     }
   }
 
-  const applyPreviewUpdates = (updates: ReturnType<typeof syncAutoStairOpenings>) => {
+  // The guard only stops the preview's own override writes from re-entering the refresh. Held
+  // past them (to a microtask), it swallowed the refresh a drop asks for in the same tick, and
+  // the dragged stair's preview cuts stayed drawn on the floor and ceiling until a reload.
+  const writePreview = (write: () => void) => {
     syncingPreviewOpenings = true
-    previewController.apply(updates)
-    queueMicrotask(() => {
+    try {
+      write()
+    } finally {
       syncingPreviewOpenings = false
-    })
+    }
   }
+
+  const applyPreviewUpdates = (updates: ReturnType<typeof syncAutoStairOpenings>) =>
+    writePreview(() => previewController.apply(updates))
 
   const applyOpeningChanges = (skipExistingSurfaces = false, ownerIds?: ReadonlySet<string>) => {
     const changes = planOwnedFloorOpenings(useScene.getState().nodes, {
@@ -65,11 +72,7 @@ export function initializeStairOpeningSync() {
 
   const clearPreviewUpdates = () => {
     if (previewController.previewSurfaceIds.size === 0) return
-    syncingPreviewOpenings = true
-    previewController.clear()
-    queueMicrotask(() => {
-      syncingPreviewOpenings = false
-    })
+    writePreview(() => previewController.clear())
   }
 
   const refreshLivePreview = () => {

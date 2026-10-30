@@ -13,6 +13,7 @@ import {
 import { act, create } from '@react-three/test-renderer'
 import { createElement } from 'react'
 import * as THREE from 'three'
+import { OPENING_CASING_MESH_NAME } from '../wall/opening-casing-geometry'
 import { generateExtrudedWall } from '../wall/wall-system'
 import { buildDoorPreviewMesh, DoorSystem } from './door-system'
 
@@ -78,10 +79,12 @@ function ownsDoorHit(object: THREE.Object3D, door: THREE.Object3D): boolean {
   return false
 }
 
+/** The door's own body: not its cutout proxy, nor its casing, which stays on the wall faces. */
 function visibleBounds(door: THREE.Mesh) {
   const bounds = new THREE.Box3()
   for (const child of door.children) {
-    if (child.name !== 'cutout') bounds.expandByObject(child, true)
+    if (child.name !== 'cutout' && child.name !== OPENING_CASING_MESH_NAME)
+      bounds.expandByObject(child, true)
   }
   return bounds
 }

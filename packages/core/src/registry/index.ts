@@ -149,6 +149,8 @@ export type {
   PaintPatchArgs,
   PaintPreviewArgs,
   PaintResolveArgs,
+  PaintScopeId,
+  PaintSurfaceScopes,
   ParamAction,
   ParametricDescriptor,
   ParamField,

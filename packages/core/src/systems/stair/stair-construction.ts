@@ -1,10 +1,19 @@
-import type { StairConstruction, StairNode, StairSegmentNode } from '../../schema'
+import type { StairNode, StairSegmentNode } from '../../schema'
 import {
   measureStairDetail,
   STAIR_DETAIL_SURFACE_BUDGET,
   stairSegmentDetailError,
 } from './stair-detail-budget'
 import { resolveStairArcDimensions } from './stair-layout'
+import {
+  type ResolvedStairConstruction,
+  resolveStairStringerLayout,
+  type StairStructureHost,
+  stairLandingFrame,
+  stairStringerFlight,
+  stairStringerSlices,
+  stairStructureConstructionOf,
+} from './stair-structure'
 import { resolveStairWinder } from './stair-winder'
 
 export type StairConstructionPiece = {
@@ -22,11 +31,19 @@ export type StairConstructionPiece = {
   top: number
 }
 
+/**
+ * The body a segment is drawn with: its own construction, its stair's, or the one the stair's
+ * structure draws (`stairStructureConstructionOf`) — null keeps the original body.
+ */
 export function resolveStairConstruction(
   node: Pick<StairSegmentNode, 'construction'>,
-  parent?: Pick<StairNode, 'construction'>,
-): StairConstruction | null {
-  return node.construction ?? parent?.construction ?? null
+  parent?: Pick<StairNode, 'construction'> & StairStructureHost,
+): ResolvedStairConstruction | null {
+  return (
+    node.construction ??
+    parent?.construction ??
+    (parent ? stairStructureConstructionOf(parent) : null)
+  )
 }
 
 export function stairConstructionError(
@@ -96,6 +113,14 @@ export function stairSegmentConstructionError(
   if (
     (construction.mode === 'side-stringers' && construction.stringerWidth * 2 > segment.width) ||
     (construction.mode === 'center-stringer' && construction.stringerWidth > segment.width)
+  )
+    return 'Stringers must fit within the flight width.'
+  const structure = construction.structure
+  if (
+    structure &&
+    structure.type !== 'concrete' &&
+    !winder &&
+    resolveStairStringerLayout(segment.width, structure).count < 2
   )
     return 'Stringers must fit within the flight width.'
   if (
@@ -263,6 +288,33 @@ export function resolveStraightStairConstruction(
           ],
         })
       }
+  }
+  // A structure's stringers, each sliced per step at its place across the flight (cut carriages
+  // notched under the treads, housed boards over the nosing line); a landing's frame under it.
+  const structure = construction.structure
+  if (structure && structure.type !== 'concrete' && !segment.winder) {
+    if (!landing) {
+      const flight = stairStringerFlight(segment, construction)
+      for (const band of resolveStairStringerLayout(segment.width, structure).bands)
+        for (const slice of stairStringerSlices(band, flight)) {
+          const runs = slice.profile.map((point) => point[0])
+          pieces.push({
+            role: 'body',
+            index: slice.index,
+            x0: band.x0,
+            x1: band.x1,
+            z0: Math.min(...runs),
+            z1: Math.max(...runs),
+            underside: slice.underside,
+            top: slice.top,
+            profile: slice.profile,
+          })
+        }
+    } else {
+      const frame = stairLandingFrame(segment, treadThickness + finishThickness, absoluteHeight)
+      for (const part of [...frame.rims, ...frame.joists, ...frame.posts])
+        box('body', 0, part.x0, part.x1, part.z0, part.z1, part.bottom, part.top)
+    }
   }
   return pieces
 }
@@ -476,20 +528,38 @@ export function resolveArcStairConstruction(
 }
 
 export function straightStairConstructionDetailCost(
-  segment: Pick<StairSegmentNode, 'construction' | 'segmentType' | 'stepCount'>,
+  segment: Pick<StairSegmentNode, 'construction' | 'segmentType' | 'stepCount'> &
+    Partial<Pick<StairSegmentNode, 'width' | 'length'>>,
   parent?: StairNode,
 ): number {
   const construction = resolveStairConstruction(segment, parent)
   const count = segment.segmentType === 'landing' ? 1 : segment.stepCount
   if (!construction) return count
-  if (segment.segmentType === 'landing') return 1 + Number(construction.finishThickness > 0)
+  // a structure's stringers add one slice per stringer per step, a landing its frame
+  const structure = construction.structure?.type === 'concrete' ? undefined : construction.structure
+  const width = segment.width ?? parent?.width ?? 1
+  if (segment.segmentType === 'landing') {
+    const frame = structure
+      ? stairLandingFrame(
+          { width, length: segment.length ?? width },
+          construction.treadThickness + construction.finishThickness,
+          Number.POSITIVE_INFINITY,
+        )
+      : null
+    return (
+      1 +
+      Number(construction.finishThickness > 0) +
+      (frame ? frame.rims.length + frame.joists.length + frame.posts.length : 0)
+    )
+  }
   const closed = construction.mode === 'solid' || construction.mode === 'waist'
   const parts =
     1 +
     Number(closed && construction.nosing > 0) +
     Number(construction.finishThickness > 0) +
     Number(!closed && construction.closedRisers) +
-    (construction.mode === 'side-stringers' ? 2 : construction.mode === 'center-stringer' ? 1 : 0)
+    (construction.mode === 'side-stringers' ? 2 : construction.mode === 'center-stringer' ? 1 : 0) +
+    (structure ? resolveStairStringerLayout(width, structure).count : 0)
   return count * parts
 }
 

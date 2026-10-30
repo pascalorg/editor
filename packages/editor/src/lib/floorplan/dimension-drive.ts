@@ -120,6 +120,17 @@ export type DimensionDriveTarget =
       openingId: AnyNodeId
       wallId: AnyNodeId
     }
+  | {
+      /**
+       * The dimension runs across the wall, from one of its faces to another
+       * wall (a room width, the outside size): the whole wall slides along
+       * its normal, its neighbours following, as a push of the wall does.
+       */
+      kind: 'wall-offset'
+      wallId: AnyNodeId
+      /** Unit vector the wall travels along when the value grows. */
+      direction: DimensionPlanPoint
+    }
 
 export type DimensionDriveResolution =
   | { drivable: true; target: DimensionDriveTarget }
@@ -174,7 +185,7 @@ function resolveWallDrive(
   const wallDirection = unit(subtract(wall.end, wall.start))
   if (!wallDirection) return { drivable: false, reason: 'degenerate wall' }
   if (Math.abs(cross(wallDirection, dimDirection)) > PARALLEL_TOLERANCE) {
-    return { drivable: false, reason: 'dimension is not along the wall' }
+    return resolveWallOffsetDrive(query, wall, wallDirection, dimDirection)
   }
   if ((wall as { curvature?: number }).curvature) {
     return { drivable: false, reason: 'curved walls are not drivable yet' }
@@ -208,6 +219,56 @@ function resolveWallDrive(
     drivable: true,
     target: { kind: 'wall-endpoint', wallId: wall.id as AnyNodeId, endpoint, direction },
   }
+}
+
+/** How far off a wall's face a witness point may sit and still be on that wall. */
+const FACE_MATCH_TOLERANCE_M = 0.05
+
+/**
+ * A dimension square to the wall, with one end on it: typing a value slides
+ * the wall along its normal, away from the other end when the value grows.
+ */
+function resolveWallOffsetDrive(
+  query: DimensionDriveQuery,
+  wall: WallNode,
+  wallDirection: DimensionPlanPoint,
+  dimDirection: DimensionPlanPoint,
+): DimensionDriveResolution {
+  if (Math.abs(dot(wallDirection, dimDirection)) > PARALLEL_TOLERANCE) {
+    return { drivable: false, reason: 'dimension is neither along nor across the wall' }
+  }
+  if (wall.curveOffset) return { drivable: false, reason: 'curved walls are not drivable yet' }
+  const reach = (wall.thickness ?? 0.1) + FACE_MATCH_TOLERANCE_M
+  const onWall = (point: DimensionPlanPoint) =>
+    distanceToSegment(point, wall.start as DimensionPlanPoint, wall.end as DimensionPlanPoint) <=
+    reach
+  const startOn = onWall(query.start)
+  const endOn = onWall(query.end)
+  if (startOn === endOn) {
+    return { drivable: false, reason: 'dimension does not start or end on this wall' }
+  }
+  const direction = startOn
+    ? unit(subtract(query.start, query.end))
+    : unit(subtract(query.end, query.start))
+  if (!direction) return { drivable: false, reason: 'degenerate dimension' }
+  return {
+    drivable: true,
+    target: { kind: 'wall-offset', wallId: wall.id as AnyNodeId, direction },
+  }
+}
+
+function distanceToSegment(
+  point: DimensionPlanPoint,
+  start: DimensionPlanPoint,
+  end: DimensionPlanPoint,
+): number {
+  const segment = subtract(end, start)
+  const lengthSq = dot(segment, segment)
+  const t =
+    lengthSq <= 1e-12
+      ? 0
+      : Math.max(0, Math.min(1, dot(subtract(point, start), segment) / lengthSq))
+  return length(subtract(point, [start[0] + segment[0] * t, start[1] + segment[1] * t]))
 }
 
 function resolveOpeningDrive(
@@ -360,6 +421,9 @@ export function planDimensionDrive(args: {
 }): DimensionDrivePlan | null {
   const delta = args.nextLength - args.currentLength
   if (!Number.isFinite(delta) || Math.abs(delta) < 1e-9) return { updates: [], delta: 0 }
+  // A wall offset moves the wall with its junctions re-planned, bridges and
+  // all: that is the wall-push planner's job (`commitDimensionValue`).
+  if (args.target.kind === 'wall-offset') return null
 
   if (args.target.kind === 'opening-width') {
     const opening = args.nodes[args.target.openingId]

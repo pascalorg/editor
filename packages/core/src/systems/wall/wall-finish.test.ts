@@ -1,7 +1,14 @@
 import { describe, expect, test } from 'bun:test'
 import { extractRooms } from '../../lib/room-graph'
+import { getMaterialPresetByRef, MATERIAL_CATALOG } from '../../material-library'
+import { wallSlots } from '../../node-slots/wall'
 import { type AnyNode, LevelNode } from '../../schema'
-import { WallNode } from '../../schema/nodes/wall'
+import {
+  DEFAULT_EXTERIOR_WALL_FINISH,
+  DEFAULT_INTERIOR_WALL_PAINT,
+  getWallFaceDefault,
+  WallNode,
+} from '../../schema/nodes/wall'
 import { ZoneNode } from '../../schema/nodes/zone'
 import {
   buildWallFinishLayout,
@@ -156,7 +163,7 @@ describe('wall finish resolution order', () => {
     expect(resolveWallFaceChain(host, 'a')).toEqual({ kind: 'ref', ref: 'library:slot-a' })
     expect(resolveWallFaceChain(host, 'b')).toEqual({
       kind: 'default',
-      ref: 'library:concrete-drywall',
+      ref: 'library:preset-seattlegrey',
     })
   })
 
@@ -181,7 +188,58 @@ describe('wall finish resolution order', () => {
     expect(resolveWallFaceChain(withSlot, 'a')).toEqual({ kind: 'ref', ref: 'library:slot' })
     expect(resolveWallFaceChain(host, 'a')).toEqual({
       kind: 'default',
+      ref: 'library:preset-seattlegrey',
+    })
+  })
+
+  test('an unpainted face wears Seattle grey; a painted face keeps its paint, raw drywall included', () => {
+    const plain = WallNode.parse({ start: [0, 0], end: [4, 0] })
+    expect(DEFAULT_INTERIOR_WALL_PAINT).toBe('library:preset-seattlegrey')
+    expect(getMaterialPresetByRef(DEFAULT_INTERIOR_WALL_PAINT)?.mapProperties.color).toBe('#d8d6d1')
+    expect(MATERIAL_CATALOG.find((m) => m.id === 'preset-seattlegrey')?.label).toBe('Seattle grey')
+    for (const face of ['a', 'b'] as const)
+      expect(resolveWallFaceChain(plain, face)).toEqual({
+        kind: 'default',
+        ref: DEFAULT_INTERIOR_WALL_PAINT,
+      })
+    // Raw drywall is still a finish to pick on purpose.
+    const painted = { ...plain, slots: { a: 'library:concrete-drywall', b: 'library:preset-sage' } }
+    expect(getMaterialPresetByRef('library:concrete-drywall')).not.toBeNull()
+    expect(resolveWallFaceChain(painted, 'a')).toEqual({
+      kind: 'ref',
       ref: 'library:concrete-drywall',
+    })
+    expect(resolveWallFaceChain(painted, 'b')).toEqual({ kind: 'ref', ref: 'library:preset-sage' })
+  })
+
+  test("Seattle grey stays inside: an exterior face keeps raw drywall, a partition's faces go grey", () => {
+    const at = (frontSide: string, backSide: string) => {
+      const wall = WallNode.parse({ start: [0, 0], end: [4, 0], frontSide, backSide })
+      return (['a', 'b'] as const).map((face) => {
+        const chain = resolveWallFaceChain(wall, face)
+        return chain.kind === 'default' ? chain.ref : chain.kind
+      })
+    }
+    expect(DEFAULT_EXTERIOR_WALL_FINISH).toBe('library:concrete-drywall')
+    const grey = DEFAULT_INTERIOR_WALL_PAINT
+    const drywall = DEFAULT_EXTERIOR_WALL_FINISH
+    // An exterior wall: drywall outside (the default before the interior paint), grey inside.
+    expect(at('exterior', 'interior')).toEqual([drywall, grey])
+    expect(at('interior', 'exterior')).toEqual([grey, drywall])
+    expect(at('exterior', 'unknown')).toEqual([drywall, grey])
+    // A partition, or a wall whose rooms are not detected yet: grey both faces.
+    expect(at('interior', 'interior')).toEqual([grey, grey])
+    expect(at('unknown', 'unknown')).toEqual([grey, grey])
+    // Outdoors on both sides: no inside face.
+    expect(at('exterior', 'exterior')).toEqual([drywall, drywall])
+    // The face's slot declaration says the same, and paint on an exterior face still wins.
+    const outside = WallNode.parse({ start: [0, 0], end: [4, 0], frontSide: 'exterior' })
+    expect(getWallFaceDefault(outside, 'a')).toBe(drywall)
+    expect(wallSlots(outside).find((slot) => slot.slotId === 'a')?.default).toBe(drywall)
+    expect(wallSlots(outside).find((slot) => slot.slotId === 'b')?.default).toBe(grey)
+    expect(resolveWallFaceChain({ ...outside, slots: { a: 'library:preset-sage' } }, 'a')).toEqual({
+      kind: 'ref',
+      ref: 'library:preset-sage',
     })
   })
 

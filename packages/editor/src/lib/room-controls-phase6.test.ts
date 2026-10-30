@@ -17,6 +17,7 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { createElement } from 'react'
 import { roomTransformSource } from '../components/editor/room-controls'
+import { commitDimensionValue } from '../components/editor-2d/renderers/floorplan-dimension-edit-overlay'
 import { getRoomSelectionIndex } from '../hooks/use-selected-room'
 import useEditor from '../store/use-editor'
 import useInteractionScope from '../store/use-interaction-scope'
@@ -24,6 +25,7 @@ import { installImmediateAnimationFrames } from '../test-utils/immediate-animati
 import { withSelectionHarness } from '../test-utils/selection-harness'
 import { useGestureLifecycleOwner } from './gesture-lifecycle'
 import {
+  beginWallGroupPush,
   cancelRoomHandleDrag,
   commitRoomElevation,
   commitRoomPush,
@@ -34,7 +36,10 @@ import {
   roomFloorElevation,
   roomPushHandles,
   runRoomHandleDrag,
+  selectedWallDimensions,
+  useRoomHandleDrag,
 } from './room-handle-drag'
+import { mergeSelectionDimensions } from './room-push-dimensions'
 import { applyRoomPlan, renameRoom } from './room-structure-commands'
 import {
   cancelRoomTransform,
@@ -376,6 +381,45 @@ describe('room handles (elevation, push/pull)', () => {
     expect(useScene.temporal.getState().pastStates).toHaveLength(1)
   })
 
+  test('a selected wall shows its room width and outside size, and typing either moves the wall', () => {
+    const east = () =>
+      Object.values(useScene.getState().nodes).find(
+        (n): n is WallNode => n.type === 'wall' && n.start[0] === n.end[0] && n.start[0] > 3,
+      )!
+    const wall = east()
+    const thickness = wall.thickness ?? 0.1
+    const dimensions = selectedWallDimensions(useScene.getState().nodes, wall, 'both')
+    const interior = dimensions.find((d) => d.faces === 'interior')!
+    const exterior = dimensions.find((d) => d.faces === 'exterior')!
+    // The 6 m room between centrelines: face to face inside, outer face to outer face outside.
+    expect(interior.distance).toBeCloseTo(6 - thickness)
+    expect(exterior.distance).toBeCloseTo(6 + thickness)
+    expect(selectedWallDimensions(useScene.getState().nodes, wall, 'interior')).toEqual([interior])
+    expect(selectedWallDimensions(useScene.getState().nodes, wall, 'exterior')).toEqual([exterior])
+
+    // Type 10' ID: the wall moves out until the room is exactly that wide, one undo step.
+    const target = (d: typeof interior) => ({
+      ownerNodeId: wall.id as AnyNodeId,
+      witnessStart: d.from,
+      witnessEnd: d.to,
+      value: d.distance,
+    })
+    expect(commitDimensionValue({ target: target(interior), nextLength: 3.048 })).toEqual({
+      ok: true,
+    })
+    // The west face sits half a thickness inside x = 0; the east centreline half outside its face.
+    expect(east().start[0]).toBeCloseTo(3.048 + thickness)
+    expect(useScene.temporal.getState().pastStates).toHaveLength(1)
+    const after = selectedWallDimensions(useScene.getState().nodes, east(), 'both')
+    expect(after.find((d) => d.faces === 'interior')!.distance).toBeCloseTo(3.048)
+
+    // Type the outside size: the same wall moves so the building reads it.
+    const outside = after.find((d) => d.faces === 'exterior')!
+    expect(commitDimensionValue({ target: target(outside), nextLength: 5 })).toEqual({ ok: true })
+    expect(east().start[0]).toBeCloseTo(5 - thickness)
+    expect(useScene.temporal.getState().pastStates).toHaveLength(2)
+  })
+
   test('a partial span splits off and moves only the room-facing piece, openings stay put', () => {
     // A 10 m north wall, of which this 6 m room faces only 0..0.6; a door
     // on the far stretch must stay where it is.
@@ -451,6 +495,102 @@ describe('room handles (elevation, push/pull)', () => {
     const host = after[movedDoor.parentId as AnyNodeId] as WallNode
     expect(host.start[1]).toBeCloseTo(4)
     expect(useScene.temporal.getState().pastStates).toHaveLength(1)
+  })
+
+  const roomWalls = () => {
+    const walls = Object.values(useScene.getState().nodes).filter(
+      (n): n is WallNode => n.type === 'wall',
+    )
+    const at = (axis: 0 | 1, value: number) =>
+      walls.find(
+        (w) => Math.abs(w.start[axis] - value) < 1e-6 && Math.abs(w.end[axis] - value) < 1e-6,
+      )!
+    return { east: at(0, 6), west: at(0, 0), north: at(1, 4), south: at(1, 0) }
+  }
+
+  test('two selected walls move as their push arrows: parallel, still joined, one undo step', () => {
+    const { east, north, west, south } = roomWalls()
+    const push = beginWallGroupPush([east.id, north.id], LEVEL)
+    const nodes = useScene.getState().nodes
+    // A diagonal drag: each wall takes only the part along its own normal.
+    push.preview([1, 0.5])
+    expect(useLiveNodeOverrides.getState().overrides.get(east.id as AnyNodeId)).toBeDefined()
+    expect(useScene.getState().nodes).toBe(nodes)
+    expect(push.commit()).toBe(true)
+    const after = useScene.getState().nodes
+    const wall = (id: string) => after[id as AnyNodeId] as WallNode
+    for (const point of [wall(east.id).start, wall(east.id).end]) expect(point[0]).toBeCloseTo(7)
+    for (const point of [wall(north.id).start, wall(north.id).end])
+      expect(point[1]).toBeCloseTo(4.5)
+    const corner = (a: WallNode, b: WallNode) =>
+      [a.start, a.end].some((p) =>
+        [b.start, b.end].some((q) => Math.hypot(p[0] - q[0], p[1] - q[1]) < 1e-6),
+      )
+    // Their own corner, and the walls they meet, stay joined; the others keep their line.
+    expect(corner(wall(east.id), wall(north.id))).toBe(true)
+    expect(corner(wall(east.id), wall(south.id))).toBe(true)
+    expect(corner(wall(north.id), wall(west.id))).toBe(true)
+    for (const point of [wall(west.id).start, wall(west.id).end]) expect(point[0]).toBeCloseTo(0)
+    for (const point of [wall(south.id).start, wall(south.id).end]) expect(point[1]).toBeCloseTo(0)
+    expect(useScene.temporal.getState().pastStates).toHaveLength(1)
+  })
+
+  test("several selected walls show each one's dimensions, a room between two of them once", () => {
+    const { east, west, north } = roomWalls()
+    const thickness = east.thickness ?? 0.1
+    const nodes = useScene.getState().nodes
+    const dimensions = mergeSelectionDimensions(
+      [east, west, north].map((wall) => ({
+        ownerId: wall.id,
+        dimensions: selectedWallDimensions(nodes, wall, 'both'),
+      })),
+    )
+    const shown = (faces: 'interior' | 'exterior') =>
+      dimensions
+        .filter((d) => d.faces === faces)
+        .map((d) => [d.ownerId, Number(d.distance.toFixed(4))])
+    // East and west both measure the 6 m room and the building across it: once each, on east.
+    expect(shown('interior')).toEqual([
+      [east.id, Number((6 - thickness).toFixed(4))],
+      [north.id, Number((4 - thickness).toFixed(4))],
+    ])
+    expect(shown('exterior')).toEqual([
+      [east.id, Number((6 + thickness).toFixed(4))],
+      [north.id, Number((4 + thickness).toFixed(4))],
+    ])
+    expect(new Set(dimensions.map((d) => d.key)).size).toBe(dimensions.length)
+
+    // Typing one moves the wall it runs from.
+    const depth = dimensions.find((d) => d.ownerId === north.id && d.faces === 'interior')!
+    expect(
+      commitDimensionValue({
+        target: {
+          ownerNodeId: north.id as AnyNodeId,
+          witnessStart: depth.from,
+          witnessEnd: depth.to,
+          value: depth.distance,
+        },
+        nextLength: 5,
+      }),
+    ).toEqual({ ok: true })
+    const moved = useScene.getState().nodes[north.id as AnyNodeId] as WallNode
+    expect(moved.start[1]).toBeCloseTo(5 + thickness)
+  })
+
+  test('a multi-wall move shows the room widths live, as a single wall push does', () => {
+    const { east, north, west } = roomWalls()
+    const thickness = east.thickness ?? 0.1
+    const push = beginWallGroupPush([east.id, west.id, north.id], LEVEL)
+    push.preview([1, 0.5])
+    const drag = useRoomHandleDrag.getState().drag
+    expect(drag?.kind).toBe('wall-group-push')
+    const widths = (drag?.kind === 'wall-group-push' ? drag.dimensions : []).map((d) => d.distance)
+    // East and west both moved 1 m: the 6 m room is still 6 m wide, shown once; north went 0.5 m out.
+    expect(widths.filter((w) => Math.abs(w - (6 - thickness)) < 1e-6)).toHaveLength(1)
+    expect(widths.some((w) => Math.abs(w - (4.5 - thickness)) < 1e-6)).toBe(true)
+    push.cancel()
+    expect(useRoomHandleDrag.getState().drag).toBeNull()
+    expect(useLiveNodeOverrides.getState().overrides.size).toBe(0)
   })
 })
 

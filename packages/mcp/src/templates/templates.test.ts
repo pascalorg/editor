@@ -31,6 +31,7 @@ describe('scene templates', () => {
           )
         }
         expect(res.success).toBe(true)
+        if (res.data.type === 'door') expect(res.data.frameThickness).toBe(0.02)
       }
     })
 

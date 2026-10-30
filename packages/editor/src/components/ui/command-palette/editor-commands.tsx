@@ -37,6 +37,7 @@ import {
 } from 'lucide-react'
 import { useEffect } from 'react'
 import { addStoreyOnTop } from '../../../lib/add-storey'
+import { offerExteriorWallCopy } from '../level-wall-copy-prompt'
 import { getHistoryCommandState, runRedo, runUndo } from '../../../lib/history'
 import { deleteLevelWithFallbackSelection } from '../../../lib/level-selection'
 import { getSavedSceneDocument } from '../../../lib/scene'
@@ -205,6 +206,7 @@ export function EditorCommands() {
             if (!building) return
             const newLevel = addStoreyOnTop(building.id)
             useViewer.getState().setSelection({ levelId: newLevel.id })
+            offerExteriorWallCopy(newLevel.id)
           }),
       },
       {

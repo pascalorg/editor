@@ -46,10 +46,13 @@ const OPTIONS = [
 export function StairConstructionControls({
   node,
   inherited,
+  structured = false,
   onChange,
 }: {
   node: StairNode | StairSegmentNode
   inherited?: StairConstruction
+  /** The stair has a structure: without a body of its own it draws the structure's. */
+  structured?: boolean
   onChange: (construction: StairConstruction | undefined) => void
 }) {
   const i18n = usePascalI18n()
@@ -62,13 +65,18 @@ export function StairConstructionControls({
         label={i18n._({ id: 'node.stair.constructionControls.body', message: 'Body' })}
         value={node.construction?.mode ?? 'original'}
         options={OPTIONS.map((option) =>
-          option.value === 'original' && inherited
+          option.value === 'original' && (inherited || structured)
             ? {
                 ...option,
-                label: i18n._({
-                  id: 'node.stair.constructionControls.inherit',
-                  message: 'Inherit',
-                }),
+                label: inherited
+                  ? i18n._({
+                      id: 'node.stair.constructionControls.inherit',
+                      message: 'Inherit',
+                    })
+                  : i18n._({
+                      id: 'node.stair.constructionControls.fromStructure',
+                      message: 'From structure',
+                    }),
               }
             : { ...option, label: i18n._(option.label) },
         )}
@@ -197,6 +205,7 @@ export function StairConstructionField({
   return (
     <StairConstructionControls
       node={node}
+      structured={Boolean(node.structure)}
       onChange={(construction) => onUpdate({ construction })}
     />
   )
@@ -213,10 +222,15 @@ export function StairSegmentConstructionField({
     const parent = node.parentId ? state.nodes[node.parentId as AnyNodeId] : undefined
     return parent?.type === 'stair' ? parent.construction : undefined
   })
+  const structured = useScene((state) => {
+    const parent = node.parentId ? state.nodes[node.parentId as AnyNodeId] : undefined
+    return parent?.type === 'stair' && Boolean(parent.structure)
+  })
   return (
     <StairConstructionControls
       node={node}
       inherited={inherited}
+      structured={structured}
       onChange={(construction) => onUpdate({ construction })}
     />
   )

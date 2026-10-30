@@ -9,6 +9,7 @@ import {
   createTerrainField,
   DoorNode as DoorSchema,
   encodeTerrainField,
+  findOpenWallEnds,
   flattenPatch,
   GROUND_SUPPORT_ID,
   getFloorPlacedElevation,
@@ -19,6 +20,7 @@ import {
   resolveTerrainWallConstructionOptions,
   runAsSingleSceneHistoryStep,
   SlabNode,
+  snapWorldXZToBuildingLocal,
   spatialGridManager,
   useScene,
   type WallNode,
@@ -30,11 +32,15 @@ import {
   migrateRoomZones,
 } from '@pascal-app/core/scene-migrations'
 import { useViewer } from '@pascal-app/viewer'
-import useEditor from '../../../store/use-editor'
+import type { SnappingMode } from '../../../lib/snapping-mode'
+import { snapBuildingLocalToWorldGrid } from '../../../lib/world-grid-snap'
+import useEditor, { isAngleSnapActive, isMagneticSnapActive } from '../../../store/use-editor'
 import useInteractionScope from '../../../store/use-interaction-scope'
 import {
   createWallOnCurrentLevel,
+  getSegmentGridStep,
   resolveEndpointWallSplit,
+  snapWallDraftPoint,
   snapWallDraftPointDetailed,
 } from './wall-drafting'
 import type { WallPlanPoint } from './wall-snap-geometry'
@@ -758,27 +764,64 @@ describe('createWallOnCurrentLevel', () => {
     expect(levelWalls()).toHaveLength(2)
   })
 
-  test('genuine mid-wall endpoint still splits the host (T junction)', () => {
-    const created = createWallOnCurrentLevel([2, 2], [2, 0])
+  test.each(['grid', 'lines', 'angles', 'off'] as const)(
+    '%s drafting splits the host at a mid-wall junction',
+    (mode) => {
+      useEditor.getState().setSnappingMode('wall', mode)
+      const created = createWallOnCurrentLevel([2, 2], [2, 0])
 
-    expect(created?.end).toEqual([2, 0])
-    expect(useScene.getState().nodes['wall_a' as AnyNodeId]).toBeUndefined()
-    const walls = levelWalls()
-    expect(walls).toHaveLength(3)
-    expect(
-      walls.some((wall) => wall.start[0] === 0 && wall.end[0] === 2 && wall.end[1] === 0),
-    ).toBe(true)
-    expect(
-      walls.some((wall) => wall.start[0] === 2 && wall.start[1] === 0 && wall.end[0] === 4),
-    ).toBe(true)
+      expect(created?.end).toEqual([2, 0])
+      expect(useScene.getState().nodes['wall_a' as AnyNodeId]).toBeUndefined()
+      expect(
+        levelWalls()
+          .filter((wall) => wall.id !== created?.id)
+          .map(({ start, end }) => [start, end]),
+      ).toEqual([
+        [
+          [0, 0],
+          [2, 0],
+        ],
+        [
+          [2, 0],
+          [4, 0],
+        ],
+      ])
+    },
+  )
+
+  test('a wall drawn exactly over one built another way takes its place', () => {
+    // The seed wall is plain; the wall tool draws a thicker one.
+    const previousDefaults = useEditor.getState().toolDefaults
+    useEditor.setState({ toolDefaults: { ...previousDefaults, wall: { thickness: 0.3 } } } as never)
+    try {
+      const drawn = createWallOnCurrentLevel([0, 0], [4, 0])
+      expect(drawn).not.toBeNull()
+      expect(useScene.getState().nodes['wall_a' as AnyNodeId]).toBeUndefined()
+      expect(levelWalls().map((wall) => wall.id)).toEqual([drawn!.id])
+    } finally {
+      useEditor.setState({ toolDefaults: previousDefaults } as never)
+    }
   })
 
-  test('exact duplicate segment is rejected', () => {
+  test('a wall drawn exactly over one built the same is refused', () => {
     expect(createWallOnCurrentLevel([0, 0], [4, 0])).toBeNull()
     expect(levelWalls()).toHaveLength(1)
   })
 
-  test('grid mode: endpoint resolved onto a wall body still splits the host', () => {
+  test('a wall drawn on along part of another takes that stretch over', () => {
+    const drawn = createWallOnCurrentLevel([2, 0], [6, 0])
+    expect(drawn).not.toBeNull()
+    const walls = levelWalls()
+    // The seed wall keeps [0, 2]; nothing else runs along [2, 4].
+    expect(walls).toHaveLength(2)
+    const seed = walls.find((wall) => wall.id !== drawn!.id)!
+    expect([seed.start, seed.end]).toEqual([
+      [0, 0],
+      [2, 0],
+    ])
+  })
+
+  test('grid mode: endpoint resolved onto a wall body splits its host', () => {
     useEditor.getState().setSnappingMode('wall', 'grid')
 
     const created = createWallOnCurrentLevel([2, 2], [2, 0])
@@ -798,7 +841,7 @@ describe('createWallOnCurrentLevel', () => {
     expect(levelWalls()).toHaveLength(2)
   })
 
-  test('mid-span split migrates the host attachments to the covering half', () => {
+  test('a T into a wall rehosts its door at the same position', () => {
     const door = DoorSchema.parse({
       position: [1, 1.05, 0],
       parentId: 'wall_a',
@@ -809,12 +852,12 @@ describe('createWallOnCurrentLevel', () => {
     const created = createWallOnCurrentLevel([2, 2], [2, 0])
 
     expect(created?.end).toEqual([2, 0])
-    const walls = levelWalls()
-    const firstHalf = walls.find((wall) => wall.start[0] === 0 && wall.end[0] === 2)
-    expect(firstHalf).toBeDefined()
-    const migratedDoor = useScene.getState().nodes[door.id as AnyNodeId]
-    expect(migratedDoor?.parentId).toBe(firstHalf?.id)
-    expect(firstHalf?.children).toContain(door.id)
+    const kept = useScene.getState().nodes[door.id as AnyNodeId] as DoorSchema
+    expect(kept.parentId).not.toBe('wall_a')
+    expect(kept.position[0]).toBe(1)
+    expect((useScene.getState().nodes[kept.parentId as AnyNodeId] as WallNode).children).toContain(
+      door.id,
+    )
   })
 
   test('a splitting commit lands as a single undo step', () => {
@@ -826,7 +869,7 @@ describe('createWallOnCurrentLevel', () => {
     expect(useScene.temporal.getState().pastStates.length - before).toBe(1)
   })
 
-  test('a crossing splits both the host and the inserted wall in one undo step', () => {
+  test('a crossing splits both walls in one undo step', () => {
     const before = useScene.temporal.getState().pastStates.length
 
     const created = createWallOnCurrentLevel([2, -2], [2, 2])
@@ -1095,4 +1138,237 @@ describe('snapWallDraftPointDetailed', () => {
     expect(freed.point).toEqual([2, 0])
     expect(freed.snap).toBeNull()
   })
+
+  test('an end aimed into an L corner block joins the corner and reads as one', () => {
+    const south = { ...makeWall([0, 0], [4, 0], 'wall_south'), thickness: 0.2 }
+    const west = { ...makeWall([0, 4], [0, 0], 'wall_west'), thickness: 0.2 }
+    const result = snapWallDraftPointDetailed({
+      point: [0.08, 0.08],
+      walls: [south, west],
+      start: [2, 3],
+      magnetic: false,
+      step: 0,
+      captureWallBodies: true,
+    })
+    expect(result.point).toEqual([0, 0])
+    expect(result.snap).toBe('endpoint')
+    expect(result.targetWallIds).toEqual(['wall_south', 'wall_west'])
+  })
+
+  // The 3D tool snaps to the floor below as a reference but can't join it: an
+  // end by a lower wall's face stays put, while its corner still snaps.
+  test('walls left out of bodyWalls never capture an end, but still snap corners', () => {
+    const lower = { ...makeWall([0, 0.4], [4, 0.4], 'wall_lower'), thickness: 0.2 }
+    const snap = (point: WallPlanPoint, bodyWalls?: WallNode[]) =>
+      snapWallDraftPointDetailed({
+        point,
+        walls: [lower],
+        start: [1, 3],
+        magnetic: false,
+        step: 0,
+        captureWallBodies: true,
+        bodyWalls,
+      })
+
+    const captured = snap([1, 0.5])
+    expect(captured.snap).toBe('wall')
+    expect(captured.point[1]).toBeCloseTo(0.4, 12)
+
+    const free = snap([1, 0.5], [])
+    expect(free.point).toEqual([1, 0.5])
+    expect(free.snap).toBeNull()
+
+    const corner = snap([0.02, 0.42], [])
+    expect(corner.point).toEqual([0, 0.4])
+    expect(corner.snap).toBe('endpoint')
+  })
 })
+
+// The site planner sets a house on its lot turned and offset. Its walls are
+// drawn square to the house, in building-local metres. An interior wall drawn
+// across it has to meet both exterior walls exactly and stay square to the
+// house however the building is turned, in 3D and on the plan alike.
+const HOUSE_BUILDING_ID = 'building_lot'
+// A 30' × 24' house of 8" walls, 2' × 1' off the building origin, so no wall
+// line or face lies on the 0.5 m lattice.
+const HOUSE_MIN: WallPlanPoint = [0.6096, 0.3048]
+const HOUSE_MAX: WallPlanPoint = [9.7536, 7.62]
+const EXTERIOR_THICKNESS = 0.2032
+// Where a builder aims an interior wall's end: just inside the exterior
+// wall's interior face (1.18" off it).
+const FACE_AIM = EXTERIOR_THICKNESS / 2 + 0.03
+
+const BUILDING_POSES: Array<{
+  label: string
+  yaw: number
+  position: [number, number, number]
+}> = [
+  { label: 'an unturned building at the origin', yaw: 0, position: [0, 0, 0] },
+  {
+    label: 'a building turned 17° and offset on its lot',
+    yaw: (17 * Math.PI) / 180,
+    position: [12.37, 0, -8.91],
+  },
+]
+
+function seedHouse({ yaw, position }: { yaw: number; position: [number, number, number] }) {
+  const [x0, z0] = HOUSE_MIN
+  const [x1, z1] = HOUSE_MAX
+  const walls = [
+    makeWall([x0, z0], [x1, z0], 'wall_south'),
+    makeWall([x1, z0], [x1, z1], 'wall_east'),
+    makeWall([x1, z1], [x0, z1], 'wall_north'),
+    makeWall([x0, z1], [x0, z0], 'wall_west'),
+  ].map((wall) => ({ ...wall, thickness: EXTERIOR_THICKNESS }))
+  const building = BuildingNode.parse({
+    id: HOUSE_BUILDING_ID,
+    position,
+    rotation: [0, yaw, 0],
+    children: [LEVEL_ID],
+  })
+  const level = LevelSchema.parse({ id: LEVEL_ID, parentId: building.id, level: 0, height: 2.5 })
+  useScene.setState({
+    nodes: Object.fromEntries([
+      [building.id, building],
+      [level.id, { ...level, children: walls.map((wall) => wall.id) }],
+      ...walls.map((wall) => [wall.id, wall] as const),
+    ]),
+    rootNodeIds: [building.id],
+    dirtyNodes: new Set(),
+    collections: {},
+  } as never)
+  useViewer.setState({
+    selection: {
+      buildingId: HOUSE_BUILDING_ID,
+      levelId: LEVEL_ID,
+      zoneId: null,
+      selectedIds: [],
+    },
+  } as never)
+}
+
+for (const pose of BUILDING_POSES) {
+  describe(`an interior wall drawn across a house in ${pose.label}`, () => {
+    const [, z0] = HOUSE_MIN
+    const [, z1] = HOUSE_MAX
+
+    beforeEach(() => {
+      useEditor.getState().setGridSnapStep(0.5)
+      // A reshaping-endpoint scope resolves to the 'wall' snap context
+      // without the node registry, as in `createWallOnCurrentLevel` above.
+      useInteractionScope
+        .getState()
+        .begin({ kind: 'reshaping', nodeId: 'wall_south', reshape: 'endpoint', driver: 'tool' })
+      seedHouse(pose)
+      useScene.temporal.getState().clear()
+      useScene.temporal.getState().resume()
+    })
+
+    afterEach(() => {
+      useEditor.getState().setSnappingMode('wall', 'grid')
+    })
+
+    const setMode = (mode: SnappingMode) => useEditor.getState().setSnappingMode('wall', mode)
+
+    // The cursor as a grid event hands it over: a hit on the world plane,
+    // taken into the building's frame.
+    const cursorAt = (local: WallPlanPoint): WallPlanPoint => {
+      const cos = Math.cos(pose.yaw)
+      const sin = Math.sin(pose.yaw)
+      const worldX = pose.position[0] + local[0] * cos + local[1] * sin
+      const worldZ = pose.position[2] - local[0] * sin + local[1] * cos
+      return snapWorldXZToBuildingLocal(worldX, worldZ, pose.position, pose.yaw, 0).local
+    }
+
+    // The 3D wall tool's snap call.
+    const snapIn3d = (point: WallPlanPoint, start?: WallPlanPoint, captureWallBodies = true) =>
+      snapWallDraftPointDetailed({
+        point,
+        walls: levelWalls(),
+        start,
+        angleSnap: start !== undefined && isAngleSnapActive(),
+        magnetic: isMagneticSnapActive(),
+        captureWallBodies,
+      })
+
+    // The plan's click: the same cursor through the plan's grid callback.
+    const snapOnPlan = (point: WallPlanPoint, start?: WallPlanPoint) =>
+      snapWallDraftPoint({
+        point,
+        walls: levelWalls(),
+        start,
+        angleSnap: start !== undefined && isAngleSnapActive(),
+        magnetic: isMagneticSnapActive(),
+        gridSnap: (p) => snapBuildingLocalToWorldGrid(p, getSegmentGridStep()),
+        captureWallBodies: true,
+      })
+
+    const partitionOpenEnds = (partition: WallNode) =>
+      findOpenWallEnds(useScene.getState().nodes, LEVEL_ID).filter(
+        (end) => end.wallId === partition.id,
+      )
+
+    test('grid: both ends land on the exterior walls, square to the house, with no gap', () => {
+      setMode('grid')
+      const startAim = cursorAt([4.2, z0 + FACE_AIM])
+      const start = snapIn3d(startAim)
+      expect(start.snap).toBe('wall')
+      expect(start.targetWallIds).toEqual(['wall_south'])
+      expect(start.point[0]).toBeCloseTo(4, 9)
+      expect(start.point[1]).toBeCloseTo(z0, 9)
+
+      // The cursor drifts a little sideways on its way across the house.
+      const endAim = cursorAt([4.1, z1 - FACE_AIM])
+      const end = snapIn3d(endAim, start.point)
+      expect(end.snap).toBe('wall')
+      expect(end.targetWallIds).toEqual(['wall_north'])
+      expect(end.point[0]).toBeCloseTo(start.point[0], 9)
+      expect(end.point[1]).toBeCloseTo(z1, 9)
+
+      // The plan snaps the same cursor to the same points.
+      expect(snapOnPlan(startAim)).toEqual(start.point)
+      expect(snapOnPlan(endAim, start.point)).toEqual(end.point)
+
+      const partition = createWallOnCurrentLevel(start.point, end.point)
+      expect(partition).not.toBeNull()
+      expect(partitionOpenEnds(partition!)).toEqual([])
+    })
+
+    test('ortho holds the wall square to the house and lands it on the far wall', () => {
+      setMode('angles')
+      const startAim = cursorAt([4.2, z0 + FACE_AIM])
+      const start = snapIn3d(startAim)
+      expect(start.point[0]).toBeCloseTo(4.2, 9)
+      expect(start.point[1]).toBeCloseTo(z0, 9)
+
+      // 4° off square: the 15° lock squares it to the house.
+      const endAim = cursorAt([3.7, z1 - FACE_AIM])
+      const end = snapIn3d(endAim, start.point)
+      expect(end.snap).toBe('wall')
+      expect(end.point[0]).toBeCloseTo(start.point[0], 9)
+      expect(end.point[1]).toBeCloseTo(z1, 9)
+
+      const onPlan = snapOnPlan(endAim, start.point)
+      expect(onPlan[0]).toBeCloseTo(end.point[0], 9)
+      expect(onPlan[1]).toBeCloseTo(end.point[1], 9)
+
+      const partition = createWallOnCurrentLevel(start.point, end.point)
+      expect(partition).not.toBeNull()
+      expect(partitionOpenEnds(partition!)).toEqual([])
+    })
+
+    test('without the body snap the lattice stops the end short of the face: an open gap', () => {
+      setMode('grid')
+      const start = snapIn3d(cursorAt([4.2, z0 + FACE_AIM]))
+      const end = snapIn3d(cursorAt([4.1, z1 - FACE_AIM]), start.point, false)
+      // The lattice line under the cursor, 0.72" short of the north wall's face.
+      expect(end.snap).toBeNull()
+      expect(end.point[1]).toBeCloseTo(7.5, 9)
+
+      const partition = createWallOnCurrentLevel(start.point, end.point)
+      const [open] = partitionOpenEnds(partition!)
+      expect(open?.reason).toBe('gap')
+      expect(open?.gap).toBeCloseTo(z1 - EXTERIOR_THICKNESS / 2 - 7.5, 3)
+    })
+  })
+}

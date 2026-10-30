@@ -1,4 +1,4 @@
-import type { ParametricDescriptor } from '@pascal-app/core'
+import { DEFAULT_WALL_THICKNESS, type ParametricDescriptor } from '@pascal-app/core'
 import type { WallNode } from './schema'
 
 /**
@@ -21,7 +21,20 @@ export const wallParametrics: ParametricDescriptor<WallNode> = {
         // Reference is not a raw field: its labels depend on each wall's rooms
         // (`wallReferenceModel` in panel-model), so generic inspectors never
         // show the stored a / b value.
-        { key: 'thickness', kind: 'number', unit: 'm', min: 0.05, max: 1000, step: 0.01 },
+        // An assembly owns the thickness (the sum of its layers), so the field
+        // edits only walls without one; those read it from the panel model's
+        // readout instead of typing over it. A railing's posts set its thickness.
+        {
+          key: 'thickness',
+          kind: 'number',
+          unit: 'm',
+          min: 0.05,
+          max: 1000,
+          step: 0.01,
+          default: DEFAULT_WALL_THICKNESS,
+          appliesTo: (wall) =>
+            wall.wallType !== 'railing' && (!wall.assembly || wall.wallType === 'curtain'),
+        },
         // `height` may be absent (plane-bound top); the custom panel owns the
         // Follows storey / Custom height mode switch, so this is metadata only.
         { key: 'height', kind: 'number', unit: 'm', min: 0.1, max: 1000, step: 0.05 },

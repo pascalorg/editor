@@ -19,6 +19,25 @@ const zoneIntentPatch = z.strictObject({
       elevation: measurement('length', 'm').nullable().optional(),
       finish: finish.nullable().optional(),
       regions: paintRegions.nullable().optional(),
+      drop: measurement('length', 'm', { min: 0 }).nullable().optional(),
+    })
+    .nullable()
+    .optional(),
+  roomType: z.enum(['porch', 'deck', 'patio']).nullable().optional(),
+  porchFraming: z
+    .strictObject({
+      auto: z.boolean().nullable().optional(),
+      postSize: z.enum(['4x4', '6x6', '8x8']).nullable().optional(),
+      postSpacing: measurement('length', 'm', { min: 0.6 }).nullable().optional(),
+      beamSize: z.string().nullable().optional(),
+    })
+    .nullable()
+    .optional(),
+  decking: z
+    .strictObject({
+      boardSize: z.enum(['5/4x6', '2x6', '2x4', 'composite']).nullable().optional(),
+      gap: measurement('length', 'm', { positive: true }).nullable().optional(),
+      direction: z.enum(['parallel', 'diagonal', 'perpendicular']).nullable().optional(),
     })
     .nullable()
     .optional(),
@@ -195,7 +214,7 @@ export const setZoneIntentTool = {
   name: 'set_zone_intent',
   title: 'Set room intent',
   description:
-    'Update room name, floor finish/elevation/regions, floor.footprint ("new" mints a unique floor key tied to this creator room, an existing key joins that floor on this level, null returns to the shared floor). Touching rooms with the same key share a base plate; disconnected pieces share construction settings. Conversion preserves world geometry in one edit and refuses when infeasible. get_zones exposes floor_choices. A keyed floor uses "<creator room name> floor" while the creator remains on that key; otherwise it uses the largest named room. Existing keys such as "own" without a creator use that fallback. A user-given plate name wins; the shared floor stays "Shared floor". Keyed rooms can have raised or sunken floor.elevation, stored as a level-local walking top. Slab thickness, foundation height and edge finish use set_room_floor_construction, updating every piece of the key. Update ceiling paint regions (ceiling.regions: [x, z] polygons with a finish, later wins), step finishes (floorStepFinish for every step of the room; floorStepOverrides: [{ key, step?, finish }] per doorway, key = the door id the step sits under or the lower room id), wall material and construction opt-outs. daylight { artificialLight, mechanicalVentilation } declares a habitable room lit and aired by artificial means (the IRC R303.1 exceptions to daylight; both true), stored in the room\'s metadata; a bedroom, living room or kitchen needs a window to outside or this declaration, above and below grade alike. Absent fields are unchanged; null clears.',
+    'Update room name, floor finish/elevation/regions, floor.footprint ("new" mints a unique floor key tied to this creator room, an existing key joins that floor on this level, null returns to the shared floor). Touching rooms with the same key share a base plate; disconnected pieces share construction settings. Conversion preserves world geometry in one edit and refuses when infeasible. get_zones exposes floor_choices. A keyed floor uses "<creator room name> floor" while the creator remains on that key; otherwise it uses the largest named room. Existing keys such as "own" without a creator use that fallback. A user-given plate name wins; the shared floor stays "Shared floor". Keyed rooms can have raised or sunken floor.elevation, stored as a level-local walking top. Slab thickness, foundation height and edge finish use set_room_floor_construction, updating every piece of the key. Update ceiling paint regions (ceiling.regions: [x, z] polygons with a finish, later wins), step finishes (floorStepFinish for every step of the room; floorStepOverrides: [{ key, step?, finish }] per doorway, key = the door id the step sits under or the lower room id), wall material and construction opt-outs. daylight { artificialLight, mechanicalVentilation } declares a habitable room lit and aired by artificial means (the IRC R303.1 exceptions to daylight; both true), stored in the room\'s metadata; a bedroom, living room or kitchen needs a window to outside or this declaration, above and below grade alike. roomType ("porch" | "deck" | "patio", null for a room) makes the room outdoors: a porch is a concrete slab stepped floor.drop (1.5 in) under the house with a ceiling, a deck wood decking 1 in down and framed, a patio concrete and open. porchFraming { auto, postSize "4x4"|"6x6"|"8x8", postSpacing m, beamSize e.g. "6x8" } sets the posts of a covered porch (one at each outside corner, more at most postSpacing apart) and the beam on them under its ceiling; a deck or patio gets them only with auto true (to carry a roof over it). A size or the spacing rebuilds them, auto false leaves them as edited. decking { boardSize "5/4x6"|"2x6"|"2x4"|"composite", gap m (1/8, 3/16 or 1/4 in), direction "parallel"|"diagonal"|"perpendicular" to the house } sets a deck\'s boards (default 5/4x6, 1/4 in apart, along the house); its frame follows: joists 12 in on centre under diagonal 5/4 or composite boards (IRC R507.7), and along the house on beams square to it under boards running out from it. Absent fields are unchanged; null clears.',
   input: { zoneId: NodeId, patch: zoneIntentPatch },
 }
 

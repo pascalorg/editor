@@ -4,6 +4,7 @@ import {
   createWallPointerTracker,
   wallPointerInParent,
   wallSideAtPointer,
+  wallSideOfPlanPoint,
 } from './wall-placement-pointer'
 
 test('keeps the grab offset across a pointer gap on the original face', () => {
@@ -39,4 +40,26 @@ test('reads the pointer in the rotated wall parent and identifies its face', () 
   expect(local[0]).toBeCloseTo(2)
   expect(local[1]).toBeCloseTo(3)
   expect(wallSideAtPointer(local)).toBe('back')
+})
+
+test('a plan point reads the wall face it is on, as a 3D hover does', () => {
+  // Along +X the frame's +Z (front) is the plan's +Z side.
+  const wall = {
+    start: [0, 0] as [number, number],
+    end: [4, 0] as [number, number],
+    thickness: 0.2,
+  }
+  expect(wallSideOfPlanPoint(wall, [2, 0.3])).toBe('front')
+  expect(wallSideOfPlanPoint(wall, [2, -0.3])).toBe('back')
+  // Drawn the other way, the same point is on its back.
+  expect(
+    wallSideOfPlanPoint(
+      { ...wall, start: [4, 0] as [number, number], end: [0, 0] as [number, number] },
+      [2, 0.3],
+    ),
+  ).toBe('back')
+  // A justified wall splits at its body's middle, not its reference line.
+  const justified = { ...wall, justification: 'a' as const }
+  expect(wallSideOfPlanPoint(justified, [2, 0.05])).toBe('back')
+  expect(wallSideOfPlanPoint(justified, [2, 0.15])).toBe('front')
 })

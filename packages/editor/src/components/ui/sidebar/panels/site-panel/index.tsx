@@ -58,6 +58,7 @@ import {
   type LevelDuplicatePreset,
 } from '@pascal-app/core/building'
 import { addStoreyOnTop } from './../../../../../lib/add-storey'
+import { offerExteriorWallCopy } from './../../../../../components/ui/level-wall-copy-prompt'
 import { deleteLevelWithFallbackSelection } from './../../../../../lib/level-selection'
 import {
   formatAreaLabel,
@@ -1068,6 +1069,7 @@ const LevelsSection = memo(function LevelsSection({
   const handleAddLevel = () => {
     const newLevel = addStoreyOnTop(building.id)
     setSelection({ buildingId: building.id, levelId: newLevel.id })
+    offerExteriorWallCopy(newLevel.id)
   }
 
   return (

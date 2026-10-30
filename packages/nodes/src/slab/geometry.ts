@@ -7,16 +7,19 @@ import {
   cutterContextNodes,
   FenceNode,
   FOUNDATION_SLOT_DEFAULT,
+  floorPlateRoom,
   type GeometryContext,
   getLevelElevations,
   getMaterialPresetByRef,
   getRenderableSlabPolygon,
   intersection,
+  isDeckSlab,
   isFloorPlate,
   type LevelNode,
   levelBaseElevationAt,
   liftedManualSlab,
   type MaterialSchema,
+  OUTDOOR_ROOM_DEFAULTS,
   type PlateSurfacePartition,
   type PlateTopCell,
   parseFloorStepRole,
@@ -50,6 +53,7 @@ import {
 import { type BufferGeometry, FrontSide, Group, type Material, Mesh, type Texture } from 'three'
 import { generateFenceSlotGeometries } from '../fence/geometry-parts'
 import { creaseCrossings } from '../site/terrain-drape'
+import { buildDeckGeometry } from './deck-geometry'
 import { clipPlateTerrainFill, splitPlateFaces, splitSlabFacesByFacing } from './surface-split'
 
 /**
@@ -171,6 +175,21 @@ function getLegacySlabMaterial(node: SlabNode, shading: RenderShading): Material
   return material
 }
 
+/**
+ * The plank flooring decks were given before they had boards (the old deck room default, and the
+ * porch generator's decks): laid on each board it reads as flooring, so boards still carrying it
+ * draw the deck default's plain grain.
+ */
+const LEGACY_DECK_FINISH = 'library:wood-floorplank1'
+
+/** A porch or patio's concrete edge runs down to the site's ground. */
+function isOutdoorGroundSlab(node: SlabNode, ctx: GeometryContext | undefined): boolean {
+  const roomType = floorPlateRoom(node, (id) => ctx?.resolve<AnyNode>(id))?.roomType
+  return (
+    isFloorPlate(node) && node.support !== 'open' && (roomType === 'porch' || roomType === 'patio')
+  )
+}
+
 function terrainFillContext(ctx: GeometryContext | undefined, foundation: boolean) {
   if (!ctx) return null
   const level = ctx.parent
@@ -207,8 +226,9 @@ function buildSlabTerrainFillGeometry(
   polygon: Array<[number, number]>,
   ctx: GeometryContext | undefined,
   partition: PlateSurfacePartition | null,
+  outdoor = false,
 ): BufferGeometry | null {
-  const terrain = terrainFillContext(ctx, node.plateRole === 'base')
+  const terrain = terrainFillContext(ctx, node.plateRole === 'base' || outdoor)
   if (!terrain || polygon.length < 3) return null
 
   let area2 = 0
@@ -356,6 +376,48 @@ export function buildSlabGeometry(
         return false
       }),
     )
+  // A deck is its boards on its frame (`buildDeckGeometry`), never a solid slab.
+  if (isDeckSlab(node, (id) => ctx?.resolve<AnyNode>(id)))
+    return buildDeckGeometry(node, ctx, {
+      polygon,
+      partition: platePartitionOf(node, ctx, node.plateRole === 'platform'),
+      boardMaterial: (cell) =>
+        (cell ? cell.finish : (node.slots?.surface ?? node.materialPreset)) === LEGACY_DECK_FINISH
+          ? getPlateCellMaterial(
+              node,
+              {
+                role: cell?.role ?? 'surface',
+                finish: OUTDOOR_ROOM_DEFAULTS.deck.finish,
+                materialKey: plateFinishKey(OUTDOOR_ROOM_DEFAULTS.deck.finish),
+                polygons: cell?.polygons ?? [],
+              },
+              shading,
+              textures,
+              colorPreset,
+              sceneTheme,
+              ctx?.materials,
+            )
+          : cell
+            ? getPlateCellMaterial(
+                node,
+                cell,
+                shading,
+                textures,
+                colorPreset,
+                sceneTheme,
+                ctx?.materials,
+              )
+            : getSlabSlotMaterial(
+                node,
+                'surface',
+                shading,
+                textures,
+                colorPreset,
+                sceneTheme,
+                ctx?.materials,
+              ),
+      look: { shading, textures, colorPreset, sceneTheme },
+    })
   const merged = generateSlabGeometry(node, polygonContext, platform ? levelBaseAt : undefined)
   const elevation = node.elevation ?? 0.05
   const partition = platePartitionOf(node, ctx, platform || node.plateRole === 'platform')
@@ -474,8 +536,10 @@ export function buildSlabGeometry(
   merged.dispose()
 
   const foundation = node.plateRole === 'base' && node.foundation?.type === 'solid'
+  // A porch or patio slab runs down into the ground beside the house, whatever stands under it.
+  const outdoor = isOutdoorGroundSlab(node, ctx)
   if (
-    (foundation || (!node.plateRole && node.fillToTerrain)) &&
+    (foundation || outdoor || (!node.plateRole && node.fillToTerrain)) &&
     !node.recessed &&
     !platform &&
     group.children.length > 0
@@ -485,10 +549,11 @@ export function buildSlabGeometry(
       getRenderableSlabPolygon(node, polygonContext),
       ctx,
       partition,
+      outdoor,
     )
     if (terrainFill) {
-      // The skirt hangs below the plate perimeter and always faces out.
-      const slotId: SlabSlotId = foundation ? 'foundation' : partition ? 'edge' : 'side'
+      // The skirt hangs below the plate perimeter and always faces out: the slab's concrete.
+      const slotId: SlabSlotId = foundation || outdoor ? 'foundation' : partition ? 'edge' : 'side'
       addMesh(
         terrainFill,
         slotId,

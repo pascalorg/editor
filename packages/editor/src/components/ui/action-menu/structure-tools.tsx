@@ -20,6 +20,7 @@ export const tools: ToolConfig[] = [
   { id: 'roof', iconSrc: '/icons/roof.webp', label: /* i18n */ { id: 'editor.actionMenu.structureTools.gableRoof', message: 'Gable Roof' } },
   { id: 'fence', iconSrc: '/icons/fence.webp', label: /* i18n */ { id: 'editor.actionMenu.structureTools.fence', message: 'Fence' } },
   { id: 'column', iconSrc: '/icons/column.webp', label: /* i18n */ { id: 'editor.actionMenu.structureTools.column', message: 'Column' } },
+  { id: 'beam', iconSrc: '/icons/beam.svg', label: /* i18n */ { id: 'editor.actionMenu.structureTools.beam', message: 'Beam' } },
   { id: 'elevator', iconSrc: '/icons/elevator.webp', label: /* i18n */ { id: 'editor.actionMenu.structureTools.elevator', message: 'Elevator' } },
   { id: 'slab', iconSrc: '/icons/floor.webp', label: /* i18n */ { id: 'editor.actionMenu.structureTools.slab', message: 'Slab' } },
   { id: 'ceiling', iconSrc: '/icons/ceiling.webp', label: /* i18n */ { id: 'editor.actionMenu.structureTools.ceiling', message: 'Ceiling' } },

@@ -9,6 +9,7 @@ import type {
   RoofSegmentNode,
   WallNode,
 } from '../../schema'
+import { isRailingWall } from '../../schema/nodes/railing-wall'
 import { coveredStoreyId, servesAsRoofLevel } from '../../services/roof-level'
 import {
   findLevelAboveId,
@@ -94,7 +95,10 @@ function wallsUnderRoof(
   })
 }
 
-/** The tallest of these walls' tops, from `targetLevelId`'s floor; undefined for none. */
+/**
+ * The tallest of these walls' tops, from `targetLevelId`'s floor; undefined for none. A railing is a
+ * guard round a deck or a porch, not a wall: no roof stands on its top.
+ */
 function highestWallTop(
   targetLevelId: string,
   wallIds: readonly string[],
@@ -104,7 +108,7 @@ function highestWallTop(
   let highest: number | undefined
   for (const id of wallIds) {
     const wall = nodes[id]
-    if (wall?.type !== 'wall') continue
+    if (wall?.type !== 'wall' || isRailingWall(wall)) continue
     const top = resolveRoofWallTopElevation(
       targetLevelId as LevelNode['id'],
       wall,

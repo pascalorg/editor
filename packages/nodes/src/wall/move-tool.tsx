@@ -6,9 +6,13 @@ import {
   beginSceneHistoryPauseSession,
   createLevelStructurePreview,
   emitter,
+  finishWallEdit,
   type GridEvent,
+  generateId,
   getPerpendicularWallMoveAxis,
   getPlannedLinkedWallUpdates,
+  planAttachedWallChanges,
+  planAttachedWallUpdates,
   planWallEndRejoins,
   planWallMoveJunctions,
   resolveMovedWallSupportSlabPatch,
@@ -24,12 +28,17 @@ import {
   getSegmentGridStep,
   isSegmentLongEnough,
   isTypingTarget,
+  isWallRunFree,
   markToolCancelConsumed,
+  nearestWallParallelTarget,
+  publishWallParallelGuide,
   snapBuildingLocalToWorldGrid,
   snapScalarToGrid,
   triggerSFX,
   useEditor,
   WALL_CONNECT_SNAP_RADIUS,
+  type WallParallelTarget,
+  wallParallelTargets,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -328,6 +337,33 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
       return { start: nextStart, end: nextEnd }
     }
 
+    // The level's other walls, which the moving wall lines up with when parallel
+    // (`wallParallelTargets`). Recomputed when R / T turns the wall.
+    const levelWalls = Object.values(useScene.getState().nodes).filter(
+      (entry): entry is WallNode => entry?.type === 'wall' && (entry.parentId ?? null) === levelId,
+    )
+    const movingWall = levelWalls.find((entry) => entry.id === nodeId)
+    let parallelTargets: { rotation: number; targets: WallParallelTarget[] } | null = null
+    const getParallelTargets = (axis: WallMoveAxis) => {
+      const rotation = pendingRotationRef.current
+      if (parallelTargets?.rotation !== rotation) {
+        const turned = buildWallFromCenter(originalCenter)
+        parallelTargets = {
+          rotation,
+          targets: movingWall
+            ? wallParallelTargets({ ...movingWall, ...turned }, axis, levelWalls)
+            : [],
+        }
+      }
+      return parallelTargets.targets
+    }
+    let lastLineUp: WallParallelTarget | null = null
+    // Alt moves the wall exactly with the pointer, as in the floor plan.
+    let altHeld = false
+    const onPointerMove = (event: PointerEvent) => {
+      altHeld = event.altKey
+    }
+
     const getMovePlan = (nextStart: [number, number], nextEnd: [number, number]) =>
       planWallMoveJunctions(
         linkedOriginalsRef.current,
@@ -350,10 +386,27 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
         nextEnd,
       )
       const movedById = new Map(movedUpdates.map((entry) => [entry.id, entry]))
+      const linkedIds = new Set(linkedOriginalsRef.current.map((wall) => wall.id))
+      // Walls T'd into this one stay on it, stretched along their own line.
+      const attached = isNew
+        ? []
+        : planAttachedWallUpdates(
+            Object.values(dragNodes).filter(
+              (entry): entry is WallNode =>
+                entry.type === 'wall' && entry.id !== nodeId && !linkedIds.has(entry.id),
+            ),
+            originalStart,
+            originalEnd,
+            nextStart,
+            nextEnd,
+          )
 
-      return linkedOriginalsRef.current.map(
-        (wall) => movedById.get(wall.id) ?? { id: wall.id, start: wall.start, end: wall.end },
-      )
+      return [
+        ...linkedOriginalsRef.current.map(
+          (wall) => movedById.get(wall.id) ?? { id: wall.id, start: wall.start, end: wall.end },
+        ),
+        ...attached,
+      ]
     }
 
     const applyPreview = (nextStart: [number, number], nextEnd: [number, number]) => {
@@ -432,6 +485,7 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
       const rawDeltaX = rawX - anchor[0]
       const rawDeltaZ = rawZ - anchor[1]
       if (!hasDraggedRef.current && Math.hypot(rawDeltaX, rawDeltaZ) < 1e-6) return
+      const free = isWallRunFree({ altKey: altHeld })
 
       // When the move is axis-locked (side-handle drag), snap the wall
       // center's absolute perpendicular offset to a multiple of
@@ -444,29 +498,39 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
       // the displacement alone preserves any pre-existing off-grid
       // offset, so the wall could only ever sit at `originalCentre ±
       // k·snapStep` — never on actual grid lines. Snapping the wall's
-      // own perpendicular coordinate fixes that.
+      // own perpendicular coordinate fixes that. A parallel wall the wall
+      // lines up with wins over the grid.
       const axis = moveAxisRef.current
       let deltaX: number
       let deltaZ: number
+      let lineUp: WallParallelTarget | null = null
       if (axis) {
         const originalProj = originalCenter[0] * axis[0] + originalCenter[1] * axis[1]
         const rawProj = originalProj + rawDeltaX * axis[0] + rawDeltaZ * axis[1]
-        const snappedProj = snapScalarToGrid(rawProj, snapStep)
+        lineUp = free ? null : nearestWallParallelTarget(getParallelTargets(axis), rawProj)
+        const snappedProj = lineUp
+          ? lineUp.position
+          : snapScalarToGrid(rawProj, free ? 0 : snapStep)
         const perpDelta = snappedProj - originalProj
         deltaX = axis[0] * perpDelta
         deltaZ = axis[1] * perpDelta
       } else {
-        // Snap the resulting wall center to the WORLD XZ grid (projected
-        // back into building-local), then express the result as a delta
-        // from the original centre. Without this, a rotated building
-        // dragged the wall along its local axes instead of world ones.
+        // Snap the resulting wall center to the building's own grid lattice
+        // (the one the wall tool drafts on, square to a turned house), then
+        // express the result as a delta from the original centre.
         const targetLocal: [number, number] = [
           originalCenter[0] + rawDeltaX,
           originalCenter[1] + rawDeltaZ,
         ]
-        const snappedLocal = snapBuildingLocalToWorldGrid(targetLocal, snapStep)
+        const snappedLocal = free
+          ? targetLocal
+          : snapBuildingLocalToWorldGrid(targetLocal, snapStep)
         deltaX = snappedLocal[0] - originalCenter[0]
         deltaZ = snappedLocal[1] - originalCenter[1]
+      }
+      if (lineUp !== lastLineUp) {
+        lastLineUp = lineUp
+        publishWallParallelGuide(lineUp)
       }
 
       const constrainedGridPos: [number, number] = [anchor[0] + deltaX, anchor[1] + deltaZ]
@@ -564,14 +628,46 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
       // The drag writes nothing to the store (the preview is live overrides), so history is
       // paused only for this drop. Keyed by the moving wall: in split view the 2D move overlay
       // co-owns the gesture, and commitStep lifts its pause too.
-      const changes = planWallEndRejoins(
+      // The moved and stretched walls and the jogs take over any stretch of a
+      // parallel wall they now run along; jogs on the outline are outside walls.
+      // Walls T'd into this one follow it, what hangs on them staying put.
+      const attachedChanges = isNew
+        ? []
+        : planAttachedWallChanges(
+            sceneState.nodes,
+            nodeId,
+            originalStart,
+            originalEnd,
+            preview.start,
+            preview.end,
+            new Set([
+              ...linkedOriginalsRef.current.map((wall) => wall.id),
+              ...collapsedLinkedWallIds,
+            ]),
+          )
+      const changes = finishWallEdit(
         sceneState.nodes,
-        commitUpdates.map(({ id }) => id),
-        WALL_CONNECT_SNAP_RADIUS,
+        planWallEndRejoins(
+          sceneState.nodes,
+          commitUpdates.map(({ id }) => id),
+          WALL_CONNECT_SNAP_RADIUS,
+          {
+            update: [...wallUpdates, ...attachedChanges],
+            create: wallCreates,
+            delete: Array.from(collapsedLinkedWallIds),
+          },
+        ),
         {
-          update: wallUpdates,
-          create: wallCreates,
-          delete: Array.from(collapsedLinkedWallIds),
+          winnerIds: [
+            ...commitUpdates.map(({ id }) => id),
+            ...attachedChanges.flatMap(({ id }) =>
+              sceneState.nodes[id]?.type === 'wall' ? [id] : [],
+            ),
+            ...wallCreates.map(({ node }) => node.id),
+          ],
+          movedWallId: nodeId,
+          bridgeIds: wallCreates.map(({ node }) => node.id),
+          mintId: () => generateId('wall'),
         },
       )
       const drop = beginSceneHistoryPauseSession(useScene, { gesture: nodeId })
@@ -650,10 +746,12 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
 
     emitter.on('grid:move', onGridMove)
     emitter.on('tool:cancel', onCancel)
+    window.addEventListener('pointermove', onPointerMove)
     window.addEventListener('pointerup', onPointerUp)
     window.addEventListener('keydown', onKeyDown)
 
     return () => {
+      if (lastLineUp) publishWallParallelGuide(null)
       if (shouldRestoreOnCleanup) {
         // `shouldRestoreOnCleanup` is only true if neither `onPointerUp`
         // (commit branch) nor `onCancel` ran — i.e., the unmount came
@@ -668,6 +766,7 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
       }
       emitter.off('grid:move', onGridMove)
       emitter.off('tool:cancel', onCancel)
+      window.removeEventListener('pointermove', onPointerMove)
       window.removeEventListener('pointerup', onPointerUp)
       window.removeEventListener('keydown', onKeyDown)
     }

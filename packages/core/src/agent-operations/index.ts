@@ -34,6 +34,7 @@ import { fitStair, measureStairOperation } from './stairs'
 import type { AgentOperation, AgentOperations } from './types'
 import { createUnit, listUnits, setUnitMembers } from './units'
 import { verifyScene } from './verify-scene'
+import { setWallType } from './wall-type'
 
 export * from './achieved'
 export * from './add-column'
@@ -94,6 +95,7 @@ export * from './wall-face-script'
 export * from './wall-object-observations'
 export * from './wall-opening'
 export * from './wall-skirting'
+export * from './wall-type'
 
 const SINGLE_OPERATIONS = {
   measure_stair: measureStairOperation,
@@ -111,6 +113,7 @@ const SINGLE_OPERATIONS = {
   set_checkpoint: setCheckpoint,
   design_brief: designBrief,
   add_wall: addWall,
+  set_wall_type: setWallType,
   add_fence: addFence,
   add_corner_window: addCornerWindow,
   merge_windows: mergeWindowsOperation,

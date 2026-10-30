@@ -90,7 +90,7 @@ function exportedIds(installedPlugins: readonly string[] | undefined) {
     'meters',
     DEFAULT_FLOORPLAN_ANNOTATION_VISIBILITY,
     'floor-plan',
-    'finished-faces',
+    'both',
     installedPlugins,
   ).map(({ id }) => id)
 }

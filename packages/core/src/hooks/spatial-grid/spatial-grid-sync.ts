@@ -1,3 +1,4 @@
+import { isDeckSlab } from '../../lib/deck-framing'
 import { resolveLevelId } from '../../lib/node-ancestry'
 import { isFloorPlate } from '../../lib/plate-surface'
 import { subtractPolygonsFromPolygon } from '../../lib/polygon-union'
@@ -524,6 +525,11 @@ export function markTerrainSupportDependents(
 
   for (const node of Object.values(nodes)) {
     if (node.type === 'slab') {
+      // A deck's posts run down to the ground under each, on whatever storey it stands.
+      if (isDeckSlab(node, (id) => nodes[id])) {
+        markDirty(node.id)
+        continue
+      }
       const level = nodes[resolveLevelId(node, nodes)]
       if (
         node.plateRole === 'base' &&

@@ -1,10 +1,13 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  BeamNode,
+  ColumnNode,
   BuildingNode,
   CeilingNode,
   type FenceNode,
   LevelNode,
+  railingWallDefaults,
   SiteNode,
   SlabNode,
   WallNode,
@@ -12,6 +15,7 @@ import {
 } from '../../schema'
 import { FOUNDATION_CONSTRUCTIONS } from '../../lib/foundation-construction'
 import { foundationWallConstruction } from '../../lib/foundation-wall'
+import { WALL_ASSEMBLY_PRESETS, wallAssemblyPatch } from '../../systems/wall/wall-assembly'
 import { getLevelElevations } from '../../services/storey'
 import type { AgentToolCase, SceneGraph } from './cases'
 
@@ -1303,4 +1307,202 @@ export const CREATE_STAIR_CASES: AgentToolCase[] = [
     input: { levelId: 'level_ground', x: 3, z: 1, railingMaterial: 'library:brass-rail' },
     expect: { refusal: 'unknown_material', mentions: ['railingMaterial', 'library:brass-rail'] },
   },
+]
+
+const ASSEMBLY_PRESET = WALL_ASSEMBLY_PRESETS.find((entry) => entry.id === 'exterior-2x6-siding')!
+const PROJECT_TYPE: { id: string; label: string; assembly: import('../../schema').Assembly } = {
+  id: 'custom-porch', label: 'Porch wall',
+  assembly: { face: 'exterior' as const, presetId: 'custom-porch', layers: [
+    { id: 'framing', role: 'structure' as const, core: true, material: 'wood', thickness: 0.14 },
+    { id: 'interior', role: 'lining' as const, material: 'drywall', thickness: 0.01 },
+  ] },
+}
+function wallTypesScene(): SceneGraph {
+  const scene = storeysScene()
+  const site = SiteNode.parse({ id: 'site_types', children: scene.rootNodeIds, wallTypes: [PROJECT_TYPE] })
+  for (const id of scene.rootNodeIds) (scene.nodes[id] as AnyNode).parentId = site.id
+  scene.nodes[site.id] = site
+  scene.rootNodeIds = [site.id]
+  return scene
+}
+
+export const WALL_TYPE_CASES: AgentToolCase[] = [
+  ...[ASSEMBLY_PRESET, PROJECT_TYPE].map((type): AgentToolCase => ({
+    name: `add wall copies ${type.id} layers and thickness, overriding explicit thickness`,
+    tool: 'add_wall', scene: wallTypesScene,
+    input: { levelId: 'level_ground', start: [8, 0], end: [8, 4], type: type.id, thickness: 0.3 },
+    expect: { result: { ok: true }, check: (result, nodes) => {
+      const wall = nodes[result.wallId as string]
+      const patch = wallAssemblyPatch(type.assembly)
+      return wall?.type === 'wall' && JSON.stringify(wall) === JSON.stringify(WallNode.parse({ ...wall, ...patch })) && wall.thickness === patch.thickness
+        ? [] : ['Assembly or thickness differs from the panel patch']
+    } },
+  })),
+  {
+    name: 'an explicit assembly below grade keeps its type without claiming default foundation construction',
+    tool: 'add_wall', scene: basementHouseScene,
+    input: { levelId: 'level_base', start: [0, 0], end: [6, 0], type: ASSEMBLY_PRESET.id },
+    expect: { result: { ok: true }, check: (result, nodes) => {
+      const wall = nodes[result.wallId as string]
+      return wall?.type === 'wall' && wall.assembly?.presetId === ASSEMBLY_PRESET.id && !result.construction
+        ? [] : ['Explicit wall type was replaced or reported as default foundation construction']
+    } },
+  },
+  ...[ASSEMBLY_PRESET, PROJECT_TYPE].map((type): AgentToolCase => ({
+    name: `set wall type copies ${type.id} on existing walls`,
+    tool: 'set_wall_type', scene: wallTypesScene,
+    input: { wallIds: ['wall_ground'], type: type.id },
+    expect: { result: { ok: true, wallIds: ['wall_ground'], type: type.id },
+      after: { wall_ground: wallAssemblyPatch(type.assembly) } },
+  })),
+  ...['add_wall', 'set_wall_type'].map((tool): AgentToolCase => ({
+    name: 'unknown assembly ids are refused', tool, scene: wallTypesScene,
+    input: { levelId: 'level_ground', start: [8, 0], end: [8, 4], wallIds: ['wall_ground'], type: 'missing-type' },
+    expect: { refusal: 'unknown_wall_type' },
+  })),
+  {
+    name: 'every wall must exist before any wall type changes',
+    tool: 'set_wall_type', scene: wallTypesScene,
+    input: { wallIds: ['wall_ground', 'wall_missing'], type: PROJECT_TYPE.id },
+    expect: { refusal: 'target_not_found' },
+  },
+  {
+    name: 'clearing an assembly keeps its thickness',
+    tool: 'set_wall_type', scene: () => {
+      const scene = wallTypesScene()
+      Object.assign(scene.nodes.wall_ground!, wallAssemblyPatch(PROJECT_TYPE.assembly))
+      return scene
+    },
+    input: { wallIds: ['wall_ground'], type: null },
+    expect: { result: { ok: true }, check: (_result, nodes) => {
+      const wall = nodes.wall_ground
+      return wall?.type === 'wall' && !wall.assembly && wall.thickness === wallAssemblyPatch(PROJECT_TYPE.assembly).thickness
+        ? [] : ['Clearing the assembly changed thickness or retained layers']
+    } },
+  },
+  ...[ASSEMBLY_PRESET, PROJECT_TYPE, null].map((type): AgentToolCase => ({
+    name: `get walls reports ${type?.id ?? 'no assembly'} and available types`,
+    tool: 'get_walls', scene: () => {
+      const scene = wallTypesScene()
+      if (type) Object.assign(scene.nodes.wall_ground!, wallAssemblyPatch(type.assembly))
+      return scene
+    },
+    input: { levelId: 'level_ground' },
+    expect: { result: {}, contains: {
+      walls: [{ id: 'wall_ground', type: type ? { id: type.id, label: type.label } : null }],
+      wallTypes: [{ id: PROJECT_TYPE.id, label: PROJECT_TYPE.label }, { id: ASSEMBLY_PRESET.id, label: ASSEMBLY_PRESET.label }],
+    } },
+  })),
+]
+
+export const FRAMING_POST_CASES: AgentToolCase[] = [
+  {
+    name: 'role post uses the Post tile defaults and reaches the beam above it',
+    tool: 'add_column', scene: () => {
+      const scene = storeysScene()
+      const beam = BeamNode.parse({ id: 'beam_post', parentId: 'level_ground', start: [7, 0], end: [10, 0], topElevation: 2.6, depth: 0.2 })
+      scene.nodes[beam.id] = beam
+      ;(scene.nodes.level_ground as LevelNode).children.push(beam.id)
+      return scene
+    },
+    input: { level: 'level_ground', x: 8, z: 0, role: 'post' },
+    expect: { result: { ok: true, width: 5.5 * 0.0254, depth: 5.5 * 0.0254 }, check: (result, nodes) => {
+      const post = nodes[result.columnId as string]
+      return post?.type === 'column' && post.role === 'post' && post.crossSection === 'square' && post.postBase === 'none' && post.baseStyle === 'none' && post.capitalStyle === 'none' && post.slots?.shaft === 'library:wood-woodplank19' && Math.abs(post.height - 2.4) < 1e-9
+        ? [] : [`Wrong Post tile defaults: ${JSON.stringify(post)}`]
+    } },
+  },
+  ...(['4x4', '6x6', '8x8'] as const).map((size, index): AgentToolCase => ({
+    name: `post ${size} with ${['none', 'post-base', 'pier'][index]} uses native size and base fields`,
+    tool: 'add_column', scene: storeysScene,
+    input: { level: 'level_ground', x: 8, z: 0, role: 'post', postSize: size, postBase: ['none', 'post-base', 'pier'][index], height: '8 ft' },
+    expect: { result: { ok: true, height: 2.4384 }, check: (result, nodes) => {
+      const post = nodes[result.columnId as string]
+      const side = [3.5, 5.5, 7.25][index]! * 0.0254
+      const base = ['none', 'post-base', 'pier'][index]
+      return post?.type === 'column' && post.width === side && post.depth === side && post.postBase === base && post.baseStyle === (index === 0 ? 'none' : 'simple-square') && post.baseHeight === [0, 1.5 * 0.0254, 8 * 0.0254][index] && (index === 0 || post.slots?.base === ['unused', 'library:metal-steel', 'library:concrete-raw'][index])
+        ? [] : ['Post section or base differs from the tile choices']
+    } },
+  })),
+  {
+    name: 'editing a post size and base keeps its authored height, position and shaft finish',
+    tool: 'add_column', scene: () => {
+      const scene = storeysScene()
+      const post = ColumnNode.parse({ id: 'column_post', parentId: 'level_ground', role: 'post', crossSection: 'square', width: 0.1397, depth: 0.1397, height: 1.8, position: [8, 0, 0], slots: { shaft: 'library:preset-white', base: 'library:metal-steel' }, postBase: 'post-base' })
+      scene.nodes[post.id] = post
+      ;(scene.nodes.level_ground as LevelNode).children.push(post.id)
+      return scene
+    },
+    input: { nodeId: 'column_post', postSize: '8x8', postBase: 'pier' },
+    expect: { result: { ok: true }, after: { column_post: { role: 'post', width: 7.25 * 0.0254, depth: 7.25 * 0.0254, height: 1.8, position: [8, 0, 0], postBase: 'pier', baseStyle: 'simple-square', baseHeight: 8 * 0.0254, slots: { shaft: 'library:preset-white', base: 'library:concrete-raw' } } } },
+  },
+  {
+    name: 'ordinary columns keep their defaults when no post is requested',
+    tool: 'add_column', scene: storeysScene,
+    input: { level: 'level_ground', x: 8, z: 0 },
+    expect: { result: { height: 2.5, width: 0.44, depth: 0.44 }, check: (result, nodes) => {
+      const column = nodes[result.columnId as string]
+      return column?.type === 'column' && !column.role && !column.postBase && column.crossSection === 'round' ? [] : ['Ordinary column defaults changed']
+    } },
+  },
+  {
+    name: 'post choices on an ordinary column require role post',
+    tool: 'add_column', scene: storeysScene,
+    input: { level: 'level_ground', x: 8, z: 0, postSize: '4x4' },
+    expect: { refusal: 'not_a_post' },
+  },
+]
+
+export const RAILING_WALL_CASES: AgentToolCase[] = [
+  ...([undefined, 'post-and-rail', 'balusters', 'cable', 'boards', 'glass', 'metal'] as const).map((style): AgentToolCase => ({
+    name: `railing ${style ?? 'default'} uses Build panel members and post thickness even below grade`,
+    tool: 'add_wall', scene: basementHouseScene,
+    input: { levelId: 'level_base', start: [0, 0], end: [6, 0], wallType: 'railing', thickness: 0.3, ...(style ? { railing: { style } } : {}) },
+    expect: { result: { ok: true }, check: (result, nodes) => {
+      const wall = nodes[result.wallId as string]
+      const defaults = railingWallDefaults(style)
+      return wall?.type === 'wall' && wall.wallType === 'railing' && wall.height === defaults.height && wall.thickness === defaults.thickness && !wall.assembly && JSON.stringify(wall.railing) === JSON.stringify(defaults.railing) && !result.construction
+        ? [] : [`Railing differs from Build defaults: ${JSON.stringify(wall)}`]
+    } },
+  })),
+  {
+    name: 'railing accepts every schema setting and a custom guard height in length notation',
+    tool: 'add_wall', scene: storeysScene,
+    input: { levelId: 'level_ground', start: [8, 0], end: [8, 4], wallType: 'railing', height: '42 in', thickness: 0.3,
+      railing: { style: 'cable', postSpacing: '4 ft', postSize: '3 in', infillSize: '0.25 in', infillGap: '2 in', bottomClearance: 0, cap: false } },
+    expect: { result: { ok: true }, check: (result, nodes) => {
+      const wall = nodes[result.wallId as string]
+      const expected = WallNode.parse({ ...wall, wallType: 'railing', height: 1.0668, thickness: 0.0762,
+        railing: { style: 'cable', postSpacing: 1.2192, postSize: 0.0762, infillSize: 0.00635, infillGap: 0.0508, bottomClearance: 0, cap: false } })
+      return JSON.stringify(wall) === JSON.stringify(expected) ? [] : ['Custom guard settings or height were lost']
+    } },
+  },
+  {
+    name: 'railing settings require the railing kind', tool: 'add_wall', scene: storeysScene,
+    input: { levelId: 'level_ground', start: [8, 0], end: [8, 4], railing: { style: 'glass' } },
+    expect: { refusal: 'not_a_railing' },
+  },
+  {
+    name: 'railings take no assembly type', tool: 'add_wall', scene: storeysScene,
+    input: { levelId: 'level_ground', start: [8, 0], end: [8, 4], wallType: 'railing', type: ASSEMBLY_PRESET.id },
+    expect: { refusal: 'railing_wall' },
+  },
+  ...(['railing', 'curtain'] as const).map((wallType): AgentToolCase => ({
+    name: `existing ${wallType} walls refuse assembly changes`, tool: 'set_wall_type', scene: () => {
+      const scene = storeysScene()
+      Object.assign(scene.nodes.wall_ground!, { wallType })
+      return scene
+    },
+    input: { wallIds: ['wall_ground'], type: ASSEMBLY_PRESET.id },
+    expect: { refusal: `${wallType}_wall` },
+  })),
+  ...([undefined, 'standard', 'railing', 'curtain'] as const).map((wallType): AgentToolCase => ({
+    name: `get walls reports wallType ${wallType ?? 'standard for legacy walls'}`, tool: 'get_walls', scene: () => {
+      const scene = storeysScene()
+      Object.assign(scene.nodes.wall_ground!, { wallType })
+      return scene
+    },
+    input: { levelId: 'level_ground' },
+    expect: { result: {}, contains: { walls: [{ id: 'wall_ground', wallType: wallType ?? 'standard' }] } },
+  })),
 ]

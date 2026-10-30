@@ -2,7 +2,14 @@
 // depend on @types/bun so the import type is unresolved at compile time.
 import { describe, expect, test } from 'bun:test'
 import { MaterialProperties, type MaterialSchema } from '@pascal-app/core'
-import { MeshPhysicalMaterial, MeshStandardMaterial, NoColorSpace, SRGBColorSpace } from 'three'
+import {
+  MeshPhysicalMaterial,
+  MeshStandardMaterial,
+  NoColorSpace,
+  SRGBColorSpace,
+  Texture,
+  TextureLoader,
+} from 'three'
 import { MeshLambertNodeMaterial, MeshStandardNodeMaterial } from 'three/webgpu'
 import {
   createMaterial as createSceneMaterial,
@@ -11,6 +18,7 @@ import {
 } from '../index'
 import {
   createMaterial,
+  createMaterialFromPreset,
   getTextureKey,
   resolveMaterialRef,
   resolveSlotDefaultMaterial,
@@ -184,5 +192,33 @@ describe('plain colour material refs', () => {
     expect(material).toBe(
       createMaterial({ properties: MaterialProperties.parse({ color: '#2f5585' }) }, 'rendered'),
     )
+  })
+})
+
+describe('catalog maps the asset CDN does not have yet', () => {
+  test('a CDN miss loads the app’s own copy of the map', async () => {
+    const requested: string[] = []
+    const original = TextureLoader.prototype.loadAsync
+    TextureLoader.prototype.loadAsync = ((url: string) => {
+      requested.push(url)
+      return url.startsWith('/')
+        ? Promise.resolve(new Texture())
+        : Promise.reject(new Error('404 on the CDN'))
+    }) as typeof original
+    try {
+      const material = createMaterialFromPreset({
+        maps: { albedoMap: '/material/test/cdn-miss_basecolor.webp' },
+        mapProperties: { color: '#ffffff' },
+      } as never) as MeshStandardNodeMaterial
+      await Bun.sleep(0)
+      await Promise.resolve()
+      expect(requested).toEqual([
+        expect.stringMatching(/^https?:\/\/.+\/material\/test\/cdn-miss_basecolor\.webp$/),
+        '/material/test/cdn-miss_basecolor.webp',
+      ])
+      expect(material.map).toBeInstanceOf(Texture)
+    } finally {
+      TextureLoader.prototype.loadAsync = original
+    }
   })
 })

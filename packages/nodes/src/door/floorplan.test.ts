@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { DoorNode, type FloorplanGeometry, type GeometryContext, WallNode } from '@pascal-app/core'
 import { buildDoorFloorplan } from './floorplan'
+import { placementSwing, swapDoorHingePatch, swapDoorSwingPatch } from './swing'
 
 const wall = WallNode.parse({
   id: 'wall_door-plan',
@@ -83,10 +84,9 @@ describe('buildDoorFloorplan wall-local plane offset', () => {
     expect(footprint?.max).toBeCloseTo(0.1, 9)
   })
 
-  test('an auto frame offset off the wall draws at the wall thickness plus the lip', () => {
-    // No `frameDepth`: the frame is 0.2 m (the wall) + 0.02 m; offset -0.215 puts it past the -z face.
-    const spans = polygonSpans(buildDoor({ doorType: 'sliding', position: [2, 1.05, -0.215] }))
-    const frame = spans.find((span) => Math.abs(span.min + 0.325) < 1e-9)
+  test('an offset auto-depth door is exactly as deep as its wall', () => {
+    const spans = polygonSpans(buildDoor({ doorType: 'sliding', position: [2, 1.05, -0.205] }))
+    const frame = spans.find((span) => Math.abs(span.min + 0.305) < 1e-9)
     expect(frame).toBeDefined()
     expect(frame?.max).toBeCloseTo(-0.105, 9)
   })
@@ -107,5 +107,46 @@ describe('buildDoorFloorplan wall-local plane offset', () => {
     const panels = spans.filter((span) => span !== frame && span.max - span.min < 0.1)
     expect(panels.length).toBeGreaterThan(0)
     for (const panel of panels) expect(panel.max).toBeLessThanOrEqual(-0.1 + 1e-9)
+  })
+})
+
+/** The plan z the open leaf reaches: + is the wall's front (+Z) side, - its back. */
+function leafSide(geometry: FloorplanGeometry[]) {
+  const leaf = geometry
+    .filter((item) => item.kind === 'line')
+    .reduce<{ y1: number; y2: number } | null>((best, item) => {
+      if (item.kind !== 'line') return best
+      return !best || Math.abs(item.y2 - item.y1) > Math.abs(best.y2 - best.y1) ? item : best
+    }, null)
+  return Math.sign(leaf!.y2 - leaf!.y1)
+}
+
+describe('swing chosen while placing', () => {
+  const placed = (rotationY: number, cursor: 'front' | 'back', values: Partial<DoorNode> = {}) =>
+    buildDoor({
+      ...values,
+      rotation: [0, rotationY, 0],
+      swingDirection: placementSwing(DoorNode.parse({ ...values }), rotationY, cursor),
+    })
+
+  test('the leaf swings into the side of the wall the cursor is on', () => {
+    expect(leafSide(placed(0, 'front'))).toBe(1)
+    expect(leafSide(placed(Math.PI, 'back'))).toBe(-1)
+  })
+
+  test('a door held facing out (an outside wall) still swings toward the cursor', () => {
+    expect(leafSide(placed(0, 'back'))).toBe(-1)
+    expect(leafSide(placed(Math.PI, 'front'))).toBe(1)
+    expect(leafSide(placed(0, 'front', { doorType: 'double' }))).toBe(1)
+  })
+
+  test('swapping the swing sends the leaf to the other side; swapping hinges keeps it there', () => {
+    const door = DoorNode.parse({ id: 'door_swap', hingesSide: 'left', handleSide: 'right' })
+    expect(leafSide(buildDoor({ ...door, ...swapDoorSwingPatch(door) }))).toBe(
+      -leafSide(buildDoor(door)),
+    )
+    const swapped = swapDoorHingePatch(door)
+    expect(swapped).toEqual({ hingesSide: 'right', handleSide: 'left' })
+    expect(leafSide(buildDoor({ ...door, ...swapped }))).toBe(leafSide(buildDoor(door)))
   })
 })

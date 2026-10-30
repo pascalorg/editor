@@ -61,6 +61,7 @@ import {
   setCheckpointTool,
   setGroundLevelTool,
   setUnitMembersTool,
+  setWallTypeTool,
   validateDesignTool,
   verifySceneTool,
   viewAssetsTool,
@@ -237,7 +238,11 @@ const SHARED_TOOLS: SharedTool[] = [
     contract: getWallsTool,
     operation: AGENT_OPERATIONS.get_walls,
     annotations: READ_ONLY_TOOL_ANNOTATIONS,
-    outputSchema: { levelId: z.string(), walls: z.array(jsonObject) },
+    outputSchema: {
+      levelId: z.string(),
+      walls: z.array(jsonObject),
+      wallTypes: z.array(jsonObject),
+    },
   },
   {
     contract: getZonesTool,
@@ -352,6 +357,11 @@ const SHARED_TOOLS: SharedTool[] = [
     contract: addWallTool,
     operation: AGENT_OPERATIONS.add_wall,
     annotations: ADDITIVE_TOOL_ANNOTATIONS,
+  },
+  {
+    contract: setWallTypeTool,
+    operation: AGENT_OPERATIONS.set_wall_type,
+    annotations: DESTRUCTIVE_TOOL_ANNOTATIONS,
   },
   {
     contract: addFenceTool,

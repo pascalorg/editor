@@ -4,6 +4,7 @@ import {
   type AnyNode,
   getCatalogMaterialById,
   getLibraryMaterialIdFromRef,
+  getMaterialSwatch,
   getSceneMaterialIdFromRef,
   nodeRegistry,
   type PascalI18n,
@@ -11,10 +12,11 @@ import {
   useScene,
 } from '@pascal-app/core'
 import { useState } from 'react'
+import { materialSwatchStyle } from '../../../lib/material-swatch-style'
 import { Popover, PopoverContent, PopoverTrigger } from '../primitives/popover'
 import { MaterialPicker } from './material-picker'
 
-type Swatch = { label: string; color: string | null; image: string | null }
+type Swatch = { label: string; color: string | null; image: string | null; tinted?: boolean }
 
 /** How a finish reference reads in a panel: its catalog tile, its colour, or its scene material. */
 function useFinishSwatch(ref: string | undefined, fallback: string): Swatch {
@@ -33,15 +35,19 @@ function describe(
   i18n: PascalI18n,
 ) {
   const library = getCatalogMaterialById(getLibraryMaterialIdFromRef(ref) ?? undefined)
-  if (library)
+  if (library) {
+    const swatch = getMaterialSwatch(library)
     return {
       label: library.label,
-      color: library.previewColor ?? null,
-      image: library.previewThumbnailUrl ?? null,
+      color: swatch.color,
+      image: swatch.imageUrl,
+      tinted: swatch.tinted,
     }
+  }
   const sceneId = getSceneMaterialIdFromRef(ref)
   const scene = sceneId ? materials[sceneId as keyof typeof materials] : undefined
-  if (scene) return { label: scene.name, color: scene.material.properties?.color ?? null, image: null }
+  if (scene)
+    return { label: scene.name, color: scene.material.properties?.color ?? null, image: null }
   if (ref.startsWith('#')) return { label: ref.toUpperCase(), color: ref, image: null }
   return { label: defaultLabel(i18n), color: null, image: null }
 }
@@ -101,17 +107,22 @@ export function FinishSwatch({
             <span
               aria-hidden
               className="size-4 shrink-0 overflow-hidden rounded-full border border-border/50"
-              style={{ backgroundColor: swatch.color ?? 'transparent' }}
-            >
-              {swatch.image && <img alt="" className="size-full object-cover" src={swatch.image} />}
-            </span>
+              style={materialSwatchStyle({
+                color: swatch.color ?? 'transparent',
+                imageUrl: swatch.image,
+                tinted: swatch.tinted,
+              })}
+            />
             <span className="truncate">{swatch.label}</span>
           </button>
         </PopoverTrigger>
         <PopoverContent align="end" className="flex h-96 w-80 flex-col p-2" side="left">
           <MaterialPicker
             onSelectMaterialPreset={(ref) => {
-              const live = useScene.getState().nodes[node.id as keyof ReturnType<typeof useScene.getState>['nodes']]
+              const live =
+                useScene.getState().nodes[
+                  node.id as keyof ReturnType<typeof useScene.getState>['nodes']
+                ]
               if (live) paintSurface(live, role, ref)
               setOpen(false)
             }}

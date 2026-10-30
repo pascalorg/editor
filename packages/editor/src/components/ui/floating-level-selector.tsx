@@ -72,6 +72,7 @@ import { useIsMobile } from '../../hooks/use-mobile'
 import { ActionButton } from './controls/action-button'
 import { SliderControl } from './controls/slider-control'
 import { LevelDuplicateDialog } from './level-duplicate-dialog'
+import { LevelWallCopyPrompt, offerExteriorWallCopy } from './level-wall-copy-prompt'
 import {
   Dialog,
   DialogContent,
@@ -655,12 +656,14 @@ export function FloatingLevelSelector() {
     if (!resolvedBuildingId) return
     const newLevel = addStoreyOnTop(resolvedBuildingId)
     setSelection({ buildingId: resolvedBuildingId, levelId: newLevel.id })
+    offerExteriorWallCopy(newLevel.id)
   }, [resolvedBuildingId, setSelection])
 
   const handleAddBelow = useCallback(() => {
     if (!resolvedBuildingId) return
     const newLevel = addStoreyBelow(resolvedBuildingId)
     setSelection({ buildingId: resolvedBuildingId, levelId: newLevel.id })
+    offerExteriorWallCopy(newLevel.id)
   }, [resolvedBuildingId, setSelection])
 
   const handleInsertBetween = useCallback(
@@ -684,6 +687,7 @@ export function FloatingLevelSelector() {
           .map((l) => ({ id: l.id as AnyNodeId, data: { level: l.level + 1 } as Partial<AnyNode> })),
       })
       setSelection({ buildingId: resolvedBuildingId, levelId: newLevel.id })
+      offerExteriorWallCopy(newLevel.id, lower.id)
     },
     [resolvedBuildingId, levels, applyNodeChanges, setSelection],
   )
@@ -876,6 +880,7 @@ export function FloatingLevelSelector() {
           </DndContext>
         </div>
         <UnitFocusChip />
+        <LevelWallCopyPrompt />
       </div>
 
       {/* Delete confirmation dialog */}

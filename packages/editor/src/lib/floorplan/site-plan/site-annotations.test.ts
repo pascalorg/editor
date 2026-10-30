@@ -1,5 +1,12 @@
 import { describe, expect, test } from 'bun:test'
-import { createTerrainField, type LevelNode, quantize, type SceneSnapshot } from '@pascal-app/core'
+import {
+  createTerrainField,
+  LevelNode,
+  quantize,
+  type SceneSnapshot,
+  SlabNode,
+  ZoneNode,
+} from '@pascal-app/core'
 import { buildSitePlanDrawing, setbacksWarning } from './build-site-plan-drawing'
 import { registerSitePlanContributor } from './contributors'
 import { computeSiteCoverage } from './coverage'
@@ -14,6 +21,7 @@ import {
   streetEdgeNames,
   UNNAMED_STREET,
 } from './site-annotations'
+import { outdoorParts } from './site-parts'
 
 /** The QA lot (4121 NW 34th St, Gainesville): a through lot, NW 34th Terrace on the west edge (1), NW 34th Street on the east (3). */
 const LOT: [number, number][] = [
@@ -436,6 +444,43 @@ describe('the setbacks line a plans examiner reads', () => {
 })
 
 describe('the finish floor elevation', () => {
+  test('outdoor plates use their room type for site parts and stay out of the house floor elevation', () => {
+    const polygon: [number, number][] = [
+      [0, 0],
+      [2, 0],
+      [2, 2],
+      [0, 2],
+    ]
+    const room = ZoneNode.parse({ name: 'Deck', roomType: 'deck', polygon })
+    const plate = SlabNode.parse({
+      zoneIds: [room.id],
+      plateRole: 'sunken',
+      polygon,
+      elevation: 0.4,
+    })
+    const floor = SlabNode.parse({
+      plateRole: 'base',
+      zoneIds: [room.id],
+      polygon: [],
+      elevation: 0.05,
+    })
+    const level = LevelNode.parse({ children: [plate.id, floor.id, room.id] })
+    for (const metadata of [{}, { floor: 'porch-slab' }]) {
+      const scene = {
+        nodes: {
+          [level.id]: level,
+          [room.id]: room,
+          [plate.id]: { ...plate, metadata },
+          [floor.id]: floor,
+        },
+      } as unknown as SceneSnapshot
+      expect(outdoorParts(scene, level, null, [], [])).toMatchObject([
+        { id: plate.id, kind: 'deck', wood: true },
+      ])
+      expect(floorTops(scene, level)).toEqual({ floor: 0.05, garage: null })
+    }
+  })
+
   test('the driveway and walk (flatwork, no floor tag) never become the FF', () => {
     const nodes = {
       level_0: {

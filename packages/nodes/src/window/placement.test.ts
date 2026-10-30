@@ -10,6 +10,9 @@ afterEach(() => useWindowPlacement.setState(initial))
 // keeps whatever the previous type left: cycled past Bay or Bow, a Fixed window placed without one.
 test("the window tool's type chip gives every type its own sill, cycled past Bay and Bow", () => {
   let draft = WindowNode.parse({ ...placedWindowFields() })
+  expect(draft.frameThickness).toBe(0.02)
+  expect(draft.casingFaceA).toBe(true)
+  expect(draft.casingFaceB).toBe(true)
   const seen: Record<string, boolean> = {}
   for (let step = 0; step < 18; step++) {
     useWindowPlacement.getState().cycleType()

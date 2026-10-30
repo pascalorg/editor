@@ -38,6 +38,10 @@ export const RoofNode = BaseNode.extend({
   edgeMaterialPreset: z.string().optional(),
   wallMaterial: MaterialSchema.optional(),
   wallMaterialPreset: z.string().optional(),
+  // The wall band between the top plate and the eaves (a raised heel): its own finish, under every
+  // segment that has none; absent, the walls' below it.
+  heelMaterial: MaterialSchema.optional(),
+  heelMaterialPreset: z.string().optional(),
   position: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
   // Rotation around Y axis in radians
   rotation: z.number().default(0),

@@ -393,11 +393,16 @@ async function loadPresetTexture(
   // materials can be created while a capture canvas's renderer is still
   // initializing, and failing here would cache the material permanently
   // texture-less (white).
-  const load = isKtx2Url(resolvedPath)
-    ? whenKtx2Ready().then(() =>
-        (ktx2Loader as unknown as THREE.TextureLoader).loadAsync(resolvedPath),
-      )
-    : textureLoader.loadAsync(resolvedPath)
+  const loadFrom = (url: string) =>
+    isKtx2Url(url)
+      ? whenKtx2Ready().then(() => (ktx2Loader as unknown as THREE.TextureLoader).loadAsync(url))
+      : textureLoader.loadAsync(url)
+  // A catalog map ships in the app's public folder before the asset CDN has it
+  // (a branch, a deploy ahead of the CDN): a CDN miss retries the app's own copy.
+  const load =
+    resolvedPath !== path && path.startsWith('/')
+      ? loadFrom(resolvedPath).catch(() => loadFrom(path))
+      : loadFrom(resolvedPath)
 
   const promise = load
     .then((texture) => {

@@ -1,6 +1,14 @@
 import type { z } from 'zod'
 import type { addColumnTool } from '../agent-tools/columns'
 import { refuse } from '../agent-tools/refusal'
+import { getFloorPlacedElevation } from '../hooks/spatial-grid/floor-placed-elevation'
+import {
+  FRAMING_POST_MIN_HEIGHT,
+  FRAMING_POST_SIZES,
+  framingPostBasePatch,
+  framingPostFields,
+  framingPostTopAt,
+} from '../lib/framing-post'
 import {
   matchScriptSlotsToLibrary,
   requireMeasured,
@@ -67,6 +75,10 @@ export const addColumn: AgentOperation<AddColumnInput> = (nodes, input, context)
   if (compiled)
     requireMeasured(compiled, { label: input.name, nodeId: input.nodeId, tool: 'add_column' })
   const dimensions = compiled ? scriptedSize(compiled.manifest) : undefined
+  const post = (input.role ?? previous?.role) === 'post'
+  if (!post && (input.postSize !== undefined || input.postBase !== undefined))
+    refuse('not_a_post', 'postSize and postBase require role post or an existing framing post.')
+  const newPost = post && previous?.role !== 'post'
   const {
     nodeId: _,
     code: _code,
@@ -77,14 +89,25 @@ export const addColumn: AgentOperation<AddColumnInput> = (nodes, input, context)
     y,
     z,
     rotation,
+    postSize,
     ...fields
   } = input
-  const node = ColumnNode.parse({
+  let node = ColumnNode.parse({
     ...previous,
+    ...(newPost ? framingPostFields(postSize, input.postBase) : {}),
     ...fields,
+    ...(postSize
+      ? {
+          width: FRAMING_POST_SIZES[postSize],
+          depth: FRAMING_POST_SIZES[postSize],
+          radius: FRAMING_POST_SIZES[postSize] / 2,
+        }
+      : {}),
     ...(compiled?.nodeId ? { id: compiled.nodeId } : {}),
     name:
-      input.name ?? previous?.name ?? `Column ${queryNodes(nodes, { type: 'column' }).length + 1}`,
+      input.name ??
+      previous?.name ??
+      (post ? 'Post' : `Column ${queryNodes(nodes, { type: 'column' }).length + 1}`),
     parentId: parent.id,
     position: [
       x ?? previous?.position[0] ?? 0,
@@ -107,6 +130,21 @@ export const addColumn: AgentOperation<AddColumnInput> = (nodes, input, context)
         }
       : {}),
   })
+  if (post && (newPost || postSize !== undefined || input.postBase !== undefined))
+    node = ColumnNode.parse({
+      ...node,
+      ...framingPostBasePatch(node, input.postBase ?? node.postBase ?? 'none'),
+    })
+  if (newPost && input.height === undefined && !compiled) {
+    const base =
+      getFloorPlacedElevation({ node, nodes, position: node.position, levelId: parent.id }) +
+      node.position[1]
+    const { top } = framingPostTopAt(nodes, parent.id, [node.position[0], node.position[2]], {
+      baseElevation: base,
+      side: node.width,
+    })
+    node = { ...node, height: Math.max(FRAMING_POST_MIN_HEIGHT, top - base) }
+  }
   const slotIds = new Set(compiled?.manifest.slots.map((slot) => slot.id))
   const orphanedSlots = compiled
     ? Object.keys(previous?.slots ?? {}).filter((id) => !slotIds.has(id))

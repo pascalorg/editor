@@ -1,4 +1,5 @@
 import type { WallNode } from '../schema'
+import { isRailingWall } from '../schema/nodes/railing-wall'
 import { getWallCurveFrameAt, isCurvedWall } from '../systems/wall/wall-curve'
 import {
   dedupeSequentialPoints,
@@ -16,7 +17,9 @@ import { distanceToSegment } from './room-topology-index'
  * The outside of a storey's walls: the unbounded faces of the planar wall
  * graph, walked the other way round from rooms. Facades fill these loops and
  * the wall tool selects them. Kept apart from the room kernel (`room-graph`),
- * which only ever wants the bounded faces.
+ * which only ever wants the bounded faces. A railing closes rooms but holds no
+ * outside back (a deck's guard), so the loops are traced without railings: the
+ * outline of a house with a deck is its solid walls'.
  */
 
 type WallFace = {
@@ -403,7 +406,10 @@ export function enclosedWallIds(
 }
 
 function outerFaces(walls: WallNode[], joinTolerance: number) {
-  const loops = exteriorFaces(walls, Math.max(WALL_ENDPOINT_TOLERANCE, joinTolerance))
+  const loops = exteriorFaces(
+    walls.filter((wall) => !isRailingWall(wall)),
+    Math.max(WALL_ENDPOINT_TOLERANCE, joinTolerance),
+  )
   return loops.filter(
     (loop, index) =>
       !loops.some((other, otherIndex) => {

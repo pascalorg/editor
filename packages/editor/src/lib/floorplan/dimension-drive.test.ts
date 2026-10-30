@@ -157,7 +157,7 @@ describe('driving a wall length', () => {
     expect(plan?.updates[0]?.data).toEqual({ start: [0, 0], end: [3.5, 0] })
   })
 
-  test('a dimension across the wall is not drivable', () => {
+  test('a dimension across the wall that ends on neither face is not drivable', () => {
     const nodes = scene()
     const resolution = resolveDimensionDrive({
       nodes,
@@ -165,7 +165,10 @@ describe('driving a wall length', () => {
       start: [1.5, -1],
       end: [1.5, 1],
     })
-    expect(resolution).toEqual({ drivable: false, reason: 'dimension is not along the wall' })
+    expect(resolution).toEqual({
+      drivable: false,
+      reason: 'dimension does not start or end on this wall',
+    })
   })
 
   test('a locked wall refuses to drive', () => {
@@ -361,5 +364,31 @@ describe('an opening width tag resizes the opening', () => {
       nextLength: 1.2192,
     })
     expect(plan?.updates).toEqual([{ id: 'win_1' as AnyNodeId, data: { width: 1.2192 } }])
+  })
+})
+
+describe('a dimension across a wall slides the wall', () => {
+  test('a room width from the wall face drives the wall along its normal, away from the far end', () => {
+    // wall_a runs east along z = 0; the dimension leaves its south face for a wall 3 m south.
+    const resolution = resolveDimensionDrive({
+      nodes: scene(),
+      ownerNodeId: 'wall_a' as AnyNodeId,
+      start: [1.5, 0.075],
+      end: [1.5, 3],
+    })
+    expect(resolution).toEqual({
+      drivable: true,
+      target: { kind: 'wall-offset', wallId: 'wall_a' as AnyNodeId, direction: [0, -1] },
+    })
+  })
+
+  test('the wall end of the dimension may be either witness point', () => {
+    const resolution = resolveDimensionDrive({
+      nodes: scene(),
+      ownerNodeId: 'wall_a' as AnyNodeId,
+      start: [1.5, -4],
+      end: [1.5, -0.075],
+    })
+    expect(resolution).toMatchObject({ drivable: true, target: { direction: [0, 1] } })
   })
 })

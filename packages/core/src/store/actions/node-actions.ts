@@ -1480,6 +1480,9 @@ const applyNodeChangesActionImpl = (
       removeFromCollections(nextCollections, id)
 
       delete nextNodes[id]
+      // A mark left on a deleted node would sit in the dirty set for good,
+      // as `deleteNodes` notes: a preview may have marked it before the drop.
+      nodesToClearDirty.add(id)
     }
 
     refreshDefaultGuttersForRoofIds(nextNodes, roofsToRefresh, nodesToMarkDirty, nodesToClearDirty)
@@ -1494,14 +1497,16 @@ const applyNodeChangesActionImpl = (
     return { nodes: nextNodes, rootNodeIds: resolvedRootIds, collections: nextCollections }
   })
 
+  // A store subscriber may already have deleted a node this write touched (the
+  // structure sync merging a room away): nothing is left to rebuild there.
   for (const id of nodesToMarkDirty) {
-    get().markDirty(id)
+    if (get().nodes[id]) get().markDirty(id)
   }
   for (const id of nodesToClearDirty) {
     get().clearDirty(id)
   }
   for (const id of parentsToMarkDirty) {
-    get().markDirty(id)
+    if (get().nodes[id]) get().markDirty(id)
     const parent = get().nodes[id]
     if (parent && 'children' in parent && Array.isArray(parent.children)) {
       for (const childId of parent.children) {
@@ -1657,7 +1662,9 @@ const updateNodesActionImpl = (
     // A disposed scene's frame reaches nothing.
     if (environment.disposed) return
     pendingUpdates.forEach((id) => {
-      get().markDirty(id)
+      // A node deleted since its update (a room merged away by the same drop)
+      // has nothing left to rebuild; marking it would leave it in the set.
+      if (get().nodes[id]) get().markDirty(id)
     })
     pendingUpdates.clear()
   }

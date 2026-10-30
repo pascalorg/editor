@@ -72,6 +72,69 @@ describe('roof system gable geometry', () => {
   })
 })
 
+/** Each slot's triangle centroids, segment-local. */
+function slotCentroids(geometry: THREE.BufferGeometry): Map<number, THREE.Vector3[]> {
+  const position = geometry.getAttribute('position')
+  const index = geometry.getIndex()
+  const vertex = (corner: number) => (index ? index.getX(corner) : corner)
+  const slots = new Map<number, THREE.Vector3[]>()
+  for (const group of geometry.groups) {
+    for (let corner = group.start; corner < group.start + group.count; corner += 3) {
+      const centroid = new THREE.Vector3()
+      for (let k = 0; k < 3; k++)
+        centroid.add(new THREE.Vector3().fromBufferAttribute(position, vertex(corner + k)))
+      centroid.multiplyScalar(1 / 3)
+      const list = slots.get(group.materialIndex ?? 0) ?? []
+      list.push(centroid)
+      slots.set(group.materialIndex ?? 0, list)
+    }
+  }
+  return slots
+}
+
+describe('roof wall bands', () => {
+  // A raised heel: the band of wall between the plate and the eaves, under a gable.
+  const heeled = (roofType: 'gable' | 'hip') =>
+    RoofSegmentNode.parse({
+      roofType,
+      width: 8,
+      depth: 6,
+      wallHeight: 0.5,
+      wallThickness: 0.2,
+      pitch: 30,
+    })
+
+  test('a gable segment carries its heel band and each gable end as slots of their own', () => {
+    const geometry = generateRoofSegmentGeometry(heeled('gable'))
+    try {
+      const slots = slotCentroids(geometry)
+      const heel = slots.get(4) ?? []
+      const left = slots.get(5) ?? []
+      const right = slots.get(6) ?? []
+      expect(heel.length).toBeGreaterThan(0)
+      expect(left.length).toBeGreaterThan(0)
+      expect(right.length).toBeGreaterThan(0)
+      // the heel band stands under the eaves; each gable above them, at its own end
+      expect(heel.every((c) => c.y < 0.5)).toBe(true)
+      expect(left.every((c) => c.x < -4 && c.y > 0.45)).toBe(true)
+      expect(right.every((c) => c.x > 4 && c.y > 0.45)).toBe(true)
+    } finally {
+      geometry.dispose()
+    }
+  })
+
+  test('a hip has a heel band but no gables', () => {
+    const geometry = generateRoofSegmentGeometry(heeled('hip'))
+    try {
+      const slots = slotCentroids(geometry)
+      expect(slots.get(4)?.length ?? 0).toBeGreaterThan(0)
+      expect(slots.has(5) || slots.has(6)).toBe(false)
+    } finally {
+      geometry.dispose()
+    }
+  })
+})
+
 describe('roof system shed geometry', () => {
   function inspectShedGeometry(segment: RoofSegmentNode) {
     const geometry = generateRoofSegmentGeometry(segment)

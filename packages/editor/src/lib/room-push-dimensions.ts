@@ -4,6 +4,7 @@ import {
   getWallFaceOffsets,
   isCurvedWall,
   type Point,
+  type SeparatorNode,
   type WallNode,
 } from '@pascal-app/core'
 
@@ -154,11 +155,61 @@ export function wallPushDimensionRooms(
 }
 
 /**
+ * The rooms along a pushed edge of invisible walls, as `wallPushDimensionRooms`
+ * reads them along a wall: each room's stretch of the edge's separators, put
+ * on the edge's one `line` (`[0, 1]` its length), faced as that line runs.
+ */
+export function separatorEdgeDimensionRooms(
+  rooms: ReadonlyArray<{ id: string; spans: readonly BoundarySpan[] }>,
+  edge: {
+    line: Pick<SeparatorNode, 'start' | 'end'>
+    separators: ReadonlyArray<{ separatorId: string; t0: number; t1: number }>
+  },
+  resolve: (id: string) => AnyNode | undefined,
+  elevationOf: (roomId: string) => number,
+): PushDimensionRoom[] {
+  const { start, end } = edge.line
+  const dx = end[0] - start[0]
+  const dz = end[1] - start[1]
+  const lengthSq = dx * dx + dz * dz
+  if (lengthSq < 1e-12) return []
+  const members = new Set(edge.separators.map((member) => member.separatorId))
+  const along = ([x, z]: Point) => ((x - start[0]) * dx + (z - start[1]) * dz) / lengthSq
+  return rooms.flatMap((room) =>
+    room.spans.flatMap((own): PushDimensionRoom[] => {
+      const member = edge.separators.find((entry) => entry.separatorId === own.boundaryId)
+      const separator = resolve(own.boundaryId)
+      if (!member || separator?.type !== 'separator') return []
+      const t0 = Math.max(member.t0, own.t0)
+      const t1 = Math.min(member.t1, own.t1)
+      if (t1 - t0 < 1e-4) return []
+      const sx = separator.end[0] - separator.start[0]
+      const sz = separator.end[1] - separator.start[1]
+      const point = (t: number): Point => [separator.start[0] + sx * t, separator.start[1] + sz * t]
+      const [u0, u1] = [along(point(t0)), along(point(t1))]
+      // A separator drawn against the edge's line has its faces the other way round.
+      const same = sx * dx + sz * dz > 0
+      return [
+        {
+          id: room.id,
+          face: same ? own.face : own.face === 'a' ? 'b' : 'a',
+          t0: Math.min(u0, u1),
+          t1: Math.max(u0, u1),
+          others: room.spans.filter((other) => !members.has(other.boundaryId)),
+          elevation: elevationOf(room.id),
+        },
+      ]
+    }),
+  )
+}
+
+/**
  * The live dimensions of a wall push: for every room along the pushed stretch,
  * the moving face (the resting face moved `distance` along `outward` — a push
  * is a pure translation) to each facing parallel boundary of that room, read
  * through `resolve` so the preview's geometry counts. Per side of the wall:
- * nearest first, one per distinct distance, at most three.
+ * nearest first, one per distinct distance, at most three. An edge of
+ * invisible walls is measured as its one line.
  */
 export function wallPushDimensions({
   rooms,
@@ -168,7 +219,7 @@ export function wallPushDimensions({
   resolve,
 }: {
   rooms: readonly PushDimensionRoom[]
-  wall: WallNode
+  wall: WallNode | SeparatorNode
   outward: Point
   distance: number
   resolve: (id: string) => AnyNode | undefined
@@ -193,6 +244,179 @@ export function wallPushDimensions({
       key: `${side}:${index}`,
     })),
   )
+}
+
+/** Whether two dimensions measure the same span, either way round. */
+export function sameRoomDimension(a: RoomDimension, b: RoomDimension): boolean {
+  const near = (p: Point, q: Point) => Math.hypot(p[0] - q[0], p[1] - q[1]) < 1e-3
+  return (near(a.from, b.from) && near(a.to, b.to)) || (near(a.from, b.to) && near(a.to, b.from))
+}
+
+/** A selected wall's temporary dimension: a room width (ID) or the outside size (OD). */
+export type WallSelectionDimension = RoomDimension & { faces: 'interior' | 'exterior' }
+
+/** A selection's temporary dimension with the node it runs from: typing it moves that node. */
+export type OwnedSelectionDimension = WallSelectionDimension & { ownerId: string }
+
+/**
+ * Several selected nodes' temporary dimensions as one list, keys unique across
+ * owners. Two selected walls across one room both measure it: the width shows
+ * once, owned by the first.
+ */
+export function mergeSelectionDimensions(
+  owners: ReadonlyArray<{ ownerId: string; dimensions: readonly WallSelectionDimension[] }>,
+): OwnedSelectionDimension[] {
+  const kept: OwnedSelectionDimension[] = []
+  for (const { ownerId, dimensions } of owners)
+    for (const dimension of dimensions)
+      if (!kept.some((other) => sameRoomDimension(other, dimension)))
+        kept.push({ ...dimension, key: `${ownerId}:${dimension.key}`, ownerId })
+  return kept
+}
+
+/** Which faces a selected wall's temporary dimensions measure to. */
+export type WallDimensionFaces = 'interior' | 'exterior' | 'both'
+
+const CONNECTION_TOLERANCE = 0.03
+/** Where along the shared stretch the outside size is drawn, clear of the room widths at its middle. */
+const EXTERIOR_DIMENSION_AT = 0.25
+
+function pointSegmentDistance(p: Point, a: Point, b: Point): number {
+  const dx = b[0] - a[0]
+  const dz = b[1] - a[1]
+  const lengthSq = dx * dx + dz * dz
+  const t =
+    lengthSq < 1e-12
+      ? 0
+      : Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dz) / lengthSq))
+  return Math.hypot(p[0] - (a[0] + dx * t), p[1] - (a[1] + dz * t))
+}
+
+function wallsTouch(left: WallNode, right: WallNode): boolean {
+  return (
+    [left.start, left.end].some(
+      (p) => pointSegmentDistance(p, right.start, right.end) <= CONNECTION_TOLERANCE,
+    ) ||
+    [right.start, right.end].some(
+      (p) => pointSegmentDistance(p, left.start, left.end) <= CONNECTION_TOLERANCE,
+    )
+  )
+}
+
+/** The walls joined to `wall` through shared corners and T junctions, itself included. */
+function connectedWalls(wall: WallNode, walls: readonly WallNode[]): WallNode[] {
+  const found = new Map<string, WallNode>([[wall.id, wall]])
+  const queue = [wall]
+  for (let current = queue.pop(); current; current = queue.pop()) {
+    for (const candidate of walls) {
+      if (found.has(candidate.id) || !wallsTouch(current, candidate)) continue
+      found.set(candidate.id, candidate)
+      queue.push(candidate)
+    }
+  }
+  return [...found.values()]
+}
+
+/**
+ * The outside size across the building from a wall's exterior face: to the
+ * far face of the farthest parallel wall of the same connected building that
+ * shares some of its length — the opposite exterior wall. Null when nothing
+ * is across (a lone wall, a curved one).
+ */
+function overallExteriorDimension(
+  wall: WallNode,
+  exteriorFace: 'a' | 'b',
+  walls: readonly WallNode[],
+): Measured | null {
+  const own = boundaryFace(wall, 0, 1, exteriorFace)
+  if (!own) return null
+  const dx = own.end[0] - own.start[0]
+  const dz = own.end[1] - own.start[1]
+  const length = Math.hypot(dx, dz)
+  const dir: Point = [dx / length, dz / length]
+  // The face's room-ward normal points out of the building here: across is its opposite.
+  const across: Point = [-own.inward[0], -own.inward[1]]
+  const along = (p: Point) => (p[0] - own.start[0]) * dir[0] + (p[1] - own.start[1]) * dir[1]
+  let best: { distance: number; lo: number; hi: number } | null = null
+  for (const other of connectedWalls(wall, walls)) {
+    if (other.id === wall.id) continue
+    for (const face of ['a', 'b'] as const) {
+      const candidate = boundaryFace(other, 0, 1, face)
+      if (!candidate) continue
+      const fx = candidate.end[0] - candidate.start[0]
+      const fz = candidate.end[1] - candidate.start[1]
+      const faceLength = Math.hypot(fx, fz)
+      if (Math.abs(dir[0] * fz - dir[1] * fx) / faceLength > PARALLEL_SIN) continue
+      const distance =
+        (candidate.start[0] - own.start[0]) * across[0] +
+        (candidate.start[1] - own.start[1]) * across[1]
+      if (distance <= MIN_GAP) continue
+      const a = along(candidate.start)
+      const b = along(candidate.end)
+      const lo = Math.max(0, Math.min(a, b))
+      const hi = Math.min(length, Math.max(a, b))
+      if (hi - lo < MIN_OVERLAP) continue
+      if (!best || distance > best.distance + SAME_DISTANCE) best = { distance, lo, hi }
+    }
+  }
+  if (!best) return null
+  const at = (u: number): Point => [own.start[0] + dir[0] * u, own.start[1] + dir[1] * u]
+  const [lo, hi] = [at(best.lo), at(best.hi)]
+  // Measured from the same end of the stretch whichever way the wall was drawn,
+  // so the walls on either side of the building put their outside size in one place.
+  const fromLo = Math.abs(lo[0] - hi[0]) > 1e-6 ? lo[0] < hi[0] : lo[1] <= hi[1]
+  const offset = (best.hi - best.lo) * EXTERIOR_DIMENSION_AT
+  const from = at(fromLo ? best.lo + offset : best.hi - offset)
+  return {
+    from,
+    to: [from[0] + across[0] * best.distance, from[1] + across[1] * best.distance],
+    distance: best.distance,
+  }
+}
+
+/**
+ * The temporary dimensions of a selected wall at rest, in 2D and 3D: the room
+ * widths a push of it shows (its face to each facing wall, both sides — ID),
+ * and for an exterior wall the outside size across the building (OD). `faces`
+ * picks which; a wall with no outside (rooms on both faces) shows its room
+ * widths whatever the choice. Each dimension runs `from` the selected wall,
+ * so typing a value moves that wall (`commitDimensionValue`).
+ */
+export function wallSelectionDimensions({
+  rooms,
+  wall,
+  walls,
+  faces,
+  resolve,
+  baseElevation,
+}: {
+  rooms: readonly PushDimensionRoom[]
+  wall: WallNode
+  /** The level's walls, for the opposite exterior wall. */
+  walls: readonly WallNode[]
+  faces: WallDimensionFaces
+  resolve: (id: string) => AnyNode | undefined
+  /** The wall's base, for a dimension with no room floor to stand on. */
+  baseElevation: number
+}): WallSelectionDimension[] {
+  const interior = wallPushDimensions({ rooms, wall, outward: [0, 0], distance: 0, resolve }).map(
+    (dimension): WallSelectionDimension => ({ ...dimension, faces: 'interior' }),
+  )
+  const roomFaces = new Set(rooms.map((room) => room.face))
+  const exteriorFace = roomFaces.size === 1 ? (roomFaces.has('a') ? 'b' : 'a') : null
+  if (!exteriorFace || faces === 'interior') return interior
+  const overall = overallExteriorDimension(wall, exteriorFace, walls)
+  const exterior: WallSelectionDimension[] = overall
+    ? [
+        {
+          ...overall,
+          key: 'exterior',
+          faces: 'exterior',
+          elevation: (rooms[0]?.elevation ?? baseElevation) + DIMENSION_FLOOR_LIFT,
+        },
+      ]
+    : []
+  return faces === 'exterior' ? exterior : [...interior, ...exterior]
 }
 
 /**

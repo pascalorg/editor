@@ -12,7 +12,9 @@ import {
   ActionButton,
   ActionGroup,
   exitCeilingEditToRoom,
+  formatAreaLabel,
   formatLinearMeasurement,
+  getAreaUnitLabel,
   holeEditScope,
   PanelSection,
   PanelWrapper,
@@ -20,6 +22,7 @@ import {
   ShapeChoice,
   SliderControl,
   setCeilingHoles,
+  squareMetersToAreaUnit,
   startOpeningDraft,
   triggerSFX,
   useCeilingEditCeilingId,
@@ -31,6 +34,7 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { Edit, Move, Plus, Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useRef } from 'react'
+import { CeilingBuildUpSection } from './build-up-section'
 import { CEILING_PANEL_MIN_HEIGHT, ceilingHeightRange, clampCeilingHeight } from './height-bounds'
 
 /**
@@ -367,10 +371,14 @@ export function CeilingPanel() {
         )}
       </PanelSection>
 
+      <CeilingBuildUpSection node={node} onUpdate={handleUpdate} unit={unit} />
+
       <PanelSection title={i18n._({ id: 'node.ceiling.panel.info', message: 'Info' })}>
         <div className="flex items-center justify-between px-2 py-1 text-muted-foreground text-sm">
           <span>{i18n._({ id: 'node.ceiling.panel.area', message: 'Area' })}</span>
-          <span className="font-mono text-foreground dark:text-white">{area.toFixed(2)} m²</span>
+          <span className="font-mono text-foreground dark:text-white">
+            {formatAreaLabel(area, unit, 2)}
+          </span>
         </div>
       </PanelSection>
 
@@ -416,9 +424,14 @@ export function CeilingPanel() {
                       {i18n._({
                         id: 'node.holeSummary',
                         message:
-                          '{area} m² · {count, plural, one {{points} pt} other {{points} pts}} · {source}',
+                          '{area} {unit} · {count, plural, one {{points} pt} other {{points} pts}} · {source}',
                         values: {
-                          area: formatFixed(holeArea, 2, i18n.getLocale()),
+                          area: formatFixed(
+                            squareMetersToAreaUnit(holeArea, unit),
+                            2,
+                            i18n.getLocale(),
+                          ),
+                          unit: getAreaUnitLabel(unit),
                           count: hole.length,
                           points: String(hole.length),
                           source: isAutoHole

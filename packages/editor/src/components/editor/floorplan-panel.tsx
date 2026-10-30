@@ -12,6 +12,7 @@ import {
   calculateLevelMiters,
   createSizedStairFlight,
   DEFAULT_ANGLE_STEP,
+  DEFAULT_WALL_THICKNESS,
   type DoorNode,
   DoorNode as DoorNodeSchema,
   type ElevatorNode,
@@ -38,6 +39,7 @@ import {
   resolveSlabPlacementElevation,
   resolveTerrainWallConstructionOptions,
   runAsSingleSceneHistoryStep,
+  type SeparatorNode,
   type SiteNode,
   type SlabNode,
   SlabNode as SlabNodeSchema,
@@ -144,7 +146,13 @@ import {
 } from '../../lib/units'
 import { cn } from '../../lib/utils'
 import { framingAnimates } from '../../lib/viewer-selection'
-import { getWallDrawVariant } from '../../lib/wall-draw-variant'
+import {
+  getWallDrawVariant,
+  getWallLineKind,
+  invisibleWallDraftSnapLines,
+  useWallDraftThickness,
+} from '../../lib/wall-draw-variant'
+import { wallSideOfPlanPoint } from '../../lib/wall-placement-pointer'
 import {
   addWallPolygonDraftCorner,
   commitWallPolygonDraft,
@@ -152,6 +160,18 @@ import {
   startWallPolygonDraft,
   wallPolygonDraftWalls,
 } from '../../lib/wall-polygon-draft'
+import {
+  endWallPullRun,
+  releaseWallPullDrag,
+  useWallPullRun,
+  wallDraftIsRun,
+} from '../../lib/wall-pull'
+import {
+  isWallRunFree,
+  publishWallRunFeedback,
+  snapWallRunDraftPoint,
+  wallRunDirection,
+} from '../../lib/wall-run-snap'
 import { snapBuildingLocalToWorldGrid } from '../../lib/world-grid-snap'
 import { nextZoneName } from '../../lib/zone-name'
 import { subscribeNavigationSyncPose } from '../../store/navigation-sync-pose-store'
@@ -182,6 +202,7 @@ import {
   VIEW_3D,
   visibleScene,
 } from '../../store/view-layout'
+import { FloorplanAdjacentWallsLayer } from '../editor-2d/floorplan-adjacent-walls-layer'
 import { FloorplanAlignmentGuideLayer } from '../editor-2d/floorplan-alignment-guide-layer'
 import { FloorplanCursorIndicatorOverlay as Editor2dFloorplanCursorIndicatorOverlay } from '../editor-2d/floorplan-cursor-indicator-overlay'
 import { FloorplanGroupActionMenu } from '../editor-2d/floorplan-group-action-menu'
@@ -239,6 +260,7 @@ import {
 } from '../tools/shared/segment-angle'
 import {
   chainEndJoinsExistingWall,
+  createInvisibleWallOnCurrentLevel,
   createWallOnCurrentLevel,
   isSegmentLongEnough,
   snapWallDraftPoint,
@@ -267,6 +289,7 @@ import {
   resolveFloorplanPresentationViewBox,
   setFloorplanCompassRotation,
 } from './floorplan-navigation-presentation'
+import { swallowNextClick } from './handles/use-handle-drag'
 import { useFloorplanBackgroundPlacement } from './use-floorplan-background-placement'
 import { useFloorplanHitTesting } from './use-floorplan-hit-testing'
 import { useFloorplanSceneData } from './use-floorplan-scene-data'
@@ -275,6 +298,9 @@ import { sceneSpan } from './views/scene-region'
 const FALLBACK_VIEW_SIZE = 12
 const FLOORPLAN_PADDING = 2
 const MIN_VIEWPORT_WIDTH_RATIO = 0.08
+// However large the fitted plan (a whole lot), zooming in goes down to a view this wide (m): a
+// casing leg or a stud's edge fills the screen.
+const MIN_VIEWPORT_WIDTH = 0.6
 const MAX_VIEWPORT_WIDTH_RATIO = 40
 const PANEL_MIN_WIDTH = 420
 const PANEL_MIN_HEIGHT = 320
@@ -842,7 +868,7 @@ function resolveFloorplanViewWidth(
     return Math.max(0.001, requestedWidth)
   }
 
-  const minWidth = fittedViewport.width * MIN_VIEWPORT_WIDTH_RATIO
+  const minWidth = Math.min(fittedViewport.width * MIN_VIEWPORT_WIDTH_RATIO, MIN_VIEWPORT_WIDTH)
   const maxWidth = fittedViewport.width * MAX_VIEWPORT_WIDTH_RATIO
 
   return clamp(requestedWidth, Math.min(minWidth, currentWidth), Math.max(maxWidth, currentWidth))
@@ -2288,7 +2314,12 @@ function getWallHoverSidePaths(polygon: Point2D[], wall: WallNode): [string, str
   return [rightSidePath, leftSidePath]
 }
 
-function buildDraftWall(levelId: string, start: WallPlanPoint, end: WallPlanPoint): WallNode {
+function buildDraftWall(
+  levelId: string,
+  start: WallPlanPoint,
+  end: WallPlanPoint,
+  thickness?: number,
+): WallNode {
   return {
     object: 'node',
     id: 'wall_draft' as WallNode['id'],
@@ -2300,6 +2331,7 @@ function buildDraftWall(levelId: string, start: WallPlanPoint, end: WallPlanPoin
     children: [],
     start,
     end,
+    thickness,
     frontSide: 'unknown',
     backSide: 'unknown',
   }
@@ -2830,8 +2862,10 @@ function findClosestWallPoint(
     const distSq = (point[0] - px) ** 2 + (point[1] - pz) ** 2
     if (distSq < bestDistSq) {
       bestDistSq = distSq
-      // Provide an arbitrary front-facing normal so the tool knows it's a valid wall side
-      best = { wall, point: [px, pz], t, normal: [0, 0, 1] }
+      // The face the cursor is on, as a 3D hover's normal reports it: a door
+      // swings and a window faces toward the cursor's side, in 2D as in 3D.
+      const side = wallSideOfPlanPoint(wall, [point[0], point[1]])
+      best = { wall, point: [px, pz], t, normal: [0, 0, side === 'front' ? 1 : -1] }
     }
   }
 
@@ -4466,6 +4500,8 @@ function FloorplanLinearDraftLayer({
   sceneRotationDeg: number
 }) {
   const metricNotation = useViewer((state) => state.metricNotation)
+  // The thickness the wall commits at, as the 3D draft shows it.
+  const wallDraftThickness = useWallDraftThickness(DEFAULT_WALL_THICKNESS)
   const wallDraftEnd = useFloorplanDraftPreview((s) => s.wallDraftEnd)
   const fenceDraftEnd = useFloorplanDraftPreview((s) => s.fenceDraftEnd)
   const roofDraftEnd = useFloorplanDraftPreview((s) => s.roofDraftEnd)
@@ -4489,10 +4525,12 @@ function FloorplanLinearDraftLayer({
     ) {
       return null
     }
-    const draftWall = getSharedFloorplanWall(buildDraftWall(levelId, wallDraftStart, wallDraftEnd))
+    const draftWall = getSharedFloorplanWall(
+      buildDraftWall(levelId, wallDraftStart, wallDraftEnd, wallDraftThickness),
+    )
     // Keep the live draft preview cheap; full level-wide mitering here runs on every mouse move.
     return getWallPlanFootprint(draftWall, EMPTY_WALL_MITER_DATA)
-  }, [levelId, wallDraftStart, wallDraftEnd])
+  }, [levelId, wallDraftStart, wallDraftEnd, wallDraftThickness])
 
   // Rectangle mode drafts four walls at once; they read exactly like a line
   // draft — same mitered footprints, measurement plates and axis guides.
@@ -5067,6 +5105,9 @@ export function FloorplanPanel({
   // Walls committed by the current 2D-only chain — exclusion set for the
   // T-junction chain-termination test (mirrors the 3D tool's `chainWallIds`).
   const wallChainWallIdsRef = useRef<string[]>([])
+  // Direction of the run's last wall (a pulled run's source first): the next
+  // holds square to it. Null before the run has a wall.
+  const wallRunReferenceRef = useRef<WallPlanPoint | null>(null)
   const setDraftEnd = useCallback(
     (next: WallPlanPoint | null | ((prev: WallPlanPoint | null) => WallPlanPoint | null)) => {
       const store = useFloorplanDraftPreview.getState()
@@ -5082,14 +5123,10 @@ export function FloorplanPanel({
     },
     [],
   )
-  const [roofDraftStart, setRoofDraftStart] = useState<WallPlanPoint | null>(null)
-  const setRoofDraftEnd = useCallback(
-    (next: WallPlanPoint | null | ((prev: WallPlanPoint | null) => WallPlanPoint | null)) => {
-      const store = useFloorplanDraftPreview.getState()
-      store.setRoofDraftEnd(typeof next === 'function' ? next(store.roofDraftEnd) : next)
-    },
-    [],
-  )
+  // The roof tool that owns the input (the 3D tool, or the plan's own in 2D-only view) writes the
+  // roof draft from the corners it snaps and commits; the plan only draws it, so its rectangle is
+  // the roof the next click makes.
+  const roofDraftStart = useFloorplanDraftPreview((s) => s.roofDraftStart)
   const [ceilingDraftPoints, setCeilingDraftPoints] = useState<WallPlanPoint[]>([])
   const [slabDraftPoints, setSlabDraftPoints] = useState<WallPlanPoint[]>([])
   const slabPlacementBaseRef = useRef<number | null>(null)
@@ -5102,9 +5139,6 @@ export function FloorplanPanel({
   useEffect(() => {
     useFloorplanDraftPreview.getState().setFenceDraftStart(fenceDraftStart)
   }, [fenceDraftStart])
-  useEffect(() => {
-    useFloorplanDraftPreview.getState().setRoofDraftStart(roofDraftStart)
-  }, [roofDraftStart])
   const [zoneDraftPoints, setZoneDraftPoints] = useState<WallPlanPoint[]>([])
   const [siteBoundaryDraft, setSiteBoundaryDraft] = useState<SiteBoundaryDraft | null>(null)
   const [siteVertexDragState, setSiteVertexDragState] = useState<SiteVertexDragState | null>(null)
@@ -7890,20 +7924,29 @@ export function FloorplanPanel({
     setWallChainFirstVertex(null)
     wallConstructionOptionsRef.current = undefined
     wallChainWallIdsRef.current = []
+    wallRunReferenceRef.current = null
     setDraftEnd(null)
     useSegmentDraftChain.getState().clear('wall')
+    // A run pulled from a wall end ends with the plan's draft: back to Select.
+    endWallPullRun()
   }, [setDraftEnd])
   const clearFencePlacementDraft = useCallback(() => {
     setFenceDraftStart(null)
     setFenceDraftEnd(null)
   }, [setFenceDraftEnd])
   const clearRoofPlacementDraft = useCallback(() => {
-    setRoofDraftStart(null)
-    setRoofDraftEnd(null)
-  }, [setRoofDraftEnd])
+    const draft = useFloorplanDraftPreview.getState()
+    draft.setRoofDraftStart(null)
+    draft.setRoofDraftEnd(null)
+  }, [])
   const clearCeilingPlacementDraft = useCallback(() => {
     setCeilingDraftPoints([])
   }, [])
+  // Beside the 3D view its ceiling tool commits; in 2D-only view the plan does. Each keeps its own
+  // corners, so a polygon begun under one owner must not be closed against the other's.
+  useEffect(() => {
+    if (shownScene) clearCeilingPlacementDraft()
+  }, [clearCeilingPlacementDraft, shownScene])
   const clearSlabPlacementDraft = useCallback(() => {
     setSlabDraftPoints([])
     slabPlacementBaseRef.current = null
@@ -7998,6 +8041,30 @@ export function FloorplanPanel({
       emitter.off('tool:cancel', handleCancel)
     }
   }, [clearDraft])
+
+  // A wall end's pull grip pressed in the plan opens the Walls run at that
+  // end: start the plan's draft there, as if the end had been clicked. A pull
+  // from the 3D view drafts there (the plan beside it follows its moves).
+  const wallPullRun = useWallPullRun((state) => state.run)
+  const seededWallPullSeqRef = useRef<number | null>(null)
+  useEffect(() => {
+    if (!(wallPullRun && wallPullRun.origin === '2d' && isWallBuildActive && levelId)) return
+    if (seededWallPullSeqRef.current === wallPullRun.seq) return
+    seededWallPullSeqRef.current = wallPullRun.seq
+    const start = wallPullRun.start
+    wallConstructionOptionsRef.current = resolveTerrainWallConstructionOptions(
+      useScene.getState().nodes,
+      levelId,
+      start,
+      useEditor.getState().toolDefaults.wall,
+    )
+    wallChainWallIdsRef.current = []
+    wallRunReferenceRef.current = wallPullRun.reference
+    setDraftStart(start)
+    setWallChainFirstVertex(start)
+    setDraftEnd(start)
+    setCursorPoint(start)
+  }, [isWallBuildActive, levelId, setCursorPoint, setDraftEnd, wallPullRun])
 
   const createZoneOnCurrentLevel = useCallback(
     (points: WallPlanPoint[]) => {
@@ -9313,14 +9380,6 @@ export function FloorplanPanel({
         setCursorPoint((previousPoint) =>
           previousPoint && pointsEqual(previousPoint, snappedPoint) ? previousPoint : snappedPoint,
         )
-
-        if (roofDraftStart) {
-          setRoofDraftEnd((previousPoint) =>
-            previousPoint && pointsEqual(previousPoint, snappedPoint)
-              ? previousPoint
-              : snappedPoint,
-          )
-        }
         return
       }
 
@@ -9535,35 +9594,61 @@ export function FloorplanPanel({
         return
       }
 
-      // Wall draft: grid + magnetic snap, then Figma-style alignment.
-      // While a draft is open the segment locks to 15° rays from its start.
-      // Snapping is governed by the snapping mode (`'off'` is the bypass);
-      // there is no Shift hold-to-bypass.
-      const wallAngleSnap = draftStart !== null && isAngleSnapActive()
-      const wallSnap = snapWallDraftPointDetailed({
-        point: planPoint,
-        walls: [...walls, ...wallPolygonDraftWalls()],
-        start: draftStart ?? undefined,
-        angleSnap: wallAngleSnap,
-        magnetic: isMagneticSnapActive(),
-      })
-      const wallSnapped = wallSnap.point
-      // Locked onto existing geometry (corner / midpoint / crossing / edge) →
-      // that snap wins, so skip Figma alignment and stand the beacon there.
-      const lockedToWall = wallSnap.snap !== null
-      let snappedPoint = wallSnapped
-      if (lockedToWall) {
-        useAlignmentGuides.getState().clear()
-      } else {
-        // Alignment lines show in every mode; the pull applies only when
-        // magnetic ('lines') and the segment isn't angle-locked.
-        snappedPoint = alignFloorplanDraftPoint(wallSnapped, {
-          applySnap: isMagneticSnapActive() && !wallAngleSnap,
+      // Wall draft: grid + magnetic snap, then Figma-style alignment. A Walls
+      // segment locks to 15° rays from its start; a run's segment (a Polygon
+      // side, a pulled run) holds square to the last wall and the house's axes,
+      // with projection guides and a labelled snap marker
+      // (`snapWallRunDraftPoint`). Snapping is governed by the snapping mode
+      // (`'off'` is the bypass); Alt frees a run's segment. An invisible wall
+      // draft catches the invisible walls already drawn as well.
+      let snappedPoint: WallPlanPoint
+      const draftSnapWalls = [
+        ...walls,
+        ...wallPolygonDraftWalls(),
+        ...invisibleWallDraftSnapLines(),
+      ]
+      if (draftStart && wallDraftIsRun()) {
+        const runSnap = snapWallRunDraftPoint({
+          point: planPoint,
+          start: draftStart,
+          runStart: wallChainFirstVertex ?? draftStart,
+          reference: wallRunReferenceRef.current,
+          walls: draftSnapWalls,
+          free: isWallRunFree(event),
         })
+        snappedPoint = runSnap.point
+        publishWallRunFeedback(runSnap)
+      } else {
+        const wallAngleSnap = draftStart !== null && isAngleSnapActive()
+        const wallSnap = snapWallDraftPointDetailed({
+          point: planPoint,
+          walls: draftSnapWalls,
+          start: draftStart ?? undefined,
+          angleSnap: wallAngleSnap,
+          magnetic: isMagneticSnapActive(),
+          // Same as the click: an end aimed into a wall's body joins it.
+          captureWallBodies: true,
+        })
+        const wallSnapped = wallSnap.point
+        // Locked onto existing geometry (corner / midpoint / crossing / edge) →
+        // that snap wins, so skip Figma alignment and stand the beacon there.
+        const lockedToWall = wallSnap.snap !== null
+        snappedPoint = wallSnapped
+        if (lockedToWall) {
+          useAlignmentGuides.getState().clear()
+        } else {
+          // Alignment lines show in every mode; the pull applies only when
+          // magnetic ('lines') and the segment isn't angle-locked.
+          snappedPoint = alignFloorplanDraftPoint(wallSnapped, {
+            applySnap: isMagneticSnapActive() && !wallAngleSnap,
+          })
+        }
+        useWallSnapIndicator
+          .getState()
+          .set(
+            wallSnap.snap ? { x: snappedPoint[0], z: snappedPoint[1], kind: wallSnap.snap } : null,
+          )
       }
-      useWallSnapIndicator
-        .getState()
-        .set(wallSnap.snap ? { x: snappedPoint[0], z: snappedPoint[1], kind: wallSnap.snap } : null)
 
       // Emit `grid:move` so the registry-driven wall tool's 3D preview
       // tracks the cursor. The local draftEnd update below is what
@@ -9621,15 +9706,14 @@ export function FloorplanPanel({
       levelId,
       publishFloorplanNavigationPose,
       referenceScaleDraft,
-      roofDraftStart,
       siteVertexDragState,
       surfaceSize.height,
       surfaceSize.width,
       svgAspectRatio,
       walls,
+      wallChainFirstVertex,
       setCursorPoint,
       setDraftEnd,
-      setRoofDraftEnd,
       setFenceDraftEnd,
     ],
   )
@@ -9823,6 +9907,7 @@ export function FloorplanPanel({
         ) {
           startWallPolygonDraft(levelId as AnyNodeId, point, wallConstructionOptionsRef.current)
         }
+        wallRunReferenceRef.current = null
         setDraftStart(point)
         setWallChainFirstVertex(point)
         setDraftEnd(point)
@@ -9833,6 +9918,8 @@ export function FloorplanPanel({
       if (!isSegmentLongEnough(draftStart, point)) {
         return
       }
+      // The run's next segment holds square to this one.
+      const placedDirection = wallRunDirection(draftStart, point)
 
       // The 3D wall tool's `grid:click` listener
       // (`packages/nodes/src/wall/tool.tsx`) owns the wall-create
@@ -9849,7 +9936,7 @@ export function FloorplanPanel({
       // ceiling 2D-only committers: create locally here, gated on the
       // view, so split / 3D keep their single-owner tool commit.
       const viewIs2DOnly = visibleScene(useEditor.getState()) === '2d'
-      let createdWall: WallNode | null = null
+      let createdWall: WallNode | SeparatorNode | null = null
       // 2D-only Polygon room: the corner joins the draft; nothing is written
       // until it closes, seals or tees (then every wall at once).
       if (viewIs2DOnly && getWallDrawVariant() === 'polygon') {
@@ -9859,17 +9946,18 @@ export function FloorplanPanel({
           setCursorPoint(null)
           return
         }
+        wallRunReferenceRef.current = placedDirection
         setDraftStart(point)
         setDraftEnd(point)
         setCursorPoint(point)
         return
       }
       if (viewIs2DOnly) {
-        createdWall = createWallOnCurrentLevel(
-          draftStart,
-          point,
-          wallConstructionOptionsRef.current,
-        )
+        // The Walls variant's Invisible draws room separators, not walls.
+        createdWall =
+          getWallLineKind() === 'invisible'
+            ? createInvisibleWallOnCurrentLevel(draftStart, point)
+            : createWallOnCurrentLevel(draftStart, point, wallConstructionOptionsRef.current)
       }
       if (createdWall) {
         wallChainWallIdsRef.current.push(createdWall.id)
@@ -9885,7 +9973,7 @@ export function FloorplanPanel({
         : (publishedNextStart ?? point)
 
       if (
-        useEditor.getState().getContinuation('wall') === 'single' ||
+        !wallDraftIsRun() ||
         (wallChainFirstVertex && isWithinWallJoinSnapRadius(nextStart, wallChainFirstVertex))
       ) {
         clearWallPlacementDraft()
@@ -9907,7 +9995,7 @@ export function FloorplanPanel({
             levelWalls,
             wallChainWallIdsRef.current,
           ) ||
-          wallClosesRoom(levelWalls, createdWall)
+          (createdWall.type === 'wall' && wallClosesRoom(levelWalls, createdWall))
         ) {
           clearWallPlacementDraft()
           setCursorPoint(null)
@@ -9923,6 +10011,7 @@ export function FloorplanPanel({
         return
       }
 
+      wallRunReferenceRef.current = placedDirection
       setDraftStart(nextStart)
       setDraftEnd(nextStart)
       setCursorPoint(nextStart)
@@ -9953,6 +10042,11 @@ export function FloorplanPanel({
     }) => snapWallDraftPoint({ ...args, magnetic: isMagneticSnapActive() }),
     [],
   )
+  // What the click needs to snap an open run's segment as the move did.
+  const getWallRunContext = useCallback(
+    () => ({ runStart: wallChainFirstVertex, reference: wallRunReferenceRef.current }),
+    [wallChainFirstVertex],
+  )
   const { handleBackgroundPlacementClick } = useFloorplanBackgroundPlacement({
     activePolygonDraftPoints,
     ceilingDraftPoints,
@@ -9965,6 +10059,7 @@ export function FloorplanPanel({
     findClosestWallPoint,
     floorplanOpeningLocalY,
     getSnappedFloorplanPoint,
+    getWallRunContext,
     handleCeilingItemPlacementClick,
     handleCeilingPlacementPoint,
     handleSlabPlacementPoint,
@@ -9988,20 +10083,16 @@ export function FloorplanPanel({
     isWallBuildActive,
     isZoneBuildActive,
     levelId,
-    roofDraftStart,
     setCursorPoint,
     setFenceDraftEnd,
     setFenceDraftStart,
-    setRoofDraftEnd,
-    setRoofDraftStart,
     snapPolygonDraftPoint,
     snapWallDraftPoint: snapWallDraftPointMagnetic,
     toPoint2D,
     walls,
-    // World-axis grid snap so drafts land on the visible grid even
-    // when the active building is rotated. The helper resolves the
-    // active building's pose internally; this hook stays oblivious to
-    // building rotation / position.
+    // Building-grid snap: the lattice this plan draws inside its rotated
+    // scene group, so drafts land on the visible grid however the
+    // building is turned, and where the 3D tool would put them.
     worldGridSnap: snapBuildingLocalToWorldGrid,
   })
 
@@ -10204,6 +10295,16 @@ export function FloorplanPanel({
   )
   const handleSvgPointerUp = useCallback(
     (event: ReactPointerEvent<SVGSVGElement>) => {
+      // Letting go of a wall end's pull grip places the pulled wall, as a click
+      // there would; the click the browser fires next is eaten.
+      const pull = useWallPullRun.getState().run
+      if (event.button === 0 && pull?.dragging && pull.origin === '2d') {
+        releaseWallPullDrag()
+        if (isWallBuildActive && draftStart) {
+          swallowNextClick()
+          handleBackgroundClick(event)
+        }
+      }
       if (
         isFenceBuildActive &&
         useEditor.getState().getContinuation('fence') === 'freehand' &&
@@ -10215,14 +10316,30 @@ export function FloorplanPanel({
       endFloorplanNavigation(event)
     },
     [
+      draftStart,
       emitFloorplanGridEvent,
       endFloorplanNavigation,
       getPlanPointFromClientPoint,
+      handleBackgroundClick,
       isFenceBuildActive,
+      isWallBuildActive,
     ],
   )
   const handleBackgroundDoubleClick = useCallback(
     (event: ReactMouseEvent<SVGSVGElement>) => {
+      // A double-click ends a wall run as the 3D tool's detail-2 click does:
+      // the walls already drawn stay, an open Polygon room is kept, and the
+      // draft goes. The click path does this on its second click; this also
+      // covers one the plan never routed there (the walls the run drew sit
+      // under the pointer by then).
+      if (isWallBuildActive) {
+        if (draftStart) {
+          commitWallPolygonDraft()
+          clearWallPlacementDraft()
+          setCursorPoint(null)
+        }
+        return
+      }
       if (!(isPolygonDraftBuildActive && !isRoofBuildActive)) {
         return
       }
@@ -10268,6 +10385,8 @@ export function FloorplanPanel({
     },
     [
       activePolygonDraftPoints,
+      clearWallPlacementDraft,
+      draftStart,
       emitFloorplanGridEvent,
       handleCeilingPlacementConfirm,
       getPlanPointFromClientPoint,
@@ -10276,8 +10395,10 @@ export function FloorplanPanel({
       isCeilingBuildActive,
       isPolygonDraftBuildActive,
       isRoofBuildActive,
+      isWallBuildActive,
       isZoneBuildActive,
       levelId,
+      setCursorPoint,
     ],
   )
 
@@ -11626,6 +11747,11 @@ export function FloorplanPanel({
                       `floorplan-wall-move-ghost-layer.tsx`. */}
                   <FloorplanWallMoveGhostLayer />
                 </g>
+                {/* Dashed walls of the level below / above, over the plan but
+                    outside the measured group so they never change the fit. */}
+                {activeDrawingType !== 'site-plan' && (
+                  <FloorplanAdjacentWallsLayer levelId={levelNode?.id} />
+                )}
                 {activeDrawingType !== 'site-plan' && <FloorplanOpenWallEndsLayer />}
                 <FloorplanMeasurementToolLayer />
                 <FloorplanRegisteredToolLayer />
@@ -11641,7 +11767,7 @@ export function FloorplanPanel({
                   overlay during a free-translate drag. Sits above the
                   registry layer so the red lines and distance pills
                   paint on top of node geometry. */}
-              <FloorplanAlignmentGuideLayer />
+              <FloorplanAlignmentGuideLayer unitsPerPixel={floorplanUnitsPerPixel} />
 
               {/* The property line, its vertex handles and its edge labels are
                   drawn in BUILDING-LOCAL metres (the frame the level's walls
@@ -11695,7 +11821,7 @@ export function FloorplanPanel({
               {/* "Magnetic" wall-snap beacon — per-kind glyph at the active
                   draft / endpoint-move snap point. Same store + coord space as
                   the alignment guides. */}
-              <FloorplanSnapBeaconLayer />
+              <FloorplanSnapBeaconLayer unitsPerPixel={floorplanUnitsPerPixel} />
 
               <FloorplanMarqueeOverlay cursorColor={palette.cursor} />
 

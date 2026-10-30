@@ -319,6 +319,7 @@ export {
   type WallMode,
 } from './store/use-viewer'
 export {
+  CEILING_CAP_MESH,
   CEILING_REGION_MESH,
   type CeilingRegionMaterial,
   CeilingSystem,
@@ -394,7 +395,17 @@ export {
   presentLevelsForCapture,
   snapLevelsToTruePositions,
 } from './systems/level/level-utils'
-export { getRoofMaterialArray, levelWallCladdingRef } from './systems/roof/roof-materials'
+export {
+  ROOF_GABLE_LEFT_MATERIAL_INDEX,
+  ROOF_GABLE_RIGHT_MATERIAL_INDEX,
+  ROOF_HEEL_MATERIAL_INDEX,
+  ROOF_RENDER_MATERIAL_COUNT,
+} from './systems/roof/roof-material-slots'
+export {
+  getRoofMaterialArray,
+  levelWallCladdingRef,
+  levelWallFaceRef,
+} from './systems/roof/roof-materials'
 // Generic roof-segment primitives. Kinds that compose CSG against
 // the roof shell (chimney's self-trim, dormer's virtual-segment cut)
 // read these through the public surface. No kind-specific helpers
@@ -413,6 +424,7 @@ export {
   remapRoofShellFaces,
   roofCsgDummyMats,
   type SurfaceFrame,
+  splitRoofWallBandFaces,
 } from './systems/roof/roof-system'
 export { ScanSystem } from './systems/scan/scan-system'
 // Pure slab geometry generator — composed into the registry-driven slab

@@ -27,7 +27,7 @@ import { FIND_BY_TYPE_CASES } from './find-by-type-cases'
 import { FINISH_CASES } from './finish-cases'
 import { LOT_INFO_CASES } from './lot-info-cases'
 import { CREATE_ROOF_CASES, MOVE_ROOFS_CASES } from './roof-cases'
-import { ROOM_CASES } from './room-cases'
+import { OUTDOOR_ROOM_READ_CASES, ROOM_CASES } from './room-cases'
 import { CHECK_ROOMS_CASES, VALIDATE_SCENE_CASES } from './scene-check-cases'
 import { SEARCH_ASSETS_CASES } from './search-assets-cases'
 import { VIEW_ASSETS_CASES } from './view-assets-cases'
@@ -45,6 +45,9 @@ import {
   ADD_FENCE_CASES,
   ADD_LEVEL_CASES,
   ADD_WALL_CASES,
+  WALL_TYPE_CASES,
+  FRAMING_POST_CASES,
+  RAILING_WALL_CASES,
   CREATE_STAIR_CASES,
 } from './structure-cases'
 import { UNIT_CASES } from './unit-cases'
@@ -279,7 +282,7 @@ export function finishReadbackScene(): SceneGraph {
   const wall = scene.nodes.wall_ground as WallNode
   scene.nodes.wall_ground = {
     ...wall,
-    slots: { a: 'library:concrete-drywall' },
+    slots: { a: 'library:preset-seattlegrey' },
     faceRegions: [{ id: 'wainscot', face: 'a', v1: 0.9, finish: 'library:wood' }],
   }
   scene.nodes.wall_side = {
@@ -510,8 +513,8 @@ export const GET_WALLS_CASES: AgentToolCase[] = [
             resolvedHeight: 2.5,
             heightIsExplicit: true,
             wallFaceChains: {
-              a: { kind: 'default', ref: 'library:concrete-drywall' },
-              b: { kind: 'default', ref: 'library:concrete-drywall' },
+              a: { kind: 'default', ref: 'library:preset-seattlegrey' },
+              b: { kind: 'default', ref: 'library:preset-seattlegrey' },
             },
             openings: [
               { id: 'door_ground', type: 'door' },
@@ -524,8 +527,8 @@ export const GET_WALLS_CASES: AgentToolCase[] = [
             resolvedHeight: 2.8,
             heightIsExplicit: false,
             wallFaceChains: {
-              a: { kind: 'default', ref: 'library:concrete-drywall' },
-              b: { kind: 'default', ref: 'library:concrete-drywall' },
+              a: { kind: 'default', ref: 'library:preset-seattlegrey' },
+              b: { kind: 'default', ref: 'library:preset-seattlegrey' },
             },
             openings: [],
           },
@@ -581,8 +584,8 @@ export const FINISH_READBACK_CASES: AgentToolCase[] = [
           {
             id: 'wall_ground',
             wallFaceChains: {
-              a: { kind: 'ref', ref: 'library:concrete-drywall' },
-              b: { kind: 'default', ref: 'library:concrete-drywall' },
+              a: { kind: 'ref', ref: 'library:preset-seattlegrey' },
+              b: { kind: 'default', ref: 'library:preset-seattlegrey' },
             },
           },
           {
@@ -629,8 +632,8 @@ export const FINISH_READBACK_CASES: AgentToolCase[] = [
           {
             id: 'wall_upper',
             wallFaceChains: {
-              a: { kind: 'default', ref: 'library:concrete-drywall' },
-              b: { kind: 'default', ref: 'library:concrete-drywall' },
+              a: { kind: 'default', ref: 'library:preset-seattlegrey' },
+              b: { kind: 'default', ref: 'library:preset-seattlegrey' },
             },
           },
         ],
@@ -964,12 +967,16 @@ export const AGENT_TOOL_CASES: readonly AgentToolCase[] = [
   ...CHECK_ROOMS_CASES,
   ...DELETE_NODE_CASES,
   ...ROOM_CASES,
+  ...OUTDOOR_ROOM_READ_CASES,
   ...CREATE_ROOM_CASES,
   ...FURNISH_ROOM_CASES,
   ...SEARCH_ASSETS_CASES,
   ...VIEW_ASSETS_CASES,
   ...DESIGN_BRIEF_CASES,
   ...ADD_WALL_CASES,
+  ...WALL_TYPE_CASES,
+  ...FRAMING_POST_CASES,
+  ...RAILING_WALL_CASES,
   ...ADD_FENCE_CASES,
   ...CREATE_ROOF_CASES,
   ...MOVE_ROOFS_CASES,

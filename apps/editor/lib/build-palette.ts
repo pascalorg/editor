@@ -8,7 +8,7 @@ import {
   useEditor,
   useFloorplanMode,
 } from '@pascal-app/editor'
-import { beginFenceFeaturePlacement } from '@pascal-app/nodes'
+import { armFramingPostTool, beginFenceFeaturePlacement } from '@pascal-app/nodes'
 import { useViewer } from '@pascal-app/viewer'
 import { getRoofFootprintSource, type RoofFootprintSource } from '@/lib/build-tab-state'
 
@@ -107,6 +107,14 @@ export const BASE_BUILD_TYPES: BuildType[] = [
     id: 'column',
     label: /* i18n */ { id: 'app.lib.buildPalette.column', message: 'Column' },
     iconSrc: '/icons/column.webp',
+    kind: 'column',
+    section: 'advanced',
+  },
+  // The column tool armed with a framing post (`activatePostTool`): one family with Column.
+  {
+    id: 'post',
+    label: /* i18n */ { id: 'app.lib.buildPalette.post', message: 'Post' },
+    iconSrc: '/icons/post.svg',
     kind: 'column',
     section: 'advanced',
   },
@@ -251,6 +259,15 @@ export function activateBuildTool(kind: string): void {
   editor.setToolDefaults(kind, null)
   editor.setMode('build')
   editor.setTool(kind)
+}
+
+/**
+ * The Post tile: the column tool placing treated framing posts that stand up to the beam over
+ * them, at the size and base last picked (the tool's Place and Base rows).
+ */
+export function activatePostTool(): void {
+  activateBuildTool('column')
+  if (useEditor.getState().tool === 'column') armFramingPostTool()
 }
 
 export function activateFenceFeaturePlacement(kind: 'gate' | 'opening'): void {

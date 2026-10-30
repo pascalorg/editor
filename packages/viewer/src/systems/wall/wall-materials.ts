@@ -2,6 +2,7 @@ import {
   type ExposedStructure,
   getEffectiveWallFaceMaterial,
   getMaterialPresetByRef,
+  getWallFaceDefault,
   getWallSurfaceMaterialSignature,
   parseMaterialColor,
   parseMaterialRef,
@@ -15,7 +16,7 @@ import {
   type WallNode,
   type WallSurfaceMaterialSpec,
   wallAssemblyExposedStructure,
-  wallAssemblyFinishRef,
+  wallAssemblyFaceFinish,
 } from '@pascal-app/core'
 import { Color, type Material } from 'three'
 import { Fn, float, fract, length, mix, positionLocal, smoothstep, step, uv, vec2 } from 'three/tsl'
@@ -127,11 +128,11 @@ function resolveWallSlotDefault(declaredDefault: string, shading: RenderShading)
   return createDefaultMaterial(slotDefault, 0.9, shading)
 }
 
-// The assembly cladding's ref when `face` is the wall's exterior face (a is the
-// +normal face; an unresolved side keeps the cladding on b, as legacy did).
+// The assembly's finish for `face`: its cladding when `face` is the wall's exterior face (a is the
+// +normal face; an unresolved side keeps the cladding on b, as legacy did), and the paint picked
+// for a lining while drafting on a lined face.
 function wallAssemblyFaceFinishRef(wallNode: WallNode, face: WallFace): string | null {
-  const exteriorFace = resolveWallExteriorSide(wallNode) === 1 ? 'a' : 'b'
-  return face === exteriorFace ? wallAssemblyFinishRef(wallNode) : null
+  return wallAssemblyFaceFinish(wallNode, face)
 }
 
 // What `face` shows when it is the exterior face of a wall with no cladding over a bare masonry or
@@ -159,9 +160,9 @@ function exposedStructureMaterial(structure: ExposedStructure, shading: RenderSh
 }
 
 // Slot-first resolution for one wall face, matching every other paintable kind:
-//   node.slots[face] ref → legacy inline finish → declared slot default.
+//   node.slots[face] ref → legacy inline finish → the face's default.
 // A dangling `scene:` ref (material deleted / copied across scenes) falls back
-// to the declared default — it never blocks rendering (the dangling-ref rule).
+// to the face's default — it never blocks rendering (the dangling-ref rule).
 function resolveWallFaceMaterial(
   wallNode: WallNode,
   face: WallFace,
@@ -172,13 +173,15 @@ function resolveWallFaceMaterial(
   if (finish.kind === 'ref') {
     return (
       resolveMaterialRef(finish.ref, sceneMaterials, shading) ??
-      resolveWallSlotDefault(WALL_SLOT_DEFAULT[face], shading)
+      resolveWallSlotDefault(getWallFaceDefault(wallNode, face), shading)
     )
   }
   if (finish.kind === 'legacy') return getSurfaceVisibleMaterial(finish.spec, shading)
   // No paint on this face: the wall ASSEMBLY's cladding (WS5) skins the
   // exterior — a "2x6 lap siding" wall reads as lap siding without the user
-  // painting it. Painting the face still wins.
+  // painting it. Painting the face still wins. Any other unpainted face wears
+  // its default (`getWallFaceDefault`): the interior paint
+  // (`DEFAULT_INTERIOR_WALL_PAINT`) inside, raw drywall on the exterior side.
   const assemblyRef = wallAssemblyFaceFinishRef(wallNode, face)
   const exposed = assemblyRef ? null : wallFaceExposedStructure(wallNode, face)
   if (exposed) return exposedStructureMaterial(exposed, shading)
@@ -220,10 +223,14 @@ function wallFaceMaterialSignature(
   sceneMaterials: SceneMaterials,
 ): string {
   const ref = wallNode.slots?.[face]
-  if (ref) return refMaterialSignature(ref, sceneMaterials)
+  // The face's default follows its side, so a room detected outside it re-skins
+  // an unpainted face (and the fallback of a dangling ref).
+  const fallback = getWallFaceDefault(wallNode, face)
+  if (ref) return JSON.stringify({ ref: refMaterialSignature(ref, sceneMaterials), fallback })
   const spec = getEffectiveWallFaceMaterial(wallNode, face)
   const assemblyRef = wallAssemblyFaceFinishRef(wallNode, face)
   return JSON.stringify({
+    fallback,
     legacy: getWallSurfaceMaterialSignature(spec),
     preset: spec.materialPreset ? materialPresetRefSignature(spec.materialPreset) : null,
     // Changing the assembly's cladding must re-skin the face.

@@ -41,6 +41,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { BoxGeometry, EdgesGeometry, type Group, Vector3 } from 'three'
 import { LineBasicNodeMaterial } from 'three/webgpu'
 import { commitOpeningMove } from '../shared/commit-opening-move'
+import { movedOpeningCasingFaces } from '../shared/opening-casing-move'
 import {
   clearOpeningGuides3D,
   publishOpeningGuidesForWallEvent,
@@ -162,6 +163,9 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
 
     // Same-wall moves keep the wall-local plane offset; another host resets it.
     const planeOffsetOn = (wallId: string) => openingPlaneOffsetOnWall(movingDoorNode, wallId)
+    // Another host may name its faces the other way round: the casing keeps to its side of it.
+    const casingOn = (hostId: string, rotation: DoorNode['rotation']) =>
+      movedOpeningCasingFaces(movingDoorNode, hostId, rotation, useScene.getState().nodes)
 
     let currentHostId: string | null = movingDoorNode.parentId
     let dragAnchor: { wallId: string; rawX: number; startX: number } | null = null
@@ -468,11 +472,11 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
       })
       // Forward-facing triangle (editor-side overlay), in the same building-local
       // frame the ghost renders in. The door's front is its local +Z. Drop it to
-      // the floor under the wall (the ghost Y is the opening centre, ~1m up).
+      // the door's sill (the ghost Y is the opening centre, ~1m up).
       useFacingPose.getState().set({
         position: [
           ghostWorldPos[0],
-          getLevelYOffset() + getSlabElevation(target.event),
+          ghostWorldPos[1] - movingDoorNode.height / 2,
           ghostWorldPos[2],
         ],
         rotationY: ghostYaw,
@@ -576,6 +580,7 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
           side: target.side,
           wallId: target.wallId,
           parentId: target.wallId,
+          ...casingOn(target.wallId, [0, target.itemRotation, 0]),
           roofSegmentId: undefined,
           roofFace: undefined,
           // The moving node is hidden during free-follow; the committed door
@@ -611,6 +616,7 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
             side: target.side,
             parentId: target.wallId,
             wallId: target.wallId,
+            ...casingOn(target.wallId, [0, target.itemRotation, 0]),
             roofSegmentId: undefined,
             visible: true,
           })
@@ -847,6 +853,7 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
           roofSegmentId: segmentId,
           roofFace: target.face.id,
           parentId: segmentId,
+          ...casingOn(segmentId, [0, 0, 0]),
           visible: true,
         })
         history.commitStep(() => {
@@ -879,6 +886,7 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
             wallId: undefined,
             roofSegmentId: segmentId,
             roofFace: target.face.id,
+            ...casingOn(segmentId, [0, 0, 0]),
             visible: true,
           })
         })

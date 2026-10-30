@@ -28,6 +28,7 @@ for (const [field, value] of [
   ['floorStepFinish', 'library:preset-white'],
   ['floorEdgeFinish', 'library:preset-white'],
   ['floorStepOverrides', [{ key: 'door_1', finish: 'library:preset-white' }]],
+  ['decking', { direction: 'diagonal' }],
 ] as const)
   test(`${field} changes invalidate the room plate without changing floor intent`, async () => {
     const { LevelNode, ZoneNode } = await import('@pascal-app/core')

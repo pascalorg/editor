@@ -25,6 +25,8 @@ import {
 import { getClampedWallCurveOffset } from '../systems/wall/wall-curve'
 import { changedLevelConstructionDisplacements } from './floor-foundation-stack'
 import { createFloorOpeningIndex, floorOpeningTargets } from './floor-opening-intent'
+import { porchPartOf, porchPartSignature } from './porch-framing-sync'
+import { railingFencedRoomIds, railingWallIds } from './railing-rooms'
 import {
   type ExtractedRoom,
   extractRooms,
@@ -145,6 +147,9 @@ function zoneGeometrySignature(zone: ZoneNodeType) {
     zone.wallMaterial,
     zone.wallOverrides,
     zone.seed,
+    // A porch's type and framing settings rebuild its posts and beam.
+    zone.roomType,
+    zone.porchFraming,
     // A drawn zone's outline is intent (it may be adopted); a room's outline is
     // derived, and an edit to it must be re-derived here as the hosted path does.
     // The kernel's own write is not a change: the baseline is taken after it.
@@ -164,11 +169,19 @@ function levelStructureSnapshots(nodes: Record<string, any>) {
   const zonesByLevel = new Map<string, ZoneNodeType[]>()
   const slabElevationsByLevel = new Map<string, string[]>()
   const coveringUndersidesByLevel = new Map<string, string[]>()
+  const porchPartsByLevel = new Map<string, string[]>()
   const floorOpenings: Extract<AnyNode, { type: 'floor-opening' }>[] = []
 
   for (const node of Object.values(nodes)) {
     if (!(node && typeof node === 'object' && 'parentId' in node && node.parentId)) continue
     const levelId = (node as any).parentId as string
+    // A porch's own post or beam moved, resized or deleted by hand hands its framing over.
+    const porchPart = porchPartSignature(node)
+    if (porchPart) {
+      const parts = porchPartsByLevel.get(levelId) ?? []
+      parts.push(porchPart)
+      porchPartsByLevel.set(levelId, parts)
+    }
     if (node.type === 'stair' && nodes[node.deckSlabId]?.support === 'open') {
       const target = nodes[node.deckSlabId].parentId
       const arrivals = arrivalsByLevel.get(target) ?? []
@@ -271,6 +284,7 @@ function levelStructureSnapshots(nodes: Record<string, any>) {
     ...zonesByLevel.keys(),
     ...separatorsByLevel.keys(),
     ...openingsByLevel.keys(),
+    ...porchPartsByLevel.keys(),
   ])
   for (const levelId of levelIds) {
     const walls = wallsByLevel.get(levelId) ?? []
@@ -284,7 +298,7 @@ function levelStructureSnapshots(nodes: Record<string, any>) {
       : ''
     snapshots.set(
       levelId,
-      `${(arrivalsByLevel.get(levelId) ?? []).sort().join('|')}#${(separatorsByLevel.get(levelId) ?? []).sort().join('|')}#${storeyKey}#${levelWallSnapshot(walls, nodes, levelId)}##${zones.map(zoneGeometrySignature).sort().join('||')}##${slabKey}##${aboveSlabKey}##${(ceilingIdsByLevel.get(levelId) ?? []).sort().join('|')}##${(openingsByLevel.get(levelId) ?? []).sort().join('|')}`,
+      `${(arrivalsByLevel.get(levelId) ?? []).sort().join('|')}#${(separatorsByLevel.get(levelId) ?? []).sort().join('|')}#${storeyKey}#${levelWallSnapshot(walls, nodes, levelId)}##${zones.map(zoneGeometrySignature).sort().join('||')}##${slabKey}##${aboveSlabKey}##${(ceilingIdsByLevel.get(levelId) ?? []).sort().join('|')}##${(openingsByLevel.get(levelId) ?? []).sort().join('|')}##${(porchPartsByLevel.get(levelId) ?? []).sort().join('|')}`,
     )
   }
 
@@ -418,6 +432,10 @@ function fallbackLevelIdsForCandidates(
       } else if (node.type === 'door' || node.type === 'window') {
         const wall = nodes[node.parentId]
         if (wall?.parentId) levelIds.add(wall.parentId)
+      } else if (porchPartOf(node)) {
+        // A porch's own post or beam edited by hand: the kernel hands its framing over.
+        if (porchPartSignature(before[id]) !== porchPartSignature(current[id]) && node.parentId)
+          levelIds.add(node.parentId)
       } else if (node.type === 'slab') {
         const old = before[id],
           next = current[id]
@@ -459,12 +477,12 @@ function detectSpacesFromWalls(levelId: string, boundaries: BoundaryNode[]) {
   const rooms = extractRooms(boundaries)
   const walls = boundaries.filter((boundary): boundary is WallNode => boundary.type === 'wall')
   const roomPolygons = rooms.map((room) => room.polygon)
+  const spans = rooms.flatMap((room) => room.spans)
+  // A room a railing fences off from the outside (a deck's guard) is outside.
+  const fenced = railingFencedRoomIds(spans, railingWallIds(walls))
   const wallUpdates: WallSideUpdate[] = walls.map((wall) => ({
     wallId: wall.id,
-    ...classifyWallSides(
-      wall,
-      rooms.flatMap((room) => room.spans),
-    ),
+    ...classifyWallSides(wall, spans, fenced),
   }))
 
   return {

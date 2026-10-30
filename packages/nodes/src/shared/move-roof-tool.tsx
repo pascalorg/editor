@@ -28,6 +28,7 @@ import {
   consumePlacementDragRelease,
   DragBoundingBox,
   getFloorStackPreviewPosition,
+  isGridSnapActive,
   isMagneticSnapActive,
   isTypingTarget,
   resolvePlanarCursorPosition,
@@ -43,6 +44,13 @@ import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { snapFenceDraftPoint } from '../fence/drafting'
+import {
+  bearingWallThickness,
+  catchRoofOnWalls,
+  placeRoofOnWalls,
+  roofCatchWalls,
+  segmentWallLine,
+} from '../roof/wall-catch'
 import { clearStairMovePreview, publishStairMovePreview } from '../stair/surface-move-preview'
 
 /** Figma-style alignment-snap threshold (meters), matching the other tools. */
@@ -276,6 +284,88 @@ export const MoveRoofTool: React.FC<{
       return ar.snap && isMagneticSnapActive() ? [lx + ar.snap.dx, lz + ar.snap.dz] : [lx, lz]
     }
 
+    // A roof's wall line lands on the walls under it, as in the plan's segment move
+    // (`catchRoofOnWalls`); that catch replaces the cursor's own snap onto a wall.
+    const catchesWalls = movingNode.type === 'roof' || movingNode.type === 'roof-segment'
+    const catchWalls = catchesWalls ? roofCatchWalls(useScene.getState().nodes, levelId) : []
+    let rawAnchor: [number, number] | null = null
+    const catchOnWalls = (
+      raw: [number, number],
+      snapped: [number, number],
+    ): [number, number] | null => {
+      const nodes = useScene.getState().nodes
+      const roof =
+        movingNode.type === 'roof'
+          ? movingNode
+          : (nodes[movingNode.parentId as AnyNodeId] as RoofNode | undefined)
+      if (roof?.type !== 'roof' || catchWalls.length === 0) return null
+      // A segment's place is in its roof's frame; the walls are in the level's plan.
+      const cos = Math.cos(-roof.rotation)
+      const sin = Math.sin(-roof.rotation)
+      const toPlan = ([x, z]: [number, number]): [number, number] =>
+        movingNode.type === 'roof'
+          ? [x, z]
+          : [roof.position[0] + x * cos - z * sin, roof.position[2] + x * sin + z * cos]
+      const fromPlan = ([x, z]: [number, number]): [number, number] => {
+        if (movingNode.type === 'roof') return [x, z]
+        const dx = x - roof.position[0]
+        const dz = z - roof.position[2]
+        return [dx * cos + dz * sin, -dx * sin + dz * cos]
+      }
+      const lines =
+        movingNode.type === 'roof'
+          ? roof.children
+              .map((id) => nodes[id as AnyNodeId])
+              .filter((child): child is RoofSegmentNode => child?.type === 'roof-segment')
+              .map((segment) =>
+                segmentWallLine(
+                  { position: [raw[0], 0, raw[1]], rotation: pendingRotation },
+                  segment,
+                ),
+              )
+          : movingNode.type === 'roof-segment'
+            ? [
+                segmentWallLine(roof, {
+                  ...movingNode,
+                  position: [raw[0], 0, raw[1]],
+                  rotation: pendingRotation,
+                }),
+              ]
+            : []
+      const angle =
+        movingNode.type === 'roof' ? -pendingRotation : -(roof.rotation + pendingRotation)
+      const caught = catchRoofOnWalls({ lines, walls: catchWalls, angle })
+      if (!(caught.u || caught.v)) return null
+      return fromPlan(placeRoofOnWalls(toPlan(raw), toPlan(snapped), caught, angle))
+    }
+    // Dropped onto the walls under it, a roof's segments take their thickness for their gable
+    // and heel walls.
+    const bearingThicknesses = (
+      position: [number, number, number],
+      rotation: number,
+    ): { id: AnyNodeId; data: Partial<RoofSegmentNode> }[] => {
+      const nodes = useScene.getState().nodes
+      const roof =
+        movingNode.type === 'roof'
+          ? { ...movingNode, position, rotation }
+          : (nodes[movingNode.parentId as AnyNodeId] as RoofNode | undefined)
+      if (roof?.type !== 'roof' || catchWalls.length === 0) return []
+      const segments =
+        movingNode.type === 'roof'
+          ? roof.children
+              .map((id) => nodes[id as AnyNodeId])
+              .filter((child): child is RoofSegmentNode => child?.type === 'roof-segment')
+          : movingNode.type === 'roof-segment'
+            ? [{ ...movingNode, position, rotation }]
+            : []
+      return segments.flatMap((segment) => {
+        const thickness = bearingWallThickness(segmentWallLine(roof, segment), catchWalls)
+        return thickness === null || thickness === segment.wallThickness
+          ? []
+          : [{ id: segment.id as AnyNodeId, data: { wallThickness: thickness } }]
+      })
+    }
+
     const localToWorldPoint = (localPoint: WallPlanPoint, y: number): [number, number, number] => {
       if (buildingObj) {
         const worldPoint = buildingObj.localToWorld(
@@ -348,9 +438,10 @@ export const MoveRoofTool: React.FC<{
       const y = event.position[1]
 
       const roofBypassSnap = event.nativeEvent?.altKey === true
+      const cursor: WallPlanPoint = [event.localPosition[0], event.localPosition[2]]
       const snappedLocal = snapFenceDraftPoint({
-        point: [event.localPosition[0], event.localPosition[2]],
-        walls: levelWalls,
+        point: cursor,
+        walls: catchesWalls ? [] : levelWalls,
         fences: levelFences,
         bypassSnap: roofBypassSnap,
         magnetic: !roofBypassSnap && isMagneticSnapActive(),
@@ -372,7 +463,24 @@ export const MoveRoofTool: React.FC<{
       dragAnchorRef.current = resolved.anchor
       let [localX, localZ] = resolved.point
 
-      if (alignTopLevel) {
+      // The catch reads the unsnapped place, so the walls win over the grid near them.
+      let caught: [number, number] | null = null
+      if (catchesWalls) {
+        const [cursorX, , cursorZ] = localToWorldPoint(cursor, y)
+        const raw = resolvePlanarCursorPosition({
+          cursor: computeLocal(cursorX, cursorZ, y, cursor[0], cursor[1]),
+          original: [movingNode.position[0], movingNode.position[2]],
+          anchor: rawAnchor,
+          mode: useAbsoluteCursorPlacement ? 'absolute' : 'relative',
+        })
+        rawAnchor = raw.anchor
+        if (!roofBypassSnap && (isGridSnapActive() || isMagneticSnapActive()))
+          caught = catchOnWalls(raw.point, [localX, localZ])
+      }
+      if (caught) {
+        ;[localX, localZ] = caught
+        useAlignmentGuides.getState().clear()
+      } else if (alignTopLevel) {
         const aligned = alignLocalPoint(localX, localZ, event.nativeEvent?.altKey === true)
         localX = aligned[0]
         localZ = aligned[1]
@@ -525,9 +633,13 @@ export const MoveRoofTool: React.FC<{
         if (movingNode.type === 'roof' || movingNode.type === 'roof-segment') {
           // Moved or turned onto the walls that carry it, a roof goes to the level above them.
           const scene = useScene.getState()
-          scene.applyNodeChanges(
-            seatRoofs(scene.nodes, { update: [{ id: movingNode.id, data: patch }] }).changes,
-          )
+          const thicknesses = bearingThicknesses(position, pendingRotation)
+          const own = thicknesses.find(({ id }) => id === movingNode.id)?.data
+          const update = [
+            { id: movingNode.id, data: { ...patch, ...own } },
+            ...thicknesses.filter(({ id }) => id !== movingNode.id),
+          ]
+          scene.applyNodeChanges(seatRoofs(scene.nodes, { update }).changes)
         } else {
           useScene.getState().updateNodes([
             {

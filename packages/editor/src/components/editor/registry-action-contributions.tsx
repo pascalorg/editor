@@ -17,6 +17,7 @@ import { type ComponentType, lazy, Suspense } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { getFloorplanNodeExtension } from '../../lib/floorplan/floorplan-extension'
 import { ActionMenuButton } from './action-menu-button'
+import { InspectorExtensionActions } from './inspector-extension-actions'
 
 type Loader = () => Promise<{ default: ComponentType }>
 const lazyCache = new WeakMap<Loader, ComponentType>()
@@ -106,7 +107,8 @@ function MechanismAction() {
 /**
  * The buttons kinds add to the action menu for selections holding them
  * (`extensions['pascal:editor/floorplan'].actionMenu.actions`), in 2D and 3D
- * alike. Each contribution reads the selection and decides its own visibility.
+ * alike, then one per plugin inspector extension of the selected node. Each
+ * contribution reads the selection and decides its own visibility.
  */
 export function RegistryActionContributions() {
   const selectedIds = useViewer((s) => s.selection.selectedIds)
@@ -133,6 +135,7 @@ export function RegistryActionContributions() {
           </Suspense>
         ) : null
       })}
+      <InspectorExtensionActions />
     </>
   )
 }

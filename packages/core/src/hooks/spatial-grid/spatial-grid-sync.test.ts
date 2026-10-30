@@ -4,7 +4,15 @@ import { encodeTerrainField } from '../../lib/terrain-codec'
 import { applyHeightPatch, createTerrainField, flattenPatch } from '../../lib/terrain-field'
 import { nodeRegistry, registerNode } from '../../registry'
 import type { AnyNodeDefinition } from '../../registry/types'
-import { type AnyNode, type AnyNodeId, ItemNode, LevelNode, SlabNode, WallNode } from '../../schema'
+import {
+  type AnyNode,
+  type AnyNodeId,
+  ItemNode,
+  LevelNode,
+  SlabNode,
+  WallNode,
+  ZoneNode,
+} from '../../schema'
 import useLiveTerrain from '../../store/use-live-terrain'
 import useScene, { clearSceneHistory } from '../../store/use-scene'
 import { spatialGridManager } from './spatial-grid-manager'
@@ -534,6 +542,26 @@ describe('spatial-grid sync dirty rules (terrain support)', () => {
     markTerrainSupportDependents(nodes, (id) => marked.push(id))
 
     expect(marked).toEqual(['column_host'])
+  })
+
+  test('terrain changes rebuild a deck room’s plate without plugin tags', () => {
+    const room = ZoneNode.parse({
+      id: 'zone_deck',
+      name: 'Deck',
+      polygon: SQUARE,
+      roomType: 'deck',
+    })
+    const deck = SlabNode.parse({
+      id: 'slab_deck',
+      parentId: 'level_0',
+      polygon: SQUARE,
+      zoneIds: [room.id],
+      plateRole: 'sunken',
+    })
+    const level = makeLevel('level_0', 0, 2.5, [deck.id, room.id])
+    const marked: string[] = []
+    markTerrainSupportDependents(nodesFor(level, room, deck), (id) => marked.push(id))
+    expect(marked).toContain(deck.id)
   })
 
   test('markTerrainSupportDependents includes ground-hosted and terrain-fill structures', () => {

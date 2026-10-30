@@ -20,10 +20,10 @@ describe("the door panel's Type row", () => {
   })
 
   test('a modern door made sliding stays modern', () => {
-    const modern = door(doorStyleLook('modern'))
+    const modern = door({ ...doorStyleLook('modern'), frameThickness: 0.035 })
     const sliding = { ...modern, ...doorTypeChange(modern, 'sliding') } as DoorNode
     expect(doorStylesOf(sliding)).toEqual(['modern'])
-    expect(sliding).toMatchObject({ trackStyle: 'visible', leafCount: 2 })
+    expect(sliding).toMatchObject({ trackStyle: 'visible', leafCount: 2, frameThickness: 0.035 })
   })
 
   test('keeps the door on the floor at the new height', () => {

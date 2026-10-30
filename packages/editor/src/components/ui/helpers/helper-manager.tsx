@@ -42,7 +42,7 @@ import {
   terrainHudTitle,
   toolHudTitle,
 } from '../../../lib/hud-title'
-import type { ReshapeKind } from '../../../lib/interaction/scope'
+import type { InteractionScope, ReshapeKind } from '../../../lib/interaction/scope'
 import {
   type MezzanineShape,
   useMezzanineDraft,
@@ -292,6 +292,25 @@ export const MEZZANINE_GESTURE_HINTS: Record<MezzanineGesture, ContextualShortcu
     { keys: ['Alt'], label: /* i18n */ { id: 'editor.helpers.helperManager.freeMove', message: 'Free move' } },
     { keys: ['Esc'], label: /* i18n */ { id: 'editor.helpers.helperManager.cancel', message: 'Cancel' } },
   ],
+}
+
+/**
+ * Whether the armed tool's own hints (`toolHints`) win over the node in hand: a registry tool that
+ * holds its draft in a placing scope (the roof's footprint, a fitting, a block) says what its clicks
+ * do, where the generic rows misnamed it ("Move roof · Left click: Place" while a click draws a
+ * footprint).
+ */
+export function toolHintsOwnPlacing(
+  scope: InteractionScope,
+  tool: string | null,
+  toolHintCount: number,
+): boolean {
+  return (
+    scope.kind === 'placing' &&
+    scope.driver === 'registry-tool' &&
+    scope.nodeType === tool &&
+    toolHintCount > 0
+  )
 }
 
 export function HelperManager() {
@@ -546,7 +565,10 @@ export function HelperManager() {
     )
   }
 
-  if (movingNode) {
+  if (
+    movingNode &&
+    !toolHintsOwnPlacing(scope, tool, tool ? (nodeRegistry.get(tool)?.toolHints?.length ?? 0) : 0)
+  ) {
     // A fresh placement (e.g. a positioned preset like a shelf) advertises its
     // once/repeat continuation, exactly like the GLB item tool — but an existing
     // node being *moved* is not a placement, so it gets no continuation chip.

@@ -311,9 +311,19 @@ describe('floor plan export policy', () => {
       stairAnnotations: true,
     }
 
-    expect(resolveFloorplanExportAnnotationVisibility('expert', liveVisibility)).toEqual(
+    expect(resolveFloorplanExportAnnotationVisibility('expert', liveVisibility, true)).toEqual(
       liveVisibility,
     )
+  })
+
+  test('exports no automatic dimensions while Display → Dimensions is off', () => {
+    expect(
+      resolveFloorplanExportAnnotationVisibility(
+        'expert',
+        DEFAULT_FLOORPLAN_ANNOTATION_VISIBILITY,
+        false,
+      ),
+    ).toEqual({ ...DEFAULT_FLOORPLAN_ANNOTATION_VISIBILITY, automaticDimensions: false })
   })
 
   test('exports only model geometry and room labels in Default', () => {
@@ -321,6 +331,7 @@ describe('floor plan export policy', () => {
       resolveFloorplanExportAnnotationVisibility(
         'default',
         DEFAULT_FLOORPLAN_ANNOTATION_VISIBILITY,
+        true,
       ),
     ).toEqual({
       automaticDimensions: false,
@@ -700,7 +711,7 @@ describe('collectFloorplanGeometry', () => {
         'meters',
         DEFAULT_FLOORPLAN_ANNOTATION_VISIBILITY,
         'floor-plan',
-        'finished-faces',
+        'both',
         [enabledPluginId],
       )
 
@@ -758,7 +769,7 @@ describe('collectFloorplanGeometry', () => {
         'meters',
         DEFAULT_FLOORPLAN_ANNOTATION_VISIBILITY,
         'floor-plan',
-        'finished-faces',
+        'both',
         [enabledPluginId],
       )
       expect(upper.map(({ id }) => id)).toEqual(['site_overlay', 'level_upper_architecture'])
@@ -775,7 +786,7 @@ describe('collectFloorplanGeometry', () => {
         'meters',
         DEFAULT_FLOORPLAN_ANNOTATION_VISIBILITY,
         'floor-plan',
-        'finished-faces',
+        'both',
         [enabledPluginId],
       )
       // A hidden Site hides only its own ground and boundary; the site-scoped
@@ -790,7 +801,7 @@ describe('collectFloorplanGeometry', () => {
         'meters',
         DEFAULT_FLOORPLAN_ANNOTATION_VISIBILITY,
         'floor-plan',
-        'finished-faces',
+        'both',
         [enabledPluginId],
       )
       expect(structure.map(({ id }) => id)).toEqual(['level_architecture'])

@@ -69,6 +69,8 @@ export default function RectangleWallTool() {
           (n): n is WallNode => n.type === 'wall' && n.parentId === activeLevelId,
         ),
         magnetic: isMagneticSnapActive(),
+        // A corner aimed into an existing wall's body joins it.
+        captureWallBodies: true,
       })
       useWallSnapIndicator.getState().set(
         result.snap

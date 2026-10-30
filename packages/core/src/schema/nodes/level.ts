@@ -2,6 +2,7 @@ import dedent from 'dedent'
 import { z } from 'zod'
 import type { ProceduralItemNode } from '../../procedural-items/node'
 import { BaseNode, nodeType, objectId } from '../base'
+import type { BeamNode } from './beam'
 import type { BlockNode } from './block'
 import type { CeilingNode } from './ceiling'
 import type { ColumnNode } from './column'
@@ -38,6 +39,7 @@ type CoreLevelChildId =
   | FloorOpeningNode['id']
   | FenceNode['id']
   | ColumnNode['id']
+  | BeamNode['id']
   | ConstructionDimensionNode['id']
   | BlockNode['id']
   | StructuralGridNode['id']

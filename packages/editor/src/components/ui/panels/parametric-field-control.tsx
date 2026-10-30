@@ -28,7 +28,7 @@ export function ParametricFieldControl({
 
   switch (field.kind) {
     case 'number': {
-      const num = typeof value === 'number' ? value : 0
+      const num = typeof value === 'number' ? value : (field.default ?? 0)
       const step = field.step ?? 0.01
       const precision = precisionForStep(step)
       return (

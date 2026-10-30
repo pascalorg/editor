@@ -20,16 +20,18 @@ import {
 } from '../schema'
 import { getCurtainWallConfig } from '../schema/nodes/curtain-wall'
 import type { DoorType, WindowType } from '../schema/nodes/opening-types'
+import { isRailingWall, railingOpeningFields } from '../schema/nodes/railing-wall'
 import { getWallTop } from '../services/storey'
 import { resolveWallExteriorSide } from '../systems/wall/wall-assembly'
 import { getWallCurveLength, isCurvedWall } from '../systems/wall/wall-curve'
+import { NEW_DOOR_FRAME_THICKNESS } from './door-types'
 import {
   type DoorStyle,
   doorStyleLook,
   getWindowStyleOverrides,
   type WindowStyle,
 } from './opening-style-presets'
-import { windowTakesStyle } from './window-types'
+import { NEW_WINDOW_FRAME_THICKNESS, windowTakesStyle } from './window-types'
 
 // The placement rules of wall openings, shared by the editor's door and window tools and by
 // every agent surface: what the editor lets a person do by hand is what an agent may do.
@@ -285,6 +287,14 @@ export function planWallOpening(nodes: Nodes, input: WallOpeningInput) {
       `Wall ${wallId} is curved; doors and windows go on straight walls, as in the editor.`,
       { wallId },
     )
+  // A railing's openings are gaps in its guard: a door becomes one, a window has none to fill.
+  if (kind === 'window' && isRailingWall(wall))
+    refuse(
+      'railing_window',
+      `Wall ${wallId} is a railing: it takes a door, which becomes a gap in the guard, not a window.`,
+      { wallId },
+    )
+  const railingGap = kind === 'door' && isRailingWall(wall) ? railingOpeningFields(wall) : null
 
   const { t, position } = input
   if (t !== undefined && position !== undefined && Math.abs(t - position) > 1e-9)
@@ -316,7 +326,7 @@ export function planWallOpening(nodes: Nodes, input: WallOpeningInput) {
   if (compiled) requireMeasured(compiled, { label: `A ${kind}`, tool: `add_${kind}` })
   const [scriptedWidth, scriptedHeight] = compiled ? scriptedSize(compiled.manifest) : []
   const width = scriptedWidth ?? input.width ?? DEFAULTS[kind].width
-  const height = scriptedHeight ?? input.height ?? DEFAULTS[kind].height
+  const height = railingGap?.height ?? scriptedHeight ?? input.height ?? DEFAULTS[kind].height
   const wallLength = lengthOf(wall)
   if (wallLength < width)
     refuse(
@@ -370,6 +380,8 @@ export function planWallOpening(nodes: Nodes, input: WallOpeningInput) {
     parentId: wallId,
     width,
     height,
+    casingFaceA: true,
+    casingFaceB: true,
     ...(input.openingShape ? { openingShape: input.openingShape } : {}),
     ...(input.archHeight === undefined ? {} : { archHeight: Math.min(input.archHeight, height) }),
     ...(input.cornerRadius === undefined ? {} : { cornerRadius: input.cornerRadius }),
@@ -384,15 +396,18 @@ export function planWallOpening(nodes: Nodes, input: WallOpeningInput) {
     kind === 'door'
       ? DoorNode.parse({
           ...base,
+          frameThickness: NEW_DOOR_FRAME_THICKNESS,
           ...doorFacing(wall),
           ...doorHardwareSides(input),
           swingDirection: input.swingDirection ?? 'inward',
           ...(input.style ? doorStyleLook(input.style as DoorStyle) : {}),
           ...(input.doorType ? { doorType: input.doorType } : {}),
           ...(input.openingKind ? { openingKind: input.openingKind } : {}),
+          ...railingGap,
         })
       : WindowNode.parse({
           ...base,
+          frameThickness: NEW_WINDOW_FRAME_THICKNESS,
           ...getWindowStyleOverrides(input.style as WindowStyle | undefined),
           ...(input.windowType ? { windowType: input.windowType } : {}),
           ...(input.columns ? { columnRatios: equalRatios(input.columns) } : {}),

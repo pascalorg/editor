@@ -1,6 +1,7 @@
 import type { SlotDeclaration } from '../registry/types'
 import { getCurtainWallConfig } from '../schema/nodes/curtain-wall'
-import { WALL_SURFACE_SLOT_DEFAULTS, type WallNode } from '../schema/nodes/wall'
+import { getRailingWallConfig, railingWallSlotDefault } from '../schema/nodes/railing-wall'
+import { getWallFaceDefault, WALL_SURFACE_SLOT_DEFAULTS, type WallNode } from '../schema/nodes/wall'
 
 /**
  * A wall exposes two paintable faces — `a` (left of start → end) and `b` —
@@ -19,9 +20,26 @@ export function wallSlots(node?: WallNode): SlotDeclaration[] {
       { slotId: 'curtain-solid', label: 'Solid panels', default: config.solidColor },
     ]
   }
+  // A railing has no faces: it paints its posts and rails, and its infill.
+  if (node?.wallType === 'railing') {
+    const { style } = getRailingWallConfig(node)
+    return [
+      {
+        slotId: 'railing-frame',
+        label: 'Posts & rails',
+        default: railingWallSlotDefault(style, 'railing-frame'),
+      },
+      {
+        slotId: 'railing-infill',
+        label: style === 'glass' ? 'Glass' : 'Infill',
+        default: railingWallSlotDefault(style, 'railing-infill'),
+      },
+    ]
+  }
+  // A face's default follows its side: the interior paint, raw drywall outside.
   return [
-    { slotId: 'a', label: 'Side A', default: WALL_SURFACE_SLOT_DEFAULTS.a },
-    { slotId: 'b', label: 'Side B', default: WALL_SURFACE_SLOT_DEFAULTS.b },
+    { slotId: 'a', label: 'Side A', default: getWallFaceDefault(node ?? {}, 'a') },
+    { slotId: 'b', label: 'Side B', default: getWallFaceDefault(node ?? {}, 'b') },
     {
       slotId: 'aSkirting',
       label: 'Skirting (side A)',

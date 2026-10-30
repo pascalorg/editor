@@ -4,11 +4,18 @@ import {
   type AnyNodeId,
   type FloorplanGeometry,
   type GeometryContext,
+  getRoofSegmentVisibleTopBounds,
   RoofNode,
   RoofSegmentNode,
 } from '@pascal-app/core'
 import { createFloorplanContextExtensions } from '@pascal-app/editor'
 import { buildRoofFloorplan } from './floorplan'
+
+/**
+ * No overhang, wall or shingle reach: the eave sits on the wall line, so a test about clipping or
+ * creases reads in round numbers. Otherwise the editor plan runs out to the eave.
+ */
+const FLUSH = { overhang: 0, wallThickness: 0, shingleThickness: 0 }
 
 function buildContext(
   node: ReturnType<typeof RoofNode.parse>,
@@ -90,6 +97,7 @@ describe('buildRoofFloorplan roof intersections', () => {
       roofType: 'mansard',
       width: 10,
       depth: 8,
+      ...FLUSH,
     })
     const enteringSegment = RoofSegmentNode.parse({
       id: 'rseg_entering',
@@ -98,6 +106,7 @@ describe('buildRoofFloorplan roof intersections', () => {
       roofType: 'gable',
       width: 8,
       depth: 4,
+      ...FLUSH,
     })
     const nodes = {
       [hostRoof.id]: hostRoof,
@@ -175,6 +184,167 @@ describe('buildRoofFloorplan roof intersections', () => {
   })
 })
 
+/** Every straight line the plan draws, as rounded endpoint pairs in either order. */
+function lineKey(from: [number, number], to: [number, number]): string {
+  const key = (point: [number, number]) =>
+    point.map((value) => (Math.abs(value) < 0.005 ? 0 : value).toFixed(2)).join(',')
+  const a = key(from)
+  const b = key(to)
+  return a < b ? `${a} ${b}` : `${b} ${a}`
+}
+
+function planLines(geometry: FloorplanGeometry | null): string[] {
+  return flat(geometry).flatMap((child) =>
+    child.kind === 'line' ? [lineKey([child.x1, child.y1], [child.x2, child.y2])] : [],
+  )
+}
+
+describe('roof plan creases from the roof surface', () => {
+  // A 10 × 8 gable, ridge along x, and a 4-wide wing roof running into it from +z,
+  // its ridge along z: both on the same plate at the same pitch.
+  function wingedHouse() {
+    const main = RoofNode.parse({ id: 'roof_main', type: 'roof', children: ['rseg_main'] })
+    const wing = RoofNode.parse({
+      id: 'roof_wing',
+      type: 'roof',
+      position: [0, 0, 5],
+      children: ['rseg_wing'],
+    })
+    const mainSegment = RoofSegmentNode.parse({
+      id: 'rseg_main',
+      type: 'roof-segment',
+      parentId: main.id,
+      roofType: 'gable',
+      width: 10,
+      depth: 8,
+      pitch: 30,
+      wallHeight: 0,
+
+      ...FLUSH,
+    })
+    const wingSegment = RoofSegmentNode.parse({
+      id: 'rseg_wing',
+      type: 'roof-segment',
+      parentId: wing.id,
+      roofType: 'gable',
+      width: 10,
+      depth: 4,
+      pitch: 30,
+      wallHeight: 0,
+      rotation: Math.PI / 2,
+
+      ...FLUSH,
+    })
+    const nodes = {
+      [main.id]: main,
+      [wing.id]: wing,
+      [mainSegment.id]: mainSegment,
+      [wingSegment.id]: wingSegment,
+    }
+    return {
+      main: buildRoofFloorplan(main, buildContext(main, [mainSegment], [wing], nodes)),
+      wing: buildRoofFloorplan(wing, buildContext(wing, [wingSegment], [main], nodes)),
+    }
+  }
+
+  test("a wing's ridge runs on past the main roof's wall line to where it meets the main slope", () => {
+    const { wing } = wingedHouse()
+    expect(planLines(wing)).toContain(lineKey([0, 10], [0, 2]))
+  })
+
+  test('the valleys run from where the eaves cross up to the ridge, drawn once', () => {
+    const { main, wing } = wingedHouse()
+    expect(planLines(main)).toEqual(
+      expect.arrayContaining([
+        lineKey([-5, 0], [5, 0]),
+        lineKey([0, 2], [2, 4]),
+        lineKey([0, 2], [-2, 4]),
+      ]),
+    )
+    expect(planLines(wing)).not.toContain(lineKey([0, 2], [2, 4]))
+  })
+
+  test('a hip draws its ridge and four hips', () => {
+    const roof = RoofNode.parse({ id: 'roof_h', type: 'roof', children: ['rseg_h'] })
+    const segment = RoofSegmentNode.parse({
+      id: 'rseg_h',
+      type: 'roof-segment',
+      parentId: roof.id,
+      roofType: 'hip',
+      width: 10,
+      depth: 6,
+      ...FLUSH,
+    })
+    const nodes = { [roof.id]: roof, [segment.id]: segment }
+    const lines = planLines(buildRoofFloorplan(roof, buildContext(roof, [segment], [], nodes)))
+    expect(lines).toEqual(
+      expect.arrayContaining([
+        lineKey([-2, 0], [2, 0]),
+        lineKey([-5, -3], [-2, 0]),
+        lineKey([-5, 3], [-2, 0]),
+        lineKey([5, -3], [2, 0]),
+        lineKey([5, 3], [2, 0]),
+      ]),
+    )
+    expect(lines).toHaveLength(5)
+  })
+})
+
+describe('the editor plan runs out to the eave', () => {
+  function singleRoof(roofType: 'gable' | 'hip', drafting = false) {
+    const roof = RoofNode.parse({ id: 'roof_e', type: 'roof', children: ['rseg_e'] })
+    const segment = RoofSegmentNode.parse({
+      id: 'rseg_e',
+      type: 'roof-segment',
+      parentId: roof.id,
+      roofType,
+      width: 10,
+      depth: 6,
+    })
+    const nodes = { [roof.id]: roof, [segment.id]: segment }
+    return {
+      edge: getRoofSegmentVisibleTopBounds(segment),
+      geometry: buildRoofFloorplan(roof, buildContext(roof, [segment], [], nodes, drafting)),
+    }
+  }
+
+  test('the outline is the eave and rake, overhang included, not the wall line', () => {
+    const { edge, geometry } = singleRoof('gable')
+    const outline = outlinePoints(geometry)
+    expect(edge.minX).toBeLessThan(-5.1)
+    expect(Math.min(...outline.map(([x]) => x))).toBeCloseTo(edge.minX, 6)
+    expect(Math.max(...outline.map(([x]) => x))).toBeCloseTo(edge.maxX, 6)
+    expect(Math.min(...outline.map(([, z]) => z))).toBeCloseTo(edge.minZ, 6)
+    expect(Math.max(...outline.map(([, z]) => z))).toBeCloseTo(edge.maxZ, 6)
+  })
+
+  test("a gable's ridge runs out to both rakes", () => {
+    const { edge, geometry } = singleRoof('gable')
+    expect(planLines(geometry)).toEqual([lineKey([edge.minX, 0], [edge.maxX, 0])])
+  })
+
+  test("a hip's hips run out to the eave corners", () => {
+    const { edge, geometry } = singleRoof('hip')
+    expect(planLines(geometry)).toEqual(
+      expect.arrayContaining([
+        lineKey([-2, 0], [2, 0]),
+        lineKey([edge.minX, edge.minZ], [-2, 0]),
+        lineKey([edge.minX, edge.maxZ], [-2, 0]),
+        lineKey([edge.maxX, edge.minZ], [2, 0]),
+        lineKey([edge.maxX, edge.maxZ], [2, 0]),
+      ]),
+    )
+  })
+
+  test('a drafted sheet still outlines the wall line and dashes the eave past it', () => {
+    const { edge, geometry } = singleRoof('hip', true)
+    const outline = outlinePoints(geometry)
+    expect(Math.min(...outline.map(([x]) => x))).toBeCloseTo(-5, 6)
+    expect(Math.min(...eavePoints(geometry).map(([x]) => x))).toBeCloseTo(edge.minX, 6)
+    expect(planLines(geometry)).toContain(lineKey([-5, -3], [-2, 0]))
+  })
+})
+
 /** A 46' × 32' gable at a 7:12 pitch. */
 function cottageRoof(overrides: Record<string, unknown> = {}, drafting = true) {
   const roof = RoofNode.parse({ id: 'roof_c', type: 'roof', children: ['rseg_c'] })
@@ -248,5 +418,51 @@ describe('roof plan slope annotation', () => {
   test('a flat roof is not annotated with a pitch it does not have', () => {
     const geometry = cottageRoof({ roofType: 'flat', pitch: 0 })
     expect(labels(geometry).filter((label) => /:12$/.test(label.text))).toHaveLength(0)
+  })
+})
+
+describe("the roof's wall line while it is selected or moved", () => {
+  const BLUE = '#2563eb'
+  function wallLines(view: { selected?: boolean; moving?: boolean }) {
+    const roof = RoofNode.parse({ id: 'roof_w', type: 'roof', children: ['rseg_w'] })
+    const segment = RoofSegmentNode.parse({
+      id: 'rseg_w',
+      type: 'roof-segment',
+      parentId: roof.id,
+      roofType: 'gable',
+      width: 10,
+      depth: 6,
+    })
+    const nodes = { [roof.id]: roof, [segment.id]: segment }
+    const geometry = buildRoofFloorplan(roof, {
+      ...buildContext(roof, [segment], [], nodes),
+      viewState: {
+        selected: false,
+        highlighted: false,
+        hovered: false,
+        moving: false,
+        unit: 'metric',
+        ...view,
+        palette: { selectedStroke: BLUE } as never,
+      },
+    })
+    return flat(geometry).filter(
+      (child) => child.kind === 'polygon' && child.stroke === BLUE && child.fill === 'none',
+    )
+  }
+
+  test('a selected or moved roof draws each segment where it stands on the walls', () => {
+    for (const view of [{ selected: true }, { moving: true }]) {
+      const lines = wallLines(view).filter((child) =>
+        child.kind === 'polygon'
+          ? child.points.every(([x, z]) => Math.abs(x) === 5 && Math.abs(z) === 3)
+          : false,
+      )
+      expect(lines).toHaveLength(1)
+    }
+  })
+
+  test('at rest it draws only the eaves', () => {
+    expect(wallLines({})).toHaveLength(0)
   })
 })

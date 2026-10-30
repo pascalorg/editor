@@ -8,6 +8,7 @@ import { CurtainWallConfig } from './curtain-wall'
 import { DoorNode } from './door'
 import { ItemNode } from './item'
 import { LeanToExtensionNode } from './lean-to-extension'
+import { RailingWallConfig } from './railing-wall'
 import { WindowNode } from './window'
 
 // Geometric faces: `a` is left of start → end, `b` is right (wall-frame convention).
@@ -83,9 +84,27 @@ export const WALL_SKIRTING_SLOT_DEFAULT = 'library:preset-softwhite'
 export const WALL_CROWN_SLOT_DEFAULT = 'library:preset-white'
 export const WALL_CHAIR_RAIL_SLOT_DEFAULT = 'library:preset-cream'
 
+/**
+ * The paint an interior wall face shows until someone paints it: Seattle grey,
+ * a cool light grey flat colour from the catalog. Both faces of a partition and
+ * the inside face of an exterior wall wear it (`getWallFaceDefault`); an
+ * exterior face shows its assembly's cladding, or its bare block or concrete,
+ * else `DEFAULT_EXTERIOR_WALL_FINISH`. Raw drywall (`library:concrete-drywall`)
+ * stays in the catalog for a face meant to be bare.
+ */
+export const DEFAULT_INTERIOR_WALL_PAINT = 'library:preset-seattlegrey'
+
+/**
+ * What an unpainted exterior wall face with no cladding shows: raw drywall, the
+ * default every face drew before the interior paint, kept outside so an old
+ * save's exterior walls look as they did and meet the roof's gable and heel
+ * bands (drywall too) without a seam at the plate.
+ */
+export const DEFAULT_EXTERIOR_WALL_FINISH = 'library:concrete-drywall'
+
 export const WALL_SURFACE_SLOT_DEFAULTS = {
-  a: 'library:concrete-drywall',
-  b: 'library:concrete-drywall',
+  a: DEFAULT_INTERIOR_WALL_PAINT,
+  b: DEFAULT_INTERIOR_WALL_PAINT,
   aSkirting: WALL_SKIRTING_SLOT_DEFAULT,
   bSkirting: WALL_SKIRTING_SLOT_DEFAULT,
   aCrown: WALL_CROWN_SLOT_DEFAULT,
@@ -214,6 +233,8 @@ export const WallAssembly = z
     framing: z.object({
       kind: WallAssemblyFramingKind,
       depth: z.number().nonnegative(),
+      /** Studs on centre, metres; absent = the framer's own. */
+      spacing: z.number().positive().optional(),
     }),
     interior: z
       .object({
@@ -244,8 +265,10 @@ export type WallAssembly = z.infer<typeof WallAssembly>
 export const WallNode = BaseNode.extend({
   id: objectId('wall'),
   type: nodeType('wall'),
-  wallType: z.enum(['standard', 'curtain']).optional(),
+  wallType: z.enum(['standard', 'curtain', 'railing']).optional(),
   curtainWall: CurtainWallConfig.optional(),
+  // How a railing wall's guard is built — see RailingWallConfig.
+  railing: RailingWallConfig.optional(),
   children: z
     .array(
       z.union([
@@ -332,6 +355,7 @@ export const WallNode = BaseNode.extend({
 }).describe(
   dedent`
   Wall node - used to represent a wall in the building
+  - wallType: standard (framed), curtain (glazed, curtainWall) or railing (an open guard, railing: { style, postSpacing, postSize, infillSize, infillGap, bottomClearance, cap }; it closes rooms like any wall, its doors are gaps in the guard, its height is its own and its thickness its posts')
   - thickness: TOTAL thickness in meters (all assembly layers together)
   - assembly: optional layered construction stack; when present it is the single
     source of truth and thickness is re-derived from it on every edit
@@ -353,14 +377,32 @@ export type WallNode = z.infer<typeof WallNode>
 /** Legacy semantic side, read only by load migrations. */
 export type WallSurfaceSide = 'interior' | 'exterior'
 
-// Declared default appearance for an unpainted wall face in colored mode —
-// visual parity with the retired DEFAULT_WALL_MATERIAL. Lives in core so the
+// Declared default appearance for an unpainted wall face in colored mode — the
+// interior paint (`DEFAULT_INTERIOR_WALL_PAINT`). Lives in core so the
 // slot declaration (nodes) and the material resolver (viewer) share one value.
 // May be a `#rrggbb` colour or a `library:<id>` ref. Textures-off still
-// collapses to the themed wall role (the escape hatch).
+// collapses to the themed wall role (the escape hatch). A face on the wall's
+// exterior side defaults to `DEFAULT_EXTERIOR_WALL_FINISH` instead
+// (`getWallFaceDefault`).
 export const WALL_SLOT_DEFAULT: Record<WallFace, string> = {
   a: WALL_SURFACE_SLOT_DEFAULTS.a,
   b: WALL_SURFACE_SLOT_DEFAULTS.b,
+}
+
+/**
+ * The default an unpainted face of `wall` shows (`a` is the +normal face, the
+ * `frontSide`): `DEFAULT_EXTERIOR_WALL_FINISH` where that side faces outdoors,
+ * the interior paint everywhere else — both faces of a partition or of a wall
+ * whose rooms are not yet detected, and the inside face of an exterior wall.
+ * An assembly's cladding or bare structure on the exterior face is drawn ahead
+ * of it by the renderer.
+ */
+export function getWallFaceDefault(
+  wall: Partial<Pick<WallNode, 'frontSide' | 'backSide'>>,
+  face: WallFace,
+): string {
+  const side = face === 'a' ? wall.frontSide : wall.backSide
+  return side === 'exterior' ? DEFAULT_EXTERIOR_WALL_FINISH : WALL_SLOT_DEFAULT[face]
 }
 
 export type WallTrimKind = 'skirting' | 'crown' | 'chairRail'

@@ -14,9 +14,12 @@ import {
   type MessageDescriptor,
   normalizeRoofSegmentTrim,
   ROOF_SHAPE_DEFAULTS,
+  type RoofEaveCut,
   type RoofSegmentNode,
   type RoofSegmentTrim,
   type RoofType,
+  roofBuildUpPatch,
+  roofSegmentEaveProfile,
   roofTypeHasRakes,
   usePascalI18n,
   useScene,
@@ -39,6 +42,7 @@ import { useCallback } from 'react'
 import { BarrelRoofPanel } from '../roof/barrel-panel'
 import { RoofGlazingPanel } from '../roof/glazing-panel'
 import { commitSeatedRoofEdit } from '../roof/roof-level-target'
+import { RoofBuildUpSection } from './build-up-section'
 
 const ROOF_TYPE_OPTIONS: { label: MessageDescriptor; value: RoofType }[] = [
   { label: /* i18n */ { id: 'node.roofSegment.panel.hip', message: 'Hip' }, value: 'hip' },
@@ -66,6 +70,19 @@ const ROOF_TYPE_OPTIONS_3: { label: MessageDescriptor; value: RoofType }[] = [
   },
   { label: /* i18n */ { id: 'node.roofSegment.panel.barrel', message: 'Barrel' }, value: 'barrel' },
 ]
+
+// How the rafter tails are cut at the eaves, the fascia and soffit with them (core's `roofEaveProfile`).
+const EAVE_CUT_OPTIONS: { label: MessageDescriptor; value: RoofEaveCut }[] = [
+  { label: /* i18n */ { id: 'node.roofSegment.panel.plumb', message: 'Plumb' }, value: 'plumb' },
+  { label: /* i18n */ { id: 'node.roofSegment.panel.square', message: 'Square' }, value: 'square' },
+  {
+    label: /* i18n */ { id: 'node.roofSegment.panel.plumbLevel', message: 'Plumb + level' },
+    value: 'plumb-level',
+  },
+]
+
+/** The sloped forms whose tails are cut at their eaves by the plane's eave cut. */
+const EAVE_CUT_ROOF_TYPES: ReadonlySet<RoofType> = new Set(['gable', 'hip', 'shed'])
 
 // Carpenter / roofer convention: rise over a 12" run, converted to degrees.
 // atan(3/12) ≈ 14.04°, atan(6/12) ≈ 26.57°, atan(9/12) ≈ 36.87°, atan(12/12) = 45°.
@@ -95,6 +112,17 @@ const EMPTY_TRIM: RoofSegmentTrim = {
   backRightZ: 0,
 }
 
+/** The planes of a roof that take layers: its segments, glazed ones aside. */
+function roofLayerPlaneIds(
+  children: readonly string[],
+  nodes: Record<AnyNodeId, AnyNode>,
+): AnyNodeId[] {
+  return children.filter((id) => {
+    const child = nodes[id as AnyNodeId]
+    return child?.type === 'roof-segment' && !isGlazedRoofSegment(child)
+  }) as AnyNodeId[]
+}
+
 function hasSegmentTrim(node: RoofSegmentNode): boolean {
   return Object.values(normalizeRoofSegmentTrim(node)).some((value) => value > 0)
 }
@@ -122,6 +150,7 @@ export default function RoofSegmentPanel() {
   const updateNode = useScene((s) => s.updateNode)
   const setMovingNode = useEditor((s) => s.setMovingNode)
   const setRoofHostDragArmedId = useEditor((s) => s.setRoofHostDragArmedId)
+  const unit = useViewer((s) => s.unit)
 
   const node = useScene((s) =>
     selectedId ? (s.nodes[selectedId as AnyNode['id']] as RoofSegmentNode | undefined) : undefined,
@@ -132,6 +161,14 @@ export default function RoofSegmentPanel() {
       : undefined
     if (current?.type !== 'roof-segment') return false
     return isAutoRidgeVentEnabled(current, s.nodes)
+  })
+  // How many planes of this roof take layers: "Apply to all planes" shows once there are two.
+  const roofPlaneCount = useScene((s) => {
+    const current = selectedId
+      ? (s.nodes[selectedId as AnyNode['id']] as RoofSegmentNode | undefined)
+      : undefined
+    const roof = current?.parentId ? s.nodes[current.parentId as AnyNodeId] : undefined
+    return roof?.type === 'roof' ? roofLayerPlaneIds(roof.children, s.nodes).length : 0
   })
   const autoGutterEnabled = useScene((s) => {
     const current = selectedId
@@ -152,6 +189,18 @@ export default function RoofSegmentPanel() {
     },
     [selectedId],
   )
+
+  const handleApplyToRoof = useCallback(() => {
+    const scene = useScene.getState()
+    const current = selectedId ? scene.nodes[selectedId as AnyNodeId] : undefined
+    if (current?.type !== 'roof-segment' || !current.buildUp) return
+    const roof = current.parentId ? scene.nodes[current.parentId as AnyNodeId] : undefined
+    if (roof?.type !== 'roof') return
+    const patch = roofBuildUpPatch(current.buildUp)
+    scene.updateNodes(
+      roofLayerPlaneIds(roof.children, scene.nodes).map((id) => ({ id, data: patch })),
+    )
+  }, [selectedId])
 
   const handleRoofTypeChange = useCallback(
     (roofType: RoofType) => {
@@ -679,7 +728,8 @@ export default function RoofSegmentPanel() {
           unit="m"
           value={node.wallThickness}
         />
-        {!isGlazedRoofSegment(node) && (
+        {/* With layers, the Layers section sets it and shows it. */}
+        {!(isGlazedRoofSegment(node) || node.buildUp) && (
           <SliderControl
             label={i18n._({ id: 'node.roofSegment.panel.deckThick', message: 'Deck Thick.' })}
             max={0.3}
@@ -729,7 +779,7 @@ export default function RoofSegmentPanel() {
             value={reach.x - halfWall}
           />
         )}
-        {!isGlazedRoofSegment(node) && (
+        {!(isGlazedRoofSegment(node) || node.buildUp) && (
           <SliderControl
             label={i18n._({ id: 'node.roofSegment.panel.shingleThick', message: 'Shingle Thick.' })}
             max={0.3}
@@ -740,6 +790,21 @@ export default function RoofSegmentPanel() {
             unit="m"
             value={node.shingleThickness}
           />
+        )}
+        {EAVE_CUT_ROOF_TYPES.has(node.roofType) && node.pitch > 0 && (
+          <div>
+            <div className="px-1 pb-1 text-[10px] text-muted-foreground uppercase tracking-wide">
+              {i18n._({ id: 'node.roofSegment.panel.eaveCut', message: 'Eave cut' })}
+            </div>
+            <SegmentedControl
+              onChange={(v) => handleUpdate({ eaveCut: v })}
+              options={EAVE_CUT_OPTIONS.map((option) => ({
+                ...option,
+                label: i18n._(option.label),
+              }))}
+              value={node.eaveCut ?? 'plumb'}
+            />
+          </div>
         )}
         <ToggleControl
           checked={node.fascia ?? false}
@@ -755,10 +820,19 @@ export default function RoofSegmentPanel() {
             precision={2}
             step={0.01}
             unit="m"
-            value={node.fasciaHeight ?? 0.184}
+            value={node.fasciaHeight ?? roofSegmentEaveProfile(node).fascia.height}
           />
         )}
       </PanelSection>
+
+      {!isGlazedRoofSegment(node) && (
+        <RoofBuildUpSection
+          node={node}
+          onApplyToRoof={roofPlaneCount > 1 ? handleApplyToRoof : undefined}
+          onUpdate={handleUpdate}
+          unit={unit}
+        />
+      )}
 
       <PanelSection title={i18n._({ id: 'node.roofSegment.panel.position', message: 'Position' })}>
         <SliderControl

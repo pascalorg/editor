@@ -12,6 +12,7 @@ import {
 import { resolveStairArcDimensions } from './stair-layout'
 import { resolveStairRailPaths } from './stair-rail-path'
 import { resolveStairTotalRise } from './stair-rise-query'
+import { stairStructureDiagnostics } from './stair-structure'
 import { resolveStairWinder } from './stair-winder'
 
 export const DEFAULT_STAIR_DESIGN_TARGETS = StairDesignTargets.parse({})
@@ -241,6 +242,12 @@ export function measureStair(stair: StairNode, nodes: Record<string, AnyNode>) {
     )
   else if (headroom.obstructions.length)
     report('headroom-target', stair.id, 'Overhead surfaces leave less than the target headroom.')
+  // a stair with a structure owes the code's numbers too (IRC R311.7 / R312, DCA 6)
+  for (const issue of stairStructureDiagnostics(stair, measurements, {
+    totalRise,
+    headroom: headroom.status === 'unresolved' ? null : headroom.minimum,
+  }))
+    report(issue.code, issue.nodeId, issue.message, issue.severity)
   return {
     totalRise,
     targets,

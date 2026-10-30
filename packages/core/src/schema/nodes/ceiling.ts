@@ -1,6 +1,7 @@
 import dedent from 'dedent'
 import { z } from 'zod'
 import { BaseNode, nodeType, objectId } from '../base'
+import { CeilingBuildUp } from '../build-up'
 import { MaterialSchema } from '../material'
 import { ItemNode } from './item'
 import { SurfaceHoleMetadata } from './surface-hole-metadata'
@@ -26,6 +27,9 @@ export const CeilingNode = BaseNode.extend({
   // − CEILING_CLAMP_MARGIN (see `resolveCeilingHeight`). Present = an
   // explicit custom height, still write-clamped under that bound.
   height: z.number().optional(),
+  // Layers bottom up from `height`, the finished underside: the ceiling's
+  // thickness rises from there (`ceilingBuildUpThickness`). Absent = no thickness.
+  buildUp: CeilingBuildUp.optional(),
   // Painted parts of a manual ceiling (later wins). An automatic ceiling draws
   // its room's `zone.ceiling.regions` instead: it is rebuilt from the room.
   regions: z.array(SurfacePaintRegion).optional(),
@@ -39,6 +43,7 @@ export const CeilingNode = BaseNode.extend({
   - holes: array of polygons representing holes in the ceiling
   - holeMetadata: metadata parallel to holes, used to preserve manual and auto-managed cutouts
   - height: explicit height in meters; absent = follows the level top automatically
+  - buildUp: layers bottom up from the underside (finish, framing, decking, insulation)
   - regions: painted parts of a manual ceiling ([x, z] polygons, later wins)
   - autoFromWalls: whether the ceiling is automatically generated from a closed wall loop
   `,

@@ -73,6 +73,7 @@ import { Switch } from './../../../../../components/ui/primitives/switch'
 import { cn } from './../../../../../lib/utils'
 import { refusedObjectsNotice } from './../../../../../components/editor/group-actions'
 import { addStoreyBelow, addStoreyOnTop } from './../../../../../lib/add-storey'
+import { offerExteriorWallCopy } from './../../../../../components/ui/level-wall-copy-prompt'
 import { deleteLevelWithFallbackSelection } from './../../../../../lib/level-selection'
 import { bringBuildArtifacts } from './../../../../../lib/scene-clipboard'
 import useEditor, { selectDefaultBuildingAndLevel } from './../../../../../store/use-editor'
@@ -423,10 +424,12 @@ function FloorSettingsSection() {
   const addFloor = () => {
     const newLevel = addStoreyOnTop(building.id)
     setSelection({ buildingId: building.id, levelId: newLevel.id })
+    offerExteriorWallCopy(newLevel.id)
   }
   const addBasement = () => {
     const newLevel = addStoreyBelow(building.id)
     setSelection({ buildingId: building.id, levelId: newLevel.id })
+    offerExteriorWallCopy(newLevel.id)
   }
 
   return (

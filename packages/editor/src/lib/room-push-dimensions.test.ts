@@ -11,8 +11,10 @@ import {
   DIMENSION_FLOOR_LIFT,
   mezzanineEdgeDimensions,
   type RoomDimension,
+  type WallDimensionFaces,
   wallPushDimensionRooms,
   wallPushDimensions,
+  wallSelectionDimensions,
 } from './room-push-dimensions'
 
 // Rooms are real: the walls go through core's room topology, so the faces the
@@ -63,6 +65,20 @@ function measure(
     outward,
     distance,
     resolve: (id) => nodes[id],
+  })
+}
+
+function selection({ nodes, walls }: Scene, wall: WallNode, faces: WallDimensionFaces) {
+  const index = createRoomTopologyIndex()
+  index.rebuildLevel(LEVEL, nodes)
+  const rooms = index.getLevelTopology(LEVEL)?.rooms ?? []
+  return wallSelectionDimensions({
+    rooms: wallPushDimensionRooms(rooms, { wallId: wall.id, t0: 0, t1: 1 }, () => 0),
+    wall,
+    walls,
+    faces,
+    resolve: (id) => nodes[id],
+    baseElevation: 0,
   })
 }
 
@@ -204,6 +220,27 @@ describe('two rooms sharing the moving wall', () => {
     expect(west.from[0]).toBeCloseTo(5 - THICKNESS / 2)
     expect(east.from[0]).toBeCloseTo(5 + THICKNESS / 2)
     expect(west.key).not.toBe(east.key)
+  })
+
+  test('selected, a shared wall shows both room widths and no outside size, whatever the faces', () => {
+    for (const faces of ['both', 'interior', 'exterior'] as const) {
+      const dimensions = selection(rooms, middle, faces)
+      expect(dimensions.map((dimension) => dimension.faces)).toEqual(['interior', 'interior'])
+      expect(distances(dimensions).sort()).toEqual([3.8, 3.8])
+    }
+  })
+
+  test('selected, an exterior wall adds the outside size across the building', () => {
+    const east = wallAt(rooms, [8, 0], [8, 4])
+    const dimensions = selection(rooms, east, 'both')
+    const outside = dimensions.find((dimension) => dimension.faces === 'exterior')!
+    // Outer face to outer face, past the middle wall, clear of the room width's line.
+    expect(outside.distance).toBeCloseTo(8 + THICKNESS)
+    expect(outside.from[0]).toBeCloseTo(8 + THICKNESS / 2)
+    expect(outside.to[0]).toBeCloseTo(-THICKNESS / 2)
+    expect(distances(dimensions.filter((dimension) => dimension.faces === 'interior'))).toEqual([
+      3.8,
+    ])
   })
 
   test('a push over part of the wall measures only the rooms along that part', () => {

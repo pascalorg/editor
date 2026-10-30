@@ -39,6 +39,23 @@ describe('measurement display preferences', () => {
     expect(useViewer.getState().showMeasurements).toBe(false)
   })
 
+  // Framing only hides the shell; carried into another project, that house opened invisible.
+  test('another project opens with the whole house, not framing only', () => {
+    useViewer.getState().setProjectId('project-a')
+    useViewer.getState().setFramingOnly(true)
+    useViewer.getState().setProjectId('project-b')
+    expect(useViewer.getState().framingOnly).toBe(false)
+  })
+
+  // The frame in the finished house opens its floors and roofs: the view's, not the project's.
+  test('another project opens with its floors and roofs closed, the frame not shown', () => {
+    useViewer.getState().setProjectId('project-a')
+    useViewer.getState().setFramingShown(true)
+    expect(useViewer.getState().framingShown).toBe(true)
+    useViewer.getState().setProjectId('project-b')
+    expect(useViewer.getState().framingShown).toBe(false)
+  })
+
   test('changes display units without changing measurement visibility preferences', () => {
     const viewer = useViewer.getState()
     viewer.setProjectId('project-a')

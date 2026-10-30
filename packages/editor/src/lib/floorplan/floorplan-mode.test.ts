@@ -5,7 +5,6 @@ import {
   normalizeFloorplanMode,
   normalizeFloorplanModesByProject,
   resolveFloorplanAnnotationVisibility,
-  resolveFloorplanWallDimensionReference,
 } from './floorplan-mode'
 
 describe('floor-plan mode', () => {
@@ -115,10 +114,18 @@ describe('floor-plan mode', () => {
     })
   })
 
-  test('uses centerline dimensions only in Default', () => {
-    expect(resolveFloorplanWallDimensionReference('default', 'finished-faces')).toBe('centerline')
-    expect(resolveFloorplanWallDimensionReference('expert', 'finished-faces')).toBe(
-      'finished-faces',
-    )
+  test('Dimensions off hides automatic and contextual dimensions in both modes', () => {
+    for (const mode of ['default', 'expert'] as const) {
+      const visibility = resolveFloorplanAnnotationVisibility(
+        mode,
+        { ...DEFAULT_FLOORPLAN_ANNOTATION_VISIBILITY, contextualDimensions: true },
+        { selected: true, target: 'editor', dimensions: false },
+      )
+      expect(visibility.automaticDimensions).toBe(false)
+      expect(visibility.contextualDimensions).toBe(false)
+      // Drawn dimensions and measurements are the user's own: they stay.
+      expect(visibility.manualDimensions).toBe(true)
+      expect(visibility.measurements).toBe(true)
+    }
   })
 })

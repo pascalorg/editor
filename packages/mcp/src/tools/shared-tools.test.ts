@@ -10,6 +10,7 @@ import { AGENT_TOOL_CASES } from '../../../core/src/agent-operations/__fixtures_
 import { CATALOG_BRIEF } from '../../../core/src/agent-operations/__fixtures__/design-brief-cases'
 import { SceneBridge } from '../bridge/scene-bridge'
 import { createSceneOperations } from '../operations'
+import { registerAddColumn } from './add-column'
 import { ADDITIVE_TOOL_ANNOTATIONS } from './annotations'
 import { type AssetCatalog, builtInCatalog } from './asset-catalog'
 import { type PlanReadingHosts, registerOperationTool, registerSharedTools } from './shared-tools'
@@ -84,6 +85,7 @@ describe('shared tools over MCP', () => {
   beforeEach(async () => {
     bridge = new SceneBridge()
     const server = new McpServer({ name: 'test', version: '0.0.0' })
+    registerAddColumn(server, createSceneOperations({ bridge, activeLevelId: () => viewed }))
     registerSharedTools(
       server,
       createSceneOperations({ bridge, activeLevelId: () => viewed }),

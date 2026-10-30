@@ -133,6 +133,32 @@ export {
 } from './lib/assembly-stack'
 export { loadAssetUrl, saveAsset } from './lib/asset-storage'
 export {
+  BEAM_MATERIAL_LABELS,
+  BEAM_MATERIAL_LIBRARY_REFS,
+  BEAM_TOP_REFERENCE_LABELS,
+  BEAM_TOP_REFERENCES,
+  type BeamInput,
+  type BeamPlan,
+  type BeamTopReference,
+  beamBottomElevation,
+  beamCeilingPlane,
+  beamOutline,
+  beamPlan,
+  beamSizeLabel,
+  beamSizePreset,
+  beamSizePresetPatch,
+  beamsOverPoint,
+  beamTopElevation,
+  beamTopReferenceOf,
+  beamTopReferencePatch,
+  createBeam,
+  inchFractionLabel,
+  type LevelFloorAt,
+  levelFloorAt,
+  matchBeamSizePreset,
+  postStationsAlong,
+} from './lib/beam'
+export {
   belowGradeFloorY,
   belowGradeFootprints,
   coveredBelowGradeFootprints,
@@ -140,6 +166,26 @@ export {
   GROUND_PIT_PLATE_CLEARANCE,
   groundPitFloorY,
 } from './lib/below-grade-footprints'
+export {
+  CEILING_BUILD_UP_PRESETS,
+  type CeilingBuildUpPreset,
+  ceilingBuildUpThickness,
+  ceilingCapLift,
+  DRYWALL_THICKNESSES,
+  FRAMING_SPACINGS,
+  LUMBER_DEPTH,
+  PANEL_THICKNESSES,
+  PLASTER_THICKNESS,
+  ROOF_BUILD_UP_PRESETS,
+  ROOFING_THICKNESS,
+  type RoofBuildUpPreset,
+  roofBuildUpDepths,
+  roofBuildUpOfDeck,
+  roofBuildUpPatch,
+  roofStructureDepth,
+  UNDERLAYMENT_THICKNESS,
+  WOOD_PLANK_THICKNESS,
+} from './lib/build-up'
 export {
   footprintOutline,
   levelFootprintLoops,
@@ -167,6 +213,55 @@ export {
 } from './lib/corner-snap'
 export { criticallyDamped } from './lib/critically-damped'
 export { isCutterName, resolveCutterHost } from './lib/cutter-host'
+export {
+  DECK_BOARD_DIRECTIONS,
+  DECK_BOARD_GAPS,
+  DECK_BOARD_JOINT_GAP,
+  DECK_BOARD_MAX_LENGTH,
+  DECK_BOARD_SIZES,
+  DECK_BOARD_STOCK,
+  DEFAULT_DECK_BOARDS,
+  type DeckBoardAxes,
+  type DeckBoardDirection,
+  type DeckBoardJoists,
+  type DeckBoardRun,
+  type DeckBoardSettings,
+  type DeckBoardSize,
+  type DeckBoardStock,
+  deckBoardRun,
+  deckBoardSettings,
+  deckBoardThickness,
+  deckJoistSpacingLimit,
+  deckSlabBoards,
+  layoutDeckBoards,
+} from './lib/deck-boards'
+export {
+  DECK_BEAM_INSET,
+  DECK_BOARD_OVERHANG,
+  DECK_DROPPED_BEAM,
+  DECK_JOIST_SPANS,
+  DECK_MIN_POST_HEIGHT,
+  DECK_POST,
+  DECK_POST_END_INSET,
+  DECK_POST_SPACING,
+  type DeckAxes,
+  type DeckBeamKind,
+  type DeckBeamPiece,
+  type DeckFramingInput,
+  type DeckFramingPlan,
+  type DeckHanger,
+  type DeckJoistPiece,
+  type DeckJoistSpan,
+  type DeckLumber,
+  type DeckPiece,
+  type DeckPieceRole,
+  type DeckPostPiece,
+  type DeckWall,
+  deckAxes,
+  deckLedgerEdge,
+  isDeckSlab,
+  planDeckFraming,
+} from './lib/deck-framing'
 export { deepestDrawnY, lowestGroundY } from './lib/deepest-drawn'
 export {
   clampDoorOperationState,
@@ -250,6 +345,24 @@ export {
   foundationRegionOf,
 } from './lib/foundation-construction'
 export { FOUNDATION_STANDARD } from './lib/foundation-standard'
+export {
+  createFramingPost,
+  DEFAULT_FRAMING_POST_SIZE,
+  FRAMING_POST_BASE_LABELS,
+  FRAMING_POST_MATERIAL_REF,
+  FRAMING_POST_MAX_HEIGHT,
+  FRAMING_POST_MIN_HEIGHT,
+  FRAMING_POST_SIZES,
+  type FramingPostInput,
+  type FramingPostSize,
+  type FramingPostTop,
+  framingPostBasePatch,
+  framingPostFields,
+  framingPostHeightLimit,
+  framingPostSize,
+  framingPostTopAt,
+  isFramingPost,
+} from './lib/framing-post'
 export { type FoundationMember, genericFoundation } from './lib/generic-foundation'
 export {
   ceilingSeatY,
@@ -325,6 +438,18 @@ export {
   withHostedCutterHoles,
 } from './lib/object-cuts'
 export {
+  DEFAULT_OPENING_CASING_WIDTH,
+  OPENING_CASING_PROUD,
+  type OpeningCasingBoard,
+  type OpeningCasingFace,
+  type OpeningCasingHost,
+  openingCasingBoards,
+  openingCasingFaces,
+  openingCasingWidth,
+  openingHostFacing,
+  resolveOpeningCasingHost,
+} from './lib/opening-casing'
+export {
   getOpeningFloorDatum,
   getOpeningWallCut,
   getOpeningWallPlacement,
@@ -333,10 +458,21 @@ export {
 } from './lib/opening-floor-datum'
 export {
   isAutoFrameDepth,
-  OPENING_FRAME_LIP,
   resolveHostedOpeningFrameDepth,
   resolveOpeningFrameDepth,
 } from './lib/opening-frame-depth'
+export {
+  DECK_FLOOR_DROP,
+  DECKING_THICKNESS,
+  isOutdoorRoom,
+  isOutdoorRoomType,
+  nextOutdoorRoomName,
+  OUTDOOR_ROOM_DEFAULTS,
+  OUTDOOR_ROOM_TYPES,
+  type OutdoorRoomDefaults,
+  type OutdoorRoomType,
+  PORCH_FLOOR_DROP,
+} from './lib/outdoor-room'
 export {
   classifyPlateSideAt,
   clearPlateSurfaceCaches,
@@ -392,6 +528,34 @@ export {
   unionPolygons,
 } from './lib/polygon-union'
 export {
+  DEFAULT_PORCH_FRAMING,
+  PORCH_POST_SETBACK,
+  PORCH_POST_SPACING,
+  type PorchBeamPlan,
+  type PorchFramingPlan,
+  type PorchFramingSettings,
+  type PorchPostPlan,
+  planPorchFraming,
+  porchFramingSettings,
+} from './lib/porch-framing'
+export { type PorchPartMetadata, porchPartOf } from './lib/porch-framing-sync'
+export {
+  type EavePoint,
+  eaveContains,
+  FASCIA_DROP,
+  FASCIA_STOCK,
+  FASCIA_THICKNESS,
+  type FasciaStock,
+  fasciaStockFor,
+  LEVEL_CUT_RUN,
+  type RoofEaveInput,
+  type RoofEaveProfile,
+  roofEaveProfile,
+  roofSegmentEaveInput,
+  roofSegmentEaveProfile,
+  SOFFIT_THICKNESS,
+} from './lib/roof-eave'
+export {
   compareRoofOverlapIdentity,
   getRoofPlanBounds,
   type RoofOverlapEntry,
@@ -416,6 +580,7 @@ export {
   roomFloorElevationFromRelative,
   roundFloorElevation,
 } from './lib/room-floor-feasibility'
+export { floorPlateRoom } from './lib/room-floor-plate'
 export type { OpenWallEnd } from './lib/room-graph'
 export { isAllocatedRoomName } from './lib/room-name'
 export {
@@ -623,6 +788,7 @@ export {
   getLibraryMaterialIdFromRef,
   getLibraryMaterialsVersion,
   getMaterialPresetByRef,
+  getMaterialSwatch,
   getMaterialsForCategory,
   getSceneMaterialIdFromRef,
   isCommunityMaterialId,
@@ -635,6 +801,7 @@ export {
   type MaterialRef,
   type MaterialSource,
   type MaterialSurface,
+  type MaterialSwatch,
   materialColorPaint,
   type ParsedMaterialRef,
   parseMaterialColor,
@@ -838,12 +1005,15 @@ export {
   isSplineFence,
   sampleFenceSpline,
 } from './systems/fence/fence-spline'
-export { planOwnedFloorOpenings } from './systems/owned-floor-openings'
+export { authorStairOpeningPatches, planOwnedFloorOpenings } from './systems/owned-floor-openings'
 export { resolveRoofElevation, resolveRoofWallTopElevation } from './systems/roof/roof-elevation'
 export { RoofElevationSystem } from './systems/roof/roof-elevation-system'
 export {
   fitRoofFootprint,
+  outdoorRoomRoofOutline,
   type RoofFootprintTarget,
+  type RoofOutlineEdge,
+  resolveOutdoorRoomRoofFootprintOnLevel,
   resolveRoomRoofFootprint,
   resolveRoomRoofFootprintOnLevel,
 } from './systems/roof/roof-footprint'
@@ -856,6 +1026,7 @@ export {
   type SlabElevationClamp,
   type WallSlabSupport,
 } from './systems/slab/slab-support'
+export { stairBaseElevation } from './systems/stair/stair-base-elevation'
 export {
   measureStairHeadroom,
   resolveStairWalkingSurfaces,
@@ -934,6 +1105,42 @@ export {
   planStairSizingEdit,
   type StairDiagnostic,
 } from './systems/stair/stair-sizing'
+export {
+  autoStairStringerCount,
+  DEFAULT_STAIR_NOSING,
+  formatStairInches,
+  inferStairStructure,
+  type ResolvedStairConstruction,
+  type ResolvedStairStructure,
+  resolveStairStringerLayout,
+  resolveStairStructure,
+  STAIR_CODE,
+  STAIR_HOUSING_DEPTH,
+  STAIR_LANDING_JOIST,
+  STAIR_LANDING_JOIST_SPACING,
+  STAIR_LANDING_POST,
+  STAIR_RISER_THICKNESS,
+  STAIR_STEEL_STRINGER,
+  STAIR_STRINGER_STOCK,
+  STAIR_TREAD_STOCK,
+  type StairFrameBox,
+  type StairStringerBand,
+  type StairStringerCut,
+  type StairStringerFlight,
+  type StairStringerLayout,
+  type StairStringerSlice,
+  type StairStructureHost,
+  type StairStructureIssue,
+  stairIsExterior,
+  stairLandingFrame,
+  stairStringerCut,
+  stairStringerEdges,
+  stairStringerFlight,
+  stairStringerSlices,
+  stairStructureConstruction,
+  stairStructureConstructionOf,
+  stairStructureDiagnostics,
+} from './systems/stair/stair-structure'
 export { planStairSweepEdit } from './systems/stair/stair-sweep-edit'
 export {
   resolveStairWalkingPaths,
@@ -948,6 +1155,7 @@ export {
   type StairWinderPoint,
 } from './systems/stair/stair-winder'
 export {
+  assemblyLayerSlotKey,
   assemblyThickness,
   BRICK_AIR_SPACE,
   BRICK_VENEER,
@@ -961,7 +1169,14 @@ export {
   GYPSUM_SHEATHING,
   getWallAssemblyPreset,
   getWallLayerPolylines,
+  isExteriorWallAssembly,
   isLegacyWallAssembly,
+  isWallCladdingProduct,
+  LGS_STUD_350,
+  LGS_STUD_550,
+  LGS_STUD_800,
+  parseWallTypes,
+  projectWallTypes,
   type ResolvedWallAssembly,
   resolveWallAssembly,
   resolveWallExteriorSide,
@@ -970,23 +1185,32 @@ export {
   STUCCO_3_COAT,
   STUD_2X4,
   STUD_2X6,
+  STUD_2X8,
+  STUD_SPACING_16,
+  STUD_SPACING_24,
   WALL_ASSEMBLY_PRESETS,
   WALL_FINISH_LIBRARY_REF,
+  WALL_TYPE_CORES,
   type WallAssemblyLayer,
   type WallAssemblyLayerRole,
   type WallAssemblyPreset,
   type WallLayerMiterData,
   type WallLayerPolyline,
+  type WallTypeCore,
   WSP_SHEATHING,
   wallAssemblyExposedStructure,
   wallAssemblyExteriorFinish,
+  wallAssemblyFaceFinish,
   wallAssemblyFinishRef,
   wallAssemblyFraming,
   wallAssemblyFromLegacy,
   wallAssemblyPatch,
   wallAssemblyToLegacy,
   wallAssemblyUnverifiedNote,
+  wallCladdingProducts,
   wallLayerBoundaryOffsets,
+  wallTypeAssembly,
+  wallTypeCoreOf,
 } from './systems/wall/wall-assembly'
 export {
   constrainWallCurveOffsetToAvoidIntersections,
@@ -1064,6 +1288,7 @@ export {
   getLinkedWallUpdates,
   getPerpendicularWallMoveAxis,
   getPlannedLinkedWallUpdates,
+  planAttachedWallUpdates,
   planWallMoveJunctions,
   type WallMoveAxis,
   type WallMoveBridgePlan,
@@ -1089,6 +1314,7 @@ export {
 export {
   findOpenWallEnds,
   planJoinOpenWallEnd,
+  planSeparatorInsertion,
   planWallEndRejoins,
   planWallInsertion,
   planWallSplitAtPoint,

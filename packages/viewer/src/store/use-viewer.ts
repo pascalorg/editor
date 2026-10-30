@@ -238,6 +238,28 @@ type ViewerState = {
   showZones: boolean
   setShowZones: (show: boolean) => void
 
+  /**
+   * Ceilings also draw their upper face, so they read as solid from above: a roof seen over closed
+   * rooms. Off, a camera above looks into the rooms, the ceiling showing only from below. The
+   * editor drives it from its Ceilings display setting; not persisted.
+   */
+  showCeilingTops: boolean
+  setShowCeilingTops: (show: boolean) => void
+  /**
+   * The house as its frame: a framing plugin draws the studs, plates, headers, joists and rafters of
+   * every storey and hides the shell over them; the foundation stays. Not persisted.
+   */
+  framingOnly: boolean
+  setFramingOnly: (on: boolean) => void
+  /**
+   * The frame in the finished house: a framing plugin draws the studs, joists and rafters with the
+   * shell left as it is, and the roof decks draw open where their rafters are, so the frame shows
+   * where it is exposed (the attic) and stays hidden inside the walls and the finished ceilings.
+   * Framing only wins while both are on. Not persisted.
+   */
+  framingShown: boolean
+  setFramingShown: (on: boolean) => void
+
   transparentBackground: boolean
   setTransparentBackground: (transparent: boolean) => void
 
@@ -707,6 +729,14 @@ const useViewer = create<ViewerState>()(
       showZones: true,
       setShowZones: (show) => set({ showZones: show }),
 
+      showCeilingTops: false,
+      setShowCeilingTops: (show) => set({ showCeilingTops: show }),
+      framingOnly: false,
+      setFramingOnly: (on) => set({ framingOnly: on }),
+      framingShown: false,
+      setFramingShown: (on) =>
+        set((state) => (state.framingShown === on ? state : { framingShown: on })),
+
       transparentBackground: false,
       setTransparentBackground: (transparent) => set({ transparentBackground: transparent }),
 
@@ -724,6 +754,8 @@ const useViewer = create<ViewerState>()(
             projectPreferences,
             projectPresentation: undefined,
             previewSceneTheme: null,
+            framingOnly: false,
+            framingShown: false,
             showScans: prefs.showScans ?? true,
             showGuides: prefs.showGuides ?? true,
             showGrid: prefs.showGrid ?? true,

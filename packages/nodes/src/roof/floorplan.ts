@@ -4,6 +4,7 @@ import {
   type GeometryContext,
   getGlazedRoofPlanLines,
   getRoofSegmentVisibleTopBounds,
+  getSegmentSlopeFrame,
   type RoofNode,
   type RoofSegmentNode,
   roofPlanOverlapEntryOwns,
@@ -12,6 +13,7 @@ import {
 } from '@pascal-app/core'
 import { floorplanGeometryMetadata, readFloorplanContext } from '@pascal-app/editor'
 import { getConicalRoofPlanFootprint, getRoofSegmentPlanLinework } from '../roof-segment/floorplan'
+import { getRoofSurfaceCreases, type RoofCreaseSurface, type RoofPlane } from './roof-plan-creases'
 
 type Pt = [number, number]
 type Seg = [Pt, Pt]
@@ -23,11 +25,24 @@ type SegPlan = {
   footprint: Pt[]
   /** The visible roof edge — the footprint plus the eave / rake overhang. */
   eave: Pt[]
+  /**
+   * The edge the plan outlines, and the reach of its ridges, hips and
+   * valleys. The editor draws the roof as the 3D shows it from above, out to
+   * the eave and rake; a drafted sheet outlines the wall line and dashes the
+   * overhang past it (`eave`).
+   */
+  outline: Pt[]
   ridges: Seg[]
   hips: Seg[]
   breaks: Seg[]
   glazing: Seg[]
   slopes: SlopeArrow[]
+  /**
+   * The segment's top as planes, for a form made only of planes (gable, hip,
+   * shed, flat): the plan then draws its ridges, hips and valleys off the
+   * unioned surface (`getRoofSurfaceCreases`) instead of `ridges` / `hips`.
+   */
+  surface: RoofCreaseSurface | null
 }
 
 type PlanEntry = {
@@ -117,6 +132,35 @@ function overlapEntry(entry: PlanEntry, ctx: GeometryContext) {
   }
 }
 
+/**
+ * A planar form's roof planes in segment-local plan coordinates, each as
+ * `[gx, gz, c]` with height `c + gx·lx + gz·lz` above the eave: every slope
+ * rises at the pitch from its eave line. `null` for the forms with curved or
+ * broken slopes, which keep their own linework.
+ */
+function localRoofPlanes(seg: RoofSegmentNode): [number, number, number][] | null {
+  const hw = Math.max(seg.width, 0.01) / 2
+  const hd = Math.max(seg.depth, 0.01) / 2
+  const tan = getSegmentSlopeFrame(seg).tanTheta
+  const towardPlusZ: [number, number, number] = [0, -tan, tan * hd]
+  const towardMinusZ: [number, number, number] = [0, tan, tan * hd]
+  const towardPlusX: [number, number, number] = [-tan, 0, tan * hw]
+  const towardMinusX: [number, number, number] = [tan, 0, tan * hw]
+  switch (seg.roofType) {
+    case 'flat':
+      return [[0, 0, 0]]
+    case 'shed':
+      // high eave at lz = −hd, falling to +hd, as the 3D builder slopes it
+      return [towardPlusZ]
+    case 'gable':
+      return [towardPlusZ, towardMinusZ]
+    case 'hip':
+      return [towardPlusZ, towardMinusZ, towardPlusX, towardMinusX]
+    default:
+      return null
+  }
+}
+
 /** A segment's footprint + ridge/hip/break/slope linework, in world plan coords. */
 function buildSegPlan(roof: RoofNode, seg: RoofSegmentNode, drafting: boolean): SegPlan {
   const cosRoof = Math.cos(-roof.rotation)
@@ -132,19 +176,52 @@ function buildSegPlan(roof: RoofNode, seg: RoofSegmentNode, drafting: boolean): 
   ]
   const hw = Math.max(seg.width, 0.01) / 2
   const hd = Math.max(seg.depth, 0.01) / 2
+  const conical = seg.roofType === 'conical'
+  // The drip edge: core's own visible-top bounds, which add the horizontal
+  // component of `overhang` (plus half the wall thickness and, on the sloped
+  // faces, the shingle projection) to the footprint on each side.
+  const edge = getRoofSegmentVisibleTopBounds(seg)
+  // In the editor a line that ends on the wall line runs on to the eave or
+  // rake, as the 3D's hips, ridges and slope breaks do.
+  const toEdge = (v: number, half: number, min: number, max: number) =>
+    Math.abs(v - half) < 1e-6 ? max : Math.abs(v + half) < 1e-6 ? min : v
+  const reach = drafting || conical ? null : edge
+  const mapSeg = (s: readonly [readonly [number, number], readonly [number, number]]): Seg =>
+    s.map(([lx, lz]) =>
+      reach
+        ? tp(toEdge(lx, hw, reach.minX, reach.maxX), toEdge(lz, hd, reach.minZ, reach.maxZ))
+        : tp(lx, lz),
+    ) as Seg
   const lw = getRoofSegmentPlanLinework(seg)
-  const mapSeg = (s: readonly [readonly [number, number], readonly [number, number]]): Seg => [
-    tp(s[0][0], s[0][1]),
-    tp(s[1][0], s[1][1]),
+  const footprint = conical
+    ? getConicalRoofPlanFootprint(seg).map(([x, z]) => tp(x, z))
+    : [tp(-hw, -hd), tp(hw, -hd), tp(hw, hd), tp(-hw, hd)]
+  const eave = [
+    tp(edge.minX, edge.minZ),
+    tp(edge.maxX, edge.minZ),
+    tp(edge.maxX, edge.maxZ),
+    tp(edge.minX, edge.maxZ),
   ]
-  const footprint =
-    seg.roofType === 'conical'
-      ? getConicalRoofPlanFootprint(seg).map(([x, z]) => tp(x, z))
-      : [tp(-hw, -hd), tp(hw, -hd), tp(hw, hd), tp(-hw, hd)]
+  const outline = reach ? eave : footprint
   const ridges = lw.ridges.map(mapSeg)
   const hips = lw.hips.map(mapSeg)
   const breaks = lw.breaks.map(mapSeg)
-  const glazing = getGlazedRoofPlanLines(seg).map(mapSeg)
+  const glazing = getGlazedRoofPlanLines(seg).map(([a, b]): Seg => [tp(a[0], a[1]), tp(b[0], b[1])])
+  const local = localRoofPlanes(seg)
+  // Heights in the roof's level frame, so the planes of two roofs side by side
+  // compare. The planes run on past the wall line, as the overhang does.
+  const base = roof.position[1] + seg.position[1] + seg.wallHeight
+  const surface: RoofCreaseSurface | null = local
+    ? {
+        roofId: String(roof.id),
+        footprint: outline,
+        planes: local.map(([gx, gz, c0]): RoofPlane => {
+          const a = gx * cos - gz * sin
+          const b = gx * sin + gz * cos
+          return { a, b, c: base + c0 - a * segCx - b * segCz }
+        }),
+      }
+    : null
   if (!drafting) {
     const slopes = lw.slope
       ? [
@@ -155,25 +232,18 @@ function buildSegPlan(roof: RoofNode, seg: RoofSegmentNode, drafting: boolean): 
           },
         ]
       : []
-    return { footprint, eave: footprint, ridges, hips, breaks, glazing, slopes }
+    return { footprint, eave, outline, ridges, hips, breaks, glazing, slopes, surface }
   }
-  // The drip edge: core's own visible-top bounds, which add the horizontal
-  // component of `overhang` (plus half the wall thickness and, on the sloped
-  // faces, the shingle projection) to the footprint on each side.
-  const edge = getRoofSegmentVisibleTopBounds(seg)
   const pitch = seg.roofType === 'barrel' ? '' : roofPitchLabel(seg.pitch)
   return {
     footprint,
-    eave: [
-      tp(edge.minX, edge.minZ),
-      tp(edge.maxX, edge.minZ),
-      tp(edge.maxX, edge.maxZ),
-      tp(edge.minX, edge.maxZ),
-    ],
+    eave,
+    outline,
     ridges,
     hips,
     breaks,
     glazing,
+    surface,
     slopes: slopeArrows(seg).map((arrow) => ({
       tail: tp(arrow.tail[0], arrow.tail[1]),
       head: tp(arrow.head[0], arrow.head[1]),
@@ -272,25 +342,25 @@ export function buildRoofFloorplan(node: RoofNode, ctx: GeometryContext): Floorp
   }
 
   const currentEntries = entries.filter((entry) => entry.roof.id === node.id)
+  const owningCandidates = (entry: PlanEntry) =>
+    entries.filter((candidate) => {
+      if (candidate.segment.id === entry.segment.id) return false
+      if (candidate.segment.roofType === 'shed') return false
+      return roofPlanOverlapEntryOwns(overlapEntry(candidate, ctx), overlapEntry(entry, ctx))
+    })
   const visiblePlans = currentEntries.map((entry) => {
-    const cutters = entries
-      .filter((candidate) => {
-        if (candidate.segment.id === entry.segment.id) return false
-        if (candidate.segment.roofType === 'shed') return false
-        return roofPlanOverlapEntryOwns(overlapEntry(candidate, ctx), overlapEntry(entry, ctx))
-      })
-      .map((candidate) => candidate.plan.footprint)
+    const cutters = owningCandidates(entry).map((candidate) => candidate.plan.outline)
     return {
       plan: entry.plan,
       cutters,
-      footprints: subtractPolygonsFromPolygon(entry.plan.footprint, cutters) as Pt[][],
+      outlines: subtractPolygonsFromPolygon(entry.plan.outline, cutters) as Pt[][],
       eaves: subtractPolygonsFromPolygon(entry.plan.eave, cutters) as Pt[][],
       /** True when the drip edge is far enough outside the wall line to draw. */
       hasOverhang:
         drafting && polygonSpread(entry.plan.eave) - polygonSpread(entry.plan.footprint) > 0.04,
     }
   })
-  const rings = unionPolygons(visiblePlans.flatMap(({ footprints }) => footprints)) as Pt[][]
+  const rings = unionPolygons(visiblePlans.flatMap(({ outlines }) => outlines)) as Pt[][]
   if (rings.length === 0) return null
   const eaveRings = unionPolygons(
     visiblePlans.flatMap(({ eaves, hasOverhang }) => (hasOverhang ? eaves : [])),
@@ -344,7 +414,7 @@ export function buildRoofFloorplan(node: RoofNode, ctx: GeometryContext): Floorp
     })
   }
 
-  // Merged outline (wall line under the roof).
+  // Merged outline: the eave and rake in the editor, the wall line on a sheet.
   for (const ring of rings) {
     if (ring.length < 3) continue
     children.push({
@@ -358,24 +428,65 @@ export function buildRoofFloorplan(node: RoofNode, ctx: GeometryContext): Floorp
     })
   }
 
+  // Selected or moved, the wall line each segment stands on: whether the roof sits on the walls'
+  // centre lines (a selected segment draws its own).
+  if (!drafting && palette && ((view?.moving ?? false) || showSelectedChrome)) {
+    for (const { plan } of visiblePlans) {
+      children.push({
+        kind: 'polygon',
+        points: plan.footprint.map(([x, z]) => [x, z] as FloorplanPoint),
+        fill: 'none',
+        stroke: palette.selectedStroke,
+        strokeWidth: 0.035,
+        strokeLinejoin: 'miter',
+        pointerEvents: 'none',
+      })
+    }
+  }
+
+  // Ridges, hips and valleys of the planar segments, off the surface they make
+  // together with this level's other roofs: a wing's ridge runs on until it
+  // meets the main roof's slope, and a valley runs where the two slopes meet.
+  // The curved and broken forms are not in that surface: where one owns an
+  // overlap it cuts these lines as before.
+  const planarEntries = entries.filter((entry) => entry.plan.surface)
+  const curvedCutters = (entry: PlanEntry) =>
+    owningCandidates(entry)
+      .filter((candidate) => !candidate.plan.surface)
+      .map((candidate) => candidate.plan.outline)
+  for (const crease of getRoofSurfaceCreases(planarEntries.map((entry) => entry.plan.surface!))) {
+    if (crease.roofId !== String(node.id)) continue
+    const [i, k] = crease.between
+    const cutters = [
+      ...curvedCutters(planarEntries[i]!),
+      ...(k === i ? [] : curvedCutters(planarEntries[k]!)),
+    ]
+    const width = crease.kind === 'ridge' ? ridgeWidth : hipWidth
+    for (const visible of clipLineByCutters([crease.from, crease.to], cutters))
+      pushLine(visible[0], visible[1], width)
+  }
+
   for (const { plan, cutters } of visiblePlans) {
     for (const line of plan.glazing) {
       for (const visible of clipLineByCutters(line, cutters))
         pushLine(visible[0], visible[1], hipWidth)
     }
-    for (const line of plan.breaks) {
-      for (const visible of clipLineByCutters(line, cutters)) {
-        pushLine(visible[0], visible[1], hipWidth)
+    // A planar segment's ridges and hips were drawn off the shared surface above.
+    if (!plan.surface) {
+      for (const line of plan.breaks) {
+        for (const visible of clipLineByCutters(line, cutters)) {
+          pushLine(visible[0], visible[1], hipWidth)
+        }
       }
-    }
-    for (const line of plan.hips) {
-      for (const visible of clipLineByCutters(line, cutters)) {
-        pushLine(visible[0], visible[1], hipWidth)
+      for (const line of plan.hips) {
+        for (const visible of clipLineByCutters(line, cutters)) {
+          pushLine(visible[0], visible[1], hipWidth)
+        }
       }
-    }
-    for (const line of plan.ridges) {
-      for (const visible of clipLineByCutters(line, cutters)) {
-        pushLine(visible[0], visible[1], ridgeWidth)
+      for (const line of plan.ridges) {
+        for (const visible of clipLineByCutters(line, cutters)) {
+          pushLine(visible[0], visible[1], ridgeWidth)
+        }
       }
     }
 

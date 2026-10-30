@@ -11,15 +11,17 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import { getNodePanelModel } from '../../../lib/panel-rows'
+import { getNodePanelModel, type MultiPanelControl } from '../../../lib/panel-rows'
 import { selectionMatchesSessionGroup } from '../../../lib/session-groups'
 import useSessionGroups from '../../../store/use-session-groups'
 import { PanelSection } from '../controls/panel-section'
 import { SegmentedControl } from '../controls/segmented-control'
+import { SelectControl } from '../controls/select-control'
 import { SliderControl } from '../controls/slider-control'
 import { resolveUniqueSelectionIds } from './homogeneous-selection'
 import {
   commitMultiNodeFields,
+  fieldTargetIds,
   fieldVisibleForAll,
   firstNumericFieldValue,
   firstVec3FieldValue,
@@ -88,6 +90,13 @@ export function MultiParametricInspector({ footer }: { footer?: React.ReactNode 
           ) : null}
         </MultiGroupFields>
       ))}
+      {hasKindControls ? (
+        <MultiKindSections
+          groupTitles={parametrics.groups.map((group) => group.label)}
+          nodeIds={nodeIds}
+          nodeType={nodeType}
+        />
+      ) : null}
       <div className="border-border/50 border-t p-3">
         <MultiSelectionActions />
       </div>
@@ -95,10 +104,20 @@ export function MultiParametricInspector({ footer }: { footer?: React.ReactNode 
   )
 }
 
+function useMultiKindControls(nodeIds: AnyNodeId[], nodeType: AnyNode['type']) {
+  const nodes = useScene((s) => s.nodes)
+  return useMemo(() => {
+    const model = getNodePanelModel(nodeRegistry.get(nodeType))
+    if (!model?.multiControls) return []
+    const selection = nodeIds.flatMap((id) => (nodes[id] ? [nodes[id]!] : []))
+    return model.multiControls({ selection, nodes })
+  }, [nodeIds, nodeType, nodes])
+}
+
 /**
  * The kind's own multi-selection controls for one section (the wall's
- * Reference), from its panel model — the same segmented control the single
- * panel shows, mixed when the selection disagrees.
+ * Reference), from its panel model — the same control the single panel
+ * shows, mixed when the selection disagrees.
  */
 function MultiKindControls({
   nodeIds,
@@ -109,29 +128,81 @@ function MultiKindControls({
   nodeType: AnyNode['type']
   section: string
 }) {
-  const nodes = useScene((s) => s.nodes)
-  const controls = useMemo(() => {
-    const model = getNodePanelModel(nodeRegistry.get(nodeType))
-    if (!model?.multiControls) return []
-    const selection = nodeIds.flatMap((id) => (nodes[id] ? [nodes[id]!] : []))
-    return model.multiControls({ selection, nodes }).filter((control) => control.section === section)
-  }, [nodeIds, nodeType, nodes, section])
+  const controls = useMultiKindControls(nodeIds, nodeType).filter(
+    (control) => control.section === section,
+  )
   return (
     <>
       {controls.map((control) => (
-        <div className="flex flex-col gap-1" key={control.id}>
-          <div className="px-1 font-medium text-[10px] text-muted-foreground/80">
-            {control.label}
-          </div>
-          <SegmentedControl
-            mixed={control.value === null}
-            onChange={control.onChange}
-            options={control.options.map((option) => ({ ...option }))}
-            value={control.value ?? ''}
-          />
-        </div>
+        <MultiKindControlView control={control} key={control.id} />
       ))}
     </>
+  )
+}
+
+/** The kind's controls whose section is none of the parametrics groups, each section its own. */
+function MultiKindSections({
+  groupTitles,
+  nodeIds,
+  nodeType,
+}: {
+  groupTitles: readonly string[]
+  nodeIds: AnyNodeId[]
+  nodeType: AnyNode['type']
+}) {
+  const controls = useMultiKindControls(nodeIds, nodeType).filter(
+    (control) => !groupTitles.includes(control.section),
+  )
+  const sections = [...new Set(controls.map((control) => control.section))]
+  return (
+    <>
+      {sections.map((section) => (
+        <PanelSection key={section} title={section}>
+          {controls
+            .filter((control) => control.section === section)
+            .map((control) => (
+              <MultiKindControlView control={control} key={control.id} />
+            ))}
+        </PanelSection>
+      ))}
+    </>
+  )
+}
+
+function MultiKindControlView({ control }: { control: MultiPanelControl }) {
+  if (control.kind === 'readout') {
+    return (
+      <div className="flex items-center justify-between gap-2 px-2 py-1.5">
+        <span className="font-medium text-[10px] text-muted-foreground uppercase tracking-wider">
+          {control.label}
+        </span>
+        <span className="truncate text-[11px] text-muted-foreground tabular-nums">
+          {control.detail ? `${control.value} · ${control.detail}` : control.value}
+        </span>
+      </div>
+    )
+  }
+  if (control.kind === 'select') {
+    return (
+      <SelectControl
+        label={control.label}
+        mixed={control.value === null}
+        onChange={control.onChange}
+        options={control.options.map((option) => ({ ...option }))}
+        value={control.value ?? ''}
+      />
+    )
+  }
+  return (
+    <div className="flex flex-col gap-1">
+      <div className="px-1 font-medium text-[10px] text-muted-foreground/80">{control.label}</div>
+      <SegmentedControl
+        mixed={control.value === null}
+        onChange={control.onChange}
+        options={control.options.map((option) => ({ ...option }))}
+        value={control.value ?? ''}
+      />
+    </div>
   )
 }
 
@@ -154,9 +225,16 @@ function MultiGroupFields({
 }) {
   const genericFields = fields.filter((field) => field.kind !== 'custom')
   const anyVisible = useScene((s) =>
-    genericFields.some((field) =>
-      fieldVisibleForAll(nodeIds, (field as { visibleIf?: (n: AnyNode) => boolean }).visibleIf, s.nodes),
-    ),
+    genericFields.some((field) => {
+      const { visibleIf, appliesTo } = field as {
+        visibleIf?: (n: AnyNode) => boolean
+        appliesTo?: (n: AnyNode) => boolean
+      }
+      return (
+        fieldVisibleForAll(nodeIds, visibleIf, s.nodes) &&
+        fieldTargetIds(nodeIds, appliesTo, s.nodes).length > 0
+      )
+    }),
   )
   if ((genericFields.length === 0 || !anyVisible) && !children) return null
   return (
@@ -195,7 +273,7 @@ function MultiGroupFields({
 
 function MultiFieldRenderer({
   field,
-  nodeIds,
+  nodeIds: selectedIds,
   parametrics,
 }: {
   field: ParamField<AnyNode>
@@ -203,11 +281,21 @@ function MultiFieldRenderer({
   parametrics: ParametricDescriptor<AnyNode>
 }) {
   const key = String(field.key)
+  // A field that names the nodes it `appliesTo` reads and edits only those.
+  const appliesTo = (field as { appliesTo?: (n: AnyNode) => boolean }).appliesTo
+  const nodeIds = useScene(
+    useShallow((s) => fieldTargetIds(selectedIds, appliesTo, s.nodes)),
+  )
   const visible = useScene((s) =>
     fieldVisibleForAll(nodeIds, (field as { visibleIf?: (n: AnyNode) => boolean }).visibleIf, s.nodes),
   )
-  const reduced = useScene(useShallow((s) => reduceFieldValue(nodeIds, key, s.nodes)))
-  const numericOrigin = useScene((s) => firstNumericFieldValue(nodeIds, key, s.nodes))
+  const fallback = field.kind === 'number' ? field.default : undefined
+  const reduced = useScene(
+    useShallow((s) => reduceFieldValue(nodeIds, key, s.nodes, fallback)),
+  )
+  const numericOrigin = useScene((s) =>
+    firstNumericFieldValue(nodeIds, key, s.nodes, fallback ?? 0),
+  )
   const vecOrigin = useScene(useShallow((s) => firstVec3FieldValue(nodeIds, key, s.nodes)))
 
   const preview = useCallback(
@@ -223,7 +311,7 @@ function MultiFieldRenderer({
     [nodeIds, parametrics],
   )
 
-  if (!visible) return null
+  if (!visible || nodeIds.length === 0) return null
 
   if (field.kind === 'vec3') {
     return (

@@ -9,7 +9,7 @@ import {
   useScene,
 } from '@pascal-app/core'
 import { type PanelToolOption, useEditor, useFloorplanMode } from '@pascal-app/editor'
-import { useLiquidLineToolOptions } from '@pascal-app/nodes'
+import { framingPostToolChoices, useLiquidLineToolOptions } from '@pascal-app/nodes'
 import { useViewer } from '@pascal-app/viewer'
 import type { XRWandBuildItem, XRWandBuildModel } from '@webxr/plugin'
 import {
@@ -17,6 +17,7 @@ import {
   activateFenceFeaturePlacement,
   activateModularCabinetTool,
   activatePaintMode,
+  activatePostTool,
   activateRoofFeatureTool,
   activateRoofFootprintSource,
   activateRoofType,
@@ -96,6 +97,7 @@ export function useBuildPanelModel(): XRWandBuildModel {
     return host?.type === 'fence' ? host : undefined
   })
   const defaults = useEditor((state) => state.toolDefaults.roof)
+  const postArmed = useEditor((state) => framingPostToolChoices(state.toolDefaults.column) !== null)
   const floorplanMode = useFloorplanMode((state) => state.mode)
   useRegistryVersion()
   const features = collectRoofFeatures()
@@ -124,12 +126,15 @@ export function useBuildPanelModel(): XRWandBuildModel {
               ? mepActive
               : type.id === 'kitchen'
                 ? kitchenActive
-                : mode === 'build' && tool === type.kind,
+                : type.kind === 'column'
+                  ? mode === 'build' && tool === 'column' && (type.id === 'post') === postArmed
+                  : mode === 'build' && tool === type.kind,
       onSelect: () => {
         if (type.id === 'fence' && selectedFence) return
         if (type.mode === 'terrain-sculpt') activateTerrainSculptMode()
         else if (type.id === 'mep') activateBuildTool('duct-segment')
         else if (type.id === 'kitchen') activateModularCabinetTool()
+        else if (type.id === 'post') activatePostTool()
         else if (type.kind) activateBuildTool(type.kind)
       },
     }),

@@ -8,6 +8,8 @@ import {
   getEffectiveNode,
   getOpeningWallPlacement,
   getWallThickness,
+  nodeRegistry,
+  resolveOpeningCasingHost,
   resolveOpeningFrameDepth,
   type SceneMaterial,
   type SceneMaterialId,
@@ -35,6 +37,7 @@ import {
 import { timeSpan } from '../../lib/perf-tracks'
 import { settleScriptedOpening } from '../../lib/scripted-opening'
 import useViewer from '../../store/use-viewer'
+import { buildOpeningCasingMeshes } from '../wall/opening-casing-geometry'
 import { getOpeningCutoutProxyDepth } from '../wall/opening-cutout-geometry'
 
 // Invisible material for root mesh — used as selection hitbox only
@@ -2319,7 +2322,7 @@ function updateDoorMesh(rawNode: DoorNode, mesh: THREE.Mesh): boolean {
   currentDoorSlot = undefined
 
   // The frame runs through its host wall: an auto depth is the wall's thickness
-  // plus a lip, so every builder below reads one resolved number.
+  // exactly, so every builder below reads one resolved number.
   const parent = normalized.parentId
     ? useScene.getState().nodes[normalized.parentId as AnyNodeId]
     : undefined
@@ -2368,6 +2371,9 @@ function updateDoorMesh(rawNode: DoorNode, mesh: THREE.Mesh): boolean {
   glassMaterial = resolveDoorSlotMaterial(node, 'glass')
   hardwareMaterial = resolveDoorSlotMaterial(node, 'hardware')
 
+  // The casing sits on the wall faces around the opening, whatever fills it.
+  addDoorCasing(node, mesh)
+
   const {
     width,
     height,
@@ -2400,7 +2406,10 @@ function updateDoorMesh(rawNode: DoorNode, mesh: THREE.Mesh): boolean {
   const operationState = runtimeDoorState?.operationState ?? nodeOperationState
   const clampedSwingAngle = Math.max(0, Math.min(Math.PI / 2, swingAngle))
 
-  if (openingKind === 'opening') {
+  const renderContent = parent
+    ? nodeRegistry.get(parent.type)?.capabilities.surfaces?.renderOpeningContent?.(parent)
+    : undefined
+  if (openingKind === 'opening' || renderContent === false) {
     syncDoorCutout(node, mesh)
     return true
   }
@@ -2731,6 +2740,31 @@ function hideEmptyGeometryMeshes(root: THREE.Object3D) {
     const position = child.geometry.getAttribute('position')
     if (!position || position.count === 0) child.visible = false
   })
+}
+
+/**
+ * The door's casing (head and legs) on the faces of its wall (or gable) around
+ * the cutout, inheriting the frame until each side is painted. Read from the live host, so it stays on
+ * the faces while the wall's thickness is dragged.
+ */
+function addDoorCasing(node: DoorNode, mesh: THREE.Mesh) {
+  const nodes = useScene.getState().nodes
+  const hostId = node.roofSegmentId ?? node.parentId
+  const hostNode = hostId ? nodes[hostId as AnyNodeId] : undefined
+  const host = resolveOpeningCasingHost(
+    node,
+    nodes,
+    hostNode ? getEffectiveNode(hostNode) : undefined,
+  )
+  if (!host) return
+  for (const casing of buildOpeningCasingMeshes(node, host, frameMaterial)) {
+    const ref = node.slots?.[casing.userData.slotId]
+    casing.material =
+      (currentTextures && ref
+        ? resolveMaterialRef(ref, currentSceneMaterials, currentShading)
+        : null) ?? frameMaterial
+    mesh.add(casing)
+  }
 }
 
 function syncDoorCutout(node: DoorNode, mesh: THREE.Mesh) {

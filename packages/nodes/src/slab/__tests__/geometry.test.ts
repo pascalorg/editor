@@ -11,6 +11,7 @@ import {
   SlabNode,
   slabPolygonContextFromGeometry,
   WallNode,
+  ZoneNode,
 } from '@pascal-app/core'
 import { type Group, Mesh, type MeshStandardMaterial } from 'three'
 import { buildSlabGeometry } from '../geometry'
@@ -105,7 +106,10 @@ function thresholdStrip(): SlabNode {
   })
 }
 
-function geometryContext(site: ReturnType<typeof SiteNode.parse>): GeometryContext {
+function geometryContext(
+  site: ReturnType<typeof SiteNode.parse>,
+  extra: AnyNode[] = [],
+): GeometryContext {
   const building = BuildingNode.parse({
     id: 'building_test',
     parentId: site.id,
@@ -118,7 +122,12 @@ function geometryContext(site: ReturnType<typeof SiteNode.parse>): GeometryConte
     height: 2.5,
     children: [],
   })
-  const nodes = { [site.id]: site, [building.id]: building, [level.id]: level }
+  const nodes: Record<string, AnyNode> = {
+    [site.id]: site,
+    [building.id]: building,
+    [level.id]: level,
+    ...Object.fromEntries(extra.map((node) => [node.id, node])),
+  }
   return {
     resolve: (id) => nodes[id as keyof typeof nodes],
     children: [],
@@ -239,6 +248,48 @@ describe('buildSlabGeometry', () => {
     fill.geometry.computeBoundingBox()
     expect(fill.geometry.boundingBox?.min.y).toBeCloseTo(0)
     expect(fill.geometry.boundingBox?.max.y).toBeCloseTo(0.3)
+  })
+
+  test('a porch or patio slab outside the house runs its concrete edge down to the ground', () => {
+    const site = SiteNode.parse({ id: 'site_test', children: ['building_test'] })
+    const porch = SlabNode.parse({
+      plateRole: 'sunken',
+      boundary: 'auto',
+      elevation: 0.4,
+      thickness: 0.1,
+      zoneIds: ['zone_outdoor'],
+      polygon: [
+        [0, 0],
+        [2, 0],
+        [2, 1],
+        [0, 1],
+      ],
+    })
+    const zone = ZoneNode.parse({
+      id: 'zone_outdoor',
+      name: 'Porch',
+      polygon: porch.polygon,
+      roomType: 'porch',
+    })
+    const skirt = meshesOf(
+      buildSlabGeometry(porch, geometryContext(site, [zone]), 'solid', false),
+    ).find((mesh) => mesh.userData.slotId === 'foundation')!
+    expect(skirt).toBeDefined()
+    skirt.geometry.computeBoundingBox()
+    expect(skirt.geometry.boundingBox?.min.y).toBeCloseTo(0)
+    expect(skirt.geometry.boundingBox?.max.y).toBeCloseTo(0.3)
+    // A plate a step down inside the house stays as it is.
+    const sunken = { ...porch, metadata: { floor: 'porch-slab' } }
+    expect(
+      meshesOf(
+        buildSlabGeometry(
+          sunken,
+          geometryContext(site, [{ ...zone, roomType: undefined }]),
+          'solid',
+          false,
+        ),
+      ).some((mesh) => mesh.userData.slotId === 'foundation'),
+    ).toBe(false)
   })
 })
 

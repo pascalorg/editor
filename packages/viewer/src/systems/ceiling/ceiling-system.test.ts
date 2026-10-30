@@ -1,7 +1,8 @@
 import { expect, test } from 'bun:test'
-import { type AnyNode, CeilingNode, ZoneNode } from '@pascal-app/core'
+import { type AnyNode, CEILING_DRAW_OFFSET, CeilingNode, ZoneNode } from '@pascal-app/core'
 import { type BufferGeometry, type Material, Mesh, MeshBasicMaterial } from 'three'
 import {
+  CEILING_CAP_MESH,
   CEILING_REGION_MESH,
   type CeilingRegionMaterial,
   updateCeilingGeometry,
@@ -124,4 +125,39 @@ test('a manual ceiling draws its own regions, clipped by its holes', () => {
   expect(region?.userData.paintRole).toBe('region:own')
   expect(planArea(region!.geometry)).toBeCloseTo(3)
   expect(planArea(mesh.geometry)).toBeCloseTo(12)
+})
+
+test('the cap draws the whole ceiling from above, painted parts and all', () => {
+  const { ceiling, mesh, nodes } = setup({
+    regions: [{ id: 'left', polygon: square(0, 0, 2), finish: 'library:blue' }],
+  })
+  const grid = new Mesh(undefined, new MeshBasicMaterial())
+  grid.name = 'ceiling-grid'
+  const cap = new Mesh(undefined, new MeshBasicMaterial())
+  cap.name = CEILING_CAP_MESH
+  mesh.add(grid, cap)
+  updateCeilingGeometry(ceiling, mesh, [], nodes)
+  expect(cap.geometry).toBe(grid.geometry)
+  expect(planArea(cap.geometry)).toBeCloseTo(16)
+})
+
+test('the cap stands on top of the ceiling layers; the underside stays at the height', () => {
+  const ceiling = CeilingNode.parse({
+    id: 'ceiling_layered',
+    polygon: square(0, 0, 4),
+    height: 2.4,
+    buildUp: {
+      finish: { kind: 'drywall', thickness: 0.0127 },
+      framing: { system: 'joists', size: '2x6', spacing: 0.4064 },
+    },
+  })
+  const mesh = new Mesh(undefined, new MeshBasicMaterial())
+  const grid = new Mesh(undefined, new MeshBasicMaterial())
+  grid.name = 'ceiling-grid'
+  const cap = new Mesh(undefined, new MeshBasicMaterial())
+  cap.name = CEILING_CAP_MESH
+  mesh.add(grid, cap)
+  updateCeilingGeometry(ceiling, mesh, [], { [ceiling.id]: ceiling } as Record<string, AnyNode>)
+  expect(mesh.position.y).toBeCloseTo(2.4 - CEILING_DRAW_OFFSET, 9)
+  expect(cap.position.y).toBeCloseTo(0.0127 + 0.1397, 9)
 })

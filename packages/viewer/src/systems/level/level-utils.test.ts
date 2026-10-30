@@ -46,9 +46,10 @@ describe('resolveLevelVisibility', () => {
     ).toEqual({ visible: false, shadowOnly: false })
   })
 
-  test('the level display hides the levels above the selected one as shadow casters', () => {
+  test('the level display keeps upper storeys and roofs as shadow-only casters', () => {
     const base = { hideAbove: true, hasSelectedLevel: true, selectedIndex: 1 }
-    expect(decide({ ...base, index: 2 })).toEqual({ visible: true, shadowOnly: true })
+    for (const index of [2, 3])
+      expect(decide({ ...base, index })).toEqual({ visible: true, shadowOnly: true })
     expect(decide({ ...base, index: 1, isSelected: true })).toEqual({
       visible: true,
       shadowOnly: false,

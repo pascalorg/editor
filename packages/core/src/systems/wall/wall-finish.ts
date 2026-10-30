@@ -3,8 +3,8 @@ import { sampleWallPointsForRoomDetection, WALL_JUNCTION_TOLERANCE } from '../..
 import type { AnyNode, AnyNodeId } from '../../schema'
 import {
   getEffectiveWallFaceMaterial,
+  getWallFaceDefault,
   WALL_FACE_REGION_LIMIT,
-  WALL_SLOT_DEFAULT,
   type WallFace,
   type WallFaceRegion,
   type WallNode,
@@ -325,7 +325,8 @@ export function wallFinishMaterialIndex(
 /**
  * The wall's own chain for one face, in the order the renderer walks it:
  * `slots[face]` ref → legacy inline finish (per-face, then wall-wide) → the
- * declared default. A dangling ref renders the declared default.
+ * face's default (`getWallFaceDefault`: the interior paint, or raw drywall on
+ * the exterior side). A dangling ref renders the face's default.
  */
 export type WallFaceChainFinish =
   | { kind: 'ref'; ref: string }
@@ -333,14 +334,15 @@ export type WallFaceChainFinish =
   | { kind: 'default'; ref: string }
 
 export function resolveWallFaceChain(
-  wall: Pick<WallNode, 'slots' | 'legacyFaceMaterials' | 'material' | 'materialPreset'>,
+  wall: Pick<WallNode, 'slots' | 'legacyFaceMaterials' | 'material' | 'materialPreset'> &
+    Partial<Pick<WallNode, 'frontSide' | 'backSide'>>,
   face: WallFace,
 ): WallFaceChainFinish {
   const ref = wall.slots?.[face]
   if (ref) return { kind: 'ref', ref }
   const spec = getEffectiveWallFaceMaterial(wall, face)
   if (spec.materialPreset || spec.material) return { kind: 'legacy', spec }
-  return { kind: 'default', ref: WALL_SLOT_DEFAULT[face] }
+  return { kind: 'default', ref: getWallFaceDefault(wall, face) }
 }
 
 // Paint roles a wall resolves to (the paint tool offers `room:<zoneId>`):

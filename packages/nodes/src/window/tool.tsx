@@ -15,6 +15,7 @@ import {
   getWallThickness,
   holdHiddenWallPointerEvents,
   isCurvedWall,
+  isRailingWall,
   prefersReducedMotion,
   type RoofEvent,
   type RoofNode,
@@ -679,6 +680,9 @@ const WindowTool: React.FC = () => {
         awningDirection: draft.awningDirection,
         casementStyle: draft.casementStyle,
         hingesSide: draft.hingesSide,
+        casingFaceA: draft.casingFaceA,
+        casingFaceB: draft.casingFaceB,
+        casingWidth: draft.casingWidth,
         frameThickness: draft.frameThickness,
         columnRatios: draft.columnRatios,
         rowRatios: draft.rowRatios,
@@ -744,6 +748,9 @@ const WindowTool: React.FC = () => {
         openingCornerRadii: draft.openingCornerRadii,
         cornerRadius: draft.cornerRadius,
         archHeight: draft.archHeight,
+        casingFaceA: draft.casingFaceA,
+        casingFaceB: draft.casingFaceB,
+        casingWidth: draft.casingWidth,
         frameThickness: draft.frameThickness,
         columnRatios: draft.columnRatios,
         rowRatios: draft.rowRatios,
@@ -770,9 +777,11 @@ const WindowTool: React.FC = () => {
     const onWallHover = (event: WallEvent) => {
       hostKind = 'wall'
       lastMeshEventTime = event.nativeEvent?.timeStamp ?? -1
+      // A railing takes no window: its openings are gaps a door leaves in the guard.
       if (
         !isValidWallSideFace(event.normal) ||
         isCurvedWall(event.node) ||
+        isRailingWall(event.node) ||
         event.node.parentId !== getLevelId()
       ) {
         destroyDraft()
@@ -815,6 +824,7 @@ const WindowTool: React.FC = () => {
       if (
         !isValidWallSideFace(event.normal) ||
         isCurvedWall(event.node) ||
+        isRailingWall(event.node) ||
         event.node.parentId !== getLevelId()
       ) {
         return
@@ -1097,6 +1107,9 @@ const WindowTool: React.FC = () => {
         awningDirection: draft.awningDirection,
         casementStyle: draft.casementStyle,
         hingesSide: draft.hingesSide,
+        casingFaceA: draft.casingFaceA,
+        casingFaceB: draft.casingFaceB,
+        casingWidth: draft.casingWidth,
         frameThickness: draft.frameThickness,
         columnRatios: draft.columnRatios,
         rowRatios: draft.rowRatios,

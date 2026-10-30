@@ -89,7 +89,7 @@ test('walls: a face region, a room override, the room finish, then the face defa
   useScene.setState({ nodes: { ...nodes, [zone.id]: plain as AnyNode } })
   expect(preset(wall, wallRoomFaceRole(zone.id, 'a'))).toBe('library:brick')
   useScene.setState({ nodes })
-  expect(preset(wall, 'b')).toBe('library:concrete-drywall')
+  expect(preset(wall, 'b')).toBe('library:preset-seattlegrey')
 })
 
 test('floors: a region, the room floor, and an unpainted room shows the plate top', () => {

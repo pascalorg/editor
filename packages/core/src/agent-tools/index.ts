@@ -37,7 +37,7 @@ import { UNIT_TOOL_CONTRACTS } from './units'
 import { verifySceneTool } from './verify-scene'
 import { viewSceneTool } from './view-scene'
 import { addDoorTool, addWindowTool } from './wall-openings'
-import { addWallTool } from './walls'
+import { addWallTool, setWallTypeTool } from './walls'
 
 export * from './achieved'
 export * from './add-object'
@@ -101,6 +101,7 @@ export const AGENT_TOOL_CONTRACTS = [
   placeDesignTool,
   validateDesignTool,
   addWallTool,
+  setWallTypeTool,
   addFenceTool,
   addCornerWindowTool,
   mergeWindowsTool,

@@ -1,6 +1,7 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  type EavePoint,
   type GlazedRoofPiece,
   getBarrelRoofFaces,
   getBarrelRoofSolidPieces,
@@ -22,29 +23,40 @@ import {
   isBandedShedSegment,
   isGlazedRoofSegment,
   isIndependentRoofSegment,
+  LUMBER_DEPTH,
   nodeRegistry,
   normalizeRoofSegmentTrim,
   pointInPolygon2D,
   ROOF_SHAPE_DEFAULTS,
+  type RoofEaveProfile,
   type RoofNode,
   type RoofPlanBounds,
   type RoofSegmentNode,
   type RoofType,
   roofOverlapEntryOwns,
   roofPlanBoundsOverlap,
+  roofSegmentEaveProfile,
+  roofStructureDepth,
   sceneRegistry,
   unionPolygons,
   useLiveNodeOverrides,
   useScene,
 } from '@pascal-app/core'
 import { useFrame } from '@react-three/fiber'
+import { useEffect } from 'react'
 import * as THREE from 'three'
 import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { ADDITION, Brush, Evaluator, SUBTRACTION } from 'three-bvh-csg'
 import { computeBoundsTree } from 'three-mesh-bvh'
 import { applyWorldScaleBoxUVs } from '../../lib/box-uv'
 import { ensureRenderableGeometryAttributes, subtractCsgBrush } from '../../lib/csg-utils'
+import useViewer from '../../store/use-viewer'
 import { isRevealAssembling } from '../construction-reveal/construction-reveal'
+import {
+  ROOF_GABLE_LEFT_MATERIAL_INDEX,
+  ROOF_GABLE_RIGHT_MATERIAL_INDEX,
+  ROOF_HEEL_MATERIAL_INDEX,
+} from './roof-material-slots'
 
 function csgGeometry(brush: Brush): THREE.BufferGeometry {
   return brush.geometry as unknown as THREE.BufferGeometry
@@ -311,6 +323,19 @@ export const RoofSystem = ({ geometryAdapter }: { geometryAdapter?: RoofGeometry
   // `markDirty` call. Mirrors WallSystem / DoorSystem.
   useLiveNodeOverrides((s) => s.overrides)
 
+  // "Framing" opens the decks' structure band (`roofFramingDepth`): every segment, and so every
+  // roof shell, rebuilds when it flips.
+  useEffect(
+    () =>
+      useViewer.subscribe((state, previous) => {
+        if (state.framingShown === previous.framingShown) return
+        const scene = useScene.getState()
+        for (const node of Object.values(scene.nodes))
+          if (node.type === 'roof-segment') scene.markDirty(node.id)
+      }),
+    [],
+  )
+
   useFrame(() => {
     // Clear stale pending updates when the scene is unloaded
     if (rootNodeIds.length === 0) {
@@ -334,6 +359,7 @@ export const RoofSystem = ({ geometryAdapter }: { geometryAdapter?: RoofGeometry
       return
 
     const nodes = useScene.getState().nodes
+    const framing = useViewer.getState().framingShown
 
     // --- Pass 1: Process dirty roof-segments (throttled) ---
     let segmentsProcessed = 0
@@ -387,7 +413,7 @@ export const RoofSystem = ({ geometryAdapter }: { geometryAdapter?: RoofGeometry
             mesh.parent?.name === 'segments-wrapper' &&
             mesh.parent?.parent?.getObjectByName('merged-roof')?.visible === true
           if (isVisible && !revealOnly && segmentsProcessed < MAX_SEGMENTS_PER_FRAME) {
-            updateRoofSegmentGeometry(effectiveSegment, mesh, nodes, geometryAdapter)
+            updateRoofSegmentGeometry(effectiveSegment, mesh, nodes, geometryAdapter, framing)
             segmentsProcessed++
           } else if (isVisible && !revealOnly) {
             return // Over budget — keep dirty, process next frame
@@ -447,7 +473,7 @@ export const RoofSystem = ({ geometryAdapter }: { geometryAdapter?: RoofGeometry
       // Built even while hidden: a roof assembling from its segments (construction
       // reveal) hides its shell, and must show it whole the moment it is captured.
       rememberMergedInputs(node as RoofNode, nodes)
-      updateMergedRoofGeometry(node as RoofNode, group, nodes)
+      updateMergedRoofGeometry(node as RoofNode, group, nodes, framing)
       roofsProcessed++
 
       pendingRoofUpdates.delete(id)
@@ -466,8 +492,9 @@ function updateRoofSegmentGeometry(
   mesh: THREE.Mesh,
   nodes?: Record<string, AnyNode>,
   adapter?: RoofGeometryAdapter,
+  framing = false,
 ) {
-  const newGeo = generateRoofSegmentGeometry(node, nodes)
+  const newGeo = generateRoofSegmentGeometry(node, nodes, { framing })
 
   mesh.geometry.dispose()
   mesh.geometry = newGeo
@@ -566,9 +593,11 @@ function getMergedRoofSegmentBrushes(
   roofNode: RoofNode,
   segment: RoofSegmentNode,
   nodes: Record<string, AnyNode>,
+  framing: boolean,
 ): RoofSegmentBrushSet | null {
   const segmentId = segment.id as AnyNodeId
-  const cacheKey = getMergedRoofSegmentCacheKey(roofNode, segment, nodes)
+  const framingDepth = framing ? roofFramingDepth(segment) : 0
+  const cacheKey = getMergedRoofSegmentCacheKey(roofNode, segment, nodes, framingDepth)
   const cached = mergedRoofSegmentGeometryCache.get(segmentId)
   if (cached?.key === cacheKey) {
     return cloneCachedMergedRoofSegmentBrushes(cached)
@@ -581,7 +610,11 @@ function getMergedRoofSegmentBrushes(
       segment.position,
       segment.rotation ?? 0,
     ),
-    () => getRoofSegmentBrushes(segment, { fascia: wearsFascia(segment, roofNode) }),
+    () =>
+      getRoofSegmentBrushes(segment, {
+        fascia: wearsFascia(segment, roofNode),
+        framing: framingDepth,
+      }),
   )
   if (!brushes) {
     disposeCachedMergedRoofSegmentGeometrySet(cached)
@@ -640,6 +673,7 @@ function updateMergedRoofGeometry(
   roofNode: RoofNode,
   group: THREE.Group,
   nodes: Record<string, AnyNode>,
+  framing: boolean,
 ) {
   const mergedMesh = group.getObjectByName('merged-roof') as THREE.Mesh | undefined
   if (!mergedMesh) return
@@ -701,7 +735,7 @@ function updateMergedRoofGeometry(
       continue
     }
     csgChildren.push(child)
-    const brushes = getMergedRoofSegmentBrushes(roofNode, child, nodes)
+    const brushes = getMergedRoofSegmentBrushes(roofNode, child, nodes, framing)
     if (!brushes) continue
     if (brushes.rakeBoards) {
       rakeBoardGeometries.push(brushes.rakeBoards)
@@ -813,6 +847,22 @@ function updateMergedRoofGeometry(
       }
 
       let finalGeo = addShedInsetEndPanels(resultGeo, csgChildren, true)
+      splitRoofWallBandFaces(
+        finalGeo,
+        csgChildren
+          .filter((child) => shouldIncludeRoofSegmentWallShell(child, roofNode))
+          .map((child) => ({
+            node: child,
+            inverse: new THREE.Matrix4()
+              .compose(
+                _position.set(child.position[0], child.position[1], child.position[2]),
+                _quaternion.setFromAxisAngle(_yAxis, child.rotation),
+                _scale,
+              )
+              .invert(),
+          })),
+        false,
+      )
       const appendedGeometries = [...rakeBoardGeometries, ...directSegmentGeometries]
       if (appendedGeometries.length > 0) {
         const merged = mergeGeometriesPreservingGroups([finalGeo, ...appendedGeometries])
@@ -1003,6 +1053,7 @@ function getMergedRoofSegmentCacheKey(
   roofNode: RoofNode,
   segment: RoofSegmentNode,
   nodes: Record<string, AnyNode>,
+  framing: number,
 ): string {
   return JSON.stringify({
     roofPosition: roofNode.position ?? [0, 0, 0],
@@ -1011,6 +1062,7 @@ function getMergedRoofSegmentCacheKey(
     composite: (roofNode.children?.length ?? 0) > 1,
     segment,
     accessories: getMergedRoofAccessoryCachePayload(segment, nodes),
+    framing,
   })
 }
 
@@ -1471,104 +1523,290 @@ export function clipGeometryBySegmentTrim(
  * Generate complete hollow-shell geometry for a roof segment.
  * Ports the prototype's CSG approach using three-bvh-csg.
  */
-/** A 1x8 fascia / rake board: actual 3/4 × 7-1/4 in. */
-const FASCIA_BOARD = { thickness: 0.019, height: 0.184 } as const
 /** A board's back sits this far inside the deck edge, so the union is one solid with no coplanar faces. */
 const FASCIA_EMBED = 0.002
 /**
+ * Boards that meet leave this between them: drawn as one solid, overlapping or touching boards would
+ * leave it no inside to tell, and the union with the deck tears.
+ */
+const BOARD_GAP = 0.0001
+/**
  * Slot 2 takes the trim finish like the rake faces, and the shell remap
  * leaves it alone: the remap would send a plumb eave board to the wall band
- * and its top edge to the shingles.
+ * and its top edge to the shingles. A boxed eave's soffit and returns take it too.
  */
 const FASCIA_MATERIAL_INDEX = 2
 
+/** The forms whose eaves core's `roofEaveProfile` cuts and boards: the ones Bones frames with tails. */
+const EAVE_ROOF_TYPES: ReadonlySet<RoofType> = new Set(['gable', 'hip', 'shed', 'flat'])
+
+/** One edge of a segment: its eave or rake looks along ±z (`axis` 'z') or ±x. */
+type SegmentEdge = { axis: 'x' | 'z'; sign: 1 | -1 }
+
+const EDGES_Z: readonly SegmentEdge[] = [
+  { axis: 'z', sign: 1 },
+  { axis: 'z', sign: -1 },
+]
+const EDGES_X: readonly SegmentEdge[] = [
+  { axis: 'x', sign: 1 },
+  { axis: 'x', sign: -1 },
+]
+
+/** The point of an edge's section (`s` out past its plate line, `y` over `plateY`) at `u` along it. */
+function edgePoint(
+  node: RoofSegmentNode,
+  edge: SegmentEdge,
+  plateY: number,
+  [s, y]: EavePoint,
+  u: number,
+): THREE.Vector3 {
+  const out = edge.sign * ((edge.axis === 'z' ? node.depth : node.width) / 2 + s)
+  return edge.axis === 'z'
+    ? new THREE.Vector3(u, plateY + y, out)
+    : new THREE.Vector3(out, plateY + y, u)
+}
+
+/** A convex solid's faces, each turned to face away from its centre. */
+function outwardFaces(faces: THREE.Vector3[][]): THREE.Vector3[][] {
+  const points = faces.flat()
+  const centre = points
+    .reduce((sum, v) => sum.add(v), new THREE.Vector3())
+    .multiplyScalar(1 / Math.max(1, points.length))
+  return faces.map((face) => {
+    const normal = new THREE.Vector3()
+      .subVectors(face[1]!, face[0]!)
+      .cross(new THREE.Vector3().subVectors(face[2]!, face[0]!))
+    const faceCentre = face
+      .reduce((sum, v) => sum.add(v), new THREE.Vector3())
+      .multiplyScalar(1 / face.length)
+    return normal.dot(faceCentre.sub(centre)) < 0 ? [...face].reverse() : face
+  })
+}
+
 /**
- * The fascia and rake boards a segment wears, in its own frame: a plumb 1x8
- * on every eave with its top on the deck's top edge, and one up every gable
- * or shed rake, from the eave line the deck itself is built on. Being part
- * of the segment, they follow its pitch, size, overhang and type, and the
- * trims, cuts and sibling roofs clip them like the deck. Gable, hip, shed
- * and flat; null for the other forms.
+ * A prism over a convex `section` of an edge, run along it from `from` to `to`: each end where its
+ * function puts it at each section point (affine in it), so an end can butt a sloped board's face.
+ */
+function edgePrism(
+  node: RoofSegmentNode,
+  edge: SegmentEdge,
+  plateY: number,
+  section: readonly EavePoint[],
+  from: (point: EavePoint) => number,
+  to: (point: EavePoint) => number,
+): THREE.Vector3[][] {
+  const a = section.map((point) => edgePoint(node, edge, plateY, point, from(point)))
+  const b = section.map((point) => edgePoint(node, edge, plateY, point, to(point)))
+  const faces = [a, b]
+  for (let i = 0; i < section.length; i++) {
+    const j = (i + 1) % section.length
+    faces.push([a[i]!, a[j]!, b[j]!, b[i]!])
+  }
+  return outwardFaces(faces)
+}
+
+/** Where a line through two section points is at height `y`, out from the plate line. */
+function sAtHeight([s0, y0]: EavePoint, [s1, y1]: EavePoint, y: number): number {
+  return Math.abs(y1 - y0) < 1e-9 ? s0 : s0 + ((y - y0) * (s1 - s0)) / (y1 - y0)
+}
+
+/** A fascia's section with its back pulled `FASCIA_EMBED` into the deck, along its thickness. */
+function embeddedFascia(profile: RoofEaveProfile): EavePoint[] {
+  const [backTop, frontTop, frontBottom, backBottom] = profile.fascia.corners
+  const [nx, ny] = profile.fascia.square ? [profile.cos, -profile.sin] : [1, 0]
+  const back = ([s, y]: EavePoint): EavePoint => [s - nx * FASCIA_EMBED, y - ny * FASCIA_EMBED]
+  return [back(backTop), frontTop, frontBottom, back(backBottom)]
+}
+
+/**
+ * A rake board's section in the eave's frame (`profile`): plumb, its top on the sheathing's top, as
+ * deep as the profile's rake board, from the fascia's back at the eave (square to the slope with a
+ * square cut; held level at the fascia's bottom with a plumb-and-level one) up to `inner`, plumb.
+ */
+function rakeSection(profile: RoofEaveProfile, inner: number): EavePoint[] {
+  const { top, cos, sin, tan } = profile
+  const depth = profile.rake.height
+  const bottom = (s: number) => top(s) - depth
+  // short of the fascia's back, which is pulled into the deck
+  const pull = FASCIA_EMBED + BOARD_GAP
+  const [s0, y0] = profile.end[0] as EavePoint
+  const corner: EavePoint = profile.fascia.square
+    ? [s0 - pull * cos, y0 + pull * sin]
+    : [s0 - pull, top(s0 - pull)]
+  const section: EavePoint[] = [corner]
+  if (profile.cut === 'square') {
+    const along = depth * cos
+    section.push([corner[0] - along * sin, corner[1] - along * cos])
+  } else if (profile.cut === 'plumb-level') {
+    const level = profile.fascia.corners[3][1]
+    const s = tan > 1e-9 ? (top(0) - depth - level) / tan : corner[0]
+    if (bottom(corner[0]) < level && s < corner[0]) section.push([corner[0], level], [s, level])
+    else section.push([corner[0], bottom(corner[0])])
+  } else section.push([corner[0], bottom(corner[0])])
+  section.push([inner, bottom(inner)], [inner, top(inner)])
+  return section
+}
+
+/**
+ * The fascia and rake boards a segment wears, in its own frame, as its eaves are cut
+ * (`roofSegmentEaveProfile`): a 1x on every eave covering the tails' end, its top flush with the
+ * sheathing's, and a plumb one up every gable or shed rake over the barge rafter, its top on the
+ * sheathing's. The eave boards run through to the rake boards' faces, which butt their backs; a hip's
+ * or flat roof's end boards butt the side boards' backs. Being part of the segment, they follow its
+ * pitch, size, overhang, layers and type, and the trims, cuts and sibling roofs clip them like the
+ * deck. Gable, hip, shed and flat; null for the other forms.
  */
 function buildFasciaBoards(
   node: RoofSegmentNode,
   reach: { x: number; z: number },
-  eaveTopY: number,
-  tanTheta: number,
+  eave: RoofEaveProfile,
+  high: RoofEaveProfile | null,
 ): THREE.BufferGeometry | null {
   const { roofType, width, depth } = node
-  const bt = node.fasciaDepth ?? FASCIA_BOARD.thickness
-  const bh = node.fasciaHeight ?? FASCIA_BOARD.height
-  // A flat roof's boards sized on purpose reach its top, over the membrane's edge: a coping band.
-  const flatTopY = node.fasciaHeight !== undefined ? eaveTopY + node.shingleThickness : eaveTopY
-  const out = bt / 2 - FASCIA_EMBED
-  const halfD = depth / 2 + reach.z
-  const zE = halfD + out
-  const xE = width / 2 + reach.x + out
-  // the eave boards run through the corners to the rake / side boards'
-  // outer faces (a lapped return, no notch at the corner)
-  const xL = xE + bt / 2
+  if (!EAVE_ROOF_TYPES.has(roofType)) return null
+  const plateY = node.wallHeight
+  const thickness = eave.fascia.thickness
+  const board = embeddedFascia(eave)
   const faces: THREE.Vector3[][] = []
-  const board = (
-    a: [number, number, number],
-    b: [number, number, number],
-    across: [number, number],
-  ) => {
-    const ax = (across[0] * bt) / 2
-    const az = (across[1] * bt) / 2
-    const p = [
-      [a[0] - ax, a[1] - bh, a[2] - az],
-      [b[0] - ax, b[1] - bh, b[2] - az],
-      [b[0] + ax, b[1] - bh, b[2] + az],
-      [a[0] + ax, a[1] - bh, a[2] + az],
-      [a[0] - ax, a[1], a[2] - az],
-      [b[0] - ax, b[1], b[2] - az],
-      [b[0] + ax, b[1], b[2] + az],
-      [a[0] + ax, a[1], a[2] + az],
-    ].map(([x, y, z]) => new THREE.Vector3(x, y, z))
-    const centre = p.reduce((sum, v) => sum.add(v), new THREE.Vector3()).multiplyScalar(1 / 8)
-    const quads = [
-      [0, 1, 2, 3],
-      [4, 5, 6, 7],
-      [0, 4, 5, 1],
-      [1, 5, 6, 2],
-      [2, 6, 7, 3],
-      [3, 7, 4, 0],
-    ]
-    for (const quad of quads) {
-      const face = quad.map((k) => p[k]!.clone())
-      const normal = new THREE.Vector3()
-        .subVectors(face[1]!, face[0]!)
-        .cross(new THREE.Vector3().subVectors(face[2]!, face[0]!))
-      const faceCentre = face
-        .reduce((sum, v) => sum.add(v), new THREE.Vector3())
-        .multiplyScalar(1 / 4)
-      if (normal.dot(faceCentre.sub(centre)) < 0) face.reverse()
-      faces.push(face)
-    }
-  }
+  const rakeFace = width / 2 + reach.x + thickness
 
-  if (roofType === 'gable') {
-    const ridgeY = eaveTopY + halfD * tanTheta
-    board([-xL, eaveTopY, zE], [xL, eaveTopY, zE], [0, 1])
-    board([-xL, eaveTopY, -zE], [xL, eaveTopY, -zE], [0, 1])
-    for (const sx of [-1, 1]) {
-      board([sx * xE, eaveTopY, zE], [sx * xE, ridgeY, 0], [1, 0])
-      board([sx * xE, ridgeY, 0], [sx * xE, eaveTopY, -zE], [1, 0])
-    }
-  } else if (roofType === 'hip' || roofType === 'flat') {
-    const y = roofType === 'flat' ? flatTopY : eaveTopY
-    for (const sz of [-1, 1]) board([-xL, y, sz * zE], [xL, y, sz * zE], [0, 1])
-    // the side boards butt the eave boards' backs
-    for (const sx of [-1, 1]) board([sx * xE, y, -zE + bt / 2], [sx * xE, y, zE - bt / 2], [1, 0])
-  } else if (roofType === 'shed') {
-    // the low eave at +z, the slope rising to −z
-    const highY = eaveTopY + 2 * halfD * tanTheta
-    board([-xL, eaveTopY, zE], [xL, eaveTopY, zE], [0, 1])
-    if (node.fasciaHighEdge ?? true) board([-xL, highY, -zE], [xL, highY, -zE], [0, 1])
-    for (const sx of [-1, 1]) board([sx * xE, eaveTopY, zE], [sx * xE, highY, -zE], [1, 0])
-  } else return null
+  if (roofType === 'gable' || roofType === 'shed') {
+    const sides = roofType === 'gable' ? EDGES_Z : [EDGES_Z[0]!]
+    for (const edge of sides)
+      faces.push(
+        ...edgePrism(
+          node,
+          edge,
+          plateY,
+          board,
+          () => -rakeFace,
+          () => rakeFace,
+        ),
+      )
+    const highY = plateY + getSegmentSlopeFrame(node).activeRh
+    if (roofType === 'shed' && high && (node.fasciaHighEdge ?? true))
+      faces.push(
+        ...edgePrism(
+          node,
+          EDGES_Z[1]!,
+          highY,
+          embeddedFascia(high),
+          () => -rakeFace,
+          () => rakeFace,
+        ),
+      )
+    // the rakes: a gable's up each slope to the ridge, a shed's from its low eave to its high edge
+    const inner =
+      roofType === 'gable' ? -depth / 2 + BOARD_GAP : -depth - reach.z + FASCIA_EMBED + BOARD_GAP
+    const section = rakeSection(eave, inner)
+    const back = width / 2 + reach.x - FASCIA_EMBED
+    for (const edge of sides)
+      for (const sx of [-1, 1] as const) {
+        const [x0, x1] = sx === 1 ? [back, rakeFace] : [-rakeFace, -back]
+        faces.push(
+          ...edgePrism(
+            node,
+            edge,
+            plateY,
+            section,
+            () => x0,
+            () => x1,
+          ),
+        )
+      }
+  } else {
+    // hip and flat: the boards along ±z run through to the end boards' faces, which butt their backs
+    const [, frontTop, frontBottom] = eave.fascia.corners
+    const front = (y: number) => sAtHeight(frontTop, frontBottom, y)
+    const back = (y: number) => sAtHeight(board[0]!, board[3]!, y) - BOARD_GAP
+    for (const edge of EDGES_Z)
+      faces.push(
+        ...edgePrism(
+          node,
+          edge,
+          plateY,
+          board,
+          ([, y]) => -(width / 2 + front(y)),
+          ([, y]) => width / 2 + front(y),
+        ),
+      )
+    for (const edge of EDGES_X)
+      faces.push(
+        ...edgePrism(
+          node,
+          edge,
+          plateY,
+          board,
+          ([, y]) => -(depth / 2 + back(y)),
+          ([, y]) => depth / 2 + back(y),
+        ),
+      )
+  }
   return createGeometryFromFaces(faces, FASCIA_MATERIAL_INDEX)
+}
+
+/**
+ * What a segment's eave cut takes off its deck slab out past the walls (`roofSegmentEaveProfile`):
+ * the wedge outside a square cut; under a truss's top chords the heel's depth, the tails riding
+ * that far over the deck's underside (`seal` under them, as the deck is); under a boxed eave's
+ * soffit everything, the box standing on it. Each a convex solid, a hip's bounded by its hip lines
+ * (a hair past them, so the two at a corner overlap). None for a plumb cut on rafters.
+ */
+function buildEaveCuts(
+  node: RoofSegmentNode,
+  reach: { x: number; z: number },
+  eave: RoofEaveProfile,
+  seal: number,
+): THREE.Vector3[][][] {
+  const { roofType, width, depth } = node
+  if (roofType === 'flat') return []
+  const plateY = node.wallHeight
+  const sections: EavePoint[][] = []
+  if (eave.cut === 'square') {
+    const [corner] = eave.end as [EavePoint]
+    const down = (point: EavePoint, d: number): EavePoint => [
+      point[0] - d * eave.sin,
+      point[1] - d * eave.cos,
+    ]
+    const out = (point: EavePoint, d: number): EavePoint => [
+      point[0] + d * eave.cos,
+      point[1] - d * eave.sin,
+    ]
+    const reachDown = node.deckThickness + 0.1
+    const above = down(corner, -0.2)
+    const below = down(corner, reachDown)
+    sections.push([above, out(above, 0.5), out(below, 0.5), below])
+  }
+  const lift = eave.under(0)
+  const far = eave.reach + 0.3
+  if (lift > 1e-6) {
+    const at = (s: number, d: number): EavePoint => [s, eave.under(s) - seal - d]
+    sections.push([at(eave.wallOut, 0), at(far, 0), at(far, 1), at(eave.wallOut, 1)])
+  }
+  if (eave.soffit) {
+    const level = eave.soffit.y - eave.soffit.thickness
+    sections.push([
+      [eave.wallOut, level],
+      [far, level],
+      [far, level - 1],
+      [eave.wallOut, level - 1],
+    ])
+  }
+  if (sections.length === 0) return []
+  const solids: THREE.Vector3[][][] = []
+  const edges =
+    roofType === 'hip' ? [...EDGES_Z, ...EDGES_X] : roofType === 'gable' ? EDGES_Z : [EDGES_Z[0]!]
+  for (const edge of edges)
+    for (const section of sections) {
+      // a hip's eave runs out to its hip lines; a gable's or shed's past its rakes
+      const half = (edge.axis === 'z' ? width : depth) / 2
+      const end =
+        roofType === 'hip'
+          ? ([s]: EavePoint) => half + Math.max(0, s) + 0.01
+          : () => half + reach.x + 1
+      solids.push(edgePrism(node, edge, plateY, section, (point) => -end(point), end))
+    }
+  return solids
 }
 
 /**
@@ -1584,13 +1822,50 @@ function wearsFascia(node: RoofSegmentNode, parentRoof?: RoofNode): boolean {
   return !parentRoof || (parentRoof.children?.length ?? 0) <= 1
 }
 
+/** What a framed roof's deck keeps over its open structure band at least: a 7/16 in sheet. */
+const ROOF_DECK_KEPT = 0.0111
+/**
+ * Where the deck stays whole while its structure band is open (over the walls, in the overhangs),
+ * its underside sits this far under the rafter plane, so the rafter tails stay inside it rather
+ * than sharing its face.
+ */
+const ROOF_DECK_SEAL = 0.005
+
+/**
+ * The forms whose open band is the deck's own planes raised: their planes stay put as the
+ * footprint shrinks to the walls' inner faces. A gambrel's or a mansard's break and a dutch
+ * gablet move with it, so those decks stay closed.
+ */
+const FRAMING_OPEN_ROOF_TYPES: ReadonlySet<RoofType> = new Set(['gable', 'hip', 'shed', 'flat'])
+
+/**
+ * How deep a roof plane's deck opens under its sheathing while the viewer shows the frame
+ * (`useViewer.framingShown`), square to the slope: the structure its layers name
+ * (`roofStructureDepth`: its rafters, or its trusses' top chords on their heel), else Bones' default
+ * 2x6. A deck no deeper keeps its top 7/16 in; a plane finished underneath (a cathedral ceiling)
+ * stays closed, the frame hidden behind its finish, and so does a form `FRAMING_OPEN_ROOF_TYPES`
+ * leaves out. 0 when nothing opens.
+ */
+export function roofFramingDepth(node: RoofSegmentNode): number {
+  if (!FRAMING_OPEN_ROOF_TYPES.has(node.roofType) || node.buildUp?.finish) return 0
+  const structure = node.buildUp
+    ? roofStructureDepth(node.buildUp.structure) || LUMBER_DEPTH['2x6']
+    : LUMBER_DEPTH['2x6']
+  const depth = Math.min(structure, node.deckThickness - ROOF_DECK_KEPT)
+  return depth > 0.005 ? depth : 0
+}
+
 /**
  * `fascia`: build the segment's fascia boards into its deck. Only the roof
  * renderer asks; a dormer, a chimney or a sibling's clip takes the bare shell.
+ * `framing`: the structure band to open (`roofFramingDepth`), the roof
+ * renderer's while the frame is shown. Inside the walls the deck keeps only the
+ * band over it, so the rafters show from the attic; over the walls and in the
+ * overhangs it stays whole, closing the band at the walls' inner faces.
  */
 export function getRoofSegmentBrushes(
   node: RoofSegmentNode,
-  options: { fascia?: boolean } = {},
+  options: { fascia?: boolean; framing?: number } = {},
 ): RoofSegmentBrushSet | null {
   const { roofType, width, depth, wallHeight, wallThickness, deckThickness, shingleThickness } =
     node
@@ -1623,6 +1898,7 @@ export function getRoofSegmentBrushes(
     materialRule?: (normal: THREE.Vector3) => number,
     onPlate = false,
     xExt = wExt,
+    keepBase = false,
   ) => {
     const wV = Math.max(0.01, width + 2 * xExt)
     const dV = Math.max(0.01, depth + 2 * wExt)
@@ -1633,7 +1909,11 @@ export function getRoofSegmentBrushes(
     // One floor for all volumes keeps each cutter level with the shell it carves.
     // A plate-seated roof (wallHeight 0) is the exception for its sloped deck
     // volumes: their eave hangs below the plate, and raising it lifted the
-    // whole roof off its walls, so their base sinks instead.
+    // whole roof off its walls, so their base sinks instead: under the plate's
+    // plane at their edge too, so a deck's top volume keeps the deck's whole
+    // depth out to the eave (a base 5 cm under its top cut the eave to a 5 cm
+    // edge with the tails hanging under it). `keepBase`: a volume whose base
+    // is its own (a boxed eave's soffit).
     const eaveY = wallHeight - autoDrop + vOffset
     const sinkBase = plateSeated && !onPlate && autoDrop !== 0
     const whV = sinkBase ? eaveY : Math.max(0.05, eaveY)
@@ -1644,7 +1924,10 @@ export function getRoofSegmentBrushes(
       if (roofType === 'shed') rhV = activeRh + 2 * autoDrop
     }
 
-    const safeBaseY = sinkBase ? Math.min(baseY, whV - 0.05) : baseY
+    const safeBaseY =
+      sinkBase && !keepBase
+        ? Math.min(baseY, Math.min(whV, wallHeight - autoDrop - ROOF_DECK_SEAL) - 0.05)
+        : baseY
 
     let structuralI = baseI
     if (isVoid) {
@@ -1692,14 +1975,66 @@ export function getRoofSegmentBrushes(
     false,
     reach.x,
   )
-  const deckBotGeo = getVol(deckExt, 0, -5, 0, true, undefined, false, reach.x)
-  // the deck's top edge at its outer plane, as `getVol` puts it
-  const deckEaveDrop = deckExt * tanTheta
-  const deckEaveTopY =
-    plateSeated && deckEaveDrop > 0
-      ? wallHeight - deckEaveDrop + verticalRt
-      : Math.max(0.05, wallHeight - deckEaveDrop + verticalRt)
-  const fasciaGeo = options.fascia ? buildFasciaBoards(node, reach, deckEaveTopY, tanTheta) : null
+  const framing = Math.max(0, options.framing ?? 0)
+  const deckBotGeo = getVol(
+    deckExt,
+    framing > 0 ? -ROOF_DECK_SEAL : 0,
+    -5,
+    0,
+    true,
+    undefined,
+    false,
+    reach.x,
+  )
+  // the structure band inside the walls' inner faces, open while the frame is shown
+  const framingRt = activeRh > 0 ? framing / cosTheta : framing
+  const half = -wallThickness / 2
+  const framingGeo =
+    framing > 0 ? getVol(half, framingRt, -5, 0, true, undefined, false, half) : null
+  // The eaves, cut and boarded by the plane's rule, the one Bones cuts its tails by (core's
+  // `roofSegmentEaveProfile`). Only the roof renderer asks (`options.fascia` given); a dormer, a
+  // chimney or a sibling's clip takes the bare shell.
+  const eave =
+    options.fascia !== undefined && EAVE_ROOF_TYPES.has(roofType)
+      ? roofSegmentEaveProfile(node)
+      : null
+  const highEave = eave && roofType === 'shed' ? roofSegmentEaveProfile(node, 'high') : null
+  const fasciaGeo = eave && options.fascia ? buildFasciaBoards(node, reach, eave, highEave) : null
+  const eaveCutGeos = eave
+    ? buildEaveCuts(node, reach, eave, framing > 0 ? ROOF_DECK_SEAL : 0).map((faces) =>
+        createGeometryFromFaces(faces, 1),
+      )
+    : []
+  // A boxed eave (plumb and level): solid from the soffit, level under the tails, up into the deck,
+  // from the walls (a hair into them) out to the fascia's back; its ends are the returns under the rakes.
+  let boxGeo: THREE.BufferGeometry | null = null
+  let boxCut: Brush | null = null
+  if (eave?.soffit) {
+    const soffitBottom = wallHeight + eave.soffit.y - eave.soffit.thickness
+    const ext = reach.z - FASCIA_EMBED
+    boxGeo = getVol(
+      ext,
+      verticalRt - 0.003,
+      soffitBottom,
+      FASCIA_MATERIAL_INDEX,
+      false,
+      undefined,
+      false,
+      roofType === 'hip' ? ext : reach.x - FASCIA_EMBED,
+      true,
+    )
+    const inside = eave.wallOut - FASCIA_EMBED
+    const far = width / 2 + depth / 2 + reach.x + reach.z + 2
+    const top = wallHeight + activeRh + deckThickness + shingleThickness + 2
+    boxCut = buildTrimCutBrush(
+      roofType === 'hip' ? -(width / 2 + inside) : -far,
+      roofType === 'hip' ? width / 2 + inside : far,
+      roofType === 'shed' ? -far : -(depth / 2 + inside),
+      depth / 2 + inside,
+      soffitBottom - 1,
+      top,
+    )
+  }
 
   const stSin = shingleThickness * sinTheta
   const stCos = shingleThickness * cosTheta
@@ -1871,6 +2206,15 @@ export function getRoofSegmentBrushes(
   const shinBotBrush = toBrush(shinBotGeo)
   const fasciaBrush = fasciaGeo ? toBrush(fasciaGeo) : null
   if (fasciaGeo && !fasciaBrush) fasciaGeo.dispose()
+  const eaveCutBrushes = eaveCutGeos.flatMap((geometry) => {
+    const brush = toBrush(geometry)
+    if (!brush) geometry.dispose()
+    return brush ? [brush] : []
+  })
+  const boxBrush = boxGeo ? toBrush(boxGeo) : null
+  if (boxGeo && !boxBrush) boxGeo.dispose()
+  const framingBrush = framingGeo ? toBrush(framingGeo) : null
+  if (framingGeo && !framingBrush) framingGeo.dispose()
   if (shinBotBrush) {
     const wV = shinBotW
     const dV = shinBotD
@@ -1889,6 +2233,31 @@ export function getRoofSegmentBrushes(
     try {
       let deckSlab = csgEvaluator.evaluate(deckTopBrush, deckBotBrush, SUBTRACTION)
       prepareBrushForCSG(deckSlab)
+      if (framingBrush) {
+        const open = csgEvaluator.evaluate(deckSlab, framingBrush, SUBTRACTION)
+        prepareBrushForCSG(open)
+        deckSlab.geometry.dispose()
+        framingBrush.geometry.dispose()
+        deckSlab = open
+      }
+      for (const cut of eaveCutBrushes) {
+        const next = csgEvaluator.evaluate(deckSlab, cut, SUBTRACTION)
+        prepareBrushForCSG(next)
+        deckSlab.geometry.dispose()
+        cut.geometry.dispose()
+        deckSlab = next
+      }
+      if (boxBrush && boxCut) {
+        const box = csgEvaluator.evaluate(boxBrush, boxCut, SUBTRACTION)
+        prepareBrushForCSG(box)
+        const withBox = csgEvaluator.evaluate(deckSlab, box, ADDITION)
+        prepareBrushForCSG(withBox)
+        deckSlab.geometry.dispose()
+        box.geometry.dispose()
+        boxBrush.geometry.dispose()
+        boxCut.geometry.dispose()
+        deckSlab = withBox
+      }
       if (fasciaBrush) {
         const withFascia = csgEvaluator.evaluate(deckSlab, fasciaBrush, ADDITION)
         prepareBrushForCSG(withFascia)
@@ -1936,6 +2305,10 @@ export function getRoofSegmentBrushes(
   if (wallBrush) wallBrush.geometry.dispose()
   if (innerBrush) innerBrush.geometry.dispose()
   fasciaBrush?.geometry.dispose()
+  framingBrush?.geometry.dispose()
+  for (const cut of eaveCutBrushes) cut.geometry.dispose()
+  boxBrush?.geometry.dispose()
+  boxCut?.geometry.dispose()
   rakeBoards?.dispose()
 
   return null
@@ -2021,9 +2394,15 @@ function buildIndependentRoofSegmentGeometry(
   return geometry
 }
 
+/**
+ * `framing`: the frame is shown (`useViewer.framingShown`), so the deck opens its structure band
+ * (`roofFramingDepth`). Only the roof system asks; a picture of the plan or a section takes the
+ * closed deck.
+ */
 export function generateRoofSegmentGeometry(
   node: RoofSegmentNode,
   nodes?: Record<string, AnyNode>,
+  options: { framing?: boolean } = {},
 ): THREE.BufferGeometry {
   const parentNode = node.parentId ? nodes?.[node.parentId] : undefined
   const parentRoof = parentNode?.type === 'roof' ? parentNode : undefined
@@ -2050,7 +2429,10 @@ export function generateRoofSegmentGeometry(
     return result
   }
   const brushes = withSegmentUvMatrix(segmentWorldMatrix, () =>
-    getRoofSegmentBrushes(node, { fascia: wearsFascia(node, parentRoof) }),
+    getRoofSegmentBrushes(node, {
+      fascia: wearsFascia(node, parentRoof),
+      framing: options.framing ? roofFramingDepth(node) : 0,
+    }),
   )
   if (!brushes) {
     // Fallback: simple box
@@ -2109,6 +2491,7 @@ export function generateRoofSegmentGeometry(
 
     remapRoofShellFaces(resultGeo, node)
     resultGeo = addShedInsetEndPanels(resultGeo, [node], false)
+    if (hollowWall) splitRoofWallBandFaces(resultGeo, [{ node, inverse: null }], true)
 
     hollowWall?.geometry.dispose()
     if (combined !== shinDeck) shinDeck.geometry.dispose()
@@ -3451,6 +3834,133 @@ function splitShellByFacePlanes(
   source.dispose()
   geometry.dispose()
   return createGeometryFromRawAttributes(keptPositions, keptNormals, keptUvs, keptGroups)
+}
+
+/** Off a wall shell's outer plane by more than this, a face is not the wall band. */
+const WALL_BAND_PLANE_TOLERANCE = 0.01
+
+type WallBandSegment = {
+  node: RoofSegmentNode
+  /** Geometry space → segment-local (identity for a segment's own mesh). */
+  inverse: THREE.Matrix4 | null
+}
+
+const _bandA = new THREE.Vector3()
+const _bandB = new THREE.Vector3()
+const _bandC = new THREE.Vector3()
+const _bandCentroid = new THREE.Vector3()
+const _bandNormal = new THREE.Vector3()
+const _bandLocalCentroid = new THREE.Vector3()
+const _bandLocalNormal = new THREE.Vector3()
+const _bandNormalMatrix = new THREE.Matrix3()
+
+/**
+ * Which wall band a slot-0 triangle is, in segment-local space, or null when
+ * it is not on the wall shell's outer face (soffits, deck and shingle edges).
+ * The shell's outer faces stand half the wall thickness outside the footprint;
+ * on the ±x ends, above the eave, they are the gables, and below it, like the
+ * ±z sides, the heel band.
+ */
+function classifyWallBandFace(
+  node: RoofSegmentNode,
+  centroid: THREE.Vector3,
+  normal: THREE.Vector3,
+): number | null {
+  if (Math.abs(normal.y) > 0.2) return null
+  const half = Math.max(0, node.wallThickness) / 2
+  const outerX = node.width / 2 + half
+  const outerZ = node.depth / 2 + half
+  const tol = WALL_BAND_PLANE_TOLERANCE
+  if (Math.abs(normal.x) > 0.9) {
+    if (Math.sign(normal.x) !== Math.sign(centroid.x)) return null
+    if (Math.abs(Math.abs(centroid.x) - outerX) > tol || Math.abs(centroid.z) > outerZ + tol)
+      return null
+    // the shell's eave line, as `getRoofSegmentBrushes` raises it (5 cm at the least)
+    const { tanTheta } = getSegmentSlopeFrame(node)
+    const eaveY = Math.max(0.05, node.wallHeight - half * tanTheta)
+    if (centroid.y <= eaveY + 1e-5) return ROOF_HEEL_MATERIAL_INDEX
+    return normal.x < 0 ? ROOF_GABLE_LEFT_MATERIAL_INDEX : ROOF_GABLE_RIGHT_MATERIAL_INDEX
+  }
+  if (Math.abs(normal.z) > 0.9) {
+    if (Math.sign(normal.z) !== Math.sign(centroid.z)) return null
+    if (Math.abs(Math.abs(centroid.z) - outerZ) > tol || Math.abs(centroid.x) > outerX + tol)
+      return null
+    return ROOF_HEEL_MATERIAL_INDEX
+  }
+  return null
+}
+
+/**
+ * Split the wall bands off slot 0 (see `ROOF_HEEL_MATERIAL_INDEX`): the heel
+ * band always, each gable end when `gables` (a segment's own mesh, where they
+ * paint apart; on the merged shell they stay the edge role's). Runs on the
+ * finished shell, after every slot remap that folds indices back into 0–3.
+ */
+export function splitRoofWallBandFaces(
+  geometry: THREE.BufferGeometry,
+  segments: readonly WallBandSegment[],
+  gables: boolean,
+) {
+  const position = geometry.getAttribute('position')
+  if (!position || geometry.groups.length === 0 || segments.length === 0) return
+  const index = geometry.getIndex()
+  const triangleCount = Math.floor((index ? index.count : position.count) / 3)
+  if (triangleCount === 0) return
+  const vertexAt = (corner: number) => (index ? index.getX(corner) : corner)
+
+  const triangleMaterials = new Array<number>(triangleCount).fill(0)
+  let changed = false
+  for (const group of geometry.groups) {
+    const start = Math.floor(group.start / 3)
+    const end = Math.min(triangleCount, Math.floor((group.start + group.count) / 3))
+    for (let triangle = start; triangle < end; triangle++) {
+      const materialIndex = group.materialIndex ?? 0
+      triangleMaterials[triangle] = materialIndex
+      if (materialIndex !== ROOF_EDGE_MATERIAL_INDEX) continue
+      _bandA.fromBufferAttribute(position, vertexAt(triangle * 3))
+      _bandB.fromBufferAttribute(position, vertexAt(triangle * 3 + 1))
+      _bandC.fromBufferAttribute(position, vertexAt(triangle * 3 + 2))
+      _bandCentroid
+        .copy(_bandA)
+        .add(_bandB)
+        .add(_bandC)
+        .multiplyScalar(1 / 3)
+      _bandNormal.subVectors(_bandB, _bandA).cross(_bandC.sub(_bandA))
+      if (_bandNormal.lengthSq() < 1e-14) continue
+      _bandNormal.normalize()
+      for (const segment of segments) {
+        _bandLocalCentroid.copy(_bandCentroid)
+        _bandLocalNormal.copy(_bandNormal)
+        if (segment.inverse) {
+          _bandLocalCentroid.applyMatrix4(segment.inverse)
+          _bandLocalNormal.applyMatrix3(_bandNormalMatrix.setFromMatrix4(segment.inverse))
+          _bandLocalNormal.normalize()
+        }
+        const band = classifyWallBandFace(segment.node, _bandLocalCentroid, _bandLocalNormal)
+        if (band === null) continue
+        const resolved =
+          band === ROOF_HEEL_MATERIAL_INDEX || gables ? band : ROOF_EDGE_MATERIAL_INDEX
+        if (resolved !== ROOF_EDGE_MATERIAL_INDEX) {
+          triangleMaterials[triangle] = resolved
+          changed = true
+        }
+        break
+      }
+    }
+  }
+  if (!changed) return
+
+  geometry.clearGroups()
+  let currentMaterial = triangleMaterials[0] ?? 0
+  let groupStart = 0
+  for (let triangle = 1; triangle < triangleCount; triangle++) {
+    const materialIndex = triangleMaterials[triangle] ?? 0
+    if (materialIndex === currentMaterial) continue
+    geometry.addGroup(groupStart * 3, (triangle - groupStart) * 3, currentMaterial)
+    groupStart = triangle
+    currentMaterial = materialIndex
+  }
+  geometry.addGroup(groupStart * 3, (triangleCount - groupStart) * 3, currentMaterial)
 }
 
 export function remapRoofShellFaces(geometry: THREE.BufferGeometry, node: RoofSegmentNode) {

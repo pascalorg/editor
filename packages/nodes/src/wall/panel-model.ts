@@ -1,6 +1,11 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  type Assembly,
+  BRICK_AIR_SPACE,
+  BRICK_VENEER,
+  DEFAULT_WALL_THICKNESS,
+  FIBER_CEMENT,
   faceOnLine,
   GROUND_SUPPORT_ID,
   getClampedWallCurveOffset,
@@ -9,18 +14,30 @@ import {
   justificationForFaceOnLine,
   normalizeWallCurveOffset,
   planWallJustification,
+  projectWallTypes,
   roomSideFaces,
+  runAsSingleSceneHistoryStep,
+  SIDING_LAP,
+  STONE_VENEER_UNVERIFIED,
+  STUCCO_3_COAT,
   terrainSupportLift,
   useScene,
+  WALL_ASSEMBLY_PRESETS,
   WALL_CHAIR_RAIL_DEFAULT,
   WALL_CROWN_DEFAULT,
   WALL_SKIRTING_DEFAULT,
+  type WallAssemblyExteriorFinish,
   type WallNode,
   type WallTrimProfile,
+  wallAssemblyFromLegacy,
+  wallAssemblyPatch,
+  wallAssemblyToLegacy,
   wallTrimPatch,
 } from '@pascal-app/core'
 import {
   curveReshapeScope,
+  formatLinearMeasurement,
+  type MultiPanelControl,
   type PanelRow,
   triggerSFX,
   useInteractionScope,
@@ -29,6 +46,7 @@ import { useViewer } from '@pascal-app/viewer'
 import { resolveWallOpeningCeiling } from '../shared/wall-opening-ceiling'
 import { hasWallCurveBlockingChildren } from './curve-eligibility'
 import { buildWallLengthPatch } from './length-patch'
+import { railingWallRows } from './railing-wall-panel-model'
 
 type TrimKey = 'skirting' | 'crown' | 'chairRail'
 const profiles: Record<TrimKey, readonly WallTrimProfile[]> = {
@@ -196,46 +214,51 @@ export function wallSettings(
   number('Dimensions', 'wall-length', 'Length', length, 0.1, 1000, 0.05, (next) => {
     update(buildWallLengthPatch(node, next))
   })
-  choice(
-    'Dimensions',
-    'wall-top',
-    'Top',
-    node.height == null ? 'Follows level' : 'Custom height',
-    () =>
-      update(
-        node.height == null
-          ? { height: Math.max(0.1, height) }
-          : { height: undefined, ...repairBase() },
-      ),
-  )
-  if (node.height == null)
-    choice('Dimensions', 'wall-height-auto', 'Current height', `${Number(height.toFixed(3))} m`)
-  else
-    number('Dimensions', 'height', 'Height', node.height, 0.1, 1000, 0.05, (height) =>
-      update({ height }),
+  // A railing keeps its own height and its posts set its thickness: its rows say so instead.
+  const railing = node.wallType === 'railing'
+  if (railing) rows.push(...railingWallRows(node, update))
+  else {
+    choice(
+      'Dimensions',
+      'wall-top',
+      'Top',
+      node.height == null ? 'Follows level' : 'Custom height',
+      () =>
+        update(
+          node.height == null
+            ? { height: Math.max(0.1, height) }
+            : { height: undefined, ...repairBase() },
+        ),
     )
-  choice(
-    'Dimensions',
-    'wall-bottom',
-    'Bottom',
-    node.fillToTerrain ? 'Fill to terrain' : 'Auto',
-    () =>
-      update(
-        node.fillToTerrain
-          ? { fillToTerrain: undefined, ...repairBase() }
-          : { fillToTerrain: true },
-      ),
-  )
-  number(
-    'Dimensions',
-    'thickness',
-    'Thickness',
-    node.thickness ?? 0.1,
-    0.05,
-    1000,
-    0.01,
-    (thickness) => update({ thickness }),
-  )
+    if (node.height == null)
+      choice('Dimensions', 'wall-height-auto', 'Current height', `${Number(height.toFixed(3))} m`)
+    else
+      number('Dimensions', 'height', 'Height', node.height, 0.1, 1000, 0.05, (height) =>
+        update({ height }),
+      )
+    choice(
+      'Dimensions',
+      'wall-bottom',
+      'Bottom',
+      node.fillToTerrain ? 'Fill to terrain' : 'Auto',
+      () =>
+        update(
+          node.fillToTerrain
+            ? { fillToTerrain: undefined, ...repairBase() }
+            : { fillToTerrain: true },
+        ),
+    )
+    number(
+      'Dimensions',
+      'thickness',
+      'Thickness',
+      node.thickness ?? 0.1,
+      0.05,
+      1000,
+      0.01,
+      (thickness) => update({ thickness }),
+    )
+  }
   const blockedCurve = hasWallCurveBlockingChildren(
     (node.children ?? []).flatMap((id) =>
       nodes[id as AnyNodeId] ? [nodes[id as AnyNodeId]!] : [],
@@ -262,11 +285,15 @@ export function wallSettings(
         onSelect: reshape,
       })
   }
-  for (const [key, title, defaults] of [
-    ['skirting', 'Skirting', WALL_SKIRTING_DEFAULT],
-    ['crown', 'Crown molding', WALL_CROWN_DEFAULT],
-    ['chairRail', 'Chair rail', WALL_CHAIR_RAIL_DEFAULT],
-  ] as const) {
+  // A railing has no faces to trim.
+  const trims = railing
+    ? []
+    : ([
+        ['skirting', 'Skirting', WALL_SKIRTING_DEFAULT],
+        ['crown', 'Crown molding', WALL_CROWN_DEFAULT],
+        ['chairRail', 'Chair rail', WALL_CHAIR_RAIL_DEFAULT],
+      ] as const)
+  for (const [key, title, defaults] of trims) {
     const trim = { ...defaults, ...node[key] }
     const patch = (value: Partial<typeof trim>) => update(wallTrimPatch(node, key, value))
     choice(title, `${key}-enabled`, title, trim.enabled ? 'On' : 'Off', () =>
@@ -306,4 +333,149 @@ export function wallSettings(
       )
   }
   return rows
+}
+
+export const EXTERIOR_FINISH_OPTIONS: Array<{ value: WallAssemblyExteriorFinish; label: string }> =
+  [
+    { value: 'none', label: 'None' },
+    { value: 'siding', label: 'Lap siding' },
+    { value: 'fiber-cement', label: 'Fiber cement' },
+    { value: 'stucco', label: 'Stucco' },
+    { value: 'brick', label: 'Brick veneer' },
+    { value: 'stone', label: 'Stone veneer' },
+  ]
+
+/** Cited default thickness for a finish the user just switched to. */
+export const EXTERIOR_FINISH_DEFAULT: Record<WallAssemblyExteriorFinish, number> = {
+  none: 0,
+  siding: SIDING_LAP,
+  'fiber-cement': FIBER_CEMENT,
+  stucco: STUCCO_3_COAT,
+  brick: BRICK_VENEER + BRICK_AIR_SPACE,
+  stone: STONE_VENEER_UNVERIFIED,
+}
+
+const PLAIN_PRESET = 'none'
+const CUSTOM_PRESET = 'custom'
+
+/**
+ * The wall types a wall's Preset can be: the cited presets, then the project's own
+ * (`SiteNode.wallTypes`, by label), each applied the same way (`wallAssemblyPatch`).
+ */
+function wallPresetChoices(): Array<{ id: string; label: string; assembly: Assembly }> {
+  const { nodes, rootNodeIds } = useScene.getState()
+  return [...WALL_ASSEMBLY_PRESETS, ...projectWallTypes(nodes, rootNodeIds)]
+}
+
+/**
+ * The assembly preset a wall shows: its preset or project type, a custom stack
+ * (also one from a project type this project does not have), or none (a single layer).
+ */
+function wallPresetValue(wall: WallNode, known: ReadonlySet<string>): string {
+  const presetId = wall.assembly?.presetId
+  if (presetId && known.has(presetId)) return presetId
+  return wall.assembly ? CUSTOM_PRESET : PLAIN_PRESET
+}
+
+function shared<T>(values: readonly T[]): T | null {
+  return values.length > 0 && values.every((value) => value === values[0]) ? values[0]! : null
+}
+
+function writeWalls(updates: Array<{ id: AnyNodeId; data: Partial<WallNode> }>) {
+  if (updates.length === 0) return
+  runAsSingleSceneHistoryStep(useScene, () => useScene.getState().updateNodes(updates))
+}
+
+/**
+ * The wall's assembly and thickness controls for a multi-selection, as the
+ * single panel offers them: the Preset (wall type) and the Exterior cladding,
+ * each applied to every selected standard wall in one undo step, and the
+ * thickness of the walls whose assembly sets it, which the selection reads but
+ * cannot type over (the Thickness field edits the others). Curtain walls and
+ * railings take no assembly and are left out of all three.
+ */
+export function wallAssemblyMultiControls(selection: readonly WallNode[]): MultiPanelControl[] {
+  const walls = selection.filter(
+    (wall) => wall.wallType !== 'curtain' && wall.wallType !== 'railing',
+  )
+  if (walls.length === 0) return []
+  const controls: MultiPanelControl[] = []
+  const withAssembly = walls.filter((wall) => wall.assembly)
+  if (withAssembly.length > 0) {
+    const { unit, metricNotation } = useViewer.getState()
+    const thickness = shared(
+      withAssembly.map((wall) => Math.round((wall.thickness ?? DEFAULT_WALL_THICKNESS) * 1e6)),
+    )
+    // Only the walls with an assembly: the Thickness field edits the rest.
+    const every = withAssembly.length === selection.length
+    controls.push({
+      id: 'wall-thickness-assembly',
+      kind: 'readout',
+      section: 'Dimensions',
+      label: every ? 'Thickness' : 'Assembly walls',
+      value:
+        thickness === null
+          ? 'Mixed'
+          : formatLinearMeasurement(thickness / 1e6, unit, metricNotation),
+      detail: every
+        ? 'from assembly'
+        : `${withAssembly.length} of ${selection.length}, from assembly`,
+    })
+  }
+  const choices = wallPresetChoices()
+  const known = new Set(choices.map((choice) => choice.id))
+  const preset = shared(walls.map((wall) => wallPresetValue(wall, known)))
+  controls.push({
+    id: 'wall-assembly-preset',
+    kind: 'select',
+    section: 'Assembly',
+    label: 'Preset',
+    options: [
+      { value: PLAIN_PRESET, label: 'None (single layer)' },
+      ...(preset === CUSTOM_PRESET ? [{ value: CUSTOM_PRESET, label: 'Custom' }] : []),
+      ...choices.map((entry) => ({ value: entry.id, label: entry.label })),
+    ],
+    value: preset,
+    onChange: (value) => {
+      if (value === CUSTOM_PRESET) return
+      const chosen = choices.find((entry) => entry.id === value)
+      writeWalls(
+        walls.map((wall) => ({
+          id: wall.id as AnyNodeId,
+          data: chosen
+            ? wallAssemblyPatch(structuredClone(chosen.assembly))
+            : { assembly: undefined },
+        })),
+      )
+    },
+  })
+  // The cladding edit works on the WS5 view of each stack, as the single panel's
+  // Exterior row does; it shows only when every wall has one.
+  const legacy = walls.map((wall) => (wall.assembly ? wallAssemblyToLegacy(wall.assembly) : null))
+  if (legacy.every((entry) => entry !== null)) {
+    controls.push({
+      id: 'wall-assembly-exterior',
+      kind: 'select',
+      section: 'Assembly',
+      label: 'Exterior',
+      options: EXTERIOR_FINISH_OPTIONS,
+      value: shared(legacy.map((entry) => entry!.exterior?.finish ?? 'none')),
+      onChange: (value) => {
+        const finish = value as WallAssemblyExteriorFinish
+        writeWalls(
+          walls.map((wall, index) => ({
+            id: wall.id as AnyNodeId,
+            data: wallAssemblyPatch(
+              wallAssemblyFromLegacy({
+                ...legacy[index]!,
+                exterior: { finish, thickness: EXTERIOR_FINISH_DEFAULT[finish] },
+                preset: undefined,
+              }),
+            ),
+          })),
+        )
+      },
+    })
+  }
+  return controls
 }

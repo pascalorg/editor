@@ -56,6 +56,7 @@ import { StairConstructionControls } from './construction-controls'
 import { getStairDestinationUpdates } from './destination'
 import { StairRailingControls } from './railing-controls'
 import { getStairTypeChange } from './stair-type'
+import { StairStructureControls } from './structure-controls'
 
 /** Core's stair diagnostics in the UI language; codes without fixed text show core's message. */
 const STAIR_DIAGNOSTIC_MESSAGES: Partial<Record<string, MessageDescriptor>> = {
@@ -1073,8 +1074,12 @@ export default function StairPanel() {
       <PanelSection
         title={i18n._({ id: 'node.stair.panel.construction', message: 'Construction' })}
       >
+        {node.stairType === 'straight' ? (
+          <StairStructureControls node={node} segments={segments} onUpdate={handleUpdate} />
+        ) : null}
         <StairConstructionControls
           node={node}
+          structured={node.stairType === 'straight' && Boolean(node.structure)}
           onChange={(construction) => handleUpdate({ construction })}
         />
       </PanelSection>

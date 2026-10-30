@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { FOUNDATION_CONSTRUCTIONS } from '../../lib/foundation-construction'
-import type { WallNode } from '../../schema'
+import { Assembly, type WallNode } from '../../schema'
 import type { WallAssembly } from '../../schema/nodes/wall'
 import {
   assemblyThickness,
@@ -19,6 +19,7 @@ import {
   wallAssemblyExposedStructure,
   wallAssemblyFromLegacy,
   wallAssemblyPatch,
+  wallAssemblyToLegacy,
   wallLayerBoundaryOffsets,
 } from './wall-assembly'
 import { calculateLevelMiters } from './wall-mitering'
@@ -108,6 +109,20 @@ describe('assemblyThickness', () => {
     const patch = wallAssemblyPatch(stack)
     expect(patch.thickness).toBeCloseTo(assemblyThickness(stack), 12)
     expect(patch.assembly).toBe(stack)
+  })
+
+  test("the core's stud spacing rides the inspector's view both ways and adds no thickness", () => {
+    const spaced = { ...EXT_2X6, framing: { ...EXT_2X6.framing, spacing: 24 * IN } }
+    const stack = f2(spaced)
+    expect(stack.layers.find((layer) => layer.core)?.spacing).toBe(24 * IN)
+    expect(wallAssemblyToLegacy(stack)?.framing).toEqual(spaced.framing)
+    expect(assemblyThickness(stack)).toBeCloseTo(assemblyThickness(f2(EXT_2X6)), 12)
+    expect(Assembly.safeParse(stack).success).toBe(true)
+    const misplaced = {
+      ...stack,
+      layers: stack.layers.map((layer) => (layer.core ? layer : { ...layer, spacing: 16 * IN })),
+    }
+    expect(Assembly.safeParse(misplaced).success).toBe(false)
   })
 })
 

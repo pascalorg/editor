@@ -1,10 +1,20 @@
 'use client'
 
-import { type FloorplanGeometry, type Point, roomDrawnFloor, useScene } from '@pascal-app/core'
+import {
+  type AnyNode,
+  type AnyNodeId,
+  type FloorplanGeometry,
+  nodeRegistry,
+  type Point,
+  roomDrawnFloor,
+  useScene,
+} from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { Minus, Plus } from 'lucide-react'
 import { type PointerEvent as ReactPointerEvent, useMemo, useState } from 'react'
-import { useSelectedRoom } from '../../hooks/use-selected-room'
+import { useShallow } from 'zustand/react/shallow'
+import { useRoomRecords, useSelectedRoom } from '../../hooks/use-selected-room'
+import { getFloorplanNodeExtension } from '../../lib/floorplan/floorplan-extension'
 import { formatLinearMeasurement, MEASUREMENT_FLOORPLAN_COLOR } from '../../lib/measurements'
 import {
   commitRoomFloorElevation,
@@ -21,8 +31,13 @@ import {
   useRoomHandleDrag,
   type WallPushHandle,
 } from '../../lib/room-handle-drag'
-import type { RoomDimension } from '../../lib/room-push-dimensions'
+import {
+  mergeSelectionDimensions,
+  type OwnedSelectionDimension,
+  type RoomDimension,
+} from '../../lib/room-push-dimensions'
 import useEditor from '../../store/use-editor'
+import useFloorplanAnnotationVisibility from '../../store/use-floorplan-annotation-visibility'
 import useInteractionScope from '../../store/use-interaction-scope'
 import { useFloorplanRender } from '../editor-2d/floorplan-render-context'
 import { FloorplanGeometryRenderer } from '../editor-2d/renderers/floorplan-geometry-renderer'
@@ -158,9 +173,10 @@ function startArrow(event: ReactPointerEvent<SVGPathElement>, run: () => unknown
 
 /**
  * The selected room's arrows on the plan: one push/pull chevron per boundary
- * span (on the far face, along the normal the handle supplies) and, for a
- * mezzanine, one per plate edge. Mounted after every node's handles so a
- * wall outline never takes the press. The drags are the 3D arrows' own.
+ * wall span (on the far face, along the normal the handle supplies), one per
+ * straight edge of invisible walls and, for a mezzanine, one per plate edge.
+ * Mounted after every node's handles so a wall outline never takes the press.
+ * The drags are the 3D arrows' own.
  */
 export function RoomHandles2D({ levelId }: { levelId: string | null }) {
   const room = useRoomControls()
@@ -327,6 +343,13 @@ export function RoomHandleDragPreview2D({ levelId }: { levelId: string | null })
   const unit = useViewer((s) => s.unit)
   const metricNotation = useViewer((s) => s.metricNotation)
   if (!drag || drag.levelId !== levelId || drag.kind === 'elevation') return null
+  if (drag.kind === 'wall-group-push')
+    return (
+      <g data-room-drag-preview-2d pointerEvents="none">
+        <PlanRoomDimensions dimensions={drag.dimensions} />
+        {drag.message && <PlanReadout at={drag.anchor} refused text={drag.message} />}
+      </g>
+    )
   const plan = drag as PlanDrag
   const at: Point = [
     plan.anchor[0] + plan.outward[0] * plan.distance,
@@ -349,6 +372,133 @@ export function RoomHandleDragPreview2D({ levelId }: { levelId: string | null })
       )}
       <PlanRoomDimensions dimensions={plan.dimensions} />
       <PlanReadout at={at} refused={!!plan.message} text={text} />
+    </g>
+  )
+}
+
+function selectionDimensionsOf(node: AnyNode | undefined) {
+  return node
+    ? getFloorplanNodeExtension(nodeRegistry.get(node.type))?.selectionDimensions
+    : undefined
+}
+
+const NO_NODES: readonly AnyNode[] = []
+
+/**
+ * The selected nodes that show their temporary dimensions now: Select mode,
+ * nothing in progress, Display → Dimensions on, kinds with `selectionDimensions`
+ * only (a wall among other selected things still shows its own), on the first
+ * one's level. A new array only when one of them changes.
+ */
+export function useSelectionDimensionNodes(): readonly AnyNode[] {
+  const selectedIds = useViewer((s) => s.selection.selectedIds)
+  const enabled = useEditor((s) => s.mode === 'select')
+  const idle = useInteractionScope((s) => s.scope.kind === 'idle')
+  const dragging = useRoomHandleDrag((s) => s.drag !== null)
+  const shown = useFloorplanAnnotationVisibility((s) => s.showDimensions)
+  const active = enabled && idle && !dragging && shown
+  return useScene(
+    useShallow((s) => {
+      if (!active) return NO_NODES
+      const found: AnyNode[] = []
+      for (const id of selectedIds) {
+        const node = s.nodes[id as AnyNodeId]
+        if (!node || !selectionDimensionsOf(node)) continue
+        if (found.length && node.parentId !== found[0]!.parentId) continue
+        found.push(node)
+      }
+      return found
+    }),
+  )
+}
+
+/**
+ * The selected nodes' temporary dimensions (`useSelectionDimensionNodes`),
+ * from each kind's `selectionDimensions` (a wall: the room widths its push
+ * shows and, for an exterior wall, the outside size, as Display → Measure
+ * walls asks). Several selected walls show each one's, a room two of them
+ * bound measured once. Shared by the plan and the 3D view; typing into one
+ * drives the node it runs from. Recomputed only when a measured node or its
+ * level's rooms change (the room index keeps its records while unrelated
+ * nodes edit).
+ */
+export function useSelectedWallDimensions(): {
+  levelId: string
+  dimensions: readonly OwnedSelectionDimension[]
+} | null {
+  const measured = useSelectionDimensionNodes()
+  const faces = useFloorplanAnnotationVisibility((s) => s.wallDimensionFaces)
+  const levelId = measured[0]?.parentId ?? null
+  const rooms = useRoomRecords(levelId)
+  return useMemo(() => {
+    // `rooms` is the invalidation key: it changes when the level's room
+    // topology, slabs, ceilings or zones do.
+    if (!levelId || !rooms) return null
+    const nodes = useScene.getState().nodes
+    const dimensions = mergeSelectionDimensions(
+      measured.map((node) => ({
+        ownerId: node.id,
+        dimensions: selectionDimensionsOf(node)?.({ node, nodes, faces }) ?? [],
+      })),
+    )
+    return dimensions.length ? { levelId, dimensions } : null
+  }, [faces, levelId, measured, rooms])
+}
+
+/**
+ * The selected walls' temporary dimensions on the plan, drawn as the push
+ * drag draws its room widths (indigo line, end dots). Each is a `dimension`
+ * owned by the wall it runs from, so a click on its value opens the plan's
+ * type-a-value box (`FloorplanDimensionEditOverlay`) and the typed size slides
+ * that wall.
+ */
+export function SelectedWallDimensions2D({ levelId }: { levelId: string | null }) {
+  const selection = useSelectedWallDimensions()
+  const context = useFloorplanRender()
+  const unit = useViewer((s) => s.unit)
+  const metricNotation = useViewer((s) => s.metricNotation)
+  const owners = useMemo(() => {
+    const byOwner = new Map<string, FloorplanGeometry[]>()
+    for (const { from, to, distance, ownerId } of selection?.dimensions ?? []) {
+      const length = Math.hypot(to[0] - from[0], to[1] - from[1]) || 1
+      const geometry: FloorplanGeometry = {
+        kind: 'dimension',
+        start: from,
+        end: to,
+        offsetNormal: [-(to[1] - from[1]) / length, (to[0] - from[0]) / length],
+        offsetDistance: 0,
+        extensionOvershoot: 0,
+        extensionStartGap: 0,
+        terminator: 'dot',
+        text: formatLinearMeasurement(distance, unit, metricNotation),
+        stroke: MEASUREMENT_FLOORPLAN_COLOR,
+      }
+      const list = byOwner.get(ownerId)
+      if (list) list.push(geometry)
+      else byOwner.set(ownerId, [geometry])
+    }
+    return [...byOwner].map(([ownerId, children]) => ({
+      ownerId,
+      geometry: { kind: 'group', children } satisfies FloorplanGeometry,
+    }))
+  }, [metricNotation, selection, unit])
+  if (!selection || selection.levelId !== levelId) return null
+  return (
+    <g
+      data-selected-wall-dimensions-2d=""
+      // A press on a value is the type-a-value box's, not the plan's marquee or pan.
+      onPointerDown={(event) => event.stopPropagation()}
+    >
+      {owners.map(({ ownerId, geometry }) => (
+        <g data-node-id={ownerId} key={ownerId}>
+          <FloorplanGeometryRenderer
+            geometry={geometry}
+            pointerEventsOverride="none"
+            sceneRotationDeg={context?.sceneRotationDeg ?? 0}
+            screenUnitsPerPixel={context?.unitsPerPixel}
+          />
+        </g>
+      ))}
     </g>
   )
 }

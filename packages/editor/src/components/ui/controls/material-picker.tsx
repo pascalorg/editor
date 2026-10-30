@@ -1,8 +1,9 @@
 'use client'
 
-import { type MaterialTarget, toLibraryMaterialRef } from '@pascal-app/core'
+import { getMaterialSwatch, type MaterialTarget, toLibraryMaterialRef } from '@pascal-app/core'
 import { Plus } from 'lucide-react'
-import { useMaterialCatalogModel, type MaterialSourceFilter } from '../../../lib/material-catalog-model'
+import { useMaterialCatalogModel } from '../../../lib/material-catalog-model'
+import { materialSwatchStyle } from '../../../lib/material-swatch-style'
 import { triggerSFX } from '../../../lib/sfx-bus'
 
 export type { MaterialSourceFilter } from '../../../lib/material-catalog-model'
@@ -35,7 +36,21 @@ export function MaterialPicker({
   onCreateMaterialRequest,
   selectOnCategoryChange = true,
 }: MaterialPickerProps) {
-  const { selectedCategory, setSelectedCategory, sourceFilter, setSourceFilter, visibleSourceFilters, availableCategories, catalogItems, select: handleCatalogSelect } = useMaterialCatalogModel(selectedMaterialPreset, onSelectMaterialPreset, disabled, selectOnCategoryChange)
+  const {
+    selectedCategory,
+    setSelectedCategory,
+    sourceFilter,
+    setSourceFilter,
+    visibleSourceFilters,
+    availableCategories,
+    catalogItems,
+    select: handleCatalogSelect,
+  } = useMaterialCatalogModel(
+    selectedMaterialPreset,
+    onSelectMaterialPreset,
+    disabled,
+    selectOnCategoryChange,
+  )
 
   return (
     <div
@@ -121,20 +136,12 @@ export function MaterialPicker({
               onMouseEnter={() => triggerSFX('sfx:menu-hover')}
               type="button"
             >
-              <div className="relative aspect-square w-full overflow-hidden rounded-lg">
-                {item.previewThumbnailUrl ? (
-                  <img
-                    alt={item.label}
-                    className="h-full w-full object-cover"
-                    src={item.previewThumbnailUrl}
-                  />
-                ) : (
-                  <div
-                    className="h-full w-full"
-                    style={{ backgroundColor: item.previewColor ?? '#f3f4f6' }}
-                  />
-                )}
-              </div>
+              <div
+                aria-label={item.label}
+                className="relative aspect-square w-full overflow-hidden rounded-lg"
+                role="img"
+                style={materialSwatchStyle(getMaterialSwatch(item))}
+              />
               <span className="truncate px-0.5 text-left font-medium text-[11px] text-muted-foreground group-hover:text-foreground">
                 {item.label}
               </span>

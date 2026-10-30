@@ -11,6 +11,7 @@ import {
   readFloorplanGeometryMetadata,
   withFloorplanGeometryMetadata,
 } from '@pascal-app/editor'
+import { buildOpeningCasingPlan } from '../shared/opening-casing'
 import {
   buildOpeningMarkAnnotation,
   type OpeningFloorplanLevelData,
@@ -42,6 +43,8 @@ import { resolveOpeningPlanPlane } from '../shared/opening-plane-offset'
  * with no swing arc.
  *   4. Center line through the cutout (matches the legacy's
  *      `getOpeningCenterLine` segment for visual continuity).
+ *   5. Casing legs standing proud of each cased wall face beside the
+ *      cutout (`buildOpeningCasingPlan`).
  *
  * Requires `ctx.parent` to be a wall (door.parentId is the wall it's
  * mounted on). Returns null when the parent isn't a wall (orphaned
@@ -159,6 +162,15 @@ export function buildDoorFloorplan(node: DoorNode, ctx: GeometryContext): Floorp
       strokeLinejoin: 'round',
     },
   ]
+
+  // Casing legs on the wall faces beside the cutout, as the 3D door has them.
+  const casing = buildOpeningCasingPlan(node, wall, {
+    fill: fillColor,
+    stroke: accentMuted,
+    strokeWidth: showSelectedChrome ? 1.4 : 1,
+    vectorEffect: 'non-scaling-stroke',
+  })
+  if (casing) children.push(casing)
 
   if (node.openingShape !== 'rectangle') {
     const overheadRise =
@@ -305,8 +317,9 @@ export function buildDoorFloorplan(node: DoorNode, ctx: GeometryContext): Floorp
   // fall through to just the opening footprint (the earlier behaviour).
   const isSwingDoor = node.doorType === 'hinged' || isDoubleLeaf
   // A frameless wall opening — drawn as a bare gap, no leaf / arc / panel
-  // (mirrors the 3D system, which renders only the cutout for openings).
-  const isOpening = node.openingKind === 'opening'
+  // (mirrors the 3D system, which renders only the cutout for openings). A
+  // door on a railing is always one: a gap in the guard.
+  const isOpening = node.openingKind === 'opening' || wall.wallType === 'railing'
 
   if (isOpening) {
     // Open doorway — a frameless gap in the wall. No leaf, arc, or panel;

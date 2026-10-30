@@ -59,6 +59,7 @@ import {
   getDormerWindowWorldYaw,
   resolveDormerWindowTarget,
 } from '../shared/dormer-wall-opening-placement'
+import { movedOpeningCasingFaces } from '../shared/opening-casing-move'
 import {
   clearOpeningGuides3D,
   publishOpeningGuidesForWallEvent,
@@ -209,6 +210,9 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
 
     // Same-wall moves keep the wall-local plane offset; another host resets it.
     const planeOffsetOn = (wallId: string) => openingPlaneOffsetOnWall(movingWindowNode, wallId)
+    // Another host may name its faces the other way round: the casing keeps to its side of it.
+    const casingOn = (hostId: string, rotation: WindowNode['rotation']) =>
+      movedOpeningCasingFaces(movingWindowNode, hostId, rotation, useScene.getState().nodes)
 
     let currentHostId: string | null = movingWindowNode.parentId
     let committed = false
@@ -721,6 +725,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
           side: target.side,
           wallId: target.wallId,
           parentId: target.wallId,
+          ...casingOn(target.wallId, [0, target.itemRotation, 0]),
           roofSegmentId: undefined,
           roofFace: undefined,
           // Hidden during free-follow; the committed window must be visible.
@@ -758,6 +763,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
             side: target.side,
             parentId: target.wallId,
             wallId: target.wallId,
+            ...casingOn(target.wallId, [0, target.itemRotation, 0]),
             roofSegmentId: undefined,
             visible: true,
           })
@@ -1198,6 +1204,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
           roofSegmentId: segmentId,
           roofFace: target.face.id,
           parentId: segmentId,
+          ...casingOn(segmentId, [0, 0, 0]),
           visible: true,
         })
         history.commitStep(() => {
@@ -1232,6 +1239,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
             wallId: undefined,
             roofSegmentId: segmentId,
             roofFace: target.face.id,
+            ...casingOn(segmentId, [0, 0, 0]),
             visible: true,
           })
           settleMovedWindow(movingWindowNode.id, null)

@@ -2,7 +2,7 @@
 
 import { useViewer } from '@pascal-app/viewer'
 import { memo } from 'react'
-import useAlignmentGuides from '../../store/use-alignment-guides'
+import useAlignmentGuides, { type DraftGuideLine } from '../../store/use-alignment-guides'
 import { formatMeasurement } from '../editor/measurement-pill'
 import { useFloorplanRender } from './floorplan-render-context'
 
@@ -24,16 +24,29 @@ import { useFloorplanRender } from './floorplan-render-context'
  *
  * Stroke widths and handle radii are scaled by `unitsPerPixel` so they
  * stay a constant size on screen no matter the zoom.
+ *
+ * A wall pulled from a wall end (and the run it continues) publishes its
+ * projection guides beside them (`useAlignmentGuides.draft`): dashed lines —
+ * the extension of the wall it comes from in amber, lines through other walls'
+ * ends in indigo, lines through the run's start in emerald — and a ringed ✕
+ * where two of them cross, matching the 3D layer.
  */
-export const FloorplanAlignmentGuideLayer = memo(function FloorplanAlignmentGuideLayer() {
+export const FloorplanAlignmentGuideLayer = memo(function FloorplanAlignmentGuideLayer({
+  unitsPerPixel,
+}: {
+  /** The plan's live scale, which keeps a wall draft's guides screen-sized. */
+  unitsPerPixel?: number
+}) {
   const guides = useAlignmentGuides((s) => s.guides)
+  const draft = useAlignmentGuides((s) => s.draft)
   const unit = useViewer((s) => s.unit)
   const metricNotation = useViewer((s) => s.metricNotation)
   const ctx = useFloorplanRender()
 
-  if (guides.length === 0) return null
+  if (guides.length === 0 && !draft) return null
 
   const upp = ctx?.unitsPerPixel ?? 0.01
+  const draftUpp = unitsPerPixel ?? upp
   const sceneRot = ctx?.sceneRotationDeg ?? 0
 
   // Pixel-budgeted sizes converted to world meters so visuals stay
@@ -50,6 +63,47 @@ export const FloorplanAlignmentGuideLayer = memo(function FloorplanAlignmentGuid
 
   return (
     <g pointerEvents="none">
+      {draft?.lines.map((line, i) => (
+        <line
+          key={`draft-${i}`}
+          stroke={DRAFT_GUIDE_COLORS[line.kind]}
+          strokeDasharray={`${6 * draftUpp} ${4 * draftUpp}`}
+          strokeLinecap="round"
+          strokeWidth={1.5 * draftUpp}
+          x1={line.from[0]}
+          x2={line.to[0]}
+          y1={line.from[1]}
+          y2={line.to[1]}
+        />
+      ))}
+      {draft?.intersections.map((point, i) => (
+        <g
+          key={`draft-x-${i}`}
+          stroke={DRAFT_GUIDE_COLORS.alignment}
+          strokeLinecap="round"
+          strokeWidth={1.5 * draftUpp}
+        >
+          <circle
+            cx={point[0]}
+            cy={point[1]}
+            fill="#ffffff"
+            fillOpacity={0.85}
+            r={5.5 * draftUpp}
+          />
+          <line
+            x1={point[0] - 3 * draftUpp}
+            x2={point[0] + 3 * draftUpp}
+            y1={point[1] - 3 * draftUpp}
+            y2={point[1] + 3 * draftUpp}
+          />
+          <line
+            x1={point[0] - 3 * draftUpp}
+            x2={point[0] + 3 * draftUpp}
+            y1={point[1] + 3 * draftUpp}
+            y2={point[1] - 3 * draftUpp}
+          />
+        </g>
+      ))}
       {guides.map((guide, i) => {
         const { from, to, axis } = guide
         const midX = (from.x + to.x) / 2
@@ -106,6 +160,12 @@ export const FloorplanAlignmentGuideLayer = memo(function FloorplanAlignmentGuid
     </g>
   )
 })
+
+const DRAFT_GUIDE_COLORS: Record<DraftGuideLine['kind'], string> = {
+  extension: '#f59e0b', // amber-500
+  alignment: '#6366f1', // indigo-500 — the snap marker's colour
+  'run-start': '#10b981', // emerald-500 — the pull grip's colour
+}
 
 function XCap({
   color,

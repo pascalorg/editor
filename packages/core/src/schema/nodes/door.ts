@@ -3,7 +3,12 @@ import { z } from 'zod'
 import { BaseNode, nodeType, objectId } from '../base'
 import { GeometryScriptSource } from '../geometry-source'
 import { MaterialSchema } from '../material'
-import { DEFAULT_DOOR_CONTENT_PADDING, DoorType, defaultDoorSegments } from './opening-types'
+import {
+  DEFAULT_DOOR_CONTENT_PADDING,
+  DEFAULT_OPENING_CASING_WIDTH,
+  DoorType,
+  defaultDoorSegments,
+} from './opening-types'
 
 export { DoorType } from './opening-types'
 
@@ -130,10 +135,19 @@ export const DoorNode = BaseNode.extend({
     .number()
     .optional()
     .describe(
-      "Frame depth through the wall; left out, the frame follows its wall: the wall's thickness plus a 1 cm lip on each face.",
+      "Frame depth through the wall; left out, the frame is exactly the host wall's thickness.",
     ),
   threshold: z.boolean().default(true),
   thresholdHeight: z.number().default(0.02),
+
+  // Casing: flat boards on the finished faces of the host wall around the
+  // opening (head and both legs, none at the floor), never inside it, so the
+  // wall cutout stays width × height. The faces are the host's `a` / `b`
+  // (WallFace), not the door's front and back, so flipping the swing leaves
+  // the casing where it is. Absent casing fields keep saved openings uncased.
+  casingFaceA: z.boolean().default(false),
+  casingFaceB: z.boolean().default(false),
+  casingWidth: z.number().positive().default(DEFAULT_OPENING_CASING_WIDTH),
 
   // Swing
   hingesSide: z.enum(['left', 'right']).default('left'),
@@ -163,11 +177,15 @@ export const DoorNode = BaseNode.extend({
   panicBarHeight: z.number().default(1.0),
 }).describe(dedent`Door node - a parametric door placed on a wall
   - position: center of the door in wall-local coordinate system (Y = height/2, always at floor)
+  - width/height: overall outer dimensions, which are also the wall cutout
   - doorCategory/doorType: explicit operation family, defaulting old doors to interior hinged
   - openingKind/openingShape: hinged door or frameless wall opening shape
   - segments: rows stacked top to bottom, each defining its own columnRatios
   - type 'empty' = no leaf fill for that segment, 'panel' = raised/recessed panel, 'glass' = glazed
   - hingesSide/swingDirection/swingAngle: which way the door opens and how far it is currently open
+  - frameThickness: width of the frame members (new doors use 0.020 m; absent in saved doors keeps 0.05 m)
+  - casingFaceA/casingFaceB: casing (head and legs) on the host wall's face a / b, around the cutout (absent means off; new openings enable both)
+  - casingWidth: face width of the casing boards (2 in by default)
   - doorCloser/panicBar: commercial and emergency hardware options
 `)
 

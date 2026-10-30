@@ -314,10 +314,13 @@ function FieldRenderer({ field, nodeId, onUpdate }: FieldRendererProps) {
   // visibleIf may consult other fields on the node — subscribe to its boolean
   // result so we re-evaluate when relevant.
   const visible = useScene((s) => {
-    const visibleIf = (field as { visibleIf?: (n: AnyNode) => boolean }).visibleIf
-    if (!visibleIf) return true
+    const { visibleIf, appliesTo } = field as {
+      visibleIf?: (n: AnyNode) => boolean
+      appliesTo?: (n: AnyNode) => boolean
+    }
+    if (!(visibleIf || appliesTo)) return true
     const n = s.nodes[nodeId]
-    return n ? visibleIf(n as AnyNode) : false
+    return n ? (visibleIf?.(n as AnyNode) ?? true) && (appliesTo?.(n as AnyNode) ?? true) : false
   })
   if (!visible) return null
 

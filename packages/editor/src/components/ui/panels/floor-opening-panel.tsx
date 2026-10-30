@@ -100,11 +100,17 @@ export function FloorOpeningPanel({ openingId }: { openingId: string }) {
       <div className="flex flex-col gap-3 px-4 pt-3 pb-4 text-sm" data-floor-opening-panel={opening.id}>
         <p className="text-muted-foreground text-xs">
           {owned
-            ? i18n._({
-                id: 'editor.panels.floorOpeningPanel.areaOwned',
-                message: '{area} · Shape follows its owner.',
-                values: { area: formatAreaLabel(area([{ outer: opening.polygon, holes: [] }]), unit, 2) },
-              })
+            ? opening.source === 'stair'
+              ? i18n._({
+                  id: 'editor.panels.floorOpeningPanel.areaStairResize',
+                  message: '{area} · Drag its sides or corners to resize it; it moves with the stair.',
+                  values: { area: formatAreaLabel(area([{ outer: opening.polygon, holes: [] }]), unit, 2) },
+                })
+              : i18n._({
+                  id: 'editor.panels.floorOpeningPanel.areaOwned',
+                  message: '{area} · Shape follows its owner.',
+                  values: { area: formatAreaLabel(area([{ outer: opening.polygon, holes: [] }]), unit, 2) },
+                })
             : i18n._({
                 id: 'editor.panels.floorOpeningPanel.areaDragCorners',
                 message: '{area} · Drag its corners to change the shape.',

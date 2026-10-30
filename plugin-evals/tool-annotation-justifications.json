@@ -1034,6 +1034,19 @@
       }
     },
     {
+      "name": "set_wall_type",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "It writes wall assemblies and thicknesses in the connected Pascal scene.",
+        "destructiveHint": "It replaces existing assembly intent; undo restores it.",
+        "openWorldHint": "It operates on the connected Pascal scene without accessing the public internet."
+      }
+    },
+    {
       "name": "set_zone",
       "annotations": {
         "readOnlyHint": false,

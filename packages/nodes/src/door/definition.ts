@@ -7,6 +7,7 @@ import type {
   WallNode,
 } from '@pascal-app/core'
 import { doorSlots } from '@pascal-app/core'
+import { NEW_DOOR_FRAME_THICKNESS } from '@pascal-app/core/building'
 import type { FloorplanNodeExtension } from '@pascal-app/editor'
 import { curtainOpeningResizeMax } from '../shared/curtain-opening-limits'
 import { doorBatchable } from '../shared/node-batch/batchable'
@@ -223,6 +224,8 @@ export const doorDefinition: NodeDefinition<typeof DoorNode> = {
     'pascal:editor/floorplan': {
       contextualDimensions: buildDoorContextualDimensions,
       schedule: buildDoorFloorplanSchedule,
+      // Swap hinge / swing side from the action bar, in 2D and 3D.
+      actionMenu: { actions: () => import('./actions') },
     } satisfies FloorplanNodeExtension<DoorNodeType>,
   },
   surfaceRole: 'joinery',
@@ -231,7 +234,13 @@ export const doorDefinition: NodeDefinition<typeof DoorNode> = {
   // full default shape — door has 40+ fields, listing them inline would
   // duplicate the schema. Parse a minimal stub, drop id/type, return rest.
   defaults: () => {
-    const stub = DoorNode.parse({ id: 'door_default' as never, type: 'door' })
+    const stub = DoorNode.parse({
+      id: 'door_default' as never,
+      type: 'door',
+      frameThickness: NEW_DOOR_FRAME_THICKNESS,
+      casingFaceA: true,
+      casingFaceB: true,
+    })
     const { id: _id, type: _type, ...rest } = stub
     return rest
   },

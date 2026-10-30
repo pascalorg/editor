@@ -1,7 +1,16 @@
-import { describe, expect, test } from 'bun:test'
-import type { HandleDescriptor, RoofNode } from '@pascal-app/core'
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import {
+  type AnyNode,
+  type AnyNodeId,
+  getEffectiveRoofSurfaceMaterial,
+  type HandleDescriptor,
+  type RoofNode,
+  type RoofSegmentNode,
+  RoofSegmentNode as RoofSegmentSchema,
+  useScene,
+} from '@pascal-app/core'
+import { useEditor } from '@pascal-app/editor'
 import { roofDefinition } from './definition'
-import useRoofPlacementMode from './roof-placement-mode'
 
 function roof(overrides: Partial<RoofNode> = {}): RoofNode {
   return {
@@ -73,14 +82,23 @@ describe('roof tool registration', () => {
     const placementHint = roofDefinition.toolHints?.find((hint) => hint.key === 'P')
     const rotationHint = roofDefinition.toolHints?.find((hint) => hint.key === 'R')
 
-    useRoofPlacementMode.setState({ conical: false, mode: 'auto' })
-    expect(placementHint?.visible?.value()).toBe(false)
-    expect(rotationHint?.visible?.value()).toBe(true)
+    const previousDefaults = useEditor.getState().toolDefaults
+    let changes = 0
+    const unsubscribe = placementHint?.visible?.subscribe(() => changes++)
+    try {
+      useEditor.getState().setToolDefaults('roof', { roofType: 'gable' })
+      expect(placementHint?.visible?.value()).toBe(false)
+      expect(rotationHint?.visible?.value()).toBe(true)
 
-    useRoofPlacementMode.setState({ conical: true })
-    expect(placementHint?.visible?.value()).toBe(true)
-    expect(rotationHint?.visible?.value()).toBe(false)
-    useRoofPlacementMode.setState({ conical: false, mode: 'auto' })
+      // Armed with a cone and no tool mounted yet, as in a 2D-only session.
+      useEditor.getState().setToolDefaults('roof', { roofType: 'conical' })
+      expect(placementHint?.visible?.value()).toBe(true)
+      expect(rotationHint?.visible?.value()).toBe(false)
+      expect(changes).toBe(1)
+    } finally {
+      unsubscribe?.()
+      useEditor.setState({ toolDefaults: previousDefaults })
+    }
   })
 })
 
@@ -91,5 +109,84 @@ describe('roof assembly host', () => {
     expect(host).toMatchObject({ reference: 'covering', measure: 'normal' })
     expect(host?.backing).toBeUndefined()
     expect(host?.body(roof())).toBeNull()
+  })
+})
+
+describe('roof paint: gables on the merged shell', () => {
+  const paint = roofDefinition.capabilities!.paint!
+  const red = { preset: 'custom', properties: { color: '#aa2222' } } as const
+  let previousRaf: typeof requestAnimationFrame
+  let previousCancelRaf: typeof cancelAnimationFrame
+
+  beforeEach(() => {
+    previousRaf = globalThis.requestAnimationFrame
+    previousCancelRaf = globalThis.cancelAnimationFrame
+    globalThis.requestAnimationFrame = () => 0
+    globalThis.cancelAnimationFrame = () => {}
+  })
+
+  afterEach(() => {
+    useScene.getState().unloadScene()
+    useScene.temporal.getState().clear()
+    globalThis.requestAnimationFrame = previousRaf
+    globalThis.cancelAnimationFrame = previousCancelRaf
+  })
+
+  function seed() {
+    const left = RoofSegmentSchema.parse({
+      id: 'rseg_left',
+      type: 'roof-segment',
+      parentId: 'roof_test',
+      roofType: 'gable',
+      gableLeftMaterialPreset: 'library:brick',
+    })
+    const right = RoofSegmentSchema.parse({
+      id: 'rseg_right',
+      type: 'roof-segment',
+      parentId: 'roof_test',
+      roofType: 'gable',
+    })
+    const node = roof({ children: [left.id, right.id] as RoofNode['children'] })
+    useScene.setState({
+      nodes: Object.fromEntries(
+        [node, left, right].map((entry) => [entry.id, entry as AnyNode]),
+      ) as Record<AnyNodeId, AnyNode>,
+      rootNodeIds: [node.id as AnyNodeId],
+      readOnly: false,
+    } as never)
+    return node
+  }
+  const segmentOf = (id: string) => useScene.getState().nodes[id as AnyNodeId] as RoofSegmentNode
+
+  test('a gable offers itself or every gable of the roof', () => {
+    const scopes = paint.scopes?.(roof(), 'gable-right:rseg_right')
+    expect(scopes?.scopes).toEqual(['single', 'matching'])
+    expect(scopes?.labels).toEqual({ matching: 'All gables' })
+    expect(paint.roleLabel?.(roof(), 'gable-right:rseg_right')).toBe('Right gable')
+    expect(paint.roleLabel?.(roof(), 'heel')).toBe('Heel band')
+    // the roof's own surfaces keep the derived single scope
+    expect(paint.scopes?.(roof(), 'edge')).toBeNull()
+  })
+
+  test('one gable paints only its segment', () => {
+    const node = seed()
+    const role = paint.scopes?.(node, 'gable-right:rseg_right')?.roleFor?.('single')
+    paint.commit?.({ node, role: role!, material: red, materialPreset: undefined })
+    expect(segmentOf('rseg_right').gableRightMaterial).toMatchObject(red)
+    expect(segmentOf('rseg_left').gableLeftMaterialPreset).toBe('library:brick')
+    const after = useScene.getState().nodes[node.id as AnyNodeId] as RoofNode
+    expect(getEffectiveRoofSurfaceMaterial(after, 'edge')).toEqual(
+      getEffectiveRoofSurfaceMaterial(node, 'edge'),
+    )
+  })
+
+  test('every gable paints the roof edge and clears each segment gable', () => {
+    const node = seed()
+    const role = paint.scopes?.(node, 'gable-right:rseg_right')?.roleFor?.('matching')
+    paint.commit?.({ node, role: role!, material: red, materialPreset: undefined })
+    const after = useScene.getState().nodes[node.id as AnyNodeId] as RoofNode
+    expect(getEffectiveRoofSurfaceMaterial(after, 'edge').material).toMatchObject(red)
+    expect(segmentOf('rseg_left').gableLeftMaterialPreset).toBeUndefined()
+    expect(segmentOf('rseg_right').gableRightMaterial).toBeUndefined()
   })
 })

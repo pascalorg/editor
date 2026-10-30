@@ -5,9 +5,14 @@ import { ChevronRight } from 'lucide-react'
 import { type ComponentPropsWithoutRef, type ReactNode, useEffect, useState } from 'react'
 import { cn } from '../../../lib/utils'
 import {
+  selectWallKind,
+  useWallKind,
   WALL_DRAW_VARIANTS,
+  WALL_KINDS,
   type WallDrawVariant,
+  type WallKind,
 } from '../../../lib/wall-draw-variant'
+import { SegmentedControl } from '../controls/segmented-control'
 
 /**
  * The Build panel's grouped layout (Rooms / Add to rooms / Outdoor / Advanced),
@@ -214,7 +219,9 @@ export function BuildPanelCaption({ caption, lead }: { caption: string; lead?: s
 
 /**
  * The Rooms group: one large tile per wall drawing variant, and the armed
- * variant's caption. `activeVariant` is null while the wall tool is not armed.
+ * variant's caption. While Walls is armed the caption gives way to its kinds
+ * (Standard, Invisible, Railing) and a line on the one picked.
+ * `activeVariant` is null while the wall tool is not armed.
  */
 export function BuildPanelRoomsSection({
   activeVariant,
@@ -259,17 +266,21 @@ export function BuildPanelRoomsSection({
           )
         })}
       </BuildToolGrid>
-      <BuildPanelCaption
-        caption={
-          activeMessages?.caption ??
-          i18n._({
-            id: 'editor.buildPanel.rooms.idle',
-            message:
-              'Pick a shape to start. Every room brings its own walls, floor and ceiling.',
-          })
-        }
-        lead={activeMessages?.lead}
-      />
+      {activeVariant === 'walls' ? (
+        <BuildPanelWallKinds />
+      ) : (
+        <BuildPanelCaption
+          caption={
+            activeMessages?.caption ??
+            i18n._({
+              id: 'editor.buildPanel.rooms.idle',
+              message:
+                'Pick a shape to start. Every room brings its own walls, floor and ceiling.',
+            })
+          }
+          lead={activeMessages?.lead}
+        />
+      )}
     </BuildPanelSection>
   )
 }
@@ -297,18 +308,12 @@ function roomVariantMessages(variant: WallDrawVariant, i18n: PascalI18n) {
     }
   }
   if (variant === 'walls') {
+    // Armed, Walls shows its kinds in place of a caption (`BuildPanelWallKinds`).
     return {
       label: i18n._({ id: 'editor.buildPanel.rooms.walls.label', message: 'Walls' }),
       title: i18n._({ id: 'editor.buildPanel.rooms.walls.title', message: 'Walls' }),
-      lead: i18n._({
-        id: 'editor.buildPanel.rooms.walls.lead',
-        message: 'Draw one wall at a time.',
-      }),
-      caption: i18n._({
-        id: 'editor.buildPanel.rooms.walls.caption',
-        message: '{lead} Close a loop and it becomes a room; leave it open for partitions.',
-        values: { lead: CAPTION_LEAD_MARKER },
-      }),
+      lead: undefined,
+      caption: undefined,
     }
   }
   return {
@@ -327,4 +332,49 @@ function roomVariantMessages(variant: WallDrawVariant, i18n: PascalI18n) {
       values: { lead: CAPTION_LEAD_MARKER },
     }),
   }
+}
+
+function wallKindHelp(kind: WallKind, i18n: PascalI18n): string {
+  if (kind === 'invisible') {
+    return i18n._({
+      id: 'editor.buildPanel.rooms.wallKinds.invisibleHelp',
+      message:
+        'Divides a room or closes off a porch without building a wall; rooms close on it. Change any wall later from its controls.',
+    })
+  }
+  if (kind === 'railing') {
+    return i18n._({
+      id: 'editor.buildPanel.rooms.wallKinds.railingHelp',
+      message:
+        'A guard for stairs, balconies and mezzanines; rooms close on it. Change any wall later from its controls.',
+    })
+  }
+  return i18n._({
+    id: 'editor.buildPanel.rooms.wallKinds.standardHelp',
+    message:
+      'One wall per two clicks. Its sides become exterior or interior from the rooms it bounds. Change any wall later from its controls.',
+  })
+}
+
+/** What the armed Walls variant draws: a plain wall, an invisible wall or a railing. */
+function BuildPanelWallKinds() {
+  const i18n = usePascalI18n()
+  const kind = useWallKind()
+  return (
+    <div
+      aria-label={i18n._({ id: 'editor.buildPanel.rooms.wallKinds.label', message: 'Wall kind' })}
+      className="mt-2 flex flex-col gap-2 rounded-xl border border-border/50 bg-black/4 p-2 dark:bg-muted/40"
+      data-build-group="wall-kinds"
+      role="group"
+    >
+      <SegmentedControl
+        onChange={selectWallKind}
+        options={WALL_KINDS.map((entry) => ({ value: entry.id, label: i18n._(entry.label) }))}
+        value={kind}
+      />
+      <p className="px-0.5 text-[11px] text-muted-foreground leading-relaxed">
+        {wallKindHelp(kind, i18n)}
+      </p>
+    </div>
+  )
 }

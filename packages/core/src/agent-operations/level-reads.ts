@@ -1,4 +1,7 @@
+import { deckBoardSettings } from '../lib/deck-boards'
 import { area } from '../lib/polygon-boolean'
+import { porchFramingSettings } from '../lib/porch-framing'
+import { porchPartOf } from '../lib/porch-framing-sync'
 import { roomFloorChoices } from '../lib/room-floor-choices'
 import type {
   AnyNode,
@@ -17,6 +20,7 @@ import { resolveWallEffectiveHeight } from '../systems/wall/wall-top'
 import { type LevelTargetInput, targetLevel } from './level-target'
 import { contentCounts, levelIdOf, levelRole, nodesOnLevel, queryNodes } from './scene-queries'
 import type { AgentOperation, SceneNodes } from './types'
+import { wallTypeChoices } from './wall-type'
 
 const round2 = (value: number) => Math.round(value * 100) / 100
 
@@ -48,6 +52,9 @@ export function wallResolvedHeight(nodes: SceneNodes, wall: WallNode): number {
 }
 
 export function wallSummary(nodes: SceneNodes, wall: WallNode) {
+  const type = wall.assembly?.presetId
+    ? wallTypeChoices(nodes).find((entry) => entry.id === wall.assembly?.presetId)
+    : undefined
   return {
     id: wall.id,
     name: wall.name,
@@ -58,6 +65,8 @@ export function wallSummary(nodes: SceneNodes, wall: WallNode) {
     resolvedHeight: wallResolvedHeight(nodes, wall),
     heightIsExplicit: wall.height !== undefined,
     thickness: wall.thickness,
+    wallType: wall.wallType ?? 'standard',
+    type: type ? { id: type.id, label: type.label } : null,
     wallFaceChains: {
       a: resolveWallFaceChain(wall, 'a'),
       b: resolveWallFaceChain(wall, 'b'),
@@ -91,12 +100,29 @@ const unitOf = (nodes: SceneNodes, zoneId: ZoneNode['id']) => {
   return { unitId: unit?.id ?? null, unit: unit?.name ?? null }
 }
 
+function zoneFraming(nodes: SceneNodes, zone: ZoneNode) {
+  const parts = queryNodes(nodes, { type: ['column', 'beam'], parentId: zone.parentId }).filter(
+    (node) => porchPartOf(node)?.porchOf === zone.id,
+  )
+  if (!zone.roomType && !zone.porchFraming && parts.length === 0) return null
+  return {
+    ...porchFramingSettings(zone),
+    auto: zone.porchFraming?.auto ?? (zone.roomType === 'porch' && zone.hasCeiling !== false),
+    postCount: parts.filter((node) => node.type === 'column').length,
+    beamCount: parts.filter((node) => node.type === 'beam').length,
+  }
+}
+
 const zoneSummary = (nodes: SceneNodes, zone: ZoneNode) => ({
   id: zone.id,
   name: zone.name,
   color: zone.color,
   polygon: zone.polygon,
   holes: zone.holes ?? [],
+  roomType: zone.roomType ?? 'room',
+  floor: { drop: zone.floor?.drop ?? 0 },
+  porchFraming: zoneFraming(nodes, zone),
+  ...(zone.roomType === 'deck' || zone.decking ? { decking: deckBoardSettings(zone) } : {}),
   wallMaterial: zone.wallMaterial ?? null,
   wallOverrides: zone.wallOverrides ?? [],
   ...unitOf(nodes, zone.id),
@@ -196,7 +222,13 @@ export const getLevelSummary: AgentOperation<LevelTargetInput> = (nodes, input, 
 export const getWalls: AgentOperation<LevelTargetInput> = (nodes, input, context) => {
   const level = targetLevel(nodes, input, context)
   const walls = ofType(nodesOnLevel(nodes, level.id), 'wall')
-  return { result: { levelId: level.id, walls: walls.map((wall) => wallSummary(nodes, wall)) } }
+  return {
+    result: {
+      levelId: level.id,
+      walls: walls.map((wall) => wallSummary(nodes, wall)),
+      wallTypes: wallTypeChoices(nodes).map(({ id, label }) => ({ id, label })),
+    },
+  }
 }
 
 /** `get_zones`. */

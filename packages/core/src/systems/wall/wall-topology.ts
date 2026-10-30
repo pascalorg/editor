@@ -8,11 +8,13 @@ import {
   type DoorNode,
   getScaledDimensions,
   type ItemNode,
+  SeparatorNode,
   type WallNode,
   WallNode as WallSchema,
   type WindowNode,
 } from '../../schema'
 import { getWallArcData, getWallCurveFrameAt, getWallCurveLength, isCurvedWall } from './wall-curve'
+import { getWallFaceOffsets } from './wall-frame'
 import type { WallPlanPoint } from './wall-move'
 
 export const WALL_MIN_LENGTH = 0.01
@@ -185,6 +187,30 @@ function projectPointOntoWallCenterline(
   }
 }
 
+/**
+ * How near `end` of `host` a join on `host` counts as that end: the split
+ * epsilon, or as far as the bodies of the other walls meeting there reach, so a
+ * join inside a corner block takes the corner rather than splitting off a stub
+ * of `host` buried in it.
+ */
+function cornerBlockReach(
+  end: WallPlanPoint,
+  host: WallNode,
+  walls: WallNode[],
+  ignoreWallIds: ReadonlySet<string>,
+) {
+  let reach = WALL_SPLIT_ENDPOINT_EPSILON
+  for (const other of walls) {
+    if (other.id === host.id || ignoreWallIds.has(other.id)) continue
+    if (distanceSquared(other.start, end) > 1e-12 && distanceSquared(other.end, end) > 1e-12) {
+      continue
+    }
+    const { a, b } = getWallFaceOffsets(other)
+    reach = Math.max(reach, a, -b)
+  }
+  return reach
+}
+
 function nearestWallProjection(
   point: WallPlanPoint,
   walls: WallNode[],
@@ -199,11 +225,10 @@ function nearestWallProjection(
     if (!projection) continue
     const candidateDistance = distanceSquared(point, projection.point)
     if (candidateDistance > radius * radius || candidateDistance >= bestDistance) continue
-    const corner = ([wall.start, wall.end] as WallPlanPoint[]).find(
-      (candidate) =>
-        distanceSquared(projection.point, candidate) <=
-        WALL_SPLIT_ENDPOINT_EPSILON * WALL_SPLIT_ENDPOINT_EPSILON,
-    )
+    const corner = ([wall.start, wall.end] as WallPlanPoint[]).find((candidate) => {
+      const reach = cornerBlockReach(candidate, wall, walls, ignoreWallIds)
+      return distanceSquared(projection.point, candidate) <= reach * reach
+    })
     best = corner
       ? { wall: null, point: [corner[0], corner[1]], wallT: projection.wallT }
       : { wall, ...projection }
@@ -363,7 +388,10 @@ function segmentCurveOffset(wall: WallNode, startT: number, endT: number) {
   return arc.direction * arc.radius * (1 - Math.cos(angle / 2))
 }
 
-function attachmentSpan(node: AnyNode): { min: number; max: number; center: number } | null {
+/** Where a door, window or wall item sits along its wall: metres from the wall start. */
+export function wallAttachmentSpan(
+  node: AnyNode,
+): { min: number; max: number; center: number } | null {
   if (node.type === 'door') {
     const door = node as DoorNode
     return {
@@ -470,7 +498,7 @@ export function splitWall(
   const segmentChildren = segments.map(() => [] as AnyNodeId[])
   const updates: WallTopologyChanges['update'] = []
   for (const attachment of wallAttachments(wall, nodes)) {
-    const span = attachmentSpan(attachment)
+    const span = wallAttachmentSpan(attachment)
     if (!span) return null
     const segmentIndex = parameters.slice(0, -1).findIndex((startT, index) => {
       const endT = parameters[index + 1]!
@@ -505,6 +533,16 @@ export function planWallInsertion(
     joinRadius: number
     wallDefaults?: Partial<WallNode>
     mintId?: () => string
+    /**
+     * Draw along walls that already cover the span instead of refusing: the
+     * caller has the new wall take that stretch over (`finishWallEdit`).
+     */
+    replaceCovered?: boolean
+    /**
+     * Leave the walls the new one meets whole: an end on a wall's body joins
+     * it there as a T (rooms and miters read the junction off the body), and a
+     * wall it crosses stays one wall, the new one split either side of it.
+     */
   },
 ): WallInsertionResult {
   const walls = Object.values(nodes).filter(
@@ -514,7 +552,7 @@ export function planWallInsertion(
   const startProjection = nearestWallProjection(args.start, walls, args.joinRadius)
   const resolvedStart = startProjection?.point ?? args.start
   const resolvedEnd = endProjection?.point ?? args.end
-  if (wallSegmentsCoverSegment(resolvedStart, resolvedEnd, walls)) {
+  if (!args.replaceCovered && wallSegmentsCoverSegment(resolvedStart, resolvedEnd, walls)) {
     return { ok: false, reason: 'covered-existing-wall' }
   }
   const crossings = walls
@@ -632,6 +670,119 @@ export function planWallInsertion(
   return { ok: true, plan }
 }
 
+/**
+ * The stretches of `start` → `end` no line already closes rooms along: an invisible wall on it or
+ * a straight wall's reference line. Two lines on top of each other close no room; they leave a
+ * sliver between them.
+ */
+function uncoveredStretches(
+  start: WallPlanPoint,
+  end: WallPlanPoint,
+  lines: readonly { start: WallPlanPoint; end: WallPlanPoint }[],
+): [WallPlanPoint, WallPlanPoint][] {
+  const length = Math.hypot(end[0] - start[0], end[1] - start[1])
+  const dir = [(end[0] - start[0]) / length, (end[1] - start[1]) / length] as const
+  const along = (point: WallPlanPoint) =>
+    (point[0] - start[0]) * dir[0] + (point[1] - start[1]) * dir[1]
+  const at = (t: number): WallPlanPoint =>
+    t <= 0 ? start : t >= length ? end : [start[0] + dir[0] * t, start[1] + dir[1] * t]
+  const covered = lines
+    .flatMap((line) => {
+      if (
+        distanceToLine(line.start, start, end) > 1e-3 ||
+        distanceToLine(line.end, start, end) > 1e-3
+      )
+        return []
+      const a = along(line.start)
+      const b = along(line.end)
+      const lo = Math.max(0, Math.min(a, b))
+      const hi = Math.min(length, Math.max(a, b))
+      return hi - lo > 1e-6 ? [[lo, hi] as const] : []
+    })
+    .sort((a, b) => a[0] - b[0])
+  const stretches: [WallPlanPoint, WallPlanPoint][] = []
+  let reach = 0
+  for (const [lo, hi] of covered) {
+    if (lo > reach + 1e-6) stretches.push([at(reach), at(lo)])
+    reach = Math.max(reach, hi)
+  }
+  if (reach < length - 1e-6) stretches.push([at(reach), at(length)])
+  return stretches
+}
+
+/**
+ * An invisible wall drawn `start` → `end` (a room divider): a room separator, so
+ * rooms close on it as on a wall, but it is no wall and cuts none. An end landing on a wall joins
+ * it on its reference line, where the room graph meets it (a join inside a corner block takes the
+ * corner), and the line breaks either side of a wall it crosses so each piece tees into it. A
+ * stretch drawn over an invisible wall or along a wall's reference line adds nothing. Null when
+ * nothing is left to add, or it would be too short.
+ */
+export function planSeparatorInsertion(
+  nodes: Record<AnyNodeId, AnyNode>,
+  args: {
+    levelId: AnyNodeId
+    start: WallPlanPoint
+    end: WallPlanPoint
+    joinRadius: number
+    mintId?: () => string
+  },
+): {
+  changes: WallTopologyChanges
+  separators: SeparatorNode[]
+  resolvedStart: WallPlanPoint
+  resolvedEnd: WallPlanPoint
+} | null {
+  const walls = Object.values(nodes).filter(
+    (node): node is WallNode => node.type === 'wall' && node.parentId === args.levelId,
+  )
+  const resolvedStart =
+    nearestWallProjection(args.start, walls, args.joinRadius)?.point ?? args.start
+  const resolvedEnd = nearestWallProjection(args.end, walls, args.joinRadius)?.point ?? args.end
+  if (!isSegmentLongEnough(resolvedStart, resolvedEnd)) return null
+  const crossings = walls
+    .flatMap((wall) =>
+      isCurvedWall(wall)
+        ? curvedSegmentIntersections(resolvedStart, resolvedEnd, wall)
+        : [straightSegmentIntersection(resolvedStart, resolvedEnd, wall)].filter(
+            (crossing): crossing is WallSegmentIntersection => crossing !== null,
+          ),
+    )
+    .map((crossing) => joinCrossingAtNearbyWallEndpoint(crossing, walls))
+    .filter(
+      ({ draftT }) => draftT > WALL_INTERSECTION_EPSILON && draftT < 1 - WALL_INTERSECTION_EPSILON,
+    )
+    .sort((left, right) => left.draftT - right.draftT)
+  const vertices = [resolvedStart]
+  for (const { point } of crossings)
+    if (!vertices.some((vertex) => distanceSquared(vertex, point) <= 1e-12)) vertices.push(point)
+  vertices.push(resolvedEnd)
+  const lines = [
+    ...Object.values(nodes).filter(
+      (node): node is SeparatorNode => node.type === 'separator' && node.parentId === args.levelId,
+    ),
+    ...walls.filter((wall) => !isCurvedWall(wall)),
+  ]
+  const separators = vertices
+    .slice(0, -1)
+    .flatMap((start, index) => uncoveredStretches(start, vertices[index + 1]!, lines))
+    .filter(([from, to]) => isSegmentLongEnough(from, to))
+    .map(([start, end]) =>
+      SeparatorNode.parse({ id: args.mintId?.(), parentId: args.levelId, start, end }),
+    )
+  if (!separators.length) return null
+  return {
+    changes: {
+      create: separators.map((node) => ({ node, parentId: args.levelId })),
+      update: [],
+      delete: [],
+    },
+    separators,
+    resolvedStart,
+    resolvedEnd,
+  }
+}
+
 function distanceToLine(point: WallPlanPoint, a: WallPlanPoint, b: WallPlanPoint) {
   const length = Math.hypot(b[0] - a[0], b[1] - a[1])
   return Math.abs((point[0] - a[0]) * (b[1] - a[1]) - (point[1] - a[1]) * (b[0] - a[0])) / length
@@ -739,7 +890,7 @@ function planWallEndJoin(
     const dz = (after.end[1] - after.start[1]) / length
     const oldLength = wallLength(before)
     for (const attachment of wallAttachments(before, adjusted)) {
-      const span = attachmentSpan(attachment)
+      const span = wallAttachmentSpan(attachment)
       if (!span) return false
       const oldPoint = getWallCurveFrameAt(before, span.center / oldLength).point
       const projection = isCurvedWall(after)

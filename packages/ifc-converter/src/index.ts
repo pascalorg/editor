@@ -24,6 +24,7 @@ import {
   ZoneNode,
   zoneColorForSeed,
 } from '@pascal-app/core'
+import { NEW_DOOR_FRAME_THICKNESS } from '@pascal-app/core/building'
 import * as WebIFC from 'web-ifc'
 import { extractBeamGeometry } from './beam-geometry'
 import { type IfcConversionSimplificationOptions, simplifyConvertedSceneGraph } from './cleanup'
@@ -1859,6 +1860,7 @@ export async function convertIfcToPascalWithReport(
             object: 'node',
             id: nodeId,
             type: 'door',
+            frameThickness: NEW_DOOR_FRAME_THICKNESS,
             name: element.Name?.value || `Door`,
             parentId: wallNodeId,
             visible: true,
@@ -2049,6 +2051,7 @@ export async function convertIfcToPascalWithReport(
           object: 'node',
           id: nodeId,
           type: 'door',
+          frameThickness: NEW_DOOR_FRAME_THICKNESS,
           name: element.Name?.value || `Door`,
           parentId: parentNodeId,
           visible: true,

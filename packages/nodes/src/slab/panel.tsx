@@ -14,6 +14,8 @@ import {
   ActionButton,
   ActionGroup,
   FloorFoundationPanel,
+  formatAreaLabel,
+  getAreaUnitLabel,
   holeEditScope,
   PanelSection,
   PanelWrapper,
@@ -21,6 +23,7 @@ import {
   SegmentedControl,
   ShapeChoice,
   SliderControl,
+  squareMetersToAreaUnit,
   startOpeningDraft,
   triggerSFX,
   useEditingHole,
@@ -433,7 +436,9 @@ export function SlabPanel() {
       <PanelSection title={i18n._({ id: 'node.slab.panel.info', message: 'Info' })}>
         <div className="flex items-center justify-between px-2 py-1 text-muted-foreground text-sm">
           <span>{i18n._({ id: 'node.slab.panel.area', message: 'Area' })}</span>
-          <span className="font-mono text-foreground dark:text-white">{area.toFixed(2)} m²</span>
+          <span className="font-mono text-foreground dark:text-white">
+            {formatAreaLabel(area, unit, 2)}
+          </span>
         </div>
       </PanelSection>
 
@@ -486,9 +491,14 @@ export function SlabPanel() {
                       {i18n._({
                         id: 'node.holeSummary',
                         message:
-                          '{area} m² · {count, plural, one {{points} pt} other {{points} pts}} · {source}',
+                          '{area} {unit} · {count, plural, one {{points} pt} other {{points} pts}} · {source}',
                         values: {
-                          area: formatFixed(holeArea, 2, i18n.getLocale()),
+                          area: formatFixed(
+                            squareMetersToAreaUnit(holeArea, unit),
+                            2,
+                            i18n.getLocale(),
+                          ),
+                          unit: getAreaUnitLabel(unit),
                           count: hole.length,
                           points: String(hole.length),
                           source: isAutoHole

@@ -1,6 +1,6 @@
 import type { AuthorScenePayload } from '../agent-tools/author-scene'
 import { refuse } from '../agent-tools/refusal'
-import { doorTypeFields } from '../building/door-types'
+import { doorTypeFields, NEW_DOOR_FRAME_THICKNESS } from '../building/door-types'
 import {
   DOOR_STYLES,
   type DoorStyle,
@@ -9,7 +9,11 @@ import {
   WINDOW_STYLES,
   type WindowStyle,
 } from '../building/opening-style-presets'
-import { windowTakesStyle, windowTypeFields } from '../building/window-types'
+import {
+  NEW_WINDOW_FRAME_THICKNESS,
+  windowTakesStyle,
+  windowTypeFields,
+} from '../building/window-types'
 import { cutFloorOpening } from '../commands/structure/floor-opening'
 import { floorRoomFaces } from '../lib/floor-room-faces'
 import {
@@ -1086,6 +1090,8 @@ export function authorScene(
           visible: true,
           metadata: { authorScene: { id, color: o.color ?? null } },
           wallId: node.id,
+          casingFaceA: true,
+          casingFaceB: true,
           width,
           height,
           rotation: [0, 0, 0],
@@ -1104,6 +1110,7 @@ export function authorScene(
           opening = DoorNode.parse({
             ...common,
             type: 'door',
+            frameThickness: NEW_DOOR_FRAME_THICKNESS,
             position: [x, height / 2, 0],
             openingKind: 'opening',
           })
@@ -1125,6 +1132,7 @@ export function authorScene(
           opening = DoorNode.parse({
             ...common,
             type: 'door',
+            frameThickness: NEW_DOOR_FRAME_THICKNESS,
             position: [x, height / 2, 0],
             ...(type && isDoorType(type) ? doorTypeFields(type) : {}),
             ...(style && isDoorStyle(style) ? doorStyleLook(style) : {}),
@@ -1153,6 +1161,7 @@ export function authorScene(
           opening = WindowNode.parse({
             ...common,
             type: 'window',
+            frameThickness: NEW_WINDOW_FRAME_THICKNESS,
             position: [x, o.sill + height / 2, 0],
             ...(windowType ? windowTypeFields(windowType) : {}),
             ...(style && isWindowStyle(style) && takesStyle ? getWindowStyleOverrides(style) : {}),

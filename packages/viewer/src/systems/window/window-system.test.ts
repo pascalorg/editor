@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { OPENING_FRAME_LIP, useScene, WallNode, WindowNode, WindowType } from '@pascal-app/core'
+import { useScene, WallNode, WindowNode, WindowType } from '@pascal-app/core'
 import * as THREE from 'three'
 import { buildWindowPreviewMesh } from './window-system'
 
@@ -59,8 +59,8 @@ describe("a window's faces at the edges of its opening", () => {
 
 /**
  * A window's frame used to be 0.07 m deep whatever its wall, so a thicker wall showed its cut faces
- * around the frame. Left unset, the depth follows the host wall: its thickness plus a lip on each
- * face, and the sill still starts at the frame's front face.
+ * around the frame. Left unset, the depth follows the host wall: its thickness exactly,
+ * and the sill still starts at the frame's front face.
  */
 describe("a window's frame depth follows its wall", () => {
   function windowOn(wallThickness: number, patch: Partial<WindowNode> = {}) {
@@ -105,9 +105,9 @@ describe("a window's frame depth follows its wall", () => {
     return found
   }
 
-  test('a window with no frame depth in a 0.2 m wall gets a 0.22 m frame', () => {
+  test('a window with no frame depth in a 0.2 m wall gets a 0.2 m frame', () => {
     const { mesh } = windowOn(0.2)
-    expect(hitboxDepth(mesh)).toBeCloseTo(0.2 + OPENING_FRAME_LIP * 2, 9)
+    expect(hitboxDepth(mesh)).toBeCloseTo(0.2, 9)
   })
 
   test('an explicit 0.07 m frame stays 0.07 m in a 0.2 m wall', () => {
@@ -118,8 +118,8 @@ describe("a window's frame depth follows its wall", () => {
     const { mesh, node } = windowOn(0.2)
     const sill = sillBox(mesh, node)
     expect(sill).toBeDefined()
-    // The frame's front face is at +0.11; the sill starts there and runs outward.
-    expect(sill!.min.z).toBeCloseTo(0.11, 6)
-    expect(sill!.max.z).toBeCloseTo(0.11 + node.sillDepth, 6)
+    // The frame's front face is at +0.1; the sill starts there and runs outward.
+    expect(sill!.min.z).toBeCloseTo(0.1, 6)
+    expect(sill!.max.z).toBeCloseTo(0.1 + node.sillDepth, 6)
   })
 })

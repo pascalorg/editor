@@ -131,6 +131,17 @@ describe('resolveRoofElevation', () => {
     expect(resolveRoofElevation(roof, nodes)).toBe(-0.5)
   })
 
+  // A deck's 36 in guard pulled the roof over it down onto the railing tops.
+  test("a railing's top never seats a roof: the walls' do, else it keeps its height", () => {
+    const { walls, roof, nodes } = scene([2.5])
+    const railing = (wall: WallNode) =>
+      ({ ...wall, wallType: 'railing', height: 36 * 0.0254, thickness: 0.0889 }) as WallNode
+    const deck = { ...nodes, ...Object.fromEntries(walls.map((wall) => [wall.id, railing(wall)])) }
+    expect(resolveRoofElevation(roof, deck)).toBe(0)
+    const leaning = { ...deck, [walls[0]!.id]: walls[0]! }
+    expect(resolveRoofElevation(roof, leaning)).toBe(-0.5)
+  })
+
   test('freezes without an enclosure, retaining follow intent', () => {
     const { walls, roof, nodes } = scene([4])
     const remaining = { ...nodes }

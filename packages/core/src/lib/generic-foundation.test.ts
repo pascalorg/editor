@@ -10,6 +10,7 @@ import {
   LevelNode,
   nodeType,
   objectId,
+  railingWallDefaults,
   SiteNode,
   SlabNode,
   WallNode,
@@ -462,3 +463,38 @@ test('the answer is worked out once per scene state', () => {
 })
 
 afterEach(() => nodeRegistry._reset())
+
+/** `house` with a 3 × 4 m deck off its east wall, fenced by three railings. */
+function withRailedDeck(house: Nodes): Nodes {
+  const corners: Array<[number, number]> = [
+    [10, 2],
+    [13, 2],
+    [13, 6],
+    [10, 6],
+  ]
+  const railings = corners.slice(1).map((end, index) =>
+    WallNode.parse({
+      id: `wall_deck_${index}`,
+      parentId: 'level_g',
+      start: corners[index],
+      end,
+      ...railingWallDefaults(),
+    }),
+  )
+  const level = house['level_g' as AnyNodeId] as LevelNode
+  return keyed([
+    ...Object.values(house),
+    { ...level, children: [...level.children, ...railings.map((wall) => wall.id)] },
+    ...railings,
+  ])
+}
+
+test('a railing carries no foundation: a deck it fences adds none, a ring of railings stands on none', () => {
+  const members = genericFoundation(withRailedDeck(flatHouse()))
+  expect(ofKind(members, 'footing')).toHaveLength(4)
+  expect(ofKind(members, 'stem')).toHaveLength(4)
+  expect(Math.max(...members.flatMap((member) => [member.from[0], member.to[0]]))).toBeLessThan(
+    10.5,
+  )
+  expect(genericFoundation(flatHouse({ wallExtra: railingWallDefaults() }))).toEqual([])
+})

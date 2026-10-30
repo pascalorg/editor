@@ -1,6 +1,7 @@
 'use client'
 
 import {
+  type AnyNode,
   type AnyNodeId,
   type BuildingNode,
   type GuideNode,
@@ -11,15 +12,31 @@ import {
   usePascalI18n,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
-import { Check, ChevronDown, Eye, EyeOff, Layers2, Plus, Trash2, Waypoints } from 'lucide-react'
+import {
+  Check,
+  ChevronDown,
+  Eye,
+  EyeOff,
+  Layers2,
+  Plus,
+  SquareDashed,
+  Trash2,
+  Waypoints,
+} from 'lucide-react'
 import { useCallback, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { createLocalGuideImage } from '../../../lib/local-guide-image'
 import { cn } from '../../../lib/utils'
 import useEditor from '../../../store/use-editor'
 import { useUploadStore } from '../../../store/use-upload'
+import {
+  ADJACENT_WALL_COLORS,
+  adjacentLevelIds,
+  useWallsBelowSetting,
+} from '../../editor-2d/floorplan-adjacent-walls-layer'
 import { SliderControl } from '../controls/slider-control'
 import { Popover, PopoverContent, PopoverTrigger } from '../primitives/popover'
+import { Switch } from '../primitives/switch'
 import { ActionButton } from './action-button'
 import { useActionMenuPopupSide } from './placement'
 import { localizedLevelName } from '../../../i18n/level-name'
@@ -963,6 +980,152 @@ function ReferenceFloorControl() {
   )
 }
 
+// ── Walls below / above control ─────────────────────────────────────────────
+
+function useAdjacentLevelNames() {
+  const i18n = usePascalI18n()
+  const levelId = useViewer((s) => s.selection.levelId)
+  return useScene(
+    useShallow((state) => {
+      const nodes = state.nodes as Record<string, AnyNode>
+      const ids = adjacentLevelIds(nodes, levelId)
+      const name = (id: string | null) => {
+        const level = id ? nodes[id] : undefined
+        return level?.type === 'level' ? localizedLevelName(level, i18n, i18n.getLocale()) : null
+      }
+      return { below: name(ids.below), above: name(ids.above) }
+    }),
+  )
+}
+
+/**
+ * What the "Walls below / above" button turns each side to: the sides that have a level all on, or
+ * all off when one shows. A side with no level keeps its setting, which persists for the levels
+ * that have one: turning the walls below on from the top storey must not trace walls above later.
+ */
+export function adjacentWallsToggle(
+  active: boolean,
+  levels: { below: string | null; above: string | null },
+): { below?: boolean; above?: boolean } {
+  return {
+    ...(levels.below ? { below: !active } : {}),
+    ...(levels.above ? { above: !active } : {}),
+  }
+}
+
+/**
+ * "Walls below / above": the plan traces the walls of the neighbouring levels as dashed outlines,
+ * blue for the level below (on a roof level, the top storey), magenta for the level above.
+ */
+function AdjacentWallsControl() {
+  const i18n = usePascalI18n()
+  const popupSide = useActionMenuPopupSide()
+  const levelId = useViewer((s) => s.selection.levelId)
+  const { shown: showBelow, setShown: setShowBelow } = useWallsBelowSetting(levelId)
+  const showAbove = useEditor((state) => state.showWallsAbove)
+  const setShowAbove = useEditor((state) => state.setShowWallsAbove)
+  const names = useAdjacentLevelNames()
+  const [isOpen, setIsOpen] = useState(false)
+  const active = (showBelow && !!names.below) || (showAbove && !!names.above)
+  const available = !!(names.below || names.above)
+  const rows = [
+    {
+      key: 'below',
+      label: i18n._({ id: 'editor.actionMenu.viewToggles.wallsBelow', message: 'Walls below' }),
+      level: names.below,
+      checked: showBelow,
+      set: setShowBelow,
+      color: ADJACENT_WALL_COLORS.below,
+    },
+    {
+      key: 'above',
+      label: i18n._({ id: 'editor.actionMenu.viewToggles.wallsAbove', message: 'Walls above' }),
+      level: names.above,
+      checked: showAbove,
+      set: setShowAbove,
+      color: ADJACENT_WALL_COLORS.above,
+    },
+  ] as const
+
+  return (
+    <Popover onOpenChange={setIsOpen} open={isOpen}>
+      <div className="flex items-center">
+        <ActionButton
+          className={cn(
+            'rounded-r-none p-0',
+            active
+              ? 'bg-black/9 hover:bg-black/9 dark:bg-white/15'
+              : 'opacity-60 grayscale hover:bg-black/4 hover:opacity-100 hover:grayscale-0',
+          )}
+          disabled={!available}
+          label={active ? i18n._({ id: 'editor.actionMenu.viewToggles.wallsBelowAndAboveShown', message: 'Walls below and above: shown' }) : i18n._({ id: 'editor.actionMenu.viewToggles.showWallsBelowAndAbove', message: 'Show walls below and above' })}
+          onClick={() => {
+            const next = adjacentWallsToggle(active, names)
+            if (next.below !== undefined) setShowBelow(next.below)
+            if (next.above !== undefined) setShowAbove(next.above)
+          }}
+          size="icon"
+          variant="ghost"
+        >
+          <SquareDashed className="h-4 w-4" />
+        </ActionButton>
+        <PopoverTrigger asChild>
+          <button
+            aria-expanded={isOpen}
+            aria-label={i18n._({ id: 'editor.actionMenu.viewToggles.wallsBelowAndAboveSettings', message: 'Walls below and above settings' })}
+            className={cn(
+              'flex h-11 w-6 items-center justify-center rounded-r-lg transition-colors',
+              active
+                ? 'bg-black/4 dark:bg-white/5 hover:bg-black/5 dark:hover:bg-white/8'
+                : 'opacity-60 hover:bg-black/4 dark:hover:bg-white/5 hover:opacity-100',
+            )}
+            disabled={!available}
+            type="button"
+          >
+            <ChevronDown className={cn('h-3 w-3 transition-transform', isOpen && 'rotate-180')} />
+          </button>
+        </PopoverTrigger>
+      </div>
+      <PopoverContent
+        align="center"
+        className="w-72 rounded-xl border-border/45 bg-background/96 p-3 shadow-elevation-3 backdrop-blur-xl"
+        side={popupSide}
+        sideOffset={14}
+      >
+        <div className="space-y-3" data-adjacent-walls-settings>
+          <div>
+            <p className="font-medium text-foreground text-sm">{i18n._({ id: 'editor.actionMenu.viewToggles.wallsBelowAndAbove', message: 'Walls below and above' })}</p>
+            <p className="text-muted-foreground text-xs">
+              {i18n._({ id: 'editor.actionMenu.viewToggles.dashedOutlinesOfTheNeighbouringLevels', message: 'Dashed outlines of the neighbouring levels’ walls, to line walls up and check a roof against the walls under it.' })}
+            </p>
+          </div>
+          {rows.map((row) => (
+            <label className="flex items-center gap-3" key={row.key}>
+              <span
+                aria-hidden
+                className="h-0 w-5 shrink-0 border-t-2 border-dashed"
+                style={{ borderColor: row.color }}
+              />
+              <span className="flex min-w-0 flex-1 flex-col">
+                <span className="text-foreground text-sm">{row.label}</span>
+                <span className="truncate text-muted-foreground text-xs">
+                  {row.level ?? (row.key === 'below' ? i18n._({ id: 'editor.actionMenu.viewToggles.noLevelBelow', message: 'No level below' }) : i18n._({ id: 'editor.actionMenu.viewToggles.noLevelAbove', message: 'No level above' }))}
+                </span>
+              </span>
+              <Switch
+                aria-label={row.label}
+                checked={row.checked}
+                disabled={!row.level}
+                onCheckedChange={row.set}
+              />
+            </label>
+          ))}
+        </div>
+      </PopoverContent>
+    </Popover>
+  )
+}
+
 // ── Riser diagram control ────────────────────────────────────────────────────
 
 function RiserControl() {
@@ -1003,6 +1166,7 @@ export function ViewToggles() {
       <ScansControl />
       <GuidesControl />
       <ReferenceFloorControl />
+      <AdjacentWallsControl />
       <RiserControl />
     </div>
   )

@@ -11,6 +11,7 @@ import {
   resolveDimensionDrive,
 } from '../../../lib/floorplan/dimension-drive'
 import { formatScheduleLength } from '../../../lib/floorplan/schedules'
+import { commitRoomPush } from '../../../lib/room-handle-drag'
 import useEditor from '../../../store/use-editor'
 
 /**
@@ -20,7 +21,8 @@ import useEditor from '../../../store/use-editor'
  * plate, pre-filled with the current text. Enter commits, Esc cancels.
  * Committing DRIVES geometry: the anchor the dimension runs toward moves
  * along the dimension direction by the delta, and connected wall junctions
- * follow (`planDimensionDrive`). When nothing bindable is under the far
+ * follow (`planDimensionDrive`); a dimension across a wall slides the whole
+ * wall, as its push arrow does (`commitRoomPush`). When nothing bindable is under the far
  * anchor the value is written as `textOverride` on a construction-dimension
  * node instead, and the label renders an "override" badge.
  *
@@ -60,6 +62,32 @@ export function useDimensionEditAllowed(): boolean {
   return useEditor((state) => isDimensionEditAllowed(state, { readOnly }))
 }
 
+/**
+ * The typeable dimension value under a press, with the node typing it drives:
+ * the pressed element's or, when the plan's dashed group box lies over it, the
+ * one beneath (a multi-selection's walls keep their dimensions inside it).
+ */
+export function typeableDimensionAt(
+  target: EventTarget | null,
+  clientX: number,
+  clientY: number,
+): { label: Element; ownerNodeId: AnyNodeId } | null {
+  const resolve = (element: Element | null | undefined) => {
+    const hit = element?.closest?.('[data-floorplan-dimension-hit]')
+    const label = hit?.closest('[data-floorplan-annotation-label]')
+    const ownerNodeId = hit?.closest('[data-node-id]')?.getAttribute('data-node-id')
+    return label && ownerNodeId ? { label, ownerNodeId: ownerNodeId as AnyNodeId } : null
+  }
+  const element = target as Element | null
+  const direct = resolve(element)
+  if (direct || !element?.closest?.('[data-group-selection-box]')) return direct
+  for (const below of document.elementsFromPoint(clientX, clientY)) {
+    const found = resolve(below)
+    if (found) return found
+  }
+  return null
+}
+
 type EditTarget = {
   ownerNodeId: AnyNodeId
   text: string
@@ -93,13 +121,9 @@ export function FloorplanDimensionEditOverlay(): React.ReactElement | null {
         return
       }
       if (!isDimensionEditAllowed(useEditor.getState(), useScene.getState())) return
-      const origin = event.target as Element | null
-      const hit = origin?.closest?.('[data-floorplan-dimension-hit]')
-      if (!hit) return
-      const label = hit.closest('[data-floorplan-annotation-label]')
-      const owner = hit.closest('[data-node-id]')
-      const ownerNodeId = owner?.getAttribute('data-node-id')
-      if (!label || !ownerNodeId) return
+      const found = typeableDimensionAt(event.target, event.clientX, event.clientY)
+      if (!found) return
+      const { label, ownerNodeId } = found
 
       const value = number(label.getAttribute('data-floorplan-dimension-value'))
       const witnessStart = point(
@@ -117,7 +141,7 @@ export function FloorplanDimensionEditOverlay(): React.ReactElement | null {
       const box = label.getBoundingClientRect()
       const text = label.getAttribute('data-floorplan-dimension-text') ?? ''
       setTarget({
-        ownerNodeId: ownerNodeId as AnyNodeId,
+        ownerNodeId,
         text,
         value,
         witnessStart,
@@ -245,6 +269,21 @@ export function commitDimensionValue(args: {
       textOverride: formatScheduleLength(args.nextLength, args.unit ?? 'imperial'),
     } as Partial<AnyNode>)
     return { ok: true }
+  }
+
+  if (resolution.target.kind === 'wall-offset') {
+    // The wall's own push: the whole wall slides along its normal, connected
+    // walls follow through the junction planner, rooms and floors re-form —
+    // one undo step, exactly as dragging its side arrow that far.
+    const delta = args.nextLength - args.target.value
+    if (Math.abs(delta) < 1e-9) return { ok: true }
+    return commitRoomPush(
+      { wallId: resolution.target.wallId, t0: 0, t1: 1 },
+      resolution.target.direction,
+      delta,
+    )
+      ? { ok: true }
+      : { ok: false, reason: "Can't move this wall there" }
   }
 
   const plan = planDimensionDrive({

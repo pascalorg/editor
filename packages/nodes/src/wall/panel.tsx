@@ -4,9 +4,7 @@ import {
   type AnyNode,
   type AnyNodeId,
   assemblyThickness,
-  BRICK_AIR_SPACE,
-  BRICK_VENEER,
-  FIBER_CEMENT,
+  FRAMING_SPACINGS,
   GROUND_SUPPORT_ID,
   GYPSUM_HALF,
   GYPSUM_SHEATHING,
@@ -18,9 +16,6 @@ import {
   normalizeWallCurveOffset,
   resolveWallAssembly,
   runAsSingleSceneHistoryStep,
-  SIDING_LAP,
-  STONE_VENEER_UNVERIFIED,
-  STUCCO_3_COAT,
   terrainSupportLift,
   useLiveNodeOverrides,
   usePascalI18n,
@@ -60,18 +55,29 @@ import {
   SliderControl,
   triggerSFX,
   useInteractionScope,
+  useProjectWallTypes,
   WallPaintRegionList,
+  WallTypeMenu,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { Spline } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
+import { formatSpacing } from '../shared/build-up-controls'
+import { formatLayerThickness, parseLayerThickness } from '../shared/layer-thickness'
 import { resolveWallOpeningCeiling } from '../shared/wall-opening-ceiling'
 import { CurtainWallPanel } from './curtain-wall-panel'
 import { hasWallCurveBlockingChildren } from './curve-eligibility'
 import { buildWallLengthPatch } from './length-patch'
-import { type WallReferenceValue, wallReferenceModel } from './panel-model'
+import {
+  EXTERIOR_FINISH_DEFAULT,
+  EXTERIOR_FINISH_OPTIONS,
+  type WallReferenceValue,
+  wallReferenceModel,
+} from './panel-model'
 import { createWallPropertyPreview } from './property-preview'
+import { RailingWallPanel } from './railing-wall-panel'
+import { railingWallTypePatch } from './railing-wall-panel-model'
 
 /**
  * Base half of the plane-bound repair: a stamped draft offset goes, and a
@@ -296,6 +302,9 @@ export default function WallPanel() {
   const skirting = { ...WALL_SKIRTING_DEFAULT, ...(node.skirting ?? {}) }
   const crown = { ...WALL_CROWN_DEFAULT, ...(node.crown ?? {}) }
   const chairRail = { ...WALL_CHAIR_RAIL_DEFAULT, ...(node.chairRail ?? {}) }
+  // A railing keeps its own height, its posts set its thickness, and it has no assembly or faces:
+  // the Railing section holds its controls instead.
+  const railing = node.wallType === 'railing'
 
   return (
     <PanelWrapper
@@ -306,7 +315,9 @@ export default function WallPanel() {
     >
       <PanelSection title={i18n._({ id: 'node.wall.panel.wallType', message: 'Wall type' })}>
         <SegmentedControl
-          onChange={(wallType) => handleUpdate({ wallType })}
+          onChange={(wallType) =>
+            handleUpdate(wallType === 'railing' ? railingWallTypePatch(node) : { wallType })
+          }
           options={[
             {
               label: i18n._({ id: 'node.wall.panel.standard', message: 'Standard' }),
@@ -316,10 +327,17 @@ export default function WallPanel() {
               label: i18n._({ id: 'node.wall.panel.curtainWall', message: 'Curtain wall' }),
               value: 'curtain',
             },
+            {
+              label: i18n._({ id: 'node.wall.panel.railing', message: 'Railing' }),
+              value: 'railing',
+            },
           ]}
           value={node.wallType ?? 'standard'}
         />
       </PanelSection>
+      {node.wallType !== 'curtain' && !railing && (
+        <WallAssemblySection node={node} onUpdate={handleUpdate} unit={unit} />
+      )}
       <PanelSection title={i18n._({ id: 'node.wall.panel.dimensions', message: 'Dimensions' })}>
         <SliderControl
           onCommit={handleCommit}
@@ -339,115 +357,125 @@ export default function WallPanel() {
           unit={unitLabel}
           value={displayLength}
         />
-        <div className="px-1 font-medium text-[10px] text-muted-foreground/80 uppercase tracking-wider">
-          {i18n._({ id: 'node.wall.panel.top', message: 'Top' })}
-        </div>
-        <SegmentedControl
-          onChange={handleTopModeChange}
-          options={[
-            {
-              label: i18n._({ id: 'node.wall.panel.followsLevel', message: 'Follows level' }),
-              value: 'storey',
-            },
-            {
-              label: i18n._({ id: 'node.wall.panel.customHeight', message: 'Custom height' }),
-              value: 'custom',
-            },
-          ]}
-          value={isPlaneBound ? 'storey' : 'custom'}
-        />
-        {isPlaneBound ? (
-          <div className="px-1 text-[11px] text-muted-foreground">
-            {i18n._({
-              id: 'node.panel.currently',
-              message: 'Currently {value}',
-              values: { value: formatLinearMeasurement(height, unit) },
-            })}
-          </div>
-        ) : (
-          <SliderControl
-            onCommit={handleCommit}
-            onCancel={handleCancel}
-            restoreOnCommit={false}
-            previewWhileTyping
-            label={i18n._({ id: 'node.wall.panel.height', message: 'Height' })}
-            max={metersToLinearUnit(1000, unit)}
-            min={metersToLinearUnit(0.1, unit)}
-            onChange={(v) =>
-              handlePreview({
-                height: linearControlValueToMeters(v, unit, { maxMeters: 1000, minMeters: 0.1 }),
-              })
-            }
-            precision={2}
-            step={0.1}
-            unit={unitLabel}
-            value={Math.round(displayHeight * 100) / 100}
-          />
-        )}
-        <div className="px-1 font-medium text-[10px] text-muted-foreground/80 uppercase tracking-wider">
-          {i18n._({ id: 'node.wall.panel.bottom', message: 'Bottom' })}
-        </div>
-        <SegmentedControl
-          onChange={handleInfillChange}
-          options={[
-            { label: i18n._({ id: 'node.wall.panel.auto', message: 'Auto' }), value: 'auto' },
-            {
-              label: i18n._({ id: 'node.wall.panel.fillToTerrain', message: 'Fill to terrain' }),
-              value: 'terrain',
-            },
-          ]}
-          value={followsTerrain ? 'terrain' : 'auto'}
-        />
-        {followsTerrain && (
-          <div className="px-1 text-[11px] text-muted-foreground">
-            {i18n._({
-              id: 'node.wall.panel.extendsDownwardToMeetTheTerrain',
-              message: 'Extends downward to meet the terrain. Height and top stay unchanged.',
-            })}
-          </div>
-        )}
-        {node.assembly && node.wallType !== 'curtain' ? (
-          // The assembly owns the total. Editing `thickness` here would put the
-          // two out of sync, so the slider becomes a readout and the Assembly
-          // section is the only place thickness changes.
-          <div className="flex items-center justify-between px-2 py-1.5">
-            <span className="font-medium text-[10px] text-muted-foreground uppercase tracking-wider">
-              {i18n._({ id: 'node.wall.panel.thickness', message: 'Thickness' })}
-            </span>
-            <span className="text-[11px] text-muted-foreground tabular-nums">
-              {i18n._({
-                id: 'node.wall.panel.thicknessFromAssembly',
-                message: '{thickness} · from assembly',
-                values: { thickness: formatLinearMeasurement(thickness, unit) },
-              })}
-            </span>
-          </div>
-        ) : (
-          <SliderControl
-            onCommit={handleCommit}
-            onCancel={handleCancel}
-            restoreOnCommit={false}
-            previewWhileTyping
-            label={
-              node.wallType === 'curtain'
-                ? i18n._({ id: 'node.wall.panel.frameDepth', message: 'Frame depth' })
-                : i18n._({ id: 'node.wall.panel.thickness', message: 'Thickness' })
-            }
-            max={metersToLinearUnit(1000, unit)}
-            min={metersToLinearUnit(0.05, unit)}
-            onChange={(v) =>
-              handlePreview({
-                thickness: linearControlValueToMeters(v, unit, {
-                  maxMeters: 1000,
-                  minMeters: 0.05,
-                }),
-              })
-            }
-            precision={3}
-            step={0.01}
-            unit={unitLabel}
-            value={Math.round(displayThickness * 1000) / 1000}
-          />
+        {!railing && (
+          <>
+            <div className="px-1 font-medium text-[10px] text-muted-foreground/80 uppercase tracking-wider">
+              {i18n._({ id: 'node.wall.panel.top', message: 'Top' })}
+            </div>
+            <SegmentedControl
+              onChange={handleTopModeChange}
+              options={[
+                {
+                  label: i18n._({ id: 'node.wall.panel.followsLevel', message: 'Follows level' }),
+                  value: 'storey',
+                },
+                {
+                  label: i18n._({ id: 'node.wall.panel.customHeight', message: 'Custom height' }),
+                  value: 'custom',
+                },
+              ]}
+              value={isPlaneBound ? 'storey' : 'custom'}
+            />
+            {isPlaneBound ? (
+              <div className="px-1 text-[11px] text-muted-foreground">
+                {i18n._({
+                  id: 'node.panel.currently',
+                  message: 'Currently {value}',
+                  values: { value: formatLinearMeasurement(height, unit) },
+                })}
+              </div>
+            ) : (
+              <SliderControl
+                onCommit={handleCommit}
+                onCancel={handleCancel}
+                restoreOnCommit={false}
+                previewWhileTyping
+                label={i18n._({ id: 'node.wall.panel.height', message: 'Height' })}
+                max={metersToLinearUnit(1000, unit)}
+                min={metersToLinearUnit(0.1, unit)}
+                onChange={(v) =>
+                  handlePreview({
+                    height: linearControlValueToMeters(v, unit, {
+                      maxMeters: 1000,
+                      minMeters: 0.1,
+                    }),
+                  })
+                }
+                precision={2}
+                step={0.1}
+                unit={unitLabel}
+                value={Math.round(displayHeight * 100) / 100}
+              />
+            )}
+            <div className="px-1 font-medium text-[10px] text-muted-foreground/80 uppercase tracking-wider">
+              {i18n._({ id: 'node.wall.panel.bottom', message: 'Bottom' })}
+            </div>
+            <SegmentedControl
+              onChange={handleInfillChange}
+              options={[
+                { label: i18n._({ id: 'node.wall.panel.auto', message: 'Auto' }), value: 'auto' },
+                {
+                  label: i18n._({
+                    id: 'node.wall.panel.fillToTerrain',
+                    message: 'Fill to terrain',
+                  }),
+                  value: 'terrain',
+                },
+              ]}
+              value={followsTerrain ? 'terrain' : 'auto'}
+            />
+            {followsTerrain && (
+              <div className="px-1 text-[11px] text-muted-foreground">
+                {i18n._({
+                  id: 'node.wall.panel.extendsDownwardToMeetTheTerrain',
+                  message: 'Extends downward to meet the terrain. Height and top stay unchanged.',
+                })}
+              </div>
+            )}
+            {node.assembly && node.wallType !== 'curtain' ? (
+              // The assembly owns the total. Editing `thickness` here would put the
+              // two out of sync, so the slider becomes a readout and the Assembly
+              // section is the only place thickness changes.
+              <div className="flex items-center justify-between px-2 py-1.5">
+                <span className="font-medium text-[10px] text-muted-foreground uppercase tracking-wider">
+                  {i18n._({ id: 'node.wall.panel.thickness', message: 'Thickness' })}
+                </span>
+                <span className="text-[11px] text-muted-foreground tabular-nums">
+                  {i18n._({
+                    id: 'node.wall.panel.thicknessFromAssembly',
+                    message: '{thickness} · from assembly',
+                    values: { thickness: formatLinearMeasurement(thickness, unit) },
+                  })}
+                </span>
+              </div>
+            ) : (
+              <SliderControl
+                onCommit={handleCommit}
+                onCancel={handleCancel}
+                restoreOnCommit={false}
+                previewWhileTyping
+                label={
+                  node.wallType === 'curtain'
+                    ? i18n._({ id: 'node.wall.panel.frameDepth', message: 'Frame depth' })
+                    : i18n._({ id: 'node.wall.panel.thickness', message: 'Thickness' })
+                }
+                max={metersToLinearUnit(1000, unit)}
+                min={metersToLinearUnit(0.05, unit)}
+                onChange={(v) =>
+                  handlePreview({
+                    thickness: linearControlValueToMeters(v, unit, {
+                      maxMeters: 1000,
+                      minMeters: 0.05,
+                    }),
+                  })
+                }
+                precision={3}
+                step={0.01}
+                unit={unitLabel}
+                value={Math.round(displayThickness * 1000) / 1000}
+              />
+            )}
+          </>
         )}
         <div className="px-1 font-medium text-[10px] text-muted-foreground/80">
           {i18n._({ id: 'node.wall.panel.reference', message: 'Reference' })}
@@ -502,10 +530,18 @@ export default function WallPanel() {
           onCancel={handleCancel}
           unit={unit}
         />
+      ) : railing ? (
+        <RailingWallPanel
+          key={node.id}
+          node={node}
+          onUpdate={handleUpdate}
+          onPreview={handlePreview}
+          onCommit={handleCommit}
+          onCancel={handleCancel}
+          unit={unit}
+        />
       ) : (
         <>
-          <WallAssemblySection node={node} onUpdate={handleUpdate} unit={unit} />
-
           <WallPaintRegionList wallId={node.id} />
 
           <WallFaceScriptSection wallId={node.id} />
@@ -791,68 +827,6 @@ function WallTrimSection({
 // re-derived total in one `updateNode` call, so the 2D plan and the 3D wall
 // both move on the same store tick.
 
-const METRES_PER_INCH = 0.0254
-
-/**
- * Imperial-friendly thickness input. Accepts `5/8`, `5/8"`, `7/16 in`,
- * `1-1/4"`, `1 1/2"`, `12mm`, `0.012m`. A bare number means INCHES in imperial
- * display and MILLIMETRES in metric — wall layers are millimetre-scale and
- * typing `0.0127` for half-inch board is nobody's idea of usable.
- */
-function parseLayerThickness(raw: string, unit: 'metric' | 'imperial'): number | null {
-  const text = raw.trim().toLowerCase().replace(/["”]/g, ' in ')
-  if (!text) return null
-  const explicit = /(mm|cm|m|in|ft|')\s*$/.exec(text)
-  const suffix = explicit?.[1]
-  const body = (suffix ? text.slice(0, explicit?.index) : text).trim()
-
-  // `1-1/4` / `1 1/2` / `5/8` / `0.4375`
-  const mixed = /^(\d+(?:\.\d+)?)[\s-]+(\d+)\s*\/\s*(\d+)$/.exec(body)
-  const fraction = /^(\d+)\s*\/\s*(\d+)$/.exec(body)
-  let value: number
-  if (mixed) {
-    value = Number(mixed[1]) + Number(mixed[2]) / Number(mixed[3])
-  } else if (fraction) {
-    value = Number(fraction[1]) / Number(fraction[2])
-  } else {
-    value = Number(body)
-  }
-  if (!Number.isFinite(value) || value < 0) return null
-
-  switch (suffix) {
-    case 'mm':
-      return value / 1000
-    case 'cm':
-      return value / 100
-    case 'm':
-      return value
-    case 'in':
-      return value * METRES_PER_INCH
-    case 'ft':
-    case "'":
-      return value * 12 * METRES_PER_INCH
-    default:
-      return unit === 'imperial' ? value * METRES_PER_INCH : value / 1000
-  }
-}
-
-/** Nearest common fraction of an inch, so 0.0111 m reads back as `7/16"`. */
-function formatLayerThickness(metres: number, unit: 'metric' | 'imperial'): string {
-  if (unit !== 'imperial') return `${Math.round(metres * 1000 * 10) / 10} mm`
-  const inchValue = metres / METRES_PER_INCH
-  const sixteenths = Math.round(inchValue * 16)
-  if (Math.abs(inchValue * 16 - sixteenths) > 1e-6) return `${Math.round(inchValue * 1000) / 1000}"`
-  const whole = Math.floor(sixteenths / 16)
-  let numerator = sixteenths % 16
-  let denominator = 16
-  while (numerator % 2 === 0 && numerator > 0) {
-    numerator /= 2
-    denominator /= 2
-  }
-  if (numerator === 0) return `${whole}"`
-  return whole > 0 ? `${whole}-${numerator}/${denominator}"` : `${numerator}/${denominator}"`
-}
-
 const SELECT_CLASS =
   'h-7 w-full rounded border border-border bg-background px-2 text-[11px] text-foreground outline-none focus:border-primary'
 const INPUT_CLASS =
@@ -904,26 +878,18 @@ function ThicknessInput({
   )
 }
 
-const EXTERIOR_FINISH_OPTIONS: Array<{
-  value: WallAssemblyExteriorFinish
-  label: MessageDescriptor
-}> = [
-  { value: 'none', label: /* i18n */ { id: 'node.wall.panel.none', message: 'None' } },
-  { value: 'siding', label: /* i18n */ { id: 'node.wall.panel.lapSiding', message: 'Lap siding' } },
-  {
-    value: 'fiber-cement',
-    label: /* i18n */ { id: 'node.wall.panel.fiberCement', message: 'Fiber cement' },
-  },
-  { value: 'stucco', label: /* i18n */ { id: 'node.wall.panel.stucco', message: 'Stucco' } },
-  {
-    value: 'brick',
-    label: /* i18n */ { id: 'node.wall.panel.brickVeneer', message: 'Brick veneer' },
-  },
-  {
-    value: 'stone',
-    label: /* i18n */ { id: 'node.wall.panel.stoneVeneer', message: 'Stone veneer' },
-  },
-]
+/**
+ * The Exterior select's names for the finishes of the list it shares with the
+ * multi-selection controls (`EXTERIOR_FINISH_OPTIONS`, in `panel-model`).
+ */
+const EXTERIOR_FINISH_LABELS: Record<WallAssemblyExteriorFinish, MessageDescriptor> = {
+  none: /* i18n */ { id: 'node.wall.panel.none', message: 'None' },
+  siding: /* i18n */ { id: 'node.wall.panel.lapSiding', message: 'Lap siding' },
+  'fiber-cement': /* i18n */ { id: 'node.wall.panel.fiberCement', message: 'Fiber cement' },
+  stucco: /* i18n */ { id: 'node.wall.panel.stucco', message: 'Stucco' },
+  brick: /* i18n */ { id: 'node.wall.panel.brickVeneer', message: 'Brick veneer' },
+  stone: /* i18n */ { id: 'node.wall.panel.stoneVeneer', message: 'Stone veneer' },
+}
 
 const SHEATHING_OPTIONS: Array<{ value: WallAssemblySheathingMaterial; label: MessageDescriptor }> =
   [
@@ -940,6 +906,24 @@ const FRAMING_OPTIONS: Array<{ value: WallAssemblyFramingKind; label: MessageDes
   { value: 'icf', label: /* i18n */ { id: 'node.wall.panel.icf', message: 'ICF' } },
 ]
 
+const spacingKey = (metres: number) => metres.toFixed(6)
+
+/**
+ * The stud spacings to pick from, the framing list roofs and ceilings use, keeping a stored one
+ * off the list; and the one stored (null for the framer's default).
+ */
+export function studSpacingChoices(stored: number | undefined) {
+  const listed = FRAMING_SPACINGS.find(
+    (size) => stored !== undefined && Math.abs(size - stored) < 1e-6,
+  )
+  const current = stored === undefined ? null : (listed ?? stored)
+  return {
+    sizes:
+      current === null || listed !== undefined ? FRAMING_SPACINGS : [current, ...FRAMING_SPACINGS],
+    current,
+  }
+}
+
 const INTERIOR_FINISH_OPTIONS: Array<{
   value: WallAssemblyInteriorFinish
   label: MessageDescriptor
@@ -948,16 +932,6 @@ const INTERIOR_FINISH_OPTIONS: Array<{
   { value: 'drywall', label: /* i18n */ { id: 'node.wall.panel.drywall', message: 'Drywall' } },
   { value: 'plaster', label: /* i18n */ { id: 'node.wall.panel.plaster', message: 'Plaster' } },
 ]
-
-/** Cited default thickness for a finish the user just switched to. */
-const EXTERIOR_FINISH_DEFAULT: Record<WallAssemblyExteriorFinish, number> = {
-  none: 0,
-  siding: SIDING_LAP,
-  'fiber-cement': FIBER_CEMENT,
-  stucco: STUCCO_3_COAT,
-  brick: BRICK_VENEER + BRICK_AIR_SPACE,
-  stone: STONE_VENEER_UNVERIFIED,
-}
 
 function WallAssemblySection({
   node,
@@ -973,8 +947,15 @@ function WallAssemblySection({
   // The cladding / sheathing / framing / interior editor works on the WS5 view
   // of the F2 stack; a stack it cannot express is listed read-only.
   const assembly = stack ? (wallAssemblyToLegacy(stack) ?? undefined) : undefined
+  const studSpacing = studSpacingChoices(assembly?.framing.spacing)
   const resolved = resolveWallAssembly(node)
   const presetNote = wallAssemblyUnverifiedNote(node)
+  // The project's own wall types sit beside the presets and apply the same way.
+  const projectTypes = useProjectWallTypes()
+  const presetId = stack?.presetId
+  const knownPreset =
+    !!presetId &&
+    (!!getWallAssemblyPreset(presetId) || projectTypes.some((type) => type.id === presetId))
 
   // Every write goes through wallAssemblyPatch so `thickness` is re-derived.
   // Changing any layer clears `preset` — the stack is no longer that preset.
@@ -996,10 +977,10 @@ function WallAssemblySection({
               onUpdate({ assembly: undefined })
               return
             }
-            const preset = getWallAssemblyPreset(id)
-            if (preset) onUpdate(wallAssemblyPatch(preset.assembly))
+            const preset = getWallAssemblyPreset(id) ?? projectTypes.find((type) => type.id === id)
+            if (preset) onUpdate(wallAssemblyPatch(structuredClone(preset.assembly)))
           }}
-          value={stack?.presetId ?? ''}
+          value={knownPreset ? presetId : ''}
         >
           <option value="">
             {stack
@@ -1011,7 +992,25 @@ function WallAssemblySection({
               {preset.label}
             </option>
           ))}
+          {projectTypes.length > 0 ? (
+            <optgroup
+              label={i18n._({ id: 'node.wall.panel.thisProject', message: 'This project' })}
+            >
+              {projectTypes.map((type) => (
+                <option key={type.id} value={type.id}>
+                  {type.label}
+                </option>
+              ))}
+            </optgroup>
+          ) : null}
         </select>
+        <WallTypeMenu
+          assembly={stack}
+          onApply={(type) => onUpdate(wallAssemblyPatch(structuredClone(type.assembly)))}
+          placement={
+            node.frontSide === 'exterior' || node.backSide === 'exterior' ? 'exterior' : 'interior'
+          }
+        />
       </LayerRow>
 
       {assembly && (
@@ -1030,7 +1029,7 @@ function WallAssemblySection({
             >
               {EXTERIOR_FINISH_OPTIONS.map((option) => (
                 <option key={option.value} value={option.value}>
-                  {i18n._(option.label)}
+                  {i18n._(EXTERIOR_FINISH_LABELS[option.value])}
                 </option>
               ))}
             </select>
@@ -1092,13 +1091,16 @@ function WallAssemblySection({
             <select
               className={SELECT_CLASS}
               onChange={(event) =>
-                edit((draft) => ({
-                  ...draft,
-                  framing: {
-                    kind: event.target.value as WallAssemblyFramingKind,
-                    depth: draft.framing.depth,
-                  },
-                }))
+                edit((draft) => {
+                  const kind = event.target.value as WallAssemblyFramingKind
+                  // Block and ICF have no studs to space.
+                  const studs = kind === 'wood' || kind === 'lgs'
+                  const { spacing, ...framing } = draft.framing
+                  return {
+                    ...draft,
+                    framing: { ...framing, kind, ...(studs && spacing ? { spacing } : {}) },
+                  }
+                })
               }
               value={assembly.framing.kind}
             >
@@ -1111,11 +1113,42 @@ function WallAssemblySection({
             <ThicknessInput
               metres={assembly.framing.depth}
               onCommit={(depth) =>
-                edit((draft) => ({ ...draft, framing: { kind: draft.framing.kind, depth } }))
+                edit((draft) => ({ ...draft, framing: { ...draft.framing, depth } }))
               }
               unit={unit}
             />
           </LayerRow>
+
+          {(assembly.framing.kind === 'wood' || assembly.framing.kind === 'lgs') && (
+            <LayerRow label={i18n._({ id: 'node.wall.panel.studs', message: 'Studs' })}>
+              <select
+                className={SELECT_CLASS}
+                onChange={(event) => {
+                  const spacing = studSpacing.sizes.find(
+                    (size) => spacingKey(size) === event.target.value,
+                  )
+                  edit((draft) => ({
+                    ...draft,
+                    framing: {
+                      kind: draft.framing.kind,
+                      depth: draft.framing.depth,
+                      ...(spacing !== undefined ? { spacing } : {}),
+                    },
+                  }))
+                }}
+                value={studSpacing.current === null ? '' : spacingKey(studSpacing.current)}
+              >
+                <option value="">
+                  {i18n._({ id: 'node.wall.panel.framersDefault', message: "Framer's default" })}
+                </option>
+                {studSpacing.sizes.map((spacing) => (
+                  <option key={spacingKey(spacing)} value={spacingKey(spacing)}>
+                    {formatSpacing(spacing, unit, i18n)}
+                  </option>
+                ))}
+              </select>
+            </LayerRow>
+          )}
 
           <LayerRow label={i18n._({ id: 'node.wall.panel.interior', message: 'Interior' })}>
             <select

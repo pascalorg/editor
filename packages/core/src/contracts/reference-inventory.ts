@@ -81,7 +81,10 @@ const MATERIAL_FIELDS = [
   'edgeMaterial',
   'exteriorMaterial',
   'fasciaMaterial',
+  'gableLeftMaterial',
+  'gableRightMaterial',
   'glassMaterial',
+  'heelMaterial',
   'interiorMaterial',
   'panelMaterial',
   'railingMaterial',
@@ -660,7 +663,14 @@ export const EXISTING_REFERENCES: readonly ExistingReference[] = [
       note: 'Capture provenance: stable across re-capture (R9).',
     }),
   ),
-  ...(['assembly.layers[].src', 'assembly.backing[].src'] as const).map((path) =>
+  ...(
+    [
+      'assembly.layers[].src',
+      'assembly.backing[].src',
+      'wallTypes[].assembly.layers[].src',
+      'wallTypes[].assembly.backing[].src',
+    ] as const
+  ).map((path) =>
     row({
       kind: '*',
       path,
@@ -668,7 +678,14 @@ export const EXISTING_REFERENCES: readonly ExistingReference[] = [
       note: 'Layer provenance (F2): a preset strips it so it never claims a source element.',
     }),
   ),
-  ...(['assembly.layers[].slot', 'assembly.backing[].slot'] as const).map((path) =>
+  ...(
+    [
+      'assembly.layers[].slot',
+      'assembly.backing[].slot',
+      'wallTypes[].assembly.layers[].slot',
+      'wallTypes[].assembly.backing[].slot',
+    ] as const
+  ).map((path) =>
     row({
       kind: '*',
       path,
@@ -676,11 +693,19 @@ export const EXISTING_REFERENCES: readonly ExistingReference[] = [
       note: "A key into the host's own `slots`; a missing key falls back to `layer:<id>`, then the role default.",
     }),
   ),
+  ...(['assembly.presetId', 'wallTypes[].assembly.presetId'] as const).map((path) =>
+    row({
+      kind: '*',
+      path,
+      ...policy('asset', 'content', 'freeze', 'keep'),
+      note: 'The assembly preset a layer stack was made from.',
+    }),
+  ),
   row({
     kind: '*',
-    path: 'assembly.presetId',
+    path: 'buildUp.presetId',
     ...policy('asset', 'content', 'freeze', 'keep'),
-    note: 'The assembly preset a layer stack was made from.',
+    note: 'The build-up preset a roof plane or ceiling took its layers from.',
   }),
 
   // ─── Typed provenance (D5) ────────────────────────────────────────
@@ -739,11 +764,23 @@ export const NON_REFERENCES: readonly { kind: string; path: string; reason: stri
   { kind: 'block', path: 'topology.vertices[].id', reason: 'Defines a topology key.' },
   { kind: 'block', path: 'topology.edges[].id', reason: 'Defines a topology key.' },
   { kind: 'block', path: 'topology.faces[].id', reason: 'Defines a topology key.' },
-  ...(['assembly.layers[].id', 'assembly.backing[].id'] as const).map((path) => ({
+  ...(
+    [
+      'assembly.layers[].id',
+      'assembly.backing[].id',
+      'wallTypes[].assembly.layers[].id',
+      'wallTypes[].assembly.backing[].id',
+    ] as const
+  ).map((path) => ({
     kind: '*',
     path,
     reason: 'Defines an assembly layer key (the `#layer:<id>` address).',
   })),
+  {
+    kind: 'site',
+    path: 'wallTypes[].id',
+    reason: "Defines a project wall type's key (what a wall's `assembly.presetId` names).",
+  },
   {
     kind: 'gutter',
     path: 'outlets[].id',
@@ -961,6 +998,12 @@ export const METADATA_REFERENCES: readonly ExistingReference[] = [
     targetKinds: ['slab'],
     note: 'The deck a balcony railing or deck belongs to.',
   }),
+  meta('porchOf', {
+    ...policy('node', 'internal', 'drop', 'strip'),
+    targetKinds: ['zone'],
+    dependents: ['metadata.porchPart', 'metadata.porchSeed'],
+    note: "The porch room a post or beam was made for by the structure kernel (lib/porch-framing-sync), which part of its framing and its shape as made; a porch gone takes its parts with it, one edited by hand stays the user's own.",
+  }),
 ]
 
 const described = (reason: string, paths: readonly string[]) =>
@@ -1000,6 +1043,7 @@ export const METADATA_NON_REFERENCES: readonly { path: string; reason: string }[
     'cabinetAdjacencyRevision',
     'cabinetLayoutRevision',
     'cabinetPresetNominalWidth',
+    'decking',
     'deferParentRebuild',
     'drawingCoordinationLocked',
     'floor',

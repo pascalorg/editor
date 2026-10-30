@@ -3,6 +3,7 @@ import {
   DEFAULT_WALL_THICKNESS,
   getWallBaseElevationForNodes,
   getWallEffectiveHeightForNodes,
+  isRailingWall,
   type NodeDefinition,
   type WallNode as WallNodeType,
   wallSlots,
@@ -14,6 +15,7 @@ import {
   getWallDrawVariant,
   type NodePanelModel,
   PANEL_MODEL_EXTENSION,
+  selectedWallDimensions,
   useEditor,
   type WallDrawVariant,
 } from '@pascal-app/editor'
@@ -34,7 +36,12 @@ import {
   wallMeasurementFeatures,
 } from './measurement'
 import { wallPaint } from './paint'
-import { type WallReferenceValue, wallReferenceModel, wallSettings } from './panel-model'
+import {
+  type WallReferenceValue,
+  wallAssemblyMultiControls,
+  wallReferenceModel,
+  wallSettings,
+} from './panel-model'
 import { wallParametrics } from './parametrics'
 import { wallQuickMeasurement } from './quick-measurement'
 import { WallNode } from './schema'
@@ -89,6 +96,7 @@ export const wallDefinition: NodeDefinition<typeof WallNode> = {
             value: reference.value,
             onChange: (value) => reference.apply(value as WallReferenceValue),
           },
+          ...wallAssemblyMultiControls(selection),
         ]
       },
     } satisfies NodePanelModel<WallNodeType>,
@@ -112,6 +120,8 @@ export const wallDefinition: NodeDefinition<typeof WallNode> = {
       tool: () => import('./floorplan-tool'),
       reshapeLayers: { split: () => import('./split-floorplan-layer') },
       contextualDimensions: buildWallContextualDimensions,
+      planHitSelectsNode: true,
+      selectionDimensions: ({ node, nodes, faces }) => selectedWallDimensions(nodes, node, faces),
       actionMenu: {
         actions: () => import('./actions'),
         canCurve: ({ node, nodes }) =>
@@ -141,13 +151,23 @@ export const wallDefinition: NodeDefinition<typeof WallNode> = {
     reveal: { phase: 'structure', style: 'rise' },
     exterior: wallSeenFromOutside,
     revealLayout: { line: (node) => (node.type === 'wall' ? [node.start, node.end] : null) },
-    revealOnEdit: ['start', 'end', 'curveOffset', 'height', 'thickness', 'wallType', 'curtainWall'],
+    revealOnEdit: [
+      'start',
+      'end',
+      'curveOffset',
+      'height',
+      'thickness',
+      'wallType',
+      'curtainWall',
+      'railing',
+    ],
     // Wall move is bespoke (endpoint drag, linked-wall corner cascade,
     // ALT-detach). Omitting `movable` keeps the legacy MoveWallTool via
     // capability-driven dispatch.
     selectable: { hitVolume: 'bbox' },
     // Front + back faces host items (paintings, shelves, switches).
     surfaces: {
+      renderOpeningContent: (node) => !isRailingWall(node),
       hosting: false,
       top: {
         height: (node, { nodes }) => {
@@ -253,6 +273,8 @@ export const wallDefinition: NodeDefinition<typeof WallNode> = {
       visible: whenWallVariant('polygon'),
     },
     { key: 'Left click', label: 'Set wall start / end', visible: whenWallVariant('walls') },
+    // A started Polygon room holds square; Alt lets it go.
+    { key: 'Alt', label: 'Free angle', visible: whenWallVariant('polygon') },
     { key: 'Esc', label: 'Cancel' },
   ],
   // The split session (`split-session.ts`) is the wall's own reshape; the HUD
@@ -304,6 +326,6 @@ export const wallDefinition: NodeDefinition<typeof WallNode> = {
 
   mcp: {
     description:
-      'A wall defined by endpoints and optional curve sagitta. wallType selects standard or curtain. curtainWall configures construction, framing, grids, glazing, spandrels, and zero-based panel overrides. Thickness is frame depth for curtain walls.',
+      'A wall defined by endpoints and optional curve sagitta. wallType selects standard, curtain or railing. curtainWall configures construction, framing, grids, glazing, spandrels, and zero-based panel overrides. Thickness is frame depth for curtain walls. A railing is an open guard (railing: style, postSpacing, postSize, infillSize, infillGap, bottomClearance, cap) that closes rooms like a wall; its height is its own (36 in by default), its thickness its posts, and a door on it is a gap in the guard.',
   },
 }

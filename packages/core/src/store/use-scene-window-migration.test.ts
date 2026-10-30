@@ -83,6 +83,8 @@ describe('scene window migrations', () => {
     expect(window.columnRatios).toEqual([1])
     expect(window.rowRatios).toEqual([1])
     expect(window.frameThickness).toBe(0.05)
+    expect(window.casingFaceA).toBe(false)
+    expect(window.casingFaceB).toBe(false)
     expect(window.sill).toBe(true)
     // …and authored fields survive.
     expect(window.width).toBe(1.2)
