@@ -731,7 +731,6 @@ export {
 } from './lib/slab-polygon'
 export {
   doorSillFloorOf,
-  isGarageName,
   roomFoundationOf,
   slabRoomElevation,
 } from './lib/slab-room'

@@ -10,7 +10,7 @@ import {
 import { ownFloorIntentChanges } from '../../lib/own-floor-intent'
 import { drawnFloorElevationConflict } from '../../lib/room-drawn-floor'
 import { roundFloorElevation } from '../../lib/room-floor-feasibility'
-import { isGarageName, slabRoomDoorChanges, slabRoomElevation } from '../../lib/slab-room'
+import { slabRoomDoorChanges, slabRoomElevation } from '../../lib/slab-room'
 import { type AnyNode, type AnyNodeId, ZoneNode } from '../../schema'
 import { mezzanineElevationConflict } from './mezzanine-content'
 import { requireZone, type StructureNodes, type StructurePlan } from './shared'
@@ -78,8 +78,7 @@ export const ZoneIntentPatch = z.strictObject({
 export type ZoneIntentPatch = z.infer<typeof ZoneIntentPatch>
 
 /**
- * The patch with what the room's foundation asks of its floor: a choice of slab or raised floor,
- * or a room named a garage, which stands on a slab unless its floor was chosen already.
+ * The patch with what an explicit choice of slab or raised foundation asks of the room's floor.
  */
 function withRoomFoundation(
   nodes: StructureNodes,
@@ -87,12 +86,8 @@ function withRoomFoundation(
   patch: ZoneIntentPatch,
 ): ZoneIntentPatch {
   const asked = patch.floor?.foundation
-  const named =
-    asked === undefined && zone.floor?.foundation === undefined && isGarageName(patch.name)
-      ? 'slab'
-      : undefined
-  if (asked === undefined && named === undefined) return patch
-  const choice = asked ?? named ?? null
+  if (asked === undefined) return patch
+  const choice = asked
   const scene = nodes as Record<AnyNodeId, AnyNode>
   // In a raised house a slab room's floor comes down to its slab on grade; a room back on the
   // raised floor goes back up to it.
@@ -153,7 +148,7 @@ function withRoomType(
 
 /**
  * A room's intent: its name, floor, ceiling and finishes. Its floor's foundation (`floor.foundation`)
- * moves its floor with it in a raised house: a slab room (a garage, by choice or by its name) comes
+ * moves its floor with it in a raised house: a slab room comes
  * down to its slab on grade (`slabRoomElevation`), and back up when it goes back on the raised floor.
  */
 export function setZoneIntent(

@@ -16,11 +16,6 @@ type Nodes = Record<AnyNodeId, AnyNode>
 /** Grade is read along a room's outline this often, metres. */
 const GRADE_STEP = 0.15
 
-/** A room named a garage: "garage" as a word, whatever its case ("Garage", "2-car garage"). */
-export function isGarageName(name: string | null | undefined): boolean {
-  return typeof name === 'string' && /\bgarage\b/i.test(name)
-}
-
 /** The building a room stands in, when it is one with its foundation record on. */
 function buildingOfRoom(nodes: Nodes, zone: Pick<ZoneNode, 'parentId'>): BuildingNode | null {
   const buildingId = zone.parentId
@@ -31,8 +26,8 @@ function buildingOfRoom(nodes: Nodes, zone: Pick<ZoneNode, 'parentId'>): Buildin
 }
 
 /**
- * What a room's floor stands on: its own choice (`floor.foundation`, made in its panel or by its
- * name), else its building's foundation type. `null` for a room in no building with its foundation
+ * What a room's floor stands on: its own choice (`floor.foundation`, made in its panel or by an
+ * agent), else its building's foundation type. `null` for a room in no building with its foundation
  * record on.
  */
 export function roomFoundationOf(

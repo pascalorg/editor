@@ -174,20 +174,23 @@ describe('plate top partition', () => {
     expect(JSON.stringify(second)).toBe(JSON.stringify(first))
   })
 
-  test('a plate with no room finish keeps one plain surface cell', () => {
-    clearPlateSurfaceCaches()
-    const { plate, context } = twoRoomLevel()
-    const bare = context.zones.map((z) => ({ ...z, floor: undefined }))
-    const partition = computePlateSurfacePartition(plate, {
-      ...context,
-      zones: bare,
-      slabs: [plate],
-    })
-    if (!partition) throw new Error('expected a partition')
-    expect(partition.plainTop).toBe(true)
-    expect(partition.cells).toHaveLength(1)
-    expect(partition.cells[0]?.role).toBe('surface')
-  })
+  test.each([undefined, 'slab'] as const)(
+    'a plate with no room finish inherits its surface with foundation %s',
+    (foundation) => {
+      clearPlateSurfaceCaches()
+      const { plate, context } = twoRoomLevel()
+      const bare = context.zones.map((z) => ({ ...z, name: 'Garage', floor: { foundation } }))
+      const partition = computePlateSurfacePartition(plate, {
+        ...context,
+        zones: bare,
+        slabs: [plate],
+      })
+      if (!partition) throw new Error('expected a partition')
+      expect(partition.plainTop).toBe(true)
+      expect(partition.cells).toHaveLength(1)
+      expect(partition.cells[0]?.role).toBe('surface')
+    },
+  )
 
   test('a manual slab has no partition', () => {
     clearPlateSurfaceCaches()

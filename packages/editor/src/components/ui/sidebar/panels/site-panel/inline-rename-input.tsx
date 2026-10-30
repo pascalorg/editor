@@ -2,9 +2,8 @@ import { type AnyNodeId, usePascalI18n, useScene } from '@pascal-app/core'
 import { Pencil } from 'lucide-react'
 import { memo, useCallback, useEffect, useRef, useState } from 'react'
 import { displayRoomName } from './../../../../../lib/room-name-messages'
-import { renameRoom } from './../../../../../lib/room-structure-commands'
 import { cn } from './../../../../../lib/utils'
-import { commitRoomNameEdit } from './../../../panels/room-name-options'
+import { commitTreeRoomRename } from './../../../panels/room-name-options'
 
 interface InlineRenameFieldProps {
   name: string | undefined
@@ -25,10 +24,7 @@ type InlineRenameInputProps = Omit<InlineRenameFieldProps, 'name' | 'onRename'> 
   editableName?: (name: string | undefined) => string | undefined
 }
 
-/**
- * Renames a scene node through `updateNode`; a room through its intent (`renameRoom`), so a name
- * carries what it asks of the room (a garage stands on a slab) as the room panel's does.
- */
+/** Renames a scene node through `updateNode`. */
 export const InlineRenameInput = memo(function InlineRenameInput({
   nodeId,
   editableName,
@@ -37,11 +33,9 @@ export const InlineRenameInput = memo(function InlineRenameInput({
   const updateNode = useScene((s) => s.updateNode)
   const stored = useScene((s) => s.nodes[nodeId]?.name)
   const name = editableName ? editableName(stored) : stored
-  const isRoom = useScene((s) => s.nodes[nodeId]?.type === 'zone')
   const handleRename = useCallback(
-    (next: string | undefined) =>
-      isRoom ? renameRoom(nodeId, next ?? '') : updateNode(nodeId, { name: next }),
-    [isRoom, nodeId, updateNode],
+    (next: string | undefined) => updateNode(nodeId, { name: next }),
+    [nodeId, updateNode],
   )
   return <InlineRenameField {...props} name={name} onRename={handleRename} />
 })
@@ -50,8 +44,6 @@ export const InlineRenameInput = memo(function InlineRenameInput({
  * Renames a room or zone from the layer tree. The field edits the name in the
  * UI language, as the room panel shows it, and stores what an edit there
  * stores: a catalog name stays English ("Salon 3" on a Lounge stores "Lounge 3").
- * Like the room panel's, it writes through the room's intent (`renameRoom`), so
- * a name carries what it asks of the room (a garage stands on a slab).
  */
 export const RoomRenameInput = memo(function RoomRenameInput({
   nodeId,
@@ -60,14 +52,7 @@ export const RoomRenameInput = memo(function RoomRenameInput({
   const i18n = usePascalI18n()
   const stored = useScene((s) => s.nodes[nodeId]?.name)
   const handleRename = useCallback(
-    (next: string | undefined) => {
-      if (next === undefined) {
-        renameRoom(nodeId, '')
-        return
-      }
-      const name = useScene.getState().nodes[nodeId]?.name ?? ''
-      commitRoomNameEdit(nodeId, name, displayRoomName(name, i18n), next, i18n)
-    },
+    (next: string | undefined) => commitTreeRoomRename(nodeId, next, i18n),
     [nodeId, i18n],
   )
   return (

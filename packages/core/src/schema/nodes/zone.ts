@@ -130,7 +130,7 @@ export const ZoneNode = BaseNode.extend({
   - roomNumber/finishes/ceilingHeight/occupancy: construction-document room metadata
   - floor.regions / ceiling.regions: painted parts of the room's floor and ceiling ([x, z] polygons, later wins)
   - floor.script: a three.js module that builds the room's floor finish (boards, tiles) for its floor polygon, drawn over the floor; it owns its colours
-  - floor.foundation: "raised" or "slab", what the room's floor stands on; absent, the building's foundation type (a garage named so defaults to "slab")
+  - floor.foundation: "raised" or "slab", what the room's floor stands on; absent, the building's foundation type
   - floor.drop: metres the floor steps down from the floor it would share (a porch under the house's floor); an explicit floor.elevation wins
   - roomType: "porch", "deck" or "patio" for a room outside the house (outdoors even when covered); absent, an ordinary room
   - porchFraming: a porch's posts and beam (auto placement on unless false; a deck's or patio's only when auto is true; post size, max post spacing in metres, beam size)

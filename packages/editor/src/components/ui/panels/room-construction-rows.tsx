@@ -481,7 +481,7 @@ function SitsOn({ zoneId, noFloor }: { zoneId: string; noFloor: boolean }) {
 /**
  * "Raised floor | Slab": what the room's floor stands on in a raised house (`floor.foundation`,
  * through core's `setZoneIntent`): on the house's raised floor, or on a slab on grade of its own
- * (a garage, which its name picks), its floor coming down onto it in the same step. Shown where
+ * (for example a garage), its floor coming down onto it in the same step. Shown where
  * the building's designed foundation is a raised floor, or the room already chose.
  */
 export function RoomFoundationChoice({ zoneId }: { zoneId: string }) {

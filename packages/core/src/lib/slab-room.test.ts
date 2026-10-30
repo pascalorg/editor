@@ -21,8 +21,7 @@ import {
   foundationRimSteps,
   genericFoundation,
 } from './generic-foundation'
-import { SLAB_ROOM_FLOOR_FINISH } from './plate-surface'
-import { doorSillFloorOf, isGarageName, roomFoundationOf, slabRoomElevation } from './slab-room'
+import { doorSillFloorOf, roomFoundationOf, slabRoomElevation } from './slab-room'
 
 const IN = 0.0254
 type Nodes = Record<AnyNodeId, AnyNode>
@@ -126,36 +125,39 @@ function apply(nodes: Nodes, update: Array<{ id: string; data: unknown }>): Node
 }
 
 /** The house seated on its raised floor, then `name` given to the east room through its panel. */
-function seatedAndNamed(name: string): Nodes {
+function seatedAndNamed(name: string, foundation?: 'slab'): Nodes {
   let nodes = raisedHouseWithGarage()
   nodes = apply(
     nodes,
     buildBuildingFoundationChanges({ nodes, buildingId: 'building_a', patch: {} })!.update,
   )
-  const plan = setZoneIntent(nodes, { zoneId: 'zone_garage', patch: { name } })
+  const plan = setZoneIntent(nodes, {
+    zoneId: 'zone_garage',
+    patch: { name, ...(foundation ? { floor: { foundation } } : {}) },
+  })
   expect(plan.conflicts ?? []).toEqual([])
   return apply(nodes, plan.changes as Array<{ id: string; data: unknown }>)
 }
 
 const zone = (nodes: Nodes, id = 'zone_garage') => nodes[id as AnyNodeId] as ZoneNode
 
-test('a garage is "garage" as a word, whatever its case', () => {
-  expect(['Garage', '2-car garage', 'GARAGE 2', 'Garage/Shop'].map(isGarageName)).toEqual([
-    true,
-    true,
-    true,
-    true,
-  ])
-  expect(['Garages', 'Garageband', 'Living', ''].map(isGarageName)).toEqual([
-    false,
-    false,
-    false,
-    false,
-  ])
-})
+test.each(['Garage', '2-car garage', 'GARAGE 2', 'Garage/Shop', 'Workshop'])(
+  'renaming a raised room to %s changes only its label',
+  (name) => {
+    const nodes = seatedAndNamed('Room 2')
+    const plan = setZoneIntent(nodes, { zoneId: 'zone_garage', patch: { name } })
+    expect(plan.conflicts ?? []).toEqual([])
+    expect(plan.changes).toEqual([{ op: 'update', id: 'zone_garage', data: { name } }])
+    const renamed = apply(nodes, plan.changes as never)
+    expect(zone(renamed).floor).toEqual(zone(nodes).floor)
+    for (const id of ['door_overhead', 'door_man', 'door_house'] as const)
+      expect(renamed[id as AnyNodeId]).toEqual(nodes[id as AnyNodeId])
+    expect(roomFoundationOf(renamed, zone(renamed))).toBe('raised')
+  },
+)
 
-test('named a garage, a room of a raised house comes down onto a slab 4 in over grade; a new name leaves it there', () => {
-  const nodes = seatedAndNamed('2-car garage')
+test('an explicit slab choice lowers a room to 4 in over grade and survives renaming', () => {
+  const nodes = seatedAndNamed('2-car garage', 'slab')
   expect(zone(nodes).floor?.foundation).toBe('slab')
   expect(roomFoundationOf(nodes, zone(nodes))).toBe('slab')
   expect(roomFoundationOf(nodes, zone(nodes, 'zone_house'))).toBe('raised')
@@ -195,7 +197,7 @@ test('a room chosen raised stays raised when named a garage; chosen slab, it com
 })
 
 test('a garage off a raised house: its slab on grade, its walls on an 8 in curb cut at its doors, the shared wall on the house’s stem', () => {
-  const nodes = seatedAndNamed('Garage')
+  const nodes = seatedAndNamed('Garage', 'slab')
   const report = designedFoundationReport(nodes, 'building_a')!
   const plane = levelPlaneWorldY(nodes, 'level_g')!
   const slabTop = plane + zone(nodes).floor!.elevation!
@@ -240,7 +242,7 @@ test('a garage off a raised house: its slab on grade, its walls on an 8 in curb 
 })
 
 test('seating the raised house again keeps the garage on grade; a slab house takes it back onto its floor', () => {
-  let nodes = seatedAndNamed('Garage')
+  let nodes = seatedAndNamed('Garage', 'slab')
   const before = zone(nodes).floor!.elevation!
   nodes = apply(
     nodes,
@@ -261,7 +263,7 @@ test('seating the raised house again keeps the garage on grade; a slab house tak
 })
 
 test('a slab room’s doors open from its slab; the door into the house keeps its sill at the floor', () => {
-  const nodes = seatedAndNamed('Garage')
+  const nodes = seatedAndNamed('Garage', 'slab')
   const elevation = zone(nodes).floor!.elevation!
   const sill = (id: string) => {
     const door = nodes[id as AnyNodeId] as DoorNode
@@ -281,7 +283,7 @@ test('a slab room’s doors open from its slab; the door into the house keeps it
 })
 
 test('a door placed or moved onto a garage’s wall to the outside stands on its slab; on the shared wall or a house wall, on the house floor', () => {
-  const nodes = seatedAndNamed('Garage')
+  const nodes = seatedAndNamed('Garage', 'slab')
   const elevation = zone(nodes).floor!.elevation!
   const wall = (id: string) => nodes[id as AnyNodeId] as WallNode
   // The rule the door tools place and move a door by (`clampDoorToWall`, given the scene).
@@ -317,10 +319,4 @@ test('a door placed or moved onto a garage’s wall to the outside stands on its
   )
   expect(zone(slab).floor?.foundation).toBe('slab')
   expect(doorSillFloorOf(slab, slab['wall_ge' as AnyNodeId] as WallNode)).toBe(0)
-})
-
-test('a slab room is bare concrete until a finish is chosen for it', () => {
-  const nodes = seatedAndNamed('Garage')
-  expect(zone(nodes).floor?.finish).toBeUndefined()
-  expect(SLAB_ROOM_FLOOR_FINISH).toBe('library:concrete-raw')
 })

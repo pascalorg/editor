@@ -141,7 +141,10 @@ function drawnRaisedHouseWithGarage(): Nodes {
   nodes = draw(nodes, [18.5, 6], [12.5, 6])
   const garage = zoneAt(nodes, [15.5, 3])
   nodes = commit(nodes, (scene) => {
-    const plan = setZoneIntent(scene, { zoneId: garage.id, patch: { name: 'Garage' } })
+    const plan = setZoneIntent(scene, {
+      zoneId: garage.id,
+      patch: { name: 'Garage', floor: { foundation: 'slab' } },
+    })
     expect(plan.conflicts ?? []).toEqual([])
     return applySceneChanges(scene, {
       update: plan.changes.flatMap((change) =>
