@@ -1323,6 +1323,16 @@ msgstr "公開リンク"
 msgid "app.sharePanel.shareProject"
 msgstr "プロジェクトを共有"
 
+# Source-Hash: c90de8776040735c
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Above"
+#: apps/editor/components/viewer-toolbar.tsx
+#, fuzzy
+msgid "app.viewerToolbar.above"
+msgstr "上"
+
 # Source-Hash: 3d3f438d5a49eba7
 # Review: required
 # AI-Provider: claude-code
@@ -1332,6 +1342,26 @@ msgstr "プロジェクトを共有"
 #, fuzzy
 msgid "app.viewerToolbar.automaticDimensions"
 msgstr "自動寸法"
+
+# Source-Hash: 1794e014a604344c
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Below"
+#: apps/editor/components/viewer-toolbar.tsx
+#, fuzzy
+msgid "app.viewerToolbar.below"
+msgstr "下"
+
+# Source-Hash: 69578b7dd7723fa1
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Both"
+#: apps/editor/components/viewer-toolbar.tsx
+#, fuzzy
+msgid "app.viewerToolbar.both"
+msgstr "両方"
 
 # Source-Hash: 14622745dbf93f4c
 # Review: required
@@ -1403,6 +1433,16 @@ msgstr "カットアウェイ"
 msgid "app.viewerToolbar.default"
 msgstr "標準"
 
+# Source-Hash: 12df69f42beb0643
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Dimensions"
+#: apps/editor/components/viewer-toolbar.tsx
+#, fuzzy
+msgid "app.viewerToolbar.dimensions"
+msgstr "寸法"
+
 # Source-Hash: a313661ef9dd0a65
 # Review: required
 # AI-Provider: claude-code
@@ -1442,6 +1482,16 @@ msgstr "建具記号"
 #, fuzzy
 msgid "app.viewerToolbar.edges"
 msgstr "エッジ"
+
+# Source-Hash: 9bacee5dbd658209
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Editing"
+#: apps/editor/components/viewer-toolbar.tsx
+#, fuzzy
+msgid "app.viewerToolbar.editing"
+msgstr "編集"
 
 # Source-Hash: d86126c5d16c6238
 # Review: required
@@ -1493,16 +1543,6 @@ msgstr "エキスパート"
 msgid "app.viewerToolbar.exploded"
 msgstr "分解"
 
-# Source-Hash: c6f865a366ef5755
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Face of stud"
-#: apps/editor/components/viewer-toolbar.tsx
-#, fuzzy
-msgid "app.viewerToolbar.faceOfStud"
-msgstr "下地面"
-
 # Source-Hash: 0c583f1d4201293b
 # Review: required
 # AI-Provider: claude-code
@@ -1522,16 +1562,6 @@ msgstr "主な折れ目の淡い輪郭"
 #, fuzzy
 msgid "app.viewerToolbar.feetInches"
 msgstr "フィート・インチ"
-
-# Source-Hash: 43b8017fa821c46c
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Finished faces"
-#: apps/editor/components/viewer-toolbar.tsx
-#, fuzzy
-msgid "app.viewerToolbar.finishedFaces"
-msgstr "仕上げ面"
 
 # Source-Hash: 8827df1cdeb02ed9
 # Review: required
@@ -1593,15 +1623,15 @@ msgstr "図面化と注記の全コントロール"
 msgid "app.viewerToolbar.fullHeight"
 msgstr "全高"
 
-# Source-Hash: c9838bc98cb35125
+# Source-Hash: 91c2dd3678e981b2
 # Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Full wall thickness"
+# English: "Ghosted for reference"
 #: apps/editor/components/viewer-toolbar.tsx
 #, fuzzy
-msgid "app.viewerToolbar.fullWallThickness"
-msgstr "壁の全厚"
+msgid "app.viewerToolbar.ghostedForReference"
+msgstr "参照用に半透明で表示"
 
 # Source-Hash: 7e4a0a38f694be6b
 # Review: required
@@ -1612,6 +1642,38 @@ msgstr "壁の全厚"
 #, fuzzy
 msgid "app.viewerToolbar.grid"
 msgstr "グリッド"
+
+# Source-Hash: 81ef3a25ccb6eaf7
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "ID"
+#. Short for inside dimension: measured between the inside faces of walls.
+#: apps/editor/components/viewer-toolbar.tsx
+#, fuzzy
+msgid "app.viewerToolbar.id"
+msgstr "内法"
+
+# Source-Hash: 09f615a2c6a14a76
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "ID + OD"
+#. Inside and outside dimensions together.
+#: apps/editor/components/viewer-toolbar.tsx
+#, fuzzy
+msgid "app.viewerToolbar.idOd"
+msgstr "内法 + 外法"
+
+# Source-Hash: 8a7ff5011275abbd
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Inside"
+#: apps/editor/components/viewer-toolbar.tsx
+#, fuzzy
+msgid "app.viewerToolbar.inside"
+msgstr "内側"
 
 # Source-Hash: 4bf4a6861d7d633e
 # Review: required
@@ -1673,6 +1735,16 @@ msgstr "手動寸法"
 msgid "app.viewerToolbar.measurements"
 msgstr "計測"
 
+# Source-Hash: b2cac1ec253d4394
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Measure walls"
+#: apps/editor/components/viewer-toolbar.tsx
+#, fuzzy
+msgid "app.viewerToolbar.measureWalls"
+msgstr "壁の測り方"
+
 # Source-Hash: 0a39470be3b84536
 # Review: required
 # AI-Provider: claude-code
@@ -1693,15 +1765,25 @@ msgstr "メートル"
 msgid "app.viewerToolbar.millimeters"
 msgstr "ミリメートル"
 
-# Source-Hash: b784527bb90b9c5e
+# Source-Hash: 340a0a4e7703227b
 # Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "3D measurements"
+# English: "2D only"
 #: apps/editor/components/viewer-toolbar.tsx
 #, fuzzy
-msgid "app.viewerToolbar.n3dMeasurements"
-msgstr "3D 計測"
+msgid "app.viewerToolbar.n2dOnly"
+msgstr "2Dのみ"
+
+# Source-Hash: ed5416e4329bd789
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "3D only"
+#: apps/editor/components/viewer-toolbar.tsx
+#, fuzzy
+msgid "app.viewerToolbar.n3dOnly"
+msgstr "3Dのみ"
 
 # Source-Hash: 4ff58913a4492199
 # Review: required
@@ -1712,6 +1794,17 @@ msgstr "3D 計測"
 #, fuzzy
 msgid "app.viewerToolbar.noEdgeLines"
 msgstr "エッジ線なし"
+
+# Source-Hash: fdaa3b3faa1844fd
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "OD"
+#. Short for outside dimension: measured between the outside faces of walls.
+#: apps/editor/components/viewer-toolbar.tsx
+#, fuzzy
+msgid "app.viewerToolbar.od"
+msgstr "外法"
 
 # Source-Hash: 50accd740fa2e736
 # Review: required
@@ -1743,6 +1836,36 @@ msgstr "オン"
 msgid "app.viewerToolbar.orthographic"
 msgstr "平行投影"
 
+# Source-Hash: 370413dd021d6ea7
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Other levels"
+#: apps/editor/components/viewer-toolbar.tsx
+#, fuzzy
+msgid "app.viewerToolbar.otherLevels"
+msgstr "他の階層"
+
+# Source-Hash: dc4fe6cb415ed882
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Outside"
+#: apps/editor/components/viewer-toolbar.tsx
+#, fuzzy
+msgid "app.viewerToolbar.outside"
+msgstr "外側"
+
+# Source-Hash: 4b5cbc83a3533c2a
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Overall size, outside face to outside face"
+#: apps/editor/components/viewer-toolbar.tsx
+#, fuzzy
+msgid "app.viewerToolbar.overallSizeOutsideFaceToOutsideFace"
+msgstr "外形寸法（外面から外面まで）"
+
 # Source-Hash: 316e25993ff72b88
 # Review: required
 # AI-Provider: claude-code
@@ -1752,6 +1875,16 @@ msgstr "平行投影"
 #, fuzzy
 msgid "app.viewerToolbar.perspective"
 msgstr "透視投影"
+
+# Source-Hash: 007a63bd7c1e2b55
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Plan"
+#: apps/editor/components/viewer-toolbar.tsx
+#, fuzzy
+msgid "app.viewerToolbar.plan"
+msgstr "平面図"
 
 # Source-Hash: 20226b68d5467072
 # Review: required
@@ -1803,6 +1936,36 @@ msgstr "レンダリング"
 msgid "app.viewerToolbar.roomLabels"
 msgstr "部屋ラベル"
 
+# Source-Hash: 257efab00820fb67
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Room sizes, inside face to inside face"
+#: apps/editor/components/viewer-toolbar.tsx
+#, fuzzy
+msgid "app.viewerToolbar.roomSizesInsideFaceToInsideFace"
+msgstr "部屋の寸法（内面から内面まで）"
+
+# Source-Hash: 1ed28930a451001d
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Room sizes inside, overall size outside"
+#: apps/editor/components/viewer-toolbar.tsx
+#, fuzzy
+msgid "app.viewerToolbar.roomSizesInsideOverallSizeOutside"
+msgstr "内側は部屋の寸法、外側は外形寸法"
+
+# Source-Hash: 8dc78e215a97d9fc
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Scene"
+#: apps/editor/components/viewer-toolbar.tsx
+#, fuzzy
+msgid "app.viewerToolbar.scene"
+msgstr "シーン"
+
 # Source-Hash: 82720864e5034398
 # Review: required
 # AI-Provider: claude-code
@@ -1823,15 +1986,25 @@ msgstr "シーンテーマ"
 msgid "app.viewerToolbar.shadows"
 msgstr "影"
 
-# Source-Hash: 59dc62417b44931d
+# Source-Hash: e04ae95c14479764
 # Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Single wall axis"
+# English: "Shared by 2D and 3D"
 #: apps/editor/components/viewer-toolbar.tsx
 #, fuzzy
-msgid "app.viewerToolbar.singleWallAxis"
-msgstr "壁の中心線"
+msgid "app.viewerToolbar.sharedBy2dAnd3d"
+msgstr "2Dと3Dで共通"
+
+# Source-Hash: 827e0c6ac9936b69
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Show"
+#: apps/editor/components/viewer-toolbar.tsx
+#, fuzzy
+msgid "app.viewerToolbar.show"
+msgstr "表示"
 
 # Source-Hash: d266d83ec490df4e
 # Review: required
@@ -1893,16 +2066,6 @@ msgstr "階段の注記"
 msgid "app.viewerToolbar.strong"
 msgstr "強"
 
-# Source-Hash: e1be031e67d95382
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Structural core face"
-#: apps/editor/components/viewer-toolbar.tsx
-#, fuzzy
-msgid "app.viewerToolbar.structuralCoreFace"
-msgstr "構造躯体面"
-
 # Source-Hash: efc50964d7b0ec47
 # Review: required
 # AI-Provider: claude-code
@@ -1923,6 +2086,16 @@ msgstr "構造通り芯と柱芯"
 msgid "app.viewerToolbar.translucent"
 msgstr "半透明"
 
+# Source-Hash: 07511ce5a194e1ed
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Turn on Dimensions to show them"
+#: apps/editor/components/viewer-toolbar.tsx
+#, fuzzy
+msgid "app.viewerToolbar.turnOnDimensionsToShowThem"
+msgstr "表示するには寸法をオンにしてください"
+
 # Source-Hash: b404dded35241274
 # Review: required
 # AI-Provider: claude-code
@@ -1942,26 +2115,6 @@ msgstr "単位"
 #, fuzzy
 msgid "app.viewerToolbar.walkthrough"
 msgstr "ウォークスルー"
-
-# Source-Hash: 62281975e51da7e3
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Wall centerline"
-#: apps/editor/components/viewer-toolbar.tsx
-#, fuzzy
-msgid "app.viewerToolbar.wallCenterline"
-msgstr "壁芯"
-
-# Source-Hash: ff145d7003118ec6
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Wall dimensions"
-#: apps/editor/components/viewer-toolbar.tsx
-#, fuzzy
-msgid "app.viewerToolbar.wallDimensions"
-msgstr "壁の寸法"
 
 # Source-Hash: 13969d1d6e310aa4
 # Review: required
@@ -3050,36 +3203,6 @@ msgstr "ホームに戻る"
 msgid "editor.buildPanel.advanced"
 msgstr "詳細"
 
-# Source-Hash: 7afac05841af7b0c
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "{lead} every wall takes the exterior type, wherever it lands. Esc or double-click ends the run."
-#: packages/editor/src/components/ui/build-panel/build-panel.tsx
-#, fuzzy
-msgid "editor.buildPanel.rooms.exteriorWall.caption"
-msgstr "{lead}どこに描いても、各壁が外壁の種類になります。Esc またはダブルクリックで連続描画を終了します。"
-
-# Source-Hash: 0a7c3607e2011f54
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Exterior wall"
-#: packages/editor/src/components/ui/build-panel/build-panel.tsx
-#, fuzzy
-msgid "editor.buildPanel.rooms.exteriorWall.label"
-msgstr "外壁"
-
-# Source-Hash: 76fd5dab80b9d731
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Exterior walls: every wall drawn takes the exterior type and cladding"
-#: packages/editor/src/components/ui/build-panel/build-panel.tsx
-#, fuzzy
-msgid "editor.buildPanel.rooms.exteriorWall.title"
-msgstr "外壁：描いた壁はすべて外壁の種類と外装材になります"
-
 # Source-Hash: fb40866c2d6db5fb
 # Review: human
 # English: "walls · floor · ceiling"
@@ -3093,66 +3216,6 @@ msgstr "壁 · 床 · 天井"
 #: packages/editor/src/components/ui/build-panel/build-panel.tsx
 msgid "editor.buildPanel.rooms.idle"
 msgstr "形状を選んで開始します。部屋ごとに壁・床・天井が作成されます。"
-
-# Source-Hash: f1fddcf6d6b5c32b
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "{lead} every wall takes the interior type, wherever it lands. Esc or double-click ends the run."
-#: packages/editor/src/components/ui/build-panel/build-panel.tsx
-#, fuzzy
-msgid "editor.buildPanel.rooms.interiorWall.caption"
-msgstr "{lead}どこに描いても、各壁が内壁の種類になります。Esc またはダブルクリックで連続描画を終了します。"
-
-# Source-Hash: b9e25ba9781c9848
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Interior wall"
-#: packages/editor/src/components/ui/build-panel/build-panel.tsx
-#, fuzzy
-msgid "editor.buildPanel.rooms.interiorWall.label"
-msgstr "内壁"
-
-# Source-Hash: 9e4a942fd52a06c0
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Interior walls: every wall drawn takes the interior type and paint"
-#: packages/editor/src/components/ui/build-panel/build-panel.tsx
-#, fuzzy
-msgid "editor.buildPanel.rooms.interiorWall.title"
-msgstr "内壁：描いた壁はすべて内壁の種類と塗装になります"
-
-# Source-Hash: 3f519112d88b3ba6
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "{lead} every line is an invisible wall: rooms close on it, nothing is built. Closed off outside the house, a room becomes a porch. Esc or double-click ends the run."
-#: packages/editor/src/components/ui/build-panel/build-panel.tsx
-#, fuzzy
-msgid "editor.buildPanel.rooms.invisibleWall.caption"
-msgstr "{lead}各線が見えない壁になります。部屋の境界になりますが、何も建てられません。住宅の外側を区切ると、その部屋はポーチになります。Esc またはダブルクリックで連続描画を終了します。"
-
-# Source-Hash: 5b0317bd807d560e
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Invisible wall"
-#: packages/editor/src/components/ui/build-panel/build-panel.tsx
-#, fuzzy
-msgid "editor.buildPanel.rooms.invisibleWall.label"
-msgstr "見えない壁"
-
-# Source-Hash: 72fbf62dac3603b5
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Invisible walls: divide a room or close off a porch without building a wall. Rooms close on them; they never cut a wall."
-#: packages/editor/src/components/ui/build-panel/build-panel.tsx
-#, fuzzy
-msgid "editor.buildPanel.rooms.invisibleWall.title"
-msgstr "見えない壁：壁を建てずに部屋を分割したり、ポーチを区切ったりします。部屋の境界になりますが、壁を分断することはありません。"
 
 # Source-Hash: ae2800b6c9e2b6ed
 # Review: human
@@ -3181,36 +3244,6 @@ msgstr "各頂点をクリックし、"
 #: packages/editor/src/components/ui/build-panel/build-panel.tsx
 msgid "editor.buildPanel.rooms.polygon.title"
 msgstr "多角形の部屋"
-
-# Source-Hash: 18773160bb84f069
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "{lead} every line is a railing: a guard rooms close on, with no studs, siding or footing. Place a door on it for an opening. Esc or double-click ends the run."
-#: packages/editor/src/components/ui/build-panel/build-panel.tsx
-#, fuzzy
-msgid "editor.buildPanel.rooms.railing.caption"
-msgstr "{lead}各線が手すりになります。部屋の境界となる転落防止柵で、スタッド・サイディング・フーチングはありません。開口を設けるにはドアを配置します。Esc またはダブルクリックで連続描画を終了します。"
-
-# Source-Hash: 240ed9c77627b9a1
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Railing"
-#: packages/editor/src/components/ui/build-panel/build-panel.tsx
-#, fuzzy
-msgid "editor.buildPanel.rooms.railing.label"
-msgstr "手すり"
-
-# Source-Hash: 161fbdfe5f09b81a
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Railings: a 36 in guard drawn like walls, posts at most 6 ft apart. Rooms close on it and it takes openings; style and height in the wall panel."
-#: packages/editor/src/components/ui/build-panel/build-panel.tsx
-#, fuzzy
-msgid "editor.buildPanel.rooms.railing.title"
-msgstr "手すり：壁と同じように描く高さ 36 in の転落防止柵で、支柱の間隔は最大 6 ft です。部屋の境界になり、開口も設けられます。スタイルと高さは壁パネルで設定します。"
 
 # Source-Hash: 9b46295eedcbedae
 # Review: human
@@ -3247,15 +3280,45 @@ msgstr "長方形の部屋"
 msgid "editor.buildPanel.rooms.title"
 msgstr "部屋"
 
-# Source-Hash: ee04555fa3ead992
+# Source-Hash: 9755d557ce490458
 # Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "{lead} every wall starts where the last ended. Esc or double-click ends the run; close a loop and it becomes a room."
+# English: "Divides a room or closes off a porch without building a wall; rooms close on it. Change any wall later from its controls."
 #: packages/editor/src/components/ui/build-panel/build-panel.tsx
 #, fuzzy
-msgid "editor.buildPanel.rooms.walls.caption"
-msgstr "{lead}各壁は前の壁の終点から始まります。Esc またはダブルクリックで連続描画を終了し、ループを閉じると部屋になります。"
+msgid "editor.buildPanel.rooms.wallKinds.invisibleHelp"
+msgstr "壁を建てずに部屋を区切ったりポーチを閉じたりします。部屋はこの線で閉じます。どの壁も後からコントロールで変更できます。"
+
+# Source-Hash: abe7e7de0d337058
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Wall kind"
+#: packages/editor/src/components/ui/build-panel/build-panel.tsx
+#, fuzzy
+msgid "editor.buildPanel.rooms.wallKinds.label"
+msgstr "壁の種類"
+
+# Source-Hash: b4d012ac50ef1e82
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "A guard for stairs, balconies and mezzanines; rooms close on it. Change any wall later from its controls."
+#: packages/editor/src/components/ui/build-panel/build-panel.tsx
+#, fuzzy
+msgid "editor.buildPanel.rooms.wallKinds.railingHelp"
+msgstr "階段、バルコニー、中二階のための手すりです。部屋はこの線で閉じます。どの壁も後からコントロールで変更できます。"
+
+# Source-Hash: 5e6d896656f4e056
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "One wall per two clicks. Its sides become exterior or interior from the rooms it bounds. Change any wall later from its controls."
+#: packages/editor/src/components/ui/build-panel/build-panel.tsx
+#, fuzzy
+msgid "editor.buildPanel.rooms.wallKinds.standardHelp"
+msgstr "2回のクリックで壁を1枚描きます。面は接する部屋に応じて外部または内部になります。どの壁も後からコントロールで変更できます。"
 
 # Source-Hash: aac9a732d2159ccc
 # Review: human
@@ -3264,16 +3327,6 @@ msgstr "{lead}各壁は前の壁の終点から始まります。Esc または�
 msgid "editor.buildPanel.rooms.walls.label"
 msgstr "壁"
 
-# Source-Hash: ab5c2c822d968ca2
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Click each corner;"
-#: packages/editor/src/components/ui/build-panel/build-panel.tsx
-#, fuzzy
-msgid "editor.buildPanel.rooms.walls.lead"
-msgstr "各頂点をクリックします。"
-
 # Source-Hash: aac9a732d2159ccc
 # Review: human
 # English: "Walls"
@@ -3281,22 +3334,12 @@ msgstr "各頂点をクリックします。"
 msgid "editor.buildPanel.rooms.walls.title"
 msgstr "壁"
 
-# Source-Hash: 4ca0e0e73229540c
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Default"
-#: packages/editor/src/components/ui/build-panel/wall-type-controls.tsx
-#, fuzzy
-msgid "editor.buildPanel.wallTypeControls.default"
-msgstr "標準"
-
 # Source-Hash: 1dba2aacc55e0bb7
 # Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Delete from this project"
-#: packages/editor/src/components/ui/build-panel/wall-type-controls.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-menu.tsx
 #, fuzzy
 msgid "editor.buildPanel.wallTypeControls.deleteFromThisProject"
 msgstr "このプロジェクトから削除"
@@ -3306,7 +3349,7 @@ msgstr "このプロジェクトから削除"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Duplicate as a new type…"
-#: packages/editor/src/components/ui/build-panel/wall-type-controls.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-menu.tsx
 #, fuzzy
 msgid "editor.buildPanel.wallTypeControls.duplicateAsANewType"
 msgstr "新しい種類として複製…"
@@ -3316,27 +3359,17 @@ msgstr "新しい種類として複製…"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Edit layers…"
-#: packages/editor/src/components/ui/build-panel/wall-type-controls.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-menu.tsx
 #, fuzzy
 msgid "editor.buildPanel.wallTypeControls.editLayers"
 msgstr "層を編集…"
-
-# Source-Hash: 640331cc307a8421
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Edit or duplicate {label}"
-#: packages/editor/src/components/ui/build-panel/wall-type-controls.tsx
-#, fuzzy
-msgid "editor.buildPanel.wallTypeControls.editOrDuplicateLabel"
-msgstr "{label}を編集または複製"
 
 # Source-Hash: 8f1ea5a4c16ba810
 # Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Edit or duplicate this wall type"
-#: packages/editor/src/components/ui/build-panel/wall-type-controls.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-menu.tsx
 #, fuzzy
 msgid "editor.buildPanel.wallTypeControls.editOrDuplicateThisWallType"
 msgstr "この壁の種類を編集または複製"
@@ -3346,7 +3379,7 @@ msgstr "この壁の種類を編集または複製"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "New wall type…"
-#: packages/editor/src/components/ui/build-panel/wall-type-controls.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-menu.tsx
 #, fuzzy
 msgid "editor.buildPanel.wallTypeControls.newWallType"
 msgstr "新しい壁の種類…"
@@ -3356,7 +3389,7 @@ msgstr "新しい壁の種類…"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Presets stay as cited. Duplicate one to change its layers."
-#: packages/editor/src/components/ui/build-panel/wall-type-controls.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-menu.tsx
 #, fuzzy
 msgid "editor.buildPanel.wallTypeControls.presetsStayAsCitedDuplicateOne"
 msgstr "プリセットは出典どおりのままです。層を変えるには複製してください。"
@@ -3366,7 +3399,7 @@ msgstr "プリセットは出典どおりのままです。層を変えるには
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Add"
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 #, fuzzy
 msgid "editor.buildPanel.wallTypeEditorDialog.add"
 msgstr "追加"
@@ -3376,7 +3409,7 @@ msgstr "追加"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Air space"
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 #, fuzzy
 msgid "editor.buildPanel.wallTypeEditorDialog.airSpace"
 msgstr "空気層"
@@ -3386,7 +3419,7 @@ msgstr "空気層"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "A wall type holds at most {limit, plural, one {# layer} other {# layers}}."
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 #, fuzzy
 msgid "editor.buildPanel.wallTypeEditorDialog.aWallTypeHoldsAtMost"
 msgstr "壁の種類に含められる層は最大 {limit, plural, other {# 層}}です。"
@@ -3396,7 +3429,7 @@ msgstr "壁の種類に含められる層は最大 {limit, plural, other {# 層}
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Brick veneer"
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 #, fuzzy
 msgid "editor.buildPanel.wallTypeEditorDialog.brickVeneer"
 msgstr "レンガ張り"
@@ -3406,7 +3439,7 @@ msgstr "レンガ張り"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Cancel"
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 #, fuzzy
 msgid "editor.buildPanel.wallTypeEditorDialog.cancel"
 msgstr "キャンセル"
@@ -3416,7 +3449,7 @@ msgstr "キャンセル"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Drywall"
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 #, fuzzy
 msgid "editor.buildPanel.wallTypeEditorDialog.drywall"
 msgstr "石膏ボード"
@@ -3426,7 +3459,7 @@ msgstr "石膏ボード"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Duplicate wall type"
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 #, fuzzy
 msgid "editor.buildPanel.wallTypeEditorDialog.duplicateWallType"
 msgstr "壁の種類を複製"
@@ -3436,7 +3469,7 @@ msgstr "壁の種類を複製"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Edit wall type"
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 #, fuzzy
 msgid "editor.buildPanel.wallTypeEditorDialog.editWallType"
 msgstr "壁の種類を編集"
@@ -3446,7 +3479,7 @@ msgstr "壁の種類を編集"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Every wall type has one framing core"
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 #, fuzzy
 msgid "editor.buildPanel.wallTypeEditorDialog.everyWallTypeHasOneFraming"
 msgstr "壁の種類には必ず下地コアが 1 つあります"
@@ -3456,7 +3489,7 @@ msgstr "壁の種類には必ず下地コアが 1 つあります"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Fiber cement"
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 #, fuzzy
 msgid "editor.buildPanel.wallTypeEditorDialog.fiberCement"
 msgstr "繊維セメント"
@@ -3466,7 +3499,7 @@ msgstr "繊維セメント"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Finish"
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 #, fuzzy
 msgid "editor.buildPanel.wallTypeEditorDialog.finish"
 msgstr "仕上げ"
@@ -3476,7 +3509,7 @@ msgstr "仕上げ"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Framing core"
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 #, fuzzy
 msgid "editor.buildPanel.wallTypeEditorDialog.framingCore"
 msgstr "下地コア"
@@ -3486,7 +3519,7 @@ msgstr "下地コア"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "{fullReason} Remove one to add another."
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 #, fuzzy
 msgid "editor.buildPanel.wallTypeEditorDialog.fullreasonRemoveOneToAddAnother"
 msgstr "{fullReason}追加するには 1 つ削除してください。"
@@ -3496,7 +3529,7 @@ msgstr "{fullReason}追加するには 1 つ削除してください。"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Gypsum sheathing"
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 #, fuzzy
 msgid "editor.buildPanel.wallTypeEditorDialog.gypsumSheathing"
 msgstr "石膏ボード下張り"
@@ -3506,7 +3539,7 @@ msgstr "石膏ボード下張り"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Inside"
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 #, fuzzy
 msgid "editor.buildPanel.wallTypeEditorDialog.inside"
 msgstr "内側"
@@ -3516,7 +3549,7 @@ msgstr "内側"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Insulation"
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 #, fuzzy
 msgid "editor.buildPanel.wallTypeEditorDialog.insulation"
 msgstr "断熱材"
@@ -3526,7 +3559,7 @@ msgstr "断熱材"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Lap siding"
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 #, fuzzy
 msgid "editor.buildPanel.wallTypeEditorDialog.lapSiding"
 msgstr "下見板張り"
@@ -3536,7 +3569,7 @@ msgstr "下見板張り"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Layer"
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 #, fuzzy
 msgid "editor.buildPanel.wallTypeEditorDialog.layer"
 msgstr "層"
@@ -3546,7 +3579,7 @@ msgstr "層"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Layer role"
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 #, fuzzy
 msgid "editor.buildPanel.wallTypeEditorDialog.layerRole"
 msgstr "層の役割"
@@ -3556,47 +3589,17 @@ msgstr "層の役割"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Lining"
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 #, fuzzy
 msgid "editor.buildPanel.wallTypeEditorDialog.lining"
 msgstr "内張り"
-
-# Source-Hash: d4e37e79879efa23
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Lists under Exterior: it has a cladding side."
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
-#, fuzzy
-msgid "editor.buildPanel.wallTypeEditorDialog.listsUnderExteriorItHasA"
-msgstr "外装側があるため「外壁」に表示されます。"
-
-# Source-Hash: d455f88eb0e9e68e
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Lists under Interior: both faces match."
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
-#, fuzzy
-msgid "editor.buildPanel.wallTypeEditorDialog.listsUnderInteriorBothFacesMatch"
-msgstr "両面が同じため「内壁」に表示されます。"
-
-# Source-Hash: 5454746105949d05
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "List the layers from the outside in, around one framing core. Walls already drawn keep their layers; walls drawn from now on use the saved type."
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
-#, fuzzy
-msgid "editor.buildPanel.wallTypeEditorDialog.listTheLayersFromTheOutside"
-msgstr "1 つの下地コアを挟んで、外側から内側の順に層を並べます。描画済みの壁は今の層のままで、今後描く壁には保存した種類が使われます。"
 
 # Source-Hash: 964b86ae1474ff98
 # Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Material"
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 #, fuzzy
 msgid "editor.buildPanel.wallTypeEditorDialog.material"
 msgstr "材料"
@@ -3606,7 +3609,7 @@ msgstr "材料"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Mineral wool board"
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 #, fuzzy
 msgid "editor.buildPanel.wallTypeEditorDialog.mineralWoolBoard"
 msgstr "ロックウールボード"
@@ -3616,7 +3619,7 @@ msgstr "ロックウールボード"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Move in"
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 #, fuzzy
 msgid "editor.buildPanel.wallTypeEditorDialog.moveIn"
 msgstr "内側へ移動"
@@ -3626,7 +3629,7 @@ msgstr "内側へ移動"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Move out"
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 #, fuzzy
 msgid "editor.buildPanel.wallTypeEditorDialog.moveOut"
 msgstr "外側へ移動"
@@ -3636,7 +3639,7 @@ msgstr "外側へ移動"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Name"
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 #, fuzzy
 msgid "editor.buildPanel.wallTypeEditorDialog.name"
 msgstr "名前"
@@ -3646,7 +3649,7 @@ msgstr "名前"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "New wall type"
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 #, fuzzy
 msgid "editor.buildPanel.wallTypeEditorDialog.newWallType"
 msgstr "新しい壁の種類"
@@ -3656,7 +3659,7 @@ msgstr "新しい壁の種類"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "OSB"
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 #, fuzzy
 msgid "editor.buildPanel.wallTypeEditorDialog.osb"
 msgstr "OSB"
@@ -3666,7 +3669,7 @@ msgstr "OSB"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Outside"
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 #, fuzzy
 msgid "editor.buildPanel.wallTypeEditorDialog.outside"
 msgstr "外側"
@@ -3676,7 +3679,7 @@ msgstr "外側"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Plaster"
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 #, fuzzy
 msgid "editor.buildPanel.wallTypeEditorDialog.plaster"
 msgstr "漆喰"
@@ -3686,7 +3689,7 @@ msgstr "漆喰"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Plywood"
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 #, fuzzy
 msgid "editor.buildPanel.wallTypeEditorDialog.plywood"
 msgstr "合板"
@@ -3696,7 +3699,7 @@ msgstr "合板"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Remove layer"
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 #, fuzzy
 msgid "editor.buildPanel.wallTypeEditorDialog.removeLayer"
 msgstr "層を削除"
@@ -3706,7 +3709,7 @@ msgstr "層を削除"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Rigid foam"
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 #, fuzzy
 msgid "editor.buildPanel.wallTypeEditorDialog.rigidFoam"
 msgstr "硬質フォーム"
@@ -3716,7 +3719,7 @@ msgstr "硬質フォーム"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Save wall type"
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 #, fuzzy
 msgid "editor.buildPanel.wallTypeEditorDialog.saveWallType"
 msgstr "壁の種類を保存"
@@ -3726,7 +3729,7 @@ msgstr "壁の種類を保存"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Sheathing"
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 #, fuzzy
 msgid "editor.buildPanel.wallTypeEditorDialog.sheathing"
 msgstr "下張り"
@@ -3736,7 +3739,7 @@ msgstr "下張り"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Stone veneer"
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 #, fuzzy
 msgid "editor.buildPanel.wallTypeEditorDialog.stoneVeneer"
 msgstr "石張り"
@@ -3746,7 +3749,7 @@ msgstr "石張り"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Stucco"
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 #, fuzzy
 msgid "editor.buildPanel.wallTypeEditorDialog.stucco"
 msgstr "スタッコ"
@@ -3756,7 +3759,7 @@ msgstr "スタッコ"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Thickness"
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 #, fuzzy
 msgid "editor.buildPanel.wallTypeEditorDialog.thickness"
 msgstr "厚さ"
@@ -3766,7 +3769,7 @@ msgstr "厚さ"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Total {thickness}"
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 #, fuzzy
 msgid "editor.buildPanel.wallTypeEditorDialog.totalThickness"
 msgstr "総厚 {thickness}"
@@ -3776,160 +3779,20 @@ msgstr "総厚 {thickness}"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Wall type"
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 #, fuzzy
 msgid "editor.buildPanel.wallTypeEditorDialog.wallType"
 msgstr "壁の種類"
-
-# Source-Hash: abff67400a76e5eb
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Brick"
-#: packages/editor/src/components/ui/build-panel/build-panel.tsx
-#, fuzzy
-msgid "editor.buildPanel.wallTypes.brick"
-msgstr "レンガ"
-
-# Source-Hash: ecca209317a2d1cd
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Cladding"
-#: packages/editor/src/components/ui/build-panel/build-panel.tsx
-#, fuzzy
-msgid "editor.buildPanel.wallTypes.cladding"
-msgstr "外装材"
-
-# Source-Hash: 5c53959decce5dae
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Drawing: Exterior walls."
-#: packages/editor/src/components/ui/build-panel/build-panel.tsx
-#, fuzzy
-msgid "editor.buildPanel.wallTypes.drawingExterior"
-msgstr "描画中：外壁。"
-
-# Source-Hash: 5206b8695c329b06
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Drawing: Interior walls."
-#: packages/editor/src/components/ui/build-panel/build-panel.tsx
-#, fuzzy
-msgid "editor.buildPanel.wallTypes.drawingInterior"
-msgstr "描画中：内壁。"
-
-# Source-Hash: 8a542e796ac8edf0
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Drywall paint"
-#: packages/editor/src/components/ui/build-panel/build-panel.tsx
-#, fuzzy
-msgid "editor.buildPanel.wallTypes.drywallPaint"
-msgstr "石膏ボードの塗装"
-
-# Source-Hash: 0ead5e5711b98bf6
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Exterior"
-#: packages/editor/src/components/ui/build-panel/build-panel.tsx
-#, fuzzy
-msgid "editor.buildPanel.wallTypes.exterior"
-msgstr "外壁"
-
-# Source-Hash: fd89c31f16639f50
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Fiber cement"
-#: packages/editor/src/components/ui/build-panel/build-panel.tsx
-#, fuzzy
-msgid "editor.buildPanel.wallTypes.fiberCement"
-msgstr "繊維セメント"
-
-# Source-Hash: 5badd399f078d485
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "{drawing} Every wall takes the exterior type until you pick a shape or leave the tool."
-#: packages/editor/src/components/ui/build-panel/build-panel.tsx
-#, fuzzy
-msgid "editor.buildPanel.wallTypes.forcedExterior"
-msgstr "{drawing}形状を選ぶかツールを終了するまで、すべての壁が外壁の種類になります。"
-
-# Source-Hash: de2c329c8d03a385
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "{drawing} Every wall takes the interior type until you pick a shape or leave the tool."
-#: packages/editor/src/components/ui/build-panel/build-panel.tsx
-#, fuzzy
-msgid "editor.buildPanel.wallTypes.forcedInterior"
-msgstr "{drawing}形状を選ぶかツールを終了するまで、すべての壁が内壁の種類になります。"
-
-# Source-Hash: b70a5d0948632955
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "New walls use the exterior type and cladding; walls drawn inside a room use the interior type. Every drywall face gets the paint."
-#: packages/editor/src/components/ui/build-panel/build-panel.tsx
-#, fuzzy
-msgid "editor.buildPanel.wallTypes.hint"
-msgstr "新しい壁には外壁の種類と外装材が、部屋の内側に描いた壁には内壁の種類が使われます。石膏ボードの面にはすべてこの塗装が適用されます。"
-
-# Source-Hash: ff005196861cef68
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Interior"
-#: packages/editor/src/components/ui/build-panel/build-panel.tsx
-#, fuzzy
-msgid "editor.buildPanel.wallTypes.interior"
-msgstr "内壁"
 
 # Source-Hash: 3744d42a0e4ee161
 # Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Plain wall"
-#: packages/editor/src/components/ui/build-panel/build-panel.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-menu.tsx
 #, fuzzy
 msgid "editor.buildPanel.wallTypes.plainWall"
 msgstr "単層の壁"
-
-# Source-Hash: 8884a1d20caae02f
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Siding"
-#: packages/editor/src/components/ui/build-panel/build-panel.tsx
-#, fuzzy
-msgid "editor.buildPanel.wallTypes.siding"
-msgstr "サイディング"
-
-# Source-Hash: 44c6466e6907a0b4
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Stone"
-#: packages/editor/src/components/ui/build-panel/build-panel.tsx
-#, fuzzy
-msgid "editor.buildPanel.wallTypes.stone"
-msgstr "石"
-
-# Source-Hash: 687cf7bc64b0224e
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Stucco"
-#: packages/editor/src/components/ui/build-panel/build-panel.tsx
-#, fuzzy
-msgid "editor.buildPanel.wallTypes.stucco"
-msgstr "スタッコ"
 
 # Source-Hash: 1f3650da23603008
 # Review: required
@@ -11097,15 +10960,35 @@ msgstr "{kind}を分割"
 msgid "editor.lib.hudTitle.terrace"
 msgstr "テラス"
 
-# Source-Hash: 322452fdf0850c8a
+# Source-Hash: 472d127eb9416ec5
 # Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "{title} ({exterior} exterior, {interior} interior)"
-#: packages/editor/src/lib/tool-shortcuts.ts
+# English: "Invisible"
+#: packages/editor/src/lib/wall-draw-variant.ts
 #, fuzzy
-msgid "editor.lib.toolShortcuts.wallsTooltip"
-msgstr "{title}（外壁 {exterior}、内壁 {interior}）"
+msgid "editor.lib.wallDrawVariant.kind.invisible"
+msgstr "見えない壁"
+
+# Source-Hash: 240ed9c77627b9a1
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Railing"
+#: packages/editor/src/lib/wall-draw-variant.ts
+#, fuzzy
+msgid "editor.lib.wallDrawVariant.kind.railing"
+msgstr "手すり"
+
+# Source-Hash: d998c212030bc7c2
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Standard"
+#: packages/editor/src/lib/wall-draw-variant.ts
+#, fuzzy
+msgid "editor.lib.wallDrawVariant.kind.standard"
+msgstr "標準"
 
 # Source-Hash: 8ec6152e139b0e3f
 # Review: required
@@ -14039,16 +13922,6 @@ msgstr "戻る"
 msgid "editor.panels.panelWrapper.close"
 msgstr "閉じる"
 
-# Source-Hash: 2dff25ca30c80559
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Close {title}"
-#: packages/editor/src/components/ui/panels/panel-wrapper.tsx
-#, fuzzy
-msgid "editor.panels.panelWrapper.closeTitle"
-msgstr "{title}を閉じる"
-
 # Source-Hash: 4f15c3e0fe6178b5
 # Review: required
 # AI-Provider: claude-code
@@ -14088,16 +13961,6 @@ msgstr "パネルを展開"
 #, fuzzy
 msgid "editor.panels.panelWrapper.manageCollections"
 msgstr "コレクションを管理…"
-
-# Source-Hash: 2ff02ed91f54235c
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Open {title}"
-#: packages/editor/src/components/ui/panels/panel-wrapper.tsx
-#, fuzzy
-msgid "editor.panels.panelWrapper.openTitle"
-msgstr "{title}を開く"
 
 # Source-Hash: bf91b71a9aa76e94
 # Review: required
@@ -17853,16 +17716,6 @@ msgstr "曲面の壁にはコーナー窓を付けられません"
 msgid "editor.toolHint.addACornerClickTheFirst.o4r67t"
 msgstr "角を追加 · 最初の点をクリックして閉じる"
 
-# Source-Hash: d0ddef756fb49fbc
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Add a wall · each one starts where the last ended"
-#: packages/nodes/src/i18n/definition-messages.ts
-#, fuzzy
-msgid "editor.toolHint.addAWallEachOneStarts.4zkf12"
-msgstr "壁を追加 · 前の壁の終点から次の壁が始まる"
-
 # Source-Hash: 6a0745dd047b149a
 # Review: required
 # AI-Provider: claude-code
@@ -18172,16 +18025,6 @@ msgstr "複数点の参照を完了"
 #, fuzzy
 msgid "editor.toolHint.finishSlab.xmnm8e"
 msgstr "スラブを完了"
-
-# Source-Hash: 54ae97157eacbc56
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Finish the run"
-#: packages/nodes/src/i18n/definition-messages.ts
-#, fuzzy
-msgid "editor.toolHint.finishTheRun.ayliww"
-msgstr "連続描画を完了"
 
 # Source-Hash: 66ed7c7598d3aa29
 # Review: required
@@ -19153,6 +18996,16 @@ msgstr "1つの角、次に対角を設定"
 msgid "editor.toolHint.setRoofFootprint.p50n0o"
 msgstr "屋根の外形を設定"
 
+# Source-Hash: 0243859b1d64c21e
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Set wall start / end"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.toolHint.setWallStartEnd.1r8ubcx"
+msgstr "壁の始点 / 終点を設定"
+
 # Source-Hash: c2806cce9612fa50
 # Review: required
 # AI-Provider: claude-code
@@ -19992,6 +19845,36 @@ msgstr "地盤面下の階層の上で地面を透過"
 #, fuzzy
 msgid "editor.views.viewBar.views"
 msgstr "ビュー"
+
+# Source-Hash: 57c1428fe2d28745
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "List the layers from the outside in, around one framing core. The type is saved with the project and applied to this wall; other walls keep their layers."
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
+#, fuzzy
+msgid "editor.wallTypeEditorDialog.listTheLayersAppliedToThisWall"
+msgstr "1つの躯体を中心に、外側から内側へ層を並べます。種類はプロジェクトに保存され、この壁に適用されます。他の壁は現在の層のままです。"
+
+# Source-Hash: 9e9715d52410c86f
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Custom"
+#: packages/editor/src/components/ui/wall-type/wall-type-menu.tsx
+#, fuzzy
+msgid "editor.wallTypeMenu.custom"
+msgstr "カスタム"
+
+# Source-Hash: 0e2a2a8b90ba9c7e
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Wall types: new, edit or duplicate {label}"
+#: packages/editor/src/components/ui/wall-type/wall-type-menu.tsx
+#, fuzzy
+msgid "editor.wallTypeMenu.wallTypesOf"
+msgstr "壁の種類：{label} の新規作成・編集・複製"
 
 # Source-Hash: fdece5c2158dfe88
 # Review: required
@@ -35769,58 +35652,6 @@ msgstr "レポート"
 msgid "node.unit.unitPanel.unit"
 msgstr "住戸"
 
-# Source-Hash: e04a35319a83ad7c
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Dimensions to the exterior faces (outside size). Click for both"
-#: packages/nodes/src/wall/actions.tsx
-#, fuzzy
-msgid "node.wall.actions.dimensionsToTheExteriorFacesOutside"
-msgstr "外面までの寸法（外形寸法）。クリックで両方に切り替え"
-
-# Source-Hash: 41c6c329ecb15086
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Dimensions to the interior and exterior faces. Click for interior only"
-#: packages/nodes/src/wall/actions.tsx
-#, fuzzy
-msgid "node.wall.actions.dimensionsToTheInteriorAndExterior"
-msgstr "内面と外面までの寸法。クリックで内法のみに切り替え"
-
-# Source-Hash: 57524fee08ddde73
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Dimensions to the interior faces (room size). Click for exterior only"
-#: packages/nodes/src/wall/actions.tsx
-#, fuzzy
-msgid "node.wall.actions.dimensionsToTheInteriorFacesRoom"
-msgstr "内面までの寸法（部屋の大きさ）。クリックで外法のみに切り替え"
-
-# Source-Hash: 81ef3a25ccb6eaf7
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "ID"
-#. Short button text: interior dimension, measured to the interior faces.
-#: packages/nodes/src/wall/actions.tsx
-#, fuzzy
-msgid "node.wall.actions.id"
-msgstr "内法"
-
-# Source-Hash: e846b1fcc616fb6d
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "ID+OD"
-#. Short button text: ID is the interior dimension, OD the outside dimension.
-#: packages/nodes/src/wall/actions.tsx
-#, fuzzy
-msgid "node.wall.actions.idOd"
-msgstr "内法+外法"
-
 # Source-Hash: d53242481ff46157
 # Review: required
 # AI-Provider: claude-code
@@ -35830,17 +35661,6 @@ msgstr "内法+外法"
 #, fuzzy
 msgid "node.wall.actions.mergeWalls"
 msgstr "壁を結合"
-
-# Source-Hash: fdaa3b3faa1844fd
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "OD"
-#. Short button text: outside dimension, measured to the exterior faces.
-#: packages/nodes/src/wall/actions.tsx
-#, fuzzy
-msgid "node.wall.actions.od"
-msgstr "外法"
 
 # Source-Hash: d7ead4708d50965f
 # Review: required
@@ -37511,6 +37331,16 @@ msgstr "{trim, select, skirting {幅木を隠す} crown {廻り縁を隠す} oth
 #, fuzzy
 msgid "node.wall.trim.show"
 msgstr "{trim, select, skirting {幅木を表示} crown {廻り縁を表示} other {チェアレールを表示}}"
+
+# Source-Hash: b1757d76048706b7
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Swap hinge side"
+#: packages/nodes/src/window/actions.tsx
+#, fuzzy
+msgid "node.window.actions.swapHingeSide"
+msgstr "丁番側を入れ替え"
 
 # Source-Hash: ea6a51e66eb0c0dc
 # Review: required

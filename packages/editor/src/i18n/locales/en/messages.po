@@ -532,8 +532,20 @@ msgid "app.sharePanel.shareProject"
 msgstr "Share project"
 
 #: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.above"
+msgstr "Above"
+
+#: apps/editor/components/viewer-toolbar.tsx
 msgid "app.viewerToolbar.automaticDimensions"
 msgstr "Automatic dimensions"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.below"
+msgstr "Below"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.both"
+msgstr "Both"
 
 #: apps/editor/components/viewer-toolbar.tsx
 msgid "app.viewerToolbar.camera"
@@ -564,6 +576,10 @@ msgid "app.viewerToolbar.default"
 msgstr "Default"
 
 #: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.dimensions"
+msgstr "Dimensions"
+
+#: apps/editor/components/viewer-toolbar.tsx
 msgid "app.viewerToolbar.display"
 msgstr "Display"
 
@@ -578,6 +594,10 @@ msgstr "Door/window marks"
 #: apps/editor/components/viewer-toolbar.tsx
 msgid "app.viewerToolbar.edges"
 msgstr "Edges"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.editing"
+msgstr "Editing"
 
 #: apps/editor/components/viewer-toolbar.tsx
 msgid "app.viewerToolbar.enterVr"
@@ -600,20 +620,12 @@ msgid "app.viewerToolbar.exploded"
 msgstr "Exploded"
 
 #: apps/editor/components/viewer-toolbar.tsx
-msgid "app.viewerToolbar.faceOfStud"
-msgstr "Face of stud"
-
-#: apps/editor/components/viewer-toolbar.tsx
 msgid "app.viewerToolbar.faintOutlineOfMajorCreases"
 msgstr "Faint outline of major creases"
 
 #: apps/editor/components/viewer-toolbar.tsx
 msgid "app.viewerToolbar.feetInches"
 msgstr "Feet & inches"
-
-#: apps/editor/components/viewer-toolbar.tsx
-msgid "app.viewerToolbar.finishedFaces"
-msgstr "Finished faces"
 
 #: apps/editor/components/viewer-toolbar.tsx
 msgid "app.viewerToolbar.flatAndFastNoAmbientOcclusion"
@@ -640,12 +652,26 @@ msgid "app.viewerToolbar.fullHeight"
 msgstr "Full height"
 
 #: apps/editor/components/viewer-toolbar.tsx
-msgid "app.viewerToolbar.fullWallThickness"
-msgstr "Full wall thickness"
+msgid "app.viewerToolbar.ghostedForReference"
+msgstr "Ghosted for reference"
 
 #: apps/editor/components/viewer-toolbar.tsx
 msgid "app.viewerToolbar.grid"
 msgstr "Grid"
+
+#. Short for inside dimension: measured between the inside faces of walls.
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.id"
+msgstr "ID"
+
+#. Inside and outside dimensions together.
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.idOd"
+msgstr "ID + OD"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.inside"
+msgstr "Inside"
 
 #: apps/editor/components/viewer-toolbar.tsx
 msgid "app.viewerToolbar.levelsMode"
@@ -672,6 +698,10 @@ msgid "app.viewerToolbar.measurements"
 msgstr "Measurements"
 
 #: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.measureWalls"
+msgstr "Measure walls"
+
+#: apps/editor/components/viewer-toolbar.tsx
 msgid "app.viewerToolbar.meters"
 msgstr "Meters"
 
@@ -680,12 +710,21 @@ msgid "app.viewerToolbar.millimeters"
 msgstr "Millimeters"
 
 #: apps/editor/components/viewer-toolbar.tsx
-msgid "app.viewerToolbar.n3dMeasurements"
-msgstr "3D measurements"
+msgid "app.viewerToolbar.n2dOnly"
+msgstr "2D only"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.n3dOnly"
+msgstr "3D only"
 
 #: apps/editor/components/viewer-toolbar.tsx
 msgid "app.viewerToolbar.noEdgeLines"
 msgstr "No edge lines"
+
+#. Short for outside dimension: measured between the outside faces of walls.
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.od"
+msgstr "OD"
 
 #: apps/editor/components/viewer-toolbar.tsx
 msgid "app.viewerToolbar.off"
@@ -700,8 +739,24 @@ msgid "app.viewerToolbar.orthographic"
 msgstr "Orthographic"
 
 #: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.otherLevels"
+msgstr "Other levels"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.outside"
+msgstr "Outside"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.overallSizeOutsideFaceToOutsideFace"
+msgstr "Overall size, outside face to outside face"
+
+#: apps/editor/components/viewer-toolbar.tsx
 msgid "app.viewerToolbar.perspective"
 msgstr "Perspective"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.plan"
+msgstr "Plan"
 
 #: apps/editor/components/viewer-toolbar.tsx
 msgid "app.viewerToolbar.preview"
@@ -724,6 +779,18 @@ msgid "app.viewerToolbar.roomLabels"
 msgstr "Room labels"
 
 #: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.roomSizesInsideFaceToInsideFace"
+msgstr "Room sizes, inside face to inside face"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.roomSizesInsideOverallSizeOutside"
+msgstr "Room sizes inside, overall size outside"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.scene"
+msgstr "Scene"
+
+#: apps/editor/components/viewer-toolbar.tsx
 msgid "app.viewerToolbar.sceneTheme"
 msgstr "Scene theme"
 
@@ -732,8 +799,12 @@ msgid "app.viewerToolbar.shadows"
 msgstr "Shadows"
 
 #: apps/editor/components/viewer-toolbar.tsx
-msgid "app.viewerToolbar.singleWallAxis"
-msgstr "Single wall axis"
+msgid "app.viewerToolbar.sharedBy2dAnd3d"
+msgstr "Shared by 2D and 3D"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.show"
+msgstr "Show"
 
 #: apps/editor/components/viewer-toolbar.tsx
 msgid "app.viewerToolbar.soft"
@@ -760,10 +831,6 @@ msgid "app.viewerToolbar.strong"
 msgstr "Strong"
 
 #: apps/editor/components/viewer-toolbar.tsx
-msgid "app.viewerToolbar.structuralCoreFace"
-msgstr "Structural core face"
-
-#: apps/editor/components/viewer-toolbar.tsx
 msgid "app.viewerToolbar.structuralGridsColumnCenters"
 msgstr "Structural grids & column centers"
 
@@ -772,20 +839,16 @@ msgid "app.viewerToolbar.translucent"
 msgstr "Translucent"
 
 #: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.turnOnDimensionsToShowThem"
+msgstr "Turn on Dimensions to show them"
+
+#: apps/editor/components/viewer-toolbar.tsx
 msgid "app.viewerToolbar.units"
 msgstr "Units"
 
 #: apps/editor/components/viewer-toolbar.tsx
 msgid "app.viewerToolbar.walkthrough"
 msgstr "Walkthrough"
-
-#: apps/editor/components/viewer-toolbar.tsx
-msgid "app.viewerToolbar.wallCenterline"
-msgstr "Wall centerline"
-
-#: apps/editor/components/viewer-toolbar.tsx
-msgid "app.viewerToolbar.wallDimensions"
-msgstr "Wall dimensions"
 
 #: apps/editor/components/viewer-toolbar.tsx
 msgid "app.viewerToolbar.wallsLabel"
@@ -1230,48 +1293,12 @@ msgid "editor.buildPanel.advanced"
 msgstr "Advanced"
 
 #: packages/editor/src/components/ui/build-panel/build-panel.tsx
-msgid "editor.buildPanel.rooms.exteriorWall.caption"
-msgstr "{lead} every wall takes the exterior type, wherever it lands. Esc or double-click ends the run."
-
-#: packages/editor/src/components/ui/build-panel/build-panel.tsx
-msgid "editor.buildPanel.rooms.exteriorWall.label"
-msgstr "Exterior wall"
-
-#: packages/editor/src/components/ui/build-panel/build-panel.tsx
-msgid "editor.buildPanel.rooms.exteriorWall.title"
-msgstr "Exterior walls: every wall drawn takes the exterior type and cladding"
-
-#: packages/editor/src/components/ui/build-panel/build-panel.tsx
 msgid "editor.buildPanel.rooms.hint"
 msgstr "walls · floor · ceiling"
 
 #: packages/editor/src/components/ui/build-panel/build-panel.tsx
 msgid "editor.buildPanel.rooms.idle"
 msgstr "Pick a shape to start. Every room brings its own walls, floor and ceiling."
-
-#: packages/editor/src/components/ui/build-panel/build-panel.tsx
-msgid "editor.buildPanel.rooms.interiorWall.caption"
-msgstr "{lead} every wall takes the interior type, wherever it lands. Esc or double-click ends the run."
-
-#: packages/editor/src/components/ui/build-panel/build-panel.tsx
-msgid "editor.buildPanel.rooms.interiorWall.label"
-msgstr "Interior wall"
-
-#: packages/editor/src/components/ui/build-panel/build-panel.tsx
-msgid "editor.buildPanel.rooms.interiorWall.title"
-msgstr "Interior walls: every wall drawn takes the interior type and paint"
-
-#: packages/editor/src/components/ui/build-panel/build-panel.tsx
-msgid "editor.buildPanel.rooms.invisibleWall.caption"
-msgstr "{lead} every line is an invisible wall: rooms close on it, nothing is built. Closed off outside the house, a room becomes a porch. Esc or double-click ends the run."
-
-#: packages/editor/src/components/ui/build-panel/build-panel.tsx
-msgid "editor.buildPanel.rooms.invisibleWall.label"
-msgstr "Invisible wall"
-
-#: packages/editor/src/components/ui/build-panel/build-panel.tsx
-msgid "editor.buildPanel.rooms.invisibleWall.title"
-msgstr "Invisible walls: divide a room or close off a porch without building a wall. Rooms close on them; they never cut a wall."
 
 #: packages/editor/src/components/ui/build-panel/build-panel.tsx
 msgid "editor.buildPanel.rooms.polygon.caption"
@@ -1288,18 +1315,6 @@ msgstr "Click each corner,"
 #: packages/editor/src/components/ui/build-panel/build-panel.tsx
 msgid "editor.buildPanel.rooms.polygon.title"
 msgstr "Polygon room"
-
-#: packages/editor/src/components/ui/build-panel/build-panel.tsx
-msgid "editor.buildPanel.rooms.railing.caption"
-msgstr "{lead} every line is a railing: a guard rooms close on, with no studs, siding or footing. Place a door on it for an opening. Esc or double-click ends the run."
-
-#: packages/editor/src/components/ui/build-panel/build-panel.tsx
-msgid "editor.buildPanel.rooms.railing.label"
-msgstr "Railing"
-
-#: packages/editor/src/components/ui/build-panel/build-panel.tsx
-msgid "editor.buildPanel.rooms.railing.title"
-msgstr "Railings: a 36 in guard drawn like walls, posts at most 6 ft apart. Rooms close on it and it takes openings; style and height in the wall panel."
 
 #: packages/editor/src/components/ui/build-panel/build-panel.tsx
 msgid "editor.buildPanel.rooms.rectangle.caption"
@@ -1322,280 +1337,212 @@ msgid "editor.buildPanel.rooms.title"
 msgstr "Rooms"
 
 #: packages/editor/src/components/ui/build-panel/build-panel.tsx
-msgid "editor.buildPanel.rooms.walls.caption"
-msgstr "{lead} every wall starts where the last ended. Esc or double-click ends the run; close a loop and it becomes a room."
+msgid "editor.buildPanel.rooms.wallKinds.invisibleHelp"
+msgstr "Divides a room or closes off a porch without building a wall; rooms close on it. Change any wall later from its controls."
+
+#: packages/editor/src/components/ui/build-panel/build-panel.tsx
+msgid "editor.buildPanel.rooms.wallKinds.label"
+msgstr "Wall kind"
+
+#: packages/editor/src/components/ui/build-panel/build-panel.tsx
+msgid "editor.buildPanel.rooms.wallKinds.railingHelp"
+msgstr "A guard for stairs, balconies and mezzanines; rooms close on it. Change any wall later from its controls."
+
+#: packages/editor/src/components/ui/build-panel/build-panel.tsx
+msgid "editor.buildPanel.rooms.wallKinds.standardHelp"
+msgstr "One wall per two clicks. Its sides become exterior or interior from the rooms it bounds. Change any wall later from its controls."
 
 #: packages/editor/src/components/ui/build-panel/build-panel.tsx
 msgid "editor.buildPanel.rooms.walls.label"
 msgstr "Walls"
 
 #: packages/editor/src/components/ui/build-panel/build-panel.tsx
-msgid "editor.buildPanel.rooms.walls.lead"
-msgstr "Click each corner;"
-
-#: packages/editor/src/components/ui/build-panel/build-panel.tsx
 msgid "editor.buildPanel.rooms.walls.title"
 msgstr "Walls"
 
-#: packages/editor/src/components/ui/build-panel/wall-type-controls.tsx
-msgid "editor.buildPanel.wallTypeControls.default"
-msgstr "Default"
-
-#: packages/editor/src/components/ui/build-panel/wall-type-controls.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-menu.tsx
 msgid "editor.buildPanel.wallTypeControls.deleteFromThisProject"
 msgstr "Delete from this project"
 
-#: packages/editor/src/components/ui/build-panel/wall-type-controls.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-menu.tsx
 msgid "editor.buildPanel.wallTypeControls.duplicateAsANewType"
 msgstr "Duplicate as a new type…"
 
-#: packages/editor/src/components/ui/build-panel/wall-type-controls.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-menu.tsx
 msgid "editor.buildPanel.wallTypeControls.editLayers"
 msgstr "Edit layers…"
 
-#: packages/editor/src/components/ui/build-panel/wall-type-controls.tsx
-msgid "editor.buildPanel.wallTypeControls.editOrDuplicateLabel"
-msgstr "Edit or duplicate {label}"
-
-#: packages/editor/src/components/ui/build-panel/wall-type-controls.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-menu.tsx
 msgid "editor.buildPanel.wallTypeControls.editOrDuplicateThisWallType"
 msgstr "Edit or duplicate this wall type"
 
-#: packages/editor/src/components/ui/build-panel/wall-type-controls.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-menu.tsx
 msgid "editor.buildPanel.wallTypeControls.newWallType"
 msgstr "New wall type…"
 
-#: packages/editor/src/components/ui/build-panel/wall-type-controls.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-menu.tsx
 msgid "editor.buildPanel.wallTypeControls.presetsStayAsCitedDuplicateOne"
 msgstr "Presets stay as cited. Duplicate one to change its layers."
 
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 msgid "editor.buildPanel.wallTypeEditorDialog.add"
 msgstr "Add"
 
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 msgid "editor.buildPanel.wallTypeEditorDialog.airSpace"
 msgstr "Air space"
 
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 msgid "editor.buildPanel.wallTypeEditorDialog.aWallTypeHoldsAtMost"
 msgstr "A wall type holds at most {limit, plural, one {# layer} other {# layers}}."
 
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 msgid "editor.buildPanel.wallTypeEditorDialog.brickVeneer"
 msgstr "Brick veneer"
 
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 msgid "editor.buildPanel.wallTypeEditorDialog.cancel"
 msgstr "Cancel"
 
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 msgid "editor.buildPanel.wallTypeEditorDialog.drywall"
 msgstr "Drywall"
 
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 msgid "editor.buildPanel.wallTypeEditorDialog.duplicateWallType"
 msgstr "Duplicate wall type"
 
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 msgid "editor.buildPanel.wallTypeEditorDialog.editWallType"
 msgstr "Edit wall type"
 
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 msgid "editor.buildPanel.wallTypeEditorDialog.everyWallTypeHasOneFraming"
 msgstr "Every wall type has one framing core"
 
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 msgid "editor.buildPanel.wallTypeEditorDialog.fiberCement"
 msgstr "Fiber cement"
 
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 msgid "editor.buildPanel.wallTypeEditorDialog.finish"
 msgstr "Finish"
 
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 msgid "editor.buildPanel.wallTypeEditorDialog.framingCore"
 msgstr "Framing core"
 
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 msgid "editor.buildPanel.wallTypeEditorDialog.fullreasonRemoveOneToAddAnother"
 msgstr "{fullReason} Remove one to add another."
 
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 msgid "editor.buildPanel.wallTypeEditorDialog.gypsumSheathing"
 msgstr "Gypsum sheathing"
 
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 msgid "editor.buildPanel.wallTypeEditorDialog.inside"
 msgstr "Inside"
 
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 msgid "editor.buildPanel.wallTypeEditorDialog.insulation"
 msgstr "Insulation"
 
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 msgid "editor.buildPanel.wallTypeEditorDialog.lapSiding"
 msgstr "Lap siding"
 
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 msgid "editor.buildPanel.wallTypeEditorDialog.layer"
 msgstr "Layer"
 
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 msgid "editor.buildPanel.wallTypeEditorDialog.layerRole"
 msgstr "Layer role"
 
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 msgid "editor.buildPanel.wallTypeEditorDialog.lining"
 msgstr "Lining"
 
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
-msgid "editor.buildPanel.wallTypeEditorDialog.listsUnderExteriorItHasA"
-msgstr "Lists under Exterior: it has a cladding side."
-
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
-msgid "editor.buildPanel.wallTypeEditorDialog.listsUnderInteriorBothFacesMatch"
-msgstr "Lists under Interior: both faces match."
-
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
-msgid "editor.buildPanel.wallTypeEditorDialog.listTheLayersFromTheOutside"
-msgstr "List the layers from the outside in, around one framing core. Walls already drawn keep their layers; walls drawn from now on use the saved type."
-
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 msgid "editor.buildPanel.wallTypeEditorDialog.material"
 msgstr "Material"
 
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 msgid "editor.buildPanel.wallTypeEditorDialog.mineralWoolBoard"
 msgstr "Mineral wool board"
 
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 msgid "editor.buildPanel.wallTypeEditorDialog.moveIn"
 msgstr "Move in"
 
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 msgid "editor.buildPanel.wallTypeEditorDialog.moveOut"
 msgstr "Move out"
 
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 msgid "editor.buildPanel.wallTypeEditorDialog.name"
 msgstr "Name"
 
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 msgid "editor.buildPanel.wallTypeEditorDialog.newWallType"
 msgstr "New wall type"
 
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 msgid "editor.buildPanel.wallTypeEditorDialog.osb"
 msgstr "OSB"
 
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 msgid "editor.buildPanel.wallTypeEditorDialog.outside"
 msgstr "Outside"
 
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 msgid "editor.buildPanel.wallTypeEditorDialog.plaster"
 msgstr "Plaster"
 
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 msgid "editor.buildPanel.wallTypeEditorDialog.plywood"
 msgstr "Plywood"
 
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 msgid "editor.buildPanel.wallTypeEditorDialog.removeLayer"
 msgstr "Remove layer"
 
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 msgid "editor.buildPanel.wallTypeEditorDialog.rigidFoam"
 msgstr "Rigid foam"
 
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 msgid "editor.buildPanel.wallTypeEditorDialog.saveWallType"
 msgstr "Save wall type"
 
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 msgid "editor.buildPanel.wallTypeEditorDialog.sheathing"
 msgstr "Sheathing"
 
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 msgid "editor.buildPanel.wallTypeEditorDialog.stoneVeneer"
 msgstr "Stone veneer"
 
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 msgid "editor.buildPanel.wallTypeEditorDialog.stucco"
 msgstr "Stucco"
 
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 msgid "editor.buildPanel.wallTypeEditorDialog.thickness"
 msgstr "Thickness"
 
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 msgid "editor.buildPanel.wallTypeEditorDialog.totalThickness"
 msgstr "Total {thickness}"
 
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 msgid "editor.buildPanel.wallTypeEditorDialog.wallType"
 msgstr "Wall type"
 
-#: packages/editor/src/components/ui/build-panel/build-panel.tsx
-msgid "editor.buildPanel.wallTypes.brick"
-msgstr "Brick"
-
-#: packages/editor/src/components/ui/build-panel/build-panel.tsx
-msgid "editor.buildPanel.wallTypes.cladding"
-msgstr "Cladding"
-
-#: packages/editor/src/components/ui/build-panel/build-panel.tsx
-msgid "editor.buildPanel.wallTypes.drawingExterior"
-msgstr "Drawing: Exterior walls."
-
-#: packages/editor/src/components/ui/build-panel/build-panel.tsx
-msgid "editor.buildPanel.wallTypes.drawingInterior"
-msgstr "Drawing: Interior walls."
-
-#: packages/editor/src/components/ui/build-panel/build-panel.tsx
-msgid "editor.buildPanel.wallTypes.drywallPaint"
-msgstr "Drywall paint"
-
-#: packages/editor/src/components/ui/build-panel/build-panel.tsx
-msgid "editor.buildPanel.wallTypes.exterior"
-msgstr "Exterior"
-
-#: packages/editor/src/components/ui/build-panel/build-panel.tsx
-msgid "editor.buildPanel.wallTypes.fiberCement"
-msgstr "Fiber cement"
-
-#: packages/editor/src/components/ui/build-panel/build-panel.tsx
-msgid "editor.buildPanel.wallTypes.forcedExterior"
-msgstr "{drawing} Every wall takes the exterior type until you pick a shape or leave the tool."
-
-#: packages/editor/src/components/ui/build-panel/build-panel.tsx
-msgid "editor.buildPanel.wallTypes.forcedInterior"
-msgstr "{drawing} Every wall takes the interior type until you pick a shape or leave the tool."
-
-#: packages/editor/src/components/ui/build-panel/build-panel.tsx
-msgid "editor.buildPanel.wallTypes.hint"
-msgstr "New walls use the exterior type and cladding; walls drawn inside a room use the interior type. Every drywall face gets the paint."
-
-#: packages/editor/src/components/ui/build-panel/build-panel.tsx
-msgid "editor.buildPanel.wallTypes.interior"
-msgstr "Interior"
-
-#: packages/editor/src/components/ui/build-panel/build-panel.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-menu.tsx
 msgid "editor.buildPanel.wallTypes.plainWall"
 msgstr "Plain wall"
-
-#: packages/editor/src/components/ui/build-panel/build-panel.tsx
-msgid "editor.buildPanel.wallTypes.siding"
-msgstr "Siding"
-
-#: packages/editor/src/components/ui/build-panel/build-panel.tsx
-msgid "editor.buildPanel.wallTypes.stone"
-msgstr "Stone"
-
-#: packages/editor/src/components/ui/build-panel/build-panel.tsx
-msgid "editor.buildPanel.wallTypes.stucco"
-msgstr "Stucco"
 
 #: packages/editor/src/components/editor/index.tsx
 msgid "editor.cameraControlsHint"
@@ -4467,9 +4414,17 @@ msgstr "Split {kind}"
 msgid "editor.lib.hudTitle.terrace"
 msgstr "Terrace"
 
-#: packages/editor/src/lib/tool-shortcuts.ts
-msgid "editor.lib.toolShortcuts.wallsTooltip"
-msgstr "{title} ({exterior} exterior, {interior} interior)"
+#: packages/editor/src/lib/wall-draw-variant.ts
+msgid "editor.lib.wallDrawVariant.kind.invisible"
+msgstr "Invisible"
+
+#: packages/editor/src/lib/wall-draw-variant.ts
+msgid "editor.lib.wallDrawVariant.kind.railing"
+msgstr "Railing"
+
+#: packages/editor/src/lib/wall-draw-variant.ts
+msgid "editor.lib.wallDrawVariant.kind.standard"
+msgstr "Standard"
 
 #: packages/editor/src/lib/wall-draw-variant.ts
 msgid "editor.lib.wallDrawVariant.polygonRoom"
@@ -5646,10 +5601,6 @@ msgid "editor.panels.panelWrapper.close"
 msgstr "Close"
 
 #: packages/editor/src/components/ui/panels/panel-wrapper.tsx
-msgid "editor.panels.panelWrapper.closeTitle"
-msgstr "Close {title}"
-
-#: packages/editor/src/components/ui/panels/panel-wrapper.tsx
 msgid "editor.panels.panelWrapper.collapsePanel"
 msgstr "Collapse panel"
 
@@ -5664,10 +5615,6 @@ msgstr "Expand panel"
 #: packages/editor/src/components/ui/panels/panel-wrapper.tsx
 msgid "editor.panels.panelWrapper.manageCollections"
 msgstr "Manage collections…"
-
-#: packages/editor/src/components/ui/panels/panel-wrapper.tsx
-msgid "editor.panels.panelWrapper.openTitle"
-msgstr "Open {title}"
 
 #: packages/editor/src/components/ui/panels/panel-wrapper.tsx
 msgid "editor.panels.panelWrapper.reset"
@@ -7174,10 +7121,6 @@ msgid "editor.toolHint.addACornerClickTheFirst.o4r67t"
 msgstr "Add a corner · click the first to close"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.addAWallEachOneStarts.4zkf12"
-msgstr "Add a wall · each one starts where the last ended"
-
-#: packages/nodes/src/i18n/definition-messages.ts
 msgid "editor.toolHint.anotherOpeningIsInTheWay.11l9dd0"
 msgstr "Another opening is in the way at the corner"
 
@@ -7300,10 +7243,6 @@ msgstr "Finish multi-point witnesses"
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "editor.toolHint.finishSlab.xmnm8e"
 msgstr "Finish slab"
-
-#: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.finishTheRun.ayliww"
-msgstr "Finish the run"
 
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "editor.toolHint.flipSide.172xku9"
@@ -7694,6 +7633,10 @@ msgid "editor.toolHint.setRoofFootprint.p50n0o"
 msgstr "Set roof footprint"
 
 #: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.toolHint.setWallStartEnd.1r8ubcx"
+msgstr "Set wall start / end"
+
+#: packages/nodes/src/i18n/definition-messages.ts
 msgid "editor.toolHint.slopeLevel.ftqp67"
 msgstr "Slope / level"
 
@@ -8028,6 +7971,18 @@ msgstr "Veil the ground over a level below grade"
 #: packages/editor/src/components/editor/views/view-bar.tsx
 msgid "editor.views.viewBar.views"
 msgstr "Views"
+
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
+msgid "editor.wallTypeEditorDialog.listTheLayersAppliedToThisWall"
+msgstr "List the layers from the outside in, around one framing core. The type is saved with the project and applied to this wall; other walls keep their layers."
+
+#: packages/editor/src/components/ui/wall-type/wall-type-menu.tsx
+msgid "editor.wallTypeMenu.custom"
+msgstr "Custom"
+
+#: packages/editor/src/components/ui/wall-type/wall-type-menu.tsx
+msgid "editor.wallTypeMenu.wallTypesOf"
+msgstr "Wall types: new, edit or duplicate {label}"
 
 #: packages/editor/src/components/editor/index.tsx
 msgid "editor.youCanRetryTheSceneOr"
@@ -14350,35 +14305,8 @@ msgid "node.unit.unitPanel.unit"
 msgstr "Unit"
 
 #: packages/nodes/src/wall/actions.tsx
-msgid "node.wall.actions.dimensionsToTheExteriorFacesOutside"
-msgstr "Dimensions to the exterior faces (outside size). Click for both"
-
-#: packages/nodes/src/wall/actions.tsx
-msgid "node.wall.actions.dimensionsToTheInteriorAndExterior"
-msgstr "Dimensions to the interior and exterior faces. Click for interior only"
-
-#: packages/nodes/src/wall/actions.tsx
-msgid "node.wall.actions.dimensionsToTheInteriorFacesRoom"
-msgstr "Dimensions to the interior faces (room size). Click for exterior only"
-
-#. Short button text: interior dimension, measured to the interior faces.
-#: packages/nodes/src/wall/actions.tsx
-msgid "node.wall.actions.id"
-msgstr "ID"
-
-#. Short button text: ID is the interior dimension, OD the outside dimension.
-#: packages/nodes/src/wall/actions.tsx
-msgid "node.wall.actions.idOd"
-msgstr "ID+OD"
-
-#: packages/nodes/src/wall/actions.tsx
 msgid "node.wall.actions.mergeWalls"
 msgstr "Merge walls"
-
-#. Short button text: outside dimension, measured to the exterior faces.
-#: packages/nodes/src/wall/actions.tsx
-msgid "node.wall.actions.od"
-msgstr "OD"
 
 #: packages/nodes/src/wall/actions.tsx
 msgid "node.wall.actions.splitWall"
@@ -15047,6 +14975,10 @@ msgstr "{trim, select, skirting {Hide skirting} crown {Hide crown molding} other
 #: packages/nodes/src/wall/panel.tsx
 msgid "node.wall.trim.show"
 msgstr "{trim, select, skirting {Show skirting} crown {Show crown molding} other {Show chair rail}}"
+
+#: packages/nodes/src/window/actions.tsx
+msgid "node.window.actions.swapHingeSide"
+msgstr "Swap hinge side"
 
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "node.window.description"

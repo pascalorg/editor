@@ -1323,6 +1323,16 @@ msgstr "Enlace público"
 msgid "app.sharePanel.shareProject"
 msgstr "Compartir proyecto"
 
+# Source-Hash: c90de8776040735c
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Above"
+#: apps/editor/components/viewer-toolbar.tsx
+#, fuzzy
+msgid "app.viewerToolbar.above"
+msgstr "Superiores"
+
 # Source-Hash: 3d3f438d5a49eba7
 # Review: required
 # AI-Provider: claude-code
@@ -1332,6 +1342,26 @@ msgstr "Compartir proyecto"
 #, fuzzy
 msgid "app.viewerToolbar.automaticDimensions"
 msgstr "Cotas automáticas"
+
+# Source-Hash: 1794e014a604344c
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Below"
+#: apps/editor/components/viewer-toolbar.tsx
+#, fuzzy
+msgid "app.viewerToolbar.below"
+msgstr "Inferiores"
+
+# Source-Hash: 69578b7dd7723fa1
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Both"
+#: apps/editor/components/viewer-toolbar.tsx
+#, fuzzy
+msgid "app.viewerToolbar.both"
+msgstr "Ambos"
 
 # Source-Hash: 14622745dbf93f4c
 # Review: required
@@ -1403,6 +1433,16 @@ msgstr "Corte"
 msgid "app.viewerToolbar.default"
 msgstr "Predeterminado"
 
+# Source-Hash: 12df69f42beb0643
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Dimensions"
+#: apps/editor/components/viewer-toolbar.tsx
+#, fuzzy
+msgid "app.viewerToolbar.dimensions"
+msgstr "Dimensiones"
+
 # Source-Hash: a313661ef9dd0a65
 # Review: required
 # AI-Provider: claude-code
@@ -1442,6 +1482,16 @@ msgstr "Marcas de puertas y ventanas"
 #, fuzzy
 msgid "app.viewerToolbar.edges"
 msgstr "Aristas"
+
+# Source-Hash: 9bacee5dbd658209
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Editing"
+#: apps/editor/components/viewer-toolbar.tsx
+#, fuzzy
+msgid "app.viewerToolbar.editing"
+msgstr "Edición"
 
 # Source-Hash: d86126c5d16c6238
 # Review: required
@@ -1493,16 +1543,6 @@ msgstr "Experto"
 msgid "app.viewerToolbar.exploded"
 msgstr "Despiece"
 
-# Source-Hash: c6f865a366ef5755
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Face of stud"
-#: apps/editor/components/viewer-toolbar.tsx
-#, fuzzy
-msgid "app.viewerToolbar.faceOfStud"
-msgstr "Cara del montante"
-
 # Source-Hash: 0c583f1d4201293b
 # Review: required
 # AI-Provider: claude-code
@@ -1522,16 +1562,6 @@ msgstr "Contorno tenue de los pliegues principales"
 #, fuzzy
 msgid "app.viewerToolbar.feetInches"
 msgstr "Pies y pulgadas"
-
-# Source-Hash: 43b8017fa821c46c
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Finished faces"
-#: apps/editor/components/viewer-toolbar.tsx
-#, fuzzy
-msgid "app.viewerToolbar.finishedFaces"
-msgstr "Caras acabadas"
 
 # Source-Hash: 8827df1cdeb02ed9
 # Review: required
@@ -1593,15 +1623,15 @@ msgstr "Documentación y anotaciones completas"
 msgid "app.viewerToolbar.fullHeight"
 msgstr "Altura completa"
 
-# Source-Hash: c9838bc98cb35125
+# Source-Hash: 91c2dd3678e981b2
 # Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Full wall thickness"
+# English: "Ghosted for reference"
 #: apps/editor/components/viewer-toolbar.tsx
 #, fuzzy
-msgid "app.viewerToolbar.fullWallThickness"
-msgstr "Espesor total del muro"
+msgid "app.viewerToolbar.ghostedForReference"
+msgstr "Atenuados como referencia"
 
 # Source-Hash: 7e4a0a38f694be6b
 # Review: required
@@ -1612,6 +1642,38 @@ msgstr "Espesor total del muro"
 #, fuzzy
 msgid "app.viewerToolbar.grid"
 msgstr "Cuadrícula"
+
+# Source-Hash: 81ef3a25ccb6eaf7
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "ID"
+#. Short for inside dimension: measured between the inside faces of walls.
+#: apps/editor/components/viewer-toolbar.tsx
+#, fuzzy
+msgid "app.viewerToolbar.id"
+msgstr "Int."
+
+# Source-Hash: 09f615a2c6a14a76
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "ID + OD"
+#. Inside and outside dimensions together.
+#: apps/editor/components/viewer-toolbar.tsx
+#, fuzzy
+msgid "app.viewerToolbar.idOd"
+msgstr "Int. + Ext."
+
+# Source-Hash: 8a7ff5011275abbd
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Inside"
+#: apps/editor/components/viewer-toolbar.tsx
+#, fuzzy
+msgid "app.viewerToolbar.inside"
+msgstr "Interior"
 
 # Source-Hash: 4bf4a6861d7d633e
 # Review: required
@@ -1673,6 +1735,16 @@ msgstr "Cotas manuales"
 msgid "app.viewerToolbar.measurements"
 msgstr "Medidas"
 
+# Source-Hash: b2cac1ec253d4394
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Measure walls"
+#: apps/editor/components/viewer-toolbar.tsx
+#, fuzzy
+msgid "app.viewerToolbar.measureWalls"
+msgstr "Medir los muros"
+
 # Source-Hash: 0a39470be3b84536
 # Review: required
 # AI-Provider: claude-code
@@ -1693,15 +1765,25 @@ msgstr "Metros"
 msgid "app.viewerToolbar.millimeters"
 msgstr "Milímetros"
 
-# Source-Hash: b784527bb90b9c5e
+# Source-Hash: 340a0a4e7703227b
 # Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "3D measurements"
+# English: "2D only"
 #: apps/editor/components/viewer-toolbar.tsx
 #, fuzzy
-msgid "app.viewerToolbar.n3dMeasurements"
-msgstr "Medidas 3D"
+msgid "app.viewerToolbar.n2dOnly"
+msgstr "Solo 2D"
+
+# Source-Hash: ed5416e4329bd789
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "3D only"
+#: apps/editor/components/viewer-toolbar.tsx
+#, fuzzy
+msgid "app.viewerToolbar.n3dOnly"
+msgstr "Solo 3D"
 
 # Source-Hash: 4ff58913a4492199
 # Review: required
@@ -1712,6 +1794,17 @@ msgstr "Medidas 3D"
 #, fuzzy
 msgid "app.viewerToolbar.noEdgeLines"
 msgstr "Sin aristas"
+
+# Source-Hash: fdaa3b3faa1844fd
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "OD"
+#. Short for outside dimension: measured between the outside faces of walls.
+#: apps/editor/components/viewer-toolbar.tsx
+#, fuzzy
+msgid "app.viewerToolbar.od"
+msgstr "Ext."
 
 # Source-Hash: 50accd740fa2e736
 # Review: required
@@ -1743,6 +1836,36 @@ msgstr "Activado"
 msgid "app.viewerToolbar.orthographic"
 msgstr "Ortográfica"
 
+# Source-Hash: 370413dd021d6ea7
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Other levels"
+#: apps/editor/components/viewer-toolbar.tsx
+#, fuzzy
+msgid "app.viewerToolbar.otherLevels"
+msgstr "Otros niveles"
+
+# Source-Hash: dc4fe6cb415ed882
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Outside"
+#: apps/editor/components/viewer-toolbar.tsx
+#, fuzzy
+msgid "app.viewerToolbar.outside"
+msgstr "Exterior"
+
+# Source-Hash: 4b5cbc83a3533c2a
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Overall size, outside face to outside face"
+#: apps/editor/components/viewer-toolbar.tsx
+#, fuzzy
+msgid "app.viewerToolbar.overallSizeOutsideFaceToOutsideFace"
+msgstr "Tamaño total, de cara exterior a cara exterior"
+
 # Source-Hash: 316e25993ff72b88
 # Review: required
 # AI-Provider: claude-code
@@ -1752,6 +1875,16 @@ msgstr "Ortográfica"
 #, fuzzy
 msgid "app.viewerToolbar.perspective"
 msgstr "Perspectiva"
+
+# Source-Hash: 007a63bd7c1e2b55
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Plan"
+#: apps/editor/components/viewer-toolbar.tsx
+#, fuzzy
+msgid "app.viewerToolbar.plan"
+msgstr "Plano"
 
 # Source-Hash: 20226b68d5467072
 # Review: required
@@ -1803,6 +1936,36 @@ msgstr "Renderizado"
 msgid "app.viewerToolbar.roomLabels"
 msgstr "Etiquetas de estancias"
 
+# Source-Hash: 257efab00820fb67
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Room sizes, inside face to inside face"
+#: apps/editor/components/viewer-toolbar.tsx
+#, fuzzy
+msgid "app.viewerToolbar.roomSizesInsideFaceToInsideFace"
+msgstr "Tamaño de las habitaciones, de cara interior a cara interior"
+
+# Source-Hash: 1ed28930a451001d
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Room sizes inside, overall size outside"
+#: apps/editor/components/viewer-toolbar.tsx
+#, fuzzy
+msgid "app.viewerToolbar.roomSizesInsideOverallSizeOutside"
+msgstr "Tamaño de las habitaciones por dentro, tamaño total por fuera"
+
+# Source-Hash: 8dc78e215a97d9fc
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Scene"
+#: apps/editor/components/viewer-toolbar.tsx
+#, fuzzy
+msgid "app.viewerToolbar.scene"
+msgstr "Escena"
+
 # Source-Hash: 82720864e5034398
 # Review: required
 # AI-Provider: claude-code
@@ -1823,15 +1986,25 @@ msgstr "Tema de la escena"
 msgid "app.viewerToolbar.shadows"
 msgstr "Sombras"
 
-# Source-Hash: 59dc62417b44931d
+# Source-Hash: e04ae95c14479764
 # Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Single wall axis"
+# English: "Shared by 2D and 3D"
 #: apps/editor/components/viewer-toolbar.tsx
 #, fuzzy
-msgid "app.viewerToolbar.singleWallAxis"
-msgstr "Eje único del muro"
+msgid "app.viewerToolbar.sharedBy2dAnd3d"
+msgstr "Compartido por 2D y 3D"
+
+# Source-Hash: 827e0c6ac9936b69
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Show"
+#: apps/editor/components/viewer-toolbar.tsx
+#, fuzzy
+msgid "app.viewerToolbar.show"
+msgstr "Mostrar"
 
 # Source-Hash: d266d83ec490df4e
 # Review: required
@@ -1893,16 +2066,6 @@ msgstr "Anotaciones de escaleras"
 msgid "app.viewerToolbar.strong"
 msgstr "Marcadas"
 
-# Source-Hash: e1be031e67d95382
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Structural core face"
-#: apps/editor/components/viewer-toolbar.tsx
-#, fuzzy
-msgid "app.viewerToolbar.structuralCoreFace"
-msgstr "Cara del núcleo estructural"
-
 # Source-Hash: efc50964d7b0ec47
 # Review: required
 # AI-Provider: claude-code
@@ -1923,6 +2086,16 @@ msgstr "Ejes estructurales y centros de pilares"
 msgid "app.viewerToolbar.translucent"
 msgstr "Translúcido"
 
+# Source-Hash: 07511ce5a194e1ed
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Turn on Dimensions to show them"
+#: apps/editor/components/viewer-toolbar.tsx
+#, fuzzy
+msgid "app.viewerToolbar.turnOnDimensionsToShowThem"
+msgstr "Activa las dimensiones para mostrarlas"
+
 # Source-Hash: b404dded35241274
 # Review: required
 # AI-Provider: claude-code
@@ -1942,26 +2115,6 @@ msgstr "Unidades"
 #, fuzzy
 msgid "app.viewerToolbar.walkthrough"
 msgstr "Recorrido"
-
-# Source-Hash: 62281975e51da7e3
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Wall centerline"
-#: apps/editor/components/viewer-toolbar.tsx
-#, fuzzy
-msgid "app.viewerToolbar.wallCenterline"
-msgstr "Eje del muro"
-
-# Source-Hash: ff145d7003118ec6
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Wall dimensions"
-#: apps/editor/components/viewer-toolbar.tsx
-#, fuzzy
-msgid "app.viewerToolbar.wallDimensions"
-msgstr "Cotas de muros"
 
 # Source-Hash: 13969d1d6e310aa4
 # Review: required
@@ -3050,36 +3203,6 @@ msgstr "Volver al inicio"
 msgid "editor.buildPanel.advanced"
 msgstr "Avanzado"
 
-# Source-Hash: 7afac05841af7b0c
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "{lead} every wall takes the exterior type, wherever it lands. Esc or double-click ends the run."
-#: packages/editor/src/components/ui/build-panel/build-panel.tsx
-#, fuzzy
-msgid "editor.buildPanel.rooms.exteriorWall.caption"
-msgstr "{lead} cada muro toma el tipo exterior, esté donde esté. Esc o doble clic termina el tramo."
-
-# Source-Hash: 0a7c3607e2011f54
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Exterior wall"
-#: packages/editor/src/components/ui/build-panel/build-panel.tsx
-#, fuzzy
-msgid "editor.buildPanel.rooms.exteriorWall.label"
-msgstr "Muro exterior"
-
-# Source-Hash: 76fd5dab80b9d731
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Exterior walls: every wall drawn takes the exterior type and cladding"
-#: packages/editor/src/components/ui/build-panel/build-panel.tsx
-#, fuzzy
-msgid "editor.buildPanel.rooms.exteriorWall.title"
-msgstr "Muros exteriores: cada muro dibujado toma el tipo exterior y el revestimiento"
-
 # Source-Hash: fb40866c2d6db5fb
 # Review: human
 # English: "walls · floor · ceiling"
@@ -3093,66 +3216,6 @@ msgstr "muros · suelo · techo"
 #: packages/editor/src/components/ui/build-panel/build-panel.tsx
 msgid "editor.buildPanel.rooms.idle"
 msgstr "Elige una forma para empezar. Cada estancia incluye sus muros, suelo y techo."
-
-# Source-Hash: f1fddcf6d6b5c32b
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "{lead} every wall takes the interior type, wherever it lands. Esc or double-click ends the run."
-#: packages/editor/src/components/ui/build-panel/build-panel.tsx
-#, fuzzy
-msgid "editor.buildPanel.rooms.interiorWall.caption"
-msgstr "{lead} cada muro toma el tipo interior, esté donde esté. Esc o doble clic termina el tramo."
-
-# Source-Hash: b9e25ba9781c9848
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Interior wall"
-#: packages/editor/src/components/ui/build-panel/build-panel.tsx
-#, fuzzy
-msgid "editor.buildPanel.rooms.interiorWall.label"
-msgstr "Muro interior"
-
-# Source-Hash: 9e4a942fd52a06c0
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Interior walls: every wall drawn takes the interior type and paint"
-#: packages/editor/src/components/ui/build-panel/build-panel.tsx
-#, fuzzy
-msgid "editor.buildPanel.rooms.interiorWall.title"
-msgstr "Muros interiores: cada muro dibujado toma el tipo interior y la pintura"
-
-# Source-Hash: 3f519112d88b3ba6
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "{lead} every line is an invisible wall: rooms close on it, nothing is built. Closed off outside the house, a room becomes a porch. Esc or double-click ends the run."
-#: packages/editor/src/components/ui/build-panel/build-panel.tsx
-#, fuzzy
-msgid "editor.buildPanel.rooms.invisibleWall.caption"
-msgstr "{lead} cada línea es un muro invisible: delimita estancias, pero no se construye nada. Cerrada fuera de la casa, una estancia se convierte en porche. Esc o doble clic termina el tramo."
-
-# Source-Hash: 5b0317bd807d560e
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Invisible wall"
-#: packages/editor/src/components/ui/build-panel/build-panel.tsx
-#, fuzzy
-msgid "editor.buildPanel.rooms.invisibleWall.label"
-msgstr "Muro invisible"
-
-# Source-Hash: 72fbf62dac3603b5
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Invisible walls: divide a room or close off a porch without building a wall. Rooms close on them; they never cut a wall."
-#: packages/editor/src/components/ui/build-panel/build-panel.tsx
-#, fuzzy
-msgid "editor.buildPanel.rooms.invisibleWall.title"
-msgstr "Muros invisibles: divide una estancia o cierra un porche sin construir un muro. Delimitan estancias; nunca cortan un muro."
 
 # Source-Hash: ae2800b6c9e2b6ed
 # Review: human
@@ -3181,36 +3244,6 @@ msgstr "Haz clic en cada esquina"
 #: packages/editor/src/components/ui/build-panel/build-panel.tsx
 msgid "editor.buildPanel.rooms.polygon.title"
 msgstr "Estancia poligonal"
-
-# Source-Hash: 18773160bb84f069
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "{lead} every line is a railing: a guard rooms close on, with no studs, siding or footing. Place a door on it for an opening. Esc or double-click ends the run."
-#: packages/editor/src/components/ui/build-panel/build-panel.tsx
-#, fuzzy
-msgid "editor.buildPanel.rooms.railing.caption"
-msgstr "{lead} cada línea es una barandilla: una protección que delimita estancias, sin montantes, revestimiento ni zapata. Coloca una puerta en ella para crear un paso. Esc o doble clic termina el tramo."
-
-# Source-Hash: 240ed9c77627b9a1
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Railing"
-#: packages/editor/src/components/ui/build-panel/build-panel.tsx
-#, fuzzy
-msgid "editor.buildPanel.rooms.railing.label"
-msgstr "Barandilla"
-
-# Source-Hash: 161fbdfe5f09b81a
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Railings: a 36 in guard drawn like walls, posts at most 6 ft apart. Rooms close on it and it takes openings; style and height in the wall panel."
-#: packages/editor/src/components/ui/build-panel/build-panel.tsx
-#, fuzzy
-msgid "editor.buildPanel.rooms.railing.title"
-msgstr "Barandillas: una protección de 36 in que se dibuja como los muros, con postes a 6 ft como máximo. Delimita estancias y admite aberturas; el estilo y la altura, en el panel del muro."
 
 # Source-Hash: 9b46295eedcbedae
 # Review: human
@@ -3247,15 +3280,45 @@ msgstr "Estancia rectangular"
 msgid "editor.buildPanel.rooms.title"
 msgstr "Estancias"
 
-# Source-Hash: ee04555fa3ead992
+# Source-Hash: 9755d557ce490458
 # Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "{lead} every wall starts where the last ended. Esc or double-click ends the run; close a loop and it becomes a room."
+# English: "Divides a room or closes off a porch without building a wall; rooms close on it. Change any wall later from its controls."
 #: packages/editor/src/components/ui/build-panel/build-panel.tsx
 #, fuzzy
-msgid "editor.buildPanel.rooms.walls.caption"
-msgstr "{lead} cada muro empieza donde acabó el anterior. Esc o doble clic termina el tramo; cierra un contorno y se convertirá en una estancia."
+msgid "editor.buildPanel.rooms.wallKinds.invisibleHelp"
+msgstr "Divide una habitación o cierra un porche sin construir un muro; las habitaciones se cierran en él. Cambia cualquier muro después desde sus controles."
+
+# Source-Hash: abe7e7de0d337058
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Wall kind"
+#: packages/editor/src/components/ui/build-panel/build-panel.tsx
+#, fuzzy
+msgid "editor.buildPanel.rooms.wallKinds.label"
+msgstr "Tipo de muro"
+
+# Source-Hash: b4d012ac50ef1e82
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "A guard for stairs, balconies and mezzanines; rooms close on it. Change any wall later from its controls."
+#: packages/editor/src/components/ui/build-panel/build-panel.tsx
+#, fuzzy
+msgid "editor.buildPanel.rooms.wallKinds.railingHelp"
+msgstr "Una barandilla para escaleras, balcones y altillos; las habitaciones se cierran en ella. Cambia cualquier muro después desde sus controles."
+
+# Source-Hash: 5e6d896656f4e056
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "One wall per two clicks. Its sides become exterior or interior from the rooms it bounds. Change any wall later from its controls."
+#: packages/editor/src/components/ui/build-panel/build-panel.tsx
+#, fuzzy
+msgid "editor.buildPanel.rooms.wallKinds.standardHelp"
+msgstr "Un muro cada dos clics. Sus caras pasan a ser exteriores o interiores según las habitaciones que delimita. Cambia cualquier muro después desde sus controles."
 
 # Source-Hash: aac9a732d2159ccc
 # Review: human
@@ -3264,16 +3327,6 @@ msgstr "{lead} cada muro empieza donde acabó el anterior. Esc o doble clic term
 msgid "editor.buildPanel.rooms.walls.label"
 msgstr "Muros"
 
-# Source-Hash: ab5c2c822d968ca2
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Click each corner;"
-#: packages/editor/src/components/ui/build-panel/build-panel.tsx
-#, fuzzy
-msgid "editor.buildPanel.rooms.walls.lead"
-msgstr "Haz clic en cada esquina;"
-
 # Source-Hash: aac9a732d2159ccc
 # Review: human
 # English: "Walls"
@@ -3281,22 +3334,12 @@ msgstr "Haz clic en cada esquina;"
 msgid "editor.buildPanel.rooms.walls.title"
 msgstr "Muros"
 
-# Source-Hash: 4ca0e0e73229540c
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Default"
-#: packages/editor/src/components/ui/build-panel/wall-type-controls.tsx
-#, fuzzy
-msgid "editor.buildPanel.wallTypeControls.default"
-msgstr "Predeterminado"
-
 # Source-Hash: 1dba2aacc55e0bb7
 # Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Delete from this project"
-#: packages/editor/src/components/ui/build-panel/wall-type-controls.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-menu.tsx
 #, fuzzy
 msgid "editor.buildPanel.wallTypeControls.deleteFromThisProject"
 msgstr "Eliminar de este proyecto"
@@ -3306,7 +3349,7 @@ msgstr "Eliminar de este proyecto"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Duplicate as a new type…"
-#: packages/editor/src/components/ui/build-panel/wall-type-controls.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-menu.tsx
 #, fuzzy
 msgid "editor.buildPanel.wallTypeControls.duplicateAsANewType"
 msgstr "Duplicar como tipo nuevo…"
@@ -3316,27 +3359,17 @@ msgstr "Duplicar como tipo nuevo…"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Edit layers…"
-#: packages/editor/src/components/ui/build-panel/wall-type-controls.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-menu.tsx
 #, fuzzy
 msgid "editor.buildPanel.wallTypeControls.editLayers"
 msgstr "Editar capas…"
-
-# Source-Hash: 640331cc307a8421
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Edit or duplicate {label}"
-#: packages/editor/src/components/ui/build-panel/wall-type-controls.tsx
-#, fuzzy
-msgid "editor.buildPanel.wallTypeControls.editOrDuplicateLabel"
-msgstr "Editar o duplicar {label}"
 
 # Source-Hash: 8f1ea5a4c16ba810
 # Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Edit or duplicate this wall type"
-#: packages/editor/src/components/ui/build-panel/wall-type-controls.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-menu.tsx
 #, fuzzy
 msgid "editor.buildPanel.wallTypeControls.editOrDuplicateThisWallType"
 msgstr "Editar o duplicar este tipo de muro"
@@ -3346,7 +3379,7 @@ msgstr "Editar o duplicar este tipo de muro"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "New wall type…"
-#: packages/editor/src/components/ui/build-panel/wall-type-controls.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-menu.tsx
 #, fuzzy
 msgid "editor.buildPanel.wallTypeControls.newWallType"
 msgstr "Nuevo tipo de muro…"
@@ -3356,7 +3389,7 @@ msgstr "Nuevo tipo de muro…"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Presets stay as cited. Duplicate one to change its layers."
-#: packages/editor/src/components/ui/build-panel/wall-type-controls.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-menu.tsx
 #, fuzzy
 msgid "editor.buildPanel.wallTypeControls.presetsStayAsCitedDuplicateOne"
 msgstr "Los preajustes se mantienen tal como se citan. Duplica uno para cambiar sus capas."
@@ -3366,7 +3399,7 @@ msgstr "Los preajustes se mantienen tal como se citan. Duplica uno para cambiar 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Add"
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 #, fuzzy
 msgid "editor.buildPanel.wallTypeEditorDialog.add"
 msgstr "Añadir"
@@ -3376,7 +3409,7 @@ msgstr "Añadir"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Air space"
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 #, fuzzy
 msgid "editor.buildPanel.wallTypeEditorDialog.airSpace"
 msgstr "Cámara de aire"
@@ -3386,7 +3419,7 @@ msgstr "Cámara de aire"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "A wall type holds at most {limit, plural, one {# layer} other {# layers}}."
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 #, fuzzy
 msgid "editor.buildPanel.wallTypeEditorDialog.aWallTypeHoldsAtMost"
 msgstr "Un tipo de muro admite como máximo {limit, plural, one {# capa} many {# capas} other {# capas}}."
@@ -3396,7 +3429,7 @@ msgstr "Un tipo de muro admite como máximo {limit, plural, one {# capa} many {#
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Brick veneer"
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 #, fuzzy
 msgid "editor.buildPanel.wallTypeEditorDialog.brickVeneer"
 msgstr "Chapado de ladrillo"
@@ -3406,7 +3439,7 @@ msgstr "Chapado de ladrillo"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Cancel"
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 #, fuzzy
 msgid "editor.buildPanel.wallTypeEditorDialog.cancel"
 msgstr "Cancelar"
@@ -3416,7 +3449,7 @@ msgstr "Cancelar"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Drywall"
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 #, fuzzy
 msgid "editor.buildPanel.wallTypeEditorDialog.drywall"
 msgstr "Placa de yeso"
@@ -3426,7 +3459,7 @@ msgstr "Placa de yeso"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Duplicate wall type"
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 #, fuzzy
 msgid "editor.buildPanel.wallTypeEditorDialog.duplicateWallType"
 msgstr "Duplicar tipo de muro"
@@ -3436,7 +3469,7 @@ msgstr "Duplicar tipo de muro"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Edit wall type"
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 #, fuzzy
 msgid "editor.buildPanel.wallTypeEditorDialog.editWallType"
 msgstr "Editar tipo de muro"
@@ -3446,7 +3479,7 @@ msgstr "Editar tipo de muro"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Every wall type has one framing core"
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 #, fuzzy
 msgid "editor.buildPanel.wallTypeEditorDialog.everyWallTypeHasOneFraming"
 msgstr "Cada tipo de muro tiene un núcleo de entramado"
@@ -3456,7 +3489,7 @@ msgstr "Cada tipo de muro tiene un núcleo de entramado"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Fiber cement"
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 #, fuzzy
 msgid "editor.buildPanel.wallTypeEditorDialog.fiberCement"
 msgstr "Fibrocemento"
@@ -3466,7 +3499,7 @@ msgstr "Fibrocemento"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Finish"
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 #, fuzzy
 msgid "editor.buildPanel.wallTypeEditorDialog.finish"
 msgstr "Acabado"
@@ -3476,7 +3509,7 @@ msgstr "Acabado"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Framing core"
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 #, fuzzy
 msgid "editor.buildPanel.wallTypeEditorDialog.framingCore"
 msgstr "Núcleo de entramado"
@@ -3486,7 +3519,7 @@ msgstr "Núcleo de entramado"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "{fullReason} Remove one to add another."
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 #, fuzzy
 msgid "editor.buildPanel.wallTypeEditorDialog.fullreasonRemoveOneToAddAnother"
 msgstr "{fullReason} Quita una para añadir otra."
@@ -3496,7 +3529,7 @@ msgstr "{fullReason} Quita una para añadir otra."
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Gypsum sheathing"
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 #, fuzzy
 msgid "editor.buildPanel.wallTypeEditorDialog.gypsumSheathing"
 msgstr "Tablero de yeso"
@@ -3506,7 +3539,7 @@ msgstr "Tablero de yeso"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Inside"
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 #, fuzzy
 msgid "editor.buildPanel.wallTypeEditorDialog.inside"
 msgstr "Interior"
@@ -3516,7 +3549,7 @@ msgstr "Interior"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Insulation"
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 #, fuzzy
 msgid "editor.buildPanel.wallTypeEditorDialog.insulation"
 msgstr "Aislamiento"
@@ -3526,7 +3559,7 @@ msgstr "Aislamiento"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Lap siding"
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 #, fuzzy
 msgid "editor.buildPanel.wallTypeEditorDialog.lapSiding"
 msgstr "Revestimiento solapado"
@@ -3536,7 +3569,7 @@ msgstr "Revestimiento solapado"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Layer"
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 #, fuzzy
 msgid "editor.buildPanel.wallTypeEditorDialog.layer"
 msgstr "Capa"
@@ -3546,7 +3579,7 @@ msgstr "Capa"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Layer role"
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 #, fuzzy
 msgid "editor.buildPanel.wallTypeEditorDialog.layerRole"
 msgstr "Función de la capa"
@@ -3556,47 +3589,17 @@ msgstr "Función de la capa"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Lining"
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 #, fuzzy
 msgid "editor.buildPanel.wallTypeEditorDialog.lining"
 msgstr "Trasdosado"
-
-# Source-Hash: d4e37e79879efa23
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Lists under Exterior: it has a cladding side."
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
-#, fuzzy
-msgid "editor.buildPanel.wallTypeEditorDialog.listsUnderExteriorItHasA"
-msgstr "Aparece en Exterior: tiene una cara con revestimiento."
-
-# Source-Hash: d455f88eb0e9e68e
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Lists under Interior: both faces match."
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
-#, fuzzy
-msgid "editor.buildPanel.wallTypeEditorDialog.listsUnderInteriorBothFacesMatch"
-msgstr "Aparece en Interior: ambas caras son iguales."
-
-# Source-Hash: 5454746105949d05
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "List the layers from the outside in, around one framing core. Walls already drawn keep their layers; walls drawn from now on use the saved type."
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
-#, fuzzy
-msgid "editor.buildPanel.wallTypeEditorDialog.listTheLayersFromTheOutside"
-msgstr "Enumera las capas de fuera hacia dentro, alrededor de un núcleo de entramado. Los muros ya dibujados conservan sus capas; los que se dibujen a partir de ahora usarán el tipo guardado."
 
 # Source-Hash: 964b86ae1474ff98
 # Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Material"
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 #, fuzzy
 msgid "editor.buildPanel.wallTypeEditorDialog.material"
 msgstr "Material"
@@ -3606,7 +3609,7 @@ msgstr "Material"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Mineral wool board"
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 #, fuzzy
 msgid "editor.buildPanel.wallTypeEditorDialog.mineralWoolBoard"
 msgstr "Panel de lana mineral"
@@ -3616,7 +3619,7 @@ msgstr "Panel de lana mineral"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Move in"
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 #, fuzzy
 msgid "editor.buildPanel.wallTypeEditorDialog.moveIn"
 msgstr "Mover hacia dentro"
@@ -3626,7 +3629,7 @@ msgstr "Mover hacia dentro"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Move out"
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 #, fuzzy
 msgid "editor.buildPanel.wallTypeEditorDialog.moveOut"
 msgstr "Mover hacia fuera"
@@ -3636,7 +3639,7 @@ msgstr "Mover hacia fuera"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Name"
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 #, fuzzy
 msgid "editor.buildPanel.wallTypeEditorDialog.name"
 msgstr "Nombre"
@@ -3646,7 +3649,7 @@ msgstr "Nombre"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "New wall type"
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 #, fuzzy
 msgid "editor.buildPanel.wallTypeEditorDialog.newWallType"
 msgstr "Nuevo tipo de muro"
@@ -3656,7 +3659,7 @@ msgstr "Nuevo tipo de muro"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "OSB"
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 #, fuzzy
 msgid "editor.buildPanel.wallTypeEditorDialog.osb"
 msgstr "OSB"
@@ -3666,7 +3669,7 @@ msgstr "OSB"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Outside"
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 #, fuzzy
 msgid "editor.buildPanel.wallTypeEditorDialog.outside"
 msgstr "Exterior"
@@ -3676,7 +3679,7 @@ msgstr "Exterior"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Plaster"
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 #, fuzzy
 msgid "editor.buildPanel.wallTypeEditorDialog.plaster"
 msgstr "Enlucido"
@@ -3686,7 +3689,7 @@ msgstr "Enlucido"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Plywood"
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 #, fuzzy
 msgid "editor.buildPanel.wallTypeEditorDialog.plywood"
 msgstr "Contrachapado"
@@ -3696,7 +3699,7 @@ msgstr "Contrachapado"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Remove layer"
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 #, fuzzy
 msgid "editor.buildPanel.wallTypeEditorDialog.removeLayer"
 msgstr "Quitar capa"
@@ -3706,7 +3709,7 @@ msgstr "Quitar capa"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Rigid foam"
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 #, fuzzy
 msgid "editor.buildPanel.wallTypeEditorDialog.rigidFoam"
 msgstr "Espuma rígida"
@@ -3716,7 +3719,7 @@ msgstr "Espuma rígida"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Save wall type"
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 #, fuzzy
 msgid "editor.buildPanel.wallTypeEditorDialog.saveWallType"
 msgstr "Guardar tipo de muro"
@@ -3726,7 +3729,7 @@ msgstr "Guardar tipo de muro"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Sheathing"
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 #, fuzzy
 msgid "editor.buildPanel.wallTypeEditorDialog.sheathing"
 msgstr "Tablero"
@@ -3736,7 +3739,7 @@ msgstr "Tablero"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Stone veneer"
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 #, fuzzy
 msgid "editor.buildPanel.wallTypeEditorDialog.stoneVeneer"
 msgstr "Chapado de piedra"
@@ -3746,7 +3749,7 @@ msgstr "Chapado de piedra"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Stucco"
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 #, fuzzy
 msgid "editor.buildPanel.wallTypeEditorDialog.stucco"
 msgstr "Estuco"
@@ -3756,7 +3759,7 @@ msgstr "Estuco"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Thickness"
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 #, fuzzy
 msgid "editor.buildPanel.wallTypeEditorDialog.thickness"
 msgstr "Espesor"
@@ -3766,7 +3769,7 @@ msgstr "Espesor"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Total {thickness}"
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 #, fuzzy
 msgid "editor.buildPanel.wallTypeEditorDialog.totalThickness"
 msgstr "Total {thickness}"
@@ -3776,160 +3779,20 @@ msgstr "Total {thickness}"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Wall type"
-#: packages/editor/src/components/ui/build-panel/wall-type-editor-dialog.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 #, fuzzy
 msgid "editor.buildPanel.wallTypeEditorDialog.wallType"
 msgstr "Tipo de muro"
-
-# Source-Hash: abff67400a76e5eb
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Brick"
-#: packages/editor/src/components/ui/build-panel/build-panel.tsx
-#, fuzzy
-msgid "editor.buildPanel.wallTypes.brick"
-msgstr "Ladrillo"
-
-# Source-Hash: ecca209317a2d1cd
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Cladding"
-#: packages/editor/src/components/ui/build-panel/build-panel.tsx
-#, fuzzy
-msgid "editor.buildPanel.wallTypes.cladding"
-msgstr "Revestimiento"
-
-# Source-Hash: 5c53959decce5dae
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Drawing: Exterior walls."
-#: packages/editor/src/components/ui/build-panel/build-panel.tsx
-#, fuzzy
-msgid "editor.buildPanel.wallTypes.drawingExterior"
-msgstr "Dibujando: muros exteriores."
-
-# Source-Hash: 5206b8695c329b06
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Drawing: Interior walls."
-#: packages/editor/src/components/ui/build-panel/build-panel.tsx
-#, fuzzy
-msgid "editor.buildPanel.wallTypes.drawingInterior"
-msgstr "Dibujando: muros interiores."
-
-# Source-Hash: 8a542e796ac8edf0
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Drywall paint"
-#: packages/editor/src/components/ui/build-panel/build-panel.tsx
-#, fuzzy
-msgid "editor.buildPanel.wallTypes.drywallPaint"
-msgstr "Pintura sobre placa de yeso"
-
-# Source-Hash: 0ead5e5711b98bf6
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Exterior"
-#: packages/editor/src/components/ui/build-panel/build-panel.tsx
-#, fuzzy
-msgid "editor.buildPanel.wallTypes.exterior"
-msgstr "Exterior"
-
-# Source-Hash: fd89c31f16639f50
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Fiber cement"
-#: packages/editor/src/components/ui/build-panel/build-panel.tsx
-#, fuzzy
-msgid "editor.buildPanel.wallTypes.fiberCement"
-msgstr "Fibrocemento"
-
-# Source-Hash: 5badd399f078d485
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "{drawing} Every wall takes the exterior type until you pick a shape or leave the tool."
-#: packages/editor/src/components/ui/build-panel/build-panel.tsx
-#, fuzzy
-msgid "editor.buildPanel.wallTypes.forcedExterior"
-msgstr "{drawing} Cada muro toma el tipo exterior hasta que elijas una forma o salgas de la herramienta."
-
-# Source-Hash: de2c329c8d03a385
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "{drawing} Every wall takes the interior type until you pick a shape or leave the tool."
-#: packages/editor/src/components/ui/build-panel/build-panel.tsx
-#, fuzzy
-msgid "editor.buildPanel.wallTypes.forcedInterior"
-msgstr "{drawing} Cada muro toma el tipo interior hasta que elijas una forma o salgas de la herramienta."
-
-# Source-Hash: b70a5d0948632955
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "New walls use the exterior type and cladding; walls drawn inside a room use the interior type. Every drywall face gets the paint."
-#: packages/editor/src/components/ui/build-panel/build-panel.tsx
-#, fuzzy
-msgid "editor.buildPanel.wallTypes.hint"
-msgstr "Los muros nuevos usan el tipo exterior y su revestimiento; los dibujados dentro de una estancia usan el tipo interior. Todas las caras de placa de yeso reciben la pintura."
-
-# Source-Hash: ff005196861cef68
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Interior"
-#: packages/editor/src/components/ui/build-panel/build-panel.tsx
-#, fuzzy
-msgid "editor.buildPanel.wallTypes.interior"
-msgstr "Interior"
 
 # Source-Hash: 3744d42a0e4ee161
 # Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Plain wall"
-#: packages/editor/src/components/ui/build-panel/build-panel.tsx
+#: packages/editor/src/components/ui/wall-type/wall-type-menu.tsx
 #, fuzzy
 msgid "editor.buildPanel.wallTypes.plainWall"
 msgstr "Muro simple"
-
-# Source-Hash: 8884a1d20caae02f
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Siding"
-#: packages/editor/src/components/ui/build-panel/build-panel.tsx
-#, fuzzy
-msgid "editor.buildPanel.wallTypes.siding"
-msgstr "Revestimiento de tablas"
-
-# Source-Hash: 44c6466e6907a0b4
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Stone"
-#: packages/editor/src/components/ui/build-panel/build-panel.tsx
-#, fuzzy
-msgid "editor.buildPanel.wallTypes.stone"
-msgstr "Piedra"
-
-# Source-Hash: 687cf7bc64b0224e
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Stucco"
-#: packages/editor/src/components/ui/build-panel/build-panel.tsx
-#, fuzzy
-msgid "editor.buildPanel.wallTypes.stucco"
-msgstr "Estuco"
 
 # Source-Hash: 1f3650da23603008
 # Review: required
@@ -11097,15 +10960,35 @@ msgstr "Dividir {kind}"
 msgid "editor.lib.hudTitle.terrace"
 msgstr "Terraza"
 
-# Source-Hash: 322452fdf0850c8a
+# Source-Hash: 472d127eb9416ec5
 # Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "{title} ({exterior} exterior, {interior} interior)"
-#: packages/editor/src/lib/tool-shortcuts.ts
+# English: "Invisible"
+#: packages/editor/src/lib/wall-draw-variant.ts
 #, fuzzy
-msgid "editor.lib.toolShortcuts.wallsTooltip"
-msgstr "{title} ({exterior} exteriores, {interior} interiores)"
+msgid "editor.lib.wallDrawVariant.kind.invisible"
+msgstr "Invisible"
+
+# Source-Hash: 240ed9c77627b9a1
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Railing"
+#: packages/editor/src/lib/wall-draw-variant.ts
+#, fuzzy
+msgid "editor.lib.wallDrawVariant.kind.railing"
+msgstr "Barandilla"
+
+# Source-Hash: d998c212030bc7c2
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Standard"
+#: packages/editor/src/lib/wall-draw-variant.ts
+#, fuzzy
+msgid "editor.lib.wallDrawVariant.kind.standard"
+msgstr "Estándar"
 
 # Source-Hash: 8ec6152e139b0e3f
 # Review: required
@@ -14039,16 +13922,6 @@ msgstr "Volver"
 msgid "editor.panels.panelWrapper.close"
 msgstr "Cerrar"
 
-# Source-Hash: 2dff25ca30c80559
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Close {title}"
-#: packages/editor/src/components/ui/panels/panel-wrapper.tsx
-#, fuzzy
-msgid "editor.panels.panelWrapper.closeTitle"
-msgstr "Cerrar {title}"
-
 # Source-Hash: 4f15c3e0fe6178b5
 # Review: required
 # AI-Provider: claude-code
@@ -14088,16 +13961,6 @@ msgstr "Expandir panel"
 #, fuzzy
 msgid "editor.panels.panelWrapper.manageCollections"
 msgstr "Gestionar colecciones…"
-
-# Source-Hash: 2ff02ed91f54235c
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Open {title}"
-#: packages/editor/src/components/ui/panels/panel-wrapper.tsx
-#, fuzzy
-msgid "editor.panels.panelWrapper.openTitle"
-msgstr "Abrir {title}"
 
 # Source-Hash: bf91b71a9aa76e94
 # Review: required
@@ -17853,16 +17716,6 @@ msgstr "Un muro curvo no admite ventana de esquina"
 msgid "editor.toolHint.addACornerClickTheFirst.o4r67t"
 msgstr "Añadir esquina · haz clic en la primera para cerrar"
 
-# Source-Hash: d0ddef756fb49fbc
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Add a wall · each one starts where the last ended"
-#: packages/nodes/src/i18n/definition-messages.ts
-#, fuzzy
-msgid "editor.toolHint.addAWallEachOneStarts.4zkf12"
-msgstr "Añadir muro · cada uno empieza donde acabó el anterior"
-
 # Source-Hash: 6a0745dd047b149a
 # Review: required
 # AI-Provider: claude-code
@@ -18172,16 +18025,6 @@ msgstr "Terminar los testigos de varios puntos"
 #, fuzzy
 msgid "editor.toolHint.finishSlab.xmnm8e"
 msgstr "Terminar el forjado"
-
-# Source-Hash: 54ae97157eacbc56
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Finish the run"
-#: packages/nodes/src/i18n/definition-messages.ts
-#, fuzzy
-msgid "editor.toolHint.finishTheRun.ayliww"
-msgstr "Terminar el tramo"
 
 # Source-Hash: 66ed7c7598d3aa29
 # Review: required
@@ -19153,6 +18996,16 @@ msgstr "Fija una esquina y luego la opuesta"
 msgid "editor.toolHint.setRoofFootprint.p50n0o"
 msgstr "Fijar la planta de la cubierta"
 
+# Source-Hash: 0243859b1d64c21e
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Set wall start / end"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.toolHint.setWallStartEnd.1r8ubcx"
+msgstr "Fijar inicio / fin del muro"
+
 # Source-Hash: c2806cce9612fa50
 # Review: required
 # AI-Provider: claude-code
@@ -19992,6 +19845,36 @@ msgstr "Velar el terreno sobre una planta bajo rasante"
 #, fuzzy
 msgid "editor.views.viewBar.views"
 msgstr "Vistas"
+
+# Source-Hash: 57c1428fe2d28745
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "List the layers from the outside in, around one framing core. The type is saved with the project and applied to this wall; other walls keep their layers."
+#: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
+#, fuzzy
+msgid "editor.wallTypeEditorDialog.listTheLayersAppliedToThisWall"
+msgstr "Enumera las capas de fuera hacia dentro, en torno a un único núcleo estructural. El tipo se guarda con el proyecto y se aplica a este muro; los demás muros conservan sus capas."
+
+# Source-Hash: 9e9715d52410c86f
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Custom"
+#: packages/editor/src/components/ui/wall-type/wall-type-menu.tsx
+#, fuzzy
+msgid "editor.wallTypeMenu.custom"
+msgstr "Personalizado"
+
+# Source-Hash: 0e2a2a8b90ba9c7e
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Wall types: new, edit or duplicate {label}"
+#: packages/editor/src/components/ui/wall-type/wall-type-menu.tsx
+#, fuzzy
+msgid "editor.wallTypeMenu.wallTypesOf"
+msgstr "Tipos de muro: crear, editar o duplicar {label}"
 
 # Source-Hash: fdece5c2158dfe88
 # Review: required
@@ -35769,58 +35652,6 @@ msgstr "Informe"
 msgid "node.unit.unitPanel.unit"
 msgstr "Unidad"
 
-# Source-Hash: e04a35319a83ad7c
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Dimensions to the exterior faces (outside size). Click for both"
-#: packages/nodes/src/wall/actions.tsx
-#, fuzzy
-msgid "node.wall.actions.dimensionsToTheExteriorFacesOutside"
-msgstr "Cotas a las caras exteriores (medida exterior). Haz clic para ambas"
-
-# Source-Hash: 41c6c329ecb15086
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Dimensions to the interior and exterior faces. Click for interior only"
-#: packages/nodes/src/wall/actions.tsx
-#, fuzzy
-msgid "node.wall.actions.dimensionsToTheInteriorAndExterior"
-msgstr "Cotas a las caras interiores y exteriores. Haz clic para solo interiores"
-
-# Source-Hash: 57524fee08ddde73
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Dimensions to the interior faces (room size). Click for exterior only"
-#: packages/nodes/src/wall/actions.tsx
-#, fuzzy
-msgid "node.wall.actions.dimensionsToTheInteriorFacesRoom"
-msgstr "Cotas a las caras interiores (medida de la estancia). Haz clic para solo exteriores"
-
-# Source-Hash: 81ef3a25ccb6eaf7
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "ID"
-#. Short button text: interior dimension, measured to the interior faces.
-#: packages/nodes/src/wall/actions.tsx
-#, fuzzy
-msgid "node.wall.actions.id"
-msgstr "Int."
-
-# Source-Hash: e846b1fcc616fb6d
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "ID+OD"
-#. Short button text: ID is the interior dimension, OD the outside dimension.
-#: packages/nodes/src/wall/actions.tsx
-#, fuzzy
-msgid "node.wall.actions.idOd"
-msgstr "Int.+Ext."
-
 # Source-Hash: d53242481ff46157
 # Review: required
 # AI-Provider: claude-code
@@ -35830,17 +35661,6 @@ msgstr "Int.+Ext."
 #, fuzzy
 msgid "node.wall.actions.mergeWalls"
 msgstr "Unir muros"
-
-# Source-Hash: fdaa3b3faa1844fd
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "OD"
-#. Short button text: outside dimension, measured to the exterior faces.
-#: packages/nodes/src/wall/actions.tsx
-#, fuzzy
-msgid "node.wall.actions.od"
-msgstr "Ext."
 
 # Source-Hash: d7ead4708d50965f
 # Review: required
@@ -37511,6 +37331,16 @@ msgstr "{trim, select, skirting {Ocultar rodapié} crown {Ocultar moldura de tec
 #, fuzzy
 msgid "node.wall.trim.show"
 msgstr "{trim, select, skirting {Mostrar rodapié} crown {Mostrar moldura de techo} other {Mostrar moldura de silla}}"
+
+# Source-Hash: b1757d76048706b7
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Swap hinge side"
+#: packages/nodes/src/window/actions.tsx
+#, fuzzy
+msgid "node.window.actions.swapHingeSide"
+msgstr "Cambiar el lado de las bisagras"
 
 # Source-Hash: ea6a51e66eb0c0dc
 # Review: required
