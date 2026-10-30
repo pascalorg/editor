@@ -12,8 +12,6 @@ import type { DuctSegmentNode } from './duct-segment'
 import type { DuctTerminalNode } from './duct-terminal'
 import type { FenceNode } from './fence'
 import type { FloorOpeningNode } from './floor-opening'
-import type { FootingNode } from './footing'
-import type { FoundationNode } from './foundation'
 import type { GuideNode } from './guide'
 import type { HvacEquipmentNode } from './hvac-equipment'
 import type { ImportedMeshNode } from './imported-mesh'
@@ -39,8 +37,6 @@ type CoreLevelChildId =
   | WallNode['id']
   | SeparatorNode['id']
   | FloorOpeningNode['id']
-  | FootingNode['id']
-  | FoundationNode['id']
   | FenceNode['id']
   | ColumnNode['id']
   | BeamNode['id']

@@ -74,8 +74,7 @@ const createFloorMaterial = (zoneColor: string) => {
 export const ZoneRenderer = ({ node }: { node: ZoneNode }) => {
   const ref = useRef<Group>(null!)
   useRegistry(node.id, 'zone', ref)
-  // The foundation view shows no rooms: its label is HTML, which a hidden group does not hide.
-  const showZones = useViewer((state) => state.showZones && !state.foundationView)
+  const showZones = useViewer((state) => state.showZones)
   const script = node.floor?.script
   return (
     <group ref={ref} visible={node.visible !== false}>

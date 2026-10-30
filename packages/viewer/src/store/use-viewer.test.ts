@@ -56,13 +56,6 @@ describe('measurement display preferences', () => {
     expect(useViewer.getState().framingShown).toBe(false)
   })
 
-  test('another project opens on its levels, not the foundation view', () => {
-    useViewer.getState().setProjectId('project-a')
-    useViewer.getState().setFoundationView(true)
-    useViewer.getState().setProjectId('project-b')
-    expect(useViewer.getState().foundationView).toBe(false)
-  })
-
   test('changes display units without changing measurement visibility preferences', () => {
     const viewer = useViewer.getState()
     viewer.setProjectId('project-a')
@@ -131,45 +124,6 @@ describe('pointed highlights', () => {
     useViewer.getState().setPointedIds(null)
     useViewer.getState().setPointedIds([])
     expect(useViewer.getState().pointedIds).toBe(empty)
-  })
-})
-
-describe('the foundation view', () => {
-  const select = (buildingId: string, levelId: string) =>
-    useViewer
-      .getState()
-      .setSelection({ buildingId: buildingId as never, levelId: levelId as never })
-  beforeEach(() => {
-    useViewer.getState().resetSelection()
-    select('building_a', 'level_b')
-    useViewer.getState().setFoundationView(true)
-  })
-  afterEach(() => useViewer.getState().resetSelection())
-
-  test('stays on while its level is kept: a footing picked, the same level selected again', () => {
-    useViewer.getState().setSelection({ selectedIds: ['footing_a' as never] })
-    select('building_a', 'level_b')
-    expect(useViewer.getState().foundationView).toBe(true)
-  })
-
-  test('ends when another level or building is selected, or the selection is reset', () => {
-    useViewer.getState().setSelection({ levelId: 'level_g' as never })
-    expect(useViewer.getState().foundationView).toBe(false)
-
-    select('building_a', 'level_b')
-    useViewer.getState().setFoundationView(true)
-    select('building_b', 'level_b')
-    expect(useViewer.getState().foundationView).toBe(false)
-
-    useViewer.getState().setFoundationView(true)
-    useViewer.getState().resetSelection()
-    expect(useViewer.getState().foundationView).toBe(false)
-  })
-
-  test('switching it to what it already is changes nothing', () => {
-    const before = useViewer.getState()
-    useViewer.getState().setFoundationView(true)
-    expect(useViewer.getState()).toBe(before)
   })
 })
 

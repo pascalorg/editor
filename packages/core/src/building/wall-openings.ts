@@ -7,7 +7,6 @@ import {
   scriptSource,
 } from '../lib/geometry-script-node'
 import { wallSupportForNodes } from '../lib/opening-floor-datum'
-import { doorSillFloorOf } from '../lib/slab-room'
 import {
   type AnyNode,
   type AnyNodeId,
@@ -64,22 +63,17 @@ export function resolveWallOpeningCeiling(
 const openingMargin = (wall: WallNode) =>
   wall.wallType === 'curtain' ? getCurtainWallConfig(wall).perimeterWidth : 0
 
-/**
- * A door's centre: slid along the wall to stay on it, standing on the floor it opens from
- * (`doorSillFloorOf`: a garage's slab in its walls to the outside, given the scene).
- */
+/** A door's centre: slid along the wall to stay on it, standing on the floor. */
 export function clampDoorToWall(
   wall: WallNode,
   localX: number,
   width: number,
   height: number,
-  nodes?: Readonly<Record<AnyNodeId, AnyNode>>,
 ): { clampedX: number; clampedY: number } {
   const margin = openingMargin(wall)
   const length = getWallCurveLength(wall)
   const clampedX = Math.max(margin + width / 2, Math.min(length - margin - width / 2, localX))
-  const floor = nodes ? doorSillFloorOf(nodes as Record<AnyNodeId, AnyNode>, wall) : 0
-  return { clampedX, clampedY: floor + height / 2 }
+  return { clampedX, clampedY: height / 2 }
 }
 
 /** A window's centre: slid to stay on the wall, and between the floor and the wall's ceiling. */
@@ -345,13 +339,13 @@ export function planWallOpening(nodes: Nodes, input: WallOpeningInput) {
   // below stands one that is too tall on the floor and reports it clamped.
   const rawY =
     kind === 'door'
-      ? doorSillFloorOf(nodes as Record<AnyNodeId, AnyNode>, wall) + height / 2
+      ? height / 2
       : input.sillHeight === undefined
         ? resolveWallOpeningCeiling(wall, nodes as Record<AnyNodeId, AnyNode>) / 2
         : input.sillHeight + height / 2
   const { clampedX, clampedY } =
     kind === 'door'
-      ? clampDoorToWall(wall, rawX, width, height, nodes as Record<AnyNodeId, AnyNode>)
+      ? clampDoorToWall(wall, rawX, width, height)
       : clampWindowToWall(wall, rawX, rawY, width, height, nodes as Record<AnyNodeId, AnyNode>)
 
   if (!input.force) {

@@ -83,7 +83,6 @@ function deckScene(decking?: ZoneNode['decking'], buildingY = 0, painted?: strin
     parentId: site.id,
     children: ['level_1'],
     position: [0, buildingY, 0],
-    metadata: { foundation: { enabled: false } },
   })
   const level = LevelNode.parse({
     id: 'level_1',

@@ -309,7 +309,6 @@ export { CATALOG_ITEMS } from './components/ui/item-catalog/catalog-items'
 // A base plate's panel (one connected footprint's floor and foundation); the
 // slab kind's panel hands base plates to it.
 export { FloorFoundationPanel } from './components/ui/panels/floor-foundation-panel'
-export { FoundationViewPanel } from './components/ui/panels/foundation-view-panel'
 export {
   resolveHomogeneousSelection,
   resolveUniqueSelectionIds,
@@ -639,15 +638,6 @@ export {
   streetCore,
   streetEdgeNames,
 } from './lib/floorplan/site-plan'
-export {
-  armFootingTool,
-  armFoundationTool,
-  editFoundationOutline,
-  enterFoundationView,
-  followWallsForFoundation,
-  houseFoundationOutlines,
-  traceFoundationFromWalls,
-} from './lib/foundation-view'
 export {
   commitFreshPlacementSubtree,
   createFreshPlacementSubtree,

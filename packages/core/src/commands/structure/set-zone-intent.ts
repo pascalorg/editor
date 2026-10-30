@@ -10,8 +10,7 @@ import {
 import { ownFloorIntentChanges } from '../../lib/own-floor-intent'
 import { drawnFloorElevationConflict } from '../../lib/room-drawn-floor'
 import { roundFloorElevation } from '../../lib/room-floor-feasibility'
-import { slabRoomDoorChanges, slabRoomElevation } from '../../lib/slab-room'
-import { type AnyNode, type AnyNodeId, ZoneNode } from '../../schema'
+import { ZoneNode } from '../../schema'
 import { mezzanineElevationConflict } from './mezzanine-content'
 import { requireZone, type StructureNodes, type StructurePlan } from './shared'
 
@@ -27,7 +26,6 @@ export const ZoneIntentPatch = z.strictObject({
       elevation: floor.shape.elevation.unwrap().nullable().optional(),
       finish: floor.shape.finish.unwrap().nullable().optional(),
       regions: floor.shape.regions.unwrap().nullable().optional(),
-      foundation: floor.shape.foundation.unwrap().nullable().optional(),
       drop: floor.shape.drop.unwrap().nullable().optional(),
     })
     .nullable()
@@ -78,33 +76,6 @@ export const ZoneIntentPatch = z.strictObject({
 export type ZoneIntentPatch = z.infer<typeof ZoneIntentPatch>
 
 /**
- * The patch with what an explicit choice of slab or raised foundation asks of the room's floor.
- */
-function withRoomFoundation(
-  nodes: StructureNodes,
-  zone: ZoneNode,
-  patch: ZoneIntentPatch,
-): ZoneIntentPatch {
-  const asked = patch.floor?.foundation
-  if (asked === undefined) return patch
-  const choice = asked
-  const scene = nodes as Record<AnyNodeId, AnyNode>
-  // In a raised house a slab room's floor comes down to its slab on grade; a room back on the
-  // raised floor goes back up to it.
-  const lowered = choice === 'slab' ? slabRoomElevation(scene, zone) : null
-  const raised = choice !== 'slab' && zone.floor?.foundation === 'slab'
-  return {
-    ...patch,
-    floor: {
-      ...patch.floor,
-      foundation: choice,
-      ...(lowered !== null && patch.floor?.elevation === undefined ? { elevation: lowered } : {}),
-      ...(raised && patch.floor?.elevation === undefined ? { elevation: null } : {}),
-    },
-  }
-}
-
-/**
  * The patch with what a change of room type brings (`lib/outdoor-room`): a porch, deck or patio
  * steps its floor down from the house's, takes its floor finish, a ceiling or none, and its name
  * while the room still has a default one; back to an ordinary room drops them again. What the
@@ -146,21 +117,12 @@ function withRoomType(
   }
 }
 
-/**
- * A room's intent: its name, floor, ceiling and finishes. Its floor's foundation (`floor.foundation`)
- * moves its floor with it in a raised house: a slab room comes
- * down to its slab on grade (`slabRoomElevation`), and back up when it goes back on the raised floor.
- */
 export function setZoneIntent(
   nodes: StructureNodes,
   input: { zoneId: string; patch: ZoneIntentPatch },
 ): StructurePlan {
   const zone = requireZone(nodes, input.zoneId)
-  const patch = withRoomFoundation(
-    nodes,
-    zone,
-    withRoomType(nodes, zone, ZoneIntentPatch.parse(input.patch)),
-  )
+  const patch = withRoomType(nodes, zone, ZoneIntentPatch.parse(input.patch))
   const painted = zone.floor?.script && (patch.floor?.finish ?? patch.floor?.regions)
   const scripted = painted ? floorScriptPaintRefusal(zone) : undefined
   if (scripted)
@@ -244,7 +206,6 @@ export function setZoneIntent(
         'regions',
         'thickness',
         'footprint',
-        'foundation',
         'drop',
       ] as const) {
         const value = patch.floor[key]
@@ -290,17 +251,8 @@ export function setZoneIntent(
   }
   ZoneNode.parse({ ...zone, ...data })
   const own = ownFloorIntentChanges(nodes, Object.keys(data).length ? [{ id: zone.id, data }] : [])
-  // A slab room's doors to the outside open from its slab: their sills move with its floor.
-  const sill = (room: ZoneNode) =>
-    room.floor?.foundation === 'slab' ? (room.floor.elevation ?? 0) : 0
-  const doors = slabRoomDoorChanges(
-    nodes as Record<AnyNodeId, AnyNode>,
-    zone,
-    sill(zone),
-    sill({ ...zone, ...data } as ZoneNode),
-  )
   return {
-    changes: [...own.updates, ...doors].map((update) => ({ op: 'update', ...update })),
+    changes: own.updates.map((update) => ({ op: 'update', ...update })),
     ...(own.conflicts.length ? { conflicts: own.conflicts } : {}),
   }
 }

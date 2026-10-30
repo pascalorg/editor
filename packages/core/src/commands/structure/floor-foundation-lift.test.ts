@@ -3,7 +3,7 @@ import { GROUND_SUPPORT_ID } from '../../hooks/spatial-grid/support-host-id'
 import { floorConstructionLift, liftedManualSlab } from '../../lib/floor-construction-lift'
 import { automaticFloorHeight } from '../../lib/floor-foundation-datum'
 import { expandFloorIntentChanges, floorIntentConflicts } from '../../lib/floor-intent-changes'
-import { getOpeningFloorDatum, wallSupportForNodes } from '../../lib/opening-floor-datum'
+import { wallSupportForNodes } from '../../lib/opening-floor-datum'
 import {
   type AnyNode,
   BuildingNode,
@@ -15,7 +15,6 @@ import {
   RoofSegmentNode,
   SlabNode,
   WallNode,
-  WindowNode,
   ZoneNode,
 } from '../../schema'
 import { resolveCeilingHeight } from '../../services/level-height'
@@ -516,88 +515,4 @@ test('a tiny room carried under the upper storey retains its own floor step', ()
   expect(
     plan.changes.find((change) => change.op === 'update' && change.id === zone.id),
   ).toMatchObject({ data: { floor: { elevation: 0.75 } } })
-})
-
-test('a thicker upper floor pushes that storey up: its walls, windows, ceilings and the storeys above rise; the ceiling below holds; one undo step', () => {
-  const building = BuildingNode.parse({ id: 'building_lift' })
-  const levels = [0, 1, 2].map((level) =>
-    LevelNode.parse({ id: `level_lift${level}`, parentId: building.id, level, height: 3 }),
-  )
-  building.children = levels.map((level) => level.id)
-  const nodes: Record<string, AnyNode> = Object.fromEntries(
-    [building, ...levels].map((node) => [node.id, node]),
-  )
-  const polygon = rect(0)
-  for (const level of levels.slice(0, 2)) {
-    const zone = ZoneNode.parse({
-      id: `zone_up${level.level}`,
-      parentId: level.id,
-      name: `Room ${level.level}`,
-      spaceRole: 'room',
-      polygon,
-    })
-    nodes[zone.id] = zone
-    polygon.forEach((start, at) => {
-      const wall = WallNode.parse({
-        id: `wall_up${level.level}_${at}`,
-        parentId: level.id,
-        start,
-        end: polygon[(at + 1) % 4],
-      })
-      nodes[wall.id] = wall
-    })
-    const ceiling = CeilingNode.parse({
-      id: `ceiling_up${level.level}`,
-      parentId: level.id,
-      polygon,
-      boundary: 'auto',
-      autoFromWalls: true,
-      zoneId: zone.id,
-    })
-    nodes[ceiling.id] = ceiling
-  }
-  const opening = WindowNode.parse({ id: 'window_up', parentId: 'wall_up1_0', position: [2, 1, 0] })
-  nodes[opening.id] = opening
-  nodes.wall_up1_0 = { ...nodes.wall_up1_0, children: [opening.id] } as WallNode
-  nodes.slab_up2 = SlabNode.parse({ id: 'slab_up2', parentId: levels[2]!.id, polygon })
-  for (const level of levels)
-    level.children = Object.values(nodes)
-      .filter((node) => node.parentId === level.id)
-      .map((node) => node.id) as LevelNode['children']
-  const before = reconcileStructureOnLoad(nodes).nodes
-  const plate = Object.values(before).find(
-    (node): node is SlabNode =>
-      node.type === 'slab' && node.plateRole === 'base' && node.parentId === 'level_lift1',
-  )!
-  const lift = 0.3556 - plate.thickness
-  const wall = before.wall_up1_0 as WallNode
-  const upperCeiling = before.ceiling_up1 as CeilingNode
-  const lowerCeiling = before.ceiling_up0 as CeilingNode
-  useScene.setState({ nodes: before, rootNodeIds: ['building_lift'], readOnly: false })
-  useScene.temporal.getState().clear()
-  const plan = setFloorFoundation(before, { slabId: plate.id, patch: { thickness: 0.3556 } })
-  expect(plan.conflicts).toEqual([])
-  useScene.getState().applyNodeChanges(structureChangeBatch(plan.changes))
-  expect(useScene.temporal.getState().pastStates).toHaveLength(1)
-  const after = reconcileStructureOnLoad(useScene.getState().nodes).nodes
-  expect(after[plate.id]).toMatchObject({ thickness: 0.3556 })
-  expect(wallSupportForNodes(wall, after).elevation).toBeCloseTo(
-    wallSupportForNodes(wall, before).elevation + lift,
-  )
-  expect(getWallPlaneTop(wall, wall.parentId!, after)).toBeCloseTo(
-    getWallPlaneTop(wall, wall.parentId!, before) + lift,
-  )
-  expect(getOpeningFloorDatum(wall, opening, after)).toBeCloseTo(
-    getOpeningFloorDatum(wall, opening, before) + lift,
-  )
-  expect(resolveCeilingHeight(upperCeiling, after)).toBeCloseTo(
-    resolveCeilingHeight(upperCeiling, before) + lift,
-  )
-  expect(getLevelElevations(after).get('level_lift2')!.baseY).toBeCloseTo(6 + lift)
-  expect(resolveCeilingHeight(lowerCeiling, after)).toBeCloseTo(
-    resolveCeilingHeight(lowerCeiling, before),
-  )
-  expect(getWallPlaneTop(before.wall_up0_0 as WallNode, 'level_lift0', after)).toBe(3)
-  useScene.temporal.getState().undo()
-  expect(useScene.getState().nodes).toEqual(before)
 })

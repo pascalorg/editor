@@ -88,8 +88,6 @@ export function floorplanLayerRank(type: string): number {
       return 0
     case 'slab':
     case 'ceiling':
-    // Under the footings drawn inside it, which stay pickable over it.
-    case 'foundation':
       return 1
     default:
       return 2

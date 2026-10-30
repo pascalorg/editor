@@ -1,1 +1,0 @@
-export { foundationDefinition } from './definition'

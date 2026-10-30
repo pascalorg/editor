@@ -1138,10 +1138,6 @@ export const METADATA_NON_REFERENCES: readonly { path: string; reason: string }[
     "A room's declaration of artificial light and mechanical ventilation (set_zone_intent): booleans, not ids.",
     ['daylight'],
   ),
-  ...described(
-    "A building's foundation record (type, support, finish floor over grade, sizes in inches): numbers, flags and enums; names nothing.",
-    ['foundation', 'foundation.ffAboveGradeIn', 'foundation.type'],
-  ),
   ...described('Site-plan facts kept on the node: values, not ids.', [
     'flatwork',
     'flatworkDims',

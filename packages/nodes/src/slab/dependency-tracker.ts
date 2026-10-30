@@ -3,7 +3,6 @@ import {
   type AnyNodeId,
   floorConstructionLift,
   getRenderableSlabPolygon,
-  isBuildingFoundationOn,
   isFloorPlate,
   plateLevelContext,
   prepareSlabPolygonContext,
@@ -142,11 +141,8 @@ export function createSlabDependencyTracker(initialNodes: Record<string, AnyNode
         current.set(levelId, cached)
         continue
       }
-      // A plate's foundation skirt gives way to the building's designed foundation.
       const transform =
-        building?.type === 'building'
-          ? [building.id, building.position, building.rotation, isBuildingFoundationOn(building)]
-          : null
+        building?.type === 'building' ? [building.id, building.position, building.rotation] : null
       const transformSignature = JSON.stringify(transform)
       const sameValues = <T extends AnyNode>(left: T[], right: T[]) =>
         left.length === right.length &&

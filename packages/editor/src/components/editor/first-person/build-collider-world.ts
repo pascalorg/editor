@@ -5,11 +5,11 @@ import {
   type DoorNode,
   getGarageVisibleOpeningRatio,
   getLevelElevations,
-  gradedTerrainFieldOf,
   isOperationDoorType,
   nodeMechanism,
   nodeRegistry,
   sceneRegistry,
+  terrainFieldOf,
   useInteractive,
   useScene,
 } from '@pascal-app/core'
@@ -177,8 +177,7 @@ function createSiteGroundColliderGeometry(site: SiteNode, nodes: SceneNodes) {
 
   const covered = coveredBelowGradeFootprints(nodes)
 
-  // The ground walked on is the ground as built, graded to the slabs' pads.
-  const field = gradedTerrainFieldOf(nodes, site)
+  const field = terrainFieldOf(site)
   if (field) {
     const terrainGeometry = createTerrainColliderGeometry(field)
     if (terrainGeometry) {

@@ -79,7 +79,7 @@ type HostKind = 'wall' | 'roof' | null
  * Door tool — places DoorNodes on walls and on roof-segment wall faces
  * (the generated base walls under a roof, including coplanar gable ends).
  * Doors always sit at floor level (clampedY = height/2 — segment base for
- * roof-hosted doors), a garage's slab in its walls to the outside.
+ * roof-hosted doors).
  *
  * The ghost follows the cursor everywhere (like moving an item): over open
  * floor it floats as an invalid (unplaceable) ghost; the moment the cursor
@@ -332,14 +332,7 @@ const DoorTool: React.FC = () => {
         candidates: alignmentCandidates,
         applySnap,
       })
-      // A door in a garage's wall to the outside stands on its slab (`doorSillFloorOf`).
-      const { clampedX, clampedY } = clampToWall(
-        wall,
-        localX,
-        width,
-        height,
-        useScene.getState().nodes,
-      )
+      const { clampedX, clampedY } = clampToWall(wall, localX, width, height)
       const valid = !hasWallChildOverlap(
         wall.id,
         useScene.getState().nodes,

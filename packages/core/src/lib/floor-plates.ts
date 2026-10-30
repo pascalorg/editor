@@ -439,15 +439,11 @@ export function buildFloorPlates({
       room.zone.id,
       union([
         Math.abs(elevationOf(room) - baseOf(room)) >= 0.001 - 1e-9
-          ? // A room on a slab of its own (a garage) takes its walls' footprints with it: the
-            // house's floor stops at them, never running under its walls or through its doors.
-            room.zone.floor?.foundation === 'slab'
-            ? union([...roomClearPolygon(room), ...roomWallFootprints([room])])
-            : // A porch or deck a step down takes its railings: they stand on its own floor, and
-              // the house's floor stops at the house wall rather than ringing it under them.
-              isOutdoorRoomType(room.zone.roomType)
-              ? union([...roomClearPolygon(room), ...roomRailingFootprints(room)])
-              : roomClearPolygon(room)
+          ? // A porch or deck a step down takes its railings: they stand on its own floor, and
+            // the house's floor stops at the house wall rather than ringing it under them.
+            isOutdoorRoomType(room.zone.roomType)
+            ? union([...roomClearPolygon(room), ...roomRailingFootprints(room)])
+            : roomClearPolygon(room)
           : [],
         ...(thresholds.get(room.zone.id) ?? []),
       ]),

@@ -205,7 +205,6 @@ import {
 import { FloorplanAdjacentWallsLayer } from '../editor-2d/floorplan-adjacent-walls-layer'
 import { FloorplanAlignmentGuideLayer } from '../editor-2d/floorplan-alignment-guide-layer'
 import { FloorplanCursorIndicatorOverlay as Editor2dFloorplanCursorIndicatorOverlay } from '../editor-2d/floorplan-cursor-indicator-overlay'
-import { FloorplanFoundationLayer } from '../editor-2d/floorplan-foundation-layer'
 import { FloorplanGroupActionMenu } from '../editor-2d/floorplan-group-action-menu'
 import { FloorplanSiteKeyHandler } from '../editor-2d/floorplan-hotkey-handlers'
 import { FloorplanMeasurementToolLayer } from '../editor-2d/floorplan-measurement-tool-layer'
@@ -11733,11 +11732,7 @@ export function FloorplanPanel({
                   {activeDrawingType === 'site-plan' ? (
                     <FloorplanSitePlanLayer />
                   ) : (
-                    <>
-                      {/* The foundation view's concrete, under the footings the registry draws. */}
-                      <FloorplanFoundationLayer />
-                      <FloorplanRegistryLayer />
-                    </>
+                    <FloorplanRegistryLayer />
                   )}
                   {/* Faint footprint ghost of the node being placed by a
                       registry placement tool (e.g. column), following the

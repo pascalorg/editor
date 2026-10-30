@@ -332,12 +332,7 @@ test('terrain skirt clips only the partial step run and keeps the adjacent exter
   const field = createTerrainField({ cols: 11, rows: 7, spacing: 1, origin: [-1, -1] })
   field.heights.fill(-150)
   const site = SiteNode.parse({ terrain: encodeTerrainField(field) })
-  // The plate's own skirt is the foundation only with the building's designed one switched off.
-  const building = BuildingNode.parse({
-    parentId: site.id,
-    children: [level.id],
-    metadata: { foundation: { enabled: false } },
-  })
+  const building = BuildingNode.parse({ parentId: site.id, children: [level.id] })
   site.children = [building.id]
   level.parentId = building.id
   host.parentId = level.id
@@ -726,12 +721,7 @@ test('a raised terrace keeps the base terrain skirt and never fills the platform
   const field = createTerrainField({ cols: 11, rows: 11, spacing: 1, origin: [-2, -2] })
   field.heights.fill(-150)
   const site = SiteNode.parse({ terrain: encodeTerrainField(field) })
-  // The plate's own skirt is the foundation only with the building's designed one switched off.
-  const building = BuildingNode.parse({
-    parentId: site.id,
-    children: [level.id],
-    metadata: { foundation: { enabled: false } },
-  })
+  const building = BuildingNode.parse({ parentId: site.id, children: [level.id] })
   level.parentId = building.id
   site.children = [building.id]
   const { group, slabs } = derivedScene(
@@ -953,12 +943,7 @@ test.each([0, 0.7])('raised house band has a foundation only at site datum %s', 
   for (let z = 0; z < field.rows; z++)
     for (let x = 0; x < field.cols; x++) field.heights[z * field.cols + x] = -100 + x * 3
   const site = SiteNode.parse({ terrain: encodeTerrainField(field) })
-  // The plate's own skirt is the foundation only with the building's designed one switched off.
-  const building = BuildingNode.parse({
-    parentId: site.id,
-    children: [level.id],
-    metadata: { foundation: { enabled: false } },
-  })
+  const building = BuildingNode.parse({ parentId: site.id, children: [level.id] })
   site.children = [building.id]
   level.parentId = building.id
   const outside = source.walls[0]!

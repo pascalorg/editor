@@ -302,30 +302,22 @@ describe('what reads the construction', () => {
     expect(wall.thickness).toBe(0.354)
   })
 
-  test('the generic foundation pours the stem, as wide as the construction says', () => {
-    // The designed foundation switched off: the generic one is what stands under the house.
-    const generic = (site: SitePatch | null) => {
-      const nodes = house(site)
-      const building = nodes['building_a' as AnyNodeId]!
-      return {
-        ...nodes,
-        building_a: { ...building, metadata: { foundation: { enabled: false } } },
-      } as Nodes
-    }
+  test('the generic foundation draws the stem in the matching material and width', () => {
     const stems = (site: SitePatch | null) =>
-      genericFoundation(generic(site)).filter((member) => member.kind === 'stem')
+      genericFoundation(house(site)).filter((member) => member.kind === 'stem')
     // the basement's own walls are none, so the ground floor ring is the outline: stems only where the floor is above the footing
     const us = stems({ address: { state: 'TX' } })
     const eu = stems({ dossier: dossier('Paris, France') })
     const unknown = stems({})
     expect(unknown.length).toBeGreaterThan(0)
-    // Poured everywhere: block is for basement walls, not a crawl space's stem.
-    for (const run of [...unknown, ...us, ...eu]) expect(run.material).toBe('concrete')
+    for (const run of unknown) expect(run.material).toBe('cmu')
+    for (const run of us) expect(run.material).toBe('cmu')
+    for (const run of eu) expect(run.material).toBe('concrete')
     expect([us.length, eu.length]).toEqual([unknown.length, unknown.length])
     for (const run of us)
       expect(run.width).toBeCloseTo(FOUNDATION_CONSTRUCTIONS.cmu.stemThickness, 9)
     for (const run of eu) expect(run.width).toBeCloseTo(0.25, 9)
-    const footings = genericFoundation(generic({ dossier: dossier('Paris, France') })).filter(
+    const footings = genericFoundation(house({ dossier: dossier('Paris, France') })).filter(
       (member) => member.kind === 'footing',
     )
     expect(footings.length).toBeGreaterThan(0)
@@ -334,15 +326,9 @@ describe('what reads the construction', () => {
 
   test('the ground seat reads the construction: a floor 0.15 m over grade is seated in Paris, a floor 0.3 m over it is not', () => {
     const seated = (nodes: Nodes, offset: number) => {
-      // The designed foundation off: on, its own rule seats the floor (here, over a basement).
       const raised = {
         ...nodes,
-        building_a: {
-          ...nodes.building_a,
-          groundLevelId: 'level_main',
-          position: [0, offset, 0],
-          metadata: { foundation: { enabled: false } },
-        },
+        building_a: { ...nodes.building_a, groundLevelId: 'level_main', position: [0, offset, 0] },
       } as Nodes
       return groundSeat(raised, 'building_a')
     }

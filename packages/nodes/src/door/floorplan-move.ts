@@ -213,14 +213,7 @@ export const doorFloorplanMoveTarget: FloorplanMoveTarget<DoorNode> = ({ node })
             nodes,
           })
       const snappedLocalX = neighborX ?? snapToHalf(hit.localX)
-      // On a garage's wall to the outside the door comes down to its slab (`doorSillFloorOf`).
-      const { clampedX, clampedY } = clampToWall(
-        hit.wall,
-        snappedLocalX,
-        node.width,
-        node.height,
-        nodes,
-      )
+      const { clampedX, clampedY } = clampToWall(hit.wall, snappedLocalX, node.width, node.height)
 
       // One click per real position step, keyed on the SNAPPED along-wall value
       // so it ticks only when the door actually moves to a new cell.

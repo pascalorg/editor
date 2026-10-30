@@ -21,8 +21,6 @@ import { EyebrowVentNode } from './nodes/eyebrow-vent'
 import { FenceNode } from './nodes/fence'
 import { FenceGateNode, FenceOpeningNode } from './nodes/fence-feature'
 import { FloorOpeningNode } from './nodes/floor-opening'
-import { FootingNode } from './nodes/footing'
-import { FoundationNode } from './nodes/foundation'
 import { GuideNode } from './nodes/guide'
 import { GutterNode } from './nodes/gutter'
 import { HvacEquipmentNode } from './nodes/hvac-equipment'
@@ -105,8 +103,6 @@ export const AnyNode = nodeUnion([
   WallNode,
   SeparatorNode,
   FloorOpeningNode,
-  FootingNode,
-  FoundationNode,
   FenceNode,
   FenceGateNode,
   FenceOpeningNode,

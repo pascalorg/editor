@@ -214,10 +214,9 @@ export default function DoorPanel() {
   if (!(node && node.type === 'door' && selectedId)) return null
 
   const limits = curtainOpeningLimits(node, useScene.getState().nodes)
-  // The sill stays where it stands (a garage's slab, the house's floor); the head moves.
   const heightUpdates = (height: number): Partial<DoorNode> => ({
     height,
-    position: [node.position[0], node.position[1] - node.height / 2 + height / 2, node.position[2]],
+    position: [node.position[0], height / 2, node.position[2]],
     handleHeight: scaleHandleHeight(node.handleHeight, node.height, height),
   })
   const hSum = node.segments.reduce((s, seg) => s + seg.heightRatio, 0)

@@ -5,7 +5,6 @@ import {
   type FoundationReading,
   foundationReadingOf,
 } from './foundation-construction'
-import { designedFoundationReport } from './generic-foundation'
 import { footprintSamples, terrainFieldOverLevel } from './grade-standing'
 import { groundLevelOf } from './ground-level'
 import { heightAt } from './terrain-field'
@@ -43,14 +42,6 @@ export function gradeUnderLevel(nodes: Record<AnyNodeId, AnyNode>, level: LevelN
   return sum / samples.length
 }
 
-/**
- * What seats the ground floor: the building's foundation construction (`aboveGrade` over the grade
- * under the floor), or its designed foundation's own rule over the highest grade along it: a
- * slab's, a raised floor's or a pile-borne floor's top `ffAboveGradeIn`, a basement's walls' top
- * `basementTopAboveGradeIn`.
- */
-export type GroundSeatRule = 'construction' | 'slab' | 'raised' | 'piles' | 'basement'
-
 /** Where a building's ground level stands against grade. */
 export type GroundSeat = {
   buildingId: string
@@ -63,33 +54,22 @@ export type GroundSeat = {
   gradeElevation: number
   /** How far the floor datum stands over grade: negative when it is sunk. */
   offset: number
-  /**
-   * The `offset` at which the ground floor is seated, metres: as far as the building's foundation
-   * construction stands it over grade, or where its designed foundation's rule holds (`rule`).
-   */
+  /** How far the building's foundation construction stands the ground floor over grade, metres. */
   aboveGrade: number
   /** The construction, the region and style it was read from. */
   foundation: FoundationReading
-  rule: GroundSeatRule
-  /** What the rule asks, inches: the construction's seat, or the record's height over grade. */
-  askedIn: number
   /**
    * The floor datum stands between grade and the foundation's top (`aboveGrade`, or the block's
    * 8 in where that is higher), within {@link GROUND_SEAT_TOLERANCE}: what a scene seated before
    * the 8 in rule, one seated by it and one seated by its own region's construction all satisfy,
-   * so a check has nothing to say about any of them. On a designed foundation, what its rule
-   * measures stands between the highest grade and its seat.
+   * so a check has nothing to say about any of them.
    */
   seated: boolean
-  /** The ground floor stands at its seat (`aboveGrade`), within the tolerance. */
+  /** The floor datum stands at `aboveGrade` over grade, within the tolerance. */
   atFoundationTop: boolean
 }
 
-/**
- * `null` for an id that is no building, or a building with no level at or over the ground. Where
- * the building's designed foundation stands under its ground floor (`designedFoundationReport`),
- * the seat is that foundation's own (`designedSeatOf`); else the construction's.
- */
+/** `null` for an id that is no building, or a building with no level at or over the ground. */
 export function groundSeat(
   nodes: Record<AnyNodeId, AnyNode>,
   buildingId: string,
@@ -100,70 +80,19 @@ export function groundSeat(
   const gradeElevation = gradeUnderLevel(nodes, ground.level)
   const offset = datum.floorElevation - gradeElevation
   const foundation = foundationReadingOf(nodes, buildingId)
-  const base = {
+  const aboveGrade = foundation.construction.seatAboveGrade
+  return {
     buildingId,
     levelId: ground.level.id,
     explicit: ground.explicit,
     floorElevation: datum.floorElevation,
     gradeElevation,
     offset,
-    foundation,
-  }
-  const designed = designedSeatOf(nodes, buildingId, ground.level.id)
-  if (designed) {
-    // The offset at which the designed seat holds, so a move by `aboveGrade - offset` reaches it.
-    const miss = designed.over - designed.asked
-    return {
-      ...base,
-      aboveGrade: offset - miss,
-      rule: designed.rule,
-      askedIn: designed.asked / INCH,
-      seated: designed.over >= -GROUND_SEAT_TOLERANCE && miss <= GROUND_SEAT_TOLERANCE,
-      atFoundationTop: Math.abs(miss) <= GROUND_SEAT_TOLERANCE,
-    }
-  }
-  const aboveGrade = foundation.construction.seatAboveGrade
-  return {
-    ...base,
     aboveGrade,
-    rule: 'construction',
-    askedIn: aboveGrade / INCH,
+    foundation,
     seated:
       offset >= -GROUND_SEAT_TOLERANCE &&
       offset <= Math.max(aboveGrade, GROUND_FLOOR_ABOVE_GRADE) + GROUND_SEAT_TOLERANCE,
     atFoundationTop: Math.abs(offset - aboveGrade) <= GROUND_SEAT_TOLERANCE,
-  }
-}
-
-const INCH = 0.0254
-
-/**
- * How the building's designed foundation seats its ground floor, where one stands under it: what
- * it measures over the highest grade along the foundation (`over`: a slab's, a raised floor's or a
- * pile-borne floor's top; over a basement, the basement walls' top) and what the record asks of it
- * (`asked`: `ffAboveGradeIn`, or `basementTopAboveGradeIn`), metres. `null` where none is designed,
- * or it stands under another level than the ground floor.
- */
-function designedSeatOf(
-  nodes: Record<AnyNodeId, AnyNode>,
-  buildingId: string,
-  groundLevelId: string,
-): { rule: Exclude<GroundSeatRule, 'construction'>; over: number; asked: number } | null {
-  const report = designedFoundationReport(nodes, buildingId)
-  if (!report) return null
-  const { foundation } = report
-  if (report.basement)
-    return report.basement.groundLevelId === groundLevelId
-      ? {
-          rule: 'basement',
-          over: report.basement.wallTopY - report.highestGradeY,
-          asked: foundation.basementTopAboveGradeIn * INCH,
-        }
-      : null
-  if (report.levelId !== groundLevelId) return null
-  return {
-    rule: foundation.support === 'piles' ? 'piles' : foundation.type,
-    over: report.floorTopY - report.highestGradeY,
-    asked: foundation.ffAboveGradeIn * INCH,
   }
 }

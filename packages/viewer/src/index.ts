@@ -111,12 +111,10 @@ export type { EdgeMode } from './lib/edge-style'
 export {
   BLOCK_MASONRY,
   concreteMaterial,
-  framingMaterial,
   type Masonry,
   masonryMaterial,
   STRUCTURE_COLORS,
 } from './lib/foundation-materials'
-export { foundationViewBuildingId, hiddenByFoundationView } from './lib/foundation-view-hidden'
 export { preserveGltfUnlit } from './lib/gltf-unlit'
 export { PERF_OVERLAY_ENABLED } from './lib/gpu-perf'
 export {

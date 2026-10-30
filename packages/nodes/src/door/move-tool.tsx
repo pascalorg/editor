@@ -358,14 +358,11 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
         // component lives in `snapToHalf` (itself mode-aware).
         applySnap: isMagneticSnapActive(),
       })
-      // On a garage's wall to the outside the door comes down to its slab; back on a house wall,
-      // up to the house's floor (`doorSillFloorOf`).
       const { clampedX, clampedY } = clampToWall(
         event.node,
         localX,
         movingDoorNode.width,
         movingDoorNode.height,
-        useScene.getState().nodes,
       )
 
       const valid = !hasWallChildOverlap(

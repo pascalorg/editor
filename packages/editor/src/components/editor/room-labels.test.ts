@@ -91,7 +91,7 @@ describe('room label pills', () => {
     }
   })
 
-  test('step back for any other selection, a room, a zone, a unit, a tool, a gesture, site or the foundation view', () => {
+  test('step back for any other selection, a room, a zone, a unit, a tool, a gesture or site', () => {
     for (const change of [
       { selectedTypes: ['wall'] },
       { selectedTypes: ['level', 'item'] },
@@ -104,7 +104,6 @@ describe('room label pills', () => {
       { phase: 'site' },
       { isCaptureMode: true },
       { isThumbnailCapture: true },
-      { foundationView: true },
     ] satisfies Partial<RoomLabelVisibilityState>[]) {
       expect(roomLabelsVisible({ ...resting, ...change })).toBe(false)
     }

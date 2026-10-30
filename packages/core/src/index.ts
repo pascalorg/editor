@@ -171,20 +171,8 @@ export {
   type CeilingBuildUpPreset,
   ceilingBuildUpThickness,
   ceilingCapLift,
-  DEFAULT_FLOOR_BUILD_UP,
-  DEFAULT_RAISED_FLOOR_BUILD_UP,
   DRYWALL_THICKNESSES,
-  FLOOR_BUILD_UP_PRESETS,
-  FLOORING_THICKNESS,
-  type FloorBuildUpPreset,
   FRAMING_SPACINGS,
-  floorBuildUpMatches,
-  floorBuildUpOf,
-  floorBuildUpPatch,
-  floorBuildUpThickness,
-  floorLayerDepths,
-  floorStructureDepth,
-  I_JOIST_DEPTH,
   LUMBER_DEPTH,
   PANEL_THICKNESSES,
   PLASTER_THICKNESS,
@@ -195,7 +183,6 @@ export {
   roofBuildUpOfDeck,
   roofBuildUpPatch,
   roofStructureDepth,
-  SUBFLOOR_THICKNESSES,
   UNDERLAYMENT_THICKNESS,
   WOOD_PLANK_THICKNESS,
 } from './lib/build-up'
@@ -207,25 +194,6 @@ export {
   turnPlanPoint,
   yawOf,
 } from './lib/building-footprint'
-export {
-  BUILDING_FOUNDATION_DIMENSIONS,
-  BUILDING_FOUNDATION_LIMITS,
-  type BuildingFoundation,
-  type BuildingFoundationDimension,
-  type BuildingFoundationRecord,
-  type BuildingFoundationSupport,
-  type BuildingFoundationType,
-  buildingFoundationDefaults,
-  buildingFoundationOf,
-  buildingFoundationRecordOf,
-  buildingStoreyCount,
-  FOUNDATION_SILL_IN,
-  ffMinimumIn,
-  isBuildingFoundationOn,
-  resolveBuildingFoundation,
-  SLAB_EDGE_TAPER_IN,
-  slabEdgeTaper,
-} from './lib/building-foundation'
 export {
   CEILING_SURFACE_ROLE,
   type CeilingSurfaceCell,
@@ -295,14 +263,6 @@ export {
   planDeckFraming,
 } from './lib/deck-framing'
 export { deepestDrawnY, lowestGroundY } from './lib/deepest-drawn'
-export {
-  type BasementReport,
-  type DesignedFoundationReport,
-  type FoundationOutline,
-  type FoundationRimStep,
-  foundationOutlines,
-  SLAB_ROOM_CURB,
-} from './lib/designed-foundation'
 export {
   clampDoorOperationState,
   getDoorRenderOpenAmount,
@@ -376,16 +336,6 @@ export {
   withoutFloorStepOverrideKeys,
 } from './lib/floor-step-finish'
 export {
-  FOOTING_MINIMUM,
-  type FootingDesign,
-  type FootingPlan,
-  footingDesign,
-  footingLevelOf,
-  footingMembers,
-  footingOutline,
-  footingPlan,
-} from './lib/footing'
-export {
   FOUNDATION_CONSTRUCTIONS,
   type FoundationConstruction,
   type FoundationConstructionId,
@@ -394,27 +344,7 @@ export {
   foundationReadingOf,
   foundationRegionOf,
 } from './lib/foundation-construction'
-export {
-  FOUNDATION_GRADING,
-  finishedGradeAt,
-  type GradingPad,
-  gradedTerrainFieldOf,
-  gradeTerrainField,
-  isExcavation,
-} from './lib/foundation-grading'
 export { FOUNDATION_STANDARD } from './lib/foundation-standard'
-export {
-  buildingFoundationMembers,
-  buildingFoundationNodes,
-  type FoundationBadge,
-  type FoundationPlanShape,
-  type FoundationView,
-  foundationBadge,
-  foundationPlan,
-  foundationViewHiddenIds,
-  foundationViewOf,
-  traceFoundationOutlines,
-} from './lib/foundation-view'
 export {
   createFramingPost,
   DEFAULT_FRAMING_POST_SIZE,
@@ -433,17 +363,7 @@ export {
   framingPostTopAt,
   isFramingPost,
 } from './lib/framing-post'
-export {
-  designedFoundationReport,
-  type FoundationMember,
-  foundationGradingPads,
-  foundationRimBottom,
-  foundationRimBottoms,
-  foundationRimSteps,
-  foundationSharedStemTops,
-  genericFoundation,
-  isHouseOutline,
-} from './lib/generic-foundation'
+export { type FoundationMember, genericFoundation } from './lib/generic-foundation'
 export {
   ceilingSeatY,
   isScriptedNode,
@@ -471,7 +391,6 @@ export {
   GROUND_FLOOR_ABOVE_GRADE,
   GROUND_SEAT_TOLERANCE,
   type GroundSeat,
-  type GroundSeatRule,
   gradeUnderLevel,
   groundSeat,
 } from './lib/ground-seat'
@@ -729,11 +648,6 @@ export {
   slabPolygonContextFromGeometry,
   snapSlabEdgeToWallBand,
 } from './lib/slab-polygon'
-export {
-  doorSillFloorOf,
-  roomFoundationOf,
-  slabRoomElevation,
-} from './lib/slab-room'
 export {
   deriveSlotId,
   isSlotMaterialName,

@@ -70,18 +70,11 @@ function ringOf(levelId: string) {
   )
 }
 
-/**
- * A house on the flat site, over a basement when `basement` is set (the villa's numbers), its designed
- * foundation switched off: it stands on the generic one under test.
- */
+/** A house on the flat site, over a basement when `basement` is set (the villa's numbers). */
 function setHouse(basement: boolean, extra: AnyNode[] = []) {
   const levels = basement ? ['level_b', 'level_g'] : ['level_g']
   const nodes: AnyNode[] = [
-    BuildingNode.parse({
-      id: 'building_a',
-      children: levels,
-      metadata: { foundation: { enabled: false } },
-    }),
+    BuildingNode.parse({ id: 'building_a', children: levels }),
     ...levels.flatMap((levelId) => {
       const walls = ringOf(levelId)
       return [
@@ -122,7 +115,7 @@ const parts = (root: Object3D) => {
 
 const names = (root: Object3D) => parts(root).map((part) => part.userData.genericFoundation)
 
-test('a house stands on a footing and a poured wall, marked, found by captures and stripped from exports; over a basement only the footing; the walkthrough has none', async () => {
+test('a house stands on a footing and a block wall, marked, found by captures and stripped from exports; over a basement only the footing; the walkthrough has none', async () => {
   setHouse(false)
   const renderer = await create(<SiteRenderer node={lot()} />)
   try {
@@ -159,7 +152,7 @@ const paris = () =>
     },
   })
 
-test('the stem is poured, in the US as in Europe: one concrete with its footing', async () => {
+test('the stem is drawn in what the building is built of: block, concrete in Europe', async () => {
   const materialOf = async (extra: AnyNode[]) => {
     setHouse(false, extra)
     const renderer = await create(<SiteRenderer node={lot()} />)
@@ -170,7 +163,7 @@ test('the stem is poured, in the US as in Europe: one concrete with its footing'
       await renderer.unmount()
     }
   }
-  expect(await materialOf([])).toBe('concrete')
+  expect(await materialOf([])).toBe('masonry')
   expect(await materialOf([paris()])).toBe('concrete')
 })
 

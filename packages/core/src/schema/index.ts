@@ -20,15 +20,10 @@ export {
   parseAllowedOrigins,
 } from './asset-url'
 export { BaseNode, generateId, Material, nodeType, objectId } from './base'
-// Roof-plane, ceiling and floor layer build-ups
+// Roof-plane and ceiling layer build-ups
 export {
   CeilingBuildUp,
   CeilingFraming,
-  FloorBuildUp,
-  FlooringKind,
-  FlooringLayer,
-  FloorStructure,
-  IJoistDepth,
   InsulationKind,
   InsulationLayer,
   InteriorFinishKind,
@@ -233,8 +228,6 @@ export {
 } from './nodes/fence'
 export { type FenceFeatureNode, FenceGateNode, FenceOpeningNode } from './nodes/fence-feature'
 export { FloorOpeningNode } from './nodes/floor-opening'
-export { FOOTING_SIZES, FootingNode, FootingShape } from './nodes/footing'
-export { FoundationConstructionChoice, FoundationNode } from './nodes/foundation'
 export { GuideNode, GuideScaleReference } from './nodes/guide'
 export {
   computeGutterEaveY,
@@ -446,12 +439,7 @@ export {
   SkylightType,
   type SkylightTypePreset,
 } from './nodes/skylight'
-export {
-  DEFAULT_UPPER_FLOOR_THICKNESS,
-  MIN_GROUND_FLOOR_THICKNESS,
-  MIN_SLAB_THICKNESS,
-  SlabNode,
-} from './nodes/slab'
+export { MIN_GROUND_FLOOR_THICKNESS, MIN_SLAB_THICKNESS, SlabNode } from './nodes/slab'
 export {
   SolarPanelMaterialRole,
   SolarPanelNode,

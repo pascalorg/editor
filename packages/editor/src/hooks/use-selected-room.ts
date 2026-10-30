@@ -112,18 +112,13 @@ export function resolveEditorRoomHit(
   return room?.key ?? null
 }
 
-/**
- * Rooms pick inside the building; from site a click picks the whole building. The foundation view
- * shows no rooms: a click there picks a footing or nothing.
- */
+/** Rooms pick inside the building; from site a click picks the whole building. */
 export function roomPickingEnabled() {
   const editor = useEditor.getState()
-  const viewer = useViewer.getState()
   return (
     editor.phase !== 'site' &&
     editor.mode === 'select' &&
-    !viewer.focusedUnitId &&
-    !viewer.foundationView &&
+    !useViewer.getState().focusedUnitId &&
     selectionEnabled(useInteractionScope.getState().scope)
   )
 }

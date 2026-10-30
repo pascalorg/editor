@@ -20,8 +20,6 @@ import { eyebrowVentDefinition } from './eyebrow-vent'
 import { fenceDefinition } from './fence'
 import { fenceGateDefinition, fenceOpeningDefinition } from './fence-feature/definition'
 import { floorOpeningDefinition } from './floor-opening/definition'
-import { footingDefinition } from './footing'
-import { foundationDefinition } from './foundation'
 import { guideDefinition } from './guide'
 import { gutterDefinition } from './gutter'
 import { hvacEquipmentDefinition } from './hvac-equipment'
@@ -100,8 +98,6 @@ export const builtinPlugin: Plugin = {
     // panels / move tools / floorplan branches still serve these.
     columnDefinition as unknown as AnyNodeDefinition,
     beamDefinition as unknown as AnyNodeDefinition,
-    footingDefinition as unknown as AnyNodeDefinition,
-    foundationDefinition as unknown as AnyNodeDefinition,
     elevatorDefinition as unknown as AnyNodeDefinition,
     unitDefinition as unknown as AnyNodeDefinition,
     roofDefinition as unknown as AnyNodeDefinition,
@@ -205,8 +201,6 @@ export { eyebrowVentDefinition } from './eyebrow-vent'
 export { beginFenceFeaturePlacement, fenceDefinition } from './fence'
 export { fenceGateDefinition, fenceOpeningDefinition } from './fence-feature/definition'
 export { floorOpeningDefinition } from './floor-opening/definition'
-export { footingDefinition } from './footing'
-export { foundationDefinition } from './foundation'
 export { guideDefinition } from './guide'
 export { gutterDefinition } from './gutter'
 export { hvacEquipmentDefinition } from './hvac-equipment'

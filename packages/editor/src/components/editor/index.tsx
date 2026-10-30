@@ -4,7 +4,6 @@ import { Icon } from '@iconify/react'
 import {
   acquireSceneReadOnlyLease,
   createI18n,
-  DEFAULT_UPPER_FLOOR_THICKNESS,
   getCatalogMaterialById,
   getLibraryMaterialIdFromRef,
   getMaterialSwatch,
@@ -192,10 +191,7 @@ const EDITOR_DEFAULT_RENDER = { shading: 'solid' } as const
  */
 function initializeEditorRuntime(): () => void {
   const unsubscribeSpatialGrid = initSpatialGridSync()
-  // Floors a person draws over rooms below are born framed-floor thick; agent writes are not.
-  const unsubscribeSpaceDetection = initSpaceDetectionSync(useScene, useEditor, {
-    newUpperFloorThickness: DEFAULT_UPPER_FLOOR_THICKNESS,
-  })
+  const unsubscribeSpaceDetection = initSpaceDetectionSync(useScene, useEditor)
   const stopFinishScriptRefresh = initFinishScriptRefresh()
   initSFXBus()
 

@@ -71,15 +71,12 @@ export type RoomLabelVisibilityState = {
   focusedUnitId: string | null
   isCaptureMode: boolean
   isThumbnailCapture: boolean
-  /** The level list's Foundation row: no rooms in that view. */
-  foundationView?: boolean
 }
 
 /**
  * Room pills are the resting view of a level: inside the building, select tool
  * idle, and nothing picked but the site, building or level itself. Anything
- * selected, a unit being arranged, a gesture in flight, or the foundation view
- * takes them away.
+ * selected, a unit being arranged, or a gesture in flight takes them away.
  */
 export function roomLabelsVisible(state: RoomLabelVisibilityState): boolean {
   return (
@@ -89,7 +86,6 @@ export function roomLabelsVisible(state: RoomLabelVisibilityState): boolean {
     !state.room &&
     !state.zoneId &&
     !state.focusedUnitId &&
-    !state.foundationView &&
     !state.isCaptureMode &&
     !state.isThumbnailCapture &&
     state.selectedTypes.every((type) => type !== undefined && CONTEXT_TYPES.has(type))
@@ -127,7 +123,6 @@ function useRoomLabelsVisible() {
   const scopeIdle = useInteractionScope((s) => s.scope.kind === 'idle')
   const zoneId = useViewer((s) => s.selection.zoneId)
   const focusedUnitId = useViewer((s) => s.focusedUnitId)
-  const foundationView = useViewer((s) => s.foundationView)
   const selectedIds = useViewer((s) => s.selection.selectedIds)
   const selectedTypes = useScene(
     useShallow((s) =>
@@ -139,7 +134,6 @@ function useRoomLabelsVisible() {
     scopeIdle,
     zoneId,
     focusedUnitId,
-    foundationView,
     selectedTypes,
     isThumbnailCapture,
   })

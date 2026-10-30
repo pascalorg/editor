@@ -4,11 +4,9 @@ import {
   type AnyNode,
   type AnyNodeId,
   BEAM_SIZE_PRESETS,
-  buildingFoundationOf,
   floorFootprintSupportClass,
   formatList,
   floorPlateAtGroundContact,
-  getLevelElevations,
   MIN_GROUND_FLOOR_THICKNESS,
   MIN_SLAB_THICKNESS,
   type MessageDescriptor,
@@ -17,7 +15,6 @@ import {
   porchFramingSettings,
   porchPartOf,
   roomDrawnFloor,
-  roomFoundationOf,
   setZoneIntent,
   type PascalI18n,
   useLocale,
@@ -29,7 +26,6 @@ import { Check, ChevronDown, ChevronRight } from 'lucide-react'
 import Image from 'next/image'
 import { type ReactNode, useMemo, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import { floorHeldByDesignedFoundation } from '../../../lib/building-foundation'
 import { startCeilingEdit } from '../../../lib/ceiling-edit-session'
 import {
   applyRoomFloorConstruction,
@@ -410,8 +406,7 @@ function SitsOn({ zoneId, noFloor }: { zoneId: string; noFloor: boolean }) {
   const summary = useScene(
     useShallow((scene) => {
       const plate = roomFloorOwner(scene.nodes, zoneId) ?? roomFootprint(scene.nodes, zoneId)
-      if (!plate)
-        return { id: '', name: '', drawn: false, lift: 0, supported: false, designed: false }
+      if (!plate) return { id: '', name: '', drawn: false, lift: 0, supported: false }
       if (plate.plateRole !== 'base')
         return {
           id: plate.id as string,
@@ -419,7 +414,6 @@ function SitsOn({ zoneId, noFloor }: { zoneId: string; noFloor: boolean }) {
           drawn: true,
           lift: 0,
           supported: false,
-          designed: false,
         }
       return {
         id: plate.id as string,
@@ -438,12 +432,7 @@ function SitsOn({ zoneId, noFloor }: { zoneId: string; noFloor: boolean }) {
         : i18n._({ id: 'editor.panels.roomConstructionRows.lowered', message: 'Lowered {lift}', values: { lift } })
       : summary.supported
         ? i18n._({ id: 'editor.panels.roomConstructionRows.onTheWallsBelow', message: 'On the walls below' })
-        : summary.designed
-          ? i18n._({
-              id: 'editor.panels.roomConstructionRows.onTheFoundation',
-              message: 'On the foundation',
-            })
-          : i18n._({ id: 'editor.panels.roomConstructionRows.onTheGround', message: 'On the ground' })
+        : i18n._({ id: 'editor.panels.roomConstructionRows.onTheGround', message: 'On the ground' })
   if (noFloor)
     return (
       <span className="mb-2 ml-[42px] text-muted-foreground text-xs" data-sits-on="none">
@@ -452,76 +441,26 @@ function SitsOn({ zoneId, noFloor }: { zoneId: string; noFloor: boolean }) {
     )
   if (!summary.id) return null
   return (
-    <>
-      <button
-        className="mb-2 ml-[42px] flex items-center gap-1 text-left text-muted-foreground text-xs transition-colors hover:text-foreground"
-        data-sits-on={summary.id}
-        onClick={() => openFloorFoundation(summary.id)}
-        type="button"
-      >
-        <span>
-          {messageWithSlot(
-            i18n,
-            /* i18n */ {
-              id: 'editor.panels.roomConstructionRows.sitsOnPreset',
-              message: 'Sits on: {name} · {preset}',
-              values: { preset },
-            },
-            'name',
-            <span className="text-foreground">{summary.name}</span>,
-          )}
-        </span>
-        <ChevronRight className="size-3 shrink-0" />
-      </button>
-      <RoomFoundationChoice zoneId={zoneId} />
-    </>
-  )
-}
-
-/**
- * "Raised floor | Slab": what the room's floor stands on in a raised house (`floor.foundation`,
- * through core's `setZoneIntent`): on the house's raised floor, or on a slab on grade of its own
- * (for example a garage), its floor coming down onto it in the same step. Shown where
- * the building's designed foundation is a raised floor, or the room already chose.
- */
-export function RoomFoundationChoice({ zoneId }: { zoneId: string }) {
-  const i18n = usePascalI18n()
-  const choice = useScene(
-    useShallow((scene) => {
-      const zone = scene.nodes[zoneId as AnyNodeId]
-      if (zone?.type !== 'zone') return null
-      const resolved = roomFoundationOf(scene.nodes, zone)
-      const building = resolved && zone.parentId ? buildingOfLevel(scene.nodes, zone.parentId) : null
-      const type = building ? buildingFoundationOf(scene.nodes, building)?.type : null
-      if (!resolved || (type !== 'raised' && zone.floor?.foundation === undefined)) return null
-      return { value: resolved, chosen: zone.floor?.foundation !== undefined }
-    }),
-  )
-  if (!choice) return null
-  return (
-    <div className="mb-2 ml-[42px] flex flex-col gap-1" data-room-foundation={choice.value}>
-      <SegmentedControl
-        onChange={(foundation: 'raised' | 'slab') =>
-          applyRoomPlan(
-            setZoneIntent(useScene.getState().nodes, { zoneId, patch: { floor: { foundation } } }),
-          )
-        }
-        options={[
-          {
-            label: i18n._({
-              id: 'editor.panels.roomConstructionRows.raisedFloor',
-              message: 'Raised floor',
-            }),
-            value: 'raised',
+    <button
+      className="mb-2 ml-[42px] flex items-center gap-1 text-left text-muted-foreground text-xs transition-colors hover:text-foreground"
+      data-sits-on={summary.id}
+      onClick={() => openFloorFoundation(summary.id)}
+      type="button"
+    >
+      <span>
+        {messageWithSlot(
+          i18n,
+          /* i18n */ {
+            id: 'editor.panels.roomConstructionRows.sitsOnPreset',
+            message: 'Sits on: {name} · {preset}',
+            values: { preset },
           },
-          {
-            label: i18n._({ id: 'editor.panels.roomConstructionRows.slab', message: 'Slab' }),
-            value: 'slab',
-          },
-        ]}
-        value={choice.value}
-      />
-    </div>
+          'name',
+          <span className="text-foreground">{summary.name}</span>,
+        )}
+      </span>
+      <ChevronRight className="size-3 shrink-0" />
+    </button>
   )
 }
 
@@ -792,11 +731,6 @@ export function PorchFramingFields({ zoneId }: { zoneId: string }) {
   )
 }
 
-/** The building a level stands in. */
-function buildingOfLevel(nodes: Record<AnyNodeId, AnyNode>, levelId: string): string | null {
-  return getLevelElevations(nodes).get(levelId as AnyNodeId)?.buildingId ?? null
-}
-
 /**
  * The room's floor construction, edited from the room: its thickness, through
  * core's `setRoomFloorConstruction` (the command MCP uses too), on whatever the
@@ -863,7 +797,7 @@ export function RoomFloorConstructionField({ zoneId }: { zoneId: string }) {
  * How a footprint stands: on the ground, its foundation height ("Raised 0.30 m"
  * or on the ground); upstairs, its lift above resting on the walls below.
  */
-export function footprintStanding(
+function footprintStanding(
   nodes: Record<string, import('@pascal-app/core').AnyNode>,
   plate: import('@pascal-app/core').SlabNode,
 ) {
@@ -871,8 +805,6 @@ export function footprintStanding(
   return {
     supported,
     lift: supported ? floorLift(nodes, plate) : foundationHeight(nodes, plate),
-    // The building's designed foundation carries a floor on the ground.
-    designed: floorHeldByDesignedFoundation(nodes, plate),
   }
 }
 

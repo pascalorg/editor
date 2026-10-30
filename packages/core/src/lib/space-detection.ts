@@ -1,19 +1,14 @@
-import { setFloorFoundation } from '../commands/structure/set-floor-foundation'
-import { structureChangeBatch } from '../commands/structure/shared'
 import {
   type AnyNode,
   type AnyNodeId,
-  type SlabNode,
   type WallNode,
   ZoneNode,
   type ZoneNode as ZoneNodeType,
 } from '../schema'
 import { generateId } from '../schema/base'
-import { SlabNode as SlabSchema } from '../schema/nodes/slab'
 import { findLevelAboveId, getLevelBelow, getLevelElevations } from '../services/storey'
 import { isSettlingDocument } from '../store/document-settling'
 import {
-  activeSceneCommitAuthor,
   activeSceneCommitNodeIds,
   getSceneHistoryPauseDepth,
   isRestoringSceneHistory,
@@ -28,10 +23,8 @@ import {
   sceneEnvironmentOf,
 } from '../store/scene-environment'
 import { getClampedWallCurveOffset } from '../systems/wall/wall-curve'
-import { floorFootprintSupportClass } from './floor-foundation-datum'
 import { changedLevelConstructionDisplacements } from './floor-foundation-stack'
 import { createFloorOpeningIndex, floorOpeningTargets } from './floor-opening-intent'
-import { area } from './polygon-boolean'
 import { porchPartOf, porchPartSignature } from './porch-framing-sync'
 import { railingFencedRoomIds, railingWallIds } from './railing-rooms'
 import {
@@ -78,12 +71,6 @@ export type SpaceTopologyReconcileEvent = {
 export type SpaceDetectionSyncOptions = {
   mintId?: StructureIdFactory
   onTopologyReconcile?: (event: SpaceTopologyReconcileEvent) => void
-  /**
-   * The editor's opt-in for floors a person draws: a new floor over rooms below is born this thick
-   * (`DEFAULT_UPPER_FLOOR_THICKNESS`). Off by default, and never for writes an agent authors, so
-   * programmatic builds keep the elevations they asked for.
-   */
-  newUpperFloorThickness?: number
 }
 
 type WallSideUpdate = {
@@ -557,88 +544,8 @@ function syncSceneStructure(
   sceneStore: any,
   previousNodes: SceneNodes,
   mintId: StructureIdFactory,
-  newUpperFloorThickness?: number,
 ) {
-  const patches = applyStructureReconciliation(sceneStore, { levelIds, previousNodes, mintId })
-  if (newUpperFloorThickness !== undefined && activeSceneCommitAuthor() !== 'agent')
-    thickenNewUpperFloors(patches, sceneStore, previousNodes, mintId, newUpperFloorThickness)
-}
-
-const SCHEMA_SLAB_THICKNESS = SlabSchema.shape.thickness.parse(undefined)
-
-const isBasePlate = (node: AnyNode | undefined): node is SlabNode =>
-  node?.type === 'slab' && node.plateRole === 'base'
-
-/**
- * A storey's floor over rooms below is born a framed floor, not the 0.05 m
- * schema default: a plate the reconciler just created, standing on rooms below,
- * takes the editor's opt-in thickness (`newUpperFloorThickness`) on a level that
- * had no floor yet, and
- * the thickness of that level's floor on one that has (so a second room upstairs
- * matches the first, and an older 0.05 m floor stays as it was). It is written
- * as the Floor thickness control writes it — underside held on the walls below,
- * so this storey and the ones above ride up and the ceilings below stay — inside
- * the edit that made the room, so one undo takes both back. Loaded, remote and
- * undone scenes never reach here, so a saved floor keeps its thickness.
- */
-function thickenNewUpperFloors(
-  patches: ReturnType<typeof applyStructureReconciliation>,
-  sceneStore: any,
-  previousNodes: SceneNodes,
-  mintId: StructureIdFactory,
-  firstFloorThickness: number,
-) {
-  for (const patch of patches) {
-    if (patch.op !== 'create' || !isBasePlate(patch.node as AnyNode)) continue
-    const nodes = sceneStore.getState().nodes as SceneNodes
-    const plate = nodes[patch.node.id as AnyNodeId]
-    if (!isBasePlate(plate) || !plate.parentId) continue
-    // A plate that took its construction from an earlier one keeps it.
-    if (Math.abs(plate.thickness - SCHEMA_SLAB_THICKNESS) > 1e-6) continue
-    if (floorFootprintSupportClass(nodes, plate) !== 'supported') continue
-    const thickness = newFloorThickness(nodes, previousNodes, plate, firstFloorThickness)
-    if (thickness === null || Math.abs(thickness - plate.thickness) < 1e-6) continue
-    const plan = setFloorFoundation(nodes, { slabId: plate.id, patch: { thickness } })
-    const { applyNodeChanges } = sceneStore.getState()
-    if (plan.conflicts?.length || !plan.changes.length || typeof applyNodeChanges !== 'function')
-      continue
-    applyNodeChanges(structureChangeBatch(plan.changes))
-    const level = nodes[plate.parentId as AnyNodeId]
-    const building = level?.parentId ? nodes[level.parentId as AnyNodeId] : undefined
-    applyStructureReconciliation(sceneStore, {
-      levelIds:
-        building?.type === 'building'
-          ? (building.children as string[]).filter((id) => nodes[id as AnyNodeId]?.type === 'level')
-          : [plate.parentId],
-      previousNodes: nodes,
-      mintId,
-    })
-  }
-}
-
-/** The thickness a new supported floor plate takes on its level, or null to leave it. */
-function newFloorThickness(
-  nodes: SceneNodes,
-  previousNodes: SceneNodes,
-  plate: SlabNode,
-  firstFloorThickness: number,
-): number | null {
-  const before = Object.values(previousNodes).filter(
-    (node): node is SlabNode => isBasePlate(node) && node.parentId === plate.parentId,
-  )
-  if (!before.length) return firstFloorThickness
-  const sibling = before
-    .map((node) => nodes[node.id as AnyNodeId])
-    .filter(
-      (node): node is SlabNode =>
-        isBasePlate(node) && floorFootprintSupportClass(nodes, node) === 'supported',
-    )
-    .sort(
-      (a, b) =>
-        area([{ outer: b.polygon, holes: b.holes ?? [] }]) -
-          area([{ outer: a.polygon, holes: a.holes ?? [] }]) || a.id.localeCompare(b.id),
-    )[0]
-  return sibling ? sibling.thickness : null
+  applyStructureReconciliation(sceneStore, { levelIds, previousNodes, mintId })
 }
 
 function publishSpaces(levelIds: string[], nodes: SceneNodes, editorStore: any) {
@@ -779,13 +686,7 @@ export function initSpaceDetectionSync(
       pauseSceneHistory(sceneStore)
       try {
         const levels = [...new Set([...changedWalls.keys(), ...fallbackLevels])]
-        syncSceneStructure(
-          levels,
-          sceneStore,
-          previousNodes,
-          mintId,
-          options.newUpperFloorThickness,
-        )
+        syncSceneStructure(levels, sceneStore, previousNodes, mintId)
         publishSpaces(levels, sceneStore.getState().nodes, editorStore)
         for (const [levelId, wallIds] of changedWalls) {
           const topologyDelta = topologyIndex.applyWallDelta(levelId, wallIds, previousNodes, nodes)
@@ -838,13 +739,7 @@ export function initSpaceDetectionSync(
     isProcessing = true
     pauseSceneHistory(sceneStore)
     try {
-      syncSceneStructure(
-        [...levelsToUpdate],
-        sceneStore,
-        previousNodes,
-        mintId,
-        options.newUpperFloorThickness,
-      )
+      syncSceneStructure([...levelsToUpdate], sceneStore, previousNodes, mintId)
       publishSpaces([...levelsToUpdate], sceneStore.getState().nodes, editorStore)
     } finally {
       resumeSceneHistory(sceneStore)
@@ -872,7 +767,7 @@ export function initSpaceDetectionSync(
     isProcessing = true
     pauseSceneHistory(sceneStore)
     try {
-      syncSceneStructure(levels, sceneStore, previousNodes, mintId, options.newUpperFloorThickness)
+      syncSceneStructure(levels, sceneStore, previousNodes, mintId)
       publishSpaces(levels, sceneStore.getState().nodes, editorStore)
       for (const id of levels) topologyIndex.rebuildLevel(id, sceneStore.getState().nodes)
       previousNodes = sceneStore.getState().nodes

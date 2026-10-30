@@ -1,7 +1,6 @@
 import dedent from 'dedent'
 import { z } from 'zod'
 import { BaseNode, nodeType, objectId } from '../base'
-import { FloorBuildUp } from '../build-up'
 import { MaterialSchema } from '../material'
 import { SurfaceHoleMetadata } from './surface-hole-metadata'
 import { ZoneFloorScript } from './zone'
@@ -14,11 +13,6 @@ export const MIN_SLAB_THICKNESS = 0.02
 // it is never zero (a zero-thickness plate renders as a hole).
 export const MIN_GROUND_FLOOR_THICKNESS = 0.01
 export const DEFAULT_SLAB_ELEVATION = 0.05
-
-// A storey's first floor over rooms below is a framed floor: ¾ in hardwood, ⅝ in T&G plywood,
-// 2x12 joists and ½ in drywall under them, 13⅛ in (`DEFAULT_FLOOR_BUILD_UP`, whose thickness this
-// is). The schema default stays 0.05 so saved plates keep their thickness.
-export const DEFAULT_UPPER_FLOOR_THICKNESS = 13.125 * 0.0254
 
 export const SlabNode = BaseNode.extend({
   id: objectId('slab'),
@@ -54,9 +48,6 @@ export const SlabNode = BaseNode.extend({
     })
     .optional(),
   thickness: z.number().default(0.05), // Grows downward from the surface
-  buildUp: FloorBuildUp.optional().describe(
-    'Framed floor plate only: its layers top down (flooring, sheathing, joists, ceiling); the thickness derives from them. Absent reads the default framed floor.',
-  ),
   recessed: z.boolean().default(false),
   recessedRimElevation: z.number().finite().optional(),
   fillToTerrain: z.boolean().optional(),

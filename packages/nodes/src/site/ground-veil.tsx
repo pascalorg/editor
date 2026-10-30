@@ -116,22 +116,7 @@ export function gradeRingMaterial() {
 }
 
 /**
- * Whether the site's ground is its veil alone: in Framing only and in the foundation view the solid
- * ground steps aside, so the footings and stem walls under grade show, and its faint veil stays to
- * show where grade is. The walkthrough walks on solid ground.
- */
-export function groundSheer(state: {
-  framingOnly?: boolean
-  foundationView?: boolean
-  walkthroughMode?: boolean
-}) {
-  return (
-    (state.framingOnly === true || state.foundationView === true) && state.walkthroughMode !== true
-  )
-}
-
-/**
- * Drawn only while the ground is veiled, or sheer: the veil of one solid ground surface (the same geometry
+ * Drawn only while the ground is veiled: the veil of one solid ground surface (the same geometry
  * in the same place), or the grade ring. A direct child of the site, as the surfaces are, so the
  * captures find it (`siteGround`) and hide it with the site's other surfaces.
  *
@@ -152,12 +137,10 @@ export function GroundVeil({
   rotation?: [number, number, number]
   shows?: 'window' | 'veiled'
 }) {
-  const veiled = useViewer(
-    (state) =>
-      groundSheer(state) ||
-      (shows === 'veiled'
-        ? anyGroundVeiled(state)
-        : state.groundMode === 'auto' && state.groundWindowVeiled),
+  const veiled = useViewer((state) =>
+    shows === 'veiled'
+      ? anyGroundVeiled(state)
+      : state.groundMode === 'auto' && state.groundWindowVeiled,
   )
   return (
     <mesh

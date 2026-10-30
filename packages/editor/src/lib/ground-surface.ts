@@ -14,26 +14,23 @@
 // it delegates to (`raycastTerrain`, `heightAt`) is pure core.
 
 import {
-  gradedTerrainFieldOf,
   heightAt,
   isSiteDatum,
   raycastTerrain,
   type SiteNode,
   type TerrainField,
   type TerrainHit,
+  terrainFieldOf,
   useScene,
 } from '@pascal-app/core'
 
-/**
- * The active site's terrain field as built (graded to the slabs' building pads, as it draws), or
- * null when the scene has no sculpted ground.
- */
+/** The active site's terrain field, or null when the scene has no sculpted ground. */
 export function siteTerrainField(): TerrainField | null {
   const { nodes, rootNodeIds } = useScene.getState()
   const siteId = rootNodeIds[0]
   const site = siteId ? nodes[siteId] : null
   if (site?.type !== 'site') return null
-  return gradedTerrainFieldOf(nodes, site as SiteNode)
+  return terrainFieldOf(site as SiteNode)
 }
 
 /**

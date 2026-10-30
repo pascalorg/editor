@@ -418,10 +418,6 @@ Because community autosave only persists after the first post-load edit, the mig
 - **Host lifecycle.** Retiring a plate remaps `supportSlabId`/`deckSlabId` to its surviving plate in the same commit. Deleting a slab without a successor strips those references; a host merely reshaped away falls back silently and resumes if the slab returns.
 - **Clone paths differ.** `clone-scene-graph.ts` remaps `supportSlabId`/`deckSlabId`; the editor clipboard (`scene-clipboard.ts`) intentionally does not (it re-elects); room placement remaps them (fixed in the private repo's `room-placement.ts`). When adding a new clone/instantiation path, remap both fields.
 
-Room names are labels: renaming a room never changes its foundation, floor elevation,
-door sills or finish. Choose `floor.foundation` explicitly in the room panel or through
-the agent field to use a slab or raised floor.
-
 ## Deferred by decision
 
 Persistent Room identity, partial-storey navigation, slab reference-face enums, suspended ceilings, and a site datum for sloped terrain are deferred; none block this model. Decks ship as catalog rooms/presets; the one-gesture mezzanine/balcony tools were removed (code preserved at editor `e30042db`).

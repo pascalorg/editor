@@ -1,15 +1,12 @@
 import { groundSeat } from '../lib/ground-seat'
 import type { AnyNode, AnyNodeId, BuildingNode, LevelNode } from '../schema'
 import { getLevelElevations } from '../services/storey'
-import { designedSeatMove } from './foundation'
 
 /**
  * Making `levelId` the building's ground floor, as the level panel's "Set as ground floor" and the
  * agent's `set_ground_level` do: the building names it (`groundLevelId`), is seated so that level's
  * floor datum, the top of the foundation, stands over grade as the building's foundation
- * construction seats it (`GroundSeat.aboveGrade`: 0.203 m on block, by region and style), or as
- * its designed foundation's own rule does (`GroundSeat.rule`: a slab's or a raised floor's top
- * `ffAboveGradeIn`, a basement's walls' top `basementTopAboveGradeIn`, over the highest grade); its
+ * construction seats it (`GroundSeat.aboveGrade`: 0.203 m on block, by region and style); its
  * position moves in height, the plan stays where it is, and the
  * floor indices are renumbered so it is index 0 and the ones under it are the basements. Every
  * floor keeps its place relative to the others. One change set, one undo step. `null` for an id
@@ -38,14 +35,8 @@ export function buildGroundLevelChanges({
   if (!seat) return null
 
   const [x, y, z] = (building as BuildingNode).position
-  // Micrometres: the seat is measured through sums of storey heights, and a stored height keeps no
-  // noise. A designed foundation's seat is the one its panel makes (`designedSeatMove`).
-  const moveBy = seat.atFoundationTop
-    ? 0
-    : Math.round(
-        ((seat.rule === 'construction' ? null : designedSeatMove(asNamed, building.id)) ??
-          seat.aboveGrade - seat.offset) * 1e6,
-      ) / 1e6
+  // Micrometres: the seat is measured through sums of storey heights, and a stored height keeps no noise.
+  const moveBy = seat.atFoundationTop ? 0 : Math.round((seat.aboveGrade - seat.offset) * 1e6) / 1e6
   const shift = level.level
   const renumbered = Object.values(nodes).filter(
     (node): node is LevelNode =>

@@ -12,7 +12,6 @@ import {
   deckSlabBoards,
   type GeometryContext,
   getLevelElevations,
-  gradedTerrainFieldOf,
   intersection,
   type LevelNode,
   layoutDeckBoards,
@@ -26,7 +25,7 @@ import {
   type SiteNode,
   type SlabNode,
   surfaceHeightAt,
-  useScene,
+  terrainFieldOf,
   type ZoneNode,
 } from '@pascal-app/core'
 import {
@@ -79,7 +78,7 @@ export type DeckGeometryOptions = {
   look: DeckLook
 }
 
-/** The level-local ground under a plan point: the site's graded terrain, or the datum, wherever the storey stands. */
+/** The level-local ground under a plan point: the site's terrain, or the datum, wherever the storey stands. */
 function groundUnder(ctx: GeometryContext | undefined): (x: number, z: number) => number {
   const level = ctx?.parent
   if (!ctx || level?.type !== 'level' || !level.parentId) return () => 0
@@ -95,7 +94,7 @@ function groundUnder(ctx: GeometryContext | undefined): (x: number, z: number) =
   const elevation = getLevelElevations(nodes).get(level.id)
   if (!elevation) return () => 0
   const baseWorldY = (building.position?.[1] ?? 0) + elevation.baseY
-  const field = site?.type === 'site' ? gradedTerrainFieldOf(useScene.getState().nodes, site) : null
+  const field = site?.type === 'site' ? terrainFieldOf(site) : null
   if (!field) return () => SITE_DATUM_Y - baseWorldY
   const angle = building.rotation?.[1] ?? 0
   const cos = Math.cos(angle)

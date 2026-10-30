@@ -551,7 +551,6 @@ const NO_MEMBER_IDS: readonly string[] = []
 export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
   const selectedLevelId = useViewer((s) => s.selection.levelId)
   const selectedBuildingId = useViewer((s) => s.selection.buildingId)
-  const foundationView = useViewer((s) => s.foundationView)
   const unit = useViewer((s) => s.unit)
   const metricNotation = useViewer((s) => s.metricNotation)
   const setSelection = useViewer((s) => s.setSelection)
@@ -1619,13 +1618,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
     }
   }, [])
 
-  // The foundation view keeps the foundation's outlines and footings live and leaves the rest of
-  // the level to the foundation layer's ghosted walls; a level plan shows no foundation outline.
-  const entries = floorplanData.entries.filter((entry) =>
-    foundationView
-      ? entry.node.type === 'footing' || entry.node.type === 'foundation'
-      : entry.node.type !== 'foundation',
-  )
+  const entries = floorplanData.entries
   if (entries.length === 0) return null
 
   const palette = renderCtx?.palette
@@ -1699,13 +1692,9 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
           higher-rank kinds (slabs, then walls / items / shelves) layer
           on top in the expected document-order z-stack. */}
       <g className="floorplan-registry-base">{renderEntries('base')}</g>
-      {!foundationView && (
-        <>
-          <RoomHighlight2D levelId={levelId} />
-          <RoomLabels2D levelId={levelId} />
-          <FloorRegionControls2D levelId={levelId} />
-        </>
-      )}
+      <RoomHighlight2D levelId={levelId} />
+      <RoomLabels2D levelId={levelId} />
+      <FloorRegionControls2D levelId={levelId} />
       {/* Overlay pass — interactive handles (vertex / midpoint / edge /
           move) and labels (text / dimensions). Painted after every base
           entry so polygon-editor chrome on a selected slab stays above
@@ -1717,13 +1706,9 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
       {/* Handles pass — every grabbable handle above every node's overlay,
           so a neighbour's outline never covers a selected wall's corner. */}
       <g className="floorplan-registry-handles">{renderEntries('handles')}</g>
-      {!foundationView && (
-        <>
-          <RoomHandles2D levelId={levelId} />
-          <RoomHandleDragPreview2D levelId={levelId} />
-          <SelectedWallDimensions2D levelId={levelId} />
-        </>
-      )}
+      <RoomHandles2D levelId={levelId} />
+      <RoomHandleDragPreview2D levelId={levelId} />
+      <SelectedWallDimensions2D levelId={levelId} />
       <FloorplanAnnotationLayoutResolver active={floorplanVisible} />
       {/* Click-to-type dimension labels. Portals its HTML input to
           document.body, so mounting it inside the SVG tree is safe. */}

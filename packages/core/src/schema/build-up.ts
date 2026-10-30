@@ -1,7 +1,7 @@
 import { z } from 'zod'
 
 /**
- * Typed layer build-ups for roof planes, ceilings and framed floors: each layer is a product
+ * Typed layer build-ups for roof planes and ceilings: each layer is a product
  * choice (a roofing, a sheathing, a framing size at a spacing) rather than an
  * F2 layer list, so framing tools read the structure they frame and the
  * inspector edits choices, not strings. Thicknesses are metres; spacings are
@@ -41,16 +41,6 @@ export type InsulationKind = z.infer<typeof InsulationKind>
 export const InteriorFinishKind = z.enum(['drywall', 'plaster', 'wood-plank'])
 export type InteriorFinishKind = z.infer<typeof InteriorFinishKind>
 
-export const FlooringKind = z.enum([
-  'hardwood',
-  'engineered-wood',
-  'laminate',
-  'vinyl-plank',
-  'ceramic-tile',
-  'carpet',
-])
-export type FlooringKind = z.infer<typeof FlooringKind>
-
 export const RoofingLayer = z.object({ kind: RoofingKind, thickness: Thickness, name: LayerName })
 export const UnderlaymentLayer = z.object({
   kind: UnderlaymentKind,
@@ -68,7 +58,6 @@ export const InteriorFinishLayer = z.object({
   thickness: Thickness,
   name: LayerName,
 })
-export const FlooringLayer = z.object({ kind: FlooringKind, thickness: Thickness, name: LayerName })
 
 /** For trusses, `size` is the top chord: the depth the roof plane's deck carries. */
 export const RoofStructure = z.object({
@@ -115,38 +104,3 @@ export const CeilingBuildUp = z.object({
   insulation: InsulationLayer.optional(),
 })
 export type CeilingBuildUp = z.infer<typeof CeilingBuildUp>
-
-/** Engineered wood I-joists, by their depth in inches. */
-export const IJoistDepth = z.enum(['9-1/2', '11-7/8', '14', '16'])
-export type IJoistDepth = z.infer<typeof IJoistDepth>
-
-/** A floor's joists: sawn lumber by its nominal size, or I-joists by their depth. */
-export const FloorStructure = z
-  .object({
-    system: z.enum(['joists', 'i-joists']),
-    size: z.union([NominalLumber, IJoistDepth]),
-    spacing: z.number().finite().positive(),
-  })
-  .refine(
-    (structure) =>
-      structure.system === 'joists'
-        ? NominalLumber.safeParse(structure.size).success
-        : IJoistDepth.safeParse(structure.size).success,
-    { message: 'Joists take a lumber size, I-joists a depth' },
-  )
-export type FloorStructure = z.infer<typeof FloorStructure>
-
-/**
- * A framed floor, top down: the flooring, the subfloor sheathing on the joists, the joists, and
- * the ceiling hung under them. Absent optional layers are none (a floor over a crawl space has no
- * ceiling; exposed joists in a basement none either). The floor plate's `thickness` derives from it
- * (`floorBuildUpPatch`).
- */
-export const FloorBuildUp = z.object({
-  presetId: z.string().optional(),
-  flooring: FlooringLayer.optional(),
-  sheathing: PanelLayer.optional(),
-  structure: FloorStructure,
-  ceiling: InteriorFinishLayer.optional(),
-})
-export type FloorBuildUp = z.infer<typeof FloorBuildUp>

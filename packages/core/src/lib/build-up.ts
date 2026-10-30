@@ -1,9 +1,5 @@
 import type {
   CeilingBuildUp,
-  FloorBuildUp,
-  FlooringKind,
-  FloorStructure,
-  IJoistDepth,
   NominalLumber,
   RoofBuildUp,
   RoofingKind,
@@ -11,7 +7,6 @@ import type {
   UnderlaymentKind,
 } from '../schema/build-up'
 import type { CeilingNode } from '../schema/nodes/ceiling'
-import type { SlabNode } from '../schema/nodes/slab'
 import type { AnyNode, AnyNodeId } from '../schema/types'
 import { resolveCeilingHeight } from '../services/level-height'
 import { CEILING_CLAMP_MARGIN, getCoveringSlabUndersideAt } from '../services/storey'
@@ -67,26 +62,6 @@ export const FRAMING_SPACINGS: readonly number[] = [12, 16, 19.2, 24].map(inches
 
 export const DRYWALL_THICKNESSES: readonly number[] = [0.5, 0.625].map(inches)
 
-/** Engineered wood I-joists' depths. */
-export const I_JOIST_DEPTH: Record<IJoistDepth, number> = {
-  '9-1/2': inches(9.5),
-  '11-7/8': inches(11.875),
-  '14': inches(14),
-  '16': inches(16),
-}
-
-/** Typical installed thickness of each flooring, its underlayment or setting bed with it. */
-export const FLOORING_THICKNESS: Record<FlooringKind, number> = {
-  hardwood: inches(0.75),
-  'engineered-wood': inches(0.5),
-  laminate: inches(0.375),
-  'vinyl-plank': inches(0.25),
-  'ceramic-tile': inches(0.5),
-  carpet: inches(0.5),
-}
-
-/** Floor sheathing panels: ⅝ and ¾ in T&G for joists 16 and 24 in on centre, 23/32 in rated. */
-export const SUBFLOOR_THICKNESSES: readonly number[] = [19 / 32, 5 / 8, 23 / 32, 3 / 4].map(inches)
 /** Three-coat plaster on lath. */
 export const PLASTER_THICKNESS = inches(0.875)
 export const WOOD_PLANK_THICKNESS = inches(0.75)
@@ -163,59 +138,6 @@ export function roofBuildUpOfDeck(deckThickness: number): RoofBuildUp {
   return { ...layers, structure: { system: 'rafters', size, spacing: preset.structure.spacing } }
 }
 
-/** A floor's joists' depth: the lumber's dressed depth, or the I-joist's. */
-export function floorStructureDepth(structure: FloorStructure): number {
-  return structure.system === 'i-joists'
-    ? (I_JOIST_DEPTH[structure.size as IJoistDepth] ?? 0)
-    : (LUMBER_DEPTH[structure.size as NominalLumber] ?? 0)
-}
-
-/** A framed floor's layers' depths, top down, metres; an absent layer is 0. */
-export function floorLayerDepths(buildUp: FloorBuildUp): {
-  flooring: number
-  sheathing: number
-  joists: number
-  ceiling: number
-} {
-  return {
-    flooring: buildUp.flooring?.thickness ?? 0,
-    sheathing: buildUp.sheathing?.thickness ?? 0,
-    joists: floorStructureDepth(buildUp.structure),
-    ceiling: buildUp.ceiling?.thickness ?? 0,
-  }
-}
-
-/** A framed floor's thickness: its layers summed. */
-export function floorBuildUpThickness(buildUp: FloorBuildUp): number {
-  const { flooring, sheathing, joists, ceiling } = floorLayerDepths(buildUp)
-  return Math.round((flooring + sheathing + joists + ceiling) * 1e6) / 1e6
-}
-
-/**
- * The patch that sets a floor plate's layers: the build-up and the thickness it derives, together.
- * A writer never sets one without the other.
- */
-export function floorBuildUpPatch(buildUp: FloorBuildUp): {
-  buildUp: FloorBuildUp
-  thickness: number
-} {
-  return { buildUp, thickness: floorBuildUpThickness(buildUp) }
-}
-
-/**
- * A framed floor plate's layers: its own, else the default framed floor. A plate saved before its
- * layers were kept (a 14 in floor, a hand-set thickness) reads the default until a layer is set;
- * `floorBuildUpMatches` says whether its thickness is still the layers' sum.
- */
-export function floorBuildUpOf(plate: Pick<SlabNode, 'buildUp'>): FloorBuildUp {
-  return plate.buildUp ?? DEFAULT_FLOOR_BUILD_UP
-}
-
-/** Whether a plate's thickness is its layers' sum (a writer set them together). */
-export function floorBuildUpMatches(plate: Pick<SlabNode, 'buildUp' | 'thickness'>): boolean {
-  return Math.abs(floorBuildUpThickness(floorBuildUpOf(plate)) - plate.thickness) < 1e-4
-}
-
 /** A ceiling's thickness, up from its finished underside. */
 export function ceilingBuildUpThickness(buildUp: CeilingBuildUp): number {
   return (
@@ -252,7 +174,6 @@ export function ceilingCapLift(
 }
 
 export type RoofBuildUpPreset = { id: string; label: string; buildUp: RoofBuildUp }
-export type FloorBuildUpPreset = { id: string; label: string; buildUp: FloorBuildUp }
 export type CeilingBuildUpPreset = { id: string; label: string; buildUp: CeilingBuildUp }
 
 const roofPreset = (id: string, label: string, buildUp: Omit<RoofBuildUp, 'presetId'>) => ({
@@ -335,54 +256,3 @@ export const CEILING_BUILD_UP_PRESETS: readonly CeilingBuildUpPreset[] = [
     decking: plywood(inches(3 / 4)),
   }),
 ]
-
-const floorPreset = (id: string, label: string, buildUp: Omit<FloorBuildUp, 'presetId'>) => ({
-  id,
-  label,
-  buildUp: { presetId: id, ...buildUp },
-})
-
-const hardwood = { kind: 'hardwood', thickness: FLOORING_THICKNESS.hardwood } as const
-const subfloor = plywood(inches(5 / 8))
-
-/**
- * The first is the default framed floor: ¾ in hardwood on ⅝ in T&G plywood, 2x12 joists 16 in on
- * centre, ½ in drywall on the ceiling under them, 13⅛ in. A raised floor's framing (over a crawl
- * space, no ceiling) is the second.
- */
-export const FLOOR_BUILD_UP_PRESETS: readonly FloorBuildUpPreset[] = [
-  floorPreset('hardwood-2x12-16', 'Hardwood on 2x12 @ 16"', {
-    flooring: hardwood,
-    sheathing: subfloor,
-    structure: { system: 'joists', size: '2x12', spacing: inches(16) },
-    ceiling: drywall(),
-  }),
-  floorPreset('crawl-2x12-16', 'Over a crawl space, 2x12 @ 16"', {
-    flooring: hardwood,
-    sheathing: subfloor,
-    structure: { system: 'joists', size: '2x12', spacing: inches(16) },
-  }),
-  floorPreset('tile-2x10-16', 'Tile on 2x10 @ 16"', {
-    flooring: { kind: 'ceramic-tile', thickness: FLOORING_THICKNESS['ceramic-tile'] },
-    sheathing: plywood(inches(3 / 4)),
-    structure: { system: 'joists', size: '2x10', spacing: inches(16) },
-    ceiling: drywall(),
-  }),
-  floorPreset('carpet-tji-11-7-8-19', 'Carpet on 11-7/8" I-joists @ 19.2"', {
-    flooring: { kind: 'carpet', thickness: FLOORING_THICKNESS.carpet },
-    sheathing: { kind: 'osb', thickness: inches(23 / 32) },
-    structure: { system: 'i-joists', size: '11-7/8', spacing: inches(19.2) },
-    ceiling: drywall(),
-  }),
-  floorPreset('exposed-2x10-16', 'Exposed 2x10 @ 16", no ceiling', {
-    flooring: hardwood,
-    sheathing: subfloor,
-    structure: { system: 'joists', size: '2x10', spacing: inches(16) },
-  }),
-]
-
-/** The framed floor a storey over rooms gets, and a basement's ceiling: the first preset. */
-export const DEFAULT_FLOOR_BUILD_UP: FloorBuildUp = FLOOR_BUILD_UP_PRESETS[0]!.buildUp
-
-/** A raised floor's framing over its crawl space: no ceiling under the joists. */
-export const DEFAULT_RAISED_FLOOR_BUILD_UP: FloorBuildUp = FLOOR_BUILD_UP_PRESETS[1]!.buildUp

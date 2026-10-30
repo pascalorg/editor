@@ -14,7 +14,6 @@ import { useEffect, useRef } from 'react'
 import type { Intersection, Mesh, Raycaster } from 'three'
 import { Vector3 } from 'three'
 import { groundHoleContains } from './ground-hole'
-import { groundSheer } from './ground-veil'
 
 /** How often the CPU word is re-asked, and how far the eye must move to ask it sooner. */
 const CHECK_INTERVAL_S = 0.2
@@ -34,7 +33,6 @@ export function GroundWindowSystem() {
     box: null as GroundBox | null,
     mode: '',
     walking: false,
-    sheer: false,
     veiled: false,
     nodes: null as unknown,
   })
@@ -51,7 +49,6 @@ export function GroundWindowSystem() {
       nodes !== check.nodes ||
       viewer.groundMode !== check.mode ||
       viewer.walkthroughMode !== check.walking ||
-      groundSheer(viewer) !== check.sheer ||
       groundVeiled(viewer) !== check.veiled
     if (!due) return
     check.at = clock.elapsedTime
@@ -59,7 +56,6 @@ export function GroundWindowSystem() {
     check.box = box
     check.mode = viewer.groundMode
     check.walking = viewer.walkthroughMode
-    check.sheer = groundSheer(viewer)
     check.veiled = groundVeiled(viewer)
     check.nodes = nodes
     const eye: [number, number, number] = [camera.position.x, camera.position.y, camera.position.z]
@@ -67,11 +63,9 @@ export function GroundWindowSystem() {
     // below grade is seen through the hole in the ground (`groundVeiled`), solid round it: no
     // window opens over it, which would cut the solid ground in the box's silhouette and show the
     // level through a translucent sheet in front of the opening. Any terrain field asks for one (a
-    // custom terrain, a pad, a retaining break), not only a hillside. A sheer ground is all veil,
-    // no solid to cut a window in.
+    // custom terrain, a pad, a retaining break), not only a hillside.
     const inTheWay =
       !groundVeiled(viewer) &&
-      !check.sheer &&
       box !== null &&
       !viewer.walkthroughMode &&
       terrainBetweenEyeAndBox(nodes, eye, box)

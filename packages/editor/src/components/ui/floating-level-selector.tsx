@@ -23,9 +23,6 @@ import {
   type AnyNodeId,
   type BuildingNode,
   DEFAULT_LEVEL_HEIGHT,
-  type FoundationBadge,
-  foundationBadge,
-  type GroundSeatRule,
   getStoredLevelHeight,
   groundSeat,
   LevelNode,
@@ -59,7 +56,6 @@ import {
 } from '@pascal-app/core/building'
 import {
   formatNumber,
-  type MessageDescriptor,
   roofLevelOrderBreach,
   servesAsRoofLevel,
   useLocale,
@@ -68,10 +64,8 @@ import {
 import { authoredLevelName, localizedLevelName } from '../../i18n/level-name'
 import { messageWithSlot } from '../../i18n/message-slot'
 import { addStoreyBelow, addStoreyOnTop, setGroundFloor } from '../../lib/add-storey'
-import { groundSeatAction } from '../../lib/building-foundation'
 import { deleteLevelWithFallbackSelection } from '../../lib/level-selection'
 import { unitMemberLevels, leaveUnitFocus } from '../../lib/units'
-import { enterFoundationView } from '../../lib/foundation-view'
 import { useLinearDisplay } from '../../lib/use-linear-display'
 import { cn } from '../../lib/utils'
 import { useIsMobile } from '../../hooks/use-mobile'
@@ -480,16 +474,13 @@ type GroundLineState = {
   seated: boolean
   atFoundationTop: boolean
   offset: number
-  rule: GroundSeatRule
-  askedIn: number
 }
 
 /**
  * "Ground · +0.20": where the stack meets grade, read as the ground floor's datum over the ground
  * (the top of the foundation, 8 in over it once seated). The levels under it are below grade. When
  * the datum stands outside the seat (a stack that lifted it, or sank it) the line turns amber and
- * a click seats the building, by its foundation's own rule (`groundSeat`: a slab's or a raised
- * floor's top, a basement's walls' top, over the high side of the ground).
+ * a click seats the building.
  */
 function GroundLine({ ground, onSeat }: { ground: GroundLineState; onSeat: () => void }) {
   const i18n = usePascalI18n()
@@ -501,8 +492,6 @@ function GroundLine({ ground, onSeat }: { ground: GroundLineState; onSeat: () =>
     values: { offset: `${over > 0 ? '+' : ''}${over.toFixed(precision)}` },
   })
   const distance = `${Math.abs(over).toFixed(precision)} ${displayUnit}`
-  // What the click does, by the foundation's own seat rule.
-  const action = groundSeatAction(ground.rule, ground.askedIn, i18n)
   return (
     <div
       className="relative flex items-center gap-1.5 px-2 py-0.5"
@@ -523,13 +512,15 @@ function GroundLine({ ground, onSeat }: { ground: GroundLineState; onSeat: () =>
             ground.offset > 0
               ? i18n._({
                   id: 'editor.floatingLevelSelector.groundFloorOverGrade',
-                  message: 'The ground floor stands {distance} over grade. {action}',
-                  values: { distance, action },
+                  message:
+                    'The ground floor stands {distance} over grade. Seat the ground floor 8 in over grade',
+                  values: { distance },
                 })
               : i18n._({
                   id: 'editor.floatingLevelSelector.groundFloorUnderGrade',
-                  message: 'The ground floor stands {distance} under grade. {action}',
-                  values: { distance, action },
+                  message:
+                    'The ground floor stands {distance} under grade. Seat the ground floor 8 in over grade',
+                  values: { distance },
                 })
           }
           type="button"
@@ -544,95 +535,6 @@ function GroundLine({ ground, onSeat }: { ground: GroundLineState; onSeat: () =>
         )}
       />
     </div>
-  )
-}
-
-// ── The foundation, under the stack: a view of the building's, never a level ─
-
-/** The badge's kind as the row shows it; `data-foundation-badge` keeps core's value. */
-const FOUNDATION_BADGE_LABELS: Record<FoundationBadge, MessageDescriptor> = {
-  Slab: /* i18n */ { id: 'editor.floatingLevelSelector.foundationBadgeSlab', message: 'Slab' },
-  Raised: /* i18n */ { id: 'editor.floatingLevelSelector.foundationBadgeRaised', message: 'Raised' },
-  Piles: /* i18n */ { id: 'editor.floatingLevelSelector.foundationBadgePiles', message: 'Piles' },
-  Basement: /* i18n */ {
-    id: 'editor.floatingLevelSelector.foundationBadgeBasement',
-    message: 'Basement',
-  },
-  Off: /* i18n */ { id: 'editor.floatingLevelSelector.foundationBadgeOff', message: 'Off' },
-}
-
-const FOUNDATION_BADGE_TITLES: Record<FoundationBadge, MessageDescriptor> = {
-  Slab: /* i18n */ {
-    id: 'editor.floatingLevelSelector.foundationBadgeSlabTitle',
-    message: 'Slab on grade',
-  },
-  Raised: /* i18n */ {
-    id: 'editor.floatingLevelSelector.foundationBadgeRaisedTitle',
-    message: 'Raised floor on a stem wall',
-  },
-  Piles: /* i18n */ {
-    id: 'editor.floatingLevelSelector.foundationBadgePilesTitle',
-    message: 'Grade beam on piles',
-  },
-  Basement: /* i18n */ {
-    id: 'editor.floatingLevelSelector.foundationBadgeBasementTitle',
-    message: 'Basement walls cut into the ground',
-  },
-  Off: /* i18n */ {
-    id: 'editor.floatingLevelSelector.foundationBadgeOffTitle',
-    message: 'No foundation drawn: click to set one up',
-  },
-}
-
-/**
- * "Foundation" under the lowest level and the ground line: the building's foundation, its kind on
- * the badge. A click shows its plan, the house hidden over it in 3D, and its settings in the panel.
- * Not a level: never dragged, nothing inserted beside it.
- */
-export function FoundationRow({
-  badge,
-  isSelected,
-  onSelect,
-}: {
-  badge: FoundationBadge
-  isSelected: boolean
-  onSelect: () => void
-}) {
-  const i18n = usePascalI18n()
-  return (
-    <button
-      aria-pressed={isSelected}
-      className={cn(
-        'flex w-full items-center rounded-lg py-1.5 pr-0.5 pl-[22px] font-medium text-xs transition-colors',
-        isSelected
-          ? 'bg-black/6 dark:bg-white/10 text-foreground'
-          : 'text-muted-foreground/70 hover:bg-black/4 dark:hover:bg-white/5 hover:text-muted-foreground',
-      )}
-      data-guide-target="level-foundation"
-      data-testid="level-foundation-row"
-      onClick={onSelect}
-      title={i18n._({
-        id: 'editor.floatingLevelSelector.showTheFoundation',
-        message: 'Show the foundation',
-      })}
-      type="button"
-    >
-      <span className="min-w-0 flex-1 truncate text-left">
-        {i18n._({ id: 'editor.floatingLevelSelector.foundation', message: 'Foundation' })}
-      </span>
-      <span
-        className={cn(
-          'mr-4 shrink-0 rounded px-1 font-mono text-[10px]',
-          badge === 'Off'
-            ? 'text-muted-foreground/50'
-            : 'text-muted-foreground dark:text-muted-foreground/70',
-        )}
-        data-foundation-badge={badge}
-        title={i18n._(FOUNDATION_BADGE_TITLES[badge])}
-      >
-        {i18n._(FOUNDATION_BADGE_LABELS[badge])}
-      </span>
-    </button>
   )
 }
 
@@ -681,8 +583,6 @@ export function FloatingLevelSelector() {
   const selectedBuildingId = useViewer((s) => s.selection.buildingId)
   const levelId = useViewer((s) => s.selection.levelId)
   const setSelection = useViewer((s) => s.setSelection)
-  const foundationView = useViewer((s) => s.foundationView)
-  const setFoundationView = useViewer((s) => s.setFoundationView)
   const createNode = useScene((s) => s.createNode)
   const applyNodeChanges = useScene((s) => s.applyNodeChanges)
   const updateNodes = useScene((s) => s.updateNodes)
@@ -738,8 +638,6 @@ export function FloatingLevelSelector() {
             seated: seat.seated,
             atFoundationTop: seat.atFoundationTop,
             offset: seat.offset,
-            rule: seat.rule,
-            askedIn: seat.askedIn,
           }
         : null
     }),
@@ -748,14 +646,6 @@ export function FloatingLevelSelector() {
   const handleSetGround = useCallback((levelId: string) => {
     setGroundFloor(levelId as LevelNode['id'])
   }, [])
-
-  const badge = useScene((state) =>
-    resolvedBuildingId ? foundationBadge(state.nodes, resolvedBuildingId) : 'Off',
-  )
-
-  const handleSelectFoundation = useCallback(() => {
-    if (resolvedBuildingId) enterFoundationView(resolvedBuildingId)
-  }, [resolvedBuildingId])
 
   const topIsRoofLevel = useScene((state) => {
     const top = levels.at(-1)
@@ -908,6 +798,18 @@ export function FloatingLevelSelector() {
             </button>
           )}
 
+          {/* Floating + at bottom edge */}
+          {!draggingLevelId && (
+            <button
+              className={cn(addButtonClass, 'bottom-0 translate-y-1/2')}
+              onClick={handleAddBelow}
+              title={i18n._({ id: 'editor.floatingLevelSelector.addLevelBelow', message: 'Add level below' })}
+              type="button"
+            >
+              <Plus className="h-2.5 w-2.5" />
+            </button>
+          )}
+
           {/* Level list */}
           <DndContext
             collisionDetection={closestCenter}
@@ -919,7 +821,7 @@ export function FloatingLevelSelector() {
             <SortableContext items={sortableLevelIds} strategy={verticalListSortingStrategy}>
               <div className="flex flex-col gap-0.5 rounded-xl border border-border bg-background/90 p-1 shadow-2xl backdrop-blur-md">
                 {reversedLevels.map((level, i) => {
-                  const isSelected = level.id === levelId && !foundationView
+                  const isSelected = level.id === levelId
                   const sortedIndex = levels.indexOf(level)
                   const showGapBelow = i < reversedLevels.length - 1
 
@@ -947,8 +849,7 @@ export function FloatingLevelSelector() {
                         onRequestDelete={() => setDeletingLevel(level)}
                         onSetGround={() => handleSetGround(level.id)}
                         onSelect={() => {
-                          if (level.id !== levelId) markPerfAction('level-switch', level.id)
-                          setFoundationView(false)
+                          if (!isSelected) markPerfAction('level-switch', level.id)
                           setSelection(
                             resolvedBuildingId
                               ? { buildingId: resolvedBuildingId, levelId: level.id }
@@ -957,27 +858,11 @@ export function FloatingLevelSelector() {
                         }}
                       />
 
-                      {!draggingLevelId && (
-                        // Between two levels, a level inserted there; under the lowest, one added
-                        // below it (over the foundation, which is no level).
+                      {showGapBelow && !draggingLevelId && (
                         <button
                           className={cn(addButtonClass, 'bottom-0 translate-y-1/2')}
-                          onClick={
-                            showGapBelow
-                              ? () => handleInsertBetween(sortedIndex - 1)
-                              : handleAddBelow
-                          }
-                          title={
-                            showGapBelow
-                              ? i18n._({
-                                  id: 'editor.floatingLevelSelector.insertLevelHere',
-                                  message: 'Insert level here',
-                                })
-                              : i18n._({
-                                  id: 'editor.floatingLevelSelector.addLevelBelow',
-                                  message: 'Add level below',
-                                })
-                          }
+                          onClick={() => handleInsertBetween(sortedIndex - 1)}
+                          title={i18n._({ id: 'editor.floatingLevelSelector.insertLevelHere', message: 'Insert level here' })}
                           type="button"
                         >
                           <Plus className="h-2.5 w-2.5" />
@@ -990,13 +875,6 @@ export function FloatingLevelSelector() {
                     </Fragment>
                   )
                 })}
-                {resolvedBuildingId && (
-                  <FoundationRow
-                    badge={badge}
-                    isSelected={foundationView}
-                    onSelect={handleSelectFoundation}
-                  />
-                )}
               </div>
             </SortableContext>
           </DndContext>

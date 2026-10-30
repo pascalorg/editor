@@ -40,9 +40,7 @@ function sceneScreenPoint(point: [number, number]): { left: number; top: number 
 export const FloorplanOpenWallEndsLayer = memo(function FloorplanOpenWallEndsLayer() {
   const visible = useEditor((state) => isViewVisible(state, VIEW_2D))
   const suppressed = useOpenWallEndsSuppressed()
-  // The foundation view ghosts the walls: their open ends are not what it is about.
-  const foundationView = useViewer((state) => state.foundationView)
-  return visible && !suppressed && !foundationView ? <ActiveOpenWallEndsLayer /> : null
+  return visible && !suppressed ? <ActiveOpenWallEndsLayer /> : null
 })
 
 const ActiveOpenWallEndsLayer = memo(function ActiveOpenWallEndsLayer() {

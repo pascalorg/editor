@@ -4,21 +4,13 @@ import {
   acquireSceneHistoryPause,
   applyStructureReconciliation,
   area,
-  DEFAULT_FLOOR_BUILD_UP,
   DEFAULT_FOUNDATION_HEIGHT,
-  type FloorBuildUp,
   type FloorFoundationPatch,
-  type FloorStructure,
-  floorBuildUpPatch,
-  floorStructureDepth,
   generateId,
   getRoomBaseElevation,
   groundFloorConstruction,
-  I_JOIST_DEPTH,
   intersection,
-  LUMBER_DEPTH,
   roomDrawnFloor,
-  runAsSingleSceneHistoryStep,
   type SlabNode,
   setFloorFoundation,
   setRoomFloorConstruction,
@@ -305,110 +297,6 @@ export function setFootprintThickness(slabId: string, value: number): string | n
 /** A live slab-thickness preview (a scrub): the same session as the height's, one undo step. */
 export function beginFootprintThicknessPreview(slabId: string) {
   return beginFootprintPreview(slabId, setFootprintThickness, (_, plate) => plate.thickness)
-}
-
-// A framed floor's layers (a storey's floor plate, a raised floor's framing) are edited the way a
-// roof plane's are: each change is a whole new build-up, and no longer the preset it started as.
-
-/** The layers a framed floor can do without; its joists are always there. */
-export type FloorLayerKey = 'flooring' | 'sheathing' | 'ceiling'
-
-/** `base` with `change` applied and no longer a preset; a layer set to `undefined` goes (off). */
-export function editedFloorBuildUp(
-  base: FloorBuildUp,
-  change: Partial<FloorBuildUp>,
-): FloorBuildUp {
-  const next: Record<string, unknown> = { ...base, ...change }
-  delete next.presetId
-  for (const key of Object.keys(next)) if (next[key] === undefined) delete next[key]
-  return next as FloorBuildUp
-}
-
-/** A layer switched off (it goes) or back on, as `defaults` has it (else as the default floor has it). */
-export function switchFloorLayer(
-  buildUp: FloorBuildUp,
-  layer: FloorLayerKey,
-  on: boolean,
-  defaults: FloorBuildUp = DEFAULT_FLOOR_BUILD_UP,
-): FloorBuildUp {
-  const restored = defaults[layer] ?? DEFAULT_FLOOR_BUILD_UP[layer]
-  return editedFloorBuildUp(buildUp, {
-    [layer]: on ? restored : undefined,
-  } as Partial<FloorBuildUp>)
-}
-
-/**
- * A layer's material named ("Brazilian cherry"; its kind still says what it is); a blank name goes
- * back to the kind's. The preset stays: a name builds nothing different.
- */
-export function renameFloorLayer(
-  buildUp: FloorBuildUp,
-  layer: FloorLayerKey,
-  name: string,
-): FloorBuildUp {
-  const current = buildUp[layer]
-  if (!current) return buildUp
-  const named = name.trim().slice(0, 60)
-  const { name: _, ...unnamed } = current
-  return { ...buildUp, [layer]: named ? { ...unnamed, name: named } : unnamed } as FloorBuildUp
-}
-
-/** The joists as the other system, at the depth nearest theirs (2x12 lumber becomes an 11-7/8 in I-joist). */
-export function floorStructureAs(
-  structure: FloorStructure,
-  system: FloorStructure['system'],
-): FloorStructure {
-  if (structure.system === system) return structure
-  const depth = floorStructureDepth(structure)
-  const sizes: [string, number][] = Object.entries(
-    system === 'joists' ? LUMBER_DEPTH : I_JOIST_DEPTH,
-  )
-  const [size] = sizes.reduce((best, entry) =>
-    Math.abs(entry[1] - depth) < Math.abs(best[1] - depth) ? entry : best,
-  )
-  return { ...structure, system, size } as FloorStructure
-}
-
-type FootprintPreview = ReturnType<typeof beginFootprintPreview>
-
-/**
- * Sets a framed floor plate's layers. Its thickness becomes theirs through the floor height (the
- * underside stays on the walls below, the storeys above ride with the top, and the shared rules
- * refuse what they refuse); the layers are written with it in the same undo step, and only once
- * the height is accepted. A scrub's preview `session` lands the height (its live writes taken back
- * first); `together` moves the footprints sharing the storey above with this one. Returns why it
- * was refused, or null.
- */
-export function applyFloorBuildUp(
-  slabId: string,
-  buildUp: FloorBuildUp,
-  options: { session?: FootprintPreview | null; together?: readonly string[] } = {},
-): string | null {
-  const nodes = useScene.getState().nodes
-  const plate = nodes[slabId as AnyNodeId]
-  const control = isBase(plate) ? upperFloorHeightControl(nodes, plate) : null
-  if (!(isBase(plate) && control)) {
-    options.session?.cancel()
-    return isBase(plate)
-      ? 'Only a floor resting on the walls below is framed.'
-      : 'The floor is gone.'
-  }
-  const patch = floorBuildUpPatch(buildUp)
-  // The underside is held while a scrub previews, so it reads the same mid-scrub as before it.
-  const top = control.currentTop - plate.thickness + patch.thickness
-  return runAsSingleSceneHistoryStep(useScene, () => {
-    const refused = options.together
-      ? applyFloorFoundation(options.together, { thickness: patch.thickness })
-      : options.session
-        ? options.session.commit(top)
-        : Math.abs(patch.thickness - plate.thickness) < 1e-6
-          ? null
-          : setFootprintHeight(slabId, top)
-    if (refused) return refused
-    if (JSON.stringify(plate.buildUp) !== JSON.stringify(patch.buildUp))
-      useScene.getState().updateNode(slabId as AnyNodeId, { buildUp: patch.buildUp })
-    return null
-  })
 }
 
 function beginFootprintPreview(
