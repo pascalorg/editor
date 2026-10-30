@@ -17,11 +17,11 @@ export const FLOORPLAN_CONTEXT_EXTENSION_KEY = 'pascal:editor/floorplan'
 export type FloorplanRenderPurpose = 'edit' | 'document'
 export type FloorplanMetricNotation = 'meters' | 'millimeters'
 export type FloorplanToolMode = 'default' | 'expert'
-export type FloorplanWallDimensionReference = 'finished-faces' | 'centerline' | 'stud-faces'
-export const DEFAULT_FLOORPLAN_WALL_DIMENSION_REFERENCE = 'finished-faces'
 /**
- * Which faces a selected wall's temporary dimensions measure to: the interior
- * faces (ID, the room size), the exterior faces (OD, the outside size) or both.
+ * Display → Measure walls: which finished faces wall dimensions measure to —
+ * the interior faces (ID, the room sizes), the exterior faces (OD, the
+ * outside size) or both. Read by a selected wall's temporary dimensions in 2D
+ * and 3D and by the Expert plan's automatic dimension strings.
  */
 export type FloorplanWallDimensionFaces = 'interior' | 'exterior' | 'both'
 export const DEFAULT_FLOORPLAN_WALL_DIMENSION_FACES: FloorplanWallDimensionFaces = 'both'
@@ -160,16 +160,7 @@ type FloorplanContextExtension = {
    */
   roomLabelOverlay: boolean
   metricNotation: FloorplanMetricNotation
-  wallDimensionReference: FloorplanWallDimensionReference
   wallDimensionFaces: FloorplanWallDimensionFaces
-}
-
-export function normalizeFloorplanWallDimensionReference(
-  value: unknown,
-): FloorplanWallDimensionReference {
-  return value === 'centerline' || value === 'stud-faces'
-    ? value
-    : DEFAULT_FLOORPLAN_WALL_DIMENSION_REFERENCE
 }
 
 export function getFloorplanNodeExtension(
@@ -216,9 +207,6 @@ export function createFloorplanContextExtensions(
       drafting: values.drafting === true,
       roomLabelOverlay: values.roomLabelOverlay === true,
       metricNotation: values.metricNotation === 'millimeters' ? 'millimeters' : 'meters',
-      wallDimensionReference: normalizeFloorplanWallDimensionReference(
-        values.wallDimensionReference,
-      ),
       wallDimensionFaces: normalizeFloorplanWallDimensionFaces(values.wallDimensionFaces),
     } satisfies FloorplanContextExtension,
   }
@@ -234,9 +222,6 @@ export function readFloorplanContext(ctx: GeometryContext): FloorplanContextExte
       drafting: extension.drafting === true,
       roomLabelOverlay: extension.roomLabelOverlay === true,
       metricNotation: extension.metricNotation === 'millimeters' ? 'millimeters' : 'meters',
-      wallDimensionReference: normalizeFloorplanWallDimensionReference(
-        extension.wallDimensionReference,
-      ),
       wallDimensionFaces: normalizeFloorplanWallDimensionFaces(extension.wallDimensionFaces),
     }
   }
@@ -246,7 +231,6 @@ export function readFloorplanContext(ctx: GeometryContext): FloorplanContextExte
     drafting: false,
     roomLabelOverlay: false,
     metricNotation: 'meters',
-    wallDimensionReference: DEFAULT_FLOORPLAN_WALL_DIMENSION_REFERENCE,
     wallDimensionFaces: DEFAULT_FLOORPLAN_WALL_DIMENSION_FACES,
   }
 }

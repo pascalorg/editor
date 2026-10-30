@@ -79,7 +79,6 @@ import {
   createFloorplanContextExtensions,
   type FloorplanAnnotationRole,
   type FloorplanWallDimensionFaces,
-  type FloorplanWallDimensionReference,
   getFloorplanNodeExtension,
   readFloorplanGeometryMetadata,
   withFloorplanGeometryMetadata,
@@ -87,7 +86,6 @@ import {
 import {
   type FloorplanMode,
   resolveFloorplanAnnotationVisibility,
-  resolveFloorplanWallDimensionReference,
 } from '../../../lib/floorplan/floorplan-mode'
 import {
   buildFloorplanContext,
@@ -405,7 +403,6 @@ type NodeDeps = {
   live: LiveTransform | undefined
   unit: 'metric' | 'imperial'
   metricNotation: 'meters' | 'millimeters'
-  wallDimensionReference: FloorplanWallDimensionReference
   wallDimensionFaces?: FloorplanWallDimensionFaces
   selected: boolean
   highlighted: boolean
@@ -643,13 +640,9 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
   const floorplanVisible = useEditor((s) => isViewVisible(s, VIEW_2D))
   const drawingType = useDrawingView((s) => s.drawingType)
   const annotationVisibility = useFloorplanAnnotationVisibility((s) => s.visibility)
-  const wallDimensionReference = useFloorplanAnnotationVisibility((s) => s.wallDimensionReference)
+  const showDimensions = useFloorplanAnnotationVisibility((s) => s.showDimensions)
   const wallDimensionFaces = useFloorplanAnnotationVisibility((s) => s.wallDimensionFaces)
   const floorplanMode = useFloorplanMode((s) => s.mode)
-  const effectiveWallDimensionReference = resolveFloorplanWallDimensionReference(
-    floorplanMode,
-    wallDimensionReference,
-  )
   // Elevator builders read runtime state imperatively, so entries include this
   // rare-changing ref in their cache deps.
   const interactiveElevators = useInteractive((s) => s.elevators)
@@ -1649,6 +1642,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
       <FloorplanRegistryEntry
         activeDragId={handleIdForNode(activeDragId, entry.id)}
         annotationVisibility={annotationVisibility}
+        showDimensions={showDimensions}
         floorplanMode={floorplanMode}
         floorplanVisible={floorplanVisible}
         geometryCacheRef={geometryCacheRef}
@@ -1678,7 +1672,6 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
         siblingEpoch={entry.dependsOnSiblingInputs ? (siblingEpochs.get(entry.id) ?? 0) : 0}
         unit={unit}
         metricNotation={metricNotation}
-        wallDimensionReference={effectiveWallDimensionReference}
         wallDimensionFaces={wallDimensionFaces}
         visibilityRootId={
           entry.visibilityRootId ?? (entry.ctxOverrides ? undefined : (levelId as AnyNodeId))
@@ -1776,9 +1769,7 @@ function FloorplanAnnotationLayoutResolver({ active }: { active: boolean }) {
   const drawingType = useDrawingView((state) => state.drawingType)
   const annotationLayoutOverrides = useDrawingView((state) => state.annotationLayoutOverrides)
   const annotationVisibility = useFloorplanAnnotationVisibility((state) => state.visibility)
-  const wallDimensionReference = useFloorplanAnnotationVisibility(
-    (state) => state.wallDimensionReference,
-  )
+  const showDimensions = useFloorplanAnnotationVisibility((state) => state.showDimensions)
   const wallDimensionFaces = useFloorplanAnnotationVisibility((state) => state.wallDimensionFaces)
   const floorplanMode = useFloorplanMode((state) => state.mode)
   const layoutInputs = useMemo(
@@ -1788,7 +1779,7 @@ function FloorplanAnnotationLayoutResolver({ active }: { active: boolean }) {
       drawingType,
       interactionIdle,
       settledLayoutEpoch,
-      wallDimensionReference,
+      showDimensions,
       wallDimensionFaces,
       floorplanMode,
     }),
@@ -1798,7 +1789,7 @@ function FloorplanAnnotationLayoutResolver({ active }: { active: boolean }) {
       drawingType,
       interactionIdle,
       settledLayoutEpoch,
-      wallDimensionReference,
+      showDimensions,
       wallDimensionFaces,
       floorplanMode,
     ],
@@ -2027,6 +2018,7 @@ function readFloorplanAnnotationLayoutOffset(label: SVGGElement) {
 type FloorplanRegistryEntryProps = {
   activeDragId: string | null
   annotationVisibility: FloorplanAnnotationVisibility
+  showDimensions: boolean
   floorplanMode: FloorplanMode
   ctxOverrides: FloorplanContextOverrides | undefined
   floorplanVisible: boolean
@@ -2068,7 +2060,6 @@ type FloorplanRegistryEntryProps = {
   siblingEpoch: number
   unit: 'metric' | 'imperial'
   metricNotation: 'meters' | 'millimeters'
-  wallDimensionReference: FloorplanWallDimensionReference
   wallDimensionFaces: FloorplanWallDimensionFaces
   visibilityRootId: AnyNodeId | undefined
 }
@@ -2076,6 +2067,7 @@ type FloorplanRegistryEntryProps = {
 const FloorplanRegistryEntry = memo(function FloorplanRegistryEntry({
   activeDragId,
   annotationVisibility,
+  showDimensions,
   floorplanMode,
   ctxOverrides,
   floorplanVisible,
@@ -2105,7 +2097,6 @@ const FloorplanRegistryEntry = memo(function FloorplanRegistryEntry({
   siblingEpoch,
   unit,
   metricNotation,
-  wallDimensionReference,
   wallDimensionFaces,
   visibilityRootId,
 }: FloorplanRegistryEntryProps): React.ReactElement | null {
@@ -2168,6 +2159,7 @@ const FloorplanRegistryEntry = memo(function FloorplanRegistryEntry({
       referencedAnnotationRole,
       selected,
       target: 'editor',
+      dimensions: showDimensions,
     },
   )
 
@@ -2299,7 +2291,6 @@ const FloorplanRegistryEntry = memo(function FloorplanRegistryEntry({
     siblingEpoch,
     unit,
     metricNotation,
-    wallDimensionReference,
     wallDimensionFaces,
     visibilityRootId,
   })
@@ -2373,7 +2364,6 @@ type BuildFloorplanEntryGeometryArgs = {
   siblingEpoch: number
   unit: 'metric' | 'imperial'
   metricNotation: 'meters' | 'millimeters'
-  wallDimensionReference: FloorplanWallDimensionReference
   wallDimensionFaces?: FloorplanWallDimensionFaces
   visibilityRootId: AnyNodeId | undefined
 }
@@ -2434,7 +2424,6 @@ export function buildFloorplanEntryGeometry({
   siblingEpoch,
   unit,
   metricNotation,
-  wallDimensionReference,
   wallDimensionFaces,
   visibilityRootId,
 }: BuildFloorplanEntryGeometryArgs): CacheEntry | null {
@@ -2463,7 +2452,6 @@ export function buildFloorplanEntryGeometry({
     live,
     unit,
     metricNotation,
-    wallDimensionReference,
     wallDimensionFaces,
     selected,
     highlighted,
@@ -2551,7 +2539,6 @@ export function buildFloorplanEntryGeometry({
     unit,
     metricNotation,
     roomLabelOverlay: true,
-    wallDimensionReference,
     wallDimensionFaces,
     highlighted,
     hovered,
@@ -2578,7 +2565,6 @@ export function buildFloorplanEntryGeometry({
           metricNotation,
           purpose: 'edit',
           roomLabelOverlay: true,
-          wallDimensionReference,
           wallDimensionFaces,
         }),
         viewState: palette
@@ -3932,7 +3918,6 @@ function nodeDepsEqual(a: NodeDeps, b: NodeDeps): boolean {
     'live',
     'unit',
     'metricNotation',
-    'wallDimensionReference',
     'wallDimensionFaces',
     'selected',
     'highlighted',

@@ -163,7 +163,6 @@ describe('site-scoped floorplan discovery', () => {
       siblingEpoch: 0,
       unit: 'metric' as const,
       metricNotation: 'meters' as const,
-      wallDimensionReference: 'finished-faces' as const,
       visibilityRootId: site.id,
     }
     const committedSnapshot = structuredClone(overlay)

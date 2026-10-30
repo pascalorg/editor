@@ -367,9 +367,9 @@ export function RoomHandleDragPreview2D({ levelId }: { levelId: string | null })
 /**
  * The sole selected node's temporary dimensions while nothing is in progress,
  * from its kind's `selectionDimensions` (a wall: the room widths its push
- * shows and, for an exterior wall, the outside size, as the dimension-faces
- * preference asks). Shared by the plan and the 3D view; typing into one
- * drives the node. Recomputed only when the node itself or its level's rooms
+ * shows and, for an exterior wall, the outside size, as Display → Measure walls
+ * asks; none while Display → Dimensions is off). Shared by the plan and the 3D
+ * view; typing into one drives the node. Recomputed only when the node itself or its level's rooms
  * change (the room index keeps its records while unrelated nodes edit).
  */
 export function useSelectedWallDimensions(): {
@@ -383,19 +383,20 @@ export function useSelectedWallDimensions(): {
   const enabled = useEditor((s) => s.mode === 'select')
   const idle = useInteractionScope((s) => s.scope.kind === 'idle')
   const dragging = useRoomHandleDrag((s) => s.drag !== null)
+  const shown = useFloorplanAnnotationVisibility((s) => s.showDimensions)
   const faces = useFloorplanAnnotationVisibility((s) => s.wallDimensionFaces)
   const build = node
     ? getFloorplanNodeExtension(nodeRegistry.get(node.type))?.selectionDimensions
     : undefined
   const rooms = useRoomRecords(build ? (node?.parentId ?? null) : null)
   return useMemo(() => {
-    if (!node || !build || !enabled || !idle || dragging) return null
+    if (!node || !build || !shown || !enabled || !idle || dragging) return null
     // `rooms` is the invalidation key: it changes when the level's room
     // topology, slabs, ceilings or zones do.
     if (!rooms) return null
     const dimensions = build({ node, nodes: useScene.getState().nodes, faces })
     return dimensions.length ? { node, dimensions } : null
-  }, [build, dragging, enabled, faces, idle, node, rooms])
+  }, [build, dragging, enabled, faces, idle, node, rooms, shown])
 }
 
 /**

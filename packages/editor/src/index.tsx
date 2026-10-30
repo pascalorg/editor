@@ -336,7 +336,9 @@ export { PALETTE_COLORS } from './components/ui/primitives/color-dot'
 export {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuSub,
   DropdownMenuSubContent,

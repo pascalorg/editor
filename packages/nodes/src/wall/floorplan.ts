@@ -24,6 +24,7 @@ import {
   wallLayerBoundaryOffsets,
 } from '@pascal-app/core'
 import {
+  type FloorplanWallDimensionFaces,
   floorplanGeometryMetadata,
   readFloorplanContext,
   WALL_PULL_AFFORDANCE,
@@ -38,6 +39,7 @@ import {
   buildCurvedWallConstructionDimensions,
   buildLevelWallConstructionDimensionPlan,
   buildWallConstructionDimensions,
+  constructionDimensionFace,
   renderPlannedConstructionDimensions,
   type WallConstructionDimensionPlan,
 } from './construction-dimensions'
@@ -55,9 +57,12 @@ const FLOORPLAN_SELECTION_HATCH_SPACING = 0.12
 const FLOORPLAN_SELECTED_WALL_STROKE_WIDTH = 0.03
 const FLOORPLAN_RAILING_STROKE_WIDTH = 0.01
 const FLOORPLAN_SELECTION_HATCH_STROKE_WIDTH = 0.02
-const WALL_DIMENSION_REFERENCES = ['finished-faces', 'centerline', 'stud-faces'] as const
-
-type WallDimensionReference = (typeof WALL_DIMENSION_REFERENCES)[number]
+// The automatic strings measure finished faces; a partition meeting a facade
+// is dimensioned to both of its faces.
+const FINISHED_FACE_DIMENSIONS = {
+  datumPolicy: 'wall-face',
+  intersectionReferencePolicy: 'both-faces',
+} as const
 
 function floorplanWallThickness(wall: WallNode): number {
   const baseThickness = getWallThickness(wall)
@@ -86,7 +91,8 @@ export type WallFloorplanLevelData = {
   documentMiters: WallMiterData
   layerMiters: WallLayerMiterData
   documentLayerMiters: WallLayerMiterData
-  constructionDimensionsByReference: Record<WallDimensionReference, WallConstructionDimensionPlan>
+  /** Built on first read: a level whose plan shows no automatic dimensions never pays for it. */
+  readonly constructionDimensions: WallConstructionDimensionPlan
 }
 
 // --- Assembly layer lines ---------------------------------------------------
@@ -244,45 +250,23 @@ export function computeWallFloorplanLevelData({
   nodes: Record<string, AnyNode>
 }): WallFloorplanLevelData {
   const walls = siblings.map(exaggerateWallThickness)
-  const constructionDimensionsByReference = {} as Record<
-    WallDimensionReference,
-    WallConstructionDimensionPlan
-  >
-  for (const reference of WALL_DIMENSION_REFERENCES) {
-    let cached: WallConstructionDimensionPlan | undefined
-    Object.defineProperty(constructionDimensionsByReference, reference, {
-      enumerable: true,
-      get: () => {
-        if (cached) return cached
-        const datumPolicy =
-          reference === 'finished-faces'
-            ? 'wall-face'
-            : reference === 'stud-faces'
-              ? 'structural-face'
-              : 'centerline'
-        cached = buildLevelWallConstructionDimensionPlan(
-          siblings,
-          nodes,
-          constructionDimensionStandard({
-            datumPolicy,
-            ...(reference === 'finished-faces'
-              ? { intersectionReferencePolicy: 'both-faces' as const }
-              : {}),
-          }),
-        )
-        return cached
-      },
-    })
-  }
   const documentWalls = [...siblings]
   const miters = calculateLevelMiters(walls)
   const documentMiters = calculateLevelMiters(documentWalls)
+  let constructionDimensions: WallConstructionDimensionPlan | undefined
   return {
     miters,
     documentMiters,
     layerMiters: calculateLevelLayerMiters(walls, miters, wallLayerOffsets),
     documentLayerMiters: calculateLevelLayerMiters(documentWalls, documentMiters, wallLayerOffsets),
-    constructionDimensionsByReference,
+    get constructionDimensions() {
+      constructionDimensions ??= buildLevelWallConstructionDimensionPlan(
+        siblings,
+        nodes,
+        constructionDimensionStandard(FINISHED_FACE_DIMENSIONS),
+      )
+      return constructionDimensions
+    },
   }
 }
 
@@ -304,7 +288,7 @@ export function computeWallFloorplanLevelData({
  * direct builder callers.
  */
 export function buildWallFloorplan(node: WallNode, ctx: GeometryContext): FloorplanGeometry | null {
-  const { automaticDimensions, metricNotation, purpose, wallDimensionReference } =
+  const { automaticDimensions, metricNotation, purpose, wallDimensionFaces } =
     readFloorplanContext(ctx)
   const documentMode = purpose === 'document'
   const wallForPurpose = (wall: WallNode) => (documentMode ? wall : exaggerateWallThickness(wall))
@@ -412,7 +396,7 @@ export function buildWallFloorplan(node: WallNode, ctx: GeometryContext): Floorp
     const dimensionStroke =
       isSelected && palette ? palette.selectedStroke : (palette?.measurementStroke ?? '#334155')
     const dimensionStandard = constructionDimensionStandard({
-      datumPolicy: wallDimensionDatumPolicy(wallDimensionReference),
+      ...FINISHED_FACE_DIMENSIONS,
       metricNotation,
     })
     const exteriorCornerDimensionStandard = constructionDimensionStandard({
@@ -432,20 +416,21 @@ export function buildWallFloorplan(node: WallNode, ctx: GeometryContext): Floorp
         }),
       )
     } else {
-      const planned = levelData?.constructionDimensionsByReference[wallDimensionReference].get(
-        node.id,
-      )
+      const planned = levelData?.constructionDimensions.get(node.id)
       if (planned) {
         children.push(
           ...renderPlannedConstructionDimensions(
-            planned,
+            planned.filter((entry) =>
+              measuresFace(wallDimensionFaces, constructionDimensionFace(entry.tier)),
+            ),
             view?.unit ?? 'metric',
             dimensionStroke,
             documentMode ? 'document' : 'editor',
             dimensionStandard,
           ),
         )
-      } else if (!levelData) {
+      } else if (!levelData && measuresFace(wallDimensionFaces, 'exterior')) {
+        // Without the level plan, only the exterior strings are drawn.
         children.push(
           ...buildWallConstructionDimensions(self, ctx, {
             unit: view?.unit ?? 'metric',
@@ -609,13 +594,9 @@ function buildSelectedWallHatchLines(wall: WallNode, stroke: string): FloorplanG
   return lines
 }
 
-function wallDimensionDatumPolicy(reference: WallDimensionReference) {
-  switch (reference) {
-    case 'centerline':
-      return 'centerline' as const
-    case 'stud-faces':
-      return 'structural-face' as const
-    case 'finished-faces':
-      return 'wall-face' as const
-  }
+function measuresFace(
+  faces: FloorplanWallDimensionFaces,
+  face: Exclude<FloorplanWallDimensionFaces, 'both'>,
+): boolean {
+  return faces === 'both' || faces === face
 }

@@ -31,7 +31,6 @@ function context(
     extensions: createFloorplanContextExtensions({
       metricNotation: 'meters',
       purpose: 'edit',
-      wallDimensionReference: 'centerline',
       wallDimensionFaces,
     }),
     viewState: moving

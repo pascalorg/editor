@@ -37,7 +37,7 @@ function context(
   purpose: 'edit' | 'document',
   selected = false,
   metricNotation: 'meters' | 'millimeters' = 'meters',
-  wallDimensionReference: 'finished-faces' | 'centerline' | 'stud-faces' = 'finished-faces',
+  wallDimensionFaces: 'interior' | 'exterior' | 'both' = 'both',
   automaticDimensions = true,
 ): GeometryContext {
   return {
@@ -57,7 +57,7 @@ function context(
       automaticDimensions,
       metricNotation,
       purpose,
-      wallDimensionReference,
+      wallDimensionFaces,
     }),
   }
 }
@@ -172,10 +172,7 @@ describe('buildWallFloorplan render purpose', () => {
   })
 
   test('does not construct automatic wall dimensions when presentation disables them', () => {
-    const geometry = buildWallFloorplan(
-      wall,
-      context('edit', false, 'meters', 'finished-faces', false),
-    )
+    const geometry = buildWallFloorplan(wall, context('edit', false, 'meters', 'both', false))
     const entries = geometry ? flatten(geometry) : []
 
     expect(
@@ -189,22 +186,22 @@ describe('buildWallFloorplan render purpose', () => {
     expect(entries.some((entry) => entry.kind === 'polygon')).toBe(true)
   })
 
-  test('keeps standalone wall witnesses on the wall face in every intersection mode', () => {
+  test("keeps a standalone wall's outside string on its face, and drops it for Inside", () => {
     const plainWall = WallNode.parse({
       ...wall,
       thickness: 0.1,
     })
-    const witnessY = (reference: 'finished-faces' | 'centerline' | 'stud-faces') => {
-      const geometry = buildWallFloorplan(plainWall, context('edit', false, 'meters', reference))
+    const witnessY = (faces: 'interior' | 'exterior' | 'both') => {
+      const geometry = buildWallFloorplan(plainWall, context('edit', false, 'meters', faces))
       const dimension = geometry
         ? flatten(geometry).find((entry) => entry.kind === 'dimension-string')
         : undefined
       return dimension?.kind === 'dimension-string' ? dimension.segments[0]?.start[1] : undefined
     }
 
-    expect(witnessY('finished-faces')).toBeCloseTo(0.065)
-    expect(witnessY('centerline')).toBeCloseTo(0.065)
-    expect(witnessY('stud-faces')).toBeCloseTo(0.065)
+    expect(witnessY('both')).toBeCloseTo(0.065)
+    expect(witnessY('exterior')).toBeCloseTo(0.065)
+    expect(witnessY('interior')).toBeUndefined()
   })
 
   test('shows an orthogonal depth dimension for a curved wall without a radius leader', () => {
