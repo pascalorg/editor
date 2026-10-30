@@ -1,4 +1,7 @@
+import { deckBoardSettings } from '../lib/deck-boards'
 import { area } from '../lib/polygon-boolean'
+import { porchFramingSettings } from '../lib/porch-framing'
+import { porchPartOf } from '../lib/porch-framing-sync'
 import { roomFloorChoices } from '../lib/room-floor-choices'
 import type {
   AnyNode,
@@ -97,12 +100,29 @@ const unitOf = (nodes: SceneNodes, zoneId: ZoneNode['id']) => {
   return { unitId: unit?.id ?? null, unit: unit?.name ?? null }
 }
 
+function zoneFraming(nodes: SceneNodes, zone: ZoneNode) {
+  const parts = queryNodes(nodes, { type: ['column', 'beam'], parentId: zone.parentId }).filter(
+    (node) => porchPartOf(node)?.porchOf === zone.id,
+  )
+  if (!zone.roomType && !zone.porchFraming && parts.length === 0) return null
+  return {
+    ...porchFramingSettings(zone),
+    auto: zone.porchFraming?.auto ?? (zone.roomType === 'porch' && zone.hasCeiling !== false),
+    postCount: parts.filter((node) => node.type === 'column').length,
+    beamCount: parts.filter((node) => node.type === 'beam').length,
+  }
+}
+
 const zoneSummary = (nodes: SceneNodes, zone: ZoneNode) => ({
   id: zone.id,
   name: zone.name,
   color: zone.color,
   polygon: zone.polygon,
   holes: zone.holes ?? [],
+  roomType: zone.roomType ?? 'room',
+  floor: { drop: zone.floor?.drop ?? 0 },
+  porchFraming: zoneFraming(nodes, zone),
+  ...(zone.roomType === 'deck' || zone.decking ? { decking: deckBoardSettings(zone) } : {}),
   wallMaterial: zone.wallMaterial ?? null,
   wallOverrides: zone.wallOverrides ?? [],
   ...unitOf(nodes, zone.id),

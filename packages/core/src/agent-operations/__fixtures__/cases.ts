@@ -27,7 +27,7 @@ import { FIND_BY_TYPE_CASES } from './find-by-type-cases'
 import { FINISH_CASES } from './finish-cases'
 import { LOT_INFO_CASES } from './lot-info-cases'
 import { CREATE_ROOF_CASES, MOVE_ROOFS_CASES } from './roof-cases'
-import { ROOM_CASES } from './room-cases'
+import { OUTDOOR_ROOM_READ_CASES, ROOM_CASES } from './room-cases'
 import { CHECK_ROOMS_CASES, VALIDATE_SCENE_CASES } from './scene-check-cases'
 import { SEARCH_ASSETS_CASES } from './search-assets-cases'
 import { VIEW_ASSETS_CASES } from './view-assets-cases'
@@ -967,6 +967,7 @@ export const AGENT_TOOL_CASES: readonly AgentToolCase[] = [
   ...CHECK_ROOMS_CASES,
   ...DELETE_NODE_CASES,
   ...ROOM_CASES,
+  ...OUTDOOR_ROOM_READ_CASES,
   ...CREATE_ROOM_CASES,
   ...FURNISH_ROOM_CASES,
   ...SEARCH_ASSETS_CASES,
