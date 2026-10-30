@@ -311,9 +311,6 @@ export function createWallOnCurrentLevel(
         ? railingWallDefaults()
         : (useEditor.getState().toolDefaults.wall ?? {}),
       wallTypes: railing ? undefined : getDrawnWallTypes(),
-      // A wall drawn into another meets its inside face and leaves it whole,
-      // as a framed partition does; the split tool breaks a wall on purpose.
-      keepHostsWhole: true,
     }
     let result = planWallInsertion(nodes, insertion)
     if (!result.ok && result.reason === 'covered-existing-wall') {

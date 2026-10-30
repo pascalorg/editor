@@ -580,7 +580,6 @@ export function planWallInsertion(
      * it there as a T (rooms and miters read the junction off the body), and a
      * wall it crosses stays one wall, the new one split either side of it.
      */
-    keepHostsWhole?: boolean
   },
 ): WallInsertionResult {
   const walls = Object.values(nodes).filter(
@@ -658,13 +657,12 @@ export function planWallInsertion(
     splitWalls.set(wallId, parameters)
   }
   for (const projection of [startProjection, endProjection]) {
-    if (projection?.wall && !args.keepHostsWhole) {
+    if (projection?.wall) {
       addSplitParameter(projection.wall.id, projection.wallT)
     }
   }
   for (const crossing of crossings) {
     if (
-      args.keepHostsWhole ||
       crossing.wallT <= WALL_INTERSECTION_EPSILON ||
       crossing.wallT >= 1 - WALL_INTERSECTION_EPSILON
     ) {

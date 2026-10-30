@@ -786,17 +786,30 @@ describe('createWallOnCurrentLevel', () => {
     expect(levelWalls()).toHaveLength(2)
   })
 
-  test('a mid-wall endpoint T-joins the host and leaves it whole', () => {
-    const created = createWallOnCurrentLevel([2, 2], [2, 0])
+  test.each(['grid', 'lines', 'angles', 'off'] as const)(
+    '%s drafting splits the host at a mid-wall junction',
+    (mode) => {
+      useEditor.getState().setSnappingMode('wall', mode)
+      const created = createWallOnCurrentLevel([2, 2], [2, 0])
 
-    expect(created?.end).toEqual([2, 0])
-    const host = useScene.getState().nodes['wall_a' as AnyNodeId] as WallNode
-    expect([host.start, host.end]).toEqual([
-      [0, 0],
-      [4, 0],
-    ])
-    expect(levelWalls()).toHaveLength(2)
-  })
+      expect(created?.end).toEqual([2, 0])
+      expect(useScene.getState().nodes['wall_a' as AnyNodeId]).toBeUndefined()
+      expect(
+        levelWalls()
+          .filter((wall) => wall.id !== created?.id)
+          .map(({ start, end }) => [start, end]),
+      ).toEqual([
+        [
+          [0, 0],
+          [2, 0],
+        ],
+        [
+          [2, 0],
+          [4, 0],
+        ],
+      ])
+    },
+  )
 
   test('a wall drawn exactly over one built another way takes its place', () => {
     // The seed wall is plain; the wall tool draws the Build panel's outside type.
@@ -825,14 +838,14 @@ describe('createWallOnCurrentLevel', () => {
     ])
   })
 
-  test('grid mode: endpoint resolved onto a wall body joins it whole', () => {
+  test('grid mode: endpoint resolved onto a wall body splits its host', () => {
     useEditor.getState().setSnappingMode('wall', 'grid')
 
     const created = createWallOnCurrentLevel([2, 2], [2, 0])
 
     expect(created?.end).toEqual([2, 0])
-    expect(useScene.getState().nodes['wall_a' as AnyNodeId]).toBeDefined()
-    expect(levelWalls()).toHaveLength(2)
+    expect(useScene.getState().nodes['wall_a' as AnyNodeId]).toBeUndefined()
+    expect(levelWalls()).toHaveLength(3)
   })
 
   test('grid mode: endpoint beyond the connect radius is left alone (no residual snap)', () => {
@@ -845,7 +858,7 @@ describe('createWallOnCurrentLevel', () => {
     expect(levelWalls()).toHaveLength(2)
   })
 
-  test("a T into a wall leaves the host's door on it, where it was", () => {
+  test('a T into a wall rehosts its door at the same position', () => {
     const door = DoorSchema.parse({
       position: [1, 1.05, 0],
       parentId: 'wall_a',
@@ -857,9 +870,9 @@ describe('createWallOnCurrentLevel', () => {
 
     expect(created?.end).toEqual([2, 0])
     const kept = useScene.getState().nodes[door.id as AnyNodeId] as DoorSchema
-    expect(kept.parentId).toBe('wall_a')
+    expect(kept.parentId).not.toBe('wall_a')
     expect(kept.position[0]).toBe(1)
-    expect((useScene.getState().nodes['wall_a' as AnyNodeId] as WallNode).children).toContain(
+    expect((useScene.getState().nodes[kept.parentId as AnyNodeId] as WallNode).children).toContain(
       door.id,
     )
   })
@@ -873,15 +886,15 @@ describe('createWallOnCurrentLevel', () => {
     expect(useScene.temporal.getState().pastStates.length - before).toBe(1)
   })
 
-  test('a crossing splits only the drawn wall, in one undo step: the host stays whole', () => {
+  test('a crossing splits both walls in one undo step', () => {
     const before = useScene.temporal.getState().pastStates.length
 
     const created = createWallOnCurrentLevel([2, -2], [2, 2])
 
     expect(created?.start).toEqual([2, 0])
     expect(created?.end).toEqual([2, 2])
-    expect(useScene.getState().nodes['wall_a' as AnyNodeId]).toBeDefined()
-    expect(levelWalls()).toHaveLength(3)
+    expect(useScene.getState().nodes['wall_a' as AnyNodeId]).toBeUndefined()
+    expect(levelWalls()).toHaveLength(4)
     expect(useScene.temporal.getState().pastStates.length - before).toBe(1)
   })
 
