@@ -97,8 +97,8 @@ export function openingCasingFaces(
   const offset = opening.position[2] ?? 0
   const half = host.thickness / 2
   const faces: OpeningCasingFace[] = []
-  if (opening.casingFaceA !== false) faces.push({ face: 'a', plane: half - offset, out: 1 })
-  if (opening.casingFaceB !== false) faces.push({ face: 'b', plane: -half - offset, out: -1 })
+  if (opening.casingFaceA === true) faces.push({ face: 'a', plane: half - offset, out: 1 })
+  if (opening.casingFaceB === true) faces.push({ face: 'b', plane: -half - offset, out: -1 })
   return faces
 }
 

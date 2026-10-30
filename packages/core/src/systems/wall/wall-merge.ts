@@ -338,7 +338,7 @@ function reversedWallChildPatch(child: AnyNode): Partial<AnyNode> {
     patch.side = child.side === 'front' ? 'back' : 'front'
   }
   if (child.type === 'door' || child.type === 'window') {
-    const [faceA, faceB] = [child.casingFaceA !== false, child.casingFaceB !== false]
+    const [faceA, faceB] = [child.casingFaceA === true, child.casingFaceB === true]
     if (faceA !== faceB) Object.assign(patch, { casingFaceA: faceB, casingFaceB: faceA })
   }
   if ('rotation' in child && Array.isArray(child.rotation)) {

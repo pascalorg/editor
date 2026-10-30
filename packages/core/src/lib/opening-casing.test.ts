@@ -17,9 +17,25 @@ const INCH = 0.0254
 const host = { thickness: 0.2 }
 
 const window = (values: Record<string, unknown> = {}) =>
-  WindowNode.parse({ id: 'window_c', position: [2, 1.2, 0], width: 1.2, height: 1, ...values })
+  WindowNode.parse({
+    id: 'window_c',
+    position: [2, 1.2, 0],
+    width: 1.2,
+    height: 1,
+    casingFaceA: true,
+    casingFaceB: true,
+    ...values,
+  })
 const door = (values: Record<string, unknown> = {}) =>
-  DoorNode.parse({ id: 'door_c', position: [2, 1.05, 0], width: 0.9, height: 2.1, ...values })
+  DoorNode.parse({
+    id: 'door_c',
+    position: [2, 1.05, 0],
+    width: 0.9,
+    height: 2.1,
+    casingFaceA: true,
+    casingFaceB: true,
+    ...values,
+  })
 
 const parts = (boards: OpeningCasingBoard[], face: 'a' | 'b') =>
   boards
@@ -34,13 +50,14 @@ const span = (board: OpeningCasingBoard, axis: 0 | 1 | 2) => [
 ]
 
 describe('opening casing schema', () => {
-  test('a door or window saved before casing loads cased on both faces, 2 in wide', () => {
+  test('a door or window saved before casing loads without casing', () => {
     for (const legacy of [
       WindowNode.parse({ id: 'window_old', width: 1.2, height: 1 }),
       DoorNode.parse({ id: 'door_old', width: 0.9, height: 2.1 }),
     ]) {
-      expect(legacy.casingFaceA).toBe(true)
-      expect(legacy.casingFaceB).toBe(true)
+      expect(legacy.casingFaceA).toBe(false)
+      expect(legacy.casingFaceB).toBe(false)
+      expect(openingCasingBoards(legacy, host)).toEqual([])
       expect(legacy.casingWidth).toBeCloseTo(2 * INCH, 12)
     }
     expect(DEFAULT_OPENING_CASING_WIDTH).toBeCloseTo(2 * INCH, 12)
@@ -50,7 +67,7 @@ describe('opening casing schema', () => {
   test('a casing face turned off stays off', () => {
     const parsed = WindowNode.parse({ id: 'window_off', casingFaceA: false, casingWidth: 0.09 })
     expect(parsed.casingFaceA).toBe(false)
-    expect(parsed.casingFaceB).toBe(true)
+    expect(parsed.casingFaceB).toBe(false)
     expect(parsed.casingWidth).toBe(0.09)
   })
 })

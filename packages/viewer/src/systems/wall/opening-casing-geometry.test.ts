@@ -59,6 +59,8 @@ const window = (values: Partial<WindowNode> = {}) =>
     width: 1.2,
     height: 1,
     sill: false,
+    casingFaceA: true,
+    casingFaceB: true,
     ...values,
   })
 
@@ -70,6 +72,8 @@ const door = (values: Partial<DoorNode> = {}) =>
     position: [2, 1.05, 0],
     width: 0.9,
     height: 2.1,
+    casingFaceA: true,
+    casingFaceB: true,
     ...values,
   })
 

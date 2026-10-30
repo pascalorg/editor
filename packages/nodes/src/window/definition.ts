@@ -290,7 +290,12 @@ export const windowDefinition: NodeDefinition<typeof WindowNode> = {
   // Same schema-driven defaults trick as door: parse a stub, strip
   // id/type. Window also has many fields with zod `.default()` set.
   defaults: () => {
-    const stub = WindowNode.parse({ id: 'window_default' as never, type: 'window' })
+    const stub = WindowNode.parse({
+      id: 'window_default' as never,
+      type: 'window',
+      casingFaceA: true,
+      casingFaceB: true,
+    })
     const { id: _id, type: _type, ...rest } = stub
     return rest
   },

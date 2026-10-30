@@ -61,6 +61,8 @@ export const useWindowPlacement = create<WindowPlacementState>((set, get) => ({
 export function placedWindowFields(): Partial<WindowNode> {
   const { type, style } = useWindowPlacement.getState()
   return {
+    casingFaceA: true,
+    casingFaceB: true,
     ...windowTypeFields(type),
     sill: !SILLLESS_WINDOW_TYPES.has(type),
     ...(windowTakesStyle(type) ? getWindowStyleOverrides(style) : {}),

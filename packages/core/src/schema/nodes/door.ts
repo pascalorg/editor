@@ -144,9 +144,9 @@ export const DoorNode = BaseNode.extend({
   // opening (head and both legs, none at the floor), never inside it, so the
   // wall cutout stays width × height. The faces are the host's `a` / `b`
   // (WallFace), not the door's front and back, so flipping the swing leaves
-  // the casing where it is. Saves from before casing load with it on both faces.
-  casingFaceA: z.boolean().default(true),
-  casingFaceB: z.boolean().default(true),
+  // the casing where it is. Absent casing fields keep saved openings uncased.
+  casingFaceA: z.boolean().default(false),
+  casingFaceB: z.boolean().default(false),
   casingWidth: z.number().positive().default(DEFAULT_OPENING_CASING_WIDTH),
 
   // Swing
@@ -183,7 +183,7 @@ export const DoorNode = BaseNode.extend({
   - segments: rows stacked top to bottom, each defining its own columnRatios
   - type 'empty' = no leaf fill for that segment, 'panel' = raised/recessed panel, 'glass' = glazed
   - hingesSide/swingDirection/swingAngle: which way the door opens and how far it is currently open
-  - casingFaceA/casingFaceB: casing (head and legs) on the host wall's face a / b, around the cutout
+  - casingFaceA/casingFaceB: casing (head and legs) on the host wall's face a / b, around the cutout (absent means off; new openings enable both)
   - casingWidth: face width of the casing boards (2 in by default)
   - doorCloser/panicBar: commercial and emergency hardware options
 `)

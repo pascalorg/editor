@@ -45,8 +45,8 @@ export function OpeningCasingSection({
   )
   const imperial = useViewer((state) => state.unit) === 'imperial'
   if (!cased) return null
-  const faceA = node.casingFaceA !== false
-  const faceB = node.casingFaceB !== false
+  const faceA = node.casingFaceA === true
+  const faceB = node.casingFaceB === true
   const toShown = (meters: number) => (imperial ? meters / INCH : meters)
 
   return (

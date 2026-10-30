@@ -9,8 +9,12 @@ import {
   WallNode,
   WindowNode,
 } from '@pascal-app/core'
+import { doorDefinition } from '../door/definition'
 import { buildDoorFloorplan } from '../door/floorplan'
+import { placedDoorFields } from '../door/placement'
+import { windowDefinition } from '../window/definition'
 import { buildWindowFloorplan } from '../window/floorplan'
+import { placedWindowFields } from '../window/placement'
 import { openingCasingFaceLabels } from './opening-casing'
 
 const INCH = 0.0254
@@ -47,6 +51,8 @@ const windowPlan = (values: Partial<WindowNode> = {}) =>
       position: [2, 1.2, 0],
       width: 1.2,
       height: 1,
+      casingFaceA: true,
+      casingFaceB: true,
       ...values,
     }),
     context as GeometryContext,
@@ -60,6 +66,8 @@ const doorPlan = (values: Partial<DoorNode> = {}) =>
       wallId: wall.id,
       position: [2, 1.05, 0],
       width: 0.9,
+      casingFaceA: true,
+      casingFaceB: true,
       ...values,
     }),
     context as GeometryContext,
@@ -133,4 +141,24 @@ describe('opening casing face names', () => {
       b: 'Side B',
     })
   })
+})
+
+test('tools and preset defaults create cased openings while legacy openings stay uncased', () => {
+  for (const [schema, fields, definition] of [
+    [DoorNode, placedDoorFields(), doorDefinition],
+    [WindowNode, placedWindowFields(), windowDefinition],
+  ] as const) {
+    const placed = schema.parse(fields)
+    expect(placed.casingFaceA).toBe(true)
+    expect(placed.casingFaceB).toBe(true)
+    const preset = definition.defaults?.()
+    expect(preset?.casingFaceA).toBe(true)
+    expect(preset?.casingFaceB).toBe(true)
+    const legacy = schema.parse({})
+    const geometry =
+      legacy.type === 'door'
+        ? buildDoorFloorplan(legacy, context as GeometryContext)
+        : buildWindowFloorplan(legacy, context as GeometryContext)
+    expect(casingLegs(geometry)).toEqual([])
+  }
 })

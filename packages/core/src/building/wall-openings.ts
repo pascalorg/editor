@@ -385,6 +385,8 @@ export function planWallOpening(nodes: Nodes, input: WallOpeningInput) {
     parentId: wallId,
     width,
     height,
+    casingFaceA: true,
+    casingFaceB: true,
     ...(input.openingShape ? { openingShape: input.openingShape } : {}),
     ...(input.archHeight === undefined ? {} : { archHeight: Math.min(input.archHeight, height) }),
     ...(input.cornerRadius === undefined ? {} : { cornerRadius: input.cornerRadius }),

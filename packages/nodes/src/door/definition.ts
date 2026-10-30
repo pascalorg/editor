@@ -233,7 +233,12 @@ export const doorDefinition: NodeDefinition<typeof DoorNode> = {
   // full default shape — door has 40+ fields, listing them inline would
   // duplicate the schema. Parse a minimal stub, drop id/type, return rest.
   defaults: () => {
-    const stub = DoorNode.parse({ id: 'door_default' as never, type: 'door' })
+    const stub = DoorNode.parse({
+      id: 'door_default' as never,
+      type: 'door',
+      casingFaceA: true,
+      casingFaceB: true,
+    })
     const { id: _id, type: _type, ...rest } = stub
     return rest
   },

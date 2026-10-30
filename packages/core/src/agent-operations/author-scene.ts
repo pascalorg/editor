@@ -1060,6 +1060,8 @@ export function authorScene(
           visible: true,
           metadata: { authorScene: { id, color: o.color ?? null } },
           wallId: node.id,
+          casingFaceA: true,
+          casingFaceB: true,
           width,
           height,
           rotation: [0, 0, 0],

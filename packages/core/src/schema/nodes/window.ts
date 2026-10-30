@@ -122,10 +122,10 @@ export const WindowNode = BaseNode.extend({
   // Casing: flat boards on the finished faces of the host wall around the
   // opening, never inside it, so the wall cutout stays width × height. The
   // faces are the host's `a` / `b` (WallFace), not the unit's own front and
-  // back, so flipping the window leaves its casing where it is. Saves from
-  // before casing load with it on both faces.
-  casingFaceA: z.boolean().default(true),
-  casingFaceB: z.boolean().default(true),
+  // back, so flipping the window leaves its casing where it is. Absent casing fields keep
+  // saved openings uncased.
+  casingFaceA: z.boolean().default(false),
+  casingFaceB: z.boolean().default(false),
   casingWidth: z.number().positive().default(DEFAULT_OPENING_CASING_WIDTH),
 }).describe(dedent`Window node - a parametric window placed on a wall
   - position: center of the window in wall-local coordinate system
@@ -135,7 +135,7 @@ export const WindowNode = BaseNode.extend({
   - frameDepth: how deep the frame sits within the wall
   - columnRatios/rowRatios: pane division ratios
   - sill: whether to show a window sill
-  - casingFaceA/casingFaceB: picture-frame casing on the host wall's face a / b, around the cutout
+  - casingFaceA/casingFaceB: picture-frame casing on the host wall's face a / b, around the cutout (absent means off; new openings enable both)
   - casingWidth: face width of the casing boards (2 in by default)
   - corner: joined to a window on the other wall at this wall's start or end (a corner window)
 `)
