@@ -146,7 +146,8 @@ describe('ceiling layers', () => {
         parentId: 'building_a',
         children: floorAbove ? ['slab_above'] : [],
       }),
-      SlabNode.parse({ id: 'slab_above', polygon: square, elevation: 0, thickness: 0.3 }),
+      // The floor above as its plate stands: on the walls below, its underside at their top.
+      SlabNode.parse({ id: 'slab_above', polygon: square, elevation: 0.05, thickness: 0.05 }),
     ]
     const node = CeilingNode.parse({
       id: 'ceiling_a',
@@ -166,10 +167,10 @@ describe('ceiling layers', () => {
   test('the upper face stands on the layers under a roof, and short of the floor above', () => {
     const open = scene({ height: 2.4, buildUp: joists }, false)
     expect(ceilingCapLift(open.node, open.nodes)).toBeCloseTo(6 * IN, 9)
-    // the floor above hangs 0.3 m from 2.5 m: 2.2 m, less the margin, is as high as it goes
-    const under = scene({ height: 2.1, buildUp: joists }, true)
+    // the floor above stands on the walls at 2.5 m: that, less the margin, is as high as it goes
+    const under = scene({ height: 2.4, buildUp: joists }, true)
     expect(ceilingCapLift(under.node, under.nodes)).toBeCloseTo(0.1 - CEILING_CLAMP_MARGIN, 9)
-    const bare = scene({ height: 2.1 }, true)
+    const bare = scene({ height: 2.4 }, true)
     expect(ceilingCapLift(bare.node, bare.nodes)).toBe(0)
   })
 })
