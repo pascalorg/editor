@@ -2485,6 +2485,8 @@ export type SnappableConfig = {
 export type SnapPointKind = 'start' | 'end' | 'midpoint' | 'center' | 'corners'
 
 export type SurfacesConfig = {
+  /** False makes hosted openings gaps without leaf, frame or threshold; defaults to true. */
+  renderOpeningContent?: (node: AnyNode) => boolean
   hosting?: SurfaceProvider | false
   top?: {
     /** Height above the node origin; point, when supplied, is in the parent XZ frame. */

@@ -4,6 +4,7 @@ import {
   area,
   BuildingNode,
   CeilingNode,
+  ColumnNode,
   clearSceneHistory,
   createZone,
   DoorNode,
@@ -25,7 +26,12 @@ import { deleteConfirmationContent } from '../components/editor/delete-confirmat
 import { constructionActions, wallsSwitch } from '../components/ui/panels/room-construction-rows'
 import useDeleteConfirmation from '../store/use-delete-confirmation'
 import useEditor from '../store/use-editor'
-import { roomClearPolygon, roomConstructionState, roomFloorContents } from './room-construction'
+import {
+  roomClearPolygon,
+  roomConstructionState,
+  roomFloorContents,
+  roomPorchFramingCounts,
+} from './room-construction'
 import {
   addRoomConstruction,
   adoptExistingCeiling,
@@ -175,6 +181,27 @@ describe('room construction state', () => {
     expect(room.ceiling.ceilingId).toBe(ceilingOf(zoneId)!.id)
     expect(constructionActions(room, 'walls')).toEqual({ add: false, remove: true })
     expect(constructionActions(room, 'floor')).toEqual({ add: false, remove: true })
+  })
+
+  test('porch framing counts the room’s generated parts by marker, across node kinds', () => {
+    const zone = nodes()[zoneId as AnyNodeId] as ZoneNode
+    const parts = [
+      ColumnNode.parse({ metadata: { porchOf: zoneId, porchPart: 'corner:0' } }),
+      ItemNode.parse({
+        ...item('item_side_post', 'Post', LEVEL, [0, 0, 0]),
+        metadata: { porchOf: zoneId, porchPart: 'side:0:1' },
+      }),
+      ColumnNode.parse({ metadata: { porchOf: zoneId, porchPart: 'beam:0' } }),
+      ColumnNode.parse({ metadata: { porchOf: 'zone_other', porchPart: 'corner:0' } }),
+      ColumnNode.parse({}),
+    ]
+    const level = nodes()[LEVEL as AnyNodeId] as LevelNode
+    const scene = {
+      ...nodes(),
+      ...Object.fromEntries(parts.map((part) => [part.id, part])),
+      [level.id]: { ...level, children: [...level.children, ...parts.map((part) => part.id)] },
+    }
+    expect(roomPorchFramingCounts(scene, zone)).toEqual({ posts: 2, beams: 1 })
   })
 
   test('memoized per nodes identity', () => {

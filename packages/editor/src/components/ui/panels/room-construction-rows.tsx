@@ -13,7 +13,6 @@ import {
   type OutdoorRoomType,
   type PorchFramingSettings,
   porchFramingSettings,
-  porchPartOf,
   roomDrawnFloor,
   setZoneIntent,
   type PascalI18n,
@@ -61,6 +60,7 @@ import {
 import { ownFloorElevationBounds } from '../../../lib/room-handle-drag'
 import type { RoomSelectionRecord } from '../../../lib/room-selection'
 import { cn } from '../../../lib/utils'
+import { roomPorchFramingCounts } from '../../../lib/room-construction'
 import { applyRoomPlan } from '../../../lib/room-structure-commands'
 import { MetricControl } from '../controls/metric-control'
 import { SegmentedControl } from '../controls/segmented-control'
@@ -571,15 +571,7 @@ export function PorchFramingFields({ zoneId }: { zoneId: string }) {
       if (zone?.type !== 'zone') return null
       const optional = zone.roomType === 'deck' || zone.roomType === 'patio'
       if (!(optional || (zone.roomType === 'porch' && zone.hasCeiling !== false))) return null
-      const level = zone.parentId ? scene.nodes[zone.parentId as AnyNodeId] : undefined
-      let posts = 0
-      let beams = 0
-      for (const id of level?.type === 'level' ? level.children : []) {
-        const node = scene.nodes[id as AnyNodeId]
-        if (porchPartOf(node)?.porchOf !== zoneId) continue
-        if (node?.type === 'column') posts++
-        else beams++
-      }
+      const { posts, beams } = roomPorchFramingCounts(scene.nodes, zone)
       const auto = zone.porchFraming?.auto
       const mode: PorchFramingMode =
         auto === false ? 'manual' : optional && auto !== true ? 'off' : 'auto'

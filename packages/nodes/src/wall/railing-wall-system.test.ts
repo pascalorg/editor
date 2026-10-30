@@ -2,15 +2,17 @@ import { afterEach, expect, test } from 'bun:test'
 import {
   DoorNode,
   LevelNode,
+  nodeRegistry,
   railingWallDefaults,
   sceneRegistry,
   useLiveNodeOverrides,
   useScene,
   WallNode,
 } from '@pascal-app/core'
-import { runWallBuildFrame } from '@pascal-app/viewer'
+import { buildDoorPreviewMesh, runWallBuildFrame } from '@pascal-app/viewer'
 import { DoubleSide, Mesh, MeshBasicMaterial, Raycaster, Vector3 } from 'three'
 import { curtainWallGeometryAdapter } from './curtain-wall-adapter'
+import { wallDefinition } from './definition'
 import { withRailingWalls } from './railing-wall-adapter'
 import { RAILING_FRAME_MATERIAL_INDEX } from './railing-wall-geometry'
 
@@ -68,5 +70,31 @@ test('the wall system builds a railing as its guard, open at its door, and follo
   } finally {
     mesh.geometry.dispose()
     material.dispose()
+  }
+})
+
+test('hosted doors render only their gap on railings and keep their content on solid walls', () => {
+  const restore = nodeRegistry._snapshot()
+  nodeRegistry._reset()
+  nodeRegistry._register(wallDefinition)
+  try {
+    for (const wallType of ['railing', 'standard'] as const) {
+      const wall = WallNode.parse({ wallType, start: [0, 0], end: [6, 0] })
+      const door = DoorNode.parse({ parentId: wall.id, wallId: wall.id, openingKind: 'door' })
+      useScene.setState({ nodes: { [wall.id]: wall, [door.id]: door } })
+      const mesh = buildDoorPreviewMesh(door)
+      try {
+        expect(mesh.getObjectByName('cutout')).toBeDefined()
+        const content = mesh.children.filter((child) => child.name !== 'cutout')
+        if (wallType === 'railing') expect(content).toHaveLength(0)
+        else expect(content.length).toBeGreaterThan(0)
+      } finally {
+        mesh.traverse((object) => {
+          if (object instanceof Mesh) object.geometry.dispose()
+        })
+      }
+    }
+  } finally {
+    restore()
   }
 })

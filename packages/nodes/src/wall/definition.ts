@@ -3,6 +3,7 @@ import {
   DEFAULT_WALL_THICKNESS,
   getWallBaseElevationForNodes,
   getWallEffectiveHeightForNodes,
+  isRailingWall,
   type NodeDefinition,
   type WallNode as WallNodeType,
   wallSlots,
@@ -166,6 +167,7 @@ export const wallDefinition: NodeDefinition<typeof WallNode> = {
     selectable: { hitVolume: 'bbox' },
     // Front + back faces host items (paintings, shelves, switches).
     surfaces: {
+      renderOpeningContent: (node) => !isRailingWall(node),
       hosting: false,
       top: {
         height: (node, { nodes }) => {

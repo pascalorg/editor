@@ -383,3 +383,16 @@ export function roomConstructionState(
   memo.states.set(zoneId, state)
   return state
 }
+
+export function roomPorchFramingCounts(nodes: StructureNodes, zone: ZoneNode) {
+  const level = zone.parentId ? nodes[zone.parentId] : undefined
+  let posts = 0
+  let beams = 0
+  for (const id of level?.type === 'level' ? level.children : []) {
+    const metadata = nodes[id]?.metadata
+    if (metadata?.porchOf !== zone.id || typeof metadata.porchPart !== 'string') continue
+    if (/^(corner|side):/.test(metadata.porchPart)) posts++
+    else if (metadata.porchPart.startsWith('beam:')) beams++
+  }
+  return { posts, beams }
+}

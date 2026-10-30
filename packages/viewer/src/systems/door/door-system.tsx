@@ -8,7 +8,7 @@ import {
   getEffectiveNode,
   getOpeningWallPlacement,
   getWallThickness,
-  isRailingWall,
+  nodeRegistry,
   resolveOpeningCasingHost,
   resolveOpeningFrameDepth,
   type SceneMaterial,
@@ -2406,8 +2406,10 @@ function updateDoorMesh(rawNode: DoorNode, mesh: THREE.Mesh): boolean {
   const operationState = runtimeDoorState?.operationState ?? nodeOperationState
   const clampedSwingAngle = Math.max(0, Math.min(Math.PI / 2, swingAngle))
 
-  // A door on a railing is a gap in its guard, whatever it says it is: no leaf, frame or threshold.
-  if (openingKind === 'opening' || isRailingWall(parent)) {
+  const renderContent = parent
+    ? nodeRegistry.get(parent.type)?.capabilities.surfaces?.renderOpeningContent?.(parent)
+    : undefined
+  if (openingKind === 'opening' || renderContent === false) {
     syncDoorCutout(node, mesh)
     return true
   }

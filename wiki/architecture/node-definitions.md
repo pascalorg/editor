@@ -72,6 +72,10 @@ can supply `supportHeight(node, x, z, { nodes })`; return its height where it
 supports a point and `null` elsewhere. Keep footprint and hole rules in the
 kind's definition so viewer code can discover support through the registry.
 
+`capabilities.surfaces.renderOpeningContent(node)` can return false when a host
+renders a door as a gap, without its leaf, frame or threshold. It defaults to true;
+railing walls resolve it per node so ordinary walls keep their door content.
+
 ### `surfaceRole`
 
 A kind may declare `surfaceRole?: SurfaceRole` on its definition. It is a colour token only (`core` stores no material), used to resolve the per-role clay/theme colour for untextured surfaces. See [materials-and-themes](materials-and-themes.md).
