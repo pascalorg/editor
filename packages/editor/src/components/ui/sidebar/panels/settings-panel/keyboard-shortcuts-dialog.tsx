@@ -208,9 +208,9 @@ const SHORTCUT_CATEGORIES: ShortcutCategory[] = [
         note: 'Tap and release on its own. Use it when the default half-metre grid is too coarse — placing a window, for instance.',
       },
       {
-        keys: ['Shift'],
-        action: 'Bypass guided snapping and angle constraints',
-        note: 'Hold during the active gesture. Passive guide or measurement feedback may stay visible.',
+        keys: ['Alt'],
+        action: 'Bypass snapping, angle constraints and collisions',
+        note: 'Hold during the active gesture; release to snap again. Passive guide or measurement feedback may stay visible.',
       },
       {
         keys: ['Shift'],
@@ -304,7 +304,7 @@ export function KeyboardShortcutsDialog() {
             {i18n._({
               id: 'editor.sidebar.panels.settingsPanel.keyboardShortcutsDialog.shortcutsAreContextAwareGuidedConstraints',
               message:
-                'Shortcuts are context-aware. Guided constraints are enabled by default; hold Shift during an active gesture to build freely.',
+                'Shortcuts are context-aware. Snapping is a visible mode: tap Shift to cycle it, hold Alt during a gesture to place freely.',
             })}
           </DialogDescription>
         </DialogHeader>
