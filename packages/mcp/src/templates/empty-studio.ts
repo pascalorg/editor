@@ -1,4 +1,5 @@
 import { DEFAULT_LEVEL_HEIGHT } from '@pascal-app/core'
+import { NEW_DOOR_FRAME_THICKNESS } from '@pascal-app/core/building'
 import type { SceneGraph } from '@pascal-app/core/clone-scene-graph'
 import type { AnyNode, AnyNodeId } from '@pascal-app/core/schema'
 
@@ -73,7 +74,7 @@ function buildNodes(): StudioNodes {
     rotation: [0, 0, 0],
     width: 0.9,
     height: 2.1,
-    frameThickness: 0.05,
+    frameThickness: NEW_DOOR_FRAME_THICKNESS,
     threshold: true,
     thresholdHeight: 0.02,
     hingesSide: 'left',

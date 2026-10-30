@@ -1,3 +1,4 @@
+import { NEW_DOOR_FRAME_THICKNESS } from '@pascal-app/core/building'
 import type { SceneGraph } from '@pascal-app/core/clone-scene-graph'
 import type { AnyNode, AnyNodeId } from '@pascal-app/core/schema'
 
@@ -64,7 +65,7 @@ function door(id: string, parentWallId: string, width = 0.9): AnyNode {
     rotation: [0, 0, 0],
     width,
     height: 2.1,
-    frameThickness: 0.05,
+    frameThickness: NEW_DOOR_FRAME_THICKNESS,
     threshold: true,
     thresholdHeight: 0.02,
     hingesSide: 'left',

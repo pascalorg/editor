@@ -30,7 +30,7 @@ describe('planWallOpening', () => {
       expect(planned.clamped).toBe(c.expect.clamped)
       expect(planned.node.casingFaceA).toBe(true)
       expect(planned.node.casingFaceB).toBe(true)
-      if (planned.node.type === 'window') expect(planned.node.frameThickness).toBe(0.02)
+      expect(planned.node.frameThickness).toBe(0.02)
       if (c.expect.glassPanels) expect(JSON.stringify(planned.node)).toContain('"glass"')
       if (c.expect.node) expect(planned.node).toMatchObject(c.expect.node)
     })

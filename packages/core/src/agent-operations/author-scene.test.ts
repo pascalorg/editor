@@ -619,7 +619,11 @@ describe('author_scene', () => {
       casingFaceA: true,
       casingFaceB: true,
     })
-    expect(byType('door')[0]).toMatchObject({ casingFaceA: true, casingFaceB: true })
+    expect(byType('door')[0]).toMatchObject({
+      frameThickness: 0.02,
+      casingFaceA: true,
+      casingFaceB: true,
+    })
     expect(byType('level')).toHaveLength(1)
     expect(byType('wall')).toHaveLength(4)
     // Each wall knows which face looks into the room, from the plan: never both the same.
@@ -2710,7 +2714,12 @@ describe('author_scene', () => {
       'wall glass: a curtain wall has no faces to paint, its color ignored; curtain.frameColor colours its frame',
     )
     const passage = byAuthorId(outcome, 'west/0')
-    expect(passage).toMatchObject({ type: 'door', openingKind: 'opening', openingShape: 'arch' })
+    expect(passage).toMatchObject({
+      type: 'door',
+      frameThickness: 0.02,
+      openingKind: 'opening',
+      openingShape: 'arch',
+    })
     expect(outcome.result.passages).toBe(1)
     expect(outcome.result.defaults).toContain('passage west/0: it has no leaf, its hinge ignored')
     expect(byAuthorId(outcome, 'west/1')).toMatchObject({ openingShape: 'arch', archHeight: 0.3 })

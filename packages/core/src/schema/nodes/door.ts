@@ -183,6 +183,7 @@ export const DoorNode = BaseNode.extend({
   - segments: rows stacked top to bottom, each defining its own columnRatios
   - type 'empty' = no leaf fill for that segment, 'panel' = raised/recessed panel, 'glass' = glazed
   - hingesSide/swingDirection/swingAngle: which way the door opens and how far it is currently open
+  - frameThickness: width of the frame members (new doors use 0.020 m; absent in saved doors keeps 0.05 m)
   - casingFaceA/casingFaceB: casing (head and legs) on the host wall's face a / b, around the cutout (absent means off; new openings enable both)
   - casingWidth: face width of the casing boards (2 in by default)
   - doorCloser/panicBar: commercial and emergency hardware options

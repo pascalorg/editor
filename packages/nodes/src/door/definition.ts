@@ -7,6 +7,7 @@ import type {
   WallNode,
 } from '@pascal-app/core'
 import { doorSlots } from '@pascal-app/core'
+import { NEW_DOOR_FRAME_THICKNESS } from '@pascal-app/core/building'
 import type { FloorplanNodeExtension } from '@pascal-app/editor'
 import { curtainOpeningResizeMax } from '../shared/curtain-opening-limits'
 import { doorBatchable } from '../shared/node-batch/batchable'
@@ -236,6 +237,7 @@ export const doorDefinition: NodeDefinition<typeof DoorNode> = {
     const stub = DoorNode.parse({
       id: 'door_default' as never,
       type: 'door',
+      frameThickness: NEW_DOOR_FRAME_THICKNESS,
       casingFaceA: true,
       casingFaceB: true,
     })

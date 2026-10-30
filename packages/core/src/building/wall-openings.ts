@@ -24,6 +24,7 @@ import { isRailingWall, railingOpeningFields } from '../schema/nodes/railing-wal
 import { getWallTop } from '../services/storey'
 import { resolveWallExteriorSide } from '../systems/wall/wall-assembly'
 import { getWallCurveLength, isCurvedWall } from '../systems/wall/wall-curve'
+import { NEW_DOOR_FRAME_THICKNESS } from './door-types'
 import {
   type DoorStyle,
   doorStyleLook,
@@ -395,6 +396,7 @@ export function planWallOpening(nodes: Nodes, input: WallOpeningInput) {
     kind === 'door'
       ? DoorNode.parse({
           ...base,
+          frameThickness: NEW_DOOR_FRAME_THICKNESS,
           ...doorFacing(wall),
           ...doorHardwareSides(input),
           swingDirection: input.swingDirection ?? 'inward',

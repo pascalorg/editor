@@ -8,6 +8,7 @@ import {
   type DoorStyle,
   doorStyleLook,
   doorTypeFields,
+  NEW_DOOR_FRAME_THICKNESS,
 } from '@pascal-app/core/building'
 import { create } from 'zustand'
 
@@ -54,6 +55,7 @@ export const useDoorPlacement = create<DoorPlacementState>((set, get) => ({
 export function placedDoorFields(): Partial<DoorNode> {
   const { type, style } = useDoorPlacement.getState()
   return {
+    frameThickness: NEW_DOOR_FRAME_THICKNESS,
     casingFaceA: true,
     casingFaceB: true,
     ...doorTypeFields(type),

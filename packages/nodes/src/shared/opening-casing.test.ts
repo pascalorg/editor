@@ -12,12 +12,13 @@ import {
   WallNode,
   WindowNode,
 } from '@pascal-app/core'
+import { DOOR_STYLES } from '@pascal-app/core/building'
 import { buildDoorPreviewMesh, buildWindowPreviewMesh } from '@pascal-app/viewer'
 import { type Material, type Mesh, Ray, Vector3 } from 'three'
 import { doorDefinition } from '../door/definition'
 import { buildDoorFloorplan } from '../door/floorplan'
 import { doorPaint } from '../door/paint'
-import { placedDoorFields } from '../door/placement'
+import { doorTypeOptions, placedDoorFields, useDoorPlacement } from '../door/placement'
 import { windowDefinition } from '../window/definition'
 import { buildWindowFloorplan } from '../window/floorplan'
 import { windowPaint } from '../window/paint'
@@ -161,17 +162,30 @@ test('tools and preset defaults create cased openings while legacy openings stay
     const preset = definition.defaults?.()
     expect(preset?.casingFaceA).toBe(true)
     expect(preset?.casingFaceB).toBe(true)
-    if (placed.type === 'window') {
-      expect(placed.frameThickness).toBe(0.02)
-      expect(preset?.frameThickness).toBe(0.02)
-    }
+    expect(placed.frameThickness).toBe(0.02)
+    expect(preset?.frameThickness).toBe(0.02)
     const legacy = schema.parse({})
     expect(legacy.frameThickness).toBe(0.05)
+    expect(schema.parse({ frameThickness: 0.035 }).frameThickness).toBe(0.035)
     const geometry =
       legacy.type === 'door'
         ? buildDoorFloorplan(legacy, context as GeometryContext)
         : buildWindowFloorplan(legacy, context as GeometryContext)
     expect(casingLegs(geometry)).toEqual([])
+  }
+})
+
+test('the door tool writes 20 mm frames for every type and style', () => {
+  const previous = useDoorPlacement.getState()
+  try {
+    for (const { value: type } of doorTypeOptions) {
+      for (const style of DOOR_STYLES) {
+        useDoorPlacement.setState({ type, style })
+        expect(DoorNode.parse(placedDoorFields()).frameThickness).toBe(0.02)
+      }
+    }
+  } finally {
+    useDoorPlacement.setState(previous)
   }
 })
 

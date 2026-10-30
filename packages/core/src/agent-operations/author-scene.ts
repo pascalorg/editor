@@ -1,6 +1,6 @@
 import type { AuthorScenePayload } from '../agent-tools/author-scene'
 import { refuse } from '../agent-tools/refusal'
-import { doorTypeFields } from '../building/door-types'
+import { doorTypeFields, NEW_DOOR_FRAME_THICKNESS } from '../building/door-types'
 import {
   DOOR_STYLES,
   type DoorStyle,
@@ -1084,6 +1084,7 @@ export function authorScene(
           opening = DoorNode.parse({
             ...common,
             type: 'door',
+            frameThickness: NEW_DOOR_FRAME_THICKNESS,
             position: [x, height / 2, 0],
             openingKind: 'opening',
           })
@@ -1105,6 +1106,7 @@ export function authorScene(
           opening = DoorNode.parse({
             ...common,
             type: 'door',
+            frameThickness: NEW_DOOR_FRAME_THICKNESS,
             position: [x, height / 2, 0],
             ...(type && isDoorType(type) ? doorTypeFields(type) : {}),
             ...(style && isDoorStyle(style) ? doorStyleLook(style) : {}),
