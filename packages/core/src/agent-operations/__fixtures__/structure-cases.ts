@@ -1,6 +1,8 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  BeamNode,
+  ColumnNode,
   BuildingNode,
   CeilingNode,
   type FenceNode,
@@ -1390,4 +1392,62 @@ export const WALL_TYPE_CASES: AgentToolCase[] = [
       wallTypes: [{ id: PROJECT_TYPE.id, label: PROJECT_TYPE.label }, { id: ASSEMBLY_PRESET.id, label: ASSEMBLY_PRESET.label }],
     } },
   })),
+]
+
+export const FRAMING_POST_CASES: AgentToolCase[] = [
+  {
+    name: 'role post uses the Post tile defaults and reaches the beam above it',
+    tool: 'add_column', scene: () => {
+      const scene = storeysScene()
+      const beam = BeamNode.parse({ id: 'beam_post', parentId: 'level_ground', start: [7, 0], end: [10, 0], topElevation: 2.6, depth: 0.2 })
+      scene.nodes[beam.id] = beam
+      ;(scene.nodes.level_ground as LevelNode).children.push(beam.id)
+      return scene
+    },
+    input: { level: 'level_ground', x: 8, z: 0, role: 'post' },
+    expect: { result: { ok: true, width: 5.5 * 0.0254, depth: 5.5 * 0.0254 }, check: (result, nodes) => {
+      const post = nodes[result.columnId as string]
+      return post?.type === 'column' && post.role === 'post' && post.crossSection === 'square' && post.postBase === 'none' && post.baseStyle === 'none' && post.capitalStyle === 'none' && post.slots?.shaft === 'library:wood-woodplank19' && Math.abs(post.height - 2.4) < 1e-9
+        ? [] : [`Wrong Post tile defaults: ${JSON.stringify(post)}`]
+    } },
+  },
+  ...(['4x4', '6x6', '8x8'] as const).map((size, index): AgentToolCase => ({
+    name: `post ${size} with ${['none', 'post-base', 'pier'][index]} uses native size and base fields`,
+    tool: 'add_column', scene: storeysScene,
+    input: { level: 'level_ground', x: 8, z: 0, role: 'post', postSize: size, postBase: ['none', 'post-base', 'pier'][index], height: '8 ft' },
+    expect: { result: { ok: true, height: 2.4384 }, check: (result, nodes) => {
+      const post = nodes[result.columnId as string]
+      const side = [3.5, 5.5, 7.25][index]! * 0.0254
+      const base = ['none', 'post-base', 'pier'][index]
+      return post?.type === 'column' && post.width === side && post.depth === side && post.postBase === base && post.baseStyle === (index === 0 ? 'none' : 'simple-square') && post.baseHeight === [0, 1.5 * 0.0254, 8 * 0.0254][index] && (index === 0 || post.slots?.base === ['unused', 'library:metal-steel', 'library:concrete-raw'][index])
+        ? [] : ['Post section or base differs from the tile choices']
+    } },
+  })),
+  {
+    name: 'editing a post size and base keeps its authored height, position and shaft finish',
+    tool: 'add_column', scene: () => {
+      const scene = storeysScene()
+      const post = ColumnNode.parse({ id: 'column_post', parentId: 'level_ground', role: 'post', crossSection: 'square', width: 0.1397, depth: 0.1397, height: 1.8, position: [8, 0, 0], slots: { shaft: 'library:preset-white', base: 'library:metal-steel' }, postBase: 'post-base' })
+      scene.nodes[post.id] = post
+      ;(scene.nodes.level_ground as LevelNode).children.push(post.id)
+      return scene
+    },
+    input: { nodeId: 'column_post', postSize: '8x8', postBase: 'pier' },
+    expect: { result: { ok: true }, after: { column_post: { role: 'post', width: 7.25 * 0.0254, depth: 7.25 * 0.0254, height: 1.8, position: [8, 0, 0], postBase: 'pier', baseStyle: 'simple-square', baseHeight: 8 * 0.0254, slots: { shaft: 'library:preset-white', base: 'library:concrete-raw' } } } },
+  },
+  {
+    name: 'ordinary columns keep their defaults when no post is requested',
+    tool: 'add_column', scene: storeysScene,
+    input: { level: 'level_ground', x: 8, z: 0 },
+    expect: { result: { height: 2.5, width: 0.44, depth: 0.44 }, check: (result, nodes) => {
+      const column = nodes[result.columnId as string]
+      return column?.type === 'column' && !column.role && !column.postBase && column.crossSection === 'round' ? [] : ['Ordinary column defaults changed']
+    } },
+  },
+  {
+    name: 'post choices on an ordinary column require role post',
+    tool: 'add_column', scene: storeysScene,
+    input: { level: 'level_ground', x: 8, z: 0, postSize: '4x4' },
+    expect: { refusal: 'not_a_post' },
+  },
 ]
