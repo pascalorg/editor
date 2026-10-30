@@ -68,7 +68,8 @@ finish renderer is delivered.
 ## Writers contract and the refusal guard
 
 Derived construction is a slab or ceiling marked `boundary: 'auto'` (legacy:
-`autoFromWalls: true`). Everything else states *intent* — walls, separators, and
+`autoFromWalls: true`), plus porch posts and beams tagged with `metadata.porchOf`,
+`porchPart` and `porchSeed`, maintained by the kernel's porch-framing sync. Everything else states *intent* — walls, separators, and
 zones with `spaceRole: 'room'` plus `floor`, `hasFloor` and `hasCeiling` — and the
 reconciler derives the construction from it.
 
@@ -114,7 +115,8 @@ application writes through `useScene.setState`.
 
 `packages/core/src/store/derived-writer-allowlist.test.ts` is the CI guardrail: a
 new file under any package's `src` that writes the derived markers fails unless
-it is on the kernel/migration allowlist. It scans code with comments stripped, so
+it is on the kernel/migration allowlist; porch markers are restricted to the kernel and
+`lib/porch-framing-sync.ts`, including stable room-ID remapping. It scans code with comments stripped, so
 prose that spells a marker out verbatim trips it too.
 
 ## Local commit boundary

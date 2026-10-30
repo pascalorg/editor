@@ -35,6 +35,16 @@ export function porchPartOf(node: AnyNode | null | undefined): PorchPartMetadata
     : null
 }
 
+/** Keep generated parts linked when reconciliation assigns their room its stable ID. */
+export function remapPorchOwner(
+  metadata: Record<string, unknown> | undefined,
+  ids: ReadonlyMap<string, string>,
+): Record<string, unknown> | undefined {
+  return typeof metadata?.porchOf === 'string' && ids.has(metadata.porchOf)
+    ? { ...metadata, porchOf: ids.get(metadata.porchOf) }
+    : undefined
+}
+
 const round = (value: number) => Math.round(value * 1e6) / 1e6
 
 /** A part's shape, as it was made: anything else is a hand edit. */
