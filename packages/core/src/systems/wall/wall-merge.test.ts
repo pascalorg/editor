@@ -228,7 +228,7 @@ describe('explicit wall merge through the store', () => {
       const moved = nodes[absorbedWindow.id] as WindowNode
       expect(moved.position[0]).toBeCloseTo(expectedX)
       expect(moved.side).toBe('back')
-      expect([moved.casingFaceA, moved.casingFaceB]).toEqual([false, false])
+      expect([moved.casingFaceA, moved.casingFaceB]).toEqual([undefined, undefined])
       // A door on the reversed wall turns with its frame — depth and yaw — while
       // its hinges and handle, hung off that yaw, keep their stored side.
       const door = nodes[absorbedDoor.id] as DoorNode

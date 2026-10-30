@@ -87,8 +87,8 @@ export const windowFloorplanMoveTarget: FloorplanMoveTarget<WindowNode> = ({ nod
     roofSegmentId: undefined
     roofFace: undefined
     visible: true
-    casingFaceA: boolean
-    casingFaceB: boolean
+    casingFaceA?: boolean
+    casingFaceB?: boolean
   } | null = null
 
   // R flips the window's facing (front ↔ back) mid-placement — see

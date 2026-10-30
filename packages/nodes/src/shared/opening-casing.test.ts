@@ -6,6 +6,7 @@ import {
   type GeometryContext,
   LevelNode,
   OPENING_CASING_PROUD,
+  openingCasingWidth,
   sceneRegistry,
   slotPaintMaterial,
   useScene,
@@ -224,7 +225,7 @@ test('casing paint targets each host side, inherits the frame, and previews and 
               part.geometry.computeBoundingBox()
               const local = part.geometry.boundingBox!.getCenter(new Vector3())
               if (part.geometry.type === 'ExtrudeGeometry') {
-                local.x = node.width / 2 + node.casingWidth / 2
+                local.x = node.width / 2 + openingCasingWidth(node) / 2
                 local.y = 0
               }
               const center = local.applyMatrix4(mesh.matrixWorld)

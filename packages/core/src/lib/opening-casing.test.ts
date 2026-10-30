@@ -6,6 +6,7 @@ import {
   type OpeningCasingBoard,
   openingCasingBoards,
   openingCasingFaces,
+  openingCasingWidth,
   resolveOpeningCasingHost,
 } from './opening-casing'
 
@@ -55,10 +56,12 @@ describe('opening casing schema', () => {
       WindowNode.parse({ id: 'window_old', width: 1.2, height: 1 }),
       DoorNode.parse({ id: 'door_old', width: 0.9, height: 2.1 }),
     ]) {
-      expect(legacy.casingFaceA).toBe(false)
-      expect(legacy.casingFaceB).toBe(false)
+      // Loading adds no casing fields: absent faces are uncased.
+      expect('casingFaceA' in legacy || 'casingFaceB' in legacy || 'casingWidth' in legacy).toBe(
+        false,
+      )
       expect(openingCasingBoards(legacy, host)).toEqual([])
-      expect(legacy.casingWidth).toBeCloseTo(2 * INCH, 12)
+      expect(openingCasingWidth(legacy)).toBeCloseTo(2 * INCH, 12)
     }
     expect(DEFAULT_OPENING_CASING_WIDTH).toBeCloseTo(2 * INCH, 12)
     expect(OPENING_CASING_PROUD).toBeCloseTo(0.75 * INCH, 12)
@@ -67,7 +70,7 @@ describe('opening casing schema', () => {
   test('a casing face turned off stays off', () => {
     const parsed = WindowNode.parse({ id: 'window_off', casingFaceA: false, casingWidth: 0.09 })
     expect(parsed.casingFaceA).toBe(false)
-    expect(parsed.casingFaceB).toBe(false)
+    expect(parsed.casingFaceB).toBeUndefined()
     expect(parsed.casingWidth).toBe(0.09)
   })
 })

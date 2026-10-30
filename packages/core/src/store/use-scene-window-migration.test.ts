@@ -83,8 +83,8 @@ describe('scene window migrations', () => {
     expect(window.columnRatios).toEqual([1])
     expect(window.rowRatios).toEqual([1])
     expect(window.frameThickness).toBe(0.05)
-    expect(window.casingFaceA).toBe(false)
-    expect(window.casingFaceB).toBe(false)
+    // Casing has no default: a window saved before it stays uncased, fieldless.
+    expect('casingFaceA' in window).toBe(false)
     expect(window.sill).toBe(true)
     // …and authored fields survive.
     expect(window.width).toBe(1.2)

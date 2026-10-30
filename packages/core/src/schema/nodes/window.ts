@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { BaseNode, nodeType, objectId } from '../base'
 import { GeometryScriptSource } from '../geometry-source'
 import { MaterialSchema } from '../material'
-import { DEFAULT_OPENING_CASING_WIDTH, WindowType } from './opening-types'
+import { WindowType } from './opening-types'
 
 export { WindowType } from './opening-types'
 
@@ -122,11 +122,12 @@ export const WindowNode = BaseNode.extend({
   // Casing: flat boards on the finished faces of the host wall around the
   // opening, never inside it, so the wall cutout stays width × height. The
   // faces are the host's `a` / `b` (WallFace), not the unit's own front and
-  // back, so flipping the window leaves its casing where it is. Absent casing fields keep
-  // saved openings uncased.
-  casingFaceA: z.boolean().default(false),
-  casingFaceB: z.boolean().default(false),
-  casingWidth: z.number().positive().default(DEFAULT_OPENING_CASING_WIDTH),
+  // back, so flipping the window leaves its casing where it is. Optional, never
+  // defaulted, so loading a saved opening adds no fields: absent faces are
+  // uncased, an absent width is 2 in.
+  casingFaceA: z.boolean().optional(),
+  casingFaceB: z.boolean().optional(),
+  casingWidth: z.number().positive().optional(),
 }).describe(dedent`Window node - a parametric window placed on a wall
   - position: center of the window in wall-local coordinate system
   - width/height: overall outer dimensions, which are also the wall cutout

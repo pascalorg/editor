@@ -84,8 +84,8 @@ export const doorFloorplanMoveTarget: FloorplanMoveTarget<DoorNode> = ({ node })
     roofSegmentId: undefined
     roofFace: undefined
     visible: true
-    casingFaceA: boolean
-    casingFaceB: boolean
+    casingFaceA?: boolean
+    casingFaceB?: boolean
   } | null = null
 
   // R flips the door's facing (front ↔ back) mid-placement. `apply` re-derives
