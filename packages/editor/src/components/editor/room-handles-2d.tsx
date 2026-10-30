@@ -338,6 +338,13 @@ export function RoomHandleDragPreview2D({ levelId }: { levelId: string | null })
   const unit = useViewer((s) => s.unit)
   const metricNotation = useViewer((s) => s.metricNotation)
   if (!drag || drag.levelId !== levelId || drag.kind === 'elevation') return null
+  if (drag.kind === 'wall-group-push')
+    return (
+      <g data-room-drag-preview-2d pointerEvents="none">
+        <PlanRoomDimensions dimensions={drag.dimensions} />
+        {drag.message && <PlanReadout at={drag.anchor} refused text={drag.message} />}
+      </g>
+    )
   const plan = drag as PlanDrag
   const at: Point = [
     plan.anchor[0] + plan.outward[0] * plan.distance,

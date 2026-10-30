@@ -805,6 +805,45 @@ export function RoomHandleDragPreview3D() {
       </group>
     )
   }
+  const ghosts = drag.ghosts.map((ghost, index) => {
+    const length = Math.hypot(ghost.end[0] - ghost.start[0], ghost.end[1] - ghost.start[1])
+    if (length < 1e-3) return null
+    return (
+      <mesh
+        key={index}
+        layers={EDITOR_LAYER}
+        material={materials.fill}
+        position={[
+          (ghost.start[0] + ghost.end[0]) / 2,
+          drag.base + ghost.height / 2,
+          (ghost.start[1] + ghost.end[1]) / 2,
+        ]}
+        raycast={noRaycast}
+        renderOrder={99}
+        rotation={[0, -Math.atan2(ghost.end[1] - ghost.start[1], ghost.end[0] - ghost.start[0]), 0]}
+      >
+        <boxGeometry args={[length, ghost.height, ghost.thickness]} />
+      </mesh>
+    )
+  })
+  if (drag.kind === 'wall-group-push')
+    return (
+      <group>
+        <RoomDimensionLines3D dimensions={drag.dimensions} />
+        {ghosts}
+        {drag.message && (
+          <Html
+            center
+            position={[drag.anchor[0], drag.height + 0.45, drag.anchor[1]]}
+            zIndexRange={[25, 0]}
+          >
+            <div className={PILL}>
+              <span className="font-medium text-red-500">{drag.message}</span>
+            </div>
+          </Html>
+        )}
+      </group>
+    )
   const at: Point = [
     drag.anchor[0] + drag.outward[0] * drag.distance,
     drag.anchor[1] + drag.outward[1] * drag.distance,
@@ -814,31 +853,7 @@ export function RoomHandleDragPreview3D() {
   return (
     <group>
       <RoomDimensionLines3D dimensions={drag.dimensions} />
-      {drag.ghosts.map((ghost, index) => {
-        const length = Math.hypot(ghost.end[0] - ghost.start[0], ghost.end[1] - ghost.start[1])
-        if (length < 1e-3) return null
-        return (
-          <mesh
-            key={index}
-            layers={EDITOR_LAYER}
-            material={materials.fill}
-            position={[
-              (ghost.start[0] + ghost.end[0]) / 2,
-              drag.base + ghost.height / 2,
-              (ghost.start[1] + ghost.end[1]) / 2,
-            ]}
-            raycast={noRaycast}
-            renderOrder={99}
-            rotation={[
-              0,
-              -Math.atan2(ghost.end[1] - ghost.start[1], ghost.end[0] - ghost.start[0]),
-              0,
-            ]}
-          >
-            <boxGeometry args={[length, ghost.height, ghost.thickness]} />
-          </mesh>
-        )
-      })}
+      {ghosts}
       <Html center position={[at[0], drag.height + 0.45, at[1]]} zIndexRange={[25, 0]}>
         <div className={PILL}>
           {drag.message ? (

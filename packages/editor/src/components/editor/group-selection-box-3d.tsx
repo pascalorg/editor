@@ -5,6 +5,7 @@ import { useViewer } from '@pascal-app/viewer'
 import { type ThreeEvent, useThree } from '@react-three/fiber'
 import { useEffect, useMemo } from 'react'
 import * as THREE from 'three'
+import { useRoomHandleDrag } from '../../lib/room-handle-drag'
 import useEditor from '../../store/use-editor'
 import { useMovingNode } from '../../store/use-interaction-scope'
 import { useFloorplanGroupDrag } from '../editor-2d/floorplan-group-move'
@@ -38,6 +39,8 @@ export function GroupSelectionBox3D() {
   const mode = useEditor((s) => s.mode)
   const movingNode = useMovingNode()
   const delta = useFloorplanGroupDrag((s) => s.delta)
+  // Pushed walls don't move as one box: the room widths they show take its place.
+  const wallPush = useRoomHandleDrag((s) => s.drag?.kind === 'wall-group-push')
   const { camera, raycaster, gl } = useThree()
 
   const participantIds = useMemo(
@@ -118,7 +121,7 @@ export function GroupSelectionBox3D() {
     return new THREE.Vector3(delta[0], 0, delta[1]).applyMatrix4(matrix).sub(origin)
   }, [delta, levelId])
 
-  if (!box || !edges || movingNode || mode !== 'select') return null
+  if (!box || !edges || movingNode || wallPush || mode !== 'select') return null
 
   const handlePointerDown = (event: ThreeEvent<PointerEvent>) => {
     const native = event.nativeEvent

@@ -75,6 +75,8 @@ export const ROOM_ELEVATION_DRAG_LABEL = 'room-elevation'
 export const WALL_PUSH_DRAG_LABEL = 'wall-push'
 /** Scope label of a mezzanine edge push (its plate grows or shrinks). */
 export const MEZZANINE_EDGE_DRAG_LABEL = 'mezzanine-edge'
+/** What a wall push the planner refuses reads. */
+export const PUSH_REFUSED_MESSAGE = "Can't move this wall there"
 
 /** A wall a push would create (a moved span piece, a bridge), drawn as a ghost. */
 export type RoomPushGhost = { start: Point; end: Point; thickness: number; height: number }
@@ -106,6 +108,20 @@ export type RoomHandleDrag =
       distance: number
       ghosts: RoomPushGhost[]
       /** The pushed rooms' live widths, moving face to each facing parallel wall. */
+      dimensions: RoomDimension[]
+      message?: string
+    }
+  | {
+      /** Several selected walls moved together, each along its own normal. */
+      kind: 'wall-group-push'
+      levelId: string
+      /** Where a refusal reads: over the moved walls' middle, in level plan coordinates. */
+      anchor: Point
+      height: number
+      /** The lowest moved wall's base, where the ghost pieces stand. */
+      base: number
+      ghosts: RoomPushGhost[]
+      /** Every moved wall's live room widths, as its own push shows them. */
       dimensions: RoomDimension[]
       message?: string
     }
@@ -588,9 +604,20 @@ export function previewRoomPush(
   clearPushPreview()
   if (Math.abs(distance) < 1e-6) return { ghosts: [] }
   const nodes = useScene.getState().nodes
+  return previewPushPlan(nodes, nodes[span.wallId as AnyNodeId]?.parentId, () =>
+    planRoomPush(nodes, span, outward, distance, previewMint()),
+  )
+}
+
+/** Shows a push plan live (`previewRoomPush`); the caller has cleared the last one. */
+function previewPushPlan(
+  nodes: Nodes,
+  levelId: string | null | undefined,
+  planPush: () => StructurePlan,
+): { code?: string; ghosts: RoomPushGhost[] } {
   let plan: StructurePlan
   try {
-    plan = planRoomPush(nodes, span, outward, distance, previewMint())
+    plan = planPush()
   } catch {
     return { code: 'invalid-geometry', ghosts: [] }
   }
@@ -598,7 +625,6 @@ export function previewRoomPush(
   const updates: Array<readonly [AnyNodeId, Partial<AnyNode>]> = plan.changes.flatMap((change) =>
     change.op === 'update' ? [[change.id as AnyNodeId, change.data] as const] : [],
   )
-  const levelId = nodes[span.wallId as AnyNodeId]?.parentId
   if (levelId) updates.push(...previewSurfaces(nodes, levelId, applyChanges(nodes, plan.changes)))
   useLiveNodeOverrides
     .getState()
@@ -649,9 +675,13 @@ export function endRoomPushPreview() {
 export function commitRoomPush(span: WallPushSpan, outward: Point, distance: number) {
   endRoomPushPreview()
   if (Math.abs(distance) < 1e-6) return true
+  return commitPushPlan((nodes) => planRoomPush(nodes, span, outward, distance))
+}
+
+function commitPushPlan(planPush: (nodes: StructureNodes) => StructurePlan) {
   try {
     return runAsSingleSceneHistoryStep(useScene, () => {
-      const plan = planRoomPush(useScene.getState().nodes, span, outward, distance)
+      const plan = planPush(useScene.getState().nodes)
       if (!applyRoomPlan(plan)) return false
       const nodes = useScene.getState().nodes
       const patches = plan.changes.flatMap((change) => {
@@ -1168,7 +1198,7 @@ export function runWallPushDrag({
       const preview = previewRoomPush(handle, handle.outward, distance)
       ghosts = preview.ghosts
       blocked = !!preview.code
-      publish(preview.code ? "Can't move this wall there" : undefined)
+      publish(preview.code ? PUSH_REFUSED_MESSAGE : undefined)
     },
     onCommit: () => {
       stopLineUp()
@@ -1259,6 +1289,194 @@ export function selectedWallDimensions(
     resolve: (id) => nodes[id],
     baseElevation: base,
   })
+}
+
+/** An end this close to another moved wall is joined to it. */
+const GROUP_JOIN_REACH = 1e-3
+/** Walls whose directions cross by less than this (sine) run in line, never meet at a corner. */
+const GROUP_PARALLEL_SIN = 1e-4
+
+/** The way a wall's push arrows point: its `a`-side normal at its middle. */
+function wallPushNormal(wall: WallNode): Point {
+  const frame = getWallCurveFrameAt(wall, 0.5)
+  return [frame.normal.x, frame.normal.y]
+}
+
+function wallDirection(wall: WallNode): Point {
+  const dx = wall.end[0] - wall.start[0]
+  const dz = wall.end[1] - wall.start[1]
+  const length = Math.hypot(dx, dz) || 1
+  return [dx / length, dz / length]
+}
+
+/** Whether `point` is on `wall`: one of its ends, or along a straight one. */
+function wallHoldsPoint(wall: WallNode, [x, z]: Point): boolean {
+  const near = ([px, pz]: Point) => Math.hypot(px - x, pz - z) <= GROUP_JOIN_REACH
+  if (near(wall.start) || near(wall.end)) return true
+  if ((wall.curveOffset ?? 0) !== 0) return false
+  const [ux, uz] = wallDirection(wall)
+  const along = (x - wall.start[0]) * ux + (z - wall.start[1]) * uz
+  const length = Math.hypot(wall.end[0] - wall.start[0], wall.end[1] - wall.start[1])
+  return (
+    along > 0 &&
+    along < length &&
+    Math.abs((z - wall.start[1]) * ux - (x - wall.start[0]) * uz) <= GROUP_JOIN_REACH
+  )
+}
+
+/**
+ * Moves several walls at once, each as its own push arrow would: along its
+ * normal by `drag` projected on it, so it stays parallel to where it was, the
+ * walls joined to it following through the junction planner. An end on
+ * another moved wall that is not in line with it (a corner or a T between
+ * them) sits on both moved lines, which is where it lands moved by the whole
+ * drag, so they stay joined. Each wall is planned in turn while the others
+ * already stand at their targets, so no moved wall is pulled along as
+ * another's neighbour. One plan, one undo step.
+ */
+export function planWallGroupPush(
+  nodes: StructureNodes,
+  wallIds: readonly string[],
+  drag: Point,
+  mintId: (kind: 'zone' | 'wall' | 'separator') => string = generateId,
+): StructurePlan {
+  const walls = wallIds.flatMap((id) => {
+    const node = nodes[id]
+    return node?.type === 'wall' ? [node] : []
+  })
+  const crosses = (a: WallNode, b: WallNode) => {
+    const [ux, uz] = wallDirection(a)
+    const [vx, vz] = wallDirection(b)
+    return Math.abs(ux * vz - uz * vx) > GROUP_PARALLEL_SIN
+  }
+  let scratch: Scratch = { ...nodes }
+  for (const wall of walls) {
+    const [nx, nz] = wallPushNormal(wall)
+    const distance = drag[0] * nx + drag[1] * nz
+    const move = (point: Point): Point =>
+      walls.some((other) => other !== wall && crosses(wall, other) && wallHoldsPoint(other, point))
+        ? [point[0] + drag[0], point[1] + drag[1]]
+        : [point[0] + nx * distance, point[1] + nz * distance]
+    scratch[wall.id] = { ...wall, start: move(wall.start), end: move(wall.end) }
+  }
+  for (const wall of walls) {
+    const target = scratch[wall.id]
+    if (target?.type !== 'wall') continue
+    scratch[wall.id] = { ...target, start: wall.start, end: wall.end }
+    const moved = setWallGeometry(scratch, {
+      wallId: wall.id,
+      start: target.start,
+      end: target.end,
+      mintId,
+    })
+    if (moved.conflicts?.length) return moved
+    scratch = applyChanges(scratch, moved.changes)
+  }
+  return { changes: diffNodes(nodes, scratch) }
+}
+
+/** A multi-wall push in flight (`beginWallGroupPush`). */
+export type WallGroupPush = {
+  /** Previews the walls moved by the level-plan drag. */
+  preview: (drag: Point) => void
+  /** Writes the last preview as one undo step; false when nothing was written. */
+  commit: () => boolean
+  /** Drops the preview; the scene is untouched. */
+  cancel: () => void
+}
+
+/**
+ * The live side of `planWallGroupPush`, for a group move whose selection is
+ * walls only: the walls, their neighbours and the room surfaces preview
+ * through overrides, created pieces as ghosts, and each wall's room widths
+ * show as its own push shows them (`useRoomHandleDrag`, kind
+ * `wall-group-push`). The caller owns the gesture: its pointer, keys and scope.
+ */
+export function beginWallGroupPush(wallIds: readonly string[], levelId: string): WallGroupPush {
+  const nodes = useScene.getState().nodes
+  const measured = wallIds.flatMap((id) => {
+    const wall = nodes[id as AnyNodeId]
+    if (wall?.type !== 'wall') return []
+    const base = getWallBaseElevationForNodes(wall, nodes)
+    return [
+      {
+        wall,
+        base,
+        top: base + getWallEffectiveHeightForNodes(wall, nodes),
+        normal: wallPushNormal(wall),
+        rooms: pushDimensionRooms(nodes, levelId, { wallId: wall.id, t0: 0, t1: 1 }, base),
+      },
+    ]
+  })
+  const middle: Point = [0, 0]
+  for (const { wall } of measured) {
+    middle[0] += (wall.start[0] + wall.end[0]) / 2 / measured.length
+    middle[1] += (wall.start[1] + wall.end[1]) / 2 / measured.length
+  }
+  let drag: Point = [0, 0]
+  let blocked = false
+  let shown = false
+  const dimensions = () => {
+    const kept: RoomDimension[] = []
+    const same = (a: RoomDimension, b: RoomDimension) =>
+      (Math.hypot(a.from[0] - b.from[0], a.from[1] - b.from[1]) < 1e-3 &&
+        Math.hypot(a.to[0] - b.to[0], a.to[1] - b.to[1]) < 1e-3) ||
+      (Math.hypot(a.from[0] - b.to[0], a.from[1] - b.to[1]) < 1e-3 &&
+        Math.hypot(a.to[0] - b.from[0], a.to[1] - b.from[1]) < 1e-3)
+    for (const { wall, normal, rooms } of measured) {
+      const distance = drag[0] * normal[0] + drag[1] * normal[1]
+      // Two moved walls across one room both measure it: the width shows once.
+      for (const dimension of wallPushDimensions({
+        rooms,
+        wall,
+        outward: normal,
+        distance,
+        resolve: livePreviewNode,
+      }))
+        if (!kept.some((other) => same(other, dimension)))
+          kept.push({ ...dimension, key: `${wall.id}:${dimension.key}` })
+    }
+    return kept
+  }
+  const publish = (ghosts: RoomPushGhost[], message?: string) =>
+    useRoomHandleDrag.setState({
+      drag: {
+        kind: 'wall-group-push',
+        levelId,
+        anchor: [middle[0] + drag[0], middle[1] + drag[1]],
+        height: Math.max(...measured.map(({ top }) => top)),
+        base: Math.min(...measured.map(({ base }) => base)),
+        ghosts,
+        dimensions: dimensions(),
+        message,
+      },
+    })
+  const end = () => {
+    endRoomPushPreview()
+    useRoomHandleDrag.setState({ drag: null })
+  }
+  return {
+    preview: (next) => {
+      if (shown && next[0] === drag[0] && next[1] === drag[1]) return
+      shown = true
+      drag = [next[0], next[1]]
+      clearPushPreview()
+      const preview =
+        Math.hypot(drag[0], drag[1]) < 1e-6
+          ? { ghosts: [] }
+          : previewPushPlan(useScene.getState().nodes, levelId, () =>
+              planWallGroupPush(useScene.getState().nodes, wallIds, drag, previewMint()),
+            )
+      blocked = !!preview.code
+      publish(preview.ghosts, preview.code ? PUSH_REFUSED_MESSAGE : undefined)
+    },
+    commit: () => {
+      end()
+      if (blocked || Math.hypot(drag[0], drag[1]) < 1e-6) return false
+      return commitPushPlan((current) => planWallGroupPush(current, wallIds, drag))
+    },
+    cancel: end,
+  }
 }
 
 /** A node as the push preview draws it: the scene's, with its live override merged. */

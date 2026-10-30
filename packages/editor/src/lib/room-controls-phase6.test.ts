@@ -25,6 +25,7 @@ import { installImmediateAnimationFrames } from '../test-utils/immediate-animati
 import { withSelectionHarness } from '../test-utils/selection-harness'
 import { useGestureLifecycleOwner } from './gesture-lifecycle'
 import {
+  beginWallGroupPush,
   cancelRoomHandleDrag,
   commitRoomElevation,
   commitRoomPush,
@@ -36,6 +37,7 @@ import {
   roomPushHandles,
   runRoomHandleDrag,
   selectedWallDimensions,
+  useRoomHandleDrag,
 } from './room-handle-drag'
 import { applyRoomPlan, renameRoom } from './room-structure-commands'
 import {
@@ -492,6 +494,60 @@ describe('room handles (elevation, push/pull)', () => {
     const host = after[movedDoor.parentId as AnyNodeId] as WallNode
     expect(host.start[1]).toBeCloseTo(4)
     expect(useScene.temporal.getState().pastStates).toHaveLength(1)
+  })
+
+  const roomWalls = () => {
+    const walls = Object.values(useScene.getState().nodes).filter(
+      (n): n is WallNode => n.type === 'wall',
+    )
+    const at = (axis: 0 | 1, value: number) =>
+      walls.find(
+        (w) => Math.abs(w.start[axis] - value) < 1e-6 && Math.abs(w.end[axis] - value) < 1e-6,
+      )!
+    return { east: at(0, 6), west: at(0, 0), north: at(1, 4), south: at(1, 0) }
+  }
+
+  test('two selected walls move as their push arrows: parallel, still joined, one undo step', () => {
+    const { east, north, west, south } = roomWalls()
+    const push = beginWallGroupPush([east.id, north.id], LEVEL)
+    const nodes = useScene.getState().nodes
+    // A diagonal drag: each wall takes only the part along its own normal.
+    push.preview([1, 0.5])
+    expect(useLiveNodeOverrides.getState().overrides.get(east.id as AnyNodeId)).toBeDefined()
+    expect(useScene.getState().nodes).toBe(nodes)
+    expect(push.commit()).toBe(true)
+    const after = useScene.getState().nodes
+    const wall = (id: string) => after[id as AnyNodeId] as WallNode
+    for (const point of [wall(east.id).start, wall(east.id).end]) expect(point[0]).toBeCloseTo(7)
+    for (const point of [wall(north.id).start, wall(north.id).end])
+      expect(point[1]).toBeCloseTo(4.5)
+    const corner = (a: WallNode, b: WallNode) =>
+      [a.start, a.end].some((p) =>
+        [b.start, b.end].some((q) => Math.hypot(p[0] - q[0], p[1] - q[1]) < 1e-6),
+      )
+    // Their own corner, and the walls they meet, stay joined; the others keep their line.
+    expect(corner(wall(east.id), wall(north.id))).toBe(true)
+    expect(corner(wall(east.id), wall(south.id))).toBe(true)
+    expect(corner(wall(north.id), wall(west.id))).toBe(true)
+    for (const point of [wall(west.id).start, wall(west.id).end]) expect(point[0]).toBeCloseTo(0)
+    for (const point of [wall(south.id).start, wall(south.id).end]) expect(point[1]).toBeCloseTo(0)
+    expect(useScene.temporal.getState().pastStates).toHaveLength(1)
+  })
+
+  test('a multi-wall move shows the room widths live, as a single wall push does', () => {
+    const { east, north, west } = roomWalls()
+    const thickness = east.thickness ?? 0.1
+    const push = beginWallGroupPush([east.id, west.id, north.id], LEVEL)
+    push.preview([1, 0.5])
+    const drag = useRoomHandleDrag.getState().drag
+    expect(drag?.kind).toBe('wall-group-push')
+    const widths = (drag?.kind === 'wall-group-push' ? drag.dimensions : []).map((d) => d.distance)
+    // East and west both moved 1 m: the 6 m room is still 6 m wide, shown once; north went 0.5 m out.
+    expect(widths.filter((w) => Math.abs(w - (6 - thickness)) < 1e-6)).toHaveLength(1)
+    expect(widths.some((w) => Math.abs(w - (4.5 - thickness)) < 1e-6)).toBe(true)
+    push.cancel()
+    expect(useRoomHandleDrag.getState().drag).toBeNull()
+    expect(useLiveNodeOverrides.getState().overrides.size).toBe(0)
   })
 })
 
