@@ -45,12 +45,8 @@ export function getLevelPresentationY(
  * `visible` flag (the sidebar eye), which hides the floor outright, and
  * presentation hiding — solo mode hides every level but the soloed one, and
  * the editor's level display (`hideAbove`) hides the levels above the
- * selected one. Solo's hidden levels ABOVE the soloed one stay in the shadow
- * map so the sun still shadows that floor through them (the published
- * viewer's presentation and captures rely on it). The editor's level display
- * hides the levels above outright, shadows included: a roof hidden to look
- * into the floor below must not leave its shadow on it — unless the caller
- * keeps them casting (`hiddenAboveCastShadows`, the published viewer's GLB scene).
+ * selected one. Presentation-hidden levels ABOVE the selected one stay in the
+ * shadow map so the sun still shadows the selected floor through them.
  * A level the author hid never enters that shadow-caster branch: its shadows
  * on the floor below would be exactly what hiding it was meant to remove.
  *
@@ -67,7 +63,6 @@ export function resolveLevelVisibility({
   selectedIndex,
   nodeVisible,
   revealing,
-  hiddenAboveCastShadows = false,
 }: {
   levelMode: 'stacked' | 'exploded' | 'solo' | 'manual'
   hideAbove: boolean
@@ -77,17 +72,14 @@ export function resolveLevelVisibility({
   selectedIndex: number | undefined
   nodeVisible: boolean
   revealing: boolean
-  /** Keep the levels `hideAbove` hides in the shadow map, as solo keeps its. */
-  hiddenAboveCastShadows?: boolean
 }): { visible: boolean; shadowOnly: boolean } {
   if (!nodeVisible) return { visible: false, shadowOnly: false }
   if (revealing) return { visible: true, shadowOnly: false }
 
-  const above = selectedIndex !== undefined && index > selectedIndex
-  const soloHidden = levelMode === 'solo' && hasSelectedLevel && !isSelected
-  const displayHidden = hideAbove && above
-  const hidden = soloHidden || displayHidden
-  const shadowOnly = above && (soloHidden || (displayHidden && hiddenAboveCastShadows))
+  const hidden =
+    (levelMode === 'solo' && hasSelectedLevel && !isSelected) ||
+    (hideAbove && selectedIndex !== undefined && index > selectedIndex)
+  const shadowOnly = hidden && selectedIndex !== undefined && index > selectedIndex
   return { visible: shadowOnly || !hidden, shadowOnly }
 }
 
