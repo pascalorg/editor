@@ -929,7 +929,8 @@ const OUTDOOR_FLOOR_TAGS = new Set(['porch-slab', 'deck'])
  * A plate standing alone under one outdoor room (a porch, deck or patio stepped down from the
  * house) is tagged for the framing plugin, as a drawn porch slab or deck is: `metadata.floor`
  * (and, for a deck, its boards' thickness in `metadata.decking`, `lib/deck-boards`). Any other
- * plate loses a tag it was given that way.
+ * plate loses a tag it was given that way. These are interop fields for framing plugins
+ * (including Bones) and the Architect generator; built-in readers use zoneIds and roomType.
  */
 function withOutdoorFloorTag(plate: SlabNode, members: readonly PlateRoom[]): SlabNode {
   const type = members.length === 1 ? members[0]!.zone.roomType : undefined

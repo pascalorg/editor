@@ -4,7 +4,6 @@ import {
   type AnyNodeId,
   BuildingNode,
   clearPlateSurfaceCaches,
-  DECK_BOARD_STOCK,
   type GeometryContext,
   LevelNode,
   SiteNode,
@@ -75,7 +74,6 @@ function deckScene(decking?: ZoneNode['decking'], buildingY = 0, painted?: strin
     elevation: TOP,
     thickness: 0.15,
     polygon: outline,
-    metadata: { floor: 'deck', decking: DECK_BOARD_STOCK[decking?.boardSize ?? '5/4x6'].thickness },
   })
   const site = SiteNode.parse({ id: 'site_1', children: ['building_1'] })
   const building = BuildingNode.parse({

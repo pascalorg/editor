@@ -22,7 +22,8 @@ const SlabSystems = () => {
         if (state.framingOnly === previous.framingOnly) return
         const scene = useScene.getState()
         for (const node of Object.values(scene.nodes))
-          if (node.type === 'slab' && isDeckSlab(node)) scene.markDirty(node.id)
+          if (node.type === 'slab' && isDeckSlab(node, (id) => scene.nodes[id]))
+            scene.markDirty(node.id)
       }),
     [],
   )

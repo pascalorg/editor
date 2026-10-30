@@ -11,7 +11,9 @@ import {
   type AnyNodeId,
   type BuildingNode,
   type FloorplanGeometry,
+  floorPlateRoom,
   heightAt,
+  isOutdoorRoomType,
   type LevelNode,
   outwardNormal,
   type SceneSnapshot,
@@ -1072,6 +1074,7 @@ export function floorTops(
     if (n?.type !== 'slab') continue
     // the driveway and walks are paving at grade, never the finish floor
     if (flatworkKindOf(n)) continue
+    if (isOutdoorRoomType(floorPlateRoom(n, (id) => scene.nodes[id])?.roomType)) continue
     const tag = n.metadata?.floor
     const top = typeof n.elevation === 'number' ? n.elevation : 0.05
     if (tag === 'garage-slab-at-grade') garage = garage === null ? top : Math.min(garage, top)

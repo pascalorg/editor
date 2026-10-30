@@ -26,7 +26,9 @@ there is no other floor for them. A new room closed off outside the house by inv
 becomes a porch, one fenced by railings alone a deck (`outsideRoomTypes`). Its `floor.drop` steps
 its floor down from the floor it would share, so the generator gives it a plate of its own under
 the house's (a step-down floor, its railings' footprints with it), and tags that plate
-`metadata.floor` (`porch-slab` or `deck`) for the slab geometry and the framing plugin. A deck's
+`metadata.floor` (`porch-slab` or `deck`) and `metadata.decking` as interop fields for framing
+plugins (including Bones) and the Architect generator; built-in readers use the plate’s
+`zoneIds` linkage and the room’s `roomType`. A deck's
 plate draws its boards and frame, ledger, joists, rims, beams and posts on concrete piers down to
 the site's terrain (`planDeckFraming`, `nodes/src/slab/deck-geometry.ts`); a porch or patio slab
 runs its concrete edge down to the terrain. A covered porch's posts and beam are columns and beams

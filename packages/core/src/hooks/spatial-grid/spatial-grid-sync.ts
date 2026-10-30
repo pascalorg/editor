@@ -526,7 +526,7 @@ export function markTerrainSupportDependents(
   for (const node of Object.values(nodes)) {
     if (node.type === 'slab') {
       // A deck's posts run down to the ground under each, on whatever storey it stands.
-      if (isDeckSlab(node)) {
+      if (isDeckSlab(node, (id) => nodes[id])) {
         markDirty(node.id)
         continue
       }

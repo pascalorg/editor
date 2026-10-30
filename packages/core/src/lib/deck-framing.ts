@@ -1,9 +1,10 @@
+import type { AnyNode, AnyNodeId, SlabNode } from '../schema'
 import { DEFAULT_DECK_BOARDS, type DeckBoardSettings, deckJoistSpacingLimit } from './deck-boards'
+import { floorPlateRoom } from './room-floor-plate'
 
 /**
  * A wood deck's frame, planned once for the engine, which draws it under the deck's boards, and
- * for the framing plugin, which books, labels and cites it: a deck room's floor plate, or any
- * slab tagged `metadata.floor: 'deck'`. Framed to IRC R507:
+ * for the framing plugin, which books, labels and cites it. Framed to IRC R507:
  *
  *   - a LEDGER on the house edge (the deck edge along a house wall), the joist size;
  *   - JOISTS at the spacing (closer under diagonal boards, Table R507.7), sized from a span table:
@@ -75,12 +76,12 @@ export const DECK_POST: DeckLumber = { size: '4x4', thickness: 3.5 * IN, depth: 
 /** A wall a deck edge may bear on: its centreline and thickness. */
 export type DeckWall = { start: P; end: P; thickness: number; curved?: boolean }
 
-/**
- * A slab that is a wood deck, boards on a frame: a deck room's floor plate, or any slab tagged
- * `metadata.floor: 'deck'` as the framing plugin reads it (a generated deck).
- */
-export function isDeckSlab(slab: { metadata?: unknown; recessed?: boolean }): boolean {
-  return (slab.metadata as { floor?: unknown } | undefined)?.floor === 'deck' && !slab.recessed
+/** A deck room's dedicated floor plate, drawn as boards on a frame. */
+export function isDeckSlab(
+  slab: Pick<SlabNode, 'zoneIds' | 'plateRole' | 'recessed'>,
+  resolve: (id: AnyNodeId) => AnyNode | undefined,
+): boolean {
+  return !slab.recessed && floorPlateRoom(slab, resolve)?.roomType === 'deck'
 }
 
 const sub = (a: P, b: P): V2 => [a[0] - b[0], a[1] - b[1]]

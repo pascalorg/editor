@@ -99,21 +99,13 @@ export function deckBoardSettings(
   }
 }
 
-/**
- * The boards a deck slab (`isDeckSlab`) is laid with: its room's, when it is a deck room's floor
- * plate; else the defaults, in 2x stock when the slab declares decking that thick
- * (`metadata.decking`, a generated deck's).
- */
+/** The boards on a deck room's floor plate, read from its room's intent. */
 export function deckSlabBoards(
-  slab: { zoneIds?: readonly string[]; metadata?: unknown },
+  slab: { zoneIds?: readonly string[] },
   zoneOf: (id: string) => Pick<ZoneNode, 'decking' | 'roomType'> | null | undefined,
 ): DeckBoardSettings {
   const zone = slab.zoneIds?.length === 1 ? zoneOf(slab.zoneIds[0]!) : undefined
-  if (zone?.roomType === 'deck') return deckBoardSettings(zone)
-  const decking = (slab.metadata as { decking?: unknown } | undefined)?.decking
-  return typeof decking === 'number' && decking >= 1.25 * IN
-    ? { ...DEFAULT_DECK_BOARDS, boardSize: '2x6' }
-    : DEFAULT_DECK_BOARDS
+  return zone?.roomType === 'deck' ? deckBoardSettings(zone) : DEFAULT_DECK_BOARDS
 }
 
 /** The boards' thickness: how far under the walking surface the joists' tops stand. */

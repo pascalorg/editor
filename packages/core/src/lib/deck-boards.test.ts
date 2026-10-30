@@ -138,13 +138,12 @@ test('a deck with no settings gets 5/4x6 boards, 1 in by 5 1/2 in, a quarter inc
   expect(
     deckBoardSettings({ decking: { boardSize: '2x4', gap: IN / 8, direction: 'diagonal' } }),
   ).toEqual({ boardSize: '2x4', gap: IN / 8, direction: 'diagonal' })
-  // a deck room's plate takes its room's boards; a generated deck's 1 1/2 in decking is 2x stock
+  // The room's boards win even when the plugin tag declares a different thickness.
   const zone = { roomType: 'deck' as const, decking: { boardSize: '2x6' as const } }
-  expect(deckSlabBoards({ zoneIds: ['zone_a'] }, () => zone).boardSize).toBe('2x6')
-  expect(
-    deckSlabBoards({ metadata: { floor: 'deck', decking: 1.5 * IN } }, () => null).boardSize,
-  ).toBe('2x6')
-  expect(deckSlabBoards({ metadata: { floor: 'deck' } }, () => null)).toEqual(DEFAULT_DECK_BOARDS)
+  const slab = { zoneIds: ['zone_a'], metadata: { floor: 'deck', decking: IN } }
+  expect(deckSlabBoards(slab, () => zone).boardSize).toBe('2x6')
+  expect(deckSlabBoards(slab, () => ({ roomType: 'deck' }))).toEqual(DEFAULT_DECK_BOARDS)
+  expect(deckSlabBoards(slab, () => null)).toEqual(DEFAULT_DECK_BOARDS)
 })
 
 describe('boards along the house over a 12 × 10 ft deck', () => {

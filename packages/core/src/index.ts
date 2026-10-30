@@ -578,6 +578,7 @@ export {
   roomFloorElevationFromRelative,
   roundFloorElevation,
 } from './lib/room-floor-feasibility'
+export { floorPlateRoom } from './lib/room-floor-plate'
 export type { OpenWallEnd } from './lib/room-graph'
 export { isAllocatedRoomName } from './lib/room-name'
 export {

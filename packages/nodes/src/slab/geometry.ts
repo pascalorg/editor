@@ -7,6 +7,7 @@ import {
   cutterContextNodes,
   FenceNode,
   FOUNDATION_SLOT_DEFAULT,
+  floorPlateRoom,
   type GeometryContext,
   getLevelElevations,
   getMaterialPresetByRef,
@@ -181,16 +182,11 @@ function getLegacySlabMaterial(node: SlabNode, shading: RenderShading): Material
  */
 const LEGACY_DECK_FINISH = 'library:wood-floorplank1'
 
-/**
- * A porch or patio slab outside the house (a plate the structure kernel tags `metadata.floor:
- * 'porch-slab'`): its concrete edge runs down to the site's ground, never floating over it.
- */
-function isOutdoorGroundSlab(node: SlabNode): boolean {
+/** A porch or patio's concrete edge runs down to the site's ground. */
+function isOutdoorGroundSlab(node: SlabNode, ctx: GeometryContext | undefined): boolean {
+  const roomType = floorPlateRoom(node, (id) => ctx?.resolve<AnyNode>(id))?.roomType
   return (
-    isFloorPlate(node) &&
-    node.plateRole !== 'base' &&
-    node.support !== 'open' &&
-    (node.metadata as Record<string, unknown> | undefined)?.floor === 'porch-slab'
+    isFloorPlate(node) && node.support !== 'open' && (roomType === 'porch' || roomType === 'patio')
   )
 }
 
@@ -381,7 +377,7 @@ export function buildSlabGeometry(
       }),
     )
   // A deck is its boards on its frame (`buildDeckGeometry`), never a solid slab.
-  if (isDeckSlab(node))
+  if (isDeckSlab(node, (id) => ctx?.resolve<AnyNode>(id)))
     return buildDeckGeometry(node, ctx, {
       polygon,
       partition: platePartitionOf(node, ctx, node.plateRole === 'platform'),
@@ -541,7 +537,7 @@ export function buildSlabGeometry(
 
   const foundation = node.plateRole === 'base' && node.foundation?.type === 'solid'
   // A porch or patio slab runs down into the ground beside the house, whatever stands under it.
-  const outdoor = isOutdoorGroundSlab(node)
+  const outdoor = isOutdoorGroundSlab(node, ctx)
   if (
     (foundation || outdoor || (!node.plateRole && node.fillToTerrain)) &&
     !node.recessed &&
