@@ -156,8 +156,11 @@ describe("the editor's level display", () => {
     await updateLevelPresentation(1 / 12)
     // Stacked positions, no exploded gap.
     expect(objects.map((object) => object.position.y)).toEqual([0, 2.5, 5])
-    // Below and the selected level show; the one above is hidden, out of the shadow map too.
-    expect(objects.map((object) => object.visible)).toEqual([true, true, false])
+    // Below and the selected level show; the one above casts shadows only.
+    expect(objects.map((object) => object.visible)).toEqual([true, true, true])
+    expect(objects[2]!.layers.isEnabled(0)).toBe(false)
+    expect(objects[0]!.layers.isEnabled(0)).toBe(true)
+    expect(objects[1]!.layers.isEnabled(0)).toBe(true)
 
     // The top level selected: everything shows again.
     setLevelMode('stacked', levels[2]!.id)
@@ -214,7 +217,7 @@ describe("the editor's level display", () => {
     setLevelMode('stacked', 'level_a_m1')
     useViewer.setState({ hideLevelsAboveSelection: true })
     await updateLevelPresentation(1 / 12)
-    const drawn = (id: string) => objects.get(id)!.visible
+    const drawn = (id: string) => objects.get(id)!.layers.isEnabled(0)
     expect(['level_a_m1', 'level_a_g', 'level_b_m1', 'level_b_g'].map(drawn)).toEqual([
       true,
       false,
@@ -228,11 +231,11 @@ describe("the editor's level display", () => {
     setLevelMode('stacked', levels[0]!.id)
     useViewer.setState({ hideLevelsAboveSelection: true })
     await updateLevelPresentation(1 / 12)
-    expect(objects[1]!.visible).toBe(false)
+    expect(objects[1]!.layers.isEnabled(0)).toBe(false)
     const restore = snapLevelsToTruePositions()
-    expect(objects[1]!.visible).toBe(true)
+    expect(objects[1]!.layers.isEnabled(0)).toBe(true)
     restore()
-    expect(objects[1]!.visible).toBe(false)
+    expect(objects[1]!.layers.isEnabled(0)).toBe(false)
   })
 })
 
@@ -242,15 +245,16 @@ describe('a level a construction reveal is playing on', () => {
     setLevelMode('stacked', levels[0]!.id)
     useViewer.setState({ hideLevelsAboveSelection: true })
     await updateLevelPresentation(1 / 12)
-    expect(objects[1]!.visible).toBe(false)
+    expect(objects[1]!.layers.isEnabled(0)).toBe(false)
 
     useViewer.setState({ levelsRevealing: [levels[1]!.id] })
     await updateLevelPresentation(1 / 12)
     expect(objects[1]!.visible).toBe(true)
+    expect(objects[1]!.layers.isEnabled(0)).toBe(true)
 
     useViewer.setState({ levelsRevealing: [] })
     await updateLevelPresentation(1 / 12)
-    expect(objects[1]!.visible).toBe(false)
+    expect(objects[1]!.layers.isEnabled(0)).toBe(false)
   })
 
   test('shows in solo, where every other level is hidden', async () => {
