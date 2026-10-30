@@ -5,6 +5,7 @@ import {
   getMaterialSwatch,
   getMaterialsForCategory,
   getSceneMaterialIdFromRef,
+  MATERIAL_CATALOG,
 } from './index'
 
 describe('material references', () => {
@@ -84,5 +85,17 @@ describe('siding', () => {
     })
     const white = getMaterialSwatch(getCatalogMaterialById('preset-white')!)
     expect(white.imageUrl).toBeNull()
+  })
+})
+
+describe('textured catalog materials', () => {
+  test('uses compressed maps with browser-readable thumbnails in stored orientation', () => {
+    for (const item of MATERIAL_CATALOG) {
+      const maps = Object.values(item.preset.maps).filter(Boolean)
+      if (maps.length === 0) continue
+      for (const map of maps) expect(map).toMatch(/\.ktx2$/)
+      expect(item.previewThumbnailUrl).toMatch(/_thumb\.webp$/)
+      expect(item.preset.mapProperties.flipY).toBe(false)
+    }
   })
 })

@@ -1926,7 +1926,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     previewColor: '#505050',
     preset: {
       maps: {
-        albedoMap: '/material/roofing/roof_shingles_grey/roof_shingles_grey_basecolor_512.webp',
+        albedoMap: '/material/roofing/roof_shingles_grey/roof_shingles_grey_basecolor_512.ktx2',
         aoMap: '/material/roofing/roof_shingles_classic/roof_shingles_classic_ao_512.ktx2',
         metalnessMap:
           '/material/roofing/roof_shingles_classic/roof_shingles_classic_metallic_512.ktx2',
