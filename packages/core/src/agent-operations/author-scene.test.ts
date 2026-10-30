@@ -614,6 +614,12 @@ describe('author_scene', () => {
     expect(outcome.changes?.delete).toEqual(['level_0'])
     const created = outcome.changes!.create!.map((c) => c.node)
     const byType = (t: string) => created.filter((n) => n.type === t)
+    expect(byType('window')[0]).toMatchObject({
+      frameThickness: 0.02,
+      casingFaceA: true,
+      casingFaceB: true,
+    })
+    expect(byType('door')[0]).toMatchObject({ casingFaceA: true, casingFaceB: true })
     expect(byType('level')).toHaveLength(1)
     expect(byType('wall')).toHaveLength(4)
     // Each wall knows which face looks into the room, from the plan: never both the same.

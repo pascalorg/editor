@@ -31,7 +31,7 @@ import {
   getWindowStyleOverrides,
   type WindowStyle,
 } from './opening-style-presets'
-import { windowTakesStyle } from './window-types'
+import { NEW_WINDOW_FRAME_THICKNESS, windowTakesStyle } from './window-types'
 
 // The placement rules of wall openings, shared by the editor's door and window tools and by
 // every agent surface: what the editor lets a person do by hand is what an agent may do.
@@ -411,6 +411,7 @@ export function planWallOpening(nodes: Nodes, input: WallOpeningInput) {
         })
       : WindowNode.parse({
           ...base,
+          frameThickness: NEW_WINDOW_FRAME_THICKNESS,
           ...getWindowStyleOverrides(input.style as WindowStyle | undefined),
           ...(input.windowType ? { windowType: input.windowType } : {}),
           ...(input.columns ? { columnRatios: equalRatios(input.columns) } : {}),

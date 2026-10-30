@@ -13,6 +13,7 @@ import {
   getDormerWallOpeningVerticalBounds,
   windowSlots,
 } from '@pascal-app/core'
+import { NEW_WINDOW_FRAME_THICKNESS } from '@pascal-app/core/building'
 import type { FloorplanNodeExtension } from '@pascal-app/editor'
 import { curtainOpeningResizeMax } from '../shared/curtain-opening-limits'
 import { windowBatchable } from '../shared/node-batch/batchable'
@@ -293,6 +294,7 @@ export const windowDefinition: NodeDefinition<typeof WindowNode> = {
     const stub = WindowNode.parse({
       id: 'window_default' as never,
       type: 'window',
+      frameThickness: NEW_WINDOW_FRAME_THICKNESS,
       casingFaceA: true,
       casingFaceB: true,
     })

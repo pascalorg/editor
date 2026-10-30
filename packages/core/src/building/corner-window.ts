@@ -218,6 +218,7 @@ export function wrapCorner(
   return {
     create: {
       ...partner,
+      frameThickness: window.frameThickness,
       columnRatios: window.columnRatios,
       rowRatios: window.rowRatios,
       casingWidth: window.casingWidth,

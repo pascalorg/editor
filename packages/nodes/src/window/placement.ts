@@ -3,6 +3,7 @@
 import type { CornerBlockReason, ToolHint, WindowNode } from '@pascal-app/core'
 import {
   getWindowStyleOverrides,
+  NEW_WINDOW_FRAME_THICKNESS,
   SILLLESS_WINDOW_TYPES,
   WINDOW_STYLE_CHOICES,
   WINDOW_STYLE_LABELS,
@@ -61,6 +62,7 @@ export const useWindowPlacement = create<WindowPlacementState>((set, get) => ({
 export function placedWindowFields(): Partial<WindowNode> {
   const { type, style } = useWindowPlacement.getState()
   return {
+    frameThickness: NEW_WINDOW_FRAME_THICKNESS,
     casingFaceA: true,
     casingFaceB: true,
     ...windowTypeFields(type),

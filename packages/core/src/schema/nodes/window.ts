@@ -131,7 +131,7 @@ export const WindowNode = BaseNode.extend({
   - position: center of the window in wall-local coordinate system
   - width/height: overall outer dimensions, which are also the wall cutout
   - windowType: explicit window family, defaulting old windows to fixed
-  - frameThickness: width of the frame members
+  - frameThickness: width of the frame members (new windows use 0.020 m; absent in saved windows keeps 0.05 m)
   - frameDepth: how deep the frame sits within the wall
   - columnRatios/rowRatios: pane division ratios
   - sill: whether to show a window sill

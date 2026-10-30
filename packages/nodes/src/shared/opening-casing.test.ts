@@ -161,7 +161,12 @@ test('tools and preset defaults create cased openings while legacy openings stay
     const preset = definition.defaults?.()
     expect(preset?.casingFaceA).toBe(true)
     expect(preset?.casingFaceB).toBe(true)
+    if (placed.type === 'window') {
+      expect(placed.frameThickness).toBe(0.02)
+      expect(preset?.frameThickness).toBe(0.02)
+    }
     const legacy = schema.parse({})
+    expect(legacy.frameThickness).toBe(0.05)
     const geometry =
       legacy.type === 'door'
         ? buildDoorFloorplan(legacy, context as GeometryContext)
