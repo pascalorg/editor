@@ -31,7 +31,7 @@ export const getWallsTool = {
   name: 'get_walls',
   title: 'Get walls',
   description:
-    'Get the walls of a level: start and end in metres, length, stored and resolved height, thickness, type ({ id, label } for a known assembly preset or project wall type, null otherwise), and their doors and windows. wallTypes lists available assembly type ids and labels for add_wall.type and set_wall_type. wallFaceChains gives base-chain provenance for geometric faces a (left of start → end) and b (right): ref (authored face slot), legacy (inline spec), or default (declared fallback ref). These are not final rendered finishes: room intent, face paint regions, exterior assembly cladding and reference availability can change appearance. A chosen white or default-matching ref is legitimate; fallback alone is not a defect or a requirement to paint.',
+    'Get the walls of a level: start and end in metres, length, stored and resolved height, thickness, wallType (standard, railing or curtain; standard when absent), type ({ id, label } for a known assembly preset or project wall type, null otherwise), and their doors and windows. wallTypes lists available assembly type ids and labels for add_wall.type and set_wall_type. wallFaceChains gives base-chain provenance for geometric faces a (left of start → end) and b (right): ref (authored face slot), legacy (inline spec), or default (declared fallback ref). These are not final rendered finishes: room intent, face paint regions, exterior assembly cladding and reference availability can change appearance. A chosen white or default-matching ref is legitimate; fallback alone is not a defect or a requirement to paint.',
   input: levelTarget,
 }
 

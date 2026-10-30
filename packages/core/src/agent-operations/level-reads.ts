@@ -62,6 +62,7 @@ export function wallSummary(nodes: SceneNodes, wall: WallNode) {
     resolvedHeight: wallResolvedHeight(nodes, wall),
     heightIsExplicit: wall.height !== undefined,
     thickness: wall.thickness,
+    wallType: wall.wallType ?? 'standard',
     type: type ? { id: type.id, label: type.label } : null,
     wallFaceChains: {
       a: resolveWallFaceChain(wall, 'a'),

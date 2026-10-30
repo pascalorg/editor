@@ -7,30 +7,30 @@ import {
   withFoundationConstruction,
 } from '../lib/foundation-wall'
 import { lotOverhang } from '../lib/site-placement'
-import { type LevelNode, WallNode } from '../schema'
+import { type LevelNode, railingWallDefaults, WallNode } from '../schema'
 import { normalizeWallCurveOffset } from '../systems/wall/wall-curve'
 import { WALL_MIN_LENGTH } from '../systems/wall/wall-topology'
 import { applySceneChanges } from './apply-changes'
-import { type LevelTargetInput, targetLevel } from './level-target'
+import { targetLevel } from './level-target'
 import { refuseRoofLevel } from './roof-writes'
 import { queryNodes } from './scene-queries'
 import type { AgentOperation } from './types'
 import { wallTypePatch } from './wall-type'
 
 type Pt = [number, number]
-type AddWallInput = LevelTargetInput & {
-  start: number[]
-  end: number[]
-  thickness?: number
-  height?: number
-  curveOffset?: number
-  type?: string
-}
+type AddWallInput = z.infer<z.ZodObject<typeof addWallTool.input>>
 
 /** `add_wall`: one wall between two points, named as the editor names walls. */
 export const addWall: AgentOperation<AddWallInput> = (nodes, input, context) => {
   const level = targetLevel(nodes, input, context)
   refuseRoofLevel(nodes, level.id, 'a wall')
+  const railing = input.wallType === 'railing'
+  if (input.railing && !railing)
+    refuse('not_a_railing', 'railing settings require wallType railing.')
+  if (railing && input.type !== undefined)
+    refuse('railing_wall', 'A railing has no assembly: omit type.')
+  const guardDefaults = railing ? railingWallDefaults(input.railing?.style) : undefined
+  const guard = guardDefaults ? { ...guardDefaults.railing, ...input.railing } : undefined
   const start = input.start as Pt
   const end = input.end as Pt
   const length = Math.hypot(end[0] - start[0], end[1] - start[1])
@@ -54,17 +54,29 @@ export const addWall: AgentOperation<AddWallInput> = (nodes, input, context) => 
     ...(input.height === undefined ? {} : { height: input.height }),
     ...(curveOffset ? { curveOffset } : {}),
     ...assembly,
+    ...(input.wallType === undefined ? {} : { wallType: input.wallType }),
+    ...(guardDefaults && guard
+      ? {
+          ...guardDefaults,
+          railing: guard,
+          height: input.height ?? guardDefaults.height,
+          thickness: guard.postSize,
+        }
+      : {}),
   })
-  const [wall] = withFoundationConstruction(
-    nodes,
-    level.id,
-    [...queryNodes<WallNode>(nodes, { type: 'wall', parentId: level.id }), drawn],
-    [drawn],
-    { thickness: input.thickness, ...assembly },
-  ) as [WallNode]
+  const [wall] = railing
+    ? [drawn]
+    : (withFoundationConstruction(
+        nodes,
+        level.id,
+        [...queryNodes<WallNode>(nodes, { type: 'wall', parentId: level.id }), drawn],
+        [drawn],
+        { thickness: input.thickness, ...assembly },
+      ) as [WallNode])
   const reading = foundationReadingOfLevel(nodes, level.id)
   const foundation = input.type === undefined && wall.assembly !== undefined
   const partition =
+    !railing &&
     !foundation &&
     input.type === undefined &&
     input.thickness === undefined &&
@@ -110,3 +122,6 @@ export const addWall: AgentOperation<AddWallInput> = (nodes, input, context) => 
     changes: { create: [{ node: wall, parentId: level.id }] },
   }
 }
+
+import type { z } from 'zod'
+import type { addWallTool } from '../agent-tools/walls'

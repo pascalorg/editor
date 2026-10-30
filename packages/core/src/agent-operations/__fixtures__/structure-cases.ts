@@ -7,6 +7,7 @@ import {
   CeilingNode,
   type FenceNode,
   LevelNode,
+  railingWallDefaults,
   SiteNode,
   SlabNode,
   WallNode,
@@ -1450,4 +1451,58 @@ export const FRAMING_POST_CASES: AgentToolCase[] = [
     input: { level: 'level_ground', x: 8, z: 0, postSize: '4x4' },
     expect: { refusal: 'not_a_post' },
   },
+]
+
+export const RAILING_WALL_CASES: AgentToolCase[] = [
+  ...([undefined, 'post-and-rail', 'balusters', 'cable', 'boards', 'glass', 'metal'] as const).map((style): AgentToolCase => ({
+    name: `railing ${style ?? 'default'} uses Build panel members and post thickness even below grade`,
+    tool: 'add_wall', scene: basementHouseScene,
+    input: { levelId: 'level_base', start: [0, 0], end: [6, 0], wallType: 'railing', thickness: 0.3, ...(style ? { railing: { style } } : {}) },
+    expect: { result: { ok: true }, check: (result, nodes) => {
+      const wall = nodes[result.wallId as string]
+      const defaults = railingWallDefaults(style)
+      return wall?.type === 'wall' && wall.wallType === 'railing' && wall.height === defaults.height && wall.thickness === defaults.thickness && !wall.assembly && JSON.stringify(wall.railing) === JSON.stringify(defaults.railing) && !result.construction
+        ? [] : [`Railing differs from Build defaults: ${JSON.stringify(wall)}`]
+    } },
+  })),
+  {
+    name: 'railing accepts every schema setting and a custom guard height in length notation',
+    tool: 'add_wall', scene: storeysScene,
+    input: { levelId: 'level_ground', start: [8, 0], end: [8, 4], wallType: 'railing', height: '42 in', thickness: 0.3,
+      railing: { style: 'cable', postSpacing: '4 ft', postSize: '3 in', infillSize: '0.25 in', infillGap: '2 in', bottomClearance: 0, cap: false } },
+    expect: { result: { ok: true }, check: (result, nodes) => {
+      const wall = nodes[result.wallId as string]
+      const expected = WallNode.parse({ ...wall, wallType: 'railing', height: 1.0668, thickness: 0.0762,
+        railing: { style: 'cable', postSpacing: 1.2192, postSize: 0.0762, infillSize: 0.00635, infillGap: 0.0508, bottomClearance: 0, cap: false } })
+      return JSON.stringify(wall) === JSON.stringify(expected) ? [] : ['Custom guard settings or height were lost']
+    } },
+  },
+  {
+    name: 'railing settings require the railing kind', tool: 'add_wall', scene: storeysScene,
+    input: { levelId: 'level_ground', start: [8, 0], end: [8, 4], railing: { style: 'glass' } },
+    expect: { refusal: 'not_a_railing' },
+  },
+  {
+    name: 'railings take no assembly type', tool: 'add_wall', scene: storeysScene,
+    input: { levelId: 'level_ground', start: [8, 0], end: [8, 4], wallType: 'railing', type: ASSEMBLY_PRESET.id },
+    expect: { refusal: 'railing_wall' },
+  },
+  ...(['railing', 'curtain'] as const).map((wallType): AgentToolCase => ({
+    name: `existing ${wallType} walls refuse assembly changes`, tool: 'set_wall_type', scene: () => {
+      const scene = storeysScene()
+      Object.assign(scene.nodes.wall_ground!, { wallType })
+      return scene
+    },
+    input: { wallIds: ['wall_ground'], type: ASSEMBLY_PRESET.id },
+    expect: { refusal: `${wallType}_wall` },
+  })),
+  ...([undefined, 'standard', 'railing', 'curtain'] as const).map((wallType): AgentToolCase => ({
+    name: `get walls reports wallType ${wallType ?? 'standard for legacy walls'}`, tool: 'get_walls', scene: () => {
+      const scene = storeysScene()
+      Object.assign(scene.nodes.wall_ground!, { wallType })
+      return scene
+    },
+    input: { levelId: 'level_ground' },
+    expect: { result: {}, contains: { walls: [{ id: 'wall_ground', wallType: wallType ?? 'standard' }] } },
+  })),
 ]
