@@ -1047,14 +1047,6 @@ msgid "editor.actionMenu.structureTools.fence"
 msgstr "Fence"
 
 #: packages/editor/src/components/ui/action-menu/structure-tools.tsx
-msgid "editor.actionMenu.structureTools.footing"
-msgstr "Footing"
-
-#: packages/editor/src/components/ui/action-menu/structure-tools.tsx
-msgid "editor.actionMenu.structureTools.foundation"
-msgstr "Foundation"
-
-#: packages/editor/src/components/ui/action-menu/structure-tools.tsx
 msgid "editor.actionMenu.structureTools.gableRoof"
 msgstr "Gable Roof"
 
@@ -1576,10 +1568,6 @@ msgstr "Dismiss"
 msgid "editor.dismissCameraControlsHint"
 msgstr "Dismiss camera controls hint"
 
-#: packages/editor/src/components/editor-2d/floorplan-foundation-layer.tsx
-msgid "editor.editor2d.floorplanFoundationLayer.clickToEditTheFoundationS"
-msgstr "Click to edit the foundation’s outline"
-
 #: packages/editor/src/components/editor/index.tsx
 msgid "editor.expandSidebar"
 msgstr "Expand sidebar"
@@ -1661,56 +1649,12 @@ msgid "editor.floatingLevelSelector.focusedUnitHasZonesHere"
 msgstr "Focused unit has zones here"
 
 #: packages/editor/src/components/ui/floating-level-selector.tsx
-msgid "editor.floatingLevelSelector.foundation"
-msgstr "Foundation"
-
-#: packages/editor/src/components/ui/floating-level-selector.tsx
-msgid "editor.floatingLevelSelector.foundationBadgeBasement"
-msgstr "Basement"
-
-#: packages/editor/src/components/ui/floating-level-selector.tsx
-msgid "editor.floatingLevelSelector.foundationBadgeBasementTitle"
-msgstr "Basement walls cut into the ground"
-
-#: packages/editor/src/components/ui/floating-level-selector.tsx
-msgid "editor.floatingLevelSelector.foundationBadgeOff"
-msgstr "Off"
-
-#: packages/editor/src/components/ui/floating-level-selector.tsx
-msgid "editor.floatingLevelSelector.foundationBadgeOffTitle"
-msgstr "No foundation drawn: click to set one up"
-
-#: packages/editor/src/components/ui/floating-level-selector.tsx
-msgid "editor.floatingLevelSelector.foundationBadgePiles"
-msgstr "Piles"
-
-#: packages/editor/src/components/ui/floating-level-selector.tsx
-msgid "editor.floatingLevelSelector.foundationBadgePilesTitle"
-msgstr "Grade beam on piles"
-
-#: packages/editor/src/components/ui/floating-level-selector.tsx
-msgid "editor.floatingLevelSelector.foundationBadgeRaised"
-msgstr "Raised"
-
-#: packages/editor/src/components/ui/floating-level-selector.tsx
-msgid "editor.floatingLevelSelector.foundationBadgeRaisedTitle"
-msgstr "Raised floor on a stem wall"
-
-#: packages/editor/src/components/ui/floating-level-selector.tsx
-msgid "editor.floatingLevelSelector.foundationBadgeSlab"
-msgstr "Slab"
-
-#: packages/editor/src/components/ui/floating-level-selector.tsx
-msgid "editor.floatingLevelSelector.foundationBadgeSlabTitle"
-msgstr "Slab on grade"
-
-#: packages/editor/src/components/ui/floating-level-selector.tsx
 msgid "editor.floatingLevelSelector.groundFloorOverGrade"
-msgstr "The ground floor stands {distance} over grade. {action}"
+msgstr "The ground floor stands {distance} over grade. Seat the ground floor 8 in over grade"
 
 #: packages/editor/src/components/ui/floating-level-selector.tsx
 msgid "editor.floatingLevelSelector.groundFloorUnderGrade"
-msgstr "The ground floor stands {distance} under grade. {action}"
+msgstr "The ground floor stands {distance} under grade. Seat the ground floor 8 in over grade"
 
 #: packages/editor/src/components/ui/floating-level-selector.tsx
 msgid "editor.floatingLevelSelector.groundLineTheLevelsUnderIt"
@@ -1743,10 +1687,6 @@ msgstr "Seat the building so this floor stands at grade; the floors under it are
 #: packages/editor/src/components/ui/floating-level-selector.tsx
 msgid "editor.floatingLevelSelector.setAsGroundFloor"
 msgstr "Set as ground floor"
-
-#: packages/editor/src/components/ui/floating-level-selector.tsx
-msgid "editor.floatingLevelSelector.showTheFoundation"
-msgstr "Show the foundation"
 
 #: packages/editor/src/components/ui/floating-level-selector.tsx
 msgid "editor.floatingLevelSelector.theGroundLevelCannotBeDeleted"
@@ -4066,150 +4006,6 @@ msgstr "No thanks"
 msgid "editor.levelWallCopyPrompt.sourcenameSOutsideWallsInPlace"
 msgstr "{sourceName}’s outside walls, in place, so this level lines up with it."
 
-#: packages/editor/src/lib/building-foundation.ts
-msgid "editor.lib.buildingFoundation.basementExcavation"
-msgstr "Cut {depth} into the ground on the high side, dug out inside the walls’ outside faces; the ground round the house is left as it lies."
-
-#: packages/editor/src/lib/building-foundation.ts
-msgid "editor.lib.buildingFoundation.basementTopOverTheGround"
-msgstr "The basement wall’s top stands {distance} over the high side of the ground; the foundation is set for {asked} over it."
-
-#: packages/editor/src/lib/building-foundation.ts
-msgid "editor.lib.buildingFoundation.basementTopUnderTheGround"
-msgstr "The basement wall’s top stands {distance} under the high side of the ground; the foundation is set for {asked} over it."
-
-#: packages/editor/src/lib/building-foundation.ts
-msgid "editor.lib.buildingFoundation.crawlSpaceDugOut"
-msgstr "Crawl space: dug out up to {dug} for {clearance} under the joists (IRC R317.1)."
-
-#: packages/editor/src/lib/building-foundation.ts
-msgid "editor.lib.buildingFoundation.crippleWalls"
-msgstr "Past {stem} of stem out of the ground the stem drops to {least} over grade: {cripples, plural, one {# cripple wall} other {# cripple walls}} over it, up to {tallest} tall."
-
-#: packages/editor/src/lib/building-foundation.ts
-msgid "editor.lib.buildingFoundation.daylightWalls"
-msgstr "The ground falls {fall} across the house: the downhill walls stand up to {exposed} out of it."
-
-#: packages/editor/src/lib/building-foundation.ts
-msgid "editor.lib.buildingFoundation.deepFill"
-msgstr "That is {fill} of fill. A raised floor on a stem wall suits a floor this high."
-
-#: packages/editor/src/lib/building-foundation.ts
-msgid "editor.lib.buildingFoundation.deepFillOnASlope"
-msgstr "That is {fill} of fill on the low side. A raised floor on a stem wall suits this slope."
-
-#: packages/editor/src/lib/building-foundation.ts
-msgid "editor.lib.buildingFoundation.floorOverTheGround"
-msgstr "The floor stands {distance} over the high side of the ground; the foundation is set for {asked} over it."
-
-#: packages/editor/src/lib/building-foundation.ts
-msgid "editor.lib.buildingFoundation.floorUnderTheGround"
-msgstr "The floor stands {distance} under the high side of the ground; the foundation is set for {asked} over it."
-
-#: packages/editor/src/lib/building-foundation.ts
-msgid "editor.lib.buildingFoundation.footingSteps"
-msgstr "The ground falls {fall} across the house: the footing steps {steps, plural, one {# time} other {# times}} along its steepest side, {riser} a step."
-
-#: packages/editor/src/lib/building-foundation.ts
-msgid "editor.lib.buildingFoundation.footingStepsUpTo"
-msgstr "The ground falls {fall} across the house: the footing steps {steps, plural, one {# time} other {# times}} along its steepest side, up to {riser} a step."
-
-#: packages/editor/src/lib/building-foundation.ts
-msgid "editor.lib.buildingFoundation.footingTooNarrow"
-msgstr "The footing is {width} wide: {storeys, plural, one {one storey asks} other {# storeys ask}} {asked} on 1500 psf soil (IRC Table R403.1(1))."
-
-#: packages/editor/src/lib/building-foundation.ts
-msgid "editor.lib.buildingFoundation.footingTooShallow"
-msgstr "The footing’s bottom is {depth} under grade: keep it {least} at least, or the frost line (IRC R403.1.4)."
-
-#: packages/editor/src/lib/building-foundation.ts
-msgid "editor.lib.buildingFoundation.gradingCut"
-msgstr "The ground is held {least} under the slab’s top on every side: cut {cut}."
-
-#: packages/editor/src/lib/building-foundation.ts
-msgid "editor.lib.buildingFoundation.gradingCutOnASlope"
-msgstr "The ground is held {least} under the slab’s top on every side: cut {cut} on the high side."
-
-#: packages/editor/src/lib/building-foundation.ts
-msgid "editor.lib.buildingFoundation.gradingFilled"
-msgstr "The ground is held {least} under the slab’s top on every side: filled {fill}."
-
-#: packages/editor/src/lib/building-foundation.ts
-msgid "editor.lib.buildingFoundation.gradingFilledAndCut"
-msgstr "The ground is held {least} under the slab’s top on every side: filled {fill}, cut {cut}."
-
-#: packages/editor/src/lib/building-foundation.ts
-msgid "editor.lib.buildingFoundation.gradingFilledAndCutOnASlope"
-msgstr "The ground is held {least} under the slab’s top on every side: filled up to {fill} on the low side, cut {cut} on the high side."
-
-#: packages/editor/src/lib/building-foundation.ts
-msgid "editor.lib.buildingFoundation.gradingFilledOnASlope"
-msgstr "The ground is held {least} under the slab’s top on every side: filled up to {fill} on the low side."
-
-#: packages/editor/src/lib/building-foundation.ts
-msgid "editor.lib.buildingFoundation.groundCutRoundTheStem"
-msgstr "The ground is cut {cut} on the high side to hold the stem wall’s top {least} over it (IRC R317.1). Raising the floor cuts less."
-
-#: packages/editor/src/lib/building-foundation.ts
-msgid "editor.lib.buildingFoundation.raiseItOnAStemWall"
-msgstr "Raise it on a stem wall"
-
-#: packages/editor/src/lib/building-foundation.ts
-msgid "editor.lib.buildingFoundation.raiseTheFloor"
-msgstr "Raise the floor"
-
-#: packages/editor/src/lib/building-foundation.ts
-msgid "editor.lib.buildingFoundation.seatBasementWallTop"
-msgstr "Seat the basement wall’s top {asked} over the high side of the ground"
-
-#: packages/editor/src/lib/building-foundation.ts
-msgid "editor.lib.buildingFoundation.seatFloorTop"
-msgstr "Seat the floor’s top {asked} over the high side of the ground"
-
-#: packages/editor/src/lib/building-foundation.ts
-msgid "editor.lib.buildingFoundation.seatGroundFloor"
-msgstr "Seat the ground floor {asked} over grade"
-
-#: packages/editor/src/lib/building-foundation.ts
-msgid "editor.lib.buildingFoundation.seatItAt"
-msgstr "Seat it at {asked}"
-
-#: packages/editor/src/lib/building-foundation.ts
-msgid "editor.lib.buildingFoundation.seatRaisedFloorTop"
-msgstr "Seat the raised floor’s top {asked} over the high side of the ground"
-
-#: packages/editor/src/lib/building-foundation.ts
-msgid "editor.lib.buildingFoundation.seatSlabTop"
-msgstr "Seat the slab’s top {asked} over the high side of the ground"
-
-#: packages/editor/src/lib/building-foundation.ts
-msgid "editor.lib.buildingFoundation.setIt"
-msgstr "Set it {height}"
-
-#: packages/editor/src/lib/building-foundation.ts
-msgid "editor.lib.buildingFoundation.setItDeep"
-msgstr "Set it {depth} deep"
-
-#: packages/editor/src/lib/building-foundation.ts
-msgid "editor.lib.buildingFoundation.sillTooNearTheGround"
-msgstr "The sill and the floor framing sit {height} over the ground: keep them {least} off it at least (IRC R317.1)."
-
-#: packages/editor/src/lib/building-foundation.ts
-msgid "editor.lib.buildingFoundation.slabEdgeSteps"
-msgstr "The ground falls {fall} across the house: the slab edge steps {steps, plural, one {# time} other {# times}} along its steepest side, {riser} a step."
-
-#: packages/editor/src/lib/building-foundation.ts
-msgid "editor.lib.buildingFoundation.slabEdgeStepsUpTo"
-msgstr "The ground falls {fall} across the house: the slab edge steps {steps, plural, one {# time} other {# times}} along its steepest side, up to {riser} a step."
-
-#: packages/editor/src/lib/building-foundation.ts
-msgid "editor.lib.buildingFoundation.slabEdgeTooShallow"
-msgstr "The slab edge’s bottom is {depth} under grade: keep it {least} at least, or the frost line (IRC R403.1.4)."
-
-#: packages/editor/src/lib/building-foundation.ts
-msgid "editor.lib.buildingFoundation.widenItTo"
-msgstr "Widen it to {width}"
-
 #: packages/editor/src/lib/contextual-help.ts
 msgid "editor.lib.contextualHelp.addOrRemoveObjectsFromThe"
 msgstr "Add or remove objects from the selection"
@@ -4558,490 +4354,6 @@ msgstr "Window"
 msgid "editor.nodeDisplay.zone"
 msgstr "Zone"
 
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.atTheHighSideOfThe"
-msgstr "At the high side of the ground, to scale"
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.atTheHighSideOfThe2"
-msgstr "At the high side of the ground, to scale; the dashed line is the grade"
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.auto"
-msgstr "Auto"
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.basementSlab"
-msgstr "Basement slab"
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.basementWall"
-msgstr "Basement wall"
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.basementWallHint"
-msgstr "Poured concrete: 8 in for most basements (IRC Table R404.1.2(1))."
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.basementWallItsOwn"
-msgstr "Basement wall (its own)"
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.basementWallThickness"
-msgstr "Basement wall {thickness}"
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.basementWallTopOverGrade"
-msgstr "Basement wall top over grade"
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.basementWallTopOverGradeHint"
-msgstr "Measured over the highest grade along the house: the sill and the floor framing sit on it, 8 in off the ground at least (IRC R317.1). Set it higher for a daylight basement."
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.carpet"
-msgstr "Carpet"
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.ceiling"
-msgstr "Ceiling"
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.ceramicTile"
-msgstr "Ceramic tile"
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.closeTheOutsideWallsIntoA"
-msgstr "Close the outside walls into a loop to draw the foundation under them."
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.crawlSpaceUnderJoists"
-msgstr "Crawl space under joists"
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.crawlSpaceUnderJoistsHint"
-msgstr "Measured from the underside of the joists, which bear on the sill (IRC R317.1: 18 in to the dirt). The crawl space is dug out to it."
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.custom"
-msgstr "Custom"
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.deleteTheBasementRaisedFloor"
-msgstr "Delete the basement and it stands on its raised floor again."
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.deleteTheBasementSlab"
-msgstr "Delete the basement and it stands on its slab again."
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.depthDeep"
-msgstr "{depth} deep"
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.depthDown"
-msgstr "{depth} down"
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.depthIJoist"
-msgstr "{depth} I-joist"
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.drawTheFoundation"
-msgstr "Draw the foundation"
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.drywall"
-msgstr "Drywall"
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.drywallCeiling"
-msgstr "Drywall ceiling"
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.edgeUnderGrade"
-msgstr "Edge under grade"
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.edgeUnderGradeHint"
-msgstr "IRC R403.1.4: at least 12 in, or the frost line."
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.edgeWidth"
-msgstr "Edge width"
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.edgeWidthWide"
-msgstr "Edge {width} wide"
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.engineeredWood"
-msgstr "Engineered wood"
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.finish"
-msgstr "Finish"
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.finishFloorOverGrade"
-msgstr "Finish floor over grade"
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.finishFloorOverGradeHint"
-msgstr "Measured over the highest grade under the outside walls. The foundation grows down the slope from there."
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.floorFraming"
-msgstr "Floor framing"
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.floorFramingAndSill"
-msgstr "Floor framing and sill {depth}"
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.floorFramingHint"
-msgstr "Floor top down to the stem: flooring, subfloor, joists, sill."
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.floorFramingSillIncluded"
-msgstr "Floor framing {depth}, sill {sill} included"
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.flooring"
-msgstr "Flooring"
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.footingThickness"
-msgstr "Footing thickness"
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.footingUnderGrade"
-msgstr "Footing under grade"
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.footingUnderGradeHint"
-msgstr "IRC R403.1.4: at least 12 in under the ground beside it, outside and in the dug-out crawl space; deeper to the frost line."
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.footingWidth"
-msgstr "Footing width"
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.footingWidthHint"
-msgstr "Table R403.1(1), 1500 psf soil: 12, 15, 23 in for 1, 2, 3 storeys."
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.footingWidthThickness"
-msgstr "Footing {width} × {thickness}"
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.foundation"
-msgstr "Foundation"
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.gradeBeamDepth"
-msgstr "Grade beam depth"
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.gradeBeamOnPiles"
-msgstr "Grade beam on piles"
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.gradeBeamWidth"
-msgstr "Grade beam width"
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.gradeBeamWidthDepth"
-msgstr "Grade beam {width} × {depth}"
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.halfTheEdgeSDepthUnder"
-msgstr "Half the edge’s depth under the slab, 6 to 12 in"
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.hardwood"
-msgstr "Hardwood"
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.heightCrawl"
-msgstr "{height} crawl"
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.heightFinishFloor"
-msgstr "{height} FF"
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.heightTop"
-msgstr "{height} top"
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.iJoists"
-msgstr "I-joists"
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.itsLayersMakeWithTheSill"
-msgstr "Its layers make {depth} with the sill; the framing follows them once a layer is set."
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.itsWallsArePouredUnderThe"
-msgstr "Its walls are poured under the house’s outside walls."
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.itsWallsAreTheBasementS"
-msgstr "Its walls are the basement’s own, on their footing."
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.joists"
-msgstr "Joists"
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.kind"
-msgstr "Kind"
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.labelAuto"
-msgstr "{label} (auto)"
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.laminate"
-msgstr "Laminate"
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.leastDepthUnderGrade"
-msgstr "Least depth under grade"
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.leastDepthUnderGradeHint"
-msgstr "The beam goes at least this far under grade (IRC R403.1.4: 12 in, or the frost line); a deeper beam goes further."
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.leastStepRun"
-msgstr "Least step run"
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.leastStepRunHint"
-msgstr "IRC R403.1.5: the top of a footing is level; it steps where the ground falls."
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.lumber"
-msgstr "Lumber"
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.nameTheMaterial"
-msgstr "Name the material"
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.off"
-msgstr "Off"
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.osb"
-msgstr "OSB"
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.osbSubfloor"
-msgstr "OSB subfloor"
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.panel"
-msgstr "Panel"
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.pileDiameter"
-msgstr "Pile diameter"
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.pileDiameterHint"
-msgstr "Piles are sized by the engineer."
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.pileDiameterSpacingDeep"
-msgstr "Pile {diameter} @ {spacing}, {length} deep"
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.pileLength"
-msgstr "Pile length"
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.pileSpacing"
-msgstr "Pile spacing"
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.plaster"
-msgstr "Plaster"
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.plasterCeiling"
-msgstr "Plaster ceiling"
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.plywood"
-msgstr "Plywood"
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.plywoodSubfloor"
-msgstr "Plywood subfloor"
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.preset"
-msgstr "Preset"
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.raisedFloor"
-msgstr "Raised floor"
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.sectionBasement"
-msgstr "Foundation section: basement, its wall's top {top} over grade, its floor {floor} under it"
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.sectionRaisedFloor"
-msgstr "Foundation section: raised floor on a stem wall, finish floor {floor} over grade, crawl space {crawl} under the joists"
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.sectionRaisedFloorOnPiles"
-msgstr "Foundation section: raised floor on a stem wall on piles, finish floor {floor} over grade, crawl space {crawl} under the joists"
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.sectionSlabOnGrade"
-msgstr "Foundation section: slab on grade, finish floor {floor} over grade"
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.sectionSlabOnGradeOnPiles"
-msgstr "Foundation section: slab on grade on piles, finish floor {floor} over grade"
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.sill"
-msgstr "Sill"
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.size"
-msgstr "Size"
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.sizeJoists"
-msgstr "{size} joists"
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.slab"
-msgstr "Slab"
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.slabHint"
-msgstr "IRC R506.1 asks 3½ in at least."
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.slabOnGrade"
-msgstr "Slab on grade"
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.slabThickness"
-msgstr "Slab {thickness}"
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.slabTopOverGrade"
-msgstr "Slab top over grade"
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.slabTopOverGradeHint"
-msgstr "The ground round the slab is graded to this on every side: filled where it falls away, cut where it rises (IRC R317.1: 8 in)."
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.spacing"
-msgstr "Spacing"
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.spacingOnCentre"
-msgstr "{spacing} o.c."
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.stemTopOverGrade"
-msgstr "Stem top over grade"
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.stemTopOverGradeHint"
-msgstr "IRC R317.1 keeps wood framing 8 in off the ground."
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.stemWall"
-msgstr "Stem wall"
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.stemWallAndFooting"
-msgstr "Stem wall and footing"
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.stemWallHint"
-msgstr "Table R404.1.2: 6 in for one storey, 8 in for more."
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.stemWallThickness"
-msgstr "Stem wall {thickness}"
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.stepDownTheSlope"
-msgstr "Step down the slope"
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.stepHeight"
-msgstr "Step height"
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.subfloorSheathing"
-msgstr "Subfloor sheathing"
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.tallestStemBeforeStepping"
-msgstr "Tallest stem before stepping"
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.tallestStemBeforeSteppingHint"
-msgstr "A side whose stem would stand taller out of the ground steps down the slope: its stem drops to its top over grade, a cripple wall over it."
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.taper"
-msgstr "Taper"
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.taperAt45"
-msgstr "Taper {taper} at 45°"
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.taperHint"
-msgstr "The edge’s inside face stands plumb from its bottom, then tapers in at 45° to the slab. Auto runs it half the edge’s depth under the slab, 6 to 12 in, so a deeper edge grows plumb, not wider."
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.theHouseStandsOnABasement"
-msgstr "The house stands on a basement: its walls are the foundation walls, so only their footing is drawn."
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.theHouseStandsOnItsBasement"
-msgstr "The house stands on its basement, cut into the ground: the ground round it is left as it lies."
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.thickness"
-msgstr "Thickness"
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.titleMaterial"
-msgstr "{title} material"
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.turnedDownEdge"
-msgstr "Turned-down edge"
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.vinylPlank"
-msgstr "Vinyl plank"
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.woodPlank"
-msgstr "Wood plank"
-
-#: packages/editor/src/components/ui/panels/building-foundation-section.tsx
-msgid "editor.panels.buildingFoundationSection.woodPlankCeiling"
-msgstr "Wood plank ceiling"
-
 #: packages/editor/src/components/ui/panels/collections/collections-popover.tsx
 msgid "editor.panels.collections.collectionsPopover.cancel"
 msgstr "Cancel"
@@ -5111,20 +4423,8 @@ msgid "editor.panels.floorFoundationPanel.aThickerFloorGrowsUpwardThe"
 msgstr "A thicker floor grows upward: the rooms below keep their height."
 
 #: packages/editor/src/components/ui/panels/floor-foundation-panel.tsx
-msgid "editor.panels.floorFoundationPanel.buildUpFollows"
-msgstr "Its layers make {thickness}; the thickness follows them on the first change."
-
-#: packages/editor/src/components/ui/panels/floor-foundation-panel.tsx
 msgid "editor.panels.floorFoundationPanel.edgeFinish"
 msgstr "Edge finish"
-
-#: packages/editor/src/components/ui/panels/floor-foundation-panel.tsx
-msgid "editor.panels.floorFoundationPanel.floor"
-msgstr "Floor"
-
-#: packages/editor/src/components/ui/panels/floor-foundation-panel.tsx
-msgid "editor.panels.floorFoundationPanel.floorBuildUp"
-msgstr "Floor build-up"
 
 #: packages/editor/src/components/ui/panels/floor-foundation-panel.tsx
 msgid "editor.panels.floorFoundationPanel.floorPlate"
@@ -5135,8 +4435,8 @@ msgid "editor.panels.floorFoundationPanel.floorPlateThicknesslabelThickRestingOn
 msgstr "Floor plate {thicknessLabel} thick, resting on the walls below"
 
 #: packages/editor/src/components/ui/panels/floor-foundation-panel.tsx
-msgid "editor.panels.floorFoundationPanel.floorThicknessValue"
-msgstr "Floor thickness {thickness}"
+msgid "editor.panels.floorFoundationPanel.floorThickness"
+msgstr "Floor thickness"
 
 #: packages/editor/src/components/ui/panels/floor-foundation-panel.tsx
 msgid "editor.panels.floorFoundationPanel.floorTopAbove"
@@ -5207,24 +4507,12 @@ msgid "editor.panels.floorFoundationPanel.section.ground"
 msgstr "Ground"
 
 #: packages/editor/src/components/ui/panels/floor-foundation-panel.tsx
-msgid "editor.panels.floorFoundationPanel.section.layer"
-msgstr "{layer} · {size}"
-
-#: packages/editor/src/components/ui/panels/floor-foundation-panel.tsx
 msgid "editor.panels.floorFoundationPanel.section.slab"
 msgstr "Slab · {thickness}"
 
 #: packages/editor/src/components/ui/panels/floor-foundation-panel.tsx
 msgid "editor.panels.floorFoundationPanel.section.wallsBelow"
 msgstr "Walls below"
-
-#: packages/editor/src/components/ui/panels/floor-foundation-panel.tsx
-msgid "editor.panels.floorFoundationPanel.sectionLayers"
-msgstr "Floor plate {thickness} thick: {layers}; resting on the walls below"
-
-#: packages/editor/src/components/ui/panels/floor-foundation-panel.tsx
-msgid "editor.panels.floorFoundationPanel.sectionLayerSize"
-msgstr "{layer} {size}"
 
 #: packages/editor/src/components/ui/panels/floor-foundation-panel.tsx
 msgid "editor.panels.floorFoundationPanel.sectionOnGround"
@@ -5333,103 +4621,6 @@ msgstr "There is no storey below."
 #: packages/editor/src/components/ui/panels/floor-opening-panel.tsx
 msgid "editor.panels.floorOpeningPanel.title"
 msgstr "{source, select, stair {Stair opening} elevator {Elevator opening} ceiling {Ceiling opening} other {Floor opening}}"
-
-#: packages/editor/src/components/ui/panels/foundation-view-panel.tsx
-msgid "editor.panels.foundationViewPanel.aRaisedFloorOnAStem"
-msgstr "A raised floor on a stem wall of its own."
-
-#: packages/editor/src/components/ui/panels/foundation-view-panel.tsx
-msgid "editor.panels.foundationViewPanel.aSlabOfItsOwn"
-msgstr "A slab of its own (a porch, a patio, a garage pad), the ground held 8 in under its top all round."
-
-#: packages/editor/src/components/ui/panels/foundation-view-panel.tsx
-msgid "editor.panels.foundationViewPanel.clickItsCornersClickTheFirst"
-msgstr "Click its corners; click the first again, or press Enter, to close it."
-
-#: packages/editor/src/components/ui/panels/foundation-view-panel.tsx
-msgid "editor.panels.foundationViewPanel.closeTheOutsideWallsIntoA"
-msgstr "Close the outside walls into a loop first, or draw one"
-
-#: packages/editor/src/components/ui/panels/foundation-view-panel.tsx
-msgid "editor.panels.foundationViewPanel.deleteThisOutline"
-msgstr "Delete this outline"
-
-#: packages/editor/src/components/ui/panels/foundation-view-panel.tsx
-msgid "editor.panels.foundationViewPanel.draw"
-msgstr "Draw"
-
-#: packages/editor/src/components/ui/panels/foundation-view-panel.tsx
-msgid "editor.panels.foundationViewPanel.editItMyself"
-msgstr "Edit it myself"
-
-#: packages/editor/src/components/ui/panels/foundation-view-panel.tsx
-msgid "editor.panels.foundationViewPanel.followTheWalls"
-msgstr "Follow the walls"
-
-#: packages/editor/src/components/ui/panels/foundation-view-panel.tsx
-msgid "editor.panels.foundationViewPanel.footingsDrawn"
-msgstr "{footings, plural, one {# footing} other {# footings}} drawn: click one in the plan to size or move it."
-
-#: packages/editor/src/components/ui/panels/foundation-view-panel.tsx
-msgid "editor.panels.foundationViewPanel.foundation"
-msgstr "Foundation"
-
-#: packages/editor/src/components/ui/panels/foundation-view-panel.tsx
-msgid "editor.panels.foundationViewPanel.houseFoundation"
-msgstr "House foundation"
-
-#: packages/editor/src/components/ui/panels/foundation-view-panel.tsx
-msgid "editor.panels.foundationViewPanel.howFarItsTopSitsUnder"
-msgstr "How far its top sits under the house’s floor: a porch slab steps down from the door"
-
-#: packages/editor/src/components/ui/panels/foundation-view-panel.tsx
-msgid "editor.panels.foundationViewPanel.itsOwnDragItsCornersAnd"
-msgstr "Its own: drag its corners and sides in the plan or in 3D. Moving the walls leaves it be."
-
-#: packages/editor/src/components/ui/panels/foundation-view-panel.tsx
-msgid "editor.panels.foundationViewPanel.outline"
-msgstr "Outline"
-
-#: packages/editor/src/components/ui/panels/foundation-view-panel.tsx
-msgid "editor.panels.foundationViewPanel.outlinesOfSlabsAndRaisedFloors"
-msgstr "Outlines of slabs and raised floors (porches, patios, a garage pad), and footings under interior bearing walls and posts."
-
-#: packages/editor/src/components/ui/panels/foundation-view-panel.tsx
-msgid "editor.panels.foundationViewPanel.raisedFloor"
-msgstr "Raised floor"
-
-#: packages/editor/src/components/ui/panels/foundation-view-panel.tsx
-msgid "editor.panels.foundationViewPanel.reTraceFromWalls"
-msgstr "Re-trace from walls"
-
-#: packages/editor/src/components/ui/panels/foundation-view-panel.tsx
-msgid "editor.panels.foundationViewPanel.setTheOutlineBackToThe"
-msgstr "Set the outline back to the outside faces of the walls, keeping it your own"
-
-#: packages/editor/src/components/ui/panels/foundation-view-panel.tsx
-msgid "editor.panels.foundationViewPanel.slab"
-msgstr "Slab"
-
-#. What a picked foundation outline pours: the house’s own foundation, as against a slab or raised floor of its own.
-#: packages/editor/src/components/ui/panels/foundation-view-panel.tsx
-msgid "editor.panels.foundationViewPanel.theHouses"
-msgstr "The house’s"
-
-#: packages/editor/src/components/ui/panels/foundation-view-panel.tsx
-msgid "editor.panels.foundationViewPanel.theHousesOwnFoundation"
-msgstr "The house’s own foundation, poured as the house’s settings below say, in place of the walls’ outline."
-
-#: packages/editor/src/components/ui/panels/foundation-view-panel.tsx
-msgid "editor.panels.foundationViewPanel.thisOutline"
-msgstr "This outline"
-
-#: packages/editor/src/components/ui/panels/foundation-view-panel.tsx
-msgid "editor.panels.foundationViewPanel.topUnderTheFloor"
-msgstr "Top under the floor"
-
-#: packages/editor/src/components/ui/panels/foundation-view-panel.tsx
-msgid "editor.panels.foundationViewPanel.tracedFromTheOutsideWallsIt"
-msgstr "Traced from the outside walls: it moves when they do."
 
 #: packages/editor/src/components/ui/panels/multi-selection-panel.tsx
 msgid "editor.panels.mergeRefusal.alreadyJoined"
@@ -5583,10 +4774,6 @@ msgstr "Unwrap the corner"
 #: packages/editor/src/components/ui/panels/multi-selection-panel.tsx
 msgid "editor.panels.multiSelectionPanel.unwrapTheCornerBothWindowsStay"
 msgstr "Unwrap the corner: both windows stay, each framed at the corner"
-
-#: packages/editor/src/components/ui/panels/panel-manager.tsx
-msgid "editor.panels.panelManager.foundation"
-msgstr "Foundation"
 
 #: packages/editor/src/components/ui/panels/panel-manager.tsx
 msgid "editor.panels.panelManager.selection"
@@ -5937,10 +5124,6 @@ msgid "editor.panels.roomConstructionRows.notIncluded"
 msgstr "Not included"
 
 #: packages/editor/src/components/ui/panels/room-construction-rows.tsx
-msgid "editor.panels.roomConstructionRows.onTheFoundation"
-msgstr "On the foundation"
-
-#: packages/editor/src/components/ui/panels/room-construction-rows.tsx
 msgid "editor.panels.roomConstructionRows.onTheGround"
 msgstr "On the ground"
 
@@ -5975,10 +5158,6 @@ msgstr "Post spacing (max)"
 #: packages/editor/src/components/ui/panels/room-construction-rows.tsx
 msgid "editor.panels.roomConstructionRows.raised"
 msgstr "Raised {lift}"
-
-#: packages/editor/src/components/ui/panels/room-construction-rows.tsx
-msgid "editor.panels.roomConstructionRows.raisedFloor"
-msgstr "Raised floor"
 
 #: packages/editor/src/components/ui/panels/room-construction-rows.tsx
 msgid "editor.panels.roomConstructionRows.replace"
@@ -6035,10 +5214,6 @@ msgstr "Turning walls off keeps the ones shared with {rooms}."
 #: packages/editor/src/components/ui/panels/room-construction-rows.tsx
 msgid "editor.panels.roomConstructionRows.sitsOnPreset"
 msgstr "Sits on: {name} · {preset}"
-
-#: packages/editor/src/components/ui/panels/room-construction-rows.tsx
-msgid "editor.panels.roomConstructionRows.slab"
-msgstr "Slab"
 
 #: packages/editor/src/components/ui/panels/room-construction-rows.tsx
 msgid "editor.panels.roomConstructionRows.theNextRoom"
@@ -7161,10 +6336,6 @@ msgid "editor.toolHint.cancelStartPoint.1xbq2lh"
 msgstr "Cancel start point"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.closeTheOutline.f6cvzi"
-msgstr "Close the outline"
-
-#: packages/nodes/src/i18n/definition-messages.ts
 msgid "editor.toolHint.cornerWindow.1avkzpo"
 msgstr "Corner window"
 
@@ -7401,10 +6572,6 @@ msgid "editor.toolHint.pipeSizeDownUp.wp04og"
 msgstr "Pipe size down / up"
 
 #: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.placeACornerOfTheFoundation.1o1ze9j"
-msgstr "Place a corner of the foundation"
-
-#: packages/nodes/src/i18n/definition-messages.ts
 msgid "editor.toolHint.placeAndContinue.qfwkrq"
 msgstr "Place and continue"
 
@@ -7619,10 +6786,6 @@ msgstr "Set beam start / end; the next beam starts there"
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "editor.toolHint.setFenceStartEnd.1phbwsq"
 msgstr "Set fence start / end"
-
-#: packages/nodes/src/i18n/definition-messages.ts
-msgid "editor.toolHint.setFootingStartEndOrPlace.nnv1av"
-msgstr "Set footing start / end, or place a pad"
 
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "editor.toolHint.setOneCornerThenTheOpposite.8tsl49"
@@ -11208,118 +10371,6 @@ msgstr "Open Passage"
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "node.floorOpening.label"
 msgstr "Floor opening"
-
-#: packages/nodes/src/i18n/definition-messages.ts
-msgid "node.footing.description"
-msgstr "A concrete strip or pad footing poured under the lowest floor."
-
-#: packages/nodes/src/i18n/definition-messages.ts
-msgid "node.footing.label"
-msgstr "Footing"
-
-#: packages/nodes/src/footing/panel.tsx
-msgid "node.footing.panel.actions"
-msgstr "Actions"
-
-#: packages/nodes/src/footing/panel.tsx
-msgid "node.footing.panel.aGradeBeamOnPilesAs"
-msgstr "A grade beam on piles, as the building is."
-
-#: packages/nodes/src/footing/panel.tsx
-msgid "node.footing.panel.aPierCarriesTheFloor"
-msgstr "A pier carries the floor."
-
-#: packages/nodes/src/footing/panel.tsx
-msgid "node.footing.panel.aPileCapOnOnePile"
-msgstr "A pile cap on one pile, as the building is."
-
-#: packages/nodes/src/footing/panel.tsx
-msgid "node.footing.panel.aStemWallCarriesTheFloor"
-msgstr "A stem wall carries the floor."
-
-#: packages/nodes/src/footing/panel.tsx
-msgid "node.footing.panel.aThickenedSlabUnderTheFloor"
-msgstr "A thickened slab under the floor slab."
-
-#: packages/nodes/src/footing/panel.tsx
-msgid "node.footing.panel.atLeast"
-msgstr "At least"
-
-#: packages/nodes/src/footing/panel.tsx
-msgid "node.footing.panel.bottom"
-msgstr ", bottom"
-
-#: packages/nodes/src/footing/panel.tsx
-msgid "node.footing.panel.clearTheDepth"
-msgstr "Clear the depth"
-
-#: packages/nodes/src/footing/panel.tsx
-msgid "node.footing.panel.delete"
-msgstr "Delete"
-
-#: packages/nodes/src/footing/panel.tsx
-msgid "node.footing.panel.depthUnderGrade"
-msgstr "Depth under grade"
-
-#: packages/nodes/src/footing/panel.tsx
-msgid "node.footing.panel.depthUnderGradeBuildingS"
-msgstr "Depth under grade (building's)"
-
-#: packages/nodes/src/footing/panel.tsx
-msgid "node.footing.panel.footing"
-msgstr "Footing"
-
-#: packages/nodes/src/footing/panel.tsx
-msgid "node.footing.panel.ircR4031AsksAFooting"
-msgstr "IRC R403.1 asks a footing at least 12 in wide and 6 in thick."
-
-#: packages/nodes/src/footing/panel.tsx
-msgid "node.footing.panel.length"
-msgstr "Length"
-
-#: packages/nodes/src/footing/panel.tsx
-msgid "node.footing.panel.pad"
-msgstr "Pad"
-
-#: packages/nodes/src/footing/panel.tsx
-msgid "node.footing.panel.strip"
-msgstr "Strip"
-
-#: packages/nodes/src/footing/panel.tsx
-msgid "node.footing.panel.theFootingSThicknessUnderThe"
-msgstr "the footing’s thickness under the floor reaches this far."
-
-#: packages/nodes/src/footing/panel.tsx
-msgid "node.footing.panel.theGradeBeamReachesThisFar"
-msgstr "the grade beam reaches this far."
-
-#: packages/nodes/src/footing/panel.tsx
-msgid "node.footing.panel.theSlabAndTheFootingS"
-msgstr "the slab and the footing’s thickness reach this far."
-
-#: packages/nodes/src/footing/panel.tsx
-msgid "node.footing.panel.thickness"
-msgstr "Thickness"
-
-#: packages/nodes/src/footing/panel.tsx
-msgid "node.footing.panel.top"
-msgstr "Top"
-
-#: packages/nodes/src/footing/panel.tsx
-msgid "node.footing.panel.useTheBuildingSDepth"
-msgstr "Use the building's depth"
-
-#: packages/nodes/src/footing/panel.tsx
-msgid "node.footing.panel.width"
-msgstr "Width"
-
-#: packages/nodes/src/i18n/definition-messages.ts
-msgid "node.foundation.description"
-msgstr "The outline the foundation is poured to: drawn, or traced from the walls and stretched."
-
-#: packages/nodes/src/i18n/definition-messages.ts
-msgid "node.foundation.label"
-msgstr "Foundation"
 
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "node.guide.description"
