@@ -42,7 +42,21 @@ describe('siding', () => {
     expect(batten.imageUrl).toContain('batten')
   })
 
-  test('a thumbnail shows as is, and a flat colour stays a colour', () => {
+  test('a thumbnail multiplies the material tint instead of its representative preview colour', () => {
+    const navy = getCatalogMaterialById('siding-lap-navy')!
+    const item = {
+      ...navy,
+      previewThumbnailUrl: '/material/siding/lap_thumb.webp',
+      previewColor: '#eeeeee',
+    }
+    expect(getMaterialSwatch(item)).toEqual({
+      color: navy.preset.mapProperties.color,
+      imageUrl: item.previewThumbnailUrl,
+      tinted: true,
+    })
+  })
+
+  test('a white-tinted thumbnail shows as is, and a flat colour stays a colour', () => {
     const wood = getCatalogMaterialById('wood-finewood27')!
     expect(getMaterialSwatch(wood)).toEqual({
       color: wood.previewColor!,

@@ -4979,7 +4979,7 @@ export type MaterialSwatch = {
   color: string
   imageUrl: string | null
   /**
-   * The image is a white albedo the colour tints, as the 3D material does
+   * The image is a neutral thumbnail or albedo the colour tints, as the 3D material does
    * (`mapProperties.color` × map): draw it multiplied over `color`.
    */
   tinted: boolean
@@ -4988,18 +4988,18 @@ export type MaterialSwatch = {
 const BROWSER_IMAGE = /\.(?:webp|png|jpe?g|avif|gif)(?:[?#]|$)/i
 
 /**
- * A catalog material's swatch: its thumbnail; else its albedo when a browser can
- * show it, tinted by the material's colour (a siding's lap or batten relief in its
- * paint colour rather than a flat chip); else its preview colour.
+ * A catalog material's swatch: its thumbnail or browser-readable albedo,
+ * multiplied by the material's colour; else its flat preview colour.
  */
 export function getMaterialSwatch(item: MaterialCatalogItem): MaterialSwatch {
   const tint = item.preset.mapProperties.color
   const color = item.previewColor ?? tint ?? '#f3f4f6'
-  if (item.previewThumbnailUrl) return { color, imageUrl: item.previewThumbnailUrl, tinted: false }
   const albedo = item.preset.maps.albedoMap
-  if (albedo && BROWSER_IMAGE.test(albedo)) {
-    const tinted = !!tint && tint.toLowerCase() !== '#ffffff'
-    return { color: tinted ? tint : color, imageUrl: albedo, tinted }
+  const imageUrl =
+    item.previewThumbnailUrl ?? (albedo && BROWSER_IMAGE.test(albedo) ? albedo : null)
+  if (imageUrl) {
+    const tinted = !!tint && !/^#(?:fff|ffffff)$/i.test(tint)
+    return { color: tinted ? tint : color, imageUrl, tinted }
   }
   return { color, imageUrl: null, tinted: false }
 }
