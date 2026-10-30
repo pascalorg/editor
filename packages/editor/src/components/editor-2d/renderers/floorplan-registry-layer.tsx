@@ -138,6 +138,7 @@ import {
   RoomHandleDragPreview2D,
   RoomHandles2D,
   SelectedWallDimensions2D,
+  useSelectionDimensionNodes,
 } from '../../editor/room-handles-2d'
 import { RoomHighlight2D } from '../../editor/room-highlight'
 import { RoomLabels2D } from '../../editor/room-labels'
@@ -158,7 +159,10 @@ import {
   resolveSvgAnnotationCollisions,
   svgAnnotationLabelId,
 } from './floorplan-annotation-layout'
-import { FloorplanDimensionEditOverlay } from './floorplan-dimension-edit-overlay'
+import {
+  FloorplanDimensionEditOverlay,
+  typeableDimensionAt,
+} from './floorplan-dimension-edit-overlay'
 import { FloorplanDimensionRenderer } from './floorplan-dimension-renderer'
 import { FloorplanGeometryRenderer } from './floorplan-geometry-renderer'
 import {
@@ -627,6 +631,11 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
   // `handleClickStop` / `handleSelect`, so the tool never sees it. Pass
   // clicks through in that case (`floorplanEntryYieldsToToolNow`).
   const editorMode = useEditor((s) => s.mode)
+  const selectionDimensionNodes = useSelectionDimensionNodes()
+  const selectionDimensionIds = useMemo(
+    () => new Set(selectionDimensionNodes.map((node) => node.id)),
+    [selectionDimensionNodes],
+  )
   const floorplanSelectionTool = useEditor((s) => s.floorplanSelectionTool)
   const endpointReshape = useEndpointReshape()
   const isMarqueeSelectionActive =
@@ -1009,6 +1018,12 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
       if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return false
       if (movingNode) return false
       if (useEditor.getState().mode === 'delete') return false
+      // A press on a member's dimension value is the type-a-value box's: its click opens it.
+      if (!immediate && typeableDimensionAt(event.target, event.clientX, event.clientY)) {
+        event.stopPropagation()
+        suppressBoxSelectForPointer(event)
+        return true
+      }
       const started = startFloorplanGroupMove(id, event, {
         immediate,
         onClickFallthrough: immediate ? undefined : () => startGroupPickUp(),
@@ -1636,6 +1651,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
         hoveredHandleId={handleIdForNode(hoveredHandleId, entry.id)}
         interactiveElevators={interactiveElevators}
         isMarqueeSelectionActive={isMarqueeSelectionActive}
+        keepsSelectionDimensions={selectionDimensionIds.has(entry.id)}
         key={`${pass}-${entry.id}`}
         levelDataCacheRef={levelDataCacheRef}
         levelNodeIdsByType={floorplanData.levelNodeIdsByType}
@@ -2005,6 +2021,8 @@ type FloorplanRegistryEntryProps = {
   hoveredHandleId: string | null
   interactiveElevators: unknown
   isMarqueeSelectionActive: boolean
+  /** A wall in a multi-selection still shows its own length (`useSelectionDimensionNodes`). */
+  keepsSelectionDimensions: boolean
   levelDataCacheRef: { current: Map<string, LevelDataCacheEntry> }
   levelNodeIdsByType: ReadonlyMap<string, readonly AnyNodeId[]>
   moving: boolean
@@ -2054,6 +2072,7 @@ const FloorplanRegistryEntry = memo(function FloorplanRegistryEntry({
   hoveredHandleId,
   interactiveElevators,
   isMarqueeSelectionActive,
+  keepsSelectionDimensions,
   levelDataCacheRef,
   levelNodeIdsByType,
   moving,
@@ -2278,10 +2297,10 @@ const FloorplanRegistryEntry = memo(function FloorplanRegistryEntry({
     : null
   // Multi-selection shows highlight only: strip this member's edit handles /
   // dimension chrome (all of which live in the overlay pass) while keeping
-  // its highlighted body geometry.
+  // its highlighted body geometry and, for a wall, its own length.
   const geometry =
     visibleGeometry && suppressHandles && pass !== 'base'
-      ? stripHandleChrome(visibleGeometry)
+      ? stripHandleChrome(visibleGeometry, keepsSelectionDimensions)
       : visibleGeometry
   useFloorplanReveal(nodeId, entryRef, cacheEntry, revealWaiting, revealActive)
   if (revealWaiting || !geometry) return null
@@ -3775,11 +3794,19 @@ const HANDLE_CHROME_KINDS = new Set<FloorplanGeometry['kind']>([
   'equal-spacing-badge',
 ])
 
-function stripHandleChrome(g: FloorplanGeometry): FloorplanGeometry | null {
+function stripHandleChrome(
+  g: FloorplanGeometry,
+  keepContextualDimensions = false,
+): FloorplanGeometry | null {
+  if (
+    keepContextualDimensions &&
+    readFloorplanGeometryMetadata(g).annotationRole === 'contextual-dimension'
+  )
+    return g
   if (HANDLE_CHROME_KINDS.has(g.kind)) return null
   if (g.kind === 'group') {
     const children = g.children
-      .map(stripHandleChrome)
+      .map((child) => stripHandleChrome(child, keepContextualDimensions))
       .filter((c): c is FloorplanGeometry => c !== null)
     if (children.length === 0) return null
     return { kind: 'group', children, transform: g.transform }

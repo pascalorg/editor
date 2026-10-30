@@ -175,16 +175,26 @@ In Select mode, 3D and 2D canvas selection share the same modifier vocabulary:
 
 ### Selected-wall dimensions
 
-With exactly one node selected in Select mode and no interaction scope running, both views
-show its kind's `selectionDimensions` (floor-plan extension), unless Display → Dimensions is
-off (`useFloorplanAnnotationVisibility.showDimensions`, persisted, default on). The wall's are the push drag's
+With a node selected in Select mode, alone or with others, and no interaction scope or room
+drag running, both views show its kind's `selectionDimensions` (floor-plan extension), unless
+Display → Dimensions is off (`useFloorplanAnnotationVisibility.showDimensions`, persisted,
+default on). `useSelectionDimensionNodes` (in `room-handles-2d.tsx`) picks the selected nodes of
+kinds that have them, on one level, in one subscription; nodes of other kinds in a mixed
+selection add none. Several selected walls each show theirs, merged by
+`mergeSelectionDimensions` (`lib/room-push-dimensions.ts`): a room width or outside size two of
+them measure shows once, owned by the first, by the same `sameRoomDimension` test the
+multi-wall move uses (the outside size is placed from the same end of its stretch whichever
+way the wall was drawn, so opposite walls draw it in one place). The wall's are the push drag's
 dimensions without dragging (`selectedWallDimensions` in
 `lib/room-handle-drag.ts`, from `wallSelectionDimensions` in `lib/room-push-dimensions.ts`):
 each room width the wall bounds, face to face, and, for a wall with rooms on one side only,
 the outside size to the far face of the farthest parallel wall it connects to. A wall between
 two rooms shows room widths only. The plan draws them in `SelectedWallDimensions2D` under the
-wall's `data-node-id`, so `FloorplanDimensionEditOverlay` makes each one typeable; 3D
-labels (`SelectedWallDimensions3D`) open an inline input. Both commit through
+`data-node-id` of the wall it runs from, so `FloorplanDimensionEditOverlay` makes each one
+typeable and the typed size moves that wall; 3D labels (`SelectedWallDimensions3D`) open an
+inline input for their own wall. In a multi-selection the plan's dashed group box covers the
+walls: a press on a dimension value under it, or on a member's, is the value box's
+(`typeableDimensionAt`), not a group move or pick-up. Both commit through
 `commitDimensionValue`: a dimension perpendicular to a straight wall with one witness on it
 resolves to a `wall-offset` drive and moves the wall by `commitRoomPush`, so joined walls stay
 attached and the move is one undo step. Input parses with `parseDimensionInput`
@@ -202,7 +212,9 @@ their interior chains (the `interior` / `interior-overall` tiers: clear spans in
 rooms), their facade chains (every other tier: openings, partitions, columns, jogs, overall)
 or both (`constructionDimensionFace` in `nodes/src/wall/construction-dimensions.ts`); the PDF
 export follows it. A wall with no exterior side keeps one face-to-face span whatever the
-choice. Dimensions off also hides the plan's automatic and contextual dimensions
+choice. A multi-selection strips its members' handles and dimension chrome but keeps this
+length on the walls that show selection dimensions (`stripHandleChrome` keeps the
+`contextual-dimension` role). Dimensions off also hides the plan's automatic and contextual dimensions
 (`resolveFloorplanAnnotationVisibility`); drawn dimensions and measurements stay.
 
 The floating helper in `packages/editor/src/components/ui/helpers/helper-manager.tsx`

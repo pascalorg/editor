@@ -246,8 +246,33 @@ export function wallPushDimensions({
   )
 }
 
+/** Whether two dimensions measure the same span, either way round. */
+export function sameRoomDimension(a: RoomDimension, b: RoomDimension): boolean {
+  const near = (p: Point, q: Point) => Math.hypot(p[0] - q[0], p[1] - q[1]) < 1e-3
+  return (near(a.from, b.from) && near(a.to, b.to)) || (near(a.from, b.to) && near(a.to, b.from))
+}
+
 /** A selected wall's temporary dimension: a room width (ID) or the outside size (OD). */
 export type WallSelectionDimension = RoomDimension & { faces: 'interior' | 'exterior' }
+
+/** A selection's temporary dimension with the node it runs from: typing it moves that node. */
+export type OwnedSelectionDimension = WallSelectionDimension & { ownerId: string }
+
+/**
+ * Several selected nodes' temporary dimensions as one list, keys unique across
+ * owners. Two selected walls across one room both measure it: the width shows
+ * once, owned by the first.
+ */
+export function mergeSelectionDimensions(
+  owners: ReadonlyArray<{ ownerId: string; dimensions: readonly WallSelectionDimension[] }>,
+): OwnedSelectionDimension[] {
+  const kept: OwnedSelectionDimension[] = []
+  for (const { ownerId, dimensions } of owners)
+    for (const dimension of dimensions)
+      if (!kept.some((other) => sameRoomDimension(other, dimension)))
+        kept.push({ ...dimension, key: `${ownerId}:${dimension.key}`, ownerId })
+  return kept
+}
 
 /** Which faces a selected wall's temporary dimensions measure to. */
 export type WallDimensionFaces = 'interior' | 'exterior' | 'both'
@@ -335,8 +360,13 @@ function overallExteriorDimension(
     }
   }
   if (!best) return null
-  const u = best.lo + (best.hi - best.lo) * EXTERIOR_DIMENSION_AT
-  const from: Point = [own.start[0] + dir[0] * u, own.start[1] + dir[1] * u]
+  const at = (u: number): Point => [own.start[0] + dir[0] * u, own.start[1] + dir[1] * u]
+  const [lo, hi] = [at(best.lo), at(best.hi)]
+  // Measured from the same end of the stretch whichever way the wall was drawn,
+  // so the walls on either side of the building put their outside size in one place.
+  const fromLo = Math.abs(lo[0] - hi[0]) > 1e-6 ? lo[0] < hi[0] : lo[1] <= hi[1]
+  const offset = (best.hi - best.lo) * EXTERIOR_DIMENSION_AT
+  const from = at(fromLo ? best.lo + offset : best.hi - offset)
   return {
     from,
     to: [from[0] + across[0] * best.distance, from[1] + across[1] * best.distance],

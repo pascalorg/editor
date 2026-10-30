@@ -87,8 +87,9 @@ export type FloorplanNodeExtension<N extends AnyNode = AnyNode> = {
    */
   planHitSelectsNode?: boolean
   /**
-   * Temporary dimensions shown while this node is the sole selection in
-   * Select mode, in 2D and 3D (level-local plan points). Each is typeable:
+   * Temporary dimensions shown while this node is selected in Select mode,
+   * alone or with others, in 2D and 3D (level-local plan points). Its
+   * `contextualDimensions` also stay in a multi-selection. Each is typeable:
    * `commitDimensionValue` drives the node so it reads the typed value.
    * Recomputed when the node or its level's rooms change.
    */

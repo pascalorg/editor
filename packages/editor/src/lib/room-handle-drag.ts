@@ -50,6 +50,7 @@ import { roomOwnPlate } from './room-built-on'
 import {
   mezzanineEdgeDimensions,
   type RoomDimension,
+  sameRoomDimension,
   separatorEdgeDimensionRooms,
   type WallDimensionFaces,
   type WallSelectionDimension,
@@ -1418,11 +1419,6 @@ export function beginWallGroupPush(wallIds: readonly string[], levelId: string):
   let shown = false
   const dimensions = () => {
     const kept: RoomDimension[] = []
-    const same = (a: RoomDimension, b: RoomDimension) =>
-      (Math.hypot(a.from[0] - b.from[0], a.from[1] - b.from[1]) < 1e-3 &&
-        Math.hypot(a.to[0] - b.to[0], a.to[1] - b.to[1]) < 1e-3) ||
-      (Math.hypot(a.from[0] - b.to[0], a.from[1] - b.to[1]) < 1e-3 &&
-        Math.hypot(a.to[0] - b.from[0], a.to[1] - b.from[1]) < 1e-3)
     for (const { wall, normal, rooms } of measured) {
       const distance = drag[0] * normal[0] + drag[1] * normal[1]
       // Two moved walls across one room both measure it: the width shows once.
@@ -1433,7 +1429,7 @@ export function beginWallGroupPush(wallIds: readonly string[], levelId: string):
         distance,
         resolve: livePreviewNode,
       }))
-        if (!kept.some((other) => same(other, dimension)))
+        if (!kept.some((other) => sameRoomDimension(other, dimension)))
           kept.push({ ...dimension, key: `${wall.id}:${dimension.key}` })
     }
     return kept

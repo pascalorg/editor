@@ -39,6 +39,7 @@ import {
   selectedWallDimensions,
   useRoomHandleDrag,
 } from './room-handle-drag'
+import { mergeSelectionDimensions } from './room-push-dimensions'
 import { applyRoomPlan, renameRoom } from './room-structure-commands'
 import {
   cancelRoomTransform,
@@ -532,6 +533,48 @@ describe('room handles (elevation, push/pull)', () => {
     for (const point of [wall(west.id).start, wall(west.id).end]) expect(point[0]).toBeCloseTo(0)
     for (const point of [wall(south.id).start, wall(south.id).end]) expect(point[1]).toBeCloseTo(0)
     expect(useScene.temporal.getState().pastStates).toHaveLength(1)
+  })
+
+  test("several selected walls show each one's dimensions, a room between two of them once", () => {
+    const { east, west, north } = roomWalls()
+    const thickness = east.thickness ?? 0.1
+    const nodes = useScene.getState().nodes
+    const dimensions = mergeSelectionDimensions(
+      [east, west, north].map((wall) => ({
+        ownerId: wall.id,
+        dimensions: selectedWallDimensions(nodes, wall, 'both'),
+      })),
+    )
+    const shown = (faces: 'interior' | 'exterior') =>
+      dimensions
+        .filter((d) => d.faces === faces)
+        .map((d) => [d.ownerId, Number(d.distance.toFixed(4))])
+    // East and west both measure the 6 m room and the building across it: once each, on east.
+    expect(shown('interior')).toEqual([
+      [east.id, Number((6 - thickness).toFixed(4))],
+      [north.id, Number((4 - thickness).toFixed(4))],
+    ])
+    expect(shown('exterior')).toEqual([
+      [east.id, Number((6 + thickness).toFixed(4))],
+      [north.id, Number((4 + thickness).toFixed(4))],
+    ])
+    expect(new Set(dimensions.map((d) => d.key)).size).toBe(dimensions.length)
+
+    // Typing one moves the wall it runs from.
+    const depth = dimensions.find((d) => d.ownerId === north.id && d.faces === 'interior')!
+    expect(
+      commitDimensionValue({
+        target: {
+          ownerNodeId: north.id as AnyNodeId,
+          witnessStart: depth.from,
+          witnessEnd: depth.to,
+          value: depth.distance,
+        },
+        nextLength: 5,
+      }),
+    ).toEqual({ ok: true })
+    const moved = useScene.getState().nodes[north.id as AnyNodeId] as WallNode
+    expect(moved.start[1]).toBeCloseTo(5 + thickness)
   })
 
   test('a multi-wall move shows the room widths live, as a single wall push does', () => {

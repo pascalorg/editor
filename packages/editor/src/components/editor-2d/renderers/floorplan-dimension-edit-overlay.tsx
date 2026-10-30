@@ -62,6 +62,32 @@ export function useDimensionEditAllowed(): boolean {
   return useEditor((state) => isDimensionEditAllowed(state, { readOnly }))
 }
 
+/**
+ * The typeable dimension value under a press, with the node typing it drives:
+ * the pressed element's or, when the plan's dashed group box lies over it, the
+ * one beneath (a multi-selection's walls keep their dimensions inside it).
+ */
+export function typeableDimensionAt(
+  target: EventTarget | null,
+  clientX: number,
+  clientY: number,
+): { label: Element; ownerNodeId: AnyNodeId } | null {
+  const resolve = (element: Element | null | undefined) => {
+    const hit = element?.closest?.('[data-floorplan-dimension-hit]')
+    const label = hit?.closest('[data-floorplan-annotation-label]')
+    const ownerNodeId = hit?.closest('[data-node-id]')?.getAttribute('data-node-id')
+    return label && ownerNodeId ? { label, ownerNodeId: ownerNodeId as AnyNodeId } : null
+  }
+  const element = target as Element | null
+  const direct = resolve(element)
+  if (direct || !element?.closest?.('[data-group-selection-box]')) return direct
+  for (const below of document.elementsFromPoint(clientX, clientY)) {
+    const found = resolve(below)
+    if (found) return found
+  }
+  return null
+}
+
 type EditTarget = {
   ownerNodeId: AnyNodeId
   text: string
@@ -95,13 +121,9 @@ export function FloorplanDimensionEditOverlay(): React.ReactElement | null {
         return
       }
       if (!isDimensionEditAllowed(useEditor.getState(), useScene.getState())) return
-      const origin = event.target as Element | null
-      const hit = origin?.closest?.('[data-floorplan-dimension-hit]')
-      if (!hit) return
-      const label = hit.closest('[data-floorplan-annotation-label]')
-      const owner = hit.closest('[data-node-id]')
-      const ownerNodeId = owner?.getAttribute('data-node-id')
-      if (!label || !ownerNodeId) return
+      const found = typeableDimensionAt(event.target, event.clientX, event.clientY)
+      if (!found) return
+      const { label, ownerNodeId } = found
 
       const value = number(label.getAttribute('data-floorplan-dimension-value'))
       const witnessStart = point(
@@ -119,7 +141,7 @@ export function FloorplanDimensionEditOverlay(): React.ReactElement | null {
       const box = label.getBoundingClientRect()
       const text = label.getAttribute('data-floorplan-dimension-text') ?? ''
       setTarget({
-        ownerNodeId: ownerNodeId as AnyNodeId,
+        ownerNodeId,
         text,
         value,
         witnessStart,

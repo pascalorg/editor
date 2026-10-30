@@ -430,18 +430,16 @@ const DIMENSION_LABEL_OUTLINE = [
 function RoomDimensionLines3D({
   dimensions,
   hidden = false,
-  wallId,
 }: {
-  dimensions: readonly RoomDimension[]
+  /** With an `ownerId` (a selected wall's), a value can be typed to move that wall. */
+  dimensions: readonly (RoomDimension & { ownerId?: string })[]
   /** Hides the labels while keeping their drei `Html` roots mounted. */
   hidden?: boolean
-  /** The selected wall the dimensions run from: set, each value can be typed to move it. */
-  wallId?: string
 }) {
   const i18n = usePascalI18n()
   const unit = useViewer((s) => s.unit)
   const metricNotation = useViewer((s) => s.metricNotation)
-  const editable = useDimensionEditAllowed() && !!wallId
+  const editAllowed = useDimensionEditAllowed()
   const [editing, setEditing] = useState<string | null>(null)
   const geometry = useMemo(() => {
     if (!dimensions.length) return null
@@ -467,56 +465,59 @@ function RoomDimensionLines3D({
         raycast={noRaycast}
         renderOrder={1001}
       />
-      {dimensions.map((dimension) => (
-        <Html
-          center
-          key={dimension.key}
-          position={[
-            (dimension.from[0] + dimension.to[0]) / 2,
-            dimension.elevation,
-            (dimension.from[1] + dimension.to[1]) / 2,
-          ]}
-          style={{ display: hidden ? 'none' : undefined, pointerEvents: 'none' }}
-          zIndexRange={[20, 0]}
-        >
-          {editable && wallId && !hidden && editing === dimension.key ? (
-            <DimensionValueInput
-              dimension={dimension}
-              initial={formatMeasurement(dimension.distance, unit, metricNotation)}
-              onClose={() => setEditing(null)}
-              unit={unit}
-              wallId={wallId}
-            />
-          ) : (
-            <div
-              className={`-translate-y-3 whitespace-nowrap font-medium text-base text-white ${editable ? 'pointer-events-auto cursor-text' : ''}`}
-              data-room-dimension-3d
-              onClick={editable ? () => setEditing(dimension.key) : undefined}
-              onKeyDown={
-                editable
-                  ? (event) => {
-                      if (event.key === 'Enter') setEditing(dimension.key)
-                    }
-                  : undefined
-              }
-              onPointerDown={editable ? (event) => event.stopPropagation() : undefined}
-              role={editable ? 'button' : undefined}
-              style={{ textShadow: DIMENSION_LABEL_OUTLINE }}
-              tabIndex={editable ? 0 : undefined}
-              title={
-                editable
-                  ? i18n._({
-                      id: 'editor.roomHandles.typeASizeToMoveThe',
-                      message: 'Type a size to move the wall',
-                    })
-                  : undefined
-              }
-            >
-              {formatMeasurement(dimension.distance, unit, metricNotation)}
-            </div>
-          )}
-        </Html>
-      ))}
+      {dimensions.map(({ ownerId: wallId, ...dimension }) => {
+        const editable = editAllowed && !!wallId
+        return (
+          <Html
+            center
+            key={dimension.key}
+            position={[
+              (dimension.from[0] + dimension.to[0]) / 2,
+              dimension.elevation,
+              (dimension.from[1] + dimension.to[1]) / 2,
+            ]}
+            style={{ display: hidden ? 'none' : undefined, pointerEvents: 'none' }}
+            zIndexRange={[20, 0]}
+          >
+            {editable && wallId && !hidden && editing === dimension.key ? (
+              <DimensionValueInput
+                dimension={dimension}
+                initial={formatMeasurement(dimension.distance, unit, metricNotation)}
+                onClose={() => setEditing(null)}
+                unit={unit}
+                wallId={wallId}
+              />
+            ) : (
+              <div
+                className={`-translate-y-3 whitespace-nowrap font-medium text-base text-white ${editable ? 'pointer-events-auto cursor-text' : ''}`}
+                data-room-dimension-3d
+                onClick={editable ? () => setEditing(dimension.key) : undefined}
+                onKeyDown={
+                  editable
+                    ? (event) => {
+                        if (event.key === 'Enter') setEditing(dimension.key)
+                      }
+                    : undefined
+                }
+                onPointerDown={editable ? (event) => event.stopPropagation() : undefined}
+                role={editable ? 'button' : undefined}
+                style={{ textShadow: DIMENSION_LABEL_OUTLINE }}
+                tabIndex={editable ? 0 : undefined}
+                title={
+                  editable
+                    ? i18n._({
+                        id: 'editor.roomHandles.typeASizeToMoveThe',
+                        message: 'Type a size to move the wall',
+                      })
+                    : undefined
+                }
+              >
+                {formatMeasurement(dimension.distance, unit, metricNotation)}
+              </div>
+            )}
+          </Html>
+        )
+      })}
     </group>
   )
 }
@@ -606,14 +607,14 @@ function DimensionValueInput({
 }
 
 /**
- * The sole selected wall's temporary dimensions in 3D, the plan's twin
- * (`SelectedWallDimensions2D`): the room widths its push shows and the
- * outside size, drawn as the push draws them, in the wall's level frame.
+ * The selected walls' temporary dimensions in 3D, the plan's twin
+ * (`SelectedWallDimensions2D`): the room widths their pushes show and the
+ * outside sizes, drawn as the push draws them, in the walls' level frame.
  */
 export function SelectedWallDimensions3D() {
   const selection = useSelectedWallDimensions()
   const isFloorplanHovered = useEditor((s) => s.isFloorplanHovered)
-  const levelId = selection?.node.parentId ?? null
+  const levelId = selection?.levelId ?? null
   const root = useRef<Group>(null)
   useFrame(() => {
     const level = levelId ? sceneRegistry.nodes.get(levelId) : null
@@ -632,11 +633,7 @@ export function SelectedWallDimensions3D() {
   // when it happens inside a render.
   return (
     <group matrixAutoUpdate={false} ref={root}>
-      <RoomDimensionLines3D
-        dimensions={selection.dimensions}
-        hidden={isFloorplanHovered}
-        wallId={selection.node.id}
-      />
+      <RoomDimensionLines3D dimensions={selection.dimensions} hidden={isFloorplanHovered} />
     </group>
   )
 }
