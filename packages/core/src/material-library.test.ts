@@ -5,7 +5,7 @@ import {
   getMaterialSwatch,
   getMaterialsForCategory,
   getSceneMaterialIdFromRef,
-} from './material-library'
+} from './index'
 
 describe('material references', () => {
   test('rejects malformed runtime values instead of calling string methods', () => {
@@ -19,6 +19,25 @@ describe('material references', () => {
 })
 
 describe('siding', () => {
+  test('shares complete metre-scale lap and batten profiles across the 18 painted finishes', () => {
+    const siding = getMaterialsForCategory('siding')
+    expect(siding).toHaveLength(18)
+    for (const item of siding) {
+      const profile = item.id.includes('batten') || item.id.includes('vertical') ? 'batten' : 'lap'
+      expect(item.preset.maps).toEqual({
+        albedoMap: `/material/siding/${profile}_basecolor_512.ktx2`,
+        normalMap: `/material/siding/${profile}_normal_512.ktx2`,
+        roughnessMap: `/material/siding/${profile}_roughness_512.ktx2`,
+        aoMap: `/material/siding/${profile}_ao_512.ktx2`,
+      })
+      expect(item.preset.mapProperties.repeatX).toBe(1)
+      expect(item.preset.mapProperties.repeatY).toBe(1)
+      expect(item.preset.mapProperties.flipY).toBe(false)
+      expect(getMaterialSwatch(item).imageUrl).toBe(item.previewThumbnailUrl!)
+      expect(getMaterialSwatch(item).tinted).toBe(true)
+    }
+  })
+
   test('has its own category, apart from wood, under the ids scenes already reference', () => {
     const siding = getMaterialsForCategory('siding').map((item) => item.id)
     for (const id of ['siding-lap-white', 'siding-lap-cedar', 'siding-batten-charcoal']) {
@@ -35,7 +54,7 @@ describe('siding', () => {
     const navy = getCatalogMaterialById('siding-lap-navy')!
     expect(getMaterialSwatch(navy)).toEqual({
       color: navy.preset.mapProperties.color,
-      imageUrl: navy.preset.maps.albedoMap!,
+      imageUrl: navy.previewThumbnailUrl!,
       tinted: true,
     })
     const batten = getMaterialSwatch(getCatalogMaterialById('siding-batten-olive')!)
