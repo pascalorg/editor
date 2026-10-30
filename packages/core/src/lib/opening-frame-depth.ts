@@ -1,10 +1,10 @@
 import type { AnyNode, DoorNode, WindowNode } from '../schema'
 import { DEFAULT_WALL_THICKNESS, getWallThickness } from '../systems/wall/wall-footprint'
 
-/** How far an auto-depth frame stands proud of each wall face. */
+/** How far an auto-depth door frame stands proud of each wall face. */
 export const OPENING_FRAME_LIP = 0.01
 
-type FrameDepthOpening = Pick<DoorNode | WindowNode, 'frameDepth'>
+type FrameDepthOpening = Pick<DoorNode | WindowNode, 'type' | 'frameDepth'>
 
 /** An opening without an explicit frame depth follows its host wall. */
 export function isAutoFrameDepth(opening: FrameDepthOpening): boolean {
@@ -14,14 +14,13 @@ export function isAutoFrameDepth(opening: FrameDepthOpening): boolean {
 /**
  * The depth a door's or window's frame runs through its wall. An explicit
  * `frameDepth` is kept as stored; left out, the frame is the host wall's
- * thickness plus a lip on each face, so the wall's cut faces never show
- * around it whatever the wall is.
+ * thickness for a window, or the thickness plus a lip on each face for a door.
  */
 export function resolveOpeningFrameDepth(
   opening: FrameDepthOpening,
   wallThickness: number,
 ): number {
-  return opening.frameDepth ?? wallThickness + OPENING_FRAME_LIP * 2
+  return opening.frameDepth ?? wallThickness + (opening.type === 'door' ? OPENING_FRAME_LIP * 2 : 0)
 }
 
 /**
@@ -30,7 +29,7 @@ export function resolveOpeningFrameDepth(
  * dormer, an unparented preview).
  */
 export function resolveHostedOpeningFrameDepth(
-  opening: Pick<DoorNode | WindowNode, 'frameDepth' | 'parentId'>,
+  opening: Pick<DoorNode | WindowNode, 'type' | 'frameDepth' | 'parentId'>,
   nodes: Readonly<Record<string, AnyNode | undefined>>,
 ): number {
   const host = opening.parentId ? nodes[opening.parentId] : undefined

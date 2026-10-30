@@ -40,6 +40,13 @@ describe('buildWindowFloorplan wall-local plane offset', () => {
     expect(footprint?.max).toBeCloseTo(0.1, 9)
   })
 
+  test('an offset auto-depth window is exactly as deep as its wall', () => {
+    const spans = polygonSpans({ position: [2, 1.5, -0.205] })
+    expect(
+      spans.some((span) => Math.abs(span.min + 0.305) < 1e-9 && Math.abs(span.max + 0.105) < 1e-9),
+    ).toBe(true)
+  })
+
   test('a frame standing proud of the wall draws outside that face, at its own depth', () => {
     const spans = polygonSpans({ position: [2, 1.5, -0.205], frameDepth: 0.2068 })
     expect(

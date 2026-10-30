@@ -7,13 +7,15 @@ import {
   resolveOpeningFrameDepth,
 } from './opening-frame-depth'
 
-test('an opening with no frame depth takes its wall thickness plus a lip on each face', () => {
+test('auto depth is the wall thickness for windows and includes a lip for doors', () => {
   const door = DoorNode.parse({ id: 'door_auto', position: [1, 1.05, 0] })
   const window = WindowNode.parse({ id: 'window_auto', position: [1, 1.5, 0] })
   expect(isAutoFrameDepth(door)).toBe(true)
   expect(isAutoFrameDepth(window)).toBe(true)
   expect(resolveOpeningFrameDepth(door, 0.2)).toBeCloseTo(0.2 + OPENING_FRAME_LIP * 2, 9)
-  expect(resolveOpeningFrameDepth(window, 0.1)).toBeCloseTo(0.12, 9)
+  expect(resolveOpeningFrameDepth(window, 0.1)).toBeCloseTo(0.1, 9)
+  expect(resolveOpeningFrameDepth(window, 0.35)).toBeCloseTo(0.35, 9)
+  expect(resolveOpeningFrameDepth({ ...window, frameDepth: 0.07 }, 0.35)).toBe(0.07)
   expect(resolveOpeningFrameDepth(door, 0.35)).toBeCloseTo(0.37, 9)
 })
 
@@ -48,4 +50,7 @@ test('a hosted opening resolves against its parent wall, and re-resolves on a th
     9,
   )
   expect(resolveHostedOpeningFrameDepth({ ...door, frameDepth: 0.07 }, nodes)).toBe(0.07)
+  const window = WindowNode.parse({ parentId: thin.id })
+  expect(resolveHostedOpeningFrameDepth(window, nodes)).toBe(0.1)
+  expect(resolveHostedOpeningFrameDepth({ ...window, parentId: thick.id }, nodes)).toBe(0.3)
 })

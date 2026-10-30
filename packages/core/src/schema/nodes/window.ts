@@ -92,7 +92,7 @@ export const WindowNode = BaseNode.extend({
     .number()
     .optional()
     .describe(
-      "Frame depth through the wall; left out, the frame follows its wall: the wall's thickness plus a 1 cm lip on each face.",
+      "Frame depth through the wall; left out, the frame is exactly the host wall's thickness.",
     ),
 
   // Divisions — ratios allow non-uniform panes

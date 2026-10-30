@@ -3187,7 +3187,7 @@ function updateWindowMesh(rawNode: WindowNode, mesh: THREE.Mesh): boolean {
   mesh.userData[FUSED_CORNER_SIDE] = 0
 
   // The frame runs through its host wall: an auto depth is the wall's thickness
-  // plus a lip, so every builder below reads one resolved number.
+  // exactly, so every builder below reads one resolved number.
   const parent = rawNode.parentId
     ? useScene.getState().nodes[rawNode.parentId as AnyNodeId]
     : undefined

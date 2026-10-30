@@ -18,12 +18,12 @@ export function openingPlaneOffsetOnWall(opening: PlanarOpening, targetWallId: s
  * Where an opening's plan symbol sits across its wall. A centred opening keeps
  * the long-standing symbol: centred in the cutout, as deep as the wall. An
  * opening offset from the centre plane draws its frame at that offset with its
- * frame depth (explicit, or the wall's thickness plus the lip), like the 3D
+ * resolved frame depth, like the 3D
  * renderer; the builder then also draws the cutout, because the wall is still
  * cut through its whole thickness.
  */
 export function resolveOpeningPlanPlane(
-  opening: Pick<DoorNode | WindowNode, 'position' | 'frameDepth'>,
+  opening: Pick<DoorNode | WindowNode, 'type' | 'position' | 'frameDepth'>,
   wallThickness: number,
 ): { offset: number; depth: number } {
   const offset = opening.position[2] ?? 0
