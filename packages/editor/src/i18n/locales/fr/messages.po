@@ -14835,15 +14835,15 @@ msgstr "Modes et historique"
 msgid "editor.sidebar.panels.settingsPanel.keyboardShortcutsDialog.selection"
 msgstr "Sélection"
 
-# Source-Hash: 8a708ce860d787e8
+# Source-Hash: 0da1c4d163df2953
 # Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Shortcuts are context-aware. Guided constraints are enabled by default; hold Shift during an active gesture to build freely."
+# English: "Shortcuts are context-aware. Snapping is a visible mode: tap Shift to cycle it, hold Alt during a gesture to place freely."
 #: packages/editor/src/components/ui/sidebar/panels/settings-panel/keyboard-shortcuts-dialog.tsx
 #, fuzzy
 msgid "editor.sidebar.panels.settingsPanel.keyboardShortcutsDialog.shortcutsAreContextAwareGuidedConstraints"
-msgstr "Les raccourcis dépendent du contexte. Les contraintes guidées sont activées par défaut ; maintenez Maj pendant un geste en cours pour construire librement."
+msgstr "Les raccourcis dépendent du contexte. L’aimantation est un mode visible : appuyez brièvement sur Maj pour en changer, maintenez Alt pendant un geste pour placer librement."
 
 # Source-Hash: 3c67cde0578ac829
 # Review: required

@@ -14835,15 +14835,15 @@ msgstr "模式与历史记录"
 msgid "editor.sidebar.panels.settingsPanel.keyboardShortcutsDialog.selection"
 msgstr "选择"
 
-# Source-Hash: 8a708ce860d787e8
+# Source-Hash: 0da1c4d163df2953
 # Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Shortcuts are context-aware. Guided constraints are enabled by default; hold Shift during an active gesture to build freely."
+# English: "Shortcuts are context-aware. Snapping is a visible mode: tap Shift to cycle it, hold Alt during a gesture to place freely."
 #: packages/editor/src/components/ui/sidebar/panels/settings-panel/keyboard-shortcuts-dialog.tsx
 #, fuzzy
 msgid "editor.sidebar.panels.settingsPanel.keyboardShortcutsDialog.shortcutsAreContextAwareGuidedConstraints"
-msgstr "快捷键随上下文而变化。引导约束默认开启；在操作进行中按住 Shift 可自由建造。"
+msgstr "快捷键随上下文而变化。吸附是可见的模式：轻按 Shift 切换，操作中按住 Alt 可自由放置。"
 
 # Source-Hash: 3c67cde0578ac829
 # Review: required

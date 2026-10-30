@@ -5969,7 +5969,7 @@ msgstr "Selection"
 
 #: packages/editor/src/components/ui/sidebar/panels/settings-panel/keyboard-shortcuts-dialog.tsx
 msgid "editor.sidebar.panels.settingsPanel.keyboardShortcutsDialog.shortcutsAreContextAwareGuidedConstraints"
-msgstr "Shortcuts are context-aware. Guided constraints are enabled by default; hold Shift during an active gesture to build freely."
+msgstr "Shortcuts are context-aware. Snapping is a visible mode: tap Shift to cycle it, hold Alt during a gesture to place freely."
 
 #: packages/editor/src/components/ui/sidebar/panels/site-panel/index.tsx
 msgid "editor.sidebar.panels.sitePanel.addLevel"
