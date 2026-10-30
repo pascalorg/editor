@@ -17,7 +17,21 @@ cuts overlapping room ceilings, and keeps wall support unchanged. See
 [the vertical model](vertical-model.md#stacked-mezzanine-rooms).
 
 Deleting an auto plate explicitly writes `hasFloor: false` on its linked zones; removing a
-manual cover allows an eligible room to join a generated plate again.
+manual cover allows an eligible room to join a generated plate again. A base plate shared with
+rooms that stand on plates of their own (a porch a step down, a raised platform) is not their
+floor: deleting it leaves theirs (`surfaceIntentZoneIds`).
+
+Porches, decks and patios are rooms with a `roomType` (`lib/outdoor-room`) on these same plates;
+there is no other floor for them. A new room closed off outside the house by invisible walls
+becomes a porch, one fenced by railings alone a deck (`outsideRoomTypes`). Its `floor.drop` steps
+its floor down from the floor it would share, so the generator gives it a plate of its own under
+the house's (a step-down floor, its railings' footprints with it), and tags that plate
+`metadata.floor` (`porch-slab` or `deck`) for the slab geometry and the framing plugin. A deck's
+plate draws its boards and frame, ledger, joists, rims, beams and posts on concrete piers down to
+the site's terrain (`planDeckFraming`, `nodes/src/slab/deck-geometry.ts`); a porch or patio slab
+runs its concrete edge down to the terrain. A covered porch's posts and beam are columns and beams
+the kernel keeps in the same reconcile (`reconcilePorchFraming`), handed to the user once one is
+edited by hand. Its walls stay exterior whatever covers it (`outdoorRoomIds`).
 
 A room drawn where walls already enclose one (every polygon edge on a wall) names that room
 instead of stacking a second zone on it (`walledRoomAt`, by the reconciler's adoption
