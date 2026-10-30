@@ -980,13 +980,13 @@ export type FloorplanMoveTarget<N> = (args: {
 
 /**
  * A plugin-contributed section for the floating node inspector card.
- * When a node whose `type` is in `kinds` is selected, the inspector header
- * shows the extension's `icon` as a button. Clicking it swaps the card
- * body to ONLY this extension's `component` (inside a section titled
- * `title`) — extension mode and the kind's own controls are EITHER/OR,
- * never appended together. Clicking the (highlighted) icon again, or the
- * chevron, returns to the regular controls. The mobile sheet has no
- * header icons, so it appends the section after the kind's controls
+ * When a node whose `type` is in `kinds` is selected, the node's action
+ * menu shows the extension's `icon` as a button, `title` as its tooltip.
+ * Clicking it opens the inspector card on ONLY this extension's `component`
+ * (inside a section titled `title`) — extension mode and the kind's own
+ * controls are EITHER/OR, never appended together. The card's chevron
+ * returns to the regular controls. The mobile sheet has no action-menu
+ * buttons for it, so it appends the section after the kind's controls
  * instead.
  *
  * `component` is lazy-loaded on first expand and receives the selected
@@ -1007,9 +1007,9 @@ export type InspectorExtension = {
   pluginId: string
   /** Node kinds whose inspector card grows this section. */
   kinds: string[]
-  /** Header-button icon (16px box). */
+  /** The icon of its action-menu button (16px box). */
   icon: IconRef
-  /** Section title, e.g. `Engineering`. */
+  /** Section title and its action-menu tooltip, e.g. `Engineering`. */
   title: string
   /** Lazy section body; receives `{ node }` (the selected node). */
   component: LazyComponent

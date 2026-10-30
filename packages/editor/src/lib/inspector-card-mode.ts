@@ -14,9 +14,9 @@
  * - chevron / header press ({@link toggleCard}): collapsed → regular,
  *   regular → collapsed, extension → regular (exit extension mode first,
  *   stay expanded);
- * - extension icon press ({@link toggleExtension}): enters that
- *   extension's mode from anywhere (expanding a folded card); pressing
- *   the ACTIVE extension's icon again returns to regular.
+ * - an extension's action-menu button ({@link openExtension}): enters that
+ *   extension's mode from anywhere (expanding a folded card); pressed while
+ *   that extension is already showing, it keeps it showing.
  */
 
 export interface InspectorCardMode {
@@ -36,13 +36,8 @@ export function toggleCard(mode: InspectorCardMode): InspectorCardMode {
   return { collapsed: true, activeExtensionId: null }
 }
 
-/** Header extension-icon press. */
-export function toggleExtension(mode: InspectorCardMode, extensionId: string): InspectorCardMode {
-  // The active extension's icon pressed again → back to the regular controls.
-  if (!mode.collapsed && mode.activeExtensionId === extensionId) {
-    return { collapsed: false, activeExtensionId: null }
-  }
-  // Anywhere else (folded, regular, another extension) → this extension only.
+/** An extension's action-menu button: opens the card on that extension, or keeps it there. */
+export function openExtension(extensionId: string): InspectorCardMode {
   return { collapsed: false, activeExtensionId: extensionId }
 }
 

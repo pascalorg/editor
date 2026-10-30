@@ -285,6 +285,8 @@ export const windowDefinition: NodeDefinition<typeof WindowNode> = {
     'pascal:editor/floorplan': {
       contextualDimensions: buildWindowContextualDimensions,
       schedule: buildWindowFloorplanSchedule,
+      // Swap a casement's hinge side from the action bar, in 2D and 3D.
+      actionMenu: { actions: () => import('./actions') },
     } satisfies FloorplanNodeExtension<WindowNodeType>,
   },
 

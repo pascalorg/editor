@@ -1,16 +1,11 @@
 'use client'
 
-import { Icon } from '@iconify/react'
 import {
   type AnyNode,
   type AnyNodeId,
-  getInspectorExtensions,
-  type IconRef,
   type InspectorExtension,
-  useRegistryVersion,
   useScene, usePascalI18n,
 } from '@pascal-app/core'
-import { useViewer } from '@pascal-app/viewer'
 import { ChevronDown, ChevronLeft, GripHorizontal, RotateCcw, X } from 'lucide-react'
 import {
   type ComponentType,
@@ -21,18 +16,12 @@ import {
   useContext,
   useEffect,
   useLayoutEffect,
-  useMemo,
   useRef,
   useState,
 } from 'react'
 import { useIsMobile } from '../../../hooks/use-mobile'
-import { IconRefImage } from '../icon-ref'
 import { NodeIconImage } from '../node-icon-image'
-import {
-  resolveActiveExtension,
-  toggleCard,
-  toggleExtension,
-} from '../../../lib/inspector-card-mode'
+import { resolveActiveExtension, toggleCard } from '../../../lib/inspector-card-mode'
 import { cn } from '../../../lib/utils'
 import { useInspectorExpanded } from '../../../lib/inspector-expanded'
 import { ActionButton, ActionGroup } from '../controls/action-button'
@@ -40,6 +29,7 @@ import { PanelSection } from '../controls/panel-section'
 import { ErrorBoundary } from '../primitives/error-boundary'
 import { useInRightStack } from '../right-stack'
 import { CollectionsPopover } from './collections/collections-popover'
+import { renderExtensionIcon, useInspectorExtensions } from './inspector-extensions'
 
 const DRAG_MARGIN = 8
 // Pointer travel (px) below which a header press is treated as a click
@@ -132,35 +122,16 @@ export function PanelWrapper({
   // The wrapper self-resolves the selected node instead of taking a prop:
   // kind-owned `customPanel`s (wall, slab, …) render their own
   // <PanelWrapper>, so this is the one spot every inspector card flows
-  // through. Extensions only apply to a single-node selection.
-  const registryVersion = useRegistryVersion()
-  const selectedId = useViewer((s) =>
-    s.selection.selectedIds.length === 1 ? s.selection.selectedIds[0] : undefined,
-  ) as AnyNodeId | undefined
-  // Subscribe to the selected node's *type* only — a string primitive that
-  // doesn't change as fields are edited (same trick as ParametricInspector).
-  const selectedType = useScene((s) => (selectedId ? s.nodes[selectedId]?.type ?? null : null))
-  const installedPlugins = useScene((s) => s.installedPlugins)
-  const extensions = useMemo(() => {
-    // re-derive when plugin extensions register after mount (async plugin load)
-    void registryVersion
-    if (!selectedType) return []
-    return getInspectorExtensions(selectedType).filter(
-      (extension) => !extension.pluginId || installedPlugins.includes(extension.pluginId),
-    )
-  }, [selectedType, installedPlugins, registryVersion])
+  // through. Extensions only apply to a single-node selection; the action
+  // menu opens them (`InspectorExtensionActions`).
+  const { selectedId, extensions, primaryExtension } = useInspectorExtensions()
 
   // Which extension's content fills the card body (extension mode). The two
   // expanded modes are EITHER/OR: extension mode replaces the regular
   // controls; null shows the regular controls with no extension sections.
-  // See `lib/inspector-card-mode.ts` for the transition table.
-  const [activeExtensionId, setActiveExtensionId] = useState<string | null>(null)
   // Stale ids (kind changed, plugin gated off) fall back to regular mode.
-  const primaryExtensionId = useScene((state) => {
-    const node = selectedId ? state.nodes[selectedId] : undefined
-    return node ? extensions.find((extension) => extension.primaryWhen?.(node))?.id : undefined
-  })
-  const primaryExtension = extensions.find((extension) => extension.id === primaryExtensionId)
+  // See `lib/inspector-card-mode.ts` for the transition table.
+  const activeExtensionId = useInspectorExpanded((state) => state.activeExtensionId)
   const activeExtension = primaryExtension ?? resolveActiveExtension(activeExtensionId, extensions)
 
   // The panel is collapsed to just its header until the user expands it. The
@@ -175,14 +146,6 @@ export function PanelWrapper({
     if (primaryExtension) setCollapsed(false)
   }, [primaryExtension, selectedId, setCollapsed])
 
-  const applyMode = useCallback(
-    (next: { collapsed: boolean; activeExtensionId: string | null }) => {
-      setCollapsed(next.collapsed)
-      setActiveExtensionId(next.activeExtensionId)
-    },
-    [setCollapsed],
-  )
-
   // Chevron / header press — collapsed → regular, regular → collapsed,
   // extension mode → regular (exit the extension first, stay expanded).
   const handleCardToggle = useCallback(() => {
@@ -190,14 +153,12 @@ export function PanelWrapper({
       setCollapsed(!collapsed)
       return
     }
-    applyMode(toggleCard({ collapsed, activeExtensionId }))
-  }, [applyMode, collapsed, activeExtensionId, primaryExtension, setCollapsed])
+    useInspectorExpanded.getState().applyMode(toggleCard({ collapsed, activeExtensionId }))
+  }, [collapsed, activeExtensionId, primaryExtension, setCollapsed])
 
-  // Folding the card forgets the active extension — extension mode is a
-  // one-shot affordance of the header icon, not sticky panel state.
-  useEffect(() => {
-    if (collapsed) setActiveExtensionId(null)
-  }, [collapsed])
+  // Extension mode is an affordance of the card it was opened on: a card that
+  // closes (selection cleared or changed kind) leaves the next one regular.
+  useEffect(() => () => useInspectorExpanded.setState({ activeExtensionId: null }), [])
 
   // Drag-to-reposition from the header. `offset` is a translation applied on
   // top of the default `top-20 right-4` anchor; null until first dragged.
@@ -398,34 +359,6 @@ export function PanelWrapper({
                 <RotateCcw className="h-4 w-4" />
               </button>
             )}
-            {/* Extension mode buttons — one icon per registered inspector
-                extension, left of the chevron. Click swaps the card body to
-                ONLY that extension's content (either/or with the regular
-                controls); the active icon (highlighted) or the chevron
-                returns to the regular controls. */}
-            {extensions.filter((extension) => extension !== primaryExtension).map((extension) => {
-              const isActive = !collapsed && activeExtensionId === extension.id
-              return (
-                <button
-                  aria-label={isActive ? i18n._({ id: 'editor.panels.panelWrapper.closeTitle', message: 'Close {title}', values: { title: extension.title } }) : i18n._({ id: 'editor.panels.panelWrapper.openTitle', message: 'Open {title}', values: { title: extension.title } })}
-                  aria-pressed={isActive}
-                  className={cn(
-                    'flex h-7 w-7 items-center justify-center rounded-md transition-colors',
-                    isActive
-                      ? 'bg-cyan-500/20 text-cyan-700 dark:text-cyan-400 hover:bg-cyan-500/30'
-                      : 'bg-black/4 dark:bg-[#2C2C2E] text-muted-foreground hover:bg-black/8 dark:hover:bg-[#3e3e3e] hover:text-foreground',
-                  )}
-                  key={extension.id}
-                  onClick={() =>
-                    applyMode(toggleExtension({ collapsed, activeExtensionId }, extension.id))
-                  }
-                  title={extension.title}
-                  type="button"
-                >
-                  {renderExtensionIcon(extension.icon)}
-                </button>
-              )
-            })}
             <button
               aria-expanded={!collapsed}
               aria-label={collapsed ? i18n._({ id: 'editor.panels.panelWrapper.expandPanel', message: 'Expand panel' }) : i18n._({ id: 'editor.panels.panelWrapper.collapsePanel', message: 'Collapse panel' })}
@@ -510,30 +443,6 @@ export function PanelWrapper({
 }
 
 // ─── Plugin inspector extensions ──────────────────────────────────────
-
-/** 16px icon for an extension's header button — mirrors the parametric
- *  inspector's `renderIcon` (plain <img> so no next/image server deps). */
-function renderExtensionIcon(ref: IconRef): React.ReactNode {
-  if (ref.kind === 'url') {
-    return <IconRefImage className="h-4 w-4 shrink-0" src={ref.src} />
-  }
-  if (ref.kind === 'iconify') {
-    return <Icon height={16} icon={ref.name} width={16} />
-  }
-  if (ref.kind === 'svg') {
-    return (
-      <svg height={16} viewBox={ref.viewBox} width={16}>
-        <path d={ref.path} fill="currentColor" />
-      </svg>
-    )
-  }
-  const LazyIcon = lazy(ref.module)
-  return (
-    <Suspense fallback={null}>
-      <LazyIcon />
-    </Suspense>
-  )
-}
 
 // `React.lazy` once per loader so the resolved component keeps a stable
 // identity across renders — same WeakMap pattern as `resolveCustomPanel`

@@ -42,3 +42,16 @@ test('without usable storage the panel opens folded and expanding still works', 
   useInspectorExpanded.getState().setExpanded(true)
   expect(useInspectorExpanded.getState().expanded).toBe(true)
 })
+
+test('an extension opened from the action menu expands the card; folding it forgets the extension', async () => {
+  stubStorage({ getItem: () => null, setItem: () => {} })
+  const { useInspectorExpanded } = await load()
+  useInspectorExpanded.getState().applyMode({ collapsed: false, activeExtensionId: 'bones:eng' })
+  expect(useInspectorExpanded.getState()).toMatchObject({
+    expanded: true,
+    activeExtensionId: 'bones:eng',
+  })
+  useInspectorExpanded.getState().setExpanded(false)
+  useInspectorExpanded.getState().setExpanded(true)
+  expect(useInspectorExpanded.getState().activeExtensionId).toBeNull()
+})
