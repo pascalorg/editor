@@ -6,14 +6,21 @@ import {
   type GeometryContext,
   LevelNode,
   OPENING_CASING_PROUD,
+  sceneRegistry,
+  slotPaintMaterial,
+  useScene,
   WallNode,
   WindowNode,
 } from '@pascal-app/core'
+import { buildDoorPreviewMesh, buildWindowPreviewMesh } from '@pascal-app/viewer'
+import { type Material, type Mesh, Ray, Vector3 } from 'three'
 import { doorDefinition } from '../door/definition'
 import { buildDoorFloorplan } from '../door/floorplan'
+import { doorPaint } from '../door/paint'
 import { placedDoorFields } from '../door/placement'
 import { windowDefinition } from '../window/definition'
 import { buildWindowFloorplan } from '../window/floorplan'
+import { windowPaint } from '../window/paint'
 import { placedWindowFields } from '../window/placement'
 import { openingCasingFaceLabels } from './opening-casing'
 
@@ -160,5 +167,125 @@ test('tools and preset defaults create cased openings while legacy openings stay
         ? buildDoorFloorplan(legacy, context as GeometryContext)
         : buildWindowFloorplan(legacy, context as GeometryContext)
     expect(casingLegs(geometry)).toEqual([])
+  }
+})
+
+test('casing paint targets each host side, inherits the frame, and previews and erases independently', () => {
+  const previous = useScene.getState()
+  try {
+    useScene.setState({ nodes: { [wall.id]: wall }, materials: {} })
+    for (const kind of ['door', 'window'] as const) {
+      const paint = kind === 'door' ? doorPaint : windowPaint
+      for (const openingShape of ['rectangle', 'arch', 'rounded'] as const) {
+        for (const rotationY of [0, Math.PI]) {
+          const frameRef = rotationY === 0 ? 'library:preset-metal' : '#123456'
+          const fields = {
+            parentId: wall.id,
+            position: [2, 1.2, 0],
+            rotation: [0, rotationY, 0],
+            casingFaceA: true,
+            casingFaceB: true,
+            openingShape,
+            slots: { frame: frameRef },
+          }
+          const node = kind === 'door' ? DoorNode.parse(fields) : WindowNode.parse(fields)
+          const mesh =
+            node.type === 'door' ? buildDoorPreviewMesh(node) : buildWindowPreviewMesh(node)
+          mesh.updateMatrixWorld(true)
+          sceneRegistry.nodes.set(node.id, mesh)
+          try {
+            const frame = mesh.children.find((part) => part.userData.slotId === 'frame') as Mesh
+            const parts = mesh.children.filter(
+              (part) => part.userData.slotId === 'casing-a' || part.userData.slotId === 'casing-b',
+            ) as Mesh[]
+            expect(parts.length).toBeGreaterThan(0)
+            for (const part of parts) {
+              expect(part.material).toBe(frame.material)
+              const side = part.userData.slotId === 'casing-a' ? 1 : -1
+              part.geometry.computeBoundingBox()
+              const local = part.geometry.boundingBox!.getCenter(new Vector3())
+              if (part.geometry.type === 'ExtrudeGeometry') {
+                local.x = node.width / 2 + node.casingWidth / 2
+                local.y = 0
+              }
+              const center = local.applyMatrix4(mesh.matrixWorld)
+              expect((center.z - node.position[2]) * side).toBeGreaterThan(0)
+              const ray = new Ray(
+                new Vector3(center.x, center.y, center.z + side),
+                new Vector3(0, 0, -side),
+              )
+              expect(paint.resolveRole({ node, materialIndex: null, ray })).toBe(
+                part.userData.slotId,
+              )
+              expect(paint.resolveRole({ node, materialIndex: null, hitObject: part })).toBe(
+                part.userData.slotId,
+              )
+            }
+            expect(paint.roleLabel?.(node, 'casing-a')).toBe('Casing A')
+            expect(paint.roleLabel?.(node, 'casing-b')).toBe('Casing B')
+            expect(paint.getEffectiveMaterial?.({ node, role: 'casing-a', nodes: {} })).toEqual(
+              slotPaintMaterial(frameRef, {}),
+            )
+            const original = parts.map((part) => part.material)
+            const restore = paint.applyPreview({
+              node,
+              role: 'casing-a',
+              root: mesh,
+              material: undefined,
+              materialPreset: 'library:preset-softwhite',
+            })
+            expect(restore).not.toBeNull()
+            parts.forEach((part, i) => {
+              if (part.userData.slotId === 'casing-a') expect(part.material).not.toBe(original[i])
+              else expect(part.material).toBe(original[i])
+            })
+            restore?.()
+            parts.forEach((part, i) => {
+              expect(part.material).toBe(original[i])
+            })
+            const patch = paint.buildPatch({
+              node,
+              role: 'casing-a',
+              material: undefined,
+              materialPreset: 'library:preset-softwhite',
+            })
+            expect(patch).toMatchObject({
+              slots: { frame: frameRef, 'casing-a': 'library:preset-softwhite' },
+            })
+            const painted = { ...node, ...patch } as typeof node
+            const rebuilt =
+              painted.type === 'door'
+                ? buildDoorPreviewMesh(painted)
+                : buildWindowPreviewMesh(painted)
+            const a = rebuilt.children.find((part) => part.userData.slotId === 'casing-a') as Mesh
+            const b = rebuilt.children.find((part) => part.userData.slotId === 'casing-b') as Mesh
+            expect(a.material).not.toBe(b.material)
+            expect(b.material).toBe(frame.material)
+            const erasePreview = paint.applyPreview({
+              node: painted,
+              role: 'casing-a',
+              root: rebuilt,
+              material: undefined,
+              materialPreset: undefined,
+            })
+            expect(erasePreview).not.toBeNull()
+            expect(a.material).toBe(b.material as Material)
+            erasePreview?.()
+            expect(
+              paint.buildPatch({
+                node: painted,
+                role: 'casing-a',
+                material: undefined,
+                materialPreset: undefined,
+              }),
+            ).toMatchObject({ slots: { frame: frameRef } })
+          } finally {
+            sceneRegistry.nodes.delete(node.id)
+          }
+        }
+      }
+    }
+  } finally {
+    useScene.setState(previous)
   }
 })

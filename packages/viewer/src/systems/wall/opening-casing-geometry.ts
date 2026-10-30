@@ -31,11 +31,12 @@ export function buildOpeningCasingMeshes(
   const facing = openingHostFacing(opening)
   const shaped = opening.openingShape === 'arch' || opening.openingShape === 'rounded'
   const meshes: THREE.Mesh[] = []
-  const add = (geometry: THREE.BufferGeometry) => {
+  const add = (geometry: THREE.BufferGeometry, face: 'a' | 'b') => {
     // Turned half round, the unit's x and z run against the host's.
     if (facing < 0) geometry.rotateY(Math.PI)
     const mesh = new THREE.Mesh(geometry, material)
     mesh.name = OPENING_CASING_MESH_NAME
+    mesh.userData.slotId = `casing-${face}`
     meshes.push(mesh)
   }
 
@@ -45,19 +46,19 @@ export function buildOpeningCasingMeshes(
     const geometry = new THREE.BoxGeometry(width, height, depth)
     applyWorldScaleBoxUVs(geometry, width, height, depth)
     geometry.translate(...board.center)
-    add(geometry)
+    add(geometry, board.face)
   }
 
   if (shaped) {
     const band = casingBandShape(opening, openingCasingWidth(opening))
-    for (const { plane, out } of openingCasingFaces(opening, host)) {
+    for (const { face, plane, out } of openingCasingFaces(opening, host)) {
       const geometry = new THREE.ExtrudeGeometry(band, {
         depth: OPENING_CASING_PROUD,
         bevelEnabled: false,
         curveSegments: 24,
       })
       geometry.translate(0, 0, out > 0 ? plane : plane - OPENING_CASING_PROUD)
-      add(geometry)
+      add(geometry, face)
     }
   }
 

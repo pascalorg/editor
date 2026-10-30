@@ -1,6 +1,7 @@
 import {
   type AnyNode,
   type DoorNode,
+  defaultI18n,
   type FloorplanGeometry,
   type FloorplanPoint,
   getWallBodyCenterOffset,
@@ -99,4 +100,12 @@ export function openingCasingFaceLabels(
     }
   }
   return { a: 'Side A', b: 'Side B' }
+}
+
+export function openingCasingPaintLabel(role: string): string | null {
+  if (role === 'casing-a')
+    return defaultI18n._({ id: 'node.shared.openingCasing.faceA', message: 'Casing A' })
+  if (role === 'casing-b')
+    return defaultI18n._({ id: 'node.shared.openingCasing.faceB', message: 'Casing B' })
+  return null
 }

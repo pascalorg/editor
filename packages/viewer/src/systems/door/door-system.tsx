@@ -2742,7 +2742,7 @@ function hideEmptyGeometryMeshes(root: THREE.Object3D) {
 
 /**
  * The door's casing (head and legs) on the faces of its wall (or gable) around
- * the cutout, painted with the frame. Read from the live host, so it stays on
+ * the cutout, inheriting the frame until each side is painted. Read from the live host, so it stays on
  * the faces while the wall's thickness is dragged.
  */
 function addDoorCasing(node: DoorNode, mesh: THREE.Mesh) {
@@ -2756,7 +2756,11 @@ function addDoorCasing(node: DoorNode, mesh: THREE.Mesh) {
   )
   if (!host) return
   for (const casing of buildOpeningCasingMeshes(node, host, frameMaterial)) {
-    casing.userData.slotId = 'frame'
+    const ref = node.slots?.[casing.userData.slotId]
+    casing.material =
+      (currentTextures && ref
+        ? resolveMaterialRef(ref, currentSceneMaterials, currentShading)
+        : null) ?? frameMaterial
     mesh.add(casing)
   }
 }

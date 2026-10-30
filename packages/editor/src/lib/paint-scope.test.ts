@@ -802,6 +802,7 @@ describe('a surface that declares its own scopes', () => {
         category: 'structure',
         defaults: () => ({}),
         capabilities: {
+          slots: () => [{ slotId: 'end:1', label: 'End' }],
           paint: {
             resolveRole: () => null,
             buildPatch: () => ({}),

@@ -3487,7 +3487,11 @@ function addWindowCasing(node: WindowNode, mesh: THREE.Mesh) {
   )
   if (!host) return
   for (const casing of buildOpeningCasingMeshes(node, host, baseMaterial)) {
-    casing.userData.slotId = 'frame'
+    const ref = node.slots?.[casing.userData.slotId]
+    casing.material =
+      (currentTextures && ref
+        ? resolveMaterialRef(ref, currentSceneMaterials, currentShading)
+        : null) ?? baseMaterial
     mesh.add(casing)
   }
 }

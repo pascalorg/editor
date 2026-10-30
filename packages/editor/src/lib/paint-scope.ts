@@ -175,12 +175,13 @@ export function paintSurfaceLabel(node: AnyNode, role: string): string {
   return slotDisplayLabel(node, role)
 }
 
-/** Display label for the hovered slot — declared label wins, else derived from the id. */
+/** Display label for the hovered slot, with a capability override for contextual copy. */
 export function slotDisplayLabel(node: AnyNode, role: string): string {
   const capabilities = nodeRegistry.get(node.type)?.capabilities
+  const roleLabel = capabilities?.paint?.roleLabel?.(node, role)
+  if (roleLabel) return roleLabel
   const declared = capabilities?.slots?.(node)?.find((slot) => slot.slotId === role)
-  if (declared) return declared.label
-  return capabilities?.paint?.roleLabel?.(node, role) ?? slotLabelFromId(role)
+  return declared?.label ?? slotLabelFromId(role)
 }
 
 // ── Fan-out resolution ──────────────────────────────────────────────────────
