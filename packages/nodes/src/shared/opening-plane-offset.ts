@@ -23,7 +23,7 @@ export function openingPlaneOffsetOnWall(opening: PlanarOpening, targetWallId: s
  * cut through its whole thickness.
  */
 export function resolveOpeningPlanPlane(
-  opening: Pick<DoorNode | WindowNode, 'type' | 'position' | 'frameDepth'>,
+  opening: Pick<DoorNode | WindowNode, 'position' | 'frameDepth'>,
   wallThickness: number,
 ): { offset: number; depth: number } {
   const offset = opening.position[2] ?? 0

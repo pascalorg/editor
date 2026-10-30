@@ -59,8 +59,8 @@ describe("a window's faces at the edges of its opening", () => {
 
 /**
  * A window's frame used to be 0.07 m deep whatever its wall, so a thicker wall showed its cut faces
- * around the frame. Left unset, the depth follows the host wall: its thickness plus a lip on each
- * face, and the sill still starts at the frame's front face.
+ * around the frame. Left unset, the depth follows the host wall: its thickness exactly,
+ * and the sill still starts at the frame's front face.
  */
 describe("a window's frame depth follows its wall", () => {
   function windowOn(wallThickness: number, patch: Partial<WindowNode> = {}) {

@@ -84,10 +84,9 @@ describe('buildDoorFloorplan wall-local plane offset', () => {
     expect(footprint?.max).toBeCloseTo(0.1, 9)
   })
 
-  test('an auto frame offset off the wall draws at the wall thickness plus the lip', () => {
-    // No `frameDepth`: the frame is 0.2 m (the wall) + 0.02 m; offset -0.215 puts it past the -z face.
-    const spans = polygonSpans(buildDoor({ doorType: 'sliding', position: [2, 1.05, -0.215] }))
-    const frame = spans.find((span) => Math.abs(span.min + 0.325) < 1e-9)
+  test('an offset auto-depth door is exactly as deep as its wall', () => {
+    const spans = polygonSpans(buildDoor({ doorType: 'sliding', position: [2, 1.05, -0.205] }))
+    const frame = spans.find((span) => Math.abs(span.min + 0.305) < 1e-9)
     expect(frame).toBeDefined()
     expect(frame?.max).toBeCloseTo(-0.105, 9)
   })

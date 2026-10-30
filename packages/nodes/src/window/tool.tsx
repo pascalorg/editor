@@ -321,7 +321,7 @@ const WindowTool: React.FC = () => {
         position: [worldPosition[0], worldPosition[1] + indicatorYOffset, worldPosition[2]],
         rotationY: cursorRotationY,
         depth: resolveOpeningFrameDepth(
-          { type: 'window', frameDepth: draftRef.current?.frameDepth },
+          { frameDepth: draftRef.current?.frameDepth },
           hostThickness,
         ),
       })
@@ -1275,7 +1275,7 @@ const WindowTool: React.FC = () => {
     const boxGeo = new BoxGeometry(
       FALLBACK_WIDTH,
       FALLBACK_HEIGHT,
-      resolveOpeningFrameDepth({ type: 'window' }, DEFAULT_WALL_THICKNESS),
+      resolveOpeningFrameDepth({}, DEFAULT_WALL_THICKNESS),
     )
     const geo = new EdgesGeometry(boxGeo)
     boxGeo.dispose()

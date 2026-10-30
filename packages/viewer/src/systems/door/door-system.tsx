@@ -2322,7 +2322,7 @@ function updateDoorMesh(rawNode: DoorNode, mesh: THREE.Mesh): boolean {
   currentDoorSlot = undefined
 
   // The frame runs through its host wall: an auto depth is the wall's thickness
-  // plus a lip, so every builder below reads one resolved number.
+  // exactly, so every builder below reads one resolved number.
   const parent = normalized.parentId
     ? useScene.getState().nodes[normalized.parentId as AnyNodeId]
     : undefined

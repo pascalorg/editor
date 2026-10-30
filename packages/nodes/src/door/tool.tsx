@@ -261,7 +261,7 @@ const DoorTool: React.FC = () => {
         position: [worldPosition[0], worldPosition[1] + indicatorYOffset, worldPosition[2]],
         rotationY: cursorRotationY,
         depth: resolveOpeningFrameDepth(
-          { type: 'door', frameDepth: draftRef.current?.frameDepth },
+          { frameDepth: draftRef.current?.frameDepth },
           hostThickness,
         ),
       })
@@ -886,7 +886,7 @@ const DoorTool: React.FC = () => {
     const boxGeo = new BoxGeometry(
       FALLBACK_WIDTH,
       FALLBACK_HEIGHT,
-      resolveOpeningFrameDepth({ type: 'door' }, DEFAULT_WALL_THICKNESS),
+      resolveOpeningFrameDepth({}, DEFAULT_WALL_THICKNESS),
     )
     const geo = new EdgesGeometry(boxGeo)
     boxGeo.dispose()
