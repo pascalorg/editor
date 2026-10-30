@@ -390,9 +390,10 @@ export function roomPorchFramingCounts(nodes: StructureNodes, zone: ZoneNode) {
   let beams = 0
   for (const id of level?.type === 'level' ? level.children : []) {
     const metadata = nodes[id]?.metadata
-    if (metadata?.porchOf !== zone.id || typeof metadata.porchPart !== 'string') continue
-    if (/^(corner|side):/.test(metadata.porchPart)) posts++
-    else if (metadata.porchPart.startsWith('beam:')) beams++
+    const part = metadata?.porchPart
+    if (metadata?.porchOf !== zone.id || typeof part !== 'string') continue
+    if (/^(corner|side):/.test(part)) posts++
+    else if (part.startsWith('beam:')) beams++
   }
   return { posts, beams }
 }
