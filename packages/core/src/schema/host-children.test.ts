@@ -57,10 +57,6 @@ test.each(baseline)(
           ? {
               ...expected,
               floorThresholdVersion: 1,
-              // Saved before casing: no casing.
-              casingFaceA: false,
-              casingFaceB: false,
-              casingWidth: 0.0508,
             }
           : saved.type === 'fence'
             ? {

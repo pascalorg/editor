@@ -3,12 +3,7 @@ import { z } from 'zod'
 import { BaseNode, nodeType, objectId } from '../base'
 import { GeometryScriptSource } from '../geometry-source'
 import { MaterialSchema } from '../material'
-import {
-  DEFAULT_DOOR_CONTENT_PADDING,
-  DEFAULT_OPENING_CASING_WIDTH,
-  DoorType,
-  defaultDoorSegments,
-} from './opening-types'
+import { DEFAULT_DOOR_CONTENT_PADDING, DoorType, defaultDoorSegments } from './opening-types'
 
 export { DoorType } from './opening-types'
 
@@ -144,10 +139,11 @@ export const DoorNode = BaseNode.extend({
   // opening (head and both legs, none at the floor), never inside it, so the
   // wall cutout stays width × height. The faces are the host's `a` / `b`
   // (WallFace), not the door's front and back, so flipping the swing leaves
-  // the casing where it is. Absent casing fields keep saved openings uncased.
-  casingFaceA: z.boolean().default(false),
-  casingFaceB: z.boolean().default(false),
-  casingWidth: z.number().positive().default(DEFAULT_OPENING_CASING_WIDTH),
+  // the casing where it is. Optional, never defaulted, so loading a saved
+  // opening adds no fields: absent faces are uncased, an absent width is 2 in.
+  casingFaceA: z.boolean().optional(),
+  casingFaceB: z.boolean().optional(),
+  casingWidth: z.number().positive().optional(),
 
   // Swing
   hingesSide: z.enum(['left', 'right']).default('left'),
