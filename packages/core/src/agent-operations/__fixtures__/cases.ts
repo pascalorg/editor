@@ -45,6 +45,7 @@ import {
   ADD_FENCE_CASES,
   ADD_LEVEL_CASES,
   ADD_WALL_CASES,
+  WALL_TYPE_CASES,
   CREATE_STAIR_CASES,
 } from './structure-cases'
 import { UNIT_CASES } from './unit-cases'
@@ -970,6 +971,7 @@ export const AGENT_TOOL_CASES: readonly AgentToolCase[] = [
   ...VIEW_ASSETS_CASES,
   ...DESIGN_BRIEF_CASES,
   ...ADD_WALL_CASES,
+  ...WALL_TYPE_CASES,
   ...ADD_FENCE_CASES,
   ...CREATE_ROOF_CASES,
   ...MOVE_ROOFS_CASES,

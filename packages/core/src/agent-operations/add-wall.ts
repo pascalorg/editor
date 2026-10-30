@@ -15,6 +15,7 @@ import { type LevelTargetInput, targetLevel } from './level-target'
 import { refuseRoofLevel } from './roof-writes'
 import { queryNodes } from './scene-queries'
 import type { AgentOperation } from './types'
+import { wallTypePatch } from './wall-type'
 
 type Pt = [number, number]
 type AddWallInput = LevelTargetInput & {
@@ -23,6 +24,7 @@ type AddWallInput = LevelTargetInput & {
   thickness?: number
   height?: number
   curveOffset?: number
+  type?: string
 }
 
 /** `add_wall`: one wall between two points, named as the editor names walls. */
@@ -42,6 +44,7 @@ export const addWall: AgentOperation<AddWallInput> = (nodes, input, context) => 
     ? normalizeWallCurveOffset({ start, end }, input.curveOffset)
     : 0
   const walls = queryNodes(nodes, { type: 'wall' }).length
+  const assembly = input.type === undefined ? {} : wallTypePatch(nodes, input.type)
   const drawn = WallNode.parse({
     name: `Wall ${walls + 1}`,
     parentId: level.id,
@@ -50,18 +53,22 @@ export const addWall: AgentOperation<AddWallInput> = (nodes, input, context) => 
     ...(input.thickness === undefined ? {} : { thickness: input.thickness }),
     ...(input.height === undefined ? {} : { height: input.height }),
     ...(curveOffset ? { curveOffset } : {}),
+    ...assembly,
   })
   const [wall] = withFoundationConstruction(
     nodes,
     level.id,
     [...queryNodes<WallNode>(nodes, { type: 'wall', parentId: level.id }), drawn],
     [drawn],
-    { thickness: input.thickness },
+    { thickness: input.thickness, ...assembly },
   ) as [WallNode]
   const reading = foundationReadingOfLevel(nodes, level.id)
-  const foundation = wall.assembly !== undefined
+  const foundation = input.type === undefined && wall.assembly !== undefined
   const partition =
-    !foundation && input.thickness === undefined && levelHoldsFoundationWalls(nodes, level.id)
+    !foundation &&
+    input.type === undefined &&
+    input.thickness === undefined &&
+    levelHoldsFoundationWalls(nodes, level.id)
   // the wall's mitred band, curve and all: what crosses the lot line, not only its centreline
   const after = applySceneChanges(nodes, { create: [{ node: wall, parentId: level.id }] })
   const site = lotOverhang(

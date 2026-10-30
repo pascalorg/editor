@@ -2,6 +2,14 @@ import { z } from 'zod'
 import { FOUNDATION_BY_REGION_NOTE } from '../lib/foundation-construction'
 import { levelTarget } from './levels'
 import { measurement } from './measurement'
+import { NodeId } from './node-id'
+
+const wallTypeInput = z
+  .string()
+  .min(1)
+  .describe(
+    'Assembly type id from get_walls.wallTypes: a built-in preset or custom- project wall type. Copies its layers and total thickness in metres, overriding thickness. Unknown ids: unknown_wall_type.',
+  )
 
 /**
  * A wall's bend: a rounded corner could only be made with apply_patch, its sign documented
@@ -19,12 +27,13 @@ export const addWallTool = {
   name: 'add_wall',
   title: 'Add wall',
   description:
-    'Add a single wall between two points on a level, straight or, with curveOffset, an arc. Refused with a code: a level that is not a storey (a declared roof level), and a wall shorter than 1 cm. On a level below grade, a wall against the ground (on the outline of the walls of the level) is a foundation wall, ' +
+    'Add a single wall between two points on a level, straight or, with curveOffset, an arc. type applies a preset or project wall assembly including its thickness (unknown_wall_type for an unknown id). Refused with a code: a level that is not a storey (a declared roof level), and a wall shorter than 1 cm. On a level below grade, a wall against the ground (on the outline of the walls of the level) is a foundation wall, ' +
     FOUNDATION_BY_REGION_NOTE +
     '; a partition inside the outline is an ordinary wall; the result says which.',
   input: {
     start: planPoint('start'),
     end: planPoint('end'),
+    type: wallTypeInput.optional(),
     thickness: measurement('length', 'm', {
       positive: true,
       description:
@@ -38,5 +47,16 @@ export const addWallTool = {
     }).optional(),
     curveOffset: WALL_CURVE_OFFSET_INPUT.optional(),
     ...levelTarget,
+  },
+}
+
+export const setWallTypeTool = {
+  name: 'set_wall_type',
+  title: 'Set wall type',
+  description:
+    'Apply an assembly type to existing standard walls, copying its layers and total thickness as the wall panel does. type null clears the assembly and keeps thickness. All walls change together. Refused with unknown_wall_type for an unknown type id, target_not_found for a missing wall, curtain_wall or railing_wall for walls that take no assembly.',
+  input: {
+    wallIds: z.array(NodeId).min(1),
+    type: wallTypeInput.nullable(),
   },
 }

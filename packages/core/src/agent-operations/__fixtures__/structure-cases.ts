@@ -12,6 +12,7 @@ import {
 } from '../../schema'
 import { FOUNDATION_CONSTRUCTIONS } from '../../lib/foundation-construction'
 import { foundationWallConstruction } from '../../lib/foundation-wall'
+import { WALL_ASSEMBLY_PRESETS, wallAssemblyPatch } from '../../systems/wall/wall-assembly'
 import { getLevelElevations } from '../../services/storey'
 import type { AgentToolCase, SceneGraph } from './cases'
 
@@ -1303,4 +1304,90 @@ export const CREATE_STAIR_CASES: AgentToolCase[] = [
     input: { levelId: 'level_ground', x: 3, z: 1, railingMaterial: 'library:brass-rail' },
     expect: { refusal: 'unknown_material', mentions: ['railingMaterial', 'library:brass-rail'] },
   },
+]
+
+const ASSEMBLY_PRESET = WALL_ASSEMBLY_PRESETS.find((entry) => entry.id === 'exterior-2x6-siding')!
+const PROJECT_TYPE: { id: string; label: string; assembly: import('../../schema').Assembly } = {
+  id: 'custom-porch', label: 'Porch wall',
+  assembly: { face: 'exterior' as const, presetId: 'custom-porch', layers: [
+    { id: 'framing', role: 'structure' as const, core: true, material: 'wood', thickness: 0.14 },
+    { id: 'interior', role: 'lining' as const, material: 'drywall', thickness: 0.01 },
+  ] },
+}
+function wallTypesScene(): SceneGraph {
+  const scene = storeysScene()
+  const site = SiteNode.parse({ id: 'site_types', children: scene.rootNodeIds, wallTypes: [PROJECT_TYPE] })
+  for (const id of scene.rootNodeIds) (scene.nodes[id] as AnyNode).parentId = site.id
+  scene.nodes[site.id] = site
+  scene.rootNodeIds = [site.id]
+  return scene
+}
+
+export const WALL_TYPE_CASES: AgentToolCase[] = [
+  ...[ASSEMBLY_PRESET, PROJECT_TYPE].map((type): AgentToolCase => ({
+    name: `add wall copies ${type.id} layers and thickness, overriding explicit thickness`,
+    tool: 'add_wall', scene: wallTypesScene,
+    input: { levelId: 'level_ground', start: [8, 0], end: [8, 4], type: type.id, thickness: 0.3 },
+    expect: { result: { ok: true }, check: (result, nodes) => {
+      const wall = nodes[result.wallId as string]
+      const patch = wallAssemblyPatch(type.assembly)
+      return wall?.type === 'wall' && JSON.stringify(wall) === JSON.stringify(WallNode.parse({ ...wall, ...patch })) && wall.thickness === patch.thickness
+        ? [] : ['Assembly or thickness differs from the panel patch']
+    } },
+  })),
+  {
+    name: 'an explicit assembly below grade keeps its type without claiming default foundation construction',
+    tool: 'add_wall', scene: basementHouseScene,
+    input: { levelId: 'level_base', start: [0, 0], end: [6, 0], type: ASSEMBLY_PRESET.id },
+    expect: { result: { ok: true }, check: (result, nodes) => {
+      const wall = nodes[result.wallId as string]
+      return wall?.type === 'wall' && wall.assembly?.presetId === ASSEMBLY_PRESET.id && !result.construction
+        ? [] : ['Explicit wall type was replaced or reported as default foundation construction']
+    } },
+  },
+  ...[ASSEMBLY_PRESET, PROJECT_TYPE].map((type): AgentToolCase => ({
+    name: `set wall type copies ${type.id} on existing walls`,
+    tool: 'set_wall_type', scene: wallTypesScene,
+    input: { wallIds: ['wall_ground'], type: type.id },
+    expect: { result: { ok: true, wallIds: ['wall_ground'], type: type.id },
+      after: { wall_ground: wallAssemblyPatch(type.assembly) } },
+  })),
+  ...['add_wall', 'set_wall_type'].map((tool): AgentToolCase => ({
+    name: 'unknown assembly ids are refused', tool, scene: wallTypesScene,
+    input: { levelId: 'level_ground', start: [8, 0], end: [8, 4], wallIds: ['wall_ground'], type: 'missing-type' },
+    expect: { refusal: 'unknown_wall_type' },
+  })),
+  {
+    name: 'every wall must exist before any wall type changes',
+    tool: 'set_wall_type', scene: wallTypesScene,
+    input: { wallIds: ['wall_ground', 'wall_missing'], type: PROJECT_TYPE.id },
+    expect: { refusal: 'target_not_found' },
+  },
+  {
+    name: 'clearing an assembly keeps its thickness',
+    tool: 'set_wall_type', scene: () => {
+      const scene = wallTypesScene()
+      Object.assign(scene.nodes.wall_ground!, wallAssemblyPatch(PROJECT_TYPE.assembly))
+      return scene
+    },
+    input: { wallIds: ['wall_ground'], type: null },
+    expect: { result: { ok: true }, check: (_result, nodes) => {
+      const wall = nodes.wall_ground
+      return wall?.type === 'wall' && !wall.assembly && wall.thickness === wallAssemblyPatch(PROJECT_TYPE.assembly).thickness
+        ? [] : ['Clearing the assembly changed thickness or retained layers']
+    } },
+  },
+  ...[ASSEMBLY_PRESET, PROJECT_TYPE, null].map((type): AgentToolCase => ({
+    name: `get walls reports ${type?.id ?? 'no assembly'} and available types`,
+    tool: 'get_walls', scene: () => {
+      const scene = wallTypesScene()
+      if (type) Object.assign(scene.nodes.wall_ground!, wallAssemblyPatch(type.assembly))
+      return scene
+    },
+    input: { levelId: 'level_ground' },
+    expect: { result: {}, contains: {
+      walls: [{ id: 'wall_ground', type: type ? { id: type.id, label: type.label } : null }],
+      wallTypes: [{ id: PROJECT_TYPE.id, label: PROJECT_TYPE.label }, { id: ASSEMBLY_PRESET.id, label: ASSEMBLY_PRESET.label }],
+    } },
+  })),
 ]

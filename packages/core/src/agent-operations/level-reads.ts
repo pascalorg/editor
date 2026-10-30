@@ -17,6 +17,7 @@ import { resolveWallEffectiveHeight } from '../systems/wall/wall-top'
 import { type LevelTargetInput, targetLevel } from './level-target'
 import { contentCounts, levelIdOf, levelRole, nodesOnLevel, queryNodes } from './scene-queries'
 import type { AgentOperation, SceneNodes } from './types'
+import { wallTypeChoices } from './wall-type'
 
 const round2 = (value: number) => Math.round(value * 100) / 100
 
@@ -48,6 +49,9 @@ export function wallResolvedHeight(nodes: SceneNodes, wall: WallNode): number {
 }
 
 export function wallSummary(nodes: SceneNodes, wall: WallNode) {
+  const type = wall.assembly?.presetId
+    ? wallTypeChoices(nodes).find((entry) => entry.id === wall.assembly?.presetId)
+    : undefined
   return {
     id: wall.id,
     name: wall.name,
@@ -58,6 +62,7 @@ export function wallSummary(nodes: SceneNodes, wall: WallNode) {
     resolvedHeight: wallResolvedHeight(nodes, wall),
     heightIsExplicit: wall.height !== undefined,
     thickness: wall.thickness,
+    type: type ? { id: type.id, label: type.label } : null,
     wallFaceChains: {
       a: resolveWallFaceChain(wall, 'a'),
       b: resolveWallFaceChain(wall, 'b'),
@@ -196,7 +201,13 @@ export const getLevelSummary: AgentOperation<LevelTargetInput> = (nodes, input, 
 export const getWalls: AgentOperation<LevelTargetInput> = (nodes, input, context) => {
   const level = targetLevel(nodes, input, context)
   const walls = ofType(nodesOnLevel(nodes, level.id), 'wall')
-  return { result: { levelId: level.id, walls: walls.map((wall) => wallSummary(nodes, wall)) } }
+  return {
+    result: {
+      levelId: level.id,
+      walls: walls.map((wall) => wallSummary(nodes, wall)),
+      wallTypes: wallTypeChoices(nodes).map(({ id, label }) => ({ id, label })),
+    },
+  }
 }
 
 /** `get_zones`. */
