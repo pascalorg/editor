@@ -13,6 +13,7 @@ import {
 } from '../lib/space-detection'
 import {
   BuildingNode,
+  type CeilingNode,
   generateId,
   LevelNode,
   type SlabNode,
@@ -24,6 +25,8 @@ import { authorStairOpeningPatches } from '../systems/owned-floor-openings'
 import { initializeStairOpeningSync } from '../systems/stair/stair-opening-system'
 import { resolveStairTotalRise } from '../systems/stair/stair-rise'
 import { reconcileStructureOnLoad } from '../utils/reconcile-structure-on-load'
+import useLiveNodeOverrides from './use-live-node-overrides'
+import useLiveTransforms from './use-live-transforms'
 import useScene, { clearSceneHistory } from './use-scene'
 
 const rect = (x0: number, z0: number, x1: number, z1: number): [number, number][] => [
@@ -298,6 +301,93 @@ test('stair edits own the live floor and ceiling cuts in one undo step', async (
     clearSceneHistory()
     globalThis.requestAnimationFrame = previousFrame
     globalThis.cancelAnimationFrame = previousCancel
+  }
+})
+
+// The move tool drags a stair on live previews, then commits its pose and drops the previews in
+// one handler; the old cut stayed drawn on the floor above until a reload.
+test('a stair dragged and dropped leaves only its new cut on the floor and ceiling', async () => {
+  const building = BuildingNode.parse({
+    id: 'building_dragged_stair',
+    children: ['level_dragged_stair_0', 'level_dragged_stair_1'],
+  })
+  const ground = LevelNode.parse({ id: 'level_dragged_stair_0', parentId: building.id, level: 0 })
+  const upper = LevelNode.parse({ id: 'level_dragged_stair_1', parentId: building.id, level: 1 })
+  useScene.setState({
+    nodes: { [building.id]: building, [ground.id]: ground, [upper.id]: upper },
+    rootNodeIds: [building.id],
+    dirtyNodes: new Set(),
+    materials: {},
+    collections: {},
+    readOnly: false,
+  })
+  clearSceneHistory()
+  const stopStructure = initSpaceDetectionSync(useScene, {
+    getState: () => ({ spaces: {}, setSpaces: () => {} }),
+  })
+  const stopStair = initializeStairOpeningSync()
+  const settle = async () => {
+    for (let index = 0; index < 4; index++) await Promise.resolve()
+  }
+  const surfaces = () =>
+    Object.values(useScene.getState().nodes).filter(
+      (node): node is SlabNode | CeilingNode =>
+        (node.type === 'slab' && node.parentId === upper.id) ||
+        (node.type === 'ceiling' && node.parentId === ground.id),
+    )
+  try {
+    for (const levelId of [ground.id, upper.id]) {
+      const plan = createZone(useScene.getState().nodes, {
+        levelId,
+        polygon: rect(0, 0, 8, 5),
+        enclose: true,
+        mintId: generateId,
+      })
+      useScene.getState().applyNodeChanges(structureChangeBatch(plan.changes))
+    }
+    await settle()
+    const stair = StairNode.parse({
+      id: 'stair_dragged',
+      parentId: ground.id,
+      fromLevelId: ground.id,
+      toLevelId: upper.id,
+      slabOpeningMode: 'destination',
+      position: [2, 0, 1],
+      children: ['sseg_dragged'],
+    })
+    const segment = StairSegmentNode.parse({
+      id: 'sseg_dragged',
+      parentId: stair.id,
+      length: 3,
+      height: 3,
+      width: 1,
+    })
+    useScene.getState().applyNodeChanges(
+      structureChangeBatch([
+        { op: 'create', node: stair },
+        { op: 'create', node: segment },
+      ]),
+    )
+    await settle()
+    const dropped: [number, number, number] = [6, 0, 1]
+    useLiveNodeOverrides.getState().set(stair.id, { position: dropped, rotation: 0 })
+    useLiveTransforms.getState().set(stair.id, { position: dropped, rotation: 0 })
+    await settle()
+    // The drop, as the move tool makes it.
+    useScene.getState().updateNode(stair.id, { position: dropped })
+    useLiveNodeOverrides.getState().clear(stair.id)
+    useLiveTransforms.getState().clear(stair.id)
+    await settle()
+    expect(surfaces()).toHaveLength(2)
+    for (const surface of surfaces()) {
+      expect(useLiveNodeOverrides.getState().get(surface.id)).toBeUndefined()
+      expect(surface.holes).toHaveLength(1)
+      expect(Math.min(...surface.holes[0]!.map(([x]) => x))).toBeGreaterThan(5)
+    }
+  } finally {
+    stopStair()
+    stopStructure()
+    clearSceneHistory()
   }
 })
 
