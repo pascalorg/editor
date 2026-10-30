@@ -2,16 +2,23 @@ import { expect, test } from 'bun:test'
 import {
   type AnyNode,
   BuildingNode,
+  CeilingNode,
+  clearSceneHistory,
   containsPoint,
+  initSpaceDetectionSync,
   LevelNode,
   measureStairHeadroom,
   resolveStairWalkingSurfaces,
+  runAsSingleSceneHistoryStep,
   SlabNode,
   StairNode,
   StairSegmentNode,
   stairClearanceOpening,
   syncAutoStairOpenings,
+  useScene,
 } from '../../index'
+import { reconcileDocument, runSettlingDocument } from '../../runtime'
+import { initializeStairOpeningSync } from './stair-opening-system'
 
 test('headroom cuts follow tread heights and slab undersides while preserving authored holes', () => {
   const building = BuildingNode.parse({})
@@ -205,3 +212,133 @@ test('a widened straight-flight opening stays a square-cornered rectangle', () =
     expect((b[0] - a[0]) * (c[0] - b[0]) + (b[1] - a[1]) * (c[1] - b[1])).toBeCloseTo(0)
   }
 })
+
+test.each(['updateNode', 'applyNodeChanges', 'reconcileDocument'] as const)(
+  '%s moves a stair between surfaces without leaving its old automatic cutouts, in one undo step',
+  async (path) => {
+    const previousScene = useScene.getState()
+    const previousCancel = globalThis.cancelAnimationFrame
+    globalThis.cancelAnimationFrame = () => {}
+    const previousFrame = globalThis.requestAnimationFrame
+    globalThis.requestAnimationFrame = ((callback: FrameRequestCallback) => {
+      callback(0)
+      return 1
+    }) as typeof requestAnimationFrame
+    const building = BuildingNode.parse({ children: ['level_move_ground', 'level_move_upper'] })
+    const ground = LevelNode.parse({
+      id: 'level_move_ground',
+      parentId: building.id,
+      level: 0,
+      height: 3,
+    })
+    const upper = LevelNode.parse({ id: 'level_move_upper', parentId: building.id, level: 1 })
+    useScene.setState({
+      nodes: { [building.id]: building, [ground.id]: ground, [upper.id]: upper },
+      rootNodeIds: [building.id],
+      dirtyNodes: new Set(),
+      materials: {},
+      collections: {},
+      readOnly: false,
+    })
+    const stopStructure = initSpaceDetectionSync(useScene, {
+      getState: () => ({ spaces: {}, setSpaces: () => {} }),
+    })
+    const stopStair = initializeStairOpeningSync()
+    const settle = async () => {
+      for (let i = 0; i < 4; i++) await Promise.resolve()
+    }
+    try {
+      for (const [left, right] of [
+        [0, 4],
+        [4, 10],
+      ] as const) {
+        const polygon: [number, number][] = [
+          [left, 0],
+          [right, 0],
+          [right, 8],
+          [left, 8],
+        ]
+        useScene.getState().createNodes([
+          {
+            node: SlabNode.parse({ parentId: upper.id, polygon, elevation: 0, thickness: 0.2 }),
+            parentId: upper.id,
+          },
+          {
+            node: CeilingNode.parse({ parentId: ground.id, polygon, height: 3 }),
+            parentId: ground.id,
+          },
+        ])
+      }
+      const segment = StairSegmentNode.parse({ length: 5, height: 3, width: 1, stepCount: 15 })
+      const stair = StairNode.parse({
+        parentId: ground.id,
+        fromLevelId: ground.id,
+        toLevelId: upper.id,
+        position: [2, 0, 1],
+        totalRise: 3,
+        slabOpeningMode: 'destination',
+        children: [segment.id],
+      })
+      useScene.getState().createNodes([
+        { node: stair, parentId: ground.id },
+        { node: { ...segment, parentId: stair.id }, parentId: stair.id },
+      ])
+      await settle()
+      clearSceneHistory()
+      const surfaces = () =>
+        Object.values(useScene.getState().nodes).filter(
+          (node): node is SlabNode | CeilingNode =>
+            (node.type === 'slab' && node.parentId === upper.id) ||
+            (node.type === 'ceiling' && node.parentId === ground.id),
+        )
+      const before = surfaces().map((node) => ({
+        id: node.id,
+        polygon: node.polygon,
+        holes: node.holes,
+      }))
+      expect(before).toHaveLength(4)
+      expect(before.filter((node) => node.holes.length === 1)).toHaveLength(2)
+      const data = { position: [6, 0, 1] as [number, number, number] }
+      if (path === 'updateNode') useScene.getState().updateNode(stair.id, data)
+      else if (path === 'applyNodeChanges')
+        useScene.getState().applyNodeChanges({ update: [{ id: stair.id, data }] })
+      else
+        runAsSingleSceneHistoryStep(useScene, () =>
+          runSettlingDocument(useScene, () => {
+            const beforeMove = useScene.getState().nodes
+            useScene.getState().applyNodeChanges({ update: [{ id: stair.id, data }] })
+            reconcileDocument(useScene, beforeMove)
+          }),
+        )
+      await settle()
+      for (const surface of surfaces()) {
+        const openings = Object.values(useScene.getState().nodes).filter(
+          (node) =>
+            node.type === 'floor-opening' &&
+            node.ownerId === stair.id &&
+            node.parentId === surface.parentId,
+        )
+        expect(openings).toHaveLength(1)
+        const atNewPosition = containsPoint([{ outer: surface.polygon, holes: [] }], [6, 4])
+        expect(surface.holes).toHaveLength(atNewPosition ? 1 : 0)
+        const shape = [{ outer: surface.polygon, holes: surface.holes }]
+        if (atNewPosition) expect(containsPoint(shape, [6, 4])).toBe(false)
+        else expect(containsPoint(shape, [2, 4])).toBe(true)
+        expect(surface.polygon).toEqual(before.find((node) => node.id === surface.id)!.polygon)
+      }
+      expect(useScene.temporal.getState().pastStates).toHaveLength(1)
+      useScene.temporal.getState().undo()
+      await settle()
+      expect(
+        surfaces().map((node) => ({ id: node.id, polygon: node.polygon, holes: node.holes })),
+      ).toEqual(before)
+    } finally {
+      stopStair()
+      stopStructure()
+      useScene.setState(previousScene)
+      clearSceneHistory()
+      globalThis.requestAnimationFrame = previousFrame
+      globalThis.cancelAnimationFrame = previousCancel
+    }
+  },
+)

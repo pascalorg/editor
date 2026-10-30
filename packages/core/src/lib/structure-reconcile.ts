@@ -233,9 +233,10 @@ export function reconcileSceneStructure({
       if (metadata?.source !== 'floor-opening')
         return [{ hole, metadata: metadata ?? { source: 'manual' as const } }]
       const opening = metadata.openingId ? draft[metadata.openingId] : undefined
+      // An owner's cut map is complete: a surface it no longer names must heal.
       return opening?.type === 'floor-opening' &&
-        !opening.legacyPlateCuts?.[surface.id] &&
-        !opening.legacyCeilingCuts?.[surface.id]
+        !opening.legacyPlateCuts &&
+        !opening.legacyCeilingCuts
         ? [{ hole, metadata }]
         : []
     })
