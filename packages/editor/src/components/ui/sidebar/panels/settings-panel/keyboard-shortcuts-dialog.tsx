@@ -128,9 +128,10 @@ const SHORTCUT_CATEGORIES: ShortcutCategory[] = [
         note: 'In the scene graph, Shift-click selects the visible range like a file browser.',
       },
       {
-        keys: ['Left drag'],
+        keys: ['Left click'],
         action: 'Move the whole multi-selection',
-        note: 'With 2+ objects selected, in 2D and 3D alike: drag the selection (or its dashed box) to slide it. A click alone never starts a move; use Move in the action menu to pick it up.',
+        note:
+          'With 2+ objects selected, in 2D and 3D alike: drag the selection (or its dashed box) to slide it; click it to pick it up and place with the next click.',
       },
       {
         keys: ['R', 'T'],

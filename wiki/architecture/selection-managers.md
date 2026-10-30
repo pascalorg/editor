@@ -168,11 +168,6 @@ In Select mode, 3D and 2D canvas selection share the same modifier vocabulary:
 - `Ctrl/Meta + right-drag` on a selected rotatable object starts direct rotation from the
   canvas. Rotation snaps to the default angle increment unless Shift is held during the
   drag.
-- A click only selects (or drills from room to element). Clicking an already-selected
-  object again, in either view, never picks it up: a move starts from a drag (of the
-  object or the dashed group box) or **Move** in the action menu. A plain click on a session group's dashed
-  box keeps the selection; a click on a member selects it (`group-move-3d.ts`,
-  `startGroupMoveDrag` in the registry layer).
 - In the 2D plan a wall hit selects the wall, and only a room interior selects the room
   (the wall's floor-plan extension declares `planHitSelectsNode`, which `resolvePlanRoomHit`
   reads). 3D stays room-first (E-012): a wall face

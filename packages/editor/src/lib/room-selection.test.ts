@@ -650,7 +650,7 @@ describe('room drill-down state through the mounted selection manager', () => {
       expect(useEditor.getState().room).toBeNull()
     })
   })
-  test('repeated clicks on the selected crate keep it selected and never start a move', async () => {
+  test('a second click on the selected crate picks it up, and that click cannot drop it', async () => {
     jest.useFakeTimers()
     if (!nodeRegistry.has('test-crate')) {
       registerNode({
@@ -674,12 +674,19 @@ describe('room drill-down state through the mounted selection manager', () => {
       await act(async () => {
         useScene.setState({ nodes: { ...useScene.getState().nodes, [crate.id]: crate } })
       })
-      for (let index = 0; index < 3; index++) {
-        await click(crate.id, [2, 2])
-        jest.advanceTimersByTime(50)
-        expect(getMovingNode()).toBeNull()
-        expect(useViewer.getState().selection.selectedIds).toEqual([crate.id])
-      }
+      await click(crate.id, [2, 2])
+      jest.advanceTimersByTime(50)
+      await click(crate.id, [2, 2])
+      expect(getMovingNode()?.id).toBe(crate.id)
+
+      // The browser's click that ends this press would otherwise commit the move in place.
+      const endingClick = new Event('click', { cancelable: true })
+      window.dispatchEvent(endingClick)
+      expect(endingClick.defaultPrevented).toBe(true)
+      const dropClick = new Event('click', { cancelable: true })
+      window.dispatchEvent(dropClick)
+      expect(dropClick.defaultPrevented).toBe(false)
+      await act(async () => useEditor.getState().setMovingNode(null))
     })
   })
 

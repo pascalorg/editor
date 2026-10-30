@@ -132,6 +132,7 @@ import useInteractionScope, {
 import { expandSessionSelectionForNode } from '../../../store/use-session-groups'
 import { isViewVisible, VIEW_2D } from '../../../store/view-layout'
 import { FloorRegionControls2D } from '../../editor/floor-region-controls'
+import { startGroupPickUp } from '../../editor/group-actions'
 import { classifyParticipant } from '../../editor/group-transform-shared'
 import {
   RoomHandleDragPreview2D,
@@ -998,28 +999,20 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
 
   // Photoshop-style group drag: plain pointer-down on a transformable member
   // of a multi-selection slides the whole selection rigidly; a plain click
-  // (no drag) selects the pressed member alone — a click never picks
-  // anything up (clicking outside still deselects). Modified clicks
+  // (no drag) enters the group pick-up instead — parity with the single-item
+  // click-to-move (clicking outside still deselects). Modified clicks
   // (selection toggle) and Cmd-drag / direct-rotate keep their existing
   // paths. `immediate` engages without the drag threshold — the move-handle
   // dot's pick-up semantics.
   const startGroupMoveDrag = useCallback(
-    (
-      id: AnyNodeId,
-      event: ReactPointerEvent<SVGGElement>,
-      immediate = false,
-      selectOnClick = true,
-    ): boolean => {
+    (id: AnyNodeId, event: ReactPointerEvent<SVGGElement>, immediate = false): boolean => {
       if (event.button !== 0) return false
       if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return false
       if (movingNode) return false
       if (useEditor.getState().mode === 'delete') return false
       const started = startFloorplanGroupMove(id, event, {
         immediate,
-        onClickFallthrough:
-          immediate || !selectOnClick
-            ? undefined
-            : () => applyEntrySelection(id, { shouldToggle: false, isolateMember: false }),
+        onClickFallthrough: immediate ? undefined : () => startGroupPickUp(),
       })
       if (!started) return false
       event.preventDefault()
@@ -1027,7 +1020,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
       suppressBoxSelectForPointer(event)
       return true
     },
-    [applyEntrySelection, movingNode],
+    [movingNode],
   )
 
   // Move-handle dot variant — routes the dot through the group session when
@@ -1038,7 +1031,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
   )
 
   // The dashed selection box is itself the group's drag handle: a press
-  // anywhere inside it slides the group (a plain click keeps the selection),
+  // anywhere inside it slides the group (or picks it up on a plain click),
   // anchored on the first transformable member.
   const handleGroupBoxPointerDown = useCallback(
     (event: ReactPointerEvent<SVGGElement>) => {
@@ -1049,7 +1042,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
           classifyParticipant(sceneNodes[id as AnyNodeId], currentLevelId, sceneNodes) !== null,
       )
       if (!anchor) return
-      startGroupMoveDrag(anchor as AnyNodeId, event, false, false)
+      startGroupMoveDrag(anchor as AnyNodeId, event)
     },
     [startGroupMoveDrag],
   )

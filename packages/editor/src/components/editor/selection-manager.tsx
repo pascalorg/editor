@@ -46,6 +46,7 @@ import {
   canDirectMoveNode,
   canDirectRotateNode,
   pointerEventHitsEditorHandle,
+  resolveDirectManipulationNode,
   resolveDirectRotationDragDelta,
   resolveDirectRotationPatch,
   shouldStartDirectMoveDrag,
@@ -1398,8 +1399,8 @@ export const SelectionManager = () => {
     }
   }, [isCurveReshape, mode, movingNode, camera, raycaster, glDomElement, registryVersion])
 
-  // Move cursor over the selected movable node: the visual cue that dragging it
-  // moves it (replaces the removed move-cross gizmo). Reacts only when the
+  // Move cursor over the selected movable node: the visual cue that clicking it
+  // picks it up (replaces the removed move-cross gizmo). Reacts only when the
   // hovered/selected node changes (not on every camera move) so it doesn't fight
   // the rotate/resize gizmos' own hover cursors. Clears only the cursor it owns.
   useEffect(() => {
@@ -1441,7 +1442,7 @@ export const SelectionManager = () => {
     }
   }, [mode, glDomElement])
 
-  // While a node is actively being moved (a drag, the Move button, or a
+  // While a node is actively being moved (click-to-move / Move button, or a
   // fresh preset placement), show a grabbing hand. Mode-independent: presets
   // move in build mode. Overrides the hover 'move' cursor (which bails while a
   // movingNode exists), and clears back to the canvas's custom cursor on drop.
@@ -1661,9 +1662,9 @@ export const SelectionManager = () => {
         // Reset the handled flag after a short delay so the grid:click that the
         // SAME DOM click also raycasts is ignored (it fires synchronously, before
         // this 50ms macrotask). Scheduled here — right after the flag is set — so
-        // EVERY branch below clears it, including the room early return (which
-        // would otherwise leave empty-click deselect stuck until the next
-        // normal select).
+        // EVERY branch below clears it, including the click-to-move early return
+        // (which previously skipped the reset and left empty-click deselect stuck
+        // until the next normal select).
         setTimeout(() => {
           clickHandledRef.current = false
         }, 50)
@@ -1698,9 +1699,35 @@ export const SelectionManager = () => {
             .endIf((sc) => sc.kind === 'reshaping' && sc.reshape === 'hole')
         }
 
-        // A repeated plain click only selects (or cycles, through
-        // `resolveCanvasSelectionNode` above): it never picks the node up.
-        // Moving takes an explicit drag, the Move action or its shortcut.
+        // Click-to-move: clicking the already-selected sole movable node with
+        // no modifiers picks it up instead of re-selecting — the move-cross
+        // gizmo's old job, now on the node body. `setMovingNode` arms the
+        // registry move tool in click-to-commit mode, exactly like the floating
+        // Move button. The first (selecting) click can't hit this because the
+        // node isn't yet in `selectedIdsBeforeRouting`.
+        const nativeEvent = event.nativeEvent
+        const hasModifier =
+          nativeEvent.altKey || nativeEvent.shiftKey || isCommandModifier(nativeEvent)
+        const isAlreadySole =
+          selectedIdsBeforeRouting.length === 1 && selectedIdsBeforeRouting[0] === nodeToSelect.id
+        if (
+          useEditor.getState().mode !== 'delete' &&
+          !hasModifier &&
+          isAlreadySole &&
+          !expandSessionSelectionForNode(nodeToSelect.id) &&
+          !getMovingNode() &&
+          canDirectMoveNode(nodeToSelect)
+        ) {
+          // The move tool mounts before the browser's click that ends this
+          // gesture, which would otherwise commit the node where it stands.
+          swallowNextClick()
+          sfxEmitter.emit('sfx:item-pick')
+          const moveTarget = resolveDirectManipulationNode(nodeToSelect, useScene.getState().nodes)
+          useEditor.getState().setMovingNode(moveTarget as never)
+          useViewer.getState().setSelection({ selectedIds: [] })
+          return
+        }
+
         activeStrategy.handleSelect(
           nodeToSelect,
           event.nativeEvent,

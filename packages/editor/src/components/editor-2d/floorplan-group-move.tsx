@@ -607,7 +607,7 @@ const GROUP_BOX_ROTATE_CURSOR_STYLE = {
  * participants — what a group drag carries (connected walls outside the
  * selection stretch at their shared ends to stay joined) — and IS the group's
  * drag handle: press anywhere
- * inside it and drag to slide the group; a click alone leaves it in place. Holding a selection
+ * inside it to slide the group, click to pick it up. Holding a selection
  * modifier (Cmd/Ctrl/Shift) lets pointer events pass through so members under
  * the box can still be toggled in and out. Rides the live drag delta so it
  * tracks the group mid-gesture. Mounted inside the floor-plan scene `<g>`, so
