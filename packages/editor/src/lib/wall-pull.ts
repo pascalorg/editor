@@ -2,13 +2,13 @@
  * "Pull to continue": a selected wall's end carries a grip that, dragged,
  * draws the next wall from that end.
  *
- * Pressing the grip arms the wall tool's Walls run (each wall starts where the
- * last ended) already started at the pulled end, with the pulled wall's type:
- * its assembly, thickness, height and finishes. The drag shows the next wall;
- * letting go places it, and the run carries on from its far end, click by
- * click, until Esc, a double-click, closing the loop or teeing into a wall —
- * exactly as the Walls run ends. Then the editor is back in Select, with the
- * Rooms shape and wall tool settings the user had.
+ * Pressing the grip arms the wall tool on Walls, as a run (each wall starts
+ * where the last ended, `wallDraftIsRun`) already started at the pulled end,
+ * with the pulled wall's type: its assembly, thickness, height and finishes.
+ * The drag shows the next wall; letting go places it, and the run carries on
+ * from its far end, click by click, until Esc, a double-click, closing the loop
+ * or teeing into a wall. Then the editor is back in Select, with the Rooms
+ * shape and wall tool settings the user had.
  *
  * Its walls snap as every line run does once started (`wall-run-snap.ts`):
  * square to the wall before — the pulled one, for the first — or the house's
@@ -31,7 +31,7 @@ import { useViewer } from '@pascal-app/viewer'
 import { create } from 'zustand'
 import useEditor from '../store/use-editor'
 import type { ContinuationMode } from './continuation'
-import { selectWallDrawVariant } from './wall-draw-variant'
+import { getWallDrawVariant, selectWallDrawVariant } from './wall-draw-variant'
 import { publishWallRunFeedback } from './wall-run-snap'
 
 /** The floor plan's affordance id for a wall end's pull grip (a `move-arrow`, variant `pull`). */
@@ -64,6 +64,16 @@ type WallPullState = { run: WallPullRun | null }
 
 /** The open pull run, if any. */
 export const useWallPullRun = create<WallPullState>(() => ({ run: null }))
+
+/**
+ * Whether the wall tool's open segment belongs to a run: a Polygon room's sides, or the walls
+ * pulled from a wall end. A run's segment holds square to the one before it (`wall-run-snap.ts`)
+ * and the next chains from its end. Otherwise it is a Walls segment: one wall, locked to 15° rays
+ * from its start, and the tool stops once it is placed.
+ */
+export function wallDraftIsRun(): boolean {
+  return getWallDrawVariant() !== 'walls' || useWallPullRun.getState().run !== null
+}
 
 /**
  * The wall tool defaults that draw walls of `wall`'s type (core

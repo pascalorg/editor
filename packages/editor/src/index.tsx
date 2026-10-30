@@ -373,6 +373,8 @@ export {
   SnapTargetBadge,
   SnapTargetIcon,
 } from './components/ui/snap-target-badge'
+// A wall's project wall types: new, edit, duplicate (the wall panel's Assembly).
+export { WallTypeMenu } from './components/ui/wall-type/wall-type-menu'
 export {
   FloorplanCompassButton,
   type FloorplanCompassButtonProps,
@@ -946,12 +948,7 @@ export {
   sculptFieldForSite,
   terrainPointInsideSite,
 } from './lib/terrain-sculpt'
-export {
-  armWallLineTool,
-  armWallTypeTool,
-  wallVariantTooltip,
-  withToolShortcut,
-} from './lib/tool-shortcuts'
+export { withToolShortcut } from './lib/tool-shortcuts'
 export { isTypingTarget } from './lib/typing-target'
 export { enterUnitFocus } from './lib/units'
 export { exportSceneToUsdz, type UsdzExportOptions } from './lib/usdz-export'
@@ -971,21 +968,18 @@ export {
   type ViewerSource,
 } from './lib/viewer-selection'
 export {
-  getDrawnWallTypes,
   getWallDrawVariant,
   getWallLineKind,
-  getWallTypeOverride,
   INVISIBLE_WALL_DRAFT_THICKNESS,
   invisibleWallDraftSnapLines,
   selectWallDrawVariant,
-  setWallLineKind,
-  setWallTypeOverride,
+  selectWallKind,
   useWallDraftThickness,
   useWallDrawVariant,
-  useWallLineKind,
-  useWallSegmentDraftThickness,
-  useWallTypeOverridePlacement,
+  useWallKind,
+  WALL_KINDS,
   type WallDrawVariant,
+  type WallKind,
   type WallLineKind,
 } from './lib/wall-draw-variant'
 export {
@@ -1017,6 +1011,7 @@ export {
   WALL_PULL_GRIP_TITLE,
   type WallPullGripPayload,
   type WallPullRun,
+  wallDraftIsRun,
   wallPullSeed,
   wallPullTypePatch,
 } from './lib/wall-pull'
@@ -1027,23 +1022,10 @@ export {
   wallRunDirection,
 } from './lib/wall-run-snap'
 export {
-  availableWallType,
-  DEFAULT_WALL_FINISHES,
-  DEFAULT_WALL_TYPES,
   deleteProjectWallType,
-  PLAIN_WALL_TYPE,
-  resolveWallType,
   saveProjectWallType,
   useProjectWallTypes,
-  WALL_LINE_TOOLS,
-  WALL_TYPE_OPTIONS,
-  WALL_TYPE_TOOLS,
-  type WallFinishes,
-  type WallTypeId,
   type WallTypePlacement,
-  type WallTypes,
-  wallTypeOptions,
-  wallTypePatch,
   wallTypePlacementOf,
 } from './lib/wall-type'
 export { writeWindowChanges } from './lib/window-changes'

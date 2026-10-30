@@ -17,10 +17,12 @@ import { useViewer } from '@pascal-app/viewer'
 import { createWallOnCurrentLevel } from '../components/tools/wall/wall-drafting'
 import type { WallPlanPoint } from '../components/tools/wall/wall-snap-geometry'
 import useEditor from '../store/use-editor'
+import { selectWallDrawVariant } from './wall-draw-variant'
 import {
   endWallPullRun,
   startWallPull,
   useWallPullRun,
+  wallDraftIsRun,
   wallPullSeed,
   wallPullTypePatch,
 } from './wall-pull'
@@ -215,6 +217,21 @@ describe('pulling the next wall from a wall end', () => {
     expect([Math.min(...xs), Math.max(...xs), Math.min(...zs), Math.max(...zs)]).toEqual([
       0, 5, 0, 4,
     ])
+  })
+
+  // The Walls variant had become a run that chained every wall from the last; it draws one wall
+  // per two clicks and stops. A Polygon room's sides and a pulled run still chain.
+  test('a Walls segment is one wall; Polygon sides and a pulled run chain', () => {
+    selectWallDrawVariant('walls')
+    expect(wallDraftIsRun()).toBe(false)
+    selectWallDrawVariant('polygon')
+    expect(wallDraftIsRun()).toBe(true)
+    startWallPull({ wallId: 'wall_source', endpoint: 'end', origin: '2d' })
+    expect(useEditor.getState().getContinuation('wall')).toBe('single')
+    expect(wallDraftIsRun()).toBe(true)
+    endWallPullRun()
+    selectWallDrawVariant('walls')
+    expect(wallDraftIsRun()).toBe(false)
   })
 
   test('leaving the wall tool ends the run without leaving Select behind', () => {

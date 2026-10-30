@@ -270,21 +270,9 @@ export const wallDefinition: NodeDefinition<typeof WallNode> = {
       label: 'Add a corner · click the first to close',
       visible: whenWallVariant('polygon'),
     },
-    {
-      key: 'Left click',
-      label: 'Add a wall · each one starts where the last ended',
-      visible: whenWallVariant('walls'),
-    },
-    { key: 'Double click', label: 'Finish the run', visible: whenWallVariant('walls') },
-    // A started Walls or Polygon run holds square; Alt lets it go.
-    {
-      key: 'Alt',
-      label: 'Free angle',
-      visible: {
-        subscribe: (onChange: () => void) => useEditor.subscribe(onChange),
-        value: () => getWallDrawVariant() !== 'rectangle',
-      },
-    },
+    { key: 'Left click', label: 'Set wall start / end', visible: whenWallVariant('walls') },
+    // A started Polygon room holds square; Alt lets it go.
+    { key: 'Alt', label: 'Free angle', visible: whenWallVariant('polygon') },
     { key: 'Esc', label: 'Cancel' },
   ],
   // The split session (`split-session.ts`) is the wall's own reshape; the HUD

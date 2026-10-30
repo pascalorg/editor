@@ -57,6 +57,7 @@ import {
   useInteractionScope,
   useProjectWallTypes,
   WallPaintRegionList,
+  WallTypeMenu,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { Spline } from 'lucide-react'
@@ -1003,6 +1004,13 @@ function WallAssemblySection({
             </optgroup>
           ) : null}
         </select>
+        <WallTypeMenu
+          assembly={stack}
+          onApply={(type) => onUpdate(wallAssemblyPatch(structuredClone(type.assembly)))}
+          placement={
+            node.frontSide === 'exterior' || node.backSide === 'exterior' ? 'exterior' : 'interior'
+          }
+        />
       </LayerRow>
 
       {assembly && (

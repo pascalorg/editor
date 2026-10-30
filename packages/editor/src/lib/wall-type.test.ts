@@ -1,38 +1,31 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import {
-  assemblyThickness,
-  DEFAULT_INTERIOR_WALL_PAINT,
   GYPSUM_HALF,
   getSceneDocument,
+  projectWallTypes,
   SiteNode,
   STUD_2X8,
   useScene,
   WallTypeDefinition,
   wallTypeAssembly,
 } from '@pascal-app/core'
-import useEditor from '../store/use-editor'
-import { getDrawnWallTypes, setWallTypeOverride } from './wall-draw-variant'
 import {
-  currentProjectWallTypes,
-  DEFAULT_WALL_FINISHES,
-  DEFAULT_WALL_TYPES,
   deleteProjectWallType,
   newWallTypeBlockedReason,
-  normalizeWallFinishes,
-  normalizeWallTypes,
-  PLAIN_WALL_TYPE,
   PROJECT_WALL_TYPE_LIMIT,
   saveProjectWallType,
   WALL_TYPE_LAYER_LIMIT,
   WALL_TYPE_SAVE_FAILURE,
-  wallTypeOptions,
-  wallTypePlacementOf,
-  wallTypeThickness,
 } from './wall-type'
 
 // Scene writes schedule their dirty pass on a frame; bun has none.
 globalThis.requestAnimationFrame ??= () => 0
 globalThis.cancelAnimationFrame ??= () => {}
+
+const currentProjectWallTypes = () => {
+  const { nodes, rootNodeIds } = useScene.getState()
+  return projectWallTypes(nodes, rootNodeIds)
+}
 
 /** A 2x8 at 24 in partition, drywall both faces. */
 const SOUND_WALL: WallTypeDefinition = {
@@ -51,40 +44,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
-  setWallTypeOverride(null)
-  useEditor.setState({ wallTypes: DEFAULT_WALL_TYPES, wallFinishes: DEFAULT_WALL_FINISHES })
   useScene.getState().unloadScene()
-})
-
-describe('the Exterior and Interior lists', () => {
-  test('each lists the presets that build its kind of wall, and the plain wall', () => {
-    const exterior = wallTypeOptions('exterior', []).map((option) => option.id)
-    const interior = wallTypeOptions('interior', []).map((option) => option.id)
-    expect(exterior).toContain('exterior-2x6-siding')
-    expect(exterior).toContain('exterior-cmu-stucco')
-    expect(exterior).not.toContain('interior-2x4-drywall')
-    expect(interior).toEqual([
-      'interior-2x4-drywall',
-      'interior-2x6-plumbing',
-      'cmu-8-furred-drywall',
-      PLAIN_WALL_TYPE,
-    ])
-    expect(exterior.at(-1)).toBe(PLAIN_WALL_TYPE)
-  })
-
-  test('a pick made before the split still shows in its old list', () => {
-    const exterior = wallTypeOptions('exterior', [], 'interior-2x4-drywall')
-    expect(exterior.map((option) => option.id)).toContain('interior-2x4-drywall')
-  })
-
-  test("a project type lists under the placement its layers give, in a group of the project's own", () => {
-    expect(wallTypePlacementOf(SOUND_WALL.assembly)).toBe('interior')
-    const interior = wallTypeOptions('interior', [SOUND_WALL])
-    expect(interior.find((option) => option.id === SOUND_WALL.id)?.group).toBe('This project')
-    expect(wallTypeOptions('exterior', [SOUND_WALL]).map((option) => option.id)).not.toContain(
-      SOUND_WALL.id,
-    )
-  })
 })
 
 describe('project wall types', () => {
@@ -101,17 +61,6 @@ describe('project wall types', () => {
     expect(currentProjectWallTypes().map((type) => type.label)).toEqual(['Sound wall'])
     deleteProjectWallType(SOUND_WALL.id)
     expect(currentProjectWallTypes()).toEqual([])
-  })
-
-  test('walls drawn with one take its stack, at the thickness its layers sum to', () => {
-    saveProjectWallType(SOUND_WALL)
-    useEditor.getState().setWallType('interior', SOUND_WALL.id)
-    expect(useEditor.getState().wallTypes.interior).toBe(SOUND_WALL.id)
-    const drawn = getDrawnWallTypes().interior
-    expect(drawn?.assembly?.presetId).toBe(SOUND_WALL.id)
-    expect(drawn?.thickness).toBeCloseTo(assemblyThickness(SOUND_WALL.assembly), 12)
-    expect(drawn?.thickness).toBeCloseTo(STUD_2X8 + 2 * GYPSUM_HALF, 12)
-    expect(wallTypeThickness(SOUND_WALL.id, 'interior')).toBeCloseTo(drawn!.thickness!, 12)
   })
 
   test('a 13th layer and a 65th type are refused, each saying why, and nothing is written', () => {
@@ -172,61 +121,5 @@ describe('project wall types', () => {
     expect(saveProjectWallType(SOUND_WALL)).toBe('no-site')
     expect(WALL_TYPE_SAVE_FAILURE.invalid).not.toBe(WALL_TYPE_SAVE_FAILURE['no-site'])
     expect(WALL_TYPE_SAVE_FAILURE.invalid).not.toContain('site')
-  })
-
-  test("a pick this project does not have draws the placement's default", () => {
-    useEditor.getState().setWallType('interior', 'custom-elsewhere')
-    expect(useEditor.getState().wallTypes.interior).toBe('custom-elsewhere')
-    expect(getDrawnWallTypes().interior?.assembly?.presetId).toBe(DEFAULT_WALL_TYPES.interior)
-    expect(normalizeWallTypes({ exterior: 'custom-x', interior: 'custom bad' })).toEqual({
-      exterior: 'custom-x',
-      interior: DEFAULT_WALL_TYPES.interior,
-    })
-  })
-})
-
-describe('finishes picked while drafting', () => {
-  test('start at the defaults, which write nothing on the wall', () => {
-    expect(useEditor.getState().wallFinishes.paint).toBe(DEFAULT_INTERIOR_WALL_PAINT)
-    const types = getDrawnWallTypes()
-    expect(types.exterior?.slots).toBeUndefined()
-    expect(types.interior?.slots).toBeUndefined()
-  })
-
-  test('go on the cladding of the exterior type and on every drywall face', () => {
-    useEditor.getState().setWallCladding('siding', 'library:siding-lap-navy')
-    useEditor.getState().setWallPaint('library:preset-sage')
-    const types = getDrawnWallTypes()
-    expect(types.exterior?.slots).toEqual({
-      'layer:exterior': 'library:siding-lap-navy',
-      'layer:interior': 'library:preset-sage',
-    })
-    expect(types.interior?.slots).toEqual({
-      'layer:interior-back': 'library:preset-sage',
-      'layer:interior': 'library:preset-sage',
-    })
-    // Stucco keeps its own pick: the navy siding is not a stucco.
-    useEditor.getState().setWallType('exterior', 'exterior-2x6-stucco')
-    expect(getDrawnWallTypes().exterior?.slots).toEqual({ 'layer:interior': 'library:preset-sage' })
-    useEditor.getState().setWallCladding('stucco', 'library:preset-sand')
-    expect(getDrawnWallTypes().exterior?.slots?.['layer:exterior']).toBe('library:preset-sand')
-  })
-
-  test('the Interior wall tool draws its type and paint everywhere', () => {
-    useEditor.getState().setWallPaint('library:preset-sage')
-    setWallTypeOverride('interior')
-    const types = getDrawnWallTypes()
-    expect(types.exterior?.assembly?.presetId).toBe(DEFAULT_WALL_TYPES.interior)
-    expect(types.exterior?.slots?.['layer:interior']).toBe('library:preset-sage')
-  })
-
-  test('stored picks come back; anything else is dropped', () => {
-    expect(
-      normalizeWallFinishes({
-        cladding: { siding: 'library:siding-lap-sage', stucco: 42 },
-        paint: 'library:preset-mint',
-      }),
-    ).toEqual({ cladding: { siding: 'library:siding-lap-sage' }, paint: 'library:preset-mint' })
-    expect(normalizeWallFinishes(undefined)).toEqual(DEFAULT_WALL_FINISHES)
   })
 })

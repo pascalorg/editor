@@ -22,8 +22,7 @@ export function levelExteriorWalls(nodes: Record<string, AnyNode>, levelId: stri
  * there: its doors and windows, its support and terrain settings, and a height that only meant
  * "as tall as this storey" (the copy follows its own storey). A copy between a basement and a floor
  * over the ground takes the construction of where it lands: walls copied down to a basement get the
- * foundation build, and foundation walls copied up take `exteriorConstruction` (the editor passes
- * its current exterior wall type; without one they are plain walls). Rooms then come from the copied
+ * foundation build, and foundation walls copied up are plain walls. Rooms then come from the copied
  * walls as from drawn ones. Returns the create entries for `applyNodeChanges`; empty when the
  * source has no closed outline.
  */
@@ -32,14 +31,11 @@ export function buildExteriorWallCopy({
   fromLevelId,
   toLevelId,
   mintId = () => generateId('wall'),
-  exteriorConstruction = {},
 }: {
   nodes: Record<string, AnyNode>
   fromLevelId: string
   toLevelId: string
   mintId?: () => string
-  /** An above-grade exterior wall's build (assembly and thickness), for walls copied up from a basement. */
-  exteriorConstruction?: Pick<Partial<WallNode>, 'assembly' | 'thickness'>
 }): Array<{ node: WallNode; parentId: AnyNodeId }> {
   const from = nodes[fromLevelId]
   const to = nodes[toLevelId]
@@ -71,18 +67,7 @@ export function buildExteriorWallCopy({
       parentId: toLevelId,
       children: [],
       ...(height !== undefined && !wallFollowsStorey(wall, storeyHeight) ? { height } : {}),
-      ...(!reconstruct
-        ? { assembly, thickness }
-        : targetFoundation
-          ? {}
-          : structuredClone(
-              Object.fromEntries(
-                Object.entries({
-                  assembly: exteriorConstruction.assembly,
-                  thickness: exteriorConstruction.thickness,
-                }).filter(([, value]) => value !== undefined),
-              ),
-            )),
+      ...(reconstruct ? {} : { assembly, thickness }),
     })
   })
   if (!copies.length) return []

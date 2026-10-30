@@ -1,189 +1,25 @@
 import {
   type AnyNodeId,
   type Assembly,
-  assemblyThickness,
-  CUSTOM_WALL_TYPE_PREFIX,
-  DEFAULT_INTERIOR_WALL_PAINT,
-  type DrawnWallTypes,
-  getWallAssemblyPreset,
   isExteriorWallAssembly,
   parseWallTypes,
   projectWallTypes,
   type SiteNode,
   useScene,
-  WALL_ASSEMBLY_PRESETS,
-  type WallNode,
   WallTypeDefinition,
-  WallTypeDefinitionId,
-  wallAssemblyCladding,
-  wallAssemblyFinishSlots,
-  wallAssemblyPatch,
 } from '@pascal-app/core'
 import { useMemo } from 'react'
 
 /**
- * The wall types new walls are drawn with, picked in the Build panel before
- * drawing and kept with the editor preferences. A type is a wall assembly
- * preset id, a project wall type id (`custom-…`, saved on the site), or `plain`
- * for a single-layer wall with no assembly.
+ * A project's own wall types (`SiteNode.wallTypes`), made and edited from a wall's
+ * Assembly controls (`WallTypeMenu`): saved on the site, so they travel with the
+ * project and undo like any edit.
  *
- * `exterior` builds the walls that hold the outside back (the outline, an open
- * run, the first walls of a plan); `interior` builds the walls a closed circuit
- * of walls encloses (`DrawnWallTypes` in core).
+ * A placement is the kind of wall a stack builds, read from its layers: `exterior`
+ * with a cladding side, `interior` lined alike on both faces. A new type starts from
+ * a typical stack of its placement.
  */
 export type WallTypePlacement = 'exterior' | 'interior'
-export type WallTypeId = string
-export type WallTypes = Record<WallTypePlacement, WallTypeId>
-
-export const PLAIN_WALL_TYPE = 'plain'
-
-export const DEFAULT_WALL_TYPES: WallTypes = {
-  exterior: 'exterior-2x6-siding',
-  interior: 'interior-2x4-drywall',
-}
-
-/**
- * The finishes new walls are drawn with, picked beside their types and kept with
- * them: the cladding product for each cladding kind (so going from siding to
- * stucco and back keeps the siding colour), and the paint every lining gets —
- * both faces of a partition and the inside face of an exterior wall. Absent =
- * the kind's own cladding (`WALL_FINISH_LIBRARY_REF`).
- */
-export type WallFinishes = {
-  cladding: Partial<Record<string, string>>
-  paint: string
-}
-
-/**
- * The paint starts at the default interior paint every unpainted face already
- * shows, so a wall drawn with it carries none of its own (`wallAssemblyFinishSlots`).
- */
-export const DEFAULT_WALL_FINISHES: WallFinishes = {
-  cladding: {},
-  paint: DEFAULT_INTERIOR_WALL_PAINT,
-}
-
-/**
- * The Rooms group's Exterior wall and Interior wall tiles, beside Walls: single
- * walls of that placement's type and finish wherever they land (`armWallTypeTool`,
- * the tiles of the Shift+E and I shortcuts).
- */
-export const WALL_TYPE_TOOLS: ReadonlyArray<{
-  placement: WallTypePlacement
-  label: string
-  iconSrc: string
-  /** `ToolShortcutId` of the key that arms it. */
-  shortcut: 'exterior-wall' | 'interior-wall'
-  title: string
-}> = [
-  {
-    placement: 'exterior',
-    label: 'Exterior wall',
-    iconSrc: '/icons/walls.webp',
-    shortcut: 'exterior-wall',
-    title: 'Exterior walls: every wall drawn takes the exterior type and cladding',
-  },
-  {
-    placement: 'interior',
-    label: 'Interior wall',
-    iconSrc: '/icons/divide-room.webp',
-    shortcut: 'interior-wall',
-    title: 'Interior walls: every wall drawn takes the interior type and paint',
-  },
-]
-
-/**
- * The Rooms group's Invisible wall tile (and Railing, beside it): runs of lines the
- * wall tool draws that are no walls of a type (`armWallLineTool`).
- */
-export const WALL_LINE_TOOLS: ReadonlyArray<{
-  kind: 'invisible' | 'railing'
-  label: string
-  iconSrc: string
-  title: string
-  /** The Rooms caption's rest while the tile is armed. */
-  caption: string
-}> = [
-  {
-    kind: 'invisible',
-    label: 'Invisible wall',
-    iconSrc: '/icons/zone.webp',
-    title:
-      'Invisible walls: divide a room or close off a porch without building a wall. Rooms close on them; they never cut a wall.',
-    caption:
-      'every line is an invisible wall: rooms close on it, nothing is built. Closed off outside the house, a room becomes a porch.',
-  },
-  {
-    kind: 'railing',
-    label: 'Railing',
-    iconSrc: '/icons/fence.webp',
-    title:
-      'Railings: a 36 in guard drawn like walls, posts at most 6 ft apart. Rooms close on it and it takes openings; style and height in the wall panel.',
-    caption:
-      'every line is a railing: a guard rooms close on, with no studs, siding or footing. Place a door on it for an opening.',
-  },
-]
-
-export type WallTypeOption = { id: WallTypeId; label: string; group: string }
-
-const GROUP_LABEL: Record<string, string> = {
-  exterior: 'Exterior',
-  interior: 'Interior',
-  masonry: 'Masonry',
-}
-
-export const WALL_TYPE_OPTIONS: readonly WallTypeOption[] = [
-  ...WALL_ASSEMBLY_PRESETS.map((preset) => ({
-    id: preset.id,
-    label: preset.label,
-    group: GROUP_LABEL[preset.category] ?? preset.category,
-  })),
-  { id: PLAIN_WALL_TYPE, label: 'Plain wall (single layer)', group: 'Other' },
-]
-
-const PLAIN_OPTION = WALL_TYPE_OPTIONS[WALL_TYPE_OPTIONS.length - 1]!
-
-/** Whether `id` is a project wall type id (it may still be missing from this project). */
-export function isProjectWallTypeId(id: string): boolean {
-  return id.startsWith(CUSTOM_WALL_TYPE_PREFIX) && WallTypeDefinitionId.safeParse(id).success
-}
-
-function isWallTypeId(value: unknown): value is WallTypeId {
-  return (
-    typeof value === 'string' &&
-    (value === PLAIN_WALL_TYPE || !!getWallAssemblyPreset(value) || isProjectWallTypeId(value))
-  )
-}
-
-export function normalizeWallTypes(value: unknown): WallTypes {
-  const record = (value && typeof value === 'object' ? value : {}) as Record<string, unknown>
-  return {
-    exterior: isWallTypeId(record.exterior) ? record.exterior : DEFAULT_WALL_TYPES.exterior,
-    interior: isWallTypeId(record.interior) ? record.interior : DEFAULT_WALL_TYPES.interior,
-  }
-}
-
-const isFinishRef = (value: unknown): value is string =>
-  typeof value === 'string' && (value.startsWith('library:') || /^#[\da-f]{6}$/i.test(value))
-
-export function normalizeWallFinishes(value: unknown): WallFinishes {
-  const record = (value && typeof value === 'object' ? value : {}) as Record<string, unknown>
-  const cladding = (
-    record.cladding && typeof record.cladding === 'object' ? record.cladding : {}
-  ) as Record<string, unknown>
-  return {
-    cladding: Object.fromEntries(
-      Object.entries(cladding).filter((entry): entry is [string, string] => isFinishRef(entry[1])),
-    ),
-    paint: isFinishRef(record.paint) ? record.paint : DEFAULT_WALL_FINISHES.paint,
-  }
-}
-
-/** The project's own wall types, as the scene holds them now (`SiteNode.wallTypes`). */
-export function currentProjectWallTypes(): WallTypeDefinition[] {
-  const { nodes, rootNodeIds } = useScene.getState()
-  return projectWallTypes(nodes, rootNodeIds)
-}
 
 function siteOf(state: ReturnType<typeof useScene.getState>): SiteNode | undefined {
   for (const id of state.rootNodeIds) {
@@ -199,106 +35,9 @@ export function useProjectWallTypes(): WallTypeDefinition[] {
   return useMemo(() => parseWallTypes(saved), [saved])
 }
 
-/**
- * A type's name and stack: a preset's, or a project type's. Null for a plain wall,
- * and for a project type this project does not have (picked in another project).
- */
-export function resolveWallType(
-  id: WallTypeId,
-  projectTypes: readonly WallTypeDefinition[] = currentProjectWallTypes(),
-): { label: string; assembly: Assembly; project: boolean } | null {
-  const preset = getWallAssemblyPreset(id)
-  if (preset) return { label: preset.label, assembly: preset.assembly, project: false }
-  const own = projectTypes.find((type) => type.id === id)
-  return own ? { label: own.label, assembly: own.assembly, project: true } : null
-}
-
-/**
- * The type a placement draws with: its pick, or the placement's default when the
- * pick is a project type this project does not have.
- */
-export function availableWallType(
-  id: WallTypeId,
-  placement: WallTypePlacement,
-  projectTypes: readonly WallTypeDefinition[] = currentProjectWallTypes(),
-): WallTypeId {
-  return isProjectWallTypeId(id) && !resolveWallType(id, projectTypes)
-    ? DEFAULT_WALL_TYPES[placement]
-    : id
-}
-
-/** The placement whose list a stack belongs in, read from its layers (`isExteriorWallAssembly`). */
+/** The placement a stack builds, read from its layers (`isExteriorWallAssembly`). */
 export function wallTypePlacementOf(assembly: Assembly): WallTypePlacement {
   return isExteriorWallAssembly(assembly) ? 'exterior' : 'interior'
-}
-
-/**
- * The types a placement's list offers: the presets that build that kind of wall,
- * then the project's own, then the plain wall (in both). `current` is listed
- * even off its placement, so a pick made before the lists split still shows.
- */
-export function wallTypeOptions(
-  placement: WallTypePlacement,
-  projectTypes: readonly WallTypeDefinition[],
-  current?: WallTypeId,
-): WallTypeOption[] {
-  const options: WallTypeOption[] = [
-    ...WALL_ASSEMBLY_PRESETS.filter(
-      (preset) => wallTypePlacementOf(preset.assembly) === placement || preset.id === current,
-    ).map((preset) => ({ id: preset.id, label: preset.label, group: 'Presets' })),
-    ...projectTypes
-      .filter((type) => wallTypePlacementOf(type.assembly) === placement || type.id === current)
-      .map((type) => ({ id: type.id, label: type.label, group: 'This project' })),
-  ]
-  return [...options, PLAIN_OPTION]
-}
-
-/**
- * The wall patch a type gives a new wall: its assembly, the thickness it sums to,
- * and the `slots` of the finishes picked for it (`wallAssemblyFinishSlots`).
- */
-export function wallTypePatch(
-  id: WallTypeId,
-  finishes?: WallFinishes,
-  projectTypes: readonly WallTypeDefinition[] = currentProjectWallTypes(),
-): Partial<WallNode> {
-  const type = resolveWallType(id, projectTypes)
-  if (!type) return {}
-  const assembly = structuredClone(type.assembly)
-  const slots = finishes
-    ? wallAssemblyFinishSlots(assembly, {
-        cladding: finishes.cladding[wallAssemblyCladding(assembly) ?? ''],
-        paint: finishes.paint,
-      })
-    : {}
-  return { ...wallAssemblyPatch(assembly), ...(Object.keys(slots).length > 0 ? { slots } : {}) }
-}
-
-export function drawnWallTypesOf(types: WallTypes, finishes?: WallFinishes): DrawnWallTypes {
-  const projectTypes = currentProjectWallTypes()
-  const patch = (placement: WallTypePlacement) =>
-    wallTypePatch(
-      availableWallType(types[placement], placement, projectTypes),
-      finishes,
-      projectTypes,
-    )
-  return { exterior: patch('exterior'), interior: patch('interior') }
-}
-
-/**
- * The thickness a type draws at, or undefined for a plain wall (the wall default).
- * With its placement, a project type this project lacks reads as that placement's default.
- */
-export function wallTypeThickness(
-  id: WallTypeId,
-  placement?: WallTypePlacement,
-): number | undefined {
-  const projectTypes = currentProjectWallTypes()
-  const type = resolveWallType(
-    placement ? availableWallType(id, placement, projectTypes) : id,
-    projectTypes,
-  )
-  return type ? assemblyThickness(type.assembly) : undefined
 }
 
 /** The most layers a wall type's stack holds (`Assembly.layers`). */
@@ -366,7 +105,7 @@ export function saveProjectWallType(type: WallTypeDefinition): WallTypeSaveResul
 }
 
 /** Removes a project wall type from the site. Walls drawn with it keep their stack. */
-export function deleteProjectWallType(id: WallTypeId): void {
+export function deleteProjectWallType(id: string): void {
   const state = useScene.getState()
   const site = siteOf(state)
   if (!site) return

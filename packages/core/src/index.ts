@@ -1282,12 +1282,10 @@ export {
   type WallLayerPolyline,
   type WallTypeCore,
   WSP_SHEATHING,
-  wallAssemblyCladding,
   wallAssemblyExposedStructure,
   wallAssemblyExteriorFinish,
   wallAssemblyFaceFinish,
   wallAssemblyFinishRef,
-  wallAssemblyFinishSlots,
   wallAssemblyFraming,
   wallAssemblyFromLegacy,
   wallAssemblyPatch,
@@ -1295,7 +1293,6 @@ export {
   wallAssemblyUnverifiedNote,
   wallCladdingProducts,
   wallLayerBoundaryOffsets,
-  wallPaintProducts,
   wallTypeAssembly,
   wallTypeCoreOf,
 } from './systems/wall/wall-assembly'
@@ -1399,7 +1396,6 @@ export {
   wallFollowsStorey,
 } from './systems/wall/wall-top'
 export {
-  type DrawnWallTypes,
   findOpenWallEnds,
   planJoinOpenWallEnd,
   planSeparatorInsertion,

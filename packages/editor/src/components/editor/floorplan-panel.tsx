@@ -151,7 +151,6 @@ import {
   getWallLineKind,
   invisibleWallDraftSnapLines,
   useWallDraftThickness,
-  useWallSegmentDraftThickness,
 } from '../../lib/wall-draw-variant'
 import { wallSideOfPlanPoint } from '../../lib/wall-placement-pointer'
 import {
@@ -161,7 +160,12 @@ import {
   startWallPolygonDraft,
   wallPolygonDraftWalls,
 } from '../../lib/wall-polygon-draft'
-import { endWallPullRun, releaseWallPullDrag, useWallPullRun } from '../../lib/wall-pull'
+import {
+  endWallPullRun,
+  releaseWallPullDrag,
+  useWallPullRun,
+  wallDraftIsRun,
+} from '../../lib/wall-pull'
 import {
   isWallRunFree,
   publishWallRunFeedback,
@@ -2315,7 +2319,7 @@ function buildDraftWall(
   levelId: string,
   start: WallPlanPoint,
   end: WallPlanPoint,
-  thickness: number,
+  thickness?: number,
 ): WallNode {
   return {
     object: 'node',
@@ -4499,7 +4503,6 @@ function FloorplanLinearDraftLayer({
   const metricNotation = useViewer((state) => state.metricNotation)
   // The thickness the wall commits at, as the 3D draft shows it.
   const wallDraftThickness = useWallDraftThickness(DEFAULT_WALL_THICKNESS)
-  const sideDraftThickness = useWallSegmentDraftThickness(DEFAULT_WALL_THICKNESS)
   const wallDraftEnd = useFloorplanDraftPreview((s) => s.wallDraftEnd)
   const fenceDraftEnd = useFloorplanDraftPreview((s) => s.fenceDraftEnd)
   const roofDraftEnd = useFloorplanDraftPreview((s) => s.roofDraftEnd)
@@ -4538,13 +4541,12 @@ function FloorplanLinearDraftLayer({
     }
     const corners = wallRectangleCorners(wallRectangleDraftStart, wallRectangleDraftEnd)
     if (corners.length !== 4) return null
-    const draftWalls = corners.map((start, index) => {
-      const end = corners[(index + 1) % 4]!
-      return getSharedFloorplanWall({
-        ...buildDraftWall(levelId, start, end, sideDraftThickness(start, end)),
+    const draftWalls = corners.map((start, index) =>
+      getSharedFloorplanWall({
+        ...buildDraftWall(levelId, start, corners[(index + 1) % 4]!),
         id: `wall_draft_${index}` as WallNode['id'],
-      })
-    })
+      }),
+    )
     const miterData = calculateLevelMiters(draftWalls)
     const polygons = draftWalls.map((wall) =>
       formatPolygonPoints(getWallPlanFootprint(wall, miterData)),
@@ -4573,7 +4575,6 @@ function FloorplanLinearDraftLayer({
     isWallBuildActive,
     levelId,
     metricNotation,
-    sideDraftThickness,
     unit,
     wallRectangleDraftEnd,
     wallRectangleDraftStart,
@@ -4583,16 +4584,15 @@ function FloorplanLinearDraftLayer({
   // rectangle draft (mitered together) until the polygon is written.
   const polygonRoomDraft = useMemo(() => {
     if (!(levelId && isWallBuildActive && wallPolygonDraftPoints.length >= 2)) return null
-    const draftWalls = wallPolygonDraftPoints.slice(1).map((end, index) => {
-      const start = wallPolygonDraftPoints[index]!
-      return getSharedFloorplanWall({
-        ...buildDraftWall(levelId, start, end, sideDraftThickness(start, end)),
+    const draftWalls = wallPolygonDraftPoints.slice(1).map((end, index) =>
+      getSharedFloorplanWall({
+        ...buildDraftWall(levelId, wallPolygonDraftPoints[index]!, end),
         id: `wall_polygon_draft_${index}` as WallNode['id'],
-      })
-    })
+      }),
+    )
     const miterData = calculateLevelMiters(draftWalls)
     return draftWalls.map((wall) => formatPolygonPoints(getWallPlanFootprint(wall, miterData)))
-  }, [isWallBuildActive, levelId, sideDraftThickness, wallPolygonDraftPoints])
+  }, [isWallBuildActive, levelId, wallPolygonDraftPoints])
 
   const draftPolygonPoints = useMemo(() => {
     if (isRoofBuildActive && roofDraftStart && roofDraftEnd) {
@@ -9595,19 +9595,20 @@ export function FloorplanPanel({
         return
       }
 
-      // Wall draft. The first point: grid + magnetic snap, then Figma-style
-      // alignment. Once a draft is open the segment holds square to the last
-      // wall and the house's axes, with projection guides and a labelled snap
-      // marker (`snapWallRunDraftPoint`). Snapping is governed by the snapping
-      // mode (`'off'` is the bypass); Alt frees an open segment. An invisible
-      // wall draft catches the invisible walls already drawn as well.
+      // Wall draft: grid + magnetic snap, then Figma-style alignment. A Walls
+      // segment locks to 15° rays from its start; a run's segment (a Polygon
+      // side, a pulled run) holds square to the last wall and the house's axes,
+      // with projection guides and a labelled snap marker
+      // (`snapWallRunDraftPoint`). Snapping is governed by the snapping mode
+      // (`'off'` is the bypass); Alt frees a run's segment. An invisible wall
+      // draft catches the invisible walls already drawn as well.
       let snappedPoint: WallPlanPoint
       const draftSnapWalls = [
         ...walls,
         ...wallPolygonDraftWalls(),
         ...invisibleWallDraftSnapLines(),
       ]
-      if (draftStart) {
+      if (draftStart && wallDraftIsRun()) {
         const runSnap = snapWallRunDraftPoint({
           point: planPoint,
           start: draftStart,
@@ -9619,9 +9620,12 @@ export function FloorplanPanel({
         snappedPoint = runSnap.point
         publishWallRunFeedback(runSnap)
       } else {
+        const wallAngleSnap = draftStart !== null && isAngleSnapActive()
         const wallSnap = snapWallDraftPointDetailed({
           point: planPoint,
           walls: draftSnapWalls,
+          start: draftStart ?? undefined,
+          angleSnap: wallAngleSnap,
           magnetic: isMagneticSnapActive(),
           // Same as the click: an end aimed into a wall's body joins it.
           captureWallBodies: true,
@@ -9635,9 +9639,9 @@ export function FloorplanPanel({
           useAlignmentGuides.getState().clear()
         } else {
           // Alignment lines show in every mode; the pull applies only when
-          // magnetic ('lines').
+          // magnetic ('lines') and the segment isn't angle-locked.
           snappedPoint = alignFloorplanDraftPoint(wallSnapped, {
-            applySnap: isMagneticSnapActive(),
+            applySnap: isMagneticSnapActive() && !wallAngleSnap,
           })
         }
         useWallSnapIndicator
@@ -9950,7 +9954,7 @@ export function FloorplanPanel({
         return
       }
       if (viewIs2DOnly) {
-        // The Invisible wall tile draws room separators, not walls.
+        // The Walls variant's Invisible draws room separators, not walls.
         createdWall =
           getWallLineKind() === 'invisible'
             ? createInvisibleWallOnCurrentLevel(draftStart, point)
@@ -9969,7 +9973,10 @@ export function FloorplanPanel({
         ? (createdWall.end as WallPlanPoint)
         : (publishedNextStart ?? point)
 
-      if (wallChainFirstVertex && isWithinWallJoinSnapRadius(nextStart, wallChainFirstVertex)) {
+      if (
+        !wallDraftIsRun() ||
+        (wallChainFirstVertex && isWithinWallJoinSnapRadius(nextStart, wallChainFirstVertex))
+      ) {
         clearWallPlacementDraft()
         setCursorPoint(null)
         return

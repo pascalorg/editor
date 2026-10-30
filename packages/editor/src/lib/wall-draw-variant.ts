@@ -1,30 +1,15 @@
 import {
-  type AnyNode,
-  type AnyNodeId,
-  type DrawnWallTypes,
-  detectSpacesForLevel,
   emitter,
   type MessageDescriptor,
-  pointInPolygon2D,
   railingWallDefaults,
   useScene,
   type WallNode,
-  type WallPlanPoint,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
-import { useCallback } from 'react'
 import { create } from 'zustand'
 import useEditor from '../store/use-editor'
-import { useFloorplanDraftPreview } from '../store/use-floorplan-draft-preview'
 import type { ContinuationMode } from './continuation'
 import { levelSeparatorLines } from './separator-lines'
-import {
-  availableWallType,
-  drawnWallTypesOf,
-  type WallTypePlacement,
-  type WallTypes,
-  wallTypeThickness,
-} from './wall-type'
 
 /**
  * How the wall tool draws, picked from the Build panel's Rooms group before
@@ -76,8 +61,8 @@ export const WALL_DRAW_VARIANTS: readonly WallDrawVariantInfo[] = [
     title: /* i18n */ { id: 'editor.lib.wallDrawVariant.walls', message: 'Walls' },
     iconSrc: '/icons/wall.webp',
     caption: {
-      lead: 'Click each corner;',
-      rest: 'every wall starts where the last ended. Esc or double-click ends the run; close a loop and it becomes a room.',
+      lead: 'Draw one wall at a time.',
+      rest: 'Close a loop and it becomes a room; leave it open for partitions.',
     },
   },
 ]
@@ -90,7 +75,7 @@ export function getWallDrawVariantInfo(variant: WallDrawVariant): WallDrawVarian
 }
 
 export function wallDrawVariantOf(mode: ContinuationMode): WallDrawVariant {
-  return WALL_DRAW_VARIANTS.find((info) => info.mode === mode)?.id ?? 'polygon'
+  return WALL_DRAW_VARIANTS.find((info) => info.mode === mode)?.id ?? 'rectangle'
 }
 
 export function getWallDrawVariant(): WallDrawVariant {
@@ -107,9 +92,6 @@ export function useWallDrawVariant(): WallDrawVariant {
  * finishes as a rectangle.
  */
 export function selectWallDrawVariant(variant: WallDrawVariant): void {
-  // Picking a shape, even the one in hand, goes back to choosing the wall type
-  // by placement.
-  setWallTypeOverride(null)
   const editor = useEditor.getState()
   const { mode } = getWallDrawVariantInfo(variant)
   if (editor.getContinuation('wall') === mode) return
@@ -118,59 +100,73 @@ export function selectWallDrawVariant(variant: WallDrawVariant): void {
 }
 
 /**
- * The construction Rectangle, Polygon and Walls give the walls they draw: the
- * Build panel's exterior and interior wall types, with the finishes picked
- * beside them. A preset the host placed (`toolDefaults.wall` with its own
- * thickness or assembly) keeps its own.
- */
-export function getDrawnWallTypes(): DrawnWallTypes {
-  const { wallTypes, wallFinishes } = useEditor.getState()
-  const override = useWallTypeOverride.getState().placement
-  if (!override) return drawnWallTypesOf(wallTypes, wallFinishes)
-  const forced = availableWallType(wallTypes[override], override)
-  return drawnWallTypesOf({ exterior: forced, interior: forced }, wallFinishes)
-}
-
-/**
- * What the wall tool draws in place of walls of a type: invisible walls (room dividers,
- * room separators no wall stands on) or railings.
+ * What the wall tool draws in place of plain walls: invisible walls (room separators no wall
+ * stands on) or railings.
  */
 export type WallLineKind = 'invisible' | 'railing'
+
+/**
+ * The Walls variant's kinds, its sub-row in the Build panel: a plain wall (room detection
+ * sides it exterior or interior), an invisible wall, or a railing.
+ */
+export type WallKind = 'standard' | WallLineKind
+
+export const WALL_KINDS: ReadonlyArray<{ id: WallKind; label: MessageDescriptor }> = [
+  {
+    id: 'standard',
+    label: /* i18n */ { id: 'editor.lib.wallDrawVariant.kind.standard', message: 'Standard' },
+  },
+  {
+    id: 'invisible',
+    label: /* i18n */ { id: 'editor.lib.wallDrawVariant.kind.invisible', message: 'Invisible' },
+  },
+  {
+    id: 'railing',
+    label: /* i18n */ { id: 'editor.lib.wallDrawVariant.kind.railing', message: 'Railing' },
+  },
+]
 
 /** The line an invisible wall's draft is drawn at, metres. */
 export const INVISIBLE_WALL_DRAFT_THICKNESS = 0.01
 
 // Session-only, so it lives beside the persisted editor store, not in it.
-const useWallTypeOverride = create<{
-  placement: WallTypePlacement | null
-  lineKind: WallLineKind | null
-}>(() => ({
-  placement: null,
+const useWallLineKindStore = create<{ lineKind: WallLineKind | null }>(() => ({
   lineKind: null,
 }))
 
-/**
- * For this session only: draw every wall with the exterior or the interior
- * type, wherever it lands (null goes back to choosing by placement). Not
- * persisted; the Build panel's picks are unchanged. It ends any invisible wall
- * or railing run.
- */
-export function setWallTypeOverride(placement: WallTypePlacement | null): void {
-  useWallTypeOverride.setState({ placement, lineKind: null })
-}
-
-/** For this session only: the wall tool draws invisible walls or railings (null: walls again). */
-export function setWallLineKind(lineKind: WallLineKind | null): void {
-  useWallTypeOverride.setState({ lineKind, placement: null })
-}
-
 export function getWallLineKind(): WallLineKind | null {
-  return useWallTypeOverride.getState().lineKind
+  return useWallLineKindStore.getState().lineKind
 }
 
-/** The line kind the wall tool draws, for the Build panel to light its tile; null when walls. */
-export function useWallLineKind(): WallLineKind | null {
-  return useWallTypeOverride((state) => state.lineKind)
+/** The kind the Walls variant draws, for the Build panel's sub-row. */
+export function useWallKind(): WallKind {
+  return useWallLineKindStore((state) => state.lineKind ?? 'standard')
+}
+
+/**
+ * Pick what the Walls variant draws, for this session: it lasts while the wall tool draws
+ * Walls (`subscribeWallKindReset`). Switching while the tool is armed drops the in-flight
+ * draft, so a half-drawn wall never lands as another kind.
+ */
+export function selectWallKind(kind: WallKind): void {
+  const lineKind = kind === 'standard' ? null : kind
+  if (getWallLineKind() === lineKind) return
+  const editor = useEditor.getState()
+  if (editor.mode === 'build' && editor.tool === 'wall') emitter.emit('tool:cancel')
+  useWallLineKindStore.setState({ lineKind })
+}
+
+/** Back to plain walls once the wall tool is left or draws another variant. */
+export function subscribeWallKindReset(): () => void {
+  return useEditor.subscribe((state) => {
+    if (
+      state.mode === 'build' &&
+      state.tool === 'wall' &&
+      state.getContinuation('wall') === 'single'
+    )
+      return
+    if (getWallLineKind() !== null) useWallLineKindStore.setState({ lineKind: null })
+  })
 }
 
 /**
@@ -183,113 +179,14 @@ export function invisibleWallDraftSnapLines(): WallNode[] {
   return levelSeparatorLines(useScene.getState().nodes, useViewer.getState().selection.levelId)
 }
 
-export function getWallTypeOverride(): WallTypePlacement | null {
-  return useWallTypeOverride.getState().placement
-}
-
-/** The forced wall type placement, for the Build panel to show; null when none. */
-export function useWallTypeOverridePlacement(): WallTypePlacement | null {
-  return useWallTypeOverride((state) => state.placement)
-}
-
-// A level's rooms, once per scene state: the draft asks on every pointer move.
-const levelRoomsCache = new WeakMap<object, Map<string, Array<Array<[number, number]>>>>()
-
-function levelRooms(
-  nodes: Readonly<Record<AnyNodeId, AnyNode>>,
-  levelId: string,
-): Array<Array<[number, number]>> {
-  let byLevel = levelRoomsCache.get(nodes)
-  if (!byLevel) {
-    byLevel = new Map()
-    levelRoomsCache.set(nodes, byLevel)
-  }
-  const cached = byLevel.get(levelId)
-  if (cached) return cached
-  const level = nodes[levelId as AnyNodeId]
-  const walls =
-    level?.type === 'level'
-      ? level.children
-          .map((id) => nodes[id as AnyNodeId])
-          .filter((node): node is WallNode => node?.type === 'wall' && node.visible !== false)
-      : []
-  const rooms = detectSpacesForLevel(levelId, walls)
-    .spaces.filter((space) => !space.isExterior)
-    .map((space) => space.polygon)
-  byLevel.set(levelId, rooms)
-  return rooms
-}
-
 /**
- * The wall type a wall drawn `start` → `end` on `levelId` gets, as the commit decides it
- * (`DrawnWallTypes`): interior inside a room the level's walls close (a partition), exterior
- * elsewhere (the outline, an open run, the first walls of a plan).
- */
-export function drawnWallPlacement(
-  nodes: Readonly<Record<AnyNodeId, AnyNode>>,
-  levelId: string,
-  start: WallPlanPoint,
-  end: WallPlanPoint,
-): WallTypePlacement {
-  const middle: [number, number] = [(start[0] + end[0]) / 2, (start[1] + end[1]) / 2]
-  return levelRooms(nodes, levelId).some((room) =>
-    pointInPolygon2D(middle, room, { includeBoundary: false }),
-  )
-    ? 'interior'
-    : 'exterior'
-}
-
-function draftThickness(
-  seeded: unknown,
-  wallTypes: WallTypes,
-  placement: WallTypePlacement,
-  fallback: number,
-): number {
-  if (typeof seeded === 'number') return seeded
-  return wallTypeThickness(wallTypes[placement], placement) ?? fallback
-}
-
-function draftPlacement(start: WallPlanPoint, end: WallPlanPoint): WallTypePlacement {
-  const levelId = useViewer.getState().selection.levelId
-  return levelId ? drawnWallPlacement(useScene.getState().nodes, levelId, start, end) : 'exterior'
-}
-
-/**
- * The thickness the wall tool's line draft draws at: a placed preset's, else
- * the wall type it draws with (the override's, or the one the drafted segment
- * gets where it lies), else `fallback` (a plain wall).
+ * The thickness the wall tool's drafts draw at: an invisible wall's line, a railing's, a
+ * placed preset's (`toolDefaults.wall`), else `fallback` (a plain wall).
  */
 export function useWallDraftThickness(fallback: number): number {
-  const override = useWallTypeOverride((state) => state.placement)
-  // Read once per draft move: the scene and level stay put while a segment is drafted.
-  const drawn = useFloorplanDraftPreview((state) =>
-    state.wallDraftStart && state.wallDraftEnd
-      ? draftPlacement(state.wallDraftStart, state.wallDraftEnd)
-      : 'exterior',
-  )
-  const placement = override ?? drawn
-  const lineKind = useWallTypeOverride((state) => state.lineKind)
-  const thickness = useEditor((state) =>
-    draftThickness(state.toolDefaults.wall?.thickness, state.wallTypes, placement, fallback),
-  )
-  if (lineKind === 'invisible') return INVISIBLE_WALL_DRAFT_THICKNESS
-  return lineKind === 'railing' ? railingWallDefaults().thickness : thickness
-}
-
-/**
- * The same thickness for each side of a Rectangle or Polygon room draft, which
- * has no line draft to judge by: the commit types every side by where it lies,
- * so a closet drawn inside a room is all partition.
- */
-export function useWallSegmentDraftThickness(
-  fallback: number,
-): (start: WallPlanPoint, end: WallPlanPoint) => number {
-  const override = useWallTypeOverride((state) => state.placement)
+  const lineKind = useWallLineKindStore((state) => state.lineKind)
   const seeded = useEditor((state) => state.toolDefaults.wall?.thickness)
-  const wallTypes = useEditor((state) => state.wallTypes)
-  return useCallback(
-    (start, end) =>
-      draftThickness(seeded, wallTypes, override ?? draftPlacement(start, end), fallback),
-    [fallback, override, seeded, wallTypes],
-  )
+  if (lineKind === 'invisible') return INVISIBLE_WALL_DRAFT_THICKNESS
+  if (lineKind === 'railing') return railingWallDefaults().thickness
+  return typeof seeded === 'number' ? seeded : fallback
 }

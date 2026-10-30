@@ -20,7 +20,7 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import { resolveSnapFlags } from '../../../lib/snapping-mode'
-import { getDrawnWallTypes, getWallLineKind } from '../../../lib/wall-draw-variant'
+import { getWallLineKind } from '../../../lib/wall-draw-variant'
 import useEditor, { getActiveSnappingMode, isMagneticSnapActive } from '../../../store/use-editor'
 import {
   distanceSquared,
@@ -256,7 +256,7 @@ export function isSegmentLongEnough(start: WallPlanPoint, end: WallPlanPoint): b
 }
 
 /**
- * An invisible wall drawn `start` → `end` on the current level (the Invisible wall tile, a room
+ * An invisible wall drawn `start` → `end` on the current level (the Walls variant's Invisible, a room
  * divider): room separators, each end joined to a wall it lands on and broken
  * either side of a wall it crosses (`planSeparatorInsertion`), as one undo step. Rooms close on
  * it; a room it closes off outside the house becomes a porch. The last piece, for the run to go
@@ -300,17 +300,16 @@ export function createWallOnCurrentLevel(
   const joinRadius = isMagneticSnapActive() ? WALL_JOIN_SNAP_RADIUS : WALL_CONNECT_SNAP_RADIUS
 
   return runAsSingleSceneHistoryStep(useScene, () => {
-    // The Railing tile draws railings: a guard of their own, not the Build panel's wall types.
-    const railing = getWallLineKind() === 'railing'
+    // The Walls variant's Railing draws railings: a guard of their own.
     const insertion = {
       levelId: currentLevelId as AnyNodeId,
       start,
       end,
       joinRadius,
-      wallDefaults: railing
-        ? railingWallDefaults()
-        : (useEditor.getState().toolDefaults.wall ?? {}),
-      wallTypes: railing ? undefined : getDrawnWallTypes(),
+      wallDefaults:
+        getWallLineKind() === 'railing'
+          ? railingWallDefaults()
+          : (useEditor.getState().toolDefaults.wall ?? {}),
     }
     let result = planWallInsertion(nodes, insertion)
     if (!result.ok && result.reason === 'covered-existing-wall') {

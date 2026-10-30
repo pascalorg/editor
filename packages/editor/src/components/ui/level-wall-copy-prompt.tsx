@@ -11,7 +11,6 @@ import {
 import { buildExteriorWallCopy, levelExteriorWalls } from '@pascal-app/core/building'
 import { useViewer } from '@pascal-app/viewer'
 import { create } from 'zustand'
-import { getDrawnWallTypes } from '../../lib/wall-draw-variant'
 
 type Offer = { levelId: string; sourceLevelId: string; direction: 'below' | 'above' }
 
@@ -67,8 +66,6 @@ export function acceptExteriorWallCopy(offer: Offer): number {
     nodes: useScene.getState().nodes as Record<string, AnyNode>,
     fromLevelId: offer.sourceLevelId,
     toLevelId: offer.levelId,
-    // Foundation walls copied above grade are built as the Build panel's exterior walls.
-    exteriorConstruction: getDrawnWallTypes().exterior,
   })
   if (walls.length) useScene.getState().applyNodeChanges({ create: walls })
   setOffer(null)

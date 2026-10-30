@@ -65,16 +65,6 @@ import {
   snapContextOf,
   snappingModesFor,
 } from '../lib/snapping-mode'
-import {
-  DEFAULT_WALL_FINISHES,
-  DEFAULT_WALL_TYPES,
-  normalizeWallFinishes,
-  normalizeWallTypes,
-  type WallFinishes,
-  type WallTypeId,
-  type WallTypePlacement,
-  type WallTypes,
-} from '../lib/wall-type'
 import { cameraPoseStore } from './camera-pose-store'
 import { publishNavigationSyncPoseToStore } from './navigation-sync-pose-store'
 import useInteractionScope from './use-interaction-scope'
@@ -531,15 +521,6 @@ type EditorState = {
   setContinuation: (context: ContinuationContext, mode: ContinuationMode) => void
   cycleContinuation: (context: ContinuationContext) => ContinuationMode
   getContinuation: (context: ContinuationContext) => ContinuationMode
-  // The wall types new walls are drawn with (`lib/wall-type.ts`), picked in the
-  // Build panel's Rooms group. Persisted.
-  wallTypes: WallTypes
-  setWallType: (placement: WallTypePlacement, id: WallTypeId) => void
-  // The finishes picked beside them: a cladding product per cladding kind and
-  // the drywall paint (`WallFinishes`). Persisted.
-  wallFinishes: WallFinishes
-  setWallCladding: (kind: string, ref: string) => void
-  setWallPaint: (ref: string) => void
   showReferenceFloor: boolean
   toggleReferenceFloor: () => void
   setShowReferenceFloor: (show: boolean) => void
@@ -639,8 +620,6 @@ type PersistedEditorLayoutState = Pick<
   | 'lastMeasurementKind'
   | 'snappingModeByContext'
   | 'continuationByContext'
-  | 'wallTypes'
-  | 'wallFinishes'
   | 'showReferenceFloor'
   | 'referenceFloorOffset'
   | 'referenceFloorOpacity'
@@ -681,8 +660,6 @@ export const DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE: PersistedEditorLayoutState =
     cabinet: CONTINUATION_PROFILES.cabinet.default,
     canopy: CONTINUATION_PROFILES.canopy.default,
   },
-  wallTypes: DEFAULT_WALL_TYPES,
-  wallFinishes: DEFAULT_WALL_FINISHES,
   showReferenceFloor: false,
   referenceFloorOffset: 1,
   referenceFloorOpacity: 0.35,
@@ -940,8 +917,6 @@ export function normalizePersistedEditorLayoutState(
       rotation: migrateSnappingMode(state?.snappingModeByContext?.rotation, 'rotation'),
     },
     continuationByContext: normalizeContinuationByContext(state),
-    wallTypes: normalizeWallTypes(state?.wallTypes),
-    wallFinishes: normalizeWallFinishes(state?.wallFinishes),
     showReferenceFloor: state?.showReferenceFloor === true,
     referenceFloorOffset:
       typeof state?.referenceFloorOffset === 'number' && state.referenceFloorOffset >= 1
@@ -1616,23 +1591,6 @@ const useEditor = create<EditorState>()(
         const current = get().continuationByContext[context]
         return migrateContinuationMode(current, context) ?? CONTINUATION_PROFILES[context].default
       },
-      wallTypes: DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.wallTypes,
-      setWallType: (placement, id) =>
-        set((state) => ({
-          wallTypes: normalizeWallTypes({ ...state.wallTypes, [placement]: id }),
-        })),
-      wallFinishes: DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.wallFinishes,
-      setWallCladding: (kind, ref) =>
-        set((state) => ({
-          wallFinishes: normalizeWallFinishes({
-            ...state.wallFinishes,
-            cladding: { ...state.wallFinishes.cladding, [kind]: ref },
-          }),
-        })),
-      setWallPaint: (ref) =>
-        set((state) => ({
-          wallFinishes: normalizeWallFinishes({ ...state.wallFinishes, paint: ref }),
-        })),
       showReferenceFloor: DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.showReferenceFloor,
       toggleReferenceFloor: () =>
         set((state) => ({ showReferenceFloor: !state.showReferenceFloor })),
@@ -1754,8 +1712,6 @@ const useEditor = create<EditorState>()(
         lastMeasurementKind: state.lastMeasurementKind,
         snappingModeByContext: state.snappingModeByContext,
         continuationByContext: state.continuationByContext,
-        wallTypes: state.wallTypes,
-        wallFinishes: state.wallFinishes,
         showReferenceFloor: state.showReferenceFloor,
         referenceFloorOffset: state.referenceFloorOffset,
         referenceFloorOpacity: state.referenceFloorOpacity,

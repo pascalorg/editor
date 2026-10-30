@@ -7,7 +7,6 @@ import {
   WindowNode,
   ZoneNode,
 } from '../../schema'
-import { getWallAssemblyPreset, wallAssemblyPatch } from './wall-assembly'
 import { getWallCurveFrameAt, getWallCurveLength } from './wall-curve'
 import {
   planWallDivision,
@@ -56,49 +55,6 @@ describe('wall creation operations', () => {
       })
     }
     expect(JSON.stringify(nodes)).toBe(before)
-  })
-  test('drawn walls take the exterior type, walls drawn inside a room the interior one', () => {
-    const wallTypes = {
-      exterior: wallAssemblyPatch(getWallAssemblyPreset('exterior-2x6-siding')!.assembly),
-      interior: wallAssemblyPatch(getWallAssemblyPreset('interior-2x4-drywall')!.assembly),
-    }
-    const outline = planWallRectangle(map([]), {
-      levelId: level.id,
-      start: [0, 0],
-      end: [8, 6],
-      wallTypes,
-    })
-    for (const wall of outline.walls) {
-      expect(wall.assembly?.presetId).toBe('exterior-2x6-siding')
-      expect(wall.thickness).toBeCloseTo(wallTypes.exterior.thickness, 9)
-    }
-    const closet = planWallRectangle(map(rectangle()), {
-      levelId: level.id,
-      start: [1, 1],
-      end: [3, 2],
-      wallTypes,
-    })
-    expect(closet.walls).toHaveLength(4)
-    for (const wall of closet.walls) expect(wall.assembly?.presetId).toBe('interior-2x4-drywall')
-    const addition = planWallRectangle(map(rectangle()), {
-      levelId: level.id,
-      start: [8, 0],
-      end: [12, 6],
-      wallTypes,
-    })
-    for (const wall of addition.walls) expect(wall.assembly?.presetId).toBe('exterior-2x6-siding')
-    // A preset placed by the host (an explicit thickness) keeps its own construction.
-    const seeded = planWallRectangle(map([]), {
-      levelId: level.id,
-      start: [0, 0],
-      end: [8, 6],
-      wallDefaults: { thickness: 0.3 },
-      wallTypes,
-    })
-    for (const wall of seeded.walls) {
-      expect(wall.assembly).toBeUndefined()
-      expect(wall.thickness).toBe(0.3)
-    }
   })
   test('adjacent rectangles reuse their shared wall', () => {
     const existing = rectangle()

@@ -370,7 +370,7 @@ describe('wall tool hints', () => {
       selectWallDrawVariant('polygon')
       expect(visibleClickHints()).toEqual(['Add a corner · click the first to close'])
       selectWallDrawVariant('walls')
-      expect(visibleClickHints()).toEqual(['Add a wall · each one starts where the last ended'])
+      expect(visibleClickHints()).toEqual(['Set wall start / end'])
     } finally {
       selectWallDrawVariant('polygon')
     }

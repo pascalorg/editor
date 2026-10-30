@@ -121,7 +121,7 @@ test('a new floor copies the exterior walls below in place, and its rooms come f
   }
 })
 
-test('foundation walls copied up from a basement take the exterior build given, walls copied down get the foundation', () => {
+test('foundation walls copied up from a basement are plain walls, walls copied down get the foundation', () => {
   const square: [number, number][] = [
     [-4, -4],
     [4, -4],
@@ -161,16 +161,11 @@ test('foundation walls copied up from a basement take the exterior build given, 
   const foundation = foundationWallConstruction(Object.values(FOUNDATION_CONSTRUCTIONS)[0]!)
   for (const wall of walls(basement.id, foundation)) nodes[wall.id] = wall
   const siding = wallAssemblyPatch(structuredClone(WALL_ASSEMBLY_PRESETS[0]!.assembly))
-  const up = buildExteriorWallCopy({
-    nodes,
-    fromLevelId: basement.id,
-    toLevelId: main.id,
-    exteriorConstruction: siding,
-  })
+  const up = buildExteriorWallCopy({ nodes, fromLevelId: basement.id, toLevelId: main.id })
   expect(up).toHaveLength(4)
   for (const { node } of up) {
-    expect(node.thickness).toBeCloseTo(siding.thickness!, 6)
-    expect(node.assembly).toEqual(siding.assembly)
+    expect(node.assembly).toBeUndefined()
+    expect(node.thickness).toBeUndefined()
   }
   const above: Record<string, AnyNode> = Object.fromEntries(
     [building, basement, main].map((node) => [node.id, node]),
@@ -180,7 +175,6 @@ test('foundation walls copied up from a basement take the exterior build given, 
     nodes: above,
     fromLevelId: main.id,
     toLevelId: basement.id,
-    exteriorConstruction: siding,
   })
   expect(down).toHaveLength(4)
   for (const { node } of down) expect(node.assembly).not.toEqual(siding.assembly)

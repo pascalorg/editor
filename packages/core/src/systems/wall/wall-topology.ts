@@ -1,5 +1,4 @@
 import { GROUND_SUPPORT_ID } from '../../hooks/spatial-grid/support-host-id'
-import { enclosedWallIds } from '../../lib/exterior-wall-loops'
 import { withFoundationConstruction } from '../../lib/foundation-wall'
 import { detectOpenWallEnds, type OpenWallEnd, wallEndJoinCandidates } from '../../lib/room-graph'
 import { terrainSupportLift } from '../../lib/terrain-support'
@@ -38,40 +37,6 @@ export type WallInsertionPlan = {
   terminalWallId: WallNode['id']
   resolvedStart: WallPlanPoint
   resolvedEnd: WallPlanPoint
-}
-
-/**
- * The construction a drawing tool gives the walls it draws, by where each lands: `interior` for a
- * wall a closed circuit of walls encloses (a partition, `enclosedWallIds`), `exterior` for every
- * other (the outline, an open run, the first walls of a plan). Each is a wall patch, typically an
- * assembly and its thickness (`wallAssemblyPatch`).
- */
-export type DrawnWallTypes = {
-  exterior?: Partial<WallNode>
-  interior?: Partial<WallNode>
-}
-
-/**
- * `inserted` (among `levelWalls`, the level's walls with them in) with the drawing tool's wall
- * types. A caller who gave a thickness or an assembly keeps it, as a foundation wall keeps the
- * foundation construction it was just given.
- */
-function withDrawnWallTypes(
-  levelWalls: WallNode[],
-  inserted: WallNode[],
-  given: Partial<WallNode>,
-  types: DrawnWallTypes | undefined,
-): WallNode[] {
-  if (!(types?.exterior || types?.interior)) return inserted
-  if (given.assembly !== undefined || given.thickness !== undefined) return inserted
-  // A curtain wall and a railing have no assembly to give.
-  if (given.wallType === 'curtain' || given.wallType === 'railing') return inserted
-  const enclosed = enclosedWallIds(levelWalls.filter((wall) => wall.visible !== false))
-  return inserted.map((wall) => {
-    if (wall.assembly !== undefined) return wall
-    const patch = enclosed.has(wall.id) ? types.interior : types.exterior
-    return patch && Object.keys(patch).length > 0 ? WallSchema.parse({ ...wall, ...patch }) : wall
-  })
 }
 
 export type WallTopologyRejection = {
@@ -567,8 +532,6 @@ export function planWallInsertion(
     end: WallPlanPoint
     joinRadius: number
     wallDefaults?: Partial<WallNode>
-    /** The construction for walls the user draws, by exterior / interior placement. */
-    wallTypes?: DrawnWallTypes
     mintId?: () => string
     /**
      * Draw along walls that already cover the span instead of refusing: the
@@ -636,17 +599,12 @@ export function planWallInsertion(
       end: vertices[index + 1]!,
     }),
   )
-  const insertedWalls = withDrawnWallTypes(
+  const insertedWalls = withFoundationConstruction(
+    nodes,
+    args.levelId,
     [...walls, ...drawnWalls],
-    withFoundationConstruction(
-      nodes,
-      args.levelId,
-      [...walls, ...drawnWalls],
-      drawnWalls,
-      wallProperties,
-    ),
+    drawnWalls,
     wallProperties,
-    args.wallTypes,
   )
   const splitWalls = new Map<WallNode['id'], number[]>()
   const addSplitParameter = (wallId: WallNode['id'], wallT: number) => {

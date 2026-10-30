@@ -19,6 +19,7 @@ import { resolveGenericFloorplanGridEventPoint } from '../../lib/floorplan-grid-
 import { snapRegisteredDraftPoint } from '../../lib/registered-draft-snap'
 import { resolveSlabPlanPointSnap } from '../../lib/slab-plan-snap'
 import { commitWallPolygonDraft, wallPolygonDraftWalls } from '../../lib/wall-polygon-draft'
+import { wallDraftIsRun } from '../../lib/wall-pull'
 import { isWallRunFree, snapWallRunDraftPoint } from '../../lib/wall-run-snap'
 import useAlignmentGuides from '../../store/use-alignment-guides'
 import useEditor, { isAngleSnapActive, isMagneticSnapActive } from '../../store/use-editor'
@@ -351,14 +352,15 @@ export function useFloorplanBackgroundPlacement({
       // / draftEnd state in the floor plan would never update, leaving
       // the dashed-line draft preview invisible.
       if (isWallBuildActive) {
-        // Wall draft, matching the move-preview branch. The first point is
-        // mode-driven (matches the chip): `grid` snaps to the building's grid
-        // lattice (`gridSnap`), `lines` pulls it onto existing wall corners /
-        // edges + alignment, `off` is free, and in every mode but `lines` an
-        // end aimed into a wall's body joins that wall. An open run's segment
-        // lands where the move showed it (`snapWallRunDraftPoint`).
+        // Wall draft, matching the move-preview branch: mode-driven (matches
+        // the chip). `grid` snaps to the building's grid lattice (`gridSnap`),
+        // `angles` locks a Walls segment to 15° rays from its start, `lines`
+        // pulls the point onto existing wall corners / edges + alignment, `off`
+        // is free, and in every mode but `lines` an end aimed into a wall's body
+        // joins that wall. A run's segment (a Polygon side, a pulled run) lands
+        // where the move showed it (`snapWallRunDraftPoint`).
         let snappedPoint: WallPlanPoint
-        if (draftStart) {
+        if (draftStart && wallDraftIsRun()) {
           const run = getWallRunContext()
           snappedPoint = snapWallRunDraftPoint({
             point: planPoint,
@@ -370,9 +372,12 @@ export function useFloorplanBackgroundPlacement({
           }).point
         } else {
           const wallStep = getSegmentGridStep()
+          const wallAngleSnap = draftStart !== null && isAngleSnapActive()
           const wallSnapped = snapWallDraftPoint({
             point: planPoint,
             walls: [...walls, ...wallPolygonDraftWalls()],
+            start: draftStart ?? undefined,
+            angleSnap: wallAngleSnap,
             gridSnap: (p) => worldGridSnap(p, wallStep),
             captureWallBodies: true,
           })
@@ -384,9 +389,9 @@ export function useFloorplanBackgroundPlacement({
             useAlignmentGuides.getState().clear()
           } else {
             // Alignment lines are shown in every mode; the pull applies only when
-            // magnetic ('lines').
+            // magnetic ('lines') and the segment isn't angle-locked.
             snappedPoint = alignFloorplanDraftPoint(wallSnapped, {
-              applySnap: isMagneticSnapActive(),
+              applySnap: isMagneticSnapActive() && !wallAngleSnap,
             })
           }
         }

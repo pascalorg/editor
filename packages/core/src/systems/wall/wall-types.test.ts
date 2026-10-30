@@ -1,7 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import type { AnyNode, WallNode } from '../../schema'
 import { SiteNode } from '../../schema/nodes/site'
-import { DEFAULT_INTERIOR_WALL_PAINT } from '../../schema/nodes/wall'
 import { newWallTypeId, WallTypeDefinition } from '../../schema/wall-type'
 import {
   assemblyThickness,
@@ -18,7 +17,6 @@ import {
   WSP_SHEATHING,
   wallAssemblyFaceFinish,
   wallAssemblyFinishRef,
-  wallAssemblyFinishSlots,
   wallAssemblyFraming,
   wallAssemblyPatch,
   wallAssemblyToLegacy,
@@ -170,34 +168,6 @@ describe('project wall types', () => {
 describe('finishes picked while drafting', () => {
   const sage = 'library:siding-lap-sage'
   const blush = 'library:preset-blush'
-
-  test('the cladding product goes on the cladding layer and the paint on every lining', () => {
-    const assembly = getWallAssemblyPreset('exterior-2x6-siding')!.assembly
-    expect(wallAssemblyFinishSlots(assembly, { cladding: sage, paint: blush })).toEqual({
-      'layer:exterior': sage,
-      'layer:interior': blush,
-    })
-    const partition = getWallAssemblyPreset('interior-2x4-drywall')!.assembly
-    expect(wallAssemblyFinishSlots(partition, { cladding: sage, paint: blush })).toEqual({
-      'layer:interior-back': blush,
-      'layer:interior': blush,
-    })
-  })
-
-  test('the defaults write nothing, and a product that does not dress the cladding is refused', () => {
-    const siding = getWallAssemblyPreset('exterior-2x6-siding')!.assembly
-    expect(
-      wallAssemblyFinishSlots(siding, {
-        cladding: WALL_FINISH_LIBRARY_REF.siding,
-        paint: DEFAULT_INTERIOR_WALL_PAINT,
-      }),
-    ).toEqual({})
-    const stucco = getWallAssemblyPreset('exterior-2x6-stucco')!.assembly
-    expect(wallAssemblyFinishSlots(stucco, { cladding: sage })).toEqual({})
-    expect(wallAssemblyFinishSlots(stucco, { cladding: 'library:preset-sand' })).toEqual({
-      'layer:exterior': 'library:preset-sand',
-    })
-  })
 
   test('each kind offers its own products, its default among them', () => {
     for (const kind of ['siding', 'fiber-cement', 'stucco', 'brick']) {

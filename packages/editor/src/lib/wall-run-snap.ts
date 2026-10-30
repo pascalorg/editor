@@ -1,7 +1,7 @@
 /**
  * Snapping for the wall tool's line runs once their first point is placed —
- * the Walls run (its tile, the Exterior and Interior wall tools), a Polygon
- * room's sides, and a run pulled from a wall end (`wall-pull.ts`).
+ * a Polygon room's sides and a run pulled from a wall end (`wall-pull.ts`,
+ * `wallDraftIsRun`); a Walls segment is one wall and snaps as its first point.
  *
  * Each wall holds square: straight on from the wall before it, square to it,
  * or along the house's axes within about 7°, and on 15° steps past that, with

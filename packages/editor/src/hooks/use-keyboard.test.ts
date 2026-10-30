@@ -18,14 +18,9 @@ import { useSidebarStore } from '../components/ui/primitives/sidebar'
 import { runRedo, runUndo } from '../lib/history'
 import { meshEditScope } from '../lib/interaction/scope'
 import { setSidebarTabIds } from '../lib/sidebar-panel'
-import {
-  armToolShortcut,
-  subscribeWallTypeOverrideReset,
-  toolShortcutForKey,
-  withToolShortcut,
-} from '../lib/tool-shortcuts'
-import { getWallTypeOverride } from '../lib/wall-draw-variant'
-import useEditor from '../store/use-editor'
+import { armToolShortcut, toolShortcutForKey, withToolShortcut } from '../lib/tool-shortcuts'
+import { getWallDrawVariant, selectWallDrawVariant } from '../lib/wall-draw-variant'
+import useEditor, { normalizePersistedEditorLayoutState } from '../store/use-editor'
 import useInteractionScope from '../store/use-interaction-scope'
 import {
   armPaintFromShortcut,
@@ -433,20 +428,35 @@ describe('B and P open their panel', () => {
     expect(useSidebarStore.getState().isCollapsed).toBe(false)
   })
 
-  test('B arms the wall tool on Rectangle and shows the Build panel', () => {
+  test('B arms the wall tool on the Rooms shape picked last and shows the Build panel', () => {
     setSidebarTabIds(['site', 'build', 'paint', 'items'])
     useEditor.getState().setActiveSidebarPanel('items')
     useSidebarStore.getState().setIsCollapsed(true)
-    useEditor.getState().setContinuation('wall', 'single')
+    selectWallDrawVariant('walls')
+    useEditor.getState().armToolMode({ mode: 'select' })
 
     armWallToolFromShortcut()
 
     const editor = useEditor.getState()
     expect(editor.mode).toBe('build')
     expect(editor.tool).toBe('wall')
-    expect(editor.getContinuation('wall')).toBe('rectangle')
+    expect(getWallDrawVariant()).toBe('walls')
     expect(editor.activeSidebarPanel).toBe('build')
     expect(useSidebarStore.getState().isCollapsed).toBe(false)
+    // The pick is a preference: it comes back with the saved editor layout.
+    expect(
+      normalizePersistedEditorLayoutState({ continuationByContext: { wall: 'single' } } as never)
+        .continuationByContext.wall,
+    ).toBe('single')
+  })
+
+  test('B draws a Rectangle until a Rooms shape is picked', () => {
+    expect(normalizePersistedEditorLayoutState({}).continuationByContext.wall).toBe('rectangle')
+    useEditor.setState({
+      continuationByContext: normalizePersistedEditorLayoutState({}).continuationByContext,
+    })
+    armWallToolFromShortcut()
+    expect(getWallDrawVariant()).toBe('rectangle')
   })
 
   // A host may drop the armed tool when the panel changes (the community does,
@@ -513,9 +523,8 @@ describe('drafting tool shortcuts', () => {
     expect(press('KeyW', { shiftKey: true })).toBe('window')
     expect(press('KeyS', { shiftKey: true })).toBe('stair')
     expect(press('KeyR', { shiftKey: true })).toBe('roof')
-    expect(press('KeyE', { shiftKey: true })).toBe('exterior-wall')
-    expect(press('KeyI')).toBe('interior-wall')
-    for (const code of ['KeyD', 'KeyW', 'KeyS', 'KeyR', 'KeyE', 'KeyA'])
+    expect(press('KeyE', { shiftKey: true })).toBeNull()
+    for (const code of ['KeyD', 'KeyW', 'KeyS', 'KeyR', 'KeyE', 'KeyI', 'KeyA'])
       expect(press(code)).toBeNull()
     expect(press('KeyD', { shiftKey: true, ctrlKey: true })).toBeNull()
     expect(press('KeyD', { shiftKey: true, repeat: true })).toBeNull()
@@ -524,7 +533,6 @@ describe('drafting tool shortcuts', () => {
   test('stand down while a gesture holds Shift', () => {
     useInteractionScope.getState().begin({ kind: 'box-select' })
     expect(press('KeyD', { shiftKey: true })).toBeNull()
-    expect(press('KeyI')).toBe('interior-wall')
   })
 
   test('arm their tool with the Build panel showing, and name their key in tooltips', () => {
@@ -544,44 +552,5 @@ describe('drafting tool shortcuts', () => {
     expect(withToolShortcut('Door', 'door')).toBe('Door (Shift+D)')
     expect(withToolShortcut('Wall', 'wall')).toBe('Wall (B)')
     expect(withToolShortcut('Fence', 'fence')).toBe('Fence')
-  })
-
-  test('exterior and interior walls draw single walls of one type until the wall tool is left', () => {
-    const unsubscribe = subscribeWallTypeOverrideReset()
-    try {
-      armToolShortcut('interior-wall')
-      expect(useEditor.getState().tool).toBe('wall')
-      expect(useEditor.getState().getContinuation('wall')).toBe('single')
-      expect(getWallTypeOverride()).toBe('interior')
-      armToolShortcut('exterior-wall')
-      expect(getWallTypeOverride()).toBe('exterior')
-      armWallToolFromShortcut()
-      expect(getWallTypeOverride()).toBeNull()
-      armToolShortcut('interior-wall')
-      useEditor.getState().armToolMode({ mode: 'select' })
-      expect(getWallTypeOverride()).toBeNull()
-    } finally {
-      unsubscribe()
-    }
-  })
-
-  test('leave the saved Rooms shape as it was once their walls end', () => {
-    const unsubscribe = subscribeWallTypeOverrideReset()
-    try {
-      useEditor.getState().setContinuation('wall', 'rectangle')
-      armToolShortcut('interior-wall')
-      armToolShortcut('exterior-wall')
-      expect(useEditor.getState().getContinuation('wall')).toBe('single')
-      useEditor.getState().armToolMode({ mode: 'select' })
-      expect(useEditor.getState().getContinuation('wall')).toBe('rectangle')
-
-      // A shape picked while drawing is the user's choice, and stays.
-      armToolShortcut('interior-wall')
-      useEditor.getState().setContinuation('wall', 'room')
-      useEditor.getState().armToolMode({ mode: 'select' })
-      expect(useEditor.getState().getContinuation('wall')).toBe('room')
-    } finally {
-      unsubscribe()
-    }
   })
 })

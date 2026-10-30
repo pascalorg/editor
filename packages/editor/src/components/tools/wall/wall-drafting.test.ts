@@ -273,42 +273,20 @@ describe('createWallOnCurrentLevel', () => {
       for (const [start, end] of sides) {
         expect(createWallOnCurrentLevel(start, end)?.thickness).toBe(0.241)
       }
-      // Not foundation walls: they take the interior wall type of the Build panel.
       const partition = createWallOnCurrentLevel([4, 0], [4, 6])
-      expect(partition?.assembly?.presetId).toBe('interior-2x4-drywall')
+      expect(partition?.assembly).toBeUndefined()
       const dangling = createWallOnCurrentLevel([0, 3], [3, 3])
-      expect(dangling?.assembly?.presetId).toBe('interior-2x4-drywall')
+      expect(dangling?.assembly).toBeUndefined()
       // a bay on the outside of the east wall is on the outline again
       const bay = createWallOnCurrentLevel([8, 1], [11, 1])
       expect(bay?.thickness).toBe(0.241)
     })
 
-    test('the ground floor over it draws the exterior wall type, not a foundation wall', () => {
+    test('the ground floor over it keeps the plain wall', () => {
       seedBasement()
       select('level_main')
       const created = createWallOnCurrentLevel([0, 0], [4, 0])
-      expect(created?.assembly?.presetId).toBe('exterior-2x6-siding')
-    })
-
-    test('the Build panel wall types build what is drawn; plain draws a single layer', () => {
-      const previousTypes = useEditor.getState().wallTypes
-      try {
-        seedBasement()
-        select('level_main')
-        useEditor.getState().setWallType('exterior', 'exterior-2x6-stucco')
-        expect(createWallOnCurrentLevel([0, 0], [4, 0])?.assembly?.presetId).toBe(
-          'exterior-2x6-stucco',
-        )
-        useEditor.getState().setWallType('exterior', 'plain')
-        const plain = createWallOnCurrentLevel([0, 2], [4, 2])
-        expect(plain?.assembly).toBeUndefined()
-        expect(plain?.thickness).toBeUndefined()
-        // An unknown id falls back to the default type.
-        useEditor.getState().setWallType('exterior', 'no-such-preset')
-        expect(useEditor.getState().wallTypes.exterior).toBe('exterior-2x6-siding')
-      } finally {
-        useEditor.setState({ wallTypes: previousTypes } as never)
-      }
+      expect(created?.assembly).toBeUndefined()
     })
 
     test('a thickness set in the tool defaults is kept, with no stack', () => {
@@ -812,15 +790,20 @@ describe('createWallOnCurrentLevel', () => {
   )
 
   test('a wall drawn exactly over one built another way takes its place', () => {
-    // The seed wall is plain; the wall tool draws the Build panel's outside type.
-    const drawn = createWallOnCurrentLevel([0, 0], [4, 0])
-    expect(drawn).not.toBeNull()
-    expect(useScene.getState().nodes['wall_a' as AnyNodeId]).toBeUndefined()
-    expect(levelWalls().map((wall) => wall.id)).toEqual([drawn!.id])
+    // The seed wall is plain; the wall tool draws a thicker one.
+    const previousDefaults = useEditor.getState().toolDefaults
+    useEditor.setState({ toolDefaults: { ...previousDefaults, wall: { thickness: 0.3 } } } as never)
+    try {
+      const drawn = createWallOnCurrentLevel([0, 0], [4, 0])
+      expect(drawn).not.toBeNull()
+      expect(useScene.getState().nodes['wall_a' as AnyNodeId]).toBeUndefined()
+      expect(levelWalls().map((wall) => wall.id)).toEqual([drawn!.id])
+    } finally {
+      useEditor.setState({ toolDefaults: previousDefaults } as never)
+    }
   })
 
   test('a wall drawn exactly over one built the same is refused', () => {
-    expect(createWallOnCurrentLevel([0, 0], [4, 0])).not.toBeNull()
     expect(createWallOnCurrentLevel([0, 0], [4, 0])).toBeNull()
     expect(levelWalls()).toHaveLength(1)
   })

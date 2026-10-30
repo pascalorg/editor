@@ -10,10 +10,12 @@ import {
   GYPSUM_SHEATHING,
   type MessageDescriptor,
   newWallTypeId,
+  runAsSingleSceneHistoryStep,
   SIDING_LAP,
   STONE_VENEER_UNVERIFIED,
   STUCCO_3_COAT,
   usePascalI18n,
+  useScene,
   WALL_TYPE_CORES,
   type WallTypeCore,
   type WallTypeDefinition,
@@ -23,7 +25,7 @@ import {
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { ArrowDown, ArrowUp, Plus, X } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { formatLayerThickness, parseLayerThickness } from '../../../lib/layer-thickness'
 import type { LinearUnit } from '../../../lib/measurements'
 import { cn } from '../../../lib/utils'
@@ -33,7 +35,6 @@ import {
   WALL_TYPE_SAVE_FAILURE,
   type WallTypePlacement,
   type WallTypeSaveResult,
-  wallTypePlacementOf,
 } from '../../../lib/wall-type'
 import { Button } from '../primitives/button'
 import {
@@ -371,8 +372,8 @@ const TITLE: Record<WallTypeEditorRequest['mode'], MessageDescriptor> = {
  * layers from the outside in — finish, air space, sheathing, insulation, lining —
  * around exactly one framing core, whose size and spacing are what the framers stud
  * the wall at. The total updates as layers change; saving keeps the type with the
- * project (`saveProjectWallType`) and lists it under Exterior when it has a cladding
- * side, Interior otherwise.
+ * project (`saveProjectWallType`) and hands it to `onSaved` in the same undo step,
+ * so a wall the type is applied to there undoes with it.
  */
 export function WallTypeEditorDialog({
   onClose,
@@ -405,10 +406,6 @@ export function WallTypeEditorDialog({
   }, [request])
 
   const total = layers.reduce((sum, layer) => sum + layer.thickness, 0)
-  const placement = useMemo(
-    () => (layers.length > 0 ? wallTypePlacementOf(draftAssembly('custom-draft', layers)) : null),
-    [layers],
-  )
   const trimmed = name.trim()
   const canSave = trimmed.length > 0 && layers.every((layer) => layer.thickness > 0)
   // A wall type's stack holds `WALL_TYPE_LAYER_LIMIT` layers at most; past it the type would not save.
@@ -440,12 +437,15 @@ export function WallTypeEditorDialog({
       label: trimmed.slice(0, 60),
       assembly: draftAssembly(id, layers),
     }
-    const result = saveProjectWallType(type)
+    const result = runAsSingleSceneHistoryStep(useScene, () => {
+      const saved = saveProjectWallType(type)
+      if (saved === 'saved') onSaved(type)
+      return saved
+    })
     if (result !== 'saved') {
       setFailure(result)
       return
     }
-    onSaved(type)
     onClose()
   }
 
@@ -468,9 +468,9 @@ export function WallTypeEditorDialog({
           </DialogTitle>
           <DialogDescription>
             {i18n._({
-              id: 'editor.buildPanel.wallTypeEditorDialog.listTheLayersFromTheOutside',
+              id: 'editor.wallTypeEditorDialog.listTheLayersAppliedToThisWall',
               message:
-                'List the layers from the outside in, around one framing core. Walls already drawn keep their layers; walls drawn from now on use the saved type.',
+                'List the layers from the outside in, around one framing core. The type is saved with the project and applied to this wall; other walls keep their layers.',
             })}
           </DialogDescription>
         </DialogHeader>
@@ -691,18 +691,7 @@ export function WallTypeEditorDialog({
           </div>
         </div>
 
-        <div className="flex items-baseline justify-between gap-3 rounded-lg bg-black/4 px-3 py-2 dark:bg-muted/40">
-          <span className="text-muted-foreground text-xs">
-            {placement === 'exterior'
-              ? i18n._({
-                  id: 'editor.buildPanel.wallTypeEditorDialog.listsUnderExteriorItHasA',
-                  message: 'Lists under Exterior: it has a cladding side.',
-                })
-              : i18n._({
-                  id: 'editor.buildPanel.wallTypeEditorDialog.listsUnderInteriorBothFacesMatch',
-                  message: 'Lists under Interior: both faces match.',
-                })}
-          </span>
+        <div className="flex items-baseline justify-end gap-3 rounded-lg bg-black/4 px-3 py-2 dark:bg-muted/40">
           <span className="font-medium text-sm tabular-nums">
             {i18n._({
               id: 'editor.buildPanel.wallTypeEditorDialog.totalThickness',

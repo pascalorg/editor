@@ -56,7 +56,11 @@ const SHORTCUT_CATEGORIES: ShortcutCategory[] = [
     },
     shortcuts: [
       { keys: TOOL_SHORTCUT_KEYS.select, action: 'Switch to Select mode' },
-      { keys: TOOL_SHORTCUT_KEYS.wall, action: 'Switch to Build mode, drawing a rectangle room' },
+      {
+        keys: TOOL_SHORTCUT_KEYS.wall,
+        action: 'Switch to Build mode, drawing with the last Rooms shape',
+        note: 'Rectangle, Polygon or Walls, whichever you picked last; Rectangle the first time.',
+      },
       { keys: TOOL_SHORTCUT_KEYS.measurement, action: 'Activate the last measurement tool' },
       { keys: TOOL_SHORTCUT_KEYS.paint, action: 'Switch to Paint mode' },
       { keys: TOOL_SHORTCUT_KEYS.terrain, action: 'Sculpt the ground (terrain)' },
@@ -78,16 +82,6 @@ const SHORTCUT_CATEGORIES: ShortcutCategory[] = [
       message: 'Build Tools',
     },
     shortcuts: [
-      {
-        keys: TOOL_SHORTCUT_KEYS['exterior-wall'],
-        action: 'Draw exterior walls',
-        note: 'Draws with the Walls shape, each wall with the exterior wall type picked in the Build panel. E alone still opens or closes the selected door or window.',
-      },
-      {
-        keys: TOOL_SHORTCUT_KEYS['interior-wall'],
-        action: 'Draw interior walls',
-        note: 'Draws with the Walls shape, each wall with the interior wall type picked in the Build panel.',
-      },
       {
         keys: TOOL_SHORTCUT_KEYS.door,
         action: 'Place a door',

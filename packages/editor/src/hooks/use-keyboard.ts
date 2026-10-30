@@ -38,14 +38,10 @@ import { cycleSelectionAtPointer, trackSelectionCyclePointer } from '../lib/sele
 import { sfxEmitter } from '../lib/sfx-bus'
 import { openSidebarPanel } from '../lib/sidebar-panel'
 import { activeSiteNode, clampBrushRadius } from '../lib/terrain-sculpt'
-import {
-  armToolShortcut,
-  subscribeWallTypeOverrideReset,
-  toolShortcutForKey,
-} from '../lib/tool-shortcuts'
+import { armToolShortcut, toolShortcutForKey } from '../lib/tool-shortcuts'
 import { isTypingTarget } from '../lib/typing-target'
 import { leaveUnitFocus } from '../lib/units'
-import { selectWallDrawVariant } from '../lib/wall-draw-variant'
+import { subscribeWallKindReset } from '../lib/wall-draw-variant'
 import { isWallNudgeKey, nudgeSelectedWall } from '../lib/wall-nudge'
 import useDeleteConfirmation from '../store/use-delete-confirmation'
 import useEditor, { getActiveContinuationContext, getActiveSnapContext } from '../store/use-editor'
@@ -223,13 +219,12 @@ export const runHistoryShortcut = (direction: 'undo' | 'redo') => {
 }
 
 /**
- * B: the wall tool on Rectangle — the quickest room — with the Build panel
- * showing, so the lit tile says what is in hand. The panel's tiles still pick
- * another shape for the session. The panel opens before the tool is armed: a
- * host may drop the armed tool when the panel changes.
+ * B: the wall tool on the Rooms shape picked last (Rectangle, Polygon or Walls,
+ * kept with the editor preferences; Rectangle until one is picked), with the
+ * Build panel showing, so the lit tile says what is in hand. The panel opens
+ * before the tool is armed: a host may drop the armed tool when the panel changes.
  */
 export const armWallToolFromShortcut = () => {
-  selectWallDrawVariant('rectangle')
   openSidebarPanel(['build'])
   useEditor.getState().armToolMode({ mode: 'build', tool: 'wall' })
 }
@@ -485,15 +480,14 @@ export const useKeyboard = ({
         }
       }
 
-      // Drafting tools on a key: I, and Shift with D / W / S / R / E where the
-      // bare key pans, rotates or operates (lib/tool-shortcuts). An armed
-      // placement keeps Shift+R as its own R.
+      // Drafting tools on Shift with D / W / S / R, where the bare key pans or
+      // rotates (lib/tool-shortcuts). An armed placement keeps Shift+R as its own R.
       const toolShortcut = isVersionPreviewMode
         ? null
         : toolShortcutForKey({ ...pickKeyFields(e), repeat: false })
       if (toolShortcut && !(toolShortcut === 'roof' && isToolOwnedRotation())) {
         e.preventDefault()
-        // A held chord repeats: arm once, and never let a repeat fall through to bare R / E.
+        // A held chord repeats: arm once, and never let a repeat fall through to bare R.
         if (!e.repeat) armToolShortcut(toolShortcut)
         return
       }
@@ -903,9 +897,9 @@ export const useKeyboard = ({
     window.addEventListener('keydown', handleSessionGroupKeyDown, true)
     window.addEventListener('keydown', handleKeyDown)
     window.addEventListener('keyup', handleKeyUp)
-    const unsubscribeWallTypeOverride = subscribeWallTypeOverrideReset()
+    const unsubscribeWallKind = subscribeWallKindReset()
     return () => {
-      unsubscribeWallTypeOverride()
+      unsubscribeWallKind()
       window.removeEventListener('keydown', handleSessionGroupKeyDown, true)
       window.removeEventListener('keydown', handleKeyDown)
       window.removeEventListener('keyup', handleKeyUp)

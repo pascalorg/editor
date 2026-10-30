@@ -23,7 +23,6 @@ import {
   useFloorplanMode,
   useTerraceDraft,
   useWallDrawVariant,
-  wallVariantTooltip,
   withToolShortcut,
 } from '@pascal-app/editor'
 import { framingPostToolChoices, useLiquidLineToolOptions } from '@pascal-app/nodes'
@@ -264,7 +263,6 @@ export function BuildTab() {
                   if (!(editor.mode === 'build' && editor.tool === 'wall'))
                     activateBuildTool('wall')
                 }}
-                tileProps={(variant) => ({ title: wallVariantTooltip(variant, i18n) })}
               />
               <BuildPanelSection
                 id="add"

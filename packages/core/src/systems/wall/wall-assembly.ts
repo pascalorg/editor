@@ -51,7 +51,7 @@ import {
 } from '../../material-library'
 import type { AnyNode, WallNode } from '../../schema'
 import type { Assembly, AssemblyLayer } from '../../schema/assembly'
-import { DEFAULT_INTERIOR_WALL_PAINT, WallAssembly, type WallFace } from '../../schema/nodes/wall'
+import { WallAssembly, type WallFace } from '../../schema/nodes/wall'
 import { WallTypeDefinition } from '../../schema/wall-type'
 import { DEFAULT_WALL_THICKNESS } from './wall-footprint'
 import { type Point2D, pointToKey, type WallMiterData } from './wall-mitering'
@@ -746,16 +746,6 @@ export function isWallCladdingProduct(kind: string | undefined, ref: string | un
   return !!id && wallCladdingProducts(kind).some((item) => item.id === id)
 }
 
-/** The paints a wall's lining can be finished with while drafting: the catalog's flat colours. */
-export function wallPaintProducts(): MaterialCatalogItem[] {
-  return getMaterialsForCategory('colors')
-}
-
-/** The cladding kind a stack is finished with outside (`siding`, `stucco`, …), if any. */
-export function wallAssemblyCladding(assembly: Assembly): string | undefined {
-  return assembly.layers.find((layer) => layer.role === 'finish' && layer.thickness > 0)?.material
-}
-
 /**
  * Whether a stack builds an exterior wall, read from its own layers: it has a cladding side — a
  * finish or sheathing layer, or a lining on one face only (block or framing left bare outside).
@@ -767,35 +757,6 @@ export function isExteriorWallAssembly(assembly: Assembly): boolean {
   )
   if (layers.some((layer) => layer.role === 'finish' || layer.role === 'sheathing')) return true
   return (layers[0]?.role === 'lining') !== (layers[layers.length - 1]?.role === 'lining')
-}
-
-/**
- * The `slots` a wall drawn with `assembly` carries for the finishes picked while drafting: the
- * cladding product on its exterior finish layer and the paint on every lining. They follow the
- * layers, not a geometric face, so the cladding stays outside and the paint inside however the
- * wall's rooms are detected later (`wallAssemblyFaceFinish` reads them back). A pick that is the
- * layer's own default (`WALL_FINISH_LIBRARY_REF`, `DEFAULT_INTERIOR_WALL_PAINT`) is left out, and
- * a product that does not dress the stack's cladding is never written.
- */
-export function wallAssemblyFinishSlots(
-  assembly: Assembly,
-  picks: { cladding?: string | null; paint?: string | null },
-): Record<string, string> {
-  const slots: Record<string, string> = {}
-  const cladding = assembly.layers.find((layer) => layer.role === 'finish' && layer.thickness > 0)
-  const kind = cladding?.material
-  if (
-    cladding &&
-    picks.cladding &&
-    picks.cladding !== WALL_FINISH_LIBRARY_REF[kind ?? ''] &&
-    isWallCladdingProduct(kind, picks.cladding)
-  )
-    slots[assemblyLayerSlotKey(cladding)] = picks.cladding
-  if (picks.paint && picks.paint !== DEFAULT_INTERIOR_WALL_PAINT) {
-    for (const layer of assembly.layers)
-      if (layer.role === 'lining') slots[assemblyLayerSlotKey(layer)] = picks.paint
-  }
-  return slots
 }
 
 // ============================================================================
