@@ -1,8 +1,8 @@
 # Urinal
 
 A generic wall-mounted ceramic urinal for layout planning. The mesh is authored
-procedurally using the elliptical shell approach from `kkg-agentic-bim`, with a
-recessed bowl, rounded lip and drain cap. It represents no manufacturer or product.
+procedurally as a shell lofted through elliptical sections, with a recessed
+bowl, rounded lip and drain cap. It represents no manufacturer or product.
 The generator and its outputs are available under this repository's MIT license;
 there are no downloaded meshes, textures or other external assets.
 

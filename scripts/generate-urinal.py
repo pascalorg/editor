@@ -31,8 +31,8 @@ def material(name, color, roughness, metallic=0):
 ceramic = material("slot_ceramic", (0.82, 0.85, 0.87), 0.22)
 chrome = material("slot_drain", (0.42, 0.46, 0.5), 0.24, 0.85)
 
-# Elliptical shell sections follow the generic fixture approach in KKG's BIM
-# model. Moving the inner sections downward gives the bowl a low drain sump.
+# The shell is lofted through these elliptical sections. Moving the inner
+# sections downward gives the bowl a low drain sump.
 # Tuples are (half width, half height, height center, front depth, rim tilt).
 profile = [
     (0, 0, 0.325, -0.175, 0),
