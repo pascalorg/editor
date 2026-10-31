@@ -233,6 +233,8 @@ with `i18n.setLocale(...)`.
 `bun run i18n:translate -- fr` sends only missing or source-stale PO entries
 through the Vercel AI SDK. Configure one provider and model:
 
+- `I18N_PROVIDER=minimax` and `MINIMAX_API_KEY` (defaults to
+  `MiniMax-M3.1-Flash` through `https://api.minimax.io/v1`);
 - `I18N_PROVIDER=openai`, `OPENAI_API_KEY`, and `I18N_MODEL`; or
 - `I18N_PROVIDER=anthropic`, `ANTHROPIC_API_KEY`, and `I18N_MODEL`.
 
