@@ -61,6 +61,8 @@ const demands = (treatment: Treatment) =>
 export type FacadeRevision = {
   code: 'facade_revised_simpler'
   message: string
+  /** A facade finding informs: the brief is free to revise, and what the building has is the facade tools' to say. */
+  severity: 'info'
 }
 
 /**
@@ -76,6 +78,7 @@ export function facadeRevision(
   if (!(first && latest) || demands(latest) >= demands(first)) return null
   return {
     code: 'facade_revised_simpler',
+    severity: 'info',
     message: `The facade was revised during the turn: from ${treatmentWords(first)} to ${treatmentWords(latest) || 'no stated treatment'}.`,
   }
 }

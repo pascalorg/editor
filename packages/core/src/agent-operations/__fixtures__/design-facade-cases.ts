@@ -42,7 +42,7 @@ const keeping = (designBrief: DesignBrief, firstTreatment?: Treatment): AgentToo
   }),
 })
 
-const REVISED = { type: 'facade_revised_simpler', severity: 'warning' }
+const REVISED = { type: 'facade_revised_simpler', severity: 'info' }
 
 export const DESIGN_FACADE_CASES: AgentToolCase[] = [
   {
