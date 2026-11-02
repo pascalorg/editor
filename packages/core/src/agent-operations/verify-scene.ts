@@ -41,7 +41,9 @@ import { wallResolvedHeight } from './level-reads'
 import { pointInPolygon, polygonContainsPolygon, type Vec2 } from './plan-geometry'
 import type { RoomCheckIssue } from './room-checks'
 import { type RoomFinding, roomFindings } from './room-findings'
+import { roomIssueScope } from './room-readings'
 import { EMPTY_SESSION } from './scene-checkpoint'
+import { sceneIssueGroups } from './scene-issue-groups'
 import { changesSince, type SceneCheckpoint } from './scene-measure'
 import {
   type ContentCounts,
@@ -795,6 +797,7 @@ export const verifyScene: AgentOperation<VerifySceneInput | undefined> = (
     if (check.order >= CHECKPOINT_ORDER) issues.push(...check.run(settled, input ?? {}, context))
 
   const occupiedStoryCount = levels.filter((level) => level.isOccupiedStory).length
+  const issueGroups = sceneIssueGroups(issues, nodes)
   return {
     result: {
       ok: true,
@@ -807,6 +810,9 @@ export const verifyScene: AgentOperation<VerifySceneInput | undefined> = (
       levels,
       emptyLevelIds: empty.map((level) => level.levelId),
       issues,
+      ...(typeof input?.room === 'string' && { roomScope: roomIssueScope(nodes, input.room) }),
+      issueGroups,
+      issueCount: issues.length,
       hasIssues: issues.some((issue) => !('severity' in issue && issue.severity === 'info')),
       ...authoredObjects(nodes),
       ...Object.assign({}, ...reports.map((report) => report.run(nodes))),

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test } from 'bun:test'
 import { verifyScene } from '../../agent-operations'
+import { verifySceneModelResult } from '../../agent-tools/verify-scene'
 import { distanceToBoundary } from '../../lib/polygon-boolean'
 import {
   type AnyNode,
@@ -335,6 +336,21 @@ describe('a narrow place is one finding for the rooms it leads to', () => {
     ])
   })
 
+  test('the room filter gives the place for each room it leads to, and nothing for another room', () => {
+    setSdfChecks(true)
+    const report = verifyScene(both(), {}, { activeLevelId: null }).result
+    try {
+      for (const room of ['East room', 'East annex', 'zone_annex']) {
+        const answer = verifySceneModelResult(report, { room }) as { issues: { type: string }[] }
+        expect(answer.issues.map((i) => i.type)).toContain('usage_passage_narrow')
+      }
+      const west = verifySceneModelResult(report, { room: 'West room' }) as { issueCount: number }
+      expect(west.issueCount).toBe(0)
+    } finally {
+      setSdfChecks(false)
+    }
+  })
+
   test('a slot on no way to a room has no passage finding', () => {
     // two stubs from the north wall leave a 0.30 m slot, 1.5 m deep, open to the hall at one end
     const nodes = house([
@@ -477,5 +493,37 @@ describe('the flag', () => {
     setSdfChecks(false)
     expect(JSON.stringify(verifyScene(nodes, {}, context).result)).toBe(off)
     expect(off).not.toContain('usage_')
+  })
+
+  test('a model reads a narrow place as one entry, and the report and the asking give the findings whole', () => {
+    setSdfChecks(true)
+    const report = verifyScene(twoRooms(0.7), {}, { activeLevelId: null }).result as {
+      issues: { type: string; place?: { room: string } }[]
+    }
+    // the report keeps each finding as measured
+    const east = report.issues.filter((i) => i.place?.room === 'East room')
+    expect(east.map((i) => i.type)).toEqual(['usage_passage_narrow'])
+
+    const model = verifySceneModelResult(report, {}) as {
+      issues: { type: string; message: string; nodeIds: string[]; count?: number }[]
+      usageNote: string
+    }
+    // a narrow place is its own entry, the limit that applied with it and the entrance said once in the note; nothing else in the room, so no room entry
+    const place = model.issues.find((i) => i.type === 'usage_passage_narrow')
+    expect(place?.message).toBe(
+      'Passage to “East room”: 0.60 m clear between the jambs of “Inner door”, a 0.70 m door (below 0.80 m, a doorway).',
+    )
+    expect(place?.nodeIds).toEqual(['door_inner'])
+    expect(model.issues.some((i) => i.type === 'usage_room')).toBe(false)
+    expect(model.usageNote).toContain('Ground-floor passages are measured from “Front door”.')
+
+    const asked = verifySceneModelResult(report, { room: 'East room' }) as {
+      issues: { type: string }[]
+    }
+    expect(asked.issues).toEqual(east)
+    const byKind = verifySceneModelResult(report, { type: 'usage_passage_narrow' }) as {
+      issues: unknown[]
+    }
+    expect(byKind.issues).toEqual(report.issues.filter((i) => i.type === 'usage_passage_narrow'))
   })
 })

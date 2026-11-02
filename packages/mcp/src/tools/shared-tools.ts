@@ -65,6 +65,7 @@ import {
   setUnitMembersTool,
   setWallTypeTool,
   validateDesignTool,
+  verifySceneModelResult,
   verifySceneTool,
   viewAssetsTool,
 } from '@pascal-app/core/agent-tools'
@@ -663,6 +664,18 @@ function writesScene(changes: SceneChanges | undefined): boolean {
   )
 }
 
+/**
+ * What the model reads of a tool's result: for verify_scene, the findings grouped and trimmed
+ * (`verifySceneModelResult`); every other result as it is. The structured result keeps the report whole.
+ */
+function modelResult(
+  name: string,
+  output: Record<string, unknown>,
+  input: Record<string, unknown>,
+) {
+  return name === verifySceneTool.name ? verifySceneModelResult(output, input) : output
+}
+
 export function registerSharedTools(
   server: McpServer,
   bridge: SceneOperations,
@@ -795,11 +808,22 @@ export function registerOperationTool(
       })
       if (pictures.length)
         return {
-          content: [{ type: 'text' as const, text: JSON.stringify(shown) }, ...pictures],
+          content: [
+            {
+              type: 'text' as const,
+              text: JSON.stringify(modelResult(tool.contract.name, shown, input)),
+            },
+            ...pictures,
+          ],
           structuredContent: shown,
         }
       return {
-        content: [{ type: 'text' as const, text: JSON.stringify(payload) }],
+        content: [
+          {
+            type: 'text' as const,
+            text: JSON.stringify(modelResult(tool.contract.name, payload, input)),
+          },
+        ],
         structuredContent: payload,
       }
     },
