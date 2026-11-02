@@ -52,6 +52,13 @@ import {
 } from './scene-queries'
 import { reviewSince } from './scene-review'
 import type { AgentContext, AgentOperation, SceneNodes } from './types'
+import {
+  type WallEndShortIssue,
+  type WallNearlyAlignedIssue,
+  wallBodies,
+  wallEndShortIssues,
+  wallNearlyAlignedIssues,
+} from './wall-joins'
 import { type WallObjectObservation, wallObjectObservations } from './wall-object-observations'
 
 /** A problem verify_scene found, typed so it can be counted and acted on. */
@@ -94,6 +101,8 @@ export type SceneIssue =
       gap?: number
       nearestWallId?: string
     }
+  | WallEndShortIssue
+  | WallNearlyAlignedIssue
 
 /** What verify_scene was asked: its contract's input, which other modules may extend. */
 export type VerifySceneInput = Readonly<Record<string, unknown>>
@@ -390,6 +399,15 @@ export const verifyScene: AgentOperation<VerifySceneInput | undefined> = (
   for (const level of levels) {
     const { content, levelName } = level
     if (level.unread) continue
+    const bodies = wallBodies(
+      onLevel(level.levelId).filter(
+        (node): node is AnyNode & { type: 'wall' } => node.type === 'wall',
+      ),
+    )
+    issues.push(
+      ...wallEndShortIssues({ levelId: level.levelId, levelName, bodies }),
+      ...wallNearlyAlignedIssues({ levelId: level.levelId, levelName, bodies }),
+    )
     // A free-standing wall (garden wall, half wall) is legitimate, not something to repair.
     for (const end of detectOpenWallEnds(nodes, level.levelId)) {
       if (end.reason === 'isolated') continue

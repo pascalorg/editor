@@ -306,7 +306,7 @@ const SHARED_TOOLS: SharedTool[] = [
         z.looseObject({
           type: z.string(),
           message: z.string(),
-          severity: z.literal('info').optional(),
+          severity: z.enum(['info', 'warning']).optional(),
           nodeId: z.string().optional(),
           path: z.string().optional(),
           zoneId: z.string().optional(),

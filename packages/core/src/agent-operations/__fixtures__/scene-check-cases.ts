@@ -53,6 +53,9 @@ const rect = (x0: number, z0: number, x1: number, z1: number): Pt[] => [
   [x0, z1],
 ]
 
+const wallAt = (tag: string, start: Pt, end: Pt) =>
+  WallNode.parse({ id: `wall_${tag}`, name: `Wall ${tag}`, parentId: 'level_0', start, end, height: 2.5 })
+
 const roomZone = (id: string, levelId: string, name: string, polygon: Pt[], extra = {}) =>
   ZoneNode.parse({ id, parentId: levelId, name, polygon, spaceRole: 'room', ...extra })
 
@@ -696,5 +699,46 @@ export const CHECK_ROOMS_CASES: AgentToolCase[] = [
       )
     },
     { lacks: [{ type: 'room_not_enclosed' }] },
+  ),
+  // Where straight walls meet: an end that stops 3-25 cm short of another wall (daylight between them), and a wall a few
+  // degrees off the line of its neighbours (a short wall holding a door, drawn skewed). Angled walls drawn on purpose are quiet.
+  // wall_open_end (info, with the nearest wall to repair toward) says the same end when the room graph elects no joint: both stand.
+  verify(
+    'verify_scene on a wall that stops 10 cm short of another wall: wall_end_short names both walls with the gap',
+    () => ground(wallAt('across', [0, 0], [4, 0]), wallAt('stub', [2, 2], [2, 0.15])),
+    {
+      contains: [{ type: 'wall_end_short', severity: 'warning', levelId: 'level_0', wallId: 'wall_stub', otherWallId: 'wall_across', end: 'end' }],
+      check: (result) => {
+        const [first] = issuesOf(result, 'wall_end_short')
+        return (first?.gap as number) > 0.099 && (first?.gap as number) < 0.101 ? [] : [`gap ${first?.gap} m, not 10 cm of daylight`]
+      },
+    },
+  ),
+  verify(
+    'verify_scene on a short wall between two walls on one line, turned 4 degrees: wall_nearly_aligned names it with the angle and both neighbours',
+    () => {
+      const end: Pt = [4 + Math.cos((4 * Math.PI) / 180), Math.sin((4 * Math.PI) / 180)]
+      return ground(wallAt('left', [0, 0], [4, 0]), wallAt('gap', [4, 0], end), wallAt('right', end, [end[0] + 4, end[1]]))
+    },
+    {
+      contains: [{ type: 'wall_nearly_aligned', severity: 'warning', levelId: 'level_0', wallId: 'wall_gap', angle: 4 }],
+      check: (result) => {
+        const [first] = issuesOf(result, 'wall_nearly_aligned')
+        const ids = ((first?.neighbours ?? []) as { wallId: string }[]).map((n) => n.wallId).sort().join()
+        return ids === 'wall_left,wall_right' ? [] : [`neighbours ${ids}, not the two walls it sits between`]
+      },
+    },
+  ),
+  verify(
+    'verify_scene on walls joined square, a T and a bay turned 30 degrees: neither wall_end_short nor wall_nearly_aligned',
+    () =>
+      ground(
+        wallAt('a', [0, 0], [4, 0]),
+        wallAt('b', [4, 0], [4, 3]),
+        wallAt('stem', [2, 0], [2, 3]),
+        wallAt('bay1', [4, 3], [6, 3 + 2 * Math.tan((30 * Math.PI) / 180)]),
+        wallAt('bay2', [6, 3 + 2 * Math.tan((30 * Math.PI) / 180)], [8, 3]),
+      ),
+    { lacks: [{ type: 'wall_end_short' }, { type: 'wall_nearly_aligned' }] },
   ),
 ]
