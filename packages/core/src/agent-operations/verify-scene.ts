@@ -330,6 +330,9 @@ function checkSchemas(scene: SceneNodes, hostSchema: AgentContext['nodeSchema'])
  * openings off their wall, stairs off their slab, blocked doors, overlapping furniture, and every
  * field a node's schema rejects, by node and path; a kind no schema here knows, once per kind.
  */
+/** A flight of this many risers or fewer is a step up to a door, not a staircase: no going or comfort target applies. */
+const SHORT_FLIGHT_STEPS = 3
+
 export const verifyScene: AgentOperation<VerifySceneInput | undefined> = (
   scene,
   input,
@@ -598,12 +601,20 @@ export const verifyScene: AgentOperation<VerifySceneInput | undefined> = (
     const sourceLevelId = levelIdOf(nodes, stair.id)
     if (sourceLevelId && holdingUnread.has(buildingOf(sourceLevelId) ?? '')) continue
     const stairName = stair.name ?? stair.id
-    for (const diagnostic of measureStair(stair, nodes as Record<string, AnyNode>).diagnostics)
+    const measured = measureStair(stair, nodes as Record<string, AnyNode>)
+    for (const diagnostic of measured.diagnostics) {
+      // the going and comfort rules are a staircase's: a step or two up to a door has none to miss
+      if (
+        measured.riserCount <= SHORT_FLIGHT_STEPS &&
+        (diagnostic.code === 'comfort-target' || diagnostic.code === 'going-target')
+      )
+        continue
       report(
         `stair_${diagnostic.code.replaceAll('-', '_')}`,
         `Stair ${stairName}: ${diagnostic.message}`,
         diagnostic.code.endsWith('-target'),
       )
+    }
     if (sourceLevelId) {
       const sourceName = nodes[sourceLevelId]?.name ?? sourceLevelId
       const footprints = stairFootprintPolygons(nodes, stair)
