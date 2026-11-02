@@ -65,6 +65,8 @@ export * from './furnish-room'
 export * from './get-node'
 export * from './hosted-services'
 export * from './layout-clearance'
+// The door check that reads an item's real shape, not the plain one of door-clearance.
+export { findBlockedDoors } from './layout-clearance'
 export * from './level-height-fill'
 export * from './level-reads'
 export * from './level-target'
