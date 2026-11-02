@@ -60,8 +60,6 @@ export function wetRoomIssues(rooms: readonly RoomReading[]): RoomCheckIssue[] {
     const wet = room.wet
     if (wet?.verdict !== 'no' || !isWetRoomUse(room.use)) return []
     const where = wet.byFixtures ? 'the walls its fixtures stand against' : 'its walls'
-    const dress = (layer: string) =>
-      `dress_room ({ zoneIds: ['${room.id}'], layers: [{ kind: 'tiles', finish: '<a tile>', ${layer} }] }) lays it`
     const bareShower = wet.showers.find((shower) => shower.full === 'no')
     const [lead, fix] =
       wet.tiled === 'no'
@@ -71,11 +69,11 @@ export function wetRoomIssues(rooms: readonly RoomReading[]): RoomCheckIssue[] {
               : wet.tiledTo && wet.tiledTo > 0.05
                 ? `has tile up to ${metres(wet.tiledTo)} on ${where}`
                 : `has tile on part of ${where}, along less than most of their length`,
-            dress(`to: ${WET_TILED_TO_M}`),
+            `tile ${where} to ${metres(WET_TILED_TO_M)}`,
           ]
         : [
             `is tiled to ${metres(WET_TILED_TO_M)} but not to the ceiling around its shower (${bareShower?.name})`,
-            dress(`to: 'full', where: { around: ['${bareShower?.id}'] }`),
+            `tile the walls around ${bareShower?.name} to the ceiling`,
           ]
     return [
       {
@@ -112,13 +110,13 @@ export function skirtingIssue(rooms: readonly RoomReading[]): RoomCheckIssue | n
       ? null
       : {
           type: 'rooms_no_skirting',
-          message: `No room of the scene has skirting: ${listed(bare.map((room) => room.name))} (${bare.length}) show bare wall bases. set_wall_trim sets it ({ kind: 'skirting', zoneIds } with these rooms' ids), as does a skirting layer of dress_room, or keep the bare bases if they are intended.`,
+          message: `No room of the scene has skirting: ${listed(bare.map((room) => room.name))} (${bare.length}) show bare wall bases. Skirting is the skirting field of the wall: set it on the walls of these rooms, or keep the bare bases if they are intended.`,
           severity: 'warning',
           nodeIds,
         }
   return {
     type: 'rooms_no_skirting',
-    message: `${listed(bare.map((room) => room.name))} have no skirting while ${listed(skirted.map((room) => room.name))} do. set_wall_trim sets it ({ kind: 'skirting', zoneIds } with these rooms' ids), as does a skirting layer of dress_room, or keep them bare if that is intended.`,
+    message: `${listed(bare.map((room) => room.name))} have no skirting while ${listed(skirted.map((room) => room.name))} do. Skirting is the skirting field of the wall: set it on the walls of these rooms, or keep them bare if that is intended.`,
     severity: 'warning',
     nodeIds,
   }

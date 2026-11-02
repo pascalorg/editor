@@ -67,9 +67,7 @@ describe('a wet room owes tile on its walls', () => {
       ],
     ])('%s does not make a wet room tiled', (_, spec, lead) => {
       expect(wet(spec)?.message).toContain(lead)
-      expect(wet(spec)?.message).toContain(
-        "dress_room ({ zoneIds: ['zone_0'], layers: [{ kind: 'tiles'",
-      )
+      expect(wet(spec)?.message).toContain('tile its walls to 1.20 m')
     })
 
     test.each([
@@ -94,7 +92,7 @@ describe('a wet room owes tile on its walls', () => {
     test('a shower whose surround stops at 1.2 m is named, with the call that tiles around it', () => {
       const issue = wet(room({ regions: [{ v1: 1.2, finish: TILE }], pieces: [SHOWER] }))
       expect(issue?.message).toContain('not to the ceiling around its shower (Douche)')
-      expect(issue?.message).toContain("to: 'full', where: { around: ['item_0_0'] }")
+      expect(issue?.message).toContain('tile the walls around Douche to the ceiling')
     })
 
     test('the walls read are those the fixtures stand against, else all of them', () => {

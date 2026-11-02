@@ -123,7 +123,7 @@ function stairLevelIds(nodes: SceneNodes, id: string): string[] {
 }
 
 /**
- * The one reading of reach that describe_circulation and verify_scene share: what is reached from
+ * The one reading of reach that verify_scene and the circulation findings share: what is reached from
  * any entrance, what is unmeasured, and, per level, whether an entrance reaches it at all.
  */
 export function circulationReach(

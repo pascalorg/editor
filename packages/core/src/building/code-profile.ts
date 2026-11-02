@@ -373,5 +373,5 @@ export function codeProfileOf(nodes: Readonly<Record<string, SiteLike>>): CodePr
 export const thresholdOf = (profile: CodeProfile, id: ThresholdId): Threshold | undefined =>
   profile.thresholds[id]
 
-/** The IRC value of a threshold, for a checker that is a US checker by design (Architect Pro's `design_check`). */
+/** The IRC value of a threshold, for a checker that is a US checker by design (a host's own design checker). */
 export const ircValue = (id: IrcThresholdId): number => IRC_2021[id].value
