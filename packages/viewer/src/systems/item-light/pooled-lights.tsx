@@ -424,8 +424,11 @@ export function PooledLights<T extends PooledLight>(props: Props<T>) {
     drivePool(pools.current.shadow, shadowRefs.current, byKey, intensity, dt)
   }
 
-  /** The glows, each drawn its radius nearer `eye` so the fixture around the bulb does not hide it. */
-  const placeGlows = (byKey: Map<string, T>, eye: Vector3) => {
+  /**
+   * The glows, each at its bulb and depth-tested: the fixture's opaque housing hides what lies
+   * behind it and its glass shows it. Drawn nearer the eye, a glow covered the fixture's own body.
+   */
+  const placeGlows = (byKey: Map<string, T>) => {
     if (!needsRef.current.glows) return
     const { intensity } = propsRef.current
     const darkness = glowDarkness(
@@ -437,11 +440,6 @@ export function PooledLights<T extends PooledLight>(props: Props<T>) {
       if (!light.glow || count >= GLOW_CAPACITY) continue
       const now = intensity(light)
       if (now <= 0 || !light.getWorldPosition(_pos)) continue
-      _dir.subVectors(eye, _pos)
-      _pos.addScaledVector(
-        _dir,
-        Math.min(light.glow.size / 2, _dir.length() / 2) / (_dir.length() || 1),
-      )
       const level = light.peak ? Math.min(1, now / light.peak) : 1
       _color
         .set(light.color)
@@ -469,8 +467,7 @@ export function PooledLights<T extends PooledLight>(props: Props<T>) {
       rank(camera, byKey)
       for (const pool of Object.values(pools.current)) settle(pool)
       drive(byKey, Number.POSITIVE_INFINITY)
-      camera.getWorldPosition(_camPos)
-      placeGlows(byKey, _camPos)
+      placeGlows(byKey)
       return () => {
         Object.values(pools.current).forEach((pool, i) => {
           pool.forEach((slot, j) => {
@@ -510,8 +507,7 @@ export function PooledLights<T extends PooledLight>(props: Props<T>) {
       rank(camera, byKey)
     }
     drive(byKey, Math.min(delta, 0.1))
-    camera.getWorldPosition(_camPos)
-    placeGlows(byKey, _camPos)
+    placeGlows(byKey)
   }, 6)
 
   return (
