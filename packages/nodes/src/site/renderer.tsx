@@ -16,6 +16,7 @@ import {
   type TerrainField,
   terrainContours,
   terrainFieldOf,
+  terrainOverFloors,
   union,
   unionPolygons,
   useLiveNodeOverrides,
@@ -57,21 +58,13 @@ import {
   vec2,
 } from 'three/tsl'
 import { MeshLambertNodeMaterial } from 'three/webgpu'
-import { GenericFoundation } from './generic-foundation'
 import {
   GroundHole,
   groundHoleColorNode,
   groundHoleShadowNode,
   solidGroundMaskNode,
 } from './ground-hole'
-import {
-  GroundVeil,
-  gradeRingGeometry,
-  gradeRingMaterial,
-  groundVeilMaterial,
-  horizonVeilMaterial,
-  noopRaycast,
-} from './ground-veil'
+import { GroundVeil, groundVeilMaterial, horizonVeilMaterial, noopRaycast } from './ground-veil'
 import { GroundWindowSystem } from './ground-window-system'
 import {
   buildPatternedRibbon,
@@ -246,8 +239,8 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
   }, [polygonPoints])
 
   // Where the ground meets the levels below grade. `all` says whether the scene has any (the
-  // ground materials carry the hole's mask from then on); `shown` is what the hole is cut over and
-  // the grade ring runs along under the veil: the level shown and the ones between it and grade, as
+  // ground materials carry the hole's mask from then on); `shown` is what the hole is cut over under
+  // the veil: the level shown and the ones between it and grade, as
   // the level display hides them. While the level shown is not below grade the last such set is
   // kept, so a hole easing shut keeps its shape. `covered` is the part of them under the house
   // itself, whatever level is shown: the ground stands open there (see `holes`).
@@ -415,6 +408,16 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
     return next
   })
 
+  // Inside a storey's own floor the ground never shows over it: the part of each floor plate the
+  // terrain stands over (a slope interpolated just over a walk-out's floor included) is cut too.
+  const overFloorsCache = useRef<[number, number][][]>([])
+  const overFloors = useScene((state: S) => {
+    const next = terrainOverFloors(state.nodes)
+    if (polygonsMatch(next, overFloorsCache.current)) return overFloorsCache.current
+    overFloorsCache.current = next
+    return next
+  })
+
   // What the ground is cut open over: the recessed slabs, and the basement under the house. The
   // house covers that part of a basement, so the ground there is open whatever level is shown:
   // from outside nothing changes, and a stairwell, a floor opening or a walkthrough on the stair
@@ -426,25 +429,13 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
   // the triangulation.
   const coverOpen = !(belowGrade && groundMode === 'solid')
   const holes = useMemo(() => {
-    if (!coverOpen || buried.covered.length === 0 || !polygonPoints || polygonPoints.length < 3)
+    const open = [...buried.covered, ...overFloors]
+    if (!coverOpen || open.length === 0 || !polygonPoints || polygonPoints.length < 3)
       return slabPolygons
-    const inLot = intersection(union(buried.covered), polygonPoints as [number, number][])
+    const inLot = intersection(union(open), polygonPoints as [number, number][])
     const covered = inLot.filter((piece) => piece.holes.length === 0).map((piece) => piece.outer)
     return covered.length > 0 ? [...slabPolygons, ...covered] : slabPolygons
-  }, [coverOpen, buried.covered, polygonPoints, slabPolygons])
-
-  const gradeRings = useMemo(
-    () => buried.shown.map((outline) => gradeRingGeometry(outline, persistedField)),
-    [buried.shown, persistedField],
-  )
-  useEffect(
-    () => () => {
-      for (const ring of gradeRings) ring.dispose()
-    },
-    [gradeRings],
-  )
-  const gradeRing = useMemo(gradeRingMaterial, [])
-  useEffect(() => () => gradeRing.dispose(), [gradeRing])
+  }, [coverOpen, buried.covered, overFloors, polygonPoints, slabPolygons])
 
   // Ground shape: site polygon with slab footprints punched as holes
   const groundShape = useMemo(() => {
@@ -698,7 +689,6 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
   return (
     <group ref={ref} {...handlers}>
       <GroundWindowSystem />
-      <GenericFoundation />
       <GroundHole
         drawnFloorY={buried.drawnFloorY}
         floorY={buried.floorY}
@@ -764,11 +754,6 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
           rotation={FLAT_ON_THE_GROUND}
         />
       )}
-
-      {showSiteSurfaces &&
-        gradeRings.map((geometry, index) => (
-          <GroundVeil geometry={geometry} key={index} material={gradeRing} shows="veiled" />
-        ))}
 
       {showSiteSurfaces && ribbons && (
         <>

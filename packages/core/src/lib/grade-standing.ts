@@ -115,7 +115,7 @@ export function terrainFieldOverLevel(
 /**
  * World XZ samples over the level's floor slabs: each slab's corners plus a grid across it no
  * coarser than the terrain's own spacing, capped so a big plate stays cheap. Slabs are the
- * footprint the grade ring already trusts (`belowGradeFootprints`).
+ * footprint the ground's hole already trusts (`belowGradeFootprints`).
  */
 export function footprintSamples(
   nodes: Record<AnyNodeId, AnyNode>,

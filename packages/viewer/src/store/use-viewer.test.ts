@@ -1,7 +1,7 @@
 // @ts-expect-error — bun:test is provided by the Bun runtime; viewer does not
 // include Bun ambient types in its production declaration build.
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import useViewer, { anyGroundVeiled, groundVeiled, siteGroundShown } from './use-viewer'
+import useViewer, { groundVeiled, siteGroundShown } from './use-viewer'
 
 const resetMeasurementPreferences = () => {
   useViewer.setState({
@@ -180,12 +180,6 @@ describe('the ground over a level below grade', () => {
 
   test('is solid in the walkthrough, whatever level the overview had shown', () => {
     expect(groundVeiled({ ...below, walkthroughMode: true })).toBe(false)
-    expect(anyGroundVeiled({ ...below, groundWindowVeiled: true, walkthroughMode: true })).toBe(
-      false,
-    )
-    expect(anyGroundVeiled({ ...below, groundWindowVeiled: true, walkthroughMode: false })).toBe(
-      true,
-    )
   })
 })
 

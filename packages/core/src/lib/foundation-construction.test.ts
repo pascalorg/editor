@@ -17,8 +17,6 @@ import {
   foundationRegionOf,
 } from './foundation-construction'
 import { foundationWallConstruction } from './foundation-wall'
-import { genericFoundation } from './generic-foundation'
-import { groundSeat } from './ground-seat'
 
 type Nodes = Record<AnyNodeId, AnyNode>
 type SitePatch = Partial<Parameters<typeof SiteNode.parse>[0]>
@@ -212,10 +210,9 @@ describe('the construction by region and style', () => {
     foundationReadingOf(house(site, styles), 'building_a').construction
       .id as FoundationConstructionId
 
-  test('a US site is block, the ground floor 0.203 m over grade', () => {
+  test('a US site is block', () => {
     const reading = foundationReadingOf(house({ address: { state: 'TX' } }), 'building_a')
     expect(reading.construction.id).toBe('cmu')
-    expect(reading.construction.seatAboveGrade).toBe(0.203)
     expect(foundationWallConstruction(reading.construction).thickness).toBe(0.241)
   })
 
@@ -232,12 +229,11 @@ describe('the construction by region and style', () => {
       ])
       expect(wall.assembly.layers[2]).toMatchObject({ core: true, material: 'concrete' })
       expect(wall.assembly.face).toBe('exterior')
-      expect(reading.construction.seatAboveGrade).toBe(0.15)
       expect(reading.basis).toContain('Europe')
     }
   })
 
-  test('an unknown site keeps today’s default: block, 0.241 m, 0.203 m over grade', () => {
+  test('an unknown site keeps today’s default: block, 0.241 m', () => {
     for (const site of [null, {}, { address: { state: 'ON' } }]) {
       const reading = foundationReadingOf(house(site), 'building_a')
       expect(reading.construction).toBe(FOUNDATION_CONSTRUCTIONS.cmu)
@@ -300,46 +296,5 @@ describe('what reads the construction', () => {
     const wall = drawBelow(nodes, [8, 0], [8, 6])
     expect(nodes['wall_old' as AnyNodeId]).toEqual(before)
     expect(wall.thickness).toBe(0.354)
-  })
-
-  test('the generic foundation draws the stem in the matching material and width', () => {
-    const stems = (site: SitePatch | null) =>
-      genericFoundation(house(site)).filter((member) => member.kind === 'stem')
-    // the basement's own walls are none, so the ground floor ring is the outline: stems only where the floor is above the footing
-    const us = stems({ address: { state: 'TX' } })
-    const eu = stems({ dossier: dossier('Paris, France') })
-    const unknown = stems({})
-    expect(unknown.length).toBeGreaterThan(0)
-    for (const run of unknown) expect(run.material).toBe('cmu')
-    for (const run of us) expect(run.material).toBe('cmu')
-    for (const run of eu) expect(run.material).toBe('concrete')
-    expect([us.length, eu.length]).toEqual([unknown.length, unknown.length])
-    for (const run of us)
-      expect(run.width).toBeCloseTo(FOUNDATION_CONSTRUCTIONS.cmu.stemThickness, 9)
-    for (const run of eu) expect(run.width).toBeCloseTo(0.25, 9)
-    const footings = genericFoundation(house({ dossier: dossier('Paris, France') })).filter(
-      (member) => member.kind === 'footing',
-    )
-    expect(footings.length).toBeGreaterThan(0)
-    for (const footing of footings) expect(footing.material).toBe('concrete')
-  })
-
-  test('the ground seat reads the construction: a floor 0.15 m over grade is seated in Paris, a floor 0.3 m over it is not', () => {
-    const seated = (nodes: Nodes, offset: number) => {
-      const raised = {
-        ...nodes,
-        building_a: { ...nodes.building_a, groundLevelId: 'level_main', position: [0, offset, 0] },
-      } as Nodes
-      return groundSeat(raised, 'building_a')
-    }
-    const paris = seated(house({ dossier: dossier('Paris, France') }), 0.15)
-    expect(paris).toMatchObject({ aboveGrade: 0.15, atFoundationTop: true, seated: true })
-    const us = seated(house({ address: { state: 'TX' } }), 0.203)
-    expect(us).toMatchObject({ aboveGrade: 0.203, atFoundationTop: true })
-    // a European scene seated at the block's 0.203 m before the region was read is still seated
-    const before = seated(house({ dossier: dossier('Paris, France') }), 0.203)
-    expect(before).toMatchObject({ seated: true, atFoundationTop: false })
-    const tooHigh = seated(house({ dossier: dossier('Paris, France') }), 0.3)
-    expect(tooHigh).toMatchObject({ seated: false })
   })
 })

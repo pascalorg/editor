@@ -1,6 +1,5 @@
 import type { AnyNode, AnyNodeId } from '../schema'
 import type { Assembly } from '../schema/assembly'
-import { FOUNDATION_STANDARD } from './foundation-standard'
 
 /** What a foundation wall is built of: block, or cast in place. */
 export type FoundationConstructionId = 'cmu' | 'cast-concrete'
@@ -16,12 +15,6 @@ export type FoundationConstruction = {
   description: string
   /** The stack a new foundation wall stores, outside in (the wall's thickness is its sum). */
   assembly: Assembly
-  /** The course the generic foundation draws up to the floor, where the walls above it are thinner. */
-  stemThickness: number
-  /** How far the ground floor stands over finished grade: the top of the foundation, metres. */
-  seatAboveGrade: number
-  /** Where the seat comes from. */
-  seatBasis: string
   /** Whether the numbers cite a standard (`standard`) or are a sensible default (`default`). */
   source: 'standard' | 'default'
 }
@@ -29,17 +22,14 @@ export type FoundationConstruction = {
 const INCH = 0.0254
 
 /**
- * The foundation constructions, as data: the wall a person gets below grade, the course the generic
- * foundation draws, and how high the floor stands over the ground. The generic one (`cmu`) is the
- * US residential practice and stays the answer wherever nothing says better.
+ * The foundation constructions, as data: the wall a person gets below grade. The generic one
+ * (`cmu`) is the US residential practice and stays the answer wherever nothing says better.
  *
- * - `cmu`: 8 in block, 2x4 pressure-treated furring laid flat inside (IRC R404.1, R317.1), the
- *   floor 8 in over grade (R317.1 keeps wood framing that far off exposed ground).
+ * - `cmu`: 8 in block, 2x4 pressure-treated furring laid flat inside (IRC R404.1, R317.1).
  * - `cast-concrete`: the continental and British practice of a cast wall, 25 cm, insulated and
  *   waterproofed on the outside. The thicknesses are the usual ones (cellar walls of 20 to 25 cm,
  *   perimeter insulation of 10 cm, a 4 mm bitumen sheet), a sensible default rather than one
- *   country's code. The floor 15 cm over the ground: the damp-proof course of British practice
- *   (Approved Document C, NHBC) stands at least 150 mm over it, and plinths elsewhere run as high.
+ *   country's code.
  */
 export const FOUNDATION_CONSTRUCTIONS: Record<FoundationConstructionId, FoundationConstruction> = {
   cmu: {
@@ -55,10 +45,6 @@ export const FOUNDATION_CONSTRUCTIONS: Record<FoundationConstructionId, Foundati
       ],
       face: 'exterior',
     },
-    stemThickness: FOUNDATION_STANDARD.stemThickness,
-    seatAboveGrade: 0.203,
-    seatBasis:
-      'IRC R317.1 keeps wood framing resting on a foundation wall 8 in from exposed ground',
     source: 'standard',
   },
   'cast-concrete': {
@@ -74,10 +60,6 @@ export const FOUNDATION_CONSTRUCTIONS: Record<FoundationConstructionId, Foundati
       ],
       face: 'exterior',
     },
-    stemThickness: 0.25,
-    seatAboveGrade: 0.15,
-    seatBasis:
-      'a sensible default: the damp-proof course of British practice (Approved Document C, NHBC) stands at least 150 mm over the ground and continental plinths run about as high; verify the local rule',
     source: 'default',
   },
 }
