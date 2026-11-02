@@ -63,14 +63,7 @@ import {
   groundHoleShadowNode,
   solidGroundMaskNode,
 } from './ground-hole'
-import {
-  GroundVeil,
-  gradeRingGeometry,
-  gradeRingMaterial,
-  groundVeilMaterial,
-  horizonVeilMaterial,
-  noopRaycast,
-} from './ground-veil'
+import { GroundVeil, groundVeilMaterial, horizonVeilMaterial, noopRaycast } from './ground-veil'
 import { GroundWindowSystem } from './ground-window-system'
 import {
   buildPatternedRibbon,
@@ -245,8 +238,8 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
   }, [polygonPoints])
 
   // Where the ground meets the levels below grade. `all` says whether the scene has any (the
-  // ground materials carry the hole's mask from then on); `shown` is what the hole is cut over and
-  // the grade ring runs along under the veil: the level shown and the ones between it and grade, as
+  // ground materials carry the hole's mask from then on); `shown` is what the hole is cut over under
+  // the veil: the level shown and the ones between it and grade, as
   // the level display hides them. While the level shown is not below grade the last such set is
   // kept, so a hole easing shut keeps its shape. `covered` is the part of them under the house
   // itself, whatever level is shown: the ground stands open there (see `holes`).
@@ -431,19 +424,6 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
     const covered = inLot.filter((piece) => piece.holes.length === 0).map((piece) => piece.outer)
     return covered.length > 0 ? [...slabPolygons, ...covered] : slabPolygons
   }, [coverOpen, buried.covered, polygonPoints, slabPolygons])
-
-  const gradeRings = useMemo(
-    () => buried.shown.map((outline) => gradeRingGeometry(outline, persistedField)),
-    [buried.shown, persistedField],
-  )
-  useEffect(
-    () => () => {
-      for (const ring of gradeRings) ring.dispose()
-    },
-    [gradeRings],
-  )
-  const gradeRing = useMemo(gradeRingMaterial, [])
-  useEffect(() => () => gradeRing.dispose(), [gradeRing])
 
   // Ground shape: site polygon with slab footprints punched as holes
   const groundShape = useMemo(() => {
@@ -762,11 +742,6 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
           rotation={FLAT_ON_THE_GROUND}
         />
       )}
-
-      {showSiteSurfaces &&
-        gradeRings.map((geometry, index) => (
-          <GroundVeil geometry={geometry} key={index} material={gradeRing} shows="veiled" />
-        ))}
 
       {showSiteSurfaces && ribbons && (
         <>

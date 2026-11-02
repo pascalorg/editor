@@ -21,7 +21,7 @@ import {
   useViewer,
 } from '@pascal-app/viewer'
 import { act, create } from '@react-three/test-renderer'
-import { Box3, type Line, type Mesh, type Object3D, Raycaster, Vector3 } from 'three'
+import { type Line, type Mesh, type Object3D, Raycaster, Vector3 } from 'three'
 import type { MeshBasicNodeMaterial } from 'three/webgpu'
 import { groundHoleDistanceAt, holeRadiusAt } from './ground-hole'
 import { groundPitDrawnFloorNow, groundPitFloorNow } from './ground-pit'
@@ -78,17 +78,6 @@ function groundPickedAt(root: Object3D, x = 0, z = 0) {
 }
 
 const drawn = (surface: Object3D) => surface.visible && surface.layers.isEnabled(SCENE_LAYER)
-
-/** The veil surfaces told apart: the grade ring is the narrow one, the sheets cover the lot. */
-function veilsOf(root: Object3D) {
-  const veils = ground(root, 'veil')
-  const isRing = (veil: Mesh) => {
-    veil.geometry.computeBoundingBox()
-    const box = veil.geometry.boundingBox ?? new Box3()
-    return box.max.x - box.min.x < 7
-  }
-  return { sheets: veils.filter((veil) => !isRing(veil)), rings: veils.filter(isRing) }
-}
 
 /** True when the node graph under `root` reads the hole's opening uniform. */
 function readsHoleOpening(root: unknown) {
@@ -159,17 +148,10 @@ test.each([false, true])(
     await act(async () => useViewer.setState({ belowGrade: true, gradeStanding: 'below-grade' }))
     groundHoleOpenNode().value = 1
     await renderer.advanceFrames(2, 0.05)
-    // The ground stays solid and drawn (the hole is in its mask), no veil sheet over it, the grade
-    // ring where it meets the plate, drawn along the plate's outline (the ribbon's half-width
-    // widens it by 8 cm).
+    // The ground stays solid and drawn (the hole is in its mask), nothing veiled over it: no sheet,
+    // and no ring drawn round the plate.
     expect(solid.every(drawn)).toBe(true)
-    const { sheets, rings } = veilsOf(scene)
-    expect(sheets.filter(drawn)).toHaveLength(0)
-    expect(rings.filter(drawn)).toHaveLength(1)
-    const ring = rings[0]?.geometry.boundingBox ?? new Box3()
-    expect(
-      [ring.min.x, ring.max.x, ring.min.z, ring.max.z].map((v) => Math.abs(Math.round(v))),
-    ).toEqual([0, 6, 0, 4])
+    expect(ground(scene, 'veil').some(drawn)).toBe(false)
     // Over the plate the click falls through to the floor; past the hole's reach it lands.
     expect(groundPickedAt(scene, 3, 2)).toHaveLength(0)
     expect(groundPickedAt(scene, 9, 9).length).toBeGreaterThan(0)
@@ -199,12 +181,6 @@ test.each([
   expect(ground(scene, 'solid').every(drawn)).toBe(true)
   expect(ground(scene, 'veil').some(drawn)).toBe(false)
   expect(groundPickedAt(scene, 3, 2).length).toBeGreaterThan(0)
-  // Leaving the walkthrough: the overview rule is back (the ring under the veil).
-  if ('walkthroughMode' in state) {
-    await act(async () => useViewer.setState({ walkthroughMode: false }))
-    await renderer.advanceFrames(2, 0.05)
-    expect(veilsOf(scene).rings.filter(drawn)).toHaveLength(1)
-  }
   await renderer.unmount()
 })
 
@@ -311,16 +287,6 @@ function showLevel(levelId: string) {
 test('the hole follows the level shown (it and the levels between it and grade, never the deeper ones) and is one outline', async () => {
   withFourBasements()
   const renderer = await create(<SiteRenderer node={lot(false)} />)
-  const scene = renderer.scene.instance as Object3D
-  // The grade ring's extent, rounded: the lot's own sheets are the wide ones.
-  const ringExtents = () =>
-    ground(scene, 'veil')
-      .map((veil) => {
-        veil.geometry.computeBoundingBox()
-        const box = veil.geometry.boundingBox ?? new Box3()
-        return [box.min.x, box.max.x, box.min.z, box.max.z].map((v) => Math.round(v))
-      })
-      .filter(([x0, x1]) => (x1 ?? 0) - (x0 ?? 0) < 19)
   expect(useViewer.getState().hasLevelBelowGrade).toBe(true)
   groundHoleOpenNode().value = 1
 
@@ -330,7 +296,6 @@ test('the hole follows the level shown (it and the levels between it and grade, 
   expect(groundHoleDistanceAt(0, 0)).toBeLessThan(0)
   expect(groundHoleDistanceAt(8, 1)).toBeGreaterThan(3)
   expect(groundHoleDistanceAt(-7, 6)).toBeGreaterThan(3)
-  expect(ringExtents()).toEqual([[-3, 3, -3, 3]])
   // The pit goes down to the floor of the level shown, which is shallow here.
   expect(groundPitFloorNow()).toBeLessThan(0)
   expect(groundPitFloorNow()).toBeGreaterThan(-4)
@@ -341,7 +306,6 @@ test('the hole follows the level shown (it and the levels between it and grade, 
   // east, is not opened (it is deeper than the level shown).
   expect(groundHoleDistanceAt(-7, 6)).toBeLessThan(0)
   expect(groundHoleDistanceAt(8.5, 1)).toBeGreaterThan(0.3)
-  expect(ringExtents()).toEqual([[-8, 8, -8, 7]])
 
   await act(async () => showLevel('level_m4'))
   await renderer.advanceFrames(2, 0.05)
@@ -356,7 +320,6 @@ test('the hole follows the level shown (it and the levels between it and grade, 
     [-6, 5],
   ] as const)
     expect(groundHoleDistanceAt(x, z)).toBeLessThan(0)
-  expect(ringExtents()).toEqual([[-8, 9, -8, 7]])
   // -4 sits 12 m down (its 0.2 m plate on top).
   expect(groundPitFloorNow()).toBeCloseTo(-11.8, 1)
 
@@ -555,7 +518,7 @@ function withHillsideHouse(walkoutEast: number) {
   return site
 }
 
-test('on a hillside the hole, the grade ring and the pit stop where the ground does: the valley side of a walk-out stays closed', async () => {
+test('on a hillside the hole and the pit stop where the ground does: the valley side of a walk-out stays closed', async () => {
   const site = withHillsideHouse(9)
   const renderer = await create(<SiteRenderer node={site} />)
   const scene = renderer.scene.instance as Object3D
@@ -568,18 +531,6 @@ test('on a hillside the hole, the grade ring and the pit stop where the ground d
   expect(groundHoleDistanceAt(3, 0)).toBeLessThan(0)
   expect(groundHoleDistanceAt(7, 0)).toBeLessThan(0)
   expect(groundHoleDistanceAt(-6, 0)).toBeGreaterThan(1)
-
-  // The grade ring runs along the same outline. (The sheets are transparent: the terrain's cut
-  // round the opening under the walk-out, where the house covers the cellar, is one of them.)
-  const rings = ground(scene, 'veil').filter((veil) => {
-    veil.geometry.computeBoundingBox()
-    const box = veil.geometry.boundingBox ?? new Box3()
-    return box.max.x - box.min.x < 15 && !(veil.material as { transparent?: boolean }).transparent
-  })
-  expect(rings).toHaveLength(1)
-  const ringBox = rings[0]!.geometry.boundingBox ?? new Box3()
-  expect(ringBox.min.x).toBeGreaterThan(-2.5)
-  expect(ringBox.max.x).toBeLessThan(9.5)
 
   await renderer.unmount()
 })

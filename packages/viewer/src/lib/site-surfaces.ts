@@ -10,7 +10,7 @@ export const SITE_GROUND = 'siteGround'
 
 /**
  * `solid`: the lot's fill, its sculpted terrain, the horizon disc. `veil`: what is drawn in their
- * place over a level below grade, the grade ring with it.
+ * place over a level below grade.
  */
 export type SiteGroundRole = 'solid' | 'veil'
 

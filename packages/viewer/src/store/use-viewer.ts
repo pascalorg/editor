@@ -887,20 +887,6 @@ export function groundVeiled(state: {
   )
 }
 
-/** Whether any ground is veiled now, wholesale or through the eye's window. */
-export function anyGroundVeiled(state: {
-  belowGrade: boolean
-  groundMode: GroundMode
-  gradeStanding?: LevelGradeStanding
-  groundWindowVeiled: boolean
-  walkthroughMode?: boolean
-}): boolean {
-  return (
-    groundVeiled(state) ||
-    (state.groundMode === 'auto' && state.groundWindowVeiled && state.walkthroughMode !== true)
-  )
-}
-
 /**
  * Whether the site draws its own ground. `showGround: false` says other geometry supplies the
  * ground (an authored landscape), which stands on a level above a basement; while a level below

@@ -86,8 +86,7 @@ function levelPlates(nodes: Record<AnyNodeId, AnyNode>): LevelPlates[] {
  * Where the ground meets the levels below grade, in the site's plan: each such level's floor slabs
  * placed where its building stands and joined into outlines, the levels' together as one set (a
  * deeper level wider than the one over it, or under part of it, gives one outline, not overlapping
- * ones). The 3D view cuts its hole in the ground and draws its grade ring along them while the
- * ground is veiled. An automatic floor follows the walls' centrelines, so an outline runs half a
+ * ones). The 3D view cuts its hole in the ground over them while the ground is veiled. An automatic floor follows the walls' centrelines, so an outline runs half a
  * wall inside the outer faces. A level only partly below grade (a walk-out on a hillside) gives
  * the part of its floor the ground stands over by more than {@link BELOW_GRADE_TOLERANCE}, the
  * edge following the slope; fully buried levels give their whole floor.

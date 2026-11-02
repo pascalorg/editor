@@ -296,14 +296,12 @@ export {
   stepAmbianceProgress,
   temporarilyWithoutAmbiance,
   UNDERGROUND_RIM,
-  UNDERGROUND_RING,
   undergroundAmbianceNode,
 } from './lib/underground-ambiance'
 export { createZoneShape, createZoneWallGeometry } from './lib/zone-geometry'
 export type { LightSource } from './store/use-item-light-pool'
 export { catalogLightSource, useItemLightPool } from './store/use-item-light-pool'
 export {
-  anyGroundVeiled,
   applyCountryUnitDefault,
   DEFAULT_UNDERGROUND_LOOK,
   default as useViewer,
