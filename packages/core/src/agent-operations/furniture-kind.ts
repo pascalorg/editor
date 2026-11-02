@@ -173,6 +173,19 @@ export function furnitureKind(asset: Named): FurnitureKind {
   return WALL.test(text) ? 'wall' : 'free'
 }
 
+/** A sofa stands off the wall on its rug and stools stand at an island: in an open plan neither is in the middle of the room. */
+const FLOATS_IN_OPEN_PLAN = /sofa|couch|loveseat|stool/
+
+/**
+ * The word that makes a piece wall-bound ("fridge", "counter"), for a piece that is judged to stand
+ * against a wall; null for every other piece, a sofa or stools that float by design included.
+ */
+export function wallBoundWord(asset: Named): string | null {
+  const text = read(asset)
+  if (furnitureKind(asset) !== 'wall' || FLOATS_IN_OPEN_PLAN.test(text)) return null
+  return WALL.exec(text)?.[0].trim() ?? BEDSIDE.exec(text)?.[0] ?? 'piece'
+}
+
 /**
  * What a piece faces when it does not stand against a wall, as a pattern for the name of the item
  * it belongs with: the coffee table and the TV face the sofa, a chair faces its table.

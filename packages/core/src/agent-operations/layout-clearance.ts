@@ -36,7 +36,7 @@ import {
   type PlanAabb,
   resolveNodeLevelId,
 } from './door-clearance'
-import { designedTogether, furnitureKind, isFloorUnderlay, isWallDressing } from './furniture-kind'
+import { designedTogether, isFloorUnderlay, isWallDressing, wallBoundWord } from './furniture-kind'
 import { type ItemSolid, manifestSolids, relateSolids, type ToLevel } from './item-solids'
 import { itemLevelHeightRange, itemLevelPose, itemPlanAabbInLevel } from './item-space'
 import {
@@ -868,7 +868,8 @@ export function findItemsMidRoom(args: { nodes: Iterable<AnyNode>; levelId?: str
     ...(args.levelId === undefined ? {} : { levelId: args.levelId }),
   })) {
     const node = byId.get(footprint.id)
-    if (node?.type !== 'item' || furnitureKind(node.asset) !== 'wall') continue
+    const word = node?.type === 'item' ? wallBoundWord(node.asset) : null
+    if (node?.type !== 'item' || !word) continue
     const room = zones.find((zone) =>
       pointInPolygon([node.position[0], node.position[2]], zone.polygon as Vec2[], true),
     )
@@ -877,7 +878,7 @@ export function findItemsMidRoom(args: { nodes: Iterable<AnyNode>; levelId?: str
     if (gap <= MID_ROOM_DISTANCE_M) continue
     found.push({
       id: node.id,
-      message: `${footprint.name ?? node.asset.id} (${node.id}) stands in the middle of ${room.name || room.id}, ${gap.toFixed(1)} m from the nearest wall: a ${node.asset.id} belongs against a wall (place_in_room puts it there).`,
+      message: `${footprint.name ?? node.asset.id} (${node.id}) stands in the middle of ${room.name || room.id}, ${gap.toFixed(1)} m from the nearest wall: a ${word} belongs against a wall (place_in_room puts it there).`,
     })
   }
   return found
