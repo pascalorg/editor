@@ -290,6 +290,30 @@ describe('beds', () => {
     ])
     expect(run(roomy, 'usage_bed_clearance')).toHaveLength(0)
   })
+
+  test('a queen bed with its bedside tables is read along its own head-to-foot axis, not as a king lying across', () => {
+    // 2.65 m across with the bedsides, 2.11 m from head to foot, its head to the east wall
+    const nodes = scene(1, [
+      slab('slab_1', 'level_1', [
+        [-0.3, -0.3],
+        [5.3, -0.3],
+        [5.3, 5.3],
+        [-0.3, 5.3],
+      ]),
+      wall('wall_s', [0, 0], [5, 0]),
+      wall('wall_e', [5, 0], [5, 5]),
+      wall('wall_n', [5, 5], [0, 5]),
+      wall('wall_w', [0, 5], [0, 0]),
+      zone('zone_1', 'Bedroom', room(5, 5)),
+      piece('item_c', 'Queen bed with bedside tables', 'bed', 3.895, 2.5, 2.65, 2.11, 0.5, {
+        rotation: [0, (3 * Math.PI) / 2, 0],
+      }),
+    ])
+    const [bed] = measureBeds(nodes, usageShapes(nodes))
+    expect(bed).toMatchObject({ sizeClass: 'queen', widthM: 2.65, lengthM: 2.11 })
+    expect(bed!.foot).toBeGreaterThan(2.5)
+    expect(run(nodes, 'usage_bed_clearance')).toHaveLength(0)
+  })
 })
 
 describe('usage_door_swing', () => {

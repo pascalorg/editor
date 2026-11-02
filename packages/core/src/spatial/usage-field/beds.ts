@@ -1,6 +1,6 @@
 import { isFloorUnderlay } from '../../agent-operations/furniture-kind'
 import { area, intersection, type Ring } from '../../lib/polygon-boolean'
-import type { ItemNode, ZoneNode } from '../../schema'
+import { type AnyNode, getScaledDimensions, type ItemNode, type ZoneNode } from '../../schema'
 import type { UsageIssue } from './findings'
 import { m, nameOf, quote, unique } from './labels'
 import { type Obstacle, obstaclesInBand, rayHit } from './obstacles'
@@ -93,6 +93,52 @@ function boundingRectangle(points: Ring) {
   }
 }
 
+type Rect = ReturnType<typeof boundingRectangle>
+
+const CLASS_WORDS: [BedClass, RegExp][] = [
+  ['king', /king/i],
+  ['queen', /queen/i],
+  ['double', /double/i],
+  ['single', /single|twin/i],
+]
+
+/**
+ * A bed standing wider than long, bedside tables included, reads as lying across its room: its
+ * head-to-foot axis is the item's own z (a bed's length is never less than its width), whatever the
+ * box says. Null for any other piece, which keeps the smallest rectangle round its outline.
+ */
+function ownAxes(node: AnyNode | undefined, outline: Ring): Rect | null {
+  if (node?.type !== 'item') return null
+  const [width, , depth] = getScaledDimensions(node)
+  if (!(width > depth + 0.05)) return null
+  const angle = node.rotation[1]
+  const along: [number, number] = [Math.sin(angle), Math.cos(angle)]
+  const across: [number, number] = [Math.cos(angle), -Math.sin(angle)]
+  const us = outline.map(([x, z]) => x * across[0] + z * across[1])
+  const vs = outline.map(([x, z]) => x * along[0] + z * along[1])
+  const [u0, u1] = [Math.min(...us), Math.max(...us)]
+  const [v0, v1] = [Math.min(...vs), Math.max(...vs)]
+  const [u, v] = [(u0 + u1) / 2, (v0 + v1) / 2]
+  return {
+    centre: [u * across[0] + v * along[0], u * across[1] + v * along[1]],
+    long: along,
+    across,
+    length: v1 - v0,
+    width: u1 - u0,
+  }
+}
+
+/** The mattress's class: the width of the item's own bed part when its manifest has one, else a size its name states, else the footprint's width. */
+function classOfBed(node: AnyNode | undefined, name: string, rect: Rect): BedClass {
+  if (node?.type === 'item') {
+    const part = node.source?.manifest?.parts?.find((candidate) => candidate.type === 'bed')
+    if (part?.bounds) return bedClassOf((part.bounds.max[0] - part.bounds.min[0]) * node.scale[0])
+    const named = CLASS_WORDS.find(([, words]) => words.test(name))
+    if (named && rect.width > rect.length) return named[0]
+  }
+  return bedClassOf(rect.width)
+}
+
 /** One bed's size class and free space, from its own prisms and those of its level (the bed itself may be a candidate that is not in the scene). */
 export function measureBedPrisms(
   nodes: Nodes,
@@ -107,7 +153,7 @@ export function measureBedPrisms(
     .filter((prism) => prism.z0 < floor + 0.9)
     .flatMap((prism) => prism.outer as Ring)
   if (outline.length < 3) return null
-  const rect = boundingRectangle(outline)
+  const rect = ownAxes(nodes[bed.id], outline) ?? boundingRectangle(outline)
   const band = { z0: floor + FEET_FROM_M, z1: floor + FEET_TO_M }
   // what lies on or under the bed (bedding, a throw) is not an obstacle beside it
   const overlapsBed = (prism: Prism) =>
@@ -192,7 +238,7 @@ export function measureBedPrisms(
     room,
     widthM: Math.round(rect.width * 100) / 100,
     lengthM: Math.round(rect.length * 100) / 100,
-    sizeClass: bedClassOf(rect.width),
+    sizeClass: classOfBed(nodes[bed.id], bed.name, rect),
     left: Math.round(sideRays(1) * 100) / 100,
     right: Math.round(sideRays(-1) * 100) / 100,
     foot: Math.round(median(footHits) * 100) / 100,
