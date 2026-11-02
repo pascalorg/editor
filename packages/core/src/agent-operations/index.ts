@@ -15,12 +15,14 @@ import './brief-findings'
 import { designBrief, gatedByBrief } from './design-brief'
 import { placeDesign, validateDesignOperation } from './designs'
 import { duplicateLevel } from './duplicate-level'
+import { duplicateNode } from './duplicate-node'
 import { findByType } from './find-by-type'
 import { furnishRoom } from './furnish-room'
 import { getNode } from './get-node'
 import { getLevelSummary, getWalls, getZones } from './level-reads'
 import { listLevels } from './list-levels'
 import { mergeWindowsOperation } from './merge-windows'
+import { moveNode } from './move-node'
 import { moveRoofsToRoofLevel } from './move-roofs'
 import { paint } from './paint'
 import { placeInRoom } from './place-in-room'
@@ -66,6 +68,7 @@ export * from './design-form'
 export * from './designs'
 export * from './door-clearance'
 export * from './duplicate-level'
+export * from './duplicate-node'
 export * from './find-by-type'
 export * from './furnish-room'
 export * from './get-node'
@@ -80,6 +83,8 @@ export * from './list-levels'
 export * from './material-preset'
 export * from './material-refs'
 export * from './merge-windows'
+export * from './move-node'
+export * from './move-plan'
 export * from './move-roofs'
 export * from './node-patch'
 export * from './paint'
@@ -139,6 +144,8 @@ const SINGLE_OPERATIONS = {
   move_roofs_to_roof_level: moveRoofsToRoofLevel,
   place_items: gatedByBrief('place_items', placeItems),
   delete_node: deleteNode,
+  move_node: moveNode,
+  duplicate_node: duplicateNode,
   find_by_type: findByType,
   create_room: createRoom,
   furnish_room: gatedByBrief('furnish_room', furnishRoom),

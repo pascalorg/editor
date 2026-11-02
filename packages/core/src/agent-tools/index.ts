@@ -24,6 +24,7 @@ import {
   setGroundLevelTool,
 } from './levels'
 import { mergeWindowsTool } from './merge-windows'
+import { duplicateNodeTool, moveNodeTool } from './move-duplicate'
 import { deleteNodeTool, getNodeTool } from './nodes'
 import { paintTool } from './paint'
 import { placeInRoomTool } from './place-in-room'
@@ -57,6 +58,7 @@ export * from './hosted-services'
 export * from './levels'
 export * from './measurement'
 export * from './merge-windows'
+export * from './move-duplicate'
 export { NodeId } from './node-id'
 export * from './nodes'
 export * from './notation-inventory'
@@ -115,6 +117,8 @@ export const AGENT_TOOL_CONTRACTS = [
   createRoofTool,
   moveRoofsToRoofLevelTool,
   deleteNodeTool,
+  moveNodeTool,
+  duplicateNodeTool,
   addObjectTool,
   authorSceneTool,
   getSourceTool,

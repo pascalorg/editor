@@ -12,6 +12,8 @@ export const BATCHABLE_TOOLS = [
   'duplicate_level',
   'verify_scene',
   'delete_node',
+  'move_node',
+  'duplicate_node',
   'measure_stair',
   'fit_stair',
   'find_by_type',
