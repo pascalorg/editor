@@ -174,24 +174,20 @@ describe('a brief that names the catalog, a brand or existing pieces', () => {
 describe('run_batch', () => {
   const call = (tool: string, input: unknown) => ({ tool, input })
 
-  test('one refused call refuses the batch whole, naming the call, whatever onRefusal says', () => {
+  test('hosts leave per-call batch refusals to the batch operation', () => {
     const calls = [call('paint', {}), call('place_design', { design: {} })]
     for (const onRefusal of ['stop', 'skip'] as const) {
       const refusal = furnishingRefusal('run_batch', { calls, onRefusal }, null)
-      expect(refusal?.code).toBe('design_brief_required')
-      expect(refusal?.message).toStartWith(
-        "The batch's call 2 (place_design) is refused: Furnishing follows",
-      )
-      expect(refusal?.message).toEndWith('Nothing in the batch was applied.')
-      expect(refusal?.details).toMatchObject({ index: 1, tool: 'place_design' })
+      expect(refusal).toBeNull()
     }
   })
 
-  test('under an open brief, creation passes and a catalog placement does not', () => {
+  test('an open batch gate does not replace the catalog placement gate', () => {
     expect(code('run_batch', { calls: [call('add_object', { code: 'x' })] }, open())).toBeNull()
-    expect(code('run_batch', { calls: [call('place_in_room', { assetId: 'sofa' })] }, open())).toBe(
-      'brief_source_open',
-    )
+    expect(
+      code('run_batch', { calls: [call('place_in_room', { assetId: 'sofa' })] }, open()),
+    ).toBeNull()
+    expect(code('place_in_room', { assetId: 'sofa' }, open())).toBe('brief_source_open')
   })
 
   test('a batch with no furnishing call is not gated', () => {
@@ -200,14 +196,21 @@ describe('run_batch', () => {
     ).toBeNull()
   })
 
-  test('the operation refuses before any call runs', () => {
+  test('the default policy rolls back a brief refusal as it does a runtime refusal', () => {
     const run = () =>
       AGENT_OPERATIONS.run_batch(
         {},
-        { calls: [{ tool: 'list_levels' }, { tool: 'place_design', input: { design: {} } }] },
+        {
+          calls: [
+            { tool: 'list_levels' },
+            { tool: 'place_in_room', input: { assetId: 'sofa', zoneId: 'zone_x' } },
+          ],
+        },
         { activeLevelId: null, designBrief: null },
       )
-    expect(run).toThrow(/The batch's call 2 \(place_design\)/)
+    expect(run).toThrow(
+      /The batch stopped at call 2 \(place_in_room\), refused with design_brief_required/,
+    )
   })
 })
 

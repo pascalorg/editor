@@ -732,7 +732,9 @@ export function registerOperationTool(
             typeof call === 'object' &&
             call !== null &&
             'tool' in call &&
-            call.tool === placeInRoomTool.name,
+            call.tool === placeInRoomTool.name &&
+            (designBrief === undefined ||
+              !furnishingRefusal(call.tool, 'input' in call ? call.input : {}, designBrief)),
         )
       const batchesObjects =
         tool.contract.name === runBatchTool.name &&
@@ -760,6 +762,7 @@ export function registerOperationTool(
           batchObjects: await buildBatchObjects(
             input.calls as { tool?: unknown; input?: unknown }[],
             hosts.buildObject ?? refuseScripts,
+            designBrief,
           ),
         }),
       }

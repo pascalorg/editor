@@ -634,7 +634,7 @@ export const DESIGN_BRIEF_CASES: AgentToolCase[] = [
     expect: { result: {} },
   },
   {
-    name: 'a batch holding one furnishing call before a brief is refused whole, whatever onRefusal says',
+    name: 'skip reports a missing brief per call while the batch reads still run',
     tool: 'run_batch',
     scene: storeysScene,
     input: {
@@ -646,8 +646,9 @@ export const DESIGN_BRIEF_CASES: AgentToolCase[] = [
     },
     context: { designBrief: null },
     expect: {
-      refusal: 'design_brief_required',
-      mentions: ["The batch's call 2 (place_design) is refused", 'Nothing in the batch was applied'],
+      result: { applied: 1, refused: 1 },
+      contains: { calls: [{ index: 1, tool: 'place_design', status: 'refused', code: 'design_brief_required' }] },
+      mentions: BEFORE,
     },
   },
   {
@@ -718,7 +719,7 @@ export const DESIGN_BRIEF_CASES: AgentToolCase[] = [
     expect: { result: { status: 'applied', applied: 1, refused: 0 } },
   },
   {
-    name: 'a batch under an open brief refuses a catalog placement whole',
+    name: 'skip under an open brief makes its piece and reports the refused catalog call',
     tool: 'run_batch',
     scene: storeysScene,
     input: {
@@ -730,8 +731,49 @@ export const DESIGN_BRIEF_CASES: AgentToolCase[] = [
     },
     context: { ...library, designBrief: OPEN },
     expect: {
-      refusal: 'brief_source_open',
-      mentions: ["The batch's call 2 (place_in_room) is refused", OPEN_SOURCE('double-bed')],
+      result: { applied: 1, refused: 1 },
+      contains: { calls: [{ index: 1, tool: 'place_in_room', status: 'refused', code: 'brief_source_open' }] },
+      mentions: [OPEN_SOURCE('double-bed')],
+    },
+  },
+  {
+    name: 'stop names the refused catalog call and applies nothing',
+    tool: 'run_batch',
+    scene: storeysScene,
+    input: {
+      calls: [
+        { tool: 'place_design', input: sofa },
+        { tool: 'place_in_room', input: { assetId: 'double-bed', polygon: [[0, 0], [4, 0], [4, 5], [0, 5]], ...ground } },
+      ],
+    },
+    context: { ...library, designBrief: OPEN },
+    expect: {
+      refusal: 'batch_call_refused',
+      mentions: ['call 2', 'place_in_room', 'brief_source_open', OPEN_SOURCE('double-bed')],
+    },
+  },
+  {
+    name: 'skip runs the calls around an unsupported tool and an invalid input',
+    tool: 'run_batch',
+    scene: storeysScene,
+    input: {
+      calls: [
+        { tool: 'list_levels' },
+        { tool: 'run_batch', input: { calls: [] } },
+        { tool: 'delete_node', input: {} },
+        { tool: 'list_levels' },
+      ],
+      onRefusal: 'skip',
+    },
+    expect: {
+      result: { applied: 2, refused: 2 },
+      contains: {
+        calls: [
+          { index: 1, tool: 'run_batch', status: 'refused', code: 'unknown_tool' },
+          { index: 2, tool: 'delete_node', status: 'refused', code: 'invalid_input' },
+          { index: 3, tool: 'list_levels', status: 'ok' },
+        ],
+      },
     },
   },
 ]

@@ -325,29 +325,73 @@ describe('the design brief over MCP', () => {
     ).toBeFalsy()
   })
 
-  test('run_batch holding a gated call is refused as a whole, whatever onRefusal says, and nothing is applied', async () => {
-    const before = Object.keys(bridge.getNodes()).length
+  test('run_batch keeps the brief gate: stop applies nothing, skip applies the other calls, and furnishing runs only after a brief', async () => {
+    const before = structuredClone(bridge.getNodes())
+    const [firstWall, secondWall] = Object.values(before).filter((node) => node.type === 'wall')
+    if (!(firstWall && secondWall)) throw new Error('The room needs two walls to delete')
+    const gatedCall = { tool: 'place_design', input: sofa() }
     const calls = [
-      { tool: 'delete_node', input: { id: 'wall_missing' } },
-      { tool: 'place_design', input: sofa() },
+      { tool: 'delete_node', input: { id: firstWall.id } },
+      gatedCall,
+      { tool: 'delete_node', input: { id: secondWall.id } },
     ]
-    for (const onRefusal of ['stop', 'skip'] as const) {
-      const { result, payload } = await call('run_batch', { calls, onRefusal })
+    for (const policy of [{}, { onRefusal: 'stop' }]) {
+      const { result, payload } = await call('run_batch', { calls, ...policy })
       expect(result.isError).toBe(true)
-      expect(payload.code).toBe('design_brief_required')
-      expect(String(payload.error)).toContain("The batch's call 2 (place_design) is refused")
+      expect(payload).toMatchObject({
+        code: 'batch_call_refused',
+        index: 1,
+        tool: 'place_design',
+        refusal: 'design_brief_required',
+      })
+      expect(bridge.getNodes()).toEqual(before)
     }
-    expect(Object.keys(bridge.getNodes()).length).toBe(before)
+    const skipped = await call('run_batch', { calls, onRefusal: 'skip' })
+    expect(skipped.result.isError).toBeFalsy()
+    expect(skipped.payload).toMatchObject({
+      status: 'applied',
+      applied: 2,
+      refused: 1,
+      calls: [
+        { index: 0, tool: 'delete_node', status: 'ok' },
+        {
+          index: 1,
+          tool: 'place_design',
+          status: 'refused',
+          code: 'design_brief_required',
+          error: expect.stringContaining('design_brief records what the request fixes'),
+        },
+        { index: 2, tool: 'delete_node', status: 'ok' },
+      ],
+    })
+    expect(bridge.getNodes()[firstWall.id]).toBeUndefined()
+    expect(bridge.getNodes()[secondWall.id]).toBeUndefined()
+    expect(
+      Object.values(bridge.getNodes()).filter((node) =>
+        ['item', 'procedural-item'].includes(node.type),
+      ),
+    ).toEqual([])
+    expect(compiles).toBe(0)
+    expect(bridge.agentSession.read().designBrief).toBeUndefined()
+
     await call('design_brief', brief('open'))
     const batch = await call('run_batch', {
-      calls: [calls[1]!, { tool: 'add_object', input: object }],
+      calls: [gatedCall, { tool: 'add_object', input: object }],
     })
     expect(batch.result.isError).toBeFalsy()
     expect(batch.payload).toMatchObject({ status: 'applied', applied: 2, refused: 0 })
+    expect(compiles).toBe(1)
+    expect(Object.values(bridge.getNodes()).some((node) => node.type === 'procedural-item')).toBe(
+      true,
+    )
     const refused = await call('run_batch', {
       calls: [{ tool: 'place_in_room', input: { assetId: 'double-bed', zoneId } }],
     })
-    expect(refused.payload.code).toBe('brief_source_open')
+    expect(refused.result.isError).toBe(true)
+    expect(refused.payload).toMatchObject({
+      code: 'batch_call_refused',
+      refusal: 'brief_source_open',
+    })
   })
 
   test('the brief is the session’s: the next brief replaces it, a scene load starts the session anew', async () => {

@@ -20,6 +20,7 @@ export const BATCHABLE_TOOLS = [
   'set_wall_type',
   'add_fence',
   'add_level',
+  'create_unit',
   'create_stair',
   'add_corner_window',
   'merge_windows',
@@ -45,7 +46,7 @@ export const INDEPENDENT_BATCH_TOOLS: readonly string[] = ['add_object']
 export const runBatchTool = {
   name: 'run_batch',
   title: 'Run a batch of scene tools',
-  description: `Optionally run several scene tools in one call: in order, each on the scene the calls before it left, applied as one undo step, with a report per call. Supports repeated or known-in-advance work; individual calls remain available. A call cannot use an id another call of the same batch creates; created ids are available in the report for subsequent calls. onRefusal stop (default): a refused call stops the batch and nothing is applied; skip: the others are applied and each refusal is reported; add_object calls are independent of each other under both: one that fails is reported with its own error and the others are applied, each with the receipt a single add_object gives. Tools: ${BATCHABLE_TOOLS.join(', ')}.`,
+  description: `Optionally run several scene tools in one call: in order, each on the scene the calls before it left, applied as one undo step, with a report per call. Supports repeated or known-in-advance work; individual calls remain available. A call cannot use an id another call of the same batch creates; created ids are available in the report for subsequent calls. onRefusal stop (default): a refused call stops the batch and nothing is applied; skip: the others are applied and each refusal is reported. This policy includes unsupported tools, invalid inputs and design-brief refusals, as well as runtime refusals. add_object calls are independent of each other under both: one that fails is reported with its own error and the others are applied, each with the receipt a single add_object gives. Tools: ${BATCHABLE_TOOLS.join(', ')}.`,
   input: {
     calls: z
       .array(

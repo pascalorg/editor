@@ -236,28 +236,13 @@ function placedAssets(tool: string, input: Record<string, unknown>): string[] {
 /**
  * Why a furnishing call may not run under this brief, or null. `brief` null is no brief yet. An
  * `add_object` that names a `nodeId` edits an object that stands: it places and makes nothing.
- * A batch holding a refused call is refused whole: the gate says nothing about its other calls.
+ * A batch checks each call in its operation, under the same policy as runtime refusals.
  */
 export function furnishingRefusal(
   tool: string,
   input: unknown,
   brief: DesignBrief | null,
 ): AgentRefusal | null {
-  if (tool === 'run_batch') {
-    const calls = asRecord(input).calls
-    for (const [index, call] of (Array.isArray(calls) ? calls : []).entries()) {
-      const { tool: name, input: callInput } = asRecord(call)
-      if (typeof name !== 'string') continue
-      const refusal = furnishingRefusal(name, callInput, brief)
-      if (refusal)
-        return new AgentRefusal(
-          refusal.code,
-          `The batch's call ${index + 1} (${name}) is refused: ${refusal.message} Nothing in the batch was applied.`,
-          { ...refusal.details, index, tool: name },
-        )
-    }
-    return null
-  }
   if (!(isCatalogPlacement(tool) || isCreation(tool))) return null
   const args = asRecord(input)
   if (tool === 'add_object' && typeof args.nodeId === 'string') return null
