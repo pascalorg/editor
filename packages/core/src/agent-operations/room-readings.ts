@@ -82,7 +82,6 @@ export type RoomReading = {
     faces: number
     facts: FinishFact[]
   }
-  /** How its walls are dressed, kind by kind, in the brief's words. */
   /** A wet room's walls read against what a wet room is tiled to; absent for the other rooms. */
   wet?: WetReading
   skirting: { faces: number; withSkirting: number }

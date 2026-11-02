@@ -31,7 +31,11 @@ import { OUTDOOR_ROOM_READ_CASES, ROOM_CASES } from './room-cases'
 import { CHECK_ROOMS_CASES, VALIDATE_SCENE_CASES } from './scene-check-cases'
 import { SEARCH_ASSETS_CASES } from './search-assets-cases'
 import { VIEW_ASSETS_CASES } from './view-assets-cases'
+import { BRIEF_GAP_CASES } from './brief-gaps-cases'
 import { DESIGN_BRIEF_CASES } from './design-brief-cases'
+import { DESIGN_FACADE_CASES } from './design-facade-cases'
+import { DESIGN_FORM_CASES } from './design-form-cases'
+import { DESIGN_DRESSING_CASES } from './room-dressing-cases'
 import { CORNER_WINDOW_CASES } from './corner-window-cases'
 import { MERGE_WINDOWS_CASES } from './merge-windows-cases'
 import { DESCRIBE_NODE_CASES, FIND_NODES_CASES } from './node-read-cases'
@@ -974,6 +978,10 @@ export const AGENT_TOOL_CASES: readonly AgentToolCase[] = [
   ...SEARCH_ASSETS_CASES,
   ...VIEW_ASSETS_CASES,
   ...DESIGN_BRIEF_CASES,
+  ...DESIGN_FORM_CASES,
+  ...DESIGN_FACADE_CASES,
+  ...DESIGN_DRESSING_CASES,
+  ...BRIEF_GAP_CASES,
   ...ADD_WALL_CASES,
   ...WALL_TYPE_CASES,
   ...FRAMING_POST_CASES,

@@ -1004,6 +1004,11 @@ export const METADATA_REFERENCES: readonly ExistingReference[] = [
     dependents: ['metadata.porchPart', 'metadata.porchSeed'],
     note: "The porch room a post or beam was made for by the structure kernel (lib/porch-framing-sync), which part of its framing and its shape as made; a porch gone takes its parts with it, one edited by hand stays the user's own.",
   }),
+  meta('referenceLevelId', {
+    ...policy('node', 'membership', 'drop', 'strip'),
+    targetKinds: ['level'],
+    note: 'The level a roof or roof level was measured from, a level id as the roof writers record it. Read to find the roof a massing volume carries.',
+  }),
 ]
 
 const described = (reason: string, paths: readonly string[]) =>
@@ -1085,6 +1090,10 @@ export const METADATA_NON_REFERENCES: readonly { path: string; reason: string }[
   ...described(
     'Which building code the project follows (`irc-2021`, `au-ncc`, `fr`): a profile name, never a node id. Read by the code-specific usage checks; a scene that does not name one has no jurisdiction.',
     ['codeProfile'],
+  ),
+  ...described(
+    "The massing volume a room or roof belongs to, as a volume tool wrote it: the volume's own id (it names no node), its name, shape and place in the stack. Read to group rooms into the volumes a form is compared on; nothing follows or remaps it.",
+    ['volume', 'volumeId'],
   ),
   ...described('Read as a truthy flag only; no editor writer.', [
     'arrayModifier',

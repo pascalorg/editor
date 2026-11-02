@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { INDEPENDENT_BATCH_TOOLS } from '../agent-tools/batch'
-import { isAgentRefusal, refuse } from '../agent-tools/refusal'
+import { AgentRefusal, isAgentRefusal, type RefusalKeep, refuse } from '../agent-tools/refusal'
 import type { SceneMaterialId } from '../schema/scene-material'
 import { applySceneChanges, mergeSceneChanges } from './apply-changes'
 import { requireFurnishing } from './design-brief'
@@ -54,11 +54,15 @@ export function createBatchOperation(
   return (nodes, { calls, onRefusal = 'stop' }, context) => {
     let working = nodes
     let workingContext = context
+    let kept: RefusalKeep['readings'] | undefined
     const sets: SceneChanges[] = []
     const reports: CallReport[] = []
     for (const [index, call] of calls.entries()) {
       try {
-        requireFurnishing(call.tool, call.input, context.designBrief)
+        requireFurnishing(call.tool, call.input, context.designBrief, {
+          session: workingContext.session,
+          catalog: workingContext.catalog,
+        })
         const { operation, input } = prepareCall(call, index, operations, contracts)
         const { result, changes } = operation(working, input as never, {
           ...workingContext,
@@ -80,11 +84,23 @@ export function createBatchOperation(
       } catch (error) {
         if (!isAgentRefusal(error)) throw error
         if (onRefusal === 'stop' && !INDEPENDENT_BATCH_TOOLS.includes(call.tool))
-          refuse(
+          throw new AgentRefusal(
             'batch_call_refused',
             `The batch stopped at call ${index + 1} (${call.tool}), refused with ${error.code}: ${error.message} Nothing in the batch was applied.`,
             { ...error.details, index, tool: call.tool, refusal: error.code },
+            error.keep,
           )
+        if (error.keep) {
+          kept = { ...kept, ...error.keep.readings }
+          if (workingContext.session)
+            workingContext = {
+              ...workingContext,
+              session: {
+                ...workingContext.session,
+                readings: { ...workingContext.session.readings, ...error.keep.readings },
+              },
+            }
+        }
         reports.push({
           index,
           tool: call.tool,
@@ -115,6 +131,7 @@ export function createBatchOperation(
     return {
       result: { status: 'applied', applied, refused: reports.length - applied, calls: reports },
       ...(changed ? { changes: merged } : {}),
+      ...(kept ? { keep: { readings: kept } } : {}),
     }
   }
 }

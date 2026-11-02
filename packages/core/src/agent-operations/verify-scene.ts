@@ -71,7 +71,7 @@ export type SceneIssue =
   | CeilingObjectObservation
   | WallObjectObservation
   | RoomFinding
-  | { type: string; message: string; severity?: 'info' }
+  | { type: string; message: string; severity?: 'info' | 'warning' }
   | { type: 'schema_invalid'; message: string; nodeId: string; path: string }
   | {
       type: 'schema_unknown_kind'

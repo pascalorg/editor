@@ -10,11 +10,11 @@ import {
   applyAgentOutcome,
   assetViewNeeds,
   assetViewsReadCatalog,
-  briefReadsCatalog,
   buildBatchObjects,
   createAssetViewLoader,
   createFetchAssetViewIO,
   furnishingRefusal,
+  namesCatalogPieces,
   type SceneChanges,
   startOfSession,
   writeCollections,
@@ -44,6 +44,7 @@ import {
   getSiteTool,
   getWallsTool,
   getZonesTool,
+  isAgentRefusal,
   listLevelsTool,
   listUnitsTool,
   measureStairTool,
@@ -718,11 +719,26 @@ export function registerOperationTool(
       // The agent's session begins with its first call, before anything is written.
       const first = bridge.agentSession && startOfSession(bridge.agentSession.read(), before)
       if (first) bridge.agentSession?.keep(first)
-      // Gate before catalog I/O or module compilation.
+      // Gate before module compilation. The gate reads the catalog's tags to let technical
+      // equipment and plants through; a batch's calls are checked one by one, so its catalog is
+      // read too.
       const designBrief = briefInForce(bridge)
+      const gateCatalog =
+        designBrief?.source === 'open' &&
+        (namesCatalogPieces(tool.contract.name, input) ||
+          (tool.contract.name === runBatchTool.name && Array.isArray(input.calls)))
+          ? await catalog()
+          : undefined
       if (designBrief !== undefined) {
-        const refusal = furnishingRefusal(tool.contract.name, input, designBrief)
-        if (refusal) return refusalResult(refusal)
+        const refusal = furnishingRefusal(tool.contract.name, input, designBrief, {
+          session: bridge.agentSession?.read(),
+          catalog: gateCatalog,
+        })
+        if (refusal) {
+          // A refusal can ask the session to remember what it refused (a catalog piece under an open source).
+          if (refusal.keep) bridge.agentSession?.keep(refusal.keep)
+          return refusalResult(refusal)
+        }
       }
       const batchPlacesInRoom =
         tool.contract.name === runBatchTool.name &&
@@ -734,7 +750,10 @@ export function registerOperationTool(
             'tool' in call &&
             call.tool === placeInRoomTool.name &&
             (designBrief === undefined ||
-              !furnishingRefusal(call.tool, 'input' in call ? call.input : {}, designBrief)),
+              !furnishingRefusal(call.tool, 'input' in call ? call.input : {}, designBrief, {
+                session: bridge.agentSession?.read(),
+                catalog: gateCatalog,
+              })),
         )
       const batchesObjects =
         tool.contract.name === runBatchTool.name &&
@@ -756,8 +775,7 @@ export function registerOperationTool(
         ...(designBrief !== undefined && { designBrief }),
         ...((tool.catalog ||
           batchPlacesInRoom ||
-          assetViewsReadCatalog(tool.contract.name, input) ||
-          briefReadsCatalog(tool.contract.name, input)) && { catalog: await catalog() }),
+          assetViewsReadCatalog(tool.contract.name, input)) && { catalog: await catalog() }),
         ...(batchesObjects && {
           batchObjects: await buildBatchObjects(
             input.calls as { tool?: unknown; input?: unknown }[],
@@ -774,6 +792,8 @@ export function registerOperationTool(
       try {
         outcome = inScene(bridge, () => tool.operation(nodes, input as never, context))
       } catch (error) {
+        // A refusal can ask the session to remember what it refused (a catalog piece under an open source).
+        if (isAgentRefusal(error) && error.keep) bridge.agentSession?.keep(error.keep)
         return refusalResult(error)
       }
       let result = outcome.result
