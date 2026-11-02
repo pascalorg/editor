@@ -326,7 +326,7 @@ test('a capture re-ranks for its own camera, at full strength at once, and gives
   }
 })
 
-test('the glows write nothing into the normals and diffuse colour the ink reads', async () => {
+test('a glow sits at its bulb, and writes nothing into the normals and diffuse colour the ink reads', async () => {
   registerLamp('lamp', [0, 1, 0])
   useItemLightPool.getState().registrations.get('lamp')!.glow = { size: 0.2 }
   const renderer = await create(createElement(ItemLightSystem))
@@ -334,6 +334,11 @@ test('the glows write nothing into the normals and diffuse colour the ink reads'
     await act(async () => renderer.advanceFrames(1, 1 / 30))
     const [sprite] = renderer.scene.findAll((entry) => entry.instance.name === 'light-glows')
     const material = (sprite!.instance as unknown as { material: SpriteNodeMaterial }).material
+    // At the bulb itself, not nearer the eye: there it covered the fixture's own body.
+    await renderer.advanceFrames(2, 1 / 30)
+    const positions = (material.positionNode as unknown as { value: { array: Float32Array } }).value
+      .array
+    expect([...positions.slice(0, 3)]).toEqual([0, 1, 0])
     expect(Object.keys(material.mrtNode?.outputNodes ?? {}).sort()).toEqual([
       'diffuseColor',
       'normal',
