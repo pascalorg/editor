@@ -53,7 +53,7 @@ const turning = (room: string, roomId: string, over: Partial<Found> = {}): Found
   type: 'usage_turning_narrow',
   message: `No 1.50 m turning circle in “${room}”: largest 1.20 m.`,
   brief: 'no 1.50 m turning circle, largest 1.20 m',
-  severity: 'warning',
+  severity: 'info',
   nodeIds: [roomId],
   valueM: 1.2,
   thresholdM: 1.5,
@@ -109,7 +109,7 @@ describe('a room’s turning circle and pocket are one entry', () => {
       type: 'usage_room',
       severity: 'warning',
       message:
-        'Bath: no 1.50 m turning circle, largest 1.20 m; 0.57 m² of floor with no 0.60 m way out, beside “Tub”.',
+        'Bath: 0.57 m² of floor with no 0.60 m way out, beside “Tub”; no 1.50 m turning circle, largest 1.20 m.',
       nodeIds: ['zone_bath', 'item_tub'],
       count: 2,
     })
@@ -201,7 +201,7 @@ describe('a narrow place is one entry for the rooms it leads to', () => {
 })
 
 describe('every other usage finding arrives one by one', () => {
-  test('promoted warnings keep their approximation evidence in singles, passages and room entries', () => {
+  test('approximation evidence stays on singles, passages and room entries; a turning circle alone informs', () => {
     const { issues } = shownOf(
       [
         clash(1, 'warning'),
@@ -211,7 +211,7 @@ describe('every other usage finding arrives one by one', () => {
     )
     expect(issues).toHaveLength(3)
     for (const issue of issues) {
-      expect(issue.severity).toBe('warning')
+      expect(issue.severity).toBe(issue.type === 'usage_room' ? 'info' : 'warning')
       expect(issue.approximate).toBe(true)
     }
   })

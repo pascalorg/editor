@@ -438,6 +438,9 @@ describe('turning circles', () => {
     expect(found[0]!.valueM).toBeGreaterThan(1.2)
     expect(found[0]!.valueM).toBeLessThan(1.4)
     expect(found[0]!.message).toBe('No 1.50 m turning circle in “Closet”: largest 1.30 m.')
+    // A turning circle measures the room: it informs, on an exact outline as well as an approximate one.
+    expect(found[0]!.approximate).toBe(false)
+    expect(found[0]!.severity).toBe('info')
   })
 
   test('a wide room has one', () => {

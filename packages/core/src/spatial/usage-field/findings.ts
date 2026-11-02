@@ -261,8 +261,8 @@ function turningIssue(room: RoomMeasure): UsageIssue | null {
     type: 'usage_turning_narrow',
     message: `No ${m(TURNING_M)} m turning circle in ${quote(room.name)}: largest ${m(turning.diameter)} m.`,
     brief: `no ${m(TURNING_M)} m turning circle, largest ${m(turning.diameter)} m`,
-    // A turning circle is a measurement of the room, not a use defect of a piece: on an approximate outline it informs.
-    severity: turning.approximate ? 'info' : 'warning',
+    // A turning circle measures the room, not a defect of a piece: it informs, exact outline or not.
+    severity: 'info',
     nodeIds: [room.roomId],
     valueM: turning.diameter,
     thresholdM: TURNING_M,
