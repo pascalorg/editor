@@ -19,6 +19,7 @@ import { isCeilingGeometry } from '../services/roof-level'
 import { isRoofOnStoreyWalls } from '../services/roof-move'
 import { getStoredLevelHeight, getWallCoveringSlabs, getWallTop } from '../services/storey'
 import { getStoreyDatum } from '../services/storey-datum'
+import type { UsageIssue } from '../spatial/usage-field/findings'
 import {
   computeSegmentTransforms,
   rotateXZ,
@@ -103,6 +104,7 @@ export type SceneIssue =
     }
   | WallEndShortIssue
   | WallNearlyAlignedIssue
+  | UsageIssue
 
 /** What verify_scene was asked: its contract's input, which other modules may extend. */
 export type VerifySceneInput = Readonly<Record<string, unknown>>

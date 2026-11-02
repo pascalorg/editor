@@ -60,6 +60,28 @@ export const GeometryScriptParamSpec = z.object({
 })
 export type GeometryScriptParamSpec = z.infer<typeof GeometryScriptParamSpec>
 
+const planPoint = z.tuple([finite, finite])
+const planRing = z.array(planPoint).min(3)
+
+/**
+ * What a build occupies in plan, height band by height band, for the usage checks (passages,
+ * pockets, wall protrusions): `y0`..`y1` in the artifact's frame and the plan outlines (x, z) of
+ * everything it has in that band, traced from a conservative raster of its meshes, so an outline
+ * is never inside the build and at most `tolerance` metres outside it. Written by the compiler
+ * only when usage checks are on, so it is absent from older artifacts.
+ */
+export const GeometryShape = z.object({
+  tolerance: finite,
+  bands: z.array(
+    z.object({
+      y0: finite,
+      y1: finite,
+      polygons: z.array(z.object({ outer: planRing, holes: z.array(planRing).optional() })),
+    }),
+  ),
+})
+export type GeometryShape = z.infer<typeof GeometryShape>
+
 /**
  * What the compiler read from the script's output, by naming convention:
  * `part:<id>` objects, `slot_<id>` materials, `anchor:<id>` empties, lights
@@ -149,6 +171,7 @@ export const GeometryArtifactManifest = z.object({
     .optional(),
   cutout: z.boolean().default(false),
   collider: z.boolean().default(false),
+  shape: GeometryShape.optional(),
   triangles: z.number().int().nonnegative(),
   /**
    * Built for a room's floor or a wall face: the share of it (less its holes) the build covers,
