@@ -165,6 +165,7 @@ export {
   GROUND_PIT_FLOOR_DROP,
   GROUND_PIT_PLATE_CLEARANCE,
   groundPitFloorY,
+  terrainOverFloors,
 } from './lib/below-grade-footprints'
 export {
   CEILING_BUILD_UP_PRESETS,

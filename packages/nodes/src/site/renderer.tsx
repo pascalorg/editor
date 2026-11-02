@@ -16,6 +16,7 @@ import {
   type TerrainField,
   terrainContours,
   terrainFieldOf,
+  terrainOverFloors,
   union,
   unionPolygons,
   useLiveNodeOverrides,
@@ -407,6 +408,16 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
     return next
   })
 
+  // Inside a storey's own floor the ground never shows over it: the part of each floor plate the
+  // terrain stands over (a slope interpolated just over a walk-out's floor included) is cut too.
+  const overFloorsCache = useRef<[number, number][][]>([])
+  const overFloors = useScene((state: S) => {
+    const next = terrainOverFloors(state.nodes)
+    if (polygonsMatch(next, overFloorsCache.current)) return overFloorsCache.current
+    overFloorsCache.current = next
+    return next
+  })
+
   // What the ground is cut open over: the recessed slabs, and the basement under the house. The
   // house covers that part of a basement, so the ground there is open whatever level is shown:
   // from outside nothing changes, and a stairwell, a floor opening or a walkthrough on the stair
@@ -418,12 +429,13 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
   // the triangulation.
   const coverOpen = !(belowGrade && groundMode === 'solid')
   const holes = useMemo(() => {
-    if (!coverOpen || buried.covered.length === 0 || !polygonPoints || polygonPoints.length < 3)
+    const open = [...buried.covered, ...overFloors]
+    if (!coverOpen || open.length === 0 || !polygonPoints || polygonPoints.length < 3)
       return slabPolygons
-    const inLot = intersection(union(buried.covered), polygonPoints as [number, number][])
+    const inLot = intersection(union(open), polygonPoints as [number, number][])
     const covered = inLot.filter((piece) => piece.holes.length === 0).map((piece) => piece.outer)
     return covered.length > 0 ? [...slabPolygons, ...covered] : slabPolygons
-  }, [coverOpen, buried.covered, polygonPoints, slabPolygons])
+  }, [coverOpen, buried.covered, overFloors, polygonPoints, slabPolygons])
 
   // Ground shape: site polygon with slab footprints punched as holes
   const groundShape = useMemo(() => {
