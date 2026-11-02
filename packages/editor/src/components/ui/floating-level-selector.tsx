@@ -472,7 +472,6 @@ function SortableLevelRow({
 type GroundLineState = {
   levelId: string
   seated: boolean
-  atFoundationTop: boolean
   offset: number
 }
 
@@ -636,7 +635,6 @@ export function FloatingLevelSelector() {
         ? {
             levelId: seat.levelId,
             seated: seat.seated,
-            atFoundationTop: seat.atFoundationTop,
             offset: seat.offset,
           }
         : null
@@ -845,7 +843,7 @@ export function FloatingLevelSelector() {
                         }
                         onDuplicate={(preset) => handleDuplicateLevel(level, preset)}
                         onPaste={() => handlePasteToLevel(level)}
-                        isGround={ground?.levelId === level.id && ground.atFoundationTop}
+                        isGround={ground?.levelId === level.id && ground.seated}
                         onRequestDelete={() => setDeletingLevel(level)}
                         onSetGround={() => handleSetGround(level.id)}
                         onSelect={() => {

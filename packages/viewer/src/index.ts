@@ -250,10 +250,8 @@ export {
 } from './lib/scene-visibility'
 export { SCRIPTED_MODEL_FLAG } from './lib/scripted-opening'
 export {
-  SITE_FOUNDATION,
   SITE_GROUND,
   type SiteGroundRole,
-  siteFoundation,
   siteGround,
   siteSurfaces,
   temporarilyVeilGround,

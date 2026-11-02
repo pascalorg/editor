@@ -444,7 +444,7 @@ export const verifyScene: AgentOperation<VerifySceneInput | undefined> = (
     if (seat?.levelId === level.levelId && seat.explicit && !seat.seated)
       report(
         'ground_level_unseated',
-        `${levelName} is the ground floor, but its floor datum stands ${seat.offset.toFixed(2)} m ${seat.offset > 0 ? 'over' : 'under'} grade (${seat.gradeElevation.toFixed(2)} m); a seated ground floor stands between grade and ${seat.aboveGrade} m (the top of the ${seat.foundation.construction.label} foundation) over it. set_ground_level on it seats the building.`,
+        `${levelName} is the ground floor, but its floor datum stands ${seat.offset.toFixed(2)} m ${seat.offset > 0 ? 'over' : 'under'} grade (${seat.gradeElevation.toFixed(2)} m); a seated ground floor stands on it. set_ground_level on it seats the building.`,
         true,
       )
     if (content.walls > 0 && content.zones === 0)

@@ -5,8 +5,6 @@ import {
   BuildingNode,
   createTerrainField,
   encodeTerrainField,
-  GROUND_PIT_PLATE_CLEARANCE,
-  genericFoundation,
   groundPitFloorY,
   LevelNode,
   SiteNode,
@@ -513,21 +511,14 @@ function withSeatedBasement() {
   })
 }
 
-test('the pit draws its floor off the plane the footing under the basement stops on', async () => {
+test('the pit draws its floor where core says, off the plane of the plate underside', async () => {
   withSeatedBasement()
   const renderer = await create(<SiteRenderer node={lot(false)} />)
   await act(async () => showLevel('level_b'))
   groundHoleOpenNode().value = 1
   await renderer.advanceFrames(3, 0.05)
   const { nodes } = useScene.getState()
-  const footings = genericFoundation(nodes).filter((member) => member.kind === 'footing')
-  expect(footings).toHaveLength(4)
-  // What the pit draws is what core says, and the footing's top is not on its plane.
   expect(groundPitDrawnFloorNow()).toBeCloseTo(groundPitFloorY(nodes, 'level_b') ?? Number.NaN, 9)
-  for (const footing of footings)
-    expect(Math.abs(footing.topY - groundPitDrawnFloorNow())).toBeGreaterThanOrEqual(
-      GROUND_PIT_PLATE_CLEARANCE - 1e-9,
-    )
   // The pit still goes down to the floor of the level shown (the floor top, -2.647).
   expect(groundPitFloorNow()).toBeCloseTo(-2.647, 3)
   await renderer.unmount()

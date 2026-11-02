@@ -57,7 +57,6 @@ import {
   vec2,
 } from 'three/tsl'
 import { MeshLambertNodeMaterial } from 'three/webgpu'
-import { GenericFoundation } from './generic-foundation'
 import {
   GroundHole,
   groundHoleColorNode,
@@ -698,7 +697,6 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
   return (
     <group ref={ref} {...handlers}>
       <GroundWindowSystem />
-      <GenericFoundation />
       <GroundHole
         drawnFloorY={buried.drawnFloorY}
         floorY={buried.floorY}

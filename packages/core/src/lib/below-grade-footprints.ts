@@ -182,9 +182,8 @@ export function belowGradeFloorY(
 /** How far under the top of the floor plate the pit hangs its own floor: the default plate's thickness. */
 export const GROUND_PIT_FLOOR_DROP = 0.05
 /**
- * How far the pit's floor keeps from the plane of the plate's underside. The foundation under the
- * level tops out on that plane (`genericFoundation`), and seen through the hole it has to stand
- * on the pit's floor, not share its plane: two faces on one plane flicker. 2 cm is what a 24-bit
+ * How far the pit's floor keeps from the plane of the plate's underside: two faces on one plane
+ * flicker. 2 cm is what a 24-bit
  * depth buffer with the viewer's 0.3 m near plane tells apart out to about 300 m, further than
  * the hole is ever looked into from.
  */

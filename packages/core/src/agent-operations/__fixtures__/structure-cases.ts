@@ -615,23 +615,6 @@ export const ADD_LEVEL_CASES: AgentToolCase[] = [
     },
   },
   {
-    name: 'set_ground_level on a site in Paris seats the building 0.15 m over grade, as cast concrete foundations do',
-    tool: 'set_ground_level',
-    scene: () =>
-      onSite(storeysScene(), SiteNode.parse({ id: 'site_paris', dossier: dossierAt('Paris, France') })),
-    input: { levelId: 'level_ground' },
-    expect: {
-      result: {
-        ok: true,
-        floorElevation: 0.15,
-        aboveGrade: 0.15,
-        foundation: { region: 'europe', construction: 'cast-concrete' },
-      },
-      mentions: ['cast concrete', 'Europe'],
-      after: { building_house: { position: [0, 0.15, 0], groundLevelId: 'level_ground' } },
-    },
-  },
-  {
     name: 'above the highest level of the viewed building, at the default storey height',
     tool: 'add_level',
     scene: storeysScene,
@@ -703,7 +686,7 @@ export const ADD_LEVEL_CASES: AgentToolCase[] = [
     scene: storeysScene,
     input: { levelId: 'level_upper' },
     expect: {
-      result: { ok: true, renumbered: true, floorElevation: 0.203 },
+      result: { ok: true, renumbered: true, floorElevation: 0 },
       after: {
         level_upper: { level: 0 },
         level_ground: { level: -1 },

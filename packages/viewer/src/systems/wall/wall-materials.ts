@@ -143,7 +143,7 @@ function wallFaceExposedStructure(wallNode: WallNode, face: WallFace): ExposedSt
   return face === exteriorFace ? wallAssemblyExposedStructure(wallNode) : null
 }
 
-// The structure as the generic foundation draws it (same courses, joints and colours), made once:
+// The bare structure (courses, joints and colours), made once:
 // the block's bond runs along the face's world-planar U, the wall's own metres. Solid shading
 // keeps to a flat colour, like every other wall finish.
 const structureMaterials = new Map<ExposedStructure, Material>()

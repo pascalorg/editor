@@ -363,7 +363,6 @@ export {
   framingPostTopAt,
   isFramingPost,
 } from './lib/framing-post'
-export { type FoundationMember, genericFoundation } from './lib/generic-foundation'
 export {
   ceilingSeatY,
   isScriptedNode,
@@ -390,7 +389,6 @@ export {
 export { type LevelGradeStanding, levelGradeStanding } from './lib/grade-standing'
 export { type GroundLevel, groundLevelOf, levelUnderNamedGround } from './lib/ground-level'
 export {
-  GROUND_FLOOR_ABOVE_GRADE,
   GROUND_SEAT_TOLERANCE,
   type GroundSeat,
   gradeUnderLevel,
