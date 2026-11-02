@@ -349,17 +349,20 @@ export function planWallOpening(nodes: Nodes, input: WallOpeningInput) {
 
   const rawX = along * wallLength
   // A window with no sill given is centred on its wall, taller than the wall or not: the clamp
-  // below stands one that is too tall on the floor and reports it clamped.
+  // below stands one that is too tall on the floor and reports it clamped. A door stands on the
+  // floor unless given a sill (rare: down to a floor sunk beside the wall); with one it keeps
+  // between the wall's bottom and its ceiling, as a window does. A railing's gap is on the floor.
+  const sill = railingGap ? undefined : input.sillHeight
+  const onFloor = kind === 'door' && sill === undefined
   const rawY =
-    kind === 'door'
-      ? height / 2
-      : input.sillHeight === undefined
-        ? resolveWallOpeningCeiling(wall, nodes as Record<AnyNodeId, AnyNode>) / 2
-        : input.sillHeight + height / 2
-  const { clampedX, clampedY } =
-    kind === 'door'
-      ? clampDoorToWall(wall, rawX, width, height)
-      : clampWindowToWall(wall, rawX, rawY, width, height, nodes as Record<AnyNodeId, AnyNode>)
+    sill !== undefined
+      ? sill + height / 2
+      : kind === 'door'
+        ? height / 2
+        : resolveWallOpeningCeiling(wall, nodes as Record<AnyNodeId, AnyNode>) / 2
+  const { clampedX, clampedY } = onFloor
+    ? clampDoorToWall(wall, rawX, width, height)
+    : clampWindowToWall(wall, rawX, rawY, width, height, nodes as Record<AnyNodeId, AnyNode>)
 
   if (!input.force) {
     const blocking = findWallChildOverlap(wallId, nodes, clampedX, clampedY, width, height)
@@ -433,6 +436,6 @@ export function planWallOpening(nodes: Nodes, input: WallOpeningInput) {
     t: along,
     wallLength,
     clamped: Math.abs(clampedX - rawX) > 1e-9 || Math.abs(clampedY - rawY) > 1e-9,
-    ...(kind === 'window' ? { sillHeight: clampedY - height / 2 } : {}),
+    ...(onFloor ? {} : { sillHeight: clampedY - height / 2 }),
   }
 }
