@@ -383,6 +383,36 @@ export const VALIDATE_SCENE_CASES: AgentToolCase[] = [
   ),
 ]
 
+/** An 8 × 3 m house with a partition at x = 4: two spaces, west and east, each as the zones given cover it. */
+const twoSpaces = (...extra: AnyNode[]) =>
+  ground(
+    ...wallRing('level_0', 'pair', rect(0, 0, 8, 3)),
+    WallNode.parse({ id: 'wall_partition', parentId: 'level_0', start: [4, 0], end: [4, 3] }),
+    ...extra,
+  )
+
+const westRoom = (extra = {}) => roomZone('zone_west', 'level_0', 'Study', rect(0, 0, 4, 3), extra)
+const eastRoom = (polygon: Pt[] = rect(4, 0, 8, 3), extra = {}) =>
+  roomZone('zone_east', 'level_0', 'Bedroom', polygon, extra)
+
+/** A stair as wide as the east space, standing on its far end: floor a zone need not claim. */
+const wideStair = () => [
+  StairNode.parse({
+    id: 'stair_wide',
+    parentId: 'level_0',
+    name: 'Wide stair',
+    position: [6, 0, 1.5],
+  }),
+  StairSegmentNode.parse({
+    id: 'sseg_wide',
+    parentId: 'stair_wide',
+    width: 3.9,
+    length: 1.5,
+    height: 2.5,
+    stepCount: 10,
+  }),
+]
+
 export const CHECK_ROOMS_CASES: AgentToolCase[] = [
   verify(
     'check_rooms { levelId } counts ("4 walls, 1 detected spaces, 1 zones"): the level\'s content.walls, spaces and content.zones',
@@ -699,6 +729,98 @@ export const CHECK_ROOMS_CASES: AgentToolCase[] = [
       )
     },
     { lacks: [{ type: 'room_not_enclosed' }] },
+  ),
+  // Rooms are tiled by their zones: two rooms on one floor, or floor the walls enclose that no zone claims. Wall bodies are
+  // not floor, a width is the short side of the rectangle with the piece's area and perimeter after a 7.5 cm opening, and what is under 0.1 m² (overlap) or 0.3 m² (unclaimed) or 15 cm wide is quiet.
+  // A store adopts a drawn zone as its space's room when it loads a scene, so a zone that overlaps another or stops short can only
+  // be read as declared: the cases that raise a finding run on the core runner; the quiet ones run everywhere.
+  verify(
+    'verify_scene on two rooms whose zones share a half-metre strip across their partition: zones_overlap names both rooms with the strip\'s area, width and place',
+    () => twoSpaces(westRoom(), eastRoom(rect(3.5, 0, 8, 3))),
+    {
+      surfaces: ['core'],
+      contains: [{ type: 'zones_overlap', severity: 'warning', levelId: 'level_0' }],
+      lacks: [{ type: 'space_many_rooms' }],
+      check: (result) => {
+        const found = issuesOf(result, 'zones_overlap')
+        const [first] = found
+        const ids = [...((first?.zoneIds ?? []) as string[])].sort().join()
+        const [x] = (first?.at ?? [0, 0]) as Pt
+        return [
+          ...(found.length === 1 ? [] : [`${found.length} zones_overlap, not one strip`]),
+          ...(ids === 'zone_east,zone_west' ? [] : [`zones ${ids}, not the study and the bedroom`]),
+          // 0.5 m less the partition's half thickness on its side, by the wall-to-wall length: about 0.45 x 2.9
+          ...((first?.area as number) > 1.2 && (first?.area as number) < 1.4
+            ? []
+            : [`area ${first?.area} m², not the strip beside the partition`]),
+          ...((first?.width as number) > 0.4 && (first?.width as number) < 0.5
+            ? []
+            : [`width ${first?.width} m, not about 0.45`]),
+          ...(x > 3.5 && x < 4 ? [] : [`at x ${x}, not in the strip`]),
+        ]
+      },
+    },
+  ),
+  verify(
+    'verify_scene on two rooms whose zones meet on the partition\'s centre line: neither overlap nor unclaimed floor',
+    () => twoSpaces(westRoom(), eastRoom()),
+    { lacks: [{ type: 'zones_overlap' }, { type: 'floor_unclaimed' }] },
+  ),
+  verify(
+    'verify_scene on two rooms whose zones stop at the partition\'s faces, not its centre line: the wall body is not floor, so nothing is unclaimed or overlapped',
+    () =>
+      twoSpaces(
+        roomZone('zone_west', 'level_0', 'Study', rect(0.05, 0.05, 3.95, 2.95)),
+        eastRoom(rect(4.05, 0.05, 7.95, 2.95)),
+      ),
+    { lacks: [{ type: 'zones_overlap' }, { type: 'floor_unclaimed' }] },
+  ),
+  verify(
+    'verify_scene on a room whose zone covers three quarters of its space: floor_unclaimed with the strip\'s area, width and place, beside the room',
+    () => twoSpaces(westRoom(), eastRoom(rect(4, 0, 8, 2.25))),
+    {
+      surfaces: ['core'],
+      contains: [{ type: 'floor_unclaimed', severity: 'warning', levelId: 'level_0' }],
+      lacks: [{ type: 'space_no_room' }, { type: 'zones_overlap' }],
+      check: (result) => {
+        const found = issuesOf(result, 'floor_unclaimed')
+        const [first] = found
+        const [, z] = (first?.at ?? [0, 0]) as Pt
+        return [
+          ...(found.length === 1 ? [] : [`${found.length} floor_unclaimed, not one strip`]),
+          // 0.7 m by the east space's 3.9 m
+          ...((first?.area as number) > 2.5 && (first?.area as number) < 2.9
+            ? []
+            : [`area ${first?.area} m², not the strip the zone stops short of`]),
+          ...((first?.width as number) > 0.65 && (first?.width as number) < 0.75
+            ? []
+            : [`width ${first?.width} m, not about 0.7`]),
+          ...(z > 2.25 ? [] : [`at z ${z}, not beyond the zone's edge`]),
+          ...(((first?.zoneIds ?? []) as string[]).includes('zone_east')
+            ? []
+            : ['the room beside the strip is not named']),
+        ]
+      },
+    },
+  ),
+  verify(
+    'verify_scene on a space no zone covers: space_no_room says it, floor_unclaimed does not repeat it',
+    () => ground(...wallRing('level_0', 'bare', ROOM)),
+    {
+      surfaces: ['core'],
+      contains: [{ type: 'space_no_room', levelId: 'level_0' }],
+      lacks: [{ type: 'floor_unclaimed' }],
+    },
+  ),
+  verify(
+    'verify_scene on a space whose zone stops short where a stair stands: the stair claims its floor, so nothing is unclaimed',
+    () => twoSpaces(westRoom(), eastRoom(rect(4, 0, 8, 1.6)), ...wideStair()),
+    { lacks: [{ type: 'floor_unclaimed' }] },
+  ),
+  verify(
+    'verify_scene on the same space with no stair: the floor the zone stops short of is unclaimed',
+    () => twoSpaces(westRoom(), eastRoom(rect(4, 0, 8, 1.6))),
+    { surfaces: ['core'], contains: [{ type: 'floor_unclaimed', levelId: 'level_0' }] },
   ),
   // Where straight walls meet: an end that stops 3-25 cm short of another wall (daylight between them), and a wall a few
   // degrees off the line of its neighbours (a short wall holding a door, drawn skewed). Angled walls drawn on purpose are quiet.
