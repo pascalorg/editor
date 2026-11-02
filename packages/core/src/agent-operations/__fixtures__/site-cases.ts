@@ -937,3 +937,49 @@ export const SITE_VERIFY_CASES: AgentToolCase[] = [
     },
   },
 ]
+
+export const SET_CODE_PROFILE_CASES: AgentToolCase[] = [
+  {
+    name: 'a project that names a code gets it on the site, the rest of the site metadata kept',
+    tool: 'set_code_profile',
+    scene: () => scene(site({ metadata: { codeOverrides: { state: 'FL' } } })),
+    input: { profile: 'irc-2021' },
+    expect: {
+      result: { siteId: 'site_lot', profile: 'irc-2021', previous: null, unchanged: false },
+      after: { site_lot: { metadata: { codeProfile: 'irc-2021', codeOverrides: { state: 'FL' } } } },
+      mentions: ['US IRC 2021'],
+    },
+  },
+  {
+    name: 'null clears it: the key goes, the rest stays',
+    tool: 'set_code_profile',
+    scene: () => scene(site({ metadata: { codeProfile: 'irc-2021', codeOverrides: { state: 'FL' } } })),
+    input: { profile: null },
+    expect: {
+      result: { profile: null, previous: 'irc-2021', unchanged: false },
+      after: { site_lot: { metadata: { codeOverrides: { state: 'FL' } } } },
+      mentions: ['names no code'],
+    },
+  },
+  {
+    name: 'saying what is already said changes nothing',
+    tool: 'set_code_profile',
+    scene: () => scene(site({ metadata: { codeProfile: 'au-ncc' } })),
+    input: { profile: 'au-ncc' },
+    expect: { result: { profile: 'au-ncc', unchanged: true }, mentions: ['only the values read in its own texts'] },
+  },
+  {
+    name: 'a scene with no site has nowhere to put it',
+    tool: 'set_code_profile',
+    scene: () => ({ nodes: {}, rootNodeIds: [] }),
+    input: { profile: 'irc-2021' },
+    expect: { refusal: 'no_site' },
+  },
+  {
+    name: 'two sites leave it ambiguous',
+    tool: 'set_code_profile',
+    scene: () => scene(site(), SiteNode.parse({ id: 'site_other', children: [] })),
+    input: { profile: 'irc-2021' },
+    expect: { refusal: 'ambiguous_site' },
+  },
+]

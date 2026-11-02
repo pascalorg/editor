@@ -28,6 +28,7 @@ import { ROOM_OPERATIONS } from './room-structure'
 import { searchAssets } from './search-assets'
 import { searchMaterials } from './search-materials'
 import { setCheckpoint } from './set-checkpoint'
+import { setCodeProfile } from './set-code-profile'
 import { setGroundLevel } from './set-ground-level'
 import { getSite, placeBuilding } from './site'
 import { fitStair, measureStairOperation } from './stairs'
@@ -85,6 +86,7 @@ export * from './scene-queries'
 export * from './scene-view'
 export * from './search-assets'
 export * from './search-materials'
+export * from './set-code-profile'
 export * from './site'
 export * from './slab-surface-script'
 export * from './stairs'
@@ -111,6 +113,7 @@ const SINGLE_OPERATIONS = {
   validate_design: validateDesignOperation,
   place_design: gatedByBrief('place_design', placeDesign),
   set_checkpoint: setCheckpoint,
+  set_code_profile: setCodeProfile,
   design_brief: designBrief,
   add_wall: addWall,
   set_wall_type: setWallType,

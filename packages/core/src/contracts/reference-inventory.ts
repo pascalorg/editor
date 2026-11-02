@@ -1082,6 +1082,10 @@ export const METADATA_NON_REFERENCES: readonly { path: string; reason: string }[
     "The site's hand-set code facts (Bones' `codeOverrides`: state, county, wind, snow…): numbers, flags and place names. Core reads only its `state`, to tell a US site from another, and names no node.",
     ['codeOverrides'],
   ),
+  ...described(
+    'Which building code the project follows (`irc-2021`, `au-ncc`, `fr`): a profile name, never a node id. Read by the code-specific usage checks; a scene that does not name one has no jurisdiction.',
+    ['codeProfile'],
+  ),
   ...described('Read as a truthy flag only; no editor writer.', [
     'arrayModifier',
     'curvedWindowMaster',

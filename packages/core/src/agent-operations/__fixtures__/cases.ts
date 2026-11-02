@@ -39,6 +39,7 @@ import {
   GET_SITE_CASES,
   PLACE_BUILDING_CASES,
   SITE_LINE_CASES,
+  SET_CODE_PROFILE_CASES,
   SITE_VERIFY_CASES,
 } from './site-cases'
 import {
@@ -995,6 +996,7 @@ export const AGENT_TOOL_CASES: readonly AgentToolCase[] = [
   ...PLACE_BUILDING_CASES,
   ...SITE_LINE_CASES,
   ...SITE_VERIFY_CASES,
+  ...SET_CODE_PROFILE_CASES,
   ...FINISH_CASES,
   ...UNIT_CASES,
 ]
