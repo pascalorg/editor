@@ -1,4 +1,4 @@
-import type { AnyNode, AnyNodeId, BuildingNode, LevelNode, SlabNode } from '../schema'
+import type { AnyNode, AnyNodeId, BuildingNode, DoorNode, LevelNode, SlabNode } from '../schema'
 import {
   BELOW_GRADE_TOLERANCE,
   getLevelElevations,
@@ -6,7 +6,10 @@ import {
   levelPlaneWorldY,
 } from '../services/storey'
 import { pointInPolygon } from '../systems/slab/slab-support'
+import { getWallCurveFrameAt, getWallCurveLength } from '../systems/wall/wall-curve'
+import { getWallFaceOffsets } from '../systems/wall/wall-frame'
 import { levelUnderNamedGround } from './ground-level'
+import { getOpeningFloorDatum } from './opening-floor-datum'
 import { isSiteFlatwork } from './site-flatwork'
 import { heightAt, type TerrainField } from './terrain-field'
 import { terrainFieldOf } from './terrain-source'
@@ -77,7 +80,9 @@ function flatFloorsStanding(
   if (plane === null) return fallback
   const slabs = floorSlabsOf(nodes, level)
   if (slabs.length === 0) return fallback
-  const buried = slabs.filter((slab) => floorBuriedOnFlatSite(plane + slab.elevation)).length
+  const buried = slabs.filter((slab) =>
+    floorBuriedOnFlatSite(plane + slabGradeElevation(nodes, level, slab)),
+  ).length
   if (buried === 0) return 'at-grade'
   return buried === slabs.length ? 'below-grade' : 'partly-below-grade'
 }
@@ -97,6 +102,92 @@ function floorSlabsOf(nodes: Record<AnyNodeId, AnyNode>, level: LevelNode): Slab
     slabs.push(slab)
   }
   return slabs
+}
+
+/** How far past a wall's face a door's two sides are looked at. */
+const DOOR_SIDE_REACH = 0.1
+
+const gradeElevationsMemo = new WeakMap<object, Map<string, Map<string, number>>>()
+
+/**
+ * The level-local elevation the ground is judged against over a floor slab: its own top, except
+ * for a floor sunk under its level's floor that opens to the outside through a door reaching down
+ * to it (a garage below the house, its door onto the drive). The ground outside that door comes
+ * down to it, so it is no basement: it is judged at its level's floor, and does not leave the
+ * level partly below grade.
+ */
+export function slabGradeElevation(
+  nodes: Record<AnyNodeId, AnyNode>,
+  level: LevelNode,
+  slab: SlabNode,
+): number {
+  let levels = gradeElevationsMemo.get(nodes)
+  if (!levels) {
+    levels = new Map()
+    gradeElevationsMemo.set(nodes, levels)
+  }
+  let walkOuts = levels.get(level.id)
+  if (!walkOuts) {
+    walkOuts = sunkenFloorsOpeningOut(nodes, level)
+    levels.set(level.id, walkOuts)
+  }
+  return walkOuts.get(slab.id) ?? slab.elevation
+}
+
+/**
+ * The world Y of `level`'s lowest floor as the ground judges it ({@link slabGradeElevation}): a
+ * garage sunk under the floor and opening out to the drive leaves it at the level's floor. `null`
+ * for a level with no floor slab, or no plane.
+ */
+export function levelGradeFloorWorldY(
+  nodes: Record<AnyNodeId, AnyNode>,
+  level: LevelNode,
+): number | null {
+  const plane = levelPlaneWorldY(nodes, level.id)
+  const slabs = floorSlabsOf(nodes, level)
+  if (plane === null || slabs.length === 0) return null
+  return plane + Math.min(...slabs.map((slab) => slabGradeElevation(nodes, level, slab)))
+}
+
+/** {@link slabGradeElevation}'s exceptions on `level`: slab id to the level floor it is judged at. */
+function sunkenFloorsOpeningOut(
+  nodes: Record<AnyNodeId, AnyNode>,
+  level: LevelNode,
+): Map<string, number> {
+  const walkOuts = new Map<string, number>()
+  const slabs = floorSlabsOf(nodes, level)
+  if (slabs.length < 2) return walkOuts
+  const floor = Math.max(...slabs.map((slab) => slab.elevation))
+  const floorsAt = ([x, z]: [number, number]) =>
+    slabs.filter((slab) => pointInPolygon(x, z, slab.polygon))
+  for (const wallId of level.children) {
+    const wall = nodes[wallId as AnyNodeId]
+    if (wall?.type !== 'wall') continue
+    const length = getWallCurveLength(wall)
+    if (length < 1e-9) continue
+    const faces = getWallFaceOffsets(wall)
+    for (const doorId of wall.children ?? []) {
+      const door = nodes[doorId as AnyNodeId]
+      if (door?.type !== 'door') continue
+      const { position, height } = door as DoorNode
+      // A raw legacy door places itself by `offset` until it is loaded.
+      if (!Array.isArray(position)) continue
+      const bottom = getOpeningFloorDatum(wall, door as DoorNode, nodes) + position[1] - height / 2
+      const frame = getWallCurveFrameAt(wall, position[0] / length)
+      const side = (offset: number): [number, number] => [
+        frame.point.x + frame.normal.x * offset,
+        frame.point.y + frame.normal.y * offset,
+      ]
+      const a = floorsAt(side(faces.a + DOOR_SIDE_REACH))
+      const b = floorsAt(side(faces.b - DOOR_SIDE_REACH))
+      // A door between a floor and no floor at all opens to the outside.
+      const inside = a.length === 0 ? b : b.length === 0 ? a : []
+      for (const slab of inside)
+        if (slab.elevation < floor && bottom <= slab.elevation + BELOW_GRADE_TOLERANCE)
+          walkOuts.set(slab.id, floor)
+    }
+  }
+  return walkOuts
 }
 
 /** The site's terrain field for the site this level stands on, or null on a flat site. */
@@ -144,7 +235,7 @@ export function footprintFloorSamples(
   for (const slab of floorSlabsOf(nodes, level)) {
     for (const [x, z] of slabSamples(slab.polygon, field.spacing)) {
       const [worldX, worldZ] = levelLocalToWorldXZ(placed, x, z)
-      samples.push([worldX, worldZ, plane + slab.elevation])
+      samples.push([worldX, worldZ, plane + slabGradeElevation(nodes, level, slab)])
     }
   }
   return samples

@@ -36,7 +36,7 @@ export const authorSceneOpening = z.object({
   width: length('Opening width.', { positive: true }),
   height: length('Opening height.', { positive: true }),
   sill: length(
-    'Bottom of the opening above the floor; 0 for a door or floor-to-ceiling glazing (default 0).',
+    "Bottom of the opening above the floor the wall stands on; 0 for a door or floor-to-ceiling glazing (default 0). Negative reaches below that floor, down to the wall's bottom where the wall goes down beside a sunken floor: a garage door filling its doorway to a garage floor below the level's.",
     { default: 0 },
   ),
   name: z.string().max(80).optional(),

@@ -6,7 +6,7 @@ import {
   scriptedSize,
   scriptSource,
 } from '../lib/geometry-script-node'
-import { wallSupportForNodes } from '../lib/opening-floor-datum'
+import { wallBottomUnderOpening, wallSupportForNodes } from '../lib/opening-floor-datum'
 import {
   type AnyNode,
   type AnyNodeId,
@@ -77,7 +77,10 @@ export function clampDoorToWall(
   return { clampedX, clampedY: height / 2 }
 }
 
-/** A window's centre: slid to stay on the wall, and between the floor and the wall's ceiling. */
+/**
+ * A window's centre: slid to stay on the wall, and between the wall's bottom and its ceiling. The
+ * bottom is the floor, or lower where the wall fills down beside a sunken floor (a garage).
+ */
 export function clampWindowToWall(
   wall: WallNode,
   localX: number,
@@ -90,7 +93,16 @@ export function clampWindowToWall(
   const margin = openingMargin(wall)
   const length = getWallCurveLength(wall)
   const clampedX = Math.max(margin + width / 2, Math.min(length - margin - width / 2, localX))
-  const clampedY = Math.max(margin + height / 2, Math.min(ceiling - margin - height / 2, localY))
+  const support = wallSupportForNodes(wall, nodes)
+  const floor = Math.min(
+    0,
+    wallBottomUnderOpening(wall, { position: [clampedX, 0, 0], width }, support) -
+      support.elevation,
+  )
+  const clampedY = Math.max(
+    floor + margin + height / 2,
+    Math.min(ceiling - margin - height / 2, localY),
+  )
   return { clampedX, clampedY }
 }
 

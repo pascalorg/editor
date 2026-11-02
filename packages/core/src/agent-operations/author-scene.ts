@@ -1111,7 +1111,7 @@ export function authorScene(
             ...common,
             type: 'door',
             frameThickness: NEW_DOOR_FRAME_THICKNESS,
-            position: [x, height / 2, 0],
+            position: [x, o.sill + height / 2, 0],
             openingKind: 'opening',
           })
           report.passages++
@@ -1133,7 +1133,7 @@ export function authorScene(
             ...common,
             type: 'door',
             frameThickness: NEW_DOOR_FRAME_THICKNESS,
-            position: [x, height / 2, 0],
+            position: [x, o.sill + height / 2, 0],
             ...(type && isDoorType(type) ? doorTypeFields(type) : {}),
             ...(style && isDoorStyle(style) ? doorStyleLook(style) : {}),
             ...(o.leaves ? { leafCount: o.leaves } : {}),
