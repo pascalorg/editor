@@ -61,12 +61,27 @@ const roomZone = (id: string, levelId: string, name: string, polygon: Pt[], extr
 
 const ground = (...nodes: AnyNode[]) => scene(building(), level('level_0', 0), ...nodes)
 
-/** A finished room on the ground floor: its walls, a door, its room zone, floor and ceiling. */
+/** A finished room on the ground floor: its walls painted on both faces, a door, its room zone with a floor and a wall finish, a floor plate and a painted ceiling. */
 const finished = (tag: string, name: string, ring: Pt[] = ROOM) => [
-  ...wallRing('level_0', tag, ring),
-  roomZone(`zone_${tag}`, 'level_0', name, ring),
+  ...wallRing('level_0', tag, ring).map((wall) =>
+    wall.type === 'wall'
+      ? WallNode.parse({
+          ...wall,
+          slots: { a: 'library:preset-softwhite', b: 'library:preset-softwhite' },
+        })
+      : wall,
+  ),
+  roomZone(`zone_${tag}`, 'level_0', name, ring, {
+    floor: { finish: 'library:wood-woodparquet14' },
+    wallMaterial: 'library:preset-softwhite',
+  }),
   SlabNode.parse({ id: `slab_${tag}`, parentId: 'level_0', polygon: ring }),
-  CeilingNode.parse({ id: `ceiling_${tag}`, parentId: 'level_0', polygon: ring }),
+  CeilingNode.parse({
+    id: `ceiling_${tag}`,
+    parentId: 'level_0',
+    polygon: ring,
+    slots: { surface: 'library:preset-softwhite' },
+  }),
 ]
 
 const living = () => finished('living', 'Living')
@@ -105,20 +120,39 @@ type Expect = {
   check?: (result: Record<string, unknown>) => string[]
 }
 
-const verify = (name: string, build: () => SceneGraph, expect: Expect): AgentToolCase => ({
-  name,
-  tool: 'verify_scene',
-  scene: build,
-  input: {},
-  ...(expect.surfaces && { surfaces: expect.surfaces }),
-  expect: {
-    result: expect.result ?? {},
-    ...(expect.contains && { contains: { issues: expect.contains } }),
-    ...(expect.lacks && { lacks: { issues: expect.lacks } }),
-    ...(expect.mentions && { mentions: expect.mentions }),
-    ...(expect.check && { check: (result) => expect.check!(result) }),
-  },
-})
+/**
+ * A case that says "the scene is clean" (`hasIssues: false`) says it of the checks the case is
+ * about: these scenes have rooms and no roof, which `verify_scene` states as a fact of its own
+ * (`missing_roof`), so the case holds that no other issue stands.
+ */
+const cleanBesidesRoof = (result: Record<string, unknown>) =>
+  (result.issues as { type: string; severity?: string }[])
+    .filter((issue) => issue.type !== 'missing_roof' && issue.severity !== 'info')
+    .map((issue) => `an issue stands: ${issue.type}`)
+
+const verify = (name: string, build: () => SceneGraph, expect: Expect): AgentToolCase => {
+  const { hasIssues, ...rest } = (expect.result ?? {}) as Record<string, unknown>
+  const clean = hasIssues === false
+  return {
+    name,
+    tool: 'verify_scene',
+    scene: build,
+    input: {},
+    ...(expect.surfaces && { surfaces: expect.surfaces }),
+    expect: {
+      result: clean ? rest : (expect.result ?? {}),
+      ...(expect.contains && { contains: { issues: expect.contains } }),
+      ...(expect.lacks && { lacks: { issues: expect.lacks } }),
+      ...(expect.mentions && { mentions: expect.mentions }),
+      ...((expect.check || clean) && {
+        check: (result: Record<string, unknown>) => [
+          ...(expect.check ? expect.check(result) : []),
+          ...(clean ? cleanBesidesRoof(result) : []),
+        ],
+      }),
+    },
+  }
+}
 
 const issuesOf = (result: Record<string, unknown>, type: string) =>
   (result.issues as { type: string; [key: string]: unknown }[]).filter(

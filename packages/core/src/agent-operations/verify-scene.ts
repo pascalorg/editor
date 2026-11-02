@@ -39,6 +39,7 @@ import {
 import { layoutIssuesFromScene } from './layout-clearance'
 import { wallResolvedHeight } from './level-reads'
 import { pointInPolygon, polygonContainsPolygon, type Vec2 } from './plan-geometry'
+import type { RoomCheckIssue } from './room-checks'
 import { type RoomFinding, roomFindings } from './room-findings'
 import { EMPTY_SESSION } from './scene-checkpoint'
 import { changesSince, type SceneCheckpoint } from './scene-measure'
@@ -105,6 +106,7 @@ export type SceneIssue =
   | WallEndShortIssue
   | WallNearlyAlignedIssue
   | UsageIssue
+  | RoomCheckIssue
 
 /** What verify_scene was asked: its contract's input, which other modules may extend. */
 export type VerifySceneInput = Readonly<Record<string, unknown>>
@@ -117,7 +119,7 @@ export type VerifySceneInput = Readonly<Record<string, unknown>>
 export type SceneCheck = {
   name: string
   order: number
-  run: (nodes: SceneNodes, input: VerifySceneInput) => SceneIssue[]
+  run: (nodes: SceneNodes, input: VerifySceneInput, context: AgentContext) => SceneIssue[]
 }
 
 export const CHECKPOINT_ORDER = 100
@@ -776,7 +778,7 @@ export const verifyScene: AgentOperation<VerifySceneInput | undefined> = (
   issues.push(...ceilingObjectObservations(settled))
   issues.push(...wallObjectObservations(settled))
   for (const check of checks)
-    if (check.order < CHECKPOINT_ORDER) issues.push(...check.run(settled, input ?? {}))
+    if (check.order < CHECKPOINT_ORDER) issues.push(...check.run(settled, input ?? {}, context))
   // What the edits since the host's checkpoint lost, by place.
   const hosted = context.checkpoint
     ? changesSince(context.checkpoint as SceneCheckpoint, scene)
@@ -788,7 +790,7 @@ export const verifyScene: AgentOperation<VerifySceneInput | undefined> = (
   const since = typeof input?.since === 'string' ? reviewSince(session, input.since, scene) : null
   if (since?.places) issues.push(...since.places.issues)
   for (const check of checks)
-    if (check.order >= CHECKPOINT_ORDER) issues.push(...check.run(settled, input ?? {}))
+    if (check.order >= CHECKPOINT_ORDER) issues.push(...check.run(settled, input ?? {}, context))
 
   const occupiedStoryCount = levels.filter((level) => level.isOccupiedStory).length
   return {
