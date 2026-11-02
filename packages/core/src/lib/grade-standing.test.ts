@@ -1,6 +1,14 @@
 import { describe, expect, test } from 'bun:test'
 import type { AnyNode, AnyNodeId } from '../schema'
-import { BuildingNode, DoorNode, LevelNode, SiteNode, SlabNode, WallNode } from '../schema'
+import {
+  BuildingNode,
+  DoorNode,
+  LevelNode,
+  SiteNode,
+  SlabNode,
+  WallNode,
+  ZoneNode,
+} from '../schema'
 import hillside from './__fixtures__/owner-hillside-grade.json'
 import { levelGradeStanding } from './grade-standing'
 import { levelGroundBox } from './ground-window'
@@ -224,10 +232,57 @@ describe('a garage sunk under the floor', () => {
     expect(levelGroundBox(nodes, 'level_g')?.min[1]).toBeCloseTo(0.05, 6)
   })
 
+  test('its floor laid as several plates at its height leaves the level at grade too', () => {
+    const nodes = sunkenGarage(2.5)
+    const level = nodes['level_g' as AnyNodeId] as LevelNode
+    const back = SlabNode.parse({
+      id: 'slab_garage_back',
+      parentId: 'level_g',
+      polygon: [
+        [0, -8],
+        [5, -8],
+        [5, -4],
+        [0, -4],
+      ],
+      elevation: -0.68,
+    })
+    const split = {
+      ...nodes,
+      [back.id]: back,
+      [level.id]: { ...level, children: [...level.children, back.id] },
+    } as typeof nodes
+    expect(levelGradeStanding(split, 'level_g')).toBe('at-grade')
+  })
+
   test('with no door out of it, it is a sunken room the ground stands over', () => {
     for (const nodes of [sunkenGarage(null), sunkenGarage(7.5)]) {
       expect(levelGradeStanding(nodes, 'level_g')).toBe('partly-below-grade')
       expect(levelGroundBox(nodes, 'level_g')?.min[1]).toBeCloseTo(-0.68, 6)
     }
   })
+})
+
+test('a pad outside every room (an entry stoop) is not a floor the ground buries', () => {
+  const nodes = sunkenGarage(null)
+  const level = nodes['level_g' as AnyNodeId] as LevelNode
+  // The garage is no room here: only the house is, and the sunken slab is a pad beside it.
+  const house = ZoneNode.parse({
+    id: 'zone_house',
+    name: 'House',
+    parentId: 'level_g',
+    spaceRole: 'room',
+    polygon: [
+      [-5, -4],
+      [0, -4],
+      [0, 4],
+      [-5, 4],
+    ],
+  })
+  const withRoom = {
+    ...nodes,
+    [house.id]: house,
+    [level.id]: { ...level, children: [...level.children, house.id] },
+  } as typeof nodes
+  expect(levelGradeStanding(nodes, 'level_g')).toBe('partly-below-grade')
+  expect(levelGradeStanding(withRoom, 'level_g')).toBe('at-grade')
 })

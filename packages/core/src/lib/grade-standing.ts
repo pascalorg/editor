@@ -10,6 +10,7 @@ import { getWallCurveFrameAt, getWallCurveLength } from '../systems/wall/wall-cu
 import { getWallFaceOffsets } from '../systems/wall/wall-frame'
 import { levelUnderNamedGround } from './ground-level'
 import { getOpeningFloorDatum } from './opening-floor-datum'
+import { area, intersection, union } from './polygon-boolean'
 import { isSiteFlatwork } from './site-flatwork'
 import { heightAt, type TerrainField } from './terrain-field'
 import { terrainFieldOf } from './terrain-source'
@@ -92,17 +93,41 @@ export function floorBuriedOnFlatSite(floorY: number): boolean {
   return SITE_DATUM_Y - floorY > BELOW_GRADE_TOLERANCE
 }
 
-/** The floor slabs of the house on a level: not a basin, not site flatwork, with a plan. */
+const floorSlabsMemo = new WeakMap<object, Map<string, SlabNode[]>>()
+
+/**
+ * The floor slabs of the house on a level: not a basin, not site flatwork, with a plan, and on a
+ * level with rooms, under one of them. A slab outside every room (an entry pad, a stoop) is the
+ * site's, as flatwork is, not a floor the ground can bury.
+ */
 function floorSlabsOf(nodes: Record<AnyNodeId, AnyNode>, level: LevelNode): SlabNode[] {
-  const slabs: SlabNode[] = []
-  for (const childId of level.children) {
-    const slab = nodes[childId as AnyNodeId]
-    if (slab?.type !== 'slab' || slab.recessed === true || slab.polygon.length < 3) continue
-    if (isSiteFlatwork(slab)) continue
-    slabs.push(slab)
+  let levels = floorSlabsMemo.get(nodes)
+  if (!levels) {
+    levels = new Map()
+    floorSlabsMemo.set(nodes, levels)
   }
-  return slabs
+  const hit = levels.get(level.id)
+  if (hit) return hit
+  const slabs: SlabNode[] = []
+  const rooms: Array<{ outer: Array<[number, number]>; holes: Array<Array<[number, number]>> }> = []
+  for (const childId of level.children) {
+    const child = nodes[childId as AnyNodeId]
+    if (child?.type === 'zone' && child.spaceRole === 'room' && child.polygon.length >= 3)
+      rooms.push({ outer: child.polygon, holes: child.holes ?? [] })
+    if (child?.type !== 'slab' || child.recessed === true || child.polygon.length < 3) continue
+    if (isSiteFlatwork(child)) continue
+    slabs.push(child)
+  }
+  const indoors = rooms.length ? union(rooms) : null
+  const floors = indoors
+    ? slabs.filter((slab) => area(intersection(slab.polygon, indoors)) > OUTDOOR_SLAB_AREA)
+    : slabs
+  levels.set(level.id, floors)
+  return floors
 }
+
+/** A slab sharing less than this with the level's rooms (m²) stands outside them. */
+const OUTDOOR_SLAB_AREA = 1e-3
 
 /** How far past a wall's face a door's two sides are looked at. */
 const DOOR_SIDE_REACH = 0.1
@@ -185,6 +210,25 @@ function sunkenFloorsOpeningOut(
       for (const slab of inside)
         if (slab.elevation < floor && bottom <= slab.elevation + BELOW_GRADE_TOLERANCE)
           walkOuts.set(slab.id, floor)
+    }
+  }
+  // The rest of that floor: a garage's floor may be several plates at its height (of its room, or
+  // joining the one the door is on).
+  for (let grown = walkOuts.size > 0; grown; ) {
+    grown = false
+    for (const slab of slabs) {
+      if (walkOuts.has(slab.id)) continue
+      const joined = slabs.some(
+        (other) =>
+          walkOuts.has(other.id) &&
+          Math.abs(other.elevation - slab.elevation) < 1e-3 &&
+          ((slab.zoneIds ?? []).some((id) => other.zoneIds?.includes(id)) ||
+            union([slab.polygon, other.polygon]).length === 1),
+      )
+      if (joined) {
+        walkOuts.set(slab.id, floor)
+        grown = true
+      }
     }
   }
   return walkOuts
