@@ -216,6 +216,22 @@ describe('usage_opening_blocked', () => {
     const far = piece('item_d', 'Wardrobe', 'wardrobe', 2, 1.5, 1.2, 0.6, 2)
     expect(run(windowed([far]), 'usage_opening_blocked')).toHaveLength(0)
   })
+
+  test('a bed head, a bedside piece or a lamp at a window is nothing', () => {
+    const bed = piece('item_b', 'Bed', 'bed', 2, 0.05 + 0.3, 1.6, 0.6, 1.2)
+    expect(run(windowed([bed]), 'usage_opening_blocked')).toHaveLength(0)
+    const bedside = piece(
+      'item_n',
+      'Bedside table with lamp',
+      'furniture',
+      2,
+      0.05 + 0.3,
+      0.5,
+      0.4,
+      1.3,
+    )
+    expect(run(windowed([bedside]), 'usage_opening_blocked')).toHaveLength(0)
+  })
 })
 
 describe('beds', () => {

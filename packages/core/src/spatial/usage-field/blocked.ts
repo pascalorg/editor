@@ -146,6 +146,8 @@ export function blockedOpeningIssues(
             if (piece.z1 < sill + WINDOW_ABOVE_SILL_M || piece.z0 > head) continue
             if (piece.host?.wallId === wall.id) continue
             if (isSetAtWindow(itemText(nodes, piece.nodeId))) continue
+            // a bed head against a window is a design choice, not a finding
+            if (isBed(nodes[piece.nodeId])) continue
             if (!boxesMeet(pieceBoxes.get(piece)!, zoneBox)) continue
             const meet = intersection({ outer: piece.outer, holes: piece.holes }, zone)
             if (area(meet) < MIN_AREA_M2) continue
@@ -169,13 +171,11 @@ export function blockedOpeningIssues(
             nearest = Math.max(0, nearest)
             const who = quote(nameOf(nodes, piece.nodeId))
             const tall = piece.z1 - sill >= WINDOW_ABOVE_SILL_M
-            // a bed head against a window is a design choice, not a defect
-            const warning = tall && nearest <= WINDOW_BLOCK_M && !isBed(nodes[piece.nodeId])
+            const warning = tall && nearest <= WINDOW_BLOCK_M
             // past a curtain's depth, a piece not hosted on the window still shuts it when it is a curtain or blind, or covers all of the glass (its width, and up to its head)
             const shuts =
               tall &&
               nearest > WINDOW_BLOCK_M &&
-              !isBed(nodes[piece.nodeId]) &&
               (CURTAIN.test(itemText(nodes, piece.nodeId)) ||
                 (cover >= 1 - TOLERANCE_M / (2 * half) && piece.z1 >= head - TOLERANCE_M))
             const deepIn = envelopes.reduce((deepest, envelope) => {

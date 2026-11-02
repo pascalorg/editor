@@ -388,14 +388,14 @@ describe('usage_opening_blocked: a free piece in front of a window', () => {
     ])
   })
 
-  test('a piece that covers part of the glass, a sofa back, a bed head and a low piece stay information or nothing', () => {
+  test('a piece that covers part of the glass, a sofa back stays information, a bed head and a low piece are nothing', () => {
     const narrow = piece('item_n', 'Wardrobe', 'wardrobe', 2, 0.05 + 0.2 + 0.3, 0.8, 0.6, 2)
     expect(blocked(bedroom([narrow]))).toMatchObject([{ severity: 'info' }])
     // a sofa's back across all of the glass, 0.4 m above the sill, is a design choice
     const sofa = piece('item_f', 'Sofa', 'sofa', 2, 0.05 + 0.2 + 0.3, 1.8, 0.6, 1.3)
     expect(blocked(bedroom([sofa]))).toMatchObject([{ severity: 'info' }])
     const bed = piece('item_b', 'Bed', 'bed', 2, 0.05 + 0.2 + 0.3, 1.6, 0.6, 1.2)
-    expect(blocked(bedroom([bed]))).toMatchObject([{ severity: 'info' }])
+    expect(blocked(bedroom([bed]))).toHaveLength(0)
     const sideboard = piece('item_s', 'Sideboard', 'sideboard', 2, 0.05 + 0.2 + 0.25, 1.6, 0.5, 0.8)
     expect(blocked(bedroom([sideboard]))).toHaveLength(0)
   })
