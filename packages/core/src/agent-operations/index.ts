@@ -37,6 +37,7 @@ import { createUnit, listUnits, setUnitMembers } from './units'
 import { verifyScene } from './verify-scene'
 import { setWallType } from './wall-type'
 import './room-checks'
+import './unreachable-rooms-check'
 import './usage-checks'
 
 export * from './achieved'

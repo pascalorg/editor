@@ -54,6 +54,7 @@ import {
 } from './scene-queries'
 import { reviewSince } from './scene-review'
 import type { AgentContext, AgentOperation, SceneNodes } from './types'
+import type { RoomUnreachableIssue } from './unreachable-rooms-check'
 import {
   type WallEndShortIssue,
   type WallNearlyAlignedIssue,
@@ -107,6 +108,7 @@ export type SceneIssue =
   | WallNearlyAlignedIssue
   | UsageIssue
   | RoomCheckIssue
+  | RoomUnreachableIssue
 
 /** What verify_scene was asked: its contract's input, which other modules may extend. */
 export type VerifySceneInput = Readonly<Record<string, unknown>>
