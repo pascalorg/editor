@@ -1,7 +1,16 @@
 import { describe, expect, test } from 'bun:test'
 import { type AgentRefusal, isAgentRefusal } from '../agent-tools/refusal'
 import { addDoorTool, addWindowTool } from '../agent-tools/wall-openings'
-import { type LevelNode, RAILING_GUARD_HEIGHT, railingWallDefaults, WallNode } from '../schema'
+import { getOpeningWallCut } from '../lib/opening-floor-datum'
+import {
+  type AnyNode,
+  type LevelNode,
+  RAILING_GUARD_HEIGHT,
+  railingWallDefaults,
+  SlabNode,
+  WallNode,
+  type WallNode as WallNodeType,
+} from '../schema'
 import { OPENING_SCENE, openingScene, WALL_OPENING_CASES } from './__fixtures__/wall-opening-cases'
 import { placedDoorFace, planWallOpening } from './wall-openings'
 
@@ -52,6 +61,67 @@ describe('a window taller than its wall, with no sill given', () => {
     expect(planned.node.position[1]).toBeCloseTo(1.5, 6)
     expect(planned.sillHeight).toBeCloseTo(0, 6)
     expect(planned.clamped).toBe(true)
+  })
+})
+
+// add_door's sill is rare: a door down to a floor sunk beside its wall (a garage under the house).
+describe('a door given a sill', () => {
+  /** The opening scene with a garage sunk 0.73 m beside the house, under wall_main past x = 2. */
+  const sunken = () => {
+    const { nodes } = openingScene()
+    const slab = (id: string, x0: number, x1: number, elevation: number) =>
+      SlabNode.parse({
+        id,
+        parentId: OPENING_SCENE.levelId,
+        polygon: [
+          [x0, -4],
+          [x1, -4],
+          [x1, 1],
+          [x0, 1],
+        ],
+        elevation,
+      })
+    const house = slab('slab_house', -1, 2, 0.05)
+    const garage = slab('slab_garage', 2, 5, -0.68)
+    const level = nodes[OPENING_SCENE.levelId] as LevelNode
+    return {
+      ...nodes,
+      [house.id]: house,
+      [garage.id]: garage,
+      [level.id]: { ...level, children: [...level.children, house.id, garage.id] },
+    } as Record<string, AnyNode>
+  }
+  const bottomOf = (nodes: Record<string, AnyNode>, sillHeight: number) => {
+    const planned = planWallOpening(nodes, {
+      kind: 'door',
+      wallId: OPENING_SCENE.main,
+      t: 0.5,
+      width: 2.4,
+      height: 2.2,
+      sillHeight,
+    })
+    const wall = nodes[OPENING_SCENE.main] as WallNodeType
+    return { planned, bottom: getOpeningWallCut(wall, planned.node, nodes).bottom }
+  }
+
+  test('reaches down to the floor sunk beside the wall, and stops at the wall bottom', () => {
+    const { planned, bottom } = bottomOf(sunken(), -2)
+    expect(bottom).toBeCloseTo(-0.68, 6)
+    expect(planned.clamped).toBe(true)
+  })
+
+  test('on a wall standing on its floor, it stays on the floor', () => {
+    const { planned } = bottomOf(openingScene().nodes, -0.5)
+    expect(planned.sillHeight).toBeCloseTo(0, 6)
+    expect(planned.node.position[1]).toBeCloseTo(1.1, 6)
+    expect(planned.clamped).toBe(true)
+  })
+
+  test('without one, a door stands on the floor and says no sill', () => {
+    const planned = planWallOpening(sunken(), { kind: 'door', wallId: OPENING_SCENE.main, t: 0.5 })
+    expect(planned.node.position[1]).toBeCloseTo(1.05, 6)
+    expect(planned.sillHeight).toBeUndefined()
+    expect(planned.clamped).toBe(false)
   })
 })
 

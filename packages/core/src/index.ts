@@ -486,6 +486,7 @@ export {
   type PlateSurfacePartition,
   type PlateTopCell,
   parseRoomFinishRole,
+  plateDoorwayCuts,
   plateFinishKey,
   plateLevelContext,
   platePartitionSignature,

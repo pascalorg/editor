@@ -1,8 +1,17 @@
 import { describe, expect, test } from 'bun:test'
 import type { AnyNode, AnyNodeId } from '../schema'
-import { BuildingNode, LevelNode, SiteNode, SlabNode } from '../schema'
+import {
+  BuildingNode,
+  DoorNode,
+  LevelNode,
+  SiteNode,
+  SlabNode,
+  WallNode,
+  ZoneNode,
+} from '../schema'
 import hillside from './__fixtures__/owner-hillside-grade.json'
 import { levelGradeStanding } from './grade-standing'
+import { levelGroundBox } from './ground-window'
 import { encodeTerrainField } from './terrain-codec'
 import { createTerrainField } from './terrain-field'
 
@@ -157,4 +166,123 @@ describe('levelGradeStanding', () => {
       expect(level && levelGradeStanding(nodes, level.id)).toBe('at-grade')
     }
   })
+})
+
+// ── A garage sunk under the floor: a basement, or a room opening out to the drive ─────────────
+
+/**
+ * A flat site and one level: the house floor (top 0.05 m, x -5..0) and a garage sunk 0.73 m
+ * beside it (top -0.68 m, x 0..5), one front wall along z = 4 across both, from the garage's end.
+ * `doorAlong` places a door on the floor in that wall: 2.5 m along opens the garage, 7.5 m the house.
+ */
+function sunkenGarage(doorAlong: number | null) {
+  const half = (id: string, x0: number, x1: number, elevation: number) =>
+    SlabNode.parse({
+      id,
+      parentId: 'level_g',
+      polygon: [
+        [x0, -4],
+        [x1, -4],
+        [x1, 4],
+        [x0, 4],
+      ],
+      elevation,
+    })
+  return buildNodes([
+    SiteNode.parse({ id: 'site_a', children: ['building_a'] }),
+    BuildingNode.parse({ id: 'building_a', parentId: 'site_a', children: ['level_g'] }),
+    LevelNode.parse({
+      id: 'level_g',
+      level: 0,
+      height: 3,
+      parentId: 'building_a',
+      children: ['slab_house', 'slab_garage', 'wall_front'],
+    }),
+    half('slab_house', -5, 0, 0.05),
+    half('slab_garage', 0, 5, -0.68),
+    WallNode.parse({
+      id: 'wall_front',
+      parentId: 'level_g',
+      start: [5, 4],
+      end: [-5, 4],
+      thickness: 0.2,
+      height: 2.7,
+      children: doorAlong === null ? [] : ['door_front'],
+    }),
+    ...(doorAlong === null
+      ? []
+      : [
+          DoorNode.parse({
+            id: 'door_front',
+            parentId: 'wall_front',
+            wallId: 'wall_front',
+            position: [doorAlong, 1.1, 0],
+            width: 2.4,
+            height: 2.2,
+          }),
+        ]),
+  ])
+}
+
+describe('a garage sunk under the floor', () => {
+  test('opening out through a door down to its floor, it leaves the level at grade', () => {
+    const nodes = sunkenGarage(2.5)
+    expect(levelGradeStanding(nodes, 'level_g')).toBe('at-grade')
+    // The ground window looks for the level at its floor, not at the garage's.
+    expect(levelGroundBox(nodes, 'level_g')?.min[1]).toBeCloseTo(0.05, 6)
+  })
+
+  test('its floor laid as several plates at its height leaves the level at grade too', () => {
+    const nodes = sunkenGarage(2.5)
+    const level = nodes['level_g' as AnyNodeId] as LevelNode
+    const back = SlabNode.parse({
+      id: 'slab_garage_back',
+      parentId: 'level_g',
+      polygon: [
+        [0, -8],
+        [5, -8],
+        [5, -4],
+        [0, -4],
+      ],
+      elevation: -0.68,
+    })
+    const split = {
+      ...nodes,
+      [back.id]: back,
+      [level.id]: { ...level, children: [...level.children, back.id] },
+    } as typeof nodes
+    expect(levelGradeStanding(split, 'level_g')).toBe('at-grade')
+  })
+
+  test('with no door out of it, it is a sunken room the ground stands over', () => {
+    for (const nodes of [sunkenGarage(null), sunkenGarage(7.5)]) {
+      expect(levelGradeStanding(nodes, 'level_g')).toBe('partly-below-grade')
+      expect(levelGroundBox(nodes, 'level_g')?.min[1]).toBeCloseTo(-0.68, 6)
+    }
+  })
+})
+
+test('a pad outside every room (an entry stoop) is not a floor the ground buries', () => {
+  const nodes = sunkenGarage(null)
+  const level = nodes['level_g' as AnyNodeId] as LevelNode
+  // The garage is no room here: only the house is, and the sunken slab is a pad beside it.
+  const house = ZoneNode.parse({
+    id: 'zone_house',
+    name: 'House',
+    parentId: 'level_g',
+    spaceRole: 'room',
+    polygon: [
+      [-5, -4],
+      [0, -4],
+      [0, 4],
+      [-5, 4],
+    ],
+  })
+  const withRoom = {
+    ...nodes,
+    [house.id]: house,
+    [level.id]: { ...level, children: [...level.children, house.id] },
+  } as typeof nodes
+  expect(levelGradeStanding(nodes, 'level_g')).toBe('partly-below-grade')
+  expect(levelGradeStanding(withRoom, 'level_g')).toBe('at-grade')
 })

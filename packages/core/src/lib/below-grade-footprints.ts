@@ -10,6 +10,7 @@ import {
   floorBuriedOnFlatSite,
   type LevelGradeStanding,
   levelGradeStanding,
+  slabGradeElevation,
   terrainFieldOverLevel,
 } from './grade-standing'
 import { groundOverPart } from './ground-over-part'
@@ -62,11 +63,12 @@ function levelPlates(nodes: Record<AnyNodeId, AnyNode>): LevelPlates[] {
       const plate = slab.polygon.map(([x, z]) => levelLocalToWorldXZ(placed, x, z))
       plates.push(plate)
       if (standing === 'at-grade') continue
-      if (field && plane !== null)
-        buried.push(...groundOverPart(plate, field, plane + slab.elevation + BELOW_GRADE_TOLERANCE))
-      else if (plane !== null) {
+      const floorY = plane === null ? null : plane + slabGradeElevation(nodes, level, slab)
+      if (field && floorY !== null)
+        buried.push(...groundOverPart(plate, field, floorY + BELOW_GRADE_TOLERANCE))
+      else if (floorY !== null) {
         // A flat site, a level of floors at different heights: a floor is buried or it is not.
-        if (floorBuriedOnFlatSite(plane + slab.elevation)) buried.push(plate)
+        if (floorBuriedOnFlatSite(floorY)) buried.push(plate)
       } else buried.push(plate)
     }
     levels.push({
