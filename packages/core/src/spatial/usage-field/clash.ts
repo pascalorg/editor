@@ -21,6 +21,8 @@ import type { Nodes } from './walls'
 export const CLASH_INFO_M = 0.02
 /** From this depth a clash is a warning; between the two it is information. */
 export const CLASH_WARNING_M = 0.08
+/** An approximate shape needs a warning at a greater depth: its outline's own error is this order. */
+export const CLASH_APPROX_WARNING_M = 0.12
 /** A clash smaller than this in plan is a sliver (m²). */
 export const CLASH_MIN_AREA_M2 = 0.002
 /** A wall-fixed piece (a cabinet, a wall unit) may sink this far into a wall: it is scribed to it. */
@@ -138,7 +140,7 @@ export function pairClash(
  * door or window frame or sill, a stair or a guard (a curtain or a blind is read with its opening). Read on the real outlines, so a
  * contact (under 2 cm), a piece resting on another, a rug, foliage, a building element (trim, soffit,
  * pier, beam) and a wall-fixed piece scribed to its wall (5 cm) stay quiet. From 2 cm it is information,
- * from 8 cm a warning, with approximate outlines still labeled as such.
+ * from 8 cm a warning, and from 12 cm for an approximate outline, still labeled as such.
  */
 export function clashIssues(nodes: Nodes, shapes: UsageShapes): UsageIssue[] {
   const out: UsageIssue[] = []
@@ -187,14 +189,15 @@ export function clashIssues(nodes: Nodes, shapes: UsageShapes): UsageIssue[] {
       const target = isPiecePrism(b)
         ? `${quote(nameOf(nodes, b.nodeId))}`
         : `${WHAT[b.kind] ?? 'the'} ${quote(nameOf(nodes, b.nodeId))}`
-      const severity = depth >= CLASH_WARNING_M ? 'warning' : 'info'
+      const warnAt = approximate ? CLASH_APPROX_WARNING_M : CLASH_WARNING_M
+      const severity = depth >= warnAt ? 'warning' : 'info'
       out.push({
         type: 'usage_clash',
         message: `${who} ${isPiecePrism(b) ? 'overlaps' : 'stands'} ${cm(depth)} ${isPiecePrism(b) ? 'of' : 'into'} ${target}${room ? ` in ${quote(room.name)}` : ''}${size >= 0.1 || approximate ? ` (${[size >= 0.1 ? `${Math.round(size * 1e4)} cm² in plan` : '', approximate ? 'approximate shape' : ''].filter(Boolean).join(', ')})` : ''}.`,
         severity,
         nodeIds: unique([room?.id, a.nodeId, b.nodeId]),
         valueM: Math.round(depth * 1000) / 1000,
-        thresholdM: CLASH_WARNING_M,
+        thresholdM: warnAt,
         place: { room: room?.name ?? '', roomId: room?.id ?? level.levelId, at },
         obstacles: [a, b].map((prism) => ({
           nodeId: prism.nodeId,

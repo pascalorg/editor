@@ -147,15 +147,38 @@ const closed = (extra: AnyNode[], heights: number[] = []) =>
   )
 
 describe('usage_clash', () => {
-  test('deep overlaps on approximate bounds warn, while shallow contacts stay information', () => {
+  test('an approximate outline 10 cm into a wall is information, and so is a contact', () => {
     const cupboard = piece('item_w', 'Wardrobe', 'wardrobe', 0.25, 2, 0.6, 1.5, 2)
     delete cupboard.source
     expect(run(closed([cupboard]), 'usage_clash')).toContainEqual(
-      expect.objectContaining({ severity: 'warning', approximate: true }),
+      expect.objectContaining({ severity: 'info', approximate: true, thresholdM: 0.12 }),
     )
     cupboard.position[0] = 0.3
     expect(run(closed([cupboard]), 'usage_clash')).toContainEqual(
-      expect.objectContaining({ severity: 'info', approximate: true }),
+      expect.objectContaining({ severity: 'info', approximate: true, thresholdM: 0.12 }),
+    )
+  })
+
+  test('approximate outlines warn from 12 cm, exact outlines from 8 cm', () => {
+    const approximate = piece('item_a', 'Wardrobe', 'wardrobe', 0.25, 2, 0.6, 1.5, 2)
+    delete approximate.source
+    expect(run(closed([approximate]), 'usage_clash')).toContainEqual(
+      expect.objectContaining({ severity: 'info', valueM: 0.1, thresholdM: 0.12 }),
+    )
+    const exact = piece('item_b', 'Wardrobe', 'wardrobe', 0.25, 2, 0.6, 1.5, 2)
+    expect(run(closed([exact]), 'usage_clash')).toContainEqual(
+      expect.objectContaining({ severity: 'warning', valueM: 0.1, thresholdM: 0.08 }),
+    )
+  })
+
+  test('an approximate clash of 13 cm is a warning', () => {
+    const sofa = piece('item_a', 'Sofa', 'sofa', 2, 2, 2, 0.9, 0.8)
+    delete sofa.source
+    const cabinet = piece('item_b', 'Sideboard', 'sideboard', 3.12, 2, 0.5, 0.5, 0.8)
+    delete cabinet.source
+    const found = run(closed([sofa, cabinet]), 'usage_clash')
+    expect(found).toContainEqual(
+      expect.objectContaining({ severity: 'warning', valueM: 0.13, thresholdM: 0.12 }),
     )
   })
 
