@@ -182,6 +182,50 @@ describe('usage_clash', () => {
     )
   })
 
+  /** A bedroom whose south window carries a sill 0.3 m deep: its front is at z = 0.35. */
+  const silled = (extra: AnyNode[]) =>
+    scene(1, [
+      slab('slab_1', 'level_1', [
+        [-0.3, -0.3],
+        [4.3, -0.3],
+        [4.3, 4.3],
+        [-0.3, 4.3],
+      ]),
+      wall('wall_s', [0, 0], [4, 0], ['window_1']),
+      wall('wall_e', [4, 0], [4, 4]),
+      wall('wall_n', [4, 4], [0, 4]),
+      wall('wall_w', [0, 4], [0, 0]),
+      WindowNode.parse({
+        id: 'window_1',
+        parentId: 'wall_s',
+        wallId: 'wall_s',
+        position: [2, 1.5, 0],
+        width: 1.6,
+        height: 1.2,
+        name: 'South window',
+        sillDepth: 0.3,
+        sillThickness: 0.05,
+      }),
+      zone('zone_1', 'Bedroom', room(4, 4)),
+      ...extra,
+    ])
+
+  test('a bed 10 cm into a window sill is nothing, a sofa stays a clash and a bed into a wall stays one', () => {
+    // z = 0.55 is 10 cm into the sill (0.05 to 0.35) and clear of the wall face
+    const sillBed = piece('item_b', 'Bed', 'bed', 2, 0.55, 1.6, 0.6, 1.2)
+    expect(run(silled([sillBed]), 'usage_clash')).toHaveLength(0)
+    const sillSofa = piece('item_s', 'Sofa', 'sofa', 2, 0.55, 1.6, 0.6, 1.3)
+    expect(run(silled([sillSofa]), 'usage_clash')).toContainEqual(
+      expect.objectContaining({ severity: 'warning' }),
+    )
+    const wallBed = piece('item_w', 'Bed', 'bed', 0.25, 2, 1.6, 2.1, 0.5, {
+      rotation: [0, Math.PI / 2, 0],
+    })
+    expect(run(silled([wallBed]), 'usage_clash')).toContainEqual(
+      expect.objectContaining({ severity: 'warning', valueM: 0.1 }),
+    )
+  })
+
   test('two pieces: an overlap is a clash, a piece resting on another, a rug under a table, and foliage are not', () => {
     const sofa = piece('item_a', 'Sofa', 'sofa', 2, 2, 2, 0.9, 0.8)
     const chair = piece('item_b', 'Armchair', 'armchair', 2.9, 2, 0.9, 0.9, 0.8)

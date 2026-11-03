@@ -6,6 +6,7 @@ import { cm, nameOf, quote, unique } from './labels'
 import {
   boxesMeet,
   hosts,
+  isBed,
   isBuildingElement,
   isFoliage,
   isPiecePrism,
@@ -183,6 +184,8 @@ export function clashIssues(nodes: Nodes, shapes: UsageShapes): UsageIssue[] {
       }
     }
     for (const { a, b, depth, area: size, at } of found.values()) {
+      // a bed head against a window is a design choice, not a finding
+      if (isBed(nodes[a.nodeId]) && (b.kind === 'sill' || b.kind === 'window-frame')) continue
       const approximate = a.shape === 'approx' || b.shape === 'approx'
       const room = roomAt(nodes, level.levelId, at)
       const who = quote(nameOf(nodes, a.nodeId))
