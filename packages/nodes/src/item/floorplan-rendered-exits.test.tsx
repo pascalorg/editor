@@ -741,24 +741,8 @@ for (const mounting of ['wall', 'roof', 'ceiling'] as const)
       const actual = sceneRegistry.nodes
         .get(level.id)!
         .worldToLocal(new Vector3().setFromMatrixPosition(worldMatrix(child.id)))
-      if (mounting === 'roof') {
-        // Production plan rendering uses stored roof-face Z, not the wall-side thickness offset.
-        const { getRoofWallFaceFrame, roofFacePointToSegment } = await import('@pascal-app/core')
-        const face = getRoofWallFaceFrame(segment, mounted.roofFace!)
-        const local = roofFacePointToSegment(segment, mounted.roofFace!, mounted.position)
-        const expected = transformPoint(
-          frame(roof.position, [0, roof.rotation, 0]),
-          transformPoint(
-            frame(segment.position, [0, segment.rotation, 0]),
-            transformPoint(frame(local, [0, face.yaw + mounted.rotation[1], 0]), child.position),
-          ),
-        )
-        expect(center[0]).toBeCloseTo(expected[0])
-        expect(center[1]).toBeCloseTo(expected[2])
-      } else {
-        expect(center[0]).toBeCloseTo(actual.x)
-        expect(center[1]).toBeCloseTo(actual.z)
-      }
+      expect(center[0]).toBeCloseTo(actual.x)
+      expect(center[1]).toBeCloseTo(actual.z)
       const beforeDrag = worldMatrix(child.id)
       await moving(child)
       await pointer('pointermove', center)
