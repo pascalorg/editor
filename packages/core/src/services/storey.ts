@@ -1,5 +1,8 @@
 import { footprintLift } from '../lib/floor-foundation-datum'
-import { levelConstructionDisplacements } from '../lib/floor-foundation-stack'
+import {
+  levelConstructionDisplacements,
+  upperStoreyFootprints,
+} from '../lib/floor-foundation-stack'
 import { area, intersection } from '../lib/polygon-boolean'
 import { isSiteFlatwork } from '../lib/site-flatwork'
 import { queryNodes } from '../runtime/node-queries'
@@ -407,13 +410,22 @@ function resolveCoveringSlabContext(
   const authoredHeight =
     resolveLevelFloorToFloorHeight(levelId, getAuthoredLevelElevations(nodes)) ??
     getStoredLevelHeight(level)
+  // A plate carrying the storey above rises to that storey's floor: when a
+  // neighbouring plate's foundation lifted the storey, this plate's walls grow
+  // taller to meet it instead of stopping short. A plate with nothing above
+  // keeps its own storey height.
+  const carriesStoreyAbove = new Set(
+    (aboveId ? (upperStoreyFootprints(nodes).get(aboveId) ?? []) : []).map((base) => base.id),
+  )
   const context = {
     floorToFloorHeight,
     planeHeight: authoredHeight,
     slabs,
     footprintPlanes: footprints.map(({ slab, lift }) => ({
       slab,
-      top: authoredHeight + lift,
+      top: carriesStoreyAbove.has(slab.id)
+        ? Math.max(authoredHeight + lift, floorToFloorHeight)
+        : authoredHeight + lift,
     })),
   }
 
