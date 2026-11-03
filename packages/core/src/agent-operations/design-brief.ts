@@ -173,7 +173,7 @@ function requireTreatment(facade: NonNullable<BriefAxes['facade']>): void {
 
 /**
  * An open form states its massing in full, and a form of one volume is neither detached nor at
- * several heights: what the scene is read back against is a commitment it can keep or break.
+ * several heights.
  */
 function requireMassing(form: NonNullable<BriefAxes['form']>): void {
   const massing = form.massing ?? {}
@@ -232,8 +232,7 @@ function requireDressing(input: DesignBriefInput, axes: BriefAxes): void {
 
 /**
  * The rooms of a building the brief designs: an open form owes one entry per room, each with its
- * own distinct line, and rooms of one use are not copies of one another. Anything subtler than a
- * word-for-word copy is a finding at the end of the turn, not a refusal here.
+ * own distinct line, and rooms of one use are not copies of one another.
  */
 function requireRooms(input: DesignBriefInput, axes: BriefAxes): void {
   const rooms = input.rooms ?? []

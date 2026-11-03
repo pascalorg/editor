@@ -1,16 +1,7 @@
 import { z } from 'zod'
-import {
-  type DesignBrief,
-  DesignBriefRecord,
-  type Massing,
-  massingSchema,
-  ROOM_DRESSINGS,
-  type Treatment,
-  treatmentSchema,
-} from '../agent-tools/design-brief'
+import { type DesignBrief, DesignBriefRecord } from '../agent-tools/design-brief'
 import { type AnyNode, isDefaultGutterNode } from '../schema'
 import { isDerivedNode } from '../store/derived-node-guard'
-import { type AnnouncedDressing, announcedDressing } from './room-dressing'
 import { measureScene, type SceneMeasure } from './scene-measure'
 import { levelIdOf } from './scene-queries'
 import type { SceneChanges, SceneNodes } from './types'
@@ -45,21 +36,6 @@ export type SessionRecord = {
   designBrief?: DesignBrief
   /** The catalog ids view_assets showed: a brief keeps a catalog piece as it is only after one. */
   viewed?: string[]
-  /**
-   * The first massing a brief stated since the brief was last taken away: a later brief may
-   * revise the form, and this is what it is read against. Goes with the brief.
-   */
-  firstMassing?: Massing
-  /** The first facade treatment a brief stated since the brief was last taken away, as the massing is kept. */
-  firstTreatment?: Treatment
-  /** The dressing the first brief announced for each room (by folded name) since the brief was last taken away, as the treatment is kept. */
-  firstDressing?: AnnouncedDressing
-  /**
-   * How many entries `made` held when the first brief since the brief was last taken away was
-   * written: what follows was made under it, which is how "the turn built" is told from what the
-   * thread built before. Goes with the brief.
-   */
-  briefMadeAt?: number
   /**
    * What a module read about the scene or the turn when its tool last ran, by the module's own key:
    * plain JSON, small, opaque here. The module that wrote a key reads it back from
@@ -109,17 +85,6 @@ export function keepInSession(session: SessionRecord, keep: SessionKeep): Sessio
     return true
   })
   const designBrief = 'designBrief' in keep ? keep.designBrief : session.designBrief
-  const firstMassing = designBrief
-    ? (session.firstMassing ?? designBrief.axes?.form?.massing)
-    : undefined
-  const firstTreatment = designBrief
-    ? (session.firstTreatment ?? designBrief.axes?.facade?.treatment)
-    : undefined
-  const announced = designBrief ? announcedDressing(designBrief) : undefined
-  const firstDressing =
-    designBrief &&
-    (session.firstDressing ?? (Object.keys(announced ?? {}).length ? announced : undefined))
-  const briefMadeAt = designBrief ? (session.briefMadeAt ?? session.made.length) : undefined
   const incomingViewed = new Set(keep.viewed ?? [])
   const viewed =
     keep.viewed === null
@@ -135,10 +100,6 @@ export function keepInSession(session: SessionRecord, keep: SessionKeep): Sessio
       : session.checkpoints,
     made: fresh.length ? [...session.made, ...fresh].slice(0, MAX_MADE) : session.made,
     ...(designBrief ? { designBrief } : {}),
-    ...(firstMassing ? { firstMassing } : {}),
-    ...(firstTreatment ? { firstTreatment } : {}),
-    ...(firstDressing ? { firstDressing } : {}),
-    ...(briefMadeAt === undefined ? {} : { briefMadeAt }),
     ...(viewed.length ? { viewed } : {}),
     ...(readings ? { readings } : {}),
   }
@@ -304,10 +265,6 @@ const Record_ = z.object({
   made: z.array(Made).max(MAX_MADE),
   designBrief: DesignBriefRecord.optional(),
   viewed: z.array(z.string()).max(MAX_VIEWED).optional(),
-  firstMassing: massingSchema.optional(),
-  firstTreatment: treatmentSchema.optional(),
-  firstDressing: z.record(z.string(), z.array(z.enum(ROOM_DRESSINGS))).optional(),
-  briefMadeAt: z.number().int().min(0).optional(),
   // a bag that does not read back costs the session its readings, never its brief or its moments
   readings: z
     .record(z.string(), z.unknown())
