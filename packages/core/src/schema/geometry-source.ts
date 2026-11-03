@@ -65,7 +65,7 @@ const planRing = z.array(planPoint).min(3)
 
 /**
  * What a build occupies in plan, height band by height band, for the usage checks (passages,
- * pockets, wall protrusions): `y0`..`y1` in the artifact's frame and the plan outlines (x, z) of
+ * pockets, clashes): `y0`..`y1` in the artifact's frame and the plan outlines (x, z) of
  * everything it has in that band, traced from a conservative raster of its meshes, so an outline
  * is never inside the build and at most `tolerance` metres outside it. Written by the compiler
  * only when usage checks are on, so it is absent from older artifacts.

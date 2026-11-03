@@ -18,7 +18,6 @@ import {
   type Passage,
   type RoomMeasure,
 } from './measure'
-import { PROTRUSION_LIMIT_M, type Protrusion, wallProtrusions } from './protrusion'
 import { usageShapes } from './shapes'
 import { doorSwingIssues } from './swings'
 import type { Nodes } from './walls'
@@ -50,7 +49,6 @@ export type UsageIssue = {
     | 'usage_passage_narrow'
     | 'usage_turning_narrow'
     | 'usage_pocket'
-    | 'usage_wall_object_protrudes'
     | 'usage_clash'
     | 'usage_opening_blocked'
     | 'usage_door_swing'
@@ -299,20 +297,6 @@ function pocketIssue(nodes: Nodes, room: RoomMeasure, from: string): UsageIssue 
   }
 }
 
-function protrusionIssue(nodes: Nodes, found: Protrusion): UsageIssue {
-  return {
-    type: 'usage_wall_object_protrudes',
-    message: `${quote(nameOf(nodes, found.nodeId))} protrudes ${m(found.depth)} m from the wall at ${m(found.bottom)} m above a free floor in ${quote(found.roomName)} (over ${m(PROTRUSION_LIMIT_M)} m).`,
-    severity: 'warning',
-    nodeIds: [found.nodeId, found.wallId],
-    valueM: found.depth,
-    thresholdM: PROTRUSION_LIMIT_M,
-    place: { room: found.roomName, roomId: found.roomId, at: found.at },
-    obstacles: [],
-    approximate: found.approximate,
-  }
-}
-
 /**
  * The usage findings of a scene: narrow passages (measured from the chosen entrance, one for each
  * place that is narrow with the rooms it leads to, and the best other door as a fact), missing turning circles, floor a 0.60 m unit cannot get out of, wall
@@ -359,8 +343,6 @@ export function usageIssues(nodes: Nodes, options: MeasureOptions = {}): UsageIs
       }
     }
   }
-  for (const found of wallProtrusions(nodes, shapes))
-    if (found.depth > PROTRUSION_LIMIT_M + TOLERANCE_M) issues.push(protrusionIssue(nodes, found))
   issues.push(
     ...clashIssues(nodes, shapes),
     ...blockedOpeningIssues(nodes, shapes),

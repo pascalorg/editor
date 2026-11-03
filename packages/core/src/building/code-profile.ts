@@ -308,27 +308,6 @@ export const USAGE_INDICATORS = {
     cite: "wheelchair turning space, 1.50 m: an espace de manœuvre avec possibilité de demi-tour, Ø 1,50 m (annexe 2), in a bedroom and a salle d'eau, arrêté du 24 décembre 2015 art. 13 (consolidated text in force on 27 October 2026, Légifrance); ADA 304.3 not read",
     source: 'code text',
   },
-  protrusionLimit: {
-    value: 0.1,
-    unit: 'm',
-    section: 'ADA 307.2, 4 in',
-    cite: 'nearer than this to the wall, an object is not an obstacle',
-    source: 'secondary source',
-  },
-  protrusionLowest: {
-    value: 0.685,
-    unit: 'm',
-    section: 'ADA 307.2, 27 in',
-    cite: 'what a cane finds: a wall object whose lower edge is at or above this',
-    source: 'secondary source',
-  },
-  protrusionHighest: {
-    value: 2.03,
-    unit: 'm',
-    section: 'ADA 307.2, 80 in',
-    cite: 'what a cane finds: a wall object whose lower edge is at or below this',
-    source: 'secondary source',
-  },
 } as const satisfies Record<string, Threshold>
 
 export type IrcThresholdId = keyof typeof IRC_2021

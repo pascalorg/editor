@@ -45,7 +45,7 @@ export type Prism = {
   shape: 'exact' | 'approx'
   /** What made it approximate, for the finding's wording. */
   why?: string
-  /** Set for what is mounted on a wall, which the protrusion check measures from the wall's face. */
+  /** Set for what is mounted on a wall: the clash and opening-blocked checks leave it out against its own host. */
   host?: { wallId: string; face: 'a' | 'b' }
 }
 
