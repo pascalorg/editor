@@ -42,6 +42,7 @@ import { pointInPolygon, polygonContainsPolygon, type Vec2 } from './plan-geomet
 import type { RoomCheckIssue } from './room-checks'
 import { type RoomFinding, roomFindings } from './room-findings'
 import { roomIssueScope } from './room-readings'
+import { withoutProbation } from './scene-check-policy'
 import { EMPTY_SESSION } from './scene-checkpoint'
 import { sceneIssueGroups } from './scene-issue-groups'
 import { changesSince, type SceneCheckpoint } from './scene-measure'
@@ -808,6 +809,7 @@ export const verifyScene: AgentOperation<VerifySceneInput | undefined> = (
     if (check.order >= CHECKPOINT_ORDER) issues.push(...check.run(settled, input ?? {}, context))
 
   const occupiedStoryCount = levels.filter((level) => level.isOccupiedStory).length
+  issues.splice(0, issues.length, ...withoutProbation(issues))
   const issueGroups = sceneIssueGroups(issues, nodes)
   return {
     result: {
