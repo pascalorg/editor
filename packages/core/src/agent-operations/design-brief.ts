@@ -118,8 +118,11 @@ function quoteNamesSource(source: string, brand: string | undefined, quote: stri
   return (source === 'catalog' ? CATALOG_WORD : EXISTING_WORD).test(folded)
 }
 
+/** The building's form and facade are the brief's own record: nothing reads them back yet, so a brief may leave them out. */
+const OPTIONAL_AXES: readonly string[] = ['form', 'facade']
+
 /**
- * Every axis is stated, bounded or open. A bounded axis quotes the person's own words: where
+ * Every axis but form and facade is stated, bounded or open. A bounded axis quotes the person's own words: where
  * the host lends the message (the chat, `requestText`) the quote is in it, folded as the
  * source quote is; over MCP there is no message, so the quote is required by the contract and
  * not compared with anything. An open axis carries a design statement of at least
@@ -127,7 +130,7 @@ function quoteNamesSource(source: string, brand: string | undefined, quote: stri
  */
 function requireAxes(input: DesignBriefInput, context: AgentContext): BriefAxes {
   const axes = input.axes ?? {}
-  const missing = BRIEF_AXES.filter((axis) => !axes[axis])
+  const missing = BRIEF_AXES.filter((axis) => !(axes[axis] || OPTIONAL_AXES.includes(axis)))
   if (missing.length)
     refuse(
       'axis_missing',
@@ -135,7 +138,8 @@ function requireAxes(input: DesignBriefInput, context: AgentContext): BriefAxes 
       { axes: missing },
     )
   for (const axis of BRIEF_AXES) {
-    const reading = axes[axis]!
+    const reading = axes[axis]
+    if (!reading) continue
     if (reading.kind === 'bounded') {
       const quote = fold(reading.quote)
       if (
@@ -150,8 +154,8 @@ function requireAxes(input: DesignBriefInput, context: AgentContext): BriefAxes 
     } else if (fold(reading.design).split(' ').filter(Boolean).length < AXIS_DESIGN_MIN_WORDS)
       refuse('axis_open_without_design', `The ${axis} is open: say how it is designed.`, { axis })
   }
-  requireMassing(axes.form!)
-  requireTreatment(axes.facade!)
+  if (axes.form) requireMassing(axes.form)
+  if (axes.facade) requireTreatment(axes.facade)
   return axes
 }
 

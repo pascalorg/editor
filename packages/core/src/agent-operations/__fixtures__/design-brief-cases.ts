@@ -820,7 +820,7 @@ export const DESIGN_BRIEF_CASES: AgentToolCase[] = [
     },
   },
   {
-    name: 'a brief with no form axis is refused, the absent axis named',
+    name: 'a brief with no form axis is recorded: form is optional',
     tool: 'design_brief',
     scene: storeysScene,
     input: {
@@ -829,7 +829,7 @@ export const DESIGN_BRIEF_CASES: AgentToolCase[] = [
       vision: 'A calm room of oak and linen.',
       beyond: DRESSED,
     },
-    expect: { refusal: 'axis_missing', mentions: ['form is absent'] },
+    expect: { result: { status: 'recorded' } },
   },
   {
     name: 'an open form with no massing is refused, the fields named',
@@ -1055,7 +1055,7 @@ export const DESIGN_BRIEF_CASES: AgentToolCase[] = [
     },
   },
   {
-    name: 'a brief with no facade axis is refused, the absent axis named',
+    name: 'a brief with no facade axis is recorded: facade is optional',
     tool: 'design_brief',
     scene: storeysScene,
     input: {
@@ -1064,7 +1064,7 @@ export const DESIGN_BRIEF_CASES: AgentToolCase[] = [
       vision: 'A calm room of oak and linen.',
       beyond: DRESSED,
     },
-    expect: { refusal: 'axis_missing', mentions: ['facade is absent'] },
+    expect: { result: { status: 'recorded' } },
   },
   {
     name: 'an open facade with no treatment is refused, the fields named',
