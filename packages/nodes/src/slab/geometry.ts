@@ -24,6 +24,7 @@ import {
   type PlateSurfacePartition,
   type PlateTopCell,
   parseFloorStepRole,
+  plateDoorwayCuts,
   plateFinishKey,
   plateLevelContext,
   resolveFloorStepFinish,
@@ -420,7 +421,16 @@ export function buildSlabGeometry(
               ),
       look: { shading, textures, colorPreset, sceneTheme },
     })
-  const merged = generateSlabGeometry(node, polygonContext, platform ? levelBaseAt : undefined)
+  // The doorway of an opening reaching below this floor is cut out of it (the partition does the
+  // same to its top): the slab builder subtracts holes crossing the outline.
+  const doorways = ctx ? plateDoorwayCuts(node, plateLevelContext(ctx.parent, ctx.resolve)) : []
+  const merged = generateSlabGeometry(
+    doorways.length
+      ? { ...node, holes: [...(node.holes ?? []), ...doorways.map((part) => part.outer)] }
+      : node,
+    polygonContext,
+    platform ? levelBaseAt : undefined,
+  )
   const elevation = node.elevation ?? 0.05
   const partition = platePartitionOf(node, ctx, platform || node.plateRole === 'platform')
 

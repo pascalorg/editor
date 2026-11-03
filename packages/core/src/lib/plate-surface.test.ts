@@ -1,15 +1,31 @@
 import { describe, expect, test } from 'bun:test'
-import { SlabNode, WallNode, ZoneNode } from '../schema'
+import { applySceneChanges, authorScene, finalizeAuthorScene } from '../agent-operations'
+import { ROOM_OPERATIONS } from '../agent-operations/room-structure'
+import { authorScenePayload } from '../agent-tools/author-scene'
+import {
+  type AnyNode,
+  BuildingNode,
+  LevelNode,
+  SiteNode,
+  SlabNode,
+  WallNode,
+  type WallNode as WallNodeType,
+  ZoneNode,
+} from '../schema'
+import { getOpeningWallCut } from './opening-floor-datum'
 import {
   classifyPlateSideAt,
   clearPlateSurfaceCaches,
   computePlateSurfacePartition,
   type PlateLevelContext,
   parseRoomFinishRole,
+  plateDoorwayCuts,
   plateFinishKey,
+  plateLevelContext,
   roomFinishRole,
 } from './plate-surface'
 import { area, containsPoint, intersection, union } from './polygon-boolean'
+import { reconcileSceneStructure } from './structure-reconcile'
 
 const WOOD = 'library:wood-woodplank48'
 const TILE = 'library:flooring-tiles3'
@@ -356,5 +372,93 @@ describe('room finish roles', () => {
     expect(plateFinishKey({ properties: { color: '#ff0000' } })).toBe(
       plateFinishKey({ properties: { color: '#ff0000' } }),
     )
+  })
+})
+
+describe('the doorway of an opening reaching below its floor', () => {
+  /**
+   * A house and its garage behind one front wall (as author_scene writes them), the garage's floor
+   * then sunk 0.73 m: the wall stands on the house floor and its garage face goes down. The garage
+   * door's sill is `sill` under the floor the wall stands on.
+   */
+  function garage(sill: number) {
+    const wall = (id: string, start: number[], end: number[], openings?: unknown[]) => ({
+      id,
+      start,
+      end,
+      height: 2.7,
+      thickness: 0.2,
+      ...(openings ? { openings } : {}),
+    })
+    const payload = authorScenePayload.parse({
+      levels: [
+        {
+          name: 'Ground',
+          walls: [
+            wall('n', [0, 0], [10, 0]),
+            wall('e', [10, 0], [10, 6]),
+            wall('s', [10, 6], [0, 6], [{ kind: 'door', along: 2, width: 2.4, height: 2.2, sill }]),
+            wall('w', [0, 6], [0, 0]),
+            wall('mid', [6, 0], [6, 6]),
+          ],
+          rooms: [
+            { name: 'Living', seed: [3, 3] },
+            { name: 'Garage', seed: [8, 3] },
+          ],
+        },
+      ],
+    })
+    const scaffold = {
+      site_1: SiteNode.parse({ id: 'site_1', children: ['building_1'] }),
+      building_1: BuildingNode.parse({
+        id: 'building_1',
+        parentId: 'site_1',
+        children: ['level_0'],
+      }),
+      level_0: LevelNode.parse({ id: 'level_0', parentId: 'building_1', level: 0, children: [] }),
+    } as Record<string, AnyNode>
+    const outcome = authorScene(scaffold, { payload, compiled: {} }, { activeLevelId: 'level_0' })
+    let nodes = applySceneChanges(scaffold, finalizeAuthorScene(scaffold, outcome as never).changes)
+    const zoneId = Object.values(nodes).find((n) => n.type === 'zone' && n.name === 'Garage')!.id
+    for (const floor of [{ footprint: 'new' }, { elevation: -0.68 }]) {
+      const before = nodes
+      nodes = applySceneChanges(
+        nodes,
+        ROOM_OPERATIONS.set_zone_intent(
+          nodes,
+          { zoneId, patch: { floor } },
+          { activeLevelId: null },
+        ).changes!,
+      )
+      let n = 0
+      nodes = {
+        ...reconcileSceneStructure({ nodes, previousNodes: before, mintId: (k) => `${k}_r${n++}` })
+          .nodes,
+      } as typeof nodes
+    }
+    const level = Object.values(nodes).find((n) => n.type === 'level')!
+    const context = plateLevelContext(level, (id) => nodes[id])
+    const door = context.openings![0]!
+    const front = nodes[door.parentId!] as WallNodeType
+    return { context, doorway: getOpeningWallCut(front, door, nodes).aperture }
+  }
+  const cutPlates = (context: PlateLevelContext) =>
+    context.slabs.filter((plate) => area(plateDoorwayCuts(plate, context)) > 0)
+
+  test('is cut out of the floor the wall stands on, open down to the door bottom', () => {
+    clearPlateSurfaceCaches()
+    const { context, doorway } = garage(-0.73)
+    const cut = cutPlates(context)
+    expect(cut.map((plate) => plate.elevation)).toEqual([0.05])
+    for (const plate of context.slabs) {
+      const top = computePlateSurfacePartition(plate, context)?.cells.flatMap((c) => c.polygons)
+      if (top && plate.elevation > -0.68)
+        expect(area(intersection(top, doorway))).toBeLessThan(1e-6)
+    }
+  })
+
+  test('a door on its floor keeps its threshold', () => {
+    clearPlateSurfaceCaches()
+    expect(cutPlates(garage(0).context)).toEqual([])
   })
 })

@@ -837,6 +837,26 @@ const partitionCache = new Map<string, PlateSurfacePartition>()
  * `platePartitionSignature`. Returns `null` for anything that is not an
  * unrecessed floor plate — manual slabs and pools keep the plain two-slot path.
  */
+/**
+ * The doorways cut out of `plate`: those of the openings reaching below their floor (a negative
+ * sill: a garage door down to the garage floor sunk beside its wall) where the plate stands above
+ * the opening's bottom. The doorway is then open from its bottom to its head on both faces, with
+ * no strip of the floor the wall stands on left across it.
+ */
+export function plateDoorwayCuts(plate: SlabNode, context: PlateLevelContext): MultiPolygon {
+  if (!isFloorPlate(plate) || plate.recessed || plate.polygon.length < 3) return []
+  const elevation = plate.elevation ?? DEFAULT_SLAB_ELEVATION
+  const apertures = levelInputs(context).openings.flatMap(({ opening, aperture, cut }) =>
+    opening.position[1] - opening.height / 2 < -BELOW_FLOOR_SILL && cut.bottom < elevation - 1e-3
+      ? aperture
+      : [],
+  )
+  return apertures.length ? intersection(union(apertures), slabTop(plate)) : []
+}
+
+/** A sill this far under its floor reaches below it; nearer is the floor (rounding). */
+const BELOW_FLOOR_SILL = 1e-3
+
 export function computePlateSurfacePartition(
   plate: SlabNode,
   context: PlateLevelContext,
@@ -846,7 +866,8 @@ export function computePlateSurfacePartition(
   const cached = partitionCache.get(signature)
   if (cached) return cached
 
-  const top = slabTop(plate)
+  const doorways = plateDoorwayCuts(plate, context)
+  const top = doorways.length ? difference(slabTop(plate), doorways) : slabTop(plate)
   if (!top.length) return null
   const wallCover = levelWallCover(context.walls)
   const prepared = levelInputs(context)
