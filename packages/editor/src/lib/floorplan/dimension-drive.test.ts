@@ -238,6 +238,25 @@ describe('driving an opening along its wall', () => {
     expect(resolution).toMatchObject({ drivable: true, target: { kind: 'opening', sign: 1 } })
   })
 
+  test('a contextual dimension measuring from opening to wall end pushes the opening away', () => {
+    const nodes = sceneWithDoor()
+    const resolution = resolveDimensionDrive({
+      nodes,
+      ownerNodeId: 'door_1' as AnyNodeId,
+      start: [1.65, 0],
+      end: [3, 0],
+    })
+    expect(resolution).toMatchObject({ drivable: true, target: { kind: 'opening', sign: -1 } })
+    if (!resolution.drivable) return
+    const plan = planDimensionDrive({
+      nodes,
+      target: resolution.target,
+      currentLength: 1.35,
+      nextLength: 1.55,
+    })
+    expect(plan?.updates[0]?.data).toEqual({ position: [1.0, 1.05, 0] })
+  })
+
   test('the door stays inside its wall', () => {
     const nodes = sceneWithDoor()
     const resolution = resolveDimensionDrive({
