@@ -3,6 +3,7 @@
 import {
   DEFAULT_ANGLE_STEP,
   emitter,
+  parseDimension,
   type GridEvent,
   type LevelNode,
   snapPointAlongAngleRay,
@@ -13,6 +14,7 @@ import {
   CursorSphere,
   clearCeilingSnapFeedback,
   DimensionInput,
+  LocalizedHtml as Html,
   type DimensionInputState,
   EDITOR_LAYER,
   isAngleSnapActive,
@@ -26,7 +28,6 @@ import {
   visibleScene,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
-import { Html } from '@react-three/drei'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { BufferGeometry, DoubleSide, type Group, type Line, Shape, Vector3 } from 'three'
 import { mix, positionLocal } from 'three/tsl'
@@ -105,6 +106,36 @@ export const CeilingTool: React.FC = () => {
     [],
   )
 
+  // The plan keeps its own copy of the corners, started empty on every view change, and finishes a
+  // polygon in 2D-only view without this tool. Corners kept here once the plan shows (from split
+  // or 3D-only view) would close a different polygon than the one the plan draws.
+  useEffect(() => {
+    let shownScene = visibleScene(useEditor.getState())
+    return useEditor.subscribe((state) => {
+      const nextScene = visibleScene(state)
+      if (nextScene === shownScene) return
+      shownScene = nextScene
+      if (nextScene === '3d') return
+      setPoints([])
+      clearCeilingSnapFeedback()
+    })
+  }, [])
+
+  const verticalGeo = useMemo(
+    () =>
+      new BufferGeometry().setFromPoints([
+        new Vector3(0, 0, 0),
+        new Vector3(0, CEILING_HEIGHT - GRID_OFFSET, 0),
+      ]),
+    [],
+  )
+
+  useEffect(() => {
+    return () => {
+      verticalGeo.dispose()
+    }
+  }, [verticalGeo])
+
   const handleDimChange = useCallback((state: DimensionInputState) => {
     useDimensionDraftStore.getState().setValues(state.lengthValue, state.angleValue)
   }, [])
@@ -120,7 +151,7 @@ export const CeilingTool: React.FC = () => {
 
     const length =
       currentDim.lockedLength ??
-      (currentDim.lengthValue ? parseFloat(currentDim.lengthValue) : null)
+      (currentDim.lengthValue ? parseDimension(currentDim.lengthValue) : null)
     if (length === null || Number.isNaN(length) || length <= 0) return
 
     let angle = currentDim.lockedAngle
@@ -377,12 +408,7 @@ export const CeilingTool: React.FC = () => {
       {/* @ts-ignore */}
       <line
         frustumCulled={false}
-        geometry={
-          new BufferGeometry().setFromPoints([
-            new Vector3(0, 0, 0),
-            new Vector3(0, CEILING_HEIGHT - GRID_OFFSET, 0),
-          ])
-        }
+        geometry={verticalGeo}
         layers={EDITOR_LAYER}
         // @ts-expect-error
         ref={verticalLineRef}
@@ -493,7 +519,7 @@ export const CeilingTool: React.FC = () => {
       ))}
 
       {/* Floating Dimension Input for Ceiling */}
-      {dimStore.points.length > 0 && points.length > 0 && points[points.length - 1] && (
+      {typeof document !== 'undefined' && typeof document.createElement === 'function' && dimStore.points.length > 0 && points.length > 0 && points[points.length - 1] && (
         <Html
           center
           position={[

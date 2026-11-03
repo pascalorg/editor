@@ -11,6 +11,7 @@ import {
   getWallMiterBoundaryPoints,
   type LevelNode,
   levelBaseElevationAt,
+  parseDimension,
   type Point2D,
   resolveAlignment,
   sampleFenceSpline,
@@ -43,6 +44,7 @@ import {
   useAlignmentGuides,
   useEditor,
   DimensionInput,
+  LocalizedHtml as Html,
   type DimensionInputState,
   useDimensionDraftStore,
   useFenceCurveDraft,
@@ -58,7 +60,6 @@ import {
   getSceneTheme,
   useViewer,
 } from '@pascal-app/viewer'
-import { Html } from '@react-three/drei'
 import { useThree } from '@react-three/fiber'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
@@ -666,7 +667,7 @@ const StraightFenceTool: React.FC = () => {
 
     const length =
       currentDim.lockedLength ??
-      (currentDim.lengthValue ? parseFloat(currentDim.lengthValue) : null)
+      (currentDim.lengthValue ? parseDimension(currentDim.lengthValue) : null)
     if (length === null || Number.isNaN(length) || length <= 0) return
 
     let angle = currentDim.lockedAngle
@@ -1107,7 +1108,7 @@ const StraightFenceTool: React.FC = () => {
       )}
 
       {/* Floating Dimension Input for Fence */}
-      {dimStore.points.length > 0 && buildingState.current === 1 && (
+      {typeof document !== 'undefined' && typeof document.createElement === 'function' && dimStore.points.length > 0 && buildingState.current === 1 && (
         <Html
           center
           position={[

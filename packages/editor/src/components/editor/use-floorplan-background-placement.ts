@@ -479,16 +479,6 @@ export function useFloorplanBackgroundPlacement({
           return true
         }
 
-        useDimensionDraftStore.setState({
-          points: [...dimState.points, finalPoint],
-          previewPoint: null,
-          lengthValue: '',
-          angleValue: '',
-          lockedLength: null,
-          lockedAngle: null,
-          fieldType: 'length',
-        })
-
         handleWallPlacementPoint(finalPoint)
         return true
       }

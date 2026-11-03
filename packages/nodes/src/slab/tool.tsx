@@ -3,6 +3,7 @@
 import {
   DEFAULT_ANGLE_STEP,
   emitter,
+  parseDimension,
   type GridEvent,
   type LevelNode,
   resolveSlabPlacementElevation,
@@ -15,6 +16,7 @@ import {
   clearPlacementSurface,
   clearSlabSnapFeedback,
   DimensionInput,
+  LocalizedHtml as Html,
   type DimensionInputState,
   EDITOR_LAYER,
   type HorizontalConstructionPlane,
@@ -36,7 +38,6 @@ import {
   visibleScene,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
-import { Html } from '@react-three/drei'
 import { useThree } from '@react-three/fiber'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { BufferGeometry, DoubleSide, type Group, type Line, Shape, Vector3 } from 'three'
@@ -143,7 +144,7 @@ export const SlabTool: React.FC = () => {
 
     const length =
       currentDim.lockedLength ??
-      (currentDim.lengthValue ? parseFloat(currentDim.lengthValue) : null)
+      (currentDim.lengthValue ? parseDimension(currentDim.lengthValue) : null)
     if (length === null || Number.isNaN(length) || length <= 0) return
 
     let angle = currentDim.lockedAngle
@@ -485,7 +486,7 @@ export const SlabTool: React.FC = () => {
       ))}
 
       {/* Floating Dimension Input for Slab */}
-      {dimStore.points.length > 0 && points.length > 0 && points[points.length - 1] && (
+      {typeof document !== 'undefined' && typeof document.createElement === 'function' && dimStore.points.length > 0 && points.length > 0 && points[points.length - 1] && (
         <Html
           center
           position={[

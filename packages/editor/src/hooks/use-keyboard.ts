@@ -38,6 +38,7 @@ import { cycleSelectionAtPointer, trackSelectionCyclePointer } from '../lib/sele
 import { sfxEmitter } from '../lib/sfx-bus'
 import { openSidebarPanel } from '../lib/sidebar-panel'
 import { activeSiteNode, clampBrushRadius } from '../lib/terrain-sculpt'
+import { useDimensionDraftStore } from '../lib/dimension-draft-store'
 import { armToolShortcut, toolShortcutForKey } from '../lib/tool-shortcuts'
 import { isTypingTarget } from '../lib/typing-target'
 import { leaveUnitFocus } from '../lib/units'
@@ -492,7 +493,14 @@ export const useKeyboard = ({
         return
       }
 
-      // D/A shortcuts to focus dimension input fields during wall drafting
+      // Dimension input shortcuts during active drafting (wall, fence, slab, ceiling)
+      const dimStoreState = useDimensionDraftStore.getState()
+      const currentTool = useEditor.getState().tool
+      const isDraftingWithDim =
+        dimStoreState.points.length > 0 &&
+        (currentTool === 'wall' || currentTool === 'fence' || currentTool === 'slab' || currentTool === 'ceiling')
+
+      // D/A shortcuts to focus dimension input fields during drafting (only when active so WASD panning is not stolen)
       if (
         (e.key === 'd' || e.key === 'D' || e.key === 'a' || e.key === 'A') &&
         !e.repeat &&
@@ -500,25 +508,29 @@ export const useKeyboard = ({
         !e.ctrlKey &&
         !e.shiftKey &&
         !e.altKey &&
-        useEditor.getState().tool === 'wall'
+        isDraftingWithDim
       ) {
         e.preventDefault()
-        emitter.emit(
-          'dimension:focus',
-          e.key === 'd' || e.key === 'D' ? 'length' : 'angle',
-        )
+        const targetField = e.key === 'd' || e.key === 'D' ? 'length' : 'angle'
+        dimStoreState.setFieldType(targetField)
+        emitter.emit('dimension:focus', targetField)
         return
       }
 
-      // Numeric keys automatically focus length input during wall drafting
+      // Numeric keys automatically focus length input during drafting and seed the character
       if (
         /^[0-9.]$/.test(e.key) &&
         !e.metaKey &&
         !e.ctrlKey &&
         !e.altKey &&
-        useEditor.getState().tool === 'wall'
+        isDraftingWithDim
       ) {
+        e.preventDefault()
+        const nextLength = (dimStoreState.lengthValue ?? '') + e.key
+        dimStoreState.setValues(nextLength, dimStoreState.angleValue)
+        dimStoreState.setFieldType('length')
         emitter.emit('dimension:focus', 'length')
+        return
       }
 
       if (e.key === 'Escape') {

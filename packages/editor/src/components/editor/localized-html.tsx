@@ -12,6 +12,9 @@ import { type ComponentProps, forwardRef } from 'react'
  */
 export const Html = forwardRef<HTMLDivElement, Omit<ComponentProps<typeof DreiHtml>, 'ref'>>(
   function Html({ children, ...props }, ref) {
+    if (typeof document === 'undefined' || typeof document.createElement !== 'function') {
+      return null
+    }
     const i18n = usePascalI18n()
     return (
       <DreiHtml {...props} ref={ref}>

@@ -47,6 +47,7 @@ import {
   SlabNode as SlabNodeSchema,
   type StairNode,
   StairNode as StairNodeSchema,
+  parseDimension,
   sampleWallCenterline,
   sceneRegistry,
   snapPointAlongAngleRay,
@@ -9681,13 +9682,13 @@ export function FloorplanPanel({
       setDraftEnd((previousEnd) => {
         if (
           !previousEnd ||
-          previousEnd[0] !== snappedPoint[0] ||
-          previousEnd[1] !== snappedPoint[1]
+          previousEnd[0] !== finalMovePoint[0] ||
+          previousEnd[1] !== finalMovePoint[1]
         ) {
           sfxEmitter.emit('sfx:grid-snap')
         }
 
-        return snappedPoint
+        return finalMovePoint
       })
     },
     [
@@ -11995,6 +11996,7 @@ export function FloorplanPanel({
             }
             onCommitPoint={(pt) => {
               if (isWallBuildActive) {
+                emitFloorplanGridEvent('click', pt, new MouseEvent('click') as any)
                 handleWallPlacementPoint(pt)
               } else if (isFenceBuildActive) {
                 emitFloorplanGridEvent('click', pt, new MouseEvent('click') as any)
@@ -12011,7 +12013,10 @@ export function FloorplanPanel({
             onCancel={() => {
               if (isWallBuildActive) clearWallPlacementDraft()
               else if (isFenceBuildActive) clearFencePlacementDraft()
-              else useDimensionDraftStore.getState().reset()
+              else if (isCeilingBuildActive) clearCeilingPlacementDraft()
+              else if (isZoneBuildActive) clearZonePlacementDraft()
+              else clearSlabPlacementDraft()
+              useDimensionDraftStore.getState().reset()
             }}
           />
         )}
@@ -12112,7 +12117,7 @@ function FloorplanDimensionInputOverlay({
 
     const length =
       currentDim.lockedLength ??
-      (currentDim.lengthValue ? parseFloat(currentDim.lengthValue) : null)
+      (currentDim.lengthValue ? parseDimension(currentDim.lengthValue) : null)
     if (length === null || Number.isNaN(length) || length <= 0) return
 
     let angle = currentDim.lockedAngle

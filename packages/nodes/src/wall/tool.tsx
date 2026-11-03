@@ -75,6 +75,7 @@ import {
   // Dimension drafting
   buildGhostWalls,
   DimensionInput,
+  LocalizedHtml as Html,
   type DimensionDraftState,
   EMPTY_DIMENSION_DRAFT,
   isDoubleClick,
@@ -84,7 +85,6 @@ import {
   useDimensionDraftStore,
 } from '@pascal-app/editor'
 import { getSceneTheme, useViewer } from '@pascal-app/viewer'
-import { Html } from '@react-three/drei'
 import { useThree } from '@react-three/fiber'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { BoxGeometry, DoubleSide, type Group, type Mesh, Vector3 } from 'three'
@@ -885,18 +885,15 @@ const LineWallTool: React.FC = () => {
     const onGridClick = (event: GridEvent) => {
       if (!wallPreviewRef.current || planOwnsInput()) return
 
-      const now = event.nativeEvent?.timeStamp ?? Date.now()
       if (
         buildingState.current === 1 &&
-        (event.nativeEvent.detail >= 2 || (lastClickTime.current > 0 && now - lastClickTime.current < 400))
+        event.nativeEvent?.detail >= 2
       ) {
         // A double-click finishes the chain and keeps an open Polygon room.
         commitWallPolygonDraft()
         stopDrafting()
-        lastClickTime.current = 0
         return
       }
-      lastClickTime.current = now
 
       const { walls, snapWalls, bodyWalls } = getWallDraftSnapWalls()
       const pointed = buildingState.current === 0 ? pointedSurfaceFor(event) : null
@@ -994,6 +991,7 @@ const LineWallTool: React.FC = () => {
                 { applySnap: !angleLocked },
               )
         }
+    const commitWallPlacementPoint = (snappedEnd: WallPlanPoint, event?: GridEvent) => {
         const dx = snappedEnd[0] - startingPoint.current.x
         const dz = snappedEnd[1] - startingPoint.current.z
         if (dx * dx + dz * dz < 0.01 * 0.01) return
@@ -1021,7 +1019,7 @@ const LineWallTool: React.FC = () => {
         } else {
           const draftPlane = constructionPlane.current
           const commitPointed =
-            draftPlane?.supportSlabId === GROUND_SUPPORT_ID ? null : pointedSurfaceFor(event)
+            draftPlane?.supportSlabId === GROUND_SUPPORT_ID ? null : (event ? pointedSurfaceFor(event) : null)
           // Both start and end are building-local ✓
           // The Walls variant's Invisible draws room separators, not walls.
           const createdWall =
@@ -1079,6 +1077,7 @@ const LineWallTool: React.FC = () => {
             return
           }
           nextStart = createdWall.end
+          const currentDim = useDimensionDraftStore.getState()
           useDimensionDraftStore.setState({
             points: [...currentDim.points, nextStart],
             previewPoint: null,
@@ -1093,7 +1092,7 @@ const LineWallTool: React.FC = () => {
         // chains its next segment from the same point (its own snap
         // pipeline can resolve a slightly different endpoint).
         useSegmentDraftChain.getState().setChainStart('wall', [nextStart[0], nextStart[1]])
-        const draftY = constructionPlane.current?.localY ?? event.localPosition[1]
+        const draftY = constructionPlane.current?.localY ?? event?.localPosition[1] ?? startingPoint.current.y
         startingPoint.current.set(nextStart[0], draftY, nextStart[1])
         endingPoint.current.copy(startingPoint.current)
         const draftPreview = useFloorplanDraftPreview.getState()
@@ -1115,6 +1114,9 @@ const LineWallTool: React.FC = () => {
           wallPreviewRef.current.visible = false
         }
         setDraftMeasurement(null)
+    }
+    commitWallPointRef.current = commitWallPlacementPoint
+                commitWallPlacementPoint(snappedEnd, event)
       }
     }
 
@@ -1170,7 +1172,7 @@ const LineWallTool: React.FC = () => {
 
     const length =
       currentDim.lockedLength ??
-      (currentDim.lengthValue ? parseFloat(currentDim.lengthValue) : null)
+      (currentDim.lengthValue ? parseDimension(currentDim.lengthValue) : null)
     if (length === null || Number.isNaN(length) || length <= 0) return
 
     let angle = currentDim.lockedAngle
@@ -1186,31 +1188,7 @@ const LineWallTool: React.FC = () => {
       lastPt[1] + Math.sin(rad) * length,
     ]
 
-    createWallOnCurrentLevel(lastPt, nextPoint, {
-      constructionHeight: previewHeightRef.current,
-    })
-
-    useDimensionDraftStore.setState({
-      points: [...currentDim.points, nextPoint],
-      previewPoint: null,
-      lengthValue: '',
-      angleValue: '',
-      lockedLength: null,
-      lockedAngle: null,
-      fieldType: 'length',
-    })
-
-    useSegmentDraftChain.getState().setChainStart('wall', [nextPoint[0], nextPoint[1]])
-    startingPoint.current.set(nextPoint[0], startingPoint.current.y, nextPoint[1])
-    endingPoint.current.copy(startingPoint.current)
-    cursorRef.current?.position.copy(startingPoint.current)
-    setAxisGuide({
-      origin: nextPoint,
-      endOrigin: null,
-      y: startingPoint.current.y,
-      angleLabel: null,
-    })
-    setDraftMeasurement(null)
+    commitWallPointRef.current(nextPoint)
     triggerSFX('sfx:structure-build-start')
   }, [])
 
@@ -1256,7 +1234,7 @@ const LineWallTool: React.FC = () => {
       )}
 
       {/* Dimension input HUD */}
-      {dimStore.points.length > 0 && (
+      {typeof document !== 'undefined' && typeof document.createElement === 'function' && dimStore.points.length > 0 && (
         <Html
           center
           position={[
