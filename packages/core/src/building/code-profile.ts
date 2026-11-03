@@ -4,13 +4,10 @@
  *
  * Which code applies is the project's to say: `site.metadata.codeProfile`. A scene that does not say has
  * no jurisdiction, and a code-specific check then reports information that names the code it used, never
- * a warning (the listing houses are Australian designs; the US IRC is not what they were drawn to). The
- * profiles for Australia (NCC, ABCB Housing Provisions) and France hold only the rows read in their own
- * texts (below); a check that has no row for the code reports nothing. These are usage indicators, not a
- * compliance check.
+ * a warning (the listing houses are Australian designs; the US IRC is not what they were drawn to). These are usage indicators, not a compliance check.
  */
 
-export const CODE_PROFILE_IDS = ['irc-2021', 'au-ncc', 'fr'] as const
+export const CODE_PROFILE_IDS = ['irc-2021'] as const
 export type CodeProfileId = (typeof CODE_PROFILE_IDS)[number]
 
 /** The text the number was read in (a state's adoption of the model code, or UpCodes), or only a guide, a forum or another checker's constant. */
@@ -186,100 +183,6 @@ export const IRC_2021 = {
   },
 } as const satisfies Record<string, Threshold>
 
-const NCC_READ = 'read on ncc.abcb.gov.au, NCC 2022 ABCB Housing Provisions, 27 October 2026'
-
-/**
- * The Australian National Construction Code, ABCB Housing Provisions (NCC 2022), the rows whose text was
- * read there. The same ids as the IRC rows, where the rule is the same kind of rule; what the Housing
- * Provisions do not set (a stair width, a hall width, a room area, an egress opening, the clearances at
- * a toilet, a door that must not swing over stairs) has no row, and a check that needs one reports nothing.
- */
-export const NCC_2022 = {
-  riserMax: {
-    value: 0.19,
-    unit: 'm',
-    section: 'NCC 2022 HP Table 11.2.2a',
-    cite: `NCC 2022 Housing Provisions Table 11.2.2a, riser at most 190 mm for a stair other than a spiral (115 mm at least; 225 mm for stairs serving rarely used non-habitable rooms, Table 11.2.2b); ${NCC_READ}`,
-    source: 'code text',
-  },
-  treadMin: {
-    value: 0.24,
-    unit: 'm',
-    section: 'NCC 2022 HP Table 11.2.2a',
-    cite: `NCC 2022 Housing Provisions Table 11.2.2a, going at least 240 mm (355 mm at most; 2R+G between 550 and 700 mm; 215 mm for stairs serving rarely used non-habitable rooms, Table 11.2.2b); ${NCC_READ}`,
-    source: 'code text',
-  },
-  stairLanding: {
-    value: 0.75,
-    unit: 'm',
-    section: 'NCC 2022 HP 11.2.5(1)(a)',
-    cite: `NCC 2022 Housing Provisions 11.2.5(1)(a), a landing at least 750 mm long (500 mm from the inside edge where it turns; 600 mm for a stair serving only rarely used non-habitable rooms, 11.2.5(2)); ${NCC_READ}`,
-    source: 'code text',
-  },
-  exteriorDoorLanding: {
-    value: 0.75,
-    unit: 'm',
-    section: 'NCC 2022 HP 11.2.5(1)(a), (c), (d)',
-    cite: `NCC 2022 Housing Provisions 11.2.5(1)(a), (c), (d), a landing at least 750 mm long across the full width of a doorway whose sill opens onto a stairway or ramp with a change in level of more than 3 risers or 570 mm (a threshold more than 230 mm above the adjoining surface incorporates steps, 11.2.6); ${NCC_READ}`,
-    appliesWhen: { dropOverM: 0.57, risersOver: 3 },
-    source: 'code text',
-  },
-  stairHeadroom: {
-    value: 2,
-    unit: 'm',
-    section: 'NCC 2022 HP 10.3.1(1)(f)',
-    cite: `NCC 2022 Housing Provisions 10.3.1(1)(f), 2.0 m measured vertically above the nosing line of a stairway, ramp or landing; ${NCC_READ}`,
-    source: 'code text',
-  },
-  ceilingHeight: {
-    value: 2.4,
-    unit: 'm',
-    section: 'NCC 2022 HP 10.3.1(1)(a)',
-    cite: `NCC 2022 Housing Provisions 10.3.1(1)(a), 2.4 m in a habitable room other than a kitchen (a kitchen, corridor, bathroom or laundry 2.1 m; a sloping ceiling over two thirds of the floor); ${NCC_READ}`,
-    source: 'code text',
-  },
-} as const satisfies Partial<Record<keyof typeof IRC_2021, Threshold>>
-
-const FR_READ =
-  "read on legifrance.gouv.fr (JORFTEXT000031692481), consolidated text in force on 27 October 2026, articles 11 and 12 unmodified since publication: the accessibility rules for new collective housing and individual houses; whom they bind is the decree's, not read here"
-
-/**
- * France: the rows whose text was read in the arrêté du 24 décembre 2015 on the accessibility of new
- * dwellings. Nothing here comes from a construction text that sets a room area or a ceiling height for a
- * new dwelling (none was found in the national texts opened); the clear space beside a WC (0,80 x 1,30 m)
- * is a space for a wheelchair in the unité de vie, not the IRC's centre-to-obstruction figure, so it has no row.
- */
-export const FR_2015 = {
-  hallWidth: {
-    value: 0.9,
-    unit: 'm',
-    section: 'arrêté du 24 décembre 2015 art. 11 II',
-    cite: `arrêté du 24 décembre 2015 art. 11, II: la largeur minimale des circulations intérieures est de 0,90 m (porte d'entrée 0,90 m nominal, 0,83 m de passage utile; portes intérieures 0,80 m nominal, 0,77 m utile); ${FR_READ}`,
-    source: 'code text',
-  },
-  stairWidth: {
-    value: 0.8,
-    unit: 'm',
-    section: 'arrêté du 24 décembre 2015 art. 12',
-    cite: `arrêté du 24 décembre 2015 art. 12: l'escalier d'un logement sur plusieurs niveaux a une largeur minimale de 0,80 m (mesurée à l'aplomb de la main courante si elle empiète de plus de 10 cm); ${FR_READ}`,
-    source: 'code text',
-  },
-  riserMax: {
-    value: 0.18,
-    unit: 'm',
-    section: 'arrêté du 24 décembre 2015 art. 12',
-    cite: `arrêté du 24 décembre 2015 art. 12: hauteur de marche inférieure ou égale à 18 cm; ${FR_READ}`,
-    source: 'code text',
-  },
-  treadMin: {
-    value: 0.24,
-    unit: 'm',
-    section: 'arrêté du 24 décembre 2015 art. 12',
-    cite: `arrêté du 24 décembre 2015 art. 12: largeur du giron supérieure ou égale à 24 cm; ${FR_READ}`,
-    source: 'code text',
-  },
-} as const satisfies Partial<Record<keyof typeof IRC_2021, Threshold>>
-
 /**
  * Numbers the usage checks borrow for what a person can do in a house: a clear passage, a door, a turning
  * space, the edge a cane finds. They are not a code row and apply to every project whatever its jurisdiction
@@ -321,12 +224,6 @@ export type CodeProfile = {
 
 export const CODE_PROFILES: Readonly<Record<CodeProfileId, CodeProfile>> = {
   'irc-2021': { id: 'irc-2021', label: 'the US IRC 2021', thresholds: IRC_2021 },
-  'au-ncc': {
-    id: 'au-ncc',
-    label: 'the Australian NCC (ABCB Housing Provisions)',
-    thresholds: NCC_2022,
-  },
-  fr: { id: 'fr', label: 'the French regulations', thresholds: FR_2015 },
 }
 
 /** Where a project says which code applies: `site.metadata.codeProfile`. */

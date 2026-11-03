@@ -32,7 +32,6 @@ import { placeItemsTool } from './place-items'
 import { createRoofTool, moveRoofsToRoofLevelTool } from './roofs'
 import { ROOM_TOOL_CONTRACTS } from './room-structure'
 import { searchMaterialsTool } from './search-materials'
-import { setCodeProfileTool } from './set-code-profile'
 import { getSiteTool, placeBuildingTool } from './site'
 import { createStairTool, fitStairTool, measureStairTool } from './stairs'
 import { UNIT_TOOL_CONTRACTS } from './units'
@@ -70,7 +69,6 @@ export * from './retired'
 export * from './roofs'
 export * from './room-structure'
 export * from './search-materials'
-export * from './set-code-profile'
 export * from './site'
 export { CATALOG_SOURCE, OTHER_SOURCES, OUTSIDE_SOURCES } from './sources'
 export * from './stairs'
@@ -104,7 +102,6 @@ export const AGENT_TOOL_CONTRACTS = [
   designBriefTool,
   placeDesignTool,
   validateDesignTool,
-  setCodeProfileTool,
   addWallTool,
   setWallTypeTool,
   addFenceTool,

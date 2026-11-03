@@ -1083,7 +1083,7 @@ export const METADATA_NON_REFERENCES: readonly { path: string; reason: string }[
     ['codeOverrides'],
   ),
   ...described(
-    'Which building code the project follows (`irc-2021`, `au-ncc`, `fr`): a profile name, never a node id. Read by the code-specific usage checks; a scene that does not name one has no jurisdiction.',
+    'Which building code the project follows (`irc-2021`): a profile name, never a node id. Read by the code-specific usage checks; a scene that does not name one has no jurisdiction.',
     ['codeProfile'],
   ),
   ...described('Read as a truthy flag only; no editor writer.', [

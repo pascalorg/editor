@@ -27,7 +27,6 @@ import {
   addLevelTool,
   addObjectTool,
   addWallTool,
-  codeProfileOutput,
   createRoofTool,
   createRoomTool,
   createStairTool,
@@ -65,7 +64,6 @@ import {
   searchAssetsTool,
   searchMaterialsTool,
   setCheckpointTool,
-  setCodeProfileTool,
   setGroundLevelTool,
   setUnitMembersTool,
   setWallTypeTool,
@@ -275,12 +273,6 @@ const SHARED_TOOLS: SharedTool[] = [
       ...achievedOutput,
       ...liveSyncOutput,
     },
-  },
-  {
-    contract: setCodeProfileTool,
-    operation: AGENT_OPERATIONS.set_code_profile,
-    annotations: DESTRUCTIVE_TOOL_ANNOTATIONS,
-    outputSchema: { ...codeProfileOutput, ...achievedOutput, ...liveSyncOutput },
   },
   {
     contract: setGroundLevelTool,

@@ -1,5 +1,4 @@
 import { describe, expect, test } from 'bun:test'
-import { setCodeProfile } from '../../agent-operations/set-code-profile'
 import {
   type AnyNode,
   BuildingNode,
@@ -568,24 +567,6 @@ describe('usage_fixture_clearance', () => {
       )
     }
   })
-
-  test('set_code_profile on a US project turns the finding into a warning, and clearing it turns it back', () => {
-    const apply = (nodes: Nodes, profile: 'irc-2021' | null) => {
-      const out = setCodeProfile(nodes, { profile }, { activeLevelId: null })
-      const update = out.changes?.update?.[0]
-      return update
-        ? ({ ...nodes, [update.id]: { ...nodes[update.id]!, ...update.data } } as Nodes)
-        : nodes
-    }
-    const bare = toiletRoom(0.4, [site()])
-    expect(clear(bare)[0]).toMatchObject({ severity: 'info', code: { byDefault: true } })
-    const us = apply(bare, 'irc-2021')
-    expect(clear(us)[0]).toMatchObject({
-      severity: 'warning',
-      code: { profile: 'irc-2021', byDefault: false },
-    })
-    expect(clear(apply(us, null))[0]).toMatchObject({ severity: 'info' })
-  })
 })
 
 describe('usage_door_over_stair', () => {
@@ -672,8 +653,6 @@ describe('usage_door_over_stair', () => {
       severity: 'warning',
       code: { byDefault: false },
     })
-    expect(over(headOfStair('outward', [site('au-ncc')]))).toHaveLength(0)
-    expect(over(headOfStair('outward', [site('fr')]))).toHaveLength(0)
   })
 
   test('the same door swinging into the room, away from the stair, says nothing', () => {
