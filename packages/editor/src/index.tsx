@@ -295,7 +295,7 @@ export {
 } from './components/ui/build-panel/build-panel'
 export { useCommandPalette } from './components/ui/command-palette'
 export { useDimensionDraftStore } from './lib/dimension-draft-store'
-export { DimensionInput } from './components/tools/shared/dimension-input'
+export { DimensionInput, type DimensionInputState } from './components/tools/shared/dimension-input'
 export { ActionButton, ActionGroup } from './components/ui/controls/action-button'
 export {
   MaterialPaintPanel,

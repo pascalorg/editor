@@ -11981,14 +11981,38 @@ export function FloorplanPanel({
           </svg>
         ) : null}
 
-        {/* Floating dimension input overlay for 2D wall drafting */}
-        {isWallBuildActive && draftStart && (
+        {/* Floating dimension input overlay for 2D drafting (wall, fence, slab, ceiling) */}
+        {((isWallBuildActive && draftStart) ||
+          (isFenceBuildActive && fenceDraftStart) ||
+          (isPolygonDraftBuildActive && activePolygonDraftPoints.length > 0)) && (
           <FloorplanDimensionInputOverlay
-            draftStart={draftStart}
+            draftStart={
+              isWallBuildActive
+                ? draftStart
+                : isFenceBuildActive
+                ? fenceDraftStart
+                : activePolygonDraftPoints[activePolygonDraftPoints.length - 1] ?? null
+            }
             onCommitPoint={(pt) => {
-              handleWallPlacementPoint(pt)
+              if (isWallBuildActive) {
+                handleWallPlacementPoint(pt)
+              } else if (isFenceBuildActive) {
+                emitFloorplanGridEvent('click', pt, new MouseEvent('click') as any)
+              } else if (isPolygonDraftBuildActive) {
+                if (isZoneBuildActive) {
+                  handleZonePlacementPoint(pt)
+                } else if (isCeilingBuildActive) {
+                  handleCeilingPlacementPoint(pt)
+                } else {
+                  handleSlabPlacementPoint(pt)
+                }
+              }
             }}
-            onCancel={clearWallPlacementDraft}
+            onCancel={() => {
+              if (isWallBuildActive) clearWallPlacementDraft()
+              else if (isFenceBuildActive) clearFencePlacementDraft()
+              else useDimensionDraftStore.getState().reset()
+            }}
           />
         )}
       </div>

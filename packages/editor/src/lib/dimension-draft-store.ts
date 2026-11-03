@@ -1,10 +1,8 @@
-﻿/**
+/**
  * Shared zustand store for dimension-input drafting state.
  *
- * Both the 3D wall tool and the 2D floorplan panel read/write this store.
- * The 3D tool owns the DimensionInput component (via Html); the 2D
- * floorplan renders ghost walls as SVG and places points using the
- * locked dimensions.
+ * Supports drafting across multiple tools: wall, fence, slab, ceiling.
+ * Both 3D canvas tools and the 2D floorplan panel read/write this store.
  */
 import { create } from 'zustand'
 import type { WallPlanPoint } from '../components/tools/wall/wall-drafting'
@@ -16,7 +14,11 @@ import {
   buildGhostWalls,
 } from '../components/tools/wall/wall-drafting'
 
-interface DimensionDraftStore extends DimensionDraftState {
+export type DraftToolKind = 'wall' | 'fence' | 'slab' | 'ceiling'
+
+export interface DimensionDraftStore extends DimensionDraftState {
+  activeTool: DraftToolKind | null
+  setActiveTool: (tool: DraftToolKind | null) => void
   /** Place a point using locked dimensions or fallback. Returns new state. */
   placePoint: (fallback: WallPlanPoint) => void
   /** Update length/angle values and recalculate preview. */
@@ -28,12 +30,12 @@ interface DimensionDraftStore extends DimensionDraftState {
   /** Reset to initial state. */
   reset: () => void
   /** Initialize with a starting point (Point 1). */
-  startDraft: (point: WallPlanPoint) => void
+  startDraft: (point: WallPlanPoint, tool?: DraftToolKind) => void
   /** Get ghost wall segments for rendering. */
   getGhostWalls: () => Array<{ start: WallPlanPoint; end: WallPlanPoint }>
 }
 
-function calculateNextPoint(
+export function calculateNextPoint(
   from: WallPlanPoint,
   lengthMeters: number,
   angleDeg: number,
@@ -51,12 +53,18 @@ export const useDimensionDraftStore = create<DimensionDraftStore>((set, get) => 
   lockedAngle: null,
   lastClickTime: 0,
   fieldType: 'length' as const,
+  activeTool: null,
 
-  startDraft(point) {
+  setActiveTool(tool) {
+    set({ activeTool: tool })
+  },
+
+  startDraft(point, tool = 'wall') {
     set({
       ...EMPTY_DIMENSION_DRAFT,
       points: [point],
       fieldType: 'length',
+      activeTool: tool,
     })
   },
 
@@ -130,7 +138,7 @@ export const useDimensionDraftStore = create<DimensionDraftStore>((set, get) => 
   },
 
   reset() {
-    set(EMPTY_DIMENSION_DRAFT)
+    set({ ...EMPTY_DIMENSION_DRAFT, activeTool: null })
   },
 
   getGhostWalls() {
