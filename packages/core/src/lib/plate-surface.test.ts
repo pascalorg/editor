@@ -5,6 +5,7 @@ import { authorScenePayload } from '../agent-tools/author-scene'
 import {
   type AnyNode,
   BuildingNode,
+  DoorNode,
   LevelNode,
   SiteNode,
   SlabNode,
@@ -461,4 +462,74 @@ describe('the doorway of an opening reaching below its floor', () => {
     clearPlateSurfaceCaches()
     expect(cutPlates(garage(0).context)).toEqual([])
   })
+})
+
+test('a plate edge a hair off the wall face leaves no sliver across the doorway', () => {
+  clearPlateSurfaceCaches()
+  const level = 'level_1'
+  const half = (id: string, x0: number, x1: number, elevation: number) =>
+    SlabNode.parse({
+      id,
+      parentId: level,
+      polygon: [
+        [x0, -4],
+        [x1, -4],
+        [x1, 3.9],
+        [x0, 3.9],
+      ],
+      elevation,
+    })
+  // The floor the wall stands on, under its outer half: its outer edge runs 3 mm off the face.
+  const band = SlabNode.parse({
+    id: 'slab_band',
+    parentId: level,
+    boundary: 'auto',
+    plateRole: 'base',
+    polygon: [
+      [0, 4],
+      [5, 4],
+      [5, 4.103],
+      [0, 4.1],
+    ],
+    elevation: 0.05,
+  })
+  const front = WallNode.parse({
+    id: 'wall_front',
+    parentId: level,
+    start: [5, 4],
+    end: [-5, 4],
+    thickness: 0.2,
+    height: 2.7,
+    children: ['door_garage'],
+  })
+  const door = DoorNode.parse({
+    id: 'door_garage',
+    parentId: front.id,
+    wallId: front.id,
+    position: [2.5, -0.73 + 1.1, 0],
+    width: 2.4,
+    height: 2.2,
+  })
+  const slabs = [half('slab_house', -5, 0, 0.05), half('slab_garage', 0, 5, -0.68), band]
+  const nodes = Object.fromEntries(
+    [
+      LevelNode.parse({ id: level, level: 0, children: [...slabs.map((s) => s.id), front.id] }),
+      ...slabs,
+      front,
+      door,
+    ].map((node) => [node.id, node]),
+  )
+  const context: PlateLevelContext = { walls: [front], zones: [], slabs, openings: [door], nodes }
+  expect(area(plateDoorwayCuts(band, context))).toBeGreaterThan(0)
+  // The door spans x 1.3…3.7; across the wall and well past it, nothing of the band is left.
+  const doorway = union([
+    [
+      [1.31, 3.5],
+      [3.69, 3.5],
+      [3.69, 4.5],
+      [1.31, 4.5],
+    ],
+  ])
+  const top = computePlateSurfacePartition(band, context)!.cells.flatMap((cell) => cell.polygons)
+  expect(area(intersection(top, doorway))).toBe(0)
 })
