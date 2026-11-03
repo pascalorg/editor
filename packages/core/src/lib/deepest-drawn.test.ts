@@ -9,7 +9,6 @@ import {
   WallNode,
 } from '../schema'
 import { deepestDrawnY, lowestGroundY } from './deepest-drawn'
-import { FOUNDATION_STANDARD } from './foundation-standard'
 import { FLAT_GROUND_Y } from './site-ground-height'
 import { encodeTerrainField } from './terrain-codec'
 import { createTerrainField } from './terrain-field'
@@ -83,16 +82,13 @@ test('over no floor the scene draws nothing deep', () => {
   expect(deepestDrawnY(keyed([site()]))).toBeNull()
 })
 
-test('a house at grade is deepest at a footing under its floor', () => {
-  expect(deepestDrawnY(house(null))).toBeCloseTo(
-    0.05 - 0.05 - FOUNDATION_STANDARD.footingThickness,
-    9,
-  )
+test('a house at grade is deepest at the underside of its floor', () => {
+  expect(deepestDrawnY(house(null))).toBeCloseTo(0.05 - 0.05, 9)
 })
 
-test('a basement is deepest at the footing under its floor', () => {
+test('a basement is deepest at the underside of its floor', () => {
   // The floor top is at -3.63 + 0.05 on a 0.05 m slab.
-  expect(deepestDrawnY(house(-3.63))).toBeCloseTo(-3.63 - FOUNDATION_STANDARD.footingThickness, 9)
+  expect(deepestDrawnY(house(-3.63))).toBeCloseTo(-3.63, 9)
 })
 
 /** A basement (-1, plane at -3.63) whose floor has two slabs on different elevations. */
@@ -127,10 +123,10 @@ test('a split-level floor is deepest at its lowest slab underside, not the highe
     { elevation: 0.05, thickness: 0.05 },
     { elevation: -1.2, thickness: 0.2 },
   ])
-  expect(deepestDrawnY(nodes)).toBeCloseTo(-3.63 - 1.4 - FOUNDATION_STANDARD.footingThickness, 9)
+  expect(deepestDrawnY(nodes)).toBeCloseTo(-3.63 - 1.4, 9)
 })
 
-test('a recessed slab counts where it is drawn: by its own underside, with no footing under it', () => {
+test('a recessed slab counts where it is drawn: by its own underside', () => {
   // A pool basin: floor at -1.5, 0.3 thick, under a 0.05 m standing slab.
   const nodes = splitBasement([
     { elevation: 0.05, thickness: 0.05 },
@@ -139,21 +135,11 @@ test('a recessed slab counts where it is drawn: by its own underside, with no fo
   expect(deepestDrawnY(nodes)).toBeCloseTo(-3.63 - 1.8, 9)
 })
 
-test('a thick recessed slab that stays shallow does not deepen the standing plate’s footing', () => {
-  // A raised recessed plate (top 0.45, 0.5 thick: underside -0.05) beside a thin standing plate:
-  // the footing under the standing plate is the deeper thing, not a thickest-slab guess.
-  const nodes = splitBasement([
-    { elevation: 0.05, thickness: 0.05 },
-    { elevation: 0.45, thickness: 0.5, recessed: true },
-  ])
-  expect(deepestDrawnY(nodes)).toBeCloseTo(-3.63 - FOUNDATION_STANDARD.footingThickness, 9)
-})
-
 test('site flatwork is not a floor: a driveway laid deeper than the house’s slab does not take the dive depth down', () => {
   // The house on its 0.05 m plate; a driveway on the same level, top -0.3, 0.3 thick (underside -0.6).
   const nodes = splitBasement([
     { elevation: 0.05, thickness: 0.05 },
     { elevation: -0.3, thickness: 0.3, metadata: { flatwork: 'driveway' } },
   ])
-  expect(deepestDrawnY(nodes)).toBeCloseTo(-3.63 - FOUNDATION_STANDARD.footingThickness, 9)
+  expect(deepestDrawnY(nodes)).toBeCloseTo(-3.63, 9)
 })

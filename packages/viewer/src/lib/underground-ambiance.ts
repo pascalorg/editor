@@ -52,8 +52,6 @@ const BACKDROP = {
 } as const
 /** The thin rim along the cut of the hole in the ground, from above. */
 export const UNDERGROUND_RIM = UNDERGROUND_PALETTE.rim
-/** The grade ring, where the ground meets the level below grade: a light rim in the dark mode. */
-export const UNDERGROUND_RING = UNDERGROUND_PALETTE.ring
 /** The corners the vignette closes in to. */
 export const UNDERGROUND_VIGNETTE = UNDERGROUND_PALETTE.vignette
 

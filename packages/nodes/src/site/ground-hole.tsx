@@ -43,7 +43,7 @@ import { EDGE_LOOKS, type EdgeLook } from './underground-edge'
  * in a soft feather and a thin light line marks the cut itself.
  *
  * The footprint is a signed-distance field baked on the CPU into a small texture when the
- * footprints change (the polygons the grade ring is drawn from), so the ground's mask costs one
+ * footprints change, so the ground's mask costs one
  * texture fetch and one noise lookup per fragment, whatever the building's outline. How far the
  * hole is open (0 to 1, eased, 0 in a capture) is the viewer's `groundHoleOpenNode`.
  */
@@ -317,8 +317,8 @@ export function groundHoleColorNode(shadeColor: string) {
 }
 
 /**
- * Feeds the hole the footprints it is cut over (the polygons the grade ring runs along: the level
- * shown and the ones between it and grade), and says to the rest of the viewer whether the scene
+ * Feeds the hole the footprints it is cut over (the level shown and the ones between it and
+ * grade), and says to the rest of the viewer whether the scene
  * has a level below grade at all (`present`): the ground materials carry the hole's mask, and the
  * eye's fill light is mounted, from then on, once, so that changing floors only changes uniforms.
  *

@@ -111,6 +111,29 @@ export function openingFitsAtDatum(
   return datum + opening.position[1] + opening.height / 2 <= top + 1e-9
 }
 
+/**
+ * The lowest the wall reaches under the opening's span, level-local, on its centreline or either
+ * face: where a face goes down beside a floor sunk under the one the wall stands on (a garage
+ * beside the house), lower than that floor.
+ */
+export function wallBottomUnderOpening(
+  wall: WallNode,
+  opening: Pick<DoorNode | WindowNode, 'position' | 'width'>,
+  support: WallSlabSupport,
+): number {
+  const length = getWallCurveLength(wall)
+  if (length < 1e-9) return support.baseElevation
+  const from = Math.max(0, (opening.position[0] - opening.width / 2) / length)
+  const to = Math.min(1, (opening.position[0] + opening.width / 2) / length)
+  const segments = [...support.baseSegments, ...support.faceBottom.a, ...support.faceBottom.b]
+  const heights = segments.flatMap((segment) => {
+    const start = Math.max(from, segment.start),
+      end = Math.min(to, segment.end)
+    return end > start ? [supportSegmentAt(segment, start), supportSegmentAt(segment, end)] : []
+  })
+  return heights.length ? Math.min(...heights) : support.baseElevation
+}
+
 export function getOpeningFloorDatum(
   wall: WallNode,
   opening: Pick<DoorNode | WindowNode, 'position' | 'width' | 'height'>,
@@ -181,10 +204,15 @@ export function getOpeningWallCut(
   const bottoms = [...support.faceBottom.a, ...support.faceBottom.b]
     .filter((s) => s.end > from && s.start < to)
     .map((s) => Math.min(s.elevation, s.endElevation ?? s.elevation))
+  // An opening may reach below its floor (a negative sill: a garage door down to the garage floor
+  // sunk beside the wall), never below the wall itself.
   const bottom =
     isFloorAnchoredOpening(opening) && covered
       ? Math.min(support.elevation, ...bottoms)
-      : datum + opening.position[1] - opening.height / 2
+      : Math.max(
+          datum + opening.position[1] - opening.height / 2,
+          Math.min(datum, wallBottomUnderOpening(wall, opening, support)),
+        )
   return {
     // The floor the doorway exposes: exactly the wall's own footprint.
     aperture,

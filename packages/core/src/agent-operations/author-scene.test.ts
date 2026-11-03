@@ -987,6 +987,33 @@ describe('author_scene', () => {
     expect(r.defaults).toContain('1 window has no type: written fixed (cannot open); give type')
   })
 
+  test("a door keeps its sill, below the floor too: a garage door down to the garage's", () => {
+    const payload = authorScenePayload.parse({
+      ...bedroom,
+      levels: [
+        {
+          ...bedroom.levels[0],
+          items: [],
+          lights: [],
+          walls: bedroom.levels[0]!.walls!.map((w) =>
+            w.id === 'south'
+              ? {
+                  ...w,
+                  openings: [
+                    { kind: 'door', along: 1.4, width: 2.4, height: 2.2, sill: -0.73 },
+                    { kind: 'passage', along: 3.4, width: 0.8, height: 2.1, sill: 0.2 },
+                  ],
+                }
+              : w,
+          ),
+        },
+      ],
+    })
+    const outcome = run(payload, {})
+    expect(byAuthorId(outcome, 'south/0').position[1]).toBeCloseTo(-0.73 + 1.1, 6)
+    expect(byAuthorId(outcome, 'south/1').position[1]).toBeCloseTo(0.2 + 1.05, 6)
+  })
+
   test('an opening with code is the scripted door or window add_door writes, by its own id', () => {
     const payload = authorScenePayload.parse({
       ...bedroom,

@@ -13,6 +13,7 @@ import {
   coveredBelowGradeFootprints,
   GROUND_PIT_PLATE_CLEARANCE,
   groundPitFloorY,
+  terrainOverFloors,
 } from './below-grade-footprints'
 import { levelGradeStanding } from './grade-standing'
 import { levelGroundBox, levelStackGroundBox, terrainBetweenEyeAndBox } from './ground-window'
@@ -335,6 +336,31 @@ test('a walk-out whose buried part is wider than the cellar opens it, the edge f
   expect(x[1]).toBe(9)
   expect(z).toEqual([-4, 4])
   expect(belowGradeFootprints(nodes, 'level_walkout')).toHaveLength(1)
+})
+
+test('the terrain is cut wherever it stands over a floor inside its plate, the tolerance band included', () => {
+  // The ground climbs 0.4 m: over the walk-out's 0.2 m floor, under the 0.5 m below-grade bar.
+  const nodes = houseOnHillside({ walkoutEast: 9, riseCm: 40 })
+  expect(belowGradeFootprints(nodes, 'level_walkout')).toEqual([])
+  // Over the floor from x = -0.5 (0.2 m reached on the 0.4 m climb between -1 and 0) to the east
+  // edge; the cellar, under the ground everywhere, whole: one outline.
+  const [outline, ...more] = terrainOverFloors(nodes)
+  expect(more).toEqual([])
+  const { x, z } = extent(outline ?? [])
+  expect(x[0]).toBeCloseTo(-2, 3)
+  expect(x[1]).toBe(9)
+  expect(z).toEqual([-4, 4])
+  const walkoutOnly = {
+    ...nodes,
+    slab_cellar: { ...nodes.slab_cellar, visible: false },
+  } as typeof nodes
+  const [walkout] = terrainOverFloors(walkoutOnly)
+  expect(extent(walkout ?? []).x[0]).toBeCloseTo(-0.5 + 0.005 / 0.4, 3)
+})
+
+test('a floor the terrain stays under cuts nothing: on flat ground only the cellar under it is cut', () => {
+  const cut = terrainOverFloors(houseOnHillside({ riseCm: 0 }))
+  expect(cut.map(extent)).toEqual([{ x: [-2, 5], z: [-4, 4] }])
 })
 
 test('a level under the ground line that the ground leaves out of the ground opens nothing', () => {

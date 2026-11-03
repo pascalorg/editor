@@ -73,6 +73,10 @@ export const addDoorTool = {
       positive: true,
       description: 'Door height (default 2.1 m).',
     }).optional(),
+    sillHeight: measurement('length', 'm', {
+      description:
+        "Rarely needed: the door's bottom above the floor the wall stands on (default 0, on the floor). Negative reaches below that floor, down to the wall's bottom, where the wall goes down beside a floor sunk under it (a garage below the house, a step in the terrain): a garage door filling its doorway down to the garage floor. It stays between the wall's bottom and its ceiling, and reports clamped.",
+    }).optional(),
     openingKind: z
       .enum(['door', 'opening'])
       .optional()
@@ -168,7 +172,11 @@ const openingOutput = {
   achieved: achievedOutput,
 }
 
-export const addDoorOutput = { doorId: z.string(), ...openingOutput }
+export const addDoorOutput = {
+  doorId: z.string(),
+  ...openingOutput,
+  sillHeight: z.number().optional(),
+}
 
 export const addWindowOutput = {
   windowId: z.string(),

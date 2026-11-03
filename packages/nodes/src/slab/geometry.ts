@@ -6,6 +6,7 @@ import {
   computePlateSurfacePartition,
   cutterContextNodes,
   FenceNode,
+  FLAT_GROUND_Y,
   FOUNDATION_SLOT_DEFAULT,
   floorPlateRoom,
   type GeometryContext,
@@ -23,6 +24,7 @@ import {
   type PlateSurfacePartition,
   type PlateTopCell,
   parseFloorStepRole,
+  plateDoorwayCuts,
   plateFinishKey,
   plateLevelContext,
   resolveFloorStepFinish,
@@ -265,7 +267,8 @@ function buildSlabTerrainFillGeometry(
   const localPoints = points.map(([x, z]) => ({ x, z }))
   const bottomY = points.map(([x, z]) => {
     const [siteX, siteZ] = toSite(x, z)
-    const ground = terrain.field ? surfaceHeightAt(terrain.field, siteX, siteZ) : 0
+    // Down to the ground as the site draws it: a flat site's fill lies a hand under the datum.
+    const ground = terrain.field ? surfaceHeightAt(terrain.field, siteX, siteZ) : FLAT_GROUND_Y
     return Math.min(top, ground - terrain.baseWorldY)
   })
   const geometry = buildTerrainPerimeterFillGeometry(localPoints, bottomY, top, 1e-4)
@@ -418,7 +421,16 @@ export function buildSlabGeometry(
               ),
       look: { shading, textures, colorPreset, sceneTheme },
     })
-  const merged = generateSlabGeometry(node, polygonContext, platform ? levelBaseAt : undefined)
+  // The doorway of an opening reaching below this floor is cut out of it (the partition does the
+  // same to its top): the slab builder subtracts holes crossing the outline.
+  const doorways = ctx ? plateDoorwayCuts(node, plateLevelContext(ctx.parent, ctx.resolve)) : []
+  const merged = generateSlabGeometry(
+    doorways.length
+      ? { ...node, holes: [...(node.holes ?? []), ...doorways.map((part) => part.outer)] }
+      : node,
+    polygonContext,
+    platform ? levelBaseAt : undefined,
+  )
   const elevation = node.elevation ?? 0.05
   const partition = platePartitionOf(node, ctx, platform || node.plateRole === 'platform')
 

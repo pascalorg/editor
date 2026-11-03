@@ -165,6 +165,7 @@ export {
   GROUND_PIT_FLOOR_DROP,
   GROUND_PIT_PLATE_CLEARANCE,
   groundPitFloorY,
+  terrainOverFloors,
 } from './lib/below-grade-footprints'
 export {
   CEILING_BUILD_UP_PRESETS,
@@ -363,7 +364,6 @@ export {
   framingPostTopAt,
   isFramingPost,
 } from './lib/framing-post'
-export { type FoundationMember, genericFoundation } from './lib/generic-foundation'
 export {
   ceilingSeatY,
   isScriptedNode,
@@ -390,7 +390,6 @@ export {
 export { type LevelGradeStanding, levelGradeStanding } from './lib/grade-standing'
 export { type GroundLevel, groundLevelOf, levelUnderNamedGround } from './lib/ground-level'
 export {
-  GROUND_FLOOR_ABOVE_GRADE,
   GROUND_SEAT_TOLERANCE,
   type GroundSeat,
   gradeUnderLevel,
@@ -487,6 +486,7 @@ export {
   type PlateSurfacePartition,
   type PlateTopCell,
   parseRoomFinishRole,
+  plateDoorwayCuts,
   plateFinishKey,
   plateLevelContext,
   platePartitionSignature,

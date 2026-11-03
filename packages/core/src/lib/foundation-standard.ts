@@ -1,9 +1,8 @@
 const INCH = 0.0254
 
 /**
- * The standard numbers of a residential foundation, in metres, stated once: the generic foundation
- * the viewer draws under every building (`genericFoundation`), Bones' pour and the sections
- * plugin's drawings all read them. They are the common US residential values (IRC chapters 4 and
+ * The standard numbers of a residential foundation, in metres, stated once: a basement's foundation
+ * walls, Bones' pour and the sections plugin's drawings all read them. They are the common US residential values (IRC chapters 4 and
  * 5), not a jurisdiction's: core holds no frost data, so what depends on one (the frost line, the
  * wall convention) stays with the jurisdiction profile in Bones.
  */
