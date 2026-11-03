@@ -20,3 +20,16 @@ test("author_scene's description names the native tools that add to the scene a 
   for (const tool of ['create_room', 'add_wall', 'add_door', 'add_window', 'create_stair'])
     expect(authorSceneTool.description).toContain(tool)
 })
+
+// The module and the adapter are what a conversion stores, when it succeeds; a later call with
+// replace: true and edits changes parts of them (each find text occurring once) and the adapter runs
+// on the whole edited module (`packages/mcp/src/tools/author-scene.ts`). The description says so, as facts.
+test("author_scene's description states what a conversion stores and what a later call changes of it", () => {
+  const { description } = authorSceneTool
+  expect(description).toContain(
+    'A conversion stores one module and one adapter, and only when it succeeds',
+  )
+  expect(description).toContain('a later call with replace: true and edits')
+  expect(description).toContain('each find text occurring exactly once')
+  expect(description).toContain('the adapter runs on the whole edited module')
+})
