@@ -1,13 +1,10 @@
 import { isSkirtedRoomUse, isWetRoomUse } from '../building/room-use'
 import type { SceneMaterial } from '../schema'
-import { finishWords } from './room-finishes'
 import { type RoomReading, readRooms } from './room-readings'
 import { WET_TILED_TO_M } from './room-wet'
 import type { SceneNodes } from './types'
 import { registerSceneCheck } from './verify-scene'
 import { type DefaultWallFace, readWallFaces, type WallFaceReading } from './wall-face-defaults'
-import { wallItemFaceIssues } from './wall-item-faces'
-import { outsideFinishInside } from './wall-outside-finish'
 
 /**
  * What the rooms of a scene owe, checked at the end of a turn: a wet room with no tile, rooms with no
@@ -25,8 +22,6 @@ export const ROOM_CHECK_CODES = [
   'wall_faces_default',
   'rooms_floors_default',
   'room_no_floor',
-  'walls_outside_finish_inside',
-  'room_wall_item_wrong_face',
 ] as const
 export type RoomCheckCode = (typeof ROOM_CHECK_CODES)[number]
 
@@ -238,31 +233,6 @@ export function wallFaceDefaultIssue(
   }
 }
 
-/**
- * The finish of an outside face on the inside face of the same wall: the walls whose two faces show
- * one finish, indoor rooms on one face and none on the other, where no partition of the scene shows
- * that finish. One finding per finish, with the walls' total length and the rooms that look at them.
- */
-export function outsideFinishInsideIssues(
-  nodes: SceneNodes,
-  materials?: Readonly<Record<string, SceneMaterial>>,
-): RoomCheckIssue[] {
-  return outsideFinishInside(nodes, materials).map(({ finish, walls, partitions }) => {
-    const rooms = [...new Set(walls.flatMap((wall) => wall.rooms))]
-    const metres = walls.reduce((sum, wall) => sum + wall.lengthM, 0)
-    return {
-      type: 'walls_outside_finish_inside',
-      message: `${finishWords(finish)} shows on both faces of ${plural(walls.length, 'wall')} (${metres.toFixed(1)} m): the outside face and the inside face, which looks into ${listed(rooms)}${
-        partitions.length
-          ? `; the partitions of the scene show ${partitions.map((other) => other.name).join(' and ')}`
-          : ''
-      }.`,
-      severity: 'warning',
-      nodeIds: walls.map((wall) => wall.id),
-    }
-  })
-}
-
 /** Every room check on a scene. */
 export function roomCheckIssues(
   nodes: SceneNodes,
@@ -285,8 +255,6 @@ export function roomCheckIssues(
     ...(noFloor ? [noFloor] : []),
     ...(wallFaces ? [wallFaces] : []),
     ...(floors ? [floors] : []),
-    ...outsideFinishInsideIssues(nodes, options.materials),
-    ...wallItemFaceIssues(nodes),
   ]
 }
 

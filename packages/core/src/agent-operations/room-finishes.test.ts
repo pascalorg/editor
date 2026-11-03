@@ -1,13 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import type { AnyNode, SceneMaterial, ZoneNode } from '../schema'
 import { paintedKitchenScene } from './__fixtures__/room-cases'
-import {
-  changedFinishes,
-  describeFinish,
-  finishWords,
-  levelFinishes,
-  roomFinishes,
-} from './room-finishes'
+import { changedFinishes, describeFinish, levelFinishes, roomFinishes } from './room-finishes'
 import { nodesOnLevel } from './scene-queries'
 
 const scene = () => paintedKitchenScene().nodes as Record<string, AnyNode>
@@ -79,19 +73,6 @@ describe('describeFinish', () => {
       color: '#445566',
     })
     expect(describeFinish({})).toEqual({ ref: null, name: 'an inline material' })
-  })
-})
-
-describe('finishWords', () => {
-  test('a name, then the ref and colour it has', () => {
-    expect(finishWords(describeFinish('library:preset-softwhite'))).toBe(
-      'Soft White (library:preset-softwhite, #ebe7df)',
-    )
-    expect(finishWords(describeFinish('library:wood-floorplank1'))).toBe(
-      'Floor Plank 1 (library:wood-floorplank1, #bf8552)',
-    )
-    expect(finishWords(describeFinish(undefined))).toBe('default')
-    expect(finishWords(describeFinish('wood'))).toBe('wood')
   })
 })
 

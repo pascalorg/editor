@@ -88,13 +88,6 @@ export function describeFinish(finish: Finish, materials?: Materials): FinishFac
   return { ref: finish, name: finish }
 }
 
-/** A finish in a phrase: its name, then its ref and colour where it has them. */
-export function finishWords(fact: FinishFact): string {
-  const facts = [fact.ref && fact.ref !== fact.name ? fact.ref : undefined, fact.color]
-  const rest = facts.filter(Boolean).join(', ')
-  return rest ? `${fact.name} (${rest})` : fact.name
-}
-
 /** One finish's identity, so rooms painted alike group together. */
 const keyOf = (fact: FinishFact) =>
   fact.ref ?? (fact.name === DEFAULT_FINISH.name ? 'default' : `inline:${fact.color ?? ''}`)
