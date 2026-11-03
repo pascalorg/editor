@@ -225,14 +225,19 @@ function passageIssue(nodes: Nodes, members: Narrow[]): UsageIssue {
       : `${m(passage.width)} m${between(sides)}`
   }${shared ? `; ${alternativeOf(shared)}` : ''}`
   const sentence = `${targets}: ${clause}`
-  const tail = ` (below ${m(limit)} m${doorway ? ', a doorway' : ''}).`
+  // a leaf drawn at least the doorway's 0.80 m is a standard door: what it leaves is information
+  const standardLeaf = typeof drawn === 'number' && drawn >= DOOR_M - TOLERANCE_M ? drawn : null
+  const tail =
+    standardLeaf === null
+      ? ` (below ${m(limit)} m${doorway ? ', a doorway' : ''}).`
+      : ` (a ${m(standardLeaf)} m door leaf: the frame leaves ${m(passage.width)} m clear).`
   const lead = members[0]!.room
   return {
     type: 'usage_passage_narrow',
     message: `Narrow passage to ${sentence}${door ? `, measured from ${quote(door)}` : ''}${tail}`,
     brief: `Passage to ${sentence}${tail}`,
     ...(door ? { fromDoor: door } : {}),
-    severity: 'warning',
+    severity: standardLeaf === null ? 'warning' : 'info',
     nodeIds: unique([
       ...members.map(({ room }) => (room.roomId.startsWith('zone_') ? room.roomId : undefined)),
       ...sides.map((s) => s.nodeId),

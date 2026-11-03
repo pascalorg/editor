@@ -222,6 +222,33 @@ describe('passages', () => {
     expect(issue!.message).not.toMatch(/non conforme/i)
   })
 
+  test('a doorway limited only by its standard 0.82 m leaf informs: the frame leaves 0.72 m clear', () => {
+    const found = issues(twoRooms(0.82)).filter((i) => i.type === 'usage_passage_narrow')
+    expect(found).toHaveLength(1)
+    const [issue] = found
+    expect(issue!.severity).toBe('info')
+    expect(issue!.valueM).toBeCloseTo(0.72, 2)
+    expect(issue!.thresholdM).toBe(0.8)
+    expect(issue!.doorWidthM).toBe(0.82)
+    expect(issue!.message).toContain(
+      '0.72 m clear between the jambs of “Inner door”, a 0.82 m door',
+    )
+    expect(issue!.message).toContain('(a 0.82 m door leaf: the frame leaves 0.72 m clear).')
+    expect(issue!.message).not.toContain('a doorway)')
+    expect(issue!.brief).toContain('(a 0.82 m door leaf: the frame leaves 0.72 m clear).')
+    expect(issue!.brief).not.toContain('a doorway)')
+  })
+
+  test('a leaf drawn 0.80 m informs at the boundary; 0.79 m is still a warning', () => {
+    const [boundary] = issues(twoRooms(0.8)).filter((i) => i.type === 'usage_passage_narrow')
+    expect(boundary!.severity).toBe('info')
+    expect(boundary!.doorWidthM).toBe(0.8)
+    const [narrow] = issues(twoRooms(0.79)).filter((i) => i.type === 'usage_passage_narrow')
+    expect(narrow!.severity).toBe('warning')
+    expect(narrow!.doorWidthM).toBe(0.79)
+    expect(narrow!.message).toContain('(below 0.80 m, a doorway)')
+  })
+
   test('a bookcase that leaves 0.70 m in a corridor narrows a passage that is not a doorway', () => {
     const found = issues(corridorWithBookcase()).filter(
       (i) => i.type === 'usage_passage_narrow' && i.place.room === 'Study',
@@ -232,6 +259,19 @@ describe('passages', () => {
     expect(found[0]!.severity).toBe('warning')
     expect(found[0]!.obstacles.map((o) => o.name)).toContain('Bookcase')
     expect(found[0]!.message).toMatch(/between “[^”]+” and “[^”]+”/)
+  })
+
+  test('a pinch between one jamb and a bookcase of the same clear width stays a warning', () => {
+    // a wide doorway whose north side a bookcase fills, leaving 0.72 m between it and the south jamb
+    const found = issues(twoRooms(1.2, [bookcase('item_1', 2.7, 2.77, 0.5, 1.2)])).filter(
+      (i) => i.type === 'usage_passage_narrow',
+    )
+    expect(found).toHaveLength(1)
+    expect(found[0]!.valueM).toBeCloseTo(0.72, 2)
+    expect(found[0]!.thresholdM).toBe(0.8)
+    expect(found[0]!.obstacles.map((o) => o.kind).sort()).toEqual(['item', 'jamb'])
+    expect(found[0]!.severity).toBe('warning')
+    expect(found[0]!.message).not.toContain('door leaf')
   })
 
   test('an approximate bookcase narrowing the corridor is a warning, not just a measurement', () => {
