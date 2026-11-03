@@ -14,6 +14,7 @@ import {
   CabinetModuleNode,
   CabinetNode,
   FenceNode,
+  ItemNode,
   LevelNode,
   MeasurementNode,
   nodeKindOf,
@@ -241,6 +242,30 @@ describe('measure in world space', () => {
       { op: 'create', node: window, parentId: wall.id as AnyNodeId },
     ])
     expectPoint(await pointOf(window.id), [0, 1.2, 2])
+  })
+
+  test('a wall-side item is measured on the face it hangs from', async () => {
+    seedRef()
+    const wall = WallNode.parse({ start: [10, 0], end: [16, 0], thickness: 0.3 })
+    const asset = {
+      id: 'wall-shelf',
+      name: 'Wall shelf',
+      category: 'decor',
+      thumbnail: '',
+      src: '/wall-shelf.glb',
+      dimensions: [0.6, 0.3, 0.2] as Vec3,
+      attachTo: 'wall-side' as const,
+    }
+    const front = ItemNode.parse({ asset, side: 'front', position: [2, 1.5, 0] })
+    const back = ItemNode.parse({ asset, side: 'back', position: [4, 1.5, 0] })
+    bridge.applyPatch([
+      { op: 'create', node: wall, parentId: level.id as AnyNodeId },
+      { op: 'create', node: front, parentId: wall.id as AnyNodeId },
+      { op: 'create', node: back, parentId: wall.id as AnyNodeId },
+    ])
+    expectPoint(await pointOf(front.id), [12, 1.5, 0.15])
+    expectPoint(await pointOf(back.id), [14, 1.5, -0.15])
+    expect(await approximateOf(front.id)).toBeUndefined()
   })
 
   test('upper levels add their stacked base and the building transform', async () => {
