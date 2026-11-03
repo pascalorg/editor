@@ -72,11 +72,22 @@ import {
   wallDraftIsRun,
   wallPolygonDraftWalls,
   wallRunDirection,
+  // Dimension drafting
+  buildGhostWalls,
+  DimensionInput,
+  type DimensionDraftState,
+  EMPTY_DIMENSION_DRAFT,
+  isDoubleClick,
+  placeDraftPoint,
+  recordClickTime,
+  updateDraftPreview,
+  useDimensionDraftStore,
 } from '@pascal-app/editor'
 import { getSceneTheme, useViewer } from '@pascal-app/viewer'
+import { Html } from '@react-three/drei'
 import { useThree } from '@react-three/fiber'
-import { useEffect, useRef, useState } from 'react'
-import { DoubleSide, type Group, type Mesh, Vector3 } from 'three'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { BoxGeometry, DoubleSide, type Group, type Mesh, Vector3 } from 'three'
 import {
   DraftAngleArc,
   type DraftAngleLabel,
@@ -538,10 +549,12 @@ const LineWallTool: React.FC = () => {
   const constructionPlane = useRef<HorizontalConstructionPlane | null>(null)
   const flatConstructionBase = useRef(false)
   const buildingState = useRef(0)
+  const lastClickTime = useRef(0)
   const [draftMeasurement, setDraftMeasurement] = useState<DraftMeasurementState>(null)
   // Base Y of an open Polygon room's ghost sides (its construction plane).
   const [polygonGhostY, setPolygonGhostY] = useState(0)
   const [axisGuide, setAxisGuide] = useState<DraftAxisGuideState>(null)
+  const dimStore = useDimensionDraftStore() ?? EMPTY_DIMENSION_DRAFT
   const measurementColor = isDark ? '#ffffff' : '#111111'
   const measurementShadowColor = isDark ? '#111111' : '#ffffff'
 
@@ -662,6 +675,7 @@ const LineWallTool: React.FC = () => {
     const stopDrafting = () => {
       discardWallPolygonDraft()
       buildingState.current = 0
+      useDimensionDraftStore.getState().reset()
       constructionPlane.current = null
       flatConstructionBase.current = false
       chainFirstVertex.current = null
@@ -796,7 +810,23 @@ const LineWallTool: React.FC = () => {
       }
 
       if (buildingState.current === 1) {
-        const snappedLocal = gridPosition
+        const dimState = useDimensionDraftStore.getState()
+        let snappedLocal: WallPlanPoint
+        if (dimState.lockedLength !== null) {
+          const lastPt: WallPlanPoint = dimState.points.length > 0
+            ? dimState.points[dimState.points.length - 1]!
+            : [startingPoint.current.x, startingPoint.current.z]
+          const angle = dimState.lockedAngle !== null
+            ? dimState.lockedAngle
+            : (Math.atan2(localPoint[1] - lastPt[1], localPoint[0] - lastPt[0]) * 180) / Math.PI
+          const rad = (angle * Math.PI) / 180
+          snappedLocal = [
+            lastPt[0] + Math.cos(rad) * dimState.lockedLength,
+            lastPt[1] + Math.sin(rad) * dimState.lockedLength,
+          ]
+        } else {
+          snappedLocal = gridPosition
+        }
         const draftY = constructionPlane.current?.localY ?? event.localPosition[1]
         endingPoint.current.set(snappedLocal[0], draftY, snappedLocal[1])
         const draftPreview = useFloorplanDraftPreview.getState()
@@ -855,12 +885,18 @@ const LineWallTool: React.FC = () => {
     const onGridClick = (event: GridEvent) => {
       if (!wallPreviewRef.current || planOwnsInput()) return
 
-      if (buildingState.current === 1 && event.nativeEvent.detail >= 2) {
+      const now = event.nativeEvent?.timeStamp ?? Date.now()
+      if (
+        buildingState.current === 1 &&
+        (event.nativeEvent.detail >= 2 || (lastClickTime.current > 0 && now - lastClickTime.current < 400))
+      ) {
         // A double-click finishes the chain and keeps an open Polygon room.
         commitWallPolygonDraft()
         stopDrafting()
+        lastClickTime.current = 0
         return
       }
+      lastClickTime.current = now
 
       const { walls, snapWalls, bodyWalls } = getWallDraftSnapWalls()
       const pointed = buildingState.current === 0 ? pointedSurfaceFor(event) : null
@@ -905,6 +941,11 @@ const LineWallTool: React.FC = () => {
           angleLabel: null,
         })
         triggerSFX('sfx:structure-build-start')
+        useDimensionDraftStore.setState({
+          ...EMPTY_DIMENSION_DRAFT,
+          points: [[snappedStart[0], snappedStart[1]]],
+          fieldType: 'length',
+        })
         const levelId = useViewer.getState().selection.levelId
         if (getWallDrawVariant() === 'polygon' && levelId) {
           startWallPolygonDraft(levelId as AnyNodeId, snappedStart, {
@@ -922,21 +963,37 @@ const LineWallTool: React.FC = () => {
         // positions it for the active segment.
         setDraftMeasurement(null)
       } else if (buildingState.current === 1) {
-        const angleLocked = isAngleSnapActive()
-        const snappedEnd = wallDraftIsRun()
-          ? snapRun(localClick, event).point
-          : alignPoint(
-              snapWallDraftPointDetailed({
-                point: localClick,
-                walls: snapWalls,
-                start: angleLocked ? [startingPoint.current.x, startingPoint.current.z] : undefined,
-                angleSnap: angleLocked,
-                magnetic: isMagneticSnapActive(),
-                captureWallBodies: true,
-                bodyWalls,
-              }).point,
-              { applySnap: !angleLocked },
-            )
+        const currentDim = useDimensionDraftStore.getState()
+        let snappedEnd: WallPlanPoint
+        if (currentDim.lockedLength !== null) {
+          const lastPt: WallPlanPoint = currentDim.points.length > 0
+            ? currentDim.points[currentDim.points.length - 1]!
+            : [startingPoint.current.x, startingPoint.current.z]
+          const angle = currentDim.lockedAngle !== null
+            ? currentDim.lockedAngle
+            : (Math.atan2(localClick[1] - lastPt[1], localClick[0] - lastPt[0]) * 180) / Math.PI
+          const rad = (angle * Math.PI) / 180
+          snappedEnd = [
+            lastPt[0] + Math.cos(rad) * currentDim.lockedLength,
+            lastPt[1] + Math.sin(rad) * currentDim.lockedLength,
+          ]
+        } else {
+          const angleLocked = isAngleSnapActive()
+          snappedEnd = wallDraftIsRun()
+            ? snapRun(localClick, event).point
+            : alignPoint(
+                snapWallDraftPointDetailed({
+                  point: localClick,
+                  walls: snapWalls,
+                  start: angleLocked ? [startingPoint.current.x, startingPoint.current.z] : undefined,
+                  angleSnap: angleLocked,
+                  magnetic: isMagneticSnapActive(),
+                  captureWallBodies: true,
+                  bodyWalls,
+                }).point,
+                { applySnap: !angleLocked },
+              )
+        }
         const dx = snappedEnd[0] - startingPoint.current.x
         const dz = snappedEnd[1] - startingPoint.current.z
         if (dx * dx + dz * dz < 0.01 * 0.01) return
@@ -998,11 +1055,7 @@ const LineWallTool: React.FC = () => {
           useAlignmentGuides.getState().clear()
           useWallSnapIndicator.getState().clear()
 
-          // Walls draws one wall per two clicks.
-          if (!wallDraftIsRun()) {
-            stopDrafting()
-            return
-          }
+          // Multi-point wall drafting: continue drawing the next segment from the created wall's end point
 
           const closedToChainStart =
             chainFirstVertex.current &&
@@ -1026,6 +1079,15 @@ const LineWallTool: React.FC = () => {
             return
           }
           nextStart = createdWall.end
+          useDimensionDraftStore.setState({
+            points: [...currentDim.points, nextStart],
+            previewPoint: null,
+            lengthValue: '',
+            angleValue: '',
+            lockedLength: null,
+            lockedAngle: null,
+            fieldType: 'length',
+          })
         }
         // Publish the resolved chain start so the 2D floor-plan draft
         // chains its next segment from the same point (its own snap
@@ -1066,6 +1128,11 @@ const LineWallTool: React.FC = () => {
     emitter.on('grid:move', onGridMove)
     emitter.on('grid:click', onGridClick)
     emitter.on('tool:cancel', onCancel)
+
+    const onDimensionFocus = (fieldType: 'length' | 'angle') => {
+      useDimensionDraftStore.getState().setFieldType(fieldType)
+    }
+    emitter.on('dimension:focus', onDimensionFocus)
     const stopPullSeeding = useWallPullRun.subscribe((state) => seedPull(state.run))
     seedPull(useWallPullRun.getState().run)
 
@@ -1076,6 +1143,7 @@ const LineWallTool: React.FC = () => {
       emitter.off('grid:move', onGridMove)
       emitter.off('grid:click', onGridClick)
       emitter.off('tool:cancel', onCancel)
+      emitter.off('dimension:focus', onDimensionFocus)
       clearPlacementSurface()
       useAlignmentGuides.getState().clear()
       useWallSnapIndicator.getState().clear()
@@ -1085,6 +1153,74 @@ const LineWallTool: React.FC = () => {
       draftPreview.setWallDraftEnd(null)
     }
   }, [unit, metricNotation])
+
+  const handleDimChange = useCallback((newState: { lengthValue: string; angleValue: string; fieldType?: 'length' | 'angle' }) => {
+    useDimensionDraftStore.getState().setValues(newState.lengthValue, newState.angleValue)
+    if (newState.fieldType) {
+      useDimensionDraftStore.getState().setFieldType(newState.fieldType)
+    }
+  }, [])
+
+  const handleDimConfirm = useCallback(() => {
+    const currentDim = useDimensionDraftStore.getState()
+    const lastPt: WallPlanPoint =
+      currentDim.points.length > 0
+        ? currentDim.points[currentDim.points.length - 1]!
+        : [startingPoint.current.x, startingPoint.current.z]
+
+    const length =
+      currentDim.lockedLength ??
+      (currentDim.lengthValue ? parseFloat(currentDim.lengthValue) : null)
+    if (length === null || Number.isNaN(length) || length <= 0) return
+
+    let angle = currentDim.lockedAngle
+    if (angle === null) {
+      const dx = endingPoint.current.x - lastPt[0]
+      const dz = endingPoint.current.z - lastPt[1]
+      angle = dx === 0 && dz === 0 ? 0 : (Math.atan2(dz, dx) * 180) / Math.PI
+    }
+
+    const rad = (angle * Math.PI) / 180
+    const nextPoint: WallPlanPoint = [
+      lastPt[0] + Math.cos(rad) * length,
+      lastPt[1] + Math.sin(rad) * length,
+    ]
+
+    createWallOnCurrentLevel(lastPt, nextPoint, {
+      constructionHeight: previewHeightRef.current,
+    })
+
+    useDimensionDraftStore.setState({
+      points: [...currentDim.points, nextPoint],
+      previewPoint: null,
+      lengthValue: '',
+      angleValue: '',
+      lockedLength: null,
+      lockedAngle: null,
+      fieldType: 'length',
+    })
+
+    useSegmentDraftChain.getState().setChainStart('wall', [nextPoint[0], nextPoint[1]])
+    startingPoint.current.set(nextPoint[0], startingPoint.current.y, nextPoint[1])
+    endingPoint.current.copy(startingPoint.current)
+    cursorRef.current?.position.copy(startingPoint.current)
+    setAxisGuide({
+      origin: nextPoint,
+      endOrigin: null,
+      y: startingPoint.current.y,
+      angleLabel: null,
+    })
+    setDraftMeasurement(null)
+    triggerSFX('sfx:structure-build-start')
+  }, [])
+
+  const handleDimCancel = useCallback(() => {
+    useDimensionDraftStore.getState().reset()
+    if (buildingState.current === 1) {
+      markToolCancelConsumed()
+      emitter.emit('tool:cancel')
+    }
+  }, [])
 
   return (
     <group>
@@ -1106,6 +1242,47 @@ const LineWallTool: React.FC = () => {
           transparent
         />
       </mesh>
+      {/* Ghost walls for multi-point dimension drafting */}
+      {dimStore.points.length > 1 &&
+        buildGhostWalls(dimStore.points).map((seg: { start: WallPlanPoint; end: WallPlanPoint }, i: number) => (
+          <GhostWallSegment key={i} start={seg.start} end={seg.end} y={startingPoint.current.y} />
+        ))}
+      {dimStore.previewPoint && dimStore.points.length > 0 && (
+        <GhostWallSegment
+          start={dimStore.points[dimStore.points.length - 1]!}
+          end={dimStore.previewPoint}
+          y={startingPoint.current.y}
+        />
+      )}
+
+      {/* Dimension input HUD */}
+      {dimStore.points.length > 0 && (
+        <Html
+          center
+          position={[
+            startingPoint.current.x,
+            startingPoint.current.y + previewHeight + 0.3,
+            startingPoint.current.z,
+          ]}
+          style={{ pointerEvents: 'auto' }}
+          zIndexRange={[100, 0]}
+        >
+          <DimensionInput
+            state={{
+              active: true,
+              fieldType: dimStore.fieldType,
+              lengthValue: dimStore.lengthValue,
+              angleValue: dimStore.angleValue,
+              lockedLength: dimStore.lockedLength,
+              lockedAngle: dimStore.lockedAngle,
+            }}
+            onChange={handleDimChange}
+            onConfirm={handleDimConfirm}
+            onCancel={handleDimCancel}
+          />
+        </Html>
+      )}
+
       {draftMeasurement && (
         <>
           <DraftMeasurementLabel
@@ -1196,3 +1373,52 @@ export const WallTool: React.FC = () => {
 }
 
 export default WallTool
+
+function GhostWallSegment({
+  start,
+  end,
+  y,
+}: {
+  start: WallPlanPoint
+  end: WallPlanPoint
+  y: number
+}) {
+  const geometry = useMemo(() => {
+    const sx = start[0], sz = start[1]
+    const ex = end[0], ez = end[1]
+    const dx = ex - sx
+    const dz = ez - sz
+    const length = Math.sqrt(dx * dx + dz * dz)
+    if (length < 0.01) return null
+
+    const angle = Math.atan2(dz, dx)
+    const midX = (sx + ex) / 2
+    const midZ = (sz + ez) / 2
+
+    const geo = new BoxGeometry(length, DEFAULT_LEVEL_HEIGHT, DRAFT_WALL_THICKNESS)
+    const matrix = new Vector3(midX, y + DEFAULT_LEVEL_HEIGHT / 2, midZ)
+    return { geo, position: matrix, angle }
+  }, [start, end, y])
+
+  if (!geometry) return null
+
+  return (
+    <mesh
+      layers={EDITOR_LAYER}
+      renderOrder={1}
+      position={geometry.position}
+      rotation={[0, -geometry.angle, 0]}
+      visible
+    >
+      <primitive object={geometry.geo} attach="geometry" />
+      <meshBasicMaterial
+        color="#818cf8"
+        depthTest={false}
+        depthWrite={false}
+        opacity={0.25}
+        side={DoubleSide}
+        transparent
+      />
+    </mesh>
+  )
+}

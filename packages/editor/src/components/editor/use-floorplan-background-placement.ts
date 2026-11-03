@@ -26,6 +26,7 @@ import useEditor, { isAngleSnapActive, isMagneticSnapActive } from '../../store/
 import usePlacementPreview from '../../store/use-placement-preview'
 import useSegmentDraftChain from '../../store/use-segment-draft-chain'
 import { getSegmentGridStep, type WallPlanPoint } from '../tools/wall/wall-drafting'
+import { useDimensionDraftStore } from '../../lib/dimension-draft-store'
 
 const NOOP_SUBSCRIBE = () => () => {}
 const DEFAULT_ROOF_FOOTPRINT_CHOICE = () => 'draw'
@@ -396,22 +397,41 @@ export function useFloorplanBackgroundPlacement({
           }
         }
 
-        emitFloorplanGridEvent('click', snappedPoint, event)
+        // Check if locked dimensions are set — use calculated point instead of mouse
+        const dimState = useDimensionDraftStore.getState()
+        let finalPoint = snappedPoint
+        if (dimState.lockedLength !== null && dimState.points.length > 0) {
+          const lastPt = dimState.points[dimState.points.length - 1]!
+          const angle = dimState.lockedAngle !== null
+            ? dimState.lockedAngle
+            : (Math.atan2(planPoint[1] - lastPt[1], planPoint[0] - lastPt[0]) * 180) / Math.PI
+          const rad = (angle * Math.PI) / 180
+          finalPoint = [
+            lastPt[0] + Math.cos(rad) * dimState.lockedLength,
+            lastPt[1] + Math.sin(rad) * dimState.lockedLength,
+          ]
+        }
 
-        // Double-click finishes the chain. The emit above already made the
-        // 3D wall tool stopDrafting (its detail >= 2 guard), so close the
-        // 2D draft too — otherwise it stays open against a closed 3D tool
-        // and the next previewed segment is silently never created.
+        emitFloorplanGridEvent('click', finalPoint, event)
+
         if (draftStart && event.detail >= 2) {
-          // …and keeps an open Polygon room (2D-only owns it; in split view the
-          // 3D tool already committed it on the same click).
           commitWallPolygonDraft()
           clearWallPlacementDraft()
-          setCursorPoint(snappedPoint)
+          setCursorPoint(finalPoint)
           return true
         }
 
-        handleWallPlacementPoint(snappedPoint)
+        useDimensionDraftStore.setState({
+          points: [...dimState.points, finalPoint],
+          previewPoint: null,
+          lengthValue: '',
+          angleValue: '',
+          lockedLength: null,
+          lockedAngle: null,
+          fieldType: 'length',
+        })
+
+        handleWallPlacementPoint(finalPoint)
         return true
       }
 

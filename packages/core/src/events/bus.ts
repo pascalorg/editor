@@ -346,6 +346,7 @@ type CameraControlEvents = {
 
 type ToolEvents = {
   'tool:cancel': undefined
+  'dimension:focus': 'length' | 'angle'
 }
 
 type GuideEvents = {
