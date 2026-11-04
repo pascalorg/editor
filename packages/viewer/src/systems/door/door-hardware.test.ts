@@ -4,7 +4,15 @@ import { act, create } from '@react-three/test-renderer'
 import { createElement } from 'react'
 import * as THREE from 'three'
 import { disposeObject3DResources } from '../../lib/dispose-object3d'
-import { hingeBarrel, leverOnRose, roller, roundedBox, tube } from '../../lib/hardware-geometry'
+import {
+  hingeJambPart,
+  hingeLeafPart,
+  leverOnRose,
+  pullBar,
+  roller,
+  roundedBox,
+  tube,
+} from '../../lib/hardware-geometry'
 import { buildDoorPreviewMesh, DoorSystem, poseDoorMovingParts } from './door-system'
 
 function swingLeaves(mesh: THREE.Object3D) {
@@ -15,6 +23,14 @@ function handles(leaf: THREE.Object3D) {
   return leaf.children.filter(
     (child): child is THREE.Mesh => child instanceof THREE.Mesh && child.geometry === leverOnRose(),
   )
+}
+
+function movingHinges(leaf: THREE.Object3D) {
+  const hinges: THREE.Mesh[] = []
+  leaf.traverse((part) => {
+    if (part instanceof THREE.Mesh && part.geometry === hingeLeafPart()) hinges.push(part)
+  })
+  return hinges
 }
 
 function expectVector(actual: THREE.Vector3, expected: THREE.Vector3) {
@@ -43,6 +59,49 @@ for (const doorType of ['hinged', 'double', 'french'] as const) {
             const hingeSign = Math.sign(leaf.position.x)
             const face = swingDirection === 'inward' ? 1 : -1
             expect(leaf.position.z).toBeCloseTo(face * 0.02)
+            const leafHinges = movingHinges(leaf)
+            const jambHinges = mesh.children.filter(
+              (part): part is THREE.Mesh =>
+                part instanceof THREE.Mesh &&
+                part.geometry === hingeJambPart() &&
+                Math.abs(part.position.x - leaf.position.x) < 1e-6,
+            )
+            expect(leafHinges).toHaveLength(3)
+            expect(jambHinges).toHaveLength(3)
+            for (const [index, moving] of leafHinges.entries()) {
+              const fixed = jambHinges[index]!
+              expectVector(
+                moving.getWorldPosition(new THREE.Vector3()),
+                fixed.getWorldPosition(new THREE.Vector3()),
+              )
+              expectVector(
+                fixed.position,
+                new THREE.Vector3(leaf.position.x, moving.position.y, leaf.position.z),
+              )
+              expect(moving.userData.slotId).toBe('hardware')
+              expect(fixed.userData.slotId).toBe('hardware')
+              expect(moving.matrixWorld.determinant()).toBeGreaterThan(0)
+              expect(fixed.matrixWorld.determinant()).toBeGreaterThan(0)
+              const fixedPlate = fixed.localToWorld(new THREE.Vector3(-0.00125, 0, -0.014))
+              const movingPlate = moving.localToWorld(new THREE.Vector3(0.00125, 0, -0.014))
+              if (angle === 0) {
+                const localFixed = mesh.worldToLocal(fixedPlate.clone())
+                const localMoving = mesh.worldToLocal(movingPlate.clone())
+                expect(localMoving.x - leaf.position.x).toBeCloseTo(-hingeSign * 0.00125)
+                expect(localFixed.x - leaf.position.x).toBeCloseTo(hingeSign * 0.00125)
+                expect(localMoving.z).toBeCloseTo(face * 0.006)
+                expect(localFixed.z).toBeCloseTo(face * 0.006)
+              } else {
+                const rest = movingHinges(closedLeaves[i]!)[index]!
+                const closedPlate = new THREE.Vector3(0.00125, 0, -0.014)
+                  .applyQuaternion(rest.quaternion)
+                  .add(moving.position)
+                  .applyAxisAngle(new THREE.Vector3(0, 1, 0), angle * face * hingeSign)
+                  .add(leaf.position)
+                  .applyMatrix4(mesh.matrixWorld)
+                expectVector(movingPlate, closedPlate)
+              }
+            }
             const leafHandles = handles(leaf)
             expect(leafHandles).toHaveLength(2)
             for (const [j, handle] of leafHandles.entries()) {
@@ -53,8 +112,8 @@ for (const doorType of ['hinged', 'double', 'french'] as const) {
                 .add(leaf.position)
                 .applyMatrix4(mesh.matrixWorld)
               expectVector(handle.getWorldPosition(new THREE.Vector3()), expected)
-              const grip = handle.localToWorld(new THREE.Vector3(0.125, 0, 0.054))
-              const spindle = handle.localToWorld(new THREE.Vector3(0, 0, 0.054))
+              const grip = handle.localToWorld(new THREE.Vector3(0.125, -0.012, 0.047))
+              const spindle = handle.localToWorld(new THREE.Vector3(0, 0, 0.047))
               const hingeDirection = new THREE.Vector3(hingeSign, 0, 0).applyQuaternion(
                 leaf.getWorldQuaternion(new THREE.Quaternion()),
               )
@@ -75,7 +134,15 @@ for (const openingShape of ['rectangle', 'rounded', 'arch'] as const) {
     const mesh = buildDoorPreviewMesh(
       DoorNode.parse({ openingShape, handle: false, swingAngle: 0 }),
     )
-    const box = new THREE.Box3().setFromObject(swingLeaves(mesh)[0]!)
+    const leaf = swingLeaves(mesh)[0]!
+    const box = new THREE.Box3()
+    leaf.updateWorldMatrix(true, true)
+    leaf.traverse((part) => {
+      if (part instanceof THREE.Mesh && part.userData.slotId !== 'hardware') {
+        part.geometry.computeBoundingBox()
+        box.union(part.geometry.boundingBox!.clone().applyMatrix4(part.matrixWorld))
+      }
+    })
     // Captured on origin/main before moving the pivot; hardware changes have their own bounds.
     const depth = openingShape === 'rectangle' ? 0.03 : 0.02
     expectVector(box.min, new THREE.Vector3(-0.4, -1.05, -depth))
@@ -235,7 +302,7 @@ test('rebuilding a sibling keeps shared hardware usable and undisposed', async (
   const siblingNode = DoorNode.parse({ id: 'door_shared_sibling' })
   const first = buildDoorPreviewMesh(firstNode)
   const sibling = buildDoorPreviewMesh(siblingNode)
-  const geometries = [leverOnRose(), hingeBarrel()]
+  const geometries = [leverOnRose(), hingeJambPart(), hingeLeafPart(), pullBar()]
   let sharedDisposals = 0
   let ownedDisposals = 0
   const onDispose = () => sharedDisposals++
@@ -269,11 +336,11 @@ test('rebuilding a sibling keeps shared hardware usable and undisposed', async (
       expect(geometry.boundingBox!.isEmpty()).toBe(false)
     }
     sibling.updateMatrixWorld(true)
-    const ray = new THREE.Raycaster(new THREE.Vector3(-0.4, -0.8, 1), new THREE.Vector3(0, 0, -1))
+    const ray = new THREE.Raycaster(new THREE.Vector3(-0.4, -0.818, 1), new THREE.Vector3(0, 0, -1))
     expect(
       ray
         .intersectObject(sibling, true)
-        .some((hit) => hit.object instanceof THREE.Mesh && hit.object.geometry === hingeBarrel()),
+        .some((hit) => hit.object instanceof THREE.Mesh && hit.object.geometry === hingeJambPart()),
     ).toBe(true)
   } finally {
     for (const geometry of geometries) geometry.removeEventListener('dispose', onDispose)
@@ -302,6 +369,7 @@ for (const doorType of ['pocket', 'sliding', 'folding', 'barn'] as const) {
           child instanceof THREE.Mesh && child.userData.slotId === 'hardware',
       )
       expect(hardware.length).toBeGreaterThanOrEqual(2)
+      expect(hardware.filter((part) => part.geometry === pullBar())).toHaveLength(2)
       const localPositions = hardware.map((part) => part.position.clone())
       mesh.updateMatrixWorld(true)
       const closed = hardware.map((part) => part.getWorldPosition(new THREE.Vector3()))
@@ -320,8 +388,7 @@ for (const doorType of ['pocket', 'sliding', 'folding', 'barn'] as const) {
       if (doorType === 'barn') {
         expect(hardware.filter((part) => part.geometry === roller(0.0425, 0.02))).toHaveLength(2)
       } else {
-        for (const part of hardware)
-          expect(part.geometry).toBe(roundedBox(0.02, 0.12, 0.006, 0.003))
+        for (const part of hardware) expect(part.geometry).toBe(pullBar())
       }
     })
   }
@@ -354,4 +421,48 @@ test('passages and empty swing leaves gain no hardware', () => {
     })
     expect(count).toBe(0)
   }
+})
+
+test('shaped openings omit the matching leaf and jamb hinge together', () => {
+  for (const patch of [
+    { openingShape: 'rounded', cornerRadius: 0.3 },
+    { openingShape: 'rounded', cornerRadius: 0.2, hingesSide: 'right' },
+    { openingShape: 'arch', archHeight: 0.45 },
+    {
+      doorType: 'double',
+      openingShape: 'rounded',
+      openingRadiusMode: 'individual',
+      openingTopRadii: [0.3, 0],
+    },
+  ]) {
+    const mesh = buildDoorPreviewMesh(DoorNode.parse(patch))
+    for (const leaf of swingLeaves(mesh)) {
+      const fixed = mesh.children.filter(
+        (part) =>
+          part instanceof THREE.Mesh &&
+          part.geometry === hingeJambPart() &&
+          Math.abs(part.position.x - leaf.position.x) < 1e-6,
+      )
+      const moving = movingHinges(leaf)
+      expect(moving.map((part) => part.position.y)).toEqual(fixed.map((part) => part.position.y))
+    }
+  }
+})
+
+test('default hinged hardware preserves the measured tessellation with 10 percent headroom', () => {
+  const mesh = buildDoorPreviewMesh(DoorNode.parse({}))
+  let triangles = 0
+  let levers = 0
+  let hingeParts = 0
+  mesh.traverse((part) => {
+    if (!(part instanceof THREE.Mesh) || part.userData.slotId !== 'hardware') return
+    triangles += (part.geometry.index?.count ?? part.geometry.getAttribute('position').count) / 3
+    if (part.geometry === leverOnRose()) levers++
+    else if (part.geometry === hingeLeafPart() || part.geometry === hingeJambPart()) hingeParts++
+  })
+  expect(levers).toBe(2)
+  expect(hingeParts).toBe(6)
+  // The specified segment counts exceed 4,000; retain the requested surface quality.
+  expect(triangles).toBe(7032)
+  expect(triangles).toBeLessThanOrEqual(7736)
 })

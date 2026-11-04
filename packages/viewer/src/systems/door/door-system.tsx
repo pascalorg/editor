@@ -24,7 +24,15 @@ import { useFrame } from '@react-three/fiber'
 import { useEffect, useRef } from 'react'
 import * as THREE from 'three'
 import { applyWorldScaleBoxUVs } from '../../lib/box-uv'
-import { hingeBarrel, leverOnRose, roller, roundedBox, tube } from '../../lib/hardware-geometry'
+import {
+  hingeJambPart,
+  hingeLeafPart,
+  leverOnRose,
+  pullBar,
+  roller,
+  roundedBox,
+  tube,
+} from '../../lib/hardware-geometry'
 import {
   type ColorPreset,
   createDefaultMaterial,
@@ -316,7 +324,8 @@ function addHardware(
 
 function addPulls(parent: THREE.Object3D, x: number, y: number, faceZ: number, centerZ = 0) {
   for (const face of [-1, 1]) {
-    addHardware(parent, roundedBox(0.02, 0.12, 0.006, 0.003), x, y, centerZ + face * faceZ)
+    const pull = addHardware(parent, pullBar(), x, y, centerZ + face * faceZ)
+    if (face < 0) pull.rotateY(Math.PI)
   }
 }
 
@@ -1418,6 +1427,9 @@ function addDoorLeaf(
 
   if (hasLeafContent) {
     currentDoorSlot = 'hardware'
+    const leafHinges = new THREE.Group()
+    leafHinges.name = 'door-leaf-hinges'
+    leafGroup.add(leafHinges)
     const hingeH = 0.1
     const hingeRadii = roundedBoundary?.radii ?? openingTopRadii
     const cornerDrop =
@@ -1432,7 +1444,12 @@ function addDoorLeaf(
     const straightEdgeTop = leafTop - cornerDrop
     for (const hingeY of [leafBottom + 0.25, (leafBottom + leafTop) / 2, leafTop - 0.25]) {
       if (hingeY + hingeH / 2 > straightEdgeTop + 1e-6) continue
-      addHardware(mesh, hingeBarrel(), hingeX, hingeY, pivotZ)
+      const jambPart = addHardware(mesh, hingeJambPart(), hingeX, hingeY, pivotZ)
+      const leafPart = addHardware(leafHinges, hingeLeafPart(), 0, hingeY, 0)
+      for (const part of [jambPart, leafPart]) {
+        if (hingeSide === 'right') part.rotateZ(Math.PI)
+        if (swingFace < 0) part.rotateX(Math.PI)
+      }
     }
   }
 
@@ -1898,13 +1915,14 @@ function addBarnDoor(
 
   currentDoorSlot = 'hardware'
   for (const face of [-1, 1]) {
-    addHardware(
+    const pull = addHardware(
       leafGroup,
-      roundedBox(0.026, 0.22, 0.026),
+      pullBar(),
       handleX,
       handleY,
       faceZ + face * (leafDepth / 2 + 0.023),
     )
+    if (face < 0) pull.rotateY(Math.PI)
   }
 }
 

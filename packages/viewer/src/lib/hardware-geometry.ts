@@ -1,9 +1,14 @@
 import {
+  BoxGeometry,
   type BufferGeometry,
   CapsuleGeometry,
+  CatmullRomCurve3,
   CylinderGeometry,
   LatheGeometry,
+  SphereGeometry,
+  TubeGeometry,
   Vector2,
+  Vector3,
 } from 'three'
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
@@ -33,9 +38,19 @@ function lathe(profile: [number, number][], segments: number) {
     profile.map(([r, y]) => new Vector2(r, y)),
     segments,
   )
-  const radius = Math.max(...profile.map(([r]) => r))
-  const heights = profile.map(([, y]) => y)
-  scaleUVs(geometry, 2 * Math.PI * radius, Math.max(...heights) - Math.min(...heights))
+  geometry.normalizeNormals()
+  const uv = geometry.getAttribute('uv')
+  let distance = 0
+  for (let j = 0; j < profile.length; j++) {
+    const [r, y] = profile[j]!
+    if (j > 0) {
+      const [previousR, previousY] = profile[j - 1]!
+      distance += Math.hypot(r - previousR, y - previousY)
+    }
+    for (let i = 0; i <= segments; i++) {
+      uv.setXY(i * profile.length + j, (i / segments) * 2 * Math.PI * r, distance)
+    }
+  }
   return geometry
 }
 
@@ -60,45 +75,148 @@ function merge(parts: BufferGeometry[]) {
   return geometry
 }
 
-function rose(radius: number, depth: number, segments: number) {
-  return lathe(
-    [
-      [0, 0],
-      [radius, 0],
-      [radius, depth - 0.002],
-      [radius - 0.002, depth],
-      [0, depth],
-    ],
-    segments,
-  ).rotateX(Math.PI / 2)
+function hemisphere(radius: number, radialSegments: number, heightSegments: number) {
+  const geometry = new SphereGeometry(
+    radius,
+    radialSegments,
+    heightSegments,
+    0,
+    2 * Math.PI,
+    0,
+    Math.PI / 2,
+  )
+  scaleUVs(geometry, 2 * Math.PI * radius, (Math.PI * radius) / 2)
+  return geometry
 }
 
 /** Origin is the spindle on the mounting face; the grip points along +X, out along +Z. */
 export function leverOnRose() {
   return cached('lever', [], () => {
-    const neck = cylinder(0.009, 0.045, 10)
+    const faceFillet = 0.0005
+    const faceRadius = 0.0245 - faceFillet * (Math.SQRT2 - 1)
+    const profile: [number, number][] = [
+      [0, 0],
+      [0.026, 0],
+      [0.026, 0.0075],
+    ]
+    for (const angle of [Math.PI / 4, Math.PI / 3, (5 * Math.PI) / 12, Math.PI / 2]) {
+      profile.push([
+        faceRadius + faceFillet * Math.cos(angle),
+        0.0085 + faceFillet * Math.sin(angle),
+      ])
+    }
+    profile.push([0, 0.009])
+    const rose = lathe(profile, 48).rotateX(Math.PI / 2)
+    const neck = cylinder(0.01, 0.037, 24)
       .rotateX(Math.PI / 2)
-      .translate(0, 0, 0.009 + 0.045 / 2)
-    const grip = new CapsuleGeometry(0.0095, 0.1155, 1, 8)
-    scaleUVs(grip, 2 * Math.PI * 0.0095, 0.1345)
-    grip.rotateZ(-Math.PI / 2).translate(0.05775, 0, 0.054)
-    return merge([rose(0.026, 0.009, 16), neck, grip])
+      .translate(0, 0, 0.009 + 0.037 / 2)
+    const neckProfile: [number, number][] = []
+    for (let i = 0; i <= 4; i++) {
+      const angle = (i * Math.PI) / 8
+      neckProfile.push([0.009 + 0.001 * Math.cos(angle), 0.046 + 0.001 * Math.sin(angle)])
+    }
+    neckProfile.push([0, 0.047])
+    const fillet = lathe(neckProfile, 24)
+    const filletNormals = fillet.getAttribute('normal')
+    // Match the cylinder tangent exactly rather than averaging the first fillet chord.
+    for (let i = 0; i <= 24; i++) {
+      const phi = (i * 2 * Math.PI) / 24
+      for (let j = 0; j < neckProfile.length; j++) {
+        const angle = (Math.min(j, 4) * Math.PI) / 8
+        filletNormals.setXYZ(
+          i * neckProfile.length + j,
+          Math.cos(angle) * Math.sin(phi),
+          Math.sin(angle),
+          Math.cos(angle) * Math.cos(phi),
+        )
+      }
+    }
+    fillet.rotateX(Math.PI / 2)
+    const curve = new CatmullRomCurve3(
+      [
+        [0, 0],
+        [0.01, 0],
+        [0.02, 0],
+        [0.035, 0],
+        [0.065, -0.004],
+        [0.095, -0.011],
+        [0.105, -0.012],
+        [0.1155, -0.012],
+      ].map(([x, y]) => new Vector3(x, y, 0.047)),
+    )
+    const grip = new TubeGeometry(curve, 24, 0.0095, 16, false)
+    scaleUVs(grip, curve.getLength(), 2 * Math.PI * 0.0095)
+    const cap = hemisphere(0.0095, 16, 8)
+      .rotateZ(-Math.PI / 2)
+      .translate(0.1155, -0.012, 0.047)
+    // Close the heel where the horizontal grip meets the vertical neck.
+    const heel = hemisphere(0.0095, 16, 8)
+      .rotateZ(Math.PI / 2)
+      .translate(0, 0, 0.047)
+    return merge([rose, neck, fillet, grip, cap, heel])
   })
 }
 
-/** A vertical 95 mm capped barrel, centred on the knuckle axis. */
-export function hingeBarrel() {
-  return cached('hinge', [], () =>
-    lathe(
-      [
-        [0, -0.0475],
-        [0.0065, -0.0475],
-        [0.0065, 0.0475],
-        [0, 0.0475],
-      ],
-      12,
-    ),
-  )
+function hingePart(leaf: boolean) {
+  return cached(leaf ? 'hinge-leaf' : 'hinge-jamb', [], () => {
+    const plate = new BoxGeometry(0.0025, 0.089, 0.028)
+    boxUVs(plate, 0.0025, 0.089, 0.028)
+    plate.translate(leaf ? 0.00125 : -0.00125, 0, -0.014)
+    const parts: BufferGeometry[] = [plate]
+    for (let i = leaf ? 0 : 1; i < 5; i += 2) {
+      parts.push(cylinder(0.007, 0.017, 24).translate(0, -0.036 + i * 0.018, 0))
+    }
+    if (leaf) {
+      parts.push(hemisphere(0.007, 24, 4).translate(0, 0.0445, 0))
+      parts.push(hemisphere(0.007, 24, 4).rotateX(Math.PI).translate(0, -0.0445, 0))
+    }
+    return merge(parts)
+  })
+}
+
+/** Odd knuckles and plate on the leaf edge (+X), extending into the rebate (-Z). */
+export function hingeLeafPart() {
+  return hingePart(true)
+}
+
+/** Even knuckles and plate on the jamb face (-X), extending into the rebate (-Z). */
+export function hingeJambPart() {
+  return hingePart(false)
+}
+
+/** Origin on the mounting face; bar along Y, projecting along +Z. */
+export function pullBar() {
+  return cached('pull', [], () => {
+    const bar = new CapsuleGeometry(0.009, 0.102, 8, 16)
+    scaleUVs(bar, 2 * Math.PI * 0.009, 0.102 + Math.PI * 0.009)
+    bar.translate(0, 0, 0.022)
+    const parts: BufferGeometry[] = [bar]
+    for (const y of [-0.02, 0.02]) {
+      parts.push(
+        cylinder(0.005, 0.02, 16)
+          .rotateX(Math.PI / 2)
+          .translate(0, y, 0.01),
+      )
+    }
+    return merge(parts)
+  })
+}
+
+function boxUVs(geometry: BufferGeometry, width: number, height: number, depth: number) {
+  const uv = geometry.getAttribute('uv')
+  const faceSizes = [
+    [depth, height],
+    [depth, height],
+    [width, depth],
+    [width, depth],
+    [width, height],
+    [width, height],
+  ]
+  const verticesPerFace = uv.count / 6
+  for (let i = 0; i < uv.count; i++) {
+    const [u, v] = faceSizes[Math.floor(i / verticesPerFace)]!
+    uv.setXY(i, uv.getX(i) * u!, uv.getY(i) * v!)
+  }
 }
 
 export function roundedBox(
@@ -108,21 +226,8 @@ export function roundedBox(
   r = Math.min(0.004, w / 4, h / 4, d / 4),
 ) {
   return cached('box', [w, h, d, r], (width, height, depth, radius) => {
-    const geometry = new RoundedBoxGeometry(width, height, depth, 1, radius)
-    const uv = geometry.getAttribute('uv')
-    const faceSizes = [
-      [depth, height],
-      [depth, height],
-      [width, depth],
-      [width, depth],
-      [width, height],
-      [width, height],
-    ]
-    const verticesPerFace = uv.count / 6
-    for (let i = 0; i < uv.count; i++) {
-      const [u, v] = faceSizes[Math.floor(i / verticesPerFace)]!
-      uv.setXY(i, uv.getX(i) * u!, uv.getY(i) * v!)
-    }
+    const geometry = new RoundedBoxGeometry(width, height, depth, 2, radius)
+    boxUVs(geometry, width, height, depth)
     return geometry
   })
 }
