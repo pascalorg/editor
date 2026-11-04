@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { DoorNode, type FloorplanGeometry, type GeometryContext, WallNode } from '@pascal-app/core'
 import { buildDoorFloorplan } from './floorplan'
-import { placementSwing, swapDoorHingePatch, swapDoorSwingPatch } from './swing'
+import { hingesSidePatch, placementSwing, swapDoorHingePatch, swapDoorSwingPatch } from './swing'
 
 const wall = WallNode.parse({
   id: 'wall_door-plan',
@@ -148,5 +148,18 @@ describe('swing chosen while placing', () => {
     const swapped = swapDoorHingePatch(door)
     expect(swapped).toEqual({ hingesSide: 'right', handleSide: 'left' })
     expect(leafSide(buildDoor({ ...door, ...swapped }))).toBe(leafSide(buildDoor(door)))
+  })
+
+  test('picking a hinge side in the panel moves the handle to the free edge', () => {
+    // A door saved with its handle on the hinge side comes out right once a side is picked.
+    const door = DoorNode.parse({ id: 'door_pick', hingesSide: 'left', handleSide: 'left' })
+    expect({ ...door, ...hingesSidePatch('right') }).toMatchObject({
+      hingesSide: 'right',
+      handleSide: 'left',
+    })
+    expect({ ...door, ...hingesSidePatch('left') }).toMatchObject({
+      hingesSide: 'left',
+      handleSide: 'right',
+    })
   })
 })

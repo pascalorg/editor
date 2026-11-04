@@ -25,6 +25,17 @@ import { useEffect, useRef } from 'react'
 import * as THREE from 'three'
 import { applyWorldScaleBoxUVs } from '../../lib/box-uv'
 import {
+  flushPull,
+  hingeJambPart,
+  hingeLeafPart,
+  leverOnRose,
+  pullBar,
+  roller,
+  roundedBox,
+  sphere,
+  tube,
+} from '../../lib/hardware-geometry'
+import {
   type ColorPreset,
   createDefaultMaterial,
   createMaterial,
@@ -288,12 +299,49 @@ function addBox(
   y: number,
   z: number,
 ) {
-  const geometry = new THREE.BoxGeometry(w, h, d)
-  applyWorldScaleBoxUVs(geometry, w, h, d)
+  const geometry =
+    currentDoorSlot === 'hardware' ? roundedBox(w, h, d) : new THREE.BoxGeometry(w, h, d)
+  if (geometry instanceof THREE.BoxGeometry && !geometry.userData.shared) {
+    applyWorldScaleBoxUVs(geometry, w, h, d)
+  }
   const m = new THREE.Mesh(geometry, material)
   m.position.set(x, y, z)
   tagDoorSlot(m)
   parent.add(m)
+}
+
+function addHardware(
+  parent: THREE.Object3D,
+  geometry: THREE.BufferGeometry,
+  x: number,
+  y: number,
+  z: number,
+) {
+  const part = new THREE.Mesh(geometry, hardwareMaterial)
+  part.userData.slotId = 'hardware'
+  part.position.set(x, y, z)
+  parent.add(part)
+  return part
+}
+
+function addPulls(
+  parent: THREE.Object3D,
+  x: number,
+  y: number,
+  faceZ: number,
+  centerZ = 0,
+  recessed = false,
+) {
+  for (const face of [-1, 1]) {
+    const pull = addHardware(
+      parent,
+      recessed ? flushPull() : pullBar(),
+      x,
+      y,
+      centerZ + face * faceZ,
+    )
+    if (face < 0) pull.rotateY(Math.PI)
+  }
 }
 
 function addRotatedBox(
@@ -305,13 +353,13 @@ function addRotatedBox(
   x: number,
   y: number,
   z: number,
-  rotationY: number,
+  rotationZ: number,
 ) {
   const geometry = new THREE.BoxGeometry(w, h, d)
   applyWorldScaleBoxUVs(geometry, w, h, d)
   const m = new THREE.Mesh(geometry, material)
   m.position.set(x, y, z)
-  m.rotation.y = rotationY
+  m.rotation.z = rotationZ
   tagDoorSlot(m)
   parent.add(m)
 }
@@ -842,12 +890,12 @@ function createTopClippedRectShape(
 
 function disposeObject(object: THREE.Object3D) {
   object.traverse((child) => {
-    if (child instanceof THREE.Mesh) child.geometry.dispose()
+    if (child instanceof THREE.Mesh && !child.geometry.userData.shared) child.geometry.dispose()
   })
 }
 
 function addLeafSegmentContent({
-  addLeafBox,
+  addLeafBox: buildLeafBox,
   addLeafShape,
   leafWidth,
   leafHeight,
@@ -857,6 +905,7 @@ function addLeafSegmentContent({
   segments,
   contentPadding,
   keepFrameWhenEmpty = false,
+  flushPullAt,
   renderPerimeterFrame = true,
   openingShape = 'rectangle',
   openingTopRadii,
@@ -881,12 +930,37 @@ function addLeafSegmentContent({
   segments: DoorNode['segments']
   contentPadding: DoorNode['contentPadding']
   keepFrameWhenEmpty?: boolean
+  flushPullAt?: { x: number; y: number }
   renderPerimeterFrame?: boolean
   openingShape?: DoorNode['openingShape']
   openingTopRadii?: TopCornerRadii
   archHeight?: number
   archOuterSide?: 'left' | 'right'
 }) {
+  let pullFaceZ = leafDepth / 2
+  const addLeafBox: typeof buildLeafBox = (material, w, h, d, x, y, z) => {
+    if (!flushPullAt) return buildLeafBox(material, w, h, d, x, y, z)
+    const left = x - w / 2
+    const right = x + w / 2
+    const bottom = y - h / 2
+    const top = y + h / 2
+    const cutLeft = Math.max(left, flushPullAt.x - 0.02)
+    const cutRight = Math.min(right, flushPullAt.x + 0.02)
+    const cutBottom = Math.max(bottom, flushPullAt.y - 0.06)
+    const cutTop = Math.min(top, flushPullAt.y + 0.06)
+    if (cutLeft >= cutRight || cutBottom >= cutTop) {
+      return buildLeafBox(material, w, h, d, x, y, z)
+    }
+    pullFaceZ = Math.max(pullFaceZ, Math.abs(z) + d / 2)
+    for (const [l, r, b, t] of [
+      [left, cutLeft, bottom, top],
+      [cutRight, right, bottom, top],
+      [cutLeft, cutRight, bottom, cutBottom],
+      [cutLeft, cutRight, cutTop, top],
+    ] as const) {
+      if (r > l && t > b) buildLeafBox(material, r - l, t - b, d, (l + r) / 2, (b + t) / 2, z)
+    }
+  }
   const hasLeafContent = segments.some((seg) => seg.type !== 'empty')
   const shouldRenderFrame = hasLeafContent || keepFrameWhenEmpty
   const cpX = contentPadding[0]
@@ -1105,6 +1179,7 @@ function addLeafSegmentContent({
 
     segY -= segH
   }
+  return pullFaceZ
 }
 
 function addDoorLeaf(
@@ -1115,6 +1190,7 @@ function addDoorLeaf(
     leafCenterX,
     leafCenterY,
     leafDepth,
+    frameDepth,
     hingeX,
     hingeSide,
     swingRotation,
@@ -1127,6 +1203,8 @@ function addDoorLeaf(
     handleSide,
     doorCloser,
     panicBar,
+    panicBarStyle,
+    panicBarRods,
     panicBarHeight,
     doorHeight,
     openingShape,
@@ -1141,6 +1219,7 @@ function addDoorLeaf(
     leafCenterX: number
     leafCenterY: number
     leafDepth: number
+    frameDepth: number
     hingeX: number
     hingeSide: 'left' | 'right'
     swingRotation: number
@@ -1156,6 +1235,8 @@ function addDoorLeaf(
     handleSide: DoorNode['handleSide']
     doorCloser: boolean
     panicBar: boolean
+    panicBarStyle: DoorNode['panicBarStyle']
+    panicBarRods: boolean
     panicBarHeight: number
     doorHeight: number
     openingShape: DoorNode['openingShape']
@@ -1176,7 +1257,9 @@ function addDoorLeaf(
 ) {
   const hasLeafContent = segments.some((seg) => seg.type !== 'empty')
   const leafGroup = new THREE.Group()
-  leafGroup.position.set(hingeX, 0, 0)
+  const swingFace = Math.sign(openRotationY) * (hingeSide === 'right' ? 1 : -1)
+  const pivotZ = (swingFace * leafDepth) / 2
+  leafGroup.position.set(hingeX, 0, pivotZ)
   leafGroup.rotation.y = swingRotation
   // Marks this group as the swing leaf and records its fully-open angle so the
   // GLB exporter can bake an open/close animation clip from a single pose. The
@@ -1192,9 +1275,9 @@ function addDoorLeaf(
     x: number,
     y: number,
     z: number,
-  ) => addBox(leafGroup, material, w, h, d, x - hingeX, y, z)
+  ) => addBox(leafGroup, material, w, h, d, x - hingeX, y, z - pivotZ)
   const addLeafShape = (material: THREE.Material, shape: THREE.Shape, depth: number) =>
-    addShapeAt(leafGroup, material, shape, depth, -hingeX, 0, 0)
+    addShapeAt(leafGroup, material, shape, depth, -hingeX, 0, -pivotZ)
 
   const localLeafCenterX = leafCenterX - hingeX
   const leafBottom = leafCenterY - leafHeight / 2
@@ -1229,7 +1312,15 @@ function addDoorLeaf(
         if (roundedBoundary) {
           addLeafShape(baseMaterial, roundedLeafShape, leafDepth)
         } else {
-          addShapeAt(leafGroup, baseMaterial, roundedLeafShape, leafDepth, localLeafCenterX, 0, 0)
+          addShapeAt(
+            leafGroup,
+            baseMaterial,
+            roundedLeafShape,
+            leafDepth,
+            localLeafCenterX,
+            0,
+            -pivotZ,
+          )
         }
       }
     } else if (openingShape === 'arch') {
@@ -1269,7 +1360,15 @@ function addDoorLeaf(
         if (archOuterSide || archedBoundary) {
           addLeafShape(baseMaterial, archedLeafShape, leafDepth)
         } else {
-          addShapeAt(leafGroup, baseMaterial, archedLeafShape, leafDepth, localLeafCenterX, 0, 0)
+          addShapeAt(
+            leafGroup,
+            baseMaterial,
+            archedLeafShape,
+            leafDepth,
+            localLeafCenterX,
+            0,
+            -pivotZ,
+          )
         }
       }
     }
@@ -1295,56 +1394,154 @@ function addDoorLeaf(
   if (hasLeafContent && handle) {
     currentDoorSlot = 'hardware'
     const handleY = handleHeight - doorHeight / 2
-    const faceZ = leafDepth / 2
     const handleX =
       handleSide === 'right'
-        ? leafCenterX + leafWidth / 2 - 0.045
-        : leafCenterX - leafWidth / 2 + 0.045
-
-    addLeafBox(hardwareMaterial, 0.028, 0.14, 0.01, handleX, handleY, faceZ + 0.005)
-    addLeafBox(hardwareMaterial, 0.022, 0.1, 0.035, handleX, handleY, faceZ + 0.025)
-
-    if (handleBothSides) {
-      addLeafBox(hardwareMaterial, 0.028, 0.14, 0.01, handleX, handleY, -faceZ - 0.005)
-      addLeafBox(hardwareMaterial, 0.022, 0.1, 0.035, handleX, handleY, -faceZ - 0.025)
+        ? leafCenterX + leafWidth / 2 - 0.06
+        : leafCenterX - leafWidth / 2 + 0.06
+    const contentH = leafHeight - 2 * contentPadding[1]
+    const totalRatio = segments.reduce((sum, segment) => sum + segment.heightRatio, 0)
+    let segmentTop = leafCenterY + contentH / 2
+    let panelDepth = 0
+    for (const segment of segments) {
+      const segmentBottom = segmentTop - (contentH * segment.heightRatio) / totalRatio
+      if (handleY >= segmentBottom && handleY <= segmentTop && segment.type === 'panel') {
+        panelDepth = Math.max(0, segment.panelDepth)
+        break
+      }
+      segmentTop = segmentBottom
+    }
+    const faceZ = leafDepth / 2 + panelDepth
+    // Panic hardware owns the push face (+z): no lever beside the bar there.
+    const leverFaces = (handleBothSides ? [1, -1] : [1]).filter((face) => !(panicBar && face > 0))
+    for (const face of leverFaces) {
+      const lever = addHardware(
+        leafGroup,
+        leverOnRose(),
+        handleX - hingeX,
+        handleY,
+        face * faceZ - pivotZ,
+      )
+      if (face < 0) lever.rotateY(Math.PI)
+      const gripDirection = face * (hingeSide === 'left' ? -1 : 1)
+      if (gripDirection < 0) lever.rotateZ(Math.PI)
     }
   }
 
   if (hasLeafContent && doorCloser) {
     currentDoorSlot = 'hardware'
-    const closerY = leafCenterY + leafHeight / 2 - 0.04
-    addLeafBox(hardwareMaterial, 0.28, 0.055, 0.055, leafCenterX, closerY, leafDepth / 2 + 0.03)
-    addLeafBox(
-      hardwareMaterial,
-      0.14,
-      0.015,
-      0.015,
-      leafCenterX + leafWidth / 4,
-      closerY + 0.025,
-      leafDepth / 2 + 0.015,
+    const latchSign = hingeSide === 'left' ? 1 : -1
+    const offsetScale = Math.min(1, leafWidth / 0.4)
+    const closerY = leafTop - 0.04
+    const bodyX = hingeX + latchSign * 0.16 * offsetScale
+    const bodyZ = swingFace * (leafDepth / 2 + 0.03)
+    addLeafBox(hardwareMaterial, 0.28, 0.055, 0.055, bodyX, closerY, bodyZ)
+    const armY = closerY + 0.0275
+    const closedPivot = new THREE.Vector3(hingeX + latchSign * 0.04 * offsetScale, armY, bodyZ)
+    const closedElbow = new THREE.Vector3(
+      hingeX + latchSign * 0.18 * offsetScale,
+      armY,
+      swingFace * (frameDepth / 2 + 0.12),
     )
+    const shoe = new THREE.Vector3(
+      hingeX + latchSign * 0.34 * offsetScale,
+      armY,
+      swingFace * (frameDepth / 2 + 0.015),
+    )
+    // The shoe overlaps the head face; its underside shares the body pivot's plane below the soffit.
+    addHardware(mesh, roundedBox(0.09, 0.025, 0.03), shoe.x, armY + 0.0125, shoe.z)
+    const pivotOffset = new THREE.Vector3(hingeX, 0, pivotZ)
+    const axis = new THREE.Vector3(0, 1, 0)
+    const pivot = closedPivot
+      .clone()
+      .sub(pivotOffset)
+      .applyAxisAngle(axis, swingRotation)
+      .add(pivotOffset)
+    // Use the cached tubes' millimetre lengths as the actual linkage lengths.
+    const l1 = Math.round(closedPivot.distanceTo(closedElbow) * 1000) / 1000
+    const l2 = Math.round(shoe.distanceTo(closedElbow) * 1000) / 1000
+    const delta = shoe.clone().sub(pivot)
+    const distance = delta.length()
+    const direction =
+      distance > 1e-9 ? delta.divideScalar(distance) : new THREE.Vector3(latchSign, 0, 0)
+    // Unreachable anchors keep fixed-length links collinear rather than stretching them.
+    const reach = Math.max(Math.abs(l1 - l2), Math.min(l1 + l2, distance))
+    const along = reach > 1e-9 ? (l1 * l1 - l2 * l2 + reach * reach) / (2 * reach) : 0
+    const bow = Math.sqrt(Math.max(0, l1 * l1 - along * along))
+    const normal = new THREE.Vector3(-direction.z, 0, direction.x)
+    if (normal.z * swingFace < 0) normal.negate()
+    const elbow = pivot.clone().addScaledVector(direction, along).addScaledVector(normal, bow)
+    for (const [parent, radius, start, end] of [
+      [leafGroup, 0.0075, pivot, elbow],
+      [mesh, 0.006, shoe, elbow],
+    ] as const) {
+      const localStart = start.clone()
+      const localEnd = end.clone()
+      if (parent === leafGroup) {
+        localStart.sub(pivotOffset).applyAxisAngle(axis, -swingRotation)
+        localEnd.sub(pivotOffset).applyAxisAngle(axis, -swingRotation)
+      }
+      const vector = localEnd.clone().sub(localStart)
+      const length = parent === leafGroup ? l1 : l2
+      const center = localStart.clone().addScaledVector(vector.clone().normalize(), length / 2)
+      const arm = addHardware(parent, tube(radius, length), center.x, center.y, center.z)
+      arm.quaternion.setFromUnitVectors(axis, vector.normalize())
+    }
+    addHardware(mesh, sphere(0.009), elbow.x, elbow.y, elbow.z)
   }
 
   if (hasLeafContent && panicBar) {
-    currentDoorSlot = 'hardware'
     const barY = panicBarHeight - doorHeight / 2
-    addLeafBox(
-      hardwareMaterial,
-      leafWidth * 0.72,
-      0.04,
-      0.055,
-      leafCenterX,
+    const latchSign = hingeSide === 'left' ? 1 : -1
+    const latchX = leafCenterX + latchSign * (leafWidth / 2 - 0.055)
+    const hingeEndX = leafCenterX - latchSign * (leafWidth / 2 - 0.04)
+    const faceZ = (swingFace * leafDepth) / 2
+    const device = (geometry: THREE.BufferGeometry, x: number, y: number, offFace: number) => {
+      const part = addHardware(
+        leafGroup,
+        geometry,
+        x - hingeX,
+        y,
+        faceZ + swingFace * offFace - pivotZ,
+      )
+      if (swingFace < 0) part.rotateY(Math.PI)
+      return part
+    }
+    const touchbar = panicBarStyle === 'touchbar'
+    const caseHeight = touchbar ? 0.1 : 0.07
+    device(
+      roundedBox(touchbar ? 0.09 : 0.075, caseHeight, touchbar ? 0.055 : 0.06),
+      latchX,
       barY,
-      leafDepth / 2 + 0.03,
+      touchbar ? 0.0275 : 0.03,
     )
+    device(roundedBox(touchbar ? 0.035 : 0.04, 0.07, 0.05), hingeEndX, barY, 0.025)
+    const barLength = Math.abs(latchX - hingeEndX)
+    const bar = device(
+      touchbar ? roundedBox(barLength, 0.06, 0.03) : tube(0.0125, barLength),
+      (latchX + hingeEndX) / 2,
+      barY,
+      touchbar ? 0.035 : 0.045,
+    )
+    if (!touchbar) bar.rotateZ(Math.PI / 2)
+    if (panicBarRods) {
+      for (const end of [-1, 1]) {
+        const latchY = end > 0 ? leafTop - 0.05 : leafBottom + 0.05
+        device(roundedBox(0.035, 0.06, 0.04), latchX, latchY, 0.02)
+        const startY = barY + (end * caseHeight) / 2
+        const endY = latchY - end * 0.03
+        const rodY = (startY + endY) / 2
+        device(tube(0.006, Math.abs(endY - startY)), latchX, rodY, 0.025)
+        device(roundedBox(0.03, 0.02, 0.03), latchX, rodY, 0.015)
+      }
+    }
   }
 
   if (hasLeafContent) {
     currentDoorSlot = 'hardware'
-    const hingeMarkerX = hingeSide === 'right' ? hingeX - 0.012 : hingeX + 0.012
+    const leafHinges = new THREE.Group()
+    leafHinges.name = 'door-leaf-hinges'
+    leafGroup.add(leafHinges)
     const hingeH = 0.1
-    const hingeW = 0.024
-    const hingeD = leafDepth + 0.016
     const hingeRadii = roundedBoundary?.radii ?? openingTopRadii
     const cornerDrop =
       openingShape === 'rounded'
@@ -1358,7 +1555,12 @@ function addDoorLeaf(
     const straightEdgeTop = leafTop - cornerDrop
     for (const hingeY of [leafBottom + 0.25, (leafBottom + leafTop) / 2, leafTop - 0.25]) {
       if (hingeY + hingeH / 2 > straightEdgeTop + 1e-6) continue
-      addBox(mesh, hardwareMaterial, hingeW, hingeH, hingeD, hingeMarkerX, hingeY, 0)
+      const jambPart = addHardware(mesh, hingeJambPart(), hingeX, hingeY, pivotZ)
+      const leafPart = addHardware(leafHinges, hingeLeafPart(), 0, hingeY, 0)
+      for (const part of [jambPart, leafPart]) {
+        if (hingeSide === 'right') part.rotateZ(Math.PI)
+        if (swingFace < 0) part.rotateX(Math.PI)
+      }
     }
   }
 
@@ -1569,6 +1771,8 @@ function addFoldingDoor(
   // x), starting from the left jamb. At rest every joint is straight, so the
   // panels lie flat across the opening; `poseDoorMovingParts` folds the joints.
   let parent: THREE.Object3D = mesh
+  let pullFaceZ = leafDepth / 2
+  const handleY = handleHeight - doorHeight / 2
   for (let index = 0; index < panelCount; index++) {
     const group = new THREE.Group()
     group.name = `${FOLDING_PANEL_NAME}${index}`
@@ -1588,8 +1792,10 @@ function addFoldingDoor(
       z: number,
     ) => addBox(group, material, w, h, d, panelLength / 2 + x, y, z)
 
-    addLeafSegmentContent({
+    pullFaceZ = addLeafSegmentContent({
       addLeafBox: addFoldingLeafBox,
+      flushPullAt:
+        index === panelCount - 1 ? { x: panelLength / 2 - 0.035, y: handleY } : undefined,
       leafWidth: Math.max(0.08, panelLength),
       leafHeight,
       leafCenterX: 0,
@@ -1610,28 +1816,8 @@ function addFoldingDoor(
   }
 
   // Handle on the free end of the last panel (its local x=panelLength edge).
-  const handleY = handleHeight - doorHeight / 2
   currentDoorSlot = 'hardware'
-  addBox(
-    parent,
-    hardwareMaterial,
-    0.035,
-    0.16,
-    leafDepth + 0.035,
-    panelLength - 0.035,
-    handleY,
-    0.045,
-  )
-  addBox(
-    parent,
-    hardwareMaterial,
-    0.035,
-    0.16,
-    leafDepth + 0.035,
-    panelLength - 0.035,
-    handleY,
-    -0.045,
-  )
+  addPulls(parent, panelLength - 0.035, handleY, pullFaceZ, 0, true)
 }
 
 function addPocketDoor(
@@ -1718,8 +1904,9 @@ function addPocketDoor(
     z: number,
   ) => addBox(leafGroup, material, w, h, d, x, y, z)
 
-  addLeafSegmentContent({
+  const pullFaceZ = addLeafSegmentContent({
     addLeafBox: addPocketLeafBox,
+    flushPullAt: { x: handleX, y: handleY },
     leafWidth,
     leafHeight,
     leafCenterX: 0,
@@ -1729,26 +1916,7 @@ function addPocketDoor(
     contentPadding,
   })
   currentDoorSlot = 'hardware'
-  addBox(
-    leafGroup,
-    hardwareMaterial,
-    0.03,
-    0.18,
-    leafDepth + 0.03,
-    handleX,
-    handleY,
-    leafDepth / 2 + 0.02,
-  )
-  addBox(
-    leafGroup,
-    hardwareMaterial,
-    0.03,
-    0.18,
-    leafDepth + 0.03,
-    handleX,
-    handleY,
-    -leafDepth / 2 - 0.02,
-  )
+  addPulls(leafGroup, handleX, handleY, pullFaceZ, 0, true)
 }
 
 function addBarnDoor(
@@ -1790,12 +1958,19 @@ function addBarnDoor(
   // in the opening); `poseDoorMovingParts` slides the group along the rail. The
   // rail and end stops stay static on the mesh.
   const handleX = -slideSign * (leafWidth / 2 - 0.075)
-  const wheelY = trackY - 0.075
+  const wheelY = trackY + 0.035 / 2 + 0.0425
 
   currentDoorSlot = 'hardware'
   addBox(mesh, hardwareMaterial, railLength, 0.035, 0.035, railCenterX, trackY, faceZ + 0.01)
-  addBox(mesh, hardwareMaterial, 0.05, 0.13, 0.035, -insideWidth / 2, trackY - 0.02, faceZ + 0.01)
-  addBox(mesh, hardwareMaterial, 0.05, 0.13, 0.035, insideWidth / 2, trackY - 0.02, faceZ + 0.01)
+  for (const end of [-1, 1]) {
+    addHardware(
+      mesh,
+      roller(0.02, 0.03),
+      railCenterX + (end * railLength) / 2,
+      trackY,
+      faceZ + 0.01,
+    )
+  }
 
   const leafGroup = new THREE.Group()
   leafGroup.name = BARN_LEAF_NAME
@@ -1849,31 +2024,21 @@ function addBarnDoor(
 
   currentDoorSlot = 'hardware'
   for (const offset of [-leafWidth * 0.28, leafWidth * 0.28]) {
-    addBox(leafGroup, hardwareMaterial, 0.085, 0.085, 0.035, offset, wheelY, faceZ + 0.022)
-    addBox(leafGroup, hardwareMaterial, 0.026, 0.16, 0.026, offset, wheelY - 0.075, faceZ + 0.022)
+    addHardware(leafGroup, roller(0.0425, 0.02), offset, wheelY, faceZ + 0.01)
+    addBox(leafGroup, hardwareMaterial, 0.026, 0.16, 0.026, offset, wheelY - 0.075, faceZ + 0.033)
   }
 
   currentDoorSlot = 'hardware'
-  addBox(
-    leafGroup,
-    hardwareMaterial,
-    0.032,
-    0.22,
-    leafDepth + 0.034,
-    handleX,
-    handleY,
-    faceZ + leafDepth / 2 + 0.02,
-  )
-  addBox(
-    leafGroup,
-    hardwareMaterial,
-    0.032,
-    0.22,
-    leafDepth + 0.034,
-    handleX,
-    handleY,
-    faceZ - leafDepth / 2 - 0.02,
-  )
+  for (const face of [-1, 1]) {
+    const pull = addHardware(
+      leafGroup,
+      pullBar(),
+      handleX,
+      handleY,
+      faceZ + face * (leafDepth / 2 + 0.023),
+    )
+    if (face < 0) pull.rotateY(Math.PI)
+  }
 }
 
 function addSlidingDoor(
@@ -1977,8 +2142,9 @@ function addSlidingDoor(
     contentPadding,
     keepFrameWhenEmpty: true,
   })
-  addLeafSegmentContent({
+  const pullFaceZ = addLeafSegmentContent({
     addLeafBox: addActivePanelBox,
+    flushPullAt: { x: handleX - closedActiveX, y: handleY },
     leafWidth: panelWidth,
     leafHeight: panelHeight,
     leafCenterX: 0,
@@ -1989,26 +2155,7 @@ function addSlidingDoor(
     keepFrameWhenEmpty: true,
   })
   currentDoorSlot = 'hardware'
-  addBox(
-    activePanelGroup,
-    hardwareMaterial,
-    0.032,
-    0.24,
-    0.016,
-    handleX,
-    handleY,
-    frontZ + leafDepth / 2 + 0.01,
-  )
-  addBox(
-    activePanelGroup,
-    hardwareMaterial,
-    0.032,
-    0.24,
-    0.016,
-    handleX,
-    handleY,
-    frontZ - leafDepth / 2 - 0.01,
-  )
+  addPulls(activePanelGroup, handleX, handleY, pullFaceZ, frontZ, true)
 }
 
 function addGarageSectionalDoor(
@@ -2389,6 +2536,8 @@ function updateDoorMesh(rawNode: DoorNode, mesh: THREE.Mesh): boolean {
     handleSide,
     doorCloser,
     panicBar,
+    panicBarStyle,
+    panicBarRods,
     panicBarHeight,
     contentPadding,
     hingesSide,
@@ -2633,6 +2782,7 @@ function updateDoorMesh(rawNode: DoorNode, mesh: THREE.Mesh): boolean {
       leafCenterX: -insideWidth / 4,
       leafCenterY,
       leafDepth,
+      frameDepth,
       hingeX: -insideWidth / 2,
       hingeSide: 'left',
       swingRotation: -clampedSwingAngle * swingDirectionSign,
@@ -2645,6 +2795,8 @@ function updateDoorMesh(rawNode: DoorNode, mesh: THREE.Mesh): boolean {
       handleSide: 'right',
       doorCloser,
       panicBar,
+      panicBarStyle,
+      panicBarRods,
       panicBarHeight,
       doorHeight: height,
       openingShape,
@@ -2662,6 +2814,7 @@ function updateDoorMesh(rawNode: DoorNode, mesh: THREE.Mesh): boolean {
       leafCenterX: insideWidth / 4,
       leafCenterY,
       leafDepth,
+      frameDepth,
       hingeX: insideWidth / 2,
       hingeSide: 'right',
       swingRotation: clampedSwingAngle * swingDirectionSign,
@@ -2674,6 +2827,8 @@ function updateDoorMesh(rawNode: DoorNode, mesh: THREE.Mesh): boolean {
       handleSide: 'left',
       doorCloser: false,
       panicBar,
+      panicBarStyle,
+      panicBarRods,
       panicBarHeight,
       doorHeight: height,
       openingShape,
@@ -2694,6 +2849,7 @@ function updateDoorMesh(rawNode: DoorNode, mesh: THREE.Mesh): boolean {
       leafCenterX: 0,
       leafCenterY,
       leafDepth,
+      frameDepth,
       hingeX,
       hingeSide: hingesSide,
       swingRotation: clampedSwingAngle * swingDirectionSign * hingeDirectionSign,
@@ -2706,6 +2862,8 @@ function updateDoorMesh(rawNode: DoorNode, mesh: THREE.Mesh): boolean {
       handleSide,
       doorCloser,
       panicBar,
+      panicBarStyle,
+      panicBarRods,
       panicBarHeight,
       doorHeight: height,
       openingShape,

@@ -170,6 +170,8 @@ export const DoorNode = BaseNode.extend({
   // Emergency / commercial hardware
   doorCloser: z.boolean().default(false),
   panicBar: z.boolean().default(false),
+  panicBarStyle: z.enum(['crossbar', 'touchbar']).default('crossbar'),
+  panicBarRods: z.boolean().default(false),
   panicBarHeight: z.number().default(1.0),
 }).describe(dedent`Door node - a parametric door placed on a wall
   - position: center of the door in wall-local coordinate system (Y = height/2, always at floor)
@@ -183,6 +185,9 @@ export const DoorNode = BaseNode.extend({
   - casingFaceA/casingFaceB: casing (head and legs) on the host wall's face a / b, around the cutout (absent means off; new openings enable both)
   - casingWidth: face width of the casing boards (2 in by default)
   - doorCloser/panicBar: commercial and emergency hardware options
+  - panicBarStyle: crossbar tube (default) or flat touchbar push rail
+  - panicBarRods: optional top and bottom latch rods (default off)
+  - panicBarHeight: device height above the leaf bottom, in metres
 `)
 
 export type DoorNode = z.infer<typeof DoorNode>

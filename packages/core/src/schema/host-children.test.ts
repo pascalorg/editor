@@ -57,6 +57,7 @@ test.each(baseline)(
           ? {
               ...expected,
               floorThresholdVersion: 1,
+              ...(saved.type === 'door' ? { panicBarStyle: 'crossbar', panicBarRods: false } : {}),
             }
           : saved.type === 'fence'
             ? {
