@@ -723,3 +723,10 @@ test('panic defaults preserve loading legacy doors and match explicit crossbar w
     expect(part.quaternion.equals(expected[index]!.quaternion)).toBe(true)
   }
 })
+
+test('a panic bar leaves the push face without a lever; the pull face keeps it', () => {
+  const mesh = buildDoorPreviewMesh(DoorNode.parse({ panicBar: true }))
+  const levers = handles(swingLeaves(mesh)[0]!)
+  expect(levers).toHaveLength(1)
+  expect(levers[0]!.position.z).toBeLessThan(0)
+})

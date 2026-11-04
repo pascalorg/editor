@@ -1411,7 +1411,9 @@ function addDoorLeaf(
       segmentTop = segmentBottom
     }
     const faceZ = leafDepth / 2 + panelDepth
-    for (const face of handleBothSides ? [1, -1] : [1]) {
+    // Panic hardware owns the push face (+z): no lever beside the bar there.
+    const leverFaces = (handleBothSides ? [1, -1] : [1]).filter((face) => !(panicBar && face > 0))
+    for (const face of leverFaces) {
       const lever = addHardware(
         leafGroup,
         leverOnRose(),
