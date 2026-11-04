@@ -9288,6 +9288,10 @@ msgid "node.door.panel.cornerRadius"
 msgstr "Corner radius"
 
 #: packages/nodes/src/door/panel.tsx
+msgid "node.door.panel.crossbar"
+msgstr "Crossbar"
+
+#: packages/nodes/src/door/panel.tsx
 msgid "node.door.panel.customTheSegmentsMatchNoStyle"
 msgstr "Custom: the segments match no style."
 
@@ -9392,6 +9396,10 @@ msgid "node.door.panel.inward"
 msgstr "Inward"
 
 #: packages/nodes/src/door/panel.tsx
+msgid "node.door.panel.latchRods"
+msgstr "Latch rods"
+
+#: packages/nodes/src/door/panel.tsx
 msgid "node.door.panel.left"
 msgstr "Left"
 
@@ -9426,6 +9434,10 @@ msgstr "Panels"
 #: packages/nodes/src/door/panel.tsx
 msgid "node.door.panel.panicBar"
 msgstr "Panic bar"
+
+#: packages/nodes/src/door/panel.tsx
+msgid "node.door.panel.panicBarStyle"
+msgstr "Style"
 
 #: packages/nodes/src/door/panel.tsx
 msgid "node.door.panel.pocket"
@@ -9490,6 +9502,10 @@ msgstr "Threshold"
 #: packages/nodes/src/door/panel.tsx
 msgid "node.door.panel.topShape"
 msgstr "Top shape"
+
+#: packages/nodes/src/door/panel.tsx
+msgid "node.door.panel.touchbar"
+msgstr "Touchbar"
 
 #: packages/nodes/src/door/panel.tsx
 msgid "node.door.panel.type"

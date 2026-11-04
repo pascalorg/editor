@@ -1183,6 +1183,30 @@ export default function DoorPanel() {
             />
             {node.panicBar && (
               <div className="mt-1 flex flex-col gap-1">
+                <div className="space-y-1">
+                  <span className="font-medium text-[10px] text-muted-foreground/80 uppercase tracking-wider">
+                    {i18n._({ id: 'node.door.panel.panicBarStyle', message: 'Style' })}
+                  </span>
+                  <SegmentedControl
+                    onChange={(v) => handleUpdate({ panicBarStyle: v })}
+                    options={[
+                      {
+                        label: i18n._({ id: 'node.door.panel.crossbar', message: 'Crossbar' }),
+                        value: 'crossbar',
+                      },
+                      {
+                        label: i18n._({ id: 'node.door.panel.touchbar', message: 'Touchbar' }),
+                        value: 'touchbar',
+                      },
+                    ]}
+                    value={node.panicBarStyle}
+                  />
+                </div>
+                <ToggleControl
+                  checked={node.panicBarRods}
+                  label={i18n._({ id: 'node.door.panel.latchRods', message: 'Latch rods' })}
+                  onChange={(checked) => handleUpdate({ panicBarRods: checked })}
+                />
                 <SliderControl
                   label={i18n._({ id: 'node.door.panel.barHeight', message: 'Bar height' })}
                   max={node.height - 0.1}
