@@ -22715,42 +22715,42 @@ msgstr "关联的线性、曲线、圆形、角度或坐标平面尺寸。"
 msgid "node.constructionDimension.label"
 msgstr "施工尺寸"
 
-# Source-Hash: 61a6c6b9bc29c4f8
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Bottom Left"
+# English: "Bottom left"
+# Source-Hash: 61b43e9e1ef4bbce
+# Review: required
 #: packages/nodes/src/window/panel.tsx
 #, fuzzy
 msgid "node.cornerRadius.bottomLeft"
 msgstr "左下"
 
-# Source-Hash: c5368accab136fa6
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Bottom Right"
+# English: "Bottom right"
+# Source-Hash: fff82f2567ad62ed
+# Review: required
 #: packages/nodes/src/window/panel.tsx
 #, fuzzy
 msgid "node.cornerRadius.bottomRight"
 msgstr "右下"
 
-# Source-Hash: c8f86af3f03af6c7
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Top Left"
+# English: "Top left"
+# Source-Hash: 958318671816c1b4
+# Review: required
 #: packages/nodes/src/door/panel.tsx
 #: packages/nodes/src/window/panel.tsx
 #, fuzzy
 msgid "node.cornerRadius.topLeft"
 msgstr "左上"
 
-# Source-Hash: 0ead7f1ffdbbd892
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Top Right"
+# English: "Top right"
+# Source-Hash: 5330252f459f8378
+# Review: required
 #: packages/nodes/src/door/panel.tsx
 #: packages/nodes/src/window/panel.tsx
 #, fuzzy
@@ -23029,11 +23029,11 @@ msgstr "门"
 msgid "node.door.panel.actions"
 msgstr "操作"
 
-# Source-Hash: 8337b3213849faca
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "+ Add Segment"
+# English: "+ Add segment"
+# Source-Hash: 5b524aa525f7ea0f
+# Review: required
 #: packages/nodes/src/door/panel.tsx
 #, fuzzy
 msgid "node.door.panel.addSegment"
@@ -23059,11 +23059,11 @@ msgstr "全部"
 msgid "node.door.panel.arch"
 msgstr "拱形"
 
-# Source-Hash: 3715cd54e4775087
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Arch Height"
+# English: "Arch height"
+# Source-Hash: 60c4ab0cc34a25e2
+# Review: required
 #: packages/nodes/src/door/panel.tsx
 #, fuzzy
 msgid "node.door.panel.archHeight"
@@ -23089,11 +23089,11 @@ msgstr "自动"
 msgid "node.door.panel.autoFollowsTheWall"
 msgstr "自动跟随墙体"
 
-# Source-Hash: 387773c8aa2820a4
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Bar Height"
+# English: "Bar height"
+# Source-Hash: 9514a6ddebdca34e
+# Review: required
 #: packages/nodes/src/door/panel.tsx
 #, fuzzy
 msgid "node.door.panel.barHeight"
@@ -23109,21 +23109,21 @@ msgstr "横档高度"
 msgid "node.door.panel.columns"
 msgstr "列"
 
-# Source-Hash: f533584833a4a7bb
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Content Padding"
+# English: "Leaf border"
+# Source-Hash: f5465e56487083d2
+# Review: required
 #: packages/nodes/src/door/panel.tsx
 #, fuzzy
 msgid "node.door.panel.contentPadding"
-msgstr "内容边距"
+msgstr "门扇边框"
 
-# Source-Hash: 7a90a42b578f2435
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Corner Radius"
+# English: "Corner radius"
+# Source-Hash: 69f9b1f2c8f465ff
+# Review: required
 #: packages/nodes/src/door/panel.tsx
 #, fuzzy
 msgid "node.door.panel.cornerRadius"
@@ -23199,11 +23199,11 @@ msgstr "分隔条"
 msgid "node.door.panel.door"
 msgstr "门"
 
-# Source-Hash: 4a0aa7f647e6461b
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Door Closer"
+# English: "Door closer"
+# Source-Hash: a277c3b373318af3
+# Review: required
 #: packages/nodes/src/door/panel.tsx
 #, fuzzy
 msgid "node.door.panel.doorCloser"
@@ -23229,31 +23229,31 @@ msgstr "复制"
 msgid "node.door.panel.empty"
 msgstr "空"
 
-# Source-Hash: 6982301da2dbe186
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Enable Handle"
+# English: "Enable handle"
+# Source-Hash: 68acf95a3981cfb3
+# Review: required
 #: packages/nodes/src/door/panel.tsx
 #, fuzzy
 msgid "node.door.panel.enableHandle"
 msgstr "启用把手"
 
-# Source-Hash: 2e96ebf9c6e7fe49
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Enable Threshold"
+# English: "Enable threshold"
+# Source-Hash: a5020cb0548ee902
+# Review: required
 #: packages/nodes/src/door/panel.tsx
 #, fuzzy
 msgid "node.door.panel.enableThreshold"
 msgstr "启用门槛"
 
-# Source-Hash: 61f9413d3bbabde7
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Flip Side"
+# English: "Flip side"
+# Source-Hash: 66ed7c7598d3aa29
+# Review: required
 #: packages/nodes/src/door/panel.tsx
 #, fuzzy
 msgid "node.door.panel.flipSide"
@@ -23309,21 +23309,11 @@ msgstr "车库"
 msgid "node.door.panel.glass"
 msgstr "玻璃"
 
-# Source-Hash: 41483b645efc0c65
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Handle"
-#: packages/nodes/src/door/panel.tsx
-#, fuzzy
-msgid "node.door.panel.handle"
-msgstr "把手"
-
-# Source-Hash: b4a496a904640583
+# English: "Handle side"
+# Source-Hash: 32c9f50bfbcd384f
 # Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Handle Side"
 #: packages/nodes/src/door/panel.tsx
 #, fuzzy
 msgid "node.door.panel.handleSide"
@@ -23349,11 +23339,11 @@ msgstr "五金件"
 msgid "node.door.panel.height"
 msgstr "高度"
 
-# Source-Hash: 7c8f079bbefe86c9
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Hinges Side"
+# English: "Hinges side"
+# Source-Hash: d9dc95af942941c9
+# Review: required
 #: packages/nodes/src/door/panel.tsx
 #, fuzzy
 msgid "node.door.panel.hingesSide"
@@ -23439,11 +23429,11 @@ msgstr "打开"
 msgid "node.door.panel.opening"
 msgstr "开口"
 
-# Source-Hash: ecb81bd3eefa6a47
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Opening Shape"
+# English: "Opening shape"
+# Source-Hash: a70dab7a7868461a
+# Review: required
 #: packages/nodes/src/door/panel.tsx
 #, fuzzy
 msgid "node.door.panel.openingShape"
@@ -23479,11 +23469,11 @@ msgstr "面板"
 msgid "node.door.panel.panels"
 msgstr "面板"
 
-# Source-Hash: ad56a8ab82ff1a77
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Panic Bar"
+# English: "Panic bar"
+# Source-Hash: 3e873cd39d6074e3
+# Review: required
 #: packages/nodes/src/door/panel.tsx
 #, fuzzy
 msgid "node.door.panel.panicBar"
@@ -23539,11 +23529,11 @@ msgstr "矩形"
 msgid "node.door.panel.remove"
 msgstr "- 移除"
 
-# Source-Hash: 59236bd016c6b904
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Reveal Radius"
+# English: "Reveal radius"
+# Source-Hash: 97ecc9727d8c5041
+# Review: required
 #: packages/nodes/src/door/panel.tsx
 #, fuzzy
 msgid "node.door.panel.revealRadius"
@@ -23639,11 +23629,11 @@ msgstr "厚度"
 msgid "node.door.panel.threshold"
 msgstr "门槛"
 
-# Source-Hash: 7e2505dd1d5e3513
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Top Shape"
+# English: "Top shape"
+# Source-Hash: 0ad7725ac75eb494
+# Review: required
 #: packages/nodes/src/door/panel.tsx
 #, fuzzy
 msgid "node.door.panel.topShape"
@@ -28909,6 +28899,16 @@ msgstr "门窗套"
 #, fuzzy
 msgid "node.shared.openingCasingSection.width"
 msgstr "宽度"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Depth position"
+# Source-Hash: 226e0943453157e4
+# Review: required
+#: packages/nodes/src/shared/opening-depth-position.tsx
+#, fuzzy
+msgid "node.shared.openingDepthPosition.depthPosition"
+msgstr "深度位置"
 
 # Source-Hash: ee1c8bc3e27fb550
 # Review: required
@@ -35071,11 +35071,11 @@ msgstr "全部"
 msgid "node.window.panel.arch"
 msgstr "拱形"
 
-# Source-Hash: 3715cd54e4775087
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Arch Height"
+# English: "Arch height"
+# Source-Hash: 60c4ab0cc34a25e2
+# Review: required
 #: packages/nodes/src/window/panel.tsx
 #, fuzzy
 msgid "node.window.panel.archHeight"
@@ -35111,11 +35111,11 @@ msgstr "自动跟随墙体"
 msgid "node.window.panel.columns"
 msgstr "列"
 
-# Source-Hash: 2f417371c399ad67
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Col Widths"
+# English: "Column widths"
+# Source-Hash: 6a7af8847c4ee873
+# Review: required
 #: packages/nodes/src/window/panel.tsx
 #, fuzzy
 msgid "node.window.panel.colWidths"
@@ -35141,11 +35141,11 @@ msgstr "转角"
 msgid "node.window.panel.cornerPost"
 msgstr "角柱"
 
-# Source-Hash: 7a90a42b578f2435
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Corner Radius"
+# English: "Corner radius"
+# Source-Hash: 69f9b1f2c8f465ff
+# Review: required
 #: packages/nodes/src/window/panel.tsx
 #, fuzzy
 msgid "node.window.panel.cornerRadius"
@@ -35221,21 +35221,21 @@ msgstr "向下"
 msgid "node.window.panel.duplicate"
 msgstr "复制"
 
-# Source-Hash: 8497c4373d5d18ad
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Enable Sill"
+# English: "Enable sill"
+# Source-Hash: b9624366cfb39a10
+# Review: required
 #: packages/nodes/src/window/panel.tsx
 #, fuzzy
 msgid "node.window.panel.enableSill"
 msgstr "启用窗台"
 
-# Source-Hash: 61f9413d3bbabde7
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Flip Side"
+# English: "Flip side"
+# Source-Hash: 66ed7c7598d3aa29
+# Review: required
 #: packages/nodes/src/window/panel.tsx
 #, fuzzy
 msgid "node.window.panel.flipSide"
@@ -35341,11 +35341,11 @@ msgstr "移动"
 msgid "node.window.panel.opening"
 msgstr "开口"
 
-# Source-Hash: ecb81bd3eefa6a47
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Opening Shape"
+# English: "Opening shape"
+# Source-Hash: a70dab7a7868461a
+# Review: required
 #: packages/nodes/src/window/panel.tsx
 #, fuzzy
 msgid "node.window.panel.openingShape"
@@ -35391,11 +35391,11 @@ msgstr "位置"
 msgid "node.window.panel.rect"
 msgstr "矩形"
 
-# Source-Hash: 59236bd016c6b904
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Reveal Radius"
+# English: "Reveal radius"
+# Source-Hash: 97ecc9727d8c5041
+# Review: required
 #: packages/nodes/src/window/panel.tsx
 #, fuzzy
 msgid "node.window.panel.revealRadius"
@@ -35421,11 +35421,11 @@ msgstr "右"
 msgid "node.window.panel.rounded"
 msgstr "圆角"
 
-# Source-Hash: fb811056b862b6d0
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Row Heights"
+# English: "Row heights"
+# Source-Hash: 741c0faa3bb79010
+# Review: required
 #: packages/nodes/src/window/panel.tsx
 #, fuzzy
 msgid "node.window.panel.rowHeights"
@@ -35501,11 +35501,11 @@ msgstr "厚度"
 msgid "node.window.panel.thisSide"
 msgstr "此侧"
 
-# Source-Hash: 7e2505dd1d5e3513
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Top Shape"
+# English: "Top shape"
+# Source-Hash: 0ad7725ac75eb494
+# Review: required
 #: packages/nodes/src/window/panel.tsx
 #, fuzzy
 msgid "node.window.panel.topShape"
@@ -35561,11 +35561,11 @@ msgstr "宽度"
 msgid "node.window.panel.window"
 msgstr "窗"
 
-# Source-Hash: f59cd625e6082651
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Window Type"
+# English: "Window type"
+# Source-Hash: 696202e263e39d6e
+# Review: required
 #: packages/nodes/src/window/panel.tsx
 #, fuzzy
 msgid "node.window.panel.windowType"
@@ -35751,11 +35751,11 @@ msgstr "弓形窗"
 msgid "node.window.type.casement"
 msgstr "平开窗"
 
-# Source-Hash: b0b737fc5cb1d32a
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Double Hung"
+# English: "Double-hung"
+# Source-Hash: e06fc5a432b74a5b
+# Review: required
 #: packages/nodes/src/shared/opening-labels.ts
 #, fuzzy
 msgid "node.window.type.doubleHung"
@@ -35791,11 +35791,11 @@ msgstr "下悬窗"
 msgid "node.window.type.louvered"
 msgstr "百叶窗"
 
-# Source-Hash: de6ffb1cf676f270
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Single Hung"
+# English: "Single-hung"
+# Source-Hash: 1c9fdf0ea7fdb313
+# Review: required
 #: packages/nodes/src/shared/opening-labels.ts
 #, fuzzy
 msgid "node.window.type.singleHung"

@@ -9121,21 +9121,21 @@ msgstr "Construction Dimension"
 
 #: packages/nodes/src/window/panel.tsx
 msgid "node.cornerRadius.bottomLeft"
-msgstr "Bottom Left"
+msgstr "Bottom left"
 
 #: packages/nodes/src/window/panel.tsx
 msgid "node.cornerRadius.bottomRight"
-msgstr "Bottom Right"
+msgstr "Bottom right"
 
 #: packages/nodes/src/door/panel.tsx
 #: packages/nodes/src/window/panel.tsx
 msgid "node.cornerRadius.topLeft"
-msgstr "Top Left"
+msgstr "Top left"
 
 #: packages/nodes/src/door/panel.tsx
 #: packages/nodes/src/window/panel.tsx
 msgid "node.cornerRadius.topRight"
-msgstr "Top Right"
+msgstr "Top right"
 
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "node.cupola.description"
@@ -9249,7 +9249,7 @@ msgstr "Actions"
 
 #: packages/nodes/src/door/panel.tsx
 msgid "node.door.panel.addSegment"
-msgstr "+ Add Segment"
+msgstr "+ Add segment"
 
 #: packages/nodes/src/door/panel.tsx
 msgid "node.door.panel.all"
@@ -9261,7 +9261,7 @@ msgstr "Arch"
 
 #: packages/nodes/src/door/panel.tsx
 msgid "node.door.panel.archHeight"
-msgstr "Arch Height"
+msgstr "Arch height"
 
 #: packages/nodes/src/door/panel.tsx
 msgid "node.door.panel.auto"
@@ -9273,7 +9273,7 @@ msgstr "Auto follows the wall"
 
 #: packages/nodes/src/door/panel.tsx
 msgid "node.door.panel.barHeight"
-msgstr "Bar Height"
+msgstr "Bar height"
 
 #: packages/nodes/src/door/panel.tsx
 msgid "node.door.panel.columns"
@@ -9281,11 +9281,11 @@ msgstr "Columns"
 
 #: packages/nodes/src/door/panel.tsx
 msgid "node.door.panel.contentPadding"
-msgstr "Content Padding"
+msgstr "Leaf border"
 
 #: packages/nodes/src/door/panel.tsx
 msgid "node.door.panel.cornerRadius"
-msgstr "Corner Radius"
+msgstr "Corner radius"
 
 #: packages/nodes/src/door/panel.tsx
 msgid "node.door.panel.customTheSegmentsMatchNoStyle"
@@ -9317,7 +9317,7 @@ msgstr "Door"
 
 #: packages/nodes/src/door/panel.tsx
 msgid "node.door.panel.doorCloser"
-msgstr "Door Closer"
+msgstr "Door closer"
 
 #: packages/nodes/src/door/panel.tsx
 msgid "node.door.panel.duplicate"
@@ -9329,15 +9329,15 @@ msgstr "Empty"
 
 #: packages/nodes/src/door/panel.tsx
 msgid "node.door.panel.enableHandle"
-msgstr "Enable Handle"
+msgstr "Enable handle"
 
 #: packages/nodes/src/door/panel.tsx
 msgid "node.door.panel.enableThreshold"
-msgstr "Enable Threshold"
+msgstr "Enable threshold"
 
 #: packages/nodes/src/door/panel.tsx
 msgid "node.door.panel.flipSide"
-msgstr "Flip Side"
+msgstr "Flip side"
 
 #: packages/nodes/src/door/panel.tsx
 msgid "node.door.panel.fold"
@@ -9360,12 +9360,8 @@ msgid "node.door.panel.glass"
 msgstr "Glass"
 
 #: packages/nodes/src/door/panel.tsx
-msgid "node.door.panel.handle"
-msgstr "Handle"
-
-#: packages/nodes/src/door/panel.tsx
 msgid "node.door.panel.handleSide"
-msgstr "Handle Side"
+msgstr "Handle side"
 
 #: packages/nodes/src/door/panel.tsx
 msgid "node.door.panel.hardware"
@@ -9377,7 +9373,7 @@ msgstr "Height"
 
 #: packages/nodes/src/door/panel.tsx
 msgid "node.door.panel.hingesSide"
-msgstr "Hinges Side"
+msgstr "Hinges side"
 
 #: packages/nodes/src/door/panel.tsx
 msgid "node.door.panel.horizontal"
@@ -9413,7 +9409,7 @@ msgstr "Opening"
 
 #: packages/nodes/src/door/panel.tsx
 msgid "node.door.panel.openingShape"
-msgstr "Opening Shape"
+msgstr "Opening shape"
 
 #: packages/nodes/src/door/panel.tsx
 msgid "node.door.panel.outward"
@@ -9429,7 +9425,7 @@ msgstr "Panels"
 
 #: packages/nodes/src/door/panel.tsx
 msgid "node.door.panel.panicBar"
-msgstr "Panic Bar"
+msgstr "Panic bar"
 
 #: packages/nodes/src/door/panel.tsx
 msgid "node.door.panel.pocket"
@@ -9453,7 +9449,7 @@ msgstr "- Remove"
 
 #: packages/nodes/src/door/panel.tsx
 msgid "node.door.panel.revealRadius"
-msgstr "Reveal Radius"
+msgstr "Reveal radius"
 
 #: packages/nodes/src/door/panel.tsx
 msgid "node.door.panel.right"
@@ -9493,7 +9489,7 @@ msgstr "Threshold"
 
 #: packages/nodes/src/door/panel.tsx
 msgid "node.door.panel.topShape"
-msgstr "Top Shape"
+msgstr "Top shape"
 
 #: packages/nodes/src/door/panel.tsx
 msgid "node.door.panel.type"
@@ -11605,6 +11601,10 @@ msgstr "Casing"
 #: packages/nodes/src/shared/opening-casing-section.tsx
 msgid "node.shared.openingCasingSection.width"
 msgstr "Width"
+
+#: packages/nodes/src/shared/opening-depth-position.tsx
+msgid "node.shared.openingDepthPosition.depthPosition"
+msgstr "Depth position"
 
 #: packages/nodes/src/shared/run-hanger-inspector.tsx
 msgid "node.shared.runHangerInspector.automaticSupport"
@@ -14073,7 +14073,7 @@ msgstr "Arch"
 
 #: packages/nodes/src/window/panel.tsx
 msgid "node.window.panel.archHeight"
-msgstr "Arch Height"
+msgstr "Arch height"
 
 #: packages/nodes/src/window/panel.tsx
 msgid "node.window.panel.auto"
@@ -14089,7 +14089,7 @@ msgstr "Columns"
 
 #: packages/nodes/src/window/panel.tsx
 msgid "node.window.panel.colWidths"
-msgstr "Col Widths"
+msgstr "Column widths"
 
 #: packages/nodes/src/window/panel.tsx
 msgid "node.window.panel.corner"
@@ -14101,7 +14101,7 @@ msgstr "Corner post"
 
 #: packages/nodes/src/window/panel.tsx
 msgid "node.window.panel.cornerRadius"
-msgstr "Corner Radius"
+msgstr "Corner radius"
 
 #: packages/nodes/src/window/panel.tsx
 msgid "node.window.panel.customThePanesMatchNoStyle"
@@ -14133,11 +14133,11 @@ msgstr "Duplicate"
 
 #: packages/nodes/src/window/panel.tsx
 msgid "node.window.panel.enableSill"
-msgstr "Enable Sill"
+msgstr "Enable sill"
 
 #: packages/nodes/src/window/panel.tsx
 msgid "node.window.panel.flipSide"
-msgstr "Flip Side"
+msgstr "Flip side"
 
 #: packages/nodes/src/window/panel.tsx
 msgid "node.window.panel.frame"
@@ -14181,7 +14181,7 @@ msgstr "Opening"
 
 #: packages/nodes/src/window/panel.tsx
 msgid "node.window.panel.openingShape"
-msgstr "Opening Shape"
+msgstr "Opening shape"
 
 #: packages/nodes/src/window/panel.tsx
 msgid "node.window.panel.otherSide"
@@ -14201,7 +14201,7 @@ msgstr "Rect"
 
 #: packages/nodes/src/window/panel.tsx
 msgid "node.window.panel.revealRadius"
-msgstr "Reveal Radius"
+msgstr "Reveal radius"
 
 #: packages/nodes/src/window/panel.tsx
 msgid "node.window.panel.right"
@@ -14213,7 +14213,7 @@ msgstr "Rounded"
 
 #: packages/nodes/src/window/panel.tsx
 msgid "node.window.panel.rowHeights"
-msgstr "Row Heights"
+msgstr "Row heights"
 
 #: packages/nodes/src/window/panel.tsx
 msgid "node.window.panel.rows"
@@ -14245,7 +14245,7 @@ msgstr "This side"
 
 #: packages/nodes/src/window/panel.tsx
 msgid "node.window.panel.topShape"
-msgstr "Top Shape"
+msgstr "Top shape"
 
 #: packages/nodes/src/window/panel.tsx
 msgid "node.window.panel.type"
@@ -14269,7 +14269,7 @@ msgstr "Window"
 
 #: packages/nodes/src/window/panel.tsx
 msgid "node.window.panel.windowType"
-msgstr "Window Type"
+msgstr "Window type"
 
 #: packages/nodes/src/window/panel.tsx
 msgid "node.window.panel.wrapsTheCornerWithNamed"
@@ -14345,7 +14345,7 @@ msgstr "Casement"
 
 #: packages/nodes/src/shared/opening-labels.ts
 msgid "node.window.type.doubleHung"
-msgstr "Double Hung"
+msgstr "Double-hung"
 
 #: packages/nodes/src/shared/opening-labels.ts
 msgid "node.window.type.fixed"
@@ -14361,7 +14361,7 @@ msgstr "Louvered"
 
 #: packages/nodes/src/shared/opening-labels.ts
 msgid "node.window.type.singleHung"
-msgstr "Single Hung"
+msgstr "Single-hung"
 
 #: packages/nodes/src/shared/opening-labels.ts
 msgid "node.window.type.sliding"
