@@ -2,20 +2,23 @@ import { describe, expect, test } from 'bun:test'
 import { z } from 'zod'
 import {
   AGENT_TOOL_CONTRACTS,
+  addObjectTool,
   type DesignBrief,
   type DesignBriefInput,
   designBriefTool,
+  placeDesignTool,
 } from '../agent-tools'
 import { isAgentRefusal } from '../agent-tools/refusal'
 import { type AssetInput, BuildingNode, LevelNode, ZoneNode } from '../schema'
-import { CATALOG_BRIEF, OPEN_AXES } from './__fixtures__/design-brief-cases'
+import { CATALOG_BRIEF, HOUSE_ROOMS, OPEN_AXES } from './__fixtures__/design-brief-cases'
+import { storeysScene } from './__fixtures__/structure-cases'
 import { applyAgentOutcome } from './apply-outcome'
 import {
   briefUnlocks,
   designBrief,
   furnishingRefusal,
   gatedByBrief,
-  isTechnicalEquipment,
+  REFUSED_PIECES_KEY,
   requireFurnishing,
 } from './design-brief'
 import { AGENT_OPERATIONS } from './index'
@@ -39,13 +42,12 @@ const nothing = (why: string) =>
     ),
   ) as never
 
-const open = (asIs?: DesignBrief['asIs']): DesignBriefInput => ({
+const open = (): DesignBriefInput => ({
   fixed: ['a 4 by 5 m bedroom with a double bed'],
   open: ['form and finish'],
   source: 'open',
   vision: 'Oak and linen.',
   beyond: 'none: the test places what the request names.',
-  ...(asIs ? { asIs } : {}),
 })
 
 const tagged = (id: string, name: string, ...functionTags: string[]): AssetInput => ({
@@ -87,9 +89,11 @@ describe('the gate before a brief', () => {
       'add_window',
       'paint',
       'search_materials',
+      'generate_material',
       'search_assets',
       'view_assets',
       'verify_scene',
+      'add_shelf',
       'design_brief',
     ])
       expect(code(tool, {}, null)).toBeNull()
@@ -120,40 +124,96 @@ describe('an open brief', () => {
       open(),
     )
     expect(refusal?.code).toBe('brief_source_open')
-    expect(refusal?.message).toBe(
-      "The brief left the source open: double-bed can be made with add_object or place_design (view_assets shows the catalog's for reference), or, for technical equipment, named in the brief's asIs after view_assets, with a reason.",
+    expect(refusal?.message).toContain(
+      'The brief left the source open: double-bed cannot be placed from the catalog, pieces are made.',
     )
     expect(refusal?.details).toMatchObject({ tool: 'place_items', pieces: ['double-bed'] })
   })
 
-  test('every piece of the call that is not named is listed, each once', () => {
+  test('every piece of the call is listed, each once', () => {
     const refusal = furnishingRefusal(
       'place_items',
       {
         items: [
           { assetId: 'double-bed', x: 0, z: 0 },
-          { assetId: 'toilet', x: 1, z: 1 },
+          { assetId: 'sofa', x: 1, z: 1 },
           { assetId: 'double-bed', x: 2, z: 2 },
           { assetId: 'nightstand', x: 3, z: 3 },
         ],
       },
-      open([{ assetId: 'toilet', reason: 'technical equipment' }]),
+      open(),
     )
-    expect(refusal?.details.pieces).toEqual(['double-bed', 'nightstand'])
+    expect(refusal?.details.pieces).toEqual(['double-bed', 'sofa', 'nightstand'])
   })
 
-  test('a catalog piece named in asIs is placed as it is, by place_items and place_in_room', () => {
-    const brief = open([{ assetId: 'toilet', reason: 'technical equipment' }])
-    expect(code('place_items', { items: [{ assetId: 'toilet', x: 0, z: 0 }] }, brief)).toBeNull()
-    expect(code('place_in_room', { assetId: 'toilet' }, brief)).toBeNull()
-    expect(code('place_in_room', { assetId: 'bathtub' }, brief)).toBe('brief_source_open')
+  test.each([
+    ['place_items', { items: [{ assetId: 'sofa', x: 0, z: 0 }] }],
+    ['place_in_room', { assetId: 'sofa' }],
+    ['place_in_room', { assetId: 'double-bed' }],
+  ])(
+    'a catalog piece that is neither equipment nor a plant is refused: %s of %j',
+    (tool, input) => {
+      expect(code(tool, input, open())).toBe('brief_source_open')
+    },
+  )
+
+  test('add_object and place_design make the pieces, a toilet or a fridge as a bed', () => {
+    expect(code('add_object', { code: 'export default 1', reason: 'a toilet' }, open())).toBeNull()
+    expect(code('place_design', { design: {} }, open())).toBeNull()
   })
 
-  test('furnish_room places a whole stock set, so asIs does not open it', () => {
-    const brief = open([{ assetId: 'toilet', reason: 'technical equipment' }])
+  test('furnish_room places a whole stock set, so it stays closed', () => {
+    const brief = open()
     const refusal = furnishingRefusal('furnish_room', { roomType: 'bathroom' }, brief)
     expect(refusal?.code).toBe('brief_source_open')
-    expect(refusal?.message).toContain("the pieces of furnish_room's stock set can be made")
+    expect(refusal?.message).toContain(
+      "the pieces of furnish_room's stock set cannot be placed from the catalog",
+    )
+  })
+})
+
+describe('a piece refused under an open source', () => {
+  const placing = (assetId: string) => ({ items: [{ assetId, x: 0, z: 0 }] })
+  const after = (...pieces: string[]) => ({ readings: { [REFUSED_PIECES_KEY]: pieces } })
+
+  test('the refusal asks the session to remember the piece it refused', () => {
+    const refusal = furnishingRefusal('place_items', placing('sofa'), open())
+    expect(refusal?.keep).toEqual({ readings: { [REFUSED_PIECES_KEY]: ['sofa'] } })
+  })
+
+  test('a piece refused before is answered briefly, the same whichever tool places it', () => {
+    const short = (tool: string, input: unknown) =>
+      furnishingRefusal(tool, input, open(), { session: after('sofa') })
+    const again = short('place_items', placing('sofa'))
+    expect(again?.message).toBe(
+      "Already refused, the brief's source is open: sofa. Technical equipment and plants are placed from the catalog; add_object and place_design make the other pieces.",
+    )
+    expect(short('place_in_room', { assetId: 'sofa' })?.message).toBe(again?.message)
+    expect(short('place_by_relation', placing('sofa'))?.message).toBe(again?.message)
+    expect(again?.keep).toBeUndefined()
+  })
+
+  test('a call with an old piece and a new one gives the facts for the new one, and keeps both', () => {
+    const refusal = furnishingRefusal(
+      'place_items',
+      { items: [...placing('sofa').items, ...placing('double-bed').items] },
+      open(),
+      { session: after('sofa') },
+    )
+    expect(refusal?.message).toContain('double-bed cannot be placed from the catalog')
+    expect(refusal?.message).not.toContain('sofa cannot be placed')
+    expect(refusal?.message).toContain(' Already refused: sofa.')
+    expect(refusal?.keep?.readings[REFUSED_PIECES_KEY]).toEqual(['sofa', 'double-bed'])
+  })
+
+  test('the tools and fields the first refusal names are in their contracts', () => {
+    const named = (tool: { input: object }, fields: string[]) =>
+      fields.filter((field) => !(field in tool.input))
+    expect(named(addObjectTool, ['code', 'piece', 'parentId', 'position'])).toEqual([])
+    expect(named(placeDesignTool, ['design', 'hostId', 'position'])).toEqual([])
+    const refusal = furnishingRefusal('place_items', placing('sofa'), open())
+    for (const text of ['add_object makes a piece', 'place_design places'])
+      expect(refusal?.message).toContain(text)
   })
 })
 
@@ -174,24 +234,20 @@ describe('a brief that names the catalog, a brand or existing pieces', () => {
 describe('run_batch', () => {
   const call = (tool: string, input: unknown) => ({ tool, input })
 
-  test('one refused call refuses the batch whole, naming the call, whatever onRefusal says', () => {
+  test('hosts leave per-call batch refusals to the batch operation', () => {
     const calls = [call('paint', {}), call('place_design', { design: {} })]
     for (const onRefusal of ['stop', 'skip'] as const) {
       const refusal = furnishingRefusal('run_batch', { calls, onRefusal }, null)
-      expect(refusal?.code).toBe('design_brief_required')
-      expect(refusal?.message).toStartWith(
-        "The batch's call 2 (place_design) is refused: Furnishing follows",
-      )
-      expect(refusal?.message).toEndWith('Nothing in the batch was applied.')
-      expect(refusal?.details).toMatchObject({ index: 1, tool: 'place_design' })
+      expect(refusal).toBeNull()
     }
   })
 
-  test('under an open brief, creation passes and a catalog placement does not', () => {
+  test('an open batch gate does not replace the catalog placement gate', () => {
     expect(code('run_batch', { calls: [call('add_object', { code: 'x' })] }, open())).toBeNull()
-    expect(code('run_batch', { calls: [call('place_in_room', { assetId: 'sofa' })] }, open())).toBe(
-      'brief_source_open',
-    )
+    expect(
+      code('run_batch', { calls: [call('place_in_room', { assetId: 'sofa' })] }, open()),
+    ).toBeNull()
+    expect(code('place_in_room', { assetId: 'sofa' }, open())).toBe('brief_source_open')
   })
 
   test('a batch with no furnishing call is not gated', () => {
@@ -200,30 +256,67 @@ describe('run_batch', () => {
     ).toBeNull()
   })
 
-  test('the operation refuses before any call runs', () => {
+  const openContext = (): AgentContext => ({
+    activeLevelId: null,
+    designBrief: open(),
+    session: EMPTY_SESSION,
+  })
+  const sofas = [
+    { tool: 'place_in_room', input: { assetId: 'sofa' } },
+    { tool: 'place_in_room', input: { assetId: 'sofa' } },
+  ]
+
+  test('skip: a piece refused in the batch is short the second time, and the batch keeps it once', () => {
+    const outcome = AGENT_OPERATIONS.run_batch(
+      {},
+      { calls: sofas, onRefusal: 'skip' },
+      openContext(),
+    )
+    const [first, second] = (outcome.result.calls as { error: string }[]).map((c) => c.error)
+    expect(first).toContain('sofa cannot be placed from the catalog')
+    expect(second).toStartWith("Already refused, the brief's source is open: sofa.")
+    expect(outcome.keep?.readings).toEqual({ [REFUSED_PIECES_KEY]: ['sofa'] })
+  })
+
+  test('stop: the refusal that stops the batch carries the keep of the call that refused', () => {
+    try {
+      AGENT_OPERATIONS.run_batch({}, { calls: sofas }, openContext())
+      throw new Error('the batch did not stop')
+    } catch (error) {
+      expect(isAgentRefusal(error) && error.code).toBe('batch_call_refused')
+      expect(isAgentRefusal(error) && error.keep).toEqual({
+        readings: { [REFUSED_PIECES_KEY]: ['sofa'] },
+      })
+    }
+  })
+
+  test('the default policy rolls back a brief refusal as it does a runtime refusal', () => {
     const run = () =>
       AGENT_OPERATIONS.run_batch(
         {},
-        { calls: [{ tool: 'list_levels' }, { tool: 'place_design', input: { design: {} } }] },
+        {
+          calls: [
+            { tool: 'list_levels' },
+            { tool: 'place_in_room', input: { assetId: 'sofa', zoneId: 'zone_x' } },
+          ],
+        },
         { activeLevelId: null, designBrief: null },
       )
-    expect(run).toThrow(/The batch's call 2 \(place_design\)/)
+    expect(run).toThrow(
+      /The batch stopped at call 2 \(place_in_room\), refused with design_brief_required/,
+    )
   })
 })
 
 describe('design_brief', () => {
   const input = {
     axes: OPEN_AXES,
+    rooms: HOUSE_ROOMS,
     source: 'open' as const,
     vision: 'Calm.',
     beyond: dressed,
-    asIs: [{ assetId: 'toilet', reason: 'technical equipment' }],
   }
-  const seen: AgentContext = {
-    activeLevelId: null,
-    catalog: [tagged('toilet', 'Toilet', 'toilets')],
-    session: { checkpoints: {}, made: [], viewed: ['toilet'] },
-  }
+  const seen: AgentContext = { activeLevelId: null }
 
   test('is a shared tool: contract, operation, no scene change', () => {
     expect(AGENT_TOOL_CONTRACTS.map((contract) => contract.name)).toContain('design_brief')
@@ -232,13 +325,12 @@ describe('design_brief', () => {
     expect(outcome.keep?.designBrief).toEqual(outcome.result.brief as DesignBrief)
   })
 
-  test('asIs is kept only with an open source, and a brand only with a brand source', () => {
+  test('a brand is kept only with a brand source', () => {
     const catalog = designBrief(
       {},
       { ...input, source: 'catalog', brand: 'IKEA', sourceQuote: 'catalog only' },
       { activeLevelId: null },
     )
-    expect(catalog.result.brief).not.toHaveProperty('asIs')
     expect(catalog.result.brief).not.toHaveProperty('brand')
     const brand = designBrief(
       {},
@@ -249,15 +341,14 @@ describe('design_brief', () => {
   })
 
   test('says what it unlocks and what stays closed', () => {
-    expect(briefUnlocks(open([{ assetId: 'toilet', reason: 'r' }]))).toEqual({
+    expect(briefUnlocks(open() as DesignBrief)).toEqual({
       unlocks: [
         'add_object, place_design make the pieces.',
-        'place_items and place_in_room place the technical equipment named in asIs: toilet.',
+        'place_items and place_in_room place technical equipment and plants from the catalog.',
       ],
       closed: [
         'furnish_room places a whole stock set.',
-        'Catalog pieces not named in asIs: place_items and place_in_room refuse them; view_assets shows the catalog for reference.',
-        'asIs keeps technical equipment (sanitaryware, appliances); furniture is made.',
+        'Every other catalog piece is made; view_assets shows the catalog for reference.',
       ],
     })
     expect(briefUnlocks(CATALOG_BRIEF).closed).toEqual([])
@@ -331,7 +422,7 @@ describe('the brief in a session', () => {
 
   test('is read back from where a host stored it, and a stored record that is not a brief is dropped with the record', () => {
     const stored = keepInSession(EMPTY_SESSION, {
-      designBrief: open([{ assetId: 'toilet', reason: 'r' }]),
+      designBrief: open(),
     })
     expect(parseSessionRecord(JSON.parse(JSON.stringify(stored)))).toEqual(stored)
     expect(parseSessionRecord({ ...stored, designBrief: { source: 'nope' } })).toEqual(
@@ -407,15 +498,16 @@ describe('the owner’s bedroom: a 4 by 5 m bedroom with a double bed, two night
   })
 })
 
-describe('asIs keeps technical equipment, looked at first', () => {
+describe('an open source places technical equipment and plants from the catalog', () => {
   const catalog = [
     tagged('double-bed', 'Double bed', 'double-beds'),
-    tagged('bedside-table', 'Bedside table', 'coffee-tables'),
-    tagged('closet', 'Closet', 'wardrobes'),
+    tagged('sofa', 'Sofa', 'sofas'),
     tagged('toilet', 'Toilet', 'toilets'),
     tagged('fridge', 'Fridge', 'kitchen-appliances'),
+    tagged('palm', 'Palm', 'trees'),
+    { ...tagged('bush', 'Bush', 'outdoor'), tags: ['tree', 'plant', 'garden'] },
   ]
-  const brief = (assetIds: string[], source: 'open' | 'catalog' = 'open') => ({
+  const brief = (source: 'open' | 'catalog' = 'open') => ({
     axes:
       source === 'open'
         ? OPEN_AXES
@@ -427,89 +519,104 @@ describe('asIs keeps technical equipment, looked at first', () => {
               reading: 'the catalog, and nothing beyond it',
             },
           },
+    rooms: HOUSE_ROOMS,
     source,
     ...(source === 'open' ? {} : { sourceQuote: 'catalog only' }),
     vision: 'Calm.',
     beyond: source === 'open' ? dressed : nothing('catalog only'),
-    asIs: assetIds.map((assetId) => ({ assetId, reason: 'as drawn' })),
   })
-  const run = (assetIds: string[], viewed: string[], source: 'open' | 'catalog' = 'open') => {
-    try {
-      return designBrief({}, brief(assetIds, source), {
-        activeLevelId: null,
-        catalog,
-        session: { checkpoints: {}, made: [], viewed },
-      })
-    } catch (error) {
-      if (isAgentRefusal(error)) return error
-      throw error
-    }
-  }
+  const kept = (source: 'open' | 'catalog' = 'open') =>
+    designBrief({}, brief(source), { activeLevelId: null, catalog }).keep!.designBrief!
 
-  test('furniture is refused as asIs, viewed or not, with a fact per piece', () => {
-    const refusal = run(
-      ['double-bed', 'bedside-table', 'closet'],
-      ['double-bed', 'bedside-table', 'closet'],
+  const refusal = (tool: string, input: unknown) =>
+    furnishingRefusal(tool, input, kept(), { catalog })
+  const at = (assetId: string) => ({ items: [{ assetId, x: 0, z: 0 }] })
+
+  test('a fridge is placed from the catalog', () => {
+    expect(refusal('place_items', at('fridge'))).toBeNull()
+    const outcome = AGENT_OPERATIONS.place_items(
+      storeysScene().nodes as SceneNodes,
+      { ...at('fridge'), levelId: 'level_ground' },
+      { activeLevelId: null, catalog, designBrief: kept() },
     )
-    expect(isAgentRefusal(refusal) && refusal.code).toBe('brief_as_is_furniture')
-    expect((refusal as { message: string }).message).toBe(
-      ['Double bed', 'Bedside table', 'Closet']
-        .map(
-          (name) =>
-            `${name} is furniture: in an open brief furniture is made (add_object, place_design) or the request names a catalog source; asIs keeps technical equipment (sanitaryware, appliances).`,
-        )
-        .join(' '),
-    )
+    expect(outcome.result).toMatchObject({ ok: true, levelId: 'level_ground' })
   })
 
-  test('a piece not viewed is refused, naming it and view_assets', () => {
-    const refusal = run(['toilet', 'fridge'], ['fridge']) as { code: string; message: string }
-    expect(refusal.code).toBe('brief_as_is_not_viewed')
-    expect(refusal.message).toBe(
-      'toilet was not viewed: asIs keeps a catalog piece only after view_assets showed it earlier in the same turn (chat) or session (MCP).',
+  test('a palm is placed from the catalog, by its plant tags', () => {
+    expect(refusal('place_items', at('bush'))).toBeNull()
+    expect(refusal('place_items', at('palm'))).toBeNull()
+  })
+
+  test('a sofa is still refused under an open source', () => {
+    const refused = refusal('place_items', at('sofa'))
+    expect(refused?.code).toBe('brief_source_open')
+    expect(refused?.details).toMatchObject({ pieces: ['sofa'] })
+    expect(refused?.message).toContain(
+      'Technical equipment (sanitaryware, appliances) and plants are placed from the catalog under an open source',
     )
   })
 
-  test('a piece never viewed because the host has no session record is refused too', () => {
+  test('a call mixing a fridge and a sofa refuses only the sofa', () => {
+    const mixed = { items: [...at('fridge').items, ...at('sofa').items] }
+    expect(refusal('place_items', mixed)?.details).toMatchObject({ pieces: ['sofa'] })
+  })
+
+  test('a run_batch places the fridge and refuses the sofa', () => {
+    const placedBy = (assetId: string) => ({
+      tool: 'place_in_room',
+      input: {
+        assetId,
+        polygon: [
+          [0, 0],
+          [4, 0],
+          [4, 5],
+          [0, 5],
+        ],
+        levelId: 'level_ground',
+      },
+    })
+    const outcome = AGENT_OPERATIONS.run_batch(
+      storeysScene().nodes as SceneNodes,
+      { calls: [placedBy('fridge'), placedBy('sofa')], onRefusal: 'skip' },
+      { activeLevelId: null, catalog, designBrief: kept(), session: EMPTY_SESSION },
+    )
+    expect(outcome.result).toMatchObject({ applied: 1, refused: 1 })
+    expect(outcome.result.calls).toMatchObject([
+      { index: 0, status: 'ok' },
+      { index: 1, status: 'refused', code: 'brief_source_open' },
+    ])
+  })
+
+  test('catalog source: place_items of a toilet is allowed', () => {
     expect(
-      (() => {
-        try {
-          designBrief({}, brief(['toilet']), { activeLevelId: null, catalog })
-        } catch (error) {
-          return isAgentRefusal(error) && error.code
-        }
-      })(),
-    ).toBe('brief_as_is_not_viewed')
-  })
-
-  test('technical equipment viewed is kept, and place_items then passes', () => {
-    const outcome = run(['toilet', 'fridge'], ['toilet', 'fridge']) as ReturnType<
-      typeof designBrief
-    >
-    const kept = outcome.keep?.designBrief as DesignBrief
-    expect(kept.asIs?.map((piece) => piece.assetId)).toEqual(['toilet', 'fridge'])
-    expect(code('place_items', { items: [{ assetId: 'toilet', x: 0, z: 0 }] }, kept)).toBeNull()
-    expect(code('place_items', { items: [{ assetId: 'double-bed', x: 0, z: 0 }] }, kept)).toBe(
-      'brief_source_open',
-    )
-  })
-
-  test('a catalog brief opens everything and checks no asIs', () => {
-    const outcome = run(['double-bed'], [], 'catalog') as ReturnType<typeof designBrief>
-    expect(outcome.result.brief).not.toHaveProperty('asIs')
-    expect(
-      code('place_items', { items: [{ assetId: 'double-bed' }] }, outcome.keep!.designBrief!),
+      code('place_items', { items: [{ assetId: 'toilet', x: 0, z: 0 }] }, kept('catalog')),
     ).toBeNull()
   })
 
-  test('technical means plumbing, appliances and services by function tag, else by category', () => {
-    expect(isTechnicalEquipment(tagged('x', 'X', 'sinks', 'plumbing'))).toBe(true)
-    expect(isTechnicalEquipment(tagged('x', 'X', 'utilities'))).toBe(true)
-    expect(isTechnicalEquipment(tagged('x', 'X', 'climate-appliances'))).toBe(true)
-    expect(isTechnicalEquipment(tagged('x', 'X', 'sofas'))).toBe(false)
-    expect(isTechnicalEquipment(tagged('x', 'X', 'kitchen-appliances', 'cabinets'))).toBe(false)
-    expect(isTechnicalEquipment({ category: 'toilets' })).toBe(true)
-    expect(isTechnicalEquipment({ category: 'furniture' })).toBe(false)
+  test('a brief stored with asIs, before it was removed, parses without it and gates as open', () => {
+    const stored = parseSessionRecord({
+      checkpoints: {},
+      made: [],
+      designBrief: {
+        ...brief(),
+        asIs: [{ assetId: 'double-bed', reason: 'as drawn in the catalog' }],
+      },
+    })
+    expect(stored.designBrief).toBeDefined()
+    expect(stored.designBrief).not.toHaveProperty('asIs')
+    expect(
+      code('place_items', { items: [{ assetId: 'double-bed', x: 0, z: 0 }] }, stored.designBrief!),
+    ).toBe('brief_source_open')
+    expect(code('add_object', { code: 'export default 1' }, stored.designBrief!)).toBeNull()
+  })
+
+  test('an asIs a model still sends is not kept', () => {
+    const outcome = designBrief(
+      {},
+      { ...brief(), asIs: [{ assetId: 'toilet', reason: 'as drawn' }] } as never,
+      { activeLevelId: null, catalog },
+    )
+    expect(outcome.result.brief).not.toHaveProperty('asIs')
   })
 
   test('view_assets records the ids it showed; the session adds, dedups and forgets them', () => {
@@ -529,7 +636,7 @@ describe('asIs keeps technical equipment, looked at first', () => {
 
 describe('beyond: the dressing of the rooms, layer by layer', () => {
   const schema = z.object(designBriefTool.input)
-  const base = { axes: OPEN_AXES, source: 'open', vision: 'Calm.' }
+  const base = { axes: OPEN_AXES, rooms: HOUSE_ROOMS, source: 'open', vision: 'Calm.' }
   const run = (
     beyond: unknown,
     extra: Partial<DesignBrief> = {},
@@ -743,6 +850,7 @@ describe('beyond: the dressing of the rooms, layer by layer', () => {
 describe('a source other than open quotes the request', () => {
   const brief = {
     axes: OPEN_AXES,
+    rooms: HOUSE_ROOMS,
     vision: 'Furnished.',
     beyond: dressed,
   }
@@ -846,7 +954,10 @@ describe('a source other than open quotes the request', () => {
   })
 
   test('an older stored brief (no beyond) still reads, with the session’s checkpoints, and still gates', () => {
-    const { beyond: _beyond, ...older } = open([{ assetId: 'toilet', reason: 'r' }])
+    const { beyond: _beyond, ...older } = {
+      ...open(),
+      asIs: [{ assetId: 'sofa', reason: 'r' }],
+    }
     const stored = JSON.parse(
       JSON.stringify({
         ...EMPTY_SESSION,
@@ -861,11 +972,13 @@ describe('a source other than open quotes the request', () => {
     expect(code('place_items', { items: [{ assetId: 'double-bed' }] }, read.designBrief!)).toBe(
       'brief_source_open',
     )
-    expect(code('place_items', { items: [{ assetId: 'toilet' }] }, read.designBrief!)).toBeNull()
+    expect(code('place_items', { items: [{ assetId: 'sofa' }] }, read.designBrief!)).toBe(
+      'brief_source_open',
+    )
   })
 
   test('a brief stored as fixed and open lists with a string beyond, before the axes, still reads, with the session’s checkpoints', () => {
-    const older = open([{ assetId: 'toilet', reason: 'r' }])
+    const older = open()
     const read = parseSessionRecord(
       JSON.parse(
         JSON.stringify({

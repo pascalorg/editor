@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { INDEPENDENT_BATCH_TOOLS } from '../agent-tools/batch'
-import { isAgentRefusal, refuse } from '../agent-tools/refusal'
+import { AgentRefusal, isAgentRefusal, type RefusalKeep, refuse } from '../agent-tools/refusal'
 import type { SceneMaterialId } from '../schema/scene-material'
 import { applySceneChanges, mergeSceneChanges } from './apply-changes'
 import { requireFurnishing } from './design-brief'
@@ -17,73 +17,56 @@ type CallReport =
   | { index: number; tool: string; status: 'ok'; result: Record<string, unknown> }
   | { index: number; tool: string; status: 'refused'; code: string; error: string }
 
-type PreparedCall =
-  | { index: number; tool: string; invalid: string }
-  | {
-      index: number
-      tool: string
-      invalid?: undefined
-      operation: AgentOperation<never>
-      input: unknown
-    }
+function prepareCall(
+  call: BatchInput['calls'][number],
+  index: number,
+  operations: Readonly<Record<string, AgentOperation<never>>>,
+  contracts: readonly Contract[],
+) {
+  const operation = Object.hasOwn(operations, call.tool) ? operations[call.tool] : undefined
+  const contract = contracts.find((candidate) => candidate.name === call.tool)
+  if (!(operation && contract))
+    refuse(
+      'unknown_tool',
+      `The batch's call ${index + 1} names ${call.tool}, which a batch cannot run: call it on its own. A batch runs: ${Object.keys(operations).join(', ')}.`,
+    )
+  const parsed = z.object(contract.input).safeParse(call.input ?? {})
+  if (!parsed.success)
+    refuse(
+      'invalid_input',
+      `The batch's call ${index + 1} (${call.tool}) has an invalid input: ${parsed.error.issues
+        .map((issue) => `${issue.path.join('.') || 'input'}: ${issue.message}`)
+        .join('; ')}.`,
+    )
+  return { operation, input: parsed.data }
+}
 
 /**
  * `run_batch`: shared tools in order, each on the scene the calls before it left, their changes
  * merged into one set — one undo step, one write on either surface. The user: the model spent a
  * round trip per step on what could be serialised (deleting balcony walls one by one, the same
- * build on every floor). Inputs are checked before anything runs.
+ * build on every floor). Pre-check and operation refusals follow the same per-call policy.
  */
 export function createBatchOperation(
   operations: Readonly<Record<string, AgentOperation<never>>>,
   contracts: readonly Contract[],
 ): AgentOperation<BatchInput> {
-  const names = Object.keys(operations).join(', ')
   return (nodes, { calls, onRefusal = 'stop' }, context) => {
-    const prepared = calls.map((call, index): PreparedCall => {
-      const operation = operations[call.tool]
-      const contract = contracts.find((candidate) => candidate.name === call.tool)
-      if (!(operation && contract))
-        refuse(
-          'unknown_tool',
-          `The batch's call ${index + 1} names ${call.tool}, which a batch cannot run: call it on its own. A batch runs: ${names}.`,
-          { index, tool: call.tool },
-        )
-      const parsed = z.object(contract.input).safeParse(call.input ?? {})
-      if (!parsed.success) {
-        const message = `The batch's call ${index + 1} (${call.tool}) has an invalid input: ${parsed.error.issues
-          .map((issue) => `${issue.path.join('.') || 'input'}: ${issue.message}`)
-          .join('; ')}.`
-        // An independent call's bad input is its own report; the others still run.
-        if (INDEPENDENT_BATCH_TOOLS.includes(call.tool))
-          return { index, tool: call.tool, invalid: message }
-        refuse('invalid_input', `${message} Nothing ran.`, { index, tool: call.tool })
-      }
-      return { index, tool: call.tool, operation, input: parsed.data }
-    })
-
-    // The gate is a fact of the tool, not of the scene: a call it refuses cannot succeed under
-    // either onRefusal, so the batch is refused whole before anything runs.
-    requireFurnishing('run_batch', { calls }, context.designBrief)
-
     let working = nodes
     let workingContext = context
+    let kept: RefusalKeep['readings'] | undefined
     const sets: SceneChanges[] = []
     const reports: CallReport[] = []
-    for (const call of prepared) {
-      if (call.invalid !== undefined) {
-        reports.push({
-          index: call.index,
-          tool: call.tool,
-          status: 'refused',
-          code: 'invalid_input',
-          error: call.invalid,
-        })
-        continue
-      }
+    for (const [index, call] of calls.entries()) {
       try {
-        const { result, changes } = call.operation(working, call.input as never, {
+        requireFurnishing(call.tool, call.input, context.designBrief, {
+          session: workingContext.session,
+          catalog: workingContext.catalog,
+        })
+        const { operation, input } = prepareCall(call, index, operations, contracts)
+        const { result, changes } = operation(working, input as never, {
           ...workingContext,
-          batchCall: call.index,
+          batchCall: index,
         })
         if (changes) {
           sets.push(changes)
@@ -97,17 +80,29 @@ export function createBatchOperation(
               },
             }
         }
-        reports.push({ index: call.index, tool: call.tool, status: 'ok', result })
+        reports.push({ index, tool: call.tool, status: 'ok', result })
       } catch (error) {
         if (!isAgentRefusal(error)) throw error
         if (onRefusal === 'stop' && !INDEPENDENT_BATCH_TOOLS.includes(call.tool))
-          refuse(
+          throw new AgentRefusal(
             'batch_call_refused',
-            `The batch stopped at call ${call.index + 1} (${call.tool}), refused with ${error.code}: ${error.message} Nothing in the batch was applied.`,
-            { index: call.index, tool: call.tool, refusal: error.code, ...error.details },
+            `The batch stopped at call ${index + 1} (${call.tool}), refused with ${error.code}: ${error.message} Nothing in the batch was applied.`,
+            { ...error.details, index, tool: call.tool, refusal: error.code },
+            error.keep,
           )
+        if (error.keep) {
+          kept = { ...kept, ...error.keep.readings }
+          if (workingContext.session)
+            workingContext = {
+              ...workingContext,
+              session: {
+                ...workingContext.session,
+                readings: { ...workingContext.session.readings, ...error.keep.readings },
+              },
+            }
+        }
         reports.push({
-          index: call.index,
+          index,
           tool: call.tool,
           status: 'refused',
           code: error.code,
@@ -136,6 +131,7 @@ export function createBatchOperation(
     return {
       result: { status: 'applied', applied, refused: reports.length - applied, calls: reports },
       ...(changed ? { changes: merged } : {}),
+      ...(kept ? { keep: { readings: kept } } : {}),
     }
   }
 }

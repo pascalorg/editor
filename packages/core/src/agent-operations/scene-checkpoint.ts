@@ -36,6 +36,12 @@ export type SessionRecord = {
   designBrief?: DesignBrief
   /** The catalog ids view_assets showed: a brief keeps a catalog piece as it is only after one. */
   viewed?: string[]
+  /**
+   * What a module read about the scene or the turn when its tool last ran, by the module's own key:
+   * plain JSON, small, opaque here. The module that wrote a key reads it back from
+   * `context.session.readings`.
+   */
+  readings?: Record<string, unknown>
 }
 
 /**
@@ -47,6 +53,8 @@ export type SessionKeep = {
   made?: readonly MadeEntry[]
   designBrief?: DesignBrief | null
   viewed?: readonly string[] | null
+  /** Keys to set, each replacing the module's last reading; a null takes the key away. */
+  readings?: Readonly<Record<string, unknown>>
 }
 
 export const EMPTY_SESSION: SessionRecord = { checkpoints: {}, made: [] }
@@ -59,6 +67,8 @@ export const MAX_CHECKPOINT_NODES = 5000
 export const MAX_MADE = 20_000
 /** The viewed list keeps the most recent ids up to here. */
 export const MAX_VIEWED = 500
+/** A session keeps the readings of this many modules; the oldest key goes first. */
+export const MAX_READINGS = 16
 
 /**
  * The record after a keep: a checkpoint of the same name is replaced, made entries accumulate. A node
@@ -83,6 +93,7 @@ export function keepInSession(session: SessionRecord, keep: SessionKeep): Sessio
           ...(session.viewed ?? []).filter((id) => !incomingViewed.has(id)),
           ...incomingViewed,
         ].slice(-MAX_VIEWED)
+  const readings = keptReadings(session.readings, keep.readings)
   return {
     checkpoints: keep.checkpoint
       ? { ...session.checkpoints, [keep.checkpoint.name]: keep.checkpoint }
@@ -90,7 +101,27 @@ export function keepInSession(session: SessionRecord, keep: SessionKeep): Sessio
     made: fresh.length ? [...session.made, ...fresh].slice(0, MAX_MADE) : session.made,
     ...(designBrief ? { designBrief } : {}),
     ...(viewed.length ? { viewed } : {}),
+    ...(readings ? { readings } : {}),
   }
+}
+
+/** A module's key: lower case first, then letters, digits, dots, dashes and underscores (`brief.refusedPieces`). */
+const READING_KEY = /^[a-z][\w.-]{0,63}$/
+
+/** The readings after a keep: a key set again moves to the end, a null drops it, a key that is not a module's is ignored, and the oldest past the cap go. */
+function keptReadings(
+  held: SessionRecord['readings'],
+  keep: SessionKeep['readings'],
+): SessionRecord['readings'] {
+  if (!keep) return held
+  const next = new Map(Object.entries(held ?? {}))
+  for (const [key, value] of Object.entries(keep)) {
+    if (!READING_KEY.test(key)) continue
+    next.delete(key)
+    if (value !== null && value !== undefined) next.set(key, value)
+  }
+  const kept = [...next].slice(-MAX_READINGS)
+  return kept.length ? Object.fromEntries(kept) : undefined
 }
 
 const FNV_PRIME = 0x01000193
@@ -234,6 +265,16 @@ const Record_ = z.object({
   made: z.array(Made).max(MAX_MADE),
   designBrief: DesignBriefRecord.optional(),
   viewed: z.array(z.string()).max(MAX_VIEWED).optional(),
+  // a bag that does not read back costs the session its readings, never its brief or its moments
+  readings: z
+    .record(z.string(), z.unknown())
+    .refine(
+      (readings) =>
+        Object.keys(readings).length <= MAX_READINGS &&
+        Object.keys(readings).every((key) => READING_KEY.test(key)),
+    )
+    .optional()
+    .catch(undefined),
 })
 
 /**

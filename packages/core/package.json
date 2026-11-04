@@ -41,6 +41,11 @@
       "import": "./dist/registry/index.js",
       "default": "./dist/registry/index.js"
     },
+    "./usage-field": {
+      "types": "./dist/spatial/usage-field/index.d.ts",
+      "import": "./dist/spatial/usage-field/index.js",
+      "default": "./dist/spatial/usage-field/index.js"
+    },
     "./zone-colors": {
       "types": "./dist/lib/zone-colors.d.ts",
       "import": "./dist/lib/zone-colors.js",

@@ -222,6 +222,48 @@ describe('author_scene', () => {
     expect(scene).toEqual(before)
   })
 
+  test('a payload is the whole design: a revision removes the level it no longer names, and a second payload without replace is refused', () => {
+    const ground = bedroom.levels[0]!
+    const upper = {
+      ...ground,
+      name: 'Upper floor',
+      elevation: 2.8,
+      walls: ground.walls!.map((wall) => ({ ...wall, id: `up_${wall.id}` })),
+      items: [],
+      lights: [],
+    }
+    const whole = authorScenePayload.parse({ levels: [ground, upper] })
+    const first = authorScene(
+      scaffold(),
+      { payload: whole, compiled: { bed, lamp: bed } },
+      { activeLevelId: null },
+    )
+    const saved = applySceneChanges(scaffold(), first.changes)
+    const upperWalls = ['north', 'east', 'south', 'west'].map((id) => first.result.ids[`up_${id}`]!)
+    for (const id of upperWalls) expect(saved[id]).toBeDefined()
+
+    expect(() =>
+      authorScene(
+        saved,
+        { payload: authorScenePayload.parse({ levels: [upper] }), compiled: {} },
+        { activeLevelId: null },
+      ),
+    ).toThrow('already holds a conversion')
+
+    const revised = authorScene(
+      saved,
+      {
+        payload: authorScenePayload.parse({ levels: [ground] }),
+        compiled: { bed, lamp: bed },
+        replace: true,
+      },
+      { activeLevelId: null },
+    )
+    for (const id of upperWalls) expect(revised.changes!.delete).toContain(id)
+    const after = applySceneChanges(saved, revised.changes)
+    for (const id of upperWalls) expect(after[id]).toBeUndefined()
+  })
+
   test('item ids cannot overwrite another item or a generated source mapping', () => {
     for (const id of ['bed', 'room/0/0']) {
       const scene = scaffold()

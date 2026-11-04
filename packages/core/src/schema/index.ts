@@ -71,6 +71,7 @@ export {
   GeometryScriptParamSpec,
   GeometryScriptParamValue,
   GeometryScriptSource,
+  GeometryShape,
   isGeometryScriptMimeType,
   LightGlow,
   LightSpot,

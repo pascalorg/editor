@@ -10,11 +10,11 @@ import {
   applyAgentOutcome,
   assetViewNeeds,
   assetViewsReadCatalog,
-  briefReadsCatalog,
   buildBatchObjects,
   createAssetViewLoader,
   createFetchAssetViewIO,
   furnishingRefusal,
+  namesCatalogPieces,
   type SceneChanges,
   startOfSession,
   writeCollections,
@@ -35,6 +35,8 @@ import {
   deleteNodeTool,
   designBriefTool,
   duplicateLevelTool,
+  duplicateNodeOutput,
+  duplicateNodeTool,
   findByTypeTool,
   fitStairTool,
   furnishRoomTool,
@@ -43,10 +45,13 @@ import {
   getSiteTool,
   getWallsTool,
   getZonesTool,
+  isAgentRefusal,
   listLevelsTool,
   listUnitsTool,
   measureStairTool,
   mergeWindowsTool,
+  moveNodeOutput,
+  moveNodeTool,
   moveRoofsToRoofLevelTool,
   paintTool,
   placeBuildingTool,
@@ -63,6 +68,7 @@ import {
   setUnitMembersTool,
   setWallTypeTool,
   validateDesignTool,
+  verifySceneModelResult,
   verifySceneTool,
   viewAssetsTool,
 } from '@pascal-app/core/agent-tools'
@@ -306,7 +312,7 @@ const SHARED_TOOLS: SharedTool[] = [
         z.looseObject({
           type: z.string(),
           message: z.string(),
-          severity: z.literal('info').optional(),
+          severity: z.enum(['info', 'warning']).optional(),
           nodeId: z.string().optional(),
           path: z.string().optional(),
           zoneId: z.string().optional(),
@@ -409,6 +415,18 @@ const SHARED_TOOLS: SharedTool[] = [
     operation: AGENT_OPERATIONS.delete_node,
     annotations: DESTRUCTIVE_TOOL_ANNOTATIONS,
     outputSchema: { deletedIds: z.array(z.string()), ...achievedOutput, ...liveSyncOutput },
+  },
+  {
+    contract: moveNodeTool,
+    operation: AGENT_OPERATIONS.move_node,
+    annotations: DESTRUCTIVE_TOOL_ANNOTATIONS,
+    outputSchema: { ...moveNodeOutput, ...liveSyncOutput },
+  },
+  {
+    contract: duplicateNodeTool,
+    operation: AGENT_OPERATIONS.duplicate_node,
+    annotations: ADDITIVE_TOOL_ANNOTATIONS,
+    outputSchema: { ...duplicateNodeOutput, ...liveSyncOutput },
   },
   {
     contract: createRoomTool,
@@ -655,6 +673,18 @@ function writesScene(changes: SceneChanges | undefined): boolean {
   )
 }
 
+/**
+ * What the model reads of a tool's result: for verify_scene, the findings grouped and trimmed
+ * (`verifySceneModelResult`); every other result as it is. The structured result keeps the report whole.
+ */
+function modelResult(
+  name: string,
+  output: Record<string, unknown>,
+  input: Record<string, unknown>,
+) {
+  return name === verifySceneTool.name ? verifySceneModelResult(output, input) : output
+}
+
 export function registerSharedTools(
   server: McpServer,
   bridge: SceneOperations,
@@ -697,11 +727,26 @@ export function registerOperationTool(
       // The agent's session begins with its first call, before anything is written.
       const first = bridge.agentSession && startOfSession(bridge.agentSession.read(), before)
       if (first) bridge.agentSession?.keep(first)
-      // Gate before catalog I/O or module compilation.
+      // Gate before module compilation. The gate reads the catalog's tags to let technical
+      // equipment and plants through; a batch's calls are checked one by one, so its catalog is
+      // read too.
       const designBrief = briefInForce(bridge)
+      const gateCatalog =
+        designBrief?.source === 'open' &&
+        (namesCatalogPieces(tool.contract.name, input) ||
+          (tool.contract.name === runBatchTool.name && Array.isArray(input.calls)))
+          ? await catalog()
+          : undefined
       if (designBrief !== undefined) {
-        const refusal = furnishingRefusal(tool.contract.name, input, designBrief)
-        if (refusal) return refusalResult(refusal)
+        const refusal = furnishingRefusal(tool.contract.name, input, designBrief, {
+          session: bridge.agentSession?.read(),
+          catalog: gateCatalog,
+        })
+        if (refusal) {
+          // A refusal can ask the session to remember what it refused (a catalog piece under an open source).
+          if (refusal.keep) bridge.agentSession?.keep(refusal.keep)
+          return refusalResult(refusal)
+        }
       }
       const batchPlacesInRoom =
         tool.contract.name === runBatchTool.name &&
@@ -711,7 +756,12 @@ export function registerOperationTool(
             typeof call === 'object' &&
             call !== null &&
             'tool' in call &&
-            call.tool === placeInRoomTool.name,
+            call.tool === placeInRoomTool.name &&
+            (designBrief === undefined ||
+              !furnishingRefusal(call.tool, 'input' in call ? call.input : {}, designBrief, {
+                session: bridge.agentSession?.read(),
+                catalog: gateCatalog,
+              })),
         )
       const batchesObjects =
         tool.contract.name === runBatchTool.name &&
@@ -733,12 +783,12 @@ export function registerOperationTool(
         ...(designBrief !== undefined && { designBrief }),
         ...((tool.catalog ||
           batchPlacesInRoom ||
-          assetViewsReadCatalog(tool.contract.name, input) ||
-          briefReadsCatalog(tool.contract.name, input)) && { catalog: await catalog() }),
+          assetViewsReadCatalog(tool.contract.name, input)) && { catalog: await catalog() }),
         ...(batchesObjects && {
           batchObjects: await buildBatchObjects(
             input.calls as { tool?: unknown; input?: unknown }[],
             hosts.buildObject ?? refuseScripts,
+            designBrief,
           ),
         }),
       }
@@ -750,6 +800,8 @@ export function registerOperationTool(
       try {
         outcome = inScene(bridge, () => tool.operation(nodes, input as never, context))
       } catch (error) {
+        // A refusal can ask the session to remember what it refused (a catalog piece under an open source).
+        if (isAgentRefusal(error) && error.keep) bridge.agentSession?.keep(error.keep)
         return refusalResult(error)
       }
       let result = outcome.result
@@ -787,11 +839,22 @@ export function registerOperationTool(
       })
       if (pictures.length)
         return {
-          content: [{ type: 'text' as const, text: JSON.stringify(shown) }, ...pictures],
+          content: [
+            {
+              type: 'text' as const,
+              text: JSON.stringify(modelResult(tool.contract.name, shown, input)),
+            },
+            ...pictures,
+          ],
           structuredContent: shown,
         }
       return {
-        content: [{ type: 'text' as const, text: JSON.stringify(payload) }],
+        content: [
+          {
+            type: 'text' as const,
+            text: JSON.stringify(modelResult(tool.contract.name, payload, input)),
+          },
+        ],
         structuredContent: payload,
       }
     },
