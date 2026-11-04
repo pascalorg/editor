@@ -81,3 +81,24 @@ describe('panelled door styles', () => {
       expect(panelFaces(style)).toEqual({ front: true, back: true })
     })
 })
+
+test('barn braces cross diagonally in the leaf plane', () => {
+  const mesh = buildDoorPreviewMesh(DoorNode.parse({ doorType: 'barn' }))
+  const leaf = mesh.getObjectByName('door-barn-leaf')!
+  const braces = leaf.children.filter(
+    (part): part is THREE.Mesh =>
+      part instanceof THREE.Mesh && part.geometry.type === 'BoxGeometry' && !part.userData.slotId,
+  )
+  expect(braces).toHaveLength(2)
+  const directions = braces.map((brace) => {
+    const direction = new THREE.Vector3(0, 1, 0).applyQuaternion(brace.quaternion)
+    expect(Math.abs(direction.x)).toBeGreaterThan(0.4)
+    expect(direction.y).toBeGreaterThan(0.8)
+    expect(direction.z).toBeCloseTo(0)
+    const bounds = new THREE.Box3().setFromObject(brace)
+    expect(bounds.getSize(new THREE.Vector3()).z).toBeCloseTo(0.012)
+    return direction
+  })
+  expect(directions[0]!.x * directions[1]!.x).toBeLessThan(0)
+  expect(braces[0]!.position.equals(braces[1]!.position)).toBe(true)
+})

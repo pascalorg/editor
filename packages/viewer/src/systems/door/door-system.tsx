@@ -329,13 +329,13 @@ function addRotatedBox(
   x: number,
   y: number,
   z: number,
-  rotationY: number,
+  rotationZ: number,
 ) {
   const geometry = new THREE.BoxGeometry(w, h, d)
   applyWorldScaleBoxUVs(geometry, w, h, d)
   const m = new THREE.Mesh(geometry, material)
   m.position.set(x, y, z)
-  m.rotation.y = rotationY
+  m.rotation.z = rotationZ
   tagDoorSlot(m)
   parent.add(m)
 }
@@ -1139,6 +1139,7 @@ function addDoorLeaf(
     leafCenterX,
     leafCenterY,
     leafDepth,
+    frameDepth,
     hingeX,
     hingeSide,
     swingRotation,
@@ -1165,6 +1166,7 @@ function addDoorLeaf(
     leafCenterX: number
     leafCenterY: number
     leafDepth: number
+    frameDepth: number
     hingeX: number
     hingeSide: 'left' | 'right'
     swingRotation: number
@@ -1372,14 +1374,23 @@ function addDoorLeaf(
     currentDoorSlot = 'hardware'
     const closerY = leafCenterY + leafHeight / 2 - 0.04
     addLeafBox(hardwareMaterial, 0.28, 0.055, 0.055, leafCenterX, closerY, leafDepth / 2 + 0.03)
+    const armStart = new THREE.Vector3(leafCenterX + 0.1, closerY + 0.025, leafDepth / 2 + 0.015)
+    const armEnd = new THREE.Vector3(
+      leafCenterX + leafWidth / 4,
+      (leafTop + doorHeight / 2) / 2,
+      frameDepth / 2 + 0.015,
+    )
+    addHardware(mesh, roundedBox(0.06, 0.03, 0.03), armEnd.x, armEnd.y, armEnd.z)
+    const armDirection = armEnd.clone().sub(armStart)
+    const armCenter = armStart.clone().add(armEnd).multiplyScalar(0.5)
     const arm = addHardware(
       leafGroup,
-      tube(0.0075, 0.14),
-      leafCenterX + leafWidth / 4 - hingeX,
-      closerY + 0.025,
-      leafDepth / 2 + 0.015 - pivotZ,
+      tube(0.0075, armDirection.length()),
+      armCenter.x - hingeX,
+      armCenter.y,
+      armCenter.z - pivotZ,
     )
-    arm.rotateZ(Math.PI / 2)
+    arm.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), armDirection.normalize())
   }
 
   if (hasLeafContent && panicBar) {
@@ -1394,14 +1405,13 @@ function addDoorLeaf(
     )
     bar.rotateZ(Math.PI / 2)
     for (const end of [-1, 1]) {
-      const cap = addHardware(
+      addHardware(
         leafGroup,
-        roller(0.02, 0.006),
+        roundedBox(0.045, 0.07, 0.04),
         leafCenterX - hingeX + (end * barLength) / 2,
         barY,
-        leafDepth / 2 + 0.03 - pivotZ,
+        leafDepth / 2 + 0.02 - pivotZ,
       )
-      cap.rotateY(Math.PI / 2)
     }
   }
 
@@ -1819,8 +1829,15 @@ function addBarnDoor(
 
   currentDoorSlot = 'hardware'
   addBox(mesh, hardwareMaterial, railLength, 0.035, 0.035, railCenterX, trackY, faceZ + 0.01)
-  addBox(mesh, hardwareMaterial, 0.05, 0.13, 0.035, -insideWidth / 2, trackY - 0.02, faceZ + 0.01)
-  addBox(mesh, hardwareMaterial, 0.05, 0.13, 0.035, insideWidth / 2, trackY - 0.02, faceZ + 0.01)
+  for (const end of [-1, 1]) {
+    addHardware(
+      mesh,
+      roller(0.02, 0.03),
+      railCenterX + (end * railLength) / 2,
+      trackY,
+      faceZ + 0.01,
+    )
+  }
 
   const leafGroup = new THREE.Group()
   leafGroup.name = BARN_LEAF_NAME
@@ -2628,6 +2645,7 @@ function updateDoorMesh(rawNode: DoorNode, mesh: THREE.Mesh): boolean {
       leafCenterX: -insideWidth / 4,
       leafCenterY,
       leafDepth,
+      frameDepth,
       hingeX: -insideWidth / 2,
       hingeSide: 'left',
       swingRotation: -clampedSwingAngle * swingDirectionSign,
@@ -2657,6 +2675,7 @@ function updateDoorMesh(rawNode: DoorNode, mesh: THREE.Mesh): boolean {
       leafCenterX: insideWidth / 4,
       leafCenterY,
       leafDepth,
+      frameDepth,
       hingeX: insideWidth / 2,
       hingeSide: 'right',
       swingRotation: clampedSwingAngle * swingDirectionSign,
@@ -2689,6 +2708,7 @@ function updateDoorMesh(rawNode: DoorNode, mesh: THREE.Mesh): boolean {
       leafCenterX: 0,
       leafCenterY,
       leafDepth,
+      frameDepth,
       hingeX,
       hingeSide: hingesSide,
       swingRotation: clampedSwingAngle * swingDirectionSign * hingeDirectionSign,

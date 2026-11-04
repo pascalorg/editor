@@ -4,7 +4,7 @@ import { act, create } from '@react-three/test-renderer'
 import { createElement } from 'react'
 import * as THREE from 'three'
 import { disposeObject3DResources } from '../../lib/dispose-object3d'
-import { hingeBarrel, leverOnRose, roller, roundedBox } from '../../lib/hardware-geometry'
+import { hingeBarrel, leverOnRose, roller, roundedBox, tube } from '../../lib/hardware-geometry'
 import { buildDoorPreviewMesh, DoorSystem, poseDoorMovingParts } from './door-system'
 
 function swingLeaves(mesh: THREE.Object3D) {
@@ -99,6 +99,127 @@ test('roses seat on the raised segment at the handle height, on both faces', () 
     expect(Math.abs(position.z)).toBeCloseTo(0.055)
     expect(position.y).toBeCloseTo(node.handleHeight - node.height / 2)
     expect(position.x).toBeCloseTo((node.width - 2 * node.frameThickness) / 2 - 0.06)
+  }
+})
+
+test('panic bar ends sit in leaf-mounted brackets that reach the leaf face', () => {
+  for (const swingAngle of [0, Math.PI / 4, Math.PI / 2]) {
+    const node = DoorNode.parse({ panicBar: true, swingAngle })
+    const mesh = buildDoorPreviewMesh(node)
+    mesh.updateMatrixWorld(true)
+    const leaf = swingLeaves(mesh)[0]!
+    const barLength = (node.width - 2 * node.frameThickness) * 0.72
+    const bar = leaf.children.find(
+      (part): part is THREE.Mesh =>
+        part instanceof THREE.Mesh && part.geometry === tube(0.02, barLength),
+    )!
+    const brackets = leaf.children.filter(
+      (part): part is THREE.Mesh =>
+        part instanceof THREE.Mesh && part.geometry === roundedBox(0.045, 0.07, 0.04),
+    )
+    expect(brackets).toHaveLength(2)
+    for (const [index, bracket] of brackets.entries()) {
+      expect(bracket.userData.slotId).toBe('hardware')
+      expect(bar.userData.slotId).toBe('hardware')
+      const bounds = new THREE.Box3().setFromBufferAttribute(
+        bracket.geometry.getAttribute('position') as THREE.BufferAttribute,
+      )
+      const end = bar.localToWorld(
+        new THREE.Vector3(0, ((index === 0 ? 1 : -1) * barLength) / 2, 0),
+      )
+      const localEnd = bracket.worldToLocal(end)
+      expect(bounds.containsPoint(localEnd)).toBe(true)
+      expect(localEnd.z).toBeGreaterThan(0)
+      expect(bracket.position.z + bounds.min.z + leaf.position.z).toBeCloseTo(0.02)
+    }
+    expect(
+      leaf.children.some(
+        (part) => part instanceof THREE.Mesh && part.geometry === roller(0.02, 0.006),
+      ),
+    ).toBe(false)
+  }
+})
+
+test('closer arm joins its leaf body to a fixed bracket on the head jamb when closed', () => {
+  for (const frameDepth of [0.1, 0.24]) {
+    const node = DoorNode.parse({ doorCloser: true, frameDepth })
+    const mesh = buildDoorPreviewMesh(node)
+    mesh.updateMatrixWorld(true)
+    const leaf = swingLeaves(mesh)[0]!
+    const body = leaf.children.find(
+      (part): part is THREE.Mesh =>
+        part instanceof THREE.Mesh && part.geometry === roundedBox(0.28, 0.055, 0.055),
+    )!
+    const arm = leaf.children.find(
+      (part): part is THREE.Mesh =>
+        part instanceof THREE.Mesh && part.geometry.type === 'CylinderGeometry',
+    )!
+    const bracket = mesh.children.find(
+      (part): part is THREE.Mesh =>
+        part instanceof THREE.Mesh && part.geometry === roundedBox(0.06, 0.03, 0.03),
+    )!
+    expect(bracket.userData.slotId).toBe('hardware')
+    expect(arm.userData.slotId).toBe('hardware')
+    const bracketBounds = new THREE.Box3().setFromObject(bracket)
+    expect(bracketBounds.min.z).toBeCloseTo(frameDepth / 2)
+    expect(bracketBounds.min.y).toBeGreaterThan(node.height / 2 - node.frameThickness)
+    arm.geometry.computeBoundingBox()
+    const length = arm.geometry.boundingBox!.getSize(new THREE.Vector3()).y
+    const start = arm.localToWorld(new THREE.Vector3(0, -length / 2, 0))
+    const end = arm.localToWorld(new THREE.Vector3(0, length / 2, 0))
+    expect(new THREE.Box3().setFromObject(body).containsPoint(start)).toBe(true)
+    expect(bracketBounds.containsPoint(end)).toBe(true)
+    const bracketPosition = bracket.getWorldPosition(new THREE.Vector3())
+    const localArmPosition = arm.position.clone()
+    const localArmQuaternion = arm.quaternion.clone()
+    leaf.rotation.y = leaf.userData.pascalSwingLeaf.openRotationY
+    mesh.updateMatrixWorld(true)
+    expectVector(bracket.getWorldPosition(new THREE.Vector3()), bracketPosition)
+    expectVector(arm.position, localArmPosition)
+    expect(arm.quaternion.equals(localArmQuaternion)).toBe(true)
+    expect(arm.localToWorld(new THREE.Vector3(0, length / 2, 0)).distanceTo(end)).toBeGreaterThan(
+      0.01,
+    )
+  }
+  for (const patch of [
+    { doorCloser: false },
+    { doorCloser: true, segments: [{ ...DoorNode.parse({}).segments[0], type: 'empty' }] },
+  ]) {
+    const mesh = buildDoorPreviewMesh(DoorNode.parse(patch))
+    expect(
+      mesh.children.some(
+        (part) => part instanceof THREE.Mesh && part.geometry === roundedBox(0.06, 0.03, 0.03),
+      ),
+    ).toBe(false)
+  }
+})
+
+test('barn rail stops are rollers centred on the two fixed rail ends', () => {
+  for (const slideDirection of ['left', 'right'] as const) {
+    const node = DoorNode.parse({ doorType: 'barn', slideDirection })
+    const mesh = buildDoorPreviewMesh(node)
+    const rail = mesh.children.find(
+      (part): part is THREE.Mesh =>
+        part instanceof THREE.Mesh && part.geometry.type === 'RoundedBoxGeometry',
+    )!
+    const stops = mesh.children.filter(
+      (part): part is THREE.Mesh =>
+        part instanceof THREE.Mesh && part.geometry === roller(0.02, 0.03),
+    )
+    expect(stops).toHaveLength(2)
+    rail.geometry.computeBoundingBox()
+    const length = rail.geometry.boundingBox!.getSize(new THREE.Vector3()).x
+    for (const [index, stop] of stops.entries()) {
+      expect(stop.userData.slotId).toBe('hardware')
+      expectVector(
+        stop.position,
+        rail.position.clone().add(new THREE.Vector3(((index === 0 ? -1 : 1) * length) / 2, 0, 0)),
+      )
+      expectVector(
+        new THREE.Vector3(0, 0, 1).applyQuaternion(stop.quaternion),
+        new THREE.Vector3(0, 0, 1),
+      )
+    }
   }
 })
 
