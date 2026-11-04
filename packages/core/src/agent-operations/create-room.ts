@@ -1,5 +1,5 @@
 import { isAgentRefusal, refuse } from '../agent-tools/refusal'
-import { doorFacing, planWallOpening } from '../building/wall-openings'
+import { doorFacing, planWallOpening, type WallOpeningInput } from '../building/wall-openings'
 import { createZone, walledRoomAt } from '../commands/structure/create-zone'
 import { structureChangeBatch } from '../commands/structure/shared'
 import { levelFootprintLoops } from '../lib/building-footprint'
@@ -22,7 +22,17 @@ import { polygonArea, type Vec2 } from './plan-geometry'
 import { levelRole, queryNodes } from './scene-queries'
 import type { AgentOperation, SceneNodes } from './types'
 
-type OpeningSpec = {
+type OpeningSpec = Pick<
+  WallOpeningInput,
+  | 'windowType'
+  | 'columns'
+  | 'rows'
+  | 'sashGrid'
+  | 'windowHandle'
+  | 'sillInterior'
+  | 'shutters'
+  | 'shutterWidth'
+> & {
   wallIndex: number
   t?: number
   width?: number

@@ -1,5 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { z } from 'zod'
+import { AGENT_OPERATIONS } from '../agent-operations'
+import { createRoomTool } from '../agent-tools/create-room'
 import { type AgentRefusal, isAgentRefusal } from '../agent-tools/refusal'
 import { addDoorTool, addWindowTool } from '../agent-tools/wall-openings'
 import { getOpeningWallCut } from '../lib/opening-floor-datum'
@@ -207,3 +209,84 @@ for (const handleStyle of ['lever', 'lever-curved', 'knob', 'bar', 'plate'] as c
     if (planned.node.type === 'door') expect(planned.node.handleStyle).toBe(handleStyle)
   })
 }
+describe('agent-authored window details', () => {
+  test.each(['casement', 'single-hung', 'double-hung', 'sliding', 'awning', 'hopper'] as const)(
+    'add_window applies columns and rows per %s sash',
+    (windowType) => {
+      const input = z.object(addWindowTool.input).parse({
+        wallId: OPENING_SCENE.main,
+        t: 0.5,
+        windowType,
+        columns: 3,
+        rows: 2,
+        windowHandle: false,
+        sillInterior: true,
+        shutters: 'louvered',
+        shutterWidth: '40 cm',
+      })
+      const { node } = planWallOpening(openingScene().nodes, { kind: 'window', ...input })
+      expect(node).toMatchObject({
+        type: 'window',
+        windowType,
+        sashGrid: true,
+        columnRatios: [1 / 3, 1 / 3, 1 / 3],
+        rowRatios: [0.5, 0.5],
+        windowHandle: false,
+        sillInterior: true,
+        shutters: 'louvered',
+        shutterWidth: 0.4,
+      })
+    },
+  )
+
+  test('windows without requested divisions keep the optional sash grid absent', () => {
+    for (const windowType of ['fixed', 'casement'] as const) {
+      const { node } = planWallOpening(openingScene().nodes, {
+        kind: 'window',
+        wallId: OPENING_SCENE.main,
+        t: 0.5,
+        windowType,
+      })
+      expect(node).not.toHaveProperty('sashGrid')
+    }
+  })
+
+  test('create_room preserves its operable window details', () => {
+    const { nodes } = openingScene()
+    const input = z.object(createRoomTool.input).parse({
+      name: 'Study',
+      levelId: OPENING_SCENE.levelId,
+      polygon: [
+        [20, 20],
+        [24, 20],
+        [24, 24],
+        [20, 24],
+      ],
+      windows: [
+        {
+          wallIndex: 0,
+          windowType: 'double-hung',
+          columns: 3,
+          rows: 2,
+          sillInterior: true,
+          shutters: 'panel',
+          shutterWidth: 0.45,
+        },
+      ],
+    })
+    const outcome = AGENT_OPERATIONS.create_room(nodes, input, {
+      activeLevelId: OPENING_SCENE.levelId,
+    })
+    const window = outcome.changes?.create?.find(({ node }) => node.type === 'window')?.node
+    expect(window).toMatchObject({
+      type: 'window',
+      windowType: 'double-hung',
+      sashGrid: true,
+      columnRatios: [1 / 3, 1 / 3, 1 / 3],
+      rowRatios: [0.5, 0.5],
+      sillInterior: true,
+      shutters: 'panel',
+      shutterWidth: 0.45,
+    })
+  })
+})

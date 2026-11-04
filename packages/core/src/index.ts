@@ -446,6 +446,7 @@ export {
   openingCasingFaces,
   openingCasingWidth,
   openingHostFacing,
+  openingInteriorFace,
   resolveOpeningCasingHost,
 } from './lib/opening-casing'
 export {

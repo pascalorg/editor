@@ -217,31 +217,50 @@ export function flushPull() {
   })
 }
 
-function hingePart(leaf: boolean) {
-  return cached(leaf ? 'hinge-leaf' : 'hinge-jamb', [], () => {
-    const plate = new BoxGeometry(0.0025, 0.089, 0.028)
-    boxUVs(plate, 0.0025, 0.089, 0.028)
-    plate.translate(leaf ? 0.00125 : -0.00125, 0, -0.014)
+function hingePart(leaf: boolean, diameter: number, height: number) {
+  return cached(leaf ? 'hinge-leaf' : 'hinge-jamb', [diameter, height], (d, h) => {
+    const radialScale = d / 0.014
+    const heightScale = h / 0.103
+    const radius = d / 2
+    const plateW = 0.0025 * radialScale
+    const plateH = 0.089 * heightScale
+    const plateD = 0.028 * radialScale
+    const plate = new BoxGeometry(plateW, plateH, plateD)
+    boxUVs(plate, plateW, plateH, plateD)
+    plate.translate(leaf ? plateW / 2 : -plateW / 2, 0, -plateD / 2)
     const parts: BufferGeometry[] = [plate]
     for (let i = leaf ? 0 : 1; i < 5; i += 2) {
-      parts.push(cylinder(0.007, 0.017, 24).translate(0, -0.036 + i * 0.018, 0))
+      parts.push(
+        cylinder(radius, 0.017 * heightScale, 24).translate(
+          0,
+          (-0.036 + i * 0.018) * heightScale,
+          0,
+        ),
+      )
     }
     if (leaf) {
-      parts.push(hemisphere(0.007, 24, 4).translate(0, 0.0445, 0))
-      parts.push(hemisphere(0.007, 24, 4).rotateX(Math.PI).translate(0, -0.0445, 0))
+      for (const side of [-1, 1]) {
+        const cap = hemisphere(radius, 24, 4)
+        const capScale = heightScale / radialScale
+        cap.scale(1, capScale, 1)
+        const uv = cap.getAttribute('uv')
+        for (let i = 0; i < uv.count; i++) uv.setY(i, uv.getY(i) * capScale)
+        if (side < 0) cap.rotateX(Math.PI)
+        parts.push(cap.translate(0, side * 0.0445 * heightScale, 0))
+      }
     }
     return merge(parts)
   })
 }
 
 /** Odd knuckles and plate on the leaf edge (+X), extending into the rebate (-Z). */
-export function hingeLeafPart() {
-  return hingePart(true)
+export function hingeLeafPart(diameter = 0.014, height = 0.103) {
+  return hingePart(true, diameter, height)
 }
 
 /** Even knuckles and plate on the jamb face (-X), extending into the rebate (-Z). */
-export function hingeJambPart() {
-  return hingePart(false)
+export function hingeJambPart(diameter = 0.014, height = 0.103) {
+  return hingePart(false, diameter, height)
 }
 
 /** Origin on the mounting face; bar along Y, projecting along +Z. */

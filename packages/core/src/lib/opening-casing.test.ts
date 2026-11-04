@@ -182,3 +182,16 @@ describe('opening casing host', () => {
     ).toEqual({ thickness: 0.18 })
   })
 })
+
+test.each(['a', 'b'] as const)(
+  'a stool drops the casing bottom on room face %s only',
+  (interiorFace) => {
+    const opening = window({ sill: false, sillInterior: true })
+    const boards = openingCasingBoards(opening, { thickness: 0.3, interiorFace })
+    const other = interiorFace === 'a' ? 'b' : 'a'
+    const bottom = (face: 'a' | 'b') =>
+      boards.find((board) => board.face === face && board.part === 'bottom')!
+    expect(span(bottom(interiorFace), 1)[1]).toBeCloseTo(-opening.height / 2 - 0.03)
+    expect(span(bottom(other), 1)[1]).toBeCloseTo(-opening.height / 2)
+  },
+)

@@ -1,6 +1,6 @@
 import type { SlotDeclaration } from '../registry/types'
 
-export type WindowSlotId = 'frame' | 'casing-a' | 'casing-b' | 'glass'
+export type WindowSlotId = 'frame' | 'casing-a' | 'casing-b' | 'glass' | 'hardware' | 'shutters'
 
 // Picker swatches. Rendering falls back to the live frame/glass defaults (which
 // already track shading + theme), so these are just the indicator colours.
@@ -14,5 +14,7 @@ export function windowSlots(): SlotDeclaration[] {
     { slotId: 'casing-a', label: 'Casing A', default: FRAME_DEFAULT },
     { slotId: 'casing-b', label: 'Casing B', default: FRAME_DEFAULT },
     { slotId: 'glass', label: 'Glass', default: GLASS_DEFAULT },
+    { slotId: 'hardware', label: 'Hardware', default: FRAME_DEFAULT },
+    { slotId: 'shutters', label: 'Shutters', default: 'library:preset-charcoal' },
   ]
 }
