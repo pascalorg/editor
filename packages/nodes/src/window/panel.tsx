@@ -48,6 +48,7 @@ import { useCallback, useEffect, useMemo } from 'react'
 import { AuthoredParams } from '../item/authored-params'
 import { constrainCurtainOpening, curtainOpeningLimits } from '../shared/curtain-opening-limits'
 import { OpeningCasingSection } from '../shared/opening-casing-section'
+import { OpeningDepthPositionControl } from '../shared/opening-depth-position'
 import { WINDOW_STYLE_MESSAGES, WINDOW_TYPE_MESSAGES } from '../shared/opening-labels'
 import { createOpeningPropertyPreview } from '../shared/opening-property-preview'
 import { openingPropertyPreviewHost } from '../shared/opening-property-preview-host'
@@ -1127,6 +1128,7 @@ export default function WindowPanel() {
               </button>
             </div>
           )}
+          <OpeningDepthPositionControl node={node} onUpdate={handleUpdate} />
         </PanelSection>
       )}
 
