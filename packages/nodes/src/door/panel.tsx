@@ -3,7 +3,9 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  type DoorHandleStyle,
   type DoorNode,
+  doorHandleStyle,
   isAutoFrameDepth,
   type MessageDescriptor,
   resolveHostedOpeningFrameDepth,
@@ -18,6 +20,7 @@ import {
   ActionGroup,
   cn,
   duplicateNodeAndPickUp,
+  FinishSwatch,
   PanelSection,
   PanelWrapper,
   SegmentedControl,
@@ -53,6 +56,22 @@ const DOOR_TYPE_LABELS: Record<DoorNode['doorType'], MessageDescriptor> = {
   'garage-rollup': /* i18n */ { id: 'node.door.type.garageRollup', message: 'Roll-up' },
   'garage-tiltup': /* i18n */ { id: 'node.door.type.garageTiltup', message: 'Tilt-up' },
 }
+
+const HANDLE_STYLE_LABELS: Record<DoorHandleStyle, MessageDescriptor> = {
+  lever: /* i18n */ { id: 'node.door.panel.handleLever', message: 'Lever' },
+  'lever-curved': /* i18n */ {
+    id: 'node.door.panel.handleLeverCurved',
+    message: 'Curved lever',
+  },
+  knob: /* i18n */ { id: 'node.door.panel.handleKnob', message: 'Knob' },
+  bar: /* i18n */ { id: 'node.door.panel.handleBar', message: 'Bar' },
+  plate: /* i18n */ { id: 'node.door.panel.handlePlate', message: 'Plate' },
+}
+
+const HANDLE_STYLES = Object.keys(HANDLE_STYLE_LABELS) as DoorHandleStyle[]
+
+// The hardware slot's declared default (packages/core/src/node-slots/door.ts), shown as "Default".
+const HARDWARE_FINISH_DEFAULT = 'library:metal-chrome'
 
 const garageDoorTypeOptions = [
   {
@@ -1137,6 +1156,20 @@ export default function DoorPanel() {
           />
           {node.handle && (
             <div className="mt-1 flex flex-col gap-1">
+              <div className="space-y-1">
+                <span className="font-medium text-[10px] text-muted-foreground/80 uppercase tracking-wider">
+                  {i18n._({ id: 'node.door.panel.handleStyle', message: 'Style' })}
+                </span>
+                {/* An explicit pick is stored even for Lever: absence only means a saved door. */}
+                <SegmentedControl
+                  onChange={(v) => handleUpdate({ handleStyle: v })}
+                  options={HANDLE_STYLES.map((style) => ({
+                    label: i18n._(HANDLE_STYLE_LABELS[style]),
+                    value: style,
+                  }))}
+                  value={doorHandleStyle(node)}
+                />
+              </div>
               <SliderControl
                 label={i18n._({ id: 'node.door.panel.height', message: 'Height' })}
                 max={node.height - 0.1}
@@ -1219,6 +1252,16 @@ export default function DoorPanel() {
                 />
               </div>
             )}
+          </div>
+          <div className="mt-1 border-border/50 border-t pt-1">
+            {/* Every hardware part (handle, hinges, closer, panic bar) shares the one slot. */}
+            <FinishSwatch
+              fallback={HARDWARE_FINISH_DEFAULT}
+              label={i18n._({ id: 'node.door.panel.finish', message: 'Finish' })}
+              node={node}
+              paintRole="hardware"
+              value={node.slots?.hardware}
+            />
           </div>
         </PanelSection>
       )}
