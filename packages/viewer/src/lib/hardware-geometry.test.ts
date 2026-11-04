@@ -7,6 +7,7 @@ import {
   pullBar,
   roller,
   roundedBox,
+  sphere,
   tube,
 } from './hardware-geometry'
 
@@ -17,6 +18,7 @@ for (const [name, build, measuredTriangles] of [
   ['pull', pullBar, 672],
   ['box', () => roundedBox(0.28, 0.055, 0.055), 300],
   ['tube', () => tube(0.0095, 0.125), 48],
+  ['sphere', () => sphere(0.009), 168],
   ['roller', () => roller(0.0425, 0.02), 80],
 ] as const) {
   test(`${name}: cached geometry has finite positions, normals and metre UVs`, () => {
@@ -85,6 +87,7 @@ test('rounded box UVs span each face in metres', () => {
 test('dimension keys quantise to millimetres', () => {
   expect(roundedBox(0.28, 0.055, 0.055)).toBe(roundedBox(0.2801, 0.0551, 0.0551))
   expect(tube(0.01, 0.12)).toBe(tube(0.0101, 0.1201))
+  expect(sphere(0.009)).toBe(sphere(0.0091))
   expect(roller(0.0425, 0.02)).toBe(roller(0.0426, 0.0201))
   expect(tube(0.01, 0.12)).not.toBe(tube(0.01, 0.121))
 })

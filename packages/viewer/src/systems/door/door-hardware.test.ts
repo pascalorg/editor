@@ -11,6 +11,7 @@ import {
   pullBar,
   roller,
   roundedBox,
+  sphere,
   tube,
 } from '../../lib/hardware-geometry'
 import { buildDoorPreviewMesh, DoorSystem, poseDoorMovingParts } from './door-system'
@@ -207,52 +208,96 @@ test('panic bar ends sit in leaf-mounted brackets that reach the leaf face', () 
   }
 })
 
-test('closer arm joins its leaf body to a fixed bracket on the head jamb when closed', () => {
+test('closer arms meet below the head and reach a fixed shoe without entering the jamb', () => {
   for (const frameDepth of [0.1, 0.24]) {
-    const node = DoorNode.parse({ doorCloser: true, frameDepth })
-    const mesh = buildDoorPreviewMesh(node)
-    mesh.updateMatrixWorld(true)
-    const leaf = swingLeaves(mesh)[0]!
-    const body = leaf.children.find(
-      (part): part is THREE.Mesh =>
-        part instanceof THREE.Mesh && part.geometry === roundedBox(0.28, 0.055, 0.055),
-    )!
-    const arm = leaf.children.find(
-      (part): part is THREE.Mesh =>
-        part instanceof THREE.Mesh && part.geometry.type === 'CylinderGeometry',
-    )!
-    const bracket = mesh.children.find(
-      (part): part is THREE.Mesh =>
-        part instanceof THREE.Mesh && part.geometry === roundedBox(0.06, 0.03, 0.03),
-    )!
-    expect(bracket.userData.slotId).toBe('hardware')
-    expect(arm.userData.slotId).toBe('hardware')
-    const bracketBounds = new THREE.Box3().setFromObject(bracket)
-    expect(bracketBounds.min.z).toBeCloseTo(frameDepth / 2)
-    expect(bracketBounds.min.y).toBeGreaterThan(node.height / 2 - node.frameThickness)
-    expect(bracketBounds.max.y).toBeLessThanOrEqual(node.height / 2 + 1e-6)
-    arm.geometry.computeBoundingBox()
-    const length = arm.geometry.boundingBox!.getSize(new THREE.Vector3()).y
-    const start = arm.localToWorld(new THREE.Vector3(0, -length / 2, 0))
-    const end = arm.localToWorld(new THREE.Vector3(0, length / 2, 0))
-    const bodyTop = body.localToWorld(new THREE.Vector3(0.14 - 0.02, 0.0275, 0))
-    const bracketUnderside = bracket.localToWorld(new THREE.Vector3(0, -0.015, 0))
-    expect(start.distanceTo(bodyTop)).toBeLessThanOrEqual(0.008)
-    expect(end.distanceTo(bracketUnderside)).toBeLessThanOrEqual(0.008)
-    expect(start.distanceTo(end)).toBeGreaterThanOrEqual(0.1)
-    expect(new THREE.Box3().setFromObject(body).containsPoint(start)).toBe(true)
-    expect(bracketBounds.containsPoint(end)).toBe(true)
-    const bracketPosition = bracket.getWorldPosition(new THREE.Vector3())
-    const localArmPosition = arm.position.clone()
-    const localArmQuaternion = arm.quaternion.clone()
-    leaf.rotation.y = leaf.userData.pascalSwingLeaf.openRotationY
-    mesh.updateMatrixWorld(true)
-    expectVector(bracket.getWorldPosition(new THREE.Vector3()), bracketPosition)
-    expectVector(arm.position, localArmPosition)
-    expect(arm.quaternion.equals(localArmQuaternion)).toBe(true)
-    expect(arm.localToWorld(new THREE.Vector3(0, length / 2, 0)).distanceTo(end)).toBeGreaterThan(
-      0.01,
-    )
+    for (const hingesSide of ['left', 'right'] as const) {
+      for (const swingDirection of ['inward', 'outward'] as const) {
+        const node = DoorNode.parse({ doorCloser: true, frameDepth, hingesSide, swingDirection })
+        const mesh = buildDoorPreviewMesh(node)
+        mesh.updateMatrixWorld(true)
+        const leaf = swingLeaves(mesh)[0]!
+        const body = leaf.children.find(
+          (part): part is THREE.Mesh =>
+            part instanceof THREE.Mesh && part.geometry === roundedBox(0.28, 0.055, 0.055),
+        )!
+        const arms = leaf.children.filter(
+          (part): part is THREE.Mesh<THREE.CylinderGeometry> =>
+            part instanceof THREE.Mesh && part.geometry.type === 'CylinderGeometry',
+        )
+        expect(arms).toHaveLength(2)
+        const main = arms.find((part) => part.geometry.parameters.radiusTop === 0.0075)!
+        const forearm = arms.find((part) => part.geometry.parameters.radiusTop === 0.006)!
+        const knuckle = leaf.children.find(
+          (part): part is THREE.Mesh =>
+            part instanceof THREE.Mesh && part.geometry === sphere(0.009),
+        )!
+        const shoe = mesh.children.find(
+          (part): part is THREE.Mesh =>
+            part instanceof THREE.Mesh && part.geometry === roundedBox(0.09, 0.025, 0.03),
+        )!
+        for (const part of [body, main, forearm, knuckle, shoe]) {
+          expect(part.userData.slotId).toBe('hardware')
+        }
+        const leafTop = node.height / 2 - node.frameThickness
+        const bodyPosition = body.getWorldPosition(new THREE.Vector3())
+        expect(bodyPosition.y).toBeCloseTo(leafTop - 0.04)
+        expect(bodyPosition.z).toBeCloseTo(0.04 / 2 + 0.03)
+        const pivot = body.localToWorld(new THREE.Vector3(0.12, 0.0275, 0))
+        const elbow = new THREE.Vector3(
+          bodyPosition.x + 0.18,
+          leafTop - 0.005,
+          frameDepth / 2 + 0.035,
+        )
+        expectVector(knuckle.getWorldPosition(new THREE.Vector3()), elbow)
+        expectVector(
+          shoe.getWorldPosition(new THREE.Vector3()),
+          new THREE.Vector3(bodyPosition.x + 0.34, leafTop + 0.02, frameDepth / 2 + 0.015),
+        )
+        const shoeBounds = new THREE.Box3().setFromObject(shoe)
+        expect(shoeBounds.min.z).toBeCloseTo(frameDepth / 2)
+        const shoeUnderside = shoe.localToWorld(new THREE.Vector3(0, -0.0125, 0))
+        const head = new THREE.Box3(
+          new THREE.Vector3(-(node.width / 2 - node.frameThickness), leafTop, -frameDepth / 2),
+          new THREE.Vector3(node.width / 2 - node.frameThickness, node.height / 2, frameDepth / 2),
+        )
+        const ends = [main, forearm].map((arm) => {
+          const length = arm.geometry.parameters.height
+          const start = arm.localToWorld(new THREE.Vector3(0, -length / 2, 0))
+          const end = arm.localToWorld(new THREE.Vector3(0, length / 2, 0))
+          for (let sample = 0; sample < 10; sample++) {
+            const point = start.clone().lerp(end, sample / 9)
+            expect(head.containsPoint(point)).toBe(false)
+            // The tube radius must also clear the head, not just its centreline.
+            expect(head.distanceToPoint(point)).toBeGreaterThan(arm.geometry.parameters.radiusTop)
+          }
+          return { start, end }
+        })
+        expect(ends[0]!.start.distanceTo(pivot)).toBeLessThanOrEqual(0.008)
+        expect(ends[0]!.end.distanceTo(elbow)).toBeLessThanOrEqual(0.008)
+        expect(ends[0]!.end.distanceTo(ends[1]!.start)).toBeLessThanOrEqual(0.008)
+        expect(ends[1]!.end.distanceTo(shoeUnderside)).toBeLessThanOrEqual(0.008)
+        expect(shoeBounds.distanceToPoint(ends[1]!.end)).toBeLessThanOrEqual(0.008)
+        const fixedShoePosition = shoe.getWorldPosition(new THREE.Vector3())
+        const moving = [body, main, forearm, knuckle]
+        const rest = moving.map((part) => ({
+          position: part.position.clone(),
+          quaternion: part.quaternion.clone(),
+          world: part.getWorldPosition(new THREE.Vector3()),
+        }))
+        for (const amount of [0.5, 1, 0]) {
+          leaf.rotation.y = leaf.userData.pascalSwingLeaf.openRotationY * amount
+          mesh.updateMatrixWorld(true)
+          expectVector(shoe.getWorldPosition(new THREE.Vector3()), fixedShoePosition)
+          for (const [index, part] of moving.entries()) {
+            expectVector(part.position, rest[index]!.position)
+            expect(part.quaternion.equals(rest[index]!.quaternion)).toBe(true)
+            const world = part.getWorldPosition(new THREE.Vector3())
+            if (amount > 0) expect(world.distanceTo(rest[index]!.world)).toBeGreaterThan(0.01)
+            else expectVector(world, rest[index]!.world)
+          }
+        }
+      }
+    }
   }
   for (const patch of [
     { doorCloser: false },
@@ -261,7 +306,7 @@ test('closer arm joins its leaf body to a fixed bracket on the head jamb when cl
     const mesh = buildDoorPreviewMesh(DoorNode.parse(patch))
     expect(
       mesh.children.some(
-        (part) => part instanceof THREE.Mesh && part.geometry === roundedBox(0.06, 0.03, 0.03),
+        (part) => part instanceof THREE.Mesh && part.geometry === roundedBox(0.09, 0.025, 0.03),
       ),
     ).toBe(false)
   }

@@ -31,6 +31,7 @@ import {
   pullBar,
   roller,
   roundedBox,
+  sphere,
   tube,
 } from '../../lib/hardware-geometry'
 import {
@@ -1384,23 +1385,32 @@ function addDoorLeaf(
     const closerY = leafCenterY + leafHeight / 2 - 0.04
     const bodyZ = leafDepth / 2 + 0.03
     addLeafBox(hardwareMaterial, 0.28, 0.055, 0.055, leafCenterX, closerY, bodyZ)
-    const armStart = new THREE.Vector3(leafCenterX + 0.14 - 0.02, closerY + 0.0275, bodyZ)
-    // The head spans leafTop to doorHeight / 2; seat the bracket flush with its top.
-    const bracketY = doorHeight / 2 - 0.015
-    const bracketX = leafCenterX + leafWidth / 4
-    const bracketZ = frameDepth / 2 + 0.015
-    addHardware(mesh, roundedBox(0.06, 0.03, 0.03), bracketX, bracketY, bracketZ)
-    const armEnd = new THREE.Vector3(bracketX, bracketY - 0.015, bracketZ)
-    const armDirection = armEnd.clone().sub(armStart)
-    const armCenter = armStart.clone().add(armEnd).multiplyScalar(0.5)
-    const arm = addHardware(
-      leafGroup,
-      tube(0.0075, armDirection.length() + 0.015),
-      armCenter.x - hingeX,
-      armCenter.y,
-      armCenter.z - pivotZ,
+    const armStart = new THREE.Vector3(leafCenterX + 0.12, closerY + 0.0275, bodyZ)
+    const elbow = new THREE.Vector3(
+      leafCenterX + 0.12 + 0.06,
+      leafTop - 0.005,
+      frameDepth / 2 + 0.035,
     )
-    arm.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), armDirection.normalize())
+    const shoe = new THREE.Vector3(elbow.x + 0.16, leafTop + 0.02, frameDepth / 2 + 0.015)
+    addHardware(mesh, roundedBox(0.09, 0.025, 0.03), shoe.x, shoe.y, shoe.z)
+    // Reach the head face below the soffit, then rise slightly into the shoe underside.
+    const armEnd = shoe.clone().add(new THREE.Vector3(0, -0.0125, 0))
+    for (const [radius, start, end] of [
+      [0.0075, armStart, elbow],
+      [0.006, elbow, armEnd],
+    ] as const) {
+      const direction = end.clone().sub(start)
+      const center = start.clone().add(end).multiplyScalar(0.5)
+      const arm = addHardware(
+        leafGroup,
+        tube(radius, direction.length()),
+        center.x - hingeX,
+        center.y,
+        center.z - pivotZ,
+      )
+      arm.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction.normalize())
+    }
+    addHardware(leafGroup, sphere(0.009), elbow.x - hingeX, elbow.y, elbow.z - pivotZ)
   }
 
   if (hasLeafContent && panicBar) {

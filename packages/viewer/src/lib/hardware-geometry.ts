@@ -237,6 +237,14 @@ export function tube(radius: number, length: number) {
   return cached('tube', [2 * radius, length], (diameter, l) => cylinder(diameter / 2, l, 12))
 }
 
+export function sphere(radius: number) {
+  return cached('sphere', [2 * radius], (diameter) => {
+    const geometry = new SphereGeometry(diameter / 2, 12, 8)
+    scaleUVs(geometry, Math.PI * diameter, (Math.PI * diameter) / 2)
+    return geometry
+  })
+}
+
 /** A wheel with its axle along Z. */
 export function roller(radius: number, width: number) {
   return cached('roller', [2 * radius, width], (diameter, w) =>
