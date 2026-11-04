@@ -106,6 +106,45 @@ export const addDoorTool = {
   },
 }
 
+/** Native window details shared by every window authoring contract. */
+export const windowDetailFields = {
+  columns: z
+    .number()
+    .int()
+    .min(1)
+    .max(12)
+    .optional()
+    .describe(
+      "Panes across each operable sash (the whole fixed window), equal widths; overrides the style's panes.",
+    ),
+  rows: z
+    .number()
+    .int()
+    .min(1)
+    .max(12)
+    .optional()
+    .describe(
+      "Panes up each operable sash (the whole fixed window), equal heights; overrides the style's panes.",
+    ),
+  windowHandle: z.boolean().optional().describe('Show the interior sash handle (default true).'),
+  sashGrid: z
+    .boolean()
+    .optional()
+    .describe('Pane grid per operable sash (default false; columns or rows enable it).'),
+  sillInterior: z
+    .boolean()
+    .optional()
+    .describe('Add a stool board on the room side (default false).'),
+  shutters: z
+    .enum(['none', 'louvered', 'panel'])
+    .optional()
+    .describe('Decorative exterior shutters (default none).'),
+  shutterWidth: measurement('length', 'm', {
+    positive: true,
+    description: 'Width of each shutter; default half the opening, at most 0.6 m.',
+  }).optional(),
+}
+
 export const addWindowTool = {
   name: 'add_window',
   title: 'Add window',
@@ -133,20 +172,7 @@ export const addWindowTool = {
     ...outline('0.35 m'),
     ...script('window'),
     windowType: WindowType.optional().describe('How it opens (default fixed).'),
-    columns: z
-      .number()
-      .int()
-      .min(1)
-      .max(12)
-      .optional()
-      .describe("Panes across, equal widths; overrides the style's panes."),
-    rows: z
-      .number()
-      .int()
-      .min(1)
-      .max(12)
-      .optional()
-      .describe("Panes up, equal heights; overrides the style's panes."),
+    ...windowDetailFields,
     style: z
       .enum(WINDOW_STYLES)
       .optional()

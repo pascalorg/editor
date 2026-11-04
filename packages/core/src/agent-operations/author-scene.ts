@@ -1161,10 +1161,20 @@ export function authorScene(
           opening = WindowNode.parse({
             ...common,
             type: 'window',
+            sashGrid:
+              !windowTakesStyle(windowType ?? 'fixed') && (o.columns || o.rows) ? true : o.sashGrid,
+            windowHandle: o.windowHandle,
+            sillInterior: o.sillInterior,
+            shutters: o.shutters,
+            shutterWidth: o.shutterWidth,
             frameThickness: NEW_WINDOW_FRAME_THICKNESS,
             position: [x, o.sill + height / 2, 0],
             ...(windowType ? windowTypeFields(windowType) : {}),
             ...(style && isWindowStyle(style) && takesStyle ? getWindowStyleOverrides(style) : {}),
+            ...(o.columns
+              ? { columnRatios: Array.from({ length: o.columns }, () => 1 / o.columns!) }
+              : {}),
+            ...(o.rows ? { rowRatios: Array.from({ length: o.rows }, () => 1 / o.rows!) } : {}),
           })
           report.windows++
         }

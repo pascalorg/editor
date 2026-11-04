@@ -14,3 +14,16 @@ test('a window leaving Bay or Bow gets its sill back; a sill turned off elsewher
     sill: false,
   })
 })
+
+test('saved windows keep optional grids, stool boards and shutters absent', () => {
+  const saved = WindowNode.parse({
+    windowType: 'double-hung',
+    columnRatios: [1, 1, 1],
+    rowRatios: [1, 1],
+  })
+  for (const key of ['sashGrid', 'windowHandle', 'sillInterior', 'shutters', 'shutterWidth']) {
+    expect(saved).not.toHaveProperty(key)
+  }
+  expect(WindowNode.safeParse({ shutterWidth: 0 }).success).toBe(false)
+  expect(WindowNode.safeParse({ shutters: 'unknown' }).success).toBe(false)
+})

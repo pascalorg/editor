@@ -275,3 +275,20 @@ test('flush pull has an open front, five inner faces, a 12 mm recess and a 1 mm 
     expect(hits[0]!.distance).toBeCloseTo(distance, 6)
   }
 })
+
+test('window hinge pairs use cached 10 by 60 mm sections with metre UVs', () => {
+  const leaf = hingeLeafPart(0.01, 0.06)
+  const jamb = hingeJambPart(0.01, 0.06)
+  expect(hingeLeafPart(0.0101, 0.0601)).toBe(leaf)
+  for (const geometry of [leaf, jamb]) {
+    geometry.computeBoundingBox()
+    const size = geometry.boundingBox!.getSize(new THREE.Vector3())
+    expect(size.x).toBeCloseTo(0.01, 6)
+    expect(size.y).toBeLessThanOrEqual(0.060001)
+    const uv = geometry.getAttribute('uv')
+    expect(Math.max(...Array.from(uv.array).map(Math.abs))).toBeLessThanOrEqual(0.060001)
+    expect(geometry.userData.shared).toBe(true)
+  }
+  expect(leaf.boundingBox!.getSize(new THREE.Vector3()).y).toBeCloseTo(0.06, 6)
+  expect(hingeLeafPart()).not.toBe(leaf)
+})

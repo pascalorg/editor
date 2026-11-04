@@ -1,6 +1,7 @@
 import type { AnyNode, DoorNode, WallFace, WindowNode } from '../schema'
 import { DEFAULT_OPENING_CASING_WIDTH, OPENING_CASING_PROUD } from '../schema/nodes/opening-types'
 import { DEFAULT_WALL_THICKNESS, getWallThickness } from '../systems/wall/wall-footprint'
+import { roomSideFaces } from '../systems/wall/wall-room-sides'
 import { cornerPair } from './corner-pair'
 
 /**
@@ -27,6 +28,8 @@ type Span = readonly [number, number]
 export type OpeningCasingHost = {
   /** The host's total thickness with its finishes: each face is half of it off the mid-plane (m). */
   thickness: number
+  /** Room side, when known, for a window's interior stool. */
+  interiorFace?: WallFace
   /** The host end a corner window runs to: no leg there; the head and bottom stop at the opening. */
   cornerEnd?: 'start' | 'end'
 }
@@ -66,6 +69,17 @@ export function openingHostFacing(opening: Pick<CasedOpening, 'rotation'>): 1 | 
   return Math.cos(opening.rotation?.[1] ?? 0) >= 0 ? 1 : -1
 }
 
+/** Roof face a is outside; an unbounded wall follows the same a/outside, b/inside convention. */
+export function openingInteriorFace(
+  opening: Pick<CasedOpening, 'parentId' | 'roofSegmentId'>,
+  nodes: Readonly<Record<string, AnyNode>>,
+): WallFace {
+  if (!opening.roofSegmentId && opening.parentId && nodes[opening.parentId]?.type === 'wall') {
+    return roomSideFaces(nodes, opening.parentId).inside ?? 'b'
+  }
+  return 'b'
+}
+
 /**
  * The host an opening is cased on: its wall, or the roof-segment face it is cut into (a gable
  * end, whose face `a` is the outside). Null where casing has nowhere to go: a curtain wall, a
@@ -78,15 +92,23 @@ export function resolveOpeningCasingHost(
   host: AnyNode | undefined = nodes[opening.roofSegmentId ?? opening.parentId ?? ''],
 ): OpeningCasingHost | null {
   if (opening.source) return null
+  const interior =
+    opening.type === 'window' && opening.sillInterior
+      ? { interiorFace: openingInteriorFace(opening, nodes) }
+      : {}
   if (opening.roofSegmentId) {
     return host?.type === 'roof-segment'
-      ? { thickness: host.wallThickness ?? DEFAULT_WALL_THICKNESS }
+      ? { thickness: host.wallThickness ?? DEFAULT_WALL_THICKNESS, ...interior }
       : null
   }
   if (host?.type !== 'wall' || host.wallType === 'curtain' || host.wallType === 'railing')
     return null
   const pair = opening.type === 'window' ? cornerPair(nodes, opening) : null
-  return { thickness: getWallThickness(host), ...(pair ? { cornerEnd: pair.end } : {}) }
+  return {
+    thickness: getWallThickness(host),
+    ...interior,
+    ...(pair ? { cornerEnd: pair.end } : {}),
+  }
 }
 
 /** The host faces an opening is cased on: both unless turned off (a save from before has both). */
@@ -103,10 +125,13 @@ export function openingCasingFaces(
 }
 
 /** How far a window's sill takes the bottom board down on `face`: its thickness, on its front. */
-function sillDrop(opening: CasedOpening, face: WallFace): number {
-  if (opening.type !== 'window' || !opening.sill || opening.openingKind === 'opening') return 0
+function sillDrop(opening: CasedOpening, face: WallFace, host: OpeningCasingHost): number {
+  if (opening.type !== 'window' || opening.openingKind === 'opening') return 0
   const front: WallFace = openingHostFacing(opening) === 1 ? 'a' : 'b'
-  return face === front ? Math.max(opening.sillThickness ?? 0, 0) : 0
+  return Math.max(
+    opening.sill && face === front ? Math.max(opening.sillThickness ?? 0, 0) : 0,
+    opening.sillInterior && face === (host.interiorFace ?? 'b') ? 0.03 : 0,
+  )
 }
 
 /** The casing boards of a rectangular opening on each face it is cased on, in the host frame. */
@@ -140,7 +165,7 @@ export function openingCasingBoards(
     board('head', [left, right], [halfHeight, halfHeight + width])
     for (const along of legs) board('leg', along, [-halfHeight, halfHeight])
     if (opening.type !== 'window') continue
-    const drop = sillDrop(opening, face)
+    const drop = sillDrop(opening, face, host)
     if (drop > 1e-6)
       for (const along of legs) board('foot', along, [-halfHeight - drop, -halfHeight])
     board('bottom', [left, right], [-halfHeight - drop - width, -halfHeight - drop])

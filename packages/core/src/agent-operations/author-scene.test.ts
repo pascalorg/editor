@@ -3179,3 +3179,45 @@ describe('author_scene units', () => {
     expect(house).toMatchObject({ passed: true, detail: 'The design names no units.' })
   })
 })
+
+test.each(['casement', 'double-hung', 'fixed'] as const)(
+  'author_scene writes %s window divisions and exterior details',
+  (type) => {
+    const payload = structuredClone(bedroom)
+    payload.levels[0]!.walls![1]!.openings = [
+      {
+        kind: 'window',
+        along: 2.5,
+        width: 1.4,
+        height: 1.3,
+        sill: 0.9,
+        type,
+        columns: 3,
+        rows: 2,
+        windowHandle: false,
+        sillInterior: true,
+        shutters: 'panel',
+        shutterWidth: 0.4,
+      },
+    ]
+    const outcome = authorScene(
+      scaffold(),
+      { payload: authorScenePayload.parse(payload), compiled: { bed, lamp: bed } },
+      { activeLevelId: 'level_0' },
+    )
+    const window = nodesOf(outcome).find((node) => node.type === 'window')!
+    expect(window).toMatchObject({
+      type: 'window',
+      windowType: type,
+      columnRatios: [1 / 3, 1 / 3, 1 / 3],
+      rowRatios: [0.5, 0.5],
+      windowHandle: false,
+      sillInterior: true,
+      shutters: 'panel',
+      shutterWidth: 0.4,
+    })
+    expect((window as AnyNode & { sashGrid?: boolean }).sashGrid).toBe(
+      type === 'fixed' ? undefined : true,
+    )
+  },
+)

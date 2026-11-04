@@ -6,6 +6,7 @@ import { StairRailingMode, StairRailingStyle } from '../schema/nodes/stair-types
 import { measurement, roofPitch } from './measurement'
 import { NodeId } from './node-id'
 import { unitKind } from './units'
+import { windowDetailFields } from './wall-openings'
 
 const DESCRIPTION = `Turn a whole design you wrote as free three.js into an editable Pascal scene: the payload holds the whole design. You read your own module however you like (its source, running it and reading the objects, both) and hand over a conversion payload: levels, walls (straight, curved or glass) with their openings, rooms (each naming its unit in a building of several dwellings or tenancies: a condo, an apartment building, a hotel; a room naming none is common area), slabs, voids, columns, railings, stairs, every piece of furniture as an authored object with its own module, and lights. Pascal does the rest server-side: compiles and stores each item, places it, derives the rooms and their floors, paints, runs its checks, saves, and answers with a gate report you iterate against. Nothing you hand over is silently dropped: what cannot be placed comes back by name with a reason, and what Pascal corrected (a wall end snapped onto the centerline it meets) is listed.
 
@@ -27,6 +28,7 @@ const length = (description: string, opts: { positive?: boolean; default?: numbe
   measurement('length', 'm', { description, ...opts })
 
 export const authorSceneOpening = z.object({
+  ...windowDetailFields,
   kind: z
     .enum(['door', 'window', 'passage'])
     .describe(

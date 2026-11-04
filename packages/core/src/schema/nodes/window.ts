@@ -22,8 +22,9 @@ export const WindowNode = BaseNode.extend({
   type: nodeType('window'),
   material: MaterialSchema.optional(),
   // Per-slot material overrides on the unified slot model. Keys: `frame`,
-  // `glass`. Value = a `MaterialRef` (`library:<id>` / `scene:<id>`) or a plain
-  // `#rrggbb` colour. Absent = the frame/glass default. Mirrors `ShelfNode.slots`.
+  // `glass`, `hardware`, `shutters`, `casing-a`, `casing-b`. Value = a
+  // `MaterialRef` (`library:<id>` / `scene:<id>`) or a plain
+  // `#rrggbb` colour. Hardware follows the frame unless painted.
   slots: z.record(z.string(), z.string()).optional(),
   /**
    * A three.js script the window is built from instead of its parametric frame, as on an item:
@@ -95,6 +96,12 @@ export const WindowNode = BaseNode.extend({
       "Frame depth through the wall; left out, the frame is exactly the host wall's thickness.",
     ),
 
+  windowHandle: z.boolean().optional().describe('Show the operable sash handle (absent = true).'),
+  sashGrid: z
+    .boolean()
+    .optional()
+    .describe('Apply pane divisions per operable sash (absent = false).'),
+
   // Divisions — ratios allow non-uniform panes
   // [0.5, 0.5] = two equal panes
   // [0.6, 0.4] = one larger, one smaller
@@ -119,6 +126,10 @@ export const WindowNode = BaseNode.extend({
   sillDepth: z.number().default(0.08),
   sillThickness: z.number().default(0.03),
 
+  sillInterior: z.boolean().optional(),
+  shutters: z.enum(['none', 'louvered', 'panel']).optional(),
+  shutterWidth: z.number().positive().optional(),
+
   // Casing: flat boards on the finished faces of the host wall around the
   // opening, never inside it, so the wall cutout stays width × height. The
   // faces are the host's `a` / `b` (WallFace), not the unit's own front and
@@ -135,6 +146,10 @@ export const WindowNode = BaseNode.extend({
   - frameThickness: width of the frame members (new windows use 0.020 m; absent in saved windows keeps 0.05 m)
   - frameDepth: how deep the frame sits within the wall
   - columnRatios/rowRatios: pane division ratios
+  - windowHandle: show the interior handle on casement, awning and hopper sashes (absent = true)
+  - sashGrid: pane divisions per operable sash (absent = false; saved windows keep no bars)
+  - sillInterior: room-side stool board (absent = false)
+  - shutters/shutterWidth: decorative exterior shutters (absent = none); width per side defaults to half the opening, capped at 0.6 m
   - sill: whether to show a window sill
   - casingFaceA/casingFaceB: picture-frame casing on the host wall's face a / b, around the cutout (absent means off; new openings enable both)
   - casingWidth: face width of the casing boards (2 in by default)

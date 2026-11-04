@@ -208,6 +208,11 @@ export type WallOpeningInput = {
   windowType?: WindowType
   columns?: number
   rows?: number
+  windowHandle?: boolean
+  sashGrid?: boolean
+  sillInterior?: boolean
+  shutters?: WindowNode['shutters']
+  shutterWidth?: number
   /** A compiled script the opening is built from; its bounds set width and height. */
   compiled?: CompiledGeometryScript
   code?: string
@@ -427,6 +432,17 @@ export function planWallOpening(nodes: Nodes, input: WallOpeningInput) {
           ...(input.windowType ? { windowType: input.windowType } : {}),
           ...(input.columns ? { columnRatios: equalRatios(input.columns) } : {}),
           ...(input.rows ? { rowRatios: equalRatios(input.rows) } : {}),
+          ...(input.windowType &&
+          !windowTakesStyle(input.windowType) &&
+          (input.columns || input.rows)
+            ? { sashGrid: true }
+            : input.sashGrid === undefined
+              ? {}
+              : { sashGrid: input.sashGrid }),
+          ...(input.windowHandle === undefined ? {} : { windowHandle: input.windowHandle }),
+          ...(input.sillInterior === undefined ? {} : { sillInterior: input.sillInterior }),
+          ...(input.shutters === undefined ? {} : { shutters: input.shutters }),
+          ...(input.shutterWidth === undefined ? {} : { shutterWidth: input.shutterWidth }),
         })
 
   return {
