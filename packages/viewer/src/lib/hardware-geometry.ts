@@ -64,11 +64,8 @@ function rose(radius: number, depth: number, segments: number) {
   return lathe(
     [
       [0, 0],
-      [radius - 0.002, 0],
-      [radius - 0.0006, 0.0006],
-      [radius, 0.002],
+      [radius, 0],
       [radius, depth - 0.002],
-      [radius - 0.0006, depth - 0.0006],
       [radius - 0.002, depth],
       [0, depth],
     ],
@@ -79,52 +76,24 @@ function rose(radius: number, depth: number, segments: number) {
 /** Origin is the spindle on the mounting face; the grip points along +X, out along +Z. */
 export function leverOnRose() {
   return cached('lever', [], () => {
-    const neck = cylinder(0.009, 0.045, 12)
+    const neck = cylinder(0.009, 0.045, 10)
       .rotateX(Math.PI / 2)
       .translate(0, 0, 0.009 + 0.045 / 2)
-    const grip = new CapsuleGeometry(0.0095, 0.1155, 2, 10)
+    const grip = new CapsuleGeometry(0.0095, 0.1155, 1, 8)
     scaleUVs(grip, 2 * Math.PI * 0.0095, 0.1345)
     grip.rotateZ(-Math.PI / 2).translate(0.05775, 0, 0.054)
-    return merge([rose(0.026, 0.009, 20), neck, grip])
+    return merge([rose(0.026, 0.009, 16), neck, grip])
   })
 }
 
-export function knobOnRose() {
-  return cached('knob', [], () => {
-    const knob = lathe(
-      [
-        [0, 0.008],
-        [0.01, 0.008],
-        [0.01, 0.022],
-        [0.02, 0.025],
-        [0.026, 0.033],
-        [0.028, 0.041],
-        [0.024, 0.051],
-        [0.014, 0.058],
-        [0, 0.06],
-      ],
-      14,
-    ).rotateX(Math.PI / 2)
-    return merge([rose(0.028, 0.008, 14), knob])
-  })
-}
-
-/** A vertical 89 mm barrel with a 3 mm cap at each end, centred on the knuckle axis. */
+/** A vertical 95 mm capped barrel, centred on the knuckle axis. */
 export function hingeBarrel() {
   return cached('hinge', [], () =>
     lathe(
       [
         [0, -0.0475],
-        [0.0055, -0.0475],
-        [0.0065, -0.0465],
-        [0.0065, -0.0445],
-        [0.006, -0.0445],
-        [0.0065, -0.0435],
-        [0.0065, 0.0435],
-        [0.006, 0.0445],
-        [0.0065, 0.0445],
-        [0.0065, 0.0465],
-        [0.0055, 0.0475],
+        [0.0065, -0.0475],
+        [0.0065, 0.0475],
         [0, 0.0475],
       ],
       12,
@@ -139,7 +108,7 @@ export function roundedBox(
   r = Math.min(0.004, w / 4, h / 4, d / 4),
 ) {
   return cached('box', [w, h, d, r], (width, height, depth, radius) => {
-    const geometry = new RoundedBoxGeometry(width, height, depth, 2, radius)
+    const geometry = new RoundedBoxGeometry(width, height, depth, 1, radius)
     const uv = geometry.getAttribute('uv')
     const faceSizes = [
       [depth, height],

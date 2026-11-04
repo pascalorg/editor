@@ -1,14 +1,13 @@
 import { expect, test } from 'bun:test'
 import * as THREE from 'three'
-import { hingeBarrel, knobOnRose, leverOnRose, roller, roundedBox, tube } from './hardware-geometry'
+import { hingeBarrel, leverOnRose, roller, roundedBox, tube } from './hardware-geometry'
 
-for (const [name, build] of [
-  ['lever', leverOnRose],
-  ['knob', knobOnRose],
-  ['hinge', hingeBarrel],
-  ['box', () => roundedBox(0.28, 0.055, 0.055)],
-  ['tube', () => tube(0.0095, 0.125)],
-  ['roller', () => roller(0.0425, 0.02)],
+for (const [name, build, triangleCeiling] of [
+  ['lever', leverOnRose, 260],
+  ['hinge', hingeBarrel, 120],
+  ['box', () => roundedBox(0.28, 0.055, 0.055), 110],
+  ['tube', () => tube(0.0095, 0.125), 48],
+  ['roller', () => roller(0.0425, 0.02), 80],
 ] as const) {
   test(`${name}: cached geometry has finite positions, normals and metre UVs`, () => {
     const geometry = build()
@@ -20,7 +19,39 @@ for (const [name, build] of [
     const uv = geometry.getAttribute('uv')
     expect(Math.max(...Array.from(uv.array).map(Math.abs))).toBeLessThan(1)
   })
+
+  test(`${name}: geometry stays within its triangle budget`, () => {
+    const geometry = build()
+    expect(
+      (geometry.index?.count ?? geometry.getAttribute('position').count) / 3,
+    ).toBeLessThanOrEqual(triangleCeiling)
+  })
 }
+
+test('rounded box UVs span each face in metres', () => {
+  const uv = roundedBox(0.28, 0.055, 0.035).getAttribute('uv')
+  const faceSizes = [
+    [0.035, 0.055],
+    [0.035, 0.055],
+    [0.28, 0.035],
+    [0.28, 0.035],
+    [0.28, 0.055],
+    [0.28, 0.055],
+  ]
+  const verticesPerFace = uv.count / 6
+  for (const [face, [width, height]] of faceSizes.entries()) {
+    const u = []
+    const v = []
+    for (let i = face * verticesPerFace; i < (face + 1) * verticesPerFace; i++) {
+      u.push(uv.getX(i))
+      v.push(uv.getY(i))
+    }
+    expect(Math.min(...u)).toBeCloseTo(0)
+    expect(Math.max(...u)).toBeCloseTo(width!)
+    expect(Math.min(...v)).toBeCloseTo(0)
+    expect(Math.max(...v)).toBeCloseTo(height!)
+  }
+})
 
 test('dimension keys quantise to millimetres', () => {
   expect(roundedBox(0.28, 0.055, 0.055)).toBe(roundedBox(0.2801, 0.0551, 0.0551))
