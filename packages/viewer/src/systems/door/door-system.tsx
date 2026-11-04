@@ -1373,19 +1373,20 @@ function addDoorLeaf(
   if (hasLeafContent && doorCloser) {
     currentDoorSlot = 'hardware'
     const closerY = leafCenterY + leafHeight / 2 - 0.04
-    addLeafBox(hardwareMaterial, 0.28, 0.055, 0.055, leafCenterX, closerY, leafDepth / 2 + 0.03)
-    const armStart = new THREE.Vector3(leafCenterX + 0.1, closerY + 0.025, leafDepth / 2 + 0.015)
-    const armEnd = new THREE.Vector3(
-      leafCenterX + leafWidth / 4,
-      (leafTop + doorHeight / 2) / 2,
-      frameDepth / 2 + 0.015,
-    )
-    addHardware(mesh, roundedBox(0.06, 0.03, 0.03), armEnd.x, armEnd.y, armEnd.z)
+    const bodyZ = leafDepth / 2 + 0.03
+    addLeafBox(hardwareMaterial, 0.28, 0.055, 0.055, leafCenterX, closerY, bodyZ)
+    const armStart = new THREE.Vector3(leafCenterX + 0.14 - 0.02, closerY + 0.0275, bodyZ)
+    // The head spans leafTop to doorHeight / 2; seat the bracket flush with its top.
+    const bracketY = doorHeight / 2 - 0.015
+    const bracketX = leafCenterX + leafWidth / 4
+    const bracketZ = frameDepth / 2 + 0.015
+    addHardware(mesh, roundedBox(0.06, 0.03, 0.03), bracketX, bracketY, bracketZ)
+    const armEnd = new THREE.Vector3(bracketX, bracketY - 0.015, bracketZ)
     const armDirection = armEnd.clone().sub(armStart)
     const armCenter = armStart.clone().add(armEnd).multiplyScalar(0.5)
     const arm = addHardware(
       leafGroup,
-      tube(0.0075, armDirection.length()),
+      tube(0.0075, armDirection.length() + 0.015),
       armCenter.x - hingeX,
       armCenter.y,
       armCenter.z - pivotZ,
