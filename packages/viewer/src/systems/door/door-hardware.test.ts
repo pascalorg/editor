@@ -5,6 +5,7 @@ import { createElement } from 'react'
 import * as THREE from 'three'
 import { disposeObject3DResources } from '../../lib/dispose-object3d'
 import {
+  flushPull,
   hingeJambPart,
   hingeLeafPart,
   leverOnRose,
@@ -113,7 +114,7 @@ for (const doorType of ['hinged', 'double', 'french'] as const) {
                 .add(leaf.position)
                 .applyMatrix4(mesh.matrixWorld)
               expectVector(handle.getWorldPosition(new THREE.Vector3()), expected)
-              const grip = handle.localToWorld(new THREE.Vector3(0.125, -0.012, 0.047))
+              const grip = handle.localToWorld(new THREE.Vector3(0.125, 0, 0.047))
               const spindle = handle.localToWorld(new THREE.Vector3(0, 0, 0.047))
               const hingeDirection = new THREE.Vector3(hingeSign, 0, 0).applyQuaternion(
                 leaf.getWorldQuaternion(new THREE.Quaternion()),
@@ -170,135 +171,261 @@ test('roses seat on the raised segment at the handle height, on both faces', () 
   }
 })
 
-test('panic bar ends sit in leaf-mounted brackets that reach the leaf face', () => {
-  for (const swingAngle of [0, Math.PI / 4, Math.PI / 2]) {
-    const node = DoorNode.parse({ panicBar: true, swingAngle })
-    const mesh = buildDoorPreviewMesh(node)
-    mesh.updateMatrixWorld(true)
-    const leaf = swingLeaves(mesh)[0]!
-    const barLength = (node.width - 2 * node.frameThickness) * 0.72
-    const bar = leaf.children.find(
-      (part): part is THREE.Mesh =>
-        part instanceof THREE.Mesh && part.geometry === tube(0.02, barLength),
-    )!
-    const brackets = leaf.children.filter(
-      (part): part is THREE.Mesh =>
-        part instanceof THREE.Mesh && part.geometry === roundedBox(0.045, 0.07, 0.04),
-    )
-    expect(brackets).toHaveLength(2)
-    for (const [index, bracket] of brackets.entries()) {
-      expect(bracket.userData.slotId).toBe('hardware')
-      expect(bar.userData.slotId).toBe('hardware')
-      const bounds = new THREE.Box3().setFromBufferAttribute(
-        bracket.geometry.getAttribute('position') as THREE.BufferAttribute,
-      )
-      const end = bar.localToWorld(
-        new THREE.Vector3(0, ((index === 0 ? 1 : -1) * barLength) / 2, 0),
-      )
-      const localEnd = bracket.worldToLocal(end)
-      expect(bounds.containsPoint(localEnd)).toBe(true)
-      expect(localEnd.z).toBeGreaterThan(0)
-      expect(bracket.position.z + bounds.min.z + leaf.position.z).toBeCloseTo(0.02)
-    }
-    expect(
-      leaf.children.some(
-        (part) => part instanceof THREE.Mesh && part.geometry === roller(0.02, 0.006),
-      ),
-    ).toBe(false)
-  }
-})
-
-test('closer arms meet below the head and reach a fixed shoe without entering the jamb', () => {
-  for (const frameDepth of [0.1, 0.24]) {
-    for (const hingesSide of ['left', 'right'] as const) {
-      for (const swingDirection of ['inward', 'outward'] as const) {
-        const node = DoorNode.parse({ doorCloser: true, frameDepth, hingesSide, swingDirection })
-        const mesh = buildDoorPreviewMesh(node)
-        mesh.updateMatrixWorld(true)
-        const leaf = swingLeaves(mesh)[0]!
-        const body = leaf.children.find(
-          (part): part is THREE.Mesh =>
-            part instanceof THREE.Mesh && part.geometry === roundedBox(0.28, 0.055, 0.055),
-        )!
-        const arms = leaf.children.filter(
-          (part): part is THREE.Mesh<THREE.CylinderGeometry> =>
-            part instanceof THREE.Mesh && part.geometry.type === 'CylinderGeometry',
-        )
-        expect(arms).toHaveLength(2)
-        const main = arms.find((part) => part.geometry.parameters.radiusTop === 0.0075)!
-        const forearm = arms.find((part) => part.geometry.parameters.radiusTop === 0.006)!
-        const knuckle = leaf.children.find(
-          (part): part is THREE.Mesh =>
-            part instanceof THREE.Mesh && part.geometry === sphere(0.009),
-        )!
-        const shoe = mesh.children.find(
-          (part): part is THREE.Mesh =>
-            part instanceof THREE.Mesh && part.geometry === roundedBox(0.09, 0.025, 0.03),
-        )!
-        for (const part of [body, main, forearm, knuckle, shoe]) {
-          expect(part.userData.slotId).toBe('hardware')
-        }
-        const leafTop = node.height / 2 - node.frameThickness
-        const bodyPosition = body.getWorldPosition(new THREE.Vector3())
-        expect(bodyPosition.y).toBeCloseTo(leafTop - 0.04)
-        expect(bodyPosition.z).toBeCloseTo(0.04 / 2 + 0.03)
-        const pivot = body.localToWorld(new THREE.Vector3(0.12, 0.0275, 0))
-        const elbow = new THREE.Vector3(
-          bodyPosition.x + 0.18,
-          leafTop - 0.005,
-          frameDepth / 2 + 0.035,
-        )
-        expectVector(knuckle.getWorldPosition(new THREE.Vector3()), elbow)
-        expectVector(
-          shoe.getWorldPosition(new THREE.Vector3()),
-          new THREE.Vector3(bodyPosition.x + 0.34, leafTop + 0.02, frameDepth / 2 + 0.015),
-        )
-        const shoeBounds = new THREE.Box3().setFromObject(shoe)
-        expect(shoeBounds.min.z).toBeCloseTo(frameDepth / 2)
-        const shoeUnderside = shoe.localToWorld(new THREE.Vector3(0, -0.0125, 0))
-        const head = new THREE.Box3(
-          new THREE.Vector3(-(node.width / 2 - node.frameThickness), leafTop, -frameDepth / 2),
-          new THREE.Vector3(node.width / 2 - node.frameThickness, node.height / 2, frameDepth / 2),
-        )
-        const ends = [main, forearm].map((arm) => {
-          const length = arm.geometry.parameters.height
-          const start = arm.localToWorld(new THREE.Vector3(0, -length / 2, 0))
-          const end = arm.localToWorld(new THREE.Vector3(0, length / 2, 0))
-          for (let sample = 0; sample < 10; sample++) {
-            const point = start.clone().lerp(end, sample / 9)
-            expect(head.containsPoint(point)).toBe(false)
-            // The tube radius must also clear the head, not just its centreline.
-            expect(head.distanceToPoint(point)).toBeGreaterThan(arm.geometry.parameters.radiusTop)
-          }
-          return { start, end }
-        })
-        expect(ends[0]!.start.distanceTo(pivot)).toBeLessThanOrEqual(0.008)
-        expect(ends[0]!.end.distanceTo(elbow)).toBeLessThanOrEqual(0.008)
-        expect(ends[0]!.end.distanceTo(ends[1]!.start)).toBeLessThanOrEqual(0.008)
-        expect(ends[1]!.end.distanceTo(shoeUnderside)).toBeLessThanOrEqual(0.008)
-        expect(shoeBounds.distanceToPoint(ends[1]!.end)).toBeLessThanOrEqual(0.008)
-        const fixedShoePosition = shoe.getWorldPosition(new THREE.Vector3())
-        const moving = [body, main, forearm, knuckle]
-        const rest = moving.map((part) => ({
-          position: part.position.clone(),
-          quaternion: part.quaternion.clone(),
-          world: part.getWorldPosition(new THREE.Vector3()),
-        }))
-        for (const amount of [0.5, 1, 0]) {
-          leaf.rotation.y = leaf.userData.pascalSwingLeaf.openRotationY * amount
-          mesh.updateMatrixWorld(true)
-          expectVector(shoe.getWorldPosition(new THREE.Vector3()), fixedShoePosition)
-          for (const [index, part] of moving.entries()) {
-            expectVector(part.position, rest[index]!.position)
-            expect(part.quaternion.equals(rest[index]!.quaternion)).toBe(true)
-            const world = part.getWorldPosition(new THREE.Vector3())
-            if (amount > 0) expect(world.distanceTo(rest[index]!.world)).toBeGreaterThan(0.01)
-            else expectVector(world, rest[index]!.world)
-          }
+for (const doorType of ['hinged', 'double', 'french'] as const) {
+  for (const hingesSide of ['left', 'right'] as const) {
+    for (const swingDirection of ['inward', 'outward'] as const) {
+      for (const panicBarStyle of ['crossbar', 'touchbar'] as const) {
+        for (const panicBarRods of [false, true]) {
+          test(`${doorType} ${hingesSide} ${swingDirection} ${panicBarStyle} rods=${panicBarRods}: panic device seats on the swing face and follows the leaf`, () => {
+            const node = DoorNode.parse({
+              doorType,
+              hingesSide,
+              swingDirection,
+              panicBar: true,
+              panicBarStyle,
+              panicBarRods,
+              panicBarHeight: 0.95,
+            })
+            for (const swingAngle of [0, Math.PI / 4, Math.PI / 2]) {
+              const mesh = buildDoorPreviewMesh({ ...node, swingAngle })
+              mesh.updateMatrixWorld(true)
+              const face = swingDirection === 'inward' ? 1 : -1
+              for (const leaf of swingLeaves(mesh)) {
+                const leafWidth =
+                  (node.width - 2 * node.frameThickness) / (doorType === 'hinged' ? 1 : 2)
+                const latchSign = leaf.position.x < 0 ? 1 : -1
+                const centerX = (latchSign * leafWidth) / 2
+                const latchX = centerX + latchSign * (leafWidth / 2 - 0.055)
+                const hingeX = centerX - latchSign * (leafWidth / 2 - 0.04)
+                const barLength = Math.abs(latchX - hingeX)
+                const barY = node.panicBarHeight - node.height / 2
+                const hardware = leaf.children.filter(
+                  (part): part is THREE.Mesh =>
+                    part instanceof THREE.Mesh && part.userData.slotId === 'hardware',
+                )
+                const touch = panicBarStyle === 'touchbar'
+                const find = (geometry: THREE.BufferGeometry) =>
+                  hardware.filter((part) => part.geometry === geometry)
+                const bar = find(
+                  touch ? roundedBox(barLength, 0.06, 0.03) : tube(0.0125, barLength),
+                )[0]!
+                expect(bar).toBeDefined()
+                expect(bar.position.x).toBeCloseTo((latchX + hingeX) / 2)
+                expect(bar.position.y).toBeCloseTo(barY)
+                expect(bar.position.z).toBeCloseTo(face * (touch ? 0.035 : 0.045))
+                const latch = find(
+                  roundedBox(touch ? 0.09 : 0.075, touch ? 0.1 : 0.07, touch ? 0.055 : 0.06),
+                )[0]!
+                const cap = find(roundedBox(touch ? 0.035 : 0.04, 0.07, 0.05))[0]!
+                for (const [part, x, depth] of [
+                  [latch, latchX, touch ? 0.055 : 0.06],
+                  [cap, hingeX, 0.05],
+                ] as const) {
+                  expect(part.position.x).toBeCloseTo(x)
+                  expect(part.position.y).toBeCloseTo(barY)
+                  expect(face * part.position.z - depth / 2).toBeCloseTo(0)
+                }
+                for (const x of [latchX, hingeX]) {
+                  const end = new THREE.Vector3(x - bar.position.x, 0, 0).applyQuaternion(
+                    bar.quaternion.clone().invert(),
+                  )
+                  const worldEnd = bar.localToWorld(end)
+                  const mount = x === latchX ? latch : cap
+                  const localEnd = mount.worldToLocal(worldEnd)
+                  mount.geometry.computeBoundingBox()
+                  expect(mount.geometry.boundingBox!.distanceToPoint(localEnd)).toBeLessThan(0.001)
+                }
+                const latches = find(roundedBox(0.035, 0.06, 0.04))
+                const clips = find(roundedBox(0.03, 0.02, 0.03))
+                expect(latches).toHaveLength(panicBarRods ? 2 : 0)
+                expect(clips).toHaveLength(panicBarRods ? 2 : 0)
+                if (panicBarRods) {
+                  const leafTop = node.height / 2 - node.frameThickness
+                  const leafBottom = -node.height / 2
+                  for (const end of [-1, 1]) {
+                    const latchY = end > 0 ? leafTop - 0.05 : leafBottom + 0.05
+                    const startY = barY + (end * (touch ? 0.1 : 0.07)) / 2
+                    const endY = latchY - end * 0.03
+                    const rod = find(tube(0.006, Math.abs(endY - startY)))[0]!
+                    expect(rod).toBeDefined()
+                    expect(rod.position.x).toBeCloseTo(latchX)
+                    expect(rod.position.y).toBeCloseTo((startY + endY) / 2)
+                    expect(rod.position.z).toBeCloseTo(face * 0.025)
+                    expect(latches.some((part) => Math.abs(part.position.y - latchY) < 1e-6)).toBe(
+                      true,
+                    )
+                    expect(
+                      clips.some(
+                        (part) =>
+                          Math.abs(part.position.y - rod.position.y) < 1e-6 &&
+                          Math.abs(part.position.x - latchX) < 1e-6,
+                      ),
+                    ).toBe(true)
+                  }
+                }
+                for (const part of [bar, latch, cap, ...latches, ...clips]) {
+                  expect(part.geometry.userData.shared).toBe(true)
+                  expect(part.matrixWorld.determinant()).toBeGreaterThan(0)
+                }
+              }
+            }
+          })
         }
       }
     }
   }
+}
+
+function armEnds(arm: THREE.Mesh<THREE.CylinderGeometry>) {
+  const half = arm.geometry.parameters.height / 2
+  return [
+    arm.localToWorld(new THREE.Vector3(0, -half, 0)),
+    arm.localToWorld(new THREE.Vector3(0, half, 0)),
+  ] as const
+}
+
+for (const doorType of ['hinged', 'double', 'french'] as const) {
+  for (const frameDepth of [0.1, 0.24]) {
+    for (const hingesSide of ['left', 'right'] as const) {
+      for (const swingDirection of ['inward', 'outward'] as const) {
+        test(`${doorType} ${frameDepth} ${hingesSide} ${swingDirection}: closer linkage meets its moving pivot, elbow and fixed shoe at 0/45/90°`, () => {
+          const node = DoorNode.parse({
+            doorType,
+            doorCloser: true,
+            frameDepth,
+            hingesSide,
+            swingDirection,
+          })
+          let closedLengths: number[] | undefined
+          let shoePosition: THREE.Vector3 | undefined
+          for (const swingAngle of [0, Math.PI / 4, Math.PI / 2]) {
+            const mesh = buildDoorPreviewMesh({ ...node, swingAngle })
+            mesh.updateMatrixWorld(true)
+            const leaf = swingLeaves(mesh)[0]!
+            const body = leaf.children.find(
+              (part): part is THREE.Mesh =>
+                part instanceof THREE.Mesh && part.geometry === roundedBox(0.28, 0.055, 0.055),
+            )!
+            const cylinders = (parent: THREE.Object3D, radius: number) =>
+              parent.children.find(
+                (part): part is THREE.Mesh<THREE.CylinderGeometry> =>
+                  part instanceof THREE.Mesh &&
+                  part.geometry instanceof THREE.CylinderGeometry &&
+                  part.geometry.parameters.radiusTop === radius,
+              )!
+            const main = cylinders(leaf, 0.0075)
+            const forearm = cylinders(mesh, 0.006)
+            const knuckle = mesh.children.find(
+              (part): part is THREE.Mesh =>
+                part instanceof THREE.Mesh && part.geometry === sphere(0.009),
+            )!
+            const shoe = mesh.children.find(
+              (part): part is THREE.Mesh =>
+                part instanceof THREE.Mesh && part.geometry === roundedBox(0.09, 0.025, 0.03),
+            )!
+            const latchSign = leaf.position.x < 0 ? 1 : -1
+            const leafWidth =
+              (node.width - 2 * node.frameThickness) / (doorType === 'hinged' ? 1 : 2)
+            const pivot = body.localToWorld(
+              new THREE.Vector3(-latchSign * 0.12 * Math.min(1, leafWidth / 0.4), 0.0275, 0),
+            )
+            const elbow = knuckle.getWorldPosition(new THREE.Vector3())
+            if (swingAngle === 0) {
+              const face = swingDirection === 'inward' ? 1 : -1
+              const closedElbow = new THREE.Vector3(
+                leaf.position.x + latchSign * 0.18 * Math.min(1, leafWidth / 0.4),
+                node.height / 2 - node.frameThickness - 0.0125,
+                face * (frameDepth / 2 + 0.12),
+              )
+              expect(elbow.distanceTo(closedElbow)).toBeLessThan(0.002)
+            }
+            const shoeAnchor = shoe.localToWorld(new THREE.Vector3(0, -0.0125, 0))
+            const [mainStart, mainEnd] = armEnds(main)
+            const [forearmStart, forearmEnd] = armEnds(forearm)
+            for (const [actual, expected] of [
+              [mainStart, pivot],
+              [mainEnd, elbow],
+              [forearmStart, shoeAnchor],
+              [forearmEnd, elbow],
+              [mainEnd, forearmEnd],
+            ] as const) {
+              expect(actual.distanceTo(expected)).toBeLessThan(0.002)
+            }
+            const leafTop = node.height / 2 - node.frameThickness
+            const head = new THREE.Box3(
+              new THREE.Vector3(-node.width / 2, leafTop, -frameDepth / 2),
+              new THREE.Vector3(node.width / 2, node.height / 2, frameDepth / 2),
+            )
+            for (const arm of [main, forearm]) {
+              const [start, end] = armEnds(arm)
+              for (let sample = 0; sample <= 10; sample++) {
+                expect(head.distanceToPoint(start.clone().lerp(end, sample / 10))).toBeGreaterThan(
+                  arm.geometry.parameters.radiusTop,
+                )
+              }
+            }
+            expect(mainStart.y).toBeCloseTo(mainEnd.y)
+            expect(forearmStart.y).toBeCloseTo(forearmEnd.y)
+            const lengths = [main.geometry.parameters.height, forearm.geometry.parameters.height]
+            if (!closedLengths) closedLengths = lengths
+            expect(lengths).toEqual(closedLengths)
+            const fixedPosition = shoe.getWorldPosition(new THREE.Vector3())
+            if (!shoePosition) shoePosition = fixedPosition
+            expectVector(fixedPosition, shoePosition)
+            for (const part of [body, main, forearm, knuckle, shoe]) {
+              expect(part.userData.slotId).toBe('hardware')
+              expect(part.geometry.userData.shared).toBe(true)
+              expect(part.matrixWorld.determinant()).toBeGreaterThan(0)
+            }
+          }
+        })
+      }
+    }
+  }
+}
+
+test('unreachable closer anchors clamp to full extension with finite fixed-length geometry', () => {
+  const node = DoorNode.parse({ doorCloser: true, frameDepth: 0.01, swingAngle: Math.PI / 2 })
+  const mesh = buildDoorPreviewMesh(node)
+  const closed = buildDoorPreviewMesh({ ...node, swingAngle: 0 })
+  mesh.updateMatrixWorld(true)
+  const leaf = swingLeaves(mesh)[0]!
+  const main = leaf.children.find(
+    (part): part is THREE.Mesh<THREE.CylinderGeometry> =>
+      part instanceof THREE.Mesh &&
+      part.geometry instanceof THREE.CylinderGeometry &&
+      part.geometry.parameters.radiusTop === 0.0075,
+  )!
+  const forearm = mesh.children.find(
+    (part): part is THREE.Mesh<THREE.CylinderGeometry> =>
+      part instanceof THREE.Mesh &&
+      part.geometry instanceof THREE.CylinderGeometry &&
+      part.geometry.parameters.radiusTop === 0.006,
+  )!
+  const knuckle = mesh.children.find(
+    (part): part is THREE.Mesh => part instanceof THREE.Mesh && part.geometry === sphere(0.009),
+  )!
+  const [pivot, elbow] = armEnds(main)
+  const [shoe, forearmEnd] = armEnds(forearm)
+  const l1 = main.geometry.parameters.height
+  const l2 = forearm.geometry.parameters.height
+  expect(pivot.distanceTo(shoe)).toBeGreaterThan(l1 + l2)
+  expectVector(elbow, knuckle.getWorldPosition(new THREE.Vector3()))
+  const direction = shoe.clone().sub(pivot).normalize()
+  expectVector(elbow, pivot.clone().addScaledVector(direction, l1))
+  expectVector(forearmEnd, shoe.clone().addScaledVector(direction, -l2))
+  const geometries = [main.geometry, forearm.geometry]
+  const closedGeometries: THREE.BufferGeometry[] = []
+  closed.traverse((part) => {
+    if (part instanceof THREE.Mesh) closedGeometries.push(part.geometry)
+  })
+  for (const geometry of geometries) {
+    expect(closedGeometries.includes(geometry)).toBe(true)
+    expect(Array.from(geometry.getAttribute('position').array).every(Number.isFinite)).toBe(true)
+  }
+})
+
+test('closer is omitted when disabled or the leaf has no content', () => {
   for (const patch of [
     { doorCloser: false },
     { doorCloser: true, segments: [{ ...DoorNode.parse({}).segments[0], type: 'empty' }] },
@@ -414,7 +541,11 @@ for (const doorType of ['pocket', 'sliding', 'folding', 'barn'] as const) {
           child instanceof THREE.Mesh && child.userData.slotId === 'hardware',
       )
       expect(hardware.length).toBeGreaterThanOrEqual(2)
-      expect(hardware.filter((part) => part.geometry === pullBar())).toHaveLength(2)
+      expect(
+        hardware.filter(
+          (part) => part.geometry === (doorType === 'barn' ? pullBar() : flushPull()),
+        ),
+      ).toHaveLength(2)
       const localPositions = hardware.map((part) => part.position.clone())
       mesh.updateMatrixWorld(true)
       const closed = hardware.map((part) => part.getWorldPosition(new THREE.Vector3()))
@@ -433,7 +564,7 @@ for (const doorType of ['pocket', 'sliding', 'folding', 'barn'] as const) {
       if (doorType === 'barn') {
         expect(hardware.filter((part) => part.geometry === roller(0.0425, 0.02))).toHaveLength(2)
       } else {
-        for (const part of hardware) expect(part.geometry).toBe(pullBar())
+        for (const part of hardware) expect(part.geometry).toBe(flushPull())
       }
     })
   }
@@ -510,4 +641,85 @@ test('default hinged hardware preserves the measured tessellation with 10 percen
   // The specified segment counts exceed 4,000; retain the requested surface quality.
   expect(triangles).toBe(7032)
   expect(triangles).toBeLessThanOrEqual(7736)
+})
+
+for (const doorType of ['pocket', 'sliding', 'folding'] as const) {
+  for (const slideDirection of ['left', 'right'] as const) {
+    for (const contentPadding of [
+      [0.08, 0.08],
+      [0, 0],
+    ] as [number, number][]) {
+      test(`${doorType} ${slideDirection} padding=${contentPadding}: both flush cups occupy real holes through stile and panel boxes`, () => {
+        const segment = {
+          ...DoorNode.parse({}).segments[0]!,
+          type: 'panel',
+          panelInset: 0.01,
+          panelDepth: 0.02,
+        }
+        const mesh = buildDoorPreviewMesh(
+          DoorNode.parse({ doorType, slideDirection, contentPadding, segments: [segment] }),
+        )
+        const group = mesh.getObjectByName(
+          { pocket: 'door-pocket-leaf', sliding: 'door-sliding-active', folding: 'door-fold-3' }[
+            doorType
+          ],
+        )!
+        mesh.updateMatrixWorld(true)
+        const cups = group.children.filter(
+          (part): part is THREE.Mesh => part instanceof THREE.Mesh && part.geometry === flushPull(),
+        )
+        expect(cups).toHaveLength(2)
+        const panelParts = group.children.filter(
+          (part) => part instanceof THREE.Mesh && part.userData.slotId !== 'hardware',
+        )
+        for (const cup of cups) {
+          for (const [x, y] of [
+            [0, 0],
+            [0.015, 0.05],
+            [-0.015, -0.05],
+          ]) {
+            const origin = cup.localToWorld(new THREE.Vector3(x, y, 0.1))
+            const direction = new THREE.Vector3(0, 0, -1).transformDirection(cup.matrixWorld)
+            const ray = new THREE.Raycaster(origin, direction)
+            const cupHits = ray.intersectObject(cup)
+            expect(cupHits[0]!.distance).toBeCloseTo(0.11, 6)
+            const leafHits = ray.intersectObjects(panelParts)
+            expect(leafHits.every((hit) => hit.distance >= 0.112 - 1e-6)).toBe(true)
+          }
+          const origin = cup.localToWorld(new THREE.Vector3(0.0215, 0, 0.1))
+          const direction = new THREE.Vector3(0, 0, -1).transformDirection(cup.matrixWorld)
+          const rimHits = new THREE.Raycaster(origin, direction).intersectObject(cup)
+          expect(rimHits[0]!.distance).toBeCloseTo(0.099, 6)
+          expect(cup.userData.slotId).toBe('hardware')
+        }
+      })
+    }
+  }
+}
+
+test('panic defaults preserve loading legacy doors and match explicit crossbar without rods', () => {
+  const legacy = DoorNode.parse({ panicBar: true })
+  expect(legacy.panicBarStyle).toBe('crossbar')
+  expect(legacy.panicBarRods).toBe(false)
+  const mesh = buildDoorPreviewMesh(legacy)
+  const explicit = buildDoorPreviewMesh({
+    ...legacy,
+    panicBarStyle: 'crossbar',
+    panicBarRods: false,
+  })
+  const hardware = (root: THREE.Object3D) => {
+    const parts: THREE.Mesh[] = []
+    root.traverse((part) => {
+      if (part instanceof THREE.Mesh && part.userData.slotId === 'hardware') parts.push(part)
+    })
+    return parts
+  }
+  const actual = hardware(mesh)
+  const expected = hardware(explicit)
+  expect(actual).toHaveLength(expected.length)
+  for (const [index, part] of actual.entries()) {
+    expect(part.geometry).toBe(expected[index]!.geometry)
+    expectVector(part.position, expected[index]!.position)
+    expect(part.quaternion.equals(expected[index]!.quaternion)).toBe(true)
+  }
 })

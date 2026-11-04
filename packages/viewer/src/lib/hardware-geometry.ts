@@ -90,8 +90,8 @@ function hemisphere(radius: number, radialSegments: number, heightSegments: numb
 }
 
 /** Origin is the spindle on the mounting face; the grip points along +X, out along +Z. */
-export function leverOnRose() {
-  return cached('lever', [], () => {
+function buildLever(curved: boolean) {
+  return cached(curved ? 'lever-curved' : 'lever-straight', [], () => {
     const faceFillet = 0.0005
     const faceRadius = 0.0245 - faceFillet * (Math.SQRT2 - 1)
     const profile: [number, number][] = [
@@ -133,27 +133,62 @@ export function leverOnRose() {
     }
     fillet.rotateX(Math.PI / 2)
     const curve = new CatmullRomCurve3(
-      [
-        [0, 0],
-        [0.01, 0],
-        [0.02, 0],
-        [0.035, 0],
-        [0.065, -0.004],
-        [0.095, -0.011],
-        [0.105, -0.012],
-        [0.1155, -0.012],
-      ].map(([x, y]) => new Vector3(x, y, 0.047)),
+      (curved
+        ? [
+            [0, 0],
+            [0.01, 0],
+            [0.02, 0],
+            [0.035, 0],
+            [0.065, -0.004],
+            [0.095, -0.011],
+            [0.105, -0.012],
+            [0.1155, -0.012],
+          ]
+        : [
+            [0, 0],
+            [0.1155, 0],
+          ]
+      ).map(([x, y]) => new Vector3(x, y, 0.047)),
     )
     const grip = new TubeGeometry(curve, 24, 0.0095, 16, false)
     scaleUVs(grip, curve.getLength(), 2 * Math.PI * 0.0095)
     const cap = hemisphere(0.0095, 16, 8)
       .rotateZ(-Math.PI / 2)
-      .translate(0.1155, -0.012, 0.047)
+      .translate(0.1155, curved ? -0.012 : 0, 0.047)
     // Close the heel where the horizontal grip meets the vertical neck.
     const heel = hemisphere(0.0095, 16, 8)
       .rotateZ(Math.PI / 2)
       .translate(0, 0, 0.047)
     return merge([rose, neck, fillet, grip, cap, heel])
+  })
+}
+
+export function leverOnRose() {
+  return buildLever(false)
+}
+
+// Retained for the handle-style presets in the next slice.
+export function leverOnRoseCurved() {
+  return buildLever(true)
+}
+
+/** Origin at the face; a 40 × 120 mm open cup with a 3 mm rim, recessed 12 mm. */
+export function flushPull() {
+  return cached('flush-pull', [], () => {
+    const parts: BufferGeometry[] = []
+    const box = (w: number, h: number, d: number, x: number, y: number, z: number) => {
+      const geometry = new BoxGeometry(w, h, d)
+      boxUVs(geometry, w, h, d)
+      parts.push(geometry.translate(x, y, z))
+    }
+    box(0.04, 0.12, 0.002, 0, 0, -0.011)
+    for (const side of [-1, 1]) {
+      box(0.002, 0.12, 0.01, side * 0.019, 0, -0.005)
+      box(0.036, 0.002, 0.01, 0, side * 0.059, -0.005)
+      box(0.003, 0.126, 0.001, side * 0.0215, 0, 0.0005)
+      box(0.04, 0.003, 0.001, 0, side * 0.0615, 0.0005)
+    }
+    return merge(parts)
   })
 }
 
