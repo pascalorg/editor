@@ -7,12 +7,14 @@ import {
   fusesAtCorner,
   isAutoFrameDepth,
   resolveHostedOpeningFrameDepth,
+  resolveOpeningCasingHost,
   runAsSingleSceneHistoryStep,
   scriptImages,
   useInteractive,
   usePascalI18n,
   useScene,
   type WindowNode,
+  type WindowType,
 } from '@pascal-app/core'
 import { isAgentRefusal } from '@pascal-app/core/agent-tools'
 import {
@@ -33,6 +35,7 @@ import {
   ActionGroup,
   cn,
   duplicateNodeAndPickUp,
+  FinishSwatch,
   PanelSection,
   PanelWrapper,
   SegmentedControl,
@@ -92,6 +95,27 @@ function normalizeWindowCornerRadii(
   return next.map((radius) => radius * scale) as [number, number, number, number]
 }
 
+const INCH = 0.0254
+const MIN_SHUTTER_WIDTH = 0.15
+const MAX_SHUTTER_WIDTH = 0.6
+
+// The declared slot defaults (packages/core/src/node-slots/window.ts), shown as "Default". The
+// hardware follows the frame until it is painted.
+const FRAME_FINISH_DEFAULT = 'library:preset-softwhite'
+const SHUTTERS_FINISH_DEFAULT = 'library:preset-charcoal'
+
+// What the viewer draws (window-system `addWindowDetails`): the handle and hinges on these sashes,
+// the per-sash grid in these types, neither on a corner window.
+const SASH_HARDWARE_TYPES: ReadonlySet<WindowType> = new Set(['casement', 'awning', 'hopper'])
+const SASH_GRID_TYPES: ReadonlySet<WindowType> = new Set([
+  'casement',
+  'sliding',
+  'single-hung',
+  'double-hung',
+  'awning',
+  'hopper',
+])
+
 /** The Corner section's pill buttons: a token hover, the press, the keyboard focus ring. */
 const CORNER_BUTTON =
   'outline-hidden transition-[background-color,scale] duration-150 hover:bg-foreground/[0.06] focus-visible:outline-2 focus-visible:outline-foreground/50 focus-visible:outline-offset-2 motion-safe:active:scale-[0.96]'
@@ -132,6 +156,16 @@ export default function WindowPanel() {
   )
   // The depth the frame renders at: explicit, or the host wall's thickness plus the lip.
   const frameDepth = useScene((s) => (node ? resolveHostedOpeningFrameDepth(node, s.nodes) : 0))
+  // Shutters hang where casing can: not on a curtain wall, a dormer or a script's unit; nor on a
+  // roof's gable face or a corner window, where the second shutter has no wall beside it.
+  const takesShutters = useScene(
+    (s) =>
+      node?.type === 'window' &&
+      !node.roofSegmentId &&
+      !node.corner &&
+      resolveOpeningCasingHost(node, s.nodes) !== null,
+  )
+  const imperial = useViewer((s) => s.unit) === 'imperial'
 
   // Stable handler refs ("Custom panels" in wiki/architecture/node-definitions.md).
   // Without them, the 15+ SliderControls in this panel would loop on drag.
@@ -293,7 +327,14 @@ export default function WindowPanel() {
     windowType === 'louvered'
   const isOperableWindow = isTrackSashWindow || isOperableSashWindow
   const supportsWindowShape = SHAPED_WINDOW_TYPES.has(node.windowType ?? 'fixed')
-  const supportsGrid = isFixedWindow
+  const hasSashHardware = !node.corner && SASH_HARDWARE_TYPES.has(windowType)
+  // Curved sashes take no grid: the viewer draws it in rectangular ones only.
+  const takesSashGrid =
+    !node.corner &&
+    SASH_GRID_TYPES.has(windowType) &&
+    (openingShape === 'rectangle' || !SHAPED_WINDOW_TYPES.has(windowType))
+  const supportsGrid = isFixedWindow || takesSashGrid
+  const showGridDivisions = isFixedWindow || node.sashGrid === true
   const supportsSill = !SILLLESS_WINDOW_TYPES.has(node.windowType)
   const showWindowTypeSection = !scripted && !isOpening
   const windowStyles = windowStylesOf(node)
@@ -303,6 +344,11 @@ export default function WindowPanel() {
   const showGridSection = !scripted && !isOpening && supportsGrid
   const showStyleSection = !scripted && !isOpening && windowTakesStyle(node.windowType)
   const showSillSection = !scripted && !isOpening && supportsSill
+  const showHardwareSection = !scripted && !isOpening && hasSashHardware
+  const showShuttersSection = !scripted && !isOpening && takesShutters
+  const shutters = node.shutters ?? 'none'
+  const shutterWidth = node.shutterWidth ?? Math.min(node.width / 2, MAX_SHUTTER_WIDTH)
+  const toShownLength = (meters: number) => (imperial ? meters / INCH : meters)
   const showOperationSection = !scripted && !isOpening && isOperableWindow
   const showAwningDirectionSection = !scripted && !isOpening && displayedWindowType === 'awning'
   const showCasementSection = !scripted && !isOpening && windowType === 'casement'
@@ -496,95 +542,109 @@ export default function WindowPanel() {
 
       {showGridSection && (
         <PanelSection title={i18n._({ id: 'node.window.panel.grid', message: 'Grid' })}>
-          <SliderControl
-            label={i18n._({ id: 'node.window.panel.columns', message: 'Columns' })}
-            max={8}
-            min={1}
-            onChange={(v) => {
-              const n = Math.max(1, Math.min(8, Math.round(v)))
-              handleUpdate({ columnRatios: Array(n).fill(1 / n) })
-            }}
-            precision={0}
-            step={1}
-            value={numCols}
-          />
-          <SliderControl
-            label={i18n._({ id: 'node.window.panel.rows', message: 'Rows' })}
-            max={8}
-            min={1}
-            onChange={(v) => {
-              const n = Math.max(1, Math.min(8, Math.round(v)))
-              handleUpdate({ rowRatios: Array(n).fill(1 / n) })
-            }}
-            precision={0}
-            step={1}
-            value={numRows}
-          />
-
-          {numCols > 1 && (
-            <div className="mt-2 flex flex-col gap-1">
-              <div className="mb-1 px-1 font-medium text-[10px] text-muted-foreground/80 uppercase tracking-wider">
-                {i18n._({ id: 'node.window.panel.colWidths', message: 'Column widths' })}
-              </div>
-              {normCols.map((ratio, i) => (
-                <SliderControl
-                  key={`c-${i}`}
-                  label={`C${i + 1}`}
-                  max={95}
-                  min={5}
-                  onChange={(v) => setColumnRatio(i, v / 100)}
-                  precision={1}
-                  step={1}
-                  unit="%"
-                  value={Math.round(ratio * 100 * 10) / 10}
-                />
-              ))}
-              <div className="mt-1 border-border/50 border-t pt-1">
-                <SliderControl
-                  label={i18n._({ id: 'node.window.panel.divider', message: 'Divider' })}
-                  max={0.1}
-                  min={0.005}
-                  onChange={(v) => handleUpdate({ columnDividerThickness: v })}
-                  precision={3}
-                  step={0.01}
-                  unit="m"
-                  value={node.columnDividerThickness ?? 0.03}
-                />
-              </div>
-            </div>
+          {!isFixedWindow && (
+            <ToggleControl
+              checked={node.sashGrid === true}
+              label={i18n._({
+                id: 'node.window.panel.divideEachSash',
+                message: 'Divide each sash',
+              })}
+              onChange={(checked) => handleUpdate({ sashGrid: checked })}
+            />
           )}
+          {showGridDivisions && (
+            <>
+              <SliderControl
+                label={i18n._({ id: 'node.window.panel.columns', message: 'Columns' })}
+                max={8}
+                min={1}
+                onChange={(v) => {
+                  const n = Math.max(1, Math.min(8, Math.round(v)))
+                  handleUpdate({ columnRatios: Array(n).fill(1 / n) })
+                }}
+                precision={0}
+                step={1}
+                value={numCols}
+              />
+              <SliderControl
+                label={i18n._({ id: 'node.window.panel.rows', message: 'Rows' })}
+                max={8}
+                min={1}
+                onChange={(v) => {
+                  const n = Math.max(1, Math.min(8, Math.round(v)))
+                  handleUpdate({ rowRatios: Array(n).fill(1 / n) })
+                }}
+                precision={0}
+                step={1}
+                value={numRows}
+              />
 
-          {numRows > 1 && (
-            <div className="mt-2 flex flex-col gap-1">
-              <div className="mb-1 px-1 font-medium text-[10px] text-muted-foreground/80 uppercase tracking-wider">
-                {i18n._({ id: 'node.window.panel.rowHeights', message: 'Row heights' })}
-              </div>
-              {normRows.map((ratio, i) => (
-                <SliderControl
-                  key={`r-${i}`}
-                  label={`R${i + 1}`}
-                  max={95}
-                  min={5}
-                  onChange={(v) => setRowRatio(i, v / 100)}
-                  precision={1}
-                  step={1}
-                  unit="%"
-                  value={Math.round(ratio * 100 * 10) / 10}
-                />
-              ))}
-              <div className="mt-1 border-border/50 border-t pt-1">
-                <SliderControl
-                  label={i18n._({ id: 'node.window.panel.divider', message: 'Divider' })}
-                  max={0.1}
-                  min={0.005}
-                  onChange={(v) => handleUpdate({ rowDividerThickness: v })}
-                  precision={3}
-                  step={0.01}
-                  unit="m"
-                  value={node.rowDividerThickness ?? 0.03}
-                />
-              </div>
-            </div>
+              {numCols > 1 && (
+                <div className="mt-2 flex flex-col gap-1">
+                  <div className="mb-1 px-1 font-medium text-[10px] text-muted-foreground/80 uppercase tracking-wider">
+                    {i18n._({ id: 'node.window.panel.colWidths', message: 'Column widths' })}
+                  </div>
+                  {normCols.map((ratio, i) => (
+                    <SliderControl
+                      key={`c-${i}`}
+                      label={`C${i + 1}`}
+                      max={95}
+                      min={5}
+                      onChange={(v) => setColumnRatio(i, v / 100)}
+                      precision={1}
+                      step={1}
+                      unit="%"
+                      value={Math.round(ratio * 100 * 10) / 10}
+                    />
+                  ))}
+                  <div className="mt-1 border-border/50 border-t pt-1">
+                    <SliderControl
+                      label={i18n._({ id: 'node.window.panel.divider', message: 'Divider' })}
+                      max={0.1}
+                      min={0.005}
+                      onChange={(v) => handleUpdate({ columnDividerThickness: v })}
+                      precision={3}
+                      step={0.01}
+                      unit="m"
+                      value={node.columnDividerThickness ?? 0.03}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {numRows > 1 && (
+                <div className="mt-2 flex flex-col gap-1">
+                  <div className="mb-1 px-1 font-medium text-[10px] text-muted-foreground/80 uppercase tracking-wider">
+                    {i18n._({ id: 'node.window.panel.rowHeights', message: 'Row heights' })}
+                  </div>
+                  {normRows.map((ratio, i) => (
+                    <SliderControl
+                      key={`r-${i}`}
+                      label={`R${i + 1}`}
+                      max={95}
+                      min={5}
+                      onChange={(v) => setRowRatio(i, v / 100)}
+                      precision={1}
+                      step={1}
+                      unit="%"
+                      value={Math.round(ratio * 100 * 10) / 10}
+                    />
+                  ))}
+                  <div className="mt-1 border-border/50 border-t pt-1">
+                    <SliderControl
+                      label={i18n._({ id: 'node.window.panel.divider', message: 'Divider' })}
+                      max={0.1}
+                      min={0.005}
+                      onChange={(v) => handleUpdate({ rowDividerThickness: v })}
+                      precision={3}
+                      step={0.01}
+                      unit="m"
+                      value={node.rowDividerThickness ?? 0.03}
+                    />
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </PanelSection>
       )}
@@ -1161,10 +1221,82 @@ export default function WindowPanel() {
               />
             </div>
           )}
+          <ToggleControl
+            checked={node.sillInterior === true}
+            label={i18n._({ id: 'node.window.panel.roomSideBoard', message: 'Room-side board' })}
+            onChange={(checked) => handleUpdate({ sillInterior: checked })}
+          />
+        </PanelSection>
+      )}
+
+      {showHardwareSection && (
+        <PanelSection title={i18n._({ id: 'node.window.panel.hardware', message: 'Hardware' })}>
+          <ToggleControl
+            checked={node.windowHandle !== false}
+            label={i18n._({ id: 'node.window.panel.handle', message: 'Handle' })}
+            onChange={(checked) => handleUpdate({ windowHandle: checked })}
+          />
+          <FinishSwatch
+            fallback={node.slots?.frame ?? FRAME_FINISH_DEFAULT}
+            label={i18n._({ id: 'node.window.panel.finish', message: 'Finish' })}
+            node={node}
+            paintRole="hardware"
+            value={node.slots?.hardware}
+          />
         </PanelSection>
       )}
 
       <OpeningCasingSection node={node} onUpdate={handleUpdate} />
+
+      {showShuttersSection && (
+        <PanelSection title={i18n._({ id: 'node.window.panel.shutters', message: 'Shutters' })}>
+          <SegmentedControl
+            onChange={(value) => handleUpdate({ shutters: value })}
+            options={[
+              {
+                value: 'none',
+                label: i18n._({ id: 'node.window.panel.shuttersNone', message: 'None' }),
+              },
+              {
+                value: 'louvered',
+                label: i18n._({ id: 'node.window.panel.shuttersLouvered', message: 'Louvered' }),
+              },
+              {
+                value: 'panel',
+                label: i18n._({ id: 'node.window.panel.shuttersPanel', message: 'Panel' }),
+              },
+            ]}
+            value={shutters}
+          />
+          {shutters !== 'none' && (
+            <div className="mt-1 flex flex-col gap-1">
+              {/* In inches on an imperial plan, as the casing width: feet would show 1.2 ft. */}
+              <SliderControl
+                label={i18n._({ id: 'node.window.panel.width', message: 'Width' })}
+                max={toShownLength(MAX_SHUTTER_WIDTH)}
+                min={toShownLength(MIN_SHUTTER_WIDTH)}
+                onChange={(value) => {
+                  const meters = imperial ? value * INCH : value
+                  handleUpdate({
+                    shutterWidth: Math.min(Math.max(meters, MIN_SHUTTER_WIDTH), MAX_SHUTTER_WIDTH),
+                  })
+                }}
+                precision={imperial ? 1 : 2}
+                step={imperial ? 0.5 : 0.01}
+                unit={imperial ? 'in' : 'm'}
+                value={toShownLength(shutterWidth)}
+              />
+              <FinishSwatch
+                fallback={SHUTTERS_FINISH_DEFAULT}
+                label={i18n._({ id: 'node.window.panel.finish', message: 'Finish' })}
+                node={node}
+                paintRole="shutters"
+                value={node.slots?.shutters}
+              />
+            </div>
+          )}
+        </PanelSection>
+      )}
 
       <PanelSection title={i18n._({ id: 'node.window.panel.actions', message: 'Actions' })}>
         <ActionGroup>
