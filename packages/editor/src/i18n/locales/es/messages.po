@@ -23261,6 +23261,16 @@ msgstr "Activar umbral"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
+# Source-Hash: b3907da0ad234f10
+# Review: required
+# English: "Finish"
+#: packages/nodes/src/door/panel.tsx
+#, fuzzy
+msgid "node.door.panel.finish"
+msgstr "Acabado"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
 # Source-Hash: 66ed7c7598d3aa29
 # Review: required
 # English: "Flip side"
@@ -23321,6 +23331,56 @@ msgstr "Vidrio"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
+# Source-Hash: 9cf3754f15467c50
+# Review: required
+# English: "Bar"
+#: packages/nodes/src/door/panel.tsx
+#, fuzzy
+msgid "node.door.panel.handleBar"
+msgstr "Barra"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 103e15b39c909210
+# Review: required
+# English: "Knob"
+#: packages/nodes/src/door/panel.tsx
+#, fuzzy
+msgid "node.door.panel.handleKnob"
+msgstr "Pomo"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 6b595b41a920f6e9
+# Review: required
+# English: "Lever"
+#: packages/nodes/src/door/panel.tsx
+#, fuzzy
+msgid "node.door.panel.handleLever"
+msgstr "Manilla"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 21826ef290a282c4
+# Review: required
+# English: "Curved lever"
+#: packages/nodes/src/door/panel.tsx
+#, fuzzy
+msgid "node.door.panel.handleLeverCurved"
+msgstr "Manilla curva"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 244d8513c40c8de8
+# Review: required
+# English: "Plate"
+#: packages/nodes/src/door/panel.tsx
+#, fuzzy
+msgid "node.door.panel.handlePlate"
+msgstr "Placa"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
 # Source-Hash: 32c9f50bfbcd384f
 # Review: required
 # English: "Handle side"
@@ -23328,6 +23388,16 @@ msgstr "Vidrio"
 #, fuzzy
 msgid "node.door.panel.handleSide"
 msgstr "Lado de la manilla"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 1a79a485d91f3f28
+# Review: required
+# English: "Style"
+#: packages/nodes/src/door/panel.tsx
+#, fuzzy
+msgid "node.door.panel.handleStyle"
+msgstr "Estilo"
 
 # Source-Hash: 8c1bc3a078056ff7
 # Review: required
@@ -35231,6 +35301,16 @@ msgstr "Profundidad"
 msgid "node.window.panel.dimensions"
 msgstr "Dimensiones"
 
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 1d8c21c3a94cecec
+# Review: required
+# English: "Divide each sash"
+#: packages/nodes/src/window/panel.tsx
+#, fuzzy
+msgid "node.window.panel.divideEachSash"
+msgstr "Dividir cada hoja"
+
 # Source-Hash: c53c3307e2a2a32a
 # Review: required
 # AI-Provider: claude-code
@@ -35270,6 +35350,16 @@ msgstr "Duplicar"
 #, fuzzy
 msgid "node.window.panel.enableSill"
 msgstr "Activar alféizar"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: b3907da0ad234f10
+# Review: required
+# English: "Finish"
+#: packages/nodes/src/window/panel.tsx
+#, fuzzy
+msgid "node.window.panel.finish"
+msgstr "Acabado"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
@@ -35330,6 +35420,26 @@ msgstr "Vidrio fundido"
 #, fuzzy
 msgid "node.window.panel.grid"
 msgstr "Cuadrícula"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 41483b645efc0c65
+# Review: required
+# English: "Handle"
+#: packages/nodes/src/window/panel.tsx
+#, fuzzy
+msgid "node.window.panel.handle"
+msgstr "Manilla"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 8c1bc3a078056ff7
+# Review: required
+# English: "Hardware"
+#: packages/nodes/src/window/panel.tsx
+#, fuzzy
+msgid "node.window.panel.hardware"
+msgstr "Herrajes"
 
 # Source-Hash: 646ef0fbcbc58edf
 # Review: required
@@ -35451,6 +35561,16 @@ msgstr "Radio del derrame"
 msgid "node.window.panel.right"
 msgstr "Derecha"
 
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 57c865955f3ce1dc
+# Review: required
+# English: "Room-side board"
+#: packages/nodes/src/window/panel.tsx
+#, fuzzy
+msgid "node.window.panel.roomSideBoard"
+msgstr "Repisa del lado de la estancia"
+
 # Source-Hash: fc826da6c99303e6
 # Review: required
 # AI-Provider: claude-code
@@ -35480,6 +35600,46 @@ msgstr "Alturas de fila"
 #, fuzzy
 msgid "node.window.panel.rows"
 msgstr "Filas"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 6daa40e63114ad7c
+# Review: required
+# English: "Shutters"
+#: packages/nodes/src/window/panel.tsx
+#, fuzzy
+msgid "node.window.panel.shutters"
+msgstr "Contraventanas"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 5746be19ba2a53be
+# Review: required
+# English: "Louvered"
+#: packages/nodes/src/window/panel.tsx
+#, fuzzy
+msgid "node.window.panel.shuttersLouvered"
+msgstr "De lamas"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: f2953d2931e36d0c
+# Review: required
+# English: "None"
+#: packages/nodes/src/window/panel.tsx
+#, fuzzy
+msgid "node.window.panel.shuttersNone"
+msgstr "Ninguna"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 482469f5a0873f73
+# Review: required
+# English: "Panel"
+#: packages/nodes/src/window/panel.tsx
+#, fuzzy
+msgid "node.window.panel.shuttersPanel"
+msgstr "Ciegas"
 
 # Source-Hash: 62ded63b01564969
 # Review: required

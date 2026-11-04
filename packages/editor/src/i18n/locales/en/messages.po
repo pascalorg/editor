@@ -9340,6 +9340,10 @@ msgid "node.door.panel.enableThreshold"
 msgstr "Enable threshold"
 
 #: packages/nodes/src/door/panel.tsx
+msgid "node.door.panel.finish"
+msgstr "Finish"
+
+#: packages/nodes/src/door/panel.tsx
 msgid "node.door.panel.flipSide"
 msgstr "Flip side"
 
@@ -9364,8 +9368,32 @@ msgid "node.door.panel.glass"
 msgstr "Glass"
 
 #: packages/nodes/src/door/panel.tsx
+msgid "node.door.panel.handleBar"
+msgstr "Bar"
+
+#: packages/nodes/src/door/panel.tsx
+msgid "node.door.panel.handleKnob"
+msgstr "Knob"
+
+#: packages/nodes/src/door/panel.tsx
+msgid "node.door.panel.handleLever"
+msgstr "Lever"
+
+#: packages/nodes/src/door/panel.tsx
+msgid "node.door.panel.handleLeverCurved"
+msgstr "Curved lever"
+
+#: packages/nodes/src/door/panel.tsx
+msgid "node.door.panel.handlePlate"
+msgstr "Plate"
+
+#: packages/nodes/src/door/panel.tsx
 msgid "node.door.panel.handleSide"
 msgstr "Handle side"
+
+#: packages/nodes/src/door/panel.tsx
+msgid "node.door.panel.handleStyle"
+msgstr "Style"
 
 #: packages/nodes/src/door/panel.tsx
 msgid "node.door.panel.hardware"
@@ -14136,6 +14164,10 @@ msgid "node.window.panel.dimensions"
 msgstr "Dimensions"
 
 #: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.divideEachSash"
+msgstr "Divide each sash"
+
+#: packages/nodes/src/window/panel.tsx
 msgid "node.window.panel.divider"
 msgstr "Divider"
 
@@ -14150,6 +14182,10 @@ msgstr "Duplicate"
 #: packages/nodes/src/window/panel.tsx
 msgid "node.window.panel.enableSill"
 msgstr "Enable sill"
+
+#: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.finish"
+msgstr "Finish"
 
 #: packages/nodes/src/window/panel.tsx
 msgid "node.window.panel.flipSide"
@@ -14174,6 +14210,14 @@ msgstr "Fused glass"
 #: packages/nodes/src/window/panel.tsx
 msgid "node.window.panel.grid"
 msgstr "Grid"
+
+#: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.handle"
+msgstr "Handle"
+
+#: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.hardware"
+msgstr "Hardware"
 
 #: packages/nodes/src/window/panel.tsx
 msgid "node.window.panel.height"
@@ -14224,6 +14268,10 @@ msgid "node.window.panel.right"
 msgstr "Right"
 
 #: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.roomSideBoard"
+msgstr "Room-side board"
+
+#: packages/nodes/src/window/panel.tsx
 msgid "node.window.panel.rounded"
 msgstr "Rounded"
 
@@ -14234,6 +14282,22 @@ msgstr "Row heights"
 #: packages/nodes/src/window/panel.tsx
 msgid "node.window.panel.rows"
 msgstr "Rows"
+
+#: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.shutters"
+msgstr "Shutters"
+
+#: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.shuttersLouvered"
+msgstr "Louvered"
+
+#: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.shuttersNone"
+msgstr "None"
+
+#: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.shuttersPanel"
+msgstr "Panel"
 
 #: packages/nodes/src/window/panel.tsx
 msgid "node.window.panel.sill"
