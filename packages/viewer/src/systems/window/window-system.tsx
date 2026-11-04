@@ -319,7 +319,7 @@ function addShape(
 
 function disposeObjectGeometry(object: THREE.Object3D) {
   object.traverse((child) => {
-    if (child instanceof THREE.Mesh) child.geometry.dispose()
+    if (child instanceof THREE.Mesh && !child.geometry.userData.shared) child.geometry.dispose()
   })
 }
 

@@ -1203,6 +1203,64 @@ describe('prepareSceneForExport', () => {
     expect(closed.angleTo(new THREE.Quaternion())).toBeCloseTo(0)
   })
 
+  for (const doorType of ['hinged', 'double', 'french'] as const) {
+    test(`bakes ${doorType} hardware with the leaf through closed/45/90° poses`, () => {
+      const node = DoorNode.parse({
+        id: `door_hardware_${doorType}`,
+        doorType,
+        swingAngle: Math.PI / 3,
+        position: [2, 1.05, 3],
+        rotation: [0, 0.4, 0],
+      })
+      const mesh = buildDoorPreviewMesh(node)
+      const root = new THREE.Group()
+      root.add(mesh)
+      sceneRegistry.nodes.set(node.id, mesh)
+      const { scene, animations } = prepareSceneForExport(root, { [node.id]: node })
+      expect(animations).toHaveLength(1)
+      const clip = animations[0]!
+      expect(clip.tracks).toHaveLength(doorType === 'hinged' ? 1 : 2)
+      const mixer = new THREE.AnimationMixer(scene)
+      const action = mixer.clipAction(clip)
+      action.setLoop(THREE.LoopOnce, 1)
+      action.clampWhenFinished = true
+      action.play()
+      for (const amount of [0, 0.5, 1]) {
+        mixer.setTime(amount)
+        scene.updateMatrixWorld(true)
+        const live = buildDoorPreviewMesh({ ...node, swingAngle: (amount * Math.PI) / 2 })
+        live.updateMatrixWorld(true)
+        const leaves = live.children.filter((part) => part.userData.pascalSwingLeaf)
+        for (const [i, track] of clip.tracks.entries()) {
+          const target = scene.getObjectByProperty('uuid', track.name.replace('.quaternion', ''))!
+          const exportedHardware = target.children.filter(
+            (part) => part.userData.slotId === 'hardware',
+          )
+          const liveHardware = leaves[i]!.children.filter(
+            (part) => part.userData.slotId === 'hardware',
+          )
+          expect(exportedHardware).toHaveLength(2)
+          for (const [j, part] of exportedHardware.entries()) {
+            const source = liveHardware[j]!
+            expect(
+              part
+                .getWorldPosition(new THREE.Vector3())
+                .distanceTo(source.getWorldPosition(new THREE.Vector3())),
+            ).toBeLessThan(1e-6)
+            expect(
+              part
+                .getWorldQuaternion(new THREE.Quaternion())
+                .angleTo(source.getWorldQuaternion(new THREE.Quaternion())),
+            ).toBeLessThan(1e-6)
+            expect((part as THREE.Mesh).geometry).not.toBe((source as THREE.Mesh).geometry)
+            expect((part as THREE.Mesh).geometry.userData.shared).toBeUndefined()
+          }
+        }
+      }
+      mixer.stopAllAction()
+    })
+  }
+
   test('bakes registry-owned open clips and stamps the node openable', () => {
     const root = new THREE.Group()
     const nodeGroup = new THREE.Group()

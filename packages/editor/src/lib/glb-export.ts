@@ -914,6 +914,8 @@ function cloneSceneForExport(
     let geometry = cache.geometries.get(renderable.geometry)
     if (!geometry) {
       geometry = renderable.geometry.clone()
+      // Export owns its clones even when the live geometry belongs to a shared cache.
+      delete geometry.userData.shared
       cache.geometries.set(renderable.geometry, geometry)
     }
     renderableClone.geometry = geometry
