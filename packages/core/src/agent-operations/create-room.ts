@@ -10,6 +10,7 @@ import { lotOverhang } from '../lib/site-placement'
 import {
   type AnyNode,
   type AnyNodeId,
+  type DoorNode,
   generateId,
   type LevelNode,
   type WallNode,
@@ -28,6 +29,7 @@ type OpeningSpec = {
   height?: number
   sillHeight?: number
   hingesSide?: 'left' | 'right'
+  handleStyle?: DoorNode['handleStyle']
   handleSide?: 'left' | 'right'
   swingDirection?: 'inward' | 'outward'
   style?: string

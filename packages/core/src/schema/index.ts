@@ -183,8 +183,10 @@ export {
   getCurtainWallConfig,
 } from './nodes/curtain-wall'
 export {
+  DoorHandleStyle,
   DoorNode,
   DoorSegment,
+  doorHandleStyle,
   FRENCH_DOOR_SEGMENTS,
   OpeningConstructionType,
   OpeningDimensionReference,

@@ -7,6 +7,7 @@ import type {
   WindowNode,
 } from '@pascal-app/core'
 import {
+  doorHandleStyle,
   getOpeningFloorDatum,
   getWallLocalFaceZ,
   resolveHostedOpeningFrameDepth,
@@ -620,10 +621,20 @@ function doorOperation(door: DoorNode): string {
 
 function doorHardware(door: DoorNode): string {
   if (door.openingKind === 'opening') return 'None'
-  const hardware = []
-  if (door.doorCloser) hardware.push('Closer')
-  if (door.panicBar) hardware.push('Panic bar')
-  if (door.threshold) hardware.push('Threshold')
+  const hardware: string[] = []
+  if (door.handle) {
+    const swing = ['hinged', 'double', 'french'].includes(door.doorType)
+    const labels = {
+      lever: 'Lever',
+      'lever-curved': 'Curved lever',
+      knob: 'Knob',
+      bar: 'Bar pull',
+      plate: 'Plate lever',
+    }
+    hardware.push(swing ? labels[doorHandleStyle(door)] : 'Pull')
+  }
+  if (door.doorCloser) hardware.push(hardware.length ? 'closer' : 'Closer')
+  if (door.panicBar) hardware.push(hardware.length ? 'panic bar' : 'Panic bar')
   return hardware.length > 0 ? hardware.join(', ') : 'Standard'
 }
 

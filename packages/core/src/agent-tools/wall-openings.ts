@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { DOOR_STYLES, WINDOW_STYLES } from '../building/opening-style-presets'
 import { geometryMetaFields } from '../schema/geometry-metadata'
-import { DoorType, WindowType } from '../schema/nodes/opening-types'
+import { DoorHandleStyle, DoorType, WindowType } from '../schema/nodes/opening-types'
 import { achievedOutput } from './achieved'
 import { scriptLanguage, scriptParams } from './add-object'
 import { measurement } from './measurement'
@@ -84,6 +84,9 @@ export const addDoorTool = {
         "door (default), or opening: a passage with no leaf, framed or arched by the outline, as the editor's door panel offers.",
       ),
     hingesSide: z.enum(['left', 'right']).optional().describe('Hinge side (default left).'),
+    handleStyle: DoorHandleStyle.optional().describe(
+      'Door handle: lever (default), lever-curved, knob, bar, or plate.',
+    ),
     handleSide: z
       .enum(['left', 'right'])
       .optional()

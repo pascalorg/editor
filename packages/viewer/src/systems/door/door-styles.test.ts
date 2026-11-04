@@ -71,8 +71,25 @@ describe('door styles', () => {
  * from the hall, a six-panel door shows its six panels (the user, 2026-10-06, on :3102).
  */
 function panelFaces(style: (typeof DOOR_STYLES)[number]) {
-  const centres = leafBoxes(style, ['panel']).leaves.map((box) => (box.min.z + box.max.z) / 2)
-  return { front: centres.some((z) => z > 0.001), back: centres.some((z) => z < -0.001) }
+  const mesh = buildDoorPreviewMesh(DoorNode.parse(doorStyleLook(style)))
+  let front = false
+  let back = false
+  mesh.traverse((part) => {
+    if (
+      !(part instanceof THREE.Mesh) ||
+      part.userData.slotId !== 'panel' ||
+      part.geometry.type !== 'BufferGeometry'
+    )
+      return
+    const positions = part.geometry.getAttribute('position')
+    const normals = part.geometry.getAttribute('normal')
+    for (let i = 0; i < positions.count; i++) {
+      if (Math.abs(Math.abs(positions.getZ(i)) - 0.02) < 1e-6) continue
+      if (normals.getZ(i) > 0.999) front = true
+      if (normals.getZ(i) < -0.999) back = true
+    }
+  })
+  return { front, back }
 }
 
 describe('panelled door styles', () => {
@@ -101,4 +118,142 @@ test('barn braces cross diagonally in the leaf plane', () => {
   })
   expect(directions[0]!.x * directions[1]!.x).toBeLessThan(0)
   expect(braces[0]!.position.equals(braces[1]!.position)).toBe(true)
+})
+
+function panelBounds(node: DoorNode) {
+  const mesh = buildDoorPreviewMesh(node)
+  mesh.updateMatrixWorld(true)
+  const bounds = new THREE.Box3()
+  mesh.traverse((part) => {
+    if (part instanceof THREE.Mesh && part.userData.slotId === 'panel')
+      bounds.union(new THREE.Box3().setFromObject(part))
+  })
+  return bounds
+}
+
+test('the leaf has 3 mm clearance at every edge while the frame and cutout retain their size', () => {
+  const node = DoorNode.parse({ ...doorStyleLook('modern'), threshold: false })
+  const bounds = panelBounds(node)
+  expect(bounds.min.x).toBeCloseTo(-node.width / 2 + node.frameThickness + 0.003)
+  expect(bounds.max.x).toBeCloseTo(node.width / 2 - node.frameThickness - 0.003)
+  expect(bounds.min.y).toBeCloseTo(-node.height / 2 + 0.003)
+  expect(bounds.max.y).toBeCloseTo(node.height / 2 - node.frameThickness - 0.003)
+  const mesh = buildDoorPreviewMesh(node)
+  expect((mesh.geometry as THREE.BoxGeometry).parameters.width).toBe(node.width)
+  expect((mesh.geometry as THREE.BoxGeometry).parameters.height).toBe(node.height)
+})
+
+test('the exact saved default Panel leaf heals without mutating the node; a custom margin stays stored', () => {
+  const legacy = DoorNode.parse({ ...doorStyleLook('panel'), contentPadding: [0.04, 0.04] })
+  const saved = structuredClone(legacy)
+  const panels = (node: DoorNode) => {
+    const positions: number[][] = []
+    buildDoorPreviewMesh(node).traverse((part) => {
+      if (part instanceof THREE.Mesh && part.userData.slotId === 'panel')
+        positions.push([...part.geometry.getAttribute('position').array])
+    })
+    return positions
+  }
+  expect(panels(legacy)).toEqual(panels(DoorNode.parse(doorStyleLook('panel'))))
+  expect(legacy).toEqual(saved)
+  expect(panels({ ...legacy, contentPadding: [0.04000001, 0.04] })).not.toEqual(panels(legacy))
+})
+
+for (const panelDepth of [0.01, -0.01]) {
+  test(`${panelDepth}: the field centre and 45 degree bevel sit on both sides of the leaf`, () => {
+    const node = DoorNode.parse({ segments: [{ type: 'panel', heightRatio: 1, panelDepth }] })
+    const mesh = buildDoorPreviewMesh(node)
+    mesh.updateMatrixWorld(true)
+    const fields: THREE.Mesh[] = []
+    mesh.traverse((part) => {
+      if (
+        part instanceof THREE.Mesh &&
+        part.userData.slotId === 'panel' &&
+        part.geometry.type === 'BufferGeometry'
+      )
+        fields.push(part)
+    })
+    expect(fields).toHaveLength(1)
+    for (const face of [-1, 1]) {
+      const ray = new THREE.Raycaster(
+        new THREE.Vector3(0, -0.025, face),
+        new THREE.Vector3(0, 0, -face),
+      )
+      const hit = ray.intersectObjects(fields)[0]!
+      expect(hit.point.z).toBeCloseTo(face * (0.02 + panelDepth), 6)
+    }
+    const geometry = fields[0]!.geometry
+    const normals = geometry.getAttribute('normal')
+    const position = geometry.getAttribute('position')
+    const uv = geometry.getAttribute('uv')
+    for (let i = 0; i < position.count; i += 3) {
+      const edge = new THREE.Vector3()
+        .fromBufferAttribute(position, i)
+        .distanceTo(new THREE.Vector3().fromBufferAttribute(position, i + 1))
+      const uvEdge = Math.hypot(uv.getX(i) - uv.getX(i + 1), uv.getY(i) - uv.getY(i + 1))
+      expect(uvEdge).toBeCloseTo(edge, 6)
+    }
+    expect(
+      Array.from({ length: normals.count }, (_, i) => Math.abs(normals.getZ(i))).some(
+        (z) => Math.abs(z - Math.SQRT1_2) < 1e-5,
+      ),
+    ).toBe(true)
+    for (const attribute of Object.values(geometry.attributes))
+      expect([...attribute.array].every(Number.isFinite)).toBe(true)
+  })
+}
+
+for (const swingDirection of ['inward', 'outward'] as const) {
+  test(`${swingDirection}: rectangular swing doors have only head and leg stops on the closing side`, () => {
+    const mesh = buildDoorPreviewMesh(DoorNode.parse({ swingDirection, swingAngle: 0.7 }))
+    const stops = mesh.children.filter(
+      (part) => part.name === 'door-jamb-stop',
+    ) as THREE.Mesh<THREE.BoxGeometry>[]
+    expect(stops).toHaveLength(3)
+    for (const stop of stops) {
+      expect(stop.userData.slotId).toBe('frame')
+      expect(stop.geometry.parameters.depth).toBe(0.032)
+      expect(stop.position.z).toBeCloseTo(swingDirection === 'inward' ? -0.036 : 0.036)
+      expect(Math.min(stop.geometry.parameters.width, stop.geometry.parameters.height)).toBe(0.012)
+    }
+  })
+}
+for (const patch of [
+  { openingShape: 'arch' },
+  { openingShape: 'rounded' },
+  ...[
+    'folding',
+    'pocket',
+    'sliding',
+    'barn',
+    'garage-sectional',
+    'garage-tiltup',
+    'garage-rollup',
+  ].map((doorType) => ({ doorType })),
+]) {
+  test(`no jamb stop on ${JSON.stringify(patch)}`, () => {
+    expect(
+      buildDoorPreviewMesh(DoorNode.parse(patch)).children.some(
+        (part) => part.name === 'door-jamb-stop',
+      ),
+    ).toBe(false)
+  })
+}
+
+test('glass keeps a 12 mm bead standing 6 mm proud on each face', () => {
+  const node = DoorNode.parse(doorStyleLook('glass'))
+  const bounds = panelBounds(node)
+  expect(bounds.min.z).toBeCloseTo(-0.026)
+  expect(bounds.max.z).toBeCloseTo(0.026)
+  const mesh = buildDoorPreviewMesh(node)
+  mesh.updateMatrixWorld(true)
+  const ray = new THREE.Raycaster(
+    new THREE.Vector3(-0.4 + 0.003 + 0.07 + 0.006, -0.025, 1),
+    new THREE.Vector3(0, 0, -1),
+  )
+  const panels: THREE.Mesh[] = []
+  mesh.traverse((part) => {
+    if (part instanceof THREE.Mesh && part.userData.slotId === 'panel') panels.push(part)
+  })
+  expect(ray.intersectObjects(panels)[0]!.point.z).toBeCloseTo(0.026)
 })

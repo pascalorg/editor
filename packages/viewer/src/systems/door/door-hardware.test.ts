@@ -8,7 +8,10 @@ import {
   flushPull,
   hingeJambPart,
   hingeLeafPart,
+  knobOnRose,
+  leverOnPlate,
   leverOnRose,
+  leverOnRoseCurved,
   pullBar,
   roller,
   roundedBox,
@@ -132,7 +135,7 @@ for (const doorType of ['hinged', 'double', 'french'] as const) {
 }
 
 for (const openingShape of ['rectangle', 'rounded', 'arch'] as const) {
-  test(`${openingShape}: closed leaf bounds match the pre-pivot geometry`, () => {
+  test(`${openingShape}: closed leaf bounds include the edge clearance and bevelled field`, () => {
     const mesh = buildDoorPreviewMesh(
       DoorNode.parse({ openingShape, handle: false, swingAngle: 0 }),
     )
@@ -145,10 +148,8 @@ for (const openingShape of ['rectangle', 'rounded', 'arch'] as const) {
         box.union(part.geometry.boundingBox!.clone().applyMatrix4(part.matrixWorld))
       }
     })
-    // Captured on origin/main before moving the pivot; hardware changes have their own bounds.
-    const depth = openingShape === 'rectangle' ? 0.03 : 0.02
-    expectVector(box.min, new THREE.Vector3(-0.4, -1.05, -depth))
-    expectVector(box.max, new THREE.Vector3(0.4, 1, depth))
+    expectVector(box.min, new THREE.Vector3(-0.397, -1.047, -0.03))
+    expectVector(box.max, new THREE.Vector3(0.397, 0.997, 0.03))
   })
 }
 
@@ -156,6 +157,7 @@ test('roses seat on the raised segment at the handle height, on both faces', () 
   const segment = DoorNode.parse({}).segments[0]!
   const node = DoorNode.parse({
     handleHeight: 0.5,
+    contentPadding: [0, 0],
     segments: [
       { ...segment, heightRatio: 1, panelDepth: 0.005 },
       { ...segment, heightRatio: 1, panelDepth: 0.035 },
@@ -163,9 +165,19 @@ test('roses seat on the raised segment at the handle height, on both faces', () 
   })
   const mesh = buildDoorPreviewMesh(node)
   mesh.updateMatrixWorld(true)
+  const panels: THREE.Mesh[] = []
+  mesh.traverse((part) => {
+    if (part instanceof THREE.Mesh && part.userData.slotId === 'panel') panels.push(part)
+  })
   for (const handle of handles(swingLeaves(mesh)[0]!)) {
     const position = handle.getWorldPosition(new THREE.Vector3())
-    expect(Math.abs(position.z)).toBeCloseTo(0.055)
+    const face = Math.sign(position.z)
+    const surface = new THREE.Raycaster(
+      new THREE.Vector3(position.x, position.y, face),
+      new THREE.Vector3(0, 0, -face),
+    ).intersectObjects(panels)[0]!
+    expect(position.z).toBeCloseTo(surface.point.z, 6)
+    expect(Math.abs(position.z)).toBeGreaterThan(0.02)
     expect(position.y).toBeCloseTo(node.handleHeight - node.height / 2)
     expect(position.x).toBeCloseTo((node.width - 2 * node.frameThickness) / 2 - 0.06)
   }
@@ -729,4 +741,49 @@ test('a panic bar leaves the push face without a lever; the pull face keeps it',
   const levers = handles(swingLeaves(mesh)[0]!)
   expect(levers).toHaveLength(1)
   expect(levers[0]!.position.z).toBeLessThan(0)
+})
+
+for (const [handleStyle, build] of [
+  ['lever', leverOnRose],
+  ['lever-curved', leverOnRoseCurved],
+  ['knob', knobOnRose],
+  ['bar', () => pullBar(true)],
+  ['plate', leverOnPlate],
+] as const) {
+  for (const panicBar of [false, true]) {
+    test(`${handleStyle} panic=${panicBar}: selected handles occupy both faces except the panic push face`, () => {
+      const node = DoorNode.parse({ handleStyle, panicBar, handleHeight: 0.94 })
+      const root = buildDoorPreviewMesh(node)
+      root.updateMatrixWorld(true)
+      const selected: THREE.Mesh[] = []
+      root.traverse((part) => {
+        if (part instanceof THREE.Mesh && part.geometry === build()) selected.push(part)
+      })
+      expect(selected).toHaveLength(panicBar ? 1 : 2)
+      for (const handle of selected) {
+        expect(handle.userData.slotId).toBe('hardware')
+        expect(handle.getWorldPosition(new THREE.Vector3()).y).toBeCloseTo(0.94 - node.height / 2)
+        expect(handle.matrixWorld.determinant()).toBeGreaterThan(0)
+      }
+      let disabledHandles = 0
+      buildDoorPreviewMesh({ ...node, handle: false }).traverse((part) => {
+        if (part instanceof THREE.Mesh && part.geometry === build()) disabledHandles++
+      })
+      expect(disabledHandles).toBe(0)
+      const pocket = buildDoorPreviewMesh({ ...node, doorType: 'pocket' })
+      let cups = 0
+      pocket.traverse((part) => {
+        if (part instanceof THREE.Mesh && part.geometry === flushPull()) cups++
+      })
+      expect(cups).toBe(2)
+    })
+  }
+}
+
+test('default handles seat on the broad stile rather than floating above its panel', () => {
+  const root = buildDoorPreviewMesh(DoorNode.parse({}))
+  root.updateMatrixWorld(true)
+  for (const handle of handles(swingLeaves(root)[0]!)) {
+    expect(Math.abs(handle.getWorldPosition(new THREE.Vector3()).z)).toBeCloseTo(0.02, 6)
+  }
 })

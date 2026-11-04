@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test'
+import { z } from 'zod'
 import { type AgentRefusal, isAgentRefusal } from '../agent-tools/refusal'
 import { addDoorTool, addWindowTool } from '../agent-tools/wall-openings'
 import { getOpeningWallCut } from '../lib/opening-floor-datum'
@@ -197,3 +198,12 @@ describe('an opening on a railing', () => {
     expect((error as AgentRefusal).code).toBe('railing_window')
   })
 })
+
+for (const handleStyle of ['lever', 'lever-curved', 'knob', 'bar', 'plate'] as const) {
+  test(`add_door carries ${handleStyle} from its wire input into the node`, () => {
+    const input = z.object(addDoorTool.input).parse({ wallId: 'wall_main', t: 0.5, handleStyle })
+    const planned = planWallOpening(openingScene().nodes, { ...input, kind: 'door' })
+    expect(planned.node.type).toBe('door')
+    if (planned.node.type === 'door') expect(planned.node.handleStyle).toBe(handleStyle)
+  })
+}

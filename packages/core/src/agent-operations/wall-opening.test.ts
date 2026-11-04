@@ -2,8 +2,11 @@ import { describe, expect, test } from 'bun:test'
 import { DOOR_TYPE_SIZES } from '@pascal-app/core/building'
 import { z } from 'zod'
 import { addDoorOutput, addWindowOutput } from '../agent-tools'
+import { createRoomTool } from '../agent-tools/create-room'
 import { OPENING_SCENE, openingScene } from '../building/__fixtures__/wall-opening-cases'
+import { LevelNode } from '../schema'
 import { applySceneChanges } from './apply-changes'
+import { AGENT_OPERATIONS } from './index'
 import type { SceneNodes } from './types'
 import { addWallOpening } from './wall-opening'
 
@@ -52,5 +55,27 @@ describe('add_door and add_window answer once, for every surface', () => {
     expect(z.object(addWindowOutput).strict().parse(result)).toEqual(result)
     expect(result.sillHeight).toBeCloseTo(0.5, 6)
     expect(result.achieved.created).toEqual({ window: 1 })
+  })
+})
+
+test('create_room carries its door handle style from tool input to created node', () => {
+  const level = LevelNode.parse({ id: 'level_room_handles' })
+  const input = z.object(createRoomTool.input).parse({
+    levelId: level.id,
+    name: 'Office',
+    polygon: [
+      [0, 0],
+      [4, 0],
+      [4, 4],
+      [0, 4],
+    ],
+    doors: [{ wallIndex: 0, handleStyle: 'knob' }],
+  })
+  const outcome = AGENT_OPERATIONS.create_room({ [level.id]: level }, input as never, {
+    activeLevelId: level.id,
+  })
+  const after = applySceneChanges({ [level.id]: level }, outcome.changes) as SceneNodes
+  expect(Object.values(after).find((node) => node.type === 'door')).toMatchObject({
+    handleStyle: 'knob',
   })
 })

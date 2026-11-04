@@ -70,7 +70,10 @@ function cylinder(radius: number, length: number, segments: number) {
 }
 
 function merge(parts: BufferGeometry[]) {
-  const geometry = mergeGeometries(parts)!
+  const indexed = parts.every((part) => part.index !== null)
+  const normalized = parts.map((part) => (!indexed && part.index ? part.toNonIndexed() : part))
+  const geometry = mergeGeometries(normalized)!
+  for (const part of normalized) if (!parts.includes(part)) part.dispose()
   for (const part of parts) part.dispose()
   return geometry
 }
@@ -90,8 +93,8 @@ function hemisphere(radius: number, radialSegments: number, heightSegments: numb
 }
 
 /** Origin is the spindle on the mounting face; the grip points along +X, out along +Z. */
-function buildLever(curved: boolean) {
-  return cached(curved ? 'lever-curved' : 'lever-straight', [], () => {
+function buildLever(curved: boolean, plate = false) {
+  return cached(plate ? 'lever-plate' : curved ? 'lever-curved' : 'lever-straight', [], () => {
     const faceFillet = 0.0005
     const faceRadius = 0.0245 - faceFillet * (Math.SQRT2 - 1)
     const profile: [number, number][] = [
@@ -106,7 +109,9 @@ function buildLever(curved: boolean) {
       ])
     }
     profile.push([0, 0.009])
-    const rose = lathe(profile, 48).rotateX(Math.PI / 2)
+    const rose = plate
+      ? roundedBox(0.04, 0.22, 0.006, 0.003).clone().translate(0, 0, 0.003)
+      : lathe(profile, 48).rotateX(Math.PI / 2)
     const neck = cylinder(0.01, 0.037, 24)
       .rotateX(Math.PI / 2)
       .translate(0, 0, 0.009 + 0.037 / 2)
@@ -159,6 +164,7 @@ function buildLever(curved: boolean) {
     const heel = hemisphere(0.0095, 16, 8)
       .rotateZ(Math.PI / 2)
       .translate(0, 0, 0.047)
+    if (plate) for (const part of [neck, fillet, grip, cap, heel]) part.translate(0, 0, -0.003)
     return merge([rose, neck, fillet, grip, cap, heel])
   })
 }
@@ -167,9 +173,28 @@ export function leverOnRose() {
   return buildLever(false)
 }
 
-// Retained for the handle-style presets in the next slice.
 export function leverOnRoseCurved() {
   return buildLever(true)
+}
+
+export function leverOnPlate() {
+  return buildLever(false, true)
+}
+
+/** Origin at the mounting face; a 56 mm ball on a 20 mm neck and 56 mm rose. */
+export function knobOnRose() {
+  return cached('knob', [], () => {
+    const rose = cylinder(0.028, 0.006, 48)
+      .rotateX(Math.PI / 2)
+      .translate(0, 0, 0.003)
+    const neck = cylinder(0.01, 0.025, 24)
+      .rotateX(Math.PI / 2)
+      .translate(0, 0, 0.0185)
+    const ball = new SphereGeometry(0.028, 48, 24)
+    scaleUVs(ball, 2 * Math.PI * 0.028, Math.PI * 0.028)
+    ball.translate(0, 0, 0.052)
+    return merge([rose, neck, ball])
+  })
 }
 
 /** Origin at the face; a 40 × 120 mm open cup with a 3 mm rim, recessed 12 mm. */
@@ -220,8 +245,19 @@ export function hingeJambPart() {
 }
 
 /** Origin on the mounting face; bar along Y, projecting along +Z. */
-export function pullBar() {
-  return cached('pull', [], () => {
+export function pullBar(doorScale = false) {
+  return cached(doorScale ? 'door-pull' : 'pull', [], () => {
+    if (doorScale) {
+      const bar = cylinder(0.0125, 0.4, 48).translate(0, 0, 0.05)
+      return merge([
+        bar,
+        ...[-0.15, 0.15].map((y) =>
+          cylinder(0.008, 0.05, 24)
+            .rotateX(Math.PI / 2)
+            .translate(0, y, 0.025),
+        ),
+      ])
+    }
     const bar = new CapsuleGeometry(0.009, 0.102, 8, 16)
     scaleUVs(bar, 2 * Math.PI * 0.009, 0.102 + Math.PI * 0.009)
     bar.translate(0, 0, 0.022)

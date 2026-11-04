@@ -4,6 +4,8 @@ import {
   flushPull,
   hingeJambPart,
   hingeLeafPart,
+  knobOnRose,
+  leverOnPlate,
   leverOnRose,
   leverOnRoseCurved,
   pullBar,
@@ -16,6 +18,9 @@ import {
 for (const [name, build, measuredTriangles] of [
   ['lever', leverOnRose, 2256],
   ['curved lever', leverOnRoseCurved, 2256],
+  ['knob', knobOnRose, 2544],
+  ['plate lever', leverOnPlate, 1884],
+  ['door bar pull', () => pullBar(true), 384],
   ['flush pull', flushPull, 108],
   ['hinge leaf', hingeLeafPart, 636],
   ['hinge jamb', hingeJambPart, 204],
@@ -274,4 +279,41 @@ test('flush pull has an open front, five inner faces, a 12 mm recess and a 1 mm 
     expect(hits.length).toBeGreaterThan(0)
     expect(hits[0]!.distance).toBeCloseTo(distance, 6)
   }
+})
+
+test('door bar is 25 by 400 mm with two 16 mm standoffs 300 mm apart', () => {
+  const positions = pullBar(true).getAttribute('position')
+  const bounds = new THREE.Box3().setFromBufferAttribute(positions as THREE.BufferAttribute)
+  expect(bounds.getSize(new THREE.Vector3()).x).toBeCloseTo(0.025, 6)
+  expect(bounds.getSize(new THREE.Vector3()).y).toBeCloseTo(0.4, 6)
+  expect(bounds.min.z).toBeCloseTo(0, 6)
+  for (const y of [-0.15, 0.15]) {
+    expect(
+      Array.from({ length: positions.count }, (_, i) => i).some(
+        (i) => Math.abs(positions.getY(i) - y) < 1e-7 && Math.abs(positions.getX(i) - 0.008) < 1e-7,
+      ),
+    ).toBe(true)
+  }
+})
+
+test('knob and plate have the specified rose, ball and backplate sizes', () => {
+  const bounds = (geometry: THREE.BufferGeometry) =>
+    new THREE.Box3().setFromBufferAttribute(
+      geometry.getAttribute('position') as THREE.BufferAttribute,
+    )
+  const knob = bounds(knobOnRose())
+  expect(knob.getSize(new THREE.Vector3()).x).toBeCloseTo(0.056)
+  expect(knob.getSize(new THREE.Vector3()).y).toBeCloseTo(0.056)
+  expect(knob.min.z).toBeCloseTo(0)
+  expect(knob.max.z).toBeCloseTo(0.08)
+  const plate = bounds(leverOnPlate())
+  expect(plate.min.y).toBeCloseTo(-0.11)
+  expect(plate.max.y).toBeCloseTo(0.11)
+  const backplate = leverOnPlate().getAttribute('position')
+  const platePoints = Array.from({ length: backplate.count }, (_, i) =>
+    new THREE.Vector3().fromBufferAttribute(backplate, i),
+  ).filter((p) => p.z < 0.00601)
+  expect(new THREE.Box3().setFromPoints(platePoints).getSize(new THREE.Vector3()).x).toBeCloseTo(
+    0.04,
+  )
 })

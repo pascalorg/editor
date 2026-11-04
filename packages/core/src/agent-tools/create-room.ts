@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { DOOR_STYLES, WINDOW_STYLES } from '../building/opening-style-presets'
 import { FOUNDATION_BY_REGION_NOTE } from '../lib/foundation-construction'
+import { DoorHandleStyle } from '../schema/nodes/opening-types'
 import { levelTarget } from './levels'
 import { measurement } from './measurement'
 
@@ -72,6 +73,7 @@ export const createRoomTool = {
             positive: true,
             description: 'Door height (default 2.1 m).',
           }).optional(),
+          handleStyle: DoorHandleStyle.optional().describe('Door handle style (default lever).'),
           hingesSide: z.enum(['left', 'right']).optional().describe('Hinge side (default left).'),
           swingDirection: z
             .enum(['inward', 'outward'])

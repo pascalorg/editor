@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { DOOR_STYLES, WINDOW_STYLES } from '../building/opening-style-presets'
-import { DoorType, WindowType } from '../schema/nodes/opening-types'
+import { DoorHandleStyle, DoorType, WindowType } from '../schema/nodes/opening-types'
 import { RoofType } from '../schema/nodes/roof-types'
 import { StairRailingMode, StairRailingStyle } from '../schema/nodes/stair-types'
 import { measurement, roofPitch } from './measurement'
@@ -93,6 +93,9 @@ export const authorSceneOpening = z.object({
     .describe(
       'Exact #rrggbb for the frame (default: color, or the opening’s own finish when color is absent).',
     ),
+  handleStyle: DoorHandleStyle.optional().describe(
+    'Door handle: lever (default), lever-curved, knob, bar, or plate.',
+  ),
   hinge: z
     .enum(['start', 'end'])
     .optional()

@@ -3,9 +3,14 @@ import { z } from 'zod'
 import { BaseNode, nodeType, objectId } from '../base'
 import { GeometryScriptSource } from '../geometry-source'
 import { MaterialSchema } from '../material'
-import { DEFAULT_DOOR_CONTENT_PADDING, DoorType, defaultDoorSegments } from './opening-types'
+import {
+  DEFAULT_DOOR_CONTENT_PADDING,
+  DoorHandleStyle,
+  DoorType,
+  defaultDoorSegments,
+} from './opening-types'
 
-export { DoorType } from './opening-types'
+export { DoorHandleStyle, DoorType } from './opening-types'
 
 export const DoorSegment = z.object({
   type: z.enum(['panel', 'glass', 'empty']),
@@ -159,6 +164,9 @@ export const DoorNode = BaseNode.extend({
 
   // Handle
   handle: z.boolean().default(true),
+  handleStyle: DoorHandleStyle.optional().describe(
+    'Handle style; absent means a straight lever on a rose.',
+  ),
   handleHeight: z.number().default(1.05),
   handleSide: z.enum(['left', 'right']).default('right'),
 
@@ -184,6 +192,7 @@ export const DoorNode = BaseNode.extend({
   - frameThickness: width of the frame members (new doors use 0.020 m; absent in saved doors keeps 0.05 m)
   - casingFaceA/casingFaceB: casing (head and legs) on the host wall's face a / b, around the cutout (absent means off; new openings enable both)
   - casingWidth: face width of the casing boards (2 in by default)
+  - handleStyle: lever (default), lever-curved, knob, bar, or plate; absent means lever
   - doorCloser/panicBar: commercial and emergency hardware options
   - panicBarStyle: crossbar tube (default) or flat touchbar push rail
   - panicBarRods: optional top and bottom latch rods (default off)
@@ -191,3 +200,8 @@ export const DoorNode = BaseNode.extend({
 `)
 
 export type DoorNode = z.infer<typeof DoorNode>
+
+/** Resolve saved doors without adding a field to their data. */
+export function doorHandleStyle(door: Pick<DoorNode, 'handleStyle'>): DoorHandleStyle {
+  return door.handleStyle ?? 'lever'
+}

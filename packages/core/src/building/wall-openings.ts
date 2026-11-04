@@ -194,6 +194,7 @@ export type WallOpeningInput = {
   height?: number
   sillHeight?: number
   hingesSide?: 'left' | 'right'
+  handleStyle?: DoorNode['handleStyle']
   /** Defaults to the side opposite the hinges. */
   handleSide?: 'left' | 'right'
   swingDirection?: 'inward' | 'outward'
@@ -414,6 +415,7 @@ export function planWallOpening(nodes: Nodes, input: WallOpeningInput) {
           frameThickness: NEW_DOOR_FRAME_THICKNESS,
           ...doorFacing(wall),
           ...doorHardwareSides(input),
+          handleStyle: input.handleStyle,
           swingDirection: input.swingDirection ?? 'inward',
           ...(input.style ? doorStyleLook(input.style as DoorStyle) : {}),
           ...(input.doorType ? { doorType: input.doorType } : {}),

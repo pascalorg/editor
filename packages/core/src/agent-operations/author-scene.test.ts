@@ -930,6 +930,7 @@ describe('author_scene', () => {
                       type: 'french',
                       style: 'modern',
                       hinge: 'end',
+                      handleStyle: 'plate',
                     },
                     { kind: 'door', along: 3, width: 0.9, height: 2.1, leaves: 2 },
                   ],
@@ -970,6 +971,7 @@ describe('author_scene', () => {
     expect(french.leafCount).toBe(2)
     expect(french.hingesSide).toBe('right')
     expect(french.handleSide).toBe('left')
+    expect(french.handleStyle).toBe('plate')
     // The style's leaf over the type's: a modern French door is one flush slab.
     expect(french.segments).toHaveLength(1)
     expect(byAuthorId(outcome, 'south/1').leafCount).toBe(2)

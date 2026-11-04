@@ -1139,6 +1139,7 @@ export function authorScene(
             ...(o.leaves ? { leafCount: o.leaves } : {}),
             hingesSide,
             handleSide,
+            handleStyle: o.handleStyle,
             ...(o.swing ? { swingDirection: o.swing === 'back' ? 'outward' : 'inward' } : {}),
           })
           report.doors++
