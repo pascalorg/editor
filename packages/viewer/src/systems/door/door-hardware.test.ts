@@ -148,12 +148,12 @@ for (const openingShape of ['rectangle', 'rounded', 'arch'] as const) {
         box.union(part.geometry.boundingBox!.clone().applyMatrix4(part.matrixWorld))
       }
     })
-    expectVector(box.min, new THREE.Vector3(-0.397, -1.047, -0.03))
-    expectVector(box.max, new THREE.Vector3(0.397, 0.997, 0.03))
+    expectVector(box.min, new THREE.Vector3(-0.397, -1.047, -0.02))
+    expectVector(box.max, new THREE.Vector3(0.397, 0.997, 0.02))
   })
 }
 
-test('roses seat on the raised segment at the handle height, on both faces', () => {
+test('roses seat on the carved segment at the handle height, on both faces', () => {
   const segment = DoorNode.parse({}).segments[0]!
   const node = DoorNode.parse({
     handleHeight: 0.5,
@@ -177,7 +177,7 @@ test('roses seat on the raised segment at the handle height, on both faces', () 
       new THREE.Vector3(0, 0, -face),
     ).intersectObjects(panels)[0]!
     expect(position.z).toBeCloseTo(surface.point.z, 6)
-    expect(Math.abs(position.z)).toBeGreaterThan(0.02)
+    expect(Math.abs(position.z)).toBeLessThan(0.02)
     expect(position.y).toBeCloseTo(node.handleHeight - node.height / 2)
     expect(position.x).toBeCloseTo((node.width - 2 * node.frameThickness) / 2 - 0.06)
   }

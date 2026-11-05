@@ -1,6 +1,38 @@
 import { BufferGeometry, Float32BufferAttribute, ShapeUtils, Vector2, Vector3 } from 'three'
 
-/** Closed field with a flat centre and bevels on both faces, including a true recessed profile. */
+export function panelProfile(
+  leafDepth: number,
+  panelDepth: number,
+  panelInset: number,
+  width: number,
+  height: number,
+) {
+  const fieldDepth = Math.min(
+    panelDepth > 0 ? Math.max(0.006, Math.min(0.012, panelDepth)) : Math.min(-panelDepth, 0.012),
+    Math.max(0, (leafDepth - 0.002) / 2),
+  )
+  // Narrow custom openings must leave room for a centre instead of crossing their offset rings.
+  const stickingWidth = Math.min(
+    Math.max(0.012, Math.min(0.02, panelInset / 2)),
+    width / 4,
+    height / 4,
+  )
+  const profile = [
+    { inset: 0, depth: 0 },
+    { inset: stickingWidth / 2, depth: -fieldDepth * 0.35 },
+    { inset: stickingWidth, depth: -fieldDepth },
+  ]
+  if (panelDepth > 0) {
+    const plateauDepth = Math.min(0.002, fieldDepth)
+    profile.push({
+      inset: stickingWidth + Math.min(fieldDepth - plateauDepth, stickingWidth * 0.9),
+      depth: -plateauDepth,
+    })
+  }
+  return profile
+}
+
+/** One closed panel: inward sticking, a recessed field and an optional raised centre, on both faces. */
 export function buildPanelField(
   contour: Vector2[],
   leafDepth: number,
@@ -16,16 +48,16 @@ export function buildPanelField(
     return Math.abs(point.clone().sub(previous).cross(next.clone().sub(point))) > 1e-9
   })
   if (ShapeUtils.isClockWise(outer)) outer.reverse()
-  const depth = Math.max(-leafDepth / 2 + 0.001, panelDepth)
   const xs = outer.map((p) => p.x)
   const ys = outer.map((p) => p.y)
-  const bevel = Math.min(
-    Math.abs(depth),
-    panelInset / 2,
-    (Math.max(...xs) - Math.min(...xs)) / 4,
-    (Math.max(...ys) - Math.min(...ys)) / 4,
+  const profile = panelProfile(
+    leafDepth,
+    panelDepth,
+    panelInset,
+    Math.max(...xs) - Math.min(...xs),
+    Math.max(...ys) - Math.min(...ys),
   )
-  const inner = outer.map((point, i) => {
+  const offsets = outer.map((point, i) => {
     const incoming = point
       .clone()
       .sub(outer[(i + outer.length - 1) % outer.length]!)
@@ -33,9 +65,13 @@ export function buildPanelField(
     const outgoing = outer[(i + 1) % outer.length]!.clone().sub(point).normalize()
     const n1 = new Vector2(-incoming.y, incoming.x)
     const n2 = new Vector2(-outgoing.y, outgoing.x)
-    const scale = bevel / (1 + n1.dot(n2))
-    return point.clone().add(n1.add(n2).multiplyScalar(scale))
+    const scale = 1 / (1 + n1.dot(n2))
+    return n1.add(n2).multiplyScalar(scale)
   })
+  const rings = profile.map(({ inset, depth }) => ({
+    contour: outer.map((point, i) => point.clone().addScaledVector(offsets[i]!, inset)),
+    depth,
+  }))
   const positions: number[] = []
   const uvs: number[] = []
   const triangle = (
@@ -62,27 +98,32 @@ export function buildPanelField(
   }
   const point3 = (p: Vector2, z: number) => new Vector3(p.x, p.y, z)
   for (const face of [-1, 1]) {
+    const { contour: inner, depth } = rings[rings.length - 1]!
     const z = face * (leafDepth / 2 + depth)
     for (const [a, b, c] of ShapeUtils.triangulateShape(inner, [])) {
       const points = [point3(inner[a!]!, z), point3(inner[b!]!, z), point3(inner[c!]!, z)]
       if (face < 0) points.reverse()
       triangle(points[0]!, points[1]!, points[2]!)
     }
-    for (let i = 0; i < outer.length; i++) {
-      const j = (i + 1) % outer.length
-      const a = point3(outer[i]!, (face * leafDepth) / 2)
-      const b = point3(outer[j]!, (face * leafDepth) / 2)
-      const c = point3(inner[j]!, z)
-      const d = point3(inner[i]!, z)
-      const u = b.clone().sub(a).normalize()
-      const normal = b.clone().sub(a).cross(d.clone().sub(a)).normalize()
-      const v = normal.clone().cross(u)
-      if (face > 0) {
-        triangle(a, b, c, u, v)
-        triangle(a, c, d, u, v)
-      } else {
-        triangle(a, c, b, u, v)
-        triangle(a, d, c, u, v)
+    for (let ring = 1; ring < rings.length; ring++) {
+      const outside = rings[ring - 1]!
+      const inside = rings[ring]!
+      for (let i = 0; i < outer.length; i++) {
+        const j = (i + 1) % outer.length
+        const a = point3(outside.contour[i]!, face * (leafDepth / 2 + outside.depth))
+        const b = point3(outside.contour[j]!, face * (leafDepth / 2 + outside.depth))
+        const c = point3(inside.contour[j]!, face * (leafDepth / 2 + inside.depth))
+        const d = point3(inside.contour[i]!, face * (leafDepth / 2 + inside.depth))
+        const u = b.clone().sub(a).normalize()
+        const normal = b.clone().sub(a).cross(d.clone().sub(a)).normalize()
+        const v = normal.clone().cross(u)
+        if (face > 0) {
+          triangle(a, b, c, u, v)
+          triangle(a, c, d, u, v)
+        } else {
+          triangle(a, c, b, u, v)
+          triangle(a, d, c, u, v)
+        }
       }
     }
   }

@@ -64,6 +64,53 @@ describe('door styles', () => {
     test(`a ${style} door's leaf covers its opening`, () => {
       expect(leafCoverage(style)).toEqual([])
     })
+
+  for (const style of DOOR_STYLES)
+    test(`${style}: panel segments stay inside both leaf faces with recessed fields`, () => {
+      const look = doorStyleLook(style)
+      // Preserve every cell's dimensions while excluding the proud beads of glazed segments.
+      const node = DoorNode.parse({
+        ...look,
+        segments: look.segments.map((segment) =>
+          segment.type === 'glass' ? { ...segment, type: 'empty' } : segment,
+        ),
+      })
+      const mesh = buildDoorPreviewMesh(node)
+      mesh.updateMatrixWorld(true)
+      const leafDepth = 0.04
+      let fields = 0
+      mesh.traverse((part) => {
+        if (!(part instanceof THREE.Mesh) || part.userData.slotId !== 'panel') return
+        const leaf = part.parent!
+        const positions = part.geometry.getAttribute('position')
+        for (let i = 0; i < positions.count; i++) {
+          const point = leaf.worldToLocal(
+            part.localToWorld(new THREE.Vector3().fromBufferAttribute(positions, i)),
+          )
+          // Swing leaves pivot at one face; measure z from the leaf's mid-plane.
+          point.z += leaf.position.z
+          expect(Math.abs(point.z)).toBeLessThanOrEqual(leafDepth / 2 + 1e-6)
+        }
+        if (part.geometry.type !== 'BufferGeometry') return
+        fields++
+        const normals = part.geometry.getAttribute('normal')
+        for (const face of [-1, 1]) {
+          const fieldVertices = Array.from({ length: positions.count }, (_, i) => i).filter(
+            (i) => face * normals.getZ(i) > 0.999,
+          )
+          expect(fieldVertices.length).toBeGreaterThan(0)
+          for (const i of fieldVertices)
+            expect(face * positions.getZ(i)).toBeLessThan(leafDepth / 2 - 1e-6)
+        }
+      })
+      const expectedFields = node.segments.reduce(
+        (sum, segment) =>
+          sum +
+          (segment.type === 'panel' && segment.panelDepth !== 0 ? segment.columnRatios.length : 0),
+        0,
+      )
+      expect(fields).toBe(expectedFields)
+    })
 })
 
 /**
@@ -159,13 +206,22 @@ test('the exact saved default Panel leaf heals without mutating the node; a cust
   expect(panels({ ...legacy, contentPadding: [0.04000001, 0.04] })).not.toEqual(panels(legacy))
 })
 
-for (const panelDepth of [0.01, -0.01]) {
-  test(`${panelDepth}: the field centre and 45 degree bevel sit on both sides of the leaf`, () => {
+for (const [panelDepth, fieldDepth, centreDepth] of [
+  [0.001, 0.006, 0.002],
+  [0.01, 0.01, 0.002],
+  [0.035, 0.012, 0.002],
+  [-0.005, 0.005, 0.005],
+  [-0.01, 0.01, 0.01],
+  [-0.02, 0.012, 0.012],
+] as const) {
+  test(`${panelDepth}: sticking, field and centre are carved into both leaf faces`, () => {
     const node = DoorNode.parse({ segments: [{ type: 'panel', heightRatio: 1, panelDepth }] })
     const mesh = buildDoorPreviewMesh(node)
     mesh.updateMatrixWorld(true)
     const fields: THREE.Mesh[] = []
+    const panels: THREE.Mesh[] = []
     mesh.traverse((part) => {
+      if (part instanceof THREE.Mesh && part.userData.slotId === 'panel') panels.push(part)
       if (
         part instanceof THREE.Mesh &&
         part.userData.slotId === 'panel' &&
@@ -174,15 +230,25 @@ for (const panelDepth of [0.01, -0.01]) {
         fields.push(part)
     })
     expect(fields).toHaveLength(1)
-    for (const face of [-1, 1]) {
-      const ray = new THREE.Raycaster(
-        new THREE.Vector3(0, -0.025, face),
-        new THREE.Vector3(0, 0, -face),
-      )
-      const hit = ray.intersectObjects(fields)[0]!
-      expect(hit.point.z).toBeCloseTo(face * (0.02 + panelDepth), 6)
-    }
     const geometry = fields[0]!.geometry
+    geometry.computeBoundingBox()
+    const left = geometry.boundingBox!.min.x
+    for (const face of [-1, 1]) {
+      for (const [x, depth] of [
+        [left + 0.005, fieldDepth * 0.175],
+        [left + 0.015, fieldDepth * 0.675],
+        [left + 0.02, fieldDepth],
+        [0, centreDepth],
+      ]) {
+        const ray = new THREE.Raycaster(
+          new THREE.Vector3(x, -0.025, face),
+          new THREE.Vector3(0, 0, -face),
+        )
+        // Include the stile/rail meshes so a backing slab cannot hide a correctly shaped field.
+        const hit = ray.intersectObjects(panels)[0]!
+        expect(hit.point.z).toBeCloseTo(face * (0.02 - depth!), 6)
+      }
+    }
     const normals = geometry.getAttribute('normal')
     const position = geometry.getAttribute('position')
     const uv = geometry.getAttribute('uv')
@@ -193,11 +259,11 @@ for (const panelDepth of [0.01, -0.01]) {
       const uvEdge = Math.hypot(uv.getX(i) - uv.getX(i + 1), uv.getY(i) - uv.getY(i + 1))
       expect(uvEdge).toBeCloseTo(edge, 6)
     }
-    expect(
-      Array.from({ length: normals.count }, (_, i) => Math.abs(normals.getZ(i))).some(
-        (z) => Math.abs(z - Math.SQRT1_2) < 1e-5,
-      ),
-    ).toBe(true)
+    for (let i = 0; i < position.count; i++) {
+      expect(Math.abs(position.getZ(i))).toBeLessThanOrEqual(0.02 + 1e-6)
+      if (Math.abs(normals.getZ(i)) > 0)
+        expect(2 * Math.abs(position.getZ(i))).toBeGreaterThanOrEqual(0.002 - 1e-6)
+    }
     for (const attribute of Object.values(geometry.attributes))
       expect([...attribute.array].every(Number.isFinite)).toBe(true)
   })

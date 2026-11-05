@@ -55,7 +55,7 @@ import { settleScriptedOpening } from '../../lib/scripted-opening'
 import useViewer from '../../store/use-viewer'
 import { buildOpeningCasingMeshes } from '../wall/opening-casing-geometry'
 import { getOpeningCutoutProxyDepth } from '../wall/opening-cutout-geometry'
-import { buildPanelField } from './leaf-profile'
+import { buildPanelField, panelProfile } from './leaf-profile'
 
 // Invisible material for root mesh — used as selection hitbox only
 const hitboxMaterial = new THREE.MeshBasicMaterial({ visible: false })
@@ -1092,6 +1092,7 @@ function addLeafSegmentContent({
         cx += colWidths[c]!
         const dividerLeft = cx
         const dividerRight = cx + seg.dividerThickness
+        const dividerDepth = seg.type === 'panel' ? leafDepth : leafDepth + 0.001
         const dividerShape =
           hasShapedTop && addLeafShape
             ? createTopClippedRectShape(
@@ -1104,13 +1105,13 @@ function addLeafSegmentContent({
             : null
 
         if (dividerShape && addLeafShape) {
-          addLeafShape(baseMaterial, dividerShape, leafDepth + 0.001)
+          addLeafShape(baseMaterial, dividerShape, dividerDepth)
         } else {
           addLeafBox(
             baseMaterial,
             seg.dividerThickness,
             segH,
-            leafDepth + 0.001,
+            dividerDepth,
             cx + seg.dividerThickness / 2,
             segCenterY,
             0,
@@ -1504,10 +1505,24 @@ function addDoorLeaf(
             fieldW / 2 - Math.abs(handleX - columnLeft - columnW / 2),
             fieldH / 2 - Math.abs(handleY - (segmentTop + segmentBottom) / 2),
           )
-          if (edgeDistance > 0 && segment.panelDepth !== 0) {
-            const depth = Math.max(-leafDepth / 2 + 0.001, segment.panelDepth)
-            const bevel = Math.min(Math.abs(depth), segment.panelInset / 2, fieldW / 4, fieldH / 4)
-            panelDepth = depth * (bevel > 0 ? Math.min(1, edgeDistance / bevel) : 1)
+          if (edgeDistance > 0 && fieldW > 0.01 && fieldH > 0.01 && segment.panelDepth !== 0) {
+            const profile = panelProfile(
+              leafDepth,
+              segment.panelDepth,
+              segment.panelInset,
+              fieldW,
+              fieldH,
+            )
+            panelDepth = profile[profile.length - 1]!.depth
+            for (let i = 1; i < profile.length; i++) {
+              const outside = profile[i - 1]!
+              const inside = profile[i]!
+              if (edgeDistance <= inside.inset) {
+                const t = (edgeDistance - outside.inset) / (inside.inset - outside.inset)
+                panelDepth = outside.depth + t * (inside.depth - outside.depth)
+                break
+              }
+            }
             break
           }
           columnLeft += columnW + segment.dividerThickness
