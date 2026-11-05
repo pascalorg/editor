@@ -17455,6 +17455,16 @@ msgstr "类型：单悬"
 msgid "editor.toolHint.typeSliding.nwmr3f"
 msgstr "类型：推拉"
 
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 72d0a3b22316c870
+# Review: required
+# English: "Type: Tilt and Turn"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.toolHint.typeTiltAndTurn.5rrbaw"
+msgstr "类型：内开内倒"
+
 # Source-Hash: bff0c1694ee0a37e
 # Review: required
 # AI-Provider: claude-code
@@ -23381,16 +23391,6 @@ msgstr "面板式"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# Source-Hash: 32c9f50bfbcd384f
-# Review: required
-# English: "Handle side"
-#: packages/nodes/src/door/panel.tsx
-#, fuzzy
-msgid "node.door.panel.handleSide"
-msgstr "把手侧"
-
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
 # Source-Hash: 1a79a485d91f3f28
 # Review: required
 # English: "Style"
@@ -23488,6 +23488,16 @@ msgstr "锁杆"
 #, fuzzy
 msgid "node.door.panel.left"
 msgstr "左"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: aec2556541126ec1
+# Review: required
+# English: "Left sidelight"
+#: packages/nodes/src/door/panel.tsx
+#, fuzzy
+msgid "node.door.panel.leftSidelight"
+msgstr "左侧边窗"
 
 # Source-Hash: bd02c614454fbd2b
 # Review: required
@@ -23649,6 +23659,16 @@ msgstr "洞口圆角半径"
 msgid "node.door.panel.right"
 msgstr "右"
 
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 5cf8d42f1b3af6e8
+# Review: required
+# English: "Right sidelight"
+#: packages/nodes/src/door/panel.tsx
+#, fuzzy
+msgid "node.door.panel.rightSidelight"
+msgstr "右侧边窗"
+
 # Source-Hash: fc826da6c99303e6
 # Review: required
 # AI-Provider: claude-code
@@ -23688,6 +23708,36 @@ msgstr "尺寸受墙体限制，包括洞口框的间隙。"
 #, fuzzy
 msgid "node.door.panel.slide"
 msgstr "推拉"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 5aebb26f969d5fa4
+# Review: required
+# English: "Bypass"
+#: packages/nodes/src/door/panel.tsx
+#, fuzzy
+msgid "node.door.panel.slidingBypass"
+msgstr "重叠推拉"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 54800340a0eeab23
+# Review: required
+# English: "Layout"
+#: packages/nodes/src/door/panel.tsx
+#, fuzzy
+msgid "node.door.panel.slidingLayout"
+msgstr "布局"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 78dbe13192c0894b
+# Review: required
+# English: "Patio"
+#: packages/nodes/src/door/panel.tsx
+#, fuzzy
+msgid "node.door.panel.slidingPatio"
+msgstr "露台推拉门"
 
 # Source-Hash: 1a79a485d91f3f28
 # Review: required
@@ -23748,6 +23798,16 @@ msgstr "顶部形状"
 #, fuzzy
 msgid "node.door.panel.touchbar"
 msgstr "推杠"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 9628d0cc155e29a3
+# Review: required
+# English: "Transom"
+#: packages/nodes/src/door/panel.tsx
+#, fuzzy
+msgid "node.door.panel.transom"
+msgstr "亮子"
 
 # Source-Hash: c44f7ab8bbd24858
 # Review: required
@@ -35451,6 +35511,16 @@ msgstr "五金件"
 msgid "node.window.panel.height"
 msgstr "高度"
 
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: d9dc95af942941c9
+# Review: required
+# English: "Hinges side"
+#: packages/nodes/src/window/panel.tsx
+#, fuzzy
+msgid "node.window.panel.hingesSide"
+msgstr "铰链侧"
+
 # Source-Hash: 42824e50de26bc14
 # Review: required
 # AI-Provider: claude-code
@@ -35460,6 +35530,26 @@ msgstr "高度"
 #, fuzzy
 msgid "node.window.panel.individual"
 msgstr "单独"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: b31361e9a342ae79
+# Review: required
+# English: "Inside sill"
+#: packages/nodes/src/window/panel.tsx
+#, fuzzy
+msgid "node.window.panel.insideSill"
+msgstr "室内窗台"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 1f4ad5ad3e1be222
+# Review: required
+# English: "Inward"
+#: packages/nodes/src/window/panel.tsx
+#, fuzzy
+msgid "node.window.panel.inward"
+msgstr "向内"
 
 # Source-Hash: f365c6b6dd9ebab9
 # Review: required
@@ -35481,6 +35571,16 @@ msgstr "左"
 msgid "node.window.panel.move"
 msgstr "移动"
 
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 3e52f04f92e08070
+# Review: required
+# English: "Open"
+#: packages/nodes/src/window/panel.tsx
+#, fuzzy
+msgid "node.window.panel.open"
+msgstr "开启程度"
+
 # Source-Hash: e04298381837252f
 # Review: required
 # AI-Provider: claude-code
@@ -35501,6 +35601,16 @@ msgstr "开口"
 msgid "node.window.panel.openingShape"
 msgstr "开洞形状"
 
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 6f6bf7658cf9ed64
+# Review: required
+# English: "Opens"
+#: packages/nodes/src/window/panel.tsx
+#, fuzzy
+msgid "node.window.panel.opens"
+msgstr "开启方向"
+
 # Source-Hash: cf40395b71bedcca
 # Review: required
 # AI-Provider: claude-code
@@ -35510,6 +35620,26 @@ msgstr "开洞形状"
 #, fuzzy
 msgid "node.window.panel.otherSide"
 msgstr "另一侧"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: ccd8f06b8f8d27c9
+# Review: required
+# English: "Outward"
+#: packages/nodes/src/window/panel.tsx
+#, fuzzy
+msgid "node.window.panel.outward"
+msgstr "向外"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 88540def2ce16ac5
+# Review: required
+# English: "Overhang"
+#: packages/nodes/src/window/panel.tsx
+#, fuzzy
+msgid "node.window.panel.overhang"
+msgstr "挑出"
 
 # Source-Hash: 28fe6e9deddde6e8
 # Review: required
@@ -35563,13 +35693,13 @@ msgstr "右"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# Source-Hash: 57c865955f3ce1dc
+# Source-Hash: 7ae285832490b4c1
 # Review: required
-# English: "Room-side board"
+# English: "Roller shutter"
 #: packages/nodes/src/window/panel.tsx
 #, fuzzy
-msgid "node.window.panel.roomSideBoard"
-msgstr "房间侧窗台板"
+msgid "node.window.panel.rollerShutter"
+msgstr "卷帘"
 
 # Source-Hash: fc826da6c99303e6
 # Review: required
@@ -35610,6 +35740,36 @@ msgstr "行"
 #, fuzzy
 msgid "node.window.panel.shutters"
 msgstr "护窗板"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: b469abd5cad15ac3
+# Review: required
+# English: "Board and batten"
+#: packages/nodes/src/window/panel.tsx
+#, fuzzy
+msgid "node.window.panel.shuttersBoardBatten"
+msgstr "板条式"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: a3c72c286896ec04
+# Review: required
+# English: "Sides"
+#: packages/nodes/src/window/panel.tsx
+#, fuzzy
+msgid "node.window.panel.shutterSides"
+msgstr "侧"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 69578b7dd7723fa1
+# Review: required
+# English: "Both"
+#: packages/nodes/src/window/panel.tsx
+#, fuzzy
+msgid "node.window.panel.shutterSidesBoth"
+msgstr "两侧"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
@@ -35700,6 +35860,36 @@ msgstr "厚度"
 #, fuzzy
 msgid "node.window.panel.thisSide"
 msgstr "此侧"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: b47ccf6a86662344
+# Review: required
+# English: "Mode"
+#: packages/nodes/src/window/panel.tsx
+#, fuzzy
+msgid "node.window.panel.tiltTurnMode"
+msgstr "模式"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 1615637fe68e188a
+# Review: required
+# English: "Tilt"
+#: packages/nodes/src/window/panel.tsx
+#, fuzzy
+msgid "node.window.panel.tiltTurnTilt"
+msgstr "内倒"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 57c6c983d38e9187
+# Review: required
+# English: "Turn"
+#: packages/nodes/src/window/panel.tsx
+#, fuzzy
+msgid "node.window.panel.tiltTurnTurn"
+msgstr "内开"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
@@ -36010,6 +36200,16 @@ msgstr "单悬窗"
 #, fuzzy
 msgid "node.window.type.sliding"
 msgstr "推拉门"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: f59a706c9d25325b
+# Review: required
+# English: "Tilt and turn"
+#: packages/nodes/src/shared/opening-labels.ts
+#, fuzzy
+msgid "node.window.type.tiltTurn"
+msgstr "内开内倒"
 
 # Source-Hash: 4a4d97a4101793b7
 # Review: required

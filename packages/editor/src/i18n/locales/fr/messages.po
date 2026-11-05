@@ -17455,6 +17455,16 @@ msgstr "Type : guillotine simple"
 msgid "editor.toolHint.typeSliding.nwmr3f"
 msgstr "Type : coulissante"
 
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 72d0a3b22316c870
+# Review: required
+# English: "Type: Tilt and Turn"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.toolHint.typeTiltAndTurn.5rrbaw"
+msgstr "Type : oscillo-battant"
+
 # Source-Hash: bff0c1694ee0a37e
 # Review: required
 # AI-Provider: claude-code
@@ -23381,16 +23391,6 @@ msgstr "Plaque"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# Source-Hash: 32c9f50bfbcd384f
-# Review: required
-# English: "Handle side"
-#: packages/nodes/src/door/panel.tsx
-#, fuzzy
-msgid "node.door.panel.handleSide"
-msgstr "Côté de la poignée"
-
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
 # Source-Hash: 1a79a485d91f3f28
 # Review: required
 # English: "Style"
@@ -23488,6 +23488,16 @@ msgstr "Tringles de verrouillage"
 #, fuzzy
 msgid "node.door.panel.left"
 msgstr "Gauche"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: aec2556541126ec1
+# Review: required
+# English: "Left sidelight"
+#: packages/nodes/src/door/panel.tsx
+#, fuzzy
+msgid "node.door.panel.leftSidelight"
+msgstr "Imposte latérale gauche"
 
 # Source-Hash: bd02c614454fbd2b
 # Review: required
@@ -23649,6 +23659,16 @@ msgstr "Rayon de l’ébrasement"
 msgid "node.door.panel.right"
 msgstr "Droite"
 
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 5cf8d42f1b3af6e8
+# Review: required
+# English: "Right sidelight"
+#: packages/nodes/src/door/panel.tsx
+#, fuzzy
+msgid "node.door.panel.rightSidelight"
+msgstr "Imposte latérale droite"
+
 # Source-Hash: fc826da6c99303e6
 # Review: required
 # AI-Provider: claude-code
@@ -23688,6 +23708,36 @@ msgstr "La taille est limitée au mur, dégagement du cadre d’ouverture compri
 #, fuzzy
 msgid "node.door.panel.slide"
 msgstr "Coulisser"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 5aebb26f969d5fa4
+# Review: required
+# English: "Bypass"
+#: packages/nodes/src/door/panel.tsx
+#, fuzzy
+msgid "node.door.panel.slidingBypass"
+msgstr "Placard coulissant"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 54800340a0eeab23
+# Review: required
+# English: "Layout"
+#: packages/nodes/src/door/panel.tsx
+#, fuzzy
+msgid "node.door.panel.slidingLayout"
+msgstr "Disposition"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 78dbe13192c0894b
+# Review: required
+# English: "Patio"
+#: packages/nodes/src/door/panel.tsx
+#, fuzzy
+msgid "node.door.panel.slidingPatio"
+msgstr "Baie coulissante"
 
 # Source-Hash: 1a79a485d91f3f28
 # Review: required
@@ -23748,6 +23798,16 @@ msgstr "Forme du haut"
 #, fuzzy
 msgid "node.door.panel.touchbar"
 msgstr "Barre de poussée"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 9628d0cc155e29a3
+# Review: required
+# English: "Transom"
+#: packages/nodes/src/door/panel.tsx
+#, fuzzy
+msgid "node.door.panel.transom"
+msgstr "Imposte"
 
 # Source-Hash: c44f7ab8bbd24858
 # Review: required
@@ -35451,6 +35511,16 @@ msgstr "Quincaillerie"
 msgid "node.window.panel.height"
 msgstr "Hauteur"
 
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: d9dc95af942941c9
+# Review: required
+# English: "Hinges side"
+#: packages/nodes/src/window/panel.tsx
+#, fuzzy
+msgid "node.window.panel.hingesSide"
+msgstr "Côté des charnières"
+
 # Source-Hash: 42824e50de26bc14
 # Review: required
 # AI-Provider: claude-code
@@ -35460,6 +35530,26 @@ msgstr "Hauteur"
 #, fuzzy
 msgid "node.window.panel.individual"
 msgstr "Individuel"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: b31361e9a342ae79
+# Review: required
+# English: "Inside sill"
+#: packages/nodes/src/window/panel.tsx
+#, fuzzy
+msgid "node.window.panel.insideSill"
+msgstr "Tablette intérieure"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 1f4ad5ad3e1be222
+# Review: required
+# English: "Inward"
+#: packages/nodes/src/window/panel.tsx
+#, fuzzy
+msgid "node.window.panel.inward"
+msgstr "Vers l’intérieur"
 
 # Source-Hash: f365c6b6dd9ebab9
 # Review: required
@@ -35481,6 +35571,16 @@ msgstr "Gauche"
 msgid "node.window.panel.move"
 msgstr "Déplacer"
 
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 3e52f04f92e08070
+# Review: required
+# English: "Open"
+#: packages/nodes/src/window/panel.tsx
+#, fuzzy
+msgid "node.window.panel.open"
+msgstr "Ouverture"
+
 # Source-Hash: e04298381837252f
 # Review: required
 # AI-Provider: claude-code
@@ -35501,6 +35601,16 @@ msgstr "Ouverture"
 msgid "node.window.panel.openingShape"
 msgstr "Forme de l’ouverture"
 
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 6f6bf7658cf9ed64
+# Review: required
+# English: "Opens"
+#: packages/nodes/src/window/panel.tsx
+#, fuzzy
+msgid "node.window.panel.opens"
+msgstr "Ouverture vers"
+
 # Source-Hash: cf40395b71bedcca
 # Review: required
 # AI-Provider: claude-code
@@ -35510,6 +35620,26 @@ msgstr "Forme de l’ouverture"
 #, fuzzy
 msgid "node.window.panel.otherSide"
 msgstr "Autre côté"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: ccd8f06b8f8d27c9
+# Review: required
+# English: "Outward"
+#: packages/nodes/src/window/panel.tsx
+#, fuzzy
+msgid "node.window.panel.outward"
+msgstr "Vers l’extérieur"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 88540def2ce16ac5
+# Review: required
+# English: "Overhang"
+#: packages/nodes/src/window/panel.tsx
+#, fuzzy
+msgid "node.window.panel.overhang"
+msgstr "Débord"
 
 # Source-Hash: 28fe6e9deddde6e8
 # Review: required
@@ -35563,13 +35693,13 @@ msgstr "Droite"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# Source-Hash: 57c865955f3ce1dc
+# Source-Hash: 7ae285832490b4c1
 # Review: required
-# English: "Room-side board"
+# English: "Roller shutter"
 #: packages/nodes/src/window/panel.tsx
 #, fuzzy
-msgid "node.window.panel.roomSideBoard"
-msgstr "Tablette côté pièce"
+msgid "node.window.panel.rollerShutter"
+msgstr "Volet roulant"
 
 # Source-Hash: fc826da6c99303e6
 # Review: required
@@ -35610,6 +35740,36 @@ msgstr "Rangées"
 #, fuzzy
 msgid "node.window.panel.shutters"
 msgstr "Volets"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: b469abd5cad15ac3
+# Review: required
+# English: "Board and batten"
+#: packages/nodes/src/window/panel.tsx
+#, fuzzy
+msgid "node.window.panel.shuttersBoardBatten"
+msgstr "Planches et barres"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: a3c72c286896ec04
+# Review: required
+# English: "Sides"
+#: packages/nodes/src/window/panel.tsx
+#, fuzzy
+msgid "node.window.panel.shutterSides"
+msgstr "Côtés"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 69578b7dd7723fa1
+# Review: required
+# English: "Both"
+#: packages/nodes/src/window/panel.tsx
+#, fuzzy
+msgid "node.window.panel.shutterSidesBoth"
+msgstr "Les deux"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
@@ -35700,6 +35860,36 @@ msgstr "Épaisseur"
 #, fuzzy
 msgid "node.window.panel.thisSide"
 msgstr "Ce côté"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: b47ccf6a86662344
+# Review: required
+# English: "Mode"
+#: packages/nodes/src/window/panel.tsx
+#, fuzzy
+msgid "node.window.panel.tiltTurnMode"
+msgstr "Mode"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 1615637fe68e188a
+# Review: required
+# English: "Tilt"
+#: packages/nodes/src/window/panel.tsx
+#, fuzzy
+msgid "node.window.panel.tiltTurnTilt"
+msgstr "Soufflet"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 57c6c983d38e9187
+# Review: required
+# English: "Turn"
+#: packages/nodes/src/window/panel.tsx
+#, fuzzy
+msgid "node.window.panel.tiltTurnTurn"
+msgstr "Battant"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
@@ -36010,6 +36200,16 @@ msgstr "Guillotine simple"
 #, fuzzy
 msgid "node.window.type.sliding"
 msgstr "Coulissante"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: f59a706c9d25325b
+# Review: required
+# English: "Tilt and turn"
+#: packages/nodes/src/shared/opening-labels.ts
+#, fuzzy
+msgid "node.window.type.tiltTurn"
+msgstr "Oscillo-battant"
 
 # Source-Hash: 4a4d97a4101793b7
 # Review: required

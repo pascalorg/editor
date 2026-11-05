@@ -653,6 +653,7 @@ export const definitionMessages = [
   /* i18n */ { id: "editor.toolHint.typePocket.hc65x9", message: "Type: Pocket" },
   /* i18n */ { id: "editor.toolHint.typeSingleHung.p53pyl", message: "Type: Single Hung" },
   /* i18n */ { id: "editor.toolHint.typeSliding.nwmr3f", message: "Type: Sliding" },
+  /* i18n */ { id: "editor.toolHint.typeTiltAndTurn.5rrbaw", message: "Type: Tilt and Turn" },
   /* i18n */ { id: "editor.toolHint.verticalStackClickToPlace.ijcn4q", message: "Vertical stack ↕, click to place" },
   /* i18n */ { id: "editor.toolHint.wasteVent.1hvi3vj", message: "Waste / vent" },
   /* i18n */ { id: "editor.toolHint.windowStyleClickOrPressL.ah7qm9", message: "Window style — click or press L to cycle" },
