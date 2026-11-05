@@ -68,6 +68,8 @@ const LAMP_E_TARGET = 1.1
 const LAMP_MIN_D2 = 0.64
 const DATA_W = 256
 const MAX_LEVELS = 8
+/** Texels per exterior lamp: [pos, range] [rgb, cosInner] [spot dir, cosOuter]. */
+const EXT_STRIDE = 3
 
 export type RoomLamp = {
   position: Vector3
@@ -78,6 +80,8 @@ export type RoomLamp = {
   itemId?: string
   /** Lit right now (the lamp's own switch). */
   on: boolean
+  /** Spotlight cone (exterior lamps keep it; inside, lamps fill their room). */
+  spot?: { direction: Vector3; cosOuter: number; cosInner: number }
 }
 
 export type RoomZone = {
@@ -615,18 +619,23 @@ export class RoomLighting {
 
   // ---- data texture --------------------------------------------------------------------------
   // rooms:   [enclosed, lampStart, lampCount, portalStart] [portalCount, bounce.rgb] [coverY, roof, level, 0]
-  // lamps:   [pos.xyz, range] [rgb·intensity·on, 0]
+  // lamps:   [pos.xyz, range] [rgb·intensity·on, cosInner] (+ exterior: [spot dir.xyz, cosOuter])
   // portals: [center.xyz, halfW] [normal.xyz, halfH] [radiance.rgb, neighbour] [floorY, mainLamp, gain, kind]
   private portalBase = 0
 
   private allocateData() {
     const nRoomLamps = this.rooms.reduce((s, r) => s + r.lamps.length, 0)
     const nLamps = nRoomLamps + this.exteriorLamps.length
-    const texels = this.rooms.length * 3 + nLamps * 2 + this.portals.length * PSTRIDE + 4
+    const texels =
+      this.rooms.length * 3 +
+      nLamps * 2 +
+      this.exteriorLamps.length +
+      this.portals.length * PSTRIDE +
+      4
     const rows = Math.max(1, Math.ceil(texels / DATA_W))
     this.data = new Float32Array(DATA_W * rows * 4)
     const lampBase = this.rooms.length * 3
-    this.portalBase = lampBase + nLamps * 2
+    this.portalBase = lampBase + nLamps * 2 + this.exteriorLamps.length
     let lamp = 0
     this.rooms.forEach((r, i) => {
       this.set(i * 3, r.enclosed ? 1 : 0, lampBase + lamp * 2, r.lamps.length, 0)
@@ -641,12 +650,17 @@ export class RoomLighting {
     })
     // Exterior lamps after the room lamps — evaluated analytically on outside surfaces.
     const extLampStart = lampBase + lamp * 2
-    for (const l of this.exteriorLamps) {
-      this.lampTexel.set(l, lampBase + lamp * 2)
-      this.set(lampBase + lamp * 2, l.position.x, l.position.y, l.position.z, Math.max(6, l.range))
+    this.exteriorLamps.forEach((l, i) => {
+      const texel = extLampStart + i * EXT_STRIDE
+      this.lampTexel.set(l, texel)
+      this.set(texel, l.position.x, l.position.y, l.position.z, Math.max(6, l.range))
       this.writeLamp(l)
-      lamp++
-    }
+      // Omni lamps: a cone that takes everything (cos ≥ −1 > −2).
+      const spot = l.spot
+      if (spot)
+        this.set(texel + 2, spot.direction.x, spot.direction.y, spot.direction.z, spot.cosOuter)
+      else this.set(texel + 2, 0, -1, 0, -2)
+    })
     // Every room's portals contiguous.
     this.portals = this.rooms.flatMap((r) => r.portals)
     let ps = 0
@@ -707,7 +721,8 @@ export class RoomLighting {
 
   private writeLamp(l: RoomLamp) {
     const k = (l.on ? 1 : 0) * l.intensity
-    this.set(this.lampTexel.get(l)! + 1, l.color.r * k, l.color.g * k, l.color.b * k, 0)
+    const cosInner = l.spot ? l.spot.cosInner : -1
+    this.set(this.lampTexel.get(l)! + 1, l.color.r * k, l.color.g * k, l.color.b * k, cosInner)
   }
 
   /** Interior portals emit the neighbour room's average radiance: L = E_avg·ρ/π (lamps + daylight). */
@@ -1116,14 +1131,21 @@ export class RoomLighting {
   exteriorLampsNode = Fn(([P, Nw]: [N, N]) => {
     const out = vec3(0).toVar()
     Loop({ start: int(0), end: this.u.extLampCount, type: 'int', condition: '<' }, ({ i }: N) => {
-      const a = this.texel(this.u.extLampStart.add(i.mul(2)))
-      const c = this.texel(this.u.extLampStart.add(i.mul(2)).add(1))
+      const base = this.u.extLampStart.add(i.mul(EXT_STRIDE))
+      const a = this.texel(base)
+      const c = this.texel(base.add(1))
+      const s = this.texel(base.add(2))
       const L = a.xyz.sub(P)
       const d2 = dot(L, L)
       const d = d2.sqrt()
       const win = clamp(float(1).sub(d.div(a.w).pow(4)), 0, 1).pow(2)
+      // Spotlights keep their cone (soft edge = the penumbra); omni lamps pass everywhere.
+      const cone = smoothstep(s.w, c.w, dot(L.div(d).negate(), s.xyz))
       out.addAssign(
-        c.xyz.mul(win.div(max(d2, LAMP_MIN_D2))).mul(max(dot(Nw, L.div(d)).mul(0.75).add(0.25), 0)),
+        c.xyz
+          .mul(win.div(max(d2, LAMP_MIN_D2)))
+          .mul(max(dot(Nw, L.div(d)).mul(0.75).add(0.25), 0))
+          .mul(cone),
       )
     })
     return this.softClampLamps(out.mul(1.2)).mul(this.lampGain)

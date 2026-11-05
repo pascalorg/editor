@@ -51,6 +51,8 @@ export function useDaylightRooms() {
     s.sinceCheck += delta
     if (s.sinceCheck >= CHECK_INTERVAL) {
       s.sinceCheck = 0
+      // Items can swap their materials (edits, loads): keep the lamps' own emitters installed.
+      syncLampEmitters()
       const live = (sceneRegistry.byType.zone?.size ?? 0) > 0
       const baked = live ? null : findBakedRoot(scene)
       const feedKeys = feedSignature()

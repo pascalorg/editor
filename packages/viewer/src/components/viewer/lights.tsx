@@ -117,9 +117,16 @@ export function Lights() {
   if (wantsFill) fillMounted.current = true
   const filled = fillMounted.current
   const atmosphere = useSceneAtmosphere()
+  // The daylight look lights with one key (sun, or moon at night) and the sky environment only:
+  // no moon slot, hemisphere or ambient light (each light costs every material's shader).
+  const daylight = isDaylightAtmosphere(atmosphere)
   const lightSlots = useMemo(
-    () => Array.from({ length: atmosphere ? 2 : theme.lights.length }, (_, index) => index),
-    [atmosphere, theme.lights.length],
+    () =>
+      Array.from(
+        { length: daylight ? 1 : atmosphere ? 2 : theme.lights.length },
+        (_, index) => index,
+      ),
+    [atmosphere, daylight, theme.lights.length],
   )
 
   const lightRefs = useRef<Array<DirectionalLight | null>>([])
@@ -442,8 +449,8 @@ export function Lights() {
         )
       })}
 
-      {atmosphere || theme.hemi ? <hemisphereLight ref={hemiRef} /> : null}
-      <ambientLight ref={ambientRef} />
+      {!daylight && (atmosphere || theme.hemi) ? <hemisphereLight ref={hemiRef} /> : null}
+      {daylight ? null : <ambientLight ref={ambientRef} />}
       {filled && <UndergroundFill lightRef={fillRef} />}
       <UndergroundAmbiance />
     </>

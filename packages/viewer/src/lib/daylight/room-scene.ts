@@ -6,9 +6,12 @@ import {
   useInteractive,
   useScene,
 } from '@pascal-app/core'
-import { Box3, Color, MathUtils, type Object3D, Vector3 } from 'three'
+import { Box3, Color, type Material, MathUtils, type Mesh, type Object3D, Vector3 } from 'three'
+import { materialEmissive, smoothstep, uniform, vec3 } from 'three/tsl'
+import { MeshStandardNodeMaterial } from 'three/webgpu'
 import { setSurfaceRaycastLayers } from '../layers'
 import type { RoomLamp, RoomOpeningRoot, RoomSceneInput, RoomZone } from './rooms'
+import { daylightUniforms } from './runtime'
 
 /**
  * Builds the room system's input from a scene: the live parametric graph (scene registry +
@@ -26,6 +29,9 @@ export type LampFeedLight = {
   /** The lamp's item: its node id (live) or object (baked). */
   nodeId?: string
   object?: Object3D
+  /** A spotlight's cone (angle in degrees, full cone; softness = penumbra) and its aim. */
+  spot?: { direction?: readonly [number, number, number]; angle?: number; softness?: number }
+  getWorldDirection?: (out: Vector3) => void
 }
 
 type LampFeed = {
@@ -62,10 +68,24 @@ export function feedLamps(): RoomLamp[] {
         intensity: 4 + 3 * Math.log2(1 + Math.max(0, peak)),
         range: MathUtils.clamp(light.distance || 5.5, 2.5, 9),
         on: feed.intensity(light) > 0,
+        spot: light.spot ? lampSpot(light) : undefined,
       })
     }
   }
   return lamps
+}
+
+/** A spot's cone, as the light pools read it (half-angle = angle / 2, penumbra = softness). */
+function lampSpot(light: LampFeedLight): RoomLamp['spot'] {
+  const direction = new Vector3(...(light.spot?.direction ?? [0, -1, 0]))
+  if (light.getWorldDirection) light.getWorldDirection(direction)
+  const half = Math.min(Math.PI / 2, MathUtils.degToRad((light.spot?.angle ?? 60) / 2))
+  const penumbra = MathUtils.clamp(light.spot?.softness ?? 0, 0, 1)
+  return {
+    direction: direction.normalize(),
+    cosOuter: Math.cos(half),
+    cosInner: Math.cos(half * (1 - penumbra)),
+  }
 }
 
 /** Current on/off of a fed lamp (by key). */
@@ -270,44 +290,75 @@ export function bakedRoomScene(root: Object3D, virtualLampsOn: boolean): RoomSce
   }
 }
 
-type EmissiveMaterial = {
+type EmitterMaterial = Material & {
   emissive?: { getHex(): number }
   emissiveIntensity?: number
-  transparent?: boolean
-  userData: Record<string, unknown>
-  needsUpdate: boolean
 }
 
-function emissiveMeshes(root: Object3D): Object3D[] {
-  const out: Object3D[] = []
+function isEmitter(material: EmitterMaterial): boolean {
+  return (
+    !material.transparent &&
+    !!material.emissive &&
+    material.emissive.getHex() !== 0 &&
+    (material.emissiveIntensity ?? 1) > 0
+  )
+}
+
+function emissiveMeshes(root: Object3D): Mesh[] {
+  const out: Mesh[] = []
   root.traverse((object) => {
-    const mesh = object as unknown as {
-      isMesh?: boolean
-      material?: EmissiveMaterial | EmissiveMaterial[]
-    }
+    const mesh = object as Mesh
     if (!mesh.isMesh || !mesh.material) return
-    const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material]
-    if (
-      materials.some(
-        (m) =>
-          !m.transparent &&
-          !!m.emissive &&
-          m.emissive.getHex() !== 0 &&
-          (m.emissiveIntensity ?? 1) > 0,
-      )
-    )
-      out.push(object)
+    const materials = (
+      Array.isArray(mesh.material) ? mesh.material : [mesh.material]
+    ) as EmitterMaterial[]
+    if (materials.some(isEmitter)) out.push(mesh)
   })
   return out
 }
 
 /**
- * Lamp shades and bulbs follow their own lamp: their meshes are tagged so the material hook gives
- * them a normalised display brightness, and `userData.daylightLampOn` carries the lamp's switch
- * per object (lamps of one model share a material). A light can sit on a child item while the
- * glowing mesh belongs to its parent item: search the item, then its nearest item ancestor.
+ * A lamp's private emitter material: the exported hue at a fixed display brightness (× display
+ * white, ÷ exposure) while its lamp is on — always reads as lit and blooms; dark when off, even
+ * by day. Dark emissive parts (cords, trims) stay dark.
+ */
+function lampEmitterMaterial(source: EmitterMaterial, on: { value: number }): Material {
+  const material = new MeshStandardNodeMaterial()
+  for (const key of Object.keys(source)) {
+    if (key === 'type' || key === 'uuid' || key === 'id' || key === 'defines') continue
+    ;(material as unknown as Record<string, unknown>)[key] = (
+      source as unknown as Record<string, unknown>
+    )[key]
+  }
+  material.name = source.name
+  material.userData = { ...source.userData, daylightLampMaterial: true }
+  const emissive: any = materialEmissive
+  const lum = emissive.dot(vec3(0.2126, 0.7152, 0.0722)).max(1e-4)
+  material.emissiveNode = emissive
+    .div(lum)
+    .mul(smoothstep(0.02, 0.08, lum))
+    .mul(on)
+    .mul(daylightUniforms.emitterDisplay)
+    .mul(daylightUniforms.emitterExpInv)
+  return material
+}
+
+type LampEmitter = {
+  original: Material | Material[]
+  installed: Material | Material[]
+  clones: Material[]
+  on: ReturnType<typeof uniform>
+}
+const lampEmitters = new Map<Mesh, LampEmitter>()
+
+/**
+ * Lamp shades and bulbs follow their own lamp (the enhanced viewer's isolated emitters): each
+ * lamp's emissive meshes get private materials whose emission follows that lamp's switch. A light
+ * can sit on a child item while the glowing mesh belongs to its parent item: search the item, then
+ * its nearest item ancestor. Re-installed if the item swaps its materials.
  */
 export function syncLampEmitters(): void {
+  const registered = new Set(sceneRegistry.nodes.values())
   for (const feed of lampFeeds) {
     for (const light of feed.lights()) {
       const root =
@@ -316,21 +367,46 @@ export function syncLampEmitters(): void {
       let meshes = emissiveMeshes(root)
       for (let parent = root.parent; !meshes.length && parent; parent = parent.parent) {
         const extras = parent.userData as { pascalId?: string; kind?: string }
-        const registered = [...sceneRegistry.nodes.values()].includes(parent)
-        if (extras.pascalId || registered) {
+        if (extras.pascalId || registered.has(parent)) {
           if (extras.kind === undefined || extras.kind === 'item') meshes = emissiveMeshes(parent)
           break
         }
       }
       const on = feed.intensity(light) > 0 ? 1 : 0
       for (const mesh of meshes) {
-        mesh.userData.daylightLampOn = on
-        if (mesh.userData.daylightLampEmitter) continue
-        mesh.userData.daylightLampEmitter = true
-        const material = (mesh as unknown as { material: EmissiveMaterial | EmissiveMaterial[] })
-          .material
-        for (const m of Array.isArray(material) ? material : [material]) m.needsUpdate = true
+        let emitter = lampEmitters.get(mesh)
+        if (emitter && mesh.material !== emitter.installed) {
+          for (const clone of emitter.clones) clone.dispose()
+          emitter = undefined
+        }
+        if (!emitter) {
+          const lit = uniform(on)
+          const originals = (
+            Array.isArray(mesh.material) ? mesh.material : [mesh.material]
+          ) as EmitterMaterial[]
+          const clones: Material[] = []
+          const next = originals.map((material) => {
+            if (!isEmitter(material)) return material
+            const clone = lampEmitterMaterial(material, lit)
+            clones.push(clone)
+            return clone
+          })
+          const installed = Array.isArray(mesh.material) ? next : next[0]!
+          emitter = { original: mesh.material, installed, clones, on: lit }
+          lampEmitters.set(mesh, emitter)
+          mesh.material = installed
+        }
+        emitter.on.value = on
       }
     }
   }
+}
+
+/** The lamps' own materials back (the daylight look left). */
+export function restoreLampEmitters(): void {
+  for (const [mesh, emitter] of lampEmitters) {
+    if (mesh.material === emitter.installed) mesh.material = emitter.original
+    for (const clone of emitter.clones) clone.dispose()
+  }
+  lampEmitters.clear()
 }

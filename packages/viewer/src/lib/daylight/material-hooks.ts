@@ -16,7 +16,6 @@ import {
   positionWorld,
   pow,
   smoothstep,
-  userData,
   vec3,
   vec4,
 } from 'three/tsl'
@@ -181,25 +180,12 @@ export function installDaylightMaterialHooks(): void {
   proto.setupLighting = function (builder) {
     if (!hooked(this, builder) || !emitter(this)) return setupLighting.call(this, builder)
     // Build-time only: the emission joins this compile without touching the material.
+    // Glowing surfaces (screens, signs; lamps get their own materials): brighter at night, kept
+    // out of the night exposure lift.
     const u = daylightUniforms
-    if ((builder as any).object?.userData?.daylightLampEmitter === true) {
-      // A lamp's shade/bulb: the exported hue at a fixed display brightness (× display white, ÷
-      // exposure) while its lamp is on — always reads as lit and blooms; dark when off, even by
-      // day. Dark emissive parts (cords, trims) stay dark.
-      const emissive: any = materialEmissive
-      const lum = emissive.dot(vec3(0.2126, 0.7152, 0.0722)).max(1e-4)
-      this.emissiveNode = emissive
-        .div(lum)
-        .mul(smoothstep(0.02, 0.08, lum))
-        .mul(userData('daylightLampOn', 'float') as any)
-        .mul(u.emitterDisplay)
-        .mul(u.emitterExpInv)
-    } else {
-      // Other glowing surfaces (screens, signs): brighter at night, kept out of the night lift.
-      this.emissiveNode = materialEmissive.mul(
-        float(1).add(u.lampLevel.mul(u.emissiveBoost).mul(u.glowComp)),
-      )
-    }
+    this.emissiveNode = materialEmissive.mul(
+      float(1).add(u.lampLevel.mul(u.emissiveBoost).mul(u.glowComp)),
+    )
     try {
       return setupLighting.call(this, builder)
     } finally {

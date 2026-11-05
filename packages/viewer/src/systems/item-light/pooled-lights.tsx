@@ -31,7 +31,7 @@ import {
 } from 'three/webgpu'
 import { useSceneAtmosphere } from '../../components/viewer/scene-atmosphere'
 import { isDaylightAtmosphere } from '../../lib/daylight/look'
-import { lampFeeds } from '../../lib/daylight/room-scene'
+import { type LampFeedLight, lampFeeds } from '../../lib/daylight/room-scene'
 import useViewer from '../../store/use-viewer'
 
 /** A light an item holds, as the pools drive it. */
@@ -343,7 +343,8 @@ function DaylightLampFeed<T extends PooledLight>(props: Props<T>) {
   useLayoutEffect(() => {
     const feed = {
       lights: () => propsRef.current.getLights(),
-      intensity: (light: PooledLight) => propsRef.current.intensity(light as T),
+      // The feed hands back the pool's own lights.
+      intensity: (light: LampFeedLight) => propsRef.current.intensity(light as unknown as T),
     }
     lampFeeds.add(feed)
     return () => {

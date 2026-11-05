@@ -14,6 +14,7 @@ import {
 import { resolveLocation } from '../../lib/daylight/location'
 import type { DaylightAtmosphereSource } from '../../lib/daylight/look'
 import { installDaylightMaterialHooks } from '../../lib/daylight/material-hooks'
+import { restoreLampEmitters } from '../../lib/daylight/room-scene'
 import { daylightRooms } from '../../lib/daylight/rooms'
 import { daylightUniforms, setDaylightRenderer } from '../../lib/daylight/runtime'
 import { createDaylightSky, WEATHER_COVER } from '../../lib/daylight/sky'
@@ -150,6 +151,7 @@ export function DaylightAtmosphere() {
     setDaylightRenderer(renderer, true)
     daylightUniforms.albedoClamp.value = 1
     return () => {
+      restoreLampEmitters()
       setDaylightRenderer(renderer, false)
       daylightUniforms.albedoClamp.value = 0
       daylightUniforms.eon.value = 0
