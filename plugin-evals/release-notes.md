@@ -1,6 +1,10 @@
 # OpenAI submission release notes
 
-Draft release notes for a future Pascal agent skills 0.1.10 **With MCP** submission.
+Draft release notes for a future Pascal agent skills 0.1.11 **With MCP** submission.
+
+This release adds the `architect` router skill, which teaches agents to invoke the hosted Architect generative-design service via `ask_architect`, `get_architect_turn`, and `cancel_architect_turn` on the `pascal-hosted` server. It also adds the `architect:run` OAuth scope to the Cursor managed browser sign-in. The skill documents effort levels (`low`/`medium`/`high` on any plan with credits; `pro` requires Pascal Pro/Max), upgrade and top-up link handling, and explicit boundaries against remote code execution and harness embedding.
+
+Draft release notes for the previous Pascal agent skills 0.1.10 **With MCP** submission.
 
 The plugin teaches ChatGPT and Codex to create, inspect, edit, validate, save, and hand off editable Pascal 3D scenes through a separately connected Pascal MCP server. It also includes a focused furniture-fit workflow that reports measured footprint evidence, unsupported checks, and one bounded next action without authorizing project changes or spending.
 

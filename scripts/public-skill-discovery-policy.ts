@@ -18,6 +18,7 @@ type IntendedSkill = {
 export const intendedSkillDiscovery = new Map<string, IntendedSkill>([
   ['skills/pascal-3d/SKILL.md', { name: 'pascal-3d', internal: false }],
   ['skills/furniture-fit/SKILL.md', { name: 'furniture-fit', internal: false }],
+  ['skills/architect/SKILL.md', { name: 'architect', internal: false }],
 ])
 
 export const maintainerSkillsRoot = '.agents/skills/'
