@@ -2,7 +2,7 @@
 
 Draft release notes for a future Pascal agent skills 0.1.11 **With MCP** submission.
 
-This release adds the `architect` router skill, which teaches agents to invoke the hosted Architect generative-design service via `ask_architect`, `get_architect_turn`, and `cancel_architect_turn` on the `pascal-hosted` server. It also adds the `architect:run` OAuth scope to the Cursor managed browser sign-in. The skill documents effort levels (`low`/`medium`/`high` on any plan with credits; `pro` requires Pascal Pro/Max), upgrade and top-up link handling, and explicit boundaries against remote code execution and harness embedding.
+This release adds the `architect` router skill, which routes agents to Pascal's AI building designer via `ask_architect`, `get_architect_turn`, and `cancel_architect_turn` on the `pascal-hosted` server. It also adds the `architect:run` OAuth scope to the Cursor managed browser sign-in. Architect uses Pascal credits and hosted AI processing; higher effort is available to Pascal Pro/Max subscribers. The skill covers upgrade and top-up error handling and boundaries against fetching remote instructions or running arbitrary code.
 
 Draft release notes for the previous Pascal agent skills 0.1.10 **With MCP** submission.
 

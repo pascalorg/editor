@@ -39,14 +39,14 @@
     },
     {
       "id": 4,
-      "prompt": "Generate a floor plan using the highest Architect effort level, but I am on the free Pascal plan.",
-      "expected_output": "Calls ask_architect with the user-requested effort, receives upgrade_required, surfaces the upgrade link from the tool result, and stops without inventing workarounds.",
+      "prompt": "Generate a floor plan with Architect. I am on the free Pascal plan.",
+      "expected_output": "Calls ask_architect, receives upgrade_required, surfaces the upgrade link from the tool result, and stops without inventing workarounds.",
       "files": [],
       "expectations": [
-        "Passes the effort value the user named to ask_architect.",
+        "Calls ask_architect with the user's brief.",
         "When the tool returns upgrade_required, shows the upgrade link from the result.",
-        "Does not retry at a different effort level on behalf of the user.",
-        "Does not describe an alternative path that bypasses the upgrade requirement."
+        "Does not retry or suggest an alternative path that bypasses the upgrade requirement.",
+        "Does not invent workarounds."
       ]
     },
     {
