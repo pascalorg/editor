@@ -1,11 +1,17 @@
 import { refuse } from '../agent-tools/refusal'
-import { clampDoorToWall, clampWindowToWall, findWallChildOverlap } from '../building/wall-openings'
+import {
+  clampDoorToWall,
+  clampWindowToWall,
+  findWallChildOverlap,
+  resolveWallOpeningCeiling,
+} from '../building/wall-openings'
 import { getDoorOpeningSize } from '../lib/door-opening'
 import { openingHostFacing } from '../lib/opening-casing'
 import {
   type AnyNode,
   type AnyNodeId,
   type DoorNode,
+  getCurtainWallConfig,
   getScaledDimensions,
   type ItemNode,
   type WallNode,
@@ -225,6 +231,17 @@ function planOpeningMove(
       `Wall ${wall.id} is ${length.toFixed(2)} m long, too short for this ${cutout.width.toFixed(2)} m ${node.type}.`,
       { id: node.id, wallId: wall.id, wallLength: length, width: cutout.width },
     )
+  if (node.type === 'door') {
+    const wallHeight =
+      resolveWallOpeningCeiling(wall, nodes as Record<AnyNodeId, AnyNode>) -
+      (wall.wallType === 'curtain' ? getCurtainWallConfig(wall).perimeterWidth : 0)
+    if (cutout.height > wallHeight + 1e-6)
+      refuse(
+        'wall_too_low',
+        `Wall ${wall.id} is ${wallHeight.toFixed(2)} m high, too low for this ${cutout.height.toFixed(2)} m door.`,
+        { id: node.id, wallId: wall.id, wallHeight, height: cutout.height },
+      )
+  }
   const rawX = desiredLocalX(wall, node, target)
   const rawY =
     node.type === 'door'

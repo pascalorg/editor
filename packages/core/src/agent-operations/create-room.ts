@@ -3,6 +3,7 @@ import { doorFacing, planWallOpening, type WallOpeningInput } from '../building/
 import { createZone, walledRoomAt } from '../commands/structure/create-zone'
 import { structureChangeBatch } from '../commands/structure/shared'
 import { levelFootprintLoops } from '../lib/building-footprint'
+import { doorPositionForFacing } from '../lib/door-opening'
 import { foundationReadingOfLevel } from '../lib/foundation-construction'
 import { foundationWallRule, levelHoldsFoundationWalls } from '../lib/foundation-wall'
 import { isAllocatedRoomName } from '../lib/room-name'
@@ -340,7 +341,9 @@ export const createRoom: AgentOperation<CreateRoomInput> = (nodes, input, contex
         const wall = derived[door?.parentId ?? '']
         if (door?.type !== 'door' || wall?.type !== 'wall') return []
         const facing = doorFacing(wall)
-        return facing.side && facing.side !== door.side ? [{ id, data: facing }] : []
+        return facing.side && facing.side !== door.side
+          ? [{ id, data: { ...facing, position: doorPositionForFacing(door, facing.rotation) } }]
+          : []
       })
       return {
         result: { ...result, ...derivedSurfaces(derived, level.id, plan.zoneId) },

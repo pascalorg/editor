@@ -66,7 +66,7 @@ export const doorDetailFields = {
   transomHeight: measurement('length', 'm', {
     min: 0,
     description:
-      'Fixed light above a swing door and its sidelights, metres; absent or 0 means none.',
+      'Fixed light above a swing door and its sidelights, metres; absent or 0 means none. The full cutout must fit under the wall top (wall_too_low).',
   }).optional(),
   leafCount: z
     .union([z.literal(1), z.literal(2), z.literal(3), z.literal(4), z.literal(6), z.literal(8)])

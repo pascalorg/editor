@@ -1,3 +1,5 @@
+import { getDoorOpeningSize } from '../../lib/door-opening'
+import { openingHostFacing } from '../../lib/opening-casing'
 import {
   type AnyNode,
   type AssetInput,
@@ -242,6 +244,30 @@ const roomOn = (levelId: string) => (result: Record<string, unknown>, nodes: Nod
 const room = (input: Record<string, unknown>) => ({ name: 'Bedroom', polygon: CLEAR, ...input })
 
 export const CREATE_ROOM_CASES: AgentToolCase[] = [
+  ...[CLEAR, [...CLEAR].reverse()].map((polygon): AgentToolCase => ({
+    name: `an asymmetric entry cutout keeps its planned centre after reconcile (${polygon === CLEAR ? 'forward' : 'reverse'})`,
+    tool: 'create_room',
+    scene: roomsScene,
+    input: { levelId: 'level_g', name: 'Entry', polygon, doors: [{ wallIndex: 0, t: 0.35, sidelightLeft: 0.2, sidelightRight: 0.6 }] },
+    expect: {
+      result: { ok: true },
+      check: (result, nodes) => {
+        const door = nodes[(result.doorIds as string[])[0]!]
+        const wall = nodes[door?.parentId ?? '']
+        if (door?.type !== 'door' || wall?.type !== 'wall') return ['entry door or wall missing']
+        const centre = door.position[0] - getDoorOpeningSize(door).leafOffsetX * openingHostFacing(door)
+        const length = Math.hypot(wall.end[0] - wall.start[0], wall.end[1] - wall.start[1])
+        return problems([Math.abs(centre - length * 0.35) < 1e-6, `cutout centre ${centre} moved from planned t`])
+      },
+    },
+  })),
+  {
+    name: 'an entry transom above a room wall is skipped with wall_too_low',
+    tool: 'create_room',
+    scene: roomsScene,
+    input: room({ levelId: 'level_g', wallHeight: 2.5, doors: [{ wallIndex: 0, transomHeight: 0.8 }] }),
+    expect: { result: { ok: true }, contains: { doorIds: [], skippedOpenings: [{ kind: 'door', index: 0, code: 'wall_too_low' }] } },
+  },
   // A door declared with a new room is planned before the host knows the new walls' outside;
   // once the room is derived, a door on an outside wall faces out, as add_door's does.
   {

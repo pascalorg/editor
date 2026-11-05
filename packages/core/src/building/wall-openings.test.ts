@@ -4,6 +4,8 @@ import { AGENT_OPERATIONS } from '../agent-operations'
 import { createRoomTool } from '../agent-tools/create-room'
 import { type AgentRefusal, isAgentRefusal } from '../agent-tools/refusal'
 import { addDoorTool, addWindowTool } from '../agent-tools/wall-openings'
+import { getDoorOpeningSize } from '../lib/door-opening'
+import { openingHostFacing } from '../lib/opening-casing'
 import { getOpeningWallCut } from '../lib/opening-floor-datum'
 import {
   type AnyNode,
@@ -15,7 +17,7 @@ import {
   type WallNode as WallNodeType,
 } from '../schema'
 import { OPENING_SCENE, openingScene, WALL_OPENING_CASES } from './__fixtures__/wall-opening-cases'
-import { placedDoorFace, planWallOpening } from './wall-openings'
+import { clampDoorToWall, placedDoorFace, planWallOpening } from './wall-openings'
 
 // Layer 1 of 3: the operation both agent surfaces call. The cases are the spec.
 describe('planWallOpening', () => {
@@ -368,4 +370,40 @@ describe('swing door fixed lights', () => {
         expect(node.segments.some((s) => s.type === 'glass')).toBe(false)
     }
   })
+})
+
+for (const wallId of [OPENING_SCENE.outFront, OPENING_SCENE.outBack]) {
+  test(`add_door centres the complete entry cutout at t on ${wallId}`, () => {
+    const { nodes } = openingScene()
+    const { node, clamped } = planWallOpening(nodes, {
+      kind: 'door',
+      wallId,
+      t: 0.35,
+      sidelightLeft: 0.2,
+      sidelightRight: 0.6,
+    })
+    expect(
+      node.position[0] - getDoorOpeningSize(node).leafOffsetX * openingHostFacing(node),
+    ).toBeCloseTo(1.4)
+    expect(clamped).toBe(false)
+  })
+}
+
+test('door clamp shortens the transom under an explicit wall top without changing the leaf', () => {
+  const { nodes } = openingScene()
+  const wall = nodes.wall_main as WallNodeType
+  const fitted = clampDoorToWall(wall, 2, 0.9, 2.1, { transomHeight: 0.8 }, nodes)
+  expect(fitted.clampedY).toBeCloseTo(1.05)
+  expect(fitted.transomHeight).toBeCloseTo(0.4)
+})
+
+test('door clamp resolves a plane-bound wall ceiling and leaves an overheight leaf intact', () => {
+  const { nodes } = openingScene()
+  const wall = nodes[OPENING_SCENE.storey] as WallNodeType
+  expect(clampDoorToWall(wall, 2, 0.9, 2.1, { transomHeight: 1 }, nodes).transomHeight).toBeCloseTo(
+    0.7,
+  )
+  const fitted = clampDoorToWall(wall, 2, 0.9, 3, { transomHeight: 1 }, nodes)
+  expect(fitted.transomHeight).toBe(0)
+  expect(fitted.clampedY).toBe(1.5)
 })

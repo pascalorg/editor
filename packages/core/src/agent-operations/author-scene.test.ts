@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import type { AuthorScenePayload } from '../agent-tools/author-scene'
 import { authorScenePayload } from '../agent-tools/author-scene'
+import { getDoorOpeningSize, openingHostFacing } from '../index'
 import { floorScriptInputs } from '../lib/floor-script'
 import { reconcileSceneStructure } from '../lib/structure-reconcile'
 import { cloneNodesInto } from '../registry/subtree'
@@ -3289,3 +3290,83 @@ test('author_scene writes native entry lights and the chosen folding panel count
   const folded = doors[1]
   expect(folded?.type === 'door' && folded.segments.some((s) => s.type === 'glass')).toBe(false)
 })
+
+for (const sill of [0, 0.2]) {
+  test(`author_scene refuses a transom above its wall at sill ${sill}`, () => {
+    const payload = authorScenePayload.parse({
+      levels: [
+        {
+          name: 'Entry',
+          walls: [
+            {
+              id: 'front',
+              start: [0, 0],
+              end: [4, 0],
+              height: 2.5,
+              thickness: 0.2,
+              openings: [
+                { kind: 'door', along: 2, width: 1, height: 2.1, sill, transomHeight: 0.5 },
+              ],
+            },
+          ],
+        },
+      ],
+    })
+    const outcome = run(payload, {})
+    expect(outcome.result.defects).toContainEqual(expect.objectContaining({ code: 'wall_too_low' }))
+    expect(outcome.changes?.create?.some(({ node }) => node.type === 'door')).toBe(false)
+  })
+}
+
+for (const reversed of [false, true]) {
+  test(`author_scene keeps an asymmetric entry cutout centred when facing outside (${reversed})`, () => {
+    const polygon: [number, number][] = [
+      [0, 0],
+      [4, 0],
+      [4, 4],
+      [0, 4],
+    ]
+    if (reversed) polygon.reverse()
+    const outcome = run(
+      authorScenePayload.parse({
+        levels: [
+          {
+            name: 'Entry',
+            walls: polygon.map((start, i) => ({
+              id: `edge${i}`,
+              start,
+              end: polygon[(i + 1) % polygon.length],
+              height: 3,
+              thickness: 0.2,
+              openings:
+                i === 0
+                  ? [
+                      {
+                        kind: 'door',
+                        along: 1.4,
+                        width: 0.9,
+                        height: 2.1,
+                        sidelightLeft: 0.2,
+                        sidelightRight: 0.6,
+                      },
+                    ]
+                  : [],
+            })),
+          },
+        ],
+      }),
+      {},
+    )
+    const nodes = outcome.changes?.create?.map(({ node }) => node) ?? []
+    const door = nodes.find((node) => node.type === 'door')
+    expect(door?.type).toBe('door')
+    if (door?.type !== 'door') return
+    const wall = nodes.find((node) => node.id === door.parentId)
+    expect(wall?.type).toBe('wall')
+    if (wall?.type !== 'wall') return
+    expect(door.side).toBe(wall.frontSide === 'exterior' ? 'front' : 'back')
+    expect(
+      door.position[0] - getDoorOpeningSize(door).leafOffsetX * openingHostFacing(door),
+    ).toBeCloseTo(1.4)
+  })
+}
