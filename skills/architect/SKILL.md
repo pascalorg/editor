@@ -1,9 +1,9 @@
 ---
 name: architect
-description: Use Architect to run generative design and BIM/spatial-analysis work inside Pascal. Use this skill when a user asks Architect to generate a building, floor plan, or spatial design, or wants deep design exploration beyond what direct MCP scene tools offer. Architect queues a background turn, polls for its result, and surfaces the finished Pascal scene or report.
+description: Use Architect, Pascal's AI building designer, to generate buildings, floor plans, and spatial designs from a brief. Use this skill when a user asks Architect to generate or design a building or space inside Pascal. Architect queues a background turn, polls for its result, and surfaces the finished Pascal scene or report.
 compatibility: Requires the hosted Pascal MCP endpoint (pascal-hosted / https://editor.pascal.app/api/mcp). The ask_architect, get_architect_turn, and cancel_architect_turn tools live on that server.
 metadata:
-  version: "0.1.0"
+  version: "0.1.1"
   source-reviewed: "2026-11-05"
   native-host-validation: "package-checks-only"
   openclaw:
@@ -17,33 +17,30 @@ metadata:
 
 # Architect
 
-Architect is Pascal's generative design service. It interprets a spatial brief — a building type, program, site constraints, style notes — and produces an editable Pascal scene, BIM report, or analysis result. Use it for requests that need deep design generation, code-compliant layout exploration, or multi-option BIM studies that go beyond direct scene-tool calls.
+Architect is Pascal's AI building designer. Give it a spatial brief — building type, program, site, style notes — and it produces an editable Pascal scene or report. Use it when the user asks Architect to design or generate a building or space.
 
 ## When to use Architect vs. scene tools
 
 | Situation | Use |
 | --- | --- |
-| Generate a full building or floor plan from a brief | Architect (`ask_architect`) |
-| BIM analysis, quantity takeoff, generative massing | Architect |
+| Generate a building or floor plan from a brief | Architect (`ask_architect`) |
+| BIM analysis or generative massing | Architect |
 | Edit a specific node, add a window, paint a surface | Pascal scene MCP tools directly |
 | Inspect, validate, or save an existing scene | Pascal scene MCP tools directly |
 | Check furniture clearance | `furniture-fit` skill |
 
 Both Architect and the scene tools use the `pascal-hosted` server. If only `pascal` (local CLI) is connected, tell the user to connect `pascal-hosted` and stop.
 
-## Effort and plans
+## Effort
 
-Architect accepts an optional `effort` parameter: `low` | `medium` | `high` | `pro` (default: `medium`). Higher effort runs more design iterations and costs more credits.
+Pass `effort` only if the user explicitly names one; otherwise omit it and let the server choose the default. Higher effort is available when the user asks for deeper exploration; the highest tier requires Pascal Pro or Max.
 
-- `low`, `medium`, `high` — available on any Pascal plan that has credits. Users on the free tier can top up credits one-off.
-- `pro` — deepest effort level; requires Pascal Pro or Max.
-
-If a tool call returns `out_of_credits` or a top-up prompt, show the link from the tool result and stop — do not retry or invent workarounds.
-If a tool call returns `upgrade_required` for `pro` effort on a non-Pro plan, show the upgrade link from the tool result and stop.
+If a tool call returns `upgrade_required`, show the upgrade link from the tool result and stop — do not retry at a lower value or invent workarounds.
+If a tool call returns `out_of_credits`, show the top-up link from the tool result and stop.
 
 ## Workflow
 
-1. **Start a turn.** Call `ask_architect` with the user's brief and chosen effort. It returns a `turn_id` and queues the work in the background.
+1. **Start a turn.** Call `ask_architect` with the user's brief and, if the user named one, the requested effort. It returns a `turn_id` and queues the work in the background.
 
 2. **Poll for the result.** Call `get_architect_turn` with the `turn_id`. Repeat with a short delay (a few seconds) until `status` is `done`, `failed`, or `cancelled`. Do not poll faster than once every three seconds.
 

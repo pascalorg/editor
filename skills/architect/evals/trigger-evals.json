@@ -6,7 +6,7 @@
       "should_trigger": true
     },
     {
-      "query": "Run an Architect BIM study for my office building with high effort.",
+      "query": "Run an Architect BIM study for my office building.",
       "should_trigger": true
     },
     {
@@ -18,7 +18,7 @@
       "should_trigger": true
     },
     {
-      "query": "Generate multiple floor-plan options for a school using Architect at medium effort.",
+      "query": "Generate multiple floor-plan options for a school using Architect.",
       "should_trigger": true
     },
     {
