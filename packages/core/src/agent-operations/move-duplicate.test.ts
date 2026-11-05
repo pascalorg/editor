@@ -398,3 +398,16 @@ describe('duplicate_node', () => {
     )
   })
 })
+
+test('moving an entry door refuses a transom above its resolved wall ceiling, even with force', () => {
+  for (const planeBound of [false, true]) {
+    const nodes = scene()
+    ;(nodes.door_a as DoorNode).transomHeight = 1
+    if (planeBound) delete (nodes.wall_a as WallNode).height
+    expect(
+      refusalCode(() =>
+        moveNode(nodes, { id: 'door_a', by: [0.1, 0], force: true } as never, context),
+      ),
+    ).toBe('wall_too_low')
+  }
+})

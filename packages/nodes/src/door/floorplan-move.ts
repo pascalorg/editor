@@ -1,6 +1,7 @@
 import {
   type AnyNodeId,
   type DoorNode,
+  doorPositionForFacing,
   type FloorplanMoveTarget,
   type FloorplanMoveTargetSession,
   getDoorOpeningSize,
@@ -88,6 +89,7 @@ export const doorFloorplanMoveTarget: FloorplanMoveTarget<DoorNode> = ({ node })
     visible: true
     casingFaceA?: boolean
     casingFaceB?: boolean
+    transomHeight?: number
   } | null = null
 
   // R flips the door's facing (front ↔ back) mid-placement. `apply` re-derives
@@ -205,28 +207,42 @@ export const doorFloorplanMoveTarget: FloorplanMoveTarget<DoorNode> = ({ node })
       // openings / wall ends); it competes with — and wins over — the grid
       // snap. Follows the magnetic ("lines") mode; the grid component lives in
       // `snapToHalf` (mode-aware → raw when grid is off).
+      const facingX = doorPositionForFacing(
+        { ...node, position: [hit.localX, node.position[1], node.position[2]] },
+        [0, hit.itemRotation + (flipped ? Math.PI : 0), 0],
+      )[0]
       const neighborX = !isMagneticSnapActive()
         ? null
         : snapLocalXToNeighbors({
             wall: hit.wall,
             localX:
-              hit.localX -
+              facingX -
               getDoorOpeningSize(node).leafOffsetX *
                 openingHostFacing({ rotation: [0, hit.itemRotation + (flipped ? Math.PI : 0), 0] }),
             width: getDoorOpeningSize(node).width,
             selfId: nodeId,
             nodes,
           })
+      const offset =
+        getDoorOpeningSize(node).leafOffsetX *
+        openingHostFacing({ rotation: [0, hit.itemRotation + (flipped ? Math.PI : 0), 0] })
       const snappedLocalX =
         neighborX === null
-          ? snapToHalf(hit.localX)
+          ? snapToHalf(facingX - offset) + offset
           : neighborX +
             getDoorOpeningSize(node).leafOffsetX *
               openingHostFacing({ rotation: [0, hit.itemRotation + (flipped ? Math.PI : 0), 0] })
-      const { clampedX, clampedY } = clampToWall(hit.wall, snappedLocalX, node.width, node.height, {
-        ...node,
-        rotation: [0, hit.itemRotation + (flipped ? Math.PI : 0), 0],
-      })
+      const { clampedX, clampedY, transomHeight } = clampToWall(
+        hit.wall,
+        snappedLocalX,
+        node.width,
+        node.height,
+        {
+          ...node,
+          rotation: [0, hit.itemRotation + (flipped ? Math.PI : 0), 0],
+        },
+        nodes,
+      )
 
       // One click per real position step, keyed on the SNAPPED along-wall value
       // so it ticks only when the door actually moves to a new cell.
@@ -251,6 +267,7 @@ export const doorFloorplanMoveTarget: FloorplanMoveTarget<DoorNode> = ({ node })
         roofFace: undefined,
         visible: true,
         ...casing,
+        ...(transomHeight === undefined ? {} : { transomHeight }),
       }
 
       setLiveOverride(`wall:${hit.wall.id}:${side}`, {
@@ -261,6 +278,7 @@ export const doorFloorplanMoveTarget: FloorplanMoveTarget<DoorNode> = ({ node })
         roofFace: undefined,
         visible: true,
         ...casing,
+        ...(transomHeight === undefined ? {} : { transomHeight }),
       })
       useLiveTransforms.getState().set(nodeId, {
         position: lastValid.position,
@@ -283,11 +301,12 @@ export const doorFloorplanMoveTarget: FloorplanMoveTarget<DoorNode> = ({ node })
         lastValid.parentId,
         useScene.getState().nodes,
         lastValid.position[0] -
-          getDoorOpeningSize(live).leafOffsetX *
+          getDoorOpeningSize({ ...live, ...lastValid }).leafOffsetX *
             openingHostFacing({ rotation: lastValid.rotation }),
-        lastValid.position[1] + (getDoorOpeningSize(live).height - live.height) / 2,
-        getDoorOpeningSize(live).width,
-        getDoorOpeningSize(live).height,
+        lastValid.position[1] +
+          (getDoorOpeningSize({ ...live, ...lastValid }).height - live.height) / 2,
+        getDoorOpeningSize({ ...live, ...lastValid }).width,
+        getDoorOpeningSize({ ...live, ...lastValid }).height,
         live.id,
       )
       return resolveOpeningPlacement({ collides, forcePlace }).placeable

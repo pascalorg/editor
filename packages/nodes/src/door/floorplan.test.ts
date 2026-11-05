@@ -1,6 +1,22 @@
 import { describe, expect, test } from 'bun:test'
-import { DoorNode, type FloorplanGeometry, type GeometryContext, WallNode } from '@pascal-app/core'
+import {
+  DoorNode,
+  type FloorplanGeometry,
+  type GeometryContext,
+  getDoorOpeningSize,
+  getEffectiveNode,
+  LevelNode,
+  openingHostFacing,
+  registerNode,
+  useLiveNodeOverrides,
+  useLiveTransforms,
+  useScene,
+  WallNode,
+} from '@pascal-app/core'
+import { getActiveSnappingMode, useEditor } from '@pascal-app/editor'
+import { doorDefinition } from './definition'
 import { buildDoorFloorplan } from './floorplan'
+import { doorFloorplanMoveTarget } from './floorplan-move'
 import { hingesSidePatch, placementSwing, swapDoorHingePatch, swapDoorSwingPatch } from './swing'
 
 const wall = WallNode.parse({
@@ -176,3 +192,77 @@ test('fixed lights enlarge the cutout footprint without changing the swing radiu
   )
   expect(arc?.kind === 'path' && arc.d).toContain('A 1 1')
 })
+
+for (const mode of ['off', 'grid', 'lines'] as const) {
+  test(`Flip side during a plan move preserves an asymmetric cutout beside another opening (${mode})`, () => {
+    const initial = useScene.getState()
+    const editorState = useEditor.getState()
+    const level = LevelNode.parse({ id: 'level_entry', children: ['wall_entry'] })
+    const host = WallNode.parse({
+      id: 'wall_entry',
+      parentId: level.id,
+      start: [0, 0],
+      end: [4, 0],
+      height: 2.5,
+      children: ['door_entry', 'door_neighbor'],
+    })
+    const entry = DoorNode.parse({
+      id: 'door_entry',
+      parentId: host.id,
+      wallId: host.id,
+      position: [0.65, 1.05, 0],
+      sidelightLeft: 0.2,
+      sidelightRight: 0.6,
+      transomHeight: 0.8,
+    })
+    const neighbor = DoorNode.parse({
+      id: 'door_neighbor',
+      parentId: host.id,
+      wallId: host.id,
+      width: 0.8,
+      position: [2.45, 1.05, 0],
+    })
+    try {
+      registerNode(doorDefinition)
+      useEditor.setState({
+        mode: 'build',
+        tool: 'door',
+        snappingModeByContext: { ...editorState.snappingModeByContext, item: mode },
+      })
+      useScene.setState({
+        nodes: { [level.id]: level, [host.id]: host, [entry.id]: entry, [neighbor.id]: neighbor },
+        dirtyNodes: new Set(),
+      })
+      expect(getActiveSnappingMode()).toBe(mode)
+      const session = doorFloorplanMoveTarget({ node: entry, nodes: useScene.getState().nodes })
+      session.apply({
+        planPoint: [0.65, 0],
+        modifiers: { shiftKey: false, altKey: false, ctrlKey: false, metaKey: false },
+      })
+      expect(session.canCommit()).toBe(true)
+      const transform = useLiveTransforms.getState().transforms.get(entry.id)
+      const before = {
+        ...getEffectiveNode(entry),
+        position: transform?.position ?? entry.position,
+        rotation: [0, transform?.rotation ?? entry.rotation[1], 0] as DoorNode['rotation'],
+      }
+      const centre =
+        before.position[0] - getDoorOpeningSize(before).leafOffsetX * openingHostFacing(before)
+      session.flipSide?.()
+      expect(session.canCommit()).toBe(true)
+      session.commit?.()
+      const saved = useScene.getState().nodes[entry.id] as DoorNode
+      const savedCentre =
+        saved.position[0] - getDoorOpeningSize(saved).leafOffsetX * openingHostFacing(saved)
+      expect(savedCentre).toBeCloseTo(centre)
+      expect(savedCentre - getDoorOpeningSize(saved).width / 2).toBeGreaterThanOrEqual(-1e-6)
+      expect(saved.height).toBe(2.1)
+      expect(saved.transomHeight).toBeCloseTo(0.4)
+    } finally {
+      useLiveTransforms.getState().clear(entry.id)
+      useLiveNodeOverrides.getState().clearAll()
+      useScene.setState(initial)
+      useEditor.setState(editorState)
+    }
+  })
+}

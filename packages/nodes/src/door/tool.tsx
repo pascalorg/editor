@@ -4,6 +4,7 @@ import {
   beginSceneHistoryDraft,
   DEFAULT_WALL_THICKNESS,
   DoorNode,
+  doorPositionForFacing,
   emitter,
   type GridEvent,
   getDoorOpeningSize,
@@ -331,26 +332,49 @@ const DoorTool: React.FC = () => {
       const draft = draftRef.current
       const size = getDoorOpeningSize({ ...draft, width, height })
       const offset = size.leafOffsetX * openingHostFacing({ rotation: [0, rotationY, 0] })
+      const facingX = doorPositionForFacing(
+        {
+          ...draft,
+          width,
+          height,
+          rotation: [0, 0, 0],
+          position: [rawLocalX + size.leafOffsetX, height / 2, 0],
+        },
+        [0, rotationY, 0],
+      )[0]
       const localX = resolveWallSlideAlignment({
         wallNode: wall,
-        rawLocalX: rawLocalX - offset,
+        rawLocalX: facingX - offset,
         width: size.width,
         candidates: alignmentCandidates,
         applySnap,
       })
-      const cut = clampToWall(wall, localX, size.width, size.height)
-      const clampedX = cut.clampedX + offset
-      const clampedY = cut.clampedY - (size.height - height) / 2
+      const cut = clampToWall(
+        wall,
+        localX + offset,
+        width,
+        height,
+        { ...draft, rotation: [0, rotationY, 0] },
+        useScene.getState().nodes,
+      )
+      const fittedSize = getDoorOpeningSize({
+        ...draft,
+        width,
+        height,
+        transomHeight: cut.transomHeight ?? draft?.transomHeight,
+      })
+      const clampedX = cut.clampedX
+      const clampedY = cut.clampedY
       const valid = !hasWallChildOverlap(
         wall.id,
         useScene.getState().nodes,
-        cut.clampedX,
-        cut.clampedY,
-        size.width,
-        size.height,
+        cut.clampedX - offset,
+        cut.clampedY + (fittedSize.height - height) / 2,
+        fittedSize.width,
+        fittedSize.height,
         ignoreId,
       )
-      return { clampedX, clampedY, valid }
+      return { clampedX, clampedY, valid, transomHeight: cut.transomHeight }
     }
 
     // Shared create/update path for the wall draft — used by the direct
@@ -385,7 +409,7 @@ const DoorTool: React.FC = () => {
         draftRef.current = node
       }
 
-      const { clampedX, clampedY, valid } = resolveWallPlacement(
+      const { clampedX, clampedY, valid, transomHeight } = resolveWallPlacement(
         wall,
         rawLocalX,
         width,
@@ -400,6 +424,7 @@ const DoorTool: React.FC = () => {
       if (wall.id === draftRef.current.parentId) {
         useScene.getState().updateNode(draftRef.current.id, {
           position: [clampedX, clampedY, 0],
+          ...(transomHeight === undefined ? {} : { transomHeight }),
           rotation: [0, itemRotation, 0],
           side,
           swingDirection,
@@ -408,6 +433,7 @@ const DoorTool: React.FC = () => {
       } else {
         useScene.getState().updateNode(draftRef.current.id, {
           position: [clampedX, clampedY, 0],
+          ...(transomHeight === undefined ? {} : { transomHeight }),
           rotation: [0, itemRotation, 0],
           side,
           swingDirection,

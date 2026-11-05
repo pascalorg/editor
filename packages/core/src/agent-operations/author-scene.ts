@@ -9,13 +9,14 @@ import {
   WINDOW_STYLES,
   type WindowStyle,
 } from '../building/opening-style-presets'
+import { doorFacing, resolveWallOpeningCeiling } from '../building/wall-openings'
 import {
   NEW_WINDOW_FRAME_THICKNESS,
   windowTakesStyle,
   windowTypeFields,
 } from '../building/window-types'
 import { cutFloorOpening } from '../commands/structure/floor-opening'
-import { getDoorOpeningSize } from '../lib/door-opening'
+import { doorPositionForFacing, getDoorOpeningSize } from '../lib/door-opening'
 import { floorRoomFaces } from '../lib/floor-room-faces'
 import {
   matchScriptSlotsToLibrary,
@@ -50,6 +51,7 @@ import {
   type FloorOpeningNode,
   type GeometryArtifactManifest,
   getActiveRoofHeight,
+  getCurtainWallConfig,
   getSegmentSlopeFrame,
   LevelNode,
   RoofNode,
@@ -1075,6 +1077,19 @@ export function authorScene(
           )
           return
         }
+        if (o.kind === 'door') {
+          const wallHeight =
+            resolveWallOpeningCeiling(node, draft) -
+            (node.wallType === 'curtain' ? getCurtainWallConfig(node).perimeterWidth : 0)
+          if (o.sill + size.height > wallHeight + 1e-6) {
+            defect(
+              id,
+              'wall_too_low',
+              `Wall ${w.spec.id} is ${metres(wallHeight)} high, too low for a ${metres(size.height)} door at sill ${metres(o.sill)}.`,
+            )
+            return
+          }
+        }
         // A door or window is flat, set on the arc at its centre: its ends leave the curve.
         if (curve) {
           const chord = dist(w.start, w.end)
@@ -1088,12 +1103,11 @@ export function authorScene(
               `The ${metres(width)} ${o.kind} is flat on wall ${w.spec.id}, an arc of radius ${metres(radius)}: its ends stand ${metres(standoff)} off the curve, past the wall's faces. Set narrower ones side by side, at most ${metres(2 * Math.sqrt(radius ** 2 - (radius - half) ** 2))} wide.`,
             )
         }
-        const x =
-          Math.min(Math.max(o.along - size.leafOffsetX, size.width / 2), length - size.width / 2) +
-          size.leafOffsetX
-        if (Math.abs(x - o.along) > 0.01)
+        const centre = Math.min(Math.max(o.along, size.width / 2), length - size.width / 2)
+        const x = centre + size.leafOffsetX
+        if (Math.abs(centre - o.along) > 0.01)
           say(
-            `${o.kind} ${id}: moved ${Math.abs(x - o.along).toFixed(2)} m along the wall to fit inside it`,
+            `${o.kind} ${id}: moved ${Math.abs(centre - o.along).toFixed(2)} m along the wall to fit inside it`,
           )
         const common = {
           object: 'node',
@@ -1526,6 +1540,16 @@ export function authorScene(
   const levelIds = levelNodes.map((l) => l.id as `level_${string}`)
   let written: Record<string, AnyNode> = {
     ...reconcileSceneStructure({ nodes: draft, levelIds, mintId: (kind) => mint(kind) }).nodes,
+  }
+  for (const opening of Object.values(written)) {
+    const wall = written[opening.parentId ?? '']
+    if (opening.type !== 'door' || wall?.type !== 'wall' || scaffoldIds.has(opening.id)) continue
+    const facing = doorFacing(wall)
+    written[opening.id] = {
+      ...opening,
+      ...facing,
+      position: doorPositionForFacing(opening, facing.rotation),
+    }
   }
   // A room's plate and ceiling are named by its room, whose id follows its walls: a revision keeps
   // an unchanged room's, and a room it adds brings its own with it (never another room's renamed).

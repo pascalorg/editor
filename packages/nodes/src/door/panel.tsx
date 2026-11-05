@@ -6,6 +6,7 @@ import {
   type DoorHandleStyle,
   type DoorNode,
   doorHandleStyle,
+  doorPositionForFacing,
   isAutoFrameDepth,
   type MessageDescriptor,
   resolveHostedOpeningFrameDepth,
@@ -182,6 +183,11 @@ export default function DoorPanel() {
     handleUpdate({
       side: node.side === 'front' ? 'back' : 'front',
       rotation: [node.rotation[0], node.rotation[1] + Math.PI, node.rotation[2]],
+      position: doorPositionForFacing(node, [
+        node.rotation[0],
+        node.rotation[1] + Math.PI,
+        node.rotation[2],
+      ]),
     })
   }, [node, handleUpdate])
 

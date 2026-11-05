@@ -8,6 +8,7 @@ import {
   openingHostFacing,
   type WindowNode,
 } from '@pascal-app/core'
+import { clampDoorToWall } from '@pascal-app/core/building'
 import { resolveWallOpeningCeiling } from './wall-opening-ceiling'
 
 type Opening = DoorNode | WindowNode
@@ -76,7 +77,27 @@ export function constrainCurtainOpening<T extends Opening>(
   patch: Partial<T>,
   nodes: Readonly<Record<AnyNodeId, AnyNode>>,
 ): Partial<T> {
-  const next = { ...opening, ...patch }
+  let next = { ...opening, ...patch }
+  const wall = nodes[(next.parentId ?? next.wallId) as AnyNodeId]
+  if (
+    next.type === 'door' &&
+    wall?.type === 'wall' &&
+    'transomHeight' in next &&
+    next.transomHeight
+  ) {
+    const { transomHeight } = clampDoorToWall(
+      wall,
+      next.position[0],
+      next.width,
+      next.height,
+      next,
+      nodes,
+    )
+    if (transomHeight !== undefined && transomHeight !== next.transomHeight) {
+      patch = { ...patch, transomHeight }
+      next = { ...opening, ...patch }
+    }
+  }
   const limits = curtainOpeningLimits(next, nodes)
   if (
     !limits ||

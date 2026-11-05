@@ -1,4 +1,5 @@
 import { refuse } from '../agent-tools/refusal'
+import { doorPositionForFacing } from '../lib/door-opening'
 import { parseMaterialColor } from '../material-library'
 import type { AnyNode } from '../schema'
 import { parseNode } from '../schema/compiled-node-parsers'
@@ -135,6 +136,23 @@ export function honestNodePatch(
         `${material} would not show: ${preset} (${hider}) is read first. Clear it in the same patch (${preset}: null).`,
         { field: material, hiddenBy: preset },
       )
+  }
+  if (
+    current.type === 'door' &&
+    parsed.data.type === 'door' &&
+    ('rotation' in sent || 'side' in sent)
+  ) {
+    const next = parsed.data
+    const rotation =
+      sent.rotation === undefined
+        ? ([
+            next.rotation[0],
+            next.side === 'back' ? Math.PI : 0,
+            next.rotation[2],
+          ] as typeof next.rotation)
+        : next.rotation
+    sent.rotation = rotation
+    sent.position = doorPositionForFacing({ ...next, rotation: current.rotation }, rotation)
   }
   return sent
 }
