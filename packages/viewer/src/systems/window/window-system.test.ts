@@ -153,6 +153,22 @@ describe('window sash sections, hardware and pane grids', () => {
       (part) => part instanceof THREE.Mesh && part.userData.slotId === slot,
     ) as THREE.Mesh[]
 
+  test.each(casements)(
+    '$windowType stays within its measured triangle budget with 10 percent headroom',
+    (fields) => {
+      const mesh = buildWindowPreviewMesh(WindowNode.parse(fields))
+      let triangles = 0
+      mesh.traverse((part) => {
+        if (!(part instanceof THREE.Mesh) || part.material === mesh.material) return
+        triangles +=
+          (part.geometry.index?.count ?? part.geometry.getAttribute('position').count) / 3
+      })
+      const measured = 'casementStyle' in fields && fields.casementStyle === 'french' ? 2264 : 1168
+      expect(triangles).toBeGreaterThan(0)
+      expect(triangles).toBeLessThanOrEqual(Math.ceil(measured * 1.1))
+    },
+  )
+
   test.each(operable)('a thick wall keeps $windowType sash and glass sections small', (fields) => {
     const node = WindowNode.parse({ ...fields, frameDepth: 0.6, sill: false })
     const mesh = buildWindowPreviewMesh(node)

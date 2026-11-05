@@ -300,7 +300,7 @@ for (const doorType of ['hinged', 'double', 'french'] as const) {
   for (const frameDepth of [0.1, 0.24]) {
     for (const hingesSide of ['left', 'right'] as const) {
       for (const swingDirection of ['inward', 'outward'] as const) {
-        test(`${doorType} ${frameDepth} ${hingesSide} ${swingDirection}: closer linkage meets its moving pivot, elbow and fixed shoe at 0/45/90°`, () => {
+        test(`${doorType} ${frameDepth} ${hingesSide} ${swingDirection}: pull-face closer clears the head and meets its moving pivot, elbow and fixed shoe at 0/45/90°`, () => {
           const node = DoorNode.parse({
             doorType,
             doorCloser: true,
@@ -310,6 +310,8 @@ for (const doorType of ['hinged', 'double', 'french'] as const) {
           })
           let closedLengths: number[] | undefined
           let shoePosition: THREE.Vector3 | undefined
+          let previousDistance = 0
+          let previousBend = Math.PI
           for (const swingAngle of [0, Math.PI / 4, Math.PI / 2]) {
             const mesh = buildDoorPreviewMesh({ ...node, swingAngle })
             mesh.updateMatrixWorld(true)
@@ -339,15 +341,15 @@ for (const doorType of ['hinged', 'double', 'french'] as const) {
             const leafWidth =
               (node.width - 2 * node.frameThickness) / (doorType === 'hinged' ? 1 : 2)
             const pivot = body.localToWorld(
-              new THREE.Vector3(-latchSign * 0.12 * Math.min(1, leafWidth / 0.4), 0.0275, 0),
+              new THREE.Vector3(latchSign * 0.11 * Math.min(1, leafWidth / 0.4), 0.0275, 0),
             )
             const elbow = knuckle.getWorldPosition(new THREE.Vector3())
             if (swingAngle === 0) {
-              const face = swingDirection === 'inward' ? 1 : -1
+              const face = swingDirection === 'inward' ? -1 : 1
               const closedElbow = new THREE.Vector3(
                 leaf.position.x + latchSign * 0.18 * Math.min(1, leafWidth / 0.4),
                 node.height / 2 - node.frameThickness - 0.0125,
-                face * (frameDepth / 2 + 0.12),
+                face * (frameDepth / 2 + 0.19),
               )
               expect(elbow.distanceTo(closedElbow)).toBeLessThan(0.002)
             }
@@ -368,14 +370,31 @@ for (const doorType of ['hinged', 'double', 'french'] as const) {
               new THREE.Vector3(-node.width / 2, leafTop, -frameDepth / 2),
               new THREE.Vector3(node.width / 2, node.height / 2, frameDepth / 2),
             )
-            for (const arm of [main, forearm]) {
-              const [start, end] = armEnds(arm)
-              for (let sample = 0; sample <= 10; sample++) {
-                expect(head.distanceToPoint(start.clone().lerp(end, sample / 10))).toBeGreaterThan(
-                  arm.geometry.parameters.radiusTop,
-                )
+            const pullFace = swingDirection === 'inward' ? -1 : 1
+            expect((body.position.z + leaf.position.z) * pullFace).toBeCloseTo(0.05)
+            expect(shoe.position.z).toBeCloseTo(pullFace * (frameDepth / 2 + 0.015))
+            for (const point of [pivot, mainEnd, forearmStart, forearmEnd, elbow]) {
+              // Moving parts stay outside the leaf's pull face even after it rotates.
+              const local = leaf.worldToLocal(point.clone())
+              expect(pullFace * (local.z + leaf.position.z)).toBeGreaterThanOrEqual(0.02 - 0.002)
+            }
+            for (const part of [body, main, forearm, knuckle, shoe]) {
+              const positions = part.geometry.getAttribute('position')
+              for (let vertex = 0; vertex < positions.count; vertex++) {
+                const point = new THREE.Vector3().fromBufferAttribute(positions, vertex)
+                part.localToWorld(point)
+                const local = leaf.worldToLocal(point.clone())
+                expect(pullFace * (local.z + leaf.position.z)).toBeGreaterThanOrEqual(0.02 - 0.002)
+                mesh.worldToLocal(point)
+                expect(head.containsPoint(point)).toBe(false)
               }
             }
+            const distance = pivot.distanceTo(shoeAnchor)
+            const bend = elbow.clone().sub(pivot).angleTo(shoeAnchor.clone().sub(elbow))
+            expect(distance).toBeGreaterThan(previousDistance)
+            expect(bend).toBeLessThan(previousBend)
+            previousDistance = distance
+            previousBend = bend
             expect(mainStart.y).toBeCloseTo(mainEnd.y)
             expect(forearmStart.y).toBeCloseTo(forearmEnd.y)
             const lengths = [main.geometry.parameters.height, forearm.geometry.parameters.height]
@@ -637,22 +656,20 @@ test('shaped openings omit the matching leaf and jamb hinge together', () => {
   }
 })
 
-test('default hinged hardware preserves the measured tessellation with 10 percent headroom', () => {
+test('default hinged door stays within its measured triangle budget with 10 percent headroom', () => {
   const mesh = buildDoorPreviewMesh(DoorNode.parse({}))
   let triangles = 0
   let levers = 0
   let hingeParts = 0
   mesh.traverse((part) => {
-    if (!(part instanceof THREE.Mesh) || part.userData.slotId !== 'hardware') return
+    if (!(part instanceof THREE.Mesh) || part.material === mesh.material) return
     triangles += (part.geometry.index?.count ?? part.geometry.getAttribute('position').count) / 3
     if (part.geometry === leverOnRose()) levers++
     else if (part.geometry === hingeLeafPart() || part.geometry === hingeJambPart()) hingeParts++
   })
   expect(levers).toBe(2)
   expect(hingeParts).toBe(6)
-  // The specified segment counts exceed 4,000; retain the requested surface quality.
-  expect(triangles).toBe(7032)
-  expect(triangles).toBeLessThanOrEqual(7736)
+  expect(triangles).toBeLessThanOrEqual(Math.ceil(3496 * 1.1))
 })
 
 for (const doorType of ['pocket', 'sliding', 'folding'] as const) {

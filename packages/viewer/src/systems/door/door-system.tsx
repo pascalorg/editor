@@ -1563,19 +1563,21 @@ function addDoorLeaf(
     const offsetScale = Math.min(1, leafWidth / 0.4)
     const closerY = leafTop - 0.04
     const bodyX = hingeX + latchSign * 0.16 * offsetScale
-    const bodyZ = swingFace * (leafDepth / 2 + 0.03)
+    const pullFace = -swingFace
+    const bodyZ = pullFace * (leafDepth / 2 + 0.03)
     addLeafBox(hardwareMaterial, 0.28, 0.055, 0.055, bodyX, closerY, bodyZ)
     const armY = closerY + 0.0275
-    const closedPivot = new THREE.Vector3(hingeX + latchSign * 0.04 * offsetScale, armY, bodyZ)
+    // The latch-end spindle recedes from the head shoe as the leaf opens.
+    const closedPivot = new THREE.Vector3(hingeX + latchSign * 0.27 * offsetScale, armY, bodyZ)
     const closedElbow = new THREE.Vector3(
       hingeX + latchSign * 0.18 * offsetScale,
       armY,
-      swingFace * (frameDepth / 2 + 0.12),
+      pullFace * (frameDepth / 2 + 0.19),
     )
     const shoe = new THREE.Vector3(
       hingeX + latchSign * 0.34 * offsetScale,
       armY,
-      swingFace * (frameDepth / 2 + 0.015),
+      pullFace * (frameDepth / 2 + 0.015),
     )
     // The shoe overlaps the head face; its underside shares the body pivot's plane below the soffit.
     addHardware(mesh, roundedBox(0.09, 0.025, 0.03), shoe.x, armY + 0.0125, shoe.z)
@@ -1598,7 +1600,7 @@ function addDoorLeaf(
     const along = reach > 1e-9 ? (l1 * l1 - l2 * l2 + reach * reach) / (2 * reach) : 0
     const bow = Math.sqrt(Math.max(0, l1 * l1 - along * along))
     const normal = new THREE.Vector3(-direction.z, 0, direction.x)
-    if (normal.z * swingFace < 0) normal.negate()
+    if (normal.z * pullFace < 0) normal.negate()
     const elbow = pivot.clone().addScaledVector(direction, along).addScaledVector(normal, bow)
     for (const [parent, radius, start, end] of [
       [leafGroup, 0.0075, pivot, elbow],

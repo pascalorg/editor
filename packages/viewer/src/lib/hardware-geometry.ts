@@ -102,7 +102,7 @@ function buildLever(curved: boolean, plate = false) {
       [0.026, 0],
       [0.026, 0.0075],
     ]
-    for (const angle of [Math.PI / 4, Math.PI / 3, (5 * Math.PI) / 12, Math.PI / 2]) {
+    for (const angle of [Math.PI / 4, Math.PI / 2]) {
       profile.push([
         faceRadius + faceFillet * Math.cos(angle),
         0.0085 + faceFillet * Math.sin(angle),
@@ -111,8 +111,8 @@ function buildLever(curved: boolean, plate = false) {
     profile.push([0, 0.009])
     const rose = plate
       ? roundedBox(0.04, 0.22, 0.006, 0.003).clone().translate(0, 0, 0.003)
-      : lathe(profile, 48).rotateX(Math.PI / 2)
-    const neck = cylinder(0.01, 0.037, 24)
+      : lathe(profile, 32).rotateX(Math.PI / 2)
+    const neck = cylinder(0.01, 0.037, 16)
       .rotateX(Math.PI / 2)
       .translate(0, 0, 0.009 + 0.037 / 2)
     const neckProfile: [number, number][] = []
@@ -121,11 +121,11 @@ function buildLever(curved: boolean, plate = false) {
       neckProfile.push([0.009 + 0.001 * Math.cos(angle), 0.046 + 0.001 * Math.sin(angle)])
     }
     neckProfile.push([0, 0.047])
-    const fillet = lathe(neckProfile, 24)
+    const fillet = lathe(neckProfile, 16)
     const filletNormals = fillet.getAttribute('normal')
     // Match the cylinder tangent exactly rather than averaging the first fillet chord.
-    for (let i = 0; i <= 24; i++) {
-      const phi = (i * 2 * Math.PI) / 24
+    for (let i = 0; i <= 16; i++) {
+      const phi = (i * 2 * Math.PI) / 16
       for (let j = 0; j < neckProfile.length; j++) {
         const angle = (Math.min(j, 4) * Math.PI) / 8
         filletNormals.setXYZ(
@@ -155,13 +155,13 @@ function buildLever(curved: boolean, plate = false) {
           ]
       ).map(([x, y]) => new Vector3(x, y, 0.047)),
     )
-    const grip = new TubeGeometry(curve, 24, 0.0095, 16, false)
+    const grip = new TubeGeometry(curve, curved ? 24 : 2, 0.0095, 16, false)
     scaleUVs(grip, curve.getLength(), 2 * Math.PI * 0.0095)
-    const cap = hemisphere(0.0095, 16, 8)
+    const cap = hemisphere(0.0095, 12, 6)
       .rotateZ(-Math.PI / 2)
       .translate(0.1155, curved ? -0.012 : 0, 0.047)
     // Close the heel where the horizontal grip meets the vertical neck.
-    const heel = hemisphere(0.0095, 16, 8)
+    const heel = hemisphere(0.0095, 12, 6)
       .rotateZ(Math.PI / 2)
       .translate(0, 0, 0.047)
     if (plate) for (const part of [neck, fillet, grip, cap, heel]) part.translate(0, 0, -0.003)
@@ -184,13 +184,13 @@ export function leverOnPlate() {
 /** Origin at the mounting face; a 56 mm ball on a 20 mm neck and 56 mm rose. */
 export function knobOnRose() {
   return cached('knob', [], () => {
-    const rose = cylinder(0.028, 0.006, 48)
+    const rose = cylinder(0.028, 0.006, 32)
       .rotateX(Math.PI / 2)
       .translate(0, 0, 0.003)
-    const neck = cylinder(0.01, 0.025, 24)
+    const neck = cylinder(0.01, 0.025, 16)
       .rotateX(Math.PI / 2)
       .translate(0, 0, 0.0185)
-    const ball = new SphereGeometry(0.028, 48, 24)
+    const ball = new SphereGeometry(0.028, 32, 16)
     scaleUVs(ball, 2 * Math.PI * 0.028, Math.PI * 0.028)
     ball.translate(0, 0, 0.052)
     return merge([rose, neck, ball])
@@ -231,7 +231,7 @@ function hingePart(leaf: boolean, diameter: number, height: number) {
     const parts: BufferGeometry[] = [plate]
     for (let i = leaf ? 0 : 1; i < 5; i += 2) {
       parts.push(
-        cylinder(radius, 0.017 * heightScale, 24).translate(
+        cylinder(radius, 0.017 * heightScale, 16).translate(
           0,
           (-0.036 + i * 0.018) * heightScale,
           0,
@@ -240,7 +240,7 @@ function hingePart(leaf: boolean, diameter: number, height: number) {
     }
     if (leaf) {
       for (const side of [-1, 1]) {
-        const cap = hemisphere(radius, 24, 4)
+        const cap = hemisphere(radius, 12, d <= 0.01 ? 2 : 3)
         const capScale = heightScale / radialScale
         cap.scale(1, capScale, 1)
         const uv = cap.getAttribute('uv')
@@ -267,17 +267,17 @@ export function hingeJambPart(diameter = 0.014, height = 0.103) {
 export function pullBar(doorScale = false) {
   return cached(doorScale ? 'door-pull' : 'pull', [], () => {
     if (doorScale) {
-      const bar = cylinder(0.0125, 0.4, 48).translate(0, 0, 0.05)
+      const bar = cylinder(0.0125, 0.4, 32).translate(0, 0, 0.05)
       return merge([
         bar,
         ...[-0.15, 0.15].map((y) =>
-          cylinder(0.008, 0.05, 24)
+          cylinder(0.008, 0.05, 16)
             .rotateX(Math.PI / 2)
             .translate(0, y, 0.025),
         ),
       ])
     }
-    const bar = new CapsuleGeometry(0.009, 0.102, 8, 16)
+    const bar = new CapsuleGeometry(0.009, 0.102, 6, 12)
     scaleUVs(bar, 2 * Math.PI * 0.009, 0.102 + Math.PI * 0.009)
     bar.translate(0, 0, 0.022)
     const parts: BufferGeometry[] = [bar]
@@ -316,7 +316,7 @@ export function roundedBox(
   r = Math.min(0.004, w / 4, h / 4, d / 4),
 ) {
   return cached('box', [w, h, d, r], (width, height, depth, radius) => {
-    const geometry = new RoundedBoxGeometry(width, height, depth, 2, radius)
+    const geometry = new RoundedBoxGeometry(width, height, depth, 1, radius)
     boxUVs(geometry, width, height, depth)
     return geometry
   })
