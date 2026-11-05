@@ -60,7 +60,7 @@ import {
   WINDOW_SHUTTER_OUTER_NAME,
 } from './window-pose'
 
-import { buildWindowRollerCurtain } from './window-roller-shutter'
+import { buildWindowRollerCurtain, getWindowRollerCurtainZ } from './window-roller-shutter'
 
 export * from './window-pose'
 
@@ -3520,21 +3520,57 @@ function addWindowDetails(node: RenderWindowNode, mesh: THREE.Mesh) {
       }
     }
   }
+  if (!node.corner) {
+    const gridTypes = [
+      'casement',
+      'sliding',
+      'single-hung',
+      'double-hung',
+      'awning',
+      'hopper',
+      'tilt-turn',
+    ]
+    // Curved sash outlines need clipped grids; rectangular sashes cover the initial grid contract.
+    if (
+      node.sashGrid &&
+      gridTypes.includes(node.windowType) &&
+      (node.openingShape === 'rectangle' || isRectangleOnlyWindowType(node))
+    ) {
+      const panes: THREE.Mesh[] = []
+      mesh.traverse((child) => {
+        if (child instanceof THREE.Mesh && child.userData.slotId === 'glass') panes.push(child)
+      })
+      for (const pane of panes) addSashGrid(node, pane)
+    }
+    if (hasHardware) {
+      for (const name of [
+        CASEMENT_WINDOW_SASH_NAME,
+        FRENCH_CASEMENT_LEFT_SASH_NAME,
+        FRENCH_CASEMENT_RIGHT_SASH_NAME,
+        AWNING_WINDOW_SASH_NAME,
+        HOPPER_WINDOW_SASH_NAME,
+        TILT_TURN_WINDOW_SASH_NAME,
+      ]) {
+        const sash = mesh.getObjectByName(name)
+        if (!sash) continue
+        addSashHardware(node, sash, interior)
+      }
+    }
+  }
   if (node.rollerShutter === 'box' || node.rollerShutter === 'concealed') {
     currentWindowSlot = 'shutters'
     const material = resolveWindowSlotMaterial(node, 'shutters')
     const concealed = node.rollerShutter === 'concealed'
     const faceZ = (exterior * wallDepth) / 2 - offset
-    const guideZ = concealed ? exterior * 0.02 : faceZ + exterior * 0.035
     if (concealed) {
       addBox(
         mesh,
         material,
-        node.width,
+        node.width - 0.002,
         0.03,
         0.03,
         0,
-        node.height / 2 - 0.015,
+        node.height / 2 - 0.016,
         faceZ - exterior * 0.015,
       ).name = 'window-roller-lintel'
     } else {
@@ -3550,6 +3586,9 @@ function addWindowDetails(node: RenderWindowNode, mesh: THREE.Mesh) {
         faceZ + exterior * 0.11,
       ).name = 'window-roller-box'
     }
+    // Shutter clearance follows the closed unit, independent of its rendered opening angle.
+    poseWindowMovingParts(node, mesh, 0)
+    const guideZ = getWindowRollerCurtainZ(mesh, exterior)
     for (const side of [-1, 1])
       addBox(
         mesh,
@@ -3569,41 +3608,6 @@ function addWindowDetails(node: RenderWindowNode, mesh: THREE.Mesh) {
         getWindowRenderShutterAmount(node, 'rollerShutterOpen'),
       ),
     )
-  }
-  if (node.corner) return
-  const gridTypes = [
-    'casement',
-    'sliding',
-    'single-hung',
-    'double-hung',
-    'awning',
-    'hopper',
-    'tilt-turn',
-  ]
-  // Curved sash outlines need clipped grids; rectangular sashes cover the initial grid contract.
-  if (
-    node.sashGrid &&
-    gridTypes.includes(node.windowType) &&
-    (node.openingShape === 'rectangle' || isRectangleOnlyWindowType(node))
-  ) {
-    const panes: THREE.Mesh[] = []
-    mesh.traverse((child) => {
-      if (child instanceof THREE.Mesh && child.userData.slotId === 'glass') panes.push(child)
-    })
-    for (const pane of panes) addSashGrid(node, pane)
-  }
-  if (!hasHardware) return
-  for (const name of [
-    CASEMENT_WINDOW_SASH_NAME,
-    FRENCH_CASEMENT_LEFT_SASH_NAME,
-    FRENCH_CASEMENT_RIGHT_SASH_NAME,
-    AWNING_WINDOW_SASH_NAME,
-    HOPPER_WINDOW_SASH_NAME,
-    TILT_TURN_WINDOW_SASH_NAME,
-  ]) {
-    const sash = mesh.getObjectByName(name)
-    if (!sash) continue
-    addSashHardware(node, sash, interior)
   }
 }
 

@@ -834,6 +834,64 @@ describe('room-aware window motion and exterior accessories', () => {
     },
   )
 
+  test.each(['casement', 'awning', 'tilt-turn', 'fixed'] as const)(
+    'concealed roller clears every closed %s frame, sash, glass and hardware vertex',
+    (windowType) => {
+      inRoom((wall) => {
+        for (const side of ['front', 'back'] as const) {
+          for (const frameDepth of [0.07, 0.3]) {
+            for (const operationState of [0, 1]) {
+              const node = WindowNode.parse({
+                parentId: wall.id,
+                position: [2, 1.5, 0],
+                rotation: [0, side === 'front' ? 0 : Math.PI, 0],
+                side,
+                windowType,
+                frameDepth,
+                operationState,
+                rollerShutter: 'concealed',
+                rollerShutterOpen: 0,
+                sill: false,
+                sashGrid: true,
+                columnRatios: [1, 1],
+              })
+              const mesh = buildWindowPreviewMesh(node)
+              const curtain = mesh.getObjectByName('window-roller-curtain')!
+              const exterior = mesh.userData.windowExteriorSign as number
+              poseWindowMovingParts(node, mesh, 0)
+              mesh.updateWorldMatrix(true, true)
+              const toWindow = mesh.matrixWorld.clone().invert()
+              let extent = -Infinity
+              let vertices = 0
+              mesh.traverse((part) => {
+                if (
+                  !(part instanceof THREE.Mesh) ||
+                  !['frame', 'glass', 'hardware'].includes(part.userData.slotId)
+                )
+                  return
+                const position = part.geometry.getAttribute('position')
+                for (let i = 0; i < position.count; i++) {
+                  const z =
+                    new THREE.Vector3()
+                      .fromBufferAttribute(position, i)
+                      .applyMatrix4(part.matrixWorld)
+                      .applyMatrix4(toWindow).z * exterior
+                  expect(curtain.position.z * exterior).toBeGreaterThan(z)
+                  extent = Math.max(extent, z)
+                  vertices++
+                }
+              })
+              expect(vertices).toBeGreaterThan(0)
+              expect(curtain.position.z * exterior - extent).toBeCloseTo(0.015, 6)
+              for (const guide of collect(mesh, 'window-roller-guide'))
+                expect(guide.position.z).toBeCloseTo(curtain.position.z, 6)
+            }
+          }
+        }
+      })
+    },
+  )
+
   test.each(['front', 'back'] as const)(
     'concealed roller stays within the reveal on the %s placement face; box height is configurable',
     (side) =>
@@ -845,6 +903,7 @@ describe('room-aware window motion and exterior accessories', () => {
           side,
           width: 1.2,
           height: 1.4,
+          frameDepth: 0.07,
           rollerShutter: 'concealed',
           rollerShutterBoxHeight: 0.4,
           rollerShutterOpen: 0,
@@ -869,6 +928,9 @@ describe('room-aware window motion and exterior accessories', () => {
         }
         const lintel = new THREE.Box3().setFromObject(mesh.getObjectByName('window-roller-lintel')!)
         expect(lintel.getSize(new THREE.Vector3()).y).toBeCloseTo(0.03)
+        expect(lintel.max.y).toBeCloseTo(1.5 + node.height / 2 - 0.001, 6)
+        expect(lintel.min.x).toBeCloseTo(2 - node.width / 2 + 0.001, 6)
+        expect(lintel.max.x).toBeCloseTo(2 + node.width / 2 - 0.001, 6)
         expect(lintel.max.z).toBeCloseTo(-0.12)
         expect(lintel.min.z).toBeCloseTo(-0.15)
         for (const guide of collect(mesh, 'window-roller-guide')) {
@@ -880,7 +942,7 @@ describe('room-aware window motion and exterior accessories', () => {
           expect(size.z).toBeCloseTo(0.03)
         }
         const curtain = mesh.getObjectByName('window-roller-curtain')!
-        expect(Math.abs(curtain.position.z)).toBeCloseTo(0.02)
+        expect(Math.abs(curtain.position.z)).toBeCloseTo(0.07 / 2 + 0.015)
         expect(new THREE.Box3().setFromObject(curtain).getSize(new THREE.Vector3()).x).toBeCloseTo(
           1.15,
         )
@@ -891,6 +953,11 @@ describe('room-aware window motion and exterior accessories', () => {
         expect(box.getSize(new THREE.Vector3()).y).toBeCloseTo(0.4)
         expect(box.min.y).toBeCloseTo(1.5 + node.height / 2)
         expect(box.max.z).toBeLessThan(-0.15)
+        const boxedCurtain = boxed.getObjectByName('window-roller-curtain')!
+        const curtainBounds = new THREE.Box3().setFromObject(boxedCurtain)
+        expect(box.min.z - curtainBounds.getCenter(new THREE.Vector3()).z).toBeCloseTo(0.015)
+        for (const guide of collect(boxed, 'window-roller-guide'))
+          expect(guide.position.z).toBeCloseTo(boxedCurtain.position.z)
       }),
   )
 })

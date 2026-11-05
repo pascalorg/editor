@@ -1,7 +1,32 @@
 import type { WindowNode } from '@pascal-app/core'
-import { BoxGeometry, Group, type Material, Mesh, type Object3D } from 'three'
+import { BoxGeometry, Group, type Material, Matrix4, Mesh, type Object3D, Vector3 } from 'three'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import { applyWorldScaleBoxUVs } from '../../lib/box-uv'
+
+/** Measure the closed unit in its own coordinates, including a surface-mounted roller box. */
+export function getWindowRollerCurtainZ(mesh: Object3D, exterior: number): number {
+  mesh.updateWorldMatrix(true, true)
+  const toWindow = mesh.matrixWorld.clone().invert()
+  const transform = new Matrix4()
+  const vertex = new Vector3()
+  let extent = 0
+  mesh.traverse((part) => {
+    if (
+      !(part instanceof Mesh) ||
+      part === mesh ||
+      (!['frame', 'glass', 'hardware'].includes(part.userData.slotId) &&
+        part.name !== 'window-roller-box')
+    )
+      return
+    transform.multiplyMatrices(toWindow, part.matrixWorld)
+    const position = part.geometry.getAttribute('position')
+    for (let i = 0; i < position.count; i++) {
+      vertex.fromBufferAttribute(position, i).applyMatrix4(transform)
+      extent = Math.max(extent, vertex.z * exterior)
+    }
+  })
+  return exterior * (extent + 0.015)
+}
 
 export function buildWindowRollerCurtain(
   node: WindowNode,
