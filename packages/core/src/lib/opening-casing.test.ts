@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test'
+import { openingExteriorFace } from '../index'
 import { type AnyNode, DoorNode, RoofSegmentNode, WallNode, WindowNode } from '../schema'
 import {
   DEFAULT_OPENING_CASING_WIDTH,
@@ -166,6 +167,7 @@ describe('opening casing host', () => {
     const nodes = { [wall.id]: wall } as Record<string, AnyNode>
     expect(resolveOpeningCasingHost(window({ parentId: wall.id }), nodes)).toEqual({
       thickness: 0.15,
+      exteriorFace: 'a',
     })
     const curtain = { ...wall, wallType: 'curtain' as const }
     expect(resolveOpeningCasingHost(window({ parentId: wall.id }), { [wall.id]: curtain })).toBe(
@@ -179,7 +181,7 @@ describe('opening casing host', () => {
     const opening = window({ roofSegmentId: segment.id, roofFace: 'front', parentId: segment.id })
     expect(
       resolveOpeningCasingHost(opening, { [segment.id]: segment } as Record<string, AnyNode>),
-    ).toEqual({ thickness: 0.18 })
+    ).toEqual({ thickness: 0.18, exteriorFace: 'a' })
   })
 })
 
@@ -195,3 +197,41 @@ test.each(['a', 'b'] as const)(
     expect(span(bottom(other), 1)[1]).toBeCloseTo(-opening.height / 2)
   },
 )
+
+test('exterior face follows a single room, falling back to placement on unbounded or shared walls', () => {
+  const wall = WallNode.parse({ start: [0, 0], end: [4, 0] })
+  const node = window({ parentId: wall.id, side: 'front' })
+  const walls = [
+    wall,
+    WallNode.parse({ start: [4, 0], end: [4, 4] }),
+    WallNode.parse({ start: [4, 4], end: [0, 4] }),
+    WallNode.parse({ start: [0, 4], end: [0, 0] }),
+  ]
+  const nodes = Object.fromEntries(walls.map((wall) => [wall.id, wall]))
+  expect(openingExteriorFace(node, nodes)).toBe('b')
+  expect(openingExteriorFace({ ...node, side: 'back' }, nodes)).toBe('b')
+  expect(openingExteriorFace(node, { [wall.id]: wall })).toBe('a')
+  expect(openingExteriorFace({ ...node, side: 'back' }, { [wall.id]: wall })).toBe('b')
+  const lower = [
+    WallNode.parse({ start: [4, 0], end: [4, -4] }),
+    WallNode.parse({ start: [4, -4], end: [0, -4] }),
+    WallNode.parse({ start: [0, -4], end: [0, 0] }),
+  ]
+  for (const wall of lower) nodes[wall.id] = wall
+  expect(openingExteriorFace(node, nodes)).toBe('a')
+  expect(openingExteriorFace({ ...node, side: 'back' }, nodes)).toBe('b')
+})
+
+test('exterior sill drops casing on the unoccupied face even when placed from the room', () => {
+  const boards = openingCasingBoards(
+    window({ sillInterior: true, sillThickness: 0.04, sillInteriorThickness: 0.06 }),
+    { thickness: 0.3, exteriorFace: 'b', interiorFace: 'a' },
+  )
+  for (const [face, drop] of [
+    ['a', 0.06],
+    ['b', 0.04],
+  ] as const) {
+    const bottom = boards.find((board) => board.face === face && board.part === 'bottom')!
+    expect(span(bottom, 1)[1]).toBeCloseTo(-0.5 - drop)
+  }
+})

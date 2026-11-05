@@ -17,7 +17,7 @@ const base = createSlotPaintCapability({
   resolveRole: resolveSlotByReRaycast,
   applyPreview: previewSlotByUserData,
   erasedLook: ({ node, role, materials = {} }) => {
-    if (role !== 'casing-a' && role !== 'casing-b' && role !== 'hardware')
+    if (role !== 'casing-a' && role !== 'casing-b' && role !== 'hardware' && role !== 'sill')
       return declaredSlotLook(node, role)
     if (node.type !== 'window' || node.source) return null
     const frame =
@@ -37,7 +37,13 @@ export const windowPaint: PaintCapability = {
   roleLabel: (_node, role) => openingCasingPaintLabel(role),
   getEffectiveMaterial: (args) => {
     const own = base.getEffectiveMaterial?.(args)
-    if (own || (args.role !== 'casing-a' && args.role !== 'casing-b' && args.role !== 'hardware'))
+    if (
+      own ||
+      (args.role !== 'casing-a' &&
+        args.role !== 'casing-b' &&
+        args.role !== 'hardware' &&
+        args.role !== 'sill')
+    )
       return own ?? null
     return base.getEffectiveMaterial?.({ ...args, role: 'frame' }) ?? null
   },

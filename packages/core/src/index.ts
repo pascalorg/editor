@@ -450,6 +450,7 @@ export {
   openingInteriorFace,
   resolveOpeningCasingHost,
 } from './lib/opening-casing'
+export { openingExteriorFace } from './lib/opening-exterior-face'
 export {
   getOpeningFloorDatum,
   getOpeningWallCut,

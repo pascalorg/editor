@@ -137,6 +137,62 @@ export const addDoorTool = {
 
 /** Native window details shared by every window authoring contract. */
 export const windowDetailFields = {
+  hingesSide: z
+    .enum(['left', 'right'])
+    .optional()
+    .describe('Casement or tilt-turn side hinges (default left).'),
+  openingDirection: z
+    .enum(['outward', 'inward'])
+    .optional()
+    .describe(
+      'Casement or awning swing toward exterior or interior, independent of placement (new windows default outward). Ignored by hopper and tilt-turn, which open inward.',
+    ),
+  tiltTurnMode: z
+    .enum(['tilt', 'turn'])
+    .optional()
+    .describe(
+      'Tilt-turn only: tilt inward about the bottom up to 15 degrees (default), or turn inward about the side hinges up to 90 degrees.',
+    ),
+  rollerShutter: z
+    .enum(['none', 'box'])
+    .optional()
+    .describe('Exterior roller shutter box, guide rails and slat curtain (default none).'),
+  rollerShutterOpen: z
+    .number()
+    .min(0)
+    .max(1)
+    .optional()
+    .describe(
+      'Static roller curtain position: 0 down, 1 fully up (default 1), independent of operationState.',
+    ),
+  shutterOpen: z
+    .number()
+    .min(0)
+    .max(1)
+    .optional()
+    .describe(
+      'Exterior shutter position: 0 closed over the window, 1 flat open against the wall (default 1).',
+    ),
+  shutterSides: z
+    .enum(['both', 'left', 'right'])
+    .optional()
+    .describe('Which exterior shutter leaves to build (default both).'),
+  sillOverhang: measurement('length', 'm', {
+    min: 0,
+    description: 'Exterior sill extension on each side; default 0.4 times sillDepth.',
+  }).optional(),
+  sillInteriorDepth: measurement('length', 'm', {
+    positive: true,
+    description: 'Interior stool depth (default 0.06 m).',
+  }).optional(),
+  sillInteriorThickness: measurement('length', 'm', {
+    positive: true,
+    description: 'Interior stool thickness (default 0.03 m).',
+  }).optional(),
+  sillInteriorOverhang: measurement('length', 'm', {
+    min: 0,
+    description: 'Interior stool extension beyond casing on each side (default 0.015 m).',
+  }).optional(),
   columns: z
     .number()
     .int()
@@ -165,7 +221,7 @@ export const windowDetailFields = {
     .optional()
     .describe('Add a stool board on the room side (default false).'),
   shutters: z
-    .enum(['none', 'louvered', 'panel'])
+    .enum(['none', 'louvered', 'panel', 'board-batten'])
     .optional()
     .describe('Decorative exterior shutters (default none).'),
   shutterWidth: measurement('length', 'm', {

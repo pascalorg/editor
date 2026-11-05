@@ -56,6 +56,7 @@ export const WindowType = z.enum([
   'casement',
   'awning',
   'hopper',
+  'tilt-turn',
   'single-hung',
   'double-hung',
   'bay',

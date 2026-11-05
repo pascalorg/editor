@@ -33,7 +33,7 @@ import {
   getWindowStyleOverrides,
   type WindowStyle,
 } from './opening-style-presets'
-import { NEW_WINDOW_FRAME_THICKNESS, windowTakesStyle } from './window-types'
+import { NEW_WINDOW_FRAME_THICKNESS, windowTakesStyle, windowTypeFields } from './window-types'
 
 // The placement rules of wall openings, shared by the editor's door and window tools and by
 // every agent surface: what the editor lets a person do by hand is what an agent may do.
@@ -228,6 +228,16 @@ export type WallOpeningInput = {
   sillInterior?: boolean
   shutters?: WindowNode['shutters']
   shutterWidth?: number
+  openingDirection?: WindowNode['openingDirection']
+  tiltTurnMode?: WindowNode['tiltTurnMode']
+  sillOverhang?: WindowNode['sillOverhang']
+  sillInteriorDepth?: WindowNode['sillInteriorDepth']
+  sillInteriorThickness?: WindowNode['sillInteriorThickness']
+  sillInteriorOverhang?: WindowNode['sillInteriorOverhang']
+  shutterOpen?: WindowNode['shutterOpen']
+  shutterSides?: WindowNode['shutterSides']
+  rollerShutter?: WindowNode['rollerShutter']
+  rollerShutterOpen?: WindowNode['rollerShutterOpen']
   /** A compiled script the opening is built from; its bounds set width and height. */
   compiled?: CompiledGeometryScript
   code?: string
@@ -482,7 +492,8 @@ export function planWallOpening(nodes: Nodes, input: WallOpeningInput) {
           ...base,
           frameThickness: NEW_WINDOW_FRAME_THICKNESS,
           ...getWindowStyleOverrides(input.style as WindowStyle | undefined),
-          ...(input.windowType ? { windowType: input.windowType } : {}),
+          ...windowTypeFields(windowType),
+          ...(input.hingesSide === undefined ? {} : { hingesSide: input.hingesSide }),
           ...(input.columns ? { columnRatios: equalRatios(input.columns) } : {}),
           ...(input.rows ? { rowRatios: equalRatios(input.rows) } : {}),
           ...(input.windowType &&
@@ -496,6 +507,26 @@ export function planWallOpening(nodes: Nodes, input: WallOpeningInput) {
           ...(input.sillInterior === undefined ? {} : { sillInterior: input.sillInterior }),
           ...(input.shutters === undefined ? {} : { shutters: input.shutters }),
           ...(input.shutterWidth === undefined ? {} : { shutterWidth: input.shutterWidth }),
+          ...(input.openingDirection === undefined
+            ? {}
+            : { openingDirection: input.openingDirection }),
+          ...(input.tiltTurnMode === undefined ? {} : { tiltTurnMode: input.tiltTurnMode }),
+          ...(input.sillOverhang === undefined ? {} : { sillOverhang: input.sillOverhang }),
+          ...(input.sillInteriorDepth === undefined
+            ? {}
+            : { sillInteriorDepth: input.sillInteriorDepth }),
+          ...(input.sillInteriorThickness === undefined
+            ? {}
+            : { sillInteriorThickness: input.sillInteriorThickness }),
+          ...(input.sillInteriorOverhang === undefined
+            ? {}
+            : { sillInteriorOverhang: input.sillInteriorOverhang }),
+          ...(input.shutterOpen === undefined ? {} : { shutterOpen: input.shutterOpen }),
+          ...(input.shutterSides === undefined ? {} : { shutterSides: input.shutterSides }),
+          ...(input.rollerShutter === undefined ? {} : { rollerShutter: input.rollerShutter }),
+          ...(input.rollerShutterOpen === undefined
+            ? {}
+            : { rollerShutterOpen: input.rollerShutterOpen }),
         })
 
   return {

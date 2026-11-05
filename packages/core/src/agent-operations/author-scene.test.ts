@@ -3182,9 +3182,26 @@ describe('author_scene units', () => {
   })
 })
 
-test.each(['casement', 'double-hung', 'fixed'] as const)(
+test.each(['casement', 'double-hung', 'fixed', 'tilt-turn'] as const)(
   'author_scene writes %s window divisions and exterior details',
   (type) => {
+    const details = {
+      windowHandle: false,
+      sillInterior: true,
+      shutters: 'board-batten' as const,
+      shutterWidth: 0.4,
+      openingDirection: 'inward' as const,
+      tiltTurnMode: 'turn' as const,
+      shutterOpen: 0.25,
+      shutterSides: 'right' as const,
+      rollerShutter: 'box' as const,
+      rollerShutterOpen: 0.5,
+      sillOverhang: 0.12,
+      sillInteriorDepth: 0.09,
+      sillInteriorThickness: 0.04,
+      sillInteriorOverhang: 0.02,
+      hingesSide: 'right' as const,
+    }
     const payload = structuredClone(bedroom)
     payload.levels[0]!.walls![1]!.openings = [
       {
@@ -3196,10 +3213,7 @@ test.each(['casement', 'double-hung', 'fixed'] as const)(
         type,
         columns: 3,
         rows: 2,
-        windowHandle: false,
-        sillInterior: true,
-        shutters: 'panel',
-        shutterWidth: 0.4,
+        ...details,
       },
     ]
     const outcome = authorScene(
@@ -3213,10 +3227,7 @@ test.each(['casement', 'double-hung', 'fixed'] as const)(
       windowType: type,
       columnRatios: [1 / 3, 1 / 3, 1 / 3],
       rowRatios: [0.5, 0.5],
-      windowHandle: false,
-      sillInterior: true,
-      shutters: 'panel',
-      shutterWidth: 0.4,
+      ...details,
     })
     expect((window as AnyNode & { sashGrid?: boolean }).sashGrid).toBe(
       type === 'fixed' ? undefined : true,

@@ -63,7 +63,7 @@ export const authorSceneOpening = z.object({
     .enum([...DoorType.options, ...WindowType.options.filter((t) => t !== 'sliding')])
     .optional()
     .describe(
-      'How it opens. A door: hinged (default), double (two leaves), french (two glazed leaves), folding, pocket, barn, sliding, garage-sectional, garage-rollup, garage-tiltup. A window: fixed (default; cannot open), sliding, casement, awning, hopper, single-hung, double-hung, bay, bow, louvered. Give it: a window with no type is written fixed.',
+      'How it opens. A door: hinged (default), double (two leaves), french (two glazed leaves), folding, pocket, barn, sliding, garage-sectional, garage-rollup, garage-tiltup. A window: fixed (default; cannot open), sliding, casement, awning, hopper, tilt-turn (inward tilt or turn), single-hung, double-hung, bay, bow, louvered. Give it: a window with no type is written fixed.',
     ),
   style: z
     .enum([...DOOR_STYLES, ...WINDOW_STYLES])

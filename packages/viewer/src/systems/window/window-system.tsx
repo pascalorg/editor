@@ -5,8 +5,9 @@ import {
   getEffectiveNode,
   getOpeningWallPlacement,
   getWallThickness,
+  openingCasingWidth,
+  openingExteriorFace,
   openingHostFacing,
-  openingInteriorFace,
   resolveOpeningCasingHost,
   resolveOpeningFrameDepth,
   type SceneMaterial,
@@ -41,6 +42,23 @@ import { buildOpeningCasingMeshes } from '../wall/opening-casing-geometry'
 import { getOpeningCutoutProxyDepth } from '../wall/opening-cutout-geometry'
 import { cornerFrameStale, FUSED_CORNER_SIDE } from './corner-frame'
 
+import {
+  AWNING_WINDOW_SASH_NAME,
+  CASEMENT_WINDOW_SASH_NAME,
+  DOUBLE_HUNG_BOTTOM_SASH_NAME,
+  DOUBLE_HUNG_TOP_SASH_NAME,
+  FRENCH_CASEMENT_LEFT_SASH_NAME,
+  FRENCH_CASEMENT_RIGHT_SASH_NAME,
+  HOPPER_WINDOW_SASH_NAME,
+  LOUVERED_WINDOW_SLATS_NAME,
+  poseWindowMovingParts,
+  SINGLE_HUNG_ACTIVE_SASH_NAME,
+  SLIDING_WINDOW_ACTIVE_PANEL_NAME,
+  TILT_TURN_WINDOW_SASH_NAME,
+} from './window-pose'
+
+export * from './window-pose'
+
 /** A window as the builders see it: its frame depth resolved against its host wall. */
 type RenderWindowNode = WindowNode & { frameDepth: number }
 
@@ -55,16 +73,6 @@ let currentShading: RenderShading = 'rendered'
 let currentTextures = true
 let currentColorPreset: ColorPreset = 'clay'
 let currentSceneMaterials: Record<SceneMaterialId, SceneMaterial> | undefined
-export const CASEMENT_WINDOW_SASH_NAME = 'casement-window-sash'
-export const FRENCH_CASEMENT_LEFT_SASH_NAME = 'french-casement-left-sash'
-export const FRENCH_CASEMENT_RIGHT_SASH_NAME = 'french-casement-right-sash'
-export const SLIDING_WINDOW_ACTIVE_PANEL_NAME = 'sliding-window-active-panel'
-export const SINGLE_HUNG_ACTIVE_SASH_NAME = 'single-hung-active-sash'
-export const DOUBLE_HUNG_TOP_SASH_NAME = 'double-hung-top-sash'
-export const DOUBLE_HUNG_BOTTOM_SASH_NAME = 'double-hung-bottom-sash'
-export const LOUVERED_WINDOW_SLATS_NAME = 'louvered-window-slats'
-export const AWNING_WINDOW_SASH_NAME = 'awning-window-sash'
-export const HOPPER_WINDOW_SASH_NAME = 'hopper-window-sash'
 
 const MAX_WINDOW_REBUILDS_PER_FRAME = 16
 const WINDOW_PROGRESSIVE_DIRTY_THRESHOLD = MAX_WINDOW_REBUILDS_PER_FRAME
@@ -255,7 +263,7 @@ function windowSlotDefault(slotId: 'frame' | 'glass'): THREE.Material {
 // role/base default. Textures-off ignores overrides — the monochrome escape hatch.
 function resolveWindowSlotMaterial(node: WindowNode, slotId: WindowSlotId): THREE.Material {
   const fallback =
-    slotId === 'hardware' || slotId === 'shutters'
+    slotId === 'hardware' || slotId === 'shutters' || slotId === 'sill'
       ? resolveWindowSlotMaterial(node, 'frame')
       : windowSlotDefault(slotId === 'glass' ? 'glass' : 'frame')
   if (!currentTextures) return fallback
@@ -305,20 +313,39 @@ function addBox(
  */
 const SILL_LIFT = 0.001
 
-/** The sill: a board under the opening, a little wider, standing out from the frame's front (+Z). */
+/** Both sills sit on finished host faces, independent of the frame's inset or placement face. */
+function windowFaceFrame(node: RenderWindowNode, mesh: THREE.Object3D) {
+  const nodes = useScene.getState().nodes
+  const exteriorFace = openingExteriorFace(node, nodes)
+  const facing = openingHostFacing({ rotation: [0, mesh.rotation.y, 0] })
+  const exterior = (exteriorFace === 'a' ? 1 : -1) * facing
+  const hostId = node.roofSegmentId ?? node.parentId
+  const hostNode = hostId ? nodes[hostId as AnyNodeId] : undefined
+  const host = resolveOpeningCasingHost(
+    node,
+    nodes,
+    hostNode ? getEffectiveNode(hostNode) : undefined,
+  )
+  const wallDepth =
+    host?.thickness ?? (hostNode?.type === 'wall' ? getWallThickness(hostNode) : node.frameDepth)
+  const cased = (face: 'a' | 'b') =>
+    face === 'a' ? node.casingFaceA === true : node.casingFaceB === true
+  return { exterior, exteriorFace, cased, wallDepth, offset: (node.position[2] ?? 0) * facing }
+}
+
 function addSill(parent: THREE.Object3D, node: RenderWindowNode) {
-  const { width, height, frameDepth, sillDepth, sillThickness } = node
-  currentWindowSlot = 'frame'
+  const { exterior, wallDepth, offset } = windowFaceFrame(node, parent)
+  currentWindowSlot = 'sill'
   addBox(
     parent,
-    baseMaterial,
-    width + sillDepth * 0.4,
-    sillThickness,
-    sillDepth,
+    resolveWindowSlotMaterial(node, 'sill'),
+    node.width + 2 * (node.sillOverhang ?? node.sillDepth * 0.4),
+    node.sillThickness,
+    node.sillDepth,
     0,
-    -height / 2 - sillThickness / 2 + SILL_LIFT,
-    frameDepth / 2 + sillDepth / 2,
-  )
+    -node.height / 2 - node.sillThickness / 2 + SILL_LIFT,
+    exterior * (wallDepth / 2 + node.sillDepth / 2) - offset,
+  ).name = 'window-exterior-sill'
 }
 
 function addShape(
@@ -856,6 +883,7 @@ function getAwningDirection(node: WindowNode) {
 
 function isRectangleOnlyWindowType(node: WindowNode) {
   return (
+    node.windowType === 'tilt-turn' ||
     node.windowType === 'sliding' ||
     node.windowType === 'single-hung' ||
     node.windowType === 'double-hung' ||
@@ -1659,6 +1687,40 @@ function addCasementWindowVisuals(node: RenderWindowNode, mesh: THREE.Mesh) {
   }
 
   if (sill) addSill(mesh, node)
+}
+
+function addTiltTurnWindowVisuals(node: RenderWindowNode, mesh: THREE.Mesh) {
+  const { width, height, frameDepth, frameThickness: rail } = node
+  const innerW = width - 2 * rail
+  const innerH = height - 2 * rail
+  currentWindowSlot = 'frame'
+  for (const side of [-1, 1]) {
+    addBox(mesh, baseMaterial, width, rail, frameDepth, 0, (side * (height - rail)) / 2, 0)
+    addBox(mesh, baseMaterial, rail, innerH, frameDepth, (side * (width - rail)) / 2, 0, 0)
+  }
+  if (innerW > 0.01 && innerH > 0.01) {
+    const turn = node.tiltTurnMode === 'turn'
+    const side = node.hingesSide === 'right' ? 1 : -1
+    const sash = new THREE.Group()
+    sash.name = TILT_TURN_WINDOW_SASH_NAME
+    sash.position.set(turn ? (side * innerW) / 2 : 0, turn ? 0 : -innerH / 2, frameDepth * 0.06)
+    const content = new THREE.Group()
+    content.position.set(turn ? (-side * innerW) / 2 : 0, turn ? 0 : innerH / 2, 0)
+    sash.add(content)
+    mesh.add(sash)
+    const sashRail = Math.max(rail * 0.72, 0.032)
+    addHungSash(
+      content,
+      innerW,
+      innerH,
+      sashRail,
+      frameDepth,
+      windowDepths(frameDepth).glass,
+      Math.max(innerW - 2 * sashRail, 0.01),
+      Math.max(innerH - 2 * sashRail, 0.01),
+    )
+  }
+  if (node.sill) addSill(mesh, node)
 }
 
 function addAwningWindowVisuals(node: RenderWindowNode, mesh: THREE.Mesh) {
@@ -2950,6 +3012,12 @@ function updateWindowMesh(rawNode: WindowNode, mesh: THREE.Mesh): boolean {
     return true
   }
 
+  if (windowType === 'tilt-turn') {
+    addTiltTurnWindowVisuals(node, mesh)
+    syncWindowCutout(node, mesh)
+    return true
+  }
+
   if (windowType === 'hopper') {
     addAwningWindowVisuals(node, mesh)
     syncWindowCutout(node, mesh)
@@ -3230,17 +3298,20 @@ function addSashGrid(node: RenderWindowNode, glass: THREE.Mesh) {
 
 function addSashHardware(node: RenderWindowNode, sash: THREE.Object3D, interior: number) {
   const rail = Math.max(node.frameThickness * 0.72, 0.032)
-  const horizontalHinge = node.windowType !== 'casement'
+  const tiltTurn = node.windowType === 'tilt-turn'
+  const horizontalHinge = node.windowType !== 'casement' && !tiltTurn
   const innerW = node.width - 2 * node.frameThickness
   const innerH = node.height - 2 * node.frameThickness
-  const french = node.casementStyle === 'french'
+  const french = !tiltTurn && node.casementStyle === 'french'
   const panelW = french && !horizontalHinge ? innerW / 2 : innerW
   const leftHinge =
     sash.name === FRENCH_CASEMENT_LEFT_SASH_NAME ||
-    (sash.name === CASEMENT_WINDOW_SASH_NAME && node.hingesSide === 'left')
+    ([CASEMENT_WINDOW_SASH_NAME, TILT_TURN_WINDOW_SASH_NAME].includes(sash.name) &&
+      node.hingesSide === 'left')
   const downward = getAwningDirection(node) === 'down'
-  const centerX = horizontalHinge ? 0 : ((leftHinge ? 1 : -1) * panelW) / 2
-  const centerY = horizontalHinge ? ((downward ? 1 : -1) * innerH) / 2 : 0
+  const tilt = tiltTurn && node.tiltTurnMode !== 'turn'
+  const centerX = tilt || horizontalHinge ? 0 : ((leftHinge ? 1 : -1) * panelW) / 2
+  const centerY = tilt ? innerH / 2 : horizontalHinge ? ((downward ? 1 : -1) * innerH) / 2 : 0
   const surfaceZ = (interior * windowDepths(node.frameDepth).sash) / 2
   const material = resolveWindowSlotMaterial(node, 'hardware')
   const hardware = new THREE.Group()
@@ -3264,25 +3335,31 @@ function addSashHardware(node: RenderWindowNode, sash: THREE.Object3D, interior:
     handle.name = 'window-handle'
     handle.position.set(
       horizontalHinge ? 0 : centerX + (leftHinge ? 1 : -1) * (panelW / 2 - rail / 2),
-      horizontalHinge ? centerY + (downward ? 1 : -1) * (innerH / 2 - rail / 2) : 0,
+      horizontalHinge ? centerY + (downward ? 1 : -1) * (innerH / 2 - rail / 2) : centerY,
       surfaceZ,
     )
     if (interior < 0) handle.rotation.y = Math.PI
+    if (tiltTurn) handle.rotation.z = Math.PI / 2
     hardware.add(handle)
     part(handle, roundedBox(0.028, 0.12, 0.006, 0.003), 0, 0, 0.003)
     part(handle, tube(0.006, 0.028), 0, 0, 0.02).rotation.x = Math.PI / 2
     part(handle, tube(0.006, 0.09), 0, -0.045, 0.034)
   }
-  for (const side of [-1, 1]) {
+  for (const side of tiltTurn ? [-1, 1, 0] : [-1, 1]) {
+    const bottom = tiltTurn && side === 0
     const hinge = new THREE.Group()
     hinge.name = 'window-hinge'
     hinge.position.set(
-      horizontalHinge ? side * panelW * 0.3 : 0,
-      horizontalHinge ? 0 : side * innerH * 0.3,
+      bottom
+        ? centerX
+        : horizontalHinge
+          ? side * panelW * 0.3
+          : centerX - ((leftHinge ? 1 : -1) * panelW) / 2,
+      bottom ? centerY - innerH / 2 : horizontalHinge ? 0 : centerY + side * innerH * 0.3,
       surfaceZ,
     )
     // Mirroring uses rotation so the hardware keeps outward-facing triangles.
-    if (horizontalHinge) hinge.rotation.z = Math.PI / 2
+    if (horizontalHinge || bottom) hinge.rotation.z = Math.PI / 2
     if (interior < 0) hinge.rotation.y = Math.PI
     hardware.add(hinge)
     for (const geometry of [hingeLeafPart(0.01, 0.06), hingeJambPart(0.01, 0.06)]) {
@@ -3293,91 +3370,151 @@ function addSashHardware(node: RenderWindowNode, sash: THREE.Object3D, interior:
 
 /** Finish existing sash groups so pose/export animate every attached part together. */
 function addWindowDetails(node: RenderWindowNode, mesh: THREE.Mesh) {
-  const hasHardware = !node.corner && ['casement', 'awning', 'hopper'].includes(node.windowType)
-  const hasShutters = node.shutters && node.shutters !== 'none'
-  if (!hasHardware && !hasShutters && !node.sillInterior && !node.sashGrid) return
-  const nodes = useScene.getState().nodes
-  const interiorFace =
-    hasHardware || hasShutters || node.sillInterior ? openingInteriorFace(node, nodes) : 'b'
-  const facing = openingHostFacing({ rotation: [0, mesh.rotation.y, 0] })
-  const interior = (interiorFace === 'a' ? 1 : -1) * facing
-  const hostId = node.roofSegmentId ?? node.parentId
-  const hostNode = hostId ? nodes[hostId as AnyNodeId] : undefined
-  const host = resolveOpeningCasingHost(
-    node,
-    nodes,
-    hostNode ? getEffectiveNode(hostNode) : undefined,
-  )
-  const wallDepth = host?.thickness ?? node.frameDepth
-  const offset = (node.position[2] ?? 0) * facing
+  const hasHardware =
+    !node.corner && ['casement', 'awning', 'hopper', 'tilt-turn'].includes(node.windowType)
+  const { exterior, exteriorFace, cased, wallDepth, offset } = windowFaceFrame(node, mesh)
+  const interior = -exterior
+  mesh.userData.windowExteriorSign = exterior
   if (node.sillInterior) {
-    currentWindowSlot = 'frame'
+    const interiorFace = exteriorFace === 'a' ? 'b' : 'a'
+    const depth = node.sillInteriorDepth ?? 0.06
+    const thickness = node.sillInteriorThickness ?? 0.03
+    const overhang =
+      (cased(interiorFace) ? openingCasingWidth(node) : 0) + (node.sillInteriorOverhang ?? 0.015)
+    currentWindowSlot = 'sill'
     addBox(
       mesh,
-      baseMaterial,
-      node.width + 0.1,
-      0.03,
-      0.06,
+      resolveWindowSlotMaterial(node, 'sill'),
+      node.width + 2 * overhang,
+      thickness,
+      depth,
       0,
-      -node.height / 2 - 0.015 + SILL_LIFT,
-      interior * (wallDepth / 2 + 0.03) - offset,
+      -node.height / 2 - thickness / 2 + SILL_LIFT,
+      interior * (wallDepth / 2 + depth / 2) - offset,
     ).name = 'window-interior-stool'
   }
   if (node.shutters && node.shutters !== 'none') {
     currentWindowSlot = 'shutters'
     const material = resolveWindowSlotMaterial(node, 'shutters')
-    const width = Math.min(node.shutterWidth ?? node.width / 2, 0.6)
+    const width = node.shutterWidth ?? Math.min(node.width / 2, 0.6)
     const height = node.height
     const border = Math.min(0.055, width / 4, height / 8)
+    const casingGap = cased(exteriorFace) ? openingCasingWidth(node) + 0.01 : 0
     for (const side of [-1, 1]) {
+      if (
+        (node.shutterSides === 'left' && side === 1) ||
+        (node.shutterSides === 'right' && side === -1)
+      )
+        continue
       const shutter = new THREE.Group()
       shutter.name = 'window-shutter'
+      shutter.userData.side = side === -1 ? 'left' : 'right'
       shutter.position.set(
-        side * (node.width / 2 + width / 2),
+        side * (node.width / 2 + casingGap),
         0,
-        -interior * (wallDepth / 2 + 0.02 + 0.015) - offset,
+        exterior * (wallDepth / 2 + 0.02 + 0.015) - offset,
       )
-      if (interior > 0) shutter.rotation.y = Math.PI
+      shutter.rotation.y = -side * exterior * (1 - (node.shutterOpen ?? 1)) * Math.PI
       mesh.add(shutter)
-      for (const edge of [-1, 1]) {
-        addBox(shutter, material, border, height, 0.03, (edge * (width - border)) / 2, 0, 0)
-        addBox(
-          shutter,
-          material,
-          width - 2 * border,
-          border,
-          0.03,
-          0,
-          (edge * (height - border)) / 2,
-          0,
-        )
-      }
-      const innerW = width - 2 * border
-      const innerH = height - 2 * border
-      if (node.shutters === 'louvered') {
-        for (let y = -innerH / 2 + 0.02; y < innerH / 2; y += 0.04) {
-          addBox(shutter, material, innerW, Math.min(0.034, innerH), 0.012, 0, y, 0).rotation.x =
-            -Math.PI / 6
-        }
-      } else {
-        addBox(shutter, material, innerW, border, 0.03, 0, 0, 0)
-        for (const half of [-1, 1]) {
-          addBox(
-            shutter,
-            material,
-            innerW,
-            (innerH - border) / 2,
-            0.012,
+      const board = (w: number, h: number, d: number, x: number, y: number, z = 0) =>
+        addBox(shutter, material, w, h, d, (side * width) / 2 + x, y, z)
+      if (node.shutters === 'board-batten') {
+        const count = Math.ceil(width / 0.1)
+        for (let i = 0; i < count; i++) {
+          const boardWidth = Math.min(0.1, width - i * 0.1)
+          board(
+            boardWidth - Math.min(0.002, boardWidth * 0.05),
+            height,
+            0.02,
+            -width / 2 + i * 0.1 + boardWidth / 2,
             0,
-            (half * (innerH + border)) / 4,
-            -0.009,
           )
+        }
+        for (const y of [-height * 0.3, height * 0.3])
+          board(width, 0.07, 0.01, 0, y, -exterior * 0.01)
+        if (height > 1.2) board(width, 0.07, 0.01, 0, 0, -exterior * 0.01)
+      } else {
+        for (const edge of [-1, 1]) {
+          board(border, height, 0.03, (edge * (width - border)) / 2, 0)
+          board(width - 2 * border, border, 0.03, 0, (edge * (height - border)) / 2)
+        }
+        const innerW = width - 2 * border
+        const innerH = height - 2 * border
+        if (node.shutters === 'louvered') {
+          for (let y = -innerH / 2 + 0.02; y < innerH / 2; y += 0.04)
+            board(innerW, Math.min(0.034, innerH), 0.012, 0, y).rotation.x =
+              (-exterior * Math.PI) / 6
+          if (height > 1.2) board(innerW, border, 0.03, 0, 0)
+        } else {
+          if (height > 1.2) {
+            board(innerW, border, 0.03, 0, 0)
+            for (const half of [-1, 1])
+              board(
+                innerW,
+                (innerH - border) / 2,
+                0.012,
+                0,
+                (half * (innerH + border)) / 4,
+                -exterior * 0.009,
+              )
+          } else board(innerW, innerH, 0.012, 0, 0, -exterior * 0.009)
         }
       }
     }
   }
+  if (node.rollerShutter === 'box') {
+    currentWindowSlot = 'shutters'
+    const material = resolveWindowSlotMaterial(node, 'shutters')
+    const z = exterior * (wallDepth / 2 + 0.02) - offset
+    addBox(
+      mesh,
+      material,
+      node.width + 0.08,
+      0.18,
+      0.18,
+      0,
+      node.height / 2 + 0.09,
+      z + exterior * 0.09,
+    ).name = 'window-roller-box'
+    for (const side of [-1, 1])
+      addBox(
+        mesh,
+        material,
+        0.04,
+        node.height,
+        0.03,
+        side * (node.width / 2 + 0.02),
+        0,
+        z + exterior * 0.015,
+      ).name = 'window-roller-guide'
+    const curtain = new THREE.Group()
+    curtain.name = 'window-roller-curtain'
+    mesh.add(curtain)
+    const drop = (1 - (node.rollerShutterOpen ?? 1)) * node.height
+    for (let top = 0; top < drop - 1e-9; top += 0.04) {
+      const h = Math.min(0.04, drop - top)
+      addBox(
+        curtain,
+        material,
+        node.width,
+        h,
+        0.012,
+        0,
+        node.height / 2 - top - h / 2,
+        z + exterior * 0.015,
+      )
+    }
+  }
   if (node.corner) return
-  const gridTypes = ['casement', 'sliding', 'single-hung', 'double-hung', 'awning', 'hopper']
+  const gridTypes = [
+    'casement',
+    'sliding',
+    'single-hung',
+    'double-hung',
+    'awning',
+    'hopper',
+    'tilt-turn',
+  ]
   // Curved sash outlines need clipped grids; rectangular sashes cover the initial grid contract.
   if (
     node.sashGrid &&
@@ -3397,16 +3534,30 @@ function addWindowDetails(node: RenderWindowNode, mesh: THREE.Mesh) {
     FRENCH_CASEMENT_RIGHT_SASH_NAME,
     AWNING_WINDOW_SASH_NAME,
     HOPPER_WINDOW_SASH_NAME,
+    TILT_TURN_WINDOW_SASH_NAME,
   ]) {
     const sash = mesh.getObjectByName(name)
     if (!sash) continue
     addSashHardware(node, sash, interior)
-    disableSubtreeRaycastIfSwung(sash, sash.rotation.y || sash.rotation.x)
   }
 }
 
 function syncWindowCutout(node: RenderWindowNode, mesh: THREE.Mesh) {
-  if (node.openingKind !== 'opening') addWindowDetails(node, mesh)
+  if (node.openingKind !== 'opening') {
+    addWindowDetails(node, mesh)
+    poseWindowMovingParts(node, mesh, getWindowRenderOpenAmount(node))
+    for (const name of [
+      CASEMENT_WINDOW_SASH_NAME,
+      FRENCH_CASEMENT_LEFT_SASH_NAME,
+      FRENCH_CASEMENT_RIGHT_SASH_NAME,
+      AWNING_WINDOW_SASH_NAME,
+      HOPPER_WINDOW_SASH_NAME,
+      TILT_TURN_WINDOW_SASH_NAME,
+    ]) {
+      const sash = mesh.getObjectByName(name)
+      if (sash) disableSubtreeRaycastIfSwung(sash, sash.rotation.y || sash.rotation.x)
+    }
+  }
   // ── Cutout: invisible raycast hit target for the whole opening ──
   let cutout = mesh.getObjectByName('cutout') as THREE.Mesh | undefined
   if (!cutout) {
