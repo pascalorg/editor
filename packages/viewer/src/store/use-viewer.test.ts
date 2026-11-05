@@ -316,3 +316,23 @@ describe('the site ground with showGround off', () => {
     }
   })
 })
+
+describe('render quality', () => {
+  const original = useViewer.getState()
+  afterEach(() => useViewer.setState(original, true))
+
+  test('auto follows the detected tier; a pick holds until auto is chosen again', () => {
+    const store = useViewer.getState()
+    store.setRenderQuality('auto')
+    store.setDetectedRenderQuality('low')
+    expect(useViewer.getState().renderQuality).toBe('low')
+    store.setRenderQuality('high')
+    store.setDetectedRenderQuality('medium')
+    expect(useViewer.getState()).toMatchObject({
+      renderQuality: 'high',
+      renderQualityChoice: 'high',
+    })
+    store.setRenderQuality('auto')
+    expect(useViewer.getState().renderQuality).toBe('medium')
+  })
+})

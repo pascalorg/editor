@@ -3734,6 +3734,16 @@ msgstr "Pivoter"
 msgid "editor.cameraHint.zoom"
 msgstr "Zoom"
 
+# Source-Hash: 5299816622fc73be
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Quality: Auto"
+#: packages/editor/src/components/ui/command-palette/editor-commands.tsx
+#, fuzzy
+msgid "editor.commands.qualityAuto"
+msgstr "Qualité : Auto"
+
 # Source-Hash: bf4659b003e22b8d
 # Review: required
 # AI-Provider: claude-code
@@ -4004,21 +4014,21 @@ msgstr "Quitter le focus sur le logement"
 msgid "editor.floatingLevelSelector.focusedUnitHasZonesHere"
 msgstr "Le logement ciblé a des zones ici"
 
-# Source-Hash: 6a00e82fda812178
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "The ground floor stands {distance} over grade. Seat the ground floor 8 in over grade"
+# Source-Hash: 6a00e82fda812178
+# Review: required
 #: packages/editor/src/components/ui/floating-level-selector.tsx
 #, fuzzy
 msgid "editor.floatingLevelSelector.groundFloorOverGrade"
 msgstr "Le rez-de-chaussée se trouve à {distance} au-dessus du sol. {action}"
 
-# Source-Hash: 61f400e77494df9b
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "The ground floor stands {distance} under grade. Seat the ground floor 8 in over grade"
+# Source-Hash: 61f400e77494df9b
+# Review: required
 #: packages/editor/src/components/ui/floating-level-selector.tsx
 #, fuzzy
 msgid "editor.floatingLevelSelector.groundFloorUnderGrade"
@@ -36004,9 +36014,50 @@ msgstr "Le soleil suit votre position"
 # AI-Model: claude-opus-5-5
 # English: "Use my location"
 #: packages/editor/src/components/viewer/render-settings-menu.tsx
+#: packages/editor/src/components/viewer/sky-control.tsx
 #, fuzzy
 msgid "viewer.daylight.location.use"
 msgstr "Utiliser ma position"
+
+# Source-Hash: 18dad06b2abd1dd7
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Afternoon"
+#: packages/editor/src/components/viewer/sky-control.tsx
+#, fuzzy
+msgid "viewer.daylight.phase.afternoon"
+msgstr "Après-midi"
+
+# Source-Hash: 5bcbec8f2f132d3a
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Morning"
+#: packages/editor/src/components/viewer/sky-control.tsx
+#, fuzzy
+msgid "viewer.daylight.phase.morning"
+msgstr "Matin"
+
+# Source-Hash: 05b65242d8c48791
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Auto"
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
+#, fuzzy
+msgid "viewer.daylight.quality.auto"
+msgstr "Auto"
+
+# Source-Hash: 9dda9a76be946457
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Picked for this device: {tier}"
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
+#, fuzzy
+msgid "viewer.daylight.quality.autoDetail"
+msgstr "Choisie pour cet appareil : {tier}"
 
 # Source-Hash: b77127463c51fa94
 # Review: required
@@ -36078,12 +36129,153 @@ msgstr "Occlusion ambiante en demi-résolution"
 msgid "viewer.daylight.quality.title"
 msgstr "Qualité"
 
+# Source-Hash: 5cdc78a33073e842
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Drag the sun to set the time"
+#: packages/editor/src/components/viewer/sky-control.tsx
+#, fuzzy
+msgid "viewer.daylight.sky.arc"
+msgstr "Faites glisser le soleil pour régler l'heure"
+
+# Source-Hash: d7cf5045c01b2eb9
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Close"
+#: packages/editor/src/components/viewer/sky-control.tsx
+#, fuzzy
+msgid "viewer.daylight.sky.close"
+msgstr "Fermer"
+
+# Source-Hash: 047f94cfff30d159
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Cloud cover"
+#: packages/editor/src/components/viewer/sky-control.tsx
+#, fuzzy
+msgid "viewer.daylight.sky.cloudCover"
+msgstr "Couverture nuageuse"
+
+# Source-Hash: 713190bee1f709c9
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Follow the clock"
+#: packages/editor/src/components/viewer/sky-control.tsx
+#, fuzzy
+msgid "viewer.daylight.sky.followClock"
+msgstr "Suivre l'horloge"
+
+# Source-Hash: 65e4960f5046f388
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "The sun moves with your local clock."
+#: packages/editor/src/components/viewer/sky-control.tsx
+#, fuzzy
+msgid "viewer.daylight.sky.followClockDetail"
+msgstr "Le soleil suit votre horloge locale."
+
+# Source-Hash: ae43493ea6fa1c9b
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "In viewport"
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
+#, fuzzy
+msgid "viewer.daylight.sky.inViewport"
+msgstr "Dans la vue"
+
+# Source-Hash: 32e941d5f1cf996a
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Follows your local clock. Sun position is approximate."
+#: packages/editor/src/components/viewer/sky-control.tsx
+#, fuzzy
+msgid "viewer.daylight.sky.liveDetail"
+msgstr "Suit votre horloge locale. La position du soleil est approximative."
+
+# Source-Hash: 942e1615fb4f395b
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Time & weather"
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
+#, fuzzy
+msgid "viewer.daylight.sky.menuItem"
+msgstr "Heure et météo"
+
+# Source-Hash: 1e15866d9e91fed6
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Time and weather"
+#: packages/editor/src/components/viewer/sky-control.tsx
+#, fuzzy
+msgid "viewer.daylight.sky.open"
+msgstr "Heure et météo"
+
+# Source-Hash: bf91b71a9aa76e94
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Reset"
+#: packages/editor/src/components/viewer/sky-control.tsx
+#, fuzzy
+msgid "viewer.daylight.sky.reset"
+msgstr "Réinitialiser"
+
+# Source-Hash: 09ce200e8245250a
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Light and weather for this view"
+#: packages/editor/src/components/viewer/sky-control.tsx
+#, fuzzy
+msgid "viewer.daylight.sky.subtitle"
+msgstr "Lumière et météo de cette vue"
+
+# Source-Hash: 1c93d60fee6d9820
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Sunrise"
+#: packages/editor/src/components/viewer/sky-control.tsx
+#, fuzzy
+msgid "viewer.daylight.sky.sunrise"
+msgstr "Lever"
+
+# Source-Hash: efe94d3ec8d8c44e
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Sunset"
+#: packages/editor/src/components/viewer/sky-control.tsx
+#, fuzzy
+msgid "viewer.daylight.sky.sunset"
+msgstr "Coucher"
+
+# Source-Hash: cd6c31c72565a084
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Sky"
+#: packages/editor/src/components/viewer/sky-control.tsx
+#, fuzzy
+msgid "viewer.daylight.sky.title"
+msgstr "Ciel"
+
 # Source-Hash: dfa53e6471dec872
 # Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Blue hour"
 #: packages/editor/src/components/viewer/render-settings-menu.tsx
+#: packages/editor/src/components/viewer/sky-control.tsx
 #, fuzzy
 msgid "viewer.daylight.time.blue"
 msgstr "Heure bleue"
@@ -36094,6 +36286,7 @@ msgstr "Heure bleue"
 # AI-Model: claude-opus-5-5
 # English: "Golden hour"
 #: packages/editor/src/components/viewer/render-settings-menu.tsx
+#: packages/editor/src/components/viewer/sky-control.tsx
 #, fuzzy
 msgid "viewer.daylight.time.golden"
 msgstr "Heure dorée"
@@ -36104,6 +36297,7 @@ msgstr "Heure dorée"
 # AI-Model: claude-opus-5-5
 # English: "Midday"
 #: packages/editor/src/components/viewer/render-settings-menu.tsx
+#: packages/editor/src/components/viewer/sky-control.tsx
 #, fuzzy
 msgid "viewer.daylight.time.midday"
 msgstr "Midi"
@@ -36114,6 +36308,7 @@ msgstr "Midi"
 # AI-Model: claude-opus-5-5
 # English: "Night"
 #: packages/editor/src/components/viewer/render-settings-menu.tsx
+#: packages/editor/src/components/viewer/sky-control.tsx
 #, fuzzy
 msgid "viewer.daylight.time.night"
 msgstr "Nuit"
@@ -36124,6 +36319,7 @@ msgstr "Nuit"
 # AI-Model: claude-opus-5-5
 # English: "Time of day"
 #: packages/editor/src/components/viewer/render-settings-menu.tsx
+#: packages/editor/src/components/viewer/sky-control.tsx
 #, fuzzy
 msgid "viewer.daylight.time.title"
 msgstr "Moment de la journée"
@@ -36134,6 +36330,7 @@ msgstr "Moment de la journée"
 # AI-Model: claude-opus-5-5
 # English: "Clear"
 #: packages/editor/src/components/viewer/render-settings-menu.tsx
+#: packages/editor/src/components/viewer/sky-control.tsx
 #, fuzzy
 msgid "viewer.daylight.weather.clear"
 msgstr "Dégagé"
@@ -36144,6 +36341,7 @@ msgstr "Dégagé"
 # AI-Model: claude-opus-5-5
 # English: "Cloudy"
 #: packages/editor/src/components/viewer/render-settings-menu.tsx
+#: packages/editor/src/components/viewer/sky-control.tsx
 #, fuzzy
 msgid "viewer.daylight.weather.cloudy"
 msgstr "Nuageux"
@@ -36154,6 +36352,7 @@ msgstr "Nuageux"
 # AI-Model: claude-opus-5-5
 # English: "Fair"
 #: packages/editor/src/components/viewer/render-settings-menu.tsx
+#: packages/editor/src/components/viewer/sky-control.tsx
 #, fuzzy
 msgid "viewer.daylight.weather.fair"
 msgstr "Beau temps"
@@ -36164,6 +36363,7 @@ msgstr "Beau temps"
 # AI-Model: claude-opus-5-5
 # English: "Overcast"
 #: packages/editor/src/components/viewer/render-settings-menu.tsx
+#: packages/editor/src/components/viewer/sky-control.tsx
 #, fuzzy
 msgid "viewer.daylight.weather.overcast"
 msgstr "Couvert"

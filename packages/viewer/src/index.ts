@@ -119,7 +119,16 @@ export {
 } from './lib/daylight/location'
 export { type DaylightAtmosphereSource, isDaylightAtmosphere } from './lib/daylight/look'
 export { WEATHER_COVER, type Weather } from './lib/daylight/sky'
-export type { TimeOfDay } from './lib/daylight/solar'
+export {
+  presetInstant,
+  type SkyPhase,
+  skyPhase,
+  solarClockInstant,
+  solarClockMinutes,
+  solarPosition,
+  sunEvents,
+  type TimeOfDay,
+} from './lib/daylight/solar'
 export type { DisplayState } from './lib/display-state'
 export { disposeObject3DResources } from './lib/dispose-object3d'
 export type { EdgeMode } from './lib/edge-style'
@@ -324,6 +333,7 @@ export {
   groundVeiled,
   type MetricNotation,
   type RenderQuality,
+  type RenderQualityChoice,
   siteGroundShown,
   type UndergroundEdge,
   type UndergroundLook,

@@ -10,6 +10,7 @@ import {
   type Weather,
 } from '@pascal-app/viewer'
 import {
+  ArrowDownLeft,
   Check,
   Cloud,
   CloudSun,
@@ -28,12 +29,13 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
 } from '../ui/primitives/dropdown-menu'
+import { openSkyPanel, useSkyPanel, weatherIcon } from './sky-control'
 
 /**
  * Render settings shared by every display dropdown:
  * - `QualityMenu` (both appearances): Low / Medium / High.
  * - `DaylightMenu` (colored): time-of-day and weather presets, plus "Use my location" when the
- *   site has no geocoded point.
+ *   site has no geocoded point — or, while the sky chip is in the viewport, a row opening it.
  * - `EdgesToggleItem` (monochrome): ink edges on or off.
  */
 
@@ -110,16 +112,33 @@ export function QualityMenu({
 }) {
   const i18n = usePascalI18n()
   const quality = useViewer((s) => s.renderQuality)
+  const choice = useViewer((s) => s.renderQualityChoice)
   const qualities = qualityOptions(i18n)
   const active = qualities.find((o) => o.id === quality) ?? qualities[2]
+  const autoName = i18n._({ id: 'viewer.daylight.quality.auto', message: 'Auto' })
   return (
     <DropdownMenuSub>
       <DropdownMenuSubTrigger>
         <Gauge className="h-4 w-4" />
         <span>{i18n._({ id: 'viewer.daylight.quality.title', message: 'Quality' })}</span>
-        <span className="ml-auto text-muted-foreground text-xs">{active.name}</span>
+        <span className="ml-auto text-muted-foreground text-xs">
+          {choice === 'auto' ? `${autoName} (${active.name})` : active.name}
+        </span>
       </DropdownMenuSubTrigger>
       <DropdownMenuSubContent className={subContentClassName}>
+        <DropdownMenuItem onSelect={() => useViewer.getState().setRenderQuality('auto')}>
+          <div className="flex flex-col">
+            <span className="text-foreground">{autoName}</span>
+            <span className="text-muted-foreground text-xs">
+              {i18n._({
+                id: 'viewer.daylight.quality.autoDetail',
+                message: 'Picked for this device: {tier}',
+                values: { tier: active.name },
+              })}
+            </span>
+          </div>
+          {choice === 'auto' ? <Check className="ml-auto h-4 w-4 text-foreground" /> : null}
+        </DropdownMenuItem>
         {qualities.map((option) => (
           <DropdownMenuItem
             key={option.id}
@@ -129,7 +148,7 @@ export function QualityMenu({
               <span className="text-foreground">{option.name}</span>
               <span className="text-muted-foreground text-xs">{option.detail}</span>
             </div>
-            {quality === option.id ? <Check className="ml-auto h-4 w-4 text-foreground" /> : null}
+            {choice === option.id ? <Check className="ml-auto h-4 w-4 text-foreground" /> : null}
           </DropdownMenuItem>
         ))}
       </DropdownMenuSubContent>
@@ -156,11 +175,27 @@ export function DaylightMenu({
     return false
   })
   const [locating, setLocating] = useState(false)
+  // The sky chip beside the compass carries time and weather wherever it is mounted.
+  const skyChip = useSkyPanel((s) => s.hosts > 0)
   const times = timeOptions(i18n)
   const weathers = weatherOptions(i18n)
   const activeTime = times.find((o) => o.id === timeOfDay) ?? times[1]
   const activeWeather = weathers.find((o) => o.id === weather) ?? weathers[1]
   const source = siteHasLocation ? 'site' : resolveLocation(null, deviceLocation).source
+
+  if (skyChip) {
+    const WeatherIcon = weatherIcon(weather)
+    return (
+      <DropdownMenuItem onSelect={openSkyPanel}>
+        <WeatherIcon className="h-4 w-4" />
+        <span>{i18n._({ id: 'viewer.daylight.sky.menuItem', message: 'Time & weather' })}</span>
+        <span className="ml-auto flex items-center gap-1 text-violet-600 text-xs dark:text-violet-300">
+          {i18n._({ id: 'viewer.daylight.sky.inViewport', message: 'In viewport' })}
+          <ArrowDownLeft className="h-3.5 w-3.5" />
+        </span>
+      </DropdownMenuItem>
+    )
+  }
 
   return (
     <>

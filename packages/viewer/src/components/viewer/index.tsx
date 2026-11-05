@@ -21,6 +21,7 @@ import {
   useState,
 } from 'react'
 import * as THREE from 'three/webgpu'
+import { classifyDevice, readDeviceSignals } from '../../lib/device-tier'
 import { hasDrawableGeometry } from '../../lib/drawable-geometry'
 import { PERF_OVERLAY_ENABLED } from '../../lib/gpu-perf'
 import { applyIsolation, clearIsolation } from '../../lib/isolation'
@@ -721,6 +722,14 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
               })
               if (result.status === 'ready') {
                 installEmptyDrawGuard(result.renderer)
+                // Before the first frame, so the post-processing builds once at the device's tier.
+                useViewer
+                  .getState()
+                  .setDetectedRenderQuality(
+                    classifyDevice(
+                      readDeviceSignals(result.backend, (result.renderer as any).backend?.device),
+                    ),
+                  )
                 return result.renderer
               }
 

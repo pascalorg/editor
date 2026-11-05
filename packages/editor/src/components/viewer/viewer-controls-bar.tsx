@@ -17,6 +17,7 @@ import {
   Square,
   SwatchBook,
 } from 'lucide-react'
+import { useIsMobile } from '../../hooks/use-mobile'
 import { sceneThemeName } from '../../i18n/scene-theme-name'
 import { cn } from '../../lib/utils'
 import { ActionButton } from '../ui/action-menu/action-button'
@@ -33,6 +34,7 @@ import {
 } from '../ui/primitives/dropdown-menu'
 import { TooltipProvider } from '../ui/primitives/tooltip'
 import { DaylightMenu, EdgesToggleItem, QualityMenu } from './render-settings-menu'
+import { SkyControl } from './sky-control'
 
 const wallModeConfig = {
   up: {
@@ -270,6 +272,8 @@ export const ViewerControlsBar = ({
   const i18n = usePascalI18n()
   const levelMode = useViewer((s) => s.levelMode)
   const wallMode = useViewer((s) => s.wallMode)
+  const textures = useViewer((s) => s.textures)
+  const isMobile = useIsMobile()
   // Sessions may carry a stale mode outside the cycle (e.g. the retired
   // 'translucent'); render and cycle it as cutaway instead of crashing.
   const safeWallMode = (
@@ -277,172 +281,180 @@ export const ViewerControlsBar = ({
   ) as keyof typeof wallModeConfig
 
   return (
-    <div
-      className={cn(
-        'dark absolute bottom-4 left-1/2 z-20 -translate-x-1/2 text-foreground sm:bottom-6',
-        className,
-      )}
-    >
-      <TooltipProvider delayDuration={0}>
-        <div className="corner-smooth pointer-events-auto flex h-12 max-w-[calc(100vw-1rem)] flex-row items-center justify-center gap-0.5 overflow-hidden rounded-2xl border border-border/40 bg-background/95 p-1 shadow-elevation-4 backdrop-blur-xl transition-colors duration-200 ease-out sm:h-14 sm:gap-1.5 sm:p-1.5">
-          {((canShowScans && (!glbActive || glbHasScans)) ||
-            (canShowGuides && (!glbActive || glbHasGuides))) && (
-            <>
-              <VisibilityMenu
-                canShowGuides={canShowGuides && (!glbActive || glbHasGuides)}
-                canShowScans={canShowScans && (!glbActive || glbHasScans)}
-              />
-              <div className="mx-1 h-5 w-px bg-border/40" />
-            </>
-          )}
+    <>
+      {textures && !isMobile ? (
+        // The sky (time and weather) beside the compass in the scene's bottom-left corner.
+        <SkyControl dark style={{ left: 52 }} />
+      ) : null}
+      <div
+        className={cn(
+          'dark absolute bottom-4 left-1/2 z-20 -translate-x-1/2 text-foreground sm:bottom-6',
+          className,
+        )}
+      >
+        <TooltipProvider delayDuration={0}>
+          <div className="corner-smooth pointer-events-auto flex h-12 max-w-[calc(100vw-1rem)] flex-row items-center justify-center gap-0.5 overflow-hidden rounded-2xl border border-border/40 bg-background/95 p-1 shadow-elevation-4 backdrop-blur-xl transition-colors duration-200 ease-out sm:h-14 sm:gap-1.5 sm:p-1.5">
+            {((canShowScans && (!glbActive || glbHasScans)) ||
+              (canShowGuides && (!glbActive || glbHasGuides))) && (
+              <>
+                <VisibilityMenu
+                  canShowGuides={canShowGuides && (!glbActive || glbHasGuides)}
+                  canShowScans={canShowScans && (!glbActive || glbHasScans)}
+                />
+                <div className="mx-1 h-5 w-px bg-border/40" />
+              </>
+            )}
 
-          {/* Level mode */}
-          <ActionButton
-            className={
-              levelMode === 'stacked'
-                ? 'hover:bg-white/5 hover:text-amber-400'
-                : 'bg-amber-500/20 text-amber-400'
-            }
-            label={i18n._({
-              id: 'viewer.levels.label',
-              message: 'Levels: {mode}',
-              values: { mode: levelModeLabel(levelMode, i18n) },
-            })}
-            onClick={() => {
-              if (levelMode === 'manual') return useViewer.getState().setLevelMode('stacked')
-              const modes: ('stacked' | 'exploded' | 'solo')[] = ['stacked', 'exploded', 'solo']
-              const nextIndex = (modes.indexOf(levelMode as any) + 1) % modes.length
-              useViewer.getState().setLevelMode(modes[nextIndex] ?? 'stacked')
-            }}
-            size="icon"
-            tooltipClassName="dark"
-            tooltipSide="top"
-            variant="ghost"
-          >
-            {levelMode === 'solo' && <Diamond className="h-6 w-6" />}
-            {levelMode === 'exploded' && <Layers2 className="h-6 w-6" />}
-            {(levelMode === 'stacked' || levelMode === 'manual') && <Layers className="h-6 w-6" />}
-          </ActionButton>
-
-          {/* Wall mode — parametric only; baked GLB walls are fixed-height. */}
-          {!glbActive && (
+            {/* Level mode */}
             <ActionButton
               className={
-                safeWallMode === 'cutaway'
-                  ? 'opacity-60 grayscale hover:bg-white/5 hover:opacity-100 hover:grayscale-0'
-                  : 'bg-white/10'
+                levelMode === 'stacked'
+                  ? 'hover:bg-white/5 hover:text-amber-400'
+                  : 'bg-amber-500/20 text-amber-400'
               }
               label={i18n._({
-                id: 'viewer.walls.label',
-                message: 'Walls: {mode}',
-                values: { mode: wallModeLabel(safeWallMode, i18n) },
+                id: 'viewer.levels.label',
+                message: 'Levels: {mode}',
+                values: { mode: levelModeLabel(levelMode, i18n) },
               })}
               onClick={() => {
-                const modes: ('cutaway' | 'up' | 'down')[] = ['cutaway', 'up', 'down']
-                const nextIndex = (modes.indexOf(safeWallMode) + 1) % modes.length
-                useViewer.getState().setWallMode(modes[nextIndex] ?? 'cutaway')
+                if (levelMode === 'manual') return useViewer.getState().setLevelMode('stacked')
+                const modes: ('stacked' | 'exploded' | 'solo')[] = ['stacked', 'exploded', 'solo']
+                const nextIndex = (modes.indexOf(levelMode as any) + 1) % modes.length
+                useViewer.getState().setLevelMode(modes[nextIndex] ?? 'stacked')
               }}
               size="icon"
               tooltipClassName="dark"
               tooltipSide="top"
               variant="ghost"
             >
+              {levelMode === 'solo' && <Diamond className="h-6 w-6" />}
+              {levelMode === 'exploded' && <Layers2 className="h-6 w-6" />}
+              {(levelMode === 'stacked' || levelMode === 'manual') && (
+                <Layers className="h-6 w-6" />
+              )}
+            </ActionButton>
+
+            {/* Wall mode — parametric only; baked GLB walls are fixed-height. */}
+            {!glbActive && (
+              <ActionButton
+                className={
+                  safeWallMode === 'cutaway'
+                    ? 'opacity-60 grayscale hover:bg-white/5 hover:opacity-100 hover:grayscale-0'
+                    : 'bg-white/10'
+                }
+                label={i18n._({
+                  id: 'viewer.walls.label',
+                  message: 'Walls: {mode}',
+                  values: { mode: wallModeLabel(safeWallMode, i18n) },
+                })}
+                onClick={() => {
+                  const modes: ('cutaway' | 'up' | 'down')[] = ['cutaway', 'up', 'down']
+                  const nextIndex = (modes.indexOf(safeWallMode) + 1) % modes.length
+                  useViewer.getState().setWallMode(modes[nextIndex] ?? 'cutaway')
+                }}
+                size="icon"
+                tooltipClassName="dark"
+                tooltipSide="top"
+                variant="ghost"
+              >
+                <img
+                  alt={wallModeLabel(safeWallMode, i18n)}
+                  className="h-[28px] w-[28px]"
+                  height={28}
+                  src={wallModeConfig[safeWallMode].icon}
+                  width={28}
+                />
+              </ActionButton>
+            )}
+
+            <div className="mx-1 h-5 w-px bg-border/40" />
+
+            <DisplayMenu />
+
+            <div className="mx-1 h-5 w-px bg-border/40" />
+
+            {/* Walkthrough */}
+            <ActionButton
+              className={
+                walkthroughActive
+                  ? 'bg-emerald-500/20 text-emerald-400'
+                  : 'hover:bg-white/5 hover:text-emerald-400'
+              }
+              label={i18n._({
+                id: 'viewer.walkthrough.label',
+                message: 'Walkthrough: {state}',
+                values: {
+                  state: walkthroughActive
+                    ? i18n._({ id: 'viewer.common.on', message: 'On' })
+                    : i18n._({ id: 'viewer.common.off', message: 'Off' }),
+                },
+              })}
+              onClick={onWalkthroughToggle}
+              size="icon"
+              tooltipClassName="dark"
+              tooltipSide="top"
+              variant="ghost"
+            >
+              <Footprints className="h-6 w-6" />
+            </ActionButton>
+
+            <div className="mx-1 h-5 w-px bg-border/40" />
+
+            {/* Follow Pascal */}
+            <FollowPascalToggle className="hidden sm:inline-flex" tooltipClassName="dark" />
+
+            {/* Camera actions */}
+            <ActionButton
+              className="group hidden hover:bg-white/5 sm:inline-flex"
+              label={i18n._({ id: 'viewer.camera.orbitLeft', message: 'Orbit left' })}
+              onClick={() => emitter.emit('camera-controls:orbit-ccw')}
+              size="icon"
+              tooltipClassName="dark"
+              tooltipSide="top"
+              variant="ghost"
+            >
               <img
-                alt={wallModeLabel(safeWallMode, i18n)}
-                className="h-[28px] w-[28px]"
-                height={28}
-                src={wallModeConfig[safeWallMode].icon}
-                width={28}
+                alt={i18n._({ id: 'viewer.camera.orbitLeft', message: 'Orbit left' })}
+                className="h-[28px] w-[28px] -scale-x-100 object-contain opacity-70 transition-opacity group-hover:opacity-100"
+                src="/icons/rotate.webp"
               />
             </ActionButton>
-          )}
 
-          <div className="mx-1 h-5 w-px bg-border/40" />
+            <ActionButton
+              className="group hidden hover:bg-white/5 sm:inline-flex"
+              label={i18n._({ id: 'viewer.camera.orbitRight', message: 'Orbit right' })}
+              onClick={() => emitter.emit('camera-controls:orbit-cw')}
+              size="icon"
+              tooltipClassName="dark"
+              tooltipSide="top"
+              variant="ghost"
+            >
+              <img
+                alt={i18n._({ id: 'viewer.camera.orbitRight', message: 'Orbit right' })}
+                className="h-[28px] w-[28px] object-contain opacity-70 transition-opacity group-hover:opacity-100"
+                src="/icons/rotate.webp"
+              />
+            </ActionButton>
 
-          <DisplayMenu />
-
-          <div className="mx-1 h-5 w-px bg-border/40" />
-
-          {/* Walkthrough */}
-          <ActionButton
-            className={
-              walkthroughActive
-                ? 'bg-emerald-500/20 text-emerald-400'
-                : 'hover:bg-white/5 hover:text-emerald-400'
-            }
-            label={i18n._({
-              id: 'viewer.walkthrough.label',
-              message: 'Walkthrough: {state}',
-              values: {
-                state: walkthroughActive
-                  ? i18n._({ id: 'viewer.common.on', message: 'On' })
-                  : i18n._({ id: 'viewer.common.off', message: 'Off' }),
-              },
-            })}
-            onClick={onWalkthroughToggle}
-            size="icon"
-            tooltipClassName="dark"
-            tooltipSide="top"
-            variant="ghost"
-          >
-            <Footprints className="h-6 w-6" />
-          </ActionButton>
-
-          <div className="mx-1 h-5 w-px bg-border/40" />
-
-          {/* Follow Pascal */}
-          <FollowPascalToggle className="hidden sm:inline-flex" tooltipClassName="dark" />
-
-          {/* Camera actions */}
-          <ActionButton
-            className="group hidden hover:bg-white/5 sm:inline-flex"
-            label={i18n._({ id: 'viewer.camera.orbitLeft', message: 'Orbit left' })}
-            onClick={() => emitter.emit('camera-controls:orbit-ccw')}
-            size="icon"
-            tooltipClassName="dark"
-            tooltipSide="top"
-            variant="ghost"
-          >
-            <img
-              alt={i18n._({ id: 'viewer.camera.orbitLeft', message: 'Orbit left' })}
-              className="h-[28px] w-[28px] -scale-x-100 object-contain opacity-70 transition-opacity group-hover:opacity-100"
-              src="/icons/rotate.webp"
-            />
-          </ActionButton>
-
-          <ActionButton
-            className="group hidden hover:bg-white/5 sm:inline-flex"
-            label={i18n._({ id: 'viewer.camera.orbitRight', message: 'Orbit right' })}
-            onClick={() => emitter.emit('camera-controls:orbit-cw')}
-            size="icon"
-            tooltipClassName="dark"
-            tooltipSide="top"
-            variant="ghost"
-          >
-            <img
-              alt={i18n._({ id: 'viewer.camera.orbitRight', message: 'Orbit right' })}
-              className="h-[28px] w-[28px] object-contain opacity-70 transition-opacity group-hover:opacity-100"
-              src="/icons/rotate.webp"
-            />
-          </ActionButton>
-
-          <ActionButton
-            className="group hover:bg-white/5"
-            label={i18n._({ id: 'viewer.camera.topView', message: 'Top view' })}
-            onClick={() => emitter.emit('camera-controls:top-view')}
-            size="icon"
-            tooltipClassName="dark"
-            tooltipSide="top"
-            variant="ghost"
-          >
-            <img
-              alt={i18n._({ id: 'viewer.camera.topView', message: 'Top view' })}
-              className="h-[28px] w-[28px] object-contain opacity-70 transition-opacity group-hover:opacity-100"
-              src="/icons/topview.webp"
-            />
-          </ActionButton>
-        </div>
-      </TooltipProvider>
-    </div>
+            <ActionButton
+              className="group hover:bg-white/5"
+              label={i18n._({ id: 'viewer.camera.topView', message: 'Top view' })}
+              onClick={() => emitter.emit('camera-controls:top-view')}
+              size="icon"
+              tooltipClassName="dark"
+              tooltipSide="top"
+              variant="ghost"
+            >
+              <img
+                alt={i18n._({ id: 'viewer.camera.topView', message: 'Top view' })}
+                className="h-[28px] w-[28px] object-contain opacity-70 transition-opacity group-hover:opacity-100"
+                src="/icons/topview.webp"
+              />
+            </ActionButton>
+          </div>
+        </TooltipProvider>
+      </div>
+    </>
   )
 }

@@ -29,6 +29,8 @@ import {
 
 export type RenderContext = 'editor' | 'viewer'
 export type RenderQuality = 'low' | 'medium' | 'high'
+/** A quality tier, or `auto`: the tier the device was detected for. */
+export type RenderQualityChoice = RenderQuality | 'auto'
 export type MetricNotation = 'meters' | 'millimeters'
 export type WallMode = 'up' | 'cutaway' | 'down' | 'translucent'
 
@@ -262,16 +264,29 @@ type ViewerState = {
 
   /** Colored appearance: time-of-day preset driving the built-in daylight sun and sky. */
   timeOfDay: TimeOfDay
+  /** A preset: clears any exact time and the live clock. */
   setTimeOfDay: (timeOfDay: TimeOfDay) => void
+  /** An exact time (minutes after local mean midnight at the site); null follows `timeOfDay`. */
+  timeOfDayMinutes: number | null
+  setTimeOfDayMinutes: (minutes: number | null) => void
+  /** The sky follows the clock: now, live. */
+  skyLive: boolean
+  setSkyLive: (live: boolean) => void
   /** Colored appearance: cloud cover preset. */
   weather: Weather
   setWeather: (weather: Weather) => void
   /** A device position the user chose to share; used when the site has no geocoded point. */
   deviceLocation: LatLng | null
   setDeviceLocation: (location: LatLng | null) => void
-  /** Post-processing tier of the colored appearance (bloom/AO/AA/shadow resolution). */
+  /** Post-processing tier of the colored appearance (bloom/AO/AA/shadow resolution) in effect:
+   * the user's pick, or on `auto` the tier detected for the device. */
   renderQuality: RenderQuality
-  setRenderQuality: (quality: RenderQuality) => void
+  /** What the user picked (persisted); `auto` follows `detectedRenderQuality`. */
+  renderQualityChoice: RenderQualityChoice
+  /** The tier the device's capabilities call for (GPU, memory, form factor); never persisted. */
+  detectedRenderQuality: RenderQuality | null
+  setRenderQuality: (quality: RenderQualityChoice) => void
+  setDetectedRenderQuality: (quality: RenderQuality) => void
 
   // Embed-controlled ink-edge opacity override (null = use the per-mode default).
   inkOpacity: number | null
@@ -349,19 +364,29 @@ type PersistedViewerState = Partial<
     | 'wallMode'
     | 'projectPreferences'
     | 'timeOfDay'
+    | 'timeOfDayMinutes'
+    | 'skyLive'
     | 'weather'
     | 'deviceLocation'
-    | 'renderQuality'
+    | 'renderQualityChoice'
   >
 >
 
 const TIMES_OF_DAY = ['golden', 'midday', 'blue', 'night'] as const
 const WEATHERS = ['clear', 'fair', 'cloudy', 'overcast'] as const
-const RENDER_QUALITIES = ['low', 'medium', 'high'] as const
+const RENDER_QUALITY_CHOICES = ['auto', 'low', 'medium', 'high'] as const
 
-function defaultRenderQuality(): RenderQuality {
+/** Until the renderer is up and the device detected: touch devices Medium, others High. */
+function provisionalRenderQuality(): RenderQuality {
   if (typeof window === 'undefined' || !window.matchMedia) return 'high'
   return window.matchMedia('(pointer: coarse)').matches ? 'medium' : 'high'
+}
+
+function effectiveRenderQuality(
+  choice: RenderQualityChoice,
+  detected: RenderQuality | null,
+): RenderQuality {
+  return choice === 'auto' ? (detected ?? provisionalRenderQuality()) : choice
 }
 
 function normalizeLatLng(value: unknown): LatLng | null {
@@ -517,13 +542,20 @@ function normalizePersistedViewerState(value: unknown): PersistedViewerState {
     wallMode: pickString<ViewerState['wallMode']>(state.wallMode, WALL_MODES, 'up'),
     projectPreferences: normalizeProjectPreferences(state.projectPreferences),
     timeOfDay: pickString<TimeOfDay>(state.timeOfDay, TIMES_OF_DAY, 'midday'),
+    timeOfDayMinutes:
+      typeof state.timeOfDayMinutes === 'number' &&
+      state.timeOfDayMinutes >= 0 &&
+      state.timeOfDayMinutes <= 1440
+        ? state.timeOfDayMinutes
+        : null,
+    skyLive: state.skyLive === true,
     weather: pickString<Weather>(state.weather, WEATHERS, 'fair'),
     deviceLocation: normalizeLatLng(state.deviceLocation),
     // Solid shading was retired into the quality tiers: a saved Solid pick becomes Low.
-    renderQuality: pickString<RenderQuality>(
+    renderQualityChoice: pickString<RenderQualityChoice>(
       state.renderQuality,
-      RENDER_QUALITIES,
-      persistedSolid(state) ? 'low' : defaultRenderQuality(),
+      RENDER_QUALITY_CHOICES,
+      persistedSolid(state) ? 'low' : 'auto',
     ),
   }
 }
@@ -685,7 +717,9 @@ const useViewer = create<ViewerState>()(
               [state.renderContext]: shading,
             },
           }),
-          ...(shading === 'solid' ? { renderQuality: 'low' as const } : {}),
+          ...(shading === 'solid'
+            ? { renderQuality: 'low' as const, renderQualityChoice: 'low' as const }
+            : {}),
         })),
 
       textures: true,
@@ -796,13 +830,28 @@ const useViewer = create<ViewerState>()(
       setTransparentBackground: (transparent) => set({ transparentBackground: transparent }),
 
       timeOfDay: 'midday',
-      setTimeOfDay: (timeOfDay) => set({ timeOfDay }),
+      setTimeOfDay: (timeOfDay) => set({ timeOfDay, timeOfDayMinutes: null, skyLive: false }),
+      timeOfDayMinutes: null,
+      setTimeOfDayMinutes: (timeOfDayMinutes) => set({ timeOfDayMinutes, skyLive: false }),
+      skyLive: false,
+      setSkyLive: (skyLive) => set({ skyLive }),
       weather: 'fair',
       setWeather: (weather) => set({ weather }),
       deviceLocation: null,
       setDeviceLocation: (deviceLocation) => set({ deviceLocation }),
-      renderQuality: defaultRenderQuality(),
-      setRenderQuality: (renderQuality) => set({ renderQuality }),
+      renderQuality: provisionalRenderQuality(),
+      renderQualityChoice: 'auto',
+      detectedRenderQuality: null,
+      setRenderQuality: (renderQualityChoice) =>
+        set((state) => ({
+          renderQualityChoice,
+          renderQuality: effectiveRenderQuality(renderQualityChoice, state.detectedRenderQuality),
+        })),
+      setDetectedRenderQuality: (detectedRenderQuality) =>
+        set((state) => ({
+          detectedRenderQuality,
+          renderQuality: effectiveRenderQuality(state.renderQualityChoice, detectedRenderQuality),
+        })),
 
       inkOpacity: null,
       setInkOpacity: (opacity) => set({ inkOpacity: opacity }),
@@ -886,9 +935,15 @@ const useViewer = create<ViewerState>()(
       name: 'viewer-preferences',
       merge: (persistedState, currentState) => {
         const persisted = normalizePersistedViewerState(persistedState)
+        const renderQualityChoice =
+          persisted.renderQualityChoice ?? currentState.renderQualityChoice
         return {
           ...currentState,
           ...persisted,
+          renderQuality: effectiveRenderQuality(
+            renderQualityChoice,
+            currentState.detectedRenderQuality,
+          ),
           ...resolveLook(currentState, {
             ...persisted,
             lookDefaults: {
@@ -915,9 +970,11 @@ const useViewer = create<ViewerState>()(
           Object.entries(state.projectPreferences).filter(([key]) => key !== ''),
         ),
         timeOfDay: state.timeOfDay,
+        timeOfDayMinutes: state.timeOfDayMinutes,
+        skyLive: state.skyLive,
         weather: state.weather,
         deviceLocation: state.deviceLocation,
-        renderQuality: state.renderQuality,
+        renderQuality: state.renderQualityChoice,
       }),
     },
   ),

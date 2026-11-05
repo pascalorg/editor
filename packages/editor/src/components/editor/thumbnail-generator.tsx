@@ -473,10 +473,19 @@ export function presentFinished(): () => void {
     viewer.setColorPreset(FINISHED_PRESENTATION.colorPreset)
     restores.push(() => useViewer.getState().setColorPreset(colorPreset))
   }
-  if (viewer.timeOfDay !== FINISHED_PRESENTATION.timeOfDay) {
-    const timeOfDay = viewer.timeOfDay
+  if (
+    viewer.timeOfDay !== FINISHED_PRESENTATION.timeOfDay ||
+    viewer.timeOfDayMinutes !== null ||
+    viewer.skyLive
+  ) {
+    const { timeOfDay, timeOfDayMinutes, skyLive } = viewer
     viewer.setTimeOfDay(FINISHED_PRESENTATION.timeOfDay)
-    restores.push(() => useViewer.getState().setTimeOfDay(timeOfDay))
+    restores.push(() => {
+      const next = useViewer.getState()
+      next.setTimeOfDay(timeOfDay)
+      if (timeOfDayMinutes !== null) next.setTimeOfDayMinutes(timeOfDayMinutes)
+      if (skyLive) next.setSkyLive(true)
+    })
   }
   if (viewer.weather !== FINISHED_PRESENTATION.weather) {
     const weather = viewer.weather

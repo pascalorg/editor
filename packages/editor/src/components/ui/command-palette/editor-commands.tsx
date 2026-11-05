@@ -321,6 +321,14 @@ export function EditorCommands() {
           }),
       },
       {
+        id: 'editor.viewer.quality-auto',
+        label: i18n._({ id: 'editor.commands.qualityAuto', message: 'Quality: Auto' }),
+        group: 'Viewer Controls',
+        icon: <Gauge className="h-4 w-4" />,
+        keywords: ['quality', 'auto', 'device', 'render'],
+        execute: () => run(() => useViewer.getState().setRenderQuality('auto')),
+      },
+      {
         id: 'editor.viewer.quality-low',
         label: i18n._({ id: 'editor.commands.qualityLow', message: 'Quality: Low' }),
         group: 'Viewer Controls',

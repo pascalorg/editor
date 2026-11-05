@@ -2,7 +2,7 @@
 
 import { useInteractive, useScene } from '@pascal-app/core'
 import { useFrame, useThree } from '@react-three/fiber'
-import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { BackSide, Color, MathUtils, Mesh, Scene, SphereGeometry, Vector3 } from 'three'
 import { pmremTexture, positionWorldDirection, vec3 } from 'three/tsl'
 import {
@@ -18,7 +18,12 @@ import { restoreLampEmitters } from '../../lib/daylight/room-scene'
 import { daylightRooms } from '../../lib/daylight/rooms'
 import { daylightUniforms, setDaylightRenderer } from '../../lib/daylight/runtime'
 import { createDaylightSky, WEATHER_COVER } from '../../lib/daylight/sky'
-import { presetInstant, type SolarLight, solarLight } from '../../lib/daylight/solar'
+import {
+  presetInstant,
+  type SolarLight,
+  solarClockInstant,
+  solarLight,
+} from '../../lib/daylight/solar'
 import useViewer, { type RenderQuality } from '../../store/use-viewer'
 import { SceneAtmosphere } from './scene-atmosphere'
 import { useDaylightRooms } from './use-daylight-rooms'
@@ -73,6 +78,8 @@ const UP = new Vector3(0, 1, 0)
 export function DaylightAtmosphere() {
   const renderer = useThree((s) => s.gl) as unknown as WebGPURenderer
   const timeOfDay = useViewer((s) => s.timeOfDay)
+  const timeOfDayMinutes = useViewer((s) => s.timeOfDayMinutes)
+  const skyLive = useViewer((s) => s.skyLive)
   const weather = useViewer((s) => s.weather)
   const deviceLocation = useViewer((s) => s.deviceLocation)
   const transparent = useViewer((s) => s.transparentBackground)
@@ -170,12 +177,32 @@ export function DaylightAtmosphere() {
     daylightRooms.refresh()
   }, [quality, source])
 
-  // Sun, sky and lights follow the presets (pinned to a neutral fair midday for transparent captures).
+  // The live sky moves on with the clock, a minute at a time.
+  const [clockTick, setClockTick] = useState(0)
   useEffect(() => {
-    const preset = transparent ? 'midday' : timeOfDay
+    if (!skyLive || transparent) return
+    const timer = setInterval(() => setClockTick((tick) => tick + 1), 60_000)
+    return () => clearInterval(timer)
+  }, [skyLive, transparent])
+
+  // Lamp switches follow the sun only when it crosses into or out of the evening, so the
+  // person's own switches survive weather changes and the live clock's ticks.
+  const lampsLit = useRef<boolean | null>(null)
+
+  // Sun, sky and lights follow the time of day: the live clock, an exact time, or a preset
+  // (pinned to a neutral fair midday for transparent captures).
+  // biome-ignore lint/correctness/useExhaustiveDependencies: clockTick re-runs the live sky.
+  useEffect(() => {
     const cover = transparent ? WEATHER_COVER.fair : WEATHER_COVER[weather]
     const { location } = resolveLocation(site, deviceLocation)
-    const when = presetInstant(new Date(), location.lat, location.lng, preset)
+    const today = new Date()
+    const when = transparent
+      ? presetInstant(today, location.lat, location.lng, 'midday')
+      : skyLive
+        ? today
+        : timeOfDayMinutes !== null
+          ? solarClockInstant(today, location.lng, timeOfDayMinutes)
+          : presetInstant(today, location.lat, location.lng, timeOfDay)
     const sun = solarLight(
       when,
       location.lat,
@@ -229,11 +256,28 @@ export function DaylightAtmosphere() {
 
     // Lamps follow the light: a smooth level for the room lamps, on/off for the lamp switches.
     daylightUniforms.lampLevel.value = 1 - MathUtils.smoothstep(sun.elevation, -5, 6)
-    useInteractive.getState().setLampDefault(preset === 'blue' || preset === 'night', true)
+    // Blue hour and night (the presets aim at −4° and −14°; golden hour at +6° stays unlit).
+    const lit = sun.elevation < -2
+    if (lit !== lampsLit.current) {
+      lampsLit.current = lit
+      useInteractive.getState().setLampDefault(lit, true)
+    }
 
     // Re-capture the sky environment.
     environment.capture()
-  }, [deviceLocation, environment, site, sky, source, timeOfDay, transparent, weather])
+  }, [
+    clockTick,
+    deviceLocation,
+    environment,
+    site,
+    skyLive,
+    sky,
+    source,
+    timeOfDay,
+    timeOfDayMinutes,
+    transparent,
+    weather,
+  ])
 
   // Lamps loaded after the preset applied (items mount late, and an authored "on" default would
   // light them by day) join the time of day; the person's own switches are left alone after.

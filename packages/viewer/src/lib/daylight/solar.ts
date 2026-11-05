@@ -144,3 +144,54 @@ export function presetInstant(day: Date, lat: number, lng: number, preset: TimeO
   }
   return new Date(best)
 }
+
+/**
+ * Times of day as minutes after local mean midnight at the site's longitude (sun time, no
+ * timezone): 720 is roughly when the sun is highest, give or take the equation of time.
+ */
+function meanMidnightUtc(day: Date, lng: number): number {
+  return Date.UTC(day.getFullYear(), day.getMonth(), day.getDate()) - (lng / 15) * 3_600_000
+}
+
+/** The instant `minutes` after local mean midnight on `day` at longitude `lng`. */
+export function solarClockInstant(day: Date, lng: number, minutes: number): Date {
+  return new Date(meanMidnightUtc(day, lng) + minutes * 60_000)
+}
+
+/** Minutes after local mean midnight of `date` at longitude `lng`, 0…1440. */
+export function solarClockMinutes(date: Date, lng: number): number {
+  const minutes = (date.getTime() - meanMidnightUtc(date, lng)) / 60_000
+  return ((minutes % 1440) + 1440) % 1440
+}
+
+/** Sunrise and sunset on `day` (local mean minutes), or null where the sun never crosses. */
+export function sunEvents(
+  day: Date,
+  lat: number,
+  lng: number,
+): { sunrise: number; sunset: number } | null {
+  const above = (minutes: number) =>
+    solarPosition(solarClockInstant(day, lng, minutes), lat, lng).elevation > -0.833
+  let sunrise: number | null = null
+  let sunset: number | null = null
+  let previous = above(0)
+  for (let minutes = 5; minutes <= 1440; minutes += 5) {
+    const now = above(minutes)
+    if (now && !previous && sunrise === null) sunrise = minutes
+    if (!now && previous && sunrise !== null) sunset = minutes
+    previous = now
+  }
+  return sunrise !== null && sunset !== null ? { sunrise, sunset } : null
+}
+
+/** The phase a moment of the day reads as, from the sun's elevation and the side of noon. */
+export type SkyPhase = 'night' | 'blue' | 'golden' | 'morning' | 'midday' | 'afternoon'
+
+export function skyPhase(elevation: number, minutes: number): SkyPhase {
+  if (elevation < -6) return 'night'
+  if (elevation < 0) return 'blue'
+  if (elevation < 10) return 'golden'
+  if (minutes < 11 * 60) return 'morning'
+  if (minutes > 14.5 * 60) return 'afternoon'
+  return 'midday'
+}

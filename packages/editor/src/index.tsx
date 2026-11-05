@@ -388,6 +388,7 @@ export {
   EdgesToggleItem,
   QualityMenu,
 } from './components/viewer/render-settings-menu'
+export { openSkyPanel, SkyControl, useSkyPanel } from './components/viewer/sky-control'
 export { useViewerCameraNavigationSync } from './components/viewer/use-viewer-camera-navigation-sync'
 export {
   ViewerControlsBar,
