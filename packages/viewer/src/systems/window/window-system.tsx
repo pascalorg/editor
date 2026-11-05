@@ -3562,18 +3562,7 @@ function addWindowDetails(node: RenderWindowNode, mesh: THREE.Mesh) {
     const material = resolveWindowSlotMaterial(node, 'shutters')
     const concealed = node.rollerShutter === 'concealed'
     const faceZ = (exterior * wallDepth) / 2 - offset
-    if (concealed) {
-      addBox(
-        mesh,
-        material,
-        node.width - 0.002,
-        0.03,
-        0.03,
-        0,
-        node.height / 2 - 0.016,
-        faceZ - exterior * 0.015,
-      ).name = 'window-roller-lintel'
-    } else {
+    if (!concealed) {
       const boxHeight = node.rollerShutterBoxHeight ?? 0.18
       addBox(
         mesh,
@@ -3589,6 +3578,19 @@ function addWindowDetails(node: RenderWindowNode, mesh: THREE.Mesh) {
     // Shutter clearance follows the closed unit, independent of its rendered opening angle.
     poseWindowMovingParts(node, mesh, 0)
     const guideZ = getWindowRollerCurtainZ(mesh, exterior)
+    // The concealed head strip shares the curtain plane: inside the frame head it would fight its face.
+    if (concealed) {
+      addBox(
+        mesh,
+        material,
+        node.width - 0.002,
+        0.03,
+        0.03,
+        0,
+        node.height / 2 - 0.016,
+        guideZ,
+      ).name = 'window-roller-lintel'
+    }
     for (const side of [-1, 1])
       addBox(
         mesh,

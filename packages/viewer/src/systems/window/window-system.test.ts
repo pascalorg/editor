@@ -931,8 +931,10 @@ describe('room-aware window motion and exterior accessories', () => {
         expect(lintel.max.y).toBeCloseTo(1.5 + node.height / 2 - 0.001, 6)
         expect(lintel.min.x).toBeCloseTo(2 - node.width / 2 + 0.001, 6)
         expect(lintel.max.x).toBeCloseTo(2 + node.width / 2 - 0.001, 6)
-        expect(lintel.max.z).toBeCloseTo(-0.12)
-        expect(lintel.min.z).toBeCloseTo(-0.15)
+        // The head strip shares the curtain plane, clear of the frame head's face.
+        expect(mesh.getObjectByName('window-roller-lintel')!.position.z).toBeCloseTo(
+          mesh.getObjectByName('window-roller-curtain')!.position.z,
+        )
         for (const guide of collect(mesh, 'window-roller-guide')) {
           const size = new THREE.Box3().setFromObject(guide).getSize(new THREE.Vector3())
           expect(guide.position.z).toBeCloseTo(
