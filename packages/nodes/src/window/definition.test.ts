@@ -203,9 +203,15 @@ test('windows declare hardware and shutters and inherit the frame for unpainted 
     label: 'Shutters',
     default: 'library:preset-charcoal',
   })
+  expect(slots).toContainEqual({
+    slotId: 'sill',
+    label: 'Sill',
+    default: 'library:preset-softwhite',
+  })
   const paint = windowDefinition.capabilities!.paint!
   const frame = paint.getEffectiveMaterial!({ node, role: 'frame', nodes: {} })
   expect(paint.getEffectiveMaterial!({ node, role: 'hardware', nodes: {} })).toEqual(frame)
+  expect(paint.getEffectiveMaterial!({ node, role: 'sill', nodes: {} })).toEqual(frame)
   const painted = { ...node, slots: { ...node.slots, hardware: '#224466' } }
   expect(paint.getEffectiveMaterial!({ node: painted, role: 'hardware', nodes: {} })).not.toEqual(
     frame,

@@ -32,6 +32,16 @@ type OpeningSpec = Pick<
   | 'sillInterior'
   | 'shutters'
   | 'shutterWidth'
+  | 'openingDirection'
+  | 'tiltTurnMode'
+  | 'sillOverhang'
+  | 'sillInteriorDepth'
+  | 'sillInteriorThickness'
+  | 'sillInteriorOverhang'
+  | 'shutterOpen'
+  | 'shutterSides'
+  | 'rollerShutter'
+  | 'rollerShutterOpen'
 > & {
   wallIndex: number
   t?: number

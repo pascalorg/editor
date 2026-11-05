@@ -21,9 +21,38 @@ test('saved windows keep optional grids, stool boards and shutters absent', () =
     columnRatios: [1, 1, 1],
     rowRatios: [1, 1],
   })
-  for (const key of ['sashGrid', 'windowHandle', 'sillInterior', 'shutters', 'shutterWidth']) {
+  for (const key of [
+    'sashGrid',
+    'windowHandle',
+    'sillInterior',
+    'shutters',
+    'shutterWidth',
+    'openingDirection',
+    'tiltTurnMode',
+    'rollerShutter',
+    'rollerShutterOpen',
+    'shutterOpen',
+    'shutterSides',
+    'sillOverhang',
+    'sillInteriorDepth',
+    'sillInteriorThickness',
+    'sillInteriorOverhang',
+  ]) {
     expect(saved).not.toHaveProperty(key)
   }
   expect(WindowNode.safeParse({ shutterWidth: 0 }).success).toBe(false)
   expect(WindowNode.safeParse({ shutters: 'unknown' }).success).toBe(false)
+})
+
+test('window fractions and sill dimensions reject invalid stored data', () => {
+  for (const key of ['shutterOpen', 'rollerShutterOpen']) {
+    expect(WindowNode.safeParse({ [key]: -0.1 }).success).toBe(false)
+    expect(WindowNode.safeParse({ [key]: 1.1 }).success).toBe(false)
+  }
+  for (const key of ['sillInteriorDepth', 'sillInteriorThickness'])
+    expect(WindowNode.safeParse({ [key]: 0 }).success).toBe(false)
+  for (const key of ['sillOverhang', 'sillInteriorOverhang']) {
+    expect(WindowNode.safeParse({ [key]: -0.01 }).success).toBe(false)
+    expect(WindowNode.safeParse({ [key]: 0 }).success).toBe(true)
+  }
 })

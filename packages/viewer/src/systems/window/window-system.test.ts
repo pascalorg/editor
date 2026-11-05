@@ -386,7 +386,7 @@ describe('window stool and decorative shutters', () => {
           mesh.updateWorldMatrix(true, true)
           const stool = mesh.getObjectByName('window-interior-stool') as THREE.Mesh
           const board = new THREE.Box3().setFromObject(stool)
-          expect(board.getSize(new THREE.Vector3()).x).toBeCloseTo(1.5)
+          expect(board.getSize(new THREE.Vector3()).x).toBeCloseTo(1.4 + 2 * (0.0508 + 0.015))
           expect(board.getSize(new THREE.Vector3()).y).toBeCloseTo(0.03)
           // This room is always on world +Z of its south wall, regardless of wall direction or unit facing.
           expect(board.min.z).toBeCloseTo(0.15)
@@ -421,4 +421,256 @@ describe('window stool and decorative shutters', () => {
     const material = (slats[0] as THREE.Mesh).material as THREE.MeshStandardMaterial
     expect(material.color.getHexString()).toBe('4e5257')
   })
+})
+
+describe('room-aware window motion and exterior accessories', () => {
+  function inRoom(run: (wall: WallNode) => void) {
+    const points: [number, number][] = [
+      [0, 0],
+      [4, 0],
+      [4, 4],
+      [0, 4],
+    ]
+    const walls = points.map((start, i) =>
+      WallNode.parse({ start, end: points[(i + 1) % 4], thickness: 0.3 }),
+    )
+    const previous = useScene.getState().nodes
+    useScene.setState({ nodes: Object.fromEntries(walls.map((wall) => [wall.id, wall])) })
+    try {
+      run(walls[0]!)
+    } finally {
+      useScene.setState({ nodes: previous })
+    }
+  }
+  const collect = (root: THREE.Object3D, name: string) => {
+    const found: THREE.Object3D[] = []
+    root.traverse((part) => {
+      if (part.name === name) found.push(part)
+    })
+    return found
+  }
+  const localPoint = (root: THREE.Object3D, part: THREE.Object3D, point: THREE.Vector3) => {
+    root.updateWorldMatrix(true, true)
+    return point.applyMatrix4(part.matrixWorld).applyMatrix4(root.matrixWorld.clone().invert())
+  }
+
+  test.each(['casement', 'awning', 'hopper', 'tilt-turn'] as const)(
+    '%s poses its sash on the chosen side at 0, 0.5 and 1',
+    (windowType) => {
+      inRoom((wall) => {
+        for (const side of ['front', 'back'] as const) {
+          for (const openingDirection of ['outward', 'inward'] as const) {
+            for (const hingesSide of ['left', 'right'] as const) {
+              for (const mode of windowType === 'tilt-turn'
+                ? (['tilt', 'turn'] as const)
+                : (['tilt'] as const)) {
+                const node = WindowNode.parse({
+                  parentId: wall.id,
+                  position: [2, 1.5, 0],
+                  side,
+                  rotation: [0, side === 'front' ? 0 : Math.PI, 0],
+                  windowType,
+                  openingDirection,
+                  hingesSide,
+                  tiltTurnMode: mode,
+                  sill: false,
+                  sashGrid: true,
+                  columnRatios: [1, 1],
+                  rowRatios: [1, 1],
+                })
+                const mesh = buildWindowPreviewMesh(node)
+                const sash = mesh.children.find((part) => /sash$/.test(part.name))!
+                const handle = mesh.getObjectByName('window-handle')!
+                expect(handle).toBeDefined()
+                expect(collect(mesh, 'window-sash-grid')).toHaveLength(1)
+                const interior = side === 'front' ? 1 : -1
+                expect(handle.position.z * interior).toBeGreaterThan(0)
+                const maxAngle =
+                  windowType === 'tilt-turn'
+                    ? mode === 'tilt'
+                      ? Math.PI / 12
+                      : Math.PI / 2
+                    : windowType === 'casement'
+                      ? Math.PI / 2
+                      : Math.PI / 3
+                for (const value of [0, 0.5, 1]) {
+                  expect(poseWindowMovingParts(node, mesh, value)).toBe(true)
+                  const authored = buildWindowPreviewMesh({ ...node, operationState: value })
+                  expect(sash.quaternion.toArray()).toEqual(
+                    authored.getObjectByName(sash.name)!.quaternion.toArray(),
+                  )
+                  expect(
+                    Math.max(Math.abs(sash.rotation.x), Math.abs(sash.rotation.y)),
+                  ).toBeCloseTo(maxAngle * value)
+                  const point = new THREE.Vector3()
+                  if (windowType === 'casement' || (windowType === 'tilt-turn' && mode === 'turn'))
+                    point.x =
+                      (hingesSide === 'left' ? 1 : -1) * (node.width - 2 * node.frameThickness)
+                  else
+                    point.y =
+                      (windowType === 'awning' ? -1 : 1) * (node.height - 2 * node.frameThickness)
+                  const moved = localPoint(mesh, sash, point).z - sash.position.z
+                  const opensInward =
+                    windowType === 'hopper' ||
+                    windowType === 'tilt-turn' ||
+                    openingDirection === 'inward'
+                  if (value > 0)
+                    expect(moved * interior * (opensInward ? 1 : -1)).toBeGreaterThan(0)
+                }
+                if (windowType === 'tilt-turn') {
+                  expect(collect(mesh, 'window-hinge')).toHaveLength(3)
+                  expect(handle.rotation.z).toBeCloseTo(Math.PI / 2)
+                }
+                // A detached export clone retains the room side after the live scene goes away.
+                const clone = mesh.clone(true)
+                expect(poseWindowMovingParts(node, clone, 0.5)).toBe(true)
+                expect(clone.userData.windowExteriorSign).toBe(mesh.userData.windowExteriorSign)
+              }
+            }
+          }
+        }
+      })
+    },
+  )
+
+  test.each(['rectangle', 'rounded', 'arch'] as const)(
+    'French casement %s uses opposite leaf pivots for inward and outward',
+    (openingShape) => {
+      inRoom((wall) => {
+        for (const openingDirection of ['inward', 'outward'] as const) {
+          const node = WindowNode.parse({
+            parentId: wall.id,
+            windowType: 'casement',
+            casementStyle: 'french',
+            openingShape,
+            openingDirection,
+          })
+          const mesh = buildWindowPreviewMesh(node)
+          for (const value of [0, 0.5, 1]) {
+            poseWindowMovingParts(node, mesh, value)
+            const expected = ((openingDirection === 'outward' ? 1 : -1) * value * Math.PI) / 2
+            expect(mesh.getObjectByName('french-casement-left-sash')!.rotation.y).toBeCloseTo(
+              expected,
+            )
+            expect(mesh.getObjectByName('french-casement-right-sash')!.rotation.y).toBeCloseTo(
+              -expected,
+            )
+          }
+        }
+      })
+    },
+  )
+
+  test('legacy casement and awning retain placement-face motion without a direction', () => {
+    inRoom((wall) => {
+      for (const windowType of ['casement', 'awning'] as const) {
+        for (const side of ['front', 'back'] as const) {
+          const node = WindowNode.parse({
+            parentId: wall.id,
+            windowType,
+            side,
+            rotation: [0, side === 'front' ? 0 : Math.PI, 0],
+          })
+          const mesh = buildWindowPreviewMesh(node)
+          const sash = mesh.children.find((part) => /sash$/.test(part.name))!
+          for (const value of [0, 0.5, 1]) {
+            poseWindowMovingParts(node, mesh, value)
+            expect(windowType === 'casement' ? sash.rotation.y : sash.rotation.x).toBeCloseTo(
+              -value * (windowType === 'casement' ? Math.PI / 2 : Math.PI / 3),
+            )
+          }
+        }
+      }
+    })
+  })
+
+  test('inside placement puts the sill and roller outside, and both sills use the paintable sill slot', () => {
+    inRoom((wall) => {
+      const node = WindowNode.parse({
+        parentId: wall.id,
+        position: [2, 1.5, 0.02],
+        side: 'front',
+        sillInterior: true,
+        sillOverhang: 0.12,
+        sillInteriorDepth: 0.15,
+        sillInteriorThickness: 0.05,
+        sillInteriorOverhang: 0.02,
+        casingFaceA: true,
+        casingWidth: 0.08,
+        rollerShutter: 'box',
+        rollerShutterOpen: 0.5,
+        slots: { frame: '#884422', sill: '#aabbcc' },
+      })
+      const mesh = buildWindowPreviewMesh(node)
+      mesh.updateWorldMatrix(true, true)
+      const outside = mesh.getObjectByName('window-exterior-sill') as THREE.Mesh
+      const inside = mesh.getObjectByName('window-interior-stool') as THREE.Mesh
+      const extBox = new THREE.Box3().setFromObject(outside)
+      expect(extBox.max.z).toBeCloseTo(-0.15)
+      expect(extBox.getSize(new THREE.Vector3()).x).toBeCloseTo(node.width + 0.24)
+      const intBox = new THREE.Box3().setFromObject(inside)
+      expect(intBox.min.z).toBeCloseTo(0.15)
+      expect(intBox.max.z).toBeCloseTo(0.3)
+      expect(intBox.getSize(new THREE.Vector3()).x).toBeCloseTo(node.width + 0.2)
+      expect(intBox.getSize(new THREE.Vector3()).y).toBeCloseTo(0.05)
+      for (const sill of [inside, outside]) {
+        expect(sill.userData.slotId).toBe('sill')
+        expect((sill.material as THREE.MeshStandardMaterial).color.getHexString()).toBe('aabbcc')
+      }
+      const roller = mesh.getObjectByName('window-roller-box') as THREE.Mesh
+      const boxSize = new THREE.Box3().setFromObject(roller).getSize(new THREE.Vector3())
+      expect(boxSize.x).toBeCloseTo(node.width + 0.08)
+      expect(boxSize.y).toBeCloseTo(0.18)
+      expect(boxSize.z).toBeCloseTo(0.18)
+      expect(new THREE.Box3().setFromObject(roller).max.z).toBeLessThan(-0.15)
+      const curtain = mesh.getObjectByName('window-roller-curtain')!
+      const curtainBox = new THREE.Box3().setFromObject(curtain)
+      expect(curtainBox.getSize(new THREE.Vector3()).y).toBeCloseTo(node.height / 2)
+      expect(curtainBox.getSize(new THREE.Vector3()).z).toBeCloseTo(0.012)
+      expect(collect(mesh, 'window-roller-guide')).toHaveLength(2)
+      for (const slat of curtain.children) expect(slat.userData.slotId).toBe('shutters')
+      poseWindowMovingParts(node, mesh, 1)
+      expect(new THREE.Box3().setFromObject(curtain).equals(curtainBox)).toBe(true)
+      expect(
+        buildWindowPreviewMesh({ ...node, rollerShutterOpen: undefined }).getObjectByName(
+          'window-roller-curtain',
+        )!.children,
+      ).toHaveLength(0)
+    })
+  })
+
+  test.each(['panel', 'louvered', 'board-batten'] as const)(
+    '%s shutters pivot beside exterior casing, with selectable sides and explicit widths',
+    (shutters) => {
+      inRoom((wall) => {
+        const node = WindowNode.parse({
+          parentId: wall.id,
+          width: 1.4,
+          height: 1.4,
+          shutters,
+          shutterWidth: 0.8,
+          shutterSides: 'left',
+          casingFaceB: true,
+          casingWidth: 0.09,
+          sill: false,
+        })
+        for (const open of [0, 0.5, 1]) {
+          const mesh = buildWindowPreviewMesh({ ...node, shutterOpen: open })
+          const leaves = collect(mesh, 'window-shutter')
+          expect(leaves).toHaveLength(1)
+          const leaf = leaves[0]!
+          expect(leaf.position.x).toBeCloseTo(-0.8)
+          expect(leaf.position.z).toBeCloseTo(-0.185)
+          expect(leaf.rotation.y).toBeCloseTo(-Math.PI * (1 - open))
+          if (open === 1)
+            expect(new THREE.Box3().setFromObject(leaf).getSize(new THREE.Vector3()).x).toBeCloseTo(
+              0.8,
+            )
+          for (const part of leaf.children) expect(part.userData.slotId).toBe('shutters')
+        }
+        const plain = buildWindowPreviewMesh({ ...node, casingFaceB: false, shutterSides: 'right' })
+        expect(collect(plain, 'window-shutter')[0]!.position.x).toBeCloseTo(0.7)
+      })
+    },
+  )
 })

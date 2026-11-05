@@ -3,6 +3,7 @@ import { DEFAULT_OPENING_CASING_WIDTH, OPENING_CASING_PROUD } from '../schema/no
 import { DEFAULT_WALL_THICKNESS, getWallThickness } from '../systems/wall/wall-footprint'
 import { roomSideFaces } from '../systems/wall/wall-room-sides'
 import { cornerPair } from './corner-pair'
+import { openingExteriorFace } from './opening-exterior-face'
 
 /**
  * Door and window casing: flat boards on the finished faces of the host wall
@@ -30,6 +31,7 @@ export type OpeningCasingHost = {
   thickness: number
   /** Room side, when known, for a window's interior stool. */
   interiorFace?: WallFace
+  exteriorFace?: WallFace
   /** The host end a corner window runs to: no leg there; the head and bottom stop at the opening. */
   cornerEnd?: 'start' | 'end'
 }
@@ -92,9 +94,17 @@ export function resolveOpeningCasingHost(
   host: AnyNode | undefined = nodes[opening.roofSegmentId ?? opening.parentId ?? ''],
 ): OpeningCasingHost | null {
   if (opening.source) return null
+  const exteriorFace = opening.type === 'window' ? openingExteriorFace(opening, nodes) : undefined
   const interior =
-    opening.type === 'window' && opening.sillInterior
-      ? { interiorFace: openingInteriorFace(opening, nodes) }
+    opening.type === 'window'
+      ? {
+          exteriorFace,
+          ...(opening.sillInterior
+            ? {
+                interiorFace: exteriorFace === 'a' ? ('b' as const) : ('a' as const),
+              }
+            : {}),
+        }
       : {}
   if (opening.roofSegmentId) {
     return host?.type === 'roof-segment'
@@ -124,13 +134,15 @@ export function openingCasingFaces(
   return faces
 }
 
-/** How far a window's sill takes the bottom board down on `face`: its thickness, on its front. */
+/** The casing bottom clears whichever sill is on this host face. */
 function sillDrop(opening: CasedOpening, face: WallFace, host: OpeningCasingHost): number {
   if (opening.type !== 'window' || opening.openingKind === 'opening') return 0
-  const front: WallFace = openingHostFacing(opening) === 1 ? 'a' : 'b'
+  const front: WallFace = host.exteriorFace ?? (openingHostFacing(opening) === 1 ? 'a' : 'b')
   return Math.max(
     opening.sill && face === front ? Math.max(opening.sillThickness ?? 0, 0) : 0,
-    opening.sillInterior && face === (host.interiorFace ?? 'b') ? 0.03 : 0,
+    opening.sillInterior && face === (host.interiorFace ?? 'b')
+      ? (opening.sillInteriorThickness ?? 0.03)
+      : 0,
   )
 }
 

@@ -22,7 +22,7 @@ export const WindowNode = BaseNode.extend({
   type: nodeType('window'),
   material: MaterialSchema.optional(),
   // Per-slot material overrides on the unified slot model. Keys: `frame`,
-  // `glass`, `hardware`, `shutters`, `casing-a`, `casing-b`. Value = a
+  // `glass`, `hardware`, `shutters`, `sill`, `casing-a`, `casing-b`. Value = a
   // `MaterialRef` (`library:<id>` / `scene:<id>`) or a plain
   // `#rrggbb` colour. Hardware follows the frame unless painted.
   slots: z.record(z.string(), z.string()).optional(),
@@ -75,6 +75,8 @@ export const WindowNode = BaseNode.extend({
   // Window family
   windowType: WindowType.default('fixed'),
   operationState: z.number().min(0).max(1).default(0),
+  openingDirection: z.enum(['outward', 'inward']).optional(),
+  tiltTurnMode: z.enum(['tilt', 'turn']).optional(),
   awningDirection: z.enum(['up', 'down']).default('up'),
   casementStyle: z.enum(['single', 'french']).default('single'),
   hingesSide: z.enum(['left', 'right']).default('left'),
@@ -126,9 +128,17 @@ export const WindowNode = BaseNode.extend({
   sillDepth: z.number().default(0.08),
   sillThickness: z.number().default(0.03),
 
+  sillOverhang: z.number().nonnegative().optional(),
   sillInterior: z.boolean().optional(),
-  shutters: z.enum(['none', 'louvered', 'panel']).optional(),
+  sillInteriorDepth: z.number().positive().optional(),
+  sillInteriorThickness: z.number().positive().optional(),
+  sillInteriorOverhang: z.number().nonnegative().optional(),
+  shutters: z.enum(['none', 'louvered', 'panel', 'board-batten']).optional(),
   shutterWidth: z.number().positive().optional(),
+  shutterOpen: z.number().min(0).max(1).optional(),
+  shutterSides: z.enum(['both', 'left', 'right']).optional(),
+  rollerShutter: z.enum(['none', 'box']).optional(),
+  rollerShutterOpen: z.number().min(0).max(1).optional(),
 
   // Casing: flat boards on the finished faces of the host wall around the
   // opening, never inside it, so the wall cutout stays width × height. The
@@ -146,9 +156,14 @@ export const WindowNode = BaseNode.extend({
   - frameThickness: width of the frame members (new windows use 0.020 m; absent in saved windows keeps 0.05 m)
   - frameDepth: how deep the frame sits within the wall
   - columnRatios/rowRatios: pane division ratios
-  - windowHandle: show the interior handle on casement, awning and hopper sashes (absent = true)
+  - windowHandle: show the interior handle on casement, awning, hopper and tilt-turn sashes (absent = true)
   - sashGrid: pane divisions per operable sash (absent = false; saved windows keep no bars)
-  - sillInterior: room-side stool board (absent = false)
+  - openingDirection: casement/awning swing toward exterior or interior; absent preserves placement-face motion
+  - tiltTurnMode: tilt inward up to 15 degrees (default), or turn inward up to 90 degrees
+  - sillInterior: room-side stool board (absent = false); depth/thickness/overhang default to 0.06/0.03/0.015 m
+  - sillOverhang: exterior sill extension on each side (absent = 0.4 times sillDepth)
+  - shutterOpen/shutterSides: 0 closed to 1 flat open (default 1), both/left/right (default both)
+  - rollerShutter/rollerShutterOpen: exterior box and guides (absent none), curtain fraction up (default 1)
   - shutters/shutterWidth: decorative exterior shutters (absent = none); width per side defaults to half the opening, capped at 0.6 m
   - sill: whether to show a window sill
   - casingFaceA/casingFaceB: picture-frame casing on the host wall's face a / b, around the cutout (absent means off; new openings enable both)

@@ -278,7 +278,7 @@ export const windowDefinition: NodeDefinition<typeof WindowNode> = {
   kind: 'window',
   snapProfile: 'item',
   facingIndicator: true,
-  schemaVersion: 3,
+  schemaVersion: 4,
   schema: WindowNode,
   category: 'structure',
   extensions: {

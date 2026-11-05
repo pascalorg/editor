@@ -15,10 +15,12 @@ import {
   SiteNode,
   sceneRegistry,
   useScene,
+  WindowNode,
 } from '@pascal-app/core'
 import { evaluateRecipe, ProceduralItemNode, parseRecipe } from '@pascal-app/core/procedural-items'
 import {
   buildDoorPreviewMesh,
+  buildWindowPreviewMesh,
   markViewerPresentationTextureBorrowed,
   type ViewerPresentationContribution,
   viewerPresentationRegistry,
@@ -1163,6 +1165,55 @@ describe('prepareSceneForExport', () => {
     })
     expect(hasMesh).toBe(false)
   })
+
+  test.each(['tilt', 'turn'] as const)(
+    'bakes tilt-turn %s with attached hardware and grids at 0, 0.5 and 1',
+    (tiltTurnMode) => {
+      const node = WindowNode.parse({
+        windowType: 'tilt-turn',
+        tiltTurnMode,
+        hingesSide: 'right',
+        operationState: 0.6,
+        sill: false,
+        sashGrid: true,
+        columnRatios: [1, 1],
+        rollerShutter: 'box',
+        rollerShutterOpen: 0.5,
+      })
+      const mesh = buildWindowPreviewMesh(node)
+      const original = mesh.getObjectByName('tilt-turn-window-sash')!.quaternion.clone()
+      const root = new THREE.Group().add(mesh)
+      sceneRegistry.nodes.set(node.id, mesh)
+      const prepared = prepareSceneForExport(root, { [node.id]: node })
+      expect(prepared.animations).toHaveLength(1)
+      const clip = prepared.animations[0]!
+      expect(clip.tracks).toHaveLength(1)
+      const target = prepared.scene.getObjectByProperty(
+        'uuid',
+        clip.tracks[0]!.name.replace('.quaternion', ''),
+      )!
+      expect(target.getObjectByName('window-handle')).toBeDefined()
+      expect(target.getObjectByName('window-sash-grid')).toBeDefined()
+      const mixer = new THREE.AnimationMixer(prepared.scene)
+      const action = mixer.clipAction(clip)
+      action.setLoop(THREE.LoopOnce, 1)
+      action.clampWhenFinished = true
+      action.play()
+      for (const value of [0, 0.5, 1]) {
+        mixer.setTime(value)
+        const live = buildWindowPreviewMesh({ ...node, operationState: value })
+        const liveSash = live.getObjectByName('tilt-turn-window-sash')!
+        expect(target.quaternion.clone().normalize().angleTo(liveSash.quaternion)).toBeLessThan(
+          1e-6,
+        )
+      }
+      expect(
+        mesh.getObjectByName('tilt-turn-window-sash')!.quaternion.angleTo(original),
+      ).toBeCloseTo(0)
+      mixer.stopAllAction()
+      prepared.dispose()
+    },
+  )
 
   test('bakes a swing door into an open quaternion clip', () => {
     const root = new THREE.Group()

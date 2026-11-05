@@ -17,6 +17,7 @@ export function isOperableWindowType(windowType: string | undefined) {
     windowType === 'casement' ||
     windowType === 'awning' ||
     windowType === 'hopper' ||
+    windowType === 'tilt-turn' ||
     windowType === 'single-hung' ||
     windowType === 'double-hung' ||
     windowType === 'louvered'

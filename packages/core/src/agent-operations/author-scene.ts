@@ -1162,15 +1162,26 @@ export function authorScene(
           opening = WindowNode.parse({
             ...common,
             type: 'window',
+            hingesSide: o.hingesSide ?? (o.hinge === 'end' ? 'right' : 'left'),
             sashGrid:
               !windowTakesStyle(windowType ?? 'fixed') && (o.columns || o.rows) ? true : o.sashGrid,
             windowHandle: o.windowHandle,
             sillInterior: o.sillInterior,
             shutters: o.shutters,
             shutterWidth: o.shutterWidth,
+            tiltTurnMode: o.tiltTurnMode,
+            sillOverhang: o.sillOverhang,
+            sillInteriorDepth: o.sillInteriorDepth,
+            sillInteriorThickness: o.sillInteriorThickness,
+            sillInteriorOverhang: o.sillInteriorOverhang,
+            shutterOpen: o.shutterOpen,
+            shutterSides: o.shutterSides,
+            rollerShutter: o.rollerShutter,
+            rollerShutterOpen: o.rollerShutterOpen,
             frameThickness: NEW_WINDOW_FRAME_THICKNESS,
             position: [x, o.sill + height / 2, 0],
             ...(windowType ? windowTypeFields(windowType) : {}),
+            ...(o.openingDirection === undefined ? {} : { openingDirection: o.openingDirection }),
             ...(style && isWindowStyle(style) && takesStyle ? getWindowStyleOverrides(style) : {}),
             ...(o.columns
               ? { columnRatios: Array.from({ length: o.columns }, () => 1 / o.columns!) }

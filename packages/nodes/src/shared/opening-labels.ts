@@ -42,6 +42,7 @@ export const WINDOW_TYPE_MESSAGES: Record<WindowNode['windowType'], MessageDescr
   casement: /* i18n */ { id: 'node.window.type.casement', message: 'Casement' },
   awning: /* i18n */ { id: 'node.window.type.awning', message: 'Awning' },
   hopper: /* i18n */ { id: 'node.window.type.hopper', message: 'Hopper' },
+  'tilt-turn': /* i18n */ { id: 'node.window.type.tiltTurn', message: 'Tilt and turn' },
   'single-hung': /* i18n */ { id: 'node.window.type.singleHung', message: 'Single-hung' },
   'double-hung': /* i18n */ { id: 'node.window.type.doubleHung', message: 'Double-hung' },
   bay: /* i18n */ { id: 'node.window.type.bay', message: 'Bay' },
