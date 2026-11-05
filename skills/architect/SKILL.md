@@ -33,7 +33,7 @@ Both Architect and the scene tools use the `pascal-hosted` server. If only `pasc
 
 ## Effort and plans
 
-Architect accepts an optional `effort` parameter: `low`, `medium` (default), or `high`. Higher effort runs more design iterations and costs more credits.
+Architect accepts an optional `effort` parameter: `low` | `medium` | `high` | `pro` (default: `medium`). Higher effort runs more design iterations and costs more credits.
 
 - `low`, `medium`, `high` — available on any Pascal plan that has credits. Users on the free tier can top up credits one-off.
 - `pro` — deepest effort level; requires Pascal Pro or Max.

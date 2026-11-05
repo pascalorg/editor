@@ -80,6 +80,7 @@ export function validateCursorPluginPackage(root: string): string[] {
   for (const path of [
     'pascal-3d/SKILL.md',
     'furniture-fit/SKILL.md',
+    'architect/SKILL.md',
     '.cursor-plugin/pascal-mark-plate.svg',
   ]) {
     if (!existsSync(join(root, 'skills', path))) {
