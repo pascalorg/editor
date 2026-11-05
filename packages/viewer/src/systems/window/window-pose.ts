@@ -3,6 +3,7 @@ import type { Object3D } from 'three'
 
 export const WINDOW_LEFT_SHUTTER_NAME = 'shutter-left'
 export const WINDOW_RIGHT_SHUTTER_NAME = 'shutter-right'
+export const WINDOW_SHUTTER_OUTER_NAME = 'shutter-outer'
 
 export const CASEMENT_WINDOW_SASH_NAME = 'casement-window-sash'
 export const FRENCH_CASEMENT_LEFT_SASH_NAME = 'french-casement-left-sash'
@@ -24,7 +25,7 @@ export function windowExteriorSign(node: WindowNode, mesh?: Object3D): number {
   return (face === 'a' ? 1 : -1) * openingHostFacing(node)
 }
 
-/** Leaves are modelled flat on the wall, with local X starting at the inner hinge edge. */
+/** Leaves start along the wall in local X; bifolds stack perpendicular to it when open. */
 export function poseWindowShutters(
   node: WindowNode,
   mesh: Object3D | undefined,
@@ -39,7 +40,10 @@ export function poseWindowShutters(
     const leaf = mesh?.getObjectByName(name)
     if (!leaf) continue
     // Export clones can decompose a half-turn into nonzero X/Z Euler angles.
-    leaf.rotation.set(0, -side * exterior * (1 - value) * Math.PI, 0)
+    const outer = leaf.getObjectByName(WINDOW_SHUTTER_OUTER_NAME)
+    const swing = value * (outer ? Math.PI / 2 : Math.PI)
+    leaf.rotation.set(0, -side * exterior * (Math.PI - swing), 0)
+    if (outer) outer.rotation.set(0, -side * exterior * 2 * swing, 0)
     found = true
   }
   return found

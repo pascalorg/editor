@@ -126,7 +126,8 @@ export function setWindowShuttersOpenState(
   if (node?.type !== 'window' || node.source) return
   const fields: WindowShutterField[] = []
   if (node.shutters && node.shutters !== 'none') fields.push('shutterOpen')
-  if (node.rollerShutter === 'box') fields.push('rollerShutterOpen')
+  if (node.rollerShutter === 'box' || node.rollerShutter === 'concealed')
+    fields.push('rollerShutterOpen')
   if (!fields.length) return
   useInteractive.getState().setMechanismPart(windowId, 'shutters', on)
   for (const field of fields) {

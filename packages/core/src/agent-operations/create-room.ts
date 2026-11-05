@@ -48,6 +48,7 @@ type OpeningSpec = Pick<
   | 'shutterOpen'
   | 'shutterSides'
   | 'rollerShutter'
+  | 'rollerShutterBoxHeight'
   | 'rollerShutterOpen'
 > & {
   wallIndex: number

@@ -154,9 +154,15 @@ export const windowDetailFields = {
       'Tilt-turn only: tilt inward about the bottom up to 15 degrees (default), or turn inward about the side hinges up to 90 degrees.',
     ),
   rollerShutter: z
-    .enum(['none', 'box'])
+    .enum(['none', 'box', 'concealed'])
     .optional()
-    .describe('Exterior roller shutter box, guide rails and slat curtain (default none).'),
+    .describe(
+      'Roller mount (default none): box on the exterior face above the opening, or concealed with a 0.03 m lintel strip and 0.025 x 0.03 m guides inside the reveal. Concealed curtain sits 0.02 m outside the frame plane, width minus 0.05 m.',
+    ),
+  rollerShutterBoxHeight: measurement('length', 'm', {
+    positive: true,
+    description: 'Exterior roller box height (default 0.18 m); used only by the box mount.',
+  }).optional(),
   rollerShutterOpen: z
     .number()
     .min(0)
@@ -171,7 +177,7 @@ export const windowDetailFields = {
     .max(1)
     .optional()
     .describe(
-      'Exterior shutter position: 0 closed over the window, 1 flat open against the wall (default 1).',
+      'Exterior shutter position: 0 closed over the window, 1 open (default 1). Leaves over 0.75 m fold into two stacked halves; narrower leaves open flat against the wall.',
     ),
   shutterSides: z
     .enum(['both', 'left', 'right'])
@@ -223,10 +229,13 @@ export const windowDetailFields = {
   shutters: z
     .enum(['none', 'louvered', 'panel', 'board-batten'])
     .optional()
-    .describe('Decorative exterior shutters (default none).'),
+    .describe(
+      'Exterior shutters (default none), with a 10 mm overlap lip on one leaf when both sides are present.',
+    ),
   shutterWidth: measurement('length', 'm', {
     positive: true,
-    description: 'Width of each shutter; default half the opening, at most 0.6 m.',
+    description:
+      'Width per side, uncapped: defaults to half the opening for both sides, full opening for left or right only. Widths over 0.75 m form a bifold pair of equal halves.',
   }).optional(),
 }
 

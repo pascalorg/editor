@@ -398,8 +398,10 @@ describe('window stool and decorative shutters', () => {
           for (const shutter of shutters) {
             const box = new THREE.Box3().setFromObject(shutter)
             expect(box.min.z).toBeCloseTo(-0.2)
-            expect(box.max.z).toBeCloseTo(-0.17)
-            expect(box.getSize(new THREE.Vector3()).x).toBeCloseTo(0.6)
+            expect(box.max.z).toBeCloseTo(shutter.name === 'shutter-left' ? -0.16 : -0.17)
+            expect(box.getSize(new THREE.Vector3()).x).toBeCloseTo(
+              shutter.name === 'shutter-left' ? 0.71 : 0.7,
+            )
             expect(box.getSize(new THREE.Vector3()).y).toBeCloseTo(1)
             expect(shutter.children.every((part) => part.userData.slotId === 'shutters')).toBe(true)
           }
@@ -419,7 +421,7 @@ describe('window stool and decorative shutters', () => {
     const slats = shutter.children.slice(4)
     expect(slats.length).toBeGreaterThan(10)
     expect(slats[1]!.position.y - slats[0]!.position.y).toBeCloseTo(0.04)
-    expect(new THREE.Box3().setFromObject(shutter).getSize(new THREE.Vector3()).x).toBeCloseTo(0.4)
+    expect(new THREE.Box3().setFromObject(shutter).getSize(new THREE.Vector3()).x).toBeCloseTo(0.41)
     const material = (slats[0] as THREE.Mesh).material as THREE.MeshStandardMaterial
     expect(material.color.getHexString()).toBe('4e5257')
   })
@@ -643,13 +645,20 @@ describe('room-aware window motion and exterior accessories', () => {
     })
   })
 
-  test.each([0, 0.5, 0.63, 0.99, 1, undefined])(
-    'roller curtain at open=%s merges whole slats with gaps and at most 12 triangles each',
-    (rollerShutterOpen) => {
+  test.each(
+    (['box', 'concealed'] as const).flatMap((rollerShutter) =>
+      [0, 0.5, 0.63, 0.99, 1, undefined].map((rollerShutterOpen) => ({
+        rollerShutter,
+        rollerShutterOpen,
+      })),
+    ),
+  )(
+    '$rollerShutter roller curtain at open=$rollerShutterOpen merges whole slats with gaps and at most 12 triangles each',
+    ({ rollerShutterOpen, rollerShutter }) => {
       const node = WindowNode.parse({
         width: 1.2,
         height: 1.03,
-        rollerShutter: 'box',
+        rollerShutter,
         rollerShutterOpen,
       })
       const mesh = buildWindowPreviewMesh(node)
@@ -676,7 +685,7 @@ describe('room-aware window motion and exterior accessories', () => {
       for (let i = 0; i < slatCount; i++) {
         const bounds = slatBounds.get(i)!
         const size = bounds.getSize(new THREE.Vector3())
-        expect(size.x).toBeCloseTo(node.width)
+        expect(size.x).toBeCloseTo(node.width - (rollerShutter === 'concealed' ? 0.05 : 0))
         expect(size.y).toBeCloseTo(0.036)
         expect(size.z).toBeCloseTo(0.01)
         expect(bounds.max.y).toBeCloseTo(node.height / 2 - i * 0.04)
@@ -706,7 +715,7 @@ describe('room-aware window motion and exterior accessories', () => {
   )
 
   test.each(['panel', 'louvered', 'board-batten'] as const)(
-    '%s shutters pivot beside exterior casing, with selectable sides and explicit widths',
+    '%s shutters cover the opening beside casing, with selectable sides and explicit widths',
     (shutters) => {
       inRoom((wall) => {
         const node = WindowNode.parse({
@@ -714,7 +723,7 @@ describe('room-aware window motion and exterior accessories', () => {
           width: 1.4,
           height: 1.4,
           shutters,
-          shutterWidth: 0.8,
+          shutterWidth: 0.7,
           shutterSides: 'left',
           casingFaceB: true,
           casingWidth: 0.09,
@@ -725,12 +734,12 @@ describe('room-aware window motion and exterior accessories', () => {
           const leaves = collect(mesh, 'shutter-left')
           expect(leaves).toHaveLength(1)
           const leaf = leaves[0]!
-          expect(leaf.position.x).toBeCloseTo(-0.8)
+          expect(leaf.position.x).toBeCloseTo(-0.7)
           expect(leaf.position.z).toBeCloseTo(-0.185)
           expect(leaf.rotation.y).toBeCloseTo(-Math.PI * (1 - open))
           if (open === 1)
             expect(new THREE.Box3().setFromObject(leaf).getSize(new THREE.Vector3()).x).toBeCloseTo(
-              0.8,
+              0.7,
             )
           for (const part of leaf.children) expect(part.userData.slotId).toBe('shutters')
         }
@@ -738,5 +747,150 @@ describe('room-aware window motion and exterior accessories', () => {
         expect(collect(plain, 'shutter-right')[0]!.position.x).toBeCloseTo(0.7)
       })
     },
+  )
+  test.each(['both', 'left', 'right'] as const)(
+    'default %s shutters cover the entire opening without a width cap, including with casing',
+    (shutterSides) => {
+      inRoom((wall) => {
+        for (const width of [1.4, 2]) {
+          const node = WindowNode.parse({
+            parentId: wall.id,
+            width,
+            shutters: 'panel',
+            shutterSides,
+            shutterOpen: 0,
+            casingFaceB: true,
+            casingWidth: 0.09,
+            sill: false,
+          })
+          const mesh = buildWindowPreviewMesh(node)
+          mesh.updateWorldMatrix(true, true)
+          const leaves = ['shutter-left', 'shutter-right']
+            .map((name) => mesh.getObjectByName(name))
+            .filter((leaf) => leaf !== undefined)
+          expect(leaves).toHaveLength(shutterSides === 'both' ? 2 : 1)
+          const bounds = leaves.map((leaf) => new THREE.Box3().setFromObject(leaf!))
+          const all = bounds.reduce((box, leaf) => box.union(leaf), new THREE.Box3())
+          expect(all.min.x).toBeCloseTo(-width / 2)
+          expect(all.max.x).toBeCloseTo(width / 2)
+          if (shutterSides === 'both') {
+            expect(bounds[0]!.max.x - bounds[1]!.min.x).toBeCloseTo(0.01)
+            expect(mesh.getObjectByName('window-shutter-overlap')).toBeDefined()
+          } else expect(mesh.getObjectByName('window-shutter-overlap')).toBeUndefined()
+        }
+      })
+    },
+  )
+
+  test.each(['panel', 'louvered', 'board-batten'] as const)(
+    '%s shutters split only above 0.75 m and fold two equal halves without changing the wall hinge',
+    (shutters) => {
+      for (const side of [-1, 1]) {
+        for (const width of [0.75, 0.7501, 1]) {
+          const node = WindowNode.parse({
+            width: 2,
+            height: 1.5,
+            shutters,
+            shutterWidth: width,
+            shutterSides: side === -1 ? 'left' : 'right',
+            shutterOpen: 0,
+            sill: false,
+          })
+          const mesh = buildWindowPreviewMesh(node)
+          const inner = mesh.getObjectByName(side === -1 ? 'shutter-left' : 'shutter-right')!
+          const outer = inner.getObjectByName('shutter-outer')
+          const closed = new THREE.Box3().setFromObject(inner)
+          expect(closed.getSize(new THREE.Vector3()).x).toBeCloseTo(width)
+          expect(Boolean(outer)).toBe(width > 0.75)
+          if (!outer) continue
+          const hinge = inner.position.clone()
+          // The shared hinge bisects the closed assembly in the opening plane.
+          expect(Math.abs(outer.position.x)).toBeCloseTo(width / 2)
+          for (const open of [0, 0.5, 1]) {
+            poseWindowMovingParts(node, mesh, 0, open)
+            mesh.updateWorldMatrix(true, true)
+            expect(inner.position.equals(hinge)).toBe(true)
+            const innerDirection = new THREE.Vector3(side, 0, 0).transformDirection(
+              inner.matrixWorld,
+            )
+            const outerDirection = new THREE.Vector3(side, 0, 0).transformDirection(
+              outer.matrixWorld,
+            )
+            expect(innerDirection.dot(outerDirection)).toBeCloseTo(
+              open === 0 ? 1 : open === 0.5 ? 0 : -1,
+            )
+            if (open === 0) {
+              expect(Math.abs(innerDirection.x)).toBeCloseTo(1)
+              expect(Math.abs(outerDirection.x)).toBeCloseTo(1)
+            } else if (open === 0.5) expect(Math.abs(innerDirection.x)).toBeCloseTo(Math.SQRT1_2)
+            else {
+              const stacked = new THREE.Box3().setFromObject(inner).getSize(new THREE.Vector3())
+              expect(stacked.x).toBeLessThan(0.09)
+              expect(stacked.z).toBeCloseTo(width / 2)
+            }
+          }
+        }
+      }
+    },
+  )
+
+  test.each(['front', 'back'] as const)(
+    'concealed roller stays within the reveal on the %s placement face; box height is configurable',
+    (side) =>
+      inRoom((wall) => {
+        const node = WindowNode.parse({
+          parentId: wall.id,
+          position: [2, 1.5, 0.02],
+          rotation: [0, side === 'front' ? 0 : Math.PI, 0],
+          side,
+          width: 1.2,
+          height: 1.4,
+          rollerShutter: 'concealed',
+          rollerShutterBoxHeight: 0.4,
+          rollerShutterOpen: 0,
+          sill: false,
+        })
+        const mesh = buildWindowPreviewMesh(node)
+        mesh.updateWorldMatrix(true, true)
+        expect(mesh.getObjectByName('window-roller-box')).toBeUndefined()
+        const parts: THREE.Mesh[] = []
+        mesh.traverse((part) => {
+          if (part instanceof THREE.Mesh && part.userData.slotId === 'shutters') parts.push(part)
+        })
+        expect(parts).toHaveLength(4)
+        for (const part of parts) {
+          const bounds = new THREE.Box3().setFromObject(part)
+          expect(bounds.min.x).toBeGreaterThanOrEqual(2 - node.width / 2 - 1e-6)
+          expect(bounds.max.x).toBeLessThanOrEqual(2 + node.width / 2 + 1e-6)
+          expect(bounds.min.y).toBeGreaterThanOrEqual(1.5 - node.height / 2 - 1e-6)
+          expect(bounds.max.y).toBeLessThanOrEqual(1.5 + node.height / 2 + 1e-6)
+          expect(bounds.min.z).toBeGreaterThanOrEqual(-0.15 - 1e-6)
+          expect(bounds.max.z).toBeLessThanOrEqual(0.15 + 1e-6)
+        }
+        const lintel = new THREE.Box3().setFromObject(mesh.getObjectByName('window-roller-lintel')!)
+        expect(lintel.getSize(new THREE.Vector3()).y).toBeCloseTo(0.03)
+        expect(lintel.max.z).toBeCloseTo(-0.12)
+        expect(lintel.min.z).toBeCloseTo(-0.15)
+        for (const guide of collect(mesh, 'window-roller-guide')) {
+          const size = new THREE.Box3().setFromObject(guide).getSize(new THREE.Vector3())
+          expect(guide.position.z).toBeCloseTo(
+            mesh.getObjectByName('window-roller-curtain')!.position.z,
+          )
+          expect(size.x).toBeCloseTo(0.025)
+          expect(size.z).toBeCloseTo(0.03)
+        }
+        const curtain = mesh.getObjectByName('window-roller-curtain')!
+        expect(Math.abs(curtain.position.z)).toBeCloseTo(0.02)
+        expect(new THREE.Box3().setFromObject(curtain).getSize(new THREE.Vector3()).x).toBeCloseTo(
+          1.15,
+        )
+        const boxed = buildWindowPreviewMesh({ ...node, rollerShutter: 'box' })
+        boxed.updateWorldMatrix(true, true)
+        expect(boxed.getObjectByName('window-roller-lintel')).toBeUndefined()
+        const box = new THREE.Box3().setFromObject(boxed.getObjectByName('window-roller-box')!)
+        expect(box.getSize(new THREE.Vector3()).y).toBeCloseTo(0.4)
+        expect(box.min.y).toBeCloseTo(1.5 + node.height / 2)
+        expect(box.max.z).toBeLessThan(-0.15)
+      }),
   )
 })

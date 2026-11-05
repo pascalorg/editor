@@ -20,13 +20,15 @@ export const windowMechanism: MechanismCapability = {
       has: (node) =>
         node.type === 'window' &&
         !node.source &&
-        ((Boolean(node.shutters) && node.shutters !== 'none') || node.rollerShutter === 'box'),
+        ((Boolean(node.shutters) && node.shutters !== 'none') ||
+          node.rollerShutter === 'box' ||
+          node.rollerShutter === 'concealed'),
       isOn: (node, state) =>
         node.type === 'window' &&
         ((Boolean(node.shutters) &&
           node.shutters !== 'none' &&
           getDisplayedWindowShutterValue(node.id, 'shutterOpen', node.shutterOpen, state) > 0) ||
-          (node.rollerShutter === 'box' &&
+          ((node.rollerShutter === 'box' || node.rollerShutter === 'concealed') &&
             getDisplayedWindowShutterValue(
               node.id,
               'rollerShutterOpen',

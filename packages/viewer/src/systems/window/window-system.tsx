@@ -57,6 +57,7 @@ import {
   TILT_TURN_WINDOW_SASH_NAME,
   WINDOW_LEFT_SHUTTER_NAME,
   WINDOW_RIGHT_SHUTTER_NAME,
+  WINDOW_SHUTTER_OUTER_NAME,
 } from './window-pose'
 
 import { buildWindowRollerCurtain } from './window-roller-shutter'
@@ -3417,10 +3418,13 @@ function addWindowDetails(node: RenderWindowNode, mesh: THREE.Mesh) {
   if (node.shutters && node.shutters !== 'none') {
     currentWindowSlot = 'shutters'
     const material = resolveWindowSlotMaterial(node, 'shutters')
-    const width = node.shutterWidth ?? Math.min(node.width / 2, 0.6)
+    const sideWidth =
+      node.shutterWidth ??
+      node.width / (node.shutterSides === 'left' || node.shutterSides === 'right' ? 1 : 2)
+    const bifold = sideWidth > 0.75
+    const width = sideWidth / (bifold ? 2 : 1)
     const height = node.height
     const border = Math.min(0.055, width / 4, height / 8)
-    const casingGap = cased(exteriorFace) ? openingCasingWidth(node) + 0.01 : 0
     for (const side of [-1, 1]) {
       if (
         (node.shutterSides === 'left' && side === 1) ||
@@ -3431,87 +3435,137 @@ function addWindowDetails(node: RenderWindowNode, mesh: THREE.Mesh) {
       shutter.name = side === -1 ? WINDOW_LEFT_SHUTTER_NAME : WINDOW_RIGHT_SHUTTER_NAME
       shutter.userData.side = side === -1 ? 'left' : 'right'
       shutter.position.set(
-        side * (node.width / 2 + casingGap),
+        (side * node.width) / 2,
         0,
         exterior * (wallDepth / 2 + 0.02 + 0.015) - offset,
       )
       mesh.add(shutter)
-      const board = (w: number, h: number, d: number, x: number, y: number, z = 0) =>
-        addBox(shutter, material, w, h, d, (side * width) / 2 + x, y, z)
-      if (node.shutters === 'board-batten') {
-        const count = Math.ceil(width / 0.1)
-        for (let i = 0; i < count; i++) {
-          const boardWidth = Math.min(0.1, width - i * 0.1)
-          board(
-            boardWidth - Math.min(0.002, boardWidth * 0.05),
-            height,
-            0.02,
-            -width / 2 + i * 0.1 + boardWidth / 2,
-            0,
+      const leaves = [shutter]
+      if (bifold) {
+        const outer = new THREE.Group()
+        outer.name = WINDOW_SHUTTER_OUTER_NAME
+        outer.userData.slotId = 'shutters'
+        // Offset the hinge axis so the folded 30 mm leaves stack without intersecting.
+        outer.position.set(side * width, 0, exterior * 0.02)
+        shutter.add(outer)
+        leaves.push(outer)
+      }
+      for (const leaf of leaves) {
+        const board = (w: number, h: number, d: number, x: number, y: number, z = 0) =>
+          addBox(
+            leaf,
+            material,
+            w,
+            h,
+            d,
+            (side * width) / 2 + x,
+            y,
+            z - (leaf === shutter ? 0 : exterior * 0.02),
           )
-        }
-        for (const y of [-height * 0.3, height * 0.3])
-          board(width, 0.07, 0.01, 0, y, -exterior * 0.01)
-        if (height > 1.2) board(width, 0.07, 0.01, 0, 0, -exterior * 0.01)
-      } else {
-        for (const edge of [-1, 1]) {
-          board(border, height, 0.03, (edge * (width - border)) / 2, 0)
-          board(width - 2 * border, border, 0.03, 0, (edge * (height - border)) / 2)
-        }
-        const innerW = width - 2 * border
-        const innerH = height - 2 * border
-        if (node.shutters === 'louvered') {
-          for (let y = -innerH / 2 + 0.02; y < innerH / 2; y += 0.04)
-            board(innerW, Math.min(0.034, innerH), 0.012, 0, y).rotation.x =
-              (-exterior * Math.PI) / 6
-          if (height > 1.2) board(innerW, border, 0.03, 0, 0)
+        if (node.shutters === 'board-batten') {
+          const count = Math.ceil(width / 0.1)
+          for (let i = 0; i < count; i++) {
+            const boardWidth = Math.min(0.1, width - i * 0.1)
+            board(
+              boardWidth - Math.min(0.002, boardWidth * 0.05),
+              height,
+              0.02,
+              -width / 2 + i * 0.1 + boardWidth / 2,
+              0,
+            )
+          }
+          for (const y of [-height * 0.3, height * 0.3])
+            board(width, 0.07, 0.01, 0, y, -exterior * 0.01)
+          if (height > 1.2) board(width, 0.07, 0.01, 0, 0, -exterior * 0.01)
         } else {
-          if (height > 1.2) {
-            board(innerW, border, 0.03, 0, 0)
-            for (const half of [-1, 1])
-              board(
-                innerW,
-                (innerH - border) / 2,
-                0.012,
-                0,
-                (half * (innerH + border)) / 4,
-                -exterior * 0.009,
-              )
-          } else board(innerW, innerH, 0.012, 0, 0, -exterior * 0.009)
+          for (const edge of [-1, 1]) {
+            board(border, height, 0.03, (edge * (width - border)) / 2, 0)
+            board(width - 2 * border, border, 0.03, 0, (edge * (height - border)) / 2)
+          }
+          const innerW = width - 2 * border
+          const innerH = height - 2 * border
+          if (node.shutters === 'louvered') {
+            for (let y = -innerH / 2 + 0.02; y < innerH / 2; y += 0.04)
+              board(innerW, Math.min(0.034, innerH), 0.012, 0, y).rotation.x =
+                (-exterior * Math.PI) / 6
+            if (height > 1.2) board(innerW, border, 0.03, 0, 0)
+          } else {
+            if (height > 1.2) {
+              board(innerW, border, 0.03, 0, 0)
+              for (const half of [-1, 1])
+                board(
+                  innerW,
+                  (innerH - border) / 2,
+                  0.012,
+                  0,
+                  (half * (innerH + border)) / 4,
+                  -exterior * 0.009,
+                )
+            } else board(innerW, innerH, 0.012, 0, 0, -exterior * 0.009)
+          }
         }
+      }
+      if (side === -1 && (node.shutterSides ?? 'both') === 'both') {
+        const tip = leaves[leaves.length - 1]!
+        addBox(
+          tip,
+          material,
+          0.01,
+          height,
+          0.01,
+          side * (width + 0.005),
+          0,
+          -exterior * (tip === shutter ? 0.02 : 0.04),
+        ).name = 'window-shutter-overlap'
       }
     }
   }
-  if (node.rollerShutter === 'box') {
+  if (node.rollerShutter === 'box' || node.rollerShutter === 'concealed') {
     currentWindowSlot = 'shutters'
     const material = resolveWindowSlotMaterial(node, 'shutters')
-    const z = exterior * (wallDepth / 2 + 0.02) - offset
-    addBox(
-      mesh,
-      material,
-      node.width + 0.08,
-      0.18,
-      0.18,
-      0,
-      node.height / 2 + 0.09,
-      z + exterior * 0.09,
-    ).name = 'window-roller-box'
+    const concealed = node.rollerShutter === 'concealed'
+    const faceZ = (exterior * wallDepth) / 2 - offset
+    const guideZ = concealed ? exterior * 0.02 : faceZ + exterior * 0.035
+    if (concealed) {
+      addBox(
+        mesh,
+        material,
+        node.width,
+        0.03,
+        0.03,
+        0,
+        node.height / 2 - 0.015,
+        faceZ - exterior * 0.015,
+      ).name = 'window-roller-lintel'
+    } else {
+      const boxHeight = node.rollerShutterBoxHeight ?? 0.18
+      addBox(
+        mesh,
+        material,
+        node.width + 0.08,
+        boxHeight,
+        0.18,
+        0,
+        node.height / 2 + boxHeight / 2,
+        faceZ + exterior * 0.11,
+      ).name = 'window-roller-box'
+    }
     for (const side of [-1, 1])
       addBox(
         mesh,
         material,
-        0.04,
+        concealed ? 0.025 : 0.04,
         node.height,
         0.03,
-        side * (node.width / 2 + 0.02),
+        side * (node.width / 2 + (concealed ? -0.0125 : 0.02)),
         0,
-        z + exterior * 0.015,
+        guideZ,
       ).name = 'window-roller-guide'
     mesh.add(
       buildWindowRollerCurtain(
         node,
         material,
-        z + exterior * 0.015,
+        guideZ,
         getWindowRenderShutterAmount(node, 'rollerShutterOpen'),
       ),
     )

@@ -137,7 +137,8 @@ export const WindowNode = BaseNode.extend({
   shutterWidth: z.number().positive().optional(),
   shutterOpen: z.number().min(0).max(1).optional(),
   shutterSides: z.enum(['both', 'left', 'right']).optional(),
-  rollerShutter: z.enum(['none', 'box']).optional(),
+  rollerShutter: z.enum(['none', 'box', 'concealed']).optional(),
+  rollerShutterBoxHeight: z.number().positive().optional(),
   rollerShutterOpen: z.number().min(0).max(1).optional(),
 
   // Casing: flat boards on the finished faces of the host wall around the
@@ -162,9 +163,11 @@ export const WindowNode = BaseNode.extend({
   - tiltTurnMode: tilt inward up to 15 degrees (default), or turn inward up to 90 degrees
   - sillInterior: room-side stool board (absent = false); depth/thickness/overhang default to 0.06/0.03/0.015 m
   - sillOverhang: exterior sill extension on each side (absent = 0.4 times sillDepth)
-  - shutterOpen/shutterSides: 0 closed to 1 flat open (default 1), both/left/right (default both)
-  - rollerShutter/rollerShutterOpen: exterior box and guides (absent none), curtain fraction up (default 1)
-  - shutters/shutterWidth: decorative exterior shutters (absent = none); width per side defaults to half the opening, capped at 0.6 m
+  - shutterOpen/shutterSides: 0 closed to 1 open (default 1), both/left/right (default both); leaves over 0.75 m bifold and stack when open
+  - rollerShutter/rollerShutterOpen: none (default), box on the exterior wall, or concealed inside the reveal; curtain fraction up (default 1)
+  - rollerShutterBoxHeight: exterior box height in metres (default 0.18), box mount only
+  - concealed roller: 0.03 m lintel strip, 0.025 x 0.03 m jamb guides inside the reveal; curtain 0.02 m outside the frame plane, width minus 0.05 m
+  - shutters/shutterWidth: exterior shutters (absent = none); width per side defaults to width / 2 for both sides or full width for left/right only, uncapped; paired shutters meet with a 0.01 m overlap lip
   - sill: whether to show a window sill
   - casingFaceA/casingFaceB: picture-frame casing on the host wall's face a / b, around the cutout (absent means off; new openings enable both)
   - casingWidth: face width of the casing boards (2 in by default)

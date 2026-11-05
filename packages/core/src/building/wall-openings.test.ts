@@ -223,6 +223,8 @@ describe('agent-authored window details', () => {
         sillInterior: true,
         shutters: 'louvered',
         shutterWidth: '40 cm',
+        rollerShutter: 'box',
+        rollerShutterBoxHeight: '27 cm',
       })
       const { node } = planWallOpening(openingScene().nodes, { kind: 'window', ...input })
       expect(node).toMatchObject({
@@ -235,6 +237,8 @@ describe('agent-authored window details', () => {
         sillInterior: true,
         shutters: 'louvered',
         shutterWidth: 0.4,
+        rollerShutter: 'box',
+        rollerShutterBoxHeight: 0.27,
       })
     },
   )

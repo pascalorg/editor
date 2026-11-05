@@ -25,38 +25,41 @@ function load(fields: Partial<WindowNode>) {
 }
 
 for (const field of ['shutterOpen', 'rollerShutterOpen'] as const) {
-  test(`${field} tweens to closed and settles without persisting`, () => {
-    const { node, mesh } = load({ shutters: 'panel', rollerShutter: 'box', [field]: 1 })
-    const before = useScene.getState().nodes
-    useInteractive.getState().startWindowAnimation(node.id, {
-      field,
-      from: 1,
-      to: 0,
-      startedAt: null,
-      durationMs: 520,
-      persist: false,
-    })
-    advanceWindowAnimations(100)
-    expect(useInteractive.getState().windows[node.id]?.[field]).toBe(1)
-    advanceWindowAnimations(360)
-    expect(useInteractive.getState().windows[node.id]?.[field]).toBeCloseTo(0.5)
-    if (field === 'shutterOpen') {
-      expect(Math.abs(mesh.getObjectByName('shutter-left')!.rotation.y)).toBeCloseTo(Math.PI / 2)
-      expect(pendingWindowAnimationRebuilds.has(node.id)).toBe(false)
-      expect(useScene.getState().dirtyNodes.has(node.id)).toBe(false)
-    } else {
-      expect(pendingWindowAnimationRebuilds.has(node.id)).toBe(true)
-      const half = buildWindowPreviewMesh(node).getObjectByName('window-roller-curtain')!
-      expect(half.children).toHaveLength(1)
-    }
-    advanceWindowAnimations(620)
-    expect(useInteractive.getState().windowAnimations[node.id]).toBeUndefined()
-    expect(useInteractive.getState().windows[node.id]?.[field]).toBe(0)
-    expect(useScene.getState().nodes).toBe(before)
-    expect(useScene.getState().dirtyNodes.has(node.id)).toBe(true)
-    advanceWindowAnimations(880)
-    expect(useInteractive.getState().windows[node.id]?.[field]).toBe(0)
-  })
+  test.each(['box', 'concealed'] as const)(
+    `${field} tweens a %s roller to closed and settles without persisting`,
+    (rollerShutter) => {
+      const { node, mesh } = load({ shutters: 'panel', rollerShutter, [field]: 1 })
+      const before = useScene.getState().nodes
+      useInteractive.getState().startWindowAnimation(node.id, {
+        field,
+        from: 1,
+        to: 0,
+        startedAt: null,
+        durationMs: 520,
+        persist: false,
+      })
+      advanceWindowAnimations(100)
+      expect(useInteractive.getState().windows[node.id]?.[field]).toBe(1)
+      advanceWindowAnimations(360)
+      expect(useInteractive.getState().windows[node.id]?.[field]).toBeCloseTo(0.5)
+      if (field === 'shutterOpen') {
+        expect(Math.abs(mesh.getObjectByName('shutter-left')!.rotation.y)).toBeCloseTo(Math.PI / 2)
+        expect(pendingWindowAnimationRebuilds.has(node.id)).toBe(false)
+        expect(useScene.getState().dirtyNodes.has(node.id)).toBe(false)
+      } else {
+        expect(pendingWindowAnimationRebuilds.has(node.id)).toBe(true)
+        const half = buildWindowPreviewMesh(node).getObjectByName('window-roller-curtain')!
+        expect(half.children).toHaveLength(1)
+      }
+      advanceWindowAnimations(620)
+      expect(useInteractive.getState().windowAnimations[node.id]).toBeUndefined()
+      expect(useInteractive.getState().windows[node.id]?.[field]).toBe(0)
+      expect(useScene.getState().nodes).toBe(before)
+      expect(useScene.getState().dirtyNodes.has(node.id)).toBe(true)
+      advanceWindowAnimations(880)
+      expect(useInteractive.getState().windows[node.id]?.[field]).toBe(0)
+    },
+  )
 }
 
 test('sash, hinged shutters and roller run together; persisting the sash preserves shutter previews', () => {

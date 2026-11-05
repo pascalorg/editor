@@ -1194,6 +1194,7 @@ export function authorScene(
             shutterOpen: o.shutterOpen,
             shutterSides: o.shutterSides,
             rollerShutter: o.rollerShutter,
+            rollerShutterBoxHeight: o.rollerShutterBoxHeight,
             rollerShutterOpen: o.rollerShutterOpen,
             frameThickness: NEW_WINDOW_FRAME_THICKNESS,
             position: [x, o.sill + height / 2, 0],

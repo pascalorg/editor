@@ -1216,14 +1216,19 @@ describe('prepareSceneForExport', () => {
     },
   )
 
-  test.each([0, 0.5, 1])(
-    'bakes saved shutters at %s without adding a shutter clip or changing live previews',
-    (shutterOpen) => {
+  test.each(
+    (['box', 'concealed'] as const).flatMap((rollerShutter) =>
+      [0, 0.5, 1].map((shutterOpen) => ({ rollerShutter, shutterOpen })),
+    ),
+  )(
+    'bakes saved bifold shutters and $rollerShutter roller at $shutterOpen without changing live previews',
+    ({ shutterOpen, rollerShutter }) => {
       const node = WindowNode.parse({
         windowType: 'casement',
         shutters: 'panel',
         shutterOpen,
-        rollerShutter: 'box',
+        width: 2,
+        rollerShutter,
         rollerShutterOpen: shutterOpen,
       })
       const mesh = buildWindowPreviewMesh(node)
@@ -1237,12 +1242,22 @@ describe('prepareSceneForExport', () => {
       expect(prepared.animations).toHaveLength(1)
       expect(prepared.animations[0]!.tracks).toHaveLength(1)
       const baked = prepared.scene.getObjectByName('shutter-left')!
+      const outer = baked.getObjectByName('shutter-outer')!
+      const expectedOuter = buildWindowPreviewMesh(node).getObjectByName('shutter-outer')!
+      expect(outer.quaternion.angleTo(expectedOuter.quaternion)).toBeCloseTo(0)
       expect(baked.quaternion.angleTo(saved)).toBeCloseTo(0)
       expect(mesh.getObjectByName('shutter-left')!.quaternion.angleTo(preview)).toBeCloseTo(0)
       const curtain = prepared.scene.getObjectByName('window-roller-curtain')!
       expect(curtain.children).toHaveLength(shutterOpen === 1 ? 0 : 1)
       if (shutterOpen !== 1) {
         const panel = curtain.children[0] as THREE.Mesh
+        const expectedCurtain =
+          buildWindowPreviewMesh(node).getObjectByName('window-roller-curtain')!
+        expect(
+          new THREE.Box3()
+            .setFromObject(curtain)
+            .equals(new THREE.Box3().setFromObject(expectedCurtain)),
+        ).toBe(true)
         expect(panel.geometry.index!.count).toBe(
           Math.floor(((1 - shutterOpen) * node.height) / 0.04) * 36,
         )

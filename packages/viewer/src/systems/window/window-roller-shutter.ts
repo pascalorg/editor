@@ -11,19 +11,20 @@ export function buildWindowRollerCurtain(
 ): Group {
   const curtain = new Group()
   curtain.name = 'window-roller-curtain'
+  curtain.position.z = z
+  const width = node.width - (node.rollerShutter === 'concealed' ? 2 * 0.025 : 0)
   const slatCount = Math.floor(((1 - open) * node.height) / 0.04)
   if (slatCount <= 0) return curtain
   const slats: BoxGeometry[] = []
   for (let i = 0; i < slatCount; i++) {
-    const slat = new BoxGeometry(node.width, 0.036, 0.01)
-    applyWorldScaleBoxUVs(slat, node.width, 0.036, 0.01)
+    const slat = new BoxGeometry(width, 0.036, 0.01)
+    applyWorldScaleBoxUVs(slat, width, 0.036, 0.01)
     slat.translate(0, node.height / 2 - i * 0.04 - 0.018, 0)
     slats.push(slat)
   }
   const geometry = mergeGeometries(slats)!
   for (const slat of slats) slat.dispose()
   const panel = new Mesh(geometry, material)
-  panel.position.z = z
   panel.userData.slotId = 'shutters'
   curtain.add(panel)
   return curtain
@@ -31,14 +32,14 @@ export function buildWindowRollerCurtain(
 
 /** Export clones must use saved topology even when the live curtain is previewing another pose. */
 export function restoreWindowRollerShutter(node: WindowNode, mesh: Object3D): void {
-  if (node.rollerShutter !== 'box') return
+  if (node.rollerShutter !== 'box' && node.rollerShutter !== 'concealed') return
   const curtain = mesh.getObjectByName('window-roller-curtain')
   const guide = mesh.getObjectByName('window-roller-guide') as Mesh | undefined
   if (!curtain?.parent || !guide) return
   const restored = buildWindowRollerCurtain(
     node,
     guide.material,
-    guide.position.z,
+    curtain.position.z,
     node.rollerShutterOpen ?? 1,
   )
   curtain.parent.add(restored)

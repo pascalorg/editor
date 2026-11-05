@@ -237,6 +237,7 @@ export type WallOpeningInput = {
   shutterOpen?: WindowNode['shutterOpen']
   shutterSides?: WindowNode['shutterSides']
   rollerShutter?: WindowNode['rollerShutter']
+  rollerShutterBoxHeight?: WindowNode['rollerShutterBoxHeight']
   rollerShutterOpen?: WindowNode['rollerShutterOpen']
   /** A compiled script the opening is built from; its bounds set width and height. */
   compiled?: CompiledGeometryScript
@@ -524,6 +525,9 @@ export function planWallOpening(nodes: Nodes, input: WallOpeningInput) {
           ...(input.shutterOpen === undefined ? {} : { shutterOpen: input.shutterOpen }),
           ...(input.shutterSides === undefined ? {} : { shutterSides: input.shutterSides }),
           ...(input.rollerShutter === undefined ? {} : { rollerShutter: input.rollerShutter }),
+          ...(input.rollerShutterBoxHeight === undefined
+            ? {}
+            : { rollerShutterBoxHeight: input.rollerShutterBoxHeight }),
           ...(input.rollerShutterOpen === undefined
             ? {}
             : { rollerShutterOpen: input.rollerShutterOpen }),

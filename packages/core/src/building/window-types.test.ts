@@ -30,6 +30,7 @@ test('saved windows keep optional grids, stool boards and shutters absent', () =
     'openingDirection',
     'tiltTurnMode',
     'rollerShutter',
+    'rollerShutterBoxHeight',
     'rollerShutterOpen',
     'shutterOpen',
     'shutterSides',
@@ -49,10 +50,21 @@ test('window fractions and sill dimensions reject invalid stored data', () => {
     expect(WindowNode.safeParse({ [key]: -0.1 }).success).toBe(false)
     expect(WindowNode.safeParse({ [key]: 1.1 }).success).toBe(false)
   }
-  for (const key of ['sillInteriorDepth', 'sillInteriorThickness'])
+  for (const key of ['sillInteriorDepth', 'sillInteriorThickness', 'rollerShutterBoxHeight'])
     expect(WindowNode.safeParse({ [key]: 0 }).success).toBe(false)
   for (const key of ['sillOverhang', 'sillInteriorOverhang']) {
     expect(WindowNode.safeParse({ [key]: -0.01 }).success).toBe(false)
     expect(WindowNode.safeParse({ [key]: 0 }).success).toBe(true)
   }
 })
+
+test.each(['none', 'box', 'concealed'] as const)(
+  'window roller mount %s loads with an optional uncapped box height',
+  (rollerShutter) => {
+    expect(WindowNode.parse({ rollerShutter, rollerShutterBoxHeight: 0.9 })).toMatchObject({
+      rollerShutter,
+      rollerShutterBoxHeight: 0.9,
+    })
+    expect(WindowNode.safeParse({ rollerShutter: 'invalid' }).success).toBe(false)
+  },
+)
