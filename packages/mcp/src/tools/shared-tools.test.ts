@@ -149,19 +149,53 @@ describe('shared tools over MCP', () => {
 // The hosted MCP searched 23 built-in items, no light or plant,
 // while the chat searched the app's library; the agent found no wall light and left them out.
 describe("search_assets over MCP reads the host's catalog", () => {
-  async function search(query: string, catalog?: AssetCatalog) {
+  async function call(query: string, catalog?: AssetCatalog) {
     const server = new McpServer({ name: 'test', version: '0.0.0' })
     registerSharedTools(server, new SceneBridge(), catalog)
     const [serverTransport, clientTransport] = InMemoryTransport.createLinkedPair()
     const client = new Client({ name: 'test-client', version: '0.0.0' })
     await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
-    const result = (await client.callTool({
+    return (await client.callTool({
       name: 'search_assets',
       arguments: { queries: [{ query }] },
     })) as Result
-    const payload = JSON.parse(result.content[0]!.text)
+  }
+
+  async function search(query: string, catalog?: AssetCatalog) {
+    const payload = JSON.parse((await call(query, catalog)).content[0]!.text)
     return payload.groups[0].results.map((item: { id: string }) => item.id) as string[]
   }
+
+  test('the model reads ids, names and placement facts; the structured result keeps the rest', async () => {
+    const lamps = Array.from({ length: 30 }, (_, index) => ({
+      id: `lamp-${index}`,
+      category: 'lighting',
+      name: `Lamp ${index}`,
+      thumbnail: '',
+      src: `asset://lamp-${index}`,
+      dimensions: [0.3, 0.5, 0.3] as [number, number, number],
+      ...(index === 0 && { attachTo: 'wall' as const }),
+    }))
+    const result = await call('lamp', async () => lamps)
+    const text = JSON.parse(result.content[0]!.text)
+    const structured = result.structuredContent as typeof text
+    expect(text.groups[0]).toMatchObject({ total: 30, truncated: true })
+    expect(text.groups[0].results).toHaveLength(24)
+    expect(text.groups[0].results[0]).toEqual({
+      id: 'lamp-0',
+      name: 'Lamp 0',
+      dimensions: [0.3, 0.5, 0.3],
+      attachTo: 'wall',
+    })
+    expect(text.groups[0].results[1]).toEqual({
+      id: 'lamp-1',
+      name: 'Lamp 1',
+      dimensions: [0.3, 0.5, 0.3],
+    })
+    expect(text.hint).toContain('"lamp" matches 30 items')
+    expect(structured.groups[0].results).toHaveLength(24)
+    expect(structured.groups[0].results[1]).toMatchObject({ category: 'lighting', attachTo: null })
+  })
 
   test('a standalone server searches its built-in list', async () => {
     expect(await search('sofa')).toContain('sofa')
