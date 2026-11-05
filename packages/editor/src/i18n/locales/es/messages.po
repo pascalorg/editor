@@ -10480,6 +10480,16 @@ msgstr "Muros"
 msgid "editor.mechanismAction"
 msgstr "{action, select, close {Cerrar} open {Abrir} stop {Detener} other {Reproducir}}"
 
+# Source-Hash: a27a681402247b03
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "{action, select, close {Close shutters} other {Open shutters}}"
+#: packages/editor/src/components/editor/registry-action-contributions.tsx
+#, fuzzy
+msgid "editor.mechanismPartAction.shutters"
+msgstr "{action, select, close {Cerrar contraventanas} other {Abrir contraventanas}}"
+
 # Source-Hash: f08fbb462e9afc0e
 # Review: required
 # AI-Provider: claude-code
@@ -17415,6 +17425,16 @@ msgstr "Tipo: guillotina simple"
 msgid "editor.toolHint.typeSliding.nwmr3f"
 msgstr "Tipo: corredera"
 
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 72d0a3b22316c870
+# Review: required
+# English: "Type: Tilt and Turn"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.toolHint.typeTiltAndTurn.5rrbaw"
+msgstr "Tipo: oscilobatiente"
+
 # Source-Hash: bff0c1694ee0a37e
 # Review: required
 # AI-Provider: claude-code
@@ -23221,6 +23241,16 @@ msgstr "Activar umbral"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
+# Source-Hash: b3907da0ad234f10
+# Review: required
+# English: "Finish"
+#: packages/nodes/src/door/panel.tsx
+#, fuzzy
+msgid "node.door.panel.finish"
+msgstr "Acabado"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
 # Source-Hash: 66ed7c7598d3aa29
 # Review: required
 # English: "Flip side"
@@ -23281,13 +23311,63 @@ msgstr "Vidrio"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# Source-Hash: 32c9f50bfbcd384f
+# Source-Hash: 9cf3754f15467c50
 # Review: required
-# English: "Handle side"
+# English: "Bar"
 #: packages/nodes/src/door/panel.tsx
 #, fuzzy
-msgid "node.door.panel.handleSide"
-msgstr "Lado de la manilla"
+msgid "node.door.panel.handleBar"
+msgstr "Barra"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 103e15b39c909210
+# Review: required
+# English: "Knob"
+#: packages/nodes/src/door/panel.tsx
+#, fuzzy
+msgid "node.door.panel.handleKnob"
+msgstr "Pomo"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 6b595b41a920f6e9
+# Review: required
+# English: "Lever"
+#: packages/nodes/src/door/panel.tsx
+#, fuzzy
+msgid "node.door.panel.handleLever"
+msgstr "Manilla"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 21826ef290a282c4
+# Review: required
+# English: "Curved lever"
+#: packages/nodes/src/door/panel.tsx
+#, fuzzy
+msgid "node.door.panel.handleLeverCurved"
+msgstr "Manilla curva"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 244d8513c40c8de8
+# Review: required
+# English: "Plate"
+#: packages/nodes/src/door/panel.tsx
+#, fuzzy
+msgid "node.door.panel.handlePlate"
+msgstr "Placa"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 1a79a485d91f3f28
+# Review: required
+# English: "Style"
+#: packages/nodes/src/door/panel.tsx
+#, fuzzy
+msgid "node.door.panel.handleStyle"
+msgstr "Estilo"
 
 # Source-Hash: 8c1bc3a078056ff7
 # Review: required
@@ -23378,6 +23458,16 @@ msgstr "Varillas de cierre"
 #, fuzzy
 msgid "node.door.panel.left"
 msgstr "Izquierda"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: aec2556541126ec1
+# Review: required
+# English: "Left sidelight"
+#: packages/nodes/src/door/panel.tsx
+#, fuzzy
+msgid "node.door.panel.leftSidelight"
+msgstr "Luz lateral izquierda"
 
 # Source-Hash: bd02c614454fbd2b
 # Review: required
@@ -23539,6 +23629,16 @@ msgstr "Radio del derrame"
 msgid "node.door.panel.right"
 msgstr "Derecha"
 
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 5cf8d42f1b3af6e8
+# Review: required
+# English: "Right sidelight"
+#: packages/nodes/src/door/panel.tsx
+#, fuzzy
+msgid "node.door.panel.rightSidelight"
+msgstr "Luz lateral derecha"
+
 # Source-Hash: fc826da6c99303e6
 # Review: required
 # AI-Provider: claude-code
@@ -23578,6 +23678,36 @@ msgstr "El tamaño está limitado al muro, incluida la holgura del marco del hue
 #, fuzzy
 msgid "node.door.panel.slide"
 msgstr "Deslizar"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 5aebb26f969d5fa4
+# Review: required
+# English: "Bypass"
+#: packages/nodes/src/door/panel.tsx
+#, fuzzy
+msgid "node.door.panel.slidingBypass"
+msgstr "Corredera de armario"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 54800340a0eeab23
+# Review: required
+# English: "Layout"
+#: packages/nodes/src/door/panel.tsx
+#, fuzzy
+msgid "node.door.panel.slidingLayout"
+msgstr "Disposición"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 78dbe13192c0894b
+# Review: required
+# English: "Patio"
+#: packages/nodes/src/door/panel.tsx
+#, fuzzy
+msgid "node.door.panel.slidingPatio"
+msgstr "Corredera de patio"
 
 # Source-Hash: 1a79a485d91f3f28
 # Review: required
@@ -23638,6 +23768,16 @@ msgstr "Forma superior"
 #, fuzzy
 msgid "node.door.panel.touchbar"
 msgstr "Barra de empuje"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 9628d0cc155e29a3
+# Review: required
+# English: "Transom"
+#: packages/nodes/src/door/panel.tsx
+#, fuzzy
+msgid "node.door.panel.transom"
+msgstr "Montante"
 
 # Source-Hash: c44f7ab8bbd24858
 # Review: required
@@ -35191,6 +35331,16 @@ msgstr "Profundidad"
 msgid "node.window.panel.dimensions"
 msgstr "Dimensiones"
 
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 1d8c21c3a94cecec
+# Review: required
+# English: "Divide each sash"
+#: packages/nodes/src/window/panel.tsx
+#, fuzzy
+msgid "node.window.panel.divideEachSash"
+msgstr "Dividir cada hoja"
+
 # Source-Hash: c53c3307e2a2a32a
 # Review: required
 # AI-Provider: claude-code
@@ -35230,6 +35380,16 @@ msgstr "Duplicar"
 #, fuzzy
 msgid "node.window.panel.enableSill"
 msgstr "Activar alféizar"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: b3907da0ad234f10
+# Review: required
+# English: "Finish"
+#: packages/nodes/src/window/panel.tsx
+#, fuzzy
+msgid "node.window.panel.finish"
+msgstr "Acabado"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
@@ -35291,6 +35451,26 @@ msgstr "Vidrio fundido"
 msgid "node.window.panel.grid"
 msgstr "Cuadrícula"
 
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 41483b645efc0c65
+# Review: required
+# English: "Handle"
+#: packages/nodes/src/window/panel.tsx
+#, fuzzy
+msgid "node.window.panel.handle"
+msgstr "Manilla"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 8c1bc3a078056ff7
+# Review: required
+# English: "Hardware"
+#: packages/nodes/src/window/panel.tsx
+#, fuzzy
+msgid "node.window.panel.hardware"
+msgstr "Herrajes"
+
 # Source-Hash: 646ef0fbcbc58edf
 # Review: required
 # AI-Provider: claude-code
@@ -35301,6 +35481,16 @@ msgstr "Cuadrícula"
 msgid "node.window.panel.height"
 msgstr "Altura"
 
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: d9dc95af942941c9
+# Review: required
+# English: "Hinges side"
+#: packages/nodes/src/window/panel.tsx
+#, fuzzy
+msgid "node.window.panel.hingesSide"
+msgstr "Lado de las bisagras"
+
 # Source-Hash: 42824e50de26bc14
 # Review: required
 # AI-Provider: claude-code
@@ -35310,6 +35500,26 @@ msgstr "Altura"
 #, fuzzy
 msgid "node.window.panel.individual"
 msgstr "Individual"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: b31361e9a342ae79
+# Review: required
+# English: "Inside sill"
+#: packages/nodes/src/window/panel.tsx
+#, fuzzy
+msgid "node.window.panel.insideSill"
+msgstr "Alféizar interior"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 1f4ad5ad3e1be222
+# Review: required
+# English: "Inward"
+#: packages/nodes/src/window/panel.tsx
+#, fuzzy
+msgid "node.window.panel.inward"
+msgstr "Hacia dentro"
 
 # Source-Hash: f365c6b6dd9ebab9
 # Review: required
@@ -35331,6 +35541,16 @@ msgstr "Izquierda"
 msgid "node.window.panel.move"
 msgstr "Mover"
 
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 3e52f04f92e08070
+# Review: required
+# English: "Open"
+#: packages/nodes/src/window/panel.tsx
+#, fuzzy
+msgid "node.window.panel.open"
+msgstr "Apertura"
+
 # Source-Hash: e04298381837252f
 # Review: required
 # AI-Provider: claude-code
@@ -35351,6 +35571,16 @@ msgstr "Abertura"
 msgid "node.window.panel.openingShape"
 msgstr "Forma del hueco"
 
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 6f6bf7658cf9ed64
+# Review: required
+# English: "Opens"
+#: packages/nodes/src/window/panel.tsx
+#, fuzzy
+msgid "node.window.panel.opens"
+msgstr "Abre hacia"
+
 # Source-Hash: cf40395b71bedcca
 # Review: required
 # AI-Provider: claude-code
@@ -35360,6 +35590,26 @@ msgstr "Forma del hueco"
 #, fuzzy
 msgid "node.window.panel.otherSide"
 msgstr "Otro lado"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: ccd8f06b8f8d27c9
+# Review: required
+# English: "Outward"
+#: packages/nodes/src/window/panel.tsx
+#, fuzzy
+msgid "node.window.panel.outward"
+msgstr "Hacia fuera"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 88540def2ce16ac5
+# Review: required
+# English: "Overhang"
+#: packages/nodes/src/window/panel.tsx
+#, fuzzy
+msgid "node.window.panel.overhang"
+msgstr "Vuelo"
 
 # Source-Hash: 28fe6e9deddde6e8
 # Review: required
@@ -35411,6 +35661,56 @@ msgstr "Radio del derrame"
 msgid "node.window.panel.right"
 msgstr "Derecha"
 
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 7ae285832490b4c1
+# Review: required
+# English: "Roller shutter"
+#: packages/nodes/src/window/panel.tsx
+#, fuzzy
+msgid "node.window.panel.rollerShutter"
+msgstr "Persiana enrollable"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: e9a89a5e4ac8cd61
+# Review: required
+# English: "Box"
+#: packages/nodes/src/window/panel.tsx
+#, fuzzy
+msgid "node.window.panel.rollerShutterBox"
+msgstr "Cajón"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 6530bd8318883b22
+# Review: required
+# English: "Box height"
+#: packages/nodes/src/window/panel.tsx
+#, fuzzy
+msgid "node.window.panel.rollerShutterBoxHeight"
+msgstr "Altura del cajón"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: aad9fc7e713bf399
+# Review: required
+# English: "Concealed"
+#: packages/nodes/src/window/panel.tsx
+#, fuzzy
+msgid "node.window.panel.rollerShutterConcealed"
+msgstr "Oculta"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: f2953d2931e36d0c
+# Review: required
+# English: "None"
+#: packages/nodes/src/window/panel.tsx
+#, fuzzy
+msgid "node.window.panel.rollerShutterNone"
+msgstr "Ninguna"
+
 # Source-Hash: fc826da6c99303e6
 # Review: required
 # AI-Provider: claude-code
@@ -35440,6 +35740,76 @@ msgstr "Alturas de fila"
 #, fuzzy
 msgid "node.window.panel.rows"
 msgstr "Filas"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 6daa40e63114ad7c
+# Review: required
+# English: "Shutters"
+#: packages/nodes/src/window/panel.tsx
+#, fuzzy
+msgid "node.window.panel.shutters"
+msgstr "Contraventanas"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: b469abd5cad15ac3
+# Review: required
+# English: "Board and batten"
+#: packages/nodes/src/window/panel.tsx
+#, fuzzy
+msgid "node.window.panel.shuttersBoardBatten"
+msgstr "Tablas y travesaños"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: a3c72c286896ec04
+# Review: required
+# English: "Sides"
+#: packages/nodes/src/window/panel.tsx
+#, fuzzy
+msgid "node.window.panel.shutterSides"
+msgstr "Lados"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 69578b7dd7723fa1
+# Review: required
+# English: "Both"
+#: packages/nodes/src/window/panel.tsx
+#, fuzzy
+msgid "node.window.panel.shutterSidesBoth"
+msgstr "Ambos"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 5746be19ba2a53be
+# Review: required
+# English: "Louvered"
+#: packages/nodes/src/window/panel.tsx
+#, fuzzy
+msgid "node.window.panel.shuttersLouvered"
+msgstr "De lamas"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: f2953d2931e36d0c
+# Review: required
+# English: "None"
+#: packages/nodes/src/window/panel.tsx
+#, fuzzy
+msgid "node.window.panel.shuttersNone"
+msgstr "Ninguna"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 482469f5a0873f73
+# Review: required
+# English: "Panel"
+#: packages/nodes/src/window/panel.tsx
+#, fuzzy
+msgid "node.window.panel.shuttersPanel"
+msgstr "Ciegas"
 
 # Source-Hash: 62ded63b01564969
 # Review: required
@@ -35500,6 +35870,36 @@ msgstr "Espesor"
 #, fuzzy
 msgid "node.window.panel.thisSide"
 msgstr "Este lado"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: b47ccf6a86662344
+# Review: required
+# English: "Mode"
+#: packages/nodes/src/window/panel.tsx
+#, fuzzy
+msgid "node.window.panel.tiltTurnMode"
+msgstr "Modo"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 1615637fe68e188a
+# Review: required
+# English: "Tilt"
+#: packages/nodes/src/window/panel.tsx
+#, fuzzy
+msgid "node.window.panel.tiltTurnTilt"
+msgstr "Abatible"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 57c6c983d38e9187
+# Review: required
+# English: "Turn"
+#: packages/nodes/src/window/panel.tsx
+#, fuzzy
+msgid "node.window.panel.tiltTurnTurn"
+msgstr "Practicable"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
@@ -35810,6 +36210,16 @@ msgstr "Guillotina simple"
 #, fuzzy
 msgid "node.window.type.sliding"
 msgstr "Corredera"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: f59a706c9d25325b
+# Review: required
+# English: "Tilt and turn"
+#: packages/nodes/src/shared/opening-labels.ts
+#, fuzzy
+msgid "node.window.type.tiltTurn"
+msgstr "Oscilobatiente"
 
 # Source-Hash: 4a4d97a4101793b7
 # Review: required
@@ -36712,6 +37122,14 @@ msgstr "Visibilidad"
 #: packages/editor/src/components/viewer/viewer-controls-bar.tsx
 msgid "viewer.walkthrough.label"
 msgstr "Recorrido: {state}"
+
+# Source-Hash: 6daa40e63114ad7c
+# Review: required
+# English: "Shutters"
+#: packages/viewer/src/components/viewer/glb-scene.tsx
+#, fuzzy
+msgid "viewer.walkthrough.shutters"
+msgstr "Contraventanas"
 
 # Source-Hash: 4da8b3678ed77b45
 # Review: human

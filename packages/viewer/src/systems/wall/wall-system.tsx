@@ -7,6 +7,7 @@ import {
   DEFAULT_LEVEL_HEIGHT,
   type DoorNode,
   getAdjacentWallIds,
+  getDoorOpeningSize,
   getEffectiveNode,
   getOpeningWallCut,
   getWallBodyCenterOffset,
@@ -21,6 +22,7 @@ import {
   getWallThickness,
   isCurvedWall,
   isCutterName,
+  openingHostFacing,
   type Point2D,
   pointToKey,
   resolveCutterHost,
@@ -2184,17 +2186,19 @@ function createOpeningCutoutBrush(
   cutBottom?: number,
   cornerEnd?: 'start' | 'end',
 ): Brush {
-  const halfWidth = opening.width / 2
+  const size = getDoorOpeningSize(opening)
+  const centerX = opening.position[0] - size.leafOffsetX * openingHostFacing(opening)
+  const halfWidth = size.width / 2
   const bottom = cutBottom ?? opening.position[1] - opening.height / 2
   const bottomPadding = getOpeningCutoutBottomPadding(opening, bottom)
   const reach = CORNER_CUT_REACH * wallThickness
   const geometry = buildOpeningCutoutGeometry(
     opening,
     {
-      left: opening.position[0] - halfWidth - (cornerEnd === 'start' ? reach : 0),
-      right: opening.position[0] + halfWidth + (cornerEnd === 'end' ? reach : 0),
+      left: centerX - halfWidth - (cornerEnd === 'start' ? reach : 0),
+      right: centerX + halfWidth + (cornerEnd === 'end' ? reach : 0),
       bottom: bottom - bottomPadding,
-      top: opening.position[1] + opening.height / 2,
+      top: opening.position[1] - opening.height / 2 + size.height,
     },
     wallThickness * 2,
     wallThickness,

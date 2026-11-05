@@ -211,14 +211,14 @@ function useSky() {
   }, [skyLive])
 
   const { location, source } = resolveLocation(site, deviceLocation)
+  const { lat, lng } = location
   const day = useMemo(() => {
-    const { lat, lng } = location
     const today = new Date()
     const presets = Object.fromEntries(
       PRESETS.map(({ id }) => [id, solarClockMinutes(presetInstant(today, lat, lng, id), lng)]),
     ) as Record<TimeOfDay, number>
     return { today, presets, events: sunEvents(today, lat, lng) }
-  }, [location.lat, location.lng])
+  }, [lat, lng])
 
   const minutes = skyLive
     ? solarClockMinutes(now, location.lng)

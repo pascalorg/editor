@@ -168,6 +168,20 @@ describe('move_node', () => {
     expect((after.door_a as DoorNode).position[0]).toBeCloseTo(0.45, 6)
   })
 
+  test('a door with sidelights clamps and overlaps by its whole cutout, not its leaf', () => {
+    const wide = scene()
+    ;(wide.door_a as DoorNode).sidelightLeft = 0.4
+    ;(wide.door_a as DoorNode).sidelightRight = 0.4
+    const { result, after } = moved(wide, { id: 'door_a', to: [-5, 0] } as never)
+    expect(result.clamped).toBe(true)
+    // 0.9 m leaf + two 0.4 m sidelights: the cutout's edge stops at the wall's start.
+    expect((after.door_a as DoorNode).position[0]).toBeCloseTo(0.85, 6)
+    // The leaf alone would clear the window; the sidelights reach it.
+    expect(
+      refusalCode(() => moveNode(wide, { id: 'door_a', to: [2.0, 0] } as never, context)),
+    ).toBe('opening_overlap')
+  })
+
   test('a door moved onto the window is refused, unless forced as with Alt in the editor', () => {
     expect(
       refusalCode(() => moveNode(scene(), { id: 'door_a', to: [3, 0] } as never, context)),
@@ -383,4 +397,17 @@ describe('duplicate_node', () => {
       'duplicate_not_supported',
     )
   })
+})
+
+test('moving an entry door refuses a transom above its resolved wall ceiling, even with force', () => {
+  for (const planeBound of [false, true]) {
+    const nodes = scene()
+    ;(nodes.door_a as DoorNode).transomHeight = 1
+    if (planeBound) delete (nodes.wall_a as WallNode).height
+    expect(
+      refusalCode(() =>
+        moveNode(nodes, { id: 'door_a', by: [0.1, 0], force: true } as never, context),
+      ),
+    ).toBe('wall_too_low')
+  }
 })

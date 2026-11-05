@@ -10480,6 +10480,16 @@ msgstr "壁"
 msgid "editor.mechanismAction"
 msgstr "{action, select, close {閉じる} open {開く} stop {停止} other {再生}}"
 
+# Source-Hash: a27a681402247b03
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "{action, select, close {Close shutters} other {Open shutters}}"
+#: packages/editor/src/components/editor/registry-action-contributions.tsx
+#, fuzzy
+msgid "editor.mechanismPartAction.shutters"
+msgstr "{action, select, close {雨戸を閉じる} other {雨戸を開く}}"
+
 # Source-Hash: f08fbb462e9afc0e
 # Review: required
 # AI-Provider: claude-code
@@ -17415,6 +17425,16 @@ msgstr "種類: 上げ下げ（片側）"
 msgid "editor.toolHint.typeSliding.nwmr3f"
 msgstr "種類: 引き戸"
 
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 72d0a3b22316c870
+# Review: required
+# English: "Type: Tilt and Turn"
+#: packages/nodes/src/i18n/definition-messages.ts
+#, fuzzy
+msgid "editor.toolHint.typeTiltAndTurn.5rrbaw"
+msgstr "タイプ：内倒し内開き"
+
 # Source-Hash: bff0c1694ee0a37e
 # Review: required
 # AI-Provider: claude-code
@@ -23221,6 +23241,16 @@ msgstr "敷居を有効化"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
+# Source-Hash: b3907da0ad234f10
+# Review: required
+# English: "Finish"
+#: packages/nodes/src/door/panel.tsx
+#, fuzzy
+msgid "node.door.panel.finish"
+msgstr "仕上げ"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
 # Source-Hash: 66ed7c7598d3aa29
 # Review: required
 # English: "Flip side"
@@ -23281,13 +23311,63 @@ msgstr "ガラス"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# Source-Hash: 32c9f50bfbcd384f
+# Source-Hash: 9cf3754f15467c50
 # Review: required
-# English: "Handle side"
+# English: "Bar"
 #: packages/nodes/src/door/panel.tsx
 #, fuzzy
-msgid "node.door.panel.handleSide"
-msgstr "ハンドルの側"
+msgid "node.door.panel.handleBar"
+msgstr "バー"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 103e15b39c909210
+# Review: required
+# English: "Knob"
+#: packages/nodes/src/door/panel.tsx
+#, fuzzy
+msgid "node.door.panel.handleKnob"
+msgstr "ノブ"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 6b595b41a920f6e9
+# Review: required
+# English: "Lever"
+#: packages/nodes/src/door/panel.tsx
+#, fuzzy
+msgid "node.door.panel.handleLever"
+msgstr "レバー"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 21826ef290a282c4
+# Review: required
+# English: "Curved lever"
+#: packages/nodes/src/door/panel.tsx
+#, fuzzy
+msgid "node.door.panel.handleLeverCurved"
+msgstr "曲線レバー"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 244d8513c40c8de8
+# Review: required
+# English: "Plate"
+#: packages/nodes/src/door/panel.tsx
+#, fuzzy
+msgid "node.door.panel.handlePlate"
+msgstr "プレート"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 1a79a485d91f3f28
+# Review: required
+# English: "Style"
+#: packages/nodes/src/door/panel.tsx
+#, fuzzy
+msgid "node.door.panel.handleStyle"
+msgstr "スタイル"
 
 # Source-Hash: 8c1bc3a078056ff7
 # Review: required
@@ -23378,6 +23458,16 @@ msgstr "ラッチロッド"
 #, fuzzy
 msgid "node.door.panel.left"
 msgstr "左"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: aec2556541126ec1
+# Review: required
+# English: "Left sidelight"
+#: packages/nodes/src/door/panel.tsx
+#, fuzzy
+msgid "node.door.panel.leftSidelight"
+msgstr "左側の袖ガラス"
 
 # Source-Hash: bd02c614454fbd2b
 # Review: required
@@ -23539,6 +23629,16 @@ msgstr "見込みの半径"
 msgid "node.door.panel.right"
 msgstr "右"
 
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 5cf8d42f1b3af6e8
+# Review: required
+# English: "Right sidelight"
+#: packages/nodes/src/door/panel.tsx
+#, fuzzy
+msgid "node.door.panel.rightSidelight"
+msgstr "右側の袖ガラス"
+
 # Source-Hash: fc826da6c99303e6
 # Review: required
 # AI-Provider: claude-code
@@ -23578,6 +23678,36 @@ msgstr "サイズは開口枠のクリアランスを含めて壁の範囲に制
 #, fuzzy
 msgid "node.door.panel.slide"
 msgstr "スライド"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 5aebb26f969d5fa4
+# Review: required
+# English: "Bypass"
+#: packages/nodes/src/door/panel.tsx
+#, fuzzy
+msgid "node.door.panel.slidingBypass"
+msgstr "引き違い"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 54800340a0eeab23
+# Review: required
+# English: "Layout"
+#: packages/nodes/src/door/panel.tsx
+#, fuzzy
+msgid "node.door.panel.slidingLayout"
+msgstr "構成"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 78dbe13192c0894b
+# Review: required
+# English: "Patio"
+#: packages/nodes/src/door/panel.tsx
+#, fuzzy
+msgid "node.door.panel.slidingPatio"
+msgstr "テラス戸"
 
 # Source-Hash: 1a79a485d91f3f28
 # Review: required
@@ -23638,6 +23768,16 @@ msgstr "上部の形状"
 #, fuzzy
 msgid "node.door.panel.touchbar"
 msgstr "タッチバー"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 9628d0cc155e29a3
+# Review: required
+# English: "Transom"
+#: packages/nodes/src/door/panel.tsx
+#, fuzzy
+msgid "node.door.panel.transom"
+msgstr "欄間"
 
 # Source-Hash: c44f7ab8bbd24858
 # Review: required
@@ -35191,6 +35331,16 @@ msgstr "奥行き"
 msgid "node.window.panel.dimensions"
 msgstr "寸法"
 
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 1d8c21c3a94cecec
+# Review: required
+# English: "Divide each sash"
+#: packages/nodes/src/window/panel.tsx
+#, fuzzy
+msgid "node.window.panel.divideEachSash"
+msgstr "各サッシを分割"
+
 # Source-Hash: c53c3307e2a2a32a
 # Review: required
 # AI-Provider: claude-code
@@ -35230,6 +35380,16 @@ msgstr "複製"
 #, fuzzy
 msgid "node.window.panel.enableSill"
 msgstr "窓台を有効化"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: b3907da0ad234f10
+# Review: required
+# English: "Finish"
+#: packages/nodes/src/window/panel.tsx
+#, fuzzy
+msgid "node.window.panel.finish"
+msgstr "仕上げ"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
@@ -35291,6 +35451,26 @@ msgstr "フュージングガラス"
 msgid "node.window.panel.grid"
 msgstr "グリッド"
 
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 41483b645efc0c65
+# Review: required
+# English: "Handle"
+#: packages/nodes/src/window/panel.tsx
+#, fuzzy
+msgid "node.window.panel.handle"
+msgstr "ハンドル"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 8c1bc3a078056ff7
+# Review: required
+# English: "Hardware"
+#: packages/nodes/src/window/panel.tsx
+#, fuzzy
+msgid "node.window.panel.hardware"
+msgstr "金物"
+
 # Source-Hash: 646ef0fbcbc58edf
 # Review: required
 # AI-Provider: claude-code
@@ -35301,6 +35481,16 @@ msgstr "グリッド"
 msgid "node.window.panel.height"
 msgstr "高さ"
 
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: d9dc95af942941c9
+# Review: required
+# English: "Hinges side"
+#: packages/nodes/src/window/panel.tsx
+#, fuzzy
+msgid "node.window.panel.hingesSide"
+msgstr "蝶番の側"
+
 # Source-Hash: 42824e50de26bc14
 # Review: required
 # AI-Provider: claude-code
@@ -35310,6 +35500,26 @@ msgstr "高さ"
 #, fuzzy
 msgid "node.window.panel.individual"
 msgstr "個別"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: b31361e9a342ae79
+# Review: required
+# English: "Inside sill"
+#: packages/nodes/src/window/panel.tsx
+#, fuzzy
+msgid "node.window.panel.insideSill"
+msgstr "室内側の膳板"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 1f4ad5ad3e1be222
+# Review: required
+# English: "Inward"
+#: packages/nodes/src/window/panel.tsx
+#, fuzzy
+msgid "node.window.panel.inward"
+msgstr "内開き"
 
 # Source-Hash: f365c6b6dd9ebab9
 # Review: required
@@ -35331,6 +35541,16 @@ msgstr "左"
 msgid "node.window.panel.move"
 msgstr "移動"
 
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 3e52f04f92e08070
+# Review: required
+# English: "Open"
+#: packages/nodes/src/window/panel.tsx
+#, fuzzy
+msgid "node.window.panel.open"
+msgstr "開き具合"
+
 # Source-Hash: e04298381837252f
 # Review: required
 # AI-Provider: claude-code
@@ -35351,6 +35571,16 @@ msgstr "開口"
 msgid "node.window.panel.openingShape"
 msgstr "開口の形状"
 
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 6f6bf7658cf9ed64
+# Review: required
+# English: "Opens"
+#: packages/nodes/src/window/panel.tsx
+#, fuzzy
+msgid "node.window.panel.opens"
+msgstr "開く向き"
+
 # Source-Hash: cf40395b71bedcca
 # Review: required
 # AI-Provider: claude-code
@@ -35360,6 +35590,26 @@ msgstr "開口の形状"
 #, fuzzy
 msgid "node.window.panel.otherSide"
 msgstr "反対側"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: ccd8f06b8f8d27c9
+# Review: required
+# English: "Outward"
+#: packages/nodes/src/window/panel.tsx
+#, fuzzy
+msgid "node.window.panel.outward"
+msgstr "外開き"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 88540def2ce16ac5
+# Review: required
+# English: "Overhang"
+#: packages/nodes/src/window/panel.tsx
+#, fuzzy
+msgid "node.window.panel.overhang"
+msgstr "出幅"
 
 # Source-Hash: 28fe6e9deddde6e8
 # Review: required
@@ -35411,6 +35661,56 @@ msgstr "見込みの半径"
 msgid "node.window.panel.right"
 msgstr "右"
 
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 7ae285832490b4c1
+# Review: required
+# English: "Roller shutter"
+#: packages/nodes/src/window/panel.tsx
+#, fuzzy
+msgid "node.window.panel.rollerShutter"
+msgstr "シャッター"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: e9a89a5e4ac8cd61
+# Review: required
+# English: "Box"
+#: packages/nodes/src/window/panel.tsx
+#, fuzzy
+msgid "node.window.panel.rollerShutterBox"
+msgstr "ボックス"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 6530bd8318883b22
+# Review: required
+# English: "Box height"
+#: packages/nodes/src/window/panel.tsx
+#, fuzzy
+msgid "node.window.panel.rollerShutterBoxHeight"
+msgstr "ボックスの高さ"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: aad9fc7e713bf399
+# Review: required
+# English: "Concealed"
+#: packages/nodes/src/window/panel.tsx
+#, fuzzy
+msgid "node.window.panel.rollerShutterConcealed"
+msgstr "埋め込み"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: f2953d2931e36d0c
+# Review: required
+# English: "None"
+#: packages/nodes/src/window/panel.tsx
+#, fuzzy
+msgid "node.window.panel.rollerShutterNone"
+msgstr "なし"
+
 # Source-Hash: fc826da6c99303e6
 # Review: required
 # AI-Provider: claude-code
@@ -35440,6 +35740,76 @@ msgstr "行の高さ"
 #, fuzzy
 msgid "node.window.panel.rows"
 msgstr "行"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 6daa40e63114ad7c
+# Review: required
+# English: "Shutters"
+#: packages/nodes/src/window/panel.tsx
+#, fuzzy
+msgid "node.window.panel.shutters"
+msgstr "雨戸"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: b469abd5cad15ac3
+# Review: required
+# English: "Board and batten"
+#: packages/nodes/src/window/panel.tsx
+#, fuzzy
+msgid "node.window.panel.shuttersBoardBatten"
+msgstr "板張り"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: a3c72c286896ec04
+# Review: required
+# English: "Sides"
+#: packages/nodes/src/window/panel.tsx
+#, fuzzy
+msgid "node.window.panel.shutterSides"
+msgstr "側"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 69578b7dd7723fa1
+# Review: required
+# English: "Both"
+#: packages/nodes/src/window/panel.tsx
+#, fuzzy
+msgid "node.window.panel.shutterSidesBoth"
+msgstr "両側"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 5746be19ba2a53be
+# Review: required
+# English: "Louvered"
+#: packages/nodes/src/window/panel.tsx
+#, fuzzy
+msgid "node.window.panel.shuttersLouvered"
+msgstr "ルーバー"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: f2953d2931e36d0c
+# Review: required
+# English: "None"
+#: packages/nodes/src/window/panel.tsx
+#, fuzzy
+msgid "node.window.panel.shuttersNone"
+msgstr "なし"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 482469f5a0873f73
+# Review: required
+# English: "Panel"
+#: packages/nodes/src/window/panel.tsx
+#, fuzzy
+msgid "node.window.panel.shuttersPanel"
+msgstr "パネル"
 
 # Source-Hash: 62ded63b01564969
 # Review: required
@@ -35500,6 +35870,36 @@ msgstr "厚さ"
 #, fuzzy
 msgid "node.window.panel.thisSide"
 msgstr "こちら側"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: b47ccf6a86662344
+# Review: required
+# English: "Mode"
+#: packages/nodes/src/window/panel.tsx
+#, fuzzy
+msgid "node.window.panel.tiltTurnMode"
+msgstr "モード"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 1615637fe68e188a
+# Review: required
+# English: "Tilt"
+#: packages/nodes/src/window/panel.tsx
+#, fuzzy
+msgid "node.window.panel.tiltTurnTilt"
+msgstr "内倒し"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 57c6c983d38e9187
+# Review: required
+# English: "Turn"
+#: packages/nodes/src/window/panel.tsx
+#, fuzzy
+msgid "node.window.panel.tiltTurnTurn"
+msgstr "内開き"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
@@ -35810,6 +36210,16 @@ msgstr "上げ下げ窓（片）"
 #, fuzzy
 msgid "node.window.type.sliding"
 msgstr "引き戸"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: f59a706c9d25325b
+# Review: required
+# English: "Tilt and turn"
+#: packages/nodes/src/shared/opening-labels.ts
+#, fuzzy
+msgid "node.window.type.tiltTurn"
+msgstr "内倒し内開き"
 
 # Source-Hash: 4a4d97a4101793b7
 # Review: required
@@ -36712,6 +37122,14 @@ msgstr "表示"
 #: packages/editor/src/components/viewer/viewer-controls-bar.tsx
 msgid "viewer.walkthrough.label"
 msgstr "ウォークスルー：{state}"
+
+# Source-Hash: 6daa40e63114ad7c
+# Review: required
+# English: "Shutters"
+#: packages/viewer/src/components/viewer/glb-scene.tsx
+#, fuzzy
+msgid "viewer.walkthrough.shutters"
+msgstr "雨戸"
 
 # Source-Hash: 4da8b3678ed77b45
 # Review: human

@@ -1,9 +1,17 @@
 import { refuse } from '../agent-tools/refusal'
-import { clampDoorToWall, clampWindowToWall, findWallChildOverlap } from '../building/wall-openings'
+import {
+  clampDoorToWall,
+  clampWindowToWall,
+  findWallChildOverlap,
+  resolveWallOpeningCeiling,
+} from '../building/wall-openings'
+import { getDoorOpeningSize } from '../lib/door-opening'
+import { openingHostFacing } from '../lib/opening-casing'
 import {
   type AnyNode,
   type AnyNodeId,
   type DoorNode,
+  getCurtainWallConfig,
   getScaledDimensions,
   type ItemNode,
   type WallNode,
@@ -210,13 +218,30 @@ function planOpeningMove(
   checkOverlap: boolean,
 ): MovePlan {
   if (node.type === 'door' && target.y !== undefined) refuseStrayY(target, node)
+  // A door's cutout is wider and taller than its leaf once it has sidelights or a transom.
+  const cutout =
+    node.type === 'door'
+      ? getDoorOpeningSize(node)
+      : { width: node.width, height: node.height, leafOffsetX: 0 }
+  const cutoutOffsetX = cutout.leafOffsetX * openingHostFacing(node)
   const length = wallLength(wall)
-  if (length < node.width)
+  if (length < cutout.width)
     refuse(
       'wall_too_short',
-      `Wall ${wall.id} is ${length.toFixed(2)} m long, too short for this ${node.width.toFixed(2)} m ${node.type}.`,
-      { id: node.id, wallId: wall.id, wallLength: length, width: node.width },
+      `Wall ${wall.id} is ${length.toFixed(2)} m long, too short for this ${cutout.width.toFixed(2)} m ${node.type}.`,
+      { id: node.id, wallId: wall.id, wallLength: length, width: cutout.width },
     )
+  if (node.type === 'door') {
+    const wallHeight =
+      resolveWallOpeningCeiling(wall, nodes as Record<AnyNodeId, AnyNode>) -
+      (wall.wallType === 'curtain' ? getCurtainWallConfig(wall).perimeterWidth : 0)
+    if (cutout.height > wallHeight + 1e-6)
+      refuse(
+        'wall_too_low',
+        `Wall ${wall.id} is ${wallHeight.toFixed(2)} m high, too low for this ${cutout.height.toFixed(2)} m door.`,
+        { id: node.id, wallId: wall.id, wallHeight, height: cutout.height },
+      )
+  }
   const rawX = desiredLocalX(wall, node, target)
   const rawY =
     node.type === 'door'
@@ -226,7 +251,7 @@ function planOpeningMove(
         : target.y + node.height / 2
   const { clampedX, clampedY } =
     node.type === 'door'
-      ? clampDoorToWall(wall, rawX, node.width, node.height)
+      ? clampDoorToWall(wall, rawX, node.width, node.height, node)
       : clampWindowToWall(
           wall,
           rawX,
@@ -239,10 +264,10 @@ function planOpeningMove(
     nodes,
     wall,
     node,
-    clampedX,
-    clampedY,
-    node.width,
-    node.height,
+    clampedX - cutoutOffsetX,
+    clampedY + (cutout.height - node.height) / 2,
+    cutout.width,
+    cutout.height,
     target,
     checkOverlap,
   )

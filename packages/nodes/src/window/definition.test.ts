@@ -11,6 +11,7 @@ import {
   WallNode,
   WindowNode,
 } from '@pascal-app/core'
+import { Mesh, MeshStandardMaterial } from 'three'
 import { resolveWindowHandlePortalTarget, windowDefinition } from './definition'
 
 const windowHandles = (
@@ -187,4 +188,44 @@ describe('window handle presentation', () => {
 
     expect(handleMax(0, window, sceneWith(dormer, window))).toBeCloseTo(1.5)
   })
+})
+
+test('windows declare hardware and shutters and inherit the frame for unpainted hardware', () => {
+  const node = WindowNode.parse({ slots: { frame: '#ab7744' }, windowType: 'casement' })
+  const slots = windowDefinition.capabilities?.slots?.(node) ?? []
+  expect(slots).toContainEqual({
+    slotId: 'hardware',
+    label: 'Hardware',
+    default: 'library:preset-softwhite',
+  })
+  expect(slots).toContainEqual({
+    slotId: 'shutters',
+    label: 'Shutters',
+    default: 'library:preset-charcoal',
+  })
+  expect(slots).toContainEqual({
+    slotId: 'sill',
+    label: 'Sill',
+    default: 'library:preset-softwhite',
+  })
+  const paint = windowDefinition.capabilities!.paint!
+  const frame = paint.getEffectiveMaterial!({ node, role: 'frame', nodes: {} })
+  expect(paint.getEffectiveMaterial!({ node, role: 'hardware', nodes: {} })).toEqual(frame)
+  expect(paint.getEffectiveMaterial!({ node, role: 'sill', nodes: {} })).toEqual(frame)
+  const painted = { ...node, slots: { ...node.slots, hardware: '#224466' } }
+  expect(paint.getEffectiveMaterial!({ node: painted, role: 'hardware', nodes: {} })).not.toEqual(
+    frame,
+  )
+  const root = new Mesh(undefined, new MeshStandardMaterial({ color: '#224466' }))
+  root.userData.slotId = 'hardware'
+  const restore = paint.applyPreview({
+    node: painted,
+    role: 'hardware',
+    root,
+    material: undefined,
+    materialPreset: undefined,
+  })
+  expect((root.material as MeshStandardMaterial).color.getHexString()).toBe('ab7744')
+  restore?.()
+  expect((root.material as MeshStandardMaterial).color.getHexString()).toBe('224466')
 })

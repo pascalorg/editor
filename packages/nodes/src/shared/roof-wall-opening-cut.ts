@@ -1,5 +1,10 @@
 import type { DoorNode, RoofSegmentNode, WindowNode } from '@pascal-app/core'
-import { getRoofWallFaceFrame, roofFacePointToSegment } from '@pascal-app/core'
+import {
+  getDoorOpeningSize,
+  getRoofWallFaceFrame,
+  openingHostFacing,
+  roofFacePointToSegment,
+} from '@pascal-app/core'
 import { buildOpeningCutoutGeometry, getOpeningCutoutBottomPadding } from '@pascal-app/viewer'
 import * as THREE from 'three'
 
@@ -52,22 +57,30 @@ function buildCutGeometry(
   depth: number,
   bottomPad: number,
 ): THREE.BufferGeometry {
+  const size = getDoorOpeningSize(node)
+  const offsetX = -size.leafOffsetX * openingHostFacing(node)
+  const offsetY = (size.height - node.height) / 2
   const shaped =
     node.openingKind === 'opening' ||
     node.openingShape === 'arch' ||
     node.openingShape === 'rounded'
 
   if (!shaped) {
-    const geo = new THREE.BoxGeometry(node.width, node.height + bottomPad, depth)
-    geo.translate(0, -bottomPad / 2, 0)
+    const geo = new THREE.BoxGeometry(size.width, size.height + bottomPad, depth)
+    geo.translate(offsetX, offsetY - bottomPad / 2, 0)
     return geo
   }
 
-  const halfWidth = node.width / 2
-  const halfHeight = node.height / 2
+  const halfWidth = size.width / 2
+  const halfHeight = size.height / 2
   return buildOpeningCutoutGeometry(
     node,
-    { left: -halfWidth, right: halfWidth, bottom: -halfHeight - bottomPad, top: halfHeight },
+    {
+      left: offsetX - halfWidth,
+      right: offsetX + halfWidth,
+      bottom: offsetY - halfHeight - bottomPad,
+      top: offsetY + halfHeight,
+    },
     depth,
     wallThickness,
   )

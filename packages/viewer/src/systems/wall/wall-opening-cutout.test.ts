@@ -330,3 +330,44 @@ describe('an opening waiting for its construction reveal', () => {
     }
   })
 })
+
+for (const rotationY of [0, Math.PI]) {
+  test(`cuts sidelights and transom from wall node data facing ${rotationY}`, () => {
+    const wall = WallNode.parse({
+      id: 'wall_fixed-lights',
+      start: [0, 0],
+      end: [5, 0],
+      height: 3,
+      thickness: 0.2,
+    })
+    const door = DoorNode.parse({
+      wallId: wall.id,
+      position: [2.5, 1.05, 0],
+      rotation: [0, rotationY, 0],
+      width: 1,
+      height: 2.1,
+      sidelightLeft: 0.3,
+      sidelightRight: 0.5,
+      transomHeight: 0.4,
+    })
+    sceneRegistry.nodes.set(wall.id, new THREE.Mesh())
+    const geometry = generateExtrudedWall(wall, [door], calculateLevelMiters([wall]))
+    const mesh = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }))
+    mesh.updateMatrixWorld(true)
+    const hit = (x: number, y: number) =>
+      new THREE.Raycaster(new THREE.Vector3(x, y, 1), new THREE.Vector3(0, 0, -1)).intersectObject(
+        mesh,
+      ).length > 0
+    try {
+      expect(hit(2.5, 2.3)).toBe(false)
+      expect(hit(2.5 - (rotationY === 0 ? 0.7 : 0.9), 1)).toBe(false)
+      expect(hit(2.5 + (rotationY === 0 ? 0.9 : 0.7), 1)).toBe(false)
+      expect(hit(2.5, 2.7)).toBe(true)
+      expect(hit(1, 1)).toBe(true)
+    } finally {
+      sceneRegistry.nodes.delete(wall.id)
+      geometry.dispose()
+      ;(mesh.material as THREE.Material).dispose()
+    }
+  })
+}

@@ -286,6 +286,8 @@ export {
 } from './components/ui/build-panel/build-panel'
 export { useCommandPalette } from './components/ui/command-palette'
 export { ActionButton, ActionGroup } from './components/ui/controls/action-button'
+// A finish row in a node panel: the paint tool's picker and its write for one paint role.
+export { FinishSwatch } from './components/ui/controls/finish-swatch'
 export {
   MaterialPaintPanel,
   type MaterialPaintPanelProps,
@@ -1027,9 +1029,13 @@ export {
 export { writeWindowChanges } from './lib/window-changes'
 export {
   closeWindowOpenState,
+  getDisplayedWindowShutterValue,
   getDisplayedWindowValue,
   isOperableWindowType,
   openWindowOpenState,
+  setWindowShuttersOpenState,
+  type WindowOpenAnimationOptions,
+  type WindowShutterField,
 } from './lib/window-interaction'
 export {
   getActiveBuildingPose,

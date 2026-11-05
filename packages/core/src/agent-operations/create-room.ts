@@ -1,8 +1,9 @@
 import { isAgentRefusal, refuse } from '../agent-tools/refusal'
-import { doorFacing, planWallOpening } from '../building/wall-openings'
+import { doorFacing, planWallOpening, type WallOpeningInput } from '../building/wall-openings'
 import { createZone, walledRoomAt } from '../commands/structure/create-zone'
 import { structureChangeBatch } from '../commands/structure/shared'
 import { levelFootprintLoops } from '../lib/building-footprint'
+import { doorPositionForFacing } from '../lib/door-opening'
 import { foundationReadingOfLevel } from '../lib/foundation-construction'
 import { foundationWallRule, levelHoldsFoundationWalls } from '../lib/foundation-wall'
 import { isAllocatedRoomName } from '../lib/room-name'
@@ -10,6 +11,7 @@ import { lotOverhang } from '../lib/site-placement'
 import {
   type AnyNode,
   type AnyNodeId,
+  type DoorNode,
   generateId,
   type LevelNode,
   type WallNode,
@@ -21,13 +23,42 @@ import { polygonArea, type Vec2 } from './plan-geometry'
 import { levelRole, queryNodes } from './scene-queries'
 import type { AgentOperation, SceneNodes } from './types'
 
-type OpeningSpec = {
+type OpeningSpec = Pick<
+  WallOpeningInput,
+  | 'doorType'
+  | 'sidelightLeft'
+  | 'sidelightRight'
+  | 'transomHeight'
+  | 'leafCount'
+  | 'slidingStyle'
+  | 'slideDirection'
+  | 'windowType'
+  | 'columns'
+  | 'rows'
+  | 'sashGrid'
+  | 'windowHandle'
+  | 'sillInterior'
+  | 'shutters'
+  | 'shutterWidth'
+  | 'openingDirection'
+  | 'tiltTurnMode'
+  | 'sillOverhang'
+  | 'sillInteriorDepth'
+  | 'sillInteriorThickness'
+  | 'sillInteriorOverhang'
+  | 'shutterOpen'
+  | 'shutterSides'
+  | 'rollerShutter'
+  | 'rollerShutterBoxHeight'
+  | 'rollerShutterOpen'
+> & {
   wallIndex: number
   t?: number
   width?: number
   height?: number
   sillHeight?: number
   hingesSide?: 'left' | 'right'
+  handleStyle?: DoorNode['handleStyle']
   handleSide?: 'left' | 'right'
   swingDirection?: 'inward' | 'outward'
   style?: string
@@ -310,7 +341,9 @@ export const createRoom: AgentOperation<CreateRoomInput> = (nodes, input, contex
         const wall = derived[door?.parentId ?? '']
         if (door?.type !== 'door' || wall?.type !== 'wall') return []
         const facing = doorFacing(wall)
-        return facing.side && facing.side !== door.side ? [{ id, data: facing }] : []
+        return facing.side && facing.side !== door.side
+          ? [{ id, data: { ...facing, position: doorPositionForFacing(door, facing.rotation) } }]
+          : []
       })
       return {
         result: { ...result, ...derivedSurfaces(derived, level.id, plan.zoneId) },

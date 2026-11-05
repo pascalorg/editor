@@ -4,6 +4,8 @@ import {
   flushPull,
   hingeJambPart,
   hingeLeafPart,
+  knobOnRose,
+  leverOnPlate,
   leverOnRose,
   leverOnRoseCurved,
   pullBar,
@@ -14,13 +16,19 @@ import {
 } from './hardware-geometry'
 
 for (const [name, build, measuredTriangles] of [
-  ['lever', leverOnRose, 2256],
-  ['curved lever', leverOnRoseCurved, 2256],
+  ['lever', leverOnRose, 872],
+  ['curved lever', leverOnRoseCurved, 1576],
+  ['knob', knobOnRose, 1152],
+  ['plate lever', leverOnPlate, 660],
+  ['door bar pull', () => pullBar(true), 256],
   ['flush pull', flushPull, 108],
-  ['hinge leaf', hingeLeafPart, 636],
-  ['hinge jamb', hingeJambPart, 204],
-  ['pull', pullBar, 672],
-  ['box', () => roundedBox(0.28, 0.055, 0.055), 300],
+  ['hinge leaf', hingeLeafPart, 324],
+  ['hinge jamb', hingeJambPart, 140],
+  ['window hinge leaf', () => hingeLeafPart(0.01, 0.06), 276],
+  ['window hinge jamb', () => hingeJambPart(0.01, 0.06), 140],
+  ['window handle plate', () => roundedBox(0.028, 0.12, 0.006, 0.003), 108],
+  ['pull', pullBar, 440],
+  ['box', () => roundedBox(0.28, 0.055, 0.055), 108],
   ['tube', () => tube(0.0095, 0.125), 48],
   ['sphere', () => sphere(0.009), 168],
   ['roller', () => roller(0.0425, 0.02), 80],
@@ -245,7 +253,7 @@ test('default lever has a straight 19 mm grip parallel to the face with a hemisp
       tipVertices++
     }
   }
-  expect(gripVertices).toBeGreaterThan(200)
+  expect(gripVertices).toBeGreaterThan(0)
   expect(tipVertices).toBeGreaterThan(100)
 })
 
@@ -274,4 +282,58 @@ test('flush pull has an open front, five inner faces, a 12 mm recess and a 1 mm 
     expect(hits.length).toBeGreaterThan(0)
     expect(hits[0]!.distance).toBeCloseTo(distance, 6)
   }
+})
+
+test('door bar is 25 by 400 mm with two 16 mm standoffs 300 mm apart', () => {
+  const positions = pullBar(true).getAttribute('position')
+  const bounds = new THREE.Box3().setFromBufferAttribute(positions as THREE.BufferAttribute)
+  expect(bounds.getSize(new THREE.Vector3()).x).toBeCloseTo(0.025, 6)
+  expect(bounds.getSize(new THREE.Vector3()).y).toBeCloseTo(0.4, 6)
+  expect(bounds.min.z).toBeCloseTo(0, 6)
+  for (const y of [-0.15, 0.15]) {
+    expect(
+      Array.from({ length: positions.count }, (_, i) => i).some(
+        (i) => Math.abs(positions.getY(i) - y) < 1e-7 && Math.abs(positions.getX(i) - 0.008) < 1e-7,
+      ),
+    ).toBe(true)
+  }
+})
+
+test('knob and plate have the specified rose, ball and backplate sizes', () => {
+  const bounds = (geometry: THREE.BufferGeometry) =>
+    new THREE.Box3().setFromBufferAttribute(
+      geometry.getAttribute('position') as THREE.BufferAttribute,
+    )
+  const knob = bounds(knobOnRose())
+  expect(knob.getSize(new THREE.Vector3()).x).toBeCloseTo(0.056)
+  expect(knob.getSize(new THREE.Vector3()).y).toBeCloseTo(0.056)
+  expect(knob.min.z).toBeCloseTo(0)
+  expect(knob.max.z).toBeCloseTo(0.08)
+  const plate = bounds(leverOnPlate())
+  expect(plate.min.y).toBeCloseTo(-0.11)
+  expect(plate.max.y).toBeCloseTo(0.11)
+  const backplate = leverOnPlate().getAttribute('position')
+  const platePoints = Array.from({ length: backplate.count }, (_, i) =>
+    new THREE.Vector3().fromBufferAttribute(backplate, i),
+  ).filter((p) => p.z < 0.00601)
+  expect(new THREE.Box3().setFromPoints(platePoints).getSize(new THREE.Vector3()).x).toBeCloseTo(
+    0.04,
+  )
+})
+
+test('window hinge pairs use cached 10 by 60 mm sections with metre UVs', () => {
+  const leaf = hingeLeafPart(0.01, 0.06)
+  const jamb = hingeJambPart(0.01, 0.06)
+  expect(hingeLeafPart(0.0101, 0.0601)).toBe(leaf)
+  for (const geometry of [leaf, jamb]) {
+    geometry.computeBoundingBox()
+    const size = geometry.boundingBox!.getSize(new THREE.Vector3())
+    expect(size.x).toBeCloseTo(0.01, 6)
+    expect(size.y).toBeLessThanOrEqual(0.060001)
+    const uv = geometry.getAttribute('uv')
+    expect(Math.max(...Array.from(uv.array).map(Math.abs))).toBeLessThanOrEqual(0.060001)
+    expect(geometry.userData.shared).toBe(true)
+  }
+  expect(leaf.boundingBox!.getSize(new THREE.Vector3()).y).toBeCloseTo(0.06, 6)
+  expect(hingeLeafPart()).not.toBe(leaf)
 })

@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import type { AuthorScenePayload } from '../agent-tools/author-scene'
 import { authorScenePayload } from '../agent-tools/author-scene'
+import { getDoorOpeningSize, openingHostFacing } from '../index'
 import { floorScriptInputs } from '../lib/floor-script'
 import { reconcileSceneStructure } from '../lib/structure-reconcile'
 import { cloneNodesInto } from '../registry/subtree'
@@ -930,6 +931,7 @@ describe('author_scene', () => {
                       type: 'french',
                       style: 'modern',
                       hinge: 'end',
+                      handleStyle: 'plate',
                     },
                     { kind: 'door', along: 3, width: 0.9, height: 2.1, leaves: 2 },
                   ],
@@ -970,6 +972,7 @@ describe('author_scene', () => {
     expect(french.leafCount).toBe(2)
     expect(french.hingesSide).toBe('right')
     expect(french.handleSide).toBe('left')
+    expect(french.handleStyle).toBe('plate')
     // The style's leaf over the type's: a modern French door is one flush slab.
     expect(french.segments).toHaveLength(1)
     expect(byAuthorId(outcome, 'south/1').leafCount).toBe(2)
@@ -3179,3 +3182,191 @@ describe('author_scene units', () => {
     expect(house).toMatchObject({ passed: true, detail: 'The design names no units.' })
   })
 })
+
+test.each(['casement', 'double-hung', 'fixed', 'tilt-turn'] as const)(
+  'author_scene writes %s window divisions and exterior details',
+  (type) => {
+    const details = {
+      windowHandle: false,
+      sillInterior: true,
+      shutters: 'board-batten' as const,
+      shutterWidth: 0.4,
+      openingDirection: 'inward' as const,
+      tiltTurnMode: 'turn' as const,
+      shutterOpen: 0.25,
+      shutterSides: 'right' as const,
+      rollerShutter: 'concealed' as const,
+      rollerShutterBoxHeight: 0.27,
+      rollerShutterOpen: 0.5,
+      sillOverhang: 0.12,
+      sillInteriorDepth: 0.09,
+      sillInteriorThickness: 0.04,
+      sillInteriorOverhang: 0.02,
+      hingesSide: 'right' as const,
+    }
+    const payload = structuredClone(bedroom)
+    payload.levels[0]!.walls![1]!.openings = [
+      {
+        kind: 'window',
+        along: 2.5,
+        width: 1.4,
+        height: 1.3,
+        sill: 0.9,
+        type,
+        columns: 3,
+        rows: 2,
+        ...details,
+      },
+    ]
+    const outcome = authorScene(
+      scaffold(),
+      { payload: authorScenePayload.parse(payload), compiled: { bed, lamp: bed } },
+      { activeLevelId: 'level_0' },
+    )
+    const window = nodesOf(outcome).find((node) => node.type === 'window')!
+    expect(window).toMatchObject({
+      type: 'window',
+      windowType: type,
+      columnRatios: [1 / 3, 1 / 3, 1 / 3],
+      rowRatios: [0.5, 0.5],
+      ...details,
+    })
+    expect((window as AnyNode & { sashGrid?: boolean }).sashGrid).toBe(
+      type === 'fixed' ? undefined : true,
+    )
+  },
+)
+
+test('author_scene writes native entry lights and the chosen folding panel count', () => {
+  const payload = authorScenePayload.parse({
+    levels: [
+      {
+        name: 'Entry',
+        walls: [
+          {
+            id: 'front',
+            start: [0, 0],
+            end: [10, 0],
+            height: 3,
+            thickness: 0.2,
+            openings: [
+              {
+                kind: 'door',
+                along: 2,
+                width: 1,
+                height: 2.1,
+                sidelightLeft: 0.3,
+                sidelightRight: 0.5,
+                transomHeight: 0.4,
+              },
+              {
+                kind: 'door',
+                along: 7,
+                width: 3,
+                height: 2.1,
+                type: 'folding',
+                leaves: 8,
+                style: 'modern',
+                slideDirection: 'right',
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  })
+  const result = run(payload, {})
+  const doors =
+    result.changes?.create?.map(({ node }) => node).filter((node) => node.type === 'door') ?? []
+  expect(doors).toHaveLength(2)
+  expect(doors[0]).toMatchObject({
+    width: 1,
+    height: 2.1,
+    sidelightLeft: 0.3,
+    sidelightRight: 0.5,
+    transomHeight: 0.4,
+  })
+  expect(doors[1]).toMatchObject({ doorType: 'folding', leafCount: 8, slideDirection: 'right' })
+  const folded = doors[1]
+  expect(folded?.type === 'door' && folded.segments.some((s) => s.type === 'glass')).toBe(false)
+})
+
+for (const sill of [0, 0.2]) {
+  test(`author_scene refuses a transom above its wall at sill ${sill}`, () => {
+    const payload = authorScenePayload.parse({
+      levels: [
+        {
+          name: 'Entry',
+          walls: [
+            {
+              id: 'front',
+              start: [0, 0],
+              end: [4, 0],
+              height: 2.5,
+              thickness: 0.2,
+              openings: [
+                { kind: 'door', along: 2, width: 1, height: 2.1, sill, transomHeight: 0.5 },
+              ],
+            },
+          ],
+        },
+      ],
+    })
+    const outcome = run(payload, {})
+    expect(outcome.result.defects).toContainEqual(expect.objectContaining({ code: 'wall_too_low' }))
+    expect(outcome.changes?.create?.some(({ node }) => node.type === 'door')).toBe(false)
+  })
+}
+
+for (const reversed of [false, true]) {
+  test(`author_scene keeps an asymmetric entry cutout centred when facing outside (${reversed})`, () => {
+    const polygon: [number, number][] = [
+      [0, 0],
+      [4, 0],
+      [4, 4],
+      [0, 4],
+    ]
+    if (reversed) polygon.reverse()
+    const outcome = run(
+      authorScenePayload.parse({
+        levels: [
+          {
+            name: 'Entry',
+            walls: polygon.map((start, i) => ({
+              id: `edge${i}`,
+              start,
+              end: polygon[(i + 1) % polygon.length],
+              height: 3,
+              thickness: 0.2,
+              openings:
+                i === 0
+                  ? [
+                      {
+                        kind: 'door',
+                        along: 1.4,
+                        width: 0.9,
+                        height: 2.1,
+                        sidelightLeft: 0.2,
+                        sidelightRight: 0.6,
+                      },
+                    ]
+                  : [],
+            })),
+          },
+        ],
+      }),
+      {},
+    )
+    const nodes = outcome.changes?.create?.map(({ node }) => node) ?? []
+    const door = nodes.find((node) => node.type === 'door')
+    expect(door?.type).toBe('door')
+    if (door?.type !== 'door') return
+    const wall = nodes.find((node) => node.id === door.parentId)
+    expect(wall?.type).toBe('wall')
+    if (wall?.type !== 'wall') return
+    expect(door.side).toBe(wall.frontSide === 'exterior' ? 'front' : 'back')
+    expect(
+      door.position[0] - getDoorOpeningSize(door).leafOffsetX * openingHostFacing(door),
+    ).toBeCloseTo(1.4)
+  })
+}

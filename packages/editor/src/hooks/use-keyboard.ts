@@ -1,6 +1,7 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  doorPositionForFacing,
   emitter,
   nodeRegistry,
   pauseSpaceDetection,
@@ -687,6 +688,11 @@ export const useKeyboard = ({
             useScene.getState().updateNode(node.id, {
               side: node.side === 'front' ? 'back' : 'front',
               rotation: [node.rotation[0], node.rotation[1] + Math.PI, node.rotation[2]],
+              position: doorPositionForFacing(node, [
+                node.rotation[0],
+                node.rotation[1] + Math.PI,
+                node.rotation[2],
+              ]),
             })
             if (node.parentId) {
               useScene.getState().dirtyNodes.add(node.parentId as AnyNodeId)

@@ -2059,6 +2059,16 @@ export type SceneActionCapability<T = unknown> = {
   activate: (node: AnyNode, target: T, sceneApi: SceneApi) => boolean
 }
 
+export type MechanismPart = {
+  id: string
+  label: string
+  icon?: 'shutters'
+  verb?: 'open' | 'run'
+  has: (node: AnyNode) => boolean
+  isOn: (node: AnyNode, state: InteractiveState) => boolean
+  set: (node: AnyNode, on: boolean) => void
+}
+
 /**
  * A kind's moving parts (a fan's spin, doors, an articulated asset's joints).
  * Operating state is transient: `set` writes `useInteractive`, never the node,
@@ -2066,6 +2076,7 @@ export type SceneActionCapability<T = unknown> = {
  * with a single switch keeps it in `useInteractive.mechanisms`.
  */
 export type MechanismCapability = {
+  parts?: MechanismPart[]
   /** Whether this node has anything to run. */
   has: (node: AnyNode) => boolean
   /** Whether any of its mechanisms is running. */

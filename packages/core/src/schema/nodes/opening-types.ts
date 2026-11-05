@@ -37,7 +37,10 @@ export const defaultDoorSegments = () => [
 ]
 
 /** A new door's leaf margin [x, y] (m). */
-export const DEFAULT_DOOR_CONTENT_PADDING: [number, number] = [0.04, 0.04]
+export const DEFAULT_DOOR_CONTENT_PADDING: [number, number] = [0.11, 0.11]
+
+export const DoorHandleStyle = z.enum(['lever', 'lever-curved', 'knob', 'bar', 'plate'])
+export type DoorHandleStyle = z.infer<typeof DoorHandleStyle>
 
 const INCH = 0.0254
 
@@ -53,6 +56,7 @@ export const WindowType = z.enum([
   'casement',
   'awning',
   'hopper',
+  'tilt-turn',
   'single-hung',
   'double-hung',
   'bay',

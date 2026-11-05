@@ -338,3 +338,22 @@ describe('drafted sheet opening marks', () => {
     expect(Math.max(...xs) - Math.min(...xs)).toBeGreaterThan(OPENING_TAG_HEIGHT * 2)
   })
 })
+
+for (const [patch, hardware] of [
+  [{}, 'Lever'],
+  [{ handleStyle: 'knob', doorCloser: true }, 'Knob, closer'],
+  [{ handleStyle: 'plate', panicBar: true }, 'Plate lever, panic bar'],
+  [{ handle: false }, 'Standard'],
+  [{ openingKind: 'opening' }, 'None'],
+] as const) {
+  test(`door schedule documents ${hardware}`, () => {
+    const { doorA, level, nodes } = fixture()
+    const schedule = buildDoorFloorplanSchedule({
+      siblings: [DoorNode.parse({ ...doorA, ...patch })],
+      nodes,
+      levelId: level.id,
+      unit: 'imperial',
+    })
+    expect(schedule?.rows[0]?.cells.hardware).toBe(hardware)
+  })
+}

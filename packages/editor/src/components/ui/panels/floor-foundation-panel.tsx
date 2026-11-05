@@ -533,7 +533,7 @@ export function FloorFoundationPanel({ node, onClose }: { node: SlabNode; onClos
             hint={i18n._({ id: 'editor.panels.floorFoundationPanel.theFloorSOutsideEdgeAll', message: 'The floor\'s outside edge, all around the footprint.' })}
             label={i18n._({ id: 'editor.panels.floorFoundationPanel.edgeFinish', message: 'Edge finish' })}
             node={plate}
-            role="edge"
+            paintRole="edge"
             value={plate.slots?.edge}
           />
           {thickFloor && (
@@ -578,7 +578,7 @@ export function FloorFoundationPanel({ node, onClose }: { node: SlabNode; onClos
                   fallback={FOUNDATION_DEFAULT}
                   label={i18n._({ id: 'editor.panels.floorFoundationPanel.foundationFinish', message: 'Foundation finish' })}
                   node={plate}
-                  role="foundation"
+                  paintRole="foundation"
                   value={
                     typeof plate.foundation?.material === 'string'
                       ? plate.foundation.material
