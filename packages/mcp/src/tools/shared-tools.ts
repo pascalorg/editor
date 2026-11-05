@@ -673,16 +673,41 @@ function writesScene(changes: SceneChanges | undefined): boolean {
   )
 }
 
+type FoundAsset = { id: string; name: string; dimensions: unknown; attachTo: string | null }
+
+/**
+ * search_assets as the model reads it: each item's id, name and placement facts; the category
+ * and the floor's null attachTo stay in the structured result.
+ */
+function searchAssetsModelResult(output: Record<string, unknown>) {
+  const groups = output.groups as { results: FoundAsset[] }[]
+  return {
+    ...output,
+    groups: groups.map((group) => ({
+      ...group,
+      results: group.results.map(({ id, name, dimensions, attachTo }) => ({
+        id,
+        name,
+        dimensions,
+        ...(attachTo && { attachTo }),
+      })),
+    })),
+  }
+}
+
 /**
  * What the model reads of a tool's result: for verify_scene, the findings grouped and trimmed
- * (`verifySceneModelResult`); every other result as it is. The structured result keeps the report whole.
+ * (`verifySceneModelResult`); for search_assets, the items without what placing them does not
+ * need; every other result as it is. The structured result keeps the whole.
  */
 function modelResult(
   name: string,
   output: Record<string, unknown>,
   input: Record<string, unknown>,
 ) {
-  return name === verifySceneTool.name ? verifySceneModelResult(output, input) : output
+  if (name === verifySceneTool.name) return verifySceneModelResult(output, input)
+  if (name === searchAssetsTool.name) return searchAssetsModelResult(output)
+  return output
 }
 
 export function registerSharedTools(
