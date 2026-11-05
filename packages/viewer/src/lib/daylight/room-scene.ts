@@ -66,6 +66,7 @@ export function feedLamps(): RoomLamp[] {
         position: position.clone(),
         color: new Color(light.color || '#ffe6c4'),
         intensity: 4 + 3 * Math.log2(1 + Math.max(0, peak)),
+        candela: Math.max(0, peak),
         range: MathUtils.clamp(light.distance || 5.5, 2.5, 9),
         on: feed.intensity(light) > 0,
         spot: light.spot ? lampSpot(light) : undefined,

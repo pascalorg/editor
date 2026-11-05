@@ -87,6 +87,12 @@ export type RoomLamp = {
   on: boolean
   /** Spotlight cone (exterior lamps keep it; inside, lamps fill their room). */
   spot?: { direction: Vector3; cosOuter: number; cosInner: number }
+  /**
+   * The light's authored intensity (cd, as the real light shines at it). Exterior lamps light
+   * façades and ground with it, as the scene's lights do — `intensity` is a room-metering value,
+   * log-compressed from it, and only caps it (layouts with physical-looking 1800 cd stay tame).
+   */
+  candela?: number
 }
 
 export type RoomZone = {
@@ -815,7 +821,8 @@ export class RoomLighting {
   }
 
   private writeLamp(l: RoomLamp) {
-    const k = (l.on ? 1 : 0) * l.intensity
+    const exterior = l.candela !== undefined && this.exteriorLamps.includes(l)
+    const k = (l.on ? 1 : 0) * (exterior ? Math.min(l.candela!, l.intensity) : l.intensity)
     const cosInner = l.spot ? l.spot.cosInner : -1
     this.set(this.lampTexel.get(l)! + 1, l.color.r * k, l.color.g * k, l.color.b * k, cosInner)
   }
@@ -1237,14 +1244,18 @@ export class RoomLighting {
       const win = clamp(float(1).sub(d.div(a.w).pow(4)), 0, 1).pow(2)
       // Spotlights keep their cone (soft edge = the penumbra); omni lamps pass everywhere.
       const cone = smoothstep(s.w, c.w, dot(L.div(d).negate(), s.xyz))
+      // Spots shade plainly (N·L), as the scene's lights do: a sconce's own wall, edge-on and
+      // close, stays nearly dark. Omni lamps keep a little wrap for the bounce they'd bring.
+      const wrap = select(s.w.lessThan(-1.5), float(0.25), float(0))
+      const facing = dot(Nw, L.div(d)).mul(float(1).sub(wrap)).add(wrap)
       out.addAssign(
         c.xyz
           .mul(win.div(max(d2, LAMP_MIN_D2)))
-          .mul(max(dot(Nw, L.div(d)).mul(0.75).add(0.25), 0))
+          .mul(max(facing, 0))
           .mul(cone),
       )
     })
-    return this.softClampLamps(out.mul(1.2)).mul(this.lampGain).mul(this.lampView)
+    return this.softClampLamps(out).mul(this.lampGain).mul(this.lampView)
   })
 
   /** 1 where exterior lights may shine (outside, or rooms open to the sky), 0 inside. */
