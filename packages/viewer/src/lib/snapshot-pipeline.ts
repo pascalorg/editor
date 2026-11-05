@@ -42,6 +42,7 @@ import { DAYLIGHT_INK_BACKDROP, daylightGradeRgb, isDaylightAtmosphere } from '.
 import { daylightRoomContext } from './daylight/room-context'
 import { type EdgeMode, edgeColorFor, edgeOpacityScaleFor } from './edge-style'
 import { createEdgeDepthSampler, inkedEdges } from './ink-edges'
+import { readbackRows } from './readback-rows'
 import { sceneLightingMask, scenePassMrt } from './scene-pass-mrt'
 import type { SceneTheme } from './scene-themes'
 import { packNormalToRGB, unpackRGBToNormal } from './tsl-compat'
@@ -427,9 +428,9 @@ export async function createSnapshotPipeline({
 }
 
 /**
- * The frame in `renderTarget`, read back and encoded: WebGPU's 256-byte row
- * padding undone (the WebGL fallback's bottom-up rows flipped), then cut to
- * the capture mode — the viewport as is, an area, or the standard aspect.
+ * The frame in `renderTarget`, read back and encoded: rows made tight and
+ * top-down (`readbackRows`), then cut to the capture mode — the viewport as
+ * is, an area, or the standard aspect.
  * Shared by the post-processed pipeline and the plain one.
  */
 async function encodeCapture(
@@ -452,9 +453,6 @@ async function encodeCapture(
   },
 ): Promise<SnapshotCaptureResult> {
   const encoding = mime ? { type: mime } : { type: SNAPSHOT_MIME, quality: SNAPSHOT_QUALITY }
-  // Read pixels from the RT asynchronously.
-  // WebGPU copyTextureToBuffer aligns each row to 256 bytes, so we must
-  // depad the rows before constructing ImageData.
   const pixels = (await (renderer as any).readRenderTargetPixelsAsync(
     renderTarget,
     0,
@@ -462,15 +460,6 @@ async function encodeCapture(
     captureWidth,
     captureHeight,
   )) as Uint8Array
-
-  const actualBytesPerRow = captureWidth * 4
-  const tightTotal = actualBytesPerRow * captureHeight
-  const paddedBytesPerRow = Math.ceil(actualBytesPerRow / 256) * 256
-  // Two readback shapes to handle:
-  // - WebGPU (`copyTextureToBuffer`): top-down + 256-byte row padding
-  //   when width*4 isn't already a multiple of 256.
-  // - WebGL2 fallback (iOS Chrome, etc.): tightly-packed but bottom-up
-  //   (OpenGL framebuffer convention).
   // `isWebGPURenderer` lies — it stays true even when the renderer
   // falls back to the WebGL backend. Inspect the actual backend
   // instead (presence of a GPU device, or backend constructor name).
@@ -479,35 +468,7 @@ async function encodeCapture(
     !!backend?.device ||
     backend?.isWebGPUBackend === true ||
     backend?.constructor?.name === 'WebGPUBackend'
-  let tightPixels: Uint8ClampedArray
-  if (isWebGPU) {
-    // WebGPU: depad rows if needed; orientation is already top-down.
-    if (paddedBytesPerRow === actualBytesPerRow) {
-      tightPixels = new Uint8ClampedArray(
-        pixels.buffer,
-        pixels.byteOffset,
-        Math.min(pixels.byteLength, tightTotal),
-      )
-    } else {
-      tightPixels = new Uint8ClampedArray(tightTotal)
-      for (let row = 0; row < captureHeight; row++) {
-        tightPixels.set(
-          pixels.subarray(row * paddedBytesPerRow, row * paddedBytesPerRow + actualBytesPerRow),
-          row * actualBytesPerRow,
-        )
-      }
-    }
-  } else {
-    // WebGL2: tight buffer in bottom-up order — flip rows.
-    tightPixels = new Uint8ClampedArray(tightTotal)
-    for (let row = 0; row < captureHeight; row++) {
-      const srcStart = (captureHeight - 1 - row) * actualBytesPerRow
-      tightPixels.set(
-        pixels.subarray(srcStart, srcStart + actualBytesPerRow),
-        row * actualBytesPerRow,
-      )
-    }
-  }
+  const tightPixels = readbackRows(pixels, captureWidth, captureHeight, isWebGPU)
 
   const imageData = new ImageData(
     tightPixels as unknown as Uint8ClampedArray<ArrayBuffer>,
