@@ -36828,6 +36828,14 @@ msgstr "可见性"
 msgid "viewer.walkthrough.label"
 msgstr "漫游：{state}"
 
+# Source-Hash: 6daa40e63114ad7c
+# Review: required
+# English: "Shutters"
+#: packages/viewer/src/components/viewer/glb-scene.tsx
+#, fuzzy
+msgid "viewer.walkthrough.shutters"
+msgstr "护窗板"
+
 # Source-Hash: 4da8b3678ed77b45
 # Review: human
 # English: "Cutaway"

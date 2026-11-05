@@ -14847,6 +14847,10 @@ msgstr "Visibility"
 msgid "viewer.walkthrough.label"
 msgstr "Walkthrough: {state}"
 
+#: packages/viewer/src/components/viewer/glb-scene.tsx
+msgid "viewer.walkthrough.shutters"
+msgstr "Shutters"
+
 #: packages/editor/src/components/viewer/viewer-controls-bar.tsx
 msgid "viewer.walls.cutaway"
 msgstr "Cutaway"

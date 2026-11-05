@@ -36828,6 +36828,14 @@ msgstr "Visibilité"
 msgid "viewer.walkthrough.label"
 msgstr "Visite : {state}"
 
+# Source-Hash: 6daa40e63114ad7c
+# Review: required
+# English: "Shutters"
+#: packages/viewer/src/components/viewer/glb-scene.tsx
+#, fuzzy
+msgid "viewer.walkthrough.shutters"
+msgstr "Volets"
+
 # Source-Hash: 4da8b3678ed77b45
 # Review: human
 # English: "Cutaway"

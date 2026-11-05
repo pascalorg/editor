@@ -1186,8 +1186,8 @@ describe('prepareSceneForExport', () => {
       const root = new THREE.Group().add(mesh)
       sceneRegistry.nodes.set(node.id, mesh)
       const prepared = prepareSceneForExport(root, { [node.id]: node })
-      expect(prepared.animations).toHaveLength(1)
-      const clip = prepared.animations[0]!
+      expect(prepared.animations).toHaveLength(2)
+      const clip = prepared.animations.find((clip) => clip.name === `${node.id}: open`)!
       expect(clip.tracks).toHaveLength(1)
       const target = prepared.scene.getObjectByProperty(
         'uuid',
@@ -1239,8 +1239,25 @@ describe('prepareSceneForExport', () => {
       mesh.getObjectByName('window-roller-curtain')!.clear()
       sceneRegistry.nodes.set(node.id, mesh)
       const prepared = prepareSceneForExport(new THREE.Group().add(mesh), { [node.id]: node })
-      expect(prepared.animations).toHaveLength(1)
+      expect(prepared.animations.map((clip) => clip.name)).toEqual([
+        `${node.id}: open`,
+        `${node.id}: shutters`,
+      ])
       expect(prepared.animations[0]!.tracks).toHaveLength(1)
+      const extras = prepared.scene.getObjectByName(node.id)!.userData
+      expect(extras.shutters).toBe(true)
+      expect(extras.shuttersOpen).toBe(shutterOpen)
+      expect(extras.openable).toBe(true)
+      expect(extras.clips).toEqual(prepared.animations.map((clip) => clip.name))
+      const shutters = prepared.animations[1]!
+      expect(shutters.duration).toBe(1)
+      const leaves: THREE.Object3D[] = []
+      prepared.scene.traverse((part) => {
+        if (['shutter-left', 'shutter-right', 'shutter-outer'].includes(part.name))
+          leaves.push(part)
+      })
+      for (const leaf of leaves)
+        expect(shutters.tracks.some((track) => track.name === `${leaf.uuid}.quaternion`)).toBe(true)
       const baked = prepared.scene.getObjectByName('shutter-left')!
       const outer = baked.getObjectByName('shutter-outer')!
       const expectedOuter = buildWindowPreviewMesh(node).getObjectByName('shutter-outer')!
@@ -1248,20 +1265,108 @@ describe('prepareSceneForExport', () => {
       expect(baked.quaternion.angleTo(saved)).toBeCloseTo(0)
       expect(mesh.getObjectByName('shutter-left')!.quaternion.angleTo(preview)).toBeCloseTo(0)
       const curtain = prepared.scene.getObjectByName('window-roller-curtain')!
-      expect(curtain.children).toHaveLength(shutterOpen === 1 ? 0 : 1)
-      if (shutterOpen !== 1) {
-        const panel = curtain.children[0] as THREE.Mesh
-        const expectedCurtain =
-          buildWindowPreviewMesh(node).getObjectByName('window-roller-curtain')!
+      expect(curtain.children).toHaveLength(1)
+      expect(curtain.position.y).toBe(node.height / 2)
+      expect(curtain.scale.y).toBeCloseTo(1 - 0.98 * shutterOpen)
+      const panel = curtain.children[0] as THREE.Mesh
+      expect(panel.geometry.index!.count).toBe(Math.floor(node.height / 0.04) * 36)
+      const track = shutters.tracks.find((track) => track.name === `${curtain.uuid}.scale`)!
+      expect(Array.from(track.values)).toEqual([1, 1, 1, 1, expect.closeTo(0.02), 1])
+      expect(extras.rollerShutterAnimation).toBe('top-pivot-scale-y')
+      const mixer = new THREE.AnimationMixer(prepared.scene)
+      const action = mixer.clipAction(shutters).setLoop(THREE.LoopOnce, 1)
+      action.clampWhenFinished = true
+      action.play()
+      for (const fraction of [0, 0.25, 0.5, 0.75, 1]) {
+        mixer.setTime(fraction)
+        const expected = buildWindowPreviewMesh({ ...node, shutterOpen: fraction })
         expect(
-          new THREE.Box3()
-            .setFromObject(curtain)
-            .equals(new THREE.Box3().setFromObject(expectedCurtain)),
-        ).toBe(true)
-        expect(panel.geometry.index!.count).toBe(
-          Math.floor(((1 - shutterOpen) * node.height) / 0.04) * 36,
-        )
+          baked.quaternion
+            .clone()
+            .normalize()
+            .angleTo(expected.getObjectByName('shutter-left')!.quaternion),
+        ).toBeLessThan(1e-6)
+        expect(
+          outer.quaternion
+            .clone()
+            .normalize()
+            .angleTo(expected.getObjectByName('shutter-outer')!.quaternion),
+        ).toBeLessThan(1e-6)
       }
+      mixer.stopAllAction()
+      prepared.dispose()
+    },
+  )
+
+  test('a shuttered casement exports independent sash and leaf rotations at its saved pose', () => {
+    const node = WindowNode.parse({
+      windowType: 'casement',
+      width: 1,
+      shutters: 'panel',
+      shutterOpen: 0.25,
+      rollerShutter: 'box',
+      rollerShutterOpen: 0.75,
+    })
+    const mesh = buildWindowPreviewMesh(node)
+    sceneRegistry.nodes.set(node.id, mesh)
+    const prepared = prepareSceneForExport(new THREE.Group().add(mesh), { [node.id]: node })
+    expect(prepared.animations.map((clip) => clip.name)).toEqual([
+      `${node.id}: open`,
+      `${node.id}: shutters`,
+    ])
+    const window = prepared.scene.getObjectByName(node.id)!
+    expect(window.userData.shuttersOpen).toBe(0.25)
+    expect(window.userData.rollerShutterOpen).toBe(0.75)
+    const curtain = window.getObjectByName('window-roller-curtain')!
+    expect(curtain.scale.y).toBeCloseTo(1 - 0.98 * 0.75)
+    const top = new THREE.Box3().setFromObject(curtain).max.y
+    const leaves = ['shutter-left', 'shutter-right'].map((name) => window.getObjectByName(name)!)
+    const clip = prepared.animations[1]!
+    expect(clip.tracks.map((track) => track.name)).toEqual([
+      ...leaves.map((leaf) => `${leaf.uuid}.quaternion`),
+      `${curtain.uuid}.scale`,
+    ])
+    for (const leaf of leaves)
+      expect(leaf.quaternion.angleTo(mesh.getObjectByName(leaf.name)!.quaternion)).toBeCloseTo(0)
+    const mixer = new THREE.AnimationMixer(prepared.scene)
+    const action = mixer.clipAction(clip).setLoop(THREE.LoopOnce, 1)
+    action.clampWhenFinished = true
+    action.play()
+    for (const fraction of [0, 0.25, 0.5, 0.75, 1]) {
+      mixer.setTime(fraction)
+      const expected = buildWindowPreviewMesh({ ...node, shutterOpen: fraction })
+      for (const leaf of leaves)
+        expect(
+          leaf.quaternion
+            .clone()
+            .normalize()
+            .angleTo(expected.getObjectByName(leaf.name)!.quaternion),
+        ).toBeLessThan(1e-6)
+      expect(new THREE.Box3().setFromObject(curtain).max.y).toBeCloseTo(top)
+    }
+    mixer.stopAllAction()
+    prepared.dispose()
+  })
+
+  test.each(['panel', 'roller'] as const)(
+    'a fixed window with %s shutters exports only its shutters clip',
+    (kind) => {
+      const node = WindowNode.parse({
+        windowType: 'fixed',
+        ...(kind === 'panel'
+          ? { shutters: 'panel', shutterOpen: 0.3 }
+          : { rollerShutter: 'box', rollerShutterOpen: 0.3 }),
+      })
+      const mesh = buildWindowPreviewMesh(node)
+      sceneRegistry.nodes.set(node.id, mesh)
+      const prepared = prepareSceneForExport(new THREE.Group().add(mesh), { [node.id]: node })
+      expect(prepared.animations.map((clip) => clip.name)).toEqual([`${node.id}: shutters`])
+      expect(mesh.userData.openable).toBeUndefined()
+      const extras = prepared.scene.getObjectByName(node.id)!.userData
+      expect(extras.openable).toBeUndefined()
+      expect(extras.shutters).toBe(true)
+      expect(extras.shuttersOpen).toBe(0.3)
+      expect(extras.clips).toEqual([`${node.id}: shutters`])
       prepared.dispose()
     },
   )
