@@ -61,9 +61,9 @@ test('an operable window divides each sash only once asked; a fixed window keeps
   expect(sections(render()).has('Grid')).toBe(false)
 })
 
-test('the sill section turns the room-side board on', () => {
+test('the sill section turns the inside sill on', () => {
   select({ windowType: 'fixed' })
-  const board = control(render(), 'ToggleControl', 'Sill', 'Room-side board')
+  const board = control(render(), 'ToggleControl', 'Sill', 'Inside sill')
   expect(board.checked).toBe(false)
   board.onChange(true)
   expect(live().sillInterior).toBe(true)

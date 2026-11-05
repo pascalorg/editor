@@ -6,6 +6,8 @@ import {
   cornerPair,
   fusesAtCorner,
   isAutoFrameDepth,
+  openingExteriorFace,
+  openingHostFacing,
   resolveHostedOpeningFrameDepth,
   resolveOpeningCasingHost,
   runAsSingleSceneHistoryStep,
@@ -47,7 +49,7 @@ import {
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { Copy, FlipHorizontal2, Move, Trash2 } from 'lucide-react'
-import { useCallback, useEffect, useMemo } from 'react'
+import { type ReactNode, useCallback, useEffect, useMemo } from 'react'
 import { AuthoredParams } from '../item/authored-params'
 import { constrainCurtainOpening, curtainOpeningLimits } from '../shared/curtain-opening-limits'
 import { OpeningCasingSection } from '../shared/opening-casing-section'
@@ -98,6 +100,10 @@ function normalizeWindowCornerRadii(
 const INCH = 0.0254
 const MIN_SHUTTER_WIDTH = 0.15
 const MAX_SHUTTER_WIDTH = 0.6
+// What the viewer draws for an inside sill without its own sizes (window-system `addWindowDetails`).
+const INSIDE_SILL_DEPTH = 0.06
+const INSIDE_SILL_THICKNESS = 0.03
+const INSIDE_SILL_OVERHANG = 0.015
 
 // The declared slot defaults (packages/core/src/node-slots/window.ts), shown as "Default". The
 // hardware follows the frame until it is painted.
@@ -106,7 +112,12 @@ const SHUTTERS_FINISH_DEFAULT = 'library:preset-charcoal'
 
 // What the viewer draws (window-system `addWindowDetails`): the handle and hinges on these sashes,
 // the per-sash grid in these types, neither on a corner window.
-const SASH_HARDWARE_TYPES: ReadonlySet<WindowType> = new Set(['casement', 'awning', 'hopper'])
+const SASH_HARDWARE_TYPES: ReadonlySet<WindowType> = new Set([
+  'casement',
+  'awning',
+  'hopper',
+  'tilt-turn',
+])
 const SASH_GRID_TYPES: ReadonlySet<WindowType> = new Set([
   'casement',
   'sliding',
@@ -114,7 +125,34 @@ const SASH_GRID_TYPES: ReadonlySet<WindowType> = new Set([
   'double-hung',
   'awning',
   'hopper',
+  'tilt-turn',
 ])
+
+/**
+ * Which way a casement or awning sash without `openingDirection` opens today: toward the face it
+ * was placed from (window-pose `poseWindowMovingParts`; an awning hinged at the bottom the other
+ * way), read against the exterior face.
+ */
+function legacyOpeningDirection(
+  node: WindowNode,
+  nodes: Readonly<Record<string, AnyNode>>,
+): 'outward' | 'inward' {
+  const exterior = (openingExteriorFace(node, nodes) === 'a' ? 1 : -1) * openingHostFacing(node)
+  const placed = node.windowType === 'awning' && node.awningDirection === 'down' ? -1 : 1
+  return placed * exterior > 0 ? 'outward' : 'inward'
+}
+
+/** A small caption over a row, as the door panel's Hinges side. */
+function Captioned({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="space-y-1">
+      <span className="px-1 font-medium text-[10px] text-muted-foreground/80 uppercase tracking-wider">
+        {label}
+      </span>
+      {children}
+    </div>
+  )
+}
 
 /** The Corner section's pill buttons: a token hover, the press, the keyboard focus ring. */
 const CORNER_BUTTON =
@@ -324,6 +362,7 @@ export default function WindowPanel() {
     windowType === 'casement' ||
     windowType === 'awning' ||
     windowType === 'hopper' ||
+    windowType === 'tilt-turn' ||
     windowType === 'louvered'
   const isOperableWindow = isTrackSashWindow || isOperableSashWindow
   const supportsWindowShape = SHAPED_WINDOW_TYPES.has(node.windowType ?? 'fixed')
@@ -347,21 +386,31 @@ export default function WindowPanel() {
   const showHardwareSection = !scripted && !isOpening && hasSashHardware
   const showShuttersSection = !scripted && !isOpening && takesShutters
   const shutters = node.shutters ?? 'none'
+  const rollerShutter = node.rollerShutter === 'box'
   const shutterWidth = node.shutterWidth ?? Math.min(node.width / 2, MAX_SHUTTER_WIDTH)
   const toShownLength = (meters: number) => (imperial ? meters / INCH : meters)
   const showOperationSection = !scripted && !isOpening && isOperableWindow
   const showAwningDirectionSection = !scripted && !isOpening && displayedWindowType === 'awning'
   const showCasementSection = !scripted && !isOpening && windowType === 'casement'
+  const showTiltTurnSection = !scripted && !isOpening && windowType === 'tilt-turn'
+  // Casement and awning sashes open outward or inward; a saved window without the field keeps the
+  // way it opens today, toward the face it was placed from.
+  const showOpensRow =
+    !scripted && !isOpening && (windowType === 'casement' || windowType === 'awning')
+  const openingDirection =
+    node.openingDirection ?? legacyOpeningDirection(node, useScene.getState().nodes)
   const showFlipSide = !isOpening
   const operationLabel = isTrackSashWindow
     ? windowType === 'sliding'
       ? i18n._({ id: 'node.window.operation.slide', message: 'Slide' })
       : i18n._({ id: 'node.window.operation.raise', message: 'Raise' })
-    : windowType === 'casement'
-      ? i18n._({ id: 'node.window.operation.swing', message: 'Swing' })
-      : windowType === 'louvered'
-        ? i18n._({ id: 'node.window.operation.slats', message: 'Slats' })
-        : i18n._({ id: 'node.window.operation.tilt', message: 'Tilt' })
+    : windowType === 'tilt-turn'
+      ? i18n._(WINDOW_TYPE_MESSAGES['tilt-turn'])
+      : windowType === 'casement'
+        ? i18n._({ id: 'node.window.operation.swing', message: 'Swing' })
+        : windowType === 'louvered'
+          ? i18n._({ id: 'node.window.operation.slats', message: 'Slats' })
+          : i18n._({ id: 'node.window.operation.tilt', message: 'Tilt' })
 
   const setOperationState = (value: number) => {
     useInteractive.getState().cancelWindowAnimation(node.id)
@@ -539,6 +588,96 @@ export default function WindowPanel() {
           )}
         </PanelSection>
       )}
+
+      {!scripted && (
+        <PanelSection title={i18n._({ id: 'node.window.panel.dimensions', message: 'Dimensions' })}>
+          {limits && (
+            <p className="text-[11px] text-muted-foreground">
+              {i18n._({
+                id: 'node.window.panel.sizeIsLimitedToTheWall',
+                message: 'Size is limited to the wall, including clearance for the opening frame.',
+              })}
+            </p>
+          )}
+          {!corner?.paired && (
+            <SliderControl
+              label={i18n._({ id: 'node.window.panel.width', message: 'Width' })}
+              max={limits?.width}
+              min={0.01}
+              onChange={(v) => preview?.preview(getDimensionUpdates({ width: v }))}
+              onCommit={(v) => preview?.commit(getDimensionUpdates({ width: v }))}
+              onCancel={() => preview?.cancel()}
+              previewWhileTyping
+              precision={2}
+              restoreOnCommit={false}
+              step={0.01}
+              unit="m"
+              value={node.width}
+            />
+          )}
+          <SliderControl
+            label={i18n._({ id: 'node.window.panel.height', message: 'Height' })}
+            max={limits?.height}
+            min={0.01}
+            onChange={(v) => preview?.preview(getDimensionUpdates({ height: v }))}
+            onCommit={(v) => commitPreview(getDimensionUpdates({ height: v }))}
+            onCancel={() => preview?.cancel()}
+            previewWhileTyping
+            precision={2}
+            restoreOnCommit={false}
+            step={0.01}
+            unit="m"
+            value={node.height}
+          />
+        </PanelSection>
+      )}
+
+      <PanelSection title={i18n._({ id: 'node.window.panel.position', message: 'Position' })}>
+        {!corner?.paired && (
+          <SliderControl
+            label={
+              <>
+                X
+                <sub className="ml-[1px] text-[11px] opacity-70">
+                  {i18n._({ id: 'node.window.panel.pos', message: 'pos' })}
+                </sub>
+              </>
+            }
+            onChange={(v) => handleUpdate({ position: [v, node.position[1], node.position[2]] })}
+            precision={2}
+            step={0.1}
+            unit="m"
+            value={node.position[0]}
+          />
+        )}
+        <SliderControl
+          label={
+            <>
+              Y
+              <sub className="ml-[1px] text-[11px] opacity-70">
+                {i18n._({ id: 'node.window.panel.pos', message: 'pos' })}
+              </sub>
+            </>
+          }
+          onChange={(v) => handleUpdate({ position: [node.position[0], v, node.position[2]] })}
+          precision={2}
+          step={0.1}
+          unit="m"
+          value={node.position[1]}
+        />
+        {showFlipSide && (
+          <div className="px-1 pt-2 pb-1">
+            <ActionButton
+              className="w-full"
+              icon={<FlipHorizontal2 className="h-4 w-4" />}
+              label={i18n._({ id: 'node.window.panel.flipSide', message: 'Flip side' })}
+              onClick={handleFlip}
+            />
+          </div>
+        )}
+      </PanelSection>
+
+      {scripted && <AuthoredParams node={node} />}
 
       {showGridSection && (
         <PanelSection title={i18n._({ id: 'node.window.panel.grid', message: 'Grid' })}>
@@ -729,96 +868,6 @@ export default function WindowPanel() {
               </button>
             </div>
           )}
-        </PanelSection>
-      )}
-
-      <PanelSection title={i18n._({ id: 'node.window.panel.position', message: 'Position' })}>
-        {!corner?.paired && (
-          <SliderControl
-            label={
-              <>
-                X
-                <sub className="ml-[1px] text-[11px] opacity-70">
-                  {i18n._({ id: 'node.window.panel.pos', message: 'pos' })}
-                </sub>
-              </>
-            }
-            onChange={(v) => handleUpdate({ position: [v, node.position[1], node.position[2]] })}
-            precision={2}
-            step={0.1}
-            unit="m"
-            value={node.position[0]}
-          />
-        )}
-        <SliderControl
-          label={
-            <>
-              Y
-              <sub className="ml-[1px] text-[11px] opacity-70">
-                {i18n._({ id: 'node.window.panel.pos', message: 'pos' })}
-              </sub>
-            </>
-          }
-          onChange={(v) => handleUpdate({ position: [node.position[0], v, node.position[2]] })}
-          precision={2}
-          step={0.1}
-          unit="m"
-          value={node.position[1]}
-        />
-        {showFlipSide && (
-          <div className="px-1 pt-2 pb-1">
-            <ActionButton
-              className="w-full"
-              icon={<FlipHorizontal2 className="h-4 w-4" />}
-              label={i18n._({ id: 'node.window.panel.flipSide', message: 'Flip side' })}
-              onClick={handleFlip}
-            />
-          </div>
-        )}
-      </PanelSection>
-
-      {scripted && <AuthoredParams node={node} />}
-
-      {!scripted && (
-        <PanelSection title={i18n._({ id: 'node.window.panel.dimensions', message: 'Dimensions' })}>
-          {limits && (
-            <p className="text-[11px] text-muted-foreground">
-              {i18n._({
-                id: 'node.window.panel.sizeIsLimitedToTheWall',
-                message: 'Size is limited to the wall, including clearance for the opening frame.',
-              })}
-            </p>
-          )}
-          {!corner?.paired && (
-            <SliderControl
-              label={i18n._({ id: 'node.window.panel.width', message: 'Width' })}
-              max={limits?.width}
-              min={0.01}
-              onChange={(v) => preview?.preview(getDimensionUpdates({ width: v }))}
-              onCommit={(v) => preview?.commit(getDimensionUpdates({ width: v }))}
-              onCancel={() => preview?.cancel()}
-              previewWhileTyping
-              precision={2}
-              restoreOnCommit={false}
-              step={0.01}
-              unit="m"
-              value={node.width}
-            />
-          )}
-          <SliderControl
-            label={i18n._({ id: 'node.window.panel.height', message: 'Height' })}
-            max={limits?.height}
-            min={0.01}
-            onChange={(v) => preview?.preview(getDimensionUpdates({ height: v }))}
-            onCommit={(v) => commitPreview(getDimensionUpdates({ height: v }))}
-            onCancel={() => preview?.cancel()}
-            previewWhileTyping
-            precision={2}
-            restoreOnCommit={false}
-            step={0.01}
-            unit="m"
-            value={node.height}
-          />
         </PanelSection>
       )}
 
@@ -1121,10 +1170,74 @@ export default function WindowPanel() {
                 )}
               </div>
             )}
+            {showTiltTurnSection && (
+              <>
+                <Captioned
+                  label={i18n._({ id: 'node.window.panel.tiltTurnMode', message: 'Mode' })}
+                >
+                  <SegmentedControl
+                    onChange={(value) => handleUpdate({ tiltTurnMode: value })}
+                    options={[
+                      {
+                        value: 'tilt',
+                        label: i18n._({ id: 'node.window.panel.tiltTurnTilt', message: 'Tilt' }),
+                      },
+                      {
+                        value: 'turn',
+                        label: i18n._({ id: 'node.window.panel.tiltTurnTurn', message: 'Turn' }),
+                      },
+                    ]}
+                    value={node.tiltTurnMode ?? 'tilt'}
+                  />
+                </Captioned>
+                {node.tiltTurnMode === 'turn' && (
+                  <Captioned
+                    label={i18n._({ id: 'node.window.panel.hingesSide', message: 'Hinges side' })}
+                  >
+                    <SegmentedControl
+                      onChange={(value) => handleUpdate({ hingesSide: value })}
+                      options={[
+                        {
+                          value: 'left',
+                          label: i18n._({ id: 'node.window.panel.left', message: 'Left' }),
+                        },
+                        {
+                          value: 'right',
+                          label: i18n._({ id: 'node.window.panel.right', message: 'Right' }),
+                        },
+                      ]}
+                      value={node.hingesSide ?? 'left'}
+                    />
+                  </Captioned>
+                )}
+              </>
+            )}
+            {showOpensRow && (
+              <Captioned label={i18n._({ id: 'node.window.panel.opens', message: 'Opens' })}>
+                <SegmentedControl
+                  onChange={(value) => handleUpdate({ openingDirection: value })}
+                  options={[
+                    {
+                      value: 'outward',
+                      label: i18n._({ id: 'node.window.panel.outward', message: 'Outward' }),
+                    },
+                    {
+                      value: 'inward',
+                      label: i18n._({ id: 'node.window.panel.inward', message: 'Inward' }),
+                    },
+                  ]}
+                  value={openingDirection}
+                />
+              </Captioned>
+            )}
             {showOperationSection && (
               <div>
                 <SliderControl
-                  label={operationLabel}
+                  label={
+                    showTiltTurnSection
+                      ? i18n._({ id: 'node.window.panel.open', message: 'Open' })
+                      : operationLabel
+                  }
                   max={1}
                   min={0}
                   onChange={setOperationState}
@@ -1219,30 +1332,77 @@ export default function WindowPanel() {
                 unit="m"
                 value={node.sillThickness}
               />
+              {/* Past the opening on each side. */}
+              <SliderControl
+                label={i18n._({ id: 'node.window.panel.overhang', message: 'Overhang' })}
+                max={0.15}
+                min={0}
+                onChange={(v) => handleUpdate({ sillOverhang: Math.max(0, Math.min(0.15, v)) })}
+                precision={3}
+                step={0.005}
+                unit="m"
+                value={node.sillOverhang ?? node.sillDepth * 0.4}
+              />
             </div>
           )}
           <ToggleControl
             checked={node.sillInterior === true}
-            label={i18n._({ id: 'node.window.panel.roomSideBoard', message: 'Room-side board' })}
+            label={i18n._({ id: 'node.window.panel.insideSill', message: 'Inside sill' })}
             onChange={(checked) => handleUpdate({ sillInterior: checked })}
           />
-        </PanelSection>
-      )}
-
-      {showHardwareSection && (
-        <PanelSection title={i18n._({ id: 'node.window.panel.hardware', message: 'Hardware' })}>
-          <ToggleControl
-            checked={node.windowHandle !== false}
-            label={i18n._({ id: 'node.window.panel.handle', message: 'Handle' })}
-            onChange={(checked) => handleUpdate({ windowHandle: checked })}
-          />
-          <FinishSwatch
-            fallback={node.slots?.frame ?? FRAME_FINISH_DEFAULT}
-            label={i18n._({ id: 'node.window.panel.finish', message: 'Finish' })}
-            node={node}
-            paintRole="hardware"
-            value={node.slots?.hardware}
-          />
+          {node.sillInterior === true && (
+            <div className="mt-1 flex flex-col gap-1">
+              <SliderControl
+                label={i18n._({ id: 'node.window.panel.depth', message: 'Depth' })}
+                max={0.3}
+                min={0.02}
+                onChange={(v) =>
+                  handleUpdate({ sillInteriorDepth: Math.max(0.02, Math.min(0.3, v)) })
+                }
+                precision={3}
+                step={0.005}
+                unit="m"
+                value={node.sillInteriorDepth ?? INSIDE_SILL_DEPTH}
+              />
+              <SliderControl
+                label={i18n._({ id: 'node.window.panel.thickness', message: 'Thickness' })}
+                max={0.05}
+                min={0.015}
+                onChange={(v) =>
+                  handleUpdate({ sillInteriorThickness: Math.max(0.015, Math.min(0.05, v)) })
+                }
+                precision={3}
+                step={0.005}
+                unit="m"
+                value={node.sillInteriorThickness ?? INSIDE_SILL_THICKNESS}
+              />
+              {/* Past the casing's outer edge, or the opening's when the room side is uncased. */}
+              <SliderControl
+                label={i18n._({ id: 'node.window.panel.overhang', message: 'Overhang' })}
+                max={0.15}
+                min={0}
+                onChange={(v) =>
+                  handleUpdate({ sillInteriorOverhang: Math.max(0, Math.min(0.15, v)) })
+                }
+                precision={3}
+                step={0.005}
+                unit="m"
+                value={node.sillInteriorOverhang ?? INSIDE_SILL_OVERHANG}
+              />
+            </div>
+          )}
+          {(node.sill || node.sillInterior === true) && (
+            <div className="mt-1 border-border/50 border-t pt-1">
+              {/* Both sills share the slot; it follows the frame until painted. */}
+              <FinishSwatch
+                fallback={node.slots?.frame ?? FRAME_FINISH_DEFAULT}
+                label={i18n._({ id: 'node.window.panel.finish', message: 'Finish' })}
+                node={node}
+                paintRole="sill"
+                value={node.slots?.sill}
+              />
+            </div>
+          )}
         </PanelSection>
       )}
 
@@ -1265,11 +1425,38 @@ export default function WindowPanel() {
                 value: 'panel',
                 label: i18n._({ id: 'node.window.panel.shuttersPanel', message: 'Panel' }),
               },
+              {
+                value: 'board-batten',
+                label: i18n._({
+                  id: 'node.window.panel.shuttersBoardBatten',
+                  message: 'Board and batten',
+                }),
+              },
             ]}
             value={shutters}
           />
           {shutters !== 'none' && (
             <div className="mt-1 flex flex-col gap-1">
+              <Captioned label={i18n._({ id: 'node.window.panel.shutterSides', message: 'Sides' })}>
+                <SegmentedControl
+                  onChange={(value) => handleUpdate({ shutterSides: value })}
+                  options={[
+                    {
+                      value: 'both',
+                      label: i18n._({ id: 'node.window.panel.shutterSidesBoth', message: 'Both' }),
+                    },
+                    {
+                      value: 'left',
+                      label: i18n._({ id: 'node.window.panel.left', message: 'Left' }),
+                    },
+                    {
+                      value: 'right',
+                      label: i18n._({ id: 'node.window.panel.right', message: 'Right' }),
+                    },
+                  ]}
+                  value={node.shutterSides ?? 'both'}
+                />
+              </Captioned>
               {/* In inches on an imperial plan, as the casing width: feet would show 1.2 ft. */}
               <SliderControl
                 label={i18n._({ id: 'node.window.panel.width', message: 'Width' })}
@@ -1286,6 +1473,45 @@ export default function WindowPanel() {
                 unit={imperial ? 'in' : 'm'}
                 value={toShownLength(shutterWidth)}
               />
+              {/* 0 % closed over the window, 100 % flat against the wall. */}
+              <SliderControl
+                label={i18n._({ id: 'node.window.panel.open', message: 'Open' })}
+                max={100}
+                min={0}
+                onChange={(v) => handleUpdate({ shutterOpen: Math.max(0, Math.min(100, v)) / 100 })}
+                precision={0}
+                restoreOnCommit={false}
+                step={5}
+                unit="%"
+                value={Math.round((node.shutterOpen ?? 1) * 100)}
+              />
+            </div>
+          )}
+          <div className="mt-1 flex flex-col gap-1 border-border/50 border-t pt-1">
+            <ToggleControl
+              checked={rollerShutter}
+              label={i18n._({ id: 'node.window.panel.rollerShutter', message: 'Roller shutter' })}
+              onChange={(checked) => handleUpdate({ rollerShutter: checked ? 'box' : 'none' })}
+            />
+            {rollerShutter && (
+              <SliderControl
+                label={i18n._({ id: 'node.window.panel.open', message: 'Open' })}
+                max={100}
+                min={0}
+                onChange={(v) =>
+                  handleUpdate({ rollerShutterOpen: Math.max(0, Math.min(100, v)) / 100 })
+                }
+                precision={0}
+                restoreOnCommit={false}
+                step={5}
+                unit="%"
+                value={Math.round((node.rollerShutterOpen ?? 1) * 100)}
+              />
+            )}
+          </div>
+          {(shutters !== 'none' || rollerShutter) && (
+            <div className="mt-1 border-border/50 border-t pt-1">
+              {/* The shutters and the roller shutter's box, guides and slats share the slot. */}
               <FinishSwatch
                 fallback={SHUTTERS_FINISH_DEFAULT}
                 label={i18n._({ id: 'node.window.panel.finish', message: 'Finish' })}
@@ -1295,6 +1521,23 @@ export default function WindowPanel() {
               />
             </div>
           )}
+        </PanelSection>
+      )}
+
+      {showHardwareSection && (
+        <PanelSection title={i18n._({ id: 'node.window.panel.hardware', message: 'Hardware' })}>
+          <ToggleControl
+            checked={node.windowHandle !== false}
+            label={i18n._({ id: 'node.window.panel.handle', message: 'Handle' })}
+            onChange={(checked) => handleUpdate({ windowHandle: checked })}
+          />
+          <FinishSwatch
+            fallback={node.slots?.frame ?? FRAME_FINISH_DEFAULT}
+            label={i18n._({ id: 'node.window.panel.finish', message: 'Finish' })}
+            node={node}
+            paintRole="hardware"
+            value={node.slots?.hardware}
+          />
         </PanelSection>
       )}
 
