@@ -205,31 +205,38 @@ describe('a sheet capture session', () => {
     const viewer = useViewer.getState()
     viewer.setWallMode('down')
     viewer.setLevelMode('exploded')
-    viewer.setShading('solid')
+    viewer.setRenderQuality('low')
     viewer.setTextures(false)
     viewer.setColorPreset('white')
+    viewer.setTimeOfDay('night')
+    viewer.setWeather('overcast')
     const view = () => {
-      const { wallMode, levelMode, shading, textures, colorPreset } = useViewer.getState()
-      return { wallMode, levelMode, shading, textures, colorPreset }
+      const { wallMode, levelMode, renderQuality, textures, colorPreset, timeOfDay, weather } =
+        useViewer.getState()
+      return { wallMode, levelMode, renderQuality, textures, colorPreset, timeOfDay, weather }
     }
-    // the shading stays the user's: the capture brings its own AO
+    // the quality stays the user's: the capture brings its own AO
 
     const restore = presentFinished()
     expect(view()).toEqual({
       wallMode: 'up',
       levelMode: 'stacked',
-      shading: 'solid',
+      renderQuality: 'low',
       textures: true,
       colorPreset: 'clay',
+      timeOfDay: 'midday',
+      weather: 'fair',
     })
 
     restore()
     expect(view()).toEqual({
       wallMode: 'down',
       levelMode: 'exploded',
-      shading: 'solid',
+      renderQuality: 'low',
       textures: false,
       colorPreset: 'white',
+      timeOfDay: 'night',
+      weather: 'overcast',
     })
   })
 
@@ -239,6 +246,8 @@ describe('a sheet capture session', () => {
     viewer.setLevelMode('stacked')
     viewer.setTextures(true)
     viewer.setColorPreset('clay')
+    viewer.setTimeOfDay('midday')
+    viewer.setWeather('fair')
     let writes = 0
     const unsubscribe = useViewer.subscribe(() => {
       writes++

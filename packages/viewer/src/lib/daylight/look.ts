@@ -6,6 +6,10 @@ import type { SceneAtmosphereSource } from '../../components/viewer/scene-atmosp
 export type DaylightAtmosphereSource = SceneAtmosphereSource & {
   /** Linear RGB gains: eye-like partial chromatic adaptation to the current illuminant. */
   whiteBalance: Vector3
+  /** The key light's shadow (the sun, or the moon at night): map size per quality tier. */
+  shadow: { mapSize: number; bias: number; normalBias: number; radius: number }
+  /** Sun elevation in degrees (negative at night). */
+  elevation: number
 }
 
 export function isDaylightAtmosphere(source: unknown): source is DaylightAtmosphereSource {

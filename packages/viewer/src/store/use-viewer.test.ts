@@ -220,10 +220,11 @@ describe('project rendering defaults', () => {
     expect(useViewer.getState().lookDefaults).toMatchObject({ theme: 'paper', edges: 'strong' })
     expect(useViewer.getState().projectPreferences['look-a']?.look).toBeUndefined()
     store.setProjectId('look-b')
+    // Edges are on or off (a saved 'strong' reads as on); Solid is retired into the quality tiers.
     expect(useViewer.getState()).toMatchObject({
       sceneTheme: 'paper',
-      edges: 'strong',
-      shading: 'solid',
+      edges: 'soft',
+      shading: 'rendered',
     })
   })
 
@@ -247,7 +248,8 @@ describe('project rendering defaults', () => {
     expect(useViewer.getState()).toMatchObject({
       sceneTheme: 'night',
       edges: 'soft',
-      shading: 'solid',
+      shading: 'rendered',
+      renderQuality: 'low',
     })
     store.resetProjectLook()
     expect(useViewer.getState()).toMatchObject({
@@ -280,9 +282,10 @@ describe('project rendering defaults', () => {
     store.setShading('solid')
     expect(useViewer.getState()).toMatchObject({
       sceneTheme: 'night',
-      edges: 'strong',
+      edges: 'soft',
       shadows: false,
-      shading: 'solid',
+      shading: 'rendered',
+      renderQuality: 'low',
     })
     store.resetProjectLook()
     expect(useViewer.getState()).toMatchObject({

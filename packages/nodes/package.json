@@ -46,7 +46,7 @@
     "lucide-react": "^1",
     "react": "^18 || ^19",
     "react-dom": "^18 || ^19",
-    "three": "^0.186",
+    "three": "^0.187",
     "zustand": "^5"
   },
   "devDependencies": {
@@ -62,7 +62,7 @@
     "@types/node": "^26.6.5",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
-    "@types/three": "^0.186.0",
+    "@types/three": "^0.187",
     "typescript": "7.0.2"
   },
   "keywords": [

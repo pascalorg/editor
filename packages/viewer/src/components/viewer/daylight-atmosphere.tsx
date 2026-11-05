@@ -1,26 +1,43 @@
 'use client'
 
 import { useInteractive, useScene } from '@pascal-app/core'
-import { useFrame } from '@react-three/fiber'
-import { useEffect, useMemo, useRef } from 'react'
-import { Color, MathUtils, Vector3 } from 'three'
-import { mix, uniform, vec3 } from 'three/tsl'
-import { DaylightEnvironmentNode } from '../../lib/daylight/environment-node'
+import { useFrame, useThree } from '@react-three/fiber'
+import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
+import { BackSide, Color, MathUtils, Mesh, Scene, SphereGeometry, Vector3 } from 'three'
+import { pmremTexture, positionWorldDirection, vec3 } from 'three/tsl'
+import {
+  MeshBasicNodeMaterial,
+  PMREMGenerator,
+  type RenderTarget,
+  type WebGPURenderer,
+} from 'three/webgpu'
 import { resolveLocation } from '../../lib/daylight/location'
 import type { DaylightAtmosphereSource } from '../../lib/daylight/look'
+import { installDaylightMaterialHooks } from '../../lib/daylight/material-hooks'
+import { daylightRooms } from '../../lib/daylight/rooms'
+import { daylightUniforms, setDaylightRenderer } from '../../lib/daylight/runtime'
 import { createDaylightSky, WEATHER_COVER } from '../../lib/daylight/sky'
 import { presetInstant, type SolarLight, solarLight } from '../../lib/daylight/solar'
-import useViewer from '../../store/use-viewer'
+import useViewer, { type RenderQuality } from '../../store/use-viewer'
 import { SceneAtmosphere } from './scene-atmosphere'
+import { useDaylightRooms } from './use-daylight-rooms'
 
 /** Irradiance that renders at exposure 1 (≈ a clear afternoon exterior). */
 const METER_REF = 3.2
-/** Sky radiance → irradiance scale for the image-based lighting. */
-const SKY_GAIN = 1.15
+/** Image-based lighting gain on the sky environment. */
+const ENV_INTENSITY = 1.15
 const MOON_COLOR = new Color('#9fb4ff')
 /** Ground fog range (m), capped by the camera's far plane (the grounds add a horizon haze). */
 const FOG_START = 250
 const FOG_END = 2600
+/** Eye-like chromatic adaptation strength (0 = off, 1 = full neutralisation). */
+const WHITE_BALANCE = 0.75
+/** Maximum metered exposure boost with the camera inside a room. */
+const INTERIOR_EV = 2
+/** Sun shadow map per quality tier. */
+const SHADOW_MAP: Record<RenderQuality, number> = { high: 4096, medium: 2048, low: 1024 }
+/** EON rough diffuse per quality tier. */
+const EON: Record<RenderQuality, number> = { high: 0.6, medium: 0.6, low: 0 }
 const luminance = (c: Color) => 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b
 
 type SiteFacts = {
@@ -29,6 +46,7 @@ type SiteFacts = {
   northRotation?: number
 }
 
+/** Cosine-weighted hemisphere probes for the sky irradiance colour. */
 const HEMISPHERE = [
   new Vector3(0, 1, 0),
   ...Array.from({ length: 6 }, (_, i) =>
@@ -42,20 +60,22 @@ const HEMISPHERE = [
     ).normalize(),
   ),
 ]
+const UP = new Vector3(0, 1, 0)
 
 /**
  * The colored appearance's built-in sun and sky: real sun position for the site (or a fallback
- * location), a time-of-day preset and a weather preset. Installed through the generic
- * `SceneAtmosphere` seam, so a plugin atmosphere mounted later still takes precedence.
+ * location), a time-of-day preset and a weather preset. One shadowed key (the sun, or a cool moon
+ * at night), the sky as a PMREM environment, metered exposure and eye-like white balance.
+ * Installed through the generic `SceneAtmosphere` seam, so a plugin atmosphere mounted later
+ * still takes precedence.
  */
 export function DaylightAtmosphere() {
+  const renderer = useThree((s) => s.gl) as unknown as WebGPURenderer
   const timeOfDay = useViewer((s) => s.timeOfDay)
   const weather = useViewer((s) => s.weather)
   const deviceLocation = useViewer((s) => s.deviceLocation)
   const transparent = useViewer((s) => s.transparentBackground)
-  // Solid shading is Lambert, which ignores image-based lighting: the sky reaches it as a
-  // hemisphere light instead (rendered shading gets the sky through the environment).
-  const solid = useViewer((s) => s.shading === 'solid')
+  const quality = useViewer((s) => s.renderQuality)
   const site = useScene((state) => {
     for (const id of state.rootNodeIds) {
       const node = state.nodes[id]
@@ -65,16 +85,37 @@ export function DaylightAtmosphere() {
   })
 
   const sky = useMemo(() => createDaylightSky(), [])
-  const skyAverage = useMemo(() => uniform(new Color(0.5, 0.6, 0.7)), [])
-  const source = useMemo<DaylightAtmosphereSource>(() => {
-    const light = (dir: any) => sky.lightRadiance(dir).mul(SKY_GAIN)
-    const diffuse = (dir: any) => mix(light(dir), skyAverage, 0.4)
-    return {
+  // The environment: a PMREM of the visible sky (clouds and aureole, no sun disc — the key light
+  // is the sun), re-captured into the same target when the sun or the weather changes, so the
+  // environment node installed once stays valid.
+  const environment = useMemo(() => {
+    const scene = new Scene()
+    const material = new MeshBasicNodeMaterial({ side: BackSide, depthWrite: false })
+    material.colorNode = sky.skyRadiance(positionWorldDirection, { disc: false })
+    const dome = new Mesh(new SphereGeometry(10, 48, 24), material)
+    scene.add(dome)
+    // The viewer mounts its scene once the GPU renderer is initialized; anything else (a test
+    // double) renders without the sky environment.
+    const ready = (renderer as { hasInitialized?: () => boolean }).hasInitialized?.() === true
+    if (!ready) return { dome, pmrem: null, target: null, capture: () => {} }
+    const pmrem = new PMREMGenerator(renderer)
+    const capture = (into: RenderTarget | null) =>
+      pmrem.fromScene(scene, 0, 0.1, 100, {
+        size: 256,
+        renderTarget: into,
+      } as never) as RenderTarget
+    const target = capture(null)
+    return { dome, pmrem, target, capture: () => capture(target) }
+  }, [renderer, sky])
+  const source = useMemo<DaylightAtmosphereSource>(
+    () => ({
       skyRadiance: (dir) => sky.skyRadiance(dir),
-      reflectionRadiance: (dir) => light(dir),
+      reflectionRadiance: (dir) => sky.skyRadiance(dir, { disc: false }).mul(ENV_INTENSITY),
       // Just above the horizon in the view's heading: what the ground fog and the backdrop meet at.
-      fogRadiance: (dir) => sky.lightRadiance(vec3(dir.x, 0.004, dir.z)),
-      environmentNode: new DaylightEnvironmentNode(light, diffuse) as any,
+      fogRadiance: (dir) => sky.skyRadiance(vec3(dir.x, 0.004, dir.z), { disc: false }),
+      environmentNode: (environment.target
+        ? pmremTexture(environment.target.texture).mul(ENV_INTENSITY)
+        : vec3(0)) as any,
       sunDirection: new Vector3(0, 1, 0),
       sunColor: new Color(1, 1, 1),
       sunIntensity: 3,
@@ -89,12 +130,41 @@ export function DaylightAtmosphere() {
       fogStart: FOG_START,
       fogEnd: FOG_END,
       whiteBalance: new Vector3(1, 1, 1),
-    }
-  }, [sky, skyAverage])
+      shadow: { mapSize: SHADOW_MAP.high, bias: -0.0002, normalBias: 0.035, radius: 2 },
+      elevation: 45,
+    }),
+    [environment, sky],
+  )
 
   const solar = useRef<SolarLight | null>(null)
-  const meter = useRef({ ev: 0, sunE: 0, night: 0 })
+  const meter = useRef({ ev: 0, keyE: 0, night: 0, skyLum: 0, outdoor: new Color(1, 1, 1) })
   const wbTarget = useMemo(() => new Vector3(1, 1, 1), [])
+  useDaylightRooms()
+
+  // Materials attach their daylight hooks for this renderer only (thumbnail canvases elsewhere
+  // keep their plain look); the uniforms go back to neutral when the look leaves.
+  useLayoutEffect(() => {
+    installDaylightMaterialHooks()
+    setDaylightRenderer(renderer, true)
+    daylightUniforms.albedoClamp.value = 1
+    return () => {
+      setDaylightRenderer(renderer, false)
+      daylightUniforms.albedoClamp.value = 0
+      daylightUniforms.eon.value = 0
+      daylightUniforms.lampLevel.value = 0
+      daylightUniforms.glowComp.value = 1
+      daylightUniforms.emitterExpInv.value = 1
+    }
+  }, [renderer])
+
+  useEffect(() => {
+    daylightUniforms.eon.value = EON[quality]
+    source.shadow.mapSize = SHADOW_MAP[quality]
+    // The Low tier drops the soft room map (openings) and the sky patch.
+    daylightRooms.softRooms.value = quality === 'low' ? 0 : 1
+    daylightRooms.skyPatch.value = quality === 'low' ? 0 : 3
+    daylightRooms.refresh()
+  }, [quality, source])
 
   // Sun, sky and lights follow the presets (pinned to a neutral fair midday for transparent captures).
   useEffect(() => {
@@ -111,62 +181,85 @@ export function DaylightAtmosphere() {
     )
     solar.current = sun
     sky.update(sun, cover)
+    source.elevation = sun.elevation
 
-    source.sunDirection.copy(sun.direction)
-    source.sunColor.copy(sun.color)
-    // Clouds dim the disc statistically (no cloud shadows).
-    source.sunIntensity = 3.4 * sun.strength * (1 - 0.5 * cover ** 1.6)
-    // Night key: a cool, dim moon high on the other side of the sky.
-    source.moonDirection
-      .set(-sun.direction.x, Math.max(0.5, Math.abs(sun.direction.y)), -sun.direction.z)
-      .normalize()
-    source.moonIntensity = 0.18 * sun.night
-
-    // Sky irradiance colour (for diffuse lighting + meters).
-    const avg = new Color(0, 0, 0)
-    let weight = 0
-    for (const d of HEMISPHERE) {
-      avg.add(sky.radianceCpu(d).multiplyScalar(d.y))
-      weight += d.y
+    // One key light: the sun, or below 1° a cool, dim moon high on the other side of the sky.
+    // Clouds dim the sun statistically (no cloud shadows) and soften its shadows.
+    if (sun.elevation < 1) {
+      source.sunDirection
+        .set(-sun.direction.x, Math.max(0.5, Math.abs(sun.direction.y)), -sun.direction.z)
+        .normalize()
+      source.sunColor.copy(MOON_COLOR)
+      source.sunIntensity = 0.18 * sun.night
+    } else {
+      source.sunDirection.copy(sun.direction)
+      source.sunColor.copy(sun.color)
+      source.sunIntensity = 3.4 * sun.strength * (1 - 0.5 * cover ** 1.6)
     }
-    avg.multiplyScalar((1 / weight) * SKY_GAIN)
-    ;(skyAverage.value as Color).copy(avg)
-    source.skyColor.copy(avg)
-    source.groundColor.copy(avg).multiplyScalar(0.35)
-    source.hemisphereIntensity = solid ? Math.PI : 0
-    meter.current.sunE =
-      source.sunIntensity * Math.max(0.15, sun.direction.y) + source.moonIntensity * 0.5
+    source.moonIntensity = 0
+    source.shadow.radius = 1.6 + 2.2 * (1 - MathUtils.smoothstep(sun.elevation, 2, 30)) + cover * 3
+    meter.current.keyE = source.sunIntensity * Math.max(0.15, sun.direction.y)
     meter.current.night = sun.night
 
-    // White balance target: divide out the illuminant (sun + sky), partially, luminance-preserving.
-    const illum = avg
-      .clone()
-      .multiplyScalar(Math.PI)
-      .add(sun.color.clone().multiplyScalar(meter.current.sunE))
-    const L = Math.max(luminance(illum), 1e-5)
-    const k = 0.75 * (1 - 0.35 * sun.night)
-    wbTarget.set(
-      MathUtils.lerp(1, L / Math.max(illum.r, 1e-4), k),
-      MathUtils.lerp(1, L / Math.max(illum.g, 1e-4), k),
-      MathUtils.lerp(1, L / Math.max(illum.b, 1e-4), k),
-    )
-    wbTarget.clampScalar(0.5, 2)
-    wbTarget.divideScalar(0.2126 * wbTarget.x + 0.7152 * wbTarget.y + 0.0722 * wbTarget.z)
+    // The outdoor illuminant (sky irradiance + the key light), for the white balance.
+    const skyIrr = new Color(0, 0, 0)
+    let weight = 0
+    for (const d of HEMISPHERE) {
+      skyIrr.add(sky.radianceCpu(d).multiplyScalar(d.y))
+      weight += d.y
+    }
+    skyIrr.multiplyScalar((Math.PI / weight) * ENV_INTENSITY)
+    source.skyColor.copy(skyIrr).multiplyScalar(1 / Math.PI)
+    meter.current.skyLum = luminance(skyIrr)
+    meter.current.outdoor
+      .copy(skyIrr)
+      .add(source.sunColor.clone().multiplyScalar(meter.current.keyE))
 
-    // Lamps follow the light: on from blue hour.
+    // Windows let this sky (and sun) into the rooms.
+    daylightRooms.updateSky(
+      (dir) => sky.radianceCpu(dir).multiplyScalar(ENV_INTENSITY),
+      sun.direction,
+      sun.color,
+      source.sunIntensity,
+    )
+
+    // Lamps follow the light: a smooth level for the room lamps, on/off for the lamp switches.
+    daylightUniforms.lampLevel.value = 1 - MathUtils.smoothstep(sun.elevation, -5, 6)
     useInteractive.getState().setLampDefault(preset === 'blue' || preset === 'night', true)
-  }, [
-    deviceLocation,
-    site,
-    sky,
-    skyAverage,
-    solid,
-    source,
-    timeOfDay,
-    transparent,
-    weather,
-    wbTarget,
-  ])
+
+    // Re-capture the sky environment.
+    environment.capture()
+  }, [deviceLocation, environment, site, sky, source, timeOfDay, transparent, weather])
+
+  // Lamps loaded after the preset applied (items mount late, and an authored "on" default would
+  // light them by day) join the time of day; the person's own switches are left alone after.
+  useEffect(() => {
+    const known = new Set(Object.keys(useInteractive.getState().lampItems))
+    return useInteractive.subscribe((state) => {
+      // A lamp that leaves (its item unmounts) is new again when it comes back.
+      for (const id of known) if (!(id in state.lampItems)) known.delete(id)
+      for (const [id, indices] of Object.entries(state.lampItems)) {
+        if (known.has(id)) continue
+        known.add(id)
+        for (const index of indices) {
+          if (
+            state.items[id as keyof typeof state.items]?.controlValues[index] !== state.lampDefault
+          )
+            state.setControlValue(id as never, index, state.lampDefault)
+        }
+      }
+    })
+  }, [])
+
+  useEffect(
+    () => () => {
+      environment.target?.dispose()
+      environment.pmrem?.dispose()
+      environment.dome.geometry.dispose()
+      ;(environment.dome.material as MeshBasicNodeMaterial).dispose()
+    },
+    [environment],
+  )
 
   useFrame(({ camera }, delta) => {
     const dt = Math.min(delta, 0.1)
@@ -174,16 +267,41 @@ export function DaylightAtmosphere() {
     source.fogEnd = Math.min(FOG_END, camera.far * 0.9)
     source.fogStart = Math.min(FOG_START, source.fogEnd * 0.1)
     ;(sky.cloudTime.value as number) += dt
-    // Metered exposure: expose the scene's irradiance towards mid-grey with partial adaptation.
-    const skyE =
-      Math.PI *
-      0.45 *
-      luminance((skyAverage.value as Color).clone().multiplyScalar(1 / SKY_GAIN)) *
-      SKY_GAIN
-    const sceneE = meter.current.sunE + skyE
-    const target = MathUtils.clamp(Math.log2(METER_REF / Math.max(sceneE, 1e-4)) * 0.6, -0.5, 2.2)
+    // Metered exposure: the irradiance where the camera stands — outside: sun + sky; inside a
+    // room: its windows + bounce + lamps — exposed towards mid-grey with partial adaptation (dark
+    // scenes stay a bit dark), up to +2 EV indoors.
+    const { room, inside } = daylightRooms.isEnclosedAt(camera.position)
+    daylightUniforms.cameraOutside.value = inside ? 0 : 1
+    const skyE = Math.PI * 0.45 * luminance(sky.radianceCpu(UP)) * ENV_INTENSITY
+    const sceneE = inside ? daylightRooms.meter(room, skyE) : meter.current.keyE + skyE
+    const target = MathUtils.clamp(
+      Math.log2(METER_REF / Math.max(sceneE, 1e-4)) * 0.6,
+      -0.5,
+      inside ? INTERIOR_EV : 2.2,
+    )
     meter.current.ev += (target - meter.current.ev) * Math.min(1, dt * 3)
     source.exposure = 2 ** meter.current.ev
+    // Glows (window panes, lamp shades) stay out of the night exposure lift.
+    daylightUniforms.glowComp.value = 1 / 2 ** Math.max(0, meter.current.ev - 0.5)
+    daylightUniforms.emitterExpInv.value = 1 / source.exposure
+    // Eye-like chromatic adaptation (von Kries): divide out the illuminant where the camera is,
+    // partially (golden hour and lamplight keep some warmth), luminance-preserving; a bit less
+    // at night (moonlight stays blue-ish).
+    const illum =
+      (inside
+        ? daylightRooms.roomIlluminant(room, meter.current.outdoor, meter.current.skyLum)
+        : null) ?? meter.current.outdoor
+    const L = luminance(illum)
+    if (L > 1e-5) {
+      const k = WHITE_BALANCE * (1 - 0.35 * meter.current.night)
+      wbTarget.set(
+        MathUtils.lerp(1, L / Math.max(illum.r, 1e-4), k),
+        MathUtils.lerp(1, L / Math.max(illum.g, 1e-4), k),
+        MathUtils.lerp(1, L / Math.max(illum.b, 1e-4), k),
+      )
+      wbTarget.clampScalar(0.5, 2)
+      wbTarget.divideScalar(0.2126 * wbTarget.x + 0.7152 * wbTarget.y + 0.0722 * wbTarget.z)
+    }
     source.whiteBalance.lerp(wbTarget, Math.min(1, dt * 2))
   }, -2)
 

@@ -8,6 +8,7 @@ import type {
   OrthographicCamera,
 } from 'three/webgpu'
 import * as THREE from 'three/webgpu'
+import { isDaylightAtmosphere } from '../../lib/daylight/look'
 import { getKeyLightDirectionOverride } from '../../lib/key-light-override'
 import { SHADOW_ONLY_LAYER } from '../../lib/layers'
 import { registerSkyLights } from '../../lib/underground-ambiance'
@@ -171,6 +172,9 @@ export function Lights() {
     const dt = Math.min(delta, 0.1) * 4
     const sourceShadow = atmosphere ? undefined : theme.lights[0]?.shadow
     const sourceCamera = sourceShadow?.camera
+    // The daylight look: one key (sun or moon) with its own shadow settings, frustum fitted
+    // tightly around the building in light space.
+    const daylightShadow = isDaylightAtmosphere(atmosphere) ? atmosphere.shadow : undefined
 
     // Atmosphere directions are stable mutable vectors. Keep both light
     // resources mounted and move them imperatively so time/angle changes never
@@ -207,6 +211,8 @@ export function Lights() {
           if (SHADOW_EXCLUDED_TYPES.some((type) => sceneRegistry.byType[type]!.has(id))) continue
           box.expandByObject(obj)
         }
+        // Baked artifacts stay out of the registry: frame their shadow casters instead.
+        if (box.isEmpty() && daylightShadow) expandByShadowCasters(state.scene, box)
         box.getBoundingSphere(boundsSphere.current)
         const center = boundsSphere.current.center
         const radius = boundsSphere.current.radius
@@ -267,7 +273,14 @@ export function Lights() {
         }
 
         const cam = light.shadow?.camera as THREE.OrthographicCamera | undefined
-        if (cam) {
+        if (cam && daylightShadow && !sourceCamera) {
+          light.shadow.mapSize.setScalar(daylightShadow.mapSize)
+          light.shadow.bias = daylightShadow.bias
+          light.shadow.normalBias = daylightShadow.normalBias
+          light.shadow.radius = daylightShadow.radius
+          cam.layers.enable(SHADOW_ONLY_LAYER)
+          fitShadowToBounds(light, boundsBox.current, shadowDir.current)
+        } else if (cam) {
           // The calibrated building bias detaches furniture-scale contact shadows.
           // Small scenes need finer shadow edges too; retain the building map budget.
           const smallScene = !sourceCamera && shadowRadius.current < 1.5
@@ -331,8 +344,9 @@ export function Lights() {
       }
 
       if (index === 0 && light.shadow?.intensity !== undefined) {
-        const shadowIntensity =
-          sourceShadow?.intensity ?? (intensity <= 1 ? intensity : MAX_SHADOW_INTENSITY)
+        const shadowIntensity = daylightShadow
+          ? 1
+          : (sourceShadow?.intensity ?? (intensity <= 1 ? intensity : MAX_SHADOW_INTENSITY))
         light.shadow.intensity =
           atmosphere || !initialized.current
             ? shadowIntensity
@@ -434,4 +448,63 @@ export function Lights() {
       <UndergroundAmbiance />
     </>
   )
+}
+
+const _fitCenter = new THREE.Vector3()
+const _fitSize = new THREE.Vector3()
+const _fitCorner = new THREE.Vector3()
+const _fitBox = new THREE.Box3()
+const _fitBounds = new THREE.Box3()
+const _fitView = new THREE.Matrix4()
+const _fitUp = new THREE.Vector3(0, 1, 0)
+const _fitMargin = new THREE.Vector3(2, 0, 2)
+
+/**
+ * Daylight key: place the light on its direction around the building and fit the ortho shadow
+ * camera to the building box (+2 m of ground) projected into light space — the tightest frustum,
+ * so the map's texels all land on the building.
+ */
+function fitShadowToBounds(
+  light: THREE.DirectionalLight,
+  bounds: THREE.Box3,
+  direction: THREE.Vector3,
+) {
+  if (bounds.isEmpty()) return
+  const center = bounds.getCenter(_fitCenter)
+  const radius = bounds.getSize(_fitSize).length() / 2 + 2
+  light.position.copy(center).addScaledVector(_fitSize.copy(direction).normalize(), radius * 2)
+  light.target.position.copy(center)
+  light.target.updateMatrixWorld()
+  light.updateMatrixWorld()
+  _fitView.lookAt(light.position, center, _fitUp).invert()
+  _fitView.setPosition(0, 0, 0)
+  const b = _fitBounds.copy(bounds).expandByVector(_fitMargin)
+  const box = _fitBox.makeEmpty()
+  for (let i = 0; i < 8; i++) {
+    _fitCorner
+      .set(i & 1 ? b.max.x : b.min.x, i & 2 ? b.max.y : b.min.y, i & 4 ? b.max.z : b.min.z)
+      .sub(light.position)
+      .applyMatrix4(_fitView)
+    box.expandByPoint(_fitCorner)
+  }
+  const cam = light.shadow.camera as THREE.OrthographicCamera
+  cam.left = box.min.x - 0.5
+  cam.right = box.max.x + 0.5
+  cam.bottom = box.min.y - 0.5
+  cam.top = box.max.y + 0.5
+  cam.near = Math.max(0.1, -box.max.z - 1)
+  cam.far = -box.min.z + 1
+  cam.updateProjectionMatrix()
+}
+
+/** Shadow-casting meshes of a scene (skipping the effectively infinite grounds). */
+function expandByShadowCasters(scene: THREE.Object3D, box: THREE.Box3) {
+  const mesh = new THREE.Box3()
+  scene.traverseVisible((object) => {
+    const candidate = object as THREE.Mesh
+    if (!candidate.isMesh || !candidate.castShadow) return
+    mesh.setFromObject(candidate)
+    if (mesh.isEmpty() || mesh.max.x - mesh.min.x > 500 || mesh.max.z - mesh.min.z > 500) return
+    box.union(mesh)
+  })
 }

@@ -507,7 +507,7 @@ function normalizePersistedViewerState(value: unknown): PersistedViewerState {
     shadingByContext: normalizeShadingByContext(state.shadingByContext),
     textures: typeof state.textures === 'boolean' ? state.textures : true,
     colorPreset: pickString<ColorPreset>(state.colorPreset, COLOR_PRESETS, 'clay'),
-    edges: pickString<EdgeMode>(state.edges, EDGE_MODES, 'soft'),
+    edges: state.edges === 'off' ? 'off' : 'soft',
     shadows: typeof state.shadows === 'boolean' ? state.shadows : true,
     unit: pickString<ViewerState['unit']>(state.unit, UNITS, detectDefaultUnit()),
     metricNotation: pickString<MetricNotation>(state.metricNotation, METRIC_NOTATIONS, 'meters'),
@@ -519,12 +519,22 @@ function normalizePersistedViewerState(value: unknown): PersistedViewerState {
     timeOfDay: pickString<TimeOfDay>(state.timeOfDay, TIMES_OF_DAY, 'midday'),
     weather: pickString<Weather>(state.weather, WEATHERS, 'fair'),
     deviceLocation: normalizeLatLng(state.deviceLocation),
+    // Solid shading was retired into the quality tiers: a saved Solid pick becomes Low.
     renderQuality: pickString<RenderQuality>(
       state.renderQuality,
       RENDER_QUALITIES,
-      defaultRenderQuality(),
+      persistedSolid(state) ? 'low' : defaultRenderQuality(),
     ),
   }
+}
+
+function persistedSolid(state: Record<string, unknown>): boolean {
+  const byContext = state.shadingByContext
+  return (
+    !!byContext &&
+    typeof byContext === 'object' &&
+    Object.values(byContext as Record<string, unknown>).includes('solid')
+  )
 }
 
 /** The owner's pick (16 Oct): the section cut's clean edge over earth walls, and the simple fade. */
@@ -546,14 +556,16 @@ function resolveLook(state: ViewerState, patch: Partial<ViewerState>): Partial<V
       theme,
       next.previewSceneTheme === null && !local?.theme ? next.projectPresentation : undefined,
     ),
-    shading:
-      local?.shadingByContext?.[next.renderContext] ??
-      next.projectPresentation?.shading ??
-      next.shadingByContext[next.renderContext] ??
-      next.contextDefaultShading,
-    edges: local?.edges ?? next.projectPresentation?.edges ?? next.lookDefaults.edges,
+    // Solid (Lambert) shading is retired: the quality tiers replace it (Low is the cheap one).
+    shading: 'rendered',
+    // Edges are on (soft ink) or off; a saved 'strong' reads as on.
+    edges: onOffEdges(local?.edges ?? next.projectPresentation?.edges ?? next.lookDefaults.edges),
     shadows: local?.shadows ?? next.projectPresentation?.shadows ?? next.lookDefaults.shadows,
   }
+}
+
+function onOffEdges(edges: EdgeMode): EdgeMode {
+  return edges === 'off' ? 'off' : 'soft'
 }
 
 function chooseLook(state: ViewerState, look: LocalLook): Partial<ViewerState> {
@@ -664,15 +676,17 @@ const useViewer = create<ViewerState>()(
 
       shading: 'rendered',
       shadingByContext: {},
+      // Solid is retired into the quality tiers: asking for it picks the Low tier.
       setShading: (shading) =>
-        set((state) =>
-          chooseLook(state, {
+        set((state) => ({
+          ...chooseLook(state, {
             shadingByContext: {
               ...state.projectPreferences[state.projectId ?? '']?.look?.shadingByContext,
               [state.renderContext]: shading,
             },
           }),
-        ),
+          ...(shading === 'solid' ? { renderQuality: 'low' as const } : {}),
+        })),
 
       textures: true,
       setTextures: (textures) => set({ textures }),

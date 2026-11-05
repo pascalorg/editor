@@ -16,6 +16,7 @@ import {
   Gauge,
   LocateFixed,
   Moon,
+  PenLine,
   Sun,
   Sunrise,
   Sunset,
@@ -27,6 +28,14 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
 } from '../ui/primitives/dropdown-menu'
+
+/**
+ * Render settings shared by every display dropdown:
+ * - `QualityMenu` (both appearances): Low / Medium / High.
+ * - `DaylightMenu` (colored): time-of-day and weather presets, plus "Use my location" when the
+ *   site has no geocoded point.
+ * - `EdgesToggleItem` (monochrome): ink edges on or off.
+ */
 
 function timeOptions(i18n: PascalI18n) {
   return [
@@ -72,7 +81,7 @@ function qualityOptions(i18n: PascalI18n) {
       name: i18n._({ id: 'viewer.daylight.quality.low', message: 'Low' }),
       detail: i18n._({
         id: 'viewer.daylight.quality.lowDetail',
-        message: 'No ambient occlusion or bloom',
+        message: 'Fastest — no ambient occlusion or bloom',
       }),
     },
     {
@@ -94,11 +103,40 @@ function qualityOptions(i18n: PascalI18n) {
   ] as const satisfies readonly { id: RenderQuality; name: string; detail: string }[]
 }
 
-/**
- * Time-of-day and weather presets of the colored appearance, plus "Use my location" when the
- * site has no geocoded point, and the screen-space quality tier of rendered shading. Meant for a
- * display dropdown (each item is a sub-menu).
- */
+export function QualityMenu({
+  subContentClassName = 'dark min-w-56',
+}: {
+  subContentClassName?: string
+}) {
+  const i18n = usePascalI18n()
+  const quality = useViewer((s) => s.renderQuality)
+  const qualities = qualityOptions(i18n)
+  const active = qualities.find((o) => o.id === quality) ?? qualities[2]
+  return (
+    <DropdownMenuSub>
+      <DropdownMenuSubTrigger>
+        <Gauge className="h-4 w-4" />
+        <span>{i18n._({ id: 'viewer.daylight.quality.title', message: 'Quality' })}</span>
+        <span className="ml-auto text-muted-foreground text-xs">{active.name}</span>
+      </DropdownMenuSubTrigger>
+      <DropdownMenuSubContent className={subContentClassName}>
+        {qualities.map((option) => (
+          <DropdownMenuItem
+            key={option.id}
+            onSelect={() => useViewer.getState().setRenderQuality(option.id)}
+          >
+            <div className="flex flex-col">
+              <span className="text-foreground">{option.name}</span>
+              <span className="text-muted-foreground text-xs">{option.detail}</span>
+            </div>
+            {quality === option.id ? <Check className="ml-auto h-4 w-4 text-foreground" /> : null}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuSubContent>
+    </DropdownMenuSub>
+  )
+}
+
 export function DaylightMenu({
   subContentClassName = 'dark min-w-48',
 }: {
@@ -108,8 +146,6 @@ export function DaylightMenu({
   const timeOfDay = useViewer((s) => s.timeOfDay)
   const weather = useViewer((s) => s.weather)
   const deviceLocation = useViewer((s) => s.deviceLocation)
-  const rendered = useViewer((s) => s.shading === 'rendered')
-  const quality = useViewer((s) => s.renderQuality)
   const siteHasLocation = useScene((state) => {
     for (const id of state.rootNodeIds) {
       const node = state.nodes[id] as
@@ -124,8 +160,6 @@ export function DaylightMenu({
   const weathers = weatherOptions(i18n)
   const activeTime = times.find((o) => o.id === timeOfDay) ?? times[1]
   const activeWeather = weathers.find((o) => o.id === weather) ?? weathers[1]
-  const qualities = qualityOptions(i18n)
-  const activeQuality = qualities.find((o) => o.id === quality) ?? qualities[2]
   const source = siteHasLocation ? 'site' : resolveLocation(null, deviceLocation).source
 
   return (
@@ -198,29 +232,28 @@ export function DaylightMenu({
           ))}
         </DropdownMenuSubContent>
       </DropdownMenuSub>
-      {rendered ? (
-        <DropdownMenuSub>
-          <DropdownMenuSubTrigger>
-            <Gauge className="h-4 w-4" />
-            <span>{i18n._({ id: 'viewer.daylight.quality.title', message: 'Quality' })}</span>
-            <span className="ml-auto text-muted-foreground text-xs">{activeQuality.name}</span>
-          </DropdownMenuSubTrigger>
-          <DropdownMenuSubContent className={subContentClassName}>
-            {qualities.map((option) => (
-              <DropdownMenuItem
-                key={option.id}
-                onSelect={() => useViewer.getState().setRenderQuality(option.id)}
-              >
-                <div className="flex flex-col">
-                  <span className="text-foreground">{option.name}</span>
-                  <span className="text-muted-foreground text-xs">{option.detail}</span>
-                </div>
-                {quality === option.id ? <Check className="ml-auto h-4 w-4" /> : null}
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuSubContent>
-        </DropdownMenuSub>
-      ) : null}
     </>
+  )
+}
+
+/** Ink edges on (soft) or off. The menu stays open on toggle. */
+export function EdgesToggleItem() {
+  const i18n = usePascalI18n()
+  const on = useViewer((s) => s.edges !== 'off')
+  return (
+    <DropdownMenuItem
+      onSelect={(event) => {
+        event.preventDefault()
+        useViewer.getState().setEdges(on ? 'off' : 'soft')
+      }}
+    >
+      <PenLine className="h-4 w-4" />
+      <span>{i18n._({ id: 'viewer.display.edges.title', message: 'Edges' })}</span>
+      <span className="ml-auto text-muted-foreground text-xs">
+        {on
+          ? i18n._({ id: 'viewer.common.on', message: 'On' })
+          : i18n._({ id: 'viewer.common.off', message: 'Off' })}
+      </span>
+    </DropdownMenuItem>
   )
 }

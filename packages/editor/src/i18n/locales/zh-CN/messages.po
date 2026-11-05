@@ -1423,16 +1423,6 @@ msgstr "彩色"
 msgid "app.viewerToolbar.colors"
 msgstr "颜色"
 
-# Source-Hash: 2416a48df28d6205
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Crisp, opaque edge lines"
-#: apps/editor/components/viewer-toolbar.tsx
-#, fuzzy
-msgid "app.viewerToolbar.crispOpaqueEdgeLines"
-msgstr "清晰、不透明的边线"
-
 # Source-Hash: 4da8b3678ed77b45
 # Review: required
 # AI-Provider: claude-code
@@ -1492,16 +1482,6 @@ msgstr "显示设置"
 #, fuzzy
 msgid "app.viewerToolbar.doorWindowMarks"
 msgstr "门窗标记"
-
-# Source-Hash: 027bbc8b7287c06a
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Edges"
-#: apps/editor/components/viewer-toolbar.tsx
-#, fuzzy
-msgid "app.viewerToolbar.edges"
-msgstr "边线"
 
 # Source-Hash: 9bacee5dbd658209
 # Review: required
@@ -1563,16 +1543,6 @@ msgstr "专家"
 msgid "app.viewerToolbar.exploded"
 msgstr "分解"
 
-# Source-Hash: 0c583f1d4201293b
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Faint outline of major creases"
-#: apps/editor/components/viewer-toolbar.tsx
-#, fuzzy
-msgid "app.viewerToolbar.faintOutlineOfMajorCreases"
-msgstr "主要折边的淡轮廓"
-
 # Source-Hash: 08ecd5878b08139d
 # Review: required
 # AI-Provider: claude-code
@@ -1582,16 +1552,6 @@ msgstr "主要折边的淡轮廓"
 #, fuzzy
 msgid "app.viewerToolbar.feetInches"
 msgstr "英尺和英寸"
-
-# Source-Hash: 8827df1cdeb02ed9
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Flat and fast — no ambient occlusion"
-#: apps/editor/components/viewer-toolbar.tsx
-#, fuzzy
-msgid "app.viewerToolbar.flatAndFastNoAmbientOcclusion"
-msgstr "平面且快速 — 无环境光遮蔽"
 
 # Source-Hash: 060a718cdcff61b3
 # Review: required
@@ -1612,16 +1572,6 @@ msgstr "平面图标注"
 #, fuzzy
 msgid "app.viewerToolbar.floorPlanMode"
 msgstr "平面图模式"
-
-# Source-Hash: 8bb9e54fc786ca77
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Full ambient occlusion"
-#: apps/editor/components/viewer-toolbar.tsx
-#, fuzzy
-msgid "app.viewerToolbar.fullAmbientOcclusion"
-msgstr "完整环境光遮蔽"
 
 # Source-Hash: 91fd3544d9ce16bf
 # Review: required
@@ -1815,16 +1765,6 @@ msgstr "仅 2D"
 msgid "app.viewerToolbar.n3dOnly"
 msgstr "仅 3D"
 
-# Source-Hash: 4ff58913a4492199
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "No edge lines"
-#: apps/editor/components/viewer-toolbar.tsx
-#, fuzzy
-msgid "app.viewerToolbar.noEdgeLines"
-msgstr "无边线"
-
 # Source-Hash: fdaa3b3faa1844fd
 # Review: required
 # AI-Provider: claude-code
@@ -1936,26 +1876,6 @@ msgstr "预览"
 msgid "app.viewerToolbar.previewMode"
 msgstr "预览模式"
 
-# Source-Hash: 5e58af99d6d4fa6a
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Render"
-#: apps/editor/components/viewer-toolbar.tsx
-#, fuzzy
-msgid "app.viewerToolbar.render"
-msgstr "渲染"
-
-# Source-Hash: f363702a10aedaeb
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Rendered"
-#: apps/editor/components/viewer-toolbar.tsx
-#, fuzzy
-msgid "app.viewerToolbar.rendered"
-msgstr "渲染"
-
 # Source-Hash: 4959d5538efc595c
 # Review: required
 # AI-Provider: claude-code
@@ -2036,26 +1956,6 @@ msgstr "2D 与 3D 共用"
 msgid "app.viewerToolbar.show"
 msgstr "显示"
 
-# Source-Hash: d266d83ec490df4e
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Soft"
-#: apps/editor/components/viewer-toolbar.tsx
-#, fuzzy
-msgid "app.viewerToolbar.soft"
-msgstr "柔和"
-
-# Source-Hash: ef3e765e692faf4c
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Solid"
-#: apps/editor/components/viewer-toolbar.tsx
-#, fuzzy
-msgid "app.viewerToolbar.solid"
-msgstr "实体"
-
 # Source-Hash: e9f59b513f2f45ac
 # Review: required
 # AI-Provider: claude-code
@@ -2085,16 +1985,6 @@ msgstr "堆叠"
 #, fuzzy
 msgid "app.viewerToolbar.stairAnnotations"
 msgstr "楼梯标注"
-
-# Source-Hash: f82927a01d4c5e45
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Strong"
-#: apps/editor/components/viewer-toolbar.tsx
-#, fuzzy
-msgid "app.viewerToolbar.strong"
-msgstr "强烈"
 
 # Source-Hash: efc50964d7b0ec47
 # Review: required
@@ -3843,6 +3733,36 @@ msgstr "旋转"
 #, fuzzy
 msgid "editor.cameraHint.zoom"
 msgstr "缩放"
+
+# Source-Hash: bf4659b003e22b8d
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Quality: High"
+#: packages/editor/src/components/ui/command-palette/editor-commands.tsx
+#, fuzzy
+msgid "editor.commands.qualityHigh"
+msgstr "质量：高"
+
+# Source-Hash: 8254a76e05d68744
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Quality: Low"
+#: packages/editor/src/components/ui/command-palette/editor-commands.tsx
+#, fuzzy
+msgid "editor.commands.qualityLow"
+msgstr "质量：低"
+
+# Source-Hash: 86e656c893625063
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Quality: Medium"
+#: packages/editor/src/components/ui/command-palette/editor-commands.tsx
+#, fuzzy
+msgid "editor.commands.qualityMedium"
+msgstr "质量：中"
 
 # Source-Hash: 34b7ca7ff46c44a9
 # Review: required
@@ -36045,6 +35965,7 @@ msgstr "俯视图"
 # Source-Hash: 50accd740fa2e736
 # Review: human
 # English: "Off"
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
 #: packages/editor/src/components/viewer/viewer-controls-bar.tsx
 msgid "viewer.common.off"
 msgstr "关闭"
@@ -36052,6 +35973,7 @@ msgstr "关闭"
 # Source-Hash: 9cc01faad79c28da
 # Review: human
 # English: "On"
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
 #: packages/editor/src/components/viewer/viewer-controls-bar.tsx
 msgid "viewer.common.on"
 msgstr "开启"
@@ -36061,7 +35983,7 @@ msgstr "开启"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Sun position is approximate"
-#: packages/editor/src/components/viewer/daylight-menu.tsx
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
 #, fuzzy
 msgid "viewer.daylight.location.approximate"
 msgstr "太阳位置为近似值"
@@ -36071,7 +35993,7 @@ msgstr "太阳位置为近似值"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Sun follows your location"
-#: packages/editor/src/components/viewer/daylight-menu.tsx
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
 #, fuzzy
 msgid "viewer.daylight.location.device"
 msgstr "太阳位置跟随您的位置"
@@ -36081,7 +36003,7 @@ msgstr "太阳位置跟随您的位置"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Use my location"
-#: packages/editor/src/components/viewer/daylight-menu.tsx
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
 #, fuzzy
 msgid "viewer.daylight.location.use"
 msgstr "使用我的位置"
@@ -36091,7 +36013,7 @@ msgstr "使用我的位置"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "High"
-#: packages/editor/src/components/viewer/daylight-menu.tsx
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
 #, fuzzy
 msgid "viewer.daylight.quality.high"
 msgstr "高"
@@ -36101,7 +36023,7 @@ msgstr "高"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Lighting-aware ambient occlusion and bloom"
-#: packages/editor/src/components/viewer/daylight-menu.tsx
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
 #, fuzzy
 msgid "viewer.daylight.quality.highDetail"
 msgstr "光照感知的环境光遮蔽与泛光"
@@ -36111,27 +36033,27 @@ msgstr "光照感知的环境光遮蔽与泛光"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Low"
-#: packages/editor/src/components/viewer/daylight-menu.tsx
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
 #, fuzzy
 msgid "viewer.daylight.quality.low"
 msgstr "低"
 
-# Source-Hash: 40735b5b90a56ebd
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "No ambient occlusion or bloom"
-#: packages/editor/src/components/viewer/daylight-menu.tsx
+# Source-Hash: 8b94a0f7e27f671d
+# Review: required
+# English: "Fastest — no ambient occlusion or bloom"
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
 #, fuzzy
 msgid "viewer.daylight.quality.lowDetail"
-msgstr "无环境光遮蔽和泛光"
+msgstr "最快 — 无环境光遮蔽和泛光"
 
 # Source-Hash: 866bf047c116b31d
 # Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Medium"
-#: packages/editor/src/components/viewer/daylight-menu.tsx
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
 #, fuzzy
 msgid "viewer.daylight.quality.medium"
 msgstr "中"
@@ -36141,7 +36063,7 @@ msgstr "中"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Half-resolution ambient occlusion"
-#: packages/editor/src/components/viewer/daylight-menu.tsx
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
 #, fuzzy
 msgid "viewer.daylight.quality.mediumDetail"
 msgstr "半分辨率环境光遮蔽"
@@ -36151,7 +36073,7 @@ msgstr "半分辨率环境光遮蔽"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Quality"
-#: packages/editor/src/components/viewer/daylight-menu.tsx
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
 #, fuzzy
 msgid "viewer.daylight.quality.title"
 msgstr "质量"
@@ -36161,7 +36083,7 @@ msgstr "质量"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Blue hour"
-#: packages/editor/src/components/viewer/daylight-menu.tsx
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
 #, fuzzy
 msgid "viewer.daylight.time.blue"
 msgstr "蓝调时刻"
@@ -36171,7 +36093,7 @@ msgstr "蓝调时刻"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Golden hour"
-#: packages/editor/src/components/viewer/daylight-menu.tsx
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
 #, fuzzy
 msgid "viewer.daylight.time.golden"
 msgstr "黄金时刻"
@@ -36181,7 +36103,7 @@ msgstr "黄金时刻"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Midday"
-#: packages/editor/src/components/viewer/daylight-menu.tsx
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
 #, fuzzy
 msgid "viewer.daylight.time.midday"
 msgstr "正午"
@@ -36191,7 +36113,7 @@ msgstr "正午"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Night"
-#: packages/editor/src/components/viewer/daylight-menu.tsx
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
 #, fuzzy
 msgid "viewer.daylight.time.night"
 msgstr "夜晚"
@@ -36201,7 +36123,7 @@ msgstr "夜晚"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Time of day"
-#: packages/editor/src/components/viewer/daylight-menu.tsx
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
 #, fuzzy
 msgid "viewer.daylight.time.title"
 msgstr "时段"
@@ -36211,7 +36133,7 @@ msgstr "时段"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Clear"
-#: packages/editor/src/components/viewer/daylight-menu.tsx
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
 #, fuzzy
 msgid "viewer.daylight.weather.clear"
 msgstr "晴朗"
@@ -36221,7 +36143,7 @@ msgstr "晴朗"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Cloudy"
-#: packages/editor/src/components/viewer/daylight-menu.tsx
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
 #, fuzzy
 msgid "viewer.daylight.weather.cloudy"
 msgstr "多云"
@@ -36231,7 +36153,7 @@ msgstr "多云"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Fair"
-#: packages/editor/src/components/viewer/daylight-menu.tsx
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
 #, fuzzy
 msgid "viewer.daylight.weather.fair"
 msgstr "少云"
@@ -36241,7 +36163,7 @@ msgstr "少云"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Overcast"
-#: packages/editor/src/components/viewer/daylight-menu.tsx
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
 #, fuzzy
 msgid "viewer.daylight.weather.overcast"
 msgstr "阴天"
@@ -36251,7 +36173,7 @@ msgstr "阴天"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Weather"
-#: packages/editor/src/components/viewer/daylight-menu.tsx
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
 #, fuzzy
 msgid "viewer.daylight.weather.title"
 msgstr "天气"
@@ -36277,52 +36199,10 @@ msgstr "彩色"
 msgid "viewer.display.colors"
 msgstr "颜色"
 
-# Source-Hash: 50accd740fa2e736
-# Review: human
-# English: "Off"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
-msgid "viewer.display.edges.off"
-msgstr "关闭"
-
-# Source-Hash: 4ff58913a4492199
-# Review: human
-# English: "No edge lines"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
-msgid "viewer.display.edges.offDetail"
-msgstr "不显示边线"
-
-# Source-Hash: d266d83ec490df4e
-# Review: human
-# English: "Soft"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
-msgid "viewer.display.edges.soft"
-msgstr "柔和"
-
-# Source-Hash: 0c583f1d4201293b
-# Review: human
-# English: "Faint outline of major creases"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
-msgid "viewer.display.edges.softDetail"
-msgstr "淡化显示主要折线"
-
-# Source-Hash: f82927a01d4c5e45
-# Review: human
-# English: "Strong"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
-msgid "viewer.display.edges.strong"
-msgstr "清晰"
-
-# Source-Hash: 2416a48df28d6205
-# Review: human
-# English: "Crisp, opaque edge lines"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
-msgid "viewer.display.edges.strongDetail"
-msgstr "清晰、不透明的边线"
-
 # Source-Hash: 027bbc8b7287c06a
 # Review: human
 # English: "Edges"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
 msgid "viewer.display.edges.title"
 msgstr "边线"
 
@@ -36346,41 +36226,6 @@ msgstr "正交"
 #: packages/editor/src/components/viewer/viewer-controls-bar.tsx
 msgid "viewer.display.perspective"
 msgstr "透视"
-
-# Source-Hash: f363702a10aedaeb
-# Review: human
-# English: "Rendered"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
-msgid "viewer.display.render.rendered"
-msgstr "渲染效果"
-
-# Source-Hash: 8bb9e54fc786ca77
-# Review: human
-# English: "Full ambient occlusion"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
-msgid "viewer.display.render.renderedDetail"
-msgstr "完整环境光遮蔽"
-
-# Source-Hash: ef3e765e692faf4c
-# Review: human
-# English: "Solid"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
-msgid "viewer.display.render.solid"
-msgstr "实体"
-
-# Source-Hash: 8827df1cdeb02ed9
-# Review: human
-# English: "Flat and fast — no ambient occlusion"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
-msgid "viewer.display.render.solidDetail"
-msgstr "平整快速，不启用环境光遮蔽"
-
-# Source-Hash: 5e58af99d6d4fa6a
-# Review: human
-# English: "Render"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
-msgid "viewer.display.render.title"
-msgstr "渲染"
 
 # Source-Hash: 4c6bcb30b40047fc
 # Review: human

@@ -30,7 +30,7 @@ import { choosePointerEvents, type ViewerBreadcrumbHandler } from '../../lib/poi
 import { initializeGpuRenderer, type RendererPowerPreference } from '../../lib/renderer-capability'
 import { getSceneTheme } from '../../lib/scene-themes'
 import { installTextureNodeNullGuard } from '../../lib/texture-node-guard'
-import useViewer, { type RenderContext } from '../../store/use-viewer'
+import useViewer, { type RenderContext, type RenderQuality } from '../../store/use-viewer'
 import { FloorElevationSystem } from '../../systems/floor-elevation/floor-elevation-system'
 import { GeometrySystem } from '../../systems/geometry/geometry-system'
 import { PerfActionSettleSystem } from '../../systems/perf-action-settle/perf-action-settle-system'
@@ -405,6 +405,8 @@ export interface ViewerImmersiveSession {
   onError?: (cause: unknown) => void
 }
 
+const MAX_DPR: Record<RenderQuality, number> = { high: 1.5, medium: 1.25, low: 1 }
+
 interface ViewerProps {
   children?: React.ReactNode
   hoverStyles?: HoverStyles
@@ -420,6 +422,11 @@ interface ViewerProps {
   }
   /** Saved site appearance when rendering a baked asset without its graph. Null ignores it. */
   presentation?: SitePresentation | null
+  /**
+   * The colored appearance's built-in daylight (sun, sky, ground, time and weather presets).
+   * Default on; canonical renders (bake) turn it off and keep the neutral studio look.
+   */
+  daylight?: boolean
   /**
    * Visibility filter on the live canvas. When non-null, every registered
    * node group whose id is not in `isolate` (or in the isolated set's
@@ -506,6 +513,7 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
     transparent,
     defaultRender,
     presentation: suppliedPresentation,
+    daylight = true,
     isolate,
     sceneReadyKey,
     onSceneReadyChange,
@@ -560,7 +568,12 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
   const isDark = useViewer((state) => state.sceneAppearance.appearance === 'dark')
   const sceneTheme = useViewer((state) => state.sceneTheme)
   const previousLampTheme = useRef(sceneTheme)
+  // Scene themes drive the lamps only in monochrome; the colored appearance's daylight follows
+  // its time of day instead.
+  const colored = useViewer((state) => state.textures)
+  const themeDrivesLamps = !(daylight && colored)
   useEffect(() => {
+    if (!themeDrivesLamps) return
     useInteractive
       .getState()
       .setLampDefault(
@@ -568,7 +581,7 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
         previousLampTheme.current !== sceneTheme,
       )
     previousLampTheme.current = sceneTheme
-  }, [sceneTheme])
+  }, [sceneTheme, themeDrivesLamps])
   const transparentBackground = useViewer((state) => state.transparentBackground)
   // The shadows toggle drives `renderer.shadowMap.enabled` (via the Canvas
   // `shadows` prop) rather than the lights' `castShadow`: toggling castShadow
@@ -640,8 +653,9 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
   // Coarse-pointer devices (phones/tablets) get a tighter DPR ceiling to keep
   // fragment-shader cost down — saves another ~30% over 1.5x on high-DPI mobile.
   // Desktops (fine pointer) keep the original 1.5 cap.
-  const maxDpr =
-    typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches ? 1.25 : 1.5
+  // Pixel-ratio cap per quality tier (touch devices default to Medium).
+  const renderQuality = useViewer((state) => state.renderQuality)
+  const maxDpr = MAX_DPR[renderQuality]
   const showGpuFallback = rendererInitFailed
   // When we can't mount the GPU canvas, the SceneReadyTracker never mounts and
   // the host editor would otherwise wait on its scene-readiness timeout. Signal
@@ -737,7 +751,7 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
           {ImmersiveSession ? (
             <ImmersiveSession>
               <ViewerScene
-                daylight={suppliedPresentation !== null}
+                daylight={daylight}
                 disablePostFx
                 hoverStyles={hoverStyles}
                 immersiveXR
@@ -761,7 +775,7 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
                 paused={renderPaused}
               />
               <ViewerScene
-                daylight={suppliedPresentation !== null}
+                daylight={daylight}
                 disablePostFx={disablePostFx}
                 hoverStyles={hoverStyles}
                 renderErrorHandlers={[onRenderError]}
@@ -798,7 +812,7 @@ function ViewerScene({
   SceneWrapper,
 }: {
   children?: React.ReactNode
-  /** Canonical hosts (`presentation={null}`: bake, thumbnails) keep the neutral studio look. */
+  /** Built-in daylight for the colored appearance (off for canonical renders). */
   daylight: boolean
   disablePostFx: boolean
   hoverStyles: HoverStyles

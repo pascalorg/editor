@@ -1423,16 +1423,6 @@ msgstr "カラー"
 msgid "app.viewerToolbar.colors"
 msgstr "色"
 
-# Source-Hash: 2416a48df28d6205
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Crisp, opaque edge lines"
-#: apps/editor/components/viewer-toolbar.tsx
-#, fuzzy
-msgid "app.viewerToolbar.crispOpaqueEdgeLines"
-msgstr "くっきりした不透明なエッジ線"
-
 # Source-Hash: 4da8b3678ed77b45
 # Review: required
 # AI-Provider: claude-code
@@ -1492,16 +1482,6 @@ msgstr "表示設定"
 #, fuzzy
 msgid "app.viewerToolbar.doorWindowMarks"
 msgstr "建具記号"
-
-# Source-Hash: 027bbc8b7287c06a
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Edges"
-#: apps/editor/components/viewer-toolbar.tsx
-#, fuzzy
-msgid "app.viewerToolbar.edges"
-msgstr "エッジ"
 
 # Source-Hash: 9bacee5dbd658209
 # Review: required
@@ -1563,16 +1543,6 @@ msgstr "エキスパート"
 msgid "app.viewerToolbar.exploded"
 msgstr "分解"
 
-# Source-Hash: 0c583f1d4201293b
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Faint outline of major creases"
-#: apps/editor/components/viewer-toolbar.tsx
-#, fuzzy
-msgid "app.viewerToolbar.faintOutlineOfMajorCreases"
-msgstr "主な折れ目の淡い輪郭"
-
 # Source-Hash: 08ecd5878b08139d
 # Review: required
 # AI-Provider: claude-code
@@ -1582,16 +1552,6 @@ msgstr "主な折れ目の淡い輪郭"
 #, fuzzy
 msgid "app.viewerToolbar.feetInches"
 msgstr "フィート・インチ"
-
-# Source-Hash: 8827df1cdeb02ed9
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Flat and fast — no ambient occlusion"
-#: apps/editor/components/viewer-toolbar.tsx
-#, fuzzy
-msgid "app.viewerToolbar.flatAndFastNoAmbientOcclusion"
-msgstr "フラットで高速 — アンビエントオクルージョンなし"
 
 # Source-Hash: 060a718cdcff61b3
 # Review: required
@@ -1612,16 +1572,6 @@ msgstr "平面図の注記"
 #, fuzzy
 msgid "app.viewerToolbar.floorPlanMode"
 msgstr "平面図モード"
-
-# Source-Hash: 8bb9e54fc786ca77
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Full ambient occlusion"
-#: apps/editor/components/viewer-toolbar.tsx
-#, fuzzy
-msgid "app.viewerToolbar.fullAmbientOcclusion"
-msgstr "フルアンビエントオクルージョン"
 
 # Source-Hash: 91fd3544d9ce16bf
 # Review: required
@@ -1815,16 +1765,6 @@ msgstr "2Dのみ"
 msgid "app.viewerToolbar.n3dOnly"
 msgstr "3Dのみ"
 
-# Source-Hash: 4ff58913a4492199
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "No edge lines"
-#: apps/editor/components/viewer-toolbar.tsx
-#, fuzzy
-msgid "app.viewerToolbar.noEdgeLines"
-msgstr "エッジ線なし"
-
 # Source-Hash: fdaa3b3faa1844fd
 # Review: required
 # AI-Provider: claude-code
@@ -1936,26 +1876,6 @@ msgstr "プレビュー"
 msgid "app.viewerToolbar.previewMode"
 msgstr "プレビューモード"
 
-# Source-Hash: 5e58af99d6d4fa6a
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Render"
-#: apps/editor/components/viewer-toolbar.tsx
-#, fuzzy
-msgid "app.viewerToolbar.render"
-msgstr "レンダリング"
-
-# Source-Hash: f363702a10aedaeb
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Rendered"
-#: apps/editor/components/viewer-toolbar.tsx
-#, fuzzy
-msgid "app.viewerToolbar.rendered"
-msgstr "レンダリング"
-
 # Source-Hash: 4959d5538efc595c
 # Review: required
 # AI-Provider: claude-code
@@ -2036,26 +1956,6 @@ msgstr "2Dと3Dで共通"
 msgid "app.viewerToolbar.show"
 msgstr "表示"
 
-# Source-Hash: d266d83ec490df4e
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Soft"
-#: apps/editor/components/viewer-toolbar.tsx
-#, fuzzy
-msgid "app.viewerToolbar.soft"
-msgstr "ソフト"
-
-# Source-Hash: ef3e765e692faf4c
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Solid"
-#: apps/editor/components/viewer-toolbar.tsx
-#, fuzzy
-msgid "app.viewerToolbar.solid"
-msgstr "ソリッド"
-
 # Source-Hash: e9f59b513f2f45ac
 # Review: required
 # AI-Provider: claude-code
@@ -2085,16 +1985,6 @@ msgstr "積み重ね"
 #, fuzzy
 msgid "app.viewerToolbar.stairAnnotations"
 msgstr "階段の注記"
-
-# Source-Hash: f82927a01d4c5e45
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Strong"
-#: apps/editor/components/viewer-toolbar.tsx
-#, fuzzy
-msgid "app.viewerToolbar.strong"
-msgstr "強"
 
 # Source-Hash: efc50964d7b0ec47
 # Review: required
@@ -3843,6 +3733,36 @@ msgstr "回転"
 #, fuzzy
 msgid "editor.cameraHint.zoom"
 msgstr "ズーム"
+
+# Source-Hash: bf4659b003e22b8d
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Quality: High"
+#: packages/editor/src/components/ui/command-palette/editor-commands.tsx
+#, fuzzy
+msgid "editor.commands.qualityHigh"
+msgstr "品質：高"
+
+# Source-Hash: 8254a76e05d68744
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Quality: Low"
+#: packages/editor/src/components/ui/command-palette/editor-commands.tsx
+#, fuzzy
+msgid "editor.commands.qualityLow"
+msgstr "品質：低"
+
+# Source-Hash: 86e656c893625063
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Quality: Medium"
+#: packages/editor/src/components/ui/command-palette/editor-commands.tsx
+#, fuzzy
+msgid "editor.commands.qualityMedium"
+msgstr "品質：中"
 
 # Source-Hash: 34b7ca7ff46c44a9
 # Review: required
@@ -36045,6 +35965,7 @@ msgstr "上面図"
 # Source-Hash: 50accd740fa2e736
 # Review: human
 # English: "Off"
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
 #: packages/editor/src/components/viewer/viewer-controls-bar.tsx
 msgid "viewer.common.off"
 msgstr "オフ"
@@ -36052,6 +35973,7 @@ msgstr "オフ"
 # Source-Hash: 9cc01faad79c28da
 # Review: human
 # English: "On"
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
 #: packages/editor/src/components/viewer/viewer-controls-bar.tsx
 msgid "viewer.common.on"
 msgstr "オン"
@@ -36061,7 +35983,7 @@ msgstr "オン"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Sun position is approximate"
-#: packages/editor/src/components/viewer/daylight-menu.tsx
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
 #, fuzzy
 msgid "viewer.daylight.location.approximate"
 msgstr "太陽の位置はおおよそです"
@@ -36071,7 +35993,7 @@ msgstr "太陽の位置はおおよそです"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Sun follows your location"
-#: packages/editor/src/components/viewer/daylight-menu.tsx
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
 #, fuzzy
 msgid "viewer.daylight.location.device"
 msgstr "太陽の位置は現在地に基づきます"
@@ -36081,7 +36003,7 @@ msgstr "太陽の位置は現在地に基づきます"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Use my location"
-#: packages/editor/src/components/viewer/daylight-menu.tsx
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
 #, fuzzy
 msgid "viewer.daylight.location.use"
 msgstr "現在地を使用"
@@ -36091,7 +36013,7 @@ msgstr "現在地を使用"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "High"
-#: packages/editor/src/components/viewer/daylight-menu.tsx
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
 #, fuzzy
 msgid "viewer.daylight.quality.high"
 msgstr "高"
@@ -36101,7 +36023,7 @@ msgstr "高"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Lighting-aware ambient occlusion and bloom"
-#: packages/editor/src/components/viewer/daylight-menu.tsx
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
 #, fuzzy
 msgid "viewer.daylight.quality.highDetail"
 msgstr "ライティング連動のアンビエントオクルージョンとブルーム"
@@ -36111,27 +36033,27 @@ msgstr "ライティング連動のアンビエントオクルージョンとブ
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Low"
-#: packages/editor/src/components/viewer/daylight-menu.tsx
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
 #, fuzzy
 msgid "viewer.daylight.quality.low"
 msgstr "低"
 
-# Source-Hash: 40735b5b90a56ebd
-# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "No ambient occlusion or bloom"
-#: packages/editor/src/components/viewer/daylight-menu.tsx
+# Source-Hash: 8b94a0f7e27f671d
+# Review: required
+# English: "Fastest — no ambient occlusion or bloom"
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
 #, fuzzy
 msgid "viewer.daylight.quality.lowDetail"
-msgstr "アンビエントオクルージョンとブルームなし"
+msgstr "最速 — アンビエントオクルージョンとブルームなし"
 
 # Source-Hash: 866bf047c116b31d
 # Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Medium"
-#: packages/editor/src/components/viewer/daylight-menu.tsx
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
 #, fuzzy
 msgid "viewer.daylight.quality.medium"
 msgstr "中"
@@ -36141,7 +36063,7 @@ msgstr "中"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Half-resolution ambient occlusion"
-#: packages/editor/src/components/viewer/daylight-menu.tsx
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
 #, fuzzy
 msgid "viewer.daylight.quality.mediumDetail"
 msgstr "半解像度のアンビエントオクルージョン"
@@ -36151,7 +36073,7 @@ msgstr "半解像度のアンビエントオクルージョン"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Quality"
-#: packages/editor/src/components/viewer/daylight-menu.tsx
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
 #, fuzzy
 msgid "viewer.daylight.quality.title"
 msgstr "品質"
@@ -36161,7 +36083,7 @@ msgstr "品質"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Blue hour"
-#: packages/editor/src/components/viewer/daylight-menu.tsx
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
 #, fuzzy
 msgid "viewer.daylight.time.blue"
 msgstr "ブルーアワー"
@@ -36171,7 +36093,7 @@ msgstr "ブルーアワー"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Golden hour"
-#: packages/editor/src/components/viewer/daylight-menu.tsx
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
 #, fuzzy
 msgid "viewer.daylight.time.golden"
 msgstr "ゴールデンアワー"
@@ -36181,7 +36103,7 @@ msgstr "ゴールデンアワー"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Midday"
-#: packages/editor/src/components/viewer/daylight-menu.tsx
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
 #, fuzzy
 msgid "viewer.daylight.time.midday"
 msgstr "正午"
@@ -36191,7 +36113,7 @@ msgstr "正午"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Night"
-#: packages/editor/src/components/viewer/daylight-menu.tsx
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
 #, fuzzy
 msgid "viewer.daylight.time.night"
 msgstr "夜"
@@ -36201,7 +36123,7 @@ msgstr "夜"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Time of day"
-#: packages/editor/src/components/viewer/daylight-menu.tsx
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
 #, fuzzy
 msgid "viewer.daylight.time.title"
 msgstr "時間帯"
@@ -36211,7 +36133,7 @@ msgstr "時間帯"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Clear"
-#: packages/editor/src/components/viewer/daylight-menu.tsx
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
 #, fuzzy
 msgid "viewer.daylight.weather.clear"
 msgstr "快晴"
@@ -36221,7 +36143,7 @@ msgstr "快晴"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Cloudy"
-#: packages/editor/src/components/viewer/daylight-menu.tsx
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
 #, fuzzy
 msgid "viewer.daylight.weather.cloudy"
 msgstr "くもり"
@@ -36231,7 +36153,7 @@ msgstr "くもり"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Fair"
-#: packages/editor/src/components/viewer/daylight-menu.tsx
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
 #, fuzzy
 msgid "viewer.daylight.weather.fair"
 msgstr "晴れ"
@@ -36241,7 +36163,7 @@ msgstr "晴れ"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Overcast"
-#: packages/editor/src/components/viewer/daylight-menu.tsx
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
 #, fuzzy
 msgid "viewer.daylight.weather.overcast"
 msgstr "曇天"
@@ -36251,7 +36173,7 @@ msgstr "曇天"
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "Weather"
-#: packages/editor/src/components/viewer/daylight-menu.tsx
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
 #, fuzzy
 msgid "viewer.daylight.weather.title"
 msgstr "天気"
@@ -36277,52 +36199,10 @@ msgstr "カラー表示"
 msgid "viewer.display.colors"
 msgstr "カラー"
 
-# Source-Hash: 50accd740fa2e736
-# Review: human
-# English: "Off"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
-msgid "viewer.display.edges.off"
-msgstr "オフ"
-
-# Source-Hash: 4ff58913a4492199
-# Review: human
-# English: "No edge lines"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
-msgid "viewer.display.edges.offDetail"
-msgstr "エッジ線を表示しない"
-
-# Source-Hash: d266d83ec490df4e
-# Review: human
-# English: "Soft"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
-msgid "viewer.display.edges.soft"
-msgstr "ソフト"
-
-# Source-Hash: 0c583f1d4201293b
-# Review: human
-# English: "Faint outline of major creases"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
-msgid "viewer.display.edges.softDetail"
-msgstr "主要な稜線を薄く表示"
-
-# Source-Hash: f82927a01d4c5e45
-# Review: human
-# English: "Strong"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
-msgid "viewer.display.edges.strong"
-msgstr "強調"
-
-# Source-Hash: 2416a48df28d6205
-# Review: human
-# English: "Crisp, opaque edge lines"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
-msgid "viewer.display.edges.strongDetail"
-msgstr "エッジ線をくっきり表示"
-
 # Source-Hash: 027bbc8b7287c06a
 # Review: human
 # English: "Edges"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
 msgid "viewer.display.edges.title"
 msgstr "エッジ"
 
@@ -36346,41 +36226,6 @@ msgstr "平行投影"
 #: packages/editor/src/components/viewer/viewer-controls-bar.tsx
 msgid "viewer.display.perspective"
 msgstr "透視投影"
-
-# Source-Hash: f363702a10aedaeb
-# Review: human
-# English: "Rendered"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
-msgid "viewer.display.render.rendered"
-msgstr "レンダリング"
-
-# Source-Hash: 8bb9e54fc786ca77
-# Review: human
-# English: "Full ambient occlusion"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
-msgid "viewer.display.render.renderedDetail"
-msgstr "アンビエントオクルージョンを完全表示"
-
-# Source-Hash: ef3e765e692faf4c
-# Review: human
-# English: "Solid"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
-msgid "viewer.display.render.solid"
-msgstr "ソリッド"
-
-# Source-Hash: 8827df1cdeb02ed9
-# Review: human
-# English: "Flat and fast — no ambient occlusion"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
-msgid "viewer.display.render.solidDetail"
-msgstr "軽量表示（アンビエントオクルージョンなし）"
-
-# Source-Hash: 5e58af99d6d4fa6a
-# Review: human
-# English: "Render"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
-msgid "viewer.display.render.title"
-msgstr "レンダリング"
 
 # Source-Hash: 4c6bcb30b40047fc
 # Review: human

@@ -12,10 +12,9 @@ import {
   Vector3,
 } from 'three'
 import { bloom } from 'three/addons/tsl/display/BloomNode.js'
+import { fxaa } from 'three/addons/tsl/display/FXAANode.js'
 import { ao as gtao } from 'three/addons/tsl/display/GTAONode.js'
-import { ssgi } from 'three/addons/tsl/display/SSGINode.js'
 import { traa } from 'three/addons/tsl/display/TRAANode.js'
-import { denoise } from 'three/examples/jsm/tsl/display/DenoiseNode.js'
 import {
   add,
   builtinAOContext,
@@ -52,6 +51,7 @@ import {
   daylightGradeRgb,
   isDaylightAtmosphere as isDaylight,
 } from '../../lib/daylight/look'
+import { daylightRoomContext } from '../../lib/daylight/room-context'
 import { edgeColorFor, edgeOpacityScaleFor } from '../../lib/edge-style'
 import { PERF_OVERLAY_ENABLED } from '../../lib/gpu-perf'
 import { createEdgeDepthSampler, inkedEdges } from '../../lib/ink-edges'
@@ -79,6 +79,8 @@ import {
 import useViewer from '../../store/use-viewer'
 import { useSceneAtmosphere } from './scene-atmosphere'
 
+/** Medium tier: ½-res GTAO over the whole image (enhanced viewer: strength 0.6 × 0.8). */
+const MEDIUM_AO_BLEND = 0.48
 const NEIGHBOURS_3X3 = [
   [-1, -1],
   [0, -1],
@@ -91,13 +93,13 @@ const NEIGHBOURS_3X3 = [
 ] as const
 
 // A mild mid-gray contrast and saturation lift separates surfaces before the
-// output transform. Saved project looks can turn it off. Rendered shading only.
+// output transform. Saved project looks can turn it off.
 export const GRADE_PARAMS = {
   contrast: 1.05,
   saturation: 1.1,
 }
 
-// SSGI Parameters - adjust these to fine-tune global illumination and ambient occlusion
+// SSGI parameters for the snapshot pipeline's ambient occlusion.
 export const SSGI_PARAMS = {
   enabled: true,
   sliceCount: 1,
@@ -119,8 +121,8 @@ export const SSGI_PARAMS = {
 // allocation + per-frame work for that stage, so device temperature deltas
 // across combos isolate which pass is the actual culprit. Picked up once at
 // pipeline build; reload after changing the URL.
-//   - ao:      skip SSGI entirely (and denoise, since denoise has nothing to denoise)
-//   - denoise: keep SSGI but feed its raw noisy AO straight to the composite
+//   - ao:      skip ambient occlusion entirely
+//   - denoise: (snapshots) keep SSGI but feed its raw noisy AO straight to the composite
 //   - outline: skip the merged-outline node and its 14 internal RTs
 //   - postFx:  bypass the whole RenderPipeline and use renderer.render(scene, camera)
 //              directly — isolates raw scene-render cost from any post-FX overhead
@@ -340,7 +342,6 @@ const PostProcessingPasses = ({
 
   // Subscribe to projectId so the pipeline rebuilds on project switch
   const projectId = useViewer((s) => s.projectId)
-  const shading = useViewer((s) => s.shading)
   const ambientOcclusion = useViewer(
     (s) => s.sceneAppearance.postprocessing?.ambientOcclusion !== false,
   )
@@ -445,40 +446,32 @@ const PostProcessingPasses = ({
       disposePipeline()
       return
     }
-    // Colored appearance = the daylight look: Neutral tone mapping, white balance, grade and
-    // vignette in every shading; rendered shading adds GTAO on indirect light only (high) or a
-    // soft ½-res blend (medium) with temporal AA, and bloom (high).
+    // Quality tiers (both appearances; the enhanced-viewer reference):
+    //  high   — depth/normal/velocity pre-pass → GTAO on indirect light only, TRAA, bloom (daylight)
+    //  medium — ½-res GTAO from the scene pass, soft whole-image blend, TRAA
+    //  low    — no AO, FXAA
+    // The colored appearance adds the daylight look: Neutral tone mapping, white balance, grade
+    // and a display-space vignette. Ink edges belong to the monochrome appearance only.
     const daylight = isDaylight(atmosphere)
     renderer.toneMapping = daylight ? NeutralToneMapping : ACESFilmicToneMapping
-    const daylightLook = daylight && shading === 'rendered'
-    const aoTier = daylightLook && ambientOcclusion && !perfDisable.ao ? renderQuality : null
-    const temporalAA = daylightLook && !transparentBackground && renderQuality !== 'low'
-    const bloomEnabled = daylightLook && !transparentBackground && renderQuality === 'high'
-    const ssgiEnabled =
-      !daylightLook &&
-      shading === 'rendered' &&
-      ambientOcclusion &&
-      SSGI_PARAMS.enabled &&
-      !perfDisable.ao
-    const denoiseEnabled = ssgiEnabled && !perfDisable.denoise
+    const aoTier =
+      ambientOcclusion && !perfDisable.ao && renderQuality !== 'low' ? renderQuality : null
+    const temporalAA = !transparentBackground && renderQuality !== 'low'
+    const fxaaEnabled = !transparentBackground && renderQuality === 'low'
+    const bloomEnabled = daylight && !transparentBackground && renderQuality === 'high'
     const outlineEnabled = !perfDisable.outline
-    const inkEnabled = edges !== 'off'
-    const needsNormalMRT =
-      ssgiEnabled || inkEnabled || aoTier === 'medium' || (temporalAA && aoTier !== 'high')
-    // Soft = thin (1px sample radius) + faint (50% opacity); strong = thick
-    // (2px, ~2× wider detected band) + solid (100%). The edge masks saturate,
-    // so radius+opacity are what actually separate the two modes.
+    const inkEnabled = !daylight && edges !== 'off'
+    const needsNormalMRT = inkEnabled || aoTier === 'medium' || (temporalAA && aoTier !== 'high')
+    // Ink: thin (1px sample radius) and faint (50% opacity).
     const inkRadius = 1
-    const inkOpacity = inkOpacityOverride ?? (edges === 'strong' ? 1 : 0.5)
+    const inkOpacity = inkOpacityOverride ?? 0.5
 
     console.log('[viewer/post-processing] Building pipeline', {
       version: pipelineVersion,
-      ssgi: ssgiEnabled,
-      denoise: denoiseEnabled,
+      quality: renderQuality,
       outline: outlineEnabled,
       perfDisable,
       projectId,
-      shading,
       ambientOcclusion,
       colorGrading,
       transparentBackground,
@@ -489,7 +482,7 @@ const PostProcessingPasses = ({
 
     hasPipelineErrorRef.current = false
 
-    // WebGPU availability check: SSGI, denoise, and RenderPipeline are all
+    // WebGPU availability check: GTAO, TRAA, and RenderPipeline are all
     // WebGPU-only APIs. When the browser falls back to WebGL2 (no
     // `navigator.gpu`, or the device couldn't be created), building the
     // pipeline either throws silently or produces a broken output where
@@ -517,9 +510,9 @@ const PostProcessingPasses = ({
     try {
       const layerIndex = new LayerPassIndex(scene, [ZONE_LAYER, OVERLAY_LAYER])
       resources.layerIndex = layerIndex
-      // Temporal AA replaces MSAA, and the ½-res GTAO gathers from this depth (no multisampled
+      // Temporal AA / FXAA replace MSAA, and the ½-res GTAO gathers from this depth (no multisampled
       // `textureGather`): both want a single-sampled scene pass.
-      const singleSampled = temporalAA || aoTier === 'medium'
+      const singleSampled = temporalAA || fxaaEnabled || aoTier === 'medium'
       const scenePass = pass(scene, camera, singleSampled ? { samples: 0 } : undefined)
       resources.passes.push(scenePass)
       scenePass.setLayers(sceneOnlyLayers)
@@ -527,7 +520,7 @@ const PostProcessingPasses = ({
       resources.passes.push(zonePass)
       zonePass.setLayers(zoneLayers)
       // Editor overlays (gizmos, move handles, tool previews, grid) on their own
-      // layer, kept out of the depth/normal MRT above so the ink + SSGI ignore
+      // layer, kept out of the depth/normal MRT above so the ink + AO ignore
       // them, then composited on top of the final image below.
       const overlayPass = new LayerPassNode(layerIndex, camera, OVERLAY_LAYER, scenePass)
       resources.passes.push(overlayPass)
@@ -544,15 +537,15 @@ const PostProcessingPasses = ({
       const contentAlpha = hasGeometry.max(zonePass.a)
 
       // Composite the zone-pass tint into the base scene so rooms show whether or
-      // not SSGI is enabled. When SSGI is on, the branch below overwrites this
-      // with its own zone-inclusive composite (no double-add).
+      // not AO is enabled. The medium-tier AO branch below rebuilds this
+      // composite with the zone tint kept out of the AO (no double-add).
       let sceneColor = vec4(
         add(scenePassColor.rgb, zonePass.rgb),
         contentAlpha,
       ) as unknown as ReturnType<typeof vec4>
 
-      // Scene depth is shared by SSGI, ink, and outlines.
-      // The normal MRT is only built when SSGI or ink needs it.
+      // Scene depth is shared by AO, ink, and outlines.
+      // The normal MRT is only built when the medium AO, TRAA or ink needs it.
       const scenePassDepth = scenePass.getTextureNode('depth')
       const sampleEdgeDepth = createEdgeDepthSampler(scenePassDepth, camera)
       let scenePassNormal: any = null
@@ -573,72 +566,15 @@ const PostProcessingPasses = ({
         normalTexture.type = UnsignedByteType
         scenePass.getTexture('lighting').type = UnsignedByteType
       }
-      // Extract normal from color-encoded texture (SSGI consumes the node form).
+      // Extract normal from color-encoded texture (GTAO consumes the node form).
       const normalNode = scenePassNormal
       const sceneNormal = normalNode
         ? sample((uv) => unpackRGBToNormal(normalNode.sample(uv)))
         : null
 
-      if (ssgiEnabled && scenePassDepth && sceneNormal) {
-        const scenePassDiffuse = scenePass.getTextureNode('diffuseColor')
-        const diffuseTexture = scenePass.getTexture('diffuseColor')
-        diffuseTexture.type = UnsignedByteType
-
-        const giPass = ssgi(scenePassColor, scenePassDepth, sceneNormal, camera as any)
-        giPass.sliceCount.value = SSGI_PARAMS.sliceCount
-        giPass.stepCount.value = SSGI_PARAMS.stepCount
-        giPass.radius.value = SSGI_PARAMS.radius
-        giPass.expFactor.value = SSGI_PARAMS.expFactor
-        giPass.thickness.value = SSGI_PARAMS.thickness
-        giPass.backfaceLighting.value = SSGI_PARAMS.backfaceLighting
-        giPass.aoIntensity.value = SSGI_PARAMS.aoIntensity
-        giPass.giIntensity.value = SSGI_PARAMS.giIntensity
-        giPass.useLinearThickness.value = SSGI_PARAMS.useLinearThickness
-        giPass.useScreenSpaceSampling.value = SSGI_PARAMS.useScreenSpaceSampling
-        giPass.useTemporalFiltering = SSGI_PARAMS.useTemporalFiltering
-
-        // r185: SSGI renders AO and GI into two separate textures (R8 + RG11B10)
-        // exposed via getAONode()/getGINode() instead of one rgba texture.
-        const aoTexture = (giPass as any).getAONode()
-
-        const gi = (giPass as any).getGINode().rgb
-        let ao: any
-        if (denoiseEnabled) {
-          // DenoiseNode only denoises RGB — alpha is passed through unchanged.
-          // SSGI's AO is a single red channel, so we remap it into RGB before denoising.
-          const aoAsRgb = vec4(aoTexture.r, aoTexture.r, aoTexture.r, tslFloat(1))
-          const denoisePass = denoise(aoAsRgb, scenePassDepth, sceneNormal, camera)
-          denoisePass.index.value = 0
-          denoisePass.radius.value = 4
-          ao = (denoisePass as any).r
-        } else {
-          // Diagnostic path: feed raw noisy SSGI AO straight through. Will
-          // look grainy — that's the point, it isolates denoise cost.
-          ao = aoTexture.r
-        }
-
-        // AO is a near/mid-field cue like the ink: fade it out with raw depth
-        // (same ≈150→350 m window as ink-edges' distanceFade) so the horizon
-        // disc and the geometry↔sky depth cliff never grow an AO band — that
-        // band read as a visible line along the horizon.
-        const aoFarFade = smoothstep(tslFloat(0.9994), tslFloat(0.9998), sampleEdgeDepth(screenUV))
-        ao = mix(ao, tslFloat(1), aoFarFade)
-        const lightingWeight = scenePass.getTextureNode('lighting').r
-        ao = mix(tslFloat(1), ao, lightingWeight)
-
-        // Composite: scene * AO + diffuse * GI
-        sceneColor = vec4(
-          add(
-            scenePassColor.rgb.mul(ao),
-            add(zonePass.rgb, scenePassDiffuse.rgb.mul(gi).mul(lightingWeight)),
-          ),
-          contentAlpha,
-        )
-      }
-
-      // Daylight AO + temporal AA. High: a depth/normal/velocity pre-pass feeds GTAO, injected into
-      // the scene pass's lighting (darkens indirect light only — no grime on sunlit walls). Medium:
-      // no pre-pass; ½-res GTAO from the scene pass, blended softly over the image.
+      // AO + temporal AA. High: a depth/normal/velocity pre-pass feeds GTAO, injected into the
+      // scene pass's lighting (darkens indirect light only — no grime on sunlit walls). Medium: no
+      // pre-pass; ½-res GTAO from the scene pass, blended softly over the whole image.
       let temporalDepth: any = null
       let temporalVelocity: any = null
       if (aoTier === 'high') {
@@ -656,7 +592,10 @@ const PostProcessingPasses = ({
         aoNode.samples.value = 16
         aoNode.useTemporalFiltering = temporalAA
         resources.effects.push(aoNode)
-        scenePass.contextNode = builtinAOContext(aoNode.getTextureNode().sample(screenUV).r)
+        const screenAO = aoNode.getTextureNode().sample(screenUV).r
+        scenePass.contextNode = daylight
+          ? daylightRoomContext(screenAO)
+          : builtinAOContext(screenAO)
         temporalDepth = preDepth
         temporalVelocity = prePass.getTextureNode('velocity')
       } else if (aoTier === 'medium' && sceneNormal && scenePassDepth) {
@@ -667,18 +606,15 @@ const PostProcessingPasses = ({
         aoNode.samples.value = 16
         aoNode.resolutionScale = 0.5
         resources.effects.push(aoNode)
-        const lightingWeight = scenePass.getTextureNode('lighting').r
-        const farFade = smoothstep(tslFloat(0.9994), tslFloat(0.9998), sampleEdgeDepth(screenUV))
         const aoBlend = mix(
           tslFloat(1),
           aoNode.getTextureNode().sample(screenUV).r,
-          lightingWeight.mul(0.6),
+          MEDIUM_AO_BLEND,
         )
-        sceneColor = vec4(
-          add(scenePassColor.rgb.mul(mix(aoBlend, tslFloat(1), farFade)), zonePass.rgb),
-          contentAlpha,
-        )
+        sceneColor = vec4(add(scenePassColor.rgb.mul(aoBlend), zonePass.rgb), contentAlpha)
       }
+      // The daylight look's room light (windows, lamps, bounce, night spill) on the other tiers.
+      if (daylight && aoTier !== 'high') scenePass.contextNode = daylightRoomContext(null)
       if (temporalAA && !temporalVelocity && scenePassNormal) {
         temporalDepth = scenePassDepth
         temporalVelocity = scenePass.getTextureNode('velocity')
@@ -715,11 +651,10 @@ const PostProcessingPasses = ({
       }
 
       // Scene-referred grade (contrast around mid-gray + saturation) before the
-      // pipeline's output tone mapping. Kept out of monochrome solid/schematic
-      // shading so the flat presets stay exact. The same transform is applied to
-      // the backdrop below so geometry that fades to the background colour (the
-      // horizon disc) matches it exactly.
-      // The daylight look (any shading) adds eye-like white balance (sky and scene alike).
+      // pipeline's output tone mapping. The same transform is applied to the
+      // backdrop below so geometry that fades to the background colour (the
+      // horizon disc) matches it exactly. The daylight look adds eye-like white
+      // balance (sky and scene alike).
       const gradeRgb = (rgb: any) =>
         daylight
           ? daylightGradeRgb(rgb, whiteBalance)
@@ -727,7 +662,7 @@ const PostProcessingPasses = ({
               rgb.div(0.18).pow(vec3(GRADE_PARAMS.contrast)).mul(0.18),
               GRADE_PARAMS.saturation,
             )
-      const graded = colorGrading && (shading === 'rendered' || daylight)
+      const graded = colorGrading
       if (graded) {
         sceneColor = vec4(gradeRgb(sceneColor.rgb), sceneColor.a)
       }
@@ -844,13 +779,6 @@ const PostProcessingPasses = ({
         }
         composited = mix(composited, temporal.rgb, nearGeometry.greaterThan(0).select(1, 0))
       }
-      if (daylight && !transparentBackground) {
-        const vignette = tslLength(screenUV.sub(0.5))
-          .mul(1.35)
-          .pow(2.5)
-          .mul(DAYLIGHT_GRADE.vignette)
-        composited = composited.mul(tslFloat(1).sub(vignette))
-      }
       // The screen's edges close in with it.
       if (dive) {
         composited = mix(
@@ -859,11 +787,21 @@ const PostProcessingPasses = ({
           undergroundVignette().mul(dive),
         )
       }
-      // Editor overlays painted on top by their own alpha — they never get inked,
-      // AO'd, or outlined, and always read crisp regardless of scene depth.
-      const withOverlay = mix(composited, overlayColor.rgb, overlayColor.a)
+      // Display-space picture: tone mapping + colour space, then the daylight vignette (after the
+      // tone mapping, as in the reference). Editor overlays are painted on top by their own alpha —
+      // they never get inked, AO'd, outlined or vignetted, and always read crisp.
+      const toDisplay = (rgb: any) =>
+        renderOutput(vec4(rgb, 1), renderer.toneMapping, renderer.outputColorSpace)
+      let displayScene: any = toDisplay(composited)
+      if (daylight) {
+        const vignette = tslLength(screenUV.sub(0.5))
+          .mul(1.35)
+          .pow(2.5)
+          .mul(DAYLIGHT_GRADE.vignette)
+        displayScene = vec4(displayScene.rgb.mul(tslFloat(1).sub(vignette)), 1)
+      }
       let finalOutput: ReturnType<typeof premultiplyAlpha> | ReturnType<typeof vec4> = vec4(
-        withOverlay,
+        mix(displayScene.rgb, toDisplay(overlayColor.rgb).rgb, overlayColor.a),
         tslFloat(1),
       )
       if (transparentBackground) {
@@ -890,10 +828,13 @@ const PostProcessingPasses = ({
         finalOutput = vec4(mix(backdrop.rgb, overlay.rgb, overlayColor.a), 1)
       }
 
+      // Low tier: FXAA on the display image (no temporal AA, no MSAA).
+      if (fxaaEnabled) finalOutput = fxaa(finalOutput) as any
+
       const renderPipeline = new RenderPipeline(renderer as unknown as WebGPURenderer)
       resources.pipeline = renderPipeline
-      renderPipeline.outputColorTransform =
-        !transparentBackground && !(flatBackground && !atmosphere)
+      // Every branch above ends in display space.
+      renderPipeline.outputColorTransform = false
       renderPipeline.outputNode = finalOutput
       retryCountRef.current = 0
     } catch (error) {
@@ -902,7 +843,6 @@ const PostProcessingPasses = ({
         '[viewer/post-processing] Failed to set up post-processing pipeline. Rendering without post FX.',
         {
           version: pipelineVersion,
-          ssgi: SSGI_PARAMS.enabled,
           rendererCtor: (renderer as any).constructor?.name,
         },
         error,
@@ -930,7 +870,6 @@ const PostProcessingPasses = ({
     projectId,
     renderer,
     scene,
-    shading,
     ambientOcclusion,
     colorGrading,
     flatBackground,

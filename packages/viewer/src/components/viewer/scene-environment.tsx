@@ -1,7 +1,7 @@
 'use client'
 
 import { useThree } from '@react-three/fiber'
-import { useEffect, useRef } from 'react'
+import { useEffect } from 'react'
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js'
 import * as THREE from 'three/webgpu'
 import useViewer from '../../store/use-viewer'
@@ -73,8 +73,6 @@ export function SceneEnvironment() {
   const environment = useViewer((state) => state.sceneAppearance.environment)
   const source = environment?.source ?? 'gradient'
   const atmosphere = useSceneAtmosphere()
-  const atmosphereRef = useRef(atmosphere)
-  atmosphereRef.current = atmosphere
 
   useEffect(() => {
     const prevEnvironment = scene.environment
@@ -106,8 +104,10 @@ export function SceneEnvironment() {
     const previous = scene.environmentIntensity
     scene.environmentIntensity =
       environment?.intensity ?? (appearance === 'dark' ? ENV_INTENSITY_DARK : ENV_INTENSITY)
+    // Always hand back what was there: when an atmosphere arrives after this ran (its owner
+    // installs in a layout effect, before this component sees it), that is the atmosphere's 1.
     return () => {
-      if (!atmosphereRef.current) scene.environmentIntensity = previous
+      scene.environmentIntensity = previous
     }
   }, [appearance, atmosphere, scene, environment?.intensity])
 

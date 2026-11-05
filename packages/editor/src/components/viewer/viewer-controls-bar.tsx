@@ -1,15 +1,8 @@
 'use client'
 
 import { emitter, type PascalI18n, usePascalI18n } from '@pascal-app/core'
+import { CLAY_PALETTE, getSceneTheme, SCENE_THEMES, useViewer } from '@pascal-app/viewer'
 import {
-  CLAY_PALETTE,
-  type EdgeMode,
-  getSceneTheme,
-  SCENE_THEMES,
-  useViewer,
-} from '@pascal-app/viewer'
-import {
-  Box,
   Camera,
   Check,
   Contrast,
@@ -20,9 +13,7 @@ import {
   Layers,
   Layers2,
   Palette,
-  PenLine,
   SlidersHorizontal,
-  Sparkles,
   Square,
   SwatchBook,
 } from 'lucide-react'
@@ -41,7 +32,7 @@ import {
   DropdownMenuTrigger,
 } from '../ui/primitives/dropdown-menu'
 import { TooltipProvider } from '../ui/primitives/tooltip'
-import { DaylightMenu } from './daylight-menu'
+import { DaylightMenu, EdgesToggleItem, QualityMenu } from './render-settings-menu'
 
 const wallModeConfig = {
   up: {
@@ -141,57 +132,10 @@ function VisibilityMenu({
 function DisplayMenu() {
   const i18n = usePascalI18n()
   const cameraMode = useViewer((s) => s.cameraMode)
-  const shading = useViewer((s) => s.shading)
   const textures = useViewer((s) => s.textures)
   const shadows = useViewer((s) => s.shadows)
   const sceneTheme = useViewer((s) => s.sceneTheme)
-  const edges = useViewer((s) => s.edges)
-  const shadingOptions = [
-    {
-      id: 'solid',
-      name: i18n._({ id: 'viewer.display.render.solid', message: 'Solid' }),
-      detail: i18n._({
-        id: 'viewer.display.render.solidDetail',
-        message: 'Flat and fast — no ambient occlusion',
-      }),
-      icon: Box,
-    },
-    {
-      id: 'rendered',
-      name: i18n._({ id: 'viewer.display.render.rendered', message: 'Rendered' }),
-      detail: i18n._({
-        id: 'viewer.display.render.renderedDetail',
-        message: 'Full ambient occlusion',
-      }),
-      icon: Sparkles,
-    },
-  ] as const
-  const edgeOptions = [
-    {
-      id: 'off',
-      name: i18n._({ id: 'viewer.display.edges.off', message: 'Off' }),
-      detail: i18n._({ id: 'viewer.display.edges.offDetail', message: 'No edge lines' }),
-    },
-    {
-      id: 'soft',
-      name: i18n._({ id: 'viewer.display.edges.soft', message: 'Soft' }),
-      detail: i18n._({
-        id: 'viewer.display.edges.softDetail',
-        message: 'Faint outline of major creases',
-      }),
-    },
-    {
-      id: 'strong',
-      name: i18n._({ id: 'viewer.display.edges.strong', message: 'Strong' }),
-      detail: i18n._({
-        id: 'viewer.display.edges.strongDetail',
-        message: 'Crisp, opaque edge lines',
-      }),
-    },
-  ] as const satisfies readonly { id: EdgeMode; name: string; detail: string }[]
-  const activeShading = shadingOptions.find((o) => o.id === shading) ?? shadingOptions[0]
   const activeTheme = getSceneTheme(sceneTheme)
-  const activeEdges = edgeOptions.find((o) => o.id === edges) ?? edgeOptions[0]
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -249,94 +193,49 @@ function DisplayMenu() {
 
         <DropdownMenuSeparator />
 
-        <DropdownMenuSub>
-          <DropdownMenuSubTrigger>
-            <activeShading.icon className="h-4 w-4" />
-            <span>{i18n._({ id: 'viewer.display.render.title', message: 'Render' })}</span>
-            <span className="ml-auto text-muted-foreground text-xs">{activeShading.name}</span>
-          </DropdownMenuSubTrigger>
-          <DropdownMenuSubContent className="dark min-w-56">
-            {shadingOptions.map((option) => {
-              const OptionIcon = option.icon
-              return (
-                <DropdownMenuItem
-                  key={option.id}
-                  onSelect={() => useViewer.getState().setShading(option.id)}
-                >
-                  <OptionIcon className="h-4 w-4" />
-                  <div className="flex flex-col">
-                    <span className="text-foreground">{option.name}</span>
-                    <span className="text-muted-foreground text-xs">{option.detail}</span>
-                  </div>
-                  {shading === option.id ? (
-                    <Check className="ml-auto h-4 w-4 text-foreground" />
-                  ) : null}
-                </DropdownMenuItem>
-              )
-            })}
-          </DropdownMenuSubContent>
-        </DropdownMenuSub>
+        <QualityMenu subContentClassName="dark min-w-56" />
 
         {textures ? (
           <DaylightMenu subContentClassName="dark min-w-48" />
         ) : (
-          <DropdownMenuSub>
-            <DropdownMenuSubTrigger>
-              <SwatchBook className="h-4 w-4" />
-              <span>{i18n._({ id: 'viewer.theme.title', message: 'Scene theme' })}</span>
-              <span className="ml-auto truncate text-muted-foreground text-xs">
-                {sceneThemeName(activeTheme.id, activeTheme.name, i18n)}
-              </span>
-            </DropdownMenuSubTrigger>
-            <DropdownMenuSubContent className="dark min-w-48">
-              {SCENE_THEMES.map((theme) => {
-                const swatches = (['wall', 'roof', 'floor', 'glazing'] as const).map(
-                  (role) => theme.clayTints?.[role] ?? CLAY_PALETTE[role],
-                )
-                return (
-                  <DropdownMenuItem
-                    className="gap-2"
-                    key={theme.id}
-                    onSelect={() => useViewer.getState().setSceneTheme(theme.id)}
-                  >
-                    <span
-                      className="grid h-5 w-5 shrink-0 grid-cols-2 overflow-hidden rounded-sm border border-black/10"
-                      style={{ backgroundColor: theme.background }}
+          <>
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger>
+                <SwatchBook className="h-4 w-4" />
+                <span>{i18n._({ id: 'viewer.theme.title', message: 'Scene theme' })}</span>
+                <span className="ml-auto truncate text-muted-foreground text-xs">
+                  {sceneThemeName(activeTheme.id, activeTheme.name, i18n)}
+                </span>
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent className="dark min-w-48">
+                {SCENE_THEMES.map((theme) => {
+                  const swatches = (['wall', 'roof', 'floor', 'glazing'] as const).map(
+                    (role) => theme.clayTints?.[role] ?? CLAY_PALETTE[role],
+                  )
+                  return (
+                    <DropdownMenuItem
+                      className="gap-2"
+                      key={theme.id}
+                      onSelect={() => useViewer.getState().setSceneTheme(theme.id)}
                     >
-                      {swatches.map((color, index) => (
-                        <span key={`${theme.id}-${index}`} style={{ backgroundColor: color }} />
-                      ))}
-                    </span>
-                    <span>{sceneThemeName(theme.id, theme.name, i18n)}</span>
-                    {sceneTheme === theme.id ? <Check className="ml-auto h-4 w-4" /> : null}
-                  </DropdownMenuItem>
-                )
-              })}
-            </DropdownMenuSubContent>
-          </DropdownMenuSub>
+                      <span
+                        className="grid h-5 w-5 shrink-0 grid-cols-2 overflow-hidden rounded-sm border border-black/10"
+                        style={{ backgroundColor: theme.background }}
+                      >
+                        {swatches.map((color, index) => (
+                          <span key={`${theme.id}-${index}`} style={{ backgroundColor: color }} />
+                        ))}
+                      </span>
+                      <span>{sceneThemeName(theme.id, theme.name, i18n)}</span>
+                      {sceneTheme === theme.id ? <Check className="ml-auto h-4 w-4" /> : null}
+                    </DropdownMenuItem>
+                  )
+                })}
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
+            <EdgesToggleItem />
+          </>
         )}
-
-        <DropdownMenuSub>
-          <DropdownMenuSubTrigger>
-            <PenLine className="h-4 w-4" />
-            <span>{i18n._({ id: 'viewer.display.edges.title', message: 'Edges' })}</span>
-            <span className="ml-auto text-muted-foreground text-xs">{activeEdges.name}</span>
-          </DropdownMenuSubTrigger>
-          <DropdownMenuSubContent className="dark min-w-56">
-            {edgeOptions.map((option) => (
-              <DropdownMenuItem
-                key={option.id}
-                onSelect={() => useViewer.getState().setEdges(option.id)}
-              >
-                <div className="flex flex-col">
-                  <span className="text-foreground">{option.name}</span>
-                  <span className="text-muted-foreground text-xs">{option.detail}</span>
-                </div>
-                {edges === option.id ? <Check className="ml-auto h-4 w-4 text-foreground" /> : null}
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuSubContent>
-        </DropdownMenuSub>
       </DropdownMenuContent>
     </DropdownMenu>
   )

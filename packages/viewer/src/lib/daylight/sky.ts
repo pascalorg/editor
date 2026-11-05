@@ -100,8 +100,12 @@ export function createDaylightSky() {
     return { ambient, dusk }
   }
 
-  /** Visible sky: fbm clouds (self-shadowed towards the sun), aureole, AA'd sun disc, stars. */
-  const skyRadiance = (rawDir: any, withSun = true): any => {
+  /**
+   * Visible sky: fbm clouds (self-shadowed towards the sun), aureole, AA'd sun disc, stars.
+   * `disc: false` is the environment capture: aureole kept, disc and stars off (the sun is the
+   * directional light — no double specular sun).
+   */
+  const skyRadiance = (rawDir: any, { disc: withDisc = true }: { disc?: boolean } = {}): any => {
     const dir: any = normalize(rawDir)
     const y = dir.y
     const proj = vec2(dir.x, dir.z)
@@ -125,17 +129,19 @@ export function createDaylightSky() {
       .mul(mix(float(1), float(0.72), cover.mul(cover)))
     const cloudA = dens.mul(smoothstep(0.015, 0.16, y)).mul(0.96)
     const col = mix(base(dir), cloud, cloudA)
-    if (!withSun) return col
     const align = dot(dir, sunDir)
     const aureole = exp(align.sub(1).mul(110))
       .mul(0.2)
       .add(exp(align.sub(1).mul(8)).mul(0.08))
-    const disc = smoothstep(0.99996, 0.999985, align).mul(40).mul(float(1).sub(cloudA))
+    const disc = withDisc
+      ? smoothstep(0.99996, 0.999985, align).mul(40).mul(float(1).sub(cloudA))
+      : float(0)
     const sun = sunColor
       .mul(aureole.add(disc))
       .mul(sunVisible)
       .mul(smoothstep(-0.01, 0.02, y))
       .mul(float(1).sub(cover.mul(0.6)))
+    if (!withDisc) return col.add(sun)
     const cell: any = floor(dir.mul(380))
     const star = smoothstep(0.9975, 1, hash(cell.x.add(cell.y.mul(311)).add(cell.z.mul(17123))))
       .mul(night)
@@ -161,7 +167,7 @@ export function createDaylightSky() {
     return mix(base(dir), cloud, cloudA)
   }
 
-  /** CPU mirror of `lightRadiance` for the exposure and white-balance meters. */
+  /** CPU mirror of the sky (statistical clouds, aureole, no disc) for meters and window portals. */
   const radianceCpu = (dir: Vector3, out = new Color()) => {
     const d = dir.clone().normalize()
     const t = top.value as Color
@@ -190,6 +196,9 @@ export function createDaylightSky() {
       .add(sc.clone().multiplyScalar(sv * 0.68))
       .multiplyScalar(1 - 0.28 * c * c)
     out.lerp(cloud, Math.min(1, c * 0.85) * MathUtils.smoothstep(d.y, 0.015, 0.16) * 0.7)
+    const align = d.dot(sd)
+    const aureole = Math.exp((align - 1) * 110) * 0.2 + Math.exp((align - 1) * 8) * 0.08
+    out.add(sc.clone().multiplyScalar(aureole * sv))
     return out
   }
 

@@ -39,6 +39,7 @@ import { GRADE_PARAMS, SSGI_PARAMS } from '../components/viewer/post-processing'
 import type { SceneAtmosphereSource } from '../components/viewer/scene-atmosphere'
 import { backdropColors, backdropGradient, flatBackdropOutput } from './backdrop'
 import { DAYLIGHT_INK_BACKDROP, daylightGradeRgb, isDaylightAtmosphere } from './daylight/look'
+import { daylightRoomContext } from './daylight/room-context'
 import { type EdgeMode, edgeColorFor, edgeOpacityScaleFor } from './edge-style'
 import { createEdgeDepthSampler, inkedEdges } from './ink-edges'
 import { sceneLightingMask, scenePassMrt } from './scene-pass-mrt'
@@ -200,6 +201,10 @@ export async function createSnapshotPipeline({
         lighting: sceneLightingMask(),
       }),
     )
+
+    // The daylight look's room light (windows, lamps, bounce, night spill), as in the viewport.
+    if (daylight)
+      (scenePass as unknown as { contextNode: unknown }).contextNode = daylightRoomContext(null)
 
     const scenePassColor = scenePass.getTextureNode('output')
     const scenePassDepth = scenePass.getTextureNode('depth')

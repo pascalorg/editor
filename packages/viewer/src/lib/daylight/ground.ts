@@ -6,8 +6,10 @@ import {
   floor,
   fract,
   fwidth,
+  length,
   max,
   mix,
+  normalize,
   output,
   positionWorld,
   sin,
@@ -20,8 +22,9 @@ import { MeshLambertNodeMaterial, MeshStandardNodeMaterial } from 'three/webgpu'
 /** Neutral ground of the colored appearance, and the slightly fresher parcel inside the site. */
 export const DAYLIGHT_GROUND = '#a1a1a1'
 export const DAYLIGHT_PARCEL = '#afaeaa'
-/** View-ray slope below the horizon (≈ 2.5°) where the ground starts hazing into the sky. */
-const HORIZON_HAZE = 0.045
+/** Horizontal distance (m) over which the ground fades into the horizon sky. */
+const HORIZON_FADE_NEAR = 250
+const HORIZON_FADE_FAR = 2600
 
 /**
  * The ground around the parcel: faint squares that stay a few pixels wide at every distance (a
@@ -47,8 +50,8 @@ export function daylightGroundColor(base: any = color(DAYLIGHT_GROUND)): any {
 /**
  * A matte daylight ground material: Standard (lit by the sky environment) in rendered shading,
  * Lambert in solid shading, where every surface is Lambert and the sky comes as a hemisphere light.
- * With `horizon` (the atmosphere's fog radiance), the ground also hazes into it within a few
- * degrees of the horizon: distance fog alone packs into a hard line when the camera is low.
+ * With `horizon` (the atmosphere's horizon radiance), the lit ground blends into the sky with
+ * horizontal distance (250 m → 2.6 km) — on the lit output, so the lighting can't band it.
  */
 export function createDaylightGroundMaterial(
   solid: boolean,
@@ -57,12 +60,16 @@ export function createDaylightGroundMaterial(
   const material = solid
     ? new MeshLambertNodeMaterial()
     : new MeshStandardNodeMaterial({ roughness: 0.95, metalness: 0 })
+  // The grounds skip the room system (the dilated room map would light a strip of lawn); they
+  // still receive the window spill and exterior lamps at night.
+  material.userData.noRooms = true
   if (options.color) material.color.set(options.color)
   else material.colorNode = daylightGroundColor()
   if (options.horizon) {
-    const direction = positionWorld.sub(cameraPosition).normalize()
-    const haze = smoothstep(HORIZON_HAZE, 0.002, direction.y.negate())
-    material.outputNode = vec4(mix(output.rgb, options.horizon(direction), haze), output.a)
+    const d = positionWorld.sub(cameraPosition)
+    const fade = smoothstep(HORIZON_FADE_NEAR, HORIZON_FADE_FAR, length(d.xz))
+    material.fog = false
+    material.outputNode = vec4(mix(output.rgb, options.horizon(normalize(d)), fade), output.a)
   }
   return material
 }
