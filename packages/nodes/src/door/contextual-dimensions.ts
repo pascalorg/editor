@@ -6,7 +6,7 @@ export function buildDoorContextualDimensions(
   ctx: GeometryContext,
 ): FloorplanGeometry | null {
   return buildWallHostedOpeningContextualDimensions(node, ctx, {
-    showClearancesWhileMoving: false,
-    useExteriorNormal: false,
+    showClearancesWhileMoving: true,
+    useExteriorNormal: true,
   })
 }

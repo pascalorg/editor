@@ -17,7 +17,24 @@ export type OpeningGuideVec3 = [number, number, number]
 export type OpeningGuide3D =
   // A measured line + distance pill: sill (floor → bottom edge), head (top edge
   // → wall top), or along-wall edge-to-edge proximity.
-  | { kind: 'dimension'; id: string; from: OpeningGuideVec3; to: OpeningGuideVec3; value: number }
+  | {
+      kind: 'dimension'
+      id: string
+      from: OpeningGuideVec3
+      to: OpeningGuideVec3
+      value: number
+      targetNodeId?: string
+      wallId?: string
+      role?: 'gap:left' | 'gap:right' | 'gap:before' | 'gap:after' | 'sill' | 'head' | string
+      gapFromS?: number
+      gapToS?: number
+      centerS?: number
+      centerY?: number
+      width?: number
+      height?: number
+      wallLength?: number
+      wallHeight?: number
+    }
   // A dashed line connecting two openings that share a sill / centre / top.
   | { kind: 'align-line'; id: string; from: OpeningGuideVec3; to: OpeningGuideVec3 }
   // A Figma-style "=" badge marking one gap in an equal-spacing run.

@@ -206,6 +206,18 @@ function resolveWallDrive(
       },
     }
   }
+  const startOpening = nearestOpening(openings, wall, wallDirection, query.start)
+  if (startOpening) {
+    return {
+      drivable: true,
+      target: {
+        kind: 'opening',
+        openingId: startOpening.id as AnyNodeId,
+        wallId: wall.id as AnyNodeId,
+        sign: dot(wallDirection, dimDirection) >= 0 ? -1 : 1,
+      },
+    }
+  }
 
   // Otherwise the wall's own length: the endpoint the dimension runs TOWARD
   // moves, the one it starts from is the datum.
@@ -294,13 +306,20 @@ function resolveOpeningDrive(
       },
     }
   }
+  const origin = wall.start as DimensionPlanPoint
+  const startAlong = dot(subtract(query.start, origin), wallDirection)
+  const endAlong = dot(subtract(query.end, origin), wallDirection)
+  const distStart = Math.abs(startAlong - opening.position[0])
+  const distEnd = Math.abs(endAlong - opening.position[0])
+  const isAtStart = distStart < distEnd
+  const sign = ((isAtStart ? -1 : 1) * (dot(wallDirection, dimDirection) >= 0 ? 1 : -1)) as 1 | -1
   return {
     drivable: true,
     target: {
       kind: 'opening',
       openingId: opening.id as AnyNodeId,
       wallId: wall.id as AnyNodeId,
-      sign: dot(wallDirection, dimDirection) >= 0 ? 1 : -1,
+      sign,
     },
   }
 }

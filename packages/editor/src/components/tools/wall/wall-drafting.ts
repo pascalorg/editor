@@ -366,3 +366,125 @@ export function createWallOnCurrentLevel(
     return committedWall?.type === 'wall' ? committedWall : terminalWall
   })
 }
+
+// ---------------------------------------------------------------------------
+// Multi-point dimension-input drafting state machine
+//
+// Both 3D (tool.tsx) and 2D (floorplan-affordances.ts) consume this shared
+// state. Neither view owns the points array or double-click logic.
+// ---------------------------------------------------------------------------
+
+export const DOUBLE_CLICK_THRESHOLD_MS = 400
+
+export interface DimensionDraftState {
+  /** All confirmed points in order. */
+  points: WallPlanPoint[]
+  /** Preview point calculated from last point + locked length/angle. */
+  previewPoint: WallPlanPoint | null
+  /** Length input value (raw string). */
+  lengthValue: string
+  /** Angle input value (raw string). */
+  angleValue: string
+  /** Locked length in meters (null = not yet entered). */
+  lockedLength: number | null
+  /** Locked angle in degrees (null = not yet entered). */
+  lockedAngle: number | null
+  /** Timestamp of last click for double-click detection. */
+  lastClickTime: number
+  /** Active input field: 'length' | 'angle'. */
+  fieldType: 'length' | 'angle'
+}
+
+export const EMPTY_DIMENSION_DRAFT: DimensionDraftState = {
+  points: [],
+  previewPoint: null,
+  lengthValue: '',
+  angleValue: '',
+  lockedLength: null,
+  lockedAngle: null,
+  lastClickTime: 0,
+  fieldType: 'length',
+}
+
+/**
+ * Place a confirmed point into the draft state.
+ * If lockedLength and lockedAngle are set, the new point is calculated
+ * from the last point; otherwise it's placed at fallback.
+ */
+export function placeDraftPoint(
+  state: DimensionDraftState,
+  fallback: WallPlanPoint,
+): DimensionDraftState {
+  const newPoint: WallPlanPoint =
+    state.lockedLength !== null && state.lockedAngle !== null && state.points.length > 0
+      ? calculateNextPoint(state.points[state.points.length - 1]!, state.lockedLength, state.lockedAngle)
+      : fallback
+
+  return {
+    ...state,
+    points: [...state.points, newPoint],
+    previewPoint: null,
+    lengthValue: '',
+    angleValue: '',
+    lockedLength: null,
+    lockedAngle: null,
+  }
+}
+
+/**
+ * Update the preview point based on current length/angle values.
+ */
+export function updateDraftPreview(
+  state: DimensionDraftState,
+): DimensionDraftState {
+  if (state.points.length === 0) return state
+  if (state.lockedLength === null || state.lockedAngle === null) {
+    return { ...state, previewPoint: null }
+  }
+
+  const lastPoint = state.points[state.points.length - 1]!
+  const previewPoint = calculateNextPoint(lastPoint, state.lockedLength, state.lockedAngle)
+
+  return { ...state, previewPoint }
+}
+
+/**
+ * Check if a click is a double-click (two clicks within threshold).
+ */
+export function isDoubleClick(state: DimensionDraftState, clickTime: number): boolean {
+  return clickTime - state.lastClickTime < DOUBLE_CLICK_THRESHOLD_MS
+}
+
+/**
+ * Update the last click timestamp.
+ */
+export function recordClickTime(
+  state: DimensionDraftState,
+  clickTime: number,
+): DimensionDraftState {
+  return { ...state, lastClickTime: clickTime }
+}
+
+/**
+ * Build the ghost wall segments between all confirmed points.
+ */
+export function buildGhostWalls(points: WallPlanPoint[]): Array<{ start: WallPlanPoint; end: WallPlanPoint }> {
+  const segments: Array<{ start: WallPlanPoint; end: WallPlanPoint }> = []
+  for (let i = 1; i < points.length; i++) {
+    const start = points[i - 1]
+    const end = points[i]
+    if (start && end) {
+      segments.push({ start, end })
+    }
+  }
+  return segments
+}
+
+function calculateNextPoint(
+  from: WallPlanPoint,
+  lengthMeters: number,
+  angleDeg: number,
+): WallPlanPoint {
+  const rad = (angleDeg * Math.PI) / 180
+  return [from[0] + Math.cos(rad) * lengthMeters, from[1] + Math.sin(rad) * lengthMeters]
+}
