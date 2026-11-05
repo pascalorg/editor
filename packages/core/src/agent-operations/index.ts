@@ -49,6 +49,7 @@ export * from './add-object'
 export * from './add-wall'
 export * from './apply-changes'
 export * from './apply-outcome'
+export * from './asset-catalog'
 export * from './author-scene'
 export * from './author-scene-checks'
 export * from './authored-scene-merge'
@@ -174,7 +175,6 @@ export {
   type AssetViewLoader,
   type AssetViewSubject,
   assetViewNeeds,
-  assetViewsReadCatalog,
   createAssetViewLoader,
   createFetchAssetViewIO,
   readGlbSurfaces,

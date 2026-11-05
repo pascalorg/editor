@@ -10,7 +10,7 @@ import { SceneBridge } from '../bridge/scene-bridge'
 import { createPascalMcpServer } from '../server'
 import { InMemorySceneStore } from '../tools/scene-lifecycle/test-utils'
 import { registerAgentGuide } from './agent-guide'
-import { registerCatalogItems } from './catalog-items'
+import { CATALOG_RESOURCE_LIMIT, registerCatalogItems } from './catalog-items'
 import { registerConstraints } from './constraints'
 import { registerSceneCurrent } from './scene-current'
 import { registerSceneSummary } from './scene-summary'
@@ -196,6 +196,31 @@ describe('pascal://catalog/items', () => {
       expect(parsed.items.length).toBeGreaterThan(0)
       expect(parsed.items.map((item: { id: string }) => item.id)).toContain('sofa')
       expect(typeof parsed.note).toBe('string')
+    } finally {
+      await pair.close()
+    }
+  })
+
+  test('lists a library kept elsewhere by its first items and its size, never whole', async () => {
+    const asked: unknown[] = []
+    const pair = await spinUp((server, bridge) =>
+      registerCatalogItems(server, bridge as never, {
+        search: async (query) => {
+          asked.push(query)
+          return {
+            items: [{ id: 'palm', name: 'Palm', category: 'plants', thumbnail: '', src: '' }],
+            total: 115_000,
+          }
+        },
+        byId: async () => [],
+      }),
+    )
+    try {
+      const res = await pair.client.readResource({ uri: 'pascal://catalog/items' })
+      const parsed = JSON.parse((res.contents[0] as { text?: string }).text ?? '{}')
+      expect(asked).toEqual([{ limit: CATALOG_RESOURCE_LIMIT }])
+      expect(parsed).toMatchObject({ status: 'ok', items: [{ id: 'palm' }], total: 115_000 })
+      expect(parsed.note).toContain('search_assets finds any of them')
     } finally {
       await pair.close()
     }
