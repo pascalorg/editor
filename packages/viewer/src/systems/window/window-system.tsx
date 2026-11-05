@@ -24,6 +24,7 @@ import {
 import { useFrame } from '@react-three/fiber'
 import { useEffect, useRef } from 'react'
 import * as THREE from 'three'
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import { applyWorldScaleBoxUVs } from '../../lib/box-uv'
 import { hingeJambPart, hingeLeafPart, roundedBox, tube } from '../../lib/hardware-geometry'
 import {
@@ -3491,18 +3492,21 @@ function addWindowDetails(node: RenderWindowNode, mesh: THREE.Mesh) {
     curtain.name = 'window-roller-curtain'
     mesh.add(curtain)
     const drop = (1 - (node.rollerShutterOpen ?? 1)) * node.height
-    for (let top = 0; top < drop - 1e-9; top += 0.04) {
-      const h = Math.min(0.04, drop - top)
-      addBox(
-        curtain,
-        material,
-        node.width,
-        h,
-        0.012,
-        0,
-        node.height / 2 - top - h / 2,
-        z + exterior * 0.015,
-      )
+    const slatCount = Math.floor(drop / 0.04)
+    if (slatCount > 0) {
+      const slats: THREE.BoxGeometry[] = []
+      for (let i = 0; i < slatCount; i++) {
+        const slat = new THREE.BoxGeometry(node.width, 0.036, 0.01)
+        applyWorldScaleBoxUVs(slat, node.width, 0.036, 0.01)
+        slat.translate(0, node.height / 2 - i * 0.04 - 0.018, 0)
+        slats.push(slat)
+      }
+      const geometry = mergeGeometries(slats)!
+      for (const slat of slats) slat.dispose()
+      const panel = new THREE.Mesh(geometry, material)
+      panel.position.z = z + exterior * 0.015
+      tagWindowSlot(panel)
+      curtain.add(panel)
     }
   }
   if (node.corner) return

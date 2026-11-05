@@ -625,10 +625,12 @@ describe('room-aware window motion and exterior accessories', () => {
       expect(new THREE.Box3().setFromObject(roller).max.z).toBeLessThan(-0.15)
       const curtain = mesh.getObjectByName('window-roller-curtain')!
       const curtainBox = new THREE.Box3().setFromObject(curtain)
-      expect(curtainBox.getSize(new THREE.Vector3()).y).toBeCloseTo(node.height / 2)
-      expect(curtainBox.getSize(new THREE.Vector3()).z).toBeCloseTo(0.012)
+      const slatCount = Math.floor(((1 - node.rollerShutterOpen!) * node.height) / 0.04)
+      expect(curtainBox.getSize(new THREE.Vector3()).y).toBeCloseTo(slatCount * 0.04 - 0.004)
+      expect(curtainBox.getSize(new THREE.Vector3()).z).toBeCloseTo(0.01)
       expect(collect(mesh, 'window-roller-guide')).toHaveLength(2)
-      for (const slat of curtain.children) expect(slat.userData.slotId).toBe('shutters')
+      expect(curtain.children).toHaveLength(1)
+      expect(curtain.children[0]!.userData.slotId).toBe('shutters')
       poseWindowMovingParts(node, mesh, 1)
       expect(new THREE.Box3().setFromObject(curtain).equals(curtainBox)).toBe(true)
       expect(
@@ -638,6 +640,68 @@ describe('room-aware window motion and exterior accessories', () => {
       ).toHaveLength(0)
     })
   })
+
+  test.each([0, 0.5, 0.63, 0.99, 1, undefined])(
+    'roller curtain at open=%s merges whole slats with gaps and at most 12 triangles each',
+    (rollerShutterOpen) => {
+      const node = WindowNode.parse({
+        width: 1.2,
+        height: 1.03,
+        rollerShutter: 'box',
+        rollerShutterOpen,
+      })
+      const mesh = buildWindowPreviewMesh(node)
+      const curtain = mesh.getObjectByName('window-roller-curtain')!
+      const slatCount = Math.floor(((1 - (rollerShutterOpen ?? 1)) * node.height) / 0.04)
+      expect(curtain.children).toHaveLength(slatCount > 0 ? 1 : 0)
+      if (slatCount === 0) return
+
+      const panel = curtain.children[0] as THREE.Mesh
+      expect(panel.userData.slotId).toBe('shutters')
+      const position = panel.geometry.getAttribute('position')
+      const uv = panel.geometry.getAttribute('uv')
+      const index = panel.geometry.getIndex()
+      const slatBounds = new Map<number, THREE.Box3>()
+      const slatAt = (vertex: number) =>
+        Math.floor((node.height / 2 - position.getY(vertex) + 1e-6) / 0.04)
+      for (let i = 0; i < position.count; i++) {
+        const slat = slatAt(i)
+        const bounds = slatBounds.get(slat) ?? new THREE.Box3()
+        bounds.expandByPoint(new THREE.Vector3().fromBufferAttribute(position, i))
+        slatBounds.set(slat, bounds)
+      }
+      expect(slatBounds.size).toBe(slatCount)
+      for (let i = 0; i < slatCount; i++) {
+        const bounds = slatBounds.get(i)!
+        const size = bounds.getSize(new THREE.Vector3())
+        expect(size.x).toBeCloseTo(node.width)
+        expect(size.y).toBeCloseTo(0.036)
+        expect(size.z).toBeCloseTo(0.01)
+        expect(bounds.max.y).toBeCloseTo(node.height / 2 - i * 0.04)
+        if (i > 0) expect(slatBounds.get(i - 1)!.min.y - bounds.max.y).toBeCloseTo(0.004)
+      }
+      const triangles = Array<number>(slatCount).fill(0)
+      for (let i = 0; i < (index?.count ?? position.count); i += 3) {
+        const vertices = [0, 1, 2].map((offset) => (index ? index.getX(i + offset) : i + offset))
+        const slat = slatAt(vertices[0]!)
+        for (const vertex of vertices) expect(slatAt(vertex)).toBe(slat)
+        triangles[slat]!++
+        // Every box face maps metres in its plane to metres in UV space.
+        const [a, b] = vertices as [number, number, number]
+        const edgeLength = new THREE.Vector3()
+          .fromBufferAttribute(position, a)
+          .distanceTo(new THREE.Vector3().fromBufferAttribute(position, b))
+        const uvLength = new THREE.Vector2()
+          .fromBufferAttribute(uv, a)
+          .distanceTo(new THREE.Vector2().fromBufferAttribute(uv, b))
+        expect(uvLength).toBeCloseTo(edgeLength, 6)
+      }
+      for (const count of triangles) {
+        expect(count).toBeGreaterThan(0)
+        expect(count).toBeLessThanOrEqual(12)
+      }
+    },
+  )
 
   test.each(['panel', 'louvered', 'board-batten'] as const)(
     '%s shutters pivot beside exterior casing, with selectable sides and explicit widths',
