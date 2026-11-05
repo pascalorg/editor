@@ -374,6 +374,7 @@ export {
 } from './components/ui/snap-target-badge'
 // A wall's project wall types: new, edit, duplicate (the wall panel's Assembly).
 export { WallTypeMenu } from './components/ui/wall-type/wall-type-menu'
+export { DaylightMenu } from './components/viewer/daylight-menu'
 export {
   FloorplanCompassButton,
   type FloorplanCompassButtonProps,

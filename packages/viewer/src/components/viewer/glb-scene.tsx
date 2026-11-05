@@ -25,6 +25,8 @@ import * as THREE from 'three'
 import { lerp } from 'three/src/math/MathUtils.js'
 import { acceleratedRaycast, computeBoundsTree, disposeBoundsTree } from 'three-mesh-bvh'
 import { useGLTFKTX2 } from '../../hooks/use-gltf-ktx2'
+import { createDaylightGroundMaterial } from '../../lib/daylight/ground'
+import { isDaylightAtmosphere } from '../../lib/daylight/look'
 import { createSurfaceRoleMaterial } from '../../lib/materials'
 import { applyShadowOnly, clearShadowOnly } from '../../lib/shadow-only'
 import useViewer from '../../store/use-viewer'
@@ -34,6 +36,7 @@ import { GlbInteractive, type GlbInteractiveItem } from './glb-interactive'
 import { bakedLoopMechanisms } from './glb-mechanisms'
 import { GlbReferenceNodes } from './glb-reference-nodes'
 import { GlbReplaceInstances } from './glb-replace-instances'
+import { useSceneAtmosphere } from './scene-atmosphere'
 
 /** Baked `kind` → surface role, so monochrome can recolor by role like the
  *  parametric viewer (textures-off collapses each face to its themed clay). */
@@ -373,6 +376,18 @@ export function GlbScene({
   // useBvh={false}), so hover/pick raycasts against the baked building were
   // brute-force triangle tests — dozens of ms per pointer move on a dense scene,
   // and far worse once a `replace` forest is portaled in. Give each baked mesh a
+  // Baked meshes take part in the sun's shadows (the bake carries no shadow flags). Transparent
+  // surfaces (glazing) don't cast, so sunlight still reaches the rooms behind them.
+  useEffect(() => {
+    gltf.scene.traverse((child) => {
+      const mesh = child as THREE.Mesh
+      if (!mesh.isMesh) return
+      const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material]
+      mesh.receiveShadow = true
+      mesh.castShadow = !materials.some((material) => material?.transparent)
+    })
+  }, [gltf.scene])
+
   // BVH so those raycasts are accelerated. `replace` instances are NO_RAYCAST, so
   // the `raycast === Mesh.prototype.raycast` guard skips them (mirrors SceneBvh).
   useEffect(() => {
@@ -1024,6 +1039,7 @@ export function GlbScene({
       {replaceNodes?.length ? (
         <GlbReplaceInstances identity={identity} nodes={replaceNodes} />
       ) : null}
+      <GlbDaylightGround />
     </group>
   )
 }
@@ -1037,4 +1053,38 @@ const NO_MODIFIERS: GlbPickEvent['modifiers'] = {
 
 function modifiersOf(event: MouseEvent): GlbPickEvent['modifiers'] {
   return { alt: event.altKey, ctrl: event.ctrlKey, meta: event.metaKey, shift: event.shiftKey }
+}
+
+const NO_RAYCAST = () => {}
+
+/**
+ * The colored appearance's ground under a baked artifact (the bake strips the live horizon
+ * disc): the squared daylight ground just under the baked site fill, so the parcel keeps its own
+ * surface; the atmosphere's fog takes it to the horizon.
+ */
+function GlbDaylightGround() {
+  const atmosphere = useSceneAtmosphere()
+  const daylight = isDaylightAtmosphere(atmosphere)
+  const solid = useViewer((state) => state.shading === 'solid')
+  const material = useMemo(() => {
+    if (!daylight) return null
+    const ground = createDaylightGroundMaterial(solid, { horizon: atmosphere?.fogRadiance })
+    ground.polygonOffset = true
+    ground.polygonOffsetFactor = 2
+    ground.polygonOffsetUnits = 4
+    return ground
+  }, [atmosphere, daylight, solid])
+  useEffect(() => () => material?.dispose(), [material])
+  if (!material) return null
+  return (
+    <mesh
+      material={material}
+      position={[0, -0.07, 0]}
+      raycast={NO_RAYCAST}
+      receiveShadow
+      rotation={[-Math.PI / 2, 0, 0]}
+    >
+      <planeGeometry args={[12_000, 12_000]} />
+    </mesh>
+  )
 }

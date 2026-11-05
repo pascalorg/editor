@@ -41,6 +41,7 @@ import {
   DropdownMenuTrigger,
 } from '../ui/primitives/dropdown-menu'
 import { TooltipProvider } from '../ui/primitives/tooltip'
+import { DaylightMenu } from './daylight-menu'
 
 const wallModeConfig = {
   up: {
@@ -276,40 +277,44 @@ function DisplayMenu() {
           </DropdownMenuSubContent>
         </DropdownMenuSub>
 
-        <DropdownMenuSub>
-          <DropdownMenuSubTrigger>
-            <SwatchBook className="h-4 w-4" />
-            <span>{i18n._({ id: 'viewer.theme.title', message: 'Scene theme' })}</span>
-            <span className="ml-auto truncate text-muted-foreground text-xs">
-              {sceneThemeName(activeTheme.id, activeTheme.name, i18n)}
-            </span>
-          </DropdownMenuSubTrigger>
-          <DropdownMenuSubContent className="dark min-w-48">
-            {SCENE_THEMES.map((theme) => {
-              const swatches = (['wall', 'roof', 'floor', 'glazing'] as const).map(
-                (role) => theme.clayTints?.[role] ?? CLAY_PALETTE[role],
-              )
-              return (
-                <DropdownMenuItem
-                  className="gap-2"
-                  key={theme.id}
-                  onSelect={() => useViewer.getState().setSceneTheme(theme.id)}
-                >
-                  <span
-                    className="grid h-5 w-5 shrink-0 grid-cols-2 overflow-hidden rounded-sm border border-black/10"
-                    style={{ backgroundColor: theme.background }}
+        {textures ? (
+          <DaylightMenu subContentClassName="dark min-w-48" />
+        ) : (
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger>
+              <SwatchBook className="h-4 w-4" />
+              <span>{i18n._({ id: 'viewer.theme.title', message: 'Scene theme' })}</span>
+              <span className="ml-auto truncate text-muted-foreground text-xs">
+                {sceneThemeName(activeTheme.id, activeTheme.name, i18n)}
+              </span>
+            </DropdownMenuSubTrigger>
+            <DropdownMenuSubContent className="dark min-w-48">
+              {SCENE_THEMES.map((theme) => {
+                const swatches = (['wall', 'roof', 'floor', 'glazing'] as const).map(
+                  (role) => theme.clayTints?.[role] ?? CLAY_PALETTE[role],
+                )
+                return (
+                  <DropdownMenuItem
+                    className="gap-2"
+                    key={theme.id}
+                    onSelect={() => useViewer.getState().setSceneTheme(theme.id)}
                   >
-                    {swatches.map((color, index) => (
-                      <span key={`${theme.id}-${index}`} style={{ backgroundColor: color }} />
-                    ))}
-                  </span>
-                  <span>{sceneThemeName(theme.id, theme.name, i18n)}</span>
-                  {sceneTheme === theme.id ? <Check className="ml-auto h-4 w-4" /> : null}
-                </DropdownMenuItem>
-              )
-            })}
-          </DropdownMenuSubContent>
-        </DropdownMenuSub>
+                    <span
+                      className="grid h-5 w-5 shrink-0 grid-cols-2 overflow-hidden rounded-sm border border-black/10"
+                      style={{ backgroundColor: theme.background }}
+                    >
+                      {swatches.map((color, index) => (
+                        <span key={`${theme.id}-${index}`} style={{ backgroundColor: color }} />
+                      ))}
+                    </span>
+                    <span>{sceneThemeName(theme.id, theme.name, i18n)}</span>
+                    {sceneTheme === theme.id ? <Check className="ml-auto h-4 w-4" /> : null}
+                  </DropdownMenuItem>
+                )
+              })}
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
+        )}
 
         <DropdownMenuSub>
           <DropdownMenuSubTrigger>

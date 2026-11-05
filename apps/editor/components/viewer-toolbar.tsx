@@ -3,6 +3,7 @@
 import { Icon as IconifyIcon } from '@iconify/react'
 import { type MessageDescriptor, usePascalI18n } from '@pascal-app/core'
 import {
+  DaylightMenu,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuGroup,
@@ -48,12 +49,14 @@ import {
   Layers3,
   Link2,
   Magnet,
+  Palette,
   PenLine,
   Ruler,
   RulerDimensionLine,
   ScanLine,
   SlidersHorizontal,
   Sparkles,
+  Square,
   SquareUserRound,
   SwatchBook,
   Tag,
@@ -478,6 +481,8 @@ function DisplayMenu() {
   const setShading = useViewer((state) => state.setShading)
   const sceneTheme = useViewer((state) => state.sceneTheme)
   const setSceneTheme = useViewer((state) => state.setSceneTheme)
+  const textures = useViewer((state) => state.textures)
+  const setTextures = useViewer((state) => state.setTextures)
   const edges = useViewer((state) => state.edges)
   const setEdges = useViewer((state) => state.setEdges)
   const shadows = useViewer((state) => state.shadows)
@@ -882,42 +887,58 @@ function DisplayMenu() {
                     : i18n._({ id: 'app.viewerToolbar.orthographic', message: 'Orthographic' })}
                 </span>
               </DropdownMenuItem>
-              <DropdownMenuSub>
-                <DropdownMenuSubTrigger>
-                  <SwatchBook className="h-4 w-4" />
-                  <span>
-                    {i18n._({ id: 'app.viewerToolbar.sceneTheme', message: 'Scene theme' })}
-                  </span>
-                  <span className="ml-auto truncate text-muted-foreground text-xs">
-                    {sceneThemeName(activeTheme.id, activeTheme.name, i18n)}
-                  </span>
-                </DropdownMenuSubTrigger>
-                <DropdownMenuSubContent className="min-w-48 rounded-xl border-border/45 bg-popover/95 backdrop-blur-xl">
-                  {SCENE_THEMES.map((theme) => {
-                    const swatches = (['wall', 'roof', 'floor', 'glazing'] as const).map(
-                      (role) => theme.clayTints?.[role] ?? CLAY_PALETTE[role],
-                    )
-                    return (
-                      <DropdownMenuItem key={theme.id} onSelect={() => setSceneTheme(theme.id)}>
-                        <span
-                          className="grid h-5 w-5 shrink-0 grid-cols-2 overflow-hidden rounded-sm border border-black/10"
-                          style={{ backgroundColor: theme.background }}
-                        >
-                          {swatches.map((color, index) => (
-                            <span key={`${theme.id}-${index}`} style={{ backgroundColor: color }} />
-                          ))}
-                        </span>
-                        <span className="text-foreground">
-                          {sceneThemeName(theme.id, theme.name, i18n)}
-                        </span>
-                        {sceneTheme === theme.id ? (
-                          <Check className="ml-auto h-4 w-4 text-foreground" />
-                        ) : null}
-                      </DropdownMenuItem>
-                    )
-                  })}
-                </DropdownMenuSubContent>
-              </DropdownMenuSub>
+              <DropdownMenuItem onSelect={(e) => keepOpen(e, () => setTextures(!textures))}>
+                {textures ? <Palette className="h-4 w-4" /> : <Square className="h-4 w-4" />}
+                <span>{i18n._({ id: 'app.viewerToolbar.colors', message: 'Colors' })}</span>
+                <span className="ml-auto text-muted-foreground text-xs">
+                  {textures
+                    ? i18n._({ id: 'app.viewerToolbar.colored', message: 'Colored' })
+                    : i18n._({ id: 'app.viewerToolbar.monochrome', message: 'Monochrome' })}
+                </span>
+              </DropdownMenuItem>
+              {textures ? (
+                <DaylightMenu subContentClassName={SUBMENU_CONTENT_CLASS} />
+              ) : (
+                <DropdownMenuSub>
+                  <DropdownMenuSubTrigger>
+                    <SwatchBook className="h-4 w-4" />
+                    <span>
+                      {i18n._({ id: 'app.viewerToolbar.sceneTheme', message: 'Scene theme' })}
+                    </span>
+                    <span className="ml-auto truncate text-muted-foreground text-xs">
+                      {sceneThemeName(activeTheme.id, activeTheme.name, i18n)}
+                    </span>
+                  </DropdownMenuSubTrigger>
+                  <DropdownMenuSubContent className="min-w-48 rounded-xl border-border/45 bg-popover/95 backdrop-blur-xl">
+                    {SCENE_THEMES.map((theme) => {
+                      const swatches = (['wall', 'roof', 'floor', 'glazing'] as const).map(
+                        (role) => theme.clayTints?.[role] ?? CLAY_PALETTE[role],
+                      )
+                      return (
+                        <DropdownMenuItem key={theme.id} onSelect={() => setSceneTheme(theme.id)}>
+                          <span
+                            className="grid h-5 w-5 shrink-0 grid-cols-2 overflow-hidden rounded-sm border border-black/10"
+                            style={{ backgroundColor: theme.background }}
+                          >
+                            {swatches.map((color, index) => (
+                              <span
+                                key={`${theme.id}-${index}`}
+                                style={{ backgroundColor: color }}
+                              />
+                            ))}
+                          </span>
+                          <span className="text-foreground">
+                            {sceneThemeName(theme.id, theme.name, i18n)}
+                          </span>
+                          {sceneTheme === theme.id ? (
+                            <Check className="ml-auto h-4 w-4 text-foreground" />
+                          ) : null}
+                        </DropdownMenuItem>
+                      )
+                    })}
+                  </DropdownMenuSubContent>
+                </DropdownMenuSub>
+              )}
             </DisplayGroup>
           </>
         ) : null}

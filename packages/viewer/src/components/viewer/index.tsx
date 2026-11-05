@@ -39,6 +39,7 @@ import { subscribeWallBuildInteractions } from '../../systems/wall/wall-build-li
 import { ImmersiveXRPresentationProvider } from '../../xr/presentation-context'
 import { SceneRenderer } from '../renderers/scene-renderer'
 import { BATCH_SPIKE_ENABLED, BatchedMeshSpike } from './batched-mesh-spike'
+import { DaylightAtmosphere } from './daylight-atmosphere'
 import FrameLimiter from './frame-limiter'
 import { Lights } from './lights'
 import { PerfMonitor } from './perf-monitor'
@@ -736,6 +737,7 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
           {ImmersiveSession ? (
             <ImmersiveSession>
               <ViewerScene
+                daylight={suppliedPresentation !== null}
                 disablePostFx
                 hoverStyles={hoverStyles}
                 immersiveXR
@@ -759,6 +761,7 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
                 paused={renderPaused}
               />
               <ViewerScene
+                daylight={suppliedPresentation !== null}
                 disablePostFx={disablePostFx}
                 hoverStyles={hoverStyles}
                 renderErrorHandlers={[onRenderError]}
@@ -781,6 +784,7 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
 
 function ViewerScene({
   children,
+  daylight,
   disablePostFx,
   hoverStyles,
   immersiveXR = false,
@@ -794,6 +798,8 @@ function ViewerScene({
   SceneWrapper,
 }: {
   children?: React.ReactNode
+  /** Canonical hosts (`presentation={null}`: bake, thumbnails) keep the neutral studio look. */
+  daylight: boolean
   disablePostFx: boolean
   hoverStyles: HoverStyles
   immersiveXR?: boolean
@@ -806,6 +812,8 @@ function ViewerScene({
   useBvh: boolean
   SceneWrapper?: ViewerImmersiveSession['Scene']
 }) {
+  // Colored appearance = the built-in daylight look; monochrome keeps the scene themes.
+  const colored = useViewer((state) => state.textures)
   const renderedScene = useBvh ? (
     <SceneBvh>
       <SceneRenderer />
@@ -839,6 +847,7 @@ function ViewerScene({
         sceneReadyMaxWaitMs={sceneReadyMaxWaitMs}
       />
       <SceneErrorBoundary handlers={renderErrorHandlers}>
+        {daylight && colored && <DaylightAtmosphere />}
         <Lights />
         {SceneWrapper ? <SceneWrapper>{spatialScene}</SceneWrapper> : spatialScene}
         {!immersiveXR && <PostProcessing disablePostFx={disablePostFx} hoverStyles={hoverStyles} />}

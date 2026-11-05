@@ -438,13 +438,15 @@ const HOLD_MAX_MS = 300_000
  * What the sheets' pictures are drawn in, whatever the user's view: full-
  * height walls, the storeys stacked at their true heights, the materials'
  * own textures and colours (a white or blueprint palette is a view, not the
- * house). The shading stays the user's: the capture brings its own AO.
+ * house), lit by a fair midday. The shading stays the user's: the capture brings its own AO.
  */
 const FINISHED_PRESENTATION = {
   wallMode: 'up',
   levelMode: 'stacked',
   textures: true,
   colorPreset: 'clay',
+  timeOfDay: 'midday',
+  weather: 'fair',
 } as const
 
 /** The viewer switched to FINISHED_PRESENTATION; the returned function puts the user's view back. */
@@ -470,6 +472,16 @@ export function presentFinished(): () => void {
     const colorPreset = viewer.colorPreset
     viewer.setColorPreset(FINISHED_PRESENTATION.colorPreset)
     restores.push(() => useViewer.getState().setColorPreset(colorPreset))
+  }
+  if (viewer.timeOfDay !== FINISHED_PRESENTATION.timeOfDay) {
+    const timeOfDay = viewer.timeOfDay
+    viewer.setTimeOfDay(FINISHED_PRESENTATION.timeOfDay)
+    restores.push(() => useViewer.getState().setTimeOfDay(timeOfDay))
+  }
+  if (viewer.weather !== FINISHED_PRESENTATION.weather) {
+    const weather = viewer.weather
+    viewer.setWeather(FINISHED_PRESENTATION.weather)
+    restores.push(() => useViewer.getState().setWeather(weather))
   }
   return () => {
     for (const restore of restores.reverse()) restore()

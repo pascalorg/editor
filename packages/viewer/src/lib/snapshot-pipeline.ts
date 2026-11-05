@@ -1,4 +1,12 @@
-import { type Camera, Color, Matrix4, type Scene, SRGBColorSpace, UnsignedByteType } from 'three'
+import {
+  type Camera,
+  Color,
+  Matrix4,
+  type Scene,
+  SRGBColorSpace,
+  UnsignedByteType,
+  Vector3,
+} from 'three'
 import { ssgi } from 'three/addons/tsl/display/SSGINode.js'
 import { denoise } from 'three/examples/jsm/tsl/display/DenoiseNode.js'
 import { fxaa } from 'three/examples/jsm/tsl/display/FXAANode.js'
@@ -30,6 +38,7 @@ import {
 import { GRADE_PARAMS, SSGI_PARAMS } from '../components/viewer/post-processing'
 import type { SceneAtmosphereSource } from '../components/viewer/scene-atmosphere'
 import { backdropColors, backdropGradient, flatBackdropOutput } from './backdrop'
+import { DAYLIGHT_INK_BACKDROP, daylightGradeRgb, isDaylightAtmosphere } from './daylight/look'
 import { type EdgeMode, edgeColorFor, edgeOpacityScaleFor } from './edge-style'
 import { createEdgeDepthSampler, inkedEdges } from './ink-edges'
 import { sceneLightingMask, scenePassMrt } from './scene-pass-mrt'
@@ -177,6 +186,8 @@ export async function createSnapshotPipeline({
     const inkColorUniform = uniform(new Color('#1a1d24'))
     const inkOpacityUniform = uniform(0.5)
     const inkOpacityScaleUniform = uniform(1)
+    const daylight = isDaylightAtmosphere(atmosphere)
+    const whiteBalanceUniform = uniform(new Vector3(1, 1, 1))
 
     // The scene pass owns MRT and its transparent clear, including when nested
     // inside FXAA's intermediate render target.
@@ -246,8 +257,14 @@ export async function createSnapshotPipeline({
       opacity: float(inkOpacityUniform).mul(inkOpacityScaleUniform),
     })
     const ungradedSceneRgb = mix(aoRgb, inkedRgb, inkMixUniform)
-    const gradeRgb = (rgb: any) =>
-      saturation(rgb.div(0.18).pow(vec3(GRADE_PARAMS.contrast)).mul(0.18), GRADE_PARAMS.saturation)
+    // The built-in daylight look grades with its own white balance, as the viewport does.
+    const gradeRgb = daylight
+      ? (rgb: any) => daylightGradeRgb(rgb, whiteBalanceUniform)
+      : (rgb: any) =>
+          saturation(
+            rgb.div(0.18).pow(vec3(GRADE_PARAMS.contrast)).mul(0.18),
+            GRADE_PARAMS.saturation,
+          )
     const sceneRgb = mix(ungradedSceneRgb, gradeRgb(ungradedSceneRgb), gradeMixUniform)
 
     // Per-pixel world ray from the capture camera → sky gradient above the
@@ -335,8 +352,9 @@ export async function createSnapshotPipeline({
         const backdrop = backdropColors(sceneTheme)
         inkMixUniform.value = edges === 'off' ? 0 : 1
         inkOpacityUniform.value = edges === 'strong' ? 1 : 0.5
-        inkColorUniform.value.set(edgeColorFor(sceneTheme.background))
-        inkOpacityScaleUniform.value = edgeOpacityScaleFor(sceneTheme.background)
+        const inkBackdrop = daylight ? DAYLIGHT_INK_BACKDROP : sceneTheme.background
+        inkColorUniform.value.set(edgeColorFor(inkBackdrop))
+        inkOpacityScaleUniform.value = edgeOpacityScaleFor(inkBackdrop)
         bgColorUniform.value.set(sceneTheme.background)
         bgSkyUniform.value.set(backdrop.sky)
         bgSkyDeepUniform.value.set(backdrop.skyDeep)
@@ -344,7 +362,10 @@ export async function createSnapshotPipeline({
         bgMixUniform.value = transparent ? 0 : 1
         flatBgMixUniform.value =
           !transparent && !atmosphere && sceneTheme.backgroundSky === null ? 1 : 0
-        gradeMixUniform.value = grade && sceneTheme.postprocessing?.colorGrading !== false ? 1 : 0
+        gradeMixUniform.value =
+          (grade || daylight) && sceneTheme.postprocessing?.colorGrading !== false ? 1 : 0
+        if (isDaylightAtmosphere(atmosphere))
+          whiteBalanceUniform.value.copy(atmosphere.whiteBalance)
         aoMixUniform.value = sceneTheme.postprocessing?.ambientOcclusion === false ? 0 : 1
 
         // The capture camera never joins the scene graph, so its matrixWorld

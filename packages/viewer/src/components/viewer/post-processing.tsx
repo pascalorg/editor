@@ -1,12 +1,28 @@
 import { useFrame, useThree } from '@react-three/fiber'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Color, Layers, Matrix4, type Object3D, Scene, UnsignedByteType } from 'three'
+import {
+  ACESFilmicToneMapping,
+  Color,
+  Layers,
+  Matrix4,
+  NeutralToneMapping,
+  type Object3D,
+  Scene,
+  UnsignedByteType,
+  Vector3,
+} from 'three'
+import { bloom } from 'three/addons/tsl/display/BloomNode.js'
+import { ao as gtao } from 'three/addons/tsl/display/GTAONode.js'
 import { ssgi } from 'three/addons/tsl/display/SSGINode.js'
+import { traa } from 'three/addons/tsl/display/TRAANode.js'
 import { denoise } from 'three/examples/jsm/tsl/display/DenoiseNode.js'
 import {
   add,
+  builtinAOContext,
   diffuseColor,
+  ivec2,
   mix,
+  mrt,
   normalView,
   normalWorldGeometry,
   oscSine,
@@ -21,12 +37,21 @@ import {
   time,
   color as tslColor,
   float as tslFloat,
+  length as tslLength,
   uniform,
   vec3,
   vec4,
+  velocity,
 } from 'three/tsl'
 import { RenderPipeline, TimestampQuery, type WebGPURenderer } from 'three/webgpu'
 import { backdropColors, backdropGradient, flatBackdropOutput } from '../../lib/backdrop'
+import {
+  DAYLIGHT_BLOOM,
+  DAYLIGHT_GRADE,
+  DAYLIGHT_INK_BACKDROP,
+  daylightGradeRgb,
+  isDaylightAtmosphere as isDaylight,
+} from '../../lib/daylight/look'
 import { edgeColorFor, edgeOpacityScaleFor } from '../../lib/edge-style'
 import { PERF_OVERLAY_ENABLED } from '../../lib/gpu-perf'
 import { createEdgeDepthSampler, inkedEdges } from '../../lib/ink-edges'
@@ -53,6 +78,17 @@ import {
 } from '../../lib/underground-ambiance'
 import useViewer from '../../store/use-viewer'
 import { useSceneAtmosphere } from './scene-atmosphere'
+
+const NEIGHBOURS_3X3 = [
+  [-1, -1],
+  [0, -1],
+  [1, -1],
+  [-1, 0],
+  [1, 0],
+  [-1, 1],
+  [0, 1],
+  [1, 1],
+] as const
 
 // A mild mid-gray contrast and saturation lift separates surfaces before the
 // output transform. Saved project looks can turn it off. Rendered shading only.
@@ -313,6 +349,10 @@ const PostProcessingPasses = ({
   const edges = useViewer((s) => s.edges)
   const inkOpacityOverride = useViewer((s) => s.inkOpacity)
   const transparentBackground = useViewer((s) => s.transparentBackground)
+  const renderQuality = useViewer((s) => s.renderQuality)
+  // Daylight look uniforms, refreshed every frame from the atmosphere/exposure.
+  const whiteBalance = useMemo(() => uniform(new Vector3(1, 1, 1)), [])
+  const bloomThreshold = useMemo(() => uniform(1), [])
   const lastProjectIdRef = useRef(projectId)
 
   // Bump this to force a pipeline rebuild (used by retry logic)
@@ -405,12 +445,26 @@ const PostProcessingPasses = ({
       disposePipeline()
       return
     }
+    // Colored appearance = the daylight look: Neutral tone mapping, white balance, grade and
+    // vignette in every shading; rendered shading adds GTAO on indirect light only (high) or a
+    // soft ½-res blend (medium) with temporal AA, and bloom (high).
+    const daylight = isDaylight(atmosphere)
+    renderer.toneMapping = daylight ? NeutralToneMapping : ACESFilmicToneMapping
+    const daylightLook = daylight && shading === 'rendered'
+    const aoTier = daylightLook && ambientOcclusion && !perfDisable.ao ? renderQuality : null
+    const temporalAA = daylightLook && !transparentBackground && renderQuality !== 'low'
+    const bloomEnabled = daylightLook && !transparentBackground && renderQuality === 'high'
     const ssgiEnabled =
-      shading === 'rendered' && ambientOcclusion && SSGI_PARAMS.enabled && !perfDisable.ao
+      !daylightLook &&
+      shading === 'rendered' &&
+      ambientOcclusion &&
+      SSGI_PARAMS.enabled &&
+      !perfDisable.ao
     const denoiseEnabled = ssgiEnabled && !perfDisable.denoise
     const outlineEnabled = !perfDisable.outline
     const inkEnabled = edges !== 'off'
-    const needsNormalMRT = ssgiEnabled || inkEnabled
+    const needsNormalMRT =
+      ssgiEnabled || inkEnabled || aoTier === 'medium' || (temporalAA && aoTier !== 'high')
     // Soft = thin (1px sample radius) + faint (50% opacity); strong = thick
     // (2px, ~2× wider detected band) + solid (100%). The edge masks saturate,
     // so radius+opacity are what actually separate the two modes.
@@ -463,7 +517,10 @@ const PostProcessingPasses = ({
     try {
       const layerIndex = new LayerPassIndex(scene, [ZONE_LAYER, OVERLAY_LAYER])
       resources.layerIndex = layerIndex
-      const scenePass = pass(scene, camera)
+      // Temporal AA replaces MSAA, and the ½-res GTAO gathers from this depth (no multisampled
+      // `textureGather`): both want a single-sampled scene pass.
+      const singleSampled = temporalAA || aoTier === 'medium'
+      const scenePass = pass(scene, camera, singleSampled ? { samples: 0 } : undefined)
       resources.passes.push(scenePass)
       scenePass.setLayers(sceneOnlyLayers)
       const zonePass = new LayerPassNode(layerIndex, camera, ZONE_LAYER, scenePass)
@@ -506,6 +563,7 @@ const PostProcessingPasses = ({
             diffuseColor,
             normal: packNormalToRGB(normalView),
             lighting: sceneLightingMask(),
+            ...(temporalAA && aoTier !== 'high' ? { velocity } : {}),
           }),
         )
         scenePassNormal = scenePass.getTextureNode('normal')
@@ -578,6 +636,54 @@ const PostProcessingPasses = ({
         )
       }
 
+      // Daylight AO + temporal AA. High: a depth/normal/velocity pre-pass feeds GTAO, injected into
+      // the scene pass's lighting (darkens indirect light only — no grime on sunlit walls). Medium:
+      // no pre-pass; ½-res GTAO from the scene pass, blended softly over the image.
+      let temporalDepth: any = null
+      let temporalVelocity: any = null
+      if (aoTier === 'high') {
+        // Single-sampled: GTAO gathers from the depth texture (no multisampled `textureGather`).
+        const prePass = pass(scene, camera, { samples: 0 })
+        resources.passes.push(prePass)
+        prePass.setLayers(sceneOnlyLayers)
+        prePass.transparent = false
+        prePass.setMRT(mrt({ output: normalView, velocity }))
+        const preDepth = prePass.getTextureNode('depth')
+        const aoNode = gtao(preDepth, prePass.getTextureNode('output'), camera) as any
+        aoNode.radius.value = 0.6
+        aoNode.thickness.value = 1
+        aoNode.distanceExponent.value = 1.6
+        aoNode.samples.value = 16
+        aoNode.useTemporalFiltering = temporalAA
+        resources.effects.push(aoNode)
+        scenePass.contextNode = builtinAOContext(aoNode.getTextureNode().sample(screenUV).r)
+        temporalDepth = preDepth
+        temporalVelocity = prePass.getTextureNode('velocity')
+      } else if (aoTier === 'medium' && sceneNormal && scenePassDepth) {
+        const aoNode = gtao(scenePassDepth, sceneNormal, camera) as any
+        aoNode.radius.value = 0.6
+        aoNode.thickness.value = 1.2
+        aoNode.distanceExponent.value = 1.4
+        aoNode.samples.value = 16
+        aoNode.resolutionScale = 0.5
+        resources.effects.push(aoNode)
+        const lightingWeight = scenePass.getTextureNode('lighting').r
+        const farFade = smoothstep(tslFloat(0.9994), tslFloat(0.9998), sampleEdgeDepth(screenUV))
+        const aoBlend = mix(
+          tslFloat(1),
+          aoNode.getTextureNode().sample(screenUV).r,
+          lightingWeight.mul(0.6),
+        )
+        sceneColor = vec4(
+          add(scenePassColor.rgb.mul(mix(aoBlend, tslFloat(1), farFade)), zonePass.rgb),
+          contentAlpha,
+        )
+      }
+      if (temporalAA && !temporalVelocity && scenePassNormal) {
+        temporalDepth = scenePassDepth
+        temporalVelocity = scenePass.getTextureNode('velocity')
+      }
+
       // Screen-space ink outline (SketchUp look) — depth/normal edge detection
       // over the composited scene. Topology-agnostic, so it handles CSG-cut
       // walls cleanly. Applied before the selection outline + background mix.
@@ -595,17 +701,34 @@ const PostProcessingPasses = ({
         )
       }
 
+      // Bloom on the HDR image; the threshold follows exposure so only display-white blooms.
+      if (bloomEnabled) {
+        const glow = bloom(
+          sceneColor,
+          DAYLIGHT_BLOOM.strength,
+          DAYLIGHT_BLOOM.radius,
+          bloomThreshold,
+        ) as any
+        glow.smoothWidth.value = DAYLIGHT_BLOOM.softKnee
+        resources.effects.push(glow)
+        sceneColor = vec4(sceneColor.rgb.add(glow.rgb), sceneColor.a)
+      }
+
       // Scene-referred grade (contrast around mid-gray + saturation) before the
-      // pipeline's output tone mapping. Kept out of solid/schematic shading so
-      // the flat presets stay exact. The same transform is applied to the
-      // backdrop below so geometry that fades to the background colour (the
+      // pipeline's output tone mapping. Kept out of monochrome solid/schematic
+      // shading so the flat presets stay exact. The same transform is applied to
+      // the backdrop below so geometry that fades to the background colour (the
       // horizon disc) matches it exactly.
+      // The daylight look (any shading) adds eye-like white balance (sky and scene alike).
       const gradeRgb = (rgb: any) =>
-        saturation(
-          rgb.div(0.18).pow(vec3(GRADE_PARAMS.contrast)).mul(0.18),
-          GRADE_PARAMS.saturation,
-        )
-      if (shading === 'rendered' && colorGrading) {
+        daylight
+          ? daylightGradeRgb(rgb, whiteBalance)
+          : saturation(
+              rgb.div(0.18).pow(vec3(GRADE_PARAMS.contrast)).mul(0.18),
+              GRADE_PARAMS.saturation,
+            )
+      const graded = colorGrading && (shading === 'rendered' || daylight)
+      if (graded) {
         sceneColor = vec4(gradeRgb(sceneColor.rgb), sceneColor.a)
       }
 
@@ -676,7 +799,7 @@ const PostProcessingPasses = ({
             sky: bgSkyUniform.current,
             skyDeep: bgSkyDeepUniform.current,
           })
-      if (shading === 'rendered' && colorGrading) {
+      if (graded) {
         bgGradient = gradeRgb(bgGradient)
       }
       let sceneComposite = compositeWithOutlines.rgb
@@ -709,6 +832,25 @@ const PostProcessingPasses = ({
         sceneComposite = mix(sceneComposite, dark, undergroundFogAmount(worldPosition).mul(dive))
       }
       let composited = mix(bgGradient, sceneComposite, contentAlpha)
+      // Temporal AA resolves the whole picture, so silhouettes against the sky are smoothed too.
+      // Its history is only valid where the 3×3 neighbourhood holds geometry (open sky, at the far
+      // plane, resolves to black), so the sky away from geometry keeps the direct backdrop.
+      if (temporalAA && temporalVelocity && temporalDepth) {
+        const temporal = traa(vec4(composited, 1), temporalDepth, temporalVelocity, camera) as any
+        resources.effects.push(temporal)
+        let nearGeometry: any = contentAlpha
+        for (const [x, y] of NEIGHBOURS_3X3) {
+          nearGeometry = nearGeometry.max(scenePassColor.offset(ivec2(x, y)).a)
+        }
+        composited = mix(composited, temporal.rgb, nearGeometry.greaterThan(0).select(1, 0))
+      }
+      if (daylight && !transparentBackground) {
+        const vignette = tslLength(screenUV.sub(0.5))
+          .mul(1.35)
+          .pow(2.5)
+          .mul(DAYLIGHT_GRADE.vignette)
+        composited = composited.mul(tslFloat(1).sub(vignette))
+      }
       // The screen's edges close in with it.
       if (dive) {
         composited = mix(
@@ -793,6 +935,9 @@ const PostProcessingPasses = ({
     colorGrading,
     flatBackground,
     transparentBackground,
+    renderQuality,
+    whiteBalance,
+    bloomThreshold,
     size.height,
     size.width,
     zoneLayers,
@@ -840,10 +985,15 @@ const PostProcessingPasses = ({
     bgSkyDeepTarget.current.set(backdrop.skyDeep)
     bgSkyDeepCurrent.current.lerp(bgSkyDeepTarget.current, Math.min(delta, 0.1) * 4)
     bgSkyDeepUniform.current.value.copy(bgSkyDeepCurrent.current)
+    if (isDaylight(atmosphere)) whiteBalance.value.copy(atmosphere.whiteBalance)
+    bloomThreshold.value = 1 / Math.max(renderer.toneMappingExposure, 1e-3)
     camProjInvUniform.current.value.copy(camera.projectionMatrixInverse)
     camWorldUniform.current.value.copy(camera.matrixWorld)
-    // Ink colour follows the (lerping) background luminance — snaps dark↔light.
-    const bgHex = `#${bgCurrent.current.getHexString()}`
+    // Ink colour follows the (lerping) background luminance — snaps dark↔light. The daylight
+    // look ignores the scene theme: its edges are always the light-backdrop ink.
+    const bgHex = isDaylight(atmosphere)
+      ? DAYLIGHT_INK_BACKDROP
+      : `#${bgCurrent.current.getHexString()}`
     inkColorUniform.current.value.set(edgeColorFor(bgHex))
     inkOpacityScaleUniform.current.value = edgeOpacityScaleFor(bgHex)
 

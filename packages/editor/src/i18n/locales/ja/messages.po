@@ -1403,6 +1403,26 @@ msgstr "すっきりした図面。寸法は選択時に表示"
 msgid "app.viewerToolbar.collapseSidebar"
 msgstr "サイドバーを折りたたむ"
 
+# Source-Hash: d3d478fa6c6d7ddc
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Colored"
+#: apps/editor/components/viewer-toolbar.tsx
+#, fuzzy
+msgid "app.viewerToolbar.colored"
+msgstr "カラー"
+
+# Source-Hash: 82b74c4f5ef43336
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Colors"
+#: apps/editor/components/viewer-toolbar.tsx
+#, fuzzy
+msgid "app.viewerToolbar.colors"
+msgstr "色"
+
 # Source-Hash: 2416a48df28d6205
 # Review: required
 # AI-Provider: claude-code
@@ -1764,6 +1784,16 @@ msgstr "メートル"
 #, fuzzy
 msgid "app.viewerToolbar.millimeters"
 msgstr "ミリメートル"
+
+# Source-Hash: ecde2f7c26914be3
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Monochrome"
+#: apps/editor/components/viewer-toolbar.tsx
+#, fuzzy
+msgid "app.viewerToolbar.monochrome"
+msgstr "モノクロ"
 
 # Source-Hash: 340a0a4e7703227b
 # Review: required
@@ -4054,21 +4084,21 @@ msgstr "ユニットのフォーカスを終了"
 msgid "editor.floatingLevelSelector.focusedUnitHasZonesHere"
 msgstr "フォーカス中のユニットにはここにゾーンがあります"
 
+# Source-Hash: 6a00e82fda812178
+# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "The ground floor stands {distance} over grade. Seat the ground floor 8 in over grade"
-# Source-Hash: 6a00e82fda812178
-# Review: required
 #: packages/editor/src/components/ui/floating-level-selector.tsx
 #, fuzzy
 msgid "editor.floatingLevelSelector.groundFloorOverGrade"
 msgstr "1階は地盤面より {distance} 高い位置にあります。{action}"
 
+# Source-Hash: 61f400e77494df9b
+# Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
 # English: "The ground floor stands {distance} under grade. Seat the ground floor 8 in over grade"
-# Source-Hash: 61f400e77494df9b
-# Review: required
 #: packages/editor/src/components/ui/floating-level-selector.tsx
 #, fuzzy
 msgid "editor.floatingLevelSelector.groundFloorUnderGrade"
@@ -36025,6 +36055,206 @@ msgstr "オフ"
 #: packages/editor/src/components/viewer/viewer-controls-bar.tsx
 msgid "viewer.common.on"
 msgstr "オン"
+
+# Source-Hash: 922fc552e352165f
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Sun position is approximate"
+#: packages/editor/src/components/viewer/daylight-menu.tsx
+#, fuzzy
+msgid "viewer.daylight.location.approximate"
+msgstr "太陽の位置はおおよそです"
+
+# Source-Hash: 98dc046e099b6ac6
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Sun follows your location"
+#: packages/editor/src/components/viewer/daylight-menu.tsx
+#, fuzzy
+msgid "viewer.daylight.location.device"
+msgstr "太陽の位置は現在地に基づきます"
+
+# Source-Hash: cf7321889b128f7c
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Use my location"
+#: packages/editor/src/components/viewer/daylight-menu.tsx
+#, fuzzy
+msgid "viewer.daylight.location.use"
+msgstr "現在地を使用"
+
+# Source-Hash: b77127463c51fa94
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "High"
+#: packages/editor/src/components/viewer/daylight-menu.tsx
+#, fuzzy
+msgid "viewer.daylight.quality.high"
+msgstr "高"
+
+# Source-Hash: 51e2bcc1d08f5741
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Lighting-aware ambient occlusion and bloom"
+#: packages/editor/src/components/viewer/daylight-menu.tsx
+#, fuzzy
+msgid "viewer.daylight.quality.highDetail"
+msgstr "ライティング連動のアンビエントオクルージョンとブルーム"
+
+# Source-Hash: 803532407fb5962b
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Low"
+#: packages/editor/src/components/viewer/daylight-menu.tsx
+#, fuzzy
+msgid "viewer.daylight.quality.low"
+msgstr "低"
+
+# Source-Hash: 40735b5b90a56ebd
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "No ambient occlusion or bloom"
+#: packages/editor/src/components/viewer/daylight-menu.tsx
+#, fuzzy
+msgid "viewer.daylight.quality.lowDetail"
+msgstr "アンビエントオクルージョンとブルームなし"
+
+# Source-Hash: 866bf047c116b31d
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Medium"
+#: packages/editor/src/components/viewer/daylight-menu.tsx
+#, fuzzy
+msgid "viewer.daylight.quality.medium"
+msgstr "中"
+
+# Source-Hash: 3491de63f8c09e0f
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Half-resolution ambient occlusion"
+#: packages/editor/src/components/viewer/daylight-menu.tsx
+#, fuzzy
+msgid "viewer.daylight.quality.mediumDetail"
+msgstr "半解像度のアンビエントオクルージョン"
+
+# Source-Hash: bfeb28708d3d10ce
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Quality"
+#: packages/editor/src/components/viewer/daylight-menu.tsx
+#, fuzzy
+msgid "viewer.daylight.quality.title"
+msgstr "品質"
+
+# Source-Hash: dfa53e6471dec872
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Blue hour"
+#: packages/editor/src/components/viewer/daylight-menu.tsx
+#, fuzzy
+msgid "viewer.daylight.time.blue"
+msgstr "ブルーアワー"
+
+# Source-Hash: cbeb868b31e2efcb
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Golden hour"
+#: packages/editor/src/components/viewer/daylight-menu.tsx
+#, fuzzy
+msgid "viewer.daylight.time.golden"
+msgstr "ゴールデンアワー"
+
+# Source-Hash: 9c3d8d45d0478768
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Midday"
+#: packages/editor/src/components/viewer/daylight-menu.tsx
+#, fuzzy
+msgid "viewer.daylight.time.midday"
+msgstr "正午"
+
+# Source-Hash: b399942ec5d7e1ba
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Night"
+#: packages/editor/src/components/viewer/daylight-menu.tsx
+#, fuzzy
+msgid "viewer.daylight.time.night"
+msgstr "夜"
+
+# Source-Hash: ffb31a52dd7aa8c8
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Time of day"
+#: packages/editor/src/components/viewer/daylight-menu.tsx
+#, fuzzy
+msgid "viewer.daylight.time.title"
+msgstr "時間帯"
+
+# Source-Hash: d0f86d2093269896
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Clear"
+#: packages/editor/src/components/viewer/daylight-menu.tsx
+#, fuzzy
+msgid "viewer.daylight.weather.clear"
+msgstr "快晴"
+
+# Source-Hash: e0b8ff55f635f9ad
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Cloudy"
+#: packages/editor/src/components/viewer/daylight-menu.tsx
+#, fuzzy
+msgid "viewer.daylight.weather.cloudy"
+msgstr "くもり"
+
+# Source-Hash: e31cb3c49b94b28f
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Fair"
+#: packages/editor/src/components/viewer/daylight-menu.tsx
+#, fuzzy
+msgid "viewer.daylight.weather.fair"
+msgstr "晴れ"
+
+# Source-Hash: f512d1b947b8ae5a
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Overcast"
+#: packages/editor/src/components/viewer/daylight-menu.tsx
+#, fuzzy
+msgid "viewer.daylight.weather.overcast"
+msgstr "曇天"
+
+# Source-Hash: a1100ef1041993bd
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Weather"
+#: packages/editor/src/components/viewer/daylight-menu.tsx
+#, fuzzy
+msgid "viewer.daylight.weather.title"
+msgstr "天気"
 
 # Source-Hash: 14622745dbf93f4c
 # Review: human

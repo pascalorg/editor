@@ -15,6 +15,9 @@ import type { Object3D } from 'three'
 
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+import type { LatLng } from '../lib/daylight/location'
+import type { Weather } from '../lib/daylight/sky'
+import type { TimeOfDay } from '../lib/daylight/solar'
 import type { EdgeMode } from '../lib/edge-style'
 import type { ColorPreset, RenderShading } from '../lib/materials'
 import {
@@ -25,6 +28,7 @@ import {
 } from '../lib/scene-themes'
 
 export type RenderContext = 'editor' | 'viewer'
+export type RenderQuality = 'low' | 'medium' | 'high'
 export type MetricNotation = 'meters' | 'millimeters'
 export type WallMode = 'up' | 'cutaway' | 'down' | 'translucent'
 
@@ -256,6 +260,19 @@ type ViewerState = {
   transparentBackground: boolean
   setTransparentBackground: (transparent: boolean) => void
 
+  /** Colored appearance: time-of-day preset driving the built-in daylight sun and sky. */
+  timeOfDay: TimeOfDay
+  setTimeOfDay: (timeOfDay: TimeOfDay) => void
+  /** Colored appearance: cloud cover preset. */
+  weather: Weather
+  setWeather: (weather: Weather) => void
+  /** A device position the user chose to share; used when the site has no geocoded point. */
+  deviceLocation: LatLng | null
+  setDeviceLocation: (location: LatLng | null) => void
+  /** Post-processing tier of the colored appearance (bloom/AO/AA/shadow resolution). */
+  renderQuality: RenderQuality
+  setRenderQuality: (quality: RenderQuality) => void
+
   // Embed-controlled ink-edge opacity override (null = use the per-mode default).
   inkOpacity: number | null
   setInkOpacity: (opacity: number | null) => void
@@ -331,8 +348,32 @@ type PersistedViewerState = Partial<
     | 'levelMode'
     | 'wallMode'
     | 'projectPreferences'
+    | 'timeOfDay'
+    | 'weather'
+    | 'deviceLocation'
+    | 'renderQuality'
   >
 >
+
+const TIMES_OF_DAY = ['golden', 'midday', 'blue', 'night'] as const
+const WEATHERS = ['clear', 'fair', 'cloudy', 'overcast'] as const
+const RENDER_QUALITIES = ['low', 'medium', 'high'] as const
+
+function defaultRenderQuality(): RenderQuality {
+  if (typeof window === 'undefined' || !window.matchMedia) return 'high'
+  return window.matchMedia('(pointer: coarse)').matches ? 'medium' : 'high'
+}
+
+function normalizeLatLng(value: unknown): LatLng | null {
+  if (!value || typeof value !== 'object') return null
+  const { lat, lng } = value as Record<string, unknown>
+  return typeof lat === 'number' &&
+    typeof lng === 'number' &&
+    Number.isFinite(lat) &&
+    Number.isFinite(lng)
+    ? { lat, lng }
+    : null
+}
 
 const CAMERA_MODES = ['perspective', 'orthographic'] as const
 const RENDER_SHADINGS = ['solid', 'rendered'] as const
@@ -475,6 +516,14 @@ function normalizePersistedViewerState(value: unknown): PersistedViewerState {
     levelMode: pickString<ViewerState['levelMode']>(state.levelMode, LEVEL_MODES, 'stacked'),
     wallMode: pickString<ViewerState['wallMode']>(state.wallMode, WALL_MODES, 'up'),
     projectPreferences: normalizeProjectPreferences(state.projectPreferences),
+    timeOfDay: pickString<TimeOfDay>(state.timeOfDay, TIMES_OF_DAY, 'midday'),
+    weather: pickString<Weather>(state.weather, WEATHERS, 'fair'),
+    deviceLocation: normalizeLatLng(state.deviceLocation),
+    renderQuality: pickString<RenderQuality>(
+      state.renderQuality,
+      RENDER_QUALITIES,
+      defaultRenderQuality(),
+    ),
   }
 }
 
@@ -732,6 +781,15 @@ const useViewer = create<ViewerState>()(
       transparentBackground: false,
       setTransparentBackground: (transparent) => set({ transparentBackground: transparent }),
 
+      timeOfDay: 'midday',
+      setTimeOfDay: (timeOfDay) => set({ timeOfDay }),
+      weather: 'fair',
+      setWeather: (weather) => set({ weather }),
+      deviceLocation: null,
+      setDeviceLocation: (deviceLocation) => set({ deviceLocation }),
+      renderQuality: defaultRenderQuality(),
+      setRenderQuality: (renderQuality) => set({ renderQuality }),
+
       inkOpacity: null,
       setInkOpacity: (opacity) => set({ inkOpacity: opacity }),
 
@@ -842,6 +900,10 @@ const useViewer = create<ViewerState>()(
         projectPreferences: Object.fromEntries(
           Object.entries(state.projectPreferences).filter(([key]) => key !== ''),
         ),
+        timeOfDay: state.timeOfDay,
+        weather: state.weather,
+        deviceLocation: state.deviceLocation,
+        renderQuality: state.renderQuality,
       }),
     },
   ),
