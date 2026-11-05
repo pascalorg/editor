@@ -413,9 +413,17 @@ export default function WindowPanel() {
           : i18n._({ id: 'node.window.operation.tilt', message: 'Tilt' })
 
   const setOperationState = (value: number) => {
-    useInteractive.getState().cancelWindowAnimation(node.id)
-    useInteractive.getState().removeWindowOpenState(node.id)
+    useInteractive.getState().cancelWindowAnimation(node.id, 'operationState')
+    useInteractive.getState().removeWindowOpenState(node.id, 'operationState')
     handleUpdate({ operationState: Math.max(0, Math.min(1, value)) })
+  }
+
+  const setShutterState = (field: 'shutterOpen' | 'rollerShutterOpen', value: number) => {
+    const interactive = useInteractive.getState()
+    interactive.cancelWindowAnimation(node.id, field)
+    interactive.removeWindowOpenState(node.id, field)
+    interactive.removeMechanismPart(node.id, 'shutters')
+    handleUpdate({ [field]: Math.max(0, Math.min(100, value)) / 100 })
   }
 
   const getDimensionUpdates = (updates: Partial<Pick<WindowNode, 'width' | 'height'>>) => {
@@ -1478,7 +1486,7 @@ export default function WindowPanel() {
                 label={i18n._({ id: 'node.window.panel.open', message: 'Open' })}
                 max={100}
                 min={0}
-                onChange={(v) => handleUpdate({ shutterOpen: Math.max(0, Math.min(100, v)) / 100 })}
+                onChange={(v) => setShutterState('shutterOpen', v)}
                 precision={0}
                 restoreOnCommit={false}
                 step={5}
@@ -1498,9 +1506,7 @@ export default function WindowPanel() {
                 label={i18n._({ id: 'node.window.panel.open', message: 'Open' })}
                 max={100}
                 min={0}
-                onChange={(v) =>
-                  handleUpdate({ rollerShutterOpen: Math.max(0, Math.min(100, v)) / 100 })
-                }
+                onChange={(v) => setShutterState('rollerShutterOpen', v)}
                 precision={0}
                 restoreOnCommit={false}
                 step={5}

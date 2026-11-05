@@ -391,7 +391,9 @@ describe('window stool and decorative shutters', () => {
           // This room is always on world +Z of its south wall, regardless of wall direction or unit facing.
           expect(board.min.z).toBeCloseTo(0.15)
           expect(board.max.z).toBeCloseTo(0.21)
-          const shutters = mesh.children.filter((part) => part.name === 'window-shutter')
+          const shutters = mesh.children.filter(
+            (part) => part.name === 'shutter-left' || part.name === 'shutter-right',
+          )
           expect(shutters).toHaveLength(2)
           for (const shutter of shutters) {
             const box = new THREE.Box3().setFromObject(shutter)
@@ -411,9 +413,9 @@ describe('window stool and decorative shutters', () => {
   test('absent details add no stool or shutters; louvered shutters use 40 mm slat pitch', () => {
     const node = WindowNode.parse({ width: 1.2, height: 1, sill: false })
     expect(buildWindowPreviewMesh(node).getObjectByName('window-interior-stool')).toBeUndefined()
-    expect(buildWindowPreviewMesh(node).getObjectByName('window-shutter')).toBeUndefined()
+    expect(buildWindowPreviewMesh(node).getObjectByName('shutter-left')).toBeUndefined()
     const mesh = buildWindowPreviewMesh({ ...node, shutters: 'louvered', shutterWidth: 0.4 })
-    const shutter = mesh.getObjectByName('window-shutter')!
+    const shutter = mesh.getObjectByName('shutter-left')!
     const slats = shutter.children.slice(4)
     expect(slats.length).toBeGreaterThan(10)
     expect(slats[1]!.position.y - slats[0]!.position.y).toBeCloseTo(0.04)
@@ -720,7 +722,7 @@ describe('room-aware window motion and exterior accessories', () => {
         })
         for (const open of [0, 0.5, 1]) {
           const mesh = buildWindowPreviewMesh({ ...node, shutterOpen: open })
-          const leaves = collect(mesh, 'window-shutter')
+          const leaves = collect(mesh, 'shutter-left')
           expect(leaves).toHaveLength(1)
           const leaf = leaves[0]!
           expect(leaf.position.x).toBeCloseTo(-0.8)
@@ -733,7 +735,7 @@ describe('room-aware window motion and exterior accessories', () => {
           for (const part of leaf.children) expect(part.userData.slotId).toBe('shutters')
         }
         const plain = buildWindowPreviewMesh({ ...node, casingFaceB: false, shutterSides: 'right' })
-        expect(collect(plain, 'window-shutter')[0]!.position.x).toBeCloseTo(0.7)
+        expect(collect(plain, 'shutter-right')[0]!.position.x).toBeCloseTo(0.7)
       })
     },
   )

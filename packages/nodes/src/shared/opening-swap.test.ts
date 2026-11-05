@@ -70,7 +70,7 @@ test("only a single casement's hinge swaps; the swap opens the closed sash", () 
   applyOpeningSwap(casement, swapWindowHingePatch(casement), windowMechanism)
   expect(useScene.getState().nodes[casement.id]).toMatchObject({ hingesSide: 'right' })
   expect(useScene.temporal.getState().pastStates).toHaveLength(1)
-  expect(useInteractive.getState().windowAnimations[casement.id]).toMatchObject({
+  expect(useInteractive.getState().windowAnimations[casement.id]?.operationState).toMatchObject({
     to: 1,
     persist: false,
   })

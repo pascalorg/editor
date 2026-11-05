@@ -24,7 +24,6 @@ import {
 import { useFrame } from '@react-three/fiber'
 import { useEffect, useRef } from 'react'
 import * as THREE from 'three'
-import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import { applyWorldScaleBoxUVs } from '../../lib/box-uv'
 import { hingeJambPart, hingeLeafPart, roundedBox, tube } from '../../lib/hardware-geometry'
 import {
@@ -56,7 +55,11 @@ import {
   SINGLE_HUNG_ACTIVE_SASH_NAME,
   SLIDING_WINDOW_ACTIVE_PANEL_NAME,
   TILT_TURN_WINDOW_SASH_NAME,
+  WINDOW_LEFT_SHUTTER_NAME,
+  WINDOW_RIGHT_SHUTTER_NAME,
 } from './window-pose'
+
+import { buildWindowRollerCurtain } from './window-roller-shutter'
 
 export * from './window-pose'
 
@@ -876,6 +879,23 @@ function addArchedWindowVisuals(node: RenderWindowNode, mesh: THREE.Mesh) {
 function getWindowRenderOpenAmount(node: WindowNode) {
   const runtimeValue = useInteractive.getState().windows[node.id]?.operationState
   return Math.min(Math.max(runtimeValue ?? node.operationState ?? 0, 0), 1)
+}
+
+function getWindowRenderShutterAmount(
+  node: WindowNode,
+  field: 'shutterOpen' | 'rollerShutterOpen',
+) {
+  const interactive = useInteractive.getState()
+  return Math.min(
+    Math.max(
+      interactive.windows[node.id]?.[field] ??
+        interactive.windowAnimations[node.id]?.[field]?.from ??
+        node[field] ??
+        1,
+      0,
+    ),
+    1,
+  )
 }
 
 function getAwningDirection(node: WindowNode) {
@@ -3408,14 +3428,13 @@ function addWindowDetails(node: RenderWindowNode, mesh: THREE.Mesh) {
       )
         continue
       const shutter = new THREE.Group()
-      shutter.name = 'window-shutter'
+      shutter.name = side === -1 ? WINDOW_LEFT_SHUTTER_NAME : WINDOW_RIGHT_SHUTTER_NAME
       shutter.userData.side = side === -1 ? 'left' : 'right'
       shutter.position.set(
         side * (node.width / 2 + casingGap),
         0,
         exterior * (wallDepth / 2 + 0.02 + 0.015) - offset,
       )
-      shutter.rotation.y = -side * exterior * (1 - (node.shutterOpen ?? 1)) * Math.PI
       mesh.add(shutter)
       const board = (w: number, h: number, d: number, x: number, y: number, z = 0) =>
         addBox(shutter, material, w, h, d, (side * width) / 2 + x, y, z)
@@ -3488,26 +3507,14 @@ function addWindowDetails(node: RenderWindowNode, mesh: THREE.Mesh) {
         0,
         z + exterior * 0.015,
       ).name = 'window-roller-guide'
-    const curtain = new THREE.Group()
-    curtain.name = 'window-roller-curtain'
-    mesh.add(curtain)
-    const drop = (1 - (node.rollerShutterOpen ?? 1)) * node.height
-    const slatCount = Math.floor(drop / 0.04)
-    if (slatCount > 0) {
-      const slats: THREE.BoxGeometry[] = []
-      for (let i = 0; i < slatCount; i++) {
-        const slat = new THREE.BoxGeometry(node.width, 0.036, 0.01)
-        applyWorldScaleBoxUVs(slat, node.width, 0.036, 0.01)
-        slat.translate(0, node.height / 2 - i * 0.04 - 0.018, 0)
-        slats.push(slat)
-      }
-      const geometry = mergeGeometries(slats)!
-      for (const slat of slats) slat.dispose()
-      const panel = new THREE.Mesh(geometry, material)
-      panel.position.z = z + exterior * 0.015
-      tagWindowSlot(panel)
-      curtain.add(panel)
-    }
+    mesh.add(
+      buildWindowRollerCurtain(
+        node,
+        material,
+        z + exterior * 0.015,
+        getWindowRenderShutterAmount(node, 'rollerShutterOpen'),
+      ),
+    )
   }
   if (node.corner) return
   const gridTypes = [
@@ -3549,7 +3556,12 @@ function addWindowDetails(node: RenderWindowNode, mesh: THREE.Mesh) {
 function syncWindowCutout(node: RenderWindowNode, mesh: THREE.Mesh) {
   if (node.openingKind !== 'opening') {
     addWindowDetails(node, mesh)
-    poseWindowMovingParts(node, mesh, getWindowRenderOpenAmount(node))
+    poseWindowMovingParts(
+      node,
+      mesh,
+      getWindowRenderOpenAmount(node),
+      getWindowRenderShutterAmount(node, 'shutterOpen'),
+    )
     for (const name of [
       CASEMENT_WINDOW_SASH_NAME,
       FRENCH_CASEMENT_LEFT_SASH_NAME,

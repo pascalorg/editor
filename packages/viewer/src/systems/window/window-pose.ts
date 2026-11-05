@@ -1,6 +1,9 @@
 import { openingExteriorFace, openingHostFacing, useScene, type WindowNode } from '@pascal-app/core'
 import type { Object3D } from 'three'
 
+export const WINDOW_LEFT_SHUTTER_NAME = 'shutter-left'
+export const WINDOW_RIGHT_SHUTTER_NAME = 'shutter-right'
+
 export const CASEMENT_WINDOW_SASH_NAME = 'casement-window-sash'
 export const FRENCH_CASEMENT_LEFT_SASH_NAME = 'french-casement-left-sash'
 export const FRENCH_CASEMENT_RIGHT_SASH_NAME = 'french-casement-right-sash'
@@ -21,6 +24,27 @@ export function windowExteriorSign(node: WindowNode, mesh?: Object3D): number {
   return (face === 'a' ? 1 : -1) * openingHostFacing(node)
 }
 
+/** Leaves are modelled flat on the wall, with local X starting at the inner hinge edge. */
+export function poseWindowShutters(
+  node: WindowNode,
+  mesh: Object3D | undefined,
+  value: number,
+): boolean {
+  const exterior = windowExteriorSign(node, mesh)
+  let found = false
+  for (const [name, side] of [
+    [WINDOW_LEFT_SHUTTER_NAME, -1],
+    [WINDOW_RIGHT_SHUTTER_NAME, 1],
+  ] as const) {
+    const leaf = mesh?.getObjectByName(name)
+    if (!leaf) continue
+    // Export clones can decompose a half-turn into nonzero X/Z Euler angles.
+    leaf.rotation.set(0, -side * exterior * (1 - value) * Math.PI, 0)
+    found = true
+  }
+  return found
+}
+
 /**
  * Pose a window's moving parts (sash/panel/slats) at `value` (0 = closed,
  * 1 = open) by mutating the named child groups under `mesh`. Returns true when
@@ -34,7 +58,9 @@ export function poseWindowMovingParts(
   node: WindowNode,
   mesh: Object3D | undefined,
   value: number,
+  shutterOpen: number = node.shutterOpen ?? 1,
 ): boolean {
+  poseWindowShutters(node, mesh, shutterOpen)
   if (node.windowType === 'sliding') {
     const activePanel = mesh?.getObjectByName(SLIDING_WINDOW_ACTIVE_PANEL_NAME)
     if (!activePanel) return false

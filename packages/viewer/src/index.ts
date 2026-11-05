@@ -476,9 +476,11 @@ export {
   WallSystem,
 } from './systems/wall/wall-system'
 export {
+  advanceWindowAnimations,
   poseWindowMovingParts,
   WindowAnimationSystem,
 } from './systems/window/window-animation-system'
+export { restoreWindowRollerShutter } from './systems/window/window-roller-shutter'
 export { buildWindowPreviewMesh, WindowSystem } from './systems/window/window-system'
 export { ZoneSystem } from './systems/zone/zone-system'
 export { useImmersiveXRPresentation } from './xr/presentation-context'

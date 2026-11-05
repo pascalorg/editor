@@ -1,14 +1,41 @@
 import type { MechanismCapability } from '@pascal-app/core'
 import {
   closeWindowOpenState,
+  getDisplayedWindowShutterValue,
   getDisplayedWindowValue,
   isOperableWindowType,
   openWindowOpenState,
+  setWindowShuttersOpenState,
 } from '@pascal-app/editor'
 import { scriptedOpening } from '../shared/scripted-opening'
 
 /** A window's sash: Open and Close preview it without touching the saved open state. */
 export const windowMechanism: MechanismCapability = {
+  parts: [
+    {
+      id: 'shutters',
+      label: 'Shutters',
+      icon: 'shutters',
+      verb: 'open',
+      has: (node) =>
+        node.type === 'window' &&
+        !node.source &&
+        ((Boolean(node.shutters) && node.shutters !== 'none') || node.rollerShutter === 'box'),
+      isOn: (node, state) =>
+        node.type === 'window' &&
+        ((Boolean(node.shutters) &&
+          node.shutters !== 'none' &&
+          getDisplayedWindowShutterValue(node.id, 'shutterOpen', node.shutterOpen, state) > 0) ||
+          (node.rollerShutter === 'box' &&
+            getDisplayedWindowShutterValue(
+              node.id,
+              'rollerShutterOpen',
+              node.rollerShutterOpen,
+              state,
+            ) > 0)),
+      set: (node, on) => setWindowShuttersOpenState(node.id, on, { persist: false }),
+    },
+  ],
   verb: 'open',
   icon: 'window',
   has: (node) =>

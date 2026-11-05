@@ -26,6 +26,7 @@ import {
   isViewerPresentationTextureBorrowed,
   poseDoorMovingParts,
   poseWindowMovingParts,
+  restoreWindowRollerShutter,
   SCENE_LAYER,
   snapLevelsToTruePositions,
   type ViewerPresentationContribution,
@@ -1724,6 +1725,7 @@ function bakeWindowClip(
   node: WindowNode,
   windowObject: THREE.Object3D,
 ): THREE.AnimationClip | null {
+  restoreWindowRollerShutter(node, windowObject)
   poseWindowMovingParts(node, windowObject, 0)
 
   const closedPoses = new Map<

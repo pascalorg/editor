@@ -1023,9 +1023,13 @@ export {
 export { writeWindowChanges } from './lib/window-changes'
 export {
   closeWindowOpenState,
+  getDisplayedWindowShutterValue,
   getDisplayedWindowValue,
   isOperableWindowType,
   openWindowOpenState,
+  setWindowShuttersOpenState,
+  type WindowOpenAnimationOptions,
+  type WindowShutterField,
 } from './lib/window-interaction'
 export {
   getActiveBuildingPose,

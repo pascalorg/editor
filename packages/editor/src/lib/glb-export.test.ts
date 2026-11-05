@@ -22,6 +22,7 @@ import {
   buildDoorPreviewMesh,
   buildWindowPreviewMesh,
   markViewerPresentationTextureBorrowed,
+  poseWindowMovingParts,
   type ViewerPresentationContribution,
   viewerPresentationRegistry,
 } from '@pascal-app/viewer'
@@ -1211,6 +1212,41 @@ describe('prepareSceneForExport', () => {
         mesh.getObjectByName('tilt-turn-window-sash')!.quaternion.angleTo(original),
       ).toBeCloseTo(0)
       mixer.stopAllAction()
+      prepared.dispose()
+    },
+  )
+
+  test.each([0, 0.5, 1])(
+    'bakes saved shutters at %s without adding a shutter clip or changing live previews',
+    (shutterOpen) => {
+      const node = WindowNode.parse({
+        windowType: 'casement',
+        shutters: 'panel',
+        shutterOpen,
+        rollerShutter: 'box',
+        rollerShutterOpen: shutterOpen,
+      })
+      const mesh = buildWindowPreviewMesh(node)
+      const saved = mesh.getObjectByName('shutter-left')!.quaternion.clone()
+      poseWindowMovingParts(node, mesh, 0, 1 - shutterOpen)
+      const preview = mesh.getObjectByName('shutter-left')!.quaternion.clone()
+      // Simulate a live roller preview whose topology differs from the saved node.
+      mesh.getObjectByName('window-roller-curtain')!.clear()
+      sceneRegistry.nodes.set(node.id, mesh)
+      const prepared = prepareSceneForExport(new THREE.Group().add(mesh), { [node.id]: node })
+      expect(prepared.animations).toHaveLength(1)
+      expect(prepared.animations[0]!.tracks).toHaveLength(1)
+      const baked = prepared.scene.getObjectByName('shutter-left')!
+      expect(baked.quaternion.angleTo(saved)).toBeCloseTo(0)
+      expect(mesh.getObjectByName('shutter-left')!.quaternion.angleTo(preview)).toBeCloseTo(0)
+      const curtain = prepared.scene.getObjectByName('window-roller-curtain')!
+      expect(curtain.children).toHaveLength(shutterOpen === 1 ? 0 : 1)
+      if (shutterOpen !== 1) {
+        const panel = curtain.children[0] as THREE.Mesh
+        expect(panel.geometry.index!.count).toBe(
+          Math.floor(((1 - shutterOpen) * node.height) / 0.04) * 36,
+        )
+      }
       prepared.dispose()
     },
   )
