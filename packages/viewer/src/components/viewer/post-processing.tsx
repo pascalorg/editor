@@ -353,7 +353,9 @@ const PostProcessingPasses = ({
   const renderQuality = useViewer((s) => s.renderQuality)
   // Daylight look uniforms, refreshed every frame from the atmosphere/exposure.
   const whiteBalance = useMemo(() => uniform(new Vector3(1, 1, 1)), [])
-  const bloomThreshold = useMemo(() => uniform(1), [])
+  // 1 / exposure: the bloom threshold (only display-white blooms) and the daylight look's
+  // compensation of unlit overlays (zones, editor overlays), which keep their designed brightness.
+  const exposureInverse = useMemo(() => uniform(1), [])
   const lastProjectIdRef = useRef(projectId)
 
   // Bump this to force a pipeline rebuild (used by retry logic)
@@ -539,8 +541,9 @@ const PostProcessingPasses = ({
       // Composite the zone-pass tint into the base scene so rooms show whether or
       // not AO is enabled. The medium-tier AO branch below rebuilds this
       // composite with the zone tint kept out of the AO (no double-add).
+      const zoneRgb = daylight ? zonePass.rgb.mul(exposureInverse) : zonePass.rgb
       let sceneColor = vec4(
-        add(scenePassColor.rgb, zonePass.rgb),
+        add(scenePassColor.rgb, zoneRgb),
         contentAlpha,
       ) as unknown as ReturnType<typeof vec4>
 
@@ -611,7 +614,7 @@ const PostProcessingPasses = ({
           aoNode.getTextureNode().sample(screenUV).r,
           MEDIUM_AO_BLEND,
         )
-        sceneColor = vec4(add(scenePassColor.rgb.mul(aoBlend), zonePass.rgb), contentAlpha)
+        sceneColor = vec4(add(scenePassColor.rgb.mul(aoBlend), zoneRgb), contentAlpha)
       }
       // The daylight look's room light (windows, lamps, bounce, night spill) on the other tiers.
       if (daylight && aoTier !== 'high') scenePass.contextNode = daylightRoomContext(null)
@@ -643,7 +646,7 @@ const PostProcessingPasses = ({
           sceneColor,
           DAYLIGHT_BLOOM.strength,
           DAYLIGHT_BLOOM.radius,
-          bloomThreshold,
+          exposureInverse,
         ) as any
         glow.smoothWidth.value = DAYLIGHT_BLOOM.softKnee
         resources.effects.push(glow)
@@ -708,7 +711,12 @@ const PostProcessingPasses = ({
           .max(outlineNode.secondaryHiddenEdge)
         visualAlpha = visualAlpha.max(outlineAlpha)
         compositeWithOutlines = vec4(
-          add(sceneColor.rgb, selectedOutline.add(hoverOutline)),
+          add(
+            sceneColor.rgb,
+            daylight
+              ? selectedOutline.add(hoverOutline).mul(exposureInverse)
+              : selectedOutline.add(hoverOutline),
+          ),
           sceneColor.a,
         )
       }
@@ -801,7 +809,11 @@ const PostProcessingPasses = ({
         displayScene = vec4(displayScene.rgb.mul(tslFloat(1).sub(vignette)), 1)
       }
       let finalOutput: ReturnType<typeof premultiplyAlpha> | ReturnType<typeof vec4> = vec4(
-        mix(displayScene.rgb, toDisplay(overlayColor.rgb).rgb, overlayColor.a),
+        mix(
+          displayScene.rgb,
+          toDisplay(daylight ? overlayColor.rgb.mul(exposureInverse) : overlayColor.rgb).rgb,
+          overlayColor.a,
+        ),
         tslFloat(1),
       )
       if (transparentBackground) {
@@ -876,7 +888,7 @@ const PostProcessingPasses = ({
     transparentBackground,
     renderQuality,
     whiteBalance,
-    bloomThreshold,
+    exposureInverse,
     size.height,
     size.width,
     zoneLayers,
@@ -925,7 +937,7 @@ const PostProcessingPasses = ({
     bgSkyDeepCurrent.current.lerp(bgSkyDeepTarget.current, Math.min(delta, 0.1) * 4)
     bgSkyDeepUniform.current.value.copy(bgSkyDeepCurrent.current)
     if (isDaylight(atmosphere)) whiteBalance.value.copy(atmosphere.whiteBalance)
-    bloomThreshold.value = 1 / Math.max(renderer.toneMappingExposure, 1e-3)
+    exposureInverse.value = 1 / Math.max(renderer.toneMappingExposure, 1e-3)
     camProjInvUniform.current.value.copy(camera.projectionMatrixInverse)
     camWorldUniform.current.value.copy(camera.matrixWorld)
     // Ink colour follows the (lerping) background luminance — snaps dark↔light. The daylight

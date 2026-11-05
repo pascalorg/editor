@@ -92,6 +92,8 @@ export function DaylightAtmosphere() {
     const scene = new Scene()
     const material = new MeshBasicNodeMaterial({ side: BackSide, depthWrite: false })
     material.colorNode = sky.skyRadiance(positionWorldDirection, { disc: false })
+    // Radiance, not an unlit surface: it keeps the exposure (see the material hooks).
+    material.userData.daylightSky = true
     const dome = new Mesh(new SphereGeometry(10, 48, 24), material)
     scene.add(dome)
     // The viewer mounts its scene once the GPU renderer is initialized; anything else (a test

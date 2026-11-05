@@ -16,15 +16,18 @@ import {
   positionWorld,
   pow,
   smoothstep,
+  userData,
   vec3,
   vec4,
 } from 'three/tsl'
 import {
+  MeshBasicNodeMaterial,
   type MeshStandardNodeMaterial,
   type NodeBuilder,
   PhysicalLightingModel,
   MeshStandardNodeMaterial as StandardNodeMaterial,
 } from 'three/webgpu'
+import { SCENE_LAYER } from '../layers'
 import { daylightRooms } from './rooms'
 import { daylightUniforms, isDaylightRenderer } from './runtime'
 
@@ -37,7 +40,9 @@ import { daylightUniforms, isDaylightRenderer } from './runtime'
  * - EON rough diffuse on matte surfaces (r187 `diffuseRoughness`);
  * - lamp shades and screens glow brighter at night (× the time-of-day lamp level);
  * - tuned glass: clear up close, more opaque and reflective with distance and grazing angle, and
- *   at night warm with the light of the room behind it.
+ *   at night warm with the light of the room behind it;
+ * - unlit surfaces in the scene (pool water, guides) keep their authored display brightness: the
+ *   metered exposure (up to ×4.6 at night) is for lit surfaces only.
  *
  * Installed once as a prototype hook (like three's own lighting-model extension points). It only
  * attaches for renderers flagged by the daylight atmosphere, so other canvases (item thumbnails)
@@ -175,18 +180,48 @@ export function installDaylightMaterialHooks(): void {
   const setupLighting = proto.setupLighting
   proto.setupLighting = function (builder) {
     if (!hooked(this, builder) || !emitter(this)) return setupLighting.call(this, builder)
-    // Build-time only: the boosted emission joins this compile without touching the material.
-    this.emissiveNode = materialEmissive.mul(
-      float(1).add(
-        daylightUniforms.lampLevel
-          .mul(daylightUniforms.emissiveBoost)
-          .mul(daylightUniforms.glowComp),
-      ),
-    )
+    // Build-time only: the emission joins this compile without touching the material.
+    const u = daylightUniforms
+    if ((builder as any).object?.userData?.daylightLampEmitter === true) {
+      // A lamp's shade/bulb: the exported hue at a fixed display brightness (× display white, ÷
+      // exposure) while its lamp is on — always reads as lit and blooms; dark when off, even by
+      // day. Dark emissive parts (cords, trims) stay dark.
+      const emissive: any = materialEmissive
+      const lum = emissive.dot(vec3(0.2126, 0.7152, 0.0722)).max(1e-4)
+      this.emissiveNode = emissive
+        .div(lum)
+        .mul(smoothstep(0.02, 0.08, lum))
+        .mul(userData('daylightLampOn', 'float') as any)
+        .mul(u.emitterDisplay)
+        .mul(u.emitterExpInv)
+    } else {
+      // Other glowing surfaces (screens, signs): brighter at night, kept out of the night lift.
+      this.emissiveNode = materialEmissive.mul(
+        float(1).add(u.lampLevel.mul(u.emissiveBoost).mul(u.glowComp)),
+      )
+    }
     try {
       return setupLighting.call(this, builder)
     } finally {
       this.emissiveNode = null
     }
+  }
+
+  // Unlit scene surfaces: undo the metered exposure (zones and editor overlays are compensated in
+  // the post-processing, on their own layers; the sky capture is radiance and keeps it).
+  const basic = MeshBasicNodeMaterial.prototype as unknown as {
+    setupLighting(this: MeshBasicNodeMaterial, builder: NodeBuilder): any
+  }
+  const setupBasicLighting = basic.setupLighting
+  basic.setupLighting = function (builder) {
+    const light = setupBasicLighting.call(this, builder)
+    const object = (builder as any).object as { layers?: { isEnabled(layer: number): boolean } }
+    if (
+      !isDaylightRenderer(builder.renderer) ||
+      this.userData.daylightSky === true ||
+      !object?.layers?.isEnabled(SCENE_LAYER)
+    )
+      return light
+    return light.mul(daylightUniforms.emitterExpInv)
   }
 }

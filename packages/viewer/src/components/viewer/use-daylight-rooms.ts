@@ -11,6 +11,7 @@ import {
   liveDoorOpenness,
   liveLevelObjects,
   liveRoomScene,
+  syncLampEmitters,
 } from '../../lib/daylight/room-scene'
 import { daylightRooms } from '../../lib/daylight/rooms'
 import useViewer from '../../store/use-viewer'
@@ -86,6 +87,7 @@ export function useDaylightRooms() {
         )
         s.levelObjects = s.live ? liveLevelObjects() : bakedLevels(s.bakedRoot)
         flagGlassMaterials(scene)
+        syncLampEmitters()
       }
     }
 
@@ -99,7 +101,8 @@ export function useDaylightRooms() {
 
     // Lamp switches (fed lamps by key; virtual lamps follow the time-of-day default) and doors.
     const lit = litFeedKeys()
-    daylightRooms.setLampStates((lamp) => (lamp.itemId ? lit.has(lamp.itemId) : lampDefault))
+    if (daylightRooms.setLampStates((lamp) => (lamp.itemId ? lit.has(lamp.itemId) : lampDefault)))
+      syncLampEmitters()
     if (s.live) daylightRooms.updateDoors(liveDoorOpenness)
   })
 }

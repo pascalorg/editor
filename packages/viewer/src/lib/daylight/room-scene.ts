@@ -23,6 +23,9 @@ export type LampFeedLight = {
   /** Fully-on intensity. */
   peak?: number
   getWorldPosition: (out: Vector3) => boolean
+  /** The lamp's item: its node id (live) or object (baked). */
+  nodeId?: string
+  object?: Object3D
 }
 
 type LampFeed = {
@@ -264,5 +267,70 @@ export function bakedRoomScene(root: Object3D, virtualLampsOn: boolean): RoomSce
     lamps: feedLamps(),
     virtualLampsOn,
     configureRaycaster: (raycaster) => setSurfaceRaycastLayers(raycaster.layers),
+  }
+}
+
+type EmissiveMaterial = {
+  emissive?: { getHex(): number }
+  emissiveIntensity?: number
+  transparent?: boolean
+  userData: Record<string, unknown>
+  needsUpdate: boolean
+}
+
+function emissiveMeshes(root: Object3D): Object3D[] {
+  const out: Object3D[] = []
+  root.traverse((object) => {
+    const mesh = object as unknown as {
+      isMesh?: boolean
+      material?: EmissiveMaterial | EmissiveMaterial[]
+    }
+    if (!mesh.isMesh || !mesh.material) return
+    const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material]
+    if (
+      materials.some(
+        (m) =>
+          !m.transparent &&
+          !!m.emissive &&
+          m.emissive.getHex() !== 0 &&
+          (m.emissiveIntensity ?? 1) > 0,
+      )
+    )
+      out.push(object)
+  })
+  return out
+}
+
+/**
+ * Lamp shades and bulbs follow their own lamp: their meshes are tagged so the material hook gives
+ * them a normalised display brightness, and `userData.daylightLampOn` carries the lamp's switch
+ * per object (lamps of one model share a material). A light can sit on a child item while the
+ * glowing mesh belongs to its parent item: search the item, then its nearest item ancestor.
+ */
+export function syncLampEmitters(): void {
+  for (const feed of lampFeeds) {
+    for (const light of feed.lights()) {
+      const root =
+        light.object ?? (light.nodeId ? sceneRegistry.nodes.get(light.nodeId) : undefined)
+      if (!root) continue
+      let meshes = emissiveMeshes(root)
+      for (let parent = root.parent; !meshes.length && parent; parent = parent.parent) {
+        const extras = parent.userData as { pascalId?: string; kind?: string }
+        const registered = [...sceneRegistry.nodes.values()].includes(parent)
+        if (extras.pascalId || registered) {
+          if (extras.kind === undefined || extras.kind === 'item') meshes = emissiveMeshes(parent)
+          break
+        }
+      }
+      const on = feed.intensity(light) > 0 ? 1 : 0
+      for (const mesh of meshes) {
+        mesh.userData.daylightLampOn = on
+        if (mesh.userData.daylightLampEmitter) continue
+        mesh.userData.daylightLampEmitter = true
+        const material = (mesh as unknown as { material: EmissiveMaterial | EmissiveMaterial[] })
+          .material
+        for (const m of Array.isArray(material) ? material : [material]) m.needsUpdate = true
+      }
+    }
   }
 }
