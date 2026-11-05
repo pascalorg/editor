@@ -131,7 +131,13 @@ export {
   type ResolvedAssemblyLayer,
   resolveAssemblyStack,
 } from './lib/assembly-stack'
-export { loadAssetUrl, saveAsset } from './lib/asset-storage'
+export {
+  deleteAsset,
+  listLocalAssetUrls,
+  loadAssetUrl,
+  saveAsset,
+  sweepLocalAssetsExcept,
+} from './lib/asset-storage'
 export {
   BEAM_MATERIAL_LABELS,
   BEAM_MATERIAL_LIBRARY_REFS,
@@ -409,6 +415,11 @@ export {
   roomClearPolygon,
 } from './lib/level-footprints'
 export { getDefaultLevelName, getLevelDisplayName } from './lib/level-name'
+export {
+  collectGraphAssetUrlsFromParts,
+  collectNodeAssetUrls,
+  collectSceneAssetUrls,
+} from './lib/local-asset-lifecycle'
 export {
   areMeasurementPointsCoplanar,
   closestMeasurementFeatureBinding,
