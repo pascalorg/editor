@@ -1,5 +1,7 @@
 import { refuse } from '../agent-tools/refusal'
 import { clampDoorToWall, clampWindowToWall, findWallChildOverlap } from '../building/wall-openings'
+import { getDoorOpeningSize } from '../lib/door-opening'
+import { openingHostFacing } from '../lib/opening-casing'
 import {
   type AnyNode,
   type AnyNodeId,
@@ -210,12 +212,18 @@ function planOpeningMove(
   checkOverlap: boolean,
 ): MovePlan {
   if (node.type === 'door' && target.y !== undefined) refuseStrayY(target, node)
+  // A door's cutout is wider and taller than its leaf once it has sidelights or a transom.
+  const cutout =
+    node.type === 'door'
+      ? getDoorOpeningSize(node)
+      : { width: node.width, height: node.height, leafOffsetX: 0 }
+  const cutoutOffsetX = cutout.leafOffsetX * openingHostFacing(node)
   const length = wallLength(wall)
-  if (length < node.width)
+  if (length < cutout.width)
     refuse(
       'wall_too_short',
-      `Wall ${wall.id} is ${length.toFixed(2)} m long, too short for this ${node.width.toFixed(2)} m ${node.type}.`,
-      { id: node.id, wallId: wall.id, wallLength: length, width: node.width },
+      `Wall ${wall.id} is ${length.toFixed(2)} m long, too short for this ${cutout.width.toFixed(2)} m ${node.type}.`,
+      { id: node.id, wallId: wall.id, wallLength: length, width: cutout.width },
     )
   const rawX = desiredLocalX(wall, node, target)
   const rawY =
@@ -226,7 +234,7 @@ function planOpeningMove(
         : target.y + node.height / 2
   const { clampedX, clampedY } =
     node.type === 'door'
-      ? clampDoorToWall(wall, rawX, node.width, node.height)
+      ? clampDoorToWall(wall, rawX, node.width, node.height, node)
       : clampWindowToWall(
           wall,
           rawX,
@@ -239,10 +247,10 @@ function planOpeningMove(
     nodes,
     wall,
     node,
-    clampedX,
-    clampedY,
-    node.width,
-    node.height,
+    clampedX - cutoutOffsetX,
+    clampedY + (cutout.height - node.height) / 2,
+    cutout.width,
+    cutout.height,
     target,
     checkOverlap,
   )
