@@ -154,3 +154,19 @@ test('cancel and a history-cleared preview cannot be committed by a stale releas
   preview.commit({ height: 2.4 })
   expect(useScene.getState().nodes[door.id]).toBe(door)
 })
+
+test('entry fixed lights stay within the curtain perimeter during placement and resize', () => {
+  const entry = DoorNode.parse({
+    ...door,
+    width: 1,
+    sidelightLeft: 0.3,
+    sidelightRight: 0.5,
+    transomHeight: 0.4,
+  })
+  const placed = clampDoorToWall(wall, 0, 1, 2.1, entry)
+  expect(placed.clampedX).toBeCloseTo(0.85)
+  expect(placed.clampedY).toBeCloseTo(1.05)
+  const result = constrainCurtainOpening(entry, { position: [0, 1.05, 0], height: 3 }, nodes)
+  expect(result.position?.[0]).toBeCloseTo(0.85)
+  expect(result.height).toBeCloseTo(2.05)
+})

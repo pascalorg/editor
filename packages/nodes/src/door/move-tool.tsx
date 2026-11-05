@@ -5,10 +5,12 @@ import {
   DoorNode,
   emitter,
   type GridEvent,
+  getDoorOpeningSize,
   getOpeningWallPlacement,
   getWallThickness,
   holdHiddenWallPointerEvents,
   isCurvedWall,
+  openingHostFacing,
   type RoofEvent,
   type RoofNode,
   resolveHostedOpeningFrameDepth,
@@ -350,8 +352,11 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
       const targetLocalX = dragAnchor.startX + (rawLocalX - dragAnchor.rawX)
       const localX = resolveWallSlideAlignment({
         wallNode: event.node,
-        rawLocalX: targetLocalX,
-        width: movingDoorNode.width,
+        rawLocalX:
+          targetLocalX -
+          getDoorOpeningSize(movingDoorNode).leafOffsetX *
+            openingHostFacing({ rotation: [0, itemRotation, 0] }),
+        width: getDoorOpeningSize(movingDoorNode).width,
         candidates: alignmentCandidates,
         // Along-wall alignment guides display in every snapping mode; the
         // magnetic pull onto them lands only in "lines" mode. The grid
@@ -360,18 +365,23 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
       })
       const { clampedX, clampedY } = clampToWall(
         event.node,
-        localX,
+        localX +
+          getDoorOpeningSize(movingDoorNode).leafOffsetX *
+            openingHostFacing({ rotation: [0, itemRotation, 0] }),
         movingDoorNode.width,
         movingDoorNode.height,
+        { ...movingDoorNode, rotation: [0, itemRotation, 0] },
       )
 
       const valid = !hasWallChildOverlap(
         event.node.id,
         useScene.getState().nodes,
-        clampedX,
-        clampedY,
-        movingDoorNode.width,
-        movingDoorNode.height,
+        clampedX -
+          getDoorOpeningSize(movingDoorNode).leafOffsetX *
+            openingHostFacing({ rotation: [0, itemRotation, 0] }),
+        clampedY + (getDoorOpeningSize(movingDoorNode).height - movingDoorNode.height) / 2,
+        getDoorOpeningSize(movingDoorNode).width,
+        getDoorOpeningSize(movingDoorNode).height,
         movingDoorNode.id,
       )
 
@@ -492,10 +502,14 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
       publishOpeningGuidesForWallEvent({
         wall: target.wallNode,
         movingId: movingDoorNode.id,
-        centerS: target.clampedX,
-        centerY: target.clampedY,
-        width: movingDoorNode.width,
-        height: movingDoorNode.height,
+        centerS:
+          target.clampedX -
+          getDoorOpeningSize(movingDoorNode).leafOffsetX *
+            openingHostFacing({ rotation: [0, target.itemRotation, 0] }),
+        centerY:
+          target.clampedY + (getDoorOpeningSize(movingDoorNode).height - movingDoorNode.height) / 2,
+        width: getDoorOpeningSize(movingDoorNode).width,
+        height: getDoorOpeningSize(movingDoorNode).height,
         // Doors sit on the floor — no sill/head or vertical alignment guides.
         includeVertical: false,
         levelYOffset: getLevelYOffset(),
@@ -768,6 +782,7 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
         width: movingDoorNode.width,
         height: movingDoorNode.height,
         ignoreId: movingDoorNode.id,
+        opening: movingDoorNode,
         vertical: { kind: 'bottom-locked' },
       })
 

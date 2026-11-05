@@ -3,6 +3,7 @@ import { DEFAULT_OPENING_CASING_WIDTH, OPENING_CASING_PROUD } from '../schema/no
 import { DEFAULT_WALL_THICKNESS, getWallThickness } from '../systems/wall/wall-footprint'
 import { roomSideFaces } from '../systems/wall/wall-room-sides'
 import { cornerPair } from './corner-pair'
+import { getDoorOpeningSize } from './door-opening'
 
 /**
  * Door and window casing: flat boards on the finished faces of the host wall
@@ -65,7 +66,7 @@ export function openingCasingWidth(opening: Pick<CasedOpening, 'casingWidth'>): 
  * +1 when the unit faces the host's front (its own +z is face `a`), -1 when it is turned half
  * round to face the back, which mirrors its x and z against the host's.
  */
-export function openingHostFacing(opening: Pick<CasedOpening, 'rotation'>): 1 | -1 {
+export function openingHostFacing(opening: Partial<Pick<CasedOpening, 'rotation'>>): 1 | -1 {
   return Math.cos(opening.rotation?.[1] ?? 0) >= 0 ? 1 : -1
 }
 
@@ -141,8 +142,11 @@ export function openingCasingBoards(
 ): OpeningCasingBoard[] {
   const width = openingCasingWidth(opening)
   const proud = OPENING_CASING_PROUD
-  const halfWidth = opening.width / 2
-  const halfHeight = opening.height / 2
+  const size = getDoorOpeningSize(opening)
+  const halfWidth = size.width / 2
+  const halfHeight = size.height / 2
+  const offsetX = -size.leafOffsetX * openingHostFacing(opening)
+  const offsetY = (size.height - opening.height) / 2
   const corner = host.cornerEnd === 'start' ? -1 : host.cornerEnd === 'end' ? 1 : 0
   const left = -halfWidth - (corner === -1 ? 0 : width)
   const right = halfWidth + (corner === 1 ? 0 : width)
@@ -159,7 +163,7 @@ export function openingCasingBoards(
       boards.push({
         face,
         part,
-        center: [(x0 + x1) / 2, (y0 + y1) / 2, z],
+        center: [(x0 + x1) / 2 + offsetX, (y0 + y1) / 2 + offsetY, z],
         size: [x1 - x0, y1 - y0, proud],
       })
     board('head', [left, right], [halfHeight, halfHeight + width])

@@ -3223,3 +3223,57 @@ test.each(['casement', 'double-hung', 'fixed'] as const)(
     )
   },
 )
+
+test('author_scene writes native entry lights and the chosen folding panel count', () => {
+  const payload = authorScenePayload.parse({
+    levels: [
+      {
+        name: 'Entry',
+        walls: [
+          {
+            id: 'front',
+            start: [0, 0],
+            end: [10, 0],
+            height: 3,
+            thickness: 0.2,
+            openings: [
+              {
+                kind: 'door',
+                along: 2,
+                width: 1,
+                height: 2.1,
+                sidelightLeft: 0.3,
+                sidelightRight: 0.5,
+                transomHeight: 0.4,
+              },
+              {
+                kind: 'door',
+                along: 7,
+                width: 3,
+                height: 2.1,
+                type: 'folding',
+                leaves: 8,
+                style: 'modern',
+                slideDirection: 'right',
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  })
+  const result = run(payload, {})
+  const doors =
+    result.changes?.create?.map(({ node }) => node).filter((node) => node.type === 'door') ?? []
+  expect(doors).toHaveLength(2)
+  expect(doors[0]).toMatchObject({
+    width: 1,
+    height: 2.1,
+    sidelightLeft: 0.3,
+    sidelightRight: 0.5,
+    transomHeight: 0.4,
+  })
+  expect(doors[1]).toMatchObject({ doorType: 'folding', leafCount: 8, slideDirection: 'right' })
+  const folded = doors[1]
+  expect(folded?.type === 'door' && folded.segments.some((s) => s.type === 'glass')).toBe(false)
+})

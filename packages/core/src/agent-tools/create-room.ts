@@ -1,10 +1,10 @@
 import { z } from 'zod'
 import { DOOR_STYLES, WINDOW_STYLES } from '../building/opening-style-presets'
 import { FOUNDATION_BY_REGION_NOTE } from '../lib/foundation-construction'
-import { DoorHandleStyle, WindowType } from '../schema/nodes/opening-types'
+import { DoorHandleStyle, DoorType, WindowType } from '../schema/nodes/opening-types'
 import { levelTarget } from './levels'
 import { measurement } from './measurement'
-import { windowDetailFields } from './wall-openings'
+import { doorDetailFields, windowDetailFields } from './wall-openings'
 
 // A list of two, not a tuple: a tuple's list-form schema is refused by some clients.
 const point = z.array(z.number()).length(2)
@@ -66,6 +66,8 @@ export const createRoomTool = {
       .array(
         z.object({
           ...onEdge,
+          ...doorDetailFields,
+          doorType: DoorType.optional(),
           width: measurement('length', 'm', {
             positive: true,
             description: 'Door width (default 0.9 m).',

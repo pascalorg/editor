@@ -8,6 +8,7 @@ import type {
 } from '@pascal-app/core'
 import {
   doorHandleStyle,
+  getDoorOpeningSize,
   getOpeningFloorDatum,
   getWallLocalFaceZ,
   resolveHostedOpeningFrameDepth,
@@ -117,7 +118,12 @@ export function buildDoorFloorplanSchedule(args: {
       cells: {
         mark: marks.markById.get(door.id) ?? '—',
         type: door.openingKind === 'opening' ? 'Opening' : titleCase(door.doorType),
-        size: formatSize(door.width, door.height, args.unit, args.profile ?? 'document'),
+        size: formatSize(
+          getDoorOpeningSize(door).width,
+          getDoorOpeningSize(door).height,
+          args.unit,
+          args.profile ?? 'document',
+        ),
         roughOpening: formatRoughOpening(door, args.unit, args.profile ?? 'document'),
         operation: doorOperation(door),
         frame: `${formatConstructionLength(door.frameThickness, args.unit, args.profile ?? 'document')} / ${formatConstructionLength(resolveHostedOpeningFrameDepth(door, args.nodes), args.unit, args.profile ?? 'document')}`,
@@ -577,7 +583,7 @@ function openingDocumentationDimensions(
 ): { width: number | null; height: number | null } {
   switch (reference) {
     case 'nominal':
-      return { width: opening.width, height: opening.height }
+      return getDoorOpeningSize(opening)
     case 'rough-opening':
       return {
         width: opening.roughOpeningWidth ?? null,

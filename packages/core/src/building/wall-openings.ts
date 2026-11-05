@@ -1,11 +1,13 @@
 import { refuseParamsWithoutScript } from '../agent-operations/add-object'
 import { refuse } from '../agent-tools/refusal'
+import { getDoorOpeningSize } from '../lib/door-opening'
 import {
   matchScriptSlotsToLibrary,
   requireMeasured,
   scriptedSize,
   scriptSource,
 } from '../lib/geometry-script-node'
+import { openingHostFacing } from '../lib/opening-casing'
 import { wallBottomUnderOpening, wallSupportForNodes } from '../lib/opening-floor-datum'
 import {
   type AnyNode,
@@ -24,7 +26,7 @@ import { isRailingWall, railingOpeningFields } from '../schema/nodes/railing-wal
 import { getWallTop } from '../services/storey'
 import { resolveWallExteriorSide } from '../systems/wall/wall-assembly'
 import { getWallCurveLength, isCurvedWall } from '../systems/wall/wall-curve'
-import { NEW_DOOR_FRAME_THICKNESS } from './door-types'
+import { doorTypeFields, NEW_DOOR_FRAME_THICKNESS } from './door-types'
 import {
   type DoorStyle,
   doorStyleLook,
@@ -70,10 +72,15 @@ export function clampDoorToWall(
   localX: number,
   width: number,
   height: number,
+  door?: Partial<DoorNode>,
 ): { clampedX: number; clampedY: number } {
   const margin = openingMargin(wall)
   const length = getWallCurveLength(wall)
-  const clampedX = Math.max(margin + width / 2, Math.min(length - margin - width / 2, localX))
+  const size = getDoorOpeningSize({ ...door, width, height })
+  const offset = size.leafOffsetX * openingHostFacing(door ?? {})
+  const clampedX =
+    Math.max(margin + size.width / 2, Math.min(length - margin - size.width / 2, localX - offset)) +
+    offset
   return { clampedX, clampedY: height / 2 }
 }
 
@@ -146,11 +153,12 @@ export function findWallChildOverlap(
       childBottom = item.position[1]
       childTop = item.position[1] + h
     } else if (child.type === 'window' || child.type === 'door') {
-      const opening = child as { position: [number, number, number]; width: number; height: number }
-      childLeft = opening.position[0] - opening.width / 2
-      childRight = opening.position[0] + opening.width / 2
-      childBottom = opening.position[1] - opening.height / 2
-      childTop = opening.position[1] + opening.height / 2
+      const size = child.type === 'door' ? getDoorOpeningSize(child) : { ...child, leafOffsetX: 0 }
+      const centerX = child.position[0] - size.leafOffsetX * openingHostFacing(child)
+      childLeft = centerX - size.width / 2
+      childRight = centerX + size.width / 2
+      childBottom = child.position[1] - child.height / 2
+      childTop = childBottom + size.height
     } else {
       continue
     }
@@ -192,6 +200,12 @@ export type WallOpeningInput = {
   position?: number
   width?: number
   height?: number
+  sidelightLeft?: number
+  sidelightRight?: number
+  transomHeight?: number
+  leafCount?: DoorNode['leafCount']
+  slidingStyle?: DoorNode['slidingStyle']
+  slideDirection?: DoorNode['slideDirection']
   sillHeight?: number
   hingesSide?: 'left' | 'right'
   handleStyle?: DoorNode['handleStyle']
@@ -345,8 +359,20 @@ export function planWallOpening(nodes: Nodes, input: WallOpeningInput) {
   const [scriptedWidth, scriptedHeight] = compiled ? scriptedSize(compiled.manifest) : []
   const width = scriptedWidth ?? input.width ?? DEFAULTS[kind].width
   const height = railingGap?.height ?? scriptedHeight ?? input.height ?? DEFAULTS[kind].height
+  const size =
+    kind === 'door'
+      ? getDoorOpeningSize({
+          ...input,
+          ...(railingGap ? { openingKind: 'opening' } : {}),
+          width,
+          height,
+          ...(compiled ? { source: scriptSource(compiled, input) } : {}),
+        })
+      : { width, height, leafOffsetX: 0 }
+  const facing = kind === 'door' ? openingHostFacing(doorFacing(wall)) : 1
+  const cutOffsetX = -size.leafOffsetX * facing
   const wallLength = lengthOf(wall)
-  if (wallLength < width)
+  if (wallLength < size.width)
     refuse(
       'wall_too_short',
       `Wall ${wallId} is ${metres(wallLength)} long, too short for a ${metres(width)} ${kind}.`,
@@ -367,11 +393,25 @@ export function planWallOpening(nodes: Nodes, input: WallOpeningInput) {
         ? height / 2
         : resolveWallOpeningCeiling(wall, nodes as Record<AnyNodeId, AnyNode>) / 2
   const { clampedX, clampedY } = onFloor
-    ? clampDoorToWall(wall, rawX, width, height)
-    : clampWindowToWall(wall, rawX, rawY, width, height, nodes as Record<AnyNodeId, AnyNode>)
+    ? clampDoorToWall(wall, rawX + cutOffsetX, size.width, size.height)
+    : clampWindowToWall(
+        wall,
+        rawX + cutOffsetX,
+        rawY + (size.height - height) / 2,
+        size.width,
+        size.height,
+        nodes as Record<AnyNodeId, AnyNode>,
+      )
 
   if (!input.force) {
-    const blocking = findWallChildOverlap(wallId, nodes, clampedX, clampedY, width, height)
+    const blocking = findWallChildOverlap(
+      wallId,
+      nodes,
+      clampedX,
+      clampedY,
+      size.width,
+      size.height,
+    )
     if (blocking) {
       const span =
         blocking.type === 'item'
@@ -395,7 +435,11 @@ export function planWallOpening(nodes: Nodes, input: WallOpeningInput) {
   const base = {
     ...(compiled?.nodeId ? { id: compiled.nodeId } : {}),
     name: input.name ?? `${kind === 'door' ? 'Door' : 'Window'} ${siblings + 1}`,
-    position: [clampedX, clampedY, 0] as [number, number, number],
+    position: [clampedX - cutOffsetX, clampedY - (size.height - height) / 2, 0] as [
+      number,
+      number,
+      number,
+    ],
     rotation: [0, 0, 0] as [number, number, number],
     wallId,
     parentId: wallId,
@@ -417,11 +461,18 @@ export function planWallOpening(nodes: Nodes, input: WallOpeningInput) {
     kind === 'door'
       ? DoorNode.parse({
           ...base,
+          ...(input.doorType ? doorTypeFields(input.doorType) : {}),
           frameThickness: NEW_DOOR_FRAME_THICKNESS,
           ...doorFacing(wall),
           ...doorHardwareSides(input),
           handleStyle: input.handleStyle,
           swingDirection: input.swingDirection ?? 'inward',
+          sidelightLeft: input.sidelightLeft,
+          sidelightRight: input.sidelightRight,
+          transomHeight: input.transomHeight,
+          ...(input.leafCount === undefined ? {} : { leafCount: input.leafCount }),
+          slidingStyle: input.slidingStyle,
+          ...(input.slideDirection ? { slideDirection: input.slideDirection } : {}),
           ...(input.style ? doorStyleLook(input.style as DoorStyle) : {}),
           ...(input.doorType ? { doorType: input.doorType } : {}),
           ...(input.openingKind ? { openingKind: input.openingKind } : {}),
@@ -450,10 +501,10 @@ export function planWallOpening(nodes: Nodes, input: WallOpeningInput) {
   return {
     node,
     wallId,
-    localX: clampedX,
+    localX: node.position[0],
     t: along,
     wallLength,
-    clamped: Math.abs(clampedX - rawX) > 1e-9 || Math.abs(clampedY - rawY) > 1e-9,
-    ...(onFloor ? {} : { sillHeight: clampedY - height / 2 }),
+    clamped: Math.abs(node.position[0] - rawX) > 1e-9 || Math.abs(node.position[1] - rawY) > 1e-9,
+    ...(onFloor ? {} : { sillHeight: node.position[1] - height / 2 }),
   }
 }

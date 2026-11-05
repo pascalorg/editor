@@ -163,3 +163,16 @@ describe('swing chosen while placing', () => {
     })
   })
 })
+
+test('fixed lights enlarge the cutout footprint without changing the swing radius', () => {
+  const geometry = buildDoor({ sidelightLeft: 0.3, sidelightRight: 0.5, transomHeight: 0.4 })
+  const footprint = geometry.find((part) => part.kind === 'polygon')!
+  if (footprint.kind !== 'polygon') throw new Error('Missing opening footprint')
+  const xs = footprint.points.map(([x]) => x)
+  expect(Math.min(...xs)).toBeCloseTo(1.2)
+  expect(Math.max(...xs)).toBeCloseTo(3)
+  const arc = geometry.find(
+    (part) => part.kind === 'path' && part.strokeDasharray && part.d.includes(' A '),
+  )
+  expect(arc?.kind === 'path' && arc.d).toContain('A 1 1')
+})

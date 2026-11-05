@@ -54,6 +54,31 @@ const outline = (archDefault: string) => ({
   }).optional(),
 })
 
+export const doorDetailFields = {
+  sidelightLeft: measurement('length', 'm', {
+    min: 0,
+    description: 'Fixed glazed light left of a swing leaf, metres; absent or 0 means none.',
+  }).optional(),
+  sidelightRight: measurement('length', 'm', {
+    min: 0,
+    description: 'Fixed glazed light right of a swing leaf, metres; absent or 0 means none.',
+  }).optional(),
+  transomHeight: measurement('length', 'm', {
+    min: 0,
+    description:
+      'Fixed light above a swing door and its sidelights, metres; absent or 0 means none.',
+  }).optional(),
+  leafCount: z
+    .union([z.literal(1), z.literal(2), z.literal(3), z.literal(4), z.literal(6), z.literal(8)])
+    .optional()
+    .describe('Panel count: sliding 2–4; folding 2, 4, 6 or 8.'),
+  slidingStyle: z
+    .enum(['patio', 'bypass'])
+    .optional()
+    .describe('Sliding family: patio (default) or two-track bypass closet.'),
+  slideDirection: z.enum(['left', 'right']).optional(),
+}
+
 export const addDoorTool = {
   name: 'add_door',
   title: 'Add door',
@@ -65,6 +90,7 @@ export const addDoorTool = {
       'Rebuild this door instead of adding one: new code and/or params (get_source provides current code when needed). Its native fields change with update_node.',
     ),
     ...placement,
+    ...doorDetailFields,
     width: measurement('length', 'm', {
       positive: true,
       description: 'Door width (default 0.9 m).',

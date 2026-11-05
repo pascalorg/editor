@@ -6,7 +6,7 @@ import { StairRailingMode, StairRailingStyle } from '../schema/nodes/stair-types
 import { measurement, roofPitch } from './measurement'
 import { NodeId } from './node-id'
 import { unitKind } from './units'
-import { windowDetailFields } from './wall-openings'
+import { doorDetailFields, windowDetailFields } from './wall-openings'
 
 const DESCRIPTION = `Turn a whole design you wrote as free three.js into an editable Pascal scene: the payload holds the whole design. You read your own module however you like (its source, running it and reading the objects, both) and hand over a conversion payload: levels, walls (straight, curved or glass) with their openings, rooms (each naming its unit in a building of several dwellings or tenancies: a condo, an apartment building, a hotel; a room naming none is common area), slabs, voids, columns, railings, stairs, every piece of furniture as an authored object with its own module, and lights. Pascal does the rest server-side: compiles and stores each item, places it, derives the rooms and their floors, paints, runs its checks, saves, and answers with a gate report you iterate against. Nothing you hand over is silently dropped: what cannot be placed comes back by name with a reason, and what Pascal corrected (a wall end snapped onto the centerline it meets) is listed.
 
@@ -28,6 +28,11 @@ const length = (description: string, opts: { positive?: boolean; default?: numbe
   measurement('length', 'm', { description, ...opts })
 
 export const authorSceneOpening = z.object({
+  sidelightLeft: doorDetailFields.sidelightLeft,
+  sidelightRight: doorDetailFields.sidelightRight,
+  transomHeight: doorDetailFields.transomHeight,
+  slidingStyle: doorDetailFields.slidingStyle,
+  slideDirection: doorDetailFields.slideDirection,
   ...windowDetailFields,
   kind: z
     .enum(['door', 'window', 'passage'])
@@ -66,15 +71,9 @@ export const authorSceneOpening = z.object({
     .describe(
       "Its look, by name. A door's leaf: panel (default), glass, modern, paneled-glass, french, shaker, six-panel, craftsman, half-louvered, barn. A fixed window's panes: single (default), double-hung, triple-hung, casement, sliding, grid, tall-grid, wide-grid, horizontal-bands, transom, picture; an operable window draws its own sashes, so a style on one is dropped and reported.",
     ),
-  leaves: z
-    .number()
-    .int()
-    .min(1)
-    .max(4)
-    .optional()
-    .describe(
-      "A door's leaves, 1 to 4 (default: what its type has; 2 for double, french and sliding).",
-    ),
+  leaves: doorDetailFields.leafCount.describe(
+    "A door's leaves: sliding 2–4; folding 2, 4, 6 or 8 (default: what its type has; 2 for double, french and sliding).",
+  ),
   code: z
     .string()
     .min(1)

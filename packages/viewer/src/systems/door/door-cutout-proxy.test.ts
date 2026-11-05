@@ -358,3 +358,42 @@ describe('offset door opening hit proxy', () => {
     }
   })
 })
+
+test('sidelights and transom share the full cutout and casing but stay outside the swing leaf', () => {
+  const f = fixture({
+    width: 1,
+    height: 2.1,
+    position: [2.5, 1.05, 0],
+    sidelightLeft: 0.3,
+    sidelightRight: 0.5,
+    transomHeight: 0.4,
+    casingFaceA: true,
+    casingFaceB: true,
+  })
+  try {
+    f.proxy.geometry.computeBoundingBox()
+    const bounds = f.proxy.geometry.boundingBox!
+    expect(bounds.min.x).toBeCloseTo(-0.8)
+    expect(bounds.max.x).toBeCloseTo(1)
+    expect(bounds.min.y).toBeCloseTo(-1.05)
+    expect(bounds.max.y).toBeCloseTo(1.45)
+    const fixed = f.door.getObjectByName('door-fixed-lights')!
+    expect(fixed.parent).toBe(f.door)
+    let glass = 0
+    fixed.traverse((part) => {
+      if (part.userData.slotId === 'glass') glass++
+    })
+    expect(glass).toBe(5)
+    const casing = f.door.children.filter((part) => part.name === OPENING_CASING_MESH_NAME)
+    expect(casing).toHaveLength(6)
+    const boxes = casing.map((part) => {
+      const geometry = (part as THREE.Mesh).geometry
+      geometry.computeBoundingBox()
+      return geometry.boundingBox!
+    })
+    expect(Math.min(...boxes.map((b) => b.min.x))).toBeLessThan(-0.8)
+    expect(Math.max(...boxes.map((b) => b.max.y))).toBeGreaterThan(1.45)
+  } finally {
+    f.dispose()
+  }
+})
