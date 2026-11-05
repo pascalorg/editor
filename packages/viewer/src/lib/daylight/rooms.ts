@@ -1,13 +1,18 @@
 import {
   Box3,
+  type Camera,
   Color,
   DataTexture,
   FloatType,
+  Frustum,
   type Intersection,
   MathUtils,
+  Matrix4,
   Mesh,
   NearestFilter,
   type Object3D,
+  type OrthographicCamera,
+  type PerspectiveCamera,
   Raycaster,
   RedFormat,
   RGBAFormat,
@@ -157,6 +162,11 @@ type Room = {
 
 export type SkySampler = (outward: Vector3) => Color
 
+const _viewProj = new Matrix4()
+const _frustum = new Frustum()
+const _toCamera = new Vector3()
+const _roomsLight = new Color()
+
 export class RoomLighting {
   rooms: Room[] = []
   /** Lamps outside every room (lanterns, garden lights), lit analytically on outside surfaces. */
@@ -177,6 +187,11 @@ export class RoomLighting {
   readonly portalGain = uniform(2.5)
   readonly bounceGain = uniform(1.5)
   readonly lampGain = uniform(1)
+  /**
+   * Lamp light as drawn, not as metered: eased below 1 while the camera is outside at night, so
+   * lit rooms seen from out there keep an indoor-like exposure (the meters ignore it).
+   */
+  readonly lampView = uniform(1)
   /** Sky-IBL multiplier in enclosed rooms. */
   readonly indoorEnv = uniform(0.1)
   /** Window spill outside at night. */
@@ -457,6 +472,76 @@ export class RoomLighting {
    * such, not as a lamplit room it cannot see.
    */
   levelShown: boolean[] = []
+
+  /**
+   * What the lit rooms in view add to an outside camera's meter: a blend of the exterior reading
+   * and the rooms' own irradiance (their indoor meter), weighted by the share of the frame each
+   * fills — fully where it is open from above (its level the top one shown), a little where only
+   * its windows show — counted twice over, as the eye goes to the lit rooms. Rooms only ever
+   * brighten the reading, so daytime views are unchanged. `roomsE` is the rooms' own reading (0
+   * with none in view): what they meter at from inside. Given the outdoor illuminant, `illuminant`
+   * is the light the eye adapts to: the outdoors shifted towards the rooms' light by their pull.
+   */
+  viewedMeter(
+    camera: Camera,
+    exteriorE: number,
+    skyE: number,
+    outdoor?: Color,
+    skyLum = 0,
+  ): { sceneE: number; roomsE: number; illuminant: Color | null } {
+    _viewProj.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse)
+    _frustum.setFromProjectionMatrix(_viewProj)
+    const ortho = (camera as OrthographicCamera).isOrthographicCamera
+    const view = ortho
+      ? (() => {
+          const c = camera as OrthographicCamera
+          return ((c.right - c.left) * (c.top - c.bottom)) / (c.zoom * c.zoom)
+        })()
+      : (() => {
+          const c = camera as PerspectiveCamera
+          const t = Math.tan(MathUtils.degToRad(c.fov) / 2)
+          return 4 * t * t * c.aspect
+        })()
+    let topShown = -1
+    for (let i = 0; i < this.levelY.length; i++) if (this.levelShown[i] !== false) topShown = i
+    let weight = 0
+    let weighted = 0
+    _roomsLight.setRGB(0, 0, 0)
+    this.rooms.forEach((r, index) => {
+      if (!r.enclosed || this.levelShown[r.levelIndex] === false) return
+      if (!_frustum.containsPoint(r.centroid)) return
+      _toCamera.subVectors(camera.position, r.centroid)
+      const facing = Math.max(0.2, _toCamera.y / Math.max(_toCamera.length(), 1e-4))
+      const reach = ortho ? 1 : Math.max(_toCamera.lengthSq(), 1)
+      const open = r.levelIndex === topShown ? 1 : 0.15
+      const w = (r.area * facing * open) / reach / view
+      const E = this.meter(index, skyE)
+      weight += w
+      weighted += w * E
+      if (!outdoor) return
+      const light = this.roomIlluminant(index, outdoor, skyLum)
+      const L = light ? luminance(light) : 0
+      // Each room's light colour (unit luminance), as much as it outshines the exterior.
+      if (light && L > 1e-6)
+        _roomsLight.add(light.multiplyScalar((w * Math.max(0, E - exteriorE)) / L))
+    })
+    if (weight <= 0) return { sceneE: exteriorE, roomsE: 0, illuminant: null }
+    const roomsE = weighted / weight
+    const share = Math.min(1, weight * 2)
+    const sceneE = Math.max(exteriorE, (1 - share) * exteriorE + share * roomsE)
+    let illuminant: Color | null = null
+    const roomsL = luminance(_roomsLight)
+    const outdoorL = outdoor ? luminance(outdoor) : 0
+    if (outdoor && roomsL > 1e-6 && outdoorL > 1e-6) {
+      // The rooms' pull: their part of the reading above the exterior's.
+      const pull = MathUtils.clamp((sceneE - exteriorE) / Math.max(sceneE, 1e-6), 0, 1)
+      illuminant = outdoor
+        .clone()
+        .multiplyScalar(1 / outdoorL)
+        .lerp(_roomsLight.multiplyScalar(1 / roomsL), pull)
+    }
+    return { sceneE, roomsE, illuminant }
+  }
 
   isEnclosedAt(p: Vector3): { room: number; inside: boolean } {
     let level = 0
@@ -964,7 +1049,7 @@ export class RoomLighting {
         lampIrr.addAssign(c.xyz.mul(atten).mul(wrap))
       })
       lampIrr.assign(this.softClampLamps(lampIrr))
-      irr.addAssign(lampIrr.mul(this.lampGain))
+      irr.addAssign(lampIrr.mul(this.lampGain).mul(this.lampView))
 
       // Window portals: Lambertian rectangle, approximated as a disk of equal area
       // E = L·A·cosθe·cosθr / (π·d² + A) — finite at the glass, physically-shaped falloff.
@@ -1032,8 +1117,9 @@ export class RoomLighting {
                 .mul(max(dot(Nw, L.div(ld)).mul(0.6).add(0.4), 0)),
             )
           })
-          const mine = lampIrr.mul(this.lampGain).add(h1.yzw.mul(this.bounceGain))
-          const theirs = nbLamps.mul(this.lampGain).add(g1.yzw.mul(this.bounceGain))
+          const lamps = this.lampGain.mul(this.lampView)
+          const mine = lampIrr.mul(lamps).add(h1.yzw.mul(this.bounceGain))
+          const theirs = nbLamps.mul(lamps).add(g1.yzw.mul(this.bounceGain))
           fade.addAssign(theirs.sub(mine).mul(w))
           fadeEnc.addAssign(
             select(g0.x.greaterThan(0.5), this.indoorEnv, float(1)).sub(enclosure).mul(w),
@@ -1130,7 +1216,7 @@ export class RoomLighting {
         },
       )
     })
-    return total.mul(this.lampGain).mul(this.spillGain)
+    return total.mul(this.lampGain).mul(this.lampView).mul(this.spillGain)
   })
 
   /**
@@ -1158,7 +1244,7 @@ export class RoomLighting {
           .mul(cone),
       )
     })
-    return this.softClampLamps(out.mul(1.2)).mul(this.lampGain)
+    return this.softClampLamps(out.mul(1.2)).mul(this.lampGain).mul(this.lampView)
   })
 
   /** 1 where exterior lights may shine (outside, or rooms open to the sky), 0 inside. */

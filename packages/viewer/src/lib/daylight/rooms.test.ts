@@ -1,6 +1,15 @@
 // @ts-expect-error — Bun types are not part of the viewer's production declaration build.
 import { describe, expect, test } from 'bun:test'
-import { Box3, BoxGeometry, Color, Group, Mesh, MeshBasicMaterial, Vector3 } from 'three'
+import {
+  Box3,
+  BoxGeometry,
+  Color,
+  Group,
+  Mesh,
+  MeshBasicMaterial,
+  PerspectiveCamera,
+  Vector3,
+} from 'three'
 import { RoomLighting, type RoomSceneInput } from './rooms'
 
 const material = new MeshBasicMaterial()
@@ -126,5 +135,33 @@ describe('room lighting', () => {
     expect(rooms.isEnclosedAt(eye)).toEqual({ room: 0, inside: true })
     rooms.levelShown = [false]
     expect(rooms.isEnclosedAt(eye)).toEqual({ room: -1, inside: false })
+  })
+
+  test("lit rooms in view lower an outside camera's exposure, never raise it", () => {
+    const rooms = new RoomLighting()
+    rooms.build(twoRooms())
+    const camera = new PerspectiveCamera(50, 1.5, 0.1, 500)
+    camera.position.set(4, 14, 9)
+    camera.lookAt(4, 0, 2)
+    camera.updateMatrixWorld()
+    // Night: the moonlit exterior reads far darker than the lamplit rooms seen from above.
+    const night = rooms.viewedMeter(camera, 0.02, 0.01)
+    expect(night.roomsE).toBeGreaterThan(0.1)
+    expect(night.sceneE).toBeGreaterThan(0.04)
+    expect(night.sceneE).toBeLessThan(night.roomsE)
+    // The eye adapts from the blue moonlit outdoors towards the warm lamplit rooms.
+    const moonlight = new Color(0.05, 0.07, 0.14)
+    const adapted = rooms.viewedMeter(camera, 0.02, 0.01, moonlight, 0.07).illuminant!
+    expect(adapted.r / adapted.b).toBeGreaterThan(moonlight.r / moonlight.b)
+    // Day: the exterior outshines the rooms; the reading stays the exterior's.
+    expect(rooms.viewedMeter(camera, 5, 2).sceneE).toBe(5)
+    // Looking away, the rooms don't count.
+    camera.lookAt(4, 14, 100)
+    camera.updateMatrixWorld()
+    expect(rooms.viewedMeter(camera, 0.02, 0.01)).toEqual({
+      sceneE: 0.02,
+      roomsE: 0,
+      illuminant: null,
+    })
   })
 })

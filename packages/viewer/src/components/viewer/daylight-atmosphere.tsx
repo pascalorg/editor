@@ -38,6 +38,11 @@ const FOG_START = 250
 const FOG_END = 2600
 /** Eye-like chromatic adaptation strength (0 = off, 1 = full neutralisation). */
 const WHITE_BALANCE = 0.75
+/**
+ * How much of its extra exposure lamp light seen from outside gives back, relative to the rooms'
+ * indoor exposure (0 none … 1 all; a little is kept, so lit windows still read as glowing).
+ */
+const LAMP_VIEW_COMP = 0.8
 /** Maximum metered exposure boost with the camera inside a room. */
 const INTERIOR_EV = 2
 /** Sun shadow map per quality tier. */
@@ -165,6 +170,7 @@ export function DaylightAtmosphere() {
       daylightUniforms.lampLevel.value = 0
       daylightUniforms.glowComp.value = 1
       daylightUniforms.emitterExpInv.value = 1
+      daylightRooms.lampView.value = 1
     }
   }, [renderer])
 
@@ -321,24 +327,41 @@ export function DaylightAtmosphere() {
     const { room, inside } = daylightRooms.isEnclosedAt(camera.position)
     daylightUniforms.cameraOutside.value = inside ? 0 : 1
     const skyE = Math.PI * 0.45 * luminance(sky.radianceCpu(UP)) * ENV_INTENSITY
-    const sceneE = inside ? daylightRooms.meter(room, skyE) : meter.current.keyE + skyE
-    const target = MathUtils.clamp(
-      Math.log2(METER_REF / Math.max(sceneE, 1e-4)) * 0.6,
-      -0.5,
-      inside ? INTERIOR_EV : 2.2,
-    )
+    // Outside, the lit rooms in view count too: a cutaway of lamplit rooms exposes for them.
+    const viewed = inside
+      ? { sceneE: daylightRooms.meter(room, skyE), roomsE: 0, illuminant: null }
+      : daylightRooms.viewedMeter(
+          camera,
+          meter.current.keyE + skyE,
+          skyE,
+          meter.current.outdoor,
+          meter.current.skyLum,
+        )
+    const meterEV = (E: number, max: number) =>
+      MathUtils.clamp(Math.log2(METER_REF / Math.max(E, 1e-4)) * 0.6, -0.5, max)
+    const target = meterEV(viewed.sceneE, inside ? INTERIOR_EV : 2.2)
     meter.current.ev += (target - meter.current.ev) * Math.min(1, dt * 3)
     source.exposure = 2 ** meter.current.ev
     // Glows (window panes, lamp shades) stay out of the night exposure lift.
     daylightUniforms.glowComp.value = 1 / 2 ** Math.max(0, meter.current.ev - 0.5)
     daylightUniforms.emitterExpInv.value = 1 / source.exposure
+    // Lamp light seen from outside gives back most of the exposure it gets above what those rooms
+    // meter at from inside (back to 1 indoors), so lit rooms look from out there as they do in them.
+    const lampView =
+      inside || viewed.roomsE <= 0
+        ? 1
+        : 2 **
+          (-LAMP_VIEW_COMP * Math.max(0, meter.current.ev - meterEV(viewed.roomsE, INTERIOR_EV)))
+    const shown = daylightRooms.lampView.value as number
+    daylightRooms.lampView.value = shown + (lampView - shown) * Math.min(1, dt * 3)
     // Eye-like chromatic adaptation (von Kries): divide out the illuminant where the camera is,
     // partially (golden hour and lamplight keep some warmth), luminance-preserving; a bit less
     // at night (moonlight stays blue-ish).
+    // Outside, the eye adapts towards the lit rooms in view too (by their pull on the meter).
     const illum =
       (inside
         ? daylightRooms.roomIlluminant(room, meter.current.outdoor, meter.current.skyLum)
-        : null) ?? meter.current.outdoor
+        : viewed.illuminant) ?? meter.current.outdoor
     const L = luminance(illum)
     if (L > 1e-5) {
       const k = WHITE_BALANCE * (1 - 0.35 * meter.current.night)
