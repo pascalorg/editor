@@ -266,3 +266,21 @@ describe('a vehicle in its garage', () => {
     expect(blockedBy([garageWall, garageDoor('garage-sectional'), scarf])).toEqual(['item_scarf'])
   })
 })
+
+test('door clearance covers the fixed-light cutout in either host-facing direction', () => {
+  for (const rotationY of [0, Math.PI]) {
+    const keepout = doorKeepoutFromWall(wall('wall_entry', [0, 0], [5, 0]), {
+      id: 'door_entry',
+      position: [2.5, 1.05, 0],
+      rotation: [0, rotationY, 0],
+      width: 1,
+      height: 2.1,
+      sidelightLeft: 0.3,
+      sidelightRight: 0.5,
+      transomHeight: 0.4,
+    })!
+    expect(keepout.width).toBeCloseTo(1.8)
+    expect(keepout.height).toBeCloseTo(2.5)
+    expect(keepout.localX).toBeCloseTo(rotationY === 0 ? 2.6 : 2.4)
+  }
+})

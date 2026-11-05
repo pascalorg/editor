@@ -264,6 +264,7 @@ export {
   planDeckFraming,
 } from './lib/deck-framing'
 export { deepestDrawnY, lowestGroundY } from './lib/deepest-drawn'
+export { getDoorOpeningSize } from './lib/door-opening'
 export {
   clampDoorOperationState,
   getDoorRenderOpenAmount,

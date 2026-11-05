@@ -24,6 +24,13 @@ import type { AgentOperation, SceneNodes } from './types'
 
 type OpeningSpec = Pick<
   WallOpeningInput,
+  | 'doorType'
+  | 'sidelightLeft'
+  | 'sidelightRight'
+  | 'transomHeight'
+  | 'leafCount'
+  | 'slidingStyle'
+  | 'slideDirection'
   | 'windowType'
   | 'columns'
   | 'rows'

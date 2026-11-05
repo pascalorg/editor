@@ -290,3 +290,78 @@ describe('agent-authored window details', () => {
     })
   })
 })
+
+describe('swing door fixed lights', () => {
+  const lights = { sidelightLeft: 0.3, sidelightRight: 0.5, transomHeight: 0.4 }
+  test('add_door preserves leaf dimensions and cuts the full assembly', () => {
+    const { nodes } = openingScene()
+    const input = z.object(addDoorTool.input).parse({ wallId: 'wall_main', t: 0.5, ...lights })
+    const { node } = planWallOpening(nodes, { ...input, kind: 'door' })
+    expect(node).toMatchObject({ width: 0.9, height: 2.1, ...lights })
+    expect(node.position[1]).toBeCloseTo(1.05)
+    const cut = getOpeningWallCut(nodes.wall_main as WallNodeType, node, nodes)
+    expect(cut.top).toBeCloseTo(2.5)
+    const xs = cut.band.map(([x]) => x)
+    expect(Math.max(...xs) - Math.min(...xs)).toBeCloseTo(1.7)
+  })
+
+  test('placement clamps the whole asymmetric cutout and detects existing sidelights', () => {
+    const { nodes } = openingScene()
+    const first = planWallOpening(nodes, {
+      kind: 'door',
+      wallId: 'wall_main',
+      t: 0,
+      ...lights,
+    }).node
+    expect(first.position[0]).toBeCloseTo(0.75)
+    const wall = nodes.wall_main as WallNodeType
+    const scene = {
+      ...nodes,
+      [first.id]: first,
+      [wall.id]: { ...wall, children: [...wall.children, first.id] },
+    }
+    expect(() =>
+      planWallOpening(scene, {
+        kind: 'door',
+        wallId: wall.id,
+        t: first.position[0] / 6 + 0.12,
+        width: 0.3,
+      }),
+    ).toThrow()
+  })
+
+  test('create_room carries the fixed lights from tool input to its door', () => {
+    const { nodes } = openingScene()
+    const input = z.object(createRoomTool.input).parse({
+      name: 'Entry',
+      levelId: OPENING_SCENE.levelId,
+      polygon: [
+        [20, 20],
+        [24, 20],
+        [24, 24],
+        [20, 24],
+      ],
+      doors: [{ wallIndex: 0, ...lights }],
+    })
+    const result = AGENT_OPERATIONS.create_room(nodes, input, {
+      activeLevelId: OPENING_SCENE.levelId,
+    })
+    expect(result.changes?.create?.find(({ node }) => node.type === 'door')?.node).toMatchObject(
+      lights,
+    )
+  })
+
+  test('sliding and folding tool inputs preserve the chosen mechanism and style', () => {
+    const { nodes } = openingScene()
+    for (const fields of [
+      { doorType: 'sliding', leafCount: 4, slidingStyle: 'bypass' },
+      { doorType: 'folding', leafCount: 8, style: 'modern' },
+    ]) {
+      const input = z.object(addDoorTool.input).parse({ wallId: 'wall_main', t: 0.5, ...fields })
+      const { node } = planWallOpening(nodes, { ...input, kind: 'door' })
+      expect(node).toMatchObject({ doorType: fields.doorType, leafCount: fields.leafCount })
+      if (node.type === 'door' && fields.style === 'modern')
+        expect(node.segments.some((s) => s.type === 'glass')).toBe(false)
+    }
+  })
+})

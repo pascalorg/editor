@@ -323,3 +323,28 @@ test('glass keeps a 12 mm bead standing 6 mm proud on each face', () => {
   })
   expect(ray.intersectObjects(panels)[0]!.point.z).toBeCloseTo(0.026)
 })
+
+test('paneled-glass sidelight has a 0.3 m bottom panel and glass above its mid rail', () => {
+  const node = DoorNode.parse({
+    width: 1,
+    height: 2.1,
+    sidelightLeft: 0.4,
+    ...doorStyleLook('paneled-glass'),
+  })
+  const mesh = buildDoorPreviewMesh(node)
+  const fixed = mesh.getObjectByName('door-fixed-lights')!
+  const panels: THREE.Box3[] = []
+  let glass = 0
+  fixed.traverse((part) => {
+    if (!(part instanceof THREE.Mesh)) return
+    if (part.userData.slotId === 'glass') glass++
+    if (part.userData.slotId === 'panel') {
+      part.geometry.computeBoundingBox()
+      panels.push(part.geometry.boundingBox!.clone().translate(part.position))
+    }
+  })
+  expect(panels).toHaveLength(1)
+  expect(panels[0]!.max.y - panels[0]!.min.y).toBeCloseTo(0.3)
+  expect(panels[0]!.min.y).toBeCloseTo(-1.05)
+  expect(glass).toBe(2)
+})

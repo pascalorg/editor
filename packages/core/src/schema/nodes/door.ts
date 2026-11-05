@@ -93,9 +93,13 @@ export const DoorNode = BaseNode.extend({
   roofSegmentId: z.string().optional(),
   roofFace: z.enum(['front', 'back', 'right', 'left']).optional(),
 
-  // Overall dimensions
+  // Leaf opening dimensions
   width: z.number().default(0.9),
   height: z.number().default(2.1),
+  sidelightLeft: z.number().min(0).optional(),
+  sidelightRight: z.number().min(0).optional(),
+  transomHeight: z.number().min(0).optional(),
+  slidingStyle: z.enum(['patio', 'bypass']).optional(),
 
   // Construction-document identity. `mark` overrides the deterministic
   // level fallback (101, 102, ...). Rough-opening dimensions stay optional
@@ -114,7 +118,9 @@ export const DoorNode = BaseNode.extend({
   // Door family
   doorCategory: DoorCategory.default('interior'),
   doorType: DoorType.default('hinged'),
-  leafCount: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]).default(1),
+  leafCount: z
+    .union([z.literal(1), z.literal(2), z.literal(3), z.literal(4), z.literal(6), z.literal(8)])
+    .default(1),
   operationState: z.number().min(0).max(1).default(0),
   slideDirection: z.enum(['left', 'right']).default('left'),
   trackStyle: DoorTrackStyle.default('none'),
@@ -142,7 +148,7 @@ export const DoorNode = BaseNode.extend({
 
   // Casing: flat boards on the finished faces of the host wall around the
   // opening (head and both legs, none at the floor), never inside it, so the
-  // wall cutout stays width × height. The faces are the host's `a` / `b`
+  // wall cutout includes the leaf opening and any fixed lights. The faces are the host's `a` / `b`
   // (WallFace), not the door's front and back, so flipping the swing leaves
   // the casing where it is. Optional, never defaulted, so loading a saved
   // opening adds no fields: absent faces are uncased, an absent width is 2 in.
@@ -183,7 +189,7 @@ export const DoorNode = BaseNode.extend({
   panicBarHeight: z.number().default(1.0),
 }).describe(dedent`Door node - a parametric door placed on a wall
   - position: center of the door in wall-local coordinate system (Y = height/2, always at floor)
-  - width/height: overall outer dimensions, which are also the wall cutout
+  - width/height: leaf opening; swing doors add sidelightLeft + sidelightRight to the cutout width and transomHeight above it (metres)
   - doorCategory/doorType: explicit operation family, defaulting old doors to interior hinged
   - openingKind/openingShape: hinged door or frameless wall opening shape
   - segments: rows stacked top to bottom, each defining its own columnRatios

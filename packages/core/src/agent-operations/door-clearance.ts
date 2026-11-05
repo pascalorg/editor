@@ -1,3 +1,4 @@
+import { getDoorOpeningSize } from '../lib/door-opening'
 /**
  * Door access keep-outs for MCP layout tools.
  *
@@ -102,6 +103,10 @@ export type DoorOpeningLike = {
   /** Which face the leaf swings towards: 'inward' is the wall's +normal side, as the door plan draws it. */
   swingDirection?: 'inward' | 'outward'
   doorType?: string
+  sidelightLeft?: number
+  sidelightRight?: number
+  transomHeight?: number
+  rotation?: readonly number[]
 }
 
 /** Plan depth (m) cleared on each side of the wall face through the opening. */
@@ -333,8 +338,15 @@ export function doorKeepoutFromWall(
   const length = wallLength(wall)
   if (length <= 1e-6) return null
 
-  const width = typeof door.width === 'number' && door.width > 0 ? door.width : 0.9
-  const localX = Array.isArray(door.position) ? (door.position[0] ?? length / 2) : length / 2
+  const size = getDoorOpeningSize({
+    ...door,
+    width: typeof door.width === 'number' && door.width > 0 ? door.width : 0.9,
+    height: typeof door.height === 'number' && door.height > 0 ? door.height : DEFAULT_DOOR_HEIGHT,
+  })
+  const width = size.width
+  const localX =
+    (Array.isArray(door.position) ? (door.position[0] ?? length / 2) : length / 2) -
+    size.leafOffsetX * (Math.cos(door.rotation?.[1] ?? 0) >= 0 ? 1 : -1)
 
   const [sx, sz] = wall.start
   const [ex, ez] = wall.end
@@ -389,7 +401,7 @@ export function doorKeepoutFromWall(
     normal: [nx, nz],
     alongM: 2 * half,
     depthM: { inward: front, outward: -back },
-    height: typeof door.height === 'number' && door.height > 0 ? door.height : DEFAULT_DOOR_HEIGHT,
+    height: size.height,
     aabb: {
       minX: Math.min(...xs),
       maxX: Math.max(...xs),

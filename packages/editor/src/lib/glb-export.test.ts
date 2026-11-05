@@ -2519,3 +2519,65 @@ test('exports a plugin LOD once without invoking its argument-requiring construc
   expect(meshes[0]!.geometry).not.toBe(mesh.geometry)
   expect(lod.levels).toHaveLength(2)
 })
+
+for (const config of [
+  { doorType: 'sliding', leafCount: 3, slidingStyle: 'patio', tracks: 1 },
+  { doorType: 'sliding', leafCount: 4, slidingStyle: 'patio', tracks: 2 },
+  { doorType: 'sliding', leafCount: 4, slidingStyle: 'bypass', tracks: 2 },
+  { doorType: 'folding', leafCount: 6, tracks: 6 },
+  { doorType: 'folding', leafCount: 8, tracks: 8 },
+]) {
+  test(`GLB samples ${config.slidingStyle ?? ''} ${config.doorType} with ${config.leafCount} panels`, () => {
+    const node = DoorNode.parse({
+      ...config,
+      width: 4,
+      slideDirection: 'right',
+      operationState: 0.5,
+    })
+    const mesh = buildDoorPreviewMesh(node)
+    const root = new THREE.Group()
+    root.add(mesh)
+    sceneRegistry.nodes.set(node.id, mesh)
+    try {
+      const { animations } = prepareSceneForExport(root, { [node.id]: node })
+      expect(animations).toHaveLength(1)
+      expect(animations[0]!.tracks).toHaveLength(config.tracks)
+      for (const track of animations[0]!.tracks) {
+        expect(track.times[0]).toBe(0)
+        expect(track.times[8]).toBe(0.5)
+        expect(track.times[16]).toBe(1)
+      }
+    } finally {
+      sceneRegistry.nodes.delete(node.id)
+    }
+  })
+}
+
+test('GLB entry-door clip moves its leaf and keeps sidelights and transom static', () => {
+  const node = DoorNode.parse({
+    width: 1,
+    height: 2.1,
+    sidelightLeft: 0.3,
+    sidelightRight: 0.5,
+    transomHeight: 0.4,
+    swingAngle: 0.6,
+  })
+  const mesh = buildDoorPreviewMesh(node)
+  const root = new THREE.Group()
+  root.add(mesh)
+  sceneRegistry.nodes.set(node.id, mesh)
+  try {
+    const { scene, animations } = prepareSceneForExport(root, { [node.id]: node })
+    expect(animations).toHaveLength(1)
+    const fixed = scene.getObjectByName('door-fixed-lights')!
+    expect(fixed).toBeDefined()
+    const staticIds = new Set<string>()
+    fixed.traverse((part) => staticIds.add(part.uuid))
+    expect(animations[0]!.tracks.length).toBeGreaterThan(0)
+    expect(animations[0]!.tracks.some((track) => staticIds.has(track.name.split('.')[0]!))).toBe(
+      false,
+    )
+  } finally {
+    sceneRegistry.nodes.delete(node.id)
+  }
+})

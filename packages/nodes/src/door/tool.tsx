@@ -6,10 +6,12 @@ import {
   DoorNode,
   emitter,
   type GridEvent,
+  getDoorOpeningSize,
   getWallThickness,
   holdHiddenWallPointerEvents,
   isCurvedWall,
   isRailingWall,
+  openingHostFacing,
   type RoofEvent,
   type RoofNode,
   railingOpeningFields,
@@ -320,26 +322,32 @@ const DoorTool: React.FC = () => {
       height: number,
       applySnap: boolean,
       ignoreId?: string,
+      rotationY = 0,
     ) => {
       // Along-wall alignment guides are DISPLAYED in every snapping mode; the
       // magnetic pull onto them is applied only when `applySnap` (magnetic
       // "lines" mode). The grid component lives in `snapToHalf`, which is itself
       // mode-aware (raw cursor when grid is off).
+      const draft = draftRef.current
+      const size = getDoorOpeningSize({ ...draft, width, height })
+      const offset = size.leafOffsetX * openingHostFacing({ rotation: [0, rotationY, 0] })
       const localX = resolveWallSlideAlignment({
         wallNode: wall,
-        rawLocalX,
-        width,
+        rawLocalX: rawLocalX - offset,
+        width: size.width,
         candidates: alignmentCandidates,
         applySnap,
       })
-      const { clampedX, clampedY } = clampToWall(wall, localX, width, height)
+      const cut = clampToWall(wall, localX, size.width, size.height)
+      const clampedX = cut.clampedX + offset
+      const clampedY = cut.clampedY - (size.height - height) / 2
       const valid = !hasWallChildOverlap(
         wall.id,
         useScene.getState().nodes,
-        clampedX,
-        clampedY,
-        width,
-        height,
+        cut.clampedX,
+        cut.clampedY,
+        size.width,
+        size.height,
         ignoreId,
       )
       return { clampedX, clampedY, valid }
@@ -384,6 +392,7 @@ const DoorTool: React.FC = () => {
         height,
         applySnap,
         draftRef.current.id,
+        itemRotation,
       )
       // The leaf swings into the side the cursor is on (R sends it to the other side).
       const swingDirection = placementSwing(draftRef.current, itemRotation, swingSide)
@@ -483,6 +492,10 @@ const DoorTool: React.FC = () => {
         parentId: wall.id,
         width: draft.width,
         height: draft.height,
+        sidelightLeft: draft.sidelightLeft,
+        sidelightRight: draft.sidelightRight,
+        transomHeight: draft.transomHeight,
+        slidingStyle: draft.slidingStyle,
         doorCategory: draft.doorCategory,
         doorType: draft.doorType,
         leafCount: draft.leafCount,
@@ -587,6 +600,7 @@ const DoorTool: React.FC = () => {
         draftRef.current.height,
         isMagneticSnapActive(),
         draftRef.current.id,
+        itemRotation,
       )
       // Alt force-places over a collision (the draft stays red as a warning).
       if (!valid && event.nativeEvent?.altKey !== true) return
@@ -651,6 +665,7 @@ const DoorTool: React.FC = () => {
         width: draftRef.current?.width ?? 0.9,
         height: draftRef.current?.height ?? 2.1,
         ignoreId: draftRef.current?.id,
+        opening: draftRef.current ?? undefined,
         vertical: { kind: 'bottom-locked' },
       })
 
@@ -738,6 +753,10 @@ const DoorTool: React.FC = () => {
         parentId: segment.id,
         width: draft.width,
         height: draft.height,
+        sidelightLeft: draft.sidelightLeft,
+        sidelightRight: draft.sidelightRight,
+        transomHeight: draft.transomHeight,
+        slidingStyle: draft.slidingStyle,
         doorCategory: draft.doorCategory,
         doorType: draft.doorType,
         leafCount: draft.leafCount,
