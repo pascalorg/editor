@@ -4238,6 +4238,10 @@ msgstr "Walls"
 msgid "editor.mechanismAction"
 msgstr "{action, select, close {Close} open {Open} stop {Stop} other {Play}}"
 
+#: packages/editor/src/components/editor/registry-action-contributions.tsx
+msgid "editor.mechanismPartAction.shutters"
+msgstr "{action, select, close {Close shutters} other {Open shutters}}"
+
 #: packages/editor/src/components/editor/node-action-menu.tsx
 msgid "editor.nodeActionMenu.curve"
 msgstr "Curve"

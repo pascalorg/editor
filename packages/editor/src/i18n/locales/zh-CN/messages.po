@@ -10520,6 +10520,16 @@ msgstr "墙体"
 msgid "editor.mechanismAction"
 msgstr "{action, select, close {关闭} open {打开} stop {停止} other {播放}}"
 
+# Source-Hash: a27a681402247b03
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "{action, select, close {Close shutters} other {Open shutters}}"
+#: packages/editor/src/components/editor/registry-action-contributions.tsx
+#, fuzzy
+msgid "editor.mechanismPartAction.shutters"
+msgstr "{action, select, close {关闭百叶窗} other {打开百叶窗}}"
+
 # Source-Hash: f08fbb462e9afc0e
 # Review: required
 # AI-Provider: claude-code
