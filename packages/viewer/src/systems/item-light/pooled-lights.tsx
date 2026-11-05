@@ -2,7 +2,7 @@
 
 import type { LightSpot } from '@pascal-app/core'
 import { useFrame, useThree } from '@react-three/fiber'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
   float,
   instancedDynamicBufferAttribute,
@@ -30,6 +30,8 @@ import {
   Vector3,
 } from 'three/webgpu'
 import { useSceneAtmosphere } from '../../components/viewer/scene-atmosphere'
+import { isDaylightAtmosphere } from '../../lib/daylight/look'
+import { type LampFeedLight, lampFeeds } from '../../lib/daylight/room-scene'
 import useViewer from '../../store/use-viewer'
 
 /** A light an item holds, as the pools drive it. */
@@ -329,6 +331,30 @@ export function itemLightsForCapture(scene: Object3D, camera: Camera): () => voi
  * and stay. Glows are one instanced sprite for every glowing lamp, pooled or not.
  */
 export function PooledLights<T extends PooledLight>(props: Props<T>) {
+  // The daylight look lights rooms analytically (room lamps, window spill, exterior lamps): the
+  // pool hands its lamps over instead of mounting point lights and glows.
+  const daylight = isDaylightAtmosphere(useSceneAtmosphere())
+  return daylight ? <DaylightLampFeed {...props} /> : <PooledLightPool {...props} />
+}
+
+function DaylightLampFeed<T extends PooledLight>(props: Props<T>) {
+  const propsRef = useRef(props)
+  propsRef.current = props
+  useLayoutEffect(() => {
+    const feed = {
+      lights: () => propsRef.current.getLights(),
+      // The feed hands back the pool's own lights.
+      intensity: (light: LampFeedLight) => propsRef.current.intensity(light as unknown as T),
+    }
+    lampFeeds.add(feed)
+    return () => {
+      lampFeeds.delete(feed)
+    }
+  }, [])
+  return null
+}
+
+function PooledLightPool<T extends PooledLight>(props: Props<T>) {
   const propsRef = useRef(props)
   propsRef.current = props
   const scene = useThree((state) => state.scene)

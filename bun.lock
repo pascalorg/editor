@@ -71,7 +71,7 @@
         "react-dom": "19.3.1",
         "tailwind-merge": "^3.7.0",
         "tailwindcss": "^4.3.3",
-        "three": "^0.186.1",
+        "three": "^0.187",
         "zod": ">=4.6.7 <4.7",
       },
       "devDependencies": {
@@ -106,7 +106,7 @@
         "react-dom": "19.3.1",
         "tailwind-merge": "^3.7.0",
         "tailwindcss": "^4.3.3",
-        "three": "^0.186.1",
+        "three": "^0.187",
         "web-ifc": "^0.0.78",
       },
       "devDependencies": {
@@ -114,7 +114,7 @@
         "@types/node": "^26.6.5",
         "@types/react": "19.3.0",
         "@types/react-dom": "19.3.0",
-        "@types/three": "^0.186.0",
+        "@types/three": "^0.187",
         "typescript": "7.0.2",
       },
     },
@@ -154,7 +154,7 @@
         "@pascal/typescript-config": "*",
         "@types/bun": "^1.4.4",
         "@types/react": "19.3.0",
-        "@types/three": "^0.186.0",
+        "@types/three": "^0.187",
         "@typescript/typescript6": "6.0.2",
         "fake-indexeddb": "^6.2.6",
         "typescript": "7.0.2",
@@ -163,7 +163,7 @@
         "@react-three/drei": "^10",
         "@react-three/fiber": "^9",
         "react": "^18 || ^19",
-        "three": "^0.186",
+        "three": "^0.187",
       },
     },
     "packages/editor": {
@@ -221,7 +221,7 @@
         "@types/pdfkit": "^0.17.7",
         "@types/react": "19.3.0",
         "@types/react-dom": "19.3.0",
-        "@types/three": "^0.186.0",
+        "@types/three": "^0.187",
         "fast-xml-parser": "^5.11.2",
         "typescript": "7.0.2",
       },
@@ -233,7 +233,7 @@
         "next": ">=15",
         "react": "^18 || ^19",
         "react-dom": "^18 || ^19",
-        "three": "^0.186",
+        "three": "^0.187",
       },
     },
     "packages/eslint-config": {
@@ -263,11 +263,11 @@
       "devDependencies": {
         "@pascal/typescript-config": "*",
         "@types/bun": "^1.4.4",
-        "@types/three": "^0.186.0",
+        "@types/three": "^0.187",
         "typescript": "7.0.2",
       },
       "peerDependencies": {
-        "three": "^0.186",
+        "three": "^0.187",
       },
     },
     "packages/ifc-converter": {
@@ -324,7 +324,7 @@
         "@types/node": "^26.6.5",
         "@types/react": "19.3.0",
         "@types/react-dom": "19.3.0",
-        "@types/three": "^0.186.0",
+        "@types/three": "^0.187",
         "typescript": "7.0.2",
       },
       "peerDependencies": {
@@ -336,7 +336,7 @@
         "lucide-react": "^1",
         "react": "^18 || ^19",
         "react-dom": "^18 || ^19",
-        "three": "^0.186",
+        "three": "^0.187",
         "zustand": "^5",
       },
     },
@@ -376,7 +376,7 @@
         "@types/node": "^26",
         "@types/react": "19.3.0",
         "@types/react-dom": "19.3.0",
-        "@types/three": "^0.186.0",
+        "@types/three": "^0.187",
         "typescript": "7.0.2",
       },
       "peerDependencies": {
@@ -385,7 +385,7 @@
         "@react-three/fiber": "^9",
         "react": "^18 || ^19",
         "react-dom": "^18 || ^19",
-        "three": "^0.186",
+        "three": "^0.187",
       },
     },
     "tooling/typescript": {
@@ -394,8 +394,8 @@
     },
   },
   "patchedDependencies": {
-    "three@0.186.1": "patches/three@0.186.1.patch",
     "three-bvh-csg@0.0.18": "patches/three-bvh-csg@0.0.18.patch",
+    "three@0.187.0": "patches/three@0.187.0.patch",
     "iwer@2.3.0": "patches/iwer@2.3.0.patch",
   },
   "overrides": {
@@ -403,13 +403,13 @@
     "@react-three/fiber": "9.8.2",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
-    "@types/three": "0.186.0",
+    "@types/three": "0.187.0",
     "hono": "^4.13.14",
     "next": "16.4.3",
     "react": "19.3.1",
     "react-dom": "19.3.1",
     "react-grab": "0.2.0",
-    "three": "0.186.1",
+    "three": "0.187.0",
   },
   "packages": {
     "@ai-sdk/anthropic": ["@ai-sdk/anthropic@4.0.89", "", { "dependencies": { "@ai-sdk/provider": "4.0.34", "@ai-sdk/provider-utils": "5.0.69" }, "peerDependencies": { "zod": "^3.25.76 || ^4.1.8" } }, "sha512-PCXExlOB4P51rzJ9hGIcZ+6DfHdLpcbs0IzgbtBEubITa6f90+7K/sD38rXfdDzYdVtjFitdtSl3cr4KAY2wQw=="],
@@ -1144,7 +1144,7 @@
 
     "@types/stats.js": ["@types/stats.js@0.17.4", "", {}, "sha512-jIBvWWShCvlBqBNIZt0KAshWpvSjhkwkEu4ZUcASoAvhmrgAUI2t1dXrjSL4xXVLB4FznPrIsX3nKXFl/Dt4vA=="],
 
-    "@types/three": ["@types/three@0.186.0", "", { "dependencies": { "@dimforge/rapier3d-compat": "~0.12.0", "@tweenjs/tween.js": "~23.1.3", "@types/stats.js": "*", "@types/webxr": ">=0.5.17", "fflate": "~0.8.3", "meshoptimizer": "~1.1.1" } }, "sha512-mxYSBpDC+D0pLfSP6sW4WZTcT+nrtmZcimMqnVmy36Hte3XpeYSrvgg4TRdaM1GemGog1AWzI5qL2VoIfMXbJQ=="],
+    "@types/three": ["@types/three@0.187.0", "", { "dependencies": { "@dimforge/rapier3d-compat": "~0.12.0", "@tweenjs/tween.js": "~23.1.3", "@types/stats.js": "*", "@types/webxr": ">=0.5.17", "fflate": "~0.8.3", "meshoptimizer": "~1.1.1" } }, "sha512-v+vKNarUtk4n2QRZ4+CN5ygMM0ARUjXjIQl0R/unMUfmStFeVqGbgqarbrpoGTXRZoulSH16ePrVJVxPJEbMUA=="],
 
     "@types/webxr": ["@types/webxr@0.5.24", "", {}, "sha512-h8fgEd/DpoS9CBrjEQXR+dIDraopAEfu4wYVNY2tEPwk60stPWhvZMf4Foo5FakuQ7HFZoa8WceaWFervK2Ovg=="],
 
@@ -2138,7 +2138,7 @@
 
     "tapable": ["tapable@2.3.3", "", {}, "sha512-uxc/zpqFg6x7C8vOE7lh6Lbda8eEL9zmVm/PLeTPBRhh1xCgdWaQ+J1CUieGpIfm2HdtsUpRv+HshiasBMcc6A=="],
 
-    "three": ["three@0.186.1", "", {}, "sha512-blFeqb49wRCSGUGj7gtpfnSGHy2lwDk94RhUmS1c/hTby70kvChbWpkJ4Pm1390LqzzvTmzgXKHPEafJwCb8jA=="],
+    "three": ["three@0.187.0", "", {}, "sha512-Qiu7R+Cmh8CstZsY1uJOSWnVlfo7ZtNLV7mF8Jltk3LB3AtDu9cRZlcnRKkAk8Y4z6KKw35z7Y7Urd7jWY8etA=="],
 
     "three-bvh-csg": ["three-bvh-csg@0.0.18", "", { "peerDependencies": { "three": ">=0.179.0", "three-mesh-bvh": ">=0.9.7" } }, "sha512-M3GCZMmGFgASGuDf+YMamM83nVlD/vdwzVHcYbFxgW+g1S7/nKPiuY00YVHOMbjmJPh8mLevGZL65ItHUuGt2w=="],
 

@@ -564,8 +564,12 @@ msgid "app.viewerToolbar.collapseSidebar"
 msgstr "Collapse sidebar"
 
 #: apps/editor/components/viewer-toolbar.tsx
-msgid "app.viewerToolbar.crispOpaqueEdgeLines"
-msgstr "Crisp, opaque edge lines"
+msgid "app.viewerToolbar.colored"
+msgstr "Colored"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.colors"
+msgstr "Colors"
 
 #: apps/editor/components/viewer-toolbar.tsx
 msgid "app.viewerToolbar.cutaway"
@@ -592,10 +596,6 @@ msgid "app.viewerToolbar.doorWindowMarks"
 msgstr "Door/window marks"
 
 #: apps/editor/components/viewer-toolbar.tsx
-msgid "app.viewerToolbar.edges"
-msgstr "Edges"
-
-#: apps/editor/components/viewer-toolbar.tsx
 msgid "app.viewerToolbar.editing"
 msgstr "Editing"
 
@@ -620,16 +620,8 @@ msgid "app.viewerToolbar.exploded"
 msgstr "Exploded"
 
 #: apps/editor/components/viewer-toolbar.tsx
-msgid "app.viewerToolbar.faintOutlineOfMajorCreases"
-msgstr "Faint outline of major creases"
-
-#: apps/editor/components/viewer-toolbar.tsx
 msgid "app.viewerToolbar.feetInches"
 msgstr "Feet & inches"
-
-#: apps/editor/components/viewer-toolbar.tsx
-msgid "app.viewerToolbar.flatAndFastNoAmbientOcclusion"
-msgstr "Flat and fast — no ambient occlusion"
 
 #: apps/editor/components/viewer-toolbar.tsx
 msgid "app.viewerToolbar.floorPlanAnnotations"
@@ -638,10 +630,6 @@ msgstr "Floor plan annotations"
 #: apps/editor/components/viewer-toolbar.tsx
 msgid "app.viewerToolbar.floorPlanMode"
 msgstr "Floor plan mode"
-
-#: apps/editor/components/viewer-toolbar.tsx
-msgid "app.viewerToolbar.fullAmbientOcclusion"
-msgstr "Full ambient occlusion"
 
 #: apps/editor/components/viewer-toolbar.tsx
 msgid "app.viewerToolbar.fullDocumentationAndAnnotationControls"
@@ -710,16 +698,16 @@ msgid "app.viewerToolbar.millimeters"
 msgstr "Millimeters"
 
 #: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.monochrome"
+msgstr "Monochrome"
+
+#: apps/editor/components/viewer-toolbar.tsx
 msgid "app.viewerToolbar.n2dOnly"
 msgstr "2D only"
 
 #: apps/editor/components/viewer-toolbar.tsx
 msgid "app.viewerToolbar.n3dOnly"
 msgstr "3D only"
-
-#: apps/editor/components/viewer-toolbar.tsx
-msgid "app.viewerToolbar.noEdgeLines"
-msgstr "No edge lines"
 
 #. Short for outside dimension: measured between the outside faces of walls.
 #: apps/editor/components/viewer-toolbar.tsx
@@ -767,14 +755,6 @@ msgid "app.viewerToolbar.previewMode"
 msgstr "Preview mode"
 
 #: apps/editor/components/viewer-toolbar.tsx
-msgid "app.viewerToolbar.render"
-msgstr "Render"
-
-#: apps/editor/components/viewer-toolbar.tsx
-msgid "app.viewerToolbar.rendered"
-msgstr "Rendered"
-
-#: apps/editor/components/viewer-toolbar.tsx
 msgid "app.viewerToolbar.roomLabels"
 msgstr "Room labels"
 
@@ -807,14 +787,6 @@ msgid "app.viewerToolbar.show"
 msgstr "Show"
 
 #: apps/editor/components/viewer-toolbar.tsx
-msgid "app.viewerToolbar.soft"
-msgstr "Soft"
-
-#: apps/editor/components/viewer-toolbar.tsx
-msgid "app.viewerToolbar.solid"
-msgstr "Solid"
-
-#: apps/editor/components/viewer-toolbar.tsx
 msgid "app.viewerToolbar.solo"
 msgstr "Solo"
 
@@ -825,10 +797,6 @@ msgstr "Stack"
 #: apps/editor/components/viewer-toolbar.tsx
 msgid "app.viewerToolbar.stairAnnotations"
 msgstr "Stair annotations"
-
-#: apps/editor/components/viewer-toolbar.tsx
-msgid "app.viewerToolbar.strong"
-msgstr "Strong"
 
 #: apps/editor/components/viewer-toolbar.tsx
 msgid "app.viewerToolbar.structuralGridsColumnCenters"
@@ -1551,6 +1519,22 @@ msgstr "Rotate"
 #: packages/editor/src/components/editor/index.tsx
 msgid "editor.cameraHint.zoom"
 msgstr "Zoom"
+
+#: packages/editor/src/components/ui/command-palette/editor-commands.tsx
+msgid "editor.commands.qualityAuto"
+msgstr "Quality: Auto"
+
+#: packages/editor/src/components/ui/command-palette/editor-commands.tsx
+msgid "editor.commands.qualityHigh"
+msgstr "Quality: High"
+
+#: packages/editor/src/components/ui/command-palette/editor-commands.tsx
+msgid "editor.commands.qualityLow"
+msgstr "Quality: Low"
+
+#: packages/editor/src/components/ui/command-palette/editor-commands.tsx
+msgid "editor.commands.qualityMedium"
+msgstr "Quality: Medium"
 
 #: packages/editor/src/components/ui/controls/finish-swatch.tsx
 msgid "editor.controls.finishSwatch.ariaLabel"
@@ -14615,13 +14599,185 @@ msgstr "Orbit right"
 msgid "viewer.camera.topView"
 msgstr "Top view"
 
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
 #: packages/editor/src/components/viewer/viewer-controls-bar.tsx
 msgid "viewer.common.off"
 msgstr "Off"
 
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
 #: packages/editor/src/components/viewer/viewer-controls-bar.tsx
 msgid "viewer.common.on"
 msgstr "On"
+
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
+msgid "viewer.daylight.location.approximate"
+msgstr "Sun position is approximate"
+
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
+msgid "viewer.daylight.location.device"
+msgstr "Sun follows your location"
+
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
+#: packages/editor/src/components/viewer/sky-control.tsx
+msgid "viewer.daylight.location.use"
+msgstr "Use my location"
+
+#: packages/editor/src/components/viewer/sky-control.tsx
+msgid "viewer.daylight.phase.afternoon"
+msgstr "Afternoon"
+
+#: packages/editor/src/components/viewer/sky-control.tsx
+msgid "viewer.daylight.phase.morning"
+msgstr "Morning"
+
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
+msgid "viewer.daylight.quality.auto"
+msgstr "Auto"
+
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
+msgid "viewer.daylight.quality.autoDetail"
+msgstr "Picked for this device: {tier}"
+
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
+msgid "viewer.daylight.quality.high"
+msgstr "High"
+
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
+msgid "viewer.daylight.quality.highDetail"
+msgstr "Lighting-aware ambient occlusion and bloom"
+
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
+msgid "viewer.daylight.quality.low"
+msgstr "Low"
+
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
+msgid "viewer.daylight.quality.lowDetail"
+msgstr "Fastest — no ambient occlusion or bloom"
+
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
+msgid "viewer.daylight.quality.medium"
+msgstr "Medium"
+
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
+msgid "viewer.daylight.quality.mediumDetail"
+msgstr "Half-resolution ambient occlusion"
+
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
+msgid "viewer.daylight.quality.title"
+msgstr "Quality"
+
+#: packages/editor/src/components/viewer/sky-control.tsx
+msgid "viewer.daylight.sky.arc"
+msgstr "Drag the sun to set the time"
+
+#: packages/editor/src/components/viewer/sky-control.tsx
+msgid "viewer.daylight.sky.close"
+msgstr "Close"
+
+#: packages/editor/src/components/viewer/sky-control.tsx
+msgid "viewer.daylight.sky.cloudCover"
+msgstr "Cloud cover"
+
+#: packages/editor/src/components/viewer/sky-control.tsx
+msgid "viewer.daylight.sky.cycleWeather"
+msgstr "Cloud cover: {current}. Change to {next}"
+
+#: packages/editor/src/components/viewer/sky-control.tsx
+msgid "viewer.daylight.sky.cycleWeatherTip"
+msgstr "Cycle cloud cover"
+
+#: packages/editor/src/components/viewer/sky-control.tsx
+msgid "viewer.daylight.sky.followClock"
+msgstr "Follow the clock"
+
+#: packages/editor/src/components/viewer/sky-control.tsx
+msgid "viewer.daylight.sky.followClockDetail"
+msgstr "The sun moves with your local clock."
+
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
+msgid "viewer.daylight.sky.inViewport"
+msgstr "In viewport"
+
+#: packages/editor/src/components/viewer/sky-control.tsx
+msgid "viewer.daylight.sky.liveDetail"
+msgstr "Follows your local clock. Sun position is approximate."
+
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
+msgid "viewer.daylight.sky.menuItem"
+msgstr "Time & weather"
+
+#: packages/editor/src/components/viewer/sky-control.tsx
+msgid "viewer.daylight.sky.open"
+msgstr "Time and weather"
+
+#: packages/editor/src/components/viewer/sky-control.tsx
+msgid "viewer.daylight.sky.reset"
+msgstr "Reset"
+
+#: packages/editor/src/components/viewer/sky-control.tsx
+msgid "viewer.daylight.sky.subtitle"
+msgstr "Light and weather for this view"
+
+#: packages/editor/src/components/viewer/sky-control.tsx
+msgid "viewer.daylight.sky.sunrise"
+msgstr "Sunrise"
+
+#: packages/editor/src/components/viewer/sky-control.tsx
+msgid "viewer.daylight.sky.sunset"
+msgstr "Sunset"
+
+#: packages/editor/src/components/viewer/sky-control.tsx
+msgid "viewer.daylight.sky.title"
+msgstr "Sky"
+
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
+#: packages/editor/src/components/viewer/sky-control.tsx
+msgid "viewer.daylight.time.blue"
+msgstr "Blue hour"
+
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
+#: packages/editor/src/components/viewer/sky-control.tsx
+msgid "viewer.daylight.time.golden"
+msgstr "Golden hour"
+
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
+#: packages/editor/src/components/viewer/sky-control.tsx
+msgid "viewer.daylight.time.midday"
+msgstr "Midday"
+
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
+#: packages/editor/src/components/viewer/sky-control.tsx
+msgid "viewer.daylight.time.night"
+msgstr "Night"
+
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
+#: packages/editor/src/components/viewer/sky-control.tsx
+msgid "viewer.daylight.time.title"
+msgstr "Time of day"
+
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
+#: packages/editor/src/components/viewer/sky-control.tsx
+msgid "viewer.daylight.weather.clear"
+msgstr "Clear"
+
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
+#: packages/editor/src/components/viewer/sky-control.tsx
+msgid "viewer.daylight.weather.cloudy"
+msgstr "Cloudy"
+
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
+#: packages/editor/src/components/viewer/sky-control.tsx
+msgid "viewer.daylight.weather.fair"
+msgstr "Fair"
+
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
+#: packages/editor/src/components/viewer/sky-control.tsx
+msgid "viewer.daylight.weather.overcast"
+msgstr "Overcast"
+
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
+msgid "viewer.daylight.weather.title"
+msgstr "Weather"
 
 #: packages/editor/src/components/viewer/viewer-controls-bar.tsx
 msgid "viewer.display.camera"
@@ -14635,31 +14791,7 @@ msgstr "Colored"
 msgid "viewer.display.colors"
 msgstr "Colors"
 
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
-msgid "viewer.display.edges.off"
-msgstr "Off"
-
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
-msgid "viewer.display.edges.offDetail"
-msgstr "No edge lines"
-
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
-msgid "viewer.display.edges.soft"
-msgstr "Soft"
-
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
-msgid "viewer.display.edges.softDetail"
-msgstr "Faint outline of major creases"
-
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
-msgid "viewer.display.edges.strong"
-msgstr "Strong"
-
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
-msgid "viewer.display.edges.strongDetail"
-msgstr "Crisp, opaque edge lines"
-
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
 msgid "viewer.display.edges.title"
 msgstr "Edges"
 
@@ -14674,26 +14806,6 @@ msgstr "Orthographic"
 #: packages/editor/src/components/viewer/viewer-controls-bar.tsx
 msgid "viewer.display.perspective"
 msgstr "Perspective"
-
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
-msgid "viewer.display.render.rendered"
-msgstr "Rendered"
-
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
-msgid "viewer.display.render.renderedDetail"
-msgstr "Full ambient occlusion"
-
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
-msgid "viewer.display.render.solid"
-msgstr "Solid"
-
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
-msgid "viewer.display.render.solidDetail"
-msgstr "Flat and fast — no ambient occlusion"
-
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
-msgid "viewer.display.render.title"
-msgstr "Render"
 
 #: packages/editor/src/components/viewer/viewer-controls-bar.tsx
 msgid "viewer.display.shadows"

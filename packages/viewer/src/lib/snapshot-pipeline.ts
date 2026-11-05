@@ -1,4 +1,12 @@
-import { type Camera, Color, Matrix4, type Scene, SRGBColorSpace, UnsignedByteType } from 'three'
+import {
+  type Camera,
+  Color,
+  Matrix4,
+  type Scene,
+  SRGBColorSpace,
+  UnsignedByteType,
+  Vector3,
+} from 'three'
 import { ssgi } from 'three/addons/tsl/display/SSGINode.js'
 import { denoise } from 'three/examples/jsm/tsl/display/DenoiseNode.js'
 import { fxaa } from 'three/examples/jsm/tsl/display/FXAANode.js'
@@ -30,8 +38,11 @@ import {
 import { GRADE_PARAMS, SSGI_PARAMS } from '../components/viewer/post-processing'
 import type { SceneAtmosphereSource } from '../components/viewer/scene-atmosphere'
 import { backdropColors, backdropGradient, flatBackdropOutput } from './backdrop'
+import { DAYLIGHT_INK_BACKDROP, daylightGradeRgb, isDaylightAtmosphere } from './daylight/look'
+import { daylightRoomContext } from './daylight/room-context'
 import { type EdgeMode, edgeColorFor, edgeOpacityScaleFor } from './edge-style'
 import { createEdgeDepthSampler, inkedEdges } from './ink-edges'
+import { readbackRows } from './readback-rows'
 import { sceneLightingMask, scenePassMrt } from './scene-pass-mrt'
 import type { SceneTheme } from './scene-themes'
 import { packNormalToRGB, unpackRGBToNormal } from './tsl-compat'
@@ -177,6 +188,8 @@ export async function createSnapshotPipeline({
     const inkColorUniform = uniform(new Color('#1a1d24'))
     const inkOpacityUniform = uniform(0.5)
     const inkOpacityScaleUniform = uniform(1)
+    const daylight = isDaylightAtmosphere(atmosphere)
+    const whiteBalanceUniform = uniform(new Vector3(1, 1, 1))
 
     // The scene pass owns MRT and its transparent clear, including when nested
     // inside FXAA's intermediate render target.
@@ -189,6 +202,10 @@ export async function createSnapshotPipeline({
         lighting: sceneLightingMask(),
       }),
     )
+
+    // The daylight look's room light (windows, lamps, bounce, night spill), as in the viewport.
+    if (daylight)
+      (scenePass as unknown as { contextNode: unknown }).contextNode = daylightRoomContext(null)
 
     const scenePassColor = scenePass.getTextureNode('output')
     const scenePassDepth = scenePass.getTextureNode('depth')
@@ -246,8 +263,14 @@ export async function createSnapshotPipeline({
       opacity: float(inkOpacityUniform).mul(inkOpacityScaleUniform),
     })
     const ungradedSceneRgb = mix(aoRgb, inkedRgb, inkMixUniform)
-    const gradeRgb = (rgb: any) =>
-      saturation(rgb.div(0.18).pow(vec3(GRADE_PARAMS.contrast)).mul(0.18), GRADE_PARAMS.saturation)
+    // The built-in daylight look grades with its own white balance, as the viewport does.
+    const gradeRgb = daylight
+      ? (rgb: any) => daylightGradeRgb(rgb, whiteBalanceUniform)
+      : (rgb: any) =>
+          saturation(
+            rgb.div(0.18).pow(vec3(GRADE_PARAMS.contrast)).mul(0.18),
+            GRADE_PARAMS.saturation,
+          )
     const sceneRgb = mix(ungradedSceneRgb, gradeRgb(ungradedSceneRgb), gradeMixUniform)
 
     // Per-pixel world ray from the capture camera → sky gradient above the
@@ -335,8 +358,9 @@ export async function createSnapshotPipeline({
         const backdrop = backdropColors(sceneTheme)
         inkMixUniform.value = edges === 'off' ? 0 : 1
         inkOpacityUniform.value = edges === 'strong' ? 1 : 0.5
-        inkColorUniform.value.set(edgeColorFor(sceneTheme.background))
-        inkOpacityScaleUniform.value = edgeOpacityScaleFor(sceneTheme.background)
+        const inkBackdrop = daylight ? DAYLIGHT_INK_BACKDROP : sceneTheme.background
+        inkColorUniform.value.set(edgeColorFor(inkBackdrop))
+        inkOpacityScaleUniform.value = edgeOpacityScaleFor(inkBackdrop)
         bgColorUniform.value.set(sceneTheme.background)
         bgSkyUniform.value.set(backdrop.sky)
         bgSkyDeepUniform.value.set(backdrop.skyDeep)
@@ -344,7 +368,10 @@ export async function createSnapshotPipeline({
         bgMixUniform.value = transparent ? 0 : 1
         flatBgMixUniform.value =
           !transparent && !atmosphere && sceneTheme.backgroundSky === null ? 1 : 0
-        gradeMixUniform.value = grade && sceneTheme.postprocessing?.colorGrading !== false ? 1 : 0
+        gradeMixUniform.value =
+          (grade || daylight) && sceneTheme.postprocessing?.colorGrading !== false ? 1 : 0
+        if (isDaylightAtmosphere(atmosphere))
+          whiteBalanceUniform.value.copy(atmosphere.whiteBalance)
         aoMixUniform.value = sceneTheme.postprocessing?.ambientOcclusion === false ? 0 : 1
 
         // The capture camera never joins the scene graph, so its matrixWorld
@@ -401,9 +428,9 @@ export async function createSnapshotPipeline({
 }
 
 /**
- * The frame in `renderTarget`, read back and encoded: WebGPU's 256-byte row
- * padding undone (the WebGL fallback's bottom-up rows flipped), then cut to
- * the capture mode — the viewport as is, an area, or the standard aspect.
+ * The frame in `renderTarget`, read back and encoded: rows made tight and
+ * top-down (`readbackRows`), then cut to the capture mode — the viewport as
+ * is, an area, or the standard aspect.
  * Shared by the post-processed pipeline and the plain one.
  */
 async function encodeCapture(
@@ -426,9 +453,6 @@ async function encodeCapture(
   },
 ): Promise<SnapshotCaptureResult> {
   const encoding = mime ? { type: mime } : { type: SNAPSHOT_MIME, quality: SNAPSHOT_QUALITY }
-  // Read pixels from the RT asynchronously.
-  // WebGPU copyTextureToBuffer aligns each row to 256 bytes, so we must
-  // depad the rows before constructing ImageData.
   const pixels = (await (renderer as any).readRenderTargetPixelsAsync(
     renderTarget,
     0,
@@ -436,15 +460,6 @@ async function encodeCapture(
     captureWidth,
     captureHeight,
   )) as Uint8Array
-
-  const actualBytesPerRow = captureWidth * 4
-  const tightTotal = actualBytesPerRow * captureHeight
-  const paddedBytesPerRow = Math.ceil(actualBytesPerRow / 256) * 256
-  // Two readback shapes to handle:
-  // - WebGPU (`copyTextureToBuffer`): top-down + 256-byte row padding
-  //   when width*4 isn't already a multiple of 256.
-  // - WebGL2 fallback (iOS Chrome, etc.): tightly-packed but bottom-up
-  //   (OpenGL framebuffer convention).
   // `isWebGPURenderer` lies — it stays true even when the renderer
   // falls back to the WebGL backend. Inspect the actual backend
   // instead (presence of a GPU device, or backend constructor name).
@@ -453,35 +468,7 @@ async function encodeCapture(
     !!backend?.device ||
     backend?.isWebGPUBackend === true ||
     backend?.constructor?.name === 'WebGPUBackend'
-  let tightPixels: Uint8ClampedArray
-  if (isWebGPU) {
-    // WebGPU: depad rows if needed; orientation is already top-down.
-    if (paddedBytesPerRow === actualBytesPerRow) {
-      tightPixels = new Uint8ClampedArray(
-        pixels.buffer,
-        pixels.byteOffset,
-        Math.min(pixels.byteLength, tightTotal),
-      )
-    } else {
-      tightPixels = new Uint8ClampedArray(tightTotal)
-      for (let row = 0; row < captureHeight; row++) {
-        tightPixels.set(
-          pixels.subarray(row * paddedBytesPerRow, row * paddedBytesPerRow + actualBytesPerRow),
-          row * actualBytesPerRow,
-        )
-      }
-    }
-  } else {
-    // WebGL2: tight buffer in bottom-up order — flip rows.
-    tightPixels = new Uint8ClampedArray(tightTotal)
-    for (let row = 0; row < captureHeight; row++) {
-      const srcStart = (captureHeight - 1 - row) * actualBytesPerRow
-      tightPixels.set(
-        pixels.subarray(srcStart, srcStart + actualBytesPerRow),
-        row * actualBytesPerRow,
-      )
-    }
-  }
+  const tightPixels = readbackRows(pixels, captureWidth, captureHeight, isWebGPU)
 
   const imageData = new ImageData(
     tightPixels as unknown as Uint8ClampedArray<ArrayBuffer>,

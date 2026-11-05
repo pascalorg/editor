@@ -1403,15 +1403,25 @@ msgstr "Plan épuré ; les cotes apparaissent à la sélection"
 msgid "app.viewerToolbar.collapseSidebar"
 msgstr "Réduire la barre latérale"
 
-# Source-Hash: 2416a48df28d6205
+# Source-Hash: d3d478fa6c6d7ddc
 # Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Crisp, opaque edge lines"
+# English: "Colored"
 #: apps/editor/components/viewer-toolbar.tsx
 #, fuzzy
-msgid "app.viewerToolbar.crispOpaqueEdgeLines"
-msgstr "Arêtes nettes et opaques"
+msgid "app.viewerToolbar.colored"
+msgstr "En couleur"
+
+# Source-Hash: 82b74c4f5ef43336
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Colors"
+#: apps/editor/components/viewer-toolbar.tsx
+#, fuzzy
+msgid "app.viewerToolbar.colors"
+msgstr "Couleurs"
 
 # Source-Hash: 4da8b3678ed77b45
 # Review: required
@@ -1473,16 +1483,6 @@ msgstr "Paramètres d’affichage"
 msgid "app.viewerToolbar.doorWindowMarks"
 msgstr "Repères de portes et fenêtres"
 
-# Source-Hash: 027bbc8b7287c06a
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Edges"
-#: apps/editor/components/viewer-toolbar.tsx
-#, fuzzy
-msgid "app.viewerToolbar.edges"
-msgstr "Arêtes"
-
 # Source-Hash: 9bacee5dbd658209
 # Review: required
 # AI-Provider: claude-code
@@ -1543,16 +1543,6 @@ msgstr "Expert"
 msgid "app.viewerToolbar.exploded"
 msgstr "Éclatée"
 
-# Source-Hash: 0c583f1d4201293b
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Faint outline of major creases"
-#: apps/editor/components/viewer-toolbar.tsx
-#, fuzzy
-msgid "app.viewerToolbar.faintOutlineOfMajorCreases"
-msgstr "Contour léger des arêtes principales"
-
 # Source-Hash: 08ecd5878b08139d
 # Review: required
 # AI-Provider: claude-code
@@ -1562,16 +1552,6 @@ msgstr "Contour léger des arêtes principales"
 #, fuzzy
 msgid "app.viewerToolbar.feetInches"
 msgstr "Pieds et pouces"
-
-# Source-Hash: 8827df1cdeb02ed9
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Flat and fast — no ambient occlusion"
-#: apps/editor/components/viewer-toolbar.tsx
-#, fuzzy
-msgid "app.viewerToolbar.flatAndFastNoAmbientOcclusion"
-msgstr "Plat et rapide — sans occlusion ambiante"
 
 # Source-Hash: 060a718cdcff61b3
 # Review: required
@@ -1592,16 +1572,6 @@ msgstr "Annotations du plan d’étage"
 #, fuzzy
 msgid "app.viewerToolbar.floorPlanMode"
 msgstr "Mode plan d’étage"
-
-# Source-Hash: 8bb9e54fc786ca77
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Full ambient occlusion"
-#: apps/editor/components/viewer-toolbar.tsx
-#, fuzzy
-msgid "app.viewerToolbar.fullAmbientOcclusion"
-msgstr "Occlusion ambiante complète"
 
 # Source-Hash: 91fd3544d9ce16bf
 # Review: required
@@ -1765,6 +1735,16 @@ msgstr "Mètres"
 msgid "app.viewerToolbar.millimeters"
 msgstr "Millimètres"
 
+# Source-Hash: ecde2f7c26914be3
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Monochrome"
+#: apps/editor/components/viewer-toolbar.tsx
+#, fuzzy
+msgid "app.viewerToolbar.monochrome"
+msgstr "Monochrome"
+
 # Source-Hash: 340a0a4e7703227b
 # Review: required
 # AI-Provider: claude-code
@@ -1784,16 +1764,6 @@ msgstr "2D seulement"
 #, fuzzy
 msgid "app.viewerToolbar.n3dOnly"
 msgstr "3D seulement"
-
-# Source-Hash: 4ff58913a4492199
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "No edge lines"
-#: apps/editor/components/viewer-toolbar.tsx
-#, fuzzy
-msgid "app.viewerToolbar.noEdgeLines"
-msgstr "Aucune arête"
 
 # Source-Hash: fdaa3b3faa1844fd
 # Review: required
@@ -1906,26 +1876,6 @@ msgstr "Aperçu"
 msgid "app.viewerToolbar.previewMode"
 msgstr "Mode aperçu"
 
-# Source-Hash: 5e58af99d6d4fa6a
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Render"
-#: apps/editor/components/viewer-toolbar.tsx
-#, fuzzy
-msgid "app.viewerToolbar.render"
-msgstr "Rendu"
-
-# Source-Hash: f363702a10aedaeb
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Rendered"
-#: apps/editor/components/viewer-toolbar.tsx
-#, fuzzy
-msgid "app.viewerToolbar.rendered"
-msgstr "Rendu"
-
 # Source-Hash: 4959d5538efc595c
 # Review: required
 # AI-Provider: claude-code
@@ -2006,26 +1956,6 @@ msgstr "Commun à la 2D et à la 3D"
 msgid "app.viewerToolbar.show"
 msgstr "Afficher"
 
-# Source-Hash: d266d83ec490df4e
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Soft"
-#: apps/editor/components/viewer-toolbar.tsx
-#, fuzzy
-msgid "app.viewerToolbar.soft"
-msgstr "Douces"
-
-# Source-Hash: ef3e765e692faf4c
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Solid"
-#: apps/editor/components/viewer-toolbar.tsx
-#, fuzzy
-msgid "app.viewerToolbar.solid"
-msgstr "Plein"
-
 # Source-Hash: e9f59b513f2f45ac
 # Review: required
 # AI-Provider: claude-code
@@ -2055,16 +1985,6 @@ msgstr "Empilé"
 #, fuzzy
 msgid "app.viewerToolbar.stairAnnotations"
 msgstr "Annotations d’escalier"
-
-# Source-Hash: f82927a01d4c5e45
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Strong"
-#: apps/editor/components/viewer-toolbar.tsx
-#, fuzzy
-msgid "app.viewerToolbar.strong"
-msgstr "Marquées"
 
 # Source-Hash: efc50964d7b0ec47
 # Review: required
@@ -3813,6 +3733,46 @@ msgstr "Pivoter"
 #, fuzzy
 msgid "editor.cameraHint.zoom"
 msgstr "Zoom"
+
+# Source-Hash: 5299816622fc73be
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Quality: Auto"
+#: packages/editor/src/components/ui/command-palette/editor-commands.tsx
+#, fuzzy
+msgid "editor.commands.qualityAuto"
+msgstr "Qualité : Auto"
+
+# Source-Hash: bf4659b003e22b8d
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Quality: High"
+#: packages/editor/src/components/ui/command-palette/editor-commands.tsx
+#, fuzzy
+msgid "editor.commands.qualityHigh"
+msgstr "Qualité : haute"
+
+# Source-Hash: 8254a76e05d68744
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Quality: Low"
+#: packages/editor/src/components/ui/command-palette/editor-commands.tsx
+#, fuzzy
+msgid "editor.commands.qualityLow"
+msgstr "Qualité : basse"
+
+# Source-Hash: 86e656c893625063
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Quality: Medium"
+#: packages/editor/src/components/ui/command-palette/editor-commands.tsx
+#, fuzzy
+msgid "editor.commands.qualityMedium"
+msgstr "Qualité : moyenne"
 
 # Source-Hash: 34b7ca7ff46c44a9
 # Review: required
@@ -36425,6 +36385,7 @@ msgstr "Vue de dessus"
 # Source-Hash: 50accd740fa2e736
 # Review: human
 # English: "Off"
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
 #: packages/editor/src/components/viewer/viewer-controls-bar.tsx
 msgid "viewer.common.off"
 msgstr "Désactivé"
@@ -36432,9 +36393,420 @@ msgstr "Désactivé"
 # Source-Hash: 9cc01faad79c28da
 # Review: human
 # English: "On"
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
 #: packages/editor/src/components/viewer/viewer-controls-bar.tsx
 msgid "viewer.common.on"
 msgstr "Activé"
+
+# Source-Hash: 922fc552e352165f
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Sun position is approximate"
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
+#, fuzzy
+msgid "viewer.daylight.location.approximate"
+msgstr "Position du soleil approximative"
+
+# Source-Hash: 98dc046e099b6ac6
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Sun follows your location"
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
+#, fuzzy
+msgid "viewer.daylight.location.device"
+msgstr "Le soleil suit votre position"
+
+# Source-Hash: cf7321889b128f7c
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Use my location"
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
+#: packages/editor/src/components/viewer/sky-control.tsx
+#, fuzzy
+msgid "viewer.daylight.location.use"
+msgstr "Utiliser ma position"
+
+# Source-Hash: 18dad06b2abd1dd7
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Afternoon"
+#: packages/editor/src/components/viewer/sky-control.tsx
+#, fuzzy
+msgid "viewer.daylight.phase.afternoon"
+msgstr "Après-midi"
+
+# Source-Hash: 5bcbec8f2f132d3a
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Morning"
+#: packages/editor/src/components/viewer/sky-control.tsx
+#, fuzzy
+msgid "viewer.daylight.phase.morning"
+msgstr "Matin"
+
+# Source-Hash: 05b65242d8c48791
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Auto"
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
+#, fuzzy
+msgid "viewer.daylight.quality.auto"
+msgstr "Auto"
+
+# Source-Hash: 9dda9a76be946457
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Picked for this device: {tier}"
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
+#, fuzzy
+msgid "viewer.daylight.quality.autoDetail"
+msgstr "Choisie pour cet appareil : {tier}"
+
+# Source-Hash: b77127463c51fa94
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "High"
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
+#, fuzzy
+msgid "viewer.daylight.quality.high"
+msgstr "Haute"
+
+# Source-Hash: 51e2bcc1d08f5741
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Lighting-aware ambient occlusion and bloom"
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
+#, fuzzy
+msgid "viewer.daylight.quality.highDetail"
+msgstr "Occlusion ambiante liée à l'éclairage et bloom"
+
+# Source-Hash: 803532407fb5962b
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Low"
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
+#, fuzzy
+msgid "viewer.daylight.quality.low"
+msgstr "Basse"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 8b94a0f7e27f671d
+# Review: required
+# English: "Fastest — no ambient occlusion or bloom"
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
+#, fuzzy
+msgid "viewer.daylight.quality.lowDetail"
+msgstr "Le plus rapide — ni occlusion ambiante ni bloom"
+
+# Source-Hash: 866bf047c116b31d
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Medium"
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
+#, fuzzy
+msgid "viewer.daylight.quality.medium"
+msgstr "Moyenne"
+
+# Source-Hash: 3491de63f8c09e0f
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Half-resolution ambient occlusion"
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
+#, fuzzy
+msgid "viewer.daylight.quality.mediumDetail"
+msgstr "Occlusion ambiante en demi-résolution"
+
+# Source-Hash: bfeb28708d3d10ce
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Quality"
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
+#, fuzzy
+msgid "viewer.daylight.quality.title"
+msgstr "Qualité"
+
+# Source-Hash: 5cdc78a33073e842
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Drag the sun to set the time"
+#: packages/editor/src/components/viewer/sky-control.tsx
+#, fuzzy
+msgid "viewer.daylight.sky.arc"
+msgstr "Faites glisser le soleil pour régler l'heure"
+
+# Source-Hash: d7cf5045c01b2eb9
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Close"
+#: packages/editor/src/components/viewer/sky-control.tsx
+#, fuzzy
+msgid "viewer.daylight.sky.close"
+msgstr "Fermer"
+
+# Source-Hash: 047f94cfff30d159
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Cloud cover"
+#: packages/editor/src/components/viewer/sky-control.tsx
+#, fuzzy
+msgid "viewer.daylight.sky.cloudCover"
+msgstr "Couverture nuageuse"
+
+# Source-Hash: 0e5d4e93c4f657d4
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Cloud cover: {current}. Change to {next}"
+#: packages/editor/src/components/viewer/sky-control.tsx
+#, fuzzy
+msgid "viewer.daylight.sky.cycleWeather"
+msgstr "Couverture nuageuse : {current}. Passer à {next}"
+
+# Source-Hash: 485715dce7741562
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Cycle cloud cover"
+#: packages/editor/src/components/viewer/sky-control.tsx
+#, fuzzy
+msgid "viewer.daylight.sky.cycleWeatherTip"
+msgstr "Changer la couverture nuageuse"
+
+# Source-Hash: 713190bee1f709c9
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Follow the clock"
+#: packages/editor/src/components/viewer/sky-control.tsx
+#, fuzzy
+msgid "viewer.daylight.sky.followClock"
+msgstr "Suivre l'horloge"
+
+# Source-Hash: 65e4960f5046f388
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "The sun moves with your local clock."
+#: packages/editor/src/components/viewer/sky-control.tsx
+#, fuzzy
+msgid "viewer.daylight.sky.followClockDetail"
+msgstr "Le soleil suit votre horloge locale."
+
+# Source-Hash: ae43493ea6fa1c9b
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "In viewport"
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
+#, fuzzy
+msgid "viewer.daylight.sky.inViewport"
+msgstr "Dans la vue"
+
+# Source-Hash: 32e941d5f1cf996a
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Follows your local clock. Sun position is approximate."
+#: packages/editor/src/components/viewer/sky-control.tsx
+#, fuzzy
+msgid "viewer.daylight.sky.liveDetail"
+msgstr "Suit votre horloge locale. La position du soleil est approximative."
+
+# Source-Hash: 942e1615fb4f395b
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Time & weather"
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
+#, fuzzy
+msgid "viewer.daylight.sky.menuItem"
+msgstr "Heure et météo"
+
+# Source-Hash: 1e15866d9e91fed6
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Time and weather"
+#: packages/editor/src/components/viewer/sky-control.tsx
+#, fuzzy
+msgid "viewer.daylight.sky.open"
+msgstr "Heure et météo"
+
+# Source-Hash: bf91b71a9aa76e94
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Reset"
+#: packages/editor/src/components/viewer/sky-control.tsx
+#, fuzzy
+msgid "viewer.daylight.sky.reset"
+msgstr "Réinitialiser"
+
+# Source-Hash: 09ce200e8245250a
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Light and weather for this view"
+#: packages/editor/src/components/viewer/sky-control.tsx
+#, fuzzy
+msgid "viewer.daylight.sky.subtitle"
+msgstr "Lumière et météo de cette vue"
+
+# Source-Hash: 1c93d60fee6d9820
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Sunrise"
+#: packages/editor/src/components/viewer/sky-control.tsx
+#, fuzzy
+msgid "viewer.daylight.sky.sunrise"
+msgstr "Lever"
+
+# Source-Hash: efe94d3ec8d8c44e
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Sunset"
+#: packages/editor/src/components/viewer/sky-control.tsx
+#, fuzzy
+msgid "viewer.daylight.sky.sunset"
+msgstr "Coucher"
+
+# Source-Hash: cd6c31c72565a084
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Sky"
+#: packages/editor/src/components/viewer/sky-control.tsx
+#, fuzzy
+msgid "viewer.daylight.sky.title"
+msgstr "Ciel"
+
+# Source-Hash: dfa53e6471dec872
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Blue hour"
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
+#: packages/editor/src/components/viewer/sky-control.tsx
+#, fuzzy
+msgid "viewer.daylight.time.blue"
+msgstr "Heure bleue"
+
+# Source-Hash: cbeb868b31e2efcb
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Golden hour"
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
+#: packages/editor/src/components/viewer/sky-control.tsx
+#, fuzzy
+msgid "viewer.daylight.time.golden"
+msgstr "Heure dorée"
+
+# Source-Hash: 9c3d8d45d0478768
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Midday"
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
+#: packages/editor/src/components/viewer/sky-control.tsx
+#, fuzzy
+msgid "viewer.daylight.time.midday"
+msgstr "Midi"
+
+# Source-Hash: b399942ec5d7e1ba
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Night"
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
+#: packages/editor/src/components/viewer/sky-control.tsx
+#, fuzzy
+msgid "viewer.daylight.time.night"
+msgstr "Nuit"
+
+# Source-Hash: ffb31a52dd7aa8c8
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Time of day"
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
+#: packages/editor/src/components/viewer/sky-control.tsx
+#, fuzzy
+msgid "viewer.daylight.time.title"
+msgstr "Moment de la journée"
+
+# Source-Hash: d0f86d2093269896
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Clear"
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
+#: packages/editor/src/components/viewer/sky-control.tsx
+#, fuzzy
+msgid "viewer.daylight.weather.clear"
+msgstr "Dégagé"
+
+# Source-Hash: e0b8ff55f635f9ad
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Cloudy"
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
+#: packages/editor/src/components/viewer/sky-control.tsx
+#, fuzzy
+msgid "viewer.daylight.weather.cloudy"
+msgstr "Nuageux"
+
+# Source-Hash: e31cb3c49b94b28f
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Fair"
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
+#: packages/editor/src/components/viewer/sky-control.tsx
+#, fuzzy
+msgid "viewer.daylight.weather.fair"
+msgstr "Beau temps"
+
+# Source-Hash: f512d1b947b8ae5a
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Overcast"
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
+#: packages/editor/src/components/viewer/sky-control.tsx
+#, fuzzy
+msgid "viewer.daylight.weather.overcast"
+msgstr "Couvert"
+
+# Source-Hash: a1100ef1041993bd
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Weather"
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
+#, fuzzy
+msgid "viewer.daylight.weather.title"
+msgstr "Météo"
 
 # Source-Hash: 14622745dbf93f4c
 # Review: human
@@ -36457,52 +36829,10 @@ msgstr "En couleur"
 msgid "viewer.display.colors"
 msgstr "Couleurs"
 
-# Source-Hash: 50accd740fa2e736
-# Review: human
-# English: "Off"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
-msgid "viewer.display.edges.off"
-msgstr "Désactivées"
-
-# Source-Hash: 4ff58913a4492199
-# Review: human
-# English: "No edge lines"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
-msgid "viewer.display.edges.offDetail"
-msgstr "Aucune ligne d’arête"
-
-# Source-Hash: d266d83ec490df4e
-# Review: human
-# English: "Soft"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
-msgid "viewer.display.edges.soft"
-msgstr "Douces"
-
-# Source-Hash: 0c583f1d4201293b
-# Review: human
-# English: "Faint outline of major creases"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
-msgid "viewer.display.edges.softDetail"
-msgstr "Contour léger des plis principaux"
-
-# Source-Hash: f82927a01d4c5e45
-# Review: human
-# English: "Strong"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
-msgid "viewer.display.edges.strong"
-msgstr "Marquées"
-
-# Source-Hash: 2416a48df28d6205
-# Review: human
-# English: "Crisp, opaque edge lines"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
-msgid "viewer.display.edges.strongDetail"
-msgstr "Lignes d’arête nettes et opaques"
-
 # Source-Hash: 027bbc8b7287c06a
 # Review: human
 # English: "Edges"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
 msgid "viewer.display.edges.title"
 msgstr "Arêtes"
 
@@ -36526,41 +36856,6 @@ msgstr "Orthographique"
 #: packages/editor/src/components/viewer/viewer-controls-bar.tsx
 msgid "viewer.display.perspective"
 msgstr "Perspective"
-
-# Source-Hash: f363702a10aedaeb
-# Review: human
-# English: "Rendered"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
-msgid "viewer.display.render.rendered"
-msgstr "Réaliste"
-
-# Source-Hash: 8bb9e54fc786ca77
-# Review: human
-# English: "Full ambient occlusion"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
-msgid "viewer.display.render.renderedDetail"
-msgstr "Occlusion ambiante complète"
-
-# Source-Hash: ef3e765e692faf4c
-# Review: human
-# English: "Solid"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
-msgid "viewer.display.render.solid"
-msgstr "Solide"
-
-# Source-Hash: 8827df1cdeb02ed9
-# Review: human
-# English: "Flat and fast — no ambient occlusion"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
-msgid "viewer.display.render.solidDetail"
-msgstr "Rapide et uniforme, sans occlusion ambiante"
-
-# Source-Hash: 5e58af99d6d4fa6a
-# Review: human
-# English: "Render"
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
-msgid "viewer.display.render.title"
-msgstr "Rendu"
 
 # Source-Hash: 4c6bcb30b40047fc
 # Review: human

@@ -103,6 +103,7 @@ import { SettingsPanel, type SettingsPanelProps } from '../ui/sidebar/panels/set
 import { SitePanel, type SitePanelProps } from '../ui/sidebar/panels/site-panel'
 import type { SidebarTab } from '../ui/sidebar/tab-bar'
 import { useHostPanels } from '../ui/sidebar/use-plugin-panels'
+import { SKY_DOCK_HEIGHT, SkyControl } from '../viewer/sky-control'
 import { ViewerHoverLabel } from '../viewer/viewer-hover-label'
 import { ParametricViewerRooms } from '../viewer/viewer-rooms'
 import { ViewerSelectionManager } from '../viewer/viewer-selection-manager'
@@ -1207,6 +1208,9 @@ const ViewerCanvas = memo(function ViewerCanvas({
   const views = useEditorViews()
   const isPreviewMode = useEditor((s) => s.isPreviewMode)
   const isCaptureMode = useEditor((s) => s.isCaptureMode)
+  const textures = useViewer((s) => s.textures)
+  const isMobile = useIsMobile()
+  const planOnRight = layout.split && layout.panes[1] === VIEW_2D
   useUnitFocusRules()
   const wholeBuilding = useEditor((s) =>
     showsWholeBuilding({
@@ -1376,6 +1380,22 @@ const ViewerCanvas = memo(function ViewerCanvas({
                   viewerSceneSlot={viewerSceneSlot}
                 />
               </Viewer>
+              {!showLoader &&
+              textures &&
+              !isMobile &&
+              !(
+                isFirstPersonMode ||
+                isStudioMode ||
+                isVersionPreviewMode ||
+                isCaptureMode ||
+                isPreviewMode
+              ) ? (
+                // Beside the compass (which moves to the plan's corner when the plan is on the right).
+                <SkyControl
+                  height={SKY_DOCK_HEIGHT.editor}
+                  style={{ left: planOnRight ? 12 : 52 }}
+                />
+              ) : null}
             </div>
             {showLoader && loadingOverlay}
           </div>

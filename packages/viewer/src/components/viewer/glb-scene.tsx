@@ -27,6 +27,8 @@ import * as THREE from 'three'
 import { lerp } from 'three/src/math/MathUtils.js'
 import { acceleratedRaycast, computeBoundsTree, disposeBoundsTree } from 'three-mesh-bvh'
 import { useGLTFKTX2 } from '../../hooks/use-gltf-ktx2'
+import { createDaylightGroundMaterial, DAYLIGHT_PARCEL } from '../../lib/daylight/ground'
+import { isDaylightAtmosphere } from '../../lib/daylight/look'
 import { createSurfaceRoleMaterial } from '../../lib/materials'
 import { applyShadowOnly, clearShadowOnly } from '../../lib/shadow-only'
 import useViewer from '../../store/use-viewer'
@@ -37,6 +39,7 @@ import { bakedLoopMechanisms } from './glb-mechanisms'
 import { GlbReferenceNodes } from './glb-reference-nodes'
 import { GlbReplaceInstances } from './glb-replace-instances'
 import { bindGlbShutters, isGlbShutterHit, toggleGlbShutters } from './glb-scene-motion'
+import { useSceneAtmosphere } from './scene-atmosphere'
 
 /** Baked `kind` → surface role, so monochrome can recolor by role like the
  *  parametric viewer (textures-off collapses each face to its themed clay). */
@@ -372,6 +375,34 @@ export function GlbScene({
       })
     })
   }, [gltf.scene, textures, sceneTheme])
+
+  // Baked meshes take part in the sun's shadows (the bake carries no shadow flags). Transparent
+  // surfaces (glazing) don't cast, so sunlight still reaches the rooms behind them. Foliage ships
+  // opaque with cut-out textures (square dark leaves): alpha-test it.
+  useEffect(() => {
+    gltf.scene.traverse((object) => {
+      if (!(object.userData as PascalExtras).kind?.startsWith('trees:')) return
+      object.traverse((child) => {
+        const mesh = child as THREE.Mesh
+        if (!mesh.isMesh) return
+        for (const material of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) {
+          const standard = material as THREE.MeshStandardMaterial
+          if (!standard.map || standard.alphaTest >= 0.5) continue
+          standard.alphaTest = 0.5
+          standard.side = THREE.DoubleSide
+          standard.transparent = false
+          standard.needsUpdate = true
+        }
+      })
+    })
+    gltf.scene.traverse((child) => {
+      const mesh = child as THREE.Mesh
+      if (!mesh.isMesh) return
+      const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material]
+      mesh.receiveShadow = true
+      mesh.castShadow = !materials.some((material) => material?.transparent)
+    })
+  }, [gltf.scene])
 
   // The baked scene isn't wrapped in <SceneBvh> (the community viewer runs with
   // useBvh={false}), so hover/pick raycasts against the baked building were
@@ -1048,6 +1079,7 @@ export function GlbScene({
       {replaceNodes?.length ? (
         <GlbReplaceInstances identity={identity} nodes={replaceNodes} />
       ) : null}
+      <GlbDaylightGround root={gltf.scene} />
     </group>
   )
 }
@@ -1061,6 +1093,62 @@ const NO_MODIFIERS: GlbPickEvent['modifiers'] = {
 
 function modifiersOf(event: MouseEvent): GlbPickEvent['modifiers'] {
   return { alt: event.altKey, ctrl: event.ctrlKey, meta: event.metaKey, shift: event.shiftKey }
+}
+
+const NO_RAYCAST = () => {}
+
+/**
+ * The colored appearance's ground under a baked artifact (the bake strips the live horizon
+ * disc): the squared daylight ground just under the baked site fill, so the parcel keeps its own
+ * surface; the atmosphere's fog takes it to the horizon.
+ */
+function GlbDaylightGround({ root }: { root: THREE.Object3D }) {
+  const atmosphere = useSceneAtmosphere()
+  const daylight = isDaylightAtmosphere(atmosphere)
+  // The baked site fill (the site's own opaque surface) becomes the daylight parcel: a neutral,
+  // slightly lighter surface so the lot reads as its own place on the squared ground.
+  useEffect(() => {
+    if (!daylight) return
+    const parcel = createDaylightGroundMaterial(false, { color: DAYLIGHT_PARCEL })
+    const swapped: [THREE.Mesh, THREE.Material | THREE.Material[]][] = []
+    root.traverse((object) => {
+      if ((object.userData as PascalExtras).kind !== 'site') return
+      for (const child of object.children) {
+        const mesh = child as THREE.Mesh
+        const material = mesh.material as THREE.Material | undefined
+        if (!mesh.isMesh || (mesh.userData as PascalExtras).pascalId || !material) continue
+        if (Array.isArray(material) || material.transparent) continue
+        swapped.push([mesh, mesh.material])
+        mesh.material = parcel
+      }
+    })
+    return () => {
+      for (const [mesh, material] of swapped) mesh.material = material
+      parcel.dispose()
+    }
+  }, [daylight, root])
+  const solid = useViewer((state) => state.shading === 'solid')
+  const material = useMemo(() => {
+    if (!daylight) return null
+    const ground = createDaylightGroundMaterial(solid, { horizon: atmosphere?.fogRadiance })
+    ground.polygonOffset = true
+    ground.polygonOffsetFactor = 2
+    ground.polygonOffsetUnits = 4
+    return ground
+  }, [atmosphere, daylight, solid])
+  useEffect(() => () => material?.dispose(), [material])
+  if (!material) return null
+  return (
+    <mesh
+      material={material}
+      position={[0, -0.07, 0]}
+      raycast={NO_RAYCAST}
+      receiveShadow
+      rotation={[-Math.PI / 2, 0, 0]}
+    >
+      <planeGeometry args={[12_000, 12_000]} />
+    </mesh>
+  )
 }
 
 /** Match the walkthrough HUD's secondary key prompt, without requiring host wiring. */
