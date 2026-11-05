@@ -102,3 +102,125 @@ test('no shutters where casing has nowhere to go', () => {
   })
   expect(sections(render()).has('Shutters')).toBe(false)
 })
+
+/** The segmented row in `section` that offers `value`. */
+const segmented = (section: string, value: string) =>
+  render().find(
+    (c) =>
+      c.kind === 'SegmentedControl' &&
+      c.section === section &&
+      c.props.options.some((option: { value: string }) => option.value === value),
+  )?.props
+const slidersIn = (section: string, label: string) =>
+  render().filter(
+    (c) => c.kind === 'SliderControl' && c.section === section && c.props.label === label,
+  )
+
+test('size comes right after the type, then position; hardware after the trim', () => {
+  select({ windowType: 'casement' })
+  expect([...sections(render())]).toEqual([
+    'Type',
+    'Dimensions',
+    'Position',
+    'Grid',
+    'Top shape',
+    'Swing',
+    'Frame',
+    'Sill',
+    'Casing',
+    'Shutters',
+    'Hardware',
+  ])
+})
+
+test('tilt-and-turn: tilt or turn, the hinges side when it turns, and how far it opens', () => {
+  select({ windowType: 'tilt-turn' })
+  expect(segmented('Tilt and turn', 'turn')!.value).toBe('tilt')
+  expect(segmented('Tilt and turn', 'left')).toBeUndefined()
+  segmented('Tilt and turn', 'turn')!.onChange('turn')
+  expect(live().tiltTurnMode).toBe('turn')
+  segmented('Tilt and turn', 'left')!.onChange('right')
+  expect(live().hingesSide).toBe('right')
+  control(render(), 'SliderControl', 'Tilt and turn', 'Open').onChange(0.5)
+  expect(live().operationState).toBe(0.5)
+  expect(sections(render()).has('Hardware')).toBe(true)
+})
+
+test('casement and awning sashes open outward or inward; a saved one shows how it opens today', () => {
+  select({ windowType: 'casement', side: 'front' })
+  expect(segmented('Swing', 'inward')!.value).toBe('outward')
+  select({ windowType: 'casement', side: 'back' })
+  expect(segmented('Swing', 'inward')!.value).toBe('inward')
+  segmented('Swing', 'inward')!.onChange('outward')
+  expect(live().openingDirection).toBe('outward')
+
+  select({ windowType: 'awning', openingDirection: 'inward' })
+  expect(segmented('Tilt', 'inward')!.value).toBe('inward')
+  for (const windowType of ['hopper', 'double-hung', 'tilt-turn'] as const) {
+    select({ windowType })
+    expect(
+      render().some((c) => c.props.options?.some((o: { value: string }) => o.value === 'inward')),
+    ).toBe(false)
+  }
+})
+
+test('the outside sill overhangs the opening and the sills take their own finish', () => {
+  select({ windowType: 'fixed', sill: true, sillDepth: 0.1 })
+  const overhang = slidersIn('Sill', 'Overhang')
+  expect(overhang).toHaveLength(1)
+  expect(overhang[0]!.props.value).toBeCloseTo(0.04)
+  overhang[0]!.props.onChange(0.05)
+  expect(live().sillOverhang).toBe(0.05)
+  const finish = control(render(), 'FinishSwatch', 'Sill')
+  expect(finish.paintRole).toBe('sill')
+
+  select({ windowType: 'fixed', sill: false })
+  expect(render().some((c) => c.section === 'Sill' && c.kind === 'FinishSwatch')).toBe(false)
+})
+
+test('the inside sill sizes show once it is on and write its own fields', () => {
+  select({ windowType: 'fixed', sill: false })
+  expect(slidersIn('Sill', 'Depth')).toHaveLength(0)
+  select({ windowType: 'fixed', sill: false, sillInterior: true })
+  control(render(), 'SliderControl', 'Sill', 'Depth').onChange(0.25)
+  expect(live().sillInteriorDepth).toBe(0.25)
+  control(render(), 'SliderControl', 'Sill', 'Thickness').onChange(0.04)
+  expect(live().sillInteriorThickness).toBe(0.04)
+  control(render(), 'SliderControl', 'Sill', 'Overhang').onChange(0.1)
+  expect(live().sillInteriorOverhang).toBe(0.1)
+  expect(control(render(), 'FinishSwatch', 'Sill').paintRole).toBe('sill')
+})
+
+test('shutters: board and batten, which sides, and how far they stand open', () => {
+  select({ windowType: 'fixed', shutters: 'louvered' })
+  expect(segmented('Shutters', 'louvered')!.options.map((o: { value: string }) => o.value)).toEqual(
+    ['none', 'louvered', 'panel', 'board-batten'],
+  )
+  segmented('Shutters', 'louvered')!.onChange('board-batten')
+  expect(live().shutters).toBe('board-batten')
+  expect(segmented('Shutters', 'both')!.value).toBe('both')
+  segmented('Shutters', 'both')!.onChange('left')
+  expect(live().shutterSides).toBe('left')
+  const open = control(render(), 'SliderControl', 'Shutters', 'Open')
+  expect(open.value).toBe(100)
+  open.onChange(25)
+  expect(live().shutterOpen).toBe(0.25)
+
+  select({ windowType: 'fixed' })
+  expect(segmented('Shutters', 'both')).toBeUndefined()
+})
+
+test('a roller shutter turns on with its own opening, and takes the shutter finish', () => {
+  select({ windowType: 'fixed' })
+  expect(slidersIn('Shutters', 'Open')).toHaveLength(0)
+  expect(render().some((c) => c.section === 'Shutters' && c.kind === 'FinishSwatch')).toBe(false)
+  control(render(), 'ToggleControl', 'Shutters', 'Roller shutter').onChange(true)
+  expect(live().rollerShutter).toBe('box')
+  const open = control(render(), 'SliderControl', 'Shutters', 'Open')
+  expect(open.value).toBe(100)
+  open.onChange(40)
+  expect(live().rollerShutterOpen).toBe(0.4)
+  expect(control(render(), 'FinishSwatch', 'Shutters').paintRole).toBe('shutters')
+  control(render(), 'ToggleControl', 'Shutters', 'Roller shutter').onChange(false)
+  expect(live().rollerShutter).toBe('none')
+})
