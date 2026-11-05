@@ -1,4 +1,7 @@
 import { describe, expect, test } from 'bun:test'
+import { z } from 'zod'
+import { AGENT_OPERATIONS } from '../agent-operations'
+import { createRoomTool } from '../agent-tools/create-room'
 import { type AgentRefusal, isAgentRefusal } from '../agent-tools/refusal'
 import { addDoorTool, addWindowTool } from '../agent-tools/wall-openings'
 import { getOpeningWallCut } from '../lib/opening-floor-datum'
@@ -195,5 +198,174 @@ describe('an opening on a railing', () => {
     }
     expect(isAgentRefusal(error)).toBe(true)
     expect((error as AgentRefusal).code).toBe('railing_window')
+  })
+})
+
+for (const handleStyle of ['lever', 'lever-curved', 'knob', 'bar', 'plate'] as const) {
+  test(`add_door carries ${handleStyle} from its wire input into the node`, () => {
+    const input = z.object(addDoorTool.input).parse({ wallId: 'wall_main', t: 0.5, handleStyle })
+    const planned = planWallOpening(openingScene().nodes, { ...input, kind: 'door' })
+    expect(planned.node.type).toBe('door')
+    if (planned.node.type === 'door') expect(planned.node.handleStyle).toBe(handleStyle)
+  })
+}
+describe('agent-authored window details', () => {
+  test.each(['casement', 'single-hung', 'double-hung', 'sliding', 'awning', 'hopper'] as const)(
+    'add_window applies columns and rows per %s sash',
+    (windowType) => {
+      const input = z.object(addWindowTool.input).parse({
+        wallId: OPENING_SCENE.main,
+        t: 0.5,
+        windowType,
+        columns: 3,
+        rows: 2,
+        windowHandle: false,
+        sillInterior: true,
+        shutters: 'louvered',
+        shutterWidth: '40 cm',
+        rollerShutter: 'box',
+        rollerShutterBoxHeight: '27 cm',
+      })
+      const { node } = planWallOpening(openingScene().nodes, { kind: 'window', ...input })
+      expect(node).toMatchObject({
+        type: 'window',
+        windowType,
+        sashGrid: true,
+        columnRatios: [1 / 3, 1 / 3, 1 / 3],
+        rowRatios: [0.5, 0.5],
+        windowHandle: false,
+        sillInterior: true,
+        shutters: 'louvered',
+        shutterWidth: 0.4,
+        rollerShutter: 'box',
+        rollerShutterBoxHeight: 0.27,
+      })
+    },
+  )
+
+  test('windows without requested divisions keep the optional sash grid absent', () => {
+    for (const windowType of ['fixed', 'casement'] as const) {
+      const { node } = planWallOpening(openingScene().nodes, {
+        kind: 'window',
+        wallId: OPENING_SCENE.main,
+        t: 0.5,
+        windowType,
+      })
+      expect(node).not.toHaveProperty('sashGrid')
+    }
+  })
+
+  test('create_room preserves its operable window details', () => {
+    const { nodes } = openingScene()
+    const input = z.object(createRoomTool.input).parse({
+      name: 'Study',
+      levelId: OPENING_SCENE.levelId,
+      polygon: [
+        [20, 20],
+        [24, 20],
+        [24, 24],
+        [20, 24],
+      ],
+      windows: [
+        {
+          wallIndex: 0,
+          windowType: 'double-hung',
+          columns: 3,
+          rows: 2,
+          sillInterior: true,
+          shutters: 'panel',
+          shutterWidth: 0.45,
+        },
+      ],
+    })
+    const outcome = AGENT_OPERATIONS.create_room(nodes, input, {
+      activeLevelId: OPENING_SCENE.levelId,
+    })
+    const window = outcome.changes?.create?.find(({ node }) => node.type === 'window')?.node
+    expect(window).toMatchObject({
+      type: 'window',
+      windowType: 'double-hung',
+      sashGrid: true,
+      columnRatios: [1 / 3, 1 / 3, 1 / 3],
+      rowRatios: [0.5, 0.5],
+      sillInterior: true,
+      shutters: 'panel',
+      shutterWidth: 0.45,
+    })
+  })
+})
+
+describe('swing door fixed lights', () => {
+  const lights = { sidelightLeft: 0.3, sidelightRight: 0.5, transomHeight: 0.4 }
+  test('add_door preserves leaf dimensions and cuts the full assembly', () => {
+    const { nodes } = openingScene()
+    const input = z.object(addDoorTool.input).parse({ wallId: 'wall_main', t: 0.5, ...lights })
+    const { node } = planWallOpening(nodes, { ...input, kind: 'door' })
+    expect(node).toMatchObject({ width: 0.9, height: 2.1, ...lights })
+    expect(node.position[1]).toBeCloseTo(1.05)
+    const cut = getOpeningWallCut(nodes.wall_main as WallNodeType, node, nodes)
+    expect(cut.top).toBeCloseTo(2.5)
+    const xs = cut.band.map(([x]) => x)
+    expect(Math.max(...xs) - Math.min(...xs)).toBeCloseTo(1.7)
+  })
+
+  test('placement clamps the whole asymmetric cutout and detects existing sidelights', () => {
+    const { nodes } = openingScene()
+    const first = planWallOpening(nodes, {
+      kind: 'door',
+      wallId: 'wall_main',
+      t: 0,
+      ...lights,
+    }).node
+    expect(first.position[0]).toBeCloseTo(0.75)
+    const wall = nodes.wall_main as WallNodeType
+    const scene = {
+      ...nodes,
+      [first.id]: first,
+      [wall.id]: { ...wall, children: [...wall.children, first.id] },
+    }
+    expect(() =>
+      planWallOpening(scene, {
+        kind: 'door',
+        wallId: wall.id,
+        t: first.position[0] / 6 + 0.12,
+        width: 0.3,
+      }),
+    ).toThrow()
+  })
+
+  test('create_room carries the fixed lights from tool input to its door', () => {
+    const { nodes } = openingScene()
+    const input = z.object(createRoomTool.input).parse({
+      name: 'Entry',
+      levelId: OPENING_SCENE.levelId,
+      polygon: [
+        [20, 20],
+        [24, 20],
+        [24, 24],
+        [20, 24],
+      ],
+      doors: [{ wallIndex: 0, ...lights }],
+    })
+    const result = AGENT_OPERATIONS.create_room(nodes, input, {
+      activeLevelId: OPENING_SCENE.levelId,
+    })
+    expect(result.changes?.create?.find(({ node }) => node.type === 'door')?.node).toMatchObject(
+      lights,
+    )
+  })
+
+  test('sliding and folding tool inputs preserve the chosen mechanism and style', () => {
+    const { nodes } = openingScene()
+    for (const fields of [
+      { doorType: 'sliding', leafCount: 4, slidingStyle: 'bypass' },
+      { doorType: 'folding', leafCount: 8, style: 'modern' },
+    ]) {
+      const input = z.object(addDoorTool.input).parse({ wallId: 'wall_main', t: 0.5, ...fields })
+      const { node } = planWallOpening(nodes, { ...input, kind: 'door' })
+      expect(node).toMatchObject({ doorType: fields.doorType, leafCount: fields.leafCount })
+      if (node.type === 'door' && fields.style === 'modern')
+        expect(node.segments.some((s) => s.type === 'glass')).toBe(false)
+    }
   })
 })

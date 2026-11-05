@@ -930,6 +930,7 @@ describe('author_scene', () => {
                       type: 'french',
                       style: 'modern',
                       hinge: 'end',
+                      handleStyle: 'plate',
                     },
                     { kind: 'door', along: 3, width: 0.9, height: 2.1, leaves: 2 },
                   ],
@@ -970,6 +971,7 @@ describe('author_scene', () => {
     expect(french.leafCount).toBe(2)
     expect(french.hingesSide).toBe('right')
     expect(french.handleSide).toBe('left')
+    expect(french.handleStyle).toBe('plate')
     // The style's leaf over the type's: a modern French door is one flush slab.
     expect(french.segments).toHaveLength(1)
     expect(byAuthorId(outcome, 'south/1').leafCount).toBe(2)
@@ -3178,4 +3180,112 @@ describe('author_scene units', () => {
     }).find((check) => check.id === 'rooms_in_units')
     expect(house).toMatchObject({ passed: true, detail: 'The design names no units.' })
   })
+})
+
+test.each(['casement', 'double-hung', 'fixed', 'tilt-turn'] as const)(
+  'author_scene writes %s window divisions and exterior details',
+  (type) => {
+    const details = {
+      windowHandle: false,
+      sillInterior: true,
+      shutters: 'board-batten' as const,
+      shutterWidth: 0.4,
+      openingDirection: 'inward' as const,
+      tiltTurnMode: 'turn' as const,
+      shutterOpen: 0.25,
+      shutterSides: 'right' as const,
+      rollerShutter: 'concealed' as const,
+      rollerShutterBoxHeight: 0.27,
+      rollerShutterOpen: 0.5,
+      sillOverhang: 0.12,
+      sillInteriorDepth: 0.09,
+      sillInteriorThickness: 0.04,
+      sillInteriorOverhang: 0.02,
+      hingesSide: 'right' as const,
+    }
+    const payload = structuredClone(bedroom)
+    payload.levels[0]!.walls![1]!.openings = [
+      {
+        kind: 'window',
+        along: 2.5,
+        width: 1.4,
+        height: 1.3,
+        sill: 0.9,
+        type,
+        columns: 3,
+        rows: 2,
+        ...details,
+      },
+    ]
+    const outcome = authorScene(
+      scaffold(),
+      { payload: authorScenePayload.parse(payload), compiled: { bed, lamp: bed } },
+      { activeLevelId: 'level_0' },
+    )
+    const window = nodesOf(outcome).find((node) => node.type === 'window')!
+    expect(window).toMatchObject({
+      type: 'window',
+      windowType: type,
+      columnRatios: [1 / 3, 1 / 3, 1 / 3],
+      rowRatios: [0.5, 0.5],
+      ...details,
+    })
+    expect((window as AnyNode & { sashGrid?: boolean }).sashGrid).toBe(
+      type === 'fixed' ? undefined : true,
+    )
+  },
+)
+
+test('author_scene writes native entry lights and the chosen folding panel count', () => {
+  const payload = authorScenePayload.parse({
+    levels: [
+      {
+        name: 'Entry',
+        walls: [
+          {
+            id: 'front',
+            start: [0, 0],
+            end: [10, 0],
+            height: 3,
+            thickness: 0.2,
+            openings: [
+              {
+                kind: 'door',
+                along: 2,
+                width: 1,
+                height: 2.1,
+                sidelightLeft: 0.3,
+                sidelightRight: 0.5,
+                transomHeight: 0.4,
+              },
+              {
+                kind: 'door',
+                along: 7,
+                width: 3,
+                height: 2.1,
+                type: 'folding',
+                leaves: 8,
+                style: 'modern',
+                slideDirection: 'right',
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  })
+  const result = run(payload, {})
+  const doors =
+    result.changes?.create?.map(({ node }) => node).filter((node) => node.type === 'door') ?? []
+  expect(doors).toHaveLength(2)
+  expect(doors[0]).toMatchObject({
+    width: 1,
+    height: 2.1,
+    sidelightLeft: 0.3,
+    sidelightRight: 0.5,
+    transomHeight: 0.4,
+  })
+  expect(doors[1]).toMatchObject({ doorType: 'folding', leafCount: 8, slideDirection: 'right' })
+  const folded = doors[1]
+  expect(folded?.type === 'door' && folded.segments.some((s) => s.type === 'glass')).toBe(false)
 })

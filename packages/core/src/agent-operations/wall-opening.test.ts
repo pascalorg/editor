@@ -1,9 +1,12 @@
 import { describe, expect, test } from 'bun:test'
 import { DOOR_TYPE_SIZES } from '@pascal-app/core/building'
 import { z } from 'zod'
-import { addDoorOutput, addWindowOutput } from '../agent-tools'
+import { addDoorOutput, addWindowOutput, addWindowTool } from '../agent-tools'
+import { createRoomTool } from '../agent-tools/create-room'
 import { OPENING_SCENE, openingScene } from '../building/__fixtures__/wall-opening-cases'
+import { LevelNode } from '../schema'
 import { applySceneChanges } from './apply-changes'
+import { AGENT_OPERATIONS } from './index'
 import type { SceneNodes } from './types'
 import { addWallOpening } from './wall-opening'
 
@@ -53,4 +56,77 @@ describe('add_door and add_window answer once, for every surface', () => {
     expect(result.sillHeight).toBeCloseTo(0.5, 6)
     expect(result.achieved.created).toEqual({ window: 1 })
   })
+})
+
+test('create_room carries its door handle style from tool input to created node', () => {
+  const level = LevelNode.parse({ id: 'level_room_handles' })
+  const input = z.object(createRoomTool.input).parse({
+    levelId: level.id,
+    name: 'Office',
+    polygon: [
+      [0, 0],
+      [4, 0],
+      [4, 4],
+      [0, 4],
+    ],
+    doors: [{ wallIndex: 0, handleStyle: 'knob' }],
+  })
+  const outcome = AGENT_OPERATIONS.create_room({ [level.id]: level }, input as never, {
+    activeLevelId: level.id,
+  })
+  const after = applySceneChanges({ [level.id]: level }, outcome.changes) as SceneNodes
+  expect(Object.values(after).find((node) => node.type === 'door')).toMatchObject({
+    handleStyle: 'knob',
+  })
+})
+
+test('window authoring retains direction, tilt-turn, shutter and sill details on add_window and create_room', () => {
+  const details = {
+    windowType: 'tilt-turn' as const,
+    openingDirection: 'inward' as const,
+    tiltTurnMode: 'turn' as const,
+    hingesSide: 'right' as const,
+    shutterOpen: 0.25,
+    shutterSides: 'left' as const,
+    shutters: 'board-batten' as const,
+    shutterWidth: 0.8,
+    rollerShutter: 'concealed' as const,
+    rollerShutterBoxHeight: 0.27,
+    rollerShutterOpen: 0.5,
+    sillInterior: true,
+    sillInteriorDepth: 0.12,
+    sillInteriorThickness: 0.04,
+    sillInteriorOverhang: 0.02,
+    sillOverhang: 0.1,
+  }
+  const input = z
+    .object(addWindowTool.input)
+    .parse({ wallId: OPENING_SCENE.main, t: 0.5, ...details })
+  const outcome = addWallOpening(scene(), { kind: 'window', ...input })
+  expect(outcome.changes.create?.[0]?.node).toMatchObject(details)
+  const room = z.object(createRoomTool.input).parse({
+    name: 'Room',
+    polygon: [
+      [0, 0],
+      [5, 0],
+      [5, 5],
+      [0, 5],
+    ],
+    windows: [{ wallIndex: 0, ...details }],
+  })
+  const result = AGENT_OPERATIONS.create_room(scene(), room, {
+    activeLevelId: OPENING_SCENE.levelId,
+  })
+  const windows = result.changes.create?.filter((entry) => entry.node.type === 'window') ?? []
+  expect(windows).toHaveLength(1)
+  expect(windows[0]!.node).toMatchObject(details)
+  for (const windowType of ['casement', 'awning'] as const) {
+    const created = addWallOpening(scene(), {
+      kind: 'window',
+      wallId: OPENING_SCENE.main,
+      windowType,
+      t: 0.5,
+    })
+    expect(created.changes.create?.[0]?.node).toMatchObject({ openingDirection: 'outward' })
+  }
 })

@@ -13,14 +13,16 @@ import {
   polygonInteriorPoint,
   type SurfaceRole,
   useInteractive,
+  usePascalI18n,
 } from '@pascal-app/core'
 import {
   type EvaluatedMotion,
   operableParts,
   ProceduralMotionController,
 } from '@pascal-app/core/procedural-items'
+import { Html } from '@react-three/drei'
 import { type ThreeEvent, useFrame, useThree } from '@react-three/fiber'
-import { useCallback, useEffect, useMemo, useRef } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { lerp } from 'three/src/math/MathUtils.js'
 import { acceleratedRaycast, computeBoundsTree, disposeBoundsTree } from 'three-mesh-bvh'
@@ -34,6 +36,7 @@ import { GlbInteractive, type GlbInteractiveItem } from './glb-interactive'
 import { bakedLoopMechanisms } from './glb-mechanisms'
 import { GlbReferenceNodes } from './glb-reference-nodes'
 import { GlbReplaceInstances } from './glb-replace-instances'
+import { bindGlbShutters, isGlbShutterHit, toggleGlbShutters } from './glb-scene-motion'
 
 /** Baked `kind` → surface role, so monochrome can recolor by role like the
  *  parametric viewer (textures-off collapses each face to its themed clay). */
@@ -88,6 +91,7 @@ type PascalExtras = {
   pascalId?: string
   kind?: string
   label?: string
+  shutters?: boolean
   openable?: boolean
   clips?: string[]
   proceduralMotion?: {
@@ -696,6 +700,8 @@ export function GlbScene({
     [loopMechanisms],
   )
 
+  useEffect(() => bindGlbShutters(identity, actions), [identity, actions])
+
   const openIds = useRef(new Set<string>())
   const toggleProcedural = useCallback(
     (hit: THREE.Object3D, identityNode: THREE.Object3D) => {
@@ -801,6 +807,7 @@ export function GlbScene({
   })
 
   // ── Walkthrough: first-person HUD + interaction ────────────────────────────
+  const [shuttersInView, setShuttersInView] = useState(false)
   const walkDoorRef = useRef<{ hit: THREE.Object3D; node: THREE.Object3D } | null>(null)
   const lastWalkKey = useRef<string | null>(null)
 
@@ -875,6 +882,12 @@ export function GlbScene({
         door = { label: extras.label ?? 'Item', isOpen, verb: isOpen ? 'turn off' : 'turn on' }
       }
     }
+    if (hit && !doorNode) {
+      const node = findIdentityAncestor(hit.object)
+      if ((node?.userData as PascalExtras | undefined)?.shutters && node)
+        doorNode = { hit: hit.object, node }
+    }
+    setShuttersInView(Boolean((doorNode?.node.userData as PascalExtras | undefined)?.shutters))
     walkDoorRef.current = doorNode
 
     const key = `${floor?.id ?? ''}|${zone?.id ?? ''}|${door ? `${doorId}:${door.isOpen}` : ''}`
@@ -886,34 +899,43 @@ export function GlbScene({
 
   // E or click activates the openable in view. The click also re-locks the
   // pointer through the walkthrough controller; no selection happens.
-  const activateWalkDoor = useCallback(() => {
-    const target = walkDoorRef.current
-    if (!target) return
-    const item = toggleableItem((target.node.userData as PascalExtras).pascalId)
-    if (item) {
-      operateItem(item.pascalId, item.interactive)
-      return
-    }
-    if (!(toggleProcedural(target.hit, target.node) || toggleLoopMechanism(target.node)))
-      toggleOpenable(target.node)
-  }, [toggleableItem, toggleLoopMechanism, toggleOpenable, toggleProcedural])
+  const activateWalkDoor = useCallback(
+    (shutterHit = false) => {
+      const target = walkDoorRef.current
+      if (!target) return
+      if (shutterHit && isGlbShutterHit(target.hit, target.node) && toggleGlbShutters(target.node))
+        return
+      const item = toggleableItem((target.node.userData as PascalExtras).pascalId)
+      if (item) {
+        operateItem(item.pascalId, item.interactive)
+        return
+      }
+      if (!(toggleProcedural(target.hit, target.node) || toggleLoopMechanism(target.node)))
+        toggleOpenable(target.node)
+    },
+    [toggleableItem, toggleLoopMechanism, toggleOpenable, toggleProcedural],
+  )
   useEffect(() => {
     if (!walkthroughMode) return
     const onKey = (event: KeyboardEvent) => {
       if (event.key.toLowerCase() === 'e') activateWalkDoor()
+      if (event.key.toLowerCase() === 'f' && !event.repeat && walkDoorRef.current)
+        toggleGlbShutters(walkDoorRef.current.node)
     }
     const canvas = document.querySelector('canvas')
     window.addEventListener('keydown', onKey)
-    canvas?.addEventListener('click', activateWalkDoor)
+    const onClick = () => activateWalkDoor(true)
+    canvas?.addEventListener('click', onClick)
     return () => {
       window.removeEventListener('keydown', onKey)
-      canvas?.removeEventListener('click', activateWalkDoor)
+      canvas?.removeEventListener('click', onClick)
     }
   }, [walkthroughMode, activateWalkDoor])
 
   // Clear the HUD (and stale targeting) whenever walkthrough turns off.
   useEffect(() => {
     if (walkthroughMode) return
+    setShuttersInView(false)
     walkDoorRef.current = null
     lastWalkKey.current = null
     onWalkthroughChange?.(null)
@@ -956,6 +978,7 @@ export function GlbScene({
       if (!object) return
       if (
         !(
+          (isGlbShutterHit(pick.hitObject, object) && toggleGlbShutters(object)) ||
           toggleOpenControl(object) ||
           toggleProcedural(pick.hitObject, object) ||
           toggleLoopMechanism(object)
@@ -997,6 +1020,7 @@ export function GlbScene({
 
   return (
     <group ref={rootRef}>
+      {walkthroughMode && shuttersInView ? <GlbShuttersPrompt /> : null}
       <primitive
         object={gltf.scene}
         onClick={handleClick}
@@ -1037,4 +1061,23 @@ const NO_MODIFIERS: GlbPickEvent['modifiers'] = {
 
 function modifiersOf(event: MouseEvent): GlbPickEvent['modifiers'] {
   return { alt: event.altKey, ctrl: event.ctrlKey, meta: event.metaKey, shift: event.shiftKey }
+}
+
+/** Match the walkthrough HUD's secondary key prompt, without requiring host wiring. */
+function GlbShuttersPrompt() {
+  const i18n = usePascalI18n()
+  return (
+    <Html fullscreen style={{ pointerEvents: 'none' }}>
+      <div className="dark pointer-events-none absolute top-1/2 left-1/2 mt-16 -translate-x-1/2 whitespace-nowrap text-foreground">
+        <div className="corner-smooth flex items-center gap-1.5 rounded-full border border-border/40 bg-background/80 px-3 py-1 text-xs shadow-elevation-3 backdrop-blur-xl">
+          <kbd className="rounded border border-border/60 bg-white/10 px-1.5 py-0.5 font-mono text-[10px]">
+            F
+          </kbd>
+          <span className="font-medium">
+            {i18n._({ id: 'viewer.walkthrough.shutters', message: 'Shutters' })}
+          </span>
+        </div>
+      </div>
+    </Html>
+  )
 }

@@ -4238,6 +4238,10 @@ msgstr "Walls"
 msgid "editor.mechanismAction"
 msgstr "{action, select, close {Close} open {Open} stop {Stop} other {Play}}"
 
+#: packages/editor/src/components/editor/registry-action-contributions.tsx
+msgid "editor.mechanismPartAction.shutters"
+msgstr "{action, select, close {Close shutters} other {Open shutters}}"
+
 #: packages/editor/src/components/editor/node-action-menu.tsx
 msgid "editor.nodeActionMenu.curve"
 msgstr "Curve"
@@ -7016,6 +7020,10 @@ msgid "editor.toolHint.typeSliding.nwmr3f"
 msgstr "Type: Sliding"
 
 #: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.toolHint.typeTiltAndTurn.5rrbaw"
+msgstr "Type: Tilt and Turn"
+
+#: packages/nodes/src/i18n/definition-messages.ts
 msgid "editor.toolHint.verticalStackClickToPlace.ijcn4q"
 msgstr "Vertical stack ↕, click to place"
 
@@ -9340,6 +9348,10 @@ msgid "node.door.panel.enableThreshold"
 msgstr "Enable threshold"
 
 #: packages/nodes/src/door/panel.tsx
+msgid "node.door.panel.finish"
+msgstr "Finish"
+
+#: packages/nodes/src/door/panel.tsx
 msgid "node.door.panel.flipSide"
 msgstr "Flip side"
 
@@ -9364,8 +9376,28 @@ msgid "node.door.panel.glass"
 msgstr "Glass"
 
 #: packages/nodes/src/door/panel.tsx
-msgid "node.door.panel.handleSide"
-msgstr "Handle side"
+msgid "node.door.panel.handleBar"
+msgstr "Bar"
+
+#: packages/nodes/src/door/panel.tsx
+msgid "node.door.panel.handleKnob"
+msgstr "Knob"
+
+#: packages/nodes/src/door/panel.tsx
+msgid "node.door.panel.handleLever"
+msgstr "Lever"
+
+#: packages/nodes/src/door/panel.tsx
+msgid "node.door.panel.handleLeverCurved"
+msgstr "Curved lever"
+
+#: packages/nodes/src/door/panel.tsx
+msgid "node.door.panel.handlePlate"
+msgstr "Plate"
+
+#: packages/nodes/src/door/panel.tsx
+msgid "node.door.panel.handleStyle"
+msgstr "Style"
 
 #: packages/nodes/src/door/panel.tsx
 msgid "node.door.panel.hardware"
@@ -9402,6 +9434,10 @@ msgstr "Latch rods"
 #: packages/nodes/src/door/panel.tsx
 msgid "node.door.panel.left"
 msgstr "Left"
+
+#: packages/nodes/src/door/panel.tsx
+msgid "node.door.panel.leftSidelight"
+msgstr "Left sidelight"
 
 #: packages/nodes/src/door/panel.tsx
 msgid "node.door.panel.move"
@@ -9468,6 +9504,10 @@ msgid "node.door.panel.right"
 msgstr "Right"
 
 #: packages/nodes/src/door/panel.tsx
+msgid "node.door.panel.rightSidelight"
+msgstr "Right sidelight"
+
+#: packages/nodes/src/door/panel.tsx
 msgid "node.door.panel.rounded"
 msgstr "Rounded"
 
@@ -9482,6 +9522,18 @@ msgstr "Size is limited to the wall, including clearance for the opening frame."
 #: packages/nodes/src/door/panel.tsx
 msgid "node.door.panel.slide"
 msgstr "Slide"
+
+#: packages/nodes/src/door/panel.tsx
+msgid "node.door.panel.slidingBypass"
+msgstr "Bypass"
+
+#: packages/nodes/src/door/panel.tsx
+msgid "node.door.panel.slidingLayout"
+msgstr "Layout"
+
+#: packages/nodes/src/door/panel.tsx
+msgid "node.door.panel.slidingPatio"
+msgstr "Patio"
 
 #: packages/nodes/src/door/panel.tsx
 msgid "node.door.panel.style"
@@ -9506,6 +9558,10 @@ msgstr "Top shape"
 #: packages/nodes/src/door/panel.tsx
 msgid "node.door.panel.touchbar"
 msgstr "Touchbar"
+
+#: packages/nodes/src/door/panel.tsx
+msgid "node.door.panel.transom"
+msgstr "Transom"
 
 #: packages/nodes/src/door/panel.tsx
 msgid "node.door.panel.type"
@@ -14136,6 +14192,10 @@ msgid "node.window.panel.dimensions"
 msgstr "Dimensions"
 
 #: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.divideEachSash"
+msgstr "Divide each sash"
+
+#: packages/nodes/src/window/panel.tsx
 msgid "node.window.panel.divider"
 msgstr "Divider"
 
@@ -14150,6 +14210,10 @@ msgstr "Duplicate"
 #: packages/nodes/src/window/panel.tsx
 msgid "node.window.panel.enableSill"
 msgstr "Enable sill"
+
+#: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.finish"
+msgstr "Finish"
 
 #: packages/nodes/src/window/panel.tsx
 msgid "node.window.panel.flipSide"
@@ -14176,12 +14240,32 @@ msgid "node.window.panel.grid"
 msgstr "Grid"
 
 #: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.handle"
+msgstr "Handle"
+
+#: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.hardware"
+msgstr "Hardware"
+
+#: packages/nodes/src/window/panel.tsx
 msgid "node.window.panel.height"
 msgstr "Height"
 
 #: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.hingesSide"
+msgstr "Hinges side"
+
+#: packages/nodes/src/window/panel.tsx
 msgid "node.window.panel.individual"
 msgstr "Individual"
+
+#: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.insideSill"
+msgstr "Inside sill"
+
+#: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.inward"
+msgstr "Inward"
 
 #: packages/nodes/src/window/panel.tsx
 msgid "node.window.panel.left"
@@ -14192,6 +14276,10 @@ msgid "node.window.panel.move"
 msgstr "Move"
 
 #: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.open"
+msgstr "Open"
+
+#: packages/nodes/src/window/panel.tsx
 msgid "node.window.panel.opening"
 msgstr "Opening"
 
@@ -14200,8 +14288,20 @@ msgid "node.window.panel.openingShape"
 msgstr "Opening shape"
 
 #: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.opens"
+msgstr "Opens"
+
+#: packages/nodes/src/window/panel.tsx
 msgid "node.window.panel.otherSide"
 msgstr "Other side"
+
+#: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.outward"
+msgstr "Outward"
+
+#: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.overhang"
+msgstr "Overhang"
 
 #: packages/nodes/src/window/panel.tsx
 msgid "node.window.panel.pos"
@@ -14224,6 +14324,26 @@ msgid "node.window.panel.right"
 msgstr "Right"
 
 #: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.rollerShutter"
+msgstr "Roller shutter"
+
+#: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.rollerShutterBox"
+msgstr "Box"
+
+#: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.rollerShutterBoxHeight"
+msgstr "Box height"
+
+#: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.rollerShutterConcealed"
+msgstr "Concealed"
+
+#: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.rollerShutterNone"
+msgstr "None"
+
+#: packages/nodes/src/window/panel.tsx
 msgid "node.window.panel.rounded"
 msgstr "Rounded"
 
@@ -14234,6 +14354,34 @@ msgstr "Row heights"
 #: packages/nodes/src/window/panel.tsx
 msgid "node.window.panel.rows"
 msgstr "Rows"
+
+#: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.shutters"
+msgstr "Shutters"
+
+#: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.shuttersBoardBatten"
+msgstr "Board and batten"
+
+#: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.shutterSides"
+msgstr "Sides"
+
+#: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.shutterSidesBoth"
+msgstr "Both"
+
+#: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.shuttersLouvered"
+msgstr "Louvered"
+
+#: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.shuttersNone"
+msgstr "None"
+
+#: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.shuttersPanel"
+msgstr "Panel"
 
 #: packages/nodes/src/window/panel.tsx
 msgid "node.window.panel.sill"
@@ -14258,6 +14406,18 @@ msgstr "Thickness"
 #: packages/nodes/src/window/panel.tsx
 msgid "node.window.panel.thisSide"
 msgstr "This side"
+
+#: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.tiltTurnMode"
+msgstr "Mode"
+
+#: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.tiltTurnTilt"
+msgstr "Tilt"
+
+#: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.tiltTurnTurn"
+msgstr "Turn"
 
 #: packages/nodes/src/window/panel.tsx
 msgid "node.window.panel.topShape"
@@ -14382,6 +14542,10 @@ msgstr "Single-hung"
 #: packages/nodes/src/shared/opening-labels.ts
 msgid "node.window.type.sliding"
 msgstr "Sliding"
+
+#: packages/nodes/src/shared/opening-labels.ts
+msgid "node.window.type.tiltTurn"
+msgstr "Tilt and turn"
 
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "node.zone.description"
@@ -14682,6 +14846,10 @@ msgstr "Visibility"
 #: packages/editor/src/components/viewer/viewer-controls-bar.tsx
 msgid "viewer.walkthrough.label"
 msgstr "Walkthrough: {state}"
+
+#: packages/viewer/src/components/viewer/glb-scene.tsx
+msgid "viewer.walkthrough.shutters"
+msgstr "Shutters"
 
 #: packages/editor/src/components/viewer/viewer-controls-bar.tsx
 msgid "viewer.walls.cutaway"

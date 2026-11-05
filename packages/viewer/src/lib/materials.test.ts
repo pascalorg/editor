@@ -1,8 +1,11 @@
 // @ts-expect-error — bun:test is provided by the Bun runtime; viewer does not
 // depend on @types/bun so the import type is unresolved at compile time.
 import { describe, expect, test } from 'bun:test'
-import { MaterialProperties, type MaterialSchema } from '@pascal-app/core'
+import { DoorNode, MaterialProperties, type MaterialSchema, WindowNode } from '@pascal-app/core'
+import { doorStyleLook } from '@pascal-app/core/building'
 import {
+  FrontSide,
+  Mesh,
   MeshPhysicalMaterial,
   MeshStandardMaterial,
   NoColorSpace,
@@ -16,6 +19,8 @@ import {
   materialCastsShadow,
   resolveMaterialRef as resolveSceneMaterialRef,
 } from '../index'
+import { buildDoorPreviewMesh } from '../systems/door/door-system'
+import { buildWindowPreviewMesh } from '../systems/window/window-system'
 import {
   createMaterial,
   createMaterialFromPreset,
@@ -222,3 +227,28 @@ describe('catalog maps the asset CDN does not have yet', () => {
     }
   })
 })
+
+for (const [id, opacity, roughness] of [
+  ['preset-glass-frosted', 0.6, 0.6],
+  ['preset-glass-tinted', 0.45, 0.1],
+] as const) {
+  test(`${id} resolves through both opening glass slots without transmission or DoubleSide`, () => {
+    const ref = `library:${id}`
+    const expected = resolveMaterialRef(ref, undefined, 'rendered')!
+    expect(expected.side).toBe(FrontSide)
+    expect(expected.opacity).toBe(opacity)
+    expect((expected as MeshStandardMaterial).roughness).toBe(roughness)
+    expect((expected as MeshPhysicalMaterial).transmission ?? 0).toBe(0)
+    for (const root of [
+      buildDoorPreviewMesh(DoorNode.parse({ ...doorStyleLook('glass'), slots: { glass: ref } })),
+      buildWindowPreviewMesh(WindowNode.parse({ slots: { glass: ref } })),
+    ]) {
+      const glass: Mesh[] = []
+      root.traverse((part) => {
+        if (part instanceof Mesh && part.userData.slotId === 'glass') glass.push(part)
+      })
+      expect(glass.length).toBeGreaterThan(0)
+      for (const part of glass) expect(part.material).toBe(expected)
+    }
+  })
+}

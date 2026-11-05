@@ -71,15 +71,15 @@ export function paintSurface(node: AnyNode, role: string, materialPreset: string
 export function FinishSwatch({
   label,
   node,
-  role,
+  paintRole,
   value,
   fallback,
   hint,
 }: {
   label: string
   node: AnyNode
-  /** The paint role of the surface (`edge`, `foundation`, …). */
-  role: string
+  /** The paint role of the surface (`edge`, `foundation`, …); not an ARIA role. */
+  paintRole: string
   /** The authored finish reference; absent shows `fallback` as "Default". */
   value: string | undefined
   fallback: string
@@ -123,7 +123,7 @@ export function FinishSwatch({
                 useScene.getState().nodes[
                   node.id as keyof ReturnType<typeof useScene.getState>['nodes']
                 ]
-              if (live) paintSurface(live, role, ref)
+              if (live) paintSurface(live, paintRole, ref)
               setOpen(false)
             }}
             selectOnCategoryChange={false}

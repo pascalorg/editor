@@ -15,6 +15,7 @@ import {
   windowTypeFields,
 } from '../building/window-types'
 import { cutFloorOpening } from '../commands/structure/floor-opening'
+import { getDoorOpeningSize } from '../lib/door-opening'
 import { floorRoomFaces } from '../lib/floor-room-faces'
 import {
   matchScriptSlotsToLibrary,
@@ -1057,7 +1058,16 @@ export function authorScene(
           if (o.style) say(`${o.kind} ${id}: style ignored, its module builds it`)
         }
         const [width, height] = compiled ? scriptedSize(compiled.manifest) : [o.width, o.height]
-        if (width > length + 0.01) {
+        const size =
+          o.kind === 'door' && !compiled
+            ? getDoorOpeningSize({
+                ...o,
+                width,
+                height,
+                doorType: o.type && isDoorType(o.type) ? o.type : 'hinged',
+              })
+            : { width, height, leafOffsetX: 0 }
+        if (size.width > length + 0.01) {
           defect(
             id,
             'opening_wider_than_wall',
@@ -1069,7 +1079,7 @@ export function authorScene(
         if (curve) {
           const chord = dist(w.start, w.end)
           const radius = (chord * chord) / (8 * Math.abs(curve)) + Math.abs(curve) / 2
-          const standoff = radius - Math.sqrt(Math.max(0, radius ** 2 - (width / 2) ** 2))
+          const standoff = radius - Math.sqrt(Math.max(0, radius ** 2 - (size.width / 2) ** 2))
           const half = w.spec.thickness / 2
           if (standoff > half)
             warn(
@@ -1078,7 +1088,9 @@ export function authorScene(
               `The ${metres(width)} ${o.kind} is flat on wall ${w.spec.id}, an arc of radius ${metres(radius)}: its ends stand ${metres(standoff)} off the curve, past the wall's faces. Set narrower ones side by side, at most ${metres(2 * Math.sqrt(radius ** 2 - (radius - half) ** 2))} wide.`,
             )
         }
-        const x = Math.min(Math.max(o.along, width / 2), length - width / 2)
+        const x =
+          Math.min(Math.max(o.along - size.leafOffsetX, size.width / 2), length - size.width / 2) +
+          size.leafOffsetX
         if (Math.abs(x - o.along) > 0.01)
           say(
             `${o.kind} ${id}: moved ${Math.abs(x - o.along).toFixed(2)} m along the wall to fit inside it`,
@@ -1137,8 +1149,14 @@ export function authorScene(
             ...(type && isDoorType(type) ? doorTypeFields(type) : {}),
             ...(style && isDoorStyle(style) ? doorStyleLook(style) : {}),
             ...(o.leaves ? { leafCount: o.leaves } : {}),
+            sidelightLeft: o.sidelightLeft,
+            sidelightRight: o.sidelightRight,
+            transomHeight: o.transomHeight,
+            slidingStyle: o.slidingStyle,
+            ...(o.slideDirection ? { slideDirection: o.slideDirection } : {}),
             hingesSide,
             handleSide,
+            handleStyle: o.handleStyle,
             ...(o.swing ? { swingDirection: o.swing === 'back' ? 'outward' : 'inward' } : {}),
           })
           report.doors++
@@ -1161,10 +1179,32 @@ export function authorScene(
           opening = WindowNode.parse({
             ...common,
             type: 'window',
+            hingesSide: o.hingesSide ?? (o.hinge === 'end' ? 'right' : 'left'),
+            sashGrid:
+              !windowTakesStyle(windowType ?? 'fixed') && (o.columns || o.rows) ? true : o.sashGrid,
+            windowHandle: o.windowHandle,
+            sillInterior: o.sillInterior,
+            shutters: o.shutters,
+            shutterWidth: o.shutterWidth,
+            tiltTurnMode: o.tiltTurnMode,
+            sillOverhang: o.sillOverhang,
+            sillInteriorDepth: o.sillInteriorDepth,
+            sillInteriorThickness: o.sillInteriorThickness,
+            sillInteriorOverhang: o.sillInteriorOverhang,
+            shutterOpen: o.shutterOpen,
+            shutterSides: o.shutterSides,
+            rollerShutter: o.rollerShutter,
+            rollerShutterBoxHeight: o.rollerShutterBoxHeight,
+            rollerShutterOpen: o.rollerShutterOpen,
             frameThickness: NEW_WINDOW_FRAME_THICKNESS,
             position: [x, o.sill + height / 2, 0],
             ...(windowType ? windowTypeFields(windowType) : {}),
+            ...(o.openingDirection === undefined ? {} : { openingDirection: o.openingDirection }),
             ...(style && isWindowStyle(style) && takesStyle ? getWindowStyleOverrides(style) : {}),
+            ...(o.columns
+              ? { columnRatios: Array.from({ length: o.columns }, () => 1 / o.columns!) }
+              : {}),
+            ...(o.rows ? { rowRatios: Array.from({ length: o.rows }, () => 1 / o.rows!) } : {}),
           })
           report.windows++
         }

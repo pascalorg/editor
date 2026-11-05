@@ -3,6 +3,8 @@ import {
   type DoorNode,
   type FloorplanMoveTarget,
   type FloorplanMoveTargetSession,
+  getDoorOpeningSize,
+  openingHostFacing,
   useLiveNodeOverrides,
   useLiveTransforms,
   useScene,
@@ -207,13 +209,24 @@ export const doorFloorplanMoveTarget: FloorplanMoveTarget<DoorNode> = ({ node })
         ? null
         : snapLocalXToNeighbors({
             wall: hit.wall,
-            localX: hit.localX,
-            width: node.width,
+            localX:
+              hit.localX -
+              getDoorOpeningSize(node).leafOffsetX *
+                openingHostFacing({ rotation: [0, hit.itemRotation + (flipped ? Math.PI : 0), 0] }),
+            width: getDoorOpeningSize(node).width,
             selfId: nodeId,
             nodes,
           })
-      const snappedLocalX = neighborX ?? snapToHalf(hit.localX)
-      const { clampedX, clampedY } = clampToWall(hit.wall, snappedLocalX, node.width, node.height)
+      const snappedLocalX =
+        neighborX === null
+          ? snapToHalf(hit.localX)
+          : neighborX +
+            getDoorOpeningSize(node).leafOffsetX *
+              openingHostFacing({ rotation: [0, hit.itemRotation + (flipped ? Math.PI : 0), 0] })
+      const { clampedX, clampedY } = clampToWall(hit.wall, snappedLocalX, node.width, node.height, {
+        ...node,
+        rotation: [0, hit.itemRotation + (flipped ? Math.PI : 0), 0],
+      })
 
       // One click per real position step, keyed on the SNAPPED along-wall value
       // so it ticks only when the door actually moves to a new cell.
@@ -269,10 +282,12 @@ export const doorFloorplanMoveTarget: FloorplanMoveTarget<DoorNode> = ({ node })
       const collides = hasWallChildOverlap(
         lastValid.parentId,
         useScene.getState().nodes,
-        lastValid.position[0],
-        lastValid.position[1],
-        live.width,
-        live.height,
+        lastValid.position[0] -
+          getDoorOpeningSize(live).leafOffsetX *
+            openingHostFacing({ rotation: lastValid.rotation }),
+        lastValid.position[1] + (getDoorOpeningSize(live).height - live.height) / 2,
+        getDoorOpeningSize(live).width,
+        getDoorOpeningSize(live).height,
         live.id,
       )
       return resolveOpeningPlacement({ collides, forcePlace }).placeable

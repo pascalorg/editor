@@ -89,7 +89,7 @@ export function doorStyleLook(style: DoorStyle): DoorStyleLook {
     case 'panel':
       return look(defaultDoorSegments())
     case 'glass':
-      return look([panelSegment('glass', 1)])
+      return look([panelSegment('glass', 1)], [0.07, 0.07])
     case 'modern':
       // A flush slab: one panel over the whole leaf. An 'empty' segment is no leaf at all (a front
       // door once rendered as an open frame).
@@ -97,7 +97,7 @@ export function doorStyleLook(style: DoorStyle): DoorStyleLook {
     case 'paneled-glass':
       return look([panelSegment('glass', 0.55), panelSegment('panel', 0.45)])
     case 'french':
-      return look([panelSegment('glass', 1, [0.5, 0.5])])
+      return look([panelSegment('glass', 1, [0.5, 0.5])], [0.075, 0.09])
     case 'shaker':
       return look([panelSegment('panel', 1, [1], { panelDepth: -0.005, panelInset: 0.06 })])
     case 'six-panel':
@@ -106,8 +106,7 @@ export function doorStyleLook(style: DoorStyle): DoorStyleLook {
       return look([0.25, 0.25, 0.25, 0.25].map((ratio) => panelSegment('panel', ratio)))
     case 'half-louvered':
       // Slats as narrow raised bars on the top half: an 'empty' row would be a hole in the leaf.
-      // The door system always raises a panel by |panelDepth|, so a slat reads only when it is
-      // deep and narrow against its gap: ten bars about 7 cm tall, 2.2 cm proud, 2.8 cm apart.
+      // The ten raised bars need narrow fields to read as slats against the gaps.
       return look([
         ...Array.from({ length: 10 }, () =>
           panelSegment('panel', 0.5 / 10, [1], { panelDepth: 0.022, panelInset: 0.014 }),
@@ -133,7 +132,32 @@ const same = (a: unknown, b: unknown): boolean => {
 /** The styles a door's leaf is, in list order: none for a leaf made by hand (the panel's Custom). */
 export function doorStylesOf(door: DoorStyleLook): DoorStyle[] {
   const { segments, contentPadding } = door
-  return DOOR_STYLES.filter((style) => same(doorStyleLook(style), { segments, contentPadding }))
+  return DOOR_STYLES.filter((style) => {
+    const current = doorStyleLook(style)
+    const legacy = { ...current, contentPadding: style === 'modern' ? [0, 0] : [0.04, 0.04] }
+    return same(current, { segments, contentPadding }) || same(legacy, { segments, contentPadding })
+  })
+}
+
+/** Only the untouched legacy Panel leaf is healed at render time; custom leaves keep their look. */
+export function isLegacyDefaultDoorLook(door: DoorStyleLook): boolean {
+  const legacy = defaultDoorSegments()
+  return (
+    door.contentPadding[0] === 0.04 &&
+    door.contentPadding[1] === 0.04 &&
+    door.segments.length === legacy.length &&
+    door.segments.every((segment, i) => {
+      const expected = legacy[i]!
+      return Object.keys(expected).every((key) => {
+        const field = key as keyof DoorSegment
+        const value = segment[field]
+        const target = expected[field]
+        return Array.isArray(value) && Array.isArray(target)
+          ? value.length === target.length && value.every((v, j) => v === target[j])
+          : value === target
+      })
+    })
+  )
 }
 
 // ── Windows ──────────────────────────────────────────────────────────────────
