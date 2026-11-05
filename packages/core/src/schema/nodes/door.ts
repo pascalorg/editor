@@ -67,7 +67,7 @@ export const DoorNode = BaseNode.extend({
   type: nodeType('door'),
   material: MaterialSchema.optional(),
   // Per-slot material overrides on the unified slot model. Keys: `panel` (the
-  // door body), `frame`, `glass`, `hardware`. Value = a `MaterialRef`
+  // door body), `frame`, `casing-a`, `casing-b`, `glass`, `hardware`. Value = a `MaterialRef`
   // (`library:<id>` / `scene:<id>`) or a plain `#rrggbb` colour. Absent = the
   // door-wide `material` on panel and frame, else the slot default. Mirrors
   // `ShelfNode.slots`.
@@ -187,7 +187,8 @@ export const DoorNode = BaseNode.extend({
   - doorCategory/doorType: explicit operation family, defaulting old doors to interior hinged
   - openingKind/openingShape: hinged door or frameless wall opening shape
   - segments: rows stacked top to bottom, each defining its own columnRatios
-  - type 'empty' = no leaf fill for that segment, 'panel' = raised/recessed panel, 'glass' = glazed
+  - type 'empty' = no leaf fill for that segment, 'panel' = raised/recessed panel carved into the leaf (never proud of its faces), 'glass' = glazed
+  - contentPadding: leaf margin [x, y] around the segments, the stile and rail width (new doors and the panelled style presets use 0.11 m)
   - hingesSide/swingDirection/swingAngle: which way the door opens and how far it is currently open
   - frameThickness: width of the frame members (new doors use 0.020 m; absent in saved doors keeps 0.05 m)
   - casingFaceA/casingFaceB: casing (head and legs) on the host wall's face a / b, around the cutout (absent means off; new openings enable both)
