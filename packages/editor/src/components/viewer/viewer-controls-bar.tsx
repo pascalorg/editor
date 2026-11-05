@@ -34,7 +34,7 @@ import {
 } from '../ui/primitives/dropdown-menu'
 import { TooltipProvider } from '../ui/primitives/tooltip'
 import { DaylightMenu, EdgesToggleItem, QualityMenu } from './render-settings-menu'
-import { SkyControl } from './sky-control'
+import { SKY_DOCK_HEIGHT, SkyControl } from './sky-control'
 
 const wallModeConfig = {
   up: {
@@ -284,7 +284,7 @@ export const ViewerControlsBar = ({
     <>
       {textures && !isMobile ? (
         // The sky (time and weather) beside the compass in the scene's bottom-left corner.
-        <SkyControl dark style={{ left: 52 }} />
+        <SkyControl dark height={SKY_DOCK_HEIGHT.viewer} style={{ left: 52 }} />
       ) : null}
       <div
         className={cn(
@@ -293,7 +293,10 @@ export const ViewerControlsBar = ({
         )}
       >
         <TooltipProvider delayDuration={0}>
-          <div className="corner-smooth pointer-events-auto flex h-12 max-w-[calc(100vw-1rem)] flex-row items-center justify-center gap-0.5 overflow-hidden rounded-2xl border border-border/40 bg-background/95 p-1 shadow-elevation-4 backdrop-blur-xl transition-colors duration-200 ease-out sm:h-14 sm:gap-1.5 sm:p-1.5">
+          <div
+            data-surface="viewer-dock"
+            className="corner-smooth pointer-events-auto flex h-12 max-w-[calc(100vw-1rem)] flex-row items-center justify-center gap-0.5 overflow-hidden rounded-2xl border border-border/40 bg-background/95 p-1 shadow-elevation-4 backdrop-blur-xl transition-colors duration-200 ease-out sm:h-14 sm:gap-1.5 sm:p-1.5"
+          >
             {((canShowScans && (!glbActive || glbHasScans)) ||
               (canShowGuides && (!glbActive || glbHasGuides))) && (
               <>

@@ -36159,6 +36159,26 @@ msgstr "Fermer"
 msgid "viewer.daylight.sky.cloudCover"
 msgstr "Couverture nuageuse"
 
+# Source-Hash: 0e5d4e93c4f657d4
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Cloud cover: {current}. Change to {next}"
+#: packages/editor/src/components/viewer/sky-control.tsx
+#, fuzzy
+msgid "viewer.daylight.sky.cycleWeather"
+msgstr "Couverture nuageuse : {current}. Passer à {next}"
+
+# Source-Hash: 485715dce7741562
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Cycle cloud cover"
+#: packages/editor/src/components/viewer/sky-control.tsx
+#, fuzzy
+msgid "viewer.daylight.sky.cycleWeatherTip"
+msgstr "Changer la couverture nuageuse"
+
 # Source-Hash: 713190bee1f709c9
 # Review: required
 # AI-Provider: claude-code

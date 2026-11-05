@@ -103,7 +103,7 @@ import { SettingsPanel, type SettingsPanelProps } from '../ui/sidebar/panels/set
 import { SitePanel, type SitePanelProps } from '../ui/sidebar/panels/site-panel'
 import type { SidebarTab } from '../ui/sidebar/tab-bar'
 import { useHostPanels } from '../ui/sidebar/use-plugin-panels'
-import { SkyControl } from '../viewer/sky-control'
+import { SKY_DOCK_HEIGHT, SkyControl } from '../viewer/sky-control'
 import { ViewerHoverLabel } from '../viewer/viewer-hover-label'
 import { ParametricViewerRooms } from '../viewer/viewer-rooms'
 import { ViewerSelectionManager } from '../viewer/viewer-selection-manager'
@@ -1391,7 +1391,10 @@ const ViewerCanvas = memo(function ViewerCanvas({
                 isPreviewMode
               ) ? (
                 // Beside the compass (which moves to the plan's corner when the plan is on the right).
-                <SkyControl style={{ left: planOnRight ? 12 : 52 }} />
+                <SkyControl
+                  height={SKY_DOCK_HEIGHT.editor}
+                  style={{ left: planOnRight ? 12 : 52 }}
+                />
               ) : null}
             </div>
             {showLoader && loadingOverlay}

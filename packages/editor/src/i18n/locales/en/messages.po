@@ -14515,6 +14515,14 @@ msgid "viewer.daylight.sky.cloudCover"
 msgstr "Cloud cover"
 
 #: packages/editor/src/components/viewer/sky-control.tsx
+msgid "viewer.daylight.sky.cycleWeather"
+msgstr "Cloud cover: {current}. Change to {next}"
+
+#: packages/editor/src/components/viewer/sky-control.tsx
+msgid "viewer.daylight.sky.cycleWeatherTip"
+msgstr "Cycle cloud cover"
+
+#: packages/editor/src/components/viewer/sky-control.tsx
 msgid "viewer.daylight.sky.followClock"
 msgstr "Follow the clock"
 
