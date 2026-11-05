@@ -14328,6 +14328,22 @@ msgid "node.window.panel.rollerShutter"
 msgstr "Roller shutter"
 
 #: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.rollerShutterBox"
+msgstr "Box"
+
+#: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.rollerShutterBoxHeight"
+msgstr "Box height"
+
+#: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.rollerShutterConcealed"
+msgstr "Concealed"
+
+#: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.rollerShutterNone"
+msgstr "None"
+
+#: packages/nodes/src/window/panel.tsx
 msgid "node.window.panel.rounded"
 msgstr "Rounded"
 

@@ -35711,6 +35711,46 @@ msgstr "Droite"
 msgid "node.window.panel.rollerShutter"
 msgstr "Volet roulant"
 
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: e9a89a5e4ac8cd61
+# Review: required
+# English: "Box"
+#: packages/nodes/src/window/panel.tsx
+#, fuzzy
+msgid "node.window.panel.rollerShutterBox"
+msgstr "Coffre"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: 6530bd8318883b22
+# Review: required
+# English: "Box height"
+#: packages/nodes/src/window/panel.tsx
+#, fuzzy
+msgid "node.window.panel.rollerShutterBoxHeight"
+msgstr "Hauteur du coffre"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: aad9fc7e713bf399
+# Review: required
+# English: "Concealed"
+#: packages/nodes/src/window/panel.tsx
+#, fuzzy
+msgid "node.window.panel.rollerShutterConcealed"
+msgstr "Encastré"
+
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# Source-Hash: f2953d2931e36d0c
+# Review: required
+# English: "None"
+#: packages/nodes/src/window/panel.tsx
+#, fuzzy
+msgid "node.window.panel.rollerShutterNone"
+msgstr "Aucun"
+
 # Source-Hash: fc826da6c99303e6
 # Review: required
 # AI-Provider: claude-code

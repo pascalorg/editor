@@ -70,17 +70,20 @@ test('the sill section turns the inside sill on', () => {
 })
 
 test('shutters: a style, then a width that defaults to half the window and stays in range', () => {
-  select({ windowType: 'fixed', width: 1 })
-  const shuttersOf = () => control(render(), 'SegmentedControl', 'Shutters')
+  select({ windowType: 'fixed', width: 1.6 })
+  const shuttersOf = () => segmented('Shutters', 'louvered')!
   expect(shuttersOf().value).toBe('none')
   expect(render().some((c) => c.section === 'Shutters' && c.kind === 'SliderControl')).toBe(false)
   shuttersOf().onChange('louvered')
   expect(live().shutters).toBe('louvered')
 
   const width = control(render(), 'SliderControl', 'Shutters', 'Width')
-  expect(width.value).toBe(0.5)
-  width.onChange(0.9)
-  expect(live().shutterWidth).toBe(0.6)
+  expect(width.value).toBe(0.8)
+  expect(width.max).toBe(1.6)
+  width.onChange(2)
+  expect(live().shutterWidth).toBe(1.6)
+  width.onChange(0.05)
+  expect(live().shutterWidth).toBe(0.15)
   width.onChange(0.4)
   expect(live().shutterWidth).toBe(0.4)
   expect(control(render(), 'FinishSwatch', 'Shutters').paintRole).toBe('shutters')
@@ -91,6 +94,13 @@ test('shutters: a style, then a width that defaults to half the window and stays
   expect(inches.value).toBeCloseTo(0.4 / INCH)
   inches.onChange(12)
   expect(live().shutterWidth).toBeCloseTo(12 * INCH)
+})
+
+test('a single shutter defaults to the full window width', () => {
+  select({ windowType: 'fixed', width: 1.6, shutters: 'panel', shutterSides: 'left' })
+  expect(control(render(), 'SliderControl', 'Shutters', 'Width').value).toBe(1.6)
+  select({ windowType: 'fixed', width: 1.6, shutters: 'panel', shutterSides: 'both' })
+  expect(control(render(), 'SliderControl', 'Shutters', 'Width').value).toBe(0.8)
 })
 
 test('no shutters where casing has nowhere to go', () => {
@@ -210,17 +220,46 @@ test('shutters: board and batten, which sides, and how far they stand open', () 
   expect(segmented('Shutters', 'both')).toBeUndefined()
 })
 
-test('a roller shutter turns on with its own opening, and takes the shutter finish', () => {
+test('a roller shutter mounts in a box or concealed, with its own opening and the shutter finish', () => {
   select({ windowType: 'fixed' })
+  const roller = () => segmented('Shutters', 'concealed')!
+  expect(roller().options.map((o: { value: string }) => o.value)).toEqual([
+    'none',
+    'box',
+    'concealed',
+  ])
+  expect(roller().value).toBe('none')
   expect(slidersIn('Shutters', 'Open')).toHaveLength(0)
   expect(render().some((c) => c.section === 'Shutters' && c.kind === 'FinishSwatch')).toBe(false)
-  control(render(), 'ToggleControl', 'Shutters', 'Roller shutter').onChange(true)
+
+  roller().onChange('box')
   expect(live().rollerShutter).toBe('box')
   const open = control(render(), 'SliderControl', 'Shutters', 'Open')
   expect(open.value).toBe(100)
   open.onChange(40)
   expect(live().rollerShutterOpen).toBe(0.4)
   expect(control(render(), 'FinishSwatch', 'Shutters').paintRole).toBe('shutters')
-  control(render(), 'ToggleControl', 'Shutters', 'Roller shutter').onChange(false)
+
+  roller().onChange('concealed')
+  expect(live().rollerShutter).toBe('concealed')
+  expect(slidersIn('Shutters', 'Open')).toHaveLength(1)
+
+  // None is written, not cleared: an absent field is only what a saved window meant before.
+  roller().onChange('none')
   expect(live().rollerShutter).toBe('none')
+  expect(slidersIn('Shutters', 'Open')).toHaveLength(0)
+})
+
+test('only a boxed roller shutter takes a box height', () => {
+  select({ windowType: 'fixed', rollerShutter: 'box' })
+  const height = control(render(), 'SliderControl', 'Shutters', 'Box height')
+  expect(height.value).toBe(0.18)
+  expect([height.min, height.max]).toEqual([0.12, 0.35])
+  height.onChange(0.25)
+  expect(live().rollerShutterBoxHeight).toBe(0.25)
+
+  for (const rollerShutter of ['none', 'concealed'] as const) {
+    select({ windowType: 'fixed', rollerShutter })
+    expect(slidersIn('Shutters', 'Box height')).toHaveLength(0)
+  }
 })

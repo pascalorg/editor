@@ -99,7 +99,9 @@ function normalizeWindowCornerRadii(
 
 const INCH = 0.0254
 const MIN_SHUTTER_WIDTH = 0.15
-const MAX_SHUTTER_WIDTH = 0.6
+const MIN_ROLLER_BOX_HEIGHT = 0.12
+const MAX_ROLLER_BOX_HEIGHT = 0.35
+const DEFAULT_ROLLER_BOX_HEIGHT = 0.18
 // What the viewer draws for an inside sill without its own sizes (window-system `addWindowDetails`).
 const INSIDE_SILL_DEPTH = 0.06
 const INSIDE_SILL_THICKNESS = 0.03
@@ -386,8 +388,11 @@ export default function WindowPanel() {
   const showHardwareSection = !scripted && !isOpening && hasSashHardware
   const showShuttersSection = !scripted && !isOpening && takesShutters
   const shutters = node.shutters ?? 'none'
-  const rollerShutter = node.rollerShutter === 'box'
-  const shutterWidth = node.shutterWidth ?? Math.min(node.width / 2, MAX_SHUTTER_WIDTH)
+  const rollerShutter = node.rollerShutter ?? 'none'
+  // One shutter per side shares the window's width; a single shutter covers all of it.
+  const shutterWidth =
+    node.shutterWidth ?? ((node.shutterSides ?? 'both') === 'both' ? node.width / 2 : node.width)
+  const maxShutterWidth = Math.max(node.width, MIN_SHUTTER_WIDTH)
   const toShownLength = (meters: number) => (imperial ? meters / INCH : meters)
   const showOperationSection = !scripted && !isOpening && isOperableWindow
   const showAwningDirectionSection = !scripted && !isOpening && displayedWindowType === 'awning'
@@ -1468,12 +1473,12 @@ export default function WindowPanel() {
               {/* In inches on an imperial plan, as the casing width: feet would show 1.2 ft. */}
               <SliderControl
                 label={i18n._({ id: 'node.window.panel.width', message: 'Width' })}
-                max={toShownLength(MAX_SHUTTER_WIDTH)}
+                max={toShownLength(maxShutterWidth)}
                 min={toShownLength(MIN_SHUTTER_WIDTH)}
                 onChange={(value) => {
                   const meters = imperial ? value * INCH : value
                   handleUpdate({
-                    shutterWidth: Math.min(Math.max(meters, MIN_SHUTTER_WIDTH), MAX_SHUTTER_WIDTH),
+                    shutterWidth: Math.min(Math.max(meters, MIN_SHUTTER_WIDTH), maxShutterWidth),
                   })
                 }}
                 precision={imperial ? 1 : 2}
@@ -1496,12 +1501,54 @@ export default function WindowPanel() {
             </div>
           )}
           <div className="mt-1 flex flex-col gap-1 border-border/50 border-t pt-1">
-            <ToggleControl
-              checked={rollerShutter}
+            <Captioned
               label={i18n._({ id: 'node.window.panel.rollerShutter', message: 'Roller shutter' })}
-              onChange={(checked) => handleUpdate({ rollerShutter: checked ? 'box' : 'none' })}
-            />
-            {rollerShutter && (
+            >
+              <SegmentedControl
+                onChange={(value) => handleUpdate({ rollerShutter: value })}
+                options={[
+                  {
+                    value: 'none',
+                    label: i18n._({ id: 'node.window.panel.rollerShutterNone', message: 'None' }),
+                  },
+                  {
+                    value: 'box',
+                    label: i18n._({ id: 'node.window.panel.rollerShutterBox', message: 'Box' }),
+                  },
+                  {
+                    value: 'concealed',
+                    label: i18n._({
+                      id: 'node.window.panel.rollerShutterConcealed',
+                      message: 'Concealed',
+                    }),
+                  },
+                ]}
+                value={rollerShutter}
+              />
+            </Captioned>
+            {rollerShutter === 'box' && (
+              <SliderControl
+                label={i18n._({
+                  id: 'node.window.panel.rollerShutterBoxHeight',
+                  message: 'Box height',
+                })}
+                max={MAX_ROLLER_BOX_HEIGHT}
+                min={MIN_ROLLER_BOX_HEIGHT}
+                onChange={(value) =>
+                  handleUpdate({
+                    rollerShutterBoxHeight: Math.min(
+                      Math.max(value, MIN_ROLLER_BOX_HEIGHT),
+                      MAX_ROLLER_BOX_HEIGHT,
+                    ),
+                  })
+                }
+                precision={2}
+                step={0.01}
+                unit="m"
+                value={node.rollerShutterBoxHeight ?? DEFAULT_ROLLER_BOX_HEIGHT}
+              />
+            )}
+            {rollerShutter !== 'none' && (
               <SliderControl
                 label={i18n._({ id: 'node.window.panel.open', message: 'Open' })}
                 max={100}
@@ -1515,7 +1562,7 @@ export default function WindowPanel() {
               />
             )}
           </div>
-          {(shutters !== 'none' || rollerShutter) && (
+          {(shutters !== 'none' || rollerShutter !== 'none') && (
             <div className="mt-1 border-border/50 border-t pt-1">
               {/* The shutters and the roller shutter's box, guides and slats share the slot. */}
               <FinishSwatch
