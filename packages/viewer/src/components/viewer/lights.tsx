@@ -469,7 +469,9 @@ const _fitMargin = new THREE.Vector3(2, 0, 2)
 /**
  * Daylight key: place the light on its direction around the building and fit the ortho shadow
  * camera to the building box (+2 m of ground) projected into light space — the tightest frustum,
- * so the map's texels all land on the building.
+ * so the map's texels all land on the building. Its depth reaches on to where the casters' shadows
+ * meet the ground: a receiver beyond the far plane reads as fully lit, which cut long shadows off
+ * square. A shadow keeps its caster's light-space x/y, so only the depth grows, not the texels.
  */
 function fitShadowToBounds(
   light: THREE.DirectionalLight,
@@ -479,7 +481,8 @@ function fitShadowToBounds(
   if (bounds.isEmpty()) return
   const center = bounds.getCenter(_fitCenter)
   const radius = bounds.getSize(_fitSize).length() / 2 + 2
-  light.position.copy(center).addScaledVector(_fitSize.copy(direction).normalize(), radius * 2)
+  const toLight = _fitSize.copy(direction).normalize()
+  light.position.copy(center).addScaledVector(toLight, radius * 2)
   light.target.position.copy(center)
   light.target.updateMatrixWorld()
   light.updateMatrixWorld()
@@ -487,12 +490,17 @@ function fitShadowToBounds(
   _fitView.setPosition(0, 0, 0)
   const b = _fitBounds.copy(bounds).expandByVector(_fitMargin)
   const box = _fitBox.makeEmpty()
+  // The ground under the casters (the site ground sits just below 0).
+  const groundY = Math.min(bounds.min.y, -0.07)
   for (let i = 0; i < 8; i++) {
+    const y = i & 2 ? b.max.y : b.min.y
     _fitCorner
-      .set(i & 1 ? b.max.x : b.min.x, i & 2 ? b.max.y : b.min.y, i & 4 ? b.max.z : b.min.z)
+      .set(i & 1 ? b.max.x : b.min.x, y, i & 4 ? b.max.z : b.min.z)
       .sub(light.position)
       .applyMatrix4(_fitView)
     box.expandByPoint(_fitCorner)
+    // Down the light ray to the ground: same x/y in light space, only deeper.
+    if (toLight.y > 0) box.min.z = Math.min(box.min.z, _fitCorner.z - (y - groundY) / toLight.y)
   }
   const cam = light.shadow.camera as THREE.OrthographicCamera
   cam.left = box.min.x - 0.5
