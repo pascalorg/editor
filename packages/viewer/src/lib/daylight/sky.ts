@@ -101,6 +101,33 @@ export function createDaylightSky() {
   }
 
   /**
+   * Stars: one in a few hundred cells of a fine grid on the sphere, each a small round dot at a
+   * jittered spot in its cell. The cell index is offset positive before hashing (the hash reads
+   * its seed as an unsigned int, so negative cells all hashed alike and half the sky had none)
+   * and kept under 2^24 so the float seed stays exact. Most stars sit below the bloom threshold
+   * at night exposure; only the brightest few cross it, for a faint glow.
+   */
+  const STAR_GRID = 450
+  const stars = (dir: any): any => {
+    const grid: any = dir.mul(STAR_GRID)
+    const cell: any = floor(grid).add(STAR_GRID + 1)
+    const seed: any = cell.x.add(cell.y.mul(311)).add(cell.z.mul(17123))
+    const presence = smoothstep(0.9968, 1, hash(seed))
+    const magnitude = presence.mul(presence)
+    const jitter = vec3(hash(seed.add(101)), hash(seed.add(211)), hash(seed.add(307)))
+      .sub(0.5)
+      .mul(0.5)
+    const offset = grid.sub(floor(grid)).sub(0.5).sub(jitter)
+    const radius = mix(float(0.2), float(0.4), magnitude)
+    const dot = float(1).sub(smoothstep(radius.mul(0.35), radius, offset.length()))
+    return dot
+      .mul(presence)
+      .mul(mix(float(0.12), float(0.6), magnitude))
+      .mul(night)
+      .mul(smoothstep(0.05, 0.3, dir.y))
+  }
+
+  /**
    * Visible sky: fbm clouds (self-shadowed towards the sun), aureole, AA'd sun disc, stars.
    * `disc: false` is the environment capture: aureole kept, disc and stars off (the sun is the
    * directional light — no double specular sun).
@@ -142,12 +169,7 @@ export function createDaylightSky() {
       .mul(smoothstep(-0.01, 0.02, y))
       .mul(float(1).sub(cover.mul(0.6)))
     if (!withDisc) return col.add(sun)
-    const cell: any = floor(dir.mul(380))
-    const star = smoothstep(0.9975, 1, hash(cell.x.add(cell.y.mul(311)).add(cell.z.mul(17123))))
-      .mul(night)
-      .mul(smoothstep(0.05, 0.3, y))
-      .mul(float(1).sub(cloudA))
-    return col.add(sun).add(vec3(star.mul(0.6)))
+    return col.add(sun).add(vec3(stars(dir).mul(float(1).sub(cloudA))))
   }
 
   /** Lighting sky: clouds as their coverage-weighted average (smooth, cheap, sun-free). */

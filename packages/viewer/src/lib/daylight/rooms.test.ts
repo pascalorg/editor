@@ -118,4 +118,13 @@ describe('room lighting', () => {
     rooms.setLampStates(() => false)
     expect(rooms.meter(1, 0)).toBeLessThan(lit)
   })
+
+  test('a camera in a hidden level is outdoors', () => {
+    const rooms = new RoomLighting()
+    rooms.build(twoRooms())
+    const eye = new Vector3(1, 1.6, 1)
+    expect(rooms.isEnclosedAt(eye)).toEqual({ room: 0, inside: true })
+    rooms.levelShown = [false]
+    expect(rooms.isEnclosedAt(eye)).toEqual({ room: -1, inside: false })
+  })
 })

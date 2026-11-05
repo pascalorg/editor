@@ -451,7 +451,17 @@ export class RoomLighting {
     return v ? v - 1 : -1
   }
 
+  /**
+   * Whether each level is on screen. A camera over a level whose upper floors are hidden stands
+   * in those floors' rooms by height alone, but it is outdoors: metered and white-balanced as
+   * such, not as a lamplit room it cannot see.
+   */
+  levelShown: boolean[] = []
+
   isEnclosedAt(p: Vector3): { room: number; inside: boolean } {
+    let level = 0
+    for (let i = 0; i < this.levelY.length; i++) if (this.levelY[i]! <= p.y - 0.12) level = i
+    if (this.levelShown[level] === false) return { room: -1, inside: false }
     const room = this.roomAt(p)
     const r = room >= 0 ? this.rooms[room] : undefined
     return { room, inside: !!r?.enclosed && p.y < r.ceilingY }

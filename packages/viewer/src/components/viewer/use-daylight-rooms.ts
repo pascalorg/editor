@@ -98,8 +98,12 @@ export function useDaylightRooms() {
       (object, index) => object.getWorldPosition(scratch).y - (daylightRooms.levelY[index] ?? 0),
     )
     daylightRooms.setLevelOffsets(offsets)
+    const focused = focusedLevelIndex(s.levelObjects)
+    daylightRooms.levelShown = s.levelObjects.map(
+      (object, index) => (focused < 0 || index <= focused) && shownInScene(object),
+    )
     daylightRooms.cameraY.value = camera.position.y - (offsets[0] ?? 0)
-    daylightRooms.focusedLevel.value = focusedLevelIndex(s.levelObjects)
+    daylightRooms.focusedLevel.value = focused
 
     // Lamp switches (fed lamps by key; virtual lamps follow the time-of-day default) and doors.
     const lit = litFeedKeys()
@@ -150,6 +154,12 @@ function findBakedRoot(scene: Object3D): Object3D | null {
     if (kind === 'site' || kind === 'building' || kind === 'level') found = object.parent ?? object
   })
   return found
+}
+
+/** Visible itself and through every ancestor (hidden levels are switched off on their group). */
+function shownInScene(object: Object3D): boolean {
+  for (let x: Object3D | null = object; x; x = x.parent) if (!x.visible) return false
+  return true
 }
 
 function bakedLevels(root: Object3D | null): Object3D[] {
