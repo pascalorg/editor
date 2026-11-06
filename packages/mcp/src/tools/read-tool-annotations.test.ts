@@ -3,6 +3,12 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { Client, InMemoryTransport } from '@modelcontextprotocol/client'
+import {
+  AGENT_TOOL_CONTRACTS,
+  designBriefTool,
+  surfaceDescription,
+  viewSceneTool,
+} from '@pascal-app/core/agent-tools'
 import { SceneBridge } from '../bridge/scene-bridge'
 import { createPascalMcpServer } from '../server'
 import { SqliteSceneStore } from '../storage/sqlite-scene-store'
@@ -230,6 +236,40 @@ describe('MCP tool input schemas', () => {
     } finally {
       await client.close()
       await server.close()
+      rmSync(directory, { recursive: true, force: true })
+    }
+  })
+})
+
+// A shared tool's description is true on every surface; what only the MCP does (who renders a
+// view, how long a brief lasts) is the contract's MCP note, which only the MCP lists.
+describe('MCP tool descriptions', () => {
+  test('list each shared tool with its contract text and the MCP note, never the chat note', async () => {
+    const bridge = new SceneBridge()
+    bridge.setScene({}, [])
+    bridge.loadDefault()
+    const directory = mkdtempSync(join(tmpdir(), 'pascal-mcp-descriptions-'))
+    const store = new SqliteSceneStore({ databasePath: join(directory, 'pascal.db') })
+    const server = createPascalMcpServer({ bridge, store })
+    const [serverTransport, clientTransport] = InMemoryTransport.createLinkedPair()
+    const client = new Client({ name: 'description-test-client', version: '0.0.0' })
+    await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
+    try {
+      const listed = new Map(
+        (await client.listTools()).tools.map((tool) => [tool.name, tool.description]),
+      )
+      for (const contract of AGENT_TOOL_CONTRACTS)
+        expect({ tool: contract.name, description: listed.get(contract.name) }).toEqual({
+          tool: contract.name,
+          description: surfaceDescription(contract, 'mcp'),
+        })
+      expect(listed.get(viewSceneTool.name)).toContain('editor_tab_required')
+      expect(listed.get(designBriefTool.name)).toContain('A brief lasts for the session.')
+      expect(listed.get(designBriefTool.name)).not.toContain(designBriefTool.surfaceNotes.chat)
+    } finally {
+      await client.close()
+      await server.close()
+      store.close()
       rmSync(directory, { recursive: true, force: true })
     }
   })

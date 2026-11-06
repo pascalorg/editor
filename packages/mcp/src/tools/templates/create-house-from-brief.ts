@@ -81,7 +81,7 @@ export function registerCreateHouseFromBrief(server: McpServer, bridge: SceneOpe
     {
       title: 'Create house from brief',
       description:
-        'High-level hosted workflow for external agents: choose a starter house from a brief, create/save/publish it, and return the editor URL. Use semantic tools afterward for exact customization.',
+        "Replace the session's scene with a starter template and save it as an unpublished draft, returning its editor URL. The template follows bedroomCount, rooms and landscaping only: garden-house for landscaping or a garden, patio or yard room, else empty-studio up to one bedroom, two-bedroom for two and garden-house for more. brief, style and constraints neither choose nor shape it; the summary repeats brief. It saves into projectId's project, or a new one named projectName or after the template; with no scene store it saves nothing. Refine it with the semantic tools afterward.",
       inputSchema: z.object(createHouseFromBriefInput),
       outputSchema: z.object(createHouseFromBriefOutput),
       annotations: DESTRUCTIVE_TOOL_ANNOTATIONS,

@@ -1,6 +1,11 @@
 import { expect, test } from 'bun:test'
 import { existsSync, readFileSync } from 'node:fs'
 import { dirname, relative, resolve } from 'node:path'
+import {
+  AGENT_TOOL_CONTRACTS,
+  HOSTED_SERVICE_TOOL_CONTRACTS,
+  PROJECT_FILE_TOOL_CONTRACTS,
+} from './index'
 
 // Tool contracts are imported wherever an agent's tools are declared, including the hosted chat's
 // durable workflow, whose sandbox rejects packages that depend on Node modules (nanoid among
@@ -37,4 +42,16 @@ test('agent tool contracts reach only zod and dependency-free files', () => {
   }
   expect(offenders).toEqual([])
   expect(seen.size).toBeGreaterThan(3)
+})
+
+// Every surface's agent reads a shared description, so it states nothing only one surface does:
+// that is the surface's own note (`surfaceNotes`), which only that surface lists.
+test('a shared tool description names no surface', () => {
+  const surface = /\b(?:over|on|in|through) (?:the )?(?:MCP|chat)\b/i
+  for (const { name, description } of [
+    ...AGENT_TOOL_CONTRACTS,
+    ...HOSTED_SERVICE_TOOL_CONTRACTS,
+    ...PROJECT_FILE_TOOL_CONTRACTS,
+  ])
+    expect({ name, surface: description.match(surface)?.[0] }).toEqual({ name, surface: undefined })
 })
