@@ -150,6 +150,7 @@ export {
   turnFirstPersonLook,
 } from './lib/drone-flight'
 export type { EdgeMode } from './lib/edge-style'
+export { markHighlight, tintEmissive } from './lib/editor-highlight'
 export {
   BLOCK_MASONRY,
   concreteMaterial,

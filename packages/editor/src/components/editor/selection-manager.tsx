@@ -29,8 +29,10 @@ import {
   wallFaceScriptPaintRefusal,
 } from '@pascal-app/core'
 import {
+  markHighlight,
   ROOF_HEEL_MATERIAL_INDEX,
   registerMaterialCacheCleanup,
+  tintEmissive,
   useViewer,
 } from '@pascal-app/viewer'
 import { useThree } from '@react-three/fiber'
@@ -485,16 +487,14 @@ const HIGHLIGHT_PROFILES = {
   delete: {
     color: new Color('#dc2626'),
     blend: 0.76,
-    emissiveBlend: 0.92,
-    emissiveIntensity: 0.46,
+    emissive: 0.92,
   },
   selection: {
     // Keep the real material/texture readable: no albedo tint, just a gentle
     // indigo emissive glow so it reads as selected.
     color: new Color('#818cf8'),
     blend: 0,
-    emissiveBlend: 0.4,
-    emissiveIntensity: 0.12,
+    emissive: 0.12,
   },
 } as const
 
@@ -549,15 +549,7 @@ function createHighlightedMaterial(material: Material, kind: HighlightKind): Mat
     highlightedMaterial.color = highlightedMaterial.color.clone().lerp(profile.color, profile.blend)
   }
 
-  if (highlightedMaterial.emissive instanceof Color) {
-    highlightedMaterial.emissive = highlightedMaterial.emissive
-      .clone()
-      .lerp(profile.color, profile.emissiveBlend)
-    highlightedMaterial.emissiveIntensity = Math.max(
-      highlightedMaterial.emissiveIntensity ?? 0,
-      profile.emissiveIntensity,
-    )
-  }
+  tintEmissive(highlightedMaterial, profile.color, profile.emissive)
 
   if (typeof highlightedMaterial.opacity === 'number' && highlightedMaterial.opacity < 1) {
     highlightedMaterial.transparent = true
@@ -565,7 +557,7 @@ function createHighlightedMaterial(material: Material, kind: HighlightKind): Mat
   }
 
   highlightedMaterial.needsUpdate = true
-  return highlightedMaterial
+  return markHighlight(highlightedMaterial)
 }
 
 function createHighlightedMaterials(
