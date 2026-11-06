@@ -368,6 +368,11 @@ type WindowAnimationEvents = {
   }
 }
 
+type ProceduralMotionEvents = {
+  /** A procedural item's commanded run (`motionCommand.sequence`) has its moving parts at rest. */
+  'procedural:motion-settled': { nodeId: AnyNodeId; sequence: number }
+}
+
 type ThumbnailEvents = {
   /** `wholeWalls`: every wall drawn whole for the frame, whatever the wall mode (an authored pose, an interior view). */
   'thumbnail:before-capture': { wholeWalls?: boolean } | undefined
@@ -418,6 +423,28 @@ type SelectionEvents = {
   'selection:find-node': AnyNode
 }
 
+/** What a door, a window, its shutters or a switch sounds like when someone operates it. */
+export type InteractionSound =
+  | 'door-open'
+  | 'door-swing'
+  | 'door-close'
+  | 'window-open'
+  | 'window-swing'
+  | 'window-close'
+  | 'garage'
+  | 'shutters-open'
+  | 'shutters-close'
+  | 'panel-open'
+  | 'panel-swing'
+  | 'panel-close'
+  | 'switch-on'
+  | 'switch-off'
+
+type InteractionEvents = {
+  /** A person operated something in a viewer; the host plays it if it has sound. */
+  'interaction:sound': InteractionSound
+}
+
 type EditorEvents = GridEvents &
   GenericNodeEvents &
   NodeEvents &
@@ -431,6 +458,8 @@ type EditorEvents = GridEvents &
   AIChatEvents &
   PointAskEvents &
   RoomPresetEvents &
-  SelectionEvents
+  SelectionEvents &
+  InteractionEvents &
+  ProceduralMotionEvents
 
 export const emitter = mitt<EditorEvents>()

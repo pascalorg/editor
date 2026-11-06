@@ -17735,6 +17735,56 @@ msgstr "在地坪以下的楼层上方淡化地面"
 msgid "editor.views.viewBar.views"
 msgstr "视图"
 
+# Source-Hash: e33e472c5ffcf14d
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "boost"
+#: packages/editor/src/components/walkthrough-hud.tsx
+#, fuzzy
+msgid "editor.walkthroughHud.drone.boost"
+msgstr "加速"
+
+# Source-Hash: de3ab95e50ad3796
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "down"
+#: packages/editor/src/components/walkthrough-hud.tsx
+#, fuzzy
+msgid "editor.walkthroughHud.drone.down"
+msgstr "下降"
+
+# Source-Hash: c1becffaa3515c69
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "move"
+#: packages/editor/src/components/walkthrough-hud.tsx
+#, fuzzy
+msgid "editor.walkthroughHud.drone.move"
+msgstr "移动"
+
+# Source-Hash: fb18aad9822de902
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "slow"
+#: packages/editor/src/components/walkthrough-hud.tsx
+#, fuzzy
+msgid "editor.walkthroughHud.drone.slow"
+msgstr "减速"
+
+# Source-Hash: 5cc8d1cb43ae1748
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "up"
+#: packages/editor/src/components/walkthrough-hud.tsx
+#, fuzzy
+msgid "editor.walkthroughHud.drone.up"
+msgstr "上升"
+
 # Source-Hash: 57c1428fe2d28745
 # Review: required
 # AI-Provider: claude-code
@@ -36361,6 +36411,286 @@ msgstr "区域边界不可用"
 msgid "node.zone.quantitiesPanel.zoneQuantities"
 msgstr "区域工程量"
 
+# Source-Hash: d7fd9acca338cd6a
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "{action, select, open {Open {name}} close {Close {name}} on {Turn on {name}} other {Turn off {name}}}"
+#: packages/viewer/src/components/viewer/selection-callout.tsx
+#, fuzzy
+msgid "viewer.callout.action"
+msgstr "{action, select, open {打开{name}} close {关闭{name}} on {开启{name}} other {关闭{name}}}"
+
+# Source-Hash: 5abe4ec7ade26a12
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Deselect"
+#: packages/viewer/src/components/viewer/selection-callout.tsx
+#, fuzzy
+msgid "viewer.callout.deselect"
+msgstr "取消选择"
+
+# Source-Hash: 787e10f5db16904e
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Door"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.door"
+msgstr "门"
+
+# Source-Hash: db337a42db3a6c57
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Barn door"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.door.barn"
+msgstr "谷仓门"
+
+# Source-Hash: ddf96dbbf4fe7676
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Double door"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.door.double"
+msgstr "双开门"
+
+# Source-Hash: b44941a92287ab10
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Folding door"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.door.folding"
+msgstr "折叠门"
+
+# Source-Hash: 3f4764e840dac031
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "French door"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.door.french"
+msgstr "法式门"
+
+# Source-Hash: 31823c27167616e3
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Roll-up garage door"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.door.garageRollup"
+msgstr "卷帘式车库门"
+
+# Source-Hash: 24e8e9cd9e871a0a
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Sectional garage door"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.door.garageSectional"
+msgstr "分节式车库门"
+
+# Source-Hash: 98363ee2b9b11dda
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Tilt-up garage door"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.door.garageTiltup"
+msgstr "翻板式车库门"
+
+# Source-Hash: 329252b3466b76a4
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Hinged door"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.door.hinged"
+msgstr "平开门"
+
+# Source-Hash: 039a3d3de4c98783
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Pocket door"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.door.pocket"
+msgstr "隐藏式推拉门"
+
+# Source-Hash: f530856f6f28a285
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Sliding door"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.door.sliding"
+msgstr "推拉门"
+
+# Source-Hash: e04298381837252f
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Opening"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.opening"
+msgstr "洞口"
+
+# Source-Hash: fe1fc3c56075fce9
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "{action, select, close {Close the shutters of {name}} other {Open the shutters of {name}}}"
+#: packages/viewer/src/components/viewer/selection-callout.tsx
+#, fuzzy
+msgid "viewer.callout.shuttersAction"
+msgstr "{action, select, close {关闭{name}的百叶窗} other {打开{name}的百叶窗}}"
+
+# Source-Hash: 1548587f53543270
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "{state, select, open {Open} closed {Closed} on {On} other {Off}}"
+#: packages/viewer/src/components/viewer/selection-callout.tsx
+#, fuzzy
+msgid "viewer.callout.state"
+msgstr "{state, select, open {已打开} closed {已关闭} on {开} other {关}}"
+
+# Source-Hash: aa3c35ed33e181e5
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Window"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.window"
+msgstr "窗"
+
+# Source-Hash: b15485fd33092d23
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Awning window"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.window.awning"
+msgstr "上悬窗"
+
+# Source-Hash: 03532a03a66cf1e0
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Bay window"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.window.bay"
+msgstr "凸窗"
+
+# Source-Hash: f60c4e3b39f72154
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Bow window"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.window.bow"
+msgstr "弧形凸窗"
+
+# Source-Hash: af3f32206d00774b
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Casement window"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.window.casement"
+msgstr "平开窗"
+
+# Source-Hash: 65e81e2862cac8d5
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Double-hung window"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.window.doubleHung"
+msgstr "双悬窗"
+
+# Source-Hash: f5d602303a06631d
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Fixed window"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.window.fixed"
+msgstr "固定窗"
+
+# Source-Hash: 857acf0532fba09f
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Hopper window"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.window.hopper"
+msgstr "下悬窗"
+
+# Source-Hash: 7e9cc44d46e0a73e
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Louvered window"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.window.louvered"
+msgstr "百叶窗"
+
+# Source-Hash: 952ef425d1aeb6f0
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Single-hung window"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.window.singleHung"
+msgstr "单悬窗"
+
+# Source-Hash: 1b3bf9d422f1a474
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Sliding window"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.window.sliding"
+msgstr "推拉窗"
+
+# Source-Hash: 4cf588849369b27b
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Tilt-and-turn window"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.window.tiltTurn"
+msgstr "内开内倒窗"
+
 # Source-Hash: 8bf25afa3cb8baea
 # Review: human
 # English: "Orbit left"
@@ -36871,6 +37201,16 @@ msgstr "阴影"
 msgid "viewer.display.title"
 msgstr "显示设置"
 
+# Source-Hash: 793135ea48128fa7
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Drone: {state}"
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#, fuzzy
+msgid "viewer.drone.label"
+msgstr "无人机：{state}"
+
 # Source-Hash: 2bdf83801d4a40af
 # Review: human
 # English: "Align view to north"
@@ -37127,6 +37467,7 @@ msgstr "漫游：{state}"
 # Review: required
 # English: "Shutters"
 #: packages/viewer/src/components/viewer/glb-scene.tsx
+#: packages/viewer/src/systems/interactive/callout-actions.ts
 #, fuzzy
 msgid "viewer.walkthrough.shutters"
 msgstr "护窗板"

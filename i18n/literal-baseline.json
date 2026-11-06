@@ -801,10 +801,6 @@
     "packages/viewer/src/components/viewer/unsupported-gpu-fallback.tsx": [
       "3D viewer unavailable",
       "This browser or environment could not initialize WebGPU or WebGL, so Pascal cannot render the 3D scene here. Try opening the editor in a browser with hardware acceleration enabled."
-    ],
-    "packages/viewer/src/systems/interactive/control-widget.tsx": [
-      "Off",
-      "On"
     ]
   }
 }

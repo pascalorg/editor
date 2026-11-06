@@ -392,6 +392,7 @@ export {
 } from './components/viewer/render-settings-menu'
 export { openSkyPanel, SkyControl, useSkyPanel } from './components/viewer/sky-control'
 export { useViewerCameraNavigationSync } from './components/viewer/use-viewer-camera-navigation-sync'
+export { useViewerUiSounds } from './components/viewer/use-viewer-ui-sounds'
 export {
   ViewerControlsBar,
   type ViewerControlsBarProps,
@@ -417,6 +418,7 @@ export {
   type ViewerStageSwitcherProps,
 } from './components/viewer/viewer-stage-switcher'
 export {
+  DroneHud,
   WalkthroughHud,
   type WalkthroughHudProps,
   type WalkthroughInteract,
@@ -889,7 +891,7 @@ export {
   type SeparatorEndDrag,
 } from './lib/separator-edit'
 export { movementSfxStepKey } from './lib/sfx/movement-tick'
-export { emitDeleteSFX, triggerSFX } from './lib/sfx-bus'
+export { emitDeleteSFX, initSFXBus, triggerSFX } from './lib/sfx-bus'
 export { playSFX, type SFXName, type SFXPlaybackOptions } from './lib/sfx-player'
 export { showSidebarPanel } from './lib/sidebar-panel'
 export {

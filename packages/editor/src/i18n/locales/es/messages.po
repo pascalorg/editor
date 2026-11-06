@@ -17735,6 +17735,56 @@ msgstr "Velar el terreno sobre una planta bajo rasante"
 msgid "editor.views.viewBar.views"
 msgstr "Vistas"
 
+# Source-Hash: e33e472c5ffcf14d
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "boost"
+#: packages/editor/src/components/walkthrough-hud.tsx
+#, fuzzy
+msgid "editor.walkthroughHud.drone.boost"
+msgstr "acelerar"
+
+# Source-Hash: de3ab95e50ad3796
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "down"
+#: packages/editor/src/components/walkthrough-hud.tsx
+#, fuzzy
+msgid "editor.walkthroughHud.drone.down"
+msgstr "bajar"
+
+# Source-Hash: c1becffaa3515c69
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "move"
+#: packages/editor/src/components/walkthrough-hud.tsx
+#, fuzzy
+msgid "editor.walkthroughHud.drone.move"
+msgstr "moverse"
+
+# Source-Hash: fb18aad9822de902
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "slow"
+#: packages/editor/src/components/walkthrough-hud.tsx
+#, fuzzy
+msgid "editor.walkthroughHud.drone.slow"
+msgstr "ralentizar"
+
+# Source-Hash: 5cc8d1cb43ae1748
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "up"
+#: packages/editor/src/components/walkthrough-hud.tsx
+#, fuzzy
+msgid "editor.walkthroughHud.drone.up"
+msgstr "subir"
+
 # Source-Hash: 57c1428fe2d28745
 # Review: required
 # AI-Provider: claude-code
@@ -36361,6 +36411,286 @@ msgstr "Límite de zona no disponible"
 msgid "node.zone.quantitiesPanel.zoneQuantities"
 msgstr "Mediciones de la zona"
 
+# Source-Hash: d7fd9acca338cd6a
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "{action, select, open {Open {name}} close {Close {name}} on {Turn on {name}} other {Turn off {name}}}"
+#: packages/viewer/src/components/viewer/selection-callout.tsx
+#, fuzzy
+msgid "viewer.callout.action"
+msgstr "{action, select, open {Abrir {name}} close {Cerrar {name}} on {Encender {name}} other {Apagar {name}}}"
+
+# Source-Hash: 5abe4ec7ade26a12
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Deselect"
+#: packages/viewer/src/components/viewer/selection-callout.tsx
+#, fuzzy
+msgid "viewer.callout.deselect"
+msgstr "Deseleccionar"
+
+# Source-Hash: 787e10f5db16904e
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Door"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.door"
+msgstr "Puerta"
+
+# Source-Hash: db337a42db3a6c57
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Barn door"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.door.barn"
+msgstr "Puerta de granero"
+
+# Source-Hash: ddf96dbbf4fe7676
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Double door"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.door.double"
+msgstr "Puerta doble"
+
+# Source-Hash: b44941a92287ab10
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Folding door"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.door.folding"
+msgstr "Puerta plegable"
+
+# Source-Hash: 3f4764e840dac031
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "French door"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.door.french"
+msgstr "Puerta francesa"
+
+# Source-Hash: 31823c27167616e3
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Roll-up garage door"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.door.garageRollup"
+msgstr "Puerta de garaje enrollable"
+
+# Source-Hash: 24e8e9cd9e871a0a
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Sectional garage door"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.door.garageSectional"
+msgstr "Puerta de garaje seccional"
+
+# Source-Hash: 98363ee2b9b11dda
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Tilt-up garage door"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.door.garageTiltup"
+msgstr "Puerta de garaje basculante"
+
+# Source-Hash: 329252b3466b76a4
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Hinged door"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.door.hinged"
+msgstr "Puerta abatible"
+
+# Source-Hash: 039a3d3de4c98783
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Pocket door"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.door.pocket"
+msgstr "Puerta corredera empotrada"
+
+# Source-Hash: f530856f6f28a285
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Sliding door"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.door.sliding"
+msgstr "Puerta corredera"
+
+# Source-Hash: e04298381837252f
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Opening"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.opening"
+msgstr "Abertura"
+
+# Source-Hash: fe1fc3c56075fce9
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "{action, select, close {Close the shutters of {name}} other {Open the shutters of {name}}}"
+#: packages/viewer/src/components/viewer/selection-callout.tsx
+#, fuzzy
+msgid "viewer.callout.shuttersAction"
+msgstr "{action, select, close {Cerrar las contraventanas de {name}} other {Abrir las contraventanas de {name}}}"
+
+# Source-Hash: 1548587f53543270
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "{state, select, open {Open} closed {Closed} on {On} other {Off}}"
+#: packages/viewer/src/components/viewer/selection-callout.tsx
+#, fuzzy
+msgid "viewer.callout.state"
+msgstr "{state, select, open {Abierto} closed {Cerrado} on {Encendido} other {Apagado}}"
+
+# Source-Hash: aa3c35ed33e181e5
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Window"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.window"
+msgstr "Ventana"
+
+# Source-Hash: b15485fd33092d23
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Awning window"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.window.awning"
+msgstr "Ventana proyectante"
+
+# Source-Hash: 03532a03a66cf1e0
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Bay window"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.window.bay"
+msgstr "Ventana mirador"
+
+# Source-Hash: f60c4e3b39f72154
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Bow window"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.window.bow"
+msgstr "Ventana en arco"
+
+# Source-Hash: af3f32206d00774b
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Casement window"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.window.casement"
+msgstr "Ventana abatible"
+
+# Source-Hash: 65e81e2862cac8d5
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Double-hung window"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.window.doubleHung"
+msgstr "Ventana de guillotina doble"
+
+# Source-Hash: f5d602303a06631d
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Fixed window"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.window.fixed"
+msgstr "Ventana fija"
+
+# Source-Hash: 857acf0532fba09f
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Hopper window"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.window.hopper"
+msgstr "Ventana basculante"
+
+# Source-Hash: 7e9cc44d46e0a73e
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Louvered window"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.window.louvered"
+msgstr "Ventana de lamas"
+
+# Source-Hash: 952ef425d1aeb6f0
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Single-hung window"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.window.singleHung"
+msgstr "Ventana de guillotina simple"
+
+# Source-Hash: 1b3bf9d422f1a474
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Sliding window"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.window.sliding"
+msgstr "Ventana corredera"
+
+# Source-Hash: 4cf588849369b27b
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Tilt-and-turn window"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.window.tiltTurn"
+msgstr "Ventana oscilobatiente"
+
 # Source-Hash: 8bf25afa3cb8baea
 # Review: human
 # English: "Orbit left"
@@ -36871,6 +37201,16 @@ msgstr "Sombras"
 msgid "viewer.display.title"
 msgstr "Ajustes de visualización"
 
+# Source-Hash: 793135ea48128fa7
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Drone: {state}"
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#, fuzzy
+msgid "viewer.drone.label"
+msgstr "Dron: {state}"
+
 # Source-Hash: 2bdf83801d4a40af
 # Review: human
 # English: "Align view to north"
@@ -37127,6 +37467,7 @@ msgstr "Recorrido: {state}"
 # Review: required
 # English: "Shutters"
 #: packages/viewer/src/components/viewer/glb-scene.tsx
+#: packages/viewer/src/systems/interactive/callout-actions.ts
 #, fuzzy
 msgid "viewer.walkthrough.shutters"
 msgstr "Contraventanas"

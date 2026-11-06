@@ -3,10 +3,8 @@
 import {
   type AnyNode,
   type AnyNodeId,
-  containsPoint,
   type Interactive,
   isScriptedNode,
-  type Polygon,
   type SceneGraph,
   type ScriptedNode,
   type SliderControl,
@@ -19,9 +17,8 @@ import {
   evaluateRecipe,
   type ProceduralItemNode,
 } from '@pascal-app/core/procedural-items'
-import { Html } from '@react-three/drei'
-import { createPortal, useThree } from '@react-three/fiber'
-import { useEffect, useLayoutEffect, useMemo, useState } from 'react'
+import { useThree } from '@react-three/fiber'
+import { useEffect, useLayoutEffect, useMemo } from 'react'
 import {
   type AnimationAction,
   LoopRepeat,
@@ -39,8 +36,6 @@ import {
 } from '../../lib/procedural-emission'
 import { useItemLightPool } from '../../store/use-item-light-pool'
 import useViewer from '../../store/use-viewer'
-import { ControlWidget } from '../../systems/interactive/control-widget'
-import { proceduralControlDescriptors } from '../../systems/interactive/procedural-controls'
 import { type ScriptedClipActions, ScriptedClips } from '../../systems/interactive/scripted-clips'
 import { type PooledLight, PooledLights } from '../../systems/item-light/pooled-lights'
 
@@ -63,14 +58,6 @@ export type GlbInteractiveItem = {
     /** v2: the recipe's parts and joints, so non-fixed joints get controls too. */
     recipe?: Pick<ProceduralItemNode['recipe'], 'parts' | 'joints'>
   }
-}
-
-/** A baked zone's identity node + its local floor polygon (from `extras`). */
-export type GlbZoneRef = {
-  id: string
-  node: Object3D
-  polygon: [number, number][]
-  holes?: [number, number][][]
 }
 
 /** Pull the interactive items out of a scene graph. Only items that actually
@@ -241,8 +228,6 @@ export function buildGlbLightRegs(
   return regs
 }
 
-const _itemPos = new Vector3()
-
 /**
  * Re-creates the item-driven interactivity the parametric viewer has — pooled
  * lights, ambient animation, and the controls overlay — on top of a baked GLB.
@@ -253,12 +238,10 @@ const _itemPos = new Vector3()
 export function GlbInteractive({
   items,
   identity,
-  zones,
   actions,
 }: {
   items: GlbInteractiveItem[]
   identity: Map<string, Object3D>
-  zones: GlbZoneRef[]
   /** Baked animation actions keyed by clip name — ambient item loops play from
    *  `<pascalId>: loop`. */
   actions: Record<string, AnimationAction | null>
@@ -297,23 +280,6 @@ export function GlbInteractive({
 
   const lightRegs = useMemo(() => buildGlbLightRegs(items, identity), [items, identity])
 
-  // Project the zone's baked-local polygon into world space so focused zone
-  // membership still works after level stacking moves its parent.
-  const focusedZoneId = useViewer((s) => s.selection.zoneId)
-  const selectedIds = useViewer((s) => s.selection.selectedIds)
-  const worldPolygon = useMemo<Polygon | null>(() => {
-    if (!focusedZoneId) return null
-    const zone = zones.find((z) => z.id === focusedZoneId)
-    if (!zone) return null
-    zone.node.updateWorldMatrix(true, false)
-    const project = (ring: [number, number][]) =>
-      ring.map(([x, z]): [number, number] => {
-        const v = new Vector3(x, 0, z).applyMatrix4(zone.node.matrixWorld)
-        return [v.x, v.z]
-      })
-    return { outer: project(zone.polygon), holes: (zone.holes ?? []).map(project) }
-  }, [focusedZoneId, zones])
-
   return (
     <>
       <GlbItemLights regs={lightRegs} />
@@ -330,20 +296,6 @@ export function GlbInteractive({
           const object = identity.get(item.pascalId)
           return object ? (
             <GlbProceduralEmission item={item} key={item.pascalId} object={object} />
-          ) : null
-        })}
-      {items
-        .filter((item) => worldPolygon || selectedIds.includes(item.pascalId))
-        .map((item) => {
-          const object = identity.get(item.pascalId)
-          return object ? (
-            <GlbItemControls
-              isSelected={selectedIds.includes(item.pascalId)}
-              item={item}
-              key={item.pascalId}
-              object={object}
-              worldPolygon={worldPolygon}
-            />
           ) : null
         })}
     </>
@@ -494,112 +446,5 @@ function GlbScriptedClips({
   }, [actions, item.pascalId])
   return (
     <ScriptedClips actions={scriptActions} interactive={item.interactive} nodeId={item.pascalId} />
-  )
-}
-
-const FADE_MS = 300
-
-/** Controls overlay for a selected item or one inside the focused zone. */
-function GlbItemControls({
-  item,
-  object,
-  worldPolygon,
-  isSelected,
-}: {
-  item: GlbInteractiveItem
-  object: Object3D
-  worldPolygon: Polygon | null
-  isSelected: boolean
-}) {
-  const controlValues = useInteractive(useShallow((s) => s.items[item.pascalId]?.controlValues))
-  const proceduralState = useInteractive((s) => s.procedural[item.pascalId])
-  const lampDefault = useInteractive((s) => s.lampDefault)
-  const setControlValue = useInteractive((s) => s.setControlValue)
-  const togglePart = useInteractive((s) => s.toggleProceduralPart)
-  const toggleLights = useInteractive((s) => s.toggleProceduralLights)
-  const descriptors = item.procedural
-    ? proceduralControlDescriptors(
-        item.procedural.recipe ?? { parts: item.procedural.parts },
-        proceduralState,
-        (partId) => togglePart(item.pascalId, partId),
-        () => toggleLights(item.pascalId),
-        lampDefault,
-      )
-    : item.interactive.controls.map((control, index) => ({
-        key: String(index),
-        control,
-        value: controlValues?.[index] ?? false,
-        onChange: (value: import('@pascal-app/core').ControlValue) =>
-          setControlValue(item.pascalId, index, value),
-      }))
-
-  let visible = isSelected
-  if (worldPolygon) {
-    object.getWorldPosition(_itemPos)
-    visible = visible || containsPoint([worldPolygon], [_itemPos.x, _itemPos.z])
-  }
-
-  // Fade in on mount and fade out before unmounting the <Html>.
-  const [mounted, setMounted] = useState(false)
-  const [shown, setShown] = useState(false)
-  useEffect(() => {
-    if (visible) {
-      setMounted(true)
-      let raf2 = 0
-      const raf1 = requestAnimationFrame(() => {
-        raf2 = requestAnimationFrame(() => setShown(true))
-      })
-      return () => {
-        cancelAnimationFrame(raf1)
-        cancelAnimationFrame(raf2)
-      }
-    }
-    setShown(false)
-    const timeout = setTimeout(() => setMounted(false), FADE_MS)
-    return () => clearTimeout(timeout)
-  }, [visible])
-
-  if (!(mounted && descriptors.length)) return null
-
-  return createPortal(
-    <Html
-      center
-      distanceFactor={8}
-      eps={-1}
-      position={[0, item.height + 0.3, 0]}
-      zIndexRange={[20, 0]}
-    >
-      {/* Stop pointer/click events from reaching the canvas — otherwise R3F's
-          pointer-missed fires and deselects the zone the moment you toggle. */}
-      <div
-        onClick={(e) => e.stopPropagation()}
-        onPointerDown={(e) => e.stopPropagation()}
-        onPointerUp={(e) => e.stopPropagation()}
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 6,
-          background: 'rgba(0,0,0,0.75)',
-          backdropFilter: 'blur(8px)',
-          borderRadius: 8,
-          padding: '8px 12px',
-          minWidth: 120,
-          pointerEvents: visible ? 'auto' : 'none',
-          userSelect: 'none',
-          opacity: shown ? 1 : 0,
-          transition: `opacity ${FADE_MS}ms ease`,
-        }}
-      >
-        {descriptors.map((descriptor) => (
-          <ControlWidget
-            control={descriptor.control}
-            key={descriptor.key}
-            onChange={descriptor.onChange}
-            value={descriptor.value}
-          />
-        ))}
-      </div>
-    </Html>,
-    object,
   )
 }

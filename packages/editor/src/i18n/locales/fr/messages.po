@@ -17735,6 +17735,56 @@ msgstr "Voiler le sol au-dessus d’un niveau sous le terrain"
 msgid "editor.views.viewBar.views"
 msgstr "Vues"
 
+# Source-Hash: e33e472c5ffcf14d
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "boost"
+#: packages/editor/src/components/walkthrough-hud.tsx
+#, fuzzy
+msgid "editor.walkthroughHud.drone.boost"
+msgstr "accélérer"
+
+# Source-Hash: de3ab95e50ad3796
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "down"
+#: packages/editor/src/components/walkthrough-hud.tsx
+#, fuzzy
+msgid "editor.walkthroughHud.drone.down"
+msgstr "descendre"
+
+# Source-Hash: c1becffaa3515c69
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "move"
+#: packages/editor/src/components/walkthrough-hud.tsx
+#, fuzzy
+msgid "editor.walkthroughHud.drone.move"
+msgstr "se déplacer"
+
+# Source-Hash: fb18aad9822de902
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "slow"
+#: packages/editor/src/components/walkthrough-hud.tsx
+#, fuzzy
+msgid "editor.walkthroughHud.drone.slow"
+msgstr "ralentir"
+
+# Source-Hash: 5cc8d1cb43ae1748
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "up"
+#: packages/editor/src/components/walkthrough-hud.tsx
+#, fuzzy
+msgid "editor.walkthroughHud.drone.up"
+msgstr "monter"
+
 # Source-Hash: 57c1428fe2d28745
 # Review: required
 # AI-Provider: claude-code
@@ -36361,6 +36411,286 @@ msgstr "Limite de zone indisponible"
 msgid "node.zone.quantitiesPanel.zoneQuantities"
 msgstr "Quantités de la zone"
 
+# Source-Hash: d7fd9acca338cd6a
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "{action, select, open {Open {name}} close {Close {name}} on {Turn on {name}} other {Turn off {name}}}"
+#: packages/viewer/src/components/viewer/selection-callout.tsx
+#, fuzzy
+msgid "viewer.callout.action"
+msgstr "{action, select, open {Ouvrir {name}} close {Fermer {name}} on {Allumer {name}} other {Éteindre {name}}}"
+
+# Source-Hash: 5abe4ec7ade26a12
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Deselect"
+#: packages/viewer/src/components/viewer/selection-callout.tsx
+#, fuzzy
+msgid "viewer.callout.deselect"
+msgstr "Désélectionner"
+
+# Source-Hash: 787e10f5db16904e
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Door"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.door"
+msgstr "Porte"
+
+# Source-Hash: db337a42db3a6c57
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Barn door"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.door.barn"
+msgstr "Porte de grange"
+
+# Source-Hash: ddf96dbbf4fe7676
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Double door"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.door.double"
+msgstr "Porte double"
+
+# Source-Hash: b44941a92287ab10
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Folding door"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.door.folding"
+msgstr "Porte pliante"
+
+# Source-Hash: 3f4764e840dac031
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "French door"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.door.french"
+msgstr "Porte-fenêtre"
+
+# Source-Hash: 31823c27167616e3
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Roll-up garage door"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.door.garageRollup"
+msgstr "Porte de garage enroulable"
+
+# Source-Hash: 24e8e9cd9e871a0a
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Sectional garage door"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.door.garageSectional"
+msgstr "Porte de garage sectionnelle"
+
+# Source-Hash: 98363ee2b9b11dda
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Tilt-up garage door"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.door.garageTiltup"
+msgstr "Porte de garage basculante"
+
+# Source-Hash: 329252b3466b76a4
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Hinged door"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.door.hinged"
+msgstr "Porte battante"
+
+# Source-Hash: 039a3d3de4c98783
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Pocket door"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.door.pocket"
+msgstr "Porte à galandage"
+
+# Source-Hash: f530856f6f28a285
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Sliding door"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.door.sliding"
+msgstr "Porte coulissante"
+
+# Source-Hash: e04298381837252f
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Opening"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.opening"
+msgstr "Ouverture"
+
+# Source-Hash: fe1fc3c56075fce9
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "{action, select, close {Close the shutters of {name}} other {Open the shutters of {name}}}"
+#: packages/viewer/src/components/viewer/selection-callout.tsx
+#, fuzzy
+msgid "viewer.callout.shuttersAction"
+msgstr "{action, select, close {Fermer les volets de {name}} other {Ouvrir les volets de {name}}}"
+
+# Source-Hash: 1548587f53543270
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "{state, select, open {Open} closed {Closed} on {On} other {Off}}"
+#: packages/viewer/src/components/viewer/selection-callout.tsx
+#, fuzzy
+msgid "viewer.callout.state"
+msgstr "{state, select, open {Ouvert} closed {Fermé} on {Allumé} other {Éteint}}"
+
+# Source-Hash: aa3c35ed33e181e5
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Window"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.window"
+msgstr "Fenêtre"
+
+# Source-Hash: b15485fd33092d23
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Awning window"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.window.awning"
+msgstr "Fenêtre à projection"
+
+# Source-Hash: 03532a03a66cf1e0
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Bay window"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.window.bay"
+msgstr "Fenêtre en baie"
+
+# Source-Hash: f60c4e3b39f72154
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Bow window"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.window.bow"
+msgstr "Fenêtre en arc"
+
+# Source-Hash: af3f32206d00774b
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Casement window"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.window.casement"
+msgstr "Fenêtre à battant"
+
+# Source-Hash: 65e81e2862cac8d5
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Double-hung window"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.window.doubleHung"
+msgstr "Fenêtre à guillotine double"
+
+# Source-Hash: f5d602303a06631d
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Fixed window"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.window.fixed"
+msgstr "Fenêtre fixe"
+
+# Source-Hash: 857acf0532fba09f
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Hopper window"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.window.hopper"
+msgstr "Fenêtre à soufflet"
+
+# Source-Hash: 7e9cc44d46e0a73e
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Louvered window"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.window.louvered"
+msgstr "Fenêtre à lames"
+
+# Source-Hash: 952ef425d1aeb6f0
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Single-hung window"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.window.singleHung"
+msgstr "Fenêtre à guillotine simple"
+
+# Source-Hash: 1b3bf9d422f1a474
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Sliding window"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.window.sliding"
+msgstr "Fenêtre coulissante"
+
+# Source-Hash: 4cf588849369b27b
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Tilt-and-turn window"
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+#, fuzzy
+msgid "viewer.callout.window.tiltTurn"
+msgstr "Fenêtre oscillo-battante"
+
 # Source-Hash: 8bf25afa3cb8baea
 # Review: human
 # English: "Orbit left"
@@ -36871,6 +37201,16 @@ msgstr "Ombres"
 msgid "viewer.display.title"
 msgstr "Paramètres d’affichage"
 
+# Source-Hash: 793135ea48128fa7
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Drone: {state}"
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#, fuzzy
+msgid "viewer.drone.label"
+msgstr "Drone : {state}"
+
 # Source-Hash: 2bdf83801d4a40af
 # Review: human
 # English: "Align view to north"
@@ -37127,6 +37467,7 @@ msgstr "Visite : {state}"
 # Review: required
 # English: "Shutters"
 #: packages/viewer/src/components/viewer/glb-scene.tsx
+#: packages/viewer/src/systems/interactive/callout-actions.ts
 #, fuzzy
 msgid "viewer.walkthrough.shutters"
 msgstr "Volets"
