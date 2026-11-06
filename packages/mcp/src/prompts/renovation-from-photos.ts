@@ -13,7 +13,7 @@ const PREAMBLE = [
   'Rules:',
   '  - Do not invent dimensions. Pull them from the analysis tool results.',
   '  - Do not modify nodes that are unrelated to the goals.',
-  '  - When the work is done, report what was verified and the project `editorUrl`.',
+  "  - When the work is done, report what you checked (`verify_scene` reports the scene's issues) and the project `editorUrl`, which `get_project_status` returns.",
 ].join('\n')
 
 function isDataUrl(s: string): boolean {
