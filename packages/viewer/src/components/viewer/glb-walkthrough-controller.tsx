@@ -23,7 +23,7 @@ import {
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { acceleratedRaycast, computeBoundsTree, disposeBoundsTree } from 'three-mesh-bvh'
 import { useGLTFKTX2 } from '../../hooks/use-gltf-ktx2'
-import { SCENE_LAYER } from '../../lib/layers'
+import { BATCHED_LAYER, SCENE_LAYER } from '../../lib/layers'
 import useViewer from '../../store/use-viewer'
 import BVHEcctrl, { type BVHEcctrlApi, type MovementInput } from './bvh-ecctrl'
 import { applyWalkthroughCameraClipping } from './viewer-camera'
@@ -178,8 +178,10 @@ function buildGlbColliderWorld(scene: Object3D): GlbColliderWorld | null {
   scene.traverse((object) => {
     const mesh = object as Mesh
     if (!mesh.isMesh) return
-    // Zone fills live on a separate layer (and never collide).
-    if (!mesh.layers.isEnabled(SCENE_LAYER)) return
+    // Zone fills live on a separate layer (and never collide). Merged originals sit on the
+    // batched layer and still collide; their batches don't (each original keeps its kind rules).
+    if (mesh.userData.glbBatch) return
+    if (!mesh.layers.isEnabled(SCENE_LAYER) && !mesh.layers.isEnabled(BATCHED_LAYER)) return
     if (!isEffectivelyVisible(mesh)) return
     let ancestor: Object3D | null = mesh
     while (ancestor && !ancestor.userData.proceduralMotion) ancestor = ancestor.parent

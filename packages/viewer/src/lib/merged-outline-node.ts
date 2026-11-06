@@ -58,6 +58,7 @@ import {
   TempNode,
 } from 'three/webgpu'
 import { hasDrawableGeometry } from './drawable-geometry'
+import { BATCHED_LAYER, SCENE_LAYER } from './layers'
 
 const _quadMesh = new QuadMesh()
 const _size = new Vector2()
@@ -555,6 +556,8 @@ export class MergedOutlineNode extends TempNode {
       proxy.material = source.material
       proxy.matrixWorld.copy(source.matrixWorld)
       proxy.layers.mask = source.layers.mask
+      // A batched source is drawn by its batch: outline it as if it drew itself.
+      if (proxy.layers.isEnabled(BATCHED_LAYER)) proxy.layers.enable(SCENE_LAYER)
       proxy.visible = visible && attached
       proxy.renderOrder = source.renderOrder
       proxy.morphTargetInfluences = source.morphTargetInfluences
