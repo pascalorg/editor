@@ -150,6 +150,7 @@ export {
   turnFirstPersonLook,
 } from './lib/drone-flight'
 export type { EdgeMode } from './lib/edge-style'
+export { markHighlight, tintEmissive } from './lib/editor-highlight'
 export {
   BLOCK_MASONRY,
   concreteMaterial,
@@ -276,7 +277,6 @@ export {
   revealTimingAt,
 } from './lib/reveal-schedule'
 export { planRevealWindows, type RevealWindow } from './lib/reveal-windows'
-export { markNoBloom } from './lib/scene-pass-mrt'
 export { createSceneSupportHeightSampler } from './lib/scene-support-height'
 export {
   getSceneTheme,

@@ -9,6 +9,7 @@ import {
 import { Box3, Color, type Material, MathUtils, type Mesh, type Object3D, Vector3 } from 'three'
 import { materialEmissive, smoothstep, uniform, vec3 } from 'three/tsl'
 import { MeshStandardNodeMaterial } from 'three/webgpu'
+import { isHighlight } from '../editor-highlight'
 import { setSurfaceRaycastLayers } from '../layers'
 import type { RoomLamp, RoomOpeningRoot, RoomSceneInput, RoomZone } from './rooms'
 import { daylightUniforms } from './runtime'
@@ -299,6 +300,8 @@ type EmitterMaterial = Material & {
 function isEmitter(material: EmitterMaterial): boolean {
   return (
     !material.transparent &&
+    // An editor highlight's tint isn't a glow: a selected lamp's frame must not light up.
+    !isHighlight(material) &&
     !!material.emissive &&
     material.emissive.getHex() !== 0 &&
     (material.emissiveIntensity ?? 1) > 0
