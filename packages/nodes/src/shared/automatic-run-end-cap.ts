@@ -9,7 +9,7 @@ import {
 import type { ScenePort } from '@pascal-app/editor/distribution'
 import { Euler, Quaternion, Vector3 } from 'three'
 import { localFittingPorts } from '../duct-fitting/ports'
-import { ductPortDiameterIn } from '../duct-segment/geometry'
+import { ductPortDiameterIn } from '../duct-segment/profile'
 import { localPipeFittingPorts } from '../pipe-fitting/ports'
 import { accessoryMateQuaternion } from './accessory-placement'
 
@@ -83,7 +83,7 @@ export function createDuctRunEndCap(
     height2: duct.height,
     diameter: port.diameter,
     diameter2: port.diameter,
-    ductMaterial: duct.ductMaterial,
+    ductMaterial: duct.ductMaterial === 'spiral' ? 'sheet-metal' : duct.ductMaterial,
     system: duct.system,
   })
   const rotation = accessoryMateQuaternion(cap, port, {
@@ -213,4 +213,21 @@ export function planRunEndCapFollowUpdates(
     id,
     data: { position: placed.position, rotation: placed.rotation } as Partial<AnyNode>,
   }))
+}
+
+/** A split transfers the far cap to the new tail without moving its collar. */
+export function transferRunEndCapOwnership(
+  nodes: Readonly<Record<string, AnyNode>>,
+  previousId: AnyNodeId,
+  nextId: AnyNodeId,
+  endpoint: 'start' | 'end',
+): { id: AnyNodeId; data: Partial<AnyNode> }[] {
+  return Object.values(nodes).flatMap((node) =>
+    (node.type === 'pipe-fitting' || node.type === 'duct-fitting') &&
+    node.fittingType === 'end-cap' &&
+    node.metadata[END_CAP_OWNER_ID_KEY] === previousId &&
+    node.metadata[END_CAP_ENDPOINT_KEY] === endpoint
+      ? [{ id: node.id, data: { metadata: { ...node.metadata, [END_CAP_OWNER_ID_KEY]: nextId } } }]
+      : [],
+  )
 }

@@ -33,6 +33,7 @@ import {
 } from '../shared/ghost-alignment'
 import { type RunMoveConnectivity, startRunMoveConnectivity } from '../shared/run-move-connectivity'
 import { translateWallRun } from '../shared/wall-run-move'
+import { pipeUpdatesPreserveGrades } from './grade-operation'
 
 type Vec3 = [number, number, number]
 
@@ -217,8 +218,10 @@ export const MovePipeSegmentTool: React.FC<{ node: AnyNode }> = ({ node }) => {
         event.nativeEvent?.stopPropagation?.()
         return
       }
-      committed = true
       const finalPath = previewPathRef.current
+      const gradeUpdates = connectivity?.commitUpdates({ path: finalPath }) ?? []
+      if (!pipeUpdatesPreserveGrades(useScene.getState().nodes, gradeUpdates)) return
+      committed = true
 
       useScene.temporal.getState().resume()
       let selectId = nodeId

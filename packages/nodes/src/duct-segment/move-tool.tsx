@@ -42,7 +42,7 @@ import {
   type RunTranslationOffsetPlan,
 } from '../shared/run-translation-offset'
 import { translateWallRun } from '../shared/wall-run-move'
-import { rectSectionAxes } from './geometry'
+import { rectSectionAxes } from './profile'
 
 type Vec3 = [number, number, number]
 

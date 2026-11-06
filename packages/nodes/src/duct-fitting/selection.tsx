@@ -40,7 +40,7 @@ import {
   Vector3,
 } from 'three'
 import { LineBasicNodeMaterial, MeshBasicNodeMaterial } from 'three/webgpu'
-import { INCHES_TO_METERS } from '../duct-segment/geometry'
+import { INCHES_TO_METERS } from '../duct-segment/profile'
 import { autoOffsetInvalidationUpdates } from '../shared/auto-offset-tag'
 import {
   AXIS_VECTORS,

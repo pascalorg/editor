@@ -11,7 +11,7 @@ import {
   ductPortDiameterIn,
   equivalentDiameterIn,
   ovalEquivalentDiameterIn,
-} from '../duct-segment/geometry'
+} from '../duct-segment/profile'
 import { pipeFittingLegLength } from '../pipe-fitting/ports'
 
 /** Turns shallower than this read as a straight continuation — butt-join

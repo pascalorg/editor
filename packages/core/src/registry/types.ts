@@ -426,6 +426,8 @@ export type ToolOption = {
   /** Row label. Sentence case, e.g. 'Create from'. */
   label: string
   choices: readonly ToolOptionChoice[]
+  /** Optional exact numeric entry instead of choice buttons. */
+  input?: { min?: number; max?: number; step?: number; unit?: string }
   /** Subscribe to live value changes (Zustand-store-like); returns unsubscribe. */
   subscribe: (onChange: () => void) => () => void
   /** Current value token. */
