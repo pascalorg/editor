@@ -127,18 +127,19 @@ export const SFX: Record<string, SFXConfig> = {
   turnFailed: { src: '/audios/sfx/turn_failed.mp3' },
   turnNeedsInput: { src: '/audios/sfx/turn_needs_input.mp3' },
   // Operating the building from a viewer's callout or a walkthrough: recorded
-  // door and shutter movements, and a rocker switch (`scripts/synth-switch-cues.ts`).
+  // door and shutter movements; the switches and the viewer's hover, select and
+  // deselect ticks are the marketing house's synth cues (`scripts/synth-viewer-cues.ts`),
+  // already mixed against the doors, so they play at full volume without jitter.
   doorOpen: { src: '/audios/sfx/door_open.mp3', rateRange: [0.96, 1.04], volumeRange: [0.9, 1] },
   doorClose: { src: '/audios/sfx/door_close.mp3', rateRange: [0.96, 1.04], volumeRange: [0.9, 1] },
   garageDoor: { src: '/audios/sfx/garage_door.mp3', volumeRange: [0.9, 1] },
   shuttersOpen: { src: '/audios/sfx/shutters_open.mp3', rateRange: [0.96, 1.04] },
   shuttersClose: { src: '/audios/sfx/shutters_close.mp3', rateRange: [0.96, 1.04] },
-  switchOn: { src: '/audios/sfx/switch_on.mp3', rateRange: [0.97, 1.03], volumeRange: [0.5, 0.6] },
-  switchOff: {
-    src: '/audios/sfx/switch_off.mp3',
-    rateRange: [0.97, 1.03],
-    volumeRange: [0.5, 0.6],
-  },
+  switchOn: { src: '/audios/sfx/switch_on.mp3' },
+  switchOff: { src: '/audios/sfx/switch_off.mp3' },
+  viewerHover: { src: '/audios/sfx/viewer_hover.mp3', minIntervalMs: 95 },
+  viewerSelect: { src: '/audios/sfx/viewer_select.mp3', minIntervalMs: 90 },
+  viewerDeselect: { src: '/audios/sfx/viewer_deselect.mp3' },
 } as const
 
 export type SFXName = keyof typeof SFX

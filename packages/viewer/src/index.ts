@@ -74,6 +74,11 @@ export {
   SceneGroundReplacement,
   useSceneGroundReplacement,
 } from './components/viewer/scene-ground-replacement'
+export {
+  type CalloutAction,
+  type CalloutText,
+  SelectionCallout,
+} from './components/viewer/selection-callout'
 export { applyWalkthroughCameraClipping } from './components/viewer/viewer-camera'
 export {
   isViewerPresentationTextureBorrowed,

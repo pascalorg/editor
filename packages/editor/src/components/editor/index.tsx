@@ -104,6 +104,7 @@ import { SitePanel, type SitePanelProps } from '../ui/sidebar/panels/site-panel'
 import type { SidebarTab } from '../ui/sidebar/tab-bar'
 import { useHostPanels } from '../ui/sidebar/use-plugin-panels'
 import { SKY_DOCK_HEIGHT, SkyControl } from '../viewer/sky-control'
+import { useViewerUiSounds } from '../viewer/use-viewer-ui-sounds'
 import { ViewerHoverLabel } from '../viewer/viewer-hover-label'
 import { ParametricViewerRooms } from '../viewer/viewer-rooms'
 import { ViewerSelectionManager } from '../viewer/viewer-selection-manager'
@@ -1465,6 +1466,7 @@ function PreviewStage({
   )
 
   useViewerFloorDisplay()
+  useViewerUiSounds()
   const stageMode = isFirstPersonMode || !hasFloorplan ? '3d' : mode
   const stageModes = hasFloorplan && !isFirstPersonMode ? undefined : (['3d'] as const)
 

@@ -392,6 +392,7 @@ export {
 } from './components/viewer/render-settings-menu'
 export { openSkyPanel, SkyControl, useSkyPanel } from './components/viewer/sky-control'
 export { useViewerCameraNavigationSync } from './components/viewer/use-viewer-camera-navigation-sync'
+export { useViewerUiSounds } from './components/viewer/use-viewer-ui-sounds'
 export {
   ViewerControlsBar,
   type ViewerControlsBarProps,
