@@ -399,17 +399,18 @@ function promptFor(request: TranslationRequest): string {
   ].join('\n\n')
 }
 
-async function configuredProvider(): Promise<TranslationProvider> {
+export async function configuredProvider(
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<TranslationProvider> {
   const name =
-    process.env.I18N_PROVIDER ??
-    (process.env.OPENAI_API_KEY ? 'openai' : process.env.ANTHROPIC_API_KEY ? 'anthropic' : '')
-  const modelName = process.env.I18N_MODEL
+    env.I18N_PROVIDER ?? (env.OPENAI_API_KEY ? 'openai' : env.ANTHROPIC_API_KEY ? 'anthropic' : '')
+  const modelName = env.I18N_MODEL
   if (!modelName) throw new Error('Set I18N_MODEL to the translation model')
 
-  if (name === 'openai' && !process.env.OPENAI_API_KEY) {
+  if (name === 'openai' && !env.OPENAI_API_KEY) {
     throw new Error('Set OPENAI_API_KEY for the OpenAI translation provider')
   }
-  if (name === 'anthropic' && !process.env.ANTHROPIC_API_KEY) {
+  if (name === 'anthropic' && !env.ANTHROPIC_API_KEY) {
     throw new Error('Set ANTHROPIC_API_KEY for the Anthropic translation provider')
   }
   if (name !== 'openai' && name !== 'anthropic') {
@@ -420,12 +421,12 @@ async function configuredProvider(): Promise<TranslationProvider> {
   const model =
     name === 'openai'
       ? (await import('@ai-sdk/openai')).createOpenAI({
-          apiKey: process.env.OPENAI_API_KEY,
-          baseURL: process.env.OPENAI_BASE_URL,
+          apiKey: env.OPENAI_API_KEY,
+          baseURL: env.OPENAI_BASE_URL,
         })(modelName)
       : (await import('@ai-sdk/anthropic')).createAnthropic({
-          apiKey: process.env.ANTHROPIC_API_KEY,
-          baseURL: process.env.ANTHROPIC_BASE_URL,
+          apiKey: env.ANTHROPIC_API_KEY,
+          baseURL: env.ANTHROPIC_BASE_URL,
         })(modelName)
   const translationOutputSchema = z.object({
     locale: z.string(),

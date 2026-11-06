@@ -114,6 +114,13 @@ jobs:
       - name: Build
         run: bun run build
 
+      # Serves the build with `next start`: redirects, headers, the proxy,
+      # server rendering, scene route handlers and the image optimizer.
+      - name: Smoke-test the production editor server
+        working-directory: apps/editor
+        timeout-minutes: 5
+        run: bun run smoke
+
   cli-smoke:
     needs: changes
     if: needs.changes.outputs.runtime == 'true'
