@@ -32,6 +32,11 @@ import { isDaylightAtmosphere } from '../../lib/daylight/look'
 import { type GlbMerge, mergeBakedStatic } from '../../lib/glb-merge'
 import { setSurfaceRaycastLayers } from '../../lib/layers'
 import { createSurfaceRoleMaterial } from '../../lib/materials'
+import {
+  attachOcclusionCuller,
+  type CullingPipeline,
+  createOcclusionCuller,
+} from '../../lib/occlusion-culler'
 import { applyShadowOnly, clearShadowOnly } from '../../lib/shadow-only'
 import useViewer from '../../store/use-viewer'
 import { OPEN_SOUNDS, openingSound } from '../../systems/interactive/callout-actions'
@@ -633,6 +638,35 @@ export function GlbScene({
       if (mergeRef.current === merge) mergeRef.current = null
     }
   }, [gltf.scene, gltf.animations, interactiveItems, mergeEnabled, mergeRebuild])
+
+  // Occlusion culling (see lib/occlusion-culler.ts): what the walls, slabs and roofs hide from
+  // the eye isn't drawn. Rebuilt with the merge, whose batches are what it mostly culls.
+  // `?occlusion=0` draws everything.
+  const rootScene = useThree((state) => state.scene)
+  const renderer = useThree((state) => state.gl)
+  const getThree = useThree((state) => state.get)
+  const occlusionEnabled = useMemo(
+    () =>
+      typeof window === 'undefined' ||
+      new URLSearchParams(window.location.search).get('occlusion') !== '0',
+    [],
+  )
+  useEffect(() => {
+    // three's drawing pipeline (WebGPU renderer) answers which objects a render skips.
+    const pipeline = (renderer as { drawingPipeline?: CullingPipeline }).drawingPipeline
+    if (!occlusionEnabled || !pipeline) return
+    const culler = createOcclusionCuller(gltf.scene)
+    const detach = attachOcclusionCuller({
+      scene: rootScene,
+      pipeline,
+      culler,
+      getCamera: () => getThree().camera,
+    })
+    return () => {
+      detach()
+      culler.dispose()
+    }
+  }, [gltf.scene, rootScene, renderer, getThree, occlusionEnabled, mergeVersion])
   const mergeSignature = useRef(0)
   const mergeCheck = useRef(0)
   useFrame((_, delta) => {

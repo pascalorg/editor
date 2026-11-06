@@ -54,6 +54,11 @@ export function showInScene(obj: Object3D, reason: HiddenReason): void {
   delete holder[HOLD]
 }
 
+/** The reasons `obj` is held off the scene layer, if any. */
+export function heldReasons(obj: Object3D): ReadonlySet<HiddenReason> | undefined {
+  return (obj as Holder)[HOLD]?.reasons
+}
+
 export function temporarilyShowShadowOnly(root: Object3D): () => void {
   return temporarilyShowHeld(root, ['shadow-only'])
 }
