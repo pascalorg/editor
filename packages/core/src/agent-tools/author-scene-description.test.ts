@@ -1,5 +1,22 @@
 import { expect, test } from 'bun:test'
 import { authorSceneTool } from './author-scene'
+import { surfaceDescription } from './contract'
+
+// Only an MCP client can PUT bytes to a signed URL; the chat has no HTTP client and goes by module
+// plus adapter, or by a text upload. The shared text states only what both surfaces share.
+test("author_scene's payload-by-reference route is each surface's own note", () => {
+  const { description } = authorSceneTool
+  expect(description).toContain('payloadFile names a JSON project file')
+  expect(description).not.toContain('PUT')
+  const mcp = surfaceDescription(authorSceneTool, 'mcp')
+  expect(mcp).toContain('phase prepare')
+  expect(mcp).toContain('PUT the bytes')
+  const chat = surfaceDescription(authorSceneTool, 'chat')
+  expect(chat).toContain('module and its adapter')
+  expect(chat).toContain('phase text')
+  expect(chat).toContain('file.id')
+  expect(chat).not.toContain('PUT the bytes')
+})
 
 // An answer stops at its output limit, and the limit counts the thinking and the call's arguments
 // together. Answers that planned and wrote a whole house as one payload have stopped there before
