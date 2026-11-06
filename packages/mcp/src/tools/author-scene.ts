@@ -16,6 +16,7 @@ import {
   authorSceneTool,
   isAgentRefusal,
   refuse,
+  surfaceDescription,
 } from '@pascal-app/core/agent-tools'
 import { GEOMETRY_SCRIPT_MIME_TYPES } from '@pascal-app/core/schema'
 import { compileAuthorScene } from '@pascal-app/geometry-script/author-scene'
@@ -75,7 +76,7 @@ export function registerAuthorScene(
     authorSceneTool.name,
     {
       title: authorSceneTool.title,
-      description: authorSceneTool.description,
+      description: surfaceDescription(authorSceneTool, 'mcp'),
       inputSchema: z.object(authorSceneTool.input),
       annotations: DESTRUCTIVE_TOOL_ANNOTATIONS,
     },

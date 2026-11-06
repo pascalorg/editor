@@ -47,7 +47,7 @@ test('agent tool contracts reach only zod and dependency-free files', () => {
 // Every surface's agent reads a shared description, so it states nothing only one surface does:
 // that is the surface's own note (`surfaceNotes`), which only that surface lists.
 test('a shared tool description names no surface', () => {
-  const surface = /\b(?:over|on|in|through) (?:the )?(?:MCP|chat)\b/i
+  const surface = /\b(?:MCP|chat)\b/i
   for (const { name, description } of [
     ...AGENT_TOOL_CONTRACTS,
     ...HOSTED_SERVICE_TOOL_CONTRACTS,

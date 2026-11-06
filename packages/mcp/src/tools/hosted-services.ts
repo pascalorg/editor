@@ -7,6 +7,7 @@ import {
   HOSTED_SERVICE_TOOL_CONTRACTS,
   isAgentRefusal,
   refusalPayload,
+  surfaceDescription,
 } from '@pascal-app/core/agent-tools'
 import { z } from 'zod'
 
@@ -19,7 +20,7 @@ export function registerHostedServiceTools(
       contract.name,
       {
         title: contract.title,
-        description: contract.description,
+        description: surfaceDescription(contract, 'mcp'),
         inputSchema: z.object(contract.input).strict(),
         annotations: contract.annotations,
       },
