@@ -126,6 +126,19 @@ export const SFX: Record<string, SFXConfig> = {
   turnDone: { src: '/audios/sfx/turn_done.mp3' },
   turnFailed: { src: '/audios/sfx/turn_failed.mp3' },
   turnNeedsInput: { src: '/audios/sfx/turn_needs_input.mp3' },
+  // Operating the building from a viewer's callout or a walkthrough: recorded
+  // door and shutter movements, and a rocker switch (`scripts/synth-switch-cues.ts`).
+  doorOpen: { src: '/audios/sfx/door_open.mp3', rateRange: [0.96, 1.04], volumeRange: [0.9, 1] },
+  doorClose: { src: '/audios/sfx/door_close.mp3', rateRange: [0.96, 1.04], volumeRange: [0.9, 1] },
+  garageDoor: { src: '/audios/sfx/garage_door.mp3', volumeRange: [0.9, 1] },
+  shuttersOpen: { src: '/audios/sfx/shutters_open.mp3', rateRange: [0.96, 1.04] },
+  shuttersClose: { src: '/audios/sfx/shutters_close.mp3', rateRange: [0.96, 1.04] },
+  switchOn: { src: '/audios/sfx/switch_on.mp3', rateRange: [0.97, 1.03], volumeRange: [0.5, 0.6] },
+  switchOff: {
+    src: '/audios/sfx/switch_off.mp3',
+    rateRange: [0.97, 1.03],
+    volumeRange: [0.5, 0.6],
+  },
 } as const
 
 export type SFXName = keyof typeof SFX

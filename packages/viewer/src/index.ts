@@ -27,6 +27,10 @@ export {
   type MovementInput,
 } from './components/viewer/bvh-ecctrl'
 export {
+  DroneController,
+  type DroneControllerProps,
+} from './components/viewer/drone-controller'
+export {
   buildGlbInteractiveItems,
   GlbInteractive,
   type GlbInteractiveItem,
@@ -131,6 +135,15 @@ export {
 } from './lib/daylight/solar'
 export type { DisplayState } from './lib/display-state'
 export { disposeObject3DResources } from './lib/dispose-object3d'
+export {
+  createDroneInput,
+  DRONE_SLOW_MULTIPLIER,
+  type DroneInput,
+  type DroneLook,
+  seedDroneLook,
+  stepDroneFlight,
+  turnFirstPersonLook,
+} from './lib/drone-flight'
 export type { EdgeMode } from './lib/edge-style'
 export {
   BLOCK_MASONRY,
@@ -338,6 +351,7 @@ export {
   type UndergroundEdge,
   type UndergroundLook,
   type UndergroundTransition,
+  type WalkthroughMovement,
   type WallMode,
 } from './store/use-viewer'
 export {

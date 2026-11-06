@@ -418,6 +418,23 @@ type SelectionEvents = {
   'selection:find-node': AnyNode
 }
 
+/** What a door, a window, its shutters or a switch sounds like when someone operates it. */
+export type InteractionSound =
+  | 'door-open'
+  | 'door-close'
+  | 'window-open'
+  | 'window-close'
+  | 'garage'
+  | 'shutters-open'
+  | 'shutters-close'
+  | 'switch-on'
+  | 'switch-off'
+
+type InteractionEvents = {
+  /** A person operated something in a viewer; the host plays it if it has sound. */
+  'interaction:sound': InteractionSound
+}
+
 type EditorEvents = GridEvents &
   GenericNodeEvents &
   NodeEvents &
@@ -431,6 +448,7 @@ type EditorEvents = GridEvents &
   AIChatEvents &
   PointAskEvents &
   RoomPresetEvents &
-  SelectionEvents
+  SelectionEvents &
+  InteractionEvents
 
 export const emitter = mitt<EditorEvents>()

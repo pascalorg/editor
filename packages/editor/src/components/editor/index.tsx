@@ -1795,6 +1795,13 @@ function EditorContent({
     }
   }, [isFirstPersonMode, isPreviewMode])
 
+  // The viewer's walkthrough says how the first-person camera moves, for the
+  // viewer-side consumers that tell a walk from a drone flight.
+  const firstPersonMovementMode = useEditor((s) => s.firstPersonMovementMode)
+  useEffect(() => {
+    if (isFirstPersonMode) useViewer.getState().setWalkthroughMovement(firstPersonMovementMode)
+  }, [isFirstPersonMode, firstPersonMovementMode])
+
   const previewViewerContent = (
     <Viewer
       defaultRender={EDITOR_DEFAULT_RENDER}

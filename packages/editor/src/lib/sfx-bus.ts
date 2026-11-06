@@ -1,10 +1,11 @@
-import type { TerrainVerb } from '@pascal-app/core'
+import { emitter, type InteractionSound, type TerrainVerb } from '@pascal-app/core'
 import mitt from 'mitt'
 import useAudio from '../store/use-audio'
 import {
   disposeSFX,
   type LoopSFXName,
   playSFX,
+  type SFXName,
   startLoopSFX,
   stopLoopSFX,
   updateSFXVolumes,
@@ -74,6 +75,23 @@ const handleTerrainSculptStart = (verb: TerrainVerb) => startLoopSFX(TERRAIN_LOO
 const handleTerrainSculptStop = () => stopLoopSFX()
 let unsubscribeAudio: (() => void) | null = null
 
+/** Windows ride the door recordings, softer: a sash weighs less than a leaf. */
+const INTERACTION_SFX: Record<InteractionSound, [SFXName, number]> = {
+  'door-open': ['doorOpen', 1],
+  'door-close': ['doorClose', 1],
+  'window-open': ['doorOpen', 0.6],
+  'window-close': ['doorClose', 0.6],
+  garage: ['garageDoor', 1],
+  'shutters-open': ['shuttersOpen', 1],
+  'shutters-close': ['shuttersClose', 1],
+  'switch-on': ['switchOn', 1],
+  'switch-off': ['switchOff', 1],
+}
+const handleInteractionSound = (sound: InteractionSound) => {
+  const [name, volumeMultiplier] = INTERACTION_SFX[sound]
+  playSFX(name, { volumeMultiplier })
+}
+
 /**
  * Initialize SFX Bus - connects SFX events to actual sound playback.
  * Safe to call multiple times; re-registration is a no-op once initialized.
@@ -100,6 +118,7 @@ export function initSFXBus() {
   sfxEmitter.on('sfx:turn-needs-input', handleTurnNeedsInput)
   sfxEmitter.on('sfx:terrain-sculpt-start', handleTerrainSculptStart)
   sfxEmitter.on('sfx:terrain-sculpt-stop', handleTerrainSculptStop)
+  emitter.on('interaction:sound', handleInteractionSound)
   unsubscribeAudio = useAudio.subscribe(updateSFXVolumes)
   updateSFXVolumes()
 }
@@ -125,6 +144,7 @@ export function disposeSFXBus() {
     sfxEmitter.off('sfx:turn-needs-input', handleTurnNeedsInput)
     sfxEmitter.off('sfx:terrain-sculpt-start', handleTerrainSculptStart)
     sfxEmitter.off('sfx:terrain-sculpt-stop', handleTerrainSculptStop)
+    emitter.off('interaction:sound', handleInteractionSound)
     unsubscribeAudio?.()
     unsubscribeAudio = null
     sfxBusInitialized = false

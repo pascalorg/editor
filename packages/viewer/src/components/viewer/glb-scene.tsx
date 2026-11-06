@@ -7,7 +7,7 @@ import {
   containsPoint,
   distanceToBoundary,
   EXPLODED_GAP,
-  itemInteraction,
+  emitter,
   itemPrompt,
   operateItem,
   polygonInteriorPoint,
@@ -34,6 +34,7 @@ import { setSurfaceRaycastLayers } from '../../lib/layers'
 import { createSurfaceRoleMaterial } from '../../lib/materials'
 import { applyShadowOnly, clearShadowOnly } from '../../lib/shadow-only'
 import useViewer from '../../store/use-viewer'
+import { OPEN_SOUNDS, openingSound } from '../../systems/interactive/callout-actions'
 import { useClipActions } from '../../systems/interactive/scripted-clips'
 import { resolveLevelVisibility } from '../../systems/level/level-utils'
 import { GlbInteractive, type GlbInteractiveItem } from './glb-interactive'
@@ -41,6 +42,7 @@ import { bakedLoopMechanisms } from './glb-mechanisms'
 import { GlbReferenceNodes } from './glb-reference-nodes'
 import { GlbReplaceInstances } from './glb-replace-instances'
 import { bindGlbShutters, isGlbShutterHit, toggleGlbShutters } from './glb-scene-motion'
+import { GlbSelectionCallout } from './glb-selection-callout'
 import { useSceneAtmosphere } from './scene-atmosphere'
 
 /** Baked `kind` → surface role, so monochrome can recolor by role like the
@@ -226,6 +228,7 @@ export function GlbScene({
   onObjectsChange,
   onPick,
   onWalkthroughChange,
+  sceneNodes,
 }: {
   url: string
   /** Light / animation effects + controls recovered from the DB scene graph,
@@ -242,6 +245,8 @@ export function GlbScene({
   /** Clicks and hovers on the building; without it the scene is look-only. */
   onPick?: (event: GlbPickEvent) => void
   onWalkthroughChange?: (state: GlbWalkthrough) => void
+  /** The scene graph's nodes, so the selection callout can say what each element is. */
+  sceneNodes?: Readonly<Record<string, AnyNode>>
 }) {
   const gltf = useGLTFKTX2(url) as unknown as {
     scene: THREE.Group
@@ -357,6 +362,8 @@ export function GlbScene({
   const camera = useThree((state) => state.camera)
   const controls = useThree((state) => state.controls) as LookAtControls | null
   const walkthroughMode = useViewer((s) => s.walkthroughMode)
+  // Doors, the reticle prompt and the room HUD belong to the walk; the drone just flies.
+  const walkingOnFoot = useViewer((s) => s.walkthroughMode && s.walkthroughMovement === 'walk')
   const textures = useViewer((s) => s.textures)
   const sceneTheme = useViewer((s) => s.sceneTheme)
   // Static merge of the artifact (see lib/glb-merge.ts); `?merge=0` keeps every mesh separate.
@@ -764,17 +771,6 @@ export function GlbScene({
       ),
     [interactiveItems],
   )
-  // A click opens and closes an item with an `open` clip (an authored object,
-  // a scripted window or door), like a door.
-  const toggleOpenControl = useCallback(
-    (identityNode: THREE.Object3D) => {
-      const item = toggleableItem((identityNode.userData as PascalExtras).pascalId)
-      if (!item || itemInteraction(item.interactive).kind !== 'open') return false
-      operateItem(item.pascalId, item.interactive)
-      return true
-    },
-    [toggleableItem],
-  )
   const toggleLoopMechanism = useCallback(
     (identityNode: THREE.Object3D) => {
       const id = (identityNode.userData as PascalExtras).pascalId as AnyNodeId | undefined
@@ -789,6 +785,9 @@ export function GlbScene({
   useEffect(() => bindGlbShutters(identity, actions), [identity, actions])
 
   const openIds = useRef(new Set<string>())
+  // Bumped on every baked door or window toggle so the selection callout re-reads `openIds`.
+  const [, setOpenVersion] = useState(0)
+  const isOpen = useCallback((id: string) => openIds.current.has(id), [])
   const toggleProcedural = useCallback(
     (hit: THREE.Object3D, identityNode: THREE.Object3D) => {
       const extras = identityNode.userData as PascalExtras
@@ -831,6 +830,7 @@ export function GlbScene({
       action.play()
       if (willOpen) openIds.current.add(id)
       else openIds.current.delete(id)
+      setOpenVersion((version) => version + 1)
     },
     [actions],
   )
@@ -895,13 +895,14 @@ export function GlbScene({
   // ── Walkthrough: first-person HUD + interaction ────────────────────────────
   const [shuttersInView, setShuttersInView] = useState(false)
   const walkDoorRef = useRef<{ hit: THREE.Object3D; node: THREE.Object3D } | null>(null)
+  const walkPromptRef = useRef<{ isOpen: boolean; verb?: string } | null>(null)
   const lastWalkKey = useRef<string | null>(null)
 
   // Each frame in walkthrough, report the floor + room the camera stands in and
   // the openable directly ahead (a forward ray from screen centre) so the host
   // can draw the reticle prompt. Fires the callback only when the state changes.
   useFrame(() => {
-    if (!walkthroughMode) return
+    if (!walkingOnFoot) return
     camera.getWorldPosition(_walkPos)
 
     let floor: GlbLevelEntry | null = levels[0] ?? null
@@ -975,6 +976,7 @@ export function GlbScene({
     }
     setShuttersInView(Boolean((doorNode?.node.userData as PascalExtras | undefined)?.shutters))
     walkDoorRef.current = doorNode
+    walkPromptRef.current = door
 
     const key = `${floor?.id ?? ''}|${zone?.id ?? ''}|${door ? `${doorId}:${door.isOpen}` : ''}`
     if (key !== lastWalkKey.current) {
@@ -989,8 +991,22 @@ export function GlbScene({
     (shutterHit = false) => {
       const target = walkDoorRef.current
       if (!target) return
-      if (shutterHit && isGlbShutterHit(target.hit, target.node) && toggleGlbShutters(target.node))
+      if (shutterHit && target.node.userData.shutters && isGlbShutterHit(target.hit, target.node)) {
+        playShutterSound(target.node)
+        toggleGlbShutters(target.node)
         return
+      }
+      const prompt = walkPromptRef.current
+      if (prompt) {
+        const extras = target.node.userData as PascalExtras
+        const switches = prompt.verb !== undefined && !['open', 'close'].includes(prompt.verb)
+        const sound = switches
+          ? OPEN_SOUNDS.switch
+          : openingSound(
+              (extras.pascalId && sceneNodes?.[extras.pascalId]) || { type: extras.kind ?? 'door' },
+            )
+        emitter.emit('interaction:sound', prompt.isOpen ? sound.off : sound.on)
+      }
       const item = toggleableItem((target.node.userData as PascalExtras).pascalId)
       if (item) {
         operateItem(item.pascalId, item.interactive)
@@ -999,14 +1015,17 @@ export function GlbScene({
       if (!(toggleProcedural(target.hit, target.node) || toggleLoopMechanism(target.node)))
         toggleOpenable(target.node)
     },
-    [toggleableItem, toggleLoopMechanism, toggleOpenable, toggleProcedural],
+    [sceneNodes, toggleableItem, toggleLoopMechanism, toggleOpenable, toggleProcedural],
   )
   useEffect(() => {
-    if (!walkthroughMode) return
+    if (!walkingOnFoot) return
     const onKey = (event: KeyboardEvent) => {
       if (event.key.toLowerCase() === 'e') activateWalkDoor()
-      if (event.key.toLowerCase() === 'f' && !event.repeat && walkDoorRef.current)
-        toggleGlbShutters(walkDoorRef.current.node)
+      const shutters = walkDoorRef.current?.node
+      if (event.key.toLowerCase() === 'f' && !event.repeat && shutters?.userData.shutters) {
+        playShutterSound(shutters)
+        toggleGlbShutters(shutters)
+      }
     }
     const canvas = document.querySelector('canvas')
     window.addEventListener('keydown', onKey)
@@ -1016,16 +1035,16 @@ export function GlbScene({
       window.removeEventListener('keydown', onKey)
       canvas?.removeEventListener('click', onClick)
     }
-  }, [walkthroughMode, activateWalkDoor])
+  }, [walkingOnFoot, activateWalkDoor])
 
-  // Clear the HUD (and stale targeting) whenever walkthrough turns off.
+  // Clear the HUD (and stale targeting) whenever the walk ends, or turns into a drone flight.
   useEffect(() => {
-    if (walkthroughMode) return
+    if (walkingOnFoot) return
     setShuttersInView(false)
     walkDoorRef.current = null
     lastWalkKey.current = null
     onWalkthroughChange?.(null)
-  }, [walkthroughMode, onWalkthroughChange])
+  }, [walkingOnFoot, onWalkthroughChange])
 
   const lastHover = useRef<string | null>(null)
   const handlePointerMove = useCallback(
@@ -1049,8 +1068,8 @@ export function GlbScene({
     onPick?.({ type: 'hover', pick: null, modifiers: NO_MODIFIERS })
   }, [onPick])
 
-  // The host's rules decide the selection; an openable the click selects (a
-  // door, a window, an item with an `open` clip, a mechanism) also plays.
+  // The host's rules decide the selection; what the element can do is offered
+  // on its selection callout, never run by the click itself.
   const handleClick = useCallback(
     (event: ThreeEvent<MouseEvent>) => {
       event.stopPropagation()
@@ -1059,28 +1078,8 @@ export function GlbScene({
       if (walkthroughMode || !onPick) return
       const pick = resolveGlbPick(event.intersections, identity)
       onPick({ type: 'click', pick, modifiers: modifiersOf(event.nativeEvent) })
-      if (!pick || !useViewer.getState().selection.selectedIds.includes(pick.nodeId)) return
-      const object = identity.get(pick.nodeId)
-      if (!object) return
-      if (
-        !(
-          (isGlbShutterHit(pick.hitObject, object) && toggleGlbShutters(object)) ||
-          toggleOpenControl(object) ||
-          toggleProcedural(pick.hitObject, object) ||
-          toggleLoopMechanism(object)
-        )
-      )
-        toggleOpenable(object)
     },
-    [
-      identity,
-      onPick,
-      toggleLoopMechanism,
-      toggleOpenControl,
-      toggleOpenable,
-      toggleProcedural,
-      walkthroughMode,
-    ],
+    [identity, onPick, walkthroughMode],
   )
 
   // A click on empty space clears the room and the element (the floor stays).
@@ -1106,7 +1105,7 @@ export function GlbScene({
 
   return (
     <group ref={rootRef}>
-      {walkthroughMode && shuttersInView ? <GlbShuttersPrompt /> : null}
+      {walkingOnFoot && shuttersInView ? <GlbShuttersPrompt /> : null}
       <primitive
         object={gltf.scene}
         onClick={handleClick}
@@ -1116,13 +1115,16 @@ export function GlbScene({
       />
       {/* Re-light + re-animate the baked artifact from the DB scene graph,
           joined to the baked nodes by pascalId. */}
+      <GlbSelectionCallout
+        identity={identity}
+        isOpen={isOpen}
+        items={interactiveItems}
+        loopMechanisms={loopMechanisms}
+        sceneNodes={sceneNodes}
+        toggleOpen={toggleOpenable}
+      />
       {interactiveItems?.length ? (
-        <GlbInteractive
-          actions={actions}
-          identity={identity}
-          items={interactiveItems}
-          zones={zoneEntries}
-        />
+        <GlbInteractive actions={actions} identity={identity} items={interactiveItems} />
       ) : null}
       {/* Scans + guides, stripped from the bake and re-added from scene data,
           anchored to their parent level's baked node. */}
@@ -1137,6 +1139,12 @@ export function GlbScene({
       <GlbDaylightGround root={gltf.scene} />
     </group>
   )
+}
+
+function playShutterSound(node: THREE.Object3D) {
+  const id = (node.userData as PascalExtras).pascalId as AnyNodeId | undefined
+  const open = id && useInteractive.getState().mechanismParts[`${id}:shutters`]
+  emitter.emit('interaction:sound', open ? OPEN_SOUNDS.shutters.off : OPEN_SOUNDS.shutters.on)
 }
 
 const NO_MODIFIERS: GlbPickEvent['modifiers'] = {

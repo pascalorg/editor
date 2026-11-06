@@ -7127,6 +7127,26 @@ msgstr "Veil the ground over a level below grade"
 msgid "editor.views.viewBar.views"
 msgstr "Views"
 
+#: packages/editor/src/components/walkthrough-hud.tsx
+msgid "editor.walkthroughHud.drone.boost"
+msgstr "boost"
+
+#: packages/editor/src/components/walkthrough-hud.tsx
+msgid "editor.walkthroughHud.drone.down"
+msgstr "down"
+
+#: packages/editor/src/components/walkthrough-hud.tsx
+msgid "editor.walkthroughHud.drone.move"
+msgstr "move"
+
+#: packages/editor/src/components/walkthrough-hud.tsx
+msgid "editor.walkthroughHud.drone.slow"
+msgstr "slow"
+
+#: packages/editor/src/components/walkthrough-hud.tsx
+msgid "editor.walkthroughHud.drone.up"
+msgstr "up"
+
 #: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 msgid "editor.wallTypeEditorDialog.listTheLayersAppliedToThisWall"
 msgstr "List the layers from the outside in, around one framing core. The type is saved with the project and applied to this wall; other walls keep their layers."
@@ -14587,6 +14607,118 @@ msgstr "Zone boundary unavailable"
 msgid "node.zone.quantitiesPanel.zoneQuantities"
 msgstr "Zone quantities"
 
+#: packages/viewer/src/components/viewer/selection-callout.tsx
+msgid "viewer.callout.action"
+msgstr "{action, select, open {Open {name}} close {Close {name}} on {Turn on {name}} other {Turn off {name}}}"
+
+#: packages/viewer/src/components/viewer/selection-callout.tsx
+msgid "viewer.callout.deselect"
+msgstr "Deselect"
+
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+msgid "viewer.callout.door"
+msgstr "Door"
+
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+msgid "viewer.callout.door.barn"
+msgstr "Barn door"
+
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+msgid "viewer.callout.door.double"
+msgstr "Double door"
+
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+msgid "viewer.callout.door.folding"
+msgstr "Folding door"
+
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+msgid "viewer.callout.door.french"
+msgstr "French door"
+
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+msgid "viewer.callout.door.garageRollup"
+msgstr "Roll-up garage door"
+
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+msgid "viewer.callout.door.garageSectional"
+msgstr "Sectional garage door"
+
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+msgid "viewer.callout.door.garageTiltup"
+msgstr "Tilt-up garage door"
+
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+msgid "viewer.callout.door.hinged"
+msgstr "Hinged door"
+
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+msgid "viewer.callout.door.pocket"
+msgstr "Pocket door"
+
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+msgid "viewer.callout.door.sliding"
+msgstr "Sliding door"
+
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+msgid "viewer.callout.opening"
+msgstr "Opening"
+
+#: packages/viewer/src/components/viewer/selection-callout.tsx
+msgid "viewer.callout.shuttersAction"
+msgstr "{action, select, close {Close the shutters of {name}} other {Open the shutters of {name}}}"
+
+#: packages/viewer/src/components/viewer/selection-callout.tsx
+msgid "viewer.callout.state"
+msgstr "{state, select, open {Open} closed {Closed} on {On} other {Off}}"
+
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+msgid "viewer.callout.window"
+msgstr "Window"
+
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+msgid "viewer.callout.window.awning"
+msgstr "Awning window"
+
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+msgid "viewer.callout.window.bay"
+msgstr "Bay window"
+
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+msgid "viewer.callout.window.bow"
+msgstr "Bow window"
+
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+msgid "viewer.callout.window.casement"
+msgstr "Casement window"
+
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+msgid "viewer.callout.window.doubleHung"
+msgstr "Double-hung window"
+
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+msgid "viewer.callout.window.fixed"
+msgstr "Fixed window"
+
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+msgid "viewer.callout.window.hopper"
+msgstr "Hopper window"
+
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+msgid "viewer.callout.window.louvered"
+msgstr "Louvered window"
+
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+msgid "viewer.callout.window.singleHung"
+msgstr "Single-hung window"
+
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+msgid "viewer.callout.window.sliding"
+msgstr "Sliding window"
+
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+msgid "viewer.callout.window.tiltTurn"
+msgstr "Tilt-and-turn window"
+
 #: packages/editor/src/components/viewer/viewer-controls-bar.tsx
 msgid "viewer.camera.orbitLeft"
 msgstr "Orbit left"
@@ -14815,6 +14947,10 @@ msgstr "Shadows"
 msgid "viewer.display.title"
 msgstr "Display settings"
 
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+msgid "viewer.drone.label"
+msgstr "Drone: {state}"
+
 #: packages/editor/src/components/viewer/floorplan-compass-button.tsx
 msgid "viewer.floorplan.alignNorth"
 msgstr "Align view to north"
@@ -14960,6 +15096,7 @@ msgid "viewer.walkthrough.label"
 msgstr "Walkthrough: {state}"
 
 #: packages/viewer/src/components/viewer/glb-scene.tsx
+#: packages/viewer/src/systems/interactive/callout-actions.ts
 msgid "viewer.walkthrough.shutters"
 msgstr "Shutters"
 
