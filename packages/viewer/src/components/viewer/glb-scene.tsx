@@ -29,6 +29,8 @@ import { acceleratedRaycast, computeBoundsTree, disposeBoundsTree } from 'three-
 import { useGLTFKTX2 } from '../../hooks/use-gltf-ktx2'
 import { createDaylightGroundMaterial, DAYLIGHT_PARCEL } from '../../lib/daylight/ground'
 import { isDaylightAtmosphere } from '../../lib/daylight/look'
+import { type GlbMerge, mergeBakedStatic } from '../../lib/glb-merge'
+import { setSurfaceRaycastLayers } from '../../lib/layers'
 import { createSurfaceRoleMaterial } from '../../lib/materials'
 import { applyShadowOnly, clearShadowOnly } from '../../lib/shadow-only'
 import useViewer from '../../store/use-viewer'
@@ -166,6 +168,8 @@ const _camSize = new THREE.Vector3()
 const _walkPos = new THREE.Vector3()
 const _reticleNdc = new THREE.Vector2(0, 0)
 const _reticleRaycaster = new THREE.Raycaster()
+// Merged originals sit on the batched layer; the reticle still aims at them (batches never hit).
+setSurfaceRaycastLayers(_reticleRaycaster.layers)
 /** How far ahead (metres) an interactive part counts as "in view" for activation. */
 const WALK_REACH = 3
 const ZONE_FOOTPRINT_EPSILON = 0.05
@@ -355,6 +359,10 @@ export function GlbScene({
   const walkthroughMode = useViewer((s) => s.walkthroughMode)
   const textures = useViewer((s) => s.textures)
   const sceneTheme = useViewer((s) => s.sceneTheme)
+  // Static merge of the artifact (see lib/glb-merge.ts); `?merge=0` keeps every mesh separate.
+  const mergeRef = useRef<GlbMerge | null>(null)
+  const [mergeVersion, setMergeVersion] = useState(0)
+  const [mergeRebuild, setMergeRebuild] = useState(0)
 
   // Monochrome: strip the baked textures and recolor every building mesh with a
   // flat themed-clay material by surface role — mirrors the parametric viewer's
@@ -374,7 +382,8 @@ export function GlbScene({
           : createSurfaceRoleMaterial(role, 'clay', THREE.DoubleSide, sceneTheme)
       })
     })
-  }, [gltf.scene, textures, sceneTheme])
+    for (const batch of mergeRef.current?.batches ?? []) applyBatchLook(batch, textures, sceneTheme)
+  }, [gltf.scene, textures, sceneTheme, mergeVersion])
 
   // Baked meshes take part in the sun's shadows (the bake carries no shadow flags). Transparent
   // surfaces (glazing) don't cast, so sunlight still reaches the rooms behind them. Foliage ships
@@ -576,6 +585,52 @@ export function GlbScene({
     onObjectsChange?.(identity)
     return () => onObjectsChange?.(new Map())
   }, [identity, onObjectsChange])
+
+  // Static merge: thousands of baked meshes become a few hundred draws per pass (the enhanced
+  // viewer's batching). Rebuilt when the interactive items change, or when a merged mesh is
+  // shown or hidden on its own (a plugin taking over a baked kind, an isolation), so a batch
+  // never draws something that should be gone.
+  const mergeEnabled = useMemo(
+    () =>
+      typeof window === 'undefined' ||
+      new URLSearchParams(window.location.search).get('merge') !== '0',
+    [],
+  )
+  useEffect(() => {
+    if (!mergeEnabled) return
+    const animated = new Set<THREE.Object3D>()
+    for (const clip of gltf.animations) {
+      for (const track of clip.tracks) {
+        const { nodeName } = THREE.PropertyBinding.parseTrackName(track.name)
+        const node = THREE.PropertyBinding.findNode(gltf.scene, nodeName) as THREE.Object3D | null
+        if (node) animated.add(node)
+      }
+    }
+    const merge = mergeBakedStatic(gltf.scene, (kind) => ROLE_BY_KIND[kind ?? ''], {
+      keepIds: new Set((interactiveItems ?? []).map((item) => item.pascalId)),
+      animated,
+    })
+    const { textures: texturesNow, sceneTheme: themeNow } = useViewer.getState()
+    for (const batch of merge.batches) applyBatchLook(batch, texturesNow, themeNow)
+    mergeRef.current = merge
+    mergeSignature.current = merge.visibilitySignature()
+    setMergeVersion((version) => version + 1)
+    return () => {
+      for (const batch of merge.batches) disposeBatchLook(batch)
+      merge.dispose()
+      if (mergeRef.current === merge) mergeRef.current = null
+    }
+  }, [gltf.scene, gltf.animations, interactiveItems, mergeEnabled, mergeRebuild])
+  const mergeSignature = useRef(0)
+  const mergeCheck = useRef(0)
+  useFrame((_, delta) => {
+    const merge = mergeRef.current
+    if (!merge) return
+    mergeCheck.current += delta
+    if (mergeCheck.current < 0.25) return
+    mergeCheck.current = 0
+    if (merge.visibilitySignature() !== mergeSignature.current) setMergeRebuild((n) => n + 1)
+  })
 
   // Apply the viewer's level display to the baked floors each frame, by the
   // parametric LevelSystem's rule (solo, and the levels above the current one
@@ -1096,6 +1151,29 @@ function modifiersOf(event: MouseEvent): GlbPickEvent['modifiers'] {
 }
 
 const NO_RAYCAST = () => {}
+
+/** A merged batch shows its baked material, or in monochrome the themed clay of its role. */
+function applyBatchLook(
+  batch: THREE.Mesh,
+  textures: boolean,
+  sceneTheme: Parameters<typeof createSurfaceRoleMaterial>[3],
+) {
+  const { role, bakedMaterial } = batch.userData as {
+    role?: SurfaceRole
+    bakedMaterial: THREE.Material
+  }
+  disposeBatchLook(batch)
+  batch.material =
+    textures || !role
+      ? bakedMaterial
+      : createSurfaceRoleMaterial(role, 'clay', THREE.DoubleSide, sceneTheme)
+}
+
+function disposeBatchLook(batch: THREE.Mesh) {
+  const material = batch.material as THREE.Material
+  if (material !== (batch.userData as { bakedMaterial: THREE.Material }).bakedMaterial)
+    material.dispose()
+}
 
 /**
  * The colored appearance's ground under a baked artifact (the bake strips the live horizon
