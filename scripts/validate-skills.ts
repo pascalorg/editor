@@ -13,7 +13,7 @@ import {
 } from './public-skill-discovery-policy'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
-const skillNames = ['pascal-3d', 'furniture-fit'] as const
+const skillNames = ['pascal-3d', 'furniture-fit', 'architect'] as const
 const skillVersions = new Map<string, string>()
 const portablePluginSchema = 'https://agent-plugins.org/schemas/1.0.0/plugin.schema.json'
 const portableMcpSchema = 'https://agent-plugins.org/schemas/1.0.0/mcp.schema.json'

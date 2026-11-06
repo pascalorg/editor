@@ -29,7 +29,7 @@ Use Pascal as the scene authority. Prefer its semantic tools and validation resu
 3. Follow [references/setup.md](references/setup.md) for the selected path. Never move a local project to hosted storage or create an account merely to complete setup.
 4. Read or create the intended project, make the smallest requested change, validate the result, persist it when the store supports persistence, and return the URL supplied by Pascal.
 
-If the task is a furniture or clearance assessment and the `furniture-fit` skill is installed, use that focused workflow after connection. Do not assume another skill is present.
+If the task is a furniture or clearance assessment and the `furniture-fit` skill is installed, use that focused workflow after connection. For generative design or full building generation with Architect, use the `architect` skill if installed. Do not assume another skill is present.
 
 ## Authority and data rules
 
