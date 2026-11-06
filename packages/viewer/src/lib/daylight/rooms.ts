@@ -1046,6 +1046,18 @@ export class RoomLighting {
     return e.mul(Lc.div(L))
   }
 
+  /**
+   * Dollhouse / roofless views: an enclosed room is open to the sky when the camera is above its
+   * topmost cover and that cover is hidden from there: a ceiling (hidden from above), or anything
+   * once its level is focused (the levels over it hidden). From inside, under the cover, the room
+   * stays enclosed whatever is focused: it must not take the full sky on top of its windows.
+   * `h2` is the room's third header texel: [coverY, roof, level, 0].
+   */
+  private openToSky(h2: N): N {
+    const focused = this.focusedLevel.greaterThanEqual(0).and(int(h2.z).equal(this.focusedLevel))
+    return this.cameraY.greaterThan(h2.x).and(h2.y.lessThan(0.5).or(focused))
+  }
+
   private texel(i: N): N {
     const idx = int(i)
     return this.u.data.load(ivec2(idx.mod(DATA_W), idx.div(DATA_W)))
@@ -1069,11 +1081,7 @@ export class RoomLighting {
       const h0 = this.texel(room.mul(3))
       const h1 = this.texel(room.mul(3).add(1))
       const h2 = this.texel(room.mul(3).add(2))
-      // Dollhouse / roofless views: a room whose topmost cover is a ceiling (hidden from above)
-      // and the camera is above it — or whose level is focused — is open to the sky.
-      const seenFromAbove = h2.y.lessThan(0.5).and(this.cameraY.greaterThan(h2.x))
-      const focused = this.focusedLevel.greaterThanEqual(0).and(int(h2.z).equal(this.focusedLevel))
-      If(h0.x.greaterThan(0.5).and(seenFromAbove.or(focused).not()), () => {
+      If(h0.x.greaterThan(0.5).and(this.openToSky(h2).not()), () => {
         enclosure.assign(this.indoorEnv)
       })
       const P = assembled
@@ -1307,9 +1315,7 @@ export class RoomLighting {
     If(room.greaterThanEqual(0), () => {
       const h0 = this.texel(room.mul(3))
       const h2 = this.texel(room.mul(3).add(2))
-      const seenFromAbove = h2.y.lessThan(0.5).and(this.cameraY.greaterThan(h2.x))
-      const focused = this.focusedLevel.greaterThanEqual(0).and(int(h2.z).equal(this.focusedLevel))
-      If(h0.x.greaterThan(0.5).and(seenFromAbove.or(focused).not()), () => {
+      If(h0.x.greaterThan(0.5).and(this.openToSky(h2).not()), () => {
         mask.assign(0)
       })
     })
