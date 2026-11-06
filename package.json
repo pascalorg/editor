@@ -60,7 +60,7 @@
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
     "@types/three": "0.187.0",
-    "@hono/node-server": "^1.19.15",
+    "@hono/node-server": "^2.1.6",
     "hono": "^4.13.14",
     "next": "16.4.3",
     "react-grab": "0.2.0",
