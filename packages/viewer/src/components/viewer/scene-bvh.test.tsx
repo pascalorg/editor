@@ -22,6 +22,13 @@ import {
 } from '../../lib/csg-utils'
 import { SceneBvh } from './scene-bvh'
 
+// R3F's unmount stops three's animation loop, which needs these browser globals.
+globalThis.requestAnimationFrame ??= (callback) => {
+  callback(0)
+  return 0
+}
+globalThis.cancelAnimationFrame ??= () => {}
+
 /**
  * Picking runs through `<SceneBvh>` and three-mesh-bvh. These tests pin the
  * BVH-accelerated hits to three's own brute-force raycast on the geometry the
