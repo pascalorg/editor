@@ -214,6 +214,10 @@ describe('web runtime resolution order', () => {
       paths: fixture.paths,
       sourceFile: fixture.sourceFile,
       environment: {},
+      // The unroutable fixture port is dropped rather than refused on the CI runner, so
+      // without a short timeout the download waits out the 60s socket default and the
+      // test hits its 5s limit instead of the failure it is asserting.
+      downloadTimeoutMs: 500,
     }).catch((error: unknown) => error)
 
     expect(failure).toMatchObject({ code: 'runtime_download_failed' })
