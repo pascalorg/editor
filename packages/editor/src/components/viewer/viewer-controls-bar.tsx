@@ -7,6 +7,7 @@ import {
   Check,
   Contrast,
   Diamond,
+  Drone,
   Eye,
   EyeOff,
   Footprints,
@@ -256,6 +257,9 @@ export type ViewerControlsBarProps = {
   glbHasGuides?: boolean
   walkthroughActive?: boolean
   onWalkthroughToggle: () => void
+  /** The free-flying drone camera; its button shows only with a handler, and never on touch. */
+  droneActive?: boolean
+  onDroneToggle?: () => void
   className?: string
 }
 
@@ -267,6 +271,8 @@ export const ViewerControlsBar = ({
   glbHasGuides = false,
   walkthroughActive = false,
   onWalkthroughToggle,
+  droneActive = false,
+  onDroneToggle,
   className,
 }: ViewerControlsBarProps) => {
   const i18n = usePascalI18n()
@@ -401,6 +407,33 @@ export const ViewerControlsBar = ({
             >
               <Footprints className="h-6 w-6" />
             </ActionButton>
+
+            {/* Drone — flying needs a keyboard. */}
+            {onDroneToggle && !isMobile && (
+              <ActionButton
+                className={
+                  droneActive
+                    ? 'bg-emerald-500/20 text-emerald-400'
+                    : 'hover:bg-white/5 hover:text-emerald-400'
+                }
+                label={i18n._({
+                  id: 'viewer.drone.label',
+                  message: 'Drone: {state}',
+                  values: {
+                    state: droneActive
+                      ? i18n._({ id: 'viewer.common.on', message: 'On' })
+                      : i18n._({ id: 'viewer.common.off', message: 'Off' }),
+                  },
+                })}
+                onClick={onDroneToggle}
+                size="icon"
+                tooltipClassName="dark"
+                tooltipSide="top"
+                variant="ghost"
+              >
+                <Drone className="h-6 w-6" />
+              </ActionButton>
+            )}
 
             <div className="mx-1 h-5 w-px bg-border/40" />
 

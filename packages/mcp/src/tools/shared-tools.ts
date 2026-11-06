@@ -66,6 +66,7 @@ import {
   setGroundLevelTool,
   setUnitMembersTool,
   setWallTypeTool,
+  surfaceDescription,
   validateDesignTool,
   verifySceneModelResult,
   verifySceneTool,
@@ -727,7 +728,7 @@ export function registerOperationTool(
     tool.contract.name,
     {
       title: tool.contract.title,
-      description: tool.contract.description,
+      description: surfaceDescription(tool.contract, 'mcp'),
       inputSchema: z.object(tool.contract.input),
       // Loose: a client that listed the tools rejects any field the schema leaves out, and the
       // operations in core grow fields (verify_scene's guesses) that this list would miss.

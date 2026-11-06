@@ -33,6 +33,7 @@ export type RenderQuality = 'low' | 'medium' | 'high'
 export type RenderQualityChoice = RenderQuality | 'auto'
 export type MetricNotation = 'meters' | 'millimeters'
 export type WallMode = 'up' | 'cutaway' | 'down' | 'translucent'
+export type WalkthroughMovement = 'walk' | 'drone'
 
 type SelectionPath = {
   buildingId: BuildingNode['id'] | null
@@ -324,8 +325,13 @@ type ViewerState = {
   debugColors: boolean
   setDebugColors: (enabled: boolean) => void
 
+  /** A first-person camera is active (walk or drone): orbit controls and selection stand aside. */
   walkthroughMode: boolean
   setWalkthroughMode: (mode: boolean) => void
+  /** How the first-person camera moves: on foot (collision, doors) or as a free-flying drone.
+   *  Back to `walk` whenever the walkthrough ends. */
+  walkthroughMovement: WalkthroughMovement
+  setWalkthroughMovement: (movement: WalkthroughMovement) => void
 
   /** Pointer lock temporarily released mid-walkthrough (⌘/PrintScreen — OS
    *  screenshot needs a movable cursor); clicking the canvas re-locks. */
@@ -925,7 +931,14 @@ const useViewer = create<ViewerState>()(
       setDebugColors: (enabled) => set({ debugColors: enabled }),
 
       walkthroughMode: false,
-      setWalkthroughMode: (mode) => set({ walkthroughMode: mode, walkthroughSuspended: false }),
+      setWalkthroughMode: (mode) =>
+        set(
+          mode
+            ? { walkthroughMode: true, walkthroughSuspended: false }
+            : { walkthroughMode: false, walkthroughSuspended: false, walkthroughMovement: 'walk' },
+        ),
+      walkthroughMovement: 'walk',
+      setWalkthroughMovement: (movement) => set({ walkthroughMovement: movement }),
 
       walkthroughSuspended: false,
       setWalkthroughSuspended: (suspended) => set({ walkthroughSuspended: suspended }),

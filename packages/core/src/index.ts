@@ -32,6 +32,7 @@ export type {
   GuideEvent,
   GutterEvent,
   ImportedMeshEvent,
+  InteractionSound,
   ItemEvent,
   LeanToExtensionEvent,
   LevelEvent,

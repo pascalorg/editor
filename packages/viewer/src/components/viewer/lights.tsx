@@ -141,6 +141,10 @@ export function Lights() {
   const boundsBox = useRef(new THREE.Box3()) // scratch: union AABB
   const boundsSphere = useRef(new THREE.Sphere()) // scratch: fitted sphere
   const lastBoundsTime = useRef(-1) // last refresh timestamp (-1 = never)
+  // Daylight sun shadows render on change only (see `shadowSignature`).
+  const shadowCasters = useRef<THREE.Mesh[]>([])
+  const shadowCasterTime = useRef(-1)
+  const lastShadowSignature = useRef(Number.NaN)
   const shadowHelpers = useRef<Array<THREE.CameraHelper | null>>([])
 
   const hemiRef = useRef<HemisphereLight>(null)
@@ -287,7 +291,21 @@ export function Lights() {
           light.shadow.radius = daylightShadow.radius
           cam.layers.enable(SHADOW_ONLY_LAYER)
           fitShadowToBounds(light, boundsBox.current, shadowDir.current)
+          // The sun's map re-renders only when something it depends on changes: its placement,
+          // frustum or settings, or a caster that moved, appeared, vanished or changed shape.
+          // A walkthrough or an orbit moves only the eye, so the map is reused frame to frame.
+          light.shadow.autoUpdate = false
+          if (now - shadowCasterTime.current >= BOUNDS_REFRESH_INTERVAL) {
+            shadowCasterTime.current = now
+            collectShadowCasters(state.scene, shadowCasters.current)
+          }
+          const signature = shadowSignature(light, cam, shadowCasters.current)
+          if (signature !== lastShadowSignature.current) {
+            lastShadowSignature.current = signature
+            light.shadow.needsUpdate = true
+          }
         } else if (cam) {
+          light.shadow.autoUpdate = true
           // The calibrated building bias detaches furniture-scale contact shadows.
           // Small scenes need finer shadow edges too; retain the building map budget.
           const smallScene = !sourceCamera && shadowRadius.current < 1.5
@@ -510,6 +528,55 @@ function fitShadowToBounds(
   cam.near = Math.max(0.1, -box.max.z - 1)
   cam.far = -box.min.z + 1
   cam.updateProjectionMatrix()
+}
+
+/** Every shadow-casting mesh under `root` (visible or not: a level shown again must count). */
+function collectShadowCasters(root: THREE.Object3D, out: THREE.Mesh[]) {
+  out.length = 0
+  root.traverse((object) => {
+    const mesh = object as THREE.Mesh
+    if (mesh.isMesh && mesh.castShadow) out.push(mesh)
+  })
+}
+
+/**
+ * A number that changes whenever the sun's shadow map would: the light's world placement and
+ * projection, its map settings, and each caster's world transform, shown state (through its
+ * ancestors) and geometry. Cheap enough per frame: a few reads per caster, no allocation.
+ */
+function shadowSignature(
+  light: THREE.DirectionalLight,
+  cam: THREE.OrthographicCamera,
+  casters: readonly THREE.Mesh[],
+): number {
+  // A weighted sum, not a multiply-and-wrap hash: it stays exact to ~1e-7 at these magnitudes,
+  // so a door turning by a fraction of a degree still changes it.
+  let h = light.shadow.mapSize.x + light.shadow.bias * 1e4 + light.shadow.normalBias * 1e3
+  h += light.shadow.radius * 7
+  const lm = light.matrixWorld.elements
+  const pm = cam.projectionMatrix.elements
+  for (let i = 0; i < 16; i++) h += (i + 1) * (lm[i]! * 1.013 + pm[i]! * 0.917)
+  for (let i = 0; i < casters.length; i++) {
+    const mesh = casters[i]!
+    let shown = mesh.castShadow
+    for (let x: THREE.Object3D | null = mesh; x && shown; x = x.parent) shown = x.visible
+    if (!shown) continue
+    const m = mesh.matrixWorld.elements
+    const w = (i % 89) + 1
+    h +=
+      w *
+      (m[0]! +
+        m[1]! * 2 +
+        m[2]! * 3 +
+        m[5]! * 5 +
+        m[10]! * 7 +
+        m[12]! * 11 +
+        m[13]! * 13 +
+        m[14]! * 17 +
+        mesh.geometry.id * 0.019 +
+        0.5)
+  }
+  return h
 }
 
 /** Shadow-casting meshes of a scene (skipping the effectively infinite grounds). */

@@ -2,6 +2,7 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  emitter,
   useInteractive,
   useLiveNodeOverrides,
   useLiveTransforms,
@@ -64,6 +65,8 @@ export default function ProceduralRenderer({ node }: { node: ProceduralItemNode 
   const splitRef = useRef<Group>(null)
   const controller = useRef<ProceduralMotionController | null>(null)
   const lastCommand = useRef(0)
+  // The commanded run whose end is still to be announced (a door or drawer landing).
+  const settling = useRef<number | null>(null)
   const awake = useRef(false)
   const invalidate = useThree((state) => state.invalidate)
   const overrides = useLiveNodeOverrides((s) => s.overrides.get(node.id))
@@ -206,9 +209,14 @@ export default function ProceduralRenderer({ node }: { node: ProceduralItemNode 
     if (state?.motionCommand && state.motionCommand.sequence > lastCommand.current) {
       controller.current?.command(state.motionCommand)
       lastCommand.current = state.motionCommand.sequence
+      settling.current = state.motionCommand.sequence
     }
     const frame = controller.current?.tick(delta)
     if (!frame) return
+    if (settling.current !== null && frame.settled) {
+      emitter.emit('procedural:motion-settled', { nodeId: node.id, sequence: settling.current })
+      settling.current = null
+    }
     for (const motion of built.evaluation.motions) {
       const group = ref.current.getObjectByName(`${node.id}__motion__${motion.id}`)
       if (!group) continue

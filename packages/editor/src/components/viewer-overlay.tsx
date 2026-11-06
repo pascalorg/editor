@@ -36,6 +36,14 @@ export const ViewerOverlay = ({
       <ViewerControlsBar
         canShowGuides={canShowGuides}
         canShowScans={canShowScans}
+        onDroneToggle={() => {
+          // Arm drone before first person so the controller never builds the walk's collider.
+          flushSync(() => {
+            useEditor.getState().setFirstPersonMovementMode('drone')
+            useEditor.getState().setFirstPersonMode(true)
+          })
+          requestWalkthroughPointerLock()
+        }}
         onWalkthroughToggle={() => {
           flushSync(() => useEditor.getState().setFirstPersonMode(true))
           requestWalkthroughPointerLock()

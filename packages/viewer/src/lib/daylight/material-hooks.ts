@@ -26,6 +26,7 @@ import {
   PhysicalLightingModel,
   MeshStandardNodeMaterial as StandardNodeMaterial,
 } from 'three/webgpu'
+import { isHighlight } from '../editor-highlight'
 import { SCENE_LAYER } from '../layers'
 import { daylightRooms } from './rooms'
 import { daylightUniforms, isDaylightRenderer } from './runtime'
@@ -73,6 +74,7 @@ function matte(material: HookedMaterial): boolean {
 function emitter(material: HookedMaterial): boolean {
   return (
     !material.emissiveNode &&
+    !isHighlight(material) &&
     !!material.emissive &&
     material.emissive.getHex() !== 0 &&
     material.emissiveIntensity > 0
@@ -178,6 +180,15 @@ export function installDaylightMaterialHooks(): void {
 
   const setupLighting = proto.setupLighting
   proto.setupLighting = function (builder) {
+    if (hooked(this, builder) && !this.emissiveNode && isHighlight(this)) {
+      // Editor highlights: the tint keeps its on-screen strength whatever the exposure.
+      this.emissiveNode = materialEmissive.mul(daylightUniforms.emitterExpInv)
+      try {
+        return setupLighting.call(this, builder)
+      } finally {
+        this.emissiveNode = null
+      }
+    }
     if (!hooked(this, builder) || !emitter(this)) return setupLighting.call(this, builder)
     // Build-time only: the emission joins this compile without touching the material.
     // Glowing surfaces (screens, signs; lamps get their own materials): brighter at night, kept

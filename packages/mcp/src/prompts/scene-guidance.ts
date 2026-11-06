@@ -3,7 +3,7 @@ export const SCENE_DESIGN_GUIDANCE = [
   '  - Use meters. X/Z are horizontal floor-plan axes; Y is vertical.',
   '  - Read `pascal://agent/guide` when you need construction rules; do not inspect repository code for ordinary scene editing.',
   '  - Door default: 0.9m wide by 2.1m high, floor-mounted.',
-  '  - Window default: 1.5m wide by 1.5m high with a 0.9m sill height.',
+  '  - Window default: 1.5m wide by 1.5m high, centred vertically on its wall unless sillHeight is given.',
   '  - For clear concrete requests, act instead of asking for clarification.',
   '  - Defaults are for technical values (thicknesses, clearances, heights).',
   '  - What a request states (sizes, counts, rooms, style, references, "catalog only", a single room) binds the work exactly: a request for one bedroom is one bedroom.',
