@@ -132,6 +132,8 @@ export const SFX: Record<string, SFXConfig> = {
   // already mixed against the doors, so they play at full volume without jitter.
   doorOpen: { src: '/audios/sfx/door_open.mp3', rateRange: [0.96, 1.04], volumeRange: [0.9, 1] },
   doorClose: { src: '/audios/sfx/door_close.mp3', rateRange: [0.96, 1.04], volumeRange: [0.9, 1] },
+  // Air moving as a leaf swings shut, ahead of the latch (`scripts/synth-viewer-cues.ts`).
+  doorSwing: { src: '/audios/sfx/door_swing.mp3', rateRange: [0.97, 1.03] },
   garageDoor: { src: '/audios/sfx/garage_door.mp3', volumeRange: [0.9, 1] },
   shuttersOpen: { src: '/audios/sfx/shutters_open.mp3', rateRange: [0.96, 1.04] },
   shuttersClose: { src: '/audios/sfx/shutters_close.mp3', rateRange: [0.96, 1.04] },

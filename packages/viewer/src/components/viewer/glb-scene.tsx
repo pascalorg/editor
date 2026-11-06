@@ -831,6 +831,8 @@ export function GlbScene({
       if (willOpen) openIds.current.add(id)
       else openIds.current.delete(id)
       setOpenVersion((version) => version + 1)
+      // Played backwards from where it stands, the clip lands after its current time.
+      if (!willOpen) return new Promise<void>((resolve) => setTimeout(resolve, action.time * 1000))
     },
     [actions],
   )
@@ -997,23 +999,35 @@ export function GlbScene({
         return
       }
       const prompt = walkPromptRef.current
-      if (prompt) {
-        const extras = target.node.userData as PascalExtras
-        const switches = prompt.verb !== undefined && !['open', 'close'].includes(prompt.verb)
-        const sound = switches
-          ? OPEN_SOUNDS.switch
-          : openingSound(
-              (extras.pascalId && sceneNodes?.[extras.pascalId]) || { type: extras.kind ?? 'door' },
-            )
-        emitter.emit('interaction:sound', prompt.isOpen ? sound.off : sound.on)
+      const extras = target.node.userData as PascalExtras
+      const switches = prompt?.verb !== undefined && !['open', 'close'].includes(prompt.verb)
+      const sound = switches
+        ? OPEN_SOUNDS.switch
+        : openingSound(
+            (extras.pascalId && sceneNodes?.[extras.pascalId]) || { type: extras.kind ?? 'door' },
+          )
+      const play = (settled?: Promise<void>) => {
+        if (!prompt) return
+        // A garage door's motor runs the whole way, so it starts with the press.
+        if (!(prompt.isOpen && settled) || sound === OPEN_SOUNDS.garage) {
+          emitter.emit('interaction:sound', prompt.isOpen ? sound.off : sound.on)
+          return
+        }
+        if (sound === OPEN_SOUNDS.door || sound === OPEN_SOUNDS.window)
+          emitter.emit(
+            'interaction:sound',
+            sound === OPEN_SOUNDS.door ? 'door-swing' : 'window-swing',
+          )
+        void settled.then(() => emitter.emit('interaction:sound', sound.off))
       }
-      const item = toggleableItem((target.node.userData as PascalExtras).pascalId)
+      const item = toggleableItem(extras.pascalId)
       if (item) {
+        play()
         operateItem(item.pascalId, item.interactive)
         return
       }
-      if (!(toggleProcedural(target.hit, target.node) || toggleLoopMechanism(target.node)))
-        toggleOpenable(target.node)
+      if (toggleProcedural(target.hit, target.node) || toggleLoopMechanism(target.node)) play()
+      else play(toggleOpenable(target.node))
     },
     [sceneNodes, toggleableItem, toggleLoopMechanism, toggleOpenable, toggleProcedural],
   )

@@ -78,8 +78,10 @@ let unsubscribeAudio: (() => void) | null = null
 /** Windows ride the door recordings, softer: a sash weighs less than a leaf. */
 const INTERACTION_SFX: Record<InteractionSound, [SFXName, number]> = {
   'door-open': ['doorOpen', 1],
+  'door-swing': ['doorSwing', 1],
   'door-close': ['doorClose', 1],
   'window-open': ['doorOpen', 0.6],
+  'window-swing': ['doorSwing', 0.6],
   'window-close': ['doorClose', 0.6],
   garage: ['garageDoor', 1],
   'shutters-open': ['shuttersOpen', 1],

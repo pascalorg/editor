@@ -421,8 +421,10 @@ type SelectionEvents = {
 /** What a door, a window, its shutters or a switch sounds like when someone operates it. */
 export type InteractionSound =
   | 'door-open'
+  | 'door-swing'
   | 'door-close'
   | 'window-open'
+  | 'window-swing'
   | 'window-close'
   | 'garage'
   | 'shutters-open'

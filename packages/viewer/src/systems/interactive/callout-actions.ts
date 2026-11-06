@@ -21,6 +21,7 @@ import type {
   CalloutIcon,
   CalloutText,
 } from '../../components/viewer/selection-callout'
+import { openingSettled } from './opening-settled'
 
 /** Kinds that are the building itself: the breadcrumb names them, no callout does. */
 const STRUCTURE = new Set([
@@ -152,7 +153,7 @@ export function calloutToggle(
   on: boolean,
   name: string,
   sound: { on: InteractionSound; off: InteractionSound },
-  run: () => void,
+  run: () => void | Promise<void>,
   text?: CalloutText,
 ): CalloutAction {
   return { kind: 'toggle', key, icon, on, name, text, sound, toggle: run }
@@ -256,7 +257,11 @@ function mechanismActions(node: AnyNode, name: string, state: InteractiveState):
         mechanism.isOn(node, state),
         name,
         openingSound(node as CalloutActionInput),
-        () => toggleMechanism(mechanism, node),
+        () => {
+          toggleMechanism(mechanism, node)
+          // Built-in leaves and sashes report when they land; a scripted one plays a clip.
+          if (!(node as { source?: unknown }).source) return openingSettled(node)
+        },
       ),
     )
   for (const part of nodeMechanismParts(node)) {
@@ -268,7 +273,10 @@ function mechanismActions(node: AnyNode, name: string, state: InteractiveState):
         on,
         name,
         part.icon === 'shutters' ? OPEN_SOUNDS.shutters : OPEN_SOUNDS.switch,
-        () => toggleMechanismPart(part, node),
+        () => {
+          toggleMechanismPart(part, node)
+          if (part.icon === 'shutters') return openingSettled(node, 'shutters')
+        },
         part.icon === 'shutters' ? SHUTTERS : part.label,
       ),
     )

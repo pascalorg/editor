@@ -1,6 +1,7 @@
 /**
  * Renders the viewer's UI cues (`viewerHover`, `viewerSelect`, `viewerDeselect`,
- * `switchOn`, `switchOff` in `packages/editor/src/lib/sfx-player.ts`) with ffmpeg:
+ * `switchOn`, `switchOff`, `doorSwing` in `packages/editor/src/lib/sfx-player.ts`)
+ * with ffmpeg:
  *
  *   bun scripts/synth-viewer-cues.ts [out-dir]   # default apps/editor/public/audios/sfx
  *
@@ -10,6 +11,10 @@
  * pitch exponentially. Gains keep that house's mix against the door
  * recordings, which it plays at 0.4: each cue is written at its gain / 0.4 so
  * the files sit beside door_open.mp3 at playback volume 1.
+ *
+ * `door_swing.mp3` is ours: the air a leaf pushes as it swings shut, band-passed
+ * noise that swells over the 520 ms leaf run and dies just before the latch
+ * (`door_close.mp3`, played as the leaf lands), well under the latch's level.
  */
 import { spawnSync } from 'node:child_process'
 import { dirname, join, resolve } from 'node:path'
@@ -120,3 +125,51 @@ for (const cue of CUES) {
   )?.[1]
   console.log(`${cue.file}: peak ${peak} dBFS`)
 }
+
+// The swing: noise under a raised-sine swell cresting at 70 % of its length.
+const SWING = { file: 'door_swing.mp3', duration: 0.46, crest: 0.7, peakDb: -26 }
+const swell = `if(lt(t,${SWING.duration * SWING.crest}),pow(sin(PI/2*t/${SWING.duration * SWING.crest}),2),pow(cos(PI/2*(t-${SWING.duration * SWING.crest})/${SWING.duration * (1 - SWING.crest)}),2))`
+const swingSource = `aevalsrc='${swell}*(random(0)*2-1)':s=${SAMPLE_RATE}:d=${SWING.duration}`
+const swingFilters = 'aformat=sample_fmts=dbl,highpass=f=220,lowpass=f=1400,lowpass=f=1400'
+const swingPeak = Number(
+  /max_volume:\s*(-?[\d.]+) dB/.exec(
+    ffmpeg([
+      '-f',
+      'lavfi',
+      '-i',
+      swingSource,
+      '-af',
+      `${swingFilters},volumedetect`,
+      '-f',
+      'null',
+      '-',
+    ]),
+  )?.[1],
+)
+ffmpeg([
+  '-y',
+  '-f',
+  'lavfi',
+  '-i',
+  swingSource,
+  '-af',
+  `${swingFilters},volume=${(SWING.peakDb - swingPeak).toFixed(2)}dB:precision=double`,
+  '-ac',
+  '1',
+  '-ar',
+  String(SAMPLE_RATE),
+  '-c:a',
+  'libmp3lame',
+  '-b:a',
+  '112k',
+  '-map_metadata',
+  '-1',
+  '-id3v2_version',
+  '0',
+  '-fflags',
+  '+bitexact',
+  '-flags:a',
+  '+bitexact',
+  join(outDir, SWING.file),
+])
+console.log(`${SWING.file}: peak ${SWING.peakDb} dBFS`)

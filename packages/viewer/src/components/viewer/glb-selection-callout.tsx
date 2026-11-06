@@ -46,7 +46,7 @@ export function GlbSelectionCallout({
   loopMechanisms: ReadonlyMap<string, unknown>
   /** Baked doors and windows open through their `: open` clip, tracked by the scene. */
   isOpen: (id: string) => boolean
-  toggleOpen: (object: Object3D) => void
+  toggleOpen: (object: Object3D) => void | Promise<void>
 }) {
   const selectedIds = useViewer((s) => s.selection.selectedIds)
   const walkthrough = useViewer((s) => s.walkthroughMode)
@@ -120,7 +120,9 @@ export function GlbSelectionCallout({
         Boolean(interactive.mechanismParts[`${id as AnyNodeId}:shutters`]),
         title,
         OPEN_SOUNDS.shutters,
-        () => toggleGlbShutters(object),
+        () => {
+          toggleGlbShutters(object)
+        },
         SHUTTERS,
       ),
     )

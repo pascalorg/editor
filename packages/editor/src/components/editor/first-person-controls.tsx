@@ -51,6 +51,7 @@ import {
   type DroneLook,
   EYE_LERP_SPEED,
   type MovementInput,
+  openingSettled,
   STAND_CAPSULE,
   STAND_CLEARANCE,
   STAND_FLOAT_HEIGHT,
@@ -433,6 +434,16 @@ function playTargetSound(target: FirstPersonInteractableTarget) {
   else if (node?.type === 'door' && node.doorType?.startsWith('garage-')) sound = 'garage'
   else if (node?.type === 'window') sound = verb === 'open' ? 'window-open' : 'window-close'
   else sound = verb === 'open' ? 'door-open' : 'door-close'
+  // A built-in leaf or sash swings shut, then latches on the frame it lands.
+  if (
+    (sound === 'door-close' || sound === 'window-close') &&
+    (target.type === 'door' || target.type === 'window') &&
+    node
+  ) {
+    emitter.emit('interaction:sound', sound === 'door-close' ? 'door-swing' : 'window-swing')
+    void openingSettled(node).then(() => emitter.emit('interaction:sound', sound))
+    return
+  }
   emitter.emit('interaction:sound', sound)
 }
 

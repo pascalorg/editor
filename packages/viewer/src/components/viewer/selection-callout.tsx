@@ -37,7 +37,8 @@ export type CalloutAction =
       /** A part's own name on the pill; without it the pill shows its state word. */
       text?: CalloutText
       sound: { on: InteractionSound; off: InteractionSound }
-      toggle: () => void
+      /** When closing returns a promise for the end of the run, the closing sound waits for it. */
+      toggle: () => void | Promise<void>
     }
   | {
       kind: 'range'
@@ -237,8 +238,9 @@ function ToggleAction({ action }: { action: Extract<CalloutAction, { kind: 'togg
       className="pascal-callout-action"
       data-control={action.text ? 'named' : opens(action.icon) ? 'opening' : 'toggle'}
       onClick={() => {
-        emitter.emit('interaction:sound', action.on ? action.sound.off : action.sound.on)
-        action.toggle()
+        if (!action.on) emitter.emit('interaction:sound', action.sound.on)
+        const settled = action.toggle()
+        if (action.on) playClosing(action, settled)
       }}
       title={label}
       type="button"
@@ -247,6 +249,24 @@ function ToggleAction({ action }: { action: Extract<CalloutAction, { kind: 'togg
       <span>{text}</span>
     </button>
   )
+}
+
+/**
+ * A door or window swings shut, then latches as its leaf lands (shutters
+ * clap shut as they land); anything without a known end sounds at once.
+ */
+function playClosing(
+  action: Extract<CalloutAction, { kind: 'toggle' }>,
+  settled: void | Promise<void>,
+) {
+  // A garage door's motor runs the whole way, so it starts with the press.
+  if (!settled || action.sound.off === 'garage') {
+    emitter.emit('interaction:sound', action.sound.off)
+    return
+  }
+  if (action.icon === 'door' || action.icon === 'window')
+    emitter.emit('interaction:sound', action.icon === 'door' ? 'door-swing' : 'window-swing')
+  void settled.then(() => emitter.emit('interaction:sound', action.sound.off))
 }
 
 function RangeAction({ action }: { action: Extract<CalloutAction, { kind: 'range' }> }) {

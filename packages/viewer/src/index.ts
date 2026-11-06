@@ -418,6 +418,7 @@ export { ElevatorInteractionSystem } from './systems/elevator/elevator-interacti
 export { FloorElevationSystem } from './systems/floor-elevation/floor-elevation-system'
 export { GuideSystem } from './systems/guide/guide-system'
 export { InteractiveSystem } from './systems/interactive/interactive-system'
+export { openingSettled } from './systems/interactive/opening-settled'
 export {
   type ScriptedClipActions,
   ScriptedClips,
