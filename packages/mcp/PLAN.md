@@ -13,6 +13,7 @@
 ## 0.5 Bridge spike result (CONFIRMED)
 
 Ran `scripts/spike.ts` end-to-end. ✅ All checks pass:
+
 - `useScene.loadScene()` creates default Site → Building → Level (3 nodes)
 - `createNode(wall, levelId)` adds wall to `nodes` dict and to `level.children`
 - `updateNode(wallId, { thickness, height })` merges update, then RAF polyfill fires `markDirty`
@@ -22,6 +23,7 @@ Ran `scripts/spike.ts` end-to-end. ✅ All checks pass:
 - `unloadScene()` → `setScene(snapshot...)` round-trip preserves node count
 
 Node compatibility requires:
+
 1. **RAF polyfill** loaded before any core import (see §1 below).
 2. **Subpath imports**, not the main entry. See §0.6 below.
 
@@ -73,6 +75,7 @@ import {
 `SiteNode.children` is declared as `z.array(z.discriminatedUnion('type', [BuildingNode, ItemNode]))` — it holds **objects**, not IDs. Every other container node (`building`, `level`, `wall`, `ceiling`, `roof`, `stair`) stores `string[]` of child IDs.
 
 Implications for tools:
+
 - Parent-child traversal through `site` cannot use the generic "children is ID[]" pattern.
 - Always resolve children through the flat `nodes` dict via `parentId` scan when you need to enumerate descendants of a site.
 - `describe_node` / `find_nodes` / `duplicate_level` must special-case site.
@@ -299,6 +302,7 @@ Register via `server.registerResource(...)` with `readResource` handlers.
 - **HTTP** — `StreamableHTTPServerTransport` from `@modelcontextprotocol/sdk/server/streamableHttp.js`, bound to a `node:http` server on `--port`.
 
 CLI `pascal-mcp` flags:
+
 - `--stdio` (default) — stdio transport
 - `--http --port <n>` — HTTP transport
 - `--scene <path>` — load initial scene from JSON file via `setScene`

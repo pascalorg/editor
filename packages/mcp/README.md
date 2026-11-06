@@ -118,6 +118,7 @@ against a loaded saved scene are persisted to SQLite and recorded in a local
 apply scene graph snapshots as the agent edits the scene.
 
 The flow is intentionally local and lightweight:
+
 1. Open or create a scene in the editor so it is saved in the local database.
 2. Load that scene through MCP with `load_scene`.
 3. Run MCP mutation tools such as `create_room`, `add_door`, `furnish_room`,
@@ -262,7 +263,6 @@ so the ids a tool mints and the operations it plans run in the scene's synchrono
 optional; without it handlers run as they always have, with random ids. An implementation that
 computes on a detached scene must provide it, delegating to `SceneBridge.runInScene`, or its tools'
 ids will not be the scene's and a recomputed effect will not match.
-
 
 See [`examples/embed-in-agent.ts`](./examples/embed-in-agent.ts) for a
 compilable version.
