@@ -21,7 +21,7 @@ import {
   useState,
 } from 'react'
 import * as THREE from 'three/webgpu'
-import { classifyDevice, readDeviceSignals } from '../../lib/device-tier'
+import { classifyDevice, isSoftwareRenderer, readDeviceSignals } from '../../lib/device-tier'
 import { hasDrawableGeometry } from '../../lib/drawable-geometry'
 import { PERF_OVERLAY_ENABLED } from '../../lib/gpu-perf'
 import { applyIsolation, clearIsolation } from '../../lib/isolation'
@@ -407,6 +407,11 @@ export interface ViewerImmersiveSession {
 }
 
 const MAX_DPR: Record<RenderQuality, number> = { high: 1.5, medium: 1.25, low: 1 }
+/**
+ * A software renderer can't reach the usual cadence, and chasing it starves the app of the CPU it
+ * rasterizes on: frames are capped lower there.
+ */
+const SOFTWARE_MAX_FPS = 20
 
 interface ViewerProps {
   children?: React.ReactNode
@@ -656,6 +661,7 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
   // Desktops (fine pointer) keep the original 1.5 cap.
   // Pixel-ratio cap per quality tier (touch devices default to Medium).
   const renderQuality = useViewer((state) => state.renderQuality)
+  const softwareRenderer = useViewer((state) => state.softwareRenderer)
   const maxDpr = MAX_DPR[renderQuality]
   const showGpuFallback = rendererInitFailed
   // When we can't mount the GPU canvas, the SceneReadyTracker never mounts and
@@ -723,13 +729,13 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
               if (result.status === 'ready') {
                 installEmptyDrawGuard(result.renderer)
                 // Before the first frame, so the post-processing builds once at the device's tier.
+                const signals = readDeviceSignals(
+                  result.backend,
+                  (result.renderer as any).backend?.device,
+                )
                 useViewer
                   .getState()
-                  .setDetectedRenderQuality(
-                    classifyDevice(
-                      readDeviceSignals(result.backend, (result.renderer as any).backend?.device),
-                    ),
-                  )
+                  .setDetectedRenderQuality(classifyDevice(signals), isSoftwareRenderer(signals))
                 return result.renderer
               }
 
@@ -779,7 +785,7 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
           ) : (
             <>
               <FrameLimiter
-                fps={maxFps}
+                fps={softwareRenderer ? Math.min(maxFps, SOFTWARE_MAX_FPS) : maxFps}
                 onFrameError={composeRenderErrorHandlers(onRenderError)}
                 paused={renderPaused}
               />

@@ -43,6 +43,11 @@ export function classifyDevice(signals: DeviceSignals): RenderQuality {
   return 'medium'
 }
 
+/** Rendering on the CPU (a software adapter or rasterizer): every frame competes with the app. */
+export function isSoftwareRenderer(signals: DeviceSignals): boolean {
+  return signals.fallbackAdapter || SOFTWARE.test(signals.gpu)
+}
+
 type AdapterInfo = { vendor?: string; architecture?: string; description?: string; device?: string }
 
 /** The device's signals, read once the renderer is up (its backend and WebGPU device). */

@@ -285,8 +285,10 @@ type ViewerState = {
   renderQualityChoice: RenderQualityChoice
   /** The tier the device's capabilities call for (GPU, memory, form factor); never persisted. */
   detectedRenderQuality: RenderQuality | null
+  /** The device renders on the CPU (software adapter or rasterizer); never persisted. */
+  softwareRenderer: boolean
   setRenderQuality: (quality: RenderQualityChoice) => void
-  setDetectedRenderQuality: (quality: RenderQuality) => void
+  setDetectedRenderQuality: (quality: RenderQuality, softwareRenderer?: boolean) => void
 
   // Embed-controlled ink-edge opacity override (null = use the per-mode default).
   inkOpacity: number | null
@@ -842,14 +844,16 @@ const useViewer = create<ViewerState>()(
       renderQuality: provisionalRenderQuality(),
       renderQualityChoice: 'auto',
       detectedRenderQuality: null,
+      softwareRenderer: false,
       setRenderQuality: (renderQualityChoice) =>
         set((state) => ({
           renderQualityChoice,
           renderQuality: effectiveRenderQuality(renderQualityChoice, state.detectedRenderQuality),
         })),
-      setDetectedRenderQuality: (detectedRenderQuality) =>
+      setDetectedRenderQuality: (detectedRenderQuality, softwareRenderer = false) =>
         set((state) => ({
           detectedRenderQuality,
+          softwareRenderer,
           renderQuality: effectiveRenderQuality(state.renderQualityChoice, detectedRenderQuality),
         })),
 

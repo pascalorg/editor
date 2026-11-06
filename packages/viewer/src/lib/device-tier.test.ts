@@ -1,6 +1,6 @@
 // @ts-expect-error — Bun types are not part of the viewer's production declaration build.
 import { describe, expect, test } from 'bun:test'
-import { classifyDevice, type DeviceSignals } from './device-tier'
+import { classifyDevice, type DeviceSignals, isSoftwareRenderer } from './device-tier'
 
 const desktop = (gpu: string, extra: Partial<DeviceSignals> = {}): DeviceSignals => ({
   backend: 'webgpu',
@@ -50,5 +50,15 @@ describe('device quality tier', () => {
     expect(classifyDevice(desktop('apple gpu', { mac: true, cores: 8 }))).toBe('medium')
     expect(classifyDevice(desktop('qualcomm adreno x1-85'))).toBe('medium')
     expect(classifyDevice(desktop(''))).toBe('medium')
+  })
+
+  test('software renderers are told apart from GPUs (their frame rate is capped)', () => {
+    expect(isSoftwareRenderer(desktop('ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device))'))).toBe(
+      true,
+    )
+    expect(isSoftwareRenderer(desktop('llvmpipe (LLVM 17.0.6, 256 bits)'))).toBe(true)
+    expect(isSoftwareRenderer(desktop('', { fallbackAdapter: true }))).toBe(true)
+    expect(isSoftwareRenderer(desktop('ANGLE Metal Renderer: Apple M2 Pro'))).toBe(false)
+    expect(isSoftwareRenderer(desktop('NVIDIA GeForce RTX 3070', { backend: 'webgl' }))).toBe(false)
   })
 })
