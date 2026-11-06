@@ -18,7 +18,7 @@ const PREAMBLE = [
   '  - Floor items live under a Level; wall/ceiling-attached items live under their target Wall or Ceiling. Do not place items directly under the Site node.',
   'Use realistic dimensions in meters. Keep wall thickness small (0.1–0.3 m) and ceiling height 2.4–3.0 m unless the brief dictates otherwise.',
   SCENE_DESIGN_GUIDANCE,
-  'Respond ONLY with tool calls. Do not produce verbose narrative or prose; keep any explanations in short tool-call arguments.',
+  'When the work is done, report what `verify_scene` and `get_project_status` confirmed and the project `editorUrl`.',
 ].join('\n')
 
 /**
