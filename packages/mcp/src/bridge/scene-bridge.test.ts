@@ -248,6 +248,29 @@ describe('SceneBridge', () => {
           parentId: level.id,
         })
         expect(bridge.validateScene()).toEqual({ valid: true, errors: [], warnings: [] })
+
+        const invalidProbe = {
+          ...probe,
+          id: 'pluginprobe_invalid',
+          value: 'not-a-number',
+        }
+        expect(() =>
+          bridge.applyPatch([{ op: 'create', node: invalidProbe as any, parentId: level.id }]),
+        ).toThrow(/value/)
+
+        const nodes = bridge.getNodes()
+        bridge.setScene(
+          {
+            ...nodes,
+            [probe.id]: { ...nodes[probe.id]!, value: 'not-a-number' } as any,
+          },
+          bridge.getRootNodeIds(),
+        )
+        const invalidScene = bridge.validateScene()
+        expect(invalidScene.valid).toBe(false)
+        expect(invalidScene.errors).toContainEqual(
+          expect.objectContaining({ nodeId: probe.id, path: 'value' }),
+        )
       } finally {
         restoreRegistry()
       }

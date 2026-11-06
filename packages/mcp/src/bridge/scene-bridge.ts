@@ -44,10 +44,8 @@ function parseRegisteredNode(node: unknown): ParsedNode {
   const type = (node as { type?: unknown }).type
   if (typeof type !== 'string') return builtin
 
-  const registered = nodeRegistry.get(type)?.schema.safeParse(node)
-  return registered?.success
-    ? ({ success: true, data: registered.data as AnyNode } as ParsedNode)
-    : builtin
+  const registered = nodeRegistry.get(type)?.schema
+  return registered ? (registered.safeParse(node) as ParsedNode) : builtin
 }
 
 export type ValidationError = { nodeId: string; path: string; message: string }
