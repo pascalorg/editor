@@ -57,6 +57,8 @@ const store = new NodeBatchStore(
  * cabinet run edit its modules, in level space without marking them.
  */
 const changedNodes = new Set<string>()
+/** Scene containers: their children are organised under them, not carried by them. */
+const CONTAINER_TYPES = new Set(['level', 'building', 'site'])
 const surfaceLevelReadyAt = new Map<string, number>()
 const staleNodes = new Set<string>()
 /**
@@ -222,8 +224,10 @@ export function captureChangedNodes() {
     const node = nodes[id]
     if (!node) continue
     if (batchableConfig(node)) changedNodes.add(id as string)
-    // The host edit moved what it carries in level space; their own marks may never come.
-    addBatchableDescendants(id as string, nodes, changedNodes)
+    // The host edit moved what it carries in level space; their own marks may never come. A
+    // level, building or site carries nothing that way: its child list is bookkeeping (it changes
+    // whenever furniture is re-parented), and cascading from it released the whole floor.
+    if (!CONTAINER_TYPES.has(node.type)) addBatchableDescendants(id as string, nodes, changedNodes)
   }
 }
 
