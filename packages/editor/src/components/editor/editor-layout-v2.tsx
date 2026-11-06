@@ -19,8 +19,9 @@ import { ViewBarRow } from './views/view-bar'
 
 const SIDEBAR_MAX_WIDTH = 800
 const SIDEBAR_COLLAPSE_THRESHOLD = 220
-// Matches the `w-14` rail in <IconRail>; the resize math is relative to it.
+// Match the rail's `w-14` and `w-40` in <IconRail>; the resize math is relative to them.
 const RAIL_WIDTH = 56
+const RAIL_WIDTH_EXPANDED = 160
 
 // ── Left column: resizable panel with tab bar ────────────────────────────────
 
@@ -130,8 +131,9 @@ function LeftColumn({
   useEffect(() => {
     const handlePointerMove = (e: PointerEvent) => {
       if (!isResizing.current) return
-      // Rail occupies the leftmost 48px; the panel starts after it.
-      const newWidth = e.clientX - RAIL_WIDTH
+      // The rail occupies the left edge; the panel starts after it.
+      const railWidth = useSidebarStore.getState().railExpanded ? RAIL_WIDTH_EXPANDED : RAIL_WIDTH
+      const newWidth = e.clientX - railWidth
       if (newWidth < SIDEBAR_COLLAPSE_THRESHOLD) {
         setIsCollapsed(true)
       } else {

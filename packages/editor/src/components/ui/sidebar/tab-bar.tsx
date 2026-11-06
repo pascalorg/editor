@@ -1,9 +1,11 @@
 'use client'
 
+import { usePascalI18n } from '@pascal-app/core'
+import { PanelLeftClose, PanelLeftOpen } from 'lucide-react'
 import type { ReactNode } from 'react'
-import { editorHostPanelRegistry } from '../../../lib/plugin-panels'
 import { triggerSFX } from './../../../lib/sfx-bus'
 import { cn } from './../../../lib/utils'
+import { useSidebarStore } from '../primitives/sidebar'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../primitives/tooltip'
 
 export type SidebarTab = {
@@ -77,43 +79,52 @@ interface IconRailProps {
 }
 
 /**
- * Vertical icon rail for the v2 left column. Always visible (even when the
- * panel is collapsed) so the user can reopen the panel by clicking an icon.
- * The label renders as a hover tooltip on the right.
+ * Vertical rail for the v2 left column. Always visible (even when the panel is
+ * collapsed) so the user can reopen the panel by clicking an entry. It shows
+ * each tool's name, and can close back to icons for more room, where the name
+ * becomes a hover tooltip.
  */
 export function IconRail({ tabs, activeTab, collapsed, onIconClick }: IconRailProps) {
-  const pluginPanelIds = new Set(
-    editorHostPanelRegistry.getSnapshot().flatMap((panel) =>
-      panel.pluginId ? [panel.id] : [],
-    ),
+  const i18n = usePascalI18n()
+  const expanded = useSidebarStore((s) => s.railExpanded)
+  const setExpanded = useSidebarStore((s) => s.setRailExpanded)
+  const toggleLabel = i18n._(
+    expanded
+      ? /* i18n */ { id: 'editor.sidebar.rail.collapse', message: 'Hide names' }
+      : /* i18n */ { id: 'editor.sidebar.rail.expand', message: 'Show names' },
   )
-  const defaultTabs = tabs.filter((tab) => !pluginPanelIds.has(tab.id) && tab.id !== 'plugins')
-  const pluginTabs = tabs.filter((tab) => pluginPanelIds.has(tab.id) || tab.id === 'plugins')
 
   const renderTab = (tab: SidebarTab) => {
     const showActive = activeTab === tab.id && (!collapsed || tab.noPanel === true)
+    const button = (
+      <button
+        aria-label={tab.label}
+        aria-pressed={showActive}
+        className={cn(
+          'group flex items-center rounded-xl transition-all duration-200 [&_img]:transition-[opacity,filter] [&_img]:duration-200',
+          expanded ? 'h-10 w-full gap-2 px-1.5' : 'h-11 w-11 justify-center',
+          showActive
+            ? 'bg-sidebar-accent text-foreground shadow-sm [&_img]:opacity-100 [&_img]:grayscale-0'
+            : 'text-muted-foreground hover:bg-sidebar-accent/50 hover:text-foreground [&_img]:opacity-60 [&_img]:grayscale hover:[&_img]:opacity-100 hover:[&_img]:grayscale-0',
+        )}
+        key={tab.id}
+        onClick={() => {
+          triggerSFX('sfx:menu-click')
+          onIconClick(tab.id)
+        }}
+        onMouseEnter={() => triggerSFX('sfx:menu-hover')}
+        type="button"
+      >
+        <span className="flex size-8 shrink-0 items-center justify-center">
+          {tab.icon ?? tab.label.charAt(0)}
+        </span>
+        {expanded ? <span className="truncate font-medium text-sm">{tab.label}</span> : null}
+      </button>
+    )
+    if (expanded) return button
     return (
       <Tooltip key={tab.id}>
-        <TooltipTrigger asChild>
-          <button
-            aria-label={tab.label}
-            aria-pressed={showActive}
-            className={cn(
-              'group flex h-11 w-11 items-center justify-center rounded-xl transition-all duration-200 [&_img]:transition-[opacity,filter] [&_img]:duration-200',
-              showActive
-                ? 'bg-sidebar-accent text-foreground shadow-sm [&_img]:opacity-100 [&_img]:grayscale-0'
-                : 'text-muted-foreground hover:bg-sidebar-accent/50 hover:text-foreground [&_img]:opacity-60 [&_img]:grayscale hover:[&_img]:opacity-100 hover:[&_img]:grayscale-0',
-            )}
-            onClick={() => {
-              triggerSFX('sfx:menu-click')
-              onIconClick(tab.id)
-            }}
-            onMouseEnter={() => triggerSFX('sfx:menu-hover')}
-            type="button"
-          >
-            {tab.icon ?? tab.label.charAt(0)}
-          </button>
-        </TooltipTrigger>
+        <TooltipTrigger asChild>{button}</TooltipTrigger>
         <TooltipContent side="right">{tab.label}</TooltipContent>
       </Tooltip>
     )
@@ -122,15 +133,29 @@ export function IconRail({ tabs, activeTab, collapsed, onIconClick }: IconRailPr
   return (
     <TooltipProvider delayDuration={0} disableHoverableContent>
       <div
-        className="flex h-full w-14 shrink-0 flex-col items-center gap-1 border-border/50 border-r py-2"
+        className={cn(
+          'flex h-full shrink-0 flex-col gap-1 overflow-y-auto border-border/50 border-r py-2',
+          expanded ? 'w-40 px-2' : 'w-14 items-center',
+        )}
         data-surface="icon-rail"
       >
-        {defaultTabs.map(renderTab)}
-        {pluginTabs.length > 0 && (
-          <div className="mt-1 flex w-11 flex-col items-center gap-1 border-border/70 border-t pt-2">
-            {pluginTabs.map(renderTab)}
-          </div>
-        )}
+        {tabs.map(renderTab)}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              aria-label={toggleLabel}
+              className={cn(
+                'mt-auto flex size-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground/70 transition-colors hover:bg-sidebar-accent/50 hover:text-foreground',
+                expanded && 'ml-1.5',
+              )}
+              onClick={() => setExpanded(!expanded)}
+              type="button"
+            >
+              {expanded ? <PanelLeftClose className="size-4" /> : <PanelLeftOpen className="size-4" />}
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="right">{toggleLabel}</TooltipContent>
+        </Tooltip>
       </div>
     </TooltipProvider>
   )

@@ -15595,6 +15595,26 @@ msgstr "更新快照"
 msgid "editor.sidebar.panels.zonePanel.viewSnapshot"
 msgstr "查看快照"
 
+# Source-Hash: 655ed27ad65692e6
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Hide names"
+#: packages/editor/src/components/ui/sidebar/tab-bar.tsx
+#, fuzzy
+msgid "editor.sidebar.rail.collapse"
+msgstr "隐藏名称"
+
+# Source-Hash: 5573a321bba586a2
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Show names"
+#: packages/editor/src/components/ui/sidebar/tab-bar.tsx
+#, fuzzy
+msgid "editor.sidebar.rail.expand"
+msgstr "显示名称"
+
 # Source-Hash: 58b05af5b5724efb
 # Review: required
 # AI-Provider: claude-code

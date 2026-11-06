@@ -15595,6 +15595,26 @@ msgstr "Actualizar instantánea"
 msgid "editor.sidebar.panels.zonePanel.viewSnapshot"
 msgstr "Ver instantánea"
 
+# Source-Hash: 655ed27ad65692e6
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Hide names"
+#: packages/editor/src/components/ui/sidebar/tab-bar.tsx
+#, fuzzy
+msgid "editor.sidebar.rail.collapse"
+msgstr "Ocultar nombres"
+
+# Source-Hash: 5573a321bba586a2
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Show names"
+#: packages/editor/src/components/ui/sidebar/tab-bar.tsx
+#, fuzzy
+msgid "editor.sidebar.rail.expand"
+msgstr "Mostrar nombres"
+
 # Source-Hash: 58b05af5b5724efb
 # Review: required
 # AI-Provider: claude-code

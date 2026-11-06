@@ -43,6 +43,9 @@ type SidebarStore = {
   setIsCollapsed: (collapsed: boolean) => void
   isDragging: boolean
   setIsDragging: (isDragging: boolean) => void
+  /** Whether the rail shows each tool's name, or only its icon. */
+  railExpanded: boolean
+  setRailExpanded: (expanded: boolean) => void
 }
 
 export const useSidebarStore = create<SidebarStore>()(
@@ -60,11 +63,17 @@ export const useSidebarStore = create<SidebarStore>()(
       setIsCollapsed: (collapsed) => set({ isCollapsed: collapsed }),
       isDragging: false,
       setIsDragging: (isDragging) => set({ isDragging }),
+      railExpanded: true,
+      setRailExpanded: (railExpanded) => set({ railExpanded }),
     }),
     {
       name: 'sidebar-preferences',
       storage: hydrationGatedStorage((): boolean => useSidebarStore.persist.hasHydrated()),
-      partialize: (state) => ({ width: state.width, isCollapsed: state.isCollapsed }),
+      partialize: (state) => ({
+        width: state.width,
+        isCollapsed: state.isCollapsed,
+        railExpanded: state.railExpanded,
+      }),
       skipHydration: true,
     },
   ),
