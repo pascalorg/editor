@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 import { BATCHED_LAYER, SCENE_LAYER } from './layers'
 import { timeSpan } from './perf-tracks'
+import { isSetAsideForRender } from './scene-matrices'
 import { heldReasons } from './scene-visibility'
 
 /**
@@ -107,12 +108,18 @@ export function createOcclusionCuller(root: THREE.Object3D): OcclusionCuller {
   /** Set by the box test's rasterizer when a box pixel is not hidden. */
   let seen = false
   let lastSignature = Number.NaN
-  /** Whether an object and its ancestors are visible, memoized for one pass. */
+  /**
+   * Whether an object and its ancestors are visible, memoized for one pass. A subtree set aside
+   * for this render (`renderWithSceneMatrices`: nothing in it draws itself, e.g. merged
+   * originals) still counts as shown: its walls and slabs still occlude.
+   */
   const shownCache = new Map<THREE.Object3D, boolean>()
   const shown = (object: THREE.Object3D): boolean => {
     let value = shownCache.get(object)
     if (value === undefined) {
-      value = object.visible && (object.parent ? shown(object.parent) : true)
+      value =
+        (object.visible || isSetAsideForRender(object)) &&
+        (object.parent ? shown(object.parent) : true)
       shownCache.set(object, value)
     }
     return value

@@ -35,6 +35,7 @@ import {
   normalWorld,
   positionWorld,
   select,
+  sharedUniformGroup,
   smoothstep,
   texture,
   uniform,
@@ -212,9 +213,19 @@ export class RoomLighting {
   readonly focusedLevel = uniform(-1, 'int')
 
   // ---- shader inputs that change with the scene ----------------------------------------------
+  /**
+   * The level arrays live in one shared group, uploaded when a level moves: an array uniform in
+   * the default (per-object) group is re-sent for every object in every pass, whether it changed
+   * or not — some 760 uploads a frame in a furnished flat.
+   */
+  private readonly levelGroup = sharedUniformGroup('daylightLevels')
   private readonly u = {
-    levelYs: uniformArray(new Array(MAX_LEVELS).fill(1e9), 'float') as N,
-    levelOffsets: uniformArray(new Array(MAX_LEVELS).fill(0), 'float') as N,
+    levelYs: (uniformArray(new Array(MAX_LEVELS).fill(1e9), 'float') as N).setGroup(
+      this.levelGroup,
+    ) as N,
+    levelOffsets: (uniformArray(new Array(MAX_LEVELS).fill(0), 'float') as N).setGroup(
+      this.levelGroup,
+    ) as N,
     levelCount: uniform(1, 'int'),
     origin: uniform(new Vector2()),
     gridW: uniform(1, 'int'),
@@ -566,12 +577,17 @@ export class RoomLighting {
   setLevelOffsets(offsets: number[]) {
     const ys = this.u.levelYs.array as number[]
     const offs = this.u.levelOffsets.array as number[]
+    let changed = false
     for (let i = 0; i < MAX_LEVELS; i++) {
       const base = this.levelY[i]
       const off = offsets[i] ?? 0
-      ys[i] = base === undefined ? 1e9 : base + off
+      const y = base === undefined ? 1e9 : base + off
+      if (ys[i] === y && offs[i] === off) continue
+      ys[i] = y
       offs[i] = off
+      changed = true
     }
+    if (changed) this.levelGroup.needsUpdate = true
   }
 
   /** Re-run the light transfer (after a quality-tier change of the soft room map). */

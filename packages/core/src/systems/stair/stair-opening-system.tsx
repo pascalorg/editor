@@ -134,7 +134,12 @@ export function initializeStairOpeningSync() {
 
   const unsubscribeScene = useScene.subscribe((state, prevState) => {
     if (syncingAutoOpenings || isSettlingDocument(useScene)) return
-    if (!changedInputs(prevState.nodes, state.nodes, isStairOpeningInput)) return
+    // A level's child list is bookkeeping (furniture re-parenting under it): what joined or left
+    // is an input of its own, as the document reconcile reads it.
+    if (
+      !changedInputs(prevState.nodes, state.nodes, isStairOpeningInput, { ignoreChildLists: true })
+    )
+      return
     scheduleAutoSync(
       isHydrationNormalization() || state.hydrationId !== prevState.hydrationId,
       prevState.nodes,

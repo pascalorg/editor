@@ -19,6 +19,20 @@ import useViewer from '../../store/use-viewer'
 /** Seconds between scene-change checks, and the quiet time before a rebuild. */
 const CHECK_INTERVAL = 0.5
 const REBUILD_DELAY = 0.4
+/**
+ * Furniture: what the rooms are built from (walls, slabs, ceilings, roofs, doors, windows,
+ * zones) never includes it, so moving or placing it doesn't rebuild them (a rebuild casts
+ * thousands of rays). A lamp among it is followed by its light's position instead.
+ */
+const FURNITURE_TYPES = new Set([
+  'item',
+  'procedural-item',
+  'imported-mesh',
+  'cabinet',
+  'cabinet-module',
+  'shelf',
+])
+const LAMP_POSITION_STEP = 0.05
 
 /**
  * Keeps the daylight room system in step with the scene: rebuilds rooms, portals and lamps
@@ -40,7 +54,8 @@ export function useDaylightRooms() {
   useEffect(
     () =>
       useScene.subscribe((next, previous) => {
-        if (next.nodes !== previous.nodes) nodesVersion.current++
+        if (next.nodes !== previous.nodes && roomInputsChanged(next.nodes, previous.nodes))
+          nodesVersion.current++
       }),
     [],
   )
@@ -57,7 +72,7 @@ export function useDaylightRooms() {
       const baked = live ? null : findBakedRoot(scene)
       const feedKeys = feedSignature()
       const signature = live
-        ? `live|${sceneRegistry.revision}|${nodesVersion.current}|${useViewer.getState().geometryRevision}|${feedKeys}`
+        ? `live|${roomObjectsSignature()}|${nodesVersion.current}|${useViewer.getState().geometryRevision}|${feedKeys}`
         : `baked|${baked?.uuid ?? ''}|${baked?.children.length ?? 0}|${feedKeys}`
       if (signature !== s.signature) {
         s.signature = signature
@@ -132,10 +147,65 @@ function flagGlassMaterials(scene: Object3D) {
   })
 }
 
+const feedPosition = new Vector3()
+
+/** The lamps fed to the rooms and where they stand (a moved lamp, or its host, rebuilds). */
 function feedSignature(): string {
   let keys = ''
-  for (const feed of lampFeeds) for (const light of feed.lights()) keys += `${light.key},`
+  for (const feed of lampFeeds) {
+    for (const light of feed.lights()) {
+      keys += `${light.key}`
+      if (light.getWorldPosition(feedPosition)) {
+        const q = (v: number) => Math.round(v / LAMP_POSITION_STEP)
+        keys += `@${q(feedPosition.x)},${q(feedPosition.y)},${q(feedPosition.z)}`
+      }
+      keys += ';'
+    }
+  }
   return keys
+}
+
+/** Whether a scene edit touched anything the rooms are built from (anything but furniture). Exported for tests. */
+export function roomInputsChanged(
+  next: Readonly<Record<string, { type: string } | undefined>>,
+  previous: Readonly<Record<string, { type: string } | undefined>>,
+): boolean {
+  for (const id in next) {
+    const node = next[id]
+    const before = previous[id]
+    if (node === before || FURNITURE_TYPES.has((node ?? before)?.type ?? '')) continue
+    // A level (or any container) whose child list alone changed: what joined or left it shows up
+    // as its own change, so furniture re-parenting under it doesn't rebuild the rooms.
+    if (node && before && onlyChildrenDiffer(node, before)) continue
+    return true
+  }
+  for (const id in previous) {
+    if (!(id in next) && !FURNITURE_TYPES.has(previous[id]?.type ?? '')) return true
+  }
+  return false
+}
+
+function onlyChildrenDiffer(a: object, b: object): boolean {
+  const x = a as Record<string, unknown>
+  const y = b as Record<string, unknown>
+  for (const key in x) if (key !== 'children' && x[key] !== y[key]) return false
+  for (const key in y) if (key !== 'children' && !(key in x)) return false
+  return true
+}
+
+/** The registered objects the rooms are built from: changes when one mounts, unmounts or is replaced. */
+function roomObjectsSignature(): string {
+  let count = 0
+  let ids = 0
+  for (const [type, set] of Object.entries(sceneRegistry.byType)) {
+    if (FURNITURE_TYPES.has(type)) continue
+    for (const id of set) {
+      const object = sceneRegistry.nodes.get(id)
+      count++
+      if (object) ids += object.id
+    }
+  }
+  return `${count}:${ids}`
 }
 
 function litFeedKeys(): Set<string> {
