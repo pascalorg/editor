@@ -11,7 +11,7 @@ export const AGENT_GUIDE = [
   '## Projects, Saving and Output',
   '',
   '- `create_project` makes a browser-visible project and binds it to the session; `save_scene` without an id saves to the bound project. `get_project_status` is the authoritative status of a project: `editorUrl`, `browserVisibleVersion`, `latestVersion`, `publishedVersion`, `nodeCount` and `graphHash`.',
-  '- `create_house_from_brief` chooses a starter house from a brief, creates, saves and publishes it, and returns the editor URL. `create_story_shell`, `create_room`, `add_door`, `add_window`, `furnish_room`, `create_roof` and `place_items` each make one part of a building with the numbers the call gives.',
+  '- `create_house_from_brief` replaces the scene with a starter template picked from its bedroom count, rooms and landscaping (not from the brief’s words), saves it as an unpublished draft and returns the editor URL. `create_story_shell`, `create_room`, `add_door`, `add_window`, `furnish_room`, `create_roof` and `place_items` each make one part of a building with the numbers the call gives.',
   '- Semantic tools update the browser-visible draft as they run. `save_scene` with `saveMode: "draft"` saves the draft, autosave-style; `saveMode: "checkpoint"` records a version, a meaningful milestone.',
   '- `verify_scene` reports a scene’s issues (`hasIssues`) and inventory; `get_project_status.nodeCount` is above 0 for a non-empty design.',
   '- `editorUrl` is the link that opens the project in the browser editor, and the one the person is handed: it comes from tool output, and a route inferred from the project id is not a substitute.',

@@ -6,7 +6,12 @@ import {
   columnScriptParams,
   editedScriptLanguage,
 } from '@pascal-app/core/agent-operations'
-import { addColumnTool, isAgentRefusal, refuse } from '@pascal-app/core/agent-tools'
+import {
+  addColumnTool,
+  isAgentRefusal,
+  refuse,
+  surfaceDescription,
+} from '@pascal-app/core/agent-tools'
 import { type AnyNode, GeometryReuseFields, generateId } from '@pascal-app/core/schema'
 import { z } from 'zod'
 import type { SceneOperations } from '../operations'
@@ -26,7 +31,7 @@ export function registerAddColumn(
     addColumnTool.name,
     {
       title: addColumnTool.title,
-      description: addColumnTool.description,
+      description: surfaceDescription(addColumnTool, 'mcp'),
       inputSchema: z.object(addColumnTool.input),
       annotations: DESTRUCTIVE_TOOL_ANNOTATIONS,
     },

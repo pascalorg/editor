@@ -92,7 +92,7 @@ export const deleteProjectFileTool = {
   name: 'delete_project_file',
   title: 'Delete project file',
   description:
-    'Remove a file from the project catalog. A Studio file is removed from Studio too. Only do this when the user requests deletion. Existing scene or chat references may still retain the bytes; this is not guaranteed storage erasure.',
+    'Remove a file from the project catalog. A Studio file is removed from Studio too. Only do this when the user requests deletion. A scene or a conversation that references it may still retain the bytes; this is not guaranteed storage erasure.',
   input: file,
   annotations: {
     readOnlyHint: false,
