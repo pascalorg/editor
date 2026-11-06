@@ -223,6 +223,10 @@ export class RoomLighting {
     portalBase: uniform(0, 'int'),
     extLampStart: uniform(0, 'int'),
     extLampCount: uniform(0, 'int'),
+    // Compact lists of what can light the outside right now (one texel per entry: its index).
+    activeBase: uniform(0, 'int'),
+    spillCount: uniform(0, 'int'),
+    extActiveCount: uniform(0, 'int'),
     map: texture(emptyTexture(RedFormat)) as N,
     data: texture(emptyTexture(RGBAFormat)) as N,
   }
@@ -587,6 +591,7 @@ export class RoomLighting {
     }
     if (dirty) {
       this.writeInteriorPortals()
+      this.writeActiveLists()
       this.markData()
     }
     return dirty
@@ -605,6 +610,7 @@ export class RoomLighting {
       dirty = true
     })
     if (dirty) {
+      this.writeActiveLists()
       this.markData()
       if (this.lastSky) this.updateSky(...this.lastSky) // exterior doors feed the bounce too
     }
@@ -722,7 +728,9 @@ export class RoomLighting {
   // rooms:   [enclosed, lampStart, lampCount, portalStart] [portalCount, bounce.rgb] [coverY, roof, level, 0]
   // lamps:   [pos.xyz, range] [rgb·intensity·on, cosInner] (+ exterior: [spot dir.xyz, cosOuter])
   // portals: [center.xyz, halfW] [normal.xyz, halfH] [radiance.rgb, neighbour] [floorY, mainLamp, gain, kind]
+  // active:  [portal index] per spilling window, then [exterior lamp index] per lit exterior lamp
   private portalBase = 0
+  private activeBase = 0
 
   private allocateData() {
     const nRoomLamps = this.rooms.reduce((s, r) => s + r.lamps.length, 0)
@@ -732,6 +740,8 @@ export class RoomLighting {
       nLamps * 2 +
       this.exteriorLamps.length +
       this.portals.length * PSTRIDE +
+      this.portals.length +
+      this.exteriorLamps.length +
       4
     const rows = Math.max(1, Math.ceil(texels / DATA_W))
     this.data = new Float32Array(DATA_W * rows * 4)
@@ -794,6 +804,33 @@ export class RoomLighting {
     this.u.portalBase.value = this.portalBase
     this.u.extLampStart.value = extLampStart
     this.u.extLampCount.value = this.exteriorLamps.length
+    this.activeBase = this.portalBase + this.portals.length * PSTRIDE
+    this.u.activeBase.value = this.activeBase
+    this.writeActiveLists()
+  }
+
+  /**
+   * The outside is lit only by windows of rooms whose lamp is on and by exterior lamps that are
+   * on: list just those, so the per-pixel spill and lantern loops run over nothing by day and
+   * over the lit few at night, not over every window of the building.
+   */
+  private writeActiveLists() {
+    let spill = 0
+    this.portals.forEach((p, k) => {
+      if (p.kind === 1 || p.gain <= 0.01) return
+      const room = this.rooms[p.room]
+      if (!room?.lamps.some((lamp) => lamp.on && lamp.intensity > 0)) return
+      this.set(this.activeBase + spill, k, 0, 0, 0)
+      spill++
+    })
+    let lit = 0
+    this.exteriorLamps.forEach((lamp, i) => {
+      if (!lamp.on || lamp.intensity <= 0) return
+      this.set(this.activeBase + this.portals.length + lit, i, 0, 0, 0)
+      lit++
+    })
+    this.u.spillCount.value = spill
+    this.u.extActiveCount.value = lit
   }
 
   private uploadMap() {
@@ -1173,8 +1210,9 @@ export class RoomLighting {
    */
   exteriorSpillNode = Fn(([P, Nw]: [N, N]) => {
     const total = vec3(0).toVar()
-    Loop({ start: int(0), end: this.u.portalCount, type: 'int', condition: '<' }, ({ i }: N) => {
-      const base = this.u.portalBase.add(i.mul(PSTRIDE))
+    Loop({ start: int(0), end: this.u.spillCount, type: 'int', condition: '<' }, ({ i }: N) => {
+      const portal = int(this.texel(this.u.activeBase.add(i)).x)
+      const base = this.u.portalBase.add(portal.mul(PSTRIDE))
       const a = this.texel(base)
       const b = this.texel(base.add(1))
       const m = this.texel(base.add(3))
@@ -1233,27 +1271,31 @@ export class RoomLighting {
    */
   exteriorLampsNode = Fn(([P, Nw]: [N, N]) => {
     const out = vec3(0).toVar()
-    Loop({ start: int(0), end: this.u.extLampCount, type: 'int', condition: '<' }, ({ i }: N) => {
-      const base = this.u.extLampStart.add(i.mul(EXT_STRIDE))
+    Loop({ start: int(0), end: this.u.extActiveCount, type: 'int', condition: '<' }, ({ i }: N) => {
+      const lamp = int(this.texel(this.u.activeBase.add(this.u.portalCount).add(i)).x)
+      const base = this.u.extLampStart.add(lamp.mul(EXT_STRIDE))
       const a = this.texel(base)
-      const c = this.texel(base.add(1))
-      const s = this.texel(base.add(2))
       const L = a.xyz.sub(P)
       const d2 = dot(L, L)
-      const d = d2.sqrt()
-      const win = clamp(float(1).sub(d.div(a.w).pow(4)), 0, 1).pow(2)
-      // Spotlights keep their cone (soft edge = the penumbra); omni lamps pass everywhere.
-      const cone = smoothstep(s.w, c.w, dot(L.div(d).negate(), s.xyz))
-      // Spots shade plainly (N·L), as the scene's lights do: a sconce's own wall, edge-on and
-      // close, stays nearly dark. Omni lamps keep a little wrap for the bounce they'd bring.
-      const wrap = select(s.w.lessThan(-1.5), float(0.25), float(0))
-      const facing = dot(Nw, L.div(d)).mul(float(1).sub(wrap)).add(wrap)
-      out.addAssign(
-        c.xyz
-          .mul(win.div(max(d2, LAMP_MIN_D2)))
-          .mul(max(facing, 0))
-          .mul(cone),
-      )
+      // Beyond its reach a lamp adds nothing (its window falls to zero there): skip the rest.
+      If(d2.lessThan(a.w.mul(a.w)), () => {
+        const c = this.texel(base.add(1))
+        const s = this.texel(base.add(2))
+        const d = d2.sqrt()
+        const win = clamp(float(1).sub(d.div(a.w).pow(4)), 0, 1).pow(2)
+        // Spotlights keep their cone (soft edge = the penumbra); omni lamps pass everywhere.
+        const cone = smoothstep(s.w, c.w, dot(L.div(d).negate(), s.xyz))
+        // Spots shade plainly (N·L), as the scene's lights do: a sconce's own wall, edge-on and
+        // close, stays nearly dark. Omni lamps keep a little wrap for the bounce they'd bring.
+        const wrap = select(s.w.lessThan(-1.5), float(0.25), float(0))
+        const facing = dot(Nw, L.div(d)).mul(float(1).sub(wrap)).add(wrap)
+        out.addAssign(
+          c.xyz
+            .mul(win.div(max(d2, LAMP_MIN_D2)))
+            .mul(max(facing, 0))
+            .mul(cone),
+        )
+      })
     })
     return this.softClampLamps(out).mul(this.lampGain).mul(this.lampView)
   })

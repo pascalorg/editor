@@ -1,7 +1,9 @@
 import {
   context,
   diffuseColor,
+  Fn,
   float,
+  If,
   max,
   normalWorld,
   positionWorld,
@@ -35,6 +37,14 @@ export function daylightRoomContext(screenAO: N | null): N {
   const albedoLift = lum.max(spillAlbedoFloor).div(lum)
   const spill = rooms.exteriorSpillNode(positionWorld, normalWorld).mul(albedoLift)
   const exteriorLamps = rooms.exteriorLampsNode(positionWorld, normalWorld)
+  // Inside a room the outside terms are masked to nothing anyway: skip their loops there.
+  const outsideLight = Fn(() => {
+    const light = vec3(0).toVar()
+    If(outsideMask.greaterThan(0), () => {
+      light.assign(spill.add(exteriorLamps).mul(outsideMask))
+    })
+    return light
+  })()
 
   const aoTerm = screenAO ? screenAO.mul(enclosure) : enclosure
   const aoNoRoom = screenAO ?? float(1)
@@ -55,11 +65,7 @@ export function daylightRoomContext(screenAO: N | null): N {
         gi = spill.add(exteriorLamps).div(ao)
       } else {
         const ao = max(aoTerm, 1e-3)
-        gi = spill
-          .add(exteriorLamps)
-          .mul(outsideMask)
-          .div(ao)
-          .add(roomNode.xyz.div(max(enclosure, 1e-3)))
+        gi = outsideLight.div(ao).add(roomNode.xyz.div(max(enclosure, 1e-3)))
       }
       return input !== null ? input.add(gi) : gi
     },
