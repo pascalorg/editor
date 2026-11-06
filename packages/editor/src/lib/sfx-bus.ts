@@ -86,6 +86,10 @@ const INTERACTION_SFX: Record<InteractionSound, [SFXName, number]> = {
   garage: ['garageDoor', 1],
   'shutters-open': ['shuttersOpen', 1],
   'shutters-close': ['shuttersClose', 1],
+  // Cabinet doors and drawers: the panel recordings, as the marketing house plays its cabinets.
+  'panel-open': ['shuttersOpen', 0.75],
+  'panel-swing': ['doorSwing', 0.45],
+  'panel-close': ['shuttersClose', 0.75],
   'switch-on': ['switchOn', 1],
   'switch-off': ['switchOff', 1],
 }

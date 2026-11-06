@@ -22,6 +22,8 @@ import { Box3, type Camera, type Object3D, Vector3 } from 'three'
 
 export type CalloutIcon = 'door' | 'window' | 'shutters' | 'light' | 'fan' | 'power'
 
+export type CalloutSound = { on: InteractionSound; off: InteractionSound; swing?: InteractionSound }
+
 /** Scene data (a name, a part's label) as written, or UI copy to translate. */
 export type CalloutText = string | MessageDescriptor
 
@@ -36,7 +38,8 @@ export type CalloutAction =
       name: string
       /** A part's own name on the pill; without it the pill shows its state word. */
       text?: CalloutText
-      sound: { on: InteractionSound; off: InteractionSound }
+      /** `swing` sounds as a closing run starts, `off` as it lands. */
+      sound: CalloutSound
       /** When closing returns a promise for the end of the run, the closing sound waits for it. */
       toggle: () => void | Promise<void>
     }
@@ -252,8 +255,8 @@ function ToggleAction({ action }: { action: Extract<CalloutAction, { kind: 'togg
 }
 
 /**
- * A door or window swings shut, then latches as its leaf lands (shutters
- * clap shut as they land); anything without a known end sounds at once.
+ * A door, window or cabinet door swings shut, then latches as it lands
+ * (shutters and drawers just land); anything without a known end sounds at once.
  */
 function playClosing(
   action: Extract<CalloutAction, { kind: 'toggle' }>,
@@ -264,8 +267,7 @@ function playClosing(
     emitter.emit('interaction:sound', action.sound.off)
     return
   }
-  if (action.icon === 'door' || action.icon === 'window')
-    emitter.emit('interaction:sound', action.icon === 'door' ? 'door-swing' : 'window-swing')
+  if (action.sound.swing) emitter.emit('interaction:sound', action.sound.swing)
   void settled.then(() => emitter.emit('interaction:sound', action.sound.off))
 }
 

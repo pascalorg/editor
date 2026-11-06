@@ -35,6 +35,7 @@ import { createSurfaceRoleMaterial } from '../../lib/materials'
 import { applyShadowOnly, clearShadowOnly } from '../../lib/shadow-only'
 import useViewer from '../../store/use-viewer'
 import { OPEN_SOUNDS, openingSound } from '../../systems/interactive/callout-actions'
+import { proceduralSettled } from '../../systems/interactive/opening-settled'
 import { useClipActions } from '../../systems/interactive/scripted-clips'
 import { resolveLevelVisibility } from '../../systems/level/level-utils'
 import { GlbInteractive, type GlbInteractiveItem } from './glb-interactive'
@@ -44,6 +45,7 @@ import { GlbReplaceInstances } from './glb-replace-instances'
 import { bindGlbShutters, isGlbShutterHit, toggleGlbShutters } from './glb-scene-motion'
 import { GlbSelectionCallout } from './glb-selection-callout'
 import { useSceneAtmosphere } from './scene-atmosphere'
+import type { CalloutSound } from './selection-callout'
 
 /** Baked `kind` → surface role, so monochrome can recolor by role like the
  *  parametric viewer (textures-off collapses each face to its themed clay). */
@@ -323,6 +325,8 @@ export function GlbScene({
         clips: Map<string, { partId: string; kind: 'finite' | 'spin'; groupId: string }>
         spinParts: string[]
         sequence: number
+        /** The commanded run whose end is still to be announced. */
+        settling: number | null
       }
     >(
       [...byNode].map(([nodeId, entry]) => {
@@ -339,6 +343,7 @@ export function GlbScene({
             clips: entry.clips,
             spinParts,
             sequence: 0,
+            settling: null,
           },
         ]
       }),
@@ -698,8 +703,16 @@ export function GlbScene({
       if (command && command.sequence > entry.sequence) {
         entry.controller.command(command)
         entry.sequence = command.sequence
+        entry.settling = command.sequence
       }
       const frame = entry.controller.tick(delta)
+      if (entry.settling !== null && frame.settled) {
+        emitter.emit('procedural:motion-settled', {
+          nodeId: nodeId as AnyNodeId,
+          sequence: entry.settling,
+        })
+        entry.settling = null
+      }
       for (const [clipName, binding] of entry.clips) {
         const action = proceduralPlayback.actions.get(clipName)
         if (!action) continue
@@ -1006,19 +1019,15 @@ export function GlbScene({
         : openingSound(
             (extras.pascalId && sceneNodes?.[extras.pascalId]) || { type: extras.kind ?? 'door' },
           )
-      const play = (settled?: Promise<void>) => {
+      const play = (settled?: Promise<void>, as: CalloutSound = sound) => {
         if (!prompt) return
         // A garage door's motor runs the whole way, so it starts with the press.
-        if (!(prompt.isOpen && settled) || sound === OPEN_SOUNDS.garage) {
-          emitter.emit('interaction:sound', prompt.isOpen ? sound.off : sound.on)
+        if (!(prompt.isOpen && settled) || as === OPEN_SOUNDS.garage) {
+          emitter.emit('interaction:sound', prompt.isOpen ? as.off : as.on)
           return
         }
-        if (sound === OPEN_SOUNDS.door || sound === OPEN_SOUNDS.window)
-          emitter.emit(
-            'interaction:sound',
-            sound === OPEN_SOUNDS.door ? 'door-swing' : 'window-swing',
-          )
-        void settled.then(() => emitter.emit('interaction:sound', sound.off))
+        if (as.swing) emitter.emit('interaction:sound', as.swing)
+        void settled.then(() => emitter.emit('interaction:sound', as.off))
       }
       const item = toggleableItem(extras.pascalId)
       if (item) {
@@ -1026,7 +1035,16 @@ export function GlbScene({
         operateItem(item.pascalId, item.interactive)
         return
       }
-      if (toggleProcedural(target.hit, target.node) || toggleLoopMechanism(target.node)) play()
+      if (toggleProcedural(target.hit, target.node)) {
+        // A recipe's door or lid swings, its drawer slides; both land on the motion's end.
+        const sliding = findProceduralMotionAncestor(target.hit)?.kind === 'slide'
+        if (switches) play()
+        else
+          play(
+            proceduralSettled(extras.pascalId as AnyNodeId),
+            sliding ? OPEN_SOUNDS.drawer : OPEN_SOUNDS.panel,
+          )
+      } else if (toggleLoopMechanism(target.node)) play()
       else play(toggleOpenable(target.node))
     },
     [sceneNodes, toggleableItem, toggleLoopMechanism, toggleOpenable, toggleProcedural],

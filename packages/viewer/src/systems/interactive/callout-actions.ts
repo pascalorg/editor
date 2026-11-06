@@ -2,7 +2,6 @@ import {
   type AnyNode,
   type AnyNodeId,
   type ControlValue,
-  type InteractionSound,
   type Interactive,
   type InteractiveState,
   isScriptedNode,
@@ -19,9 +18,10 @@ import { operableParts, type ProceduralItemNode } from '@pascal-app/core/procedu
 import type {
   CalloutAction,
   CalloutIcon,
+  CalloutSound,
   CalloutText,
 } from '../../components/viewer/selection-callout'
-import { openingSettled } from './opening-settled'
+import { openingSettled, proceduralSettled } from './opening-settled'
 
 /** Kinds that are the building itself: the breadcrumb names them, no callout does. */
 const STRUCTURE = new Set([
@@ -131,12 +131,15 @@ export function calloutSubtitle(node: AnyNode | undefined, title: string): Callo
 }
 
 export const OPEN_SOUNDS = {
-  door: { on: 'door-open', off: 'door-close' },
-  window: { on: 'window-open', off: 'window-close' },
+  door: { on: 'door-open', off: 'door-close', swing: 'door-swing' },
+  window: { on: 'window-open', off: 'window-close', swing: 'window-swing' },
   garage: { on: 'garage', off: 'garage' },
   shutters: { on: 'shutters-open', off: 'shutters-close' },
+  // A recipe's hinged part (a cabinet or wardrobe door, a lid) and its sliding one (a drawer).
+  panel: { on: 'panel-open', off: 'panel-close', swing: 'panel-swing' },
+  drawer: { on: 'panel-open', off: 'panel-close' },
   switch: { on: 'switch-on', off: 'switch-off' },
-} as const satisfies Record<string, { on: InteractionSound; off: InteractionSound }>
+} as const satisfies Record<string, CalloutSound>
 
 /** The node fields that choose an opening's icon and sound. */
 export type CalloutActionInput = { type: string; doorType?: string }
@@ -152,7 +155,7 @@ export function calloutToggle(
   icon: CalloutIcon,
   on: boolean,
   name: string,
-  sound: { on: InteractionSound; off: InteractionSound },
+  sound: CalloutSound,
   run: () => void | Promise<void>,
   text?: CalloutText,
 ): CalloutAction {
@@ -226,8 +229,15 @@ export function proceduralActions(
       part.kind === 'spin' ? 'fan' : 'door',
       on,
       part.label,
-      part.kind === 'spin' ? OPEN_SOUNDS.switch : OPEN_SOUNDS.door,
-      () => useInteractive.getState().toggleProceduralPart(nodeId, part.id),
+      part.kind === 'spin'
+        ? OPEN_SOUNDS.switch
+        : part.kind === 'slide'
+          ? OPEN_SOUNDS.drawer
+          : OPEN_SOUNDS.panel,
+      () => {
+        useInteractive.getState().toggleProceduralPart(nodeId, part.id)
+        if (part.kind !== 'spin') return proceduralSettled(nodeId)
+      },
       part.label,
     )
   })

@@ -52,6 +52,7 @@ import {
   EYE_LERP_SPEED,
   type MovementInput,
   openingSettled,
+  proceduralSettled,
   STAND_CAPSULE,
   STAND_CLEARANCE,
   STAND_FLOAT_HEIGHT,
@@ -428,6 +429,16 @@ function playTargetSound(target: FirstPersonInteractableTarget) {
   const verb = resolveHudInteract(target)?.verb
   if (!verb || verb === 'press') return
   const node = useScene.getState().nodes[target.id]
+  // A recipe's door or lid swings and claps shut, its drawer slides; both land on the motion's end.
+  if (target.type === 'procedural' && (verb === 'open' || verb === 'close')) {
+    if (verb === 'open') {
+      emitter.emit('interaction:sound', 'panel-open')
+      return
+    }
+    if (target.kind !== 'slide') emitter.emit('interaction:sound', 'panel-swing')
+    void proceduralSettled(target.id).then(() => emitter.emit('interaction:sound', 'panel-close'))
+    return
+  }
   let sound: InteractionSound
   if (verb !== 'open' && verb !== 'close')
     sound = verb === 'turn on' || verb === 'play' ? 'switch-on' : 'switch-off'

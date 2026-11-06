@@ -368,6 +368,11 @@ type WindowAnimationEvents = {
   }
 }
 
+type ProceduralMotionEvents = {
+  /** A procedural item's commanded run (`motionCommand.sequence`) has its moving parts at rest. */
+  'procedural:motion-settled': { nodeId: AnyNodeId; sequence: number }
+}
+
 type ThumbnailEvents = {
   /** `wholeWalls`: every wall drawn whole for the frame, whatever the wall mode (an authored pose, an interior view). */
   'thumbnail:before-capture': { wholeWalls?: boolean } | undefined
@@ -429,6 +434,9 @@ export type InteractionSound =
   | 'garage'
   | 'shutters-open'
   | 'shutters-close'
+  | 'panel-open'
+  | 'panel-swing'
+  | 'panel-close'
   | 'switch-on'
   | 'switch-off'
 
@@ -451,6 +459,7 @@ type EditorEvents = GridEvents &
   PointAskEvents &
   RoomPresetEvents &
   SelectionEvents &
-  InteractionEvents
+  InteractionEvents &
+  ProceduralMotionEvents
 
 export const emitter = mitt<EditorEvents>()
