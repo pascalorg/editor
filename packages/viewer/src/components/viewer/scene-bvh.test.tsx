@@ -98,12 +98,18 @@ function rays(geometry: BufferGeometry): Raycaster[] {
 
 function hits(object: Object3D, raycaster: Raycaster, firstHitOnly = false): Hit[] {
   ;(raycaster as Raycaster & { firstHitOnly?: boolean }).firstHitOnly = firstHitOnly
-  return raycaster.intersectObject(object, false).map(({ distance, point, face }) => ({
-    distance: Number(distance.toFixed(5)),
-    point: round(point.toArray()),
-    normal: round(face?.normal.toArray() ?? []),
-  }))
+  return raycaster
+    .intersectObject(object, false)
+    .map(({ distance, point, face }) => ({
+      distance: Number(distance.toFixed(5)),
+      point: round(point.toArray()),
+      normal: round(face?.normal.toArray() ?? []),
+    }))
+    .sort((a, b) => a.distance - b.distance || JSON.stringify(a).localeCompare(JSON.stringify(b)))
 }
+
+/** Equal-distance hits are equally valid first hits, so only where the ray stops is compared. */
+const stop = (list: Hit[]) => list.slice(0, 1).map(({ distance, point }) => ({ distance, point }))
 
 test('<SceneBvh> accelerates meshes and its hits match stock three raycasts', async () => {
   const cases = geometries()
@@ -134,10 +140,10 @@ test('<SceneBvh> accelerates meshes and its hits match stock three raycasts', as
       expect({ name, hits: actual }).toEqual({ name, hits: expected[index]! })
       expect(actual.filter((list) => list.length > 0).length).toBeGreaterThan(40)
 
-      const first = rays(geometry).map((raycaster) => hits(mesh, raycaster, true))
+      const first = rays(geometry).map((raycaster) => stop(hits(mesh, raycaster, true)))
       expect({ name, first }).toEqual({
         name,
-        first: expected[index]!.map((list) => list.slice(0, 1)),
+        first: expected[index]!.map(stop),
       })
     }
   } finally {
