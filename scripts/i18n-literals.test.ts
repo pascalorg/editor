@@ -22,7 +22,14 @@ import {
   icuLiteral,
   namespaceFor,
 } from './i18n-codemod'
-import { type Candidate, checkAllowlistGrowth, checkLiterals, scanSource } from './i18n-literals'
+import {
+  attributeText,
+  type Candidate,
+  checkAllowlistGrowth,
+  checkLiterals,
+  renderJsxText,
+  scanSource,
+} from './i18n-literals'
 import { untranslatedWords } from './i18n-pseudo-audit'
 
 const allowlist = { texts: ['Pascal'], paths: {} }
@@ -816,4 +823,35 @@ test('with no base that has catalogs the release job fails loudly', () => {
   const { exitCode, output } = defaultReleaseCheck(root)
   expect(exitCode).toBe(1)
   expect(output).toContain('release-check: no base with bundled PO catalogs')
+})
+
+test('JSX text and attributes decode the HTML references the codebase uses, strictly', () => {
+  expect(renderJsxText('2 &times; 3 &gt; 5')).toBe('2 × 3 > 5')
+  expect(renderJsxText('it&#x27;s &quot;done&quot;')).toBe('it\'s "done"')
+  expect(renderJsxText('&#123;value&#125;')).toBe('{value}')
+  expect(renderJsxText('Gr&#252;n &#xFC;ber &#X00FC;')).toBe('Grün über ü')
+  expect(renderJsxText('Tom&nbsp;&amp;&nbsp;Jerry&hellip;')).toBe('Tom\u00a0&\u00a0Jerry…')
+  // Strict decoding: no semicolon or an unknown name stays as written.
+  expect(renderJsxText('Fish &amp chips &copy 2026 &notaname; & co')).toBe(
+    'Fish &amp chips &copy 2026 &notaname; & co',
+  )
+
+  const attribute = (source: string) => {
+    let found: ts.StringLiteral | undefined
+    const visit = (node: ts.Node): void => {
+      if (ts.isStringLiteral(node) && !found) found = node
+      ts.forEachChild(node, visit)
+    }
+    visit(ts.createSourceFile('a.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX))
+    return attributeText(found!)
+  }
+  expect(attribute('<b title="Tom &amp; Jerry &times; 2 &#252;" />')).toBe('Tom & Jerry × 2 ü')
+  expect(attribute('const label = "Tom &amp; Jerry"')).toBe('Tom &amp; Jerry')
+
+  const scanned = scanSource(
+    'packages/editor/src/components/size.tsx',
+    `export function Size() {\n  return <p title="Width &times; depth">Width &times; depth &#x27;cm&#x27;</p>\n}\n`,
+    new Set(),
+  ).map((found) => found.text)
+  expect(scanned).toEqual(['Width × depth', "Width × depth 'cm'"])
 })
