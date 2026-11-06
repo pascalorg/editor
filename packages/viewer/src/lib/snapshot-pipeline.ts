@@ -205,7 +205,7 @@ export async function createSnapshotPipeline({
 
     // The daylight look's room light (windows, lamps, bounce, night spill), as in the viewport.
     if (daylight)
-      (scenePass as unknown as { contextNode: unknown }).contextNode = daylightRoomContext(null)
+      (scenePass as unknown as { contextNode: unknown }).contextNode = daylightRoomContext()
 
     const scenePassColor = scenePass.getTextureNode('output')
     const scenePassDepth = scenePass.getTextureNode('depth')
