@@ -3,6 +3,7 @@ import { describe, expect, test } from 'bun:test'
 import * as THREE from 'three'
 import { SCENE_LAYER } from './layers'
 import { attachOcclusionCuller, createOcclusionCuller } from './occlusion-culler'
+import { renderWithSceneMatrices } from './scene-matrices'
 import { hideFromScene } from './scene-visibility'
 
 const opaque = new THREE.MeshStandardMaterial()
@@ -173,5 +174,21 @@ describe('occlusion culler', () => {
     const culled = createOcclusionCuller(s.root).cull(camera)
     expect(culled.has(behind)).toBe(true)
     expect(culled.has(beside)).toBe(false)
+  })
+
+  test('merged walls set aside for the render still occlude', () => {
+    const s = scene()
+    const behind = s.item(0, -3)
+    hideFromScene(s.wall, 'batched')
+    s.update()
+    const culler = createOcclusionCuller(s.root)
+    let culled = false
+    let setAside = false
+    renderWithSceneMatrices(s.root, () => {
+      setAside = !s.wall.parent!.visible
+      culled = culler.cull(s.camera).has(behind)
+    })
+    expect(setAside).toBe(true)
+    expect(culled).toBe(true)
   })
 })
