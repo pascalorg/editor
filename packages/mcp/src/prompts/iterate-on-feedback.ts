@@ -14,7 +14,7 @@ const PREAMBLE = [
   '  - Bundle related mutations into a single `apply_patch` call so they share one undo step.',
   '  - For multi-room changes, call verify_scene after the mutation and fix reported issues.',
   SCENE_DESIGN_GUIDANCE,
-  '  - Respond ONLY with tool calls. No prose.',
+  '  - When the work is done, report what was verified and the project `editorUrl`.',
 ].join('\n')
 
 /**
