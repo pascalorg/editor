@@ -24,6 +24,18 @@ test('manual capture feedback ignores background requests and other projects', (
   expect(isOverlaySnapshotSave({ ...saved, projectId: 'project' }, 'project')).toBe(true)
   expect(isOverlaySnapshotSave({ ...saved, projectId: 'other' }, 'project')).toBe(false)
   expect(isOverlaySnapshotSave({ ...saved, requestId: 'background' }, 'project')).toBe(false)
+  expect(isOverlaySnapshotSave({ ...saved, requestId: 'shutter' }, 'project', 'shutter')).toBe(true)
+  expect(isOverlaySnapshotSave({ ...saved, requestId: 'old-shutter' }, 'project', 'shutter')).toBe(
+    false,
+  )
+  expect(isOverlaySnapshotSave(saved, 'project', 'shutter')).toBe(false)
+  expect(
+    isOverlaySnapshotSave(
+      { ...saved, projectId: 'other', requestId: 'shutter' },
+      'project',
+      'shutter',
+    ),
+  ).toBe(false)
 })
 
 describe('capture scene restoration', () => {
