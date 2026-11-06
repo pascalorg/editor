@@ -357,6 +357,9 @@ export class NodeBatchStore implements NodeBatchStoreApi {
     batched.castShadow = shadows.castShadow
     batched.receiveShadow = shadows.receiveShadow
     batched.perObjectFrustumCulled = true
+    // Opaque: a depth sort buys little (the prepass lays depth first) and costs a sort and an
+    // indirect-buffer upload per pass.
+    batched.sortObjects = false
     // Whole-container culling would use a bounding sphere computed at first
     // cull — instances joining farther out later could vanish with the whole
     // batch. Per-instance culling above already handles visibility.

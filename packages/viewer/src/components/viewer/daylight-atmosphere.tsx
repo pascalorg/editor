@@ -132,7 +132,7 @@ export function DaylightAtmosphere() {
       skyRadiance: (dir) => sky.skyRadiance(dir),
       reflectionRadiance: (dir) => sky.skyRadiance(dir, { disc: false }).mul(ENV_INTENSITY),
       // Just above the horizon in the view's heading: what the ground fog and the backdrop meet at.
-      fogRadiance: (dir) => sky.skyRadiance(vec3(dir.x, 0.004, dir.z), { disc: false }),
+      fogRadiance: (dir) => sky.horizonRadiance(vec3(dir.x, 0.004, dir.z)),
       environmentNode: (environment.target
         ? pmremTexture(environment.target.texture).mul(ENV_INTENSITY)
         : vec3(0)) as any,
