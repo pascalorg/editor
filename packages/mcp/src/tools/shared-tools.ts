@@ -9,12 +9,11 @@ import {
   achievedChanges,
   applyAgentOutcome,
   assetViewNeeds,
-  assetViewsReadCatalog,
   buildBatchObjects,
   createAssetViewLoader,
   createFetchAssetViewIO,
   furnishingRefusal,
-  namesCatalogPieces,
+  readCatalog,
   type SceneChanges,
   startOfSession,
   writeCollections,
@@ -112,8 +111,6 @@ export type OperationTool = {
   annotations: AgentToolAnnotations
   outputSchema?: Record<string, z.ZodType>
   envelope?: (bridge: SceneOperations) => Record<string, unknown>
-  /** Reads the host's item library: only these calls wait for it (the hosted one is a query). */
-  catalog?: true
 }
 
 export type PlanReadingHosts = {
@@ -408,7 +405,6 @@ const SHARED_TOOLS: SharedTool[] = [
     contract: placeItemsTool,
     operation: AGENT_OPERATIONS.place_items,
     annotations: ADDITIVE_TOOL_ANNOTATIONS,
-    catalog: true,
   },
   {
     contract: deleteNodeTool,
@@ -463,7 +459,6 @@ const SHARED_TOOLS: SharedTool[] = [
     contract: furnishRoomTool,
     operation: AGENT_OPERATIONS.furnish_room,
     annotations: ADDITIVE_TOOL_ANNOTATIONS,
-    catalog: true,
     outputSchema: {
       ok: z.literal(true),
       placed: z.number(),
@@ -496,7 +491,6 @@ const SHARED_TOOLS: SharedTool[] = [
     contract: placeInRoomTool,
     operation: AGENT_OPERATIONS.place_in_room,
     annotations: ADDITIVE_TOOL_ANNOTATIONS,
-    catalog: true,
     outputSchema: {
       ok: z.literal(true),
       itemId: z.string(),
@@ -532,13 +526,11 @@ const SHARED_TOOLS: SharedTool[] = [
     contract: searchAssetsTool,
     operation: AGENT_OPERATIONS.search_assets,
     annotations: READ_ONLY_TOOL_ANNOTATIONS,
-    catalog: true,
   },
   {
     contract: viewAssetsTool,
     operation: AGENT_OPERATIONS.view_assets,
     annotations: READ_ONLY_TOOL_ANNOTATIONS,
-    catalog: true,
   },
   {
     contract: searchMaterialsTool,
@@ -752,20 +744,18 @@ export function registerOperationTool(
       // The agent's session begins with its first call, before anything is written.
       const first = bridge.agentSession && startOfSession(bridge.agentSession.read(), before)
       if (first) bridge.agentSession?.keep(first)
-      // Gate before module compilation. The gate reads the catalog's tags to let technical
-      // equipment and plants through; a batch's calls are checked one by one, so its catalog is
-      // read too.
+      // Gate before module compilation. Under an open source the gate reads the catalog's tags to
+      // let technical equipment and plants through; a batch's calls are checked one by one. Any
+      // other refused call reads nothing of the library.
       const designBrief = briefInForce(bridge)
-      const gateCatalog =
-        designBrief?.source === 'open' &&
-        (namesCatalogPieces(tool.contract.name, input) ||
-          (tool.contract.name === runBatchTool.name && Array.isArray(input.calls)))
-          ? await catalog()
+      const gateRead =
+        designBrief?.source === 'open'
+          ? await readCatalog(before, tool.contract.name, input, catalog)
           : undefined
       if (designBrief !== undefined) {
         const refusal = furnishingRefusal(tool.contract.name, input, designBrief, {
           session: bridge.agentSession?.read(),
-          catalog: gateCatalog,
+          catalog: gateRead?.catalog,
         })
         if (refusal) {
           // A refusal can ask the session to remember what it refused (a catalog piece under an open source).
@@ -773,21 +763,6 @@ export function registerOperationTool(
           return refusalResult(refusal)
         }
       }
-      const batchPlacesInRoom =
-        tool.contract.name === runBatchTool.name &&
-        Array.isArray(input.calls) &&
-        input.calls.some(
-          (call) =>
-            typeof call === 'object' &&
-            call !== null &&
-            'tool' in call &&
-            call.tool === placeInRoomTool.name &&
-            (designBrief === undefined ||
-              !furnishingRefusal(call.tool, 'input' in call ? call.input : {}, designBrief, {
-                session: bridge.agentSession?.read(),
-                catalog: gateCatalog,
-              })),
-        )
       const batchesObjects =
         tool.contract.name === runBatchTool.name &&
         Array.isArray(input.calls) &&
@@ -806,9 +781,8 @@ export function registerOperationTool(
         ...(bridge.nodeSchema && { nodeSchema: (kind: string) => bridge.nodeSchema!(kind) }),
         session: bridge.agentSession?.read(),
         ...(designBrief !== undefined && { designBrief }),
-        ...((tool.catalog ||
-          batchPlacesInRoom ||
-          assetViewsReadCatalog(tool.contract.name, input)) && { catalog: await catalog() }),
+        // What the call reads of the library: all of a list, or what it names of a source.
+        ...(gateRead ?? (await readCatalog(before, tool.contract.name, input, catalog))),
         ...(batchesObjects && {
           batchObjects: await buildBatchObjects(
             input.calls as { tool?: unknown; input?: unknown }[],

@@ -192,7 +192,7 @@ export function createAssetViewLoader(io: AssetViewIO): AssetViewLoader {
 }
 
 /** The `paint` inputs of a call, alone or in a batch, that name no role: they list the surfaces. */
-function roleLessPaints(tool: string, input: unknown): { targets: unknown[] }[] {
+export function roleLessPaints(tool: string, input: unknown): { targets: unknown[] }[] {
   const calls =
     tool === 'run_batch'
       ? ((input as { calls?: { tool?: unknown; input?: unknown }[] })?.calls ?? []).flatMap(
@@ -206,10 +206,6 @@ function roleLessPaints(tool: string, input: unknown): { targets: unknown[] }[] 
     return !role && Array.isArray(targets) ? [{ targets }] : []
   })
 }
-
-/** Whether `assetViewNeeds` looks items up in the catalog for this call, so the host must hand it over. */
-export const assetViewsReadCatalog = (tool: string, input: unknown): boolean =>
-  tool === 'view_assets' || roleLessPaints(tool, input).length > 0
 
 /**
  * What a host reads before a call, as the catalog is fetched: the items `view_assets` names (with

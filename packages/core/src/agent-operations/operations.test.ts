@@ -13,97 +13,114 @@ import {
   StairNode,
   StairSegmentNode,
 } from '../schema'
-import { AGENT_TOOL_CASES, finiteReadbackProblems } from './__fixtures__/cases'
+import { AGENT_TOOL_CASES, type AgentToolCase, finiteReadbackProblems } from './__fixtures__/cases'
 import { paintedKitchenScene } from './__fixtures__/room-cases'
 import { applyAgentOutcome } from './apply-outcome'
+import { assetCatalogSource, readCatalog } from './asset-catalog'
 import { AGENT_OPERATIONS, applySceneChanges } from './index'
 import { EMPTY_SESSION, keepInSession } from './scene-checkpoint'
+import type { AgentContext } from './types'
 
 // Layer 1 of 3: the core operations, on every shared tool's edge cases.
 describe('agent operations', () => {
   for (const c of AGENT_TOOL_CASES) {
     if (c.surfaces && !c.surfaces.includes('core')) continue
-    test(`${c.tool}: ${c.name}`, () => {
-      const nodes = c.scene().nodes as Record<string, AnyNode>
-      const readBefore =
-        c.readOnly || ['get_walls', 'get_zones', 'get_level_summary'].includes(c.tool)
-          ? structuredClone(nodes)
-          : undefined
-      let session = c.context?.session?.() ?? EMPTY_SESSION
-      const operation = AGENT_OPERATIONS[c.tool as keyof typeof AGENT_OPERATIONS]
-      expect(operation).toBeDefined()
-      // A scene's materials, as both hosts keep them: a native finish becomes one.
-      const context = {
-        activeLevelId: c.context?.activeLevelId ?? null,
-        catalog: c.context?.catalog,
-        assetViews: c.context?.assetViews,
-        designBrief: c.context?.designBrief,
-        requestText: c.context?.requestText,
-        session,
-        materials: {},
-      }
-      // As on both surfaces, the operation gets the input its contract parsed ("36 in" → metres).
-      const contract = AGENT_TOOL_CONTRACTS.find((candidate) => candidate.name === c.tool)!
-      const input = z.object(contract.input).parse(c.input)
-      if ('refusal' in c.expect) {
-        let error: unknown
-        try {
-          operation(nodes, input as never, context)
-        } catch (thrown) {
-          error = thrown
-        }
-        expect(isAgentRefusal(error)).toBe(true)
-        expect((error as AgentRefusal).code).toBe(c.expect.refusal)
-        for (const text of c.expect.mentions ?? []) expect((error as Error).message).toContain(text)
-        return
-      }
-      // Applied as both surfaces apply it: a scene without a store, derived by the pure reconciler.
-      let after: Record<string, AnyNode> = nodes
-      const outcome = operation(nodes, input as never, context)
-      if (readBefore) {
-        expect(outcome.changes).toBeUndefined()
-        expect(outcome.afterReconcile).toBeUndefined()
-        expect(nodes).toEqual(readBefore)
-      }
-      const result = applyAgentOutcome(outcome, {
-        keep: (kept) => {
-          session = keepInSession(session, kept)
-        },
-        getNodes: () => after,
-        applyChanges: (changes) => {
-          after = applySceneChanges(after, changes)
-        },
-        reconcile: () => {
-          after = reconcileSceneStructure({ nodes: after, mintId: (kind) => generateId(kind) })
-            .nodes as Record<string, AnyNode>
-        },
+    // A library is a list held whole, or a source the host reads before the call: the same answers.
+    const own = c.context?.catalog
+    for (const source of own ? [false, true] : [false])
+      test(`${c.tool}: ${c.name}${source ? ' (catalog source)' : ''}`, async () => {
+        const nodes = c.scene().nodes as Record<string, AnyNode>
+        const catalog =
+          own && source
+            ? await readCatalog(nodes, c.tool, c.input, assetCatalogSource(own))
+            : { catalog: own }
+        runCase(c, nodes, catalog)
       })
-      expect(c.expect.session?.(session) ?? []).toEqual([])
-      expect(result).toMatchObject(c.expect.result)
-      if (readBefore) {
-        expect(after).toEqual(readBefore)
-        expect(finiteReadbackProblems(result)).toEqual([])
-        expect(JSON.parse(JSON.stringify(result))).toMatchObject(c.expect.result)
-      }
-      for (const id of c.expect.present ?? []) expect(after[id]).toBeDefined()
-      for (const id of c.expect.absent ?? []) expect(after[id]).toBeUndefined()
-      for (const [id, fields] of Object.entries(c.expect.after ?? {}))
-        expect(after[id]).toMatchObject(fields)
-      for (const [key, entries] of Object.entries(c.expect.contains ?? {}))
-        for (const entry of entries)
-          expect((result as Record<string, unknown[]>)[key]).toContainEqual(
-            expect.objectContaining(entry),
-          )
-      for (const [key, entries] of Object.entries(c.expect.lacks ?? {}))
-        for (const entry of entries)
-          expect((result as Record<string, unknown[]>)[key]).not.toContainEqual(
-            expect.objectContaining(entry),
-          )
-      for (const text of c.expect.mentions ?? []) expect(JSON.stringify(result)).toContain(text)
-      expect(c.expect.check?.(result, after) ?? []).toEqual([])
-    })
   }
 })
+
+function runCase(
+  c: AgentToolCase,
+  nodes: Record<string, AnyNode>,
+  catalog: Pick<AgentContext, 'catalog' | 'catalogSearches'>,
+): void {
+  const readBefore =
+    c.readOnly || ['get_walls', 'get_zones', 'get_level_summary'].includes(c.tool)
+      ? structuredClone(nodes)
+      : undefined
+  let session = c.context?.session?.() ?? EMPTY_SESSION
+  const operation = AGENT_OPERATIONS[c.tool as keyof typeof AGENT_OPERATIONS]
+  expect(operation).toBeDefined()
+  // A scene's materials, as both hosts keep them: a native finish becomes one.
+  const context = {
+    activeLevelId: c.context?.activeLevelId ?? null,
+    ...catalog,
+    assetViews: c.context?.assetViews,
+    designBrief: c.context?.designBrief,
+    requestText: c.context?.requestText,
+    session,
+    materials: {},
+  }
+  // As on both surfaces, the operation gets the input its contract parsed ("36 in" → metres).
+  const contract = AGENT_TOOL_CONTRACTS.find((candidate) => candidate.name === c.tool)!
+  const input = z.object(contract.input).parse(c.input)
+  if ('refusal' in c.expect) {
+    let error: unknown
+    try {
+      operation(nodes, input as never, context)
+    } catch (thrown) {
+      error = thrown
+    }
+    expect(isAgentRefusal(error)).toBe(true)
+    expect((error as AgentRefusal).code).toBe(c.expect.refusal)
+    for (const text of c.expect.mentions ?? []) expect((error as Error).message).toContain(text)
+    return
+  }
+  // Applied as both surfaces apply it: a scene without a store, derived by the pure reconciler.
+  let after: Record<string, AnyNode> = nodes
+  const outcome = operation(nodes, input as never, context)
+  if (readBefore) {
+    expect(outcome.changes).toBeUndefined()
+    expect(outcome.afterReconcile).toBeUndefined()
+    expect(nodes).toEqual(readBefore)
+  }
+  const result = applyAgentOutcome(outcome, {
+    keep: (kept) => {
+      session = keepInSession(session, kept)
+    },
+    getNodes: () => after,
+    applyChanges: (changes) => {
+      after = applySceneChanges(after, changes)
+    },
+    reconcile: () => {
+      after = reconcileSceneStructure({ nodes: after, mintId: (kind) => generateId(kind) })
+        .nodes as Record<string, AnyNode>
+    },
+  })
+  expect(c.expect.session?.(session) ?? []).toEqual([])
+  expect(result).toMatchObject(c.expect.result)
+  if (readBefore) {
+    expect(after).toEqual(readBefore)
+    expect(finiteReadbackProblems(result)).toEqual([])
+    expect(JSON.parse(JSON.stringify(result))).toMatchObject(c.expect.result)
+  }
+  for (const id of c.expect.present ?? []) expect(after[id]).toBeDefined()
+  for (const id of c.expect.absent ?? []) expect(after[id]).toBeUndefined()
+  for (const [id, fields] of Object.entries(c.expect.after ?? {}))
+    expect(after[id]).toMatchObject(fields)
+  for (const [key, entries] of Object.entries(c.expect.contains ?? {}))
+    for (const entry of entries)
+      expect((result as Record<string, unknown[]>)[key]).toContainEqual(
+        expect.objectContaining(entry),
+      )
+  for (const [key, entries] of Object.entries(c.expect.lacks ?? {}))
+    for (const entry of entries)
+      expect((result as Record<string, unknown[]>)[key]).not.toContainEqual(
+        expect.objectContaining(entry),
+      )
+  for (const text of c.expect.mentions ?? []) expect(JSON.stringify(result)).toContain(text)
+  expect(c.expect.check?.(result, after) ?? []).toEqual([])
+}
 
 test('room intent writes round-trip through readback without deleting local paint', () => {
   let nodes = paintedKitchenScene().nodes as Record<string, AnyNode>

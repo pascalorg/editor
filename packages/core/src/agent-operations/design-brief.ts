@@ -344,17 +344,13 @@ function placeableFromCatalog(id: string, catalog: readonly AssetInput[] | undef
 }
 
 /** The catalog ids a placement call names. */
-function placedAssets(tool: string, input: Record<string, unknown>): string[] {
+export function placedAssets(tool: string, input: unknown): string[] {
+  const args = asRecord(input)
   const named =
     tool === 'place_items' || tool === 'place_by_relation'
-      ? (Array.isArray(input.items) ? input.items : []).map((item) => asRecord(item).assetId)
-      : [input.assetId]
+      ? (Array.isArray(args.items) ? args.items : []).map((item) => asRecord(item).assetId)
+      : [args.assetId]
   return [...new Set(named.filter((id): id is string => typeof id === 'string'))]
-}
-
-/** Whether a call names catalog pieces, which the gate reads the library to decide. */
-export function namesCatalogPieces(tool: string, input: unknown): boolean {
-  return placedAssets(tool, asRecord(input)).length > 0
 }
 
 /** What the gate reads beyond the brief: the session's refusals, and the catalog's tags. */

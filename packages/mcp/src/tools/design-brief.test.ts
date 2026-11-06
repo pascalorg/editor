@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Client, InMemoryTransport } from '@modelcontextprotocol/client'
+import { assetCatalogSource } from '@pascal-app/core/agent-operations'
 import { DESIGN_EXAMPLE } from '@pascal-app/core/procedural-items'
 import {
   type AnyNode,
@@ -14,7 +15,6 @@ import { SceneBridge } from '../bridge/scene-bridge'
 import { createPascalMcpServer } from '../server'
 import { SqliteSceneStore } from '../storage/sqlite-scene-store'
 import type { GeometryScriptHost } from './add-object'
-import type { AssetCatalog } from './asset-catalog'
 
 /**
  * The owner's bedroom prompt, over MCP (16 Oct): a 4 by 5 m bedroom with a double bed, two
@@ -132,7 +132,8 @@ describe('the design brief over MCP', () => {
     storeArtifact: async ({ sha256 }) => sha256,
     readArtifact: async () => null,
   }
-  const catalog: AssetCatalog = async () => CATALOG
+  // A library searched where it is kept: the gate reads the tags of the pieces a call names.
+  const catalog = assetCatalogSource(CATALOG)
 
   const call = async (name: string, args: Record<string, unknown>) => {
     const result = (await client.callTool({ name, arguments: args })) as Result
