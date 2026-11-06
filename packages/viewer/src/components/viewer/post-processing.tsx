@@ -617,8 +617,10 @@ const PostProcessingPasses = ({
 
       // Bloom on the HDR image; the threshold follows exposure so only display-white blooms.
       if (bloomEnabled) {
+        // Editor highlights stay out of it (`markNoBloom`): they must not haze over the object.
+        const bloomWeight = scenePassNormal ? scenePass.getTextureNode('lighting').g : tslFloat(1)
         const glow = bloom(
-          sceneColor,
+          vec4(sceneColor.rgb.mul(bloomWeight), sceneColor.a),
           DAYLIGHT_BLOOM.strength,
           DAYLIGHT_BLOOM.radius,
           exposureInverse,

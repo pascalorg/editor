@@ -276,6 +276,7 @@ export {
   revealTimingAt,
 } from './lib/reveal-schedule'
 export { planRevealWindows, type RevealWindow } from './lib/reveal-windows'
+export { markNoBloom } from './lib/scene-pass-mrt'
 export { createSceneSupportHeightSampler } from './lib/scene-support-height'
 export {
   getSceneTheme,

@@ -40,6 +40,7 @@ import {
   resolveSlotDefaultRef,
   resolveSurfaceColor,
 } from '../../lib/materials'
+import { markNoBloom } from '../../lib/scene-pass-mrt'
 
 type SceneMaterials = Record<SceneMaterialId, SceneMaterial> | undefined
 
@@ -316,7 +317,7 @@ function createHighlightedWallMaterial(material: Material, kind: WallHighlightKi
   }
   highlightedMaterial.needsUpdate = true
 
-  return highlightedMaterial
+  return markNoBloom(highlightedMaterial)
 }
 
 // Light selection highlight for walls (walls are excluded from the generic
@@ -384,6 +385,7 @@ function getEmissiveHighlightMaterial(
     clone.emissiveIntensity = Math.max(clone.emissiveIntensity ?? 0, emissiveIntensity)
   }
   clone.needsUpdate = true
+  markNoBloom(clone)
   cache.set(base, { clone, map: baseMap })
   return clone
 }

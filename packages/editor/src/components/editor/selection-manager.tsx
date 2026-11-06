@@ -29,6 +29,7 @@ import {
   wallFaceScriptPaintRefusal,
 } from '@pascal-app/core'
 import {
+  markNoBloom,
   ROOF_HEEL_MATERIAL_INDEX,
   registerMaterialCacheCleanup,
   useViewer,
@@ -565,7 +566,7 @@ function createHighlightedMaterial(material: Material, kind: HighlightKind): Mat
   }
 
   highlightedMaterial.needsUpdate = true
-  return highlightedMaterial
+  return markNoBloom(highlightedMaterial)
 }
 
 function createHighlightedMaterials(
