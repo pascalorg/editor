@@ -218,9 +218,17 @@ export function Lights() {
       if (!sourceCamera && now - lastBoundsTime.current >= BOUNDS_REFRESH_INTERVAL) {
         lastBoundsTime.current = now
         const box = boundsBox.current.makeEmpty()
+        const counted = new Set<THREE.Object3D>()
         for (const [id, obj] of sceneRegistry.nodes) {
           if (SHADOW_EXCLUDED_TYPES.some((type) => sceneRegistry.byType[type]!.has(id))) continue
-          box.expandByObject(obj)
+          counted.add(obj)
+        }
+        // A counted node's subtree already holds the nodes below it: walk each mesh once, not
+        // once per counted ancestor (building, level, wall, item…).
+        for (const obj of counted) {
+          let nested = false
+          for (let p = obj.parent; p && !nested; p = p.parent) nested = counted.has(p)
+          if (!nested) expandByWorldBounds(box, obj)
         }
         // Baked artifacts stay out of the registry: frame their shadow casters instead.
         if (box.isEmpty() && daylightShadow) expandByShadowCasters(state.scene, box)
@@ -577,6 +585,34 @@ function shadowSignature(
         0.5)
   }
   return h
+}
+
+const _objectBox = new THREE.Box3()
+
+/**
+ * `Box3.expandByObject` without its `updateWorldMatrix` on every object visited, which recomposed
+ * ~10k matrices per refresh: the frame's render already brought world matrices up to date
+ * (scene-matrices.ts), and bounds a frame old are fine for fitting the shadow frustum.
+ */
+function expandByWorldBounds(box: THREE.Box3, root: THREE.Object3D) {
+  root.traverse((object) => {
+    const geometry = (object as THREE.Mesh).geometry as THREE.BufferGeometry | undefined
+    if (geometry === undefined) return
+    const owned = object as THREE.Object3D & {
+      boundingBox?: THREE.Box3 | null
+      computeBoundingBox?: () => void
+    }
+    if (owned.boundingBox !== undefined) {
+      if (owned.boundingBox === null) owned.computeBoundingBox?.()
+      if (!owned.boundingBox) return
+      _objectBox.copy(owned.boundingBox)
+    } else {
+      if (geometry.boundingBox === null) geometry.computeBoundingBox()
+      _objectBox.copy(geometry.boundingBox!)
+    }
+    _objectBox.applyMatrix4(object.matrixWorld)
+    box.union(_objectBox)
+  })
 }
 
 /** Shadow-casting meshes of a scene (skipping the effectively infinite grounds). */
