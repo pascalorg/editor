@@ -1,4 +1,5 @@
 import { type ChildProcess, spawn } from 'node:child_process'
+import { once } from 'node:events'
 import { mkdtemp, rm } from 'node:fs/promises'
 import http from 'node:http'
 import { createRequire } from 'node:module'
@@ -21,10 +22,19 @@ const port = await freePort()
 const origin = `http://127.0.0.1:${port}`
 let server: ChildProcess | null = null
 const serverOutput: string[] = []
+const REQUEST_TIMEOUT_MS = 15_000
+
+for (const signal of ['SIGINT', 'SIGTERM'] as const) {
+  process.once(signal, () => {
+    server?.kill('SIGKILL')
+    process.exit(1)
+  })
+}
 
 try {
+  // Production runs `next start` on Node, so the smoke does too (not Bun's Node compatibility).
   server = spawn(
-    process.execPath,
+    'node',
     [
       createRequire(import.meta.url).resolve('next/dist/bin/next'),
       'start',
@@ -51,7 +61,7 @@ try {
   await waitForHealth()
 
   await check('health route answers JSON', async () => {
-    const response = await fetch(`${origin}/api/health`)
+    const response = await get(`${origin}/api/health`)
     expect(response.status === 200, `status ${response.status}`)
     const body = (await response.json()) as { status?: string; app?: string }
     expect(body.status === 'ok' && body.app === 'editor', JSON.stringify(body))
@@ -63,7 +73,7 @@ try {
       ['/scene/smoke', '/project/smoke'],
       ['/scenes', '/'],
     ]) {
-      const response = await fetch(`${origin}${from}`, { redirect: 'manual' })
+      const response = await get(`${origin}${from}`, { redirect: 'manual' })
       const location = new URL(response.headers.get('location') ?? '', origin).pathname
       expect(
         response.status === 307 && location === to,
@@ -73,7 +83,7 @@ try {
   })
 
   await check('embed pages allow framing', async () => {
-    const response = await fetch(`${origin}/embed/smoke`)
+    const response = await get(`${origin}/embed/smoke`)
     const policy = response.headers.get('content-security-policy')
     expect(policy === 'frame-ancestors *', `content-security-policy: ${policy}`)
   })
@@ -83,10 +93,13 @@ try {
       ['', 'en'],
       ['?lang=fr', 'fr'],
     ]) {
-      const response = await fetch(`${origin}/${query}`)
+      const response = await get(`${origin}/${query}`)
       const html = await response.text()
       expect(response.status === 200, `/${query}: status ${response.status}`)
-      expect(html.includes(`lang="${lang}"`), `/${query} did not render <html lang="${lang}">`)
+      expect(
+        new RegExp(`<html[^>]*\\slang="${lang}"`).test(html),
+        `/${query} did not render <html lang="${lang}">`,
+      )
     }
   })
 
@@ -104,32 +117,32 @@ try {
   })
 
   await check('scene routes round-trip without serving stale reads', async () => {
-    const created = await fetch(`${origin}/api/scenes`, {
+    const created = await get(`${origin}/api/scenes`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ id: 'smoke-scene', name: 'Smoke scene', graph: sceneGraph() }),
     })
     expect(created.status === 201, `create: ${created.status} ${await created.clone().text()}`)
 
-    const first = (await (await fetch(`${origin}/api/scenes/smoke-scene`)).json()) as {
+    const first = (await (await get(`${origin}/api/scenes/smoke-scene`)).json()) as {
       name?: string
       version?: number
     }
     expect(first.name === 'Smoke scene', `first read: ${JSON.stringify(first)}`)
 
-    const renamed = await fetch(`${origin}/api/scenes/smoke-scene`, {
+    const renamed = await get(`${origin}/api/scenes/smoke-scene`, {
       method: 'PATCH',
       headers: { 'content-type': 'application/json', 'if-match': `"${first.version}"` },
       body: JSON.stringify({ name: 'Renamed smoke scene' }),
     })
     expect(renamed.status === 200, `rename: ${renamed.status} ${await renamed.clone().text()}`)
 
-    const second = (await (await fetch(`${origin}/api/scenes/smoke-scene`)).json()) as {
+    const second = (await (await get(`${origin}/api/scenes/smoke-scene`)).json()) as {
       name?: string
     }
     expect(second.name === 'Renamed smoke scene', `read after rename: ${JSON.stringify(second)}`)
 
-    const listed = (await (await fetch(`${origin}/api/scenes`)).json()) as {
+    const listed = (await (await get(`${origin}/api/scenes`)).json()) as {
       scenes?: Array<{ id: string; name: string }>
     }
     expect(
@@ -138,7 +151,7 @@ try {
       `list: ${JSON.stringify(listed)}`,
     )
 
-    const stale = await fetch(`${origin}/api/scenes/smoke-scene`, {
+    const stale = await get(`${origin}/api/scenes/smoke-scene`, {
       method: 'PATCH',
       headers: { 'content-type': 'application/json', 'if-match': `"${first.version}"` },
       body: JSON.stringify({ name: 'Lost update' }),
@@ -147,18 +160,18 @@ try {
   })
 
   await check('a saved project page renders on the server', async () => {
-    const response = await fetch(`${origin}/project/smoke-scene`)
+    const response = await get(`${origin}/project/smoke-scene`)
     expect(response.status === 200, `status ${response.status}`)
     expect((await response.text()).includes('<html'), 'no HTML document')
   })
 
   await check('the image optimizer serves raster images and refuses SVG', async () => {
-    const raster = await fetch(`${origin}/_next/image?url=%2Ficons%2Fappliance.webp&w=64&q=75`)
+    const raster = await get(`${origin}/_next/image?url=%2Ficons%2Fappliance.webp&w=64&q=75`)
     expect(
       raster.status === 200 && raster.headers.get('content-type')?.startsWith('image/') === true,
       `webp: ${raster.status} ${raster.headers.get('content-type')}`,
     )
-    const svg = await fetch(`${origin}/_next/image?url=%2Fglobe.svg&w=64&q=75`)
+    const svg = await get(`${origin}/_next/image?url=%2Fglobe.svg&w=64&q=75`)
     const body = await svg.text()
     expect(
       svg.status === 400 && body.includes('image type is not allowed'),
@@ -171,7 +184,7 @@ try {
   console.error(serverOutput.join('').slice(-4000))
   throw error
 } finally {
-  server?.kill('SIGTERM')
+  await stopServer()
   await rm(dataDirectory, { recursive: true, force: true })
 }
 
@@ -181,6 +194,19 @@ function sceneGraph() {
     nodes: { [levelId]: { object: 'node', id: levelId, type: 'level', level: 0, children: [] } },
     rootNodeIds: [levelId],
   }
+}
+
+function get(url: string, init: RequestInit = {}): Promise<Response> {
+  return fetch(url, { ...init, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) })
+}
+
+async function stopServer(): Promise<void> {
+  if (!server || server.exitCode !== null || server.signalCode !== null) return
+  const exited = once(server, 'exit')
+  server.kill('SIGTERM')
+  const timer = setTimeout(() => server?.kill('SIGKILL'), 10_000)
+  await exited
+  clearTimeout(timer)
 }
 
 async function check(name: string, run: () => Promise<void>): Promise<void> {
@@ -195,7 +221,9 @@ function expect(condition: boolean, detail: string): asserts condition {
 async function waitForHealth(): Promise<void> {
   const deadline = Date.now() + 60_000
   while (Date.now() < deadline) {
-    if (server?.exitCode !== null) throw new Error(`next start exited with ${server?.exitCode}`)
+    if (!server || server.exitCode !== null || server.signalCode !== null) {
+      throw new Error(`next start exited (${server?.exitCode ?? server?.signalCode})`)
+    }
     try {
       const response = await fetch(`${origin}/api/health`, { signal: AbortSignal.timeout(2_000) })
       if (response.ok) return
@@ -223,6 +251,9 @@ function requestWithHost(
           }),
         )
       },
+    )
+    request.setTimeout(REQUEST_TIMEOUT_MS, () =>
+      request.destroy(new Error(`${pathname} timed out`)),
     )
     request.on('error', reject)
     request.end()

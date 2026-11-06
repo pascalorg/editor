@@ -118,6 +118,7 @@ jobs:
       # server rendering, scene route handlers and the image optimizer.
       - name: Smoke-test the production editor server
         working-directory: apps/editor
+        timeout-minutes: 5
         run: bun run smoke
 
   cli-smoke:
