@@ -1,13 +1,18 @@
 import { beforeEach, describe, expect, test } from 'bun:test'
+import { loadPlugin, nodeRegistry } from '@pascal-app/core'
 import {
+  BaseNode,
   BuildingNode,
   DoorNode,
   ItemNode,
   LevelNode,
+  nodeType,
+  objectId,
   SiteNode,
   WallNode,
   ZoneNode,
 } from '@pascal-app/core/schema'
+import { z } from 'zod'
 import { SceneBridge } from './scene-bridge'
 
 function tick() {
@@ -201,6 +206,53 @@ describe('SceneBridge', () => {
   })
 
   describe('applyPatch', () => {
+    test('accepts registered plugin nodes in create patches and validation', async () => {
+      const restoreRegistry = nodeRegistry._snapshot()
+      const PluginProbe = BaseNode.extend({
+        id: objectId('pluginprobe'),
+        type: nodeType('fixture:mcp-probe'),
+        value: z.number().default(1),
+      })
+
+      try {
+        await loadPlugin({
+          id: 'fixture:mcp-probe-pack',
+          apiVersion: 1,
+          nodes: [
+            {
+              kind: 'fixture:mcp-probe',
+              schemaVersion: 1,
+              schema: PluginProbe,
+              category: 'utility',
+              defaults: () => ({
+                object: 'node',
+                parentId: null,
+                visible: true,
+                metadata: {},
+                value: 1,
+              }),
+              capabilities: {},
+            } as any,
+          ],
+        })
+
+        const level = bridge.findNodes({ type: 'level' })[0]!
+        const probe = PluginProbe.parse({ value: 7 })
+
+        const result = bridge.applyPatch([{ op: 'create', node: probe as any, parentId: level.id }])
+
+        expect(result.createdIds).toContain(probe.id)
+        expect(bridge.getNode(probe.id as any)).toMatchObject({
+          type: 'fixture:mcp-probe',
+          value: 7,
+          parentId: level.id,
+        })
+        expect(bridge.validateScene()).toEqual({ valid: true, errors: [], warnings: [] })
+      } finally {
+        restoreRegistry()
+      }
+    })
+
     test('applies mixed create/update/delete atomically', async () => {
       const level = bridge.findNodes({ type: 'level' })[0]!
       const wallA = WallNode.parse({ start: [0, 0], end: [2, 0] })
