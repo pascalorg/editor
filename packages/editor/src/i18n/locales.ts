@@ -3,9 +3,10 @@ import { messages as en } from './locales/en/messages'
 import { messages as es } from './locales/es/messages'
 import { messages as fr } from './locales/fr/messages'
 import { messages as ja } from './locales/ja/messages'
+import { messages as tr } from './locales/tr/messages'
 import { messages as zhCN } from './locales/zh-CN/messages'
 
-export type BundledLocale = 'en' | 'zh-CN' | 'fr' | 'es' | 'ja'
+export type BundledLocale = 'en' | 'zh-CN' | 'fr' | 'es' | 'ja' | 'tr'
 
 type LocaleCatalog = {
   locale: BundledLocale
@@ -18,6 +19,7 @@ export const bundledLocalePacks: Record<BundledLocale, LocaleCatalog> = {
   fr: { locale: 'fr', messages: fr },
   es: { locale: 'es', messages: es },
   ja: { locale: 'ja', messages: ja },
+  tr: { locale: 'tr', messages: tr },
 }
 
 let registered = false
