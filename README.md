@@ -105,7 +105,7 @@ Without the plugin, add the servers you want to `.cursor/mcp.json`:
       "url": "https://editor.pascal.app/api/mcp",
       "auth": {
         "CLIENT_ID": "pascal-cursor",
-        "scopes": ["openid", "profile", "offline_access", "scene:read", "scene:write"]
+        "scopes": ["openid", "profile", "offline_access", "scene:read", "scene:write", "architect:run"]
       }
     }
   }
