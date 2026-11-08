@@ -1,6 +1,7 @@
 import type { AnyNode, AnyNodeId } from '../schema/types'
 
 type NodeMap = Readonly<Record<string, Pick<AnyNode, 'parentId'>>>
+type NodeLookup = (id: AnyNodeId) => Pick<AnyNode, 'parentId'> | undefined
 
 /**
  * Whether assigning `newParentId` to `nodeId` would make its parent chain
@@ -9,16 +10,17 @@ type NodeMap = Readonly<Record<string, Pick<AnyNode, 'parentId'>>>
 export function wouldCreateHierarchyCycle(
   nodeId: AnyNodeId,
   newParentId: AnyNodeId | null,
-  nodes: NodeMap,
+  nodes: NodeMap | NodeLookup,
 ): boolean {
   if (!newParentId) return false
+  const nodeAt: NodeLookup = typeof nodes === 'function' ? nodes : (id) => nodes[id]
 
   const seen = new Set<AnyNodeId>()
   let currentId: AnyNodeId | null = newParentId
   while (currentId) {
     if (currentId === nodeId || seen.has(currentId)) return true
     seen.add(currentId)
-    currentId = (nodes[currentId]?.parentId as AnyNodeId | null | undefined) ?? null
+    currentId = (nodeAt(currentId)?.parentId as AnyNodeId | null | undefined) ?? null
   }
   return false
 }

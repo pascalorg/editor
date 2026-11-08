@@ -435,6 +435,27 @@ describe('apply_patch identity and validation guards', () => {
     expect(keptLevel?.type === 'level' && keptLevel.children).not.toContain(site.id)
   })
 
+  test('refuses creates whose own parentId closes a cycle', async () => {
+    const self = SiteNode.parse({ id: 'site_self', parentId: 'site_self' })
+    expect(await refusal([{ op: 'create', node: self }])).toMatchObject({
+      code: 'invalid_parent',
+      patchIndex: 0,
+      id: self.id,
+    })
+
+    const siteA = SiteNode.parse({ id: 'site_a', parentId: 'site_b' })
+    const siteB = SiteNode.parse({ id: 'site_b', parentId: 'site_a' })
+    const cycle = await refusal([
+      { op: 'create', node: siteA },
+      { op: 'create', node: siteB },
+    ])
+    expect(cycle).toMatchObject({ code: 'invalid_parent', patchIndex: 1, id: siteB.id })
+
+    for (const id of [self.id, siteA.id, siteB.id]) {
+      expect(bridge.getNode(id as AnyNodeId)).toBeNull()
+    }
+  })
+
   test('default gutters a delete regenerates cannot be addressed later in the same patch', async () => {
     const roof = RoofNode.parse({})
     const segment = (x: number) =>
