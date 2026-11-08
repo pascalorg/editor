@@ -321,6 +321,22 @@ describe('SceneBridge', () => {
       expect(res.valid).toBe(false)
       expect(res.errors.some((e) => e.nodeId === 'wall_bogus')).toBe(true)
     })
+
+    test('reports a parent cycle that each node schema accepts on its own', () => {
+      const siteA = SiteNode.parse({ id: 'site_a', parentId: 'site_b', children: ['site_b'] })
+      const siteB = SiteNode.parse({ id: 'site_b', parentId: 'site_a', children: ['site_a'] })
+      bridge.setScene({ [siteA.id]: siteA, [siteB.id]: siteB }, [])
+
+      const res = bridge.validateScene()
+      expect(res.valid).toBe(false)
+      const message = 'hierarchy cycle detected: site_a -> site_b -> site_a'
+      expect(res.errors).toEqual(
+        expect.arrayContaining([
+          { nodeId: siteA.id, path: 'parentId', message },
+          { nodeId: siteB.id, path: 'parentId', message },
+        ]),
+      )
+    })
   })
 
   describe('traversal: site quirk & generic helpers', () => {

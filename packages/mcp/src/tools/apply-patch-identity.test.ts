@@ -409,6 +409,32 @@ describe('apply_patch identity and validation guards', () => {
     expect(bridge.getNode(siteB.id as AnyNodeId)?.parentId).toBeNull()
   })
 
+  test('refuses a cycle closed by a later update in the same patch', async () => {
+    const siteA = SiteNode.parse({ id: 'site_a' })
+    const siteB = SiteNode.parse({ id: 'site_b' })
+    bridge.setScene({ [siteA.id]: siteA, [siteB.id]: siteB }, [siteA.id, siteB.id])
+
+    const cycle = await refusal([
+      { op: 'update', id: siteA.id, data: { parentId: siteB.id } },
+      { op: 'update', id: siteB.id, data: { parentId: siteA.id } },
+    ])
+    expect(cycle).toMatchObject({ code: 'invalid_parent', patchIndex: 1, id: siteB.id })
+
+    expect(bridge.getNode(siteA.id as AnyNodeId)?.parentId).toBeNull()
+    expect(bridge.getNode(siteB.id as AnyNodeId)?.parentId).toBeNull()
+  })
+
+  test('refuses moving the site under its own level', async () => {
+    const site = Object.values(bridge.getNodes()).find((n) => n.type === 'site')!
+
+    const cycle = await refusal([{ op: 'update', id: site.id, data: { parentId: level.id } }])
+    expect(cycle).toMatchObject({ code: 'invalid_parent', patchIndex: 0, id: site.id })
+
+    expect(bridge.getNode(site.id as AnyNodeId)?.parentId).toBe(site.parentId)
+    const keptLevel = bridge.getNode(level.id as AnyNodeId)
+    expect(keptLevel?.type === 'level' && keptLevel.children).not.toContain(site.id)
+  })
+
   test('default gutters a delete regenerates cannot be addressed later in the same patch', async () => {
     const roof = RoofNode.parse({})
     const segment = (x: number) =>
