@@ -145,6 +145,9 @@ async function bundleMcpServer(
       'node',
       '--format',
       'esm',
+      // Whitespace only: zod and three read `constructor.name` at runtime, which identifier
+      // minification would rename.
+      '--minify-whitespace',
       '--define',
       `process.env.PASCAL_MCP_VERSION=${JSON.stringify(version)}`,
     ],
