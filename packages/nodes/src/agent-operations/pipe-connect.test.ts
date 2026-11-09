@@ -119,9 +119,8 @@ test('the inspector exposes collar size and elevation', () => {
 })
 
 test('collar connection works through MCP and undoes as one edit', async () => {
-  const { Client } = await import('@modelcontextprotocol/sdk/client/index.js')
-  const { InMemoryTransport } = await import('@modelcontextprotocol/sdk/inMemory.js')
-  const { McpServer } = await import('@modelcontextprotocol/sdk/server/mcp.js')
+  const { Client } = await import('@modelcontextprotocol/client')
+  const { InMemoryTransport, McpServer } = await import('@modelcontextprotocol/server')
   const { SceneBridge } = await import('@pascal-app/mcp/bridge')
   const { createSceneOperations } = await import('@pascal-app/mcp/operations')
   const { registerOperationTool } = await import('@pascal-app/mcp/tools/shared-tools')
