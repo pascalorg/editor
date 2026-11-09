@@ -6,7 +6,7 @@ import {
   getWallCurveLength,
   getWallStationAtChordFraction,
 } from '../systems/wall/wall-curve'
-import { clampWindowToWall } from './wall-openings'
+import { clampDoorToWall, clampWindowToWall } from './wall-openings'
 
 function scene(wall: Partial<WallNode>) {
   const node = WallNode.parse({
@@ -55,5 +55,32 @@ describe('a sloped top on a curved wall runs along the chord', () => {
     const placed = clampWindowToWall(wall, 100, 0.75, 1, 1.5, nodes)
     expect(placed.fits).toBe(true)
     expect(placed.clampedX).toBeCloseTo(limit - 0.5, 4)
+  })
+})
+
+describe('a flat wall places openings as it did before tops could slope', () => {
+  test('an opening taller than a 1 m wall still fits and clamps', () => {
+    const { wall, nodes } = scene({ height: 1 })
+    expect(clampWindowToWall(wall, 2, 0.5, 1, 1.2, nodes)).toEqual({
+      clampedX: 2,
+      clampedY: 0.6,
+      fits: true,
+    })
+    expect(clampDoorToWall(wall, 2, 0.9, 2.1, undefined, nodes)).toEqual({
+      clampedX: 2,
+      clampedY: 1.05,
+      fits: true,
+    })
+  })
+
+  test('an opening wider than the wall still fits, pinned to the start', () => {
+    const { wall, nodes } = scene({})
+    expect(clampWindowToWall(wall, 3, 1, 5, 1, nodes)).toMatchObject({ clampedX: 2.5, fits: true })
+  })
+
+  test('a sloped wall too low everywhere does not fit', () => {
+    const { wall, nodes } = scene({ height: 1, endHeightOffset: 0.1 })
+    expect(clampWindowToWall(wall, 2, 0.5, 1, 1.2, nodes).fits).toBe(false)
+    expect(clampDoorToWall(wall, 2, 0.9, 2.1, undefined, nodes).fits).toBe(false)
   })
 })

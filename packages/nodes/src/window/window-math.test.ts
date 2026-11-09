@@ -3,12 +3,13 @@ import { WallNode } from '@pascal-app/core'
 import { clampToWall } from './window-math'
 
 describe('clampToWall for windows', () => {
-  test('does not fit when the window is wider than the wall', () => {
+  test('does not fit when the window is wider than a sloped wall', () => {
     const wall = WallNode.parse({
       id: 'wall_short',
       start: [0, 0],
       end: [2, 0],
       height: 3,
+      endHeightOffset: 0.5,
     })
     const nodes = { [wall.id]: wall }
     const result = clampToWall(wall, 1, 1.5, 3, 1.2, nodes)

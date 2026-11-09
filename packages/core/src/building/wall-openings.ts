@@ -89,8 +89,9 @@ export function wallOpeningCeilingOver(
 }
 
 /**
- * The centres in `[min, max]` where a span `width` wide stays under the wall's top at `need`, or
- * null when there are none.
+ * The centres in `[min, max]` where a span `width` wide stays under a sloped top at `need`, or
+ * null when there are none. A flat top keeps the whole range: there the editor clamps and the
+ * agent path refuses an opening that is too tall, exactly as before tops could slope.
  */
 function centresUnderCeiling(
   wall: WallNode,
@@ -100,19 +101,14 @@ function centresUnderCeiling(
   min: number,
   max: number,
 ): [number, number] | null {
-  if (min > max) return null
   const start = resolveWallOpeningCeiling(wall, nodes, 0)
   const rise = resolveWallOpeningCeiling(wall, nodes, 1) - start
-  let lo = min
-  let hi = max
-  if (Math.abs(rise) < 1e-6) {
-    if (start < need - 1e-4) return null
-  } else {
-    // The top is linear along the chord: past this station it is lower than `need`.
-    const limit = getWallStationAtChordFraction(wall, (need - start) / rise)
-    if (rise > 0) lo = Math.max(lo, limit + width / 2)
-    else hi = Math.min(hi, limit - width / 2)
-  }
+  if (Math.abs(rise) < 1e-6) return [min, max]
+  if (min > max) return null
+  // The top is linear along the chord: past this station it is lower than `need`.
+  const limit = getWallStationAtChordFraction(wall, (need - start) / rise)
+  const lo = rise > 0 ? Math.max(min, limit + width / 2) : min
+  const hi = rise > 0 ? max : Math.min(max, limit - width / 2)
   return lo > hi + 1e-4 ? null : [lo, Math.max(lo, hi)]
 }
 
