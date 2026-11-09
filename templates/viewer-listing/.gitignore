@@ -1,0 +1,8 @@
+node_modules
+dist
+test-results
+playwright-report
+.env
+.env.local
+# The parent repo ignores lockfiles; this template ships its own.
+!package-lock.json

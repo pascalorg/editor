@@ -1,0 +1,252 @@
+{
+  "contractVersion": 1,
+  "project": {
+    "id": "fixture-house",
+    "name": "Fixture house",
+    "owner": {
+      "displayName": "Pascal tests",
+      "avatarUrl": null
+    },
+    "coverUrl": null
+  },
+  "revision": {
+    "kind": "published",
+    "version": 3,
+    "modelId": "model_fixture",
+    "disclosurePolicyVersion": 1
+  },
+  "graph": {
+    "nodes": {
+      "site_fixture": {
+        "object": "node",
+        "id": "site_fixture",
+        "type": "site",
+        "parentId": null,
+        "visible": true,
+        "children": [
+          "building_fixture"
+        ]
+      },
+      "building_fixture": {
+        "object": "node",
+        "id": "building_fixture",
+        "type": "building",
+        "parentId": "site_fixture",
+        "visible": true,
+        "children": [
+          "level_ground",
+          "level_first"
+        ]
+      },
+      "level_ground": {
+        "object": "node",
+        "id": "level_ground",
+        "type": "level",
+        "name": "Ground floor",
+        "parentId": "building_fixture",
+        "visible": true,
+        "children": [
+          "slab_ground",
+          "wall_north",
+          "wall_east",
+          "wall_west",
+          "wall_south_a",
+          "wall_south_b",
+          "zone_living",
+          "zone_kitchen",
+          "door_front"
+        ],
+        "level": 0
+      },
+      "slab_ground": {
+        "object": "node",
+        "id": "slab_ground",
+        "type": "slab",
+        "parentId": "level_ground",
+        "visible": true,
+        "children": []
+      },
+      "wall_north": {
+        "object": "node",
+        "id": "wall_north",
+        "type": "wall",
+        "parentId": "level_ground",
+        "visible": true,
+        "children": []
+      },
+      "wall_east": {
+        "object": "node",
+        "id": "wall_east",
+        "type": "wall",
+        "parentId": "level_ground",
+        "visible": true,
+        "children": []
+      },
+      "wall_west": {
+        "object": "node",
+        "id": "wall_west",
+        "type": "wall",
+        "parentId": "level_ground",
+        "visible": true,
+        "children": []
+      },
+      "wall_south_a": {
+        "object": "node",
+        "id": "wall_south_a",
+        "type": "wall",
+        "parentId": "level_ground",
+        "visible": true,
+        "children": []
+      },
+      "wall_south_b": {
+        "object": "node",
+        "id": "wall_south_b",
+        "type": "wall",
+        "parentId": "level_ground",
+        "visible": true,
+        "children": []
+      },
+      "zone_living": {
+        "object": "node",
+        "id": "zone_living",
+        "type": "zone",
+        "name": "Living room",
+        "parentId": "level_ground",
+        "visible": true,
+        "children": [],
+        "polygon": [
+          [
+            -4,
+            -3
+          ],
+          [
+            1,
+            -3
+          ],
+          [
+            1,
+            3
+          ],
+          [
+            -4,
+            3
+          ]
+        ],
+        "holes": []
+      },
+      "zone_kitchen": {
+        "object": "node",
+        "id": "zone_kitchen",
+        "type": "zone",
+        "name": "Kitchen",
+        "parentId": "level_ground",
+        "visible": true,
+        "children": [],
+        "polygon": [
+          [
+            1,
+            -3
+          ],
+          [
+            4,
+            -3
+          ],
+          [
+            4,
+            3
+          ],
+          [
+            1,
+            3
+          ]
+        ],
+        "holes": []
+      },
+      "door_front": {
+        "object": "node",
+        "id": "door_front",
+        "type": "door",
+        "name": "Front door",
+        "parentId": "level_ground",
+        "visible": true,
+        "children": []
+      },
+      "level_first": {
+        "object": "node",
+        "id": "level_first",
+        "type": "level",
+        "name": "First floor",
+        "parentId": "building_fixture",
+        "visible": true,
+        "children": [
+          "slab_first",
+          "wall_first_north",
+          "zone_bedroom"
+        ],
+        "level": 1
+      },
+      "slab_first": {
+        "object": "node",
+        "id": "slab_first",
+        "type": "slab",
+        "parentId": "level_first",
+        "visible": true,
+        "children": []
+      },
+      "wall_first_north": {
+        "object": "node",
+        "id": "wall_first_north",
+        "type": "wall",
+        "parentId": "level_first",
+        "visible": true,
+        "children": []
+      },
+      "zone_bedroom": {
+        "object": "node",
+        "id": "zone_bedroom",
+        "type": "zone",
+        "name": "Bedroom",
+        "parentId": "level_first",
+        "visible": true,
+        "children": [],
+        "polygon": [
+          [
+            -4,
+            -3
+          ],
+          [
+            4,
+            -3
+          ],
+          [
+            4,
+            3
+          ],
+          [
+            -4,
+            3
+          ]
+        ],
+        "holes": []
+      }
+    },
+    "rootNodeIds": [
+      "site_fixture"
+    ]
+  },
+  "libraryMaterials": [],
+  "bake": {
+    "status": "ready",
+    "bakeVersion": 3,
+    "hash": "fixture",
+    "lods": [
+      {
+        "level": 0,
+        "url": "https://fixtures.supabase.co/lod0.glb",
+        "bytes": null,
+        "triangles": null,
+        "expiresAt": "2000-01-01T00:00:00.000Z"
+      }
+    ]
+  }
+}
