@@ -1,4 +1,4 @@
-import { COLUMN_PRESETS, ColumnNode, type ColumnPresetId } from '@pascal-app/core'
+import { COLUMN_PRESETS, ColumnNode, type ColumnPresetId, NEW_COLUMN_SLOTS } from '@pascal-app/core'
 
 export function columnPresetUpdates(id: ColumnPresetId): Partial<ColumnNode> {
   const { label: _label, ...preset } = COLUMN_PRESETS[id]
@@ -95,6 +95,6 @@ const resetFields = {
 
 export type ColumnResetSection = keyof typeof resetFields
 export function columnSectionReset(section: ColumnResetSection): Partial<ColumnNode> {
-  const defaults = ColumnNode.parse({})
+  const defaults = ColumnNode.parse({ slots: { ...NEW_COLUMN_SLOTS } })
   return Object.fromEntries(resetFields[section].map((key) => [key, defaults[key]]))
 }

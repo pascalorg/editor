@@ -5,6 +5,7 @@ import {
   type GroupMoveSnapArgs,
   type GroupMoveSnapResult,
   type HandleDescriptor,
+  NEW_COLUMN_SLOTS,
   type NodeDefinition,
 } from '@pascal-app/core'
 import { withHostedChildren } from '../shared/hosted-resize'
@@ -351,7 +352,7 @@ export const columnDefinition: NodeDefinition<typeof ColumnNode> = {
   defaults: () => {
     const stub = ColumnNodeSchema.parse({ id: 'column_default' as never, type: 'column' })
     const { id: _id, type: _type, ...rest } = stub
-    return rest
+    return { ...rest, slots: { ...NEW_COLUMN_SLOTS } }
   },
 
   capabilities: {

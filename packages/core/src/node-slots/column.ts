@@ -3,10 +3,21 @@ import type { ColumnNode } from '../schema/nodes/column'
 
 export type ColumnSlotId = 'shaft' | 'base' | 'capital' | 'frame'
 
-export const COLUMN_SHAFT_DEFAULT = 'library:preset-white'
-export const COLUMN_BASE_DEFAULT = 'library:preset-white'
-export const COLUMN_CAPITAL_DEFAULT = 'library:preset-white'
-export const COLUMN_FRAME_DEFAULT = 'library:preset-white'
+export const COLUMN_SHAFT_DEFAULT = 'library:concrete-plaster'
+export const COLUMN_BASE_DEFAULT = 'library:concrete-plaster'
+export const COLUMN_CAPITAL_DEFAULT = 'library:concrete-plaster'
+export const COLUMN_FRAME_DEFAULT = 'library:metal-steel'
+
+/**
+ * Written onto newly created columns. The slot defaults above stay the render
+ * fallback, so saved columns that never had `slots` keep their look (E-003).
+ */
+export const NEW_COLUMN_SLOTS: Readonly<Record<ColumnSlotId, string>> = {
+  shaft: 'library:preset-white',
+  base: 'library:preset-white',
+  capital: 'library:preset-white',
+  frame: 'library:preset-white',
+}
 
 export function columnSlots(node: ColumnNode): SlotDeclaration[] {
   if (node.source)

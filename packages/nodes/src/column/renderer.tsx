@@ -93,7 +93,7 @@ function createLegacyColumnMaterial({
   return baseMaterial(shading)
 }
 
-function resolveColumnSlotMaterial({
+export function resolveColumnSlotMaterial({
   colorPreset,
   legacyMaterial,
   node,

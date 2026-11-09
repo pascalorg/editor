@@ -4,6 +4,7 @@ import {
   ColumnNode,
   type ColumnPresetId,
   clearSceneHistory,
+  NEW_COLUMN_SLOTS,
   useLiveNodeOverrides,
   useScene,
 } from '@pascal-app/core'
@@ -32,7 +33,7 @@ test('all shape presets preserve identity, placement and finishes', () => {
   }
 })
 
-test('section resets are isolated and material reset clears all finish overrides', () => {
+test('section resets are isolated and material reset restores the new-column finish', () => {
   const original = ColumnNode.parse({
     height: 4,
     baseHeight: 0.4,
@@ -48,7 +49,7 @@ test('section resets are isolated and material reset clears all finish overrides
   const finish = ColumnNode.parse({ ...original, ...columnSectionReset('Materials') })
   expect(finish.material).toBeUndefined()
   expect(finish.materialPreset).toBeUndefined()
-  expect(finish.slots).toBeUndefined()
+  expect(finish.slots).toEqual(NEW_COLUMN_SLOTS)
   expect(finish.height).toBe(4)
 })
 
@@ -87,7 +88,7 @@ test('material reset clears persisted finishes and undo restores them', () => {
   preview.commit()
   const changed = useScene.getState().nodes[original.id] as ColumnNode
   expect(changed.materialPreset).toBeUndefined()
-  expect(changed.slots).toBeUndefined()
+  expect(changed.slots).toEqual(NEW_COLUMN_SLOTS)
   expect(changed.height).toBe(original.height)
   expect(useScene.temporal.getState().pastStates).toHaveLength(1)
   useScene.temporal.getState().undo()

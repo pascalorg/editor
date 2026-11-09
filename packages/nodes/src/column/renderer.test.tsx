@@ -1,13 +1,21 @@
 import { expect, test } from 'bun:test'
-import { COLUMN_PRESETS, ColumnNode, sceneRegistry, useScene } from '@pascal-app/core'
-import { OVERLAY_LAYER, useViewer } from '@pascal-app/viewer'
+import {
+  COLUMN_PRESETS,
+  ColumnNode,
+  type ColumnNode as ColumnNodeType,
+  type ColumnSlotId,
+  sceneRegistry,
+  useScene,
+} from '@pascal-app/core'
+import { createMaterialFromPresetRef, OVERLAY_LAYER, useViewer } from '@pascal-app/viewer'
 import { act } from '@react-three/test-renderer'
 import { Box3, type Mesh, Raycaster, Vector3 } from 'three'
 import { installMountedScene, mount } from '../__tests__/harness'
 import { columnFootprintHalf } from './bounds'
+import { columnDefinition } from './definition'
 import { createColumnSpiralGeometry } from './geometry'
 import { clearColumnInspectorHighlight, setColumnInspectorHighlight } from './inspector-highlight'
-import { ColumnRenderer } from './renderer'
+import { ColumnRenderer, resolveColumnSlotMaterial } from './renderer'
 
 installMountedScene()
 const frames = [
@@ -310,4 +318,32 @@ test('inspector hover isolates the named part without changing materials, pickin
     clearColumnInspectorHighlight(owner)
     await renderer.unmount()
   }
+})
+
+test('saved columns without slots keep the legacy finish; new columns are white', () => {
+  const resolve = (node: ColumnNodeType, slotId: ColumnSlotId) =>
+    resolveColumnSlotMaterial({
+      colorPreset: 'white',
+      legacyMaterial: null,
+      node,
+      sceneMaterials: {},
+      shading: 'rendered',
+      slotId,
+      textures: true,
+    })
+  const color = (ref: string) =>
+    (
+      createMaterialFromPresetRef(ref, 'rendered') as unknown as { color: { getHex(): number } }
+    ).color.getHex()
+  const finish = (material: unknown) => (material as { color: { getHex(): number } }).color.getHex()
+  expect(color('library:concrete-plaster')).not.toBe(color('library:preset-white'))
+
+  const saved = ColumnNode.parse({ supportStyle: 'k-brace' })
+  expect(saved.slots).toBeUndefined()
+  expect(finish(resolve(saved, 'shaft'))).toBe(color('library:concrete-plaster'))
+  expect(finish(resolve(saved, 'frame'))).toBe(color('library:metal-steel'))
+
+  const placed = ColumnNode.parse({ ...columnDefinition.defaults(), supportStyle: 'k-brace' })
+  expect(finish(resolve(placed, 'shaft'))).toBe(color('library:preset-white'))
+  expect(finish(resolve(placed, 'frame'))).toBe(color('library:preset-white'))
 })

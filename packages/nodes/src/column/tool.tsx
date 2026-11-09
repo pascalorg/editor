@@ -7,6 +7,7 @@ import {
   collectAlignmentAnchors,
   emitter,
   type GridEvent,
+  NEW_COLUMN_SLOTS,
   resolveFrozenFloorPlacementPatch,
   resolveSupportSlabPatch,
   useScene,
@@ -53,6 +54,7 @@ function createColumnFromPreset(presetId: ColumnPresetId, position: [number, num
     position,
     rotation: 0,
     ...preset,
+    slots: { ...NEW_COLUMN_SLOTS },
   })
 }
 
