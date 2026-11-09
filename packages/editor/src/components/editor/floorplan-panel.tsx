@@ -293,7 +293,10 @@ import {
   resolveFloorplanPresentationViewBox,
   setFloorplanCompassRotation,
 } from './floorplan-navigation-presentation'
-import { installFloorplanWallTypingKeys } from './floorplan-wall-typing-keys'
+import {
+  endFloorplanWallTypingOnCancel,
+  installFloorplanWallTypingKeys,
+} from './floorplan-wall-typing-keys'
 import { swallowNextClick } from './handles/use-handle-drag'
 import { useFloorplanBackgroundPlacement } from './use-floorplan-background-placement'
 import { useFloorplanHitTesting } from './use-floorplan-hit-testing'
@@ -8099,6 +8102,7 @@ export function FloorplanPanel({
 
   useEffect(() => {
     const handleCancel = () => {
+      if (endFloorplanWallTypingOnCancel()) return
       clearDraft()
     }
 
