@@ -106,6 +106,34 @@ describe('explicit wall merge', () => {
     ).toThrow('These walls have a different height.')
   })
 
+  test('sloped walls merge when their tops continue one line, read either way', () => {
+    // Heights at the plan x of each end of the kept wall, whichever wall is kept.
+    const tops = (kept: WallNode) => ({
+      [kept.start[0]]: kept.height,
+      [kept.end[0]]: (kept.height ?? 0) + (kept.endHeightOffset ?? 0),
+    })
+    const a = wall([0, 0], [4, 0], { height: 3, endHeightOffset: -1 })
+    const b = wall([8, 0], [4, 0], { height: 1, endHeightOffset: 1 })
+    const plan = planWallMerge(map([a, b]), [a.id, b.id])
+    const kept = apply(map([a, b]), plan.changes)[plan.wallId] as WallNode
+    const heights = tops(kept)
+    expect(heights[0]).toBeCloseTo(3)
+    expect(heights[8]).toBeCloseTo(1)
+
+    const stepped = wall([4, 0], [8, 0], { height: 2.5, endHeightOffset: -1 })
+    expect(() => planWallMerge(map([a, stepped]), [a.id, stepped.id])).toThrow(
+      'These walls have a different slope.',
+    )
+    const shallower = wall([4, 0], [8, 0], { height: 2, endHeightOffset: -0.5 })
+    expect(() => planWallMerge(map([a, shallower]), [a.id, shallower.id])).toThrow(
+      'These walls have a different slope.',
+    )
+    const flat = wall([4, 0], [8, 0], { height: 2 })
+    expect(() => planWallMerge(map([a, flat]), [a.id, flat.id])).toThrow(
+      'These walls have a different slope.',
+    )
+  })
+
   test('merges a straight run across a T: the wall meeting it stays on its body', () => {
     const a = wall([0, 0], [4, 0])
     const b = wall([4, 0], [8, 0])

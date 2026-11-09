@@ -48,7 +48,8 @@ function getWallFreeEndpoint(wall: Pick<WallNode, 'start' | 'end'>, sharedPoint:
  * The delete heal is strict: room sides must match, and a wall following the
  * storey never joins one with an explicit height. An explicit merge compares
  * what is visible instead — `heightOf` resolves each wall's actual height — and
- * leaves the sides to room detection, which reclassifies the merged wall.
+ * leaves the sides to room detection, which reclassifies the merged wall. Sloped
+ * tops are matched by `mergedWallTop`, which also builds the merged top.
  */
 export function wallStyleMismatch(
   a: WallNode,
@@ -66,10 +67,11 @@ export function wallStyleMismatch(
   if (a.justification !== alignedB.justification) return 'justification'
   const { heightOf } = options
   if (
-    heightOf
+    !(a.endHeightOffset || b.endHeightOffset) &&
+    (heightOf
       ? Math.abs(heightOf(a) - heightOf(b)) > 1e-6
       : (a.height == null) !== (b.height == null) ||
-        Math.abs((a.height ?? 0) - (b.height ?? 0)) > 1e-6
+        Math.abs((a.height ?? 0) - (b.height ?? 0)) > 1e-6)
   )
     return 'height'
   // Faces are compared as the merged wall will carry them: b read in a's direction. An unpainted
@@ -279,6 +281,37 @@ export function areWallStylesCompatible(a: WallNode, b: WallNode) {
   return wallStyleMismatch(a, b, { sides: true }) === null
 }
 
+/**
+ * The kept wall's top once `secondary` joins it at `joint`: nothing changes between flat walls;
+ * sloped ones take the start height and the summed end offset along the kept wall. Null when the
+ * tops don't continue one line — a step at the joint or a different rise per metre.
+ * `heightAt` reads a wall's body height at a chord fraction.
+ */
+export function mergedWallTop(
+  primary: WallNode,
+  secondary: WallNode,
+  joint: [number, number],
+  heightAt: (wall: WallNode, t: number) => number,
+): Pick<WallNode, 'height' | 'endHeightOffset'> | null {
+  if (!(primary.endHeightOffset || secondary.endHeightOffset)) return {}
+  const reversed = readsBackwards(secondary, primary.start, primary.end)
+  const along = (wall: WallNode, backwards: boolean) => {
+    const heights = [heightAt(wall, 0), heightAt(wall, 1)]
+    const [from, to] = backwards ? [heights[1]!, heights[0]!] : [heights[0]!, heights[1]!]
+    return { from, to, rise: (to - from) / Math.max(wallLength(wall), 1e-9) }
+  }
+  const primaryFirst = getWallEndpointAtPoint(primary, joint) === 'end'
+  const first = primaryFirst ? along(primary, false) : along(secondary, reversed)
+  const second = primaryFirst ? along(secondary, reversed) : along(primary, false)
+  if (Math.abs(first.to - second.from) > 1e-6 || Math.abs(first.rise - second.rise) > 1e-6)
+    return null
+  return {
+    // A start that stays where it was keeps its height mode, storey-bound included.
+    height: primaryFirst ? primary.height : reversed ? first.from : secondary.height,
+    endHeightOffset: first.to - first.from + (second.to - second.from),
+  }
+}
+
 export function areWallsCollinearAcrossPoint(
   a: WallNode,
   b: WallNode,
@@ -486,6 +519,10 @@ export function planWallMerge(
       heightOf: (wall) => getWallEffectiveHeightForNodes(wall, virtual, 0),
     })
     if (mismatch) throw Error(`These walls have a different ${mismatch}.`)
+    const top = mergedWallTop(merged, next, joint, (wall, t) =>
+      getWallEffectiveHeightForNodes(wall, virtual, t),
+    )
+    if (!top) throw Error('These walls have a different slope.')
 
     const { start, end } = resolveMergedWallEndpoints(merged, next, joint)
     const faceRegions = mergeWallFaceRegions([merged, next], start, end)
@@ -508,6 +545,7 @@ export function planWallMerge(
     const { faceRegions: _regions, ...kept } = merged
     merged = {
       ...kept,
+      ...top,
       ...(faceRegions.length > 0 ? { faceRegions } : {}),
       start,
       end,
