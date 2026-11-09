@@ -1,6 +1,7 @@
 import { Box3, Matrix4, type Mesh, type Object3D, Vector3 } from 'three'
 import type { PlayedStyle } from './reveal-wipe'
 import { clearRevealWipe } from './reveal-wipe'
+import { setMatrixPosed } from './scene-matrices'
 
 /**
  * A presentation-only pose composed on a registered root.
@@ -61,6 +62,7 @@ export function setRevealPose(object: Object3D, pivot: Vector3, scale: Vector3, 
     pose = { pivot: new Vector3(), scale: new Vector3(), lift: 0, glide: null }
     poses.set(object, pose)
     object.updateMatrix = updateRevealedMatrix
+    setMatrixPosed(object, true)
   }
   pose.pivot.copy(pivot)
   pose.scale.copy(scale)
@@ -91,6 +93,7 @@ export function clearRevealPose(object: Object3D): void {
   clearRevealWipe(object)
   if (!poses.delete(object)) return
   delete (object as Partial<Pick<Object3D, 'updateMatrix'>>).updateMatrix
+  setMatrixPosed(object, false)
   if (object.matrixAutoUpdate) object.updateMatrix()
   object.matrixWorldNeedsUpdate = true
 }

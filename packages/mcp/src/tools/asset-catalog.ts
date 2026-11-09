@@ -319,22 +319,13 @@ export const MCP_CATALOG_ITEMS: AssetInput[] = [
 ]
 
 /**
- * The items search_assets, place_items and furnish_room draw from. A host passes its own (the hosted
- * app: its published library, as the chat searches); a standalone server keeps the built-in list.
+ * The items search_assets, place_items and furnish_room draw from: a host passes its own (the
+ * hosted app: a source over its published library, as the chat searches it); a standalone server
+ * keeps the built-in list.
  */
-export type AssetCatalog = () => Promise<readonly AssetInput[]>
+export type { AssetCatalog } from '@pascal-app/core/agent-operations'
 
-export const builtInCatalog: AssetCatalog = async () => MCP_CATALOG_ITEMS
-
-/** A host's catalog, read once by the first call that needs it; a failed read is tried again. */
-export function cachedCatalog(load: AssetCatalog): AssetCatalog {
-  let items: Promise<readonly AssetInput[]> | null = null
-  return () =>
-    (items ??= load().catch((error) => {
-      items = null
-      throw error
-    }))
-}
+export const builtInCatalog: readonly AssetInput[] = MCP_CATALOG_ITEMS
 
 export function findCatalogItem(items: readonly AssetInput[], id: string): AssetInput | undefined {
   return items.find((item) => item.id === id)

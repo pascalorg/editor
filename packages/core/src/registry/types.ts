@@ -426,6 +426,8 @@ export type ToolOption = {
   /** Row label. Sentence case, e.g. 'Create from'. */
   label: string
   choices: readonly ToolOptionChoice[]
+  /** Optional exact numeric entry instead of choice buttons. */
+  input?: { min?: number; max?: number; step?: number; unit?: string }
   /** Subscribe to live value changes (Zustand-store-like); returns unsubscribe. */
   subscribe: (onChange: () => void) => () => void
   /** Current value token. */
@@ -2059,6 +2061,16 @@ export type SceneActionCapability<T = unknown> = {
   activate: (node: AnyNode, target: T, sceneApi: SceneApi) => boolean
 }
 
+export type MechanismPart = {
+  id: string
+  label: string
+  icon?: 'shutters'
+  verb?: 'open' | 'run'
+  has: (node: AnyNode) => boolean
+  isOn: (node: AnyNode, state: InteractiveState) => boolean
+  set: (node: AnyNode, on: boolean) => void
+}
+
 /**
  * A kind's moving parts (a fan's spin, doors, an articulated asset's joints).
  * Operating state is transient: `set` writes `useInteractive`, never the node,
@@ -2066,6 +2078,7 @@ export type SceneActionCapability<T = unknown> = {
  * with a single switch keeps it in `useInteractive.mechanisms`.
  */
 export type MechanismCapability = {
+  parts?: MechanismPart[]
   /** Whether this node has anything to run. */
   has: (node: AnyNode) => boolean
   /** Whether any of its mechanisms is running. */
@@ -2609,11 +2622,11 @@ export type FloorPlacedConfig = {
  */
 export type BatchableConfig = {
   /**
-   * Where the node's batches live. `'level'`: the node is a direct child of a
-   * level; hosted or mounted nodes draw themselves, because their host moves
-   * them without a signal the batch sees. `'wall'`: the node is hosted by a
-   * visible wall that is a level child; the wall's edits, tint and gestures
-   * release it.
+   * Where the node's batches live. `'level'`: the node sits under a level,
+   * directly or through visible host nodes (a cabinet module in its run, a
+   * plate on a table, a lamp on a ceiling); a host's edits, tint and gestures
+   * release it. `'wall'`: the node is hosted by a visible wall that is a level
+   * child, released the same way by the wall.
    */
   scope: 'level' | 'wall'
   /** Transient states in which the node draws its own meshes, such as a running animation. */

@@ -29,11 +29,12 @@ import {
   type WallFace,
 } from '../schema'
 import { achievedChanges } from './achieved'
+import { requireFurnishing } from './design-brief'
 import { targetLevel } from './level-target'
 import { roofLevelRefusal } from './roof-writes'
 import { exactColorMaterial, exactScriptSlots } from './scene-materials'
 import { queryNodes } from './scene-queries'
-import type { AgentOperation, BatchedObject, SceneNodes } from './types'
+import type { AgentContext, AgentOperation, BatchedObject, SceneNodes } from './types'
 
 type Vec3 = [number, number, number]
 
@@ -478,6 +479,7 @@ const BATCH_COMPILES_AT_ONCE = 3
 export async function buildBatchObjects(
   calls: readonly { tool?: unknown; input?: unknown }[],
   build: (input: Omit<AddObjectInput, 'compiled'>) => Promise<CompiledGeometryScript>,
+  designBrief?: AgentContext['designBrief'],
 ): Promise<Record<number, BatchedObject>> {
   const parse = z.object(addObjectTool.input)
   const built: Record<number, BatchedObject> = {}
@@ -505,6 +507,7 @@ export async function buildBatchObjects(
   const worker = async () => {
     for (let job = jobs[next++]; job; job = jobs[next++]) {
       try {
+        requireFurnishing('add_object', job.input, designBrief)
         requireAddObjectReason(job.input)
         built[job.index] = { compiled: await build(job.input) }
       } catch (error) {

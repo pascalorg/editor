@@ -26,6 +26,7 @@ import {
   isViewerPresentationTextureBorrowed,
   poseDoorMovingParts,
   poseWindowMovingParts,
+  restoreWindowRollerShutter,
   SCENE_LAYER,
   snapLevelsToTruePositions,
   type ViewerPresentationContribution,
@@ -914,6 +915,8 @@ function cloneSceneForExport(
     let geometry = cache.geometries.get(renderable.geometry)
     if (!geometry) {
       geometry = renderable.geometry.clone()
+      // Export owns its clones even when the live geometry belongs to a shared cache.
+      delete geometry.userData.shared
       cache.geometries.set(renderable.geometry, geometry)
     }
     renderableClone.geometry = geometry
@@ -1710,14 +1713,68 @@ function openClip(id: string, tracks: THREE.KeyframeTrack[]): THREE.AnimationCli
   return clip
 }
 
+/** Shutters share a toggle, independently of the sash's open clip. */
+function bakeWindowClip(
+  id: string,
+  node: WindowNode,
+  windowObject: THREE.Object3D,
+): THREE.AnimationClip[] {
+  const clips: THREE.AnimationClip[] = []
+  restoreWindowRollerShutter(node, windowObject)
+  const sash = bakeWindowOpenClip(id, node, windowObject)
+  if (sash) clips.push(sash)
+  const hinged = Boolean(node.shutters && node.shutters !== 'none')
+  const roller = node.rollerShutter === 'box' || node.rollerShutter === 'concealed'
+  if (!hinged && !roller) return clips
+
+  const leaves: THREE.Object3D[] = []
+  windowObject.traverse((part) => {
+    if (['shutter-left', 'shutter-right', 'shutter-outer'].includes(part.name)) leaves.push(part)
+  })
+  const rotations = new Map(leaves.map((leaf) => [leaf, [] as number[]]))
+  // A midpoint disambiguates the direction of a half-turn for quaternion interpolation.
+  for (const value of [0, 0.5, 1]) {
+    poseWindowMovingParts(node, windowObject, 0, value)
+    for (const leaf of leaves) rotations.get(leaf)!.push(...leaf.quaternion.toArray())
+  }
+  poseWindowMovingParts(node, windowObject, 0)
+  const tracks: THREE.KeyframeTrack[] = leaves.map(
+    (leaf) =>
+      new THREE.QuaternionKeyframeTrack(
+        `${leaf.uuid}.quaternion`,
+        [0, 0.5, 1],
+        rotations.get(leaf)!,
+      ),
+  )
+  if (roller) {
+    restoreWindowRollerShutter({ ...node, rollerShutterOpen: 0 }, windowObject)
+    const curtain = windowObject.getObjectByName('window-roller-curtain')
+    if (curtain) {
+      // Fixed topology: compress the full curtain towards its top, inside the lintel/box.
+      curtain.position.y = node.height / 2
+      for (const child of curtain.children) child.position.y -= node.height / 2
+      curtain.scale.y = 1 - 0.98 * (node.rollerShutterOpen ?? 1)
+      tracks.push(
+        new THREE.VectorKeyframeTrack(`${curtain.uuid}.scale`, [0, 1], [1, 1, 1, 1, 0.02, 1]),
+      )
+    }
+  }
+  if (tracks.length) {
+    const clip = new THREE.AnimationClip(`${id}: shutters`, 1, tracks)
+    clip.userData = { loop: false }
+    clips.push(clip)
+  }
+  return clips
+}
+
 /**
  * Bake a window's open motion generically: snapshot every part's pose closed,
  * pose the subtree open, and emit a track for whichever parts actually moved
  * (translation for sliding/hung sashes, rotation for casement/awning/louvre).
  * Reusing the live `poseWindowMovingParts` keeps one source of truth for window
- * kinematics. The subtree is left posed closed as the GLB's rest state.
+ * kinematics. The sash is left closed; shutters keep their saved rest pose.
  */
-function bakeWindowClip(
+function bakeWindowOpenClip(
   id: string,
   node: WindowNode,
   windowObject: THREE.Object3D,
@@ -1855,6 +1912,17 @@ function stampIdentity(
     const clipNames = clipNamesByNode.get(id)
     if (clipNames?.length) {
       if (clipNames.some((name) => name.endsWith(': open'))) extras.openable = true
+      if (node.type === 'window' && clipNames.includes(`${id}: shutters`)) {
+        extras.shutters = true
+        extras.shuttersOpen =
+          node.shutters && node.shutters !== 'none'
+            ? (node.shutterOpen ?? 1)
+            : (node.rollerShutterOpen ?? 1)
+        if (node.rollerShutter === 'box' || node.rollerShutter === 'concealed') {
+          extras.rollerShutterOpen = node.rollerShutterOpen ?? 1
+          extras.rollerShutterAnimation = 'top-pivot-scale-y'
+        }
+      }
       extras.clips = clipNames
     }
     if (node.type === 'zone') {

@@ -58,6 +58,8 @@ import {
   TempNode,
 } from 'three/webgpu'
 import { hasDrawableGeometry } from './drawable-geometry'
+import { BATCHED_LAYER, SCENE_LAYER } from './layers'
+import { isSetAsideForRender } from './scene-matrices'
 
 const _quadMesh = new QuadMesh()
 const _size = new Vector2()
@@ -548,13 +550,16 @@ export class MergedOutlineNode extends TempNode {
       let visible = true
       let attached = false
       for (let ancestor = source; ancestor; ancestor = ancestor.parent) {
-        if (!ancestor.visible) visible = false
+        // A subtree set aside for this render (nothing in it draws itself) is still shown.
+        if (!ancestor.visible && !isSetAsideForRender(ancestor)) visible = false
         if (ancestor === this.scene) attached = true
       }
       proxy.geometry = source.geometry
       proxy.material = source.material
       proxy.matrixWorld.copy(source.matrixWorld)
       proxy.layers.mask = source.layers.mask
+      // A batched source is drawn by its batch: outline it as if it drew itself.
+      if (proxy.layers.isEnabled(BATCHED_LAYER)) proxy.layers.enable(SCENE_LAYER)
       proxy.visible = visible && attached
       proxy.renderOrder = source.renderOrder
       proxy.morphTargetInfluences = source.morphTargetInfluences

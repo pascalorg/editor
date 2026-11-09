@@ -6,6 +6,7 @@ import {
   doorStyleLook,
   doorStylesOf,
   getWindowStyleOverrides,
+  isLegacyDefaultDoorLook,
   WINDOW_STYLE_CHOICES,
   WINDOW_STYLE_LABELS,
   WINDOW_STYLES,
@@ -108,4 +109,25 @@ describe('one offered style per look', () => {
     for (const [a, b] of pairs(DOOR_STYLES))
       expect([a, b, doorStyleLook(a)]).not.toEqual([a, b, doorStyleLook(b)])
   })
+})
+
+for (const style of DOOR_STYLES) {
+  test(`legacy ${style} padding still reports its style`, () => {
+    expect(
+      doorStylesOf({
+        ...doorStyleLook(style),
+        contentPadding: style === 'modern' ? [0, 0] : [0.04, 0.04],
+      }),
+    ).toEqual([style])
+  })
+}
+
+test('only the exact legacy Panel look qualifies for healing', () => {
+  const legacy = { ...doorStyleLook('panel'), contentPadding: [0.04, 0.04] as [number, number] }
+  expect(isLegacyDefaultDoorLook(legacy)).toBe(true)
+  expect(isLegacyDefaultDoorLook(doorStyleLook('panel'))).toBe(false)
+  expect(isLegacyDefaultDoorLook({ ...legacy, contentPadding: [0.04000001, 0.04] })).toBe(false)
+  const segments = structuredClone(legacy.segments)
+  segments[0]!.panelDepth += 0.00000001
+  expect(isLegacyDefaultDoorLook({ ...legacy, segments })).toBe(false)
 })

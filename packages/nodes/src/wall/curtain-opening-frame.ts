@@ -1,8 +1,10 @@
 import {
   type DoorNode,
+  getDoorOpeningSize,
   getWallCurveFrameAt,
   getWallCurveLength,
   isCurvedWall,
+  openingHostFacing,
   type WallNode,
   type WindowNode,
 } from '@pascal-app/core'
@@ -34,6 +36,8 @@ export function mapCurtainOpeningGeometryToWall(geometry: BufferGeometry, wall: 
 }
 
 export function curtainOpeningProfile(opening: DoorNode | WindowNode, width: number) {
+  const size = getDoorOpeningSize(opening)
+  const centerX = opening.position[0] - size.leafOffsetX * openingHostFacing(opening)
   const bottom = opening.position[1] - opening.height / 2
   if (Math.cos(opening.rotation[1]) < 0 && opening.openingRadiusMode === 'individual') {
     if (opening.type === 'window') {
@@ -48,10 +52,10 @@ export function curtainOpeningProfile(opening: DoorNode | WindowNode, width: num
     }
   }
   const points = buildOpeningCutoutShape(opening, {
-    left: opening.position[0] - opening.width / 2,
-    right: opening.position[0] + opening.width / 2,
+    left: centerX - size.width / 2,
+    right: centerX + size.width / 2,
     bottom,
-    top: bottom + opening.height,
+    top: bottom + size.height,
   })
     .getPoints(4)
     .filter((point, index, all) => index === 0 || point.distanceToSquared(all[index - 1]!) > 1e-14)

@@ -1,6 +1,8 @@
 import { getLevelElevations, type LevelNode, sceneRegistry, useScene } from '@pascal-app/core'
 import { useFrame } from '@react-three/fiber'
+import type { Object3D } from 'three'
 import { lerp } from 'three/src/math/MathUtils.js'
+import { getLayoutRevision, isLayoutObserved } from '../../lib/layer-pass'
 import { applyShadowOnly, clearShadowOnly } from '../../lib/shadow-only'
 import useViewer from '../../store/use-viewer'
 import { heldLevelY } from './level-hold'
@@ -8,6 +10,14 @@ import { EXPLODED_GAP, resolveLevelVisibility } from './level-utils'
 import { shadowOnlyLevels } from './shadow-only-levels'
 
 const placed = new WeakSet<object>()
+/** Layout revision right after a level was last made shadow-only (see layer-pass.ts). */
+const shadowOnlyAt = new WeakMap<object, number>()
+
+function sceneRoot(object: Object3D): Object3D {
+  let root = object
+  while (root.parent) root = root.parent
+  return root
+}
 
 export const LevelSystem = () => {
   useFrame((_, delta) => {
@@ -72,11 +82,19 @@ export const LevelSystem = () => {
         revealing: levelsRevealing.includes(levelId),
       })
       if (shadowOnly) {
-        applyShadowOnly(obj)
+        // Re-applied so meshes rebuilt while hidden are hidden too — a rebuild inserts children
+        // or writes masks, which moves the observed layout revision; without either the level
+        // is as it was left.
+        const observed = isLayoutObserved(sceneRoot(obj))
+        if (!observed || shadowOnlyAt.get(obj) !== getLayoutRevision()) {
+          applyShadowOnly(obj)
+          if (observed) shadowOnlyAt.set(obj, getLayoutRevision())
+        }
         shadowOnlyLevels.add(obj)
       } else if (shadowOnlyLevels.has(obj)) {
         clearShadowOnly(obj)
         shadowOnlyLevels.delete(obj)
+        shadowOnlyAt.delete(obj)
       }
       obj.visible = visible
     }

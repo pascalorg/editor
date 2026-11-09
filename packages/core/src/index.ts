@@ -32,6 +32,7 @@ export type {
   GuideEvent,
   GutterEvent,
   ImportedMeshEvent,
+  InteractionSound,
   ItemEvent,
   LeanToExtensionEvent,
   LevelEvent,
@@ -265,6 +266,7 @@ export {
   planDeckFraming,
 } from './lib/deck-framing'
 export { deepestDrawnY, lowestGroundY } from './lib/deepest-drawn'
+export { doorPositionForFacing, getDoorOpeningSize } from './lib/door-opening'
 export {
   clampDoorOperationState,
   getDoorRenderOpenAmount,
@@ -403,6 +405,7 @@ export {
   levelStackGroundBox,
   terrainBetweenEyeAndBox,
 } from './lib/ground-window'
+export { hierarchyCycleErrors, wouldCreateHierarchyCycle } from './lib/hierarchy'
 export {
   type ExposedInterval,
   exposedIntervals,
@@ -447,8 +450,10 @@ export {
   openingCasingFaces,
   openingCasingWidth,
   openingHostFacing,
+  openingInteriorFace,
   resolveOpeningCasingHost,
 } from './lib/opening-casing'
+export { openingExteriorFace } from './lib/opening-exterior-face'
 export {
   getOpeningFloorDatum,
   getOpeningWallCut,

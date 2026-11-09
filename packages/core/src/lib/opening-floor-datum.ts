@@ -8,11 +8,13 @@ import {
 import { getWallCurveFrameAt, getWallCurveLength } from '../systems/wall/wall-curve'
 import { calculateLevelMiters, getWallPlanFootprint } from '../systems/wall/wall-footprint'
 import { getWallBodyCenterOffset } from '../systems/wall/wall-frame'
+import { getDoorOpeningSize } from './door-opening'
 import {
   isFloorAnchoredOpening,
   openingAperture,
   wallOpeningBand,
 } from './floor-opening-footprints'
+import { openingHostFacing } from './opening-casing'
 import { area, intersection, union } from './polygon-boolean'
 import { levelBaseElevationAt } from './terrain-support-query'
 
@@ -76,13 +78,18 @@ export function supportSegmentAt(segment: WallSlabSupportSegment, t: number): nu
 
 export function openingDatumFromSupport(
   wall: WallNode,
-  opening: Pick<DoorNode | WindowNode, 'position' | 'width' | 'height'>,
+  opening: Pick<DoorNode | WindowNode, 'position' | 'width' | 'height'> &
+    Partial<
+      Pick<DoorNode, 'rotation' | 'sidelightLeft' | 'sidelightRight' | 'transomHeight' | 'doorType'>
+    >,
   support: WallSlabSupport,
 ): number {
   if (!isFloorAnchoredOpening(opening)) return support.elevation
   const length = getWallCurveLength(wall)
-  const from = Math.max(0, (opening.position[0] - opening.width / 2) / length)
-  const to = Math.min(1, (opening.position[0] + opening.width / 2) / length)
+  const size = getDoorOpeningSize({ ...opening, height: opening.height ?? 0 })
+  const centerX = opening.position[0] - size.leafOffsetX * openingHostFacing(opening)
+  const from = Math.max(0, (centerX - size.width / 2) / length)
+  const to = Math.min(1, (centerX + size.width / 2) / length)
   const heights = [...support.faceDatum.a, ...support.faceDatum.b].flatMap((segment) => {
     const start = Math.max(from, segment.start),
       end = Math.min(to, segment.end)
@@ -94,7 +101,10 @@ export function openingDatumFromSupport(
 /** Unclamped floor intent, used by authoring feasibility and legacy migration. */
 export function getOpeningFloorTarget(
   wall: WallNode,
-  opening: Pick<DoorNode | WindowNode, 'position' | 'width' | 'height'>,
+  opening: Pick<DoorNode | WindowNode, 'position' | 'width' | 'height'> &
+    Partial<
+      Pick<DoorNode, 'rotation' | 'sidelightLeft' | 'sidelightRight' | 'transomHeight' | 'doorType'>
+    >,
   nodes: Readonly<Record<string, AnyNode>>,
 ): number {
   return openingDatumFromSupport(wall, opening, wallSupportForNodes(wall, nodes))
@@ -102,13 +112,20 @@ export function getOpeningFloorTarget(
 
 export function openingFitsAtDatum(
   wall: WallNode,
-  opening: Pick<DoorNode | WindowNode, 'position' | 'height'>,
+  opening: Pick<DoorNode | WindowNode, 'position' | 'height'> &
+    Partial<Pick<DoorNode, 'transomHeight' | 'doorType'>>,
   datum: number,
   nodes: Readonly<Record<string, AnyNode>>,
   support = wallSupportForNodes(wall, nodes),
 ): boolean {
   const top = getWallTop(wall, wall.parentId!, nodes, support.elevation)
-  return datum + opening.position[1] + opening.height / 2 <= top + 1e-9
+  return (
+    datum +
+      opening.position[1] -
+      opening.height / 2 +
+      getDoorOpeningSize({ ...opening, width: 0 }).height <=
+    top + 1e-9
+  )
 }
 
 /**
@@ -118,13 +135,21 @@ export function openingFitsAtDatum(
  */
 export function wallBottomUnderOpening(
   wall: WallNode,
-  opening: Pick<DoorNode | WindowNode, 'position' | 'width'>,
+  opening: Pick<DoorNode | WindowNode, 'position' | 'width'> &
+    Partial<
+      Pick<
+        DoorNode,
+        'height' | 'rotation' | 'sidelightLeft' | 'sidelightRight' | 'transomHeight' | 'doorType'
+      >
+    >,
   support: WallSlabSupport,
 ): number {
   const length = getWallCurveLength(wall)
   if (length < 1e-9) return support.baseElevation
-  const from = Math.max(0, (opening.position[0] - opening.width / 2) / length)
-  const to = Math.min(1, (opening.position[0] + opening.width / 2) / length)
+  const size = getDoorOpeningSize({ ...opening, height: opening.height ?? 0 })
+  const centerX = opening.position[0] - size.leafOffsetX * openingHostFacing(opening)
+  const from = Math.max(0, (centerX - size.width / 2) / length)
+  const to = Math.min(1, (centerX + size.width / 2) / length)
   const segments = [...support.baseSegments, ...support.faceBottom.a, ...support.faceBottom.b]
   const heights = segments.flatMap((segment) => {
     const start = Math.max(from, segment.start),
@@ -136,7 +161,10 @@ export function wallBottomUnderOpening(
 
 export function getOpeningFloorDatum(
   wall: WallNode,
-  opening: Pick<DoorNode | WindowNode, 'position' | 'width' | 'height'>,
+  opening: Pick<DoorNode | WindowNode, 'position' | 'width' | 'height'> &
+    Partial<
+      Pick<DoorNode, 'rotation' | 'sidelightLeft' | 'sidelightRight' | 'transomHeight' | 'doorType'>
+    >,
   nodes: Readonly<Record<string, AnyNode>>,
   support = wallSupportForNodes(wall, nodes),
 ): number {
@@ -199,8 +227,10 @@ export function getOpeningWallCut(
   const covered =
     area(aperture) > 0 && area(intersection(aperture, cover)) >= area(aperture) - 0.00001
   const length = getWallCurveLength(wall)
-  const from = (opening.position[0] - opening.width / 2) / length,
-    to = (opening.position[0] + opening.width / 2) / length
+  const size = getDoorOpeningSize({ ...opening, height: opening.height ?? 0 })
+  const centerX = opening.position[0] - size.leafOffsetX * openingHostFacing(opening)
+  const from = (centerX - size.width / 2) / length,
+    to = (centerX + size.width / 2) / length
   const bottoms = [...support.faceBottom.a, ...support.faceBottom.b]
     .filter((s) => s.end > from && s.start < to)
     .map((s) => Math.min(s.elevation, s.endElevation ?? s.elevation))
@@ -220,16 +250,17 @@ export function getOpeningWallCut(
     band: wallOpeningBand(wall, Math.max(0, from), Math.min(1, to)),
     datum,
     bottom,
-    top: datum + opening.position[1] + opening.height / 2,
+    top: datum + opening.position[1] - opening.height / 2 + size.height,
     covered,
   }
 }
 
 export function getOpeningWallPlacement(
   wall: WallNode,
-  opening: Pick<DoorNode | WindowNode, 'position' | 'width' | 'height' | 'rotation'> & {
-    metadata?: Record<string, unknown>
-  },
+  opening: Pick<DoorNode | WindowNode, 'position' | 'width' | 'height' | 'rotation'> &
+    Partial<Pick<DoorNode, 'sidelightLeft' | 'sidelightRight' | 'transomHeight' | 'doorType'>> & {
+      metadata?: Record<string, unknown>
+    },
   nodes: Readonly<Record<string, AnyNode>>,
 ) {
   if (opening.metadata?.curvedWindowMaster || getWallCurveLength(wall) < 1e-6)

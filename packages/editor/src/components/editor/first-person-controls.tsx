@@ -18,6 +18,7 @@ import {
   getLevelDisplayName,
   getLevelElevations,
   getResolvedElevatorDoorStyle,
+  type InteractionSound,
   itemPrompt,
   nodeMechanism,
   openElevatorDoor,
@@ -45,12 +46,20 @@ import {
   CROUCH_FLOAT_HEIGHT,
   CROUCH_RUN_SPEED,
   CROUCH_WALK_SPEED,
+  createDroneInput,
+  DRONE_SLOW_MULTIPLIER,
+  type DroneLook,
   EYE_LERP_SPEED,
   type MovementInput,
+  openingSettled,
+  proceduralSettled,
   STAND_CAPSULE,
   STAND_CLEARANCE,
   STAND_FLOAT_HEIGHT,
+  seedDroneLook,
   setSurfaceRaycastLayers,
+  stepDroneFlight,
+  turnFirstPersonLook,
   useViewer,
   WALKTHROUGH_FOV,
 } from '@pascal-app/viewer'
@@ -90,7 +99,7 @@ import {
 } from '../../lib/window-interaction'
 import useEditor from '../../store/use-editor'
 import { useFirstPersonHud, type WalkthroughInteract } from '../../store/use-first-person-hud'
-import { WalkthroughHud } from '../walkthrough-hud'
+import { DroneHud, WalkthroughHud } from '../walkthrough-hud'
 import {
   buildFirstPersonColliderWorldFromRegistry,
   deriveFirstPersonSpawn,
@@ -107,13 +116,6 @@ import {
 } from './first-person/mechanism-targets'
 
 const CAMERA_EYE_OFFSET = 0.45
-const LOOK_SENSITIVITY = 0.002
-// Drone mode: metres per second, and how hard Shift boosts it. The smoothing
-// constant is an exponential approach rate, not a linear acceleration.
-const DRONE_SPEED = 7
-const DRONE_RUN_MULTIPLIER = 3
-const DRONE_SLOW_MULTIPLIER = 0.2
-const DRONE_SMOOTHING = 12
 const CONTROLLER_CENTER_FROM_EYE = 0.85
 const DOOR_INTERACTION_DISTANCE = 2.5
 const DOOR_LEAF_INTERACTION_DEPTH = 0.08
@@ -168,10 +170,7 @@ function focusFirstPersonCanvas(canvas: HTMLCanvasElement) {
 
 const cameraOffset = new Vector3()
 const cameraEuler = new Euler(0, 0, 0, 'YXZ')
-const droneEuler = new Euler(0, 0, 0, 'YXZ')
-const droneForward = new Vector3()
-const droneRight = new Vector3()
-const droneDesiredVelocity = new Vector3()
+const droneInput = createDroneInput()
 const standClearanceRaycaster = new Raycaster()
 const standClearanceUp = new Vector3(0, 1, 0)
 const centerScreenPoint = new Vector2(0, 0)
@@ -423,6 +422,40 @@ function resolveHudInteract(target: FirstPersonInteractableTarget | null): Walkt
     ? getDisplayedDoorValue(target.id, 'operationState', node.operationState) > 0
     : getDisplayedDoorValue(target.id, 'swingAngle', node.swingAngle) > 0
   return { label: node.name || 'door', verb: isOpen ? 'close' : 'open' }
+}
+
+/** E plays what the viewer's callout plays for the same door, window or switch. */
+function playTargetSound(target: FirstPersonInteractableTarget) {
+  const verb = resolveHudInteract(target)?.verb
+  if (!verb || verb === 'press') return
+  const node = useScene.getState().nodes[target.id]
+  // A recipe's door or lid swings and claps shut, its drawer slides; both land on the motion's end.
+  if (target.type === 'procedural' && (verb === 'open' || verb === 'close')) {
+    if (verb === 'open') {
+      emitter.emit('interaction:sound', 'panel-open')
+      return
+    }
+    if (target.kind !== 'slide') emitter.emit('interaction:sound', 'panel-swing')
+    void proceduralSettled(target.id).then(() => emitter.emit('interaction:sound', 'panel-close'))
+    return
+  }
+  let sound: InteractionSound
+  if (verb !== 'open' && verb !== 'close')
+    sound = verb === 'turn on' || verb === 'play' ? 'switch-on' : 'switch-off'
+  else if (node?.type === 'door' && node.doorType?.startsWith('garage-')) sound = 'garage'
+  else if (node?.type === 'window') sound = verb === 'open' ? 'window-open' : 'window-close'
+  else sound = verb === 'open' ? 'door-open' : 'door-close'
+  // A built-in leaf or sash swings shut, then latches on the frame it lands.
+  if (
+    (sound === 'door-close' || sound === 'window-close') &&
+    (target.type === 'door' || target.type === 'window') &&
+    node
+  ) {
+    emitter.emit('interaction:sound', sound === 'door-close' ? 'door-swing' : 'window-swing')
+    void openingSettled(node).then(() => emitter.emit('interaction:sound', sound))
+    return
+  }
+  emitter.emit('interaction:sound', sound)
 }
 
 function resolveElevatorButtonTarget(object: Object3D): ElevatorButtonTarget | null {
@@ -734,8 +767,7 @@ export const FirstPersonControls = () => {
   const controllerRef = useRef<BVHEcctrlApi | null>(null)
   const movementInputRef = useRef<MovementInput>({ ...inactiveMovementInput })
   const hadPointerLockRef = useRef(false)
-  const yawRef = useRef(0)
-  const pitchRef = useRef(0)
+  const lookRef = useRef<DroneLook>({ yaw: 0, pitch: 0 })
   const interactableTargetRef = useRef<FirstPersonInteractableTarget | null>(null)
   const hudLabelFrameRef = useRef(HUD_LABEL_SAMPLE_FRAMES - 1)
   const crouchKeyRef = useRef(false)
@@ -1131,6 +1163,7 @@ export const FirstPersonControls = () => {
 
     const target = interactableTargetRef.current ?? resolveInteractableTarget()
     if (!target) return
+    playTargetSound(target)
     if (target.type === 'mechanism') {
       const node = useScene.getState().nodes[target.id]
       if (node) toggleNodeMechanism(node)
@@ -1325,9 +1358,7 @@ export const FirstPersonControls = () => {
   // Drone picks up wherever the camera currently is — orbit pose or walk eye.
   useEffect(() => {
     if (!isDroneMode) return
-    droneEuler.setFromQuaternion(camera.quaternion)
-    yawRef.current = droneEuler.y
-    pitchRef.current = droneEuler.x
+    seedDroneLook(lookRef.current, camera.quaternion)
     droneVelocityRef.current.set(0, 0, 0)
 
     // Interaction prompts belong to walk; drop whatever its frame left behind.
@@ -1344,8 +1375,8 @@ export const FirstPersonControls = () => {
 
     const spawn = placedSpawn ?? deriveFirstPersonSpawn(camera, world)
     const [x, y, z] = spawn.position
-    yawRef.current = spawn.yaw
-    pitchRef.current = 0
+    lookRef.current.yaw = spawn.yaw
+    lookRef.current.pitch = 0
     setControllerStart({
       position: [x, y - CONTROLLER_CENTER_FROM_EYE, z],
       yaw: spawn.yaw,
@@ -1381,15 +1412,13 @@ export const FirstPersonControls = () => {
       // Shutter hold: the shot is rendering — a mouse twitch must not pan it.
       if (useEditor.getState().captureShutterHold) return
 
-      const lookSensitivity =
-        LOOK_SENSITIVITY *
-        (useEditor.getState().firstPersonMovementMode === 'drone' && droneSlowKeyRef.current
+      turnFirstPersonLook(
+        lookRef.current,
+        e.movementX,
+        e.movementY,
+        useEditor.getState().firstPersonMovementMode === 'drone' && droneSlowKeyRef.current
           ? DRONE_SLOW_MULTIPLIER
-          : 1)
-      yawRef.current -= e.movementX * lookSensitivity
-      pitchRef.current = Math.max(
-        -(Math.PI / 2 - 0.05),
-        Math.min(Math.PI / 2 - 0.05, pitchRef.current - e.movementY * lookSensitivity),
+          : 1,
       )
     }
 
@@ -1817,45 +1846,24 @@ export const FirstPersonControls = () => {
     return standClearanceRaycaster.intersectObjects(meshes, false).length === 0
   }, [])
 
-  // Drone: a free camera driven straight from the look angles — no controller,
-  // no gravity or collision clamping. WASD move along the view axes, Space or E
-  // rises, Q (or Ctrl) sinks, and Shift boosts.
+  // Drone: the viewer's free flight (`stepDroneFlight`, also behind the viewer's
+  // `DroneController`) fed from this controller's keys — WASD along the view
+  // axes, Space or E rises, Q (or Ctrl) sinks, Shift boosts, Alt slows.
   useFrame((_, delta) => {
     if (!isDroneMode) return
     // Shutter hold: freeze the drone mid-air while the shot renders.
     if (useEditor.getState().captureShutterHold) return
 
-    const step = Math.min(delta, 0.1)
     const movement = movementInputRef.current
-
-    droneEuler.set(pitchRef.current, yawRef.current, 0, 'YXZ')
-    camera.quaternion.setFromEuler(droneEuler)
-    droneForward.set(0, 0, -1).applyEuler(droneEuler)
-    droneRight.set(1, 0, 0).applyEuler(droneEuler)
-
-    droneDesiredVelocity.set(0, 0, 0)
-    if (movement.forward) droneDesiredVelocity.add(droneForward)
-    if (movement.backward) droneDesiredVelocity.sub(droneForward)
-    if (movement.rightward) droneDesiredVelocity.add(droneRight)
-    if (movement.leftward) droneDesiredVelocity.sub(droneRight)
-    if (movement.jump || droneAscendKeyRef.current) droneDesiredVelocity.y += 1
-    if (droneDescendKeyRef.current || crouchKeyRef.current) droneDesiredVelocity.y -= 1
-    if (droneDesiredVelocity.lengthSq() > 0) {
-      droneDesiredVelocity
-        .normalize()
-        .multiplyScalar(
-          DRONE_SPEED *
-            (droneSlowKeyRef.current
-              ? DRONE_SLOW_MULTIPLIER
-              : movement.run
-                ? DRONE_RUN_MULTIPLIER
-                : 1),
-        )
-    }
-
-    droneVelocityRef.current.lerp(droneDesiredVelocity, 1 - Math.exp(-step * DRONE_SMOOTHING))
-    camera.position.addScaledVector(droneVelocityRef.current, step)
-    camera.updateMatrixWorld(true)
+    droneInput.forward = movement.forward === true
+    droneInput.backward = movement.backward === true
+    droneInput.leftward = movement.leftward === true
+    droneInput.rightward = movement.rightward === true
+    droneInput.up = movement.jump === true || droneAscendKeyRef.current
+    droneInput.down = droneDescendKeyRef.current || crouchKeyRef.current
+    droneInput.boost = movement.run === true
+    droneInput.slow = droneSlowKeyRef.current
+    stepDroneFlight(camera, lookRef.current, droneInput, droneVelocityRef.current, delta)
   }, 2.5)
 
   useFrame((_, delta) => {
@@ -1899,7 +1907,7 @@ export const FirstPersonControls = () => {
 
     group.rotation.y = 0
     camera.position.copy(group.position).add(cameraOffset)
-    cameraEuler.set(pitchRef.current, yawRef.current, 0, 'YXZ')
+    cameraEuler.set(lookRef.current.pitch, lookRef.current.yaw, 0, 'YXZ')
     camera.quaternion.setFromEuler(cameraEuler)
     camera.updateMatrixWorld(true)
     syncElevatorRide(group)
@@ -1991,6 +1999,7 @@ export const FirstPersonOverlay = ({ onExit }: { onExit: () => void }) => {
   const zoneLabel = useFirstPersonHud((state) => state.zoneLabel)
   const interact = useFirstPersonHud((state) => state.interact)
   const suspended = useViewer((state) => state.walkthroughSuspended)
+  const isDroneMode = useEditor((state) => state.firstPersonMovementMode === 'drone')
 
   const handleExit = useCallback(() => {
     if (document.pointerLockElement) {
@@ -1998,6 +2007,8 @@ export const FirstPersonOverlay = ({ onExit }: { onExit: () => void }) => {
     }
     onExit()
   }, [onExit])
+
+  if (isDroneMode) return <DroneHud onExit={handleExit} suspended={suspended} />
 
   return (
     <WalkthroughHud

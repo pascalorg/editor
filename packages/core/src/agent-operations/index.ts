@@ -14,12 +14,14 @@ import { deleteNode } from './delete-node'
 import { designBrief, gatedByBrief } from './design-brief'
 import { placeDesign, validateDesignOperation } from './designs'
 import { duplicateLevel } from './duplicate-level'
+import { duplicateNode } from './duplicate-node'
 import { findByType } from './find-by-type'
 import { furnishRoom } from './furnish-room'
 import { getNode } from './get-node'
 import { getLevelSummary, getWalls, getZones } from './level-reads'
 import { listLevels } from './list-levels'
 import { mergeWindowsOperation } from './merge-windows'
+import { moveNode } from './move-node'
 import { moveRoofsToRoofLevel } from './move-roofs'
 import { paint } from './paint'
 import { placeInRoom } from './place-in-room'
@@ -35,6 +37,9 @@ import type { AgentOperation, AgentOperations } from './types'
 import { createUnit, listUnits, setUnitMembers } from './units'
 import { verifyScene } from './verify-scene'
 import { setWallType } from './wall-type'
+import './room-checks'
+import './unreachable-rooms-check'
+import './usage-checks'
 
 export * from './achieved'
 export * from './add-column'
@@ -44,6 +49,7 @@ export * from './add-object'
 export * from './add-wall'
 export * from './apply-changes'
 export * from './apply-outcome'
+export * from './asset-catalog'
 export * from './author-scene'
 export * from './author-scene-checks'
 export * from './authored-scene-merge'
@@ -57,11 +63,14 @@ export * from './design-brief'
 export * from './designs'
 export * from './door-clearance'
 export * from './duplicate-level'
+export * from './duplicate-node'
 export * from './find-by-type'
 export * from './furnish-room'
 export * from './get-node'
 export * from './hosted-services'
 export * from './layout-clearance'
+// The door check that reads an item's real shape, not the plain one of door-clearance.
+export { findBlockedDoors } from './layout-clearance'
 export * from './level-height-fill'
 export * from './level-reads'
 export * from './level-target'
@@ -69,6 +78,8 @@ export * from './list-levels'
 export * from './material-preset'
 export * from './material-refs'
 export * from './merge-windows'
+export * from './move-node'
+export * from './move-plan'
 export * from './move-roofs'
 export * from './node-patch'
 export * from './paint'
@@ -77,7 +88,9 @@ export * from './plan-geometry'
 export * from './point-context'
 export * from './project-files'
 export * from './roof-writes'
+export { ROOM_CHECK_CODES } from './room-checks'
 export * from './room-floor-script'
+export { type RoomReading, readRooms } from './room-readings'
 export * from './room-structure'
 export * from './scene-materials'
 export * from './scene-measure'
@@ -124,6 +137,8 @@ const SINGLE_OPERATIONS = {
   move_roofs_to_roof_level: moveRoofsToRoofLevel,
   place_items: gatedByBrief('place_items', placeItems),
   delete_node: deleteNode,
+  move_node: moveNode,
+  duplicate_node: duplicateNode,
   find_by_type: findByType,
   create_room: createRoom,
   furnish_room: gatedByBrief('furnish_room', furnishRoom),
@@ -160,7 +175,6 @@ export {
   type AssetViewLoader,
   type AssetViewSubject,
   assetViewNeeds,
-  assetViewsReadCatalog,
   createAssetViewLoader,
   createFetchAssetViewIO,
   readGlbSurfaces,

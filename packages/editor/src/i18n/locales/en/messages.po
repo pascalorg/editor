@@ -564,8 +564,12 @@ msgid "app.viewerToolbar.collapseSidebar"
 msgstr "Collapse sidebar"
 
 #: apps/editor/components/viewer-toolbar.tsx
-msgid "app.viewerToolbar.crispOpaqueEdgeLines"
-msgstr "Crisp, opaque edge lines"
+msgid "app.viewerToolbar.colored"
+msgstr "Colored"
+
+#: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.colors"
+msgstr "Colors"
 
 #: apps/editor/components/viewer-toolbar.tsx
 msgid "app.viewerToolbar.cutaway"
@@ -592,10 +596,6 @@ msgid "app.viewerToolbar.doorWindowMarks"
 msgstr "Door/window marks"
 
 #: apps/editor/components/viewer-toolbar.tsx
-msgid "app.viewerToolbar.edges"
-msgstr "Edges"
-
-#: apps/editor/components/viewer-toolbar.tsx
 msgid "app.viewerToolbar.editing"
 msgstr "Editing"
 
@@ -620,16 +620,8 @@ msgid "app.viewerToolbar.exploded"
 msgstr "Exploded"
 
 #: apps/editor/components/viewer-toolbar.tsx
-msgid "app.viewerToolbar.faintOutlineOfMajorCreases"
-msgstr "Faint outline of major creases"
-
-#: apps/editor/components/viewer-toolbar.tsx
 msgid "app.viewerToolbar.feetInches"
 msgstr "Feet & inches"
-
-#: apps/editor/components/viewer-toolbar.tsx
-msgid "app.viewerToolbar.flatAndFastNoAmbientOcclusion"
-msgstr "Flat and fast — no ambient occlusion"
 
 #: apps/editor/components/viewer-toolbar.tsx
 msgid "app.viewerToolbar.floorPlanAnnotations"
@@ -638,10 +630,6 @@ msgstr "Floor plan annotations"
 #: apps/editor/components/viewer-toolbar.tsx
 msgid "app.viewerToolbar.floorPlanMode"
 msgstr "Floor plan mode"
-
-#: apps/editor/components/viewer-toolbar.tsx
-msgid "app.viewerToolbar.fullAmbientOcclusion"
-msgstr "Full ambient occlusion"
 
 #: apps/editor/components/viewer-toolbar.tsx
 msgid "app.viewerToolbar.fullDocumentationAndAnnotationControls"
@@ -710,16 +698,16 @@ msgid "app.viewerToolbar.millimeters"
 msgstr "Millimeters"
 
 #: apps/editor/components/viewer-toolbar.tsx
+msgid "app.viewerToolbar.monochrome"
+msgstr "Monochrome"
+
+#: apps/editor/components/viewer-toolbar.tsx
 msgid "app.viewerToolbar.n2dOnly"
 msgstr "2D only"
 
 #: apps/editor/components/viewer-toolbar.tsx
 msgid "app.viewerToolbar.n3dOnly"
 msgstr "3D only"
-
-#: apps/editor/components/viewer-toolbar.tsx
-msgid "app.viewerToolbar.noEdgeLines"
-msgstr "No edge lines"
 
 #. Short for outside dimension: measured between the outside faces of walls.
 #: apps/editor/components/viewer-toolbar.tsx
@@ -767,14 +755,6 @@ msgid "app.viewerToolbar.previewMode"
 msgstr "Preview mode"
 
 #: apps/editor/components/viewer-toolbar.tsx
-msgid "app.viewerToolbar.render"
-msgstr "Render"
-
-#: apps/editor/components/viewer-toolbar.tsx
-msgid "app.viewerToolbar.rendered"
-msgstr "Rendered"
-
-#: apps/editor/components/viewer-toolbar.tsx
 msgid "app.viewerToolbar.roomLabels"
 msgstr "Room labels"
 
@@ -807,14 +787,6 @@ msgid "app.viewerToolbar.show"
 msgstr "Show"
 
 #: apps/editor/components/viewer-toolbar.tsx
-msgid "app.viewerToolbar.soft"
-msgstr "Soft"
-
-#: apps/editor/components/viewer-toolbar.tsx
-msgid "app.viewerToolbar.solid"
-msgstr "Solid"
-
-#: apps/editor/components/viewer-toolbar.tsx
 msgid "app.viewerToolbar.solo"
 msgstr "Solo"
 
@@ -825,10 +797,6 @@ msgstr "Stack"
 #: apps/editor/components/viewer-toolbar.tsx
 msgid "app.viewerToolbar.stairAnnotations"
 msgstr "Stair annotations"
-
-#: apps/editor/components/viewer-toolbar.tsx
-msgid "app.viewerToolbar.strong"
-msgstr "Strong"
 
 #: apps/editor/components/viewer-toolbar.tsx
 msgid "app.viewerToolbar.structuralGridsColumnCenters"
@@ -1552,6 +1520,22 @@ msgstr "Rotate"
 msgid "editor.cameraHint.zoom"
 msgstr "Zoom"
 
+#: packages/editor/src/components/ui/command-palette/editor-commands.tsx
+msgid "editor.commands.qualityAuto"
+msgstr "Quality: Auto"
+
+#: packages/editor/src/components/ui/command-palette/editor-commands.tsx
+msgid "editor.commands.qualityHigh"
+msgstr "Quality: High"
+
+#: packages/editor/src/components/ui/command-palette/editor-commands.tsx
+msgid "editor.commands.qualityLow"
+msgstr "Quality: Low"
+
+#: packages/editor/src/components/ui/command-palette/editor-commands.tsx
+msgid "editor.commands.qualityMedium"
+msgstr "Quality: Medium"
+
 #: packages/editor/src/components/ui/controls/finish-swatch.tsx
 msgid "editor.controls.finishSwatch.ariaLabel"
 msgstr "{label}: {finish}"
@@ -1880,6 +1864,10 @@ msgstr "Cancel picking"
 #: packages/editor/src/components/ui/helpers/helper-manager.tsx
 msgid "editor.helpers.helperManager.cancelStroke"
 msgstr "Cancel stroke"
+
+#: packages/editor/src/components/ui/helpers/helper-manager.tsx
+msgid "editor.helpers.helperManager.detachTheJoint"
+msgstr "Detach the joint"
 
 #: packages/editor/src/components/ui/helpers/helper-manager.tsx
 msgid "editor.helpers.helperManager.done"
@@ -4237,6 +4225,10 @@ msgstr "Walls"
 #: packages/editor/src/components/editor/registry-action-contributions.tsx
 msgid "editor.mechanismAction"
 msgstr "{action, select, close {Close} open {Open} stop {Stop} other {Play}}"
+
+#: packages/editor/src/components/editor/registry-action-contributions.tsx
+msgid "editor.mechanismPartAction.shutters"
+msgstr "{action, select, close {Close shutters} other {Open shutters}}"
 
 #: packages/editor/src/components/editor/node-action-menu.tsx
 msgid "editor.nodeActionMenu.curve"
@@ -7016,6 +7008,10 @@ msgid "editor.toolHint.typeSliding.nwmr3f"
 msgstr "Type: Sliding"
 
 #: packages/nodes/src/i18n/definition-messages.ts
+msgid "editor.toolHint.typeTiltAndTurn.5rrbaw"
+msgstr "Type: Tilt and Turn"
+
+#: packages/nodes/src/i18n/definition-messages.ts
 msgid "editor.toolHint.verticalStackClickToPlace.ijcn4q"
 msgstr "Vertical stack ↕, click to place"
 
@@ -7038,6 +7034,10 @@ msgstr "Length: {field} m"
 #: packages/editor/src/components/tools/distribution/distribution-run-tool.tsx
 msgid "editor.tools.distribution.distributionRunTool.tabDirection"
 msgstr "Tab: direction"
+
+#: packages/editor/src/components/tools/distribution/distribution-run-tool.tsx
+msgid "editor.tools.distribution.distributionRunTool.targetElevation"
+msgstr "Target elevation: {elevation} m · click or Enter to place"
 
 #: packages/editor/src/components/tools/distribution/distribution-run-tool.tsx
 msgid "editor.tools.distribution.distributionRunTool.typeALength"
@@ -7134,6 +7134,26 @@ msgstr "Veil the ground over a level below grade"
 #: packages/editor/src/components/editor/views/view-bar.tsx
 msgid "editor.views.viewBar.views"
 msgstr "Views"
+
+#: packages/editor/src/components/walkthrough-hud.tsx
+msgid "editor.walkthroughHud.drone.boost"
+msgstr "boost"
+
+#: packages/editor/src/components/walkthrough-hud.tsx
+msgid "editor.walkthroughHud.drone.down"
+msgstr "down"
+
+#: packages/editor/src/components/walkthrough-hud.tsx
+msgid "editor.walkthroughHud.drone.move"
+msgstr "move"
+
+#: packages/editor/src/components/walkthrough-hud.tsx
+msgid "editor.walkthroughHud.drone.slow"
+msgstr "slow"
+
+#: packages/editor/src/components/walkthrough-hud.tsx
+msgid "editor.walkthroughHud.drone.up"
+msgstr "up"
 
 #: packages/editor/src/components/ui/wall-type/wall-type-editor-dialog.tsx
 msgid "editor.wallTypeEditorDialog.listTheLayersAppliedToThisWall"
@@ -9121,21 +9141,21 @@ msgstr "Construction Dimension"
 
 #: packages/nodes/src/window/panel.tsx
 msgid "node.cornerRadius.bottomLeft"
-msgstr "Bottom Left"
+msgstr "Bottom left"
 
 #: packages/nodes/src/window/panel.tsx
 msgid "node.cornerRadius.bottomRight"
-msgstr "Bottom Right"
+msgstr "Bottom right"
 
 #: packages/nodes/src/door/panel.tsx
 #: packages/nodes/src/window/panel.tsx
 msgid "node.cornerRadius.topLeft"
-msgstr "Top Left"
+msgstr "Top left"
 
 #: packages/nodes/src/door/panel.tsx
 #: packages/nodes/src/window/panel.tsx
 msgid "node.cornerRadius.topRight"
-msgstr "Top Right"
+msgstr "Top right"
 
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "node.cupola.description"
@@ -9249,7 +9269,7 @@ msgstr "Actions"
 
 #: packages/nodes/src/door/panel.tsx
 msgid "node.door.panel.addSegment"
-msgstr "+ Add Segment"
+msgstr "+ Add segment"
 
 #: packages/nodes/src/door/panel.tsx
 msgid "node.door.panel.all"
@@ -9261,7 +9281,7 @@ msgstr "Arch"
 
 #: packages/nodes/src/door/panel.tsx
 msgid "node.door.panel.archHeight"
-msgstr "Arch Height"
+msgstr "Arch height"
 
 #: packages/nodes/src/door/panel.tsx
 msgid "node.door.panel.auto"
@@ -9273,7 +9293,7 @@ msgstr "Auto follows the wall"
 
 #: packages/nodes/src/door/panel.tsx
 msgid "node.door.panel.barHeight"
-msgstr "Bar Height"
+msgstr "Bar height"
 
 #: packages/nodes/src/door/panel.tsx
 msgid "node.door.panel.columns"
@@ -9281,11 +9301,15 @@ msgstr "Columns"
 
 #: packages/nodes/src/door/panel.tsx
 msgid "node.door.panel.contentPadding"
-msgstr "Content Padding"
+msgstr "Leaf border"
 
 #: packages/nodes/src/door/panel.tsx
 msgid "node.door.panel.cornerRadius"
-msgstr "Corner Radius"
+msgstr "Corner radius"
+
+#: packages/nodes/src/door/panel.tsx
+msgid "node.door.panel.crossbar"
+msgstr "Crossbar"
 
 #: packages/nodes/src/door/panel.tsx
 msgid "node.door.panel.customTheSegmentsMatchNoStyle"
@@ -9317,7 +9341,7 @@ msgstr "Door"
 
 #: packages/nodes/src/door/panel.tsx
 msgid "node.door.panel.doorCloser"
-msgstr "Door Closer"
+msgstr "Door closer"
 
 #: packages/nodes/src/door/panel.tsx
 msgid "node.door.panel.duplicate"
@@ -9329,15 +9353,19 @@ msgstr "Empty"
 
 #: packages/nodes/src/door/panel.tsx
 msgid "node.door.panel.enableHandle"
-msgstr "Enable Handle"
+msgstr "Enable handle"
 
 #: packages/nodes/src/door/panel.tsx
 msgid "node.door.panel.enableThreshold"
-msgstr "Enable Threshold"
+msgstr "Enable threshold"
+
+#: packages/nodes/src/door/panel.tsx
+msgid "node.door.panel.finish"
+msgstr "Finish"
 
 #: packages/nodes/src/door/panel.tsx
 msgid "node.door.panel.flipSide"
-msgstr "Flip Side"
+msgstr "Flip side"
 
 #: packages/nodes/src/door/panel.tsx
 msgid "node.door.panel.fold"
@@ -9360,12 +9388,28 @@ msgid "node.door.panel.glass"
 msgstr "Glass"
 
 #: packages/nodes/src/door/panel.tsx
-msgid "node.door.panel.handle"
-msgstr "Handle"
+msgid "node.door.panel.handleBar"
+msgstr "Bar"
 
 #: packages/nodes/src/door/panel.tsx
-msgid "node.door.panel.handleSide"
-msgstr "Handle Side"
+msgid "node.door.panel.handleKnob"
+msgstr "Knob"
+
+#: packages/nodes/src/door/panel.tsx
+msgid "node.door.panel.handleLever"
+msgstr "Lever"
+
+#: packages/nodes/src/door/panel.tsx
+msgid "node.door.panel.handleLeverCurved"
+msgstr "Curved lever"
+
+#: packages/nodes/src/door/panel.tsx
+msgid "node.door.panel.handlePlate"
+msgstr "Plate"
+
+#: packages/nodes/src/door/panel.tsx
+msgid "node.door.panel.handleStyle"
+msgstr "Style"
 
 #: packages/nodes/src/door/panel.tsx
 msgid "node.door.panel.hardware"
@@ -9377,7 +9421,7 @@ msgstr "Height"
 
 #: packages/nodes/src/door/panel.tsx
 msgid "node.door.panel.hingesSide"
-msgstr "Hinges Side"
+msgstr "Hinges side"
 
 #: packages/nodes/src/door/panel.tsx
 msgid "node.door.panel.horizontal"
@@ -9396,8 +9440,16 @@ msgid "node.door.panel.inward"
 msgstr "Inward"
 
 #: packages/nodes/src/door/panel.tsx
+msgid "node.door.panel.latchRods"
+msgstr "Latch rods"
+
+#: packages/nodes/src/door/panel.tsx
 msgid "node.door.panel.left"
 msgstr "Left"
+
+#: packages/nodes/src/door/panel.tsx
+msgid "node.door.panel.leftSidelight"
+msgstr "Left sidelight"
 
 #: packages/nodes/src/door/panel.tsx
 msgid "node.door.panel.move"
@@ -9413,7 +9465,7 @@ msgstr "Opening"
 
 #: packages/nodes/src/door/panel.tsx
 msgid "node.door.panel.openingShape"
-msgstr "Opening Shape"
+msgstr "Opening shape"
 
 #: packages/nodes/src/door/panel.tsx
 msgid "node.door.panel.outward"
@@ -9429,7 +9481,11 @@ msgstr "Panels"
 
 #: packages/nodes/src/door/panel.tsx
 msgid "node.door.panel.panicBar"
-msgstr "Panic Bar"
+msgstr "Panic bar"
+
+#: packages/nodes/src/door/panel.tsx
+msgid "node.door.panel.panicBarStyle"
+msgstr "Style"
 
 #: packages/nodes/src/door/panel.tsx
 msgid "node.door.panel.pocket"
@@ -9453,11 +9509,15 @@ msgstr "- Remove"
 
 #: packages/nodes/src/door/panel.tsx
 msgid "node.door.panel.revealRadius"
-msgstr "Reveal Radius"
+msgstr "Reveal radius"
 
 #: packages/nodes/src/door/panel.tsx
 msgid "node.door.panel.right"
 msgstr "Right"
+
+#: packages/nodes/src/door/panel.tsx
+msgid "node.door.panel.rightSidelight"
+msgstr "Right sidelight"
 
 #: packages/nodes/src/door/panel.tsx
 msgid "node.door.panel.rounded"
@@ -9474,6 +9534,18 @@ msgstr "Size is limited to the wall, including clearance for the opening frame."
 #: packages/nodes/src/door/panel.tsx
 msgid "node.door.panel.slide"
 msgstr "Slide"
+
+#: packages/nodes/src/door/panel.tsx
+msgid "node.door.panel.slidingBypass"
+msgstr "Bypass"
+
+#: packages/nodes/src/door/panel.tsx
+msgid "node.door.panel.slidingLayout"
+msgstr "Layout"
+
+#: packages/nodes/src/door/panel.tsx
+msgid "node.door.panel.slidingPatio"
+msgstr "Patio"
 
 #: packages/nodes/src/door/panel.tsx
 msgid "node.door.panel.style"
@@ -9493,7 +9565,15 @@ msgstr "Threshold"
 
 #: packages/nodes/src/door/panel.tsx
 msgid "node.door.panel.topShape"
-msgstr "Top Shape"
+msgstr "Top shape"
+
+#: packages/nodes/src/door/panel.tsx
+msgid "node.door.panel.touchbar"
+msgstr "Touchbar"
+
+#: packages/nodes/src/door/panel.tsx
+msgid "node.door.panel.transom"
+msgstr "Transom"
 
 #: packages/nodes/src/door/panel.tsx
 msgid "node.door.panel.type"
@@ -9798,6 +9878,138 @@ msgstr "R/T rotate"
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "node.ductSegment.description"
 msgstr "HVAC duct run — polyline of round, rect, or flat-oval sections."
+
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+msgid "node.ductSegment.editInspector.applyOffset"
+msgstr "Apply offset"
+
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+msgid "node.ductSegment.editInspector.applyResize"
+msgstr "Apply resize"
+
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+msgid "node.ductSegment.editInspector.branchStopsAtJunctionsSizeChanges"
+msgstr "Branch stops at junctions, size changes and equipment. Boundary collars stay fixed."
+
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+msgid "node.ductSegment.editInspector.connectedSameSizeBranch"
+msgstr "Connected same-size branch"
+
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+msgid "node.ductSegment.editInspector.diameter"
+msgstr "Diameter (in)"
+
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+msgid "node.ductSegment.editInspector.ductEdit"
+msgstr "Duct edit"
+
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+msgid "node.ductSegment.editInspector.ductShape"
+msgstr "Duct shape"
+
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+msgid "node.ductSegment.editInspector.editDuctRoute"
+msgstr "Edit duct route"
+
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+msgid "node.ductSegment.editInspector.faceAlignmentAppliesToFreeStraight"
+msgstr "Face alignment applies to free straight runs. Left and right follow the run’s section axes."
+
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+msgid "node.ductSegment.editInspector.firstBend"
+msgstr "First bend from start (m)"
+
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+msgid "node.ductSegment.editInspector.height"
+msgstr "Height (in)"
+
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+msgid "node.ductSegment.editInspector.keepBottomFace"
+msgstr "Keep bottom face"
+
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+msgid "node.ductSegment.editInspector.keepCenterline"
+msgstr "Keep centerline"
+
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+msgid "node.ductSegment.editInspector.keepLeftFace"
+msgstr "Keep left face"
+
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+msgid "node.ductSegment.editInspector.keepRightFace"
+msgstr "Keep right face"
+
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+msgid "node.ductSegment.editInspector.keepTopFace"
+msgstr "Keep top face"
+
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+msgid "node.ductSegment.editInspector.lastBend"
+msgstr "Last bend from start (m)"
+
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+msgid "node.ductSegment.editInspector.offsetAroundObstacle"
+msgstr "Offset around obstacle"
+
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+msgid "node.ductSegment.editInspector.offsetSideElevationPreview"
+msgstr "Offset side elevation preview"
+
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+msgid "node.ductSegment.editInspector.oval"
+msgstr "Oval"
+
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+msgid "node.ductSegment.editInspector.partsSummary"
+msgstr "{affected, plural, one {# existing part affected} other {# existing parts affected}} · {created, plural, one {# new part} other {# new parts}}"
+
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+msgid "node.ductSegment.editInspector.positiveMovesUpNegativeMovesDown"
+msgstr "Positive moves up; negative moves down. Four elbows preserve both endpoints. Check the obstacle’s clearance; this does not detect collisions."
+
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+msgid "node.ductSegment.editInspector.preserveDuctAlignment"
+msgstr "Preserve duct alignment"
+
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+msgid "node.ductSegment.editInspector.rectangular"
+msgstr "Rectangular"
+
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+msgid "node.ductSegment.editInspector.resizeScope"
+msgstr "Resize scope"
+
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+msgid "node.ductSegment.editInspector.resizeWithConnections"
+msgstr "Resize with connections"
+
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+msgid "node.ductSegment.editInspector.round"
+msgstr "Round"
+
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+msgid "node.ductSegment.editInspector.sideElevationDashedLineIsThe"
+msgstr "Side elevation · dashed line is the original route"
+
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+msgid "node.ductSegment.editInspector.thisSegment"
+msgstr "This segment"
+
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+msgid "node.ductSegment.editInspector.unableToApplyEdit"
+msgstr "Unable to apply edit."
+
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+msgid "node.ductSegment.editInspector.unableToPlanEdit"
+msgstr "Unable to plan this edit."
+
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+msgid "node.ductSegment.editInspector.verticalOffset"
+msgstr "Vertical offset (m)"
+
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+msgid "node.ductSegment.editInspector.width"
+msgstr "Width (in)"
 
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "node.ductSegment.label"
@@ -10617,11 +10829,215 @@ msgstr "R/T rotate"
 
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "node.pipeSegment.description"
-msgstr "Drain / waste / vent pipe run — draw level or toggle a ¼″ per foot fall with S."
+msgstr "Drain / waste / vent pipe run — draw level or choose grade and downhill direction."
+
+#: packages/nodes/src/pipe-segment/grade-label.ts
+msgid "node.pipeSegment.grade.chooseEndpoint"
+msgstr "Choose an endpoint"
+
+#: packages/nodes/src/pipe-segment/grade-label.ts
+msgid "node.pipeSegment.grade.level"
+msgstr "Level · no gravity fall"
+
+#: packages/nodes/src/pipe-segment/grade-label.ts
+msgid "node.pipeSegment.grade.percent"
+msgstr "{percent}%"
+
+#: packages/nodes/src/pipe-segment/grade-label.ts
+msgid "node.pipeSegment.grade.sloped"
+msgstr "{percent} · 1:{ratio} · {direction, select, forward {start → end} other {end → start}} (down)"
+
+#: packages/nodes/src/pipe-segment/grade-label.ts
+msgid "node.pipeSegment.grade.vertical"
+msgstr "Vertical · {direction, select, forward {start → end} other {end → start}} (down)"
+
+#: packages/nodes/src/pipe-segment/grade-inspector.tsx
+msgid "node.pipeSegment.gradeInspector.applyGradeToHorizontalLegs"
+msgstr "Apply grade to horizontal legs"
+
+#: packages/nodes/src/pipe-segment/grade-inspector.tsx
+msgid "node.pipeSegment.gradeInspector.arrowsShowDownhillDirectionLevelRuns"
+msgstr "Arrows show downhill direction. Level runs have no gravity fall. Editing a path point preserves each leg’s grade."
+
+#: packages/nodes/src/pipe-segment/grade-inspector.tsx
+msgid "node.pipeSegment.gradeInspector.centerlineElevations"
+msgstr "Centerline elevations above level: start {start} m · end {end} m"
+
+#: packages/nodes/src/pipe-segment/grade-inspector.tsx
+msgid "node.pipeSegment.gradeInspector.endElevation"
+msgstr "End elevation (m)"
+
+#: packages/nodes/src/pipe-segment/grade-inspector.tsx
+msgid "node.pipeSegment.gradeInspector.endStart"
+msgstr "End → start"
+
+#: packages/nodes/src/pipe-segment/grade-inspector.tsx
+msgid "node.pipeSegment.gradeInspector.fixedPipeEndpoint"
+msgstr "Fixed pipe endpoint"
+
+#: packages/nodes/src/pipe-segment/grade-inspector.tsx
+msgid "node.pipeSegment.gradeInspector.grade"
+msgstr "Grade (%)"
+
+#: packages/nodes/src/pipe-segment/grade-inspector.tsx
+msgid "node.pipeSegment.gradeInspector.gradeAndFlow"
+msgstr "Grade and flow"
+
+#: packages/nodes/src/pipe-segment/grade-inspector.tsx
+msgid "node.pipeSegment.gradeInspector.keepEndElevation"
+msgstr "Keep end elevation"
+
+#: packages/nodes/src/pipe-segment/grade-inspector.tsx
+msgid "node.pipeSegment.gradeInspector.keepStartElevation"
+msgstr "Keep start elevation"
+
+#: packages/nodes/src/pipe-segment/grade-inspector.tsx
+msgid "node.pipeSegment.gradeInspector.leg"
+msgstr "Leg {number}: {grade}"
+
+#: packages/nodes/src/pipe-segment/grade-inspector.tsx
+msgid "node.pipeSegment.gradeInspector.moveElevationKeepGrades"
+msgstr "Move elevation, keep grades"
+
+#: packages/nodes/src/pipe-segment/grade-inspector.tsx
+msgid "node.pipeSegment.gradeInspector.pipeAnchorElevation"
+msgstr "Pipe anchor elevation"
+
+#: packages/nodes/src/pipe-segment/grade-inspector.tsx
+msgid "node.pipeSegment.gradeInspector.pipeDownhillFlow"
+msgstr "Pipe downhill flow"
+
+#: packages/nodes/src/pipe-segment/grade-inspector.tsx
+msgid "node.pipeSegment.gradeInspector.pipeGradePercent"
+msgstr "Pipe grade percent"
+
+#: packages/nodes/src/pipe-segment/grade-inspector.tsx
+msgid "node.pipeSegment.gradeInspector.startElevation"
+msgstr "Start elevation (m)"
+
+#: packages/nodes/src/pipe-segment/grade-inspector.tsx
+msgid "node.pipeSegment.gradeInspector.startEnd"
+msgstr "Start → end"
+
+#: packages/nodes/src/pipe-segment/grade-affordance.ts
+msgid "node.pipeSegment.gradeNotice.blocked"
+msgstr "This edit cannot preserve the pipe grade and connected collars. Adjust the fitting or use Grade and flow."
 
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "node.pipeSegment.label"
 msgstr "DWV Pipe"
+
+#: packages/nodes/src/pipe-segment/move-tool.tsx
+msgid "node.pipeSegment.moveTool.connectedGradeBlocked"
+msgstr "This move would change a connected pipe’s grade. Choose another position or press Esc to cancel."
+
+#: packages/nodes/src/pipe-segment/offset-inspector.tsx
+msgid "node.pipeSegment.offsetInspector.applyPipeOffset"
+msgstr "Apply pipe offset"
+
+#: packages/nodes/src/pipe-segment/offset-inspector.tsx
+msgid "node.pipeSegment.offsetInspector.checkObstacleClearanceThePreviewDoes"
+msgstr "Check obstacle clearance. The preview does not detect collisions."
+
+#: packages/nodes/src/pipe-segment/offset-inspector.tsx
+msgid "node.pipeSegment.offsetInspector.chooseTheFirstAndLastBend"
+msgstr "Choose the first and last bend by horizontal distance from the start. Positive offset goes up; negative goes down. Each connector uses the offset height in horizontal travel."
+
+#: packages/nodes/src/pipe-segment/offset-inspector.tsx
+msgid "node.pipeSegment.offsetInspector.firstBend"
+msgstr "First bend (m)"
+
+#: packages/nodes/src/pipe-segment/offset-inspector.tsx
+msgid "node.pipeSegment.offsetInspector.lastBend"
+msgstr "Last bend (m)"
+
+#: packages/nodes/src/pipe-segment/offset-inspector.tsx
+msgid "node.pipeSegment.offsetInspector.offsetAppliedInOneUndoStep"
+msgstr "Offset applied in one undo step. End connections stayed fixed."
+
+#: packages/nodes/src/pipe-segment/offset-inspector.tsx
+msgid "node.pipeSegment.offsetInspector.offsetAroundObstacle"
+msgstr "Offset around obstacle"
+
+#: packages/nodes/src/pipe-segment/offset-inspector.tsx
+msgid "node.pipeSegment.offsetInspector.pipeOffsetSideProfilePreview"
+msgstr "Pipe offset side profile preview"
+
+#: packages/nodes/src/pipe-segment/offset-inspector.tsx
+msgid "node.pipeSegment.offsetInspector.sideProfileSchematicFourBendsFive"
+msgstr "Side profile (schematic). Four bends · five pipe sections. Parallel sections keep the original grade; both end connections stay fixed."
+
+#: packages/nodes/src/pipe-segment/offset-inspector.tsx
+msgid "node.pipeSegment.offsetInspector.thisOffsetIncludesAnUphillWaste"
+msgstr "This offset includes an uphill waste section. It does not provide continuous downhill drainage."
+
+#: packages/nodes/src/pipe-segment/offset-inspector.tsx
+msgid "node.pipeSegment.offsetInspector.unableToApplyOffset"
+msgstr "Unable to apply offset."
+
+#: packages/nodes/src/pipe-segment/offset-inspector.tsx
+msgid "node.pipeSegment.offsetInspector.unableToPlanOffset"
+msgstr "Unable to plan offset."
+
+#: packages/nodes/src/pipe-segment/offset-inspector.tsx
+msgid "node.pipeSegment.offsetInspector.verticalOffset"
+msgstr "Vertical offset (m)"
+
+#: packages/nodes/src/pipe-segment/resize-inspector.tsx
+msgid "node.pipeSegment.resizeInspector.applyPipeSize"
+msgstr "Apply pipe size"
+
+#: packages/nodes/src/pipe-segment/resize-inspector.tsx
+msgid "node.pipeSegment.resizeInspector.branchesStopAtJunctionsSizeOr"
+msgstr "Branches stop at junctions, size or material changes, and fixture connections. Reducers keep boundary collars fixed."
+
+#: packages/nodes/src/pipe-segment/resize-inspector.tsx
+msgid "node.pipeSegment.resizeInspector.checkResize"
+msgstr "Check resize"
+
+#: packages/nodes/src/pipe-segment/resize-inspector.tsx
+msgid "node.pipeSegment.resizeInspector.connectedBranch"
+msgstr "Connected branch"
+
+#: packages/nodes/src/pipe-segment/resize-inspector.tsx
+msgid "node.pipeSegment.resizeInspector.currentDiameter"
+msgstr "Current diameter: {diameter} in"
+
+#: packages/nodes/src/pipe-segment/resize-inspector.tsx
+msgid "node.pipeSegment.resizeInspector.diameterIn"
+msgstr "Diameter (in)"
+
+#: packages/nodes/src/pipe-segment/resize-inspector.tsx
+msgid "node.pipeSegment.resizeInspector.pipeResizeDiameter"
+msgstr "Pipe resize diameter"
+
+#: packages/nodes/src/pipe-segment/resize-inspector.tsx
+msgid "node.pipeSegment.resizeInspector.pipeResizeScope"
+msgstr "Pipe resize scope"
+
+#: packages/nodes/src/pipe-segment/resize-inspector.tsx
+msgid "node.pipeSegment.resizeInspector.pipeSize"
+msgstr "Pipe size"
+
+#: packages/nodes/src/pipe-segment/resize-inspector.tsx
+msgid "node.pipeSegment.resizeInspector.resized"
+msgstr "Resized in one undo step. Grades and boundary connections preserved."
+
+#: packages/nodes/src/pipe-segment/resize-inspector.tsx
+msgid "node.pipeSegment.resizeInspector.resizeSummary"
+msgstr "{runs, plural, one {# run} other {# runs}}, {fittings, plural, one {# fitting} other {# fittings}}, {reducers, plural, one {# new reducer} other {# new reducers}}. Grades stay unchanged."
+
+#: packages/nodes/src/pipe-segment/resize-inspector.tsx
+msgid "node.pipeSegment.resizeInspector.thisSegment"
+msgstr "This segment"
+
+#: packages/nodes/src/pipe-segment/resize-inspector.tsx
+msgid "node.pipeSegment.resizeInspector.unableToResize"
+msgstr "Unable to resize pipe."
+
+#: packages/nodes/src/pipe-segment/tool.tsx
+msgid "node.pipeSegment.tool.gradeDetail"
+msgstr "{grade} · Start {start} m · End {end} m above level"
 
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "node.pipeTrap.description"
@@ -11590,6 +12006,18 @@ msgstr "{spacing} o.c."
 msgid "node.shared.buildUpControls.woodPlank"
 msgstr "Wood plank"
 
+#: packages/nodes/src/shared/connection-feedback.tsx
+msgid "node.shared.connectionFeedback.routePreview"
+msgstr "Route preview"
+
+#: packages/nodes/src/shared/duct-collar-inspector.tsx
+msgid "node.shared.ductCollarInspector.collarButton"
+msgstr "{system, select, return {Return} other {Supply}} · {size} in · {state, select, connected {Connected} other {Draw from collar}}"
+
+#: packages/nodes/src/shared/duct-collar-inspector.tsx
+msgid "node.shared.ductCollarInspector.connectDuct"
+msgstr "Connect duct"
+
 #: packages/nodes/src/shared/item-interaction-actions.tsx
 msgid "node.shared.itemInteractionActions.turnLightOff"
 msgstr "Turn light off"
@@ -11605,6 +12033,18 @@ msgstr "Casing"
 #: packages/nodes/src/shared/opening-casing-section.tsx
 msgid "node.shared.openingCasingSection.width"
 msgstr "Width"
+
+#: packages/nodes/src/shared/opening-depth-position.tsx
+msgid "node.shared.openingDepthPosition.depthPosition"
+msgstr "Depth position"
+
+#: packages/nodes/src/shared/pipe-collar-inspector.tsx
+msgid "node.shared.pipeCollarInspector.collarButton"
+msgstr "{port, select, inlet {Inlet} outlet {Outlet} branch {Branch} branch2 {Second branch} other {Collar {number}}} · {diameter} in · {elevation} m · {state, select, connected {Connected} other {Draw from collar}}"
+
+#: packages/nodes/src/shared/pipe-collar-inspector.tsx
+msgid "node.shared.pipeCollarInspector.connectPipe"
+msgstr "Connect pipe"
 
 #: packages/nodes/src/shared/run-hanger-inspector.tsx
 msgid "node.shared.runHangerInspector.automaticSupport"
@@ -14073,7 +14513,7 @@ msgstr "Arch"
 
 #: packages/nodes/src/window/panel.tsx
 msgid "node.window.panel.archHeight"
-msgstr "Arch Height"
+msgstr "Arch height"
 
 #: packages/nodes/src/window/panel.tsx
 msgid "node.window.panel.auto"
@@ -14089,7 +14529,7 @@ msgstr "Columns"
 
 #: packages/nodes/src/window/panel.tsx
 msgid "node.window.panel.colWidths"
-msgstr "Col Widths"
+msgstr "Column widths"
 
 #: packages/nodes/src/window/panel.tsx
 msgid "node.window.panel.corner"
@@ -14101,7 +14541,7 @@ msgstr "Corner post"
 
 #: packages/nodes/src/window/panel.tsx
 msgid "node.window.panel.cornerRadius"
-msgstr "Corner Radius"
+msgstr "Corner radius"
 
 #: packages/nodes/src/window/panel.tsx
 msgid "node.window.panel.customThePanesMatchNoStyle"
@@ -14120,6 +14560,10 @@ msgid "node.window.panel.dimensions"
 msgstr "Dimensions"
 
 #: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.divideEachSash"
+msgstr "Divide each sash"
+
+#: packages/nodes/src/window/panel.tsx
 msgid "node.window.panel.divider"
 msgstr "Divider"
 
@@ -14133,11 +14577,15 @@ msgstr "Duplicate"
 
 #: packages/nodes/src/window/panel.tsx
 msgid "node.window.panel.enableSill"
-msgstr "Enable Sill"
+msgstr "Enable sill"
+
+#: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.finish"
+msgstr "Finish"
 
 #: packages/nodes/src/window/panel.tsx
 msgid "node.window.panel.flipSide"
-msgstr "Flip Side"
+msgstr "Flip side"
 
 #: packages/nodes/src/window/panel.tsx
 msgid "node.window.panel.frame"
@@ -14160,12 +14608,32 @@ msgid "node.window.panel.grid"
 msgstr "Grid"
 
 #: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.handle"
+msgstr "Handle"
+
+#: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.hardware"
+msgstr "Hardware"
+
+#: packages/nodes/src/window/panel.tsx
 msgid "node.window.panel.height"
 msgstr "Height"
 
 #: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.hingesSide"
+msgstr "Hinges side"
+
+#: packages/nodes/src/window/panel.tsx
 msgid "node.window.panel.individual"
 msgstr "Individual"
+
+#: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.insideSill"
+msgstr "Inside sill"
+
+#: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.inward"
+msgstr "Inward"
 
 #: packages/nodes/src/window/panel.tsx
 msgid "node.window.panel.left"
@@ -14176,16 +14644,32 @@ msgid "node.window.panel.move"
 msgstr "Move"
 
 #: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.open"
+msgstr "Open"
+
+#: packages/nodes/src/window/panel.tsx
 msgid "node.window.panel.opening"
 msgstr "Opening"
 
 #: packages/nodes/src/window/panel.tsx
 msgid "node.window.panel.openingShape"
-msgstr "Opening Shape"
+msgstr "Opening shape"
+
+#: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.opens"
+msgstr "Opens"
 
 #: packages/nodes/src/window/panel.tsx
 msgid "node.window.panel.otherSide"
 msgstr "Other side"
+
+#: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.outward"
+msgstr "Outward"
+
+#: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.overhang"
+msgstr "Overhang"
 
 #: packages/nodes/src/window/panel.tsx
 msgid "node.window.panel.pos"
@@ -14201,11 +14685,31 @@ msgstr "Rect"
 
 #: packages/nodes/src/window/panel.tsx
 msgid "node.window.panel.revealRadius"
-msgstr "Reveal Radius"
+msgstr "Reveal radius"
 
 #: packages/nodes/src/window/panel.tsx
 msgid "node.window.panel.right"
 msgstr "Right"
+
+#: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.rollerShutter"
+msgstr "Roller shutter"
+
+#: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.rollerShutterBox"
+msgstr "Box"
+
+#: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.rollerShutterBoxHeight"
+msgstr "Box height"
+
+#: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.rollerShutterConcealed"
+msgstr "Concealed"
+
+#: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.rollerShutterNone"
+msgstr "None"
 
 #: packages/nodes/src/window/panel.tsx
 msgid "node.window.panel.rounded"
@@ -14213,11 +14717,39 @@ msgstr "Rounded"
 
 #: packages/nodes/src/window/panel.tsx
 msgid "node.window.panel.rowHeights"
-msgstr "Row Heights"
+msgstr "Row heights"
 
 #: packages/nodes/src/window/panel.tsx
 msgid "node.window.panel.rows"
 msgstr "Rows"
+
+#: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.shutters"
+msgstr "Shutters"
+
+#: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.shuttersBoardBatten"
+msgstr "Board and batten"
+
+#: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.shutterSides"
+msgstr "Sides"
+
+#: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.shutterSidesBoth"
+msgstr "Both"
+
+#: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.shuttersLouvered"
+msgstr "Louvered"
+
+#: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.shuttersNone"
+msgstr "None"
+
+#: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.shuttersPanel"
+msgstr "Panel"
 
 #: packages/nodes/src/window/panel.tsx
 msgid "node.window.panel.sill"
@@ -14244,8 +14776,20 @@ msgid "node.window.panel.thisSide"
 msgstr "This side"
 
 #: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.tiltTurnMode"
+msgstr "Mode"
+
+#: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.tiltTurnTilt"
+msgstr "Tilt"
+
+#: packages/nodes/src/window/panel.tsx
+msgid "node.window.panel.tiltTurnTurn"
+msgstr "Turn"
+
+#: packages/nodes/src/window/panel.tsx
 msgid "node.window.panel.topShape"
-msgstr "Top Shape"
+msgstr "Top shape"
 
 #: packages/nodes/src/window/panel.tsx
 msgid "node.window.panel.type"
@@ -14269,7 +14813,7 @@ msgstr "Window"
 
 #: packages/nodes/src/window/panel.tsx
 msgid "node.window.panel.windowType"
-msgstr "Window Type"
+msgstr "Window type"
 
 #: packages/nodes/src/window/panel.tsx
 msgid "node.window.panel.wrapsTheCornerWithNamed"
@@ -14345,7 +14889,7 @@ msgstr "Casement"
 
 #: packages/nodes/src/shared/opening-labels.ts
 msgid "node.window.type.doubleHung"
-msgstr "Double Hung"
+msgstr "Double-hung"
 
 #: packages/nodes/src/shared/opening-labels.ts
 msgid "node.window.type.fixed"
@@ -14361,11 +14905,15 @@ msgstr "Louvered"
 
 #: packages/nodes/src/shared/opening-labels.ts
 msgid "node.window.type.singleHung"
-msgstr "Single Hung"
+msgstr "Single-hung"
 
 #: packages/nodes/src/shared/opening-labels.ts
 msgid "node.window.type.sliding"
 msgstr "Sliding"
+
+#: packages/nodes/src/shared/opening-labels.ts
+msgid "node.window.type.tiltTurn"
+msgstr "Tilt and turn"
 
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "node.zone.description"
@@ -14423,6 +14971,118 @@ msgstr "Zone boundary unavailable"
 msgid "node.zone.quantitiesPanel.zoneQuantities"
 msgstr "Zone quantities"
 
+#: packages/viewer/src/components/viewer/selection-callout.tsx
+msgid "viewer.callout.action"
+msgstr "{action, select, open {Open {name}} close {Close {name}} on {Turn on {name}} other {Turn off {name}}}"
+
+#: packages/viewer/src/components/viewer/selection-callout.tsx
+msgid "viewer.callout.deselect"
+msgstr "Deselect"
+
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+msgid "viewer.callout.door"
+msgstr "Door"
+
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+msgid "viewer.callout.door.barn"
+msgstr "Barn door"
+
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+msgid "viewer.callout.door.double"
+msgstr "Double door"
+
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+msgid "viewer.callout.door.folding"
+msgstr "Folding door"
+
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+msgid "viewer.callout.door.french"
+msgstr "French door"
+
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+msgid "viewer.callout.door.garageRollup"
+msgstr "Roll-up garage door"
+
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+msgid "viewer.callout.door.garageSectional"
+msgstr "Sectional garage door"
+
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+msgid "viewer.callout.door.garageTiltup"
+msgstr "Tilt-up garage door"
+
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+msgid "viewer.callout.door.hinged"
+msgstr "Hinged door"
+
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+msgid "viewer.callout.door.pocket"
+msgstr "Pocket door"
+
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+msgid "viewer.callout.door.sliding"
+msgstr "Sliding door"
+
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+msgid "viewer.callout.opening"
+msgstr "Opening"
+
+#: packages/viewer/src/components/viewer/selection-callout.tsx
+msgid "viewer.callout.shuttersAction"
+msgstr "{action, select, close {Close the shutters of {name}} other {Open the shutters of {name}}}"
+
+#: packages/viewer/src/components/viewer/selection-callout.tsx
+msgid "viewer.callout.state"
+msgstr "{state, select, open {Open} closed {Closed} on {On} other {Off}}"
+
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+msgid "viewer.callout.window"
+msgstr "Window"
+
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+msgid "viewer.callout.window.awning"
+msgstr "Awning window"
+
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+msgid "viewer.callout.window.bay"
+msgstr "Bay window"
+
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+msgid "viewer.callout.window.bow"
+msgstr "Bow window"
+
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+msgid "viewer.callout.window.casement"
+msgstr "Casement window"
+
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+msgid "viewer.callout.window.doubleHung"
+msgstr "Double-hung window"
+
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+msgid "viewer.callout.window.fixed"
+msgstr "Fixed window"
+
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+msgid "viewer.callout.window.hopper"
+msgstr "Hopper window"
+
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+msgid "viewer.callout.window.louvered"
+msgstr "Louvered window"
+
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+msgid "viewer.callout.window.singleHung"
+msgstr "Single-hung window"
+
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+msgid "viewer.callout.window.sliding"
+msgstr "Sliding window"
+
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+msgid "viewer.callout.window.tiltTurn"
+msgstr "Tilt-and-turn window"
+
 #: packages/editor/src/components/viewer/viewer-controls-bar.tsx
 msgid "viewer.camera.orbitLeft"
 msgstr "Orbit left"
@@ -14435,13 +15095,185 @@ msgstr "Orbit right"
 msgid "viewer.camera.topView"
 msgstr "Top view"
 
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
 #: packages/editor/src/components/viewer/viewer-controls-bar.tsx
 msgid "viewer.common.off"
 msgstr "Off"
 
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
 #: packages/editor/src/components/viewer/viewer-controls-bar.tsx
 msgid "viewer.common.on"
 msgstr "On"
+
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
+msgid "viewer.daylight.location.approximate"
+msgstr "Sun position is approximate"
+
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
+msgid "viewer.daylight.location.device"
+msgstr "Sun follows your location"
+
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
+#: packages/editor/src/components/viewer/sky-control.tsx
+msgid "viewer.daylight.location.use"
+msgstr "Use my location"
+
+#: packages/editor/src/components/viewer/sky-control.tsx
+msgid "viewer.daylight.phase.afternoon"
+msgstr "Afternoon"
+
+#: packages/editor/src/components/viewer/sky-control.tsx
+msgid "viewer.daylight.phase.morning"
+msgstr "Morning"
+
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
+msgid "viewer.daylight.quality.auto"
+msgstr "Auto"
+
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
+msgid "viewer.daylight.quality.autoDetail"
+msgstr "Picked for this device: {tier}"
+
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
+msgid "viewer.daylight.quality.high"
+msgstr "High"
+
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
+msgid "viewer.daylight.quality.highDetail"
+msgstr "Lighting-aware ambient occlusion and bloom"
+
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
+msgid "viewer.daylight.quality.low"
+msgstr "Low"
+
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
+msgid "viewer.daylight.quality.lowDetail"
+msgstr "Fastest — no ambient occlusion or bloom"
+
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
+msgid "viewer.daylight.quality.medium"
+msgstr "Medium"
+
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
+msgid "viewer.daylight.quality.mediumDetail"
+msgstr "Half-resolution ambient occlusion"
+
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
+msgid "viewer.daylight.quality.title"
+msgstr "Quality"
+
+#: packages/editor/src/components/viewer/sky-control.tsx
+msgid "viewer.daylight.sky.arc"
+msgstr "Drag the sun to set the time"
+
+#: packages/editor/src/components/viewer/sky-control.tsx
+msgid "viewer.daylight.sky.close"
+msgstr "Close"
+
+#: packages/editor/src/components/viewer/sky-control.tsx
+msgid "viewer.daylight.sky.cloudCover"
+msgstr "Cloud cover"
+
+#: packages/editor/src/components/viewer/sky-control.tsx
+msgid "viewer.daylight.sky.cycleWeather"
+msgstr "Cloud cover: {current}. Change to {next}"
+
+#: packages/editor/src/components/viewer/sky-control.tsx
+msgid "viewer.daylight.sky.cycleWeatherTip"
+msgstr "Cycle cloud cover"
+
+#: packages/editor/src/components/viewer/sky-control.tsx
+msgid "viewer.daylight.sky.followClock"
+msgstr "Follow the clock"
+
+#: packages/editor/src/components/viewer/sky-control.tsx
+msgid "viewer.daylight.sky.followClockDetail"
+msgstr "The sun moves with your local clock."
+
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
+msgid "viewer.daylight.sky.inViewport"
+msgstr "In viewport"
+
+#: packages/editor/src/components/viewer/sky-control.tsx
+msgid "viewer.daylight.sky.liveDetail"
+msgstr "Follows your local clock. Sun position is approximate."
+
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
+msgid "viewer.daylight.sky.menuItem"
+msgstr "Time & weather"
+
+#: packages/editor/src/components/viewer/sky-control.tsx
+msgid "viewer.daylight.sky.open"
+msgstr "Time and weather"
+
+#: packages/editor/src/components/viewer/sky-control.tsx
+msgid "viewer.daylight.sky.reset"
+msgstr "Reset"
+
+#: packages/editor/src/components/viewer/sky-control.tsx
+msgid "viewer.daylight.sky.subtitle"
+msgstr "Light and weather for this view"
+
+#: packages/editor/src/components/viewer/sky-control.tsx
+msgid "viewer.daylight.sky.sunrise"
+msgstr "Sunrise"
+
+#: packages/editor/src/components/viewer/sky-control.tsx
+msgid "viewer.daylight.sky.sunset"
+msgstr "Sunset"
+
+#: packages/editor/src/components/viewer/sky-control.tsx
+msgid "viewer.daylight.sky.title"
+msgstr "Sky"
+
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
+#: packages/editor/src/components/viewer/sky-control.tsx
+msgid "viewer.daylight.time.blue"
+msgstr "Blue hour"
+
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
+#: packages/editor/src/components/viewer/sky-control.tsx
+msgid "viewer.daylight.time.golden"
+msgstr "Golden hour"
+
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
+#: packages/editor/src/components/viewer/sky-control.tsx
+msgid "viewer.daylight.time.midday"
+msgstr "Midday"
+
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
+#: packages/editor/src/components/viewer/sky-control.tsx
+msgid "viewer.daylight.time.night"
+msgstr "Night"
+
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
+#: packages/editor/src/components/viewer/sky-control.tsx
+msgid "viewer.daylight.time.title"
+msgstr "Time of day"
+
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
+#: packages/editor/src/components/viewer/sky-control.tsx
+msgid "viewer.daylight.weather.clear"
+msgstr "Clear"
+
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
+#: packages/editor/src/components/viewer/sky-control.tsx
+msgid "viewer.daylight.weather.cloudy"
+msgstr "Cloudy"
+
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
+#: packages/editor/src/components/viewer/sky-control.tsx
+msgid "viewer.daylight.weather.fair"
+msgstr "Fair"
+
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
+#: packages/editor/src/components/viewer/sky-control.tsx
+msgid "viewer.daylight.weather.overcast"
+msgstr "Overcast"
+
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
+msgid "viewer.daylight.weather.title"
+msgstr "Weather"
 
 #: packages/editor/src/components/viewer/viewer-controls-bar.tsx
 msgid "viewer.display.camera"
@@ -14455,31 +15287,7 @@ msgstr "Colored"
 msgid "viewer.display.colors"
 msgstr "Colors"
 
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
-msgid "viewer.display.edges.off"
-msgstr "Off"
-
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
-msgid "viewer.display.edges.offDetail"
-msgstr "No edge lines"
-
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
-msgid "viewer.display.edges.soft"
-msgstr "Soft"
-
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
-msgid "viewer.display.edges.softDetail"
-msgstr "Faint outline of major creases"
-
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
-msgid "viewer.display.edges.strong"
-msgstr "Strong"
-
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
-msgid "viewer.display.edges.strongDetail"
-msgstr "Crisp, opaque edge lines"
-
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+#: packages/editor/src/components/viewer/render-settings-menu.tsx
 msgid "viewer.display.edges.title"
 msgstr "Edges"
 
@@ -14496,32 +15304,16 @@ msgid "viewer.display.perspective"
 msgstr "Perspective"
 
 #: packages/editor/src/components/viewer/viewer-controls-bar.tsx
-msgid "viewer.display.render.rendered"
-msgstr "Rendered"
-
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
-msgid "viewer.display.render.renderedDetail"
-msgstr "Full ambient occlusion"
-
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
-msgid "viewer.display.render.solid"
-msgstr "Solid"
-
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
-msgid "viewer.display.render.solidDetail"
-msgstr "Flat and fast — no ambient occlusion"
-
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
-msgid "viewer.display.render.title"
-msgstr "Render"
-
-#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
 msgid "viewer.display.shadows"
 msgstr "Shadows"
 
 #: packages/editor/src/components/viewer/viewer-controls-bar.tsx
 msgid "viewer.display.title"
 msgstr "Display settings"
+
+#: packages/editor/src/components/viewer/viewer-controls-bar.tsx
+msgid "viewer.drone.label"
+msgstr "Drone: {state}"
 
 #: packages/editor/src/components/viewer/floorplan-compass-button.tsx
 msgid "viewer.floorplan.alignNorth"
@@ -14666,6 +15458,11 @@ msgstr "Visibility"
 #: packages/editor/src/components/viewer/viewer-controls-bar.tsx
 msgid "viewer.walkthrough.label"
 msgstr "Walkthrough: {state}"
+
+#: packages/viewer/src/components/viewer/glb-scene.tsx
+#: packages/viewer/src/systems/interactive/callout-actions.ts
+msgid "viewer.walkthrough.shutters"
+msgstr "Shutters"
 
 #: packages/editor/src/components/viewer/viewer-controls-bar.tsx
 msgid "viewer.walls.cutaway"

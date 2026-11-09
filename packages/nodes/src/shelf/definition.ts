@@ -1,5 +1,6 @@
 import type { HandleDescriptor, NodeDefinition, ShelfNode as ShelfNodeType } from '@pascal-app/core'
 import { shelfSlots } from '@pascal-app/core'
+import { staticBatchable } from '../shared/node-batch/batchable'
 import { restingFloorplanAffectedIds } from '../shared/resting-surface-plan'
 import { sanitizeShelfDimensions } from './dimensions'
 import { buildShelfFloorplan } from './floorplan'
@@ -165,6 +166,7 @@ export const shelfDefinition: NodeDefinition<typeof ShelfNode> = {
   }),
 
   capabilities: {
+    batchable: staticBatchable,
     reveal: { phase: 'furnishing', style: 'drop', height: 0.3 },
     revealOnEdit: ['width', 'depth', 'height', 'thickness', 'rows', 'columns', 'style'],
     movable: { axes: ['x', 'z'], gridSnap: true },

@@ -34,6 +34,19 @@ type FurnishRoomInput = LevelTargetInput & {
   doorWallIndex?: number
 }
 
+/** Every catalog id a room type's set may take, whatever the room's size: what a host reads first. */
+export const FURNISH_ROOM_ASSETS: Readonly<Record<RoomType, readonly string[]>> = {
+  bedroom: ['double-bed', 'single-bed', 'bedside-table', 'dresser', 'closet'],
+  kitchen: ['kitchen', 'kitchen-counter', 'stove', 'fridge'],
+  bathroom: ['toilet', 'bathroom-sink', 'bathtub', 'shower-square'],
+  living: ['sofa', 'coffee-table', 'livingroom-chair', 'tv-stand'],
+  dining: ['dining-table', 'dining-chair'],
+  hallway: ['coat-rack'],
+  entry: ['coat-rack'],
+  laundry: ['washing-machine', 'drying-rack'],
+  storage: ['closet'],
+}
+
 // A door belongs to a room edge when it stands this close to the edge's line, within its span.
 const DOOR_EDGE_TOLERANCE = 0.25
 // Clearance between a piece's back and the wall's centreline: half a wall and a hand's width.

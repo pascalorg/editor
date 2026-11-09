@@ -21,6 +21,7 @@ import {
 import { Color, type Material } from 'three'
 import { Fn, float, fract, length, mix, positionLocal, smoothstep, step, uv, vec2 } from 'three/tsl'
 import { MeshLambertNodeMaterial, MeshStandardNodeMaterial } from 'three/webgpu'
+import { markHighlight, tintEmissive } from '../../lib/editor-highlight'
 import {
   BLOCK_MASONRY,
   concreteMaterial,
@@ -49,8 +50,7 @@ const WALL_HIGHLIGHT_PROFILES = {
   delete: {
     color: new Color('#dc2626'),
     blend: 0.76,
-    emissiveBlend: 0.92,
-    emissiveIntensity: 0.46,
+    emissive: 0.92,
   },
 } as const
 
@@ -303,20 +303,10 @@ function createHighlightedWallMaterial(material: Material, kind: WallHighlightKi
   if ('color' in highlightedMaterial && highlightedMaterial.color) {
     highlightedMaterial.color = getHighlightedColor(highlightedMaterial.color, kind)
   }
-  if ('emissive' in highlightedMaterial && highlightedMaterial.emissive) {
-    highlightedMaterial.emissive = highlightedMaterial.emissive
-      .clone()
-      .lerp(profile.color, profile.emissiveBlend)
-  }
-  if ('emissiveIntensity' in highlightedMaterial) {
-    highlightedMaterial.emissiveIntensity = Math.max(
-      highlightedMaterial.emissiveIntensity ?? 0,
-      profile.emissiveIntensity,
-    )
-  }
+  tintEmissive(highlightedMaterial, profile.color, profile.emissive)
   highlightedMaterial.needsUpdate = true
 
-  return highlightedMaterial
+  return markHighlight(highlightedMaterial)
 }
 
 // Light selection highlight for walls (walls are excluded from the generic
@@ -329,16 +319,14 @@ function createHighlightedWallMaterial(material: Material, kind: WallHighlightKi
 //      cache keyed by the source `.map` and rebuild when it changes (self-heals
 //      once the texture lands).
 const SELECTION_HIGHLIGHT_COLOR = new Color('#818cf8')
-const SELECTION_EMISSIVE_BLEND = 0.4
-const SELECTION_EMISSIVE_INTENSITY = 0.12
+const SELECTION_EMISSIVE = 0.12
 
 // Softer sibling of the selection glow, for HOVERING a hidden wall (the
 // X-ray nearest-first selection made hidden walls hover targets; without a
 // material affordance the only thing lighting up was the furniture behind
 // them). Same indigo so hover reads as "this will select", weaker so a
 // hovered-then-selected wall still steps up on click.
-const HOVER_EMISSIVE_BLEND = 0.4
-const HOVER_EMISSIVE_INTENSITY = 0.2
+const HOVER_EMISSIVE = 0.08
 
 const SELECTION_TEXTURE_MAP_KEYS = [
   'map',
@@ -359,8 +347,7 @@ const hoverHighlightCache = new WeakMap<Material, { clone: Material; map: unknow
 function getEmissiveHighlightMaterial(
   base: Material,
   cache: WeakMap<Material, { clone: Material; map: unknown }>,
-  emissiveBlend: number,
-  emissiveIntensity: number,
+  emissive: number,
 ): Material {
   const baseMap = (base as { map?: unknown }).map ?? null
   const cached = cache.get(base)
@@ -377,13 +364,9 @@ function getEmissiveHighlightMaterial(
   for (const key of SELECTION_TEXTURE_MAP_KEYS) {
     if (src[key]) dst[key] = src[key]
   }
-  if ('emissive' in clone && clone.emissive) {
-    clone.emissive = clone.emissive.clone().lerp(SELECTION_HIGHLIGHT_COLOR, emissiveBlend)
-  }
-  if ('emissiveIntensity' in clone) {
-    clone.emissiveIntensity = Math.max(clone.emissiveIntensity ?? 0, emissiveIntensity)
-  }
+  tintEmissive(clone, SELECTION_HIGHLIGHT_COLOR, emissive)
   clone.needsUpdate = true
+  markHighlight(clone)
   cache.set(base, { clone, map: baseMap })
   return clone
 }
@@ -391,12 +374,7 @@ function getEmissiveHighlightMaterial(
 /** Lazy light-emissive selection variant of a wall's material array (keeps texture). */
 export function getSelectionHighlightMaterials(materials: WallMaterialArray): WallMaterialArray {
   return materials.map((material) =>
-    getEmissiveHighlightMaterial(
-      material,
-      selectionHighlightCache,
-      SELECTION_EMISSIVE_BLEND,
-      SELECTION_EMISSIVE_INTENSITY,
-    ),
+    getEmissiveHighlightMaterial(material, selectionHighlightCache, SELECTION_EMISSIVE),
   ) as WallMaterialArray
 }
 
@@ -407,12 +385,7 @@ export function getSelectionHighlightMaterials(materials: WallMaterialArray): Wa
  */
 export function getHoverHighlightMaterials(materials: WallMaterialArray): WallMaterialArray {
   return materials.map((material) =>
-    getEmissiveHighlightMaterial(
-      material,
-      hoverHighlightCache,
-      HOVER_EMISSIVE_BLEND,
-      HOVER_EMISSIVE_INTENSITY,
-    ),
+    getEmissiveHighlightMaterial(material, hoverHighlightCache, HOVER_EMISSIVE),
   ) as WallMaterialArray
 }
 

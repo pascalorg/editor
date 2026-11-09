@@ -25,14 +25,18 @@ export type HiddenReason = 'isolated' | 'shadow-only' | 'batched' | 'wall-batche
  */
 const HOLD = Symbol('pascal:scene-visibility:hold')
 
-type Hold = { original: number; reasons: Set<HiddenReason> }
+/** `applied`: the mask this hold last wrote, so a re-hide that changes nothing can return early. */
+type Hold = { original: number; reasons: Set<HiddenReason>; applied?: number }
 
 type Holder = Object3D & { [HOLD]?: Hold }
 
 /** Holds `obj` off the scene layer for `reason`. Idempotent per reason. */
 export function hideFromScene(obj: Object3D, reason: HiddenReason): void {
   const holder = obj as Holder
-  const hold = holder[HOLD] ?? { original: obj.layers.mask, reasons: new Set<HiddenReason>() }
+  // Solo re-hides whole levels every frame: when nothing rewrote the mask since, there is no work.
+  const held = holder[HOLD]
+  if (held?.reasons.has(reason) && held.applied === obj.layers.mask) return
+  const hold = held ?? { original: obj.layers.mask, reasons: new Set<HiddenReason>() }
   holder[HOLD] = hold
   hold.reasons.add(reason)
   applyHold(obj, hold)
@@ -52,6 +56,11 @@ export function showInScene(obj: Object3D, reason: HiddenReason): void {
 
   obj.layers.mask = hold.original
   delete holder[HOLD]
+}
+
+/** The reasons `obj` is held off the scene layer, if any. */
+export function heldReasons(obj: Object3D): ReadonlySet<HiddenReason> | undefined {
+  return (obj as Holder)[HOLD]?.reasons
 }
 
 export function temporarilyShowShadowOnly(root: Object3D): () => void {
@@ -135,9 +144,8 @@ function applyHold(obj: Object3D, hold: Hold): void {
 
   if (hold.reasons.has('batched') || hold.reasons.has('wall-batched')) {
     obj.layers.enable(BATCHED_LAYER)
-    return
-  }
-
-  if (!hold.reasons.has('isolated') && hold.reasons.has('shadow-only'))
+  } else if (!hold.reasons.has('isolated') && hold.reasons.has('shadow-only')) {
     obj.layers.enable(SHADOW_ONLY_LAYER)
+  }
+  hold.applied = obj.layers.mask
 }

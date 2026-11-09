@@ -27,7 +27,10 @@ import {
 import {
   backdropColors,
   backdropGradient,
+  createDaylightGroundMaterial,
+  DAYLIGHT_PARCEL,
   groundWindowMaskNode,
+  isDaylightAtmosphere,
   NodeRenderer,
   SITE_GROUND,
   siteGroundShown,
@@ -195,7 +198,13 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
   useRegistry(node.id, 'site', ref)
 
   const theme = useViewer((state) => state.sceneAppearance)
-  const bgColor = theme.ground
+  // The colored appearance's daylight look: a neutral parcel, lit by the sky (Standard), on a
+  // squared ground whose horizon the atmosphere's fog blends into the sky.
+  const daylight = isDaylightAtmosphere(atmosphere)
+  // Solid shading is Lambert everywhere (the sky reaches it as a hemisphere light, not the
+  // environment), so the daylight grounds follow it.
+  const solid = useViewer((state) => state.shading === 'solid')
+  const bgColor = daylight ? DAYLIGHT_PARCEL : theme.ground
   const { background: backgroundColor, sky: skyColor, haze, skyDeep } = backdropColors(theme)
   const maxLightIntensity = Math.max(1, ...theme.lights.map((light) => light.intensity))
   const livePolygon = useLiveNodeOverrides(
@@ -298,7 +307,9 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
   // not when a floor is picked), the opening a uniform; without one the materials stay plain.
   const hasBasement = buried.all.length > 0
   const groundMaterial = useMemo(() => {
-    const material = new MeshLambertNodeMaterial({ color: bgColor })
+    const material = daylight
+      ? createDaylightGroundMaterial(solid, { color: bgColor })
+      : new MeshLambertNodeMaterial({ color: bgColor })
     material.polygonOffset = true
     material.polygonOffsetFactor = 1
     material.polygonOffsetUnits = 1
@@ -313,13 +324,26 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
       ;(material as unknown as { maskNode: unknown }).maskNode = groundWindowMaskNode()
     }
     return material
-  }, [bgColor, hasBasement])
+  }, [bgColor, daylight, hasBasement, solid])
 
   // Presentation horizon: a large ground disc under the lot, fading into the
   // active fog radiance (or the theme backdrop when there is no atmosphere) so
   // the scene sits on an "infinite" plane instead of a hard-edged plate. Never pickable.
   const horizonMaterial = useMemo(() => {
     if (!fadeBounds || groundReplaced) return null
+    if (daylight) {
+      const material = createDaylightGroundMaterial(solid, { horizon: atmosphere?.fogRadiance })
+      material.polygonOffset = true
+      material.polygonOffsetFactor = 2
+      material.polygonOffsetUnits = 2
+      if (hasBasement) {
+        ;(material as unknown as { maskNode: unknown }).maskNode = solidGroundMaskNode()
+        material.receivedShadowNode = groundHoleShadowNode()
+      } else {
+        ;(material as unknown as { maskNode: unknown }).maskNode = groundWindowMaskNode()
+      }
+      return material
+    }
     const material = new MeshLambertNodeMaterial({ color: bgColor })
     const center = vec2(fadeBounds.cx, fadeBounds.cz)
     const dist = positionWorld.xz.sub(center).length()
@@ -373,6 +397,8 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
     }
     return material
   }, [
+    solid,
+    daylight,
     hasBasement,
     atmosphere,
     bgColor,
@@ -463,7 +489,8 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
 
   const horizonGeometry = useMemo(() => {
     if (!fadeBounds || groundReplaced) return null
-    const radius = Math.max(fadeBounds.radius * 8, 400)
+    // Daylight: reach the atmosphere's fog end so the ground meets the sky at the horizon.
+    const radius = daylight ? 6000 : Math.max(fadeBounds.radius * 8, 400)
     const shape = new Shape()
     const segments = 64
     shape.moveTo(radius, 0)
@@ -474,7 +501,7 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
     shape.closePath()
     addSlabHoles(shape, holes, fadeBounds.cx, fadeBounds.cz)
     return new ShapeGeometry(shape)
-  }, [fadeBounds, holes, groundReplaced])
+  }, [daylight, fadeBounds, holes, groundReplaced])
   useEffect(() => () => horizonGeometry?.dispose(), [horizonGeometry])
   useEffect(() => () => horizonMaterial?.dispose(), [horizonMaterial])
 

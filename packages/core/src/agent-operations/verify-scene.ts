@@ -1,6 +1,7 @@
 import { levelBuildingId } from '../building/level-duplication'
 import { levelGradeStanding } from '../lib/grade-standing'
 import { groundSeat } from '../lib/ground-seat'
+import { hierarchyCycleErrors } from '../lib/hierarchy'
 import { getLevelDisplayName } from '../lib/level-name'
 import { HIDDEN_SITE_NOTE } from '../lib/node-visibility'
 import { wallSupportForNodes } from '../lib/opening-floor-datum'
@@ -19,6 +20,7 @@ import { isCeilingGeometry } from '../services/roof-level'
 import { isRoofOnStoreyWalls } from '../services/roof-move'
 import { getStoredLevelHeight, getWallCoveringSlabs, getWallTop } from '../services/storey'
 import { getStoreyDatum } from '../services/storey-datum'
+import type { UsageIssue } from '../spatial/usage-field/findings'
 import {
   computeSegmentTransforms,
   rotateXZ,
@@ -38,8 +40,12 @@ import {
 import { layoutIssuesFromScene } from './layout-clearance'
 import { wallResolvedHeight } from './level-reads'
 import { pointInPolygon, polygonContainsPolygon, type Vec2 } from './plan-geometry'
+import type { RoomCheckIssue } from './room-checks'
 import { type RoomFinding, roomFindings } from './room-findings'
+import { roomIssueScope } from './room-readings'
+import { withoutDuplicatePockets } from './scene-check-policy'
 import { EMPTY_SESSION } from './scene-checkpoint'
+import { sceneIssueGroups } from './scene-issue-groups'
 import { changesSince, type SceneCheckpoint } from './scene-measure'
 import {
   type ContentCounts,
@@ -52,6 +58,14 @@ import {
 } from './scene-queries'
 import { reviewSince } from './scene-review'
 import type { AgentContext, AgentOperation, SceneNodes } from './types'
+import type { RoomUnreachableIssue } from './unreachable-rooms-check'
+import {
+  type WallEndShortIssue,
+  type WallNearlyAlignedIssue,
+  wallBodies,
+  wallEndShortIssues,
+  wallNearlyAlignedIssues,
+} from './wall-joins'
 import { type WallObjectObservation, wallObjectObservations } from './wall-object-observations'
 
 /** A problem verify_scene found, typed so it can be counted and acted on. */
@@ -59,7 +73,7 @@ export type SceneIssue =
   | CeilingObjectObservation
   | WallObjectObservation
   | RoomFinding
-  | { type: string; message: string; severity?: 'info' }
+  | { type: string; message: string; severity?: 'info' | 'warning' }
   | { type: 'schema_invalid'; message: string; nodeId: string; path: string }
   | {
       type: 'schema_unknown_kind'
@@ -94,6 +108,11 @@ export type SceneIssue =
       gap?: number
       nearestWallId?: string
     }
+  | WallEndShortIssue
+  | WallNearlyAlignedIssue
+  | UsageIssue
+  | RoomCheckIssue
+  | RoomUnreachableIssue
 
 /** What verify_scene was asked: its contract's input, which other modules may extend. */
 export type VerifySceneInput = Readonly<Record<string, unknown>>
@@ -106,7 +125,7 @@ export type VerifySceneInput = Readonly<Record<string, unknown>>
 export type SceneCheck = {
   name: string
   order: number
-  run: (nodes: SceneNodes, input: VerifySceneInput) => SceneIssue[]
+  run: (nodes: SceneNodes, input: VerifySceneInput, context: AgentContext) => SceneIssue[]
 }
 
 export const CHECKPOINT_ORDER = 100
@@ -276,7 +295,7 @@ function withDefaults(node: AnyNode, parsed: unknown): AnyNode {
  * kind's, else core's. The checks that measure read each node with its defaults filled. A node its schema
  * rejects is listed field by field and left `unread`: they could not read it. A node of a kind no
  * schema here knows (a plugin's, where the plugin is not loaded) is counted by kind and kept as
- * stored: the checks never read it.
+ * stored: the checks never read it. Each node on a parent cycle is listed by its `parentId`.
  */
 function checkSchemas(scene: SceneNodes, hostSchema: AgentContext['nodeSchema']) {
   const errors: { nodeId: string; path: string; message: string }[] = []
@@ -303,6 +322,7 @@ function checkSchemas(scene: SceneNodes, hostSchema: AgentContext['nodeSchema'])
       errors.push({ nodeId: id, path: issue.path.join('.'), message: issue.message })
     unread.add(id)
   }
+  errors.push(...hierarchyCycleErrors(scene))
   return { errors, unknownKinds, unread, measured }
 }
 
@@ -313,6 +333,9 @@ function checkSchemas(scene: SceneNodes, hostSchema: AgentContext['nodeSchema'])
  * openings off their wall, stairs off their slab, blocked doors, overlapping furniture, and every
  * field a node's schema rejects, by node and path; a kind no schema here knows, once per kind.
  */
+/** A flight of this many risers or fewer is a step up to a door, not a staircase: no going or comfort target applies. */
+const SHORT_FLIGHT_STEPS = 3
+
 export const verifyScene: AgentOperation<VerifySceneInput | undefined> = (
   scene,
   input,
@@ -390,6 +413,15 @@ export const verifyScene: AgentOperation<VerifySceneInput | undefined> = (
   for (const level of levels) {
     const { content, levelName } = level
     if (level.unread) continue
+    const bodies = wallBodies(
+      onLevel(level.levelId).filter(
+        (node): node is AnyNode & { type: 'wall' } => node.type === 'wall',
+      ),
+    )
+    issues.push(
+      ...wallEndShortIssues({ levelId: level.levelId, levelName, bodies }),
+      ...wallNearlyAlignedIssues({ levelId: level.levelId, levelName, bodies }),
+    )
     // A free-standing wall (garden wall, half wall) is legitimate, not something to repair.
     for (const end of detectOpenWallEnds(nodes, level.levelId)) {
       if (end.reason === 'isolated') continue
@@ -572,12 +604,20 @@ export const verifyScene: AgentOperation<VerifySceneInput | undefined> = (
     const sourceLevelId = levelIdOf(nodes, stair.id)
     if (sourceLevelId && holdingUnread.has(buildingOf(sourceLevelId) ?? '')) continue
     const stairName = stair.name ?? stair.id
-    for (const diagnostic of measureStair(stair, nodes as Record<string, AnyNode>).diagnostics)
+    const measured = measureStair(stair, nodes as Record<string, AnyNode>)
+    for (const diagnostic of measured.diagnostics) {
+      // the going and comfort rules are a staircase's: a step or two up to a door has none to miss
+      if (
+        measured.riserCount <= SHORT_FLIGHT_STEPS &&
+        (diagnostic.code === 'comfort-target' || diagnostic.code === 'going-target')
+      )
+        continue
       report(
         `stair_${diagnostic.code.replaceAll('-', '_')}`,
         `Stair ${stairName}: ${diagnostic.message}`,
         diagnostic.code.endsWith('-target'),
       )
+    }
     if (sourceLevelId) {
       const sourceName = nodes[sourceLevelId]?.name ?? sourceLevelId
       const footprints = stairFootprintPolygons(nodes, stair)
@@ -756,7 +796,7 @@ export const verifyScene: AgentOperation<VerifySceneInput | undefined> = (
   issues.push(...ceilingObjectObservations(settled))
   issues.push(...wallObjectObservations(settled))
   for (const check of checks)
-    if (check.order < CHECKPOINT_ORDER) issues.push(...check.run(settled, input ?? {}))
+    if (check.order < CHECKPOINT_ORDER) issues.push(...check.run(settled, input ?? {}, context))
   // What the edits since the host's checkpoint lost, by place.
   const hosted = context.checkpoint
     ? changesSince(context.checkpoint as SceneCheckpoint, scene)
@@ -768,9 +808,11 @@ export const verifyScene: AgentOperation<VerifySceneInput | undefined> = (
   const since = typeof input?.since === 'string' ? reviewSince(session, input.since, scene) : null
   if (since?.places) issues.push(...since.places.issues)
   for (const check of checks)
-    if (check.order >= CHECKPOINT_ORDER) issues.push(...check.run(settled, input ?? {}))
+    if (check.order >= CHECKPOINT_ORDER) issues.push(...check.run(settled, input ?? {}, context))
 
   const occupiedStoryCount = levels.filter((level) => level.isOccupiedStory).length
+  issues.splice(0, issues.length, ...withoutDuplicatePockets(issues))
+  const issueGroups = sceneIssueGroups(issues, nodes)
   return {
     result: {
       ok: true,
@@ -783,6 +825,9 @@ export const verifyScene: AgentOperation<VerifySceneInput | undefined> = (
       levels,
       emptyLevelIds: empty.map((level) => level.levelId),
       issues,
+      ...(typeof input?.room === 'string' && { roomScope: roomIssueScope(nodes, input.room) }),
+      issueGroups,
+      issueCount: issues.length,
       hasIssues: issues.some((issue) => !('severity' in issue && issue.severity === 'info')),
       ...authoredObjects(nodes),
       ...Object.assign({}, ...reports.map((report) => report.run(nodes))),

@@ -18,7 +18,7 @@ export function validateCursorPluginPackage(root: string): string[] {
   const config = read('skills/.cursor-plugin/mcp.json')
   const expectedManifest = {
     ...rootManifest,
-    skills: ['./pascal-3d', './furniture-fit'],
+    skills: ['./pascal-3d', './furniture-fit', './architect'],
     logo: '.cursor-plugin/pascal-mark-plate.svg',
   }
   if (JSON.stringify(manifest) !== JSON.stringify(expectedManifest)) {
@@ -60,7 +60,7 @@ export function validateCursorPluginPackage(root: string): string[] {
     url: 'https://editor.pascal.app/api/mcp',
     auth: {
       CLIENT_ID: 'pascal-cursor',
-      scopes: ['openid', 'profile', 'offline_access', 'scene:read', 'scene:write'],
+      scopes: ['openid', 'profile', 'offline_access', 'scene:read', 'scene:write', 'architect:run'],
     },
   }
   if (
@@ -80,6 +80,7 @@ export function validateCursorPluginPackage(root: string): string[] {
   for (const path of [
     'pascal-3d/SKILL.md',
     'furniture-fit/SKILL.md',
+    'architect/SKILL.md',
     '.cursor-plugin/pascal-mark-plate.svg',
   ]) {
     if (!existsSync(join(root, 'skills', path))) {

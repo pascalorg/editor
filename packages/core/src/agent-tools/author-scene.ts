@@ -1,17 +1,20 @@
 import { z } from 'zod'
 import { DOOR_STYLES, WINDOW_STYLES } from '../building/opening-style-presets'
-import { DoorType, WindowType } from '../schema/nodes/opening-types'
+import { DoorHandleStyle, DoorType, WindowType } from '../schema/nodes/opening-types'
 import { RoofType } from '../schema/nodes/roof-types'
 import { StairRailingMode, StairRailingStyle } from '../schema/nodes/stair-types'
 import { measurement, roofPitch } from './measurement'
 import { NodeId } from './node-id'
 import { unitKind } from './units'
+import { doorDetailFields, windowDetailFields } from './wall-openings'
 
-const DESCRIPTION = `Turn a whole design you wrote as free three.js into an editable Pascal scene, in one call. You read your own module however you like (its source, running it and reading the objects, both) and hand over a conversion payload: levels, walls (straight, curved or glass) with their openings, rooms (each naming its unit in a building of several dwellings or tenancies: a condo, an apartment building, a hotel; a room naming none is common area), slabs, voids, columns, railings, stairs, every piece of furniture as an authored object with its own module, and lights. Pascal does the rest server-side: compiles and stores each item, places it, derives the rooms and their floors, paints, runs its checks, saves, and answers with a gate report you iterate against. Nothing you hand over is silently dropped: what cannot be placed comes back by name with a reason, and what Pascal corrected (a wall end snapped onto the centerline it meets) is listed.
+const DESCRIPTION = `Turn a whole design you wrote as free three.js into an editable Pascal scene: the payload holds the whole design. You read your own module however you like (its source, running it and reading the objects, both) and hand over a conversion payload: levels, walls (straight, curved or glass) with their openings, rooms (each naming its unit in a building of several dwellings or tenancies: a condo, an apartment building, a hotel; a room naming none is common area), slabs, voids, columns, railings, stairs, every piece of furniture as an authored object with its own module, and lights. Pascal does the rest server-side: compiles and stores each item, places it, derives the rooms and their floors, paints, runs its checks, saves, and answers with a gate report you iterate against. Nothing you hand over is silently dropped: what cannot be placed comes back by name with a reason, and what Pascal corrected (a wall end snapped onto the centerline it meets) is listed.
 
 Coordinates: metres, plan x/z, Y up, each level's floor at y = 0 in its own frame. A wall is its centerline; walls meet where centerlines meet, so end a partition on the centerline of the wall it runs into. An opening's 'along' is measured from the wall's start to the opening's centre; give each opening its type (how it opens) and style (its look), or its own module for a shape they cannot express. An item's position is where its bottom centre stands, except a ceiling item's (mount 'ceiling': a pendant, a ceiling light): it hangs from the ceiling of the room containing its plan position, its top on that ceiling, and its y is not read. A rug, a mat or a runner is an item lying on the room's floor. What stands on a floor stands on its finish: on a room with a floorCode, on the top of its planks or tiles, so its y stays 0. Its module follows the add_object contract (metres, Y up, built in its installed orientation; at most 300k triangles and 32 materials per item; name materials slot_<finish>; drawers, doors and lids as animation clips; a THREE light named light:<id> where a bulb is: a SpotLight for a cone, castShadow for shadows, userData.glow for a halo). A hex colour is written as an exact material, one per distinct colour. Pascal builds a wall's cap, the floor plate and the ceiling itself: fold a module's caps, underlays and floor planks into the wall, the room's floor finish and the room (say so in notes), never into slabs or regions: baseboards are the wall's skirting, a plank or tile floor is the room's floorCode (a terrace's decking or paving its slab's surfaceCode), tiles, panelling or boards on a wall are its faceLeft / faceRight (or the room's wallCode), cladding, brick or battens outside its faceOutside; a slab is a terrace, a platform, a balcony; a stair is its level's stairs, which open the floor above; the roof over the top level is roof, Pascal's own segments when its shape is one of theirs, else your geometry as roof items, both on the building's roof level above the top storey. Pascal draws what bold architecture needs natively: a curved wall is one wall with the point its arc passes through, through (never a run of short straight ones), a glass front a curtain wall, a double-height room a void in the floor of the level above it (its ceiling opens with it, a railing along its edges), an archway a passage with an arch shape. Paint a wall by what its faces look onto, colorInside and colorOutside: which face is inside is Pascal's to find. Build the building as it is built: a wall at its real height, nothing lowered or removed for viewing.
 
-Hand over the payload, or your module and its adapter, the program that reads the module and returns the payload: Pascal runs the adapter (one that throws comes back with its error, and nothing is written). A payload too large for one call goes by reference: upload it as a JSON project file (upload_project_file, phase prepare, PUT, complete) and pass its fileId as payloadFile. An item names its piece instead of code when add_object makes it from words; one still being made is written when it lands, with no call from you. Pieces made from words are written many at a time while you go on, so furniture made that way does not lengthen your turn the way pieces you write yourself do.
+Hand over the payload, or your module and its adapter, the program that reads the module and returns the payload: Pascal runs the adapter (one that throws comes back with its error, and nothing is written). A payload too large for one call can go by reference: payloadFile names a JSON project file that holds it. An item names its piece instead of code when add_object makes it from words; one still being made is written when it lands, with no call from you. Pieces made from words are written many at a time while you go on, so furniture made that way does not lengthen your turn the way pieces you write yourself do.
+
+One answer has an output limit, and the limit counts thinking and the call's arguments together; answers that planned and wrote a whole house as one payload have stopped there before the payload was complete. The payload is the whole design: a later call with replace: true removes what its payload leaves out, and a call without replace on a scene that holds a conversion is refused (conversion_exists). A conversion stores one module and one adapter, and only when it succeeds; a later call with replace: true and edits (each find text occurring exactly once) changes parts of them, and the adapter runs on the whole edited module. create_room, add_wall, add_door, add_window and create_stair add to the scene a call at a time.
 
 The report says what was written, what Pascal defaulted (defaults: a window with no type is fixed and cannot open), what it warns about but wrote (warnings: thin slabs, too many slabs or regions), what it refused (defects, by your ids), the items waiting for their pieces (pending), and Pascal's checks of what stands (checks, each passed or with what failed: doors and windows a person opens move, glazing is glass, every room's floor covered, every placed piece standing, nothing written as loose debris or buried, wall finishes built, stairs arriving inside a room clear of walls, every level holding rooms or walls: the ground, terraces and foundations belong to the ground level, Pascal draws the site and foundations; where units are named, every room in one or plausibly common).
 
@@ -25,6 +28,12 @@ const length = (description: string, opts: { positive?: boolean; default?: numbe
   measurement('length', 'm', { description, ...opts })
 
 export const authorSceneOpening = z.object({
+  sidelightLeft: doorDetailFields.sidelightLeft,
+  sidelightRight: doorDetailFields.sidelightRight,
+  transomHeight: doorDetailFields.transomHeight,
+  slidingStyle: doorDetailFields.slidingStyle,
+  slideDirection: doorDetailFields.slideDirection,
+  ...windowDetailFields,
   kind: z
     .enum(['door', 'window', 'passage'])
     .describe(
@@ -54,7 +63,7 @@ export const authorSceneOpening = z.object({
     .enum([...DoorType.options, ...WindowType.options.filter((t) => t !== 'sliding')])
     .optional()
     .describe(
-      'How it opens. A door: hinged (default), double (two leaves), french (two glazed leaves), folding, pocket, barn, sliding, garage-sectional, garage-rollup, garage-tiltup. A window: fixed (default; cannot open), sliding, casement, awning, hopper, single-hung, double-hung, bay, bow, louvered. Give it: a window with no type is written fixed.',
+      'How it opens. A door: hinged (default), double (two leaves), french (two glazed leaves), folding, pocket, barn, sliding, garage-sectional, garage-rollup, garage-tiltup. A window: fixed (default; cannot open), sliding, casement, awning, hopper, tilt-turn (inward tilt or turn), single-hung, double-hung, bay, bow, louvered. Give it: a window with no type is written fixed.',
     ),
   style: z
     .enum([...DOOR_STYLES, ...WINDOW_STYLES])
@@ -62,15 +71,9 @@ export const authorSceneOpening = z.object({
     .describe(
       "Its look, by name. A door's leaf: panel (default), glass, modern, paneled-glass, french, shaker, six-panel, craftsman, half-louvered, barn. A fixed window's panes: single (default), double-hung, triple-hung, casement, sliding, grid, tall-grid, wide-grid, horizontal-bands, transom, picture; an operable window draws its own sashes, so a style on one is dropped and reported.",
     ),
-  leaves: z
-    .number()
-    .int()
-    .min(1)
-    .max(4)
-    .optional()
-    .describe(
-      "A door's leaves, 1 to 4 (default: what its type has; 2 for double, french and sliding).",
-    ),
+  leaves: doorDetailFields.leafCount.describe(
+    "A door's leaves: sliding 2–4; folding 2, 4, 6 or 8 (default: what its type has; 2 for double, french and sliding).",
+  ),
   code: z
     .string()
     .min(1)
@@ -91,6 +94,9 @@ export const authorSceneOpening = z.object({
     .describe(
       'Exact #rrggbb for the frame (default: color, or the opening’s own finish when color is absent).',
     ),
+  handleStyle: DoorHandleStyle.optional().describe(
+    'Door handle: lever (default), lever-curved, knob, bar, or plate.',
+  ),
   hinge: z
     .enum(['start', 'end'])
     .optional()
@@ -600,6 +606,10 @@ export const authorSceneTool = {
   name: 'author_scene',
   title: 'Author scene',
   description: DESCRIPTION,
+  surfaceNotes: {
+    mcp: 'A payload by reference is a project file you upload: upload_project_file with phase prepare and its size answers a signedUrl; PUT the bytes there; then phase complete with the returned fileId and storageKey; that fileId is the payloadFile. A server that keeps no project files refuses payloadFile (files_unavailable); one that cannot run an adapter refuses the module and adapter (adapter_unavailable).',
+    chat: "There is no HTTP client here: the signed upload (phase prepare, PUT, complete) is not a route of yours. A payload too large to write in one answer goes as your module and its adapter, which Pascal runs. A JSON payload that fits in one answer and in 2 MiB can be saved with upload_project_file, phase text, the JSON as its content; the saved file's id in the receipt (file.id) is the payloadFile.",
+  },
   input: {
     payload: authorScenePayload
       .optional()

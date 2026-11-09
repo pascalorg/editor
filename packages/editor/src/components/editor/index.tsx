@@ -103,6 +103,8 @@ import { SettingsPanel, type SettingsPanelProps } from '../ui/sidebar/panels/set
 import { SitePanel, type SitePanelProps } from '../ui/sidebar/panels/site-panel'
 import type { SidebarTab } from '../ui/sidebar/tab-bar'
 import { useHostPanels } from '../ui/sidebar/use-plugin-panels'
+import { SKY_DOCK_HEIGHT, SkyControl } from '../viewer/sky-control'
+import { useViewerUiSounds } from '../viewer/use-viewer-ui-sounds'
 import { ViewerHoverLabel } from '../viewer/viewer-hover-label'
 import { ParametricViewerRooms } from '../viewer/viewer-rooms'
 import { ViewerSelectionManager } from '../viewer/viewer-selection-manager'
@@ -1207,6 +1209,9 @@ const ViewerCanvas = memo(function ViewerCanvas({
   const views = useEditorViews()
   const isPreviewMode = useEditor((s) => s.isPreviewMode)
   const isCaptureMode = useEditor((s) => s.isCaptureMode)
+  const textures = useViewer((s) => s.textures)
+  const isMobile = useIsMobile()
+  const planOnRight = layout.split && layout.panes[1] === VIEW_2D
   useUnitFocusRules()
   const wholeBuilding = useEditor((s) =>
     showsWholeBuilding({
@@ -1376,6 +1381,22 @@ const ViewerCanvas = memo(function ViewerCanvas({
                   viewerSceneSlot={viewerSceneSlot}
                 />
               </Viewer>
+              {!showLoader &&
+              textures &&
+              !isMobile &&
+              !(
+                isFirstPersonMode ||
+                isStudioMode ||
+                isVersionPreviewMode ||
+                isCaptureMode ||
+                isPreviewMode
+              ) ? (
+                // Beside the compass (which moves to the plan's corner when the plan is on the right).
+                <SkyControl
+                  height={SKY_DOCK_HEIGHT.editor}
+                  style={{ left: planOnRight ? 12 : 52 }}
+                />
+              ) : null}
             </div>
             {showLoader && loadingOverlay}
           </div>
@@ -1445,6 +1466,7 @@ function PreviewStage({
   )
 
   useViewerFloorDisplay()
+  useViewerUiSounds()
   const stageMode = isFirstPersonMode || !hasFloorplan ? '3d' : mode
   const stageModes = hasFloorplan && !isFirstPersonMode ? undefined : (['3d'] as const)
 
@@ -1774,6 +1796,13 @@ function EditorContent({
       })
     }
   }, [isFirstPersonMode, isPreviewMode])
+
+  // The viewer's walkthrough says how the first-person camera moves, for the
+  // viewer-side consumers that tell a walk from a drone flight.
+  const firstPersonMovementMode = useEditor((s) => s.firstPersonMovementMode)
+  useEffect(() => {
+    if (isFirstPersonMode) useViewer.getState().setWalkthroughMovement(firstPersonMovementMode)
+  }, [isFirstPersonMode, firstPersonMovementMode])
 
   const previewViewerContent = (
     <Viewer

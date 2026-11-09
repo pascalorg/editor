@@ -20,7 +20,7 @@ import { registerResources } from './resources'
 import type { SceneStore } from './storage/types'
 import { registerTools } from './tools'
 import type { GeometryScriptHost, ObjectMakerHost } from './tools/add-object'
-import { type AssetCatalog, cachedCatalog } from './tools/asset-catalog'
+import type { AssetCatalog } from './tools/asset-catalog'
 import { registerHostedServiceTools } from './tools/hosted-services'
 import { normalizeToolSchemaDialect } from './tools/normalize-schema-dialect'
 import { registerProjectFileTools } from './tools/project-files'
@@ -52,8 +52,8 @@ export type CreatePascalMcpServerOptions = {
    */
   executeTool?: PascalMcpToolExecutor
   /**
-   * The items search_assets, place_items and furnish_room draw from, read once per server. The
-   * hosted app passes its published library; without it, a small built-in list.
+   * The items search_assets, place_items and furnish_room draw from: a list, or a source each call
+   * reads what it needs of (the hosted app's published library); without it, a small built-in list.
    */
   catalog?: AssetCatalog
   /** Runs and stores `add_object` modules; without it the tool answers `scripts_unavailable`. */
@@ -88,9 +88,8 @@ export function createPascalMcpServer(opts: CreatePascalMcpServerOptions): McpSe
   const executeTool = recordingWhatToolsMake(operations, opts.executeTool)
   if (executeTool) installToolExecutor(server, executeTool)
   installSceneScope(server, operations)
-  const catalog = opts.catalog ? cachedCatalog(opts.catalog) : undefined
   registerTools(server, operations, {
-    catalog,
+    catalog: opts.catalog,
     geometryScripts: opts.geometryScripts,
     objectMakers: opts.objectMakers,
     readFile: opts.readFile,
@@ -100,7 +99,7 @@ export function createPascalMcpServer(opts: CreatePascalMcpServerOptions): McpSe
   registerVisionTools(server, operations)
   if (opts.services) registerHostedServiceTools(server, opts.services)
   if (opts.files) registerProjectFileTools(server, opts.files)
-  registerResources(server, operations, catalog)
+  registerResources(server, operations, opts.catalog)
   registerPrompts(server, operations)
   normalizeToolSchemaDialect(server)
   answerRetiredTools(server)

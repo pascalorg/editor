@@ -1,5 +1,6 @@
 import {
   type DoorNode,
+  getDoorOpeningSize,
   OPENING_CASING_PROUD,
   type OpeningCasingHost,
   openingCasingBoards,
@@ -29,7 +30,11 @@ export function buildOpeningCasingMeshes(
   material: THREE.Material,
 ): THREE.Mesh[] {
   const facing = openingHostFacing(opening)
-  const shaped = opening.openingShape === 'arch' || opening.openingShape === 'rounded'
+  const size = getDoorOpeningSize(opening)
+  const shaped =
+    size.width === opening.width &&
+    size.height === opening.height &&
+    (opening.openingShape === 'arch' || opening.openingShape === 'rounded')
   const meshes: THREE.Mesh[] = []
   const add = (geometry: THREE.BufferGeometry, face: 'a' | 'b') => {
     // Turned half round, the unit's x and z run against the host's.

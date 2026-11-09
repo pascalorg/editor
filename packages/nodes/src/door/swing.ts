@@ -19,6 +19,11 @@ export function canSwapDoorHinge(door: SwingDoor): boolean {
   return canSwapDoorSwing(door) && door.doorType === 'hinged'
 }
 
+/** The leaf hung from `side`'s jamb, with its handle on the free edge opposite the hinges. */
+export function hingesSidePatch(side: 'left' | 'right'): Partial<DoorNode> {
+  return { hingesSide: side, handleSide: flip(side) }
+}
+
 /** The leaf hung from the other jamb: hinges and handle trade sides, so the handle stays on the free edge. */
 export function swapDoorHingePatch(door: SwingDoor): Partial<DoorNode> {
   return { hingesSide: flip(door.hingesSide), handleSide: flip(door.handleSide) }

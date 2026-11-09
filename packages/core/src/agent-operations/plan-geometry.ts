@@ -96,6 +96,18 @@ export function pointInBoundsWithPadding(
   )
 }
 
+/** The shortest distance from a point to the segment a–b. */
+export function distanceToSegment(point: Vec2, a: Vec2, b: Vec2): number {
+  const dx = b[0] - a[0]
+  const dz = b[1] - a[1]
+  const length2 = dx * dx + dz * dz
+  const t =
+    length2 === 0
+      ? 0
+      : Math.max(0, Math.min(1, ((point[0] - a[0]) * dx + (point[1] - a[1]) * dz) / length2))
+  return Math.hypot(point[0] - (a[0] + t * dx), point[1] - (a[1] + t * dz))
+}
+
 export function pointOnSegment(point: Vec2, a: Vec2, b: Vec2, tolerance = 1e-6): boolean {
   // A segment of no length (an outline's repeated corner) is its one point, not every point.
   if (a[0] === b[0] && a[1] === b[1]) return distance2D(point, a) <= tolerance

@@ -2,7 +2,10 @@ import {
   type AnyNode,
   type AnyNodeId,
   type DuctFittingNode,
+  DuctSegmentNode,
   type FloorplanAffordance,
+  type NodePort,
+  nodeRegistry,
   useScene,
 } from '@pascal-app/core'
 import { useEditor } from '@pascal-app/editor'
@@ -15,8 +18,7 @@ import {
   type RunContinuationHandlePlan,
   resolveDuctContinuationHandle,
 } from '../shared/elbow-branch-continuation'
-import { ductPortDiameterIn } from './geometry'
-import type { DuctSegmentNode } from './schema'
+import { ductPortDiameterIn } from './profile'
 
 export type DuctEndpoint = 'start' | 'end'
 
@@ -30,6 +32,7 @@ export type DuctContinuationSeed = {
 type DuctContinuationDefaults = {
   continuation?: {
     nodeId?: unknown
+    portId?: unknown
     endpoint?: unknown
     fittingId?: unknown
     segmentIndex?: unknown
@@ -86,6 +89,32 @@ export function resolveDuctContinuationSeed(
   nodes: Record<string, AnyNode>,
 ): DuctContinuationSeed | null {
   const continuation = (defaults as DuctContinuationDefaults | null)?.continuation
+  if (typeof continuation?.portId === 'string' && typeof continuation.nodeId === 'string') {
+    const source = nodes[continuation.nodeId]
+    const port =
+      source &&
+      nodeRegistry
+        .get(source.type)
+        ?.ports?.(source)
+        .find((p) => p.id === continuation.portId)
+    if (!port || (port.system !== 'supply' && port.system !== 'return')) return null
+    return {
+      duct: DuctSegmentNode.parse({
+        parentId: source.parentId,
+        path: [
+          [...port.position],
+          port.position.map((value, index) => value + port.direction[index]!),
+        ],
+        shape: port.shape ?? 'round',
+        diameter: port.diameter,
+        width: port.width ?? 14,
+        height: port.height ?? 8,
+        system: port.system,
+      }),
+      port: { ...port, nodeId: source.id },
+      body: null,
+    }
+  }
   const endpoint = continuation?.endpoint
   const nodeId = continuation?.nodeId
   if (endpoint === 'branch' && typeof nodeId === 'string') {
@@ -145,6 +174,9 @@ export function activateDuctBranch(
   if (!segment || !next) return
   const editor = useEditor.getState()
   editor.setToolDefaults('duct-segment', {
+    ...editor.toolDefaults['duct-segment'],
+    routingMode: 'surface',
+    crossingMode: 'connect',
     continuation: { nodeId: duct.id, endpoint: 'branch', segmentIndex, point },
     shape: duct.shape,
     diameter: duct.diameter,
@@ -168,6 +200,9 @@ export function activateDuctContinuation(
   if (!ductEndpointPort(duct, endpoint)) return
   const editor = useEditor.getState()
   editor.setToolDefaults('duct-segment', {
+    ...editor.toolDefaults['duct-segment'],
+    routingMode: 'surface',
+    crossingMode: 'connect',
     continuation: { nodeId: duct.id, endpoint, ...(fittingId ? { fittingId } : {}) },
     shape: duct.shape,
     diameter: duct.diameter,
@@ -178,6 +213,27 @@ export function activateDuctContinuation(
     insulated: duct.insulated,
     insulationR: duct.insulationR,
     system: duct.system,
+  })
+  useViewer.getState().setSelection({ selectedIds: [] })
+  editor.setTool('duct-segment')
+}
+
+export function activateDuctCollarContinuation(node: AnyNode, port: NodePort): void {
+  const editor = useEditor.getState()
+  editor.setToolDefaults('duct-segment', {
+    ...editor.toolDefaults['duct-segment'],
+    continuation: { nodeId: node.id, portId: port.id },
+    shape: port.shape ?? 'round',
+    diameter: port.diameter,
+    width: port.width ?? 14,
+    height: port.height ?? 8,
+    system: port.system,
+    ductMaterial: 'sheet-metal',
+    elevation: port.position[1],
+    routingMode:
+      Math.hypot(port.direction[0], port.direction[2]) < 1e-6 ? 'vertical' : 'horizontal',
+    targetElevation: port.position[1] + Math.sign(port.direction[1] || 1),
+    crossingMode: 'connect',
   })
   useViewer.getState().setSelection({ selectedIds: [] })
   editor.setTool('duct-segment')

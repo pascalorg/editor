@@ -1,6 +1,6 @@
 {
   "name": "@pascal-app/core",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "description": "Core library for Pascal 3D building editor",
   "type": "module",
   "main": "./dist/index.js",
@@ -40,6 +40,11 @@
       "types": "./dist/registry/index.d.ts",
       "import": "./dist/registry/index.js",
       "default": "./dist/registry/index.js"
+    },
+    "./usage-field": {
+      "types": "./dist/spatial/usage-field/index.d.ts",
+      "import": "./dist/spatial/usage-field/index.js",
+      "default": "./dist/spatial/usage-field/index.js"
     },
     "./zone-colors": {
       "types": "./dist/lib/zone-colors.d.ts",
@@ -155,11 +160,11 @@
     "@react-three/drei": "^10",
     "@react-three/fiber": "^9",
     "react": "^18 || ^19",
-    "three": "^0.186"
+    "three": "^0.187"
   },
   "dependencies": {
-    "@lingui/core": "6.10.1",
-    "@lingui/message-utils": "6.10.1",
+    "@lingui/core": "6.12.0",
+    "@lingui/message-utils": "6.12.0",
     "@pascal-app/lingo": "^0.5.0",
     "dedent": "^1.7.2",
     "idb-keyval": "^6.3.0",
@@ -174,9 +179,9 @@
     "@pascal/typescript-config": "*",
     "@types/bun": "^1.4.4",
     "@types/react": "19.3.0",
-    "@types/three": "^0.186.0",
+    "@types/three": "^0.187",
     "@typescript/typescript6": "6.0.2",
-    "fake-indexeddb": "^6.2.6",
+    "fake-indexeddb": "^6.2.7",
     "typescript": "7.0.2"
   },
   "keywords": [

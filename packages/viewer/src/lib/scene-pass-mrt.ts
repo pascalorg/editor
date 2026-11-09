@@ -1,16 +1,21 @@
 import { MaterialBlending } from 'three'
 import { diffuseColor, mrt, uniform, vec4 } from 'three/tsl'
 import { BlendMode } from 'three/webgpu'
+import { isHighlight } from './editor-highlight'
 import { importedUnlitMaterial } from './gltf-unlit'
 
 const materialBlend = new BlendMode(MaterialBlending)
 
-/** Unlit assets already contain their lighting; screen-space AO/GI must not light them again. */
+/**
+ * Per-pixel weights. R: screen-space AO/GI applies (unlit assets already contain their lighting
+ * and must not be lit again). G: the pixel feeds the bloom (not editor highlights, see `markHighlight`).
+ */
 export function sceneLightingMask() {
   const weight = uniform(1).onObjectUpdate(({ material }) =>
     importedUnlitMaterial(material) ? 0 : 1,
   )
-  return vec4(weight, 0, 0, diffuseColor.a)
+  const bloomWeight = uniform(1).onObjectUpdate(({ material }) => (isHighlight(material) ? 0 : 1))
+  return vec4(weight, bloomWeight, 0, diffuseColor.a)
 }
 
 /**

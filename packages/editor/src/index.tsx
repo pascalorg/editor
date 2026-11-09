@@ -297,6 +297,8 @@ export { useCommandPalette } from './components/ui/command-palette'
 export { useDimensionDraftStore } from './lib/dimension-draft-store'
 export { DimensionInput, type DimensionInputState } from './components/tools/shared/dimension-input'
 export { ActionButton, ActionGroup } from './components/ui/controls/action-button'
+// A finish row in a node panel: the paint tool's picker and its write for one paint role.
+export { FinishSwatch } from './components/ui/controls/finish-swatch'
 export {
   MaterialPaintPanel,
   type MaterialPaintPanelProps,
@@ -394,7 +396,14 @@ export {
   type FloorplanPreviewProps,
   type FloorplanPreviewScene,
 } from './components/viewer/floorplan-preview'
+export {
+  DaylightMenu,
+  EdgesToggleItem,
+  QualityMenu,
+} from './components/viewer/render-settings-menu'
+export { openSkyPanel, SkyControl, useSkyPanel } from './components/viewer/sky-control'
 export { useViewerCameraNavigationSync } from './components/viewer/use-viewer-camera-navigation-sync'
+export { useViewerUiSounds } from './components/viewer/use-viewer-ui-sounds'
 export {
   ViewerControlsBar,
   type ViewerControlsBarProps,
@@ -420,6 +429,7 @@ export {
   type ViewerStageSwitcherProps,
 } from './components/viewer/viewer-stage-switcher'
 export {
+  DroneHud,
   WalkthroughHud,
   type WalkthroughHudProps,
   type WalkthroughInteract,
@@ -477,7 +487,12 @@ export {
   resolveCeilingPlanPointSnap,
 } from './lib/ceiling-plan-snap'
 export { EDITOR_LAYER } from './lib/constants'
-export type { ContextualShortcutHint } from './lib/contextual-help'
+export {
+  AXIS_MOVE_DRAG_LABEL,
+  type ContextualShortcutHint,
+  PATH_POINT_DRAG_LABEL,
+  ROTATE_HANDLE_DRAG_LABEL,
+} from './lib/contextual-help'
 export {
   CONTEXTUAL_HELP_NODE_EXTENSION_KEY,
   type ContextualHelpNodeExtension,
@@ -666,6 +681,11 @@ export {
   editorFinishScriptHost,
   finishScriptCode,
 } from './lib/geometry-script/finish-scripts'
+export {
+  beginGesture,
+  type GestureCancelReason,
+  type GestureHandle,
+} from './lib/gesture-lifecycle'
 export { exportSceneToGlb, type GlbExportOptions } from './lib/glb-export'
 export {
   type EditorGridEvent,
@@ -892,7 +912,7 @@ export {
   type SeparatorEndDrag,
 } from './lib/separator-edit'
 export { movementSfxStepKey } from './lib/sfx/movement-tick'
-export { emitDeleteSFX, triggerSFX } from './lib/sfx-bus'
+export { emitDeleteSFX, initSFXBus, triggerSFX } from './lib/sfx-bus'
 export { playSFX, type SFXName, type SFXPlaybackOptions } from './lib/sfx-player'
 export { showSidebarPanel } from './lib/sidebar-panel'
 export {
@@ -1032,9 +1052,13 @@ export {
 export { writeWindowChanges } from './lib/window-changes'
 export {
   closeWindowOpenState,
+  getDisplayedWindowShutterValue,
   getDisplayedWindowValue,
   isOperableWindowType,
   openWindowOpenState,
+  setWindowShuttersOpenState,
+  type WindowOpenAnimationOptions,
+  type WindowShutterField,
 } from './lib/window-interaction'
 export {
   getActiveBuildingPose,

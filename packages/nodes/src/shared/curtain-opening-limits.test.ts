@@ -154,3 +154,38 @@ test('cancel and a history-cleared preview cannot be committed by a stale releas
   preview.commit({ height: 2.4 })
   expect(useScene.getState().nodes[door.id]).toBe(door)
 })
+
+test('entry fixed lights stay within the curtain perimeter during placement and resize', () => {
+  const entry = DoorNode.parse({
+    ...door,
+    width: 1,
+    sidelightLeft: 0.3,
+    sidelightRight: 0.5,
+    transomHeight: 0.4,
+  })
+  const placed = clampDoorToWall(wall, 0, 1, 2.1, entry)
+  expect(placed.clampedX).toBeCloseTo(0.85)
+  expect(placed.clampedY).toBeCloseTo(1.05)
+  const result = constrainCurtainOpening(entry, { position: [0, 1.05, 0], height: 3 }, nodes)
+  expect(result.position?.[0]).toBeCloseTo(0.85)
+  expect(result.height).toBeCloseTo(2.45)
+  expect(result.transomHeight).toBe(0)
+})
+
+for (const wallType of ['standard', 'curtain'] as const) {
+  test(`entry transom preview and commit clamp under a ${wallType} wall without shrinking the leaf`, () => {
+    const host = WallNode.parse({ ...wall, wallType })
+    const entry = DoorNode.parse({ ...door, transomHeight: 0.1 })
+    useScene.setState({ nodes: { [host.id]: host, [entry.id]: entry }, dirtyNodes: new Set() })
+    const preview = createOpeningPropertyPreview<DoorNode>(entry.id, openingPropertyPreviewHost)
+    preview.preview({ transomHeight: 1 })
+    const expected = wallType === 'curtain' ? 0.35 : 0.4
+    expect(getEffectiveNode(entry).transomHeight).toBeCloseTo(expected)
+    expect(getEffectiveNode(entry).height).toBe(2.1)
+    preview.commit({ transomHeight: 1 })
+    const saved = useScene.getState().nodes[entry.id] as DoorNode
+    expect(saved.transomHeight).toBeCloseTo(expected)
+    expect(saved.height).toBe(2.1)
+    expect(saved.position[1]).toBeCloseTo(1.05)
+  })
+}

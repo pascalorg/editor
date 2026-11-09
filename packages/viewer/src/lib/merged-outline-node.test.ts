@@ -298,13 +298,17 @@ describe('merged outline proxy bookkeeping', () => {
     }
     const renderObjects = new RenderObjects(
       renderer as any,
-      { getCacheKey: () => 0, delete: () => {} } as any,
-      {} as any,
+      {
+        getCacheKey: () => 0,
+        getCustomProgramCacheKey: (material: any) => material.customProgramCacheKey(),
+        delete: () => {},
+      } as any,
+      { deleteVertexState: () => {} } as any,
       { delete: () => disposed++ } as any,
       { deleteForRender: () => {} } as any,
       {} as any,
     )
-    const lights = {} as any
+    const lights = { addEventListener: () => {}, removeEventListener: () => {} } as any
     const context = {} as any
     const listeners = (object: any) => object._listeners?.dispose?.length ?? 0
     const initialGeometryListeners = listeners(f.geometry)

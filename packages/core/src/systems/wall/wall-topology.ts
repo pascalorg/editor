@@ -1,5 +1,7 @@
 import { GROUND_SUPPORT_ID } from '../../hooks/spatial-grid/support-host-id'
+import { getDoorOpeningSize } from '../../lib/door-opening'
 import { withFoundationConstruction } from '../../lib/foundation-wall'
+import { openingHostFacing } from '../../lib/opening-casing'
 import { detectOpenWallEnds, type OpenWallEnd, wallEndJoinCandidates } from '../../lib/room-graph'
 import { terrainSupportLift } from '../../lib/terrain-support'
 import {
@@ -394,10 +396,12 @@ export function wallAttachmentSpan(
 ): { min: number; max: number; center: number } | null {
   if (node.type === 'door') {
     const door = node as DoorNode
+    const size = getDoorOpeningSize(door)
+    const center = door.position[0] - size.leafOffsetX * openingHostFacing(door)
     return {
-      min: door.position[0] - door.width / 2,
-      max: door.position[0] + door.width / 2,
-      center: door.position[0],
+      min: center - size.width / 2,
+      max: center + size.width / 2,
+      center,
     }
   }
   if (node.type === 'window') {
