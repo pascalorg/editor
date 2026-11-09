@@ -55,10 +55,10 @@ test('window grows about its center and position edits keep all four surrounds i
 })
 
 test('door and window placement keep the curtain perimeter surround clear', () => {
-  const doorPosition = clampDoorToWall(wall, 0, 1, 2)
+  const doorPosition = clampDoorToWall(wall, 0, 1, 2, undefined, nodes)
   const windowPosition = clampWindowToWall(wall, 0, 0, 1, 1, nodes)
-  expect(doorPosition).toEqual({ clampedX: 0.55, clampedY: 1 })
-  expect(windowPosition).toEqual({ clampedX: 0.55, clampedY: 0.55 })
+  expect(doorPosition).toEqual({ clampedX: 0.55, clampedY: 1, fits: true })
+  expect(windowPosition).toEqual({ clampedX: 0.55, clampedY: 0.55, fits: true })
 })
 
 test('placement uses curved curtain arc length at the far perimeter', () => {
