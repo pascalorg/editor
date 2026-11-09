@@ -570,7 +570,7 @@ const FittingHandles = ({ fitting, target }: { fitting: DuctFittingNode; target:
 
   // Move: translate the fitting along one world axis, anchored to the cursor's
   // start coord so it doesn't jump on grab. Y is clamped at the floor; the
-  // step follows the grid snap mode.
+  // step follows the grid snap mode, and held Alt slides freely.
   const moveCompute =
     (axis: RotationAxis) =>
     (e: ThreeEvent<PointerEvent>): ((event: PointerEvent) => FittingTransform | null) => {
@@ -583,7 +583,7 @@ const FittingHandles = ({ fitting, target }: { fitting: DuctFittingNode; target:
         if (start === null) return null
         const s = sampleAxis(axis, event.clientX, event.clientY, anchorWorld)
         if (s === null) return null
-        const step = isGridSnapActive() ? useEditor.getState().gridSnapStep : 0
+        const step = !event.altKey && isGridSnapActive() ? useEditor.getState().gridSnapStep : 0
         const delta = snap(s - start, step)
         if (delta === lastDelta) return null
         lastDelta = delta

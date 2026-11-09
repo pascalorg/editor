@@ -1072,7 +1072,7 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
       if (startSample === null) return
       const s = sample(event.clientX, event.clientY)
       if (s === null) return
-      const step = isGridSnapActive() ? useEditor.getState().gridSnapStep : 0
+      const step = !event.altKey && isGridSnapActive() ? useEditor.getState().gridSnapStep : 0
       const next = snap(s - startSample, step)
       if (next === delta) return
       const dyEff = baseDy + next
