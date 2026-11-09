@@ -29,7 +29,7 @@ import { createPortal, type ThreeEvent, useFrame, useThree } from '@react-three/
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { type Group, type Object3D, Plane, Raycaster, Vector2, Vector3 } from 'three'
 import { createFollowerFrames } from './follower-frames'
-import { claimHandleDragScope } from './handle-drag-scope'
+import { useHandleDragScope } from './handle-drag-scope'
 import { REFRIGERANT_PORT_SYSTEMS } from './port-systems'
 import { HandleCube, MoveChevron } from './selection-handles'
 
@@ -131,6 +131,7 @@ function RefrigerantLineEndpointHandles({
   })
 
   const unit = useViewer((s) => s.unit)
+  const claimHandleDrag = useHandleDragScope()
   const [draggingIndex, setDraggingIndex] = useState<number | null>(null)
   const [openCluster, setOpenCluster] = useState<number | null>(null)
   const toggleCluster = (index: number) => setOpenCluster((cur) => (cur === index ? null : index))
@@ -253,7 +254,7 @@ function RefrigerantLineEndpointHandles({
     useViewer.getState().setInputDragging(true)
     document.body.style.cursor = kind.axis === 'y' ? 'ns-resize' : 'grabbing'
     setDraggingIndex(index)
-    const releaseScope = claimHandleDragScope(line.id, PATH_POINT_DRAG_LABEL, () => {
+    const releaseScope = claimHandleDrag(line.id, PATH_POINT_DRAG_LABEL, () => {
       swallowNextClick()
       finish(false)
     })
@@ -365,11 +366,12 @@ function RefrigerantLineEndpointHandles({
       swallowNextClick()
       finish(true)
     }
+    const onCancel = () => finish(false)
 
     const cleanup = () => {
       window.removeEventListener('pointermove', onMove)
       window.removeEventListener('pointerup', onUp)
-      window.removeEventListener('pointercancel', onUp)
+      window.removeEventListener('pointercancel', onCancel)
       releaseScope()
       useViewer.getState().setInputDragging(false)
       document.body.style.cursor = ''
@@ -385,7 +387,7 @@ function RefrigerantLineEndpointHandles({
     }
     window.addEventListener('pointermove', onMove)
     window.addEventListener('pointerup', onUp)
-    window.addEventListener('pointercancel', onUp)
+    window.addEventListener('pointercancel', onCancel)
   }
 
   const endpointArrows = useMemo(() => getEndpointArrows(line), [line])

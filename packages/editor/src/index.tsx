@@ -670,6 +670,11 @@ export {
   editorFinishScriptHost,
   finishScriptCode,
 } from './lib/geometry-script/finish-scripts'
+export {
+  beginGesture,
+  type GestureCancelReason,
+  type GestureHandle,
+} from './lib/gesture-lifecycle'
 export { exportSceneToGlb, type GlbExportOptions } from './lib/glb-export'
 export {
   type EditorGridEvent,

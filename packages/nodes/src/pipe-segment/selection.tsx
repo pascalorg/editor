@@ -37,7 +37,7 @@ import {
   type FittingEndpoint,
   planFittingEndpointReaim,
 } from '../shared/fitting-endpoint-reaim'
-import { claimHandleDragScope } from '../shared/handle-drag-scope'
+import { useHandleDragScope } from '../shared/handle-drag-scope'
 import { PipeFittingGhost, PipeSegmentGhost } from '../shared/mep-ghost'
 import { DWV_PORT_SYSTEMS } from '../shared/port-systems'
 import { ContinuePlusHandle, HandleCube, MoveChevron } from '../shared/selection-handles'
@@ -158,6 +158,7 @@ const PipePointHandles = ({ pipe, target }: { pipe: PipeSegmentNode; target: Obj
   })
   const unit = useViewer((s) => s.unit)
   const [draggingIndex, setDraggingIndex] = useState<number | null>(null)
+  const claimHandleDrag = useHandleDragScope()
   const [gradeNotice, setGradeNotice] = useState('')
   const [runMoving, setRunMoving] = useState(false)
   const [moveGhost, setMoveGhost] = useState<PipeRunMoveGhost | null>(null)
@@ -411,7 +412,7 @@ const PipePointHandles = ({ pipe, target }: { pipe: PipeSegmentNode; target: Obj
     useViewer.getState().setInputDragging(true)
     document.body.style.cursor = kind.axis === 'y' ? 'ns-resize' : 'grabbing'
     setDraggingIndex(index)
-    const releaseScope = claimHandleDragScope(pipe.id, PATH_POINT_DRAG_LABEL, () => {
+    const releaseScope = claimHandleDrag(pipe.id, PATH_POINT_DRAG_LABEL, () => {
       swallowNextClick()
       finish(false)
     })
@@ -527,11 +528,12 @@ const PipePointHandles = ({ pipe, target }: { pipe: PipeSegmentNode; target: Obj
       swallowNextClick()
       finish(true)
     }
+    const onCancel = () => finish(false)
 
     const cleanup = () => {
       window.removeEventListener('pointermove', onMove)
       window.removeEventListener('pointerup', onUp)
-      window.removeEventListener('pointercancel', onUp)
+      window.removeEventListener('pointercancel', onCancel)
       releaseScope()
       useViewer.getState().setInputDragging(false)
       document.body.style.cursor = ''
@@ -552,7 +554,7 @@ const PipePointHandles = ({ pipe, target }: { pipe: PipeSegmentNode; target: Obj
     }
     window.addEventListener('pointermove', onMove)
     window.addEventListener('pointerup', onUp)
-    window.addEventListener('pointercancel', onUp)
+    window.addEventListener('pointercancel', onCancel)
   }
 
   const onRunMoveDown = (kind: PipeRunMoveKind) => (e: ThreeEvent<PointerEvent>) => {
@@ -647,7 +649,7 @@ const PipePointHandles = ({ pipe, target }: { pipe: PipeSegmentNode; target: Obj
     useViewer.getState().setInputDragging(true)
     document.body.style.cursor = kind.axis === 'y' ? 'ns-resize' : 'grabbing'
     setRunMoving(true)
-    const releaseScope = claimHandleDragScope(pipe.id, AXIS_MOVE_DRAG_LABEL, () => {
+    const releaseScope = claimHandleDrag(pipe.id, AXIS_MOVE_DRAG_LABEL, () => {
       swallowNextClick()
       finish(false)
     })
@@ -681,7 +683,7 @@ const PipePointHandles = ({ pipe, target }: { pipe: PipeSegmentNode; target: Obj
     const finish = (commit: boolean) => {
       window.removeEventListener('pointermove', onMove)
       window.removeEventListener('pointerup', onUp)
-      window.removeEventListener('pointercancel', onUp)
+      window.removeEventListener('pointercancel', onCancel)
       releaseScope()
       useViewer.getState().setInputDragging(false)
       clearPlacementSurface()
@@ -714,10 +716,11 @@ const PipePointHandles = ({ pipe, target }: { pipe: PipeSegmentNode; target: Obj
       swallowNextClick()
       finish(true)
     }
+    const onCancel = () => finish(false)
 
     window.addEventListener('pointermove', onMove)
     window.addEventListener('pointerup', onUp)
-    window.addEventListener('pointercancel', onUp)
+    window.addEventListener('pointercancel', onCancel)
   }
 
   const cornerArrows = useMemo(() => getCornerArrows(displayPipe), [displayPipe])

@@ -52,7 +52,7 @@ import {
   type RotationAxis,
 } from '../shared/fitting-rotation'
 import { createFollowerFrames } from '../shared/follower-frames'
-import { claimHandleDragScope } from '../shared/handle-drag-scope'
+import { useHandleDragScope } from '../shared/handle-drag-scope'
 import { HandleCube, MoveChevron, RotateArc } from '../shared/selection-handles'
 import { pipeFittingLegLength } from './ports'
 
@@ -304,6 +304,7 @@ const FittingHandles = ({ fitting }: { fitting: PipeFittingNode }) => {
   const [open, setOpen] = useState(false)
   const [dragging, setDragging] = useState(false)
   const [sideSign, setSideSign] = useState(1)
+  const claimHandleDrag = useHandleDragScope()
 
   const makeRay = (clientX: number, clientY: number) => {
     const rect = gl.domElement.getBoundingClientRect()
@@ -409,7 +410,7 @@ const FittingHandles = ({ fitting }: { fitting: PipeFittingNode }) => {
       useViewer.getState().setInputDragging(true)
       setDragging(true)
       document.body.style.cursor = cursor
-      const releaseScope = claimHandleDragScope(fitting.id, handle, () => {
+      const releaseScope = claimHandleDrag(fitting.id, handle, () => {
         swallowNextClick()
         finish(false)
       })
@@ -443,7 +444,7 @@ const FittingHandles = ({ fitting }: { fitting: PipeFittingNode }) => {
       const cleanup = () => {
         window.removeEventListener('pointermove', onMove)
         window.removeEventListener('pointerup', onUp)
-        window.removeEventListener('pointercancel', onUp)
+        window.removeEventListener('pointercancel', onCancel)
         releaseScope()
         useViewer.getState().setInputDragging(false)
         setDragging(false)
@@ -489,10 +490,11 @@ const FittingHandles = ({ fitting }: { fitting: PipeFittingNode }) => {
         swallowNextClick()
         finish(true)
       }
+      const onCancel = () => finish(false)
 
       window.addEventListener('pointermove', onMove)
       window.addEventListener('pointerup', onUp)
-      window.addEventListener('pointercancel', onUp)
+      window.addEventListener('pointercancel', onCancel)
     }
 
   const moveCompute =
@@ -579,7 +581,7 @@ const FittingHandles = ({ fitting }: { fitting: PipeFittingNode }) => {
       useViewer.getState().setInputDragging(true)
       setDragging(true)
       document.body.style.cursor = cursor
-      const releaseScope = claimHandleDragScope(fitting.id, `resize-${dimension}`, () => {
+      const releaseScope = claimHandleDrag(fitting.id, `resize-${dimension}`, () => {
         swallowNextClick()
         finish(false)
       })
@@ -614,7 +616,7 @@ const FittingHandles = ({ fitting }: { fitting: PipeFittingNode }) => {
       const cleanup = () => {
         window.removeEventListener('pointermove', onMove)
         window.removeEventListener('pointerup', onUp)
-        window.removeEventListener('pointercancel', onUp)
+        window.removeEventListener('pointercancel', onCancel)
         releaseScope()
         useViewer.getState().setInputDragging(false)
         setDragging(false)
@@ -632,10 +634,11 @@ const FittingHandles = ({ fitting }: { fitting: PipeFittingNode }) => {
         swallowNextClick()
         finish(true)
       }
+      const onCancel = () => finish(false)
 
       window.addEventListener('pointermove', onMove)
       window.addEventListener('pointerup', onUp)
-      window.addEventListener('pointercancel', onUp)
+      window.addEventListener('pointercancel', onCancel)
     }
 
   const extent = useMemo(() => fittingExtentM(fitting), [fitting])

@@ -54,7 +54,7 @@ import {
   type RotationAxis,
 } from '../shared/fitting-rotation'
 import { createFollowerFrames } from '../shared/follower-frames'
-import { claimHandleDragScope } from '../shared/handle-drag-scope'
+import { useHandleDragScope } from '../shared/handle-drag-scope'
 import { HandleCube, MoveChevron, RotateArc } from '../shared/selection-handles'
 import { fittingLegLength } from './ports'
 
@@ -349,6 +349,7 @@ const FittingHandles = ({ fitting, target }: { fitting: DuctFittingNode; target:
   // pointer handlers own the gesture), exactly like the duct-segment rig.
   const [dragging, setDragging] = useState(false)
   const [sideSign, setSideSign] = useState(1)
+  const claimHandleDrag = useHandleDragScope()
 
   const makeRay = (clientX: number, clientY: number) => {
     const rect = gl.domElement.getBoundingClientRect()
@@ -468,7 +469,7 @@ const FittingHandles = ({ fitting, target }: { fitting: DuctFittingNode; target:
       useViewer.getState().setInputDragging(true)
       setDragging(true)
       document.body.style.cursor = cursor
-      const releaseScope = claimHandleDragScope(fitting.id, handle, () => {
+      const releaseScope = claimHandleDrag(fitting.id, handle, () => {
         swallowNextClick()
         finish(false)
       })
@@ -502,7 +503,7 @@ const FittingHandles = ({ fitting, target }: { fitting: DuctFittingNode; target:
       const cleanup = () => {
         window.removeEventListener('pointermove', onMove)
         window.removeEventListener('pointerup', onUp)
-        window.removeEventListener('pointercancel', onUp)
+        window.removeEventListener('pointercancel', onCancel)
         releaseScope()
         useViewer.getState().setInputDragging(false)
         setDragging(false)
@@ -560,10 +561,11 @@ const FittingHandles = ({ fitting, target }: { fitting: DuctFittingNode; target:
         swallowNextClick()
         finish(true)
       }
+      const onCancel = () => finish(false)
 
       window.addEventListener('pointermove', onMove)
       window.addEventListener('pointerup', onUp)
-      window.addEventListener('pointercancel', onUp)
+      window.addEventListener('pointercancel', onCancel)
     }
 
   // Move: translate the fitting along one world axis, anchored to the cursor's
@@ -663,7 +665,7 @@ const FittingHandles = ({ fitting, target }: { fitting: DuctFittingNode; target:
       useViewer.getState().setInputDragging(true)
       setDragging(true)
       document.body.style.cursor = cursor
-      const releaseScope = claimHandleDragScope(fitting.id, `resize-${dimension}`, () => {
+      const releaseScope = claimHandleDrag(fitting.id, `resize-${dimension}`, () => {
         swallowNextClick()
         finish(false)
       })
@@ -698,7 +700,7 @@ const FittingHandles = ({ fitting, target }: { fitting: DuctFittingNode; target:
       const cleanup = () => {
         window.removeEventListener('pointermove', onMove)
         window.removeEventListener('pointerup', onUp)
-        window.removeEventListener('pointercancel', onUp)
+        window.removeEventListener('pointercancel', onCancel)
         releaseScope()
         useViewer.getState().setInputDragging(false)
         setDragging(false)
@@ -716,10 +718,11 @@ const FittingHandles = ({ fitting, target }: { fitting: DuctFittingNode; target:
         swallowNextClick()
         finish(true)
       }
+      const onCancel = () => finish(false)
 
       window.addEventListener('pointermove', onMove)
       window.addEventListener('pointerup', onUp)
-      window.addEventListener('pointercancel', onUp)
+      window.addEventListener('pointercancel', onCancel)
     }
 
   const extent = useMemo(() => fittingExtentM(fitting), [fitting])

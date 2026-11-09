@@ -58,7 +58,7 @@ import {
   type FittingEndpoint,
   planFittingEndpointReaim,
 } from '../shared/fitting-endpoint-reaim'
-import { claimHandleDragScope } from '../shared/handle-drag-scope'
+import { useHandleDragScope } from '../shared/handle-drag-scope'
 import { DuctSegmentGhost, FittingGhost } from '../shared/mep-ghost'
 import { DUCT_PORT_SYSTEMS } from '../shared/port-systems'
 import { planRunTranslationOffsets } from '../shared/run-translation-offset'
@@ -235,6 +235,7 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
   })
   const unit = useViewer((s) => s.unit)
   const [draggingIndex, setDraggingIndex] = useState<number | null>(null)
+  const claimHandleDrag = useHandleDragScope()
   const [rolling, setRolling] = useState(false)
   const [runMoving, setRunMoving] = useState(false)
   // Auto-routed offset preview shown while the run-center cube's ±Y arrows
@@ -525,7 +526,7 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
     useViewer.getState().setInputDragging(true)
     document.body.style.cursor = kind.axis === 'y' ? 'ns-resize' : 'grabbing'
     setDraggingIndex(index)
-    const releaseScope = claimHandleDragScope(duct.id, PATH_POINT_DRAG_LABEL, () => {
+    const releaseScope = claimHandleDrag(duct.id, PATH_POINT_DRAG_LABEL, () => {
       swallowNextClick()
       finish(false)
     })
@@ -685,11 +686,12 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
       swallowNextClick()
       finish(true)
     }
+    const onCancel = () => finish(false)
 
     const cleanup = () => {
       window.removeEventListener('pointermove', onMove)
       window.removeEventListener('pointerup', onUp)
-      window.removeEventListener('pointercancel', onUp)
+      window.removeEventListener('pointercancel', onCancel)
       releaseScope()
       useViewer.getState().setInputDragging(false)
       document.body.style.cursor = ''
@@ -710,7 +712,7 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
     }
     window.addEventListener('pointermove', onMove)
     window.addEventListener('pointerup', onUp)
-    window.addEventListener('pointercancel', onUp)
+    window.addEventListener('pointercancel', onCancel)
   }
 
   // Roll: spin the rect / oval cross-section about the run (length) axis. The
@@ -750,7 +752,7 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
     useViewer.getState().setInputDragging(true)
     document.body.style.cursor = 'grabbing'
     setRolling(true)
-    const releaseScope = claimHandleDragScope(duct.id, ROTATE_HANDLE_DRAG_LABEL, () => {
+    const releaseScope = claimHandleDrag(duct.id, ROTATE_HANDLE_DRAG_LABEL, () => {
       swallowNextClick()
       finish(false)
     })
@@ -783,7 +785,7 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
     const finish = (commit: boolean) => {
       window.removeEventListener('pointermove', onMove)
       window.removeEventListener('pointerup', onUp)
-      window.removeEventListener('pointercancel', onUp)
+      window.removeEventListener('pointercancel', onCancel)
       releaseScope()
       useViewer.getState().setInputDragging(false)
       clearPlacementSurface()
@@ -804,10 +806,11 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
       swallowNextClick()
       finish(true)
     }
+    const onCancel = () => finish(false)
 
     window.addEventListener('pointermove', onMove)
     window.addEventListener('pointerup', onUp)
-    window.addEventListener('pointercancel', onUp)
+    window.addEventListener('pointercancel', onCancel)
   }
 
   // Move the WHOLE run, locked to one direction: the vertical world axis, or a
@@ -941,7 +944,7 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
     useViewer.getState().setInputDragging(true)
     document.body.style.cursor = kind.axis === 'y' ? 'ns-resize' : 'grabbing'
     setRunMoving(true)
-    const releaseScope = claimHandleDragScope(duct.id, AXIS_MOVE_DRAG_LABEL, () => {
+    const releaseScope = claimHandleDrag(duct.id, AXIS_MOVE_DRAG_LABEL, () => {
       swallowNextClick()
       finish(false)
     })
@@ -1148,7 +1151,7 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
     const finish = (commit: boolean) => {
       window.removeEventListener('pointermove', onMove)
       window.removeEventListener('pointerup', onUp)
-      window.removeEventListener('pointercancel', onUp)
+      window.removeEventListener('pointercancel', onCancel)
       releaseScope()
       useViewer.getState().setInputDragging(false)
       document.body.style.cursor = ''
@@ -1299,10 +1302,11 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
       swallowNextClick()
       finish(true)
     }
+    const onCancel = () => finish(false)
 
     window.addEventListener('pointermove', onMove)
     window.addEventListener('pointerup', onUp)
-    window.addEventListener('pointercancel', onUp)
+    window.addEventListener('pointercancel', onCancel)
   }
 
   const cornerArrows = useMemo(() => getCornerArrows(displayDuct), [displayDuct])
