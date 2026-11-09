@@ -4,6 +4,8 @@ import {
   type AnyNodeId,
   BuildingNode,
   createSceneApi,
+  type DuctSegmentNode,
+  DuctTerminalNode,
   emitter,
   LevelNode,
   type PipeSegmentNode,
@@ -21,7 +23,13 @@ import { Html } from '@react-three/drei'
 import { useThree } from '@react-three/fiber'
 import { act, create } from '@react-three/test-renderer'
 import type { ReactElement, ReactNode } from 'react'
+import { ductFittingDefinition } from '../duct-fitting/definition'
+import { activateDuctCollarContinuation } from '../duct-segment/continuation'
+import { ductSegmentDefinition } from '../duct-segment/definition'
+import DuctSegmentTool from '../duct-segment/tool'
+import { ductTerminalDefinition } from '../duct-terminal/definition'
 import { pipeFittingDefinition } from '../pipe-fitting/definition'
+import { activatePipeCollarContinuation } from '../pipe-segment/continuation'
 import { pipeSegmentDefinition } from '../pipe-segment/definition'
 import { pipeGrade } from '../pipe-segment/slope'
 import PipeSegmentTool from '../pipe-segment/tool'
@@ -36,6 +44,12 @@ const trap = PipeTrapNode.parse({
   position: [0, 0.5, 0],
   diameter: 1.5,
   pipeMaterial: 'abs',
+})
+const diffuser = DuctTerminalNode.parse({
+  parentId: level.id,
+  position: [4, 2.7, 0],
+  mount: 'ceiling',
+  terminalType: 'diffuser',
 })
 const trapPort = (id: 'inlet' | 'outlet') =>
   pipeTrapDefinition.ports!(trap).find((p) => p.id === id)!
@@ -61,15 +75,20 @@ const plan = (x: number, z: number): EditorGridEvent => ({
 })
 const move = (x: number, z: number) => act(async () => emitter.emit('grid:move', plan(x, z)))
 const click = (x: number, z: number) => act(async () => emitter.emit('grid:click', plan(x, z)))
-const setRunDefaults = (kind: 'pipe-segment', patch: Record<string, unknown>) =>
+const setRunDefaults = (kind: 'pipe-segment' | 'duct-segment', patch: Record<string, unknown>) =>
   act(async () => {
     const editor = useEditor.getState()
     editor.setToolDefaults(kind, { ...editor.toolDefaults[kind], ...patch })
   })
-const runDefaults = (kind: 'pipe-segment') => useEditor.getState().toolDefaults[kind] ?? {}
+const runDefaults = (kind: 'pipe-segment' | 'duct-segment') =>
+  useEditor.getState().toolDefaults[kind] ?? {}
 const pipes = () =>
   Object.values(useScene.getState().nodes).filter(
     (node): node is PipeSegmentNode => node.type === 'pipe-segment',
+  )
+const ducts = () =>
+  Object.values(useScene.getState().nodes).filter(
+    (node): node is DuctSegmentNode => node.type === 'duct-segment',
   )
 const expectPoint = (actual: Vec3 | undefined, expected: Vec3) => {
   expect(actual).toBeDefined()
@@ -120,13 +139,21 @@ beforeEach(() => {
     labels.push(props.children)
     return null
   })
-  for (const definition of [pipeSegmentDefinition, pipeFittingDefinition, pipeTrapDefinition])
+  for (const definition of [
+    pipeSegmentDefinition,
+    pipeFittingDefinition,
+    pipeTrapDefinition,
+    ductSegmentDefinition,
+    ductFittingDefinition,
+    ductTerminalDefinition,
+  ])
     registerNode(definition as never)
   useScene.setState({
     nodes: {
       [building.id]: { ...building, children: [level.id] },
-      [level.id]: { ...level, children: [trap.id] },
+      [level.id]: { ...level, children: [trap.id, diffuser.id] },
       [trap.id]: trap,
+      [diffuser.id]: diffuser,
     } as Record<AnyNodeId, AnyNode>,
     rootNodeIds: [building.id],
     dirtyNodes: new Set(),
@@ -185,6 +212,51 @@ test('a pipe run from a fixed collar leaves along its axis, then takes the chose
     const second = pipes()[1]
     expectPoint(second?.path[0], [x + 1, y, z])
     expect(pipeGrade(second!.path[0]!, second!.path.at(-1)!)).toBeCloseTo(0.02, 9)
+  } finally {
+    await renderer.unmount()
+  }
+})
+
+test('a riser drawn from a vertical pipe collar continues on the plan route', async () => {
+  const inlet = trapPort('inlet')
+  const [x, y, z] = inlet.position
+  activatePipeCollarContinuation(trap, inlet)
+  expect(runDefaults('pipe-segment')).toMatchObject({ routingMode: 'vertical' })
+  const renderer = await mountTool(<PipeSegmentTool />)
+  try {
+    await click(x + 0.5, z)
+    expect(pipes()).toHaveLength(1)
+    expectPoint(pipes()[0]?.path.at(-1), [x, y + 1, z])
+    expect(runDefaults('pipe-segment').routingMode).toBe('horizontal')
+
+    await move(x + 1.5, z)
+    await click(x + 1.5, z)
+    const [riser, across] = pipes()
+    expectPoint(riser?.path[0], [x, y, z])
+    expectPoint(across?.path.at(-1), [x + 1.5, y + 1, z])
+    expect(pipeGrade(across!.path[0]!, across!.path.at(-1)!)).toBeCloseTo(0, 9)
+  } finally {
+    await renderer.unmount()
+  }
+})
+
+test('a riser drawn from a vertical duct collar continues on the horizontal route', async () => {
+  const collar = ductTerminalDefinition.ports!(diffuser)[0]!
+  const [x, y, z] = collar.position
+  activateDuctCollarContinuation(diffuser, collar)
+  expect(runDefaults('duct-segment')).toMatchObject({ routingMode: 'vertical' })
+  const renderer = await mountTool(<DuctSegmentTool />)
+  try {
+    await click(x + 0.5, z)
+    expect(ducts()).toHaveLength(1)
+    expectPoint(ducts()[0]?.path.at(-1), [x, y + 1, z])
+    expect(runDefaults('duct-segment').routingMode).toBe('horizontal')
+
+    await move(x + 1.5, z)
+    await click(x + 1.5, z)
+    const [riser, across] = ducts()
+    expectPoint(riser?.path[0], [x, y, z])
+    expectPoint(across?.path.at(-1), [x + 1.5, y + 1, z])
   } finally {
     await renderer.unmount()
   }

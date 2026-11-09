@@ -709,6 +709,17 @@ const DuctSegmentTool = () => {
         delete: plan.delete,
       })
       pendingPromotionRef.current = null
+      const startOwner =
+        startConnection.port && !promotedFitting ? sceneApi.get(startConnection.port.nodeId) : null
+      // A riser out of a fixed collar reaches the target; staying vertical would aim the
+      // next section at the riser's own top.
+      if (
+        hangerDefaults?.routingMode === 'vertical' &&
+        startOwner &&
+        startOwner.type !== 'duct-segment' &&
+        startOwner.type !== 'duct-fitting'
+      )
+        updateRunDefaults('duct-segment', { routingMode: 'horizontal' })
       const nextDuct = plan.ducts.at(-1)
       const nextStart = nextDuct ? nextDuct.path[nextDuct.path.length - 1]! : end
       const nextPort = nextDuct ? ductEndpointPort(nextDuct, 'end') : endConnection.port
