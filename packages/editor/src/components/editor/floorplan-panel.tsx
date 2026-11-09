@@ -64,6 +64,7 @@ import {
   WindowNode as WindowNodeSchema,
   wallClosesRoom,
   wallRectangleCorners,
+  wallSegmentsCoverSegment,
 } from '@pascal-app/core'
 import { useSegmentDraftChain, useWallSnapIndicator } from '@pascal-app/editor'
 import { getSceneTheme, useViewer } from '@pascal-app/viewer'
@@ -10018,14 +10019,22 @@ export function FloorplanPanel({
           setCursorPoint(null)
           return
         }
-      } else if (!(viewIs2DOnly || publishedNextStart)) {
-        // Split view: the 3D tool owns both the commit and the continuation
-        // decision, and it clears the published chain start whenever it stops
-        // drafting (room close, T-junction, single). Mirror that here instead
-        // of chaining the 2D draft from a dead point.
-        clearWallPlacementDraft()
-        setCursorPoint(null)
-        return
+      } else {
+        const levelWalls = Object.values(useScene.getState().nodes).filter(
+          (node): node is WallNode => node?.type === 'wall' && node.parentId === levelId,
+        )
+        const isTransit = draftStart && wallSegmentsCoverSegment(draftStart, point, levelWalls)
+        if (isTransit) {
+          // Collinear tracking: start point advances along host wall without creating redundant wall
+        } else if (!(viewIs2DOnly || publishedNextStart)) {
+          // Split view: the 3D tool owns both the commit and the continuation
+          // decision, and it clears the published chain start whenever it stops
+          // drafting (room close, T-junction, single). Mirror that here instead
+          // of chaining the 2D draft from a dead point.
+          clearWallPlacementDraft()
+          setCursorPoint(null)
+          return
+        }
       }
 
       wallRunReferenceRef.current = placedDirection
@@ -12001,6 +12010,7 @@ export function FloorplanPanel({
               } else if (isFenceBuildActive) {
                 emitFloorplanGridEvent('click', pt, new MouseEvent('click') as any)
               } else if (isPolygonDraftBuildActive) {
+                emitFloorplanGridEvent('click', pt, new MouseEvent('click') as any)
                 if (isZoneBuildActive) {
                   handleZonePlacementPoint(pt)
                 } else if (isCeilingBuildActive) {
@@ -12135,7 +12145,13 @@ function FloorplanDimensionInputOverlay({
     ]
 
     useDimensionDraftStore.setState({
-      points: [...currentDim.points, nextPoint],
+      lockedLength: length,
+      lockedAngle: angle,
+    })
+
+    onCommitPoint(nextPoint)
+
+    useDimensionDraftStore.setState({
       previewPoint: null,
       lengthValue: '',
       angleValue: '',
@@ -12143,8 +12159,6 @@ function FloorplanDimensionInputOverlay({
       lockedAngle: null,
       fieldType: 'length',
     })
-
-    onCommitPoint(nextPoint)
   }, [cursorPoint, draftStart, onCommitPoint])
 
   // Resolve screen position: prefer live cursorPosition, fall back to lastPosition,

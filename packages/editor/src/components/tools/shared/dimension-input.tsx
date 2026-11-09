@@ -1,5 +1,5 @@
 ﻿import { useCallback, useEffect, useRef } from 'react'
-import { parseAngle, parseDimension } from '@pascal-app/core'
+import { emitter, parseAngle, parseDimension } from '@pascal-app/core'
 
 export interface DimensionInputState {
   active: boolean
@@ -64,6 +64,17 @@ export function DimensionInput({
       target.select()
     }
   }, [state.active, state.fieldType])
+
+  // Refocus input whenever dimension:focus is emitted (e.g. on digit shortcut entry)
+  useEffect(() => {
+    const handleFocus = (field: 'length' | 'angle') => {
+      focusField(field)
+    }
+    emitter.on('dimension:focus', handleFocus)
+    return () => {
+      emitter.off('dimension:focus', handleFocus)
+    }
+  }, [focusField])
 
   const commitValues = useCallback(() => {
     const length = parseDimension(state.lengthValue)

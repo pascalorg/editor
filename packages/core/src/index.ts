@@ -1319,6 +1319,7 @@ export {
   planWallEndRejoins,
   planWallInsertion,
   planWallSplitAtPoint,
+  wallSegmentsCoverSegment,
   type WallInsertionPlan,
   type WallJoinResult,
   type WallTopologyChanges,

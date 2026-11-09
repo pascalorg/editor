@@ -118,7 +118,7 @@ function collinearWallIntervals(
   return { intervals, length }
 }
 
-function wallSegmentsCoverSegment(start: WallPlanPoint, end: WallPlanPoint, walls: WallNode[]) {
+export function wallSegmentsCoverSegment(start: WallPlanPoint, end: WallPlanPoint, walls: WallNode[]): boolean {
   const collinear = collinearWallIntervals(start, end, walls)
   if (!collinear) return false
   const parameterTolerance = WALL_INTERSECTION_EPSILON / collinear.length
