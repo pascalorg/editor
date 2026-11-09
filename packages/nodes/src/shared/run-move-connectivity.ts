@@ -33,7 +33,9 @@ type MovedTransform = { path?: Vec3[]; position?: Vec3 }
  * through `useLiveNodeOverrides` (transient — no history churn;
  * `getEffectiveNode` merges overrides so the connected geometry rebuilds at
  * pointer rate), then fold into the commit's single tracked `updateNodes`
- * batch.
+ * batch. A transform the followers cannot follow without pulling a joint
+ * apart resolves to `null`: the tool holds its last shown frame, so release
+ * commits what is on screen.
  *
  * Returns `null` when nothing is connected, so callers skip all the work.
  */
@@ -51,18 +53,25 @@ export class RunMoveConnectivity {
     private readonly connectivity: PortConnectivity,
   ) {}
 
-  /** Patches that keep the connected nodes attached for a given live transform. */
-  private updatesFor(transform: MovedTransform): { id: AnyNodeId; data: Partial<AnyNode> }[] {
+  /** Patches that keep the connected nodes attached for a given live transform,
+   *  or null when they cannot all stay attached. */
+  private updatesFor(
+    transform: MovedTransform,
+  ): { id: AnyNodeId; data: Partial<AnyNode> }[] | null {
     const preview = { ...(this.node as Record<string, unknown>), ...transform } as AnyNode
-    return resolveConnectivityUpdates(this.connectivity, preview).filter(
-      (u) => useScene.getState().nodes[u.id],
+    return (
+      resolveConnectivityUpdates(this.connectivity, preview)?.filter(
+        (u) => useScene.getState().nodes[u.id],
+      ) ?? null
     )
   }
 
   /** Live-preview the followers for the moved node's current drag transform,
-   *  returning the follower patches it shows. */
-  preview(transform: MovedTransform): { id: AnyNodeId; data: Partial<AnyNode> }[] {
+   *  returning the follower patches it shows. Null leaves the previous preview
+   *  in place: the followers cannot follow this transform. */
+  preview(transform: MovedTransform): { id: AnyNodeId; data: Partial<AnyNode> }[] | null {
     const updates = this.updatesFor(transform)
+    if (!updates) return null
     const overrides = useLiveNodeOverrides.getState()
     const nextIds = updates.map((u) => u.id)
     // Drop overrides on nodes that fell out of this frame's update set (e.g. a
@@ -83,8 +92,9 @@ export class RunMoveConnectivity {
     return updates
   }
 
-  /** Follower patches to fold into the commit `updateNodes` batch. */
-  commitUpdates(transform: MovedTransform): { id: AnyNodeId; data: Partial<AnyNode> }[] {
+  /** Follower patches to fold into the commit `updateNodes` batch, or null when
+   *  they cannot follow `transform`. */
+  commitUpdates(transform: MovedTransform): { id: AnyNodeId; data: Partial<AnyNode> }[] | null {
     return this.updatesFor(transform)
   }
 

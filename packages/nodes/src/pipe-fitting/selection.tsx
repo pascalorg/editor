@@ -16,6 +16,8 @@ import {
 import {
   ARROW_COLOR,
   EDITOR_LAYER,
+  isAngleSnapActive,
+  isGridSnapActive,
   isTypingTarget,
   swallowNextClick,
   triggerSFX,
@@ -355,14 +357,17 @@ const FittingHandles = ({ fitting }: { fitting: PipeFittingNode }) => {
     return axis === 'x' ? local.x : local.z
   }
 
+  /** Null when the mated joints cannot follow the transform. */
   const connectivityUpdates = (
     connectivity: PortConnectivity | null,
     transform: FittingTransform,
-  ): { id: AnyNodeId; data: Partial<AnyNode> }[] => {
+  ): { id: AnyNodeId; data: Partial<AnyNode> }[] | null => {
     if (!connectivity) return []
     const preview = { ...(fitting as Record<string, unknown>), ...transform } as AnyNode
     const nodes = useScene.getState().nodes
-    return resolveConnectivityUpdates(connectivity, preview)
+    const updates = resolveConnectivityUpdates(connectivity, preview)
+    if (!updates) return null
+    return updates
       .filter((u) => nodes[u.id])
       .map((u) => {
         const node = nodes[u.id]
@@ -396,19 +401,29 @@ const FittingHandles = ({ fitting }: { fitting: PipeFittingNode }) => {
       document.body.style.cursor = cursor
       let current: FittingTransform | null = null
 
-      const buildBatch = (t: FittingTransform): { id: AnyNodeId; data: Partial<AnyNode> }[] => [
-        {
-          id: fitting.id as AnyNodeId,
-          data: preserveFittingParameters(fitting, t as Partial<PipeFittingNode>),
-        },
-        ...connectivityUpdates(connectivity, t),
-      ]
+      const buildBatch = (
+        t: FittingTransform,
+      ): { id: AnyNodeId; data: Partial<AnyNode> }[] | null => {
+        const followers = connectivityUpdates(connectivity, t)
+        return (
+          followers && [
+            {
+              id: fitting.id as AnyNodeId,
+              data: preserveFittingParameters(fitting, t as Partial<PipeFittingNode>),
+            },
+            ...followers,
+          ]
+        )
+      }
 
       const onMove = (event: PointerEvent) => {
         const next = compute(event)
         if (!next) return
+        // Joints that cannot follow hold the last frame, which release commits.
+        const batch = buildBatch(next)
+        if (!batch) return
         current = next
-        useScene.getState().updateNodes(buildBatch(next))
+        useScene.getState().updateNodes(batch)
       }
 
       const cleanup = () => {
@@ -451,7 +466,8 @@ const FittingHandles = ({ fitting }: { fitting: PipeFittingNode }) => {
           ...reverts.filter((u) => useScene.getState().nodes[u.id]),
         ])
         resumeSceneHistory(useScene)
-        if (current) useScene.getState().updateNodes(buildBatch(current))
+        const batch = current && buildBatch(current)
+        if (batch) useScene.getState().updateNodes(batch)
       }
 
       window.addEventListener('pointermove', onMove)
@@ -471,7 +487,7 @@ const FittingHandles = ({ fitting }: { fitting: PipeFittingNode }) => {
         if (start === null) return null
         const s = sampleAxis(axis, event.clientX, event.clientY, anchorWorld)
         if (s === null) return null
-        const step = event.shiftKey ? 0 : useEditor.getState().gridSnapStep
+        const step = isGridSnapActive() ? useEditor.getState().gridSnapStep : 0
         const delta = snap(s - start, step)
         if (delta === lastDelta) return null
         lastDelta = delta
@@ -510,8 +526,9 @@ const FittingHandles = ({ fitting }: { fitting: PipeFittingNode }) => {
         const b = bearing(event.clientX, event.clientY)
         if (b === null) return null
         const raw = b - startBearing
-        const delta = event.shiftKey ? raw : Math.round(raw / ROTATE_STEP_RAD) * ROTATE_STEP_RAD
-        if (!event.shiftKey) {
+        const snapped = isAngleSnapActive()
+        const delta = snapped ? Math.round(raw / ROTATE_STEP_RAD) * ROTATE_STEP_RAD : raw
+        if (snapped) {
           const step = Math.round(raw / ROTATE_STEP_RAD)
           if (step !== lastStep) {
             lastStep = step
@@ -559,11 +576,12 @@ const FittingHandles = ({ fitting }: { fitting: PipeFittingNode }) => {
           sampleAxisParameter(event.clientX, event.clientY, centerWorld, axisWorld) - start
         const deltaIn = (rawDeltaM / INCHES_TO_METERS) * 2
         const nextRaw = baseValue + deltaIn
-        const nextValue = clamp(event.shiftKey ? nextRaw : snap(nextRaw, RESIZE_STEP_IN), 1.25, 8)
+        const snapped = isGridSnapActive()
+        const nextValue = clamp(snapped ? snap(nextRaw, RESIZE_STEP_IN) : nextRaw, 1.25, 8)
         if (nextValue === lastValue) return
         lastValue = nextValue
         current = dimensionPatch(fitting, dimension, nextValue)
-        if (!event.shiftKey) triggerSFX('sfx:grid-snap')
+        if (snapped) triggerSFX('sfx:grid-snap')
         apply(current)
       }
 

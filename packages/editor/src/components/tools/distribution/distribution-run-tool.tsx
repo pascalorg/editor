@@ -627,6 +627,22 @@ export function useDistributionRunTool(config: DistributionRunToolConfig) {
       }
     }
 
+    // A vertical route rises from its start to the target elevation wherever the
+    // pointer is, so it resolves without a pointer event.
+    const verticalTarget = (currentStart: RunPoint): ResolvedRunPoint => ({
+      point: [
+        currentStart[0],
+        configRef.current.targetElevation ?? currentStart[1],
+        currentStart[2],
+      ],
+      frame: createRunSurfaceFrame(currentStart),
+      surfaceTarget: null,
+      snapped: null,
+      directionMode: 'vertical',
+      port: null,
+      body: null,
+    })
+
     const resolvePoint = (event: GridEvent): ResolvedRunPoint => {
       const adapter = configRef.current
       const hit = surfacePointFromEvent(event, adapter.levelId)
@@ -670,17 +686,7 @@ export function useDistributionRunTool(config: DistributionRunToolConfig) {
       const routeElevation = currentStart?.[1] ?? adapter.elevation ?? 0
       if (explicitRoute) {
         resolved.point[1] = routeElevation
-        if (currentStart && adapter.routingMode === 'vertical') {
-          return {
-            point: [currentStart[0], adapter.targetElevation ?? currentStart[1], currentStart[2]],
-            frame: createRunSurfaceFrame(currentStart),
-            surfaceTarget: null,
-            snapped: null,
-            directionMode: 'vertical',
-            port: null,
-            body: null,
-          }
-        }
+        if (currentStart && adapter.routingMode === 'vertical') return verticalTarget(currentStart)
       }
       const bypass = event.nativeEvent?.altKey === true
       const gridStep = !bypass && isGridSnapActive() ? useEditor.getState().gridSnapStep : 0
@@ -1073,7 +1079,8 @@ export function useDistributionRunTool(config: DistributionRunToolConfig) {
         setEndConnection({ port: null, body: null })
         // A vertical route ends at the target, not under the pointer: show that
         // riser now so the next click or Enter places what the preview shows.
-        if (configRef.current.routingMode === 'vertical') updateCursor(resolvePoint(event))
+        if (configRef.current.routingMode === 'vertical')
+          updateCursor(verticalTarget(resolved.point))
         return
       }
       const typedResolved = applyTypedLength(resolved)
@@ -1194,7 +1201,10 @@ export function useDistributionRunTool(config: DistributionRunToolConfig) {
     }
 
     refreshCursorRef.current = () => {
-      if (lastPointerRef.current)
+      const currentStart = startRef.current
+      if (currentStart && configRef.current.routingMode === 'vertical')
+        updateCursor(verticalTarget(currentStart))
+      else if (lastPointerRef.current)
         updateCursor(applyTypedLength(resolvePoint(lastPointerRef.current)))
       else if (lastResolvedRef.current) updateCursor(applyTypedLength(lastResolvedRef.current))
     }

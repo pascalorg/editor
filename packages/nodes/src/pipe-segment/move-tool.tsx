@@ -154,14 +154,16 @@ export const MovePipeSegmentTool: React.FC<{ node: AnyNode }> = ({ node }) => {
       ? startRunMoveConnectivity(node)
       : null
 
-    const setPreview = (path: Vec3[]) => {
+    // A frame the connected joints cannot follow is not shown: the ghost holds
+    // its last frame, which is what a click commits.
+    const showFrame = (path: Vec3[]): boolean => {
+      const followers = connectivity ? connectivity.preview({ path }) : []
+      if (!followers) return false
+      hasMovedRef.current = true
       previewPathRef.current = path
       setPreviewPath(path)
-    }
-
-    const previewFollowers = (path: Vec3[]) => {
-      const updates = connectivity?.preview({ path }) ?? []
-      setGradeBlocked(!pipeUpdatesPreserveGrades(useScene.getState().nodes, updates))
+      setGradeBlocked(!pipeUpdatesPreserveGrades(useScene.getState().nodes, followers))
+      return true
     }
 
     const onMove = (event: GridEvent) => {
@@ -171,10 +173,7 @@ export const MovePipeSegmentTool: React.FC<{ node: AnyNode }> = ({ node }) => {
       if (pipe.wallAttachment && attachedWall?.type === 'wall') {
         const wallMove = translateWallRun(originalPath, pipe.wallAttachment, attachedWall, event)
         if (wallMove) {
-          hasMovedRef.current = true
-          previewAttachmentRef.current = wallMove.attachment
-          setPreview(wallMove.path)
-          previewFollowers(wallMove.path)
+          if (showFrame(wallMove.path)) previewAttachmentRef.current = wallMove.attachment
           return
         }
       }
@@ -212,10 +211,7 @@ export const MovePipeSegmentTool: React.FC<{ node: AnyNode }> = ({ node }) => {
         triggerSFX('sfx:grid-snap')
       }
       prevSnapRef.current = cur
-      hasMovedRef.current = true
-      const nextPath = originalPath.map(([x, y, z]) => [x + dx, y, z + dz] as Vec3)
-      setPreview(nextPath)
-      previewFollowers(nextPath)
+      showFrame(originalPath.map(([x, y, z]) => [x + dx, y, z + dz] as Vec3))
     }
 
     const commit = (event: GridEvent) => {
@@ -229,8 +225,12 @@ export const MovePipeSegmentTool: React.FC<{ node: AnyNode }> = ({ node }) => {
         return
       }
       const finalPath = previewPathRef.current
-      const followUpdates = connectivity?.commitUpdates({ path: finalPath }) ?? []
+      const followUpdates = connectivity ? connectivity.commitUpdates({ path: finalPath }) : []
       // The drag stays live (history paused, Esc cancels) so the run can be placed elsewhere.
+      if (!followUpdates) {
+        event.nativeEvent?.stopPropagation?.()
+        return
+      }
       if (!pipeUpdatesPreserveGrades(useScene.getState().nodes, followUpdates)) {
         setGradeBlocked(true)
         event.nativeEvent?.stopPropagation?.()

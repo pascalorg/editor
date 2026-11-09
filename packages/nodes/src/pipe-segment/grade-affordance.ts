@@ -134,6 +134,7 @@ export const pipeGradePointAffordance: FloorplanAffordance<PipeSegmentNode> = {
       },
       canCommit: () => updates.length > 0,
       commit() {
+        dismissNotice()
         clear()
         useScene.getState().updateNodes(updates)
       },

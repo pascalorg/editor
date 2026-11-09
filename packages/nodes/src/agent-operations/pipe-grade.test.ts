@@ -296,7 +296,7 @@ describe('plan-view endpoint drag on a run whose far end sits on an elbow', () =
     expect(useFloorplanMode.getState().notice).toBeNull()
   })
 
-  test('a turn the elbow cannot make holds the last valid frame and says why', () => {
+  test('a turn the elbow cannot make holds the last valid frame and says why until placed', () => {
     const pipe = run()
     const fitting = elbow()
     const session = drag(pipe, fitting)
@@ -310,6 +310,7 @@ describe('plan-view endpoint drag on a run whose far end sits on an elbow', () =
     expect(session.canCommit()).toBe(true)
     session.commit!()
     expect((useScene.getState().nodes[pipe.id] as PipeSegmentNode).path[0]).toEqual([0.07, 1, -1])
+    expect(useFloorplanMode.getState().notice).toBeNull()
   })
 })
 
@@ -404,6 +405,44 @@ test('raising one leg of a closed loop with sloped legs is refused rather than h
   expect(() =>
     edit(nodes, { nodeId: south.id, action: 'elevation', elevation: 1.2 }, context),
   ).toThrow('would change a connected pipe')
+})
+
+test('stretching a run whose U loops back to its own start corner is refused, not split', () => {
+  const run = PipeSegmentNode.parse({
+    ...pipeSegmentDefinition.defaults(),
+    parentId: level.id,
+    path: [
+      [0.07, 1, 0],
+      [3.93, 1, 0],
+    ],
+  })
+  const corner = (position: number[], rotationY: number) =>
+    PipeFittingNode.parse({
+      ...pipeFittingDefinition.defaults(),
+      parentId: level.id,
+      position,
+      rotation: [0, rotationY, 0],
+    })
+  const u = PipeSegmentNode.parse({
+    ...pipeSegmentDefinition.defaults(),
+    parentId: level.id,
+    path: [
+      [4, 1, 0.07],
+      [4, 1, 2],
+      [0, 1, 2],
+      [0, 1, 0.07],
+    ],
+  })
+  const nodes = scene(run, corner([4, 1, 0], 0), u, corner([0, 1, 0], Math.PI / 2))
+  // The U translates with the run's end and would drag the start corner off
+  // the run's start, which this edit keeps fixed.
+  expect(() =>
+    edit(
+      nodes,
+      { nodeId: run.id, action: 'endpoint', pointIndex: 1, point: [4.43, 1, 0] },
+      context,
+    ),
+  ).toThrow('pulling a joint apart')
 })
 
 test('grade tool works through MCP and undoes as one edit', async () => {

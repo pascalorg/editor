@@ -297,6 +297,83 @@ test.each(['duct-segment', 'pipe-segment'] as const)(
   },
 )
 
+test.each(['duct-segment', 'pipe-segment'] as const)(
+  '%s drawn from a collar rises to each panel target without a pointer event',
+  async (toolName) => {
+    const previousEditor = useEditor.getState()
+    const previousScope = useInteractionScope.getState()
+    const previousWindow = Object.getOwnPropertyDescriptor(globalThis, 'window')
+    const previousAct = Object.getOwnPropertyDescriptor(globalThis, 'IS_REACT_ACT_ENVIRONMENT')
+    const keyTarget = Object.assign(new EventTarget(), { closest: () => null })
+    Object.defineProperty(globalThis, 'window', {
+      value: keyTarget,
+      configurable: true,
+      writable: true,
+    })
+    Object.defineProperty(globalThis, 'IS_REACT_ACT_ENVIRONMENT', {
+      value: true,
+      configurable: true,
+      writable: true,
+    })
+    let tool: ReturnType<typeof useDistributionRunTool> | undefined
+    const commits: Array<[number, number, number]> = []
+    let targetElevation = 4
+    function Host() {
+      const { gl } = useThree()
+      gl.domElement.getBoundingClientRect = () =>
+        ({ left: 0, top: 0, width: 100, height: 100 }) as DOMRect
+      tool = useDistributionRunTool({
+        active: true,
+        levelId: 'level_test',
+        toolName,
+        routingMode: 'vertical',
+        elevation: 2,
+        targetElevation,
+        initialStart: [1, 2, 0],
+        getPorts: () => [],
+        findBody: () => null,
+        commit: ({ end }) => {
+          commits.push(end)
+          return { nextStart: end, nextConnection: { port: null, body: null } }
+        },
+      })
+      return null
+    }
+    const pressEnter = () =>
+      act(async () => {
+        keyTarget.dispatchEvent(Object.assign(new Event('keydown'), { key: 'Enter' }))
+      })
+    let renderer: Awaited<ReturnType<typeof create>> | undefined
+    try {
+      useEditor.setState({ snappingModeByContext: { wall: 'off', polygon: 'off', item: 'off' } })
+      renderer = await create(<Host />)
+      expect(tool?.cursor).toEqual([1, 4, 0])
+      targetElevation = 5
+      await renderer.update(<Host />)
+      expect(tool?.cursor).toEqual([1, 5, 0])
+      await pressEnter()
+      expect(commits).toEqual([[1, 5, 0]])
+
+      targetElevation = 3
+      await renderer.update(<Host />)
+      expect(tool?.cursor).toEqual([1, 3, 0])
+      await pressEnter()
+      expect(commits).toEqual([
+        [1, 5, 0],
+        [1, 3, 0],
+      ])
+    } finally {
+      await renderer?.unmount()
+      useEditor.setState(previousEditor)
+      useInteractionScope.setState(previousScope)
+      if (previousWindow) Object.defineProperty(globalThis, 'window', previousWindow)
+      else Reflect.deleteProperty(globalThis, 'window')
+      if (previousAct) Object.defineProperty(globalThis, 'IS_REACT_ACT_ENVIRONMENT', previousAct)
+      else Reflect.deleteProperty(globalThis, 'IS_REACT_ACT_ENVIRONMENT')
+    }
+  },
+)
+
 test('a sloped horizontal route connects at the height its fall reaches', async () => {
   const previousScene = useScene.getState()
   const previousEditor = useEditor.getState()
