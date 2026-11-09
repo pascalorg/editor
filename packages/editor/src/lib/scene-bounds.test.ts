@@ -298,6 +298,24 @@ describe('computeSceneBoundsXZ', () => {
     })
   })
 
+  test('a door on a wall is bounded by the wall, not its wall-local position', () => {
+    const wall = makeWall([50, 50], [60, 50])
+    const door = {
+      object: 'node',
+      id: 'door_1',
+      type: 'door',
+      parentId: wall.id,
+      visible: true,
+      metadata: {},
+      position: [2, 1, 0],
+    } as unknown as AnyNode
+    const bounds = computeSceneBoundsXZ([wall, door])
+    expect(bounds).not.toBeNull()
+    expect(bounds!.min[0]).toBe(50)
+    expect(bounds!.max[0]).toBe(60)
+    expect(bounds!.center).toEqual([55, 50])
+  })
+
   test('skips non-finite coordinates', () => {
     const nodes: AnyNode[] = [makeWall([Number.NaN, 0], [4, 2]), makeWall([0, 0], [1, 1])]
     const bounds = computeSceneBoundsXZ(nodes)

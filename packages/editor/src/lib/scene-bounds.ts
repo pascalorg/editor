@@ -130,9 +130,11 @@ export function computeSceneBoundsXZ(
       }
     }
 
-    // Position on the XZ plane (3D position = [x, y, z]).
+    // Position on the XZ plane (3D position = [x, y, z]). A node hosted on a
+    // wall (door, window, wall item) has a wall-local position, and the
+    // wall's endpoints already bound it.
     const position = anyNode.position as unknown
-    if (Array.isArray(position) && position.length >= 3) {
+    if (Array.isArray(position) && position.length >= 3 && !isWallHosted(node, byId)) {
       extendPoint(acc, frame, position[0], position[2])
     }
   }
@@ -199,6 +201,13 @@ function createFrameResolver(byId: Map<string, AnyNode>): (id: string | null) =>
   }
 
   return resolve
+}
+
+function isWallHosted(node: AnyNode, byId: Map<string, AnyNode>): boolean {
+  const parent = node.parentId ? byId.get(node.parentId) : undefined
+  if (!parent) return false
+  const anyParent = parent as unknown as Record<string, unknown>
+  return Array.isArray(anyParent.start) && Array.isArray(anyParent.end)
 }
 
 /**
