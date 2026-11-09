@@ -26,9 +26,10 @@ const spillAlbedoFloor = uniform(0.35)
  */
 export function daylightRoomContext(): N {
   const rooms = daylightRooms
-  const roomNode = rooms.lightingNode()
+  const room = rooms.probeRoomNode()
+  const roomNode = rooms.lightingNode(room)
   const enclosure = roomNode.w
-  const outsideMask = rooms.exteriorMaskNode()
+  const outsideMask = rooms.exteriorMaskNode(room)
   // GI is later × albedo, so near-black paving would swallow the pools: lift dark receivers for
   // the spill term only (like a light decal).
   const lum = diffuseColor.rgb.dot(vec3(0.2126, 0.7152, 0.0722)).max(1e-3)

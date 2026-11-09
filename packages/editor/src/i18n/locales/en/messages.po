@@ -5484,6 +5484,22 @@ msgstr "Delete region"
 msgid "editor.panels.wallRegionList.paintRegions"
 msgstr "Paint regions"
 
+#: packages/editor/src/store/use-placement-typing.ts
+msgid "editor.placementTyping.angle"
+msgstr "Angle"
+
+#: packages/editor/src/store/use-placement-typing.ts
+msgid "editor.placementTyping.distance"
+msgstr "Distance"
+
+#: packages/editor/src/store/use-placement-typing.ts
+msgid "editor.placementTyping.length"
+msgstr "Length"
+
+#: packages/editor/src/store/use-placement-typing.ts
+msgid "editor.placementTyping.offset"
+msgstr "Offset"
+
 #: packages/editor/src/components/procedural-items/inspector.tsx
 msgid "editor.proceduralItems.inspector.adjustDesign"
 msgstr "Adjust design"

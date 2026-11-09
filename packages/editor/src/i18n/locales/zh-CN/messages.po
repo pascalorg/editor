@@ -985,9 +985,9 @@ msgstr "{count, plural, other {# 个工具}}"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Barrel"
 # Source-Hash: 344fe9d407a233a9
 # Review: required
+# English: "Barrel"
 #: apps/editor/lib/build-tab-state.ts
 #, fuzzy
 msgid "app.lib.buildTabState.barrel"
@@ -3806,9 +3806,9 @@ msgstr "默认"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Edit {label}"
 # Source-Hash: 6774854416d6dfdf
 # Review: required
+# English: "Edit {label}"
 #: packages/editor/src/components/ui/controls/slider-control.tsx
 #, fuzzy
 msgid "editor.controls.sliderControl.editLabel"
@@ -3816,9 +3816,9 @@ msgstr "编辑{label}"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Mixed"
 # Source-Hash: 37d9f63758abdb67
 # Review: required
+# English: "Mixed"
 #: packages/editor/src/components/ui/controls/slider-control.tsx
 #, fuzzy
 msgid "editor.controls.sliderControl.mixed"
@@ -13632,6 +13632,46 @@ msgstr "删除区域"
 msgid "editor.panels.wallRegionList.paintRegions"
 msgstr "涂刷区域"
 
+# Source-Hash: c69865ec5d9d1ac9
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Angle"
+#: packages/editor/src/store/use-placement-typing.ts
+#, fuzzy
+msgid "editor.placementTyping.angle"
+msgstr "角度"
+
+# Source-Hash: fe7ddb094aa8ff4d
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Distance"
+#: packages/editor/src/store/use-placement-typing.ts
+#, fuzzy
+msgid "editor.placementTyping.distance"
+msgstr "距离"
+
+# Source-Hash: 643687bc3adaac76
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Length"
+#: packages/editor/src/store/use-placement-typing.ts
+#, fuzzy
+msgid "editor.placementTyping.length"
+msgstr "长度"
+
+# Source-Hash: 0f0e13abf9b2bb67
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Offset"
+#: packages/editor/src/store/use-placement-typing.ts
+#, fuzzy
+msgid "editor.placementTyping.offset"
+msgstr "偏移"
+
 # Source-Hash: 89ee318aad485f83
 # Review: required
 # AI-Provider: claude-code
@@ -21747,9 +21787,9 @@ msgstr "操作"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "All"
 # Source-Hash: 663175a9c461a96d
 # Review: required
+# English: "All"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
 msgid "node.column.panel.all"
@@ -21767,9 +21807,9 @@ msgstr "应用比例…"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Arched"
 # Source-Hash: 63cbda7b09662368
 # Review: required
+# English: "Arched"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
 msgid "node.column.panel.arched"
@@ -21777,9 +21817,9 @@ msgstr "拱形"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Baluster"
 # Source-Hash: d11dffc2c5b0f50a
 # Review: required
+# English: "Baluster"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
 msgid "node.column.panel.baluster"
@@ -21787,9 +21827,9 @@ msgstr "栏杆柱"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Band Scale"
 # Source-Hash: a8fdf969f566a554
 # Review: required
+# English: "Band Scale"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
 msgid "node.column.panel.bandScale"
@@ -21797,9 +21837,9 @@ msgstr "箍带比例"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Base"
 # Source-Hash: fadada809e27477c
 # Review: required
+# English: "Base"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
 msgid "node.column.panel.base"
@@ -21807,9 +21847,9 @@ msgstr "柱础"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Base Carving"
 # Source-Hash: fca555ac84223bd4
 # Review: required
+# English: "Base Carving"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
 msgid "node.column.panel.baseCarvingLevel"
@@ -21817,9 +21857,9 @@ msgstr "柱础雕刻"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Base Height"
 # Source-Hash: fa9118f6f4f020d7
 # Review: required
+# English: "Base Height"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
 msgid "node.column.panel.baseHeight"
@@ -21827,9 +21867,9 @@ msgstr "柱础高度"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Base Ribs"
 # Source-Hash: efb74250b7929566
 # Review: required
+# English: "Base Ribs"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
 msgid "node.column.panel.baseRibCount"
@@ -21837,9 +21877,9 @@ msgstr "柱础棱数"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Base style"
 # Source-Hash: 1cc2da12e8463e85
 # Review: required
+# English: "Base style"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
 msgid "node.column.panel.baseStyle"
@@ -21847,9 +21887,9 @@ msgstr "柱础样式"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Bottom Scale"
 # Source-Hash: 971207d7a9e0d8a9
 # Review: required
+# English: "Bottom Scale"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
 msgid "node.column.panel.bottomScale"
@@ -21867,9 +21907,9 @@ msgstr "底部张开"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Bracket Depth"
 # Source-Hash: 35b35cd49111ba44
 # Review: required
+# English: "Bracket Depth"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
 msgid "node.column.panel.bracketDepth"
@@ -21877,9 +21917,9 @@ msgstr "斗拱深度"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Bracket Tiers"
 # Source-Hash: 06e2dd9a165502bd
 # Review: required
+# English: "Bracket Tiers"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
 msgid "node.column.panel.bracketTierCount"
@@ -21897,9 +21937,9 @@ msgstr "鼓形"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Bulge Ratio"
 # Source-Hash: 83ac65ddce825df7
 # Review: required
+# English: "Bulge Ratio"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
 msgid "node.column.panel.bulgeRatio"
@@ -21907,9 +21947,9 @@ msgstr "凸肚比例"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Capital"
 # Source-Hash: 4c56ade213b88ed0
 # Review: required
+# English: "Capital"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
 msgid "node.column.panel.capital"
@@ -21917,9 +21957,9 @@ msgstr "柱头"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Capital Carving"
 # Source-Hash: 3b969fb1765c3f6c
 # Review: required
+# English: "Capital Carving"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
 msgid "node.column.panel.capitalCarvingLevel"
@@ -21927,9 +21967,9 @@ msgstr "柱头雕刻"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Capital Height"
 # Source-Hash: 8ae9489f57d43033
 # Review: required
+# English: "Capital Height"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
 msgid "node.column.panel.capitalHeight"
@@ -21937,9 +21977,9 @@ msgstr "柱头高度"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Capital style"
 # Source-Hash: f286eccc906eb8aa
 # Review: required
+# English: "Capital style"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
 msgid "node.column.panel.capitalStyle"
@@ -21947,9 +21987,9 @@ msgstr "柱头样式"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Carving placement"
 # Source-Hash: 7886120117de9a5e
 # Review: required
+# English: "Carving placement"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
 msgid "node.column.panel.carvingPlacement"
@@ -21957,9 +21997,9 @@ msgstr "雕刻位置"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Choose a material, then click the surface to paint."
 # Source-Hash: 37ec08bc0ec0c613
 # Review: required
+# English: "Choose a material, then click the surface to paint."
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
 msgid "node.column.panel.chooseAMaterialThenClickThe"
@@ -21967,9 +22007,9 @@ msgstr "选择材质，然后点击要涂刷的表面。"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Cluster"
 # Source-Hash: a5fe146d6adf0818
 # Review: required
+# English: "Cluster"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
 msgid "node.column.panel.cluster"
@@ -21987,9 +22027,9 @@ msgstr "柱"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Column proportions"
 # Source-Hash: 5a4d3e868b707a7f
 # Review: required
+# English: "Column proportions"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
 msgid "node.column.panel.columnProportions"
@@ -21997,9 +22037,9 @@ msgstr "柱子比例"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Column style"
 # Source-Hash: 99e7e0e07220b6f0
 # Review: required
+# English: "Column style"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
 msgid "node.column.panel.columnStyle"
@@ -22017,9 +22057,9 @@ msgstr "连接板"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Corinthian Leaf"
 # Source-Hash: 054e9bc6519e4829
 # Review: required
+# English: "Corinthian Leaf"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
 msgid "node.column.panel.corinthianLeaf"
@@ -22027,9 +22067,9 @@ msgstr "科林斯叶饰"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Cross section"
 # Source-Hash: 03ade8d3de1369be
 # Review: required
+# English: "Cross section"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
 msgid "node.column.panel.crossSection"
@@ -22057,9 +22097,9 @@ msgstr "深度"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Depth Scale"
 # Source-Hash: c7c1212a7d3fb04c
 # Review: required
+# English: "Depth Scale"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
 msgid "node.column.panel.depthScale"
@@ -22067,9 +22107,9 @@ msgstr "深度比例"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Depth Span"
 # Source-Hash: 9cf14a577e74ed47
 # Review: required
+# English: "Depth Span"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
 msgid "node.column.panel.depthSpan"
@@ -22077,9 +22117,9 @@ msgstr "深度跨度"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Diameter"
 # Source-Hash: 016d8e70618916d4
 # Review: required
+# English: "Diameter"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
 msgid "node.column.panel.diameter"
@@ -22087,9 +22127,9 @@ msgstr "直径"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Diamond"
 # Source-Hash: 78e3b83eb527f5b6
 # Review: required
+# English: "Diamond"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
 msgid "node.column.panel.diamond"
@@ -22097,9 +22137,9 @@ msgstr "菱形"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Doric"
 # Source-Hash: e1ed2f159b6d34f2
 # Review: required
+# English: "Doric"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
 msgid "node.column.panel.doric"
@@ -22107,9 +22147,9 @@ msgstr "多立克"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Dravidian Carved"
 # Source-Hash: 4b84f09fc9e79572
 # Review: required
+# English: "Dravidian Carved"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
 msgid "node.column.panel.dravidianCarved"
@@ -22127,9 +22167,9 @@ msgstr "边缘柔化"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "End Scale"
 # Source-Hash: 50d76d0bfa5828f5
 # Review: required
+# English: "End Scale"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
 msgid "node.column.panel.endScale"
@@ -22137,9 +22177,9 @@ msgstr "端部比例"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Entire Object"
 # Source-Hash: e0898026fa3ef7ef
 # Review: required
+# English: "Entire Object"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
 msgid "node.column.panel.entireObject"
@@ -22147,9 +22187,9 @@ msgstr "整个对象"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Faceted"
 # Source-Hash: c63bf1154bb7909f
 # Review: required
+# English: "Faceted"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
 msgid "node.column.panel.faceted"
@@ -22157,9 +22197,9 @@ msgstr "多面"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Flute Count"
 # Source-Hash: 7e84091e8efd4274
 # Review: required
+# English: "Flute Count"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
 msgid "node.column.panel.fluteCount"
@@ -22167,9 +22207,9 @@ msgstr "凹槽数"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Fluted"
 # Source-Hash: b2166db6249b9ef0
 # Review: required
+# English: "Fluted"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
 msgid "node.column.panel.fluted"
@@ -22177,9 +22217,9 @@ msgstr "凹槽"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Flute Depth"
 # Source-Hash: ba3d227ad13eb300
 # Review: required
+# English: "Flute Depth"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
 msgid "node.column.panel.fluteDepth"
@@ -22187,9 +22227,9 @@ msgstr "凹槽深度"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Flute Width"
 # Source-Hash: 5530e4916f99d59e
 # Review: required
+# English: "Flute Width"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
 msgid "node.column.panel.fluteWidth"
@@ -22207,9 +22247,9 @@ msgstr "分叉张开"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Frame"
 # Source-Hash: ce3a6c03765dbbd8
 # Review: required
+# English: "Frame"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
 msgid "node.column.panel.frame"
@@ -22257,9 +22297,9 @@ msgstr "沙漏形"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Ionic Volute"
 # Source-Hash: 2f3ee076ecdccfe2
 # Review: required
+# English: "Ionic Volute"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
 msgid "node.column.panel.ionicVolute"
@@ -22267,9 +22307,9 @@ msgstr "爱奥尼涡卷"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Lathe Rings"
 # Source-Hash: 2499bbb980a232cf
 # Review: required
+# English: "Lathe Rings"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
 msgid "node.column.panel.latheRingCount"
@@ -22277,9 +22317,9 @@ msgstr "车削环数"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Lathe Turned"
 # Source-Hash: 73a16ff19b6f7fdc
 # Review: required
+# English: "Lathe Turned"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
 msgid "node.column.panel.latheTurned"
@@ -22287,9 +22327,9 @@ msgstr "车削"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Leaf Carved"
 # Source-Hash: f2ccd152aa17feab
 # Review: required
+# English: "Leaf Carved"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
 msgid "node.column.panel.leafCarved"
@@ -22297,9 +22337,9 @@ msgstr "叶饰雕刻"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Leaves"
 # Source-Hash: c390ba248e629b9e
 # Review: required
+# English: "Leaves"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
 msgid "node.column.panel.leafCount"
@@ -22307,9 +22347,9 @@ msgstr "叶片数"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Leaf Rows"
 # Source-Hash: a76263da42bc17b0
 # Review: required
+# English: "Leaf Rows"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
 msgid "node.column.panel.leafRows"
@@ -22317,9 +22357,9 @@ msgstr "叶片排数"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Lotus"
 # Source-Hash: 00b838b1271dcc00
 # Review: required
+# English: "Lotus"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
 msgid "node.column.panel.lotus"
@@ -22327,9 +22367,9 @@ msgstr "莲花"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Materials"
 # Source-Hash: 4d0d49127f197e7f
 # Review: required
+# English: "Materials"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
 msgid "node.column.panel.materials"
@@ -22337,9 +22377,9 @@ msgstr "材质"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Member Depth"
 # Source-Hash: b9b11a8228f9d9c3
 # Review: required
+# English: "Member Depth"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
 msgid "node.column.panel.memberDepth"
@@ -22347,9 +22387,9 @@ msgstr "构件深度"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Member Width"
 # Source-Hash: 3e0ddf162579af15
 # Review: required
+# English: "Member Width"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
 msgid "node.column.panel.memberWidth"
@@ -22367,9 +22407,9 @@ msgstr "移动"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Neck Scale"
 # Source-Hash: 78c5ca001ea8241d
 # Review: required
+# English: "Neck Scale"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
 msgid "node.column.panel.neckScale"
@@ -22377,9 +22417,9 @@ msgstr "柱颈比例"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "None"
 # Source-Hash: f2953d2931e36d0c
 # Review: required
+# English: "None"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
 msgid "node.column.panel.none"
@@ -22387,9 +22427,9 @@ msgstr "无"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Octagonal"
 # Source-Hash: 698f9ebcd3ab81c6
 # Review: required
+# English: "Octagonal"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
 msgid "node.column.panel.octagonal"
@@ -22397,9 +22437,9 @@ msgstr "八边形"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Paint Materials"
 # Source-Hash: 8680135de608a900
 # Review: required
+# English: "Paint Materials"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
 msgid "node.column.panel.paintMaterials"
@@ -22407,9 +22447,9 @@ msgstr "涂刷材质"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Carved Panels"
 # Source-Hash: 2d1f1576d0878e2d
 # Review: required
+# English: "Carved Panels"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
 msgid "node.column.panel.panelCount"
@@ -22417,9 +22457,9 @@ msgstr "雕刻面板"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Panel Relief"
 # Source-Hash: 6b503ed1b7d1569b
 # Review: required
+# English: "Panel Relief"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
 msgid "node.column.panel.panelInsetDepth"
@@ -22427,9 +22467,9 @@ msgstr "面板浮雕"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Panelled"
 # Source-Hash: 3332ef0ae3f455b0
 # Review: required
+# English: "Panelled"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
 msgid "node.column.panel.panelled"
@@ -22437,9 +22477,9 @@ msgstr "镶板"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Panelled Pedestal"
 # Source-Hash: 734c75436555233f
 # Review: required
+# English: "Panelled Pedestal"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
 msgid "node.column.panel.panelledPedestal"
@@ -22447,9 +22487,9 @@ msgstr "镶板基座"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Panel shape"
 # Source-Hash: efe3a9af7ede09f5
 # Review: required
+# English: "Panel shape"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
 msgid "node.column.panel.panelShape"
@@ -22457,9 +22497,9 @@ msgstr "面板形状"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Pendants"
 # Source-Hash: 1742cce555f51b78
 # Review: required
+# English: "Pendants"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
 msgid "node.column.panel.pendantCount"
@@ -22467,9 +22507,9 @@ msgstr "垂饰"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Plain"
 # Source-Hash: 9f0680b4bd973026
 # Review: required
+# English: "Plain"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
 msgid "node.column.panel.plain"
@@ -22477,9 +22517,9 @@ msgstr "素面"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Plinth Height Fraction"
 # Source-Hash: 642987dea5693bb0
 # Review: required
+# English: "Plinth Height Fraction"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
 msgid "node.column.panel.plinthHeightFraction"
@@ -22487,9 +22527,9 @@ msgstr "柱基高度占比"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Profile"
 # Source-Hash: 96ad4bd0f7baa40e
 # Review: required
+# English: "Profile"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
 msgid "node.column.panel.profile"
@@ -22497,9 +22537,9 @@ msgstr "轮廓"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Rectangle"
 # Source-Hash: 2c2c20272b0370cc
 # Review: required
+# English: "Rectangle"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
 msgid "node.column.panel.rectangle"
@@ -22517,9 +22557,9 @@ msgstr "矩形"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Reset base"
 # Source-Hash: 07096122904e293c
 # Review: required
+# English: "Reset base"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
 msgid "node.column.panel.resetBase"
@@ -22527,9 +22567,9 @@ msgstr "重置柱础"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Reset capital"
 # Source-Hash: 06c87de417e85470
 # Review: required
+# English: "Reset capital"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
 msgid "node.column.panel.resetCapital"
@@ -22537,9 +22577,9 @@ msgstr "重置柱头"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Reset materials"
 # Source-Hash: 3636d202511854e5
 # Review: required
+# English: "Reset materials"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
 msgid "node.column.panel.resetMaterials"
@@ -22547,9 +22587,9 @@ msgstr "重置材质"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Reset profile"
 # Source-Hash: 94b0d78e787246d7
 # Review: required
+# English: "Reset profile"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
 msgid "node.column.panel.resetProfile"
@@ -22557,9 +22597,9 @@ msgstr "重置轮廓"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Reset shape"
 # Source-Hash: b3316cff09204a85
 # Review: required
+# English: "Reset shape"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
 msgid "node.column.panel.resetShape"
@@ -22567,9 +22607,9 @@ msgstr "重置形状"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Reset size"
 # Source-Hash: 82af49f4195cd4ac
 # Review: required
+# English: "Reset size"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
 msgid "node.column.panel.resetSize"
@@ -22577,9 +22617,9 @@ msgstr "重置尺寸"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Reset surface details"
 # Source-Hash: d0618e3f3e654397
 # Review: required
+# English: "Reset surface details"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
 msgid "node.column.panel.resetSurfaceDetails"
@@ -22587,9 +22627,9 @@ msgstr "重置表面细节"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Reset transform"
 # Source-Hash: 75750b2b96267be1
 # Review: required
+# English: "Reset transform"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
 msgid "node.column.panel.resetTransform"
@@ -22597,9 +22637,9 @@ msgstr "重置变换"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Ribbed Lotus"
 # Source-Hash: 0a98ea93d3b14774
 # Review: required
+# English: "Ribbed Lotus"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
 msgid "node.column.panel.ribbedLotus"
@@ -22617,9 +22657,9 @@ msgstr "环对数"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Ring Spread Ratio"
 # Source-Hash: cf364ce8e1154b23
 # Review: required
+# English: "Ring Spread Ratio"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
 msgid "node.column.panel.ringSpreadRatio"
@@ -22637,9 +22677,9 @@ msgstr "环厚度"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Rotation"
 # Source-Hash: 01989595ee7c1dc0
 # Review: required
+# English: "Rotation"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
 msgid "node.column.panel.rotation"
@@ -22657,9 +22697,9 @@ msgstr "圆形"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Rounded"
 # Source-Hash: fc826da6c99303e6
 # Review: required
+# English: "Rounded"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
 msgid "node.column.panel.rounded"
@@ -22667,9 +22707,9 @@ msgstr "圆角"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Round Rings"
 # Source-Hash: 04945d148ddddfce
 # Review: required
+# English: "Round Rings"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
 msgid "node.column.panel.roundRings"
@@ -22677,9 +22717,9 @@ msgstr "圆环"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Scales multiply the dimensions in Size. A ratio of 0.2 means 20%."
 # Source-Hash: e08860e0c3f2e081
 # Review: required
+# English: "Scales multiply the dimensions in Size. A ratio of 0.2 means 20%."
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
 msgid "node.column.panel.scalesMultiplyTheDimensionsInSize"
@@ -22707,9 +22747,9 @@ msgstr "柱身圆角半径"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Shaft detail"
 # Source-Hash: 5a135f294b02a092
 # Review: required
+# English: "Shaft detail"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
 msgid "node.column.panel.shaftDetail"
@@ -22717,9 +22757,9 @@ msgstr "柱身细节"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Shaft profile"
 # Source-Hash: 7b983a1ad9667719
 # Review: required
+# English: "Shaft profile"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
 msgid "node.column.panel.shaftProfile"
@@ -22727,9 +22767,9 @@ msgstr "柱身轮廓"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Shaft Scale"
 # Source-Hash: f23c2ea65fb94e30
 # Review: required
+# English: "Shaft Scale"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
 msgid "node.column.panel.shaftScale"
@@ -22757,9 +22797,9 @@ msgstr "短粗"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Simple"
 # Source-Hash: a05a390ae205fdd8
 # Review: required
+# English: "Simple"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
 msgid "node.column.panel.simple"
@@ -22767,9 +22807,9 @@ msgstr "简约"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Simple Slab"
 # Source-Hash: e6d1bf2e70e5d5c2
 # Review: required
+# English: "Simple Slab"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
 msgid "node.column.panel.simpleSlab"
@@ -22777,9 +22817,9 @@ msgstr "简单板式"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Simple Square"
 # Source-Hash: b287189cec36ae84
 # Review: required
+# English: "Simple Square"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
 msgid "node.column.panel.simpleSquare"
@@ -22787,9 +22827,9 @@ msgstr "简单方形"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Sixteen Sided"
 # Source-Hash: 7dd0384e4fdd974a
 # Review: required
+# English: "Sixteen Sided"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
 msgid "node.column.panel.sixteenSided"
@@ -22797,9 +22837,9 @@ msgstr "十六边形"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Size"
 # Source-Hash: 60bb3338e0ad558c
 # Review: required
+# English: "Size"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
 msgid "node.column.panel.size"
@@ -22817,9 +22857,9 @@ msgstr "纤细"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "South Indian Bracket"
 # Source-Hash: 8560a17c90378be7
 # Review: required
+# English: "South Indian Bracket"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
 msgid "node.column.panel.southIndianBracket"
@@ -22827,9 +22867,9 @@ msgstr "南印度托架"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Spiral"
 # Source-Hash: f9a4a870cb3d3c41
 # Review: required
+# English: "Spiral"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
 msgid "node.column.panel.spiral"
@@ -22837,9 +22877,9 @@ msgstr "螺旋"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Spiral Ribs"
 # Source-Hash: 3bc28afe08c59aa1
 # Review: required
+# English: "Spiral Ribs"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
 msgid "node.column.panel.spiralRibCount"
@@ -22847,9 +22887,9 @@ msgstr "螺旋棱数"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Spiral Turns"
 # Source-Hash: 5ed49f8a45407932
 # Review: required
+# English: "Spiral Turns"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
 msgid "node.column.panel.spiralTwist"
@@ -22867,9 +22907,9 @@ msgstr "方形"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Square Plinth"
 # Source-Hash: 3b857b27d5a49b0c
 # Review: required
+# English: "Square Plinth"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
 msgid "node.column.panel.squarePlinth"
@@ -22887,9 +22927,9 @@ msgstr "标准"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Stepped"
 # Source-Hash: 2c6b1cf17a973d67
 # Review: required
+# English: "Stepped"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
 msgid "node.column.panel.stepped"
@@ -22897,9 +22937,9 @@ msgstr "阶梯"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Stepped Square"
 # Source-Hash: cbaa245faee497e0
 # Review: required
+# English: "Stepped Square"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
 msgid "node.column.panel.steppedSquare"
@@ -22907,9 +22947,9 @@ msgstr "阶梯方形"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Step Scale Reduction"
 # Source-Hash: a795c69630b88d66
 # Review: required
+# English: "Step Scale Reduction"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
 msgid "node.column.panel.stepScaleReduction"
@@ -22927,9 +22967,9 @@ msgstr "直跑"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Style"
 # Source-Hash: 1a79a485d91f3f28
 # Review: required
+# English: "Style"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
 msgid "node.column.panel.style"
@@ -22937,9 +22977,9 @@ msgstr "样式"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Surface Details"
 # Source-Hash: f6794564a5cb6eaa
 # Review: required
+# English: "Surface Details"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
 msgid "node.column.panel.surfaceDetails"
@@ -22957,9 +22997,9 @@ msgstr "锥形"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Taper Ratio"
 # Source-Hash: f7b112a6556f22a5
 # Review: required
+# English: "Taper Ratio"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
 msgid "node.column.panel.taperRatio"
@@ -22967,9 +23007,9 @@ msgstr "收分比例"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Tier Count"
 # Source-Hash: 21aa2897242f6529
 # Review: required
+# English: "Tier Count"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
 msgid "node.column.panel.tierCount"
@@ -22977,9 +23017,9 @@ msgstr "层数"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Top Scale"
 # Source-Hash: 75991d106eb93dae
 # Review: required
+# English: "Top Scale"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
 msgid "node.column.panel.topScale"
@@ -23007,9 +23047,9 @@ msgstr "变换"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Twist per Segment"
 # Source-Hash: b99175b7ac8aa206
 # Review: required
+# English: "Twist per Segment"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
 msgid "node.column.panel.twistPerSegment"
@@ -23027,9 +23067,9 @@ msgstr "扭转分段"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Volute"
 # Source-Hash: 4d8bfac0809e9f7c
 # Review: required
+# English: "Volute"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
 msgid "node.column.panel.volute"
@@ -23037,9 +23077,9 @@ msgstr "涡卷"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Volutes"
 # Source-Hash: 7c352c005719e3a2
 # Review: required
+# English: "Volutes"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
 msgid "node.column.panel.voluteCount"
@@ -23047,9 +23087,9 @@ msgstr "涡卷数"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Volute Size"
 # Source-Hash: 536aa9f690cfb81d
 # Review: required
+# English: "Volute Size"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
 msgid "node.column.panel.voluteSize"
@@ -23057,9 +23097,9 @@ msgstr "涡卷大小"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Waist Reduction Ratio"
 # Source-Hash: fdce60f01800860f
 # Review: required
+# English: "Waist Reduction Ratio"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
 msgid "node.column.panel.waistReductionRatio"
@@ -23077,9 +23117,9 @@ msgstr "宽度"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Width and depth scales multiply the dimensions in Size."
 # Source-Hash: 4f4e9f2d97ef01f5
 # Review: required
+# English: "Width and depth scales multiply the dimensions in Size."
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
 msgid "node.column.panel.widthAndDepthScalesMultiplyThe"
@@ -23087,9 +23127,9 @@ msgstr "宽度和深度比例会与“尺寸”中的数值相乘。"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Width and depth scales use Size. Band and neck scales use the base footprint."
 # Source-Hash: eb0267f511beda4a
 # Review: required
+# English: "Width and depth scales use Size. Band and neck scales use the base footprint."
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
 msgid "node.column.panel.widthAndDepthScalesUseSize"
@@ -23097,9 +23137,9 @@ msgstr "宽度和深度比例基于“尺寸”。箍带和柱颈比例基于柱
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Width Scale"
 # Source-Hash: cdb1d1dacff8560e
 # Review: required
+# English: "Width Scale"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
 msgid "node.column.panel.widthScale"
@@ -23107,9 +23147,9 @@ msgstr "宽度比例"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Width Span"
 # Source-Hash: d5bc7038c31682a9
 # Review: required
+# English: "Width Span"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
 msgid "node.column.panel.widthSpan"
@@ -23117,9 +23157,9 @@ msgstr "宽度跨度"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Wood Bracket"
 # Source-Hash: bc0503ea7ab743ed
 # Review: required
+# English: "Wood Bracket"
 #: packages/nodes/src/column/panel.tsx
 #, fuzzy
 msgid "node.column.panel.woodBracket"
@@ -23377,9 +23417,9 @@ msgstr "Y 形支撑"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Apply {label} shape"
 # Source-Hash: c9bf954389349540
 # Review: required
+# English: "Apply {label} shape"
 #: packages/nodes/src/column/preset-gallery.tsx
 #, fuzzy
 msgid "node.column.presetGallery.applyLabelShape"
@@ -23387,9 +23427,9 @@ msgstr "应用{label}形状"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Choose a shape"
 # Source-Hash: d98edff9428038de
 # Review: required
+# English: "Choose a shape"
 #: packages/nodes/src/column/preset-gallery.tsx
 #, fuzzy
 msgid "node.column.presetGallery.chooseAShape"
@@ -23397,9 +23437,9 @@ msgstr "选择形状"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Hover or focus to preview; click to apply. Materials are kept. Escape cancels the preview."
 # Source-Hash: 13bd6d71e7e6e345
 # Review: required
+# English: "Hover or focus to preview; click to apply. Materials are kept. Escape cancels the preview."
 #: packages/nodes/src/column/preset-gallery.tsx
 #, fuzzy
 msgid "node.column.presetGallery.hoverOrFocusToPreviewClick"
@@ -23407,9 +23447,9 @@ msgstr "悬停或聚焦以预览；点击以应用。材质将保留。按 Esc �
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Shape presets"
 # Source-Hash: 367dcd06db200682
 # Review: required
+# English: "Shape presets"
 #: packages/nodes/src/column/preset-gallery.tsx
 #, fuzzy
 msgid "node.column.presetGallery.shapePresets"
@@ -25742,9 +25782,9 @@ msgstr "轿厢高度"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Clear cab interior: {width} × {depth} × {height} m. Door opening: {doorWidth} × {doorHeight} m."
 # Source-Hash: 4068260bb7e3d54b
 # Review: required
+# English: "Clear cab interior: {width} × {depth} × {height} m. Door opening: {doorWidth} × {doorHeight} m."
 #: packages/nodes/src/elevator/panel.tsx
 #, fuzzy
 msgid "node.elevator.panel.cabInteriorAndDoorOpening"
@@ -25762,9 +25802,9 @@ msgstr "中开"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Cutaway shaft"
 # Source-Hash: 1ad164e4dd09e856
 # Review: required
+# English: "Cutaway shaft"
 #: packages/nodes/src/elevator/panel.tsx
 #, fuzzy
 msgid "node.elevator.panel.cutawayShaft"
@@ -25782,9 +25822,9 @@ msgstr "默认楼层"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Default floor"
 # Source-Hash: 948544e79db10407
 # Review: required
+# English: "Default floor"
 #: packages/nodes/src/elevator/panel.tsx
 #, fuzzy
 msgid "node.elevator.panel.defaultFloor2"
@@ -25832,9 +25872,9 @@ msgstr "已停用"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Disable {level}"
 # Source-Hash: 42d26aa25a7b3dc5
 # Review: required
+# English: "Disable {level}"
 #: packages/nodes/src/elevator/panel.tsx
 #, fuzzy
 msgid "node.elevator.panel.disableLevel"
@@ -25852,9 +25892,9 @@ msgstr "门高度"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Door opening style"
 # Source-Hash: c694cae2f5a8d286
 # Review: required
+# English: "Door opening style"
 #: packages/nodes/src/elevator/panel.tsx
 #, fuzzy
 msgid "node.elevator.panel.doorOpeningStyle"
@@ -25862,9 +25902,9 @@ msgstr "开门方式"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Door panel style"
 # Source-Hash: 990ae81752236e3a
 # Review: required
+# English: "Door panel style"
 #: packages/nodes/src/elevator/panel.tsx
 #, fuzzy
 msgid "node.elevator.panel.doorPanelStyle"
@@ -25952,9 +25992,9 @@ msgstr "起始"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "From level"
 # Source-Hash: 4a7d8aa4abd3f13c
 # Review: required
+# English: "From level"
 #: packages/nodes/src/elevator/panel.tsx
 #, fuzzy
 msgid "node.elevator.panel.fromLevel"
@@ -25982,9 +26022,9 @@ msgstr "玻璃框"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Hover or focus a section to highlight its parts. Cutaway affects this inspection only."
 # Source-Hash: 612cfaf47ccef086
 # Review: required
+# English: "Hover or focus a section to highlight its parts. Cutaway affects this inspection only."
 #: packages/nodes/src/elevator/panel.tsx
 #, fuzzy
 msgid "node.elevator.panel.hoverOrFocusASectionTo"
@@ -26032,9 +26072,9 @@ msgstr "位置"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Presets and inspection"
 # Source-Hash: 62e42f479e013bd9
 # Review: required
+# English: "Presets and inspection"
 #: packages/nodes/src/elevator/panel.tsx
 #, fuzzy
 msgid "node.elevator.panel.presetsAndInspection"
@@ -26042,9 +26082,9 @@ msgstr "预设与检视"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Reset {section}"
 # Source-Hash: 8e7f6a377134951b
 # Review: required
+# English: "Reset {section}"
 #: packages/nodes/src/elevator/panel.tsx
 #, fuzzy
 msgid "node.elevator.panel.resetSection"
@@ -26082,9 +26122,9 @@ msgstr "服务"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Service-only access for {level}"
 # Source-Hash: 74ce52847ea1b4e0
 # Review: required
+# English: "Service-only access for {level}"
 #: packages/nodes/src/elevator/panel.tsx
 #, fuzzy
 msgid "node.elevator.panel.serviceOnlyAccessForLevel"
@@ -26122,9 +26162,9 @@ msgstr "井道样式"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Shaft style"
 # Source-Hash: a7794a81141b4de4
 # Review: required
+# English: "Shaft style"
 #: packages/nodes/src/elevator/panel.tsx
 #, fuzzy
 msgid "node.elevator.panel.shaftStyle2"
@@ -26202,9 +26242,9 @@ msgstr "停靠站 {stopOrder}"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "The cab needs more headroom than one or more served floors provide. Check the floor heights."
 # Source-Hash: 31eedbbae787f6e7
 # Review: required
+# English: "The cab needs more headroom than one or more served floors provide. Check the floor heights."
 #: packages/nodes/src/elevator/panel.tsx
 #, fuzzy
 msgid "node.elevator.panel.theCabNeedsMoreHeadroomThan"
@@ -26222,9 +26262,9 @@ msgstr "至"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "To level"
 # Source-Hash: c14c46fb8719cb48
 # Review: required
+# English: "To level"
 #: packages/nodes/src/elevator/panel.tsx
 #, fuzzy
 msgid "node.elevator.panel.toLevel"
@@ -26262,9 +26302,9 @@ msgstr "偏航"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Glass"
 # Source-Hash: 8ab91094cf650204
 # Review: required
+# English: "Glass"
 #: packages/nodes/src/elevator/presets.ts
 #, fuzzy
 msgid "node.elevator.preset.glass"
@@ -26272,9 +26312,9 @@ msgstr "玻璃"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Passenger"
 # Source-Hash: 6f3a0cb35f471f06
 # Review: required
+# English: "Passenger"
 #: packages/nodes/src/elevator/presets.ts
 #, fuzzy
 msgid "node.elevator.preset.passenger"
@@ -26282,9 +26322,9 @@ msgstr "乘客"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Service"
 # Source-Hash: aa7b49b13f96057f
 # Review: required
+# English: "Service"
 #: packages/nodes/src/elevator/presets.ts
 #, fuzzy
 msgid "node.elevator.preset.service"
@@ -28639,9 +28679,9 @@ msgstr "由一个或多个坡面组成的坡屋顶 / 四坡屋顶 / 双坡屋顶
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Retry roof geometry"
 # Source-Hash: ca5fae8856e13ced
 # Review: required
+# English: "Retry roof geometry"
 #: packages/nodes/src/roof/geometry-notice.tsx
 #, fuzzy
 msgid "node.roof.geometryNotice.retryRoofGeometry"
@@ -28649,9 +28689,9 @@ msgstr "重试屋顶几何"
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Roof geometry could not be rebuilt. The previous shape is still shown. Adjust the dimensions or intersections and retry."
 # Source-Hash: 50b682dbab6737df
 # Review: required
+# English: "Roof geometry could not be rebuilt. The previous shape is still shown. Adjust the dimensions or intersections and retry."
 #: packages/nodes/src/roof/geometry-notice.tsx
 #, fuzzy
 msgid "node.roof.geometryNotice.roofGeometryCouldNotBeRebuilt"
@@ -28659,9 +28699,9 @@ msgstr "无法重建屋顶几何，仍显示之前的形状。请调整尺寸或
 
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Roof geometry is invalid. The previous shape is still shown. Adjust the dimensions or intersections and retry."
 # Source-Hash: 65436922f0b53083
 # Review: required
+# English: "Roof geometry is invalid. The previous shape is still shown. Adjust the dimensions or intersections and retry."
 #: packages/nodes/src/roof/geometry-notice.tsx
 #, fuzzy
 msgid "node.roof.geometryNotice.roofGeometryIsInvalidThePrevious"

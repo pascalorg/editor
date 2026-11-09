@@ -4,6 +4,7 @@ import { sceneRegistry, useInteractive, useScene } from '@pascal-app/core'
 import { useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useRef } from 'react'
 import { Box3, type Mesh, type Object3D, Vector3 } from 'three'
+import { DEFAULT_TEXTURE_LIMIT } from '../../lib/daylight/room-map'
 import {
   bakedLevelObjects,
   bakedRoomScene,
@@ -15,11 +16,14 @@ import {
   syncLampEmitters,
 } from '../../lib/daylight/room-scene'
 import { daylightRooms } from '../../lib/daylight/rooms'
+import { heldReasons } from '../../lib/scene-visibility'
 import useViewer from '../../store/use-viewer'
 
 /** Seconds between scene-change checks, and the quiet time before a rebuild. */
 const CHECK_INTERVAL = 0.5
 const REBUILD_DELAY = 0.4
+/** Longest wait for the scene to settle before building anyway (seconds). */
+const SETTLE_WAIT = 10
 /**
  * Furniture: what the rooms are built from (walls, slabs, ceilings, roofs, doors, windows,
  * zones) never includes it, so moving or placing it doesn't rebuild them (a rebuild casts
@@ -42,14 +46,24 @@ const LAMP_POSITION_STEP = 0.05
  */
 export function useDaylightRooms() {
   const scene = useThree((s) => s.scene)
+  const gl = useThree((s) => s.gl)
   const nodesVersion = useRef(0)
   const state = useRef({
     signature: '',
     pendingSince: -1,
     sinceCheck: CHECK_INTERVAL,
+    /** Times the scene finished rebuilding geometry (no dirty nodes left), and whether it is now. */
+    settles: 0,
+    dirty: false,
+    dirtyRooms: false,
+    /** Dirty nodes left when rooms were last built mid-load (they rebuild as the count falls). */
+    builtDirty: Number.POSITIVE_INFINITY,
+    /** Level offsets last frame: rays are cast at stacked heights, so no build while levels move. */
+    offsets: [] as number[],
+    levelsMoved: false,
     live: true,
     bakedRoot: null as Object3D | null,
-    levelObjects: [] as Object3D[][],
+    levelObjects: [] as (Object3D | undefined)[],
   })
 
   useEffect(
@@ -65,6 +79,23 @@ export function useDaylightRooms() {
     const s = state.current
     const lampDefault = useInteractive.getState().lampDefault
     s.sinceCheck += delta
+    // Rooms are built from finished walls, windows and covers: wait for the scene to settle, and
+    // build again each time it does (walls and openings finish without a geometry revision).
+    const { dirtyNodes, nodes } = useScene.getState()
+    const dirty = dirtyNodes.size > 0
+    if (dirty && !s.dirtyRooms)
+      for (const id of dirtyNodes) {
+        const type = nodes[id]?.type
+        if (type && !FURNITURE_TYPES.has(type)) {
+          s.dirtyRooms = true
+          break
+        }
+      }
+    if (s.dirty && !dirty && s.dirtyRooms) {
+      s.settles++
+      s.dirtyRooms = false
+    }
+    s.dirty = dirty
     if (s.sinceCheck >= CHECK_INTERVAL) {
       s.sinceCheck = 0
       // Items can swap their materials (edits, loads): keep the lamps' own emitters installed.
@@ -73,7 +104,7 @@ export function useDaylightRooms() {
       const baked = live ? null : findBakedRoot(scene)
       const feedKeys = feedSignature()
       const signature = live
-        ? `live|${roomObjectsSignature()}|${nodesVersion.current}|${useViewer.getState().geometryRevision}|${feedKeys}`
+        ? `live|${roomObjectsSignature()}|${nodesVersion.current}|${useViewer.getState().geometryRevision}|${s.settles}|${feedKeys}`
         : `baked|${baked?.uuid ?? ''}|${baked?.children.length ?? 0}|${feedKeys}`
       if (signature !== s.signature) {
         s.signature = signature
@@ -84,17 +115,23 @@ export function useDaylightRooms() {
     }
     if (s.pendingSince >= 0) {
       s.pendingSince += delta
-      if (s.pendingSince >= REBUILD_DELAY) {
+      const exploded = useViewer.getState().levelMode === 'exploded' || s.levelsMoved
+      if (
+        s.pendingSince >= REBUILD_DELAY &&
+        !exploded &&
+        (!(s.live && dirty) || s.pendingSince > SETTLE_WAIT)
+      ) {
         s.pendingSince = -1
         const input = s.live
           ? liveRoomScene(lampDefault)
           : s.bakedRoot
             ? bakedRoomScene(s.bakedRoot, lampDefault)
             : null
+        daylightRooms.map.textureLimit = textureLimit(gl)
         daylightRooms.build(
           input ?? {
             bounds: emptyBounds,
-            levelY: [0],
+            levels: [],
             zones: [],
             covers: [],
             walls: [],
@@ -104,22 +141,31 @@ export function useDaylightRooms() {
           },
         )
         s.levelObjects = s.live ? liveLevelObjects() : bakedLevelObjects(s.bakedRoot)
+        // Built before the scene settled (a large scene still building walls and windows): build
+        // again after the next wait while geometry keeps arriving, so the rooms catch up.
+        if (s.live && dirty && dirtyNodes.size < s.builtDirty) {
+          s.builtDirty = dirtyNodes.size
+          s.pendingSince = 0
+        } else if (!dirty) s.builtDirty = Number.POSITIVE_INFINITY
         flagGlassMaterials(scene)
         syncLampEmitters()
       }
     }
 
-    // Live level heights (stacked / exploded motion) and the camera, in assembled space.
-    const offsets = s.levelObjects.map((objects, index) =>
-      objects[0] ? objects[0].getWorldPosition(scratch).y - (daylightRooms.levelY[index] ?? 0) : 0,
+    // Live level heights (stacked / exploded motion), what is shown, and the camera.
+    const levels = daylightRooms.levels
+    const offsets = s.levelObjects.map((object, index) =>
+      object ? object.getWorldPosition(scratch).y - (levels[index]?.y ?? 0) : 0,
     )
-    daylightRooms.setLevelOffsets(offsets)
-    const focused = focusedLevelIndex(s.levelObjects)
-    daylightRooms.levelShown = s.levelObjects.map(
-      (objects, index) => (focused < 0 || index <= focused) && objects.some(shownInScene),
+    s.levelsMoved = offsets.some(
+      (offset, index) => Math.abs(offset - (s.offsets[index] ?? offset)) > 1e-4,
     )
-    daylightRooms.cameraY.value = camera.position.y - (offsets[0] ?? 0)
-    daylightRooms.focusedLevel.value = focused
+    s.offsets = offsets
+    const shown = s.levelObjects.map((object) => !!object && presented(object))
+    const focus = selectedFocusLevel()
+    const selected = s.levelObjects.map((object) => !!object && object === focus)
+    daylightRooms.setLevelPresentation(offsets, shown, selected)
+    daylightRooms.cameraY.value = camera.position.y
 
     // Lamp switches (fed lamps by key; virtual lamps follow the time-of-day default) and doors.
     const lit = litFeedKeys()
@@ -227,21 +273,29 @@ function findBakedRoot(scene: Object3D): Object3D | null {
   return found
 }
 
-/** Visible itself and through every ancestor (hidden levels are switched off on their group). */
-function shownInScene(object: Object3D): boolean {
+/**
+ * On screen: visible through every ancestor (hidden levels are switched off on their group) and
+ * not drawn for shadows only (levels hidden above the selection keep shadowing it).
+ */
+function presented(object: Object3D): boolean {
   for (let x: Object3D | null = object; x; x = x.parent) if (!x.visible) return false
-  return true
+  return !heldReasons(object)?.has('shadow-only')
 }
 
-/**
- * The level whose rooms open to the sky because the levels above it are hidden (solo level, or
- * levels above the selection hidden) — the enhanced viewer's "focus level". −1 otherwise.
- */
-function focusedLevelIndex(levelObjects: Object3D[][]): number {
+/** The selected level when the levels over it are hidden (solo, or hide-above), else null. */
+function selectedFocusLevel(): Object3D | null {
   const viewer = useViewer.getState()
   const hidesAbove = viewer.levelMode === 'solo' || viewer.hideLevelsAboveSelection
   const levelId = viewer.selection.levelId
-  if (!hidesAbove || !levelId) return -1
-  const object = sceneRegistry.nodes.get(levelId)
-  return object ? levelObjects.findIndex((objects) => objects.includes(object)) : -1
+  if (!hidesAbove || !levelId) return null
+  return sceneRegistry.nodes.get(levelId) ?? null
+}
+
+/** The device's largest 2D texture side (WebGPU device limits, or the WebGL context's). */
+function textureLimit(gl: unknown): number {
+  const backend = (gl as { backend?: { device?: GPUDevice; gl?: WebGL2RenderingContext } }).backend
+  const limit =
+    backend?.device?.limits?.maxTextureDimension2D ??
+    (backend?.gl?.getParameter(backend.gl.MAX_TEXTURE_SIZE) as number | undefined)
+  return limit && limit > 0 ? limit : DEFAULT_TEXTURE_LIMIT
 }
