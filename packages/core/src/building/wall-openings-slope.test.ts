@@ -1,12 +1,14 @@
 import { describe, expect, test } from 'bun:test'
-import { type AnyNode, LevelNode, WallNode } from '../schema'
+import { moveNode } from '../agent-operations/move-node'
+import { isAgentRefusal } from '../agent-tools/refusal'
+import { type AnyNode, DoorNode, LevelNode, WallNode, WindowNode } from '../schema'
 import { getWallTopOver } from '../services/storey'
 import {
   getWallChordFractionAt,
   getWallCurveLength,
   getWallStationAtChordFraction,
 } from '../systems/wall/wall-curve'
-import { clampDoorToWall, clampWindowToWall } from './wall-openings'
+import { clampDoorToWall, clampWindowToWall, planWallOpening } from './wall-openings'
 
 function scene(wall: Partial<WallNode>) {
   const node = WallNode.parse({
@@ -82,5 +84,66 @@ describe('a flat wall places openings as it did before tops could slope', () => 
     const { wall, nodes } = scene({ height: 1, endHeightOffset: 0.1 })
     expect(clampWindowToWall(wall, 2, 0.5, 1, 1.2, nodes).fits).toBe(false)
     expect(clampDoorToWall(wall, 2, 0.9, 2.1, undefined, nodes).fits).toBe(false)
+  })
+})
+
+describe('agents refuse an opening no stretch of a sloped wall can take', () => {
+  // 2.5 m at the start falling to 1 m at the end; a flat 2.5 m wall is the control.
+  const sloped = { endHeightOffset: -1.5 }
+  const refusal = (run: () => unknown) => {
+    try {
+      run()
+    } catch (error) {
+      if (isAgentRefusal(error)) return error.code
+      throw error
+    }
+    return null
+  }
+  const withOpening = (wall: Partial<WallNode>, opening: DoorNode | WindowNode) => {
+    const { nodes } = scene({ ...wall, children: [opening.id] })
+    return { ...nodes, [opening.id]: opening } as Record<string, AnyNode>
+  }
+  const window = (height: number) =>
+    WindowNode.parse({
+      id: 'window_slope',
+      parentId: 'wall_slope',
+      wallId: 'wall_slope',
+      position: [1, 1.2, 0],
+      width: 1.2,
+      height,
+    })
+  const door = DoorNode.parse({
+    id: 'door_slope',
+    parentId: 'wall_slope',
+    wallId: 'wall_slope',
+    position: [0.6, 1.2, 0],
+    width: 0.9,
+    height: 2.4,
+  })
+  const move = (nodes: Record<string, AnyNode>, id: string) =>
+    moveNode(nodes as never, { id, by: [0.1, 0] } as never, { activeLevelId: null })
+
+  test('placing a window', () => {
+    const tall = { kind: 'window', wallId: 'wall_slope', t: 0.2, width: 1.2, height: 2.4 } as const
+    expect(refusal(() => planWallOpening(scene(sloped).nodes as never, tall))).toBe('wall_too_low')
+    expect(refusal(() => planWallOpening(scene({}).nodes as never, tall))).toBeNull()
+    // One that fits only near the high end slides there instead.
+    const planned = planWallOpening(scene(sloped).nodes as never, { ...tall, t: 0.9, height: 1.5 })
+    expect(planned.clamped).toBe(true)
+  })
+
+  test('placing a door', () => {
+    const tall = { kind: 'door', wallId: 'wall_slope', t: 0.15, width: 0.9, height: 2.4 } as const
+    expect(refusal(() => planWallOpening(scene(sloped).nodes as never, tall))).toBe('wall_too_low')
+    expect(refusal(() => planWallOpening(scene({}).nodes as never, tall))).toBeNull()
+  })
+
+  test('moving a window or a door', () => {
+    expect(refusal(() => move(withOpening(sloped, window(2.4)), 'window_slope'))).toBe(
+      'wall_too_low',
+    )
+    expect(refusal(() => move(withOpening({}, window(2.4)), 'window_slope'))).toBeNull()
+    expect(refusal(() => move(withOpening(sloped, door), 'door_slope'))).toBe('wall_too_low')
+    expect(refusal(() => move(withOpening({}, door), 'door_slope'))).toBeNull()
   })
 })

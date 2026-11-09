@@ -336,6 +336,28 @@ const DEFAULTS = {
 const metres = (value: number) => `${value.toFixed(2)} m`
 
 /**
+ * Refuses an opening that no stretch of a sloped wall can take under its top, which the wall
+ * clamps report as `fits: false`. The editor refuses the same placement; a flat wall always fits.
+ */
+export function refuseOpeningAboveSlope(
+  wall: WallNode,
+  nodes: Readonly<Record<AnyNodeId, AnyNode>>,
+  kind: 'door' | 'window',
+  width: number,
+  height: number,
+): never {
+  const wallHeight = Math.max(
+    resolveWallOpeningCeiling(wall, nodes, 0),
+    resolveWallOpeningCeiling(wall, nodes, 1),
+  )
+  refuse(
+    'wall_too_low',
+    `Wall ${wall.id} slopes to at most ${metres(wallHeight)}, and nowhere along it does a ${metres(width)} wide, ${metres(height)} tall ${kind} fit under its top. Use a smaller ${kind}, or raise the wall's low end.`,
+    { wallId: wall.id, wallHeight, height },
+  )
+}
+
+/**
  * The sill that centres a window of `height` vertically on the lowest of `walls`, or 0 when it is
  * taller than they are. What a window with no sill given takes, on every agent surface.
  */
@@ -502,7 +524,7 @@ export function planWallOpening(nodes: Nodes, input: WallOpeningInput) {
             rawX - size.width / 2,
             rawX + size.width / 2,
           ) / 2
-  const { clampedX, clampedY } = onFloor
+  const { clampedX, clampedY, fits } = onFloor
     ? clampDoorToWall(
         wall,
         rawX,
@@ -519,6 +541,7 @@ export function planWallOpening(nodes: Nodes, input: WallOpeningInput) {
         size.height,
         nodes as Record<AnyNodeId, AnyNode>,
       )
+  if (!fits) refuseOpeningAboveSlope(wall, nodes, kind, size.width, size.height)
 
   if (!input.force) {
     const blocking = findWallChildOverlap(

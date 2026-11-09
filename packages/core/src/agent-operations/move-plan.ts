@@ -3,6 +3,7 @@ import {
   clampDoorToWall,
   clampWindowToWall,
   findWallChildOverlap,
+  refuseOpeningAboveSlope,
   wallOpeningCeilingOver,
 } from '../building/wall-openings'
 import { getDoorOpeningSize } from '../lib/door-opening'
@@ -253,7 +254,7 @@ function planOpeningMove(
       : target.y === undefined
         ? node.position[1]
         : target.y + node.height / 2
-  const { clampedX, clampedY } =
+  const { clampedX, clampedY, fits } =
     node.type === 'door'
       ? clampDoorToWall(
           wall,
@@ -271,6 +272,7 @@ function planOpeningMove(
           node.height,
           nodes as Record<AnyNodeId, AnyNode>,
         )
+  if (!fits) refuseOpeningAboveSlope(wall, nodes, node.type, node.width, node.height)
   overlapRefusal(
     nodes,
     wall,
