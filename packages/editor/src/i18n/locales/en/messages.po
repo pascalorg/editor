@@ -10895,6 +10895,10 @@ msgstr "Start elevation (m)"
 msgid "node.pipeSegment.gradeInspector.startEnd"
 msgstr "Start → end"
 
+#: packages/nodes/src/pipe-segment/grade-affordance.ts
+msgid "node.pipeSegment.gradeNotice.blocked"
+msgstr "This edit cannot preserve the pipe grade and connected collars. Adjust the fitting or use Grade and flow."
+
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "node.pipeSegment.label"
 msgstr "DWV Pipe"

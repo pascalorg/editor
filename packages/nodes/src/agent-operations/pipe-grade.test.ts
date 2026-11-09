@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, test } from 'bun:test'
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import {
   type AnyNode,
   LevelNode,
@@ -9,8 +9,10 @@ import {
   useLiveNodeOverrides,
   useScene,
 } from '@pascal-app/core'
+import { useFloorplanMode } from '@pascal-app/editor'
 import { pipeFittingDefinition, pipeSegmentDefinition } from '@pascal-app/nodes'
 import { builtinAgentOperations } from '@pascal-app/nodes/agent-operations'
+import { pipeGradeBlockedNotice, pipeGradePointAffordance } from '../pipe-segment/grade-affordance'
 
 let restore: ReturnType<typeof nodeRegistry._snapshot>
 beforeEach(() => {
@@ -183,6 +185,84 @@ test('plan-view editing previews grade without writing the scene until commit', 
     useLiveNodeOverrides.getState().clear(pipe.id)
     useScene.setState({ nodes: previous })
   }
+})
+
+describe('plan-view endpoint drag on a run whose far end sits on an elbow', () => {
+  const run = () =>
+    PipeSegmentNode.parse({
+      ...pipeSegmentDefinition.defaults(),
+      parentId: level.id,
+      path: [
+        [0.07, 1, 0],
+        [3.93, 1, 0],
+      ],
+    })
+  const elbow = () =>
+    PipeFittingNode.parse({
+      ...pipeFittingDefinition.defaults(),
+      parentId: level.id,
+      position: [4, 1, 0],
+    })
+  const modifiers = { altKey: false, ctrlKey: false, metaKey: false, shiftKey: false }
+  let previous: ReturnType<typeof useScene.getState>['nodes']
+  beforeEach(() => {
+    previous = useScene.getState().nodes
+  })
+  afterEach(() => {
+    useLiveNodeOverrides.getState().clearAll()
+    useScene.setState({ nodes: previous })
+    if (useFloorplanMode.getState().notice) useFloorplanMode.getState().dismissNotice()
+  })
+  function drag(pipe: PipeSegmentNode, fitting: PipeFittingNode) {
+    useScene.setState({ nodes: scene(pipe, fitting) })
+    return pipeGradePointAffordance.start({
+      node: pipe,
+      nodes: scene(pipe, fitting),
+      payload: { pointIndex: 0 },
+      initialPlanPoint: [0.07, 0],
+      gridSnapStep: 0,
+    })
+  }
+  function inletOf(fitting: PipeFittingNode, data: Partial<AnyNode> | undefined) {
+    const next = { ...fitting, ...data } as PipeFittingNode
+    return pipeFittingDefinition.ports!(next).find((port) => port.id === 'inlet')!.position
+  }
+
+  test('re-aims the elbow and keeps the run level', () => {
+    const pipe = run()
+    const fitting = elbow()
+    const session = drag(pipe, fitting)
+    session.apply({ planPoint: [0.07, -1], modifiers })
+    expect(useScene.getState().nodes[pipe.id]).toEqual(pipe)
+    expect(session.canCommit()).toBe(true)
+    session.commit!()
+
+    const nodes = useScene.getState().nodes
+    const path = (nodes[pipe.id] as PipeSegmentNode).path
+    expect(path[0]).toEqual([0.07, 1, -1])
+    expect(path[1]![1]).toBeCloseTo(1, 9)
+    const turned = nodes[fitting.id] as PipeFittingNode
+    expect(turned.rotation).not.toEqual(fitting.rotation)
+    const inlet = inletOf(fitting, turned)
+    for (const axis of [0, 1, 2] as const) expect(path[1]![axis]).toBeCloseTo(inlet[axis], 6)
+    expect(useFloorplanMode.getState().notice).toBeNull()
+  })
+
+  test('a turn the elbow cannot make holds the last valid frame and says why', () => {
+    const pipe = run()
+    const fitting = elbow()
+    const session = drag(pipe, fitting)
+    session.apply({ planPoint: [0.07, -1], modifiers })
+    const held = useLiveNodeOverrides.getState().overrides.get(pipe.id)
+    expect(held).toBeDefined()
+
+    session.apply({ planPoint: [0.07, 1], modifiers })
+    expect(useLiveNodeOverrides.getState().overrides.get(pipe.id)).toEqual(held)
+    expect(useFloorplanMode.getState().notice?.message).toBe(pipeGradeBlockedNotice.message)
+    expect(session.canCommit()).toBe(true)
+    session.commit!()
+    expect((useScene.getState().nodes[pipe.id] as PipeSegmentNode).path[0]).toEqual([0.07, 1, -1])
+  })
 })
 
 test('grade edits carry end caps and keep both collars coincident', () => {

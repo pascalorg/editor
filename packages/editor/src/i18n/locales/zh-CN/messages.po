@@ -17495,11 +17495,11 @@ msgstr "长度：{field} m"
 msgid "editor.tools.distribution.distributionRunTool.tabDirection"
 msgstr "Tab：方向"
 
-# English: "Target elevation: {elevation} m · click or Enter to place"
 # Source-Hash: adbe2d112b739871
 # Review: required
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus-5-5
+# English: "Target elevation: {elevation} m · click or Enter to place"
 #: packages/editor/src/components/tools/distribution/distribution-run-tool.tsx
 #, fuzzy
 msgid "editor.tools.distribution.distributionRunTool.targetElevation"
@@ -24599,331 +24599,331 @@ msgstr "R/T 旋转"
 msgid "node.ductSegment.description"
 msgstr "暖通风管 — 由圆形、矩形或扁椭圆截面组成的折线。"
 
-# English: "Apply offset"
 # Source-Hash: c63202c40d7fbac5
 # Review: required
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus-5-5
+# English: "Apply offset"
 #: packages/nodes/src/duct-segment/edit-inspector.tsx
 #, fuzzy
 msgid "node.ductSegment.editInspector.applyOffset"
 msgstr "应用偏移"
 
-# English: "Apply resize"
 # Source-Hash: 79cd694c04938730
 # Review: required
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus-5-5
+# English: "Apply resize"
 #: packages/nodes/src/duct-segment/edit-inspector.tsx
 #, fuzzy
 msgid "node.ductSegment.editInspector.applyResize"
 msgstr "应用尺寸调整"
 
-# English: "Branch stops at junctions, size changes and equipment. Boundary collars stay fixed."
 # Source-Hash: f97058f9f79a49f7
 # Review: required
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus-5-5
+# English: "Branch stops at junctions, size changes and equipment. Boundary collars stay fixed."
 #: packages/nodes/src/duct-segment/edit-inspector.tsx
 #, fuzzy
 msgid "node.ductSegment.editInspector.branchStopsAtJunctionsSizeChanges"
 msgstr "分支在接头、尺寸变化处和设备处停止。边界套环保持固定。"
 
-# English: "Connected same-size branch"
 # Source-Hash: e5f62ba5c4a2e770
 # Review: required
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus-5-5
+# English: "Connected same-size branch"
 #: packages/nodes/src/duct-segment/edit-inspector.tsx
 #, fuzzy
 msgid "node.ductSegment.editInspector.connectedSameSizeBranch"
 msgstr "相连的同尺寸分支"
 
-# English: "Diameter (in)"
 # Source-Hash: e704515c0fe2a6ca
 # Review: required
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus-5-5
+# English: "Diameter (in)"
 #: packages/nodes/src/duct-segment/edit-inspector.tsx
 #, fuzzy
 msgid "node.ductSegment.editInspector.diameter"
 msgstr "直径（in）"
 
-# English: "Duct edit"
 # Source-Hash: 3fba7da8f5ce8470
 # Review: required
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus-5-5
+# English: "Duct edit"
 #: packages/nodes/src/duct-segment/edit-inspector.tsx
 #, fuzzy
 msgid "node.ductSegment.editInspector.ductEdit"
 msgstr "风管编辑"
 
-# English: "Duct shape"
 # Source-Hash: 4c189ffbaf391531
 # Review: required
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus-5-5
+# English: "Duct shape"
 #: packages/nodes/src/duct-segment/edit-inspector.tsx
 #, fuzzy
 msgid "node.ductSegment.editInspector.ductShape"
 msgstr "风管形状"
 
-# English: "Edit duct route"
 # Source-Hash: 4196e9dba5038422
 # Review: required
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus-5-5
+# English: "Edit duct route"
 #: packages/nodes/src/duct-segment/edit-inspector.tsx
 #, fuzzy
 msgid "node.ductSegment.editInspector.editDuctRoute"
 msgstr "编辑风管走向"
 
-# English: "Face alignment applies to free straight runs. Left and right follow the run’s section axes."
 # Source-Hash: e6ad8e30edf8b8dc
 # Review: required
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus-5-5
+# English: "Face alignment applies to free straight runs. Left and right follow the run’s section axes."
 #: packages/nodes/src/duct-segment/edit-inspector.tsx
 #, fuzzy
 msgid "node.ductSegment.editInspector.faceAlignmentAppliesToFreeStraight"
 msgstr "面对齐适用于自由的直管段。左和右按管段的截面轴确定。"
 
-# English: "First bend from start (m)"
 # Source-Hash: 98b9dbf56de61e41
 # Review: required
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus-5-5
+# English: "First bend from start (m)"
 #: packages/nodes/src/duct-segment/edit-inspector.tsx
 #, fuzzy
 msgid "node.ductSegment.editInspector.firstBend"
 msgstr "第一个弯头距起点（m）"
 
-# English: "Height (in)"
 # Source-Hash: 46dd5dd1bd2712fd
 # Review: required
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus-5-5
+# English: "Height (in)"
 #: packages/nodes/src/duct-segment/edit-inspector.tsx
 #, fuzzy
 msgid "node.ductSegment.editInspector.height"
 msgstr "高度（in）"
 
-# English: "Keep bottom face"
 # Source-Hash: 13b1dec096cefeda
 # Review: required
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus-5-5
+# English: "Keep bottom face"
 #: packages/nodes/src/duct-segment/edit-inspector.tsx
 #, fuzzy
 msgid "node.ductSegment.editInspector.keepBottomFace"
 msgstr "保持底面"
 
-# English: "Keep centerline"
 # Source-Hash: 4d1bae9a034eef7b
 # Review: required
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus-5-5
+# English: "Keep centerline"
 #: packages/nodes/src/duct-segment/edit-inspector.tsx
 #, fuzzy
 msgid "node.ductSegment.editInspector.keepCenterline"
 msgstr "保持中心线"
 
-# English: "Keep left face"
 # Source-Hash: 66a2843e7ee53206
 # Review: required
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus-5-5
+# English: "Keep left face"
 #: packages/nodes/src/duct-segment/edit-inspector.tsx
 #, fuzzy
 msgid "node.ductSegment.editInspector.keepLeftFace"
 msgstr "保持左侧面"
 
-# English: "Keep right face"
 # Source-Hash: 422d33d91000c6d5
 # Review: required
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus-5-5
+# English: "Keep right face"
 #: packages/nodes/src/duct-segment/edit-inspector.tsx
 #, fuzzy
 msgid "node.ductSegment.editInspector.keepRightFace"
 msgstr "保持右侧面"
 
-# English: "Keep top face"
 # Source-Hash: d68b946185860736
 # Review: required
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus-5-5
+# English: "Keep top face"
 #: packages/nodes/src/duct-segment/edit-inspector.tsx
 #, fuzzy
 msgid "node.ductSegment.editInspector.keepTopFace"
 msgstr "保持顶面"
 
-# English: "Last bend from start (m)"
 # Source-Hash: 5faa81fe58b2e707
 # Review: required
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus-5-5
+# English: "Last bend from start (m)"
 #: packages/nodes/src/duct-segment/edit-inspector.tsx
 #, fuzzy
 msgid "node.ductSegment.editInspector.lastBend"
 msgstr "最后一个弯头距起点（m）"
 
-# English: "Offset around obstacle"
 # Source-Hash: aac8ab5c8fe8dc80
 # Review: required
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus-5-5
+# English: "Offset around obstacle"
 #: packages/nodes/src/duct-segment/edit-inspector.tsx
 #, fuzzy
 msgid "node.ductSegment.editInspector.offsetAroundObstacle"
 msgstr "绕障偏移"
 
-# English: "Offset side elevation preview"
 # Source-Hash: 57fd5f8ee7415f5c
 # Review: required
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus-5-5
+# English: "Offset side elevation preview"
 #: packages/nodes/src/duct-segment/edit-inspector.tsx
 #, fuzzy
 msgid "node.ductSegment.editInspector.offsetSideElevationPreview"
 msgstr "偏移侧立面预览"
 
-# English: "Oval"
 # Source-Hash: ed6d7b3dd9d5fc69
 # Review: required
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus-5-5
+# English: "Oval"
 #: packages/nodes/src/duct-segment/edit-inspector.tsx
 #, fuzzy
 msgid "node.ductSegment.editInspector.oval"
 msgstr "椭圆"
 
-# English: "{affected, plural, one {# existing part affected} other {# existing parts affected}} · {created, plural, one {# new part} other {# new parts}}"
 # Source-Hash: 4196843b0dd8f46c
 # Review: required
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus-5-5
+# English: "{affected, plural, one {# existing part affected} other {# existing parts affected}} · {created, plural, one {# new part} other {# new parts}}"
 #: packages/nodes/src/duct-segment/edit-inspector.tsx
 #, fuzzy
 msgid "node.ductSegment.editInspector.partsSummary"
 msgstr "{affected, plural, other {影响 # 个现有构件}} · {created, plural, other {新增 # 个构件}}"
 
-# English: "Positive moves up; negative moves down. Four elbows preserve both endpoints. Check the obstacle’s clearance; this does not detect collisions."
 # Source-Hash: d548731cb7cf5d27
 # Review: required
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus-5-5
+# English: "Positive moves up; negative moves down. Four elbows preserve both endpoints. Check the obstacle’s clearance; this does not detect collisions."
 #: packages/nodes/src/duct-segment/edit-inspector.tsx
 #, fuzzy
 msgid "node.ductSegment.editInspector.positiveMovesUpNegativeMovesDown"
 msgstr "正值向上移动，负值向下移动。四个弯头保持两端不变。请检查障碍物的净距；此操作不检测碰撞。"
 
-# English: "Preserve duct alignment"
 # Source-Hash: 3a046d5727f10a80
 # Review: required
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus-5-5
+# English: "Preserve duct alignment"
 #: packages/nodes/src/duct-segment/edit-inspector.tsx
 #, fuzzy
 msgid "node.ductSegment.editInspector.preserveDuctAlignment"
 msgstr "保持风管对齐方式"
 
-# English: "Rectangular"
 # Source-Hash: f29fef1beeb25f22
 # Review: required
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus-5-5
+# English: "Rectangular"
 #: packages/nodes/src/duct-segment/edit-inspector.tsx
 #, fuzzy
 msgid "node.ductSegment.editInspector.rectangular"
 msgstr "矩形"
 
-# English: "Resize scope"
 # Source-Hash: e8be4487b05f939d
 # Review: required
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus-5-5
+# English: "Resize scope"
 #: packages/nodes/src/duct-segment/edit-inspector.tsx
 #, fuzzy
 msgid "node.ductSegment.editInspector.resizeScope"
 msgstr "尺寸调整范围"
 
-# English: "Resize with connections"
 # Source-Hash: c4b16733095ad12f
 # Review: required
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus-5-5
+# English: "Resize with connections"
 #: packages/nodes/src/duct-segment/edit-inspector.tsx
 #, fuzzy
 msgid "node.ductSegment.editInspector.resizeWithConnections"
 msgstr "连同连接调整尺寸"
 
-# English: "Round"
 # Source-Hash: ad0457800a1f0eb4
 # Review: required
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus-5-5
+# English: "Round"
 #: packages/nodes/src/duct-segment/edit-inspector.tsx
 #, fuzzy
 msgid "node.ductSegment.editInspector.round"
 msgstr "圆形"
 
-# English: "Side elevation · dashed line is the original route"
 # Source-Hash: bf79b8c8e7a3ba17
 # Review: required
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus-5-5
+# English: "Side elevation · dashed line is the original route"
 #: packages/nodes/src/duct-segment/edit-inspector.tsx
 #, fuzzy
 msgid "node.ductSegment.editInspector.sideElevationDashedLineIsThe"
 msgstr "侧立面 · 虚线为原始走向"
 
-# English: "This segment"
 # Source-Hash: d271518d800f3e1c
 # Review: required
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus-5-5
+# English: "This segment"
 #: packages/nodes/src/duct-segment/edit-inspector.tsx
 #, fuzzy
 msgid "node.ductSegment.editInspector.thisSegment"
 msgstr "此段"
 
-# English: "Unable to apply edit."
 # Source-Hash: 1bbbb491639e18e1
 # Review: required
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus-5-5
+# English: "Unable to apply edit."
 #: packages/nodes/src/duct-segment/edit-inspector.tsx
 #, fuzzy
 msgid "node.ductSegment.editInspector.unableToApplyEdit"
 msgstr "无法应用编辑。"
 
-# English: "Unable to plan this edit."
 # Source-Hash: 0283a6615312b133
 # Review: required
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus-5-5
+# English: "Unable to plan this edit."
 #: packages/nodes/src/duct-segment/edit-inspector.tsx
 #, fuzzy
 msgid "node.ductSegment.editInspector.unableToPlanEdit"
 msgstr "无法规划此编辑。"
 
-# English: "Vertical offset (m)"
 # Source-Hash: 2dad926bc0e26f4a
 # Review: required
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus-5-5
+# English: "Vertical offset (m)"
 #: packages/nodes/src/duct-segment/edit-inspector.tsx
 #, fuzzy
 msgid "node.ductSegment.editInspector.verticalOffset"
 msgstr "垂直偏移（m）"
 
-# English: "Width (in)"
 # Source-Hash: 087cae2b0e372680
 # Review: required
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus-5-5
+# English: "Width (in)"
 #: packages/nodes/src/duct-segment/edit-inspector.tsx
 #, fuzzy
 msgid "node.ductSegment.editInspector.width"
@@ -26957,185 +26957,195 @@ msgstr "⌥ 轴"
 msgid "node.pipeFitting.tool.rTRotate"
 msgstr "R/T 旋转"
 
-# English: "Drain / waste / vent pipe run — draw level or choose grade and downhill direction."
 # Source-Hash: a2d9b4f249d256a2
 # Review: required
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus-5-5
+# English: "Drain / waste / vent pipe run — draw level or choose grade and downhill direction."
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
 msgid "node.pipeSegment.description"
 msgstr "排水 / 污水 / 通气管 — 水平绘制，或选择坡度和下坡方向。"
 
-# English: "Apply grade to horizontal legs"
 # Source-Hash: 1107996c9987dc5a
 # Review: required
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus-5-5
+# English: "Apply grade to horizontal legs"
 #: packages/nodes/src/pipe-segment/grade-inspector.tsx
 #, fuzzy
 msgid "node.pipeSegment.gradeInspector.applyGradeToHorizontalLegs"
 msgstr "对水平管段应用坡度"
 
-# English: "Arrows show downhill direction. Level runs have no gravity fall. Editing a path point preserves each leg’s grade."
 # Source-Hash: 6348d1ecbab8e926
 # Review: required
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus-5-5
+# English: "Arrows show downhill direction. Level runs have no gravity fall. Editing a path point preserves each leg’s grade."
 #: packages/nodes/src/pipe-segment/grade-inspector.tsx
 #, fuzzy
 msgid "node.pipeSegment.gradeInspector.arrowsShowDownhillDirectionLevelRuns"
 msgstr "箭头表示下坡方向。水平管段没有重力坡降。编辑路径点会保持每段的坡度。"
 
-# English: "Centerline elevations above level: start {start} m · end {end} m"
 # Source-Hash: 3c2d7360f5b0ec0f
 # Review: required
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus-5-5
+# English: "Centerline elevations above level: start {start} m · end {end} m"
 #: packages/nodes/src/pipe-segment/grade-inspector.tsx
 #, fuzzy
 msgid "node.pipeSegment.gradeInspector.centerlineElevations"
 msgstr "中心线相对楼层标高：起点 {start} m · 终点 {end} m"
 
-# English: "End elevation (m)"
 # Source-Hash: 13a82ce00378a76a
 # Review: required
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus-5-5
+# English: "End elevation (m)"
 #: packages/nodes/src/pipe-segment/grade-inspector.tsx
 #, fuzzy
 msgid "node.pipeSegment.gradeInspector.endElevation"
 msgstr "终点标高（m）"
 
-# English: "End → start"
 # Source-Hash: b9958602c0675e93
 # Review: required
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus-5-5
+# English: "End → start"
 #: packages/nodes/src/pipe-segment/grade-inspector.tsx
 #, fuzzy
 msgid "node.pipeSegment.gradeInspector.endStart"
 msgstr "终点 → 起点"
 
-# English: "Fixed pipe endpoint"
 # Source-Hash: eac5f522f23d244b
 # Review: required
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus-5-5
+# English: "Fixed pipe endpoint"
 #: packages/nodes/src/pipe-segment/grade-inspector.tsx
 #, fuzzy
 msgid "node.pipeSegment.gradeInspector.fixedPipeEndpoint"
 msgstr "固定的管道端点"
 
-# English: "Grade (%)"
 # Source-Hash: f3d8fa71962558e5
 # Review: required
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus-5-5
+# English: "Grade (%)"
 #: packages/nodes/src/pipe-segment/grade-inspector.tsx
 #, fuzzy
 msgid "node.pipeSegment.gradeInspector.grade"
 msgstr "坡度（%）"
 
-# English: "Grade and flow"
 # Source-Hash: bf34bb5add643aeb
 # Review: required
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus-5-5
+# English: "Grade and flow"
 #: packages/nodes/src/pipe-segment/grade-inspector.tsx
 #, fuzzy
 msgid "node.pipeSegment.gradeInspector.gradeAndFlow"
 msgstr "坡度与流向"
 
-# English: "Keep end elevation"
 # Source-Hash: ce41df161aeed7a6
 # Review: required
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus-5-5
+# English: "Keep end elevation"
 #: packages/nodes/src/pipe-segment/grade-inspector.tsx
 #, fuzzy
 msgid "node.pipeSegment.gradeInspector.keepEndElevation"
 msgstr "保持终点标高"
 
-# English: "Keep start elevation"
 # Source-Hash: a73da2d9b324635d
 # Review: required
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus-5-5
+# English: "Keep start elevation"
 #: packages/nodes/src/pipe-segment/grade-inspector.tsx
 #, fuzzy
 msgid "node.pipeSegment.gradeInspector.keepStartElevation"
 msgstr "保持起点标高"
 
-# English: "Leg {number}: {grade}"
 # Source-Hash: 95b18c4f1c132276
 # Review: required
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus-5-5
+# English: "Leg {number}: {grade}"
 #: packages/nodes/src/pipe-segment/grade-inspector.tsx
 #, fuzzy
 msgid "node.pipeSegment.gradeInspector.leg"
 msgstr "第 {number} 段：{grade}"
 
-# English: "Move elevation, keep grades"
 # Source-Hash: af7138d6a8a07914
 # Review: required
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus-5-5
+# English: "Move elevation, keep grades"
 #: packages/nodes/src/pipe-segment/grade-inspector.tsx
 #, fuzzy
 msgid "node.pipeSegment.gradeInspector.moveElevationKeepGrades"
 msgstr "移动标高，保持坡度"
 
-# English: "Pipe anchor elevation"
 # Source-Hash: a61f74b4b445e76c
 # Review: required
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus-5-5
+# English: "Pipe anchor elevation"
 #: packages/nodes/src/pipe-segment/grade-inspector.tsx
 #, fuzzy
 msgid "node.pipeSegment.gradeInspector.pipeAnchorElevation"
 msgstr "管道基准点标高"
 
-# English: "Pipe downhill flow"
 # Source-Hash: a3628871eae01da3
 # Review: required
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus-5-5
+# English: "Pipe downhill flow"
 #: packages/nodes/src/pipe-segment/grade-inspector.tsx
 #, fuzzy
 msgid "node.pipeSegment.gradeInspector.pipeDownhillFlow"
 msgstr "管道下坡流向"
 
-# English: "Pipe grade percent"
 # Source-Hash: 10c942b544edcbd4
 # Review: required
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus-5-5
+# English: "Pipe grade percent"
 #: packages/nodes/src/pipe-segment/grade-inspector.tsx
 #, fuzzy
 msgid "node.pipeSegment.gradeInspector.pipeGradePercent"
 msgstr "管道坡度百分比"
 
-# English: "Start elevation (m)"
 # Source-Hash: acb2a9b9e601c85b
 # Review: required
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus-5-5
+# English: "Start elevation (m)"
 #: packages/nodes/src/pipe-segment/grade-inspector.tsx
 #, fuzzy
 msgid "node.pipeSegment.gradeInspector.startElevation"
 msgstr "起点标高（m）"
 
-# English: "Start → end"
 # Source-Hash: c742d28f93020b10
 # Review: required
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus-5-5
+# English: "Start → end"
 #: packages/nodes/src/pipe-segment/grade-inspector.tsx
 #, fuzzy
 msgid "node.pipeSegment.gradeInspector.startEnd"
 msgstr "起点 → 终点"
+
+# Source-Hash: 42b6489db22b36a3
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "This edit cannot preserve the pipe grade and connected collars. Adjust the fitting or use Grade and flow."
+#: packages/nodes/src/pipe-segment/grade-affordance.ts
+#, fuzzy
+msgid "node.pipeSegment.gradeNotice.blocked"
+msgstr "此编辑无法保持管道坡度和已连接的套环。请调整管件或使用“坡度与流向”。"
 
 # Source-Hash: 457155657704f7cc
 # Review: required
@@ -27147,271 +27157,271 @@ msgstr "起点 → 终点"
 msgid "node.pipeSegment.label"
 msgstr "排水管"
 
-# English: "This move would change a connected pipe’s grade. Choose another position or press Esc to cancel."
 # Source-Hash: 58c093b768f21b93
 # Review: required
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus-5-5
+# English: "This move would change a connected pipe’s grade. Choose another position or press Esc to cancel."
 #: packages/nodes/src/pipe-segment/move-tool.tsx
 #, fuzzy
 msgid "node.pipeSegment.moveTool.connectedGradeBlocked"
 msgstr "此移动会改变相连管道的坡度。请选择其他位置，或按 Esc 取消。"
 
-# English: "Apply pipe offset"
 # Source-Hash: 012c10b3fb071052
 # Review: required
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus-5-5
+# English: "Apply pipe offset"
 #: packages/nodes/src/pipe-segment/offset-inspector.tsx
 #, fuzzy
 msgid "node.pipeSegment.offsetInspector.applyPipeOffset"
 msgstr "应用管道偏移"
 
-# English: "Check obstacle clearance. The preview does not detect collisions."
 # Source-Hash: 6abc3bcf60f7aed7
 # Review: required
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus-5-5
+# English: "Check obstacle clearance. The preview does not detect collisions."
 #: packages/nodes/src/pipe-segment/offset-inspector.tsx
 #, fuzzy
 msgid "node.pipeSegment.offsetInspector.checkObstacleClearanceThePreviewDoes"
 msgstr "请检查障碍物净距。预览不检测碰撞。"
 
-# English: "Choose the first and last bend by horizontal distance from the start. Positive offset goes up; negative goes down. Each connector uses the offset height in horizontal travel."
 # Source-Hash: b23728d37200c667
 # Review: required
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus-5-5
+# English: "Choose the first and last bend by horizontal distance from the start. Positive offset goes up; negative goes down. Each connector uses the offset height in horizontal travel."
 #: packages/nodes/src/pipe-segment/offset-inspector.tsx
 #, fuzzy
 msgid "node.pipeSegment.offsetInspector.chooseTheFirstAndLastBend"
 msgstr "按距起点的水平距离选择第一个和最后一个弯头。正偏移向上，负偏移向下。每段连接管的水平长度等于偏移高度。"
 
-# English: "First bend (m)"
 # Source-Hash: 03528ff54200e797
 # Review: required
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus-5-5
+# English: "First bend (m)"
 #: packages/nodes/src/pipe-segment/offset-inspector.tsx
 #, fuzzy
 msgid "node.pipeSegment.offsetInspector.firstBend"
 msgstr "第一个弯头（m）"
 
-# English: "Last bend (m)"
 # Source-Hash: 4e6b6ed646a449cc
 # Review: required
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus-5-5
+# English: "Last bend (m)"
 #: packages/nodes/src/pipe-segment/offset-inspector.tsx
 #, fuzzy
 msgid "node.pipeSegment.offsetInspector.lastBend"
 msgstr "最后一个弯头（m）"
 
-# English: "Offset applied in one undo step. End connections stayed fixed."
 # Source-Hash: 102ac6742f497c2e
 # Review: required
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus-5-5
+# English: "Offset applied in one undo step. End connections stayed fixed."
 #: packages/nodes/src/pipe-segment/offset-inspector.tsx
 #, fuzzy
 msgid "node.pipeSegment.offsetInspector.offsetAppliedInOneUndoStep"
 msgstr "已作为一个撤销步骤应用偏移。端部连接保持固定。"
 
-# English: "Offset around obstacle"
 # Source-Hash: aac8ab5c8fe8dc80
 # Review: required
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus-5-5
+# English: "Offset around obstacle"
 #: packages/nodes/src/pipe-segment/offset-inspector.tsx
 #, fuzzy
 msgid "node.pipeSegment.offsetInspector.offsetAroundObstacle"
 msgstr "绕障偏移"
 
-# English: "Pipe offset side profile preview"
 # Source-Hash: d6638d559a15dc79
 # Review: required
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus-5-5
+# English: "Pipe offset side profile preview"
 #: packages/nodes/src/pipe-segment/offset-inspector.tsx
 #, fuzzy
 msgid "node.pipeSegment.offsetInspector.pipeOffsetSideProfilePreview"
 msgstr "管道偏移侧面剖面预览"
 
-# English: "Side profile (schematic). Four bends · five pipe sections. Parallel sections keep the original grade; both end connections stay fixed."
 # Source-Hash: 93186c7801fe54b1
 # Review: required
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus-5-5
+# English: "Side profile (schematic). Four bends · five pipe sections. Parallel sections keep the original grade; both end connections stay fixed."
 #: packages/nodes/src/pipe-segment/offset-inspector.tsx
 #, fuzzy
 msgid "node.pipeSegment.offsetInspector.sideProfileSchematicFourBendsFive"
 msgstr "侧面剖面（示意）。四个弯头 · 五段管道。平行管段保持原坡度；两端连接保持固定。"
 
-# English: "This offset includes an uphill waste section. It does not provide continuous downhill drainage."
 # Source-Hash: ab6a00ca812999d5
 # Review: required
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus-5-5
+# English: "This offset includes an uphill waste section. It does not provide continuous downhill drainage."
 #: packages/nodes/src/pipe-segment/offset-inspector.tsx
 #, fuzzy
 msgid "node.pipeSegment.offsetInspector.thisOffsetIncludesAnUphillWaste"
 msgstr "此偏移包含上坡的排水管段，无法实现连续的下坡排水。"
 
-# English: "Unable to apply offset."
 # Source-Hash: 9da65d7ebc4d4ba1
 # Review: required
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus-5-5
+# English: "Unable to apply offset."
 #: packages/nodes/src/pipe-segment/offset-inspector.tsx
 #, fuzzy
 msgid "node.pipeSegment.offsetInspector.unableToApplyOffset"
 msgstr "无法应用偏移。"
 
-# English: "Unable to plan offset."
 # Source-Hash: b9d942406a6029e3
 # Review: required
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus-5-5
+# English: "Unable to plan offset."
 #: packages/nodes/src/pipe-segment/offset-inspector.tsx
 #, fuzzy
 msgid "node.pipeSegment.offsetInspector.unableToPlanOffset"
 msgstr "无法规划偏移。"
 
-# English: "Vertical offset (m)"
 # Source-Hash: 2dad926bc0e26f4a
 # Review: required
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus-5-5
+# English: "Vertical offset (m)"
 #: packages/nodes/src/pipe-segment/offset-inspector.tsx
 #, fuzzy
 msgid "node.pipeSegment.offsetInspector.verticalOffset"
 msgstr "垂直偏移（m）"
 
-# English: "Apply pipe size"
 # Source-Hash: ab7feb5e8b9ef232
 # Review: required
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus-5-5
+# English: "Apply pipe size"
 #: packages/nodes/src/pipe-segment/resize-inspector.tsx
 #, fuzzy
 msgid "node.pipeSegment.resizeInspector.applyPipeSize"
 msgstr "应用管径"
 
-# English: "Branches stop at junctions, size or material changes, and fixture connections. Reducers keep boundary collars fixed."
 # Source-Hash: 5a82f77707e6c422
 # Review: required
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus-5-5
+# English: "Branches stop at junctions, size or material changes, and fixture connections. Reducers keep boundary collars fixed."
 #: packages/nodes/src/pipe-segment/resize-inspector.tsx
 #, fuzzy
 msgid "node.pipeSegment.resizeInspector.branchesStopAtJunctionsSizeOr"
 msgstr "分支在接头、管径或材料变化处以及器具连接处停止。异径管使边界套环保持固定。"
 
-# English: "Check resize"
 # Source-Hash: 3406d3fb87431e87
 # Review: required
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus-5-5
+# English: "Check resize"
 #: packages/nodes/src/pipe-segment/resize-inspector.tsx
 #, fuzzy
 msgid "node.pipeSegment.resizeInspector.checkResize"
 msgstr "检查尺寸调整"
 
-# English: "Connected branch"
 # Source-Hash: 68e3596ff2fd6e60
 # Review: required
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus-5-5
+# English: "Connected branch"
 #: packages/nodes/src/pipe-segment/resize-inspector.tsx
 #, fuzzy
 msgid "node.pipeSegment.resizeInspector.connectedBranch"
 msgstr "相连分支"
 
-# English: "Current diameter: {diameter} in"
 # Source-Hash: c40570d3f7df8ad2
 # Review: required
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus-5-5
+# English: "Current diameter: {diameter} in"
 #: packages/nodes/src/pipe-segment/resize-inspector.tsx
 #, fuzzy
 msgid "node.pipeSegment.resizeInspector.currentDiameter"
 msgstr "当前直径：{diameter} in"
 
-# English: "Diameter (in)"
 # Source-Hash: e704515c0fe2a6ca
 # Review: required
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus-5-5
+# English: "Diameter (in)"
 #: packages/nodes/src/pipe-segment/resize-inspector.tsx
 #, fuzzy
 msgid "node.pipeSegment.resizeInspector.diameterIn"
 msgstr "直径（in）"
 
-# English: "Pipe resize diameter"
 # Source-Hash: bf4fd51ca4d3d6c6
 # Review: required
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus-5-5
+# English: "Pipe resize diameter"
 #: packages/nodes/src/pipe-segment/resize-inspector.tsx
 #, fuzzy
 msgid "node.pipeSegment.resizeInspector.pipeResizeDiameter"
 msgstr "调整后的管径"
 
-# English: "Pipe resize scope"
 # Source-Hash: e31a6978e4744398
 # Review: required
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus-5-5
+# English: "Pipe resize scope"
 #: packages/nodes/src/pipe-segment/resize-inspector.tsx
 #, fuzzy
 msgid "node.pipeSegment.resizeInspector.pipeResizeScope"
 msgstr "管道尺寸调整范围"
 
-# English: "Pipe size"
 # Source-Hash: 8b5479cd8378bf76
 # Review: required
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus-5-5
+# English: "Pipe size"
 #: packages/nodes/src/pipe-segment/resize-inspector.tsx
 #, fuzzy
 msgid "node.pipeSegment.resizeInspector.pipeSize"
 msgstr "管径"
 
-# English: "Resized in one undo step. Grades and boundary connections preserved."
 # Source-Hash: ad7c5e79e9f545f2
 # Review: required
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus-5-5
+# English: "Resized in one undo step. Grades and boundary connections preserved."
 #: packages/nodes/src/pipe-segment/resize-inspector.tsx
 #, fuzzy
 msgid "node.pipeSegment.resizeInspector.resized"
 msgstr "已作为一个撤销步骤调整尺寸。坡度和边界连接保持不变。"
 
-# English: "{runs, plural, one {# run} other {# runs}}, {fittings, plural, one {# fitting} other {# fittings}}, {reducers, plural, one {# new reducer} other {# new reducers}}. Grades stay unchanged."
 # Source-Hash: 2681a615278ea7de
 # Review: required
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus-5-5
+# English: "{runs, plural, one {# run} other {# runs}}, {fittings, plural, one {# fitting} other {# fittings}}, {reducers, plural, one {# new reducer} other {# new reducers}}. Grades stay unchanged."
 #: packages/nodes/src/pipe-segment/resize-inspector.tsx
 #, fuzzy
 msgid "node.pipeSegment.resizeInspector.resizeSummary"
 msgstr "{runs, plural, other {# 段管道}}，{fittings, plural, other {# 个管件}}，{reducers, plural, other {# 个新增异径管}}。坡度保持不变。"
 
-# English: "This segment"
 # Source-Hash: d271518d800f3e1c
 # Review: required
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus-5-5
+# English: "This segment"
 #: packages/nodes/src/pipe-segment/resize-inspector.tsx
 #, fuzzy
 msgid "node.pipeSegment.resizeInspector.thisSegment"
 msgstr "此段"
 
-# English: "Unable to resize pipe."
 # Source-Hash: 0518760b3747bae1
 # Review: required
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus-5-5
+# English: "Unable to resize pipe."
 #: packages/nodes/src/pipe-segment/resize-inspector.tsx
 #, fuzzy
 msgid "node.pipeSegment.resizeInspector.unableToResize"
@@ -29830,31 +29840,31 @@ msgstr "中距 {spacing}"
 msgid "node.shared.buildUpControls.woodPlank"
 msgstr "木板"
 
-# English: "Route preview"
 # Source-Hash: 0fe1b70953df9304
 # Review: required
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus-5-5
+# English: "Route preview"
 #: packages/nodes/src/shared/connection-feedback.tsx
 #, fuzzy
 msgid "node.shared.connectionFeedback.routePreview"
 msgstr "走向预览"
 
-# English: "{system, select, return {Return} other {Supply}} · {size} in · {state, select, connected {Connected} other {Draw from collar}}"
 # Source-Hash: d4da45e25561382c
 # Review: required
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus-5-5
+# English: "{system, select, return {Return} other {Supply}} · {size} in · {state, select, connected {Connected} other {Draw from collar}}"
 #: packages/nodes/src/shared/duct-collar-inspector.tsx
 #, fuzzy
 msgid "node.shared.ductCollarInspector.collarButton"
 msgstr "{system, select, return {回风} other {送风}} · {size} in · {state, select, connected {已连接} other {从套环绘制}}"
 
-# English: "Connect duct"
 # Source-Hash: 8ef43378888dba30
 # Review: required
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus-5-5
+# English: "Connect duct"
 #: packages/nodes/src/shared/duct-collar-inspector.tsx
 #, fuzzy
 msgid "node.shared.ductCollarInspector.connectDuct"
@@ -29910,21 +29920,21 @@ msgstr "宽度"
 msgid "node.shared.openingDepthPosition.depthPosition"
 msgstr "深度位置"
 
-# English: "{port} · {diameter} in · {elevation} m · {state, select, connected {Connected} other {Draw from collar}}"
 # Source-Hash: 9067ae38f38ebc6d
 # Review: required
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus-5-5
+# English: "{port} · {diameter} in · {elevation} m · {state, select, connected {Connected} other {Draw from collar}}"
 #: packages/nodes/src/shared/pipe-collar-inspector.tsx
 #, fuzzy
 msgid "node.shared.pipeCollarInspector.collarButton"
 msgstr "{port} · {diameter} in · {elevation} m · {state, select, connected {已连接} other {从套环绘制}}"
 
-# English: "Connect pipe"
 # Source-Hash: 88a982140de95dcc
 # Review: required
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus-5-5
+# English: "Connect pipe"
 #: packages/nodes/src/shared/pipe-collar-inspector.tsx
 #, fuzzy
 msgid "node.shared.pipeCollarInspector.connectPipe"

@@ -13,6 +13,7 @@ import {
   resumeSceneHistory,
   sceneRegistry,
   useLiveNodeOverrides,
+  usePascalI18n,
   useScene,
 } from '@pascal-app/core'
 import {
@@ -46,6 +47,7 @@ import {
   type PipeEndpoint,
   pipeContinuationHandlePlan,
 } from './continuation'
+import { pipeGradeBlockedNotice } from './grade-affordance'
 import { pipeUpdatesPreserveGrades } from './grade-operation'
 import { pipeGradesMatch, preservePipeGrades } from './slope'
 
@@ -142,6 +144,7 @@ const PipeSegmentSelectionAffordance = () => {
 }
 
 const PipePointHandles = ({ pipe, target }: { pipe: PipeSegmentNode; target: Object3D }) => {
+  const i18n = usePascalI18n()
   const { camera, gl } = useThree()
   const liveOverride = useLiveNodeOverrides((state) => state.overrides.get(pipe.id))
   const displayPipe = liveOverride ? ({ ...pipe, ...liveOverride } as PipeSegmentNode) : pipe
@@ -475,9 +478,7 @@ const PipePointHandles = ({ pipe, target }: { pipe: PipeSegmentNode; target: Obj
         return
       const batch = buildDragBatch(drag, next, detached)
       if (!batch) {
-        setGradeNotice(
-          'This edit cannot preserve the pipe grade and connected collars. Adjust the fitting or use Grade and flow.',
-        )
+        setGradeNotice(i18n._(pipeGradeBlockedNotice))
         return
       }
       setGradeNotice('')
