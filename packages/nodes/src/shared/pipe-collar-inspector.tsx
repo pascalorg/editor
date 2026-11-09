@@ -8,10 +8,8 @@ import {
   usePascalI18n,
   useScene,
 } from '@pascal-app/core'
-import { useEditor } from '@pascal-app/editor'
-import { useViewer } from '@pascal-app/viewer'
 import { pipeCollarOccupied } from '../pipe-segment/collar-connection'
-import { pipeGrade } from '../pipe-segment/slope'
+import { activatePipeCollarContinuation } from '../pipe-segment/continuation'
 
 export default function PipeCollarInspector({ node }: { node: AnyNode }) {
   const i18n = usePascalI18n()
@@ -32,33 +30,7 @@ export default function PipeCollarInspector({ node }: { node: AnyNode }) {
             type="button"
             disabled={occupied}
             className="block w-full rounded border px-2 py-1 text-left text-xs disabled:opacity-50"
-            onClick={() => {
-              const editor = useEditor.getState()
-              editor.setToolDefaults('pipe-segment', {
-                ...editor.toolDefaults['pipe-segment'],
-                continuation: { nodeId: node.id, portId: port.id },
-                diameter: port.diameter,
-                system: port.system,
-                pipeMaterial: 'pipeMaterial' in node ? node.pipeMaterial : 'pvc',
-                elevation: port.position[1],
-                routingMode:
-                  Math.hypot(port.direction[0], port.direction[2]) < 1e-6
-                    ? 'vertical'
-                    : 'horizontal',
-                targetElevation: port.position[1] + Math.sign(port.direction[1] || 1),
-                ...(() => {
-                  const grade = pipeGrade([0, 0, 0], [...port.direction]) ?? 0
-                  return {
-                    fall: Math.abs(grade) > 1e-6 ? 'sloped' : 'level',
-                    gradePercent: Math.abs(grade) * 100,
-                    flowDirection: grade < 0 ? 'reverse' : 'forward',
-                  }
-                })(),
-                crossingMode: 'connect',
-              })
-              useViewer.getState().setSelection({ selectedIds: [] })
-              editor.setTool('pipe-segment')
-            }}
+            onClick={() => activatePipeCollarContinuation(node, port)}
           >
             {i18n._({
               id: 'node.shared.pipeCollarInspector.collarButton',
