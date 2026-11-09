@@ -79,6 +79,9 @@ CI and releases allow drafts, never regressions:
   it falls back to `origin/main` if that is another commit with catalogs, then
   to the commit that introduced the catalogs. It never compares with a base
   that has no catalogs: with none available it fails and asks for `--base`.
+  A locale bundled after the base has no catalog there, and so no reviewed
+  entries to keep: the release job lists it as new and still scans its
+  compiled pack.
   It fails when a reviewed entry with the same English became a draft, or when
   a compiled pack contains any draft. Both jobs write the per-locale draft
   count, and the base used, to the job summary.
