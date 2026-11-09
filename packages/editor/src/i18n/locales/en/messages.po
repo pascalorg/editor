@@ -14172,6 +14172,10 @@ msgid "node.wall.panel.drywall"
 msgstr "Drywall"
 
 #: packages/nodes/src/wall/panel.tsx
+msgid "node.wall.panel.endHeightOffset"
+msgstr "End height offset"
+
+#: packages/nodes/src/wall/panel.tsx
 msgid "node.wall.panel.extendsDownwardToMeetTheTerrain"
 msgstr "Extends downward to meet the terrain. Height and top stay unchanged."
 
