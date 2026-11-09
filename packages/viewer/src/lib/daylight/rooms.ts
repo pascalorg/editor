@@ -1,5 +1,6 @@
 import {
   Box3,
+  type BufferAttribute,
   type Camera,
   Color,
   DataTexture,
@@ -14,7 +15,6 @@ import {
   type OrthographicCamera,
   type PerspectiveCamera,
   Raycaster,
-  RedFormat,
   RGBAFormat,
   SRGBColorSpace,
   Vector2,
@@ -35,14 +35,13 @@ import {
   normalWorld,
   positionWorld,
   select,
-  sharedUniformGroup,
   smoothstep,
   texture,
   uniform,
-  uniformArray,
   vec3,
   vec4,
 } from 'three/tsl'
+import { CELL, type MapLevel, RoomMap, TILE, type TileCells } from './room-map'
 
 /**
  * "Room-aware" interior light, the game-engine way (ported from the enhanced viewer):
@@ -65,12 +64,6 @@ import {
  */
 
 type N = any
-const CELL = 0.1
-/**
- * The room-id map stacks every level along Y of one texture. WebGPU only guarantees 8192 texels
- * a side (the renderer asks for no more), so a wide site or many levels coarsens the cells.
- */
-const MAX_MAP_SIZE = 8192
 /** Texels per portal: [center, halfW] [normal, halfH] [radiance, neighbour] [floorY, mainLamp, gain, kind]. */
 const PSTRIDE = 4
 /** Target average lamp irradiance of a room at night (same units as the ~1.5 sky irradiance of day). */
@@ -78,7 +71,6 @@ const LAMP_E_TARGET = 1.1
 /** Lamps have a size (shade/diffuser): never evaluate the inverse square closer than ~0.8 m. */
 const LAMP_MIN_D2 = 0.64
 const DATA_W = 256
-const MAX_LEVELS = 8
 /** Texels per exterior lamp: [pos, range] [rgb, cosInner] [spot dir, cosOuter]. */
 const EXT_STRIDE = 3
 
@@ -105,6 +97,7 @@ export type RoomZone = {
   id: string
   /** World XZ. */
   polygon: [number, number][]
+  holes?: [number, number][][]
   levelIndex: number
 }
 
@@ -113,8 +106,8 @@ export type RoomOpeningRoot = { object: Object3D; kind: 'window' | 'door'; id: s
 /** What the room system needs from a scene (live parametric or baked artifact). */
 export type RoomSceneInput = {
   bounds: Box3
-  /** World Y of each level, assembled (not exploded), ascending. */
-  levelY: number[]
+  /** Every level: assembled (not exploded) world Y of its floor and its building's index. */
+  levels: MapLevel[]
   zones: RoomZone[]
   /** Ceilings, roofs and slabs (enclosure rays) with their kind. */
   covers: { object: Object3D; kind: 'ceiling' | 'roof' | 'slab' }[]
@@ -194,14 +187,10 @@ export class RoomLighting {
   exteriorLamps: RoomLamp[] = []
   portals: Portal[] = []
   openings: Opening[] = []
-  levelY: number[] = [0]
+  levels: MapLevel[] = []
+  /** Which room a point is in (tiled per level; see `room-map.ts`). */
+  readonly map = new RoomMap()
   private data = new Float32Array(4)
-  private map = new Float32Array(1)
-  private origin = new Vector2()
-  private gridW = 1
-  private gridH = 1
-  private cell = CELL
-  private levels = 1
   private lampTexel = new Map<RoomLamp, number>()
   private lastSky: Parameters<RoomLighting['updateSky']> | null = null
 
@@ -224,28 +213,11 @@ export class RoomLighting {
   readonly skyPatch = uniform(3)
   /** Light through interior openings + threshold crossfade (off on the Low tier). */
   readonly softRooms = uniform(1)
+  /** Camera world Y (live). */
   readonly cameraY = uniform(0)
-  readonly focusedLevel = uniform(-1, 'int')
 
   // ---- shader inputs that change with the scene ----------------------------------------------
-  /**
-   * The level arrays live in one shared group, uploaded when a level moves: an array uniform in
-   * the default (per-object) group is re-sent for every object in every pass, whether it changed
-   * or not — some 760 uploads a frame in a furnished flat.
-   */
-  private readonly levelGroup = sharedUniformGroup('daylightLevels')
   private readonly u = {
-    levelYs: (uniformArray(new Array(MAX_LEVELS).fill(1e9), 'float') as N).setGroup(
-      this.levelGroup,
-    ) as N,
-    levelOffsets: (uniformArray(new Array(MAX_LEVELS).fill(0), 'float') as N).setGroup(
-      this.levelGroup,
-    ) as N,
-    levelCount: uniform(1, 'int'),
-    origin: uniform(new Vector2()),
-    gridW: uniform(1, 'int'),
-    gridH: uniform(1, 'int'),
-    cell: uniform(CELL),
     portalCount: uniform(0, 'int'),
     portalBase: uniform(0, 'int'),
     extLampStart: uniform(0, 'int'),
@@ -254,8 +226,7 @@ export class RoomLighting {
     activeBase: uniform(0, 'int'),
     spillCount: uniform(0, 'int'),
     extActiveCount: uniform(0, 'int'),
-    map: texture(emptyTexture(RedFormat)) as N,
-    data: texture(emptyTexture(RGBAFormat)) as N,
+    data: texture(emptyTexture()) as N,
   }
 
   /** Rebuild from a scene: rooms, lamps, portals, openings, room-id map. */
@@ -265,33 +236,12 @@ export class RoomLighting {
     this.portals = []
     this.openings = []
     this.lampTexel.clear()
-    const b = input.bounds
-    if (b.isEmpty()) {
-      this.levelY = [0]
-      this.gridW = this.gridH = this.levels = 1
-      this.cell = CELL
-      this.map = new Float32Array(1)
-      this.uploadMap()
-      this.allocateData()
-      return
-    }
-    this.origin.set(b.min.x - 1, b.min.z - 1)
-    this.levelY = input.levelY.length ? input.levelY.slice(0, MAX_LEVELS) : [0]
-    this.levels = this.levelY.length
-    const spanX = b.max.x - b.min.x + 2
-    const spanZ = b.max.z - b.min.z + 2
-    this.cell = Math.max(
-      CELL,
-      (spanX / MAX_MAP_SIZE) * 1.0001,
-      (spanZ / Math.floor(MAX_MAP_SIZE / this.levels)) * 1.0001,
-    )
-    this.gridW = Math.max(1, Math.ceil(spanX / this.cell))
-    this.gridH = Math.max(1, Math.ceil(spanZ / this.cell))
+    this.levels = input.levels.length ? input.levels : [{ y: 0, building: 0 }]
 
     // ---- rooms ---------------------------------------------------------------------------
     const raycaster = new Raycaster()
     input.configureRaycaster?.(raycaster)
-    const coverObjects = input.covers.map((c) => c.object)
+    const coverGrid = new MeshGrid(input.covers.map((c) => c.object))
     const coverKind = new Map<Object3D, string>()
     for (const c of input.covers) c.object.traverse((o) => coverKind.set(o, c.kind))
     const kindOf = (o: Object3D) => {
@@ -301,16 +251,30 @@ export class RoomLighting {
       }
       return ''
     }
+    // Level order inside each building (for the ceiling fallback) before the map is built.
+    const above = this.levels.map((level, i) => {
+      let next = -1
+      this.levels.forEach((other, j) => {
+        if (j === i || other.building !== level.building || other.y <= level.y) return
+        if (next < 0 || other.y < this.levels[next]!.y) next = j
+      })
+      return next
+    })
     for (const zone of input.zones) {
-      const levelIndex = MathUtils.clamp(zone.levelIndex, 0, this.levels - 1)
-      const floorY = this.levelY[levelIndex] ?? 0
-      const nextY = this.levelY[levelIndex + 1]
-      const area = Math.abs(polygonArea(zone.polygon))
-      const c = polygonCentroid(zone.polygon)
+      const levelIndex = MathUtils.clamp(zone.levelIndex, 0, this.levels.length - 1)
+      const floorY = this.levels[levelIndex]!.y
+      const nextY = above[levelIndex]! >= 0 ? this.levels[above[levelIndex]!]!.y : undefined
+      const holes = zone.holes ?? []
+      const area = Math.max(
+        0,
+        Math.abs(polygonArea(zone.polygon)) -
+          holes.reduce((sum, hole) => sum + Math.abs(polygonArea(hole)), 0),
+      )
+      const c = interiorPoint(zone.polygon, holes)
       // Enclosed = something overhead (ceiling / roof / slab above). Open terraces get sky light.
       raycaster.set(new Vector3(c.x, floorY + 1.2, c.y), new Vector3(0, 1, 0))
       raycaster.far = 30
-      const hits = intersectGeometry(raycaster, coverObjects, true)
+      const hits = intersectGeometry(raycaster, coverGrid.near(c.x, c.y, c.x, c.y), false)
       const hit = hits[0]
       const top = hits[hits.length - 1]
       const topKind = top ? kindOf(top.object) : ''
@@ -333,50 +297,18 @@ export class RoomLighting {
       })
     }
 
-    // ---- room-id map (levels stacked along Y of the texture) -----------------------------
-    const map = new Float32Array(this.gridW * this.gridH * this.levels)
-    this.rooms.forEach((room, ri) => {
-      const poly = room.zone.polygon
-      let minX = Number.POSITIVE_INFINITY
-      let minZ = Number.POSITIVE_INFINITY
-      let maxX = Number.NEGATIVE_INFINITY
-      let maxZ = Number.NEGATIVE_INFINITY
-      for (const [x, z] of poly) {
-        minX = Math.min(minX, x)
-        maxX = Math.max(maxX, x)
-        minZ = Math.min(minZ, z)
-        maxZ = Math.max(maxZ, z)
-      }
-      const i0 = Math.max(0, Math.floor((minX - this.origin.x) / this.cell))
-      const i1 = Math.min(this.gridW - 1, Math.ceil((maxX - this.origin.x) / this.cell))
-      const j0 = Math.max(0, Math.floor((minZ - this.origin.y) / this.cell))
-      const j1 = Math.min(this.gridH - 1, Math.ceil((maxZ - this.origin.y) / this.cell))
-      const rowBase = room.levelIndex * this.gridH
-      for (let j = j0; j <= j1; j++) {
-        const z = this.origin.y + (j + 0.5) * this.cell
-        for (let i = i0; i <= i1; i++) {
-          const x = this.origin.x + (i + 0.5) * this.cell
-          if (pointInPolygon(x, z, poly)) map[(rowBase + j) * this.gridW + i] = ri + 1
-        }
-      }
-    })
-    // Dilate by 2 cells into empty cells so wall-thickness gaps and polygon slop still resolve.
-    for (let pass = 0; pass < 2; pass++) {
-      const src = map.slice()
-      for (let l = 0; l < this.levels; l++)
-        for (let j = 1; j < this.gridH - 1; j++)
-          for (let i = 1; i < this.gridW - 1; i++) {
-            const k = (l * this.gridH + j) * this.gridW + i
-            if (src[k]) continue
-            const n = src[k - 1] || src[k + 1] || src[k - this.gridW] || src[k + this.gridW]
-            if (n) map[k] = n
-          }
-    }
-    this.map = map
-    this.uploadMap()
-
-    // ---- openings between rooms (soft room map) -------------------------------------------
-    this.openings = this.detectOpenings(input, raycaster)
+    // ---- room map + openings between rooms (walked on each level's grid) ---------------------
+    const openings = this.openingSearch(input, raycaster)
+    this.map.build(
+      this.levels,
+      this.rooms.map((room) => ({
+        level: room.levelIndex,
+        polygon: room.zone.polygon,
+        holes: room.zone.holes,
+      })),
+      openings.walk,
+    )
+    this.openings = openings.finish()
 
     // ---- lamps ---------------------------------------------------------------------------
     for (const lamp of input.lamps) {
@@ -500,15 +432,9 @@ export class RoomLighting {
     if (this.lastSky) this.updateSky(...this.lastSky)
   }
 
-  /** CPU-side room lookup (same rule as the shader, without the normal offset). */
+  /** CPU-side room lookup in assembled space (same rule as the shader, without the normal offset). */
   roomAt(p: Vector3): number {
-    let level = 0
-    for (let i = 0; i < this.levelY.length; i++) if (this.levelY[i]! <= p.y - 0.12) level = i
-    const i = Math.floor((p.x - this.origin.x) / this.cell)
-    const j = Math.floor((p.z - this.origin.y) / this.cell)
-    if (i < 0 || j < 0 || i >= this.gridW || j >= this.gridH) return -1
-    const v = this.map[(level * this.gridH + j) * this.gridW + i]
-    return v ? v - 1 : -1
+    return this.map.roomAt(p.x, p.y, p.z)
   }
 
   /**
@@ -517,6 +443,10 @@ export class RoomLighting {
    * such, not as a lamplit room it cannot see.
    */
   levelShown: boolean[] = []
+  /** Per level: focused (its rooms open from above when the camera is over their cover). */
+  levelFocused: boolean[] = []
+  /** Per level: the highest one shown in its building (its rooms seen from above). */
+  private levelTopShown: boolean[] = []
 
   /**
    * What the lit rooms in view add to an outside camera's meter: a blend of the exterior reading
@@ -547,8 +477,6 @@ export class RoomLighting {
           const t = Math.tan(MathUtils.degToRad(c.fov) / 2)
           return 4 * t * t * c.aspect
         })()
-    let topShown = -1
-    for (let i = 0; i < this.levelY.length; i++) if (this.levelShown[i] !== false) topShown = i
     let weight = 0
     let weighted = 0
     _roomsLight.setRGB(0, 0, 0)
@@ -558,7 +486,7 @@ export class RoomLighting {
       _toCamera.subVectors(camera.position, r.centroid)
       const facing = Math.max(0.2, _toCamera.y / Math.max(_toCamera.length(), 1e-4))
       const reach = ortho ? 1 : Math.max(_toCamera.lengthSq(), 1)
-      const open = r.levelIndex === topShown ? 1 : 0.15
+      const open = this.levelTopShown[r.levelIndex] !== false ? 1 : 0.15
       const w = (r.area * facing * open) / reach / view
       const E = this.meter(index, skyE)
       weight += w
@@ -589,29 +517,36 @@ export class RoomLighting {
   }
 
   isEnclosedAt(p: Vector3): { room: number; inside: boolean } {
-    let level = 0
-    for (let i = 0; i < this.levelY.length; i++) if (this.levelY[i]! <= p.y - 0.12) level = i
-    if (this.levelShown[level] === false) return { room: -1, inside: false }
     const room = this.roomAt(p)
     const r = room >= 0 ? this.rooms[room] : undefined
-    return { room, inside: !!r?.enclosed && p.y < r.ceilingY }
+    if (!r || this.levelShown[r.levelIndex] === false) return { room: -1, inside: false }
+    return { room, inside: r.enclosed && p.y < r.ceilingY }
   }
 
-  /** Explode / level motion: live world Y of each level (assembled + offset). */
-  setLevelOffsets(offsets: number[]) {
-    const ys = this.u.levelYs.array as number[]
-    const offs = this.u.levelOffsets.array as number[]
-    let changed = false
-    for (let i = 0; i < MAX_LEVELS; i++) {
-      const base = this.levelY[i]
-      const off = offsets[i] ?? 0
-      const y = base === undefined ? 1e9 : base + off
-      if (ys[i] === y && offs[i] === off) continue
-      ys[i] = y
-      offs[i] = off
-      changed = true
-    }
-    if (changed) this.levelGroup.needsUpdate = true
+  /**
+   * Live level presentation, per level: explode offset (live world Y − assembled), whether it is
+   * shown, and whether it is the selected level of a cutaway (solo / levels above hidden). A shown
+   * level is focused — its rooms open from above — when selected so, or when every level over it
+   * in its building is hidden.
+   */
+  setLevelPresentation(offsets: number[], shown: boolean[], selected: boolean[]) {
+    this.levelShown = shown
+    const focused = this.levels.map((_, i) => {
+      if (shown[i] === false) return false
+      if (selected[i]) return true
+      let up = this.map.levelAbove(i)
+      if (up < 0) return false
+      for (; up >= 0; up = this.map.levelAbove(up)) if (shown[up] !== false) return false
+      return true
+    })
+    this.levelFocused = focused
+    this.levelTopShown = this.levels.map((_, i) => {
+      if (shown[i] === false) return false
+      for (let up = this.map.levelAbove(i); up >= 0; up = this.map.levelAbove(up))
+        if (shown[up] !== false) return false
+      return true
+    })
+    this.map.setPresentation(offsets, shown, focused)
   }
 
   /** Re-run the light transfer (after a quality-tier change of the soft room map). */
@@ -791,7 +726,7 @@ export class RoomLighting {
     this.rooms.forEach((r, i) => {
       this.set(i * 3, r.enclosed ? 1 : 0, lampBase + lamp * 2, r.lamps.length, 0)
       this.set(i * 3 + 1, r.portals.length, 0, 0, 0)
-      this.set(i * 3 + 2, r.coverY, r.coverIsRoof ? 1 : 0, r.levelIndex, 0)
+      this.set(i * 3 + 2, r.coverY, r.coverIsRoof ? 1 : 0, this.map.gpuLevel(r.levelIndex), 0)
       for (const l of r.lamps) {
         this.lampTexel.set(l, lampBase + lamp * 2)
         this.set(lampBase + lamp * 2, l.position.x, l.position.y, l.position.z, l.range)
@@ -828,7 +763,7 @@ export class RoomLighting {
       this.set(t + 2, 0, 0, 0, p.neighbor)
       this.set(
         t + 3,
-        this.levelY[room.levelIndex] ?? 0,
+        this.levels[room.levelIndex]?.y ?? 0,
         main ? this.lampTexel.get(main)! : -1,
         p.gain,
         p.kind,
@@ -873,27 +808,6 @@ export class RoomLighting {
     this.u.extActiveCount.value = lit
   }
 
-  private uploadMap() {
-    const previous = this.u.map.value as DataTexture
-    const tex = new DataTexture(
-      this.map,
-      this.gridW,
-      this.gridH * this.levels,
-      RedFormat,
-      FloatType,
-    )
-    tex.magFilter = tex.minFilter = NearestFilter
-    tex.needsUpdate = true
-    this.u.map.value = tex
-    previous.dispose()
-    ;(this.u.origin.value as Vector2).copy(this.origin)
-    this.u.gridW.value = this.gridW
-    this.u.gridH.value = this.gridH
-    this.u.cell.value = this.cell
-    this.u.levelCount.value = this.levels
-    this.setLevelOffsets([])
-  }
-
   private markData() {
     ;(this.u.data.value as DataTexture).needsUpdate = true
   }
@@ -929,104 +843,118 @@ export class RoomLighting {
   }
 
   /**
-   * Walk every boundary between two room cells (or a room and outside) on the room map and cast
-   * short horizontal rays against the walls at 0.35 m and 1.6 m: open at both heights = a walkable
-   * opening (doorway, arch, open-plan edge). Windows don't count (sills are above 0.35 m).
+   * Walk every boundary between two room cells (or a room and outside) on each level's grid and
+   * cast short horizontal rays against the walls at 0.35 m and 1.6 m: open at both heights = a
+   * walkable opening (doorway, arch, open-plan edge). Windows don't count (sills are above 0.35 m).
+   * `walk` runs per level while its grid exists; `finish` clusters the samples into openings.
    */
-  private detectOpenings(input: RoomSceneInput, ray: Raycaster): Opening[] {
+  private openingSearch(input: RoomSceneInput, ray: Raycaster) {
     const doors = input.openings
       .filter((o) => o.kind === 'door')
       .map((o) => ({ id: o.id, box: new Box3().setFromObject(o.object) }))
     const doorHoles = doors.map((door) => door.box.clone().expandByScalar(0.05))
     ray.far = 0.9
+    const wallGrid = new MeshGrid(input.walls)
     const samples = new Map<string, OpeningSamples>()
-    const W = this.gridW
-    const H = this.gridH
-    const map = this.map
     const v = new Vector3()
     const dirV = new Vector3()
-    for (let l = 0; l < this.levels; l++) {
-      const floorY = this.levelY[l] ?? 0
-      for (let j = 0; j < H - 1; j++) {
-        for (let i = 0; i < W - 1; i++) {
-          const k = (l * H + j) * W + i
-          const A = map[k]!
-          for (const [di, dj, axis] of [
-            [1, 0, 'x'],
-            [0, 1, 'z'],
-          ] as const) {
-            if ((axis === 'x' ? j : i) % 2) continue // sample every 2nd cell along the edge (0.2 m)
-            const B = map[k + di + dj * W]!
-            if (A === B || (!A && !B)) continue
-            const a = A ? A - 1 : -1
-            const b = B ? B - 1 : -1
-            // Outside openings only from enclosed rooms.
-            if (a < 0 && !this.rooms[b]!.enclosed) continue
-            if (b < 0 && !this.rooms[a]!.enclosed) continue
-            const x = this.origin.x + (i + 0.5 + di * 0.5) * this.cell
-            const z = this.origin.y + (j + 0.5 + dj * 0.5) * this.cell
-            dirV.set(di, 0, dj)
-            let open = true
-            for (const h of [0.35, 1.6]) {
-              v.set(x, floorY + h, z).addScaledVector(dirV, -0.45)
-              ray.set(v, dirV)
-              // A doorway is open whatever wall-attached geometry crosses it (finishes, trims).
-              const blocked = intersectGeometry(ray, input.walls, false).some(
-                (hit) => !doorHoles.some((hole) => hole.containsPoint(hit.point)),
-              )
-              if (blocked) {
-                open = false
-                break
+
+    const walk = (tile: TileCells) => {
+      const { cells, stride, i0, j0, x0, z0, ci0, cj0, level: l } = tile
+      const floorY = this.levels[l]?.y ?? 0
+      const visit = (i: number, j: number, axis: 'x' | 'z') => {
+        const di = axis === 'x' ? 1 : 0
+        const dj = axis === 'z' ? 1 : 0
+        if ((axis === 'x' ? cj0 + j : ci0 + i) % 2) return // every 2nd cell along the edge (0.2 m)
+        const A = cells[j * stride + i]!
+        const B = cells[(j + dj) * stride + i + di]!
+        if (A === B) return
+        const a = A ? A - 1 : -1
+        const b = B ? B - 1 : -1
+        // Outside openings only from enclosed rooms.
+        if (a < 0 && !this.rooms[b]!.enclosed) return
+        if (b < 0 && !this.rooms[a]!.enclosed) return
+        const x = x0 + (i + 0.5 + di * 0.5) * CELL
+        const z = z0 + (j + 0.5 + dj * 0.5) * CELL
+        dirV.set(di, 0, dj)
+        for (const h of [0.35, 1.6]) {
+          v.set(x, floorY + h, z).addScaledVector(dirV, -0.45)
+          ray.set(v, dirV)
+          // A doorway is open whatever wall-attached geometry crosses it (finishes, trims).
+          const near = wallGrid.near(
+            Math.min(v.x, v.x + dirV.x * 0.9),
+            Math.min(v.z, v.z + dirV.z * 0.9),
+            Math.max(v.x, v.x + dirV.x * 0.9),
+            Math.max(v.z, v.z + dirV.z * 0.9),
+          )
+          const blocked = intersectGeometry(ray, near, false).some(
+            (hit) => !doorHoles.some((hole) => hole.containsPoint(hit.point)),
+          )
+          if (blocked) return
+        }
+        // Normalise so key/direction are from the lower room id (outside = last).
+        const lo = a < 0 ? b : b < 0 ? a : Math.min(a, b)
+        const hi = lo === a ? b : a
+        const dir = lo === a ? 1 : -1
+        const key = `${l}|${lo}|${hi}`
+        let s = samples.get(key)
+        if (!s) {
+          s = { a: lo, b: hi, pts: [], facing: [], level: l }
+          samples.set(key, s)
+        }
+        s.pts.push(new Vector3(x, floorY, z))
+        s.facing.push(new Vector3(di * dir, 0, dj * dir))
+      }
+      // Each edge belongs to the tile of the cell before it. A uniform tile has none inside: only
+      // its borders with the next tiles can hold one.
+      const iEnd = i0 + TILE
+      const jEnd = j0 + TILE
+      if (tile.uniform) {
+        for (let j = j0; j < jEnd; j++) visit(iEnd - 1, j, 'x')
+        for (let i = i0; i < iEnd; i++) visit(i, jEnd - 1, 'z')
+        return
+      }
+      for (let j = j0; j < jEnd; j++)
+        for (let i = i0; i < iEnd; i++) {
+          visit(i, j, 'x')
+          visit(i, j, 'z')
+        }
+    }
+
+    const finish = () => {
+      const openings: Opening[] = []
+      // Boundary samples a step apart along an edge belong to one opening. Off the grid axes (a
+      // rotated building) the edge is a staircase of cells, so adjacency is by distance.
+      const gap = Math.max(0.45, CELL * 3)
+      for (const s of samples.values()) {
+        const order = s.pts.map((_, k) => k).sort((p, q) => s.pts[p]!.x - s.pts[q]!.x)
+        const seen = new Uint8Array(order.length)
+        for (let seed = 0; seed < order.length; seed++) {
+          if (seen[seed]) continue
+          seen[seed] = 1
+          const members: number[] = []
+          const queue = [seed]
+          while (queue.length) {
+            const k = queue.pop()!
+            const p = s.pts[order[k]!]!
+            members.push(order[k]!)
+            for (const step of [-1, 1]) {
+              for (let m = k + step; m >= 0 && m < order.length; m += step) {
+                const q = s.pts[order[m]!]!
+                if (Math.abs(q.x - p.x) > gap) break
+                if (seen[m] || Math.hypot(q.x - p.x, q.z - p.z) > gap) continue
+                seen[m] = 1
+                queue.push(m)
               }
             }
-            if (!open) continue
-            // Normalise so key/direction are from the lower room id (outside = last).
-            const lo = a < 0 ? b : b < 0 ? a : Math.min(a, b)
-            const hi = lo === a ? b : a
-            const dir = lo === a ? 1 : -1
-            const key = `${l}|${lo}|${hi}`
-            let s = samples.get(key)
-            if (!s) {
-              s = { a: lo, b: hi, pts: [], facing: [], level: l }
-              samples.set(key, s)
-            }
-            s.pts.push(new Vector3(x, floorY, z))
-            s.facing.push(new Vector3(axis === 'x' ? dir : 0, 0, axis === 'z' ? dir : 0))
           }
+          if (members.length < 3) continue // < 0.5 m
+          openings.push(this.openingFromRun(members, s, doors))
         }
       }
+      return openings
     }
-    const openings: Opening[] = []
-    // Boundary samples a step apart along an edge belong to one opening. Off the grid axes (a
-    // rotated building) the edge is a staircase of cells, so adjacency is by distance.
-    const gap = Math.max(0.45, this.cell * 3)
-    for (const s of samples.values()) {
-      const order = s.pts.map((_, k) => k).sort((p, q) => s.pts[p]!.x - s.pts[q]!.x)
-      const seen = new Uint8Array(order.length)
-      for (let seed = 0; seed < order.length; seed++) {
-        if (seen[seed]) continue
-        seen[seed] = 1
-        const members: number[] = []
-        const queue = [seed]
-        while (queue.length) {
-          const k = queue.pop()!
-          const p = s.pts[order[k]!]!
-          members.push(order[k]!)
-          for (const step of [-1, 1]) {
-            for (let m = k + step; m >= 0 && m < order.length; m += step) {
-              const q = s.pts[order[m]!]!
-              if (Math.abs(q.x - p.x) > gap) break
-              if (seen[m] || Math.hypot(q.x - p.x, q.z - p.z) > gap) continue
-              seen[m] = 1
-              queue.push(m)
-            }
-          }
-        }
-        if (members.length < 3) continue // < 0.5 m
-        openings.push(this.openingFromRun(members, s, doors))
-      }
-    }
-    return openings
+    return { walk, finish }
   }
 
   /** One opening from its boundary samples: measured along their own line, facing room b. */
@@ -1058,13 +986,13 @@ export class RoomLighting {
       hi = Math.max(hi, t)
     }
     c.addScaledVector(tangent, (lo + hi) / 2)
-    const width = hi - lo + 2 * this.cell
+    const width = hi - lo + 2 * CELL
     const facing = members.reduce((acc, k) => acc.add(s.facing[k]!), new Vector3())
     const normal = new Vector3(-tangent.z, 0, tangent.x)
     if (normal.dot(facing) < 0) normal.negate()
     const roomA = this.rooms[s.a]!
     const roomB = s.b >= 0 ? this.rooms[s.b] : undefined
-    const floorY = this.levelY[s.level] ?? 0
+    const floorY = this.levels[s.level]?.y ?? 0
     // Door in this opening? → its height + state. Otherwise floor to the lower ceiling.
     const door = doors.find((d) =>
       d.box
@@ -1089,34 +1017,16 @@ export class RoomLighting {
 
   // ---- TSL ---------------------------------------------------------------------------------
 
-  /** Level index for a world-space height (live, explode-offset level heights). */
-  private levelOfNode(y: N) {
-    const level = int(0).toVar()
-    Loop({ start: int(1), end: this.u.levelCount, type: 'int', condition: '<' }, ({ i }: N) => {
-      If(this.u.levelYs.element(i).lessThanEqual(y.sub(0.12)), () => {
-        level.assign(i)
-      })
-    })
-    return level
-  }
+  /** Room index (−1 outside) at a world-space position (live heights). */
+  roomAtNode = Fn(([p]: [N]) => this.map.roomAtNode(p))
 
-  /** Room index (−1 outside) at a world-space position. */
-  roomAtNode = Fn(([p]: [N]) => {
-    const u = this.u
-    const level = this.levelOfNode(p.y)
-    const cell = ivec2(p.xz.sub(u.origin).div(u.cell).floor())
-    const inside = cell.x
-      .greaterThanEqual(0)
-      .and(cell.y.greaterThanEqual(0))
-      .and(cell.x.lessThan(u.gridW))
-      .and(cell.y.lessThan(u.gridH))
-    const safe = ivec2(
-      (clamp as N)(cell.x, int(0), u.gridW.sub(1)),
-      (clamp as N)(cell.y, int(0), u.gridH.sub(1)),
-    )
-    const id = u.map.load(ivec2(safe.x, safe.y.add(level.mul(u.gridH)))).r
-    return select(inside, int(id).sub(1), int(-1))
-  })
+  /**
+   * The room a surface faces (probed 18 cm off it along its normal). One node per material: its
+   * lighting and its exterior mask share the lookup.
+   */
+  probeRoomNode(): N {
+    return this.roomAtNode(positionWorld.add(normalWorld.mul(0.18)))
+  }
 
   /** E' = Emax·(1 − e^(−E/Emax)), on luminance, hue kept — near-field hot spots compress, never blow out. */
   private softClampLamps(e: N): N {
@@ -1130,11 +1040,12 @@ export class RoomLighting {
    * topmost cover and that cover is hidden from there: a ceiling (hidden from above), or anything
    * once its level is focused (the levels over it hidden). From inside, under the cover, the room
    * stays enclosed whatever is focused: it must not take the full sky on top of its windows.
-   * `h2` is the room's third header texel: [coverY, roof, level, 0].
+   * `h2` is the room's third header texel: [coverY, roof, level, 0]; `level` its level's
+   * [th, entryOffset, offset, flags] (flag 1: focused).
    */
-  private openToSky(h2: N): N {
-    const focused = this.focusedLevel.greaterThanEqual(0).and(int(h2.z).equal(this.focusedLevel))
-    return this.cameraY.greaterThan(h2.x).and(h2.y.lessThan(0.5).or(focused))
+  private openToSky(h2: N, level: N): N {
+    const focused = level.w.mod(2).greaterThan(0.5)
+    return this.cameraY.sub(level.z).greaterThan(h2.x).and(h2.y.lessThan(0.5).or(focused))
   }
 
   private texel(i: N): N {
@@ -1147,23 +1058,20 @@ export class RoomLighting {
    *  irradiance — lamp + portal + bounce diffuse irradiance (linear)
    *  enclosure  — multiplier for the sky IBL (1 outdoors, `indoorEnv` in enclosed rooms)
    */
-  lightingNode = Fn(() => {
-    const probe = positionWorld.add(normalWorld.mul(0.18))
-    const room = this.roomAtNode(probe).toVar()
-    // Shade in assembled space so exploded floors stay lit exactly as when stacked.
-    const assembled = positionWorld.sub(
-      vec3(0, this.u.levelOffsets.element(this.levelOfNode(probe.y)), 0),
-    )
+  lightingNode = Fn(([probeRoom]: [N]) => {
+    const room = int(probeRoom).toVar()
     const irr = vec3(0).toVar()
     const enclosure = float(1).toVar()
     If(room.greaterThanEqual(0), () => {
       const h0 = this.texel(room.mul(3))
       const h1 = this.texel(room.mul(3).add(1))
       const h2 = this.texel(room.mul(3).add(2))
-      If(h0.x.greaterThan(0.5).and(this.openToSky(h2).not()), () => {
+      const level = this.map.levelTexel1(h2.z)
+      If(h0.x.greaterThan(0.5).and(this.openToSky(h2, level).not()), () => {
         enclosure.assign(this.indoorEnv)
       })
-      const P = assembled
+      // Shade in assembled space so exploded floors stay lit exactly as when stacked.
+      const P = positionWorld.sub(vec3(0, level.z, 0))
       const Nw = normalWorld
       // Lamps: smooth windowed inverse-square, wrapped diffuse so the room reads as filled
       // rather than spotlit — stands in for the bounce we don't compute.
@@ -1388,13 +1296,13 @@ export class RoomLighting {
   })
 
   /** 1 where exterior lights may shine (outside, or rooms open to the sky), 0 inside. */
-  exteriorMaskNode = Fn(() => {
-    const room = this.roomAtNode(positionWorld.add(normalWorld.mul(0.18))).toVar()
+  exteriorMaskNode = Fn(([probeRoom]: [N]) => {
+    const room = int(probeRoom).toVar()
     const mask = float(1).toVar()
     If(room.greaterThanEqual(0), () => {
       const h0 = this.texel(room.mul(3))
       const h2 = this.texel(room.mul(3).add(2))
-      If(h0.x.greaterThan(0.5).and(this.openToSky(h2).not()), () => {
+      If(h0.x.greaterThan(0.5).and(this.openToSky(h2, this.map.levelTexel1(h2.z)).not()), () => {
         mask.assign(0)
       })
     })
@@ -1431,14 +1339,58 @@ function intersectGeometry(ray: Raycaster, objects: Object3D[], recursive: boole
   return hits.sort((a, b) => a.distance - b.distance)
 }
 
-function emptyTexture(format: typeof RedFormat | typeof RGBAFormat): DataTexture {
-  const tex = new DataTexture(
-    new Float32Array(format === RedFormat ? 1 : 4),
-    1,
-    1,
-    format,
-    FloatType,
-  )
+/**
+ * Meshes (and the meshes under them) bucketed by their world XZ bounds, so a short doorway ray or
+ * a vertical cover ray tests its neighbours, not every wall and slab of the scene.
+ */
+class MeshGrid {
+  private static readonly SIZE = 2
+  private readonly cells = new Map<number, Mesh[]>()
+  private readonly seen = new Set<Mesh>()
+
+  constructor(roots: Object3D[]) {
+    const box = new Box3()
+    for (const root of roots)
+      root.traverse((object) => {
+        const mesh = object as Mesh
+        if (!mesh.isMesh) return
+        // From the vertices as they are now: a cached bounding box can predate geometry that was
+        // rebuilt in place (walls finishing while a large scene loads).
+        const position = mesh.geometry?.getAttribute('position')
+        if (!position || position.count === 0) return
+        box.setFromBufferAttribute(position as BufferAttribute).applyMatrix4(mesh.matrixWorld)
+        if (box.isEmpty()) return
+        const s = MeshGrid.SIZE
+        for (let iz = Math.floor(box.min.z / s); iz <= Math.floor(box.max.z / s); iz++)
+          for (let ix = Math.floor(box.min.x / s); ix <= Math.floor(box.max.x / s); ix++) {
+            const key = cellKey(ix, iz)
+            const list = this.cells.get(key)
+            if (list) list.push(mesh)
+            else this.cells.set(key, [mesh])
+          }
+      })
+  }
+
+  /** Meshes whose bounds may reach the XZ rect. */
+  near(minX: number, minZ: number, maxX: number, maxZ: number): Mesh[] {
+    const s = MeshGrid.SIZE
+    const out: Mesh[] = []
+    this.seen.clear()
+    for (let iz = Math.floor(minZ / s); iz <= Math.floor(maxZ / s); iz++)
+      for (let ix = Math.floor(minX / s); ix <= Math.floor(maxX / s); ix++)
+        for (const mesh of this.cells.get(cellKey(ix, iz)) ?? [])
+          if (!this.seen.has(mesh)) {
+            this.seen.add(mesh)
+            out.push(mesh)
+          }
+    return out
+  }
+}
+
+const cellKey = (ix: number, iz: number) => (ix + 1_000_000) * 2_000_003 + (iz + 1_000_000)
+
+function emptyTexture(): DataTexture {
+  const tex = new DataTexture(new Float32Array(4), 1, 1, RGBAFormat, FloatType)
   tex.magFilter = tex.minFilter = NearestFilter
   tex.needsUpdate = true
   return tex
@@ -1485,6 +1437,32 @@ export function polygonCentroid(poly: [number, number][]) {
 }
 
 /** Tanner Helland blackbody fit → linear RGB. */
+/** A point inside the polygon and outside its holes: the centroid when it is, else a scan. */
+export function interiorPoint(poly: [number, number][], holes: [number, number][][] = []) {
+  const inside = (x: number, z: number) =>
+    pointInPolygon(x, z, poly) && !holes.some((hole) => pointInPolygon(x, z, hole))
+  const c = polygonCentroid(poly)
+  if (inside(c.x, c.y)) return c
+  let minX = Number.POSITIVE_INFINITY
+  let minZ = Number.POSITIVE_INFINITY
+  let maxX = Number.NEGATIVE_INFINITY
+  let maxZ = Number.NEGATIVE_INFINITY
+  for (const [x, z] of poly) {
+    minX = Math.min(minX, x)
+    maxX = Math.max(maxX, x)
+    minZ = Math.min(minZ, z)
+    maxZ = Math.max(maxZ, z)
+  }
+  for (let n = 4; n <= 32; n *= 2)
+    for (let j = 1; j < n; j++)
+      for (let i = 1; i < n; i++) {
+        const x = minX + ((maxX - minX) * i) / n
+        const z = minZ + ((maxZ - minZ) * j) / n
+        if (inside(x, z)) return new Vector2(x, z)
+      }
+  return c
+}
+
 export function kelvin(k: number) {
   const t = k / 100
   let r: number
