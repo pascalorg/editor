@@ -127,13 +127,31 @@ async function press(renderer: Renderer, target: ReturnType<typeof hitArea>, at:
   await settle(renderer)
 }
 
-async function pointer(type: 'pointermove' | 'pointerup', at: Point, altKey = false) {
+async function pointer(
+  type: 'pointermove' | 'pointerup' | 'pointercancel',
+  at: Point,
+  altKey = false,
+) {
   await act(async () => {
     window.dispatchEvent(Object.assign(new Event(type), { button: 0, ...client(at), altKey }))
   })
 }
 
 const near = (a: number, b: number) => Math.abs(a - b) < 1e-6
+
+/** Opens the first duct's run-center cluster and presses its along-run (+X) arrow. */
+async function grabAlongArrow(renderer: Renderer): Promise<Point> {
+  await settle(renderer)
+  await press(
+    renderer,
+    hitArea(renderer, (p) => near(p.x, 1) && near(p.y, 1) && near(p.z, 0)),
+    [1, 1, 0],
+  )
+  const arrow = hitArea(renderer, (p) => p.x > 1.05 && p.x < 1.95 && near(p.y, 1) && near(p.z, 0))
+  const grip = arrow.instance.getWorldPosition(new Vector3())
+  await press(renderer, arrow, [grip.x, grip.y, grip.z])
+  return [grip.x, grip.y, grip.z]
+}
 
 test('holding Alt on a duct end drag drops the joined duct from the live preview', async () => {
   const { first, second } = seed()
@@ -178,16 +196,8 @@ test('Alt slides a duct run center arrow freely in Grid mode', async () => {
   ] as const) {
     const { first } = seed({ joined: false })
     const renderer = await mount(<Scene />)
-    await settle(renderer)
-    await press(
-      renderer,
-      hitArea(renderer, (p) => near(p.x, 1) && near(p.y, 1) && near(p.z, 0)),
-      [1, 1, 0],
-    )
-    const arrow = hitArea(renderer, (p) => p.x > 1.05 && p.x < 1.95 && near(p.y, 1) && near(p.z, 0))
-    const grip = arrow.instance.getWorldPosition(new Vector3())
-    await press(renderer, arrow, [grip.x, grip.y, grip.z])
-    const to: Point = [grip.x + 0.37, grip.y, grip.z]
+    const grip = await grabAlongArrow(renderer)
+    const to: Point = [grip[0] + 0.37, grip[1], grip[2]]
     await pointer('pointermove', to, altKey)
     expect(previewOf(first)?.path?.[0]?.[0]).toBeCloseTo(delta, 6)
     await pointer('pointerup', to, altKey)
@@ -197,4 +207,21 @@ test('Alt slides a duct run center arrow freely in Grid mode', async () => {
     expect(useScene.temporal.getState().pastStates).toHaveLength(1)
     await renderer.unmount()
   }
+})
+
+test('a pointercancel drops a duct run slide', async () => {
+  const { first } = seed({ joined: false })
+  const renderer = await mount(<Scene />)
+  const grip = await grabAlongArrow(renderer)
+  const to: Point = [grip[0] + 0.37, grip[1], grip[2]]
+  await pointer('pointermove', to)
+  expect(previewOf(first)?.path?.[0]?.[0]).toBeCloseTo(0.5, 6)
+
+  await pointer('pointercancel', to)
+  expect(previewOf(first)).toBeUndefined()
+  expect(useInteractionScope.getState().scope.kind).toBe('idle')
+  expect(useViewer.getState().inputDragging).toBe(false)
+  await pointer('pointerup', to)
+  expect(pathOf(first)).toEqual(FIRST)
+  expect(useScene.temporal.getState().pastStates).toHaveLength(0)
 })
