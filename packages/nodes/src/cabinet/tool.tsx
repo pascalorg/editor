@@ -33,17 +33,21 @@ import {
   isAlignmentGuideActive,
   isGridSnapActive,
   isMagneticSnapActive,
-  isPlacementTypingKey,
   isTypingTarget,
   isValidWallSideFace,
+  LocalizedHtml,
   markToolCancelConsumed,
   movementSfxStepKey,
+  PLACEMENT_TYPING_DISTANCE_OFFSET,
   PlacementBox,
   PlacementCoordinateInput,
   PlacementDimensionGuides,
+  type PlacementTypingField,
   type PlacementTypingState,
   parseMeasurement,
+  placementTypingLengthOptions,
   publishPlacementSurface,
+  routePlacementTypingKey,
   triggerSFX,
   useAlignmentGuides,
   useEditor,
@@ -425,8 +429,6 @@ const CabinetPlacementTool = () => {
   const dimensionInput = usePlacementPreview((s) => s.dimensionInput)
   const typingActive = usePlacementTyping((s) => s.isActive)
   const typingProjectedPosition = usePlacementTyping((s) => s.projectedPosition)
-  // HUD ownership: in 2d/split the floorplan pane owns the typed-entry HUD.
-  const viewMode = useEditor((s) => s.viewMode)
   const [placement, setPlacement] = useState<CabinetPlacement | null>(null)
   const [draftSegments, setDraftSegments] = useState<DraftSegment[]>([])
   const [yaw, setYaw] = useState(0)
@@ -1730,9 +1732,11 @@ const CabinetPlacementTool = () => {
       const defaults = typedCoordinateDefaultsRef.current
       if (!typing.isActive || !current || !hit || !defaults || current.stretch) return false
 
-      const bareUnit = unit === 'imperial' ? 'in' : metricNotation === 'millimeters' ? 'mm' : 'm'
+      const lengthOptions = placementTypingLengthOptions(unit, metricNotation)
       const parseTypedValue = (raw: string, fallback: number) =>
-        raw.trim() ? parseMeasurement(raw, { kind: 'length', unitId: 'm' }, { bareUnit }) : fallback
+        raw.trim()
+          ? parseMeasurement(raw, { kind: 'length', unitId: 'm' }, lengthOptions)
+          : fallback
       const distance = parseTypedValue(typing.fields[0], defaults[0])
       const offset = parseTypedValue(typing.fields[1], defaults[1])
       if (distance == null || offset == null) return false
@@ -1778,7 +1782,7 @@ const CabinetPlacementTool = () => {
       return true
     }
 
-    const beginTypedPlacement = (key: string) => {
+    const beginTypedPlacement = (activeField: PlacementTypingField) => {
       const current = placementRef.current
       if (!current || current.stretch || !current.snappedToWall || !current.wallId) return false
       const nodes = useScene.getState().nodes
@@ -1809,13 +1813,14 @@ const CabinetPlacementTool = () => {
       typedWallHitRef.current = hit
       typedCoordinateDefaultsRef.current = [coordinates.distance, coordinates.offset]
       suppressTypedRestoreRef.current = false
-      usePlacementTyping
-        .getState()
-        .begin([
+      usePlacementTyping.getState().begin({
+        labels: PLACEMENT_TYPING_DISTANCE_OFFSET,
+        fieldDefaults: [
           formatLinearMeasurement(coordinates.distance, unit, metricNotation),
           formatLinearMeasurement(coordinates.offset, unit, metricNotation),
-        ])
-      usePlacementTyping.getState().append(key)
+        ],
+        activeField,
+      })
       return true
     }
 
@@ -2039,51 +2044,15 @@ const CabinetPlacementTool = () => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (isTypingTarget(event.target)) return
       const dimensionEditor = usePlacementPreview.getState()
-      const placementTyping = usePlacementTyping.getState()
-      if (placementTyping.isActive) {
-        if (event.key === 'Tab' || event.key === ',') {
-          placementTyping.toggleField()
-          event.preventDefault()
-          event.stopPropagation()
-          return
-        }
-        if (event.key === 'Enter') {
-          placementTyping.requestCommit()
-          event.preventDefault()
-          event.stopPropagation()
-          return
-        }
-        if (event.key === 'Escape') {
-          placementTyping.clear()
+      const typingOutcome = routePlacementTypingKey(event, {
+        begin: (field) => !dimensionEditor.activeDimensionId && beginTypedPlacement(field),
+      })
+      if (typingOutcome) {
+        if (typingOutcome === 'commit') usePlacementTyping.getState().requestCommit()
+        if (typingOutcome === 'clear') {
           typedWallHitRef.current = null
           typedCoordinateDefaultsRef.current = null
-          event.preventDefault()
-          event.stopPropagation()
-          return
         }
-        if (event.key === 'Backspace' || event.key === 'Delete') {
-          if (event.key === 'Delete') placementTyping.setField(placementTyping.activeField, '')
-          else placementTyping.backspace()
-          event.preventDefault()
-          event.stopPropagation()
-          return
-        }
-        if (isPlacementTypingKey(event.key) && !event.metaKey && !event.ctrlKey && !event.altKey) {
-          placementTyping.append(event.key)
-          event.preventDefault()
-          event.stopPropagation()
-          return
-        }
-      }
-      if (
-        !dimensionEditor.activeDimensionId &&
-        isPlacementTypingKey(event.key) &&
-        /^[0-9.-]$/.test(event.key) &&
-        !event.metaKey &&
-        !event.ctrlKey &&
-        !event.altKey &&
-        beginTypedPlacement(event.key)
-      ) {
         event.preventDefault()
         event.stopPropagation()
         return
@@ -2372,13 +2341,8 @@ const CabinetPlacementTool = () => {
           ))}
         </group>
       ) : null}
-      {/* Render the typed-entry HUD from exactly one surface: the 2D pane
-          owns it whenever it is visible (2d / split); the 3D Html mounts it
-          only in 3d-only mode. Both instances share one store, so mounting
-          both in split view would show two HUDs and steal the caret on
-          Tab/activation. */}
-      {viewMode === '3d' && typingActive && !stretch && placement.snappedToWall ? (
-        <Html
+      {typingActive && !stretch && placement.snappedToWall ? (
+        <LocalizedHtml
           center
           position={[
             typingProjectedPosition?.[0] ?? placement.position[0],
@@ -2389,7 +2353,7 @@ const CabinetPlacementTool = () => {
           zIndexRange={[200, 0]}
         >
           <PlacementCoordinateInput />
-        </Html>
+        </LocalizedHtml>
       ) : null}
       {placementLabel ? (
         <Html

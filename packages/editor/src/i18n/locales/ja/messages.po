@@ -13602,6 +13602,36 @@ msgstr "領域を削除"
 msgid "editor.panels.wallRegionList.paintRegions"
 msgstr "塗装領域"
 
+# Source-Hash: fe7ddb094aa8ff4d
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Distance"
+#: packages/editor/src/store/use-placement-typing.ts
+#, fuzzy
+msgid "editor.placementTyping.distance"
+msgstr "距離"
+
+# Source-Hash: 643687bc3adaac76
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Length"
+#: packages/editor/src/store/use-placement-typing.ts
+#, fuzzy
+msgid "editor.placementTyping.length"
+msgstr "長さ"
+
+# Source-Hash: 0f0e13abf9b2bb67
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Offset"
+#: packages/editor/src/store/use-placement-typing.ts
+#, fuzzy
+msgid "editor.placementTyping.offset"
+msgstr "オフセット"
+
 # Source-Hash: 89ee318aad485f83
 # Review: required
 # AI-Provider: claude-code

@@ -265,6 +265,7 @@ export {
   type WallPullSnapRadii,
   type WallPullSnapResult,
 } from './components/tools/wall/wall-pull-snap'
+export { resolveTypedWallEnd } from './components/tools/wall/wall-typed-entry'
 // `ToolbarLeft` / `ToolbarRight` alias `ViewerToolbarLeft` / `ViewerToolbarRight`
 // (same components) under the names headless hosts compose their toolbars with.
 export {
@@ -1174,10 +1175,18 @@ export {
 } from './store/use-placement-preview'
 export {
   isPlacementTypingKey,
+  isPlacementTypingStartKey,
+  PLACEMENT_TYPING_DISTANCE_OFFSET,
+  PLACEMENT_TYPING_LENGTH,
   type PlacementTypingField,
+  type PlacementTypingKeyOptions,
+  type PlacementTypingKeyOutcome,
   type PlacementTypingProjection,
+  type PlacementTypingSession,
   type PlacementTypingState,
   type PlacementTypingValues,
+  placementTypingLengthOptions,
+  routePlacementTypingKey,
   usePlacementTyping,
 } from './store/use-placement-typing'
 export { usePointAsk } from './store/use-point-ask'
@@ -1196,13 +1205,6 @@ export {
   useStairBuildPreview,
 } from './store/use-stair-build-preview'
 export { useUploadStore } from './store/use-upload'
-export {
-  acceptsWallTypingKey,
-  isWallTypingKey,
-  isWallTypingStartKey,
-  resolveTypedCommitEnd,
-  useWallDraftTyping,
-} from './store/use-wall-draft-typing'
 export { useWallMoveGhosts, type WallMoveGhostBridge } from './store/use-wall-move-ghosts'
 export {
   default as useWallSnapIndicator,

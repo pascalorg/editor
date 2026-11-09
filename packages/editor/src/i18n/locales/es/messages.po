@@ -13602,6 +13602,36 @@ msgstr "Eliminar región"
 msgid "editor.panels.wallRegionList.paintRegions"
 msgstr "Regiones de pintura"
 
+# Source-Hash: fe7ddb094aa8ff4d
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Distance"
+#: packages/editor/src/store/use-placement-typing.ts
+#, fuzzy
+msgid "editor.placementTyping.distance"
+msgstr "Distancia"
+
+# Source-Hash: 643687bc3adaac76
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Length"
+#: packages/editor/src/store/use-placement-typing.ts
+#, fuzzy
+msgid "editor.placementTyping.length"
+msgstr "Longitud"
+
+# Source-Hash: 0f0e13abf9b2bb67
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Offset"
+#: packages/editor/src/store/use-placement-typing.ts
+#, fuzzy
+msgid "editor.placementTyping.offset"
+msgstr "Desplazamiento"
+
 # Source-Hash: 89ee318aad485f83
 # Review: required
 # AI-Provider: claude-code

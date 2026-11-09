@@ -1,33 +1,31 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
-import { usePlacementTyping } from '../../../store/use-placement-typing'
-
-const FIELD_LABELS = ['Distance', 'Offset'] as const
+import { usePascalI18n } from '@pascal-app/core'
+import { type PlacementTypingField, usePlacementTyping } from '../../../store/use-placement-typing'
 
 export type PlacementCoordinateInputProps = {
-  className?: string
+  /** What each empty field stands for; defaults to the session's `fieldDefaults`. */
+  placeholders?: readonly string[]
 }
 
-export function PlacementCoordinateInput({ className }: PlacementCoordinateInputProps) {
+/**
+ * The typed-entry HUD, one box per field of the session. It only displays the
+ * session: keys reach the active tool's own handler (`routePlacementTypingKey`),
+ * so the same HUD can sit in the 3D view and the plan at once without
+ * competing for focus. Clicking a field makes it the active one.
+ */
+export function PlacementCoordinateInput({ placeholders }: PlacementCoordinateInputProps) {
+  const i18n = usePascalI18n()
   const isActive = usePlacementTyping((state) => state.isActive)
+  const labels = usePlacementTyping((state) => state.labels)
   const fields = usePlacementTyping((state) => state.fields)
   const fieldDefaults = usePlacementTyping((state) => state.fieldDefaults)
   const activeField = usePlacementTyping((state) => state.activeField)
-  const inputRefs = useRef<Array<HTMLInputElement | null>>([])
-
-  useEffect(() => {
-    const input = inputRefs.current[activeField]
-    if (!isActive || !input) return
-    input.focus()
-    input.setSelectionRange(input.value.length, input.value.length)
-  }, [activeField, isActive])
 
   if (!isActive) return null
 
   return (
     <div
-      className={className}
       data-placement-coordinate-entry
       onClick={(event) => event.stopPropagation()}
       onPointerDown={(event) => event.stopPropagation()}
@@ -43,13 +41,22 @@ export function PlacementCoordinateInput({ className }: PlacementCoordinateInput
         padding: '5px 7px',
         pointerEvents: 'auto',
         userSelect: 'none',
+        whiteSpace: 'nowrap',
       }}
     >
-      {FIELD_LABELS.map((label, index) => {
-        const field = index as 0 | 1
+      {labels.map((descriptor, index) => {
+        const field = index as PlacementTypingField
+        const label = i18n._(descriptor)
+        const active = field === activeField
+        const value = fields[field]
         return (
-          <label
-            key={label}
+          <div
+            data-placement-coordinate-field={descriptor.id}
+            key={descriptor.id}
+            onPointerDown={(event) => {
+              event.stopPropagation()
+              usePlacementTyping.getState().setActiveField(field)
+            }}
             style={{
               alignItems: 'center',
               display: 'flex',
@@ -60,54 +67,26 @@ export function PlacementCoordinateInput({ className }: PlacementCoordinateInput
               textTransform: 'uppercase',
             }}
           >
-            <span style={{ color: field === activeField ? '#a5b4fc' : '#94a3b8' }}>{label}</span>
-            <input
+            <span style={{ color: active ? '#a5b4fc' : '#94a3b8' }}>{label}</span>
+            <span
               aria-label={label}
-              data-placement-coordinate-field={label.toLowerCase()}
-              onChange={(event) =>
-                usePlacementTyping.getState().setField(field, event.target.value)
-              }
-              onFocus={() => usePlacementTyping.getState().setActiveField(field)}
-              onKeyDown={(event) => {
-                if (event.key === 'Tab' || event.key === ',') {
-                  event.preventDefault()
-                  event.stopPropagation()
-                  usePlacementTyping.getState().toggleField()
-                  return
-                }
-                if (event.key === 'Enter') {
-                  event.preventDefault()
-                  event.stopPropagation()
-                  usePlacementTyping.getState().requestCommit()
-                  return
-                }
-                if (event.key === 'Escape') {
-                  event.preventDefault()
-                  event.stopPropagation()
-                  usePlacementTyping.getState().clear()
-                }
-              }}
-              placeholder={fieldDefaults[field] || (field === 0 ? 'distance' : '0')}
-              ref={(element) => {
-                inputRefs.current[field] = element
-              }}
-              spellCheck={false}
+              role="status"
               style={{
-                background: field === activeField ? '#eef2ff' : '#e2e8f0',
-                border: 'none',
+                background: active ? '#eef2ff' : '#e2e8f0',
                 borderRadius: 3,
-                color: '#0f172a',
-                fontFamily: 'inherit',
+                color: value ? '#0f172a' : '#64748b',
                 fontSize: 12,
                 fontWeight: 600,
-                outline: field === activeField ? '2px solid #818cf8' : 'none',
+                minWidth: 76,
+                outline: active ? '2px solid #818cf8' : 'none',
                 padding: '3px 5px',
                 textAlign: 'right',
-                width: 76,
+                textTransform: 'none',
               }}
-              value={fields[field]}
-            />
-          </label>
+            >
+              {value || placeholders?.[field] || fieldDefaults[field] || '\u00a0'}
+            </span>
+          </div>
         )
       })}
     </div>
