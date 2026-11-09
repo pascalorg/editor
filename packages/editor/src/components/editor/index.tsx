@@ -983,7 +983,7 @@ const ViewerSceneContent = memo(function ViewerSceneContent({
       {!(isLoading || noEditing) && <ToolManager />}
       {isFirstPersonMode && <FirstPersonControls />}
       {isCaptureMode && !isXRMode && <CaptureCameraRig />}
-      {!isXRMode && <CustomCameraControls />}
+      {!isXRMode && <CustomCameraControls sceneReady={!isLoading} />}
       {!isXRMode && <FollowPascal />}
       {!isXRMode && <ThumbnailGenerator onThumbnailCapture={onThumbnailCapture} />}
       {!isXRMode && <VectorEdgeExtractor />}
