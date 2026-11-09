@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { type AnyNodeId, WallNode } from '@pascal-app/core'
+import { type AnyNodeId, getWallCurveLength, WallNode } from '@pascal-app/core'
 import { readHostWallCeiling, readHostWallCeilingMaxWidth } from './wall-opening-ceiling'
 
 describe('readHostWallCeiling', () => {
@@ -60,5 +60,25 @@ describe('readHostWallCeilingMaxWidth', () => {
     // At anchorS = 8.0, ceiling is 3 - 0.2*8 = 1.4m < topY (2.0m)
     const maxWidth = readHostWallCeilingMaxWidth(wallSloped.id, reader, 8.0, 1, 2.0, 5)
     expect(maxWidth).toBe(0)
+  })
+})
+
+describe('readHostWallCeilingMaxWidth on a curved wall', () => {
+  // A semicircle on a 4 m chord, falling from 2.5 m to 1 m along the chord.
+  const curved = WallNode.parse({
+    id: 'wall_curved_sloped',
+    start: [0, 0],
+    end: [4, 0],
+    curveOffset: 2,
+    height: 2.5,
+    endHeightOffset: -1.5,
+  })
+  const nodes = { [curved.id]: curved }
+  const reader = { get: (id: AnyNodeId) => nodes[id], nodes: () => nodes }
+
+  test('stops where the top reaches the opening, measured along the arc', () => {
+    // The top is 1.5 m at chord fraction 2/3, the arc angle acos(-1/3) from the start.
+    const limit = (getWallCurveLength(curved) / Math.PI) * Math.acos(-1 / 3)
+    expect(readHostWallCeilingMaxWidth(curved.id, reader, 0, 1, 1.5, 10)).toBeCloseTo(limit, 4)
   })
 })

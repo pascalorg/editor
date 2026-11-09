@@ -5,6 +5,7 @@ import { SceneMaterial } from '../schema/scene-material'
 import { AnyNode, type AnyNodeType, nodeKindOf } from '../schema/types'
 import { DEFAULT_LEVEL_HEIGHT } from '../services/level-height'
 import { getStoredLevelHeight } from '../services/storey'
+import { getWallChordFractionAt } from '../systems/wall/wall-curve'
 import { resolveWallEffectiveHeight } from '../systems/wall/wall-top'
 import { healSceneNodes } from '../utils/heal-scene-graph'
 import { checkOpeningWithinWall, formatOpeningBoundsIssue } from './opening-bounds'
@@ -429,14 +430,13 @@ export function validateBuildJson(input: unknown): ValidateBuildJsonResult {
     const level = wall.parentId ? parsedNodes.get(wall.parentId) : undefined
     const storeyHeight =
       level?.type === 'level' ? getStoredLevelHeight(level) : DEFAULT_LEVEL_HEIGHT
-    const chord = Math.hypot(wall.end[0] - wall.start[0], wall.end[1] - wall.start[1])
-    const heightAt = (s: number) =>
+    const heightAt = (station: number) =>
       resolveWallEffectiveHeight(
         wall,
         storeyHeight,
         0,
         storeyHeight,
-        chord > 1e-9 ? Math.max(0, Math.min(1, s / chord)) : 0,
+        getWallChordFractionAt(wall, station),
       )
     const wallHeight = Math.min(
       heightAt(opening.position[0] - opening.width / 2),

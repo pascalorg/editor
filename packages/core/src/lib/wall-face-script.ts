@@ -9,7 +9,7 @@ import type {
 import type { WallFace } from '../schema/nodes/wall'
 import { getWallTopOver } from '../services/storey'
 import type { WallSlabSupport } from '../systems/slab/slab-support'
-import { isCurvedWall } from '../systems/wall/wall-curve'
+import { getWallCurveLength, isCurvedWall } from '../systems/wall/wall-curve'
 import { parseWallPaintRole } from '../systems/wall/wall-finish'
 import { getWallThickness } from '../systems/wall/wall-footprint'
 import { getWallLocalFaceZ } from '../systems/wall/wall-frame'
@@ -114,7 +114,7 @@ function faceFrame(nodes: SceneNodes, wallId: string, face: WallFace): FaceFrame
       nodes as Record<string, AnyNode>,
       support.elevation,
       0,
-      length,
+      getWallCurveLength(wall),
     ) -
     support.elevation -
     offset

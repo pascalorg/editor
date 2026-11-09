@@ -25,7 +25,11 @@ import type { DoorType, WindowType } from '../schema/nodes/opening-types'
 import { isRailingWall, railingOpeningFields } from '../schema/nodes/railing-wall'
 import { getWallTop, getWallTopOver } from '../services/storey'
 import { resolveWallExteriorSide } from '../systems/wall/wall-assembly'
-import { getWallCurveLength, isCurvedWall } from '../systems/wall/wall-curve'
+import {
+  getWallCurveLength,
+  getWallStationAtChordFraction,
+  isCurvedWall,
+} from '../systems/wall/wall-curve'
 import { doorTypeFields, NEW_DOOR_FRAME_THICKNESS } from './door-types'
 import {
   type DoorStyle,
@@ -47,8 +51,8 @@ const lengthOf = (wall: Pick<WallNode, 'start' | 'end'>) =>
   Math.hypot(wall.end[0] - wall.start[0], wall.end[1] - wall.start[1])
 
 /**
- * Available wall-local Y span for an opening hosted on `wall` at `t` along its chord (0 start,
- * 1 end): the wall's resolved top (storey plane for plane-bound walls, stored height for explicit
+ * Available wall-local Y span for an opening hosted on `wall` at chord fraction `t` (0 start,
+ * 1 end; see `getWallChordFractionAt`): the wall's resolved top (storey plane for plane-bound walls, stored height for explicit
  * ones, sloped by `endHeightOffset`) minus the wall's elected slab base, the ceiling an opening's
  * top edge must stay under.
  */
@@ -64,7 +68,7 @@ export function resolveWallOpeningCeiling(
   )
 }
 
-/** The lowest opening ceiling over wall-local `[left, right]` (see `getWallTopOver`). */
+/** The lowest opening ceiling over arc-length stations `[left, right]` (see `getWallTopOver`). */
 export function wallOpeningCeilingOver(
   wall: WallNode,
   nodes: Readonly<Record<AnyNodeId, AnyNode>>,
@@ -97,17 +101,17 @@ function centresUnderCeiling(
   max: number,
 ): [number, number] | null {
   if (min > max) return null
-  const chord = lengthOf(wall)
   const start = resolveWallOpeningCeiling(wall, nodes, 0)
-  const slope = chord > 1e-9 ? (resolveWallOpeningCeiling(wall, nodes, 1) - start) / chord : 0
+  const rise = resolveWallOpeningCeiling(wall, nodes, 1) - start
   let lo = min
   let hi = max
-  if (Math.abs(slope) < 1e-6) {
+  if (Math.abs(rise) < 1e-6) {
     if (start < need - 1e-4) return null
-  } else if (slope > 0) {
-    lo = Math.max(lo, (need - start) / slope + width / 2)
   } else {
-    hi = Math.min(hi, (need - start) / slope - width / 2)
+    // The top is linear along the chord: past this station it is lower than `need`.
+    const limit = getWallStationAtChordFraction(wall, (need - start) / rise)
+    if (rise > 0) lo = Math.max(lo, limit + width / 2)
+    else hi = Math.min(hi, limit - width / 2)
   }
   return lo > hi + 1e-4 ? null : [lo, Math.max(lo, hi)]
 }
@@ -345,7 +349,7 @@ export function centredWindowSill(
   nodes: Readonly<Record<AnyNodeId, AnyNode>>,
 ): number {
   const ceiling = Math.min(
-    ...walls.map((wall) => wallOpeningCeilingOver(wall, nodes, 0, lengthOf(wall))),
+    ...walls.map((wall) => wallOpeningCeilingOver(wall, nodes, 0, getWallCurveLength(wall))),
   )
   return Math.max(0, (ceiling - height) / 2)
 }
