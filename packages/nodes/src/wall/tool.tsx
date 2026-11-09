@@ -32,9 +32,12 @@ import {
   endWallPullRun,
   formatAngleRadians,
   formatLinearMeasurement,
+  formatWallDraftHeading,
   getAngleArcToSegmentReference,
   getAngleToSegmentReference,
+  getGridEventScreenProjection,
   getSegmentAngleReferenceAtPoint,
+  getSegmentGridStep,
   getWallDrawVariant,
   getWallLineKind,
   type HorizontalConstructionPlane,
@@ -42,8 +45,13 @@ import {
   isAlignmentGuideActive,
   isAngleSnapActive,
   isMagneticSnapActive,
+  isTypingTarget,
   isWallRunFree,
+  LocalizedHtml,
   markToolCancelConsumed,
+  PLACEMENT_TYPING_LENGTH_ANGLE,
+  PlacementCoordinateInput,
+  placementTypingLengthOptions,
   publishHorizontalConstructionPlane,
   publishPlacementSurface,
   publishWallRunFeedback,
@@ -51,6 +59,8 @@ import {
   resolveEventConstructionPlane,
   resolveLevelConstructionPlane,
   resolvePointerSupportSurface,
+  resolveTypedWallEnd,
+  routePlacementTypingKey,
   type SegmentAngleReference,
   snapWallDraftPointDetailed,
   snapWallRunDraftPoint,
@@ -59,6 +69,7 @@ import {
   useAlignmentGuides,
   useEditor,
   useFloorplanDraftPreview,
+  usePlacementTyping,
   useSegmentDraftChain,
   useWallDraftThickness,
   useWallDrawVariant,
@@ -539,6 +550,7 @@ const LineWallTool: React.FC = () => {
   const flatConstructionBase = useRef(false)
   const buildingState = useRef(0)
   const [draftMeasurement, setDraftMeasurement] = useState<DraftMeasurementState>(null)
+  const typingActive = usePlacementTyping((s) => s.isActive)
   // Base Y of an open Polygon room's ghost sides (its construction plane).
   const [polygonGhostY, setPolygonGhostY] = useState(0)
   const [axisGuide, setAxisGuide] = useState<DraftAxisGuideState>(null)
@@ -666,6 +678,8 @@ const LineWallTool: React.FC = () => {
       flatConstructionBase.current = false
       chainFirstVertex.current = null
       chainWallIds.current = []
+      draftPointer = null
+      usePlacementTyping.getState().clear()
       const draftPreview = useFloorplanDraftPreview.getState()
       draftPreview.setWallDraftStart(null)
       draftPreview.setWallDraftEnd(null)
@@ -734,6 +748,75 @@ const LineWallTool: React.FC = () => {
       setAxisGuide({ origin: run.start, endOrigin: null, y: plane.localY, angleLabel: null })
     }
 
+    // The pointer's own (snapped) draft end. A typed session re-projects it on
+    // every move and every keystroke, so the preview never waits for the mouse.
+    let draftPointer: WallPlanPoint | null = null
+    let draftY = 0
+    const typedDraftEnd = (pointer: WallPlanPoint) => {
+      const typing = usePlacementTyping.getState()
+      if (!typing.isActive) return null
+      return resolveTypedWallEnd(
+        [startingPoint.current.x, startingPoint.current.z],
+        pointer,
+        typing.fields,
+        placementTypingLengthOptions(unit, metricNotation),
+        getSegmentGridStep(),
+      )
+    }
+    // Before the first move after a click the pointer still sits on the start.
+    const currentPointer = (): [WallPlanPoint, number] =>
+      draftPointer
+        ? [draftPointer, draftY]
+        : [[startingPoint.current.x, startingPoint.current.z], startingPoint.current.y]
+    const showDraftEnd = (walls: WallNode[]) => {
+      if (!wallPreviewRef.current) return
+      const [pointer, pointerY] = currentPointer()
+      const snappedLocal = typedDraftEnd(pointer) ?? pointer
+      endingPoint.current.set(snappedLocal[0], pointerY, snappedLocal[1])
+      const draftPreview = useFloorplanDraftPreview.getState()
+      draftPreview.setWallDraftStart([startingPoint.current.x, startingPoint.current.z])
+      draftPreview.setWallDraftEnd(snappedLocal)
+      cursorRef.current?.position.copy(endingPoint.current)
+      setAxisGuide({
+        origin: [startingPoint.current.x, startingPoint.current.z],
+        endOrigin: snappedLocal,
+        y: startingPoint.current.y,
+        angleLabel: getNearestAxisAngleLabel(
+          [startingPoint.current.x, startingPoint.current.z],
+          snappedLocal,
+          startingPoint.current.y,
+        ),
+      })
+
+      const currentWallEnd: [number, number] = [snappedLocal[0], snappedLocal[1]]
+      if (
+        previousWallEnd &&
+        (currentWallEnd[0] !== previousWallEnd[0] || currentWallEnd[1] !== previousWallEnd[1])
+      ) {
+        triggerSFX('sfx:grid-snap')
+      }
+      previousWallEnd = currentWallEnd
+
+      updateWallPreview(
+        wallPreviewRef.current,
+        startingPoint.current,
+        endingPoint.current,
+        previewHeightRef.current,
+        previewThicknessRef.current,
+      )
+      setDraftMeasurement(
+        getDraftMeasurementState(
+          [startingPoint.current.x, startingPoint.current.z],
+          snappedLocal,
+          walls,
+          unit,
+          metricNotation,
+          startingPoint.current.y,
+          previewHeightRef.current,
+        ),
+      )
+    }
+
     const onGridMove = (event: GridEvent) => {
       if (!(cursorRef.current && wallPreviewRef.current) || planOwnsInput()) return
 
@@ -761,9 +844,19 @@ const LineWallTool: React.FC = () => {
         : [event.localPosition[0], event.localPosition[2]]
       // Snapping is governed entirely by the snapping mode (grid / lines /
       // angles / off). `'off'` is the bypass — there is no Shift hold-to-bypass.
+      // While a session is open, a split-view move forwarded by the plan was
+      // already snapped there; snapping it again here could pull the ray onto
+      // a nearby corner, so the 3D draft would drift from the plan's.
+      const typedFromFloorplan =
+        buildingState.current === 1 &&
+        usePlacementTyping.getState().isActive &&
+        getGridEventScreenProjection(event) !== undefined
       // Everything here is building-local: the lattice, the 15° rays and the
       // alignment axes all turn with a building the site planner turned.
-      if (buildingState.current === 1 && wallDraftIsRun()) {
+      if (typedFromFloorplan) {
+        gridPosition = localPoint
+        useWallSnapIndicator.getState().set(null)
+      } else if (buildingState.current === 1 && wallDraftIsRun()) {
         // A started run holds square and shows its guides and snap marker.
         const runSnap = snapRun(localPoint, event)
         gridPosition = runSnap.point
@@ -796,51 +889,9 @@ const LineWallTool: React.FC = () => {
       }
 
       if (buildingState.current === 1) {
-        const snappedLocal = gridPosition
-        const draftY = constructionPlane.current?.localY ?? event.localPosition[1]
-        endingPoint.current.set(snappedLocal[0], draftY, snappedLocal[1])
-        const draftPreview = useFloorplanDraftPreview.getState()
-        draftPreview.setWallDraftStart([startingPoint.current.x, startingPoint.current.z])
-        draftPreview.setWallDraftEnd(snappedLocal)
-        cursorRef.current.position.copy(endingPoint.current)
-        setAxisGuide({
-          origin: [startingPoint.current.x, startingPoint.current.z],
-          endOrigin: snappedLocal,
-          y: startingPoint.current.y,
-          angleLabel: getNearestAxisAngleLabel(
-            [startingPoint.current.x, startingPoint.current.z],
-            snappedLocal,
-            startingPoint.current.y,
-          ),
-        })
-
-        const currentWallEnd: [number, number] = [snappedLocal[0], snappedLocal[1]]
-        if (
-          previousWallEnd &&
-          (currentWallEnd[0] !== previousWallEnd[0] || currentWallEnd[1] !== previousWallEnd[1])
-        ) {
-          triggerSFX('sfx:grid-snap')
-        }
-        previousWallEnd = currentWallEnd
-
-        updateWallPreview(
-          wallPreviewRef.current,
-          startingPoint.current,
-          endingPoint.current,
-          previewHeightRef.current,
-          previewThicknessRef.current,
-        )
-        setDraftMeasurement(
-          getDraftMeasurementState(
-            [startingPoint.current.x, startingPoint.current.z],
-            snappedLocal,
-            walls,
-            unit,
-            metricNotation,
-            startingPoint.current.y,
-            previewHeightRef.current,
-          ),
-        )
+        draftPointer = gridPosition
+        draftY = constructionPlane.current?.localY ?? event.localPosition[1]
+        showDraftEnd(walls)
       } else {
         const hoverPlane = resampleTerrainConstructionPlane(
           resolveEventConstructionPlane(event, pointed),
@@ -922,21 +973,29 @@ const LineWallTool: React.FC = () => {
         // positions it for the active segment.
         setDraftMeasurement(null)
       } else if (buildingState.current === 1) {
+        // An open session commits the endpoint its preview shows, re-derived
+        // from the pointer so keys typed since the last move count, and is
+        // never re-snapped.
+        const typedCommit = typedDraftEnd(draftPointer ?? localClick)
         const angleLocked = isAngleSnapActive()
-        const snappedEnd = wallDraftIsRun()
-          ? snapRun(localClick, event).point
-          : alignPoint(
-              snapWallDraftPointDetailed({
-                point: localClick,
-                walls: snapWalls,
-                start: angleLocked ? [startingPoint.current.x, startingPoint.current.z] : undefined,
-                angleSnap: angleLocked,
-                magnetic: isMagneticSnapActive(),
-                captureWallBodies: true,
-                bodyWalls,
-              }).point,
-              { applySnap: !angleLocked },
-            )
+        const snappedEnd =
+          typedCommit ??
+          (wallDraftIsRun()
+            ? snapRun(localClick, event).point
+            : alignPoint(
+                snapWallDraftPointDetailed({
+                  point: localClick,
+                  walls: snapWalls,
+                  start: angleLocked
+                    ? [startingPoint.current.x, startingPoint.current.z]
+                    : undefined,
+                  angleSnap: angleLocked,
+                  magnetic: isMagneticSnapActive(),
+                  captureWallBodies: true,
+                  bodyWalls,
+                }).point,
+                { applySnap: !angleLocked },
+              ))
         const dx = snappedEnd[0] - startingPoint.current.x
         const dz = snappedEnd[1] - startingPoint.current.z
         if (dx * dx + dz * dz < 0.01 * 0.01) return
@@ -949,6 +1008,7 @@ const LineWallTool: React.FC = () => {
           // A Polygon room writes nothing until it completes: the corner joins
           // the draft, and closing / sealing / teeing commits every wall at once.
           const outcome = addWallPolygonDraftCorner(snappedEnd)
+          usePlacementTyping.getState().clear()
           useAlignmentGuides.getState().clear()
           useWallSnapIndicator.getState().clear()
           if (outcome !== 'open') {
@@ -989,6 +1049,8 @@ const LineWallTool: React.FC = () => {
                 )
           if (!createdWall) return
           chainWallIds.current.push(createdWall.id)
+          // What was typed belongs to this segment; the next starts afresh.
+          usePlacementTyping.getState().clear()
           // The run's next wall holds square to this one.
           runReference = wallRunDirection(createdWall.start, createdWall.end)
 
@@ -1058,14 +1120,54 @@ const LineWallTool: React.FC = () => {
 
     const onCancel = () => {
       if (buildingState.current === 1) {
+        // A first Escape ends an open typed session; the next cancels the draft.
+        if (usePlacementTyping.getState().isActive) {
+          usePlacementTyping.getState().clear()
+          return
+        }
         markToolCancelConsumed()
         stopDrafting()
       }
     }
 
+    // Typed entry while a segment is drafted: a digit opens a session on the
+    // length, Tab one on the angle. In 2D-only view the plan commits walls, so
+    // its own key handler takes these.
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (buildingState.current !== 1 || planOwnsInput() || isTypingTarget(event.target)) return
+      const outcome = routePlacementTypingKey(event, {
+        begin: (activeField) => {
+          usePlacementTyping
+            .getState()
+            .begin({ labels: PLACEMENT_TYPING_LENGTH_ANGLE, activeField })
+          return true
+        },
+        tabBegins: true,
+      })
+      if (!outcome) return
+      event.preventDefault()
+      event.stopPropagation()
+      if (outcome !== 'commit') return
+      const [pointer, pointerY] = currentPointer()
+      const typedEnd = typedDraftEnd(pointer)
+      if (!typedEnd) return
+      onGridClick({
+        nativeEvent: { detail: 1 } as unknown as GridEvent['nativeEvent'],
+        position: [typedEnd[0], pointerY, typedEnd[1]],
+        localPosition: [typedEnd[0], pointerY, typedEnd[1]],
+      } as GridEvent)
+    }
+
+    const stopTypedPreview = usePlacementTyping.subscribe((state, previous) => {
+      if (buildingState.current !== 1) return
+      if (state.fields === previous.fields && state.isActive === previous.isActive) return
+      showDraftEnd(getWallDraftSnapWalls().walls)
+    })
+
     emitter.on('grid:move', onGridMove)
     emitter.on('grid:click', onGridClick)
     emitter.on('tool:cancel', onCancel)
+    window.addEventListener('keydown', onKeyDown, true)
     const stopPullSeeding = useWallPullRun.subscribe((state) => seedPull(state.run))
     seedPull(useWallPullRun.getState().run)
 
@@ -1076,6 +1178,9 @@ const LineWallTool: React.FC = () => {
       emitter.off('grid:move', onGridMove)
       emitter.off('grid:click', onGridClick)
       emitter.off('tool:cancel', onCancel)
+      window.removeEventListener('keydown', onKeyDown, true)
+      stopTypedPreview()
+      usePlacementTyping.getState().clear()
       clearPlacementSurface()
       useAlignmentGuides.getState().clear()
       useWallSnapIndicator.getState().clear()
@@ -1106,14 +1211,39 @@ const LineWallTool: React.FC = () => {
           transparent
         />
       </mesh>
+      {typingActive && (draftMeasurement || axisGuide) ? (
+        <LocalizedHtml
+          center
+          position={
+            draftMeasurement?.lengthPosition ?? [
+              axisGuide!.origin[0],
+              axisGuide!.y + previewHeight + DRAFT_LABEL_Y_OFFSET,
+              axisGuide!.origin[1],
+            ]
+          }
+          style={{ pointerEvents: 'auto', userSelect: 'none' }}
+          zIndexRange={[200, 0]}
+        >
+          <PlacementCoordinateInput
+            placeholders={[
+              draftMeasurement?.lengthLabel ?? '',
+              axisGuide?.endOrigin
+                ? formatWallDraftHeading(axisGuide.origin, axisGuide.endOrigin)
+                : '',
+            ]}
+          />
+        </LocalizedHtml>
+      ) : null}
       {draftMeasurement && (
         <>
-          <DraftMeasurementLabel
-            color={measurementColor}
-            label={draftMeasurement.lengthLabel}
-            position={draftMeasurement.lengthPosition}
-            shadowColor={measurementShadowColor}
-          />
+          {typingActive ? null : (
+            <DraftMeasurementLabel
+              color={measurementColor}
+              label={draftMeasurement.lengthLabel}
+              position={draftMeasurement.lengthPosition}
+              shadowColor={measurementShadowColor}
+            />
+          )}
           {draftMeasurement.angleLabels.map((angleLabel) => (
             <group key={angleLabel.id}>
               <DraftAngleArc arc={angleLabel.arc} color={measurementColor} />
