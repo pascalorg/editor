@@ -265,4 +265,35 @@ describe('pipe run move', () => {
     expect(useScene.temporal.getState().pastStates).toHaveLength(0)
     expect(useLiveNodeOverrides.getState().overrides.size).toBe(0)
   })
+
+  test('a move along a looped leg carries the whole loop in one undo step', async () => {
+    loadScene(ventLoop())
+    const before = structuredClone(useScene.getState().nodes)
+    const renderer = await armMove(SOUTH_ID)
+    try {
+      await moveTo(2.5, 0)
+      expect(ghostColors(renderer)).toEqual([GHOST_HEX])
+      expect(notices).toEqual([])
+      expect(await click()).toHaveBeenCalledTimes(1)
+    } finally {
+      await act(async () => renderer.unmount())
+    }
+
+    const nodes = useScene.getState().nodes
+    for (const node of ventLoop()) {
+      if (node.type === 'pipe-fitting') {
+        const [x, y, z] = (node as PipeFittingNode).position
+        expectPoint((nodes[node.id] as PipeFittingNode).position, [x + 0.5, y, z])
+        continue
+      }
+      const path = (nodes[node.id] as PipeSegmentNode).path
+      for (const [index, [x, y, z]] of (node as PipeSegmentNode).path.entries()) {
+        expectPoint(path[index], [x + 0.5, y, z])
+      }
+    }
+    expect(useScene.temporal.getState().pastStates).toHaveLength(1)
+
+    useScene.temporal.getState().undo()
+    expect(useScene.getState().nodes).toEqual(before)
+  })
 })

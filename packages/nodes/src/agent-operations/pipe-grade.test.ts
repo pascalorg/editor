@@ -212,6 +212,72 @@ test('grade edits carry end caps and keep both collars coincident', () => {
   expect(port.position[1]).toBeCloseTo(path[1]![1])
 })
 
+/** A closed square loop; `drop` lowers the north-west corner so two legs fall toward it. */
+function closedLoop(drop: number) {
+  const low = 1 - drop
+  const elbow = (position: number[], rotationY: number) =>
+    PipeFittingNode.parse({
+      ...pipeFittingDefinition.defaults(),
+      parentId: level.id,
+      position,
+      rotation: [0, rotationY, 0],
+    })
+  const leg = (path: number[][]) =>
+    PipeSegmentNode.parse({ ...pipeSegmentDefinition.defaults(), parentId: level.id, path })
+  const south = leg([
+    [0.07, 1, 0],
+    [3.93, 1, 0],
+  ])
+  const nodes = scene(
+    south,
+    elbow([4, 1, 0], 0),
+    leg([
+      [4, 1, 0.07],
+      [4, 1, 3.93],
+    ]),
+    elbow([4, 1, 4], -Math.PI / 2),
+    leg([
+      [0.07, low, 4],
+      [3.93, 1, 4],
+    ]),
+    elbow([0, low, 4], Math.PI),
+    leg([
+      [0, 1, 0.07],
+      [0, low, 3.93],
+    ]),
+    elbow([0, 1, 0], Math.PI / 2),
+  )
+  return { south, nodes }
+}
+
+test('raising one leg of a level closed loop lifts the whole loop', () => {
+  const { south, nodes } = closedLoop(0)
+  const updates = edit(nodes, { nodeId: south.id, action: 'elevation', elevation: 1.2 }, context)
+    .changes!.update!
+  expect(updates).toHaveLength(8)
+  for (const { id, data } of updates) {
+    const before = nodes[id] as PipeSegmentNode | PipeFittingNode
+    const points =
+      before.type === 'pipe-fitting'
+        ? [[before.position, (data as PipeFittingNode).position] as const]
+        : before.path.map(
+            (point, index) => [point, (data as PipeSegmentNode).path[index]!] as const,
+          )
+    for (const [from, to] of points) {
+      expect(to[0]).toBeCloseTo(from[0], 9)
+      expect(to[1]).toBeCloseTo(from[1] + 0.2, 9)
+      expect(to[2]).toBeCloseTo(from[2], 9)
+    }
+  }
+})
+
+test('raising one leg of a closed loop with sloped legs is refused rather than hanging', () => {
+  const { south, nodes } = closedLoop(0.08)
+  expect(() =>
+    edit(nodes, { nodeId: south.id, action: 'elevation', elevation: 1.2 }, context),
+  ).toThrow('would change a connected pipe')
+})
+
 test('grade tool works through MCP and undoes as one edit', async () => {
   const { Client } = await import('@modelcontextprotocol/client')
   const { InMemoryTransport, McpServer } = await import('@modelcontextprotocol/server')
