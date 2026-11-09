@@ -365,7 +365,10 @@ export const columnDefinition: NodeDefinition<typeof ColumnNode> = {
       top: { height: (node) => (node as ColumnNodeType).height },
       hosting: columnSurfaceProvider,
     },
-    duplicable: { subtree: true },
+    duplicable: {
+      subtree: true,
+      allow: ({ node }) => !isManagedColumn(node as ColumnNodeType),
+    },
     deletable: true,
     // Generic 3D translate-on-XZ via `MoveRegistryNodeTool` (grid snap + the
     // mode-driven snapping the overhaul standardised). 2D move keeps using

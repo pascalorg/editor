@@ -11,6 +11,8 @@ import {
   type DormerNode,
   type ElevatorNode,
   type FenceNode,
+  isMoveLocked,
+  isNodeDuplicable,
   type ItemNode,
   type RoofNode,
   type RoofSegmentNode,
@@ -155,9 +157,9 @@ function MobilePanelLayer({
         <MobileSelectionBar
           node={node}
           onDelete={handleDelete}
-          onDuplicate={handleDuplicate}
+          onDuplicate={isNodeDuplicable(node) ? handleDuplicate : undefined}
           onEdit={() => setIsSheetOpen((v) => !v)}
-          onMove={handleMove}
+          onMove={isMoveLocked(node) ? undefined : handleMove}
         />
       )}
       <MobilePanelSheet

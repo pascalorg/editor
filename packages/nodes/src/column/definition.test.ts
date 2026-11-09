@@ -4,6 +4,7 @@ import {
   createSceneApi,
   isMovable,
   isMoveLocked,
+  isNodeDuplicable,
   nodeRegistry,
   registerNode,
   useScene,
@@ -85,4 +86,14 @@ test('a lean-to managed post is not movable; a free post is', () => {
   expect(isMoveLocked(free)).toBe(false)
   expect(isMovable(managed)).toBe(false)
   expect(isMoveLocked(managed)).toBe(true)
+})
+
+test('a lean-to managed post cannot be duplicated; a free post can', () => {
+  if (!nodeRegistry.has('column')) registerNode(columnDefinition as never)
+  expect(isNodeDuplicable(ColumnNode.parse({}))).toBe(true)
+  expect(
+    isNodeDuplicable(
+      ColumnNode.parse({ metadata: { managedByLeanTo: 'canopy', leanToRole: 'post' } }),
+    ),
+  ).toBe(false)
 })

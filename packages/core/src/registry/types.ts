@@ -1700,6 +1700,8 @@ export type DuplicableConfig = {
   /** 'with-children' preserves the root-only draft lifecycle for childless nodes. */
   subtree?: boolean | 'with-children'
   prepareSubtreeClone?: (args: DuplicateSubtreeCloneArgs) => DuplicateSubtreeCloneResult
+  /** Per-node opt-out, e.g. a post its lean-to generates and counts itself. */
+  allow?: (args: { node: AnyNode }) => boolean
 }
 
 // ─── Capabilities ────────────────────────────────────────────────────

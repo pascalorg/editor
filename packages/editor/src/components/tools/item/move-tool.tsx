@@ -1,7 +1,6 @@
 import type { AnyNodeId, SpawnNode } from '@pascal-app/core'
-import { createSceneApi, isMoveLocked, nodeRegistry, useScene } from '@pascal-app/core'
-import { Suspense, useEffect, useMemo } from 'react'
-import useEditor from '../../../store/use-editor'
+import { createSceneApi, nodeRegistry, useScene } from '@pascal-app/core'
+import { Suspense, useMemo } from 'react'
 import { useMovingNode } from '../../../store/use-interaction-scope'
 import { MoveRegistryNodeTool } from '../registry/move-registry-node-tool'
 import { getRegistryAffordanceTool } from '../shared/affordance-dispatch'
@@ -27,12 +26,8 @@ export const MoveTool: React.FC<{
 }> = ({ onNodeMoved }) => {
   const movingNode = useMovingNode()
   const sceneApi = useMemo(() => createSceneApi(useScene), [])
-  const locked = movingNode ? isMoveLocked(movingNode) : false
-  useEffect(() => {
-    if (locked) useEditor.getState().setMovingNode(null)
-  }, [locked])
 
-  if (!movingNode || locked) return null
+  if (!movingNode) return null
 
   const def = nodeRegistry.get(movingNode.type)
 

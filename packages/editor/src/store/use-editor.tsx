@@ -10,6 +10,7 @@ import {
   type ChimneyMaterialRole,
   DEFAULT_BRUSH_SETTINGS,
   type DormerSurfaceMaterialRole,
+  isMoveLocked,
   type LevelNode,
   nodeRegistry,
   type RoofSurfaceMaterialRole,
@@ -1253,6 +1254,10 @@ const useEditor = create<EditorState>()(
           // side's effect cleanup — which fires after `setMovingNode(null)`
           // propagates — can still read who finalised. The next non-null
           // `setMovingNode` resets it. Always clear the press-drag flag.
+          set({ placementDragMode: false })
+          return
+        }
+        if (isMoveLocked(node)) {
           set({ placementDragMode: false })
           return
         }

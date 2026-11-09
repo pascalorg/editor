@@ -2,20 +2,24 @@ import { beforeAll, expect, test } from 'bun:test'
 import {
   type AnyNode,
   type AnyNodeDefinition,
+  type AnyNodeId,
   isMoveLocked,
+  isNodeDuplicable,
   nodeRegistry,
   registerNode,
+  useScene,
 } from '@pascal-app/core'
-import { act, create } from '@react-three/test-renderer'
 import { z } from 'zod'
+import { duplicateNodeAndPickUp } from '../components/editor/duplicate-node'
 import { classifyParticipant } from '../components/editor/group-transform-shared'
-import { MoveTool } from '../components/tools/item/move-tool'
 import useEditor from '../store/use-editor'
 import useInteractionScope from '../store/use-interaction-scope'
 import { canDirectMoveNode } from './direct-manipulation'
+import { createEditorApi } from './editor-api'
 import { registryMoveDisabled } from './node-action-movement'
+import { copySelectedNodesToEditorClipboard } from './scene-clipboard'
 
-// Mirrors a lean-to post: a kind-level 2D mover plus a per-node override lock.
+// Mirrors a lean-to post: a kind-level 2D mover plus per-node move and duplicate locks.
 const KIND = 'move-lock-test'
 
 beforeAll(() => {
@@ -34,6 +38,9 @@ beforeAll(() => {
           (node as { metadata?: { locked?: boolean } }).metadata?.locked
             ? { axes: [], gridSnap: false }
             : null,
+      },
+      duplicable: {
+        allow: ({ node }) => !(node as { metadata?: { locked?: boolean } }).metadata?.locked,
       },
     },
     floorplanMoveTarget: () => ({
@@ -73,9 +80,36 @@ test('group pick-up leaves a locked node behind', () => {
   expect(classifyParticipant(free, 'level_move_lock', nodes)).toBe('scalar')
 })
 
-test('the move tool refuses a locked node instead of mounting a mover', async () => {
-  const renderer = await create(<MoveTool />)
-  await act(async () => useEditor.getState().setMovingNode(node(true)))
+test('every moving-node entry refuses a locked node', () => {
+  const api = createEditorApi()
+  useEditor.getState().setMovingNode(node(true))
   expect(useInteractionScope.getState().scope.kind).toBe('idle')
-  await act(async () => renderer.unmount())
+  api.engageMoveDrag(node(true))
+  expect(useInteractionScope.getState().scope.kind).toBe('idle')
+  expect(useEditor.getState().placementDragMode).toBe(false)
+  api.engageMove(node(false))
+  expect(useInteractionScope.getState().scope.kind).toBe('moving')
+  useEditor.getState().setMovingNode(null)
+})
+
+test('a locked node cannot be duplicated or copied', () => {
+  const level = {
+    id: 'level_move_lock',
+    type: 'level',
+    parentId: null,
+    children: ['move_lock_locked', 'move_lock_free'],
+  } as unknown as AnyNode
+  const locked = node(true)
+  const free = node(false)
+  useScene.setState({
+    nodes: { [level.id]: level, [locked.id]: locked, [free.id]: free } as never,
+    rootNodeIds: [level.id as AnyNodeId],
+  })
+  expect(isNodeDuplicable(locked)).toBe(false)
+  expect(isNodeDuplicable(free)).toBe(true)
+  duplicateNodeAndPickUp(locked)
+  expect(Object.keys(useScene.getState().nodes)).toHaveLength(3)
+  expect(useInteractionScope.getState().scope.kind).toBe('idle')
+  expect(copySelectedNodesToEditorClipboard([locked.id as AnyNodeId])).toBe(false)
+  expect(copySelectedNodesToEditorClipboard([free.id as AnyNodeId])).toBe(true)
 })
