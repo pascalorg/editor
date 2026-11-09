@@ -29,6 +29,7 @@ import {
   type Camera,
   type OrthographicCamera,
   type PerspectiveCamera,
+  Sphere,
   Spherical,
   Vector3,
 } from 'three'
@@ -90,6 +91,7 @@ const tempDelta = new Vector3()
 const tempPosition = new Vector3()
 const tempSize = new Vector3()
 const tempTarget = new Vector3()
+const fitSceneSphere = new Sphere()
 const transitionFreezePosition = new Vector3()
 const transitionFreezeTarget = new Vector3()
 const keyboardPanSpherical = new Spherical()
@@ -136,6 +138,11 @@ function applyFitLookAt(control: CameraControlsImpl, lookAt: FitSceneLookAt) {
     lookAt.targetZ,
     true,
   )
+  if (isOrthographicCamera(control.camera)) {
+    fitSceneSphere.center.set(...lookAt.fitSphere.center)
+    fitSceneSphere.radius = lookAt.fitSphere.radius
+    control.fitToSphere(fitSceneSphere, true)
+  }
 }
 
 function levelOf(nodeId: string): string | null {

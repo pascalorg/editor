@@ -12,7 +12,20 @@ export type FitSceneLookAt = {
   targetZ: number
   /** The eye's height above `targetY`, before any keep-over-ground lift. */
   eyeHeight: number
+  /**
+   * What an orthographic camera fits its zoom to: `setLookAt` leaves the
+   * previous project's zoom in place. Centred on the target, so fitting it
+   * does not move the pivot.
+   */
+  fitSphere: { center: [number, number, number]; radius: number }
 }
+
+// The empty-editor pose shows the default ±15 m site.
+const DEFAULT_FIT_RADIUS = 15
+// Margin around the footprint, as the frame-node path uses for orthographic fits.
+const FIT_SPHERE_MARGIN = 1.3
+// Keeps a lone wall from filling the viewport, like the perspective 15 m floor.
+const MIN_FIT_RADIUS = 5
 
 export type PendingFitScene = {
   bounds: FitSceneBounds
@@ -40,6 +53,7 @@ export function computeFitSceneLookAt(bounds: FitSceneBounds, groundY = 0): FitS
       targetY: groundY,
       targetZ: 0,
       eyeHeight: 20,
+      fitSphere: { center: [0, groundY, 0], radius: DEFAULT_FIT_RADIUS },
     }
   }
 
@@ -58,6 +72,10 @@ export function computeFitSceneLookAt(bounds: FitSceneBounds, groundY = 0): FitS
     targetY: groundY,
     targetZ: cz,
     eyeHeight: height,
+    fitSphere: {
+      center: [cx, groundY, cz],
+      radius: Math.max((Math.hypot(w, d) / 2) * FIT_SPHERE_MARGIN, MIN_FIT_RADIUS),
+    },
   }
 }
 

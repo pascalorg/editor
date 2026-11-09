@@ -1,4 +1,6 @@
 import { describe, expect, test } from 'bun:test'
+import { CameraControlsImpl } from '@react-three/drei'
+import * as THREE from 'three'
 import {
   computeFitSceneLookAt,
   type PendingFitScene,
@@ -21,6 +23,7 @@ describe('fit-scene framing', () => {
       targetY: 0,
       targetZ: 0,
       eyeHeight: 20,
+      fitSphere: { center: [0, 0, 0], radius: 15 },
     })
   })
 
@@ -35,6 +38,7 @@ describe('fit-scene framing', () => {
       targetY: 0,
       targetZ: 20,
       eyeHeight: 32,
+      fitSphere: { center: [10, 0, 20], radius: 25 * 1.3 },
     })
   })
 
@@ -44,6 +48,67 @@ describe('fit-scene framing', () => {
     expect(lookAt.eyeY).toBe(35)
     expect(lookAt.eyeHeight).toBe(32)
     expect(computeFitSceneLookAt(null, 3)).toMatchObject({ eyeY: 23, targetY: 3 })
+  })
+
+  test('fits the orthographic sphere around the footprint at the pivot', () => {
+    const lookAt = computeFitSceneLookAt(sampleBounds, 3)
+    expect(lookAt.fitSphere.center).toEqual([lookAt.targetX, lookAt.targetY, lookAt.targetZ])
+    const [cx, cz] = sampleBounds.center
+    const [w, d] = sampleBounds.size
+    for (const [x, z] of [
+      [cx - w / 2, cz - d / 2],
+      [cx + w / 2, cz + d / 2],
+      [cx - w / 2, cz + d / 2],
+    ] as const) {
+      expect(Math.hypot(x - cx, z - cz)).toBeLessThan(lookAt.fitSphere.radius)
+    }
+    const lone = computeFitSceneLookAt({ center: [0, 0], size: [1, 0.2] })
+    expect(lone.fitSphere.radius).toBe(5)
+    expect(computeFitSceneLookAt(null, 3).fitSphere).toEqual({ center: [0, 3, 0], radius: 15 })
+  })
+
+  test('an orthographic camera fitted to the sphere shows the whole footprint whatever its zoom was', () => {
+    const previous = globalThis.DOMRect
+    globalThis.DOMRect ??= class {} as typeof DOMRect
+    CameraControlsImpl.install({ THREE })
+    const camera = new THREE.OrthographicCamera(-8, 8, 5, -5, 0.1, 1000)
+    const control = new CameraControlsImpl(camera)
+    const bounds = { center: [60, -20] as [number, number], size: [80, 30] as [number, number] }
+    try {
+      // The previous project left the camera zoomed in on a small room.
+      control.zoomTo(12, false)
+      const lookAt = computeFitSceneLookAt(bounds)
+      control.setLookAt(
+        lookAt.eyeX,
+        lookAt.eyeY,
+        lookAt.eyeZ,
+        lookAt.targetX,
+        lookAt.targetY,
+        lookAt.targetZ,
+        false,
+      )
+      const sphere = new THREE.Sphere(
+        new THREE.Vector3(...lookAt.fitSphere.center),
+        lookAt.fitSphere.radius,
+      )
+      control.fitToSphere(sphere, false)
+      control.update(0)
+      camera.updateMatrixWorld(true)
+
+      const target = control.getTarget(new THREE.Vector3())
+      expect(target.toArray()).toEqual([lookAt.targetX, lookAt.targetY, lookAt.targetZ])
+      const [cx, cz] = bounds.center
+      const [w, d] = bounds.size
+      for (const x of [cx - w / 2, cx + w / 2])
+        for (const z of [cz - d / 2, cz + d / 2]) {
+          const projected = new THREE.Vector3(x, 0, z).project(camera)
+          expect(Math.abs(projected.x)).toBeLessThanOrEqual(1)
+          expect(Math.abs(projected.y)).toBeLessThanOrEqual(1)
+        }
+    } finally {
+      control.dispose()
+      globalThis.DOMRect = previous
+    }
   })
 
   test('applies immediately when orbit controls are live', () => {
