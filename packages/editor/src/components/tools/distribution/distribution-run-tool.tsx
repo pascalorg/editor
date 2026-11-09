@@ -1071,6 +1071,9 @@ export function useDistributionRunTool(config: DistributionRunToolConfig) {
         setSnapTarget(resolved.snapped)
         setSnapScreen(resolved.snapScreen ?? null)
         setEndConnection({ port: null, body: null })
+        // A vertical route ends at the target, not under the pointer: show that
+        // riser now so the next click or Enter places what the preview shows.
+        if (configRef.current.routingMode === 'vertical') updateCursor(resolvePoint(event))
         return
       }
       const typedResolved = applyTypedLength(resolved)
