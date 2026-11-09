@@ -11,6 +11,7 @@
  * tree and derives an axis-aligned bounding box on the XZ (plan) plane.
  */
 
+import { turnPlanPoint, yawOf } from '@pascal-app/core'
 import type { AnyNode } from '@pascal-app/core/schema'
 
 export type SceneBoundsXZ = {
@@ -27,13 +28,19 @@ export type SceneBoundsXZ = {
 // A very small guard against degenerate bounds (e.g. a single wall of zero length).
 const MIN_BOUNDS_EXTENT = 0.0001
 
-function extendPoint(
-  acc: { minX: number; minZ: number; maxX: number; maxZ: number; hasPoint: boolean },
-  x: unknown,
-  z: unknown,
-): void {
-  if (typeof x !== 'number' || typeof z !== 'number') return
-  if (!(Number.isFinite(x) && Number.isFinite(z))) return
+/** A node's plan frame in world XZ: local (x, z) → origin + turnPlanPoint(x, z, yaw). */
+type PlanFrame = { x: number; z: number; yaw: number }
+
+const WORLD_FRAME: PlanFrame = { x: 0, z: 0, yaw: 0 }
+
+type BoundsAcc = { minX: number; minZ: number; maxX: number; maxZ: number; hasPoint: boolean }
+
+function extendPoint(acc: BoundsAcc, frame: PlanFrame, localX: unknown, localZ: unknown): void {
+  if (typeof localX !== 'number' || typeof localZ !== 'number') return
+  if (!(Number.isFinite(localX) && Number.isFinite(localZ))) return
+  const [tx, tz] = frame.yaw === 0 ? [localX, localZ] : turnPlanPoint(localX, localZ, frame.yaw)
+  const x = frame.x + tx
+  const z = frame.z + tz
   if (x < acc.minX) acc.minX = x
   if (x > acc.maxX) acc.maxX = x
   if (z < acc.minZ) acc.minZ = z
@@ -50,6 +57,9 @@ function extendPoint(
  *   - `polygon`      → zone, slab, site-boundary polygons.
  *   - `position`     → building/item/door/window position; uses [x, z] only.
  *
+ * Each point is in its parent's frame, so it is carried to world XZ through
+ * the ancestors' `position` and `rotation` yaw (a moved or turned building).
+ *
  * Site-node polygons are intentionally excluded when they are the default
  * 30×30 bootstrap polygon — otherwise a brand-new empty scene would frame
  * an empty square around the origin. We still include site polygons that
@@ -63,7 +73,7 @@ export function computeSceneBoundsXZ(
   const list: AnyNode[] = Array.isArray(nodes) ? nodes : Object.values(nodes)
   if (list.length === 0) return null
 
-  const acc = {
+  const acc: BoundsAcc = {
     minX: Number.POSITIVE_INFINITY,
     minZ: Number.POSITIVE_INFINITY,
     maxX: Number.NEGATIVE_INFINITY,
@@ -71,15 +81,24 @@ export function computeSceneBoundsXZ(
     hasPoint: false,
   }
 
+  const byId = new Map<string, AnyNode>()
+  for (const node of list) {
+    if (node && typeof node === 'object' && typeof node.id === 'string') byId.set(node.id, node)
+  }
+  const frameOf = createFrameResolver(byId)
+
   for (const node of list) {
     if (!node || typeof node !== 'object') continue
     const anyNode = node as unknown as Record<string, unknown>
+    // A node's own fields live in its parent's frame (a building's walls are
+    // building-local), so every point goes through the ancestors' transforms.
+    const frame = frameOf(node.parentId ?? null)
 
     // Wall / fence endpoints in level coordinates.
     const start = anyNode.start as unknown
     const end = anyNode.end as unknown
-    if (Array.isArray(start) && start.length >= 2) extendPoint(acc, start[0], start[1])
-    if (Array.isArray(end) && end.length >= 2) extendPoint(acc, end[0], end[1])
+    if (Array.isArray(start) && start.length >= 2) extendPoint(acc, frame, start[0], start[1])
+    if (Array.isArray(end) && end.length >= 2) extendPoint(acc, frame, end[0], end[1])
 
     // Zone / slab polygons (and explicit polygon-shaped site boundaries).
     const polygon = anyNode.polygon as unknown
@@ -88,7 +107,7 @@ export function computeSceneBoundsXZ(
       // points under `polygon.points` (a discriminated PropertyLineData shape).
       for (const point of polygon) {
         if (Array.isArray(point) && point.length >= 2) {
-          extendPoint(acc, point[0], point[1])
+          extendPoint(acc, frame, point[0], point[1])
         }
       }
     } else if (
@@ -105,7 +124,7 @@ export function computeSceneBoundsXZ(
       } else {
         for (const point of points) {
           if (Array.isArray(point) && point.length >= 2) {
-            extendPoint(acc, point[0], point[1])
+            extendPoint(acc, frame, point[0], point[1])
           }
         }
       }
@@ -114,7 +133,7 @@ export function computeSceneBoundsXZ(
     // Position on the XZ plane (3D position = [x, y, z]).
     const position = anyNode.position as unknown
     if (Array.isArray(position) && position.length >= 3) {
-      extendPoint(acc, position[0], position[2])
+      extendPoint(acc, frame, position[0], position[2])
     }
   }
 
@@ -144,6 +163,42 @@ export function computeSceneBoundsXZ(
     center: [centerX, centerZ],
     size: [maxX - minX, maxZ - minZ],
   }
+}
+
+/**
+ * World plan frame of each node, composed down the parent chain the way the
+ * renderers nest groups: a node with a `position` (building, item) translates
+ * its children and turns them by its `rotation` yaw; nodes without one (site,
+ * level) pass their parent's frame through.
+ */
+function createFrameResolver(byId: Map<string, AnyNode>): (id: string | null) => PlanFrame {
+  const cache = new Map<string, PlanFrame>()
+  const resolving = new Set<string>()
+
+  const resolve = (id: string | null): PlanFrame => {
+    if (!id) return WORLD_FRAME
+    const cached = cache.get(id)
+    if (cached) return cached
+    const node = byId.get(id)
+    if (!node || resolving.has(id)) return WORLD_FRAME
+    resolving.add(id)
+    const parent = resolve(node.parentId ?? null)
+    resolving.delete(id)
+
+    const anyNode = node as unknown as Record<string, unknown>
+    const position = anyNode.position
+    let frame = parent
+    if (Array.isArray(position) && position.length >= 3) {
+      const px = Number.isFinite(position[0]) ? (position[0] as number) : 0
+      const pz = Number.isFinite(position[2]) ? (position[2] as number) : 0
+      const [tx, tz] = turnPlanPoint(px, pz, parent.yaw)
+      frame = { x: parent.x + tx, z: parent.z + tz, yaw: parent.yaw + yawOf(anyNode.rotation) }
+    }
+    cache.set(id, frame)
+    return frame
+  }
+
+  return resolve
 }
 
 /**
