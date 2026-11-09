@@ -1,4 +1,10 @@
-import { type AnyNode, type AnyNodeId, type FloorplanAffordance, useScene } from '@pascal-app/core'
+import {
+  type AnyNode,
+  type AnyNodeId,
+  type FloorplanAffordance,
+  type NodePort,
+  useScene,
+} from '@pascal-app/core'
 import { useEditor } from '@pascal-app/editor'
 import type { RunBodyHit, ScenePort } from '@pascal-app/editor/distribution'
 import { useViewer } from '@pascal-app/viewer'
@@ -186,6 +192,32 @@ export function activatePipeContinuation(
             flowDirection: grade < 0 ? 'reverse' : 'forward',
           }
     })(),
+  })
+  useViewer.getState().setSelection({ selectedIds: [] })
+  editor.setTool('pipe-segment')
+}
+
+export function activatePipeCollarContinuation(node: AnyNode, port: NodePort): void {
+  const editor = useEditor.getState()
+  editor.setToolDefaults('pipe-segment', {
+    ...editor.toolDefaults['pipe-segment'],
+    continuation: { nodeId: node.id, portId: port.id },
+    diameter: port.diameter,
+    system: port.system,
+    pipeMaterial: 'pipeMaterial' in node ? node.pipeMaterial : 'pvc',
+    elevation: port.position[1],
+    routingMode:
+      Math.hypot(port.direction[0], port.direction[2]) < 1e-6 ? 'vertical' : 'horizontal',
+    targetElevation: port.position[1] + Math.sign(port.direction[1] || 1),
+    ...(() => {
+      const grade = pipeGrade([0, 0, 0], [...port.direction]) ?? 0
+      return {
+        fall: Math.abs(grade) > 1e-6 ? 'sloped' : 'level',
+        gradePercent: Math.abs(grade) * 100,
+        flowDirection: grade < 0 ? 'reverse' : 'forward',
+      }
+    })(),
+    crossingMode: 'connect',
   })
   useViewer.getState().setSelection({ selectedIds: [] })
   editor.setTool('pipe-segment')

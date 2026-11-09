@@ -4,6 +4,7 @@ import {
   type DuctFittingNode,
   DuctSegmentNode,
   type FloorplanAffordance,
+  type NodePort,
   nodeRegistry,
   useScene,
 } from '@pascal-app/core'
@@ -212,6 +213,27 @@ export function activateDuctContinuation(
     insulated: duct.insulated,
     insulationR: duct.insulationR,
     system: duct.system,
+  })
+  useViewer.getState().setSelection({ selectedIds: [] })
+  editor.setTool('duct-segment')
+}
+
+export function activateDuctCollarContinuation(node: AnyNode, port: NodePort): void {
+  const editor = useEditor.getState()
+  editor.setToolDefaults('duct-segment', {
+    ...editor.toolDefaults['duct-segment'],
+    continuation: { nodeId: node.id, portId: port.id },
+    shape: port.shape ?? 'round',
+    diameter: port.diameter,
+    width: port.width ?? 14,
+    height: port.height ?? 8,
+    system: port.system,
+    ductMaterial: 'sheet-metal',
+    elevation: port.position[1],
+    routingMode:
+      Math.hypot(port.direction[0], port.direction[2]) < 1e-6 ? 'vertical' : 'horizontal',
+    targetElevation: port.position[1] + Math.sign(port.direction[1] || 1),
+    crossingMode: 'connect',
   })
   useViewer.getState().setSelection({ selectedIds: [] })
   editor.setTool('duct-segment')

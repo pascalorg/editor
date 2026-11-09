@@ -432,6 +432,10 @@ const PipeSegmentTool = () => {
       if (!sceneApi.applyChanges) throw new Error('Registry SceneApi must support atomic changes')
       sceneApi.applyChanges(changes)
       pendingPromotionRef.current = null
+      // A riser out of a fixed collar reaches the target; staying vertical would aim the
+      // next section at the riser's own top.
+      if (startCollar && hangerDefaults?.routingMode === 'vertical')
+        updateRunDefaults('pipe-segment', { routingMode: 'horizontal' })
     }
     const nextStart = nextPipe ? nextPipe.path[nextPipe.path.length - 1]! : end
     const nextPort = nextPipe ? pipeEndpointPort(nextPipe, 'end') : endConnection.port
