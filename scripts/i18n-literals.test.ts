@@ -751,6 +751,14 @@ test('the release job fails when a compiled pack ships a draft', () => {
   expect(output).toMatch(/fr: compiled pack ships unreviewed "[^"]+"/)
 })
 
+test('a base directory without catalogs fails the release job', () => {
+  const fixture = catalogFixture(() => {})
+  const base = join(fixture.base, 'missing')
+  const { exitCode, output } = releaseCheckJob({ ...fixture, base })
+  expect(exitCode).toBe(1)
+  expect(output).toContain(`--base-dir ${base} has no bundled PO catalogs to compare with`)
+})
+
 /** A throwaway repository with the real catalogs, for the release job's base lookup. */
 function releaseRepo(steps: (git: (...args: string[]) => void, root: string) => void): string {
   const root = mkdtempSync(join(tmpdir(), 'pascal-release-'))

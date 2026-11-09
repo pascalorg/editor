@@ -1208,6 +1208,13 @@ async function main(): Promise<void> {
         })
       : readLocaleEntries((path) => readAtRevision(revision!, path))
     const added = TARGET_LOCALES.filter((locale) => !base[locale])
+    if (baseDir && added.length === TARGET_LOCALES.length) {
+      console.error(
+        `[i18n] release-check: --base-dir ${baseDir} has no bundled PO catalogs to compare with`,
+      )
+      process.exitCode = 1
+      return
+    }
     if (added.length > 0) {
       console.log(
         `New locales since ${baseDir ?? resolved?.label}, with no reviewed entries to keep: ${added.join(', ')}`,
