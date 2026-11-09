@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, test } from 'bun:test'
+import { AGENT_OPERATIONS } from '@pascal-app/core/agent-operations'
 import {
   BuildingNode,
   DoorNode,
@@ -322,7 +323,7 @@ describe('SceneBridge', () => {
       expect(res.errors.some((e) => e.nodeId === 'wall_bogus')).toBe(true)
     })
 
-    test('reports a parent cycle that each node schema accepts on its own', () => {
+    test('reports a parent cycle that each node schema accepts on its own, as verify_scene does', () => {
       const siteA = SiteNode.parse({ id: 'site_a', parentId: 'site_b', children: ['site_b'] })
       const siteB = SiteNode.parse({ id: 'site_b', parentId: 'site_a', children: ['site_a'] })
       bridge.setScene({ [siteA.id]: siteA, [siteB.id]: siteB }, [])
@@ -335,6 +336,16 @@ describe('SceneBridge', () => {
           { nodeId: siteA.id, path: 'parentId', message },
           { nodeId: siteB.id, path: 'parentId', message },
         ]),
+      )
+
+      const verified = AGENT_OPERATIONS.verify_scene(bridge.getNodes(), {}, { activeLevelId: null })
+      expect(verified.result.valid).toBe(false)
+      expect(verified.result.issues).toEqual(
+        expect.arrayContaining(
+          res.errors.map(({ nodeId, path }) =>
+            expect.objectContaining({ type: 'schema_invalid', nodeId, path }),
+          ),
+        ),
       )
     })
   })

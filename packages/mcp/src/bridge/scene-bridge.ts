@@ -3,8 +3,8 @@ import './node-shims'
 import {
   applyStructureReconciliation,
   assertDerivedNodeWrites,
-  findHierarchyCycles,
   HIDDEN_SITE_NOTE,
+  hierarchyCycleErrors,
   type NodeDeletionPlan,
   type NodeDeletionScene,
   pauseSceneHistory,
@@ -701,10 +701,7 @@ export class SceneBridge {
         })
       }
     }
-    for (const cycle of findHierarchyCycles(nodes)) {
-      const message = `hierarchy cycle detected: ${[...cycle, cycle[0]!].join(' -> ')}`
-      for (const nodeId of cycle) errors.push({ nodeId, path: 'parentId', message })
-    }
+    errors.push(...hierarchyCycleErrors(nodes))
     return { valid: errors.length === 0, errors, warnings }
   }
 

@@ -1,6 +1,7 @@
 import { levelBuildingId } from '../building/level-duplication'
 import { levelGradeStanding } from '../lib/grade-standing'
 import { groundSeat } from '../lib/ground-seat'
+import { hierarchyCycleErrors } from '../lib/hierarchy'
 import { getLevelDisplayName } from '../lib/level-name'
 import { HIDDEN_SITE_NOTE } from '../lib/node-visibility'
 import { wallSupportForNodes } from '../lib/opening-floor-datum'
@@ -294,7 +295,7 @@ function withDefaults(node: AnyNode, parsed: unknown): AnyNode {
  * kind's, else core's. The checks that measure read each node with its defaults filled. A node its schema
  * rejects is listed field by field and left `unread`: they could not read it. A node of a kind no
  * schema here knows (a plugin's, where the plugin is not loaded) is counted by kind and kept as
- * stored: the checks never read it.
+ * stored: the checks never read it. Each node on a parent cycle is listed by its `parentId`.
  */
 function checkSchemas(scene: SceneNodes, hostSchema: AgentContext['nodeSchema']) {
   const errors: { nodeId: string; path: string; message: string }[] = []
@@ -321,6 +322,7 @@ function checkSchemas(scene: SceneNodes, hostSchema: AgentContext['nodeSchema'])
       errors.push({ nodeId: id, path: issue.path.join('.'), message: issue.message })
     unread.add(id)
   }
+  errors.push(...hierarchyCycleErrors(scene))
   return { errors, unknownKinds, unread, measured }
 }
 

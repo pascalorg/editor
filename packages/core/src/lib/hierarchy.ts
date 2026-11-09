@@ -53,3 +53,13 @@ export function findHierarchyCycles(nodes: NodeMap): AnyNodeId[][] {
 
   return cycles
 }
+
+/** The `parentId` error each node on a cycle raises, as every scene check lists it. */
+export function hierarchyCycleErrors(
+  nodes: NodeMap,
+): { nodeId: AnyNodeId; path: 'parentId'; message: string }[] {
+  return findHierarchyCycles(nodes).flatMap((cycle) => {
+    const message = `hierarchy cycle detected: ${[...cycle, cycle[0]].join(' -> ')}`
+    return cycle.map((nodeId) => ({ nodeId, path: 'parentId' as const, message }))
+  })
+}
