@@ -207,9 +207,9 @@ export const elevatorDefinition: NodeDefinition<typeof ElevatorNode> = {
     movable: {
       axes: ['x', 'z'],
       gridSnap: true,
-      resolvePosition: ({ node, position }) => [
+      resolvePosition: ({ node, position, nodes }) => [
         position[0],
-        resolveElevatorNodeSupportY(node as ElevatorNodeType, position),
+        resolveElevatorNodeSupportY(node as ElevatorNodeType, position, nodes),
         position[2],
       ],
     },

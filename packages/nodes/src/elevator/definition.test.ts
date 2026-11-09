@@ -163,15 +163,14 @@ test('moving an elevator resolves its landing across split-level slabs in both d
     ],
     elevation: 0.8,
   })
+  const nodes = {
+    [building.id]: building,
+    [level.id]: level,
+    [elevator.id]: elevator,
+    [slab.id]: slab,
+  }
   try {
-    useScene.setState({
-      nodes: {
-        [building.id]: building,
-        [level.id]: level,
-        [elevator.id]: elevator,
-        [slab.id]: slab,
-      },
-    })
+    useScene.setState({ nodes: {} })
     spatialGridManager.handleNodeCreated(slab, level.id)
     const resolve = elevatorDefinition.capabilities.movable!.resolvePosition!
     for (const [x, expected] of [
@@ -182,7 +181,7 @@ test('moving an elevator resolves its landing across split-level slabs in both d
       const position = resolve({
         node: elevator,
         position: [x!, 0, 0],
-        nodes: useScene.getState().nodes,
+        nodes,
       })
       expect(position).toEqual([x!, expected!, 0])
     }
