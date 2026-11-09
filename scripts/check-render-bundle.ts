@@ -1,4 +1,4 @@
-import { realpathSync } from 'node:fs'
+import { readFileSync, realpathSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { build, type Plugin } from 'esbuild'
@@ -34,6 +34,58 @@ const boundary: Plugin = {
       return { ...result, pluginData: undefined }
     })
   },
+}
+
+// Loads the resolver hook cannot see: a computed import()/require(), import.meta.glob, and
+// workers (their entry is a URL, not an import). Pascal-owned code must not use them, so
+// every module reaches the render graph through an inspected literal import.
+const pascalSource = /(?:^|\/)packages\/(?:core|viewer|nodes|geometry-script)\//
+function rejectUninspectedLoads(path: string, contents: string) {
+  const file = ts.createSourceFile(path, contents, ts.ScriptTarget.Latest, true)
+  const literal = (node: ts.Node | undefined) =>
+    !!node && (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node))
+  const visit = (node: ts.Node): void => {
+    if (ts.isCallExpression(node)) {
+      const callee = node.expression
+      const isImport = callee.kind === ts.SyntaxKind.ImportKeyword
+      const isRequire = ts.isIdentifier(callee) && callee.text === 'require'
+      if ((isImport || isRequire) && !literal(node.arguments[0]))
+        throw new Error(
+          `Uninspected render load: computed ${isImport ? 'import()' : 'require()'} in ${path}`,
+        )
+    }
+    if (
+      ts.isPropertyAccessExpression(node) &&
+      node.name.text === 'glob' &&
+      ts.isMetaProperty(node.expression)
+    )
+      throw new Error(`Uninspected render load: import.meta.glob in ${path}`)
+    if (
+      ts.isNewExpression(node) &&
+      ts.isIdentifier(node.expression) &&
+      (node.expression.text === 'Worker' || node.expression.text === 'SharedWorker')
+    )
+      throw new Error(`Uninspected render load: ${node.expression.text} in ${path}`)
+    ts.forEachChild(node, visit)
+  }
+  visit(file)
+}
+
+for (const source of [
+  "const dep = globalThis.dep ?? '@pascal-app/editor'; export const lazy = () => import(dep)",
+  'export const lazy = (name) => import(`@pascal-app/${name}`)',
+  "const dep = '@pascal-app/editor'; export const load = () => require(dep)",
+  "export const modules = import.meta.glob('../editor/src/**/*.ts')",
+  "export const worker = new Worker(new URL('../editor/src/worker.ts', import.meta.url))",
+]) {
+  let rejected = false
+  try {
+    rejectUninspectedLoads('probe.js', source)
+  } catch (error) {
+    if (!String(error).includes('Uninspected render load:')) throw error
+    rejected = true
+  }
+  if (!rejected) throw new Error(`Boundary self-test accepted ${source}`)
 }
 
 function virtualModule(name: string, contents: string): Plugin {
@@ -112,7 +164,15 @@ const result = await build({
 const inputs = Object.keys(result.metafile.inputs)
 if (!inputs.some((path) => path.endsWith('packages/nodes/dist/render.js')))
   throw new Error('Render entry must resolve through the built package export to dist/render.js')
-for (const path of inputs) rejectForbidden(path)
+let scannedPascalModules = 0
+for (const path of inputs) {
+  rejectForbidden(path)
+  if (pascalSource.test(path.replaceAll('\\', '/'))) {
+    rejectUninspectedLoads(path, readFileSync(resolve(root, path), 'utf8'))
+    scannedPascalModules++
+  }
+}
+if (scannedPascalModules === 0) throw new Error('No Pascal-owned render modules were scanned')
 for (const [path, output] of Object.entries(result.metafile.outputs)) {
   rejectForbidden(path)
   for (const dependency of output.imports) {
@@ -138,7 +198,10 @@ function visitOutput(path: string) {
 }
 visitOutput(entry.path)
 const renderBytes = [...reachable].reduce((sum, path) => sum + outputsByPath.get(path)!.bytes, 0)
-console.log('Render bundle boundary self-test: passed (static + lazy forbidden imports)')
+console.log(
+  'Render bundle boundary self-test: passed (static, lazy, computed, glob and worker loads)',
+)
+console.log(`Pascal-owned render modules scanned for uninspected loads: ${scannedPascalModules}`)
 console.log(`Render entry: ${entry.contents.byteLength} bytes (shared chunks emitted separately)`)
 console.log(
   `Render graph including shared/lazy chunks: ${renderBytes} bytes across ${reachable.size} chunks`,
