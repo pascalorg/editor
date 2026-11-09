@@ -4,6 +4,7 @@ import {
   type AnyNode,
   type AnyNodeId,
   type CeilingNode,
+  collectionIdsOf,
   createSceneApi,
   getWallMidpointHandlePoint,
   type NodeQuickAction,
@@ -27,6 +28,7 @@ import {
   prepareFreshPlacementRootDuplicate,
 } from '../../lib/fresh-planar-placement'
 import { curveReshapeScope } from '../../lib/interaction/scope'
+import { duplicateWithoutMove, registryMoveDisabled } from '../../lib/node-action-movement'
 import { playBlockedQuickActionFeedback } from '../../lib/quick-action-feedback'
 import { collectQuickActionNodeScope } from '../../lib/quick-action-nodes'
 import { sfxEmitter } from '../../lib/sfx-bus'
@@ -37,6 +39,7 @@ import useInteractionScope, {
   useMovingNode,
 } from '../../store/use-interaction-scope'
 import { NodeActionMenu } from '../editor/node-action-menu'
+import { startZoneRoomTransform } from '../editor/room-controls'
 import { IconRefGlyph } from '../ui/icon-ref'
 
 function SideAddGlyph({ direction }: { direction: 'left' | 'right' }) {
@@ -250,12 +253,14 @@ export function FloorplanRegistryActionMenu() {
   // walls land on their bespoke `MoveWallTool` (perpendicular slide
   // with linked-wall cascade) via `affordanceTools.move`.
   const canMove =
-    !!def.capabilities.movable || !!def.floorplanMoveTarget || !!def.affordanceTools?.move
+    !registryMoveDisabled(node) &&
+    (!!def.capabilities.movable || !!def.floorplanMoveTarget || !!def.affordanceTools?.move)
   const canDuplicate = def.capabilities.duplicable !== false
   const canDelete = def.capabilities.deletable !== false
   const canAddHole = node.type === 'slab' || node.type === 'ceiling'
 
   const handleMove = () => {
+    if (startZoneRoomTransform(node, 'move')) return
     sfxEmitter.emit('sfx:item-pick')
     const sceneNodes = useScene.getState().nodes
     setMovingNode(resolveMoveActionNode(node, sceneNodes) as never)
@@ -319,7 +324,17 @@ export function FloorplanRegistryActionMenu() {
 
   const handleDuplicate = () => {
     if (!node.parentId) return
+    if (startZoneRoomTransform(node, 'duplicate')) return
     sfxEmitter.emit('sfx:item-pick')
+    if (registryMoveDisabled(node)) {
+      try {
+        const id = duplicateWithoutMove(node)
+        if (id) useViewer.getState().setSelection({ selectedIds: [id] })
+      } catch (error) {
+        console.error('Failed to duplicate node', error)
+      }
+      return
+    }
     useScene.temporal.getState().pause()
     let draftId: AnyNodeId | null = null
     try {
@@ -332,7 +347,13 @@ export function FloorplanRegistryActionMenu() {
         const cloned = prepareFreshPlacementRootDuplicate(node as AnyNode)
         const parsed = def.schema.parse(cloned) as AnyNode
         draftId = parsed.id as AnyNodeId
-        useScene.getState().createNode(parsed, node.parentId as AnyNodeId)
+        useScene.getState().createNodes([
+          {
+            node: parsed,
+            parentId: node.parentId as AnyNodeId,
+            collectionIds: collectionIdsOf(useScene.getState().collections, node.id),
+          },
+        ])
         setMovingNode(parsed as never)
       }
       setMovingNodeOrigin('2d')

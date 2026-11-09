@@ -7,8 +7,19 @@
 
 import { create } from 'zustand'
 
-/** Which kind of wall geometry the draft point snapped to. */
-export type WallSnapKind = 'endpoint' | 'midpoint' | 'intersection' | 'wall'
+/**
+ * Which kind of geometry the draft point snapped to. A pulled wall also lands
+ * square on a wall (`perpendicular`), on a projection guide (`alignment`), or
+ * at a grid length (`grid`).
+ */
+export type WallSnapKind =
+  | 'endpoint'
+  | 'midpoint'
+  | 'intersection'
+  | 'wall'
+  | 'perpendicular'
+  | 'alignment'
+  | 'grid'
 
 export type WallSnapPoint = {
   /** Building-local plan coordinates (XZ meters). */
@@ -17,6 +28,8 @@ export type WallSnapPoint = {
   kind: WallSnapKind
   /** Optional wall ids whose geometry produced this snap. */
   wallIds?: string[]
+  /** Words the marker shows beside its glyph ("Endpoint", "On wall"); none when absent. */
+  label?: string
 }
 
 type WallSnapIndicatorState = {

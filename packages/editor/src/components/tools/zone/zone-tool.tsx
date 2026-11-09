@@ -3,9 +3,10 @@ import {
   emitter,
   type GridEvent,
   type LevelNode,
+  newZone,
+  runAsSingleSceneHistoryStep,
   snapPointAlongAngleRay,
   useScene,
-  ZoneNode,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef, useState } from 'react'
@@ -16,7 +17,9 @@ import {
   clearSurfacePlanSnapFeedback,
   resolveSurfacePlanPointSnap,
 } from './../../../lib/surface-plan-snap'
+import { focusedUnitNode } from './../../../lib/units'
 import { snapWorldXZForActiveBuilding } from './../../../lib/world-grid-snap'
+import { nextZoneName } from '../../../lib/zone-name'
 import useEditor, { isAngleSnapActive, isGridSnapActive } from './../../../store/use-editor'
 import { useFloorplanDraftPreview } from './../../../store/use-floorplan-draft-preview'
 import { CursorSphere } from '../shared/cursor-sphere'
@@ -27,25 +30,23 @@ const Y_OFFSET = 0.02
  * Creates a zone with the given polygon points
  */
 const commitZoneDrawing = (levelId: LevelNode['id'], points: Array<[number, number]>) => {
-  const { createNode, nodes } = useScene.getState()
+  const { createNode, updateNode, nodes } = useScene.getState()
 
-  // Count existing zones for naming and color cycling
-  const zoneCount = Object.values(nodes).filter((n) => n.type === 'zone').length
-  const name = `Zone ${zoneCount + 1}`
+  const name = nextZoneName(nodes)
 
-  // Default to blue, cycle through palette for subsequent zones
-  const color = '#3b82f6'
+  const zone = newZone({ name, polygon: points })
 
-  const zone = ZoneNode.parse({
-    name,
-    polygon: points,
-    color,
+  const focusedUnit = focusedUnitNode()
+
+  // Joining the focused unit rides in the zone's own undo step.
+  runAsSingleSceneHistoryStep(useScene, () => {
+    createNode(zone, levelId)
+    if (focusedUnit) updateNode(focusedUnit.id, { members: [...focusedUnit.members, zone.id] })
   })
 
-  createNode(zone, levelId)
-
-  // Select the newly created zone
-  useViewer.getState().setSelection({ zoneId: zone.id })
+  // Selecting the zone would end unit focus; while painting a unit the new
+  // zone just joins it and drawing continues.
+  if (!focusedUnit) useViewer.getState().setSelection({ zoneId: zone.id })
 
   // Play structure build sound
   sfxEmitter.emit('sfx:structure-build')
@@ -183,9 +184,9 @@ export const ZoneTool: React.FC = () => {
       updateLines()
     }
 
-    // World-grid snap projected into building-local; rotated buildings
-    // used to pull the snap off the visible grid lines. Grid quantize only
-    // in grid mode; off / lines / angles leave the raw cursor.
+    // Snap on the building's own grid lattice, the one its walls are drafted
+    // on (square to a turned house). Grid quantize only in grid mode; off /
+    // lines / angles leave the raw cursor.
     const gridPointOf = (event: GridEvent): [number, number] =>
       isGridSnapActive()
         ? snapWorldXZForActiveBuilding(

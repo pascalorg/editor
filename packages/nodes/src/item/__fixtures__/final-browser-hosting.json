@@ -1,0 +1,381 @@
+{
+  "cabinet_f1": {
+    "object": "node",
+    "id": "cabinet_f1",
+    "type": "cabinet",
+    "name": "F1 counter and bar",
+    "parentId": "level_s1w8iyaei42eby4v",
+    "visible": true,
+    "metadata": {},
+    "runTier": "base",
+    "children": ["cabinet-module_f1", "item_f1counter", "procedural-item_f1bar"],
+    "barLedge": {
+      "edge": "back",
+      "height": 1.2,
+      "depth": 0.4
+    },
+    "withWaterfall": false,
+    "withFinishedEnds": false,
+    "position": [3, 0, -2],
+    "rotation": 1.5707963267948966,
+    "width": 0.5,
+    "depth": 0.6,
+    "carcassHeight": 0.8,
+    "operationState": 0,
+    "plinthHeight": 0.1,
+    "toeKickDepth": 0.075,
+    "boardThickness": 0.018,
+    "countertopThickness": 0.02,
+    "countertopOverhang": 0.02,
+    "countertopBackOverhang": 0,
+    "withFinishedBack": false,
+    "frontThickness": 0.018,
+    "frontGap": 0.003,
+    "frontStyle": "slab",
+    "panelReady": false,
+    "handleStyle": "bar",
+    "handlePosition": "auto",
+    "frontOverlay": "full",
+    "withBottomPanel": true,
+    "showPlinth": true,
+    "withCountertop": true
+  },
+  "cabinet-module_f1": {
+    "object": "node",
+    "id": "cabinet-module_f1",
+    "type": "cabinet-module",
+    "parentId": "cabinet_f1",
+    "visible": true,
+    "metadata": {},
+    "children": [],
+    "cabinetType": "base",
+    "moduleKind": "standard",
+    "topFinish": "none",
+    "topFinishHeight": 0.33,
+    "topFinishDepth": 0.32,
+    "position": [0, 0.1, 0],
+    "rotation": 0,
+    "width": 2,
+    "depth": 1,
+    "carcassHeight": 0.8,
+    "operationState": 0,
+    "plinthHeight": 0.1,
+    "toeKickDepth": 0.075,
+    "boardThickness": 0.018,
+    "countertopThickness": 0.02,
+    "countertopOverhang": 0.02,
+    "countertopBackOverhang": 0,
+    "withFinishedBack": false,
+    "frontThickness": 0.018,
+    "frontGap": 0.003,
+    "frontStyle": "slab",
+    "panelReady": false,
+    "handleStyle": "bar",
+    "handlePosition": "auto",
+    "frontOverlay": "full",
+    "withBottomPanel": true,
+    "showPlinth": true,
+    "withCountertop": true
+  },
+  "procedural-item_probe": {
+    "object": "node",
+    "id": "procedural-item_probe",
+    "type": "procedural-item",
+    "name": "Asymmetric generated probe",
+    "parentId": "level_s1w8iyaei42eby4v",
+    "visible": true,
+    "metadata": {},
+    "recipe": {
+      "version": 1,
+      "name": "F1 blue box",
+      "description": "Browser verification fixture",
+      "surfaces": [],
+      "parameters": [
+        {
+          "id": "width",
+          "label": "Width",
+          "default": 0.25,
+          "min": 0.1,
+          "max": 1,
+          "step": 0.05,
+          "unit": "m"
+        }
+      ],
+      "slots": [
+        {
+          "id": "body",
+          "label": "Body",
+          "color": "#3377dd"
+        }
+      ],
+      "parts": [
+        {
+          "id": "body",
+          "label": "Body",
+          "count": 1,
+          "shapes": [
+            {
+              "id": "box",
+              "primitive": "box",
+              "slot": "body",
+              "size": [0.4, 0.25, 0.25],
+              "position": [0, 0.125, 0]
+            }
+          ]
+        }
+      ],
+      "constraints": []
+    },
+    "parameters": {},
+    "slots": {},
+    "position": [1, 0, 1],
+    "rotation": [0, 1.7707963267948965, 0],
+    "children": [],
+    "attachments": {}
+  },
+  "item_probe": {
+    "object": "node",
+    "id": "item_probe",
+    "type": "item",
+    "name": "Catalog probe",
+    "parentId": "level_s1w8iyaei42eby4v",
+    "visible": true,
+    "metadata": {},
+    "position": [1, 0, -0.5],
+    "rotation": [0, 1.2, 0],
+    "scale": [1, 1, 1],
+    "children": [],
+    "asset": {
+      "id": "cactus",
+      "category": "furniture",
+      "name": "Cactus",
+      "thumbnail": "https://byrpxoiotywskoojsrzd.supabase.co/storage/v1/object/public/items/system/cactus/thumbnail.png",
+      "floorPlanUrl": "https://byrpxoiotywskoojsrzd.supabase.co/storage/v1/object/public/items/system/cactus/floor-plan.png",
+      "source": "library",
+      "src": "https://byrpxoiotywskoojsrzd.supabase.co/storage/v1/object/public/items/system/cactus/model.glb",
+      "dimensions": [0.34, 0.39, 0.27],
+      "tags": [
+        "cactus",
+        "rack",
+        "stand",
+        "hanger",
+        "sculpture",
+        "decor",
+        "modern",
+        "contemporary",
+        "pop",
+        "green",
+        "organizer",
+        "storage",
+        "sculptural"
+      ],
+      "offset": [-0.0039, 0, 0],
+      "rotation": [0, 0, 0],
+      "scale": [1, 1, 1]
+    }
+  },
+  "procedural-item_f1named": {
+    "object": "node",
+    "id": "procedural-item_f1named",
+    "type": "procedural-item",
+    "name": "F1 named surface host",
+    "parentId": "level_s1w8iyaei42eby4v",
+    "visible": true,
+    "metadata": {},
+    "recipe": {
+      "version": 1,
+      "name": "F1 generated platform",
+      "description": "Browser verification fixture",
+      "surfaces": [
+        {
+          "id": "top",
+          "label": "Top",
+          "position": [0.2, 1, 0.1],
+          "rotation": [0, 0.4, 0],
+          "size": [1.4, 1.4]
+        }
+      ],
+      "parameters": [
+        {
+          "id": "width",
+          "label": "Width",
+          "default": 0.25,
+          "min": 0.1,
+          "max": 1,
+          "step": 0.05,
+          "unit": "m"
+        }
+      ],
+      "slots": [
+        {
+          "id": "body",
+          "label": "Body",
+          "color": "#cc8844"
+        }
+      ],
+      "parts": [
+        {
+          "id": "body",
+          "label": "Body",
+          "count": 1,
+          "shapes": [
+            {
+              "id": "box",
+              "primitive": "box",
+              "slot": "body",
+              "size": [2, 1, 2],
+              "position": [0, 0.5, 0]
+            }
+          ]
+        }
+      ],
+      "constraints": []
+    },
+    "parameters": {},
+    "slots": {},
+    "position": [3, 0, 3],
+    "rotation": [0, 0.6, 0],
+    "children": ["item_f1named"],
+    "attachments": {
+      "item_f1named": "top"
+    }
+  },
+  "item_f1named": {
+    "object": "node",
+    "id": "item_f1named",
+    "type": "item",
+    "name": "item_f1named",
+    "parentId": "procedural-item_f1named",
+    "visible": true,
+    "metadata": {},
+    "position": [0, 0, 0],
+    "rotation": [0, 0.2, 0],
+    "scale": [1, 1, 1],
+    "children": [],
+    "asset": {
+      "id": "cactus",
+      "category": "furniture",
+      "name": "Cactus",
+      "thumbnail": "https://byrpxoiotywskoojsrzd.supabase.co/storage/v1/object/public/items/system/cactus/thumbnail.png",
+      "floorPlanUrl": "https://byrpxoiotywskoojsrzd.supabase.co/storage/v1/object/public/items/system/cactus/floor-plan.png",
+      "source": "library",
+      "src": "https://byrpxoiotywskoojsrzd.supabase.co/storage/v1/object/public/items/system/cactus/model.glb",
+      "dimensions": [0.34, 0.39, 0.27],
+      "tags": [
+        "cactus",
+        "rack",
+        "stand",
+        "hanger",
+        "sculpture",
+        "decor",
+        "modern",
+        "contemporary",
+        "pop",
+        "green",
+        "organizer",
+        "storage",
+        "sculptural"
+      ],
+      "offset": [-0.0039, 0, 0],
+      "rotation": [0, 0, 0],
+      "scale": [1, 1, 1]
+    }
+  },
+  "item_f1counter": {
+    "object": "node",
+    "id": "item_f1counter",
+    "type": "item",
+    "name": "item_f1counter",
+    "parentId": "cabinet_f1",
+    "visible": true,
+    "metadata": {},
+    "position": [-0.45, 0.92, 0.01],
+    "rotation": [0, 0.2, 0],
+    "scale": [1, 1, 1],
+    "children": [],
+    "asset": {
+      "id": "cactus",
+      "category": "furniture",
+      "name": "Cactus",
+      "thumbnail": "https://byrpxoiotywskoojsrzd.supabase.co/storage/v1/object/public/items/system/cactus/thumbnail.png",
+      "floorPlanUrl": "https://byrpxoiotywskoojsrzd.supabase.co/storage/v1/object/public/items/system/cactus/floor-plan.png",
+      "source": "library",
+      "src": "https://byrpxoiotywskoojsrzd.supabase.co/storage/v1/object/public/items/system/cactus/model.glb",
+      "dimensions": [0.34, 0.39, 0.27],
+      "tags": [
+        "cactus",
+        "rack",
+        "stand",
+        "hanger",
+        "sculpture",
+        "decor",
+        "modern",
+        "contemporary",
+        "pop",
+        "green",
+        "organizer",
+        "storage",
+        "sculptural"
+      ],
+      "offset": [-0.0039, 0, 0],
+      "rotation": [0, 0, 0],
+      "scale": [1, 1, 1]
+    }
+  },
+  "procedural-item_f1bar": {
+    "object": "node",
+    "id": "procedural-item_f1bar",
+    "type": "procedural-item",
+    "name": "F1 bar box",
+    "parentId": "cabinet_f1",
+    "visible": true,
+    "metadata": {},
+    "recipe": {
+      "version": 1,
+      "name": "F1 blue box",
+      "description": "Browser verification fixture",
+      "surfaces": [],
+      "parameters": [
+        {
+          "id": "width",
+          "label": "Width",
+          "default": 0.25,
+          "min": 0.1,
+          "max": 1,
+          "step": 0.05,
+          "unit": "m"
+        }
+      ],
+      "slots": [
+        {
+          "id": "body",
+          "label": "Body",
+          "color": "#3377dd"
+        }
+      ],
+      "parts": [
+        {
+          "id": "body",
+          "label": "Body",
+          "count": 1,
+          "shapes": [
+            {
+              "id": "box",
+              "primitive": "box",
+              "slot": "body",
+              "size": [0.25, 0.25, 0.25],
+              "position": [0, 0.125, 0]
+            }
+          ]
+        }
+      ],
+      "constraints": []
+    },
+    "parameters": {},
+    "slots": {},
+    "position": [0.45, 1.2, -0.7],
+    "rotation": [0, 0.2, 0],
+    "children": [],
+    "attachments": {}
+  }
+}

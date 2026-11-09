@@ -23,6 +23,7 @@ import {
   addBox,
   type CabinetGeometryNode,
   type CabinetSlotMaterials,
+  createCabinetPanelGeometry,
   createWorldScaleBoxGeometry,
   stampSlot,
 } from './shared'
@@ -188,7 +189,7 @@ function buildBaseFrontGeometry(
   if (node.handleStyle === 'cutout')
     return buildCutoutFrontGeometry(node, width, height, drawer, hinge)
   if (node.handleStyle === 'hole') return buildHoleFrontGeometry(node, width, height, drawer, hinge)
-  return createWorldScaleBoxGeometry(width, height, node.frontThickness)
+  return createCabinetPanelGeometry(width, height, node.frontThickness)
 }
 
 function applyShakerFrontProfile(
@@ -364,7 +365,7 @@ export function addBarHandle(
   material: Material,
 ) {
   const mesh = stampSlot(
-    new Mesh(new CylinderGeometry(0.006, 0.006, length, 16), material),
+    new Mesh(new CylinderGeometry(0.006, 0.006, length, 8), material),
     'hardware',
   )
   mesh.name = name
@@ -376,7 +377,7 @@ export function addBarHandle(
   const standOffDistance = length * 0.38
   for (const offset of [-standOffDistance, standOffDistance]) {
     const standoff = stampSlot(
-      new Mesh(new CylinderGeometry(0.004, 0.004, 0.026, 10), material),
+      new Mesh(new CylinderGeometry(0.004, 0.004, 0.026, 6), material),
       'hardware',
     )
     standoff.name = `${name}-standoff`
@@ -407,7 +408,7 @@ function addKnobHandle(
   stem.castShadow = true
   group.add(stem)
 
-  const knob = stampSlot(new Mesh(new SphereGeometry(0.011, 16, 12), material), 'hardware')
+  const knob = stampSlot(new Mesh(new SphereGeometry(0.011, 10, 6), material), 'hardware')
   knob.name = name
   knob.position.set(position[0], position[1], position[2] + 0.022)
   knob.castShadow = true
@@ -481,7 +482,11 @@ export function addHandleFeature(
     const x = placement?.x ?? resolvedPlacement.x
     const y = placement?.y ?? resolvedPlacement.y
     const z = node.frontThickness / 2
-    addBarHandle(group, [x, y, z], drawer ? 0.12 : 0.18, vertical, name, materials.hardware)
+    const span = vertical ? height : width
+    const center = vertical ? y : x
+    const available = Math.max(0.01, span - 2 * Math.abs(center) - 0.024)
+    const length = Math.min(drawer ? Math.min(0.24, width * 0.3) : 0.18, available)
+    addBarHandle(group, [x, y, z], length, vertical, name, materials.hardware)
     return
   }
 
@@ -773,7 +778,7 @@ export function addDrawerFronts(
   const drawerHeight = Math.max(0.01, (usableHeight - (count - 1) * node.frontGap) / count)
   const drawerSideThickness = Math.min(0.012, node.boardThickness * 0.7)
   const boxWidth = Math.max(0.01, boxOpeningWidth - 0.026)
-  const boxHeight = Math.max(0.02, drawerHeight - 0.012)
+  const boxHeight = Math.max(0.02, drawerHeight * 0.78)
   const boxCenterZ = boxBackZ + boxDepth / 2
   for (let i = 0; i < count; i++) {
     const openDistance = Math.min(boxDepth * 0.9, 0.35) * drawerOpenScale(i, count)
@@ -842,10 +847,34 @@ export function addDrawerFronts(
     addBox(
       slideGroup,
       [boxWidth - 2 * drawerSideThickness, drawerSideThickness, boxDepth - drawerSideThickness],
-      [0, y - boxHeight / 2 + drawerSideThickness / 2, boxCenterZ],
+      [
+        0,
+        y - boxHeight / 2 + drawerSideThickness / 2 + Math.min(0.008, boxHeight * 0.1),
+        boxCenterZ,
+      ],
       materials.carcass,
       `cabinet-drawer-bottom-${centerY.toFixed(3)}-${i}`,
       'carcass',
     )
+    for (const side of [-1, 1]) {
+      const runnerX = side * (boxWidth / 2 + 0.004)
+      const runnerY = y - boxHeight * 0.3
+      addBox(
+        group,
+        [0.006, 0.018, boxDepth * 0.9],
+        [runnerX, runnerY, boxCenterZ],
+        materials.hardware,
+        `cabinet-drawer-fixed-runner-${centerY.toFixed(3)}-${i}-${side}`,
+        'hardware',
+      )
+      addBox(
+        slideGroup,
+        [0.004, 0.01, boxDepth * 0.88],
+        [runnerX - side * 0.003, runnerY, boxCenterZ],
+        materials.hardware,
+        `cabinet-drawer-moving-runner-${centerY.toFixed(3)}-${i}-${side}`,
+        'hardware',
+      )
+    }
   }
 }

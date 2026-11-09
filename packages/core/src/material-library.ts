@@ -1,8 +1,19 @@
+import type { MaterialCategory, MaterialSurface } from './material-kinds'
 import {
   type MaterialPresetPayload,
+  MaterialProperties,
+  type MaterialSchema,
   type MaterialTarget,
   MaterialTarget as MaterialTargetSchema,
 } from './schema/material'
+
+// The library's kinds and surfaces, kept apart so a tool contract names them without the catalog.
+export {
+  MATERIAL_CATEGORIES,
+  MATERIAL_SURFACES,
+  type MaterialCategory,
+  type MaterialSurface,
+} from './material-kinds'
 
 export type MaterialSource = 'pascal' | 'community' | 'mine' | 'workspace'
 
@@ -60,36 +71,6 @@ const ROOF_TARGETS: MaterialTarget[] = [
 
 const CEILING_TARGETS: MaterialTarget[] = [MaterialTargetSchema.enum.ceiling]
 
-export const MATERIAL_CATEGORIES = [
-  'colors',
-  'wood',
-  'stone',
-  'brick',
-  'tile',
-  'wallpaper',
-  'concrete',
-  'metal',
-  'plastic',
-  'fabric',
-  'carpet',
-  'leather',
-  'roofing',
-  'ground',
-  'glass',
-  'other',
-] as const
-export type MaterialCategory = (typeof MATERIAL_CATEGORIES)[number]
-
-export const MATERIAL_SURFACES = [
-  'floor',
-  'wall',
-  'ceiling',
-  'roof',
-  'furniture',
-  'outdoor',
-] as const
-export type MaterialSurface = (typeof MATERIAL_SURFACES)[number]
-
 export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
   {
     id: 'wood-finewood27',
@@ -98,6 +79,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['floor', 'wall', 'furniture'],
     description: 'Fine wood finish',
     previewThumbnailUrl: '/material/wood/finewood_27/finewood_27_thumb.webp',
+    previewColor: '#a7753f',
     preset: {
       maps: {
         albedoMap: '/material/wood/finewood_27/finewood_27_basecolor_512.ktx2',
@@ -136,6 +118,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['floor'],
     description: 'Wood plank finish',
     previewThumbnailUrl: '/material/wood/floor_plank_1/floor_plank_1_thumb.webp',
+    previewColor: '#bf8552',
     preset: {
       maps: {
         albedoMap: '/material/wood/floor_plank_1/floor_plank_1_basecolor_512.ktx2',
@@ -173,6 +156,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['floor'],
     description: 'Parquet wood finish',
     previewThumbnailUrl: '/material/wood/hungarian_parquet_10/hungarian_parquet_10_thumb.webp',
+    previewColor: '#a87d50',
     preset: {
       maps: {
         albedoMap: '/material/wood/hungarian_parquet_10/hungarian_parquet_10_basecolor_512.ktx2',
@@ -210,6 +194,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['floor'],
     description: 'Parquet wood finish',
     previewThumbnailUrl: '/material/wood/hungarian_parquet_2/hungarian_parquet_2_thumb.webp',
+    previewColor: '#673021',
     preset: {
       maps: {
         albedoMap: '/material/wood/hungarian_parquet_2/hungarian_parquet_2_basecolor_512.ktx2',
@@ -247,6 +232,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['floor'],
     description: 'Parquet wood finish',
     previewThumbnailUrl: '/material/wood/square_parquet_21/square_parquet_21_thumb.webp',
+    previewColor: '#3f220f',
     preset: {
       maps: {
         albedoMap: '/material/wood/square_parquet_21/square_parquet_21_basecolor_512.ktx2',
@@ -284,6 +270,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['floor'],
     description: 'Parquet wood finish',
     previewThumbnailUrl: '/material/wood/square_wood_parquet_23/square_wood_parquet_23_thumb.webp',
+    previewColor: '#7e4108',
     preset: {
       maps: {
         albedoMap:
@@ -323,6 +310,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['floor', 'wall', 'furniture'],
     description: 'Fine wood finish',
     previewThumbnailUrl: '/material/wood/wood_fine/wood_fine_thumb.webp',
+    previewColor: '#ba9a80',
     preset: {
       maps: {
         albedoMap: '/material/wood/wood_fine/wood_fine_basecolor_512.ktx2',
@@ -360,6 +348,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['floor', 'wall', 'furniture'],
     description: 'Fine wood finish',
     previewThumbnailUrl: '/material/wood/wood_fine_11/wood_fine_11_thumb.webp',
+    previewColor: '#f59d52',
     preset: {
       maps: {
         albedoMap: '/material/wood/wood_fine_11/wood_fine_11_basecolor_512.ktx2',
@@ -397,6 +386,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['floor', 'wall', 'furniture'],
     description: 'Fine wood finish',
     previewThumbnailUrl: '/material/wood/wood_fine_13/wood_fine_13_thumb.webp',
+    previewColor: '#e5a76f',
     preset: {
       maps: {
         albedoMap: '/material/wood/wood_fine_13/wood_fine_13_basecolor_512.ktx2',
@@ -434,6 +424,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['floor', 'wall', 'furniture'],
     description: 'Fine wood finish',
     previewThumbnailUrl: '/material/wood/wood_fine_2/wood_fine_2_thumb.webp',
+    previewColor: '#dcb791',
     preset: {
       maps: {
         albedoMap: '/material/wood/wood_fine_2/wood_fine_2_basecolor_512.ktx2',
@@ -471,6 +462,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['floor', 'wall', 'furniture'],
     description: 'Fine wood finish',
     previewThumbnailUrl: '/material/wood/wood_fine_22/wood_fine_22_thumb.webp',
+    previewColor: '#bfa67e',
     preset: {
       maps: {
         albedoMap: '/material/wood/wood_fine_22/wood_fine_22_basecolor_512.ktx2',
@@ -508,6 +500,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['floor', 'wall', 'furniture'],
     description: 'Fine wood finish',
     previewThumbnailUrl: '/material/wood/wood_fine_24/wood_fine_24_thumb.webp',
+    previewColor: '#a43c28',
     preset: {
       maps: {
         albedoMap: '/material/wood/wood_fine_24/wood_fine_24_basecolor_512.ktx2',
@@ -545,6 +538,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['floor'],
     description: 'Parquet wood finish',
     previewThumbnailUrl: '/material/wood/wood_parquet_14/wood_parquet_14_thumb.webp',
+    previewColor: '#e3d4c2',
     preset: {
       maps: {
         albedoMap: '/material/wood/wood_parquet_14/wood_parquet_14_basecolor_512.ktx2',
@@ -584,6 +578,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['floor'],
     description: 'Parquet wood finish',
     previewThumbnailUrl: '/material/wood/wooden_parquet_11/wooden_parquet_11_thumb.webp',
+    previewColor: '#59392d',
     preset: {
       maps: {
         albedoMap: '/material/wood/wooden_parquet_11/wooden_parquet_11_basecolor_512.ktx2',
@@ -621,6 +616,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['floor'],
     description: 'Parquet wood finish',
     previewThumbnailUrl: '/material/wood/woodparquet_121/woodparquet_121_thumb.webp',
+    previewColor: '#8f7247',
     preset: {
       maps: {
         albedoMap: '/material/wood/woodparquet_121/woodparquet_121_basecolor_512.ktx2',
@@ -659,6 +655,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['floor'],
     description: 'Parquet wood finish',
     previewThumbnailUrl: '/material/wood/woodparquet_56/woodparquet_56_thumb.webp',
+    previewColor: '#ba8b5d',
     preset: {
       maps: {
         albedoMap: '/material/wood/woodparquet_56/woodparquet_56_basecolor_512.ktx2',
@@ -698,6 +695,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['floor'],
     description: 'Parquet wood finish',
     previewThumbnailUrl: '/material/wood/woodparquet_65/woodparquet_65_thumb.webp',
+    previewColor: '#9f7841',
     preset: {
       maps: {
         albedoMap: '/material/wood/woodparquet_65/woodparquet_65_basecolor_512.ktx2',
@@ -737,6 +735,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['floor'],
     description: 'Parquet wood finish',
     previewThumbnailUrl: '/material/wood/woodparquet_99/woodparquet_99_thumb.webp',
+    previewColor: '#b69573',
     preset: {
       maps: {
         albedoMap: '/material/wood/woodparquet_99/woodparquet_99_basecolor_512.ktx2',
@@ -776,6 +775,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['floor', 'wall'],
     description: 'Wood plank finish',
     previewThumbnailUrl: '/material/wood/woodplank_19/woodplank_19_thumb.webp',
+    previewColor: '#8f7b5f',
     preset: {
       maps: {
         albedoMap: '/material/wood/woodplank_19/woodplank_19_basecolor_512.ktx2',
@@ -814,6 +814,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['floor', 'wall'],
     description: 'Wood plank finish',
     previewThumbnailUrl: '/material/wood/woodplank_48/woodplank_48_thumb.webp',
+    previewColor: '#89664d',
     preset: {
       maps: {
         albedoMap: '/material/wood/woodplank_48/woodplank_48_basecolor_512.ktx2',
@@ -852,6 +853,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['floor'],
     description: 'Floor tile finish',
     previewThumbnailUrl: '/material/flooring/tile_quarry/tile_quarry_thumb.webp',
+    previewColor: '#484946',
     preset: {
       maps: {
         albedoMap: '/material/flooring/tile_quarry/tile_quarry_basecolor_512.ktx2',
@@ -890,6 +892,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['wall', 'floor', 'outdoor'],
     description: 'Brick finish',
     previewThumbnailUrl: '/material/flooring/brick_wall_rustic/brick_wall_rustic_thumb.webp',
+    previewColor: '#9b6f57',
     preset: {
       maps: {
         albedoMap: '/material/flooring/brick_wall_rustic/brick_wall_rustic_basecolor_512.ktx2',
@@ -929,6 +932,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['wall', 'floor', 'outdoor'],
     description: 'Brick finish',
     previewThumbnailUrl: '/material/flooring/brick_wall_aged/brick_wall_aged_thumb.webp',
+    previewColor: '#be9877',
     preset: {
       maps: {
         albedoMap: '/material/flooring/brick_wall_aged/brick_wall_aged_basecolor_512.ktx2',
@@ -968,6 +972,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['wall', 'floor', 'outdoor'],
     description: 'Brick finish',
     previewThumbnailUrl: '/material/flooring/brick_wall_weathered/brick_wall_weathered_thumb.webp',
+    previewColor: '#86513c',
     preset: {
       maps: {
         albedoMap:
@@ -1008,6 +1013,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['wall', 'furniture'],
     description: 'Panel finish',
     previewThumbnailUrl: '/material/flooring/garage_panel/garage_panel_thumb.webp',
+    previewColor: '#d7dad7',
     preset: {
       maps: {
         albedoMap: '/material/flooring/garage_panel/garage_panel_basecolor_512.ktx2',
@@ -1045,6 +1051,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['floor', 'wall'],
     description: 'Stone flooring finish',
     previewThumbnailUrl: '/material/flooring/green_labradorite/green_labradorite_thumb.webp',
+    previewColor: '#313828',
     preset: {
       maps: {
         albedoMap: '/material/flooring/green_labradorite/green_labradorite_basecolor_512.ktx2',
@@ -1082,6 +1089,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['outdoor', 'floor'],
     description: 'Ground surface finish',
     previewThumbnailUrl: '/material/flooring/ground_earth/ground_earth_thumb.webp',
+    previewColor: '#716c62',
     preset: {
       maps: {
         albedoMap: '/material/flooring/ground_earth/ground_earth_basecolor_512.ktx2',
@@ -1121,6 +1129,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['floor', 'outdoor'],
     description: 'Pool tile finish',
     previewThumbnailUrl: '/material/flooring/pool_tiles/pool_tiles_thumb.webp',
+    previewColor: '#79b4ce',
     preset: {
       maps: {
         albedoMap: '/material/flooring/pool_tiles/pool_tiles_basecolor_512.ktx2',
@@ -1158,6 +1167,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['floor'],
     description: 'Tile flooring finish',
     previewThumbnailUrl: '/material/flooring/tiles_checker/tiles_checker_thumb.webp',
+    previewColor: '#bab4b0',
     preset: {
       maps: {
         albedoMap: '/material/flooring/tiles_checker/tiles_checker_basecolor_512.ktx2',
@@ -1195,6 +1205,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['floor'],
     description: 'Tile flooring finish',
     previewThumbnailUrl: '/material/flooring/tiles_grid/tiles_grid_thumb.webp',
+    previewColor: '#828282',
     preset: {
       maps: {
         albedoMap: '/material/flooring/tiles_grid/tiles_grid_basecolor_512.ktx2',
@@ -1232,6 +1243,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['wall', 'floor', 'outdoor'],
     description: 'Stone finish',
     previewThumbnailUrl: '/material/flooring/stone_wall/stone_wall_thumb.webp',
+    previewColor: '#b2845c',
     preset: {
       maps: {
         albedoMap: '/material/flooring/stone_wall/stone_wall_basecolor_512.ktx2',
@@ -1269,6 +1281,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['floor'],
     description: 'Wood-look ceramic flooring finish',
     previewThumbnailUrl: '/material/flooring/wooden_ceramic_3/wooden_ceramic_3_thumb.webp',
+    previewColor: '#977459',
     preset: {
       maps: {
         albedoMap: '/material/flooring/wooden_ceramic_3/wooden_ceramic_3_basecolor_512.ktx2',
@@ -1306,6 +1319,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['floor', 'wall'],
     description: 'Ceramic flooring finish',
     previewThumbnailUrl: '/material/flooring/ceramic_mosaic/ceramic_mosaic_thumb.webp',
+    previewColor: '#b9b6ae',
     preset: {
       maps: {
         albedoMap: '/material/flooring/ceramic_mosaic/ceramic_mosaic_basecolor_512.ktx2',
@@ -1345,6 +1359,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['floor', 'wall'],
     description: 'Terrazzo flooring finish',
     previewThumbnailUrl: '/material/flooring/terrazzo/terrazzo_thumb.webp',
+    previewColor: '#939e9f',
     preset: {
       maps: {
         albedoMap: '/material/flooring/terrazzo/terrazzo_basecolor_512.ktx2',
@@ -1383,6 +1398,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['floor', 'wall'],
     description: 'Floor tile finish',
     previewThumbnailUrl: '/material/flooring/tile_stone/tile_stone_thumb.webp',
+    previewColor: '#d1d0c9',
     preset: {
       maps: {
         albedoMap: '/material/flooring/tile_stone/tile_stone_basecolor_512.ktx2',
@@ -1421,6 +1437,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['floor'],
     description: 'Floor tile finish',
     previewThumbnailUrl: '/material/flooring/tile_terracotta/tile_terracotta_thumb.webp',
+    previewColor: '#6e6b65',
     preset: {
       maps: {
         albedoMap: '/material/flooring/tile_terracotta/tile_terracotta_basecolor_512.ktx2',
@@ -1460,6 +1477,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     description: 'Green quartzite flooring finish',
     previewThumbnailUrl:
       '/material/flooring/green_glass_quartzite/green_glass_quartzite_thumb.webp',
+    previewColor: '#5d6957',
     preset: {
       maps: {
         albedoMap:
@@ -1498,6 +1516,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['floor'],
     description: 'Dark ceramic flooring finish',
     previewThumbnailUrl: '/material/flooring/dark_ceramic_grunge/dark_ceramic_grunge_thumb.webp',
+    previewColor: '#535351',
     preset: {
       maps: {
         albedoMap: '/material/flooring/dark_ceramic_grunge/dark_ceramic_grunge_basecolor_512.ktx2',
@@ -1539,6 +1558,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['floor'],
     description: 'Light ceramic flooring finish',
     previewThumbnailUrl: '/material/flooring/light_ceramic_grunge/light_ceramic_grunge_thumb.webp',
+    previewColor: '#9c9b95',
     preset: {
       maps: {
         albedoMap:
@@ -1581,6 +1601,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['floor', 'wall'],
     description: 'White marble flooring finish',
     previewThumbnailUrl: '/material/flooring/statuaretto/statuaretto_thumb.webp',
+    previewColor: '#bcbec2',
     preset: {
       maps: {
         albedoMap: '/material/flooring/statuaretto/statuaretto_basecolor_512.ktx2',
@@ -1618,6 +1639,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['floor', 'wall'],
     description: 'Floor tile finish',
     previewThumbnailUrl: '/material/flooring/tile_mosaic/tile_mosaic_thumb.webp',
+    previewColor: '#d1ccbe',
     preset: {
       maps: {
         albedoMap: '/material/flooring/tile_mosaic/tile_mosaic_basecolor_512.ktx2',
@@ -1657,6 +1679,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['floor', 'wall'],
     description: 'Floor tile finish',
     previewThumbnailUrl: '/material/flooring/tile_pattern/tile_pattern_thumb.webp',
+    previewColor: '#999287',
     preset: {
       maps: {
         albedoMap: '/material/flooring/tile_pattern/tile_pattern_basecolor_512.ktx2',
@@ -1696,6 +1719,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['floor'],
     description: 'Wood-look ceramic flooring finish',
     previewThumbnailUrl: '/material/flooring/wooden_ceramic_2/wooden_ceramic_2_thumb.webp',
+    previewColor: '#786250',
     preset: {
       maps: {
         albedoMap: '/material/flooring/wooden_ceramic_2/wooden_ceramic_2_basecolor_512.ktx2',
@@ -1733,6 +1757,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['floor'],
     description: 'Wood parquet flooring finish',
     previewThumbnailUrl: '/material/flooring/woodparquet/woodparquet_thumb.webp',
+    previewColor: '#bea27e',
     preset: {
       maps: {
         albedoMap: '/material/flooring/woodparquet/woodparquet_basecolor_512.ktx2',
@@ -1772,6 +1797,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['roof'],
     description: 'Classic roof shingle finish',
     previewThumbnailUrl: '/material/roofing/roof_shingles_classic/roof_shingles_classic_thumb.webp',
+    previewColor: '#9e5b46',
     preset: {
       maps: {
         albedoMap:
@@ -1814,6 +1840,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['roof'],
     description: 'Clay roof tile finish',
     previewThumbnailUrl: '/material/roofing/roof_tiles_clay/roof_tiles_clay_thumb.webp',
+    previewColor: '#765241',
     preset: {
       maps: {
         albedoMap: '/material/roofing/roof_tiles_clay/roof_tiles_clay_basecolor_512.ktx2',
@@ -1853,6 +1880,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['roof'],
     description: 'Terracotta roof tile finish',
     previewThumbnailUrl: '/material/roofing/roof_tiles_terracotta/roof_tiles_terracotta_thumb.webp',
+    previewColor: '#494b4d',
     preset: {
       maps: {
         albedoMap:
@@ -1889,6 +1917,48 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     },
   },
   {
+    id: 'roof-greyshingles',
+    label: 'Grey Shingles',
+    category: 'roofing',
+    surfaces: ['roof'],
+    description: 'Grey composition shingle finish',
+    previewThumbnailUrl: '/material/roofing/roof_shingles_grey/roof_shingles_grey_thumb.webp',
+    previewColor: '#505050',
+    preset: {
+      maps: {
+        albedoMap: '/material/roofing/roof_shingles_grey/roof_shingles_grey_basecolor_512.ktx2',
+        aoMap: '/material/roofing/roof_shingles_classic/roof_shingles_classic_ao_512.ktx2',
+        metalnessMap:
+          '/material/roofing/roof_shingles_classic/roof_shingles_classic_metallic_512.ktx2',
+        normalMap: '/material/roofing/roof_shingles_classic/roof_shingles_classic_normal_512.ktx2',
+        roughnessMap:
+          '/material/roofing/roof_shingles_classic/roof_shingles_classic_roughness_512.ktx2',
+      },
+      mapProperties: {
+        color: '#ffffff',
+        roughness: 1,
+        metalness: 0.1,
+        repeatX: 1,
+        repeatY: 1,
+        rotation: 0,
+        wrapS: 'Repeat',
+        wrapT: 'Repeat',
+        normalScaleX: 1,
+        normalScaleY: 1,
+        emissiveIntensity: 1,
+        displacementScale: 0,
+        transparent: false,
+        flipY: false,
+        bumpScale: 1,
+        emissiveColor: '#000000',
+        aoMapIntensity: 1,
+        side: 0,
+        opacity: 1,
+        lightMapIntensity: 1,
+      },
+    },
+  },
+  {
     id: 'roof-weatheredshingles',
     label: 'Weathered Shingles',
     category: 'roofing',
@@ -1896,6 +1966,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     description: 'Weathered roof shingle finish',
     previewThumbnailUrl:
       '/material/roofing/roof_shingles_weathered/roof_shingles_weathered_thumb.webp',
+    previewColor: '#a15e49',
     preset: {
       maps: {
         albedoMap:
@@ -2067,6 +2138,41 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     label: 'Light grey',
     category: 'colors',
     description: 'Cool light grey painted finish',
+    previewColor: '#d8d6d1',
+    preset: {
+      maps: {},
+      mapProperties: {
+        color: '#d8d6d1',
+        roughness: 0.9,
+        metalness: 0,
+        repeatX: 1,
+        repeatY: 1,
+        rotation: 0,
+        wrapS: 'Repeat',
+        wrapT: 'Repeat',
+        normalScaleX: 1,
+        normalScaleY: 1,
+        emissiveIntensity: 1,
+        displacementScale: 0.02,
+        transparent: false,
+        flipY: true,
+        bumpScale: 1,
+        emissiveColor: '#000000',
+        aoMapIntensity: 1,
+        side: 0,
+        opacity: 1,
+        lightMapIntensity: 1,
+      },
+    },
+  },
+  {
+    // The default interior wall paint (`DEFAULT_INTERIOR_WALL_PAINT`): Light grey's
+    // colour under its own name. Listed after it, so a nearest-colour snap still
+    // lands on Light grey.
+    id: 'preset-seattlegrey',
+    label: 'Seattle grey',
+    category: 'colors',
+    description: 'Cool light grey interior wall paint',
     previewColor: '#d8d6d1',
     preset: {
       maps: {},
@@ -3434,9 +3540,77 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
         emissiveColor: '#000000',
         aoMapIntensity: 1,
         // FrontSide — DoubleSide on a NodeMaterial poisons the WebGPU MRT scene
-        // pass (window/door glass relies on this). It's the only glass we use.
+        // pass (window/door glass relies on this).
         side: 0,
         opacity: 0.3,
+        lightMapIntensity: 1,
+      },
+    },
+  },
+  {
+    id: 'preset-glass-frosted',
+    label: 'Frosted glass',
+    category: 'glass',
+    description: 'Frosted glass finish',
+    previewColor: '#e8edf0',
+    preset: {
+      maps: {},
+      mapProperties: {
+        color: '#e8edf0',
+        roughness: 0.6,
+        metalness: 0.0,
+        repeatX: 1,
+        repeatY: 1,
+        rotation: 0,
+        wrapS: 'Repeat',
+        wrapT: 'Repeat',
+        normalScaleX: 1,
+        normalScaleY: 1,
+        emissiveIntensity: 1,
+        displacementScale: 0.02,
+        transparent: true,
+        flipY: true,
+        bumpScale: 1,
+        emissiveColor: '#000000',
+        aoMapIntensity: 1,
+        // FrontSide — DoubleSide on a NodeMaterial poisons the WebGPU MRT scene
+        // pass (window/door glass relies on this).
+        side: 0,
+        opacity: 0.6,
+        lightMapIntensity: 1,
+      },
+    },
+  },
+  {
+    id: 'preset-glass-tinted',
+    label: 'Tinted glass',
+    category: 'glass',
+    description: 'Tinted glass finish',
+    previewColor: '#6f8a99',
+    preset: {
+      maps: {},
+      mapProperties: {
+        color: '#6f8a99',
+        roughness: 0.1,
+        metalness: 0.0,
+        repeatX: 1,
+        repeatY: 1,
+        rotation: 0,
+        wrapS: 'Repeat',
+        wrapT: 'Repeat',
+        normalScaleX: 1,
+        normalScaleY: 1,
+        emissiveIntensity: 1,
+        displacementScale: 0.02,
+        transparent: true,
+        flipY: true,
+        bumpScale: 1,
+        emissiveColor: '#000000',
+        aoMapIntensity: 1,
+        // FrontSide — DoubleSide on a NodeMaterial poisons the WebGPU MRT scene
+        // pass (window/door glass relies on this).
+        side: 0,
+        opacity: 0.45,
         lightMapIntensity: 1,
       },
     },
@@ -3448,6 +3622,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['furniture', 'wall'],
     description: 'Natural linen weave',
     previewThumbnailUrl: '/material/fabric/linen_hikari_fabric/linen_hikari_fabric_thumb.webp',
+    previewColor: '#aaa49f',
     preset: {
       maps: {
         albedoMap: '/material/fabric/linen_hikari_fabric/linen_hikari_fabric_basecolor_512.ktx2',
@@ -3484,6 +3659,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['furniture', 'wall'],
     description: 'Plain cotton weave',
     previewThumbnailUrl: '/material/fabric/blue_cotton/blue_cotton_thumb.webp',
+    previewColor: '#528bc1',
     preset: {
       maps: {
         albedoMap: '/material/fabric/blue_cotton/blue_cotton_basecolor_512.ktx2',
@@ -3522,6 +3698,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['furniture'],
     description: 'Velvet with a soft sheen',
     previewThumbnailUrl: '/material/fabric/red_velvet/red_velvet_thumb.webp',
+    previewColor: '#781113',
     preset: {
       maps: {
         albedoMap: '/material/fabric/red_velvet/red_velvet_basecolor_512.ktx2',
@@ -3560,6 +3737,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['furniture'],
     description: 'Matte wool felt',
     previewThumbnailUrl: '/material/fabric/white_wool/white_wool_thumb.webp',
+    previewColor: '#d2d2d2',
     preset: {
       maps: {
         albedoMap: '/material/fabric/white_wool/white_wool_basecolor_512.ktx2',
@@ -3598,6 +3776,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['furniture'],
     description: 'Matte suede nap',
     previewThumbnailUrl: '/material/fabric/suede/suede_thumb.webp',
+    previewColor: '#c8be98',
     preset: {
       maps: {
         albedoMap: '/material/fabric/suede/suede_basecolor_512.ktx2',
@@ -3636,6 +3815,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['furniture'],
     description: 'Looped bouclé upholstery',
     previewThumbnailUrl: '/material/fabric/wool_boucle/wool_boucle_thumb.webp',
+    previewColor: '#776d60',
     preset: {
       maps: {
         albedoMap: '/material/fabric/wool_boucle/wool_boucle_basecolor_512.ktx2',
@@ -3672,6 +3852,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['furniture'],
     description: 'Smooth black leather',
     previewThumbnailUrl: '/material/leather/black_leather/black_leather_thumb.webp',
+    previewColor: '#2b2b2b',
     preset: {
       maps: {
         albedoMap: '/material/leather/black_leather/black_leather_basecolor_512.ktx2',
@@ -3709,6 +3890,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['furniture'],
     description: 'Pebbled calf leather',
     previewThumbnailUrl: '/material/leather/calf_leather/calf_leather_thumb.webp',
+    previewColor: '#78411a',
     preset: {
       maps: {
         albedoMap: '/material/leather/calf_leather/calf_leather_basecolor_512.ktx2',
@@ -3747,6 +3929,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['wall', 'ceiling'],
     description: 'Smooth painted plaster wall',
     previewThumbnailUrl: '/material/concrete/plaster_painted/plaster_painted_thumb.webp',
+    previewColor: '#c8c5bd',
     preset: {
       maps: {
         albedoMap: '/material/concrete/plaster_painted/plaster_painted_basecolor_512.ktx2',
@@ -3785,6 +3968,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['floor', 'wall'],
     description: 'Polished concrete floor',
     previewThumbnailUrl: '/material/concrete/concrete_polished/concrete_polished_thumb.webp',
+    previewColor: '#6d6b69',
     preset: {
       maps: {
         albedoMap: '/material/concrete/concrete_polished/concrete_polished_basecolor_512.ktx2',
@@ -3822,6 +4006,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['wall', 'floor', 'outdoor'],
     description: 'Board-formed raw concrete',
     previewThumbnailUrl: '/material/concrete/concrete_raw/concrete_raw_thumb.webp',
+    previewColor: '#a5a5a5',
     preset: {
       maps: {
         albedoMap: '/material/concrete/concrete_raw/concrete_raw_basecolor_512.ktx2',
@@ -3860,6 +4045,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['wall', 'floor'],
     description: 'Smooth cast concrete plate',
     previewThumbnailUrl: '/material/concrete/concrete_plate/concrete_plate_thumb.webp',
+    previewColor: '#ababab',
     preset: {
       maps: {
         albedoMap: '/material/concrete/concrete_plate/concrete_plate_basecolor_512.ktx2',
@@ -3898,6 +4084,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['wall', 'outdoor'],
     description: 'Exterior stucco render',
     previewThumbnailUrl: '/material/concrete/white_stucco/white_stucco_thumb.webp',
+    previewColor: '#cccccc',
     preset: {
       maps: {
         albedoMap: '/material/concrete/white_stucco/white_stucco_basecolor_512.ktx2',
@@ -3936,6 +4123,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['wall', 'ceiling'],
     description: 'Smooth prepared drywall ready for paint',
     previewThumbnailUrl: '/material/concrete/prepared_drywall/prepared_drywall_thumb.webp',
+    previewColor: '#b1b1b1',
     preset: {
       maps: {
         albedoMap: '/material/concrete/prepared_drywall/prepared_drywall_basecolor_512.ktx2',
@@ -3974,6 +4162,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['furniture', 'wall'],
     description: 'Warm copper',
     previewThumbnailUrl: '/material/metal/copper_metal/copper_metal_thumb.webp',
+    previewColor: '#cb845d',
     preset: {
       maps: {
         albedoMap: '/material/metal/copper_metal/copper_metal_basecolor_512.ktx2',
@@ -4012,6 +4201,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     surfaces: ['furniture', 'wall'],
     description: 'Polished stainless steel',
     previewThumbnailUrl: '/material/metal/polished_metal/polished_metal_thumb.webp',
+    previewColor: '#f2f4f3',
     preset: {
       maps: {
         albedoMap: '/material/metal/polished_metal/polished_metal_basecolor_512.ktx2',
@@ -4052,6 +4242,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     description: 'Brushed stainless steel',
     previewThumbnailUrl:
       '/material/metal/stainless_steel_brushed/stainless_steel_brushed_thumb.webp',
+    previewColor: '#636363',
     preset: {
       maps: {
         albedoMap:
@@ -4155,6 +4346,783 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
       },
     },
   },
+  {
+    id: 'metal-black',
+    label: 'Matte black',
+    category: 'metal',
+    surfaces: ['furniture', 'wall'],
+    description: 'Matte black finish',
+    previewColor: '#1f1f1f',
+    preset: {
+      maps: {},
+      mapProperties: {
+        color: '#1f1f1f',
+        roughness: 0.55,
+        metalness: 0.5,
+        repeatX: 1,
+        repeatY: 1,
+        rotation: 0,
+        wrapS: 'Repeat',
+        wrapT: 'Repeat',
+        normalScaleX: 1,
+        normalScaleY: 1,
+        emissiveIntensity: 1,
+        displacementScale: 0,
+        transparent: false,
+        flipY: false,
+        bumpScale: 1,
+        emissiveColor: '#000000',
+        aoMapIntensity: 1,
+        side: 0,
+        opacity: 1,
+        lightMapIntensity: 1,
+      },
+    },
+  },
+  {
+    id: 'metal-bronze',
+    label: 'Oil-rubbed bronze',
+    category: 'metal',
+    surfaces: ['furniture', 'wall'],
+    description: 'Oil-rubbed bronze finish',
+    previewColor: '#4a3a2a',
+    preset: {
+      maps: {},
+      mapProperties: {
+        color: '#4a3a2a',
+        roughness: 0.45,
+        metalness: 0.7,
+        repeatX: 1,
+        repeatY: 1,
+        rotation: 0,
+        wrapS: 'Repeat',
+        wrapT: 'Repeat',
+        normalScaleX: 1,
+        normalScaleY: 1,
+        emissiveIntensity: 1,
+        displacementScale: 0,
+        transparent: false,
+        flipY: false,
+        bumpScale: 1,
+        emissiveColor: '#000000',
+        aoMapIntensity: 1,
+        side: 0,
+        opacity: 1,
+        lightMapIntensity: 1,
+      },
+    },
+  },
+  /* ── Siding ────────────────────────────────────────────────────────────────
+   * The catalog shipped no siding finish at all — no lap, no clapboard, no
+   * board-and-batten — so imported exterior walls could be color-true only as
+   * flat paint. One white seamless albedo per profile,
+   * tinted per entry via mapProperties.color (same mechanism the flat color
+   * presets use), keeps this to two textures for every finish. Painted wood /
+   * fiber-cement and vinyl differ by sheen (roughness). The `siding` category
+   * keeps them apart from wood flooring; ids are stable scene references.
+   */
+  {
+    id: 'siding-lap-white',
+    label: 'Lap siding — white',
+    category: 'siding',
+    surfaces: ['wall', 'outdoor'],
+    description: 'Exterior clapboard lap siding, painted white',
+    previewThumbnailUrl: '/material/siding/lap_thumb.webp',
+    previewColor: '#e9e9e9',
+    preset: {
+      maps: {
+        albedoMap: '/material/siding/lap_basecolor_512.ktx2',
+        normalMap: '/material/siding/lap_normal_512.ktx2',
+        roughnessMap: '/material/siding/lap_roughness_512.ktx2',
+        aoMap: '/material/siding/lap_ao_512.ktx2',
+      },
+      mapProperties: {
+        color: '#e9e9e9',
+        roughness: 0.85,
+        metalness: 0,
+        repeatX: 1,
+        repeatY: 1,
+        rotation: 0,
+        wrapS: 'Repeat',
+        wrapT: 'Repeat',
+        normalScaleX: 1,
+        normalScaleY: 1,
+        emissiveIntensity: 1,
+        displacementScale: 0,
+        bumpScale: 1,
+        transparent: false,
+        flipY: false,
+        emissiveColor: '#000000',
+        aoMapIntensity: 1,
+        side: 0,
+        opacity: 1,
+        lightMapIntensity: 1,
+      },
+    },
+  },
+  {
+    id: 'siding-lap-greige',
+    label: 'Lap siding — greige',
+    category: 'siding',
+    surfaces: ['wall', 'outdoor'],
+    description: 'Exterior clapboard lap siding, painted greige',
+    previewThumbnailUrl: '/material/siding/lap_thumb.webp',
+    previewColor: '#c8c1b8',
+    preset: {
+      maps: {
+        albedoMap: '/material/siding/lap_basecolor_512.ktx2',
+        normalMap: '/material/siding/lap_normal_512.ktx2',
+        roughnessMap: '/material/siding/lap_roughness_512.ktx2',
+        aoMap: '/material/siding/lap_ao_512.ktx2',
+      },
+      mapProperties: {
+        color: '#c8c1b8',
+        roughness: 0.85,
+        metalness: 0,
+        repeatX: 1,
+        repeatY: 1,
+        rotation: 0,
+        wrapS: 'Repeat',
+        wrapT: 'Repeat',
+        normalScaleX: 1,
+        normalScaleY: 1,
+        emissiveIntensity: 1,
+        displacementScale: 0,
+        bumpScale: 1,
+        transparent: false,
+        flipY: false,
+        emissiveColor: '#000000',
+        aoMapIntensity: 1,
+        side: 0,
+        opacity: 1,
+        lightMapIntensity: 1,
+      },
+    },
+  },
+  {
+    id: 'siding-lap-gray',
+    label: 'Lap siding — gray',
+    category: 'siding',
+    surfaces: ['wall', 'outdoor'],
+    description: 'Exterior clapboard lap siding, painted gray',
+    previewThumbnailUrl: '/material/siding/lap_thumb.webp',
+    previewColor: '#8b8a86',
+    preset: {
+      maps: {
+        albedoMap: '/material/siding/lap_basecolor_512.ktx2',
+        normalMap: '/material/siding/lap_normal_512.ktx2',
+        roughnessMap: '/material/siding/lap_roughness_512.ktx2',
+        aoMap: '/material/siding/lap_ao_512.ktx2',
+      },
+      mapProperties: {
+        color: '#8b8a86',
+        roughness: 0.85,
+        metalness: 0,
+        repeatX: 1,
+        repeatY: 1,
+        rotation: 0,
+        wrapS: 'Repeat',
+        wrapT: 'Repeat',
+        normalScaleX: 1,
+        normalScaleY: 1,
+        emissiveIntensity: 1,
+        displacementScale: 0,
+        bumpScale: 1,
+        transparent: false,
+        flipY: false,
+        emissiveColor: '#000000',
+        aoMapIntensity: 1,
+        side: 0,
+        opacity: 1,
+        lightMapIntensity: 1,
+      },
+    },
+  },
+  {
+    id: 'siding-lap-sage',
+    label: 'Lap siding — sage',
+    category: 'siding',
+    surfaces: ['wall', 'outdoor'],
+    description: 'Exterior clapboard lap siding, painted sage',
+    previewThumbnailUrl: '/material/siding/lap_thumb.webp',
+    previewColor: '#bcc5b2',
+    preset: {
+      maps: {
+        albedoMap: '/material/siding/lap_basecolor_512.ktx2',
+        normalMap: '/material/siding/lap_normal_512.ktx2',
+        roughnessMap: '/material/siding/lap_roughness_512.ktx2',
+        aoMap: '/material/siding/lap_ao_512.ktx2',
+      },
+      mapProperties: {
+        color: '#bcc5b2',
+        roughness: 0.85,
+        metalness: 0,
+        repeatX: 1,
+        repeatY: 1,
+        rotation: 0,
+        wrapS: 'Repeat',
+        wrapT: 'Repeat',
+        normalScaleX: 1,
+        normalScaleY: 1,
+        emissiveIntensity: 1,
+        displacementScale: 0,
+        bumpScale: 1,
+        transparent: false,
+        flipY: false,
+        emissiveColor: '#000000',
+        aoMapIntensity: 1,
+        side: 0,
+        opacity: 1,
+        lightMapIntensity: 1,
+      },
+    },
+  },
+  {
+    id: 'siding-lap-cedar',
+    label: 'Lap siding — cedar',
+    category: 'siding',
+    surfaces: ['wall', 'outdoor'],
+    description: 'Exterior clapboard lap siding, stained cedar',
+    previewThumbnailUrl: '/material/siding/lap_thumb.webp',
+    previewColor: '#b5825a',
+    preset: {
+      maps: {
+        albedoMap: '/material/siding/lap_basecolor_512.ktx2',
+        normalMap: '/material/siding/lap_normal_512.ktx2',
+        roughnessMap: '/material/siding/lap_roughness_512.ktx2',
+        aoMap: '/material/siding/lap_ao_512.ktx2',
+      },
+      mapProperties: {
+        color: '#b5825a',
+        roughness: 0.85,
+        metalness: 0,
+        repeatX: 1,
+        repeatY: 1,
+        rotation: 0,
+        wrapS: 'Repeat',
+        wrapT: 'Repeat',
+        normalScaleX: 1,
+        normalScaleY: 1,
+        emissiveIntensity: 1,
+        displacementScale: 0,
+        bumpScale: 1,
+        transparent: false,
+        flipY: false,
+        emissiveColor: '#000000',
+        aoMapIntensity: 1,
+        side: 0,
+        opacity: 1,
+        lightMapIntensity: 1,
+      },
+    },
+  },
+  {
+    id: 'siding-lap-forest',
+    label: 'Lap siding — forest',
+    category: 'siding',
+    surfaces: ['wall', 'outdoor'],
+    description: 'Exterior clapboard lap siding, painted forest',
+    previewThumbnailUrl: '/material/siding/lap_thumb.webp',
+    previewColor: '#4f6b57',
+    preset: {
+      maps: {
+        albedoMap: '/material/siding/lap_basecolor_512.ktx2',
+        normalMap: '/material/siding/lap_normal_512.ktx2',
+        roughnessMap: '/material/siding/lap_roughness_512.ktx2',
+        aoMap: '/material/siding/lap_ao_512.ktx2',
+      },
+      mapProperties: {
+        color: '#4f6b57',
+        roughness: 0.85,
+        metalness: 0,
+        repeatX: 1,
+        repeatY: 1,
+        rotation: 0,
+        wrapS: 'Repeat',
+        wrapT: 'Repeat',
+        normalScaleX: 1,
+        normalScaleY: 1,
+        emissiveIntensity: 1,
+        displacementScale: 0,
+        bumpScale: 1,
+        transparent: false,
+        flipY: false,
+        emissiveColor: '#000000',
+        aoMapIntensity: 1,
+        side: 0,
+        opacity: 1,
+        lightMapIntensity: 1,
+      },
+    },
+  },
+  {
+    id: 'siding-lap-navy',
+    label: 'Lap siding — navy',
+    category: 'siding',
+    surfaces: ['wall', 'outdoor'],
+    description: 'Exterior clapboard lap siding, painted navy',
+    previewThumbnailUrl: '/material/siding/lap_thumb.webp',
+    previewColor: '#2f4865',
+    preset: {
+      maps: {
+        albedoMap: '/material/siding/lap_basecolor_512.ktx2',
+        normalMap: '/material/siding/lap_normal_512.ktx2',
+        roughnessMap: '/material/siding/lap_roughness_512.ktx2',
+        aoMap: '/material/siding/lap_ao_512.ktx2',
+      },
+      mapProperties: {
+        color: '#2f4865',
+        roughness: 0.85,
+        metalness: 0,
+        repeatX: 1,
+        repeatY: 1,
+        rotation: 0,
+        wrapS: 'Repeat',
+        wrapT: 'Repeat',
+        normalScaleX: 1,
+        normalScaleY: 1,
+        emissiveIntensity: 1,
+        displacementScale: 0,
+        bumpScale: 1,
+        transparent: false,
+        flipY: false,
+        emissiveColor: '#000000',
+        aoMapIntensity: 1,
+        side: 0,
+        opacity: 1,
+        lightMapIntensity: 1,
+      },
+    },
+  },
+  {
+    id: 'siding-lap-yellow',
+    label: 'Lap siding — yellow',
+    category: 'siding',
+    surfaces: ['wall', 'outdoor'],
+    description: 'Exterior clapboard lap siding, painted yellow',
+    previewThumbnailUrl: '/material/siding/lap_thumb.webp',
+    previewColor: '#f2e3b3',
+    preset: {
+      maps: {
+        albedoMap: '/material/siding/lap_basecolor_512.ktx2',
+        normalMap: '/material/siding/lap_normal_512.ktx2',
+        roughnessMap: '/material/siding/lap_roughness_512.ktx2',
+        aoMap: '/material/siding/lap_ao_512.ktx2',
+      },
+      mapProperties: {
+        color: '#f2e3b3',
+        roughness: 0.85,
+        metalness: 0,
+        repeatX: 1,
+        repeatY: 1,
+        rotation: 0,
+        wrapS: 'Repeat',
+        wrapT: 'Repeat',
+        normalScaleX: 1,
+        normalScaleY: 1,
+        emissiveIntensity: 1,
+        displacementScale: 0,
+        bumpScale: 1,
+        transparent: false,
+        flipY: false,
+        emissiveColor: '#000000',
+        aoMapIntensity: 1,
+        side: 0,
+        opacity: 1,
+        lightMapIntensity: 1,
+      },
+    },
+  },
+  {
+    id: 'siding-lap-nearblack',
+    label: 'Lap siding — nearblack',
+    category: 'siding',
+    surfaces: ['wall', 'outdoor'],
+    description: 'Exterior clapboard lap siding, painted nearblack',
+    previewThumbnailUrl: '/material/siding/lap_thumb.webp',
+    previewColor: '#232322',
+    preset: {
+      maps: {
+        albedoMap: '/material/siding/lap_basecolor_512.ktx2',
+        normalMap: '/material/siding/lap_normal_512.ktx2',
+        roughnessMap: '/material/siding/lap_roughness_512.ktx2',
+        aoMap: '/material/siding/lap_ao_512.ktx2',
+      },
+      mapProperties: {
+        color: '#5c5c59',
+        roughness: 0.85,
+        metalness: 0,
+        repeatX: 1,
+        repeatY: 1,
+        rotation: 0,
+        wrapS: 'Repeat',
+        wrapT: 'Repeat',
+        normalScaleX: 1,
+        normalScaleY: 1,
+        emissiveIntensity: 1,
+        displacementScale: 0,
+        bumpScale: 1,
+        transparent: false,
+        flipY: false,
+        emissiveColor: '#000000',
+        aoMapIntensity: 1,
+        side: 0,
+        opacity: 1,
+        lightMapIntensity: 1,
+      },
+    },
+  },
+  {
+    id: 'siding-lap-clay',
+    label: 'Lap siding — clay',
+    category: 'siding',
+    surfaces: ['wall', 'outdoor'],
+    description: 'Exterior clapboard lap siding, painted clay',
+    previewThumbnailUrl: '/material/siding/lap_thumb.webp',
+    previewColor: '#8f4a2e',
+    preset: {
+      maps: {
+        albedoMap: '/material/siding/lap_basecolor_512.ktx2',
+        normalMap: '/material/siding/lap_normal_512.ktx2',
+        roughnessMap: '/material/siding/lap_roughness_512.ktx2',
+        aoMap: '/material/siding/lap_ao_512.ktx2',
+      },
+      mapProperties: {
+        color: '#8f4a2e',
+        roughness: 0.85,
+        metalness: 0,
+        repeatX: 1,
+        repeatY: 1,
+        rotation: 0,
+        wrapS: 'Repeat',
+        wrapT: 'Repeat',
+        normalScaleX: 1,
+        normalScaleY: 1,
+        emissiveIntensity: 1,
+        displacementScale: 0,
+        bumpScale: 1,
+        transparent: false,
+        flipY: false,
+        emissiveColor: '#000000',
+        aoMapIntensity: 1,
+        side: 0,
+        opacity: 1,
+        lightMapIntensity: 1,
+      },
+    },
+  },
+  {
+    id: 'siding-batten-cream',
+    label: 'Board & batten — cream',
+    category: 'siding',
+    surfaces: ['wall', 'outdoor'],
+    description: 'Exterior board-and-batten siding, painted cream',
+    previewThumbnailUrl: '/material/siding/batten_thumb.webp',
+    previewColor: '#efe3cc',
+    preset: {
+      maps: {
+        albedoMap: '/material/siding/batten_basecolor_512.ktx2',
+        normalMap: '/material/siding/batten_normal_512.ktx2',
+        roughnessMap: '/material/siding/batten_roughness_512.ktx2',
+        aoMap: '/material/siding/batten_ao_512.ktx2',
+      },
+      mapProperties: {
+        color: '#efe3cc',
+        roughness: 0.85,
+        metalness: 0,
+        repeatX: 1,
+        repeatY: 1,
+        rotation: 0,
+        wrapS: 'Repeat',
+        wrapT: 'Repeat',
+        normalScaleX: 1,
+        normalScaleY: 1,
+        emissiveIntensity: 1,
+        displacementScale: 0,
+        bumpScale: 1,
+        transparent: false,
+        flipY: false,
+        emissiveColor: '#000000',
+        aoMapIntensity: 1,
+        side: 0,
+        opacity: 1,
+        lightMapIntensity: 1,
+      },
+    },
+  },
+  {
+    id: 'siding-batten-sand',
+    label: 'Board & batten — sand',
+    category: 'siding',
+    surfaces: ['wall', 'outdoor'],
+    description: 'Exterior board-and-batten siding, painted sand',
+    previewThumbnailUrl: '/material/siding/batten_thumb.webp',
+    previewColor: '#ddccae',
+    preset: {
+      maps: {
+        albedoMap: '/material/siding/batten_basecolor_512.ktx2',
+        normalMap: '/material/siding/batten_normal_512.ktx2',
+        roughnessMap: '/material/siding/batten_roughness_512.ktx2',
+        aoMap: '/material/siding/batten_ao_512.ktx2',
+      },
+      mapProperties: {
+        color: '#ddccae',
+        roughness: 0.85,
+        metalness: 0,
+        repeatX: 1,
+        repeatY: 1,
+        rotation: 0,
+        wrapS: 'Repeat',
+        wrapT: 'Repeat',
+        normalScaleX: 1,
+        normalScaleY: 1,
+        emissiveIntensity: 1,
+        displacementScale: 0,
+        bumpScale: 1,
+        transparent: false,
+        flipY: false,
+        emissiveColor: '#000000',
+        aoMapIntensity: 1,
+        side: 0,
+        opacity: 1,
+        lightMapIntensity: 1,
+      },
+    },
+  },
+  {
+    id: 'siding-batten-charcoal',
+    label: 'Board & batten — charcoal',
+    category: 'siding',
+    surfaces: ['wall', 'outdoor'],
+    description: 'Exterior board-and-batten siding, painted charcoal',
+    previewThumbnailUrl: '/material/siding/batten_thumb.webp',
+    previewColor: '#4e5257',
+    preset: {
+      maps: {
+        albedoMap: '/material/siding/batten_basecolor_512.ktx2',
+        normalMap: '/material/siding/batten_normal_512.ktx2',
+        roughnessMap: '/material/siding/batten_roughness_512.ktx2',
+        aoMap: '/material/siding/batten_ao_512.ktx2',
+      },
+      mapProperties: {
+        color: '#4e5257',
+        roughness: 0.85,
+        metalness: 0,
+        repeatX: 1,
+        repeatY: 1,
+        rotation: 0,
+        wrapS: 'Repeat',
+        wrapT: 'Repeat',
+        normalScaleX: 1,
+        normalScaleY: 1,
+        emissiveIntensity: 1,
+        displacementScale: 0,
+        bumpScale: 1,
+        transparent: false,
+        flipY: false,
+        emissiveColor: '#000000',
+        aoMapIntensity: 1,
+        side: 0,
+        opacity: 1,
+        lightMapIntensity: 1,
+      },
+    },
+  },
+  {
+    id: 'siding-batten-olive',
+    label: 'Board & batten — olive',
+    category: 'siding',
+    surfaces: ['wall', 'outdoor'],
+    description: 'Exterior board-and-batten siding, painted olive',
+    previewThumbnailUrl: '/material/siding/batten_thumb.webp',
+    previewColor: '#8d9368',
+    preset: {
+      maps: {
+        albedoMap: '/material/siding/batten_basecolor_512.ktx2',
+        normalMap: '/material/siding/batten_normal_512.ktx2',
+        roughnessMap: '/material/siding/batten_roughness_512.ktx2',
+        aoMap: '/material/siding/batten_ao_512.ktx2',
+      },
+      mapProperties: {
+        color: '#8d9368',
+        roughness: 0.85,
+        metalness: 0,
+        repeatX: 1,
+        repeatY: 1,
+        rotation: 0,
+        wrapS: 'Repeat',
+        wrapT: 'Repeat',
+        normalScaleX: 1,
+        normalScaleY: 1,
+        emissiveIntensity: 1,
+        displacementScale: 0,
+        bumpScale: 1,
+        transparent: false,
+        flipY: false,
+        emissiveColor: '#000000',
+        aoMapIntensity: 1,
+        side: 0,
+        opacity: 1,
+        lightMapIntensity: 1,
+      },
+    },
+  },
+  {
+    id: 'siding-vinyl-white',
+    label: 'Vinyl lap siding — white',
+    category: 'siding',
+    surfaces: ['wall', 'outdoor'],
+    description: 'Exterior vinyl lap siding, white, with a low sheen',
+    previewThumbnailUrl: '/material/siding/lap_thumb.webp',
+    previewColor: '#ecebe6',
+    preset: {
+      maps: {
+        albedoMap: '/material/siding/lap_basecolor_512.ktx2',
+        normalMap: '/material/siding/lap_normal_512.ktx2',
+        roughnessMap: '/material/siding/lap_roughness_512.ktx2',
+        aoMap: '/material/siding/lap_ao_512.ktx2',
+      },
+      mapProperties: {
+        color: '#ecebe6',
+        roughness: 0.55,
+        metalness: 0,
+        repeatX: 1,
+        repeatY: 1,
+        rotation: 0,
+        wrapS: 'Repeat',
+        wrapT: 'Repeat',
+        normalScaleX: 1,
+        normalScaleY: 1,
+        emissiveIntensity: 1,
+        displacementScale: 0,
+        bumpScale: 1,
+        transparent: false,
+        flipY: false,
+        emissiveColor: '#000000',
+        aoMapIntensity: 1,
+        side: 0,
+        opacity: 1,
+        lightMapIntensity: 1,
+      },
+    },
+  },
+  {
+    id: 'siding-vinyl-almond',
+    label: 'Vinyl lap siding — almond',
+    category: 'siding',
+    surfaces: ['wall', 'outdoor'],
+    description: 'Exterior vinyl lap siding, almond, with a low sheen',
+    previewThumbnailUrl: '/material/siding/lap_thumb.webp',
+    previewColor: '#ddd2bd',
+    preset: {
+      maps: {
+        albedoMap: '/material/siding/lap_basecolor_512.ktx2',
+        normalMap: '/material/siding/lap_normal_512.ktx2',
+        roughnessMap: '/material/siding/lap_roughness_512.ktx2',
+        aoMap: '/material/siding/lap_ao_512.ktx2',
+      },
+      mapProperties: {
+        color: '#ddd2bd',
+        roughness: 0.55,
+        metalness: 0,
+        repeatX: 1,
+        repeatY: 1,
+        rotation: 0,
+        wrapS: 'Repeat',
+        wrapT: 'Repeat',
+        normalScaleX: 1,
+        normalScaleY: 1,
+        emissiveIntensity: 1,
+        displacementScale: 0,
+        bumpScale: 1,
+        transparent: false,
+        flipY: false,
+        emissiveColor: '#000000',
+        aoMapIntensity: 1,
+        side: 0,
+        opacity: 1,
+        lightMapIntensity: 1,
+      },
+    },
+  },
+  {
+    id: 'siding-vinyl-gray',
+    label: 'Vinyl lap siding — gray',
+    category: 'siding',
+    surfaces: ['wall', 'outdoor'],
+    description: 'Exterior vinyl lap siding, gray, with a low sheen',
+    previewThumbnailUrl: '/material/siding/lap_thumb.webp',
+    previewColor: '#a3a6a4',
+    preset: {
+      maps: {
+        albedoMap: '/material/siding/lap_basecolor_512.ktx2',
+        normalMap: '/material/siding/lap_normal_512.ktx2',
+        roughnessMap: '/material/siding/lap_roughness_512.ktx2',
+        aoMap: '/material/siding/lap_ao_512.ktx2',
+      },
+      mapProperties: {
+        color: '#a3a6a4',
+        roughness: 0.55,
+        metalness: 0,
+        repeatX: 1,
+        repeatY: 1,
+        rotation: 0,
+        wrapS: 'Repeat',
+        wrapT: 'Repeat',
+        normalScaleX: 1,
+        normalScaleY: 1,
+        emissiveIntensity: 1,
+        displacementScale: 0,
+        bumpScale: 1,
+        transparent: false,
+        flipY: false,
+        emissiveColor: '#000000',
+        aoMapIntensity: 1,
+        side: 0,
+        opacity: 1,
+        lightMapIntensity: 1,
+      },
+    },
+  },
+  {
+    id: 'siding-vinyl-vertical-white',
+    label: 'Vinyl vertical siding — white',
+    category: 'siding',
+    surfaces: ['wall', 'outdoor'],
+    description: 'Exterior vinyl board-and-batten style vertical siding, white, with a low sheen',
+    previewThumbnailUrl: '/material/siding/batten_thumb.webp',
+    previewColor: '#ecebe6',
+    preset: {
+      maps: {
+        albedoMap: '/material/siding/batten_basecolor_512.ktx2',
+        normalMap: '/material/siding/batten_normal_512.ktx2',
+        roughnessMap: '/material/siding/batten_roughness_512.ktx2',
+        aoMap: '/material/siding/batten_ao_512.ktx2',
+      },
+      mapProperties: {
+        color: '#ecebe6',
+        roughness: 0.55,
+        metalness: 0,
+        repeatX: 1,
+        repeatY: 1,
+        rotation: 0,
+        wrapS: 'Repeat',
+        wrapT: 'Repeat',
+        normalScaleX: 1,
+        normalScaleY: 1,
+        emissiveIntensity: 1,
+        displacementScale: 0,
+        bumpScale: 1,
+        transparent: false,
+        flipY: false,
+        emissiveColor: '#000000',
+        aoMapIntensity: 1,
+        side: 0,
+        opacity: 1,
+        lightMapIntensity: 1,
+      },
+    },
+  },
 ]
 
 const STATIC_CATALOG_IDS = new Set(MATERIAL_CATALOG.map((item) => item.id))
@@ -4212,6 +5180,41 @@ export function getMaterialsForCategory(category: MaterialCategory): MaterialCat
   return items
 }
 
+/** How a catalog material reads as a small flat swatch (a tile, a chip, a cursor badge). */
+export type MaterialSwatch = {
+  color: string
+  imageUrl: string | null
+  /**
+   * The image is a neutral thumbnail or albedo the colour tints, as the 3D material does
+   * (`mapProperties.color` × map): draw it multiplied over `color`.
+   */
+  tinted: boolean
+}
+
+const BROWSER_IMAGE = /\.(?:webp|png|jpe?g|avif|gif)(?:[?#]|$)/i
+
+/**
+ * A catalog material's swatch: its thumbnail or browser-readable albedo,
+ * multiplied by the material's colour; else its flat preview colour.
+ */
+export function getMaterialSwatch(item: MaterialCatalogItem): MaterialSwatch {
+  const tint = item.preset.mapProperties.color
+  const color = item.previewColor ?? tint ?? '#f3f4f6'
+  const albedo = item.preset.maps.albedoMap
+  const imageUrl =
+    item.previewThumbnailUrl ?? (albedo && BROWSER_IMAGE.test(albedo) ? albedo : null)
+  if (imageUrl) {
+    const tinted = !!tint && !/^#(?:fff|ffffff)$/i.test(tint)
+    return { color: tinted ? tint : color, imageUrl, tinted }
+  }
+  return { color, imageUrl: null, tinted: false }
+}
+
+/** A community material's id (`mtl_…`, as the host's database mints them), well formed. */
+export function isCommunityMaterialId(id: string): boolean {
+  return /^mtl_[\w-]+$/.test(id)
+}
+
 export function getCatalogMaterialById(id?: string): MaterialCatalogItem | undefined {
   if (!id) return undefined
   return MATERIAL_CATALOG.find((item) => item.id === id) ?? dynamicLibraryMaterials.get(id)
@@ -4250,6 +5253,22 @@ export function parseMaterialRef(ref?: string | null): ParsedMaterialRef | null 
   const scene = getSceneMaterialIdFromRef(ref)
   if (scene) return { kind: 'scene', id: scene }
   return null
+}
+
+const MATERIAL_COLOR = /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i
+
+/**
+ * A plain CSS hex colour (`#rgb` / `#rrggbb`) stored where a `MaterialRef`
+ * goes, e.g. a slot value: it paints that flat colour, as
+ * `material: { properties: { color } }` does. Lowercased, or null.
+ */
+export function parseMaterialColor(value?: string | null): string | null {
+  return typeof value === 'string' && MATERIAL_COLOR.test(value) ? value.toLowerCase() : null
+}
+
+/** The flat material a plain colour stored as a material ref paints. */
+export function materialColorPaint(color: string): MaterialSchema {
+  return { properties: MaterialProperties.parse({ color }) }
 }
 
 export function getMaterialPresetByRef(materialRef?: string | null): MaterialPresetPayload | null {

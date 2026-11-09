@@ -27,6 +27,8 @@ const DoorPreview = ({
 }) => {
   const mesh = useMemo(() => {
     const m = buildDoorPreviewMesh(node)
+    // The placement parent already applies the body offset; keep host context for depth.
+    m.position.z = node.position[2]
     m.layers.set(EDITOR_LAYER)
     return m
   }, [node])

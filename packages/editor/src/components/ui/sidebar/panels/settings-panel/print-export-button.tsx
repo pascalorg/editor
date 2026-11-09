@@ -1,3 +1,5 @@
+import { getProjectFileSink } from '@pascal-app/core'
+import { downloadProjectFile } from '../../../../../lib/download-project-file'
 import { AlertTriangle, Printer } from 'lucide-react'
 import { useState } from 'react'
 import { Button } from '../../../../../components/ui/primitives/button'
@@ -22,15 +24,6 @@ type PreparedPrintExport = {
 }
 
 type PrintModelExportFormat = Extract<ModelExportFormat, 'print-3mf' | 'print-stl'>
-
-function downloadArtifact(artifact: ModelExportArtifact) {
-  const url = URL.createObjectURL(artifact.blob)
-  const link = document.createElement('a')
-  link.href = url
-  link.download = artifact.filename
-  link.click()
-  URL.revokeObjectURL(url)
-}
 
 function firstBlockingMessage(report: PrintExportReport | PrintLevelBundleReport) {
   const bundleDiagnostic = report.diagnostics.find((item) => item.severity === 'error')
@@ -81,11 +74,12 @@ export function PrintExportButton({ onlyVisible }: { onlyVisible: boolean }) {
   const handleExport = async (format: PrintModelExportFormat) => {
     if (!modelExport) return
 
+    const fileSink = getProjectFileSink()
     setExportingFormat(format)
     setError(null)
     try {
       const prepared = await preparePrintExport(modelExport, onlyVisible, format)
-      downloadArtifact(prepared.artifact)
+      await downloadProjectFile(prepared.artifact.blob, prepared.artifact.filename, fileSink)
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : '3D print export failed.')
     } finally {
@@ -118,7 +112,7 @@ export function PrintExportButton({ onlyVisible }: { onlyVisible: boolean }) {
         Export 3D print STL
       </Button>
       {error && (
-        <div className="flex gap-2 text-destructive text-xs">
+        <div className="col-span-full flex gap-2 text-destructive text-xs">
           <AlertTriangle className="mt-0.5 size-4 shrink-0" />
           <span>{error}</span>
         </div>

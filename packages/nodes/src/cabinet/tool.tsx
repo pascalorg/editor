@@ -10,13 +10,15 @@ import {
   emitter,
   type GridEvent,
   getFloorPlacedFootprints,
-  getWallThickness,
+  getWallLocalFaceZ,
   isCurvedWall,
-  movingFootprintAnchors,
+  movingAlignmentAnchors,
   nodeRegistry,
   resolveAlignment,
   resolveSupportSlabPatch,
+  runAsSingleSceneHistoryStep,
   spatialGridManager,
+  useLocale,
   useScene,
   type WallEvent,
   type WallNode,
@@ -29,12 +31,12 @@ import {
   isAlignmentGuideActive,
   isGridSnapActive,
   isMagneticSnapActive,
+  isTypingTarget,
   isValidWallSideFace,
   markToolCancelConsumed,
   movementSfxStepKey,
   PlacementBox,
   PlacementDimensionGuides,
-  parseMeasurement,
   publishPlacementSurface,
   triggerSFX,
   useAlignmentGuides,
@@ -76,8 +78,10 @@ import {
   cabinetModuleDefinition,
   cabinetRunFootprint,
 } from './definition'
+import { parseCabinetDimensionInput } from './dimension-input'
 import { buildCabinetGeometry } from './geometry'
 import { applyCabinetModuleInsertion, cabinetModuleForRunInsertion } from './insertion'
+import { resolveCabinetNeighborPlacement } from './neighbor-placement'
 import {
   buildCabinetPlacementSizeDimensions,
   resolveCabinetPlacementDimensionPosition,
@@ -90,7 +94,7 @@ import {
 } from './placement-snap'
 import useCabinetPlacementStatus from './placement-status'
 import useCabinetPlacementType from './placement-type'
-import { cabinetPresetById } from './presets'
+import { cabinetPresetById, WALL_CABINET_ELEVATION } from './presets'
 import {
   moduleMaxX,
   planRunModuleInsertion,
@@ -135,6 +139,7 @@ type CabinetPlacement = {
   stretchAnchor?: StretchAnchor
   insertionPreview?: CabinetInsertionPreview
   insertionFailure?: CabinetInsertionFailure
+  neighborJoin?: { depth: number; side: 'left' | 'right'; name: string }
 }
 
 type CabinetInsertionPreview = {
@@ -382,7 +387,7 @@ function bumpCabinetRunsNearNewRun(runId: AnyNodeId) {
 }
 
 function wallHitFromWallEvent(event: WallEvent): WallHit | null {
-  if (!event.normal || !isValidWallSideFace(event.normal) || isCurvedWall(event.node)) return null
+  if (!(event.normal && isValidWallSideFace(event.normal)) || isCurvedWall(event.node)) return null
   const wall = event.node as WallNode
   const dx = wall.end[0] - wall.start[0]
   const dy = wall.end[1] - wall.start[1]
@@ -393,7 +398,7 @@ function wallHitFromWallEvent(event: WallEvent): WallHit | null {
   return {
     wall,
     localX: event.localPosition[0],
-    perpDistance: (side === 'front' ? 1 : -1) * (getWallThickness(wall) / 2),
+    perpDistance: getWallLocalFaceZ(wall, side === 'front' ? 'a' : 'b'),
     side,
     dirX: dx / wallLength,
     dirY: dy / wallLength,
@@ -402,15 +407,18 @@ function wallHitFromWallEvent(event: WallEvent): WallHit | null {
   }
 }
 
-const CabinetTool = () => {
+const CabinetPlacementTool = () => {
   const activeLevelId = useViewer((s) => s.selection.levelId)
   const unit = useViewer((s) => s.unit)
   const metricNotation = useViewer((s) => s.metricNotation)
+  const locale = useLocale()
   const activeDimensionId = usePlacementPreview((s) => s.activeDimensionId)
   const dimensionInput = usePlacementPreview((s) => s.dimensionInput)
   const [placement, setPlacement] = useState<CabinetPlacement | null>(null)
   const [draftSegments, setDraftSegments] = useState<DraftSegment[]>([])
   const [yaw, setYaw] = useState(0)
+  const toolDefaults = useEditor((state) => state.toolDefaults.cabinet)
+  const wallCabinet = toolDefaults?.kitchenPreset === 'wall-cabinet'
   const placementType = useCabinetPlacementType((s) => s.type)
   const islandMode = placementType === 'island'
   const yawRef = useRef(0)
@@ -438,15 +446,17 @@ const CabinetTool = () => {
     return CabinetModuleNode.parse({
       ...cabinetModuleDefinition.defaults(),
       ...DEFAULT_PLACEMENT_PRESET.createPatch(),
-      showPlinth: runDefaults.showPlinth,
+      ...toolDefaults,
+      showPlinth: !wallCabinet && runDefaults.showPlinth,
       plinthHeight: runDefaults.plinthHeight,
       toeKickDepth: runDefaults.toeKickDepth,
-      withCountertop: runDefaults.withCountertop,
+      withCountertop:
+        toolDefaults?.cabinetType !== 'tall' && !wallCabinet && runDefaults.withCountertop,
       countertopThickness: runDefaults.countertopThickness,
       countertopOverhang: runDefaults.countertopOverhang,
       countertopBackOverhang: runDefaults.countertopBackOverhang,
     })
-  }, [])
+  }, [toolDefaults, wallCabinet])
   const [previewSize, setPreviewSize] = useState(() => ({
     depth: previewNodeTemplate.depth,
     height: previewNodeTemplate.carcassHeight,
@@ -465,12 +475,11 @@ const CabinetTool = () => {
   const previewNodeRef = useRef(previewNode)
   previewNodeRef.current = previewNode
   const placementDimensions = useMemo(() => {
-    const defaults = cabinetDefinition.defaults()
     return [
       previewNode.width,
-      (defaults.showPlinth ? defaults.plinthHeight : 0) +
+      (previewNode.showPlinth ? previewNode.plinthHeight : 0) +
         previewNode.carcassHeight +
-        (defaults.withCountertop ? defaults.countertopThickness : 0),
+        (previewNode.withCountertop ? previewNode.countertopThickness : 0),
       previewNode.depth + (islandMode ? ISLAND_SEATING_OVERHANG : 0),
     ] as [number, number, number]
   }, [previewNode, islandMode])
@@ -556,15 +565,32 @@ const CabinetTool = () => {
             0,
           ])
         : next.position
-      const livePreviewNode = previewNodeRef.current
+      const livePreviewNode = next.neighborJoin
+        ? { ...previewNodeRef.current, depth: next.neighborJoin.depth }
+        : previewNodeRef.current
       const node = buildCabinetPlacementPreviewNode({
         island,
         position: previewPosition,
         previewModule: livePreviewNode,
         yaw: next.yaw,
       })
-      let floorplanNode: AnyNode = stretch ? { ...node, width: stretch.length } : node
-      let floorplanContextNodes: AnyNode[] = []
+      const previewModules = (stretch?.modules ?? [{ x: 0, width: livePreviewNode.width }]).map(
+        (module) =>
+          CabinetModuleNode.parse({
+            ...livePreviewNode,
+            id: undefined,
+            parentId: node.id,
+            position: [module.x - (stretch?.centerLocalX ?? 0), 0, 0],
+            width: module.width,
+          }),
+      )
+      let floorplanNode: AnyNode = {
+        ...node,
+        parentId: activeLevelId,
+        children: previewModules.map((module) => module.id),
+        ...(stretch ? { width: stretch.length } : {}),
+      }
+      let floorplanContextNodes: AnyNode[] = previewModules
       if (next.insertionPreview) {
         const liveRun = useScene.getState().nodes[next.insertionPreview.runId]
         if (liveRun?.type === 'cabinet') {
@@ -607,15 +633,15 @@ const CabinetTool = () => {
             })
           : []
       const sizeDimensions =
-        !stretch && !island
-          ? buildCabinetPlacementSizeDimensions({
+        stretch || island
+          ? []
+          : buildCabinetPlacementSizeDimensions({
               depth: livePreviewNode.depth,
               height: livePreviewNode.carcassHeight,
               position: previewPosition,
               rotation: next.yaw,
               width: livePreviewNode.width,
             })
-          : []
       // A stretched span can exceed the schema's width cap — override post-parse.
       usePlacementPreview
         .getState()
@@ -632,7 +658,7 @@ const CabinetTool = () => {
   useFrame(() => {
     const ghostGroup = activeGhostRef.current
     const current = placementRef.current
-    if (!ghostGroup || !current) {
+    if (!(ghostGroup && current)) {
       clearPlacementSurface()
       useFacingPose.getState().clear()
       return
@@ -658,7 +684,10 @@ const CabinetTool = () => {
     publishPlacementSurface(surfacePointRef.current, surfaceNormalRef.current)
     useFacingPose.getState().set({
       position: [facingPoint.x, facingPoint.y, facingPoint.z],
-      rotationY: current.snappedToWall || current.stretch ? current.yaw : yawRef.current,
+      rotationY:
+        current.snappedToWall || current.stretch || current.neighborJoin
+          ? current.yaw
+          : yawRef.current,
       depth: current.stretch ? placementDimensions[2] : previewNode.depth,
     })
   })
@@ -738,11 +767,8 @@ const CabinetTool = () => {
       return anchor
     }
 
-    const resolveRawPosition = (
-      event: FloorPlacementClickTriggerEvent,
-    ): [number, number, number] => {
-      return getLevelLocalSnappedPosition(activeLevelId, event, 0, true)
-    }
+    const resolveRawPosition = (event: FloorPlacementClickTriggerEvent): [number, number, number] =>
+      getLevelLocalSnappedPosition(activeLevelId, event, 0, true)
 
     const resolveGridPosition = (
       raw: [number, number, number],
@@ -791,11 +817,12 @@ const CabinetTool = () => {
         previewModule: previewNodeRef.current,
         yaw,
       })
-      const moving = movingFootprintAnchors(
+      const moving = movingAlignmentAnchors(
         {
           ...alignmentNode,
-          ...(width != null ? { width } : null),
+          ...(width == null ? null : { width }),
         } as AnyNode,
+        useScene.getState().nodes,
         position[0],
         position[2],
         yaw,
@@ -812,7 +839,7 @@ const CabinetTool = () => {
       })
       useAlignmentGuides.getState().set(result.guides)
 
-      if (!applyAlignmentSnap || !result.snap) return position
+      if (!(applyAlignmentSnap && result.snap)) return position
       return [position[0] + result.snap.dx, position[1], position[2] + result.snap.dz]
     }
 
@@ -820,10 +847,14 @@ const CabinetTool = () => {
       next: Omit<CabinetPlacement, 'conflictIds' | 'valid'>,
       bypassCollision: boolean,
     ): CabinetPlacement => {
+      if (wallCabinet && !next.insertionPreview)
+        next = { ...next, position: [next.position[0], WALL_CABINET_ELEVATION, next.position[2]] }
       if (bypassCollision) {
         return { ...next, conflictIds: [], valid: !next.insertionFailure }
       }
-      const livePreviewNode = previewNodeRef.current
+      const livePreviewNode = next.neighborJoin
+        ? { ...previewNodeRef.current, depth: next.neighborJoin.depth }
+        : previewNodeRef.current
       const livePlacementDimensions = placementDimensionsRef.current
       const floorPlaced = nodeRegistry.get(livePreviewNode.type)?.capabilities?.floorPlaced
       const effectiveNode = {
@@ -859,7 +890,7 @@ const CabinetTool = () => {
       const openingConflictIds =
         wall?.type === 'wall' && next.wallLocalX != null
           ? findWallOpeningConflicts({
-              bottom: 0,
+              bottom: next.position[1],
               height: livePlacementDimensions[1],
               localX: next.wallLocalX,
               nodes: useScene.getState().nodes,
@@ -893,14 +924,16 @@ const CabinetTool = () => {
         number,
       ]
 
-      const insertion = resolveCabinetRunInsertion({
-        hit,
-        insertionId: previewNodeRef.current.id,
-        nodes,
-        placement: wallPlacement,
-        parentLevelId: activeLevelId as AnyNodeId,
-        width: previewNodeRef.current.width,
-      })
+      const insertion = wallCabinet
+        ? null
+        : resolveCabinetRunInsertion({
+            hit,
+            insertionId: previewNodeRef.current.id,
+            nodes,
+            placement: wallPlacement,
+            parentLevelId: activeLevelId as AnyNodeId,
+            width: previewNodeRef.current.width,
+          })
       const insertionPreview = insertion?.kind === 'preview' ? insertion.plan : undefined
       const insertionFailure =
         insertion?.kind === 'blocked'
@@ -946,6 +979,55 @@ const CabinetTool = () => {
       const raw = resolveRawPosition(event)
       lastRawPositionRef.current = raw
       const forcePlacement = isForcePlacementEvent(event)
+      // Alt forces past every snap, a run's magnetic join included (E-004).
+      const neighbor =
+        !forcePlacement &&
+        !islandModeRef.current &&
+        isMagneticSnapActive() &&
+        useEditor.getState().getContinuation('cabinet') === 'single'
+          ? resolveCabinetNeighborPlacement({
+              nodes: useScene.getState().nodes,
+              levelId: activeLevelId,
+              position: raw,
+              module: previewNodeRef.current,
+              wallTier: wallCabinet,
+            })
+          : null
+      if (neighbor) {
+        const { run, result, depth, side } = neighbor
+        if (result.ok) {
+          useAlignmentGuides.getState().clear()
+          const position = runLocalToPlan(run, result.inserted.position)
+          const wallPose = resolveWallPlacement(position)
+          return withPlacementValidity(
+            {
+              position,
+              ...(wallPose && Math.abs(angleDelta(wallPose.yaw, run.rotation)) < 0.08
+                ? { wallId: wallPose.wallId, wallLocalX: wallPose.wallLocalX }
+                : {}),
+              yaw: run.rotation,
+              snappedToWall: false,
+              neighborJoin: { depth, side, name: run.name || 'Kitchen run' },
+              insertionPreview: {
+                runId: run.id,
+                runPosition: run.position,
+                runYaw: run.rotation,
+                modules: result.modules,
+                inserted: result.inserted,
+              },
+            },
+            forcePlacement,
+          )
+        }
+        return {
+          position: raw,
+          yaw: run.rotation,
+          snappedToWall: false,
+          valid: false,
+          conflictIds: [],
+          insertionFailure: { runId: run.id, reason: 'no-space' },
+        }
+      }
       const wallPlacement = islandModeRef.current ? null : resolveWallPlacement(raw)
       if (wallPlacement) {
         return withPlacementValidity(
@@ -1102,6 +1184,19 @@ const CabinetTool = () => {
       placementRef.current = next
       setPlacement(next)
       useCabinetPlacementStatus.getState().setBlocked(!next.valid)
+      useCabinetPlacementStatus
+        .getState()
+        .setTarget(
+          !next.valid
+            ? next.insertionFailure
+              ? 'No space in this kitchen run'
+              : 'Placement blocked: overlaps an item or wall opening'
+            : next.neighborJoin
+              ? `${next.valid ? 'Join' : 'Blocked beside'} ${next.neighborJoin.name} · ${next.neighborJoin.side} side · Depth matched`
+              : next.insertionFailure
+                ? 'No space in this kitchen run'
+                : null,
+        )
       publishFloorplanPreview(next)
       const nextSnapKey = movementSfxStepKey({
         coords:
@@ -1146,6 +1241,15 @@ const CabinetTool = () => {
         event.stopPropagation()
         return
       }
+      if (useEditor.getState().getContinuation('cabinet') === 'single') {
+        const adjacent = resolvePlacement(event)
+        if (adjacent.neighborJoin || adjacent.insertionFailure) {
+          markWallOwnedPointer()
+          publishPlacement(adjacent, lastWallEventTime)
+          event.stopPropagation()
+          return
+        }
+      }
       const hit = islandModeRef.current ? null : wallHitFromWallEvent(event)
       const next = hit ? resolveWallHitPlacement(hit) : null
       if (next) {
@@ -1161,16 +1265,24 @@ const CabinetTool = () => {
     }
 
     const buildRunNodes = (position: [number, number, number], yaw: number) => {
-      const patch = DEFAULT_PLACEMENT_PRESET.createPatch()
+      const patch = { ...DEFAULT_PLACEMENT_PRESET.createPatch(), ...toolDefaults }
       const island = islandModeRef.current
       const cabinet = CabinetNode.parse({
         ...cabinetDefinition.defaults(),
-        name: island ? 'Kitchen Island' : 'Modular Cabinet',
+        ...(toolDefaults?.kitchenPreset ? {} : toolDefaults),
+        name: island ? 'Kitchen Island' : wallCabinet ? 'Wall cabinets' : 'Kitchen run',
+        runTier: wallCabinet ? 'wall' : 'base',
+        showPlinth: previewNode.showPlinth,
+        withCountertop: !wallCabinet,
         position,
         rotation: yaw,
         parentId: activeLevelId,
-        depth: patch.depth ?? cabinetDefinition.defaults().depth,
-        carcassHeight: patch.carcassHeight ?? cabinetDefinition.defaults().carcassHeight,
+        width: previewNode.width,
+        depth: previewNode.depth,
+        carcassHeight:
+          previewNode.cabinetType === 'tall'
+            ? cabinetDefinition.defaults().carcassHeight
+            : previewNode.carcassHeight,
         ...(island && {
           countertopBackOverhang: ISLAND_SEATING_OVERHANG,
           withFinishedBack: true,
@@ -1180,12 +1292,16 @@ const CabinetTool = () => {
         CabinetModuleNode.parse({
           ...cabinetModuleDefinition.defaults(),
           ...patch,
-          name: index === 0 ? (patch.name ?? 'Base Cabinet') : `Base Cabinet ${index + 1}`,
+          ...toolDefaults,
+          name:
+            index === 0
+              ? (patch.name ?? 'Base Cabinet')
+              : `${patch.name ?? 'Base Cabinet'} ${index + 1}`,
           parentId: cabinet.id,
           position: [localX, runModuleBaseY(cabinet.plinthHeight, cabinet.showPlinth), 0],
           width,
           depth: cabinet.depth,
-          carcassHeight: cabinet.carcassHeight,
+          carcassHeight: previewNode.carcassHeight,
           plinthHeight: cabinet.plinthHeight,
           toeKickDepth: cabinet.toeKickDepth,
           countertopThickness: cabinet.countertopThickness,
@@ -1203,7 +1319,7 @@ const CabinetTool = () => {
       const sceneApi = createSceneApi(useScene)
       sceneApi.pauseHistory()
       try {
-        if (!chainRunRef.current || !chainEndModuleRef.current || !chainCornerSideRef.current) {
+        if (!(chainRunRef.current && chainEndModuleRef.current && chainCornerSideRef.current)) {
           const { cabinet, buildModule } = buildRunNodes(
             segment.anchor.position,
             segment.anchor.yaw,
@@ -1238,7 +1354,7 @@ const CabinetTool = () => {
         const nextRun = connectedModule?.parentId
           ? sceneApi.get<CabinetNode>(connectedModule.parentId as AnyNodeId)
           : null
-        if (!connectedModule || !nextRun) throw new Error('Unable to resolve connected corner run')
+        if (!(connectedModule && nextRun)) throw new Error('Unable to resolve connected corner run')
 
         const plannedConnectedWidths = segment.stretch.modules
           .slice(1)
@@ -1299,7 +1415,7 @@ const CabinetTool = () => {
         placementRef.current?.stretch && placementRef.current.stretchAnchor
           ? placementRef.current
           : resolveActiveStretchPlacement(anchor, event)
-      if (!currentPlacement.valid || !currentPlacement.stretch || !currentPlacement.stretchAnchor) {
+      if (!(currentPlacement.valid && currentPlacement.stretch && currentPlacement.stretchAnchor)) {
         return null
       }
       return { anchor: currentPlacement.stretchAnchor, stretch: currentPlacement.stretch }
@@ -1314,39 +1430,51 @@ const CabinetTool = () => {
       const module = cabinetModuleForRunInsertion(
         CabinetModuleNode.parse({
           ...previewNodeRef.current,
+          ...(next.neighborJoin ? { depth: next.neighborJoin.depth } : {}),
           position: insertionPreview.inserted.position,
           width: insertionPreview.inserted.width,
         }),
         run,
       )
 
-      sceneApi.pauseHistory()
+      const history = useScene.temporal.getState()
+      const recorded = new Set(history.pastStates)
       try {
-        const id = applyCabinetModuleInsertion({
-          module,
-          plan: insertionPreview,
-          run,
-          sceneApi,
+        return runAsSingleSceneHistoryStep(useScene, () => {
+          const id = applyCabinetModuleInsertion({
+            module,
+            plan: insertionPreview,
+            run,
+            sceneApi,
+          })
+          if (!id) throw new Error('Unable to apply cabinet insertion')
+          const liveRun = sceneApi.get<CabinetNode>(run.id as AnyNodeId)
+          if (!liveRun) throw new Error('Unable to resolve inserted cabinet run')
+          sceneApi.update(
+            liveRun.id as AnyNodeId,
+            resolveSupportSlabPatch(liveRun, sceneApi.nodes()),
+          )
+          syncCornerRunsFromRunSources({
+            run: sceneApi.get<CabinetNode>(liveRun.id as AnyNodeId) ?? liveRun,
+            sceneApi,
+          })
+          const updatedRun = sceneApi.get<CabinetNode>(liveRun.id as AnyNodeId) ?? liveRun
+          bumpCabinetRunsNear(
+            sceneApi,
+            [cabinetRunFootprint(updatedRun, sceneApi.nodes())],
+            new Set([updatedRun.id as AnyNodeId]),
+          )
+          return id
         })
-        if (!id) throw new Error('Unable to apply cabinet insertion')
-        const liveRun = sceneApi.get<CabinetNode>(run.id as AnyNodeId)
-        if (!liveRun) throw new Error('Unable to resolve inserted cabinet run')
-        sceneApi.update(liveRun.id as AnyNodeId, resolveSupportSlabPatch(liveRun, sceneApi.nodes()))
-        syncCornerRunsFromRunSources({
-          run: sceneApi.get<CabinetNode>(liveRun.id as AnyNodeId) ?? liveRun,
-          sceneApi,
-        })
-        const updatedRun = sceneApi.get<CabinetNode>(liveRun.id as AnyNodeId) ?? liveRun
-        bumpCabinetRunsNear(
-          sceneApi,
-          [cabinetRunFootprint(updatedRun, sceneApi.nodes())],
-          new Set([updatedRun.id as AnyNodeId]),
-        )
-        sceneApi.resumeHistory()
-        return id
       } catch {
-        sceneApi.restoreAll()
-        sceneApi.resumeHistory()
+        // A failure part-way leaves nothing behind: undo the writes it recorded, then forget them.
+        const added = useScene.temporal
+          .getState()
+          .pastStates.filter((state) => !recorded.has(state)).length
+        if (added > 0) {
+          useScene.temporal.getState().undo(added)
+          useScene.temporal.setState({ futureStates: history.futureStates })
+        }
         return null
       }
     }
@@ -1512,17 +1640,14 @@ const CabinetTool = () => {
     const applyTypedDimension = () => {
       const editor = usePlacementPreview.getState()
       const current = placementRef.current
-      if (!editor.activeDimensionId || !editor.dimensionInput || !current) {
+      if (!(editor.activeDimensionId && editor.dimensionInput && current)) {
         return false
       }
-      const value = parseMeasurement(
-        editor.dimensionInput,
-        { kind: 'length', unitId: 'm' },
-        {
-          bareUnit: unit === 'imperial' ? 'in' : metricNotation === 'millimeters' ? 'mm' : 'm',
-          system: unit === 'imperial' ? 'imperial' : 'metric',
-        },
-      )
+      const value = parseCabinetDimensionInput(editor.dimensionInput, {
+        locale,
+        metricNotation,
+        unit,
+      })
       if (value === null) return false
       if (!current.stretch) {
         const sizeField =
@@ -1566,7 +1691,7 @@ const CabinetTool = () => {
             {
               ...placementBase,
               position,
-              ...(wallLocalX != null ? { wallLocalX } : {}),
+              ...(wallLocalX == null ? {} : { wallLocalX }),
             },
             false,
           )
@@ -1652,8 +1777,7 @@ const CabinetTool = () => {
     }
 
     const onKeyDown = (event: KeyboardEvent) => {
-      const tag = (event.target as HTMLElement | null)?.tagName
-      if (tag === 'INPUT' || tag === 'TEXTAREA') return
+      if (isTypingTarget(event.target)) return
       const dimensionEditor = usePlacementPreview.getState()
       if (event.key === 'Tab' && dimensionEditor.dimensions.length > 0) {
         const currentIndex = dimensionEditor.dimensions.findIndex(
@@ -1774,9 +1898,17 @@ const CabinetTool = () => {
       useAlignmentGuides.getState().clear()
       useCabinetPlacementStatus.getState().setBlocked(false)
     }
-  }, [activeLevelId, metricNotation, publishFloorplanPreview, unit])
+  }, [
+    activeLevelId,
+    metricNotation,
+    previewNode,
+    publishFloorplanPreview,
+    toolDefaults,
+    unit,
+    wallCabinet,
+  ])
 
-  if (!activeLevelId || !placement) return null
+  if (!(activeLevelId && placement)) return null
   const stretch = placement.stretch
   const draftModuleOffsets = draftSegments.map((segment, segmentIndex) =>
     draftSegments
@@ -1789,18 +1921,20 @@ const CabinetTool = () => {
   )
   const placementLabel = placement.insertionFailure
     ? 'No space in this run to insert this cabinet'
-    : stretch
-      ? placement.valid
-        ? `${draftSegments.length + 1} leg${draftSegments.length + 1 === 1 ? '' : 's'} · ${stretch.modules.length} module${stretch.modules.length === 1 ? '' : 's'} · Click to continue · Double-click/Esc to finish`
-        : null
-      : !placement.valid
-        ? null
-        : placement.snappedToWall
-          ? placement.snapReason === 'cabinet-edge'
-            ? 'Edge snap'
-            : placement.snapReason === 'corner'
-              ? 'Corner snap'
-              : 'Wall snap'
+    : placement.neighborJoin
+      ? `${placement.valid ? 'Join' : 'Blocked beside'} ${placement.neighborJoin.name} · ${placement.neighborJoin.side} side · Depth matched`
+      : stretch
+        ? placement.valid
+          ? `${draftSegments.length + 1} leg${draftSegments.length + 1 === 1 ? '' : 's'} · ${stretch.modules.length} module${stretch.modules.length === 1 ? '' : 's'} · Click to continue · Double-click/Esc to finish`
+          : null
+        : placement.valid
+          ? placement.snappedToWall
+            ? placement.snapReason === 'cabinet-edge'
+              ? 'Edge snap'
+              : placement.snapReason === 'corner'
+                ? 'Corner snap'
+                : 'Wall snap'
+            : `Place ${previewNode.name ?? 'cabinet'}`
           : null
   const labelPosition = stretch
     ? runLocalToPlan({ position: placement.position, rotation: placement.yaw }, [
@@ -1820,13 +1954,14 @@ const CabinetTool = () => {
     rotation: placement.yaw,
     levelId: activeLevelId,
   })
-  const placementRotationY = placement.snappedToWall || stretch ? placement.yaw : yaw
+  const placementRotationY =
+    placement.snappedToWall || stretch || placement.neighborJoin ? placement.yaw : yaw
   const placementBoxDimensions: [number, number, number] = [
     stretch
       ? stretch.length + (previewNode.withCountertop ? previewNode.countertopOverhang * 2 : 0)
       : placementSnapFootprint.dimensions[0],
     placementSnapFootprint.dimensions[1],
-    placementSnapFootprint.dimensions[2],
+    placement.neighborJoin?.depth ?? placementSnapFootprint.dimensions[2],
   ]
   const placementBoxPlanPosition = runLocalToPlan(
     { position: placement.position, rotation: placement.yaw },
@@ -1843,11 +1978,17 @@ const CabinetTool = () => {
       {placement.guide && <WallSnapGuide blocked={!placement.valid} guide={placement.guide} />}
       <PlacementBox
         activeDimensionId={stretch ? null : activeDimensionId}
-        dimensions={placementBoxDimensions}
         dimensionInput={dimensionInput}
+        dimensions={placementBoxDimensions}
         measurements={{ unit, metricNotation }}
         measurementValues={
-          stretch ? undefined : [previewNode.width, previewNode.carcassHeight, previewNode.depth]
+          stretch
+            ? undefined
+            : [
+                previewNode.width,
+                previewNode.carcassHeight,
+                placement.neighborJoin?.depth ?? previewNode.depth,
+              ]
         }
         onDimensionSelect={
           stretch ? undefined : (id) => usePlacementPreview.getState().selectDimension(id)
@@ -1874,9 +2015,13 @@ const CabinetTool = () => {
           ))}
         </group>
       ))}
-      <group ref={activeGhostRef} position={visualPosition} rotation={[0, placementRotationY, 0]}>
+      <group position={visualPosition} ref={activeGhostRef} rotation={[0, placementRotationY, 0]}>
         {placement.insertionPreview ? (
-          <primitive object={insertionGhost as Group} />
+          <group
+            scale={[1, 1, (placement.neighborJoin?.depth ?? previewNode.depth) / previewNode.depth]}
+          >
+            <primitive object={insertionGhost as Group} />
+          </group>
         ) : stretch ? (
           stretch.modules.map((module, index) => (
             <group
@@ -1891,7 +2036,7 @@ const CabinetTool = () => {
           <primitive object={ghost as Group} />
         )}
       </group>
-      {placement.insertionPreview ? (
+      {placement.insertionPreview && !placement.neighborJoin ? (
         <group
           position={placement.insertionPreview.runPosition}
           rotation={[0, placement.insertionPreview.runYaw, 0]}
@@ -1933,4 +2078,9 @@ const CabinetTool = () => {
   )
 }
 
-export default CabinetTool
+// Remount when the chosen item changes so typed dimensions and drafts cannot leak
+// from a base cabinet into a fridge or an overhead cabinet.
+export default function CabinetTool() {
+  const preset = useEditor((state) => state.toolDefaults.cabinet?.kitchenPreset)
+  return <CabinetPlacementTool key={String(preset ?? 'base-door')} />
+}

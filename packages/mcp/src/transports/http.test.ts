@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, expect, test } from 'bun:test'
-import { Client } from '@modelcontextprotocol/sdk/client/index.js'
-import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import { Client, SdkErrorCode, StreamableHTTPClientTransport } from '@modelcontextprotocol/client'
+import type { McpServer } from '@modelcontextprotocol/server'
 import { SceneBridge } from '../bridge/scene-bridge'
 import { createPascalMcpServer } from '../server'
 import { connectHttp, type HttpTransportHandle } from './http'
@@ -36,6 +35,42 @@ test('connectHttp listens on the given port and accepts MCP traffic', async () =
     await client.connect(clientTransport)
     const tools = await client.listTools()
     expect(Array.isArray(tools.tools)).toBe(true)
+  } finally {
+    await client.close()
+  }
+})
+
+test('connectHttp serves a negotiating client the 2025 sessionful protocol', async () => {
+  handle = await connectHttp(() => server, 0)
+  const url = new URL(`http://127.0.0.1:${handle.port}/mcp`)
+  const client = new Client(
+    { name: 'http-test-client', version: '0.0.0' },
+    { versionNegotiation: { mode: 'auto' } },
+  )
+
+  try {
+    await client.connect(new StreamableHTTPClientTransport(url))
+    expect(client.getProtocolEra()).toBe('legacy')
+    expect(client.getNegotiatedProtocolVersion()?.startsWith('2025-')).toBe(true)
+    const tools = await client.listTools()
+    expect(tools.tools.some((tool) => tool.name === 'get_scene')).toBe(true)
+  } finally {
+    await client.close()
+  }
+})
+
+test('connectHttp refuses a client pinned to 2026-07-28', async () => {
+  handle = await connectHttp(() => server, 0)
+  const url = new URL(`http://127.0.0.1:${handle.port}/mcp`)
+  const client = new Client(
+    { name: 'http-test-client', version: '0.0.0' },
+    { versionNegotiation: { mode: { pin: '2026-07-28' } } },
+  )
+
+  try {
+    await expect(client.connect(new StreamableHTTPClientTransport(url))).rejects.toMatchObject({
+      code: SdkErrorCode.EraNegotiationFailed,
+    })
   } finally {
     await client.close()
   }
@@ -116,6 +151,38 @@ test('connectHttp serves authenticated supervisor health', async () => {
     version: '1.2.3',
     instanceId: 'instance-1',
   })
+})
+
+test('connectHttp returns a full tool result in a session and refuses it after DELETE', async () => {
+  handle = await connectHttp(() => server, 0)
+  const url = new URL(`http://127.0.0.1:${handle.port}/mcp`)
+  const transport = new StreamableHTTPClientTransport(url)
+  const client = new Client({ name: 'http-session-client', version: '0.0.0' })
+
+  try {
+    await client.connect(transport)
+    const sessionId = transport.sessionId
+    expect(sessionId).toBeString()
+
+    const scene = await client.callTool({ name: 'get_scene', arguments: {} })
+    expect(scene.isError).toBeFalsy()
+    expect(JSON.stringify(scene.content).length).toBeGreaterThan(200)
+
+    await transport.terminateSession()
+    const stale = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        accept: 'application/json, text/event-stream',
+        'mcp-session-id': sessionId!,
+      },
+      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }),
+    })
+    expect(stale.status).toBe(400)
+    expect(await stale.json()).toEqual({ error: 'invalid_session' })
+  } finally {
+    await client.close()
+  }
 })
 
 test('connectHttp isolates simultaneous client sessions', async () => {

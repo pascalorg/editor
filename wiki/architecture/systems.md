@@ -8,126 +8,199 @@ Systems own business logic, geometry generation, and constraints. They run in th
 
 > **For registry-driven kinds, prefer no per-kind system.** If your kind's only job is "rebuild geometry on dirty", set `def.geometry` and let the framework's `<GeometrySystem>` handle the rebuild loop. Per-kind systems remain for *extra* responsibilities — animations, cross-kind dirty cascades, named-mesh material poking. See [node-definitions.md](node-definitions.md).
 
-## Two Kinds of Systems
+## Where systems live
 
-### Core Systems — `packages/core/src/systems/`
+### Core — `packages/core/src/systems/`
 
-Pure logic: no rendering, no Three.js objects. They read nodes from `useScene`, compute derived values (geometry, constraints), and write results back.
+Plain data: no Three.js, no `useFrame` (DECISIONS.md E-001). Pure helpers, plus a few React components that subscribe to the scene store and write derived data back.
 
-| System | Responsibility |
+| Directory | Owns |
 |---|---|
-| `WallSystem` | Wall mitering, corner joints |
-| `CeilingSystem` | Polygon-based ceiling generation |
-| `RoofSystem` | Pitched roof shape |
-| `DoorSystem` | Placement constraints on walls |
-| `WindowSystem` | Placement constraints on walls |
-| `ItemSystem` | Item transforms, collision |
+| `wall/` | Mitering, topology, tops, merge, finishes and layer bands, frame and reference line — the pure inputs of the viewer's `WallSystem` |
+| `slab/` | Slab support and placement, `ensureSlabOpenings` |
+| `stair/` | Rise, flight and footprints; `StairOpeningSystem` syncs rises and cuts slab openings |
+| `elevator/` | Dispatch and runtime service, opening sync, `ElevatorOpeningSystem` |
+| `roof/` | Footprint; `RoofElevationSystem` keeps wall-following roofs on their walls |
+| `fence/` | Spline and centerline |
 
-Slab geometry has no dedicated system: it renders through the registry `def.geometry` (`packages/nodes/src/slab/geometry.ts`, calling the pure generators in `packages/viewer/src/systems/slab/slab-system.tsx`) with a small `def.system` for dirty tracking.
+`owned-floor-openings.ts` / `reconcile-owned-floor-openings.ts` at the top level reconcile floor openings owned by other nodes.
+
+`document-reconcile.ts` is the one synchronous pass of every derived write a saved document owes (room structure, stair rises, owned openings, roof elevation): hosts that edit outside the editor (the MCP bridge, a detached scene) settle with it. The stair, elevator and roof systems plan with the same functions on a microtask for edits made in the editor, and stand down while a host settles (`isSettlingDocument`). A new system that writes saved fields adds its pass there, or a host's patch misses it ([scene-runtime](scene-runtime.md)).
+
+### Viewer — `packages/viewer/src/systems/`
+
+Three.js side-effects on registered objects (`sceneRegistry`). `<Viewer>` mounts the framework systems directly: `FloorElevationSystem`, `GeometrySystem`, core's `StairOpeningSystem` and `RoofElevationSystem`, and `<RegisteredSystems>`, which mounts every registered kind's `def.system`. The per-kind implementations below are exported by `@pascal-app/viewer` and wrapped by the kinds' `def.system` modules in `packages/nodes`.
+
+| Directory | Owns |
+|---|---|
+| `geometry/` | `GeometrySystem`: rebuilds `def.geometry` kinds on dirty |
+| `floor-elevation/` | `FloorElevationSystem`: lifts `floorPlaced` kinds over slabs |
+| `level/` | `LevelSystem`: stacked / exploded / solo / manual level positions |
+| `wall/` | `WallSystem` (dirty drain, miter cache, initial build) and `WallCutout` (opening holes) |
+| `slab/`, `ceiling/`, `fence/`, `roof/`, `stair/`, `column/` | Kind geometry generators and their dirty consumers |
+| `door/`, `window/` | Rebuild on dirty, plus the animation systems that advance `operationState` |
+| `item/`, `item-light/`, `interactive/` | Item transforms, item lights, in-scene toggles and sliders |
+| `zone/`, `guide/`, `scan/`, `elevator/` | Zone display and labels, helper geometry, point clouds, elevator interaction |
+| `perf-action-settle/` | `?perf` settle detection |
+
+### Frame priorities and the dirty lifecycle
 
 Ceiling geometry consumes dirty marks at frame priority 2, like `GeometrySystem` (slabs).
 The node batch snapshots marks at priority 1 and processes membership at priority 5,
-so it releases old geometry and collects replacements after rebuilds. A definition's
+so it releases old geometry and collects replacements after rebuilds. No consumer
+clears a mark before priority 2: `FloorElevationSystem` lifts at priority 1 but
+clears the marks it owns (floor-placed kinds with no `geometry` or `system`, such as
+columns and procedural items) at priority 2. A definition's
 `system.priority` orders mounted components; it does not set `useFrame` priority.
 
-Items, columns, ceiling undersides and slab bodies directly under a level, plus
-wall-hosted doors/windows, can join the level's `BatchedMesh` containers. Sources
-stay mounted and draw-hidden. Ceiling grids and hosted child subtrees are excluded;
-containers preserve source shadow flags. Selection (including external selection),
-live transforms and each slot paint preview target release sources until settled.
-Level mode/selected-level changes re-offer sources rejected while shadow-only.
+A kind joins by declaring `capabilities.batchable` (`BatchableConfig`): its scope
+(`'level'` children, or `'wall'`-hosted openings that follow their wall), transient
+exclusions, a settled test on the mounted root and, for geometry rebuilt in place, a
+per-mesh allocation key. Items, columns, ceiling undersides, slab bodies, procedural
+items, imported meshes and blocks directly under a level, plus wall-hosted
+doors/windows, can join the level's `BatchedMesh` containers. Sources stay mounted and
+draw-hidden. Only opaque single-material meshes join. Ceiling grids and hosted child
+subtrees are excluded; containers preserve source shadow flags. Selection (including
+external selection), live transforms and each slot paint preview target release
+sources until settled; a playing procedural motion releases its item, and part
+lights keep it out. Level mode/selected-level changes re-offer sources rejected while
+shadow-only.
 
-### Initial wall build
+### Scene hydration and the initial wall build
 
-`setScene` assigns a non-persisted hydration identity, then publishes its eligible
-`hydrationToken` after synchronous reconciliation and hydration-owned deferred
-normalization finish. Elevator openings and reconciliation of replaced levels run
-inside the synchronous boundary; queued stair rise/opening normalization extends
-that boundary through its microtask. The store owns these opening passes even if
-their reactive systems mount after hydration, and honors the scene mutation lock.
-Ordinary document writes cancel pending publication or invalidate an issued token atomically before subscribers run,
-including paused, remote and undo/redo writes. History pausing alone grants no
-exemption. Dirty marks alone do not invalidate it, so opening completion can still
-re-dirty its parent wall.
+**Where.** `setScene` gives each load a non-persisted hydration identity and publishes
+its `hydrationToken` once synchronous reconciliation and deferred normalisation finish.
+Openings are settled before that: the server-safe `ensureSceneOpenings(nodes)` runs in
+`migrateNodes` right after M4/M5, derives stair rises from the graph (including slab and
+terrain support), then ensures stair/elevator openings. It keeps what the scene already
+has — a hole owned by that stair/elevator, or holes covering at least 99.9 % of the
+proposed opening, count as present. Read-only snapshots get the same pure migration.
 
-The canvas ref installs pointerdown, pointermove and wheel capture before lazy
-systems mount. Live override/transform interruption belongs to the scene store;
-nonempty maps cancel hydration even if cleared before the wall consumer mounts.
-`applySceneSnapshot` clears stale live maps before starting the replacement.
-The eager wall lifecycle owner observes tokens independently of `WallSystem`, so a
-consumer remount retains the same span, counters, built-wall identities and pending
-neighbours. A fresh hydration resets that state; an interruption cannot re-enter
-for the same token. These hydration-scoped records are an exception to the usual
-system-unmount cache cleanup rule; the consumer still clears its miter cache.
+**What it guarantees.** Any ordinary document write — paused, remote and undo/redo
+included — cancels a pending publication or invalidates an issued token before
+subscribers run; pausing history grants no exemption. Dirty marks do not invalidate it,
+so opening completion can still re-dirty its wall. Pointer input (captured on the canvas
+before lazy systems mount) and any non-empty live override/transform map interrupt
+hydration; `applySceneSnapshot` clears stale live maps first. The wall lifecycle owner
+(`wall/wall-build-lifecycle.ts`) observes tokens independently of `WallSystem`, so a
+consumer remount keeps the span, counters and pending neighbours; these
+hydration-scoped records are the one exception to the unmount cache-cleanup rule below
+(the miter cache is still cleared).
 
-Initial build ends on the first frame with no dirty walls and no pending
-neighbours, or on interruption. If no walls rebuild for 30 consecutive frames
-while dirty walls lack registered meshes (one placeholder-sweep interval), the
-privilege is revoked. This bounded renderer grace period leaves their dirty marks
-intact and does not report geometry completion; a later mount still rebuilds them.
-Unavailable walls do not continually postpone the pending-neighbour quiet clock.
-`isWallInitialBuildActive()` and `getPendingWallRebuildCount()` remain readable
-without `?perf`.
+**Dirty lifecycle.** During the initial build `WallSystem` drains dirty walls under an
+8 ms frame budget without the interactive 8-walls/frame cap; a wall with six or more
+cutouts takes a frame of its own, and first builds skip neighbour re-invalidation
+because the neighbours are queued for their own first builds. The build ends on the
+first frame with no dirty walls and no pending neighbours, or on interruption. If no
+wall rebuilds for 30 frames while dirty walls still lack meshes, the privilege is
+revoked: their marks stay and a later mount rebuilds them. Afterwards interactive
+scheduling applies — small edits rebuild immediately, larger queues progressively,
+with an 80 ms trailing quiet window for neighbour invalidation. The wall batch waits
+for the pending-neighbour queue; node batching keeps its 180 ms quiet clock.
+`isWallInitialBuildActive()` and `getPendingWallRebuildCount()` report the state; with
+`?perf`, `__pascalPerf.batchStats().wallDrain` and the `wall-initial-build` span add
+per-frame counters.
 
-Initial build consumes walls under the existing **8 ms budget**, checked between
-walls, without the interactive **8 walls/frame** cap. A wall with at least six
-opening cutouts occupies its own frame. Each wall's first build during active
-initial build skips adjacency scanning and neighbour re-invalidation because the
-hydrated inputs are stable and its neighbours are queued for their own first
-builds. Subsequent builds retain neighbour invalidation and the **80 ms** trailing
-quiet window. Once initial build ends, the existing interactive scheduling applies
-(progressive limits for queues larger than eight; small edits rebuild immediately).
+### Floor elevation and hosted children
 
-Only with `?perf`, `__pascalPerf.batchStats().wallDrain` publishes the active state,
-this frame's consumption, cumulative budget/heavy/drained/cap exits, pending-neighbour
-count, first builds, re-invalidation builds and unique neighbour enqueues. Publication
-reuses one mutable stats object without allocating frame snapshots. Counters reset
-on each hydration identity, including one interrupted before token publication.
-`firstBuilds` counts the first-ever geometry build of each wall in that hydration,
-even after interruption; `reinvalidationBuilds` counts later builds of those walls.
-The `wall-initial-build` span starts at eligible token publication and ends at drain
-completion or interruption, spanning consumer unmounts. Counters do not imply that
-opening-system completion has drained: late opening builds can still re-dirty walls.
+`FloorElevationSystem` writes mesh Y only for nodes directly parented to a level.
+Hosted children inherit their host and any named-surface frame; a zero support lift
+does not make a live world-space position safe to write into their local transform.
+A plan-view exit can override the logical parent to a level while the mesh remains
+mounted beneath its original host. The floor-elevation preview pass converts that
+level pose through the inverse mounted ancestry, including a named-surface wrapper
+and inherited slab lift. It saves the original local matrix state and restores it
+when the override ends on cancel, re-entry or unmount; reparented commits keep their
+new local pose. Ordinary hosted 3D previews retain their mounted local frame.
+`packages/nodes/src/cabinet/__tests__/hosting-preview-pose.test.tsx` mounts the movers,
+renderers and frame systems together to check this.
 
-The wall batch still waits for its pending-neighbour queue. Node batching retains
-its global 180 ms quiet clock for now. Initial-drain batching is a follow-up: bounded
-joins must preserve whole-wave `MIN_BATCH_ENTRIES` decisions and partial/leftover
-membership, including candidates larger than one frame's allowance.
+### Construction reveal
 
-### Viewer Systems — `packages/viewer/src/systems/`
+`ConstructionReveal` (mounted by the host inside `<Viewer>`, with a `reveals(commit)` policy and a
+`level`) stages the new nodes of the commits it selects — the hosted editor selects commits whose
+`author` is `agent` (`runAsSceneCommitAuthor` / `acquireSceneCommitAuthor` in core). It is
+presentation only: the store write is done and is one undo step. A new node whose kind declares
+`capabilities.reveal` stays unmounted (`NodeRenderer` returns null) until its start time, so its
+geometry builds over frames. The order is phase (`foundation` → `structure` → `circulation` →
+`openings` → `roof` → `furnishing`); every floor plays a phase at once, its nodes in a scattered
+order (a stable hash of the id), evenly spaced, hosts before what they host; every start lands
+within about 6 s by compressing the gaps, never by skipping a node.
 
-Access Three.js objects (via `useRegistry`) and manage rendering side-effects.
+A started node stays hidden until its first build clears its dirty mark, then moves in its
+declared style, each a pose of `t` in [0, 1] that ends exactly at rest (`revealPoseAt`):
 
-| System | Responsibility |
-|---|---|
-| `LevelSystem` | Stacked / exploded / solo / manual level positions |
-| `WallCutout` | Cuts door/window holes in wall geometry |
-| `ZoneSystem` | Zone display and label placement |
-| `InteractiveSystem` | Item toggles and sliders in the scene |
-| `GuideSystem` | Temporary helper geometry |
-| `ScanSystem` | Point cloud rendering |
+| Style | Motion | Built-in kinds |
+|---|---|---|
+| `rise` | scales Y up from its base | wall, fence |
+| `scale` | grows from the base of its bounds' centre | (the `simple` level's fallback) |
+| `settle` | lowered its declared `height` onto its support, soft landing | slab, ceiling |
+| `drop` | falls its declared `height` like a load, lands with a squash and a small hop | column, stair, item, shelf, cabinet, procedural item |
+| `cut` | pops from its centre with a small overshoot | door, window |
+| `assemble` | holds still while its parts drop in one by one from its `height` | roof (its segments) |
+
+Durations live in `REVEAL_TIMING.durationMs`, heights in each kind's declaration. The pose is
+composed on the registered root by swapping its `updateMatrix`: a scale about the style's pivot
+after the root's own transform, then a lift premultiplied in the parent's frame (so a root's own
+non-uniform scale never stretches a fall). `position`, `quaternion` and `scale` stay owned by the
+renderer, `FloorElevationSystem` and `LevelSystem`, and a rebuild keeps the pose.
+
+An `assemble` node's new children that declare no reveal of their own are its parts: each drops in
+on its own turn, including parts written in a later commit while the node still assembles.
+`isRevealAssembling` / `subscribeRevealAssembling` tell its renderer to draw them apart; the roof
+hides its merged shell and shows its segments, `RoofSystem` builds the shell meanwhile, and the
+callback flips back synchronously, so a capture that ends the reveal sees the whole shell.
+
+The host's `level` sets how much plays: `off` shows the build at once; `simple` keeps the order
+with `rise` and `scale` only (no parts, no dust); `full` plays every style and the dust;
+`framing` is `full` in the viewer, for plugins that stage their own members. Rising walls puff
+dust along their base and landing drops around their foot: one instanced mesh of a fixed
+512-sprite pool on `OVERLAY_LAYER`, the oldest sprite recycled when full.
+
+It ends at once on a `load` commit or a new hydration, an undo or redo, `thumbnail:before-capture`
+(synchronously, before the clone, dust included), an export, and for selected nodes, their hosts
+and an assembled node's parts. It never plays under `prefers-reduced-motion`, at `off`, in
+`renderContext: 'viewer'`, or on a level that is hidden or shadow-only — a level hidden mid-reveal
+re-plans the rest so it holds no slot. Both batches keep revealing nodes out (`isNodeRevealing`):
+the node batch defers them, and the wall batch holds the level's merge until its walls have risen.
+`subscribeRevealPhases` reports each (phase, level) group once as it starts; the viewer plays no
+sound, the host does.
+
+The 2D floor plan follows the same schedule (E-006): an entry whose node waits
+(`useRevealPending`) is not drawn; a `rise` node with a centreline (its `hit-line`) grows along it
+from its start, everything else fades in, from `getRevealPlanState` on each
+`subscribeRevealTicks` step. When only the plan shows, the canvas stops its frames, so the reveal
+keeps its own clock (its steps capped at 50 ms, like the frame clock).
+
+The events it says, the weight of a landing, the roof that lifts for the furniture, the reverse play for an undo (`retractNodes`) and Follow Pascal are in [construction-animation](construction-animation.md).
+
+A presentation that plays beside the reveal (a plugin's own layer, landing before a group ends)
+reads `planRevealWindows(commit)`: when each (phase, level) group of that commit starts and ends,
+from the reveal's first frame, planned as if nothing else were revealing.
 
 ## Pattern
 
-Systems are React components that render nothing (`return null`) and use `useFrame` for per-frame logic.
+A kind's system is a React component that renders nothing and does its per-frame work in `useFrame`, shipped as the kind's `def.system`:
 
 ```tsx
-// packages/core/src/systems/my-system.tsx
+// packages/nodes/src/my-kind/system.tsx
+import { sceneRegistry, useScene } from '@pascal-app/core'
 import { useFrame } from '@react-three/fiber'
-import { useScene } from '../store/use-scene'
 
-export function MySystem() {
-  const nodes = useScene(s => s.nodes)
-
+export default function MyKindSystem() {
   useFrame(() => {
-    // compute and write back derived state
+    const { dirtyNodes, nodes } = useScene.getState()
+    for (const id of dirtyNodes) {
+      if (nodes[id]?.type !== 'my-kind') continue
+      const object = sceneRegistry.nodes.get(id)
+      // update object, then useScene.getState().clearDirty(id)
+    }
   })
-
   return null
 }
 ```
 
-Core and viewer systems are mounted inside `<Viewer>` alongside renderers. See `packages/viewer/src/components/viewer/index.tsx` for the mount order.
+Core systems have no frame loop: they subscribe to the scene store in an effect and write derived data back.
 
 **Systems are a customization point.** Any consumer of `<Viewer>` — the editor app, an embed, a read-only preview — can inject its own systems as children. This is how editor-specific behaviour (space detection, tool feedback) is added without touching the viewer package.
 
@@ -209,21 +282,15 @@ batched, and affected members rejoin through the normal settle window.
 ## Adding a New System
 
 1. Decide the scope:
-   - **Domain logic** → `packages/core/src/systems/`
-   - **Viewer rendering side-effect** → `packages/viewer/src/systems/` — mount in `packages/viewer/src/components/viewer/index.tsx`
-   - **Editor-specific or integration-specific** → keep it in the consuming app (e.g. `apps/editor/components/systems/`) and inject it as a child of `<Viewer>`
-
-2. Create `<name>-system.tsx` in the appropriate directory.
-
-3. Mount it in the right place:
-   - Viewer-internal systems go in `packages/viewer/src/components/viewer/index.tsx`
-   - App-specific systems are injected as children from outside:
+   - **One kind's per-frame work** → `def.system` in `packages/nodes/src/<kind>/system.tsx`; `<RegisteredSystems>` mounts it. Prefer `def.geometry` when the only job is rebuilding on dirty.
+   - **Domain logic over plain data** → `packages/core/src/systems/` (no three, no `useFrame`).
+   - **A framework-wide rendering side-effect** → `packages/viewer/src/systems/`, mounted in `packages/viewer/src/components/viewer/index.tsx`.
+   - **Editor- or integration-specific** → keep it in the consuming package and inject it as a child of `<Viewer>`:
      ```tsx
-     // apps/editor — editor injects its own systems without modifying the viewer
      <Viewer>
        <MyEditorSystem />
        <ToolManager />
      </Viewer>
      ```
 
-4. **Mount order matters.** Most viewer systems run *after* renderers in the JSX tree — they consume `sceneRegistry` data that renderers populate on mount. Only place a system before renderers if it explicitly does not read the registry.
+2. **Mount order matters.** Systems run *after* renderers in the JSX tree because they consume the `sceneRegistry` entries renderers populate on mount. Only place a system before renderers if it does not read the registry.

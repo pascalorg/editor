@@ -8,20 +8,23 @@ import {
   type ParamAction,
   type ParamField,
   useScene,
-  type ZoneNode,
+  type ZoneNode, usePascalI18n,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { Icon } from '@iconify/react'
 import { Move, Trash2 } from 'lucide-react'
 import { type ComponentType, lazy, Suspense, useCallback } from 'react'
 import { resolveMoveActionNode } from '../../../lib/direct-manipulation'
+import { commitParametricNodeFields } from '../../../lib/parametric-node-update'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import { collectZoneContentIds } from '../../../lib/zone-content'
 import useEditor from '../../../store/use-editor'
+import { IconRefImage } from '../icon-ref'
 import { ActionButton, ActionGroup } from '../controls/action-button'
 import { PanelSection } from '../controls/panel-section'
 import { ParametricFieldControl } from './parametric-field-control'
 import { InspectorFooterContext, PanelWrapper } from './panel-wrapper'
+import { inspectorActionDescriptor, inspectorGroupDescriptor, nodeLabel } from '../../../i18n/node-messages'
 
 /**
  * Auto-derived right-panel inspector for any registry-backed node.
@@ -44,6 +47,7 @@ export function ParametricInspector({
   nodeId,
   onClose,
 }: { footer?: React.ReactNode; nodeId?: AnyNodeId; onClose?: () => void } = {}) {
+  const i18n = usePascalI18n()
   const selectedIdFromSelection = useViewer((s) => s.selection.selectedIds[0]) as
     | AnyNodeId
     | undefined
@@ -61,22 +65,9 @@ export function ParametricInspector({
   const handleUpdate = useCallback(
     (patch: Partial<AnyNode>) => {
       if (!selectedId) return
-      const scene = useScene.getState()
-      const node = scene.nodes[selectedId]
-      if (parametrics?.derive && node) {
-        const next = { ...node, ...patch } as AnyNode
-        patch = { ...patch, ...parametrics.derive(next, patch, node as AnyNode) }
-      }
-      // Bundle the edited node + any reconcile follow-ups into ONE
-      // updateNodes call so a single inspector edit is a single undo step.
-      const updates: { id: AnyNodeId; data: Partial<AnyNode> }[] = [{ id: selectedId, data: patch }]
-      if (parametrics?.reconcile && node) {
-        const next = { ...node, ...patch } as AnyNode
-        updates.push(...parametrics.reconcile(node as AnyNode, next))
-      }
-      scene.updateNodes(updates)
+      commitParametricNodeFields(selectedId, patch)
     },
-    [selectedId, parametrics],
+    [selectedId],
   )
 
   const clearSelection = useCallback(() => {
@@ -138,7 +129,7 @@ export function ParametricInspector({
   }
 
   const presentation = def.presentation
-  const title = presentation?.label ?? nodeType ?? ''
+  const title = presentation?.label && nodeType ? nodeLabel(nodeType, presentation.label, i18n) : (nodeType ?? '')
   const iconNode = renderIcon(presentation?.icon)
   const canMove = !!def.capabilities.movable
   const canDelete = def.capabilities.deletable !== false
@@ -157,7 +148,11 @@ export function ParametricInspector({
       width={320}
     >
       {parametrics.groups.map((group, gi) => (
-        <PanelSection key={`group-${gi}`} title={group.label}>
+        <PanelSection
+          defaultExpanded={group.defaultExpanded}
+          key={`${nodeType}-${group.label}-${gi}`}
+          title={i18n._(inspectorGroupDescriptor(group.label))}
+        >
           {group.fields.map((field, fi) => (
             <FieldRenderer
               key={`field-${gi}-${fi}-${String(field.key)}`}
@@ -174,10 +169,10 @@ export function ParametricInspector({
         </Suspense>
       )}
       {(canMove || canDelete || (parametrics.actions && parametrics.actions.length > 0)) && (
-        <PanelSection title="Actions">
-          <ActionGroup className={isZone ? 'flex-col' : undefined}>
+        <PanelSection title={i18n._({ id: 'editor.panels.parametricInspector.actions', message: 'Actions' })}>
+          <ActionGroup className={isZone ? 'flex-col' : parametrics.actions?.length ? 'grid grid-cols-2 gap-2' : undefined}>
             {canMove && (
-              <ActionButton icon={<Move className="h-4 w-4" />} label="Move" onClick={handleMove} />
+              <ActionButton icon={<Move className="h-4 w-4" />} label={i18n._({ id: 'editor.panels.parametricInspector.move', message: 'Move' })} onClick={handleMove} />
             )}
             {parametrics.actions?.map((action, i) => (
               <ParamActionButton action={action} key={`paramaction-${i}`} nodeId={selectedId} />
@@ -187,22 +182,22 @@ export function ParametricInspector({
                 <>
                   <ActionButton
                     className="w-full flex-none"
-                    icon={<Trash2 className="h-4 w-4 text-red-400" />}
-                    label="Delete"
+                    icon={<Trash2 className="h-4 w-4 text-red-600 dark:text-red-400" />}
+                    label={i18n._({ id: 'editor.panels.parametricInspector.delete', message: 'Delete' })}
                     onClick={() => handleDelete(false)}
                   />
                   <ActionButton
                     className="w-full flex-none"
-                    icon={<Trash2 className="h-4 w-4 text-red-400" />}
-                    label="Delete with contents"
+                    icon={<Trash2 className="h-4 w-4 text-red-600 dark:text-red-400" />}
+                    label={i18n._({ id: 'editor.panels.parametricInspector.deleteWithContents', message: 'Delete with contents' })}
                     onClick={() => handleDelete(true)}
                   />
                 </>
               ) : (
                 <ActionButton
-                  className="border-red-500/40 text-red-200 hover:bg-red-500/15"
+                  className="border-red-500/40 text-red-700 dark:text-red-200 hover:bg-red-500/15"
                   icon={<Trash2 className="h-4 w-4" />}
-                  label="Delete"
+                  label={i18n._({ id: 'editor.panels.parametricInspector.delete', message: 'Delete' })}
                   onClick={() => handleDelete()}
                 />
               ))}
@@ -219,6 +214,7 @@ export function ParametricInspector({
 // from re-rendering it. The click handler re-reads the live node so the
 // handler always acts on current state.
 function ParamActionButton({ action, nodeId }: { action: ParamAction<AnyNode>; nodeId: AnyNodeId }) {
+  const i18n = usePascalI18n()
   const disabled = useScene((s) => {
     if (!action.enabledIf) return false
     const n = s.nodes[nodeId]
@@ -232,7 +228,7 @@ function ParamActionButton({ action, nodeId }: { action: ParamAction<AnyNode>; n
           <img alt="" className="h-4 w-4 shrink-0 object-contain" src={action.iconSrc} />
         ) : undefined
       }
-      label={action.label}
+      label={i18n._(inspectorActionDescriptor(action.label))}
       onClick={() => {
         const live = useScene.getState().nodes[nodeId]
         if (live) action.onClick(live as AnyNode)
@@ -244,10 +240,9 @@ function ParamActionButton({ action, nodeId }: { action: ParamAction<AnyNode>; n
 function renderIcon(ref: IconRef | undefined): React.ReactNode | undefined {
   if (!ref) return undefined
   if (ref.kind === 'url') {
-    // Plain <img> here so the inspector doesn't pull in next/image's
-    // server-only requirements (the file is `'use client'`). Same
-    // 16x16 box the legacy panels use.
-    return <img alt="" className="h-4 w-4 shrink-0 object-contain" src={ref.src} />
+    // No next/image here: the inspector is `'use client'` and next/image
+    // drags in server-only requirements. Same 16x16 box the legacy panels use.
+    return <IconRefImage className="h-4 w-4 shrink-0" src={ref.src} />
   }
   if (ref.kind === 'iconify') {
     return <Icon height={16} icon={ref.name} width={16} />
@@ -319,10 +314,13 @@ function FieldRenderer({ field, nodeId, onUpdate }: FieldRendererProps) {
   // visibleIf may consult other fields on the node — subscribe to its boolean
   // result so we re-evaluate when relevant.
   const visible = useScene((s) => {
-    const visibleIf = (field as { visibleIf?: (n: AnyNode) => boolean }).visibleIf
-    if (!visibleIf) return true
+    const { visibleIf, appliesTo } = field as {
+      visibleIf?: (n: AnyNode) => boolean
+      appliesTo?: (n: AnyNode) => boolean
+    }
+    if (!(visibleIf || appliesTo)) return true
     const n = s.nodes[nodeId]
-    return n ? visibleIf(n as AnyNode) : false
+    return n ? (visibleIf?.(n as AnyNode) ?? true) && (appliesTo?.(n as AnyNode) ?? true) : false
   })
   if (!visible) return null
 

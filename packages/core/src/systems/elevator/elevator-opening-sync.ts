@@ -1,4 +1,4 @@
-import { resolveLevelId } from '../../hooks/spatial-grid/spatial-grid-sync'
+import { resolveLevelId } from '../../lib/node-ancestry'
 import type {
   AnyNode,
   AnyNodeId,
@@ -103,7 +103,7 @@ function getServedLevelRange(elevator: ElevatorNode, nodes: Record<string, AnyNo
 }
 
 function getLevelNumber(levelId: string | null, nodes: Record<string, AnyNode>) {
-  if (!levelId) return undefined
+  if (!levelId) return
   const node = nodes[levelId as AnyNodeId]
   return node?.type === 'level' ? node.level : undefined
 }
@@ -209,8 +209,7 @@ export function syncAutoElevatorOpenings(nodes: Record<string, AnyNode>) {
     ]
 
     if (
-      !polygonsEqual(existingHoles, nextHoles) ||
-      !metadataEqual(existingMetadata, nextMetadata)
+      !(polygonsEqual(existingHoles, nextHoles) && metadataEqual(existingMetadata, nextMetadata))
     ) {
       updates.push({
         id: slab.id,
@@ -257,8 +256,7 @@ export function syncAutoElevatorOpenings(nodes: Record<string, AnyNode>) {
     ]
 
     if (
-      !polygonsEqual(existingHoles, nextHoles) ||
-      !metadataEqual(existingMetadata, nextMetadata)
+      !(polygonsEqual(existingHoles, nextHoles) && metadataEqual(existingMetadata, nextMetadata))
     ) {
       updates.push({
         id: ceiling.id,

@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import type { WallNode } from '../../schema'
+import { getWallPlanFootprint } from './wall-footprint'
 import { calculateLevelMiters, getWallMiterBoundaryPoints, pointToKey } from './wall-mitering'
 
 function wall(id: string, start: [number, number], end: [number, number]): WallNode {
@@ -127,5 +128,99 @@ describe('junction grid prefilter', () => {
 
     const junction = calculateLevelMiters([long, spur]).junctions.get(pointToKey({ x: 60, y: 0 }))
     expect(junction?.connectedWalls.map((cw) => cw.wall.id)).toEqual(['spur', 'long'])
+  })
+})
+
+describe('outside corner with a partition in line', () => {
+  // Two outside walls 0.18 thick turn a corner at the origin: one runs off to
+  // -x, the other to +z, outdoors between them. A 0.11 partition carries the
+  // first one's line on to +x.
+  const outsideLeft = {
+    ...wall('wall_left', [-3, 0], [0, 0]),
+    thickness: 0.18,
+    frontSide: 'exterior',
+    backSide: 'interior',
+  } as WallNode
+  const outsideDown = {
+    ...wall('wall_down', [0, 0], [0, 3]),
+    thickness: 0.18,
+    frontSide: 'exterior',
+    backSide: 'interior',
+  } as WallNode
+  const partition = {
+    ...wall('wall_part', [0, 0], [3, 0]),
+    thickness: 0.11,
+    frontSide: 'interior',
+    backSide: 'interior',
+  } as WallNode
+  const walls = [outsideLeft, outsideDown, partition]
+  const near = (p: { x: number; y: number } | undefined, x: number, y: number) =>
+    !!p && Math.abs(p.x - x) < 1e-9 && Math.abs(p.y - y) < 1e-9
+  const inside = (polygon: { x: number; y: number }[], x: number, y: number) => {
+    let hit = false
+    for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+      const a = polygon[i]!
+      const b = polygon[j]!
+      if (a.y > y !== b.y > y && x < ((b.x - a.x) * (y - a.y)) / (b.y - a.y) + a.x) hit = !hit
+    }
+    return hit
+  }
+  const corner = () => calculateLevelMiters(walls).junctionData.get(pointToKey({ x: 0, y: 0 }))!
+
+  test('the outside faces miter to the corner', () => {
+    for (const id of ['wall_left', 'wall_down']) {
+      const ends = corner().get(id)!
+      expect(near(ends.left, -0.09, 0.09) || near(ends.right, -0.09, 0.09)).toBe(true)
+    }
+  })
+
+  test('the partition stops square at the inside face of the corner', () => {
+    const miter = calculateLevelMiters(walls)
+    const ends = miter.junctionData.get(pointToKey({ x: 0, y: 0 }))!.get('wall_part')!
+    expect(near(ends.left, 0.09, 0.055)).toBe(true)
+    expect(near(ends.right, 0.09, -0.055)).toBe(true)
+    const footprint = getWallPlanFootprint(partition, miter)
+    expect(Math.min(...footprint.map((p) => p.x))).toBeCloseTo(0.09, 9)
+  })
+
+  test("each room's own walls cover its side of the corner", () => {
+    const miter = calculateLevelMiters(walls)
+    const left = getWallPlanFootprint(outsideLeft, miter)
+    const down = getWallPlanFootprint(outsideDown, miter)
+    // The room beyond the line (z < 0) is walled by the left wall and the
+    // partition: the corner's half on its side is the left wall's.
+    for (const [x, y] of [
+      [0.05, -0.05],
+      [0.08, -0.01],
+      [-0.05, -0.08],
+    ] as const) {
+      expect(inside(left, x, y)).toBe(true)
+      expect(inside(down, x, y)).toBe(false)
+    }
+    // The room between the partition and the down wall (x, z > 0) is theirs.
+    expect(inside(down, 0.05, 0.05)).toBe(true)
+    expect(inside(left, 0.05, 0.05)).toBe(false)
+  })
+
+  test('a corner of walls that are not outside walls keeps the shared miter', () => {
+    const indoors = walls.map(
+      (w) => ({ ...w, frontSide: 'interior', backSide: 'interior' }) as WallNode,
+    )
+    const ends = calculateLevelMiters(indoors)
+      .junctionData.get(pointToKey({ x: 0, y: 0 }))!
+      .get('wall_part')
+    expect(ends?.closing).toBeUndefined()
+  })
+})
+
+describe('a wall T-joined into a wall body', () => {
+  test('ends square on the host face, not in a wedge to its middle', () => {
+    const host = wall('wall_host', [-3, 0], [3, 0])
+    const stem = { ...wall('wall_stem', [0, 0], [0, 2]), thickness: 0.1 } as WallNode
+    const miter = calculateLevelMiters([host, stem])
+    const ends = miter.junctionData.get(pointToKey({ x: 0, y: 0 }))!.get('wall_stem')!
+    expect(ends.closing?.y).toBeCloseTo(0.05, 9)
+    const footprint = getWallPlanFootprint(stem, miter)
+    expect(Math.min(...footprint.map((p) => p.y))).toBeCloseTo(0.05, 9)
   })
 })

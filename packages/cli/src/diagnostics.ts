@@ -1,6 +1,6 @@
 import { constants } from 'node:fs'
 import { access, readdir, stat } from 'node:fs/promises'
-import { ensurePascalDirectories, getEditorStatus } from './editor-process.js'
+import { ensurePascalDirectories, getEditorStatus, pinnedRuntimeVersion } from './editor-process.js'
 import { readJsonFile } from './json-files.js'
 import { getMcpServiceStatus } from './mcp-service.js'
 import type { PascalPaths } from './paths.js'
@@ -11,17 +11,35 @@ export interface DiagnosticCheck {
   message: string
 }
 
-export async function runDoctor(paths: PascalPaths): Promise<DiagnosticCheck[]> {
-  const checks: DiagnosticCheck[] = []
-  const [major = 0, minor = 0] = process.versions.node
+// Mirrors `engines.node` in packages/cli/package.json: ^22.23.4 || ^24.22.1 || >=26.12.1
+export function isSupportedNodeVersion(version: string): boolean {
+  const [major = 0, minor = 0, patch = 0] = version
     .split('.')
-    .slice(0, 2)
-    .map((part) => Number.parseInt(part, 10))
-  const nodeSupported = major > 22 || (major === 22 && minor >= 13)
+    .slice(0, 3)
+    .map((part) => Number.parseInt(part, 10) || 0)
+  const atLeast = (m: number, p: number) => minor > m || (minor === m && patch >= p)
+  if (major === 22) return atLeast(23, 4)
+  if (major === 24) return atLeast(22, 1)
+  if (major === 26) return atLeast(12, 1)
+  return major > 26
+}
+
+export async function runDoctor(
+  paths: PascalPaths,
+  options: { runtimeSourceFile?: string } = {},
+): Promise<DiagnosticCheck[]> {
+  const checks: DiagnosticCheck[] = []
+  // Bun reports a Node compatibility version that does not track Node security releases.
+  const bun = process.versions.bun
+  const nodeSupported = bun !== undefined || isSupportedNodeVersion(process.versions.node)
   checks.push({
     id: 'node',
     status: nodeSupported ? 'pass' : 'fail',
-    message: nodeSupported ? `Node ${process.versions.node}` : 'Node 22.13 or newer is required.',
+    message: nodeSupported
+      ? bun
+        ? `Bun ${bun}`
+        : `Node ${process.versions.node}`
+      : 'Node 22.23.4+ on 22.x, 24.22.1+ on 24.x, or 26.12.1+ is required.',
   })
   try {
     await ensurePascalDirectories(paths)
@@ -47,12 +65,19 @@ export async function runDoctor(paths: PascalPaths): Promise<DiagnosticCheck[]> 
     })
   }
   try {
-    const [status, mcp] = await Promise.all([getEditorStatus(paths), getMcpServiceStatus(paths)])
+    const [status, mcp, pinned] = await Promise.all([
+      getEditorStatus(paths),
+      getMcpServiceStatus(paths),
+      pinnedRuntimeVersion(options),
+    ])
+    const outdated = Boolean(status.runtime && pinned && status.runtime.version !== pinned)
     checks.push({
       id: 'runtime',
-      status: status.installed ? 'pass' : 'warn',
+      status: status.installed && !outdated ? 'pass' : 'warn',
       message: status.runtime
-        ? `Installed web runtime ${status.runtime.version}`
+        ? outdated
+          ? `Installed web runtime ${status.runtime.version}; this CLI ships ${pinned}. It switches the next time the editor starts ("pascal restart" if it is running, or "pascal update").`
+          : `Installed web runtime ${status.runtime.version}`
         : 'No web runtime installed yet. It downloads when the editor first starts.',
     })
     checks.push({

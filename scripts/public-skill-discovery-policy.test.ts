@@ -25,11 +25,15 @@ describe('public skill discovery policy', () => {
     expect(publicSkillNames(canonicalEntries)).toEqual(intendedPublicSkillNames)
   })
 
-  test.each([
-    '.agents/skills/open-pr/SKILL.md',
-    '.agents/skills/open-pr2/SKILL.md',
-    '.agents/skills/review-architecture/SKILL.md',
-  ])('requires %s to remain internal', (path) => {
+  const maintainerSkillPaths = canonicalEntries
+    .map((entry) => entry.path)
+    .filter((path) => path.startsWith('.agents/skills/'))
+
+  test('every maintainer skill is covered by the internal rule', () => {
+    expect(maintainerSkillPaths.length).toBeGreaterThan(0)
+  })
+
+  test.each(maintainerSkillPaths)('requires %s to remain internal', (path) => {
     const entries = replaceEntry(path, (content) => content.replace('  internal: true\n', ''))
     expect(validatePublicSkillDiscoverySurface(entries)).toContain(
       `${path} must declare metadata.internal: true`,

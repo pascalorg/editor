@@ -1,0 +1,701 @@
+import { getDoorOpeningSize } from '../lib/door-opening'
+/**
+ * Door access keep-outs for MCP layout tools.
+ *
+ * Furniture that overlaps a door clear zone is reported as blocking the door.
+ * Used by furnish_room (skip placements) and verify_scene (layout issues).
+ *
+ * See docs/layout-clearance-error-log.md for pitfalls (levels, gap sign, scale).
+ */
+
+import { isVehicleDoorType } from '../lib/door-operation'
+import { area, intersection } from '../lib/polygon-boolean'
+import type { Vec3 } from '../procedural-items/recipe'
+import { boxCorners, rotateVector } from '../procedural-items/spatial'
+import { type AnyNode, getScaledDimensions } from '../schema'
+import { DEFAULT_WALL_THICKNESS } from '../systems/wall/wall-footprint'
+import { isFloorUnderlay, isVehicle } from './furniture-kind'
+import type { ItemSolid } from './item-solids'
+import { itemLevelHeightRange, itemPlanAabbInLevel } from './item-space'
+import {
+  axisOverlap,
+  type ClearMove,
+  clearingMoves,
+  describeMoves,
+  metres,
+  roundBox,
+  roundMm,
+} from './plan-clearance'
+import { type Vec2, wallLength } from './plan-geometry'
+
+export type PlanAabb = {
+  minX: number
+  maxX: number
+  minZ: number
+  maxZ: number
+}
+
+export type ItemFootprintFailureReason =
+  | 'missing_dimensions'
+  | 'non_finite_position'
+  | 'non_finite_rotation'
+  | 'non_finite_dimensions'
+  | 'non_positive_plan_dimensions'
+  | 'non_finite_scale'
+  | 'zero_plan_scale'
+  | 'non_planar_rotation'
+  | 'unsupported_attachment'
+
+export type ItemFootprintInspection =
+  | {
+      ok: true
+      aabb: PlanAabb
+      sourceDimensions: [number, number, number]
+      effectiveDimensions: [number, number, number]
+      rotationY: number
+    }
+  | { ok: false; reason: ItemFootprintFailureReason }
+
+export type DoorKeepout = {
+  doorId: string
+  wallId: string
+  levelId: string | null
+  /** World-space AABB: the full clear depth on the swing side, a walkway on the other. */
+  aabb: PlanAabb
+  width: number
+  localX: number
+  /** The door's height: an item whose bottom is above it does not block the door. */
+  height: number
+  doorType?: string
+  /** Where the door stands on its wall's centre line, and the wall's normal there: 'inward' is the +normal side. */
+  centre: Vec2
+  normal: Vec2
+  /** The zone along the wall: the door's width and a pad either side. */
+  alongM: number
+  /** The zone's depth from the wall's centre line, on each side. */
+  depthM: { inward: number; outward: number }
+  /**
+   * A vehicle door only: the opening itself, the thickness of its wall. A garage door rolls up and
+   * leaves no leaf on the floor, and a car parked inside is meant to drive out through it, so a car
+   * blocks it only by standing in the opening.
+   */
+  vehicleAperture?: DoorKeepout
+}
+
+/**
+ * Wall shape these helpers accept. Deliberately structural rather than
+ * `Pick<WallNode, …>`: `keepoutForPolygonEdge` feeds in synthetic `edge-N`
+ * segments for room edges that do not have a wall node yet, so the id cannot
+ * be the branded `wall_${string}`.
+ */
+export type WallSegmentLike = { id: string; start: Vec2; end: Vec2; thickness?: number }
+
+/**
+ * Door shape these helpers accept — a real `DoorNode` or a planned opening.
+ * `Pick<AnyNode, 'position' | 'width'>` does not work: those keys exist on
+ * only some members of the `AnyNode` union, so `Pick` rejects them.
+ */
+export type DoorOpeningLike = {
+  id: string
+  position?: readonly number[]
+  width?: number
+  height?: number
+  /** Which face the leaf swings towards: 'inward' is the wall's +normal side, as the door plan draws it. */
+  swingDirection?: 'inward' | 'outward'
+  doorType?: string
+  sidelightLeft?: number
+  sidelightRight?: number
+  transomHeight?: number
+  rotation?: readonly number[]
+}
+
+/** Plan depth (m) cleared on each side of the wall face through the opening. */
+export const DEFAULT_DOOR_CLEAR_DEPTH = 0.65
+/** Extra half-width (m) beyond the door leaf along the wall. */
+export const DEFAULT_DOOR_SIDE_PAD = 0.05
+/** Plan depth (m) kept free on the side a door does not swing to: room to walk through. */
+export const DOOR_WALKWAY_DEPTH = 0.35
+const DEFAULT_DOOR_HEIGHT = 2.1
+
+/**
+ * True when A and B come closer than `gap` meters (including penetration).
+ * `gap` is the **minimum free space required** between boxes:
+ * expand each box by gap/2, then test intersection.
+ */
+export function aabbsOverlap(a: PlanAabb, b: PlanAabb, gap = 0): boolean {
+  const g = gap
+  return a.maxX + g > b.minX && a.minX - g < b.maxX && a.maxZ + g > b.minZ && a.minZ - g < b.maxZ
+}
+
+/**
+ * Walk parentId chain to the enclosing level id (pure; no bridge required).
+ */
+export function resolveNodeLevelId(nodeId: string, byId: Map<string, AnyNode>): string | null {
+  let current: AnyNode | undefined = byId.get(nodeId)
+  const seen = new Set<string>()
+  while (current) {
+    if (seen.has(current.id)) return null
+    seen.add(current.id)
+    if (current.type === 'level') return current.id
+    const parentId = current.parentId
+    if (parentId && byId.has(parentId)) {
+      current = byId.get(parentId)
+      continue
+    }
+    current = findParentByChildren(current.id, byId)
+  }
+  return null
+}
+
+function findParentByChildren(nodeId: string, byId: Map<string, AnyNode>): AnyNode | undefined {
+  for (const candidate of byId.values()) {
+    if (!('children' in candidate) || !Array.isArray(candidate.children)) continue
+    const containsNode = (candidate.children as unknown[]).some((child) => {
+      if (typeof child === 'string') return child === nodeId
+      return (
+        child !== null &&
+        typeof child === 'object' &&
+        'id' in child &&
+        (child as { id?: unknown }).id === nodeId
+      )
+    })
+    if (containsNode) return candidate
+  }
+  return undefined
+}
+
+/**
+ * Axis-aligned item footprint in plan (x/z), rotation-aware.
+ * Prefer scaled dimensions when the node is available.
+ */
+export function itemPlanAabb(
+  position: [number, number, number] | number[],
+  dimensions: [number, number, number] | number[] | undefined,
+  rotationYRad = 0,
+): PlanAabb {
+  const x = position[0] ?? 0
+  const z = position[2] ?? 0
+  const [w = 1, , d = 1] = dimensions ?? [1, 1, 1]
+  const cos = Math.abs(Math.cos(rotationYRad))
+  const sin = Math.abs(Math.sin(rotationYRad))
+  const halfW = (w * cos + d * sin) / 2
+  const halfD = (w * sin + d * cos) / 2
+  return {
+    minX: x - halfW,
+    maxX: x + halfW,
+    minZ: z - halfD,
+    maxZ: z + halfD,
+  }
+}
+
+/** Scaled plan footprint used by legacy placement and door-clearance callers. */
+export function itemNodePlanAabb(node: AnyNode): PlanAabb | null {
+  if (node.type !== 'item') return null
+  if (!Array.isArray(node.asset.dimensions)) return null
+  const [width, height, depth] = getScaledDimensions(node)
+  const rotationY = Array.isArray(node.rotation) ? (node.rotation[1] ?? 0) : 0
+  if (
+    ![node.position[0], node.position[2], width, height, depth, rotationY].every(Number.isFinite)
+  ) {
+    return null
+  }
+  const corners = itemNodePlanCorners(node)
+  if (!corners.every((corner) => corner.every(Number.isFinite))) return null
+  return {
+    minX: Math.min(...corners.map(([x]) => x)),
+    maxX: Math.max(...corners.map(([x]) => x)),
+    minZ: Math.min(...corners.map(([, z]) => z)),
+    maxZ: Math.max(...corners.map(([, z]) => z)),
+  }
+}
+
+/**
+ * Script bounds need not be centred on the item origin, and the asset's own corrective scale,
+ * rotation and offset sit inside the node's scale, as `scriptItemBoundsInLevel` measures them;
+ * catalog bounds are normalized.
+ */
+export function itemNodePlanCorners(node: Extract<AnyNode, { type: 'item' }>): Vec2[] {
+  const yaw = node.rotation?.[1] ?? 0
+  const place = (lx: number, lz: number): Vec2 => [
+    node.position[0] + lx * Math.cos(yaw) + lz * Math.sin(yaw),
+    node.position[2] - lx * Math.sin(yaw) + lz * Math.cos(yaw),
+  ]
+  const bounds = node.source?.manifest.bounds
+  if (!bounds) {
+    const [width, , depth] = node.asset.dimensions
+    return [-width / 2, width / 2].flatMap((x) =>
+      [-depth / 2, depth / 2].map((z) => place(x * node.scale[0], z * node.scale[2])),
+    )
+  }
+  const assetScale = node.asset.scale ?? [1, 1, 1]
+  return boxCorners(bounds.min, bounds.max).map((point) => {
+    const [x, , z] = rotateVector(
+      point.map((value, axis) => value * assetScale[axis]!) as Vec3,
+      node.asset.rotation,
+    )
+    return place(
+      (x + node.asset.offset[0]) * node.scale[0],
+      (z + node.asset.offset[2]) * node.scale[2],
+    )
+  })
+}
+
+export function inspectItemPlanFootprint(
+  node: Extract<AnyNode, { type: 'item' }>,
+  options?: { floorOnly?: boolean },
+): ItemFootprintInspection {
+  if (
+    options?.floorOnly &&
+    (node.asset.attachTo === 'wall' ||
+      node.asset.attachTo === 'wall-side' ||
+      node.asset.attachTo === 'ceiling')
+  ) {
+    return { ok: false, reason: 'unsupported_attachment' }
+  }
+
+  const position = node.position
+  if (!Array.isArray(position)) {
+    return { ok: false, reason: 'non_finite_position' }
+  }
+  const x = position[0]
+  const y = position[1]
+  const z = position[2]
+  if (!(Number.isFinite(x) && Number.isFinite(y) && Number.isFinite(z))) {
+    return { ok: false, reason: 'non_finite_position' }
+  }
+
+  const rotation = Array.isArray(node.rotation) ? node.rotation : [0, 0, 0]
+  const rotationX = rotation[0] ?? Number.NaN
+  const rotationY = rotation[1] ?? Number.NaN
+  const rotationZ = rotation[2] ?? Number.NaN
+  if (!(Number.isFinite(rotationX) && Number.isFinite(rotationY) && Number.isFinite(rotationZ))) {
+    return { ok: false, reason: 'non_finite_rotation' }
+  }
+  if (Math.abs(rotationX) > 1e-6 || Math.abs(rotationZ) > 1e-6) {
+    return { ok: false, reason: 'non_planar_rotation' }
+  }
+
+  const dimensions = node.asset.dimensions
+  if (!Array.isArray(dimensions) || dimensions.length !== 3) {
+    return { ok: false, reason: 'missing_dimensions' }
+  }
+  const width = dimensions[0] ?? Number.NaN
+  const height = dimensions[1] ?? Number.NaN
+  const depth = dimensions[2] ?? Number.NaN
+  if (!(Number.isFinite(width) && Number.isFinite(height) && Number.isFinite(depth))) {
+    return { ok: false, reason: 'non_finite_dimensions' }
+  }
+  if (width <= 0 || depth <= 0) {
+    return { ok: false, reason: 'non_positive_plan_dimensions' }
+  }
+
+  const scale = Array.isArray(node.scale) ? node.scale : [1, 1, 1]
+  const scaleX = scale[0] ?? Number.NaN
+  const scaleY = scale[1] ?? Number.NaN
+  const scaleZ = scale[2] ?? Number.NaN
+  if (!(Number.isFinite(scaleX) && Number.isFinite(scaleY) && Number.isFinite(scaleZ))) {
+    return { ok: false, reason: 'non_finite_scale' }
+  }
+  if (scaleX === 0 || scaleZ === 0) {
+    return { ok: false, reason: 'zero_plan_scale' }
+  }
+
+  const [scaledWidth, scaledHeight, scaledDepth] = getScaledDimensions(node)
+  const effectiveDimensions: [number, number, number] = [
+    Math.abs(scaledWidth),
+    Math.abs(scaledHeight),
+    Math.abs(scaledDepth),
+  ]
+  if (!effectiveDimensions.every(Number.isFinite)) {
+    return { ok: false, reason: 'non_finite_dimensions' }
+  }
+  if (effectiveDimensions[0] <= 0 || effectiveDimensions[2] <= 0) {
+    return { ok: false, reason: 'non_positive_plan_dimensions' }
+  }
+
+  const aabb = itemNodePlanAabb(node)
+  if (!aabb) return { ok: false, reason: 'non_finite_dimensions' }
+  return {
+    ok: true,
+    aabb,
+    sourceDimensions: [width, height, depth],
+    effectiveDimensions,
+    rotationY,
+  }
+}
+
+/**
+ * Build a rectangular keep-out around a wall door, extruded perpendicular to the wall
+ * on both faces so either swing side is protected.
+ */
+export function doorKeepoutFromWall(
+  wall: WallSegmentLike,
+  door: DoorOpeningLike,
+  options?: { clearDepth?: number; sidePad?: number; levelId?: string | null },
+): DoorKeepout | null {
+  const clearDepth = options?.clearDepth ?? DEFAULT_DOOR_CLEAR_DEPTH
+  const sidePad = options?.sidePad ?? DEFAULT_DOOR_SIDE_PAD
+  const length = wallLength(wall)
+  if (length <= 1e-6) return null
+
+  const size = getDoorOpeningSize({
+    ...door,
+    width: typeof door.width === 'number' && door.width > 0 ? door.width : 0.9,
+    height: typeof door.height === 'number' && door.height > 0 ? door.height : DEFAULT_DOOR_HEIGHT,
+  })
+  const width = size.width
+  const localX =
+    (Array.isArray(door.position) ? (door.position[0] ?? length / 2) : length / 2) -
+    size.leafOffsetX * (Math.cos(door.rotation?.[1] ?? 0) >= 0 ? 1 : -1)
+
+  const [sx, sz] = wall.start
+  const [ex, ez] = wall.end
+  const dx = (ex - sx) / length
+  const dz = (ez - sz) / length
+  const nx = -dz
+  const nz = dx
+
+  const half = width / 2 + sidePad
+  // The leaf needs the full depth where it swings; the other side only needs a walkway. Without a
+  // known swing, both sides get the full depth.
+  const walkway = Math.min(clearDepth, DOOR_WALKWAY_DEPTH)
+  const [back, front] =
+    door.swingDirection === 'inward'
+      ? [-walkway, clearDepth]
+      : door.swingDirection === 'outward'
+        ? [-clearDepth, walkway]
+        : [-clearDepth, clearDepth]
+  const corners: Vec2[] = []
+  for (const along of [localX - half, localX + half]) {
+    const cx = sx + dx * along
+    const cz = sz + dz * along
+    for (const side of [back, front]) {
+      corners.push([cx + nx * side, cz + nz * side])
+    }
+  }
+
+  const xs = corners.map((c) => c[0])
+  const zs = corners.map((c) => c[1])
+  const vehicleAperture = isVehicleDoorType(door.doorType)
+    ? doorKeepoutFromWall(
+        wall,
+        { ...door, doorType: undefined },
+        {
+          clearDepth: (wall.thickness ?? DEFAULT_WALL_THICKNESS) / 2,
+          sidePad,
+          levelId: options?.levelId,
+        },
+      )
+    : null
+  return {
+    ...(vehicleAperture
+      ? { vehicleAperture: { ...vehicleAperture, doorType: door.doorType } }
+      : {}),
+    doorId: door.id,
+    wallId: wall.id,
+    levelId: options?.levelId ?? null,
+    width,
+    localX,
+    doorType: door.doorType,
+    centre: [sx + dx * localX, sz + dz * localX],
+    normal: [nx, nz],
+    alongM: 2 * half,
+    depthM: { inward: front, outward: -back },
+    height: size.height,
+    aabb: {
+      minX: Math.min(...xs),
+      maxX: Math.max(...xs),
+      minZ: Math.min(...zs),
+      maxZ: Math.max(...zs),
+    },
+  }
+}
+
+export function collectDoorKeepouts(
+  nodes: Iterable<AnyNode>,
+  options?: { clearDepth?: number; sidePad?: number; levelId?: string },
+): DoorKeepout[] {
+  const byId = new Map<string, AnyNode>()
+  for (const node of nodes) byId.set(node.id, node)
+
+  const keepouts: DoorKeepout[] = []
+  for (const node of byId.values()) {
+    if (node.type !== 'door') continue
+    const wallId = node.wallId ?? node.parentId
+    if (!wallId) continue
+    const wall = byId.get(wallId)
+    if (wall?.type !== 'wall') continue
+    const levelId = resolveNodeLevelId(wall.id, byId) ?? resolveNodeLevelId(node.id, byId)
+    if (options?.levelId && levelId !== options.levelId) continue
+    const keepout = doorKeepoutFromWall(wall, node, {
+      clearDepth: options?.clearDepth,
+      sidePad: options?.sidePad,
+      levelId,
+    })
+    if (keepout) keepouts.push(keepout)
+  }
+  return keepouts
+}
+
+/** How near a door's keep-out an item may stand before it is read as in it (m): a leaf's play, not a measure of the house. */
+export const DOOR_KEEPOUT_MARGIN = 0.02
+
+export function itemBlocksDoorKeepout(itemAabb: PlanAabb, keepout: DoorKeepout): boolean {
+  return aabbsOverlap(itemAabb, keepout.aabb, DOOR_KEEPOUT_MARGIN)
+}
+
+/** The side of its wall an item stands on: 'inward' is the wall's +normal side, as the door plan draws it. */
+export type DoorSide = 'inward' | 'outward'
+
+export type DoorClearZone = {
+  /** The box the check reads: the zone's bounding box in plan. */
+  box: PlanAabb
+  alongWallM: number
+  /** Depth from the wall's centre line, on each side. */
+  depthM: { inward: number; outward: number }
+}
+
+/** How far an item stands in a door's zone: a box by its depth and the ways out of it, a real shape by its area. */
+export type DoorBlockReading =
+  | {
+      /** Along the shallower axis; 0 where the box is only within the margin of the zone. */
+      overlapM: number
+      /** The moves of the item that leave it clear of the zone, nearest first. */
+      clearBy: ClearMove[]
+    }
+  | { overlapAreaM2: number }
+
+export type BlockedDoorIssue = {
+  doorId: string
+  wallId: string
+  itemId: string
+  levelId?: string | null
+  itemName?: string
+  message: string
+  footprint: PlanAabb
+  side: DoorSide
+  clearZone: DoorClearZone
+  reading: DoorBlockReading
+}
+
+/** How much of a keep-out an item's real shape must stand in to block it (m²): a touching edge is not. */
+export const DOOR_KEEPOUT_MIN_AREA = 1e-4
+
+/**
+ * The area (m²) of an item's solids that reach below the door's head and stand in the keep-out,
+ * grown by the same margin the box is read with; 0 when none does.
+ */
+function solidsKeepoutArea(solids: readonly ItemSolid[], keepout: DoorKeepout): number {
+  const { minX, maxX, minZ, maxZ } = keepout.aabb
+  const m = DOOR_KEEPOUT_MARGIN
+  const zone: [number, number][] = [
+    [minX - m, minZ - m],
+    [maxX + m, minZ - m],
+    [maxX + m, maxZ + m],
+    [minX - m, maxZ + m],
+  ]
+  return solids.reduce((total, solid) => {
+    // A pendant over the doorway is above the leaf.
+    if (solid.y0 >= keepout.height - 0.05) return total
+    const shared = area(intersection(solid.polygons, zone))
+    return shared >= DOOR_KEEPOUT_MIN_AREA ? total + shared : total
+  }, 0)
+}
+
+function clearZoneOf(keepout: DoorKeepout): DoorClearZone {
+  return {
+    box: roundBox(keepout.aabb),
+    alongWallM: roundMm(keepout.alongM),
+    depthM: { inward: roundMm(keepout.depthM.inward), outward: roundMm(keepout.depthM.outward) },
+  }
+}
+
+function sideOfWall(keepout: DoorKeepout, footprint: PlanAabb): DoorSide {
+  const across =
+    ((footprint.minX + footprint.maxX) / 2 - keepout.centre[0]) * keepout.normal[0] +
+    ((footprint.minZ + footprint.maxZ) / 2 - keepout.centre[1]) * keepout.normal[1]
+  return across >= 0 ? 'inward' : 'outward'
+}
+
+function blockedDoorMessage(
+  keepout: DoorKeepout,
+  item: { name: string; id: string },
+  facts: Pick<BlockedDoorIssue, 'side' | 'clearZone' | 'reading'>,
+): string {
+  const { side, clearZone, reading } = facts
+  const standing =
+    'overlapAreaM2' in reading
+      ? `its shape covers ${metres(reading.overlapAreaM2)} m² of the door's clear zone`
+      : reading.overlapM > 0
+        ? `its footprint stands ${metres(reading.overlapM)} m into the door's clear zone`
+        : `its footprint stands within the ${DOOR_KEEPOUT_MARGIN.toFixed(2)} m the check keeps clear of the door's clear zone`
+  const { box, alongWallM, depthM } = clearZone
+  const zone = `Clear zone: x ${metres(box.minX)}…${metres(box.maxX)}, z ${metres(box.minZ)}…${metres(box.maxZ)} (${alongWallM.toFixed(2)} m along the wall, ${depthM.inward.toFixed(2)} m deep inward and ${depthM.outward.toFixed(2)} m outward of the wall's centre line).`
+  const clear = 'clearBy' in reading ? ` Clear of it: ${describeMoves(reading.clearBy)}.` : ''
+  const kind = keepout.doorType ? `${keepout.doorType}, ` : ''
+  return `Door ${keepout.doorId} (${kind}${keepout.width.toFixed(2)} m wide) on wall ${keepout.wallId} is blocked by item ${item.name} (${item.id}): ${standing}, on the ${side} side of the wall. ${zone}${clear}`
+}
+
+function doorBlockReading(
+  keepout: DoorKeepout,
+  footprint: PlanAabb,
+  solidsAreaM2?: number,
+): DoorBlockReading {
+  if (solidsAreaM2 !== undefined) return { overlapAreaM2: roundMm(solidsAreaM2) }
+  const shared = axisOverlap(footprint, keepout.aabb)
+  return {
+    overlapM: Math.max(0, roundMm(Math.min(shared.x, shared.z))),
+    clearBy: clearingMoves(footprint, keepout.aabb, DOOR_KEEPOUT_MARGIN),
+  }
+}
+
+/** A blocked door as the agent reads it: the item, how far it stands in the zone, the ways out, the zone. */
+function blockedDoorIssue(
+  keepout: DoorKeepout,
+  node: Extract<AnyNode, { type: 'item' }>,
+  footprint: PlanAabb,
+  levelId: string | null,
+  solidsAreaM2?: number,
+): BlockedDoorIssue {
+  const name = node.name ?? node.asset?.name ?? node.id
+  const item = { name: typeof name === 'string' ? name : node.id, id: node.id }
+  const facts = {
+    side: sideOfWall(keepout, footprint),
+    clearZone: clearZoneOf(keepout),
+    reading: doorBlockReading(keepout, footprint, solidsAreaM2),
+  }
+  return {
+    doorId: keepout.doorId,
+    wallId: keepout.wallId,
+    itemId: node.id,
+    levelId,
+    itemName: item.name,
+    footprint: roundBox(footprint),
+    message: blockedDoorMessage(keepout, item, facts),
+    ...facts,
+  }
+}
+
+export function findBlockedDoors(args: {
+  nodes: Iterable<AnyNode>
+  clearDepth?: number
+  sidePad?: number
+  /** When set, only doors and items on this level are considered. */
+  levelId?: string
+  /**
+   * An item's real shape, where the host chooses to read it (wall panelling): an item that has one
+   * blocks a door by what it is made of, not by the box round it. Items without it are read by their box.
+   */
+  solidsOf?: (node: Extract<AnyNode, { type: 'item' }>) => readonly ItemSolid[] | null
+  /** An item's bottom and top in its level, where the host can read them better than the pose alone does. */
+  heightsOf?: (node: Extract<AnyNode, { type: 'item' }>) => { min: number; max: number } | null
+}): BlockedDoorIssue[] {
+  const nodes = [...args.nodes]
+  const byId = new Map(nodes.map((n) => [n.id, n] as const))
+  const keepouts = collectDoorKeepouts(nodes, {
+    clearDepth: args.clearDepth,
+    sidePad: args.sidePad,
+    levelId: args.levelId,
+  })
+  if (keepouts.length === 0) return []
+
+  const issues: BlockedDoorIssue[] = []
+  for (const node of nodes) {
+    if (node.type !== 'item') continue
+    const itemLevel = resolveNodeLevelId(node.id, byId)
+    if (args.levelId && itemLevel !== args.levelId) continue
+    // A rug is walked over; a thing on a wall is read by the wall observations.
+    if (isFloorUnderlay(node)) continue
+    if (node.parentId && byId.get(node.parentId as never)?.type === 'wall') continue
+
+    const aabb = itemPlanAabbInLevel(node, byId)
+    if (!aabb) continue
+    const heights = args.heightsOf?.(node) ?? itemLevelHeightRange(node, byId)
+    const solids = args.solidsOf?.(node) ?? null
+
+    const vehicle = isVehicle(node)
+    for (const full of keepouts) {
+      // Same-level only (multi-story safety).
+      if (full.levelId && itemLevel && full.levelId !== itemLevel) continue
+      if (args.levelId && full.levelId && full.levelId !== args.levelId) continue
+      const keepout = (vehicle && full.vehicleAperture) || full
+      if (!itemBlocksDoorKeepout(aabb, keepout)) continue
+      let solidsAreaM2: number | undefined
+      if (solids) {
+        solidsAreaM2 = solidsKeepoutArea(solids, keepout)
+        if (solidsAreaM2 === 0) continue
+      } else if (heights && heights.min >= keepout.height - 0.05) {
+        // A pendant over the doorway is above the leaf.
+        continue
+      }
+      issues.push(blockedDoorIssue(keepout, node, aabb, itemLevel, solidsAreaM2))
+    }
+  }
+  return issues
+}
+
+/**
+ * Synthetic keep-outs for a room polygon edge that will host a door (before doors exist).
+ * Used by furnish_room when doorWallIndex is known.
+ */
+export function keepoutForPolygonEdge(
+  polygon: Vec2[],
+  edgeIndex: number,
+  options?: { t?: number; width?: number; clearDepth?: number; sidePad?: number },
+): PlanAabb | null {
+  if (polygon.length < 3) return null
+  const i = ((edgeIndex % polygon.length) + polygon.length) % polygon.length
+  const start = polygon[i]!
+  const end = polygon[(i + 1) % polygon.length]!
+  const wall = {
+    id: `edge-${i}`,
+    start,
+    end,
+  }
+  const length = wallLength(wall)
+  if (length <= 1e-6) return null
+  const width = options?.width ?? 0.9
+  const t = options?.t ?? 0.5
+  const localX = Math.min(Math.max(t * length, width / 2), length - width / 2)
+  const keepout = doorKeepoutFromWall(
+    wall,
+    {
+      id: `planned-door-${i}`,
+      position: [localX, 1.05, 0],
+      width,
+    },
+    { clearDepth: options?.clearDepth, sidePad: options?.sidePad },
+  )
+  return keepout?.aabb ?? null
+}
+
+/**
+ * Whether an existing keep-out already covers this room-edge planned zone
+ * (so we do not double-count a real door on that edge).
+ *
+ * Requires the planned keep-out **center** to lie inside the existing keep-out,
+ * and the existing box to cover a large fraction of the planned area.
+ * Plain AABB overlap is not enough (nearby hallway doors must not suppress
+ * this room's entrance keep-out).
+ */
+export function keepoutCoversPlanned(existing: PlanAabb, planned: PlanAabb): boolean {
+  const cx = (planned.minX + planned.maxX) / 2
+  const cz = (planned.minZ + planned.maxZ) / 2
+  const centerInside =
+    cx >= existing.minX && cx <= existing.maxX && cz >= existing.minZ && cz <= existing.maxZ
+  if (!centerInside) return false
+
+  // Intersection area / planned area must be substantial (same opening, not a glancing touch).
+  const ix0 = Math.max(existing.minX, planned.minX)
+  const ix1 = Math.min(existing.maxX, planned.maxX)
+  const iz0 = Math.max(existing.minZ, planned.minZ)
+  const iz1 = Math.min(existing.maxZ, planned.maxZ)
+  if (ix1 <= ix0 || iz1 <= iz0) return false
+  const inter = (ix1 - ix0) * (iz1 - iz0)
+  const plannedArea = Math.max(1e-9, (planned.maxX - planned.minX) * (planned.maxZ - planned.minZ))
+  return inter / plannedArea >= 0.5
+}
+
+export function aabbFromPlan(a: PlanAabb): PlanAabb {
+  return a
+}

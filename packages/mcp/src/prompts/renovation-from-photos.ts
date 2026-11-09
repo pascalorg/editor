@@ -1,4 +1,4 @@
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import type { McpServer } from '@modelcontextprotocol/server'
 import { z } from 'zod'
 import type { SceneOperations } from '../operations'
 
@@ -13,7 +13,7 @@ const PREAMBLE = [
   'Rules:',
   '  - Do not invent dimensions. Pull them from the analysis tool results.',
   '  - Do not modify nodes that are unrelated to the goals.',
-  '  - Respond ONLY with tool calls. No prose.',
+  "  - When the work is done, report what you checked (`verify_scene` reports the scene's issues) and the project `editorUrl`, which `get_project_status` returns.",
 ].join('\n')
 
 function isDataUrl(s: string): boolean {
@@ -145,13 +145,13 @@ export function registerRenovationFromPhotos(server: McpServer, _bridge: SceneOp
       title: 'Plan a renovation from photos',
       description:
         'Plan a minimal-patch renovation given current-state photos, reference-state photos, and free-form goals.',
-      argsSchema: {
+      argsSchema: z.object({
         // MCP prompt arguments are stringly-typed; accept a JSON array or a
         // comma-separated list of base64 payloads / data URLs / http(s) URLs.
         currentPhotos: z.string(),
         referencePhotos: z.string(),
         goals: z.string(),
-      },
+      }),
     },
     async ({ currentPhotos, referencePhotos, goals }) => ({
       messages: buildRenovationMessages({ currentPhotos, referencePhotos, goals }),

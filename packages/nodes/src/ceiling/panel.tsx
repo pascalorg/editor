@@ -3,20 +3,30 @@
 import {
   type AnyNode,
   type CeilingNode,
-  getCeilingClampBound,
+  formatFixed,
   resolveCeilingHeight,
+  usePascalI18n,
   useScene,
 } from '@pascal-app/core'
 import {
   ActionButton,
   ActionGroup,
+  exitCeilingEditToRoom,
+  formatAreaLabel,
   formatLinearMeasurement,
+  getAreaUnitLabel,
   holeEditScope,
   PanelSection,
   PanelWrapper,
   SegmentedControl,
+  ShapeChoice,
   SliderControl,
+  setCeilingHoles,
+  squareMetersToAreaUnit,
+  startOpeningDraft,
   triggerSFX,
+  useCeilingEditCeilingId,
+  useCeilingEditSession,
   useEditingHole,
   useEditor,
   useInteractionScope,
@@ -24,6 +34,8 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { Edit, Move, Plus, Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useRef } from 'react'
+import { CeilingBuildUpSection } from './build-up-section'
+import { CEILING_PANEL_MIN_HEIGHT, ceilingHeightRange, clampCeilingHeight } from './height-bounds'
 
 /**
  * Phase 5 Stage E — ceiling inspector (kind-owned).
@@ -34,11 +46,18 @@ import { useCallback, useEffect, useRef } from 'react'
  * panel can collapse into auto-derived groups.
  */
 export function CeilingPanel() {
+  const i18n = usePascalI18n()
   const selectedId = useViewer((s) => s.selection.selectedIds[0])
   const unit = useViewer((s) => s.unit)
   const metricNotation = useViewer((s) => s.metricNotation)
   const setSelection = useViewer((s) => s.setSelection)
   const editingHole = useEditingHole()
+  // Holes are edited only inside this ceiling's Edit ceiling session.
+  const canEditHoles = useCeilingEditCeilingId() === selectedId
+  // The room an edited ceiling belongs to; its openings are cut from the room.
+  const roomZoneId = useCeilingEditSession((s) =>
+    s.session && s.session.ceilingId === selectedId ? s.session.zoneId : null,
+  )
   const setMovingNode = useEditor((s) => s.setMovingNode)
 
   const node = useScene((s) =>
@@ -48,15 +67,18 @@ export function CeilingPanel() {
   // Ceilings no longer drive the storey height — the stored level height
   // does — so height writes clamp under min(storey plane, lowest covering
   // slab underside from the level above) − margin instead of poking into
-  // the level above or a deck hanging from it (clamp, never ask).
-  // Selector returns a primitive, so recomputing per store update is
-  // re-render-safe.
-  const maxHeight = useScene((s) => {
-    const parent = node?.parentId ? s.nodes[node.parentId as AnyNode['id']] : undefined
-    return parent?.type === 'level'
-      ? getCeilingClampBound(parent.id, s.nodes, node?.polygon ?? [])
-      : Number.POSITIVE_INFINITY
-  })
+  // the level above or a deck hanging from it (clamp, never ask). On a
+  // level above grade the floor is grade, not the level floor, so roof-level
+  // soffits keep their negative heights. Selectors return primitives, so
+  // recomputing per store update is re-render-safe.
+  const maxHeight = useScene((s) =>
+    node ? ceilingHeightRange(node, s.nodes, CEILING_PANEL_MIN_HEIGHT).max : Infinity,
+  )
+  const minHeight = useScene((s) =>
+    node
+      ? ceilingHeightRange(node, s.nodes, CEILING_PANEL_MIN_HEIGHT).min
+      : CEILING_PANEL_MIN_HEIGHT,
+  )
 
   // Effective height: the stored custom height, or — for follows-mode
   // ceilings (absent `height`) — the live level-top bound. Primitive
@@ -68,13 +90,16 @@ export function CeilingPanel() {
     return ceiling?.type === 'ceiling' ? resolveCeilingHeight(ceiling, s.nodes) : 2.5
   })
 
-  // Panel slider-drag fix recipe (plans/editor-node-registry.md): stable
-  // handler refs so slider drags don't trigger Maximum update depth.
+  // Stable handler refs so slider drags don't trigger Maximum update depth;
+  // see "Custom panels" in wiki/architecture/node-definitions.md.
   const nodeRef = useRef(node)
   nodeRef.current = node
 
   const maxHeightRef = useRef(maxHeight)
   maxHeightRef.current = maxHeight
+
+  const minHeightRef = useRef(minHeight)
+  minHeightRef.current = minHeight
 
   const resolvedHeightRef = useRef(resolvedHeight)
   resolvedHeightRef.current = resolvedHeight
@@ -89,7 +114,12 @@ export function CeilingPanel() {
 
   const handleHeightChange = useCallback(
     (proposed: number) => {
-      handleUpdate({ height: Math.min(proposed, maxHeightRef.current) })
+      handleUpdate({
+        height: clampCeilingHeight(proposed, {
+          min: minHeightRef.current,
+          max: maxHeightRef.current,
+        }),
+      })
     },
     [handleUpdate],
   )
@@ -159,14 +189,15 @@ export function CeilingPanel() {
     const currentMetadata = currentHoles.map(
       (_, index) => node?.holeMetadata?.[index] ?? { source: 'manual' as const },
     )
-    handleUpdate({
+    const added = setCeilingHoles(selectedId, {
       holes: [...currentHoles, newHole],
       holeMetadata: [...currentMetadata, { source: 'manual' }],
     })
+    if (!added) return
     useInteractionScope
       .getState()
       .begin(holeEditScope({ nodeId: selectedId, holeIndex: currentHoles.length }))
-  }, [node, selectedId, handleUpdate])
+  }, [node, selectedId])
 
   const handleEditHole = useCallback(
     (index: number) => {
@@ -186,14 +217,14 @@ export function CeilingPanel() {
         (_, metadataIndex) => node?.holeMetadata?.[metadataIndex] ?? { source: 'manual' as const },
       )
       const newMetadata = currentMetadata.filter((_, i) => i !== index)
-      handleUpdate({ holes: newHoles, holeMetadata: newMetadata })
+      setCeilingHoles(selectedId, { holes: newHoles, holeMetadata: newMetadata })
       if (editingHole?.nodeId === selectedId && editingHole?.holeIndex === index) {
         useInteractionScope
           .getState()
           .endIf((scope) => scope.kind === 'reshaping' && scope.reshape === 'hole')
       }
     },
-    [selectedId, node?.holes, node?.holeMetadata, handleUpdate, editingHole],
+    [selectedId, node?.holes, node?.holeMetadata, editingHole],
   )
 
   const handleMove = useCallback(() => {
@@ -227,41 +258,69 @@ export function CeilingPanel() {
   const heightPresets =
     unit === 'imperial'
       ? [
-          { label: 'Low (8\'0")', height: 2.4384 },
-          { label: 'Standard (8\'6")', height: 2.5908 },
-          { label: 'High (9\'0")', height: 2.7432 },
+          {
+            label: i18n._({ id: 'node.ceiling.panel.low80', message: 'Low (8\'0")' }),
+            height: 2.4384,
+          },
+          {
+            label: i18n._({ id: 'node.ceiling.panel.standard86', message: 'Standard (8\'6")' }),
+            height: 2.5908,
+          },
+          {
+            label: i18n._({ id: 'node.ceiling.panel.high90', message: 'High (9\'0")' }),
+            height: 2.7432,
+          },
         ]
       : [
-          { label: 'Low (2.4m)', height: 2.4 },
-          { label: 'Standard (2.5m)', height: 2.5 },
-          { label: 'High (3.0m)', height: 3.0 },
+          {
+            label: i18n._({ id: 'node.ceiling.panel.low24m', message: 'Low (2.4m)' }),
+            height: 2.4,
+          },
+          {
+            label: i18n._({ id: 'node.ceiling.panel.standard25m', message: 'Standard (2.5m)' }),
+            height: 2.5,
+          },
+          {
+            label: i18n._({ id: 'node.ceiling.panel.high30m', message: 'High (3.0m)' }),
+            height: 3.0,
+          },
         ]
 
   return (
     <PanelWrapper
       icon="/icons/ceiling.webp"
       onClose={handleClose}
-      title={node.name || 'Ceiling'}
+      title={node.name || i18n._({ id: 'node.ceiling.panel.ceiling', message: 'Ceiling' })}
       width={320}
     >
-      <PanelSection title="Height">
+      <PanelSection title={i18n._({ id: 'node.ceiling.panel.height', message: 'Height' })}>
         <SegmentedControl
           onChange={handleTopModeChange}
           options={[
-            { label: 'Follows level', value: 'storey' },
-            { label: 'Custom height', value: 'custom' },
+            {
+              label: i18n._({ id: 'node.ceiling.panel.followsLevel', message: 'Follows level' }),
+              value: 'storey',
+            },
+            {
+              label: i18n._({ id: 'node.ceiling.panel.customHeight', message: 'Custom height' }),
+              value: 'custom',
+            },
           ]}
           value={isFollows ? 'storey' : 'custom'}
         />
         {isFollows ? (
           <div className="px-1 text-[11px] text-muted-foreground">
-            Currently {formatLinearMeasurement(resolvedHeight, unit, metricNotation)}
+            {i18n._({
+              id: 'node.panel.currently',
+              message: 'Currently {value}',
+              values: { value: formatLinearMeasurement(resolvedHeight, unit, metricNotation) },
+            })}
           </div>
         ) : (
           <SliderControl
-            label="Height"
+            label={i18n._({ id: 'node.ceiling.panel.height', message: 'Height' })}
             max={Math.min(1000, maxHeight)}
-            min={0}
+            min={minHeight}
             onChange={handleHeightChange}
             precision={3}
             step={0.01}
@@ -287,7 +346,14 @@ export function CeilingPanel() {
                 title={
                   fits
                     ? undefined
-                    : `Taller than this level (${formatLinearMeasurement(maxHeight, unit, metricNotation)} available). Raise the level height first.`
+                    : i18n._({
+                        id: 'node.ceiling.panel.tallerThanLevel',
+                        message:
+                          'Taller than this level ({available} available). Raise the level height first.',
+                        values: {
+                          available: formatLinearMeasurement(maxHeight, unit, metricNotation),
+                        },
+                      })
                 }
               />
             )
@@ -295,20 +361,28 @@ export function CeilingPanel() {
         </div>
         {Number.isFinite(maxHeight) && (
           <div className="px-1 pb-1 text-[11px] text-muted-foreground">
-            Limited by the level to {formatLinearMeasurement(maxHeight, unit, metricNotation)} —
-            raise the level height for a taller ceiling.
+            {i18n._({
+              id: 'node.ceiling.panel.limitedByLevel',
+              message:
+                'Limited by the level to {height} — raise the level height for a taller ceiling.',
+              values: { height: formatLinearMeasurement(maxHeight, unit, metricNotation) },
+            })}
           </div>
         )}
       </PanelSection>
 
-      <PanelSection title="Info">
+      <CeilingBuildUpSection node={node} onUpdate={handleUpdate} unit={unit} />
+
+      <PanelSection title={i18n._({ id: 'node.ceiling.panel.info', message: 'Info' })}>
         <div className="flex items-center justify-between px-2 py-1 text-muted-foreground text-sm">
-          <span>Area</span>
-          <span className="font-mono text-white">{area.toFixed(2)} m²</span>
+          <span>{i18n._({ id: 'node.ceiling.panel.area', message: 'Area' })}</span>
+          <span className="font-mono text-foreground dark:text-white">
+            {formatAreaLabel(area, unit, 2)}
+          </span>
         </div>
       </PanelSection>
 
-      <PanelSection title="Holes">
+      <PanelSection title={i18n._({ id: 'node.ceiling.panel.holes', message: 'Holes' })}>
         {node.holes && node.holes.length > 0 ? (
           <div className="flex flex-col gap-1 pb-2">
             {node.holes.map((hole, index) => {
@@ -317,7 +391,10 @@ export function CeilingPanel() {
                 editingHole?.nodeId === selectedId && editingHole?.holeIndex === index
               const source = node.holeMetadata?.[index]?.source ?? 'manual'
               const isAutoHole = source !== 'manual'
-              const autoLabel = source === 'elevator' ? 'Auto elevator cutout' : 'Auto stair cutout'
+              const autoLabel =
+                source === 'elevator'
+                  ? i18n._({ id: 'node.cutout.autoElevator', message: 'Auto elevator cutout' })
+                  : i18n._({ id: 'node.cutout.autoStair', message: 'Auto stair cutout' })
               return (
                 <div
                   className={`flex items-center justify-between rounded-lg border p-2 transition-colors ${
@@ -329,72 +406,116 @@ export function CeilingPanel() {
                 >
                   <div className="min-w-0 flex-1">
                     <p
-                      className={`font-medium text-xs ${isEditing ? 'text-primary' : 'text-white'}`}
+                      className={`font-medium text-xs ${isEditing ? 'text-primary' : 'text-foreground dark:text-white'}`}
                     >
-                      Hole {index + 1} {isEditing && '(Editing)'}
+                      {isEditing
+                        ? i18n._({
+                            id: 'node.holeEditing',
+                            message: 'Hole {number} (Editing)',
+                            values: { number: index + 1 },
+                          })
+                        : i18n._({
+                            id: 'node.holeNumber',
+                            message: 'Hole {number}',
+                            values: { number: index + 1 },
+                          })}
                     </p>
                     <p className="text-[10px] text-muted-foreground">
-                      {holeArea.toFixed(2)} m² · {hole.length} pts ·{' '}
-                      {isAutoHole ? autoLabel : 'Manual'}
+                      {i18n._({
+                        id: 'node.holeSummary',
+                        message:
+                          '{area} {unit} · {count, plural, one {{points} pt} other {{points} pts}} · {source}',
+                        values: {
+                          area: formatFixed(
+                            squareMetersToAreaUnit(holeArea, unit),
+                            2,
+                            i18n.getLocale(),
+                          ),
+                          unit: getAreaUnitLabel(unit),
+                          count: hole.length,
+                          points: String(hole.length),
+                          source: isAutoHole
+                            ? autoLabel
+                            : i18n._({ id: 'node.hole.manual', message: 'Manual' }),
+                        },
+                      })}
                     </p>
                   </div>
                   <div className="flex items-center gap-1">
                     {isEditing ? (
                       <ActionButton
                         className="h-7 bg-primary text-primary-foreground hover:bg-primary/90"
-                        label="Done"
-                        onClick={() =>
+                        label={i18n._({ id: 'node.ceiling.panel.done', message: 'Done' })}
+                        onClick={() => {
                           useInteractionScope
                             .getState()
                             .endIf(
                               (scope) => scope.kind === 'reshaping' && scope.reshape === 'hole',
                             )
-                        }
+                          // A finished opening is a completed action: back to the room.
+                          exitCeilingEditToRoom()
+                        }}
                       />
                     ) : isAutoHole ? (
-                      <div className="rounded-md bg-[#2C2C2E] px-2 py-1 text-[10px] text-muted-foreground">
-                        Auto
+                      <div className="rounded-md bg-black/4 dark:bg-[#2C2C2E] px-2 py-1 text-[10px] text-muted-foreground">
+                        {i18n._({ id: 'node.ceiling.panel.auto', message: 'Auto' })}
                       </div>
-                    ) : (
+                    ) : canEditHoles ? (
                       <>
                         <button
-                          className="flex h-7 w-7 items-center justify-center rounded-md bg-[#2C2C2E] text-muted-foreground hover:bg-[#3e3e3e] hover:text-foreground"
+                          className="flex h-7 w-7 items-center justify-center rounded-md bg-black/4 dark:bg-[#2C2C2E] text-muted-foreground hover:bg-black/8 dark:hover:bg-[#3e3e3e] hover:text-foreground"
                           onClick={() => handleEditHole(index)}
                           type="button"
                         >
                           <Edit className="h-3.5 w-3.5" />
                         </button>
                         <button
-                          className="flex h-7 w-7 items-center justify-center rounded-md bg-red-500/10 text-red-400 hover:bg-red-500/20 hover:text-red-300"
+                          className="flex h-7 w-7 items-center justify-center rounded-md bg-red-500/10 text-red-600 dark:text-red-400 hover:bg-red-500/20 hover:text-red-700 dark:hover:text-red-300"
                           onClick={() => handleDeleteHole(index)}
                           type="button"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </button>
                       </>
-                    )}
+                    ) : null}
                   </div>
                 </div>
               )
             })}
           </div>
         ) : (
-          <div className="px-2 py-3 text-center text-muted-foreground text-xs">No holes</div>
+          <div className="px-2 py-3 text-center text-muted-foreground text-xs">
+            {i18n._({ id: 'node.ceiling.panel.noHoles', message: 'No holes' })}
+          </div>
         )}
 
         <div className="px-1 pt-1 pb-1">
-          <ActionButton
-            className="w-full"
-            disabled={editingHole?.nodeId === selectedId}
-            icon={<Plus className="h-3.5 w-3.5" />}
-            label="Add Hole"
-            onClick={handleAddHole}
-          />
+          {roomZoneId ? (
+            // A room's ceiling is cut by an opening (it can also cut the floor above).
+            <ShapeChoice
+              className="px-1 text-muted-foreground text-xs"
+              disabled={!canEditHoles}
+              label={i18n._({ id: 'node.ceiling.panel.cutOpening', message: 'Cut opening' })}
+              onPick={(shape) => startOpeningDraft(roomZoneId, 'ceiling', shape)}
+            />
+          ) : (
+            <ActionButton
+              className="w-full"
+              disabled={!canEditHoles || editingHole?.nodeId === selectedId}
+              icon={<Plus className="h-3.5 w-3.5" />}
+              label={i18n._({ id: 'node.ceiling.panel.addHole', message: 'Add Hole' })}
+              onClick={handleAddHole}
+            />
+          )}
         </div>
       </PanelSection>
 
       <ActionGroup>
-        <ActionButton icon={<Move className="h-3.5 w-3.5" />} label="Move" onClick={handleMove} />
+        <ActionButton
+          icon={<Move className="h-3.5 w-3.5" />}
+          label={i18n._({ id: 'node.ceiling.panel.move', message: 'Move' })}
+          onClick={handleMove}
+        />
       </ActionGroup>
     </PanelWrapper>
   )

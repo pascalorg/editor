@@ -84,7 +84,7 @@ Compare every candidate call against the recorded user constraints before execut
 
 `verify_scene` checks saved or active scene items, not this prospective candidate. Its clean result cannot pass the candidate's default spacing or door access. Mark those candidate rows `not checked` unless a separate check includes the candidate and the required geometry; identify that evidence explicitly. A candidate collision check at the requested gap supports that gap only.
 
-`place_item` uses catalog dimensions and an unknown catalog ID falls back to a 0.5 m placeholder. That fallback cannot verify a real product. If the connected release lacks the read-only candidate input:
+`place_items` uses catalog dimensions and refuses an ID the library lacks (`asset_not_found`), so it cannot place a product of other dimensions. It also refuses a floor item standing in a door's clearance (`blocks_door`, with a spot that clears every door) or one its room cannot hold in any turn (`too_large_for_room`); report such a refusal as the door or room constraint it is, not as a tool failure. If the connected release lacks the read-only candidate input:
 
 - provide a preliminary dimension-and-bounds calculation only when a rectangular measured room and exact intended pose are supplied;
 - label it `preliminary`, not Pascal-verified;
@@ -137,7 +137,7 @@ Read [references/evidence-boundaries.md](references/evidence-boundaries.md) befo
 
 ## Validate, save, and report
 
-For a read-only assessment, do not save or create a checkpoint. For an authorized placement, run `validate_scene`, `verify_scene`, save the intended final state, then call `get_project_status`.
+For a read-only assessment, do not save or create a checkpoint. For an authorized placement, run `verify_scene`, save the intended final state, then call `get_project_status`.
 
 Use the exact report shape in [references/report-template.md](references/report-template.md). Include:
 

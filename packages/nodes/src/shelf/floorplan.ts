@@ -1,4 +1,5 @@
-import type { FloorplanGeometry, GeometryContext } from '@pascal-app/core'
+import type { AnyNodeId, FloorplanGeometry, GeometryContext } from '@pascal-app/core'
+import { restingNodePlanFrame } from '../shared/resting-surface-plan'
 import { sanitizeShelfDimensions } from './dimensions'
 import type { ShelfResizePayload } from './floorplan-affordances'
 import type { ShelfNode } from './schema'
@@ -27,8 +28,15 @@ const ROTATE_ARROW_CORNER_OFFSET = 0.22
  */
 export function buildShelfFloorplan(node: ShelfNode, ctx?: GeometryContext): FloorplanGeometry {
   const shelf = sanitizeShelfDimensions(node)
-  const [px, , pz] = shelf.position
-  const ry = shelf.rotation[1] ?? 0
+  const parent = shelf.parentId ? ctx?.resolve(shelf.parentId as AnyNodeId) : undefined
+  const hostedFrame =
+    ctx && parent?.type === 'procedural-item' && parent.attachments[shelf.id] !== undefined
+      ? restingNodePlanFrame(shelf, ctx.resolve)
+      : null
+  const [px, , pz] = hostedFrame?.position ?? shelf.position
+  const ry = hostedFrame
+    ? Math.atan2(hostedFrame.axes[2][0], hostedFrame.axes[2][2])
+    : (shelf.rotation[1] ?? 0)
   // Floor-plan plots at `-ry` so SVG's CW-with-y-down `rotate` direction
   // ends up visually matching Three.js Y-rotation (CCW from a top-down
   // view) — same `rotation` value rotates the same way in both views.

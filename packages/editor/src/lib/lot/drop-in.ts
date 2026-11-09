@@ -1,0 +1,384 @@
+/**
+ * Lot drop-in — the store-aware half. One call does what "click a button,
+ * the lot drops in" needs:
+ *
+ *   1. `resolve` — address (or a picked suggestion's
+ *      coordinates) → the real parcel ring, APN, county, zoning.
+ *   2. `roads` — the streets around the lot from OpenStreetMap,
+ *      in the lot's own frame (fail-soft: no roads is not an error).
+ *   3. `sitePatchFromParcel` — the site node patch: ring, address,
+ *      provenance, the street-facing front edge, planning-default setbacks
+ *      when the site has none, north up.
+ *   4. `elevation` — USGS ground over the lot into the site's
+ *      heightfield (`site.terrain`, terrain.ts; fail-soft, flat lots write
+ *      nothing), so a foundation can read the hill.
+ *   5. The parcel and terrain are applied to the current site together
+ *      (created at the root when the scene has none). A building outside
+ *      the new ring is re-centred — `building.position` only, never the walls.
+ *
+ * Used by the Lot rail panel, the Generate panel (drop in, then generate)
+ * and the Site inspector's "Find parcel", so every path behaves the same.
+ * Nothing here is invented: a lookup that fails says why and writes nothing.
+ * The calls go to the host's parcel provider (`setParcelProvider`).
+ */
+import {
+  type AnyNode,
+  type AnyNodeId,
+  generateId,
+  placeBuildingPose,
+  SiteNode,
+  siteBrief,
+  useScene,
+} from '@pascal-app/core'
+import {
+  answered,
+  type CodeBasisData,
+  contourLinesFromDossier,
+  type Dossier,
+  describeDossier,
+  type ElevationData,
+  type FloodData,
+  fetchDossier,
+  frontageSegmentsMetres,
+  type ParcelData,
+  parcelRingMetres,
+  setbacksCitation,
+  setbacksFromZoning,
+  siteFactsFromDossier,
+  type ZoningData,
+} from './dossier'
+import {
+  type DropInInput,
+  describeLotSummary,
+  type LotRoad,
+  type LotSummary,
+  type ParcelResolveData,
+  sitePatchFromParcel,
+} from './lot-patch'
+import { getParcelProvider, NO_PARCEL_SERVICE, type ParcelProvider } from './parcel-provider'
+import {
+  describeTerrainSample,
+  sampleLotTerrain,
+  type TerrainSampleResult,
+  type TerrainSampleSummary,
+} from './terrain'
+
+export interface LotDropInResult {
+  ok: boolean
+  error?: string
+  siteId?: string
+  summary?: LotSummary
+  /** True when a building was moved back onto the new lot. */
+  recentred?: boolean
+  /** Why no roads were used, when the road lookup failed ('' when it worked). */
+  roadsFailure?: string
+  /** The USGS terrain read, when it worked (flat lots write no heightfield). */
+  terrain?: TerrainSampleSummary | null
+  /** Why no terrain was read ('' when it worked). */
+  terrainFailure?: string
+  /** The Pascal Map dossier's status line, or why none was read ('' when it worked). */
+  dossierLine?: string
+  dossierFailure?: string
+  /** One status line. */
+  message: string
+}
+
+export interface DropInOptions {
+  /** The site to write; default = the scene's first root site (created when there is none). */
+  siteId?: string
+  /** Skip the road lookup (the front edge stays north-facing). */
+  roads?: boolean
+  roadsRadiusM?: number
+  /** Skip the USGS terrain read (the ground stays flat). */
+  terrain?: boolean
+  terrainDeadlineMs?: number
+  /** Skip the Pascal Map dossier (the parcel / roads / elevation routes alone). */
+  dossier?: boolean
+  /** Default = the provider the host set. */
+  provider?: ParcelProvider
+}
+
+type RoadsResponse = { ok: boolean; reason?: string; roads?: LotRoad[] }
+
+/** The scene's site node — the requested one, else the first root site. */
+export function findSiteNode(siteId?: string): SiteNode | null {
+  const s = useScene.getState()
+  if (siteId) {
+    const n = s.nodes[siteId as AnyNodeId] as AnyNode | undefined
+    if (n?.type === 'site') return n as SiteNode
+  }
+  for (const id of s.rootNodeIds) {
+    const n = s.nodes[id as AnyNodeId] as AnyNode | undefined
+    if (n?.type === 'site') return n as SiteNode
+  }
+  return null
+}
+
+/** Resolve the parcel, map the streets, write the site. */
+export async function dropInLot(
+  input: DropInInput,
+  options: DropInOptions = {},
+): Promise<LotDropInResult> {
+  const provider = options.provider ?? getParcelProvider()
+  if (!provider) return { ok: false, error: 'no parcel service', message: NO_PARCEL_SERVICE }
+  const address = (input.address ?? '').trim()
+  const hasCoords = Number.isFinite(input.latitude) && Number.isFinite(input.longitude)
+  if (!address && !hasCoords)
+    return { ok: false, error: 'address is required', message: 'Type an address first.' }
+
+  // The Pascal Map dossier first — the parcel with its frontage, the
+  // zoning, flood, code basis, utilities, soils, wetlands, structures and
+  // boundaries in one read. Where its parcel plane covers the lot the ring
+  // comes from it; where it does not, the parcel route below stands and
+  // the sections that DID answer (flood, utilities, …) still ride the site.
+  let dossier: Dossier | null = null
+  let dossierFailure = ''
+  if (options.dossier !== false) {
+    const read = await fetchDossier(provider, {
+      address,
+      ...(hasCoords ? { latitude: input.latitude, longitude: input.longitude } : {}),
+    })
+    if (read.ok) dossier = read.dossier
+    else dossierFailure = read.reason
+    // The parcel-wide 3DEP terrain warms up on the first look at a parcel
+    // (~30 s, terrain_status 'computing'): one more ask for the elevation
+    // section alone, after a wait, so the contour lines land on the first
+    // drop-in and not the second.
+    const el = dossier ? answered<ElevationData>(dossier, 'elevation') : null
+    if (dossier && el?.terrain_status === 'computing' && options.terrainDeadlineMs !== 0) {
+      await new Promise((r) => setTimeout(r, Math.min(30_000, options.terrainDeadlineMs ?? 20_000)))
+      const again = await fetchDossier(provider, {
+        address,
+        ...(hasCoords ? { latitude: input.latitude, longitude: input.longitude } : {}),
+        layers: ['elevation'],
+      })
+      if (again.ok && again.dossier.layers?.elevation) {
+        dossier = {
+          ...dossier,
+          layers: { ...dossier.layers, elevation: again.dossier.layers.elevation },
+        }
+      }
+    }
+  } else dossierFailure = 'skipped'
+  const dossierParcel = dossier ? answered<ParcelData>(dossier, 'parcel') : null
+  const dossierOrigin: [number, number] | null =
+    dossier && Number.isFinite(dossier.point?.lng) && Number.isFinite(dossier.point?.lat)
+      ? [dossier.point.lng, dossier.point.lat]
+      : null
+  const dossierRing =
+    dossierParcel && dossierOrigin ? parcelRingMetres(dossierParcel, dossierOrigin) : []
+
+  let data: ParcelResolveData
+  if (dossier && dossierParcel && dossierOrigin && dossierRing.length >= 3) {
+    const boundaries = answered<{
+      state?: string | null
+      zip?: string | null
+      county?: { name?: string | null }
+    }>(dossier, 'boundaries')
+    const zoning = answered<ZoningData>(dossier, 'zoning')
+    const state = boundaries?.state ?? input.state
+    data = {
+      ok: true,
+      apn: dossierParcel.parcel_key,
+      county: dossierParcel.county?.name ?? boundaries?.county?.name ?? undefined,
+      state: state ?? undefined,
+      zip: dossierParcel.situs_address?.zip ?? boundaries?.zip ?? undefined,
+      zoning: zoning?.district,
+      lotAreaSqFt:
+        typeof dossierParcel.area_m2 === 'number' ? dossierParcel.area_m2 * 10.7639 : undefined,
+      originLngLat: dossierOrigin,
+      geocodedBy: 'pascal-map',
+      matchPrecision: dossier.address?.precision,
+      notes: [
+        `Parcel from Pascal Map${dossierParcel.vintage ? ` (${dossierParcel.vintage} roll)` : ''} — the county fabric; DRAFT, not a survey. Confirm corners before staking.`,
+      ],
+      polygonM: dossierRing.map((p) => [p[0], p[1]] as [number, number]),
+      address: {
+        street: dossierParcel.situs_address?.line1 ?? input.street,
+        city: dossierParcel.situs_address?.city ?? input.city,
+        state: state ?? undefined,
+        zip: dossierParcel.situs_address?.zip ?? boundaries?.zip ?? input.zip,
+      },
+    }
+  } else {
+    try {
+      data = (await provider('resolve', {
+        address,
+        ...(hasCoords
+          ? { latitude: input.latitude, longitude: input.longitude, state: input.state }
+          : {}),
+      })) as ParcelResolveData
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Parcel lookup failed.'
+      return { ok: false, error: message, message }
+    }
+    if (!data.ok || !data.polygonM || data.polygonM.length < 3) {
+      const message = data.error ? `No parcel: ${data.error}` : 'No parcel found for that address.'
+      return { ok: false, error: data.error ?? 'no parcel', message }
+    }
+  }
+  // what the dossier adds to the patch: the frontage, the zoning, the facts
+  const extras = dossier
+    ? (() => {
+        const zoning = answered<ZoningData>(dossier, 'zoning')
+        const zoningSection = dossier.layers?.zoning
+        const setbacks = setbacksFromZoning(zoning)
+        return {
+          frontageSegmentsM:
+            dossierParcel && dossierOrigin && data.geocodedBy === 'pascal-map'
+              ? frontageSegmentsMetres(dossierParcel, dossierOrigin)
+              : [],
+          setbacks,
+          setbacksSource:
+            zoning && setbacks ? setbacksCitation(zoning, zoningSection?.source) : undefined,
+          dimensionalNote: zoning?.dimensional_note ?? null,
+          zone: zoning?.district,
+          facts: siteFactsFromDossier(dossier),
+          line: describeDossier(dossier),
+        }
+      })()
+    : null
+
+  // Streets around the lot — fail-soft, but asked twice: the Overpass
+  // mirrors time out now and then, and without the street the front edge
+  // falls back to "most north-facing", which on a lot fronting a street to
+  // the south turns the whole house round between one run and the next.
+  let roads: LotRoad[] | null = null
+  let roadsFailure = ''
+  if (options.roads !== false && data.originLngLat) {
+    for (let attempt = 0; attempt < 2 && !roads; attempt++) {
+      const asked = Date.now()
+      try {
+        const [lng, lat] = data.originLngLat
+        const r = (await provider('roads', {
+          latitude: lat,
+          longitude: lng,
+          originLngLat: data.originLngLat,
+          radiusM: options.roadsRadiusM,
+        })) as RoadsResponse
+        if (r.ok && Array.isArray(r.roads)) {
+          roads = r.roads
+          roadsFailure = ''
+        } else roadsFailure = r.reason ?? 'no roads'
+      } catch (error) {
+        roadsFailure = error instanceof Error ? error.message : 'road lookup failed'
+      }
+      // a quick miss is worth one more ask; a slow one (every mirror timed out) would only be
+      // slow again, and the lot is waiting — the front edge falls back instead
+      if (!roads && Date.now() - asked > 4000) break
+    }
+  } else if (options.roads === false) {
+    roadsFailure = 'skipped'
+  }
+
+  const geometry = sitePatchFromParcel(null, input, data, roads, undefined, extras)
+  if (!geometry)
+    return {
+      ok: false,
+      error: 'parcel geometry was unusable',
+      message: 'The parcel geometry was unusable.',
+    }
+  // The ground over the lot — fail-soft. A sloping lot writes the
+  // heightfield; a flat one (or a failed read) clears any terrain the
+  // previous lot left behind so the site never shows another parcel's hill.
+  let terrain: TerrainSampleSummary | null = null
+  let terrainFailure = ''
+  let terrainRead: TerrainSampleResult | null = null
+  if (options.terrain !== false) {
+    terrainRead = data.originLngLat
+      ? await sampleLotTerrain(geometry.patch.polygon?.points ?? [], data.originLngLat, {
+          provider,
+          ...(options.terrainDeadlineMs ? { deadlineMs: options.terrainDeadlineMs } : {}),
+        })
+      : { ok: false, reason: 'no parcel origin' }
+    if (terrainRead.ok && terrainRead.summary) terrain = terrainRead.summary
+    else terrainFailure = terrainRead.reason ?? 'no terrain'
+  } else {
+    terrainFailure = 'skipped'
+  }
+
+  // Hydration or a person's edit can replace the site while the providers run.
+  // Read it after every await, preserve its current settings, and commit the
+  // parcel with its terrain so a late read cannot leave the starter polygon.
+  const scene = useScene.getState()
+  let site = findSiteNode(options.siteId)
+  const computed = sitePatchFromParcel(site, input, data, roads, undefined, extras)
+  if (!computed)
+    return {
+      ok: false,
+      error: 'parcel geometry was unusable',
+      message: 'The parcel geometry was unusable.',
+    }
+  const contours = dossier && dossierOrigin ? contourLinesFromDossier(dossier, dossierOrigin) : null
+  const patch: Partial<SiteNode> = {
+    ...computed.patch,
+    terrainContours: contours ?? undefined,
+  }
+  if (terrainRead) {
+    const { terrainSample: _previous, ...metadata } = computed.patch.metadata as Record<
+      string,
+      unknown
+    >
+    patch.terrain = terrainRead.ok ? terrainRead.terrain : undefined
+    patch.metadata = terrain ? { ...metadata, terrainSample: terrain } : metadata
+  }
+  if (site) scene.updateNode(site.id as AnyNodeId, patch as Partial<AnyNode>)
+  else {
+    site = SiteNode.parse({ id: generateId('site'), type: 'site', name: 'Site', ...patch })
+    scene.createNodes([{ node: site as AnyNode }])
+  }
+
+  // A house the new lot leaves past its lines stands centred on the buildable area again, facing
+  // as it did.
+  let recentred = false
+  const after = useScene.getState()
+  const brief = siteBrief(after.nodes)
+  if (brief?.buildingId && brief.footprint?.fit === 'outside') {
+    const placed = placeBuildingPose(after.nodes, { buildingId: brief.buildingId })
+    if (placed.ok && placed.moved) {
+      after.updateNode(placed.buildingId as AnyNodeId, { position: placed.position })
+      recentred = true
+    }
+  }
+
+  const extra = [
+    recentred ? 'building re-centred' : '',
+    roadsFailure && roadsFailure !== 'skipped' ? `roads unavailable (${roadsFailure})` : '',
+    describeTerrainSample(terrain, terrainFailure),
+    dossierFailure && dossierFailure !== 'skipped'
+      ? `Pascal Map unavailable (${dossierFailure})`
+      : '',
+    ...(dossier ? dossierHeadline(dossier) : []),
+  ]
+  return {
+    ok: true,
+    siteId: site.id,
+    summary: computed.summary,
+    recentred,
+    roadsFailure,
+    terrain,
+    terrainFailure,
+    dossierLine: dossier ? describeDossier(dossier) : '',
+    dossierFailure,
+    message: describeLotSummary(computed.summary, extra.filter(Boolean)),
+  }
+}
+
+/** The facts a reader wants on the status line: the flood zone and the wind speed, when the dossier answered them. */
+function dossierHeadline(dossier: Dossier): string[] {
+  const out: string[] = []
+  const flood = answered<FloodData>(dossier, 'flood')
+  if (flood?.zone_at_point?.zone) {
+    const z = flood.zone_at_point
+    out.push(
+      `flood zone ${z.zone}${typeof z.base_flood_elevation_ft === 'number' ? ` (BFE ${z.base_flood_elevation_ft} ft ${z.bfe_datum ?? ''})`.replace(/ \)$/, ')') : ''}${flood.firm_panel?.panel ? `, FIRM ${flood.firm_panel.panel}` : ''}`,
+    )
+  }
+  const code = answered<CodeBasisData>(dossier, 'code_basis')
+  if (typeof code?.wind_speed_mph === 'number') {
+    out.push(
+      `wind ${code.wind_speed_mph} mph${code.wind_borne_debris_region ? ' (debris region)' : ''}${code.climate_zone_iecc ? `, zone ${code.climate_zone_iecc}` : ''}`,
+    )
+  }
+  return out
+}

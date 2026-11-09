@@ -86,3 +86,17 @@ export function closeDoorOpenState(doorId: AnyNodeId, options?: DoorOpenAnimatio
   const currentSwingAngle = getDisplayedDoorValue(doorId, 'swingAngle', node.swingAngle)
   startDoorOpenAnimation(doorId, 'swingAngle', currentSwingAngle, 0, options)
 }
+
+export function openDoorOpenState(doorId: AnyNodeId, options?: DoorOpenAnimationOptions) {
+  const node = useScene.getState().nodes[doorId]
+  if (node?.type !== 'door' || node.openingKind === 'opening') return
+
+  if (isOperationDoorType(node.doorType)) {
+    const currentOpenAmount = getDisplayedDoorValue(doorId, 'operationState', node.operationState)
+    startDoorOpenAnimation(doorId, 'operationState', currentOpenAmount, 1, options)
+    return
+  }
+
+  const currentSwingAngle = getDisplayedDoorValue(doorId, 'swingAngle', node.swingAngle)
+  startDoorOpenAnimation(doorId, 'swingAngle', currentSwingAngle, DOOR_SWING_OPEN_ANGLE, options)
+}

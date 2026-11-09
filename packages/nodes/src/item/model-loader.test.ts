@@ -1,8 +1,11 @@
 import { afterAll, afterEach, describe, expect, mock, spyOn, test } from 'bun:test'
-import { LoadingManager } from 'three'
+import { DefaultLoadingManager, LoadingManager, type Mesh, MeshBasicMaterial } from 'three'
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import {
   cancelItemModelLoad,
   classifyItemModelLoadFailure,
+  createUnavailableItemGltf,
+  getPendingItemModelLoadCount,
   getUnavailableItemAsset,
   ItemGLTFLoader,
 } from './model-loader'
@@ -35,6 +38,8 @@ const load = (loader: ItemGLTFLoader, url: string) =>
     )
   })
 
+const validGltf = JSON.stringify({ asset: { version: '2.0' }, scene: 0, scenes: [{}] })
+
 describe('classifyItemModelLoadFailure', () => {
   test('distinguishes unavailable, retryable, and unexpected failures', () => {
     expect(
@@ -58,6 +63,47 @@ describe('classifyItemModelLoadFailure', () => {
 })
 
 describe('ItemGLTFLoader', () => {
+  test('preserves imported unlit lighting without changing native basic materials', async () => {
+    const positions = new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0])
+    const gltf = await new ItemGLTFLoader().parseAsync(
+      JSON.stringify({
+        asset: { version: '2.0' },
+        extensionsUsed: ['KHR_materials_unlit'],
+        buffers: [
+          {
+            byteLength: positions.byteLength,
+            uri: `data:application/octet-stream;base64,${Buffer.from(positions.buffer).toString('base64')}`,
+          },
+        ],
+        bufferViews: [{ buffer: 0, byteLength: positions.byteLength }],
+        accessors: [
+          {
+            bufferView: 0,
+            componentType: 5126,
+            count: 3,
+            type: 'VEC3',
+            min: [0, 0, 0],
+            max: [1, 1, 0],
+          },
+        ],
+        materials: [{ extensions: { KHR_materials_unlit: {} } }, {}],
+        meshes: [0, 1].map((material) => ({
+          primitives: [{ attributes: { POSITION: 0 }, material }],
+        })),
+        nodes: [{ mesh: 0 }, { mesh: 1 }],
+        scene: 0,
+        scenes: [{ nodes: [0, 1] }],
+      }),
+      '',
+    )
+    const imported = (gltf.scene.children[0] as Mesh).material as MeshBasicMaterial
+    const lit = (gltf.scene.children[1] as Mesh).material as MeshBasicMaterial
+    expect(imported.userData.pascalImportedUnlit).toBe(true)
+    expect(imported.clone().userData.pascalImportedUnlit).toBe(true)
+    expect(lit.userData.pascalImportedUnlit).toBeUndefined()
+    expect(new MeshBasicMaterial().userData.pascalImportedUnlit).toBeUndefined()
+  })
+
   test('resolves missing responses as an unavailable item instead of rejecting', async () => {
     const consoleError = spyOn(console, 'error').mockImplementation(() => {})
     try {
@@ -71,6 +117,7 @@ describe('ItemGLTFLoader', () => {
       expect(result.kind).toBe('loaded')
       if (result.kind !== 'loaded') return
       expect(result.unavailable).toMatchObject({ url: 'https://example.test/missing.glb' })
+      expect(getPendingItemModelLoadCount()).toBe(0)
       expect(consoleError).not.toHaveBeenCalled()
     } finally {
       consoleError.mockRestore()
@@ -92,6 +139,7 @@ describe('ItemGLTFLoader', () => {
       expect(result.kind).toBe('loaded')
       if (result.kind !== 'loaded') return
       expect(result.unavailable?.message).toBe('Failed to fetch')
+      expect(getPendingItemModelLoadCount()).toBe(0)
       expect(consoleError).not.toHaveBeenCalled()
     } finally {
       consoleError.mockRestore()
@@ -106,10 +154,10 @@ describe('ItemGLTFLoader', () => {
     const result = await load(new ItemGLTFLoader(undefined, []), 'https://example.test/broken.glb')
 
     expect(result.kind).toBe('error')
+    expect(getPendingItemModelLoadCount()).toBe(0)
   })
 
   test('retries a transient response and can recover', async () => {
-    const validGltf = JSON.stringify({ asset: { version: '2.0' }, scene: 0, scenes: [{}] })
     let attempt = 0
     globalThis.fetch = mock(async () => {
       attempt += 1
@@ -134,6 +182,7 @@ describe('ItemGLTFLoader', () => {
     expect(attempt).toBe(2)
     expect(hostErrors).toBe(0)
     expect(hostLoads).toBe(1)
+    expect(getPendingItemModelLoadCount(manager)).toBe(0)
   })
 
   test('does not retry after the last consumer cancels a missing asset', async () => {
@@ -152,10 +201,196 @@ describe('ItemGLTFLoader', () => {
       throw new Error('cancelled load must not resolve')
     })
     await Bun.sleep(0)
+    expect(getPendingItemModelLoadCount(manager)).toBe(1)
     cancelItemModelLoad(url)
     await Bun.sleep(20)
 
     expect(request).toHaveBeenCalledTimes(1)
     expect(hostLoads).toBe(1)
+    expect(getPendingItemModelLoadCount(manager)).toBe(0)
   })
+
+  test('counts concurrent transactions separately from shared URLs and other host loads', async () => {
+    const request = Promise.withResolvers<Response>()
+    globalThis.fetch = mock(() => request.promise) as typeof fetch
+    const url = 'https://example.test/shared.glb'
+    DefaultLoadingManager.itemStart(url)
+    try {
+      const first = load(new ItemGLTFLoader(), url)
+      const second = load(new ItemGLTFLoader(), url)
+      expect(getPendingItemModelLoadCount()).toBe(2)
+      expect(globalThis.fetch).toHaveBeenCalledTimes(1)
+      request.resolve(new Response(validGltf, { status: 200 }))
+      await Promise.all([first, second])
+      expect(getPendingItemModelLoadCount()).toBe(0)
+    } finally {
+      DefaultLoadingManager.itemEnd(url)
+    }
+  })
+
+  test('keeps custom loading managers separate from the default manager', async () => {
+    const firstRequest = Promise.withResolvers<Response>()
+    const secondRequest = Promise.withResolvers<Response>()
+    let index = 0
+    globalThis.fetch = mock(() =>
+      index++ === 0 ? firstRequest.promise : secondRequest.promise,
+    ) as typeof fetch
+    const manager = new LoadingManager()
+    const ordinary = load(new ItemGLTFLoader(), 'https://example.test/default.glb')
+    const custom = load(new ItemGLTFLoader(manager), 'https://example.test/custom.glb')
+    expect(getPendingItemModelLoadCount()).toBe(1)
+    expect(getPendingItemModelLoadCount(manager)).toBe(1)
+    firstRequest.resolve(new Response(validGltf, { status: 200 }))
+    await ordinary
+    expect(getPendingItemModelLoadCount()).toBe(0)
+    expect(getPendingItemModelLoadCount(manager)).toBe(1)
+    secondRequest.resolve(new Response(validGltf, { status: 200 }))
+    await custom
+    expect(getPendingItemModelLoadCount(manager)).toBe(0)
+  })
+
+  test('retains one owned transaction throughout a retry and clears it on success', async () => {
+    const retryStarted = Promise.withResolvers<void>()
+    const retry = Promise.withResolvers<Response>()
+    let attempt = 0
+    globalThis.fetch = mock(async () => {
+      attempt += 1
+      if (attempt === 1) return new Response(null, { status: 503 })
+      retryStarted.resolve()
+      return retry.promise
+    }) as typeof fetch
+    const result = load(new ItemGLTFLoader(undefined, [0]), 'https://example.test/retry-count.glb')
+    expect(getPendingItemModelLoadCount()).toBe(1)
+    await retryStarted.promise
+    expect(getPendingItemModelLoadCount()).toBe(1)
+    retry.resolve(new Response(validGltf, { status: 200 }))
+    await result
+    expect(getPendingItemModelLoadCount()).toBe(0)
+  })
+
+  test('cancellation balances the count once without delivering the completed asset', async () => {
+    const request = Promise.withResolvers<Response>()
+    globalThis.fetch = mock(() => request.promise) as typeof fetch
+    const manager = new LoadingManager()
+    const ended = Promise.withResolvers<void>()
+    manager.onLoad = () => ended.resolve()
+    const onLoad = mock(() => {})
+    const onError = mock(() => {})
+    const url = 'https://example.test/cancel-in-flight.glb'
+    new ItemGLTFLoader(manager).load(url, onLoad, undefined, onError)
+    expect(getPendingItemModelLoadCount(manager)).toBe(1)
+    cancelItemModelLoad(url)
+    request.resolve(new Response(validGltf, { status: 200 }))
+    await ended.promise
+    expect(getPendingItemModelLoadCount(manager)).toBe(0)
+    expect(onLoad).not.toHaveBeenCalled()
+    expect(onError).not.toHaveBeenCalled()
+  })
+
+  test('balances a synchronous loader failure', () => {
+    const error = new Error('cannot start request')
+    const start = spyOn(GLTFLoader.prototype, 'load').mockImplementation(() => {
+      throw error
+    })
+    try {
+      const manager = new LoadingManager()
+      const onError = mock(() => {})
+      const itemEnd = spyOn(manager, 'itemEnd')
+      new ItemGLTFLoader(manager).load('invalid', () => {}, undefined, onError)
+      expect(onError).toHaveBeenCalledWith(error)
+      expect(itemEnd).toHaveBeenCalledTimes(1)
+      expect(getPendingItemModelLoadCount(manager)).toBe(0)
+    } finally {
+      start.mockRestore()
+    }
+  })
+
+  test('balances throwing consumer and manager callbacks without ending twice', () => {
+    for (const failure of ['onLoad', 'onError', 'managerError', 'managerStart'] as const) {
+      const error = new Error(failure)
+      const manager = new LoadingManager()
+      const itemEnd = spyOn(manager, 'itemEnd')
+      if (failure === 'managerError')
+        manager.onError = () => {
+          throw error
+        }
+      if (failure === 'managerStart')
+        manager.onStart = () => {
+          throw error
+        }
+      const start = spyOn(GLTFLoader.prototype, 'load').mockImplementation(
+        (url, complete, _, fail) => {
+          if (failure === 'onLoad') complete(createUnavailableItemGltf(url, 'unavailable'))
+          else fail?.(new Error('invalid model'))
+        },
+      )
+      try {
+        expect(() =>
+          new ItemGLTFLoader(manager).load(
+            'https://example.test/callback.glb',
+            () => {
+              throw error
+            },
+            undefined,
+            () => {
+              if (failure === 'onError') throw error
+            },
+          ),
+        ).toThrow(error)
+        expect(getPendingItemModelLoadCount(manager)).toBe(0)
+        expect(itemEnd).toHaveBeenCalledTimes(1)
+      } finally {
+        start.mockRestore()
+      }
+    }
+  })
+})
+
+test('ItemGLTFLoader decodes required meshopt data without renderer configuration', async () => {
+  const encoded =
+    'oAAAATwAAAD//wE8AAAAfn0AAAEMAAAA/wEMAAAAfgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=='
+  const json = {
+    asset: { version: '2.0' },
+    extensionsUsed: ['EXT_meshopt_compression'],
+    extensionsRequired: ['EXT_meshopt_compression'],
+    buffers: [
+      { uri: `data:application/octet-stream;base64,${encoded}`, byteLength: 67 },
+      { byteLength: 36, extensions: { EXT_meshopt_compression: { fallback: true } } },
+    ],
+    bufferViews: [
+      {
+        buffer: 1,
+        byteLength: 36,
+        extensions: {
+          EXT_meshopt_compression: {
+            buffer: 0,
+            byteLength: 67,
+            byteStride: 12,
+            count: 3,
+            mode: 'ATTRIBUTES',
+          },
+        },
+      },
+    ],
+    accessors: [
+      {
+        bufferView: 0,
+        componentType: 5126,
+        count: 3,
+        type: 'VEC3',
+        min: [0, 0, 0],
+        max: [1, 1, 0],
+      },
+    ],
+    meshes: [{ primitives: [{ attributes: { POSITION: 0 } }] }],
+    nodes: [{ name: 'part_panel', mesh: 0, extras: { anchor: 'top' } }],
+    scenes: [{ nodes: [0] }],
+    scene: 0,
+  }
+  const gltf = await new ItemGLTFLoader().parseAsync(JSON.stringify(json), '')
+  const panel = gltf.scene.getObjectByName('part_panel') as import('three').Mesh
+  expect(Array.from(panel.geometry.getAttribute('position').array)).toEqual([
+    0, 0, 0, 1, 0, 0, 0, 1, 0,
+  ])
+  expect(panel.userData.anchor).toBe('top')
 })

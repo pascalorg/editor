@@ -18,6 +18,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 import { useIsMobile } from '../../hooks/use-mobile'
 import { triggerSFX } from '../../lib/sfx-bus'
+import { isTypingTarget } from '../../lib/typing-target'
 import { requestWalkthroughPointerLock } from '../../lib/walkthrough-pointer-lock'
 import useEditor, {
   CAPTURE_FOV_MAX,
@@ -29,6 +30,7 @@ import useEditor, {
 import { useFirstPersonHud } from '../../store/use-first-person-hud'
 import { Slider } from '../ui/slider'
 import { WalkthroughCrosshair } from '../walkthrough-hud'
+import { CaptureLevelPicker } from './capture-level-picker'
 import { isOverlaySnapshotSave } from './snapshot-capture'
 
 // Local alias — distinct from `useEditor.captureMode` (which describes *why*
@@ -466,7 +468,7 @@ export function SnapshotCaptureOverlay({ projectId }: { projectId: string }) {
         return
       }
       if (e.key !== 'Enter') return
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
+      if (isTypingTarget(e.target)) return
       e.preventDefault()
       handleCapture()
     }
@@ -565,7 +567,7 @@ export function SnapshotCaptureOverlay({ projectId }: { projectId: string }) {
   const captureDisabled = captureState !== 'idle' || (mode === 'area' && !hasSelection)
 
   return (
-    <div className="pointer-events-none absolute inset-0 z-40" ref={overlayRef}>
+    <div className="dark pointer-events-none absolute inset-0 z-40" ref={overlayRef}>
       {/* Walk / drone keep the walkthrough's centered pointer (the ring means
           E opens the door / window under it) — the capture overlay replaces
           the walkthrough HUD, so the crosshair rides along here. */}
@@ -709,6 +711,9 @@ export function SnapshotCaptureOverlay({ projectId }: { projectId: string }) {
           </div>
         </div>
       )}
+
+      {/* Top-left: which levels the shot shows (the whole building by default). */}
+      {!isPreset && <CaptureLevelPicker />}
 
       {/* Top-right dismiss button (icon-only on mobile) */}
       <div className="pointer-events-auto absolute top-4 right-4">

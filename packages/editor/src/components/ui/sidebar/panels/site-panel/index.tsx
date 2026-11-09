@@ -1,15 +1,18 @@
+'use client'
+
 import {
   type AnyNode,
   type AnyNodeId,
   type BuildingNode,
-  DEFAULT_LEVEL_HEIGHT,
   emitter,
   type GuideNode,
-  LevelNode,
+  type LevelNode,
   type ScanNode,
   type SiteNode,
   useScene,
   type ZoneNode,
+  useLocale,
+  usePascalI18n,
 } from '@pascal-app/core'
 import { markPerfAction, useViewer } from '@pascal-app/viewer'
 import {
@@ -19,6 +22,9 @@ import {
   Copy,
   Eye,
   EyeOff,
+  Boxes,
+  Group,
+  LayoutGrid,
   Loader2,
   MoreHorizontal,
   Pencil,
@@ -28,7 +34,18 @@ import {
   X,
 } from 'lucide-react'
 import { AnimatePresence, LayoutGroup, motion } from 'motion/react'
-import { memo, useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { type ComponentType, lazy, memo, Suspense, useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { nodeRegistry } from '@pascal-app/core'
+
+/** The site kind's inspector (`parametrics.customPanel`), mounted under the Site header. */
+const SiteKindPanel = lazy(async () => {
+  const def = nodeRegistry.get('site') as
+    | { parametrics?: { customPanel?: () => Promise<{ default: ComponentType }> } }
+    | undefined
+  const loader = def?.parametrics?.customPanel
+  if (!loader) return { default: () => null }
+  return loader()
+})
 import { useShallow } from 'zustand/react/shallow'
 import { ColorDot } from './../../../../../components/ui/primitives/color-dot'
 import {
@@ -39,8 +56,9 @@ import {
 import {
   buildLevelDuplicateCreateOps,
   type LevelDuplicatePreset,
-} from './../../../../../lib/level-duplication'
-import { getDefaultLevelName } from '@pascal-app/core'
+} from '@pascal-app/core/building'
+import { addStoreyOnTop } from './../../../../../lib/add-storey'
+import { offerExteriorWallCopy } from './../../../../../components/ui/level-wall-copy-prompt'
 import { deleteLevelWithFallbackSelection } from './../../../../../lib/level-selection'
 import {
   formatAreaLabel,
@@ -52,14 +70,25 @@ import {
 } from './../../../../../lib/measurements'
 import { createLocalGuideImage, createLocalScan } from './../../../../../lib/local-guide-image'
 import { editorHostTreeChildrenRegistry } from './../../../../../lib/host-tree-children'
+import { requestRoomDeletion } from './../../../../../lib/room-structure-commands'
+import {
+  selectZoneOrRoom,
+  useZoneSelected,
+} from './../../../../../lib/room-zone-routing'
+import { createUnitInBuilding, toggleZoneMembership } from './../../../../../lib/units'
 import { cn } from './../../../../../lib/utils'
 import useEditor from './../../../../../store/use-editor'
 import { useUploadStore } from '../../../../../store/use-upload'
 import { MetricControl } from '../../../controls/metric-control'
 import { LevelDuplicateDialog } from '../../../level-duplicate-dialog'
-import { InlineRenameInput } from './inline-rename-input'
-import { focusTreeNode, TreeNode } from './tree-node'
+import { CollectionsSection } from './collection-tree-node'
+import { InlineRenameInput, RoomRenameInput } from './inline-rename-input'
+import { ZoneMembershipCheckbox } from './zone-membership-checkbox'
+import { focusTreeNode, TreeNode, TreeNodeWrapper } from './tree-node'
 import { TreeNodeDragProvider } from './tree-node-drag'
+import { zoneDefaultName } from './default-names'
+import { nodeLabelDescriptor } from '../../../../../i18n/node-messages'
+import { authoredLevelName, localizedLevelName } from '../../../../../i18n/level-name'
 
 // ============================================================================
 // PROPERTY LINE SECTION
@@ -103,6 +132,7 @@ function useSiteNode(): SiteNode | null {
 }
 
 const PropertyLineSection = memo(function PropertyLineSection() {
+  const i18n = usePascalI18n()
   const siteNode = useSiteNode()
   const updateNode = useScene((state) => state.updateNode)
   const mode = useEditor((state) => state.mode)
@@ -171,13 +201,13 @@ const PropertyLineSection = memo(function PropertyLineSection() {
 
         <div className="flex items-center gap-2">
           <Pentagon className="h-4 w-4 text-muted-foreground" />
-          <span className="font-medium text-sm">Property Line</span>
+          <span className="font-medium text-sm">{i18n._({ id: 'editor.sidebar.panels.sitePanel.propertyLine', message: 'Property Line' })}</span>
         </div>
         <button
           className={cn(
             'flex h-6 w-6 cursor-pointer items-center justify-center rounded transition-colors',
             isEditing
-              ? 'bg-orange-500/20 text-orange-400'
+              ? 'bg-orange-500/20 text-orange-700 dark:text-orange-400'
               : 'text-muted-foreground hover:bg-accent',
           )}
           onClick={handleToggleEdit}
@@ -189,13 +219,13 @@ const PropertyLineSection = memo(function PropertyLineSection() {
       {/* Measurements */}
       <div className="relative flex gap-3 pr-3 pb-2 pl-10">
         <div className="text-muted-foreground text-xs">
-          Area:{' '}
+          {i18n._({ id: 'editor.sidebar.panels.sitePanel.area', message: 'Area:' })}{' '}
           <span className="text-foreground">
             {displayArea.toFixed(1)} {getAreaUnitLabel(viewerUnit)}
           </span>
         </div>
         <div className="text-muted-foreground text-xs">
-          Perimeter:{' '}
+          {i18n._({ id: 'editor.sidebar.panels.sitePanel.perimeter', message: 'Perimeter:' })}{' '}
           <span className="text-foreground">
             {displayPerimeter.toFixed(1)} {linearLabel}
           </span>
@@ -233,7 +263,7 @@ const PropertyLineSection = memo(function PropertyLineSection() {
                   className={cn(
                     'flex h-5 w-5 shrink-0 cursor-pointer items-center justify-center rounded',
                     points.length > 3
-                      ? 'text-muted-foreground hover:bg-red-500/20 hover:text-red-400'
+                      ? 'text-muted-foreground hover:bg-red-500/20 hover:text-red-600 dark:hover:text-red-400'
                       : 'cursor-not-allowed text-muted-foreground/30',
                   )}
                   disabled={points.length <= 3}
@@ -249,7 +279,7 @@ const PropertyLineSection = memo(function PropertyLineSection() {
             onClick={handleAddPoint}
           >
             <Plus className="h-3 w-3" />
-            Add point
+            {i18n._({ id: 'editor.sidebar.panels.sitePanel.addPoint', message: 'Add point' })}
           </button>
         </div>
       )}
@@ -274,6 +304,7 @@ const CameraPopover = memo(function CameraPopover({
   onOpenChange: (open: boolean) => void
   buttonClassName?: string
 }) {
+  const i18n = usePascalI18n()
   const updateNode = useScene((state) => state.updateNode)
   return (
     <Popover onOpenChange={onOpenChange} open={open}>
@@ -284,7 +315,7 @@ const CameraPopover = memo(function CameraPopover({
             buttonClassName,
           )}
           onClick={(e) => e.stopPropagation()}
-          title="Camera snapshot"
+          title={i18n._({ id: 'editor.sidebar.panels.sitePanel.cameraSnapshot', message: 'Camera snapshot' })}
         >
           <Camera className="h-3.5 w-3.5" />
           {hasCamera && (
@@ -309,7 +340,7 @@ const CameraPopover = memo(function CameraPopover({
               }}
             >
               <Camera className="h-3.5 w-3.5" />
-              View snapshot
+              {i18n._({ id: 'editor.sidebar.panels.sitePanel.viewSnapshot', message: 'View snapshot' })}
             </button>
           )}
           <button
@@ -321,7 +352,7 @@ const CameraPopover = memo(function CameraPopover({
             }}
           >
             <Camera className="h-3.5 w-3.5" />
-            {hasCamera ? 'Update snapshot' : 'Take snapshot'}
+            {hasCamera ? i18n._({ id: 'editor.sidebar.panels.sitePanel.updateSnapshot', message: 'Update snapshot' }) : i18n._({ id: 'editor.sidebar.panels.sitePanel.takeSnapshot', message: 'Take snapshot' })}
           </button>
           {hasCamera && (
             <button
@@ -333,7 +364,7 @@ const CameraPopover = memo(function CameraPopover({
               }}
             >
               <Trash2 className="h-3.5 w-3.5" />
-              Clear snapshot
+              {i18n._({ id: 'editor.sidebar.panels.sitePanel.clearSnapshot', message: 'Clear snapshot' })}
             </button>
           )}
         </div>
@@ -353,6 +384,7 @@ const ReferenceItem = memo(function ReferenceItem({
   setSelectedReferenceId: (id: string) => void
   handleDelete: (id: string, e: React.MouseEvent) => void
 }) {
+  const i18n = usePascalI18n()
   const [isEditing, setIsEditing] = useState(false)
   const [isExpanded, setIsExpanded] = useState(true)
   const updateNode = useScene((state) => state.updateNode)
@@ -427,13 +459,13 @@ const ReferenceItem = memo(function ReferenceItem({
         >
           {isCapture ? (
             <img
-              alt="Capture"
+              alt={i18n._({ id: 'editor.sidebar.panels.sitePanel.capture', message: 'Capture' })}
               className="h-3.5 w-3.5 shrink-0 object-contain opacity-70 transition-opacity group-hover/ref:opacity-100"
               src="/icons/mesh.webp"
             />
           ) : (
             <img
-              alt="Guide"
+              alt={i18n._({ id: 'editor.sidebar.panels.sitePanel.guide', message: 'Guide' })}
               className="h-3.5 w-3.5 shrink-0 object-contain opacity-70 transition-opacity group-hover/ref:opacity-100"
               src="/icons/floorplan.webp"
             />
@@ -454,7 +486,7 @@ const ReferenceItem = memo(function ReferenceItem({
               event.stopPropagation()
               updateNode(refNode.id, { visible: !isVisible })
             }}
-            title={isVisible ? 'Hide' : 'Show'}
+            title={isVisible ? i18n._({ id: 'editor.sidebar.panels.sitePanel.hide', message: 'Hide' }) : i18n._({ id: 'editor.sidebar.panels.sitePanel.show', message: 'Show' })}
             type="button"
           >
             {isVisible ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
@@ -463,7 +495,7 @@ const ReferenceItem = memo(function ReferenceItem({
         <button
           className="z-20 flex h-5 w-5 shrink-0 cursor-pointer items-center justify-center rounded-md text-muted-foreground opacity-0 transition-colors hover:bg-black/5 hover:text-foreground group-hover/ref:opacity-100 dark:hover:bg-white/10"
           onClick={(e) => handleDelete(refNode.id, e)}
-          title="Delete"
+          title={i18n._({ id: 'editor.sidebar.panels.sitePanel.delete', message: 'Delete' })}
           type="button"
         >
           <Trash2 className="h-3 w-3" />
@@ -493,6 +525,7 @@ const LevelReferences = memo(function LevelReferences({
   onUploadAsset,
   onDeleteAsset,
 }: LevelReferencesProps) {
+  const i18n = usePascalI18n()
   const createNode = useScene((s) => s.createNode)
   const deleteNode = useScene((s) => s.deleteNode)
   const setSelection = useViewer((s) => s.setSelection)
@@ -653,7 +686,12 @@ const LevelReferences = memo(function LevelReferences({
                 ) : (
                   <Plus className="h-3.5 w-3.5" />
                 )}
-                {uploading ? `Uploading ${uploadingType}... ${progress}%` : 'Upload scan/floorplan'}
+                {uploading ? i18n._({
+                      id: 'editor.sidebar.panels.sitePanel.uploadingProgress',
+                      message:
+                        '{assetType, select, guide {Uploading guide... {progress}%} other {Uploading scan... {progress}%}}',
+                      values: { assetType: uploadingType, progress },
+                    }) : i18n._({ id: 'editor.sidebar.panels.sitePanel.uploadScanFloorplan', message: 'Upload scan/floorplan' })}
               </button>
 
               <input
@@ -713,11 +751,12 @@ const LevelItem = memo(function LevelItem({
   onUploadAsset?: (projectId: string, levelId: string, file: File, type: 'scan' | 'guide') => void
   onDeleteAsset?: (projectId: string, url: string) => void
 }) {
+  const i18n = usePascalI18n()
+  const locale = useLocale()
   const [cameraPopoverOpen, setCameraPopoverOpen] = useState(false)
   const [duplicateDialogOpen, setDuplicateDialogOpen] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
-  const createNodes = useScene((s) => s.createNodes)
-  const updateNodes = useScene((s) => s.updateNodes)
+  const applyNodeChanges = useScene((s) => s.applyNodeChanges)
   const itemRef = useRef<HTMLDivElement>(null)
   const isSelected = selectedLevelId === level.id
   const canDeleteLevel = level.level !== 0
@@ -751,22 +790,14 @@ const LevelItem = memo(function LevelItem({
   }
 
   const handleDuplicateLevel = (preset: LevelDuplicatePreset = 'everything') => {
-    const { createOps, newLevelId, shiftedLevels } = buildLevelDuplicateCreateOps({
+    const { createOps, newLevelId, updateOps } = buildLevelDuplicateCreateOps({
       nodes: useScene.getState().nodes,
       level,
       levels,
       preset,
     })
 
-    if (shiftedLevels.length > 0) {
-      updateNodes(
-        shiftedLevels.map((shiftedLevel) => ({
-          id: shiftedLevel.id as AnyNodeId,
-          data: { level: shiftedLevel.level } as Partial<AnyNode>,
-        })),
-      )
-    }
-    createNodes(createOps)
+    applyNodeChanges({ create: createOps, update: updateOps })
     selectLevel(newLevelId as LevelNode['id'], false)
     setDuplicateDialogOpen(false)
   }
@@ -806,7 +837,14 @@ const LevelItem = memo(function LevelItem({
 
         <div className="relative z-20 flex h-8 items-center pr-1 pl-[28px]">
           <button
+            aria-expanded={isExpanded}
+            aria-label={
+              isExpanded
+                ? i18n._({ id: 'editor.layers.collapse', message: 'Collapse' })
+                : i18n._({ id: 'editor.layers.expand', message: 'Expand' })
+            }
             className="z-20 flex h-4 w-4 shrink-0 cursor-pointer items-center justify-center bg-inherit"
+            type="button"
             onClick={(e) => {
               e.stopPropagation()
               if (isSelected) {
@@ -826,7 +864,7 @@ const LevelItem = memo(function LevelItem({
 
         <div className="flex h-8 min-w-0 flex-1 cursor-pointer items-center gap-2 py-0 pl-0.5 text-sm">
           <img
-            alt="Level"
+            alt={i18n._({ id: 'editor.sidebar.panels.sitePanel.level', message: 'Level' })}
             className={cn(
               'h-4 w-4 shrink-0 object-contain transition-all duration-200',
               !isSelected && 'opacity-60 grayscale',
@@ -834,7 +872,9 @@ const LevelItem = memo(function LevelItem({
             src="/icons/level.webp"
           />
           <InlineRenameInput
-            defaultName={getDefaultLevelName(level.level)}
+            defaultName={localizedLevelName({ level: level.level }, i18n, locale)}
+            displayName={localizedLevelName(level, i18n, locale)}
+            editableName={(name) => authoredLevelName({ name, level: level.level })}
             isEditing={isEditing}
             nodeId={level.id}
             onStartEditing={() => setIsEditing(true)}
@@ -852,7 +892,7 @@ const LevelItem = memo(function LevelItem({
                   : 'text-muted-foreground hover:bg-accent hover:text-foreground',
               )}
               onClick={(e) => e.stopPropagation()}
-              title="Camera snapshot"
+              title={i18n._({ id: 'editor.sidebar.panels.sitePanel.cameraSnapshot', message: 'Camera snapshot' })}
             >
               <Camera className="h-3.5 w-3.5" />
               {level.camera && (
@@ -877,7 +917,7 @@ const LevelItem = memo(function LevelItem({
                   }}
                 >
                   <Camera className="h-3.5 w-3.5" />
-                  View snapshot
+                  {i18n._({ id: 'editor.sidebar.panels.sitePanel.viewSnapshot', message: 'View snapshot' })}
                 </button>
               )}
               <button
@@ -889,7 +929,7 @@ const LevelItem = memo(function LevelItem({
                 }}
               >
                 <Camera className="h-3.5 w-3.5" />
-                {level.camera ? 'Update snapshot' : 'Take snapshot'}
+                {level.camera ? i18n._({ id: 'editor.sidebar.panels.sitePanel.updateSnapshot', message: 'Update snapshot' }) : i18n._({ id: 'editor.sidebar.panels.sitePanel.takeSnapshot', message: 'Take snapshot' })}
               </button>
               {level.camera && (
                 <button
@@ -901,7 +941,7 @@ const LevelItem = memo(function LevelItem({
                   }}
                 >
                   <Trash2 className="h-3.5 w-3.5" />
-                  Clear snapshot
+                  {i18n._({ id: 'editor.sidebar.panels.sitePanel.clearSnapshot', message: 'Clear snapshot' })}
                 </button>
               )}
             </div>
@@ -910,6 +950,11 @@ const LevelItem = memo(function LevelItem({
         <Popover>
           <PopoverTrigger asChild>
             <button
+              aria-label={i18n._({
+                id: 'editor.layers.levelOptions',
+                message: '{levelName} options',
+                values: { levelName: localizedLevelName(level, i18n, locale) },
+              })}
               className={cn(
                 'mr-1 flex h-6 w-6 shrink-0 cursor-pointer items-center justify-center rounded-md opacity-0 transition-colors group-hover/level:opacity-100',
                 selectedLevelId === level.id
@@ -921,31 +966,31 @@ const LevelItem = memo(function LevelItem({
               <MoreHorizontal className="h-3.5 w-3.5" />
             </button>
           </PopoverTrigger>
-          <PopoverContent align="start" className="w-48 p-1" side="right">
+          <PopoverContent align="start" className="w-max min-w-48 max-w-72 p-1" side="right">
             <button
               className="flex w-full cursor-pointer items-center gap-2 rounded px-3 py-1.5 text-left text-sm transition-colors hover:bg-accent"
               onClick={() => handleDuplicateLevel()}
-              title="Duplicate level"
+              title={i18n._({ id: 'editor.sidebar.panels.sitePanel.duplicateLevel', message: 'Duplicate level' })}
             >
               <Copy className="h-3.5 w-3.5" />
-              Duplicate
+              {i18n._({ id: 'editor.sidebar.panels.sitePanel.duplicate', message: 'Duplicate' })}
             </button>
             <button
               className="flex w-full cursor-pointer items-center gap-2 rounded px-3 py-1.5 text-left text-sm transition-colors hover:bg-accent"
               onClick={() => setDuplicateDialogOpen(true)}
-              title="Duplicate level with options"
+              title={i18n._({ id: 'editor.sidebar.panels.sitePanel.duplicateLevelWithOptions', message: 'Duplicate level with options' })}
             >
               <Copy className="h-3.5 w-3.5" />
-              Duplicate with options...
+              {i18n._({ id: 'editor.sidebar.panels.sitePanel.duplicateWithOptions', message: 'Duplicate with options...' })}
             </button>
             <button
               className="flex w-full items-center gap-2 rounded px-3 py-1.5 text-left text-sm transition-colors enabled:cursor-pointer enabled:hover:bg-accent enabled:hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-50"
               disabled={!canDeleteLevel}
               onClick={() => deleteLevelWithFallbackSelection(level.id)}
-              title={canDeleteLevel ? 'Delete level' : 'The ground level cannot be deleted'}
+              title={canDeleteLevel ? i18n._({ id: 'editor.sidebar.panels.sitePanel.deleteLevel', message: 'Delete level' }) : i18n._({ id: 'editor.sidebar.panels.sitePanel.theGroundLevelCannotBeDeleted', message: 'The ground level cannot be deleted' })}
             >
               <Trash2 className="h-3.5 w-3.5" />
-              Delete
+              {i18n._({ id: 'editor.sidebar.panels.sitePanel.delete', message: 'Delete' })}
             </button>
           </PopoverContent>
         </Popover>
@@ -962,7 +1007,7 @@ const LevelItem = memo(function LevelItem({
             <div className="relative border-border/50 border-b py-2 pr-3 pl-[60px]">
               <div className="pointer-events-none absolute top-0 bottom-0 left-[45px] z-10 w-px bg-border/50" />
               <MetricControl
-                label="Base elevation"
+                label={i18n._({ id: 'editor.sidebar.panels.sitePanel.baseElevation', message: 'Base elevation' })}
                 onChange={(value) => updateNode(level.id, { baseElevation: value })}
                 precision={2}
                 step={0.05}
@@ -999,7 +1044,7 @@ const LevelsSection = memo(function LevelsSection({
   onUploadAsset?: (projectId: string, levelId: string, file: File, type: 'scan' | 'guide') => void
   onDeleteAsset?: (projectId: string, url: string) => void
 } = {}) {
-  const createNode = useScene((state) => state.createNode)
+  const i18n = usePascalI18n()
   const updateNode = useScene((state) => state.updateNode)
   const selectedBuildingId = useViewer((state) => state.selection.buildingId)
   const selectedLevelId = useViewer((state) => state.selection.levelId)
@@ -1022,14 +1067,9 @@ const LevelsSection = memo(function LevelsSection({
   if (!building) return null
 
   const handleAddLevel = () => {
-    const newLevel = LevelNode.parse({
-      level: levels.length,
-      height: DEFAULT_LEVEL_HEIGHT,
-      children: [],
-      parentId: building.id,
-    })
-    createNode(newLevel, building.id)
+    const newLevel = addStoreyOnTop(building.id)
     setSelection({ buildingId: building.id, levelId: newLevel.id })
+    offerExteriorWallCopy(newLevel.id)
   }
 
   return (
@@ -1048,7 +1088,7 @@ const LevelsSection = memo(function LevelsSection({
           <div className="relative z-10 flex items-center pr-1 pl-[38px]">
             <Plus className="h-3.5 w-3.5" />
           </div>
-          <span className="truncate">Add level</span>
+          <span className="truncate">{i18n._({ id: 'editor.sidebar.panels.sitePanel.addLevel', message: 'Add level' })}</span>
         </button>
         {levels.length === 0 && (
           <div className="relative flex h-8 select-none items-center border-border/50 border-b py-0 pr-2 pl-[38px] text-muted-foreground text-xs">
@@ -1056,7 +1096,7 @@ const LevelsSection = memo(function LevelsSection({
             <div className="pointer-events-none absolute top-0 bottom-1/2 left-[21px] w-px bg-border/50" />
             {/* Horizontal branch line */}
             <div className="pointer-events-none absolute top-1/2 left-[21px] h-px w-[11px] bg-border/50" />
-            No levels yet
+            {i18n._({ id: 'editor.sidebar.panels.sitePanel.noLevelsYet', message: 'No levels yet' })}
           </div>
         )}
         {[...levels].reverse().map((level, index) => (
@@ -1078,150 +1118,102 @@ const LevelsSection = memo(function LevelsSection({
   )
 })
 
-const LayerToggle = memo(function LayerToggle() {
-  const structureLayer = useEditor((state) => state.structureLayer)
-  const setStructureLayer = useEditor((state) => state.setStructureLayer)
-  const phase = useEditor((state) => state.phase)
-  const setPhase = useEditor((state) => state.setPhase)
+const UnitsSection = memo(function UnitsSection({
+  buildingId,
+}: {
+  buildingId: BuildingNode['id']
+}) {
+  const i18n = usePascalI18n()
+  const unitIds = useScene(
+    useShallow((s) => {
+      const building = s.nodes[buildingId] as BuildingNode | undefined
+      return (building?.children ?? []).filter((id) => s.nodes[id]?.type === 'unit')
+    }),
+  )
+  const hasUnits = unitIds.length > 0
+  const [expanded, setExpanded] = useState(hasUnits)
 
-  const activeTab =
-    phase === 'structure' && structureLayer === 'elements'
-      ? 'structure'
-      : phase === 'furnish'
-        ? 'furnish'
-        : phase === 'structure' && structureLayer === 'zones'
-          ? 'zones'
-          : 'none'
+  useEffect(() => {
+    if (hasUnits) setExpanded(true)
+  }, [hasUnits])
+
+  const handleNewUnit = (event: React.MouseEvent) => {
+    event.stopPropagation()
+    createUnitInBuilding(buildingId)
+    setExpanded(true)
+  }
 
   return (
-    <div className="relative flex items-center gap-1 border-border/50 border-b bg-[#2C2C2E] p-1">
-      <button
-        className={cn(
-          'relative flex flex-1 cursor-pointer flex-col items-center justify-center rounded-md py-2 font-medium text-[10px] transition-all duration-200',
-          activeTab === 'structure'
-            ? 'text-foreground'
-            : 'text-muted-foreground hover:bg-white/5 hover:text-foreground',
-        )}
-        onClick={() => {
-          setPhase('structure')
-          setStructureLayer('elements')
-        }}
-      >
-        {activeTab === 'structure' && (
-          <motion.div
-            className="absolute inset-0 rounded-md bg-[#3e3e3e] shadow-sm ring-1 ring-border/50"
-            layoutId="layerToggleActiveBg"
-            transition={{ type: 'spring', bounce: 0.2, duration: 0.6 }}
-          />
-        )}
-        <div className="relative z-10 flex flex-col items-center">
-          <img
-            alt="Structure"
-            className={cn(
-              'mb-1 h-6 w-6 transition-all',
-              activeTab !== 'structure' && 'opacity-50 grayscale',
-            )}
-            src="/icons/room.webp"
-          />
-          Structure
-        </div>
-        <div className="absolute right-1.5 bottom-1 z-10 rounded border border-border/40 bg-background/40 px-1 py-[2px] backdrop-blur-md">
-          <span className="block font-medium font-mono text-[9px] text-muted-foreground/70 leading-none">
-            B
+    <div className="subtle-scrollbar max-h-72 shrink-0 overflow-y-auto overflow-x-hidden">
+      <TreeNodeWrapper
+        actions={
+          <button
+            className="flex h-6 w-6 cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-black/5 hover:text-foreground dark:hover:bg-white/10"
+            onClick={handleNewUnit}
+            title={i18n._({ id: 'editor.sidebar.panels.sitePanel.newUnit', message: 'New unit' })}
+            type="button"
+          >
+            <Plus className="h-3 w-3" />
+          </button>
+        }
+        depth={1}
+        expanded={expanded}
+        hasChildren
+        icon={<Group className="h-3.5 w-3.5" />}
+        label={
+          <span className="flex items-center gap-1.5">
+            {i18n._({ id: 'editor.sidebar.panels.sitePanel.units', message: 'Units' })}
+            {hasUnits && <span className="text-muted-foreground text-xs">{unitIds.length}</span>}
           </span>
-        </div>
-      </button>
-
-      <button
-        className={cn(
-          'relative flex flex-1 cursor-pointer flex-col items-center justify-center rounded-md py-2 font-medium text-[10px] transition-all duration-200',
-          activeTab === 'furnish'
-            ? 'text-foreground'
-            : 'text-muted-foreground hover:bg-white/5 hover:text-foreground',
-        )}
-        onClick={() => {
-          setPhase('furnish')
-        }}
+        }
+        onClick={() => setExpanded((value) => !value)}
+        onToggle={() => setExpanded((value) => !value)}
       >
-        {activeTab === 'furnish' && (
-          <motion.div
-            className="absolute inset-0 rounded-md bg-[#3e3e3e] shadow-sm ring-1 ring-border/50"
-            layoutId="layerToggleActiveBg"
-            transition={{ type: 'spring', bounce: 0.2, duration: 0.6 }}
-          />
-        )}
-        <div className="relative z-10 flex flex-col items-center">
-          <img
-            alt="Furnish"
-            className={cn(
-              'mb-1 h-6 w-6 transition-all',
-              activeTab !== 'furnish' && 'opacity-50 grayscale',
-            )}
-            src="/icons/couch.webp"
-          />
-          Furnish
-        </div>
-        <div className="absolute right-1.5 bottom-1 z-10 rounded border border-border/40 bg-background/40 px-1 py-[2px] backdrop-blur-md">
-          <span className="block font-medium font-mono text-[9px] text-muted-foreground/70 leading-none">
-            F
-          </span>
-        </div>
-      </button>
-
-      <button
-        className={cn(
-          'relative flex flex-1 cursor-pointer flex-col items-center justify-center rounded-md py-2 font-medium text-[10px] transition-all duration-200',
-          activeTab === 'zones'
-            ? 'text-foreground'
-            : 'text-muted-foreground hover:bg-white/5 hover:text-foreground',
-        )}
-        onClick={() => {
-          setPhase('structure')
-          setStructureLayer('zones')
-        }}
-      >
-        {activeTab === 'zones' && (
-          <motion.div
-            className="absolute inset-0 rounded-md bg-[#3e3e3e] shadow-sm ring-1 ring-border/50"
-            layoutId="layerToggleActiveBg"
-            transition={{ type: 'spring', bounce: 0.2, duration: 0.6 }}
-          />
-        )}
-        <div className="relative z-10 flex flex-col items-center">
-          <img
-            alt="Zones"
-            className={cn(
-              'mb-1 h-6 w-6 transition-all',
-              activeTab !== 'zones' && 'opacity-50 grayscale',
-            )}
-            src="/icons/kitchen.webp"
-          />
-          Zones
-        </div>
-        <div className="absolute right-1.5 bottom-1 z-10 rounded border border-border/40 bg-background/40 px-1 py-[2px] backdrop-blur-md">
-          <span className="block font-medium font-mono text-[9px] text-muted-foreground/70 leading-none">
-            Z
-          </span>
-        </div>
-      </button>
+        {unitIds.map((unitId) => (
+          <TreeNode depth={2} key={unitId} nodeId={unitId} />
+        ))}
+        <TreeNodeWrapper
+          depth={2}
+          expanded={false}
+          hasChildren={false}
+          icon={<Plus className="h-3.5 w-3.5" />}
+          isLast
+          label={i18n._({ id: 'editor.sidebar.panels.sitePanel.newUnit', message: 'New unit' })}
+          onClick={handleNewUnit}
+          onToggle={() => {}}
+        />
+      </TreeNodeWrapper>
     </div>
   )
 })
 
-const ZoneItem = memo(function ZoneItem({ zone, isLast }: { zone: ZoneNode; isLast?: boolean }) {
+const ZoneItem = memo(function ZoneItem({
+  zone,
+  depth,
+  isLast,
+}: {
+  zone: ZoneNode
+  depth: number
+  isLast?: boolean
+}) {
+  const i18n = usePascalI18n()
   const [isEditing, setIsEditing] = useState(false)
   const [cameraPopoverOpen, setCameraPopoverOpen] = useState(false)
   const deleteNode = useScene((state) => state.deleteNode)
   const updateNode = useScene((state) => state.updateNode)
-  const selectedZoneId = useViewer((state) => state.selection.zoneId)
+  const focusedUnitId = useViewer((state) => state.focusedUnitId)
+  const focusedUnit = useScene((s) => {
+    const unit = focusedUnitId ? s.nodes[focusedUnitId] : undefined
+    return unit?.type === 'unit' ? unit : null
+  })
   const hoveredId = useViewer((state) => state.hoveredId)
   const setSelection = useViewer((state) => state.setSelection)
   const setHoveredId = useViewer((state) => state.setHoveredId)
-  const setPhase = useEditor((state) => state.setPhase)
   const setMode = useEditor((state) => state.setMode)
   const unit = useViewer((state) => state.unit)
 
-  const isSelected = selectedZoneId === zone.id
+  const isSelected = useZoneSelected(zone.id)
+  const isRoom = zone.spaceRole === 'room'
   const isHovered = hoveredId === zone.id
 
   const itemRef = useRef<HTMLDivElement>(null)
@@ -1232,12 +1224,11 @@ const ZoneItem = memo(function ZoneItem({ zone, isLast }: { zone: ZoneNode; isLa
     }
   }, [isSelected])
 
-  const defaultName = `Zone (${formatAreaLabel(calculatePolygonArea(zone.polygon), unit)})`
+  const defaultName = zoneDefaultName(i18n, zone, formatAreaLabel(calculatePolygonArea(zone.polygon), unit))
 
   const handleClick = () => {
-    setSelection({ zoneId: zone.id })
-    setPhase('structure')
     setMode('select')
+    selectZoneOrRoom(zone.id)
   }
 
   const handleDoubleClick = () => {
@@ -1246,6 +1237,8 @@ const ZoneItem = memo(function ZoneItem({ zone, isLast }: { zone: ZoneNode; isLa
 
   const handleDelete = (e: React.MouseEvent) => {
     e.stopPropagation()
+    // A room goes the way the room panel deletes it (its walls, or merged back).
+    if (isRoom) return requestRoomDeletion(zone.id)
     deleteNode(zone.id)
     if (isSelected) {
       setSelection({ zoneId: null })
@@ -1259,7 +1252,7 @@ const ZoneItem = memo(function ZoneItem({ zone, isLast }: { zone: ZoneNode; isLa
   return (
     <div
       className={cn(
-        'group/row relative flex h-8 cursor-pointer select-none items-center border-border/50 border-b px-3 text-sm transition-all duration-200',
+        'group/row relative flex h-8 cursor-pointer select-none items-center border-border/50 border-b text-sm transition-all duration-200',
         isSelected
           ? 'bg-accent/50 text-foreground'
           : isHovered
@@ -1271,6 +1264,7 @@ const ZoneItem = memo(function ZoneItem({ zone, isLast }: { zone: ZoneNode; isLa
       onMouseEnter={() => setHoveredId(zone.id)}
       onMouseLeave={() => setHoveredId(null)}
       ref={itemRef}
+      style={{ paddingLeft: depth * 12 + 28, paddingRight: 12 }}
     >
       {/* Vertical tree line */}
       <div
@@ -1278,19 +1272,34 @@ const ZoneItem = memo(function ZoneItem({ zone, isLast }: { zone: ZoneNode; isLa
           'pointer-events-none absolute w-px bg-border/50',
           isLast ? 'top-0 bottom-1/2' : 'top-0 bottom-0',
         )}
-        style={{ left: 8 }}
+        style={{ left: (depth - 1) * 12 + 20 }}
       />
       {/* Horizontal branch line */}
       <div
         className="pointer-events-none absolute top-1/2 h-px bg-border/50"
-        style={{ left: 8, width: 4 }}
+        style={{ left: (depth - 1) * 12 + 20, width: 4 }}
       />
 
+      {focusedUnit && (
+        <ZoneMembershipCheckbox
+          checked={focusedUnit.members.includes(zone.id)}
+          onToggle={() => toggleZoneMembership(focusedUnit.id, zone.id)}
+          unitName={focusedUnit.name || i18n._(nodeLabelDescriptor('unit', 'Unit'))}
+        />
+      )}
       <span className={cn('mr-2', !isSelected && 'opacity-40')}>
-        <ColorDot color={zone.color} onChange={handleColorChange} />
+        <ColorDot
+          color={zone.color}
+          label={i18n._({
+            id: 'editor.layers.spaceColour',
+            message: '{role, select, room {Room colour} other {Zone colour}}',
+            values: { role: zone.spaceRole ?? 'generic' },
+          })}
+          onChange={handleColorChange}
+        />
       </span>
       <div className="min-w-0 flex-1 pr-1">
-        <InlineRenameInput
+        <RoomRenameInput
           defaultName={defaultName}
           isEditing={isEditing}
           nodeId={zone.id}
@@ -1305,7 +1314,7 @@ const ZoneItem = memo(function ZoneItem({ zone, isLast }: { zone: ZoneNode; isLa
             <button
               className="relative flex h-6 w-6 cursor-pointer items-center justify-center rounded-md text-muted-foreground opacity-0 transition-colors hover:bg-black/5 hover:text-foreground group-hover/row:opacity-100 dark:hover:bg-white/10"
               onClick={(e) => e.stopPropagation()}
-              title="Camera snapshot"
+              title={i18n._({ id: 'editor.sidebar.panels.sitePanel.cameraSnapshot', message: 'Camera snapshot' })}
             >
               <Camera className="h-3 w-3" />
               {zone.camera && (
@@ -1330,7 +1339,7 @@ const ZoneItem = memo(function ZoneItem({ zone, isLast }: { zone: ZoneNode; isLa
                   }}
                 >
                   <Camera className="h-3.5 w-3.5" />
-                  View snapshot
+                  {i18n._({ id: 'editor.sidebar.panels.sitePanel.viewSnapshot', message: 'View snapshot' })}
                 </button>
               )}
               <button
@@ -1342,7 +1351,7 @@ const ZoneItem = memo(function ZoneItem({ zone, isLast }: { zone: ZoneNode; isLa
                 }}
               >
                 <Camera className="h-3.5 w-3.5" />
-                {zone.camera ? 'Update snapshot' : 'Take snapshot'}
+                {zone.camera ? i18n._({ id: 'editor.sidebar.panels.sitePanel.updateSnapshot', message: 'Update snapshot' }) : i18n._({ id: 'editor.sidebar.panels.sitePanel.takeSnapshot', message: 'Take snapshot' })}
               </button>
               {zone.camera && (
                 <button
@@ -1354,15 +1363,17 @@ const ZoneItem = memo(function ZoneItem({ zone, isLast }: { zone: ZoneNode; isLa
                   }}
                 >
                   <Trash2 className="h-3.5 w-3.5" />
-                  Clear snapshot
+                  {i18n._({ id: 'editor.sidebar.panels.sitePanel.clearSnapshot', message: 'Clear snapshot' })}
                 </button>
               )}
             </div>
           </PopoverContent>
         </Popover>
         <button
-          className="flex h-6 w-6 cursor-pointer items-center justify-center rounded-md text-muted-foreground opacity-0 transition-colors hover:bg-black/5 hover:text-foreground group-hover/row:opacity-100 dark:hover:bg-white/10"
+          aria-label={i18n._({ id: 'editor.sidebar.panels.sitePanel.delete', message: 'Delete' })}
+          className="flex h-6 w-6 cursor-pointer items-center justify-center rounded-md text-muted-foreground opacity-0 transition-colors hover:bg-black/5 hover:text-foreground group-hover/row:opacity-100 focus-visible:opacity-100 dark:hover:bg-white/10"
           onClick={handleDelete}
+          type="button"
         >
           <Trash2 className="h-3 w-3" />
         </button>
@@ -1372,6 +1383,7 @@ const ZoneItem = memo(function ZoneItem({ zone, isLast }: { zone: ZoneNode; isLa
 })
 
 const MultiSelectionBadge = memo(function MultiSelectionBadge() {
+  const i18n = usePascalI18n()
   const selectedIds = useViewer((state) => state.selection.selectedIds)
   const setSelection = useViewer((state) => state.setSelection)
 
@@ -1380,11 +1392,15 @@ const MultiSelectionBadge = memo(function MultiSelectionBadge() {
   return (
     <div className="pointer-events-none sticky top-4 z-50 flex h-0 w-full justify-center overflow-visible">
       <div className="pointer-events-auto flex items-center gap-2.5 rounded-full border border-primary/20 bg-primary px-0.5 py-4 pl-2 font-medium text-primary-foreground text-xs shadow-black/10 shadow-lg backdrop-blur-md">
-        <span>{selectedIds.length} objects selected</span>
+        <span>{i18n._({
+            id: 'editor.sidebar.panels.sitePanel.objectsSelected',
+            message: '{count, plural, one {# object selected} other {# objects selected}}',
+            values: { count: selectedIds.length },
+          })}</span>
         <button
           className="cursor-pointer rounded-full p-1.5 transition-colors hover:bg-primary-foreground/20"
           onClick={() => setSelection({ selectedIds: [] })}
-          title="Clear selection"
+          title={i18n._({ id: 'editor.sidebar.panels.sitePanel.clearSelection', message: 'Clear selection' })}
         >
           <X className="h-4 w-4" />
         </button>
@@ -1393,17 +1409,10 @@ const MultiSelectionBadge = memo(function MultiSelectionBadge() {
   )
 })
 
-const ContentSection = memo(function ContentSection() {
+const RoomsSection = memo(function RoomsSection() {
+  const i18n = usePascalI18n()
   const selectedLevelId = useViewer((state) => state.selection.levelId)
-  const structureLayer = useEditor((state) => state.structureLayer)
-  const phase = useEditor((state) => state.phase)
-  const setPhase = useEditor((state) => state.setPhase)
-  const setMode = useEditor((state) => state.setMode)
-  const setTool = useEditor((state) => state.setTool)
-
-  const level = useScene((s) =>
-    selectedLevelId ? ((s.nodes[selectedLevelId] as LevelNode | undefined) ?? null) : null,
-  )
+  const armToolMode = useEditor((state) => state.armToolMode)
   const levelZones = useScene(
     useShallow((s) => {
       if (!selectedLevelId) return []
@@ -1411,6 +1420,83 @@ const ContentSection = memo(function ContentSection() {
         (node): node is ZoneNode => node.type === 'zone' && node.parentId === selectedLevelId,
       )
     }),
+  )
+  const [expanded, setExpanded] = useState(true)
+
+  if (!selectedLevelId) return null
+
+  const handleDrawZone = (event: React.MouseEvent) => {
+    event.stopPropagation()
+    armToolMode({ mode: 'build', tool: 'zone' })
+  }
+
+  const rooms = levelZones.filter((zone) => zone.spaceRole === 'room')
+  const others = levelZones.filter((zone) => zone.spaceRole !== 'room')
+
+  return (
+    <div className="subtle-scrollbar max-h-72 shrink-0 overflow-y-auto overflow-x-hidden">
+      <TreeNodeWrapper
+        actions={
+          <button
+            className="flex h-6 w-6 cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-black/5 hover:text-foreground dark:hover:bg-white/10"
+            onClick={handleDrawZone}
+            title={i18n._({ id: 'editor.sidebar.panels.sitePanel.drawAZone', message: 'Draw a zone' })}
+            type="button"
+          >
+            <Plus className="h-3 w-3" />
+          </button>
+        }
+        depth={1}
+        expanded={expanded}
+        hasChildren
+        icon={<LayoutGrid className="h-3.5 w-3.5" />}
+        label={
+          <span className="flex items-center gap-1.5">
+            {i18n._({ id: 'editor.sidebar.panels.sitePanel.rooms', message: 'Rooms' })}
+            {rooms.length > 0 && (
+              <span className="text-muted-foreground text-xs">{rooms.length}</span>
+            )}
+          </span>
+        }
+        onClick={() => setExpanded((value) => !value)}
+        onToggle={() => setExpanded((value) => !value)}
+      >
+        {levelZones.length === 0 && (
+          <div className="border-border/50 border-b py-2 pr-3 pl-[52px] text-muted-foreground text-xs">
+            {i18n._({ id: 'editor.sidebar.panels.sitePanel.closeWallsAroundASpaceTo', message: 'Close walls around a space to make a room.' })}
+          </div>
+        )}
+        {rooms.map((zone, index) => (
+          <ZoneItem
+            depth={2}
+            isLast={others.length === 0 && index === rooms.length - 1}
+            key={zone.id}
+            zone={zone}
+          />
+        ))}
+        {others.length > 0 && (
+          <>
+            <div
+              className="pt-3 pb-1 pl-[52px] font-medium text-[11px] text-muted-foreground"
+              data-other-zones
+            >
+              {i18n._({ id: 'editor.sidebar.panels.sitePanel.otherZones', message: 'Other zones' })}
+            </div>
+            {others.map((zone, index) => (
+              <ZoneItem depth={2} isLast={index === others.length - 1} key={zone.id} zone={zone} />
+            ))}
+          </>
+        )}
+      </TreeNodeWrapper>
+    </div>
+  )
+})
+
+const ContentSection = memo(function ContentSection() {
+  const i18n = usePascalI18n()
+  const selectedLevelId = useViewer((state) => state.selection.levelId)
+  const level = useScene((s) =>
+    selectedLevelId ? ((s.nodes[selectedLevelId] as LevelNode | undefined) ?? null) : null,
   )
   const elementChildren = useScene(
     useShallow((s) => {
@@ -1423,56 +1509,48 @@ const ContentSection = memo(function ContentSection() {
       })
     }),
   )
+  const [expanded, setExpanded] = useState(true)
 
   if (!level) {
     return (
-      <div className="px-3 py-4 text-muted-foreground text-sm">Select a level to view content</div>
+      <div className="px-3 py-4 text-muted-foreground text-sm">{i18n._({ id: 'editor.sidebar.panels.sitePanel.selectALevelToViewContent', message: 'Select a level to view content' })}</div>
     )
   }
 
-  if (structureLayer === 'zones') {
-    const handleAddZone = () => {
-      setPhase('structure')
-      setMode('build')
-      setTool('zone')
-    }
-
-    if (levelZones.length === 0) {
-      return (
-        <div className="px-3 py-4 text-muted-foreground text-sm">
-          No zones on this level.{' '}
-          <button className="cursor-pointer text-primary hover:underline" onClick={handleAddZone}>
-            Add one
-          </button>
-        </div>
-      )
-    }
-
-    return (
-      <div className="flex flex-col">
-        {levelZones.map((zone, index) => (
-          <ZoneItem isLast={index === levelZones.length - 1} key={zone.id} zone={zone} />
-        ))}
-      </div>
-    )
-  }
-
-  if (elementChildren.length === 0) {
-    return <div className="px-3 py-4 text-muted-foreground text-sm">No elements on this level</div>
-  }
   return (
-    <TreeNodeDragProvider>
-      <div className="flex flex-col">
-        {elementChildren.map((childId, index) => (
-          <TreeNode
-            depth={0}
-            isLast={index === elementChildren.length - 1}
-            key={childId}
-            nodeId={childId}
-          />
-        ))}
-      </div>
-    </TreeNodeDragProvider>
+    <TreeNodeWrapper
+      depth={1}
+      expanded={expanded}
+      hasChildren
+      icon={<Boxes className="h-3.5 w-3.5" />}
+      label={
+        <span className="flex items-center gap-1.5">
+          {i18n._({ id: 'editor.sidebar.panels.sitePanel.elements', message: 'Elements' })}
+          {elementChildren.length > 0 && (
+            <span className="text-muted-foreground text-xs">{elementChildren.length}</span>
+          )}
+        </span>
+      }
+      onClick={() => setExpanded((value) => !value)}
+      onToggle={() => setExpanded((value) => !value)}
+    >
+      {elementChildren.length === 0 ? (
+        <div className="border-border/50 border-b py-2 pr-3 pl-[52px] text-muted-foreground text-xs">
+          {i18n._({ id: 'editor.sidebar.panels.sitePanel.noElementsOnThisLevel', message: 'No elements on this level' })}
+        </div>
+      ) : (
+        <TreeNodeDragProvider>
+          {elementChildren.map((childId, index) => (
+            <TreeNode
+              depth={2}
+              isLast={index === elementChildren.length - 1}
+              key={childId}
+              nodeId={childId}
+            />
+          ))}
+        </TreeNodeDragProvider>
+      )}
+    </TreeNodeWrapper>
   )
 })
 
@@ -1493,6 +1571,7 @@ const BuildingItem = memo(function BuildingItem({
   onUploadAsset?: (projectId: string, levelId: string, file: File, type: 'scan' | 'guide') => void
   onDeleteAsset?: (projectId: string, url: string) => void
 }) {
+  const i18n = usePascalI18n()
   const setSelection = useViewer((state) => state.setSelection)
   const phase = useEditor((state) => state.phase)
   const setPhase = useEditor((state) => state.setPhase)
@@ -1508,7 +1587,7 @@ const BuildingItem = memo(function BuildingItem({
   const handleSelect = () => {
     setSelection({ buildingId: building.id })
     if (phase === 'site') {
-      setPhase('structure')
+      setPhase('building')
     }
   }
 
@@ -1533,14 +1612,14 @@ const BuildingItem = memo(function BuildingItem({
       >
         <div className="flex h-full min-w-0 flex-1 cursor-pointer items-center gap-2 py-2 pl-3">
           <img
-            alt="Building"
+            alt={i18n._({ id: 'editor.sidebar.panels.sitePanel.building', message: 'Building' })}
             className={cn(
               'h-5 w-5 object-contain transition-all',
               !isBuildingActive && 'opacity-60 grayscale',
             )}
             src="/icons/building.webp"
           />
-          <span className="truncate font-medium text-sm">{building.name || 'Building'}</span>
+          <span className="truncate font-medium text-sm">{building.name || i18n._({ id: 'editor.sidebar.panels.sitePanel.building', message: 'Building' })}</span>
         </div>
         <Popover
           onOpenChange={(open) => setBuildingCameraOpen(open ? building.id : null)}
@@ -1555,7 +1634,7 @@ const BuildingItem = memo(function BuildingItem({
                   : 'text-muted-foreground hover:bg-accent hover:text-foreground',
               )}
               onClick={(e) => e.stopPropagation()}
-              title="Camera snapshot"
+              title={i18n._({ id: 'editor.sidebar.panels.sitePanel.cameraSnapshot', message: 'Camera snapshot' })}
             >
               <Camera className="h-4 w-4" />
               {building.camera && (
@@ -1580,7 +1659,7 @@ const BuildingItem = memo(function BuildingItem({
                   }}
                 >
                   <Camera className="h-3.5 w-3.5" />
-                  View snapshot
+                  {i18n._({ id: 'editor.sidebar.panels.sitePanel.viewSnapshot', message: 'View snapshot' })}
                 </button>
               )}
               <button
@@ -1592,7 +1671,7 @@ const BuildingItem = memo(function BuildingItem({
                 }}
               >
                 <Camera className="h-3.5 w-3.5" />
-                {building.camera ? 'Update snapshot' : 'Take snapshot'}
+                {building.camera ? i18n._({ id: 'editor.sidebar.panels.sitePanel.updateSnapshot', message: 'Update snapshot' }) : i18n._({ id: 'editor.sidebar.panels.sitePanel.takeSnapshot', message: 'Take snapshot' })}
               </button>
               {building.camera && (
                 <button
@@ -1604,7 +1683,7 @@ const BuildingItem = memo(function BuildingItem({
                   }}
                 >
                   <Trash2 className="h-3.5 w-3.5" />
-                  Clear snapshot
+                  {i18n._({ id: 'editor.sidebar.panels.sitePanel.clearSnapshot', message: 'Clear snapshot' })}
                 </button>
               )}
             </div>
@@ -1629,7 +1708,9 @@ const BuildingItem = memo(function BuildingItem({
                   onUploadAsset={onUploadAsset}
                   projectId={projectId}
                 />
-                <LayerToggle />
+                <UnitsSection buildingId={building.id} />
+                <RoomsSection />
+                <CollectionsSection />
               </div>
               <div className="subtle-scrollbar relative min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
                 <MultiSelectionBadge />
@@ -1650,6 +1731,7 @@ export interface SitePanelProps {
 }
 
 export function SitePanel({ projectId, onUploadAsset, onDeleteAsset }: SitePanelProps = {}) {
+  const i18n = usePascalI18n()
   const rootNodeIds = useScene((state) => state.rootNodeIds)
   const updateNode = useScene((state) => state.updateNode)
   const selectedBuildingId = useViewer((state) => state.selection.buildingId)
@@ -1674,7 +1756,7 @@ export function SitePanel({ projectId, onUploadAsset, onDeleteAsset }: SitePanel
 
   return (
     <LayoutGroup>
-      <div className="flex h-full flex-col">
+      <div className="flex h-full flex-col" data-surface="site-panel">
         {/* Site Header */}
         {siteNode && (
           <motion.div
@@ -1685,18 +1767,25 @@ export function SitePanel({ projectId, onUploadAsset, onDeleteAsset }: SitePanel
                 : 'text-muted-foreground hover:bg-accent/30 hover:text-foreground',
             )}
             layout="position"
-            onClick={() => setPhase('site')}
+            onClick={() => {
+              setPhase('site')
+              // Also SELECT the site node so the registry inspector mounts the
+              // site kind's panel (address / parcel / setbacks / front edge).
+              // The site kind opts out of 3D click selection, so this header is
+              // its only selection entry point. (WS1)
+              setSelection({ selectedIds: [siteNode.id as AnyNodeId], zoneId: null })
+            }}
           >
             <div className="flex items-center gap-2">
               <img
-                alt="Site"
+                alt={i18n._({ id: 'editor.sidebar.panels.sitePanel.site', message: 'Site' })}
                 className={cn(
                   'h-5 w-5 object-contain transition-all',
                   phase !== 'site' && 'opacity-60 grayscale',
                 )}
                 src="/icons/site-flag.webp"
               />
-              <span className="font-medium text-sm">{siteNode.name || 'Site'}</span>
+              <span className="font-medium text-sm">{siteNode.name || i18n._({ id: 'editor.sidebar.panels.sitePanel.site', message: 'Site' })}</span>
             </div>
             <CameraPopover
               buttonClassName={cn(
@@ -1727,6 +1816,12 @@ export function SitePanel({ projectId, onUploadAsset, onDeleteAsset }: SitePanel
                 transition={{ type: 'spring', bounce: 0, duration: 0.4 }}
               >
                 <PropertyLineSection />
+                {/* Address → parcel, setbacks, front edge: the site kind's own
+                    panel (packages/nodes/src/site/panel.tsx), loaded through
+                    the registry so the editor does not import the nodes package. */}
+                <Suspense fallback={null}>
+                  <SiteKindPanel />
+                </Suspense>
               </motion.div>
             )}
           </AnimatePresence>
@@ -1734,13 +1829,13 @@ export function SitePanel({ projectId, onUploadAsset, onDeleteAsset }: SitePanel
           {/* Buildings List */}
           {buildings.length === 0 ? (
             <motion.div className="px-3 py-4 text-muted-foreground text-sm" layout="position">
-              No buildings yet
+              {i18n._({ id: 'editor.sidebar.panels.sitePanel.noBuildingsYet', message: 'No buildings yet' })}
             </motion.div>
           ) : (
             <div className="flex min-h-0 flex-1 flex-col">
               {buildings.map((building) => {
                 const isBuildingActive =
-                  (phase === 'structure' || phase === 'furnish') &&
+                  phase === 'building' &&
                   selectedBuildingId === building.id
 
                 return (

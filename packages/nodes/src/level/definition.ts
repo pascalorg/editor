@@ -28,6 +28,7 @@ export const levelDefinition: NodeDefinition<typeof LevelNode> = {
   },
 
   capabilities: {
+    exterior: false,
     // Level is a container — selection happens via the sidebar tree
     // and the floating level switcher, never via 3D click. Declaring
     // `selectable` here would make `getSelectableKinds()` add the

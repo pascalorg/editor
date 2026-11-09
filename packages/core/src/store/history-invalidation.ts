@@ -26,6 +26,7 @@ export function getHistoryDirtyNodeIds(
         previous?.type !== 'wall' ||
         next?.type !== 'wall' ||
         previous.thickness !== next.thickness ||
+        previous.justification !== next.justification ||
         previous.height !== next.height ||
         previous.curveOffset !== next.curveOffset
       ) {

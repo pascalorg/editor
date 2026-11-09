@@ -6,7 +6,7 @@ Choose one path. Do not switch storage boundaries without the user's instruction
 
 ## Local Pascal CLI
 
-Use local mode when the project should remain on the current machine. It requires Node.js 22.13 or newer and does not require a Pascal account or API key.
+Use local mode when the project should remain on the current machine. It requires Node.js 22.23.4+ on 22.x, 24.22.1+ on 24.x, or 26.12.1+ and does not require a Pascal account or API key.
 
 Install the published CLI:
 
@@ -61,7 +61,7 @@ Use the hosted endpoint when the user wants the agent to work in a Pascal accoun
 https://editor.pascal.app/api/mcp
 ```
 
-The user creates an API key in Pascal Settings (`https://editor.pascal.app/settings`) and chooses the intended personal or organization workspace. Set `PASCAL_API_KEY` to that key without printing it. If you assign it in a shell command, avoid or remove that command from shell history.
+Cursor users follow the browser sign-in instructions below. For other clients, the user creates an API key in Pascal Settings (`https://editor.pascal.app/settings`) and chooses the intended personal or organization workspace. Set `PASCAL_API_KEY` to that key without printing it. If you assign it in a shell command, avoid or remove that command from shell history.
 
 Codex CLI:
 
@@ -107,25 +107,36 @@ The current OpenClaw static-header path stores the expanded key in its private M
 
 Cursor:
 
-Installing this repository as a Cursor plugin declares an optional `PASCAL_API_KEY` variable. A team admin sets its value in the Cursor dashboard under **Plugins** → **Configure**, at install time or later; the repository holds only the `${PASCAL_API_KEY}` placeholder. With a value set, the plugin's `pascal-hosted` server reaches the hosted endpoint alongside the local `pascal` server. Leaving it unset keeps the install local-only: the local server still works and `pascal-hosted` fails with `401 Unauthorized` because the placeholder resolves to nothing. Disable `pascal-hosted` in Cursor's MCP settings to remove that failing entry.
+The Cursor marketplace installs this repository's `skills/` directory. Its `.cursor-plugin/plugin.json` explicitly selects the Cursor MCP configuration, so the Claude-only `${user_config.pascal_api_key}` header is never used by Cursor. The local server runs `npx --yes --package=@pascal-app/cli@1.0.7 pascal mcp connect`; Node.js 22.23.4+ on 22.x, 24.22.1+ on 24.x, or 26.12.1+ and npm must be available to Cursor. No global `pascal` installation or web-editor runtime is required. The first connection downloads the pinned CLI from npm, and later connections reuse npm's cache. This starts only the local MCP service and keeps existing local project storage. If Cursor reports `spawn npx ENOENT`, install Node.js/npm and fully restart Cursor so it picks up the executable path. For an older installed bundle that still runs `pascal`, update the plugin; `npm install --global @pascal-app/cli@1.0.7` followed by **Customize → MCPs → pascal → Reload** repairs that legacy local command.
 
-For Cursor without the plugin, and for other JSON-based clients, prefer their supported environment-variable or secret interpolation rather than a literal key. In `.cursor/mcp.json`:
+The hosted `pascal-hosted` server uses browser sign-in. In **Customize → MCPs**, choose **Authenticate** (or **Connect**) beside `pascal-hosted`. Pascal opens in your browser: sign in or create an account with Google or email, choose the intended workspace, review access, then return to Cursor. No API key or plugin variable is required. Let the user approve the account and workspace shown in consent. Ordinary access covers reading and editing projects; it does not authorize publishing, credit spending, external AI processing, community posting, or account management. Disconnect at `https://editor.pascal.app/settings/connected-apps`.
+
+For local-only work, use `pascal` and leave `pascal-hosted` disconnected. Local project storage stays on this machine. If browser sign-in is unavailable, verify that the installed plugin and hosted service support this flow; do not create another account or fall back to a different workspace implicitly.
+
+For Cursor without the plugin, add this to `.cursor/mcp.json` and start authentication in Cursor:
 
 ```json
 {
   "mcpServers": {
-    "pascal": {
+    "pascal-hosted": {
       "type": "http",
       "url": "https://editor.pascal.app/api/mcp",
-      "headers": {
-        "Authorization": "Bearer ${env:PASCAL_API_KEY}"
+      "auth": {
+        "CLIENT_ID": "pascal-cursor",
+        "scopes": [
+          "openid",
+          "profile",
+          "offline_access",
+          "scene:read",
+          "scene:write"
+        ]
       }
     }
   }
 }
 ```
 
-Cursor resolves `${env:PASCAL_API_KEY}` from the environment it starts in, so the file holds no key and `PASCAL_API_KEY` must be exported where Cursor is launched. The two Cursor syntaxes are not interchangeable: `${env:NAME}` reads the environment in a user or project `.cursor/mcp.json`, while a plugin's `mcp.json` uses the bare `${NAME}` plugin-variable form resolved from the dashboard. Client interpolation syntax varies. Confirm that the chosen host supports this form before relying on it.
+Existing manually configured API-key connections remain supported. Do not combine an Authorization header with this OAuth configuration.
 
 ## Autonomous private work
 
@@ -145,10 +156,14 @@ The response includes `userId`, `apiKey`, `starterProjectId`, `mcpEndpoint`, and
 
 ## Connection recovery
 
-- `401 Unauthorized`: verify the endpoint, the `Bearer` prefix, and whether the client sent the environment-backed secret. Rotate or revoke exposed keys.
+- `401 Unauthorized` in Cursor: authenticate again and confirm the intended workspace. With API-key clients, verify the endpoint, the `Bearer` prefix, and whether the client sent the environment-backed secret. Rotate or revoke exposed keys.
 - Project missing in the browser: verify that the credential belongs to the same user or organization that is opening the URL.
 - Expired MCP session: reconnect, then call `get_project_status` with the project ID to bind the new session.
 - Empty or stale browser: load the intended scene, inspect its state, call `get_project_status`, and use the returned URL. Save a draft only when the user authorized the underlying edit; a read-only assessment needs no save.
 - Missing sampling support: image-to-scene tools cannot use host vision. Use semantic construction from user-supplied measurements or report the missing capability.
 
 Current hosted instructions: `https://editor.pascal.app/docs/developers/mcp`.
+
+## Hosted project files
+
+When offered by the connected host, `get_project_assets` lists the project's uploads, plugin documents and completed Studio outputs; follow `nextCursor`. `get_project_file` returns metadata and a download URL. Store deliverables with `upload_project_file` (`text` for UTF-8 documents; `prepare`, HTTP PUT to the signed URL, then `complete` for binary files). Return the saved file URL. Use `rename_project_file` to rename, and `delete_project_file` only when deletion was requested. These calls use the credential's existing workspace scope. A local scene does not gain a hosted file catalog just by connecting an account.

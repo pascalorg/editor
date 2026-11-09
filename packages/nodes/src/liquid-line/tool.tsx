@@ -6,6 +6,7 @@ import {
   type GridEvent,
   type LinesetNode,
   LiquidLineNode,
+  usePascalI18n,
   useScene,
 } from '@pascal-app/core'
 import {
@@ -15,19 +16,25 @@ import {
   isAngleSnapActive,
   isGridSnapActive,
   isMagneticSnapActive,
+  isTypingTarget,
   markToolCancelConsumed,
   triggerSFX,
   useEditor,
   usePathDraftPreview,
 } from '@pascal-app/editor'
+import {
+  alignDrawPoint,
+  clearDrawAlignment,
+  collectScenePorts,
+  findNearestPortXZ,
+} from '@pascal-app/editor/distribution'
 import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
 import { useEffect, useRef, useState } from 'react'
 import { type Group, Vector3 } from 'three'
-import { alignDrawPoint, clearDrawAlignment } from '../shared/draw-alignment'
 import { LevelOffsetGroup } from '../shared/level-offset-group'
 import { offsetPathHorizontal } from '../shared/path-offset'
-import { collectScenePorts, findNearestPortXZ, REFRIGERANT_PORT_SYSTEMS } from '../shared/ports'
+import { REFRIGERANT_PORT_SYSTEMS } from '../shared/port-systems'
 import { liquidLineDefinition } from './definition'
 import { useLiquidLineToolOptions } from './options'
 
@@ -258,6 +265,7 @@ function tracePath(target: FollowTarget): Vec3[] | null {
 }
 
 const LiquidLineTool = () => {
+  const i18n = usePascalI18n()
   const activeLevelId = useViewer((s) => s.selection.levelId)
   const unit = useViewer((s) => s.unit)
   const follow = useLiquidLineToolOptions((s) => s.follow)
@@ -308,6 +316,7 @@ const LiquidLineTool = () => {
       // rather than folding into one mitered polyline run.
       const line = LiquidLineNode.parse({
         ...liquidLineDefinition.defaults(),
+        ...useEditor.getState().toolDefaults['liquid-line'],
         name: 'Liquid Line',
         path: [start, end],
       })
@@ -325,7 +334,10 @@ const LiquidLineTool = () => {
     const commitTrace = (target: FollowTarget) => {
       const traced = tracePath(target)
       if (!traced) return
-      const defaults = liquidLineDefinition.defaults()
+      const defaults = {
+        ...liquidLineDefinition.defaults(),
+        ...useEditor.getState().toolDefaults['liquid-line'],
+      }
       const create = []
       for (let i = 0; i < traced.length - 1; i++) {
         const a = traced[i]!
@@ -463,8 +475,7 @@ const LiquidLineTool = () => {
     }
 
     const onKeyDown = (e: KeyboardEvent) => {
-      const tag = (e.target as HTMLElement | null)?.tagName
-      if (tag === 'INPUT' || tag === 'TEXTAREA') return
+      if (isTypingTarget(e.target)) return
       if (e.key === 'f' || e.key === 'F') {
         e.preventDefault()
         useLiquidLineToolOptions.getState().toggleFollow()
@@ -570,8 +581,14 @@ const LiquidLineTool = () => {
                   }}
                 >
                   {followTargetRef.current
-                    ? 'Click to trace this lineset run'
-                    : 'Follow: hover a lineset'}
+                    ? i18n._({
+                        id: 'node.liquidLine.tool.clickToTraceThisLinesetRun',
+                        message: 'Click to trace this lineset run',
+                      })
+                    : i18n._({
+                        id: 'node.liquidLine.tool.followHoverALineset',
+                        message: 'Follow: hover a lineset',
+                      })}
                 </div>
               </Html>
             </group>

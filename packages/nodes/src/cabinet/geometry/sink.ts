@@ -11,53 +11,23 @@ import {
   Group,
   type Material,
   Mesh,
+  RingGeometry,
   SphereGeometry,
   TorusGeometry,
 } from 'three'
-import type { SinkLayout } from '../stack'
-import { createWorldScaleBoxGeometry, stampSlot } from './shared'
+import {
+  BASIN_WALL,
+  FAUCET_BASE_RADIUS,
+  type SinkBowlSpec,
+  sinkFaucetFootprint,
+  sinkOpening,
+} from '../appliance-layout'
 
-const BASIN_WALL = 0.012
+export { FAUCET_SETBACK, type SinkBowlSpec, sinkBowls } from '../appliance-layout'
+
+import { createWorldScaleBoxGeometry, refrigeratorDarkTrimMaterial, stampSlot } from './shared'
+
 const BASIN_DEPTH = 0.19
-const BASIN_CORNER_MARGIN = 0.06
-// Centers the faucet base in the strip between the bowl's back edge and the
-// countertop's back edge (BASIN_CORNER_MARGIN wide).
-export const FAUCET_SETBACK = 0.03
-
-export type SinkBowlSpec = { centerX: number; width: number; depth: number }
-
-/**
- * Bowl rects in module-local X/Z given the usable countertop footprint.
- * Shared by the 3D cut, the run-countertop cut, and the 2D floorplan symbol.
- */
-export function sinkBowls(
-  layout: SinkLayout,
-  usableWidth: number,
-  usableDepth: number,
-): SinkBowlSpec[] {
-  const depth = Math.max(0.1, usableDepth - BASIN_CORNER_MARGIN * 2)
-  const full = Math.max(0.15, usableWidth - BASIN_CORNER_MARGIN * 2)
-  if (layout === 'single') {
-    const width = Math.min(0.7, full)
-    return [{ centerX: 0, width, depth }]
-  }
-  const divider = 0.03
-  if (layout === 'double') {
-    const width = Math.min(0.42, (full - divider) / 2)
-    return [
-      { centerX: -(width + divider) / 2, width, depth },
-      { centerX: (width + divider) / 2, width, depth },
-    ]
-  }
-  // double-offset: 60/40 split
-  const total = Math.min(0.86, full)
-  const main = (total - divider) * 0.6
-  const side = (total - divider) * 0.4
-  return [
-    { centerX: -(total / 2) + main / 2, width: main, depth },
-    { centerX: total / 2 - side / 2, width: side, depth },
-  ]
-}
 
 /**
  * Subtract the sink bowl openings from a countertop mesh via three-bvh-csg.
@@ -80,9 +50,8 @@ export function cutSinkIntoCountertop(
   for (const bowl of bowls) {
     // Rim reveal: the opening is slightly smaller than the basin shell so
     // the undermount lip tucks under the countertop.
-    const cutter = new Brush(
-      new BoxGeometry(bowl.width - BASIN_WALL, countertopThickness * 4, bowl.depth - BASIN_WALL),
-    )
+    const opening = sinkOpening(bowl)
+    const cutter = new Brush(new BoxGeometry(opening.width, countertopThickness * 4, opening.depth))
     cutter.position.set(cutCenterX + bowl.centerX, countertop.position.y, cutCenterZ)
     prepareBrushForCSG(cutter)
     const next = csgEvaluator.evaluate(result, cutter, SUBTRACTION) as Brush
@@ -149,10 +118,20 @@ function addBasinShell(
     },
   ]
   for (const wall of walls) {
-    const mesh = stampSlot(
-      new Mesh(createWorldScaleBoxGeometry(...wall.size), applianceMaterial),
-      'appliance',
-    )
+    const geometry = createWorldScaleBoxGeometry(...wall.size)
+    const positions = geometry.getAttribute('position')
+    const taper = Math.min(0.025, innerWidth * 0.12, innerDepth * 0.12)
+    // Keep the countertop opening fixed; pressed steel bowls narrow toward the drain.
+    for (let i = 0; i < positions.count; i++) {
+      const y = positions.getY(i) + wall.position[1]
+      const inset = taper * Math.min(1, Math.max(0, (rimY - y) / BASIN_DEPTH))
+      const px = positions.getX(i) + wall.position[0] - x
+      const pz = positions.getZ(i) + wall.position[2] - centerZ
+      positions.setX(i, px * (1 - (2 * inset) / bowl.width) + x - wall.position[0])
+      positions.setZ(i, pz * (1 - (2 * inset) / bowl.depth) + centerZ - wall.position[2])
+    }
+    geometry.computeVertexNormals()
+    const mesh = stampSlot(new Mesh(geometry, applianceMaterial), 'appliance')
     mesh.name = `${name}-basin-${wall.suffix}`
     mesh.position.set(...wall.position)
     mesh.castShadow = true
@@ -167,6 +146,15 @@ function addBasinShell(
   drain.name = `${name}-drain`
   drain.position.set(x, bottomY + BASIN_WALL + 0.002, centerZ)
   group.add(drain)
+
+  const drainRecess = stampSlot(
+    new Mesh(new RingGeometry(0.009, 0.019, 20), refrigeratorDarkTrimMaterial),
+    'appliance',
+  )
+  drainRecess.name = `${name}-drain-recess`
+  drainRecess.rotation.x = -Math.PI / 2
+  drainRecess.position.set(x, bottomY + BASIN_WALL + 0.0042, centerZ)
+  group.add(drainRecess)
 
   const trap = stampSlot(
     new Mesh(
@@ -207,7 +195,7 @@ function addFaucetHandle(
   const rootInset = 0.022
 
   const saddle = stampSlot(
-    new Mesh(new SphereGeometry(barrelRadius * 1.08, 24, 14), applianceMaterial),
+    new Mesh(new SphereGeometry(barrelRadius * 1.08, 12, 8), applianceMaterial),
     'appliance',
   )
   saddle.name = `${name}-faucet-handle-saddle`
@@ -218,7 +206,7 @@ function addFaucetHandle(
 
   const barrel = stampSlot(
     new Mesh(
-      new CylinderGeometry(barrelRadius, barrelRadius, barrelLength + rootInset, 28),
+      new CylinderGeometry(barrelRadius, barrelRadius, barrelLength + rootInset, 16),
       applianceMaterial,
     ),
     'appliance',
@@ -232,7 +220,7 @@ function addFaucetHandle(
   const endCapThickness = 0.007
   const endCap = stampSlot(
     new Mesh(
-      new CylinderGeometry(barrelRadius * 1.03, barrelRadius * 1.03, endCapThickness, 28),
+      new CylinderGeometry(barrelRadius * 1.03, barrelRadius * 1.03, endCapThickness, 16),
       applianceMaterial,
     ),
     'appliance',
@@ -282,7 +270,10 @@ function addFaucet(
 
   // Round base flare where the body meets the countertop.
   const flare = stampSlot(
-    new Mesh(new CylinderGeometry(FAUCET_BODY_RADIUS + 0.002, 0.032, 0.008, 28), applianceMaterial),
+    new Mesh(
+      new CylinderGeometry(FAUCET_BODY_RADIUS + 0.002, FAUCET_BASE_RADIUS, 0.008, 16),
+      applianceMaterial,
+    ),
     'appliance',
   )
   flare.name = `${name}-faucet-escutcheon`
@@ -293,7 +284,7 @@ function addFaucet(
   // Mixer body: straight Ø52mm column; riser, spout, and handle grow from it.
   const body = stampSlot(
     new Mesh(
-      new CylinderGeometry(FAUCET_BODY_RADIUS, FAUCET_BODY_RADIUS, FAUCET_BODY_HEIGHT, 28),
+      new CylinderGeometry(FAUCET_BODY_RADIUS, FAUCET_BODY_RADIUS, FAUCET_BODY_HEIGHT, 16),
       applianceMaterial,
     ),
     'appliance',
@@ -305,7 +296,7 @@ function addFaucet(
 
   // Domed shoulder capping the body.
   const shoulder = stampSlot(
-    new Mesh(new SphereGeometry(FAUCET_BODY_RADIUS, 24, 16), applianceMaterial),
+    new Mesh(new SphereGeometry(FAUCET_BODY_RADIUS, 12, 8), applianceMaterial),
     'appliance',
   )
   shoulder.name = `${name}-faucet-shoulder`
@@ -346,7 +337,7 @@ function addFaucet(
   // deck) and back down toward the bowl (+Z).
   const gooseneck = stampSlot(
     new Mesh(
-      new TorusGeometry(FAUCET_ARC_RADIUS, FAUCET_TUBE_RADIUS, 14, 32, Math.PI),
+      new TorusGeometry(FAUCET_ARC_RADIUS, FAUCET_TUBE_RADIUS, 8, 20, Math.PI),
       applianceMaterial,
     ),
     'appliance',
@@ -445,9 +436,8 @@ export function addSinkCompartment(
     addBasinShell(group, bowl, centerX, centerZ, rimY, `${name}-${bowlIndex}`, applianceMaterial)
   }
 
-  const bowlsMinX = Math.min(...bowls.map((bowl) => bowl.centerX - bowl.width / 2))
-  const bowlsMaxX = Math.max(...bowls.map((bowl) => bowl.centerX + bowl.width / 2))
-  const faucetX = centerX + (bowlsMinX + bowlsMaxX) / 2
-  const faucetZ = centerZ - bowls[0]!.depth / 2 - FAUCET_SETBACK
+  const faucet = sinkFaucetFootprint(bowls)
+  const faucetX = centerX + faucet.x
+  const faucetZ = centerZ + faucet.z
   addFaucet(group, faucetX, faucetZ, rimY + countertopThickness, name, applianceMaterial)
 }

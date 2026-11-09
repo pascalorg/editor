@@ -1,14 +1,14 @@
-import { type AnyNodeId, type StairNode, type StairSegmentNode, useScene } from '@pascal-app/core'
+import { type AnyNodeId, type StairNode, type StairSegmentNode, useScene, usePascalI18n} from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { AnimatePresence } from 'motion/react'
 import Image from 'next/image'
 import { memo, useCallback, useEffect, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import useEditor from '../../../../../store/use-editor'
 import { InlineRenameInput } from './inline-rename-input'
 import { focusTreeNode, handleTreeSelection, TreeNodeWrapper } from './tree-node'
 import { TreeNodeActions } from './tree-node-actions'
 import { DropIndicatorLine, useTreeNodeDrag } from './tree-node-drag'
+import { staircaseDefaultName, stairSegmentDefaultName } from './default-names'
 
 interface StairTreeNodeProps {
   nodeId: AnyNodeId
@@ -21,6 +21,7 @@ export const StairTreeNode = memo(function StairTreeNode({
   depth,
   isLast,
 }: StairTreeNodeProps) {
+  const i18n = usePascalI18n()
   const [isEditing, setIsEditing] = useState(false)
   const [expanded, setExpanded] = useState(false)
   const isVisible = useScene((s) => s.nodes[nodeId]?.visible !== false)
@@ -48,15 +49,12 @@ export const StairTreeNode = memo(function StairTreeNode({
   const handleClick = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation()
-      const handled = handleTreeSelection(
+      handleTreeSelection(
         e,
         nodeId,
         useViewer.getState().selection.selectedIds,
         setSelection,
       )
-      if (!handled && useEditor.getState().phase === 'furnish') {
-        useEditor.getState().setPhase('structure')
-      }
     },
     [nodeId, setSelection],
   )
@@ -83,7 +81,7 @@ export const StairTreeNode = memo(function StairTreeNode({
   }, [isDropTarget, expanded])
 
   const segmentCount = segments.length
-  const defaultName = `Staircase (${segmentCount} segment${segmentCount !== 1 ? 's' : ''})`
+  const defaultName = staircaseDefaultName(i18n, segmentCount)
 
   // Hide the dragged segment from every stair while dragging
   const visibleSegments = drag ? segments.filter((seg) => seg.id !== drag.nodeId) : segments
@@ -162,6 +160,7 @@ function StairSegmentTreeNode({
   depth: number
   isLast?: boolean
 }) {
+  const i18n = usePascalI18n()
   const [isEditing, setIsEditing] = useState(false)
   const isSelected = useViewer((state) => state.selection.selectedIds.includes(node.id))
   const isHovered = useViewer((state) => state.hoveredId === node.id)
@@ -181,18 +180,16 @@ function StairSegmentTreeNode({
   const handlePointerDown = useCallback(
     (e: React.PointerEvent) => {
       if (e.button !== 0) return
-      const typeLabel = node.segmentType === 'stair' ? 'Flight' : 'Landing'
-      const label = `${typeLabel} (${node.width.toFixed(1)}×${node.length.toFixed(1)}m)`
+      const label = stairSegmentDefaultName(i18n, node.segmentType, node.width, node.length)
       startDrag(node.id, node.type, node.parentId as string, label, e.clientX, e.clientY)
     },
-    [node.id, node.type, node.parentId, node.segmentType, node.width, node.length, startDrag],
+    [node.id, node.type, node.parentId, node.segmentType, node.width, node.length, startDrag, i18n],
   )
 
   const handleStartEditing = useCallback(() => setIsEditing(true), [])
   const handleStopEditing = useCallback(() => setIsEditing(false), [])
 
-  const typeLabel = node.segmentType === 'stair' ? 'Flight' : 'Landing'
-  const defaultName = `${typeLabel} (${node.width.toFixed(1)}×${node.length.toFixed(1)}m)`
+  const defaultName = stairSegmentDefaultName(i18n, node.segmentType, node.width, node.length)
 
   return (
     <div data-drop-child={node.id}>

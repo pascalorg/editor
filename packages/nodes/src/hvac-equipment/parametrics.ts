@@ -2,6 +2,7 @@ import type { ParametricDescriptor } from '@pascal-app/core'
 import type { HvacEquipmentNode } from './schema'
 
 export const hvacEquipmentParametrics: ParametricDescriptor<HvacEquipmentNode> = {
+  trailingSection: () => import('../shared/duct-collar-inspector'),
   groups: [
     {
       label: 'Equipment',

@@ -1,15 +1,9 @@
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import { ErrorCode, McpError } from '@modelcontextprotocol/sdk/types.js'
+import type { McpServer } from '@modelcontextprotocol/server'
+import { ProtocolError, ProtocolErrorCode } from '@modelcontextprotocol/server'
+import { newZone } from '@pascal-app/core'
 import type { SceneGraph } from '@pascal-app/core/clone-scene-graph'
 import type { AnyNodeId, AnyNode as AnyNodeT } from '@pascal-app/core/schema'
-import {
-  AnyNode,
-  BuildingNode,
-  LevelNode,
-  SiteNode,
-  WallNode,
-  ZoneNode,
-} from '@pascal-app/core/schema'
+import { AnyNode, BuildingNode, LevelNode, SiteNode, WallNode } from '@pascal-app/core/schema'
 import { z } from 'zod'
 import type { SceneOperations } from '../../operations'
 import { DESTRUCTIVE_OPEN_WORLD_TOOL_ANNOTATIONS } from '../annotations'
@@ -166,7 +160,7 @@ async function callVisionSampling(
 ): Promise<VisionResponse> {
   const caps = server.server.getClientCapabilities()
   if (!caps?.sampling) {
-    throw new McpError(ErrorCode.InvalidRequest, 'sampling_unavailable')
+    throw new ProtocolError(ProtocolErrorCode.InvalidRequest, 'sampling_unavailable')
   }
 
   const imageBlock = await resolveImageBlock(image)
@@ -188,7 +182,7 @@ async function callVisionSampling(
 
   const text = extractText(response.content as Parameters<typeof extractText>[0])
   if (!text) {
-    throw new McpError(ErrorCode.InternalError, 'sampling_response_unparseable', {
+    throw new ProtocolError(ProtocolErrorCode.InternalError, 'sampling_response_unparseable', {
       reason: 'no text content returned by host',
     })
   }
@@ -197,7 +191,7 @@ async function callVisionSampling(
   try {
     parsed = JSON.parse(text)
   } catch (err) {
-    throw new McpError(ErrorCode.InternalError, 'sampling_response_unparseable', {
+    throw new ProtocolError(ProtocolErrorCode.InternalError, 'sampling_response_unparseable', {
       raw: text,
       reason: err instanceof Error ? err.message : String(err),
     })
@@ -205,7 +199,7 @@ async function callVisionSampling(
 
   const validation = VisionResponseSchema.safeParse(parsed)
   if (!validation.success) {
-    throw new McpError(ErrorCode.InternalError, 'sampling_response_invalid', {
+    throw new ProtocolError(ProtocolErrorCode.InternalError, 'sampling_response_invalid', {
       raw: text,
       errors: validation.error.issues,
     })
@@ -311,7 +305,7 @@ function buildSceneGraphFromVision(
   for (let i = 0; i < vision.rooms.length; i++) {
     const r = vision.rooms[i]!
     try {
-      const zone = ZoneNode.parse({
+      const zone = newZone({
         name: r.name,
         polygon: r.polygon,
       })
@@ -357,8 +351,8 @@ export function registerPhotoToScene(server: McpServer, bridge: SceneOperations)
       title: 'Photo to Pascal scene',
       description:
         'Orchestrator: analyse a floor-plan photo via MCP sampling, translate the structured vision result into a Pascal SceneGraph (site → building → level with walls and zones), optionally save it, and swap the bridge to the new scene. Requires host support for sampling.',
-      inputSchema: photoToSceneInput,
-      outputSchema: photoToSceneOutput,
+      inputSchema: z.object(photoToSceneInput),
+      outputSchema: z.object(photoToSceneOutput),
       annotations: DESTRUCTIVE_OPEN_WORLD_TOOL_ANNOTATIONS,
     },
     async ({ image, scaleHint, name, save, defaultWallThickness, defaultWallHeight }) => {

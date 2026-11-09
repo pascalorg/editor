@@ -1,7 +1,8 @@
 {
   "name": "@pascal-app/mcp",
-  "version": "1.0.0",
+  "version": "1.0.7",
   "description": "Model Context Protocol server for Pascal 3D editor",
+  "mcpName": "app.pascal/editor",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -35,10 +36,15 @@
       "types": "./dist/bridge/index.d.ts",
       "import": "./dist/bridge/index.js",
       "default": "./dist/bridge/index.js"
+    },
+    "./tools/*": {
+      "types": "./dist/tools/*.d.ts",
+      "import": "./dist/tools/*.js",
+      "default": "./dist/tools/*.js"
     }
   },
   "bin": {
-    "pascal-mcp": "./dist/bin/pascal-mcp.js"
+    "pascal-mcp": "dist/bin/pascal-mcp.js"
   },
   "files": [
     "dist",
@@ -47,7 +53,7 @@
     "CHANGELOG.md"
   ],
   "scripts": {
-    "build": "tsc --build && bun ../../scripts/fix-node-esm-imports.ts ../core/dist && bun ../../scripts/fix-node-esm-imports.ts dist",
+    "build": "tsc --build && bun ../../scripts/fix-node-esm-imports.ts ../core/dist && bun ../../scripts/fix-node-esm-imports.ts ../geometry-script/dist && bun ../../scripts/fix-node-esm-imports.ts dist",
     "dev": "tsgo --build --watch",
     "start": "bun dist/bin/pascal-mcp.js",
     "test": "bun test",
@@ -56,18 +62,22 @@
     "prepublishOnly": "bun run build && bun test && bun run smoke:node"
   },
   "peerDependencies": {
-    "@pascal-app/core": "^1.0.0"
+    "@pascal-app/core": "^1.0.7"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.30.0",
-    "@pascal-app/lingo": "^0.2.0",
-    "zod": ">=4.5.4 <4.6"
+    "@hono/node-server": "^2.1.6",
+    "@modelcontextprotocol/node": "^2.1.2",
+    "@modelcontextprotocol/server": "^2.4.0",
+    "@pascal-app/geometry-script": "^1.0.7",
+    "@pascal-app/lingo": "^0.5.0",
+    "zod": ">=4.6.7 <4.7"
   },
   "devDependencies": {
-    "@pascal-app/core": "^1.0.0",
+    "@modelcontextprotocol/client": "^2.4.0",
+    "@pascal-app/core": "^1.0.7",
     "@pascal/typescript-config": "*",
-    "@types/node": "^22.19.20",
-    "typescript": "6.0.3"
+    "@types/node": "^26.6.6",
+    "typescript": "7.0.2"
   },
   "keywords": [
     "mcp",
@@ -80,10 +90,10 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/pascalorg/editor.git",
+    "url": "git+https://github.com/pascalorg/editor.git",
     "directory": "packages/mcp"
   },
   "license": "MIT",
-  "homepage": "https://github.com/pascalorg/editor/tree/main/packages/mcp#readme",
+  "homepage": "https://editor.pascal.app/docs/developers/mcp",
   "bugs": "https://github.com/pascalorg/editor/issues"
 }

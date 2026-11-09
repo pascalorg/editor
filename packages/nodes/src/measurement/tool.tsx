@@ -15,6 +15,7 @@ import {
   measurementPerimeter,
   measurementPrismVolume,
   sceneRegistry,
+  useLocale,
   useScene,
 } from '@pascal-app/core'
 import {
@@ -31,7 +32,6 @@ import {
   isAlignmentGuideActive,
   isGridSnapActive,
   type LinearUnit,
-  linearUnitToMeters,
   MEASUREMENT_ACTIVE_COLOR,
   type MeasurementAxis,
   type MeasurementAxisGuide,
@@ -41,6 +41,7 @@ import {
   measurementPolygonLabelAnchor,
   measurementPolygonMidpoints,
   metersToLinearUnit,
+  parseLinearMeasurementInput,
   useEditor,
   useInteractionScope,
   useMeasurementDraft,
@@ -767,9 +768,12 @@ export function closestMeasurementExtrusionHeight(
   return Number.isFinite(height) ? height : null
 }
 
-export function parseMeasurementExtrusionHeight(value: string, unit: LinearUnit): number | null {
-  const numericValue = Number.parseFloat(value)
-  return Number.isFinite(numericValue) ? linearUnitToMeters(numericValue, unit) : null
+export function parseMeasurementExtrusionHeight(
+  value: string,
+  unit: LinearUnit,
+  locale = 'en',
+): number | null {
+  return parseLinearMeasurementInput(value, unit, locale)
 }
 
 function extrusionHeightFromPointer(
@@ -1224,6 +1228,7 @@ function DraftLabel({
 
 function DraftExtrusionControl({ position }: { position: Vector3 }) {
   const unit = useViewer((state) => state.unit)
+  const locale = useLocale()
   const extrusionHeight = useMeasurementDraft((state) => state.extrusionHeight)
   const points = useMeasurementDraft((state) => state.points)
   const baseNormal = useMeasurementDraft((state) => state.baseNormal)
@@ -1245,11 +1250,11 @@ function DraftExtrusionControl({ position }: { position: Vector3 }) {
     setValue(next)
     useMeasurementDraft
       .getState()
-      .setExtrusionHeight('3d', parseMeasurementExtrusionHeight(next, unit) ?? 0)
+      .setExtrusionHeight('3d', parseMeasurementExtrusionHeight(next, unit, locale) ?? 0)
   }
 
   const commit = () => {
-    const height = parseMeasurementExtrusionHeight(value, unit)
+    const height = parseMeasurementExtrusionHeight(value, unit, locale)
     if (height === null) {
       useMeasurementDraft.getState().setExtrusionHeight('3d', 0)
       return
@@ -1313,7 +1318,7 @@ function DraftExtrusionControl({ position }: { position: Vector3 }) {
             }}
             placeholder="0"
             step="0.1"
-            type="number"
+            type="text"
             value={value}
           />
           <span className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-muted-foreground text-xs">

@@ -64,7 +64,7 @@ export const SceneBvh = forwardRef<Group, SceneBvhProps>(
         verbose,
         setBoundingBox,
         maxDepth,
-        maxLeafSize,
+        targetLeafSize: maxLeafSize,
         indirect,
       }
       const group = ref.current

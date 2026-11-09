@@ -131,6 +131,7 @@ function preparedWallHeight(
     node.supportSlabId ?? null,
     undefined,
     node.supportOffset,
+    node.justification,
   )
   const hasDisplacedBase =
     Math.abs(support.baseElevation - support.elevation) > 1e-5 ||

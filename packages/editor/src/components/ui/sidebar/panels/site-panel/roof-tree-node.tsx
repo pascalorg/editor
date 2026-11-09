@@ -1,4 +1,4 @@
-import { type AnyNodeId, type RoofNode, type RoofSegmentNode, useScene } from '@pascal-app/core'
+import { type AnyNodeId, type RoofNode, type RoofSegmentNode, useScene, usePascalI18n} from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { AnimatePresence } from 'motion/react'
 import Image from 'next/image'
@@ -9,6 +9,7 @@ import { InlineRenameInput } from './inline-rename-input'
 import { focusTreeNode, handleTreeSelection, TreeNode, TreeNodeWrapper } from './tree-node'
 import { TreeNodeActions } from './tree-node-actions'
 import { DropIndicatorLine, useTreeNodeDrag } from './tree-node-drag'
+import { roofDefaultName, roofSegmentDefaultName } from './default-names'
 
 interface RoofTreeNodeProps {
   nodeId: AnyNodeId
@@ -21,6 +22,7 @@ export const RoofTreeNode = memo(function RoofTreeNode({
   depth,
   isLast,
 }: RoofTreeNodeProps) {
+  const i18n = usePascalI18n()
   const [isEditing, setIsEditing] = useState(false)
   const [expanded, setExpanded] = useState(false)
   const isVisible = useScene((s) => s.nodes[nodeId]?.visible !== false)
@@ -49,15 +51,12 @@ export const RoofTreeNode = memo(function RoofTreeNode({
   const handleClick = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation()
-      const handled = handleTreeSelection(
+      handleTreeSelection(
         e,
         nodeId,
         useViewer.getState().selection.selectedIds,
         setSelection,
       )
-      if (!handled && useEditor.getState().phase === 'furnish') {
-        useEditor.getState().setPhase('structure')
-      }
       if (!e.metaKey && !e.ctrlKey && !e.shiftKey) {
         setRoofHostDragArmedId(nodeId)
       }
@@ -87,7 +86,7 @@ export const RoofTreeNode = memo(function RoofTreeNode({
   }, [isDropTarget, expanded])
 
   const segmentCount = segments.length
-  const defaultName = `Roof (${segmentCount} segment${segmentCount !== 1 ? 's' : ''})`
+  const defaultName = roofDefaultName(i18n, segmentCount)
 
   // Hide the dragged segment from every roof while dragging
   const visibleSegments = drag ? segments.filter((seg) => seg.id !== drag.nodeId) : segments
@@ -166,6 +165,7 @@ function RoofSegmentTreeNode({
   depth: number
   isLast?: boolean
 }) {
+  const i18n = usePascalI18n()
   const [isEditing, setIsEditing] = useState(false)
   const [expanded, setExpanded] = useState(true)
   const accessoryIds = useScene(
@@ -209,16 +209,16 @@ function RoofSegmentTreeNode({
   const handlePointerDown = useCallback(
     (e: React.PointerEvent) => {
       if (e.button !== 0) return
-      const label = `${node.roofType.charAt(0).toUpperCase() + node.roofType.slice(1)} (${node.width.toFixed(1)}×${node.depth.toFixed(1)}m)`
+      const label = roofSegmentDefaultName(i18n, node.roofType, node.width, node.depth)
       startDrag(node.id, node.type, node.parentId as string, label, e.clientX, e.clientY)
     },
-    [node.id, node.type, node.parentId, node.roofType, node.width, node.depth, startDrag],
+    [node.id, node.type, node.parentId, node.roofType, node.width, node.depth, startDrag, i18n],
   )
 
   const handleStartEditing = useCallback(() => setIsEditing(true), [])
   const handleStopEditing = useCallback(() => setIsEditing(false), [])
 
-  const defaultName = `${node.roofType.charAt(0).toUpperCase() + node.roofType.slice(1)} (${node.width.toFixed(1)}x${node.depth.toFixed(1)}m)`
+  const defaultName = roofSegmentDefaultName(i18n, node.roofType, node.width, node.depth)
 
   const hasAccessories = accessoryIds.length > 0
 

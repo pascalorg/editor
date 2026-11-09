@@ -12,12 +12,24 @@ export { ErrorBoundary } from './components/error-boundary'
 // `@pascal-app/nodes/<kind>/renderer.tsx` and are loaded by the registry
 // — no per-kind re-exports needed.
 export { NodeRenderer } from './components/renderers/node-renderer'
-export { default as Viewer, type ViewerHandle } from './components/viewer'
+// The generic renderer of a kind that ships `def.geometry`, for a kind's renderer that draws
+// something beside its built group.
+export { ParametricNodeRenderer } from './components/renderers/parametric-node-renderer'
+export {
+  default as Viewer,
+  pendingSceneBuildCount,
+  type ViewerHandle,
+  type ViewerImmersiveSession,
+} from './components/viewer'
 export {
   type BVHEcctrlApi,
   default as BVHEcctrl,
   type MovementInput,
 } from './components/viewer/bvh-ecctrl'
+export {
+  DroneController,
+  type DroneControllerProps,
+} from './components/viewer/drone-controller'
 export {
   buildGlbInteractiveItems,
   GlbInteractive,
@@ -28,11 +40,10 @@ export {
   buildGlbReplaceNodes,
 } from './components/viewer/glb-reference-nodes'
 export {
-  type GlbHover,
-  type GlbIdentity,
-  type GlbLevel,
+  type GlbPickEvent,
   GlbScene,
   type GlbWalkthrough,
+  resolveGlbPick,
 } from './components/viewer/glb-scene'
 export {
   CROUCH_CAPSULE,
@@ -59,9 +70,16 @@ export {
 } from './components/viewer/scene-atmosphere'
 export { SceneEnvironment } from './components/viewer/scene-environment'
 export {
+  claimSceneGround,
   SceneGroundReplacement,
   useSceneGroundReplacement,
 } from './components/viewer/scene-ground-replacement'
+export {
+  type CalloutAction,
+  type CalloutText,
+  SelectionCallout,
+} from './components/viewer/selection-callout'
+export { applyWalkthroughCameraClipping } from './components/viewer/viewer-camera'
 export {
   isViewerPresentationTextureBorrowed,
   markViewerPresentationTextureBorrowed,
@@ -78,7 +96,7 @@ export { useGLTFKTX2 } from './hooks/use-gltf-ktx2'
 export { useLibraryMaterialsVersion } from './hooks/use-library-materials-version'
 export { useNodeEvents } from './hooks/use-node-events'
 export { ASSETS_CDN_URL, resolveAssetUrl, resolveCdnUrl } from './lib/asset-url'
-export { backdropGradient, deepSkyColor, horizonHazeColor } from './lib/backdrop'
+export { backdropColors, backdropGradient, deepSkyColor, horizonHazeColor } from './lib/backdrop'
 export { applyWorldScaleBoxUVs } from './lib/box-uv'
 // CSG primitives — used by chimney's roof-trim and other kinds whose
 // geometry subtracts pieces against their host. Lives in viewer
@@ -90,13 +108,67 @@ export {
   csgEvaluator,
   csgGeometry,
   csgMaterials,
+  Evaluator,
+  ensureRenderableGeometryAttributes,
   INTERSECTION,
   prepareBrushForCSG,
   SUBTRACTION,
 } from './lib/csg-utils'
+export {
+  createDaylightGroundMaterial,
+  DAYLIGHT_GROUND,
+  DAYLIGHT_PARCEL,
+  daylightGroundColor,
+} from './lib/daylight/ground'
+export {
+  type LatLng,
+  type LocationSource,
+  requestDeviceLocation,
+  resolveLocation,
+} from './lib/daylight/location'
+export { type DaylightAtmosphereSource, isDaylightAtmosphere } from './lib/daylight/look'
+export { WEATHER_COVER, type Weather } from './lib/daylight/sky'
+export {
+  presetInstant,
+  type SkyPhase,
+  skyPhase,
+  solarClockInstant,
+  solarClockMinutes,
+  solarPosition,
+  sunEvents,
+  type TimeOfDay,
+} from './lib/daylight/solar'
+export type { DisplayState } from './lib/display-state'
 export { disposeObject3DResources } from './lib/dispose-object3d'
+export {
+  createDroneInput,
+  DRONE_SLOW_MULTIPLIER,
+  type DroneInput,
+  type DroneLook,
+  seedDroneLook,
+  stepDroneFlight,
+  turnFirstPersonLook,
+} from './lib/drone-flight'
 export type { EdgeMode } from './lib/edge-style'
+export { markHighlight, tintEmissive } from './lib/editor-highlight'
+export {
+  BLOCK_MASONRY,
+  concreteMaterial,
+  type Masonry,
+  masonryMaterial,
+  STRUCTURE_COLORS,
+} from './lib/foundation-materials'
+export { preserveGltfUnlit } from './lib/gltf-unlit'
 export { PERF_OVERLAY_ENABLED } from './lib/gpu-perf'
+export {
+  groundWindowBoxNow,
+  groundWindowContains,
+  groundWindowEnabledNode,
+  groundWindowMaskNode,
+  inGroundWindowNode,
+  setGroundWindow,
+  temporarilyGroundWindowForCapture,
+} from './lib/ground-window'
 export {
   computeHeroFraming,
   DEFAULT_FRAMING_EXCLUDED_TYPES,
@@ -110,8 +182,10 @@ export {
   clearIsolation,
   collectIsolationSubtree,
   isIsolationActive,
+  refreshIsolation,
 } from './lib/isolation'
-export { configureKtx2Support, ensureKtx2Support } from './lib/ktx2-loader'
+export { setKeyLightDirectionOverride } from './lib/key-light-override'
+export { configureKtx2Support, ensureKtx2Support, ktx2TextureLoadState } from './lib/ktx2-loader'
 export { LayerPassIndex } from './lib/layer-pass'
 export {
   BATCHED_LAYER,
@@ -122,6 +196,7 @@ export {
   setSurfaceRaycastLayers,
   ZONE_LAYER,
 } from './lib/layers'
+export { holdLiveFrame } from './lib/live-frame-hold'
 export {
   applyMaterialPresetToMaterials,
   BLUEPRINT_PALETTE,
@@ -131,6 +206,7 @@ export {
   clearMaterialCache,
   createDefaultMaterial,
   createMaterial,
+  createMaterialFromPreset,
   createMaterialFromPresetRef,
   createSurfaceRoleMaterial,
   DEFAULT_CEILING_MATERIAL,
@@ -142,21 +218,37 @@ export {
   DEFAULT_WALL_MATERIAL,
   DEFAULT_WINDOW_MATERIAL,
   disposeMaterial,
+  getMaterialTextureVersion,
   glassMaterial,
   MONO_PALETTE,
+  materialCastsShadow,
+  materialTextureLoadState,
   PRESET_PALETTES,
   type RenderShading,
   registerMaterialCacheCleanup,
   resolveMaterialRef,
   resolveSlotDefaultMaterial,
   resolveSurfaceColor,
+  setSlotDefaultOverrides,
   WHITE_PALETTE,
 } from './lib/materials'
 export { mergedOutline } from './lib/merged-outline-node'
+export { createNodeTopSurfaceHeightSampler } from './lib/node-top-surface-height'
 export * from './lib/perf-actions'
 export { type PerfBatchStats, publishPerfBatchStats } from './lib/perf-panel-store'
 export * from './lib/perf-tracks'
-export { markPureRaycast } from './lib/pointer-events'
+export {
+  hasMaterialsForGroups,
+  markPureRaycast,
+  type ViewerBreadcrumb,
+  type ViewerBreadcrumbHandler,
+} from './lib/pointer-events'
+export {
+  cloneWithProceduralEmission,
+  decorateProceduralEmission,
+  proceduralSlotMeshes,
+  setProceduralEmission,
+} from './lib/procedural-emission'
 export {
   detectRendererCapability,
   initializeGpuRenderer,
@@ -166,6 +258,26 @@ export {
   type RendererInitializationResult,
   type RendererPowerPreference,
 } from './lib/renderer-capability'
+export { commitEditCandidates, commitRevealCandidates } from './lib/reveal-candidates'
+export {
+  ANIMATION_SPEEDS,
+  type AnimationSpeed,
+  DEFAULT_ANIMATION_SPEED,
+  FRAMING_PACE,
+  LAZY_REVEAL_BASE_TIMING,
+  LAZY_REVEAL_TIMING,
+  type LazyRevealTiming,
+  lazyTimingAt,
+  normalizeAnimationSpeed,
+  type PlannedReveal,
+  pacedLazyTiming,
+  planLazyReveal,
+  type RevealCandidate,
+  retractTimingAt,
+  revealTimingAt,
+} from './lib/reveal-schedule'
+export { planRevealWindows, type RevealWindow } from './lib/reveal-windows'
+export { createSceneSupportHeightSampler } from './lib/scene-support-height'
 export {
   getSceneTheme,
   SCENE_THEME_IDS,
@@ -176,9 +288,19 @@ export {
   type HiddenReason,
   hideFromScene,
   showInScene,
+  temporarilyShowPresentation,
   temporarilyShowShadowOnly,
 } from './lib/scene-visibility'
+export { SCRIPTED_MODEL_FLAG } from './lib/scripted-opening'
 export {
+  SITE_GROUND,
+  type SiteGroundRole,
+  siteGround,
+  siteSurfaces,
+  temporarilyVeilGround,
+} from './lib/site-surfaces'
+export {
+  createPlainSnapshotPipeline,
   createSnapshotPipeline,
   SNAPSHOT_MAX_EDGE,
   SNAPSHOT_MIME,
@@ -188,6 +310,7 @@ export {
   type SnapshotCropRegion,
   type SnapshotPipeline,
   type SnapshotSize,
+  type StudioBackdrop,
   THUMBNAIL_HEIGHT,
   THUMBNAIL_WIDTH,
 } from './lib/snapshot-pipeline'
@@ -204,31 +327,91 @@ export {
   textureMapForSlot,
 } from './lib/texture-reference'
 export { packNormalToRGB, unpackRGBToNormal } from './lib/tsl-compat'
-export { useItemLightPool } from './store/use-item-light-pool'
+export {
+  AMBIANCE_SECONDS,
+  ambianceNow,
+  ambianceTarget,
+  easeAmbiance,
+  eyeUnderTheGround,
+  FADE_SECONDS,
+  groundHoleOpenNode,
+  groundHoleOpenNow,
+  stepAmbianceProgress,
+  temporarilyWithoutAmbiance,
+  UNDERGROUND_RIM,
+  undergroundAmbianceNode,
+} from './lib/underground-ambiance'
+export { createZoneShape, createZoneWallGeometry } from './lib/zone-geometry'
+export type { LightSource } from './store/use-item-light-pool'
+export { catalogLightSource, useItemLightPool } from './store/use-item-light-pool'
 export {
   applyCountryUnitDefault,
+  DEFAULT_UNDERGROUND_LOOK,
   default as useViewer,
+  type GroundMode,
+  groundVeiled,
   type MetricNotation,
+  type RenderQuality,
+  type RenderQualityChoice,
+  siteGroundShown,
+  type UndergroundEdge,
+  type UndergroundLook,
+  type UndergroundTransition,
+  type WalkthroughMovement,
   type WallMode,
 } from './store/use-viewer'
-export { CeilingSystem } from './systems/ceiling/ceiling-system'
+export {
+  CEILING_CAP_MESH,
+  CEILING_REGION_MESH,
+  type CeilingRegionMaterial,
+  CeilingSystem,
+} from './systems/ceiling/ceiling-system'
 export {
   createColumnBoxGeometry,
   createColumnCylinderGeometry,
   createColumnSphereGeometry,
   createColumnTorusGeometry,
 } from './systems/column/column-geometry'
+export {
+  ConstructionReveal,
+  type ConstructionRevealDriver,
+  type ConstructionRevealLevel,
+  type ConstructionRevealOptions,
+  emitRevealPuff,
+  getRetractTurn,
+  getRevealPlanSpeed,
+  getRevealPlanState,
+  getRevealTurn,
+  isNodeRevealing,
+  isRevealAssembling,
+  type RetractResult,
+  type RevealCompleteEvent,
+  type RevealEvent,
+  type RevealFinaleEvent,
+  type RevealGroupEvent,
+  type RevealNodeStartEvent,
+  type RevealPhaseEvent,
+  type RevealPlanState,
+  type RevealPreroll,
+  type RevealRetractEvent,
+  retractNodes,
+  revealChangedNodeIds,
+  revealClockMs,
+  revealMotionOff,
+  seatLiftedNow,
+  setRevealPreroll,
+  startConstructionReveal,
+  subscribeRevealAssembling,
+  subscribeRevealEvents,
+  subscribeRevealPhases,
+  subscribeRevealTicks,
+  useRevealPending,
+  useRevealPlanActive,
+  useRevealWaiting,
+} from './systems/construction-reveal/construction-reveal'
 export { DoorAnimationSystem } from './systems/door/door-animation-system'
 export { buildDoorPreviewMesh, DoorSystem, poseDoorMovingParts } from './systems/door/door-system'
 export { ElevatorInteractionSystem } from './systems/elevator/elevator-interaction-system'
-// Fence system follows the wall re-export pattern — composed into the
-// registry-driven fence definition's `def.system`. Removed in Phase 6
-// alongside the legacy fence mount point.
-export {
-  FenceSystem,
-  generateFenceGeometry,
-  generateFenceSlotGeometries,
-} from './systems/fence/fence-system'
 // Generic floor-elevation system. Lifts the rendered mesh of any kind
 // whose definition declares `capabilities.floorPlaced` by the slab
 // elevation under its footprint. Replaces the per-kind elevation block
@@ -236,33 +419,55 @@ export {
 export { FloorElevationSystem } from './systems/floor-elevation/floor-elevation-system'
 export { GuideSystem } from './systems/guide/guide-system'
 export { InteractiveSystem } from './systems/interactive/interactive-system'
+export { openingSettled, proceduralSettled } from './systems/interactive/opening-settled'
+export {
+  type ScriptedClipActions,
+  ScriptedClips,
+  useClipActions,
+} from './systems/interactive/scripted-clips'
 // Item systems for the registry-driven item definition. ItemSystem
 // applies attachTo-driven transforms each frame; ItemLightSystem
 // manages item-mounted light sources.
 export { ItemSystem } from './systems/item/item-system'
 export { ItemLightSystem } from './systems/item-light/item-light-system'
+export { itemLightsForCapture } from './systems/item-light/pooled-lights'
 export { LevelSystem } from './systems/level/level-system'
 export {
   EXPLODED_GAP,
   getLevelPresentationY,
+  presentLevelsForCapture,
   snapLevelsToTruePositions,
 } from './systems/level/level-utils'
-export { getRoofMaterialArray } from './systems/roof/roof-materials'
+export {
+  ROOF_GABLE_LEFT_MATERIAL_INDEX,
+  ROOF_GABLE_RIGHT_MATERIAL_INDEX,
+  ROOF_HEEL_MATERIAL_INDEX,
+  ROOF_RENDER_MATERIAL_COUNT,
+} from './systems/roof/roof-material-slots'
+export {
+  getRoofMaterialArray,
+  levelWallCladdingRef,
+  levelWallFaceRef,
+} from './systems/roof/roof-materials'
 // Generic roof-segment primitives. Kinds that compose CSG against
 // the roof shell (chimney's self-trim, dormer's virtual-segment cut)
 // read these through the public surface. No kind-specific helpers
 // belong here — those live in `@pascal-app/nodes/<kind>/`.
 export {
+  clipDirectRoofGeometryAgainstSiblings,
   clipGeometryBySegmentTrim,
   generateRoofSegmentGeometry,
+  getPendingRoofMergeCount,
   getRoofOuterSurfaceFrameAtPoint,
   getRoofSegmentBrushes,
   mapRoofGroupMaterialIndex,
   ROOF_MATERIAL_SLOT_COUNT,
+  type RoofGeometryAdapter,
   RoofSystem,
   remapRoofShellFaces,
   roofCsgDummyMats,
   type SurfaceFrame,
+  splitRoofWallBandFaces,
 } from './systems/roof/roof-system'
 export { ScanSystem } from './systems/scan/scan-system'
 // Pure slab geometry generator — composed into the registry-driven slab
@@ -280,24 +485,49 @@ export { StairSystem } from './systems/stair/stair-system'
 // (arch / rounded / frameless opening) identical across both hosts.
 export {
   buildOpeningCutoutGeometry,
+  buildOpeningCutoutShape,
   getOpeningCutoutBottomPadding,
   hasFlatOpeningCutoutBottom,
 } from './systems/wall/opening-cutout-geometry'
 export { getWallHideState, WallCutout } from './systems/wall/wall-cutout'
-export { getVisibleWallMaterials } from './systems/wall/wall-materials'
+export {
+  WallCutoutCache,
+  type WallCutoutViewerState,
+  type WallCutoutViewerStore,
+} from './systems/wall/wall-cutout-cache'
+export {
+  getWallFaceBaseAt,
+  getWallFinishData,
+  getWallFinishRefs,
+  type WallFinishGeometryData,
+} from './systems/wall/wall-finish-data'
+export {
+  getMaterialsForWall,
+  getVisibleWallMaterials,
+  type WallMaterialOverride,
+  type WallMaterials,
+  type WallMaterialsResolver,
+} from './systems/wall/wall-materials'
 // Wall internals re-exported so `@pascal-app/nodes`' registry-driven wall
 // definition can compose them into `def.system` without duplicating the
 // 800+ lines of CSG / mitering logic during Phase 3. These exports are
 // removed in Phase 6 when the legacy mount points are deleted.
 export {
   drainRebuiltWalls,
+  generateExtrudedWall,
   getPendingWallRebuildCount,
   isWallInitialBuildActive,
+  runWallBuildFrame,
+  type WallGeometryAdapter,
+  type WallGeometryAdapterContext,
   WallSystem,
 } from './systems/wall/wall-system'
 export {
+  advanceWindowAnimations,
   poseWindowMovingParts,
   WindowAnimationSystem,
 } from './systems/window/window-animation-system'
+export { restoreWindowRollerShutter } from './systems/window/window-roller-shutter'
 export { buildWindowPreviewMesh, WindowSystem } from './systems/window/window-system'
 export { ZoneSystem } from './systems/zone/zone-system'
+export { useImmersiveXRPresentation } from './xr/presentation-context'

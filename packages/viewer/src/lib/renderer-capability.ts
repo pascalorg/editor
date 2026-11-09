@@ -121,12 +121,14 @@ export async function detectRendererCapability({
 
 export async function initializeGpuRenderer<Renderer extends InitializableRenderer>({
   createRenderer,
+  forceWebGL = false,
   gpu,
   powerPreference,
   probeCanvas = browserCanvas(),
   webgpuTimeoutMs = WEBGPU_INITIALIZATION_TIMEOUT_MS,
 }: {
   createRenderer: (parameters: RendererBackendParameters) => Renderer
+  forceWebGL?: boolean
   gpu?: RendererGpu | null
   powerPreference?: RendererPowerPreference
   probeCanvas?: RendererCapabilityCanvas | null
@@ -134,7 +136,7 @@ export async function initializeGpuRenderer<Renderer extends InitializableRender
 }): Promise<RendererInitializationResult<Renderer>> {
   const capability = await detectRendererCapability({
     canvas: probeCanvas,
-    gpu,
+    gpu: forceWebGL ? null : gpu,
     powerPreference,
     webgpuTimeoutMs,
   })

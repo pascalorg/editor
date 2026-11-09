@@ -3,14 +3,20 @@ import { z } from 'zod'
 import { BaseNode, nodeType, objectId } from '../base'
 import type { MaterialSchema as MaterialSchemaType } from '../material'
 import { MaterialSchema } from '../material'
-import { StairSegmentNode } from './stair-segment'
+import { StairDesignTargets } from './stair-design-targets'
+import { StairRailingMode, StairRailingStyle } from './stair-types'
 
-export const StairRailingMode = z.enum(['none', 'left', 'right', 'both'])
+export { StairDesignTargets } from './stair-design-targets'
+export { StairRailingMode, StairRailingStyle } from './stair-types'
+
+import { StairConstruction } from './stair-construction'
+import { StairSegmentNode } from './stair-segment'
+import { StairStructure } from './stair-structure'
+
 export const StairType = z.enum(['straight', 'curved', 'spiral'])
 export const StairTopLandingMode = z.enum(['none', 'integrated'])
 export const StairSlabOpeningMode = z.enum(['none', 'destination'])
 
-export type StairRailingMode = z.infer<typeof StairRailingMode>
 export type StairType = z.infer<typeof StairType>
 export type StairTopLandingMode = z.infer<typeof StairTopLandingMode>
 export type StairSlabOpeningMode = z.infer<typeof StairSlabOpeningMode>
@@ -19,6 +25,12 @@ export type StairSurfaceMaterialSpec = {
   material?: MaterialSchemaType
   materialPreset?: string
 }
+
+const StairHandrailEnd = z.object({
+  extension: z.number().finite().nonnegative().default(0),
+  return: z.enum(['none', 'wall', 'post', 'floor']).default('none'),
+  returnLength: z.number().finite().nonnegative().default(0.1),
+})
 
 export const StairNode = BaseNode.extend({
   id: objectId('stair'),
@@ -50,9 +62,16 @@ export const StairNode = BaseNode.extend({
   openingOffset: z.number().default(0),
   width: z.number().default(1.0),
   totalRise: z.number().optional(),
+  designTargets: StairDesignTargets.optional(),
+  uniformRisers: z.boolean().optional(),
   stepCount: z.number().default(10),
+  // Optional magnetic destination connection, independent of the source support.
+  autoSurfaceSnap: z.boolean().optional(),
+  destinationSurfaceId: z.string().optional(),
   thickness: z.number().default(0.25),
   fillToFloor: z.boolean().default(true),
+  construction: StairConstruction.optional(),
+  structure: StairStructure.optional(),
   innerRadius: z.number().default(0.9),
   sweepAngle: z.number().default(Math.PI / 2),
   topLandingMode: StairTopLandingMode.default('none'),
@@ -61,12 +80,31 @@ export const StairNode = BaseNode.extend({
   showStepSupports: z.boolean().default(true),
   railingMode: StairRailingMode.default('none'),
   railingHeight: z.number().default(0.92),
+  railingStyle: StairRailingStyle.optional(),
+  railingPath: z.enum(['original', 'continuous']).optional(),
+  handrail: z
+    .object({
+      mode: StairRailingMode.default('both'),
+      height: z.number().positive().default(0.9),
+      diameter: z.number().positive().default(0.045),
+      offset: z.number().nonnegative().default(0.06),
+      bottom: StairHandrailEnd.optional(),
+      top: StairHandrailEnd.optional(),
+    })
+    .optional(),
+  // 'post-and-rail' only: false leaves the TOP post out so the rail dies
+  // into a post that already stands there (a porch's 6x6 beside the flight).
+  railingTopPost: z.boolean().optional(),
+  // Guard styles: how far past the top nosing, along the slope, the rails run
+  // to die into the post standing there (a porch post set back from the edge).
+  railingTopReach: z.number().min(0).optional(),
+  railingPostThrough: z.boolean().optional(),
   // Child stair segment IDs
   children: z.array(StairSegmentNode.shape.id).default([]),
 }).describe(
   dedent`
   Stair node - a container for stair segments.
-  Acts as a group that either holds one or more StairSegmentNodes (straight stairs)
+  Acts as a group that either holds one or more StairSegmentNodes (stairs)
   or stores stair-level geometry properties for curved stairs.
   - position: center position of the stair group
   - rotation: rotation around Y axis
@@ -78,6 +116,9 @@ export const StairNode = BaseNode.extend({
   - width: stair width
   - totalRise: total stair height
   - stepCount: number of visible steps
+  - construction: optional explicit construction and finish details, inherited by child segments; absence preserves legacy bodies
+  - structure: how the stair is built — wood-stringers (2x12 or 2x10 stringers, cut or housed, the count automatic from a maximum spacing of 16 in o.c. unless set; 2x6-pair, 5/4x6-pair, 2x12 or plywood-finish treads; closed risers once it rises over 30 in), concrete (a solid poured flight on a footing) or steel-stringers (steel channels); it draws the body when no explicit construction is set. Absent keeps the original body
+  - autoSurfaceSnap: magnetically connect straight flights to nearby registered top surfaces
   - thickness: stair slab / tread thickness
   - fillToFloor: whether the stair mass fills down to the floor or uses tread thickness only
   - innerRadius: inner curve radius for curved stairs
@@ -88,7 +129,14 @@ export const StairNode = BaseNode.extend({
   - showStepSupports: whether spiral stairs render step support brackets
   - railingMode: whether to render railings and on which side(s)
   - railingHeight: top height of the railing above the stair surface
-  - children: array of StairSegmentNode IDs for straight stairs
+  - railingStyle: balusters, post-and-rail, cable, boards, glass (flat panels) or metal (steel posts and balusters); balusters when absent
+  - railingPath: original per-flight paths or continuous guards through turns and exposed landing edges
+  - designTargets: optional riser, going and headroom preferences in metres, not code certification
+  - uniformRisers: distribute the total flight rise by riser count when enabled
+  - railingTopPost: guard styles only — false leaves the top post out so the rails die into a post already standing there (a porch post); railingTopReach runs the rails that far past the top nosing along the slope to reach it (top post on, reach 0 when absent)
+  - railingPostThrough: guard styles — the posts run past the cap rail and get a cap of their own (off when absent)
+  - handrail: independent rail; optional bottom/top end extension (bottom sloped, top horizontal), return none/wall/post/floor, and returnLength in metres for outward wall-facing or downward post-facing geometry. Returns do not attach to hosts. Floor returns meet the source/arrival elevation. Closed paths have no end details.
+  - children: array of StairSegmentNode IDs for stairs
   `,
 )
 

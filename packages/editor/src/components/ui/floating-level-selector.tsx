@@ -24,14 +24,25 @@ import {
   type BuildingNode,
   DEFAULT_LEVEL_HEIGHT,
   getStoredLevelHeight,
+  groundSeat,
   LevelNode,
   useScene,
 } from '@pascal-app/core'
 import { markPerfAction, useViewer } from '@pascal-app/viewer'
-import { ClipboardPaste, Copy, GripVertical, MoreVertical, Plus, Trash2 } from 'lucide-react'
+import {
+  ArrowDownToLine,
+  ClipboardPaste,
+  Copy,
+  GripVertical,
+  MoreVertical,
+  Plus,
+  Trash2,
+  X,
+} from 'lucide-react'
 import {
   type ButtonHTMLAttributes,
   type CSSProperties,
+  Fragment,
   useCallback,
   useEffect,
   useRef,
@@ -42,14 +53,26 @@ import { pasteSelectionAndPickUp } from '../editor/group-actions'
 import {
   buildLevelDuplicateCreateOps,
   type LevelDuplicatePreset,
-} from '../../lib/level-duplication'
-import { getDefaultLevelName, getLevelDisplayName } from '@pascal-app/core'
+} from '@pascal-app/core/building'
+import {
+  formatNumber,
+  roofLevelOrderBreach,
+  servesAsRoofLevel,
+  useLocale,
+  usePascalI18n,
+} from '@pascal-app/core'
+import { authoredLevelName, localizedLevelName } from '../../i18n/level-name'
+import { messageWithSlot } from '../../i18n/message-slot'
+import { addStoreyBelow, addStoreyOnTop, setGroundFloor } from '../../lib/add-storey'
 import { deleteLevelWithFallbackSelection } from '../../lib/level-selection'
+import { unitMemberLevels, leaveUnitFocus } from '../../lib/units'
 import { useLinearDisplay } from '../../lib/use-linear-display'
 import { cn } from '../../lib/utils'
+import { useIsMobile } from '../../hooks/use-mobile'
 import { ActionButton } from './controls/action-button'
 import { SliderControl } from './controls/slider-control'
 import { LevelDuplicateDialog } from './level-duplicate-dialog'
+import { LevelWallCopyPrompt, offerExteriorWallCopy } from './level-wall-copy-prompt'
 import {
   Dialog,
   DialogContent,
@@ -71,28 +94,31 @@ function LevelInlineRename({
   isEditing: boolean
   onStopEditing: () => void
 }) {
+  const i18n = usePascalI18n()
+  const locale = useLocale()
   const updateNode = useScene((s) => s.updateNode)
-  const defaultName = getDefaultLevelName(level.level)
-  const [value, setValue] = useState(level.name || '')
+  const defaultName = localizedLevelName({ level: level.level }, i18n, locale)
+  const authoredName = authoredLevelName(level)
+  const [value, setValue] = useState(authoredName ?? '')
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (isEditing) {
-      setValue(level.name || '')
+      setValue(authoredName ?? '')
       setTimeout(() => {
         inputRef.current?.focus()
         inputRef.current?.select()
       }, 0)
     }
-  }, [isEditing, level.name])
+  }, [isEditing, authoredName])
 
   const handleSave = useCallback(() => {
     const trimmed = value.trim()
-    if (trimmed !== level.name) {
+    if ((trimmed || undefined) !== authoredName) {
       updateNode(level.id, { name: trimmed || undefined })
     }
     onStopEditing()
-  }, [value, level.id, level.name, updateNode, onStopEditing])
+  }, [value, level.id, authoredName, updateNode, onStopEditing])
 
   if (!isEditing) return null
 
@@ -131,28 +157,42 @@ function LevelRow({
   onDuplicate,
   onPaste,
   onRequestDelete,
+  onSetGround,
+  isGround,
+  unitDotColor,
 }: {
   level: LevelNode
   isSelected: boolean
   isDragging?: boolean
   dragHandleProps?: ButtonHTMLAttributes<HTMLButtonElement>
   dragHandleRef?: (element: HTMLButtonElement | null) => void
+  /** Focused-unit color when the unit has zones on this level. */
+  unitDotColor?: string
   onSelect: () => void
   onDuplicate: (preset?: LevelDuplicatePreset) => void
   onPaste?: () => void
   onRequestDelete: () => void
+  /** Makes this level the ground floor: the line moves under it. */
+  onSetGround: () => void
+  /** This level is the ground floor, seated at grade: nothing left to set. */
+  isGround: boolean
 }) {
   const [duplicateDialogOpen, setDuplicateDialogOpen] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
   const updateNode = useScene((s) => s.updateNode)
+  const i18n = usePascalI18n()
+  const locale = useLocale()
   const { isImperial, toDisplay, displayUnit, precision: displayPrecision } = useLinearDisplay('m', 2)
 
   const storeyHeight = getStoredLevelHeight(level)
   // Decimal units keep the compact readout; integer millimeters must retain trailing zeroes.
-  const formattedStoreyHeight = toDisplay(storeyHeight).toFixed(displayPrecision)
-  const storeyHeightLabel = `${
-    displayPrecision > 0 ? formattedStoreyHeight.replace(/0$/, '') : formattedStoreyHeight
-  } ${displayUnit}`
+  const formattedStoreyHeight = formatNumber(toDisplay(storeyHeight), {
+    locale,
+    min: Math.max(0, displayPrecision - 1),
+    max: displayPrecision,
+  })
+  const storeyHeightLabel = `${formattedStoreyHeight} ${displayUnit}`
+  const levelName = localizedLevelName(level, i18n, locale)
   // Same rule as the site panel and command palette: the ordinal-0 ground
   // floor is the vertical model's zero anchor and must never be deletable.
   const canDeleteLevel = level.level !== 0
@@ -183,17 +223,17 @@ function LevelRow({
         <div
           className={cn(
             'flex items-center rounded-lg transition-colors',
-            isDragging && 'bg-white/10 text-foreground shadow-lg',
+            isDragging && 'bg-black/6 dark:bg-white/10 text-foreground shadow-lg',
             isSelected
-              ? 'bg-white/10 text-foreground'
-              : 'text-muted-foreground/70 hover:bg-white/5 hover:text-muted-foreground',
+              ? 'bg-black/6 dark:bg-white/10 text-foreground'
+              : 'text-muted-foreground/70 hover:bg-black/4 dark:hover:bg-white/5 hover:text-muted-foreground',
           )}
         >
           <button
             {...dragHandleProps}
-            aria-label={`Reorder ${getLevelDisplayName(level)}`}
+            aria-label={i18n._({ id: 'editor.floatingLevelSelector.reorderLevelname', message: 'Reorder {levelName}', values: { levelName } })}
             className={cn(
-              'ml-0.5 flex h-6 w-4 shrink-0 cursor-grab touch-none items-center justify-center rounded-md text-muted-foreground/35 opacity-0 transition-colors hover:bg-white/5 hover:text-foreground focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/50 group-hover/level:opacity-100',
+              'ml-0.5 flex h-6 w-4 shrink-0 cursor-grab touch-none items-center justify-center rounded-md text-muted-foreground/35 opacity-0 transition-colors hover:bg-black/4 dark:hover:bg-white/5 hover:text-foreground focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/50 group-hover/level:opacity-100',
               isDragging && 'cursor-grabbing opacity-100',
             )}
             onClick={(e) => {
@@ -201,7 +241,7 @@ function LevelRow({
               dragHandleProps?.onClick?.(e)
             }}
             ref={dragHandleRef}
-            title="Drag to reorder"
+            title={i18n._({ id: 'editor.floatingLevelSelector.dragToReorder', message: 'Drag to reorder' })}
             type="button"
           >
             <GripVertical className="h-3.5 w-3.5" />
@@ -214,19 +254,26 @@ function LevelRow({
               e.stopPropagation()
               setIsEditing(true)
             }}
-            title={getLevelDisplayName(level)}
+            title={levelName}
             type="button"
           >
-            <span className="truncate">{getLevelDisplayName(level)}</span>
+            <span className="truncate">{levelName}</span>
+            {unitDotColor && (
+              <span
+                className="ml-1.5 h-1.5 w-1.5 shrink-0 rounded-full"
+                style={{ backgroundColor: unitDotColor }}
+                title={i18n._({ id: 'editor.floatingLevelSelector.focusedUnitHasZonesHere', message: 'Focused unit has zones here' })}
+              />
+            )}
           </button>
 
           {/* Storey height badge — opens the height popover */}
           <Popover>
             <PopoverTrigger asChild>
               <button
-                className="mr-0.5 shrink-0 whitespace-nowrap rounded px-1 py-0.5 font-mono text-[10px] text-muted-foreground/50 tabular-nums transition-colors hover:bg-white/5 hover:text-foreground"
+                className="mr-0.5 shrink-0 whitespace-nowrap rounded px-1 py-0.5 font-mono text-[10px] text-muted-foreground tabular-nums transition-colors hover:bg-black/4 hover:text-foreground dark:text-muted-foreground/50 dark:hover:bg-white/5 dark:hover:text-foreground"
                 onClick={(e) => e.stopPropagation()}
-                title="Level height"
+                title={i18n._({ id: 'editor.floatingLevelSelector.levelHeight', message: 'Level height' })}
                 type="button"
               >
                 {storeyHeightLabel}
@@ -240,7 +287,7 @@ function LevelRow({
               sideOffset={8}
             >
               <SliderControl
-                label="Level height"
+                label={i18n._({ id: 'editor.floatingLevelSelector.levelHeight', message: 'Level height' })}
                 max={20}
                 min={1}
                 onChange={(v) => updateNode(level.id, { height: v })}
@@ -266,16 +313,21 @@ function LevelRow({
           <Popover>
             <PopoverTrigger asChild>
               <button
-                className="flex h-5 w-4 shrink-0 items-center justify-center text-muted-foreground/40 opacity-0 transition-all hover:text-foreground group-hover/level:opacity-100"
+                aria-label={i18n._({
+                  id: 'editor.layers.levelOptions',
+                  message: '{levelName} options',
+                  values: { levelName },
+                })}
+                className="flex h-5 w-4 shrink-0 items-center justify-center text-muted-foreground/40 opacity-0 transition-all hover:text-foreground group-hover/level:opacity-100 focus-visible:opacity-100"
                 onClick={(e) => e.stopPropagation()}
                 type="button"
               >
                 <MoreVertical className="h-3 w-3" />
               </button>
             </PopoverTrigger>
-            <PopoverContent align="start" className="w-44 p-1" side="right" sideOffset={8}>
+            <PopoverContent align="start" className="w-max min-w-44 max-w-72 p-1" side="right" sideOffset={8}>
               <button
-                className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-muted-foreground text-xs transition-colors hover:bg-white/10 hover:text-foreground"
+                className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-muted-foreground text-xs transition-colors hover:bg-black/6 dark:hover:bg-white/10 hover:text-foreground"
                 onClick={(e) => {
                   e.stopPropagation()
                   onDuplicate()
@@ -283,10 +335,10 @@ function LevelRow({
                 type="button"
               >
                 <Copy className="h-3 w-3" />
-                Duplicate level
+                {i18n._({ id: 'editor.floatingLevelSelector.duplicateLevel', message: 'Duplicate level' })}
               </button>
               <button
-                className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-muted-foreground text-xs transition-colors hover:bg-white/10 hover:text-foreground"
+                className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-muted-foreground text-xs transition-colors hover:bg-black/6 dark:hover:bg-white/10 hover:text-foreground"
                 onClick={(e) => {
                   e.stopPropagation()
                   setDuplicateDialogOpen(true)
@@ -294,11 +346,28 @@ function LevelRow({
                 type="button"
               >
                 <Copy className="h-3 w-3" />
-                Duplicate with options...
+                {i18n._({ id: 'editor.floatingLevelSelector.duplicateWithOptions', message: 'Duplicate with options...' })}
+              </button>
+              <button
+                className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-muted-foreground text-xs transition-colors enabled:hover:bg-black/6 dark:enabled:hover:bg-white/10 enabled:hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={isGround}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onSetGround()
+                }}
+                title={
+                  isGround
+                    ? i18n._({ id: 'editor.floatingLevelSelector.thisFloorStandsAtGrade', message: 'This floor stands at grade' })
+                    : i18n._({ id: 'editor.floatingLevelSelector.seatTheBuildingSoThisFloor', message: 'Seat the building so this floor stands at grade; the floors under it are below grade' })
+                }
+                type="button"
+              >
+                <ArrowDownToLine className="h-3 w-3" />
+                {i18n._({ id: 'editor.floatingLevelSelector.setAsGroundFloor', message: 'Set as ground floor' })}
               </button>
               {onPaste && (
                 <button
-                  className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-muted-foreground text-xs transition-colors hover:bg-white/10 hover:text-foreground"
+                  className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-muted-foreground text-xs transition-colors hover:bg-black/6 dark:hover:bg-white/10 hover:text-foreground"
                   onClick={(e) => {
                     e.stopPropagation()
                     onPaste()
@@ -306,21 +375,21 @@ function LevelRow({
                   type="button"
                 >
                   <ClipboardPaste className="h-3 w-3" />
-                  Paste copied selection
+                  {i18n._({ id: 'editor.floatingLevelSelector.pasteCopiedSelection', message: 'Paste copied selection' })}
                 </button>
               )}
               <button
-                className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-muted-foreground text-xs transition-colors enabled:hover:bg-white/10 enabled:hover:text-red-400 disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-muted-foreground text-xs transition-colors enabled:hover:bg-black/6 dark:enabled:hover:bg-white/10 enabled:hover:text-red-600 dark:enabled:hover:text-red-400 disabled:cursor-not-allowed disabled:opacity-50"
                 disabled={!canDeleteLevel}
                 onClick={(e) => {
                   e.stopPropagation()
                   onRequestDelete()
                 }}
-                title={canDeleteLevel ? 'Delete level' : 'The ground level cannot be deleted'}
+                title={canDeleteLevel ? i18n._({ id: 'editor.floatingLevelSelector.deleteLevel', message: 'Delete level' }) : i18n._({ id: 'editor.floatingLevelSelector.theGroundLevelCannotBeDeleted', message: 'The ground level cannot be deleted' })}
                 type="button"
               >
                 <Trash2 className="h-3 w-3" />
-                Delete level
+                {i18n._({ id: 'editor.floatingLevelSelector.deleteLevel', message: 'Delete level' })}
               </button>
             </PopoverContent>
           </Popover>
@@ -346,13 +415,19 @@ function SortableLevelRow({
   onDuplicate,
   onPaste,
   onRequestDelete,
+  onSetGround,
+  isGround,
+  unitDotColor,
 }: {
   level: LevelNode
   isSelected: boolean
+  unitDotColor?: string
   onSelect: () => void
   onDuplicate: (preset?: LevelDuplicatePreset) => void
   onPaste?: () => void
   onRequestDelete: () => void
+  onSetGround: () => void
+  isGround: boolean
 }) {
   const {
     attributes,
@@ -382,9 +457,117 @@ function SortableLevelRow({
         level={level}
         onDuplicate={onDuplicate}
         onPaste={onPaste}
+        isGround={isGround}
         onRequestDelete={onRequestDelete}
         onSelect={onSelect}
+        onSetGround={onSetGround}
+        unitDotColor={unitDotColor}
       />
+    </div>
+  )
+}
+
+// ── The ground line: between the level at grade and the ones under it ───────
+
+type GroundLineState = {
+  levelId: string
+  seated: boolean
+  offset: number
+}
+
+/**
+ * "Ground · +0.20": where the stack meets grade, read as the ground floor's datum over the ground
+ * (the top of the foundation, 8 in over it once seated). The levels under it are below grade. When
+ * the datum stands outside the seat (a stack that lifted it, or sank it) the line turns amber and
+ * a click seats the building.
+ */
+function GroundLine({ ground, onSeat }: { ground: GroundLineState; onSeat: () => void }) {
+  const i18n = usePascalI18n()
+  const { toDisplay, displayUnit, precision } = useLinearDisplay('m', 2)
+  const over = toDisplay(ground.offset)
+  const label = i18n._({
+    id: 'editor.floatingLevelSelector.groundOffset',
+    message: 'Ground · {offset}',
+    values: { offset: `${over > 0 ? '+' : ''}${over.toFixed(precision)}` },
+  })
+  const distance = `${Math.abs(over).toFixed(precision)} ${displayUnit}`
+  return (
+    <div
+      className="relative flex items-center gap-1.5 px-2 py-0.5"
+      data-guide-target="level-ground-line"
+    >
+      {ground.seated ? (
+        <span
+          className="shrink-0 font-mono text-[10px] text-muted-foreground/70 tabular-nums"
+          title={i18n._({ id: 'editor.floatingLevelSelector.groundLineTheLevelsUnderIt', message: 'Ground line: the levels under it are below grade' })}
+        >
+          {label}
+        </span>
+      ) : (
+        <button
+          className="shrink-0 rounded-full px-1.5 font-mono text-[10px] text-amber-400 tabular-nums transition-colors hover:bg-amber-400/10"
+          onClick={onSeat}
+          title={
+            ground.offset > 0
+              ? i18n._({
+                  id: 'editor.floatingLevelSelector.groundFloorOverGrade',
+                  message:
+                    'The ground floor stands {distance} over grade. Seat the ground floor 8 in over grade',
+                  values: { distance },
+                })
+              : i18n._({
+                  id: 'editor.floatingLevelSelector.groundFloorUnderGrade',
+                  message:
+                    'The ground floor stands {distance} under grade. Seat the ground floor 8 in over grade',
+                  values: { distance },
+                })
+          }
+          type="button"
+        >
+          {label}
+        </button>
+      )}
+      <span
+        className={cn(
+          'h-px flex-1',
+          ground.seated ? 'bg-foreground/25' : 'bg-amber-400/60',
+        )}
+      />
+    </div>
+  )
+}
+
+// ── Unit focus chip: name + × to end focus, only while a unit is focused ────
+
+function UnitFocusChip() {
+  const i18n = usePascalI18n()
+  const focusedUnitId = useViewer((s) => s.focusedUnitId)
+  const focusedUnit = useScene((s) => {
+    const unit = focusedUnitId ? s.nodes[focusedUnitId] : undefined
+    return unit?.type === 'unit' ? unit : null
+  })
+
+  if (!focusedUnit) return null
+
+  return (
+    <div
+      className="mt-4 flex h-7 max-w-48 items-center gap-1.5 rounded-full border border-border bg-background/90 pr-1 pl-2.5 font-medium text-xs shadow-2xl backdrop-blur-md"
+      data-testid="unit-focus-chip"
+    >
+      <span
+        className="h-2 w-2 shrink-0 rounded-full"
+        style={{ backgroundColor: focusedUnit.color }}
+      />
+      <span className="truncate">{focusedUnit.name || i18n._({ id: 'editor.floatingLevelSelector.unit', message: 'Unit' })}</span>
+      <button
+        aria-label={i18n._({ id: 'editor.floatingLevelSelector.exitUnitFocus', message: 'Exit unit focus' })}
+        className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-black/6 dark:hover:bg-white/10 hover:text-foreground"
+        onClick={() => leaveUnitFocus()}
+        title={i18n._({ id: 'editor.floatingLevelSelector.exitUnitFocus', message: 'Exit unit focus' })}
+        type="button"
+      >
+        <X className="h-3 w-3" />
+      </button>
     </div>
   )
 }
@@ -392,15 +575,30 @@ function SortableLevelRow({
 // ── Main component ──────────────────────────────────────────────────────────
 
 export function FloatingLevelSelector() {
+  const i18n = usePascalI18n()
+  const locale = useLocale()
+  // Desktop's view bar is a row above the stage; mobile's floats over it.
+  const isMobile = useIsMobile()
   const selectedBuildingId = useViewer((s) => s.selection.buildingId)
   const levelId = useViewer((s) => s.selection.levelId)
   const setSelection = useViewer((s) => s.setSelection)
   const createNode = useScene((s) => s.createNode)
-  const createNodes = useScene((s) => s.createNodes)
+  const applyNodeChanges = useScene((s) => s.applyNodeChanges)
   const updateNodes = useScene((s) => s.updateNodes)
 
   const [deletingLevel, setDeletingLevel] = useState<LevelNode | null>(null)
   const [draggingLevelId, setDraggingLevelId] = useState<string | null>(null)
+  const focusedUnitId = useViewer((s) => s.focusedUnitId)
+  const focusedUnitColor = useScene((s) => {
+    const unit = focusedUnitId ? s.nodes[focusedUnitId] : undefined
+    return unit?.type === 'unit' ? unit.color : null
+  })
+  const focusedUnitLevelIds = useScene(
+    useShallow((s) => {
+      const unit = focusedUnitId ? s.nodes[focusedUnitId] : undefined
+      return unit?.type === 'unit' ? unitMemberLevels(unit, s.nodes).map((level) => level.id) : []
+    }),
+  )
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: { distance: 4 },
@@ -430,31 +628,41 @@ export function FloatingLevelSelector() {
     }),
   )
 
+  const ground = useScene(
+    useShallow((state): GroundLineState | null => {
+      const seat = resolvedBuildingId ? groundSeat(state.nodes, resolvedBuildingId) : null
+      return seat
+        ? {
+            levelId: seat.levelId,
+            seated: seat.seated,
+            offset: seat.offset,
+          }
+        : null
+    }),
+  )
+
+  const handleSetGround = useCallback((levelId: string) => {
+    setGroundFloor(levelId as LevelNode['id'])
+  }, [])
+
+  const topIsRoofLevel = useScene((state) => {
+    const top = levels.at(-1)
+    return top ? servesAsRoofLevel(state.nodes, top) : false
+  })
+
   const handleAddAbove = useCallback(() => {
     if (!resolvedBuildingId) return
-    const maxLevel = levels.length > 0 ? Math.max(...levels.map((l) => l.level)) : -1
-    const newLevel = LevelNode.parse({
-      level: maxLevel + 1,
-      height: DEFAULT_LEVEL_HEIGHT,
-      children: [],
-      parentId: resolvedBuildingId,
-    })
-    createNode(newLevel, resolvedBuildingId)
+    const newLevel = addStoreyOnTop(resolvedBuildingId)
     setSelection({ buildingId: resolvedBuildingId, levelId: newLevel.id })
-  }, [resolvedBuildingId, levels, createNode, setSelection])
+    offerExteriorWallCopy(newLevel.id)
+  }, [resolvedBuildingId, setSelection])
 
   const handleAddBelow = useCallback(() => {
     if (!resolvedBuildingId) return
-    const minLevel = levels.length > 0 ? Math.min(...levels.map((l) => l.level)) : 1
-    const newLevel = LevelNode.parse({
-      level: minLevel - 1,
-      height: DEFAULT_LEVEL_HEIGHT,
-      children: [],
-      parentId: resolvedBuildingId,
-    })
-    createNode(newLevel, resolvedBuildingId)
+    const newLevel = addStoreyBelow(resolvedBuildingId)
     setSelection({ buildingId: resolvedBuildingId, levelId: newLevel.id })
-  }, [resolvedBuildingId, levels, createNode, setSelection])
+    offerExteriorWallCopy(newLevel.id)
+  }, [resolvedBuildingId, setSelection])
 
   const handleInsertBetween = useCallback(
     (lowerIndex: number) => {
@@ -463,26 +671,23 @@ export function FloatingLevelSelector() {
       if (!lower) return
 
       const newLevelNumber = lower.level + 1
-      const toShift = levels.filter((l) => l.level >= newLevelNumber)
-      if (toShift.length > 0) {
-        updateNodes(
-          toShift.map((l) => ({
-            id: l.id as AnyNodeId,
-            data: { level: l.level + 1 } as Partial<AnyNode>,
-          })),
-        )
-      }
-
       const newLevel = LevelNode.parse({
         level: newLevelNumber,
         height: DEFAULT_LEVEL_HEIGHT,
         children: [],
         parentId: resolvedBuildingId,
       })
-      createNode(newLevel, resolvedBuildingId)
+      // One undo step: undoing the floor also moves the levels above back down.
+      applyNodeChanges({
+        create: [{ node: newLevel, parentId: resolvedBuildingId }],
+        update: levels
+          .filter((l) => l.level >= newLevelNumber)
+          .map((l) => ({ id: l.id as AnyNodeId, data: { level: l.level + 1 } as Partial<AnyNode> })),
+      })
       setSelection({ buildingId: resolvedBuildingId, levelId: newLevel.id })
+      offerExteriorWallCopy(newLevel.id, lower.id)
     },
-    [resolvedBuildingId, levels, createNode, updateNodes, setSelection],
+    [resolvedBuildingId, levels, applyNodeChanges, setSelection],
   )
 
   const handleConfirmDelete = useCallback(() => {
@@ -493,29 +698,21 @@ export function FloatingLevelSelector() {
 
   const handleDuplicateLevel = useCallback(
     (level: LevelNode, preset: LevelDuplicatePreset = 'everything') => {
-      const { createOps, newLevelId, shiftedLevels } = buildLevelDuplicateCreateOps({
+      const { createOps, newLevelId, updateOps } = buildLevelDuplicateCreateOps({
         nodes: useScene.getState().nodes,
         level,
         levels,
         preset,
       })
 
-      if (shiftedLevels.length > 0) {
-        updateNodes(
-          shiftedLevels.map((shiftedLevel) => ({
-            id: shiftedLevel.id as AnyNodeId,
-            data: { level: shiftedLevel.level } as Partial<AnyNode>,
-          })),
-        )
-      }
-      createNodes(createOps)
+      applyNodeChanges({ create: createOps, update: updateOps })
 
       setSelection({
         buildingId: resolvedBuildingId ?? undefined,
         levelId: newLevelId as LevelNode['id'],
       })
     },
-    [createNodes, levels, resolvedBuildingId, setSelection, updateNodes],
+    [applyNodeChanges, levels, resolvedBuildingId, setSelection],
   )
 
   const handlePasteToLevel = useCallback((level: LevelNode) => {
@@ -540,6 +737,11 @@ export function FloatingLevelSelector() {
 
       const reorderedVisualLevels = arrayMove(visualLevels, oldIndex, newIndex)
       const levelNumbersDescending = levels.map((level) => level.level).sort((a, b) => b - a)
+      // The roof level stays above every storey: a drop putting it under one it stood over is refused.
+      const floors = new Map(
+        reorderedVisualLevels.map((level, index) => [level.id, levelNumbersDescending[index]!]),
+      )
+      if (roofLevelOrderBreach(useScene.getState().nodes, floors)) return
 
       const updates = reorderedVisualLevels
         .map((level, index) => ({
@@ -570,13 +772,16 @@ export function FloatingLevelSelector() {
   const sortableLevelIds = reversedLevels.map((level) => level.id)
 
   const addButtonClass =
-    'absolute left-1/2 z-10 flex h-4 w-4 -translate-x-1/2 items-center justify-center rounded-full border border-border/80 bg-neutral-800 text-muted-foreground/60 shadow-md transition-colors hover:bg-neutral-700 hover:text-foreground'
+    'absolute left-1/2 z-10 flex h-4 w-4 -translate-x-1/2 items-center justify-center rounded-full border border-border/80 bg-white text-muted-foreground/60 shadow-md transition-colors hover:bg-neutral-100 hover:text-foreground dark:bg-neutral-800 dark:hover:bg-neutral-700'
 
   return (
     <>
-      <div className="pointer-events-auto absolute top-14 left-3 z-20">
+      <div
+        className={cn('pointer-events-auto absolute left-3 z-20', isMobile ? 'top-14' : 'top-3')}
+        data-surface="level-selector"
+      >
         <div className="relative">
-          {/* Floating + at top edge */}
+          {/* Floating + at top edge: a floor on top, under the roof level when one tops the stack */}
           {!draggingLevelId && (
             <button
               className={cn(addButtonClass, 'top-0 -translate-y-1/2')}
@@ -584,7 +789,7 @@ export function FloatingLevelSelector() {
               // read only from outside: nothing here depends on it.
               data-guide-target="level-add"
               onClick={handleAddAbove}
-              title="Add level above"
+              title={topIsRoofLevel ? i18n._({ id: 'editor.floatingLevelSelector.addAFloorUnderTheRoof', message: 'Add a floor under the roof' }) : i18n._({ id: 'editor.floatingLevelSelector.addLevelAbove', message: 'Add level above' })}
               type="button"
             >
               <Plus className="h-2.5 w-2.5" />
@@ -596,7 +801,7 @@ export function FloatingLevelSelector() {
             <button
               className={cn(addButtonClass, 'bottom-0 translate-y-1/2')}
               onClick={handleAddBelow}
-              title="Add level below"
+              title={i18n._({ id: 'editor.floatingLevelSelector.addLevelBelow', message: 'Add level below' })}
               type="button"
             >
               <Plus className="h-2.5 w-2.5" />
@@ -619,6 +824,7 @@ export function FloatingLevelSelector() {
                   const showGapBelow = i < reversedLevels.length - 1
 
                   return (
+                    <Fragment key={level.id}>
                     <div
                       className="relative"
                       // A stable hook for host-app onboarding to point at, on
@@ -626,14 +832,20 @@ export function FloatingLevelSelector() {
                       // without knowing the building. Static, and read only
                       // from outside: nothing here depends on it.
                       data-guide-target={level.level === 0 ? 'level-ground' : undefined}
-                      key={level.id}
                     >
                       <SortableLevelRow
                         isSelected={isSelected}
                         level={level}
+                        unitDotColor={
+                          focusedUnitColor && focusedUnitLevelIds.includes(level.id)
+                            ? focusedUnitColor
+                            : undefined
+                        }
                         onDuplicate={(preset) => handleDuplicateLevel(level, preset)}
                         onPaste={() => handlePasteToLevel(level)}
+                        isGround={ground?.levelId === level.id && ground.seated}
                         onRequestDelete={() => setDeletingLevel(level)}
+                        onSetGround={() => handleSetGround(level.id)}
                         onSelect={() => {
                           if (!isSelected) markPerfAction('level-switch', level.id)
                           setSelection(
@@ -648,30 +860,43 @@ export function FloatingLevelSelector() {
                         <button
                           className={cn(addButtonClass, 'bottom-0 translate-y-1/2')}
                           onClick={() => handleInsertBetween(sortedIndex - 1)}
-                          title="Insert level here"
+                          title={i18n._({ id: 'editor.floatingLevelSelector.insertLevelHere', message: 'Insert level here' })}
                           type="button"
                         >
                           <Plus className="h-2.5 w-2.5" />
                         </button>
                       )}
                     </div>
+                    {ground?.levelId === level.id && !draggingLevelId && (
+                      <GroundLine ground={ground} onSeat={() => handleSetGround(level.id)} />
+                    )}
+                    </Fragment>
                   )
                 })}
               </div>
             </SortableContext>
           </DndContext>
         </div>
+        <UnitFocusChip />
+        <LevelWallCopyPrompt />
       </div>
 
       {/* Delete confirmation dialog */}
       <Dialog onOpenChange={(open) => !open && setDeletingLevel(null)} open={!!deletingLevel}>
         <DialogContent showCloseButton={false}>
           <DialogHeader>
-            <DialogTitle>Delete level</DialogTitle>
+            <DialogTitle>{i18n._({ id: 'editor.floatingLevelSelector.deleteLevel', message: 'Delete level' })}</DialogTitle>
             <DialogDescription>
-              Are you sure you want to delete{' '}
-              <strong>{deletingLevel ? getLevelDisplayName(deletingLevel) : ''}</strong>? All
-              walls, floors, and objects on this level will be permanently removed.
+              {messageWithSlot(
+                i18n,
+                /* i18n */ {
+                  id: 'editor.floatingLevelSelector.deleteLevelConfirm',
+                  message:
+                    'Are you sure you want to delete {levelName}? All walls, floors, and objects on this level will be permanently removed.',
+                },
+                'levelName',
+                <strong>{deletingLevel ? localizedLevelName(deletingLevel, i18n, locale) : ''}</strong>,
+              )}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -680,14 +905,14 @@ export function FloatingLevelSelector() {
               onClick={() => setDeletingLevel(null)}
               type="button"
             >
-              Cancel
+              {i18n._({ id: 'editor.floatingLevelSelector.cancel', message: 'Cancel' })}
             </button>
             <button
               className="rounded-full bg-red-600 px-4 py-2 text-sm text-white transition-colors hover:bg-red-700"
               onClick={handleConfirmDelete}
               type="button"
             >
-              Delete
+              {i18n._({ id: 'editor.floatingLevelSelector.delete', message: 'Delete' })}
             </button>
           </DialogFooter>
         </DialogContent>

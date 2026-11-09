@@ -25,3 +25,25 @@ export function sceneGraphSignature(graph: PersistedSceneGraph): string {
     installedPlugins: graph.installedPlugins ?? [],
   })
 }
+
+/** Match a pending save even when an event omits optional graph metadata. */
+export function isPendingSceneGraphEcho(
+  graph: PersistedSceneGraph,
+  pending: ReadonlySet<string>,
+): boolean {
+  if (pending.has(sceneGraphSignature(graph))) return true
+  for (const signature of pending) {
+    const saved = JSON.parse(signature) as PersistedSceneGraph
+    if (
+      sceneGraphSignature({
+        ...saved,
+        ...graph,
+        collections: graph.collections ?? saved.collections,
+        materials: graph.materials ?? saved.materials,
+        installedPlugins: graph.installedPlugins ?? saved.installedPlugins,
+      }) === signature
+    )
+      return true
+  }
+  return false
+}

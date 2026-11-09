@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, test } from 'bun:test'
-import { Client } from '@modelcontextprotocol/sdk/client/index.js'
-import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import { Client } from '@modelcontextprotocol/client'
+import { InMemoryTransport, McpServer } from '@modelcontextprotocol/server'
 import type { SceneGraph } from '@pascal-app/core/clone-scene-graph'
 import { SceneBridge } from '../../bridge/scene-bridge'
 import { registerLoadScene } from './load-scene'
@@ -50,6 +49,12 @@ describe('load_scene', () => {
     expect(parsed.name).toBe('One')
     expect(parsed.version).toBe(meta.version)
     expect(bridge.getRootNodeIds()).toContain('root_a')
+    const baseline = bridge.exportJSON()
+    expect(bridge.undo(10)).toBe(0)
+    expect(bridge.exportJSON()).toEqual(baseline)
+    bridge.updateNode('root_a' as never, { name: 'Edited' })
+    expect(bridge.undo(10)).toBe(1)
+    expect(bridge.exportJSON()).toEqual(baseline)
   })
 
   test('throws scene_not_found when id is unknown', async () => {

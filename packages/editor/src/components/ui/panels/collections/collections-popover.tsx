@@ -1,12 +1,13 @@
 'use client'
 
-import type { AnyNodeId, Collection, CollectionId } from '@pascal-app/core'
-import { useScene } from '@pascal-app/core'
+import type { AnyNodeId, CollectionId } from '@pascal-app/core'
+import { useScene, usePascalI18n } from '@pascal-app/core'
 import {
   Check,
   ChevronDown,
   ChevronRight,
   Layers,
+  Minus,
   MoreHorizontal,
   Pencil,
   Plus,
@@ -29,12 +30,13 @@ import {
 import { cn } from '../../../../lib/utils'
 
 interface CollectionsPopoverProps {
-  nodeId: AnyNodeId
-  collectionIds?: CollectionId[]
+  /** The elements the popover adds to and removes from collections, together. */
+  nodeIds: AnyNodeId[]
   children: React.ReactNode
 }
 
-export function CollectionsPopover({ nodeId, collectionIds, children }: CollectionsPopoverProps) {
+export function CollectionsPopover({ nodeIds, children }: CollectionsPopoverProps) {
+  const i18n = usePascalI18n()
   const collections = useScene((s) => s.collections)
   const nodes = useScene((s) => s.nodes)
   const createCollection = useScene((s) => s.createCollection)
@@ -54,12 +56,11 @@ export function CollectionsPopover({ nodeId, collectionIds, children }: Collecti
   const [deletingId, setDeletingId] = useState<CollectionId | null>(null)
   const [expandedIds, setExpandedIds] = useState<Set<CollectionId>>(new Set())
 
-  const memberIds = collectionIds ?? []
   const allCollections = Object.values(collections)
 
   const handleCreate = () => {
     if (!createName.trim()) return
-    createCollection(createName.trim(), [nodeId])
+    createCollection(createName.trim(), nodeIds)
     setCreateName('')
     setShowCreateInput(false)
   }
@@ -71,10 +72,11 @@ export function CollectionsPopover({ nodeId, collectionIds, children }: Collecti
   }
 
   const toggleMembership = (collectionId: CollectionId) => {
-    if (memberIds.includes(collectionId)) {
-      removeFromCollection(collectionId, nodeId)
+    const memberIds = collections[collectionId]?.nodeIds ?? []
+    if (nodeIds.every((id) => memberIds.includes(id))) {
+      removeFromCollection(collectionId, nodeIds)
     } else {
-      addToCollection(collectionId, nodeId)
+      addToCollection(collectionId, nodeIds)
     }
   }
 
@@ -101,11 +103,11 @@ export function CollectionsPopover({ nodeId, collectionIds, children }: Collecti
           <div className="flex items-center gap-1.5">
             <Layers className="h-3.5 w-3.5 text-muted-foreground" />
             <span className="font-semibold text-foreground text-xs tracking-tight">
-              Collections
+              {i18n._({ id: 'editor.panels.collections.collectionsPopover.collections', message: 'Collections' })}
             </span>
           </div>
           <button
-            className="flex items-center gap-1 rounded-md px-2 py-1 font-medium text-[11px] text-muted-foreground transition-colors hover:bg-white/10 hover:text-foreground"
+            className="flex items-center gap-1 rounded-md px-2 py-1 font-medium text-[11px] text-muted-foreground transition-colors hover:bg-black/6 dark:hover:bg-white/10 hover:text-foreground"
             onClick={() => {
               setShowCreateInput((v) => !v)
               setCreateName('')
@@ -113,13 +115,13 @@ export function CollectionsPopover({ nodeId, collectionIds, children }: Collecti
             type="button"
           >
             <Plus className="h-3 w-3" />
-            New
+            {i18n._({ id: 'editor.panels.collections.collectionsPopover.new', message: 'New' })}
           </button>
         </div>
 
         {/* Create input */}
         {showCreateInput && (
-          <div className="flex items-center gap-1.5 border-border/50 border-b bg-white/5 px-3 py-2">
+          <div className="flex items-center gap-1.5 border-border/50 border-b bg-black/4 dark:bg-white/5 px-3 py-2">
             <input
               autoFocus
               className="min-w-0 flex-1 rounded-md border border-border/50 bg-background/50 px-2 py-1 text-foreground text-xs outline-none placeholder:text-muted-foreground/60 focus:border-ring focus:ring-1 focus:ring-ring/30"
@@ -131,7 +133,7 @@ export function CollectionsPopover({ nodeId, collectionIds, children }: Collecti
                   setCreateName('')
                 }
               }}
-              placeholder="Collection name…"
+              placeholder={i18n._({ id: 'editor.panels.collections.collectionsPopover.collectionName', message: 'Collection name…' })}
               value={createName}
             />
             <button
@@ -143,7 +145,7 @@ export function CollectionsPopover({ nodeId, collectionIds, children }: Collecti
               <Check className="h-3.5 w-3.5" />
             </button>
             <button
-              className="flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-white/10"
+              className="flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-black/6 dark:hover:bg-white/10"
               onClick={() => {
                 setShowCreateInput(false)
                 setCreateName('')
@@ -161,13 +163,15 @@ export function CollectionsPopover({ nodeId, collectionIds, children }: Collecti
             <div className="flex flex-col items-center justify-center gap-2 px-4 py-8 text-center">
               <Layers className="h-6 w-6 text-muted-foreground/40" />
               <p className="text-muted-foreground text-xs">
-                No collections yet. Create one to group items together.
+                {i18n._({ id: 'editor.panels.collections.collectionsPopover.noCollectionsYetCreateOneTo', message: 'No collections yet. Create one to group elements together.' })}
               </p>
             </div>
           ) : (
             <ul className="divide-y divide-border/30">
               {allCollections.map((collection) => {
-                const isIn = memberIds.includes(collection.id)
+                const memberCount = nodeIds.filter((id) => collection.nodeIds.includes(id)).length
+                const isIn = memberCount === nodeIds.length
+                const isPartly = memberCount > 0 && !isIn
                 const isExpanded = expandedIds.has(collection.id)
                 const isRenaming = renamingId === collection.id
                 const isDeleting = deletingId === collection.id
@@ -179,25 +183,24 @@ export function CollectionsPopover({ nodeId, collectionIds, children }: Collecti
                       key={collection.id}
                     >
                       <span className="truncate text-foreground/80 text-xs">
-                        Delete "{collection.name}"?
-                      </span>
+                        {i18n._({ id: 'editor.panels.collections.collectionsPopover.deleteName', message: 'Delete "{name}"?', values: { name: collection.name } })}</span>
                       <div className="flex shrink-0 items-center gap-1">
                         <button
-                          className="rounded-md bg-red-500/20 px-2 py-0.5 font-medium text-[11px] text-red-400 transition-colors hover:bg-red-500/30"
+                          className="rounded-md bg-red-500/20 px-2 py-0.5 font-medium text-[11px] text-red-600 dark:text-red-400 transition-colors hover:bg-red-500/30"
                           onClick={() => {
                             deleteCollection(collection.id)
                             setDeletingId(null)
                           }}
                           type="button"
                         >
-                          Delete
+                          {i18n._({ id: 'editor.panels.collections.collectionsPopover.delete', message: 'Delete' })}
                         </button>
                         <button
-                          className="rounded-md px-2 py-0.5 font-medium text-[11px] text-muted-foreground transition-colors hover:bg-white/10"
+                          className="rounded-md px-2 py-0.5 font-medium text-[11px] text-muted-foreground transition-colors hover:bg-black/6 dark:hover:bg-white/10"
                           onClick={() => setDeletingId(null)}
                           type="button"
                         >
-                          Cancel
+                          {i18n._({ id: 'editor.panels.collections.collectionsPopover.cancel', message: 'Cancel' })}
                         </button>
                       </div>
                     </li>
@@ -226,7 +229,7 @@ export function CollectionsPopover({ nodeId, collectionIds, children }: Collecti
                         <Check className="h-3.5 w-3.5" />
                       </button>
                       <button
-                        className="flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-white/10"
+                        className="flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-black/6 dark:hover:bg-white/10"
                         onClick={() => setRenamingId(null)}
                         type="button"
                       >
@@ -238,7 +241,7 @@ export function CollectionsPopover({ nodeId, collectionIds, children }: Collecti
 
                 return (
                   <li key={collection.id}>
-                    <div className="group flex items-center gap-2 px-3 py-2 transition-colors hover:bg-white/5">
+                    <div className="group flex items-center gap-2 px-3 py-2 transition-colors hover:bg-black/4 dark:hover:bg-white/5">
                       {/* Color dot — click to pick color */}
                       <ColorDot
                         color={collection.color ?? '#6366f1'}
@@ -268,10 +271,13 @@ export function CollectionsPopover({ nodeId, collectionIds, children }: Collecti
                       <div
                         className={cn(
                           'pointer-events-none flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors',
-                          isIn ? 'border-primary bg-primary/20 text-primary' : 'border-border/50',
+                          isIn || isPartly
+                            ? 'border-primary bg-primary/20 text-primary'
+                            : 'border-border/50',
                         )}
                       >
                         {isIn && <Check className="h-2.5 w-2.5" />}
+                        {isPartly && <Minus className="h-2.5 w-2.5" />}
                       </div>
 
                       {/* Expand toggle (only if has members) */}
@@ -290,10 +296,10 @@ export function CollectionsPopover({ nodeId, collectionIds, children }: Collecti
                       )}
 
                       {/* More dropdown */}
-                      <DropdownMenu>
+                      <DropdownMenu modal={false}>
                         <DropdownMenuTrigger asChild>
                           <button
-                            className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-muted-foreground opacity-0 transition-colors hover:bg-white/10 hover:text-foreground group-hover:opacity-100"
+                            className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-muted-foreground opacity-0 transition-colors hover:bg-black/6 dark:hover:bg-white/10 hover:text-foreground group-hover:opacity-100"
                             type="button"
                           >
                             <MoreHorizontal className="h-3.5 w-3.5" />
@@ -308,14 +314,14 @@ export function CollectionsPopover({ nodeId, collectionIds, children }: Collecti
                             }}
                           >
                             <Pencil className="h-3.5 w-3.5" />
-                            Rename
+                            {i18n._({ id: 'editor.panels.collections.collectionsPopover.rename', message: 'Rename' })}
                           </DropdownMenuItem>
                           <DropdownMenuItem
                             onClick={() => setDeletingId(collection.id)}
                             variant="destructive"
                           >
                             <Trash2 className="h-3.5 w-3.5" />
-                            Delete
+                            {i18n._({ id: 'editor.panels.collections.collectionsPopover.delete', message: 'Delete' })}
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
@@ -332,7 +338,7 @@ export function CollectionsPopover({ nodeId, collectionIds, children }: Collecti
                               <span
                                 className={cn(
                                   'truncate text-[11px]',
-                                  nid === nodeId
+                                  nodeIds.includes(nid)
                                     ? 'font-medium text-foreground'
                                     : 'text-muted-foreground',
                                 )}

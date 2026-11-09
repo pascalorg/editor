@@ -1,7 +1,7 @@
 import type { CeilingNode, LevelNode, SlabNode, WallNode } from '../schema'
 import type { AnyNode, AnyNodeId } from '../schema/types'
 import { computeWallSlabSupport, pointInPolygon } from '../systems/slab/slab-support'
-import { resolveWallTop } from '../systems/wall/wall-top'
+import { DEFAULT_WALL_HEIGHT } from '../systems/wall/wall-footprint'
 // Cycle with ./storey (it imports DEFAULT_LEVEL_HEIGHT from here) is safe:
 // both sides only reference the other inside function bodies.
 import { CEILING_CLAMP_MARGIN, getCeilingClampBound } from './storey'
@@ -35,7 +35,7 @@ export function deriveLegacyLevelHeight(
   const level = nodes[levelId as LevelNode['id']] as LevelNode | undefined
   if (!level) return DEFAULT_LEVEL_HEIGHT
 
-  const levelChildren = level.children
+  const levelChildren = (level.children ?? [])
     .map((childId) => nodes[childId as keyof typeof nodes])
     .filter((child): child is AnyNode => child !== undefined)
   const slabs = levelChildren.filter((child): child is SlabNode => child.type === 'slab')
@@ -58,11 +58,21 @@ export function deriveLegacyLevelHeight(
           end: wall.end,
           curveOffset: wall.curveOffset,
           thickness: wall.thickness,
+          justification: wall.justification,
         },
         slabs,
         walls,
+        undefined,
+        undefined,
+        0,
+        nodes,
       ).elevation
-      const top = resolveWallTop(wall, level.height ?? DEFAULT_LEVEL_HEIGHT, electedElevation)
+      // Likewise for walls: before levels stored a height, a wall without one
+      // was drawn DEFAULT_WALL_HEIGHT up from the slab it stands on, and the
+      // storey above was stacked on that top. Reading the absence as
+      // plane-bound here would drop every storey above by the slab's height
+      // and leave this level's walls standing through it.
+      const top = Math.max(0, electedElevation) + (wall.height ?? DEFAULT_WALL_HEIGHT)
       if (top > maxTop) maxTop = top
     }
   }

@@ -11,9 +11,11 @@ import {
   useScene,
 } from '@pascal-app/core'
 import {
+  copyCollectionIds,
   DragBoundingBox,
   EDITOR_LAYER,
   isAlignmentGuideActive,
+  isGridSnapActive,
   isMagneticSnapActive,
   markToolCancelConsumed,
   stripPlacementMetadataFlags,
@@ -104,7 +106,7 @@ function rotatedBounds(box: Box3, rotation: Vec3): { size: Vec3; offset: Vec3 } 
  *   on its own, leaving every mated run where it sits.
  * - **Ctrl / Cmd** switches to vertical movement (stack / riser editing): XZ
  *   holds and the cursor's screen-Y drives the riser height.
- * - **Shift** bypasses grid snapping / alignment.
+ * - Snapping follows the active editor snapping mode.
  *
  * Wired via `def.affordanceTools.move`.
  */
@@ -209,7 +211,6 @@ export const MovePipeFittingTool: React.FC<{ node: AnyNode }> = ({ node }) => {
     let verticalAnchor: { clientY: number; baseY: number } | null = null
 
     const onMove = (event: GridEvent) => {
-      const bypass = event.nativeEvent?.shiftKey === true
       // Alt = detach: drop the connected-pipe follow so the fitting moves on
       // its own, leaving every mated run where it sits.
       const detached = event.nativeEvent?.altKey === true
@@ -217,7 +218,7 @@ export const MovePipeFittingTool: React.FC<{ node: AnyNode }> = ({ node }) => {
       // screen-Y drives the riser height (connected pipes still follow).
       const vertical = event.nativeEvent?.ctrlKey === true || event.nativeEvent?.metaKey === true
       const clientY = (event.nativeEvent as { clientY?: number } | undefined)?.clientY
-      const snap = bypass ? (v: number) => v : snapToGridStep
+      const snap = isGridSnapActive() ? snapToGridStep : (v: number) => v
 
       let next: Vec3
       if (vertical && typeof clientY === 'number') {
@@ -236,10 +237,10 @@ export const MovePipeFittingTool: React.FC<{ node: AnyNode }> = ({ node }) => {
         let z = snap(event.localPosition[2])
 
         // Alignment: snap the footprint box edges onto nearby geometry and
-        // publish guides (Alt / Shift bypass). Guides are DISPLAYED in every
-        // snapping mode (isAlignmentGuideActive); the magnetic pull toward them
-        // applies only in 'lines' mode (isMagneticSnapActive).
-        if (!bypass && isAlignmentGuideActive()) {
+        // publish guides. Guides are DISPLAYED in every snapping mode
+        // (isAlignmentGuideActive); the magnetic pull toward them applies only
+        // in 'lines' mode (isMagneticSnapActive).
+        if (isAlignmentGuideActive()) {
           const proposed: Aabb2D = {
             minX: x + ox - hx,
             maxX: x + ox + hx,
@@ -258,17 +259,21 @@ export const MovePipeFittingTool: React.FC<{ node: AnyNode }> = ({ node }) => {
         next = [x, lastPos[1], z]
       }
 
-      if (next[0] !== lastPos[0] || next[1] !== lastPos[1] || next[2] !== lastPos[2]) {
+      if (
+        (isGridSnapActive() || isMagneticSnapActive()) &&
+        (next[0] !== lastPos[0] || next[1] !== lastPos[1] || next[2] !== lastPos[2])
+      ) {
         triggerSFX('sfx:grid-snap')
       }
+      // Detached: keep the followers at their origin (drop any live overrides
+      // from a prior non-detached frame). Otherwise preview the follow; joints
+      // that cannot follow hold the last shown frame.
+      if (detached) connectivity?.clear()
+      else if (connectivity && !connectivity.preview({ position: next })) return
       lastPos = next
       lastDetached = detached
       hasMoved = true
       setCursorPos(next)
-      // Detached: keep the followers at their origin (drop any live overrides
-      // from a prior non-detached frame). Otherwise preview the follow.
-      if (detached) connectivity?.clear()
-      else connectivity?.preview({ position: next })
     }
 
     const commit = (event: GridEvent) => {
@@ -281,26 +286,38 @@ export const MovePipeFittingTool: React.FC<{ node: AnyNode }> = ({ node }) => {
         event.nativeEvent?.stopPropagation?.()
         return
       }
+      const creating = isNew && !useScene.getState().nodes[nodeId]
+      // Fold connected-pipe / sibling-run follow-updates into the SAME batch
+      // as the moved fitting so the whole joint is one undo step. Detached
+      // (Alt on the final frame): the joint is broken, so nothing follows.
+      const followUpdates =
+        creating || lastDetached || !connectivity
+          ? []
+          : connectivity.commitUpdates({ position: lastPos })
+      if (!followUpdates) {
+        event.nativeEvent?.stopPropagation?.()
+        return
+      }
       committed = true
 
       useScene.temporal.getState().resume()
       let selectId = nodeId
-      if (isNew && !useScene.getState().nodes[nodeId]) {
+      if (creating) {
         const created = PipeFittingNode.parse({
           ...(node as Record<string, unknown>),
           position: lastPos,
           metadata: stripPlacementMetadataFlags(node.metadata),
           visible: true,
         })
-        useScene.getState().createNode(created as AnyNode, node.parentId as AnyNodeId)
+        useScene.getState().createNodes([
+          {
+            node: created as AnyNode,
+            parentId: node.parentId as AnyNodeId,
+            collectionIds: copyCollectionIds(node),
+          },
+        ])
         selectId = created.id as AnyNodeId
       } else {
-        // Fold connected-pipe / sibling-run follow-updates into the SAME batch
-        // as the moved fitting so the whole joint is one undo step. Detached
-        // (Alt on the final frame): the joint is broken, so nothing follows.
-        const followUpdates = lastDetached
-          ? []
-          : (connectivity?.commitUpdates({ position: lastPos }) ?? [])
         useScene
           .getState()
           .updateNodes([

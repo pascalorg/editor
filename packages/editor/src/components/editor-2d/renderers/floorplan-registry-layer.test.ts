@@ -11,10 +11,13 @@ import { type AnyNodeDefinition, emitter, nodeRegistry, registerNode } from '@pa
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { z } from 'zod'
+import { AXIS_MOVE_DRAG_LABEL, PATH_POINT_DRAG_LABEL } from '../../../lib/contextual-help'
 import {
   FLOORPLAN_NODE_EXTENSION_KEY,
   floorplanGeometryMetadata,
 } from '../../../lib/floorplan/floorplan-extension'
+import type { SessionWrites } from '../../../lib/session-writes'
+import { snapContextOf } from '../../../lib/snapping-mode'
 import {
   buildFloorplanEntryGeometry,
   cancelFloorplanAffordanceDrag,
@@ -23,11 +26,15 @@ import {
   collectFloorplanLinkedLevelNodes,
   computeAffectedSiblingIds,
   floorplanAffordanceReshapeScope,
+  floorplanEntryStripsHandles,
+  floorplanEntryYieldsToTool,
   floorplanHandleDoubleClickAffordance,
   InteractiveGeometry,
+  isFloorplanHierarchyVisible,
   isFloorplanOpeningPlacementState,
   resolveFloorplanHandleUnitsPerPixel,
   siteToFloorplanTransform,
+  splitFloorplanHandles,
   splitFloorplanOverlay,
   subscribeFloorplanAffordanceToolCancel,
 } from './floorplan-registry-layer'
@@ -158,7 +165,6 @@ describe('site-scoped floorplan discovery', () => {
       siblingEpoch: 0,
       unit: 'metric' as const,
       metricNotation: 'meters' as const,
-      wallDimensionReference: 'finished-faces' as const,
       visibilityRootId: site.id,
     }
     const committedSnapshot = structuredClone(overlay)
@@ -272,6 +278,26 @@ describe('floorplan affordance ownership', () => {
       driver: 'floorplan',
     })
   })
+
+  // With no scope, Select mode reads every snap mode as off, so these drags
+  // never snapped to the grid on the plan.
+  test('gives the MEP run point and segment drags a handle-drag scope in the run snap context', () => {
+    const point = floorplanAffordanceReshapeScope('move-path-point', 'duct_1', { pointIndex: 0 })
+    const segment = floorplanAffordanceReshapeScope('move-segment', 'duct_1', { segmentIndex: 0 })
+    expect(point).toEqual({ kind: 'handle-drag', nodeId: 'duct_1', handle: PATH_POINT_DRAG_LABEL })
+    expect(segment).toEqual({ kind: 'handle-drag', nodeId: 'duct_1', handle: AXIS_MOVE_DRAG_LABEL })
+    for (const scope of [point, segment]) {
+      expect(
+        snapContextOf({
+          scope: scope!,
+          mode: 'select',
+          tool: null,
+          profileOf: () => undefined,
+          profileOfNode: () => 'structural',
+        }),
+      ).toBe('polygon')
+    }
+  })
 })
 
 function cabinetRun(id: string, children: string[] = [], parentId: string | null = 'level_test') {
@@ -383,7 +409,13 @@ describe('floorplan affordance cancellation', () => {
       canCommit: () => true,
       commit,
     }
-    const snapshots = [{ id: 'wall_a' as AnyNodeId, data: { width: 1 } }]
+    const revert = mock(() => {})
+    const writes = {
+      record: (run: () => unknown) => run(),
+      revert,
+      changes: () => ({ create: [], update: [], delete: [] }),
+      size: 0,
+    } as unknown as SessionWrites
     const drag = {
       pointerId: 7,
       captureTarget: {
@@ -392,12 +424,11 @@ describe('floorplan affordance cancellation', () => {
       } as unknown as Element,
       handleId: 'wall_a:endpoint',
       session,
-      snapshots,
+      writes,
       historyPaused: true,
       lastPlanPoint: [0, 0] as [number, number],
     }
     const dragRef = { current: drag }
-    const restoreSnapshots = mock(() => {})
     const resumeHistory = mock(() => {})
     const clearPreview = mock(() => {})
     const clearSnapFeedback = mock(() => {})
@@ -408,7 +439,6 @@ describe('floorplan affordance cancellation', () => {
     const unsubscribe = subscribeFloorplanAffordanceToolCancel(
       () =>
         cancelFloorplanAffordanceDrag(dragRef, {
-          restoreSnapshots,
           resumeHistory,
           clearPreview,
           clearSnapFeedback,
@@ -427,7 +457,7 @@ describe('floorplan affordance cancellation', () => {
 
     expect(dragRef.current).toBeNull()
     expect(releasePointerCapture).toHaveBeenCalledWith(7)
-    expect(restoreSnapshots).toHaveBeenCalledWith(snapshots)
+    expect(revert).toHaveBeenCalledTimes(1)
     expect(resumeHistory).toHaveBeenCalledTimes(1)
     expect(clearPreview).toHaveBeenCalledTimes(2)
     expect(clearPreview).toHaveBeenNthCalledWith(1, 'wall_a')
@@ -448,7 +478,6 @@ describe('floorplan opening placement interaction routing', () => {
   test('passes entries through only while an opening tool or moving opening is active', () => {
     expect(
       isFloorplanOpeningPlacementState({
-        phase: 'structure',
         mode: 'build',
         tool: 'window',
         movingNodeHasWallOpeningPlacement: false,
@@ -456,7 +485,6 @@ describe('floorplan opening placement interaction routing', () => {
     ).toBe(true)
     expect(
       isFloorplanOpeningPlacementState({
-        phase: 'structure',
         mode: 'select',
         tool: null,
         movingNodeHasWallOpeningPlacement: true,
@@ -464,7 +492,6 @@ describe('floorplan opening placement interaction routing', () => {
     ).toBe(true)
     expect(
       isFloorplanOpeningPlacementState({
-        phase: 'structure',
         mode: 'select',
         tool: null,
         movingNodeHasWallOpeningPlacement: false,
@@ -778,5 +805,90 @@ describe('collectFloorplanLinkedLevelNodes', () => {
         new Set([parent.id as AnyNodeId]),
       ),
     ).toEqual([])
+  })
+})
+
+describe('floorplan entry routing while a tool is active', () => {
+  test('build tools get presses on entries, as in 3D; select and delete keep selecting', () => {
+    expect(floorplanEntryYieldsToTool({ mode: 'build', openingPlacement: false })).toBe(true)
+    expect(floorplanEntryYieldsToTool({ mode: 'select', openingPlacement: true })).toBe(true)
+    expect(floorplanEntryYieldsToTool({ mode: 'select', openingPlacement: false })).toBe(false)
+    expect(floorplanEntryYieldsToTool({ mode: 'delete', openingPlacement: false })).toBe(false)
+  })
+
+  // A roof plane selected before arming the roof tool kept its live corner and edge handles: a
+  // click near its eave resized it instead of drawing.
+  test('a selected node shows no edit handles while a build tool is armed', () => {
+    const entry = { multiSelected: false, ceilingWithoutSession: false }
+    expect(floorplanEntryStripsHandles({ ...entry, mode: 'select' })).toBe(false)
+    expect(floorplanEntryStripsHandles({ ...entry, mode: 'build' })).toBe(true)
+    expect(floorplanEntryStripsHandles({ ...entry, mode: 'select', multiSelected: true })).toBe(
+      true,
+    )
+  })
+})
+
+describe('isFloorplanHierarchyVisible', () => {
+  const node = (id: string, type: string, parentId: string | null, visible = true) =>
+    ({ object: 'node', id, type, parentId, visible, metadata: {} }) as unknown as AnyNode
+  const noOverrides = new Map<string, LiveNodeOverrides>()
+  const visibleUnder = (nodes: Record<string, AnyNode>, rootId: string, id: string) =>
+    isFloorplanHierarchyVisible(nodes[id]!, nodes, noOverrides, rootId as AnyNodeId)
+
+  test('a hidden Site root keeps the nodes on it, linked or detached', () => {
+    const nodes: Record<string, AnyNode> = {
+      site_a: node('site_a', 'site', null, false),
+      building_a: node('building_a', 'building', 'site_a'),
+      level_a: node('level_a', 'level', 'building_a'),
+      wall_a: node('wall_a', 'wall', 'level_a'),
+      wall_b: node('wall_b', 'wall', 'level_a', false),
+      tree_a: node('tree_a', 'trees:tree', null),
+    }
+    expect(visibleUnder(nodes, 'site_a', 'wall_a')).toBe(true)
+    expect(visibleUnder(nodes, 'site_a', 'tree_a')).toBe(true)
+    expect(visibleUnder(nodes, 'site_a', 'wall_b')).toBe(false)
+    expect(visibleUnder(nodes, 'site_a', 'site_a')).toBe(false)
+  })
+
+  test('a hidden building or level root still hides what it hosts', () => {
+    const nodes: Record<string, AnyNode> = {
+      site_a: node('site_a', 'site', null),
+      building_a: node('building_a', 'building', 'site_a', false),
+      level_a: node('level_a', 'level', 'building_a'),
+      wall_a: node('wall_a', 'wall', 'level_a'),
+      elevator_a: node('elevator_a', 'elevator', null),
+    }
+    expect(visibleUnder(nodes, 'site_a', 'wall_a')).toBe(false)
+    expect(visibleUnder(nodes, 'building_a', 'elevator_a')).toBe(false)
+    // A level plan is scoped to its level: the walk stops at the root and
+    // never consults the building above it.
+    expect(visibleUnder(nodes, 'level_a', 'wall_a')).toBe(true)
+  })
+})
+
+describe('the handles pass', () => {
+  test('grabbable handles leave the overlay for a pass of their own, under the same transform', () => {
+    const label = { kind: 'text', x: 0, y: 0, text: 'Wall 1' } as FloorplanGeometry
+    const corner = {
+      kind: 'endpoint-handle',
+      point: [1, 0],
+      state: 'idle',
+      affordance: 'move-endpoint',
+      payload: { wallId: 'wall_a', endpoint: 'end' },
+    } as FloorplanGeometry
+    const tree = {
+      kind: 'group',
+      transform: 'rotate(30)',
+      children: [label, { kind: 'group', children: [corner] }],
+    } as FloorplanGeometry
+    expect(splitFloorplanHandles(tree)).toEqual({
+      rest: { kind: 'group', transform: 'rotate(30)', children: [label] },
+      handles: {
+        kind: 'group',
+        transform: 'rotate(30)',
+        children: [{ kind: 'group', children: [corner] }],
+      },
+    } as never)
+    expect(splitFloorplanHandles(label)).toEqual({ rest: label, handles: null })
   })
 })

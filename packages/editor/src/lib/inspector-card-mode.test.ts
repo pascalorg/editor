@@ -1,9 +1,9 @@
 import { describe, expect, test } from 'bun:test'
 import {
   type InspectorCardMode,
+  openExtension,
   resolveActiveExtension,
   toggleCard,
-  toggleExtension,
 } from './inspector-card-mode'
 
 const collapsed: InspectorCardMode = { collapsed: true, activeExtensionId: null }
@@ -29,27 +29,6 @@ describe('toggleCard (chevron / header press)', () => {
   })
 })
 
-describe('toggleExtension (header icon press)', () => {
-  test('folded card opens straight into extension-only mode', () => {
-    expect(toggleExtension(collapsed, 'bones:eng')).toEqual(engineering)
-  })
-
-  test('regular expanded card swaps to extension-only mode', () => {
-    expect(toggleExtension(regular, 'bones:eng')).toEqual(engineering)
-  })
-
-  test('pressing the ACTIVE extension icon again returns to regular mode', () => {
-    expect(toggleExtension(engineering, 'bones:eng')).toEqual(regular)
-  })
-
-  test('pressing another extension icon switches extension modes directly', () => {
-    expect(toggleExtension(engineering, 'other:ext')).toEqual({
-      collapsed: false,
-      activeExtensionId: 'other:ext',
-    })
-  })
-})
-
 describe('resolveActiveExtension', () => {
   const bones = { id: 'bones:eng' }
   const other = { id: 'other:ext' }
@@ -71,20 +50,13 @@ describe('resolveActiveExtension', () => {
 })
 
 describe('full user flows (QA script)', () => {
-  test('chevron → regular only; fold; icon → extension only; icon again → regular', () => {
+  test('chevron → regular only; fold; extension action → extension only; chevron → regular', () => {
     let mode = collapsed
     mode = toggleCard(mode) // chevron
     expect(mode).toEqual(regular)
     mode = toggleCard(mode) // fold
     expect(mode).toEqual(collapsed)
-    mode = toggleExtension(mode, 'bones:eng') // bones icon
-    expect(mode).toEqual(engineering)
-    mode = toggleExtension(mode, 'bones:eng') // bones icon again
-    expect(mode).toEqual(regular)
-  })
-
-  test('extension mode exits via the chevron too', () => {
-    let mode = toggleExtension(collapsed, 'bones:eng')
+    mode = openExtension('bones:eng') // the action-menu button
     expect(mode).toEqual(engineering)
     mode = toggleCard(mode) // chevron
     expect(mode).toEqual(regular)

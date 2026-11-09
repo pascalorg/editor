@@ -1,7 +1,10 @@
 'use client'
 
 import {
+  type AnyNodeId,
   clearSceneHistory,
+  getSceneDocument,
+  materializeRegisteredNodeDefaults,
   nodeRegistry,
   resolveLevelId,
   sceneRegistry,
@@ -9,10 +12,11 @@ import {
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import useEditor, {
+  editorUiStateOnOpen,
   hasCustomPersistedEditorUiState,
-  normalizePersistedEditorUiState,
   type PersistedEditorUiState,
 } from '../store/use-editor'
+import useInteractionScope from '../store/use-interaction-scope'
 import { editorHostPanelRegistry } from './plugin-panels'
 
 export type SceneGraph = {
@@ -23,6 +27,18 @@ export type SceneGraph = {
   collections?: Record<string, unknown>
   materials?: Record<string, unknown>
   installedPlugins?: string[]
+}
+
+/**
+ * The scene as saves and exports write it. A clone in hand — a preset or duplicate the user is
+ * placing — is in the store from the tile click so tools can render and host it, but it only
+ * becomes part of the document when its placement commits.
+ */
+export function getSavedSceneDocument() {
+  const { scope } = useInteractionScope.getState()
+  const placing =
+    scope.kind === 'placing' && scope.driver === 'move-tool' ? [scope.nodeId as AnyNodeId] : []
+  return getSceneDocument(placing)
 }
 
 type PersistedSelectionPath = {
@@ -150,7 +166,6 @@ export function writePersistedSelection(selection: {
 }
 
 function getEditorUiStateForRestoredSelection(
-  sceneNodes: Record<string, any>,
   selection: PersistedSelectionPath,
   fallbackUiState: PersistedEditorUiState,
 ): PersistedEditorUiState {
@@ -167,43 +182,16 @@ function getEditorUiStateForRestoredSelection(
             : { mode: 'select' },
       mode,
       tool: mode === 'build' ? 'property-line' : null,
-      structureLayer: 'elements',
       catalogCategory: null,
     }
   }
-
-  if (selection.zoneId) {
-    return {
-      ...fallbackUiState,
-      phase: 'structure',
-      toolMode: { mode: 'select' },
-      mode: 'select',
-      tool: null,
-      structureLayer: 'zones',
-      catalogCategory: null,
-    }
-  }
-
-  const selectedNodes = selection.selectedIds
-    .map((id) => sceneNodes[id])
-    .filter((node): node is Record<string, any> => Boolean(node))
-
-  const shouldRestoreFurnishPhase =
-    selectedNodes.length > 0 &&
-    selectedNodes.every(
-      (node) =>
-        node.type === 'item' &&
-        node.asset?.category !== 'door' &&
-        node.asset?.category !== 'window',
-    )
 
   return {
     ...fallbackUiState,
-    phase: shouldRestoreFurnishPhase ? 'furnish' : 'structure',
+    phase: 'building',
     toolMode: { mode: 'select' },
     mode: 'select',
     tool: null,
-    structureLayer: 'elements',
     catalogCategory: null,
   }
 }
@@ -276,15 +264,22 @@ function getRestoredSelectionForScene(
 export function syncEditorSelectionFromCurrentScene() {
   const sceneNodes = useScene.getState().nodes as Record<string, any>
   const sceneRootIds = useScene.getState().rootNodeIds
-  const siteNode = sceneRootIds[0] ? sceneNodes[sceneRootIds[0]] : null
   const resolve = (child: any) => (typeof child === 'string' ? sceneNodes[child] : child)
-  const firstBuilding = siteNode?.children?.map(resolve).find((n: any) => n?.type === 'building')
+  const rootNodes = sceneRootIds.map((id) => sceneNodes[id]).filter(Boolean)
+  const firstBuilding =
+    rootNodes.find((node) => node.type === 'building') ??
+    rootNodes
+      .flatMap((node) => (Array.isArray(node.children) ? node.children.map(resolve) : []))
+      .find((node) => node?.type === 'building')
   const firstLevel = firstBuilding?.children?.map(resolve).find((n: any) => n?.type === 'level')
-  const restoredEditorUiState = normalizePersistedEditorUiState(useEditor.getState())
+  // Every project open lands in select mode, a mid-session switch included: this
+  // runs on each scene load, so it reads the live state the last project left
+  // behind and would otherwise re-arm that project's tool over the new scene.
+  const restoredEditorUiState = editorUiStateOnOpen(useEditor.getState())
   const shouldRestoreEditorUiState = hasCustomPersistedEditorUiState(restoredEditorUiState)
   const restoredSelection = getRestoredSelectionForScene(sceneNodes)
   const selectionDrivenEditorUiState = restoredSelection
-    ? getEditorUiStateForRestoredSelection(sceneNodes, restoredSelection, restoredEditorUiState)
+    ? getEditorUiStateForRestoredSelection(restoredSelection, restoredEditorUiState)
     : null
 
   if (firstBuilding && firstLevel) {
@@ -299,8 +294,7 @@ export function syncEditorSelectionFromCurrentScene() {
         selectedIds: [],
         zoneId: null,
       })
-      useEditor.getState().setPhase('structure')
-      useEditor.getState().setStructureLayer('elements')
+      useEditor.getState().setPhase('building')
       useEditor.getState().setMode('build')
       useEditor.getState().setTool('wall')
       return
@@ -347,8 +341,7 @@ export function syncEditorSelectionFromCurrentScene() {
       selectedIds: [],
       zoneId: null,
     })
-    useEditor.getState().setPhase('structure')
-    useEditor.getState().setStructureLayer('elements')
+    useEditor.getState().setPhase('building')
   } else {
     useEditor.getState().setPhase('site')
     useViewer.getState().setSelection({
@@ -377,7 +370,6 @@ function resetEditorInteractionState() {
   sceneRegistry.clear()
   useEditor.setState({
     phase: 'site',
-    structureLayer: 'elements',
     catalogCategory: null,
     selectedItem: null,
     selectedReferenceId: null,
@@ -400,12 +392,14 @@ export function applySceneGraphToEditor(sceneGraph?: SceneGraph | null) {
   const defaultInstalledPlugins = editorHostPanelRegistry.getDefaultInstalledPluginIds()
   if (hasUsableSceneGraph(sceneGraph)) {
     const { nodes, rootNodeIds, collections, materials, installedPlugins } = sceneGraph
-    useScene.getState().setScene(nodes as any, rootNodeIds as any, {
-      collections: collections as any,
-      materials: materials as any,
-      installedPlugins: installedPlugins ?? defaultInstalledPlugins,
-      hasExplicitPluginInstallState: installedPlugins !== undefined,
-    })
+    useScene
+      .getState()
+      .setScene(materializeRegisteredNodeDefaults(nodes) as any, rootNodeIds as any, {
+        collections: collections as any,
+        materials: materials as any,
+        installedPlugins: installedPlugins ?? defaultInstalledPlugins,
+        hasExplicitPluginInstallState: installedPlugins !== undefined,
+      })
   } else {
     useScene.getState().clearScene()
     useScene.getState().setInstalledPlugins(defaultInstalledPlugins, { explicit: false })

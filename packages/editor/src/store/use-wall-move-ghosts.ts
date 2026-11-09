@@ -10,8 +10,10 @@ import { create } from 'zustand'
  * as translucent ghost meshes mid-drag; the 2D `wallFloorplanMoveTarget`
  * writes here so the floor-plan SVG layer can render the same hint.
  *
- * Writer: `packages/nodes/src/wall/floorplan-move.ts` (on each `apply`,
- * cleared on `commit` and by the move overlay's cleanup).
+ * Writers: `packages/nodes/src/wall/floorplan-move.ts` (on each `apply`,
+ * cleared on `commit` and by the move overlay's cleanup), and the wall push
+ * preview in `lib/room-handle-drag.ts` (the pieces a push would create,
+ * cleared when the push previews again, commits or cancels).
  * Reader: `packages/editor/src/components/editor-2d/floorplan-wall-move-ghost-layer.tsx`.
  */
 export type WallMoveGhostBridge = {

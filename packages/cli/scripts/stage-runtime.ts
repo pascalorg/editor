@@ -69,6 +69,11 @@ await bundleMcpServer(
   path.join(packageDirectory, 'dist/services/pascal-mcp.mjs'),
   packageJson.version,
 )
+await bundleMcpServer(
+  path.join(packageDirectory, 'dist/services/geometry-script-worker.js'),
+  packageJson.version,
+  'packages/mcp/src/tools/geometry-script-worker.ts',
+)
 await assertFile(path.join(standaloneAppDirectory, 'server.js'))
 await rm(outputDirectory, { recursive: true, force: true })
 await mkdir(path.dirname(outputDirectory), { recursive: true })
@@ -89,6 +94,7 @@ await flattenBunNodeModules(outputDirectory)
 await materializeSymlinks(outputDirectory)
 await rm(path.join(outputDirectory, 'node_modules/.bun'), { recursive: true, force: true })
 await pruneBuildOnlyFiles(outputDirectory)
+await reportStaticMedia(path.join(outputDirectory, 'apps/editor/.next/static/media'))
 const nativeFiles = await findNativeModules(outputDirectory)
 if (nativeFiles.length > 0) {
   throw new Error(`portable runtime contains native modules:\n${nativeFiles.join('\n')}`)
@@ -122,19 +128,26 @@ console.log(
 console.log(`Digest ${sha256}`)
 console.log(`Release asset ${assetUrl}`)
 
-async function bundleMcpServer(output: string, version: string): Promise<void> {
+async function bundleMcpServer(
+  output: string,
+  version: string,
+  entry = 'packages/mcp/src/bin/pascal-mcp.ts',
+): Promise<void> {
   await mkdir(path.dirname(output), { recursive: true })
   const child = spawn(
     process.execPath,
     [
       'build',
-      path.join(repositoryRoot, 'packages/mcp/src/bin/pascal-mcp.ts'),
+      path.join(repositoryRoot, entry),
       '--outfile',
       output,
       '--target',
       'node',
       '--format',
       'esm',
+      // Whitespace only: the program stays the same token for token, so function and class
+      // names stay as written for stack traces and for code that reads them.
+      '--minify-whitespace',
       '--define',
       `process.env.PASCAL_MCP_VERSION=${JSON.stringify(version)}`,
     ],
@@ -338,4 +351,21 @@ async function findNativeModules(root: string): Promise<string[]> {
   }
   await walk(root)
   return result.sort()
+}
+
+async function reportStaticMedia(directory: string): Promise<void> {
+  const totals = new Map<string, { bytes: number; count: number }>()
+  for (const entry of await readdir(directory, { withFileTypes: true })) {
+    if (!entry.isFile()) continue
+    const extension = path.extname(entry.name) || '(no extension)'
+    const total = totals.get(extension) ?? { bytes: 0, count: 0 }
+    total.bytes += (await stat(path.join(directory, entry.name))).size
+    total.count += 1
+    totals.set(extension, total)
+  }
+  for (const [extension, total] of [...totals].sort((a, b) => b[1].bytes - a[1].bytes)) {
+    console.log(
+      `Runtime media ${extension}: ${total.count} files, ${formatMegabytes(total.bytes)} MB`,
+    )
+  }
 }

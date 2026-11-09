@@ -1,0 +1,15 @@
+// T-001: tests import other packages through their exports, never `../../<pkg>/src/...`.
+// Scoped to test files by the override in biome.jsonc.
+language js
+
+or {
+  JsModuleSource() as $source,
+  `import($source)`
+} where {
+  $source <: r"['\"](?:\.\./)+[\w-]+/src(?:/.*)?['\"]",
+  register_diagnostic(
+    span = $source,
+    message = "Tests import other packages through their exports, not their src/ by relative path. See DECISIONS.md T-001.",
+    severity = "warn"
+  )
+}

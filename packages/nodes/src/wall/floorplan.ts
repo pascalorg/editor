@@ -1,28 +1,51 @@
 import {
   type AnyNode,
+  calculateLevelLayerMiters,
   calculateLevelMiters,
   type FloorplanGeometry,
   type FloorplanPoint,
   type GeometryContext,
+  getWallBodyCenterOffset,
   getWallCurveFrameAt,
   getWallCurveLength,
+  getWallEffectiveHeightForNodes,
+  getWallFaceOffsets,
+  getWallLayerPolylines,
+  getWallLocalFaceZ,
   getWallMidpointHandlePoint,
   getWallPlanFootprint,
   getWallThickness,
   isCurvedWall,
+  isRailingWall,
+  type WallLayerMiterData,
+  type WallLayerPolyline,
   type WallMiterData,
   type WallNode,
+  wallLayerBoundaryOffsets,
 } from '@pascal-app/core'
-import { floorplanGeometryMetadata, readFloorplanContext } from '@pascal-app/editor'
+import {
+  type FloorplanWallDimensionFaces,
+  floorplanGeometryMetadata,
+  readFloorplanContext,
+  WALL_PULL_AFFORDANCE,
+  WALL_PULL_GRIP_TITLE,
+  WALL_PUSH_AFFORDANCE,
+  type WallPullGripPayload,
+  type WallPushArrowPayload,
+  wallPullSeed,
+} from '@pascal-app/editor'
 import { constructionDimensionStandard } from '../shared/construction-dimension-standards'
 import {
   buildCurvedWallConstructionDimensions,
   buildLevelWallConstructionDimensionPlan,
   buildWallConstructionDimensions,
+  constructionDimensionFace,
   renderPlannedConstructionDimensions,
   type WallConstructionDimensionPlan,
 } from './construction-dimensions'
+import { buildCurtainWallFloorplan } from './curtain-wall-floorplan'
 import { hasWallCurveBlockingChildren } from './curve-eligibility'
+import { buildRailingWallFloorplan } from './railing-wall-floorplan'
 
 // Same constants the legacy `getFloorplanWall` uses (editor/lib/floorplan/walls.ts).
 // Slightly exaggerates thin walls so the 2D plan stays legible without
@@ -32,13 +55,19 @@ const FLOORPLAN_MIN_VISIBLE_WALL_THICKNESS = 0.13
 const FLOORPLAN_MAX_EXTRA_THICKNESS = 0.035
 const FLOORPLAN_SELECTION_HATCH_SPACING = 0.12
 const FLOORPLAN_SELECTED_WALL_STROKE_WIDTH = 0.03
+const FLOORPLAN_RAILING_STROKE_WIDTH = 0.01
 const FLOORPLAN_SELECTION_HATCH_STROKE_WIDTH = 0.02
-const WALL_DIMENSION_REFERENCES = ['finished-faces', 'centerline', 'stud-faces'] as const
-
-type WallDimensionReference = (typeof WALL_DIMENSION_REFERENCES)[number]
+// The automatic strings measure finished faces; a partition meeting a facade
+// is dimensioned to both of its faces.
+const FINISHED_FACE_DIMENSIONS = {
+  datumPolicy: 'wall-face',
+  intersectionReferencePolicy: 'both-faces',
+} as const
 
 function floorplanWallThickness(wall: WallNode): number {
   const baseThickness = getWallThickness(wall)
+  // A railing draws as thin as its posts.
+  if (isRailingWall(wall)) return baseThickness
   const scaledThickness = baseThickness * FLOORPLAN_WALL_THICKNESS_SCALE
   return Math.min(
     baseThickness + FLOORPLAN_MAX_EXTRA_THICKNESS,
@@ -50,10 +79,167 @@ function exaggerateWallThickness(wall: WallNode): WallNode {
   return { ...wall, thickness: floorplanWallThickness(wall) }
 }
 
+// Assembly offsets are measured from the body centre; a justified wall's body
+// sits off its reference line, so the layer lines move with it.
+function wallLayerOffsets(wall: WallNode): number[] {
+  const centre = getWallBodyCenterOffset(wall)
+  return wallLayerBoundaryOffsets(wall, getWallThickness(wall)).map((offset) => offset + centre)
+}
+
 export type WallFloorplanLevelData = {
   miters: WallMiterData
   documentMiters: WallMiterData
-  constructionDimensionsByReference: Record<WallDimensionReference, WallConstructionDimensionPlan>
+  layerMiters: WallLayerMiterData
+  documentLayerMiters: WallLayerMiterData
+  /** Built on first read: a level whose plan shows no automatic dimensions never pays for it. */
+  readonly constructionDimensions: WallConstructionDimensionPlan
+}
+
+// --- Assembly layer lines ---------------------------------------------------
+//
+// The mitered outer footprint is unchanged; these are the boundaries BETWEEN
+// the assembly's layers, offset in from the footprint and mitered at the same
+// corners so they meet cleanly (see `calculateLevelLayerMiters` in
+// `packages/core/src/systems/wall/wall-assembly.ts` for the corner, T-junction
+// and different-assembly rules).
+//
+// In `document` purpose the framing cavity gets the standard poché (a light
+// hatch) and the finish layers are thin solid lines. In `edit` purpose the
+// footprint keeps today's look and the layer lines are drawn at reduced
+// opacity with no poché, so the editor stays readable.
+//
+// Curved walls are skipped: the offset miter is a straight-line construction
+// and a curved wall's layers would need arc offsets. Stated plainly rather
+// than approximated — a curved wall draws exactly as it does today.
+const LAYER_LINE_STROKE = '#1f2937'
+const LAYER_LINE_WIDTH_DOCUMENT = 0.008
+const LAYER_LINE_WIDTH_EDIT = 0.006
+const LAYER_LINE_OPACITY_EDIT = 0.35
+const FRAMING_POCHE_COLOR = '#94a3b8'
+const FRAMING_POCHE_OPACITY = 0.28
+
+/** Along-wall spans, measured from `wall.start`, occupied by doors / windows. */
+function openingSpans(wall: WallNode, children: AnyNode[]): Array<[number, number]> {
+  const spans: Array<[number, number]> = []
+  for (const child of children) {
+    if (child.type !== 'door' && child.type !== 'window') continue
+    const distance = child.position?.[0]
+    const width = (child as { width?: number }).width
+    if (typeof distance !== 'number' || typeof width !== 'number' || width <= 0) continue
+    spans.push([distance - width / 2, distance + width / 2])
+  }
+  return spans.sort((a, b) => a[0] - b[0])
+}
+
+/**
+ * Cut one mitered layer boundary at the openings hosted by the wall, so an
+ * opening reads as a hole through EVERY layer and not just the footprint.
+ * Parameterised along the wall direction, which is exact for straight walls.
+ */
+function cutAtOpenings(
+  line: WallLayerPolyline,
+  wall: WallNode,
+  spans: Array<[number, number]>,
+): Array<{ start: FloorplanPoint; end: FloorplanPoint }> {
+  const segment = {
+    start: [line.start.x, line.start.y] as FloorplanPoint,
+    end: [line.end.x, line.end.y] as FloorplanPoint,
+  }
+  if (spans.length === 0) return [segment]
+
+  const dx = wall.end[0] - wall.start[0]
+  const dy = wall.end[1] - wall.start[1]
+  const length = Math.hypot(dx, dy)
+  if (length < 1e-9) return [segment]
+  const ux = dx / length
+  const uy = dy / length
+  const along = (p: { x: number; y: number }) =>
+    (p.x - wall.start[0]) * ux + (p.y - wall.start[1]) * uy
+  const a0 = along(line.start)
+  const a1 = along(line.end)
+  if (Math.abs(a1 - a0) < 1e-9) return [segment]
+
+  const at = (t: number): FloorplanPoint => [
+    line.start.x + (line.end.x - line.start.x) * t,
+    line.start.y + (line.end.y - line.start.y) * t,
+  ]
+  const toT = (distance: number) => (distance - a0) / (a1 - a0)
+
+  const pieces: Array<{ start: FloorplanPoint; end: FloorplanPoint }> = []
+  let cursor = 0
+  for (const [lo, hi] of spans) {
+    const tLo = Math.max(0, Math.min(1, toT(lo)))
+    const tHi = Math.max(0, Math.min(1, toT(hi)))
+    const from = Math.min(tLo, tHi)
+    const to = Math.max(tLo, tHi)
+    if (from > cursor + 1e-6) pieces.push({ start: at(cursor), end: at(from) })
+    cursor = Math.max(cursor, to)
+  }
+  if (cursor < 1 - 1e-6) pieces.push({ start: at(cursor), end: at(1) })
+  return pieces
+}
+
+/**
+ * The layer-boundary lines plus the framing poché for one wall.
+ * `wall` is the (possibly exaggerated) wall the footprint was built from, so
+ * the stack is scaled to whatever thickness is actually drawn.
+ */
+function buildWallAssemblyLayers(
+  wall: WallNode,
+  source: WallNode,
+  layerMiters: WallLayerMiterData,
+  children: AnyNode[],
+  documentMode: boolean,
+): FloorplanGeometry[] {
+  if (!source.assembly || isCurvedWall(source)) return []
+  const offsets = wallLayerOffsets(wall)
+  if (offsets.length < 3) return []
+  const lines = getWallLayerPolylines(wall, layerMiters, offsets)
+  if (lines.length < 3) return []
+
+  const spans = openingSpans(source, children)
+  const out: FloorplanGeometry[] = []
+
+  // Framing poché first, so the boundary lines sit on top of it.
+  if (documentMode) {
+    for (let i = 0; i < lines.length - 1; i += 1) {
+      if (lines[i + 1]!.role !== 'framing') continue
+      const outer = lines[i]!
+      const inner = lines[i + 1]!
+      out.push({
+        kind: 'hatch',
+        points: [
+          [outer.start.x, outer.start.y],
+          [outer.end.x, outer.end.y],
+          [inner.end.x, inner.end.y],
+          [inner.start.x, inner.start.y],
+        ],
+        color: FRAMING_POCHE_COLOR,
+        opacity: FRAMING_POCHE_OPACITY,
+      })
+    }
+  }
+
+  // Interior boundaries only — index 0 and the last index are the two outer
+  // faces, already drawn by the mitered footprint polygon.
+  for (let i = 1; i < lines.length - 1; i += 1) {
+    for (const piece of cutAtOpenings(lines[i]!, source, spans)) {
+      out.push({
+        kind: 'line',
+        x1: piece.start[0],
+        y1: piece.start[1],
+        x2: piece.end[0],
+        y2: piece.end[1],
+        stroke: LAYER_LINE_STROKE,
+        strokeWidth: documentMode ? LAYER_LINE_WIDTH_DOCUMENT : LAYER_LINE_WIDTH_EDIT,
+        opacity: documentMode ? 1 : LAYER_LINE_OPACITY_EDIT,
+        pointerEvents: 'none',
+        metadata: floorplanGeometryMetadata({ renderPass: 'overlay' }),
+      })
+    }
+  }
+
+  return out
 }
 
 export function computeWallFloorplanLevelData({
@@ -64,40 +250,23 @@ export function computeWallFloorplanLevelData({
   nodes: Record<string, AnyNode>
 }): WallFloorplanLevelData {
   const walls = siblings.map(exaggerateWallThickness)
-  const constructionDimensionsByReference = {} as Record<
-    WallDimensionReference,
-    WallConstructionDimensionPlan
-  >
-  for (const reference of WALL_DIMENSION_REFERENCES) {
-    let cached: WallConstructionDimensionPlan | undefined
-    Object.defineProperty(constructionDimensionsByReference, reference, {
-      enumerable: true,
-      get: () => {
-        if (cached) return cached
-        const datumPolicy =
-          reference === 'finished-faces'
-            ? 'wall-face'
-            : reference === 'stud-faces'
-              ? 'structural-face'
-              : 'centerline'
-        cached = buildLevelWallConstructionDimensionPlan(
-          siblings,
-          nodes,
-          constructionDimensionStandard({
-            datumPolicy,
-            ...(reference === 'finished-faces'
-              ? { intersectionReferencePolicy: 'both-faces' as const }
-              : {}),
-          }),
-        )
-        return cached
-      },
-    })
-  }
+  const documentWalls = [...siblings]
+  const miters = calculateLevelMiters(walls)
+  const documentMiters = calculateLevelMiters(documentWalls)
+  let constructionDimensions: WallConstructionDimensionPlan | undefined
   return {
-    miters: calculateLevelMiters(walls),
-    documentMiters: calculateLevelMiters([...siblings]),
-    constructionDimensionsByReference,
+    miters,
+    documentMiters,
+    layerMiters: calculateLevelLayerMiters(walls, miters, wallLayerOffsets),
+    documentLayerMiters: calculateLevelLayerMiters(documentWalls, documentMiters, wallLayerOffsets),
+    get constructionDimensions() {
+      constructionDimensions ??= buildLevelWallConstructionDimensionPlan(
+        siblings,
+        nodes,
+        constructionDimensionStandard(FINISHED_FACE_DIMENSIONS),
+      )
+      return constructionDimensions
+    },
   }
 }
 
@@ -110,7 +279,8 @@ export function computeWallFloorplanLevelData({
  *   3. A transparent hit-line on the centerline so the user can grab the
  *      wall body easily.
  *   4. Two endpoint handles (start + end) when selected — the registry
- *      layer hosts the 5-circle stack + hover transitions + 2D drag.
+ *      layer hosts the 5-circle stack + hover transitions + 2D drag — and,
+ *      just past each, a "pull to continue" grip that draws the next wall.
  *   5. Exterior facade strings plus interior wall spans and hosted-opening widths.
  *
  * `ctx.levelData` provides the shared level miter graph when the floor-plan
@@ -118,7 +288,7 @@ export function computeWallFloorplanLevelData({
  * direct builder callers.
  */
 export function buildWallFloorplan(node: WallNode, ctx: GeometryContext): FloorplanGeometry | null {
-  const { automaticDimensions, metricNotation, purpose, wallDimensionReference } =
+  const { automaticDimensions, metricNotation, purpose, wallDimensionFaces } =
     readFloorplanContext(ctx)
   const documentMode = purpose === 'document'
   const wallForPurpose = (wall: WallNode) => (documentMode ? wall : exaggerateWallThickness(wall))
@@ -129,12 +299,20 @@ export function buildWallFloorplan(node: WallNode, ctx: GeometryContext): Floorp
   // level-wide miter calc per wall; the dispatcher path is O(1) here, which is
   // what keeps a wall drag from being O(N²) across the level.
   const levelData = ctx.levelData as WallFloorplanLevelData | undefined
-  const miters =
-    (documentMode ? levelData?.documentMiters : levelData?.miters) ??
-    calculateLevelMiters([
+  let purposeWalls: WallNode[] | undefined
+  const getPurposeWalls = () => {
+    purposeWalls ??= [
       self,
       ...ctx.siblings.filter((s): s is AnyNode & WallNode => s.type === 'wall').map(wallForPurpose),
-    ])
+    ]
+    return purposeWalls
+  }
+  const miters =
+    (documentMode ? levelData?.documentMiters : levelData?.miters) ??
+    calculateLevelMiters(getPurposeWalls())
+  const getLayerMiters = () =>
+    (documentMode ? levelData?.documentLayerMiters : levelData?.layerMiters) ??
+    calculateLevelLayerMiters(getPurposeWalls(), miters, wallLayerOffsets)
 
   const polygon = getWallPlanFootprint(self, miters)
   if (!polygon || polygon.length < 3) return null
@@ -158,7 +336,14 @@ export function buildWallFloorplan(node: WallNode, ctx: GeometryContext): Floorp
       : isHovered && palette
         ? palette.wallHoverStroke
         : '#1f2937'
-  const fill = showSelectedChrome ? '#ffffff' : '#374151'
+  // A railing is an outline round its posts, with no poché.
+  const railing = isRailingWall(node)
+  const fill =
+    node.wallType === 'curtain' || railing
+      ? 'transparent'
+      : showSelectedChrome
+        ? '#ffffff'
+        : '#374151'
 
   const children: FloorplanGeometry[] = [
     {
@@ -166,7 +351,11 @@ export function buildWallFloorplan(node: WallNode, ctx: GeometryContext): Floorp
       points,
       fill,
       stroke,
-      strokeWidth: showSelectedChrome ? FLOORPLAN_SELECTED_WALL_STROKE_WIDTH : 0.02,
+      strokeWidth: showSelectedChrome
+        ? FLOORPLAN_SELECTED_WALL_STROKE_WIDTH
+        : railing
+          ? FLOORPLAN_RAILING_STROKE_WIDTH
+          : 0.02,
       opacity: 0.92,
       metadata: floorplanGeometryMetadata({ annotationObstacle: 'outline' }),
       // Once the wall is selected, the body keeps catching the pointer
@@ -178,11 +367,36 @@ export function buildWallFloorplan(node: WallNode, ctx: GeometryContext): Floorp
     },
   ]
 
+  if (node.wallType === 'curtain') {
+    children.push(
+      ...buildCurtainWallFloorplan(
+        node,
+        getWallEffectiveHeightForNodes(node, ctx.sceneNodes ?? {}),
+        stroke,
+        ctx.children,
+      ),
+    )
+  } else if (railing) {
+    children.push(
+      ...buildRailingWallFloorplan(
+        node,
+        ctx.children,
+        ctx.siblings.filter((sibling): sibling is AnyNode & WallNode => sibling.type === 'wall'),
+        stroke,
+      ),
+    )
+  } else if (node.assembly) {
+    // Assembly layer lines + framing poché, drawn inside the footprint.
+    children.push(
+      ...buildWallAssemblyLayers(self, node, getLayerMiters(), ctx.children, documentMode),
+    )
+  }
+
   if (automaticDimensions) {
     const dimensionStroke =
       isSelected && palette ? palette.selectedStroke : (palette?.measurementStroke ?? '#334155')
     const dimensionStandard = constructionDimensionStandard({
-      datumPolicy: wallDimensionDatumPolicy(wallDimensionReference),
+      ...FINISHED_FACE_DIMENSIONS,
       metricNotation,
     })
     const exteriorCornerDimensionStandard = constructionDimensionStandard({
@@ -202,20 +416,21 @@ export function buildWallFloorplan(node: WallNode, ctx: GeometryContext): Floorp
         }),
       )
     } else {
-      const planned = levelData?.constructionDimensionsByReference[wallDimensionReference].get(
-        node.id,
-      )
+      const planned = levelData?.constructionDimensions.get(node.id)
       if (planned) {
         children.push(
           ...renderPlannedConstructionDimensions(
-            planned,
+            planned.filter((entry) =>
+              measuresFace(wallDimensionFaces, constructionDimensionFace(entry.tier)),
+            ),
             view?.unit ?? 'metric',
             dimensionStroke,
             documentMode ? 'document' : 'editor',
             dimensionStandard,
           ),
         )
-      } else if (!levelData) {
+      } else if (!levelData && measuresFace(wallDimensionFaces, 'exterior')) {
+        // Without the level plan, only the exterior strings are drawn.
         children.push(
           ...buildWallConstructionDimensions(self, ctx, {
             unit: view?.unit ?? 'metric',
@@ -266,10 +481,26 @@ export function buildWallFloorplan(node: WallNode, ctx: GeometryContext): Floorp
       affordance: 'move-endpoint',
       payload: { wallId: node.id, endpoint: 'end' as const },
     })
+    // Pull grips — an arrow just past each end, pointing out along the wall:
+    // drag one to draw the next wall from that end (`startWallPull`).
+    for (const endpoint of ['start', 'end'] as const) {
+      const seed = wallPullSeed(node, endpoint)
+      if (!seed) continue
+      children.push({
+        kind: 'move-arrow',
+        variant: 'pull',
+        point: seed.start,
+        angle: Math.atan2(seed.reference[1], seed.reference[0]),
+        affordance: WALL_PULL_AFFORDANCE,
+        payload: { wallId: node.id, endpoint } satisfies WallPullGripPayload,
+        title: WALL_PULL_GRIP_TITLE,
+      })
+    }
 
     const thicknessFrame = getWallCurveFrameAt(self, 0.5)
-    const halfVisibleThickness = getWallThickness(self) / 2
-    for (const side of [1, -1] as const) {
+    // A railing's posts set its thickness (the panel's Post size): it has no thickness handles.
+    for (const side of railing ? [] : ([1, -1] as const)) {
+      const halfVisibleThickness = getWallLocalFaceZ(self, side > 0 ? 'a' : 'b') * side
       children.push({
         kind: 'endpoint-handle',
         point: [
@@ -282,11 +513,10 @@ export function buildWallFloorplan(node: WallNode, ctx: GeometryContext): Floorp
       })
     }
 
-    // Side move arrows — two directional arrows at the wall midpoint,
-    // pointing outward perpendicular to the wall. Mirrors the 3D
-    // `WallMoveSideHandles` arrows so users can grab the wall body
-    // from the floor plan. PointerDown on either arrow activates
-    // `wallFloorplanMoveTarget` via the registry-layer dispatcher.
+    // Side push arrows — two directional arrows at the wall midpoint,
+    // pointing outward perpendicular to the wall. They are the 3D side
+    // arrows' push (same handle, drag and commit, run by the floor plan for
+    // `WALL_PUSH_AFFORDANCE`); only their placement is plan-specific.
     {
       const dx = node.end[0] - node.start[0]
       const dz = node.end[1] - node.start[1]
@@ -295,16 +525,22 @@ export function buildWallFloorplan(node: WallNode, ctx: GeometryContext): Floorp
         const midpoint = getWallMidpointHandlePoint(node)
         const nx = -dz / wallLength
         const nz = dx / wallLength
-        const offset = floorplanWallThickness(node) / 2 + 0.05
+        const offsets = getWallFaceOffsets({ ...node, thickness: floorplanWallThickness(node) })
+        const offset = offsets.a + 0.05
+        const backOffset = -offsets.b + 0.05
         children.push({
           kind: 'move-arrow',
           point: [midpoint.x + nx * offset, midpoint.y + nz * offset],
           angle: Math.atan2(nz, nx),
+          affordance: WALL_PUSH_AFFORDANCE,
+          payload: { wallId: node.id, side: 'a' } satisfies WallPushArrowPayload,
         })
         children.push({
           kind: 'move-arrow',
-          point: [midpoint.x - nx * offset, midpoint.y - nz * offset],
+          point: [midpoint.x - nx * backOffset, midpoint.y - nz * backOffset],
           angle: Math.atan2(-nz, -nx),
+          affordance: WALL_PUSH_AFFORDANCE,
+          payload: { wallId: node.id, side: 'b' } satisfies WallPushArrowPayload,
         })
       }
     }
@@ -333,8 +569,8 @@ function buildSelectedWallHatchLines(wall: WallNode, stroke: string): FloorplanG
   const length = getWallCurveLength(wall)
   if (length <= 1e-6) return []
 
-  const halfAcross = getWallThickness(wall) / 2
-  const halfAlong = halfAcross
+  const offsets = getWallFaceOffsets(wall)
+  const halfAlong = offsets.a - getWallBodyCenterOffset(wall)
   const count = Math.max(1, Math.floor(length / FLOORPLAN_SELECTION_HATCH_SPACING))
   const spacing = length / count
   const lines: FloorplanGeometry[] = []
@@ -344,10 +580,10 @@ function buildSelectedWallHatchLines(wall: WallNode, stroke: string): FloorplanG
     const frame = getWallCurveFrameAt(wall, along / length)
     lines.push({
       kind: 'line',
-      x1: frame.point.x - frame.tangent.x * halfAlong - frame.normal.x * halfAcross,
-      y1: frame.point.y - frame.tangent.y * halfAlong - frame.normal.y * halfAcross,
-      x2: frame.point.x + frame.tangent.x * halfAlong + frame.normal.x * halfAcross,
-      y2: frame.point.y + frame.tangent.y * halfAlong + frame.normal.y * halfAcross,
+      x1: frame.point.x - frame.tangent.x * halfAlong - frame.normal.x * -offsets.b,
+      y1: frame.point.y - frame.tangent.y * halfAlong - frame.normal.y * -offsets.b,
+      x2: frame.point.x + frame.tangent.x * halfAlong + frame.normal.x * offsets.a,
+      y2: frame.point.y + frame.tangent.y * halfAlong + frame.normal.y * offsets.a,
       stroke,
       strokeWidth: FLOORPLAN_SELECTION_HATCH_STROKE_WIDTH,
       pointerEvents: 'none',
@@ -358,13 +594,9 @@ function buildSelectedWallHatchLines(wall: WallNode, stroke: string): FloorplanG
   return lines
 }
 
-function wallDimensionDatumPolicy(reference: WallDimensionReference) {
-  switch (reference) {
-    case 'centerline':
-      return 'centerline' as const
-    case 'stud-faces':
-      return 'structural-face' as const
-    case 'finished-faces':
-      return 'wall-face' as const
-  }
+function measuresFace(
+  faces: FloorplanWallDimensionFaces,
+  face: Exclude<FloorplanWallDimensionFaces, 'both'>,
+): boolean {
+  return faces === 'both' || faces === face
 }

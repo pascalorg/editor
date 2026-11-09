@@ -1,4 +1,4 @@
-import type { Layers } from 'three'
+import { Layers } from 'three'
 
 /** Default Three.js layer for main scene geometry. */
 export const SCENE_LAYER = 0
@@ -17,12 +17,14 @@ export const OVERLAY_LAYER = 1
 export const ZONE_LAYER = 2
 
 /**
- * Layer for the editor ground grid. Rendered *inside* the scene pass (so scene
- * geometry depth-occludes it instead of it bleeding through walls/objects) — it
- * is a flat, depth-non-writing plane, so the screen-space ink never picks it up.
- * Kept off OVERLAY_LAYER because overlays composite on top with no scene-depth
- * test, which is exactly what we don't want for a full-floor plane. Excluded
- * from thumbnails like the other editor-only layers.
+ * Layer for editor-only visuals that scene geometry must hide: the ground grid
+ * and the construction reveal's dust. Rendered *inside* the scene pass (so
+ * walls and objects depth-occlude them instead of them bleeding through) —
+ * they write no depth, and a transparent one must write alpha 0 to the pass's
+ * normal and diffuse attachments (`scenePassMrt`), or the screen-space ink
+ * reads its whole quad as an edge. Kept off OVERLAY_LAYER because overlays
+ * composite on top with no scene-depth test.
+ * Excluded from thumbnails like the other editor-only layers.
  */
 export const GRID_LAYER = 3
 
@@ -47,6 +49,14 @@ export const SHADOW_ONLY_LAYER = 4
  * measurement rays.
  */
 export const BATCHED_LAYER = 5
+
+/** What the post-processing scene pass draws: the scene geometry, and the grid layer it depth-tests. */
+export function scenePassLayers(): Layers {
+  const layers = new Layers()
+  layers.set(SCENE_LAYER)
+  layers.enable(GRID_LAYER)
+  return layers
+}
 
 /**
  * Aims a raycaster at every real scene surface, whether a wall still draws

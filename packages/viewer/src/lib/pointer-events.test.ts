@@ -22,7 +22,12 @@ import { acceleratedRaycast, computeBoundsTree } from 'three-mesh-bvh'
 import { createWithEqualityFn } from 'zustand/traditional'
 import useViewer from '../store/use-viewer'
 import { BATCHED_LAYER } from './layers'
-import { choosePointerEvents, createPascalPointerEvents, markPureRaycast } from './pointer-events'
+import {
+  choosePointerEvents,
+  createPascalPointerEvents,
+  hasMaterialsForGroups,
+  markPureRaycast,
+} from './pointer-events'
 
 extend({ Group: THREE.Group })
 
@@ -335,7 +340,7 @@ function perfWindow(search = '?perf') {
   return probeWindow
 }
 
-describe('R3F 9.6.1 pointer-event differential', () => {
+describe('R3F 9.8.2 pointer-event differential', () => {
   test('handle-like two-arg raycasts cache when tagged and report fallback when untagged', async () => {
     const probeWindow = perfWindow()
     const { stock, cached } = await differential((f) => {
@@ -553,7 +558,7 @@ describe('R3F 9.6.1 pointer-event differential', () => {
 
   test('pins the vendored closure to the installed R3F version', () => {
     const pkg = JSON.parse(readFileSync(require.resolve('@react-three/fiber/package.json'), 'utf8'))
-    expect(pkg.version, 'R3F version drift: re-vendor pointer-events.ts').toBe('9.6.1')
+    expect(pkg.version, 'R3F version drift: re-vendor pointer-events.ts').toBe('9.8.2')
   })
 
   test('nested handlers preserve the complete ordered hit metadata and callback/hover order', async () => {
@@ -638,6 +643,24 @@ describe('R3F 9.6.1 pointer-event differential', () => {
       f.send('onPointerDown')
     })
     expect(cached.calls.get('b')).toBe(1)
+  })
+
+  test('a mesh missing a material for one of its groups is skipped, not thrown on', async () => {
+    const f = await fixture(createPascalPointerEvents)
+    const broken = f.mesh('broken')
+    f.mesh('good')
+    const material = new THREE.MeshBasicMaterial()
+    // A paint preview restored a three-entry palette over a rebuilt geometry
+    // that draws a fourth: three's raycast would read `undefined.side`.
+    broken.material = [material, material, material]
+    broken.geometry = new THREE.BufferGeometry()
+    for (const index of [0, 2, 3]) broken.geometry.addGroup(0, 3, index)
+    expect(hasMaterialsForGroups(broken)).toBe(false)
+    expect(() => f.send('onPointerMove')).not.toThrow()
+    expect(f.calls.has('broken')).toBe(false)
+    expect(f.calls.get('good')).toBe(1)
+    broken.material = [material, material, material, material]
+    expect(hasMaterialsForGroups(broken)).toBe(true)
   })
 
   test('collection skips interaction slots deleted during raycasting', async () => {
@@ -819,11 +842,11 @@ describe('R3F 9.6.1 pointer-event differential', () => {
     try {
       for (const environment of ['production', 'development', 'test']) {
         process.env.NODE_ENV = environment
-        expect(choosePointerEvents('')).toBe(createPascalPointerEvents)
+        expect(choosePointerEvents('')).not.toBe(stockEvents)
         for (const search of ['?stockEvents', '?stockEvents=false']) {
-          expect(choosePointerEvents(search)).toBe(
-            environment === 'production' ? createPascalPointerEvents : stockEvents,
-          )
+          const chosen = choosePointerEvents(search)
+          if (environment === 'production') expect(chosen).not.toBe(stockEvents)
+          else expect(chosen).toBe(stockEvents)
         }
       }
     } finally {

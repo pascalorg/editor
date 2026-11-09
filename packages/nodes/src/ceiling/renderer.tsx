@@ -1,8 +1,11 @@
 'use client'
 
 import {
+  type AnyNodeId,
+  CEILING_DRAW_OFFSET,
+  CEILING_SLOT_DEFAULT_COLOR,
   type CeilingNode,
-  getMaterialPresetByRef,
+  ceilingPaintRegions,
   resolveCeilingHeight,
   resolveMaterial,
   useLiveTransforms,
@@ -10,23 +13,36 @@ import {
   useScene,
 } from '@pascal-app/core'
 import {
+  CEILING_CAP_MESH,
+  CEILING_REGION_MESH,
+  type CeilingRegionMaterial,
   createSurfaceRoleMaterial,
   NodeRenderer,
   resolveSurfaceColor,
+  useLibraryMaterialsVersion,
+  useNodeEvents,
   useViewer,
 } from '@pascal-app/viewer'
-import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
-import { BackSide, type Mesh } from 'three/webgpu'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
+import { BackSide, FrontSide, type Mesh } from 'three/webgpu'
 import { createPlaceholderGeometry } from '../shared/placeholder-geometry'
-import { ceilingColorFromRef, getCeilingMaterials } from './materials'
-import { CEILING_SLOT_DEFAULT_COLOR } from './slots'
+import {
+  ceilingColorFromRef,
+  getCeilingCapMaterial,
+  getCeilingMaterials,
+  resolveCeilingFinish,
+} from './materials'
 
 function createEmptyGeometry() {
   return createPlaceholderGeometry()
 }
 
+// The cap is only seen: a click from above still reaches what it reached without it.
+const noopRaycast = () => {}
+
 export const CeilingRenderer = ({ node }: { node: CeilingNode }) => {
   const ref = useRef<Mesh>(null!)
+  const handlers = useNodeEvents(node, 'ceiling')
   const placeholderGeometry = useMemo(createEmptyGeometry, [])
   const gridPlaceholderGeometry = useMemo(createEmptyGeometry, [])
 
@@ -41,8 +57,11 @@ export const CeilingRenderer = ({ node }: { node: CeilingNode }) => {
     useScene.getState().markDirty(node.id)
   }, [node.id])
   const textures = useViewer((s) => s.textures)
+  const shading = useViewer((s) => s.shading)
+  const libraryMaterialsVersion = useLibraryMaterialsVersion()
   const colorPreset = useViewer((s) => s.colorPreset)
   const sceneTheme = useViewer((s) => s.sceneTheme)
+  const showTop = useViewer((s) => s.showCeilingTops)
   // Subscribe to the scene-material library so editing a `scene:` material the
   // ceiling slot references re-tints it live.
   const sceneMaterials = useScene((s) => s.materials)
@@ -51,7 +70,7 @@ export const CeilingRenderer = ({ node }: { node: CeilingNode }) => {
   // (primitive selector, so follows-mode ceilings track level-height edits
   // and covering-slab changes without a node write).
   const resolvedHeight = useScene((s) => resolveCeilingHeight(node, s.nodes))
-  const ceilingY = resolvedHeight - 0.01 + (liveTransform?.position[1] ?? 0)
+  const ceilingY = resolvedHeight - CEILING_DRAW_OFFSET + (liveTransform?.position[1] ?? 0)
   const position: [number, number, number] = [
     liveTransform?.position[0] ?? 0,
     ceilingY,
@@ -66,6 +85,7 @@ export const CeilingRenderer = ({ node }: { node: CeilingNode }) => {
     [gridPlaceholderGeometry, placeholderGeometry],
   )
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: dynamic library registration changes finish resolution
   const materials = useMemo(() => {
     // Textures-off mode takes the themed 'ceiling' role colour — the guaranteed
     // escape hatch, independent of any slot override. The bottom (seen from
@@ -75,30 +95,36 @@ export const CeilingRenderer = ({ node }: { node: CeilingNode }) => {
     // revealed (placing a ceiling-hosted item, or selecting one of its
     // children). Without that the top mesh would ship an opaque surface-role
     // material and a top-down camera would lose everything under the ceiling.
+    // The opaque top is the cap's, drawn only while the viewer shows ceiling tops.
     if (!textures) {
       const ceilingColor = resolveSurfaceColor('ceiling', colorPreset, sceneTheme)
       return {
         topMaterial: getCeilingMaterials(ceilingColor).topMaterial,
         bottomMaterial: createSurfaceRoleMaterial('ceiling', colorPreset, BackSide, sceneTheme),
+        capMaterial: createSurfaceRoleMaterial('ceiling', colorPreset, FrontSide, sceneTheme),
       }
     }
 
-    // Unified slot override — shared scene material or catalog `library:` finish
-    // (resolved to its base colour; a ceiling renders flat-tinted, not mapped).
-    const slotColor = ceilingColorFromRef(node.slots?.surface, sceneMaterials)
-    if (slotColor) return getCeilingMaterials(slotColor)
-
-    // Legacy inline material / preset (scenes painted before the slot model).
-    if (node.materialPreset || node.material) {
-      const preset = getMaterialPresetByRef(node.materialPreset)
-      const props = preset?.mapProperties ?? resolveMaterial(node.material)
-      return getCeilingMaterials(props.color || '#999999')
+    // The grid remains transparent from above; only the room-facing material
+    // uses the authored finish and the viewer's shading mode.
+    const gridColor =
+      ceilingColorFromRef(node.slots?.surface, sceneMaterials) ??
+      ceilingColorFromRef(node.materialPreset, sceneMaterials) ??
+      (node.material ? resolveMaterial(node.material).color : CEILING_SLOT_DEFAULT_COLOR)
+    const fallback = getCeilingMaterials(gridColor, shading)
+    return {
+      topMaterial: fallback.topMaterial,
+      capMaterial: getCeilingCapMaterial(gridColor, shading),
+      bottomMaterial:
+        resolveCeilingFinish(node.slots?.surface, sceneMaterials, shading) ??
+        resolveCeilingFinish(node.materialPreset, sceneMaterials, shading) ??
+        resolveCeilingFinish(node.material, sceneMaterials, shading) ??
+        fallback.bottomMaterial,
     }
-
-    // Declared slot default.
-    return getCeilingMaterials(CEILING_SLOT_DEFAULT_COLOR)
   }, [
     textures,
+    shading,
+    libraryMaterialsVersion,
     colorPreset,
     sceneTheme,
     sceneMaterials,
@@ -110,12 +136,46 @@ export const CeilingRenderer = ({ node }: { node: CeilingNode }) => {
     node.material?.texture,
   ])
 
+  // Regions use the same finish resolver as the whole surface and paint preview.
+  const regionMaterial = useCallback<CeilingRegionMaterial>(
+    (finish) => {
+      if (!textures) return materials.bottomMaterial
+      return resolveCeilingFinish(finish, sceneMaterials, shading) ?? materials.bottomMaterial
+    },
+    [textures, sceneMaterials, shading, materials],
+  )
+  useLayoutEffect(() => {
+    const mesh = ref.current
+    if (!mesh) return
+    mesh.userData.ceilingRegionMaterial = regionMaterial
+    let repainted = false
+    for (const child of mesh.children)
+      if (child.name === CEILING_REGION_MESH) {
+        ;(child as Mesh).material = regionMaterial(child.userData.finish)
+        repainted = true
+      }
+    // A batched copy keeps the old material until the ceiling is rebuilt.
+    if (repainted) useScene.getState().markDirty(node.id as AnyNodeId)
+  }, [node.id, regionMaterial])
+  // An automatic ceiling's regions live on its room: a repaint there rebuilds it.
+  const regionsKey = useScene((s) => JSON.stringify(ceilingPaintRegions(node, s.nodes)))
+  const builtRegionsKey = useRef(regionsKey)
+  useEffect(() => {
+    if (builtRegionsKey.current === regionsKey) return
+    builtRegionsKey.current = regionsKey
+    useScene.getState().markDirty(node.id as AnyNodeId)
+  }, [node.id, regionsKey])
+
   return (
     <mesh
+      castShadow
+      receiveShadow
       geometry={placeholderGeometry}
       material={materials.bottomMaterial}
       position={position}
       ref={ref}
+      visible={node.visible !== false}
+      {...handlers}
     >
       <mesh
         geometry={gridPlaceholderGeometry}
@@ -123,6 +183,14 @@ export const CeilingRenderer = ({ node }: { node: CeilingNode }) => {
         name="ceiling-grid"
         scale={0}
         visible={false}
+      />
+      <mesh
+        geometry={gridPlaceholderGeometry}
+        material={materials.capMaterial}
+        name={CEILING_CAP_MESH}
+        raycast={noopRaycast}
+        receiveShadow
+        visible={showTop}
       />
       {(node.children ?? []).map((childId) => (
         <NodeRenderer key={childId} nodeId={childId} />

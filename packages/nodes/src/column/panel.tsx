@@ -5,6 +5,9 @@ import {
   COLUMN_PRESETS,
   type ColumnNode,
   type ColumnPresetId,
+  type MessageDescriptor,
+  scriptImages,
+  usePascalI18n,
   useScene,
 } from '@pascal-app/core'
 import {
@@ -22,8 +25,12 @@ import { useViewer } from '@pascal-app/viewer'
 import { Move, Trash2 } from 'lucide-react'
 import { useCallback } from 'react'
 
+import { AuthoredParams } from '../item/authored-params'
+import { planColumnEdit } from './hosted-resize'
+import { FramingPostSection } from './post-section'
+
 const SELECT_CLASS =
-  'h-10 w-full rounded-lg border border-border/50 bg-[#2C2C2E] px-3 text-sm text-foreground outline-none transition-colors hover:bg-[#3e3e3e] focus:ring-1 focus:ring-border'
+  'h-10 w-full rounded-lg border border-border/50 bg-black/4 dark:bg-[#2C2C2E] px-3 text-sm text-foreground outline-none transition-colors hover:bg-black/8 dark:hover:bg-[#3e3e3e] focus:ring-1 focus:ring-border'
 
 const MANAGED_LEAN_TO_LAYOUT_FIELDS = new Set<keyof ColumnNode>([
   'position',
@@ -38,14 +45,39 @@ const MANAGED_LEAN_TO_LAYOUT_FIELDS = new Set<keyof ColumnNode>([
   'slots',
 ])
 
-const COLUMN_PRESET_OPTIONS = Object.entries(COLUMN_PRESETS).map(([value, preset]) => ({
+/** Preset names in the UI language; core's `COLUMN_PRESETS` labels stay English. */
+const COLUMN_PRESET_LABELS: Record<ColumnPresetId, MessageDescriptor> = {
+  basicPillar: /* i18n */ { id: 'node.column.preset.basicPillar', message: 'Straight Round' },
+  squarePillar: /* i18n */ { id: 'node.column.preset.squarePillar', message: 'Square Block' },
+  taperedPillar: /* i18n */ { id: 'node.column.preset.taperedPillar', message: 'Tapered Round' },
+  bulgedPillar: /* i18n */ { id: 'node.column.preset.bulgedPillar', message: 'Soft Bulged' },
+  hourglassPillar: /* i18n */ { id: 'node.column.preset.hourglassPillar', message: 'Hourglass' },
+  aFrameSupport: /* i18n */ { id: 'node.column.preset.aFrameSupport', message: 'A-Frame Support' },
+  yFrameSupport: /* i18n */ { id: 'node.column.preset.yFrameSupport', message: 'Y Support' },
+  vFrameSupport: /* i18n */ { id: 'node.column.preset.vFrameSupport', message: 'V Support' },
+  xBraceSupport: /* i18n */ { id: 'node.column.preset.xBraceSupport', message: 'X Brace' },
+  kBraceSupport: /* i18n */ { id: 'node.column.preset.kBraceSupport', message: 'K Brace' },
+  singleStrutSupport: /* i18n */ {
+    id: 'node.column.preset.singleStrutSupport',
+    message: 'Single Strut',
+  },
+  tripodSupport: /* i18n */ { id: 'node.column.preset.tripodSupport', message: 'Tripod Support' },
+  trestleSupport: /* i18n */ { id: 'node.column.preset.trestleSupport', message: 'Trestle Frame' },
+  portalFrameSupport: /* i18n */ {
+    id: 'node.column.preset.portalFrameSupport',
+    message: 'Portal Frame',
+  },
+  boxFrameSupport: /* i18n */ { id: 'node.column.preset.boxFrameSupport', message: 'Box Frame' },
+}
+
+const COLUMN_PRESET_OPTIONS = Object.keys(COLUMN_PRESETS).map((value) => ({
   value: value as ColumnPresetId,
-  label: preset.label,
+  label: COLUMN_PRESET_LABELS[value as ColumnPresetId],
 }))
 
 const COLUMN_PROPORTION_PRESETS = {
   slender: {
-    label: 'Slender',
+    label: /* i18n */ { id: 'node.column.panel.slender', message: 'Slender' },
     height: 3.6,
     width: 0.34,
     baseHeight: 0.18,
@@ -55,7 +87,7 @@ const COLUMN_PROPORTION_PRESETS = {
     edgeSoftness: 0.02,
   },
   standard: {
-    label: 'Standard',
+    label: /* i18n */ { id: 'node.column.panel.standard', message: 'Standard' },
     height: 2.9,
     width: 0.44,
     baseHeight: 0.22,
@@ -65,7 +97,7 @@ const COLUMN_PROPORTION_PRESETS = {
     edgeSoftness: 0.025,
   },
   heavy: {
-    label: 'Heavy',
+    label: /* i18n */ { id: 'node.column.panel.heavy', message: 'Heavy' },
     height: 3,
     width: 0.58,
     baseHeight: 0.28,
@@ -75,7 +107,7 @@ const COLUMN_PROPORTION_PRESETS = {
     edgeSoftness: 0.035,
   },
   stout: {
-    label: 'Short / Stout',
+    label: /* i18n */ { id: 'node.column.panel.shortStout', message: 'Short / Stout' },
     height: 2.2,
     width: 0.62,
     baseHeight: 0.3,
@@ -95,18 +127,39 @@ const COLUMN_PROPORTION_OPTIONS = Object.entries(COLUMN_PROPORTION_PRESETS).map(
   }),
 )
 
-const SUPPORT_STYLE_OPTIONS: Array<{ label: string; value: ColumnNode['supportStyle'] }> = [
-  { label: 'Vertical', value: 'vertical' },
-  { label: 'A-Frame', value: 'a-frame' },
-  { label: 'Y Support', value: 'y-frame' },
-  { label: 'V Support', value: 'v-frame' },
-  { label: 'X Brace', value: 'x-brace' },
-  { label: 'K Brace', value: 'k-brace' },
-  { label: 'Single Strut', value: 'single-strut' },
-  { label: 'Tripod', value: 'tripod' },
-  { label: 'Trestle', value: 'trestle' },
-  { label: 'Portal Frame', value: 'portal-frame' },
-  { label: 'Box Frame', value: 'box-frame' },
+const SUPPORT_STYLE_OPTIONS: Array<{
+  label: MessageDescriptor
+  value: ColumnNode['supportStyle']
+}> = [
+  {
+    label: /* i18n */ { id: 'node.column.panel.vertical', message: 'Vertical' },
+    value: 'vertical',
+  },
+  { label: /* i18n */ { id: 'node.column.panel.aFrame', message: 'A-Frame' }, value: 'a-frame' },
+  {
+    label: /* i18n */ { id: 'node.column.panel.ySupport', message: 'Y Support' },
+    value: 'y-frame',
+  },
+  {
+    label: /* i18n */ { id: 'node.column.panel.vSupport', message: 'V Support' },
+    value: 'v-frame',
+  },
+  { label: /* i18n */ { id: 'node.column.panel.xBrace', message: 'X Brace' }, value: 'x-brace' },
+  { label: /* i18n */ { id: 'node.column.panel.kBrace', message: 'K Brace' }, value: 'k-brace' },
+  {
+    label: /* i18n */ { id: 'node.column.panel.singleStrut', message: 'Single Strut' },
+    value: 'single-strut',
+  },
+  { label: /* i18n */ { id: 'node.column.panel.tripod', message: 'Tripod' }, value: 'tripod' },
+  { label: /* i18n */ { id: 'node.column.panel.trestle', message: 'Trestle' }, value: 'trestle' },
+  {
+    label: /* i18n */ { id: 'node.column.panel.portalFrame', message: 'Portal Frame' },
+    value: 'portal-frame',
+  },
+  {
+    label: /* i18n */ { id: 'node.column.panel.boxFrame', message: 'Box Frame' },
+    value: 'box-frame',
+  },
 ]
 
 type NonVerticalSupportStyle = Exclude<ColumnNode['supportStyle'], 'vertical'>
@@ -287,10 +340,11 @@ function shaftProfileUpdates(shaftProfile: ColumnNode['shaftProfile']): Partial<
 }
 
 export default function ColumnPanel() {
+  const i18n = usePascalI18n()
   const selectedId = useViewer((s) => s.selection.selectedIds[0])
   const selectedCount = useViewer((s) => s.selection.selectedIds.length)
   const setSelection = useViewer((s) => s.setSelection)
-  const updateNode = useScene((s) => s.updateNode)
+  const updateNodes = useScene((s) => s.updateNodes)
   const deleteNode = useScene((s) => s.deleteNode)
   const setMovingNode = useEditor((s) => s.setMovingNode)
 
@@ -304,9 +358,10 @@ export default function ColumnPanel() {
       const nextUpdates =
         node && isManagedLeanToPost(node) ? filterManagedLeanToLayoutUpdates(updates) : updates
       if (Object.keys(nextUpdates).length === 0) return
-      updateNode(selectedId as AnyNode['id'], nextUpdates)
+      const updatesToApply = planColumnEdit(selectedId as AnyNode['id'], nextUpdates)
+      if (updatesToApply) updateNodes(updatesToApply.map(([id, data]) => ({ id, data })))
     },
-    [node, selectedId, updateNode],
+    [node, selectedId, updateNodes],
   )
 
   const handleClose = useCallback(() => {
@@ -345,776 +400,882 @@ export default function ColumnPanel() {
 
   return (
     <PanelWrapper
-      icon="/icons/column.webp"
+      icon={scriptImages(node)?.thumbnail ?? '/icons/column.webp'}
       onClose={handleClose}
-      title={node.name || 'Column'}
+      title={node.name || i18n._({ id: 'node.column.panel.column', message: 'Column' })}
       width={300}
     >
-      <PanelSection title="Preset">
-        <select
-          className={SELECT_CLASS}
-          onChange={(event) => {
-            if (!event.target.value) return
-            handleUpdate(presetUpdates(event.target.value as ColumnPresetId))
-          }}
-          value=""
-        >
-          <option value="">Apply preset...</option>
-          {COLUMN_PRESET_OPTIONS.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
-      </PanelSection>
+      {/* A framing post is a sawn post, not a styled column: its own short section. */}
+      {node.role === 'post' ? (
+        <FramingPostSection node={node} onUpdate={handleUpdate} />
+      ) : node.source ? (
+        <AuthoredParams node={node} />
+      ) : (
+        <>
+          <PanelSection title={i18n._({ id: 'node.column.panel.preset', message: 'Preset' })}>
+            <select
+              className={SELECT_CLASS}
+              onChange={(event) => {
+                if (!event.target.value) return
+                handleUpdate(presetUpdates(event.target.value as ColumnPresetId))
+              }}
+              value=""
+            >
+              <option value="">
+                {i18n._({ id: 'node.column.panel.applyPreset', message: 'Apply preset...' })}
+              </option>
+              {COLUMN_PRESET_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {i18n._(option.label)}
+                </option>
+              ))}
+            </select>
+          </PanelSection>
 
-      <PanelSection title="Shape">
-        <div className="grid grid-cols-2 gap-2 px-1 pt-1">
-          {SUPPORT_STYLE_OPTIONS.map((option) => {
-            const isSelected = supportStyle === option.value
-            return (
-              <button
-                className={cn(
-                  'flex min-h-12 items-center rounded-lg border px-3 py-2.5 text-left text-xs transition-colors',
-                  isSelected
-                    ? 'border-orange-400/60 bg-orange-400/10 text-foreground'
-                    : 'border-border/50 bg-[#2C2C2E] text-muted-foreground hover:bg-[#3e3e3e] hover:text-foreground',
-                )}
-                key={option.value}
-                onClick={() => {
-                  // Per-style brace defaults reset the column to that
-                  // style's natural proportions on switch. Spread last
-                  // so the preset's braceWidth / braceDepth win over
-                  // the carried-from-previous-style values.
-                  const stylePreset =
-                    option.value === 'vertical' ? {} : SUPPORT_STYLE_DEFAULTS[option.value]
-                  handleUpdate({
-                    supportStyle: option.value,
-                    ...(option.value !== 'vertical'
-                      ? {
-                          crossSection: 'rectangular',
-                          width: node.braceWidth ?? node.width,
-                          depth: node.braceDepth ?? node.depth,
-                          baseStyle: 'none',
-                          capitalStyle: 'none',
-                        }
-                      : {}),
-                    ...stylePreset,
-                  })
-                }}
-                type="button"
-              >
-                <span className="truncate font-medium">{option.label}</span>
-              </button>
-            )
-          })}
-        </div>
-        {isBraceSupport ? (
-          <>
-            <SliderControl
-              label="Brace Width"
-              max={0.8}
-              min={0.04}
-              onChange={(value) => handleUpdate({ braceWidth: value, width: value })}
-              precision={2}
-              step={0.01}
-              unit="m"
-              value={node.braceWidth ?? node.width}
-            />
-            <SliderControl
-              label="Brace Depth"
-              max={0.8}
-              min={0.04}
-              onChange={(value) => handleUpdate({ braceDepth: value, depth: value })}
-              precision={2}
-              step={0.01}
-              unit="m"
-              value={node.braceDepth ?? node.depth}
-            />
-          </>
-        ) : (
-          <>
-            <div className="grid grid-cols-3 gap-2 px-1 pt-1">
-              {(
-                [
-                  {
-                    value: 'round',
-                    label: 'Round',
-                    icon: (
-                      <svg
-                        aria-hidden="true"
-                        fill="none"
-                        height="22"
-                        viewBox="0 0 22 22"
-                        width="22"
-                      >
-                        <circle cx="11" cy="11" r="7.5" stroke="currentColor" strokeWidth="1.5" />
-                      </svg>
-                    ),
-                  },
-                  {
-                    value: 'square',
-                    label: 'Square',
-                    icon: (
-                      <svg
-                        aria-hidden="true"
-                        fill="none"
-                        height="22"
-                        viewBox="0 0 22 22"
-                        width="22"
-                      >
-                        <rect
-                          height="15"
-                          rx="1.5"
-                          stroke="currentColor"
-                          strokeWidth="1.5"
-                          width="15"
-                          x="3.5"
-                          y="3.5"
-                        />
-                      </svg>
-                    ),
-                  },
-                  {
-                    value: 'rectangular',
-                    label: 'Rectangular',
-                    icon: (
-                      <svg
-                        aria-hidden="true"
-                        fill="none"
-                        height="22"
-                        viewBox="0 0 22 22"
-                        width="22"
-                      >
-                        <rect
-                          height="11"
-                          rx="1.5"
-                          stroke="currentColor"
-                          strokeWidth="1.5"
-                          width="16"
-                          x="3"
-                          y="5.5"
-                        />
-                      </svg>
-                    ),
-                  },
-                ] as {
-                  value: ColumnNode['crossSection']
-                  label: string
-                  icon: React.ReactNode
-                }[]
-              ).map((option) => {
-                const isSelected = node.crossSection === option.value
+          <PanelSection title={i18n._({ id: 'node.column.panel.shape', message: 'Shape' })}>
+            <div className="grid grid-cols-2 gap-2 px-1 pt-1">
+              {SUPPORT_STYLE_OPTIONS.map((option) => {
+                const isSelected = supportStyle === option.value
                 return (
                   <button
                     className={cn(
-                      'group flex flex-col items-center justify-center gap-1.5 rounded-lg border py-2.5 transition-all',
+                      'flex min-h-12 items-center rounded-lg border px-3 py-2.5 text-left text-xs transition-colors',
                       isSelected
-                        ? 'border-orange-400/60 bg-orange-400/10 text-foreground shadow-[0_0_0_1px_rgba(251,146,60,0.25)_inset]'
-                        : 'border-border/50 bg-[#2C2C2E] text-muted-foreground hover:border-border hover:bg-[#3e3e3e] hover:text-foreground',
+                        ? 'border-orange-400/60 bg-orange-400/10 text-foreground'
+                        : 'border-border/50 bg-black/4 dark:bg-[#2C2C2E] text-muted-foreground hover:bg-black/8 dark:hover:bg-[#3e3e3e] hover:text-foreground',
                     )}
                     key={option.value}
-                    onClick={() => handleUpdate({ crossSection: option.value })}
+                    onClick={() => {
+                      // Per-style brace defaults reset the column to that
+                      // style's natural proportions on switch. Spread last
+                      // so the preset's braceWidth / braceDepth win over
+                      // the carried-from-previous-style values.
+                      const stylePreset =
+                        option.value === 'vertical' ? {} : SUPPORT_STYLE_DEFAULTS[option.value]
+                      handleUpdate({
+                        supportStyle: option.value,
+                        ...(option.value !== 'vertical'
+                          ? {
+                              crossSection: 'rectangular',
+                              width: node.braceWidth ?? node.width,
+                              depth: node.braceDepth ?? node.depth,
+                              baseStyle: 'none',
+                              capitalStyle: 'none',
+                            }
+                          : {}),
+                        ...stylePreset,
+                      })
+                    }}
                     type="button"
                   >
-                    <span
-                      className={cn(
-                        'flex h-7 w-7 items-center justify-center',
-                        isSelected ? 'text-orange-300' : 'text-muted-foreground/80',
-                      )}
-                    >
-                      {option.icon}
-                    </span>
-                    <span className="font-medium text-[11px] leading-none tracking-wide">
-                      {option.label}
-                    </span>
+                    <span className="min-w-0 break-words font-medium">{i18n._(option.label)}</span>
                   </button>
                 )
               })}
             </div>
-            <SliderControl
-              label="Edge Softness"
-              max={0.12}
-              min={0}
-              onChange={(value) => handleUpdate({ edgeSoftness: value })}
-              precision={3}
-              step={0.005}
-              unit="m"
-              value={node.edgeSoftness ?? 0.025}
-            />
-            {(node.crossSection === 'square' || node.crossSection === 'rectangular') && (
-              <SliderControl
-                label="Shaft Corner Radius"
-                max={0.3}
-                min={0}
-                onChange={(value) => handleUpdate({ shaftCornerRadius: value })}
-                precision={3}
-                step={0.005}
-                unit="m"
-                value={node.shaftCornerRadius ?? 0.035}
-              />
+            {isBraceSupport ? (
+              <>
+                <SliderControl
+                  label={i18n._({ id: 'node.column.panel.braceWidth', message: 'Brace Width' })}
+                  max={0.8}
+                  min={0.04}
+                  onChange={(value) => handleUpdate({ braceWidth: value, width: value })}
+                  precision={2}
+                  step={0.01}
+                  unit="m"
+                  value={node.braceWidth ?? node.width}
+                />
+                <SliderControl
+                  label={i18n._({ id: 'node.column.panel.braceDepth', message: 'Brace Depth' })}
+                  max={0.8}
+                  min={0.04}
+                  onChange={(value) => handleUpdate({ braceDepth: value, depth: value })}
+                  precision={2}
+                  step={0.01}
+                  unit="m"
+                  value={node.braceDepth ?? node.depth}
+                />
+              </>
+            ) : (
+              <>
+                <div className="grid grid-cols-3 gap-2 px-1 pt-1">
+                  {(
+                    [
+                      {
+                        value: 'round',
+                        label: i18n._({ id: 'node.column.panel.round', message: 'Round' }),
+                        icon: (
+                          <svg
+                            aria-hidden="true"
+                            fill="none"
+                            height="22"
+                            viewBox="0 0 22 22"
+                            width="22"
+                          >
+                            <circle
+                              cx="11"
+                              cy="11"
+                              r="7.5"
+                              stroke="currentColor"
+                              strokeWidth="1.5"
+                            />
+                          </svg>
+                        ),
+                      },
+                      {
+                        value: 'square',
+                        label: i18n._({ id: 'node.column.panel.square', message: 'Square' }),
+                        icon: (
+                          <svg
+                            aria-hidden="true"
+                            fill="none"
+                            height="22"
+                            viewBox="0 0 22 22"
+                            width="22"
+                          >
+                            <rect
+                              height="15"
+                              rx="1.5"
+                              stroke="currentColor"
+                              strokeWidth="1.5"
+                              width="15"
+                              x="3.5"
+                              y="3.5"
+                            />
+                          </svg>
+                        ),
+                      },
+                      {
+                        value: 'rectangular',
+                        label: i18n._({
+                          id: 'node.column.panel.rectangular',
+                          message: 'Rectangular',
+                        }),
+                        icon: (
+                          <svg
+                            aria-hidden="true"
+                            fill="none"
+                            height="22"
+                            viewBox="0 0 22 22"
+                            width="22"
+                          >
+                            <rect
+                              height="11"
+                              rx="1.5"
+                              stroke="currentColor"
+                              strokeWidth="1.5"
+                              width="16"
+                              x="3"
+                              y="5.5"
+                            />
+                          </svg>
+                        ),
+                      },
+                    ] as {
+                      value: ColumnNode['crossSection']
+                      label: string
+                      icon: React.ReactNode
+                    }[]
+                  ).map((option) => {
+                    const isSelected = node.crossSection === option.value
+                    return (
+                      <button
+                        className={cn(
+                          'group flex flex-col items-center justify-center gap-1.5 rounded-lg border py-2.5 transition-all',
+                          isSelected
+                            ? 'border-orange-400/60 bg-orange-400/10 text-foreground shadow-[0_0_0_1px_rgba(251,146,60,0.25)_inset]'
+                            : 'border-border/50 bg-black/4 dark:bg-[#2C2C2E] text-muted-foreground hover:border-border hover:bg-black/8 dark:hover:bg-[#3e3e3e] hover:text-foreground',
+                        )}
+                        key={option.value}
+                        onClick={() => handleUpdate({ crossSection: option.value })}
+                        type="button"
+                      >
+                        <span
+                          className={cn(
+                            'flex h-7 w-7 items-center justify-center',
+                            isSelected
+                              ? 'text-orange-700 dark:text-orange-300'
+                              : 'text-muted-foreground/80',
+                          )}
+                        >
+                          {option.icon}
+                        </span>
+                        <span className="font-medium text-[11px] leading-none tracking-wide">
+                          {option.label}
+                        </span>
+                      </button>
+                    )
+                  })}
+                </div>
+                <SliderControl
+                  label={i18n._({ id: 'node.column.panel.edgeSoftness', message: 'Edge Softness' })}
+                  max={0.12}
+                  min={0}
+                  onChange={(value) => handleUpdate({ edgeSoftness: value })}
+                  precision={3}
+                  step={0.005}
+                  unit="m"
+                  value={node.edgeSoftness ?? 0.025}
+                />
+                {(node.crossSection === 'square' || node.crossSection === 'rectangular') && (
+                  <SliderControl
+                    label={i18n._({
+                      id: 'node.column.panel.shaftCornerRadius',
+                      message: 'Shaft Corner Radius',
+                    })}
+                    max={0.3}
+                    min={0}
+                    onChange={(value) => handleUpdate({ shaftCornerRadius: value })}
+                    precision={3}
+                    step={0.005}
+                    unit="m"
+                    value={node.shaftCornerRadius ?? 0.035}
+                  />
+                )}
+              </>
             )}
-          </>
-        )}
-      </PanelSection>
+          </PanelSection>
 
-      <PanelSection title="Dimensions">
-        {managedByLeanTo && (
-          <p className="px-1 pt-1 text-muted-foreground text-xs leading-relaxed">
-            Height and footprint are controlled by the lean-to extension. Rotate or change the
-            support style here; resize from the parent lean-to.
-          </p>
-        )}
-        {!isBraceSupport && !managedByLeanTo && (
-          <select
-            className={SELECT_CLASS}
-            onChange={(event) => {
-              if (!event.target.value) return
-              handleUpdate(proportionUpdates(node, event.target.value as ColumnProportionPresetId))
-            }}
-            value=""
+          <PanelSection
+            title={i18n._({ id: 'node.column.panel.dimensions', message: 'Dimensions' })}
           >
-            <option value="">Apply proportion...</option>
-            {COLUMN_PROPORTION_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        )}
-        {!managedByLeanTo && (
-          <SliderControl
-            label="Height"
-            max={1000}
-            min={0.8}
-            onChange={(value) => handleUpdate({ height: value })}
-            precision={2}
-            step={0.05}
-            unit="m"
-            value={node.height}
-          />
-        )}
-        {isBraceSupport ? (
-          <>
-            {(supportStyle === 'a-frame' ||
-              supportStyle === 'x-brace' ||
-              supportStyle === 'k-brace' ||
-              supportStyle === 'single-strut' ||
-              supportStyle === 'tripod' ||
-              supportStyle === 'trestle' ||
-              supportStyle === 'portal-frame' ||
-              supportStyle === 'box-frame') && (
+            {managedByLeanTo && (
+              <p className="px-1 pt-1 text-muted-foreground text-xs leading-relaxed">
+                {i18n._({
+                  id: 'node.column.panel.heightAndFootprintAreControlledBy',
+                  message:
+                    'Height and footprint are controlled by the lean-to extension. Rotate or change the support style here; resize from the parent lean-to.',
+                })}
+              </p>
+            )}
+            {!isBraceSupport && !managedByLeanTo && (
+              <select
+                className={SELECT_CLASS}
+                onChange={(event) => {
+                  if (!event.target.value) return
+                  handleUpdate(
+                    proportionUpdates(node, event.target.value as ColumnProportionPresetId),
+                  )
+                }}
+                value=""
+              >
+                <option value="">
+                  {i18n._({
+                    id: 'node.column.panel.applyProportion',
+                    message: 'Apply proportion...',
+                  })}
+                </option>
+                {COLUMN_PROPORTION_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {i18n._(option.label)}
+                  </option>
+                ))}
+              </select>
+            )}
+            {!managedByLeanTo && (
               <SliderControl
-                label="Bottom Spread"
+                label={i18n._({ id: 'node.column.panel.height', message: 'Height' })}
                 max={1000}
-                min={0.2}
-                onChange={(value) =>
-                  handleUpdate({
-                    braceBottomSpread: value,
-                    braceTopSpread:
-                      supportStyle === 'a-frame'
-                        ? Math.min(node.braceTopSpread ?? 0.12, value)
-                        : (node.braceTopSpread ?? 1),
-                  })
-                }
+                min={0.8}
+                onChange={(value) => handleUpdate({ height: value })}
                 precision={2}
                 step={0.05}
                 unit="m"
-                value={node.braceBottomSpread ?? 1.2}
+                value={node.height}
               />
             )}
-            <SliderControl
-              label={supportStyle === 'y-frame' ? 'Fork Spread' : 'Top Spread'}
-              max={
-                supportStyle === 'y-frame' ||
-                supportStyle === 'v-frame' ||
-                supportStyle === 'x-brace' ||
-                supportStyle === 'k-brace' ||
-                supportStyle === 'single-strut' ||
-                supportStyle === 'tripod' ||
-                supportStyle === 'trestle' ||
-                supportStyle === 'box-frame'
-                  ? 4
-                  : Math.max(0.2, node.braceBottomSpread ?? 1.2)
-              }
-              min={0}
-              onChange={(value) => handleUpdate({ braceTopSpread: value })}
-              precision={2}
-              step={0.02}
-              unit="m"
-              value={
-                node.braceTopSpread ??
-                (supportStyle === 'y-frame' ||
-                supportStyle === 'v-frame' ||
-                supportStyle === 'x-brace' ||
-                supportStyle === 'k-brace' ||
-                supportStyle === 'single-strut' ||
-                supportStyle === 'tripod' ||
-                supportStyle === 'trestle' ||
-                supportStyle === 'portal-frame' ||
-                supportStyle === 'box-frame'
-                  ? 1
-                  : 0.12)
-              }
-            />
-            <ToggleControl
-              checked={node.bracePlateEnabled ?? true}
-              label="Connector Plates"
-              onChange={(checked) => handleUpdate({ bracePlateEnabled: checked })}
-            />
-          </>
-        ) : !managedByLeanTo ? (
-          <>
-            <SliderControl
-              label="Width"
-              max={1000}
-              min={0.12}
-              onChange={(value) =>
-                handleUpdate({
-                  width: value,
-                  radius: value / 2,
-                  ...(node.crossSection === 'rectangular' ? {} : { depth: value }),
-                })
-              }
-              precision={2}
-              step={0.02}
-              unit="m"
-              value={node.width}
-            />
-            {node.crossSection === 'rectangular' && (
-              <SliderControl
-                label="Depth"
-                max={1000}
-                min={0.12}
-                onChange={(value) => handleUpdate({ depth: value })}
-                precision={2}
-                step={0.02}
-                unit="m"
-                value={node.depth}
-              />
-            )}
-          </>
-        ) : null}
-      </PanelSection>
+            {isBraceSupport ? (
+              <>
+                {(supportStyle === 'a-frame' ||
+                  supportStyle === 'x-brace' ||
+                  supportStyle === 'k-brace' ||
+                  supportStyle === 'single-strut' ||
+                  supportStyle === 'tripod' ||
+                  supportStyle === 'trestle' ||
+                  supportStyle === 'portal-frame' ||
+                  supportStyle === 'box-frame') && (
+                  <SliderControl
+                    label={i18n._({
+                      id: 'node.column.panel.bottomSpread',
+                      message: 'Bottom Spread',
+                    })}
+                    max={1000}
+                    min={0.2}
+                    onChange={(value) =>
+                      handleUpdate({
+                        braceBottomSpread: value,
+                        braceTopSpread:
+                          supportStyle === 'a-frame'
+                            ? Math.min(node.braceTopSpread ?? 0.12, value)
+                            : (node.braceTopSpread ?? 1),
+                      })
+                    }
+                    precision={2}
+                    step={0.05}
+                    unit="m"
+                    value={node.braceBottomSpread ?? 1.2}
+                  />
+                )}
+                <SliderControl
+                  label={
+                    supportStyle === 'y-frame'
+                      ? i18n._({ id: 'node.column.panel.forkSpread', message: 'Fork Spread' })
+                      : i18n._({ id: 'node.column.panel.topSpread', message: 'Top Spread' })
+                  }
+                  max={
+                    supportStyle === 'y-frame' ||
+                    supportStyle === 'v-frame' ||
+                    supportStyle === 'x-brace' ||
+                    supportStyle === 'k-brace' ||
+                    supportStyle === 'single-strut' ||
+                    supportStyle === 'tripod' ||
+                    supportStyle === 'trestle' ||
+                    supportStyle === 'box-frame'
+                      ? 4
+                      : Math.max(0.2, node.braceBottomSpread ?? 1.2)
+                  }
+                  min={0}
+                  onChange={(value) => handleUpdate({ braceTopSpread: value })}
+                  precision={2}
+                  step={0.02}
+                  unit="m"
+                  value={
+                    node.braceTopSpread ??
+                    (supportStyle === 'y-frame' ||
+                    supportStyle === 'v-frame' ||
+                    supportStyle === 'x-brace' ||
+                    supportStyle === 'k-brace' ||
+                    supportStyle === 'single-strut' ||
+                    supportStyle === 'tripod' ||
+                    supportStyle === 'trestle' ||
+                    supportStyle === 'portal-frame' ||
+                    supportStyle === 'box-frame'
+                      ? 1
+                      : 0.12)
+                  }
+                />
+                <ToggleControl
+                  checked={node.bracePlateEnabled ?? true}
+                  label={i18n._({
+                    id: 'node.column.panel.connectorPlates',
+                    message: 'Connector Plates',
+                  })}
+                  onChange={(checked) => handleUpdate({ bracePlateEnabled: checked })}
+                />
+              </>
+            ) : !managedByLeanTo ? (
+              <>
+                <SliderControl
+                  label={i18n._({ id: 'node.column.panel.width', message: 'Width' })}
+                  max={1000}
+                  min={0.12}
+                  onChange={(value) =>
+                    handleUpdate({
+                      width: value,
+                      radius: value / 2,
+                      ...(node.crossSection === 'rectangular' ? {} : { depth: value }),
+                    })
+                  }
+                  precision={2}
+                  step={0.02}
+                  unit="m"
+                  value={node.width}
+                />
+                {node.crossSection === 'rectangular' && (
+                  <SliderControl
+                    label={i18n._({ id: 'node.column.panel.depth', message: 'Depth' })}
+                    max={1000}
+                    min={0.12}
+                    onChange={(value) => handleUpdate({ depth: value })}
+                    precision={2}
+                    step={0.02}
+                    unit="m"
+                    value={node.depth}
+                  />
+                )}
+              </>
+            ) : null}
+          </PanelSection>
 
-      {!isBraceSupport && (
-        <PanelSection title="Shaft">
-          <select
-            className={SELECT_CLASS}
-            onChange={(event) =>
-              handleUpdate(shaftProfileUpdates(event.target.value as ColumnNode['shaftProfile']))
-            }
-            value={shaftProfile}
-          >
-            <option value="straight">Straight</option>
-            <option value="tapered">Tapered</option>
-            <option value="bulged">Bulged</option>
-            <option value="hourglass">Hourglass</option>
-          </select>
-          {shaftProfile === 'straight' && (
-            <SliderControl
-              label="Shaft Width"
-              max={1.2}
-              min={0.3}
-              onChange={(value) => handleUpdate({ shaftStartScale: value, shaftEndScale: value })}
-              precision={2}
-              step={0.02}
-              value={node.shaftStartScale ?? 0.72}
-            />
-          )}
-          {shaftProfile === 'tapered' && (
-            <>
+          {!isBraceSupport && (
+            <PanelSection title={i18n._({ id: 'node.column.panel.shaft', message: 'Shaft' })}>
+              <select
+                className={SELECT_CLASS}
+                onChange={(event) =>
+                  handleUpdate(
+                    shaftProfileUpdates(event.target.value as ColumnNode['shaftProfile']),
+                  )
+                }
+                value={shaftProfile}
+              >
+                <option value="straight">
+                  {i18n._({ id: 'node.column.panel.straight', message: 'Straight' })}
+                </option>
+                <option value="tapered">
+                  {i18n._({ id: 'node.column.panel.tapered', message: 'Tapered' })}
+                </option>
+                <option value="bulged">
+                  {i18n._({ id: 'node.column.panel.bulged', message: 'Bulged' })}
+                </option>
+                <option value="hourglass">
+                  {i18n._({ id: 'node.column.panel.hourglass', message: 'Hourglass' })}
+                </option>
+              </select>
+              {shaftProfile === 'straight' && (
+                <SliderControl
+                  label={i18n._({ id: 'node.column.panel.shaftWidth', message: 'Shaft Width' })}
+                  max={1.2}
+                  min={0.3}
+                  onChange={(value) =>
+                    handleUpdate({ shaftStartScale: value, shaftEndScale: value })
+                  }
+                  precision={2}
+                  step={0.02}
+                  value={node.shaftStartScale ?? 0.72}
+                />
+              )}
+              {shaftProfile === 'tapered' && (
+                <>
+                  <SliderControl
+                    label={i18n._({ id: 'node.column.panel.bottomWidth', message: 'Bottom Width' })}
+                    max={1.2}
+                    min={0.3}
+                    onChange={(value) => handleUpdate({ shaftStartScale: value })}
+                    precision={2}
+                    step={0.02}
+                    value={node.shaftStartScale ?? 0.82}
+                  />
+                  <SliderControl
+                    label={i18n._({ id: 'node.column.panel.topWidth', message: 'Top Width' })}
+                    max={1.2}
+                    min={0.3}
+                    onChange={(value) => handleUpdate({ shaftEndScale: value })}
+                    precision={2}
+                    step={0.02}
+                    value={node.shaftEndScale ?? 0.72}
+                  />
+                  <SliderControl
+                    label={i18n._({ id: 'node.column.panel.taper', message: 'Taper' })}
+                    max={0.45}
+                    min={0}
+                    onChange={(value) => handleUpdate({ shaftTaper: value })}
+                    precision={2}
+                    step={0.01}
+                    value={node.shaftTaper ?? 0.14}
+                  />
+                </>
+              )}
+              {shaftProfile === 'bulged' && (
+                <>
+                  <SliderControl
+                    label={i18n._({ id: 'node.column.panel.endWidth', message: 'End Width' })}
+                    max={1.2}
+                    min={0.3}
+                    onChange={(value) =>
+                      handleUpdate({ shaftStartScale: value, shaftEndScale: value })
+                    }
+                    precision={2}
+                    step={0.02}
+                    value={node.shaftStartScale ?? 0.68}
+                  />
+                  <SliderControl
+                    label={i18n._({ id: 'node.column.panel.bulge', message: 'Bulge' })}
+                    max={0.35}
+                    min={0}
+                    onChange={(value) => handleUpdate({ shaftBulge: value })}
+                    precision={2}
+                    step={0.01}
+                    value={node.shaftBulge ?? 0.12}
+                  />
+                </>
+              )}
+              {shaftProfile === 'hourglass' && (
+                <>
+                  <SliderControl
+                    label={i18n._({ id: 'node.column.panel.endWidth', message: 'End Width' })}
+                    max={1.2}
+                    min={0.3}
+                    onChange={(value) =>
+                      handleUpdate({ shaftStartScale: value, shaftEndScale: value })
+                    }
+                    precision={2}
+                    step={0.02}
+                    value={node.shaftStartScale ?? 0.84}
+                  />
+                  <SliderControl
+                    label={i18n._({ id: 'node.column.panel.waist', message: 'Waist' })}
+                    max={0.35}
+                    min={0}
+                    onChange={(value) => handleUpdate({ shaftBulge: value })}
+                    precision={2}
+                    step={0.01}
+                    value={node.shaftBulge ?? 0.12}
+                  />
+                </>
+              )}
               <SliderControl
-                label="Bottom Width"
-                max={1.2}
-                min={0.3}
-                onChange={(value) => handleUpdate({ shaftStartScale: value })}
-                precision={2}
-                step={0.02}
-                value={node.shaftStartScale ?? 0.82}
+                label={i18n._({ id: 'node.column.panel.segmentTwist', message: 'Segment Twist' })}
+                max={90}
+                min={-90}
+                onChange={(value) =>
+                  handleUpdate({
+                    shaftTwistStep: value,
+                    ...(Math.abs(value) > 0.001 && (node.shaftSegmentCount ?? 1) < 8
+                      ? { shaftSegmentCount: 12 }
+                      : {}),
+                  })
+                }
+                precision={0}
+                step={5}
+                unit="°"
+                value={node.shaftTwistStep ?? 0}
               />
+              {Math.abs(node.shaftTwistStep ?? 0) > 0.001 && (
+                <SliderControl
+                  label={i18n._({
+                    id: 'node.column.panel.twistSegments',
+                    message: 'Twist Segments',
+                  })}
+                  max={48}
+                  min={4}
+                  onChange={(value) => handleUpdate({ shaftSegmentCount: Math.round(value) })}
+                  precision={0}
+                  step={1}
+                  value={node.shaftSegmentCount ?? 12}
+                />
+              )}
               <SliderControl
-                label="Top Width"
-                max={1.2}
-                min={0.3}
-                onChange={(value) => handleUpdate({ shaftEndScale: value })}
-                precision={2}
-                step={0.02}
-                value={node.shaftEndScale ?? 0.72}
-              />
-              <SliderControl
-                label="Taper"
-                max={0.45}
+                label={i18n._({ id: 'node.column.panel.ringPairs', message: 'Ring Pairs' })}
+                max={4}
                 min={0}
-                onChange={(value) => handleUpdate({ shaftTaper: value })}
-                precision={2}
-                step={0.01}
-                value={node.shaftTaper ?? 0.14}
+                onChange={(value) =>
+                  handleUpdate({
+                    ringCount: Math.round(value) * 2,
+                    ringPlacement: 'ends',
+                    ringSpread: node.ringSpread ?? 0.16,
+                    ringThickness: node.ringThickness ?? 0.055,
+                  })
+                }
+                precision={0}
+                step={1}
+                value={Math.ceil((node.ringCount ?? 0) / 2)}
               />
-            </>
+              {(node.ringCount ?? 0) > 0 && (
+                <SliderControl
+                  label={i18n._({
+                    id: 'node.column.panel.ringThickness',
+                    message: 'Ring Thickness',
+                  })}
+                  max={0.14}
+                  min={0.01}
+                  onChange={(value) => handleUpdate({ ringThickness: value })}
+                  precision={3}
+                  step={0.005}
+                  unit="m"
+                  value={node.ringThickness ?? 0.055}
+                />
+              )}
+              {(node.ringCount ?? 0) > 0 && (
+                <SliderControl
+                  label={i18n._({ id: 'node.column.panel.ringSpread', message: 'Ring Spread' })}
+                  max={0.45}
+                  min={0.04}
+                  onChange={(value) => handleUpdate({ ringSpread: value, ringPlacement: 'ends' })}
+                  precision={2}
+                  step={0.01}
+                  value={node.ringSpread ?? 0.16}
+                />
+              )}
+            </PanelSection>
           )}
-          {shaftProfile === 'bulged' && (
-            <>
-              <SliderControl
-                label="End Width"
-                max={1.2}
-                min={0.3}
-                onChange={(value) => handleUpdate({ shaftStartScale: value, shaftEndScale: value })}
-                precision={2}
-                step={0.02}
-                value={node.shaftStartScale ?? 0.68}
-              />
-              <SliderControl
-                label="Bulge"
-                max={0.35}
-                min={0}
-                onChange={(value) => handleUpdate({ shaftBulge: value })}
-                precision={2}
-                step={0.01}
-                value={node.shaftBulge ?? 0.12}
-              />
-            </>
+
+          {!isBraceSupport && (
+            <PanelSection title={i18n._({ id: 'node.column.panel.ends', message: 'Ends' })}>
+              <select
+                className={SELECT_CLASS}
+                onChange={(event) => {
+                  const capitalStyle = event.target.value as ColumnNode['capitalStyle']
+                  handleUpdate({
+                    capitalStyle,
+                    ...(capitalStyle === 'none'
+                      ? {}
+                      : {
+                          capitalHeight: Math.max(node.capitalHeight, 0.12),
+                          capitalTierCount:
+                            capitalStyle === 'stepped'
+                              ? Math.max(node.capitalTierCount ?? 3, 3)
+                              : node.capitalTierCount,
+                          capitalWidthScale: Math.max(
+                            node.capitalWidthScale ?? 1.3,
+                            capitalStyle === 'stepped' ? 1.42 : 1.28,
+                          ),
+                          capitalDepthScale: Math.max(
+                            node.capitalDepthScale ?? 1.3,
+                            capitalStyle === 'stepped' ? 1.42 : 1.28,
+                          ),
+                          capitalStepSpread:
+                            capitalStyle === 'stepped'
+                              ? Math.max(node.capitalStepSpread ?? 0.34, 0.34)
+                              : node.capitalStepSpread,
+                        }),
+                  })
+                }}
+                value={
+                  node.capitalStyle === 'simple-slab' ? 'simple' : (node.capitalStyle ?? 'simple')
+                }
+              >
+                <option value="none">
+                  {i18n._({ id: 'node.column.panel.noTop', message: 'No Top' })}
+                </option>
+                <option value="simple">
+                  {i18n._({ id: 'node.column.panel.simpleTop', message: 'Simple Top' })}
+                </option>
+                <option value="stepped">
+                  {i18n._({ id: 'node.column.panel.steppedTop', message: 'Stepped Top' })}
+                </option>
+                <option value="rounded">
+                  {i18n._({ id: 'node.column.panel.roundedTop', message: 'Rounded Top' })}
+                </option>
+              </select>
+              {node.capitalStyle !== 'none' && (
+                <SliderControl
+                  label={i18n._({ id: 'node.column.panel.topHeight', message: 'Top Height' })}
+                  max={0.8}
+                  min={0.06}
+                  onChange={(value) => handleUpdate({ capitalHeight: value })}
+                  precision={2}
+                  step={0.02}
+                  unit="m"
+                  value={node.capitalHeight}
+                />
+              )}
+              {node.capitalStyle !== 'none' && (
+                <SliderControl
+                  label={i18n._({ id: 'node.column.panel.topWidth', message: 'Top Width' })}
+                  max={2.4}
+                  min={0.6}
+                  onChange={(value) =>
+                    handleUpdate({
+                      capitalWidthScale: value,
+                      ...(node.crossSection === 'rectangular' ? {} : { capitalDepthScale: value }),
+                    })
+                  }
+                  precision={2}
+                  step={0.02}
+                  value={node.capitalWidthScale ?? 1.28}
+                />
+              )}
+              {node.capitalStyle !== 'none' && node.crossSection === 'rectangular' && (
+                <SliderControl
+                  label={i18n._({ id: 'node.column.panel.topDepth', message: 'Top Depth' })}
+                  max={2.4}
+                  min={0.6}
+                  onChange={(value) => handleUpdate({ capitalDepthScale: value })}
+                  precision={2}
+                  step={0.02}
+                  value={node.capitalDepthScale ?? node.capitalWidthScale ?? 1.28}
+                />
+              )}
+              {node.capitalStyle === 'stepped' && (
+                <SliderControl
+                  label={i18n._({ id: 'node.column.panel.topTiers', message: 'Top Tiers' })}
+                  max={8}
+                  min={3}
+                  onChange={(value) => handleUpdate({ capitalTierCount: Math.round(value) })}
+                  precision={0}
+                  step={1}
+                  value={node.capitalTierCount ?? 3}
+                />
+              )}
+              {node.capitalStyle === 'stepped' && (
+                <SliderControl
+                  label={i18n._({
+                    id: 'node.column.panel.topStepSpread',
+                    message: 'Top Step Spread',
+                  })}
+                  max={0.9}
+                  min={0.05}
+                  onChange={(value) => handleUpdate({ capitalStepSpread: value })}
+                  precision={2}
+                  step={0.01}
+                  value={node.capitalStepSpread ?? 0.34}
+                />
+              )}
+              <select
+                className={`${SELECT_CLASS} mt-2`}
+                onChange={(event) => {
+                  const baseStyle = event.target.value as ColumnNode['baseStyle']
+                  handleUpdate({
+                    baseStyle,
+                    ...(baseStyle === 'none'
+                      ? {}
+                      : {
+                          baseHeight: Math.max(node.baseHeight, 0.12),
+                          baseTierCount:
+                            baseStyle === 'stepped-square'
+                              ? Math.max(node.baseTierCount ?? 3, 3)
+                              : node.baseTierCount,
+                          baseWidthScale: Math.max(
+                            node.baseWidthScale ?? 1.24,
+                            baseStyle === 'stepped-square' ? 1.42 : 1.24,
+                          ),
+                          baseDepthScale: Math.max(
+                            node.baseDepthScale ?? 1.24,
+                            baseStyle === 'stepped-square' ? 1.42 : 1.24,
+                          ),
+                          baseStepSpread:
+                            baseStyle === 'stepped-square'
+                              ? Math.max(node.baseStepSpread ?? 0.34, 0.34)
+                              : node.baseStepSpread,
+                          basePlinthHeightRatio:
+                            baseStyle === 'round-rings'
+                              ? (node.basePlinthHeightRatio ?? 0.44)
+                              : node.basePlinthHeightRatio,
+                          baseRoundBandScale:
+                            baseStyle === 'round-rings'
+                              ? (node.baseRoundBandScale ?? 0.92)
+                              : node.baseRoundBandScale,
+                          baseNeckScale:
+                            baseStyle === 'round-rings'
+                              ? (node.baseNeckScale ?? 0.72)
+                              : node.baseNeckScale,
+                        }),
+                  })
+                }}
+                value={node.baseStyle ?? 'square-plinth'}
+              >
+                <option value="none">
+                  {i18n._({ id: 'node.column.panel.noBottom', message: 'No Bottom' })}
+                </option>
+                <option value="simple-square">
+                  {i18n._({
+                    id: 'node.column.panel.simpleBlockBottom',
+                    message: 'Simple Block Bottom',
+                  })}
+                </option>
+                <option value="square-plinth">
+                  {i18n._({
+                    id: 'node.column.panel.squarePlinthBottom',
+                    message: 'Square Plinth Bottom',
+                  })}
+                </option>
+                <option value="stepped-square">
+                  {i18n._({ id: 'node.column.panel.steppedBottom', message: 'Stepped Bottom' })}
+                </option>
+                <option value="round-rings">
+                  {i18n._({ id: 'node.column.panel.roundedBottom', message: 'Rounded Bottom' })}
+                </option>
+              </select>
+              {node.baseStyle !== 'none' && (
+                <SliderControl
+                  label={i18n._({ id: 'node.column.panel.bottomHeight', message: 'Bottom Height' })}
+                  max={0.8}
+                  min={0.06}
+                  onChange={(value) => handleUpdate({ baseHeight: value })}
+                  precision={2}
+                  step={0.02}
+                  unit="m"
+                  value={node.baseHeight}
+                />
+              )}
+              {node.baseStyle !== 'none' && (
+                <SliderControl
+                  label={i18n._({ id: 'node.column.panel.bottomWidth', message: 'Bottom Width' })}
+                  max={2.4}
+                  min={0.6}
+                  onChange={(value) =>
+                    handleUpdate({
+                      baseWidthScale: value,
+                      ...(node.crossSection === 'rectangular' ? {} : { baseDepthScale: value }),
+                    })
+                  }
+                  precision={2}
+                  step={0.02}
+                  value={node.baseWidthScale ?? 1.24}
+                />
+              )}
+              {node.baseStyle !== 'none' && node.crossSection === 'rectangular' && (
+                <SliderControl
+                  label={i18n._({ id: 'node.column.panel.bottomDepth', message: 'Bottom Depth' })}
+                  max={2.4}
+                  min={0.6}
+                  onChange={(value) => handleUpdate({ baseDepthScale: value })}
+                  precision={2}
+                  step={0.02}
+                  value={node.baseDepthScale ?? node.baseWidthScale ?? 1.24}
+                />
+              )}
+              {node.baseStyle === 'round-rings' && (
+                <SliderControl
+                  label={i18n._({
+                    id: 'node.column.panel.plinthThickness',
+                    message: 'Plinth Thickness',
+                  })}
+                  max={0.7}
+                  min={0.2}
+                  onChange={(value) => handleUpdate({ basePlinthHeightRatio: value })}
+                  precision={2}
+                  step={0.01}
+                  value={node.basePlinthHeightRatio ?? 0.44}
+                />
+              )}
+              {node.baseStyle === 'round-rings' && (
+                <SliderControl
+                  label={i18n._({
+                    id: 'node.column.panel.roundBandWidth',
+                    message: 'Round Band Width',
+                  })}
+                  max={1.2}
+                  min={0.5}
+                  onChange={(value) => handleUpdate({ baseRoundBandScale: value })}
+                  precision={2}
+                  step={0.01}
+                  value={node.baseRoundBandScale ?? 0.92}
+                />
+              )}
+              {node.baseStyle === 'round-rings' && (
+                <SliderControl
+                  label={i18n._({ id: 'node.column.panel.neckWidth', message: 'Neck Width' })}
+                  max={1}
+                  min={0.35}
+                  onChange={(value) => handleUpdate({ baseNeckScale: value })}
+                  precision={2}
+                  step={0.01}
+                  value={node.baseNeckScale ?? 0.72}
+                />
+              )}
+              {node.baseStyle === 'stepped-square' && (
+                <SliderControl
+                  label={i18n._({ id: 'node.column.panel.bottomTiers', message: 'Bottom Tiers' })}
+                  max={8}
+                  min={3}
+                  onChange={(value) => handleUpdate({ baseTierCount: Math.round(value) })}
+                  precision={0}
+                  step={1}
+                  value={node.baseTierCount ?? 3}
+                />
+              )}
+              {node.baseStyle === 'stepped-square' && (
+                <SliderControl
+                  label={i18n._({
+                    id: 'node.column.panel.bottomStepSpread',
+                    message: 'Bottom Step Spread',
+                  })}
+                  max={0.9}
+                  min={0.05}
+                  onChange={(value) => handleUpdate({ baseStepSpread: value })}
+                  precision={2}
+                  step={0.01}
+                  value={node.baseStepSpread ?? 0.34}
+                />
+              )}
+            </PanelSection>
           )}
-          {shaftProfile === 'hourglass' && (
-            <>
-              <SliderControl
-                label="End Width"
-                max={1.2}
-                min={0.3}
-                onChange={(value) => handleUpdate({ shaftStartScale: value, shaftEndScale: value })}
-                precision={2}
-                step={0.02}
-                value={node.shaftStartScale ?? 0.84}
-              />
-              <SliderControl
-                label="Waist"
-                max={0.35}
-                min={0}
-                onChange={(value) => handleUpdate({ shaftBulge: value })}
-                precision={2}
-                step={0.01}
-                value={node.shaftBulge ?? 0.12}
-              />
-            </>
-          )}
-          <SliderControl
-            label="Segment Twist"
-            max={90}
-            min={-90}
-            onChange={(value) =>
-              handleUpdate({
-                shaftTwistStep: value,
-                ...(Math.abs(value) > 0.001 && (node.shaftSegmentCount ?? 1) < 8
-                  ? { shaftSegmentCount: 12 }
-                  : {}),
-              })
-            }
-            precision={0}
-            step={5}
-            unit="°"
-            value={node.shaftTwistStep ?? 0}
-          />
-          {Math.abs(node.shaftTwistStep ?? 0) > 0.001 && (
-            <SliderControl
-              label="Twist Segments"
-              max={48}
-              min={4}
-              onChange={(value) => handleUpdate({ shaftSegmentCount: Math.round(value) })}
-              precision={0}
-              step={1}
-              value={node.shaftSegmentCount ?? 12}
-            />
-          )}
-          <SliderControl
-            label="Ring Pairs"
-            max={4}
-            min={0}
-            onChange={(value) =>
-              handleUpdate({
-                ringCount: Math.round(value) * 2,
-                ringPlacement: 'ends',
-                ringSpread: node.ringSpread ?? 0.16,
-                ringThickness: node.ringThickness ?? 0.055,
-              })
-            }
-            precision={0}
-            step={1}
-            value={Math.ceil((node.ringCount ?? 0) / 2)}
-          />
-          {(node.ringCount ?? 0) > 0 && (
-            <SliderControl
-              label="Ring Thickness"
-              max={0.14}
-              min={0.01}
-              onChange={(value) => handleUpdate({ ringThickness: value })}
-              precision={3}
-              step={0.005}
-              unit="m"
-              value={node.ringThickness ?? 0.055}
-            />
-          )}
-          {(node.ringCount ?? 0) > 0 && (
-            <SliderControl
-              label="Ring Spread"
-              max={0.45}
-              min={0.04}
-              onChange={(value) => handleUpdate({ ringSpread: value, ringPlacement: 'ends' })}
-              precision={2}
-              step={0.01}
-              value={node.ringSpread ?? 0.16}
-            />
-          )}
-        </PanelSection>
+        </>
       )}
-
-      {!isBraceSupport && (
-        <PanelSection title="Ends">
-          <select
-            className={SELECT_CLASS}
-            onChange={(event) => {
-              const capitalStyle = event.target.value as ColumnNode['capitalStyle']
-              handleUpdate({
-                capitalStyle,
-                ...(capitalStyle === 'none'
-                  ? {}
-                  : {
-                      capitalHeight: Math.max(node.capitalHeight, 0.12),
-                      capitalTierCount:
-                        capitalStyle === 'stepped'
-                          ? Math.max(node.capitalTierCount ?? 3, 3)
-                          : node.capitalTierCount,
-                      capitalWidthScale: Math.max(
-                        node.capitalWidthScale ?? 1.3,
-                        capitalStyle === 'stepped' ? 1.42 : 1.28,
-                      ),
-                      capitalDepthScale: Math.max(
-                        node.capitalDepthScale ?? 1.3,
-                        capitalStyle === 'stepped' ? 1.42 : 1.28,
-                      ),
-                      capitalStepSpread:
-                        capitalStyle === 'stepped'
-                          ? Math.max(node.capitalStepSpread ?? 0.34, 0.34)
-                          : node.capitalStepSpread,
-                    }),
-              })
-            }}
-            value={node.capitalStyle === 'simple-slab' ? 'simple' : (node.capitalStyle ?? 'simple')}
-          >
-            <option value="none">No Top</option>
-            <option value="simple">Simple Top</option>
-            <option value="stepped">Stepped Top</option>
-            <option value="rounded">Rounded Top</option>
-          </select>
-          {node.capitalStyle !== 'none' && (
-            <SliderControl
-              label="Top Height"
-              max={0.8}
-              min={0.06}
-              onChange={(value) => handleUpdate({ capitalHeight: value })}
-              precision={2}
-              step={0.02}
-              unit="m"
-              value={node.capitalHeight}
-            />
-          )}
-          {node.capitalStyle !== 'none' && (
-            <SliderControl
-              label="Top Width"
-              max={2.4}
-              min={0.6}
-              onChange={(value) =>
-                handleUpdate({
-                  capitalWidthScale: value,
-                  ...(node.crossSection === 'rectangular' ? {} : { capitalDepthScale: value }),
-                })
-              }
-              precision={2}
-              step={0.02}
-              value={node.capitalWidthScale ?? 1.28}
-            />
-          )}
-          {node.capitalStyle !== 'none' && node.crossSection === 'rectangular' && (
-            <SliderControl
-              label="Top Depth"
-              max={2.4}
-              min={0.6}
-              onChange={(value) => handleUpdate({ capitalDepthScale: value })}
-              precision={2}
-              step={0.02}
-              value={node.capitalDepthScale ?? node.capitalWidthScale ?? 1.28}
-            />
-          )}
-          {node.capitalStyle === 'stepped' && (
-            <SliderControl
-              label="Top Tiers"
-              max={8}
-              min={3}
-              onChange={(value) => handleUpdate({ capitalTierCount: Math.round(value) })}
-              precision={0}
-              step={1}
-              value={node.capitalTierCount ?? 3}
-            />
-          )}
-          {node.capitalStyle === 'stepped' && (
-            <SliderControl
-              label="Top Step Spread"
-              max={0.9}
-              min={0.05}
-              onChange={(value) => handleUpdate({ capitalStepSpread: value })}
-              precision={2}
-              step={0.01}
-              value={node.capitalStepSpread ?? 0.34}
-            />
-          )}
-          <select
-            className={`${SELECT_CLASS} mt-2`}
-            onChange={(event) => {
-              const baseStyle = event.target.value as ColumnNode['baseStyle']
-              handleUpdate({
-                baseStyle,
-                ...(baseStyle === 'none'
-                  ? {}
-                  : {
-                      baseHeight: Math.max(node.baseHeight, 0.12),
-                      baseTierCount:
-                        baseStyle === 'stepped-square'
-                          ? Math.max(node.baseTierCount ?? 3, 3)
-                          : node.baseTierCount,
-                      baseWidthScale: Math.max(
-                        node.baseWidthScale ?? 1.24,
-                        baseStyle === 'stepped-square' ? 1.42 : 1.24,
-                      ),
-                      baseDepthScale: Math.max(
-                        node.baseDepthScale ?? 1.24,
-                        baseStyle === 'stepped-square' ? 1.42 : 1.24,
-                      ),
-                      baseStepSpread:
-                        baseStyle === 'stepped-square'
-                          ? Math.max(node.baseStepSpread ?? 0.34, 0.34)
-                          : node.baseStepSpread,
-                      basePlinthHeightRatio:
-                        baseStyle === 'round-rings'
-                          ? (node.basePlinthHeightRatio ?? 0.44)
-                          : node.basePlinthHeightRatio,
-                      baseRoundBandScale:
-                        baseStyle === 'round-rings'
-                          ? (node.baseRoundBandScale ?? 0.92)
-                          : node.baseRoundBandScale,
-                      baseNeckScale:
-                        baseStyle === 'round-rings'
-                          ? (node.baseNeckScale ?? 0.72)
-                          : node.baseNeckScale,
-                    }),
-              })
-            }}
-            value={node.baseStyle ?? 'square-plinth'}
-          >
-            <option value="none">No Bottom</option>
-            <option value="simple-square">Simple Block Bottom</option>
-            <option value="square-plinth">Square Plinth Bottom</option>
-            <option value="stepped-square">Stepped Bottom</option>
-            <option value="round-rings">Rounded Bottom</option>
-          </select>
-          {node.baseStyle !== 'none' && (
-            <SliderControl
-              label="Bottom Height"
-              max={0.8}
-              min={0.06}
-              onChange={(value) => handleUpdate({ baseHeight: value })}
-              precision={2}
-              step={0.02}
-              unit="m"
-              value={node.baseHeight}
-            />
-          )}
-          {node.baseStyle !== 'none' && (
-            <SliderControl
-              label="Bottom Width"
-              max={2.4}
-              min={0.6}
-              onChange={(value) =>
-                handleUpdate({
-                  baseWidthScale: value,
-                  ...(node.crossSection === 'rectangular' ? {} : { baseDepthScale: value }),
-                })
-              }
-              precision={2}
-              step={0.02}
-              value={node.baseWidthScale ?? 1.24}
-            />
-          )}
-          {node.baseStyle !== 'none' && node.crossSection === 'rectangular' && (
-            <SliderControl
-              label="Bottom Depth"
-              max={2.4}
-              min={0.6}
-              onChange={(value) => handleUpdate({ baseDepthScale: value })}
-              precision={2}
-              step={0.02}
-              value={node.baseDepthScale ?? node.baseWidthScale ?? 1.24}
-            />
-          )}
-          {node.baseStyle === 'round-rings' && (
-            <SliderControl
-              label="Plinth Thickness"
-              max={0.7}
-              min={0.2}
-              onChange={(value) => handleUpdate({ basePlinthHeightRatio: value })}
-              precision={2}
-              step={0.01}
-              value={node.basePlinthHeightRatio ?? 0.44}
-            />
-          )}
-          {node.baseStyle === 'round-rings' && (
-            <SliderControl
-              label="Round Band Width"
-              max={1.2}
-              min={0.5}
-              onChange={(value) => handleUpdate({ baseRoundBandScale: value })}
-              precision={2}
-              step={0.01}
-              value={node.baseRoundBandScale ?? 0.92}
-            />
-          )}
-          {node.baseStyle === 'round-rings' && (
-            <SliderControl
-              label="Neck Width"
-              max={1}
-              min={0.35}
-              onChange={(value) => handleUpdate({ baseNeckScale: value })}
-              precision={2}
-              step={0.01}
-              value={node.baseNeckScale ?? 0.72}
-            />
-          )}
-          {node.baseStyle === 'stepped-square' && (
-            <SliderControl
-              label="Bottom Tiers"
-              max={8}
-              min={3}
-              onChange={(value) => handleUpdate({ baseTierCount: Math.round(value) })}
-              precision={0}
-              step={1}
-              value={node.baseTierCount ?? 3}
-            />
-          )}
-          {node.baseStyle === 'stepped-square' && (
-            <SliderControl
-              label="Bottom Step Spread"
-              max={0.9}
-              min={0.05}
-              onChange={(value) => handleUpdate({ baseStepSpread: value })}
-              precision={2}
-              step={0.01}
-              value={node.baseStepSpread ?? 0.34}
-            />
-          )}
-        </PanelSection>
-      )}
-
-      <PanelSection title="Transform">
+      <PanelSection title={i18n._({ id: 'node.column.panel.transform', message: 'Transform' })}>
         <SliderControl
-          label="Yaw"
+          label={i18n._({ id: 'node.column.panel.yaw', message: 'Yaw' })}
           max={180}
           min={-180}
           onChange={(value) => handleUpdate({ rotation: (value * Math.PI) / 180 })}
@@ -1125,13 +1286,17 @@ export default function ColumnPanel() {
         />
       </PanelSection>
 
-      <PanelSection title="Actions">
+      <PanelSection title={i18n._({ id: 'node.column.panel.actions', message: 'Actions' })}>
         <ActionGroup>
-          <ActionButton icon={<Move className="h-4 w-4" />} label="Move" onClick={handleMove} />
           <ActionButton
-            className="border-red-500/40 text-red-200 hover:bg-red-500/15"
+            icon={<Move className="h-4 w-4" />}
+            label={i18n._({ id: 'node.column.panel.move', message: 'Move' })}
+            onClick={handleMove}
+          />
+          <ActionButton
+            className="border-red-500/40 text-red-700 dark:text-red-200 hover:bg-red-500/15"
             icon={<Trash2 className="h-4 w-4" />}
-            label="Delete"
+            label={i18n._({ id: 'node.column.panel.delete', message: 'Delete' })}
             onClick={handleDelete}
           />
         </ActionGroup>

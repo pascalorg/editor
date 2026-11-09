@@ -1,31 +1,34 @@
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import type { McpServer } from '@modelcontextprotocol/server'
+import type { ProjectFileReader } from '@pascal-app/core/agent-operations'
 import type { SceneOperations } from '../operations'
+import { registerAddColumn } from './add-column'
+import {
+  compileObjectOnHost,
+  type GeometryScriptHost,
+  type ObjectMakerHost,
+  registerAddObject,
+  registerGetSource,
+} from './add-object'
 import { registerApplyPatch } from './apply-patch'
+import type { AssetCatalog } from './asset-catalog'
+import { registerAuthorScene } from './author-scene'
 import { registerCheckCollisions } from './check-collisions'
+import { registerClearScene } from './clear-scene'
 import { registerConstructionTools } from './construction-tools'
-import { registerCreateLevel } from './create-level'
-import { registerCreateWall } from './create-wall'
-import { registerCutOpening } from './cut-opening'
-import { registerDeleteNode } from './delete-node'
-import { registerDescribeNode } from './describe-node'
-import { registerDuplicateLevel } from './duplicate-level'
 import { registerExportGlb } from './export-glb'
 import { registerExportJson } from './export-json'
-import { registerFindNodes } from './find-nodes'
-import { registerGetNode } from './get-node'
 import { registerGetScene } from './get-scene'
 import { registerMeasure } from './measure'
 import { registerPhotoToSceneTool } from './photo-to-scene'
-import { registerPlaceItem } from './place-item'
 import { registerRedo } from './redo'
 import { registerRoomTools } from './room-tools'
 import { registerSceneLifecycleTools } from './scene-lifecycle'
-import { registerSceneQueryTools } from './scene-query'
 import { registerSetZone } from './set-zone'
+import { type PlanReadingHosts, registerSharedTools } from './shared-tools'
 import { registerTemplateTools } from './templates'
 import { registerUndo } from './undo'
-import { registerValidateScene } from './validate-scene'
 import { registerVariantTools } from './variants'
+import { registerViewScene, type SceneViewHost } from './view-scene'
 
 /**
  * Register every non-vision MCP tool against the given server.
@@ -35,28 +38,42 @@ import { registerVariantTools } from './variants'
  * Scene-lifecycle tools (save/load/list/delete/rename scene) are registered
  * when persistence operations are available.
  */
-export function registerTools(server: McpServer, operations: SceneOperations): void {
+/** What the host lends the tools: its item library, script compiles, a view. */
+export type ToolHosts = PlanReadingHosts & {
+  catalog?: AssetCatalog
+  geometryScripts?: GeometryScriptHost
+  /** Makes add_object's pieces from words; without it a piece is refused `pieces_unavailable`. */
+  objectMakers?: ObjectMakerHost
+  /** Reads author_scene's payloadFile; without it the tool refuses one `files_unavailable`. */
+  readFile?: ProjectFileReader
+  sceneViews?: SceneViewHost
+}
+
+export function registerTools(
+  server: McpServer,
+  operations: SceneOperations,
+  { catalog, geometryScripts, objectMakers, readFile, sceneViews, assetViews }: ToolHosts = {},
+): void {
   registerGetScene(server, operations)
-  registerGetNode(server, operations)
-  registerDescribeNode(server, operations)
-  registerFindNodes(server, operations)
-  registerSceneQueryTools(server, operations)
+  registerSharedTools(server, operations, catalog, {
+    assetViews,
+    buildObject: (input) => compileObjectOnHost(geometryScripts, operations, input),
+  })
+  registerAddColumn(server, operations, geometryScripts)
+  registerAddObject(server, operations, geometryScripts, objectMakers)
+  registerAuthorScene(server, operations, geometryScripts, objectMakers, readFile)
+  registerGetSource(server, operations, geometryScripts)
   registerMeasure(server, operations)
+  registerViewScene(server, operations, sceneViews)
   registerConstructionTools(server, operations)
-  registerRoomTools(server, operations)
+  registerRoomTools(server, operations, geometryScripts)
   registerApplyPatch(server, operations)
-  registerCreateLevel(server, operations)
-  registerCreateWall(server, operations)
-  registerPlaceItem(server, operations)
-  registerCutOpening(server, operations)
+  registerClearScene(server, operations)
   registerSetZone(server, operations)
-  registerDuplicateLevel(server, operations)
-  registerDeleteNode(server, operations)
   registerUndo(server, operations)
   registerRedo(server, operations)
   registerExportJson(server, operations)
   registerExportGlb(server, operations)
-  registerValidateScene(server, operations)
   registerCheckCollisions(server, operations)
   registerTemplateTools(server, operations)
   if (operations.hasStore) {

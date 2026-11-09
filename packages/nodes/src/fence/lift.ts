@@ -2,7 +2,10 @@ import {
   type AnyNode,
   type AnyNodeId,
   findLevelAncestorId,
+  floorConstructionLift,
   levelBaseElevationAt,
+  liftedManualSlab,
+  nodeRegistry,
   type SlabNode,
 } from '@pascal-app/core'
 import type { FenceNode } from './schema'
@@ -29,11 +32,21 @@ import type { FenceNode } from './schema'
  * instead of following the hillside around it.
  */
 export function resolveFenceLiftElevation(
-  node: Pick<FenceNode, 'supportSlabId' | 'supportOffset' | 'parentId'>,
+  node: Pick<FenceNode, 'supportSlabId' | 'supportSurfaceNodeId' | 'supportOffset' | 'parentId'>,
   resolve: (id: string) => AnyNode | undefined,
   levelBase = 0,
+  nodes: Record<string, AnyNode> = {},
 ): number {
   const offset = node.supportOffset ?? 0
+  if (node.supportSurfaceNodeId) {
+    const surface = resolve(node.supportSurfaceNodeId)
+    const top = surface && nodeRegistry.get(surface.type)?.capabilities?.surfaces?.top
+    if (surface && top && surface.parentId === node.parentId) {
+      const height = typeof top.height === 'function' ? top.height(surface, { nodes }) : top.height
+      const position = (surface as unknown as { position?: number[] }).position
+      return (position?.[1] ?? 0) + height + floorConstructionLift(nodes, surface) + offset
+    }
+  }
   if (!node.supportSlabId) return levelBase + offset
   const host = resolve(node.supportSlabId)
   if (host?.type !== 'slab') return levelBase + offset
@@ -55,10 +68,21 @@ export function resolveFenceLiftElevation(
  * as a closure rather than the store.
  */
 export function resolveFenceLiftElevationForNodes(
-  node: Pick<FenceNode, 'id' | 'start' | 'supportSlabId' | 'supportOffset' | 'parentId'>,
+  node: Pick<
+    FenceNode,
+    'id' | 'start' | 'supportSlabId' | 'supportSurfaceNodeId' | 'supportOffset' | 'parentId'
+  >,
   nodes: Record<string, AnyNode>,
 ): number {
   const levelId = findLevelAncestorId(node.id as AnyNodeId, nodes)
   const levelBase = levelId ? levelBaseElevationAt(nodes, levelId, node.start[0], node.start[1]) : 0
-  return resolveFenceLiftElevation(node, (id) => nodes[id], levelBase)
+  return resolveFenceLiftElevation(
+    node,
+    (id) => {
+      const host = nodes[id]
+      return host?.type === 'slab' ? liftedManualSlab(nodes, host) : host
+    },
+    levelBase + (nodes[node.id] ? floorConstructionLift(nodes, nodes[node.id]!) : 0),
+    nodes,
+  )
 }

@@ -4,6 +4,8 @@ import {
   type MaterialPresetPayload,
   type MaterialProperties,
   type MaterialSchema,
+  materialColorPaint,
+  parseMaterialColor,
   parseMaterialRef,
   resolveMaterial,
   type SceneMaterial,
@@ -12,7 +14,7 @@ import {
 } from '@pascal-app/core'
 import { addAfterEffect, invalidate } from '@react-three/fiber'
 import * as THREE from 'three'
-import { float, mix, positionViewDirection, transformedNormalView } from 'three/tsl'
+import { float, mix, normalView, positionViewDirection } from 'three/tsl'
 import { MeshLambertNodeMaterial, MeshStandardNodeMaterial } from 'three/webgpu'
 
 import { resolveCdnUrl } from './asset-url'
@@ -111,12 +113,41 @@ const defaultMaterialCache = new Map<string, THREE.Material>()
 const surfaceRoleMaterialCache = new Map<string, THREE.Material>()
 const textureCache = new Map<string, THREE.Texture>()
 const textureLoadPromises = new Map<string, Promise<THREE.Texture | null>>()
+const pendingTextures = new Set<string>()
+const failedTextures = new Set<string>()
 const textureLoader = new THREE.TextureLoader()
 let materialTextureVersion = 0
 
 // Highlight clones can observe late assignments without polling every material.
 export function getMaterialTextureVersion(): number {
   return materialTextureVersion
+}
+
+/** Conservative capture readiness across the current material cache. */
+export function materialTextureLoadState(): { pending: number; failed: number } {
+  return { pending: pendingTextures.size + textureLoadPromises.size, failed: failedTextures.size }
+}
+
+function loadTexture(url: string, key: string): THREE.Texture {
+  pendingTextures.add(key)
+  try {
+    return pickTextureLoader(url).load(
+      url,
+      () => {
+        pendingTextures.delete(key)
+        failedTextures.delete(key)
+      },
+      undefined,
+      () => {
+        pendingTextures.delete(key)
+        failedTextures.add(key)
+      },
+    )
+  } catch (error) {
+    pendingTextures.delete(key)
+    failedTextures.add(key)
+    throw error
+  }
 }
 
 // `.ktx2` finish maps transcode through the shared KTX2 loader (support is
@@ -205,36 +236,50 @@ export function resolveTextureRepeat(repeat: unknown, scale: unknown): [number, 
   return [fallback, fallback]
 }
 
+type MaterialTexture = NonNullable<MaterialSchema['texture']>
+
+function textureOffset(texture: MaterialTexture): [number, number] {
+  return texture.offset ?? [0, 0]
+}
+
+function getPlacementKey(texture: MaterialTexture): string {
+  const [repeatX, repeatY] = resolveTextureRepeat(texture.repeat, texture.scale)
+  const [offsetX, offsetY] = textureOffset(texture)
+  return `${repeatX}x${repeatY}+${offsetX},${offsetY}`
+}
+
 export function getTextureKey(material?: MaterialSchema): string {
   const texture = material?.texture
   if (!texture) return 'none'
-  const [repeatX, repeatY] = resolveTextureRepeat(texture.repeat, texture.scale)
-  return `${texture.url}-${repeatX}x${repeatY}`
+  const normal = texture.normalMap ? `-n:${texture.normalMap}*${texture.normalScale ?? 1}` : ''
+  const bump = texture.bumpMap ? `-b:${texture.bumpMap}*${texture.bumpScale ?? 1}` : ''
+  return `${texture.url}-${getPlacementKey(texture)}${normal}${bump}`
 }
 
-function getTexture(material?: MaterialSchema): THREE.Texture | undefined {
-  const textureConfig = material?.texture
-  if (!textureConfig?.url) return undefined
-
-  const cacheKey = getTextureKey(material)
+/** One map of a native material's texture; every map shares the albedo's repeat and offset. */
+function getTexture(
+  textureConfig: MaterialTexture,
+  url: string,
+  slot: 'map' | 'normalMap' | 'bumpMap',
+): THREE.Texture {
+  const cacheKey = `${url}-${getPlacementKey(textureConfig)}-${slot}`
   const cached = textureCache.get(cacheKey)
   if (cached) return cached
 
-  const resolvedUrl = /^(?:asset|blob|data):/.test(textureConfig.url)
-    ? textureConfig.url
-    : (resolveCdnUrl(textureConfig.url) ?? textureConfig.url)
-  const texture = pickTextureLoader(resolvedUrl).load(resolvedUrl)
+  const resolvedUrl = /^(?:asset|blob|data):/.test(url) ? url : (resolveCdnUrl(url) ?? url)
+  const texture = loadTexture(resolvedUrl, cacheKey)
   texture.wrapS = THREE.RepeatWrapping
   texture.wrapT = THREE.RepeatWrapping
 
   const [repeatX, repeatY] = resolveTextureRepeat(textureConfig.repeat, textureConfig.scale)
   texture.repeat.set(repeatX, repeatY)
+  texture.offset.set(...textureOffset(textureConfig))
   texture.updateMatrix()
-  texture.colorSpace = THREE.SRGBColorSpace
+  texture.colorSpace = slot === 'map' ? THREE.SRGBColorSpace : THREE.NoColorSpace
   stampPascalTextureRef(texture, {
     kind: 'project-asset',
     src: resolvedUrl,
-    slot: 'map',
+    slot,
   })
 
   textureCache.set(cacheKey, texture)
@@ -295,7 +340,7 @@ function getPresetTexture(
   const cached = textureCache.get(cacheKey)
   if (cached) return cached
 
-  const texture = pickTextureLoader(resolvedPath).load(resolvedPath)
+  const texture = loadTexture(resolvedPath, cacheKey)
   applyTextureProperties(texture, props, slot)
   stampPascalTextureRef(texture, {
     kind: 'material',
@@ -348,11 +393,16 @@ async function loadPresetTexture(
   // materials can be created while a capture canvas's renderer is still
   // initializing, and failing here would cache the material permanently
   // texture-less (white).
-  const load = isKtx2Url(resolvedPath)
-    ? whenKtx2Ready().then(() =>
-        (ktx2Loader as unknown as THREE.TextureLoader).loadAsync(resolvedPath),
-      )
-    : textureLoader.loadAsync(resolvedPath)
+  const loadFrom = (url: string) =>
+    isKtx2Url(url)
+      ? whenKtx2Ready().then(() => (ktx2Loader as unknown as THREE.TextureLoader).loadAsync(url))
+      : textureLoader.loadAsync(url)
+  // A catalog map ships in the app's public folder before the asset CDN has it
+  // (a branch, a deploy ahead of the CDN): a CDN miss retries the app's own copy.
+  const load =
+    resolvedPath !== path && path.startsWith('/')
+      ? loadFrom(resolvedPath).catch(() => loadFrom(path))
+      : loadFrom(resolvedPath)
 
   const promise = load
     .then((texture) => {
@@ -365,11 +415,13 @@ async function loadPresetTexture(
       setTextureCacheKey(texture, cacheKey)
       textureCache.set(cacheKey, texture)
       textureLoadPromises.delete(cacheKey)
+      failedTextures.delete(cacheKey)
       return texture
     })
     .catch((error) => {
       console.warn('[viewer] Failed to load material texture', resolvedPath, error)
       textureLoadPromises.delete(cacheKey)
+      failedTextures.add(cacheKey)
       return null
     })
 
@@ -468,13 +520,25 @@ function applyMaterialMapProperties(
 // `transparent` with opacity below this gets the fresnel treatment.
 const GLASS_OPACITY_THRESHOLD = 0.6
 
+/** Glass lets light through; shadow maps would otherwise treat it as a solid panel. */
+export function materialCastsShadow(material: THREE.Material | THREE.Material[]): boolean {
+  const materials = Array.isArray(material) ? material : [material]
+  return !materials.some(
+    (entry) =>
+      (entry as THREE.MeshPhysicalMaterial).transmission > 0 ||
+      (entry.transparent && entry.opacity < GLASS_OPACITY_THRESHOLD),
+  )
+}
+
 /**
  * Fresnel-driven opacity for glass: nearly the authored opacity head-on,
  * increasingly opaque (showing the environment reflection) at grazing angles.
  * This is what makes glass read as a surface instead of a flat blue tint.
  */
 function applyGlassFresnel(material: MeshStandardNodeMaterial) {
-  const facing = transformedNormalView.dot(positionViewDirection).clamp(0, 1)
+  // The daylight look swaps in its tuned glass for flagged materials (lib/daylight/material-hooks).
+  material.userData.isGlass = true
+  const facing = normalView.dot(positionViewDirection).clamp(0, 1)
   const fresnel = facing.oneMinus().pow(3)
   material.opacityNode = mix(float(material.opacity), float(0.92), fresnel)
   material.envMapIntensity = 1.4
@@ -562,13 +626,14 @@ export function createMaterial(
   shading: RenderShading = 'rendered',
 ): THREE.Material {
   const props = resolveMaterial(material)
-  const cacheKey = `${getCacheKey(props, shading)}-${getTextureKey(material)}`
+  const glassPreset = material?.preset === 'glass'
+  const cacheKey = `${getCacheKey(props, shading)}-${getTextureKey(material)}-${glassPreset}`
 
   if (materialCache.has(cacheKey)) {
     return materialCache.get(cacheKey)!
   }
 
-  const map = getTexture(material)
+  const texture = material?.texture?.url ? material.texture : undefined
   const materialParams: {
     color: string
     map?: THREE.Texture
@@ -582,18 +647,31 @@ export function createMaterial(
     side: sideMap[props.side],
   }
 
-  if (map) materialParams.map = map
+  if (texture) materialParams.map = getTexture(texture, texture.url, 'map')
 
-  const threeMaterial =
-    shading === 'solid'
-      ? new MeshLambertNodeMaterial(materialParams)
-      : new MeshStandardNodeMaterial({
-          ...materialParams,
-          roughness: props.roughness,
-          metalness: props.metalness,
-        })
+  let threeMaterial: MeshLambertNodeMaterial | MeshStandardNodeMaterial
+  if (shading === 'solid') {
+    threeMaterial = new MeshLambertNodeMaterial(materialParams)
+  } else {
+    const standard = new MeshStandardNodeMaterial({
+      ...materialParams,
+      roughness: props.roughness,
+      metalness: props.metalness,
+    })
+    if (texture?.normalMap) {
+      standard.normalMap = getTexture(texture, texture.normalMap, 'normalMap')
+      const normalScale = texture.normalScale ?? 1
+      standard.normalScale.set(normalScale, normalScale)
+    }
+    if (texture?.bumpMap) {
+      standard.bumpMap = getTexture(texture, texture.bumpMap, 'bumpMap')
+      standard.bumpScale = texture.bumpScale ?? 1
+    }
+    threeMaterial = standard
+  }
 
-  maybeApplyGlassFresnel(threeMaterial)
+  // Explicit source transparency keeps its opacity; the glass preset owns this styling.
+  if (glassPreset) maybeApplyGlassFresnel(threeMaterial)
   threeMaterial.userData.__pascalCachedMaterial = true
   materialCache.set(cacheKey, threeMaterial)
   return threeMaterial
@@ -607,19 +685,23 @@ export function createMaterial(
  * the dangling-ref fallback for the whole session.
  */
 export function materialPresetRefSignature(ref: string): string {
-  return getMaterialPresetByRef(ref) ? ref : `${ref}#unresolved`
+  return getMaterialPresetByRef(ref) || parseMaterialColor(ref) ? ref : `${ref}#unresolved`
 }
 
 /**
- * Resolve a MaterialRef ('library:<id>' | 'scene:<id>') to a three.js material.
- * Returns null for an unknown / dangling ref so callers fall back to the
- * slot's default (authored material, then themed default). Never throws.
+ * Resolve a MaterialRef ('library:<id>' | 'scene:<id>') or a plain '#rrggbb'
+ * colour to a three.js material; the colour paints like
+ * `material: { properties: { color } }`. Returns null for an unknown / dangling
+ * ref so callers fall back to the slot's default (authored material, then
+ * themed default). Never throws.
  */
 export function resolveMaterialRef(
   ref: string | undefined,
   sceneMaterials: Record<SceneMaterialId, SceneMaterial> | undefined,
   shading: RenderShading = 'rendered',
 ): THREE.Material | null {
+  const color = parseMaterialColor(ref)
+  if (color) return createMaterial(materialColorPaint(color), shading)
   const parsed = parseMaterialRef(ref)
   if (!parsed) return null
   if (parsed.kind === 'library') return createMaterialFromPresetRef(ref, shading)
@@ -634,18 +716,37 @@ export function resolveMaterialRef(
  * procedural kinds whose colored-mode unpainted appearance comes from a
  * declarative default (slab, wall).
  */
+let slotDefaultOverrides: Readonly<Record<string, string>> | null = null
+
+/**
+ * Swaps declared slot DEFAULTS (never painted refs) for another finish, e.g.
+ * the worker thumbnail renders unpainted walls as plaster instead of the
+ * prepared-drywall default. Must be set before the scene builds its
+ * materials; `null` restores the declared defaults.
+ */
+export function setSlotDefaultOverrides(overrides: Readonly<Record<string, string>> | null) {
+  slotDefaultOverrides = overrides
+}
+
+/** A declared slot default after `setSlotDefaultOverrides`. */
+export function resolveSlotDefaultRef(slotDefault: string): string {
+  return slotDefaultOverrides?.[slotDefault] ?? slotDefault
+}
+
 export function resolveSlotDefaultMaterial(
   slotDefault: string,
   shading: RenderShading = 'rendered',
   roughness = 0.9,
 ): THREE.Material {
+  slotDefault = resolveSlotDefaultRef(slotDefault)
   if (parseMaterialRef(slotDefault)?.kind === 'library') {
     return (
       createMaterialFromPresetRef(slotDefault, shading) ??
       cachedDefaultMaterial(`slot-#ffffff-${roughness}`, '#ffffff', roughness, shading)
     )
   }
-  return cachedDefaultMaterial(`slot-${slotDefault}-${roughness}`, slotDefault, roughness, shading)
+  const color = slotDefault.startsWith('#') ? slotDefault.toLowerCase() : slotDefault
+  return cachedDefaultMaterial(`slot-${color}-${roughness}`, color, roughness, shading)
 }
 
 export function createDefaultMaterial(
@@ -811,6 +912,8 @@ export function clearMaterialCache(): void {
   surfaceRoleMaterialCache.clear()
   textureCache.clear()
   textureLoadPromises.clear()
+  pendingTextures.clear()
+  failedTextures.clear()
   const disposals: Array<() => void> = []
   for (const cleanup of materialCacheCleanups) {
     const dispose = cleanup()

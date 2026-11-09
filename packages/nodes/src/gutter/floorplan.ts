@@ -7,6 +7,7 @@ import type {
   RoofNode,
   RoofSegmentNode,
 } from '@pascal-app/core'
+import { getRoofShapeEaveOverhang } from '@pascal-app/core'
 import { computeGutterMitres, type GutterWithSegment } from './corner-mitre'
 import { EAVE_TUCK_INWARD } from './eave-snap'
 import { outletDims, outletShapeForProfile, profileFloorMidZ } from './profile-geometry'
@@ -75,7 +76,7 @@ export function buildGutterFloorplan(
   // the net move at a corner is then identical for both gutters, so they
   // still meet — now at the structural corner. Exact for right-angle
   // (hip / rectangular) corners.
-  const eaveInset = Math.max(0, (segment.overhang ?? 0) - EAVE_TUCK_INWARD)
+  const eaveInset = Math.max(0, getRoofShapeEaveOverhang(segment) - EAVE_TUCK_INWARD)
   const backZ = -eaveInset
   const rimZ = width - eaveInset
 

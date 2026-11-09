@@ -1,11 +1,18 @@
 import { describe, expect, test } from 'bun:test'
 import {
+  assemblyThickness,
   type FloorplanGeometry,
   type FloorplanPalette,
   type GeometryContext,
   WallNode,
+  wallAssemblyFromLegacy,
 } from '@pascal-app/core'
-import { createFloorplanContextExtensions, readFloorplanGeometryMetadata } from '@pascal-app/editor'
+import {
+  createFloorplanContextExtensions,
+  readFloorplanGeometryMetadata,
+  WALL_PULL_AFFORDANCE,
+  WALL_PUSH_AFFORDANCE,
+} from '@pascal-app/editor'
 import { buildWallFloorplan } from './floorplan'
 
 const palette: FloorplanPalette = {
@@ -30,7 +37,7 @@ function context(
   purpose: 'edit' | 'document',
   selected = false,
   metricNotation: 'meters' | 'millimeters' = 'meters',
-  wallDimensionReference: 'finished-faces' | 'centerline' | 'stud-faces' = 'finished-faces',
+  wallDimensionFaces: 'interior' | 'exterior' | 'both' = 'both',
   automaticDimensions = true,
 ): GeometryContext {
   return {
@@ -50,7 +57,7 @@ function context(
       automaticDimensions,
       metricNotation,
       purpose,
-      wallDimensionReference,
+      wallDimensionFaces,
     }),
   }
 }
@@ -165,10 +172,7 @@ describe('buildWallFloorplan render purpose', () => {
   })
 
   test('does not construct automatic wall dimensions when presentation disables them', () => {
-    const geometry = buildWallFloorplan(
-      wall,
-      context('edit', false, 'meters', 'finished-faces', false),
-    )
+    const geometry = buildWallFloorplan(wall, context('edit', false, 'meters', 'both', false))
     const entries = geometry ? flatten(geometry) : []
 
     expect(
@@ -182,22 +186,22 @@ describe('buildWallFloorplan render purpose', () => {
     expect(entries.some((entry) => entry.kind === 'polygon')).toBe(true)
   })
 
-  test('keeps standalone wall witnesses on the wall face in every intersection mode', () => {
+  test("keeps a standalone wall's outside string on its face, and drops it for Inside", () => {
     const plainWall = WallNode.parse({
       ...wall,
       thickness: 0.1,
     })
-    const witnessY = (reference: 'finished-faces' | 'centerline' | 'stud-faces') => {
-      const geometry = buildWallFloorplan(plainWall, context('edit', false, 'meters', reference))
+    const witnessY = (faces: 'interior' | 'exterior' | 'both') => {
+      const geometry = buildWallFloorplan(plainWall, context('edit', false, 'meters', faces))
       const dimension = geometry
         ? flatten(geometry).find((entry) => entry.kind === 'dimension-string')
         : undefined
       return dimension?.kind === 'dimension-string' ? dimension.segments[0]?.start[1] : undefined
     }
 
-    expect(witnessY('finished-faces')).toBeCloseTo(0.065)
-    expect(witnessY('centerline')).toBeCloseTo(0.065)
-    expect(witnessY('stud-faces')).toBeCloseTo(0.065)
+    expect(witnessY('both')).toBeCloseTo(0.065)
+    expect(witnessY('exterior')).toBeCloseTo(0.065)
+    expect(witnessY('interior')).toBeUndefined()
   })
 
   test('shows an orthogonal depth dimension for a curved wall without a radius leader', () => {
@@ -212,19 +216,67 @@ describe('buildWallFloorplan render purpose', () => {
     })
   })
 
-  test('places selected move arrows on the curved wall midpoint', () => {
+  test('places selected push arrows on the curved wall midpoint', () => {
     const curved = WallNode.parse({ ...wall, curveOffset: 1 })
     const geometry = buildWallFloorplan(curved, context('edit', true))
-    const arrows = geometry ? flatten(geometry).filter((entry) => entry.kind === 'move-arrow') : []
+    const arrows = geometry
+      ? flatten(geometry).filter(
+          (entry) => entry.kind === 'move-arrow' && entry.affordance === WALL_PUSH_AFFORDANCE,
+        )
+      : []
 
     expect(arrows).toHaveLength(2)
-    expect(arrows[0]).toMatchObject({ kind: 'move-arrow', angle: Math.PI / 2 })
-    expect(arrows[1]).toMatchObject({ kind: 'move-arrow', angle: -Math.PI / 2 })
+    // Each arrow is the 3D side arrow's push for its face, not a free move.
+    expect(arrows[0]).toMatchObject({
+      kind: 'move-arrow',
+      angle: Math.PI / 2,
+      affordance: WALL_PUSH_AFFORDANCE,
+      payload: { wallId: curved.id, side: 'a' },
+    })
+    expect(arrows[1]).toMatchObject({
+      kind: 'move-arrow',
+      angle: -Math.PI / 2,
+      affordance: WALL_PUSH_AFFORDANCE,
+      payload: { wallId: curved.id, side: 'b' },
+    })
     if (arrows[0]?.kind !== 'move-arrow' || arrows[1]?.kind !== 'move-arrow') return
     expect(arrows[0].point[0]).toBeCloseTo(2)
     expect(arrows[0].point[1]).toBeCloseTo(-0.885)
     expect(arrows[1].point[0]).toBeCloseTo(2)
     expect(arrows[1].point[1]).toBeCloseTo(-1.115)
+  })
+
+  test('a selected wall carries a pull grip at each end, pointing out along the wall', () => {
+    const unselected = buildWallFloorplan(wall, context('edit', false))
+    const pullsOf = (geometry: FloorplanGeometry | null) =>
+      geometry
+        ? flatten(geometry).filter(
+            (entry) => entry.kind === 'move-arrow' && entry.affordance === WALL_PULL_AFFORDANCE,
+          )
+        : []
+    expect(pullsOf(unselected)).toHaveLength(0)
+
+    const grips = pullsOf(buildWallFloorplan(wall, context('edit', true)))
+    expect(grips).toHaveLength(2)
+    expect(grips[0]).toMatchObject({
+      kind: 'move-arrow',
+      variant: 'pull',
+      point: wall.start,
+      affordance: WALL_PULL_AFFORDANCE,
+      payload: { wallId: wall.id, endpoint: 'start' },
+      title: 'Drag to draw the next wall',
+    })
+    expect(grips[1]).toMatchObject({
+      kind: 'move-arrow',
+      variant: 'pull',
+      point: wall.end,
+      payload: { wallId: wall.id, endpoint: 'end' },
+    })
+    if (grips[0]?.kind !== 'move-arrow' || grips[1]?.kind !== 'move-arrow') return
+    // Out of the wall: back along it from the start, on along it from the end.
+    const along = Math.atan2(wall.end[1] - wall.start[1], wall.end[0] - wall.start[0])
+    expect(Math.cos(grips[1].angle - along)).toBeCloseTo(1)
+    expect(Math.cos(grips[0].angle - along)).toBeCloseTo(-1)
   })
 
   test('places thickness handles on both visible faces of a curved wall', () => {
@@ -242,5 +294,107 @@ describe('buildWallFloorplan render purpose', () => {
     expect(handles[0].point[1]).toBeCloseTo(-0.935)
     expect(handles[1].point[0]).toBeCloseTo(2)
     expect(handles[1].point[1]).toBeCloseTo(-1.065)
+  })
+})
+
+describe('buildWallFloorplan assembly layers', () => {
+  // The WS5 stack #937 drew, stored as F2 layers.
+  const assembly = wallAssemblyFromLegacy({
+    preset: 'exterior-2x6-siding',
+    exterior: { finish: 'siding', thickness: 0.75 * 0.0254 },
+    sheathing: { material: 'osb', thickness: 0.4375 * 0.0254 },
+    framing: { kind: 'wood', depth: 5.5 * 0.0254 },
+    interior: { finish: 'drywall', thickness: 0.5 * 0.0254 },
+  })
+  const layered = WallNode.parse({
+    id: 'wall_layered',
+    parentId: 'level_main',
+    start: [0, 0],
+    end: [4, 0],
+    thickness: assemblyThickness(assembly),
+    assembly,
+    frontSide: 'exterior',
+    backSide: 'interior',
+    type: 'wall',
+    name: 'Layered wall',
+  })
+  const plain = WallNode.parse({
+    id: 'wall_plain',
+    parentId: 'level_main',
+    start: [0, 0],
+    end: [4, 0],
+    thickness: 0.1,
+    frontSide: 'exterior',
+    backSide: 'interior',
+    type: 'wall',
+    name: 'Plain wall',
+  })
+
+  test('a wall with no assembly draws exactly what it drew before', () => {
+    const built = buildWallFloorplan(plain, context('document'))
+    const parts = built ? flatten(built) : []
+    expect(parts.some((part) => part.kind === 'hatch')).toBe(false)
+  })
+
+  test('document purpose draws the framing poche and one line per interior boundary', () => {
+    const built = buildWallFloorplan(layered, context('document'))
+    expect(built).not.toBeNull()
+    const parts = flatten(built as FloorplanGeometry)
+    // 4 layers -> 5 boundaries -> 3 interior lines.
+    const hatches = parts.filter((part) => part.kind === 'hatch')
+    expect(hatches).toHaveLength(1)
+    const lines = parts.filter(
+      (part): part is Extract<FloorplanGeometry, { kind: 'line' }> =>
+        part.kind === 'line' && part.opacity === 1,
+    )
+    expect(lines).toHaveLength(3)
+    // Straight wall along +x: each boundary sits at its own y offset, all
+    // strictly inside the footprint.
+    const half = assemblyThickness(assembly) / 2
+    for (const line of lines) {
+      expect(line.y1).toBeCloseTo(line.y2, 12)
+      expect(Math.abs(line.y1)).toBeLessThan(half)
+      expect(line.x1).toBeCloseTo(0, 9)
+      expect(line.x2).toBeCloseTo(4, 9)
+    }
+  })
+
+  test('edit purpose keeps the layer lines but drops the poche', () => {
+    const built = buildWallFloorplan(layered, context('edit'))
+    const parts = flatten(built as FloorplanGeometry)
+    expect(parts.some((part) => part.kind === 'hatch')).toBe(false)
+    const lines = parts.filter(
+      (part): part is Extract<FloorplanGeometry, { kind: 'line' }> => part.kind === 'line',
+    )
+    expect(lines).toHaveLength(3)
+    for (const line of lines) expect(line.opacity).toBeLessThan(1)
+  })
+
+  test('an opening cuts through every layer line', () => {
+    const ctx = context('document')
+    const door = {
+      id: 'door_1',
+      type: 'door' as const,
+      parentId: 'wall_layered',
+      position: [2, 0, 0] as [number, number, number],
+      width: 0.9,
+    }
+    const withDoor: GeometryContext = {
+      ...ctx,
+      children: [door as unknown as GeometryContext['children'][number]],
+    }
+    const parts = flatten(buildWallFloorplan(layered, withDoor) as FloorplanGeometry)
+    const lines = parts.filter(
+      (part): part is Extract<FloorplanGeometry, { kind: 'line' }> =>
+        part.kind === 'line' && part.opacity === 1,
+    )
+    // Each of the 3 interior boundaries is cut into two pieces by the door.
+    expect(lines).toHaveLength(6)
+    for (const line of lines) {
+      const lo = Math.min(line.x1, line.x2)
+      const hi = Math.max(line.x1, line.x2)
+      // No piece overlaps the 1.55..2.45 rough opening.
+      expect(hi <= 1.55 + 1e-9 || lo >= 2.45 - 1e-9).toBe(true)
+    }
   })
 })

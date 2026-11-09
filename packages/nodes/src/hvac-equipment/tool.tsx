@@ -5,14 +5,21 @@ import {
   type GridEvent,
   HvacEquipmentNode,
   resolveSupportSlabPatch,
+  usePascalI18n,
   useScene,
 } from '@pascal-app/core'
-import { isGridSnapActive, isMagneticSnapActive, triggerSFX, useEditor } from '@pascal-app/editor'
+import {
+  isGridSnapActive,
+  isMagneticSnapActive,
+  isTypingTarget,
+  triggerSFX,
+  useEditor,
+} from '@pascal-app/editor'
+import { alignDrawPoint, clearDrawAlignment } from '@pascal-app/editor/distribution'
 import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { subscribeAccessorySnapping } from '../shared/accessory-snapping'
-import { alignDrawPoint, clearDrawAlignment } from '../shared/draw-alignment'
 import { LevelOffsetGroup } from '../shared/level-offset-group'
 import { hvacEquipmentDefinition } from './definition'
 import { buildHvacEquipmentGeometry } from './geometry'
@@ -35,14 +42,21 @@ function snap(value: number, step: number): number {
  * inspector after placement.
  */
 const HvacEquipmentTool = () => {
+  const i18n = usePascalI18n()
   const activeLevelId = useViewer((s) => s.selection.levelId)
+  const toolDefaults = useEditor((s) => s.toolDefaults['hvac-equipment'])
   const [cursor, setCursor] = useState<[number, number, number] | null>(null)
   const [yaw, setYaw] = useState(0)
   const yawRef = useRef(0)
 
   const previewNode = useMemo(
-    () => HvacEquipmentNode.parse({ ...hvacEquipmentDefinition.defaults(), name: 'Furnace' }),
-    [],
+    () =>
+      HvacEquipmentNode.parse({
+        ...hvacEquipmentDefinition.defaults(),
+        ...toolDefaults,
+        name: 'Furnace',
+      }),
+    [toolDefaults],
   )
   const ghost = useMemo(() => {
     const group = buildHvacEquipmentGeometry(previewNode)
@@ -84,6 +98,7 @@ const HvacEquipmentTool = () => {
       const position = resolveAligned(event)
       const unit = HvacEquipmentNode.parse({
         ...hvacEquipmentDefinition.defaults(),
+        ...toolDefaults,
         name: 'Furnace',
         position,
         rotation: yawRef.current,
@@ -99,8 +114,7 @@ const HvacEquipmentTool = () => {
     }
 
     const onKeyDown = (e: KeyboardEvent) => {
-      const tag = (e.target as HTMLElement | null)?.tagName
-      if (tag === 'INPUT' || tag === 'TEXTAREA') return
+      if (isTypingTarget(e.target)) return
       const key = e.key
       if (key !== 'r' && key !== 'R' && key !== 't' && key !== 'T') return
       // Capture-phase + stopPropagation so the editor's selection-rotate
@@ -126,7 +140,7 @@ const HvacEquipmentTool = () => {
       window.removeEventListener('keydown', onKeyDown, true)
       clearDrawAlignment()
     }
-  }, [activeLevelId])
+  }, [activeLevelId, toolDefaults])
 
   if (!activeLevelId || !cursor) return null
 
@@ -142,7 +156,9 @@ const HvacEquipmentTool = () => {
         zIndexRange={[100, 0]}
       >
         <div className="flex items-center gap-2 whitespace-nowrap rounded-full border border-border/60 bg-background/90 px-4 py-1.5 text-xs tabular-nums shadow-sm backdrop-blur">
-          <span className="font-medium text-foreground">R/T rotate</span>
+          <span className="font-medium text-foreground">
+            {i18n._({ id: 'node.hvacEquipment.tool.rTRotate', message: 'R/T rotate' })}
+          </span>
         </div>
       </Html>
     </LevelOffsetGroup>

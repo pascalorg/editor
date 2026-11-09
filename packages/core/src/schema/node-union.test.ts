@@ -115,5 +115,6 @@ describe('AnyNode', () => {
     const options: AnyNodeOption[] = [...AnyNode.options]
     expect(new Set(options.map(nodeKindOf)).size).toBe(options.length)
     expect(NODE_KINDS).toContain('wall')
+    expect(NODE_KINDS).toContain('separator')
   })
 })

@@ -1,6 +1,7 @@
 # Cross-cutting changes touching packages outside `@pascal-app/mcp`
 
 Integrator review required. Each entry documents:
+
 - **What** was changed
 - **Why** (what blocked MCP without it)
 - **Impact** on existing consumers
@@ -137,8 +138,15 @@ on every URL-bearing field in core's schemas:
 
 The validator accepts `asset://…`, `blob:…`, `data:image/…`, `/…` app-relative
 paths, `https://…`, and `http://localhost|127.0.0.1/…`. Optional origin
-narrowing via `process.env.PASCAL_ALLOWED_ASSET_ORIGINS` (comma-separated).
-Rejects `javascript:`, `file:`, `ftp:`, `ws:`, `data:text/html`,
+narrowing via `process.env.PASCAL_ALLOWED_ASSET_ORIGINS` (comma-separated),
+read by core's shared parser (`parseAllowedOrigins` / `allowedOriginsFrom` in
+`@pascal-app/core/schema`), which `safeFetch` in this package uses too: each
+`http:` or `https:` entry is normalised to its origin (credentials dropped),
+other schemes and wildcard hosts are skipped, and warnings name only the entry's
+index and reason. A value with no valid entry (whitespace only included) admits
+no `https:` origin: the validator still accepts the forms that never consult the
+allowlist (`asset://`, `blob:`, `data:image/`, app-relative paths, localhost
+`http`), and `safeFetch` fetches nothing. Unset or empty means no allowlist. Rejects `javascript:`, `file:`, `ftp:`, `ws:`, `data:text/html`,
 `data:application/*`, link-local / private IPs over bare `http`, empty strings,
 and non-URL garbage.
 
@@ -154,7 +162,7 @@ schema boundary.
 
 - **Existing scenes**: localStorage-resident scenes bypass strict validation on
   load (the store's `setScene` only runs `safeParse` on stair-type via
-  `migrateNodes`), so this is *not* a breakage for returning users. Legacy
+  `migrateNodes`), so this is _not_ a breakage for returning users. Legacy
   URLs will keep loading; only explicit MCP-bridge `safeParse` calls reject.
 - **MCP consumers**: one existing test
   (`packages/mcp/src/bridge/scene-bridge.test.ts`, previously using

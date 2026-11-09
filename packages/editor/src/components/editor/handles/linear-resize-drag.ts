@@ -1,13 +1,22 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  cascadeDirty,
   type HandleDragModifiers,
   type LinearResizeHandle,
+  type RadialResizeHandle,
   type SceneApi,
   useLiveNodeOverrides,
   useScene,
 } from '@pascal-app/core'
 import { replacePreviewOverrideIds } from './preview-overrides'
+
+export function linearResizeFactor<N>(
+  descriptor: LinearResizeHandle<N> | RadialResizeHandle<N>,
+): number {
+  if (descriptor.kind === 'radial-resize') return 1
+  return descriptor.anchor === 'center' ? 2 : descriptor.anchor === 'min' ? 1 : -1
+}
 
 export function createLinearResizeDragBinding({
   descriptor,
@@ -52,14 +61,16 @@ export function createLinearResizeDragBinding({
           previewEntries.map(([id, previewPatch]) => [id, previewPatch as Record<string, unknown>]),
         )
       for (const [previewId] of previewEntries) {
-        useScene.getState().markDirty(previewId)
+        for (const id of cascadeDirty(previewId, { scene: sceneApi }))
+          useScene.getState().markDirty(id)
       }
       return patch
     },
     clearPreview(): void {
       for (const previewId of previewOverrideIds) {
         useLiveNodeOverrides.getState().clear(previewId)
-        useScene.getState().markDirty(previewId)
+        for (const id of cascadeDirty(previewId, { scene: sceneApi }))
+          useScene.getState().markDirty(id)
       }
       previewOverrideIds = new Set()
     },

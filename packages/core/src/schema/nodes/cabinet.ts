@@ -129,7 +129,7 @@ export const CabinetNode = BaseNode.extend({
   id: objectId('cabinet'),
   type: nodeType('cabinet'),
   runTier: z.enum(['base', 'wall', 'tall']).default('base'),
-  children: z.array(z.union([objectId('cabinet-module'), objectId('cabinet')])).default([]),
+  children: z.array(z.string()).default([]),
   // Raised bar counter along one run edge: a knee wall topped by a slab at
   // bar height. Run-level because it spans modules like the countertop.
   barLedge: z
@@ -149,12 +149,12 @@ export const CabinetNode = BaseNode.extend({
 export const CabinetModuleNode = BaseNode.extend({
   id: objectId('cabinet-module'),
   type: nodeType('cabinet-module'),
-  children: z.array(z.union([objectId('cabinet-module'), objectId('cabinet')])).default([]),
+  children: z.array(z.string()).default([]),
   cabinetType: z.enum(['base', 'tall']).default('base'),
   // Discriminator for specialty units (corner L-shape, sink base, appliance
   // gap, open shelving). 'standard' modules use the compartment stack as-is;
   // new kinds extend this enum instead of overloading the stack.
-  moduleKind: z.enum(['standard', 'corner-filler']).default('standard'),
+  moduleKind: z.enum(['standard', 'corner-filler', 'wall-filler']).default('standard'),
   // Shared-boundary opening for inside-corner pockets: drops the side panel on
   // that side and lets interior shelves / decks run through to the neighbour.
   openSide: z.enum(['left', 'right']).optional(),

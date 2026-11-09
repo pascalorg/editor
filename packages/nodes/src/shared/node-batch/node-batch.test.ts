@@ -1,7 +1,10 @@
 import { afterEach, beforeEach, expect, spyOn, test } from 'bun:test'
 import {
   type AnyNode,
+  type BatchableConfig,
+  BlockNode,
   itemClipRegistry,
+  nodeRegistry,
   sceneRegistry,
   useInteractive,
   useLiveNodeOverrides,
@@ -26,14 +29,27 @@ import {
 import { commitPaintScopeFanout } from '../../../../editor/src/lib/paint-scope'
 import { applyShadowOnly, clearShadowOnly } from '../../../../viewer/src/lib/shadow-only'
 import { isWallInitialBuildActive } from '../../../../viewer/src/systems/wall/wall-system'
+import { blockDefinition } from '../../block/definition'
+import { buildBlockGeometry } from '../../block/geometry'
 import { getCeilingMaterials } from '../../ceiling/materials'
 import { ceilingPaint } from '../../ceiling/paint'
+import { importedMeshDefinition } from '../../imported-mesh/definition'
+import { setProceduralMotionPlaying } from '../../procedural-item/animation'
+import { proceduralItemDefinition } from '../../procedural-item/definition'
 import {
   createSlotPaintCapability,
   isSlotPaintPreviewActive,
   subscribeSlotPaintPreviews,
 } from '../slot-paint'
+import {
+  columnBatchable,
+  doorBatchable,
+  itemBatchable,
+  surfaceBatchable,
+  windowBatchable,
+} from './batchable'
 import { collectBatchCandidate, collectTintedNodes } from './candidates'
+import { releaseFromBatch } from './release'
 import { NodeBatchStore } from './store'
 import {
   captureChangedNodes,
@@ -50,8 +66,27 @@ const originalViewer = useViewer.getState()
 const stores: NodeBatchStore[] = []
 const restores: Array<() => void> = []
 
+/** The batch reads each kind's `capabilities.batchable` from the registry. */
+const BATCHABLE_KINDS: Record<string, BatchableConfig> = {
+  item: itemBatchable,
+  column: columnBatchable,
+  door: doorBatchable,
+  window: windowBatchable,
+  ceiling: surfaceBatchable,
+  slab: surfaceBatchable,
+}
+
+let restoreRegistry: (() => void) | null = null
+function registerBatchable(kinds: Record<string, BatchableConfig>) {
+  restoreRegistry ??= nodeRegistry._snapshot()
+  for (const [kind, batchable] of Object.entries(kinds)) {
+    nodeRegistry._register({ kind, schemaVersion: 1, capabilities: { batchable } } as never)
+  }
+}
+
 beforeEach(() => {
   now = 0
+  registerBatchable(BATCHABLE_KINDS)
   const clock = spyOn(performance, 'now').mockImplementation(() => now)
   restoreClock = () => clock.mockRestore()
   sceneRegistry.clear()
@@ -68,6 +103,8 @@ beforeEach(() => {
 
 afterEach(() => {
   for (const restore of restores.splice(0).reverse()) restore()
+  restoreRegistry?.()
+  restoreRegistry = null
   unsubscribe()
   useLiveTransforms.getState().clearAll()
   useLiveNodeOverrides.getState().clearAll()
@@ -178,31 +215,30 @@ test('separates both shadow flags and preserves them through capacity growth', (
   expect(batches(root).every((batch) => batch.userData.pascalExport === 'strip')).toBe(true)
 })
 
-test.each([
-  'ceiling',
-  'slab',
-  'item',
-])('unselected %s live move releases immediately and rejoins on clear', (kind) => {
-  const { root, meshes } = setup(kind)
-  settle()
-  expect(meshes[0]!.layers.isEnabled(SCENE_LAYER)).toBe(false)
-  useLiveTransforms.getState().set(`${kind}_0`, { position: [5, 0, 2], rotation: 0 })
-  expect(meshes[0]!.layers.isEnabled(SCENE_LAYER)).toBe(true)
-  meshes[0]!.position.set(5, 0, 2)
-  settle()
-  expect(collectBatchCandidate(`${kind}_0`)).toBeNull()
-  expect(meshes[0]!.layers.isEnabled(SCENE_LAYER)).toBe(true)
-  useLiveTransforms.getState().clear(`${kind}_0`)
-  settle()
-  expect(meshes[0]!.layers.isEnabled(SCENE_LAYER)).toBe(false)
-  const matrix = new Matrix4()
-  const batch = batches(root)[0]!
-  const translations = []
-  for (let i = 0; i < batch.instanceCount; i++) {
-    if (batch.getMatrixAt(i, matrix)) translations.push(matrix.elements[12])
-  }
-  expect(translations).toContain(5)
-})
+test.each(['ceiling', 'slab', 'item'])(
+  'unselected %s live move releases immediately and rejoins on clear',
+  (kind) => {
+    const { root, meshes } = setup(kind)
+    settle()
+    expect(meshes[0]!.layers.isEnabled(SCENE_LAYER)).toBe(false)
+    useLiveTransforms.getState().set(`${kind}_0`, { position: [5, 0, 2], rotation: 0 })
+    expect(meshes[0]!.layers.isEnabled(SCENE_LAYER)).toBe(true)
+    meshes[0]!.position.set(5, 0, 2)
+    settle()
+    expect(collectBatchCandidate(`${kind}_0`)).toBeNull()
+    expect(meshes[0]!.layers.isEnabled(SCENE_LAYER)).toBe(true)
+    useLiveTransforms.getState().clear(`${kind}_0`)
+    settle()
+    expect(meshes[0]!.layers.isEnabled(SCENE_LAYER)).toBe(false)
+    const matrix = new Matrix4()
+    const batch = batches(root)[0]!
+    const translations = []
+    for (let i = 0; i < batch.instanceCount; i++) {
+      if (batch.getMatrixAt(i, matrix)) translations.push(matrix.elements[12])
+    }
+    expect(translations).toContain(5)
+  },
+)
 
 test('paint fan-out releases secondary targets before swapping and never settles preview material', () => {
   const { root, meshes, material } = setup()
@@ -259,28 +295,29 @@ test('overlapping preview holds end only after the final restore; failed preview
   expect(isSlotPaintPreviewActive('ceiling_0')).toBe(false)
 })
 
-test.each([
-  'mode',
-  'selected-level',
-])('shadow-only candidates are re-offered on %s restoration', (change) => {
-  const { root, meshes } = setup()
-  useViewer.setState({
-    levelMode: 'solo',
-    selection: { ...useViewer.getState().selection, levelId: 'level_other' },
-  } as never)
-  applyShadowOnly(root)
-  settle()
-  expect(batches(root)).toHaveLength(0)
-  clearShadowOnly(root)
-  if (change === 'mode') useViewer.setState({ levelMode: 'stacked' })
-  else
+test.each(['mode', 'selected-level', 'revealing'])(
+  'shadow-only candidates are re-offered on %s restoration',
+  (change) => {
+    const { root, meshes } = setup()
     useViewer.setState({
-      selection: { ...useViewer.getState().selection, levelId: 'level_test' },
+      levelMode: 'solo',
+      selection: { ...useViewer.getState().selection, levelId: 'level_other' },
     } as never)
-  settle()
-  expect(batches(root)).toHaveLength(1)
-  expect(meshes.every((mesh) => !mesh.layers.isEnabled(SCENE_LAYER))).toBe(true)
-})
+    applyShadowOnly(root)
+    settle()
+    expect(batches(root)).toHaveLength(0)
+    clearShadowOnly(root)
+    if (change === 'mode') useViewer.setState({ levelMode: 'stacked' })
+    else if (change === 'revealing') useViewer.setState({ levelsRevealing: ['level_test'] })
+    else
+      useViewer.setState({
+        selection: { ...useViewer.getState().selection, levelId: 'level_test' },
+      } as never)
+    settle()
+    expect(batches(root)).toHaveLength(1)
+    expect(meshes.every((mesh) => !mesh.layers.isEnabled(SCENE_LAYER))).toBe(true)
+  },
+)
 
 test('external selection releases sources for outline masks and reoffers after clearing', () => {
   const { meshes } = setup()
@@ -293,6 +330,73 @@ test('external selection releases sources for outline masks and reoffers after c
   settle()
   expect(meshes[1]!.layers.isEnabled(SCENE_LAYER)).toBe(false)
 })
+
+test('a node still revealing draws itself, then joins once the reveal ends', () => {
+  const { meshes } = setup('item', 4)
+  let rising = true
+  const revealing = spyOn(viewerExports, 'isNodeRevealing').mockImplementation(
+    (id) => rising && id === 'item_3',
+  )
+  try {
+    settle()
+    expect(meshes[0]!.layers.isEnabled(SCENE_LAYER)).toBe(false)
+    expect(meshes[3]!.layers.isEnabled(SCENE_LAYER)).toBe(true)
+
+    rising = false
+    settle()
+    expect(meshes[3]!.layers.isEnabled(SCENE_LAYER)).toBe(false)
+  } finally {
+    revealing.mockRestore()
+  }
+})
+
+test.each(['item', 'door', 'window', 'ceiling', 'slab', 'column'])(
+  'a batched %s whose reverse play begins draws itself again, and stays out until it is gone',
+  (kind) => {
+    const { meshes } = setup(kind, 4)
+    if (kind === 'door' || kind === 'window') {
+      // An opening belongs to its wall; its level is the wall's.
+      const ids = meshes.map((_, index) => `${kind}_${index}`)
+      const nodes = useScene.getState().nodes
+      useScene.setState({
+        nodes: {
+          ...nodes,
+          wall_host: {
+            id: 'wall_host',
+            type: 'wall',
+            parentId: 'level_test',
+            visible: true,
+            children: ids,
+          },
+          ...Object.fromEntries(
+            ids.map((id) => [id, { ...nodes[id as AnyNodeId], parentId: 'wall_host' }]),
+          ),
+        },
+      } as never)
+    }
+    settle()
+    expect(meshes[0]!.layers.isEnabled(SCENE_LAYER)).toBe(false)
+    expect(meshes[1]!.layers.isEnabled(SCENE_LAYER)).toBe(false)
+    let going = true
+    const revealing = spyOn(viewerExports, 'isNodeRevealing').mockImplementation(
+      (id) => going && id === `${kind}_0`,
+    )
+    try {
+      frame()
+      // Its own meshes get the reverse play's pose; the batch copy would stay whole until the host took it out.
+      expect(meshes[0]!.layers.isEnabled(SCENE_LAYER)).toBe(true)
+      expect(meshes[1]!.layers.isEnabled(SCENE_LAYER)).toBe(false)
+      settle()
+      expect(meshes[0]!.layers.isEnabled(SCENE_LAYER)).toBe(true)
+
+      going = false
+      settle()
+      expect(meshes[0]!.layers.isEnabled(SCENE_LAYER)).toBe(false)
+    } finally {
+      revealing.mockRestore()
+    }
+  },
+)
 
 test('items retain loading, animation, transparency, hidden-hitbox and dirty-rejoin guards', () => {
   const { meshes } = setup('item')
@@ -317,38 +421,38 @@ test('items retain loading, animation, transparency, hidden-hitbox and dirty-rej
   expect(meshes[0]!.layers.isEnabled(SCENE_LAYER)).toBe(false)
   useViewer.setState({ hoveredId: 'item_0' } as never)
   frame()
-  itemClipRegistry.set('item_0', {} as never)
+  itemClipRegistry.set('item_0', [] as never)
   expect(collectBatchCandidate('item_0')).toBeNull()
   itemClipRegistry.delete('item_0')
 })
 
-test.each([
-  'door',
-  'window',
-])('%s retains host tint/override and active-animation exclusions', (kind) => {
-  setup(kind)
-  useScene.setState({
-    nodes: {
-      ...useScene.getState().nodes,
-      wall_host: {
-        id: 'wall_host',
-        type: 'wall',
-        parentId: 'level_test',
-        visible: true,
-        children: [`${kind}_0`],
+test.each(['door', 'window'])(
+  '%s retains host tint/override and active-animation exclusions',
+  (kind) => {
+    setup(kind)
+    useScene.setState({
+      nodes: {
+        ...useScene.getState().nodes,
+        wall_host: {
+          id: 'wall_host',
+          type: 'wall',
+          parentId: 'level_test',
+          visible: true,
+          children: [`${kind}_0`],
+        },
+        [`${kind}_0`]: { ...useScene.getState().nodes[`${kind}_0`], parentId: 'wall_host' },
       },
-      [`${kind}_0`]: { ...useScene.getState().nodes[`${kind}_0`], parentId: 'wall_host' },
-    },
-  } as never)
-  expect(candidate(`${kind}_0`).levelId).toBe('level_test')
-  useViewer.setState({ externalSelectedIds: ['wall_host'] } as never)
-  expect(collectTintedNodes(new Set([`${kind}_0`]))).toEqual(new Set([`${kind}_0`]))
-  useLiveNodeOverrides.getState().set('wall_host', { visible: true } as Partial<AnyNode>)
-  expect(collectBatchCandidate(`${kind}_0`)).toBeNull()
-  useLiveNodeOverrides.getState().clearAll()
-  useInteractive.setState({ [`${kind}Animations`]: { [`${kind}_0`]: {} } } as never)
-  expect(collectBatchCandidate(`${kind}_0`)).toBeNull()
-})
+    } as never)
+    expect(candidate(`${kind}_0`).levelId).toBe('level_test')
+    useViewer.setState({ externalSelectedIds: ['wall_host'] } as never)
+    expect(collectTintedNodes(new Set([`${kind}_0`]))).toEqual(new Set([`${kind}_0`]))
+    useLiveNodeOverrides.getState().set('wall_host', { visible: true } as Partial<AnyNode>)
+    expect(collectBatchCandidate(`${kind}_0`)).toBeNull()
+    useLiveNodeOverrides.getState().clearAll()
+    useInteractive.setState({ [`${kind}Animations`]: { [`${kind}_0`]: {} } } as never)
+    expect(collectBatchCandidate(`${kind}_0`)).toBeNull()
+  },
+)
 
 test('paint interaction apply then drop ends every fan-out hold without restoring committed materials', () => {
   const { meshes } = setup()
@@ -696,38 +800,135 @@ test('a throwing preview listener rolls back its hold before preview creation', 
   }
 })
 
-test.each([
-  true,
-  false,
-])('dirty hosts retain the global quiet clock with initial build = %s (drain batching deferred)', (initial) => {
-  const { root } = setup('item')
-  useScene.setState({
-    nodes: {
-      ...useScene.getState().nodes,
-      wall_host: {
-        id: 'wall_host',
-        type: 'wall',
-        parentId: 'level_test',
-        children: ['door_hosted'],
+test.each([true, false])(
+  'dirty hosts retain the global quiet clock with initial build = %s (drain batching deferred)',
+  (initial) => {
+    const { root } = setup('item')
+    useScene.setState({
+      nodes: {
+        ...useScene.getState().nodes,
+        wall_host: {
+          id: 'wall_host',
+          type: 'wall',
+          parentId: 'level_test',
+          children: ['door_hosted'],
+        },
+        door_hosted: { id: 'door_hosted', type: 'door', parentId: 'wall_host', children: [] },
       },
-      door_hosted: { id: 'door_hosted', type: 'door', parentId: 'wall_host', children: [] },
-    },
-  } as never)
-  useScene.setState({ hydrationToken: initial ? {} : null })
-  expect(isWallInitialBuildActive()).toBe(initial)
-  frame()
-  for (const time of [100, 200, 300]) {
-    now = time
-    useScene.getState().dirtyNodes.add('wall_host' as never)
-    captureChangedNodes()
-    useScene.getState().dirtyNodes.clear()
+    } as never)
+    useScene.setState({ hydrationToken: initial ? {} : null })
+    expect(isWallInitialBuildActive()).toBe(initial)
+    frame()
+    for (const time of [100, 200, 300]) {
+      now = time
+      useScene.getState().dirtyNodes.add('wall_host' as never)
+      captureChangedNodes()
+      useScene.getState().dirtyNodes.clear()
+      frame()
+      expect(batches(root)).toHaveLength(0)
+    }
+    now = 479
     frame()
     expect(batches(root)).toHaveLength(0)
+    now = 481
+    frame()
+    expect(batches(root)).toHaveLength(1)
+  },
+)
+
+function patchNodes(patch: (node: AnyNode) => Partial<AnyNode> | null) {
+  const nodes = useScene.getState().nodes
+  useScene.setState({
+    nodes: Object.fromEntries(
+      Object.entries(nodes).map(([id, node]) => [id, { ...node, ...patch(node as AnyNode) }]),
+    ),
+  } as never)
+}
+
+test('procedural items batch while static; a playing motion or part lights draw themselves', () => {
+  registerBatchable({ 'procedural-item': proceduralItemDefinition.capabilities.batchable! })
+  const { meshes } = setup('procedural-item', 5)
+  // Part lights clone their emissive slot per node; mounted items move with their host.
+  patchNodes((node) =>
+    node.type !== 'procedural-item'
+      ? null
+      : node.id === 'procedural-item_1'
+        ? ({ recipe: { parts: [{ id: 'bulb', light: { color: '#ffffff' } }] } } as never)
+        : node.id === 'procedural-item_2'
+          ? ({ parentId: 'item_host', recipe: { parts: [{ id: 'body' }] } } as never)
+          : ({ recipe: { parts: [{ id: 'body' }] } } as never),
+  )
+  expect(collectBatchCandidate('procedural-item_1')).toBeNull()
+  expect(collectBatchCandidate('procedural-item_2')).toBeNull()
+  settle()
+  expect(meshes.map((mesh) => mesh.layers.isEnabled(SCENE_LAYER))).toEqual([
+    false,
+    true,
+    true,
+    false,
+    false,
+  ])
+
+  // A motion starting inside a frame reveals the sources at once and keeps them out while it plays.
+  setProceduralMotionPlaying('procedural-item_0', true)
+  releaseFromBatch('procedural-item_0')
+  expect(meshes[0]!.layers.isEnabled(SCENE_LAYER)).toBe(true)
+  settle()
+  expect(meshes[0]!.layers.isEnabled(SCENE_LAYER)).toBe(true)
+  setProceduralMotionPlaying('procedural-item_0', false)
+  releaseFromBatch('procedural-item_0')
+  settle()
+  expect(meshes[0]!.layers.isEnabled(SCENE_LAYER)).toBe(false)
+})
+
+test.each(['block', 'imported-mesh'])(
+  '%s batches per node and a rebuild replaces its slot',
+  (kind) => {
+    registerBatchable({
+      block: blockDefinition.capabilities.batchable!,
+      'imported-mesh': importedMeshDefinition.capabilities.batchable!,
+    })
+    const { root, meshes, material } = setup(kind)
+    const store = new NodeBatchStore(() => root)
+    stores.push(store)
+    store.join(
+      meshes.map((_, i) => candidate(`${kind}_${i}`)),
+      1,
+    )
+    expect(candidate(`${kind}_0`).entries[0]!.allocationKey).toBe(`${kind}_0:0`)
+    expect(batches(root)).toHaveLength(1)
+    store.release(`${kind}_0`)
+    meshes[0]!.geometry = new BoxGeometry()
+    store.join([candidate(`${kind}_0`)], 1)
+    expect(store.stats().geometryReplacements).toBe(1)
+    expect(store.stats().overflowRebuilds).toBe(0)
+    // A multi-slot block draws with a material array and keeps its own draw.
+    meshes[1]!.material = [material, material]
+    expect(collectBatchCandidate(`${kind}_1`)).toBeNull()
+  },
+)
+
+test('a built single-slot block joins the batch; a painted multi-slot block keeps its own draw', () => {
+  registerBatchable({ block: blockDefinition.capabilities.batchable! })
+  const { root, meshes } = setup('block', 2)
+  const plain = BlockNode.parse({ id: 'block_0', name: 'Plain' })
+  const painted = BlockNode.parse({
+    id: 'block_1',
+    name: 'Painted',
+    topology: {
+      ...plain.topology,
+      faces: plain.topology.faces.map((face, index) =>
+        index === 0 ? { ...face, materialSlot: 'accent' } : face,
+      ),
+    },
+    slotNames: { body: 'Body', accent: 'Accent' },
+  })
+  for (const [index, node] of [plain, painted].entries()) {
+    const group = buildBlockGeometry(node)
+    root.remove(meshes[index]!)
+    root.add(group)
+    sceneRegistry.nodes.set(node.id, group)
   }
-  now = 479
-  frame()
-  expect(batches(root)).toHaveLength(0)
-  now = 481
-  frame()
-  expect(batches(root)).toHaveLength(1)
+  expect(candidate('block_0').entries).toHaveLength(1)
+  expect(collectBatchCandidate('block_1')).toBeNull()
 })

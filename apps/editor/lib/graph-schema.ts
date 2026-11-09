@@ -1,3 +1,4 @@
+import { migrateLegacyWallAssemblies } from '@pascal-app/core/scene-migrations'
 import { AnyNode, AssetUrl, BaseNode, nodeKindOf, SceneMaterial } from '@pascal-app/core/schema'
 import { z } from 'zod'
 
@@ -63,8 +64,7 @@ type ScanResult = { path: (string | number)[]; reason: 'url' | 'too-complex' }
 /**
  * First URL-shaped string `AssetUrl` rejects, or a breach of the walk bounds.
  *
- * The node's own `type` is exempt: a namespaced kind (`trees:tree`) is
- * scheme-shaped by construction, and the envelope has already validated it.
+ * Namespaced kinds and attachment slot identifiers are not asset URLs.
  */
 function findRejectedUrl(root: unknown): ScanResult | null {
   let budget = MAX_SCAN_VALUES
@@ -84,6 +84,15 @@ function findRejectedUrl(root: unknown): ScanResult | null {
     if (value && typeof value === 'object') {
       for (const [key, child] of Object.entries(value)) {
         if (depth === 0 && key === 'type') continue
+        // Wall attachment slots contain a node ID, not a URL scheme.
+        if (
+          depth === 0 &&
+          key === 'slotId' &&
+          typeof child === 'string' &&
+          /^wall-point:[\w.-]+$/.test(child)
+        ) {
+          continue
+        }
         const hit = walk(child, [...path, key], depth + 1)
         if (hit) return hit
       }
@@ -108,6 +117,10 @@ export const apiGraphSchema = z
     // where that allowlist is enforced.
     materials: z.record(z.string(), z.unknown()).optional(),
     installedPlugins: z.array(z.string().min(1)).optional(),
+  })
+  .transform((graph) => {
+    const migration = migrateLegacyWallAssemblies(graph.nodes)
+    return migration.changed ? { ...graph, nodes: migration.nodes } : graph
   })
   .superRefine((value, ctx) => {
     const addIssues = (nodeId: string, error: z.ZodError) => {

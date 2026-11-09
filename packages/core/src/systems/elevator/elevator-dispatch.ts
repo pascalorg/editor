@@ -38,7 +38,7 @@ function scoreDispatchCandidate({
   const currentIndex = runtimeLevelId
     ? serviceLevels.findIndex((level) => level.id === runtimeLevelId)
     : -1
-  const resolvedCurrentIndex = currentIndex >= 0 ? currentIndex : 0
+  const resolvedCurrentIndex = Math.max(currentIndex, 0)
   const distance = Math.abs(targetIndex - resolvedCurrentIndex)
   const queuePenalty = (runtime?.queue.length ?? 0) * 2 + (runtime?.targetLevelId ? 1 : 0)
   const motionPenalty = runtime?.phase === 'moving' || runtime?.phase === 'closing' ? 0.5 : 0

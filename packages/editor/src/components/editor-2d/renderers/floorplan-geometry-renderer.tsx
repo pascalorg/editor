@@ -172,7 +172,10 @@ function documentTextFontSize(
 }
 
 function documentTextSizePt(geometry: Extract<FloorplanGeometry, { kind: 'text' }>): number {
-  switch (readFloorplanGeometryMetadata(geometry).annotationRole) {
+  const metadata = readFloorplanGeometryMetadata(geometry)
+  // an explicit paper size wins over the role's (a sheet's room tag sets its own)
+  if (typeof metadata.textSizePt === 'number' && metadata.textSizePt > 0) return metadata.textSizePt
+  switch (metadata.annotationRole) {
     case 'room-label':
       if (geometry.fontSize >= 0.18) return DOCUMENT_ROOM_NAME_TEXT_SIZE_PT
       if (geometry.fontSize >= 0.145) return DOCUMENT_ROOM_NUMBER_TEXT_SIZE_PT

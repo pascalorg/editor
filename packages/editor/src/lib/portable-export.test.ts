@@ -5,6 +5,8 @@ import {
   BoxGeometry,
   BufferGeometry,
   Color,
+  CompressedTexture,
+  DataTexture,
   DoubleSide,
   Float32BufferAttribute,
   FrontSide,
@@ -15,11 +17,13 @@ import {
   Mesh,
   MeshStandardMaterial,
   Quaternion,
+  Texture,
   Vector3,
 } from 'three'
 import { USDZExporter } from 'three/examples/jsm/exporters/USDZExporter.js'
 import {
   createUsdzScene,
+  decompressCanonicalNormalMaps,
   expandInstancedMeshes,
   freezeDeformedMeshes,
   normalizePortableScene,
@@ -62,6 +66,34 @@ describe('portable vertex-color boundary', () => {
       const portableMaterial = mesh.material as MeshStandardMaterial
       expect(portableMaterial.emissive.getHex()).toBe(0)
       expect(portableMaterial.emissiveMap).toBeNull()
+    })
+  })
+
+  test('spreads a mesh with more faces than one atlas holds over several atlases', () => {
+    withCanvasCapture((capture) => {
+      const faceCount = 256 * 256 + 2
+      const colors = new Float32Array(faceCount * 3 * 4)
+      for (let vertex = 0; vertex < faceCount * 3; vertex++) {
+        colors.set(vertex < (faceCount - 2) * 3 ? [1, 0, 0, 1] : [0, 0, 1, 1], vertex * 4)
+      }
+      const geometry = new BufferGeometry()
+      geometry.setAttribute('position', new Float32BufferAttribute(faceCount * 9, 3))
+      geometry.setAttribute('color', new Float32BufferAttribute(colors, 4))
+      const mesh: Mesh = new Mesh(geometry, new MeshStandardMaterial({ vertexColors: true }))
+      const root = new Group()
+      root.add(mesh)
+
+      expect(normalizePortableScene(root)).toEqual([])
+
+      const materials = mesh.material as MeshStandardMaterial[]
+      expect(materials).toHaveLength(2)
+      expect(materials[0]!.map).not.toBe(materials[1]!.map)
+      expect(mesh.geometry.groups).toEqual([
+        { start: 0, count: (faceCount - 2) * 3, materialIndex: 0 },
+        { start: (faceCount - 2) * 3, count: 6, materialIndex: 1 },
+      ])
+      // The capture holds the last atlas painted: the page with the two blue faces.
+      expect(portableColorAt(mesh, faceCount * 3 - 1, capture)).toEqual([0, 0, 255, 255])
     })
   })
 
@@ -296,7 +328,12 @@ function portableColorAt(mesh: Mesh, vertexIndex: number, capture: () => ImageDa
       Math.round((colors.itemSize >= 4 ? colors.getW(vertexIndex) : 1) * 255),
     ]
   }
-  const material = mesh.material as MeshStandardMaterial
+  const group = mesh.geometry.groups.find(
+    ({ start, count }) => vertexIndex >= start && vertexIndex < start + count,
+  )
+  const material = (
+    Array.isArray(mesh.material) ? mesh.material[group?.materialIndex ?? 0] : mesh.material
+  ) as MeshStandardMaterial
   if (!material.map) throw new Error('Portable color has no material-connected carrier')
   const channel = material.map.channel ?? 0
   const uvName = channel === 0 ? 'uv' : `uv${channel}`
@@ -345,6 +382,17 @@ function withCanvasCapture(run: (capture: () => ImageData) => void): void {
       putImageData: (image: ImageData) => {
         captured = image
       },
+      drawImage: () => {
+        if (!captured) throw new Error('Source canvas has no captured pixels')
+      },
+      getImageData: (_x: number, _y: number, width: number, height: number) =>
+        captured ??
+        ({
+          colorSpace: 'srgb',
+          data: new Uint8ClampedArray(width * height * 4),
+          height,
+          width,
+        } as ImageData),
     }),
   } as unknown as HTMLCanvasElement
   globals.document = {
@@ -364,3 +412,77 @@ function withCanvasCapture(run: (capture: () => ImageData) => void): void {
     else delete globals.document
   }
 }
+
+describe('portable normal maps', () => {
+  function flatNormalPixels(size: number): Uint8Array {
+    const pixels = new Uint8Array(size * size * 4)
+    for (let index = 0; index < pixels.length; index += 4) pixels.set([128, 128, 255, 255], index)
+    return pixels
+  }
+
+  test('decompresses a shared compressed normal map once before canonicalising it', async () => {
+    const compressed = new CompressedTexture([], 2, 2)
+    compressed.name = 'NormalGL_test'
+    compressed.repeat.set(2, 2)
+    const first = new MeshStandardMaterial({ normalMap: compressed })
+    first.normalScale.set(0.5, 0.5)
+    const second = new MeshStandardMaterial({ normalMap: compressed })
+    second.normalScale.set(0.5, -0.5)
+    const root = new Group()
+    root.add(new Mesh(new BoxGeometry(), first), new Mesh(new BoxGeometry(), second))
+
+    let calls = 0
+    await decompressCanonicalNormalMaps(root, async () => {
+      calls += 1
+      return new DataTexture(flatNormalPixels(2), 2, 2)
+    })
+
+    expect(calls).toBe(1)
+    expect(first.normalMap).toBe(second.normalMap)
+    expect(first.normalMap?.repeat.toArray()).toEqual([2, 2])
+    expect(first.normalMap?.name).toBe('NormalGL_test')
+
+    withCanvasCapture(() => {
+      normalizePortableScene(root)
+    })
+
+    expect((first.normalMap as { isCanvasTexture?: boolean }).isCanvasTexture).toBe(true)
+    expect(first.normalMap).not.toBe(second.normalMap)
+    expect(first.normalScale.toArray()).toEqual([1, 1])
+    expect(second.normalScale.toArray()).toEqual([1, 1])
+  })
+
+  test('a compressed normal map that was not decompressed still fails loudly', () => {
+    const material = new MeshStandardMaterial({ normalMap: new CompressedTexture([], 2, 2) })
+    material.normalScale.set(0.5, 0.5)
+    const root = new Group()
+    root.add(new Mesh(new BoxGeometry(), material))
+    withCanvasCapture(() => {
+      expect(() => normalizePortableScene(root)).toThrow('must be baked before portable export')
+    })
+  })
+
+  test('preserved normal maps keep their texture and normal scale', async () => {
+    const placeholder = new Texture()
+    placeholder.image = { width: 1, height: 1 }
+    const material = new MeshStandardMaterial({ normalMap: placeholder })
+    material.normalScale.set(1, -1)
+    const root = new Group()
+    root.add(new Mesh(new BoxGeometry(), material))
+    const options = { preserveNormalMap: (texture: Texture) => texture === placeholder }
+
+    await decompressCanonicalNormalMaps(
+      root,
+      async () => {
+        throw new Error('preserved maps must not be decompressed')
+      },
+      options,
+    )
+    withCanvasCapture(() => {
+      normalizePortableScene(root, options)
+    })
+
+    expect(material.normalMap).toBe(placeholder)
+    expect(material.normalScale.toArray()).toEqual([1, -1])
+  })
+})

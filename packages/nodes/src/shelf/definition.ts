@@ -1,4 +1,7 @@
 import type { HandleDescriptor, NodeDefinition, ShelfNode as ShelfNodeType } from '@pascal-app/core'
+import { shelfSlots } from '@pascal-app/core'
+import { staticBatchable } from '../shared/node-batch/batchable'
+import { restingFloorplanAffectedIds } from '../shared/resting-surface-plan'
 import { sanitizeShelfDimensions } from './dimensions'
 import { buildShelfFloorplan } from './floorplan'
 import { shelfResizeAffordance, shelfRotateAffordance } from './floorplan-affordances'
@@ -7,7 +10,6 @@ import { buildShelfGeometry, shelfRowSurfaceYs } from './geometry'
 import { shelfPaint } from './paint'
 import { shelfParametrics } from './parametrics'
 import { ShelfNode } from './schema'
-import { shelfSlots } from './slots'
 
 const SIDE_HANDLE_OFFSET = 0.18
 const HEIGHT_HANDLE_OFFSET = 0.22
@@ -164,6 +166,9 @@ export const shelfDefinition: NodeDefinition<typeof ShelfNode> = {
   }),
 
   capabilities: {
+    batchable: staticBatchable,
+    reveal: { phase: 'furnishing', style: 'drop', height: 0.3 },
+    revealOnEdit: ['width', 'depth', 'height', 'thickness', 'rows', 'columns', 'style'],
     movable: { axes: ['x', 'z'], gridSnap: true },
     rotatable: {
       axes: ['y'],
@@ -185,7 +190,7 @@ export const shelfDefinition: NodeDefinition<typeof ShelfNode> = {
         })),
     },
     selectable: { hitVolume: 'bbox' },
-    duplicable: true,
+    duplicable: { subtree: 'with-children' },
     deletable: true,
     paint: shelfPaint,
     slots: (n) => shelfSlots(n as ShelfNode),
@@ -207,7 +212,7 @@ export const shelfDefinition: NodeDefinition<typeof ShelfNode> = {
   // declared here so the placement coordinator's shelf strategy can
   // confirm parent-kind compatibility before reparenting.
   relations: {
-    hosts: ['item'],
+    hosts: ['item', 'procedural-item'],
     cascadeDelete: 'descendants',
   },
 
@@ -224,6 +229,7 @@ export const shelfDefinition: NodeDefinition<typeof ShelfNode> = {
   // Boards/posts/back depend only on these fields — never on hosted
   // `children`. Lets <GeometrySystem> skip the dispose+rebuild (and the
   // pointer enter/leave churn it causes) when an item reparents onto a row.
+  geometryChildTypes: [],
   geometryKey: (n) => {
     const s = sanitizeShelfDimensions(n as ShelfNode)
     return JSON.stringify([
@@ -244,6 +250,7 @@ export const shelfDefinition: NodeDefinition<typeof ShelfNode> = {
     ])
   },
   floorplan: buildShelfFloorplan,
+  floorplanAffectedIds: restingFloorplanAffectedIds,
   // 2D move handler — Path 1 in `FloorplanRegistryMoveOverlay`. Without
   // this the overlay falls through to Path 2 which stomps the SVG
   // entry's `transform` attribute (set by the floor-plan layer to

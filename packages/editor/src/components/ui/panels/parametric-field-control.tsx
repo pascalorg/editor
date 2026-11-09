@@ -1,10 +1,12 @@
 'use client'
 
+import { usePascalI18n } from '@pascal-app/core'
 import type { AnyNode, ParamField } from '@pascal-app/core'
 import { SegmentedControl } from '../controls/segmented-control'
 import { SliderControl } from '../controls/slider-control'
 import { ToggleControl } from '../controls/toggle-control'
-import { precisionForStep, prettifyEnumValue, prettifyKey } from './parametric-field-utils'
+import { inspectorFieldDescriptor, inspectorOptionDescriptor } from '../../../i18n/node-messages'
+import { precisionForStep } from './parametric-field-utils'
 
 interface ParametricFieldControlProps {
   field: ParamField<AnyNode>
@@ -21,16 +23,17 @@ export function ParametricFieldControl({
   onChange,
   onCommit,
 }: ParametricFieldControlProps) {
+  const i18n = usePascalI18n()
   const key = String(field.key)
 
   switch (field.kind) {
     case 'number': {
-      const num = typeof value === 'number' ? value : 0
+      const num = typeof value === 'number' ? value : (field.default ?? 0)
       const step = field.step ?? 0.01
       const precision = precisionForStep(step)
       return (
         <SliderControl
-          label={prettifyKey(key)}
+          label={i18n._(inspectorFieldDescriptor(key))}
           max={field.max}
           min={field.min}
           mixed={mixed}
@@ -46,11 +49,11 @@ export function ParametricFieldControl({
     }
 
     case 'boolean': {
-      const checked = !mixed && value === true
+      const checked = !mixed && (value ?? field.default) === true
       return (
         <ToggleControl
           checked={checked}
-          label={prettifyKey(key)}
+          label={i18n._(inspectorFieldDescriptor(key))}
           mixed={mixed}
           onChange={(next) => {
             const patch = { [key]: next } as Partial<AnyNode>
@@ -73,27 +76,27 @@ export function ParametricFieldControl({
           <SegmentedControl
             mixed={mixed}
             onChange={apply}
-            options={field.options.map((opt) => ({ label: prettifyEnumValue(opt), value: opt }))}
+            options={field.options.map((opt) => ({ label: i18n._(inspectorOptionDescriptor(opt)), value: opt }))}
             value={str}
           />
         )
       }
       return (
         <div className="flex items-center justify-between px-3 py-2">
-          <span className="text-foreground/80 text-xs">{prettifyKey(key)}</span>
+          <span className="text-foreground/80 text-xs">{i18n._(inspectorFieldDescriptor(key))}</span>
           <select
-            className="rounded-md border border-border/50 bg-[#2C2C2E] px-2 py-1 text-foreground text-xs focus:outline-none focus:ring-1 focus:ring-foreground/30"
+            className="rounded-md border border-border/50 bg-black/4 dark:bg-[#2C2C2E] px-2 py-1 text-foreground text-xs focus:outline-none focus:ring-1 focus:ring-foreground/30"
             onChange={(e) => apply(e.target.value)}
             value={mixed ? '' : str}
           >
             {mixed && (
               <option disabled value="">
-                Mixed
+                {i18n._({ id: 'editor.panels.parametricFieldControl.mixed', message: 'Mixed' })}
               </option>
             )}
             {field.options.map((opt) => (
               <option key={opt} value={opt}>
-                {prettifyEnumValue(opt)}
+                {i18n._(inspectorOptionDescriptor(opt))}
               </option>
             ))}
           </select>
@@ -110,7 +113,7 @@ export function ParametricFieldControl({
       }
       return (
         <div className="flex items-center justify-between px-3 py-2">
-          <span className="text-foreground/80 text-xs">{prettifyKey(key)}</span>
+          <span className="text-foreground/80 text-xs">{i18n._(inspectorFieldDescriptor(key))}</span>
           <div className="flex items-center gap-2">
             <input
               className="h-6 w-8 cursor-pointer rounded border border-border/50 bg-transparent"
@@ -119,10 +122,10 @@ export function ParametricFieldControl({
               value={str}
             />
             <input
-              className="w-20 rounded-md border border-border/50 bg-[#2C2C2E] px-2 py-1 text-foreground text-xs focus:outline-none focus:ring-1 focus:ring-foreground/30"
+              className="w-20 rounded-md border border-border/50 bg-black/4 dark:bg-[#2C2C2E] px-2 py-1 text-foreground text-xs focus:outline-none focus:ring-1 focus:ring-foreground/30"
               onChange={(e) => apply(e.target.value)}
               type="text"
-              value={mixed ? 'Mixed' : str}
+              value={mixed ? i18n._({ id: 'editor.panels.mixed', message: 'Mixed' }) : str}
             />
           </div>
         </div>

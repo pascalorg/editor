@@ -1,0 +1,48 @@
+name: MCP Registry deprecate legacy entry
+
+on:
+  workflow_dispatch:
+    inputs:
+      status:
+        description: Registry status for every version of io.github.pascalorg/editor
+        type: choice
+        options:
+          - deleted
+          - deprecated
+        default: deleted
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  MCP_PUBLISHER_VERSION: 1.8.1
+  MCP_PUBLISHER_LINUX_AMD64_SHA256: a06c9096dcb9727c13555b6be26c7effa707b01f06a4c561ba7a3635443cf2cc
+
+jobs:
+  deprecate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install MCP Registry publisher
+        run: |
+          curl --fail --location \
+            "https://github.com/modelcontextprotocol/registry/releases/download/v${MCP_PUBLISHER_VERSION}/mcp-publisher_linux_amd64.tar.gz" \
+            --output "$RUNNER_TEMP/mcp-publisher.tar.gz"
+          echo "${MCP_PUBLISHER_LINUX_AMD64_SHA256}  $RUNNER_TEMP/mcp-publisher.tar.gz" | sha256sum --check
+          tar -xzf "$RUNNER_TEMP/mcp-publisher.tar.gz" -C "$RUNNER_TEMP" mcp-publisher
+
+      - name: Log in to MCP Registry
+        run: "$RUNNER_TEMP/mcp-publisher login github-oidc"
+
+      # Only a deleted entry releases its remote URL for another server name.
+      # Flags must precede the server name; --yes skips the bulk confirmation prompt.
+      - name: Update io.github.pascalorg/editor status
+        env:
+          STATUS: ${{ inputs.status }}
+        run: |
+          "$RUNNER_TEMP/mcp-publisher" status \
+            --status "$STATUS" \
+            --message "Superseded by app.pascal/editor" \
+            --all-versions \
+            --yes \
+            io.github.pascalorg/editor

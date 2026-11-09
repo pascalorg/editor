@@ -1,5 +1,6 @@
 import dedent from 'dedent'
 import { z } from 'zod'
+import { Assembly } from '../assembly'
 import { BaseNode, nodeType, objectId } from '../base'
 import type { MaterialSchema as MaterialSchemaType } from '../material'
 import { MaterialSchema } from '../material'
@@ -37,10 +38,19 @@ export const RoofNode = BaseNode.extend({
   edgeMaterialPreset: z.string().optional(),
   wallMaterial: MaterialSchema.optional(),
   wallMaterialPreset: z.string().optional(),
+  // The wall band between the top plate and the eaves (a raised heel): its own finish, under every
+  // segment that has none; absent, the walls' below it.
+  heelMaterial: MaterialSchema.optional(),
+  heelMaterialPreset: z.string().optional(),
   position: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
   // Rotation around Y axis in radians
   rotation: z.number().default(0),
   support: RoofSupport,
+  // Layer build-up inward from the covering-top plane of every segment (F2).
+  assembly: Assembly.optional(),
+  // Per-slot material overrides, as on walls and slabs: `layer:<id>` keys
+  // (or a layer's own `slot`) paint an assembly layer.
+  slots: z.record(z.string(), z.string()).optional(),
   // Child roof segment IDs
   children: z.array(RoofSegmentNode.shape.id).default([]),
 }).describe(

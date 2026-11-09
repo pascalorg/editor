@@ -1,9 +1,12 @@
 import {
   type AnyNode,
   type AnyNodeId,
-  getWallEffectiveHeightForNodes,
+  type DoorNode,
+  getOpeningFloorDatum,
   type WallNode,
+  wallSupportForNodes,
 } from '@pascal-app/core'
+import { resolveWallOpeningCeiling } from '@pascal-app/core/building'
 
 /**
  * Structural subset of `SceneApi` the opening-cap readers need — matches
@@ -15,24 +18,8 @@ export type WallCeilingSceneReader = {
   nodes: () => Readonly<Record<AnyNodeId, AnyNode>>
 }
 
-/**
- * Available wall-local Y span for an opening hosted on `wall`: the wall's
- * resolved top (storey plane for plane-bound walls, stored height for
- * explicit ones) minus the wall's elected slab base. Wall-local Y = 0 sits
- * at the elected base (where the viewer positions the wall mesh), so this
- * is the ceiling an opening's top edge must stay under.
- *
- * Uses the same slab election as the viewer's WallSystem
- * (`spatialGridManager.getSlabSupportForWall`) so the cap agrees with the
- * rendered wall; headless callers with an empty spatial grid elect base 0
- * and fall back to the full storey height.
- */
-export function resolveWallOpeningCeiling(
-  wall: WallNode,
-  nodes: Readonly<Record<AnyNodeId, AnyNode>>,
-): number {
-  return getWallEffectiveHeightForNodes(wall, nodes as Record<string, AnyNode>)
-}
+/** The ceiling an opening's top edge must stay under: the shared rule in core. */
+export { resolveWallOpeningCeiling }
 
 /**
  * Height cap for a wall-hosted opening's resize handles. Infinity only when
@@ -42,9 +29,14 @@ export function resolveWallOpeningCeiling(
 export function readHostWallCeiling(
   wallId: string | null | undefined,
   scene: WallCeilingSceneReader,
+  opening?: Pick<DoorNode, 'position' | 'width' | 'height'>,
 ): number {
   if (!wallId) return Number.POSITIVE_INFINITY
   const wall = scene.get(wallId as AnyNodeId) as WallNode | undefined
   if (!wall) return Number.POSITIVE_INFINITY
-  return resolveWallOpeningCeiling(wall, scene.nodes())
+  const nodes = scene.nodes()
+  const lift = opening
+    ? getOpeningFloorDatum(wall, opening, nodes) - wallSupportForNodes(wall, nodes).elevation
+    : 0
+  return resolveWallOpeningCeiling(wall, nodes) - lift
 }

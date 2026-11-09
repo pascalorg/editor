@@ -53,3 +53,30 @@ describe('door floor alignment', () => {
     expect(cutout.geometry.boundingBox?.min.y).toBeCloseTo(-node.height / 2, 6)
   })
 })
+
+test('a floor-anchored door mesh stands on the higher room while stored coordinates stay unchanged', async () => {
+  const { useScene } = await import('@pascal-app/core')
+  const { reconcileStructureOnLoad } = await import('@pascal-app/core/scene-migrations')
+  const { floorStepFixture } = await import(
+    '../../../../core/src/systems/slab/__fixtures__/floor-step'
+  )
+  const fixture = floorStepFixture()
+  fixture.level.height = 3
+  for (const [i, zone] of fixture.zones.entries())
+    fixture.nodes[zone.id] = { ...zone, floor: { elevation: i ? 0.05 : 0.55 } }
+  fixture.nodes[fixture.door.id] = fixture.door
+  fixture.nodes[fixture.divider.id] = { ...fixture.divider, children: [fixture.door.id] }
+  const nodes = reconcileStructureOnLoad(fixture.nodes).nodes
+  const previous = useScene.getState()
+  useScene.setState({ nodes })
+  try {
+    const mesh = buildDoorPreviewMesh(fixture.door)
+    expect(mesh.position.y - fixture.door.height / 2 + 0.05).toBeCloseTo(0.55)
+    expect(fixture.door.position).toEqual([2, 1, 0])
+    mesh.traverse((object) => {
+      if (object instanceof THREE.Mesh) object.geometry.dispose()
+    })
+  } finally {
+    useScene.setState(previous, true)
+  }
+})

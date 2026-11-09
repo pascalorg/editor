@@ -307,6 +307,7 @@ export function captureLayerKey(stream: CaptureStreamDescriptor): string {
   if (stream.kind === 'point-cloud') return 'pointCloud'
   if (stream.kind === 'surface-mesh') return 'surfaceMesh'
   if (stream.kind === 'gaussian-splat') return 'splat'
+  if (stream.kind === 'spaceform-scene') return 'spaceformScene'
   return stream.kind
 }
 

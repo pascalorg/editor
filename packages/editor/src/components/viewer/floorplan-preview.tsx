@@ -8,6 +8,8 @@ import {
   type GeometryContext,
   isNodeKindEnabled,
   nodeRegistry,
+  useLocale,
+  usePascalI18n,
   useScene,
 } from '@pascal-app/core'
 import { AnyNode as AnyNodeSchema } from '@pascal-app/core/schema'
@@ -26,6 +28,7 @@ import {
   useState,
 } from 'react'
 import { createPortal } from 'react-dom'
+import { localizedLevelName } from '../../i18n/level-name'
 import {
   FLOORPLAN_VIEW_ROTATION_DEG,
   floorplanLocalToWorldPoint,
@@ -62,6 +65,7 @@ import {
   rotateFloorplanPoint,
   visibleFloorplanViewWidth,
 } from './floorplan-preview-navigation'
+import { isVisibleInFloorplan } from './floorplan-preview-visibility'
 
 const READ_ONLY_PALETTE: FloorplanPalette = {
   selectedStroke: '#4f46e5',
@@ -141,15 +145,6 @@ function boundsToViewBox(bounds: FloorplanBounds): FloorplanViewBox {
   }
 }
 
-function levelLabel(level: AnyNode): string {
-  const named = (level as { name?: string }).name?.trim()
-  if (named) return named
-  const ordinal = (level as { level?: number }).level ?? 0
-  if (ordinal === 0) return 'Ground floor'
-  if (ordinal < 0) return `Basement ${Math.abs(ordinal)}`
-  return `Level ${ordinal}`
-}
-
 function collectLevelTree(root: AnyNode, nodes: Record<string, AnyNode>): AnyNode[] {
   const result: AnyNode[] = [root]
   const seen = new Set<string>()
@@ -191,18 +186,6 @@ export function normalizeFloorplanPreviewNodes(
     }
   }
   return normalized
-}
-
-function isVisibleInFloorplan(node: AnyNode, nodes: Record<string, AnyNode>): boolean {
-  const seen = new Set<string>()
-  let current: AnyNode | undefined = node
-  while (current) {
-    if (seen.has(current.id)) return true
-    seen.add(current.id)
-    if (current.visible === false) return false
-    current = current.parentId ? nodes[current.parentId] : undefined
-  }
-  return true
 }
 
 function buildFloorplanGeometries(
@@ -321,6 +304,8 @@ export function FloorplanPreview({
   showLevelSelector = true,
   synchronizeNavigation = false,
 }: FloorplanPreviewProps) {
+  const i18n = usePascalI18n()
+  const locale = useLocale()
   const storeNodes = useScene((state) => (scene ? EMPTY_PREVIEW_NODES : state.nodes))
   const storeInstalledPlugins = useScene((state) =>
     scene ? EMPTY_INSTALLED_PLUGINS : state.installedPlugins,
@@ -881,7 +866,10 @@ export function FloorplanPreview({
         className={className}
         style={{ display: 'grid', placeItems: 'center', background: '#f8fafc', color: '#64748b' }}
       >
-        No floor plans are available for this scene.
+        {i18n._({
+          id: 'viewer.floorplan.empty',
+          message: 'No floor plans are available for this scene.',
+        })}
       </div>
     )
   }
@@ -894,7 +882,15 @@ export function FloorplanPreview({
       {synchronizeNavigation ? <FloorplanCameraSyncMount /> : null}
       <div
         aria-keyshortcuts="ArrowUp ArrowDown ArrowLeft ArrowRight + - 0 F"
-        aria-label={`${activeLevel ? levelLabel(activeLevel) : 'Floor plan'} 2D view`}
+        aria-label={i18n._({
+          id: 'viewer.floorplan.viewLabel',
+          message: '{floor} 2D view',
+          values: {
+            floor: activeLevel
+              ? localizedLevelName(activeLevel, i18n, locale)
+              : i18n._({ id: 'viewer.floorplan.floorPlan', message: 'Floor plan' }),
+          },
+        })}
         onKeyDown={onKeyDown}
         role="application"
         ref={interactionRef}
@@ -981,9 +977,9 @@ export function FloorplanPreview({
             fontWeight: 600,
           }}
         >
-          Floor
+          {i18n._({ id: 'viewer.floorplan.floor', message: 'Floor' })}
           <select
-            aria-label="Floor"
+            aria-label={i18n._({ id: 'viewer.floorplan.floor', message: 'Floor' })}
             onChange={(event) => chooseLevel(event.target.value)}
             style={{
               border: '1px solid rgba(148,163,184,.55)',
@@ -997,7 +993,7 @@ export function FloorplanPreview({
           >
             {levels.map((level) => (
               <option key={level.id} value={level.id}>
-                {levelLabel(level)}
+                {localizedLevelName(level, i18n, locale)}
               </option>
             ))}
           </select>
@@ -1025,28 +1021,28 @@ export function FloorplanPreview({
         }}
       >
         <button
-          aria-label="Zoom out"
+          aria-label={i18n._({ id: 'viewer.floorplan.zoomOut', message: 'Zoom out' })}
           onClick={() => zoom(1.2)}
           style={controlStyle}
-          title="Zoom out"
+          title={i18n._({ id: 'viewer.floorplan.zoomOut', message: 'Zoom out' })}
           type="button"
         >
           <Minus size={16} />
         </button>
         <button
-          aria-label="Fit floor plan"
+          aria-label={i18n._({ id: 'viewer.floorplan.fit', message: 'Fit floor plan' })}
           onClick={() => updateLocalViewBox(fittedViewBox)}
           style={controlStyle}
-          title="Fit floor plan"
+          title={i18n._({ id: 'viewer.floorplan.fit', message: 'Fit floor plan' })}
           type="button"
         >
           <Maximize2 size={15} />
         </button>
         <button
-          aria-label="Zoom in"
+          aria-label={i18n._({ id: 'viewer.floorplan.zoomIn', message: 'Zoom in' })}
           onClick={() => zoom(0.8)}
           style={controlStyle}
-          title="Zoom in"
+          title={i18n._({ id: 'viewer.floorplan.zoomIn', message: 'Zoom in' })}
           type="button"
         >
           <Plus size={16} />

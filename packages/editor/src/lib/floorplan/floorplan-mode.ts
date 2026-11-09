@@ -2,11 +2,7 @@ import {
   type FloorplanAnnotationVisibility,
   revealFloorplanAnnotationRole,
 } from './annotation-visibility'
-import type {
-  FloorplanAnnotationRole,
-  FloorplanToolMode,
-  FloorplanWallDimensionReference,
-} from './floorplan-extension'
+import type { FloorplanAnnotationRole, FloorplanToolMode } from './floorplan-extension'
 
 export const FLOORPLAN_MODES = ['default', 'expert'] as const
 
@@ -18,6 +14,8 @@ export type FloorplanPresentationContext = {
   referencedAnnotationRole?: FloorplanAnnotationRole
   selected?: boolean
   target: 'editor' | 'export'
+  /** Display → Dimensions. Off hides the automatic and contextual dimensions in either mode. */
+  dimensions?: boolean
 }
 
 export function normalizeFloorplanMode(value: unknown): FloorplanMode {
@@ -46,6 +44,17 @@ export function resolveFloorplanAnnotationVisibility(
   expertVisibility: FloorplanAnnotationVisibility,
   context: FloorplanPresentationContext,
 ): FloorplanAnnotationVisibility {
+  const visibility = resolveModeAnnotationVisibility(mode, expertVisibility, context)
+  if (context.dimensions !== false) return visibility
+  if (!visibility.automaticDimensions && !visibility.contextualDimensions) return visibility
+  return { ...visibility, automaticDimensions: false, contextualDimensions: false }
+}
+
+function resolveModeAnnotationVisibility(
+  mode: FloorplanMode,
+  expertVisibility: FloorplanAnnotationVisibility,
+  context: FloorplanPresentationContext,
+): FloorplanAnnotationVisibility {
   if (mode === 'expert') return expertVisibility
 
   const interactive = context.target === 'editor'
@@ -58,16 +67,11 @@ export function resolveFloorplanAnnotationVisibility(
     openingMarks: false,
     structuralGrids: false,
     roomLabels: true,
+    roomDetails: false,
+    roofPlan: false,
     stairAnnotations: false,
   }
   return interactive && context.referencedAnnotationRole
     ? revealFloorplanAnnotationRole(visibility, context.referencedAnnotationRole)
     : visibility
-}
-
-export function resolveFloorplanWallDimensionReference(
-  mode: FloorplanMode,
-  expertReference: FloorplanWallDimensionReference,
-): FloorplanWallDimensionReference {
-  return mode === 'default' ? 'centerline' : expertReference
 }

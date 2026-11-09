@@ -37,7 +37,7 @@ import {
   rotateFloorplanExportBounds,
 } from './floorplan-export'
 import { floorplanGeometryMetadata } from './floorplan-extension'
-import { FloorplanPdfDocument } from './floorplan-pdfkit-document'
+import { FloorplanPdfDocument, loadFloorplanPdfFonts } from './floorplan-pdfkit-document'
 import { renderFloorplanGeometryToPdfKit } from './floorplan-pdfkit-renderer'
 
 type GroupGeometry = Extract<FloorplanGeometry, { kind: 'group' }>
@@ -306,12 +306,24 @@ describe('floor plan export policy', () => {
       openingMarks: true,
       structuralGrids: false,
       roomLabels: false,
+      roomDetails: true,
+      roofPlan: true,
       stairAnnotations: true,
     }
 
-    expect(resolveFloorplanExportAnnotationVisibility('expert', liveVisibility)).toEqual(
+    expect(resolveFloorplanExportAnnotationVisibility('expert', liveVisibility, true)).toEqual(
       liveVisibility,
     )
+  })
+
+  test('exports no automatic dimensions while Display → Dimensions is off', () => {
+    expect(
+      resolveFloorplanExportAnnotationVisibility(
+        'expert',
+        DEFAULT_FLOORPLAN_ANNOTATION_VISIBILITY,
+        false,
+      ),
+    ).toEqual({ ...DEFAULT_FLOORPLAN_ANNOTATION_VISIBILITY, automaticDimensions: false })
   })
 
   test('exports only model geometry and room labels in Default', () => {
@@ -319,6 +331,7 @@ describe('floor plan export policy', () => {
       resolveFloorplanExportAnnotationVisibility(
         'default',
         DEFAULT_FLOORPLAN_ANNOTATION_VISIBILITY,
+        true,
       ),
     ).toEqual({
       automaticDimensions: false,
@@ -328,6 +341,8 @@ describe('floor plan export policy', () => {
       openingMarks: false,
       structuralGrids: false,
       roomLabels: true,
+      roomDetails: false,
+      roofPlan: false,
       stairAnnotations: false,
     })
   })
@@ -696,7 +711,7 @@ describe('collectFloorplanGeometry', () => {
         'meters',
         DEFAULT_FLOORPLAN_ANNOTATION_VISIBILITY,
         'floor-plan',
-        'finished-faces',
+        'both',
         [enabledPluginId],
       )
 
@@ -730,7 +745,7 @@ describe('collectFloorplanGeometry', () => {
       rawPdf.on('data', (chunk: Buffer) => chunks.push(chunk))
       const completedPdf = Promise.withResolvers<string>()
       rawPdf.on('end', () => completedPdf.resolve(Buffer.concat(chunks).toString('latin1')))
-      const pdf = new FloorplanPdfDocument(rawPdf, [200, 200])
+      const pdf = new FloorplanPdfDocument(rawPdf, [200, 200], await loadFloorplanPdfFonts())
       pdf.addPage()
       for (const { model } of full) {
         if (!model) continue
@@ -754,7 +769,7 @@ describe('collectFloorplanGeometry', () => {
         'meters',
         DEFAULT_FLOORPLAN_ANNOTATION_VISIBILITY,
         'floor-plan',
-        'finished-faces',
+        'both',
         [enabledPluginId],
       )
       expect(upper.map(({ id }) => id)).toEqual(['site_overlay', 'level_upper_architecture'])
@@ -771,10 +786,12 @@ describe('collectFloorplanGeometry', () => {
         'meters',
         DEFAULT_FLOORPLAN_ANNOTATION_VISIBILITY,
         'floor-plan',
-        'finished-faces',
+        'both',
         [enabledPluginId],
       )
-      expect(hiddenSite.map(({ id }) => id)).toEqual(['level_architecture'])
+      // A hidden Site hides only its own ground and boundary; the site-scoped
+      // nodes on it keep their own flag (see `hidesDescendants`).
+      expect(hiddenSite.map(({ id }) => id)).toEqual(['site_overlay', 'level_architecture'])
 
       const structure = collectFloorplanGeometry(
         nodes,
@@ -784,7 +801,7 @@ describe('collectFloorplanGeometry', () => {
         'meters',
         DEFAULT_FLOORPLAN_ANNOTATION_VISIBILITY,
         'floor-plan',
-        'finished-faces',
+        'both',
         [enabledPluginId],
       )
       expect(structure.map(({ id }) => id)).toEqual(['level_architecture'])
@@ -835,9 +852,9 @@ describe('resolveExportLevels', () => {
     selectLevel(ground.id)
 
     expect(resolveExportLevels(nodes)).toEqual([
-      { id: ground.id, label: 'Level 0' },
-      { id: upper.id, label: 'Level 1' },
-      { id: attic.id, label: 'Level 3' },
+      { id: ground.id, label: 'Ground floor' },
+      { id: upper.id, label: 'Floor 1' },
+      { id: attic.id, label: 'Floor 3' },
     ])
   })
 
@@ -845,9 +862,9 @@ describe('resolveExportLevels', () => {
     selectLevel(roof.id)
 
     expect(resolveExportLevels(nodes)).toEqual([
-      { id: ground.id, label: 'Level 0' },
-      { id: upper.id, label: 'Level 1' },
-      { id: attic.id, label: 'Level 3' },
+      { id: ground.id, label: 'Ground floor' },
+      { id: upper.id, label: 'Floor 1' },
+      { id: attic.id, label: 'Floor 3' },
     ])
   })
 })

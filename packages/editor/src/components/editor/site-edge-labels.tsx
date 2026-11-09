@@ -3,7 +3,6 @@
 import type { SiteNode } from '@pascal-app/core'
 import { sceneRegistry, useLiveNodeOverrides, useScene } from '@pascal-app/core'
 import { getSceneTheme, useViewer } from '@pascal-app/viewer'
-import { Html } from '@react-three/drei'
 import { createPortal, useFrame, useThree } from '@react-three/fiber'
 import { useCallback, useMemo, useRef, useState } from 'react'
 import { type Camera, type Object3D, Vector3 } from 'three'
@@ -11,6 +10,7 @@ import { groundHeightAt } from '../../lib/ground-surface'
 import { formatLinearMeasurement } from '../../lib/measurements'
 import { SITE_BOUNDARY_DRAG_LABEL } from '../../lib/site-boundary'
 import { useActiveHandleDrag } from '../../store/use-interaction-scope'
+import { Html } from './localized-html'
 
 type ViewportSize = {
   width: number

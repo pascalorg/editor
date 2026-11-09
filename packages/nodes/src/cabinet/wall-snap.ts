@@ -5,8 +5,8 @@ import {
   calculateLevelMiters,
   getWallArcData,
   getWallCurveFrameAt,
+  getWallLocalFaceZ,
   getWallPlanFootprint,
-  getWallThickness,
   isCurvedWall,
   WALL_SNAP_DISTANCE_M,
   type WallNode,
@@ -309,7 +309,7 @@ function resolveCabinetWallUsableSpan({
   const excluded = new Set(excludeIds)
   const frontNormal = [-hit.dirY, hit.dirX] as const
   const normalScale = hit.side === 'front' ? 1 : -1
-  const faceZ = normalScale * (getWallThickness(hit.wall) / 2)
+  const faceZ = getWallLocalFaceZ(hit.wall, hit.side === 'front' ? 'a' : 'b')
   const outerZ = faceZ + normalScale * depth
   let start = 0
   let end = hit.wallLength
@@ -379,20 +379,20 @@ export function resolveCabinetWallFaceOffset({
   parentLevelId: AnyNodeId
 }): number {
   if (isCurvedWall(hit.wall)) {
-    return (hit.side === 'front' ? 1 : -1) * (getWallThickness(hit.wall) / 2)
+    return getWallLocalFaceZ(hit.wall, hit.side === 'front' ? 'a' : 'b')
   }
 
   const walls = Object.values(nodes).filter(
     (node): node is WallNode => node?.type === 'wall' && node.parentId === parentLevelId,
   )
   if (walls.length === 0) {
-    return (hit.side === 'front' ? 1 : -1) * (getWallThickness(hit.wall) / 2)
+    return getWallLocalFaceZ(hit.wall, hit.side === 'front' ? 'a' : 'b')
   }
 
   const miterData = calculateLevelMiters(walls)
   const footprint = getWallPlanFootprint(hit.wall, miterData)
   if (footprint.length < 3) {
-    return (hit.side === 'front' ? 1 : -1) * (getWallThickness(hit.wall) / 2)
+    return getWallLocalFaceZ(hit.wall, hit.side === 'front' ? 'a' : 'b')
   }
 
   const frontNormal = [-hit.dirY, hit.dirX] as const
@@ -427,7 +427,7 @@ export function resolveCabinetWallFaceOffset({
   }
 
   if (zIntersections.length === 0) {
-    return (hit.side === 'front' ? 1 : -1) * (getWallThickness(hit.wall) / 2)
+    return getWallLocalFaceZ(hit.wall, hit.side === 'front' ? 'a' : 'b')
   }
   return hit.side === 'front' ? Math.max(...zIntersections) : Math.min(...zIntersections)
 }
@@ -450,7 +450,7 @@ export function collectCabinetWallSnapNeighbors({
   const frontNormal = [-hit.dirY, hit.dirX] as const
   const normalScale = hit.side === 'front' ? 1 : -1
   const yaw = Math.atan2(frontNormal[0] * normalScale, frontNormal[1] * normalScale)
-  const wallFaceOffset = getWallThickness(hit.wall) / 2
+  const wallFaceOffset = getWallLocalFaceZ(hit.wall, hit.side === 'front' ? 'a' : 'b') * normalScale
   const neighbors: CabinetWallSnapNeighbor[] = []
   const excluded = new Set(excludeIds)
 
@@ -520,7 +520,8 @@ export function resolveCabinetWallSnapPlacement({
   const frontNormal = [frame.normal.x, frame.normal.y] as const
   const normalScale = hit.side === 'front' ? 1 : -1
   const normal = [frontNormal[0] * normalScale, frontNormal[1] * normalScale] as const
-  const resolvedFaceOffset = faceOffset ?? (normalScale * getWallThickness(hit.wall)) / 2
+  const resolvedFaceOffset =
+    faceOffset ?? getWallLocalFaceZ(hit.wall, hit.side === 'front' ? 'a' : 'b')
   const cabinetCenterOffset = resolvedFaceOffset + normalScale * (depth / 2)
   const guideOffset = resolvedFaceOffset
   const guideStart = projectCabinetWallLocalPointToPlan(

@@ -11,7 +11,7 @@ import {
   resolveCeilingHeight,
   terrainSupportLift,
   useScene,
-  type WallNode,
+  type WallNode, usePascalI18n,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback } from 'react'
@@ -58,6 +58,32 @@ function ceilingCustomHeight(node: CeilingNode, nodes: Record<string, AnyNode>):
   return Math.min(resolved, max)
 }
 
+export function applyMultiHeightMode(
+  nodeIds: AnyNodeId[],
+  next: 'storey' | 'custom',
+  parametrics: ParametricDescriptor<AnyNode>,
+) {
+  const nodes = useScene.getState().nodes as Record<string, AnyNode>
+  commitMultiNodeFields(
+    nodeIds,
+    (node) => {
+      const isCustom = (node as { height?: number }).height != null
+      if (next === 'custom') {
+        if (isCustom) return {}
+        if (node.type === 'ceiling') return { height: ceilingCustomHeight(node, nodes) }
+        if (node.type === 'wall') {
+          return { height: Math.max(0.1, getWallEffectiveHeightForNodes(node, nodes)) }
+        }
+        return {}
+      }
+      if (!isCustom) return {}
+      if (node.type === 'wall') return wallFollowsLevelPatch(node, nodes)
+      return { height: undefined }
+    },
+    parametrics,
+  )
+}
+
 export function MultiHeightModeField({
   nodeIds,
   nodeType,
@@ -73,6 +99,7 @@ export function MultiHeightModeField({
   max?: number
   step?: number
 }) {
+  const i18n = usePascalI18n()
   const unit = useViewer((s) => s.unit)
   const metricNotation = useViewer((s) => s.metricNotation)
   const mode = useScene(useShallow((s) => reduceHeightBoundMode(nodeIds, s.nodes)))
@@ -97,27 +124,7 @@ export function MultiHeightModeField({
 
   const applyMode = useCallback(
     (next: 'storey' | 'custom') => {
-      const nodes = useScene.getState().nodes as Record<string, AnyNode>
-      commitMultiNodeFields(
-        nodeIds,
-        (node) => {
-          const isCustom = (node as { height?: number }).height != null
-          if (next === 'custom') {
-            if (isCustom) return {}
-            if (node.type === 'ceiling') {
-              return { height: ceilingCustomHeight(node, nodes) }
-            }
-            if (node.type === 'wall') {
-              return { height: Math.max(0.1, getWallEffectiveHeightForNodes(node, nodes)) }
-            }
-            return {}
-          }
-          if (!isCustom) return {}
-          if (node.type === 'wall') return wallFollowsLevelPatch(node, nodes)
-          return { height: undefined }
-        },
-        parametrics,
-      )
+      applyMultiHeightMode(nodeIds, next, parametrics)
     },
     [nodeIds, parametrics],
   )
@@ -145,29 +152,29 @@ export function MultiHeightModeField({
   const sliderMixed = storedHeight.kind === 'mixed' || mixedMode
   const currentLabel = Number.isFinite(liveHeight)
     ? formatLinearMeasurement(liveHeight, unit, metricNotation)
-    : 'Mixed'
+    : i18n._({ id: 'editor.panels.mixed', message: 'Mixed' })
 
   return (
     <>
       {nodeType === 'wall' && (
         <div className="px-1 font-medium text-[10px] text-muted-foreground/80 uppercase tracking-wider">
-          Top
+          {i18n._({ id: 'editor.panels.multiHeightMode.top', message: 'Top' })}
         </div>
       )}
       <SegmentedControl
         mixed={mixedMode}
         onChange={applyMode}
         options={[
-          { label: 'Follows level', value: 'storey' },
-          { label: 'Custom height', value: 'custom' },
+          { label: i18n._({ id: 'editor.panels.multiHeightMode.followsLevel', message: 'Follows level' }), value: 'storey' },
+          { label: i18n._({ id: 'editor.panels.multiHeightMode.customHeight', message: 'Custom height' }), value: 'custom' },
         ]}
         value={mode.kind === 'same' ? mode.value : 'storey'}
       />
       {isFollows ? (
-        <div className="px-1 text-[11px] text-muted-foreground">Currently {currentLabel}</div>
+        <div className="px-1 text-[11px] text-muted-foreground">{i18n._({ id: 'editor.panels.multiHeightMode.currentlyCurrentlabel', message: 'Currently {currentLabel}', values: { currentLabel } })}</div>
       ) : isCustom ? (
         <SliderControl
-          label="Height"
+          label={i18n._({ id: 'editor.panels.multiHeightMode.height', message: 'Height' })}
           max={max}
           min={min}
           mixed={sliderMixed}

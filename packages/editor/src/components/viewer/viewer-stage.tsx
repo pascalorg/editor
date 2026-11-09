@@ -60,7 +60,6 @@ function selectViewerLevel(nodes: Record<string, AnyNode>, levelId: string) {
     selectedIds: [],
     zoneId: null,
   })
-  viewer.setLevelMode('solo')
 }
 
 export function ViewerStage({
@@ -137,7 +136,8 @@ export function ViewerStage({
       if (notify && nextLevelId !== useViewer.getState().selection.levelId) {
         markPerfAction('level-switch', nextLevelId)
       }
-      selectViewerLevel(scene?.nodes ?? useScene.getState().nodes, nextLevelId)
+      if (nextLevelId !== useViewer.getState().selection.levelId)
+        selectViewerLevel(scene?.nodes ?? useScene.getState().nodes, nextLevelId)
       if (notify) onLevelChange?.(nextLevelId)
     },
     [onLevelChange, scene],

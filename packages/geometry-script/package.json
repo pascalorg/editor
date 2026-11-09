@@ -1,0 +1,83 @@
+{
+  "name": "@pascal-app/geometry-script",
+  "version": "1.0.7",
+  "description": "Compiles AI-authored three.js and Blender (bpy) geometry scripts into GLB artifacts with a Pascal manifest. Runs in a browser worker, Bun or Node — no DOM, no React.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    "./author-scene": {
+      "types": "./dist/author-scene.d.ts",
+      "import": "./dist/author-scene.js",
+      "default": "./dist/author-scene.js"
+    },
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./adapter": {
+      "types": "./dist/adapter.d.ts",
+      "import": "./dist/adapter.js",
+      "default": "./dist/adapter.js"
+    },
+    "./design": {
+      "types": "./dist/design.d.ts",
+      "import": "./dist/design.js",
+      "default": "./dist/design.js"
+    },
+    "./compile": {
+      "types": "./dist/compile.d.ts",
+      "import": "./dist/compile.js",
+      "default": "./dist/compile.js"
+    },
+    "./sandbox": {
+      "types": "./dist/sandbox.d.ts",
+      "import": "./dist/sandbox.js",
+      "default": "./dist/sandbox.js"
+    },
+    "./blender": {
+      "types": "./dist/blender.d.ts",
+      "import": "./dist/blender.js",
+      "default": "./dist/blender.js"
+    },
+    "./blender-local": {
+      "types": "./dist/blender-local.d.ts",
+      "import": "./dist/blender-local.js",
+      "default": "./dist/blender-local.js"
+    }
+  },
+  "files": [
+    "dist",
+    "bpy",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc --build && bun ../../scripts/fix-node-esm-imports.ts dist && bun scripts/build-sandbox.ts",
+    "dev": "tsgo --build --watch",
+    "check-types": "tsgo --noEmit",
+    "prepublishOnly": "npm run build",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@pascal-app/core": "^1.0.7",
+    "three-bvh-csg": "^0.0.18"
+  },
+  "peerDependencies": {
+    "three": "^0.187"
+  },
+  "devDependencies": {
+    "@pascal/typescript-config": "*",
+    "@types/bun": "^1.4.4",
+    "@types/three": "^0.187",
+    "typescript": "7.0.2"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pascalorg/editor.git",
+    "directory": "packages/geometry-script"
+  },
+  "license": "MIT",
+  "homepage": "https://github.com/pascalorg/editor/tree/main/packages/geometry-script#readme",
+  "bugs": "https://github.com/pascalorg/editor/issues"
+}

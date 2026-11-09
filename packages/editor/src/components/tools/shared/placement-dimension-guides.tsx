@@ -1,13 +1,13 @@
 'use client'
 
 import { useViewer } from '@pascal-app/viewer'
-import { Html } from '@react-three/drei'
 import { useLayoutEffect, useMemo } from 'react'
 import { BufferGeometry, Float32BufferAttribute, Line as ThreeLine } from 'three'
 import { LineBasicNodeMaterial } from 'three/webgpu'
 import { EDITOR_LAYER } from '../../../lib/constants'
 import type { PlacementPreviewDimension } from '../../../store/use-placement-preview'
 import usePlacementPreview from '../../../store/use-placement-preview'
+import { Html } from '../../editor/localized-html'
 import { formatMeasurement } from '../../editor/measurement-pill'
 
 const DIMENSION_COLOR = 0x63_66_f1

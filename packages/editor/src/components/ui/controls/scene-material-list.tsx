@@ -10,20 +10,12 @@ import {
 } from '@pascal-app/core'
 import { Copy, Paintbrush, Pencil, Trash2 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
+import { sceneMaterialUsageCounts } from '../../../lib/scene-material-refs'
 import useEditor from '../../../store/use-editor'
 import { Button } from '../primitives/button'
 import { Input } from '../primitives/input'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../primitives/tooltip'
 import { MaterialPropertiesEditor } from './material-properties-editor'
-
-type SlotRecord = Record<string, string | undefined>
-
-function getSlotRecord(node: unknown): SlotRecord | null {
-  if (!node || typeof node !== 'object' || !('slots' in node)) return null
-  const slots = (node as { slots?: unknown }).slots
-  if (!slots || typeof slots !== 'object' || Array.isArray(slots)) return null
-  return slots as SlotRecord
-}
 
 export function SceneMaterialList({ autoEditId }: { autoEditId?: SceneMaterialId | null }) {
   const materials = useScene((state) => state.materials)
@@ -40,29 +32,9 @@ export function SceneMaterialList({ autoEditId }: { autoEditId?: SceneMaterialId
     [materials],
   )
 
-  const usageCounts = useMemo(() => {
-    const counts = new Map<SceneMaterialId, number>()
-    const refToId = new Map<string, SceneMaterialId>()
-
-    for (const [id] of materialEntries) {
-      counts.set(id, 0)
-      refToId.set(toSceneMaterialRef(id), id)
-    }
-
-    for (const node of Object.values(nodes)) {
-      const slots = getSlotRecord(node)
-      if (!slots) continue
-
-      for (const value of Object.values(slots)) {
-        if (typeof value !== 'string') continue
-        const materialId = refToId.get(value)
-        if (!materialId) continue
-        counts.set(materialId, (counts.get(materialId) ?? 0) + 1)
-      }
-    }
-
-    return counts
-  }, [materialEntries, nodes])
+  // Every place a scene material can be used — slots and the room, wall and
+  // footprint finishes — counted by the same walker saving and pasting use.
+  const usageCounts = useMemo(() => sceneMaterialUsageCounts(nodes), [nodes])
 
   return (
     <div className="space-y-2">

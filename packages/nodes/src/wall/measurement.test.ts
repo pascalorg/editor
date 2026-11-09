@@ -7,6 +7,15 @@ import {
 } from './measurement'
 
 describe('matchWallMeasurementFeature', () => {
+  test.each([1, -1])('preserves signed legacy thickness on side %s', (side) => {
+    const wall = WallNode.parse({ start: [0, 0], end: [4, 0], thickness: -0.2 })
+    expect(matchWallMeasurementFeature(wall, [2, 1, side * 0.05], 0.2)).toMatchObject({
+      featureId: side > 0 ? 'wall:face:left' : 'wall:face:right',
+      point: [2, 1, side * -0.1],
+    })
+    expect(matchWallMeasurementFeature(wall, [2, 1, side * 0.05], 0.05)).toBeNull()
+  })
+
   test('keeps an exact plan corner bound to the wall endpoint instead of its face', () => {
     const wall = WallNode.parse({ start: [0, 0], end: [4, 0], thickness: 0.2 })
 

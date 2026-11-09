@@ -1,21 +1,33 @@
 'use client'
 
 import {
+  type DoorNode,
   getWallCurveFrameAt,
+  getWallLocalFaceZ,
   getWallMiterBoundaryPoints,
-  getWallThickness,
+  getWallTrimFaces,
+  getWallTrimSlotId,
   isCurvedWall,
+  openingCasingBoards,
+  resolveOpeningCasingHost,
   type SceneMaterial,
   type SceneMaterialId,
+  spatialGridManager,
   useScene,
   WALL_CHAIR_RAIL_DEFAULT,
   WALL_CROWN_DEFAULT,
   WALL_SKIRTING_DEFAULT,
   WALL_SURFACE_SLOT_DEFAULTS,
+  type WallFace,
   type WallNode,
-  type WallSurfaceSlotId,
   type WallTrimConfig,
+  type WallTrimKind,
   type WallTrimProfile,
+  type WallTrimSlotId,
+  type WindowNode,
+  wallDoorStepRuns,
+  wallFaceBaseOffset,
+  wallFaceScriptSkirtingGap,
 } from '@pascal-app/core'
 import {
   baseMaterial,
@@ -27,6 +39,7 @@ import { memo, useEffect, useMemo } from 'react'
 import * as THREE from 'three'
 import { mergeGeometries as mergeBufferGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { resolveWallOpeningCeiling } from '../shared/wall-opening-ceiling'
+import { skirtingFloorOpeningRanges } from './skirting-floor-gaps'
 import { treatmentMiterDataForProud, type WallTreatmentLevelData } from './treatment-level-data'
 
 const CURVE_SEGMENTS = 24
@@ -38,19 +51,16 @@ type OpeningLike = {
   width?: number
   height?: number
   position?: [number, number, number]
+  casingFaceA?: boolean
+  casingFaceB?: boolean
+  casingWidth?: number
 }
 
-type TrimKind = 'skirting' | 'crown' | 'chairRail'
-type WallSide = 'interior' | 'exterior'
+type TrimKind = WallTrimKind
+type WallSide = WallFace
 type SceneMaterials = Record<SceneMaterialId, SceneMaterial>
 type Point2 = { x: number; z: number }
-type WallTreatmentSlotId =
-  | 'skirtingInterior'
-  | 'skirtingExterior'
-  | 'crownInterior'
-  | 'crownExterior'
-  | 'chairRailInterior'
-  | 'chairRailExterior'
+type WallTreatmentSlotId = WallTrimSlotId
 type TrimProfileDefinition = {
   samples: number
   proudAt: (t: number) => number
@@ -231,25 +241,10 @@ const TRIM_PROFILES: Record<TrimKind, Partial<Record<WallTrimProfile, TrimProfil
   },
 }
 
-const TRIM_KIND_CONFIG: Record<
-  TrimKind,
-  {
-    defaultConfig: WallTrimConfig
-    slots: Record<WallSide, WallTreatmentSlotId>
-  }
-> = {
-  skirting: {
-    defaultConfig: WALL_SKIRTING_DEFAULT,
-    slots: { interior: 'skirtingInterior', exterior: 'skirtingExterior' },
-  },
-  crown: {
-    defaultConfig: WALL_CROWN_DEFAULT,
-    slots: { interior: 'crownInterior', exterior: 'crownExterior' },
-  },
-  chairRail: {
-    defaultConfig: WALL_CHAIR_RAIL_DEFAULT,
-    slots: { interior: 'chairRailInterior', exterior: 'chairRailExterior' },
-  },
+const TRIM_KIND_CONFIG: Record<TrimKind, { defaultConfig: WallTrimConfig }> = {
+  skirting: { defaultConfig: WALL_SKIRTING_DEFAULT },
+  crown: { defaultConfig: WALL_CROWN_DEFAULT },
+  chairRail: { defaultConfig: WALL_CHAIR_RAIL_DEFAULT },
 }
 
 function resolveTrimProfile(kind: TrimKind, trim: WallTrimConfig) {
@@ -291,15 +286,9 @@ export function wallTreatmentProudOffsets(node: WallNode): number[] {
   return [...offsets]
 }
 
-function resolveTreatmentSideSign(node: WallNode, side: WallSide) {
-  if (side === 'interior') {
-    if (node.frontSide === 'interior') return 1
-    if (node.backSide === 'interior') return -1
-    return 1
-  }
-  if (node.frontSide === 'exterior') return 1
-  if (node.backSide === 'exterior') return -1
-  return -1
+// Face a is the wall's left (+normal), face b its right.
+function resolveTreatmentSideSign(_node: WallNode, side: WallSide) {
+  return side === 'a' ? 1 : -1
 }
 
 function wallToLocalTransform(node: WallNode) {
@@ -344,10 +333,10 @@ function buildMiteredSidePolyline(
 
   const sideSign = resolveTreatmentSideSign(node, side)
   const toLocal = wallToLocalTransform(node)
-  const proud = offset - getWallThickness(node) / 2
+  const proud = offset - getWallLocalFaceZ(node, sideSign > 0 ? 'a' : 'b') * sideSign
   const boundarySource = treatmentMiterDataForProud(levelData, proud)
   if (!boundarySource) return buildSidePolyline(node, side, offset)
-  const boundary = getWallMiterBoundaryPoints({ ...node, thickness: offset * 2 }, boundarySource)
+  const boundary = getWallMiterBoundaryPoints(node, boundarySource, proud)
 
   if (!boundary) return buildSidePolyline(node, side, offset)
 
@@ -412,13 +401,23 @@ function subtractOpeningRanges(ranges: Array<[number, number]>, openings: Array<
   return next
 }
 
+/**
+ * Where a trim on `face`, from `yBottom` to `height` above it, breaks for the wall's doors and
+ * windows: across each opening it reaches, and across each casing board on that face it reaches
+ * (the legs beside the cutout, the head over it, a window's bottom board under it), so a skirting
+ * or chair rail stops against the casing instead of running through it. A face the opening is not
+ * cased on breaks at the cutout only.
+ */
 function trimOpeningRanges(
   node: WallNode,
+  face: WallFace,
   childrenNodes: OpeningLike[],
   yBottom: number,
   height: number,
 ) {
   const yTop = yBottom + height
+  const reaches = (bottom: number, top: number) => top > yBottom + EPS && bottom < yTop - EPS
+  const nodes = useScene.getState().nodes
   return childrenNodes
     .filter((child) => child.type === 'door' || child.type === 'window')
     .flatMap((child) => {
@@ -426,9 +425,18 @@ function trimOpeningRanges(
       const childHeight = child.height ?? 0
       const position = child.position ?? [0, 0, 0]
       const childBottom = position[1] - childHeight / 2
-      const childTop = childBottom + childHeight
-      if (childTop <= yBottom + EPS || childBottom >= yTop - EPS) return []
-      return [[position[0] - width / 2, position[0] + width / 2] as [number, number]]
+      const ranges: Array<[number, number]> = []
+      if (reaches(childBottom, childBottom + childHeight))
+        ranges.push([position[0] - width / 2, position[0] + width / 2])
+      const opening = { ...child, position } as DoorNode | WindowNode
+      const host = resolveOpeningCasingHost(opening, nodes, node)
+      if (!host) return ranges
+      for (const board of openingCasingBoards(opening, host)) {
+        const [x, y] = [position[0] + board.center[0], position[1] + board.center[1]]
+        if (board.face === face && reaches(y - board.size[1] / 2, y + board.size[1] / 2))
+          ranges.push([x - board.size[0] / 2, x + board.size[0] / 2])
+      }
+      return ranges
     })
 }
 
@@ -481,6 +489,8 @@ function buildTrimSliceGeometry(
   inner: Point2[],
   extrudeHeight: number,
   translateY: number,
+  slope = 0,
+  slopeStart = 0,
 ) {
   const shape = buildPlanPolygon(outer, inner)
   if (!shape) return null
@@ -492,6 +502,11 @@ function buildTrimSliceGeometry(
   })
   geometry.rotateX(-Math.PI / 2)
   geometry.translate(0, translateY, 0)
+  if (slope !== 0) {
+    const positions = geometry.getAttribute('position')
+    for (let i = 0; i < positions.count; i++)
+      positions.setY(i, positions.getY(i) + (positions.getX(i) - slopeStart) * slope)
+  }
   geometry.computeVertexNormals()
   applyWorldScaleUvs(geometry)
   return geometry
@@ -524,14 +539,70 @@ export function buildTrimGeometry(
           )
         : 0
 
-  const thickness = getWallThickness(node)
-  const inner = buildMiteredSidePolyline(node, levelData, side, thickness / 2)
+  const faceOffset =
+    getWallLocalFaceZ(node, resolveTreatmentSideSign(node, side) > 0 ? 'a' : 'b') *
+    resolveTreatmentSideSign(node, side)
+  const inner = buildMiteredSidePolyline(node, levelData, side, faceOffset)
   if (inner.length < 2) return null
 
   const wallLength = Math.hypot(node.end[0] - node.start[0], node.end[1] - node.start[1])
-  const openingRanges = trimOpeningRanges(node, childrenNodes, yBottom, height)
-  const fullRanges: Array<[number, number]> = [[0, wallLength]]
-  const runs = subtractOpeningRanges(fullRanges, openingRanges)
+  const support =
+    kind === 'skirting' && node.parentId
+      ? (levelData.supports?.get(node.id) ??
+        spatialGridManager.getSlabSupportForWall(
+          node.parentId,
+          node.start,
+          node.end,
+          node.curveOffset ?? 0,
+          node.thickness,
+          node.supportSlabId,
+          undefined,
+          node.supportOffset,
+          node.justification,
+        ))
+      : undefined
+  const bases = support?.faceDatum[resolveTreatmentSideSign(node, side) > 0 ? 'a' : 'b'] ?? [
+    { start: 0, end: 1, elevation: yBottom },
+  ]
+  const stationX = (t: number) => {
+    if (!isCurvedWall(node)) return t * wallLength
+    const frame = getWallCurveFrameAt(node, t)
+    return wallToLocalTransform(node)(frame.point.x, frame.point.y).x
+  }
+  const face = resolveTreatmentSideSign(node, side) > 0 ? 'a' : 'b'
+  const faceScript = kind === 'skirting' ? node.finishScripts?.[face] : undefined
+  const floorGaps =
+    kind === 'skirting' ? skirtingFloorOpeningRanges(node, face, useScene.getState().nodes) : []
+  const runs = bases.flatMap((base) => {
+    const bottom = support ? base.elevation - support.elevation : yBottom
+    const openingRanges = [
+      ...trimOpeningRanges(node, face, childrenNodes, bottom, height),
+      ...floorGaps,
+    ]
+    if (support)
+      for (const child of childrenNodes) {
+        for (const run of wallDoorStepRuns(node, child, support.faceDatum, support.elevation))
+          if (run.bottom < bottom + height && run.top > bottom)
+            openingRanges.push([run.start, run.end])
+      }
+    const scripted =
+      faceScript && support
+        ? wallFaceScriptSkirtingGap(faceScript, bottom + height - wallFaceBaseOffset(support, face))
+        : null
+    if (scripted) openingRanges.push(scripted)
+    return subtractOpeningRanges([[stationX(base.start), stationX(base.end)]], openingRanges).map(
+      ([start, end]) => ({
+        start,
+        end,
+        bottom,
+        slopeStart: stationX(base.start),
+        slope:
+          base.endElevation === undefined
+            ? 0
+            : (base.endElevation - base.elevation) / (stationX(base.end) - stationX(base.start)),
+      }),
+    )
+  })
   if (runs.length === 0) return null
 
   const slices: THREE.BufferGeometry[] = []
@@ -539,7 +610,7 @@ export function buildTrimGeometry(
   if (!profile) return null
   const sliceHeight = height / profile.samples
 
-  for (const [runStart, runEnd] of runs) {
+  for (const { start: runStart, end: runEnd, bottom, slope, slopeStart } of runs) {
     const clipStart = runStart > EPS ? runStart : undefined
     const clipEnd = runEnd < wallLength - EPS ? runEnd : undefined
     const innerRun = clipPolyline(inner, clipStart, clipEnd)
@@ -547,14 +618,16 @@ export function buildTrimGeometry(
     for (let index = 0; index < profile.samples; index += 1) {
       const t = (index + 0.5) / profile.samples
       const proud = Math.max(MIN_SLICE_PROUD, trim.proud * profile.proudAt(t))
-      const outerRun = buildMiteredSidePolyline(node, levelData, side, thickness / 2 + proud)
+      const outerRun = buildMiteredSidePolyline(node, levelData, side, faceOffset + proud)
       const outerClipped = clipPolyline(outerRun, clipStart, clipEnd)
       if (outerClipped.length < 2) continue
       const slice = buildTrimSliceGeometry(
         outerClipped,
         innerRun,
         sliceHeight,
-        yBottom + index * sliceHeight,
+        bottom + index * sliceHeight,
+        slope,
+        slopeStart,
       )
       if (slice) slices.push(slice)
     }
@@ -568,7 +641,7 @@ export function buildTrimGeometry(
 
 function resolveWallSlotMaterial(
   node: WallNode,
-  slotId: WallSurfaceSlotId,
+  slotId: WallTreatmentSlotId,
   shading: RenderShading,
   sceneMaterials: SceneMaterials,
 ) {
@@ -588,12 +661,12 @@ export function createWallExtraSlotMaterials(
   sceneMaterials: SceneMaterials,
 ) {
   return {
-    skirtingInterior: resolveWallSlotMaterial(node, 'skirtingInterior', shading, sceneMaterials),
-    skirtingExterior: resolveWallSlotMaterial(node, 'skirtingExterior', shading, sceneMaterials),
-    crownInterior: resolveWallSlotMaterial(node, 'crownInterior', shading, sceneMaterials),
-    crownExterior: resolveWallSlotMaterial(node, 'crownExterior', shading, sceneMaterials),
-    chairRailInterior: resolveWallSlotMaterial(node, 'chairRailInterior', shading, sceneMaterials),
-    chairRailExterior: resolveWallSlotMaterial(node, 'chairRailExterior', shading, sceneMaterials),
+    aSkirting: resolveWallSlotMaterial(node, 'aSkirting', shading, sceneMaterials),
+    bSkirting: resolveWallSlotMaterial(node, 'bSkirting', shading, sceneMaterials),
+    aCrown: resolveWallSlotMaterial(node, 'aCrown', shading, sceneMaterials),
+    bCrown: resolveWallSlotMaterial(node, 'bCrown', shading, sceneMaterials),
+    aChairRail: resolveWallSlotMaterial(node, 'aChairRail', shading, sceneMaterials),
+    bChairRail: resolveWallSlotMaterial(node, 'bChairRail', shading, sceneMaterials),
   } satisfies Record<WallTreatmentSlotId, THREE.Material>
 }
 
@@ -609,12 +682,12 @@ export const WallTreatments = memo(function WallTreatments({
   materials: Record<WallTreatmentSlotId, THREE.Material>
 }) {
   const fallbackMaterial =
-    materials.skirtingInterior ??
-    materials.skirtingExterior ??
-    materials.crownInterior ??
-    materials.crownExterior ??
-    materials.chairRailInterior ??
-    materials.chairRailExterior
+    materials.aSkirting ??
+    materials.bSkirting ??
+    materials.aCrown ??
+    materials.bCrown ??
+    materials.aChairRail ??
+    materials.bChairRail
 
   const trimEntries = useMemo(() => {
     const out: Array<{
@@ -633,14 +706,10 @@ export const WallTreatments = memo(function WallTreatments({
     for (const [kind, rawConfig] of configs) {
       const trim = { ...TRIM_KIND_CONFIG[kind].defaultConfig, ...(rawConfig ?? {}) }
       if (!trim.enabled) continue
-      const sides =
-        trim.sides === 'both'
-          ? (['interior', 'exterior'] as WallSide[])
-          : ([trim.sides] as WallSide[])
-      for (const side of sides) {
+      for (const side of getWallTrimFaces(trim.sides)) {
         const geometry = buildTrimGeometry(node, side, trim, kind, childrenNodes, levelData)
         if (!geometry) continue
-        const slotId = TRIM_KIND_CONFIG[kind].slots[side]
+        const slotId = getWallTrimSlotId(side, kind)
         out.push({
           key: `${kind}-${side}`,
           slotId,

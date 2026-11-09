@@ -28,6 +28,7 @@ supabase/.temp/
 
 # Build Outputs
 .next/
+.next-*/
 out/
 build
 dist
@@ -57,3 +58,4 @@ og-test
 .claude/launch.json
 .claude/settings.local.json
 .vscode/launch.json
+.i18n-audit/

@@ -436,6 +436,14 @@ describe('persisted support hosts (walls, via the manager)', () => {
       electedSlabId: null,
       baseElevation: 1.75,
       baseSegments: [{ start: 0, end: 1, elevation: 1.75 }],
+      faceBottom: {
+        a: [{ start: 0, end: 1, elevation: 1.75 }],
+        b: [{ start: 0, end: 1, elevation: 1.75 }],
+      },
+      faceDatum: {
+        a: [{ start: 0, end: 1, elevation: 1.75 }],
+        b: [{ start: 0, end: 1, elevation: 1.75 }],
+      },
     })
   })
 

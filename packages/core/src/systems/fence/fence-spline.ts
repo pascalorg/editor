@@ -27,6 +27,19 @@ const TWO_POINT_CURVE_MAX_SAGITTA = 1.2
 
 type FenceSplineLike = Pick<FenceNode, 'path'>
 type TangentList = ReadonlyArray<readonly [number, number] | null> | undefined
+export type FenceSpanMode = 'straight' | 'curve'
+type SpanModes = ReadonlyArray<FenceSpanMode> | undefined
+
+export function getFenceSpanMode(
+  path: ReadonlyArray<readonly [number, number]>,
+  tangents: TangentList,
+  spanModes: SpanModes,
+  index: number,
+): FenceSpanMode {
+  return (
+    spanModes?.[index] ?? (path.length === 2 && !hasAnyTangent(tangents) ? 'straight' : 'curve')
+  )
+}
 
 export function isSplineFence(fence: FenceSplineLike): boolean {
   return Array.isArray(fence.path) && fence.path.length >= 2
@@ -157,12 +170,14 @@ export function sampleFenceSpline(
   path: ReadonlyArray<readonly [number, number]>,
   tangents?: TangentList,
   segmentsPerSpan = DEFAULT_SEGMENTS_PER_SPAN,
+  spanModes?: SpanModes,
 ): Point2D[] {
   const pts = toPoints(path)
   if (pts.length === 0) return []
   if (pts.length === 1) return [pts[0]!]
   // Two points with no adjusted tangents is a straight segment.
-  if (pts.length === 2 && !hasAnyTangent(tangents)) return [pts[0]!, pts[1]!]
+  if (pts.length === 2 && getFenceSpanMode(path, tangents, spanModes, 0) === 'straight')
+    return [pts[0]!, pts[1]!]
 
   const steps = Math.max(1, Math.floor(segmentsPerSpan))
   const result: Point2D[] = [pts[0]!]
@@ -170,6 +185,10 @@ export function sampleFenceSpline(
   for (let i = 0; i < pts.length - 1; i += 1) {
     const p1 = pts[i]!
     const p2 = pts[i + 1]!
+    if (getFenceSpanMode(path, tangents, spanModes, i) === 'straight') {
+      result.push(p2)
+      continue
+    }
     const outHandle = getFenceControlHandle(path, tangents, i)
     const nextHandle = getFenceControlHandle(path, tangents, i + 1)
     // Bézier controls: leave p1 along its OUT handle, arrive at p2 along its
@@ -201,12 +220,19 @@ function frameFromPolyline(points: Point2D[], t: number): CurveFrame {
     }
   }
 
-  const clamped = clamp01(t)
-  const lastIndex = points.length - 1
-  const scaled = clamped * lastIndex
-  const lower = Math.min(lastIndex - 1, Math.floor(scaled))
+  const lengths = points.slice(1).map((point, index) => distance(points[index]!, point))
+  const totalLength = lengths.reduce((sum, length) => sum + length, 0)
+  const targetDistance = clamp01(t) * totalLength
+  let lower = 0
+  let traversed = 0
+  while (lower < lengths.length - 1 && traversed + lengths[lower]! < targetDistance) {
+    traversed += lengths[lower]!
+    lower += 1
+  }
+  while (lower < lengths.length - 1 && lengths[lower]! < EPSILON) lower += 1
   const upper = lower + 1
-  const localU = scaled - lower
+  const localU =
+    lengths[lower]! < EPSILON ? 0 : clamp01((targetDistance - traversed) / lengths[lower]!)
 
   const a = points[lower]!
   const b = points[upper]!
@@ -215,10 +241,31 @@ function frameFromPolyline(points: Point2D[], t: number): CurveFrame {
     y: a.y + (b.y - a.y) * localU,
   }
 
-  const dx = b.x - a.x
-  const dy = b.y - a.y
+  const directionAt = (index: number): Point2D => {
+    let before = index - 1
+    let after = index + 1
+    while (before >= 0 && distance(points[before]!, points[index]!) < EPSILON) before -= 1
+    while (after < points.length && distance(points[after]!, points[index]!) < EPSILON) after += 1
+    const current = points[index]!
+    const previous = points[Math.max(0, before)]!
+    const next = points[Math.min(points.length - 1, after)]!
+    const incomingLength = distance(previous, current)
+    const outgoingLength = distance(current, next)
+    const dx =
+      (current.x - previous.x) / Math.max(incomingLength, EPSILON) +
+      (next.x - current.x) / Math.max(outgoingLength, EPSILON)
+    const dy =
+      (current.y - previous.y) / Math.max(incomingLength, EPSILON) +
+      (next.y - current.y) / Math.max(outgoingLength, EPSILON)
+    const length = Math.hypot(dx, dy)
+    return length < EPSILON ? { x: 1, y: 0 } : { x: dx / length, y: dy / length }
+  }
+  const startDirection = directionAt(lower)
+  const endDirection = directionAt(upper)
+  const dx = startDirection.x * (1 - localU) + endDirection.x * localU
+  const dy = startDirection.y * (1 - localU) + endDirection.y * localU
   const len = Math.hypot(dx, dy)
-  const tangent = len < EPSILON ? { x: 1, y: 0 } : { x: dx / len, y: dy / len }
+  const tangent = len < EPSILON ? startDirection : { x: dx / len, y: dy / len }
 
   return {
     point,
@@ -230,16 +277,17 @@ function frameFromPolyline(points: Point2D[], t: number): CurveFrame {
 /**
  * Frame (point + tangent + normal) at parameter `t` in [0, 1] along the spline
  * centerline. Same return shape as `getWallCurveFrameAt` so it is a drop-in for
- * the arc branch. `t` is uniform over the sampled polyline (arc length is not
- * reparameterised — adequate for marching posts / rails and far cheaper).
+ * the arc branch. `t` measures a fraction of the sampled curve's length so
+ * spacing stays consistent even when control points are unevenly distributed.
  */
 export function getFenceSplineFrameAt(
   path: ReadonlyArray<readonly [number, number]>,
   t: number,
   tangents?: TangentList,
   segmentsPerSpan = DEFAULT_SEGMENTS_PER_SPAN,
+  spanModes?: SpanModes,
 ): CurveFrame {
-  return frameFromPolyline(sampleFenceSpline(path, tangents, segmentsPerSpan), t)
+  return frameFromPolyline(sampleFenceSpline(path, tangents, segmentsPerSpan, spanModes), t)
 }
 
 /** Total polyline length of the sampled spline centerline. */
@@ -247,8 +295,9 @@ export function getFenceSplineLength(
   path: ReadonlyArray<readonly [number, number]>,
   tangents?: TangentList,
   segmentsPerSpan = DEFAULT_SEGMENTS_PER_SPAN,
+  spanModes?: SpanModes,
 ): number {
-  const points = sampleFenceSpline(path, tangents, segmentsPerSpan)
+  const points = sampleFenceSpline(path, tangents, segmentsPerSpan, spanModes)
   let total = 0
   for (let i = 1; i < points.length; i += 1) {
     total += distance(points[i - 1]!, points[i]!)

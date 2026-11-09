@@ -1,3 +1,4 @@
+import { type DoorNode, getDoorOpeningSize, openingHostFacing } from '@pascal-app/core'
 // Runtime glue between the pure `computeOpeningGuides` geometry (core) and the
 // editor's 3D guide store, used by the door/window move + placement tools. Lives
 // in `nodes` (not core) because it talks to the editor store; kept thin so each
@@ -8,11 +9,14 @@ import {
   type AnyNodeId,
   computeOpeningGuides,
   detectVerticalAlignment,
+  getOpeningFloorDatum,
+  getWallCurveFrameAt,
+  getWallCurveLength,
   type OpeningSpan,
   sceneRegistry,
-  spatialGridManager,
   useScene,
   type WallNode,
+  wallSupportForNodes,
 } from '@pascal-app/core'
 import { type OpeningGuide3D, useOpeningGuides } from '@pascal-app/editor'
 import { resolveWallOpeningCeiling } from './wall-opening-ceiling'
@@ -40,12 +44,17 @@ export function collectOpeningSiblings(
     if (childId === movingId) continue
     const node = nodes[childId as AnyNodeId]
     if (!node || (node.type !== 'door' && node.type !== 'window')) continue
+    const size = getDoorOpeningSize(node)
     out.push({
       id: node.id,
-      centerS: node.position[0],
-      width: node.width,
-      centerY: node.position[1],
-      height: node.height,
+      centerS: node.position[0] - size.leafOffsetX * openingHostFacing(node),
+      width: size.width,
+      centerY:
+        node.position[1] +
+        (size.height - node.height) / 2 +
+        getOpeningFloorDatum(wall, node, nodes) -
+        wallSupportForNodes(wall, nodes).elevation,
+      height: size.height,
     })
   }
   return out
@@ -67,12 +76,18 @@ export function resolveSillSnap(args: {
   nodes: Record<string, AnyNode>
 }): number | null {
   const siblings = collectOpeningSiblings(args.wall, args.movingId, args.nodes)
+  const datumOffset =
+    getOpeningFloorDatum(
+      args.wall,
+      { position: [args.localX, args.localY, 0], width: args.width, height: args.height },
+      args.nodes,
+    ) - wallSupportForNodes(args.wall, args.nodes).elevation
   const match = detectVerticalAlignment(
     {
       id: args.movingId,
       centerS: args.localX,
       width: args.width,
-      centerY: args.localY,
+      centerY: args.localY + datumOffset,
       height: args.height,
     },
     siblings,
@@ -93,8 +108,16 @@ export function publishOpeningGuides3D(args: {
   toWorld: ToWorld
   nodes: Record<string, AnyNode>
 }): void {
-  const { wall, centerS, centerY, width, toWorld } = args
-  const wallLength = Math.hypot(wall.end[0] - wall.start[0], wall.end[1] - wall.start[1])
+  const { wall, centerS, width, toWorld } = args
+  const centerY =
+    args.centerY +
+    getOpeningFloorDatum(
+      wall,
+      { position: [centerS, args.centerY, 0], width, height: args.height },
+      args.nodes,
+    ) -
+    wallSupportForNodes(wall, args.nodes).elevation
+  const wallLength = getWallCurveLength(wall)
   const wallHeight = resolveWallOpeningCeiling(wall, args.nodes)
   const siblings = collectOpeningSiblings(wall, args.movingId, args.nodes)
   const guides = computeOpeningGuides({
@@ -178,14 +201,11 @@ export function clearOpeningGuides3D(): void {
  *  publisher (which already has them) and the resize publisher (which derives
  *  them from the scene). Same frame as `wallLocalToWorld`. */
 function makeWallToWorld(wall: WallNode, levelYOffset: number, slabElevation: number): ToWorld {
-  const angle = Math.atan2(wall.end[1] - wall.start[1], wall.end[0] - wall.start[0])
-  const cos = Math.cos(angle)
-  const sin = Math.sin(angle)
-  return (s, y) => [
-    wall.start[0] + s * cos,
-    slabElevation + y + levelYOffset,
-    wall.start[1] + s * sin,
-  ]
+  const length = getWallCurveLength(wall)
+  return (s, y) => {
+    const { point } = getWallCurveFrameAt(wall, s / length)
+    return [point.x, slabElevation + y + levelYOffset, point.y]
+  }
 }
 
 /** Like {@link makeWallToWorld} but derives the level Y + slab elevation from the
@@ -193,14 +213,7 @@ function makeWallToWorld(wall: WallNode, levelYOffset: number, slabElevation: nu
 export function wallToWorld(wall: WallNode): ToWorld {
   const levelId = wall.parentId as AnyNodeId | undefined
   const levelYOffset = levelId ? (sceneRegistry.nodes.get(levelId)?.position.y ?? 0) : 0
-  const slabElevation = spatialGridManager.getSlabElevationForWall(
-    wall.parentId ?? '',
-    wall.start,
-    wall.end,
-    wall.curveOffset ?? 0,
-    wall.thickness,
-    wall.supportSlabId,
-  )
+  const slabElevation = wallSupportForNodes(wall, useScene.getState().nodes).elevation
   return makeWallToWorld(wall, levelYOffset, slabElevation)
 }
 
@@ -243,19 +256,22 @@ export function publishOpeningResizeGuides(
     position: readonly [number, number, number]
     width: number
     height: number
-  },
+  } & Partial<
+    Pick<DoorNode, 'rotation' | 'doorType' | 'sidelightLeft' | 'sidelightRight' | 'transomHeight'>
+  >,
   includeVertical: boolean,
 ): void {
   const nodes = useScene.getState().nodes
   const wall = node.parentId ? nodes[node.parentId as AnyNodeId] : undefined
   if (wall?.type !== 'wall') return
+  const size = getDoorOpeningSize(node)
   publishOpeningGuides3D({
     wall,
     movingId: node.id,
-    centerS: node.position[0],
-    centerY: node.position[1],
-    width: node.width,
-    height: node.height,
+    centerS: node.position[0] - size.leafOffsetX * openingHostFacing(node),
+    centerY: node.position[1] + (size.height - node.height) / 2,
+    width: size.width,
+    height: size.height,
     includeVertical,
     nodes,
     toWorld: wallToWorld(wall),

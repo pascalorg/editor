@@ -154,7 +154,10 @@ export function createPolygonCentroidMoveTarget(args: {
       if (extraCommitData) {
         Object.assign(data, extraCommitData)
       }
-      useScene.getState().updateNodes([{ id, data }])
+      // Dragging the shape by hand is the sanctioned conversion of a derived
+      // slab or ceiling into an authored one; for every other kind this is an
+      // ordinary polygon update carrying `extraCommitData`.
+      useScene.getState().detachDerivedNode(id, data as Partial<AnyNode>)
       useScene.getState().markDirty(id)
       useLiveTransforms.getState().clear(id)
       return true

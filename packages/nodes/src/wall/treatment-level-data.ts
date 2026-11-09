@@ -1,10 +1,10 @@
 import {
   calculateLevelMiters,
-  getWallThickness,
   isCurvedWall,
   pointToKey,
   type WallMiterData,
   type WallNode,
+  type WallSlabSupport,
 } from '@pascal-app/core'
 import { create } from 'zustand'
 import { shallow } from 'zustand/vanilla/shallow'
@@ -25,6 +25,7 @@ export function sameTreatmentWalls(a: readonly WallNode[], b: readonly WallNode[
 
 export type WallTreatmentLevelData = {
   walls: readonly WallNode[]
+  supports?: ReadonlyMap<string, WallSlabSupport>
   miterDataByProud: ReadonlyMap<number, WallMiterData>
 }
 
@@ -39,6 +40,7 @@ export function buildWallTreatmentLevelData(
   levelId: string,
   walls: readonly WallNode[],
   proudOffsets: readonly number[],
+  supports?: ReadonlyMap<string, WallSlabSupport>,
 ): WallTreatmentLevelData {
   const cached = levelMiterCache.get(levelId)
   const reusable = cached && sameTreatmentWalls(cached.walls, walls) ? cached : undefined
@@ -50,17 +52,10 @@ export function buildWallTreatmentLevelData(
       miterDataByProud.set(proud, previous)
       continue
     }
-    const adjustedWalls =
-      proud === 0
-        ? [...walls]
-        : walls.map((wall) => ({
-            ...wall,
-            thickness: getWallThickness(wall) + proud * 2,
-          }))
-    miterDataByProud.set(proud, calculateLevelMiters(adjustedWalls))
+    miterDataByProud.set(proud, calculateLevelMiters([...walls], proud))
   }
 
-  const data = { walls, miterDataByProud }
+  const data = { walls, miterDataByProud, supports }
   levelMiterCache.set(levelId, data)
   return data
 }
@@ -94,10 +89,16 @@ export function createWallTreatmentSelector(node: WallNode, proudOffsets: readon
     if (!level) {
       previousSlice = undefined
       previousInputs = []
-      return undefined
+      return
     }
 
-    const inputs: Array<number | boolean | undefined> = []
+    const support = level.supports?.get(node.id)
+    const inputs: Array<number | boolean | undefined> = [support?.elevation]
+    for (const face of ['a', 'b'] as const) {
+      inputs.push(support?.faceDatum[face].length)
+      for (const segment of support?.faceDatum[face] ?? [])
+        inputs.push(segment.start, segment.end, segment.elevation, segment.endElevation)
+    }
     for (const proud of prouds) {
       const data = level.miterDataByProud.get(proud)
       inputs.push(!!data)
@@ -121,7 +122,11 @@ export function createWallTreatmentSelector(node: WallNode, proudOffsets: readon
       miterDataByProud.set(proud, { junctionData, junctions: new Map() })
     }
     previousInputs = inputs
-    previousSlice = { walls: [node], miterDataByProud }
+    previousSlice = {
+      walls: [node],
+      miterDataByProud,
+      supports: support ? new Map([[node.id, support]]) : undefined,
+    }
     return previousSlice
   }
 }

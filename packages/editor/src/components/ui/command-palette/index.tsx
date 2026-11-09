@@ -3,15 +3,15 @@
 import type { AnyNodeId, LevelNode } from '@pascal-app/core'
 import { useScene } from '@pascal-app/core'
 import { markPerfAction, useViewer } from '@pascal-app/viewer'
-import { Command, useCommandState } from 'cmdk'
+import { Command, defaultFilter, useCommandState } from 'cmdk'
 import { ChevronRight, Search } from 'lucide-react'
-import type { ReactNode } from 'react'
-import { useEffect, useState } from 'react'
+import type { ReactNode, RefObject } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { create } from 'zustand'
 import { useShallow } from 'zustand/shallow'
 import { Dialog, DialogContent, DialogTitle } from './../../../components/ui/primitives/dialog'
 import { getLevelDisplayName } from '@pascal-app/core'
-import { useCommandRegistry } from '../../../store/use-command-registry'
+import { type CommandAction, useCommandRegistry } from '../../../store/use-command-registry'
 import { usePaletteViewRegistry } from '../../../store/use-palette-view-registry'
 
 // ---------------------------------------------------------------------------
@@ -52,6 +52,28 @@ export const useCommandPalette = create<CommandPaletteStore>((set, get) => ({
 // ---------------------------------------------------------------------------
 function resolve(value: string | (() => string)): string {
   return typeof value === 'function' ? value() : value
+}
+
+type ActionGroup = [group: string, actions: CommandAction[]]
+
+/**
+ * The registered actions by group, in the order they were registered. A search puts the group
+ * holding the best match first: cmdk ranks the items inside a group but leaves the groups where
+ * they are, so a strong match could sit below a screen of weak ones.
+ */
+export function rankedGroups(actions: CommandAction[], search: string): ActionGroup[] {
+  const groups = new Map<string, CommandAction[]>()
+  for (const action of actions) {
+    groups.set(action.group, [...(groups.get(action.group) ?? []), action])
+  }
+  const ordered: ActionGroup[] = [...groups]
+  if (!search) return ordered
+  const bestMatch = ([, list]: ActionGroup) =>
+    Math.max(...list.map((action) => defaultFilter(resolve(action.label), search, action.keywords)))
+  return ordered
+    .map((entry) => ({ entry, score: bestMatch(entry) }))
+    .sort((a, b) => b.score - a.score)
+    .map(({ entry }) => entry)
 }
 
 function Shortcut({ keys }: { keys: string[] }) {
@@ -149,7 +171,6 @@ function OptionItem({
 // ---------------------------------------------------------------------------
 const PAGE_LABEL: Record<string, string> = {
   'wall-mode': 'Wall Mode',
-  'level-mode': 'Level Mode',
   'rename-level': 'Rename Level',
   'goto-level': 'Go to Level',
 }
@@ -161,6 +182,20 @@ export interface CommandPaletteEmptyAction {
   icon: ReactNode
   label: (query: string) => string
   onSelect: (query: string) => void
+}
+
+/**
+ * A search selects the first item; this scrolls the list back to the top to show it. cmdk scrolls
+ * before the list re-renders the selection, so once a search has moved the groups it scrolls to
+ * wherever the item selected before went. Rendered after the list, whose ref is set by then.
+ */
+function TopOnFirstItem({ list }: { list: RefObject<HTMLDivElement | null> }) {
+  const value = useCommandState((s) => s.value)
+  useLayoutEffect(() => {
+    const first = list.current?.querySelector('[cmdk-item]:not([aria-disabled="true"])')
+    if (value && first?.getAttribute('aria-selected') === 'true') list.current?.scrollTo({ top: 0 })
+  }, [list, value])
+  return null
 }
 
 function EmptyActionItem({ action }: { action: CommandPaletteEmptyAction }) {
@@ -194,6 +229,7 @@ export function CommandPalette({ emptyAction }: { emptyAction?: CommandPaletteEm
 
   const [meta, setMeta] = useState('⌘')
   const [isFullscreen, setIsFullscreen] = useState(false)
+  const listRef = useRef<HTMLDivElement>(null)
 
   const page = pages[pages.length - 1]
 
@@ -204,8 +240,6 @@ export function CommandPalette({ emptyAction }: { emptyAction?: CommandPaletteEm
 
   const wallMode = useViewer((s) => s.wallMode)
   const setWallMode = useViewer((s) => s.setWallMode)
-  const levelMode = useViewer((s) => s.levelMode)
-  const setLevelMode = useViewer((s) => s.setLevelMode)
 
   const allLevels = useScene(
     useShallow((s) =>
@@ -250,12 +284,6 @@ export function CommandPalette({ emptyAction }: { emptyAction?: CommandPaletteEm
     down: 'Down',
     translucent: 'Translucent',
   }
-  const levelModeLabel: Record<'manual' | 'stacked' | 'exploded' | 'solo', string> = {
-    manual: 'Manual',
-    stacked: 'Stacked',
-    exploded: 'Exploded',
-    solo: 'Solo',
-  }
 
   const confirmRename = () => {
     if (!(activeLevelId && inputValue.trim())) return
@@ -264,15 +292,7 @@ export function CommandPalette({ emptyAction }: { emptyAction?: CommandPaletteEm
     })
   }
 
-  // ---------------------------------------------------------------------------
-  // Group registered actions by group (preserving insertion order)
-  // ---------------------------------------------------------------------------
-  const grouped = actions.reduce<Map<string, typeof actions>>((acc, action) => {
-    const list = acc.get(action.group) ?? []
-    list.push(action)
-    acc.set(action.group, list)
-    return acc
-  }, new Map())
+  const grouped = rankedGroups(actions, inputValue)
 
   const onClose = () => setOpen(false)
   const onBack = () => {
@@ -335,7 +355,7 @@ export function CommandPalette({ emptyAction }: { emptyAction?: CommandPaletteEm
               />
             </div>
 
-            <Command.List className="max-h-100 overflow-y-auto p-1.5">
+            <Command.List className="max-h-100 overflow-y-auto p-1.5" ref={listRef}>
               {(!emptyAction || page) && (
                 <Command.Empty className="py-8 text-center text-muted-foreground text-sm">
                   No commands found.
@@ -353,7 +373,7 @@ export function CommandPalette({ emptyAction }: { emptyAction?: CommandPaletteEm
 
               {/* ── Root view: render from registry ───────────────────────── */}
               {!page &&
-                Array.from(grouped.entries()).map(([group, groupActions]) => (
+                grouped.map(([group, groupActions]) => (
                   <Command.Group heading={group} key={group}>
                     {groupActions.map((action) => (
                       <Item
@@ -364,7 +384,11 @@ export function CommandPalette({ emptyAction }: { emptyAction?: CommandPaletteEm
                         keywords={action.keywords}
                         label={action.label}
                         navigate={action.navigate}
-                        onSelect={() => action.execute()}
+                        // A registered command that does not navigate within the
+                        // palette closes it, like the built-ins — otherwise the
+                        // dialog overlay keeps swallowing clicks under a full-screen
+                        // surface the command opened (Sheets).
+                        onSelect={() => (action.navigate ? action.execute() : run(() => action.execute()))}
                         shortcut={action.shortcut}
                       />
                     ))}
@@ -380,20 +404,6 @@ export function CommandPalette({ emptyAction }: { emptyAction?: CommandPaletteEm
                       key={mode}
                       label={wallModeLabel[mode]}
                       onSelect={() => run(() => setWallMode(mode))}
-                    />
-                  ))}
-                </Command.Group>
-              )}
-
-              {/* ── Level Mode sub-page ───────────────────────────────────── */}
-              {page === 'level-mode' && (
-                <Command.Group heading="Level Mode">
-                  {(['stacked', 'exploded', 'solo'] as const).map((mode) => (
-                    <OptionItem
-                      isActive={levelMode === mode}
-                      key={mode}
-                      label={levelModeLabel[mode]}
-                      onSelect={() => run(() => setLevelMode(mode))}
                     />
                   ))}
                 </Command.Group>
@@ -458,6 +468,7 @@ export function CommandPalette({ emptyAction }: { emptyAction?: CommandPaletteEm
                 </Command.Group>
               )}
             </Command.List>
+            <TopOnFirstItem list={listRef} />
 
             {/* Footer hint */}
             <div className="flex items-center justify-between border-border/50 border-t px-3 py-2">

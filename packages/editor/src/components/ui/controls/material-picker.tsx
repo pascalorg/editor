@@ -1,23 +1,12 @@
 'use client'
 
-import {
-  getCatalogMaterialById,
-  getDynamicLibraryMaterials,
-  getLibraryMaterialIdFromRef,
-  getLibraryMaterialsVersion,
-  getMaterialsForCategory,
-  MATERIAL_CATEGORIES,
-  type MaterialCatalogItem,
-  type MaterialSource,
-  type MaterialTarget,
-  subscribeLibraryMaterials,
-  toLibraryMaterialRef,
-} from '@pascal-app/core'
+import { getMaterialSwatch, type MaterialTarget, toLibraryMaterialRef } from '@pascal-app/core'
 import { Plus } from 'lucide-react'
-import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
+import { useMaterialCatalogModel } from '../../../lib/material-catalog-model'
+import { materialSwatchStyle } from '../../../lib/material-swatch-style'
 import { triggerSFX } from '../../../lib/sfx-bus'
 
-export type MaterialSourceFilter = MaterialSource
+export type { MaterialSourceFilter } from '../../../lib/material-catalog-model'
 
 export type MaterialPickerProps = {
   selectedMaterialPreset?: string
@@ -26,23 +15,12 @@ export type MaterialPickerProps = {
   nodeType?: MaterialTarget
   hideSideControl?: boolean
   onCreateMaterialRequest?: () => void
+  /** Whether switching category tabs selects the tab's first material (paint mode does). */
+  selectOnCategoryChange?: boolean
 }
 
-// No 'All': the browse surfaces (Items / Rooms / Build) dropped it and default
-// to the Pascal library — the combined list buried the curated set.
-const SOURCE_FILTERS: { id: MaterialSourceFilter; label: string }[] = [
-  { id: 'pascal', label: 'Pascal' },
-  { id: 'mine', label: 'Mine' },
-  { id: 'workspace', label: 'Workspace' },
-  { id: 'community', label: 'Community' },
-]
-
-function getCategoryLabel(category: (typeof MATERIAL_CATEGORIES)[number]) {
+function getCategoryLabel(category: string) {
   return category.charAt(0).toUpperCase() + category.slice(1)
-}
-
-function filterBySource(items: MaterialCatalogItem[], filter: MaterialSourceFilter) {
-  return items.filter((item) => (item.source ?? 'pascal') === filter)
 }
 
 /**
@@ -56,41 +34,23 @@ export function MaterialPicker({
   onSelectMaterialPreset,
   disabled = false,
   onCreateMaterialRequest,
+  selectOnCategoryChange = true,
 }: MaterialPickerProps) {
-  const [selectedCategory, setSelectedCategory] = useState<(typeof MATERIAL_CATEGORIES)[number]>(
-    MATERIAL_CATEGORIES[0],
+  const {
+    selectedCategory,
+    setSelectedCategory,
+    sourceFilter,
+    setSourceFilter,
+    visibleSourceFilters,
+    availableCategories,
+    catalogItems,
+    select: handleCatalogSelect,
+  } = useMaterialCatalogModel(
+    selectedMaterialPreset,
+    onSelectMaterialPreset,
+    disabled,
+    selectOnCategoryChange,
   )
-  const [sourceFilter, setSourceFilter] = useState<MaterialSourceFilter>('pascal')
-  // Version counter so host registrations/unregistrations re-render the picker.
-  const libraryVersion = useSyncExternalStore(
-    subscribeLibraryMaterials,
-    getLibraryMaterialsVersion,
-    getLibraryMaterialsVersion,
-  )
-  const hasWorkspaceMaterials = useMemo(
-    () => getDynamicLibraryMaterials().some((item) => item.source === 'workspace'),
-    [libraryVersion],
-  )
-  const visibleSourceFilters = SOURCE_FILTERS.filter(
-    (filter) => filter.id !== 'workspace' || hasWorkspaceMaterials,
-  )
-  const availableCategories = MATERIAL_CATEGORIES.filter(
-    (category) => getMaterialsForCategory(category).length > 0,
-  )
-  const catalogItems = filterBySource(getMaterialsForCategory(selectedCategory), sourceFilter)
-
-  // Keep the visible category in sync with the externally-selected catalog
-  // material (a `scene:` ref matches no catalog entry, so the tab stays put).
-  useEffect(() => {
-    const catalogId = getLibraryMaterialIdFromRef(selectedMaterialPreset) ?? undefined
-    const entry = getCatalogMaterialById(catalogId)
-    if (entry?.category) setSelectedCategory(entry.category)
-  }, [selectedMaterialPreset])
-
-  const handleCatalogSelect = (materialId: string) => {
-    if (disabled) return
-    onSelectMaterialPreset?.(toLibraryMaterialRef(materialId))
-  }
 
   return (
     <div
@@ -108,10 +68,6 @@ export function MaterialPicker({
             key={category}
             onClick={() => {
               setSelectedCategory(category)
-              // Auto-select the first material in the category so the brush is
-              // immediately ready (and the swatch shows as selected).
-              const first = filterBySource(getMaterialsForCategory(category), sourceFilter)[0]
-              if (first) handleCatalogSelect(first.id)
             }}
             type="button"
           >
@@ -180,20 +136,12 @@ export function MaterialPicker({
               onMouseEnter={() => triggerSFX('sfx:menu-hover')}
               type="button"
             >
-              <div className="relative aspect-square w-full overflow-hidden rounded-lg">
-                {item.previewThumbnailUrl ? (
-                  <img
-                    alt={item.label}
-                    className="h-full w-full object-cover"
-                    src={item.previewThumbnailUrl}
-                  />
-                ) : (
-                  <div
-                    className="h-full w-full"
-                    style={{ backgroundColor: item.previewColor ?? '#f3f4f6' }}
-                  />
-                )}
-              </div>
+              <div
+                aria-label={item.label}
+                className="relative aspect-square w-full overflow-hidden rounded-lg"
+                role="img"
+                style={materialSwatchStyle(getMaterialSwatch(item))}
+              />
               <span className="truncate px-0.5 text-left font-medium text-[11px] text-muted-foreground group-hover:text-foreground">
                 {item.label}
               </span>

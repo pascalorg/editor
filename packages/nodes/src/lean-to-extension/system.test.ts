@@ -98,7 +98,7 @@ describe('lean-to scene commit boundary', () => {
 
     expect(commits).toHaveLength(1)
     expect(commits[0]?.current.nodes[segmentId]?.type).toBe('roof-segment')
-    expect((commits[0]?.current.nodes[segmentId] as { depth: number }).depth).toBeCloseTo(4.27)
+    expect((commits[0]!.current.nodes[segmentId] as { depth: number }).depth).toBeCloseTo(4.27)
     expect(useScene.temporal.getState().pastStates).toHaveLength(1)
     stopCommits()
   })
@@ -402,96 +402,97 @@ describe('lean-to scene commit boundary', () => {
     expect(cornerPosts).toHaveLength(1)
   })
 
-  test.each([
-    'gable',
-    'butterfly',
-  ] as const)('synchronizes continuous %s roof and gutter miters after both runs exist', (canopyForm) => {
-    stopSync()
-    const level = LevelNode.parse({ id: `level_${canopyForm}_run_sync`, level: 0 })
-    const first = resolveLeanToFreestandingRunPlacement(
-      level.id,
-      [0, 0],
-      [4, 0],
-      false,
-      canopyForm,
-    )!
-    const second = resolveLeanToFreestandingRunPlacement(
-      level.id,
-      [4, 0],
-      [4, 4],
-      false,
-      canopyForm,
-    )!
-    const firstAssembly = createLeanToAssembly(first)
-    const secondAssembly = createLeanToAssembly(second)
-    const nodes = Object.fromEntries(
-      [
-        { ...level, children: [first.id, second.id] },
-        firstAssembly.extension,
-        ...firstAssembly.children,
-        secondAssembly.extension,
-        ...secondAssembly.children,
-      ].map((node) => [node.id, node]),
-    ) as Record<AnyNodeId, AnyNode>
-    useScene.setState({
-      collections: {},
-      dirtyNodes: new Set(),
-      materials: {},
-      nodes,
-      readOnly: false,
-      rootNodeIds: [level.id],
-    } as never)
-    clearSceneHistory()
-    stopSync = initializeLeanToExtensionSync(createSceneApi(useScene))
+  test.each(['gable', 'butterfly'] as const)(
+    'synchronizes continuous %s roof and gutter miters after both runs exist',
+    (canopyForm) => {
+      stopSync()
+      const level = LevelNode.parse({ id: `level_${canopyForm}_run_sync`, level: 0 })
+      const first = resolveLeanToFreestandingRunPlacement(
+        level.id,
+        [0, 0],
+        [4, 0],
+        false,
+        canopyForm,
+      )!
+      const second = resolveLeanToFreestandingRunPlacement(
+        level.id,
+        [4, 0],
+        [4, 4],
+        false,
+        canopyForm,
+      )!
+      const firstAssembly = createLeanToAssembly(first)
+      const secondAssembly = createLeanToAssembly(second)
+      const nodes = Object.fromEntries(
+        [
+          { ...level, children: [first.id, second.id] },
+          firstAssembly.extension,
+          ...firstAssembly.children,
+          secondAssembly.extension,
+          ...secondAssembly.children,
+        ].map((node) => [node.id, node]),
+      ) as Record<AnyNodeId, AnyNode>
+      useScene.setState({
+        collections: {},
+        dirtyNodes: new Set(),
+        materials: {},
+        nodes,
+        readOnly: false,
+        rootNodeIds: [level.id],
+      } as never)
+      clearSceneHistory()
+      stopSync = initializeLeanToExtensionSync(createSceneApi(useScene))
 
-    const syncedNodes = useScene.getState().nodes
-    const syncedFirst = syncedNodes[first.id as AnyNodeId]
-    expect(syncedFirst).toMatchObject({
-      type: 'lean-to-extension',
-      rightEndCondition: 'joined',
-      metadata: { leanToFreestandingCanopyJoints: { right: {} } },
-    })
-    const jointMetadata = syncedFirst?.metadata as
-      | { leanToFreestandingCanopyJoints?: { right?: { gutterMitre?: number } } }
-      | undefined
-    expect(jointMetadata?.leanToFreestandingCanopyJoints?.right?.gutterMitre).toBeCloseTo(
-      -Math.PI / 4,
-      12,
-    )
-    if (syncedFirst?.type !== 'lean-to-extension') return
-    const roof = syncedFirst.children
-      .map((id) => syncedNodes[id as AnyNodeId])
-      .find((node) => node?.type === 'roof')
-    const segments =
-      roof?.type === 'roof'
-        ? roof.children
-            .map((id) => syncedNodes[id as AnyNodeId])
-            .filter((node) => node?.type === 'roof-segment')
-        : []
-    const primary = segments.find(
-      (segment) =>
-        (segment.metadata as Record<string, unknown> | undefined)?.leanToRoofPlane !== 'opposite',
-    )
-    expect(primary?.trim.right + primary?.trim.left).toBeCloseTo(first.rightOverhang)
-    expect(
-      canopyForm === 'gable' ? primary?.trim.frontRightX : primary?.trim.backLeftX,
-    ).toBeCloseTo(first.projection + first.lowOverhang)
-    const gutter = primary?.children
-      .map((id) => syncedNodes[id as AnyNodeId])
-      .find(
-        (node) =>
-          node?.type === 'gutter' &&
-          (node.metadata as Record<string, unknown> | undefined)?.leanToDrainageSide !== 'opposite',
+      const syncedNodes = useScene.getState().nodes
+      const syncedFirst = syncedNodes[first.id as AnyNodeId]
+      expect(syncedFirst).toMatchObject({
+        type: 'lean-to-extension',
+        rightEndCondition: 'joined',
+        metadata: { leanToFreestandingCanopyJoints: { right: {} } },
+      })
+      const jointMetadata = syncedFirst?.metadata as
+        | { leanToFreestandingCanopyJoints?: { right?: { gutterMitre?: number } } }
+        | undefined
+      expect(jointMetadata?.leanToFreestandingCanopyJoints?.right?.gutterMitre).toBeCloseTo(
+        -Math.PI / 4,
+        12,
       )
-    expect(gutter?.endCapLeft && gutter?.endCapRight).toBe(false)
-    const gutterMetadata = gutter?.metadata as
-      | { leanToGutterMitres?: { left?: number } }
-      | undefined
-    expect(gutterMetadata?.leanToGutterMitres?.left).toBeCloseTo(
-      canopyForm === 'butterfly' ? -Math.PI / 4 : 0,
-      12,
-    )
-  })
+      if (syncedFirst?.type !== 'lean-to-extension') return
+      const roof = syncedFirst.children
+        .map((id) => syncedNodes[id as AnyNodeId])
+        .find((node) => node?.type === 'roof')
+      const segments =
+        roof?.type === 'roof'
+          ? roof.children
+              .map((id) => syncedNodes[id as AnyNodeId])
+              .filter((node) => node?.type === 'roof-segment')
+          : []
+      const primary = segments.find(
+        (segment) =>
+          (segment.metadata as Record<string, unknown> | undefined)?.leanToRoofPlane !== 'opposite',
+      )
+      expect(primary?.trim.right + primary?.trim.left).toBeCloseTo(first.rightOverhang)
+      expect(
+        canopyForm === 'gable' ? primary?.trim.frontRightX : primary?.trim.backLeftX,
+      ).toBeCloseTo(first.projection + first.lowOverhang)
+      const gutter = primary?.children
+        .map((id) => syncedNodes[id as AnyNodeId])
+        .find(
+          (node) =>
+            node?.type === 'gutter' &&
+            (node.metadata as Record<string, unknown> | undefined)?.leanToDrainageSide !==
+              'opposite',
+        )
+      expect(gutter?.endCapLeft && gutter?.endCapRight).toBe(false)
+      const gutterMetadata = gutter?.metadata as
+        | { leanToGutterMitres?: { left?: number } }
+        | undefined
+      expect(gutterMetadata?.leanToGutterMitres?.left).toBeCloseTo(
+        canopyForm === 'butterfly' ? -Math.PI / 4 : 0,
+        12,
+      )
+    },
+  )
 
   test('synchronizes an edge-snapped straight run with open gutters and one joint pillar', () => {
     stopSync()

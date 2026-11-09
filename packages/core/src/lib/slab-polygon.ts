@@ -1,13 +1,18 @@
 import type { GeometryContext } from '../registry/types'
 import type { AnyNode, AnyNodeId, SlabNode, WallNode } from '../schema'
-import { isCurvedWall, sampleWallCenterline } from '../systems/wall/wall-curve'
-import { getWallThickness } from '../systems/wall/wall-footprint'
+import { DEFAULT_SLAB_ELEVATION } from '../schema/nodes/slab'
+import { getWallCurveFrameAt, isCurvedWall, sampleWallCenterline } from '../systems/wall/wall-curve'
+import {
+  getWallBodyCenterOffset,
+  getWallBodyLine,
+  getWallFaceOffsets,
+} from '../systems/wall/wall-frame'
 
 /**
  * Render-time slab polygon rules.
  *
- * Slab nodes store the wall-centerline polygon (auto slabs) or the drawn
- * polygon (manual slabs) — render offsets are NEVER stored in node data.
+ * Auto plates store their full footprint and render unchanged. Manual slabs
+ * keep the drawn polygon and adopt wall faces at render time.
  * At geometry build time each polygon edge is SPLIT at the clipped span
  * boundaries of every overlapping candidate (sibling slab edges and wall
  * centerlines in the adoption band) and each sub-edge is classified
@@ -80,7 +85,6 @@ const MIN_SUBEDGE_LENGTH = 0.05
 const WALL_LATERAL_TIE_EPSILON = 0.02
 const CURVED_WALL_SAMPLE_SEGMENTS = 32
 const SLAB_SEAM_ELEVATION_EPSILON = 1e-4
-const DEFAULT_SLAB_ELEVATION = 0.05
 const DEFAULT_SLAB_THICKNESS = 0.05
 /**
  * A non-recessed slab whose underside (`elevation − thickness`) rises
@@ -173,6 +177,7 @@ export function getRenderableSlabPolygon(
   context: SlabPolygonContext | PreparedSlabPolygonContext,
 ): Array<[number, number]> {
   const polygon = slabNode.polygon
+  if (slabNode.boundary === 'auto') return polygon
   if (polygon.length < 3 || isFloatingSlab(slabNode)) {
     return polygon.map(([x, z]) => [x, z] as [number, number])
   }
@@ -249,10 +254,16 @@ function clipCollinearSegment(
 
 function wallCenterlineSegments(wall: WallNode): Segment[] {
   if (!isCurvedWall(wall)) {
-    return [[wall.start[0], wall.start[1], wall.end[0], wall.end[1]]]
+    const { start, end } = getWallBodyLine(wall)
+    return [[start.x, start.y, end.x, end.y]]
   }
 
-  const points = sampleWallCenterline(wall, CURVED_WALL_SAMPLE_SEGMENTS)
+  const centerOffset = getWallBodyCenterOffset(wall)
+  const points = sampleWallCenterline(wall, CURVED_WALL_SAMPLE_SEGMENTS).map((point, index) => {
+    if (centerOffset === 0) return point
+    const { normal } = getWallCurveFrameAt(wall, index / CURVED_WALL_SAMPLE_SEGMENTS)
+    return { x: point.x + normal.x * centerOffset, y: point.y + normal.y * centerOffset }
+  })
   const segments: Segment[] = []
   for (let index = 0; index < points.length - 1; index += 1) {
     const from = points[index]!
@@ -354,15 +365,23 @@ export function snapSlabEdgeToWallBand(
   const candidates: WallCandidate[] = walls.map((wall) => ({
     wall,
     segments: wallCenterlineSegments(wall),
-    halfThickness: getWallThickness(wall) / 2,
+    halfThickness: getWallFaceOffsets(wall).a - getWallBodyCenterOffset(wall),
   }))
 
   const match = matchEdgeWallBand(a[0], a[1], dirX, dirZ, edgeLength, requiredOverlap, candidates)
   if (!match) return null
   if (options?.maxLateral !== undefined && Math.abs(match.lateral) > options.maxLateral) return null
 
-  const nx = dirZ * match.lateral
-  const nz = -dirX * match.lateral
+  const wallDx = match.wall.end[0] - match.wall.start[0]
+  const wallDz = match.wall.end[1] - match.wall.start[1]
+  const wallLength = Math.hypot(wallDx, wallDz)
+  const centerOffset = getWallBodyCenterOffset(match.wall)
+  const lateral =
+    centerOffset === 0 || wallLength < 1e-9
+      ? match.lateral
+      : match.lateral + (centerOffset * (wallDx * dirX + wallDz * dirZ)) / wallLength
+  const nx = dirZ * lateral
+  const nz = -dirX * lateral
   return {
     wallId: match.wall.id,
     edge: [
@@ -388,7 +407,12 @@ type EdgeSubSpan = {
 type Bounds = [number, number, number, number]
 
 function polygonBounds(polygon: Array<[number, number]>): Bounds {
-  const bounds: Bounds = [Infinity, Infinity, -Infinity, -Infinity]
+  const bounds: Bounds = [
+    Number.POSITIVE_INFINITY,
+    Number.POSITIVE_INFINITY,
+    Number.NEGATIVE_INFINITY,
+    Number.NEGATIVE_INFINITY,
+  ]
   for (const [x, z] of polygon) {
     bounds[0] = Math.min(bounds[0], x)
     bounds[1] = Math.min(bounds[1], z)
@@ -530,7 +554,7 @@ export function prepareSlabPolygonContext(
     const candidate: PreparedWallCandidate = {
       wall,
       segments,
-      halfThickness: getWallThickness(wall) / 2,
+      halfThickness: getWallFaceOffsets(wall).a - getWallBodyCenterOffset(wall),
       bounds: polygonBounds(
         segments.flatMap(([ax, az, bx, bz]) => [
           [ax, az],

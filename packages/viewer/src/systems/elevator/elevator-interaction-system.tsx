@@ -32,6 +32,20 @@ function getElevatorButtonData(object: Object3D): ElevatorButtonUserData | null 
   return null
 }
 
+/**
+ * The roots of every elevator button under `object`. Any button along the ray
+ * takes the click, so only they are raycast — never the rest of the scene,
+ * whose meshes this capture-phase listener must not trip over.
+ */
+export function collectElevatorButtons(object: Object3D, into: Object3D[] = []): Object3D[] {
+  if ((object.userData as { elevatorButton?: unknown }).elevatorButton) {
+    into.push(object)
+    return into
+  }
+  for (const child of object.children) collectElevatorButtons(child, into)
+  return into
+}
+
 export function ElevatorInteractionSystem() {
   const camera = useThree((state) => state.camera)
   const gl = useThree((state) => state.gl)
@@ -45,6 +59,9 @@ export function ElevatorInteractionSystem() {
     const handlePointerDown = (event: PointerEvent) => {
       if (event.button !== 0) return
 
+      const buttons = collectElevatorButtons(scene)
+      if (buttons.length === 0) return
+
       const rect = canvas.getBoundingClientRect()
       const pointer = pointerRef.current
       pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1
@@ -54,7 +71,7 @@ export function ElevatorInteractionSystem() {
       raycaster.setFromCamera(pointer, camera)
 
       const button = raycaster
-        .intersectObjects(scene.children, true)
+        .intersectObjects(buttons, true)
         .map((intersection) => getElevatorButtonData(intersection.object))
         .find((data): data is ElevatorButtonUserData => data !== null)
 

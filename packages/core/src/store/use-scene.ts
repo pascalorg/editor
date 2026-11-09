@@ -3,9 +3,9 @@
 import type { TemporalState } from 'zundo'
 import { temporal } from 'zundo'
 import { create, type StateCreator, type StoreApi, type UseBoundStore } from 'zustand'
-import { parseMaterialRef, toSceneMaterialRef } from '../material-library'
+import { toSceneMaterialRef } from '../material-library'
 import { getNodePluginId, isNodeKindEnabled, nodeRegistry } from '../registry/registry'
-import { BuildingNode } from '../schema'
+import { BuildingNode, type GeometryScriptSource } from '../schema'
 import type { Collection, CollectionId } from '../schema/collections'
 import { generateCollectionId } from '../schema/collections'
 import { compiledNodeSchema } from '../schema/compiled-node-parsers'
@@ -17,6 +17,7 @@ import {
 } from '../schema/nodes/dormer'
 import { ElevatorNode as ElevatorNodeSchema } from '../schema/nodes/elevator'
 import { LevelNode, normalizeLevelBaseElevation } from '../schema/nodes/level'
+import { RoofGlazing } from '../schema/nodes/roof-glazing'
 import {
   getPitchFromActiveRoofHeight,
   type RoofSegmentNode,
@@ -30,33 +31,71 @@ import {
   StairNode as StairNodeSchema,
 } from '../schema/nodes/stair'
 import { StairSegmentNode as StairSegmentNodeSchema } from '../schema/nodes/stair-segment'
-import { getEffectiveWallSurfaceMaterial, type WallSurfaceSide } from '../schema/nodes/wall'
 import { WindowNode as WindowNodeSchema } from '../schema/nodes/window'
-import {
-  generateSceneMaterialId,
-  SceneMaterial,
-  type SceneMaterialId,
-} from '../schema/scene-material'
+import { SceneMaterial, type SceneMaterialId } from '../schema/scene-material'
 import { type AnyNode, type AnyNodeId, AnyNode as AnyNodeSchema } from '../schema/types'
-import { syncAutoElevatorOpenings } from '../systems/elevator/elevator-opening-sync'
-import { syncAutoStairOpenings } from '../systems/stair/stair-opening-sync'
-import { syncStairRises } from '../systems/stair/stair-rise'
+import { DEFAULT_LEVEL_HEIGHT } from '../services/level-height'
+import { ensureSceneOpenings } from '../utils/ensure-scene-openings'
+import { migrateFloorPlates, migrateSlabSlots } from '../utils/floor-plate-migration'
 import { healSceneNodes } from '../utils/heal-scene-graph'
+import {
+  legacySpecToMaterialRef,
+  migrateSingleMaterialSlots,
+  migrateWallSurfaceMaterials,
+} from '../utils/legacy-material-slots'
+import { materializeNodeDefaults } from '../utils/node-defaults'
+import { normalizeLegacyStructure } from '../utils/normalize-legacy-structure'
+import { materializeLegacyAutoOpenings } from '../utils/owned-floor-opening-migration'
+import { reconcileStructureOnLoad } from '../utils/reconcile-structure-on-load'
 import { removeRetiredDrawingSheetNodes } from '../utils/retired-scene-nodes'
+import { migrateCeilingRoomLinks, migrateRoomZones } from '../utils/room-zone-migration'
 import { migrateVerticalSceneNodes } from '../utils/vertical-scene-migration'
+import { migrateLegacyWallAssemblies } from '../utils/wall-assembly-migration'
+import { migrateWallFaceBands, migrateWallFaceKeys } from '../utils/wall-face-migration'
 import * as nodeActions from './actions/node-actions'
+import type { DerivedWriteOptions } from './derived-node-guard'
 import {
   areSceneSnapshotsEqual,
+  beginSceneHistoryPauseSession,
   getSceneHistoryPauseDepth,
+  isRestoringSceneHistory,
   notifySceneCommit,
   pauseSceneHistory,
   resetSceneHistoryPauseDepth,
   resumeSceneHistory,
+  runAsRemoteSceneChange,
+  runAsSceneHistoryRestore,
+  runAsSingleSceneHistoryStep,
+  runSceneWriteGuards,
   runWithSceneCommitNodeIds,
   type SceneCommitOrigin,
   type SceneSnapshot,
+  settlePendingSceneCommit,
 } from './history-control'
+import {
+  beginSceneHistoryDraft as beginSceneHistoryDraftIn,
+  clearSceneHistoryDrafts,
+  createdSceneHistoryDraftIds,
+  hasSceneHistoryDrafts,
+  noteSceneHistoryDraftWrite,
+  sceneHistoryDraftRevertUpdates as sceneHistoryDraftRevertUpdatesIn,
+  settleSceneHistoryDrafts,
+  withAdoptedDraftsAsOriginal,
+  withDraftsRestored,
+} from './history-drafts'
 import { getHistoryDirtyNodeIds } from './history-invalidation'
+import {
+  retainSceneAnnotations,
+  withoutSceneAnnotations,
+  withoutSceneNodeAnnotations,
+  writeSceneNodeField,
+} from './scene-annotations'
+import {
+  bindSceneEnvironment,
+  liveSceneEnvironment,
+  type SceneEnvironment,
+  sceneEnvironmentOf,
+} from './scene-environment'
 import {
   invalidatePendingHydration,
   isHydrationNormalization,
@@ -178,6 +217,22 @@ function normalizeWindowNode(node: Record<string, unknown>) {
   return parsed.success ? { ...node, ...parsed.data } : null
 }
 
+// Slabs and ceilings written by third-party exporters (scanning apps, IFC
+// hand-offs) can legitimately omit `holes` / `holeMetadata` / `autoFromWalls`:
+// the schema gives them defaults. The opening sync and the public viewer read
+// those fields on the raw node, so a missing `holes` throws
+// "Cannot read properties of undefined (reading 'map')" and the scene never
+// renders. Only the hole fields are filled here — a full zod parse would also
+// default `thickness`, which the vertical-model migration below must still see
+// as absent on legacy solids.
+function normalizeSurfaceHoleFields(node: Record<string, unknown>) {
+  const holes = Array.isArray(node.holes) ? node.holes : []
+  const holeMetadata = Array.isArray(node.holeMetadata) ? node.holeMetadata : []
+  const autoFromWalls =
+    node.type === 'slab' && node.autoFromWalls === undefined ? { autoFromWalls: false } : {}
+  return { ...node, holes, holeMetadata, ...autoFromWalls }
+}
+
 function normalizeShelfNode(node: Record<string, unknown>) {
   const sanitized = {
     ...node,
@@ -285,117 +340,6 @@ function migrateElevatorParent(
     ...node,
     parentId: buildingId,
   }
-}
-
-// Reuse an already-minted scene material for an identical inline legacy
-// material so a whole building painted one custom colour collapses to one
-// shared datablock (mirrors `commitSlotPaint`'s dedupe-on-match).
-function findMintedSceneMaterialRef(
-  material: unknown,
-  mintedMaterials: Record<SceneMaterialId, SceneMaterial>,
-): string | undefined {
-  const target = JSON.stringify(material)
-  for (const sceneMaterial of Object.values(mintedMaterials)) {
-    if (JSON.stringify(sceneMaterial.material) === target) {
-      return toSceneMaterialRef(sceneMaterial.id)
-    }
-  }
-  return undefined
-}
-
-// Turn a legacy surface spec (`{ material, materialPreset }`) into a
-// `MaterialRef`: a preset that's already a `library:`/`scene:` ref is used
-// as-is; an inline material mints (or reuses) a scene material. Returns
-// undefined when the spec carries no material. Shared by every legacy→slots
-// migration below.
-function legacySpecToMaterialRef(
-  spec: { material?: unknown; materialPreset?: unknown },
-  mintedMaterials: Record<SceneMaterialId, SceneMaterial>,
-): string | undefined {
-  if (typeof spec.materialPreset === 'string' && parseMaterialRef(spec.materialPreset)) {
-    return spec.materialPreset
-  }
-  if (spec.material !== undefined) {
-    const existing = findMintedSceneMaterialRef(spec.material, mintedMaterials)
-    if (existing) return existing
-    const id = generateSceneMaterialId()
-    mintedMaterials[id] = {
-      id,
-      name: `Material ${Object.keys(mintedMaterials).length + 1}`,
-      material: spec.material as SceneMaterial['material'],
-    }
-    return toSceneMaterialRef(id)
-  }
-  return undefined
-}
-
-// Move the retired inline `material*` / `interiorMaterial*` / `exteriorMaterial*`
-// fields onto the unified `node.slots` model (interior / exterior → a
-// `library:`/`scene:` ref), minting scene materials for inline customs into
-// `mintedMaterials` (merged into the scene material map by the caller). Already
-// slot-modelled walls and walls with no legacy material are left untouched.
-function migrateWallSurfaceMaterials(
-  node: Record<string, any>,
-  mintedMaterials: Record<SceneMaterialId, SceneMaterial>,
-) {
-  if (node.slots && (node.slots.interior !== undefined || node.slots.exterior !== undefined)) {
-    return node
-  }
-
-  const slots: Record<string, string> = { ...(node.slots ?? {}) }
-  for (const side of ['interior', 'exterior'] as WallSurfaceSide[]) {
-    const spec = getEffectiveWallSurfaceMaterial(
-      node as Parameters<typeof getEffectiveWallSurfaceMaterial>[0],
-      side,
-    )
-    const ref = legacySpecToMaterialRef(spec, mintedMaterials)
-    if (ref) slots[side] = ref
-  }
-
-  if (Object.keys(slots).length === 0) {
-    return node
-  }
-
-  return {
-    ...node,
-    slots,
-    material: undefined,
-    materialPreset: undefined,
-    interiorMaterial: undefined,
-    interiorMaterialPreset: undefined,
-    exteriorMaterial: undefined,
-    exteriorMaterialPreset: undefined,
-  }
-}
-
-// Move a kind's single legacy `material` / `materialPreset` onto its declared
-// slots. A pre-slot-model node painted one material rendered that material on
-// every part (each slot resolves `node.slots[slot]` → legacy → default), so the
-// migration writes the same ref to every slot id the kind can expose — unused
-// conditional slots are harmless. Already slot-modelled or unpainted nodes are
-// left untouched. Mirrors `migrateWallSurfaceMaterials` for single-surface and
-// whole-object kinds (slab, ceiling, fence, column, shelf).
-function migrateSingleMaterialSlots(
-  node: Record<string, any>,
-  slotIds: readonly string[],
-  mintedMaterials: Record<SceneMaterialId, SceneMaterial>,
-) {
-  if (node.slots && Object.keys(node.slots).length > 0) {
-    return node
-  }
-
-  const ref = legacySpecToMaterialRef(
-    { material: node.material, materialPreset: node.materialPreset },
-    mintedMaterials,
-  )
-  if (!ref) {
-    return node
-  }
-
-  const slots: Record<string, string> = {}
-  for (const slotId of slotIds) slots[slotId] = ref
-
-  return { ...node, slots, material: undefined, materialPreset: undefined }
 }
 
 function migrateRoleMaterialSlots(
@@ -650,22 +594,6 @@ function migrateConstructionDimension(node: Record<string, any>) {
   }
 }
 
-function migrateWallAssembly(node: Record<string, any>) {
-  if (!Object.hasOwn(node, 'assemblyLayers')) return node
-
-  const assemblyThickness = Array.isArray(node.assemblyLayers)
-    ? node.assemblyLayers.reduce((total: number, layer: unknown) => {
-        if (!(layer && typeof layer === 'object')) return total
-        const thickness = (layer as { thickness?: unknown }).thickness
-        return typeof thickness === 'number' && Number.isFinite(thickness) && thickness > 0
-          ? total + thickness
-          : total
-      }, 0)
-    : 0
-  const { assemblyLayers: _assemblyLayers, ...wall } = node
-  return assemblyThickness > 0 ? { ...wall, thickness: assemblyThickness } : wall
-}
-
 function migrateBlockRename(
   id: string,
   node: Record<string, any>,
@@ -716,7 +644,7 @@ function migrateNodes(nodes: Record<string, any>): {
 } {
   // Repair pre-existing corruption (null children, zero-length walls) before
   // any per-type migration runs, so already-saved scenes load cleanly.
-  const { nodes: healed } = healSceneNodes(nodes)
+  const { nodes: healed } = healSceneNodes(normalizeLegacyStructure(nodes))
   const { nodes: patchedNodes } = removeRetiredDrawingSheetNodes(healed as Record<string, any>)
 
   // Scene materials minted while moving legacy wall fields onto `node.slots`;
@@ -796,10 +724,16 @@ function migrateNodes(nodes: Record<string, any>): {
     // The migration result is cast, not zod-parsed, so the schema default never
     // applies on its own — this branch is the only place it lands.
     if (node.type === 'roof-segment') {
+      if (node.glazing !== undefined) {
+        const glazing = RoofGlazing.safeParse(node.glazing)
+        if (glazing.success) patchedNodes[id] = { ...patchedNodes[id], glazing: glazing.data }
+      }
       const currentPitch = (node as { pitch?: unknown }).pitch
       const hasValidPitch = typeof currentPitch === 'number' && currentPitch > 0
       if (!hasValidPitch) {
-        const { roofHeight, ...rest } = node as RoofSegmentNode & { roofHeight?: unknown }
+        const { roofHeight, ...rest } = patchedNodes[id] as RoofSegmentNode & {
+          roofHeight?: unknown
+        }
         const width = typeof node.width === 'number' ? node.width : 8
         const depth = typeof node.depth === 'number' ? node.depth : 6
         const roofType = (typeof node.roofType === 'string' ? node.roofType : 'gable') as RoofType
@@ -824,6 +758,10 @@ function migrateNodes(nodes: Record<string, any>): {
       if (normalized) {
         patchedNodes[id] = normalized
       }
+    }
+
+    if (node.type === 'slab' || node.type === 'ceiling') {
+      patchedNodes[id] = normalizeSurfaceHoleFields(patchedNodes[id] ?? node) as AnyNode
     }
 
     // Dormers originally rendered one inline parametric window. Promote that
@@ -880,10 +818,7 @@ function migrateNodes(nodes: Record<string, any>): {
     }
 
     if (node.type === 'wall') {
-      patchedNodes[id] = migrateWallSurfaceMaterials(
-        migrateWallAssembly(patchedNodes[id]),
-        mintedMaterials,
-      )
+      patchedNodes[id] = migrateWallSurfaceMaterials(patchedNodes[id], mintedMaterials)
     }
 
     // Cabinet v2→v3: node-level `doorStyle` was dead (geometry reads only the
@@ -1052,30 +987,6 @@ function migrateNodes(nodes: Record<string, any>): {
       patchedNodes[id] = migrateRoofSurfaceMaterials(patchedNodes[id])
     }
 
-    // Legacy: site.children used to hold nested BuildingNode / ItemNode
-    // objects (see the SiteNode schema before the children-as-ids fix).
-    // Flatten any leftover nested children into ids, and absorb the
-    // embedded nodes into the flat map so the rest of the loader can
-    // treat the site like every other parent.
-    if (node.type === 'site' && Array.isArray(node.children)) {
-      let needsFlatten = false
-      const flattened: string[] = []
-      for (const child of node.children) {
-        if (typeof child === 'string') {
-          flattened.push(child)
-        } else if (child && typeof child === 'object' && typeof child.id === 'string') {
-          needsFlatten = true
-          flattened.push(child.id)
-          if (!patchedNodes[child.id]) {
-            patchedNodes[child.id] = { ...child, parentId: id }
-          }
-        }
-      }
-      if (needsFlatten) {
-        patchedNodes[id] = { ...node, children: flattened }
-      }
-    }
-
     // Level children normalization.
     // Pre-0.9.1 JSONs may carry child IDs that no longer exist in the node
     // map (e.g. elevator IDs that lived under a level before the elevator
@@ -1110,6 +1021,14 @@ function migrateNodes(nodes: Record<string, any>): {
         children: validChildren,
       }
     }
+    // These kinds are not all schema-parsed on load, so defaults must also
+    // reach saved hosts that predate their children field.
+    if (
+      ['shelf', 'cabinet', 'cabinet-module', 'block', 'item', 'column'].includes(node.type) &&
+      patchedNodes[id].children === undefined
+    ) {
+      patchedNodes[id] = { ...patchedNodes[id], children: [] }
+    }
   }
 
   // Pass 2: elevator migration.
@@ -1129,8 +1048,33 @@ function migrateNodes(nodes: Record<string, any>): {
     }
   }
 
-  const vertical = migrateVerticalSceneNodes(patchedNodes)
-  return { nodes: vertical.nodes as Record<string, AnyNode>, mintedMaterials }
+  const walls = migrateLegacyWallAssemblies(patchedNodes)
+  const vertical = migrateVerticalSceneNodes(walls.nodes)
+  const rooms = migrateRoomZones(vertical.nodes)
+  const ceilings = migrateCeilingRoomLinks(rooms.nodes)
+  const legacyOpeningsPrepared =
+    Object.values(ceilings.nodes).some((value) => {
+      const node = value as AnyNode
+      return node.type === 'slab' && node.autoFromWalls && !node.plateRole
+    }) &&
+    Object.values(ceilings.nodes).some((value) => {
+      const node = value as AnyNode
+      return node.type === 'stair' || node.type === 'elevator'
+    })
+  const plates = migrateFloorPlates(materializeLegacyAutoOpenings(ceilings.nodes, true))
+  const slots = migrateSlabSlots(plates.nodes)
+  const openings = ensureSceneOpenings(slots.nodes).nodes
+  // M1 before M2: bands move onto geometric faces, then become paint regions.
+  const wallFaces = migrateWallFaceKeys(openings)
+  const structure = reconcileStructureOnLoad(
+    migrateWallFaceBands(wallFaces.nodes).nodes,
+    vertical.nodes,
+    { legacyOpeningsPrepared },
+  )
+  return {
+    nodes: materializeNodeDefaults(structure.nodes).nodes as Record<string, AnyNode>,
+    mintedMaterials,
+  }
 }
 
 function getNodeChildIds(node: AnyNode): AnyNodeId[] {
@@ -1194,6 +1138,30 @@ function collectReachableNodeIds(
   return reachable
 }
 
+/** Collection membership lives in `collection.nodeIds`; items alone mirror it in `collectionIds`. */
+function mirrorItemMembership(
+  nodes: Record<AnyNodeId, AnyNode>,
+  collectionId: CollectionId,
+  nodeIds: readonly AnyNodeId[],
+  member: boolean,
+): Record<AnyNodeId, AnyNode> {
+  let next = nodes
+  for (const nodeId of nodeIds) {
+    const node = next[nodeId]
+    if (node?.type !== 'item') continue
+    const current = node.collectionIds ?? []
+    if (current.includes(collectionId) === member) continue
+    if (next === nodes) next = { ...nodes }
+    next[nodeId] = {
+      ...node,
+      collectionIds: member
+        ? [...current, collectionId]
+        : current.filter((id) => id !== collectionId),
+    }
+  }
+  return next
+}
+
 export type SceneState = {
   // 1. The Data: A flat dictionary of all nodes
   nodes: Record<AnyNodeId, AnyNode>
@@ -1238,26 +1206,38 @@ export type SceneState = {
   markDirty: (id: AnyNodeId) => void
   clearDirty: (id: AnyNodeId) => void
 
-  createNode: (node: AnyNode, parentId?: AnyNodeId) => void
-  createNodes: (ops: { node: AnyNode; parentId?: AnyNodeId }[]) => void
-  applyNodeChanges: (changes: {
-    create?: { node: AnyNode; parentId?: AnyNodeId }[]
-    update?: { id: AnyNodeId; data: Partial<AnyNode> }[]
-    delete?: AnyNodeId[]
-  }) => void
+  createNode: (node: AnyNode, parentId?: AnyNodeId, options?: DerivedWriteOptions) => void
+  createNodes: (
+    ops: { node: AnyNode; parentId?: AnyNodeId; collectionIds?: CollectionId[] }[],
+    options?: DerivedWriteOptions,
+  ) => void
+  applyNodeChanges: (
+    changes: {
+      create?: { node: AnyNode; parentId?: AnyNodeId; collectionIds?: CollectionId[] }[]
+      update?: { id: AnyNodeId; data: Partial<AnyNode> }[]
+      delete?: AnyNodeId[]
+    },
+    options?: DerivedWriteOptions,
+  ) => void
 
-  updateNode: (id: AnyNodeId, data: Partial<AnyNode>) => void
-  updateNodes: (updates: { id: AnyNodeId; data: Partial<AnyNode> }[]) => void
+  updateNode: (id: AnyNodeId, data: Partial<AnyNode>, options?: DerivedWriteOptions) => void
+  updateNodes: (
+    updates: { id: AnyNodeId; data: Partial<AnyNode> }[],
+    options?: DerivedWriteOptions,
+  ) => void
 
-  deleteNode: (id: AnyNodeId) => void
-  deleteNodes: (ids: AnyNodeId[]) => void
+  deleteNode: (id: AnyNodeId, options?: DerivedWriteOptions) => void
+  deleteNodes: (ids: AnyNodeId[], options?: DerivedWriteOptions) => void
+
+  /** Convert a reconciler-owned slab or ceiling into an authored one. */
+  detachDerivedNode: (id: AnyNodeId, data?: Partial<AnyNode>) => void
 
   // Collection actions
   createCollection: (name: string, nodeIds?: AnyNodeId[]) => CollectionId
   deleteCollection: (id: CollectionId) => void
   updateCollection: (id: CollectionId, data: Partial<Omit<Collection, 'id'>>) => void
-  addToCollection: (id: CollectionId, nodeId: AnyNodeId) => void
-  removeFromCollection: (id: CollectionId, nodeId: AnyNodeId) => void
+  addToCollection: (id: CollectionId, nodeIds: AnyNodeId[]) => void
+  removeFromCollection: (id: CollectionId, nodeIds: AnyNodeId[]) => void
 
   // Scene material actions
   addSceneMaterial: (material: SceneMaterial) => void
@@ -1268,38 +1248,22 @@ export type SceneState = {
 // type PartializedStoreState = Pick<SceneState, 'rootNodeIds' | 'nodes'>;
 
 type UseSceneStore = UseBoundStore<StoreApi<SceneState>> & {
-  temporal: StoreApi<
-    TemporalState<
-      Pick<SceneState, 'nodes' | 'rootNodeIds' | 'collections' | 'materials' | 'installedPlugins'>
-    >
-  >
+  temporal: StoreApi<TemporalState<SceneSnapshot>>
 }
 
-function sceneHistorySnapshotFromState(
-  state: Pick<
-    SceneState,
-    'nodes' | 'rootNodeIds' | 'collections' | 'materials' | 'installedPlugins'
-  >,
-): SceneSnapshot {
-  const { nodes, rootNodeIds, collections, materials, installedPlugins } = state
-  // Fresh placement nodes are renderable drafts, not document history. Excluding their
-  // entire subtree here protects both local undo and external commit subscribers.
-  const transientNodeIds = new Set<AnyNodeId>()
-  for (const node of Object.values(nodes)) {
-    const metadata = node.metadata
-    if (
-      metadata &&
-      typeof metadata === 'object' &&
-      !Array.isArray(metadata) &&
-      (metadata as Record<string, unknown>).isNew === true
-    ) {
-      transientNodeIds.add(node.id)
-    }
-  }
+type SceneDocumentParts = Pick<SceneState, 'nodes' | 'rootNodeIds' | 'collections'>
 
-  if (transientNodeIds.size === 0) {
-    return { nodes, rootNodeIds, collections, materials, installedPlugins }
-  }
+/**
+ * `parts` without the subtrees of `draftIds`, and without the references to them (children,
+ * procedural attachments, collections, roots). Returns `parts` itself when there is nothing to drop.
+ */
+function withoutDraftSubtrees(
+  parts: SceneDocumentParts,
+  draftIds: Iterable<AnyNodeId>,
+): SceneDocumentParts {
+  const { nodes, rootNodeIds, collections } = parts
+  const transientNodeIds = new Set<AnyNodeId>([...draftIds].filter((id) => Boolean(nodes[id])))
+  if (transientNodeIds.size === 0) return parts
 
   const childIdsByParentId = new Map<AnyNodeId, Set<AnyNodeId>>()
   const addChild = (parentId: AnyNodeId, childId: AnyNodeId) => {
@@ -1323,39 +1287,119 @@ function sceneHistorySnapshotFromState(
     }
   }
 
-  const historyNodes = {} as Record<AnyNodeId, AnyNode>
-  for (const [id, node] of Object.entries(nodes) as [AnyNodeId, AnyNode][]) {
+  const documentNodes = {} as Record<AnyNodeId, AnyNode>
+  for (const [id, sourceNode] of Object.entries(nodes) as [AnyNodeId, AnyNode][]) {
     if (transientNodeIds.has(id)) continue
+    let node = sourceNode
+    if (node.type === 'procedural-item') {
+      let attachments: typeof node.attachments | undefined
+      for (const childId of transientNodeIds) {
+        if (!Object.hasOwn(node.attachments, childId)) continue
+        attachments ??= { ...node.attachments }
+        delete attachments[childId]
+      }
+      if (attachments) node = { ...node, attachments }
+    }
     if (!('children' in node && Array.isArray(node.children))) {
-      historyNodes[id] = node
+      documentNodes[id] = node
       continue
     }
     const children = (node.children as AnyNodeId[]).filter(
-      (childId) => !transientNodeIds.has(childId),
+      (childId) => !transientNodeIds.has(childId as AnyNodeId),
     )
-    historyNodes[id] =
+    documentNodes[id] =
       children.length === node.children.length ? node : ({ ...node, children } as AnyNode)
   }
 
-  const historyCollections = {} as Record<CollectionId, Collection>
+  const documentCollections = {} as Record<CollectionId, Collection>
   for (const [id, collection] of Object.entries(collections) as [CollectionId, Collection][]) {
     const nodeIds = collection.nodeIds.filter((nodeId) => !transientNodeIds.has(nodeId))
     if (collection.controlNodeId && transientNodeIds.has(collection.controlNodeId)) {
       const { controlNodeId: _controlNodeId, ...rest } = collection
-      historyCollections[id] = { ...rest, nodeIds }
+      documentCollections[id] = { ...rest, nodeIds }
     } else {
-      historyCollections[id] =
+      documentCollections[id] =
         nodeIds.length === collection.nodeIds.length ? collection : { ...collection, nodeIds }
     }
   }
 
   return {
-    nodes: historyNodes,
+    nodes: documentNodes,
     rootNodeIds: rootNodeIds.filter((id) => !transientNodeIds.has(id)),
-    collections: historyCollections,
+    collections: documentCollections,
+  }
+}
+
+function isFreshPlacementNode(node: AnyNode): boolean {
+  const metadata = node.metadata
+  return (
+    !!metadata &&
+    typeof metadata === 'object' &&
+    !Array.isArray(metadata) &&
+    (metadata as Record<string, unknown>).isNew === true
+  )
+}
+
+/**
+ * Fresh placement nodes are renderable drafts, not document history. Excluding their entire
+ * subtree here protects both local undo and external commit subscribers. Carried drafts
+ * (history-drafts.ts) are kept out the same way.
+ */
+function sceneHistorySnapshotFromState(
+  state: Pick<
+    SceneState,
+    | 'nodes'
+    | 'rootNodeIds'
+    | 'collections'
+    | 'materials'
+    | 'installedPlugins'
+    | 'hasExplicitPluginInstallState'
+  >,
+): SceneSnapshot {
+  const { nodes, materials, installedPlugins, hasExplicitPluginInstallState } = state
+  const kept = withoutDraftSubtrees(state, [
+    ...createdSceneHistoryDraftIds(),
+    ...Object.values(nodes)
+      .filter(isFreshPlacementNode)
+      .map((node) => node.id),
+  ])
+  return {
+    nodes: withAdoptedDraftsAsOriginal(nodes, kept.nodes),
+    rootNodeIds: kept.rootNodeIds,
+    collections: kept.collections,
     materials,
     installedPlugins,
+    hasExplicitPluginInstallState,
   }
+}
+
+/**
+ * The current scene as every save writes it: without the drafts an interaction is carrying —
+ * created carry drafts (history-drafts.ts) and the `drafts` the caller owns — and with adopted
+ * carry drafts as they were before the carry. Never inferred from metadata: committed nodes can
+ * still carry `metadata.isNew`, so only explicitly owned drafts are left out.
+ */
+export function getSceneDocument(drafts: Iterable<AnyNodeId> = []): SceneSnapshot {
+  return sceneDocumentOf(useScene, drafts)
+}
+
+/** `getSceneDocument` for any scene store: its document as a save writes it. */
+export function sceneDocumentOf(
+  store: SceneStore,
+  drafts: Iterable<AnyNodeId> = [],
+): SceneSnapshot {
+  const state = store.getState()
+  return sceneEnvironmentOf(store).run(() => {
+    const kept = withoutDraftSubtrees(state, [...createdSceneHistoryDraftIds(), ...drafts])
+    return {
+      nodes: withAdoptedDraftsAsOriginal(state.nodes, kept.nodes),
+      rootNodeIds: kept.rootNodeIds,
+      collections: kept.collections,
+      materials: state.materials,
+      installedPlugins: state.installedPlugins,
+      hasExplicitPluginInstallState: state.hasExplicitPluginInstallState,
+    }
+  })
 }
 
 /**
@@ -1401,8 +1445,80 @@ class GuardedDirtySet extends Set<AnyNodeId> {
 
 type TemporalSceneCreator = StateCreator<SceneState, [], [['temporal', UseSceneStore['temporal']]]>
 
-function createSceneStore(config: TemporalSceneCreator): UseSceneStore {
-  const hydratedConfig: TemporalSceneCreator = (set, get, store) => {
+/** A scene store: the document state and its own undo history. */
+export type SceneStore = UseSceneStore
+
+function runTemporalJump(
+  store: UseSceneStore,
+  target: Partial<SceneSnapshot> | undefined,
+  restore: () => void,
+): void {
+  const draftsBefore = store.getState().nodes
+  const restoreDrafts = () => {
+    const current = store.getState().nodes
+    const nodes = retainSceneAnnotations(
+      draftsBefore,
+      withDraftsRestored(draftsBefore, current) ?? current,
+    )
+    if (nodes === current) return
+    // The carry's own state, not a new step: a tracked write here would clear redo.
+    const pause = beginSceneHistoryPauseSession(store)
+    try {
+      store.setState({ nodes })
+    } finally {
+      pause.end()
+    }
+  }
+  runTemporalJumpOnly(store, target, () => runAsSceneHistoryRestore(restore))
+  restoreDrafts()
+}
+
+function runTemporalJumpOnly(
+  store: UseSceneStore,
+  target: Partial<SceneSnapshot> | undefined,
+  jump: () => void,
+): void {
+  if (!target?.nodes) {
+    jump()
+    return
+  }
+  const before = store.getState().nodes
+  const changed = new Set<AnyNodeId>()
+  for (const id of new Set([...Object.keys(before), ...Object.keys(target.nodes)])) {
+    const nodeId = id as AnyNodeId
+    const previous = before[nodeId]
+    const next = target.nodes[nodeId]
+    if (previous === next) continue
+    if (
+      [previous, next].some((node) => node && ['site', 'building', 'level'].includes(node.type))
+    ) {
+      jump()
+      return
+    }
+    changed.add(nodeId)
+  }
+  runWithSceneCommitNodeIds(changed, jump)
+}
+
+/** Every function field of `state` runs inside `environment` (scene-environment.ts). */
+function inEnvironment<T extends object>(environment: SceneEnvironment, state: T): T {
+  const wrapped = { ...state } as Record<string, unknown>
+  for (const [key, value] of Object.entries(state)) {
+    if (typeof value !== 'function') continue
+    const action = value as (...args: unknown[]) => unknown
+    wrapped[key] = (...args: unknown[]) => environment.run(() => action(...args))
+  }
+  return wrapped as T
+}
+
+/**
+ * A scene store bound to `environment`: its writes, actions, history and commits run in that
+ * environment, so a second store (a detached scene, `@pascal-app/core/runtime`) never pauses,
+ * commits to or drafts in the editor's. Once the environment is disposed, every read and write
+ * of the store throws.
+ */
+export function createSceneStore(environment: SceneEnvironment): SceneStore {
+  const store = create<SceneState>()((set, get, api) => {
     const setWithHydration: typeof set = (partial, replace) => {
       const state = get()
       let next = typeof partial === 'function' ? partial(state) : partial
@@ -1416,38 +1532,28 @@ function createSceneStore(config: TemporalSceneCreator): UseSceneStore {
       if (replace) set(next as SceneState, true)
       else set(next)
     }
-    store.setState = setWithHydration
-    return config(setWithHydration, get, store)
+    api.setState = setWithHydration
+    const temporalApi = api as typeof api & { temporal: UseSceneStore['temporal'] }
+    return inEnvironment(
+      environment,
+      sceneStoreConfig(() => temporalApi as UseSceneStore)(setWithHydration, get, temporalApi),
+    )
+  }) as UseSceneStore
+  bindSceneEnvironment(store, environment)
+  const { getState, setState } = store
+  store.getState = () => {
+    environment.assertActive()
+    return getState()
   }
-  return create<SceneState>()(hydratedConfig)
+  store.setState = ((partial, replace) =>
+    environment.run(() => setState(partial as SceneState, replace as true))) as typeof setState
+  const temporalState = store.temporal.getState()
+  store.temporal.setState(inEnvironment(environment, temporalState))
+  return store
 }
 
-function runTemporalJump(target: Partial<SceneSnapshot> | undefined, jump: () => void): void {
-  if (!target?.nodes) {
-    jump()
-    return
-  }
-  const before = useScene.getState().nodes
-  const changed = new Set<AnyNodeId>()
-  for (const id of new Set([...Object.keys(before), ...Object.keys(target.nodes)])) {
-    const nodeId = id as AnyNodeId
-    const previous = before[nodeId]
-    const next = target.nodes[nodeId]
-    if (previous === next) continue
-    // Structural hierarchy changes keep the full-level reconciliation fallback.
-    if (
-      [previous, next].some((node) => node && ['site', 'building', 'level'].includes(node.type))
-    ) {
-      jump()
-      return
-    }
-    changed.add(nodeId)
-  }
-  runWithSceneCommitNodeIds(changed, jump)
-}
-
-const useScene: UseSceneStore = createSceneStore(
-  temporal(
+function sceneStoreConfig(storeOf: () => UseSceneStore): TemporalSceneCreator {
+  return temporal(
     (set, get) => ({
       // 1. Flat dictionary of all nodes
       nodes: {},
@@ -1476,6 +1582,7 @@ const useScene: UseSceneStore = createSceneStore(
       setReadOnly: (readOnly: boolean) => set({ readOnly }),
 
       unloadScene: () => {
+        runSceneWriteGuards()
         invalidatePendingHydration()
         set({
           hydrationToken: null,
@@ -1499,11 +1606,12 @@ const useScene: UseSceneStore = createSceneStore(
       },
 
       setScene: (nodes, rootNodeIds, extra) => {
+        runSceneWriteGuards()
         // Apply backward compatibility migrations
         const { nodes: patchedNodes, mintedMaterials } = migrateNodes(nodes)
-        // Scene materials minted by the wall legacy→slots migration join the
-        // loaded palette (existing refs win on id collision — there are none,
-        // ids are freshly generated).
+        // Scene materials minted by the legacy→slots migrations join the
+        // loaded palette. Their ids are content-derived, so an existing entry
+        // with the same id (the hosted authority minted it) is the same material.
         const materials = { ...mintedMaterials, ...(extra?.materials ?? {}) }
 
         // Remove orphans: nodes whose parentId points to a non-existent node
@@ -1549,33 +1657,21 @@ const useScene: UseSceneStore = createSceneStore(
               installedPlugins: Array.from(new Set(extra?.installedPlugins ?? [])),
               hasExplicitPluginInstallState: extra?.hasExplicitPluginInstallState ?? false,
             })
-            const applyNormalization = (updates: { id: AnyNodeId; data: Partial<AnyNode> }[]) => {
-              if (updates.length > 0) get().updateNodes(updates)
-            }
-            const hydratedNodes = Object.values(get().nodes)
-            if (!get().readOnly) {
-              pauseSceneHistory(useScene)
-              try {
-                if (hydratedNodes.some((node) => node.type === 'elevator')) {
-                  applyNormalization(syncAutoElevatorOpenings(get().nodes))
+            if (
+              !get().readOnly &&
+              Object.values(get().nodes).some((node) => node.type === 'stair')
+            ) {
+              queueSceneNormalization(() => {
+                if (get().hydrationId !== hydrationId) return
+                const { updates } = ensureSceneOpenings(get().nodes)
+                if (!updates.length) return
+                pauseSceneHistory(storeOf())
+                try {
+                  get().updateNodes(updates)
+                } finally {
+                  resumeSceneHistory(storeOf())
                 }
-              } finally {
-                resumeSceneHistory(useScene)
-              }
-              if (hydratedNodes.some((node) => node.type === 'stair')) {
-                // Spatial-grid subscribers must settle first. Owning this pass
-                // here also covers opening systems that mount after the load.
-                queueSceneNormalization(() => {
-                  if (get().hydrationId !== hydrationId) return
-                  pauseSceneHistory(useScene)
-                  try {
-                    applyNormalization(syncStairRises(get().nodes))
-                    applyNormalization(syncAutoStairOpenings(get().nodes))
-                  } finally {
-                    resumeSceneHistory(useScene)
-                  }
-                })
-              }
+              })
             }
             // Mark all nodes as dirty to trigger re-validation
             Object.values(get().nodes).forEach((node) => {
@@ -1632,7 +1728,7 @@ const useScene: UseSceneStore = createSceneStore(
           parentId: building.id,
           level: 0,
           children: [],
-          height: 2.5,
+          height: DEFAULT_LEVEL_HEIGHT,
         })
 
         // Define all nodes flat
@@ -1659,38 +1755,33 @@ const useScene: UseSceneStore = createSceneStore(
         get().dirtyNodes.delete(id)
       },
 
-      createNodes: (ops) => nodeActions.createNodesAction(set, get, ops),
-      createNode: (node, parentId) => nodeActions.createNodesAction(set, get, [{ node, parentId }]),
-      applyNodeChanges: (changes) => nodeActions.applyNodeChangesAction(set, get, changes),
+      createNodes: (ops, options) => nodeActions.createNodesAction(set, get, ops, options),
+      createNode: (node, parentId, options) =>
+        nodeActions.createNodesAction(set, get, [{ node, parentId }], options),
+      applyNodeChanges: (changes, options) =>
+        nodeActions.applyNodeChangesAction(set, get, changes, options),
 
-      updateNodes: (updates) => nodeActions.updateNodesAction(set, get, updates),
-      updateNode: (id, data) => nodeActions.updateNodesAction(set, get, [{ id, data }]),
+      updateNodes: (updates, options) => nodeActions.updateNodesAction(set, get, updates, options),
+      updateNode: (id, data, options) =>
+        nodeActions.updateNodesAction(set, get, [{ id, data }], options),
+
+      detachDerivedNode: (id, data) => nodeActions.detachDerivedNodeAction(set, get, id, data),
 
       // --- DELETE ---
 
-      deleteNodes: (ids) => nodeActions.deleteNodesAction(set, get, ids),
+      deleteNodes: (ids, options) => nodeActions.deleteNodesAction(set, get, ids, options),
 
-      deleteNode: (id) => nodeActions.deleteNodesAction(set, get, [id]),
+      deleteNode: (id, options) => nodeActions.deleteNodesAction(set, get, [id], options),
 
       // --- COLLECTIONS ---
 
       createCollection: (name, nodeIds = []) => {
         if (get().readOnly) return '' as CollectionId
         const id = generateCollectionId()
-        const collection: Collection = { id, name, nodeIds }
-        set((state) => {
-          const nextCollections = { ...state.collections, [id]: collection }
-          // Denormalize: stamp collectionId onto each node
-          const nextNodes = { ...state.nodes }
-          for (const nodeId of nodeIds) {
-            const node = nextNodes[nodeId]
-            if (!node) continue
-            const existing =
-              ('collectionIds' in node ? (node.collectionIds as CollectionId[]) : undefined) ?? []
-            nextNodes[nodeId] = { ...node, collectionIds: [...existing, id] } as AnyNode
-          }
-          return { collections: nextCollections, nodes: nextNodes }
-        })
+        set((state) => ({
+          collections: { ...state.collections, [id]: { id, name, nodeIds: [...nodeIds] } },
+          nodes: mirrorItemMembership(state.nodes, id, nodeIds, true),
+        }))
         return id
       },
 
@@ -1700,17 +1791,10 @@ const useScene: UseSceneStore = createSceneStore(
           const col = state.collections[id]
           const nextCollections = { ...state.collections }
           delete nextCollections[id]
-          // Remove collectionId from all member nodes
-          const nextNodes = { ...state.nodes }
-          for (const nodeId of col?.nodeIds ?? []) {
-            const node = nextNodes[nodeId]
-            if (!(node && 'collectionIds' in node)) continue
-            nextNodes[nodeId] = {
-              ...node,
-              collectionIds: (node.collectionIds as CollectionId[]).filter((cid) => cid !== id),
-            } as AnyNode
+          return {
+            collections: nextCollections,
+            nodes: mirrorItemMembership(state.nodes, id, col?.nodeIds ?? [], false),
           }
-          return { collections: nextCollections, nodes: nextNodes }
         })
       },
 
@@ -1723,46 +1807,35 @@ const useScene: UseSceneStore = createSceneStore(
         })
       },
 
-      addToCollection: (id, nodeId) => {
+      addToCollection: (id, nodeIds) => {
         if (get().readOnly) return
         set((state) => {
           const col = state.collections[id]
-          if (!col || col.nodeIds.includes(nodeId)) return state
-          const nextCollections = {
-            ...state.collections,
-            [id]: { ...col, nodeIds: [...col.nodeIds, nodeId] },
+          const added = nodeIds.filter((nodeId) => !col?.nodeIds.includes(nodeId))
+          if (!col || added.length === 0) return state
+          return {
+            collections: {
+              ...state.collections,
+              [id]: { ...col, nodeIds: [...col.nodeIds, ...added] },
+            },
+            nodes: mirrorItemMembership(state.nodes, id, added, true),
           }
-          const node = state.nodes[nodeId]
-          if (!node) return { collections: nextCollections }
-          const existing =
-            ('collectionIds' in node ? (node.collectionIds as CollectionId[]) : undefined) ?? []
-          const nextNodes = {
-            ...state.nodes,
-            [nodeId]: { ...node, collectionIds: [...existing, id] } as AnyNode,
-          }
-          return { collections: nextCollections, nodes: nextNodes }
         })
       },
 
-      removeFromCollection: (id, nodeId) => {
+      removeFromCollection: (id, nodeIds) => {
         if (get().readOnly) return
         set((state) => {
           const col = state.collections[id]
-          if (!col) return state
-          const nextCollections = {
-            ...state.collections,
-            [id]: { ...col, nodeIds: col.nodeIds.filter((n) => n !== nodeId) },
+          const removed = nodeIds.filter((nodeId) => col?.nodeIds.includes(nodeId))
+          if (!col || removed.length === 0) return state
+          return {
+            collections: {
+              ...state.collections,
+              [id]: { ...col, nodeIds: col.nodeIds.filter((nodeId) => !removed.includes(nodeId)) },
+            },
+            nodes: mirrorItemMembership(state.nodes, id, removed, false),
           }
-          const node = state.nodes[nodeId]
-          if (!(node && 'collectionIds' in node)) return { collections: nextCollections }
-          const nextNodes = {
-            ...state.nodes,
-            [nodeId]: {
-              ...node,
-              collectionIds: (node.collectionIds as CollectionId[]).filter((cid) => cid !== id),
-            } as AnyNode,
-          }
-          return { collections: nextCollections, nodes: nextNodes }
         })
       },
 
@@ -1795,7 +1868,11 @@ const useScene: UseSceneStore = createSceneStore(
     }),
     {
       partialize: (state: SceneState) => sceneHistorySnapshotFromState(state),
-      equality: (pastState, currentState) => areSceneSnapshotsEqual(pastState, currentState),
+      equality: (pastState, currentState) =>
+        areSceneSnapshotsEqual(
+          { ...pastState, nodes: withoutSceneAnnotations(pastState.nodes) },
+          { ...currentState, nodes: withoutSceneAnnotations(currentState.nodes) },
+        ),
       onSave: (pastState, currentState) => {
         notifySceneCommit({
           origin: 'local',
@@ -1807,20 +1884,30 @@ const useScene: UseSceneStore = createSceneStore(
         const state = config(set, get, store)
         return {
           ...state,
-          undo: (steps = 1) =>
-            runTemporalJump(get().pastStates.slice().splice(-steps, steps)[0], () =>
-              state.undo(steps),
-            ),
-          redo: (steps = 1) =>
-            runTemporalJump(get().futureStates.slice().splice(-steps, steps)[0], () =>
-              state.redo(steps),
-            ),
+          undo: (steps = 1) => {
+            runSceneWriteGuards(storeOf())
+            return runTemporalJump(
+              storeOf(),
+              get().pastStates.slice().splice(-steps, steps)[0],
+              () => state.undo(steps),
+            )
+          },
+          redo: (steps = 1) => {
+            runSceneWriteGuards(storeOf())
+            return runTemporalJump(
+              storeOf(),
+              get().futureStates.slice().splice(-steps, steps)[0],
+              () => state.redo(steps),
+            )
+          },
         }
       },
       limit: 50, // Limit to last 50 actions
     },
-  ),
-)
+  )
+}
+
+const useScene: UseSceneStore = createSceneStore(liveSceneEnvironment)
 
 // Live state belongs to the hydration owner so even a lazy consumer cannot
 // miss an override that was set and cleared before its first frame.
@@ -1835,6 +1922,21 @@ const invalidateForLiveState = () => {
 useLiveNodeOverrides.subscribe(invalidateForLiveState)
 useLiveTransforms.subscribe(invalidateForLiveState)
 useScene.subscribe(invalidateForLiveState)
+
+// Systems rebuild a node's geometry only when it is dirty, so a preview that
+// drops its override without marking the node left it drawn at the preview
+// (a cancelled wall move's floor still pushed out). Whoever clears an
+// override, or one of its fields, the node rebuilds from the scene.
+useLiveNodeOverrides.subscribe(function markClearedOverridesDirty(state, previous) {
+  if (state.overrides === previous.overrides) return
+  let scene: SceneState | null = null
+  for (const [id, before] of previous.overrides) {
+    const after = state.overrides.get(id)
+    if (after === before || (after && Object.keys(before).every((key) => key in after))) continue
+    scene ??= useScene.getState()
+    if (scene.nodes[id as AnyNodeId]) scene.markDirty(id as AnyNodeId)
+  }
+})
 
 export default useScene
 
@@ -1861,7 +1963,7 @@ export function acquireSceneReadOnlyLease(): () => void {
 
 export type SceneNodePatch = {
   id: AnyNodeId
-  data: Partial<AnyNode>
+  data: Partial<AnyNode> & { 'source.images'?: NonNullable<GeometryScriptSource['images']> }
   removeFields: string[]
 }
 
@@ -1880,9 +1982,22 @@ export type SceneNodeStructuralPatch = {
   position: number
 }
 
+export type ScenePluginInstallPatch = {
+  id: string
+  installed: boolean
+}
+
+export type SceneCollectionPatch = {
+  id: CollectionId
+  collection: Collection | null
+}
+
 export type SceneOperationPatch = ScenePatch & {
+  pluginInstallState?: { installedPlugins: string[]; explicit: boolean }
+  collectionChanges?: SceneCollectionPatch[]
   nodeCreates: SceneNodeStructuralPatch[]
   nodeDeletes: SceneNodeStructuralPatch[]
+  pluginChanges?: ScenePluginInstallPatch[]
 }
 
 function sceneOperationPatchLiveConflictIds(
@@ -1921,7 +2036,8 @@ function sceneOperationPatchHasLiveConflict(
 }
 
 function areScenePatchValuesEqual(left: unknown, right: unknown): boolean {
-  if (Object.is(left, right)) return true
+  // Compensation crosses JSON, which serializes both signed zeros as 0.
+  if (left === right) return true
   if (typeof left !== typeof right || left === null || right === null) return false
   if (Array.isArray(left) || Array.isArray(right)) {
     return (
@@ -1934,8 +2050,10 @@ function areScenePatchValuesEqual(left: unknown, right: unknown): boolean {
   if (typeof left !== 'object' || typeof right !== 'object') return false
   const leftRecord = left as Record<string, unknown>
   const rightRecord = right as Record<string, unknown>
-  const leftKeys = Object.keys(leftRecord)
-  if (leftKeys.length !== Object.keys(rightRecord).length) return false
+  // Recorded compensation nodes have crossed JSON, which omits undefined properties.
+  const leftKeys = Object.keys(leftRecord).filter((key) => leftRecord[key] !== undefined)
+  const rightKeys = Object.keys(rightRecord).filter((key) => rightRecord[key] !== undefined)
+  if (leftKeys.length !== rightKeys.length) return false
   return leftKeys.every(
     (key) =>
       Object.hasOwn(rightRecord, key) &&
@@ -1992,10 +2110,21 @@ function insertSceneStructuralPlacements(
   return result as AnyNodeId[]
 }
 
-function sceneOperationPatchNextState(
-  beforeState: SceneState,
+/**
+ * The document a patch makes of `beforeState`, without a store, or null when the patch does not
+ * apply to it (a delete of a node that changed, a create at a taken position, a node that fails
+ * its schema). `applySceneOperationPatch` writes exactly this.
+ */
+export function nextSceneOperationState(
+  beforeState: Pick<
+    SceneState,
+    'nodes' | 'rootNodeIds' | 'collections' | 'materials' | 'installedPlugins'
+  >,
   changes: SceneOperationPatch,
-): Pick<SceneState, 'materials' | 'nodes' | 'rootNodeIds'> | null {
+):
+  | (Pick<SceneState, 'collections' | 'materials' | 'nodes' | 'rootNodeIds'> &
+      Partial<Pick<SceneState, 'installedPlugins' | 'hasExplicitPluginInstallState'>>)
+  | null {
   const createIds = new Set<AnyNodeId>()
   const deleteIds = new Set<AnyNodeId>()
   const updateIds = new Set<AnyNodeId>()
@@ -2029,7 +2158,10 @@ function sceneOperationPatchNextState(
       !Number.isSafeInteger(change.position) ||
       change.position < 0 ||
       siblings?.[change.position] !== id ||
-      !areScenePatchValuesEqual(current, change.node)
+      !areScenePatchValuesEqual(
+        withoutSceneNodeAnnotations(current as Record<string, unknown>),
+        withoutSceneNodeAnnotations(change.node as Record<string, unknown>),
+      )
     ) {
       return null
     }
@@ -2037,10 +2169,6 @@ function sceneOperationPatchNextState(
   }
   for (const id of createIds) {
     if (deleteIds.has(id)) return null
-  }
-  for (const node of Object.values(beforeState.nodes)) {
-    const parentId = (node.parentId as AnyNodeId | null | undefined) ?? null
-    if (parentId && deleteIds.has(parentId) && !deleteIds.has(node.id)) return null
   }
 
   const nextNodes = { ...beforeState.nodes }
@@ -2076,8 +2204,7 @@ function sceneOperationPatchNextState(
     if (!parent) return null
     if (createIds.has(parentId)) {
       if (
-        !('children' in parent) ||
-        !Array.isArray(parent.children) ||
+        !('children' in parent && Array.isArray(parent.children)) ||
         parent.children[change.position] !== change.node.id
       ) {
         return null
@@ -2087,25 +2214,6 @@ function sceneOperationPatchNextState(
     const placements = existingParentCreates.get(parentId) ?? []
     placements.push(change)
     existingParentCreates.set(parentId, placements)
-  }
-  const insertedRoots = insertSceneStructuralPlacements(nextRootNodeIds, rootCreates)
-  if (!insertedRoots) return null
-  nextRootNodeIds = insertedRoots
-  for (const [parentId, placements] of existingParentCreates) {
-    const parent = nextNodes[parentId]
-    if (!(parent && 'children' in parent && Array.isArray(parent.children))) return null
-    const children = insertSceneStructuralPlacements(parent.children as AnyNodeId[], placements)
-    if (!children) return null
-    nextNodes[parentId] = { ...parent, children } as AnyNode
-  }
-  for (const change of parsedCreates) {
-    const parentId = (change.node.parentId as AnyNodeId | null | undefined) ?? null
-    const siblings = structuralSiblingIds(nextNodes, nextRootNodeIds, parentId)
-    if (siblings?.[change.position] !== change.node.id) return null
-    if (!('children' in change.node && Array.isArray(change.node.children))) continue
-    for (const childId of change.node.children as AnyNodeId[]) {
-      if (nextNodes[childId]?.parentId !== change.node.id) return null
-    }
   }
 
   for (const { id, data, removeFields } of changes.nodeUpdates) {
@@ -2126,8 +2234,17 @@ function sceneOperationPatchNextState(
       return null
     }
     updateIds.add(id)
-    const candidate = { ...node, ...data } as Record<string, unknown>
-    for (const field of removeFields) delete candidate[field]
+    let candidate = { ...node } as Record<string, unknown>
+    for (const [field, value] of Object.entries(data)) {
+      const written = writeSceneNodeField(candidate, field, value, true)
+      if (!written) return null
+      candidate = written
+    }
+    for (const field of removeFields) {
+      const written = writeSceneNodeField(candidate, field, undefined, false)
+      if (!written) return null
+      candidate = written
+    }
     const validated = parseSceneOperationPatchNode(candidate)
     if (
       !validated ||
@@ -2138,6 +2255,49 @@ function sceneOperationPatchNextState(
       return null
     }
     nextNodes[id] = candidate as AnyNode
+  }
+
+  for (const id of updateIds) {
+    const previousParent = beforeState.nodes[id]?.parentId as AnyNodeId | null | undefined
+    const parentId = nextNodes[id]?.parentId as AnyNodeId | null | undefined
+    if (previousParent === parentId) continue
+    if (previousParent) {
+      const parent = nextNodes[previousParent]
+      if (parent && 'children' in parent && Array.isArray(parent.children))
+        nextNodes[previousParent] = {
+          ...parent,
+          children: parent.children.filter((child) => child !== id),
+        } as AnyNode
+    } else nextRootNodeIds = nextRootNodeIds.filter((child) => child !== id)
+    if (parentId) {
+      const parent = nextNodes[parentId]
+      if (!(parent && 'children' in parent && Array.isArray(parent.children))) return null
+      if (!parent.children.includes(id as never))
+        nextNodes[parentId] = { ...parent, children: [...parent.children, id] } as AnyNode
+    } else if (!nextRootNodeIds.includes(id)) nextRootNodeIds = [...nextRootNodeIds, id]
+  }
+  const insertedRoots = insertSceneStructuralPlacements(nextRootNodeIds, rootCreates)
+  if (!insertedRoots) return null
+  nextRootNodeIds = insertedRoots
+  for (const [parentId, placements] of existingParentCreates) {
+    const parent = nextNodes[parentId]
+    if (!(parent && 'children' in parent && Array.isArray(parent.children))) return null
+    const children = insertSceneStructuralPlacements(parent.children as AnyNodeId[], placements)
+    if (!children) return null
+    nextNodes[parentId] = { ...parent, children } as AnyNode
+  }
+
+  for (const node of Object.values(nextNodes)) {
+    if (node.parentId && deleteIds.has(node.parentId as AnyNodeId)) return null
+  }
+  for (const change of parsedCreates) {
+    const parentId = (change.node.parentId as AnyNodeId | null | undefined) ?? null
+    const siblings = structuralSiblingIds(nextNodes, nextRootNodeIds, parentId)
+    if (siblings?.[change.position] !== change.node.id) return null
+    if (!('children' in change.node && Array.isArray(change.node.children))) continue
+    for (const childId of change.node.children as AnyNodeId[]) {
+      if (nextNodes[childId]?.parentId !== change.node.id) return null
+    }
   }
 
   const materials =
@@ -2154,21 +2314,115 @@ function sceneOperationPatchNextState(
     else materials[id] = material
   }
 
-  return { materials, nodes: nextNodes, rootNodeIds: nextRootNodeIds }
+  const collectionChanges = changes.collectionChanges ?? []
+  const collections =
+    collectionChanges.length > 0 ? { ...beforeState.collections } : beforeState.collections
+  const collectionIds = new Set<CollectionId>()
+  for (const { id, collection } of collectionChanges) {
+    if (collectionIds.has(id) || (collection !== null && collection.id !== id)) return null
+    collectionIds.add(id)
+    if (collection === null) delete collections[id]
+    else collections[id] = collection
+  }
+
+  const pluginChanges = changes.pluginChanges ?? []
+  if (changes.pluginInstallState) {
+    return {
+      collections,
+      materials,
+      nodes: nextNodes,
+      rootNodeIds: nextRootNodeIds,
+      installedPlugins: [...changes.pluginInstallState.installedPlugins],
+      hasExplicitPluginInstallState: changes.pluginInstallState.explicit,
+    }
+  }
+  if (pluginChanges.length === 0) {
+    return { collections, materials, nodes: nextNodes, rootNodeIds: nextRootNodeIds }
+  }
+  const installedPlugins = new Set(beforeState.installedPlugins)
+  const pluginIds = new Set<string>()
+  for (const { id, installed } of pluginChanges) {
+    if (!id || pluginIds.has(id)) return null
+    pluginIds.add(id)
+    if (installed) installedPlugins.add(id)
+    else installedPlugins.delete(id)
+  }
+  return {
+    collections,
+    materials,
+    nodes: nextNodes,
+    rootNodeIds: nextRootNodeIds,
+    installedPlugins: Array.from(installedPlugins),
+    // A shared install list is a decision someone made, so hosts must not
+    // re-add their default plugins on top of it.
+    hasExplicitPluginInstallState: true,
+  }
 }
 
-export function applySceneOperationPatch(changes: SceneOperationPatch): boolean {
+export type ApplySceneOperationPatchOptions = {
+  /**
+   * Record the change as one step this client can undo. History holds whole snapshots, so a
+   * change kept out of it is reverted by the next undo of an earlier local step — fine for a
+   * live collaborator whose own history replaces local undo, not for a writer that only
+   * reaches this tab as a saved scene. Refused (false) mid-interaction; retry once it ends.
+   */
+  undoable?: boolean
+  /** Local annotation commits use the same durable host journal as authored commits. */
+  annotation?: boolean
+}
+
+export function applySceneOperationPatch(
+  changes: SceneOperationPatch,
+  options: ApplySceneOperationPatchOptions = {},
+): boolean {
+  runSceneWriteGuards(useScene)
   const beforeState = useScene.getState()
   if (
     changes.nodeUpdates.length === 0 &&
     changes.materialChanges.length === 0 &&
     changes.nodeCreates.length === 0 &&
-    changes.nodeDeletes.length === 0
+    changes.nodeDeletes.length === 0 &&
+    !changes.pluginChanges?.length &&
+    !changes.collectionChanges?.length &&
+    !changes.pluginInstallState
   ) {
     return false
   }
+  if (
+    options.undoable &&
+    !(
+      useScene.temporal.getState().isTracking &&
+      getSceneHistoryPauseDepth() === 0 &&
+      !hasSceneHistoryDrafts()
+    )
+  ) {
+    return false
+  }
+  if (
+    options.annotation &&
+    (options.undoable ||
+      beforeState.readOnly ||
+      !useScene.temporal.getState().isTracking ||
+      getSceneHistoryPauseDepth() > 0 ||
+      hasSceneHistoryDrafts())
+  )
+    return false
+  if (
+    options.annotation &&
+    (changes.nodeCreates.length ||
+      changes.nodeDeletes.length ||
+      changes.materialChanges.length ||
+      changes.pluginChanges?.length ||
+      changes.collectionChanges?.length ||
+      changes.pluginInstallState ||
+      changes.nodeUpdates.some(
+        ({ data, removeFields }) =>
+          removeFields.length || Object.keys(data).some((field) => field !== 'source.images'),
+      ))
+  )
+    return false
   if (sceneOperationPatchHasLiveConflict(beforeState, changes)) return false
-  const next = sceneOperationPatchNextState(beforeState, changes)
+  const next = nextSceneOperationState(beforeState, changes)
   if (!next) return false
 
   const before = sceneHistorySnapshotFromState(beforeState)
@@ -2176,7 +2430,7 @@ export function applySceneOperationPatch(changes: SceneOperationPatch): boolean 
     useScene.temporal.getState().isTracking || getSceneHistoryPauseDepth() > 0
   if (shouldScopeHistoryPause) pauseSceneHistory(useScene)
   try {
-    useScene.setState(next)
+    runAsRemoteSceneChange(() => useScene.setState(next))
   } finally {
     if (shouldScopeHistoryPause) resumeSceneHistory(useScene)
   }
@@ -2193,6 +2447,12 @@ export function applySceneOperationPatch(changes: SceneOperationPatch): boolean 
     useLiveTransforms.getState().clear(id)
   }
   if (areSceneSnapshotsEqual(before, current)) return false
+  if (options.undoable) {
+    useScene.temporal.setState(({ pastStates }) => ({
+      pastStates: [...pastStates, before],
+      futureStates: [],
+    }))
+  }
 
   for (const id of touchedNodeIds) {
     if (current.nodes[id]) currentState.markDirty(id)
@@ -2223,14 +2483,56 @@ export function applySceneOperationPatch(changes: SceneOperationPatch): boolean 
       if (node.parentId) currentState.markDirty(node.parentId as AnyNodeId)
     }
   }
+  if (changes.pluginChanges?.length || changes.pluginInstallState) {
+    for (const node of Object.values(current.nodes)) {
+      if (!getNodePluginId(node.type)) continue
+      if (!isNodeKindEnabled(node.type, currentState.installedPlugins)) {
+        currentState.clearDirty(node.id)
+      } else if (!isNodeKindEnabled(node.type, beforeState.installedPlugins)) {
+        currentState.markDirty(node.id)
+      }
+    }
+  }
   for (const { node } of changes.nodeDeletes) currentState.clearDirty(node.id)
 
   notifySceneCommit({
-    origin: 'host',
+    origin: options.annotation ? 'local' : 'host',
     before,
     current,
   })
   return true
+}
+
+/**
+ * Runs `run` on `store` as one undo step and one commit that carries everything it changed: its
+ * own writes and the history-paused derived writes it settles after them (`reconcileDocument`),
+ * which a commit captured when the first write landed would miss. Collaboration then receives the
+ * derived construction, with its ids, in the same commit as the edit that caused it.
+ */
+export function runAsSettledSceneStep<T>(store: SceneStore, run: () => T): T {
+  const environment = sceneEnvironmentOf(store)
+  const snapshot = () => environment.run(() => sceneHistorySnapshotFromState(store.getState()))
+  const before = snapshot()
+  const pastBefore = store.temporal.getState().pastStates.length
+  return runAsSingleSceneHistoryStep(store, () => {
+    const result = run()
+    const current = snapshot()
+    if (areSceneSnapshotsEqual(before, current)) return result
+    const temporal = store.temporal.getState()
+    // Only paused (derived) writes landed: they still make one step of their own.
+    if (
+      temporal.pastStates.length === pastBefore &&
+      temporal.isTracking &&
+      getSceneHistoryPauseDepth(store) === 0
+    )
+      store.temporal.setState({ pastStates: [...temporal.pastStates, before], futureStates: [] })
+    const changedNodeIds = new Set<AnyNodeId>()
+    for (const id of new Set([...Object.keys(before.nodes), ...Object.keys(current.nodes)]))
+      if (before.nodes[id as AnyNodeId] !== current.nodes[id as AnyNodeId])
+        changedNodeIds.add(id as AnyNodeId)
+    settlePendingSceneCommit(store, { origin: 'local', before, current, changedNodeIds })
+    return result
+  })
 }
 
 export function applyScenePatch(changes: ScenePatch): boolean {
@@ -2243,15 +2545,18 @@ export function applyScenePatch(changes: ScenePatch): boolean {
 
 export type ApplySceneSnapshotOptions = {
   origin: Extract<SceneCommitOrigin, 'load' | 'host'>
+  /** The snapshot's plugin list was chosen, not defaulted, so hosts keep it as is. */
+  explicitPluginInstallState?: boolean
 }
 
 export function applySceneSnapshot(
   snapshot: SceneSnapshot,
   options: ApplySceneSnapshotOptions,
 ): boolean {
+  runSceneWriteGuards(useScene)
   const before = sceneHistorySnapshotFromState(useScene.getState())
   const temporalState = useScene.temporal.getState()
-  if (!temporalState.isTracking || getSceneHistoryPauseDepth() > 0) {
+  if (!temporalState.isTracking || getSceneHistoryPauseDepth() > 0 || hasSceneHistoryDrafts()) {
     throw new Error('Cannot replace the scene snapshot during an active interaction')
   }
   useLiveNodeOverrides.getState().clearAll()
@@ -2259,11 +2564,14 @@ export function applySceneSnapshot(
 
   pauseSceneHistory(useScene)
   try {
-    useScene.getState().setScene(snapshot.nodes, snapshot.rootNodeIds, {
-      collections: snapshot.collections,
-      installedPlugins: snapshot.installedPlugins,
-      materials: snapshot.materials,
-    })
+    runAsRemoteSceneChange(() =>
+      useScene.getState().setScene(snapshot.nodes, snapshot.rootNodeIds, {
+        collections: snapshot.collections,
+        installedPlugins: snapshot.installedPlugins,
+        hasExplicitPluginInstallState: options.explicitPluginInstallState,
+        materials: snapshot.materials,
+      }),
+    )
     useScene.temporal.getState().clear()
   } finally {
     resumeSceneHistory(useScene)
@@ -2279,8 +2587,41 @@ export function applySceneSnapshot(
 let prevPastLength = 0
 let prevFutureLength = 0
 
+/**
+ * Runs one of a carry's own writes to its drafts (see history-drafts.ts) under a short pause,
+ * and marks the adopted drafts' fields it changed as carry-owned.
+ */
+export function runSceneHistoryDraftWrite<T>(write: () => T): T {
+  const before = useScene.getState().nodes
+  const wasRawPaused = !useScene.temporal.getState().isTracking && getSceneHistoryPauseDepth() === 0
+  const pause = beginSceneHistoryPauseSession(useScene)
+  try {
+    return write()
+  } finally {
+    noteSceneHistoryDraftWrite(before, useScene.getState().nodes)
+    pause.end()
+    // Legacy movers can co-mount with the overlay without owning a counted pause.
+    if (wasRawPaused && getSceneHistoryPauseDepth() === 0) useScene.temporal.getState().pause()
+  }
+}
+
+/** Updates that revert the fields a carry still holds on `ids` (see history-drafts.ts). */
+export function sceneHistoryDraftRevertUpdates(
+  ids: Iterable<AnyNodeId>,
+): Array<{ id: AnyNodeId; data: Record<string, unknown> }> {
+  return sceneHistoryDraftRevertUpdatesIn(useScene.getState().nodes, ids)
+}
+
+/** Registers a carried draft (see history-drafts.ts); returns the call that ends it. */
+export function beginSceneHistoryDraft(id: AnyNodeId, original: AnyNode | null): () => void {
+  return beginSceneHistoryDraftIn(id, original, useScene.getState().nodes)
+}
+
+export { settleSceneHistoryDrafts }
+
 export function clearSceneHistory() {
   resetSceneHistoryPauseDepth()
+  clearSceneHistoryDrafts()
   // Resetting the pause-depth counter without resuming would strand the
   // temporal store in `isTracking: false` if a pause window was active when
   // the scene was (re)loaded — every edit after the load would then be
@@ -2304,10 +2645,14 @@ useScene.temporal.subscribe((state, previousState) => {
   const currentPastLength = state.pastStates.length
   const currentFutureLength = state.futureStates.length
 
+  // Only the store's own undo / redo jump history: a new edit after an undo also
+  // grows the past and drops the redo stack, and is not a redo.
   // Undo: futureStates increases (state moved from past to future)
   // Redo: pastStates increases while futureStates decreases (state moved from future to past)
-  const didUndo = currentFutureLength > prevFutureLength
-  const didRedo = currentPastLength > prevPastLength && currentFutureLength < prevFutureLength
+  const jumping = isRestoringSceneHistory()
+  const didUndo = jumping && currentFutureLength > prevFutureLength
+  const didRedo =
+    jumping && currentPastLength > prevPastLength && currentFutureLength < prevFutureLength
 
   if (didUndo || didRedo) {
     // Capture both layouts before another synchronous jump can replace them.

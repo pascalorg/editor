@@ -1,6 +1,7 @@
 import {
   ElevatorNode as ElevatorNodeSchema,
   type ElevatorNode as ElevatorNodeType,
+  elevatorSlots,
   getElevatorCabDepth,
   getElevatorCabWidth,
   getElevatorShaftDepth,
@@ -15,7 +16,6 @@ import { elevatorResizeAffordance, elevatorRotateAffordance } from './floorplan-
 import { elevatorPaint } from './paint'
 import { elevatorParametrics } from './parametrics'
 import { ElevatorNode } from './schema'
-import { elevatorSlots } from './slots'
 
 const SIDE_HANDLE_OFFSET = 0.22
 const HEIGHT_HANDLE_OFFSET = 0.3
@@ -195,6 +195,7 @@ export const elevatorDefinition: NodeDefinition<typeof ElevatorNode> = {
   },
 
   capabilities: {
+    surfacePlacement: 'floor-only',
     selectable: { hitVolume: 'bbox' },
     // Generic XZ translate so the floating action menu's Move button
     // (and the side move-arrows emitted from `def.floorplan`) drive the
@@ -245,6 +246,7 @@ export const elevatorDefinition: NodeDefinition<typeof ElevatorNode> = {
   // No dirty consumer rebuilds this kind — see NodeDefinition.dirtyTracking.
   dirtyTracking: false,
 
+  rendersChildren: false,
   renderer: {
     kind: 'parametric',
     module: () => import('./renderer'),

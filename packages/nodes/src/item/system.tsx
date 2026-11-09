@@ -1,7 +1,9 @@
 'use client'
 
 import { ItemLightSystem, ItemSystem } from '@pascal-app/viewer'
+import { useEffect } from 'react'
 import { NodeBatchSystem } from '../shared/node-batch/system'
+import { registerWallObjectSceneCheck } from './wall-object-observations'
 
 /**
  * Registry-driven item system bundle.
@@ -17,6 +19,10 @@ import { NodeBatchSystem } from '../shared/node-batch/system'
  *    every registered kind's system mounts scene-wide.
  */
 const ItemSystems = () => {
+  useEffect(() => {
+    registerWallObjectSceneCheck()
+  }, [])
+
   return (
     <>
       <ItemSystem />

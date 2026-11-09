@@ -4,6 +4,7 @@ import {
   DuctSegmentNode,
   loadPlugin,
   nodeRegistry,
+  PipeFittingNode,
   PipeSegmentNode,
 } from '@pascal-app/core'
 import { getDuctFittingPorts } from '../duct-fitting/ports'
@@ -12,6 +13,7 @@ import { getPipeFittingPorts } from '../pipe-fitting/ports'
 import {
   createDuctRunEndCap,
   createPipeRunEndCap,
+  findAutomaticRunEndCapIds,
   findMatedRunEndCapIds,
   isRunEndCapPort,
   planRunEndCapFollowUpdates,
@@ -68,6 +70,28 @@ describe('automatic run end caps', () => {
       ),
     ).toEqual([cap.id])
     expect(isRunEndCapPort({ ...inlet, nodeId: cap.id }, nodes)).toBe(true)
+  })
+
+  test('spiral ducts use sheet-metal end caps at both collars', () => {
+    const duct = DuctSegmentNode.parse({
+      path: [
+        [0, 1, 0],
+        [3, 1, 0],
+      ],
+      shape: 'round',
+      diameter: 6,
+      ductMaterial: 'spiral',
+    })
+    for (const endpoint of ['start', 'end'] as const) {
+      const cap = createDuctRunEndCap(duct, endpoint)!
+      expect(cap.ductMaterial).toBe('sheet-metal')
+      expect(cap.diameter).toBe(6)
+      const inlet = getDuctFittingPorts(cap)[0]!
+      expect(inlet.position[0]).toBeCloseTo(endpoint === 'start' ? 0 : 3)
+      expect(inlet.position[1]).toBeCloseTo(1)
+      expect(inlet.position[2]).toBeCloseTo(0)
+    }
+    expect(duct.ductMaterial).toBe('spiral')
   })
 
   test('closes a vertical vent pipe and preserves its material', () => {
@@ -152,6 +176,27 @@ describe('automatic run end caps', () => {
     expect(
       findMatedRunEndCapIds({ ...firstPort, nodeId: first.id, id: 'end' }, nodes, 'pipe-fitting'),
     ).toEqual([firstCap.id])
+  })
+
+  test('finds automatic caps by run owner without matching manual caps', () => {
+    const pipe = PipeSegmentNode.parse({
+      path: [
+        [0, 1, 0],
+        [3, 1, 0],
+      ],
+    })
+    const automatic = createPipeRunEndCap(pipe)!
+    const manual = PipeFittingNode.parse({
+      fittingType: 'end-cap',
+      metadata: {},
+    })
+    const nodes = {
+      [pipe.id]: pipe,
+      [automatic.id]: automatic,
+      [manual.id]: manual,
+    } as Record<string, AnyNode>
+
+    expect(findAutomaticRunEndCapIds(pipe.id, nodes, 'pipe-fitting')).toEqual([automatic.id])
   })
 
   test.each([

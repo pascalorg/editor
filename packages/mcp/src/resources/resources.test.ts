@@ -2,14 +2,15 @@
 import '../bridge/node-shims'
 
 import { beforeEach, describe, expect, test } from 'bun:test'
-import { Client } from '@modelcontextprotocol/sdk/client/index.js'
-import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import { Client } from '@modelcontextprotocol/client'
+import { InMemoryTransport, McpServer } from '@modelcontextprotocol/server'
 import { WallNode, ZoneNode } from '@pascal-app/core/schema'
 import useScene from '@pascal-app/core/store'
 import { SceneBridge } from '../bridge/scene-bridge'
+import { createPascalMcpServer } from '../server'
+import { InMemorySceneStore } from '../tools/scene-lifecycle/test-utils'
 import { registerAgentGuide } from './agent-guide'
-import { registerCatalogItems } from './catalog-items'
+import { CATALOG_RESOURCE_LIMIT, registerCatalogItems } from './catalog-items'
 import { registerConstraints } from './constraints'
 import { registerSceneCurrent } from './scene-current'
 import { registerSceneSummary } from './scene-summary'
@@ -199,6 +200,31 @@ describe('pascal://catalog/items', () => {
       await pair.close()
     }
   })
+
+  test('lists a library kept elsewhere by its first items and its size, never whole', async () => {
+    const asked: unknown[] = []
+    const pair = await spinUp((server, bridge) =>
+      registerCatalogItems(server, bridge as never, {
+        search: async (query) => {
+          asked.push(query)
+          return {
+            items: [{ id: 'palm', name: 'Palm', category: 'plants', thumbnail: '', src: '' }],
+            total: 115_000,
+          }
+        },
+        byId: async () => [],
+      }),
+    )
+    try {
+      const res = await pair.client.readResource({ uri: 'pascal://catalog/items' })
+      const parsed = JSON.parse((res.contents[0] as { text?: string }).text ?? '{}')
+      expect(asked).toEqual([{ limit: CATALOG_RESOURCE_LIMIT }])
+      expect(parsed).toMatchObject({ status: 'ok', items: [{ id: 'palm' }], total: 115_000 })
+      expect(parsed.note).toContain('search_assets finds any of them')
+    } finally {
+      await pair.close()
+    }
+  })
 })
 
 describe('pascal://agent-guide', () => {
@@ -216,8 +242,61 @@ describe('pascal://agent-guide', () => {
       expect(text).toContain('get_project_status')
       expect(text).toContain('editorUrl')
       expect(text).toContain('0 to 1 along the wall')
+      expect(text).toMatch(/glass meets at a corner.*add_corner_window/)
+      expect(text).toContain('room_named_by_person')
+      expect(text).toContain('`rename: true` is for when the person asked')
+      expect(text).toContain('editor_tab_busy')
+      expect(text).toContain('invalid_input')
     } finally {
       await pair.close()
+    }
+  })
+
+  // The guide is the one text an agent is sure to read: a tool it names that the server does not
+  // serve (`get_capabilities` was one) sends every agent to a missing tool on its first step.
+  const REFUSAL_CODES = [
+    'editor_tab_busy',
+    'editor_tab_hidden',
+    'editor_tab_required',
+    'invalid_input',
+    'roof_exists',
+    // verify_scene's issue type, which names move_roofs_to_roof_level
+    'roof_mixed_in_storey',
+    'room_named_by_person',
+    'scene_wipe_blocked',
+    'unknown_wall_type',
+    'view_unavailable',
+  ]
+  // Hosted-only tools: the hosted server registers them beside the package's.
+  const HOSTED_ONLY_TOOLS = [
+    'search_project_chats',
+    'read_project_chat',
+    'get_project_assets',
+    'read_project_asset',
+    'list_project_members',
+  ]
+  test('every tool the guide names is a tool the server serves', async () => {
+    const bridge = new SceneBridge()
+    const server = createPascalMcpServer({ bridge, store: new InMemorySceneStore() })
+    const client = new Client({ name: 'guide-tools', version: '0.0.0' })
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
+    await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
+    const pair = await spinUp(registerAgentGuide)
+    try {
+      const served = new Set((await client.listTools()).tools.map((tool) => tool.name))
+      const res = await pair.client.readResource({ uri: 'pascal://agent-guide' })
+      const text = (res.contents[0] as { text?: string }).text ?? ''
+      const named = [...new Set([...text.matchAll(/`([a-z]+(?:_[a-z]+)+)`/g)].map((m) => m[1]!))]
+      const unknown = named.filter(
+        (name) =>
+          !(served.has(name) || REFUSAL_CODES.includes(name) || HOSTED_ONLY_TOOLS.includes(name)),
+      )
+      expect(unknown).toEqual([])
+      expect(text).not.toContain('get_capabilities')
+    } finally {
+      await pair.close()
+      await client.close()
+      await server.close()
     }
   })
 
@@ -226,7 +305,9 @@ describe('pascal://agent-guide', () => {
     try {
       const res = await pair.client.readResource({ uri: 'pascal://agent/guide' })
       const text = (res.contents[0] as { text?: string }).text ?? ''
-      expect(text).toContain('Pascal MCP Agent Guide')
+      const canonical = await pair.client.readResource({ uri: 'pascal://agent-guide' })
+      expect(res.contents[0]?.mimeType).toBe('text/markdown')
+      expect(text).toBe((canonical.contents[0] as { text?: string }).text)
     } finally {
       await pair.close()
     }

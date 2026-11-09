@@ -367,10 +367,10 @@ describe('applyMutation: door-positions', () => {
 })
 
 describe('applyMutation: fence-style', () => {
-  test('sets every fence style to one of privacy/slat/rail', () => {
+  test('sets every fence style to one of the supported styles', () => {
     const rng = mulberry32(7)
     const out = applyMutation(makeBaseGraph(), rng, 'fence-style')
-    const allowed = new Set(['privacy', 'slat', 'rail'])
+    const allowed = new Set(['privacy', 'slat', 'rail', 'picket'])
     for (const node of Object.values(out.nodes)) {
       if (node.type !== 'fence') continue
       expect(allowed.has((node as { style: string }).style)).toBe(true)

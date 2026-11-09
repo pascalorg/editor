@@ -1,116 +1,77 @@
-'use client'
-
-import { Editor, ItemsPanel } from '@pascal-app/editor'
-import { Hammer, Layers, Package, Settings } from 'lucide-react'
-import Image from 'next/image'
+import { Settings } from 'lucide-react'
 import Link from 'next/link'
-import { BuildTab } from '@/components/build-tab'
-import {
-  CommunityViewerToolbarLeft,
-  CommunityViewerToolbarRight,
-} from '@/components/viewer-toolbar'
+import { AppHeader, AppShell, ICON_BUTTON, PascalMark } from '@/components/app-shell'
+import { CreateProjectButton } from '@/components/create-project-button'
+import { SceneCard, type SceneCardData } from '@/components/scene-card'
+import { getSceneOperations } from '@/lib/scene-store-server'
+import { sceneThumbnailUrl } from '@/lib/scene-thumbnails'
 
-// The open-source editor only ships the built-in catalog (no uploaded items),
-// so the Library/Community/Mine source chips and tag filters add nothing —
-// drop them and keep the panel to plain categories.
-function EditorItemsPanel() {
-  return <ItemsPanel showSourceFilter={false} showTagFilters={false} />
+export const dynamic = 'force-dynamic'
+
+const dateFormat = new Intl.DateTimeFormat('en-US', {
+  month: 'short',
+  day: 'numeric',
+  year: 'numeric',
+})
+
+async function fetchScenes(): Promise<SceneCardData[]> {
+  const operations = await getSceneOperations()
+  const scenes = await operations.listScenes({ limit: 50 })
+  return Promise.all(
+    scenes.map(async (scene) => ({
+      id: scene.id,
+      name: scene.name,
+      version: scene.version,
+      nodeCount: scene.nodeCount,
+      thumbnailUrl: scene.thumbnailUrl ?? (await sceneThumbnailUrl(scene.id)),
+      updatedAt: scene.updatedAt,
+      updatedLabel: dateFormat.format(new Date(scene.updatedAt)),
+    })),
+  )
 }
 
-const SIDEBAR_TABS = [
-  {
-    id: 'site',
-    label: 'Scene',
-    component: () => null,
-    mobileDefaultSnap: 0.5,
-    mobileIcon: <Layers className="h-5 w-5" />,
-    icon: (
-      <Image
-        alt=""
-        className="h-8 w-8 object-contain"
-        height={32}
-        src="/icons/scene.webp"
-        width={32}
-      />
-    ),
-  },
-  {
-    id: 'build',
-    label: 'Build',
-    component: BuildTab,
-    mobileDefaultSnap: 0.5,
-    mobileIcon: <Hammer className="h-5 w-5" />,
-    icon: (
-      <Image
-        alt=""
-        className="h-8 w-8 object-contain"
-        height={32}
-        src="/icons/build.webp"
-        width={32}
-      />
-    ),
-  },
-  {
-    id: 'items',
-    label: 'Items',
-    component: EditorItemsPanel,
-    mobileDefaultSnap: 0.5,
-    mobileIcon: <Package className="h-5 w-5" />,
-    icon: (
-      <Image
-        alt=""
-        className="h-8 w-8 object-contain"
-        height={32}
-        src="/icons/couch.webp"
-        width={32}
-      />
-    ),
-  },
-  {
-    id: 'settings',
-    label: 'Settings',
-    component: () => null,
-    mobileDefaultSnap: 0.5,
-    mobileIcon: <Settings className="h-5 w-5" />,
-    icon: (
-      <Image
-        alt=""
-        className="h-8 w-8 object-contain"
-        height={32}
-        src="/icons/settings.webp"
-        width={32}
-      />
-    ),
-  },
-]
+/** `Project #n`: one past the highest number still in use, never below the count. */
+function nextProjectNumber(names: string[]): number {
+  const highest = names.reduce((max, name) => {
+    const match = /^Project #(\d+)$/.exec(name.trim())
+    return match ? Math.max(max, Number(match[1])) : max
+  }, 0)
+  return Math.max(highest, names.length) + 1
+}
 
-const PROJECT_ID = 'local-editor'
+export default async function HomePage() {
+  const scenes = await fetchScenes()
+  const nextNumber = nextProjectNumber(scenes.map((scene) => scene.name))
 
-export default function Home() {
   return (
-    <div className="relative h-screen w-screen">
-      {PROJECT_ID === 'local-editor' && (
-        <div className="pointer-events-none absolute top-14 left-1/2 z-40 -translate-x-1/2">
-          <div className="pointer-events-none flex max-w-[min(92vw,42rem)] flex-wrap items-center justify-center gap-x-3 gap-y-1 rounded-full border border-border/60 bg-background/90 px-4 py-1.5 text-xs shadow-sm backdrop-blur">
-            <span className="text-muted-foreground">
-              Blank canvas — saved scenes are under Scenes (not this page).
-            </span>
-            <Link
-              className="pointer-events-auto font-medium text-foreground hover:underline"
-              href="/scenes"
-            >
-              Open saved scenes
-            </Link>
+    <AppShell>
+      <AppHeader>
+        <CreateProjectButton nextNumber={nextNumber} />
+        <Link aria-label="Settings" className={ICON_BUTTON} href="/settings" title="Settings">
+          <Settings className="h-4 w-4" />
+        </Link>
+      </AppHeader>
+
+      <main className="mx-auto max-w-6xl px-6 py-10">
+        {scenes.length === 0 ? (
+          <div className="flex flex-col items-center justify-center gap-4 py-32 text-center">
+            <PascalMark className="h-10 w-10" />
+            <p className="max-w-xs text-muted-foreground text-sm">
+              Your projects live here. Start one to begin designing.
+            </p>
+            <CreateProjectButton nextNumber={nextNumber} />
           </div>
-        </div>
-      )}
-      <Editor
-        layoutVersion="v2"
-        projectId={PROJECT_ID}
-        sidebarTabs={SIDEBAR_TABS}
-        viewerToolbarLeft={<CommunityViewerToolbarLeft />}
-        viewerToolbarRight={<CommunityViewerToolbarRight />}
-      />
-    </div>
+        ) : (
+          <>
+            <h1 className="mb-6 font-semibold text-lg">Projects</h1>
+            <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {scenes.map((scene) => (
+                <SceneCard key={scene.id} scene={scene} />
+              ))}
+            </ul>
+          </>
+        )}
+      </main>
+    </AppShell>
   )
 }

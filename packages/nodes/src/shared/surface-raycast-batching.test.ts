@@ -15,40 +15,40 @@ import { resolveWallRole } from '../wall/paint'
 import { accessoryCursor } from './accessory-cursor'
 import { resolveSlotByReRaycast } from './slot-paint'
 
-test.each([
-  'door',
-  'window',
-] as const)('%s paint resolves the real slot before a batched proxy target is released', (kind) => {
-  const id = `${kind}_paint_batch` as const
-  const root = new Group()
-  const mesh = new Mesh(new BoxGeometry(1, 1, 0.1), new MeshBasicMaterial())
-  mesh.userData.slotId = 'frame'
-  root.add(mesh)
-  root.updateMatrixWorld(true)
-  const args = {
-    node: { id, type: kind },
-    hitObject: { userData: {} },
-    ray: new Ray(new Vector3(0, 0, 2), new Vector3(0, 0, -1)),
-  } as unknown as PaintResolveArgs
-  sceneRegistry.nodes.set(id, root)
-  try {
-    for (const batched of [false, true, false]) {
-      if (batched) hideFromScene(mesh, 'batched')
-      else showInScene(mesh, 'batched')
-      expect(resolveSlotByReRaycast(args)).toBe('frame')
+test.each(['door', 'window'] as const)(
+  '%s paint resolves the real slot before a batched proxy target is released',
+  (kind) => {
+    const id = `${kind}_paint_batch` as const
+    const root = new Group()
+    const mesh = new Mesh(new BoxGeometry(1, 1, 0.1), new MeshBasicMaterial())
+    mesh.userData.slotId = 'frame'
+    root.add(mesh)
+    root.updateMatrixWorld(true)
+    const args = {
+      node: { id, type: kind },
+      hitObject: { userData: {} },
+      ray: new Ray(new Vector3(0, 0, 2), new Vector3(0, 0, -1)),
+    } as unknown as PaintResolveArgs
+    sceneRegistry.nodes.set(id, root)
+    try {
+      for (const batched of [false, true, false]) {
+        if (batched) hideFromScene(mesh, 'batched')
+        else showInScene(mesh, 'batched')
+        expect(resolveSlotByReRaycast(args)).toBe('frame')
+      }
+    } finally {
+      sceneRegistry.nodes.delete(id)
+      mesh.geometry.dispose()
+      mesh.material.dispose()
     }
-  } finally {
-    sceneRegistry.nodes.delete(id)
-    mesh.geometry.dispose()
-    mesh.material.dispose()
-  }
-})
+  },
+)
 
-test('wall paint resolves a batched face band before hover release', () => {
+test('wall paint resolves a batched trim before hover release', () => {
   const node = WallNode.parse({ id: 'wall_paint_batch', start: [0, 0], end: [1, 0] })
   const root = new Group()
   const mesh = new Mesh(new BoxGeometry(1, 1, 0.1), new MeshBasicMaterial())
-  mesh.userData.slotId = 'lowerInterior'
+  mesh.userData.slotId = 'aSkirting'
   root.add(mesh)
   root.updateMatrixWorld(true)
   sceneRegistry.nodes.set(node.id, root)
@@ -62,7 +62,7 @@ test('wall paint resolves a batched face band before hover release', () => {
         localPosition: undefined,
         ray: new Ray(new Vector3(0, 0, 2), new Vector3(0, 0, -1)),
       }),
-    ).toBe('lowerInterior')
+    ).toBe('aSkirting')
   } finally {
     sceneRegistry.nodes.delete(node.id)
     mesh.geometry.dispose()

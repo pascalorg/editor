@@ -50,7 +50,10 @@ function polygonContainsWithTolerance(
   })
 }
 
-function polygonMatchesZoneFootprint(surfacePolygon: Point2D[], footprint: Point2D[]): boolean {
+export function polygonMatchesZoneFootprint(
+  surfacePolygon: Point2D[],
+  footprint: Point2D[],
+): boolean {
   if (surfacePolygon.length < 3) return false
   return (
     polygonContainsWithTolerance(footprint, surfacePolygon, SURFACE_POLYGON_TOLERANCE) &&

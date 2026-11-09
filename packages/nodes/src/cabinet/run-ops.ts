@@ -257,8 +257,8 @@ export function cabinetCornerUnlinkPatchesOnDelete(
  * A cabinet run is a grouping container — once its last child is deleted
  * the empty run must go too, so no orphan group lingers in the scene graph
  * or the persisted data. Children may be modules or derived corner leg
- * runs (which position themselves relative to the run), so ANY survivor
- * keeps the run alive. `pendingDeleteIds` covers multi-select deletes:
+ * runs (which position themselves relative to the run). Hosted assets do not
+ * keep an empty run alive. `pendingDeleteIds` covers multi-select deletes:
  * siblings already part of the same gesture count as gone.
  */
 export function cabinetEmptyRunCascadeDeleteIds(
@@ -271,7 +271,7 @@ export function cabinetEmptyRunCascadeDeleteIds(
   const hasSurvivingChild = (parent.children ?? []).some((childId) => {
     const id = childId as AnyNodeId
     if (id === node.id || pendingDeleteIds.has(id)) return false
-    return nodes[id] != null
+    return nodes[id]?.type === 'cabinet' || nodes[id]?.type === 'cabinet-module'
   })
   return hasSurvivingChild ? [] : [parent.id as AnyNodeId]
 }
@@ -481,7 +481,7 @@ export function cabinetModuleCanEqualizeWidth(
   run: CabinetNode,
 ): boolean {
   return (
-    module.moduleKind !== 'corner-filler' &&
+    module.moduleKind === 'standard' &&
     resolveCabinetType(module, run) === 'base' &&
     stackForCabinet(module).every((compartment) =>
       EQUALIZABLE_CABINET_COMPARTMENTS.has(compartment.type),
@@ -615,7 +615,7 @@ export function cabinetRunArrayPlan(
 
   const modules = cabinetModulesForRun(run, nodes)
   const source = modules.find((module) => module.id === options.sourceModuleId)
-  if (!source || source.moduleKind === 'corner-filler') {
+  if (source?.moduleKind !== 'standard') {
     return { ok: false, reason: 'no-source' }
   }
 

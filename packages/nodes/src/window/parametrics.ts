@@ -1,4 +1,5 @@
-import type { ParametricDescriptor } from '@pascal-app/core'
+import type { AnyNode, AnyNodeId, ParametricDescriptor } from '@pascal-app/core'
+import { unwrapCorner } from '@pascal-app/core/building'
 import type { WindowNode } from './schema'
 
 /**
@@ -9,6 +10,12 @@ import type { WindowNode } from './schema'
  * `case 'window':`.
  */
 export const windowParametrics: ParametricDescriptor<WindowNode> = {
+  // One side of a corner window deleted: the other is a plain window again, framed at the corner.
+  onDelete: (node, nodes) =>
+    Object.entries(unwrapCorner(nodes, node.id)).map(([id, data]) => ({
+      id: id as AnyNodeId,
+      data: data as Partial<AnyNode>,
+    })),
   groups: [
     {
       label: 'Dimensions',

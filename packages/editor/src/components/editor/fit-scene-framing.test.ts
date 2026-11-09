@@ -20,6 +20,7 @@ describe('fit-scene framing', () => {
       targetX: 0,
       targetY: 0,
       targetZ: 0,
+      eyeHeight: 20,
     })
   })
 
@@ -33,7 +34,16 @@ describe('fit-scene framing', () => {
       targetX: 10,
       targetY: 0,
       targetZ: 20,
+      eyeHeight: 32,
     })
+  })
+
+  test('rests the pivot and lifts the eye by the level ground height', () => {
+    const lookAt = computeFitSceneLookAt(sampleBounds, 3)
+    expect(lookAt.targetY).toBe(3)
+    expect(lookAt.eyeY).toBe(35)
+    expect(lookAt.eyeHeight).toBe(32)
+    expect(computeFitSceneLookAt(null, 3)).toMatchObject({ eyeY: 23, targetY: 3 })
   })
 
   test('applies immediately when orbit controls are live', () => {

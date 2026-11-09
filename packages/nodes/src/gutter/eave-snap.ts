@@ -2,6 +2,7 @@ import {
   computeGutterEaveY,
   GUTTER_EAVE_TUCK_INWARD,
   GUTTER_EAVE_TUCK_UP,
+  getRoofShapeEaveOverhang,
   getRoofShapeEaveSides,
   type RoofSegmentNode,
   type RoofType,
@@ -108,7 +109,7 @@ export function resolveEaveSnap(
 ): EaveSnap {
   const halfW = (segment.width ?? 0) / 2
   const halfD = (segment.depth ?? 0) / 2
-  const overhang = segment.overhang ?? 0
+  const overhang = getRoofShapeEaveOverhang(segment)
 
   // The slope keeps descending past the wall edge by the overhang
   // span; same drop on every eave (pitch is the segment-wide primary

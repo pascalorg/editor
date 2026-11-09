@@ -1,0 +1,99 @@
+'use client'
+import {
+  type AnyNodeId,
+  planWallMerge,
+  runAsSingleSceneHistoryStep,
+  usePascalI18n,
+  useScene,
+} from '@pascal-app/core'
+import {
+  ActionMenuButton,
+  captureElementActionOrigin,
+  completeElementAction,
+  triggerSFX,
+} from '@pascal-app/editor'
+import { useViewer } from '@pascal-app/viewer'
+import { FoldHorizontal, Scissors } from 'lucide-react'
+import { useMemo } from 'react'
+import { openWallSplit } from './split-session'
+
+/** The wall's action-menu contributions: Split (one wall), Merge (several). */
+export default function WallActions() {
+  return (
+    <>
+      <SplitWallAction />
+      <MergeWallsAction />
+    </>
+  )
+}
+
+function SplitWallAction() {
+  const i18n = usePascalI18n()
+  const selected = useViewer((s) => s.selection.selectedIds)
+  const wall = useScene((s) =>
+    selected.length === 1 ? s.nodes[selected[0] as AnyNodeId] : undefined,
+  )
+  const readOnly = useScene((s) => s.readOnly)
+  if (wall?.type !== 'wall') return null
+  return (
+    <ActionMenuButton
+      disabled={readOnly}
+      label={i18n._({ id: 'node.wall.actions.splitWall', message: 'Split wall' })}
+      onClick={(event) => {
+        event.stopPropagation()
+        openWallSplit(wall)
+      }}
+    >
+      <Scissors className="size-4" />
+    </ActionMenuButton>
+  )
+}
+
+/** Joins selected walls that continue each other into one — the inverse of Split. */
+function MergeWallsAction() {
+  const i18n = usePascalI18n()
+  const selected = useViewer((s) => s.selection.selectedIds) as AnyNodeId[]
+  const nodes = useScene((s) => s.nodes)
+  const readOnly = useScene((s) => s.readOnly)
+  // null: not a wall selection (render nothing); otherwise why it can't merge (undefined when the
+  // plan gave no reason of its own), or null.
+  const merge = useMemo(() => {
+    if (selected.length < 2 || selected.some((id) => nodes[id]?.type !== 'wall')) return null
+    try {
+      planWallMerge(nodes, selected)
+      return { reason: null }
+    } catch (error) {
+      return { reason: error instanceof Error ? error.message : undefined }
+    }
+  }, [nodes, selected])
+  if (!merge) return null
+  // Worded here rather than in the memo, so a change of language reaches it.
+  const reason =
+    merge.reason === undefined
+      ? i18n._({
+          id: 'node.wall.actions.theseWallsCannotBeMerged',
+          message: 'These walls cannot be merged.',
+        })
+      : merge.reason
+  return (
+    <ActionMenuButton
+      disabled={readOnly || reason !== null}
+      disabledReason={reason ?? undefined}
+      label={i18n._({ id: 'node.wall.actions.mergeWalls', message: 'Merge walls' })}
+      onClick={(event) => {
+        event.stopPropagation()
+        const plan = planWallMerge(useScene.getState().nodes, selected)
+        // Walls drilled from one room go back to it; otherwise the merged wall stays selected.
+        const origin = captureElementActionOrigin(selected)
+        runAsSingleSceneHistoryStep(useScene, () =>
+          useScene.getState().applyNodeChanges(plan.changes),
+        )
+        triggerSFX('sfx:structure-build')
+        if (origin) completeElementAction(origin)
+        else useViewer.getState().setSelection({ selectedIds: [plan.wallId] })
+      }}
+    >
+      <FoldHorizontal className="size-4" />
+    </ActionMenuButton>
+  )
+}

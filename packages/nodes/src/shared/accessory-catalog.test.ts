@@ -26,25 +26,24 @@ function nodes(...items: AnyNode[]): Record<AnyNodeId, AnyNode> {
 }
 
 describe('accessory catalog', () => {
-  test.each([
-    'round',
-    'rect',
-    'oval',
-  ] as const)('duct caps close the %s opening while sleeves stay hollow', (shape) => {
-    const cap = DuctFittingNode.parse({ fittingType: 'end-cap', shape })
-    expect(getDuctFittingPorts(cap)).toHaveLength(1)
-    const group = buildDuctFittingGeometry(cap)
-    group.updateMatrixWorld(true)
-    const ray = new Raycaster(new Vector3(-1, 0, 0), new Vector3(1, 0, 0))
-    expect(
-      ray.intersectObject(group, true).some((hit) => hit.object.name === 'end-cap-closure'),
-    ).toBe(true)
-    const coupling = buildDuctFittingGeometry(
-      DuctFittingNode.parse({ fittingType: 'coupling', shape }),
-    )
-    coupling.updateMatrixWorld(true)
-    expect(ray.intersectObject(coupling, true)).toHaveLength(0)
-  })
+  test.each(['round', 'rect', 'oval'] as const)(
+    'duct caps close the %s opening while sleeves stay hollow',
+    (shape) => {
+      const cap = DuctFittingNode.parse({ fittingType: 'end-cap', shape })
+      expect(getDuctFittingPorts(cap)).toHaveLength(1)
+      const group = buildDuctFittingGeometry(cap)
+      group.updateMatrixWorld(true)
+      const ray = new Raycaster(new Vector3(-1, 0, 0), new Vector3(1, 0, 0))
+      expect(
+        ray.intersectObject(group, true).some((hit) => hit.object.name === 'end-cap-closure'),
+      ).toBe(true)
+      const coupling = buildDuctFittingGeometry(
+        DuctFittingNode.parse({ fittingType: 'coupling', shape }),
+      )
+      coupling.updateMatrixWorld(true)
+      expect(ray.intersectObject(coupling, true)).toHaveLength(0)
+    },
+  )
 
   test('damper blade opens independently of its connection ports', () => {
     const closed = DuctFittingNode.parse({ fittingType: 'damper' })

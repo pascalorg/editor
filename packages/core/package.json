@@ -1,6 +1,6 @@
 {
   "name": "@pascal-app/core",
-  "version": "1.0.0",
+  "version": "1.0.7",
   "description": "Core library for Pascal 3D building editor",
   "type": "module",
   "main": "./dist/index.js",
@@ -11,10 +11,20 @@
       "import": "./dist/index.js",
       "default": "./dist/index.js"
     },
+    "./i18n": {
+      "types": "./dist/i18n/index.d.ts",
+      "import": "./dist/i18n/index.js",
+      "default": "./dist/i18n/index.js"
+    },
     "./clone-scene-graph": {
       "types": "./dist/utils/clone-scene-graph.d.ts",
       "import": "./dist/utils/clone-scene-graph.js",
       "default": "./dist/utils/clone-scene-graph.js"
+    },
+    "./structure-kernel": {
+      "types": "./dist/lib/structure-kernel.d.ts",
+      "import": "./dist/lib/structure-kernel.js",
+      "default": "./dist/lib/structure-kernel.js"
     },
     "./scene-migrations": {
       "types": "./dist/utils/scene-migrations.d.ts",
@@ -30,6 +40,21 @@
       "types": "./dist/registry/index.d.ts",
       "import": "./dist/registry/index.js",
       "default": "./dist/registry/index.js"
+    },
+    "./usage-field": {
+      "types": "./dist/spatial/usage-field/index.d.ts",
+      "import": "./dist/spatial/usage-field/index.js",
+      "default": "./dist/spatial/usage-field/index.js"
+    },
+    "./zone-colors": {
+      "types": "./dist/lib/zone-colors.d.ts",
+      "import": "./dist/lib/zone-colors.js",
+      "default": "./dist/lib/zone-colors.js"
+    },
+    "./polygon-boolean": {
+      "types": "./dist/lib/polygon-boolean.d.ts",
+      "import": "./dist/lib/polygon-boolean.js",
+      "default": "./dist/lib/polygon-boolean.js"
     },
     "./schema": {
       "types": "./dist/schema/index.d.ts",
@@ -56,6 +81,11 @@
       "import": "./dist/lib/plan-footprint.js",
       "default": "./dist/lib/plan-footprint.js"
     },
+    "./site-placement": {
+      "types": "./dist/lib/site-placement.d.ts",
+      "import": "./dist/lib/site-placement.js",
+      "default": "./dist/lib/site-placement.js"
+    },
     "./wall": {
       "types": "./dist/systems/wall/wall-footprint.d.ts",
       "import": "./dist/systems/wall/wall-footprint.js",
@@ -65,6 +95,51 @@
       "types": "./dist/systems/stair/stair-opening-sync.d.ts",
       "import": "./dist/systems/stair/stair-opening-sync.js",
       "default": "./dist/systems/stair/stair-opening-sync.js"
+    },
+    "./stair-footprint": {
+      "types": "./dist/systems/stair/stair-footprint.d.ts",
+      "import": "./dist/systems/stair/stair-footprint.js",
+      "default": "./dist/systems/stair/stair-footprint.js"
+    },
+    "./stair-rise-query": {
+      "types": "./dist/systems/stair/stair-rise-query.d.ts",
+      "import": "./dist/systems/stair/stair-rise-query.js",
+      "default": "./dist/systems/stair/stair-rise-query.js"
+    },
+    "./grade-standing": {
+      "types": "./dist/lib/grade-standing.d.ts",
+      "import": "./dist/lib/grade-standing.js",
+      "default": "./dist/lib/grade-standing.js"
+    },
+    "./ground-level": {
+      "types": "./dist/lib/ground-level.d.ts",
+      "import": "./dist/lib/ground-level.js",
+      "default": "./dist/lib/ground-level.js"
+    },
+    "./procedural-items": {
+      "types": "./dist/procedural-items/index.d.ts",
+      "import": "./dist/procedural-items/index.js",
+      "default": "./dist/procedural-items/index.js"
+    },
+    "./building": {
+      "types": "./dist/building/index.d.ts",
+      "import": "./dist/building/index.js",
+      "default": "./dist/building/index.js"
+    },
+    "./agent-tools": {
+      "types": "./dist/agent-tools/index.d.ts",
+      "import": "./dist/agent-tools/index.js",
+      "default": "./dist/agent-tools/index.js"
+    },
+    "./agent-operations": {
+      "types": "./dist/agent-operations/index.d.ts",
+      "import": "./dist/agent-operations/index.js",
+      "default": "./dist/agent-operations/index.js"
+    },
+    "./runtime": {
+      "types": "./dist/runtime/index.d.ts",
+      "import": "./dist/runtime/index.js",
+      "default": "./dist/runtime/index.js"
     }
   },
   "files": [
@@ -75,6 +150,7 @@
     "build": "tsc --build && bun ../../scripts/fix-node-esm-imports.ts dist",
     "dev": "tsgo --build --watch",
     "test": "bun test src",
+    "check-types": "tsc -p tsconfig.contracts.json --pretty false",
     "bench:registry": "bun run src/registry/__bench__/relations-resolver.bench.ts",
     "bench:schema": "bun run src/schema/__bench__/node-parsers.bench.ts",
     "smoke:node": "node --input-type=module -e \"await import('./dist/index.js')\"",
@@ -84,24 +160,29 @@
     "@react-three/drei": "^10",
     "@react-three/fiber": "^9",
     "react": "^18 || ^19",
-    "three": "^0.186"
+    "three": "^0.187"
   },
   "dependencies": {
-    "dedent": "^1.7.1",
-    "idb-keyval": "^6.2.2",
+    "@lingui/core": "6.12.0",
+    "@lingui/message-utils": "6.12.0",
+    "@pascal-app/lingo": "^0.5.0",
+    "dedent": "^1.7.2",
+    "idb-keyval": "^6.3.0",
     "mitt": "^3.0.1",
-    "nanoid": "^5.1.6",
-    "zod": ">=4.5.4 <4.6",
+    "nanoid": "^6.0.2",
+    "polygon-clipping": "0.15.7",
+    "zod": ">=4.6.7 <4.7",
     "zundo": "^2.3.0",
     "zustand": "^5"
   },
   "devDependencies": {
     "@pascal/typescript-config": "*",
-    "@types/bun": "^1.3.0",
-    "@types/react": "^19.2.2",
-    "@types/three": "^0.184.0",
-    "fake-indexeddb": "^6.2.5",
-    "typescript": "6.0.3"
+    "@types/bun": "^1.4.4",
+    "@types/react": "19.3.0",
+    "@types/three": "^0.187",
+    "@typescript/typescript6": "6.0.2",
+    "fake-indexeddb": "^6.2.7",
+    "typescript": "7.0.2"
   },
   "keywords": [
     "3d",
@@ -113,7 +194,7 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/pascalorg/editor.git",
+    "url": "git+https://github.com/pascalorg/editor.git",
     "directory": "packages/core"
   },
   "license": "MIT",

@@ -7,6 +7,7 @@ import {
   type FloorplanGeometry,
   type FloorplanPalette,
   type FloorplanPoint,
+  getLevelDisplayName,
   isNodeKindEnabled,
   type LiveNodeOverrides,
   type NodeCategory,
@@ -43,15 +44,11 @@ import { resolveNodeForDrawingType } from './drawing-coordination'
 import {
   type FloorplanMetricNotation,
   type FloorplanSchedule,
-  type FloorplanWallDimensionReference,
+  type FloorplanWallDimensionFaces,
   getFloorplanNodeExtension,
   readFloorplanGeometryMetadata,
 } from './floorplan-extension'
-import {
-  type FloorplanMode,
-  resolveFloorplanAnnotationVisibility,
-  resolveFloorplanWallDimensionReference,
-} from './floorplan-mode'
+import { type FloorplanMode, resolveFloorplanAnnotationVisibility } from './floorplan-mode'
 import { createFloorplanPdfDocument, type FloorplanPdfDocument } from './floorplan-pdfkit-document'
 import { renderFloorplanGeometryToPdfKit } from './floorplan-pdfkit-renderer'
 import { FLOORPLAN_VIEW_ROTATION_DEG } from './geometry'
@@ -130,7 +127,7 @@ const NEUTRAL_VIEW_STATE = {
 export function resolveFloorplanExportViewState(
   unit: 'metric' | 'imperial',
   metricNotation: FloorplanMetricNotation,
-  wallDimensionReference?: FloorplanWallDimensionReference,
+  wallDimensionFaces?: FloorplanWallDimensionFaces,
   automaticDimensions = true,
 ) {
   return {
@@ -138,7 +135,7 @@ export function resolveFloorplanExportViewState(
     automaticDimensions,
     unit,
     metricNotation,
-    wallDimensionReference,
+    wallDimensionFaces,
   }
 }
 
@@ -169,8 +166,23 @@ export type FloorplanPageLayout = {
   planBox: { x: number; y: number; width: number; height: number }
 }
 
+/**
+ * Install list the PDF export gates plugin kinds with. Mirrors the GLB exporter:
+ * a scene without explicit install state is legacy, so every loaded plugin kind
+ * draws (`undefined`); the store's `installedPlugins` then only holds host
+ * defaults and would hide plugin nodes the project has always had.
+ */
+export function floorplanExportInstalledPlugins(scene: {
+  installedPlugins: readonly string[]
+  hasExplicitPluginInstallState: boolean
+}): readonly string[] | undefined {
+  return scene.hasExplicitPluginInstallState ? scene.installedPlugins : undefined
+}
+
 export async function exportFloorplanPdf(scope: FloorplanExportScope): Promise<void> {
-  const { nodes, installedPlugins } = useScene.getState()
+  const sceneState = useScene.getState()
+  const { nodes } = sceneState
+  const installedPlugins = floorplanExportInstalledPlugins(sceneState)
   const viewer = useViewer.getState()
   const unit = viewer.unit
   const metricNotation = viewer.metricNotation
@@ -179,10 +191,7 @@ export async function exportFloorplanPdf(scope: FloorplanExportScope): Promise<v
   const annotationVisibility = resolveFloorplanExportAnnotationVisibility(
     floorplanMode,
     expertAnnotationState.visibility,
-  )
-  const wallDimensionReference = resolveFloorplanWallDimensionReference(
-    floorplanMode,
-    expertAnnotationState.wallDimensionReference,
+    expertAnnotationState.showDimensions,
   )
   const navigationAzimuth = useEditor.getState().navigationSyncPose?.azimuth
   const drawingType = useDrawingView.getState().drawingType
@@ -216,7 +225,7 @@ export async function exportFloorplanPdf(scope: FloorplanExportScope): Promise<v
         metricNotation,
         annotationVisibility,
         drawingType,
-        wallDimensionReference,
+        expertAnnotationState.wallDimensionFaces,
         installedPlugins,
       )
       const schedules = collectFloorplanSchedules(nodes, level.id, unit, scope)
@@ -306,6 +315,7 @@ export function collectFloorplanSchedules(
   levelId: AnyNodeId,
   unit: 'metric' | 'imperial',
   scope: FloorplanExportScope = 'full',
+  { drafting = false }: { drafting?: boolean } = {},
 ): FloorplanSchedule[] {
   const siblingsByType = new Map<string, AnyNode[]>()
   const visit = (id: AnyNodeId) => {
@@ -329,7 +339,7 @@ export function collectFloorplanSchedules(
     // or other site-category contributors whose plan geometry was excluded.
     if (!isFloorplanNodeInExportScope(definition, scope)) continue
     const siblings = siblingsByType.get(kind) ?? []
-    const schedule = scheduleContribution({ siblings, nodes, levelId, unit })
+    const schedule = scheduleContribution({ siblings, nodes, levelId, unit, drafting })
     if (schedule && schedule.rows.length > 0) schedules.push(schedule)
   }
   return schedules
@@ -587,8 +597,12 @@ export function resolveFloorplanScreenUnitsPerPixel(
 export function resolveFloorplanExportAnnotationVisibility(
   mode: FloorplanMode,
   liveVisibility: FloorplanAnnotationVisibility,
+  dimensions: boolean,
 ): FloorplanAnnotationVisibility {
-  return resolveFloorplanAnnotationVisibility(mode, liveVisibility, { target: 'export' })
+  return resolveFloorplanAnnotationVisibility(mode, liveVisibility, {
+    target: 'export',
+    dimensions,
+  })
 }
 
 export function resolveFloorplanExportRotationDeg(
@@ -768,8 +782,9 @@ export function collectFloorplanGeometry(
   metricNotation: FloorplanMetricNotation,
   annotationVisibility: FloorplanAnnotationVisibility,
   drawingType: ConstructionDrawingType,
-  wallDimensionReference: FloorplanWallDimensionReference,
-  installedPlugins: readonly string[],
+  wallDimensionFaces: FloorplanWallDimensionFaces,
+  /** `undefined` = legacy scene without install state: every loaded kind draws. */
+  installedPlugins: readonly string[] | undefined,
 ): ExportGeometry[] {
   const noLiveOverrides = new Map<string, LiveNodeOverrides>()
   const levelNodeIdsByType = new Map<string, AnyNodeId[]>()
@@ -778,13 +793,17 @@ export function collectFloorplanGeometry(
   const visit = (id: AnyNodeId) => {
     const node = nodes[id]
     if (!node) return
+    // Same install gate as the live layer: an uninstalled plugin's kinds draw
+    // nothing, while their hosted children keep their own gate.
+    const enabled = isNodeKindEnabled(node.type, installedPlugins)
     const def = nodeRegistry.get(node.type)
-    if (def?.computeFloorplanLevelData) {
+    if (enabled && def?.computeFloorplanLevelData) {
       const ids = levelNodeIdsByType.get(node.type)
       if (ids) ids.push(id)
       else levelNodeIdsByType.set(node.type, [id])
     }
     if (
+      enabled &&
       def?.floorplan &&
       isFloorplanNodeVisible(node) &&
       isFloorplanNodeInExportScope(def, scope)
@@ -802,7 +821,11 @@ export function collectFloorplanGeometry(
   if (activeLevelNode) {
     for (const linked of collectFloorplanLinkedLevelNodes(nodes, levelId, collectedIds)) {
       const definition = nodeRegistry.get(linked.node.type)
-      if (isFloorplanNodeVisible(linked.node) && isFloorplanNodeInExportScope(definition, scope)) {
+      if (
+        isNodeKindEnabled(linked.node.type, installedPlugins) &&
+        isFloorplanNodeVisible(linked.node) &&
+        isFloorplanNodeInExportScope(definition, scope)
+      ) {
         const drawingNode = resolveNodeForDrawingType(linked.node, nodes, drawingType)
         if (drawingNode) {
           entries.push({ id: linked.id, node: drawingNode, parentOverride: activeLevelNode })
@@ -881,7 +904,7 @@ export function collectFloorplanGeometry(
       resolveFloorplanExportViewState(
         unit,
         metricNotation,
-        wallDimensionReference,
+        wallDimensionFaces,
         annotationVisibility.automaticDimensions,
       ),
       levelData,
@@ -1060,9 +1083,7 @@ function levelIndexOf(node: AnyNode): number {
 }
 
 function levelLabelOf(node: AnyNode): string {
-  const name = node.name?.trim()
-  if (name) return name
-  return `Level ${levelIndexOf(node)}`
+  return getLevelDisplayName({ name: node.name, level: levelIndexOf(node) })
 }
 
 function nextFrames(count: number): Promise<void> {

@@ -1,4 +1,4 @@
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import type { McpServer } from '@modelcontextprotocol/server'
 import type { SceneOperations } from '../../operations'
 import { registerCreateFromTemplate } from './create-from-template'
 import { registerCreateHouseFromBrief } from './create-house-from-brief'

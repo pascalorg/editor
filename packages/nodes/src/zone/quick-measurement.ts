@@ -1,25 +1,18 @@
-import {
-  type GeometryContext,
-  type QuickMeasurementReport,
-  resolveAutoZonePolygon,
-  type ZoneNode,
-} from '@pascal-app/core'
+import type { QuickMeasurementReport, ZoneNode } from '@pascal-app/core'
 import {
   polygonBoundaryLength,
   polygonReportAnchor,
   polygonSurfaceArea,
 } from '../shared/quick-measurement'
 
-export function zoneQuickMeasurement(
-  node: ZoneNode,
-  context?: GeometryContext,
-): QuickMeasurementReport | null {
-  const polygon = context ? resolveAutoZonePolygon(node, context.resolve) : node.polygon
+export function zoneQuickMeasurement(node: ZoneNode): QuickMeasurementReport | null {
+  if (node.autoFromWalls && node.enclosureStatus === 'open') return null
+  const polygon = node.polygon
   if (polygon.length < 3) return null
 
   return {
     title: node.name,
-    kindLabel: 'Zone',
+    kindLabel: node.spaceRole === 'room' ? 'Room' : 'Zone',
     anchor: polygonReportAnchor(polygon, 0.08),
     metrics: [
       {
@@ -27,7 +20,7 @@ export function zoneQuickMeasurement(
         label: 'Footprint',
         abbreviation: 'A',
         quantity: 'area',
-        value: polygonSurfaceArea(polygon),
+        value: polygonSurfaceArea(polygon, node.holes),
       },
       {
         key: 'perimeter',

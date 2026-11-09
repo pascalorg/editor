@@ -16,6 +16,7 @@ import {
   SkinnedMesh,
   Sprite,
   SpriteMaterial,
+  Texture,
   type Vector2,
 } from 'three'
 import RenderObject from 'three/src/renderers/common/RenderObject.js'
@@ -297,13 +298,17 @@ describe('merged outline proxy bookkeeping', () => {
     }
     const renderObjects = new RenderObjects(
       renderer as any,
-      { getCacheKey: () => 0, delete: () => {} } as any,
-      {} as any,
+      {
+        getCacheKey: () => 0,
+        getCustomProgramCacheKey: (material: any) => material.customProgramCacheKey(),
+        delete: () => {},
+      } as any,
+      { deleteVertexState: () => {} } as any,
       { delete: () => disposed++ } as any,
       { deleteForRender: () => {} } as any,
       {} as any,
     )
-    const lights = {} as any
+    const lights = { addEventListener: () => {}, removeEventListener: () => {} } as any
     const context = {} as any
     const listeners = (object: any) => object._listeners?.dispose?.length ?? 0
     const initialGeometryListeners = listeners(f.geometry)
@@ -434,4 +439,22 @@ describe('merged outline passes', () => {
     ).not.toThrow()
     f.dispose()
   })
+})
+
+test('selection masks retain cutout coverage and release it when alpha testing is removed', () => {
+  const f = makeOutlineFixture()
+  const map = new Texture()
+  f.material.map = map
+  f.material.alphaTest = 0.5
+  f.tick()
+  const mask = f.renderer.draws[0].material
+  expect(mask.alphaTest).toBe(0.5)
+  expect(mask.opacityNode).toBeDefined()
+  expect(f.mesh.material).toBe(f.material)
+  f.renderer.draws.length = 0
+  f.material.alphaTest = 0
+  f.tick()
+  expect(f.renderer.draws[0].material.alphaTest).toBe(0)
+  map.dispose()
+  f.dispose()
 })

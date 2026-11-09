@@ -1,0 +1,1653 @@
+{
+  "sceneId": "scene-11",
+  "levelId": "level_0xnyuk0r705m454c",
+  "nodes": {
+    "level_0xnyuk0r705m454c": {
+      "id": "level_0xnyuk0r705m454c",
+      "type": "level",
+      "level": 0,
+      "height": 2.5,
+      "object": "node",
+      "visible": true,
+      "children": [
+        "wall_1gcskim364wgn24m",
+        "wall_yqopyvqdi4l8on6v",
+        "wall_srtiz9bi6lhqvmy1",
+        "wall_e8ww7ltu1gv7dl78",
+        "wall_645jt0tuk9v6zdol",
+        "wall_spbnaonci6fxespi",
+        "wall_a0rlxw5mnmrcs473",
+        "wall_rha4lzo7eh3ws82k",
+        "wall_chwknrty2gn0ll3u",
+        "wall_al6p4qomw2nv79ke",
+        "wall_y6bcx6e1lj1wmu9m",
+        "wall_08h45866jpdcpoxk",
+        "wall_nkpituv93ae3d168",
+        "wall_uosn63syg7u24hw3",
+        "wall_hadjwjqxov1m7mkd",
+        "wall_245w9h0woyk03ffa",
+        "wall_uy4h3gi5gmu4f7vq",
+        "wall_9rhv9xsicyx0kyke",
+        "wall_k2wlgacc07nd24dq",
+        "wall_xsygsfzv8ri0lee6",
+        "wall_wc7xoabyvofp0bjg",
+        "wall_kdwdxed5474a7ovr",
+        "wall_1n3kkxqb8gtk7k9g",
+        "wall_jb2otapj9dh8qhf7",
+        "wall_yggy9iov0q7kkvze",
+        "zone_0bib5oli4vnelf3k",
+        "wall_onkzu7xeh8ygknfd",
+        "wall_ske1omhb6gdxjx5c",
+        "wall_eucur8msj0lcc279",
+        "wall_v1tpjvrhuqu0rj8z",
+        "wall_gfggcwgerrtue97v",
+        "wall_vy6zr3mubzidn1xq",
+        "wall_bzfeioqoktx8aodg",
+        "wall_8k3pg5njdivce2yc",
+        "wall_a66wzlr56veg35k0",
+        "wall_8z91mszxqk4z3ce2",
+        "wall_stjav7wrp15025st",
+        "wall_rrgwf1lgecnfqymc",
+        "wall_vh542hlbe2x7bl7e",
+        "wall_h1hyroqmbnwlnqxg",
+        "wall_7ji3co55y1thexcw",
+        "slab_rje4llgwpt43axe3",
+        "wall_x5v9qhzdd4n0q768",
+        "wall_8yxriu0ibk376ri9",
+        "wall_o1zv4h4fhprw76al",
+        "wall_6q762j2nodftv57j",
+        "wall_uwzgvnp40dguvejx",
+        "wall_lu40749r5itl19r5",
+        "wall_65hmc026lsm69f6e",
+        "wall_y80zd8bxdofnz08s",
+        "wall_z00krd8n90dfiisb",
+        "wall_rnr9tia73mywzzuy",
+        "slab_peodurz577287g87",
+        "wall_ubnf4klxb8azzfq4",
+        "wall_v3szxpu3r7ahs1dy",
+        "wall_5mog495q8rsd1ctt",
+        "wall_nxyxj4nb1lkms814",
+        "wall_t3b398e82lxedvf2",
+        "wall_0s7jzrugb29y6yxj",
+        "wall_thkwbhk528kyecqw",
+        "wall_da63wgp36d9ke257",
+        "wall_t34tt1a0tq3w1ent",
+        "wall_ogajz4vxxec8mm70",
+        "wall_a3qv1l9khpcob11l",
+        "wall_48hwocby2etyqf31",
+        "wall_zu1njz00t1attej3",
+        "wall_icc1wb2orbitvd2f"
+      ],
+      "parentId": null,
+      "baseElevation": 0
+    },
+    "slab_peodurz577287g87": {
+      "id": "slab_peodurz577287g87",
+      "type": "slab",
+      "holes": [],
+      "object": "node",
+      "polygon": [
+        [
+          10.5,
+          -1.5
+        ],
+        [
+          8.020833333333334,
+          -1.5
+        ],
+        [
+          8,
+          -1.75
+        ],
+        [
+          10.5,
+          -1.75
+        ]
+      ],
+      "visible": true,
+      "parentId": "level_0xnyuk0r705m454c",
+      "recessed": false,
+      "elevation": 5.050000000000002,
+      "thickness": 0.05,
+      "holeMetadata": [],
+      "autoFromWalls": false
+    },
+    "slab_rje4llgwpt43axe3": {
+      "id": "slab_rje4llgwpt43axe3",
+      "type": "slab",
+      "holes": [],
+      "object": "node",
+      "polygon": [
+        [
+          10.289020069013336,
+          10.240005508086622
+        ],
+        [
+          2.5,
+          10
+        ],
+        [
+          10.289020069013336,
+          10
+        ]
+      ],
+      "visible": true,
+      "parentId": "level_0xnyuk0r705m454c",
+      "recessed": false,
+      "elevation": 2.55,
+      "thickness": 0.05,
+      "holeMetadata": [],
+      "autoFromWalls": true
+    },
+    "wall_08h45866jpdcpoxk": {
+      "id": "wall_08h45866jpdcpoxk",
+      "end": [
+        10.289020069013336,
+        10
+      ],
+      "type": "wall",
+      "slots": {
+        "exterior": "library:preset-beige",
+        "interior": "library:preset-cream"
+      },
+      "start": [
+        10.289020069013336,
+        10.240005508086622
+      ],
+      "object": "node",
+      "visible": true,
+      "backSide": "interior",
+      "children": [],
+      "parentId": "level_0xnyuk0r705m454c",
+      "frontSide": "exterior",
+      "thickness": 0.3
+    },
+    "wall_0s7jzrugb29y6yxj": {
+      "id": "wall_0s7jzrugb29y6yxj",
+      "end": [
+        10.5,
+        -1.5
+      ],
+      "type": "wall",
+      "slots": {
+        "exterior": "library:preset-cream",
+        "interior": "library:preset-beige"
+      },
+      "start": [
+        10.5,
+        -1.75
+      ],
+      "object": "node",
+      "visible": true,
+      "backSide": "unknown",
+      "children": [],
+      "parentId": "level_0xnyuk0r705m454c",
+      "frontSide": "unknown",
+      "thickness": 0.3
+    },
+    "wall_1gcskim364wgn24m": {
+      "id": "wall_1gcskim364wgn24m",
+      "end": [
+        7.789020069013336,
+        5.240005508086622
+      ],
+      "type": "wall",
+      "slots": {
+        "exterior": "library:preset-beige",
+        "interior": "library:preset-beige"
+      },
+      "start": [
+        10.289020069013336,
+        5.240005508086622
+      ],
+      "object": "node",
+      "visible": true,
+      "backSide": "unknown",
+      "children": [],
+      "parentId": "level_0xnyuk0r705m454c",
+      "frontSide": "unknown",
+      "thickness": 0.3
+    },
+    "wall_1n3kkxqb8gtk7k9g": {
+      "id": "wall_1n3kkxqb8gtk7k9g",
+      "end": [
+        6,
+        -11.5
+      ],
+      "type": "wall",
+      "slots": {
+        "exterior": "library:preset-beige",
+        "interior": "library:preset-cream"
+      },
+      "start": [
+        12,
+        -11.5
+      ],
+      "object": "node",
+      "visible": true,
+      "backSide": "unknown",
+      "children": [],
+      "parentId": "level_0xnyuk0r705m454c",
+      "frontSide": "unknown",
+      "thickness": 0.3
+    },
+    "wall_245w9h0woyk03ffa": {
+      "id": "wall_245w9h0woyk03ffa",
+      "end": [
+        2.5,
+        8
+      ],
+      "type": "wall",
+      "slots": {
+        "exterior": "library:preset-cream",
+        "interior": "library:preset-beige"
+      },
+      "start": [
+        2.5,
+        10
+      ],
+      "object": "node",
+      "visible": true,
+      "backSide": "unknown",
+      "children": [],
+      "parentId": "level_0xnyuk0r705m454c",
+      "frontSide": "unknown",
+      "thickness": 0.3
+    },
+    "wall_48hwocby2etyqf31": {
+      "id": "wall_48hwocby2etyqf31",
+      "end": [
+        10,
+        3
+      ],
+      "type": "wall",
+      "slots": {
+        "exterior": "library:preset-cream"
+      },
+      "start": [
+        10.25,
+        1.5
+      ],
+      "height": 2.5,
+      "object": "node",
+      "visible": true,
+      "backSide": "unknown",
+      "children": [],
+      "parentId": "level_0xnyuk0r705m454c",
+      "frontSide": "unknown",
+      "thickness": 0.3,
+      "supportOffset": 5.000000000000002,
+      "supportSlabId": "ground"
+    },
+    "wall_5mog495q8rsd1ctt": {
+      "id": "wall_5mog495q8rsd1ctt",
+      "end": [
+        8,
+        -1.5
+      ],
+      "type": "wall",
+      "slots": {
+        "exterior": "library:preset-cream",
+        "interior": "library:preset-beige"
+      },
+      "start": [
+        10.5,
+        -1.5
+      ],
+      "object": "node",
+      "visible": true,
+      "backSide": "exterior",
+      "children": [],
+      "parentId": "level_0xnyuk0r705m454c",
+      "frontSide": "interior",
+      "thickness": 0.3
+    },
+    "wall_645jt0tuk9v6zdol": {
+      "id": "wall_645jt0tuk9v6zdol",
+      "end": [
+        1,
+        -8.5
+      ],
+      "type": "wall",
+      "slots": {
+        "exterior": "library:preset-beige",
+        "interior": "library:preset-cream"
+      },
+      "start": [
+        1,
+        -11.5
+      ],
+      "object": "node",
+      "visible": true,
+      "backSide": "unknown",
+      "children": [],
+      "parentId": "level_0xnyuk0r705m454c",
+      "frontSide": "unknown",
+      "thickness": 0.3
+    },
+    "wall_65hmc026lsm69f6e": {
+      "id": "wall_65hmc026lsm69f6e",
+      "end": [
+        10.5,
+        -1.75
+      ],
+      "type": "wall",
+      "slots": {
+        "exterior": "library:preset-cream"
+      },
+      "start": [
+        10.5,
+        -1.5
+      ],
+      "height": 2.5,
+      "object": "node",
+      "visible": true,
+      "backSide": "interior",
+      "children": [],
+      "parentId": "level_0xnyuk0r705m454c",
+      "frontSide": "exterior",
+      "thickness": 0.3,
+      "supportOffset": 2.4999999999999982,
+      "supportSlabId": "ground"
+    },
+    "wall_6q762j2nodftv57j": {
+      "id": "wall_6q762j2nodftv57j",
+      "end": [
+        10.5,
+        -3.25
+      ],
+      "type": "wall",
+      "start": [
+        10.5,
+        -3
+      ],
+      "height": 2.5,
+      "object": "node",
+      "visible": true,
+      "backSide": "unknown",
+      "children": [],
+      "parentId": "level_0xnyuk0r705m454c",
+      "frontSide": "unknown",
+      "thickness": 0.3,
+      "supportOffset": 2.4999999999999982,
+      "supportSlabId": "ground"
+    },
+    "wall_7ji3co55y1thexcw": {
+      "id": "wall_7ji3co55y1thexcw",
+      "end": [
+        10.5,
+        10.25
+      ],
+      "type": "wall",
+      "start": [
+        2.5,
+        10
+      ],
+      "height": 2.5,
+      "object": "node",
+      "visible": true,
+      "backSide": "unknown",
+      "children": [],
+      "parentId": "level_0xnyuk0r705m454c",
+      "frontSide": "unknown",
+      "thickness": 0.3
+    },
+    "wall_8k3pg5njdivce2yc": {
+      "id": "wall_8k3pg5njdivce2yc",
+      "end": [
+        2.76471331920785,
+        4.799996148141359
+      ],
+      "type": "wall",
+      "slots": {
+        "exterior": "library:preset-beige",
+        "interior": "library:preset-beige"
+      },
+      "start": [
+        2.76545019020785,
+        8.99999809214136
+      ],
+      "object": "node",
+      "visible": true,
+      "backSide": "unknown",
+      "children": [],
+      "parentId": "level_0xnyuk0r705m454c",
+      "frontSide": "unknown"
+    },
+    "wall_8yxriu0ibk376ri9": {
+      "id": "wall_8yxriu0ibk376ri9",
+      "end": [
+        10,
+        3
+      ],
+      "type": "wall",
+      "start": [
+        10,
+        3.25
+      ],
+      "height": 2.5,
+      "object": "node",
+      "visible": true,
+      "backSide": "unknown",
+      "children": [],
+      "parentId": "level_0xnyuk0r705m454c",
+      "frontSide": "unknown",
+      "thickness": 0.3,
+      "supportOffset": 2.4999999999999982,
+      "supportSlabId": "ground"
+    },
+    "wall_8z91mszxqk4z3ce2": {
+      "id": "wall_8z91mszxqk4z3ce2",
+      "end": [
+        10,
+        1.5
+      ],
+      "type": "wall",
+      "slots": {
+        "exterior": "library:preset-cream",
+        "interior": "library:preset-beige"
+      },
+      "start": [
+        9,
+        1.5
+      ],
+      "object": "node",
+      "visible": true,
+      "backSide": "unknown",
+      "children": [],
+      "parentId": "level_0xnyuk0r705m454c",
+      "frontSide": "unknown",
+      "thickness": 0.3
+    },
+    "wall_9rhv9xsicyx0kyke": {
+      "id": "wall_9rhv9xsicyx0kyke",
+      "end": [
+        -3.5,
+        10
+      ],
+      "type": "wall",
+      "slots": {
+        "exterior": "library:preset-cream",
+        "interior": "library:preset-beige"
+      },
+      "start": [
+        -3.5,
+        8
+      ],
+      "object": "node",
+      "visible": true,
+      "backSide": "unknown",
+      "children": [],
+      "parentId": "level_0xnyuk0r705m454c",
+      "frontSide": "unknown",
+      "thickness": 0.3
+    },
+    "wall_a0rlxw5mnmrcs473": {
+      "id": "wall_a0rlxw5mnmrcs473",
+      "end": [
+        -4.5,
+        -5
+      ],
+      "type": "wall",
+      "slots": {
+        "exterior": "library:preset-beige",
+        "interior": "library:preset-cream"
+      },
+      "start": [
+        -4.5,
+        -8.5
+      ],
+      "object": "node",
+      "visible": true,
+      "backSide": "unknown",
+      "children": [],
+      "parentId": "level_0xnyuk0r705m454c",
+      "frontSide": "unknown",
+      "thickness": 0.3
+    },
+    "wall_a3qv1l9khpcob11l": {
+      "id": "wall_a3qv1l9khpcob11l",
+      "end": [
+        10.25,
+        1.5
+      ],
+      "type": "wall",
+      "slots": {
+        "exterior": "library:preset-cream"
+      },
+      "start": [
+        10,
+        1.5
+      ],
+      "height": 2.5,
+      "object": "node",
+      "visible": true,
+      "backSide": "unknown",
+      "children": [],
+      "parentId": "level_0xnyuk0r705m454c",
+      "frontSide": "unknown",
+      "thickness": 0.3,
+      "supportOffset": 5.000000000000002,
+      "supportSlabId": "ground"
+    },
+    "wall_a66wzlr56veg35k0": {
+      "id": "wall_a66wzlr56veg35k0",
+      "end": [
+        2.76545019020785,
+        8.99999809214136
+      ],
+      "type": "wall",
+      "slots": {
+        "interior": "library:preset-beige"
+      },
+      "start": [
+        2.76545023820785,
+        9.799998186141359
+      ],
+      "object": "node",
+      "visible": true,
+      "backSide": "unknown",
+      "children": [],
+      "parentId": "level_0xnyuk0r705m454c",
+      "frontSide": "unknown"
+    },
+    "wall_al6p4qomw2nv79ke": {
+      "id": "wall_al6p4qomw2nv79ke",
+      "end": [
+        -10,
+        1.5
+      ],
+      "type": "wall",
+      "slots": {
+        "exterior": "library:preset-beige",
+        "interior": "library:preset-cream"
+      },
+      "start": [
+        -6,
+        1.5
+      ],
+      "object": "node",
+      "visible": true,
+      "backSide": "unknown",
+      "children": [],
+      "parentId": "level_0xnyuk0r705m454c",
+      "frontSide": "unknown",
+      "thickness": 0.3
+    },
+    "wall_bzfeioqoktx8aodg": {
+      "id": "wall_bzfeioqoktx8aodg",
+      "end": [
+        10.5,
+        -3
+      ],
+      "type": "wall",
+      "slots": {
+        "exterior": "library:preset-cream",
+        "interior": "library:preset-cream"
+      },
+      "start": [
+        7.75,
+        -3
+      ],
+      "object": "node",
+      "visible": true,
+      "backSide": "unknown",
+      "children": [],
+      "parentId": "level_0xnyuk0r705m454c",
+      "frontSide": "unknown",
+      "thickness": 0.3
+    },
+    "wall_chwknrty2gn0ll3u": {
+      "id": "wall_chwknrty2gn0ll3u",
+      "end": [
+        -6,
+        1.5
+      ],
+      "type": "wall",
+      "slots": {
+        "exterior": "library:preset-beige",
+        "interior": "library:preset-cream"
+      },
+      "start": [
+        -6,
+        -5
+      ],
+      "object": "node",
+      "visible": true,
+      "backSide": "unknown",
+      "children": [],
+      "parentId": "level_0xnyuk0r705m454c",
+      "frontSide": "unknown",
+      "thickness": 0.3
+    },
+    "wall_da63wgp36d9ke257": {
+      "id": "wall_da63wgp36d9ke257",
+      "end": [
+        9,
+        1.5
+      ],
+      "type": "wall",
+      "slots": {
+        "exterior": "library:preset-cream",
+        "interior": "library:preset-beige"
+      },
+      "start": [
+        8.5,
+        1.5
+      ],
+      "object": "node",
+      "visible": true,
+      "backSide": "unknown",
+      "children": [],
+      "parentId": "level_0xnyuk0r705m454c",
+      "frontSide": "unknown",
+      "thickness": 0.3
+    },
+    "wall_e8ww7ltu1gv7dl78": {
+      "id": "wall_e8ww7ltu1gv7dl78",
+      "end": [
+        10,
+        3
+      ],
+      "type": "wall",
+      "slots": {
+        "exterior": "library:preset-cream",
+        "interior": "library:preset-beige"
+      },
+      "start": [
+        10,
+        1.5
+      ],
+      "object": "node",
+      "visible": true,
+      "backSide": "unknown",
+      "children": [],
+      "parentId": "level_0xnyuk0r705m454c",
+      "frontSide": "unknown",
+      "thickness": 0.3
+    },
+    "wall_eucur8msj0lcc279": {
+      "id": "wall_eucur8msj0lcc279",
+      "end": [
+        10,
+        3
+      ],
+      "type": "wall",
+      "slots": {
+        "exterior": "library:preset-beige",
+        "interior": "library:preset-cream"
+      },
+      "start": [
+        10.5,
+        3.75
+      ],
+      "object": "node",
+      "visible": true,
+      "backSide": "unknown",
+      "children": [],
+      "parentId": "level_0xnyuk0r705m454c",
+      "frontSide": "unknown",
+      "thickness": 0.3
+    },
+    "wall_gfggcwgerrtue97v": {
+      "id": "wall_gfggcwgerrtue97v",
+      "end": [
+        12.289020069013336,
+        -11.759994491913378
+      ],
+      "type": "wall",
+      "slots": {
+        "exterior": "library:preset-cream"
+      },
+      "start": [
+        12,
+        -11.5
+      ],
+      "object": "node",
+      "visible": true,
+      "backSide": "unknown",
+      "children": [],
+      "parentId": "level_0xnyuk0r705m454c",
+      "frontSide": "unknown",
+      "thickness": 0.3
+    },
+    "wall_h1hyroqmbnwlnqxg": {
+      "id": "wall_h1hyroqmbnwlnqxg",
+      "end": [
+        8,
+        5
+      ],
+      "type": "wall",
+      "start": [
+        2.75,
+        4.75
+      ],
+      "height": 2.5,
+      "object": "node",
+      "visible": true,
+      "backSide": "unknown",
+      "children": [],
+      "parentId": "level_0xnyuk0r705m454c",
+      "frontSide": "unknown",
+      "supportOffset": 2.499999999999999,
+      "supportSlabId": "ground"
+    },
+    "wall_hadjwjqxov1m7mkd": {
+      "id": "wall_hadjwjqxov1m7mkd",
+      "end": [
+        2.5,
+        10
+      ],
+      "type": "wall",
+      "slots": {
+        "exterior": "library:preset-cream",
+        "interior": "library:preset-beige"
+      },
+      "start": [
+        10.289020069013336,
+        10
+      ],
+      "object": "node",
+      "visible": true,
+      "backSide": "unknown",
+      "children": [],
+      "parentId": "level_0xnyuk0r705m454c",
+      "frontSide": "unknown",
+      "thickness": 0.3
+    },
+    "wall_icc1wb2orbitvd2f": {
+      "id": "wall_icc1wb2orbitvd2f",
+      "end": [
+        10.5,
+        -1.75
+      ],
+      "type": "wall",
+      "slots": {
+        "exterior": "library:preset-cream",
+        "interior": "library:preset-cream"
+      },
+      "start": [
+        8,
+        -1.5
+      ],
+      "height": 2.5,
+      "object": "node",
+      "visible": true,
+      "backSide": "unknown",
+      "children": [],
+      "parentId": "level_0xnyuk0r705m454c",
+      "frontSide": "unknown",
+      "thickness": 0.3
+    },
+    "wall_jb2otapj9dh8qhf7": {
+      "id": "wall_jb2otapj9dh8qhf7",
+      "end": [
+        1,
+        -11.5
+      ],
+      "type": "wall",
+      "slots": {
+        "exterior": "library:preset-beige",
+        "interior": "library:preset-cream"
+      },
+      "start": [
+        6,
+        -11.5
+      ],
+      "object": "node",
+      "visible": true,
+      "backSide": "unknown",
+      "children": [],
+      "parentId": "level_0xnyuk0r705m454c",
+      "frontSide": "unknown",
+      "thickness": 0.3
+    },
+    "wall_k2wlgacc07nd24dq": {
+      "id": "wall_k2wlgacc07nd24dq",
+      "end": [
+        -10,
+        10
+      ],
+      "type": "wall",
+      "slots": {
+        "exterior": "library:preset-cream",
+        "interior": "library:preset-beige"
+      },
+      "start": [
+        -3.5,
+        10
+      ],
+      "object": "node",
+      "visible": true,
+      "backSide": "unknown",
+      "children": [],
+      "parentId": "level_0xnyuk0r705m454c",
+      "frontSide": "unknown",
+      "thickness": 0.3
+    },
+    "wall_kdwdxed5474a7ovr": {
+      "id": "wall_kdwdxed5474a7ovr",
+      "end": [
+        6,
+        -10
+      ],
+      "type": "wall",
+      "slots": {
+        "exterior": "library:preset-beige",
+        "interior": "library:preset-beige"
+      },
+      "start": [
+        6,
+        -8
+      ],
+      "object": "node",
+      "visible": true,
+      "backSide": "unknown",
+      "children": [],
+      "parentId": "level_0xnyuk0r705m454c",
+      "frontSide": "unknown"
+    },
+    "wall_lu40749r5itl19r5": {
+      "id": "wall_lu40749r5itl19r5",
+      "end": [
+        8,
+        -1.75
+      ],
+      "type": "wall",
+      "start": [
+        8,
+        -1.5
+      ],
+      "height": 2.5,
+      "object": "node",
+      "visible": true,
+      "backSide": "exterior",
+      "children": [],
+      "parentId": "level_0xnyuk0r705m454c",
+      "frontSide": "interior",
+      "thickness": 0.3,
+      "supportOffset": 2.4999999999999982,
+      "supportSlabId": "ground"
+    },
+    "wall_nkpituv93ae3d168": {
+      "id": "wall_nkpituv93ae3d168",
+      "end": [
+        10.289020069013336,
+        5.240005508086622
+      ],
+      "type": "wall",
+      "slots": {
+        "exterior": "library:preset-beige",
+        "interior": "library:preset-cream"
+      },
+      "start": [
+        10.289020069013336,
+        10
+      ],
+      "object": "node",
+      "visible": true,
+      "backSide": "unknown",
+      "children": [],
+      "parentId": "level_0xnyuk0r705m454c",
+      "frontSide": "unknown",
+      "thickness": 0.3
+    },
+    "wall_nxyxj4nb1lkms814": {
+      "id": "wall_nxyxj4nb1lkms814",
+      "end": [
+        8,
+        -1.5
+      ],
+      "type": "wall",
+      "slots": {
+        "interior": "library:preset-cream"
+      },
+      "start": [
+        8,
+        1.4655172413793103
+      ],
+      "height": 2.5,
+      "object": "node",
+      "visible": true,
+      "backSide": "unknown",
+      "children": [],
+      "parentId": "level_0xnyuk0r705m454c",
+      "frontSide": "unknown",
+      "thickness": 0.3,
+      "supportOffset": 5.000000000000002,
+      "supportSlabId": "ground"
+    },
+    "wall_o1zv4h4fhprw76al": {
+      "id": "wall_o1zv4h4fhprw76al",
+      "end": [
+        10,
+        1.5
+      ],
+      "type": "wall",
+      "slots": {
+        "interior": "library:preset-cream"
+      },
+      "start": [
+        10,
+        3
+      ],
+      "height": 2.5,
+      "object": "node",
+      "visible": true,
+      "backSide": "unknown",
+      "children": [],
+      "parentId": "level_0xnyuk0r705m454c",
+      "frontSide": "unknown",
+      "thickness": 0.3,
+      "supportOffset": 2.4999999999999982,
+      "supportSlabId": "ground"
+    },
+    "wall_ogajz4vxxec8mm70": {
+      "id": "wall_ogajz4vxxec8mm70",
+      "end": [
+        10,
+        1.5
+      ],
+      "type": "wall",
+      "slots": {
+        "exterior": "library:preset-cream"
+      },
+      "start": [
+        9,
+        1.5
+      ],
+      "height": 2.5,
+      "object": "node",
+      "visible": true,
+      "backSide": "unknown",
+      "children": [],
+      "parentId": "level_0xnyuk0r705m454c",
+      "frontSide": "unknown",
+      "thickness": 0.3,
+      "supportOffset": 5.000000000000002,
+      "supportSlabId": "ground"
+    },
+    "wall_onkzu7xeh8ygknfd": {
+      "id": "wall_onkzu7xeh8ygknfd",
+      "end": [
+        7.75,
+        5
+      ],
+      "type": "wall",
+      "slots": {
+        "exterior": "library:preset-beige",
+        "interior": "library:preset-beige"
+      },
+      "start": [
+        2.75,
+        4.75
+      ],
+      "object": "node",
+      "visible": true,
+      "backSide": "unknown",
+      "children": [],
+      "parentId": "level_0xnyuk0r705m454c",
+      "frontSide": "unknown"
+    },
+    "wall_rha4lzo7eh3ws82k": {
+      "id": "wall_rha4lzo7eh3ws82k",
+      "end": [
+        -6,
+        -5
+      ],
+      "type": "wall",
+      "slots": {
+        "exterior": "library:preset-beige",
+        "interior": "library:preset-cream"
+      },
+      "start": [
+        -4.5,
+        -5
+      ],
+      "object": "node",
+      "visible": true,
+      "backSide": "unknown",
+      "children": [],
+      "parentId": "level_0xnyuk0r705m454c",
+      "frontSide": "unknown",
+      "thickness": 0.3
+    },
+    "wall_rnr9tia73mywzzuy": {
+      "id": "wall_rnr9tia73mywzzuy",
+      "end": [
+        10.75,
+        -1.75
+      ],
+      "type": "wall",
+      "start": [
+        10.5,
+        -1.75
+      ],
+      "height": 2.5,
+      "object": "node",
+      "visible": true,
+      "backSide": "unknown",
+      "children": [],
+      "parentId": "level_0xnyuk0r705m454c",
+      "frontSide": "unknown",
+      "thickness": 0.3,
+      "supportOffset": 2.4999999999999982,
+      "supportSlabId": "ground"
+    },
+    "wall_rrgwf1lgecnfqymc": {
+      "id": "wall_rrgwf1lgecnfqymc",
+      "end": [
+        8,
+        1.5
+      ],
+      "type": "wall",
+      "slots": {
+        "exterior": "library:preset-cream",
+        "interior": "library:preset-beige"
+      },
+      "start": [
+        8,
+        1.4655172413793105
+      ],
+      "object": "node",
+      "visible": true,
+      "backSide": "unknown",
+      "children": [],
+      "parentId": "level_0xnyuk0r705m454c",
+      "frontSide": "unknown",
+      "thickness": 0.3
+    },
+    "wall_ske1omhb6gdxjx5c": {
+      "id": "wall_ske1omhb6gdxjx5c",
+      "end": [
+        10.5,
+        3.75
+      ],
+      "type": "wall",
+      "slots": {
+        "exterior": "library:preset-beige",
+        "interior": "library:preset-cream"
+      },
+      "start": [
+        10.5,
+        5.25
+      ],
+      "object": "node",
+      "visible": true,
+      "backSide": "unknown",
+      "children": [],
+      "parentId": "level_0xnyuk0r705m454c",
+      "frontSide": "unknown",
+      "thickness": 0.3
+    },
+    "wall_spbnaonci6fxespi": {
+      "id": "wall_spbnaonci6fxespi",
+      "end": [
+        -4.5,
+        -8.5
+      ],
+      "type": "wall",
+      "slots": {
+        "exterior": "library:preset-beige",
+        "interior": "library:preset-cream"
+      },
+      "start": [
+        1,
+        -8.5
+      ],
+      "object": "node",
+      "visible": true,
+      "backSide": "unknown",
+      "children": [],
+      "parentId": "level_0xnyuk0r705m454c",
+      "frontSide": "unknown",
+      "thickness": 0.3
+    },
+    "wall_srtiz9bi6lhqvmy1": {
+      "id": "wall_srtiz9bi6lhqvmy1",
+      "end": [
+        12.289020069013336,
+        -11.759994491913378
+      ],
+      "type": "wall",
+      "slots": {
+        "exterior": "library:preset-beige",
+        "interior": "library:preset-cream"
+      },
+      "start": [
+        12.289020069013336,
+        -4.759994491913378
+      ],
+      "object": "node",
+      "visible": true,
+      "backSide": "unknown",
+      "children": [],
+      "parentId": "level_0xnyuk0r705m454c",
+      "frontSide": "unknown",
+      "thickness": 0.3
+    },
+    "wall_stjav7wrp15025st": {
+      "id": "wall_stjav7wrp15025st",
+      "end": [
+        8,
+        1.4655172413793105
+      ],
+      "type": "wall",
+      "slots": {
+        "exterior": "library:preset-cream",
+        "interior": "library:preset-beige"
+      },
+      "start": [
+        8,
+        -1.5
+      ],
+      "object": "node",
+      "visible": true,
+      "backSide": "unknown",
+      "children": [],
+      "parentId": "level_0xnyuk0r705m454c",
+      "frontSide": "unknown",
+      "thickness": 0.3
+    },
+    "wall_t34tt1a0tq3w1ent": {
+      "id": "wall_t34tt1a0tq3w1ent",
+      "end": [
+        9,
+        1.5
+      ],
+      "type": "wall",
+      "slots": {
+        "exterior": "library:preset-cream"
+      },
+      "start": [
+        8.5,
+        1.5
+      ],
+      "height": 2.5,
+      "object": "node",
+      "visible": true,
+      "backSide": "unknown",
+      "children": [],
+      "parentId": "level_0xnyuk0r705m454c",
+      "frontSide": "unknown",
+      "thickness": 0.3,
+      "supportOffset": 5.000000000000002,
+      "supportSlabId": "ground"
+    },
+    "wall_t3b398e82lxedvf2": {
+      "id": "wall_t3b398e82lxedvf2",
+      "end": [
+        10.5,
+        -1.75
+      ],
+      "type": "wall",
+      "slots": {
+        "exterior": "library:preset-cream",
+        "interior": "library:preset-beige"
+      },
+      "start": [
+        10.5,
+        -3
+      ],
+      "object": "node",
+      "visible": true,
+      "backSide": "unknown",
+      "children": [],
+      "parentId": "level_0xnyuk0r705m454c",
+      "frontSide": "unknown",
+      "thickness": 0.3
+    },
+    "wall_thkwbhk528kyecqw": {
+      "id": "wall_thkwbhk528kyecqw",
+      "end": [
+        8.5,
+        1.5
+      ],
+      "type": "wall",
+      "slots": {
+        "exterior": "library:preset-cream",
+        "interior": "library:preset-beige"
+      },
+      "start": [
+        8,
+        1.5
+      ],
+      "object": "node",
+      "visible": true,
+      "backSide": "unknown",
+      "children": [],
+      "parentId": "level_0xnyuk0r705m454c",
+      "frontSide": "unknown",
+      "thickness": 0.3
+    },
+    "wall_ubnf4klxb8azzfq4": {
+      "id": "wall_ubnf4klxb8azzfq4",
+      "end": [
+        10,
+        1.5
+      ],
+      "type": "wall",
+      "slots": {
+        "exterior": "library:preset-cream"
+      },
+      "start": [
+        8,
+        1.4655172413793103
+      ],
+      "height": 2.5,
+      "object": "node",
+      "visible": true,
+      "backSide": "unknown",
+      "children": [],
+      "parentId": "level_0xnyuk0r705m454c",
+      "frontSide": "unknown",
+      "thickness": 0.3,
+      "supportOffset": 2.5000000000000018,
+      "supportSlabId": "ground"
+    },
+    "wall_uosn63syg7u24hw3": {
+      "id": "wall_uosn63syg7u24hw3",
+      "end": [
+        10.289020069013336,
+        10
+      ],
+      "type": "wall",
+      "start": [
+        10.5,
+        10
+      ],
+      "object": "node",
+      "visible": true,
+      "backSide": "unknown",
+      "children": [],
+      "parentId": "level_0xnyuk0r705m454c",
+      "frontSide": "unknown",
+      "thickness": 0.3
+    },
+    "wall_uwzgvnp40dguvejx": {
+      "id": "wall_uwzgvnp40dguvejx",
+      "end": [
+        8,
+        -1.5
+      ],
+      "type": "wall",
+      "slots": {
+        "interior": "library:preset-cream"
+      },
+      "start": [
+        8,
+        1.4655172413793103
+      ],
+      "height": 2.5,
+      "object": "node",
+      "visible": true,
+      "backSide": "unknown",
+      "children": [],
+      "parentId": "level_0xnyuk0r705m454c",
+      "frontSide": "unknown",
+      "thickness": 0.3,
+      "supportOffset": 2.4999999999999982,
+      "supportSlabId": "ground"
+    },
+    "wall_uy4h3gi5gmu4f7vq": {
+      "id": "wall_uy4h3gi5gmu4f7vq",
+      "end": [
+        -3.5,
+        8
+      ],
+      "type": "wall",
+      "slots": {
+        "exterior": "library:preset-cream",
+        "interior": "library:preset-beige"
+      },
+      "start": [
+        2.5,
+        8
+      ],
+      "object": "node",
+      "visible": true,
+      "backSide": "unknown",
+      "children": [],
+      "parentId": "level_0xnyuk0r705m454c",
+      "frontSide": "unknown",
+      "thickness": 0.3
+    },
+    "wall_v1tpjvrhuqu0rj8z": {
+      "id": "wall_v1tpjvrhuqu0rj8z",
+      "end": [
+        8,
+        5
+      ],
+      "type": "wall",
+      "slots": {
+        "exterior": "library:preset-beige"
+      },
+      "start": [
+        7.75,
+        5
+      ],
+      "object": "node",
+      "visible": true,
+      "backSide": "unknown",
+      "children": [],
+      "parentId": "level_0xnyuk0r705m454c",
+      "frontSide": "unknown"
+    },
+    "wall_v3szxpu3r7ahs1dy": {
+      "id": "wall_v3szxpu3r7ahs1dy",
+      "end": [
+        10,
+        3
+      ],
+      "type": "wall",
+      "slots": {
+        "interior": "library:preset-cream"
+      },
+      "start": [
+        10.5,
+        5
+      ],
+      "height": 2.5,
+      "object": "node",
+      "visible": true,
+      "backSide": "unknown",
+      "children": [],
+      "parentId": "level_0xnyuk0r705m454c",
+      "frontSide": "unknown",
+      "thickness": 0.3,
+      "supportOffset": 2.5,
+      "supportSlabId": "ground"
+    },
+    "wall_vh542hlbe2x7bl7e": {
+      "id": "wall_vh542hlbe2x7bl7e",
+      "end": [
+        9,
+        1.5
+      ],
+      "type": "wall",
+      "start": [
+        8,
+        1.4655172413793103
+      ],
+      "object": "node",
+      "visible": true,
+      "backSide": "unknown",
+      "children": [],
+      "parentId": "level_0xnyuk0r705m454c",
+      "frontSide": "unknown"
+    },
+    "wall_vy6zr3mubzidn1xq": {
+      "id": "wall_vy6zr3mubzidn1xq",
+      "end": [
+        7.75,
+        -3
+      ],
+      "type": "wall",
+      "slots": {
+        "exterior": "library:preset-cream"
+      },
+      "start": [
+        7.789020069013336,
+        -4.759994491913378
+      ],
+      "object": "node",
+      "visible": true,
+      "backSide": "unknown",
+      "children": [],
+      "parentId": "level_0xnyuk0r705m454c",
+      "frontSide": "unknown",
+      "thickness": 0.3
+    },
+    "wall_wc7xoabyvofp0bjg": {
+      "id": "wall_wc7xoabyvofp0bjg",
+      "end": [
+        6,
+        -8
+      ],
+      "type": "wall",
+      "slots": {
+        "exterior": "library:preset-beige",
+        "interior": "library:preset-beige"
+      },
+      "start": [
+        6,
+        -5
+      ],
+      "object": "node",
+      "visible": true,
+      "backSide": "unknown",
+      "children": [],
+      "parentId": "level_0xnyuk0r705m454c",
+      "frontSide": "unknown"
+    },
+    "wall_x5v9qhzdd4n0q768": {
+      "id": "wall_x5v9qhzdd4n0q768",
+      "end": [
+        10.5,
+        5
+      ],
+      "type": "wall",
+      "slots": {
+        "interior": "library:preset-cream"
+      },
+      "start": [
+        10.289020069013336,
+        10
+      ],
+      "height": 2.5,
+      "object": "node",
+      "visible": true,
+      "backSide": "unknown",
+      "children": [],
+      "parentId": "level_0xnyuk0r705m454c",
+      "frontSide": "unknown",
+      "thickness": 0.3,
+      "supportOffset": 2.5,
+      "supportSlabId": "ground"
+    },
+    "wall_xsygsfzv8ri0lee6": {
+      "id": "wall_xsygsfzv8ri0lee6",
+      "end": [
+        6,
+        -5
+      ],
+      "type": "wall",
+      "slots": {
+        "exterior": "library:preset-beige",
+        "interior": "library:preset-beige"
+      },
+      "start": [
+        8,
+        -5
+      ],
+      "object": "node",
+      "visible": true,
+      "backSide": "unknown",
+      "children": [],
+      "parentId": "level_0xnyuk0r705m454c",
+      "frontSide": "unknown"
+    },
+    "wall_y6bcx6e1lj1wmu9m": {
+      "id": "wall_y6bcx6e1lj1wmu9m",
+      "end": [
+        -10,
+        10
+      ],
+      "type": "wall",
+      "slots": {
+        "exterior": "library:preset-beige",
+        "interior": "library:preset-cream"
+      },
+      "start": [
+        -10,
+        1.5
+      ],
+      "object": "node",
+      "visible": true,
+      "backSide": "unknown",
+      "children": [],
+      "parentId": "level_0xnyuk0r705m454c",
+      "frontSide": "unknown",
+      "thickness": 0.3
+    },
+    "wall_y80zd8bxdofnz08s": {
+      "id": "wall_y80zd8bxdofnz08s",
+      "end": [
+        10.5,
+        -3
+      ],
+      "type": "wall",
+      "slots": {
+        "interior": "library:preset-cream"
+      },
+      "start": [
+        10.5,
+        -1.75
+      ],
+      "height": 2.5,
+      "object": "node",
+      "visible": true,
+      "backSide": "unknown",
+      "children": [],
+      "parentId": "level_0xnyuk0r705m454c",
+      "frontSide": "unknown",
+      "thickness": 0.3,
+      "supportOffset": 2.4999999999999982,
+      "supportSlabId": "ground"
+    },
+    "wall_yggy9iov0q7kkvze": {
+      "id": "wall_yggy9iov0q7kkvze",
+      "end": [
+        6,
+        -11.5
+      ],
+      "type": "wall",
+      "slots": {
+        "exterior": "library:preset-beige",
+        "interior": "library:preset-beige"
+      },
+      "start": [
+        6,
+        -10
+      ],
+      "object": "node",
+      "visible": true,
+      "backSide": "unknown",
+      "children": [],
+      "parentId": "level_0xnyuk0r705m454c",
+      "frontSide": "unknown"
+    },
+    "wall_yqopyvqdi4l8on6v": {
+      "id": "wall_yqopyvqdi4l8on6v",
+      "end": [
+        12.289020069013336,
+        -4.759994491913378
+      ],
+      "type": "wall",
+      "slots": {
+        "exterior": "library:preset-beige",
+        "interior": "library:preset-cream"
+      },
+      "start": [
+        7.789020069013336,
+        -4.759994491913378
+      ],
+      "object": "node",
+      "visible": true,
+      "backSide": "unknown",
+      "children": [],
+      "parentId": "level_0xnyuk0r705m454c",
+      "frontSide": "unknown",
+      "thickness": 0.3
+    },
+    "wall_z00krd8n90dfiisb": {
+      "id": "wall_z00krd8n90dfiisb",
+      "end": [
+        10.5,
+        -1.75
+      ],
+      "type": "wall",
+      "slots": {
+        "exterior": "library:preset-cream",
+        "interior": "library:preset-cream"
+      },
+      "start": [
+        8,
+        -1.75
+      ],
+      "height": 2.5,
+      "object": "node",
+      "visible": true,
+      "backSide": "exterior",
+      "children": [],
+      "parentId": "level_0xnyuk0r705m454c",
+      "frontSide": "interior",
+      "thickness": 0.3,
+      "supportOffset": 2.4999999999999982,
+      "supportSlabId": "ground"
+    },
+    "wall_zu1njz00t1attej3": {
+      "id": "wall_zu1njz00t1attej3",
+      "end": [
+        10.75,
+        -3.5
+      ],
+      "type": "wall",
+      "slots": {
+        "interior": "library:preset-cream"
+      },
+      "start": [
+        10.5,
+        -1.75
+      ],
+      "height": 2.5,
+      "object": "node",
+      "visible": true,
+      "backSide": "unknown",
+      "children": [],
+      "parentId": "level_0xnyuk0r705m454c",
+      "frontSide": "unknown",
+      "thickness": 0.3,
+      "supportOffset": 4.999999999999998,
+      "supportSlabId": "ground"
+    },
+    "zone_0bib5oli4vnelf3k": {
+      "id": "zone_0bib5oli4vnelf3k",
+      "type": "zone",
+      "color": "#ef4444",
+      "object": "node",
+      "polygon": [
+        [
+          7.750000001,
+          9.749999999
+        ],
+        [
+          2.750000001,
+          9.750000001
+        ],
+        [
+          2.749999999,
+          4.750000001
+        ],
+        [
+          7.749999999,
+          4.749999999
+        ]
+      ],
+      "visible": true,
+      "parentId": "level_0xnyuk0r705m454c",
+      "occupancy": "",
+      "spaceRole": "generic",
+      "roomNumber": "",
+      "wallFinish": "",
+      "floorFinish": "",
+      "autoFromWalls": false,
+      "ceilingFinish": "",
+      "ceilingHeight": 2.7,
+      "boundaryWallIds": [],
+      "enclosureStatus": "auto",
+      "clearDimensionPolicy": "none",
+      "name": "Room"
+    }
+  }
+}

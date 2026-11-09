@@ -1,10 +1,18 @@
 'use client'
 
-import { type AnyNodeId, emitter, sceneRegistry, useScene, type WallNode } from '@pascal-app/core'
+import {
+  type AnyNodeId,
+  emitter,
+  getLibraryMaterialsVersion,
+  sceneRegistry,
+  useScene,
+  type WallNode,
+} from '@pascal-app/core'
 import {
   drainRebuiltWalls,
   getPendingWallRebuildCount,
   isIsolationActive,
+  isNodeRevealing,
   SCENE_LAYER,
   useViewer,
   type WallMode,
@@ -12,6 +20,7 @@ import {
 import { useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useRef } from 'react'
 import { type Material, Matrix4, Mesh, type Object3D } from 'three'
+import { isSlotPaintPreviewActive } from '../shared/slot-paint'
 import {
   applyWallBatchGroups,
   buildWallBatch,
@@ -53,6 +62,7 @@ type AppearanceInputs = {
   colorPreset: unknown
   sceneTheme: unknown
   materials: object | null
+  libraryVersion: number
 }
 
 const lastAppearance: AppearanceInputs = {
@@ -61,18 +71,21 @@ const lastAppearance: AppearanceInputs = {
   colorPreset: undefined,
   sceneTheme: undefined,
   materials: null,
+  libraryVersion: -1,
 }
 
 function appearanceChanged(): boolean {
   const viewer = useViewer.getState()
   const materials = useScene.getState().materials as object
+  const libraryVersion = getLibraryMaterialsVersion()
 
   if (
     lastAppearance.shading === viewer.shading &&
     lastAppearance.textures === viewer.textures &&
     lastAppearance.colorPreset === viewer.colorPreset &&
     lastAppearance.sceneTheme === viewer.sceneTheme &&
-    lastAppearance.materials === materials
+    lastAppearance.materials === materials &&
+    lastAppearance.libraryVersion === libraryVersion
   ) {
     return false
   }
@@ -82,6 +95,7 @@ function appearanceChanged(): boolean {
   lastAppearance.colorPreset = viewer.colorPreset
   lastAppearance.sceneTheme = viewer.sceneTheme
   lastAppearance.materials = materials
+  lastAppearance.libraryVersion = libraryVersion
   return true
 }
 
@@ -161,6 +175,8 @@ function toCandidate(
 ): WallBatchCandidate | null {
   if (excludedNodeIds.has(nodeId)) return null
   if (node.visible === false) return null
+  // Curtain walls use a separate caster that excludes their transparent panes.
+  if (node.wallType === 'curtain') return null
 
   const mesh = sceneRegistry.nodes.get(nodeId) as Mesh | undefined
   if (!mesh?.visible) return null
@@ -219,10 +235,38 @@ export function collectTintedWalls(wallIds: ReadonlySet<string>): Set<string> {
   const hovered = viewer.hoveredId
   if (hovered && wallIds.has(hovered)) tinted.add(hovered)
 
+  // A paint preview spreads past the hovered wall (a room's walls): each one it
+  // repaints has to draw itself, or the merged copy hides the preview.
+  for (const id of wallIds) if (isSlotPaintPreviewActive(id)) tinted.add(id)
+
   return tinted
 }
 
-function materialSetKey(materials: readonly Material[]): string {
+/**
+ * The materials a wall actually draws, in canonical (uuid) order. Two walls
+ * showing the same finishes batch together however their palettes are laid out
+ * — a room's finish on side a of one wall and side b of the next is one set.
+ */
+export function canonicalWallMaterials(
+  mesh: Pick<Mesh, 'geometry'>,
+  materials: readonly Material[],
+): Material[] {
+  const groups = mesh.geometry.groups
+  const used = new Set<Material>()
+  if (groups.length === 0) {
+    if (materials[0]) used.add(materials[0])
+  } else {
+    for (const group of groups) {
+      const material = materials[group.materialIndex ?? 0]
+      if (material) used.add(material)
+    }
+  }
+  return [...used].sort((left, right) =>
+    left.uuid < right.uuid ? -1 : left.uuid > right.uuid ? 1 : 0,
+  )
+}
+
+export function materialSetKey(materials: readonly Material[]): string {
   return materials.map((material) => material.uuid).join('|')
 }
 
@@ -242,7 +286,7 @@ export function collectWallBatchCandidates(
     const candidate = toCandidate(childId, child as WallNode, excludedNodeIds)
     if (!candidate) continue
 
-    const key = materialSetKey(candidate.materials)
+    const key = materialSetKey(canonicalWallMaterials(candidate.mesh, candidate.materials))
     const bucket = grouped.get(key)
     if (bucket) bucket.push(candidate)
     else grouped.set(key, [candidate])
@@ -259,6 +303,20 @@ export function collectWallBatchCandidates(
  * pays off once enough walls have drifted out, so a single edit leaves the
  * floor's merged mesh exactly where it was.
  */
+/**
+ * A wall still rising from a construction reveal moves every frame, and a
+ * merge would freeze it mid-rise — or, if it were left out, keep it out until
+ * enough walls drift to re-sew the floor. Its level waits for the whole rise.
+ */
+function levelHasRevealingWalls(levelId: string): boolean {
+  const nodes = useScene.getState().nodes
+  const level = nodes[levelId as AnyNodeId]
+  if (level?.type !== 'level') return false
+  return level.children.some(
+    (childId) => nodes[childId]?.type === 'wall' && isNodeRevealing(childId),
+  )
+}
+
 function unbatchedWallCount(
   levelId: string,
   excludedNodeIds: ReadonlySet<string> = EMPTY_IDS,
@@ -296,19 +354,24 @@ function mergeLevel(levelId: string, excludedNodeIds: ReadonlySet<string> = EMPT
   for (const candidates of collectWallBatchCandidates(levelId, excludedNodeIds).values()) {
     if (candidates.length < MIN_BATCH_WALLS) continue
 
+    const canonical = canonicalWallMaterials(candidates[0]!.mesh, candidates[0]!.materials)
     const sources = candidates.map((candidate) => {
       candidate.mesh.updateWorldMatrix(true, false)
       return {
         nodeId: candidate.nodeId,
         geometry: candidate.mesh.geometry,
         matrix: localMatrix.multiplyMatrices(rootInverse, candidate.mesh.matrixWorld).clone(),
+        materialIndexMap: candidate.materials.map((material) => {
+          const index = canonical.indexOf(material)
+          return index < 0 ? undefined : index
+        }),
       }
     })
 
     const batch = buildWallBatch(sources)
     if (!batch) continue
 
-    const mesh = new Mesh(batch.geometry, candidates[0]!.materials)
+    const mesh = new Mesh(batch.geometry, canonical)
     mesh.name = 'wall-batch'
     mesh.userData.pascalExport = 'strip'
     mesh.castShadow = true
@@ -397,6 +460,7 @@ export const WallBatchSystem = () => {
       lastAppearance.colorPreset = undefined
       lastAppearance.sceneTheme = undefined
       lastAppearance.materials = null
+      lastAppearance.libraryVersion = -1
     },
     [],
   )
@@ -441,6 +505,16 @@ export function runBatchFrame(
     releaseWall(nodeId)
   }
   changedWalls.clear()
+
+  // A wall going out in a reverse play (an undo) moves its own mesh while the merged mesh keeps
+  // drawing it whole: it draws itself until the host takes it out. Its level waits for it
+  // (`levelHasRevealingWalls`), so it is not sewn back in under the play.
+  for (const [nodeId, record] of [...batchByNode]) {
+    if (!isNodeRevealing(nodeId)) continue
+    staleLevels.add(record.levelId)
+    releaseWall(nodeId)
+    changed = true
+  }
 
   // A tinted wall paints itself through materials the merged mesh never reads,
   // so it goes back to drawing its own geometry for as long as it is lit. It
@@ -548,10 +622,22 @@ export function runBatchFrame(
     return
   }
 
+  const revealingLevels = new Set<string>()
   for (const levelId of staleLevels) {
+    if (levelHasRevealingWalls(levelId)) {
+      revealingLevels.add(levelId)
+      continue
+    }
     if (unbatchedWallCount(levelId, excludedNodeIds) >= MIN_BATCH_WALLS) {
       mergeLevel(levelId, excludedNodeIds)
     }
   }
   staleLevels.clear()
+  if (revealingLevels.size === 0) return
+  for (const levelId of revealingLevels) staleLevels.add(levelId)
+  if (wakeRef.current) clearTimeout(wakeRef.current)
+  wakeRef.current = setTimeout(() => {
+    wakeRef.current = null
+    invalidate()
+  }, BATCH_SETTLE_MS + 20)
 }

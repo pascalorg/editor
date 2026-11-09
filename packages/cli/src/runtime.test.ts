@@ -3,6 +3,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import http from 'node:http'
 import os from 'node:os'
 import path from 'node:path'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import {
   activateEditorRuntime,
   getEditorStatus,
@@ -56,22 +57,22 @@ describe('managed runtime', () => {
     expect(await Bun.file(paths.database).text()).toBe('persistent')
   })
 
-  test('preserves a configured Mint host origin in the editor process', async () => {
+  test('preserves a configured public URL in the editor process', async () => {
     const root = await temporaryRoot()
     const source = await fakeRuntime(root, '1.2.3')
     const paths = resolvePascalPaths({ PASCAL_HOME: path.join(root, 'home') })
-    const previousMintOrigin = process.env.MINT_PASCAL_HOST_ORIGIN
-    process.env.MINT_PASCAL_HOST_ORIGIN = 'https://pascal.example.com'
+    const previousPublicUrl = process.env.PASCAL_PUBLIC_URL
+    process.env.PASCAL_PUBLIC_URL = 'https://pascal.example.com'
 
     try {
       const started = await startEditor({ paths, runtimeSource: source })
-      const response = await fetch(`http://127.0.0.1:${started.state.port}/mint-origin`)
+      const response = await fetch(`http://127.0.0.1:${started.state.port}/public-url`)
 
       expect(await response.text()).toBe('https://pascal.example.com')
     } finally {
       await stopEditor(paths)
-      if (previousMintOrigin === undefined) delete process.env.MINT_PASCAL_HOST_ORIGIN
-      else process.env.MINT_PASCAL_HOST_ORIGIN = previousMintOrigin
+      if (previousPublicUrl === undefined) delete process.env.PASCAL_PUBLIC_URL
+      else process.env.PASCAL_PUBLIC_URL = previousPublicUrl
     }
   })
 
@@ -280,7 +281,26 @@ describe('managed runtime', () => {
     const started = await startEditor({ paths, runtimeSource: firstSource })
     const candidate = await installBundledRuntime(paths, secondSource, { activate: false })
 
-    const result = await activateEditorRuntime(paths, candidate)
+    // Exercise the published layout, where a CLI pin exists even for an explicit activation.
+    const cliDist = path.join(root, 'cli/dist')
+    const built = await Bun.build({
+      entrypoints: [fileURLToPath(new URL('./editor-process.ts', import.meta.url))],
+      outdir: cliDist,
+      target: 'node',
+    })
+    expect(built.success).toBe(true)
+    await writeFile(path.join(cliDist, '../package.json'), JSON.stringify({ version: '3.0.0' }))
+    await writeFile(
+      path.join(cliDist, 'runtime-source.json'),
+      JSON.stringify({
+        version: '3.0.0',
+        url: 'https://127.0.0.1:1/runtime.tar.gz',
+        sha256: 'a'.repeat(64),
+        size: 10,
+      }),
+    )
+    const packaged = await import(pathToFileURL(path.join(cliDist, 'editor-process.js')).href)
+    const result = await packaged.activateEditorRuntime(paths, candidate)
 
     expect(result.restarted).toBe(true)
     const status = await getEditorStatus(paths)
@@ -309,6 +329,82 @@ describe('managed runtime', () => {
     expect(result).toEqual({ runtime: candidate, restarted: false })
     expect((await readActiveRuntime(paths))?.version).toBe('2.0.0')
     expect((await getEditorStatus(paths)).running).toBe(false)
+  })
+})
+
+describe('runtime pinned by the CLI package', () => {
+  type ProgressEvent = { step: string } & Record<string, unknown>
+
+  async function pinnedSourceFile(root: string, version: string): Promise<string> {
+    const file = path.join(root, `runtime-source-${version}.json`)
+    await writeFile(
+      file,
+      JSON.stringify({
+        version,
+        url: `https://127.0.0.1:1/pascal-web-runtime-${version}.tar.gz`,
+        sha256: 'a'.repeat(64),
+        size: 10,
+      }),
+    )
+    return file
+  }
+
+  test('a newer CLI starts the runtime it was published with, not the previously active one', async () => {
+    const root = await temporaryRoot()
+    const paths = resolvePascalPaths({ PASCAL_HOME: path.join(root, 'home') })
+    await installBundledRuntime(paths, await fakeRuntime(root, '1.2.3'))
+    await installBundledRuntime(paths, await fakeRuntime(root, '2.0.0'), { activate: false })
+    const events: ProgressEvent[] = []
+
+    const started = await startEditor({
+      paths,
+      port: 0,
+      runtimeSourceFile: await pinnedSourceFile(root, '2.0.0'),
+      onProgress: (event) => events.push(event),
+    })
+
+    expect(started.state.version).toBe('2.0.0')
+    expect((await readActiveRuntime(paths))?.version).toBe('2.0.0')
+    expect(events).toContainEqual({ step: 'runtime-ready', version: '2.0.0', installed: false })
+    await stopEditor(paths)
+  })
+
+  test('reports an already-running older runtime instead of restarting it', async () => {
+    const root = await temporaryRoot()
+    const paths = resolvePascalPaths({ PASCAL_HOME: path.join(root, 'home') })
+    const first = await startEditor({
+      paths,
+      port: 0,
+      runtimeSource: await fakeRuntime(root, '1.2.3'),
+    })
+    const events: ProgressEvent[] = []
+
+    const second = await startEditor({
+      paths,
+      runtimeSourceFile: await pinnedSourceFile(root, '2.0.0'),
+      onProgress: (event) => events.push(event),
+    })
+
+    expect(second.alreadyRunning).toBe(true)
+    expect(second.state.instanceId).toBe(first.state.instanceId)
+    expect(events).toContainEqual({ step: 'runtime-outdated', active: '1.2.3', pinned: '2.0.0' })
+    expect((await readActiveRuntime(paths))?.version).toBe('1.2.3')
+    await stopEditor(paths)
+  })
+
+  test('keeps the active runtime when the package manifest cannot be read', async () => {
+    const root = await temporaryRoot()
+    const paths = resolvePascalPaths({ PASCAL_HOME: path.join(root, 'home') })
+    await installBundledRuntime(paths, await fakeRuntime(root, '1.2.3'))
+
+    const started = await startEditor({
+      paths,
+      port: 0,
+      runtimeSourceFile: path.join(root, 'missing-runtime-source.json'),
+    })
+
+    expect(started.state.version).toBe('1.2.3')
+    await stopEditor(paths)
   })
 })
 
@@ -342,8 +438,8 @@ const server = http.createServer((request, response) => {
     }))
     return
   }
-  if (request.url === '/mint-origin') {
-    response.end(process.env.MINT_PASCAL_HOST_ORIGIN ?? '')
+  if (request.url === '/public-url') {
+    response.end(process.env.PASCAL_PUBLIC_URL ?? '')
     return
   }
   response.end('{}')

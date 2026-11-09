@@ -1,9 +1,11 @@
 import type { AnyNode, AnyNodeId } from '../schema/types'
+import { filterDerivedNodeWrites } from '../store/derived-node-guard'
 import {
   activeSceneCommitNodeIds,
   pauseSceneHistory,
   resumeSceneHistory,
 } from '../store/history-control'
+
 import {
   type CloneNodesIntoOptions,
   collectSubtree,
@@ -20,6 +22,7 @@ import type { SceneApi } from './types'
 export type SceneStoreLike = {
   getState: () => {
     nodes: Record<AnyNodeId, AnyNode>
+    installedPlugins?: string[]
     rootNodeIds: AnyNodeId[]
     dirtyNodes: Set<AnyNodeId>
     createNode: (node: AnyNode, parentId?: AnyNodeId) => void
@@ -42,6 +45,27 @@ export type SceneStoreLike = {
   temporal: {
     getState: () => { pause: () => void; resume: () => void }
   }
+}
+
+/**
+ * The kernel host seam (frozen by A-02; `ai-surface-agnostic-scene-tools.md`
+ * Phase 0.2). The object every surface — chat, public and hosted MCP, REST,
+ * CLI, bench — hands the one tool kernel. It wraps this module's store seam
+ * instead of adding a second one; the program library's `Host` and MCP's
+ * `SceneOperations` become implementations. Optional capabilities (catalog,
+ * sampling, persistence receipts) join additively, and a missing one is a
+ * typed refusal, never an implicit cloud fallback. Nothing implements it yet.
+ */
+export type SceneToolHost = {
+  store: SceneStoreLike
+  getActiveLevelId: () => AnyNodeId | null
+  /** A host without a selection answers an empty list. */
+  getSelection?: () => readonly AnyNodeId[]
+  /**
+   * Runs `fn` as one logical transaction: validated against the proposed
+   * final graph, committed once and undone as one step (R2, R8).
+   */
+  transact?: <T>(label: string, fn: (scene: SceneApi) => T) => T
 }
 
 /**
@@ -75,18 +99,36 @@ export function createSceneApi(store: SceneStoreLike): SceneApi {
       return store.getState().nodes
     },
 
+    installedPlugins() {
+      return store.getState().installedPlugins
+    },
+
     update(id, patch) {
+      const [update] = filterDerivedNodeWrites(store.getState().nodes, {
+        update: [{ id, data: patch }],
+      }).update
+      if (!update) return
       captureIfNeeded(id)
-      store.getState().updateNode(id, patch)
+      store.getState().updateNode(id, update.data)
     },
 
     upsert(node, parentId) {
+      if (store.getState().nodes[node.id]) {
+        this.update(node.id, parentId === undefined ? node : { ...node, parentId })
+        return node.id
+      }
+      const [create] = filterDerivedNodeWrites(store.getState().nodes, {
+        create: [{ node, parentId }],
+      }).create
+      if (!create) return node.id
       captureIfNeeded(node.id)
-      store.getState().createNode(node, parentId)
+      store.getState().createNode(create.node, create.parentId)
       return node.id
     },
 
     createMany(ops) {
+      ops = filterDerivedNodeWrites(store.getState().nodes, { create: ops }).create
+      if (!ops.length) return
       for (const op of ops) captureIfNeeded(op.node.id)
       const batch = store.getState().createNodes
       if (batch) batch(ops)
@@ -94,6 +136,8 @@ export function createSceneApi(store: SceneStoreLike): SceneApi {
     },
 
     applyChanges(changes) {
+      changes = filterDerivedNodeWrites(store.getState().nodes, changes)
+      if (!changes.create?.length && !changes.update?.length && !changes.delete?.length) return
       for (const op of changes.create ?? []) captureIfNeeded(op.node.id)
       for (const op of changes.update ?? []) captureIfNeeded(op.id)
       for (const id of changes.delete ?? []) captureIfNeeded(id)
@@ -139,9 +183,9 @@ export function createSceneApi(store: SceneStoreLike): SceneApi {
       if (original === null) {
         if (current) store.getState().deleteNode(id)
       } else if (!current) {
-        store.getState().createNode(original)
+        this.upsert(original)
       } else {
-        store.getState().updateNode(id, original)
+        this.update(id, original)
       }
     },
 
@@ -174,7 +218,6 @@ export function createSceneApi(store: SceneStoreLike): SceneApi {
       const { rootId, nodes: cloned } = runCloneNodesInto(nodes, opts)
       const root = cloned[0]
       if (!root) return null
-      const state = store.getState()
       const ops: { node: AnyNode; parentId?: AnyNodeId }[] = []
       for (let i = 0; i < cloned.length; i += 1) {
         const node = cloned[i]!
@@ -184,12 +227,7 @@ export function createSceneApi(store: SceneStoreLike): SceneApi {
           ops.push({ node })
         }
       }
-      const batch = state.createNodes
-      if (batch) {
-        batch(ops)
-      } else {
-        for (const op of ops) state.createNode(op.node, op.parentId)
-      }
+      this.createMany!(ops)
       return rootId
     },
   }

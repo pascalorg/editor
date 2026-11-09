@@ -9,6 +9,7 @@ import {
 } from '@pascal-app/core'
 import { markPerfAction } from '@pascal-app/viewer'
 import useInteractionScope from '../store/use-interaction-scope'
+import { cancelGestures } from './gesture-lifecycle'
 import { registeredDraftingConfig } from './interaction/registered-drafting'
 
 export type HistoryCommandState = {
@@ -130,6 +131,9 @@ export function shouldCancelDraftOnHistoryJump(): boolean {
 }
 
 export function runUndo(): HistoryCommandResult {
+  // A history jump under a live gesture would land on its paused baseline;
+  // every history command, not only the keyboard's, ends it first.
+  cancelGestures('history')
   if (shouldCancelDraftOnHistoryJump()) emitter.emit('tool:cancel')
   if (historyCommandDelegate) {
     const result = historyCommandDelegate.undo()
@@ -147,6 +151,9 @@ export function runUndo(): HistoryCommandResult {
 }
 
 export function runRedo(): HistoryCommandResult {
+  // A history jump under a live gesture would land on its paused baseline;
+  // every history command, not only the keyboard's, ends it first.
+  cancelGestures('history')
   if (shouldCancelDraftOnHistoryJump()) emitter.emit('tool:cancel')
   if (historyCommandDelegate) {
     const result = historyCommandDelegate.redo()

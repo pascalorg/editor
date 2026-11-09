@@ -2,26 +2,26 @@
 // This extends the existing viewer-owned wall cutout and material implementation.
 import {
   type AnyNodeId,
+  getEffectiveNode,
   getLibraryMaterialsVersion,
-  getWallFaceBandConfig,
-  getWallPlaneTop,
-  resolveLevelId,
-  resolveWallEffectiveHeight,
   sceneRegistry,
-  spatialGridManager,
+  useLiveNodeOverrides,
   useLiveTransforms,
   useScene,
   type WallNode,
 } from '@pascal-app/core'
 import { type Camera, type Material, Matrix4, type Mesh, type Object3D, Vector3 } from 'three'
 import { getMaterialTextureVersion } from '../../lib/materials'
+import { hasMaterialsForGroups } from '../../lib/pointer-events'
 import useViewer, { type WallMode } from '../../store/use-viewer'
+import { getWallFinishRefs } from './wall-finish-data'
 import { resolveWallMaterialVariant, type WallMaterialVariant } from './wall-material-variant'
 import {
   getHoverHighlightMaterials,
   getMaterialsForWall,
   getSelectionHighlightMaterials,
   type WallMaterials,
+  type WallMaterialsResolver,
 } from './wall-materials'
 
 export function sameMaterialArray(a: Material | Material[], b: Material[]): boolean {
@@ -71,6 +71,12 @@ type CachedWall = {
   assignedMaterials: Material | Material[] | undefined
   visibleVariant: Variant
   hiddenVariant: Variant
+  /** Finish refs the material palette was built for; the geometry's groups index them. */
+  paletteKey: string
+}
+
+function wallPaletteKey(mesh: Mesh): string {
+  return getWallFinishRefs(mesh.geometry).join('|')
 }
 
 // About 0.06 degrees: retain the previous side at edge-on poses without
@@ -106,13 +112,58 @@ export type WallCutoutViewerState = Pick<
   | 'previewSelectedIds'
   | 'hoveredId'
   | 'hoverHighlightMode'
->
+> & { nodesRevealing?: readonly string[] }
+
+const NOT_REVEALING: readonly string[] = []
+
+/**
+ * The walls the cutaway must leave in view because something on them is playing: a wall that is
+ * moving in, going out or being edited, a wall that hosts an opening that is, and the walls under a
+ * node that is (a facade part). The person's wall mode is not touched: these are stamped visible
+ * for as long as they play, and the next frame after hides them again as the view wants.
+ */
+export function wallsInPlay(
+  nodes: ReturnType<typeof useScene.getState>['nodes'],
+  revealing: readonly string[],
+): Set<string> {
+  const walls = new Set<string>()
+  if (revealing.length === 0) return walls
+  const down = (id: string, depth: number) => {
+    const node = nodes[id as AnyNodeId]
+    if (!node) return
+    if (node.type === 'wall') walls.add(id)
+    if (depth >= 4) return
+    for (const child of (node as { children?: readonly string[] }).children ?? [])
+      down(child, depth + 1)
+  }
+  for (const id of revealing) {
+    // The wall itself, or an opening in it: the host stands visible while the opening plays.
+    for (
+      let node = nodes[id as AnyNodeId], guard = 0;
+      node && guard < 16;
+      node = node.parentId ? nodes[node.parentId as AnyNodeId] : undefined, guard += 1
+    )
+      if (node.type === 'wall') walls.add(node.id)
+    // What stands under a node that plays rides with it.
+    down(id, 0)
+  }
+  return walls
+}
+
+/**
+ * The visible variant of a mesh's materials, kept on the object by the system that cuts it away, for
+ * whoever must draw a copy of the mesh while the cutaway hides it (a deleted wall's ghost). Not in
+ * `userData`: `Object3D.clone` copies that through JSON, which would serialize every material.
+ */
+export const visibleMaterialsOf = new WeakMap<Object3D, Material[]>()
 
 export type WallCutoutViewerStore = { getState: () => WallCutoutViewerState }
 
 export class WallCutoutCache {
   readonly walls = new Map<string, CachedWall>()
   readonly rebuilt = new Set<string>()
+  /** Walls whose palette waits for a preview to give back their groups (see `mayAssign`). */
+  private readonly deferred = new Set<string>()
   private viewer: WallCutoutViewerState | undefined
   private nodes: ReturnType<typeof useScene.getState>['nodes'] | undefined
   private materials: ReturnType<typeof useScene.getState>['materials'] | undefined
@@ -128,8 +179,15 @@ export class WallCutoutCache {
   private selected = new Set<string>()
   private highlightKey = ''
   private transformed = new Set<string>()
+  private overrides = useLiveNodeOverrides.getState().overrides
+  /** The reveal's list the walls in play were read from, and the walls it named. */
+  private revealing: readonly string[] = NOT_REVEALING
+  private inPlay = new Set<string>()
 
-  constructor(private readonly viewerStore: WallCutoutViewerStore = useViewer) {}
+  constructor(
+    private readonly viewerStore: WallCutoutViewerStore = useViewer,
+    private readonly materialResolver: WallMaterialsResolver = getMaterialsForWall,
+  ) {}
 
   subscribeLiveTransforms(): () => void {
     return useLiveTransforms.subscribe((state, previous) => {
@@ -149,6 +207,8 @@ export class WallCutoutCache {
     const libraryVersion = getLibraryMaterialsVersion()
     const textureVersion = getMaterialTextureVersion()
     const previous = this.viewer
+    const overrides = useLiveNodeOverrides.getState().overrides
+    const overridesChanged = this.overrides !== overrides
     const nodesChanged = this.nodes !== scene.nodes
     const registryChanged =
       this.registryRevision !== sceneRegistry.revision || this.wallCount !== wallIds.size
@@ -187,26 +247,45 @@ export class WallCutoutCache {
       state && state.hoverHighlightMode !== 'default' && state.hoverHighlightMode !== 'delete'
         ? state.hoveredId
         : null
-    const releasedPreview = previewId(previous) !== previewId(viewer) ? previewId(previous) : null
+    const releasedPreview = previewId(previous) === previewId(viewer) ? null : previewId(previous)
     this.viewer = viewer
+    // A wall whose play starts or ends, or a node that moves under one, changes only its own stamp.
+    const revealing = viewer.nodesRevealing ?? NOT_REVEALING
+    const playChanged = new Set<string>()
+    if (this.revealing !== revealing || (nodesChanged && revealing.length > 0)) {
+      const next = wallsInPlay(scene.nodes, revealing)
+      for (const id of next) if (!this.inPlay.has(id)) playChanged.add(id)
+      for (const id of this.inPlay) if (!next.has(id)) playChanged.add(id)
+      this.inPlay = next
+      this.revealing = revealing
+    }
+    // After the stamps are current: a deferred wall is applied with the walls in play it stands among.
+    for (const id of this.deferred.size > 0 ? Array.from(this.deferred) : []) {
+      this.deferred.delete(id)
+      const wall = this.walls.get(id)
+      if (wall) this.apply(wall, viewer.wallMode, false)
+    }
     const invalidated =
+      overridesChanged ||
       appearanceChanged ||
       nodesChanged ||
       registryChanged ||
       this.rebuilt.size > 0 ||
       this.transformed.size > 0 ||
-      releasedPreview !== null
+      releasedPreview !== null ||
+      playChanged.size > 0
 
-    if (!invalidated && viewer.wallMode !== 'cutaway') return
+    const cutaway = viewer.wallMode === 'cutaway'
+    if (!invalidated && !cutaway) return
 
     camera.getWorldDirection(this.cameraDirection)
     this.cameraTarget.copy(this.cameraDirection).add(camera.position)
     const cameraChanged =
-      viewer.wallMode === 'cutaway' &&
+      cutaway &&
       time - this.lastUpdateTime > 0.1 &&
       (camera.position.distanceTo(this.lastCameraPosition) > 0.5 ||
         this.cameraTarget.distanceTo(this.lastCameraTarget) > 0.3)
-    if (!invalidated && !cameraChanged) return
+    if (!(invalidated || cameraChanged)) return
 
     if (registryChanged || nodesChanged) {
       for (const [id, wall] of this.walls) {
@@ -253,23 +332,30 @@ export class WallCutoutCache {
             assignedMaterials: undefined,
             visibleVariant: { key: 'visible', materials: [] },
             hiddenVariant: { key: 'invisible', materials: [] },
+            paletteKey: '',
           }
           this.walls.set(id, wall)
         }
         const changed = pathChanged(id)
         const rebuilt = this.rebuilt.has(id)
         if (added || changed || rebuilt) this.refreshNormal(wall, visited)
-        wall.node = node
-        if (added || appearanceChanged || (nodesChanged && changed)) this.refreshAppearance(wall)
+        const overrideChanged = this.overrides.get(id) !== overrides.get(id)
+        wall.node = getEffectiveNode(node)
+        const repaletted = rebuilt && wallPaletteKey(wall.mesh) !== wall.paletteKey
+        const refresh =
+          added || appearanceChanged || overrideChanged || (nodesChanged && changed) || repaletted
+        if (refresh) this.refreshAppearance(wall)
         if (
           added ||
           appearanceChanged ||
+          overrideChanged ||
           changed ||
           rebuilt ||
           releasedPreview === id ||
+          playChanged.has(id) ||
           cameraChanged
         ) {
-          this.apply(wall, viewer.wallMode, added || appearanceChanged || (nodesChanged && changed))
+          this.apply(wall, viewer.wallMode, refresh)
         }
       }
     } else {
@@ -277,6 +363,7 @@ export class WallCutoutCache {
     }
     this.rebuilt.clear()
     this.transformed.clear()
+    this.overrides = overrides
     this.nodes = scene.nodes
     this.materials = scene.materials
     this.registryRevision = sceneRegistry.revision
@@ -290,36 +377,41 @@ export class WallCutoutCache {
     }
   }
 
+  /**
+   * A rebuilt wall whose finish palette changed must swap materials in the same
+   * frame: its new groups already index the new palette.
+   */
+  handleRebuilt(id: string): void {
+    this.rebuilt.add(id)
+    const wall = this.walls.get(id)
+    const viewer = this.viewer
+    if (!(wall && viewer) || wall.mesh !== sceneRegistry.nodes.get(id)) return
+    if (wallPaletteKey(wall.mesh) === wall.paletteKey) return
+    const node = useScene.getState().nodes[id as AnyNodeId]
+    if (node?.type !== 'wall') return
+    wall.node = getEffectiveNode(node)
+    this.refreshAppearance(wall)
+    this.apply(wall, viewer.wallMode, true)
+  }
+
   private refreshAppearance(wall: CachedWall): void {
     const viewer = this.viewer!
     const scene = useScene.getState()
     const node = wall.node
     const deleted = viewer.hoverHighlightMode === 'delete' && viewer.hoveredId === node.id
-    let selectionHighlighted = !deleted && this.selected.has(node.id)
-    if (selectionHighlighted) {
-      const levelId = resolveLevelId(node, scene.nodes)
-      const support = spatialGridManager.getSlabSupportForWall(
-        levelId,
-        node.start,
-        node.end,
-        node.curveOffset ?? 0,
-        node.thickness,
-        node.supportSlabId,
-      )
-      const height = resolveWallEffectiveHeight(
-        node,
-        getWallPlaneTop(node, levelId, scene.nodes),
-        support.elevation,
-      )
-      selectionHighlighted = !getWallFaceBandConfig(node, height).enabled
-    }
-    const materials = getMaterialsForWall(
+    // Painted parts stay readable while their wall is selected for editing.
+    const selectionHighlighted =
+      !deleted && this.selected.has(node.id) && !(node.faceRegions?.length ?? 0)
+    const finishRefs = getWallFinishRefs(wall.mesh.geometry)
+    wall.paletteKey = finishRefs.join('|')
+    const materials = this.materialResolver(
       node,
       viewer.shading,
       viewer.textures,
       viewer.colorPreset,
       viewer.sceneTheme,
       scene.materials,
+      finishRefs,
     )
     const variant = (hidden: boolean): Variant => {
       const key = resolveWallMaterialVariant({
@@ -333,6 +425,8 @@ export class WallCutoutCache {
     }
     wall.visibleVariant = variant(false)
     wall.hiddenVariant = variant(true)
+    // The plain visible palette (no selection or hover tint): what the wall wears when a capture sees it.
+    visibleMaterialsOf.set(wall.mesh, materials.visible)
   }
 
   private refreshNormal(wall: CachedWall, visited: Set<Object3D>): void {
@@ -356,19 +450,27 @@ export class WallCutoutCache {
         wall.negativeFacing,
       )
     }
-    const hidden = wallHiddenFromFacing(wall.node, mode, wall.negativeFacing ?? false)
+    // A wall in play is seen whatever the cutaway says (walls down is the person's own choice, and
+    // stays); `mode` itself is the person's, untouched.
+    const hidden =
+      wallHiddenFromFacing(wall.node, mode, wall.negativeFacing ?? false) &&
+      !(mode === 'cutaway' && this.inPlay.has(wall.node.id))
     wall.hidden = hidden
     // The wall batch and pointer handlers consume this boolean, including
     // false on stamp lift; translucent walls must continue receiving events.
     const stamp = mode !== 'translucent' && hidden
     if (wall.mesh.userData.wallHidden !== stamp) wall.mesh.userData.wallHidden = stamp
     const variant = hidden ? wall.hiddenVariant : wall.visibleVariant
-    // Non-highlight hover owns a temporary material until its restore callback runs.
+    // Non-highlight hover (a paint preview) owns a temporary material until its
+    // restore callback runs — unless the rebuilt geometry now draws a finish that
+    // array has no entry for (a click just added one): then the new palette goes
+    // on and the preview is dropped, rather than leaving groups with no material.
     const viewer = this.viewer!
     if (
       viewer.hoveredId === wall.node.id &&
       viewer.hoverHighlightMode !== 'default' &&
-      viewer.hoverHighlightMode !== 'delete'
+      viewer.hoverHighlightMode !== 'delete' &&
+      hasMaterialsForGroups(wall.mesh)
     ) {
       if (refresh) wall.variantKey = undefined
       return
@@ -378,12 +480,34 @@ export class WallCutoutCache {
         wall.mesh.material !== variant.materials &&
         !sameMaterialArray(wall.mesh.material, variant.materials)
       ) {
+        if (!this.mayAssign(wall, variant.materials)) {
+          wall.variantKey = undefined
+          return
+        }
         wall.mesh.material = variant.materials
       }
       wall.variantKey = variant.key
       wall.assignedMaterials = wall.mesh.material
     } else if (wall.mesh.material !== wall.assignedMaterials) {
+      if (!this.mayAssign(wall, wall.assignedMaterials!)) return
       wall.mesh.material = wall.assignedMaterials!
     }
+  }
+
+  /**
+   * A paint preview spread over several walls (a room, all matching) regroups
+   * each wall's faces onto its own longer array, but only the hovered wall is
+   * known here as a preview's owner. A palette that cannot draw the groups the
+   * mesh wears now waits for the preview's restore to put them back: the mesh
+   * would otherwise keep groups with no material, and every raycast over it
+   * throws on `material.side`.
+   */
+  private mayAssign(wall: CachedWall, materials: Material | Material[]): boolean {
+    if (hasMaterialsForGroups(wall.mesh, materials) || !hasMaterialsForGroups(wall.mesh)) {
+      this.deferred.delete(wall.node.id)
+      return true
+    }
+    this.deferred.add(wall.node.id)
+    return false
   }
 }

@@ -279,6 +279,7 @@ export const dormerDefinition: NodeDefinition<typeof DormerNode> = {
   },
 
   capabilities: {
+    exterior: true,
     selectable: { hitVolume: 'bbox' },
     // Dormers own their WindowNode children. Duplicate the complete subtree
     // so the copied dormer never aliases windows from the source dormer.
@@ -316,6 +317,7 @@ export const dormerDefinition: NodeDefinition<typeof DormerNode> = {
   handles: dormerHandles,
   floorplan: buildDormerFloorplan,
 
+  rendersChildren: false,
   renderer: {
     kind: 'parametric',
     module: () => import('./renderer'),
