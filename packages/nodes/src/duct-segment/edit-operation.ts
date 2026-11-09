@@ -119,21 +119,23 @@ export const editDuct: AgentOperation<DuctEditInput> = (before, input) => {
     const corners = [a, b, c, d]
     const incoming = [axis, up, axis, up.clone().negate()]
     const outgoing = [up, axis, up.clone().negate(), axis]
-    const elbows = corners.map(
-      (corner, i) =>
-        planElbowAtPort(
-          {
-            id: 'end',
-            nodeId: duct.id,
-            position: corner.toArray(),
-            direction: incoming[i]!.toArray(),
-            diameter: profileDiameterIn(duct),
-            system: duct.system,
-          },
-          outgoing[i]!.toArray(),
-          duct,
-        )!,
-    )
+    const elbows = corners.map((corner, i) => {
+      const plan = planElbowAtPort(
+        {
+          id: 'end',
+          nodeId: duct.id,
+          position: corner.toArray(),
+          direction: incoming[i]!.toArray(),
+          diameter: profileDiameterIn(duct),
+          system: duct.system,
+        },
+        outgoing[i]!.toArray(),
+        duct,
+      )
+      if (!plan)
+        return refuse('duct_offset_angle', 'The requested bends cannot be formed on this route.')
+      return plan
+    })
     const paths: Point[][] = [
       [start.toArray(), elbows[0]!.trimmedPortPoint],
       [elbows[0]!.collarPoint, elbows[1]!.trimmedPortPoint],
