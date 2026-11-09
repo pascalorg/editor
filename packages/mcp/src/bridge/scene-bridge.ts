@@ -4,6 +4,7 @@ import {
   applyStructureReconciliation,
   assertDerivedNodeWrites,
   HIDDEN_SITE_NOTE,
+  hierarchyCycleErrors,
   type NodeDeletionPlan,
   type NodeDeletionScene,
   pauseSceneHistory,
@@ -681,10 +682,7 @@ export class SceneBridge {
     })
   }
 
-  /**
-   * Zod-validate every node in the scene. Reports one error per failed node,
-   * concatenating Zod issue paths.
-   */
+  /** Validate node schemas and global parent-chain acyclicity. */
   validateScene(): ValidationResult {
     const errors: ValidationError[] = []
     const warnings: ValidationError[] = []
@@ -703,6 +701,7 @@ export class SceneBridge {
         })
       }
     }
+    errors.push(...hierarchyCycleErrors(nodes))
     return { valid: errors.length === 0, errors, warnings }
   }
 

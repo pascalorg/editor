@@ -8,6 +8,7 @@ import {
   DoorNode,
   RoofNode,
   RoofSegmentNode,
+  SiteNode,
   WallNode,
   WindowNode,
   ZoneNode,
@@ -386,6 +387,131 @@ describe('apply_patch identity and validation guards', () => {
     expect(kept?.parentId).toBe(wall.id)
     const host = bridge.getNode(wall.id as AnyNodeId)
     expect(host?.type === 'wall' && host.children).toEqual([window.id])
+  })
+
+  test('refuses a reparent beneath a descendant without changing the scene', async () => {
+    const siteA = SiteNode.parse({ id: 'site_a' })
+    const siteB = SiteNode.parse({ id: 'site_b' })
+    bridge.setScene({ [siteA.id]: siteA }, [siteA.id])
+
+    expect(await apply([{ op: 'create', node: siteB }])).toMatchObject({ isError: false })
+    expect(
+      await apply([{ op: 'update', id: siteA.id, data: { parentId: siteB.id } }]),
+    ).toMatchObject({ isError: false })
+
+    const cycle = await refusal([{ op: 'update', id: siteB.id, data: { parentId: siteA.id } }])
+    expect(cycle).toMatchObject({ code: 'invalid_parent', patchIndex: 0, id: siteB.id })
+    expect(cycle.message).toContain('hierarchy cycle')
+
+    expect(bridge.getNode(siteA.id as AnyNodeId)?.parentId).toBe(siteB.id)
+    const keptParent = bridge.getNode(siteB.id as AnyNodeId)
+    expect(keptParent?.type === 'site' && keptParent.children).toEqual([siteA.id])
+    expect(bridge.getNode(siteB.id as AnyNodeId)?.parentId).toBeNull()
+  })
+
+  test('refuses a cycle closed by a later update in the same patch', async () => {
+    const siteA = SiteNode.parse({ id: 'site_a' })
+    const siteB = SiteNode.parse({ id: 'site_b' })
+    bridge.setScene({ [siteA.id]: siteA, [siteB.id]: siteB }, [siteA.id, siteB.id])
+
+    const cycle = await refusal([
+      { op: 'update', id: siteA.id, data: { parentId: siteB.id } },
+      { op: 'update', id: siteB.id, data: { parentId: siteA.id } },
+    ])
+    expect(cycle).toMatchObject({ code: 'invalid_parent', patchIndex: 1, id: siteB.id })
+
+    expect(bridge.getNode(siteA.id as AnyNodeId)?.parentId).toBeNull()
+    expect(bridge.getNode(siteB.id as AnyNodeId)?.parentId).toBeNull()
+  })
+
+  test('refuses moving the site under its own level', async () => {
+    const site = Object.values(bridge.getNodes()).find((n) => n.type === 'site')!
+
+    const cycle = await refusal([{ op: 'update', id: site.id, data: { parentId: level.id } }])
+    expect(cycle).toMatchObject({ code: 'invalid_parent', patchIndex: 0, id: site.id })
+
+    expect(bridge.getNode(site.id as AnyNodeId)?.parentId).toBe(site.parentId)
+    const keptLevel = bridge.getNode(level.id as AnyNodeId)
+    expect(keptLevel?.type === 'level' && keptLevel.children).not.toContain(site.id)
+  })
+
+  test('refuses creates whose own parentId closes a cycle', async () => {
+    const self = SiteNode.parse({ id: 'site_self', parentId: 'site_self' })
+    expect(await refusal([{ op: 'create', node: self }])).toMatchObject({
+      code: 'invalid_parent',
+      patchIndex: 0,
+      id: self.id,
+    })
+
+    const siteA = SiteNode.parse({ id: 'site_a', parentId: 'site_b' })
+    const siteB = SiteNode.parse({ id: 'site_b', parentId: 'site_a' })
+    const cycle = await refusal([
+      { op: 'create', node: siteA },
+      { op: 'create', node: siteB },
+    ])
+    expect(cycle).toMatchObject({ code: 'invalid_parent', patchIndex: 1, id: siteB.id })
+
+    for (const id of [self.id, siteA.id, siteB.id]) {
+      expect(bridge.getNode(id as AnyNodeId)).toBeNull()
+    }
+  })
+
+  test('edits beneath a cycle an old scene already holds apply whole', async () => {
+    const scene = bridge.exportJSON()
+    const site = Object.values(scene.nodes).find((n) => n.type === 'site')!
+    const corners = [
+      [0, 0],
+      [8, 0],
+      [8, 4],
+      [0, 4],
+    ]
+    const room = corners.map((start, i) =>
+      WallNode.parse({ id: `wall_room${i}`, parentId: level.id, start, end: corners[(i + 1) % 4] }),
+    )
+    const divider = WallNode.parse({
+      id: 'wall_divider',
+      parentId: level.id,
+      start: [20, 20],
+      end: [20, 24],
+    })
+    const loop = SiteNode.parse({ id: 'site_loop', parentId: site.id, children: [site.id] })
+    bridge.loadJSON({
+      ...scene,
+      nodes: {
+        ...scene.nodes,
+        ...Object.fromEntries([...room, divider, loop].map((node) => [node.id, node])),
+        [site.id]: {
+          ...site,
+          parentId: loop.id,
+          children: [...(site as { children: string[] }).children, loop.id],
+        } as AnyNode,
+        [level.id]: {
+          ...level,
+          children: [
+            ...(level as { children: string[] }).children,
+            ...room.map((w) => w.id),
+            divider.id,
+          ],
+        } as AnyNode,
+      },
+    })
+    const zones = () => Object.values(bridge.getNodes()).filter((n) => n.type === 'zone').length
+    const before = zones()
+
+    const split = await apply([
+      { op: 'update', id: divider.id, data: { start: [4, 0], end: [4, 4] } },
+    ])
+    expect(split).toMatchObject({ isError: false })
+    expect(zones()).toBe(before + 1)
+    const create = await apply([
+      {
+        op: 'create',
+        node: WallNode.parse({ id: 'wall_new', start: [0, 9], end: [3, 9] }),
+        parentId: level.id,
+      },
+    ])
+    expect(create).toMatchObject({ isError: false })
+    expect(bridge.validateScene().valid).toBe(false)
   })
 
   test('default gutters a delete regenerates cannot be addressed later in the same patch', async () => {

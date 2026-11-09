@@ -10,6 +10,7 @@ import {
   BaseNode,
   generateId,
   LevelNode,
+  SiteNode,
   StairNode,
   StairSegmentNode,
 } from '../schema'
@@ -316,5 +317,26 @@ test('scene verification validates registered plugin kinds, rejects malformed no
     })
   } finally {
     restore()
+  }
+})
+
+test('scene verification lists each node on a parent cycle by its parentId', () => {
+  const siteA = SiteNode.parse({ id: 'site_a', parentId: 'site_b', children: ['site_b'] })
+  const siteB = SiteNode.parse({ id: 'site_b', parentId: 'site_a', children: ['site_a'] })
+  const { result } = AGENT_OPERATIONS.verify_scene(
+    { [siteA.id]: siteA, [siteB.id]: siteB } as Record<string, AnyNode>,
+    {},
+    { activeLevelId: null },
+  )
+  expect(result.valid).toBe(false)
+  for (const nodeId of [siteA.id, siteB.id]) {
+    expect(result.issues).toContainEqual(
+      expect.objectContaining({
+        type: 'schema_invalid',
+        nodeId,
+        path: 'parentId',
+        message: expect.stringContaining('hierarchy cycle detected: site_a -> site_b -> site_a'),
+      }),
+    )
   }
 })
