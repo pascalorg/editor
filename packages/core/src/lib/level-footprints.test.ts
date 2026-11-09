@@ -466,50 +466,50 @@ describe('nested reference faces', () => {
 })
 
 describe('curved boundary junctions and exposure caching', () => {
-  test.each([
-    'separator',
-    'wall',
-  ] as const)('%s endpoint splits a curved wall at mid-span', (kind) => {
-    for (const arcT of [0.5, 0.37]) {
-      const walls = rectangle()
-      walls[0] = { ...walls[0]!, curveOffset: 0.5 }
-      const point = getWallCurveFrameAt(walls[0]!, arcT).point
-      const start: [number, number] = [point.x, point.y]
-      const end: [number, number] = [point.x, 3]
-      const divider =
-        kind === 'separator'
-          ? SeparatorNode.parse({ parentId: levelId, start, end })
-          : wall('curve_divider', start, end)
-      const { index, level } = topology([...walls, divider])
-      expect(level.rooms).toHaveLength(2)
-      const spans = index.spansForWall(levelId, walls[0]!.id)
-      const chordT = point.x / 4
-      expect(spans).toHaveLength(2)
-      expect(spans[0]).toMatchObject({ face: 'a', t0: 0 })
-      expect(spans[0]!.t1).toBeCloseTo(chordT, 12)
-      expect(spans[1]!.t0).toBeCloseTo(chordT, 12)
-      expect(spans[1]).toMatchObject({ face: 'a', t1: 1 })
-      const dividerSpans = index.spansForWall(levelId, divider.id)
-      expect(dividerSpans).toHaveLength(2)
-      expect(new Set(dividerSpans.map((span) => span.roomId)).size).toBe(2)
-      expect(index.roomForWallHit(levelId, divider.id, 'a', 0.5)).toBe(
-        index.roomAtPoint(levelId, [1, 2]),
-      )
-      expect(index.roomForWallHit(levelId, divider.id, 'b', 0.5)).toBe(
-        index.roomAtPoint(levelId, [3, 2]),
-      )
-      const before = topology(walls).index
-      before.applyWallDelta(
-        levelId,
-        new Set([divider.id]),
-        scene(walls),
-        scene([...walls, divider]),
-      )
-      expect(
-        before.getLevelTopology(levelId)!.rooms.map(({ holes, spans }) => ({ holes, spans })),
-      ).toEqual(level.rooms.map(({ holes, spans }) => ({ holes, spans })))
-    }
-  })
+  test.each(['separator', 'wall'] as const)(
+    '%s endpoint splits a curved wall at mid-span',
+    (kind) => {
+      for (const arcT of [0.5, 0.37]) {
+        const walls = rectangle()
+        walls[0] = { ...walls[0]!, curveOffset: 0.5 }
+        const point = getWallCurveFrameAt(walls[0]!, arcT).point
+        const start: [number, number] = [point.x, point.y]
+        const end: [number, number] = [point.x, 3]
+        const divider =
+          kind === 'separator'
+            ? SeparatorNode.parse({ parentId: levelId, start, end })
+            : wall('curve_divider', start, end)
+        const { index, level } = topology([...walls, divider])
+        expect(level.rooms).toHaveLength(2)
+        const spans = index.spansForWall(levelId, walls[0]!.id)
+        const chordT = point.x / 4
+        expect(spans).toHaveLength(2)
+        expect(spans[0]).toMatchObject({ face: 'a', t0: 0 })
+        expect(spans[0]!.t1).toBeCloseTo(chordT, 12)
+        expect(spans[1]!.t0).toBeCloseTo(chordT, 12)
+        expect(spans[1]).toMatchObject({ face: 'a', t1: 1 })
+        const dividerSpans = index.spansForWall(levelId, divider.id)
+        expect(dividerSpans).toHaveLength(2)
+        expect(new Set(dividerSpans.map((span) => span.roomId)).size).toBe(2)
+        expect(index.roomForWallHit(levelId, divider.id, 'a', 0.5)).toBe(
+          index.roomAtPoint(levelId, [1, 2]),
+        )
+        expect(index.roomForWallHit(levelId, divider.id, 'b', 0.5)).toBe(
+          index.roomAtPoint(levelId, [3, 2]),
+        )
+        const before = topology(walls).index
+        before.applyWallDelta(
+          levelId,
+          new Set([divider.id]),
+          scene(walls),
+          scene([...walls, divider]),
+        )
+        expect(
+          before.getLevelTopology(levelId)!.rooms.map(({ holes, spans }) => ({ holes, spans })),
+        ).toEqual(level.rooms.map(({ holes, spans }) => ({ holes, spans })))
+      }
+    },
+  )
 
   test('exposure preparation is reused across plates and invalidated by topology revision', () => {
     const walls = rectangle()

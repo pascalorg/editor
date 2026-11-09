@@ -1,19 +1,21 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  BLOCK_BODY_SLOT_ID,
   type BlockNode,
+  blockMaterialSlotIds,
   type MaterialRef,
   type PaintCapability,
   type PaintPatchArgs,
   type PaintPreviewArgs,
   type PaintResolveArgs,
-  parseMaterialRef,
   type SceneMaterialId,
+  slotPaintMaterial,
   useScene,
 } from '@pascal-app/core'
 import { type Mesh, type Object3D, Raycaster } from 'three'
 import { buildSlotPreviewMaterial, resolveSlotPaintMaterialRef } from '../shared/slot-paint'
-import { BLOCK_BODY_SLOT_ID, blockMaterialSlotIds, setBlockMaterialSlot } from './material-slots'
+import { setBlockMaterialSlot } from './material-slots'
 
 const blockPaintRaycaster = new Raycaster()
 
@@ -144,10 +146,6 @@ export const blockPaint: PaintCapability = {
   getEffectiveMaterial: ({ node, role }) => {
     if (node.type !== 'block') return null
     const ref = node.slots?.[role] ?? node.slots?.[BLOCK_BODY_SLOT_ID]
-    const parsed = parseMaterialRef(ref)
-    if (!parsed) return null
-    if (parsed.kind === 'library') return { material: undefined, materialPreset: ref }
-    const sceneMaterial = useScene.getState().materials[parsed.id as SceneMaterialId]
-    return sceneMaterial ? { material: sceneMaterial.material, materialPreset: undefined } : null
+    return slotPaintMaterial(ref, useScene.getState().materials)
   },
 }

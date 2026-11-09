@@ -834,42 +834,42 @@ describe('lean-to assembly', () => {
     expect(assembly.gutter.endCapLeft).toBe(false)
   })
 
-  test.each([
-    'gable',
-    'butterfly',
-  ] as const)('replaces duplicate %s corner posts with one shared post on each support row', (canopyForm) => {
-    const level = LevelNode.parse({ id: `level_${canopyForm}_shared_posts`, level: 0 })
-    const first = resolveLeanToFreestandingRunPlacement(
-      level.id,
-      [0, 0],
-      [8, 0],
-      false,
-      canopyForm,
-    )!
-    const second = resolveLeanToFreestandingRunPlacement(
-      level.id,
-      [8, 0],
-      [8, 8],
-      false,
-      canopyForm,
-    )!
-    const nodes = Object.fromEntries(
-      [level, first, second].map((node) => [node.id, node]),
-    ) as Record<string, AnyNode>
-    const assemblies = [
-      createLeanToAssembly(first, undefined, nodes),
-      createLeanToAssembly(second, undefined, nodes),
-    ]
-    const posts = assemblies.flatMap((assembly) => assembly.posts)
-    const sharedPosts = posts.filter((post) => {
-      const index = managedLeanToPostIndex(post)
-      return index === leanToCornerPostIndex('left') || index === leanToCornerPostIndex('right')
-    })
+  test.each(['gable', 'butterfly'] as const)(
+    'replaces duplicate %s corner posts with one shared post on each support row',
+    (canopyForm) => {
+      const level = LevelNode.parse({ id: `level_${canopyForm}_shared_posts`, level: 0 })
+      const first = resolveLeanToFreestandingRunPlacement(
+        level.id,
+        [0, 0],
+        [8, 0],
+        false,
+        canopyForm,
+      )!
+      const second = resolveLeanToFreestandingRunPlacement(
+        level.id,
+        [8, 0],
+        [8, 8],
+        false,
+        canopyForm,
+      )!
+      const nodes = Object.fromEntries(
+        [level, first, second].map((node) => [node.id, node]),
+      ) as Record<string, AnyNode>
+      const assemblies = [
+        createLeanToAssembly(first, undefined, nodes),
+        createLeanToAssembly(second, undefined, nodes),
+      ]
+      const posts = assemblies.flatMap((assembly) => assembly.posts)
+      const sharedPosts = posts.filter((post) => {
+        const index = managedLeanToPostIndex(post)
+        return index === leanToCornerPostIndex('left') || index === leanToCornerPostIndex('right')
+      })
 
-    expect(posts).toHaveLength(resolveLeanToLayout(first).postXs.length * 4 - 2)
-    expect(sharedPosts).toHaveLength(2)
-    expect(sharedPosts.map(managedLeanToPostSide).sort()).toEqual(['high', 'low'])
-  })
+      expect(posts).toHaveLength(resolveLeanToLayout(first).postXs.length * 4 - 2)
+      expect(sharedPosts).toHaveLength(2)
+      expect(sharedPosts.map(managedLeanToPostSide).sort()).toEqual(['high', 'low'])
+    },
+  )
 
   test('joins every valid freestanding direction for every canopy form', () => {
     for (const canopyForm of ['mono', 'gable', 'butterfly'] as const) {

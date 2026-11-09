@@ -43,6 +43,8 @@ export const zoneDefinition: NodeDefinition<typeof ZoneNode> = {
 
   capabilities: {
     selectable: { hitVolume: 'bbox' },
+    exterior: false,
+    revealLayout: { room: (node) => (node.type === 'zone' ? node.polygon : null) },
     duplicable: true,
     deletable: true,
     // Zones describe regions of a site — they don't translate as

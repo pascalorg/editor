@@ -1,4 +1,10 @@
-import type { DoorNode, HandleDescriptor, LinearResizeHandle, WindowNode } from '@pascal-app/core'
+import type {
+  ColumnNode,
+  DoorNode,
+  HandleDescriptor,
+  LinearResizeHandle,
+  WindowNode,
+} from '@pascal-app/core'
 import { rebuildAuthoredObject } from '@pascal-app/editor'
 
 type Opening = WindowNode | DoorNode
@@ -31,20 +37,40 @@ function byParam<N extends Opening>(
   const linear = handle as LinearResizeHandle<N>
   return {
     ...linear,
-    commit: (initial, patch) => {
-      const source = initial.source
-      const next = patch[param]
-      if (!source || typeof next !== 'number') return
-      const spec = source.manifest.params.find((candidate) => candidate.id === param)
-      const current = Number(source.params[param] ?? spec?.default ?? initial[param])
-      const value = clamp(current + (next - initial[param]), spec?.min, spec?.max)
+    commit: (initial, patch) =>
       // A side arrow keeps the opposite edge: the rebuild takes the moved centre.
-      const position = param === 'width' ? (patch.position as N['position'] | undefined) : undefined
-      rebuildAuthoredObject(initial.id, { ...source.params, [param]: value }, position).catch(
-        (reason: unknown) => console.error('[scripted opening] resize failed', reason),
-      )
-    },
+      rebuildScriptedSize(initial, patch, param === 'width' ? patch.position : undefined),
   }
+}
+
+const SIZE_PARAMS = new Set(['width', 'height', 'depth'])
+
+/**
+ * A scripted window, door or column resized by a handle: each size param its
+ * script declares moves by the dragged amount, within the param's range, and
+ * the script reruns once.
+ */
+export function rebuildScriptedSize<N extends Opening | ColumnNode>(
+  initial: N,
+  patch: Partial<N>,
+  position?: N['position'],
+): void {
+  const source = initial.source
+  if (!source) return
+  const params = { ...source.params }
+  let moved = false
+  for (const spec of source.manifest.params) {
+    const next = (patch as Record<string, unknown>)[spec.id]
+    if (!SIZE_PARAMS.has(spec.id) || typeof next !== 'number') continue
+    const before = (initial as unknown as Record<string, number>)[spec.id]!
+    const current = Number(source.params[spec.id] ?? spec.default ?? before)
+    params[spec.id] = clamp(current + (next - before), spec.min, spec.max)
+    moved = true
+  }
+  if (!moved) return
+  rebuildAuthoredObject(initial.id, params, position).catch((reason: unknown) =>
+    console.error('[scripted] resize failed', reason),
+  )
 }
 
 const clamp = (value: number, min?: number, max?: number) =>

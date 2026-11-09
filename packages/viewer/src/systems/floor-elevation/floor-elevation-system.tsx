@@ -168,7 +168,10 @@ export const FloorElevationSystem = () => {
       if (!position) return
       if (effectiveNode.parentId !== node.parentId) return
 
-      if (!(def.geometry || def.system) && dirtyNodes.has(id)) consumed.add(id)
+      // A mounted object still loading (a scripted column's artifact) keeps its mark, so
+      // scene-ready and bakes wait for it; settling marks the node dirty again.
+      const settled = def.capabilities?.batchable?.settled?.(mesh.userData) ?? true
+      if (!(def.geometry || def.system) && dirtyNodes.has(id) && settled) consumed.add(id)
 
       // `applies === false` means the kind opts OUT of floor stacking for this
       // node: its Y belongs to a host frame (a wall/ceiling-mounted item, a

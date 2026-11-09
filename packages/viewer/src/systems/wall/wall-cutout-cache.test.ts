@@ -11,6 +11,7 @@ import {
   useLiveTransforms,
   useScene,
   WallNode,
+  WindowNode,
 } from '@pascal-app/core'
 import {
   BoxGeometry,
@@ -25,15 +26,21 @@ import {
 } from 'three'
 import { createStore, type StoreApi } from 'zustand/vanilla'
 import { applyMaterialPresetToMaterials } from '../../lib/materials'
-import { getWallHideState, runWallCutoutFrame, WALL_CUTOUT_FRAME_PRIORITY } from './wall-cutout'
+import {
+  getWallHideState,
+  runWallCutoutFrame,
+  WALL_CUTOUT_FRAME_PRIORITY,
+  wallsForCapture,
+} from './wall-cutout'
 import {
   sameMaterialArray,
+  visibleMaterialsOf,
   WALL_FACING_HYSTERESIS,
   WallCutoutCache,
   type WallCutoutViewerState,
   wallFacingNegative,
 } from './wall-cutout-cache'
-import { getMaterialsForWall } from './wall-materials'
+import { getMaterialsForWall, type WallMaterialsResolver } from './wall-materials'
 import {
   drainRebuiltWalls,
   notifyWallRebuilt,
@@ -110,6 +117,48 @@ afterEach(() => {
 })
 
 describe('WallCutoutCache', () => {
+  // The owner, 15 Oct: the agent bent an exterior wall in cutaway and the cutaway hid exactly the
+  // wall that was animating.
+  test('a wall in play stays in view in cutaway while it plays, then follows the cutaway again', () => {
+    const { node, mesh } = addWall()
+    cache.update(camera, 1)
+    expect(mesh.userData.wallHidden).toBe(true)
+    viewerStore.setState({ nodesRevealing: [node.id] })
+    cache.update(camera, 1.01)
+    expect(mesh.userData.wallHidden).toBe(false)
+    expect(viewerStore.getState().wallMode).toBe('cutaway')
+    viewerStore.setState({ nodesRevealing: [] })
+    cache.update(camera, 1.02)
+    expect(mesh.userData.wallHidden).toBe(true)
+    expect(viewerStore.getState().wallMode).toBe('cutaway')
+  })
+
+  test('the wall that hosts an opening in play stays in view with it, and no other wall does', () => {
+    const host = addWall()
+    const other = addWall()
+    const window = WindowNode.parse({ parentId: host.node.id, wallId: host.node.id })
+    useScene.setState({
+      nodes: {
+        ...useScene.getState().nodes,
+        [host.node.id]: { ...host.node, children: [window.id] },
+        [window.id]: window,
+      },
+    })
+    cache.update(camera, 1)
+    expect(host.mesh.userData.wallHidden).toBe(true)
+    viewerStore.setState({ nodesRevealing: [window.id] })
+    cache.update(camera, 1.01)
+    expect(host.mesh.userData.wallHidden).toBe(false)
+    expect(other.mesh.userData.wallHidden).toBe(true)
+  })
+
+  test('a wall in play stays down when the person has put the walls down', () => {
+    const { node, mesh } = addWall()
+    viewerStore.setState({ wallMode: 'down', nodesRevealing: [node.id] })
+    cache.update(camera, 1)
+    expect(mesh.userData.wallHidden).toBe(true)
+  })
+
   test('camera orbit in full height never iterates cached walls or reads camera direction', () => {
     viewerStore.setState({ wallMode: 'up' })
     const { mesh } = addWall()
@@ -324,6 +373,62 @@ describe('WallCutoutCache', () => {
     expect((mesh.material as Material[])[2]).toBeDefined()
   })
 
+  test('a room-wide preview keeps the groups it gave a wall that is not hovered', () => {
+    viewerStore.setState({ wallMode: 'up' })
+    const hovered = addWall()
+    const spread = addWall()
+    cache.update(camera, 1)
+    const palette = spread.mesh.material as Material[]
+    viewerStore.setState({ hoveredId: spread.node.id, hoverHighlightMode: 'paint-ready' })
+    cache.update(camera, 1.005)
+    // The hover moves on to another wall of the room; its preview spreads over
+    // this one: faces regrouped onto entries past the palette's end.
+    viewerStore.setState({ hoveredId: hovered.node.id })
+    const preview = [...palette, new MeshBasicMaterial(), new MeshBasicMaterial()]
+    spread.mesh.material = preview
+    spread.mesh.geometry.addGroup(0, 3, preview.length - 1)
+    cache.update(camera, 1.01)
+    expect(spread.mesh.material).toBe(preview)
+    camera.position.x++
+    cache.update(camera, 2)
+    expect(spread.mesh.material).toBe(preview)
+    // The preview's restore gives the groups back; the palette goes on next frame.
+    spread.mesh.geometry.clearGroups()
+    spread.mesh.material = new MeshBasicMaterial()
+    viewerStore.setState({ hoveredId: null, hoverHighlightMode: 'default' })
+    cache.update(camera, 2.01)
+    expect(spread.mesh.material).toBe(cache.walls.get(spread.node.id)!.visibleVariant.materials)
+  })
+
+  test('a wall in play while a room-wide preview holds its groups is stamped now and given its palette when the preview lets go', () => {
+    const hovered = addWall()
+    const spread = addWall()
+    cache.update(camera, 1)
+    expect(spread.mesh.userData.wallHidden).toBe(true)
+    const palette = spread.mesh.material as Material[]
+    viewerStore.setState({ hoveredId: hovered.node.id, hoverHighlightMode: 'paint-ready' })
+    const preview = [...palette, new MeshBasicMaterial(), new MeshBasicMaterial()]
+    spread.mesh.material = preview
+    spread.mesh.geometry.addGroup(0, 3, preview.length - 1)
+    // The play starts under the preview: the stamp follows at once, the palette waits for the groups.
+    viewerStore.setState({ nodesRevealing: [spread.node.id] })
+    cache.update(camera, 1.01)
+    expect(spread.mesh.userData.wallHidden).toBe(false)
+    expect(spread.mesh.material).toBe(preview)
+    // The preview gives the groups back while the wall still plays: it gets its visible palette.
+    spread.mesh.geometry.clearGroups()
+    spread.mesh.material = new MeshBasicMaterial()
+    viewerStore.setState({ hoveredId: null, hoverHighlightMode: 'default' })
+    cache.update(camera, 1.02)
+    expect(spread.mesh.userData.wallHidden).toBe(false)
+    expect(spread.mesh.material).toBe(cache.walls.get(spread.node.id)!.visibleVariant.materials)
+    // The play ends: the cutaway hides it again.
+    viewerStore.setState({ nodesRevealing: [] })
+    cache.update(camera, 1.03)
+    expect(spread.mesh.userData.wallHidden).toBe(true)
+    expect(spread.mesh.material).toBe(cache.walls.get(spread.node.id)!.hiddenVariant.materials)
+  })
+
   test('appearance changes during preview are applied when temporary ownership ends', () => {
     viewerStore.setState({ wallMode: 'up' })
     const { node, mesh } = addWall()
@@ -497,6 +602,30 @@ describe('WallCutoutCache', () => {
     }
   })
 
+  // A deleted wall's ghost is drawn from this, so the reveal needs no wall palette of its own.
+  test('keeps the wall’s plain visible palette on the mesh, whether the cutaway hides it or not', () => {
+    const { node, mesh } = addWall()
+    cache.update(camera, 1)
+    expect(mesh.userData.wallHidden).toBe(true)
+    const v = viewerStore.getState()
+    const visible = getMaterialsForWall(
+      node,
+      v.shading,
+      v.textures,
+      v.colorPreset,
+      v.sceneTheme,
+      useScene.getState().materials,
+    ).visible
+    expect(visibleMaterialsOf.get(mesh)).toBe(visible)
+    expect(sameMaterialArray(mesh.material, visible)).toBe(false)
+    // A selection tints what the wall wears, not the palette a capture draws.
+    viewerStore.setState({
+      selection: { ...viewerStore.getState().selection, selectedIds: [node.id] },
+    })
+    cache.update(camera, 1.01)
+    expect(visibleMaterialsOf.get(mesh)).toBe(visible)
+  })
+
   test('appearance and highlight refreshes do not reassign an already-current material array', () => {
     const { node, mesh } = addWall()
     viewerStore.setState({ wallMode: 'up' })
@@ -596,6 +725,45 @@ describe('WallCutoutCache', () => {
       expect((mesh.material as Material[])[2] === unresolved).toBe(false)
     } finally {
       unregisterLibraryMaterials(['mtl_row14_test'])
+    }
+  })
+
+  test('a late library finish on a legacy painted face replaces the fallback without a camera move', () => {
+    const { node, mesh } = addWall()
+    const id = 'mtl_wall_legacy_continuity'
+    const painted = WallNode.parse({ ...node, materialPreset: `library:${id}` })
+    useScene.setState({ nodes: { [node.id]: painted } })
+    viewerStore.setState({ wallMode: 'up', textures: true, shading: 'rendered' })
+    cache.update(camera, 1)
+    const fallback = (mesh.material as Material[])[1]
+    try {
+      registerLibraryMaterials([
+        {
+          id,
+          label: 'Late wall finish',
+          category: 'colors',
+          preset: MaterialPresetPayloadSchema.parse({
+            maps: {},
+            mapProperties: { color: '#2468ac', roughness: 0.27, metalness: 0.63 },
+          }),
+        },
+      ])
+      cache.update(camera, 1.02)
+      const resolved = (mesh.material as Material[])[1] as Material & {
+        color: { getHexString(): string }
+        roughness: number
+        metalness: number
+      }
+      expect(resolved).not.toBe(fallback)
+      expect(resolved.color.getHexString()).toBe('2468ac')
+      expect(resolved.roughness).toBe(0.27)
+      expect(resolved.metalness).toBe(0.63)
+      for (const time of [1.04, 1.2, 2]) {
+        cache.update(camera, time)
+        expect((mesh.material as Material[])[1]).toBe(resolved)
+      }
+    } finally {
+      unregisterLibraryMaterials([id])
     }
   })
 
@@ -715,4 +883,39 @@ test('legacy wall extensions preserve the viewer-to-nodes dependency boundary', 
     expect(source.split('\n')[0]).toContain('New kind-specific modules belong in nodes')
     expect(source.split('\n')[1]).toContain('viewer-owned')
   }
+})
+
+describe('walls for a capture', () => {
+  // A curtain wall draws its frame, glass and panels from the resolver its renderer mounts the
+  // cutout with: a capture that drew it with the plain wall palette turned its glass opaque.
+  const glass = new MeshBasicMaterial({ transparent: true, opacity: 0.3 })
+  const curtainAware: WallMaterialsResolver = (wall, ...rest) =>
+    getMaterialsForWall(wall, rest[0], rest[1], rest[2], rest[3], rest[4], rest[5], {
+      hash: 'curtain',
+      create: () => ({ visible: [glass, glass, glass] }),
+    })
+
+  test("draws every wall whole with the renderer's own palette, then puts the view back", () => {
+    viewerStore.setState({ textures: true })
+    const { node, mesh } = addWall()
+    cache.update(camera, 1)
+    const cutaway = mesh.material
+    expect(mesh.userData.wallHidden).toBe(true)
+
+    const restore = wallsForCapture(curtainAware, viewerStore, true)
+    expect(mesh.material).toBe(curtainAware(node, 'solid', true, 'clay', 'studio', {}, []).visible)
+    expect((mesh.material as Material[])[1]).toBe(glass)
+    restore()
+    expect(mesh.material).toBe(cutaway)
+  })
+
+  test('leaves the wall mode alone for a capture that does not ask for whole walls', () => {
+    const { mesh } = addWall()
+    cache.update(camera, 1)
+    const cutaway = mesh.material
+    const restore = wallsForCapture(curtainAware, viewerStore, false)
+    expect(mesh.material).toBe(cutaway)
+    restore()
+    expect(mesh.material).toBe(cutaway)
+  })
 })

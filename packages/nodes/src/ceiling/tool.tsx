@@ -20,6 +20,7 @@ import {
   triggerSFX,
   useEditor,
   useFloorplanDraftPreview,
+  visibleScene,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef, useState } from 'react'
@@ -94,6 +95,21 @@ export const CeilingTool: React.FC = () => {
     [],
   )
 
+  // The plan keeps its own copy of the corners, started empty on every view change, and finishes a
+  // polygon in 2D-only view without this tool. Corners kept here once the plan shows (from split
+  // or 3D-only view) would close a different polygon than the one the plan draws.
+  useEffect(() => {
+    let shownScene = visibleScene(useEditor.getState())
+    return useEditor.subscribe((state) => {
+      const nextScene = visibleScene(state)
+      if (nextScene === shownScene) return
+      shownScene = nextScene
+      if (nextScene === '3d') return
+      setPoints([])
+      clearCeilingSnapFeedback()
+    })
+  }, [])
+
   const verticalGeo = useMemo(
     () =>
       new BufferGeometry().setFromPoints([
@@ -111,8 +127,13 @@ export const CeilingTool: React.FC = () => {
   useEffect(() => {
     if (!currentLevelId) return
 
+    // In 2D-only view the plan drafts and commits the ceiling; this tool, mounted behind the
+    // hidden canvas from an earlier visit, still hears the plan's grid events, so it stands aside
+    // (it made every ceiling twice).
+    const planOwnsInput = () => visibleScene(useEditor.getState()) === '2d'
+
     const onGridMove = (event: GridEvent) => {
-      if (!(cursorRef.current && gridCursorRef.current)) return
+      if (!(cursorRef.current && gridCursorRef.current) || planOwnsInput()) return
       const rawPoint: [number, number] = [event.localPosition[0], event.localPosition[2]]
       // Honour the active snapping mode: grid lattice + 15° angle lock are each
       // gated on the mode (off / lines → free), like the slab tool.
@@ -151,7 +172,7 @@ export const CeilingTool: React.FC = () => {
     }
 
     const onGridClick = (_event: GridEvent) => {
-      if (!currentLevelId) return
+      if (!currentLevelId || planOwnsInput()) return
       const clickPoint = previousSnappedPointRef.current ?? cursorPosition
       const firstPoint = points[0]
       if (
@@ -173,7 +194,7 @@ export const CeilingTool: React.FC = () => {
     }
 
     const onGridDoubleClick = (_event: GridEvent) => {
-      if (!currentLevelId) return
+      if (!currentLevelId || planOwnsInput()) return
       if (points.length >= 3) {
         const ceilingId = commitCeilingDrawing(currentLevelId, points)
         setSelection({ selectedIds: [ceilingId] })

@@ -6,12 +6,13 @@ import {
   PipeFittingNode,
   type PipeSegmentNode,
 } from '@pascal-app/core'
+import { queryNodes } from '@pascal-app/core/runtime'
+import type { ScenePort } from '@pascal-app/editor/distribution'
 import { Euler, Quaternion, Vector3 } from 'three'
 import { localFittingPorts } from '../duct-fitting/ports'
-import { ductPortDiameterIn } from '../duct-segment/geometry'
+import { ductPortDiameterIn } from '../duct-segment/profile'
 import { localPipeFittingPorts } from '../pipe-fitting/ports'
 import { accessoryMateQuaternion } from './accessory-placement'
-import type { ScenePort } from './ports'
 
 const END_CAP_OWNER_ID_KEY = 'automaticRunEndCapOwnerId'
 const END_CAP_ENDPOINT_KEY = 'automaticRunEndCapEndpoint'
@@ -83,7 +84,7 @@ export function createDuctRunEndCap(
     height2: duct.height,
     diameter: port.diameter,
     diameter2: port.diameter,
-    ductMaterial: duct.ductMaterial,
+    ductMaterial: duct.ductMaterial === 'spiral' ? 'sheet-metal' : duct.ductMaterial,
     system: duct.system,
   })
   const rotation = accessoryMateQuaternion(cap, port, {
@@ -152,8 +153,8 @@ export function findMatedRunEndCapIds(
 ): AnyNodeId[] {
   if (!source) return []
   const ids: AnyNodeId[] = []
-  for (const node of Object.values(nodes)) {
-    if (!node || node.type !== fittingKind || node.fittingType !== 'end-cap') continue
+  for (const node of queryNodes<DuctFittingNode | PipeFittingNode>(nodes, { type: fittingKind })) {
+    if (node.fittingType !== 'end-cap') continue
     if (node.id === source.nodeId) {
       ids.push(node.id)
       continue
@@ -172,16 +173,12 @@ export function findAutomaticRunEndCapIds(
   nodes: Readonly<Record<string, AnyNode>>,
   fittingKind: 'duct-fitting' | 'pipe-fitting',
 ): AnyNodeId[] {
-  return Object.values(nodes).flatMap((node) => {
-    if (
-      !node ||
-      node.type !== fittingKind ||
-      node.fittingType !== 'end-cap' ||
-      node.metadata[END_CAP_OWNER_ID_KEY] !== runId
-    )
-      return []
-    return [node.id]
-  })
+  return queryNodes<DuctFittingNode | PipeFittingNode>(nodes, { type: fittingKind }).flatMap(
+    (node) => {
+      if (node.fittingType !== 'end-cap' || node.metadata[END_CAP_OWNER_ID_KEY] !== runId) return []
+      return [node.id]
+    },
+  )
 }
 
 export function planRunEndCapFollowUpdates(
@@ -213,4 +210,22 @@ export function planRunEndCapFollowUpdates(
     id,
     data: { position: placed.position, rotation: placed.rotation } as Partial<AnyNode>,
   }))
+}
+
+/** A split transfers the far cap to the new tail without moving its collar. */
+export function transferRunEndCapOwnership(
+  nodes: Readonly<Record<string, AnyNode>>,
+  previousId: AnyNodeId,
+  nextId: AnyNodeId,
+  endpoint: 'start' | 'end',
+): { id: AnyNodeId; data: Partial<AnyNode> }[] {
+  return queryNodes<DuctFittingNode | PipeFittingNode>(nodes, {
+    type: ['pipe-fitting', 'duct-fitting'],
+  }).flatMap((node) =>
+    node.fittingType === 'end-cap' &&
+    node.metadata[END_CAP_OWNER_ID_KEY] === previousId &&
+    node.metadata[END_CAP_ENDPOINT_KEY] === endpoint
+      ? [{ id: node.id, data: { metadata: { ...node.metadata, [END_CAP_OWNER_ID_KEY]: nextId } } }]
+      : [],
+  )
 }

@@ -40,6 +40,8 @@ import {
   collectStructuralGridAxes,
   resolveStructuralGridSnap,
 } from '../structural-grid/coordination'
+import { framingPostToolChoices } from './post-placement'
+import { FramingPostTool } from './post-tool'
 import { ColumnPreview } from './renderer'
 
 const DEFAULT_COLUMN_PRESET_ID = 'basicPillar' satisfies ColumnPresetId
@@ -65,7 +67,7 @@ function createColumnFromPreset(presetId: ColumnPresetId, position: [number, num
  * `nodes`. Wired via `def.tool`, so `ToolManager`'s registry-first path
  * mounts it and the legacy `<ColumnTool>` branch no longer fires.
  */
-const ColumnTool = () => {
+const PillarTool = () => {
   const activeLevelId = useViewer((state) => state.selection.levelId)
   const camera = useThree((state) => state.camera)
   const cameraRef = useRef(camera)
@@ -259,6 +261,19 @@ const ColumnTool = () => {
       <ColumnPreview node={previewNode} />
     </group>
   )
+}
+
+/**
+ * The column tool, or the Post tool while the Build panel's Post tile has armed it with a framing
+ * post's fields (`toolDefaults.column`, `framingPostToolChoices`).
+ */
+const ColumnTool = () => {
+  const size = useEditor((state) => framingPostToolChoices(state.toolDefaults.column)?.size ?? null)
+  const base = useEditor(
+    (state) => framingPostToolChoices(state.toolDefaults.column)?.base ?? 'none',
+  )
+  const choices = useMemo(() => (size ? { size, base } : null), [size, base])
+  return choices ? <FramingPostTool choices={choices} /> : <PillarTool />
 }
 
 export default ColumnTool

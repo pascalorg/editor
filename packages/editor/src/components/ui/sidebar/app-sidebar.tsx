@@ -78,7 +78,7 @@ export function AppSidebar({
 
   return (
     <>
-      <div className={cn('dark flex h-full w-full bg-sidebar text-sidebar-foreground')}>
+      <div className="flex h-full w-full bg-sidebar text-sidebar-foreground">
         {/* Icon Rail */}
         <IconRail
           activePanel={activePanel}

@@ -5,6 +5,7 @@ import {
   containsPoint,
   distanceToBoundary,
   type FloorPlatePaintRefusal,
+  FOUNDATION_SLOT_DEFAULT,
   floorPlatePaintRefusal,
   floorStepKeysOf,
   floorStepOverrideFor,
@@ -21,7 +22,9 @@ import {
   runAsSingleSceneHistoryStep,
   type SceneMaterial,
   type SceneMaterialId,
+  SLAB_TOP_SLOT_DEFAULT,
   type SlabNode,
+  slabSlots,
   slotDefaultPaintMaterial,
   useScene,
   withFloorStepOverride,
@@ -53,8 +56,6 @@ import { swapPreviewMaterial } from '../shared/swap-preview-material'
  * Unpainted steps share the higher room's floor finish. Unowned construction
  * faces still write the slab's own slots.
  */
-
-import { FOUNDATION_SLOT_DEFAULT, SLAB_TOP_SLOT_DEFAULT, slabSlots } from './slots'
 
 type ZoneFinish = NonNullable<ZoneNode['floor']>['finish']
 
@@ -376,8 +377,12 @@ function finishLook(finish: ZoneFinish | undefined): PaintLook | null {
 /** A plate slot as drawn: its value, else its legacy finish, else its declared default. */
 function plateSlotLook(node: AnyNode, slot: string): PaintLook | null {
   return (
-    base.getEffectiveMaterial?.({ node, role: slot, nodes: useScene.getState().nodes }) ??
-    slotDefaultPaintMaterial(slabSlots().find((entry) => entry.slotId === slot)?.default)
+    base.getEffectiveMaterial?.({
+      node,
+      role: slot,
+      nodes: useScene.getState().nodes,
+      materials: useScene.getState().materials,
+    }) ?? slotDefaultPaintMaterial(slabSlots().find((entry) => entry.slotId === slot)?.default)
   )
 }
 
@@ -494,10 +499,11 @@ export const slabPaint: PaintCapability & {
       ? {}
       : base.buildPatch(args),
   commit: (args: PaintPatchArgs) => {
+    const refusal = floorPlatePaintRefusal(useScene.getState().nodes, args.node, args.role)
+    if (refusal) return refusal
     if (args.role === 'surface' && args.node.type === 'slab' && args.node.plateRole === 'base') {
       const role = baseSurfaceRoom(args.node)
-      if (!role)
-        return floorPlatePaintRefusal(useScene.getState().nodes, args.node, args.role) ?? undefined
+      if (!role) return
       commitRoomFinish(role, args.material, args.materialPreset)
       return
     }

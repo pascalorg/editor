@@ -1,9 +1,12 @@
 import { afterEach, expect, test } from 'bun:test'
 import { guardSceneApiRequest, sceneApiPreflight } from './scene-api-security'
+import { issueSession, SESSION_COOKIE } from './self-host-auth'
 
 const OLD_ENV = { ...process.env }
 
 afterEach(() => {
+  restoreEnv('PASCAL_ADMIN_PASSWORD')
+  restoreEnv('PASCAL_AUTH')
   restoreEnv('PASCAL_SCENE_API_TOKEN')
   restoreEnv('PASCAL_SCENE_API_ORIGINS')
   restoreEnv('PASCAL_SCENE_API_RATE_LIMIT')
@@ -33,6 +36,30 @@ test('requires a token for non-loopback scene API requests', async () => {
 
   expect(response?.status).toBe(503)
   expect(await response?.json()).toEqual({ error: 'scene_api_token_required' })
+})
+
+test('accepts the admin session on a password-protected host', () => {
+  process.env.PASCAL_ADMIN_PASSWORD = 'secret'
+  delete process.env.PASCAL_SCENE_API_TOKEN
+  const signedIn = new Request('https://editor.example/api/scenes', {
+    headers: { host: 'editor.example', cookie: `${SESSION_COOKIE}=${issueSession()}` },
+  })
+  const anonymous = new Request('https://editor.example/api/scenes', {
+    headers: { host: 'editor.example' },
+  })
+
+  expect(guardSceneApiRequest(signedIn)).toBeNull()
+  expect(guardSceneApiRequest(anonymous)?.status).toBe(401)
+})
+
+test('an upstream proxy opens the scene API without a token', () => {
+  process.env.PASCAL_AUTH = 'proxy'
+  delete process.env.PASCAL_SCENE_API_TOKEN
+  const request = new Request('https://editor.example/api/scenes', {
+    headers: { host: 'editor.example' },
+  })
+
+  expect(guardSceneApiRequest(request)).toBeNull()
 })
 
 test('accepts bearer token auth when configured', () => {

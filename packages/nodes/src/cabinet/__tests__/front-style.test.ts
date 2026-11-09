@@ -25,12 +25,22 @@ function findMeshByNamePrefix(root: { children: unknown[] }, prefix: string): Me
 
 function frontProfileStats(mesh: Mesh, recessTolerance = 0.001) {
   const position = mesh.geometry.getAttribute('position') as BufferAttribute
+  mesh.geometry.computeBoundingBox()
+  const bounds = mesh.geometry.boundingBox!
   let frameMaxZ = -Infinity
   for (let i = 0; i < position.count; i += 1) frameMaxZ = Math.max(frameMaxZ, position.getZ(i))
 
   let panelMaxZ = -Infinity
   for (let i = 0; i < position.count; i += 1) {
     const z = position.getZ(i)
+    // Measure the recessed panel, excluding the outer edge chamfer.
+    if (
+      position.getX(i) < bounds.min.x + 0.01 ||
+      position.getX(i) > bounds.max.x - 0.01 ||
+      position.getY(i) < bounds.min.y + 0.01 ||
+      position.getY(i) > bounds.max.y - 0.01
+    )
+      continue
     if (z < frameMaxZ - recessTolerance) panelMaxZ = Math.max(panelMaxZ, z)
   }
   return { frameMaxZ, panelMaxZ }

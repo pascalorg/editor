@@ -1,7 +1,7 @@
 'use client'
 
 import { Icon } from '@iconify/react'
-import { type IconRef, useScene } from '@pascal-app/core'
+import { type IconRef, useScene, usePascalI18n } from '@pascal-app/core'
 import { Plus } from 'lucide-react'
 import {
   type ComponentType,
@@ -12,6 +12,9 @@ import {
   useSyncExternalStore,
 } from 'react'
 import useEditor from '../../../store/use-editor'
+import { isViewVisible } from '../../../store/view-layout'
+import { PluginsView } from '../../editor/views/plugins-view'
+import { PLUGINS_VIEW_ID } from '../../editor/views/use-editor-views'
 import {
   editorHostPanelRegistry,
   type EditorHostPanel,
@@ -21,13 +24,17 @@ import {
 import { IconRefImage } from '../icon-ref'
 import { ErrorBoundary } from '../primitives/error-boundary'
 import type { ExtraPanel } from './icon-rail'
-import { PluginsPanel } from './panels/plugins-panel'
 
-const pluginsManagerPanel: ExtraPanel = {
+// The rail's "+" puts the plugin directory on the stage, as a view in the
+// focused pane, and stays lit while it is there instead of leaving an
+// unrelated panel open beside it. `component` serves the v1 sidebar.
+const pluginsManagerPanel: Omit<ExtraPanel, 'label'> = {
   id: 'plugins',
-  label: 'Plugins',
-  icon: <Plus className="h-5 w-5" />,
-  component: PluginsPanel,
+  icon: <img alt="" className="size-8 object-contain" src="/icons/plugins.webp" />,
+  component: PluginsView,
+  noPanel: true,
+  onSelect: () => useEditor.getState().showView(PLUGINS_VIEW_ID),
+  onDeselect: () => useEditor.getState().closeView(PLUGINS_VIEW_ID),
 }
 
 /** Resolve a plugin's {@link IconRef} into a rail-sized React node. Mirrors the
@@ -55,12 +62,12 @@ function renderIconRef(ref: IconRef): ReactNode {
 }
 
 function PluginPanelCrashed({ label }: { label: string }) {
+  const i18n = usePascalI18n()
   return (
     <div className="flex flex-col gap-2 p-4 text-sm">
-      <p className="font-medium text-sidebar-foreground">"{label}" plugin crashed</p>
+      <p className="font-medium text-sidebar-foreground">{i18n._({ id: 'editor.sidebar.usePluginPanels.labelPluginCrashed', message: '"{label}" plugin crashed', values: { label } })}</p>
       <p className="text-sidebar-foreground/50 text-xs">
-        This panel hit an error and was unloaded for this session. The rest of the editor is
-        unaffected — reload to try again.
+        {i18n._({ id: 'editor.sidebar.usePluginPanels.thisPanelHitAnErrorAnd', message: 'This panel hit an error and was unloaded for this session. The rest of the editor is unaffected — reload to try again.' })}
       </p>
     </div>
   )
@@ -75,13 +82,16 @@ function resolvePanelComponent(panel: EditorHostPanel): ComponentType {
   const cached = wrappedPanelCache.get(panel.component)
   if (cached) return cached
   const Lazy = lazy(panel.component)
-  const Wrapped: ComponentType = () => (
+  const Wrapped: ComponentType = () => {
+  const i18n = usePascalI18n()
+  return ((
     <ErrorBoundary fallback={<PluginPanelCrashed label={panel.label} />}>
-      <Suspense fallback={<div className="p-4 text-sidebar-foreground/50 text-sm">Loading…</div>}>
+      <Suspense fallback={<div className="p-4 text-sidebar-foreground/50 text-sm">{i18n._({ id: 'editor.sidebar.usePluginPanels.loading', message: 'Loading…' })}</div>}>
         <Lazy />
       </Suspense>
     </ErrorBoundary>
-  )
+  ))
+}
   Wrapped.displayName = `PluginPanel(${panel.id})`
   wrappedPanelCache.set(panel.component, Wrapped)
   return Wrapped
@@ -99,6 +109,7 @@ function resolvePanelComponent(panel: EditorHostPanel): ComponentType {
  * authoring panel like Nature doesn't ride into the studio rail.
  */
 export function useHostPanels(hostPanels?: ExtraPanel[]): ExtraPanel[] {
+  const i18n = usePascalI18n()
   const registered = useSyncExternalStore(
     editorHostPanelRegistry.subscribe,
     editorHostPanelRegistry.getSnapshot,
@@ -107,6 +118,7 @@ export function useHostPanels(hostPanels?: ExtraPanel[]): ExtraPanel[] {
   const workspaceMode = useEditor((s) => s.workspaceMode)
   const installedPlugins = useScene((s) => s.installedPlugins)
   const readOnly = useScene((s) => s.readOnly)
+  const pluginsViewShown = useEditor((s) => isViewVisible(s, PLUGINS_VIEW_ID))
   const hostIds = new Set(hostPanels?.map((p) => p.id))
 
   useEffect(() => {
@@ -142,7 +154,13 @@ export function useHostPanels(hostPanels?: ExtraPanel[]): ExtraPanel[] {
       readOnly,
       workspaceMode,
     })
-      ? [pluginsManagerPanel]
+      ? [
+          {
+            ...pluginsManagerPanel,
+            label: i18n._({ id: 'editor.sidebar.usePluginPanels.plugins', message: 'Plugins' }),
+            stageActive: pluginsViewShown,
+          },
+        ]
       : []
   return [...(hostPanels ?? []), ...fromRegistry, ...manager]
 }

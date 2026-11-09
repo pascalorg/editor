@@ -12,6 +12,7 @@ const decide = (
     index: 0,
     selectedIndex: undefined,
     nodeVisible: true,
+    revealing: false,
     ...overrides,
   })
 
@@ -45,9 +46,10 @@ describe('resolveLevelVisibility', () => {
     ).toEqual({ visible: false, shadowOnly: false })
   })
 
-  test('the level display hides the levels above the selected one as shadow casters', () => {
+  test('the level display keeps upper storeys and roofs as shadow-only casters', () => {
     const base = { hideAbove: true, hasSelectedLevel: true, selectedIndex: 1 }
-    expect(decide({ ...base, index: 2 })).toEqual({ visible: true, shadowOnly: true })
+    for (const index of [2, 3])
+      expect(decide({ ...base, index })).toEqual({ visible: true, shadowOnly: true })
     expect(decide({ ...base, index: 1, isSelected: true })).toEqual({
       visible: true,
       shadowOnly: false,
@@ -80,5 +82,27 @@ describe('resolveLevelVisibility', () => {
         nodeVisible: false,
       }),
     ).toEqual({ visible: false, shadowOnly: false })
+  })
+
+  test('a level a construction reveal is playing on shows whatever the display hides', () => {
+    const above = { hideAbove: true, hasSelectedLevel: true, selectedIndex: 0, index: 1 }
+    expect(decide(above)).toEqual({ visible: true, shadowOnly: true })
+    expect(decide({ ...above, revealing: true })).toEqual({ visible: true, shadowOnly: false })
+    expect(
+      decide({
+        levelMode: 'solo',
+        hasSelectedLevel: true,
+        index: 0,
+        selectedIndex: 1,
+        revealing: true,
+      }),
+    ).toEqual({ visible: true, shadowOnly: false })
+  })
+
+  test('the reveal does not show a level the author hid', () => {
+    expect(decide({ nodeVisible: false, revealing: true })).toEqual({
+      visible: false,
+      shadowOnly: false,
+    })
   })
 })

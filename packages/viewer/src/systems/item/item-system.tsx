@@ -9,7 +9,9 @@ import {
   type WallNode,
 } from '@pascal-app/core'
 import { useFrame } from '@react-three/fiber'
+import { useEffect } from 'react'
 import type * as THREE from 'three'
+import { initializeObjectCutInvalidation } from './object-cut-invalidation'
 
 // ============================================================================
 // ITEM SYSTEM
@@ -23,6 +25,7 @@ import type * as THREE from 'three'
  * mark at priority 2.
  */
 export const ItemSystem = () => {
+  useEffect(initializeObjectCutInvalidation, [])
   const dirtyNodes = useScene((state) => state.dirtyNodes)
   const clearDirty = useScene((state) => state.clearDirty)
 

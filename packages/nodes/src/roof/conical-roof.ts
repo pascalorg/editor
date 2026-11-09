@@ -1,6 +1,7 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  getActiveRoofHeight,
   getLevelBelow,
   getWallArcData,
   type LevelNode,
@@ -11,26 +12,30 @@ import {
   type SceneApi,
   type WallNode,
 } from '@pascal-app/core'
+import { roofLevelTarget, writeRoofNodes } from './roof-level-target'
 
 const DEFAULT_CONICAL_ROOF_PITCH = 40
 
+/**
+ * A cone over a curved wall, picked from the wall's own level or the one above it (`armedLevelId`).
+ * It goes where every roof goes (`roofLevelTarget`): on the level directly above the wall's storey.
+ */
 export function createConicalRoofSectorAboveWall(
   wall: WallNode,
   nodes: Readonly<Record<AnyNodeId, AnyNode>>,
   sceneApi: SceneApi,
-  targetLevelId: LevelNode['id'],
+  armedLevelId: LevelNode['id'],
 ): RoofSegmentNode['id'] | null {
   const arc = getWallArcData(wall)
-  if (!(arc && nodes[targetLevelId]?.type === 'level')) return null
+  if (!(arc && nodes[armedLevelId]?.type === 'level')) return null
   const completeNodes = nodes as Record<string, AnyNode>
-  const sourceLevelId = resolveLevelId(wall, completeNodes)
-  const levelBelowId = getLevelBelow(targetLevelId, completeNodes)?.id
-  if (sourceLevelId !== targetLevelId && sourceLevelId !== levelBelowId) return null
+  const sourceLevelId = resolveLevelId(wall, completeNodes) as LevelNode['id']
+  const levelBelowId = getLevelBelow(armedLevelId, completeNodes)?.id
+  if (sourceLevelId !== armedLevelId && sourceLevelId !== levelBelowId) return null
 
   const existingRoof = Object.values(nodes).find(
     (node): node is RoofNode =>
       node.type === 'roof' &&
-      node.parentId === targetLevelId &&
       typeof node.metadata === 'object' &&
       node.metadata !== null &&
       !Array.isArray(node.metadata) &&
@@ -54,19 +59,22 @@ export function createConicalRoofSectorAboveWall(
     conicalSweepAngle: arc.delta,
     conicalFullCircle: true,
   })
+  const target = roofLevelTarget(nodes, sourceLevelId, getActiveRoofHeight(segment))
   const roof = RoofNode.parse({
     name: `Roof ${roofCount + 1}`,
     metadata: { conicalSourceWallId: wall.id },
     support: { kind: 'walls' },
-    position: [arc.center.x, resolveRoofWallTopElevation(targetLevelId, wall, nodes), arc.center.y],
+    position: [
+      arc.center.x,
+      resolveRoofWallTopElevation(target.levelId, wall, target.nodes),
+      arc.center.y,
+    ],
     children: [segment.id],
   })
 
-  const ops = [
-    { node: roof, parentId: targetLevelId as AnyNodeId },
+  writeRoofNodes(sceneApi, target, [
+    { node: roof, parentId: target.levelId as AnyNodeId },
     { node: segment, parentId: roof.id as AnyNodeId },
-  ]
-  if (sceneApi.createMany) sceneApi.createMany(ops)
-  else for (const op of ops) sceneApi.upsert(op.node, op.parentId)
+  ])
   return segment.id
 }

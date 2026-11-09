@@ -1,10 +1,23 @@
 import { getLevelElevations, type LevelNode, sceneRegistry, useScene } from '@pascal-app/core'
 import { useFrame } from '@react-three/fiber'
+import type { Object3D } from 'three'
 import { lerp } from 'three/src/math/MathUtils.js'
+import { getLayoutRevision, isLayoutObserved } from '../../lib/layer-pass'
 import { applyShadowOnly, clearShadowOnly } from '../../lib/shadow-only'
 import useViewer from '../../store/use-viewer'
+import { heldLevelY } from './level-hold'
 import { EXPLODED_GAP, resolveLevelVisibility } from './level-utils'
 import { shadowOnlyLevels } from './shadow-only-levels'
+
+const placed = new WeakSet<object>()
+/** Layout revision right after a level was last made shadow-only (see layer-pass.ts). */
+const shadowOnlyAt = new WeakMap<object, number>()
+
+function sceneRoot(object: Object3D): Object3D {
+  let root = object
+  while (root.parent) root = root.parent
+  return root
+}
 
 export const LevelSystem = () => {
   useFrame((_, delta) => {
@@ -12,6 +25,7 @@ export const LevelSystem = () => {
     const levelMode = useViewer.getState().levelMode
     const hideAbove = useViewer.getState().hideLevelsAboveSelection
     const selectedLevel = useViewer.getState().selection.levelId
+    const levelsRevealing = useViewer.getState().levelsRevealing
 
     const levelElevations = getLevelElevations(nodes)
     type LevelEntry = {
@@ -32,6 +46,10 @@ export const LevelSystem = () => {
       }
     })
 
+    // A level that has just mounted (a restored floor, a new storey) cuts every level to its height
+    // together: sliding them from where they were would run the floor and the levels above through
+    // each other.
+    const appeared = entries.some(({ obj }) => !placed.has(obj))
     const selectedIndex = selectedLevel
       ? entries.find((e) => e.levelId === selectedLevel)?.index
       : undefined
@@ -47,7 +65,11 @@ export const LevelSystem = () => {
       // oscillated kilometers off-screen and the level-fit camera followed
       // (blank viewport). Clamping keeps every step a contraction: identical
       // feel at 60 fps, exact snap instead of overshoot on slow frames.
-      obj.position.y = lerp(obj.position.y, targetY, Math.min(1, delta * 12))
+      const held = heldLevelY(levelId)
+      if (held !== undefined) obj.position.y = held
+      else if (appeared) obj.position.y = targetY
+      else obj.position.y = lerp(obj.position.y, targetY, Math.min(1, delta * 12))
+      placed.add(obj)
 
       const { visible, shadowOnly } = resolveLevelVisibility({
         levelMode,
@@ -57,13 +79,22 @@ export const LevelSystem = () => {
         index,
         selectedIndex,
         nodeVisible: level?.visible !== false,
+        revealing: levelsRevealing.includes(levelId),
       })
       if (shadowOnly) {
-        applyShadowOnly(obj)
+        // Re-applied so meshes rebuilt while hidden are hidden too — a rebuild inserts children
+        // or writes masks, which moves the observed layout revision; without either the level
+        // is as it was left.
+        const observed = isLayoutObserved(sceneRoot(obj))
+        if (!observed || shadowOnlyAt.get(obj) !== getLayoutRevision()) {
+          applyShadowOnly(obj)
+          if (observed) shadowOnlyAt.set(obj, getLayoutRevision())
+        }
         shadowOnlyLevels.add(obj)
       } else if (shadowOnlyLevels.has(obj)) {
         clearShadowOnly(obj)
         shadowOnlyLevels.delete(obj)
+        shadowOnlyAt.delete(obj)
       }
       obj.visible = visible
     }

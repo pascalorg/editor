@@ -1,14 +1,14 @@
 'use client'
 
-import { type AnyNodeId, type DoorNode, useScene } from '@pascal-app/core'
+import { type AnyNodeId, type DoorNode, useScene, usePascalI18n } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import Image from 'next/image'
 import { memo, useCallback, useState } from 'react'
 import { resolveNodeSnapTarget, SnapTargetIcon } from '../../../snap-target-badge'
-import useEditor from './../../../../../store/use-editor'
 import { InlineRenameInput } from './inline-rename-input'
 import { focusTreeNode, handleTreeSelection, TreeNodeWrapper } from './tree-node'
 import { TreeNodeActions } from './tree-node-actions'
+import { nodeLabelDescriptor } from '../../../../../i18n/node-messages'
 
 interface DoorTreeNodeProps {
   nodeId: AnyNodeId
@@ -21,6 +21,7 @@ export const DoorTreeNode = memo(function DoorTreeNode({
   depth,
   isLast,
 }: DoorTreeNodeProps) {
+  const i18n = usePascalI18n()
   const [isEditing, setIsEditing] = useState(false)
   const isVisible = useScene((s) => s.nodes[nodeId as AnyNodeId]?.visible !== false)
   const node = useScene((s) => s.nodes[nodeId] as DoorNode | undefined)
@@ -32,15 +33,12 @@ export const DoorTreeNode = memo(function DoorTreeNode({
   const handleClick = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation()
-      const handled = handleTreeSelection(
+      handleTreeSelection(
         e,
         nodeId,
         useViewer.getState().selection.selectedIds,
         setSelection,
       )
-      if (!handled && useEditor.getState().phase === 'furnish') {
-        useEditor.getState().setPhase('structure')
-      }
     },
     [nodeId, setSelection],
   )
@@ -66,7 +64,7 @@ export const DoorTreeNode = memo(function DoorTreeNode({
       isVisible={isVisible}
       label={
         <InlineRenameInput
-          defaultName="Door"
+          defaultName={i18n._(nodeLabelDescriptor('door', 'Door'))}
           isEditing={isEditing}
           nodeId={nodeId as AnyNodeId}
           onStartEditing={handleStartEditing}

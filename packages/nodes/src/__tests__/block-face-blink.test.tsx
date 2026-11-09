@@ -97,7 +97,7 @@ for (const order of ['grid first', 'host first'])
           useEditor.setState({
             mode: 'build',
             tool: 'item',
-            viewMode: '3d',
+            viewLayouts: {},
             movingNodeOrigin: '3d',
             placementDragMode: false,
           })

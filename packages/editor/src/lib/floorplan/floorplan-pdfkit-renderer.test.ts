@@ -98,6 +98,45 @@ describe('renderFloorplanGeometryToPdfKit', () => {
     expect(pdf).toMatch(/f\*/)
   })
 
+  test('ends an unpainted shape so the next fill does not paint it', async () => {
+    // Zones emit fill/stroke 'none' outlines; walls fill right after them.
+    const geometry = {
+      kind: 'group',
+      children: [
+        {
+          kind: 'polygon',
+          points: [
+            [0, 0],
+            [4, 0],
+            [4, 4],
+            [0, 4],
+          ],
+          fill: 'none',
+          stroke: 'none',
+        },
+        {
+          kind: 'polygon',
+          points: [
+            [0, 0],
+            [1, 0],
+            [1, 0.2],
+            [0, 0.2],
+          ],
+          fill: '#374151',
+        },
+      ],
+    } as FloorplanGeometry
+
+    const pdf = await renderTestPdf(geometry)
+    const ops = pdf.split('\n')
+    const firstClose = ops.indexOf('h')
+
+    // the unpainted outline is closed and discarded ('n') before the filled one starts
+    expect(firstClose).toBeGreaterThan(-1)
+    expect(ops[firstClose + 1]).toBe('n')
+    expect(pdf).toMatch(/\bf\n/)
+  })
+
   test('writes a data-url PNG image without resolving it as an asset', async () => {
     const geometry = {
       kind: 'image',

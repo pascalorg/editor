@@ -1,10 +1,13 @@
 'use client'
 
 import {
+  FLOOR_SCRIPT_LIFT,
+  floorScriptSurface,
   polygonInteriorPoint,
   useLiveNodeOverrides,
   useRegistry,
   useScene,
+  type ZoneFloorScript,
   type ZoneNode,
 } from '@pascal-app/core'
 import {
@@ -19,6 +22,7 @@ import { useEffect, useMemo, useRef } from 'react'
 import { Color, DoubleSide, type Group } from 'three'
 import { color, float, uniform, uv } from 'three/tsl'
 import { MeshBasicNodeMaterial } from 'three/webgpu'
+import { FinishScriptModel } from '../shared/finish-script-model'
 import { owningUnitForZone } from './unit-membership'
 
 const Y_OFFSET = 0.01
@@ -71,9 +75,25 @@ export const ZoneRenderer = ({ node }: { node: ZoneNode }) => {
   const ref = useRef<Group>(null!)
   useRegistry(node.id, 'zone', ref)
   const showZones = useViewer((state) => state.showZones)
+  const script = node.floor?.script
   return (
     <group ref={ref} visible={node.visible !== false}>
       {showZones ? <ZoneVisuals node={node} /> : null}
+      {script ? <FloorScriptModel node={node} script={script} /> : null}
+    </group>
+  )
+}
+
+/**
+ * The room's floor finish its script built: in the level's plan, its y = 0 on the floor plate's
+ * top. A room with no plate has no floor for it to stand on.
+ */
+function FloorScriptModel({ node, script }: { node: ZoneNode; script: ZoneFloorScript }) {
+  const surface = useScene((state) => floorScriptSurface(state.nodes, node.id))
+  if (surface === null) return null
+  return (
+    <group position-y={surface + FLOOR_SCRIPT_LIFT}>
+      <FinishScriptModel ownerId={node.id} parentId={node.parentId} script={script} />
     </group>
   )
 }

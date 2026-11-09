@@ -1,7 +1,17 @@
 import dedent from 'dedent'
 import { z } from 'zod'
 import { BaseNode, nodeType, objectId } from '../base'
+import { GeometryScriptSource } from '../geometry-source'
 import { SurfacePaintRegion } from './surface-paint-region'
+
+/**
+ * A room's floor finish built by a three.js module for the room's floor (`lib/floor-script`): the
+ * module gets the floor's polygon and elevation and lays the planks, tiles or boards on exactly that
+ * outline. `inputs` is the key of the floor it was built for; once the room's floor differs (a wall
+ * moved, an edge pushed) the script is stale and runs again for the new one.
+ */
+export const ZoneFloorScript = GeometryScriptSource.extend({ inputs: z.string() })
+export type ZoneFloorScript = z.infer<typeof ZoneFloorScript>
 
 export const ZoneNode = BaseNode.extend({
   id: objectId('zone'),
@@ -26,6 +36,35 @@ export const ZoneNode = BaseNode.extend({
       sourceSlabId: z.templateLiteral(['slab_', z.string()]).optional(),
       finish: z.union([z.string(), z.record(z.string(), z.unknown())]).optional(),
       regions: z.array(SurfacePaintRegion).optional(),
+      script: ZoneFloorScript.optional(),
+      // How far the floor steps down from the floor it would otherwise share, metres (a porch
+      // 1.5 in under the house), so it follows the house's floor. An `elevation` wins over it.
+      drop: z.number().min(0).optional(),
+    })
+    .optional(),
+  // The outdoor room types: a porch (a covered floor a step down from the house), a
+  // deck (a framed floor) or a patio (an uncovered slab). Such a room is outdoors whatever covers
+  // it (`lib/outdoor-room`). Absent, an ordinary room.
+  roomType: z.enum(['porch', 'deck', 'patio']).optional(),
+  // A porch's posts and the beam on them (`lib/porch-framing`): placed by the structure kernel
+  // while `auto` holds (absent = on; a deck's or patio's only once `auto` is true), at these sizes
+  // and at most `postSpacing` metres apart.
+  porchFraming: z
+    .object({
+      auto: z.boolean().optional(),
+      postSize: z.string().optional(),
+      postSpacing: z.number().positive().optional(),
+      beamSize: z.string().optional(),
+    })
+    .optional(),
+  // A deck's boards (`lib/deck-boards`): their stock, the gap between them in metres and the way
+  // they run against the house, the joists under them following. Absent, 5/4x6 boards 1/4 in apart
+  // running along the house.
+  decking: z
+    .object({
+      boardSize: z.enum(['5/4x6', '2x6', '2x4', 'composite']).optional(),
+      gap: z.number().positive().optional(),
+      direction: z.enum(['parallel', 'diagonal', 'perpendicular']).optional(),
     })
     .optional(),
   // Painted parts of the room's ceiling. The automatic ceilings are rebuilt
@@ -87,6 +126,11 @@ export const ZoneNode = BaseNode.extend({
   - spaceRole: generic site/analysis zone or architectural room
   - roomNumber/finishes/ceilingHeight/occupancy: construction-document room metadata
   - floor.regions / ceiling.regions: painted parts of the room's floor and ceiling ([x, z] polygons, later wins)
+  - floor.script: a three.js module that builds the room's floor finish (boards, tiles) for its floor polygon, drawn over the floor; it owns its colours
+  - floor.drop: metres the floor steps down from the floor it would share (a porch under the house's floor); an explicit floor.elevation wins
+  - roomType: "porch", "deck" or "patio" for a room outside the house (outdoors even when covered); absent, an ordinary room
+  - porchFraming: a porch's posts and beam (auto placement on unless false; a deck's or patio's only when auto is true; post size, max post spacing in metres, beam size)
+  - decking: a deck's boards (boardSize "5/4x6" | "2x6" | "2x4" | "composite", gap in metres, direction "parallel" | "diagonal" | "perpendicular" to the house); absent, 5/4x6 at 1/4 in along the house
   - floorStepFinish: finish of the room's steps; floorStepOverrides: per-doorway step finishes keyed by door id (or the lower room id), optional step index
   - enclosureStatus: auto-detected, explicitly enclosed, or open
   - clearDimensionPolicy: optional room clear-dimension datum preference

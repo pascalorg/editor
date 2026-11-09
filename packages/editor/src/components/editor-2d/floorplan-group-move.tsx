@@ -24,7 +24,10 @@ import { applyFloorplanAlignment } from '../../lib/floorplan/apply-alignment'
 import { clientToPlan } from '../../lib/floorplan/plan-coords'
 import { isHistoryShortcut } from '../../lib/history'
 import { formatLinearMeasurement } from '../../lib/measurements'
+import type { WallGroupPush } from '../../lib/room-handle-drag'
+import { useRoomHandleDrag } from '../../lib/room-handle-drag'
 import { sfxEmitter } from '../../lib/sfx-bus'
+import { isTypingTarget } from '../../lib/typing-target'
 import useAlignmentGuides from '../../store/use-alignment-guides'
 import useEditor, {
   isAlignmentGuideActive,
@@ -35,6 +38,7 @@ import useEditor, {
 import useFloorplanMode from '../../store/use-floorplan-mode'
 import useInteractionScope, { useMovingNode } from '../../store/use-interaction-scope'
 import {
+  beginGroupWallPush,
   classifyParticipant,
   collectParticipants,
   computeGroupPlanBox,
@@ -119,6 +123,8 @@ export function startFloorplanGroupMove(
     rotation: number
     restCenter: Vec2
     lastDelta: Vec2 | null
+    /** Walls alone: each moves as its push arrow does instead of the rigid slide. */
+    push: WallGroupPush | null
   }
   let session: Session | null = null
 
@@ -184,6 +190,7 @@ export function startFloorplanGroupMove(
       rotation: 0,
       restCenter,
       lastDelta: null,
+      push: beginGroupWallPush(starts, levelId),
     }
   }
 
@@ -200,8 +207,14 @@ export function startFloorplanGroupMove(
     let dz = snap ? Math.round((plan[1] - startPlan[1]) / step) * step : plan[1] - startPlan[1]
 
     // Figma-style alignment layered on top: guides display in every mode
-    // except Off; the magnetic pull applies only in 'lines' mode.
-    if (isAlignmentGuideActive() && s.candidates.length > 0 && s.restAnchors.length > 0) {
+    // except Off; the magnetic pull applies only in 'lines' mode. Pushed walls
+    // don't move as one footprint, so they have no box to align.
+    if (
+      !s.push &&
+      isAlignmentGuideActive() &&
+      s.candidates.length > 0 &&
+      s.restAnchors.length > 0
+    ) {
       const proposed: [number, number] = [startPlan[0] + dx, startPlan[1] + dz]
       const aligned = applyFloorplanAlignment(
         proposed,
@@ -223,6 +236,10 @@ export function startFloorplanGroupMove(
     if (!s.lastDelta || s.lastDelta[0] !== dx || s.lastDelta[1] !== dz) {
       sfxEmitter.emit('sfx:grid-snap')
       s.lastDelta = [dx, dz]
+    }
+    if (s.push) {
+      s.push.preview([dx, dz])
+      return
     }
 
     const entries = translateGroupPatches(s.starts, s.links, dx, dz)
@@ -251,6 +268,8 @@ export function startFloorplanGroupMove(
   // current delta — the carried group turns exactly like the idle keyboard
   // rotate, and the commit stays a single updateNodes.
   const rotateSession = (s: Session, direction: 1 | -1) => {
+    // Pushed walls keep their bearing: there is nothing to turn.
+    if (s.push) return
     const pivot = { x: s.restCenter[0], z: s.restCenter[1] }
     const delta = -direction * (Math.PI / 4)
     const rotated = rotateGroupSnapshots(s.starts, s.links, pivot, delta)
@@ -270,6 +289,7 @@ export function startFloorplanGroupMove(
   }
 
   const clearLivePreviews = (s: Session) => {
+    s.push?.cancel()
     const overrides = useLiveNodeOverrides.getState()
     const liveTransforms = useLiveTransforms.getState()
     for (const id of s.affectedIds) {
@@ -329,6 +349,13 @@ export function startFloorplanGroupMove(
     // doesn't clear the multi-selection the drag is preserving.
     swallowNextClick()
     sfxEmitter.emit('sfx:item-place')
+    if (session.push) {
+      resumeSceneHistory(useScene)
+      session.push.commit()
+      session = null
+      teardown()
+      return
+    }
     const overrides = useLiveNodeOverrides.getState()
     const updates: { id: AnyNodeId; data: Partial<AnyNode> }[] = []
     for (const id of session.affectedIds) {
@@ -368,6 +395,7 @@ export function startFloorplanGroupMove(
   // Escape arm (registered earlier on window in the bubble phase), which
   // would otherwise clear the multi-selection mid-cancel.
   const onKeyDown = (e: KeyboardEvent) => {
+    if (isTypingTarget(e.target)) return
     const key = e.key.toLowerCase()
     if ((key === 'r' || key === 't') && !e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey) {
       // Armed but still under the drag threshold: engage first (exactly what
@@ -569,6 +597,7 @@ export function startFloorplanGroupRotate(event: {
 
   // Capture phase so Escape wins over the global `use-keyboard` arm.
   const onKeyDown = (e: KeyboardEvent) => {
+    if (isTypingTarget(e.target)) return
     if (e.key === 'Delete' || e.key === 'Backspace') {
       // Deleting mid-rotate: revert first, then let the global Delete arm run.
       cancel()
@@ -629,6 +658,8 @@ export const FloorplanGroupSelectionBox = memo(function FloorplanGroupSelectionB
   const delta = useFloorplanGroupDrag((s) => s.delta)
   const liveRotation = useFloorplanGroupDrag((s) => s.rotation)
   const movingNode = useMovingNode()
+  // Pushed walls don't move as one box: the room widths they show take its place.
+  const wallPush = useRoomHandleDrag((s) => s.drag?.kind === 'wall-group-push')
   const mode = useEditor((s) => s.mode)
   const floorplanMode = useFloorplanMode((s) => s.mode)
   const sceneRotationDeg = useFloorplanSceneRotation()
@@ -670,7 +701,7 @@ export const FloorplanGroupSelectionBox = memo(function FloorplanGroupSelectionB
     }
   }, [selectedIds, levelId, nodes, meshEpoch])
 
-  if (!box || movingNode || mode === 'delete') return null
+  if (!box || movingNode || wallPush || mode === 'delete') return null
 
   const pad = 6 * unitsPerPixel
   const stroke = palette?.selectedStroke ?? '#3b82f6'

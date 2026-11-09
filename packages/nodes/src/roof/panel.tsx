@@ -7,22 +7,34 @@ import {
   type ChimneyNode,
   type DormerNode,
   type GutterNode,
+  getRoofSegmentDeckReach,
+  getSegmentSlopeFrame,
+  isRoofOnStoreyWalls,
+  type LevelNode,
+  type PascalI18n,
+  planRoofsOffStorey,
   type RidgeVentNode,
   type RoofNode,
   type RoofSegmentNode,
+  roofLevelAbove,
+  roofTypeHasRakes,
   type SkylightNode,
   type SolarPanelNode,
   type TurbineVentNode,
+  useLocale,
+  usePascalI18n,
   useScene,
 } from '@pascal-app/core'
 import {
   ActionButton,
   ActionGroup,
-  commitParametricNodeFields,
-  duplicateRoofSubtree,
+  duplicateNodeAndPickUp,
   formatLinearMeasurement,
+  localizedLevelName,
+  nodeLabel,
   PanelSection,
   PanelWrapper,
+  parametricNodeUpdates,
   SegmentedControl,
   SliderControl,
   triggerSFX,
@@ -32,8 +44,12 @@ import { useViewer } from '@pascal-app/viewer'
 import { Copy, Move, Plus, Trash2 } from 'lucide-react'
 import { useCallback, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
+import { RoofGlazingPanel } from '../roof/glazing-panel'
+import { commitSeatedRoofEdit } from './roof-level-target'
 
 export default function RoofPanel() {
+  const i18n = usePascalI18n()
+  const locale = useLocale()
   const [ventType, setVentType] = useState<'box-vent' | 'ridge-vent' | 'turbine-vent'>('box-vent')
   const selectedId = useViewer((s) => s.selection.selectedIds[0])
   const unit = useViewer((s) => s.unit)
@@ -148,6 +164,47 @@ export default function RoofPanel() {
     }),
   )
 
+  // A roof on the walls of the storey holding it (the agents' and the editor's roofs before the
+  // roof level) hides that storey's plan in solo and exploded views: offer to move it where it goes.
+  const levelMove = useScene(
+    useShallow((s) => {
+      if (!node || !isRoofOnStoreyWalls(s.nodes, node.id)) return null
+      const level = s.nodes[node.parentId as AnyNodeId] as LevelNode
+      const above = roofLevelAbove(s.nodes, level.id)
+      return {
+        storey: localizedLevelName(level, i18n, locale),
+        label:
+          above.kind === 'roof'
+            ? i18n._({
+                id: 'node.roof.panel.moveToTheRoofLevel',
+                message: 'Move to the roof level',
+              })
+            : i18n._({
+                id: 'node.roof.panel.moveToLevel',
+                message: 'Move to {level}',
+                values: { level: localizedLevelName(above.level, i18n, locale) },
+              }),
+        roofs: level.children.filter((id) => isRoofOnStoreyWalls(s.nodes, id)).length,
+      }
+    }),
+  )
+
+  const handleMoveOffStorey = useCallback(() => {
+    if (!node?.parentId) return
+    const move = planRoofsOffStorey(useScene.getState().nodes, node.parentId)
+    if (!move) return
+    triggerSFX('sfx:item-place')
+    useScene.getState().applyNodeChanges({
+      create: move.changes.create.map((op) => ({
+        node: op.node,
+        parentId: op.parentId as AnyNodeId | undefined,
+      })),
+      update: move.changes.update.map(({ id, data }) => ({ id: id as AnyNodeId, data })),
+    })
+    // The storey in view hides the levels above it: the selection follows the roof up.
+    setSelection({ levelId: move.plan.levelId as LevelNode['id'], selectedIds: [node.id] })
+  }, [node, setSelection])
+
   const handleSelectElement = useCallback(
     (id: string) => {
       setSelection({ selectedIds: [id as AnyNode['id']] })
@@ -158,9 +215,26 @@ export default function RoofPanel() {
   const handleUpdate = useCallback(
     (updates: Partial<RoofNode>) => {
       if (!selectedId) return
-      commitParametricNodeFields(selectedId as AnyNode['id'], updates)
+      // Moved or turned onto the walls that carry it, it goes to the level above them.
+      commitSeatedRoofEdit(
+        parametricNodeUpdates(selectedId as AnyNode['id'], updates),
+        selectedId as AnyNode['id'],
+      )
     },
     [selectedId],
+  )
+
+  // The eaves are each segment's: the roof's sliders set them on all of its segments at once.
+  const handleSegmentsUpdate = useCallback(
+    (patch: (segment: RoofSegmentNode) => Partial<RoofSegmentNode> | null) => {
+      if (!selectedId) return
+      const update = segments.flatMap((segment) => {
+        const data = patch(segment)
+        return data ? [{ id: segment.id as AnyNodeId, data: data as Partial<AnyNode> }] : []
+      })
+      if (update.length > 0) commitSeatedRoofEdit(update, selectedId as AnyNodeId)
+    },
+    [segments, selectedId],
   )
 
   const handleClose = useCallback(() => {
@@ -183,14 +257,7 @@ export default function RoofPanel() {
   )
 
   const handleDuplicate = useCallback(() => {
-    if (!node) return
-    triggerSFX('sfx:item-pick')
-
-    try {
-      duplicateRoofSubtree(node.id as AnyNodeId, { mode: 'move' })
-    } catch (e) {
-      console.error('Failed to duplicate roof', e)
-    }
+    if (node) duplicateNodeAndPickUp(node)
   }, [node])
 
   const handleMove = useCallback(() => {
@@ -243,37 +310,121 @@ export default function RoofPanel() {
 
   if (!(node && node.type === 'roof' && selectedId)) return null
 
+  // Shown as the segment panel shows them: in plan, past the walls' outside faces.
+  const eaveSegment = segments.find((segment) => segment.roofType !== 'barrel')
+  const rakedSegment = segments.find((segment) => roofTypeHasRakes(segment.roofType))
+  const overhangPastWall = (segment: RoofSegmentNode, axis: 'x' | 'z') =>
+    getRoofSegmentDeckReach(segment)[axis] - segment.wallThickness / 2
+
   return (
     <PanelWrapper
       icon="/icons/roof.webp"
       onClose={handleClose}
-      title={node.name || 'Roof'}
+      title={node.name || i18n._({ id: 'node.roof.panel.roof', message: 'Roof' })}
       width={300}
     >
-      <PanelSection title="Segments">
+      <RoofGlazingPanel segments={segments} />
+      {levelMove && (
+        <PanelSection title={i18n._({ id: 'node.roof.panel.level', message: 'Level' })}>
+          <div className="flex flex-col gap-2 px-1 pb-1">
+            <p className="text-muted-foreground text-xs">
+              {i18n._({
+                id: 'node.roof.panel.onStoreyWalls',
+                message:
+                  "On {storey} with its walls, so it hides that floor's plan in solo and exploded views.{roofs, plural, =0 {} =1 {} other { The floor's {roofCount} roofs move together.}}",
+                values: {
+                  storey: levelMove.storey,
+                  roofs: levelMove.roofs,
+                  roofCount: String(levelMove.roofs),
+                },
+              })}
+            </p>
+            <button
+              className="w-full rounded-full bg-foreground/[0.08] px-3 py-2 font-medium text-foreground text-xs transition-colors hover:bg-foreground/[0.14]"
+              onClick={handleMoveOffStorey}
+              type="button"
+            >
+              {levelMove.label}
+            </button>
+          </div>
+        </PanelSection>
+      )}
+
+      <PanelSection title={i18n._({ id: 'node.roof.panel.segments', message: 'Segments' })}>
         <div className="flex flex-col gap-1">
           {segments.map((seg, i) => (
             <button
-              className="flex items-center justify-between rounded-lg border border-border/50 bg-[#2C2C2E] px-3 py-2 text-foreground text-sm transition-colors hover:bg-[#3e3e3e]"
+              className="flex items-center justify-between rounded-lg border border-border/50 bg-black/4 dark:bg-[#2C2C2E] px-3 py-2 text-foreground text-sm transition-colors hover:bg-black/8 dark:hover:bg-[#3e3e3e]"
               key={seg.id}
               onClick={() => handleSelectSegment(seg.id)}
               type="button"
             >
-              <span className="truncate">{seg.name || `Segment ${i + 1}`}</span>
-              <span className="text-muted-foreground text-xs capitalize">{seg.roofType}</span>
+              <span className="truncate">
+                {seg.name ||
+                  i18n._({
+                    id: 'node.segmentNumber',
+                    message: 'Segment {number}',
+                    values: { number: i + 1 },
+                  })}
+              </span>
+              <span className="text-muted-foreground text-xs">
+                {i18n._({
+                  id: 'node.roof.panel.segmentType',
+                  message:
+                    '{roofType, select, hip {Hip} gable {Gable} shed {Shed} gambrel {Gambrel} dutch {Dutch} mansard {Mansard} flat {Flat} conical {Conical} barrel {Barrel} other {Roof}}',
+                  values: { roofType: seg.roofType },
+                })}
+              </span>
             </button>
           ))}
         </div>
         <ActionGroup>
           <ActionButton
             icon={<Plus className="h-3.5 w-3.5" />}
-            label="Draw Segment"
+            label={i18n._({ id: 'node.roof.panel.drawSegment', message: 'Draw Segment' })}
             onClick={handleAddSegment}
           />
         </ActionGroup>
       </PanelSection>
 
-      <PanelSection title="Position">
+      {eaveSegment && (
+        <PanelSection title={i18n._({ id: 'node.roof.panel.eaves', message: 'Eaves' })}>
+          <SliderControl
+            label={i18n._({ id: 'node.roof.panel.eaveOverhang', message: 'Eave overhang' })}
+            max={1}
+            min={0}
+            onChange={(v) =>
+              handleSegmentsUpdate((segment) =>
+                segment.roofType === 'barrel'
+                  ? null
+                  : { overhang: v / getSegmentSlopeFrame(segment).cosTheta },
+              )
+            }
+            precision={2}
+            step={0.05}
+            unit="m"
+            value={overhangPastWall(eaveSegment, 'z')}
+          />
+          {rakedSegment && (
+            <SliderControl
+              label={i18n._({ id: 'node.roof.panel.gableOverhang', message: 'Gable overhang' })}
+              max={3}
+              min={0}
+              onChange={(v) =>
+                handleSegmentsUpdate((segment) =>
+                  roofTypeHasRakes(segment.roofType) ? { gableOverhang: v } : null,
+                )
+              }
+              precision={2}
+              step={0.05}
+              unit="m"
+              value={overhangPastWall(rakedSegment, 'x')}
+            />
+          )}
+        </PanelSection>
+      )}
+
+      <PanelSection title={i18n._({ id: 'node.roof.panel.position', message: 'Position' })}>
         <SliderControl
           label="X"
           onChange={(v) => {
@@ -292,15 +443,25 @@ export default function RoofPanel() {
               handleUpdate({ support: { kind: mode === 'walls' ? 'walls' : 'level' } })
             }
             options={[
-              { label: 'Follows walls', value: 'walls' },
-              { label: 'Custom', value: 'custom' },
+              {
+                label: i18n._({ id: 'node.roof.panel.followsWalls', message: 'Follows walls' }),
+                value: 'walls',
+              },
+              {
+                label: i18n._({ id: 'node.roof.panel.custom', message: 'Custom' }),
+                value: 'custom',
+              },
             ]}
             value={node.support?.kind === 'walls' ? 'walls' : 'custom'}
           />
         )}
         {node.support?.kind === 'walls' ? (
           <div className="px-1 text-[11px] text-muted-foreground">
-            Currently {formatLinearMeasurement(node.position[1], unit, metricNotation)}
+            {i18n._({
+              id: 'node.panel.currently',
+              message: 'Currently {value}',
+              values: { value: formatLinearMeasurement(node.position[1], unit, metricNotation) },
+            })}
           </div>
         ) : (
           <SliderControl
@@ -337,7 +498,7 @@ export default function RoofPanel() {
           value={node.position[2]}
         />
         <SliderControl
-          label="Rotation"
+          label={i18n._({ id: 'node.roof.panel.rotation', message: 'Rotation' })}
           max={180}
           min={-180}
           onChange={(degrees) => {
@@ -366,24 +527,28 @@ export default function RoofPanel() {
         </div>
       </PanelSection>
 
-      <PanelSection title="Elements">
+      <PanelSection title={i18n._({ id: 'node.roof.panel.elements', message: 'Elements' })}>
         <div className="flex flex-col gap-3">
           <div className="flex flex-col gap-1">
             {chimneys.map((chimney, i) => (
               <button
-                className="flex items-center justify-between rounded-lg border border-border/50 bg-[#2C2C2E] px-3 py-2 text-foreground text-sm transition-colors hover:bg-[#3e3e3e]"
+                className="flex items-center justify-between rounded-lg border border-border/50 bg-black/4 dark:bg-[#2C2C2E] px-3 py-2 text-foreground text-sm transition-colors hover:bg-black/8 dark:hover:bg-[#3e3e3e]"
                 key={chimney.id}
                 onClick={() => handleSelectElement(chimney.id)}
                 type="button"
               >
-                <span className="truncate">{chimney.name || `Chimney ${i + 1}`}</span>
-                <span className="text-muted-foreground text-xs">chimney</span>
+                <span className="truncate">
+                  {chimney.name || numberedName(nodeLabel('chimney', 'Chimney', i18n), i + 1, i18n)}
+                </span>
+                <span className="text-muted-foreground text-xs">
+                  {i18n._({ id: 'node.roof.panel.chimney', message: 'chimney' })}
+                </span>
               </button>
             ))}
             <ActionGroup>
               <ActionButton
                 icon={<Plus className="h-3.5 w-3.5" />}
-                label="Add Chimney"
+                label={i18n._({ id: 'node.roof.panel.addChimney', message: 'Add Chimney' })}
                 onClick={() => activateTool('chimney')}
               />
             </ActionGroup>
@@ -392,19 +557,23 @@ export default function RoofPanel() {
           <div className="flex flex-col gap-1">
             {dormers.map((dormer, i) => (
               <button
-                className="flex items-center justify-between rounded-lg border border-border/50 bg-[#2C2C2E] px-3 py-2 text-foreground text-sm transition-colors hover:bg-[#3e3e3e]"
+                className="flex items-center justify-between rounded-lg border border-border/50 bg-black/4 dark:bg-[#2C2C2E] px-3 py-2 text-foreground text-sm transition-colors hover:bg-black/8 dark:hover:bg-[#3e3e3e]"
                 key={dormer.id}
                 onClick={() => handleSelectElement(dormer.id)}
                 type="button"
               >
-                <span className="truncate">{dormer.name || `Dormer ${i + 1}`}</span>
-                <span className="text-muted-foreground text-xs">dormer</span>
+                <span className="truncate">
+                  {dormer.name || numberedName(nodeLabel('dormer', 'Dormer', i18n), i + 1, i18n)}
+                </span>
+                <span className="text-muted-foreground text-xs">
+                  {i18n._({ id: 'node.roof.panel.dormer', message: 'dormer' })}
+                </span>
               </button>
             ))}
             <ActionGroup>
               <ActionButton
                 icon={<Plus className="h-3.5 w-3.5" />}
-                label="Add Dormer"
+                label={i18n._({ id: 'node.roof.panel.addDormer', message: 'Add Dormer' })}
                 onClick={() => activateTool('dormer')}
               />
             </ActionGroup>
@@ -413,19 +582,24 @@ export default function RoofPanel() {
           <div className="flex flex-col gap-1">
             {skylights.map((skylight, i) => (
               <button
-                className="flex items-center justify-between rounded-lg border border-border/50 bg-[#2C2C2E] px-3 py-2 text-foreground text-sm transition-colors hover:bg-[#3e3e3e]"
+                className="flex items-center justify-between rounded-lg border border-border/50 bg-black/4 dark:bg-[#2C2C2E] px-3 py-2 text-foreground text-sm transition-colors hover:bg-black/8 dark:hover:bg-[#3e3e3e]"
                 key={skylight.id}
                 onClick={() => handleSelectElement(skylight.id)}
                 type="button"
               >
-                <span className="truncate">{skylight.name || `Skylight ${i + 1}`}</span>
-                <span className="text-muted-foreground text-xs">skylight</span>
+                <span className="truncate">
+                  {skylight.name ||
+                    numberedName(nodeLabel('skylight', 'Skylight', i18n), i + 1, i18n)}
+                </span>
+                <span className="text-muted-foreground text-xs">
+                  {i18n._({ id: 'node.roof.panel.skylight', message: 'skylight' })}
+                </span>
               </button>
             ))}
             <ActionGroup>
               <ActionButton
                 icon={<Plus className="h-3.5 w-3.5" />}
-                label="Add Skylight"
+                label={i18n._({ id: 'node.roof.panel.addSkylight', message: 'Add Skylight' })}
                 onClick={() => activateTool('skylight')}
               />
             </ActionGroup>
@@ -434,19 +608,24 @@ export default function RoofPanel() {
           <div className="flex flex-col gap-1">
             {solarPanels.map((panel, i) => (
               <button
-                className="flex items-center justify-between rounded-lg border border-border/50 bg-[#2C2C2E] px-3 py-2 text-foreground text-sm transition-colors hover:bg-[#3e3e3e]"
+                className="flex items-center justify-between rounded-lg border border-border/50 bg-black/4 dark:bg-[#2C2C2E] px-3 py-2 text-foreground text-sm transition-colors hover:bg-black/8 dark:hover:bg-[#3e3e3e]"
                 key={panel.id}
                 onClick={() => handleSelectElement(panel.id)}
                 type="button"
               >
-                <span className="truncate">{panel.name || `Solar Panel ${i + 1}`}</span>
-                <span className="text-muted-foreground text-xs">solar panel</span>
+                <span className="truncate">
+                  {panel.name ||
+                    numberedName(nodeLabel('solar-panel', 'Solar Panel', i18n), i + 1, i18n)}
+                </span>
+                <span className="text-muted-foreground text-xs">
+                  {i18n._({ id: 'node.roof.panel.solarPanel', message: 'solar panel' })}
+                </span>
               </button>
             ))}
             <ActionGroup>
               <ActionButton
                 icon={<Plus className="h-3.5 w-3.5" />}
-                label="Add Solar Panel"
+                label={i18n._({ id: 'node.roof.panel.addSolarPanel', message: 'Add Solar Panel' })}
                 onClick={() => activateTool('solar-panel')}
               />
             </ActionGroup>
@@ -455,41 +634,51 @@ export default function RoofPanel() {
           <div className="flex flex-col gap-1">
             {vents.map((vent, i) => (
               <button
-                className="flex items-center justify-between rounded-lg border border-border/50 bg-[#2C2C2E] px-3 py-2 text-foreground text-sm transition-colors hover:bg-[#3e3e3e]"
+                className="flex items-center justify-between rounded-lg border border-border/50 bg-black/4 dark:bg-[#2C2C2E] px-3 py-2 text-foreground text-sm transition-colors hover:bg-black/8 dark:hover:bg-[#3e3e3e]"
                 key={vent.id}
                 onClick={() => handleSelectElement(vent.id)}
                 type="button"
               >
                 <span className="truncate">
                   {vent.name ||
-                    (vent.type === 'box-vent'
-                      ? `Box Vent ${i + 1}`
-                      : vent.type === 'ridge-vent'
-                        ? `Ridge Vent ${i + 1}`
-                        : `Turbine Vent ${i + 1}`)}
+                    numberedName(
+                      vent.type === 'box-vent'
+                        ? nodeLabel('box-vent', 'Box Vent', i18n)
+                        : vent.type === 'ridge-vent'
+                          ? nodeLabel('ridge-vent', 'Ridge Vent', i18n)
+                          : nodeLabel('turbine-vent', 'Turbine Vent', i18n),
+                      i + 1,
+                      i18n,
+                    )}
                 </span>
                 <span className="text-muted-foreground text-xs">
                   {vent.type === 'box-vent'
-                    ? 'box vent'
+                    ? i18n._({ id: 'node.roof.panel.boxVent', message: 'box vent' })
                     : vent.type === 'ridge-vent'
-                      ? 'ridge vent'
-                      : 'turbine vent'}
+                      ? i18n._({ id: 'node.roof.panel.ridgeVent', message: 'ridge vent' })
+                      : i18n._({ id: 'node.roof.panel.turbineVent', message: 'turbine vent' })}
                 </span>
               </button>
             ))}
             <SegmentedControl<'box-vent' | 'ridge-vent' | 'turbine-vent'>
               onChange={setVentType}
               options={[
-                { label: 'Box', value: 'box-vent' },
-                { label: 'Ridge', value: 'ridge-vent' },
-                { label: 'Turbine', value: 'turbine-vent' },
+                { label: i18n._({ id: 'node.roof.panel.box', message: 'Box' }), value: 'box-vent' },
+                {
+                  label: i18n._({ id: 'node.roof.panel.ridge', message: 'Ridge' }),
+                  value: 'ridge-vent',
+                },
+                {
+                  label: i18n._({ id: 'node.roof.panel.turbine', message: 'Turbine' }),
+                  value: 'turbine-vent',
+                },
               ]}
               value={ventType}
             />
             <ActionGroup>
               <ActionButton
                 icon={<Plus className="h-3.5 w-3.5" />}
-                label="Add Vent"
+                label={i18n._({ id: 'node.roof.panel.addVent', message: 'Add Vent' })}
                 onClick={() => activateTool(ventType)}
               />
             </ActionGroup>
@@ -499,7 +688,7 @@ export default function RoofPanel() {
             <ActionGroup>
               <ActionButton
                 icon={<Plus className="h-3.5 w-3.5" />}
-                label="Add Cupola"
+                label={i18n._({ id: 'node.roof.panel.addCupola', message: 'Add Cupola' })}
                 onClick={() => activateTool('cupola')}
               />
             </ActionGroup>
@@ -509,7 +698,10 @@ export default function RoofPanel() {
             <ActionGroup>
               <ActionButton
                 icon={<Plus className="h-3.5 w-3.5" />}
-                label="Add Eyebrow Vent"
+                label={i18n._({
+                  id: 'node.roof.panel.addEyebrowVent',
+                  message: 'Add Eyebrow Vent',
+                })}
                 onClick={() => activateTool('eyebrow-vent')}
               />
             </ActionGroup>
@@ -518,19 +710,23 @@ export default function RoofPanel() {
           <div className="flex flex-col gap-1">
             {gutters.map((gutter, i) => (
               <button
-                className="flex items-center justify-between rounded-lg border border-border/50 bg-[#2C2C2E] px-3 py-2 text-foreground text-sm transition-colors hover:bg-[#3e3e3e]"
+                className="flex items-center justify-between rounded-lg border border-border/50 bg-black/4 dark:bg-[#2C2C2E] px-3 py-2 text-foreground text-sm transition-colors hover:bg-black/8 dark:hover:bg-[#3e3e3e]"
                 key={gutter.id}
                 onClick={() => handleSelectElement(gutter.id)}
                 type="button"
               >
-                <span className="truncate">{gutter.name || `Gutter ${i + 1}`}</span>
-                <span className="text-muted-foreground text-xs">gutter</span>
+                <span className="truncate">
+                  {gutter.name || numberedName(nodeLabel('gutter', 'Gutter', i18n), i + 1, i18n)}
+                </span>
+                <span className="text-muted-foreground text-xs">
+                  {i18n._({ id: 'node.roof.panel.gutter', message: 'gutter' })}
+                </span>
               </button>
             ))}
             <ActionGroup>
               <ActionButton
                 icon={<Plus className="h-3.5 w-3.5" />}
-                label="Add Gutter"
+                label={i18n._({ id: 'node.roof.panel.addGutter', message: 'Add Gutter' })}
                 onClick={() => activateTool('gutter')}
               />
             </ActionGroup>
@@ -538,22 +734,31 @@ export default function RoofPanel() {
         </div>
       </PanelSection>
 
-      <PanelSection title="Actions">
+      <PanelSection title={i18n._({ id: 'node.roof.panel.actions', message: 'Actions' })}>
         <ActionGroup>
-          <ActionButton icon={<Move className="h-3.5 w-3.5" />} label="Move" onClick={handleMove} />
+          <ActionButton
+            icon={<Move className="h-3.5 w-3.5" />}
+            label={i18n._({ id: 'node.roof.panel.move', message: 'Move' })}
+            onClick={handleMove}
+          />
           <ActionButton
             icon={<Copy className="h-3.5 w-3.5" />}
-            label="Duplicate"
+            label={i18n._({ id: 'node.roof.panel.duplicate', message: 'Duplicate' })}
             onClick={handleDuplicate}
           />
           <ActionButton
             className="hover:bg-red-500/20"
-            icon={<Trash2 className="h-3.5 w-3.5 text-red-400" />}
-            label="Delete"
+            icon={<Trash2 className="h-3.5 w-3.5 text-red-600 dark:text-red-400" />}
+            label={i18n._({ id: 'node.roof.panel.delete', message: 'Delete' })}
             onClick={handleDelete}
           />
         </ActionGroup>
       </PanelSection>
     </PanelWrapper>
   )
+}
+
+/** "Chimney 2": a list row for an element without a name of its own. */
+function numberedName(kind: string, number: number, i18n: PascalI18n): string {
+  return i18n._({ id: 'node.numberedName', message: '{kind} {number}', values: { kind, number } })
 }

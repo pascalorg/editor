@@ -13,7 +13,7 @@ for (const exit of ['Escape', 'unmount', 'pointercancel'] as const) {
   test(`plane marquee resets its drag and scope on ${exit}`, async () => {
     await withSelectionHarness(async ({ render, canvas }) => {
       useEditor.setState({
-        phase: 'structure',
+        phase: 'building',
         mode: 'select',
         floorplanSelectionTool: 'marquee',
         isFloorplanHovered: true,

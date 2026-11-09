@@ -116,6 +116,34 @@ describe('forkSceneGraph', () => {
     ).toHaveLength(2)
     expect(forked.installedPlugins).toEqual(['pascal:trees'])
   })
+
+  test('an item in several collections keeps every membership on both sides', () => {
+    const level = makeNode('level_1', 'level', { children: ['item_1'] })
+    const item = makeNode('item_1', 'item', {
+      parentId: 'level_1',
+      collectionIds: ['collection_a', 'collection_b'],
+    })
+    const collection = (id: string) => ({
+      id: id as CollectionId,
+      name: id,
+      nodeIds: ['item_1' as AnyNodeId],
+    })
+    const forked = forkSceneGraph({
+      nodes: { ['level_1' as AnyNodeId]: level, ['item_1' as AnyNodeId]: item },
+      rootNodeIds: ['level_1' as AnyNodeId],
+      collections: {
+        ['collection_a' as CollectionId]: collection('collection_a'),
+        ['collection_b' as CollectionId]: collection('collection_b'),
+      },
+    })
+    const forkedItem = Object.values(forked.nodes).find((node) => node.type === 'item')!
+    const collections = Object.values(forked.collections ?? {})
+
+    expect('collectionIds' in forkedItem && forkedItem.collectionIds).toEqual(
+      collections.map((entry) => entry.id),
+    )
+    expect(collections.map((entry) => entry.nodeIds)).toEqual([[forkedItem.id], [forkedItem.id]])
+  })
 })
 
 describe('construction-dimension clone references', () => {
@@ -382,4 +410,62 @@ describe('unit member remap', () => {
       ),
     ).toBe(true)
   })
+})
+
+// A level duplicated kept its corner windows naming the originals: the copies rendered as two plain
+// windows and could not be joined while the originals stood.
+describe('corner window partner remap', () => {
+  test('a level clone joins the copied sides to each other', () => {
+    const level = makeNode('level_1', 'level', { children: ['wall_a', 'wall_b'] })
+    const wallA = makeNode('wall_a', 'wall', { parentId: 'level_1', children: ['window_a'] })
+    const wallB = makeNode('wall_b', 'wall', { parentId: 'level_1', children: ['window_b'] })
+    const windowA = makeNode('window_a', 'window', {
+      parentId: 'wall_a',
+      corner: { end: 'end', partnerId: 'window_b', post: 'none' },
+    })
+    const windowB = makeNode('window_b', 'window', {
+      parentId: 'wall_b',
+      corner: { end: 'start', partnerId: 'window_a', post: 'none' },
+    })
+    const nodes = Object.fromEntries(
+      [level, wallA, wallB, windowA, windowB].map((node) => [node.id, node]),
+    ) as Record<AnyNodeId, AnyNode>
+
+    const { clonedNodes, idMap } = cloneLevelSubtree(nodes, 'level_1' as AnyNodeId)
+    const copyOf = (id: string) => clonedNodes.find((node) => node.id === idMap.get(id))
+    expect(copyOf('window_a')).toMatchObject({ corner: { partnerId: idMap.get('window_b') } })
+    expect(copyOf('window_b')).toMatchObject({ corner: { partnerId: idMap.get('window_a') } })
+  })
+})
+
+test('whole-scene and level clones remap railing supports and stair destinations', () => {
+  const level = makeNode('level_surface', 'level', {
+    children: ['slab_surface', 'fence_surface', 'stair_surface'],
+  })
+  const slab = makeNode('slab_surface', 'slab', { parentId: level.id })
+  const fence = makeNode('fence_surface', 'fence', {
+    parentId: level.id,
+    supportSurfaceNodeId: slab.id,
+  })
+  const stair = makeNode('stair_surface', 'stair', {
+    parentId: level.id,
+    destinationSurfaceId: slab.id,
+  })
+  const nodes = Object.fromEntries([level, slab, fence, stair].map((node) => [node.id, node]))
+  for (const copy of [
+    cloneSceneGraph({ nodes, rootNodeIds: [level.id] }).nodes,
+    cloneLevelSubtree(nodes, level.id).clonedNodes,
+  ]) {
+    const entries = Object.values(copy)
+    const copiedSlab = entries.find((node) => node.type === 'slab')!
+    const copiedFence = entries.find((node) => node.type === 'fence')!
+    const copiedStair = entries.find((node) => node.type === 'stair')!
+    expect((copiedFence as unknown as { supportSurfaceNodeId: string }).supportSurfaceNodeId).toBe(
+      copiedSlab.id,
+    )
+    expect((copiedStair as unknown as { destinationSurfaceId: string }).destinationSurfaceId).toBe(
+      copiedSlab.id,
+    )
+    expect(copiedSlab.id).not.toBe(slab.id)
+  }
 })

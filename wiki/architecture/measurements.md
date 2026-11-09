@@ -16,6 +16,7 @@ Measurements are regular level children. Their geometry is resolved in level-loc
 - Committed distance endpoints render as depth-tested, screen-sized contact rings aligned to each resolved anchor normal. Semantic wall-face anchors therefore remain flush to the edited host instead of becoming camera-facing or floating markers.
 - Smart measure is a transient 2D/3D measurement lens. Hovering resolves registry-owned wall, slab, and zone reports into one editor-viewport HUD and a live surface marker; clicking pins the report and leaves a stronger in-view anchor until another surface replaces it or Smart exits. It never creates nodes, changes selection, or writes history.
 - A selected zone exposes a derived blueprint report with footprint/perimeter, edge dimensions, gross wall surface, matching floor surface, and flat-room volume only when current scene evidence proves each value.
+- Temporary wall dimensions (a selected wall's room widths and outside size, and the plan's ID/OD wall lengths) are selection presentation, not measurement nodes; see [selection-managers](selection-managers.md#selected-wall-dimensions).
 - Actual value labels use the outlined annotation treatment. The 3D tool omits cursor-following feature, active-segment, and axis-name pills; the 2D tool still presents semantic and active-segment labels while that parity decision remains open.
 
 ## Smart inspection and zone quantities

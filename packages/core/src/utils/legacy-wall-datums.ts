@@ -9,7 +9,6 @@ import { levelBaseElevationAt } from '../lib/terrain-support-query'
 import type { AnyNode, SlabNode, WallNode } from '../schema'
 import { findLevelBelowId, getAuthoredLevelElevations, getWallPlaneTops } from '../services/storey'
 import { computeWallSlabSupport, type WallSlabSupport } from '../systems/slab/slab-support'
-import { resolveWallTop } from '../systems/wall/wall-top'
 
 const legacySupports = new Map<string, Map<string, WallSlabSupport>>()
 
@@ -197,7 +196,9 @@ export function preserveLegacyWallDatums(
           ? oldPlanes.get(wall.id)!
           : (wall.supportSlabId === 'ground' ? old.elevation : Math.max(0, old.elevation)) +
             wall.height
-      const newTop = resolveWallTop(current, newPlanes.get(current.id) ?? 0, next.elevation)
+      // Explicit legacy heights remain body-relative; only absent heights have a computed plane.
+      const newTop =
+        current.height === undefined ? newPlanes.get(current.id)! : next.elevation + current.height
       const patch: Partial<WallNode> = {}
       if (Math.abs(oldTop - newTop) > 1e-6) patch.height = oldTop - next.elevation
       const delta = old.elevation - next.elevation

@@ -6,6 +6,8 @@ import type {
   RoofSegmentNode,
   WallNode,
 } from '@pascal-app/core'
+import { doorSlots, getDoorOpeningSize } from '@pascal-app/core'
+import { NEW_DOOR_FRAME_THICKNESS } from '@pascal-app/core/building'
 import type { FloorplanNodeExtension } from '@pascal-app/editor'
 import { curtainOpeningResizeMax } from '../shared/curtain-opening-limits'
 import { doorBatchable } from '../shared/node-batch/batchable'
@@ -20,6 +22,7 @@ import { readRoofFaceHeightMax, readRoofFaceWidthMax } from '../shared/roof-open
 import { buildRoofWallOpeningCut } from '../shared/roof-wall-opening-cut'
 import { scriptedOpeningHandles } from '../shared/scripted-opening-handles'
 import { readHostWallCeiling } from '../shared/wall-opening-ceiling'
+import { openingSeenFromOutside } from '../wall/exterior'
 import { wallFloorplanSiblingOverrides } from '../wall/floorplan-overrides'
 import { buildDoorContextualDimensions } from './contextual-dimensions'
 import { scaleHandleHeight } from './door-math'
@@ -29,8 +32,8 @@ import { doorFloorplanMoveTarget } from './floorplan-move'
 import { doorMechanism } from './mechanism'
 import { doorPaint } from './paint'
 import { doorParametrics } from './parametrics'
+import { DOOR_PLACEMENT_HINTS } from './placement'
 import { DoorNode } from './schema'
-import { doorSlots } from './slots'
 
 const SIDE_HANDLE_OFFSET = 0.24
 const HEIGHT_HANDLE_OFFSET = 0.24
@@ -64,7 +67,10 @@ function doorWidthHandle(side: 'left' | 'right'): HandleDescriptor<DoorNodeType>
       // limits read Infinity when wallId is unset).
       const roofMax = readRoofFaceWidthMax(n, scene, sign)
       if (roofMax !== null) return Math.max(MIN_DOOR_WIDTH, roofMax)
-      return curtainOpeningResizeMax(n, scene.nodes(), 'x', sign) ?? readWallLength(n, scene)
+      return (
+        curtainOpeningResizeMax(n, scene.nodes(), 'x', sign) ??
+        readWallLength(n, scene) - (getDoorOpeningSize(n).width - n.width)
+      )
     },
     currentValue: (n) => n.width,
     onDrag: (node) => publishOpeningResizeGuides(node, false),
@@ -90,7 +96,12 @@ function doorWidthHandle(side: 'left' | 'right'): HandleDescriptor<DoorNodeType>
     placement: {
       // door-local: +X axis lives along door's own X. Inner ride group
       // applies door.rotation, so we sit purely on door-local +X / -X.
-      position: (n) => [sign * (n.width / 2 + SIDE_HANDLE_OFFSET), 0, 0],
+      position: (n) => [
+        -getDoorOpeningSize(n).leafOffsetX +
+          sign * (getDoorOpeningSize(n).width / 2 + SIDE_HANDLE_OFFSET),
+        0,
+        0,
+      ],
       rotationY: () => (side === 'right' ? 0 : Math.PI),
     },
     portal: 'grandparent',
@@ -109,7 +120,12 @@ function doorHeightHandle(): HandleDescriptor<DoorNodeType> {
       const curtainMax = curtainOpeningResizeMax(n, scene.nodes(), 'y', 1)
       if (curtainMax !== undefined) return curtainMax
       const bottom = n.position[1] - n.height / 2
-      return Math.max(MIN_DOOR_HEIGHT, readHostWallCeiling(n.wallId, scene, n) - bottom)
+      return Math.max(
+        MIN_DOOR_HEIGHT,
+        readHostWallCeiling(n.wallId, scene, n) -
+          bottom -
+          (getDoorOpeningSize(n).height - n.height),
+      )
     },
     currentValue: (n) => n.height,
     onDrag: (node) => publishOpeningResizeGuides(node, false),
@@ -124,7 +140,7 @@ function doorHeightHandle(): HandleDescriptor<DoorNodeType> {
       }
     },
     placement: {
-      position: (n) => [0, n.height / 2 + HEIGHT_HANDLE_OFFSET, 0],
+      position: (n) => [0, getDoorOpeningSize(n).height - n.height / 2 + HEIGHT_HANDLE_OFFSET, 0],
     },
     portal: 'grandparent',
   }
@@ -221,6 +237,8 @@ export const doorDefinition: NodeDefinition<typeof DoorNode> = {
     'pascal:editor/floorplan': {
       contextualDimensions: buildDoorContextualDimensions,
       schedule: buildDoorFloorplanSchedule,
+      // Swap hinge / swing side from the action bar, in 2D and 3D.
+      actionMenu: { actions: () => import('./actions') },
     } satisfies FloorplanNodeExtension<DoorNodeType>,
   },
   surfaceRole: 'joinery',
@@ -229,12 +247,31 @@ export const doorDefinition: NodeDefinition<typeof DoorNode> = {
   // full default shape — door has 40+ fields, listing them inline would
   // duplicate the schema. Parse a minimal stub, drop id/type, return rest.
   defaults: () => {
-    const stub = DoorNode.parse({ id: 'door_default' as never, type: 'door' })
+    const stub = DoorNode.parse({
+      id: 'door_default' as never,
+      type: 'door',
+      frameThickness: NEW_DOOR_FRAME_THICKNESS,
+      casingFaceA: true,
+      casingFaceB: true,
+    })
     const { id: _id, type: _type, ...rest } = stub
     return rest
   },
 
   capabilities: {
+    reveal: { phase: 'openings', style: 'cut' },
+    exterior: openingSeenFromOutside,
+    revealOnEdit: [
+      'position',
+      'width',
+      'height',
+      'sidelightLeft',
+      'sidelightRight',
+      'transomHeight',
+      'openingShape',
+      'openingKind',
+      'doorType',
+    ],
     batchable: doorBatchable,
     selectable: { hitVolume: 'bbox' },
     duplicable: true,
@@ -317,6 +354,7 @@ export const doorDefinition: NodeDefinition<typeof DoorNode> = {
 
   toolHints: [
     { key: 'Left click', label: 'Place door on wall' },
+    ...DOOR_PLACEMENT_HINTS,
     { key: 'R', label: 'Flip side' },
     { key: 'Alt', label: 'Force place' },
     { key: 'Esc', label: 'Cancel' },

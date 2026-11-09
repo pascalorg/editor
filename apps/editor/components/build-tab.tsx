@@ -1,13 +1,19 @@
 'use client'
 
-import { RoofType as RoofTypeSchema, useRegistryVersion } from '@pascal-app/core'
+import {
+  type AnyNodeId,
+  isFenceFeatureNode,
+  RoofType as RoofTypeSchema,
+  usePascalI18n,
+  useRegistryVersion,
+  useScene,
+} from '@pascal-app/core'
 import {
   BuildPanelAdvancedSection,
   BuildPanelRoomsSection,
   BuildPanelSection,
   BuildToolGrid,
   BuildToolTile,
-  MaterialPaintPanel,
   selectWallDrawVariant,
   startTerraceDraft,
   TerrainSculptPanel,
@@ -17,8 +23,10 @@ import {
   useFloorplanMode,
   useTerraceDraft,
   useWallDrawVariant,
+  withToolShortcut,
 } from '@pascal-app/editor'
-import { useLiquidLineToolOptions } from '@pascal-app/nodes'
+import { framingPostToolChoices, useLiquidLineToolOptions } from '@pascal-app/nodes'
+import { useViewer } from '@pascal-app/viewer'
 import Image from 'next/image'
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import {
@@ -29,8 +37,8 @@ import {
 } from '@/components/toolbar-tooltip'
 import {
   activateBuildTool,
-  activateModularCabinetTool,
-  activatePaintMode,
+  activateFenceFeaturePlacement,
+  activatePostTool,
   activateRoofFeatureTool,
   activateRoofType,
   activateTerrainSculptMode,
@@ -41,25 +49,45 @@ import {
   MEP_ITEMS,
   MEP_TOOL_KINDS,
   type MepItem,
-  MODULAR_CABINET_ICON,
 } from '@/lib/build-palette'
 import { getActiveRoofFeatureId, ROOF_TYPE_OPTIONS } from '@/lib/build-tab-state'
 import { cn } from '@/lib/utils'
+import { KitchenBrowser } from './kitchen-browser'
 
 const subscribeToClientMount = () => () => {}
 
 /**
  * Build tab for the open-source standalone editor — a preset-less replica of
  * the community Build sidebar. Clicking a type activates its raw tool, drawn
- * with the kind's own `def.defaults()`. The "Painting" type swaps in the
- * material-paint panel.
+ * with the kind's own `def.defaults()`. Painting has its own rail panel.
  */
 export function BuildTab() {
+  const i18n = usePascalI18n()
   const [mepOpen, setMepOpen] = useState(false)
+  const [kitchenOpen, setKitchenOpen] = useState(false)
+  const [buildSearch, setBuildSearch] = useState('')
   const activeTool = useEditor((s) => s.tool)
+  // The column tool placing framing posts lights the Post tile, not Column.
+  const postArmed = useEditor((s) => framingPostToolChoices(s.toolDefaults.column) !== null)
+  const selectedId = useViewer((s) => s.selection.selectedIds[0])
+  const selectedFenceFeature = useScene((s) => {
+    const selected = selectedId ? s.nodes[selectedId as AnyNodeId] : undefined
+    return isFenceFeatureNode(selected) ? selected : undefined
+  })
+  const selectedFence = useScene((s) => {
+    const selected = selectedId ? s.nodes[selectedId as AnyNodeId] : undefined
+    const host =
+      isFenceFeatureNode(selected) && selected.parentId
+        ? s.nodes[selected.parentId as AnyNodeId]
+        : selected
+    return host?.type === 'fence' ? host : undefined
+  })
   const mode = useEditor((s) => s.mode)
   const isTerraceActive = useTerraceDraft((s) => !!s.host)
   const roofDefaults = useEditor((s) => s.toolDefaults.roof)
+  const fenceDefaults = useEditor((s) => s.toolDefaults.fence)
+  const placingFenceFeature =
+    mode === 'build' && activeTool === 'fence' ? fenceDefaults?.featurePlacement : undefined
   const floorplanMode = useFloorplanMode((s) => s.mode)
   const wallVariant = useWallDrawVariant()
   const follow = useLiquidLineToolOptions((s) => s.follow)
@@ -78,6 +106,7 @@ export function BuildTab() {
     mode === 'build' &&
     (activeTool === 'pipe-segment' || activeTool === 'pipe-fitting' || activeTool === 'pipe-trap')
   const liquidLineContext = mode === 'build' && activeTool === 'liquid-line'
+  const fenceContext = !!selectedFence || (mode === 'build' && activeTool === 'fence')
 
   const isMepItemActive = (item: MepItem) => mode === 'build' && activeTool === item.kind
 
@@ -96,7 +125,7 @@ export function BuildTab() {
   const isMepActive =
     (mode === 'build' && !!activeTool && MEP_TOOL_KINDS.has(activeTool)) ||
     (mode === 'select' && mepOpen)
-  const isKitchenActive = mode === 'build' && activeTool === 'cabinet'
+  const isKitchenActive = kitchenOpen || (mode === 'build' && activeTool === 'cabinet')
   const parsedRoofType = RoofTypeSchema.safeParse(roofDefaults?.roofType)
   const activeRoofType = parsedRoofType.success ? parsedRoofType.data : 'gable'
 
@@ -107,30 +136,38 @@ export function BuildTab() {
     if (type.id === 'terrace') return isTerraceActive
     if (type.id === 'roof')
       return mode === 'build' && (activeTool === 'roof' || isRoofFeatureActive)
+    if (type.id === 'fence' && selectedFence) return true
+    if (type.kind === 'column')
+      return mode === 'build' && activeTool === 'column' && (type.id === 'post') === postArmed
     return mode === 'build' && activeTool === type.kind
   }
 
-  const handleTypeClick = useCallback((type: BuildType) => {
-    setMepOpen(type.id === 'mep')
-    if (type.mode === 'material-paint') {
-      activatePaintMode()
-    } else if (type.mode === 'terrain-sculpt') {
-      activateTerrainSculptMode()
-    } else if (type.id === 'mep') {
-      const ed = useEditor.getState()
-      ed.setPhase('structure')
-      ed.setStructureLayer('elements')
-      ed.setCatalogCategory(null)
-      ed.setMode('build')
-      ed.setTool(null)
-    } else if (type.id === 'kitchen') {
-      activateModularCabinetTool()
-    } else if (type.id === 'terrace') {
-      startTerraceDraft()
-    } else if (type.kind) {
-      activateBuildTool(type.kind)
-    }
-  }, [])
+  const handleTypeClick = useCallback(
+    (type: BuildType) => {
+      setMepOpen(type.id === 'mep')
+      setKitchenOpen(type.id === 'kitchen')
+      setBuildSearch('')
+      if (type.id === 'fence' && selectedFence) return
+      if (type.mode === 'terrain-sculpt') {
+        activateTerrainSculptMode()
+      } else if (type.id === 'mep') {
+        const ed = useEditor.getState()
+        ed.setPhase('building')
+        ed.setCatalogCategory(null)
+        ed.setMode('build')
+        ed.setTool(null)
+      } else if (type.id === 'kitchen') {
+        useEditor.getState().setMode('select')
+      } else if (type.id === 'terrace') {
+        startTerraceDraft()
+      } else if (type.id === 'post') {
+        activatePostTool()
+      } else if (type.kind) {
+        activateBuildTool(type.kind)
+      }
+    },
+    [selectedFence],
+  )
 
   // On open, land on the first build tool — parity with the community Build
   // sidebar, so switching to Build immediately arms a usable tool. Skip when a
@@ -140,12 +177,13 @@ export function BuildTab() {
   useEffect(() => {
     if (didInitRef.current) return
     didInitRef.current = true
+    if (selectedFence) return
     const ed = useEditor.getState()
-    if (ed.mode === 'material-paint' || ed.mode === 'terrain-sculpt') return
+    if (ed.mode === 'terrain-sculpt') return
     if (ed.mode === 'build' && ed.tool) return
     const firstType = buildTypes.find((t) => t.kind)
     if (firstType) handleTypeClick(firstType)
-  }, [buildTypes, handleTypeClick])
+  }, [buildTypes, handleTypeClick, selectedFence])
 
   const renderTile = (type: BuildType) => (
     <BuildToolTile
@@ -153,13 +191,13 @@ export function BuildTab() {
       data-build-tool={type.id}
       iconSrc={type.iconSrc}
       key={type.id}
-      label={type.label}
+      label={i18n._(type.label)}
       onClick={() => {
         triggerSFX('sfx:menu-click')
         handleTypeClick(type)
       }}
       onMouseEnter={() => triggerSFX('sfx:menu-hover')}
-      title={type.label}
+      title={withToolShortcut(i18n._(type.label), type.id)}
     />
   )
   const typesIn = (section: NonNullable<BuildType['section']>) =>
@@ -167,268 +205,496 @@ export function BuildTab() {
   const advancedTypes = typesIn('advanced')
 
   return (
-    <div className="flex h-full flex-col gap-3 overflow-y-auto p-3">
-      <div className="flex flex-col gap-3 [&>section+section]:border-border/60 [&>section+section]:border-t [&>section+section]:pt-3">
-        <BuildPanelRoomsSection
-          activeVariant={mode === 'build' && activeTool === 'wall' ? wallVariant : null}
-          onHover={() => triggerSFX('sfx:menu-hover')}
-          onSelect={(variant) => {
-            triggerSFX('sfx:menu-click')
-            selectWallDrawVariant(variant)
-            const editor = useEditor.getState()
-            if (!(editor.mode === 'build' && editor.tool === 'wall')) activateBuildTool('wall')
-          }}
-        />
-        <BuildPanelSection id="add" title="Add to rooms">
-          <BuildToolGrid columns={4}>{typesIn('add').map(renderTile)}</BuildToolGrid>
-        </BuildPanelSection>
-        <BuildPanelSection id="outdoor" title="Outdoor">
-          <BuildToolGrid columns={4}>{typesIn('outdoor').map(renderTile)}</BuildToolGrid>
-        </BuildPanelSection>
-        <BuildPanelAdvancedSection
-          containsActiveTool={advancedTypes.some(isTypeActive)}
-          description="Rooms already create their floor and ceiling. Use these for platforms and one-off structure."
-          hint="Slab, ceiling, column…"
-        >
-          <BuildToolGrid columns={4}>{advancedTypes.map(renderTile)}</BuildToolGrid>
-        </BuildPanelAdvancedSection>
-      </div>
-
-      {mode === 'material-paint' ? (
-        <div className="border-border/60 border-t pt-3">
-          <MaterialPaintPanel />
-        </div>
-      ) : mode === 'terrain-sculpt' ? (
-        <div className="border-border/60 border-t pt-3">
-          <TerrainSculptPanel />
-        </div>
-      ) : mode === 'build' && (activeTool === 'roof' || isRoofFeatureActive) ? (
-        <div className="flex flex-col gap-3 border-border/60 border-t pt-3">
-          <div className="flex flex-col gap-2">
-            <div className="px-0.5 pt-1 font-medium text-muted-foreground text-xs">Roof type</div>
-            <div className="grid grid-cols-2 gap-1.5">
-              {ROOF_TYPE_OPTIONS.map((roofType) => {
-                const active = activeTool === 'roof' && activeRoofType === roofType.value
-                return (
-                  <button
-                    aria-pressed={active}
-                    className={cn(
-                      'rounded-lg px-2.5 py-2 text-left font-medium text-xs transition-colors',
-                      active
-                        ? 'bg-primary/10 text-primary ring-1 ring-primary/50'
-                        : 'bg-muted/40 text-muted-foreground hover:bg-muted hover:text-foreground',
-                    )}
-                    key={roofType.value}
-                    onClick={() => {
-                      triggerSFX('sfx:menu-click')
-                      activateRoofType(roofType.value)
-                    }}
-                    onMouseEnter={() => triggerSFX('sfx:menu-hover')}
-                    type="button"
-                  >
-                    {roofType.label}
-                  </button>
+    <div className="flex h-full flex-col gap-3 overflow-y-auto p-3" data-surface="build-tab">
+      <label className="sr-only" htmlFor="build-search">
+        {i18n._({
+          id: 'app.buildTab.searchBuildToolsAndKitchenItems',
+          message: 'Search build tools and kitchen items',
+        })}
+      </label>
+      <input
+        id="build-search"
+        type="search"
+        placeholder={i18n._({
+          id: 'app.buildTab.searchToolsFridgeSink',
+          message: 'Search tools, fridge, sink…',
+        })}
+        value={buildSearch}
+        onChange={(event) => setBuildSearch(event.target.value)}
+        className="h-9 w-full shrink-0 rounded-lg border border-border bg-background px-3 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      />
+      {buildSearch.trim() ? (
+        <>
+          <BuildToolGrid columns={4}>
+            {buildTypes
+              .filter((type) => {
+                // The English name matches too, so shared or remembered terms work in any UI language.
+                const query = buildSearch.toLocaleLowerCase()
+                return [i18n._(type.label), type.label.message ?? ''].some((name) =>
+                  name.toLocaleLowerCase().includes(query),
                 )
-              })}
+              })
+              .map(renderTile)}
+          </BuildToolGrid>
+          <KitchenBrowser query={buildSearch} />
+        </>
+      ) : (
+        <>
+          {isKitchenActive ? (
+            <button
+              type="button"
+              className="w-fit rounded-lg px-2 py-1 text-xs text-muted-foreground hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
+              onClick={() => {
+                setKitchenOpen(false)
+                useEditor.getState().setMode('select')
+              }}
+            >
+              {i18n._({ id: 'app.buildTab.allBuildTools', message: '← All build tools' })}
+            </button>
+          ) : (
+            <div className="flex flex-col gap-3 [&>section+section]:border-border/60 [&>section+section]:border-t [&>section+section]:pt-3">
+              <BuildPanelRoomsSection
+                activeVariant={mode === 'build' && activeTool === 'wall' ? wallVariant : null}
+                onHover={() => triggerSFX('sfx:menu-hover')}
+                onSelect={(variant) => {
+                  triggerSFX('sfx:menu-click')
+                  selectWallDrawVariant(variant)
+                  const editor = useEditor.getState()
+                  if (!(editor.mode === 'build' && editor.tool === 'wall'))
+                    activateBuildTool('wall')
+                }}
+              />
+              <BuildPanelSection
+                id="add"
+                title={i18n._({ id: 'app.buildTab.addToRooms', message: 'Add to rooms' })}
+              >
+                <BuildToolGrid columns={4}>{typesIn('add').map(renderTile)}</BuildToolGrid>
+              </BuildPanelSection>
+              <BuildPanelSection
+                id="outdoor"
+                title={i18n._({ id: 'app.buildTab.outdoor', message: 'Outdoor' })}
+              >
+                <BuildToolGrid columns={4}>{typesIn('outdoor').map(renderTile)}</BuildToolGrid>
+              </BuildPanelSection>
+              <BuildPanelAdvancedSection
+                containsActiveTool={advancedTypes.some(isTypeActive)}
+                description={i18n._({
+                  id: 'app.buildTab.roomsAlreadyCreateTheirFloorAnd',
+                  message:
+                    'Rooms already create their floor and ceiling. Use these for platforms and one-off structure.',
+                })}
+                hint={i18n._({
+                  id: 'app.buildTab.slabCeilingColumn',
+                  message: 'Slab, ceiling, column…',
+                })}
+              >
+                <BuildToolGrid columns={4}>{advancedTypes.map(renderTile)}</BuildToolGrid>
+                <ToolOptionsPanel
+                  className="border-border/50 border-t pt-3"
+                  kind={advancedTypes.find(isTypeActive)?.kind}
+                />
+              </BuildPanelAdvancedSection>
             </div>
-          </div>
-
-          <ToolOptionsPanel
-            className="border-border/50 border-t pt-3"
-            kind="roof"
-            onSelect={() => {
-              const editor = useEditor.getState()
-              if (!(editor.mode === 'build' && editor.tool === 'roof')) activateBuildTool('roof')
-            }}
-          />
-          {activeRoofType === 'conical' && (
-            <p className="border-border/50 border-t px-0.5 pt-3 text-[11px] text-muted-foreground leading-relaxed">
-              Select a curved wall to match its radius and arc.
-            </p>
           )}
 
-          {roofFeatures.length > 0 ? (
-            <div className="flex flex-col gap-2 border-border/50 border-t pt-3">
+          {mode === 'terrain-sculpt' ? (
+            <div className="border-border/60 border-t pt-3">
+              <TerrainSculptPanel />
+            </div>
+          ) : mode === 'build' && (activeTool === 'roof' || isRoofFeatureActive) ? (
+            <div className="flex flex-col gap-3 border-border/60 border-t pt-3">
+              <div className="flex flex-col gap-2">
+                <div className="px-0.5 pt-1 font-medium text-muted-foreground text-xs">
+                  {i18n._({ id: 'app.buildTab.roofType', message: 'Roof type' })}
+                </div>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {ROOF_TYPE_OPTIONS.map((roofType) => {
+                    const active = activeTool === 'roof' && activeRoofType === roofType.value
+                    return (
+                      <button
+                        aria-pressed={active}
+                        className={cn(
+                          'rounded-lg px-2.5 py-2 text-left font-medium text-xs transition-colors',
+                          active
+                            ? 'bg-primary/10 text-primary ring-1 ring-primary/50'
+                            : 'bg-muted/40 text-muted-foreground hover:bg-muted hover:text-foreground',
+                        )}
+                        key={roofType.value}
+                        onClick={() => {
+                          triggerSFX('sfx:menu-click')
+                          activateRoofType(roofType.value)
+                        }}
+                        onMouseEnter={() => triggerSFX('sfx:menu-hover')}
+                        type="button"
+                      >
+                        {i18n._(roofType.label)}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
+              <ToolOptionsPanel
+                className="border-border/50 border-t pt-3"
+                kind="roof"
+                onSelect={() => {
+                  const editor = useEditor.getState()
+                  if (!(editor.mode === 'build' && editor.tool === 'roof'))
+                    activateBuildTool('roof')
+                }}
+              />
+              {activeRoofType === 'conical' && (
+                <p className="border-border/50 border-t px-0.5 pt-3 text-[11px] text-muted-foreground leading-relaxed">
+                  {i18n._({
+                    id: 'app.buildTab.selectACurvedWallToMatch',
+                    message: 'Select a curved wall to match its radius and arc.',
+                  })}
+                </p>
+              )}
+
+              {roofFeatures.length > 0 ? (
+                <div className="flex flex-col gap-2 border-border/50 border-t pt-3">
+                  <div className="px-0.5 font-medium text-muted-foreground text-xs">
+                    {i18n._({
+                      id: 'app.buildTab.featuresExtensions',
+                      message: 'Features & extensions',
+                    })}
+                  </div>
+                  <TooltipProvider delayDuration={0} disableHoverableContent>
+                    <div
+                      className="grid gap-1.5"
+                      style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(56px, 1fr))' }}
+                    >
+                      {roofFeatures.map((feature) => {
+                        const active = mode === 'build' && feature.id === activeRoofFeatureId
+                        return (
+                          <Tooltip key={feature.id}>
+                            <TooltipTrigger asChild>
+                              <button
+                                aria-pressed={active}
+                                className={cn(
+                                  'group relative flex aspect-square items-center justify-center rounded-xl p-1 transition-all duration-200',
+                                  active
+                                    ? 'bg-primary/10 ring-1 ring-primary/50'
+                                    : 'bg-muted/40 opacity-70 grayscale hover:bg-muted hover:opacity-100 hover:grayscale-0',
+                                )}
+                                onClick={() => {
+                                  triggerSFX('sfx:menu-click')
+                                  activateRoofFeatureTool(feature)
+                                }}
+                                onMouseEnter={() => triggerSFX('sfx:menu-hover')}
+                                type="button"
+                              >
+                                <Image
+                                  alt={i18n._(feature.label)}
+                                  className="size-full object-contain transition-transform duration-200 group-hover:scale-110"
+                                  height={48}
+                                  src={feature.iconSrc}
+                                  width={48}
+                                />
+                              </button>
+                            </TooltipTrigger>
+                            <TooltipContent className="pointer-events-none" side="top">
+                              {i18n._(feature.label)}
+                            </TooltipContent>
+                          </Tooltip>
+                        )
+                      })}
+                    </div>
+                  </TooltipProvider>
+                </div>
+              ) : null}
+            </div>
+          ) : fenceContext ? (
+            <div className="flex flex-col gap-3 border-border/50 border-t pt-3">
               <div className="px-0.5 font-medium text-muted-foreground text-xs">
-                Features & extensions
+                {i18n._({ id: 'app.buildTab.fenceFeatures', message: 'Fence features' })}
+              </div>
+              <BuildToolGrid columns={4}>
+                {(['gate', 'opening'] as const).map((kind) => (
+                  <BuildToolTile
+                    active={placingFenceFeature === kind}
+                    iconSrc={kind === 'gate' ? '/icons/gate.webp' : '/icons/open-passage.webp'}
+                    key={kind}
+                    label={
+                      kind === 'gate'
+                        ? i18n._({ id: 'app.buildTab.gate', message: 'Gate' })
+                        : i18n._({ id: 'app.buildTab.opening', message: 'Opening' })
+                    }
+                    onClick={() => {
+                      triggerSFX('sfx:menu-click')
+                      activateFenceFeaturePlacement(kind)
+                    }}
+                    onMouseEnter={() => triggerSFX('sfx:menu-hover')}
+                    title={
+                      kind === 'gate'
+                        ? i18n._({ id: 'app.buildTab.addGate', message: 'Add Gate' })
+                        : i18n._({ id: 'app.buildTab.addOpenPassage', message: 'Add Open Passage' })
+                    }
+                  />
+                ))}
+              </BuildToolGrid>
+              {selectedFenceFeature && (
+                <label className="flex items-center justify-between text-xs">
+                  {i18n._({ id: 'app.buildTab.matchFenceStyle', message: 'Match fence style' })}
+                  <input
+                    aria-label={i18n._({
+                      id: 'app.buildTab.matchFenceStyle',
+                      message: 'Match fence style',
+                    })}
+                    type="checkbox"
+                    checked={selectedFenceFeature.matchFenceStyle !== false}
+                    onChange={(event) =>
+                      useScene.getState().updateNode(selectedFenceFeature.id, {
+                        matchFenceStyle: event.currentTarget.checked,
+                      })
+                    }
+                  />
+                </label>
+              )}
+              {!!placingFenceFeature && (
+                <div className="space-y-2 text-xs">
+                  <p>
+                    {i18n._({
+                      id: 'app.buildTab.hoverAFenceToPreviewClick',
+                      message:
+                        'Hover a fence to preview. Click to place. Esc cancels. Leave room between openings.',
+                    })}
+                  </p>
+                  {typeof fenceDefaults?.featurePlacementFeedback === 'string' && (
+                    <p role="status" className="text-amber-400">
+                      {fenceDefaults.featurePlacementFeedback}
+                    </p>
+                  )}
+                  <label className="flex items-center justify-between">
+                    {i18n._({ id: 'app.buildTab.matchFenceStyle', message: 'Match fence style' })}
+                    <input
+                      type="checkbox"
+                      checked={fenceDefaults?.featureMatchStyle !== false}
+                      onChange={(event) =>
+                        useEditor.getState().setToolDefaults('fence', {
+                          ...fenceDefaults,
+                          featureMatchStyle: event.currentTarget.checked,
+                        })
+                      }
+                    />
+                  </label>
+                  {fenceDefaults?.featureMatchStyle === false && placingFenceFeature === 'gate' && (
+                    <label className="flex items-center justify-between">
+                      {i18n._({ id: 'app.buildTab.gateStyle', message: 'Gate style' })}
+                      <select
+                        className="rounded border bg-background p-1"
+                        value={
+                          typeof fenceDefaults?.featureStyle === 'string'
+                            ? fenceDefaults.featureStyle
+                            : 'picket'
+                        }
+                        onChange={(event) =>
+                          useEditor.getState().setToolDefaults('fence', {
+                            ...fenceDefaults,
+                            featureStyle: event.currentTarget.value,
+                          })
+                        }
+                      >
+                        <option value="picket">
+                          {i18n._({ id: 'app.buildTab.picket', message: 'Picket' })}
+                        </option>
+                        <option value="slat">
+                          {i18n._({ id: 'app.buildTab.verticalSlats', message: 'Vertical slats' })}
+                        </option>
+                        <option value="horizontal">
+                          {i18n._({
+                            id: 'app.buildTab.horizontalBoards',
+                            message: 'Horizontal boards',
+                          })}
+                        </option>
+                        <option value="privacy">
+                          {i18n._({ id: 'app.buildTab.solidPrivacy', message: 'Solid privacy' })}
+                        </option>
+                        <option value="rail">
+                          {i18n._({ id: 'app.buildTab.openRails', message: 'Open rails' })}
+                        </option>
+                      </select>
+                    </label>
+                  )}
+                  <label className="flex items-center justify-between">
+                    {i18n._({ id: 'app.buildTab.openingWidthM', message: 'Opening width (m)' })}
+                    <input
+                      className="w-20 rounded border bg-background p-1"
+                      type="number"
+                      min={0.35}
+                      max={12}
+                      step={0.05}
+                      value={
+                        typeof fenceDefaults?.featureWidth === 'number'
+                          ? fenceDefaults.featureWidth
+                          : 1.1
+                      }
+                      onChange={(event) => {
+                        const width = event.currentTarget.valueAsNumber
+                        if (Number.isFinite(width) && width >= 0.35)
+                          useEditor.getState().setToolDefaults('fence', {
+                            ...fenceDefaults,
+                            featureWidth: Math.min(12, width),
+                          })
+                      }}
+                    />
+                  </label>
+                  {placingFenceFeature === 'gate' && (
+                    <label className="flex items-center justify-between">
+                      {i18n._({ id: 'app.buildTab.leaves', message: 'Leaves' })}
+                      <select
+                        className="rounded border bg-background p-1"
+                        value={fenceDefaults?.featureLeafType === 'double' ? 'double' : 'single'}
+                        onChange={(event) =>
+                          useEditor.getState().setToolDefaults('fence', {
+                            ...fenceDefaults,
+                            featureLeafType: event.target.value,
+                          })
+                        }
+                      >
+                        <option value="single">
+                          {i18n._({ id: 'app.buildTab.singleGate', message: 'Single gate' })}
+                        </option>
+                        <option value="double">
+                          {i18n._({ id: 'app.buildTab.doubleGate', message: 'Double gate' })}
+                        </option>
+                      </select>
+                    </label>
+                  )}
+                </div>
+              )}
+              <p className="px-0.5 text-[11px] text-muted-foreground">
+                {i18n._({
+                  id: 'app.buildTab.chooseGateOrOpenPassageThen',
+                  message:
+                    'Choose Gate or Open Passage, then click its position on any fence. Find placed gates and openings under their fence in the scene graph.',
+                })}
+              </p>
+            </div>
+          ) : isKitchenActive ? (
+            <KitchenBrowser />
+          ) : isMepActive ? (
+            <div className="flex flex-col gap-2 border-border/60 border-t pt-3">
+              <div className="px-0.5 pt-1 font-medium text-muted-foreground text-xs">
+                {i18n._({ id: 'app.buildTab.mep', message: 'MEP' })}
               </div>
               <TooltipProvider delayDuration={0} disableHoverableContent>
                 <div
-                  className="grid gap-1.5"
+                  className="grid gap-1.5 px-0.5"
                   style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(56px, 1fr))' }}
                 >
-                  {roofFeatures.map((feature) => {
-                    const active = mode === 'build' && feature.id === activeRoofFeatureId
+                  {MEP_ITEMS.map((item) => {
+                    const active = isMepItemActive(item)
                     return (
-                      <Tooltip key={feature.id}>
+                      <Tooltip key={item.id}>
                         <TooltipTrigger asChild>
                           <button
                             aria-pressed={active}
                             className={cn(
-                              'group relative flex aspect-square items-center justify-center rounded-xl p-1 transition-all duration-200',
+                              'group relative flex aspect-square items-center justify-center rounded-xl transition-all duration-200',
                               active
                                 ? 'bg-primary/10 ring-1 ring-primary/50'
                                 : 'bg-muted/40 opacity-70 grayscale hover:bg-muted hover:opacity-100 hover:grayscale-0',
                             )}
                             onClick={() => {
                               triggerSFX('sfx:menu-click')
-                              activateRoofFeatureTool(feature)
+                              activateBuildTool(item.kind)
                             }}
                             onMouseEnter={() => triggerSFX('sfx:menu-hover')}
                             type="button"
                           >
                             <Image
-                              alt={feature.label}
+                              alt={i18n._(item.label)}
                               className="size-full object-contain transition-transform duration-200 group-hover:scale-110"
                               height={48}
-                              src={feature.iconSrc}
+                              src={item.iconSrc}
                               width={48}
                             />
                           </button>
                         </TooltipTrigger>
                         <TooltipContent className="pointer-events-none" side="top">
-                          {feature.label}
+                          {i18n._(item.label)}
                         </TooltipContent>
                       </Tooltip>
                     )
                   })}
                 </div>
               </TooltipProvider>
-            </div>
-          ) : null}
-        </div>
-      ) : isKitchenActive ? (
-        <div className="flex flex-col gap-2 border-border/60 border-t pt-3">
-          <div className="px-0.5 pt-1 font-medium text-muted-foreground text-xs">Kitchen</div>
-          <TooltipProvider delayDuration={0} disableHoverableContent>
-            <div
-              className="grid gap-1.5 px-0.5"
-              style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(56px, 1fr))' }}
-            >
-              <Tooltip>
-                <TooltipTrigger asChild>
+
+              {(activeTool === 'duct-segment' || activeTool === 'pipe-segment') && (
+                <ToolOptionsPanel kind={activeTool} />
+              )}
+
+              {(['duct-fitting', 'pipe-fitting'] as const)
+                .filter((kind) => (kind === 'duct-fitting' ? ductContext : pipeContext))
+                .map((kind) => (
+                  <ToolOptionsPanel
+                    active={activeTool === kind}
+                    key={kind}
+                    getChoiceThumbnail={(option, value) => {
+                      if (option.id !== 'fittingType') return undefined
+                      if (kind === 'duct-fitting' && value === 'elbow')
+                        return '/icons/duct-fitting.webp'
+                      return `/icons/fittings/${kind === 'duct-fitting' ? 'duct' : 'pipe'}-${value}.webp`
+                    }}
+                    kind={kind}
+                    onSelect={(option, value) => {
+                      if (activeTool !== kind) {
+                        const defaults = useEditor.getState().toolDefaults[kind]
+                        activateBuildTool(kind)
+                        if (defaults) useEditor.getState().setToolDefaults(kind, defaults)
+                      }
+                      option.set(value)
+                    }}
+                  />
+                ))}
+
+              {liquidLineContext ? (
+                <div className="flex flex-col gap-1.5">
+                  <span className="text-muted-foreground text-xs">
+                    {i18n._({ id: 'app.buildTab.liquidLine', message: 'Liquid Line' })}
+                  </span>
                   <button
-                    className="group relative flex aspect-square items-center justify-center rounded-xl bg-primary/10 p-1 ring-1 ring-primary/50 transition-all duration-200"
+                    className={cn(
+                      'flex items-center justify-between gap-2 rounded-lg px-3 py-2 text-sm transition-all duration-200',
+                      follow
+                        ? 'bg-primary/10 ring-1 ring-primary/50'
+                        : 'bg-muted/40 hover:bg-muted',
+                    )}
                     onClick={() => {
                       triggerSFX('sfx:menu-click')
-                      activateModularCabinetTool()
+                      toggleFollow()
                     }}
                     onMouseEnter={() => triggerSFX('sfx:menu-hover')}
                     type="button"
                   >
-                    <Image
-                      alt="Modular Cabinet"
-                      className="size-full object-contain transition-transform duration-200 group-hover:scale-110"
-                      height={48}
-                      src={MODULAR_CABINET_ICON}
-                      width={48}
-                    />
+                    <span>
+                      {i18n._({ id: 'app.buildTab.followLineset', message: 'Follow lineset' })}
+                    </span>
+                    <span className="text-muted-foreground text-xs">
+                      {follow
+                        ? i18n._({ id: 'app.buildTab.on', message: 'On' })
+                        : i18n._({ id: 'app.buildTab.off', message: 'Off' })}
+                    </span>
                   </button>
-                </TooltipTrigger>
-                <TooltipContent className="pointer-events-none" side="top">
-                  Modular Cabinet
-                </TooltipContent>
-              </Tooltip>
-            </div>
-          </TooltipProvider>
-        </div>
-      ) : isMepActive ? (
-        <div className="flex flex-col gap-2 border-border/60 border-t pt-3">
-          <div className="px-0.5 pt-1 font-medium text-muted-foreground text-xs">MEP</div>
-          <TooltipProvider delayDuration={0} disableHoverableContent>
-            <div
-              className="grid gap-1.5 px-0.5"
-              style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(56px, 1fr))' }}
-            >
-              {MEP_ITEMS.map((item) => {
-                const active = isMepItemActive(item)
-                return (
-                  <Tooltip key={item.id}>
-                    <TooltipTrigger asChild>
-                      <button
-                        aria-pressed={active}
-                        className={cn(
-                          'group relative flex aspect-square items-center justify-center rounded-xl transition-all duration-200',
-                          active
-                            ? 'bg-primary/10 ring-1 ring-primary/50'
-                            : 'bg-muted/40 opacity-70 grayscale hover:bg-muted hover:opacity-100 hover:grayscale-0',
-                        )}
-                        onClick={() => {
-                          triggerSFX('sfx:menu-click')
-                          activateBuildTool(item.kind)
-                        }}
-                        onMouseEnter={() => triggerSFX('sfx:menu-hover')}
-                        type="button"
-                      >
-                        <Image
-                          alt={item.label}
-                          className="size-full object-contain transition-transform duration-200 group-hover:scale-110"
-                          height={48}
-                          src={item.iconSrc}
-                          width={48}
-                        />
-                      </button>
-                    </TooltipTrigger>
-                    <TooltipContent className="pointer-events-none" side="top">
-                      {item.label}
-                    </TooltipContent>
-                  </Tooltip>
-                )
-              })}
-            </div>
-          </TooltipProvider>
-
-          {(['duct-fitting', 'pipe-fitting'] as const)
-            .filter((kind) => (kind === 'duct-fitting' ? ductContext : pipeContext))
-            .map((kind) => (
-              <ToolOptionsPanel
-                active={activeTool === kind}
-                key={kind}
-                getChoiceThumbnail={(option, value) => {
-                  if (option.id !== 'fittingType') return undefined
-                  if (kind === 'duct-fitting' && value === 'elbow')
-                    return '/icons/duct-fitting.webp'
-                  return `/icons/fittings/${kind === 'duct-fitting' ? 'duct' : 'pipe'}-${value}.webp`
-                }}
-                kind={kind}
-                onSelect={(option, value) => {
-                  if (activeTool !== kind) {
-                    const defaults = useEditor.getState().toolDefaults[kind]
-                    activateBuildTool(kind)
-                    if (defaults) useEditor.getState().setToolDefaults(kind, defaults)
-                  }
-                  option.set(value)
-                }}
-              />
-            ))}
-
-          {liquidLineContext ? (
-            <div className="flex flex-col gap-1.5">
-              <span className="text-muted-foreground text-xs">Liquid Line</span>
-              <button
-                className={cn(
-                  'flex items-center justify-between gap-2 rounded-lg px-3 py-2 text-sm transition-all duration-200',
-                  follow ? 'bg-primary/10 ring-1 ring-primary/50' : 'bg-muted/40 hover:bg-muted',
-                )}
-                onClick={() => {
-                  triggerSFX('sfx:menu-click')
-                  toggleFollow()
-                }}
-                onMouseEnter={() => triggerSFX('sfx:menu-hover')}
-                type="button"
-              >
-                <span>Follow lineset</span>
-                <span className="text-muted-foreground text-xs">{follow ? 'On' : 'Off'}</span>
-              </button>
-              <span className="px-1 text-[11px] text-muted-foreground">
-                {follow
-                  ? 'Click a lineset to lay the line beside it.'
-                  : 'Trace a line alongside an existing lineset (F).'}
-              </span>
+                  <span className="px-1 text-[11px] text-muted-foreground">
+                    {follow
+                      ? i18n._({
+                          id: 'app.buildTab.clickALinesetToLayThe',
+                          message: 'Click a lineset to lay the line beside it.',
+                        })
+                      : i18n._({
+                          id: 'app.buildTab.traceALineAlongsideAnExisting',
+                          message: 'Trace a line alongside an existing lineset (F).',
+                        })}
+                  </span>
+                </div>
+              ) : null}
             </div>
           ) : null}
-        </div>
-      ) : null}
+        </>
+      )}
     </div>
   )
 }

@@ -5,6 +5,7 @@ import { cloneExportUserData } from './export-user-data'
 const VERTEX_COLOR_UV_CHANNEL = 0
 const VERTEX_COLOR_TILE_SIZE = 8
 const MAX_VERTEX_COLOR_ATLAS_SIZE = 2048
+const MAX_VERTEX_COLOR_ATLAS_FACES = (MAX_VERTEX_COLOR_ATLAS_SIZE / VERTEX_COLOR_TILE_SIZE) ** 2
 
 const MATERIAL_TEXTURE_SLOTS = [
   'map',
@@ -260,14 +261,26 @@ function colorComponent(
   return attribute.itemSize >= 4 ? attribute.getW(index) : 1
 }
 
+interface VertexColorAtlasPage {
+  /** First face of the expanded geometry painted on this page. */
+  firstFace: number
+  faceCount: number
+  texture: THREE.CanvasTexture
+  hasAlpha: boolean
+}
+
+/**
+ * Paints each face of a vertex-colored geometry into its own atlas tile. A geometry with more faces
+ * than one export-sized atlas holds spreads over several pages, each covering a consecutive run of
+ * faces, so a large mesh exports at the same tile resolution as a small one.
+ */
 function buildVertexColorAtlas(
   geometry: THREE.BufferGeometry,
   materials: readonly THREE.Material[],
   relocatedUvChannel?: number,
 ): {
   geometry: THREE.BufferGeometry
-  texture: THREE.CanvasTexture
-  hasAlpha: boolean
+  pages: VertexColorAtlasPage[]
   clampedHdr: boolean
 } {
   const expanded = geometry.index ? geometry.toNonIndexed() : geometry.clone()
@@ -286,21 +299,6 @@ function buildVertexColorAtlas(
     throw new Error('Vertex-color baking requires triangle geometry with a color attribute')
   }
 
-  const faceCount = position.count / 3
-  const tilesPerRow = Math.ceil(Math.sqrt(faceCount))
-  const atlasSize = THREE.MathUtils.ceilPowerOfTwo(tilesPerRow * VERTEX_COLOR_TILE_SIZE)
-  if (atlasSize > MAX_VERTEX_COLOR_ATLAS_SIZE) {
-    expanded.dispose()
-    throw new Error(
-      `Vertex-color atlas requires ${atlasSize}px, exceeding the ${MAX_VERTEX_COLOR_ATLAS_SIZE}px export limit`,
-    )
-  }
-
-  const { canvas, context } = canvas2d(atlasSize, atlasSize)
-  const image = context.createImageData(atlasSize, atlasSize)
-
-  const uv = new Float32Array(position.count * 2)
-  let hasAlpha = false
   let clampedHdr = false
   for (let index = 0; index < color.count && !clampedHdr; index++) {
     const triangleOffset = index - (index % 3)
@@ -312,9 +310,38 @@ function buildVertexColorAtlas(
     clampedHdr = red < 0 || red > 1 || green < 0 || green > 1 || blue < 0 || blue > 1
   }
 
-  for (let face = 0; face < faceCount; face++) {
-    const tileX = (face % tilesPerRow) * VERTEX_COLOR_TILE_SIZE
-    const tileY = Math.floor(face / tilesPerRow) * VERTEX_COLOR_TILE_SIZE
+  const totalFaces = position.count / 3
+  const uv = new Float32Array(position.count * 2)
+  const pages: VertexColorAtlasPage[] = []
+  for (let firstFace = 0; firstFace < totalFaces; firstFace += MAX_VERTEX_COLOR_ATLAS_FACES) {
+    const faceCount = Math.min(MAX_VERTEX_COLOR_ATLAS_FACES, totalFaces - firstFace)
+    pages.push(paintVertexColorAtlasPage(expanded, materials, uv, firstFace, faceCount))
+  }
+
+  expanded.setAttribute(uvAttributeName(VERTEX_COLOR_UV_CHANNEL), new THREE.BufferAttribute(uv, 2))
+  expanded.deleteAttribute('color')
+  return { geometry: expanded, pages, clampedHdr }
+}
+
+/** Paints faces `firstFace … firstFace + faceCount` into one atlas and writes their tile UVs. */
+function paintVertexColorAtlasPage(
+  expanded: THREE.BufferGeometry,
+  materials: readonly THREE.Material[],
+  uv: Float32Array,
+  firstFace: number,
+  faceCount: number,
+): VertexColorAtlasPage {
+  const color = expanded.getAttribute('color')
+  const tilesPerRow = Math.ceil(Math.sqrt(faceCount))
+  const atlasSize = THREE.MathUtils.ceilPowerOfTwo(tilesPerRow * VERTEX_COLOR_TILE_SIZE)
+  const { canvas, context } = canvas2d(atlasSize, atlasSize)
+  const image = context.createImageData(atlasSize, atlasSize)
+  let hasAlpha = false
+
+  for (let tile = 0; tile < faceCount; tile++) {
+    const face = firstFace + tile
+    const tileX = (tile % tilesPerRow) * VERTEX_COLOR_TILE_SIZE
+    const tileY = Math.floor(tile / tilesPerRow) * VERTEX_COLOR_TILE_SIZE
     const vertices = [face * 3, face * 3 + 1, face * 3 + 2]
     const colors = vertices.map((vertex) => [
       colorComponent(color, vertex, 0),
@@ -375,14 +402,14 @@ function buildVertexColorAtlas(
       const tileColumn = Math.floor(x / VERTEX_COLOR_TILE_SIZE)
       const tileIndex = tileRow * tilesPerRow + tileColumn
       if (tileColumn < tilesPerRow && tileIndex < faceCount) continue
-      const sourceFace =
+      const sourceTile =
         tileRow * tilesPerRow < faceCount
           ? Math.min((tileRow + 1) * tilesPerRow - 1, faceCount - 1)
           : faceCount - 1
       const sourceX =
-        (sourceFace % tilesPerRow) * VERTEX_COLOR_TILE_SIZE + (x % VERTEX_COLOR_TILE_SIZE)
+        (sourceTile % tilesPerRow) * VERTEX_COLOR_TILE_SIZE + (x % VERTEX_COLOR_TILE_SIZE)
       const sourceY =
-        Math.floor(sourceFace / tilesPerRow) * VERTEX_COLOR_TILE_SIZE + (y % VERTEX_COLOR_TILE_SIZE)
+        Math.floor(sourceTile / tilesPerRow) * VERTEX_COLOR_TILE_SIZE + (y % VERTEX_COLOR_TILE_SIZE)
       const sourcePixel = (sourceY * atlasSize + sourceX) * 4
       const targetPixel = (y * atlasSize + x) * 4
       image.data[targetPixel] = image.data[sourcePixel]!
@@ -393,16 +420,45 @@ function buildVertexColorAtlas(
   }
 
   context.putImageData(image, 0, 0)
-  expanded.setAttribute(uvAttributeName(VERTEX_COLOR_UV_CHANNEL), new THREE.BufferAttribute(uv, 2))
-  expanded.deleteAttribute('color')
   const texture = new THREE.CanvasTexture(canvas)
   texture.name = 'pascal_vertex_color_atlas'
   texture.channel = VERTEX_COLOR_UV_CHANNEL
   texture.colorSpace = THREE.SRGBColorSpace
   texture.flipY = true
   texture.needsUpdate = true
-  return { geometry: expanded, texture, hasAlpha, clampedHdr }
+  return { firstFace, faceCount, texture, hasAlpha }
 }
+
+/**
+ * Geometry groups for a geometry whose faces are spread over atlas pages: every source group is cut
+ * at page boundaries, and the piece on page `p` uses material `p * materialCount + its own index`.
+ */
+function pagedGroups(
+  geometry: THREE.BufferGeometry,
+  pages: readonly VertexColorAtlasPage[],
+  materialCount: number,
+): { start: number; count: number; materialIndex: number }[] {
+  const vertexCount = geometry.getAttribute('position').count
+  const sources = geometry.groups.length
+    ? geometry.groups
+    : [{ start: 0, count: vertexCount, materialIndex: 0 }]
+  const groups: { start: number; count: number; materialIndex: number }[] = []
+  for (const source of sources) {
+    const sourceEnd = Math.min(source.start + source.count, vertexCount)
+    pages.forEach((page, pageIndex) => {
+      const start = Math.max(source.start, page.firstFace * 3)
+      const end = Math.min(sourceEnd, (page.firstFace + page.faceCount) * 3)
+      if (end <= start) return
+      groups.push({
+        start,
+        count: end - start,
+        materialIndex: pageIndex * materialCount + (source.materialIndex ?? 0),
+      })
+    })
+  }
+  return groups
+}
+
 function hasDeformedGeometry(mesh: THREE.Mesh): boolean {
   const skinnedMesh = mesh as THREE.SkinnedMesh
   return (
@@ -466,36 +522,46 @@ function bakeVertexColors(root: THREE.Object3D, preserveDeformations = false): b
     if (baked.clampedHdr) mesh.userData.pascalHdrVertexColor = 'clamped-to-portable-range'
     clampedHdr ||= baked.clampedHdr
     const relocatedTextures = new Map<THREE.Texture, THREE.Texture>()
-    const convertedMaterials = new Map<THREE.Material, THREE.Material>()
-    const converted = materials.map((material) => {
-      const cached = convertedMaterials.get(material)
-      if (cached) return cached
-      if (!material.vertexColors && relocatedUvChannel === undefined) return material
-      const clone = material.clone() as TexturedMaterial
-      if (relocatedUvChannel !== undefined) {
-        for (const slot of MATERIAL_TEXTURE_SLOTS) {
-          const sourceTexture = clone[slot]
-          if (!(sourceTexture instanceof THREE.Texture) || sourceTexture.channel !== 0) continue
-          let relocatedTexture = relocatedTextures.get(sourceTexture)
-          if (!relocatedTexture) {
-            relocatedTexture = sourceTexture.clone()
-            relocatedTexture.channel = relocatedUvChannel
-            relocatedTexture.needsUpdate = true
-            relocatedTextures.set(sourceTexture, relocatedTexture)
-            rememberDiscarded(root, sourceTexture)
+    const converted = baked.pages.flatMap((page) => {
+      const convertedMaterials = new Map<THREE.Material, THREE.Material>()
+      return materials.map((material) => {
+        const cached = convertedMaterials.get(material)
+        if (cached) return cached
+        if (!material.vertexColors && relocatedUvChannel === undefined) return material
+        const clone = material.clone() as TexturedMaterial
+        if (relocatedUvChannel !== undefined) {
+          for (const slot of MATERIAL_TEXTURE_SLOTS) {
+            const sourceTexture = clone[slot]
+            if (!(sourceTexture instanceof THREE.Texture) || sourceTexture.channel !== 0) continue
+            let relocatedTexture = relocatedTextures.get(sourceTexture)
+            if (!relocatedTexture) {
+              relocatedTexture = sourceTexture.clone()
+              relocatedTexture.channel = relocatedUvChannel
+              relocatedTexture.needsUpdate = true
+              relocatedTextures.set(sourceTexture, relocatedTexture)
+              rememberDiscarded(root, sourceTexture)
+            }
+            clone[slot] = relocatedTexture
           }
-          clone[slot] = relocatedTexture
         }
-      }
-      if (material.vertexColors) {
-        clone.vertexColors = false
-        clone.map = baked.texture
-        if (baked.hasAlpha) clone.transparent = true
-      }
-      convertedMaterials.set(material, clone)
-      return clone
+        if (material.vertexColors) {
+          clone.vertexColors = false
+          clone.map = page.texture
+          if (page.hasAlpha) clone.transparent = true
+        }
+        convertedMaterials.set(material, clone)
+        return clone
+      })
     })
-    mesh.material = Array.isArray(mesh.material) ? converted : converted[0]!
+    if (baked.pages.length > 1) {
+      const groups = pagedGroups(mesh.geometry, baked.pages, materials.length)
+      mesh.geometry.clearGroups()
+      for (const group of groups)
+        mesh.geometry.addGroup(group.start, group.count, group.materialIndex)
+      mesh.material = converted
+    } else {
+      mesh.material = Array.isArray(mesh.material) ? converted : converted[0]!
+    }
     rememberDiscarded(root, originalGeometry)
     for (const material of materials) rememberDiscarded(root, material)
   }

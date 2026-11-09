@@ -9,6 +9,7 @@ import {
   useScene,
 } from '@pascal-app/core'
 import { type ComponentType, lazy, Suspense, useCallback, useSyncExternalStore } from 'react'
+import { useRevealPending } from '../../systems/construction-reveal/construction-reveal'
 import { ParametricNodeRenderer } from './parametric-node-renderer'
 
 // Cache lazy components by their RendererSource so React.lazy isn't re-invoked
@@ -37,7 +38,9 @@ export const NodeRenderer = ({ nodeId }: { nodeId: AnyNode['id'] }) => {
   const kind = node?.type
   const readDefinition = useCallback(() => (kind ? nodeRegistry.get(kind) : undefined), [kind])
   const def = useSyncExternalStore(onRegistryChange, readDefinition, readDefinition)
-  if (!node) return null
+  // A node an agent just built mounts on its construction-reveal turn.
+  const revealPending = useRevealPending(nodeId)
+  if (!node || revealPending) return null
   if (!isNodeKindEnabled(node.type, installedPlugins)) return null
   if (!def) return null
   // Two-checkbox dispatch (see wiki/architecture/node-definitions.md):

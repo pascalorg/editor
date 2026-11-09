@@ -1,5 +1,8 @@
 'use client'
 
+import { usePascalI18n } from '@pascal-app/core'
+import type { MessageDescriptor } from '@pascal-app/core'
+
 import { Icon } from '@iconify/react'
 import { type LucideIcon, Trash2 } from 'lucide-react'
 import Image from 'next/image'
@@ -8,15 +11,16 @@ import { cn } from './../../../lib/utils'
 import useEditor from './../../../store/use-editor'
 import { ActionButton } from './action-button'
 import { MeasurementControl } from './measurement-control'
+import { PointAskButton } from './point-ask-button'
 
-type ControlId = 'select' | 'box-select' | 'zone' | 'delete'
+type ControlId = 'select' | 'box-select' | 'delete'
 
 type ControlConfig = {
   id: ControlId
   icon?: LucideIcon
   iconifyIcon?: string
   imageSrc?: string
-  label: string
+  label: MessageDescriptor
   shortcut?: string
   color: string
   activeColor: string
@@ -27,74 +31,41 @@ const controls: ControlConfig[] = [
   {
     id: 'select',
     imageSrc: '/icons/select.webp',
-    label: 'Select',
+    label: /* i18n */ { id: 'editor.actionMenu.controlModes.select', message: 'Select' },
     shortcut: 'V',
-    color: 'hover:bg-blue-500/20 hover:text-blue-400',
-    activeColor: 'bg-blue-500/20 text-blue-400',
-  },
-  {
-    id: 'zone',
-    imageSrc: '/icons/zone.webp',
-    label: 'Zone',
-    shortcut: 'Z',
-    color: 'hover:bg-green-500/20 hover:text-green-400',
-    activeColor: 'bg-green-500/20 text-green-400',
+    color: 'hover:bg-blue-500/20 hover:text-blue-600 dark:hover:text-blue-400',
+    activeColor: 'bg-blue-500/20 text-blue-600 dark:text-blue-400 dark:hover:text-accent-foreground',
   },
   {
     id: 'delete',
     icon: Trash2,
-    label: 'Delete',
+    label: /* i18n */ { id: 'editor.actionMenu.controlModes.delete', message: 'Delete' },
     shortcut: 'X',
-    color: 'hover:bg-red-500/20 hover:text-red-400',
-    activeColor: 'bg-red-500/20 text-red-400',
+    color: 'hover:bg-red-500/20 hover:text-red-600 dark:hover:text-red-400',
+    activeColor: 'bg-red-500/20 text-red-600 dark:text-red-400 dark:hover:text-accent-foreground',
   },
 ]
 
 export function ControlModes() {
+  const i18n = usePascalI18n()
   const mode = useEditor((state) => state.mode)
-  const phase = useEditor((state) => state.phase)
   const selectionTool = useEditor((state) => state.floorplanSelectionTool)
   const armToolMode = useEditor((state) => state.armToolMode)
-  const setPhase = useEditor((state) => state.setPhase)
-  const setStructureLayer = useEditor((state) => state.setStructureLayer)
   const setSelectionTool = useEditor((state) => state.setFloorplanSelectionTool)
-
-  const isSiteEditing = phase === 'site'
-
-  const structureLayer = useEditor((state) => state.structureLayer)
 
   const getIsActive = (id: ControlId): boolean => {
     if (id === 'select') return mode === 'select' && selectionTool === 'click'
     if (id === 'box-select') return mode === 'select' && selectionTool === 'marquee'
-    if (id === 'zone')
-      return mode === 'build' && phase === 'structure' && structureLayer === 'zones'
     return mode === id
   }
 
   const handleClick = (id: ControlId) => {
-    // Exit site editing first if needed. Sculpting is a site-phase mode, so
-    // leaving the phase is exactly the right way to leave the brush — but the
-    // order matters: `setPhase` resets the mode, and setting the mode first
-    // would have it overwritten below.
-    if (isSiteEditing) {
-      setPhase('structure')
-      setStructureLayer('elements')
-    }
-
     if (id === 'select') {
       armToolMode({ mode: 'select' })
       setSelectionTool('click')
     } else if (id === 'box-select') {
       armToolMode({ mode: 'select' })
       setSelectionTool('marquee')
-    } else if (id === 'zone') {
-      if (getIsActive('zone')) {
-        armToolMode({ mode: 'select' })
-      } else {
-        setPhase('structure')
-        setStructureLayer('zones')
-        armToolMode({ mode: 'build', tool: 'zone' })
-      }
     } else {
       armToolMode({ mode: id })
     }
@@ -109,20 +80,25 @@ export function ControlModes() {
 
         return (
           <Fragment key={c.id}>
-            {c.id === 'delete' ? <MeasurementControl /> : null}
+            {c.id === 'delete' ? (
+              <>
+                <PointAskButton />
+                <MeasurementControl />
+              </>
+            ) : null}
             <ActionButton
               className={cn(
                 'group text-muted-foreground',
                 !(isImageMode || isActive) && c.color,
                 !isImageMode && isActive && c.activeColor,
-                isImageMode && isActive && 'bg-white/10 hover:bg-white/10',
-                isImageMode && !isActive && 'hover:bg-white/5',
+                isImageMode && isActive && 'bg-black/6 hover:bg-black/6 dark:bg-white/10',
+                isImageMode && !isActive && 'hover:bg-black/4',
               )}
               // A static hook for a host app that wants to point a first-run
               // tour at this button. Nothing here reads it.
               data-guide-target={c.id === 'select' ? 'mode-select' : undefined}
               isActive={isActive}
-              label={c.label}
+              label={i18n._(c.label)}
               onClick={() => handleClick(c.id)}
               shortcut={c.shortcut}
               size="icon"
@@ -130,7 +106,7 @@ export function ControlModes() {
             >
               {c.imageSrc ? (
                 <Image
-                  alt={c.label}
+                  alt={i18n._(c.label)}
                   className={cn(
                     'h-[28px] w-[28px] object-contain transition-[opacity,filter] duration-200',
                     isActive

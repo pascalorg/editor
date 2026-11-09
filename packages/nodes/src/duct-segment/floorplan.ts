@@ -1,7 +1,7 @@
 import type { FloorplanGeometry, FloorplanPoint, GeometryContext } from '@pascal-app/core'
 import { runHangerFloorplan } from '../shared/run-hangers'
 import { ductContinuationHandlePlan, ductEndpointPort } from './continuation'
-import { INCHES_TO_METERS } from './geometry'
+import { INCHES_TO_METERS } from './profile'
 import type { DuctSegmentNode } from './schema'
 
 const SUPPLY_CENTERLINE = '#d4825a'

@@ -2,12 +2,14 @@ import {
   type AnyNode,
   type AnyNodeId,
   type HandleDescriptor,
+  liftedManualSlab,
   MIN_SLAB_THICKNESS,
   markSlabChangeDependents,
   type NodeDefinition,
   pointInPolygon2D,
   type SceneApi,
   type SlabNode as SlabNodeType,
+  slabSlots,
   syncStairRises,
 } from '@pascal-app/core'
 import {
@@ -41,7 +43,6 @@ import { slabPaint } from './paint'
 import { slabParametrics } from './parametrics'
 import { slabQuickMeasurement } from './quick-measurement'
 import { SlabNode } from './schema'
-import { slabSlots } from './slots'
 
 const HEIGHT_HANDLE_OFFSET = 0.22
 const MIN_SLAB_ELEVATION = -1
@@ -261,7 +262,8 @@ function slabHandles(node: SlabNodeType): HandleDescriptor<SlabNodeType>[] {
 /**
  * Slab — Phase 5 batch kind, polygon-based. Stage B: `def.geometry`
  * drives the rebuild via generic <GeometrySystem>; <ParametricNodeRenderer>
- * mounts the empty group. No per-kind renderer or system file.
+ * mounts the empty group, which the slab's renderer composes with the build
+ * of its surface script.
  *
  * Capabilities:
  *  - **No `movable`**: slab's "move" today is whole-slab translation via
@@ -305,10 +307,34 @@ export const slabDefinition: NodeDefinition<typeof SlabNode> = {
   }),
 
   capabilities: {
+    reveal: { phase: 'foundation', style: 'settle', height: 0.08 },
+    revealOnEdit: [
+      'polygon',
+      'holes',
+      'elevation',
+      'thickness',
+      'recessed',
+      'recessedRimElevation',
+    ],
     batchable: surfaceBatchable,
     selectable: { hitVolume: 'bbox' },
     surfaces: {
-      top: { height: (n) => (n as SlabNode).elevation },
+      top: {
+        height: (n) => (n as SlabNode).elevation,
+        supportHeight: (node, x, z, context) => {
+          const slab = node as SlabNodeType
+          if (
+            slab.polygon.length < 3 ||
+            !pointInPolygon2D([x, z], slab.polygon, { includeBoundary: true }) ||
+            slab.holes.some(
+              (hole) =>
+                hole.length >= 3 && pointInPolygon2D([x, z], hole, { includeBoundary: false }),
+            )
+          )
+            return null
+          return liftedManualSlab(context.nodes, slab).elevation
+        },
+      },
     },
     duplicable: true,
     deletable: true,
@@ -350,6 +376,10 @@ export const slabDefinition: NodeDefinition<typeof SlabNode> = {
     move: () => import('./move-tool'),
   },
 
+  renderer: {
+    kind: 'parametric',
+    module: () => import('./renderer'),
+  },
   // Stage B: pure geometry function.
   geometry: buildSlabGeometry,
   // Dependency tracker only — dirties level slabs when walls / sibling

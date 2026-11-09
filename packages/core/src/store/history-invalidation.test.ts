@@ -27,35 +27,37 @@ const ids = (before: Record<string, AnyNode>, after: Record<string, AnyNode>) =>
 const asset = { id: 'test', name: 'test', category: 'test', thumbnail: '', src: '/test.glb' }
 
 describe('history dependency closure', () => {
-  test.each([
-    'corner',
-    'tee',
-    'reverse tee',
-    'curve',
-  ])('wall body move disconnects and restores a %s in both directions, only on its level', (junction) => {
-    const changed = junction === 'curve' ? { ...wall, curveOffset: 1 } : wall
-    const adjacent = WallNode.parse({
-      id: 'wall_adjacent',
-      parentId: level.id,
-      start:
-        junction === 'corner'
-          ? [4, 0]
-          : junction === 'tee'
-            ? [2, 0]
-            : junction === 'curve'
-              ? [4, 0]
-              : [4, -2],
-      end: junction === 'reverse tee' ? [4, 2] : [2, -3],
-    })
-    const otherLevel = { ...adjacent, id: 'wall_other_level', parentId: 'level_other' } as WallNode
-    const before = nodes(level, changed, adjacent, remote, otherLevel)
-    const after = {
-      ...before,
-      [changed.id]: { ...changed, start: [8, 8], end: [12, 8] } as WallNode,
-    }
-    expect(ids(before, after)).toEqual([level.id, adjacent.id, changed.id].sort())
-    expect(ids(after, before)).toEqual(ids(before, after))
-  })
+  test.each(['corner', 'tee', 'reverse tee', 'curve'])(
+    'wall body move disconnects and restores a %s in both directions, only on its level',
+    (junction) => {
+      const changed = junction === 'curve' ? { ...wall, curveOffset: 1 } : wall
+      const adjacent = WallNode.parse({
+        id: 'wall_adjacent',
+        parentId: level.id,
+        start:
+          junction === 'corner'
+            ? [4, 0]
+            : junction === 'tee'
+              ? [2, 0]
+              : junction === 'curve'
+                ? [4, 0]
+                : [4, -2],
+        end: junction === 'reverse tee' ? [4, 2] : [2, -3],
+      })
+      const otherLevel = {
+        ...adjacent,
+        id: 'wall_other_level',
+        parentId: 'level_other',
+      } as WallNode
+      const before = nodes(level, changed, adjacent, remote, otherLevel)
+      const after = {
+        ...before,
+        [changed.id]: { ...changed, start: [8, 8], end: [12, 8] } as WallNode,
+      }
+      expect(ids(before, after)).toEqual([level.id, adjacent.id, changed.id].sort())
+      expect(ids(after, before)).toEqual(ids(before, after))
+    },
+  )
 
   test('endpoint move includes former and new neighbours without following a junction transitively', () => {
     const old = WallNode.parse({ id: 'wall_old', parentId: level.id, start: [4, 0], end: [4, 4] })
@@ -88,79 +90,78 @@ describe('history dependency closure', () => {
     expect(ids(after, before)).toEqual(ids(before, after))
   })
 
-  test.each([
-    DoorNode,
-    WindowNode,
-  ])('opening add/remove/move/resize/reparent marks surviving hosts', (schema) => {
-    const opening = schema.parse({ parentId: wall.id })
-    const before = nodes(level, wall, remote, opening)
-    for (const patch of [{ position: [1, 1, 0] }, { width: 2 }, { parentId: remote.id }]) {
-      const after = { ...before, [opening.id]: { ...opening, ...patch } as AnyNode }
-      expect(ids(before, after)).toEqual(
-        [opening.id, wall.id, ...('parentId' in patch ? [remote.id] : [])].sort(),
-      )
-    }
-    const absent = nodes(level, wall, remote)
-    expect(ids(absent, before)).toEqual([opening.id, wall.id].sort())
-    expect(ids(before, absent)).toEqual([wall.id])
-  })
+  test.each([DoorNode, WindowNode])(
+    'opening add/remove/move/resize/reparent marks surviving hosts',
+    (schema) => {
+      const opening = schema.parse({ parentId: wall.id })
+      const before = nodes(level, wall, remote, opening)
+      for (const patch of [{ position: [1, 1, 0] }, { width: 2 }, { parentId: remote.id }]) {
+        const after = { ...before, [opening.id]: { ...opening, ...patch } as AnyNode }
+        expect(ids(before, after)).toEqual(
+          [opening.id, wall.id, ...('parentId' in patch ? [remote.id] : [])].sort(),
+        )
+      }
+      const absent = nodes(level, wall, remote)
+      expect(ids(absent, before)).toEqual([opening.id, wall.id].sort())
+      expect(ids(before, absent)).toEqual([wall.id])
+    },
+  )
 
-  test.each([
-    'floor',
-    'wall host',
-    'elevated slab',
-  ])('item move on %s marks the item and parent, preserving its asset', (support) => {
-    const item = ItemNode.parse({
-      parentId: support === 'wall host' ? wall.id : level.id,
-      supportSlabId: support === 'elevated slab' ? 'slab_deck' : undefined,
-      asset,
-    })
-    const before = nodes(level, wall, remote, item)
-    const moved = { ...item, position: [3, 0, 2], rotation: [0, 1, 0] } as AnyNode
-    const after = { ...before, [item.id]: moved }
-    expect(ids(before, after)).toEqual([item.id, item.parentId!].sort())
-    expect((moved as ItemNode).asset).toBe(item.asset)
-  })
+  test.each(['floor', 'wall host', 'elevated slab'])(
+    'item move on %s marks the item and parent, preserving its asset',
+    (support) => {
+      const item = ItemNode.parse({
+        parentId: support === 'wall host' ? wall.id : level.id,
+        supportSlabId: support === 'elevated slab' ? 'slab_deck' : undefined,
+        asset,
+      })
+      const before = nodes(level, wall, remote, item)
+      const moved = { ...item, position: [3, 0, 2], rotation: [0, 1, 0] } as AnyNode
+      const after = { ...before, [item.id]: moved }
+      expect(ids(before, after)).toEqual([item.id, item.parentId!].sort())
+      expect((moved as ItemNode).asset).toBe(item.asset)
+    },
+  )
 
-  test.each([
-    SlabNode,
-    CeilingNode,
-  ])('surface polygon/holes/elevation marks the surface; subscribers own support dependencies', (schema) => {
-    const surface = schema.parse({
-      parentId: level.id,
-      polygon: [
-        [0, 0],
-        [4, 0],
-        [4, 4],
-        [0, 4],
-      ],
-    })
-    const before = nodes(level, wall, remote, surface)
-    for (const patch of [
-      {
+  test.each([SlabNode, CeilingNode])(
+    'surface polygon/holes/elevation marks the surface; subscribers own support dependencies',
+    (schema) => {
+      const surface = schema.parse({
+        parentId: level.id,
         polygon: [
           [0, 0],
-          [8, 0],
-          [8, 4],
+          [4, 0],
+          [4, 4],
           [0, 4],
         ],
-      },
-      schema === SlabNode ? { elevation: 1 } : { height: 4 },
-      {
-        holes: [
-          [
-            [1, 1],
-            [2, 1],
-            [2, 2],
+      })
+      const before = nodes(level, wall, remote, surface)
+      for (const patch of [
+        {
+          polygon: [
+            [0, 0],
+            [8, 0],
+            [8, 4],
+            [0, 4],
           ],
-        ],
-      },
-    ]) {
-      expect(ids(before, { ...before, [surface.id]: { ...surface, ...patch } as AnyNode })).toEqual(
-        [surface.id, level.id].sort(),
-      )
-    }
-  })
+        },
+        schema === SlabNode ? { elevation: 1 } : { height: 4 },
+        {
+          holes: [
+            [
+              [1, 1],
+              [2, 1],
+              [2, 2],
+            ],
+          ],
+        },
+      ]) {
+        expect(
+          ids(before, { ...before, [surface.id]: { ...surface, ...patch } as AnyNode }),
+        ).toEqual([surface.id, level.id].sort())
+      }
+    },
+  )
 
   test('level height leaves descendant invalidation to the spatial subscription', () => {
     const before = nodes(level, wall, remote)

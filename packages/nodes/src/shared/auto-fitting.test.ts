@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
+import type { ScenePort } from '@pascal-app/editor/distribution'
 import { getDuctFittingPorts } from '../duct-fitting/ports'
 import { type DuctProfile, planElbowAtPort, planElbowRealign } from './auto-fitting'
-import type { ScenePort } from './ports'
 
 type Point = [number, number, number]
 
@@ -126,8 +126,8 @@ describe('planElbowAtPort', () => {
 })
 
 import { DuctFittingNode, DuctSegmentNode } from '@pascal-app/core'
+import type { RunBodyHit } from '@pascal-app/editor/distribution'
 import { planCrossAtRunBody, planTeeAtRunBody } from './auto-fitting'
-import type { RunBodyHit } from './ports'
 
 function trunk(path: Point[]): DuctSegmentNode {
   return DuctSegmentNode.parse({

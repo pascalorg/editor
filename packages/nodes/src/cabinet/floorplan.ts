@@ -253,7 +253,7 @@ function buildModuleSymbol(
       : BODY_STROKE
 
   const stack = stackForCabinet(node)
-  const showCompartments = node.moduleKind !== 'corner-filler'
+  const showCompartments = node.moduleKind === 'standard'
   const hoodOnly = stack.length > 0 && stack.every((c) => isHoodCompartmentType(c.type))
   const dashed = opts.aboveCutPlane || hoodOnly
 

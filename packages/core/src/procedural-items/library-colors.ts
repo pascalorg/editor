@@ -98,6 +98,57 @@ export function nearestLibraryColorRef(
   )
 }
 
+export type PascalMaterialHints = {
+  name?: string
+  color?: string
+  roughness?: number
+  metalness?: number
+  /** See-through: transmissive, or alpha-blended below the viewer's glass opacity. */
+  transparent?: boolean
+  emissive?: boolean
+  finish?: ProceduralFinish | 'color'
+}
+
+/** Deterministic finish/tone matching; uncertain colours keep their authored material. */
+export function matchPascalMaterial(slot: PascalMaterialHints): `library:${string}` | null {
+  if (slot.emissive) return null
+  const name = (slot.name ?? '').replace(/([a-z])([A-Z])/g, '$1 $2').replace(/[_-]/g, ' ')
+  const finish =
+    slot.finish ??
+    (slot.transparent || /\b(glass|glazing|glazed|transparent)\b/i.test(name)
+      ? 'glass'
+      : (slot.metalness ?? 0) >= 0.5 ||
+          /\b(metal|metallic|steel|stainless|chrome|brass|copper|bronze|aluminum|aluminium|iron)\b/i.test(
+            name,
+          )
+        ? 'metal'
+        : /\b(wood|wooden|timber|lumber|oak|walnut|pine|cedar|cherry|teak|mahogany|maple|birch|beech|bamboo|plywood)\b/i.test(
+              name,
+            )
+          ? 'wood'
+          : undefined)
+  if (finish === 'glass') return 'library:preset-glass'
+  if (finish && finish !== 'color') {
+    return resolveProceduralFinishRef(finish, slot.color ?? '') ?? null
+  }
+  if (!slot.color) return null
+  if (finish !== 'color') {
+    const wood = nearestColor(slot.color, FINISH_LIBRARY_REFS.wood)
+    // Colour alone only implies wood near a curated brown tone, on a non-glossy dielectric.
+    if (
+      wood &&
+      wood.distance <= 8 &&
+      (slot.metalness ?? 0) < 0.2 &&
+      (slot.roughness ?? 1) >= 0.4 &&
+      !/\b(fabric|leather|plastic|rubber|paint|ceramic)\b/i.test(name)
+    )
+      return wood.ref
+    if ((slot.metalness ?? 0) >= 0.2 || (slot.roughness ?? 1) < 0.4) return null
+  }
+  const color = nearestLibraryColorRef(slot.color)
+  return color && (finish === 'color' || color.distance <= 6) ? color.ref : null
+}
+
 export function snapProceduralSlotsToLibrary(
   node: ProceduralItemNode,
   options: { keepOverrides: true } = { keepOverrides: true },
@@ -105,9 +156,7 @@ export function snapProceduralSlotsToLibrary(
   const slots = { ...node.slots }
   for (const slot of node.recipe.slots) {
     if (options.keepOverrides && Object.hasOwn(node.slots, slot.id)) continue
-    const ref = slot.finish
-      ? resolveProceduralFinishRef(slot.finish, slot.color)
-      : nearestLibraryColorRef(slot.color)?.ref
+    const ref = matchPascalMaterial({ finish: slot.finish ?? 'color', color: slot.color })
     if (ref) slots[slot.id] = ref
   }
   return slots

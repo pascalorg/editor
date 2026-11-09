@@ -94,7 +94,7 @@ function siteOf(nodes: Record<string, AnyNode>): SiteNode | null {
  * site-space placement, and the site renders at the origin. Only the Y rotation
  * matters — a building tipped in X or Z is not a thing the editor can produce.
  */
-function levelLocalToWorldXZ(
+export function levelLocalToWorldXZ(
   building: BuildingNode | null,
   x: number,
   z: number,

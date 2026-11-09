@@ -78,46 +78,46 @@ test('one footprint command moves its walls, opening and explicit room steps; sh
   })
 })
 
-test.each([
-  true,
-  false,
-])('migration replaces level intent and fillToTerrain=%s once, manual slabs unchanged', (fillToTerrain) => {
-  const s = scene()
-  const plates = bases(s.nodes)
-  const input = {
-    ...s.nodes,
-    [s.level.id]: { ...s.nodes[s.level.id], floorElevation: 0.35 },
-  } as Record<string, AnyNode>
-  for (const plate of plates)
-    input[plate.id] = {
-      ...plate,
-      foundation: undefined,
+test.each([true, false])(
+  'migration replaces level intent and fillToTerrain=%s once, manual slabs unchanged',
+  (fillToTerrain) => {
+    const s = scene()
+    const plates = bases(s.nodes)
+    const input = {
+      ...s.nodes,
+      [s.level.id]: { ...s.nodes[s.level.id], floorElevation: 0.35 },
+    } as Record<string, AnyNode>
+    for (const plate of plates)
+      input[plate.id] = {
+        ...plate,
+        foundation: undefined,
+        fillToTerrain,
+        slots: { edge: 'library:stone' },
+      }
+    const manual = {
+      ...plates[0]!,
+      id: 'slab_manual' as SlabNode['id'],
+      boundary: undefined,
+      autoFromWalls: false,
+      plateRole: undefined,
       fillToTerrain,
-      slots: { edge: 'library:stone' },
     }
-  const manual = {
-    ...plates[0]!,
-    id: 'slab_manual' as SlabNode['id'],
-    boundary: undefined,
-    autoFromWalls: false,
-    plateRole: undefined,
-    fillToTerrain,
-  }
-  input[manual.id] = manual
-  const first = migrateFloorPlates(input).nodes as Record<string, AnyNode>
-  expect(first[s.level.id]).not.toHaveProperty('floorElevation')
-  for (const plate of plates) {
-    expect(first[plate.id]).toMatchObject({
-      floorHeight: 0.35,
-      foundation: { type: fillToTerrain ? 'solid' : 'none' },
-    })
-    expect(first[plate.id]).not.toHaveProperty('fillToTerrain')
-    if (fillToTerrain)
-      expect((first[plate.id] as SlabNode).foundation!.material).toBe('library:stone')
-  }
-  expect(first[manual.id]).toEqual(manual)
-  expect(migrateFloorPlates(first).nodes).toEqual(first)
-})
+    input[manual.id] = manual
+    const first = migrateFloorPlates(input).nodes as Record<string, AnyNode>
+    expect(first[s.level.id]).not.toHaveProperty('floorElevation')
+    for (const plate of plates) {
+      expect(first[plate.id]).toMatchObject({
+        floorHeight: 0.35,
+        foundation: { type: fillToTerrain ? 'solid' : 'none' },
+      })
+      expect(first[plate.id]).not.toHaveProperty('fillToTerrain')
+      if (fillToTerrain)
+        expect((first[plate.id] as SlabNode).foundation!.material).toBe('library:stone')
+    }
+    expect(first[manual.id]).toEqual(manual)
+    expect(migrateFloorPlates(first).nodes).toEqual(first)
+  },
+)
 
 test('a newly drawn shed gets thin construction without copying the house settings', () => {
   const s = scene()

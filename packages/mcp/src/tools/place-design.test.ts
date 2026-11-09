@@ -1,6 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { Client } from '@modelcontextprotocol/sdk/client/index.js'
-import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
+import { Client, InMemoryTransport } from '@modelcontextprotocol/client'
 import { DESIGN_EXAMPLE } from '@pascal-app/core/procedural-items'
 import { CeilingNode, WallNode } from '@pascal-app/core/schema'
 import jointCabinetJson from '../../../core/src/procedural-items/__fixtures__/joint_cabinet.json'
@@ -34,6 +33,15 @@ async function connect() {
   const bridge = new SceneBridge()
   bridge.setScene({}, [])
   bridge.loadDefault()
+  bridge.agentSession.keep({
+    designBrief: {
+      fixed: ['the test’s pieces'],
+      open: [],
+      source: 'catalog',
+      vision: 'The catalog as it is.',
+      beyond: 'none: the test places what the request names.',
+    },
+  })
   const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
   const wall = WallNode.parse({ start: [0, 0], end: [4, 0], height: 2.7 })
   bridge.createNode(wall, level.id)

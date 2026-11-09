@@ -5,6 +5,7 @@ import {
   MaterialSchema,
   SlabNode,
   useScene,
+  ZoneFloorScript,
   type ZoneNode,
   ZoneNode as ZoneSchema,
 } from '@pascal-app/core'
@@ -213,6 +214,7 @@ describe('slab paint effective material', () => {
   test('reads a room finish back for the picker', () => {
     expect(
       slabPaint.getEffectiveMaterial?.({
+        materials: useScene.getState().materials,
         nodes: useScene.getState().nodes,
         node: plate,
         role: 'room:zone_a',
@@ -223,6 +225,7 @@ describe('slab paint effective material', () => {
     })
     expect(
       slabPaint.getEffectiveMaterial?.({
+        materials: useScene.getState().materials,
         nodes: useScene.getState().nodes,
         node: plate,
         role: 'room:zone_a/region_1',
@@ -230,6 +233,7 @@ describe('slab paint effective material', () => {
     ).toEqual({ material: undefined, materialPreset: TILE })
     expect(
       slabPaint.getEffectiveMaterial?.({
+        materials: useScene.getState().materials,
         nodes: useScene.getState().nodes,
         node: plate,
         role: 'surface',
@@ -307,6 +311,7 @@ test('foundation paint changes only its own material and erases to concrete', ()
   expect(slabNow(plate.id).foundation).toEqual({ type: 'solid', material: undefined })
   expect(
     slabPaint.getEffectiveMaterial?.({
+      materials: useScene.getState().materials,
       nodes: useScene.getState().nodes,
       node: slabNow(plate.id),
       role: 'foundation',
@@ -323,27 +328,27 @@ test('base surface paint routes to a covering room and never writes the protecte
   expect(slabNow(plate.id).slots).toBeUndefined()
 })
 
-test.each([
-  true,
-  false,
-])('foundation paint uses one undo step, including a new material: %s', (custom) => {
-  plate = { ...plate, plateRole: 'base', foundation: { type: 'solid', material: WOOD } }
-  useScene.setState({ nodes: { ...useScene.getState().nodes, [plate.id]: plate } })
-  useScene.temporal.getState().clear()
-  const before = useScene.getState().nodes
-  slabPaint.commit?.({
-    node: plate,
-    role: 'foundation',
-    material: custom ? MaterialSchema.parse({ properties: { color: '#123456' } }) : undefined,
-    materialPreset: custom ? undefined : TILE,
-  })
-  expect(useScene.temporal.getState().pastStates).toHaveLength(1)
-  expect(slabNow(plate.id).foundation?.material).not.toBe(WOOD)
-  if (custom) expect(Object.keys(useScene.getState().materials)).toHaveLength(1)
-  useScene.temporal.getState().undo()
-  expect(useScene.getState().nodes).toEqual(before)
-  expect(useScene.getState().materials).toEqual({})
-})
+test.each([true, false])(
+  'foundation paint uses one undo step, including a new material: %s',
+  (custom) => {
+    plate = { ...plate, plateRole: 'base', foundation: { type: 'solid', material: WOOD } }
+    useScene.setState({ nodes: { ...useScene.getState().nodes, [plate.id]: plate } })
+    useScene.temporal.getState().clear()
+    const before = useScene.getState().nodes
+    slabPaint.commit?.({
+      node: plate,
+      role: 'foundation',
+      material: custom ? MaterialSchema.parse({ properties: { color: '#123456' } }) : undefined,
+      materialPreset: custom ? undefined : TILE,
+    })
+    expect(useScene.temporal.getState().pastStates).toHaveLength(1)
+    expect(slabNow(plate.id).foundation?.material).not.toBe(WOOD)
+    if (custom) expect(Object.keys(useScene.getState().materials)).toHaveLength(1)
+    useScene.temporal.getState().undo()
+    expect(useScene.getState().nodes).toEqual(before)
+    expect(useScene.getState().materials).toEqual({})
+  },
+)
 
 test('a zoneless base surface returns a notice instead of throwing or recording history', () => {
   plate = { ...plate, plateRole: 'base', zoneIds: [] }
@@ -355,4 +360,47 @@ test('a zoneless base surface returns a notice instead of throwing or recording 
   ).toMatchObject({ status: 'refused', code: 'floor-surface-without-room' })
   expect(useScene.getState().nodes).toBe(before)
   expect(useScene.temporal.getState().pastStates).toHaveLength(0)
+})
+
+test("a floor built by a script refuses the room's paint, which its script owns", () => {
+  const script = ZoneFloorScript.parse({
+    kind: 'script',
+    script: 'a'.repeat(64),
+    artifact: 'b'.repeat(64),
+    inputs: 'key',
+    manifest: { bounds: { min: [0, 0, 0], max: [4, 0.01, 4] }, triangles: 2 },
+  })
+  zone = { ...zone, floor: { ...zone.floor, script } }
+  useScene.setState({ nodes: { ...useScene.getState().nodes, [zone.id]: zone } })
+  useScene.temporal.getState().clear()
+  const before = useScene.getState().nodes
+  for (const role of ['room:zone_a', 'room:zone_a/region_1'])
+    expect(
+      slabPaint.commit({ node: plate, role, material: undefined, materialPreset: TILE }),
+    ).toMatchObject({ status: 'refused', code: 'floor-built-by-script' })
+  expect(useScene.getState().nodes).toBe(before)
+  expect(useScene.temporal.getState().pastStates).toHaveLength(0)
+})
+
+test("a slab's surface built by its script refuses paint on its top, which its script owns", () => {
+  const surfaceScript = ZoneFloorScript.parse({
+    kind: 'script',
+    script: 'a'.repeat(64),
+    artifact: 'b'.repeat(64),
+    inputs: 'key',
+    manifest: { bounds: { min: [0, 0, 0], max: [2, 0.02, 2] }, triangles: 2 },
+  })
+  manual = { ...manual, surfaceScript }
+  useScene.setState({ nodes: { ...useScene.getState().nodes, [manual.id]: manual } })
+  useScene.temporal.getState().clear()
+  const before = useScene.getState().nodes
+  expect(
+    slabPaint.commit({ node: manual, role: 'surface', material: undefined, materialPreset: TILE }),
+  ).toMatchObject({ status: 'refused', code: 'floor-built-by-script' })
+  expect(useScene.getState().nodes).toBe(before)
+  expect(useScene.temporal.getState().pastStates).toHaveLength(0)
+  expect(
+    slabPaint.commit({ node: manual, role: 'side', material: undefined, materialPreset: TILE }),
+  ).toBeUndefined()
+  expect((useScene.getState().nodes[manual.id] as SlabNode).slots?.side).toBe(TILE)
 })

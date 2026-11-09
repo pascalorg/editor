@@ -103,34 +103,35 @@ describe('WS5 → F2 wall assembly migration', () => {
     expect(again.nodes).toBe(migrated.nodes)
   })
 
-  test.each(
-    unboundedLegacyStacks,
-  )('preserves valid WS5 values without upper caps: %s', (_, assembly) => {
-    expect(WallAssembly.safeParse(assembly).success).toBe(true)
-    const legacy = {
-      ...WallNode.parse({ id: 'wall_unbounded', start: [0, 0], end: [4, 0] }),
-      assembly,
-      thickness: ws5.assemblyThickness(assembly),
-    }
-    const nodes = { [legacy.id]: legacy }
-    const result = migrateLegacyWallAssemblies(nodes)
-    const wall = WallNode.parse(result.nodes[legacy.id])
-    const stack = wall.assembly!
+  test.each(unboundedLegacyStacks)(
+    'preserves valid WS5 values without upper caps: %s',
+    (_, assembly) => {
+      expect(WallAssembly.safeParse(assembly).success).toBe(true)
+      const legacy = {
+        ...WallNode.parse({ id: 'wall_unbounded', start: [0, 0], end: [4, 0] }),
+        assembly,
+        thickness: ws5.assemblyThickness(assembly),
+      }
+      const nodes = { [legacy.id]: legacy }
+      const result = migrateLegacyWallAssemblies(nodes)
+      const wall = WallNode.parse(result.nodes[legacy.id])
+      const stack = wall.assembly!
 
-    expect(result.changed).toBe(true)
-    expect(nodes[legacy.id]).toBe(legacy)
-    expect(nodes[legacy.id].assembly).toBe(assembly)
-    expect(wall.thickness).toBe(legacy.thickness)
-    expect(assemblyThickness(stack)).toBeCloseTo(legacy.thickness, 12)
-    expect(stack.presetId).toBe(assembly.preset)
-    expect(stack.cavityInsulation).toBe(assembly.cavityInsulation)
-    expect(wallAssemblyToLegacy(stack)).toEqual(assembly)
-    expect(resolveWallAssembly(wall)).toEqual(ws5Resolved(legacy))
-    expect(migrateLegacyWallAssemblies(result.nodes)).toEqual({
-      changed: false,
-      nodes: result.nodes,
-    })
-  })
+      expect(result.changed).toBe(true)
+      expect(nodes[legacy.id]).toBe(legacy)
+      expect(nodes[legacy.id].assembly).toBe(assembly)
+      expect(wall.thickness).toBe(legacy.thickness)
+      expect(assemblyThickness(stack)).toBeCloseTo(legacy.thickness, 12)
+      expect(stack.presetId).toBe(assembly.preset)
+      expect(stack.cavityInsulation).toBe(assembly.cavityInsulation)
+      expect(wallAssemblyToLegacy(stack)).toEqual(assembly)
+      expect(resolveWallAssembly(wall)).toEqual(ws5Resolved(legacy))
+      expect(migrateLegacyWallAssemblies(result.nodes)).toEqual({
+        changed: false,
+        nodes: result.nodes,
+      })
+    },
+  )
 
   test('readers see the same stack: layers, sides, finish and preset note', () => {
     for (const [index, legacy] of legacyWalls.entries()) {

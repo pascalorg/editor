@@ -7,6 +7,7 @@ import {
 } from '@pascal-app/core'
 import { isAngleSnapActive } from '@pascal-app/editor'
 import { rotateAffordanceDelta } from '../shared/rotate-affordance'
+import { rebuildScriptedSize } from '../shared/scripted-opening-handles'
 import { planColumnEdit } from './hosted-resize'
 
 // Floor minimums — mirror the 3D handles in `column/definition.ts` so a
@@ -126,6 +127,10 @@ export const columnResizeAffordance: FloorplanAffordance<ColumnNode> = {
       commit() {
         if (Object.keys(lastPatch).length > 0) {
           useLiveNodeOverrides.getState().clear(columnId)
+          if (node.source) {
+            rebuildScriptedSize(node, lastPatch)
+            return
+          }
           const updates = planColumnEdit(columnId, lastPatch)
           if (updates) useScene.getState().updateNodes(updates.map(([id, data]) => ({ id, data })))
         }

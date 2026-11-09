@@ -50,6 +50,15 @@ describe('wall reference frame', () => {
         legacyFaceMaterials: { a: { materialPreset: 'library:legacy-left' } },
         faceRegions: [{ id: 'r', face: 'a', u0: 1, v1: 0.9, finish: 'library:wainscot' }],
         skirting: { enabled: true, sides: 'a' },
+        finishScripts: {
+          a: {
+            kind: 'script',
+            script: 'a'.repeat(64),
+            artifact: 'b'.repeat(64),
+            inputs: 'key',
+            manifest: { bounds: { min: [0, 0, 0], max: [4, 1, 0.01] }, triangles: 2 },
+          },
+        },
       })
       for (const original of [wall, { ...wall, curveOffset: 0.4 }]) {
         const reversed = { ...original, ...reverseWallDirection(original) }
@@ -68,6 +77,7 @@ describe('wall reference frame', () => {
           { id: 'r', face: 'b', u1: length - 1, v1: 0.9, finish: 'library:wainscot' },
         ])
         expect(reversed.skirting?.sides).toBe('b')
+        expect(reversed.finishScripts).toEqual({ b: original.finishScripts!.a })
         expect(reversed.frontSide).toBe(original.backSide)
         expect(reversed.backSide).toBe(original.frontSide)
         expect('justification' in reversed).toBe('justification' in original)

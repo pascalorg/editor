@@ -31,7 +31,6 @@ import { getStoredLevelHeight } from '../services/storey'
 import { wallOverlapsSlabFootprint } from '../systems/slab/slab-support'
 import { getWallCurveLength } from '../systems/wall/wall-curve'
 import { calculateLevelMiters, getWallPlanFootprint } from '../systems/wall/wall-footprint'
-import { resolveWallTop } from '../systems/wall/wall-top'
 import {
   type FloorPieceAdoption,
   floorPieceFinish,
@@ -1464,7 +1463,9 @@ function runFloorPlateMigration(
             ? getStoredLevelHeight(level)
             : (wall.supportSlabId === 'ground' ? old.elevation : Math.max(0, old.elevation)) +
               wall.height
-        const newTop = resolveWallTop(wall, getStoredLevelHeight(level), next.elevation)
+        // Preserve legacy body heights rather than reclassify them against the storey.
+        const newTop =
+          wall.height === undefined ? getStoredLevelHeight(level) : next.elevation + wall.height
         if (wall.height !== undefined && Math.abs(oldTop - newTop) > 0.001)
           nodes[wall.id] = { ...wall, height: oldTop - next.elevation }
         for (const id of wall.children ?? []) {

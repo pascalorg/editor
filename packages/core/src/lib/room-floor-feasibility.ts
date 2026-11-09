@@ -5,9 +5,9 @@ import {
   MIN_GROUND_FLOOR_THICKNESS,
   MIN_SLAB_THICKNESS,
 } from '../schema/nodes/slab'
-import { getStoredLevelHeight, getWallPlaneTop } from '../services/storey'
+import { getStoredLevelHeight, getWallTop } from '../services/storey'
 import { getWallCurveFrameAt, getWallCurveLength } from '../systems/wall/wall-curve'
-import { MIN_WALL_HEIGHT, resolveWallTop } from '../systems/wall/wall-top'
+import { MIN_WALL_HEIGHT } from '../systems/wall/wall-top'
 import { floorPlateHoldsUnderside, footprintLift } from './floor-foundation-datum'
 import { isFloorAnchoredOpening } from './floor-opening-footprints'
 import { floorRoomFaces } from './floor-room-faces'
@@ -248,11 +248,7 @@ function computeRoomFloor(
     )
     const support =
       hasOpenings || wall.height !== undefined ? wallSupportForNodes(wall, candidate) : undefined
-    const top = resolveWallTop(
-      wall,
-      getWallPlaneTop(wall, level.id, nodes),
-      support?.elevation ?? 0,
-    )
+    const top = getWallTop(wall, level.id, nodes, support?.elevation ?? 0)
     const openingSpans =
       hasOpenings && linked
         ? (roomFace(nodes, zone, floorRoomFaces(boundaries(nodes, zone.parentId!)))?.spans ?? [])

@@ -1,12 +1,18 @@
 /**
- * World-grid snap for tools that consume `grid:move` / `grid:click`.
+ * Grid snap and alignment frames for tools that consume `grid:move` /
+ * `grid:click` inside a building.
  *
- * Tools historically snapped on `event.localPosition` (the cursor in the
- * active building's local frame). After the floor-plan grid was pulled
- * out of the rotated scene group, snapping has to follow the WORLD XZ
- * grid — otherwise a rotated building drags every placement off the
- * visible grid lines. This helper resolves the active building's pose
- * and projects the world snap back into local coords for storage.
+ * A building placed on a lot by the site planner is usually turned (yaw) and
+ * offset. Everything drawn or placed in it — walls, slabs, rooms, furniture,
+ * doors and windows — lives in the building's own frame, and so does the grid
+ * both views draw for it: the floor plan's grid sits inside the rotated scene
+ * group, and the 3D grid is laid on the building (`getActiveGridPose`). The
+ * snaps here follow that lattice, so a wall drawn square to the house stays
+ * square to it and lands on the lattice its neighbours were drawn on. A
+ * world-XZ lattice sits at the building's yaw to the house and off it by the
+ * building's offset, leaving drafted ends a fraction short of the walls they
+ * meet. For an unturned building at the origin the two coincide; outside any
+ * building the world grid is the lattice.
  */
 import {
   type AlignmentAnchor,
@@ -21,6 +27,8 @@ import {
   useScene,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
+import useEditor from '../store/use-editor'
+import { getMovingNode } from '../store/use-interaction-scope'
 
 /**
  * Look up the active building's pose, or null when we're at the site root.
@@ -68,13 +76,26 @@ export function getActiveBuildingPose(): BuildingPose | null {
 }
 
 /**
- * Resolve Figma-style alignment for tools whose anchors are in the active
- * building's local frame, but where alignment must run on the WORLD axes
- * (the frame the user sees the grid in). Wraps `resolveAlignmentInBuildingWorld`
- * with the active building lookup so callers don't repeat the boilerplate.
+ * The frame of the lattice the 3D grid is drawn on: the active building's pose
+ * for everything drawn or placed in it, or null — the world XZ grid — for
+ * site work (the site phase, which terrain sculpting also runs in), while a
+ * building itself is being moved (it moves on the site), and with no building.
+ */
+export function getActiveGridPose(): BuildingPose | null {
+  if (useEditor.getState().phase === 'site') return null
+  if (getMovingNode()?.type === 'building') return null
+  return getActiveBuildingPose()
+}
+
+/**
+ * Resolve Figma-style alignment for 3D tools whose anchors are in the active
+ * building's local frame, on the building's own axes (the axes its grid is
+ * drawn on). Wraps `resolveAlignmentInBuildingWorld` with the active building
+ * lookup so callers don't repeat the boilerplate.
  *
  * Returns:
- *   - `guides` in WORLD coords (renderer must live in a world-space group),
+ *   - `guides` with `from` / `to` in WORLD coords (callers bring them back
+ *     with `projectAlignmentGuidesWorldToActiveBuildingLocal`),
  *   - `snap`   in BUILDING-LOCAL coords (ready to add to a local position).
  */
 export function resolveAlignmentForActiveBuilding(args: {
@@ -82,7 +103,24 @@ export function resolveAlignmentForActiveBuilding(args: {
   candidates: readonly AlignmentAnchor[]
   threshold: number
 }): ResolveAlignmentInBuildingResult {
-  return resolveAlignmentInBuildingWorld({ ...args, pose: getActiveBuildingPose() })
+  // Pose `null` resolves in the anchors' own (building-local) frame.
+  const result = resolveAlignmentInBuildingWorld({ ...args, pose: null })
+  const pose = getActiveBuildingPose()
+  if (!pose) return result
+  return {
+    snap: result.snap,
+    guides: result.guides.map((guide) => {
+      const [fromX, fromZ] = poseLocalXZToWorld(guide.from.x, guide.from.z, pose)
+      const [toX, toZ] = poseLocalXZToWorld(guide.to.x, guide.to.z, pose)
+      return { ...guide, from: { x: fromX, z: fromZ }, to: { x: toX, z: toZ } }
+    }),
+  }
+}
+
+function poseLocalXZToWorld(x: number, z: number, pose: BuildingPose): [number, number] {
+  const cos = Math.cos(pose.rotationY)
+  const sin = Math.sin(pose.rotationY)
+  return [pose.position[0] + x * cos + z * sin, pose.position[2] - x * sin + z * cos]
 }
 
 function worldXZToPoseLocal(x: number, z: number, pose: BuildingPose | null): [number, number] {
@@ -97,9 +135,10 @@ function worldXZToPoseLocal(x: number, z: number, pose: BuildingPose | null): [n
 /**
  * Project WORLD-frame alignment guides into the active building's LOCAL frame.
  *
- * The 3D alignment layer is still mounted inside the building-local tool group,
- * so tools that resolve alignment on the world axes (item placement, slab move)
- * need their guides converted before publishing to `useAlignmentGuides`.
+ * The 3D alignment layer is mounted inside the building-local tool group, so
+ * tools that resolve through `resolveAlignmentForActiveBuilding` (item
+ * placement, slab move) convert its guides before publishing to
+ * `useAlignmentGuides`.
  */
 export function projectAlignmentGuidesWorldToActiveBuildingLocal(
   guides: readonly AlignmentGuide[],
@@ -117,119 +156,77 @@ export function projectAlignmentGuidesWorldToActiveBuildingLocal(
 }
 
 /**
- * Baseline rotation the floor-plan view applies on top of the building
- * rotation. Mirrors `FLOORPLAN_VIEW_ROTATION_DEG = 0` in lib/floorplan/geometry.ts —
- * the scene group reads it via `floorplanSceneRotationDeg = FVR - buildingRot`.
- */
-const FLOORPLAN_VIEW_ROTATION_RAD = 0
-
-function rotateAnchorsBy(
-  anchors: readonly AlignmentAnchor[],
-  cos: number,
-  sin: number,
-): AlignmentAnchor[] {
-  return anchors.map((a) => ({
-    nodeId: a.nodeId,
-    kind: a.kind,
-    x: a.x * cos - a.z * sin,
-    z: a.x * sin + a.z * cos,
-  }))
-}
-
-/**
- * Resolve alignment in the 2D floor-plan view frame — the frame the user
- * sees the (always axis-aligned) grid lines in, regardless of how the
- * building has been rotated. Use this from EVERY 2D floor-plan path so
- * alignment guides stay parallel to the visible grid.
+ * Resolve alignment for the 2D floor plan, on the active building's own axes.
+ * Use this from EVERY 2D floor-plan path so alignment guides stay parallel to
+ * the plan's grid.
  *
- * Why it differs from `resolveAlignmentForActiveBuilding`: the 3D viewport
- * shows the world XZ grid, so world-frame alignment matches the visible
- * grid there. The 2D floor plan, however, rotates the scene `<g>` by
- * `floorplanSceneRotationDeg = FVR − buildingRot` and renders the grid
- * OUTSIDE that rotated group — so the visible axes are
- * `R(FVR − buildingRot) · local`. World-frame alignment would land on
- * world axes, which appear diagonal in this view; view-frame alignment
- * lands on the SVG axes the user actually reads.
+ * The floor plan rotates its scene `<g>` by the building's yaw (and the user's
+ * view rotation) and draws both its grid and the alignment-guide layer inside
+ * that group, in building-local metres. So the axes the user reads are the
+ * building's local axes, and guides must come back in local coords: resolving
+ * on world axes would align a turned building's corners on a diagonal to its
+ * walls and draw each guide away from the anchors it matched.
  *
- * Returns guides in view-frame coords (correct input for the floor-plan
- * alignment-guide layer, which is mounted outside the rotated scene
- * group) and a snap delta projected back into building-local (so callers
- * can add it to a local position as-is).
+ * Returns guides and the snap delta in building-local coords (add the delta
+ * to a local position as-is).
  */
 export function resolveAlignmentForFloorplanView(args: {
   moving: readonly AlignmentAnchor[]
   candidates: readonly AlignmentAnchor[]
   threshold: number
 }): ResolveAlignmentInBuildingResult {
-  const pose = getActiveBuildingPose()
-  const buildingRotY = pose?.rotationY ?? 0
-  const rot = FLOORPLAN_VIEW_ROTATION_RAD - buildingRotY
-  const cos = Math.cos(rot)
-  const sin = Math.sin(rot)
-  const result = resolveAlignmentInBuildingWorld({
-    moving: rotateAnchorsBy(args.moving, cos, sin),
-    candidates: rotateAnchorsBy(args.candidates, cos, sin),
-    threshold: args.threshold,
-    // Pose `null` keeps `resolveAlignmentInBuildingWorld` in its no-op
-    // path: it just runs `resolveAlignment` on the already-rotated
-    // anchors and returns the snap delta in the same view frame.
-    pose: null,
-  })
-  if (!result.snap) return result
-  // View-frame delta → local-frame delta (transpose of R(rot)).
-  const { dx, dz } = result.snap
-  return {
-    guides: result.guides,
-    snap: { dx: dx * cos + dz * sin, dz: -dx * sin + dz * cos },
-  }
+  // Pose `null` resolves in the anchors' own (building-local) frame.
+  return resolveAlignmentInBuildingWorld({ ...args, pose: null })
 }
 
 /**
- * Snap a world XZ position to the grid, then express it in the active
- * building's local frame. When no building is active, world == local.
+ * Snap a world XZ position onto the active building's grid lattice (see
+ * `snapBuildingLocalToWorldGrid`) and return the snapped point in both
+ * frames. With no active building, world == local and the world grid is the
+ * lattice.
  */
 export function snapWorldXZForActiveBuilding(
   worldX: number,
   worldZ: number,
   step: number,
 ): { world: [number, number]; local: [number, number] } {
-  const buildingId = useViewer.getState().selection.buildingId
-  const building = buildingId ? useScene.getState().nodes[buildingId] : null
-  if (building?.type !== 'building') {
-    if (step <= 0) return { world: [worldX, worldZ], local: [worldX, worldZ] }
-    const sx = Math.round(worldX / step) * step
-    const sz = Math.round(worldZ / step) * step
-    return { world: [sx, sz], local: [sx, sz] }
+  const pose = getActiveBuildingPose()
+  if (!pose) {
+    const [x, z] = snapBuildingLocalToWorldGrid([worldX, worldZ], step)
+    return { world: [x, z], local: [x, z] }
   }
-  return snapWorldXZToBuildingLocal(
-    worldX,
-    worldZ,
-    building.position,
-    building.rotation[1] ?? 0,
-    step,
-  )
+  const { local } = snapWorldXZToBuildingLocal(worldX, worldZ, pose.position, pose.rotationY, 0)
+  const [x, z] = snapBuildingLocalToWorldGrid(local, step)
+  return { world: poseLocalXZToWorld(x, z, pose), local: [x, z] }
 }
 
 /**
- * Snap a building-local plan point so the resulting position sits on the
- * world XZ grid. The returned point is still in building-local coords —
- * useful as a `gridSnap` callback for snapWallDraftPoint / snapFenceDraftPoint
- * etc., which operate entirely in the local frame.
+ * Snap a plan point in the 3D tools' frame (a grid event's `localPosition`)
+ * onto the lattice the grid is drawn on, one axis at a time with the caller's
+ * per-axis snap (an item snaps its edges by its own size). Inside a building
+ * the point is building-local and the lattice runs along the building's axes;
+ * outside any building it is the world point and the world grid is the
+ * lattice — so no pose is needed either way.
+ */
+export function snapPlanPointToActiveGrid(
+  point: readonly [number, number],
+  snap: (value: number, axis: 0 | 1) => number,
+): [number, number] {
+  return [snap(point[0], 0), snap(point[1], 1)]
+}
+
+/**
+ * Snap a building-local plan point onto the building's own grid lattice:
+ * multiples of `step` along its local axes from its origin, the lattice both
+ * views draw and the wall tool drafts on. Coordinates in and out are
+ * building-local, so it suits a `gridSnap` callback for snapWallDraftPoint /
+ * snapFenceDraftPoint etc. (The name predates the building frame: it used to
+ * snap onto the world XZ grid, at a turned building's yaw to the house.)
  */
 export function snapBuildingLocalToWorldGrid(
   local: readonly [number, number],
   step: number,
 ): [number, number] {
-  const buildingId = useViewer.getState().selection.buildingId
-  const building = buildingId ? useScene.getState().nodes[buildingId] : null
-  if (building?.type !== 'building') {
-    if (step <= 0) return [local[0], local[1]]
-    return [Math.round(local[0] / step) * step, Math.round(local[1] / step) * step]
-  }
-  const rotY = building.rotation[1] ?? 0
-  const cos = Math.cos(rotY)
-  const sin = Math.sin(rotY)
-  const worldX = building.position[0] + local[0] * cos + local[1] * sin
-  const worldZ = building.position[2] - local[0] * sin + local[1] * cos
-  return snapWorldXZToBuildingLocal(worldX, worldZ, building.position, rotY, step).local
+  if (step <= 0) return [local[0], local[1]]
+  return snapPlanPointToActiveGrid(local, (value) => Math.round(value / step) * step)
 }

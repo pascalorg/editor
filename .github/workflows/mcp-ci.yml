@@ -33,6 +33,10 @@ jobs:
         with:
           bun-version-file: package.json
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.23.4'
+
       - name: Install
         run: bun install --frozen-lockfile
 

@@ -2,7 +2,7 @@ import type { AnyNode, AnyNodeId, SeparatorNode, WallNode } from '../schema'
 import { CeilingNode } from '../schema/nodes/ceiling'
 import { SlabNode } from '../schema/nodes/slab'
 import type { SurfacePaintRegion } from '../schema/nodes/surface-paint-region'
-import { ZoneNode } from '../schema/nodes/zone'
+import type { ZoneNode } from '../schema/nodes/zone'
 import {
   CEILING_CLAMP_MARGIN,
   getCeilingClampBound,
@@ -18,6 +18,8 @@ import { floorPlateId } from './floor-plate-id'
 import { buildFloorPlates, warnPlateFailure } from './floor-plates'
 import { floorRoomFaces } from './floor-room-faces'
 import { type FloorStepOverride, remapFloorStepOverrideKeys } from './floor-step-finish'
+import { newZone } from './new-zone'
+import { isOutdoorRoom, nextOutdoorRoomName, OUTDOOR_ROOM_DEFAULTS } from './outdoor-room'
 import { replacementPlateFor } from './plate-reference'
 import {
   area,
@@ -29,6 +31,8 @@ import {
   union,
 } from './polygon-boolean'
 import { polygonInteriorPoint } from './polygon-label'
+import { reconcilePorchFraming } from './porch-framing-sync'
+import { railingFencedRoomIds, railingWallIds } from './railing-rooms'
 import { pointFromTuple } from './room-graph'
 import { roomNameAllocator } from './room-name'
 import type { BoundarySpan } from './room-topology-index'
@@ -112,15 +116,127 @@ function equal(a: unknown, b: unknown) {
   return JSON.stringify(a) === JSON.stringify(b)
 }
 
+/** Span overlap below this (a fraction of the boundary) is a shared endpoint, not a shared edge. */
+const SPAN_OVERLAP = 1e-6
+
+/**
+ * The rooms closed off outside the house, and what they are by default: open to the outside across
+ * invisible walls or railings nothing stands behind, along at least as much of their edge as walls
+ * close (a porch on the front, or in a corner of the house). Closed with invisible walls, a porch;
+ * fenced with railings alone, a deck. A room walled on three sides and open on the fourth (a
+ * kitchen open to a terrace, a recessed porch) is not one of them. `lengthOf` is a wall's or a
+ * separator's length; `railingIds` the railing walls.
+ */
+export function outsideRoomTypes(
+  rooms: readonly { spans: readonly BoundarySpan[] }[],
+  lengthOf: (boundaryId: string) => number,
+  railingIds: ReadonlySet<string> = new Set(),
+): Map<string, 'porch' | 'deck'> {
+  const railing = (span: BoundarySpan) => span.kind === 'wall' && railingIds.has(span.boundaryId)
+  const { exposed } = openLineExposure(rooms, (span) => span.kind === 'separator' || railing(span))
+  const spanLength = (span: BoundarySpan) => (span.t1 - span.t0) * lengthOf(span.boundaryId)
+  const types = new Map<string, 'porch' | 'deck'>()
+  for (const room of rooms) {
+    let open = 0
+    let walled = 0
+    let invisible = false
+    for (const span of room.spans) {
+      if (span.kind === 'wall' && !railing(span)) walled += spanLength(span)
+      else if (exposed(span)) {
+        open += spanLength(span)
+        invisible ||= span.kind === 'separator'
+      }
+    }
+    if (room.spans[0] && open > 0 && open >= walled - 1e-6)
+      types.set(room.spans[0].roomId, invisible ? 'porch' : 'deck')
+  }
+  return types
+}
+
+/** Each separator span's spans across it, and whether any stretch of it has none. */
+function separatorExposure(rooms: readonly { spans: readonly BoundarySpan[] }[]) {
+  return openLineExposure(rooms, (span) => span.kind === 'separator')
+}
+
+/** Each open line's span (`isOpen`): the spans across it, and whether any stretch of it has none. */
+function openLineExposure(
+  rooms: readonly { spans: readonly BoundarySpan[] }[],
+  isOpen: (span: BoundarySpan) => boolean,
+) {
+  const separatorSpans = rooms.flatMap((room) => room.spans.filter(isOpen))
+  const across = (span: BoundarySpan) =>
+    separatorSpans
+      .filter(
+        (other) =>
+          other.boundaryId === span.boundaryId &&
+          other.face !== span.face &&
+          Math.min(span.t1, other.t1) - Math.max(span.t0, other.t0) > SPAN_OVERLAP,
+      )
+      .sort((a, b) => a.t0 - b.t0)
+  const exposed = (span: BoundarySpan) => {
+    let reach = span.t0
+    for (const other of across(span)) {
+      if (other.t0 > reach + SPAN_OVERLAP) return true
+      reach = Math.max(reach, other.t1)
+    }
+    return reach < span.t1 - SPAN_OVERLAP
+  }
+  return { across, exposed }
+}
+
+/**
+ * The rooms that are outside: a porch, deck or patio (`roomType`, outdoors whatever covers it), and
+ * a room without a ceiling left without crossing a wall, through a separator no room stands behind
+ * or into another such room. A porch made a room for its floor left its wall with no outside: the
+ * front door faced the hall. A room that only lost its ceiling is walled in and a kitchen open to a
+ * terrace keeps its ceiling, so both stay inside; so does a courtyard walled on every side, a limit
+ * of this rule.
+ */
+export function outdoorRoomIds(
+  rooms: readonly { spans: readonly BoundarySpan[]; hasCeiling: boolean; outdoor?: boolean }[],
+): Set<string> {
+  const { across, exposed } = separatorExposure(rooms)
+  const open = new Map(
+    rooms.flatMap((room) =>
+      (!room.hasCeiling || room.outdoor) && room.spans[0]
+        ? [[room.spans[0].roomId, room.spans] as const]
+        : [],
+    ),
+  )
+  const declared = new Set(
+    rooms.flatMap((room) => (room.outdoor && room.spans[0] ? [room.spans[0].roomId] : [])),
+  )
+  const queue = [...open].flatMap(([id, spans]) =>
+    declared.has(id) || spans.some((span) => span.kind === 'separator' && exposed(span))
+      ? [id]
+      : [],
+  )
+  const outdoor = new Set(queue)
+  for (let id = queue.pop(); id !== undefined; id = queue.pop())
+    for (const span of open.get(id)!)
+      if (span.kind === 'separator')
+        for (const other of across(span))
+          if (open.has(other.roomId) && !outdoor.has(other.roomId)) {
+            outdoor.add(other.roomId)
+            queue.push(other.roomId)
+          }
+  return outdoor
+}
+
+/** A wall face is inside when an indoor room stands on it; an outdoor room's face is outside. */
 export function classifyWallSides(
   wall: WallNode,
   spans: readonly BoundarySpan[],
+  outdoor: ReadonlySet<string> = new Set(),
 ): Pick<WallNode, 'frontSide' | 'backSide'> {
+  if (wall.metadata?.roomBoundary === false) return { frontSide: 'unknown', backSide: 'unknown' }
   const boundary = spans.filter((span) => span.boundaryId === wall.id)
   if (!boundary.length) return { frontSide: wall.frontSide, backSide: wall.backSide }
+  const indoor = (face: BoundarySpan['face']) =>
+    boundary.some((span) => span.face === face && !outdoor.has(span.roomId))
   return {
-    frontSide: boundary.some((span) => span.face === 'a') ? 'interior' : 'exterior',
-    backSide: boundary.some((span) => span.face === 'b') ? 'interior' : 'exterior',
+    frontSide: indoor('a') ? 'interior' : 'exterior',
+    backSide: indoor('b') ? 'interior' : 'exterior',
   }
 }
 
@@ -148,13 +264,14 @@ export function reconcileLevelStructure(
 function planLevelStructure({
   levelId,
   nodes,
+  previousNodes,
   mintId,
   openingIndex,
 }: {
   levelId: string
   nodes: SceneNodes
   previousNodes?: SceneNodes
-  mintId: (kind: 'zone' | 'ceiling' | 'slab' | 'separator') => string
+  mintId: (kind: 'zone' | 'ceiling' | 'slab' | 'separator' | 'column' | 'beam') => string
   openingIndex?: FloorOpeningIndex
 }): { patches: NodePatch[]; snapshot: LevelStructureSnapshot; events: StructureEvent[] } {
   const snapshot: LevelStructureSnapshot = { levelId, rooms: [] }
@@ -250,6 +367,20 @@ function planLevelStructure({
   const zoneByFace = new Map<number, ZoneNode>()
   const retiredTo = new Map<string, string>()
   const nextRoomName = roomNameAllocator(allZones)
+  // A new room closed off outside the house is a porch, or a deck when railings fence it
+  // (`lib/outdoor-room`).
+  const boundaryLengths = new Map(
+    [...walls, ...separators].map((boundary) => [
+      boundary.id as string,
+      Math.hypot(boundary.end[0] - boundary.start[0], boundary.end[1] - boundary.start[1]),
+    ]),
+  )
+  const outsideTypes = outsideRoomTypes(
+    faces,
+    (id) => boundaryLengths.get(id) ?? 0,
+    railingWallIds(walls),
+  )
+  const roomNames = allZones.map((zone) => zone.name)
   faces.forEach((face, index) => {
     const rooms = zones
       .filter((zone) => preferred.get(zone.id) === index && !adoptionFits.has(zone.id))
@@ -274,21 +405,38 @@ function planLevelStructure({
           (a, b) => scores.get(b.id)![index]! - scores.get(a.id)![index]! || compareIds(a.id, b.id),
         )[0]
     if (source) sourceByFace.set(index, source)
+    const outside =
+      !survivor && !source && face.spans[0] ? outsideTypes.get(face.spans[0].roomId) : undefined
     const zone =
       survivor ??
-      ZoneNode.parse({
-        id: mintId('zone'),
-        parentId: levelId,
-        name: nextRoomName(),
-        polygon: face.polygon.outer,
-        floor: source?.floor,
-        wallMaterial: source?.wallMaterial,
-        floorStepFinish: source?.floorStepFinish,
-        floorStepOverrides: source?.floorStepOverrides,
-        floorEdgeFinish: source?.floorEdgeFinish,
-        hasFloor: source?.hasFloor,
-        hasCeiling: source?.hasCeiling,
-      })
+      (outside
+        ? newZone({
+            id: mintId('zone'),
+            parentId: levelId,
+            name: nextOutdoorRoomName(outside, roomNames),
+            polygon: face.polygon.outer,
+            roomType: outside,
+            floor: {
+              drop: OUTDOOR_ROOM_DEFAULTS[outside].drop,
+              finish: OUTDOOR_ROOM_DEFAULTS[outside].finish,
+            },
+            ...(OUTDOOR_ROOM_DEFAULTS[outside].covered ? {} : { hasCeiling: false }),
+          })
+        : newZone({
+            id: mintId('zone'),
+            parentId: levelId,
+            name: nextRoomName(),
+            polygon: face.polygon.outer,
+            floor: source?.floor,
+            wallMaterial: source?.wallMaterial,
+            floorStepFinish: source?.floorStepFinish,
+            floorStepOverrides: source?.floorStepOverrides,
+            floorEdgeFinish: source?.floorEdgeFinish,
+            hasFloor: source?.hasFloor,
+            hasCeiling: source?.hasCeiling,
+            roomType: source?.roomType,
+          }))
+    if (outside) roomNames.push(zone.name)
     const seed =
       zone.seed && containsPoint([face.polygon], zone.seed)
         ? zone.seed
@@ -537,6 +685,7 @@ function planLevelStructure({
         material: template?.material,
         materialPreset: template?.materialPreset,
         slots: template?.slots,
+        buildUp: template?.buildUp,
         visible: template?.visible,
       })
     const updated: CeilingNode = {
@@ -708,9 +857,41 @@ function planLevelStructure({
   }
   for (const components of ceilingComponentsByFace.values())
     for (const ceiling of components) ceiling.children = [...new Set(ceiling.children)].sort()
+  // A covered porch's posts and beam (`lib/porch-framing-sync`).
+  const porchFraming = reconcilePorchFraming({
+    levelId,
+    nodes,
+    previousNodes,
+    zones: [
+      ...new Map(
+        [...allZones, ...next.values()].flatMap((zone) =>
+          zone.type === 'zone' && !deleted.has(zone.id)
+            ? [[zone.id, (next.get(zone.id) ?? zone) as ZoneNode] as const]
+            : [],
+        ),
+      ).values(),
+    ],
+    plates: floorPlan.plates,
+    current: (id) => next.get(id) ?? nodes[id],
+    mintId,
+  })
+  for (const node of porchFraming.put) put(node)
+  for (const id of porchFraming.delete) deleted.add(id)
   const spans = snapshot.rooms.flatMap((room) => room.spans)
+  const outdoor = outdoorRoomIds(
+    [...zoneByFace].map(([index, zone]) => {
+      const current = (next.get(zone.id) ?? zone) as ZoneNode
+      return {
+        spans: faces[index]!.spans,
+        hasCeiling: current.hasCeiling !== false,
+        outdoor: isOutdoorRoom(current),
+      }
+    }),
+  )
+  // A room a railing fences off from the outside (a deck's guard) is outside too.
+  for (const id of railingFencedRoomIds(spans, railingWallIds(walls))) outdoor.add(id)
   for (const wall of walls)
-    put({ ...wall, ...next.get(wall.id), ...classifyWallSides(wall, spans) } as WallNode)
+    put({ ...wall, ...next.get(wall.id), ...classifyWallSides(wall, spans, outdoor) } as WallNode)
   for (const ceiling of allCeilings) {
     if (deleted.has(ceiling.id)) continue
     const updated = (next.get(ceiling.id) ?? ceiling) as CeilingNode
@@ -825,7 +1006,14 @@ export function createLevelStructurePreview(levelId: string, nodes: SceneNodes) 
       .filter((node): node is WallNode => node.type === 'wall' && node.parentId === levelId)
       .map((node) => node.id),
   )
-  return (walls: readonly WallNode[]) => {
+  let separatorIds = new Set<string>(
+    Object.values(draft)
+      .filter((node) => node.type === 'separator' && node.parentId === levelId)
+      .map((node) => node.id),
+  )
+  // `separators`, when given, are the level's invisible walls as the gesture
+  // leaves them (an invisible-wall push); left out, the stored ones stand.
+  return (walls: readonly WallNode[], separators?: readonly SeparatorNode[]) => {
     const currentIds = new Set<WallNode['id']>()
     for (const wall of walls) {
       if (wall.parentId !== levelId) continue
@@ -835,6 +1023,16 @@ export function createLevelStructurePreview(levelId: string, nodes: SceneNodes) 
     // A level wall left out is one the gesture removes.
     for (const id of wallIds) if (!currentIds.has(id)) delete draft[id]
     wallIds = currentIds
+    if (separators) {
+      const current = new Set<string>()
+      for (const separator of separators) {
+        if (separator.parentId !== levelId) continue
+        current.add(separator.id)
+        if (draft[separator.id] !== separator) draft[separator.id] = separator
+      }
+      for (const id of separatorIds) if (!current.has(id)) delete draft[id]
+      separatorIds = current
+    }
     let id = 0
     // The stored surfaces are the committed reconciliation; only what the
     // moved walls reshape differs from them.

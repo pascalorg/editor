@@ -2,6 +2,8 @@ import {
   SHELF_BOARD_INSET as BOARD_INSET,
   type GeometryContext,
   getMaterialPresetByRef,
+  SHELF_SLOT_DEFAULT_COLOR,
+  type ShelfSlotId,
   shelfBoardDimensions,
 } from '@pascal-app/core'
 import {
@@ -14,7 +16,6 @@ import {
 import { BoxGeometry, Group, type Material, Mesh } from 'three'
 import { sanitizeShelfDimensions } from './dimensions'
 import type { ShelfNode } from './schema'
-import { SHELF_SLOT_DEFAULT_COLOR, type ShelfSlotId } from './slots'
 
 /**
  * Pure shelf geometry builder. Takes a `ShelfNode` and returns a `Group`

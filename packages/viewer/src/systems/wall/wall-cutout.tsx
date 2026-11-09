@@ -49,6 +49,52 @@ export function getWallHideState(
   return wallHiddenFromFacing(wallNode, wallMode, v.dot(cameraDir) < 0)
 }
 
+/**
+ * The walls as a capture draws them, until the returned function puts them back: a delete or a
+ * selection highlight taken off and, with `wholeWalls`, every wall whole whatever the wall mode.
+ * The palettes come from the renderer's own resolver, so a curtain wall keeps its glass.
+ */
+export function wallsForCapture(
+  materialResolver: WallMaterialsResolver,
+  viewerStore: WallCutoutViewerStore,
+  wholeWalls: boolean,
+): () => void {
+  const snapshot = new Map<Mesh, Material | Material[]>()
+  const viewer = viewerStore.getState()
+  sceneRegistry.byType.wall!.forEach((wallId) => {
+    const wallMesh = sceneRegistry.nodes.get(wallId) as Mesh | undefined
+    if (!wallMesh) return
+    const wallNode = useScene.getState().nodes[wallId as AnyNodeId] as WallNode | undefined
+    if (wallNode?.type !== 'wall') return
+    const mats = materialResolver(
+      wallNode,
+      viewer.shading,
+      viewer.textures,
+      viewer.colorPreset,
+      viewer.sceneTheme,
+      useScene.getState().materials,
+      getWallFinishRefs(wallMesh.geometry),
+    )
+    const current = wallMesh.material as Material | Material[]
+    snapshot.set(wallMesh, current)
+    if (wholeWalls || current === mats.deleteVisible) {
+      wallMesh.material = mats.visible
+    } else if (current === mats.deleteInvisible) {
+      wallMesh.material = mats.invisible
+    } else if (
+      current === mats.deleteTranslucent ||
+      sameMaterialArray(current, getSelectionHighlightMaterials(mats.translucent))
+    ) {
+      wallMesh.material = mats.translucent
+    }
+  })
+  return () => {
+    snapshot.forEach((material, mesh) => {
+      mesh.material = material
+    })
+  }
+}
+
 export const WallCutout = ({
   viewerStore = useViewer,
   materialResolver = getMaterialsForWall,
@@ -70,43 +116,13 @@ export const WallCutout = ({
   useFrame((state) => runWallCutoutFrame(cache, state), WALL_CUTOUT_FRAME_PRIORITY)
 
   useEffect(() => {
-    const snapshot = new Map<Mesh, Material | Material[]>()
-
-    const restoreForCapture = () => {
-      sceneRegistry.byType.wall!.forEach((wallId) => {
-        const wallMesh = sceneRegistry.nodes.get(wallId) as Mesh | undefined
-        if (!wallMesh) return
-        const wallNode = useScene.getState().nodes[wallId as AnyNodeId] as WallNode | undefined
-        if (wallNode?.type !== 'wall') return
-        const mats = materialResolver(
-          wallNode,
-          viewerStore.getState().shading,
-          viewerStore.getState().textures,
-          viewerStore.getState().colorPreset,
-          viewerStore.getState().sceneTheme,
-          useScene.getState().materials,
-          getWallFinishRefs(wallMesh.geometry),
-        )
-        const current = wallMesh.material as Material | Material[]
-        snapshot.set(wallMesh, current)
-        if (current === mats.deleteVisible) {
-          wallMesh.material = mats.visible
-        } else if (current === mats.deleteInvisible) {
-          wallMesh.material = mats.invisible
-        } else if (
-          current === mats.deleteTranslucent ||
-          sameMaterialArray(current, getSelectionHighlightMaterials(mats.translucent))
-        ) {
-          wallMesh.material = mats.translucent
-        }
-      })
+    let restore: (() => void) | null = null
+    const restoreForCapture = (event?: { wholeWalls?: boolean }) => {
+      restore = wallsForCapture(materialResolver, viewerStore, event?.wholeWalls === true)
     }
-
     const reapplyAfterCapture = () => {
-      snapshot.forEach((mat, mesh) => {
-        mesh.material = mat
-      })
-      snapshot.clear()
+      restore?.()
+      restore = null
     }
 
     emitter.on('thumbnail:before-capture', restoreForCapture)

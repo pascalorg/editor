@@ -7,6 +7,7 @@ import {
 } from '../schema'
 import { generateId } from '../schema/base'
 import { findLevelAboveId, getLevelBelow, getLevelElevations } from '../services/storey'
+import { isSettlingDocument } from '../store/document-settling'
 import {
   activeSceneCommitNodeIds,
   getSceneHistoryPauseDepth,
@@ -16,9 +17,16 @@ import {
   resumeSceneHistory,
   subscribeSceneCommits,
 } from '../store/history-control'
+import {
+  currentSceneEnvironment,
+  type SceneEnvironment,
+  sceneEnvironmentOf,
+} from '../store/scene-environment'
 import { getClampedWallCurveOffset } from '../systems/wall/wall-curve'
 import { changedLevelConstructionDisplacements } from './floor-foundation-stack'
 import { createFloorOpeningIndex, floorOpeningTargets } from './floor-opening-intent'
+import { porchPartOf, porchPartSignature } from './porch-framing-sync'
+import { railingFencedRoomIds, railingWallIds } from './railing-rooms'
 import {
   type ExtractedRoom,
   extractRooms,
@@ -89,7 +97,12 @@ function wallGeometrySignature(wall: WallNode, nodes: Record<string, any>, level
     // Plane-bound (no stored height) is a distinct state, not a default
     // value: it resolves to the storey plane, so it must not alias an
     // explicit height of the same magnitude in the trigger signature.
-    wall.height == null ? 'plane' : wall.height.toFixed(4),
+    // A legacy height that is not a number still signs, rather than throwing.
+    wall.height == null
+      ? 'plane'
+      : typeof wall.height === 'number'
+        ? wall.height.toFixed(4)
+        : String(wall.height),
     wall.supportSlabId ?? 'elected',
     (wall.supportOffset ?? 0).toFixed(4),
     getClampedWallCurveOffset(wall).toFixed(4),
@@ -134,6 +147,9 @@ function zoneGeometrySignature(zone: ZoneNodeType) {
     zone.wallMaterial,
     zone.wallOverrides,
     zone.seed,
+    // A porch's type and framing settings rebuild its posts and beam.
+    zone.roomType,
+    zone.porchFraming,
     // A drawn zone's outline is intent (it may be adopted); a room's outline is
     // derived, and an edit to it must be re-derived here as the hosted path does.
     // The kernel's own write is not a change: the baseline is taken after it.
@@ -153,11 +169,19 @@ function levelStructureSnapshots(nodes: Record<string, any>) {
   const zonesByLevel = new Map<string, ZoneNodeType[]>()
   const slabElevationsByLevel = new Map<string, string[]>()
   const coveringUndersidesByLevel = new Map<string, string[]>()
+  const porchPartsByLevel = new Map<string, string[]>()
   const floorOpenings: Extract<AnyNode, { type: 'floor-opening' }>[] = []
 
   for (const node of Object.values(nodes)) {
     if (!(node && typeof node === 'object' && 'parentId' in node && node.parentId)) continue
     const levelId = (node as any).parentId as string
+    // A porch's own post or beam moved, resized or deleted by hand hands its framing over.
+    const porchPart = porchPartSignature(node)
+    if (porchPart) {
+      const parts = porchPartsByLevel.get(levelId) ?? []
+      parts.push(porchPart)
+      porchPartsByLevel.set(levelId, parts)
+    }
     if (node.type === 'stair' && nodes[node.deckSlabId]?.support === 'open') {
       const target = nodes[node.deckSlabId].parentId
       const arrivals = arrivalsByLevel.get(target) ?? []
@@ -260,6 +284,7 @@ function levelStructureSnapshots(nodes: Record<string, any>) {
     ...zonesByLevel.keys(),
     ...separatorsByLevel.keys(),
     ...openingsByLevel.keys(),
+    ...porchPartsByLevel.keys(),
   ])
   for (const levelId of levelIds) {
     const walls = wallsByLevel.get(levelId) ?? []
@@ -273,7 +298,7 @@ function levelStructureSnapshots(nodes: Record<string, any>) {
       : ''
     snapshots.set(
       levelId,
-      `${(arrivalsByLevel.get(levelId) ?? []).sort().join('|')}#${(separatorsByLevel.get(levelId) ?? []).sort().join('|')}#${storeyKey}#${levelWallSnapshot(walls, nodes, levelId)}##${zones.map(zoneGeometrySignature).sort().join('||')}##${slabKey}##${aboveSlabKey}##${(ceilingIdsByLevel.get(levelId) ?? []).sort().join('|')}##${(openingsByLevel.get(levelId) ?? []).sort().join('|')}`,
+      `${(arrivalsByLevel.get(levelId) ?? []).sort().join('|')}#${(separatorsByLevel.get(levelId) ?? []).sort().join('|')}#${storeyKey}#${levelWallSnapshot(walls, nodes, levelId)}##${zones.map(zoneGeometrySignature).sort().join('||')}##${slabKey}##${aboveSlabKey}##${(ceilingIdsByLevel.get(levelId) ?? []).sort().join('|')}##${(openingsByLevel.get(levelId) ?? []).sort().join('|')}##${(porchPartsByLevel.get(levelId) ?? []).sort().join('|')}`,
     )
   }
 
@@ -407,13 +432,18 @@ function fallbackLevelIdsForCandidates(
       } else if (node.type === 'door' || node.type === 'window') {
         const wall = nodes[node.parentId]
         if (wall?.parentId) levelIds.add(wall.parentId)
+      } else if (porchPartOf(node)) {
+        // A porch's own post or beam edited by hand: the kernel hands its framing over.
+        if (porchPartSignature(before[id]) !== porchPartSignature(current[id]) && node.parentId)
+          levelIds.add(node.parentId)
       } else if (node.type === 'slab') {
         const old = before[id],
           next = current[id]
         const changed =
           !old ||
           !next ||
-          ['thickness', 'floorHeight', 'polygon', 'holes', 'elevation'].some(
+          // Everything the covering underside below reads, as well as this level's own floor.
+          ['thickness', 'floorHeight', 'polygon', 'holes', 'elevation', 'recessed'].some(
             (field) =>
               JSON.stringify((old as unknown as Record<string, unknown>)[field]) !==
               JSON.stringify((next as unknown as Record<string, unknown>)[field]),
@@ -447,12 +477,12 @@ function detectSpacesFromWalls(levelId: string, boundaries: BoundaryNode[]) {
   const rooms = extractRooms(boundaries)
   const walls = boundaries.filter((boundary): boundary is WallNode => boundary.type === 'wall')
   const roomPolygons = rooms.map((room) => room.polygon)
+  const spans = rooms.flatMap((room) => room.spans)
+  // A room a railing fences off from the outside (a deck's guard) is outside.
+  const fenced = railingFencedRoomIds(spans, railingWallIds(walls))
   const wallUpdates: WallSideUpdate[] = walls.map((wall) => ({
     wallId: wall.id,
-    ...classifyWallSides(
-      wall,
-      rooms.flatMap((room) => room.spans),
-    ),
+    ...classifyWallSides(wall, spans, fenced),
   }))
 
   return {
@@ -465,6 +495,48 @@ function detectSpacesFromWalls(levelId: string, boundaries: BoundaryNode[]) {
 
 export function detectSpacesForLevel(levelId: string, walls: BoundaryNode[]) {
   return detectSpacesFromWalls(levelId, walls)
+}
+
+/**
+ * Levels whose structure intent differs between two versions of a scene: what a paused batch's
+ * resume (and a detached scene's reconciliation) re-derives.
+ */
+export function changedStructureLevelIds(before: SceneNodes, after: SceneNodes): string[] {
+  const previous = levelStructureSnapshots(before)
+  const current = levelStructureSnapshots(after)
+  return [...new Set([...previous.keys(), ...current.keys()])].filter(
+    (id) => previous.get(id) !== current.get(id),
+  )
+}
+
+/**
+ * Levels whose structure an edit from `before` to `after` asks to re-derive, chosen as space
+ * detection chooses them for a store commit: from the nodes the edit changed (walls by level, and
+ * the fallbacks for levels, stairs, openings, slabs, ceilings, zones and separators), without
+ * signing every level of the scene.
+ */
+export function structureLevelsForChange(before: SceneNodes, after: SceneNodes): string[] {
+  const candidateIds = new Set<AnyNodeId>()
+  for (const id in after)
+    if (after[id] !== before[id] && !onlyChildrenChanged(before[id], after[id]))
+      candidateIds.add(id as AnyNodeId)
+  for (const id in before) if (!(id in after)) candidateIds.add(id as AnyNodeId)
+  if (!candidateIds.size) return []
+  const levels = fallbackLevelIdsForCandidates(before, after, candidateIds)
+  for (const levelId of changedWallIdsByLevel(before, after, candidateIds).keys())
+    levels.add(levelId)
+  return [...levels]
+}
+
+/**
+ * A parent whose child list alone changed: the children created or deleted are candidates of
+ * their own, so the parent adds nothing (an item placed on a level re-derives no structure).
+ */
+function onlyChildrenChanged(before: SceneNodes[string], after: SceneNodes[string]): boolean {
+  if (!(before && after)) return false
+  for (const key of new Set([...Object.keys(before), ...Object.keys(after)]))
+    if (key !== 'children' && before[key] !== after[key]) return false
+  return true
 }
 
 function syncSceneStructure(
@@ -492,24 +564,31 @@ function publishSpaces(levelIds: string[], nodes: SceneNodes, editorStore: any) 
 
 // Batch writers pause intermediate topology; the final resume reconciles every
 // level whose intent changed, including batches completed outside a store commit.
-let spaceDetectionPauseDepth = 0
-const resumeListeners = new Set<() => void>()
+// Per scene environment: a detached scene's batch never pauses (or resumes) the editor's.
+type SpaceDetectionPause = { depth: number; resumeListeners: Set<() => void> }
+const SPACE_DETECTION_PAUSE = Symbol('space-detection-pause')
+const pauseOf = (environment: SceneEnvironment = currentSceneEnvironment()) =>
+  environment.slot<SpaceDetectionPause>(SPACE_DETECTION_PAUSE, () => ({
+    depth: 0,
+    resumeListeners: new Set(),
+  }))
 
 /** Pause structure reconciliation. Refcounted — pair with `resumeSpaceDetection`. */
 export function pauseSpaceDetection(): void {
-  spaceDetectionPauseDepth += 1
+  pauseOf().depth += 1
 }
 
 /** Resume structure reconciliation. No-op if not currently paused. */
 export function resumeSpaceDetection(): void {
-  if (spaceDetectionPauseDepth === 0) return
-  spaceDetectionPauseDepth -= 1
-  if (spaceDetectionPauseDepth === 0) for (const reconcile of resumeListeners) reconcile()
+  const pause = pauseOf()
+  if (pause.depth === 0) return
+  pause.depth -= 1
+  if (pause.depth === 0) for (const reconcile of pause.resumeListeners) reconcile()
 }
 
 /** True iff structure reconciliation is currently paused. */
 export function isSpaceDetectionPaused(): boolean {
-  return spaceDetectionPauseDepth > 0
+  return pauseOf().depth > 0
 }
 
 export function createRoomTopologyIndex() {
@@ -530,6 +609,7 @@ export function initSpaceDetectionSync(
   // scene that merely loaded — rerunning on hydration resurrected auto slabs
   // the user had deleted in an earlier session.
   const initialNodes = sceneStore.getState().nodes
+  const pause = pauseOf(sceneEnvironmentOf(sceneStore))
   const topologyIndex = new RoomTopologyIndex<ExtractedRoom>({
     detectRooms: extractRooms,
     sampleWall: (wall) => sampleWallPointsForRoomDetection(wall).map(pointToTuple),
@@ -556,10 +636,12 @@ export function initSpaceDetectionSync(
 
   adoptSceneBaseline(initialNodes)
 
-  const unsubscribeCommits = subscribeSceneCommits((commit) => {
-    if (commit.origin === 'local') return
-    adoptSceneBaseline(commit.current.nodes)
-  })
+  const unsubscribeCommits = sceneEnvironmentOf(sceneStore).run(() =>
+    subscribeSceneCommits((commit) => {
+      if (commit.origin === 'local') return
+      adoptSceneBaseline(commit.current.nodes)
+    }),
+  )
 
   // Keep reconciliation in this synchronous store subscription. Zundo emits
   // the originating local SceneCommit only after subscribers return, so the
@@ -572,13 +654,29 @@ export function initSpaceDetectionSync(
       adoptSceneBaseline(state.nodes)
       return
     }
-    if (getSceneHistoryPauseDepth() > 0 || sceneStore.temporal.getState().isTracking === false)
+    // A settling host derives this edit's structure itself (reconcileDocument): only the topology
+    // and spaces of the levels whose walls it changed are brought up to date here. Its derived
+    // writes are history-paused, so this runs before the pause check: the baseline must take them
+    // in, or the next edit would derive the host's rooms again from before it.
+    if (isSettlingDocument(sceneStore)) {
+      const levels = [
+        ...changedWallIdsByLevel(previousNodes, state.nodes, activeSceneCommitNodeIds()).keys(),
+      ]
+      for (const levelId of levels) topologyIndex.rebuildLevel(levelId, state.nodes)
+      if (levels.length) publishSpaces(levels, state.nodes, editorStore)
+      previousNodes = state.nodes
+      return
+    }
+    if (
+      getSceneHistoryPauseDepth(sceneStore) > 0 ||
+      sceneStore.temporal.getState().isTracking === false
+    )
       return
 
     const nodes = state.nodes
     const candidateIds = activeSceneCommitNodeIds()
 
-    if (spaceDetectionPauseDepth > 0) return
+    if (pause.depth > 0) return
 
     const changedWalls = changedWallIdsByLevel(previousNodes, nodes, candidateIds)
     if (candidateIds && changedWalls.size > 0) {
@@ -664,12 +762,7 @@ export function initSpaceDetectionSync(
       return { nodes, rootNodeIds, collections, materials, installedPlugins }
     }
     const beforeCommit = capture()
-    const nodes = beforeCommit.nodes
-    const before = levelStructureSnapshots(previousNodes)
-    const after = levelStructureSnapshots(nodes)
-    const levels = [...new Set([...before.keys(), ...after.keys()])].filter(
-      (id) => before.get(id) !== after.get(id),
-    )
+    const levels = changedStructureLevelIds(previousNodes, beforeCommit.nodes)
     if (!levels.length) return
     isProcessing = true
     pauseSceneHistory(sceneStore)
@@ -686,12 +779,12 @@ export function initSpaceDetectionSync(
     // so collaboration receives the originator's ids even for AI/template batches.
     notifySceneCommit({ origin: 'local', before: beforeCommit, current: capture() })
   }
-  resumeListeners.add(reconcilePaused)
+  pause.resumeListeners.add(reconcilePaused)
 
   return () => {
     unsubscribe()
     unsubscribeCommits()
-    resumeListeners.delete(reconcilePaused)
+    pause.resumeListeners.delete(reconcilePaused)
   }
 }
 

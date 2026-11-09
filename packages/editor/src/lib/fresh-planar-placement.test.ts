@@ -3,18 +3,24 @@ import {
   type AnyNode,
   type AnyNodeDefinition,
   type AnyNodeId,
+  BuildingNode,
   beginSceneHistoryPauseSession,
   CabinetModuleNode,
   CabinetNode,
   findLevelAncestorId,
   getSceneHistoryPauseDepth,
+  type LevelNode,
   nodeRegistry,
   pauseSceneHistory,
+  RoofNode,
+  RoofSegmentNode,
   registerNode,
   resumeSceneHistory,
   type SceneCommit,
   subscribeSceneCommits,
   useScene,
+  WallNode,
+  WindowNode,
 } from '@pascal-app/core'
 import { z } from 'zod'
 import {
@@ -223,6 +229,102 @@ describe('commitFreshPlacementSubtree', () => {
     expect((useScene.getState().nodes[LEVEL_ID] as { children: AnyNodeId[] }).children).toEqual([])
   })
 
+  // A roof lives on the level above the walls that carry it: one dropped onto them (a duplicate
+  // in hand) goes there in the placement's one step.
+  test('a roof dropped onto the walls that carry it lands on a new Roof level, in the one step', () => {
+    const corners: [number, number][] = [
+      [0, 0],
+      [8, 0],
+      [8, 6],
+      [0, 6],
+    ]
+    const walls = corners.map((start, i) =>
+      WallNode.parse({ parentId: LEVEL_ID, start, end: corners[(i + 1) % 4], height: 2.5 }),
+    )
+    const segment = RoofSegmentNode.parse({ width: 8, depth: 6, wallHeight: 0 })
+    const draft = RoofNode.parse({
+      parentId: LEVEL_ID,
+      visible: false,
+      metadata: { isNew: true },
+      children: [segment.id],
+    })
+    const building = BuildingNode.parse({ children: [LEVEL_ID] })
+    useScene.setState({
+      nodes: {
+        [building.id]: building,
+        [LEVEL_ID]: {
+          ...level([...walls.map((wall) => wall.id), draft.id]),
+          parentId: building.id,
+          height: 2.5,
+        },
+        ...Object.fromEntries(walls.map((wall) => [wall.id, wall])),
+        [draft.id]: draft,
+        [segment.id]: { ...segment, parentId: draft.id },
+      },
+      rootNodeIds: [building.id],
+      collections: {},
+      dirtyNodes: new Set(),
+    } as never)
+    useScene.temporal.getState().clear()
+
+    const committedId = commitFreshPlacementSubtree(draft.id, {
+      position: [4, 2.5, 3],
+      visible: true,
+    } as Partial<AnyNode>)!
+    const nodes = useScene.getState().nodes
+    const roofLevel = nodes[nodes[committedId]!.parentId as AnyNodeId] as LevelNode
+    expect(roofLevel).toMatchObject({ type: 'level', metadata: { role: 'roof' } })
+    expect(roofLevel.children as string[]).toEqual([committedId])
+    expect((nodes[LEVEL_ID] as LevelNode).children as string[]).not.toContain(committedId)
+    expect(useScene.getState().rootNodeIds).toEqual([building.id])
+
+    useScene.temporal.getState().undo()
+    expect(useScene.getState().nodes[committedId]).toBeUndefined()
+    expect(useScene.getState().nodes[roofLevel.id]).toBeUndefined()
+  })
+
+  test('a window joined at a corner while in hand stays joined: its partner names the committed window', () => {
+    const wall = WallNode.parse({ id: 'wall_a', parentId: LEVEL_ID, start: [4, 0], end: [0, 0] })
+    const other = WallNode.parse({ id: 'wall_b', parentId: LEVEL_ID, start: [0, 0], end: [0, 3] })
+    const draft = WindowNode.parse({
+      id: 'window_draft',
+      parentId: wall.id,
+      wallId: wall.id,
+      position: [3.5, 1.5, 0],
+      width: 1,
+      visible: false,
+      metadata: { isNew: true },
+      corner: { end: 'end', partnerId: 'window_partner', post: 'none' },
+    })
+    const partner = WindowNode.parse({
+      id: 'window_partner',
+      parentId: other.id,
+      wallId: other.id,
+      position: [0.5, 1.5, 0],
+      width: 1,
+      corner: { end: 'start', partnerId: draft.id, post: 'none' },
+    })
+    useScene.setState({
+      nodes: {
+        [LEVEL_ID]: level([wall.id as AnyNodeId, other.id as AnyNodeId]),
+        [wall.id]: { ...wall, children: [draft.id] } as AnyNode,
+        [other.id]: { ...other, children: [partner.id] } as AnyNode,
+        [draft.id]: draft as AnyNode,
+        [partner.id]: partner as AnyNode,
+      },
+      rootNodeIds: [LEVEL_ID],
+      collections: {},
+      dirtyNodes: new Set(),
+    } as never)
+
+    const committedId = commitFreshPlacementSubtree(draft.id as AnyNodeId, { visible: true })
+
+    const nodes = useScene.getState().nodes as Record<string, AnyNode>
+    expect(committedId).toBeTruthy()
+    expect((nodes[committedId!] as WindowNode).corner?.partnerId).toBe(partner.id)
+    expect((nodes[partner.id] as WindowNode).corner?.partnerId).toBe(committedId!)
+  })
+
   test("never records inside another owner's pause", () => {
     pauseSceneHistory(useScene)
     try {
@@ -278,6 +380,16 @@ describe('commitFreshPlacementSubtree', () => {
     expect(duplicate.children).toEqual([])
     expect(duplicate.metadata).toEqual({ isNew: true, label: 'source' })
     expect((source as AnyNode & { children: AnyNodeId[] }).children).toEqual(['item_original'])
+  })
+
+  // A copy of one side of a corner window kept naming the original's partner, which never named it
+  // back: a link that made the copy refuse to join another window.
+  test('a copy of one side of a corner window is a plain window', () => {
+    const side = WindowNode.parse({
+      corner: { end: 'end', partnerId: 'window_partner', post: 'none' },
+    })
+    expect((prepareFreshPlacementRootDuplicate(side) as WindowNode).corner).toBeUndefined()
+    expect(side.corner?.partnerId).toBe('window_partner')
   })
 
   test('commits a duplicated cabinet draft without deleting the original modules', () => {

@@ -10,6 +10,7 @@ import {
   type WallNode,
 } from '@pascal-app/core'
 import { Box3, type BufferGeometry, Matrix4, type Object3D, Vector3 } from 'three'
+import { beginWallGroupPush, type WallGroupPush } from '../../lib/room-handle-drag'
 
 // Shared plumbing for the group transform gizmos (rotate + move). Both operate
 // on the same multi-selection: classify each participant by how its placement
@@ -484,6 +485,25 @@ export function rotatePlanBounds(
     maxZ = Math.max(maxZ, rz)
   }
   return { minX, minZ, maxX, maxZ }
+}
+
+/**
+ * A group move of walls alone moves each wall as its push arrow does
+ * (`planWallGroupPush`) rather than sliding the selection rigidly: null for
+ * any other selection, which keeps the rigid slide. Doors and windows are not
+ * participants (they ride their wall), so they never make a selection mixed.
+ */
+export function beginGroupWallPush(
+  starts: readonly ParticipantStart[],
+  levelId: string | null,
+): WallGroupPush | null {
+  const nodes = useScene.getState().nodes
+  if (!levelId || starts.length === 0) return null
+  if (!starts.every((s) => s.kind === 'endpoint' && nodes[s.id]?.type === 'wall')) return null
+  return beginWallGroupPush(
+    starts.map((s) => s.id),
+    levelId,
+  )
 }
 
 // Rigid group slide: shift every participant (and each linked neighbour's

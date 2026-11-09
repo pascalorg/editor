@@ -11,14 +11,13 @@ import {
   type WallNode,
 } from '@pascal-app/core'
 import {
-  type FencePlanPoint,
   isAlignmentGuideActive,
   isAngleSnapActive,
   isMagneticSnapActive,
   isSegmentLongEnough,
-  snapFenceDraftPoint,
   useAlignmentGuides,
 } from '@pascal-app/editor'
+import { type FencePlanPoint, snapFenceDraftPoint } from '../drafting'
 
 /**
  * Phase 5 Stage D — move-fence-endpoint drag affordance.

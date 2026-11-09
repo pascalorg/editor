@@ -66,12 +66,9 @@ export function WebXRFeatureRuntime({
   )
 }
 
-export function WebXRFeatureConsumer({
-  children,
-}: {
-  children: (feature: PascalWebXRFeature | null) => ReactNode
-}) {
-  return children(useContext(WebXRFeatureContext))
+/** The running WebXR feature, or null when the plugin is not installed in this scene. */
+export function useWebXRFeature() {
+  return useContext(WebXRFeatureContext)
 }
 
 export function useWebXRInstalled() {

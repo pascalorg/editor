@@ -117,39 +117,39 @@ function hit(y = 1, z = -0.1): ShelfEvent {
   } as ShelfEvent
 }
 
-test.each([
-  'grid',
-  'off',
-] as const)('midpoint keeps the first declared row and preserves X/Z with grid %s', (mode) => {
-  useEditor.getState().setSnappingMode('item', mode)
-  for (const declared of [
-    [0.5, 1.5],
-    [1.5, 0.5],
-  ]) {
-    rows = declared
-    const expected: [number, number, number] =
-      mode === 'grid' ? [0.25, rows[0]!, 0.125] : [0.37, rows[0]!, -0.1]
-    const ctx = context()
-    const entered = shelfSurfaceStrategy.enter(ctx, hit())!
-    expect(entered.nodeUpdate).toEqual({
-      position: expected,
-      parentId: host.id,
-      rotation: [0.1, 0.7, 0.3],
-    })
-    expect(entered.gridPosition).toEqual(expected)
-    expect(entered.cursorPosition).toEqual(expected)
-    const moved = shelfSurfaceStrategy.move(onShelf(ctx), hit())!
-    expect(moved.nodeUpdate).toEqual({ position: expected })
-    expect(moved.cursorPosition).toEqual(expected)
-    const committed = shelfSurfaceStrategy.click(
-      { ...onShelf(ctx), gridPosition: new Vector3(...entered.gridPosition) },
-      hit(),
-    )!
-    expect(committed.nodeUpdate.position).toEqual(expected)
-    expect(committed.nodeUpdate.parentId).toBe(host.id)
-  }
-  expect(resolver).toHaveBeenCalledTimes(6)
-})
+test.each(['grid', 'off'] as const)(
+  'midpoint keeps the first declared row and preserves X/Z with grid %s',
+  (mode) => {
+    useEditor.getState().setSnappingMode('item', mode)
+    for (const declared of [
+      [0.5, 1.5],
+      [1.5, 0.5],
+    ]) {
+      rows = declared
+      const expected: [number, number, number] =
+        mode === 'grid' ? [0.25, rows[0]!, 0.125] : [0.37, rows[0]!, -0.1]
+      const ctx = context()
+      const entered = shelfSurfaceStrategy.enter(ctx, hit())!
+      expect(entered.nodeUpdate).toEqual({
+        position: expected,
+        parentId: host.id,
+        rotation: [0.1, 0.7, 0.3],
+      })
+      expect(entered.gridPosition).toEqual(expected)
+      expect(entered.cursorPosition).toEqual(expected)
+      const moved = shelfSurfaceStrategy.move(onShelf(ctx), hit())!
+      expect(moved.nodeUpdate).toEqual({ position: expected })
+      expect(moved.cursorPosition).toEqual(expected)
+      const committed = shelfSurfaceStrategy.click(
+        { ...onShelf(ctx), gridPosition: new Vector3(...entered.gridPosition) },
+        hit(),
+      )!
+      expect(committed.nodeUpdate.position).toEqual(expected)
+      expect(committed.nodeUpdate.parentId).toBe(host.id)
+    }
+    expect(resolver).toHaveBeenCalledTimes(6)
+  },
+)
 
 test.each([
   [0.999, 0.5],
@@ -182,29 +182,29 @@ test('a full-board object is refused when grid snapping puts its centre outside 
   expect(shelfSurfaceStrategy.enter(context(draft), hit(1, -0.39))).toBeNull()
 })
 
-test.each([
-  'grid',
-  'off',
-] as const)('shelf frame conversion retains exact poses with grid %s', (mode) => {
-  useEditor.getState().setSnappingMode('item', mode)
-  const mesh = sceneRegistry.nodes.get(host.id)!
-  mesh.position.set(4, 2, -3)
-  mesh.rotation.set(0, Math.PI / 3, 0)
-  mesh.updateMatrixWorld(true)
-  const event = hit(1.2)
-  const local = mesh.worldToLocal(new Vector3(...event.position))
-  const expected: [number, number, number] =
-    mode === 'grid' ? [0.25, 1.5, 0.125] : [local.x, 1.5, local.z]
-  const yaw = new Euler().setFromQuaternion(mesh.getWorldQuaternion(new Quaternion()), 'YXZ').y
-  const entered = shelfSurfaceStrategy.enter(context(), event)!
-  expect(entered.nodeUpdate).toEqual({
-    position: expected,
-    parentId: host.id,
-    rotation: [0.1, 0.7 - yaw, 0.3],
-  })
-  expect(entered.cursorPosition).toEqual(mesh.localToWorld(new Vector3(...expected)).toArray())
-  expect(shelfSurfaceStrategy.move(onShelf(context()), event)!.gridPosition).toEqual(expected)
-})
+test.each(['grid', 'off'] as const)(
+  'shelf frame conversion retains exact poses with grid %s',
+  (mode) => {
+    useEditor.getState().setSnappingMode('item', mode)
+    const mesh = sceneRegistry.nodes.get(host.id)!
+    mesh.position.set(4, 2, -3)
+    mesh.rotation.set(0, Math.PI / 3, 0)
+    mesh.updateMatrixWorld(true)
+    const event = hit(1.2)
+    const local = mesh.worldToLocal(new Vector3(...event.position))
+    const expected: [number, number, number] =
+      mode === 'grid' ? [0.25, 1.5, 0.125] : [local.x, 1.5, local.z]
+    const yaw = new Euler().setFromQuaternion(mesh.getWorldQuaternion(new Quaternion()), 'YXZ').y
+    const entered = shelfSurfaceStrategy.enter(context(), event)!
+    expect(entered.nodeUpdate).toEqual({
+      position: expected,
+      parentId: host.id,
+      rotation: [0.1, 0.7 - yaw, 0.3],
+    })
+    expect(entered.cursorPosition).toEqual(mesh.localToWorld(new Vector3(...expected)).toArray())
+    expect(shelfSurfaceStrategy.move(onShelf(context()), event)!.gridPosition).toEqual(expected)
+  },
+)
 
 test('only enter requires an upward normal; moves keep electing rows', () => {
   for (const normal of [[1, 0, 0], [0, -1, 0], undefined] as ShelfEvent['normal'][]) {

@@ -3,30 +3,37 @@ import {
   type AnyNodeId,
   type BuildingNode,
   type CeilingNode,
+  type Collection,
   type ColumnNode,
   calculateLevelMiters,
   DEFAULT_WALL_THICKNESS,
   type DoorNode,
   difference,
+  getDoorOpeningSize,
   getLevelElevations,
   getOpeningWallCut,
   getRenderableSlabPolygon,
+  getWallAssemblyPreset,
   getWallBodyCenterOffset,
   getWallCurveFrameAt,
   getWallCurveLength,
   getWallFaceOffsets,
-  getWallPlaneTop,
   getWallPlanFootprint,
+  getWallTop,
   hidesDescendants,
   type ImportedMeshNode,
   intersection,
   isCurvedWall,
   type LevelNode,
   liftedManualSlab,
+  measureStair,
+  openingHostFacing,
   prepareSlabPolygonContext,
   resolveCeilingHeight,
-  resolveWallTop,
+  resolveWallExteriorSide,
   type SlabNode,
+  type StairNode,
+  type StairSegmentNode,
   sampleWallCenterline,
   type UnitNode,
   union,
@@ -48,6 +55,7 @@ import {
   identifier,
   int,
   label,
+  logical,
   type PlanFrame,
   ratio,
   relativeFrame,
@@ -55,7 +63,7 @@ import {
   type Vec2,
   type Vec3,
 } from './ifc-model'
-import type { StepRef, StepValue } from './step'
+import { type StepRef, type StepValue, typed } from './step'
 import { wallBaseCells, wallCellBand } from './wall-base'
 
 /** Triangle geometry for one node, in the rendered scene's world frame (metres, Y-up). */
@@ -65,10 +73,13 @@ export interface IfcMeshPart {
   /** sRGB components in 0..1. */
   color?: [number, number, number]
   opacity?: number
+  /** Semantic subpart supplied by the renderer. */
+  role?: string
 }
 
 export interface IfcExportInput {
   nodes: Record<string, AnyNode>
+  collections?: Readonly<Record<string, Collection>>
   /** Rendered geometry keyed by node id; required for everything that is not a native IFC element. */
   meshes?: ReadonlyMap<string, IfcMeshPart[]>
   projectName?: string
@@ -448,7 +459,11 @@ export function buildIfcExport(input: IfcExportInput): IfcExportResult {
     units,
   )
 
-  const pascalIdentity = (node: AnyNode, refs: StepRef[]) =>
+  const productsByNodeId = new Map<string, StepRef[]>()
+  const pascalIdentity = (node: AnyNode, refs: StepRef[]) => {
+    if (node.type !== 'unit') {
+      for (const ref of refs) pushTo(productsByNodeId, node.id, ref)
+    }
     model.propertySet(
       node.id,
       'Pascal',
@@ -458,6 +473,7 @@ export function buildIfcExport(input: IfcExportInput): IfcExportResult {
       ],
       refs,
     )
+  }
 
   const nodeName = (node: AnyNode, fallback: string) => {
     const name = (node as { name?: unknown }).name
@@ -757,6 +773,7 @@ export function buildIfcExport(input: IfcExportInput): IfcExportResult {
     node: AnyNode,
     sets: TriangleSet[],
     relativeTo: StepRef,
+    seed = node.id as string,
   ): StepRef | null => {
     if (sets.length === 0) return null
     const { frame, sets: local } = recentre(sets)
@@ -764,8 +781,8 @@ export function buildIfcExport(input: IfcExportInput): IfcExportResult {
     if (!shape) return null
     return emitElement(
       cls,
-      node.id,
-      node,
+      seed,
+      seed === node.id ? node : { ...node, metadata: { ...node.metadata, globalId: undefined } },
       nodeName(node, cls.entity),
       model.localPlacement(relativeTo, frame),
       shape,
@@ -831,6 +848,48 @@ export function buildIfcExport(input: IfcExportInput): IfcExportResult {
   const layerUsages = new Map<string, { usage: StepRef; walls: StepRef[] }>()
   const wallMaterial = step.add('IFCMATERIAL', 'Wall', null, null)
 
+  // One IfcMaterial per (material, role) used by an assembly layer.
+  const layerMaterials = new Map<string, StepRef>()
+  const layerMaterial = (name: string, category: string | null) => {
+    const key = `${name}|${category ?? ''}`
+    let ref = layerMaterials.get(key)
+    if (!ref) {
+      ref = step.add('IFCMATERIAL', name, null, category)
+      layerMaterials.set(key, ref)
+    }
+    return ref
+  }
+  // IFC4's suggested layer categories.
+  const layerCategory = (role: string, core: boolean) =>
+    core
+      ? 'LoadBearing'
+      : role === 'insulation'
+        ? 'Insulation'
+        : role === 'finish' || role === 'lining'
+          ? 'Finish'
+          : null
+  /**
+   * The wall's assembly as IFC layers, ordered from Pascal's front face (+n),
+   * which is where an AXIS2/POSITIVE usage starting at -faces.a begins. Null
+   * when the wall has no assembly or its layers don't add up to the body.
+   */
+  const wallAssemblyLayers = (wall: WallNode, thickness: number) => {
+    const assembly = wall.assembly
+    if (!assembly?.layers.length) return null
+    const sum = assembly.layers.reduce((total, layer) => total + layer.thickness, 0)
+    if (Math.abs(sum - thickness) > 1e-4) return null
+    // Layers run from the front face unless the stack starts at the exterior
+    // and the exterior is the back face.
+    const startsAtBack =
+      assembly.face === 'exterior' && (resolveWallExteriorSide(wall) ?? -1) === -1
+    const layers = startsAtBack ? [...assembly.layers].reverse() : assembly.layers
+    const preset = getWallAssemblyPreset(assembly.presetId)
+    return {
+      name: preset?.label ?? null,
+      layers: layers.filter((layer) => layer.thickness > 0),
+    }
+  }
+
   const wallsByLevel = new Map<string, WallNode[]>()
   for (const wall of ofType<WallNode>('wall'))
     if (wall.parentId) pushTo(wallsByLevel, wall.parentId, wall)
@@ -850,11 +909,7 @@ export function buildIfcExport(input: IfcExportInput): IfcExportResult {
       const chord = Math.hypot(endPlan[0] - startPlan[0], endPlan[1] - startPlan[1])
       const support = wallSupportForNodes(wall, nodes)
       const base = support.elevation
-      const top = resolveWallTop(
-        wall,
-        getWallPlaneTop(wall, levelId, nodes as Record<AnyNodeId, AnyNode>),
-        base,
-      )
+      const top = getWallTop(wall, levelId, nodes as Record<AnyNodeId, AnyNode>, base)
       const cells = wallBaseCells(wall, support, top)
       if (chord < 1e-6 || cells.every((cell) => top - cell.bottom <= 1e-4)) {
         skipped.push({ nodeId: wall.id, type: wall.type, reason: 'degenerate' })
@@ -939,23 +994,34 @@ export function buildIfcExport(input: IfcExportInput): IfcExportResult {
       // Pascal's body spans [b, a] along its left normal; that normal is
       // IFC -Y in the wall frame, so the first layer starts at -a.
       const offset = -faces.a
-      const usageKey = `${thickness.toFixed(6)}|${offset.toFixed(6)}`
+      const stack = wallAssemblyLayers(wall, thickness)
+      const stackKey = stack
+        ? stack.layers
+            .map((l) => `${l.role}:${l.material ?? ''}:${l.thickness.toFixed(6)}:${l.core ? 1 : 0}`)
+            .join(',')
+        : 'core'
+      const usageKey = `${thickness.toFixed(6)}|${offset.toFixed(6)}|${stackKey}`
       let usage = layerUsages.get(usageKey)
       if (!usage) {
-        const layer = step.add(
-          'IFCMATERIALLAYER',
-          wallMaterial,
-          thickness,
-          null,
-          'Core',
-          null,
-          null,
-          null,
-        )
+        const layers = stack
+          ? stack.layers.map((l) => {
+              const category = layerCategory(l.role, l.core === true)
+              return step.add(
+                'IFCMATERIALLAYER',
+                layerMaterial(l.material ?? l.role, category),
+                l.thickness,
+                l.role === 'air' ? logical(true) : null,
+                l.id,
+                l.role,
+                category,
+                null,
+              )
+            })
+          : [step.add('IFCMATERIALLAYER', wallMaterial, thickness, null, 'Core', null, null, null)]
         const layerSet = step.add(
           'IFCMATERIALLAYERSET',
-          [layer],
-          `Wall ${Math.round(thickness * 1000)} mm`,
+          layers,
+          stack?.name ?? `Wall ${Math.round(thickness * 1000)} mm`,
           null,
         )
         usage = {
@@ -996,11 +1062,15 @@ export function buildIfcExport(input: IfcExportInput): IfcExportResult {
           angle: Math.atan2(-curve.tangent.y, curve.tangent.x),
         }
         const cutBottom = (cut?.bottom ?? nominalBottom) - nominalBottom
+        const openingSize = getDoorOpeningSize(opening)
         const cutDepth =
-          (cut?.top ?? nominalBottom + opening.height) - (cut?.bottom ?? nominalBottom)
+          (cut?.top ?? nominalBottom + openingSize.height) - (cut?.bottom ?? nominalBottom)
+        const cutOffset = isCurvedWall(wall)
+          ? 0
+          : openingSize.leafOffsetX * openingHostFacing(opening)
         let openingRef: StepRef | null = null
         let openingPlacement: StepRef | null = null
-        if (cutDepth > 1e-4 && opening.width > 1e-4) {
+        if (cutDepth > 1e-4 && openingSize.width > 1e-4) {
           let profile: StepRef
           const band =
             isCurvedWall(wall) && cut
@@ -1013,8 +1083,16 @@ export function buildIfcExport(input: IfcExportInput): IfcExportResult {
                 )
               : []
           if (band.length > 0) profile = model.polygonProfile(band)
-          else profile = model.rectangleProfile(opening.width, thickness + 0.2)
-          openingPlacement = model.localPlacement(wallPlacement, relativeFrame(frame, openingFrame))
+          else profile = model.rectangleProfile(openingSize.width, thickness + 0.2)
+          const cutFrame: PlanFrame = {
+            ...openingFrame,
+            origin: [
+              openingFrame.origin[0] - cutOffset * curve.tangent.x,
+              openingFrame.origin[1] + cutOffset * curve.tangent.y,
+              nominalBottom,
+            ],
+          }
+          openingPlacement = model.localPlacement(wallPlacement, relativeFrame(frame, cutFrame))
           openingRef = step.add(
             'IFCOPENINGELEMENT',
             model.guid(`${opening.id}:opening`),
@@ -1053,7 +1131,7 @@ export function buildIfcExport(input: IfcExportInput): IfcExportResult {
           ])
         }
         const elementPlacement = openingPlacement
-          ? model.localPlacement(openingPlacement, IDENTITY_FRAME)
+          ? model.localPlacement(openingPlacement, { origin: [cutOffset, 0, 0], angle: 0 })
           : model.localPlacement(storey.placement, openingFrame)
         const fill = emitElement(
           meshClassFor(opening),
@@ -1247,7 +1325,11 @@ export function buildIfcExport(input: IfcExportInput): IfcExportResult {
     const context = contextFor(column)
     const sets = partsFor(column, context)
     const cls = meshClassFor(column)
-    if (!isPlainColumn(column) && sets.length > 0) {
+    if (column.source && sets.length === 0) {
+      skipped.push({ nodeId: column.id, type: column.type, reason: 'no-geometry' })
+      continue
+    }
+    if ((column.source || !isPlainColumn(column)) && sets.length > 0) {
       const ref = emitMeshElement(cls, column, sets, context.placement)
       if (ref) context.contained.push(ref)
       continue
@@ -1356,15 +1438,143 @@ export function buildIfcExport(input: IfcExportInput): IfcExportResult {
       ROOF_SLAB,
     )
   }
-  for (const stair of ofType('stair')) {
-    if (isExcluded(stair)) continue
+  for (const stairNode of ofType('stair')) {
+    if (isExcluded(stairNode)) continue
+    const stair = stairNode as StairNode
     handled.add(stair.id)
-    aggregateParts(
-      stair,
-      { entity: 'IFCSTAIR', tail: (tag) => [tag, enumValue('NOTDEFINED')] },
-      'stair-segment',
-      STAIR_FLIGHT,
+    const context = contextFor(stair)
+    const placement = model.localPlacement(context.placement, IDENTITY_FRAME)
+    const children = ofType('stair-segment').filter(
+      (child) => ancestorOfType(child, 'stair')?.id === stair.id,
     )
+    const measurement =
+      Array.isArray(stair.position) && Array.isArray(stair.children)
+        ? measureStair(stair, nodes)
+        : null
+    const refs: StepRef[] = []
+    for (const member of [stair, ...children]) {
+      handled.add(member.id)
+      if (isExcluded(member)) continue
+      const groups = new Map<string, IfcMeshPart[]>()
+      for (const part of meshes.get(member.id) ?? []) {
+        const role =
+          part.role === 'railing' || part.role === 'handrail'
+            ? part.role
+            : part.role === 'landing' ||
+                (member.type === 'stair-segment' &&
+                  (member as StairSegmentNode).segmentType === 'landing')
+              ? 'landing'
+              : 'flight'
+        pushTo(groups, role, part)
+      }
+      for (const [role, parts] of groups) {
+        const cls =
+          role === 'landing'
+            ? { entity: 'IFCSLAB', tail: (tag: string) => [tag, enumValue('LANDING')] }
+            : role === 'railing' || role === 'handrail'
+              ? {
+                  entity: 'IFCRAILING',
+                  tail: (tag: string) => [
+                    tag,
+                    enumValue(role === 'handrail' ? 'HANDRAIL' : 'GUARDRAIL'),
+                  ],
+                }
+              : {
+                  ...STAIR_FLIGHT,
+                  tail: (tag: string) => [
+                    tag,
+                    null,
+                    null,
+                    null,
+                    null,
+                    enumValue(
+                      member.type === 'stair-segment' && (member as StairSegmentNode).winder
+                        ? 'WINDER'
+                        : stair.stairType === 'straight'
+                          ? 'STRAIGHT'
+                          : stair.stairType === 'spiral'
+                            ? 'SPIRAL'
+                            : 'CURVED',
+                    ),
+                  ],
+                }
+        const seed =
+          member !== stair && (role === 'flight' || role === 'landing')
+            ? member.id
+            : `${member.id}:${role}`
+        const ref = emitMeshElement(
+          cls,
+          member,
+          localTriangleSets(parts, context.worldToLocal),
+          placement,
+          seed,
+        )
+        if (!ref) continue
+        refs.push(ref)
+        if (role !== 'flight') continue
+        const flight = measurement?.flights.find((entry) => entry.nodeId === member.id)
+        if (!flight || flight.riserHeight === null || flight.going === null) continue
+        const properties: Array<[string, StepValue]> = [
+          ['NumberOfRiser', typed('IFCCOUNTMEASURE', flight.count)],
+          ['NumberOfTreads', typed('IFCCOUNTMEASURE', flight.count)],
+          ['RiserHeight', typed('IFCPOSITIVELENGTHMEASURE', flight.riserHeight)],
+          ['TreadLength', typed('IFCPOSITIVELENGTHMEASURE', flight.going)],
+          ['NosingLength', typed('IFCLENGTHMEASURE', flight.construction?.nosing ?? 0)],
+          [
+            'WalkingLineOffset',
+            typed(
+              'IFCPOSITIVELENGTHMEASURE',
+              member.type === 'stair-segment'
+                ? ((member as StairSegmentNode).winder?.walkingLineOffset ?? flight.width / 2)
+                : flight.width / 2,
+            ),
+          ],
+        ]
+        if (flight.innerGoing !== null && flight.innerGoing > 0)
+          properties.push([
+            'TreadLengthAtInnerSide',
+            typed('IFCPOSITIVELENGTHMEASURE', flight.innerGoing),
+          ])
+        if (flight.construction?.mode === 'waist' && stair.stairType === 'straight')
+          properties.push([
+            'WaistThickness',
+            typed('IFCPOSITIVELENGTHMEASURE', flight.construction.waistThickness),
+          ])
+        const headroom = measurement?.headroom.flightMinimum[member.id]
+        if (measurement?.headroom.status === 'evaluated' && headroom !== undefined && headroom > 0)
+          properties.push(['Headroom', typed('IFCPOSITIVELENGTHMEASURE', headroom)])
+        model.propertySet(seed, 'Pset_StairFlightCommon', properties, [ref])
+      }
+    }
+    if (!refs.length) {
+      skipped.push({ nodeId: stair.id, type: stair.type, reason: 'no-geometry' })
+      continue
+    }
+    const winders = children.filter(
+      (child) => (child as StairSegmentNode).winder,
+    ) as StairSegmentNode[]
+    const windingType = children.some(
+      (child) => (child as StairSegmentNode).segmentType === 'landing',
+    )
+      ? 'NOTDEFINED'
+      : winders.length === 1
+        ? 'QUARTER_WINDING_STAIR'
+        : winders.length === 2 && winders[0]!.winder!.turn === winders[1]!.winder!.turn
+          ? 'TWO_QUARTER_WINDING_STAIR'
+          : 'NOTDEFINED'
+    const ref = emitElement(
+      {
+        entity: 'IFCSTAIR',
+        tail: (tag) => [tag, enumValue(windingType)],
+      },
+      `${stair.id}:assembly`,
+      stair,
+      nodeName(stair, 'IFCSTAIR'),
+      placement,
+      null,
+    )
+    model.rel('IFCRELAGGREGATES', `${stair.id}:parts`, ref, refs)
+    context.contained.push(ref)
   }
 
   for (const node of sortedNodes) {
@@ -1413,6 +1623,33 @@ export function buildIfcExport(input: IfcExportInput): IfcExportResult {
       null,
       zone,
     )
+  }
+
+  for (const collection of Object.values(input.collections ?? {}).sort((a, b) =>
+    a.id.localeCompare(b.id),
+  )) {
+    const group = step.add(
+      'IFCGROUP',
+      model.guid(collection.id),
+      ownerHistory,
+      collection.name,
+      null,
+      null,
+    )
+    model.propertySet(
+      collection.id,
+      'PascalCollection',
+      [
+        ['CollectionId', identifier(collection.id)],
+        ['Template', collection.template ? identifier(collection.template) : null],
+        ['Color', collection.color ? label(collection.color) : null],
+      ],
+      [group],
+    )
+    const members = [...new Set(collection.nodeIds)].flatMap((id) => productsByNodeId.get(id) ?? [])
+    if (members.length > 0) {
+      model.rel('IFCRELASSIGNSTOGROUP', `${collection.id}:members`, members, null, group)
+    }
   }
 
   // ── Spatial containment ──────────────────────────────────────────────

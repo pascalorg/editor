@@ -1,6 +1,7 @@
 import {
   AdditiveBlending,
   BoxGeometry,
+  CircleGeometry,
   CylinderGeometry,
   DoubleSide,
   type Float32BufferAttribute,
@@ -11,6 +12,7 @@ import {
   SphereGeometry,
   TorusGeometry,
 } from 'three'
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { cooktopFootprint } from '../appliance-layout'
 import {
   COOKTOP_FLAME_COUNT,
@@ -40,6 +42,7 @@ import {
   cooktopKnobHitMaterial,
   cooktopKnobOnMaterial,
   cooktopTrimMaterial,
+  createCabinetPanelGeometry,
   createWorldScaleBoxGeometry,
   stampSlot,
 } from './shared'
@@ -166,7 +169,7 @@ function addGasHobBurner(
   const r = GAS_HOB_BURNER_RADIUS * size
   const [x, y, z] = center
   const base = stampSlot(
-    new Mesh(new CylinderGeometry(r, r * 1.1, 0.012, 28), cooktopBurnerMaterial),
+    new Mesh(new CylinderGeometry(r, r * 1.1, 0.012, 20), cooktopBurnerMaterial),
     'appliance',
   )
   base.name = `${name}-burner-${burnerIndex}-base`
@@ -176,17 +179,17 @@ function addGasHobBurner(
   group.add(base)
 
   const ring = stampSlot(
-    new Mesh(new TorusGeometry(r * 0.72, 0.011, 10, 30), cooktopGrateMaterial),
+    new Mesh(new TorusGeometry(r * 0.72, 0.011, 4, 20), cooktopGrateMaterial),
     'appliance',
   )
   ring.name = `${name}-burner-${burnerIndex}-ring`
-  ring.rotation.x = Math.PI / 2
+  ring.rotation.x = -Math.PI / 2
   ring.position.set(x, y + 0.012, z)
   ring.castShadow = true
   group.add(ring)
 
   const cap = stampSlot(
-    new Mesh(new CylinderGeometry(r * 0.48, r * 0.6, 0.012, 24), cooktopGrateMaterial),
+    new Mesh(new CylinderGeometry(r * 0.48, r * 0.6, 0.012, 16), cooktopGrateMaterial),
     'hardware',
   )
   cap.name = `${name}-burner-${burnerIndex}-cap`
@@ -267,6 +270,44 @@ function addContinuousCooktopGrate(
       `${name}-continuous-grate-column-${i}`,
       'appliance',
     )
+  }
+  const supports: BoxGeometry[] = []
+  burners.forEach((burner) => {
+    const gap = GAS_HOB_BURNER_RADIUS * burner.size * 0.7
+    for (const axis of ['x', 'z'] as const) {
+      const coordinates = axis === 'x' ? colXs : rowZs
+      const extent = (axis === 'x' ? width : depth) / 2
+      const center = burner[axis]
+      const lower = coordinates.filter((value) => value < center - 0.001).at(-1)
+      const upper = coordinates.find((value) => value > center + 0.001)
+      const boundaries = [
+        lower == null ? -extent : (lower + center) / 2,
+        upper == null ? extent : (upper + center) / 2,
+      ]
+      boundaries.forEach((boundary, side) => {
+        const inner = center + (side === 0 ? -gap : gap)
+        const length = Math.abs(boundary - inner)
+        const geometry =
+          axis === 'x'
+            ? createWorldScaleBoxGeometry(length, bar, t)
+            : createWorldScaleBoxGeometry(t, bar, length)
+        geometry.translate(
+          axis === 'x' ? (inner + boundary) / 2 : burner.x,
+          y,
+          axis === 'z' ? (inner + boundary) / 2 : burner.z,
+        )
+        supports.push(geometry)
+      })
+    }
+  })
+  const supportGeometry = mergeGeometries(supports, false)
+  for (const geometry of supports) geometry.dispose()
+  if (supportGeometry) {
+    const mesh = stampSlot(new Mesh(supportGeometry, cooktopGrateMaterial), 'appliance')
+    mesh.name = `${name}-pan-supports`
+    mesh.castShadow = true
+    mesh.receiveShadow = true
+    group.add(mesh)
   }
 }
 
@@ -393,20 +434,28 @@ function addInductionZone(
   }
 
   const fill = stampSlot(
-    new Mesh(new CylinderGeometry(zone.radius * 0.92, zone.radius * 0.92, 0.002, 64), material),
+    new Mesh(new CircleGeometry(zone.radius * 0.92, 32), active ? material : cooktopGlassMaterial),
     'appliance',
   )
   fill.name = `${name}-zone-${zoneIndex}-fill`
+  fill.rotation.x = -Math.PI / 2
   fill.position.set(zone.x, y + 0.001, zone.z)
   group.add(fill)
 
   for (let ringIndex = 0; ringIndex < 3; ringIndex += 1) {
     const ring = stampSlot(
-      new Mesh(new TorusGeometry(zone.radius * (1 - ringIndex * 0.24), 0.0022, 8, 72), material),
+      new Mesh(
+        new RingGeometry(
+          zone.radius * (1 - ringIndex * 0.24) - 0.0022,
+          zone.radius * (1 - ringIndex * 0.24) + 0.0022,
+          48,
+        ),
+        material,
+      ),
       'appliance',
     )
     ring.name = `${name}-zone-${zoneIndex}-ring-${ringIndex}`
-    ring.rotation.x = Math.PI / 2
+    ring.rotation.x = -Math.PI / 2
     ring.position.set(zone.x, y + 0.003 + ringIndex * 0.0006, zone.z)
     group.add(ring)
   }
@@ -434,7 +483,7 @@ export function addCooktopCompartment(
   addCooktopFrameBorder(group, name, frameWidth, frameDepth, topY + 0.006)
   const surface = stampSlot(
     new Mesh(
-      createWorldScaleBoxGeometry(surfaceWidth, surfaceThickness, surfaceDepth),
+      createCabinetPanelGeometry(surfaceWidth, surfaceThickness, surfaceDepth),
       cooktopGlassMaterial,
     ),
     'appliance',
@@ -493,7 +542,7 @@ export function addCooktopCompartment(
       group.add(hit)
 
       const collar = stampSlot(
-        new Mesh(new CylinderGeometry(0.016, 0.018, 0.006, 20), cooktopTrimMaterial),
+        new Mesh(new CylinderGeometry(0.016, 0.018, 0.006, 12), cooktopTrimMaterial),
         'hardware',
       )
       collar.name = `${name}-knob-${knobIndex}-collar`
@@ -502,7 +551,7 @@ export function addCooktopCompartment(
       group.add(collar)
 
       const knob = stampSlot(
-        new Mesh(new CylinderGeometry(0.012, 0.015, 0.02, 20), cooktopGrateMaterial),
+        new Mesh(new CylinderGeometry(0.012, 0.015, 0.02, 12), cooktopGrateMaterial),
         'hardware',
       )
       knob.name = `${name}-knob-${knobIndex}`
@@ -516,7 +565,7 @@ export function addCooktopCompartment(
       const notch = stampSlot(
         new Mesh(
           new BoxGeometry(0.003, 0.004, 0.011),
-          progress > 0.5 ? cooktopKnobOnMaterial : cooktopTrimMaterial,
+          progress > 0.5 ? cooktopKnobOnMaterial : cooktopBurnerMaterial,
         ),
         'hardware',
       )
@@ -542,7 +591,7 @@ export function addCooktopCompartment(
   const controlBar = stampSlot(
     new Mesh(
       new BoxGeometry(Math.min(0.24, surfaceWidth * 0.38), 0.003, 0.012),
-      applianceDisplayMaterial,
+      burnersOn ? applianceDisplayMaterial : cooktopTrimMaterial,
     ),
     'appliance',
   )
@@ -552,12 +601,13 @@ export function addCooktopCompartment(
   for (let dotIndex = 0; dotIndex < zones.length + 2; dotIndex += 1) {
     const dot = stampSlot(
       new Mesh(
-        new CylinderGeometry(0.005, 0.005, 0.002, 14),
+        new CircleGeometry(0.005, 12),
         burnersOn ? cooktopInductionActiveZoneMaterial : cooktopInductionZoneMaterial,
       ),
       'appliance',
     )
     dot.name = `${name}-touch-dot-${dotIndex}`
+    dot.rotation.x = -Math.PI / 2
     dot.position.set(
       -0.015 * (zones.length + 1) + dotIndex * 0.03,
       topY + surfaceThickness + 0.005,

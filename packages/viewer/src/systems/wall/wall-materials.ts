@@ -1,7 +1,10 @@
 import {
+  type ExposedStructure,
   getEffectiveWallFaceMaterial,
   getMaterialPresetByRef,
+  getWallFaceDefault,
   getWallSurfaceMaterialSignature,
+  parseMaterialColor,
   parseMaterialRef,
   resolveMaterial,
   resolveWallExteriorSide,
@@ -12,11 +15,19 @@ import {
   type WallFace,
   type WallNode,
   type WallSurfaceMaterialSpec,
-  wallAssemblyFinishRef,
+  wallAssemblyExposedStructure,
+  wallAssemblyFaceFinish,
 } from '@pascal-app/core'
 import { Color, type Material } from 'three'
-import { Fn, float, fract, length, mix, positionLocal, smoothstep, step, vec2 } from 'three/tsl'
+import { Fn, float, fract, length, mix, positionLocal, smoothstep, step, uv, vec2 } from 'three/tsl'
 import { MeshLambertNodeMaterial, MeshStandardNodeMaterial } from 'three/webgpu'
+import { markHighlight, tintEmissive } from '../../lib/editor-highlight'
+import {
+  BLOCK_MASONRY,
+  concreteMaterial,
+  masonryMaterial,
+  STRUCTURE_COLORS,
+} from '../../lib/foundation-materials'
 import {
   baseMaterial,
   type ColorPreset,
@@ -39,8 +50,7 @@ const WALL_HIGHLIGHT_PROFILES = {
   delete: {
     color: new Color('#dc2626'),
     blend: 0.76,
-    emissiveBlend: 0.92,
-    emissiveIntensity: 0.46,
+    emissive: 0.92,
   },
 } as const
 
@@ -118,17 +128,41 @@ function resolveWallSlotDefault(declaredDefault: string, shading: RenderShading)
   return createDefaultMaterial(slotDefault, 0.9, shading)
 }
 
-// The assembly cladding's ref when `face` is the wall's exterior face (a is the
-// +normal face; an unresolved side keeps the cladding on b, as legacy did).
+// The assembly's finish for `face`: its cladding when `face` is the wall's exterior face (a is the
+// +normal face; an unresolved side keeps the cladding on b, as legacy did), and the paint picked
+// for a lining while drafting on a lined face.
 function wallAssemblyFaceFinishRef(wallNode: WallNode, face: WallFace): string | null {
+  return wallAssemblyFaceFinish(wallNode, face)
+}
+
+// What `face` shows when it is the exterior face of a wall with no cladding over a bare masonry or
+// concrete core: the structure itself (null otherwise, and for any face with a cladding).
+function wallFaceExposedStructure(wallNode: WallNode, face: WallFace): ExposedStructure | null {
+  if (wallAssemblyFaceFinishRef(wallNode, face)) return null
   const exteriorFace = resolveWallExteriorSide(wallNode) === 1 ? 'a' : 'b'
-  return face === exteriorFace ? wallAssemblyFinishRef(wallNode) : null
+  return face === exteriorFace ? wallAssemblyExposedStructure(wallNode) : null
+}
+
+// The bare structure (courses, joints and colours), made once:
+// the block's bond runs along the face's world-planar U, the wall's own metres. Solid shading
+// keeps to a flat colour, like every other wall finish.
+const structureMaterials = new Map<ExposedStructure, Material>()
+function exposedStructureMaterial(structure: ExposedStructure, shading: RenderShading): Material {
+  if (shading !== 'rendered')
+    return createDefaultMaterial(STRUCTURE_COLORS[structure], 0.9, shading)
+  let material = structureMaterials.get(structure)
+  if (!material) {
+    material = structure === 'cmu' ? masonryMaterial(BLOCK_MASONRY, uv().x) : concreteMaterial()
+    material.userData.__pascalCachedMaterial = true
+    structureMaterials.set(structure, material)
+  }
+  return material
 }
 
 // Slot-first resolution for one wall face, matching every other paintable kind:
-//   node.slots[face] ref → legacy inline finish → declared slot default.
+//   node.slots[face] ref → legacy inline finish → the face's default.
 // A dangling `scene:` ref (material deleted / copied across scenes) falls back
-// to the declared default — it never blocks rendering (the dangling-ref rule).
+// to the face's default — it never blocks rendering (the dangling-ref rule).
 function resolveWallFaceMaterial(
   wallNode: WallNode,
   face: WallFace,
@@ -139,14 +173,18 @@ function resolveWallFaceMaterial(
   if (finish.kind === 'ref') {
     return (
       resolveMaterialRef(finish.ref, sceneMaterials, shading) ??
-      resolveWallSlotDefault(WALL_SLOT_DEFAULT[face], shading)
+      resolveWallSlotDefault(getWallFaceDefault(wallNode, face), shading)
     )
   }
   if (finish.kind === 'legacy') return getSurfaceVisibleMaterial(finish.spec, shading)
   // No paint on this face: the wall ASSEMBLY's cladding (WS5) skins the
   // exterior — a "2x6 lap siding" wall reads as lap siding without the user
-  // painting it. Painting the face still wins.
+  // painting it. Painting the face still wins. Any other unpainted face wears
+  // its default (`getWallFaceDefault`): the interior paint
+  // (`DEFAULT_INTERIOR_WALL_PAINT`) inside, raw drywall on the exterior side.
   const assemblyRef = wallAssemblyFaceFinishRef(wallNode, face)
+  const exposed = assemblyRef ? null : wallFaceExposedStructure(wallNode, face)
+  if (exposed) return exposedStructureMaterial(exposed, shading)
   return resolveWallSlotDefault(assemblyRef ?? finish.ref, shading)
 }
 
@@ -185,15 +223,26 @@ function wallFaceMaterialSignature(
   sceneMaterials: SceneMaterials,
 ): string {
   const ref = wallNode.slots?.[face]
-  if (ref) return refMaterialSignature(ref, sceneMaterials)
+  // The face's default follows its side, so a room detected outside it re-skins
+  // an unpainted face (and the fallback of a dangling ref).
+  const fallback = getWallFaceDefault(wallNode, face)
+  if (ref) return JSON.stringify({ ref: refMaterialSignature(ref, sceneMaterials), fallback })
+  const spec = getEffectiveWallFaceMaterial(wallNode, face)
+  const assemblyRef = wallAssemblyFaceFinishRef(wallNode, face)
   return JSON.stringify({
-    legacy: getWallSurfaceMaterialSignature(getEffectiveWallFaceMaterial(wallNode, face)),
+    fallback,
+    legacy: getWallSurfaceMaterialSignature(spec),
+    preset: spec.materialPreset ? materialPresetRefSignature(spec.materialPreset) : null,
     // Changing the assembly's cladding must re-skin the face.
-    assemblyFinish: wallAssemblyFaceFinishRef(wallNode, face),
+    assemblyFinish: assemblyRef ? materialPresetRefSignature(assemblyRef) : null,
+    // So must baring or covering its structure.
+    structure: assemblyRef ? null : wallFaceExposedStructure(wallNode, face),
   })
 }
 
 function resolveRefColor(ref: string, sceneMaterials: SceneMaterials, fallback: string): string {
+  const color = parseMaterialColor(ref)
+  if (color) return color
   const parsed = parseMaterialRef(ref)
   if (parsed?.kind === 'library') {
     return getMaterialPresetByRef(ref)?.mapProperties?.color ?? fallback
@@ -219,6 +268,8 @@ function resolveWallFaceColor(
   if (assemblyRef && !(spec.materialPreset || spec.material)) {
     return getMaterialPresetByRef(assemblyRef)?.mapProperties?.color ?? fallback
   }
+  const exposed = assemblyRef ? null : wallFaceExposedStructure(wallNode, face)
+  if (exposed && !(spec.materialPreset || spec.material)) return STRUCTURE_COLORS[exposed]
   return getSurfaceColor(spec, fallback)
 }
 
@@ -252,20 +303,10 @@ function createHighlightedWallMaterial(material: Material, kind: WallHighlightKi
   if ('color' in highlightedMaterial && highlightedMaterial.color) {
     highlightedMaterial.color = getHighlightedColor(highlightedMaterial.color, kind)
   }
-  if ('emissive' in highlightedMaterial && highlightedMaterial.emissive) {
-    highlightedMaterial.emissive = highlightedMaterial.emissive
-      .clone()
-      .lerp(profile.color, profile.emissiveBlend)
-  }
-  if ('emissiveIntensity' in highlightedMaterial) {
-    highlightedMaterial.emissiveIntensity = Math.max(
-      highlightedMaterial.emissiveIntensity ?? 0,
-      profile.emissiveIntensity,
-    )
-  }
+  tintEmissive(highlightedMaterial, profile.color, profile.emissive)
   highlightedMaterial.needsUpdate = true
 
-  return highlightedMaterial
+  return markHighlight(highlightedMaterial)
 }
 
 // Light selection highlight for walls (walls are excluded from the generic
@@ -278,16 +319,14 @@ function createHighlightedWallMaterial(material: Material, kind: WallHighlightKi
 //      cache keyed by the source `.map` and rebuild when it changes (self-heals
 //      once the texture lands).
 const SELECTION_HIGHLIGHT_COLOR = new Color('#818cf8')
-const SELECTION_EMISSIVE_BLEND = 0.4
-const SELECTION_EMISSIVE_INTENSITY = 0.12
+const SELECTION_EMISSIVE = 0.12
 
 // Softer sibling of the selection glow, for HOVERING a hidden wall (the
 // X-ray nearest-first selection made hidden walls hover targets; without a
 // material affordance the only thing lighting up was the furniture behind
 // them). Same indigo so hover reads as "this will select", weaker so a
 // hovered-then-selected wall still steps up on click.
-const HOVER_EMISSIVE_BLEND = 0.4
-const HOVER_EMISSIVE_INTENSITY = 0.2
+const HOVER_EMISSIVE = 0.08
 
 const SELECTION_TEXTURE_MAP_KEYS = [
   'map',
@@ -308,8 +347,7 @@ const hoverHighlightCache = new WeakMap<Material, { clone: Material; map: unknow
 function getEmissiveHighlightMaterial(
   base: Material,
   cache: WeakMap<Material, { clone: Material; map: unknown }>,
-  emissiveBlend: number,
-  emissiveIntensity: number,
+  emissive: number,
 ): Material {
   const baseMap = (base as { map?: unknown }).map ?? null
   const cached = cache.get(base)
@@ -326,13 +364,9 @@ function getEmissiveHighlightMaterial(
   for (const key of SELECTION_TEXTURE_MAP_KEYS) {
     if (src[key]) dst[key] = src[key]
   }
-  if ('emissive' in clone && clone.emissive) {
-    clone.emissive = clone.emissive.clone().lerp(SELECTION_HIGHLIGHT_COLOR, emissiveBlend)
-  }
-  if ('emissiveIntensity' in clone) {
-    clone.emissiveIntensity = Math.max(clone.emissiveIntensity ?? 0, emissiveIntensity)
-  }
+  tintEmissive(clone, SELECTION_HIGHLIGHT_COLOR, emissive)
   clone.needsUpdate = true
+  markHighlight(clone)
   cache.set(base, { clone, map: baseMap })
   return clone
 }
@@ -340,12 +374,7 @@ function getEmissiveHighlightMaterial(
 /** Lazy light-emissive selection variant of a wall's material array (keeps texture). */
 export function getSelectionHighlightMaterials(materials: WallMaterialArray): WallMaterialArray {
   return materials.map((material) =>
-    getEmissiveHighlightMaterial(
-      material,
-      selectionHighlightCache,
-      SELECTION_EMISSIVE_BLEND,
-      SELECTION_EMISSIVE_INTENSITY,
-    ),
+    getEmissiveHighlightMaterial(material, selectionHighlightCache, SELECTION_EMISSIVE),
   ) as WallMaterialArray
 }
 
@@ -356,12 +385,7 @@ export function getSelectionHighlightMaterials(materials: WallMaterialArray): Wa
  */
 export function getHoverHighlightMaterials(materials: WallMaterialArray): WallMaterialArray {
   return materials.map((material) =>
-    getEmissiveHighlightMaterial(
-      material,
-      hoverHighlightCache,
-      HOVER_EMISSIVE_BLEND,
-      HOVER_EMISSIVE_INTENSITY,
-    ),
+    getEmissiveHighlightMaterial(material, hoverHighlightCache, HOVER_EMISSIVE),
   ) as WallMaterialArray
 }
 

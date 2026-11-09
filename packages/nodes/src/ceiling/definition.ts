@@ -1,5 +1,6 @@
 import {
   type CeilingNode as CeilingNodeType,
+  ceilingSlots,
   type HandleDescriptor,
   type NodeDefinition,
   resolveCeilingHeight,
@@ -11,6 +12,7 @@ import {
   DRAFTING_SURFACE_EXTENSION_KEY,
   type DraftingSurfaceExtension,
   type FloorplanNodeExtension,
+  PANEL_MODEL_EXTENSION,
   publishStructuralElevationGuide,
   resolveStructuralElevationSnap,
 } from '@pascal-app/editor'
@@ -27,9 +29,9 @@ import {
 import { ceilingFloorplanMoveTarget } from './floorplan-move'
 import { CEILING_HANDLE_MIN_HEIGHT, ceilingHeightRange } from './height-bounds'
 import { ceilingPaint } from './paint'
+import { ceilingPanelModel } from './panel-model'
 import { ceilingParametrics } from './parametrics'
 import { CeilingNode } from './schema'
-import { ceilingSlots } from './slots'
 
 const HEIGHT_HANDLE_OFFSET = 0.22
 
@@ -139,6 +141,7 @@ export const ceilingDefinition: NodeDefinition<typeof CeilingNode> = {
     'pascal:editor/floorplan': {
       selectionCounterparts: sameOutlineSurfaceCounterparts,
     } satisfies FloorplanNodeExtension,
+    [PANEL_MODEL_EXTENSION]: ceilingPanelModel,
   },
 
   // Height-less on purpose: a new ceiling follows the level top until the
@@ -156,6 +159,8 @@ export const ceilingDefinition: NodeDefinition<typeof CeilingNode> = {
   }),
 
   capabilities: {
+    reveal: { phase: 'roof', style: 'settle', height: 0.08 },
+    revealOnEdit: ['polygon', 'holes', 'height'],
     batchable: surfaceBatchable,
     selectable: { hitVolume: 'bbox' },
     surfaces: {
@@ -211,6 +216,7 @@ export const ceilingDefinition: NodeDefinition<typeof CeilingNode> = {
     priority: 4,
   },
   floorplan: buildCeilingFloorplan,
+  floorplanDependsOnSiblings: true,
   // 2D move handler — translates polygon by cursor delta from first
   // pointer position. Mirror of slab; 3D `MoveCeilingTool` skips
   // 2D-sourced grid events so they don't double-write on commit.

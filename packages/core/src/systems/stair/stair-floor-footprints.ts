@@ -1,10 +1,9 @@
 import type { FloorPlacedFootprint } from '../../registry/types'
 import type { AnyNode, AnyNodeId, StairNode, StairSegmentNode } from '../../schema'
-
-type SegmentTransform = {
-  position: [number, number, number]
-  rotation: number
-}
+import { resolveStairConstruction } from './stair-construction'
+import { computeSegmentTransforms, rotateXZ } from './stair-footprint'
+import { resolveStairArcDimensions } from './stair-layout'
+import { resolveStairWinder } from './stair-winder'
 
 export function getStairFloorPlacedFootprints(
   stair: StairNode,
@@ -25,37 +24,51 @@ const MAX_ARC_FOOTPRINT_SWEEP = Math.PI / 12
 
 function getArcStairFloorPlacedFootprints(stair: StairNode): FloorPlacedFootprint[] {
   const isSpiral = stair.stairType === 'spiral'
-  const innerRadius = Math.max(isSpiral ? 0.05 : 0.2, stair.innerRadius ?? (isSpiral ? 0.2 : 0.9))
-  const outerRadius = innerRadius + Math.max(stair.width ?? 1, 0.4)
-  const sweepAngle = stair.sweepAngle ?? (isSpiral ? Math.PI * 2 : Math.PI / 2)
-  const stepCount = Math.max(2, Math.round(stair.stepCount ?? 10))
-  const sliceCount = Math.max(stepCount, Math.ceil(Math.abs(sweepAngle) / MAX_ARC_FOOTPRINT_SWEEP))
+  const layout = resolveStairArcDimensions(stair, 0)
+  const { innerRadius, outerRadius } = layout
+  const sweepAngle =
+    Math.sign(layout.sweepAngle || 1) *
+    Math.min(Math.abs(layout.sweepAngle + layout.nosingSweep), Math.PI * 2)
   const footprints: FloorPlacedFootprint[] = []
 
-  for (let index = 0; index < sliceCount; index += 1) {
-    const startAngle = -sweepAngle / 2 + (sweepAngle * index) / sliceCount
-    const endAngle = -sweepAngle / 2 + (sweepAngle * (index + 1)) / sliceCount
-    const midAngle = (startAngle + endAngle) / 2
-    const halfSweep = Math.abs(endAngle - startAngle) / 2
-    const projectedInnerRadius = innerRadius * Math.cos(halfSweep)
-    const radialSize = outerRadius - projectedInnerRadius
-    const tangentialSize = 2 * outerRadius * Math.sin(halfSweep)
-    const centerRadius = (outerRadius + projectedInnerRadius) / 2
-    const [offsetX, offsetZ] = rotateXZ(
-      Math.cos(midAngle) * centerRadius,
-      Math.sin(midAngle) * centerRadius,
-      stair.rotation ?? 0,
-    )
+  const ranges = [
+    { start: -layout.sweepAngle / 2 - layout.nosingSweep, sweep: sweepAngle },
+    ...(layout.landingSweep ? [{ start: layout.sweepAngle / 2, sweep: layout.landingSweep }] : []),
+  ]
+  for (const range of ranges) {
+    const sliceCount = Math.max(1, Math.ceil(Math.abs(range.sweep) / MAX_ARC_FOOTPRINT_SWEEP))
+    for (let index = 0; index < sliceCount; index += 1) {
+      const startAngle = range.start + (range.sweep * index) / sliceCount
+      const endAngle = range.start + (range.sweep * (index + 1)) / sliceCount
+      const midAngle = (startAngle + endAngle) / 2
+      const halfSweep = Math.abs(endAngle - startAngle) / 2
+      const projectedInnerRadius = innerRadius * Math.cos(halfSweep)
+      const radialSize = outerRadius - projectedInnerRadius
+      const tangentialSize = 2 * outerRadius * Math.sin(halfSweep)
+      const centerRadius = (outerRadius + projectedInnerRadius) / 2
+      const [offsetX, offsetZ] = rotateXZ(
+        Math.cos(midAngle) * centerRadius,
+        Math.sin(midAngle) * centerRadius,
+        stair.rotation ?? 0,
+      )
 
-    footprints.push({
-      position: [stair.position[0] + offsetX, stair.position[1], stair.position[2] + offsetZ],
-      dimensions: [Math.max(radialSize, 0.01), 0.01, Math.max(tangentialSize, 0.01)],
-      rotation: [0, midAngle - (stair.rotation ?? 0), 0],
-    })
+      footprints.push({
+        position: [stair.position[0] + offsetX, stair.position[1], stair.position[2] + offsetZ],
+        dimensions: [
+          Math.max(radialSize, Number.EPSILON),
+          0.01,
+          Math.max(tangentialSize, Number.EPSILON),
+        ],
+        rotation: [0, midAngle - (stair.rotation ?? 0), 0],
+      })
+    }
   }
 
   if (isSpiral && (stair.showCenterColumn ?? true)) {
-    const columnRadius = Math.max(0.05, Math.min(innerRadius * 0.72, innerRadius - 0.03))
+    const columnRadius = Math.min(
+      innerRadius * 0.72,
+      Math.max(innerRadius - 0.03, innerRadius * 0.5),
+    )
     footprints.push({
       position: stair.position,
       dimensions: [columnRadius * 2, 0.01, columnRadius * 2],
@@ -72,9 +85,54 @@ export function getStairSegmentFloorPlacedFootprints(
 ): FloorPlacedFootprint[] {
   const transforms = computeStairSegmentFloorStackTransforms(segments)
 
-  return segments.map((segment, index) => {
+  return segments.flatMap((segment, index) => {
     const transform = transforms[index]!
-    const [centerOffsetX, centerOffsetZ] = rotateXZ(0, segment.length / 2, transform.rotation)
+    const winder = resolveStairWinder(segment)
+    if (winder) {
+      // Two rectangular legs exactly cover the square ring without filling its inner gap.
+      const gap = segment.winder!.innerGap,
+        width = segment.width,
+        sign = segment.winder!.turn === 'left' ? -1 : 1
+      const pivot = sign * (gap + width / 2)
+      const nose =
+        ((resolveStairConstruction(segment, stair)?.nosing ?? 0) * (gap + width)) /
+        (gap + segment.winder!.walkingLineOffset)
+      return [
+        [pivot - sign * (gap + width / 2), (gap + width - nose) / 2, width, gap + width + nose],
+        [pivot - (sign * gap) / 2, gap + width / 2, gap, width],
+      ]
+        .filter((rect) => rect[2]! > 0)
+        .map(([x, z, w, d]) => {
+          const [sx, sz] = rotateXZ(x!, z!, transform.rotation)
+          const [wx, wz] = rotateXZ(
+            transform.position[0] + sx,
+            transform.position[2] + sz,
+            stair.rotation,
+          )
+          return {
+            position: [
+              stair.position[0] + wx,
+              stair.position[1] + transform.position[1],
+              stair.position[2] + wz,
+            ] as [number, number, number],
+            dimensions: [w!, Math.max(segment.height, segment.thickness, 0.01), d!] as [
+              number,
+              number,
+              number,
+            ],
+            rotation: [0, stair.rotation + transform.rotation, 0] as [number, number, number],
+          }
+        })
+    }
+    const nose =
+      segment.segmentType === 'landing'
+        ? 0
+        : (resolveStairConstruction(segment, stair)?.nosing ?? 0)
+    const [centerOffsetX, centerOffsetZ] = rotateXZ(
+      0,
+      (segment.length - nose) / 2,
+      transform.rotation,
+    )
     const centerInGroupX = transform.position[0] + centerOffsetX
     const centerInGroupZ = transform.position[2] + centerOffsetZ
     const [centerOffsetWorldX, centerOffsetWorldZ] = rotateXZ(
@@ -83,76 +141,22 @@ export function getStairSegmentFloorPlacedFootprints(
       stair.rotation ?? 0,
     )
 
-    return {
-      position: [
-        stair.position[0] + centerOffsetWorldX,
-        stair.position[1] + transform.position[1],
-        stair.position[2] + centerOffsetWorldZ,
-      ],
-      dimensions: [
-        segment.width,
-        Math.max(segment.height, segment.thickness, 0.01),
-        segment.length,
-      ],
-      rotation: [0, (stair.rotation ?? 0) + transform.rotation, 0],
-    }
+    return [
+      {
+        position: [
+          stair.position[0] + centerOffsetWorldX,
+          stair.position[1] + transform.position[1],
+          stair.position[2] + centerOffsetWorldZ,
+        ],
+        dimensions: [
+          segment.width,
+          Math.max(segment.height, segment.thickness, 0.01),
+          segment.length + nose,
+        ],
+        rotation: [0, (stair.rotation ?? 0) + transform.rotation, 0],
+      },
+    ]
   })
 }
 
-export function computeStairSegmentFloorStackTransforms(
-  segments: readonly StairSegmentNode[],
-): SegmentTransform[] {
-  const transforms: SegmentTransform[] = []
-  let currentX = 0
-  let currentY = 0
-  let currentZ = 0
-  let currentRot = 0
-
-  for (let index = 0; index < segments.length; index += 1) {
-    const segment = segments[index]!
-
-    if (index > 0) {
-      const previous = segments[index - 1]!
-      let attachX = 0
-      let attachZ = 0
-      let rotationDelta = 0
-
-      switch (segment.attachmentSide) {
-        case 'front':
-          attachX = 0
-          attachZ = previous.length
-          rotationDelta = 0
-          break
-        case 'left':
-          attachX = previous.width / 2
-          attachZ = previous.length / 2
-          rotationDelta = Math.PI / 2
-          break
-        case 'right':
-          attachX = -previous.width / 2
-          attachZ = previous.length / 2
-          rotationDelta = -Math.PI / 2
-          break
-      }
-
-      const [rotatedX, rotatedZ] = rotateXZ(attachX, attachZ, currentRot)
-      currentX += rotatedX
-      currentY += previous.height
-      currentZ += rotatedZ
-      currentRot += rotationDelta
-    }
-
-    transforms.push({
-      position: [currentX, currentY, currentZ],
-      rotation: currentRot,
-    })
-  }
-
-  return transforms
-}
-
-function rotateXZ(x: number, z: number, angle: number): [number, number] {
-  const cos = Math.cos(angle)
-  const sin = Math.sin(angle)
-  return [x * cos + z * sin, -x * sin + z * cos]
-}
+export const computeStairSegmentFloorStackTransforms = computeSegmentTransforms

@@ -101,9 +101,13 @@ test('a system that throws in a frame reaches onFrameError, once, and frames kee
     expect(frames.length).toBeGreaterThan(0)
     await renderer.unmount()
   } finally {
+    // Bun has no window or document: put back their absence, not an undefined value, which a later
+    // file's `'window' in globalThis` would take for a window.
+    for (const key of ['window', 'document'] as const) {
+      if (saved[key] === undefined) Reflect.deleteProperty(globalThis, key)
+      else Object.assign(globalThis, { [key]: saved[key] })
+    }
     Object.assign(globalThis, {
-      window: saved.window,
-      document: saved.document,
       requestAnimationFrame: saved.raf,
       cancelAnimationFrame: saved.caf,
       addEventListener: saved.addEventListener,

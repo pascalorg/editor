@@ -3,6 +3,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import http from 'node:http'
 import os from 'node:os'
 import path from 'node:path'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import {
   activateEditorRuntime,
   getEditorStatus,
@@ -56,22 +57,22 @@ describe('managed runtime', () => {
     expect(await Bun.file(paths.database).text()).toBe('persistent')
   })
 
-  test('preserves a configured Mint host origin in the editor process', async () => {
+  test('preserves a configured public URL in the editor process', async () => {
     const root = await temporaryRoot()
     const source = await fakeRuntime(root, '1.2.3')
     const paths = resolvePascalPaths({ PASCAL_HOME: path.join(root, 'home') })
-    const previousMintOrigin = process.env.MINT_PASCAL_HOST_ORIGIN
-    process.env.MINT_PASCAL_HOST_ORIGIN = 'https://pascal.example.com'
+    const previousPublicUrl = process.env.PASCAL_PUBLIC_URL
+    process.env.PASCAL_PUBLIC_URL = 'https://pascal.example.com'
 
     try {
       const started = await startEditor({ paths, runtimeSource: source })
-      const response = await fetch(`http://127.0.0.1:${started.state.port}/mint-origin`)
+      const response = await fetch(`http://127.0.0.1:${started.state.port}/public-url`)
 
       expect(await response.text()).toBe('https://pascal.example.com')
     } finally {
       await stopEditor(paths)
-      if (previousMintOrigin === undefined) delete process.env.MINT_PASCAL_HOST_ORIGIN
-      else process.env.MINT_PASCAL_HOST_ORIGIN = previousMintOrigin
+      if (previousPublicUrl === undefined) delete process.env.PASCAL_PUBLIC_URL
+      else process.env.PASCAL_PUBLIC_URL = previousPublicUrl
     }
   })
 
@@ -280,7 +281,26 @@ describe('managed runtime', () => {
     const started = await startEditor({ paths, runtimeSource: firstSource })
     const candidate = await installBundledRuntime(paths, secondSource, { activate: false })
 
-    const result = await activateEditorRuntime(paths, candidate)
+    // Exercise the published layout, where a CLI pin exists even for an explicit activation.
+    const cliDist = path.join(root, 'cli/dist')
+    const built = await Bun.build({
+      entrypoints: [fileURLToPath(new URL('./editor-process.ts', import.meta.url))],
+      outdir: cliDist,
+      target: 'node',
+    })
+    expect(built.success).toBe(true)
+    await writeFile(path.join(cliDist, '../package.json'), JSON.stringify({ version: '3.0.0' }))
+    await writeFile(
+      path.join(cliDist, 'runtime-source.json'),
+      JSON.stringify({
+        version: '3.0.0',
+        url: 'https://127.0.0.1:1/runtime.tar.gz',
+        sha256: 'a'.repeat(64),
+        size: 10,
+      }),
+    )
+    const packaged = await import(pathToFileURL(path.join(cliDist, 'editor-process.js')).href)
+    const result = await packaged.activateEditorRuntime(paths, candidate)
 
     expect(result.restarted).toBe(true)
     const status = await getEditorStatus(paths)
@@ -418,8 +438,8 @@ const server = http.createServer((request, response) => {
     }))
     return
   }
-  if (request.url === '/mint-origin') {
-    response.end(process.env.MINT_PASCAL_HOST_ORIGIN ?? '')
+  if (request.url === '/public-url') {
+    response.end(process.env.PASCAL_PUBLIC_URL ?? '')
     return
   }
   response.end('{}')

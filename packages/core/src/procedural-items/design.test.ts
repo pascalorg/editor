@@ -59,23 +59,26 @@ describe('validateDesign on trial elements', () => {
     ['E1 condenser', condenserJson, 'floor', 4032, 5, 119, 25, [1.219, 1.076, 1.524]],
     ['E2 air handler', airHandlerJson, 'ceiling', 7200, 4, 30, 23, [2.125, 1.146, 2.21]],
     ['E5 louver', louverJson, 'wall', 252, 1, 21, 23, [0.634, 0.94, 0.076]],
-  ] as const)('%s is valid and measured like the trial build', (_, json, datum, triangles, groups, shapes, cases, dimensions) => {
-    const result = validateDesign(json)
-    expect(DesignValidationSchema.parse(result)).toEqual(result)
-    expect(result.valid).toBe(true)
-    expect(result.diagnostics).toEqual([])
-    expect(result.sweep).toEqual({ cases, failed: 0, failures: [] })
-    const m = result.measurements!
-    expect(m.triangles.actual).toBe(triangles)
-    expect(m.drawGroups).toHaveLength(groups)
-    expect(m.shapes).toBe(shapes)
-    for (const [i, value] of m.bounds.dimensions.entries())
-      expect(value).toBeCloseTo(dimensions[i]!, 3)
-    expect(m.datum).toMatchObject({ kind: datum, gap: 0 })
-    expect(m.datum.contact!.shapes).toBeGreaterThan(0)
-    expect(m.components.count).toBe(1)
-    expect(m.parts.reduce((sum, part) => sum + part.shapes, 0)).toBe(shapes)
-  })
+  ] as const)(
+    '%s is valid and measured like the trial build',
+    (_, json, datum, triangles, groups, shapes, cases, dimensions) => {
+      const result = validateDesign(json)
+      expect(DesignValidationSchema.parse(result)).toEqual(result)
+      expect(result.valid).toBe(true)
+      expect(result.diagnostics).toEqual([])
+      expect(result.sweep).toEqual({ cases, failed: 0, failures: [] })
+      const m = result.measurements!
+      expect(m.triangles.actual).toBe(triangles)
+      expect(m.drawGroups).toHaveLength(groups)
+      expect(m.shapes).toBe(shapes)
+      for (const [i, value] of m.bounds.dimensions.entries())
+        expect(value).toBeCloseTo(dimensions[i]!, 3)
+      expect(m.datum).toMatchObject({ kind: datum, gap: 0 })
+      expect(m.datum.contact!.shapes).toBeGreaterThan(0)
+      expect(m.components.count).toBe(1)
+      expect(m.parts.reduce((sum, part) => sum + part.shapes, 0)).toBe(shapes)
+    },
+  )
 
   test('per-part bounds and instances follow the parameters', () => {
     const at = (slat_count: number) =>
@@ -138,6 +141,39 @@ describe('validateDesign diagnostics', () => {
     const byPath = Object.fromEntries(result.diagnostics.map((d) => [d.path, d.message]))
     expect(byPath['parts[2].count']).toContain('arithmetic strings are not supported')
     expect(byPath['parts[0].shapes[0].slot']).toContain('lowercase snake_case')
+  })
+
+  test('a design written blind gets, in one answer, what each path takes and a valid example', () => {
+    const blind = {
+      version: 1,
+      name: 'Test',
+      description: 'test box',
+      mounting: 'floor',
+      parameters: [{ id: 'w', default: 1, min: 0.5, max: 2 }],
+      slots: [{ id: 'wood', default: '#c9a77c' }],
+      parts: [{ id: 'body', shape: 'cylinder', size: ['w', 0.5, 0.4], position: [0, 0.25, 0] }],
+      constraints: [],
+    }
+    const result = validateDesign(blind)
+    const at = Object.fromEntries(result.diagnostics.map((d) => [d.path, d]))
+    expect(result.diagnostics.every((d) => d.expected && d.received)).toBe(true)
+    expect(at.mounting).toMatchObject({ received: '"floor"' })
+    expect(at.mounting!.expected).toContain('A floor design leaves mounting out')
+    expect(at['parameters[0].unit']!.expected).toContain('"m"')
+    expect(at['slots[0]']!.expected).toContain('color')
+    expect(at['parts[0]']!.expected).toContain('shapes')
+    expect(at['parts[0].count']!.expected).toContain('parameter id')
+    expect(result).toMatchObject({ schemaUri: 'pascal://schema/design', example: DESIGN_EXAMPLE })
+    expect(DesignValidationSchema.safeParse(result).success).toBe(true)
+
+    const shape = { id: 'leg', primitive: 'cylinder', slot: 'wood', height: 0.5 }
+    const cylinder = {
+      ...DESIGN_EXAMPLE,
+      parts: [{ ...DESIGN_EXAMPLE.parts[0]!, shapes: [shape] }],
+    }
+    const keys = validateDesign(cylinder).diagnostics.find((d) => d.path === 'parts[0].shapes[0]')
+    expect(keys!.expected).toContain('size, position')
+    expect(keys!.expected).not.toContain('profile')
   })
 
   test('a bad slot or light color is reported as a color, not an id', () => {

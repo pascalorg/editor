@@ -4,9 +4,11 @@ import { dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
   type AnyNode,
+  type Collection,
   type ColumnNode,
   type DoorNode,
   getLevelElevations,
+  ItemNode,
   type SlabNode,
   type WallNode,
   type WindowNode,
@@ -14,7 +16,7 @@ import {
 } from '@pascal-app/core'
 import * as WebIFC from 'web-ifc'
 import { convertIfcToPascal, type PascalSceneGraph } from '../src'
-import { buildIfcExport, exportSceneToIfc } from '../src/export'
+import { buildIfcExport, exportSceneToIfc, type IfcMeshPart } from '../src/export'
 import { columnScene, roomWithOpenings, twoLevelScene, wallsOn } from './export-scenes'
 import { expectWellFormedStep } from './export-step-check'
 
@@ -24,6 +26,100 @@ const sampleHouse = fileURLToPath(
 )
 const MM = 3 // toBeCloseTo digits: |a - b| < 0.5e-3
 const EPOCH = new Date(Date.UTC(2026, 0, 1))
+
+test('collections round-trip names, templates and product membership including multipart objects', async () => {
+  const nodes = roomWithOpenings()
+  const item = ItemNode.parse({
+    id: 'item_lantern',
+    name: 'Lantern',
+    parentId: 'level_ground',
+    asset: {
+      id: 'lantern',
+      category: 'lighting',
+      name: 'Lantern',
+      thumbnail: '',
+      src: `artifact://${'b'.repeat(64)}`,
+    },
+    source: {
+      kind: 'script',
+      language: 'three',
+      script: 'a'.repeat(64),
+      artifact: 'b'.repeat(64),
+      params: {},
+      manifest: { bounds: { min: [0, 0, 0], max: [1, 1, 1] }, triangles: 2 },
+    },
+  })
+  nodes[item.id] = item
+  const collections: Record<string, Collection> = {
+    collection_lights: {
+      id: 'collection_lights',
+      name: 'Lighting — entrée',
+      template: 'lights',
+      color: '#f5b83d',
+      nodeIds: [item.id, 'item_missing'],
+    },
+    collection_openings: {
+      id: 'collection_openings',
+      name: 'South openings',
+      template: 'windows',
+      nodeIds: ['window_south', 'door_front'],
+    },
+    collection_custom: {
+      id: 'collection_custom',
+      name: 'Review together',
+      nodeIds: [item.id, 'door_front'],
+    },
+    collection_empty: {
+      id: 'collection_empty',
+      name: 'No exported members',
+      nodeIds: ['item_missing'],
+    },
+  }
+  const meshes = new Map<string, IfcMeshPart[]>([
+    [
+      item.id,
+      [{ positions: [0, 0, 0, 1, 0, 0, 0, 1, 0] }, { positions: [0, 0, 1, 1, 0, 1, 0, 1, 1] }],
+    ],
+  ])
+  const ifc = exportSceneToIfc({ nodes, collections, meshes, timestamp: EPOCH })
+  expectWellFormedStep(ifc)
+  const modelID = openModel(ifc)
+  try {
+    expect(idsOf(modelID, WebIFC.IFCGROUP)).toHaveLength(4)
+    const rels = idsOf(modelID, WebIFC.IFCRELASSIGNSTOGROUP).map((id) => api.GetLine(modelID, id))
+    expect(rels).toHaveLength(3)
+    const lighting = rels.find(
+      (rel) => api.GetLine(modelID, rel.RelatingGroup.value).Name.value === 'Lighting — entrée',
+    )
+    expect(lighting.RelatedObjects).toHaveLength(1)
+    const product = lighting.RelatedObjects[0].value
+    expect(api.GetLine(modelID, product).Tag.value).toBe(item.id)
+    expect(triangleCount(modelID, product)).toBe(2)
+  } finally {
+    api.CloseModel(modelID)
+  }
+  const scene = await reimport(ifc)
+  const importedItem = Object.values(scene.nodes).find((node) => node.name === 'Lantern')!
+  expect(importedItem).toBeDefined()
+  expect(scene.collections).toEqual({
+    collection_lights: { ...collections.collection_lights, nodeIds: [importedItem.id] },
+    collection_openings: collections.collection_openings,
+    collection_custom: {
+      ...collections.collection_custom,
+      nodeIds: [importedItem.id, 'door_front'],
+    },
+  })
+  const systemScene = await reimport(ifc.replaceAll('=IFCGROUP(', '=IFCSYSTEM('))
+  expect(
+    Object.values(systemScene.collections ?? {})
+      .map((collection) => collection.name)
+      .sort(),
+  ).toEqual(
+    Object.values(scene.collections ?? {})
+      .map((collection) => collection.name)
+      .sort(),
+  )
+})
 
 const api = new WebIFC.IfcAPI()
 const quietLog = console.log

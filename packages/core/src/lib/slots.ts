@@ -1,5 +1,6 @@
-import { parseMaterialRef } from '../material-library'
+import { materialColorPaint, parseMaterialColor, parseMaterialRef } from '../material-library'
 import type { MaterialSchema } from '../schema/material'
+import type { SceneMaterial, SceneMaterialId } from '../schema/scene-material'
 
 export const SLOT_MATERIAL_PREFIX = 'slot_'
 
@@ -53,4 +54,22 @@ export function slotDefaultPaintMaterial(
       },
     },
   }
+}
+
+/**
+ * A painted slot value as a paint material — what the eyedropper picks: a
+ * `library:` ref stays a ref, a `scene:` ref gives its scene material, a plain
+ * colour the flat material it renders as. Null when absent or dangling.
+ */
+export function slotPaintMaterial(
+  value: string | undefined,
+  sceneMaterials: Record<SceneMaterialId, SceneMaterial>,
+): { material: MaterialSchema | undefined; materialPreset: string | undefined } | null {
+  const color = parseMaterialColor(value)
+  if (color) return { material: materialColorPaint(color), materialPreset: undefined }
+  const parsed = parseMaterialRef(value)
+  if (!parsed) return null
+  if (parsed.kind === 'library') return { material: undefined, materialPreset: value }
+  const sceneMaterial = sceneMaterials[parsed.id as SceneMaterialId]
+  return sceneMaterial ? { material: sceneMaterial.material, materialPreset: undefined } : null
 }

@@ -1,6 +1,7 @@
 'use client'
 
 import { Icon } from '@iconify/react'
+import { usePascalI18n } from '@pascal-app/core'
 import {
   Copy,
   Group,
@@ -65,70 +66,103 @@ export function NodeActionMenu({
   onPointerEnter,
   onPointerLeave,
   children,
-  deleteLabel = 'Delete',
+  deleteLabel,
   deleteDisabledReason,
 }: NodeActionMenuProps) {
+  const i18n = usePascalI18n()
   return (
     <div
       className="pointer-events-auto flex items-center gap-1 rounded-lg border border-border bg-background/95 p-1 shadow-xl backdrop-blur-md"
+      data-node-action-menu
       onPointerDown={onPointerDown}
       onPointerEnter={onPointerEnter}
       onPointerLeave={onPointerLeave}
       onPointerUp={onPointerUp}
     >
       {onFind && (
-        <ActionMenuButton label="Find in catalog" onClick={onFind}>
+        <ActionMenuButton
+          label={i18n._({ id: 'editor.nodeActionMenu.findInCatalog', message: 'Find in catalog' })}
+          onClick={onFind}
+        >
           <Search className="h-4 w-4" />
         </ActionMenuButton>
       )}
       {onMove && (
-        <ActionMenuButton label="Move" onClick={onMove}>
+        <ActionMenuButton
+          label={i18n._({ id: 'editor.nodeActionMenu.move', message: 'Move' })}
+          onClick={onMove}
+        >
           <Move className="h-4 w-4" />
         </ActionMenuButton>
       )}
       {onEditMesh && (
-        <ActionMenuButton label="Edit mesh" onClick={onEditMesh}>
+        <ActionMenuButton
+          label={i18n._({ id: 'editor.nodeActionMenu.editMesh', message: 'Edit mesh' })}
+          onClick={onEditMesh}
+        >
           <PencilRuler className="h-4 w-4" />
         </ActionMenuButton>
       )}
       {onGroup && (
-        <ActionMenuButton keys={['Cmd/Ctrl', 'G']} label="Group selection" onClick={onGroup}>
+        <ActionMenuButton
+          keys={['Cmd/Ctrl', 'G']}
+          label={i18n._({ id: 'editor.nodeActionMenu.groupSelection', message: 'Group selection' })}
+          onClick={onGroup}
+        >
           <Group className="h-4 w-4" />
         </ActionMenuButton>
       )}
       {onUngroup && (
         <ActionMenuButton
           keys={['Cmd/Ctrl', 'Shift', 'G']}
-          label="Ungroup selection"
+          label={i18n._({
+            id: 'editor.nodeActionMenu.ungroupSelection',
+            message: 'Ungroup selection',
+          })}
           onClick={onUngroup}
         >
           <Ungroup className="h-4 w-4" />
         </ActionMenuButton>
       )}
       {onCurve && (
-        <ActionMenuButton label="Curve" onClick={onCurve}>
+        <ActionMenuButton
+          label={i18n._({ id: 'editor.nodeActionMenu.curve', message: 'Curve' })}
+          onClick={onCurve}
+        >
           <Spline className="h-4 w-4" />
         </ActionMenuButton>
       )}
       {onRotateLeft && (
-        <ActionMenuButton label="Rotate left" onClick={onRotateLeft}>
+        <ActionMenuButton
+          label={i18n._({ id: 'editor.nodeActionMenu.rotateLeft', message: 'Rotate left' })}
+          onClick={onRotateLeft}
+        >
           <RotateCcw className="h-4 w-4" />
         </ActionMenuButton>
       )}
       {onRotateRight && (
-        <ActionMenuButton label="Rotate right" onClick={onRotateRight}>
+        <ActionMenuButton
+          label={i18n._({ id: 'editor.nodeActionMenu.rotateRight', message: 'Rotate right' })}
+          onClick={onRotateRight}
+        >
           <RotateCw className="h-4 w-4" />
         </ActionMenuButton>
       )}
       <RegistryActionContributions />
       {children}
       {onDuplicate && (
-        <ActionMenuButton label="Duplicate" onClick={onDuplicate}>
+        <ActionMenuButton
+          label={i18n._({ id: 'editor.nodeActionMenu.duplicate', message: 'Duplicate' })}
+          onClick={onDuplicate}
+        >
           <Copy className="h-4 w-4" />
         </ActionMenuButton>
       )}
       {onAddHole && (
-        <ActionMenuButton label="Cut out" onClick={onAddHole}>
+        <ActionMenuButton
+          label={i18n._({ id: 'editor.nodeActionMenu.cutOut', message: 'Cut out' })}
+          onClick={onAddHole}
+        >
           <Icon height={16} icon="carbon:cut-out" width={16} />
         </ActionMenuButton>
       )}
@@ -138,7 +172,7 @@ export function NodeActionMenu({
           disabled={!!deleteDisabledReason}
           disabledReason={deleteDisabledReason}
           keys={['Delete / Backspace']}
-          label={deleteLabel}
+          label={deleteLabel ?? i18n._({ id: 'editor.nodeActionMenu.delete', message: 'Delete' })}
           onClick={onDelete}
         >
           <Trash2 className="h-4 w-4" />

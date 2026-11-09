@@ -1,9 +1,15 @@
-import { floorPlateHoldsUnderside } from '../lib/floor-foundation-datum'
+import {
+  floorPlateAtGroundContact,
+  floorPlateHoldsUnderside,
+  supportDerivedFloorHeight,
+} from '../lib/floor-foundation-datum'
 import { expandFloorIntentChanges, floorIntentConflicts } from '../lib/floor-intent-changes'
 import { ownFloorIntentChanges } from '../lib/own-floor-intent'
 import { type Ring, union } from '../lib/polygon-boolean'
+import { surfaceIntentZoneIds } from '../lib/surface-intent'
 import type { AnyNode, AnyNodeId, CeilingNode, SlabNode, ZoneNode } from '../schema'
 import { FloorOpeningNode, generateId } from '../schema'
+import { DEFAULT_SLAB_ELEVATION } from '../schema/nodes/slab'
 import type { SurfaceHoleMetadata } from '../schema/nodes/surface-hole-metadata'
 
 /**
@@ -68,6 +74,22 @@ const PROTECTED_FIELDS: Record<'slab' | 'ceiling', readonly string[]> = {
     'parentId',
   ],
   ceiling: ['polygon', 'zoneId', 'boundary', 'autoFromWalls', 'parentId'],
+}
+
+/**
+ * What the reconciler rebuilds on a derived surface: its protected fields, the openings it records,
+ * and its holes but for the ones a person cut (`manualSurfaceHoles`).
+ */
+export function reconcilerOwnedFields(node: DerivedSurfaceNode): readonly string[] {
+  return [...PROTECTED_FIELDS[node.type], 'openingIds', 'holes', 'holeMetadata']
+}
+
+/** The holes a person cut into a surface, as against those Pascal cuts for rooms, openings and stairs. */
+export function manualSurfaceHoles(node: AnyNode) {
+  const surface = node as { holes?: unknown; holeMetadata?: unknown }
+  const holes = (surface.holes ?? []) as unknown[]
+  const metadata = (surface.holeMetadata ?? []) as (SurfaceHoleMetadata | undefined)[]
+  return holes.filter((_, index) => (metadata[index]?.source ?? 'manual') === 'manual')
 }
 
 function equal(a: unknown, b: unknown) {
@@ -500,6 +522,63 @@ function mergeRoomHoles(current: DerivedSurfaceNode, patch: Partial<DerivedSurfa
   return { ...patch, holes, holeMetadata }
 }
 
+const createdNodes = (create: DerivedNodeChanges['create']) =>
+  new Map((create ?? []).map(({ node }) => [node.id as string, node]))
+
+/**
+ * Construction copied together with the level and rooms it stands for (a
+ * duplicated level), or together with the rooms it stands for on a level that
+ * stays (a conversion rewritten with a room more), stays derived: the
+ * reconciler adopts it for those rooms, as it does a loaded scene's, instead of
+ * building a second plate beside a manual copy.
+ */
+function arrivesWithItsRooms(node: DerivedSurfaceNode, created: ReadonlyMap<string, AnyNode>) {
+  const zones = linkedZoneIds(node)
+  const withRooms = zones.every((id) => created.get(id)?.type === 'zone')
+  return withRooms && (created.get(node.parentId ?? '')?.type === 'level' || zones.length > 0)
+}
+
+function groundPlateRebases(nodes: Readonly<Record<string, AnyNode>>, changes: DerivedNodeChanges) {
+  // Inserting a storey below a ground plate changes its construction model:
+  // retain thickness, remove the foundation, and rest its underside upstairs.
+  const movedLevels = new Set<string>(
+    changes.update?.flatMap(({ id, data }) =>
+      nodes[id]?.type === 'level' && 'level' in data && data.level !== nodes[id].level ? [id] : [],
+    ),
+  )
+  if (!movedLevels.size) return new Set<string>()
+  const draft = {
+    ...nodes,
+    ...Object.fromEntries(changes.create?.map(({ node }) => [node.id, node]) ?? []),
+  }
+  for (const { id, data } of changes.update ?? [])
+    if (movedLevels.has(id)) draft[id] = { ...draft[id], ...data } as AnyNode
+  return new Set(
+    changes.update?.flatMap(({ id, data }) => {
+      const plate = nodes[id]
+      if (
+        plate?.type !== 'slab' ||
+        plate.plateRole !== 'base' ||
+        !movedLevels.has(plate.parentId!) ||
+        !floorPlateAtGroundContact(nodes, plate) ||
+        floorPlateAtGroundContact(draft, plate)
+      )
+        return []
+      const patch = data as Partial<SlabNode>
+      const reference = supportDerivedFloorHeight(draft, plate)
+      return Object.hasOwn(patch, 'floorHeight') &&
+        patch.floorHeight === undefined &&
+        patch.foundation?.type === 'none' &&
+        (patch.thickness === undefined || patch.thickness === plate.thickness) &&
+        patch.referenceFloorElevation === reference &&
+        typeof patch.elevation === 'number' &&
+        Math.abs(patch.elevation - (reference - DEFAULT_SLAB_ELEVATION + plate.thickness)) <= 1e-6
+        ? [id]
+        : []
+    }),
+  )
+}
+
 /** In-app writers retain authored edits without taking ownership from the reconciler. */
 export function filterDerivedNodeWrites<T extends DerivedNodeChanges>(
   nodes: Readonly<Record<string, AnyNode>>,
@@ -512,11 +591,13 @@ export function filterDerivedNodeWrites<T extends DerivedNodeChanges>(
     const update = own.conflicts.length ? [] : expandFloorIntentChanges(nodes, own.updates)
     changes = { ...changes, update }
   }
+  const created = createdNodes(changes.create)
+  const rebases = groundPlateRebases(nodes, changes)
   return {
     ...changes,
     ...(changes.create && {
       create: changes.create.map((op) => {
-        if (!isDerivedNode(op.node)) return op
+        if (!isDerivedNode(op.node) || arrivesWithItsRooms(op.node, created)) return op
         const node = { ...op.node } as Record<string, unknown>
         const fields = ['plateRole', 'boundary', 'zoneIds', 'zoneId', 'autoFromWalls']
         warnFilteredFields(
@@ -532,7 +613,7 @@ export function filterDerivedNodeWrites<T extends DerivedNodeChanges>(
         const current = nodes[op.id]
         if (!isDerivedNode(current)) return [op]
         const fields = derivedFieldViolations(current, op.data, nodes).filter(
-          (field) => field !== 'holes',
+          (field) => field !== 'holes' && !(field === 'elevation' && rebases.has(op.id)),
         )
         let data = { ...op.data } as Record<string, unknown>
         for (const field of fields) delete data[field]
@@ -580,8 +661,10 @@ export function assertDerivedNodeWrites(
       code: 'room_floor_conflict',
       conflicts,
     })
+  const created = createdNodes(changes.create)
+  const rebases = groundPlateRebases(nodes, changes)
   for (const { node } of changes.create ?? []) {
-    if (!isDerivedNode(node)) continue
+    if (!isDerivedNode(node) || arrivesWithItsRooms(node, created)) continue
     throw new DerivedNodeWriteError(
       'create',
       node.id,
@@ -592,7 +675,9 @@ export function assertDerivedNodeWrites(
   for (const { id, data } of changes.update ?? []) {
     const current = nodes[id]
     if (!isDerivedNode(current)) continue
-    const fields = derivedFieldViolations(current, data, nodes)
+    const fields = derivedFieldViolations(current, data, nodes).filter(
+      (field) => !(field === 'elevation' && rebases.has(id)),
+    )
     if (fields.length === 0) continue
     throw new DerivedNodeWriteError(
       'update',
@@ -624,8 +709,9 @@ function linkedZoneIds(node: DerivedSurfaceNode): string[] {
  * Explicit deletion of derived construction is an intent edit, not a refusal:
  * removing a room's auto ceiling means "this room has no ceiling"
  * (`hasCeiling: false`), removing its plate means "no floor" (`hasFloor:
- * false`). Returns the zone updates that record it, so the reconciler does not
- * simply rebuild what the user deleted.
+ * false`) for the rooms it is the floor of (`surfaceIntentZoneIds`). Returns
+ * the zone updates that record it, so the reconciler does not simply rebuild
+ * what the user deleted.
  *
  * Cascaded descendants (deleting the level that owns the plate) carry no
  * intent — the zone is going away with them.
@@ -636,11 +722,15 @@ export function derivedDeletionIntent(
 ): { id: AnyNodeId; data: Partial<AnyNode> }[] {
   const deleted = new Set<AnyNodeId>(ids)
   const intent = new Map<AnyNodeId, Partial<ZoneNode>>()
+  // The plates still standing after the delete: a room on one of its own keeps its floor.
+  const plates = Object.values(nodes).filter(
+    (node) => node.type === 'slab' && !deleted.has(node.id as AnyNodeId),
+  )
   for (const id of ids) {
     const node = nodes[id]
     if (!isDerivedNode(node)) continue
     const field = node.type === 'ceiling' ? 'hasCeiling' : 'hasFloor'
-    for (const zoneId of linkedZoneIds(node)) {
+    for (const zoneId of surfaceIntentZoneIds(node, plates)) {
       const zone = nodes[zoneId]
       if (zone?.type !== 'zone' || deleted.has(zone.id)) continue
       if (zone[field] === false) continue

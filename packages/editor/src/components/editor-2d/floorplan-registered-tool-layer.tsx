@@ -12,6 +12,7 @@ import {
   type FloorplanMode,
   isFloorplanToolAvailableInMode,
 } from '../../lib/floorplan/floorplan-mode'
+import { selectPlacedNode } from '../../lib/level-selection'
 import useEditor from '../../store/use-editor'
 import useFloorplanMode from '../../store/use-floorplan-mode'
 import useInteractionScope, { useReshapingNode } from '../../store/use-interaction-scope'
@@ -65,8 +66,7 @@ export function FloorplanRegisteredToolLayer() {
   const metricNotation = useViewer((state) => state.metricNotation)
   const sceneApi = useMemo(() => createSceneApi(useScene), [])
   const selectNode = useCallback(
-    (id: Parameters<FloorplanToolContext['selectNode']>[0]) =>
-      useViewer.getState().setSelection({ selectedIds: [id] }),
+    (id: Parameters<FloorplanToolContext['selectNode']>[0]) => selectPlacedNode(id),
     [],
   )
   const finishTool = useCallback(() => {

@@ -1,5 +1,12 @@
 import { describe, expect, test } from 'bun:test'
-import { createTerrainField, type LevelNode, quantize, type SceneSnapshot } from '@pascal-app/core'
+import {
+  createTerrainField,
+  LevelNode,
+  quantize,
+  type SceneSnapshot,
+  SlabNode,
+  ZoneNode,
+} from '@pascal-app/core'
 import { buildSitePlanDrawing, setbacksWarning } from './build-site-plan-drawing'
 import { registerSitePlanContributor } from './contributors'
 import { computeSiteCoverage } from './coverage'
@@ -14,6 +21,7 @@ import {
   streetEdgeNames,
   UNNAMED_STREET,
 } from './site-annotations'
+import { outdoorParts } from './site-parts'
 
 /** The QA lot (4121 NW 34th St, Gainesville): a through lot, NW 34th Terrace on the west edge (1), NW 34th Street on the east (3). */
 const LOT: [number, number][] = [
@@ -278,6 +286,123 @@ describe('coverage: one computation for the site plan and the cover', () => {
   })
 })
 
+describe('the roof line', () => {
+  test('a roof on the roof level above the storey is drawn dashed over the footprint', () => {
+    const nodes = {
+      site_1: {
+        id: 'site_1',
+        type: 'site',
+        polygon: { type: 'polygon', points: lot30() },
+        children: ['bldg'],
+      },
+      bldg: {
+        id: 'bldg',
+        type: 'building',
+        parentId: 'site_1',
+        position: [0, 0, 0],
+        rotation: [0, 0, 0],
+        children: ['level_0', 'level_roof'],
+      },
+      level_0: { id: 'level_0', type: 'level', level: 0, parentId: 'bldg', children: [] },
+      level_roof: {
+        id: 'level_roof',
+        type: 'level',
+        level: 1,
+        parentId: 'bldg',
+        children: ['roof_1'],
+        metadata: { role: 'roof' },
+      },
+      roof_1: {
+        id: 'roof_1',
+        type: 'roof',
+        parentId: 'level_roof',
+        position: [0, 0, 0],
+        rotation: 0,
+        children: ['rseg_1'],
+      },
+      rseg_1: {
+        id: 'rseg_1',
+        type: 'roof-segment',
+        parentId: 'roof_1',
+        position: [0, 0, 0],
+        rotation: 0,
+        width: 10,
+        depth: 8,
+        overhang: 0.5,
+      },
+    }
+    const drawing = buildSitePlanDrawing({
+      nodes,
+      rootNodeIds: [],
+      collections: {},
+      materials: {},
+    } as unknown as SceneSnapshot)
+    const outlines = drawing.primitives.filter(
+      (g) => (g as { metadata?: { sitePlan?: string } }).metadata?.sitePlan === 'roof-outline',
+    )
+    expect(outlines).toHaveLength(1)
+  })
+})
+
+describe('the house label', () => {
+  test('the roof level is not a storey: a bungalow under it reads 1-STORY', () => {
+    const wall = (id: string, start: [number, number], end: [number, number]) => ({
+      id,
+      type: 'wall',
+      parentId: 'level_0',
+      start,
+      end,
+      thickness: 0.2,
+      height: 2.8,
+      children: [],
+      metadata: {},
+    })
+    const nodes = {
+      site_1: {
+        id: 'site_1',
+        type: 'site',
+        polygon: { type: 'polygon', points: lot30() },
+        children: ['bldg'],
+      },
+      bldg: {
+        id: 'bldg',
+        type: 'building',
+        parentId: 'site_1',
+        position: [0, 0, 0],
+        rotation: [0, 0, 0],
+        children: ['level_0', 'level_roof'],
+      },
+      level_0: {
+        id: 'level_0',
+        type: 'level',
+        level: 0,
+        parentId: 'bldg',
+        children: ['w1', 'w2', 'w3', 'w4'],
+      },
+      level_roof: {
+        id: 'level_roof',
+        type: 'level',
+        level: 1,
+        parentId: 'bldg',
+        children: [],
+        metadata: { role: 'roof' },
+      },
+      w1: wall('w1', [-5, -4], [5, -4]),
+      w2: wall('w2', [5, -4], [5, 4]),
+      w3: wall('w3', [5, 4], [-5, 4]),
+      w4: wall('w4', [-5, 4], [-5, -4]),
+    }
+    const drawing = buildSitePlanDrawing({
+      nodes,
+      rootNodeIds: [],
+      collections: {},
+      materials: {},
+    } as unknown as SceneSnapshot)
+    const texts = drawing.primitives.map((g) => (g as { text?: string }).text ?? '')
+    expect(texts.join('\n')).toContain('1-STORY RESIDENCE')
+  })
+})
+
 function lot30(): [number, number][] {
   return [
     [-15, -15],
@@ -319,6 +444,43 @@ describe('the setbacks line a plans examiner reads', () => {
 })
 
 describe('the finish floor elevation', () => {
+  test('outdoor plates use their room type for site parts and stay out of the house floor elevation', () => {
+    const polygon: [number, number][] = [
+      [0, 0],
+      [2, 0],
+      [2, 2],
+      [0, 2],
+    ]
+    const room = ZoneNode.parse({ name: 'Deck', roomType: 'deck', polygon })
+    const plate = SlabNode.parse({
+      zoneIds: [room.id],
+      plateRole: 'sunken',
+      polygon,
+      elevation: 0.4,
+    })
+    const floor = SlabNode.parse({
+      plateRole: 'base',
+      zoneIds: [room.id],
+      polygon: [],
+      elevation: 0.05,
+    })
+    const level = LevelNode.parse({ children: [plate.id, floor.id, room.id] })
+    for (const metadata of [{}, { floor: 'porch-slab' }]) {
+      const scene = {
+        nodes: {
+          [level.id]: level,
+          [room.id]: room,
+          [plate.id]: { ...plate, metadata },
+          [floor.id]: floor,
+        },
+      } as unknown as SceneSnapshot
+      expect(outdoorParts(scene, level, null, [], [])).toMatchObject([
+        { id: plate.id, kind: 'deck', wood: true },
+      ])
+      expect(floorTops(scene, level)).toEqual({ floor: 0.05, garage: null })
+    }
+  })
+
   test('the driveway and walk (flatwork, no floor tag) never become the FF', () => {
     const nodes = {
       level_0: {

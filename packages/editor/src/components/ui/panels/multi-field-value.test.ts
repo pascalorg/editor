@@ -5,6 +5,9 @@ import {
   BuildingNode,
   clearSceneHistory,
   LevelNode,
+  planStairFlightHeightEdit,
+  StairNode,
+  StairSegmentNode,
   useLiveNodeOverrides,
   useScene,
   WallNode,
@@ -12,6 +15,7 @@ import {
 import {
   buildMultiNodePatches,
   commitMultiNodeFields,
+  fieldTargetIds,
   fieldVisibleForAll,
   reduceFieldValue,
   reduceHeightBoundMode,
@@ -52,6 +56,32 @@ describe('reduceFieldValue', () => {
     }
     expect(reduceFieldValue(['a', 'b'], 'height', nodes)).toEqual({ kind: 'same', value: 2.4 })
     expect(reduceFieldValue(['a', 'b'], 'thickness', nodes)).toEqual({ kind: 'mixed' })
+  })
+
+  test('an omitted value reads as the field default, not as zero', () => {
+    const nodes = {
+      a: makeNode('a', 'wall'),
+      b: makeNode('b', 'wall', { thickness: 0.1 }),
+      c: makeNode('c', 'wall', { thickness: 0.2 }),
+    }
+    expect(reduceFieldValue(['a', 'b'], 'thickness', nodes, 0.1)).toEqual({
+      kind: 'same',
+      value: 0.1,
+    })
+    expect(reduceFieldValue(['a', 'c'], 'thickness', nodes, 0.1)).toEqual({ kind: 'mixed' })
+  })
+
+  test('a field that names the nodes it applies to edits only those', () => {
+    const nodes = {
+      a: makeNode('a', 'wall', { thickness: 0.2 }),
+      b: makeNode('b', 'wall', { thickness: 0.18, assembly: { layers: [] } }),
+      c: makeNode('c', 'wall', { thickness: 0.2 }),
+    }
+    const plain = (node: AnyNode) => !(node as { assembly?: unknown }).assembly
+    const targets = fieldTargetIds(['a', 'b', 'c'], plain, nodes)
+    expect(targets).toEqual(['a', 'c'])
+    expect(reduceFieldValue(targets, 'thickness', nodes)).toEqual({ kind: 'same', value: 0.2 })
+    expect(fieldTargetIds(['a', 'b'], undefined, nodes)).toEqual(['a', 'b'])
   })
 
   test('vec3 compares elementwise', () => {
@@ -124,9 +154,7 @@ describe('buildMultiNodePatches', () => {
       nodes,
       {
         derive: (next) => ({ thickness: (next as { height: number }).height / 10 }),
-        reconcile: (prev) => [
-          { id: `${prev.id}_follow` as AnyNodeId, data: { height: 4 } },
-        ],
+        reconcile: (prev) => [{ id: `${prev.id}_follow` as AnyNodeId, data: { height: 4 } }],
       },
     )
     expect(patches).toEqual([
@@ -206,4 +234,26 @@ describe('commitMultiNodeFields', () => {
     expect((useScene.getState().nodes[WALL_B] as { height?: number }).height).toBe(3)
     expect((useScene.getState().nodes[WALL_C] as { height?: number }).height).toBe(2.7)
   })
+})
+
+test('multi-flight edits reconcile their parent from the complete proposed scene', () => {
+  const first = StairSegmentNode.parse({ height: 1 })
+  const second = StairSegmentNode.parse({ height: 3 })
+  const stair = StairNode.parse({ totalRise: 4, children: [first.id, second.id] })
+  first.parentId = stair.id
+  second.parentId = stair.id
+  const nodes: Record<string, AnyNode> = Object.fromEntries(
+    [stair, first, second].map((node) => [node.id, node]),
+  )
+  const patches = buildMultiNodePatches([first.id, second.id], () => ({ height: 2 }), nodes, {
+    reconcile: (_prev, next, proposed) =>
+      next.type === 'stair-segment'
+        ? planStairFlightHeightEdit(next, next.height, proposed!).slice(1)
+        : [],
+  })
+  const result = { ...nodes }
+  for (const patch of patches) result[patch.id] = { ...result[patch.id], ...patch.data } as AnyNode
+  expect((result[first.id] as StairSegmentNode).height).toBe(2)
+  expect((result[second.id] as StairSegmentNode).height).toBe(2)
+  expect((result[stair.id] as StairNode).totalRise).toBe(4)
 })

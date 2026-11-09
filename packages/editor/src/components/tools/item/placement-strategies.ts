@@ -15,6 +15,7 @@ import type {
   WallNode,
 } from '@pascal-app/core'
 import {
+  ceilingSeatY,
   clampRectToRoofWallFace,
   clearFaceHostItemFields,
   createSceneApi,
@@ -26,13 +27,12 @@ import {
   resolveSurfacePlacement,
   roofFacePointToSegment,
   sceneRegistry,
-  snapLocalXZInWorld,
   useScene,
   wouldCreateHostingCycle,
 } from '@pascal-app/core'
 import { Euler, Quaternion, Vector3 } from 'three'
 import { hasRoofFaceChildOverlap, resolveRoofWallHit } from '../../../lib/roof-wall-hit'
-import { getActiveBuildingPose } from '../../../lib/world-grid-snap'
+import { snapPlanPointToActiveGrid } from '../../../lib/world-grid-snap'
 import { itemEventToSurfaceHit, surfaceWorldNormalY } from '../shared/surface-hit'
 import {
   calculateItemRotation,
@@ -72,17 +72,14 @@ export const floorStrategy = {
     const [dimX, , dimZ] = dims
     const rotY = ctx.draftItem?.rotation?.[1] ?? 0
     const swapDims = Math.abs(Math.sin(rotY)) > 0.9
-    // Snap on the world XZ grid (the grid the editor renders) so the
-    // item edges land on the visible grid even when the active building
-    // is rotated; then project the world point back into building-local
-    // for storage. Without this, a rotated building drags placement off
-    // the world grid.
+    // Snap on the lattice the grid is drawn on: a turned building's own
+    // lattice inside it (item edges square to the house), the world grid
+    // outside any building.
     // Snapping is governed by the active mode (snapToGrid returns raw in Off /
     // non-grid modes); Alt is force-place only and never bypasses snapping here.
     const dimensions = [swapDims ? dimZ : dimX, swapDims ? dimX : dimZ] as const
-    const [x, z] = snapLocalXZInWorld(
+    const [x, z] = snapPlanPointToActiveGrid(
       [event.localPosition[0], event.localPosition[2]],
-      getActiveBuildingPose(),
       (value, axis) => snapToGrid(value, dimensions[axis]),
     )
     const y = ctx.gridPosition.y
@@ -747,9 +744,7 @@ export const ceilingStrategy = {
     // use the ceiling hit's local position rather than world position.
     const x = snapToGrid(event.localPosition[0], swapDims ? dimZ : dimX)
     const z = snapToGrid(event.localPosition[2], swapDims ? dimX : dimZ)
-    // Recessed fixtures seat flush with the ceiling plane (body rising into the
-    // void above); everything else hangs its full height below the ceiling.
-    const seatY = ctx.asset.recessed ? 0 : -itemHeight
+    const seatY = ceilingSeatY(ctx.draftItem ?? { asset: ctx.asset }, itemHeight)
     const worldSnapped = event.object.localToWorld(new Vector3(x, seatY, z))
 
     return {
@@ -781,9 +776,7 @@ export const ceilingStrategy = {
 
     const x = snapToGrid(event.localPosition[0], swapDims ? dimZ : dimX)
     const z = snapToGrid(event.localPosition[2], swapDims ? dimX : dimZ)
-    // Recessed fixtures seat flush with the ceiling plane (body rising into the
-    // void above); everything else hangs its full height below the ceiling.
-    const seatY = ctx.draftItem.asset.recessed ? 0 : -itemHeight
+    const seatY = ceilingSeatY(ctx.draftItem, itemHeight)
     const worldSnapped = event.object.localToWorld(new Vector3(x, seatY, z))
 
     return {

@@ -1,6 +1,7 @@
 import {
   type AnyNode,
   roomFloorChoices as coreRoomFloorChoices,
+  type PascalI18n,
   roomDrawnFloor,
   type SlabNode,
   type ZoneNode,
@@ -130,9 +131,26 @@ export function roomBuiltOn(nodes: Nodes, zoneId: string): RoomBuiltOnModel | nu
 export function separateFloorSummary(
   model: { current: { name: string }; shared: { name: string } | null; offset: number | null },
   length: (meters: number) => string,
+  i18n: PascalI18n,
 ): string {
   const { current, shared, offset } = model
   if (!shared || offset === null) return current.name
-  if (Math.abs(offset) < 0.005) return `${current.name} · level with ${shared.name}`
-  return `${current.name} · ${length(Math.abs(offset))} ${offset > 0 ? 'above' : 'below'} ${shared.name}`
+  const values = { current: current.name, shared: shared.name, distance: length(Math.abs(offset)) }
+  if (Math.abs(offset) < 0.005)
+    return i18n._({
+      id: 'editor.room.builtOn.levelWith',
+      message: '{current} · level with {shared}',
+      values,
+    })
+  return offset > 0
+    ? i18n._({
+        id: 'editor.room.builtOn.above',
+        message: '{current} · {distance} above {shared}',
+        values,
+      })
+    : i18n._({
+        id: 'editor.room.builtOn.below',
+        message: '{current} · {distance} below {shared}',
+        values,
+      })
 }

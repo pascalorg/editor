@@ -1,5 +1,8 @@
 'use client'
 
+import type { MessageDescriptor } from '@pascal-app/core'
+
+import { usePascalI18n } from '@pascal-app/core'
 import type {
   ConstructionDimensionChainMode,
   ConstructionDimensionMode,
@@ -22,45 +25,49 @@ import { useState } from 'react'
 import type { CreatableMeasurementKind } from '../../../lib/measurement-kind'
 import { cn } from '../../../lib/utils'
 import useEditor from '../../../store/use-editor'
+import { VIEW_2D } from '../../../store/view-layout'
 import useFloorplanMode from '../../../store/use-floorplan-mode'
 import { Popover, PopoverContent, PopoverTrigger } from '../primitives/popover'
 import { ActionButton } from './action-button'
+import { useActionMenuPopupSide } from './placement'
 
 const measurementOptions = [
-  { kind: 'distance', label: 'Distance', icon: Ruler },
-  { kind: 'angle', label: 'Angle', icon: Triangle },
-  { kind: 'area', label: 'Area', icon: Square },
-  { kind: 'perimeter', label: 'Perimeter', icon: Waypoints },
-  { kind: 'volume', label: 'Volume', icon: Box },
+  { kind: 'distance', label: /* i18n */ { id: 'editor.actionMenu.measurementControl.distance', message: 'Distance' }, icon: Ruler },
+  { kind: 'angle', label: /* i18n */ { id: 'editor.actionMenu.measurementControl.angle', message: 'Angle' }, icon: Triangle },
+  { kind: 'area', label: /* i18n */ { id: 'editor.actionMenu.measurementControl.area', message: 'Area' }, icon: Square },
+  { kind: 'perimeter', label: /* i18n */ { id: 'editor.actionMenu.measurementControl.perimeter', message: 'Perimeter' }, icon: Waypoints },
+  { kind: 'volume', label: /* i18n */ { id: 'editor.actionMenu.measurementControl.volume', message: 'Volume' }, icon: Box },
 ] as const satisfies readonly {
   kind: CreatableMeasurementKind
-  label: string
+  label: MessageDescriptor
   icon: typeof Ruler
 }[]
 
 const measurementMenuOptions = [
-  { kind: 'smart', label: 'Smart', icon: ScanSearch },
+  { kind: 'smart', label: /* i18n */ { id: 'editor.actionMenu.measurementControl.smart', message: 'Smart' }, icon: ScanSearch },
   ...measurementOptions,
 ] as const
 
 const constructionDimensionOptions = [
-  { mode: 'linear', chainMode: 'point-to-point', label: 'Linear dimension', icon: Ruler },
-  { mode: 'linear', chainMode: 'continuous', label: 'Continuous dimension', icon: Waypoints },
-  { mode: 'radius', chainMode: 'point-to-point', label: 'Radius dimension', icon: CircleIcon },
-  { mode: 'diameter', chainMode: 'point-to-point', label: 'Diameter dimension', icon: CircleIcon },
-  { mode: 'center-mark', chainMode: 'point-to-point', label: 'Center mark', icon: Crosshair },
-  { mode: 'chord', chainMode: 'point-to-point', label: 'Chord dimension', icon: Minus },
-  { mode: 'arc-length', chainMode: 'point-to-point', label: 'Arc length', icon: CircleIcon },
-  { mode: 'angular', chainMode: 'point-to-point', label: 'Angular dimension', icon: Triangle },
-  { mode: 'coordinate', chainMode: 'continuous', label: 'Coordinate dimensions', icon: Grid2X2 },
+  { mode: 'linear', chainMode: 'point-to-point', label: /* i18n */ { id: 'editor.actionMenu.measurementControl.linearDimension', message: 'Linear dimension' }, icon: Ruler },
+  { mode: 'linear', chainMode: 'continuous', label: /* i18n */ { id: 'editor.actionMenu.measurementControl.continuousDimension', message: 'Continuous dimension' }, icon: Waypoints },
+  { mode: 'radius', chainMode: 'point-to-point', label: /* i18n */ { id: 'editor.actionMenu.measurementControl.radiusDimension', message: 'Radius dimension' }, icon: CircleIcon },
+  { mode: 'diameter', chainMode: 'point-to-point', label: /* i18n */ { id: 'editor.actionMenu.measurementControl.diameterDimension', message: 'Diameter dimension' }, icon: CircleIcon },
+  { mode: 'center-mark', chainMode: 'point-to-point', label: /* i18n */ { id: 'editor.actionMenu.measurementControl.centerMark', message: 'Center mark' }, icon: Crosshair },
+  { mode: 'chord', chainMode: 'point-to-point', label: /* i18n */ { id: 'editor.actionMenu.measurementControl.chordDimension', message: 'Chord dimension' }, icon: Minus },
+  { mode: 'arc-length', chainMode: 'point-to-point', label: /* i18n */ { id: 'editor.actionMenu.measurementControl.arcLength', message: 'Arc length' }, icon: CircleIcon },
+  { mode: 'angular', chainMode: 'point-to-point', label: /* i18n */ { id: 'editor.actionMenu.measurementControl.angularDimension', message: 'Angular dimension' }, icon: Triangle },
+  { mode: 'coordinate', chainMode: 'continuous', label: /* i18n */ { id: 'editor.actionMenu.measurementControl.coordinateDimensions', message: 'Coordinate dimensions' }, icon: Grid2X2 },
 ] as const satisfies readonly {
   mode: ConstructionDimensionMode
   chainMode: ConstructionDimensionChainMode
-  label: string
+  label: MessageDescriptor
   icon: typeof Ruler
 }[]
 
 export function MeasurementControl() {
+  const i18n = usePascalI18n()
+  const popupSide = useActionMenuPopupSide()
   const [isOpen, setIsOpen] = useState(false)
   const mode = useEditor((state) => state.mode)
   const tool = useEditor((state) => state.tool)
@@ -74,12 +81,10 @@ export function MeasurementControl() {
     (state) => state.toolDefaults['construction-dimension']?.mode,
   )
   const setMode = useEditor((state) => state.setMode)
-  const setPhase = useEditor((state) => state.setPhase)
   const setLastMeasurementKind = useEditor((state) => state.setLastMeasurementKind)
-  const setStructureLayer = useEditor((state) => state.setStructureLayer)
   const setTool = useEditor((state) => state.setTool)
   const setToolDefaults = useEditor((state) => state.setToolDefaults)
-  const setViewMode = useEditor((state) => state.setViewMode)
+  const showView = useEditor((state) => state.showView)
 
   const selectedOption =
     measurementOptions.find((option) => option.kind === selectedKind) ?? measurementOptions[0]
@@ -97,15 +102,15 @@ export function MeasurementControl() {
     : isSmartActive
       ? ScanSearch
       : selectedOption.icon
-  const selectedLabel = isConstructionDimensionActive
-    ? (activeConstructionDimensionOption?.label ?? 'Linear dimension')
-    : isSmartActive
-      ? 'Smart'
-      : selectedOption.label
+  const selectedLabel = i18n._(
+    isConstructionDimensionActive
+      ? (activeConstructionDimensionOption ?? constructionDimensionOptions[0]).label
+      : isSmartActive
+        ? measurementMenuOptions[0].label
+        : selectedOption.label,
+  )
 
   const activateMeasurement = (kind: CreatableMeasurementKind) => {
-    setPhase('structure')
-    setStructureLayer('elements')
     setLastMeasurementKind(kind)
     setToolDefaults('measurement', { kind })
     setMode('build')
@@ -121,8 +126,6 @@ export function MeasurementControl() {
   }
 
   const activateSmartMeasurement = () => {
-    setPhase('structure')
-    setStructureLayer('elements')
     setToolDefaults('measurement', { kind: 'smart' })
     setMode('build')
     setTool('measurement')
@@ -136,9 +139,7 @@ export function MeasurementControl() {
       useFloorplanMode.getState().showExpertModeNotice('Construction Dimension')
       return
     }
-    setPhase('structure')
-    setStructureLayer('elements')
-    setViewMode('2d')
+    showView(VIEW_2D)
     setToolDefaults('construction-dimension', { chainMode, mode: dimensionMode })
     setMode('build')
     setTool('construction-dimension')
@@ -148,15 +149,15 @@ export function MeasurementControl() {
     <Popover onOpenChange={setIsOpen} open={isOpen}>
       <div className="flex items-center">
         <ActionButton
-          aria-label={`Measure: ${selectedLabel}`}
+          aria-label={i18n._({ id: 'editor.actionMenu.measurementControl.measureSelectedlabel', message: 'Measure: {selectedLabel}', values: { selectedLabel } })}
           aria-pressed={isControlActive}
           className={cn(
             'rounded-r-none p-0 text-muted-foreground',
             isControlActive
-              ? 'bg-cyan-500/20 text-cyan-400 hover:bg-cyan-500/20'
-              : 'hover:bg-cyan-500/15 hover:text-cyan-400',
+              ? 'bg-cyan-500/20 text-cyan-700 hover:bg-cyan-500/20 dark:text-cyan-400 dark:hover:text-accent-foreground'
+              : 'hover:bg-cyan-500/15 hover:text-cyan-700 dark:hover:text-cyan-400',
           )}
-          label={`Measure: ${selectedLabel}`}
+          label={i18n._({ id: 'editor.actionMenu.measurementControl.measureSelectedlabel', message: 'Measure: {selectedLabel}', values: { selectedLabel } })}
           onClick={handlePrimaryClick}
           shortcut="M"
           size="icon"
@@ -169,12 +170,12 @@ export function MeasurementControl() {
           <button
             aria-expanded={isOpen}
             aria-haspopup="menu"
-            aria-label="Measurement options"
+            aria-label={i18n._({ id: 'editor.actionMenu.measurementControl.measurementOptions', message: 'Measurement options' })}
             className={cn(
               'flex h-11 w-6 items-center justify-center rounded-r-lg text-muted-foreground transition-colors',
               isOpen
-                ? 'bg-cyan-500/15 text-cyan-400'
-                : 'hover:bg-cyan-500/10 hover:text-cyan-400',
+                ? 'bg-cyan-500/15 text-cyan-700 dark:text-cyan-400'
+                : 'hover:bg-cyan-500/10 hover:text-cyan-700 dark:hover:text-cyan-400',
             )}
             type="button"
           >
@@ -189,10 +190,10 @@ export function MeasurementControl() {
       <PopoverContent
         align="center"
         className="max-h-[70vh] w-64 overflow-y-auto rounded-lg border-border/45 bg-background/96 p-2 shadow-elevation-3 backdrop-blur-xl"
-        side="top"
+        side={popupSide}
         sideOffset={14}
       >
-        <div aria-label="Measurement type" className="space-y-1" role="menu">
+        <div aria-label={i18n._({ id: 'editor.actionMenu.measurementControl.measurementType', message: 'Measurement type' })} className="space-y-1" role="menu">
           {measurementMenuOptions.map((option) => {
             const OptionIcon = option.icon
             const isSmart = option.kind === 'smart'
@@ -205,8 +206,8 @@ export function MeasurementControl() {
                 className={cn(
                   'flex h-9 w-full items-center gap-2 rounded-md px-2.5 text-left text-sm transition-colors',
                   isSelected
-                    ? 'bg-white/10 text-foreground'
-                    : 'text-muted-foreground hover:bg-white/8 hover:text-foreground',
+                    ? 'bg-black/6 dark:bg-white/10 text-foreground'
+                    : 'text-muted-foreground hover:bg-black/5 dark:hover:bg-white/8 hover:text-foreground',
                 )}
                 key={option.kind}
                 onClick={() => {
@@ -218,7 +219,7 @@ export function MeasurementControl() {
                 type="button"
               >
                 <OptionIcon aria-hidden="true" className="h-4 w-4" />
-                <span>{option.label}</span>
+                <span>{i18n._(option.label)}</span>
                 {isSelected ? <Check aria-hidden="true" className="ml-auto h-4 w-4" /> : null}
               </button>
             )
@@ -228,7 +229,7 @@ export function MeasurementControl() {
             <>
               <div className="my-1.5 h-px bg-border/60" />
               <div className="px-2.5 pt-1 pb-0.5 font-semibold text-[10px] text-muted-foreground uppercase tracking-wider">
-                Floor plan
+                {i18n._({ id: 'editor.actionMenu.measurementControl.floorPlan', message: 'Floor plan' })}
               </div>
 
               {constructionDimensionOptions.map((option) => {
@@ -241,8 +242,8 @@ export function MeasurementControl() {
                     className={cn(
                       'flex h-9 w-full items-center gap-2 rounded-md px-2.5 text-left text-sm transition-colors',
                       isSelected
-                        ? 'bg-white/10 text-foreground'
-                        : 'text-muted-foreground hover:bg-white/8 hover:text-foreground',
+                        ? 'bg-black/6 dark:bg-white/10 text-foreground'
+                        : 'text-muted-foreground hover:bg-black/5 dark:hover:bg-white/8 hover:text-foreground',
                     )}
                     key={`${option.mode}-${option.chainMode}`}
                     onClick={() => {
@@ -253,7 +254,7 @@ export function MeasurementControl() {
                     type="button"
                   >
                     <OptionIcon aria-hidden="true" className="h-4 w-4" />
-                    <span>{option.label}</span>
+                    <span>{i18n._(option.label)}</span>
                     {isSelected ? <Check aria-hidden="true" className="ml-auto h-4 w-4" /> : null}
                   </button>
                 )

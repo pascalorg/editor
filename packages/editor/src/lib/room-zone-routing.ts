@@ -1,9 +1,11 @@
 import { type AnyNode, type AnyNodeId, useScene, type ZoneNode } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
-import { getRoomSelectionIndex } from '../hooks/use-selected-room'
+import { getRoomSelectionIndex, hoverRoomFromHit } from '../hooks/use-selected-room'
 import useEditor from '../store/use-editor'
-import type { RoomKey } from './room-selection'
+import { expandSessionSelectionForNode } from '../store/use-session-groups'
+import { type RoomKey, sameRoom } from './room-selection'
 import { selectRoom } from './room-selection-commands'
+import { resolveSelectedIdsForNodeClick, type SelectionModifierKeys } from './selection-routing'
 
 // A room is one thing to the user whichever way they reach it: the canvas, the
 // Rooms list, the plan's fill or its label. Rooms the room index knows (closed,
@@ -42,6 +44,63 @@ export function selectZoneOrRoom(zoneId: string): 'room' | 'zone' {
   useEditor.getState().clearRoom()
   useViewer.getState().setSelection({ zoneId: zoneId as ZoneNode['id'] })
   return 'zone'
+}
+
+/**
+ * The hover a pointer on a zone's area shows — its fill or label in the plan,
+ * or its pill in either view. A room hovers room-first through the same rule
+ * as its floor on the canvas (`hoverRoomFromHit`); held modifiers, or a zone
+ * that bounds no room, hover the zone itself (its outline).
+ */
+export function hoverZoneArea(zoneId: string, modifiers: SelectionModifierKeys): void {
+  const room = roomKeyForZone(zoneId)
+  if (
+    room &&
+    sameRoom(useEditor.getState().room, room) &&
+    !(modifiers.alt || modifiers.shift || modifiers.ctrl || modifiers.meta)
+  ) {
+    useEditor.getState().setHoveredRoom(room)
+    useViewer.getState().setHoveredId(null)
+    return
+  }
+  if (room && hoverRoomFromHit(room, modifiers, null)) return
+  useEditor.getState().setHoveredRoom(null)
+  if (useViewer.getState().hoveredId !== zoneId) useViewer.getState().setHoveredId(zoneId as never)
+}
+
+/** Ends a `hoverZoneArea` hover, leaving any other hover alone. */
+export function leaveZoneArea(zoneId: string): void {
+  const room = roomKeyForZone(zoneId)
+  if (room && sameRoom(useEditor.getState().hoveredRoom, room))
+    useEditor.getState().setHoveredRoom(null)
+  if (useViewer.getState().hoveredId === zoneId) useViewer.getState().setHoveredId(null)
+}
+
+/**
+ * The selection a click on a zone's area makes, whichever surface took it.
+ * A plain click on a room selects the room (keeping it when it already is);
+ * Shift/Ctrl/Meta toggle and Alt isolate the zone itself, as on any canvas
+ * element. A zone that bounds no room selects as itself, which opens its panel
+ * and its outline editor.
+ */
+export function clickZoneArea(zoneId: string, modifiers: SelectionModifierKeys): void {
+  const room = roomKeyForZone(zoneId)
+  const bypass = modifiers.alt || modifiers.shift || modifiers.ctrl || modifiers.meta
+  if (room && !bypass) {
+    if (!sameRoom(useEditor.getState().room, room)) selectRoom(room)
+    return
+  }
+  useEditor.getState().clearRoom()
+  const { selection, setSelection } = useViewer.getState()
+  setSelection({
+    zoneId: null,
+    selectedIds: resolveSelectedIdsForNodeClick({
+      currentSelectedIds: selection.selectedIds,
+      modifierKeys: modifiers,
+      nodeId: zoneId,
+      expandIdsForNode: expandSessionSelectionForNode,
+    }),
+  })
 }
 
 /** Whether a zone's row is the selection, whichever store holds it. */

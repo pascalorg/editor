@@ -4,7 +4,15 @@ import { encodeTerrainField } from '../../lib/terrain-codec'
 import { applyHeightPatch, createTerrainField, flattenPatch } from '../../lib/terrain-field'
 import { nodeRegistry, registerNode } from '../../registry'
 import type { AnyNodeDefinition } from '../../registry/types'
-import { type AnyNode, type AnyNodeId, ItemNode, LevelNode, SlabNode, WallNode } from '../../schema'
+import {
+  type AnyNode,
+  type AnyNodeId,
+  ItemNode,
+  LevelNode,
+  SlabNode,
+  WallNode,
+  ZoneNode,
+} from '../../schema'
 import useLiveTerrain from '../../store/use-live-terrain'
 import useScene, { clearSceneHistory } from '../../store/use-scene'
 import { spatialGridManager } from './spatial-grid-manager'
@@ -536,6 +544,26 @@ describe('spatial-grid sync dirty rules (terrain support)', () => {
     expect(marked).toEqual(['column_host'])
   })
 
+  test('terrain changes rebuild a deck room’s plate without plugin tags', () => {
+    const room = ZoneNode.parse({
+      id: 'zone_deck',
+      name: 'Deck',
+      polygon: SQUARE,
+      roomType: 'deck',
+    })
+    const deck = SlabNode.parse({
+      id: 'slab_deck',
+      parentId: 'level_0',
+      polygon: SQUARE,
+      zoneIds: [room.id],
+      plateRole: 'sunken',
+    })
+    const level = makeLevel('level_0', 0, 2.5, [deck.id, room.id])
+    const marked: string[] = []
+    markTerrainSupportDependents(nodesFor(level, room, deck), (id) => marked.push(id))
+    expect(marked).toContain(deck.id)
+  })
+
   test('markTerrainSupportDependents includes ground-hosted and terrain-fill structures', () => {
     const level = makeLevel('level_0', 0, 2.5, [
       'wall_ground',
@@ -680,6 +708,91 @@ describe('temporal writes update slab support dependencies', () => {
       ]) {
         expect(useScene.getState().dirtyNodes.has(unaffected.id)).toBe(false)
       }
+    }
+  })
+
+  test("a room's floor script laid, rebuilt or removed re-elevates what stands in the room", () => {
+    const level = LevelNode.parse({ id: 'level_finish' })
+    const zone = {
+      id: 'zone_finish',
+      type: 'zone',
+      object: 'node',
+      parentId: level.id,
+      visible: true,
+      metadata: {},
+      name: 'Living room',
+      polygon: SQUARE,
+      holes: [],
+    } as unknown as AnyNode & { floor?: unknown }
+    const rug = ItemNode.parse({
+      parentId: level.id,
+      position: [2, 0, 2],
+      asset: {
+        id: 'rug',
+        name: 'Rug',
+        category: 'rug',
+        thumbnail: '',
+        src: '/rug.glb',
+        dimensions: [0.2, 1, 0.2],
+      },
+    })
+    const elsewhere = { ...rug, id: 'item_elsewhere', position: [20, 0, 20] } as AnyNode
+    useScene.setState({
+      nodes: nodesFor(level, zone, rug, elsewhere),
+      dirtyNodes: new Set(),
+      readOnly: false,
+    })
+    stop = initSpatialGridSync()
+    const script = (height: number) => ({
+      manifest: { bounds: { min: [0, 0, 0], max: [4, height, 4] } },
+    })
+    for (const floor of [{ script: script(0.018) }, { script: script(0.012) }, {}]) {
+      useScene.getState().dirtyNodes.clear()
+      const current = useScene.getState().nodes[zone.id]!
+      useScene.setState({
+        nodes: { ...useScene.getState().nodes, [zone.id]: { ...current, floor } as AnyNode },
+      })
+      expect(useScene.getState().dirtyNodes.has(rug.id)).toBe(true)
+      expect(useScene.getState().dirtyNodes.has(elsewhere.id)).toBe(false)
+    }
+  })
+
+  test("a slab's surface script laid, rebuilt or removed re-elevates what stands on it", () => {
+    const level = LevelNode.parse({ id: 'level_surface' })
+    const terrace = makeSlab('slab_surface', level.id)
+    const chair = ItemNode.parse({
+      parentId: level.id,
+      position: [2, 0, 2],
+      asset: {
+        id: 'chair',
+        name: 'Chair',
+        category: 'chair',
+        thumbnail: '',
+        src: '/chair.glb',
+        dimensions: [0.2, 1, 0.2],
+      },
+    })
+    const elsewhere = { ...chair, id: 'item_elsewhere', position: [20, 0, 20] } as AnyNode
+    useScene.setState({
+      nodes: nodesFor(level, terrace, chair, elsewhere),
+      dirtyNodes: new Set(),
+      readOnly: false,
+    })
+    stop = initSpatialGridSync()
+    const script = (height: number) => ({
+      manifest: { bounds: { min: [0, 0, 0], max: [4, height, 4] } },
+    })
+    for (const surfaceScript of [script(0.025), script(0.02), undefined]) {
+      useScene.getState().dirtyNodes.clear()
+      const current = useScene.getState().nodes[terrace.id]!
+      useScene.setState({
+        nodes: {
+          ...useScene.getState().nodes,
+          [terrace.id]: { ...current, surfaceScript } as AnyNode,
+        },
+      })
+      expect(useScene.getState().dirtyNodes.has(chair.id)).toBe(true)
+      expect(useScene.getState().dirtyNodes.has(elsewhere.id)).toBe(false)
     }
   })
 

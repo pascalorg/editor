@@ -5,7 +5,12 @@ import {
   planNodeDeletion,
   previewDefaultGutterRefresh,
   validateNodeRelations,
+  wouldCreateHierarchyCycle,
 } from '@pascal-app/core'
+import {
+  scriptedFieldRefusal,
+  unknownMaterialPresetRefusal,
+} from '@pascal-app/core/agent-operations'
 import { AnyNode, type AnyNodeId, nodeKindOf, parseNode } from '@pascal-app/core/schema'
 import type { Patch } from '../bridge/scene-bridge'
 
@@ -16,6 +21,51 @@ export type PatchRefusalCode =
   | 'invalid_parent'
   | 'invalid_update'
   | 'regenerated_default'
+  | 'scripted_field'
+  // An update that would not do what it says (honestNodePatch).
+  | 'unknown_field'
+  | 'unknown_material'
+  | 'field_required'
+  | 'shadowed_field'
+  // The roof-level rule (seatWrittenRoofs).
+  | 'roof_level'
+  | 'roof_level_holds_storey'
+  | 'roof_level_on_top'
+
+/**
+ * A check apply_patch runs over the whole patch before applying it, registered by the module that
+ * owns what it protects, so a feature brings its own check (the honest-update check is the
+ * first). It may rewrite an update's data (the cleaned data is what is written) and
+ * refuses by throwing: a PatchRefusedError comes back as `{ code, patchIndex, id, message }`, an
+ * ProtocolError as it is. What it changed in the patch it says in notes, which the answer carries.
+ * Lower `order` runs first.
+ */
+export type PatchGuard = {
+  name: string
+  order: number
+  run(patches: Patch[], nodes: Readonly<Record<string, AnyNode>>): string[] | void
+}
+
+const guards: PatchGuard[] = []
+
+/** Runs a guard on every apply_patch from now on; registering a guard again replaces it. */
+export function registerPatchGuard(guard: PatchGuard) {
+  const at = guards.findIndex((known) => known.name === guard.name)
+  if (at >= 0) guards[at] = guard
+  else guards.push(guard)
+  guards.sort((a, b) => a.order - b.order)
+}
+
+/** Runs every guard in order; the notes are what the guards changed in the patch. */
+export function runPatchGuards(
+  patches: Patch[],
+  nodes: Readonly<Record<string, AnyNode>>,
+): string[] {
+  return guards.flatMap((guard) => {
+    const notes = guard.run(patches, nodes)
+    return Array.isArray(notes) ? notes : []
+  })
+}
 
 /**
  * A patch op refused because it would break node identity, the hierarchy or
@@ -90,6 +140,11 @@ function withoutChild(parent: AnyNode, childId: string): AnyNode {
  *   (`immutable_field`); restating the current value passes;
  * - an update whose merged node has schema issues the node did not have
  *   before (`invalid_update`); kinds without a schema in this runtime pass;
+ * - an update writing a material preset the catalog does not know
+ *   (`invalid_update`; a create is rejected like other invalid creates): it
+ *   would render as the default finish;
+ * - an update of what a node's script owns, its `source` or the size it
+ *   built (`scripted_field`): only a rebuild keeps them and the geometry in step;
  * - any op on a node an earlier delete in the patch removed, or on a default
  *   gutter or downspout that delete regenerates, and any update of the roof
  *   segment holding them (`regenerated_default`).
@@ -109,15 +164,23 @@ export function assertPatchKeepsIdentity(
   rootNodeIds: readonly AnyNodeId[],
   planDeletion?: (scene: NodeDeletionScene, ids: AnyNodeId[]) => NodeDeletionPlan,
 ): void {
-  const initialIds = new Set(Object.keys(nodes))
-  let scene: NodeDeletionScene = {
-    nodes: { ...nodes } as NodeDeletionScene['nodes'],
-    rootNodeIds: [...rootNodeIds],
-    collections: {},
+  // What the patch writes, over the scene; the whole scene is copied only for a preview that reads
+  // all of it (deletes, gutter refreshes, a reparent), so an edit reads only the ids it names.
+  const written = new Map<string, AnyNode>()
+  let whole: NodeDeletionScene | null = null
+  const scene = (): NodeDeletionScene => {
+    if (!whole) {
+      const all = { ...nodes } as NodeDeletionScene['nodes']
+      for (const [id, node] of written) all[id as AnyNodeId] = node
+      whole = { nodes: all, rootNodeIds: [...rootNodeIds], collections: {} }
+    }
+    return whole
   }
-  const at = (id: string) => scene.nodes[id as AnyNodeId]
+  const at = (id: string) =>
+    whole ? whole.nodes[id as AnyNodeId] : (written.get(id) ?? nodes[id as AnyNodeId])
   const put = (node: AnyNode) => {
-    scene.nodes[node.id as AnyNodeId] = node
+    if (whole) whole.nodes[node.id as AnyNodeId] = node
+    else written.set(node.id, node)
   }
 
   // Default gutters and downspouts a delete run refreshes: the store may keep,
@@ -143,18 +206,18 @@ export function assertPatchKeepsIdentity(
     const roofId =
       node.type === 'roof' ? node.id : node.type === 'roof-segment' ? node.parentId : null
     if (!roofId) return
-    const preview = previewDefaultGutterRefresh(scene.nodes, [roofId as AnyNodeId])
+    const preview = previewDefaultGutterRefresh(scene().nodes, [roofId as AnyNodeId])
     for (const id of preview.unsettledIds) regenerated.set(id, index)
     for (const id of preview.regeneratedHostIds) regeneratedHosts.set(id, index)
   }
   let pendingDeletes: AnyNodeId[] = []
   const flushDeletes = (index: number) => {
     const plan = planDeletion
-      ? planDeletion(scene, pendingDeletes)
-      : planNodeDeletion(scene, pendingDeletes, { mintDefaults: false })
+      ? planDeletion(scene(), pendingDeletes)
+      : planNodeDeletion(scene(), pendingDeletes, { mintDefaults: false })
     for (const id of plan.unsettledIds) regenerated.set(id, index)
     for (const id of plan.regeneratedHostIds) regeneratedHosts.set(id, index)
-    scene = { nodes: plan.nodes, rootNodeIds: plan.rootNodeIds, collections: plan.collections }
+    whole = { nodes: plan.nodes, rootNodeIds: plan.rootNodeIds, collections: plan.collections }
     pendingDeletes = []
   }
 
@@ -165,10 +228,12 @@ export function assertPatchKeepsIdentity(
       const parsed = parseNode(patch.node)
       const node = (parsed.success ? parsed.data : patch.node) as AnyNode & { id?: unknown }
       if (typeof node?.id !== 'string') return
+      const preset = unknownMaterialPresetRefusal(node as Record<string, unknown>)
+      if (preset) throw new Error(`invalid patch: patches[${index}] create "${node.id}": ${preset}`)
       refuseRegenerated(index, node.id)
       const effectiveParentId = patch.parentId ?? (node.parentId as string | null | undefined)
       if (effectiveParentId) refuseRegenerated(index, effectiveParentId)
-      if (at(node.id) || (!planDeletion && initialIds.has(node.id))) {
+      if (at(node.id) || (!planDeletion && nodes[node.id] !== undefined)) {
         throw new PatchRefusedError(
           'node_exists',
           index,
@@ -182,6 +247,14 @@ export function assertPatchKeepsIdentity(
       if (patch.parentId !== undefined && !at(patch.parentId)) {
         throw new Error(
           `invalid patch: patches[${index}] create parentId "${patch.parentId}" not found`,
+        )
+      }
+      if (wouldCreateHierarchyCycle(node.id as AnyNodeId, parentId as AnyNodeId | null, at)) {
+        throw new PatchRefusedError(
+          'invalid_parent',
+          index,
+          node.id,
+          `create cannot place "${node.id}" under ${JSON.stringify(parentId)}: it would create a hierarchy cycle.`,
         )
       }
       put({ ...node, parentId } as AnyNode)
@@ -218,6 +291,10 @@ export function assertPatchKeepsIdentity(
           )
         }
       }
+      const scripted = scriptedFieldRefusal(current, data)
+      if (scripted) throw new PatchRefusedError('scripted_field', index, patch.id, scripted)
+      const preset = unknownMaterialPresetRefusal(data, current as Record<string, unknown>)
+      if (preset) throw new PatchRefusedError('invalid_update', index, patch.id, preset)
       const merged = { ...current, ...data } as AnyNode
       const issuesAfter = schemaIssues(merged as Record<string, unknown>)
       if (issuesAfter && issuesAfter.size > 0) {
@@ -233,6 +310,15 @@ export function assertPatchKeepsIdentity(
         }
       }
       if ('parentId' in data && data.parentId !== current.parentId) {
+        const newParentId = typeof data.parentId === 'string' ? (data.parentId as AnyNodeId) : null
+        if (wouldCreateHierarchyCycle(patch.id, newParentId, at)) {
+          throw new PatchRefusedError(
+            'invalid_parent',
+            index,
+            patch.id,
+            `update cannot move "${patch.id}" under ${JSON.stringify(data.parentId)}: it would create a hierarchy cycle.`,
+          )
+        }
         const newParent = typeof data.parentId === 'string' ? at(data.parentId) : undefined
         if (!(newParent && Array.isArray((newParent as { children?: unknown }).children))) {
           throw new PatchRefusedError(
@@ -242,14 +328,14 @@ export function assertPatchKeepsIdentity(
             `update cannot move "${patch.id}" under ${JSON.stringify(data.parentId)}: ${newParent ? `a ${newParent.type} holds no children` : 'no such node'}.`,
           )
         }
-        const before = { ...scene.nodes }
+        const before = { ...scene().nodes }
         const oldParent = current.parentId ? at(current.parentId) : undefined
         if (oldParent) put(withoutChild(oldParent, patch.id))
         put(withChild(newParent, patch.id))
         put(merged)
         unsettleRoofRefresh(merged, index)
         try {
-          validateNodeRelations(before, scene.nodes, [patch.id as AnyNodeId])
+          validateNodeRelations(before, scene().nodes, [patch.id as AnyNodeId])
         } catch (err) {
           throw new PatchRefusedError(
             'invalid_parent',

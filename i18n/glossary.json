@@ -1,0 +1,52 @@
+{
+  "productContext": "Pascal is an architecture and building-design editor. Use concise professional UI language familiar to architects, CAD users, builders, and interior designers.",
+  "terms": {
+    "ceiling": {
+      "zh-CN": "天花板",
+      "fr": "plafond",
+      "es": "techo",
+      "ja": "天井",
+      "note": "A generic overhead room surface, not necessarily a suspended ceiling."
+    },
+    "floor plan": {
+      "zh-CN": "平面图",
+      "fr": "plan d’étage",
+      "es": "plano de planta",
+      "ja": "平面図",
+      "note": "A 2D architectural drawing, not a project plan."
+    },
+    "level": {
+      "zh-CN": "楼层",
+      "fr": "niveau",
+      "es": "planta",
+      "ja": "階層",
+      "note": "A building storey."
+    },
+    "room": {
+      "zh-CN": "房间",
+      "fr": "pièce",
+      "es": "estancia",
+      "ja": "部屋"
+    },
+    "scan": {
+      "zh-CN": "扫描模型",
+      "fr": "relevé 3D",
+      "es": "escaneo 3D",
+      "ja": "3Dスキャン",
+      "note": "A captured 3D reference, not the verb scan."
+    },
+    "wall": {
+      "zh-CN": "墙体",
+      "fr": "mur",
+      "es": "muro",
+      "ja": "壁"
+    },
+    "walkthrough": {
+      "zh-CN": "漫游",
+      "fr": "visite",
+      "es": "recorrido",
+      "ja": "ウォークスルー",
+      "note": "First-person navigation through the building."
+    }
+  }
+}

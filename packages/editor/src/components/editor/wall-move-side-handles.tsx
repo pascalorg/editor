@@ -19,7 +19,6 @@ import {
   type WallNode,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
-import { Html } from '@react-three/drei'
 import { createPortal, type ThreeEvent, useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
@@ -61,6 +60,7 @@ import useInteractionScope, {
 import { suppressBoxSelectForPointer } from '../tools/select/box-select-state'
 import { resolveResizeSnapValue } from './handles/resize-snap'
 import { type HandleDragControls, useHandleDrag } from './handles/use-handle-drag'
+import { Html } from './localized-html'
 import { MeasurementPill } from './measurement-pill'
 import {
   createArrowHitAreaGeometry,
@@ -70,6 +70,7 @@ import {
   NO_RAYCAST,
   useInvisibleHitAreaMaterial,
 } from './node-arrow-handles'
+import { WallPullGrip } from './wall-pull-grip'
 import { WallPushArrow } from './wall-push-arrow'
 
 const HANDLE_OFFSET = 0.27
@@ -251,6 +252,9 @@ function WallMoveSideHandlesForWall({ wall }: { wall: WallNode }) {
         />
         <WallCornerLeaderHandle endpoint="start" wall={effectiveWall} />
         <WallCornerLeaderHandle endpoint="end" wall={effectiveWall} />
+        {/* Past each end, the grip that pulls the next wall out of it. */}
+        <WallPullGrip endpoint="start" wall={effectiveWall} />
+        <WallPullGrip endpoint="end" wall={effectiveWall} />
       </group>
       <WallBaseElevationHandle
         baseElevation={baseElevation}

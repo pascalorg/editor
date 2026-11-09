@@ -47,16 +47,15 @@ function upperAndSunkRoom(between: Between) {
   return { upper: f.zones[0]!.id, sides }
 }
 
-test.each([
-  'door',
-  'wall',
-  'separator',
-] as const)('every step down into a sunken room across a %s is the upper room’s', (between) => {
-  const { upper, sides } = upperAndSunkRoom(between)
-  const risers = sides.filter((side) => side.role === 'riser')
-  // A plain wall covers its drop down to the sunken floor: nothing to paint.
-  expect(risers.length > 0).toBe(between !== 'wall')
-  expect(risers.every((side) => side.zoneId === upper)).toBe(true)
-  // Only the footprint's exterior band stays the plate's own.
-  expect(sides.filter((side) => side.role === 'edge').every((side) => !side.zoneId)).toBe(true)
-})
+test.each(['door', 'wall', 'separator'] as const)(
+  'every step down into a sunken room across a %s is the upper room’s',
+  (between) => {
+    const { upper, sides } = upperAndSunkRoom(between)
+    const risers = sides.filter((side) => side.role === 'riser')
+    // A plain wall covers its drop down to the sunken floor: nothing to paint.
+    expect(risers.length > 0).toBe(between !== 'wall')
+    expect(risers.every((side) => side.zoneId === upper)).toBe(true)
+    // Only the footprint's exterior band stays the plate's own.
+    expect(sides.filter((side) => side.role === 'edge').every((side) => !side.zoneId)).toBe(true)
+  },
+)

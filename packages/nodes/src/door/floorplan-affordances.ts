@@ -3,7 +3,9 @@ import {
   type DoorNode,
   type FloorplanAffordance,
   type FloorplanAffordanceSession,
+  getDoorOpeningSize,
   getWallCurveLength,
+  openingHostFacing,
   useLiveNodeOverrides,
   useScene,
   type WallNode,
@@ -55,8 +57,12 @@ export const doorWidthAffordance: FloorplanAffordance<DoorNode> = {
     // legal width is the headroom on the grow side.
     const limits = curtainOpeningLimits(node, nodes)
     const margin = limits?.margin ?? 0
+    const size = getDoorOpeningSize(node)
+    const sidelight =
+      (size.width - node.width) / 2 - growDir * size.leafOffsetX * openingHostFacing(node)
     const maxWidth =
-      growDir > 0 ? (limits?.length ?? wallLength) - margin - anchorX : anchorX - margin
+      (growDir > 0 ? (limits?.length ?? wallLength) - margin - anchorX : anchorX - margin) -
+      sidelight
 
     const projectToWallLocalX = (planPoint: readonly [number, number]) => {
       return wall ? projectPlanPointToWallLocalX(wall, planPoint) : planPoint[0]

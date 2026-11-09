@@ -116,27 +116,27 @@ test('a shared room owns the whole wall even where another span borders an own r
   expect(containsPoint([shape(shared)], [6, 0])).toBe(true)
 })
 
-test.each([
-  false,
-  true,
-])('equal-height own/shared and own/own have no side seam (both=%s)', (both) => {
-  const s = scene(true, 0.05)
-  let nodes = toggle(s.nodes, s.zones[1]!.id, true)
-  if (both) nodes = toggle(nodes, s.zones[0]!.id, true)
-  const context = plateLevelContext(nodes[s.level.id]!, (id) => nodes[id])
-  for (const plate of bases(nodes)) {
-    const sides = computePlateSurfacePartition(plate, context)!.sides
-    const seam = sides.filter(
-      (side) =>
-        Math.abs(side.start[0] - 4) < 1e-6 &&
-        Math.abs(side.end[0] - 4) < 1e-6 &&
-        (side.start[1] + side.end[1]) / 2 > 0.1 &&
-        (side.start[1] + side.end[1]) / 2 < 3.9,
-    )
-    expect(seam.length).toBeGreaterThan(0)
-    expect(seam.every((side) => side.role === 'hidden')).toBe(true)
-  }
-})
+test.each([false, true])(
+  'equal-height own/shared and own/own have no side seam (both=%s)',
+  (both) => {
+    const s = scene(true, 0.05)
+    let nodes = toggle(s.nodes, s.zones[1]!.id, true)
+    if (both) nodes = toggle(nodes, s.zones[0]!.id, true)
+    const context = plateLevelContext(nodes[s.level.id]!, (id) => nodes[id])
+    for (const plate of bases(nodes)) {
+      const sides = computePlateSurfacePartition(plate, context)!.sides
+      const seam = sides.filter(
+        (side) =>
+          Math.abs(side.start[0] - 4) < 1e-6 &&
+          Math.abs(side.end[0] - 4) < 1e-6 &&
+          (side.start[1] + side.end[1]) / 2 > 0.1 &&
+          (side.start[1] + side.end[1]) / 2 < 3.9,
+      )
+      expect(seam.length).toBeGreaterThan(0)
+      expect(seam.every((side) => side.role === 'hidden')).toBe(true)
+    }
+  },
+)
 
 test('shared/own doorway keeps the higher landing, lower-face step, and doorway paint', () => {
   const s = scene()
@@ -729,46 +729,46 @@ test('Wawa-shaped sunken Lanai round-trips exterior doors and windows through an
   expect(zone(attached, id).floor?.elevation).toBeCloseTo(-0.1)
 })
 
-test.each([
-  undefined,
-  2.5,
-])('ceiling edge slivers do not carry the adjacent floor (height=%s)', (height) => {
-  const s = scene(false, -0.1)
-  const id = s.zones[1]!.id
-  const detached = toggle(s.nodes, id, true)
-  const ceiling = CeilingNode.parse({
-    parentId: s.level.id,
-    height,
-    polygon: [
-      [0, 0],
-      [4.12, 0],
-      [4.12, 4],
-      [0, 4],
-    ],
-  })
-  const nodes = { ...detached, [ceiling.id]: ceiling }
-  const own = bases(nodes).find((p) => p.zoneIds?.includes(id))!
-  const shared = bases(nodes).find((p) => !p.zoneIds?.includes(id))!
-  expect(footprintSupportsNode(own, ceiling, nodes)).toBe(false)
-  expect(footprintSupportsNode(shared, ceiling, nodes)).toBe(true)
-  const plan = setRoomFloorConstruction(nodes, { zoneId: id, patch: { floorHeight: -0.05 } })
-  expect(plan.conflicts ?? []).toEqual([])
-  expect(plan.changes.some((p) => p.op === 'update' && p.id === ceiling.id)).toBe(false)
-  const spanning = {
-    ...ceiling,
-    polygon: [
-      [0, 0],
-      [8, 0],
-      [8, 4],
-      [0, 4],
-    ] as [number, number][],
-  }
-  const refused = setRoomFloorConstruction(
-    { ...nodes, [ceiling.id]: spanning },
-    { zoneId: id, patch: { floorHeight: -0.05 } },
-  )
-  expect(refused.conflicts?.[0]?.message).toContain('raise both or neither')
-})
+test.each([undefined, 2.5])(
+  'ceiling edge slivers do not carry the adjacent floor (height=%s)',
+  (height) => {
+    const s = scene(false, -0.1)
+    const id = s.zones[1]!.id
+    const detached = toggle(s.nodes, id, true)
+    const ceiling = CeilingNode.parse({
+      parentId: s.level.id,
+      height,
+      polygon: [
+        [0, 0],
+        [4.12, 0],
+        [4.12, 4],
+        [0, 4],
+      ],
+    })
+    const nodes = { ...detached, [ceiling.id]: ceiling }
+    const own = bases(nodes).find((p) => p.zoneIds?.includes(id))!
+    const shared = bases(nodes).find((p) => !p.zoneIds?.includes(id))!
+    expect(footprintSupportsNode(own, ceiling, nodes)).toBe(false)
+    expect(footprintSupportsNode(shared, ceiling, nodes)).toBe(true)
+    const plan = setRoomFloorConstruction(nodes, { zoneId: id, patch: { floorHeight: -0.05 } })
+    expect(plan.conflicts ?? []).toEqual([])
+    expect(plan.changes.some((p) => p.op === 'update' && p.id === ceiling.id)).toBe(false)
+    const spanning = {
+      ...ceiling,
+      polygon: [
+        [0, 0],
+        [8, 0],
+        [8, 4],
+        [0, 4],
+      ] as [number, number][],
+    }
+    const refused = setRoomFloorConstruction(
+      { ...nodes, [ceiling.id]: spanning },
+      { zoneId: id, patch: { floorHeight: -0.05 } },
+    )
+    expect(refused.conflicts?.[0]?.message).toContain('raise both or neither')
+  },
+)
 
 test('keyed plates stay ground-bearing on their foundation; solid only while raised', () => {
   const s = scene(true, -0.1)

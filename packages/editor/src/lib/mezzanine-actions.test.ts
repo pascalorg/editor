@@ -126,7 +126,7 @@ beforeEach(() => {
   ])
   useViewer.getState().setSelection({ buildingId: building.id, levelId: LEVEL, selectedIds: [] })
   useEditor.setState({
-    phase: 'structure',
+    phase: 'building',
     mode: 'select',
     room: { levelId: LEVEL, zoneId: mezzanineId },
     gridSnapStep: 0.5,

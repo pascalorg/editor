@@ -17,6 +17,7 @@ import {
   footprintAABBFrom,
   type GridEvent,
   type GroupMoveSnapResult,
+  getFloorPlacedElevation,
   getFloorPlacedFootprints,
   type MovableConfig,
   movingFootprintAnchors,
@@ -60,6 +61,7 @@ import {
   surfaceAttachmentUpdates,
   updateSurfaceNode,
 } from '../../../lib/surface-attachment'
+import { isTypingTarget } from '../../../lib/typing-target'
 import useAlignmentGuides from '../../../store/use-alignment-guides'
 import useEditor, {
   getActiveSnappingMode,
@@ -416,6 +418,9 @@ export function MoveRegistryNodeTool({ node: source }: { node: AnyNode }) {
   const [cursorRotationY, setCursorRotationY] = useState(() => previewRotationY(originalRotationY))
   const { isFreshPlacement, previewVisible, revealFreshPlacement, useAbsoluteCursorPlacement } =
     useFreshPlacementVisibility({ node })
+  const preserveLevelAndElevation =
+    !isFreshPlacement &&
+    nodeRegistry.get(node.type)?.capabilities?.movable?.preserveLevelAndElevation === true
   // Kinds that declare `movable.cursorAttached` (duct fittings) pin to the
   // cursor instead of preserving the grab offset — small connector-like
   // nodes read an offset drag as "lagging behind the mouse".
@@ -479,7 +484,24 @@ export function MoveRegistryNodeTool({ node: source }: { node: AnyNode }) {
       return Array.isArray(rotation) ? [rotation[0] ?? 0, y, rotation[2] ?? 0] : y
     }
 
+    const keepStartingElevation = (position: [number, number, number], yaw: number) => {
+      if (!preserveLevelAndElevation) return position
+      const rotation = toCommitRotation(yaw)
+      const currentNodes = useScene.getState().nodes
+      const effectiveNode = { ...node, position, rotation } as AnyNode
+      const lift = getFloorPlacedElevation({
+        node: effectiveNode,
+        nodes: { ...currentNodes, [node.id]: effectiveNode },
+        position,
+        rotation,
+      })
+      return [position[0], originalPlanPosition[1] - lift, position[2]] as [number, number, number]
+    }
+
     const currentLevelId = () =>
+      (preserveLevelAndElevation
+        ? findLevelAncestorId(node.id, useScene.getState().nodes)
+        : null) ??
       useViewer.getState().selection.levelId ??
       (itemSurfaceMove ? findLevelAncestorId(node.id, useScene.getState().nodes) : node.parentId)
 
@@ -512,14 +534,19 @@ export function MoveRegistryNodeTool({ node: source }: { node: AnyNode }) {
     // them through `useLiveNodeOverrides` (transient — no history churn;
     // GeometrySystem merges overrides via getEffectiveNode). Each connected
     // node is re-dirtied so its geometry rebuilds against the new override.
-    const previewConnectivity = (position: [number, number, number], rotationY: number) => {
+    // False, previewing nothing, when the connected joints cannot follow.
+    const previewConnectivity = (
+      position: [number, number, number],
+      rotationY: number,
+    ): boolean => {
       const connectivity = connectivityRef.current
-      if (!connectivity) return
+      if (!connectivity) return true
       const updates = resolveConnectivityUpdates(
         connectivity,
         buildPreviewNode(position, rotationY),
       )
-      if (updates.length === 0) return
+      if (!updates) return false
+      if (updates.length === 0) return true
       useLiveNodeOverrides
         .getState()
         .setMany(updates.map((u) => [u.id, u.data as Record<string, unknown>] as const))
@@ -527,6 +554,7 @@ export function MoveRegistryNodeTool({ node: source }: { node: AnyNode }) {
       for (const u of updates) {
         if (useScene.getState().nodes[u.id]) useScene.getState().markDirty(u.id)
       }
+      return true
     }
 
     const clearConnectivityOverrides = () => {
@@ -805,10 +833,14 @@ export function MoveRegistryNodeTool({ node: source }: { node: AnyNode }) {
       // test are plane-height independent, so the elected surface is a
       // single fixed point per pointer ray.
       const pointed = resolvePointerSupportSurface(cameraRef.current, event.position)
-      supportCapRef.current = pointed?.elevation ?? null
-      supportSurfaceRef.current = pointed
-      const rawX = pointed?.localPoint?.[0] ?? event.localPosition[0]
-      const rawZ = pointed?.localPoint?.[2] ?? event.localPosition[2]
+      supportCapRef.current = preserveLevelAndElevation ? null : (pointed?.elevation ?? null)
+      supportSurfaceRef.current = preserveLevelAndElevation ? null : pointed
+      const rawX = preserveLevelAndElevation
+        ? event.localPosition[0]
+        : (pointed?.localPoint?.[0] ?? event.localPosition[0])
+      const rawZ = preserveLevelAndElevation
+        ? event.localPosition[2]
+        : (pointed?.localPoint?.[2] ?? event.localPosition[2])
       revealFreshPlacement()
 
       const magnetic = isMagneticSnapActive()
@@ -982,7 +1014,7 @@ export function MoveRegistryNodeTool({ node: source }: { node: AnyNode }) {
           if (guides.length > 0) useAlignmentGuides.getState().set(guides)
         }
       }
-      if (!parentFrame && pointed?.sourceNodeId) {
+      if (!preserveLevelAndElevation && !parentFrame && pointed?.sourceNodeId) {
         const rotation = toCommitRotation(rotationRef.current)
         const effectiveNode = {
           ...((useScene.getState().nodes[node.id] ?? node) as Record<string, unknown>),
@@ -1000,6 +1032,11 @@ export function MoveRegistryNodeTool({ node: source }: { node: AnyNode }) {
           },
         ).position
       }
+      position = keepStartingElevation(position, rotationRef.current)
+      // Carry connected ductwork along (preview only — committed on drop). A
+      // position the connected joints cannot follow holds the last frame,
+      // which is what the drop commits.
+      if (!previewConnectivity(position, rotationRef.current)) return
       const visualPosition = getVisualPosition(position)
       hasMovedRef.current = true
       setCursorPosition(visualPosition)
@@ -1027,8 +1064,6 @@ export function MoveRegistryNodeTool({ node: source }: { node: AnyNode }) {
       })
       syncParentFramePreview(position)
       markMovedNodeDirty()
-      // Carry connected ductwork along (preview only — committed on drop).
-      previewConnectivity(position, rotationRef.current)
 
       const soundStep = {
         coords: [x, z],
@@ -1107,18 +1142,20 @@ export function MoveRegistryNodeTool({ node: source }: { node: AnyNode }) {
           // The pointer cap makes the persisted host reproduce the capped
           // election — a drop under a deck stores the aimed-at lower slab
           // (or the ground), not the deck hanging above.
-          ...resolveSupportSlabPatch(
-            effectiveNode,
-            {
-              ...useScene.getState().nodes,
-              [node.id]: effectiveNode,
-            },
-            {
-              maxElevation: supportCapRef.current,
-              preferredSlabId: supportSurfaceRef.current?.supportSlabId,
-              pinSupport: supportSurfaceRef.current?.sourceNodeId != null,
-            },
-          ),
+          ...(preserveLevelAndElevation
+            ? {}
+            : resolveSupportSlabPatch(
+                effectiveNode,
+                {
+                  ...useScene.getState().nodes,
+                  [node.id]: effectiveNode,
+                },
+                {
+                  maxElevation: supportCapRef.current,
+                  preferredSlabId: supportSurfaceRef.current?.supportSlabId,
+                  pinSupport: supportSurfaceRef.current?.sourceNodeId != null,
+                },
+              )),
           ...(isNew
             ? {
                 metadata: stripPlacementMetadataFlags(node.metadata),
@@ -1142,8 +1179,9 @@ export function MoveRegistryNodeTool({ node: source }: { node: AnyNode }) {
             ? resolveConnectivityUpdates(
                 connectivityRef.current,
                 buildPreviewNode(position, rotationRef.current),
-              ).filter((u) => useScene.getState().nodes[u.id])
+              )?.filter((u) => useScene.getState().nodes[u.id])
             : []
+          if (!connectivityUpdates) return
           const surfaceId = surfaceAttachmentId(effectiveNode)
           itemSurfaceMove?.restore()
           useScene.temporal.getState().resume()
@@ -1191,18 +1229,20 @@ export function MoveRegistryNodeTool({ node: source }: { node: AnyNode }) {
           const committedNode = def.schema.parse({
             ...reparsed,
             parentId: node.parentId,
-            ...resolveSupportSlabPatch(
-              { ...reparsed, parentId: node.parentId } as AnyNode,
-              {
-                ...useScene.getState().nodes,
-                [reparsed.id]: reparsed,
-              },
-              {
-                maxElevation: supportCapRef.current,
-                preferredSlabId: supportSurfaceRef.current?.supportSlabId,
-                pinSupport: supportSurfaceRef.current?.sourceNodeId != null,
-              },
-            ),
+            ...(preserveLevelAndElevation
+              ? {}
+              : resolveSupportSlabPatch(
+                  { ...reparsed, parentId: node.parentId } as AnyNode,
+                  {
+                    ...useScene.getState().nodes,
+                    [reparsed.id]: reparsed,
+                  },
+                  {
+                    maxElevation: supportCapRef.current,
+                    preferredSlabId: supportSurfaceRef.current?.supportSlabId,
+                    pinSupport: supportSurfaceRef.current?.sourceNodeId != null,
+                  },
+                )),
           }) as AnyNode
           useScene.temporal.getState().resume()
           useScene.getState().createNode(committedNode, node.parentId as AnyNodeId)
@@ -1247,6 +1287,7 @@ export function MoveRegistryNodeTool({ node: source }: { node: AnyNode }) {
     // item placement keys (and the "Rotate" hints the move HUD shows). Applied
     // imperatively + mirrored to the live transform; committed on drop.
     const onKeyDown = (e: KeyboardEvent) => {
+      if (isTypingTarget(e.target)) return
       // Hold Alt (free place) to force placement on an invalid (red) footprint,
       // matching the GLB item tool. Recolour the box to green while held.
       if (e.key === 'Alt') {
@@ -1266,7 +1307,6 @@ export function MoveRegistryNodeTool({ node: source }: { node: AnyNode }) {
         attachmentRotationRef.current,
       )
       if (nextFreeRotation === null) return
-      sfxEmitter.emit('sfx:item-rotate')
       const hostedPose = itemSurfaceMove?.rotate(nextFreeRotation)
       let position = hostedPose?.position ?? lastCursorRef.current
       if (
@@ -1287,9 +1327,16 @@ export function MoveRegistryNodeTool({ node: source }: { node: AnyNode }) {
         )
         position = canonicalPositionFromPlan(planOrigin[0], position[1], planOrigin[2])
       }
+      const rotationY = hostedPose?.rotationY ?? nextFreeRotation
+      position = keepStartingElevation(position, rotationY)
+      // Rotating the fitting swings its collars — connected ducts follow. A
+      // swing they cannot follow holds the last frame; a surface-hosted node
+      // has already turned with its host, so its drop refuses instead.
+      if (!previewConnectivity(position, rotationY) && !hostedPose) return
+      sfxEmitter.emit('sfx:item-rotate')
       lastCursorRef.current = position
-      freeRotationRef.current = hostedPose?.rotationY ?? nextFreeRotation
-      rotationRef.current = freeRotationRef.current
+      freeRotationRef.current = rotationY
+      rotationRef.current = rotationY
       setCursorRotationY(previewRotationY(rotationRef.current))
       const visualPosition = getVisualPosition(position)
       setCursorPosition(visualPosition)
@@ -1302,8 +1349,6 @@ export function MoveRegistryNodeTool({ node: source }: { node: AnyNode }) {
         })
       syncParentFramePreview(position)
       markMovedNodeDirty()
-      // Rotating the fitting swings its collars — connected ducts follow.
-      previewConnectivity(position, rotationRef.current)
       // Rotation changes the footprint's collision span — re-check validity.
       if (!itemSurfaceMove?.hosted && itemSurfaceMove?.rejection && lastSurfaceEvent)
         onItemMove(lastSurfaceEvent)
@@ -1423,6 +1468,7 @@ export function MoveRegistryNodeTool({ node: source }: { node: AnyNode }) {
     originalPosition,
     originalPlanPosition,
     originalRotationY,
+    preserveLevelAndElevation,
     previewRotationY,
     revealFreshPlacement,
     useAbsoluteCursorPlacement,

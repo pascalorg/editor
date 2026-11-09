@@ -1,3 +1,4 @@
+import { type DoorNode, getDoorOpeningSize, openingHostFacing } from '@pascal-app/core'
 // Runtime glue between the pure `computeOpeningGuides` geometry (core) and the
 // editor's 3D guide store, used by the door/window move + placement tools. Lives
 // in `nodes` (not core) because it talks to the editor store; kept thin so each
@@ -43,15 +44,17 @@ export function collectOpeningSiblings(
     if (childId === movingId) continue
     const node = nodes[childId as AnyNodeId]
     if (!node || (node.type !== 'door' && node.type !== 'window')) continue
+    const size = getDoorOpeningSize(node)
     out.push({
       id: node.id,
-      centerS: node.position[0],
-      width: node.width,
+      centerS: node.position[0] - size.leafOffsetX * openingHostFacing(node),
+      width: size.width,
       centerY:
         node.position[1] +
+        (size.height - node.height) / 2 +
         getOpeningFloorDatum(wall, node, nodes) -
         wallSupportForNodes(wall, nodes).elevation,
-      height: node.height,
+      height: size.height,
     })
   }
   return out
@@ -253,19 +256,22 @@ export function publishOpeningResizeGuides(
     position: readonly [number, number, number]
     width: number
     height: number
-  },
+  } & Partial<
+    Pick<DoorNode, 'rotation' | 'doorType' | 'sidelightLeft' | 'sidelightRight' | 'transomHeight'>
+  >,
   includeVertical: boolean,
 ): void {
   const nodes = useScene.getState().nodes
   const wall = node.parentId ? nodes[node.parentId as AnyNodeId] : undefined
   if (wall?.type !== 'wall') return
+  const size = getDoorOpeningSize(node)
   publishOpeningGuides3D({
     wall,
     movingId: node.id,
-    centerS: node.position[0],
-    centerY: node.position[1],
-    width: node.width,
-    height: node.height,
+    centerS: node.position[0] - size.leafOffsetX * openingHostFacing(node),
+    centerY: node.position[1] + (size.height - node.height) / 2,
+    width: size.width,
+    height: size.height,
     includeVertical,
     nodes,
     toWorld: wallToWorld(wall),

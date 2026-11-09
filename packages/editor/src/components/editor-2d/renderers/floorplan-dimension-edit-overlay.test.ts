@@ -126,7 +126,7 @@ describe('commitDimensionValue', () => {
     expect(applied).toEqual([])
     expect(updated).toHaveLength(1)
     expect(updated[0]?.id).toBe('dim_1' as AnyNodeId)
-    expect(typeof (updated[0]?.data as { textOverride?: unknown }).textOverride).toBe('string')
+    expect(typeof (updated[0]!.data as { textOverride?: unknown }).textOverride).toBe('string')
   })
 })
 

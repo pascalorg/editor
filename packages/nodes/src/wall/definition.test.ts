@@ -91,6 +91,19 @@ describe('wallDefinition floor-plan extension', () => {
     const canCurve = getFloorplanNodeExtension(wallDefinition)?.actionMenu?.canCurve
     expect(canCurve?.({ node: wall, nodes })).toBe(false)
   })
+  test('takes its own plan hits and shows typeable dimensions only between rooms', () => {
+    const extension = getFloorplanNodeExtension(wallDefinition)
+    expect(extension?.planHitSelectsNode).toBe(true)
+    const wall = wallDefinition.schema.parse({
+      id: 'wall_lone',
+      parentId: 'level_lone',
+      start: [0, 0],
+      end: [4, 0],
+    })
+    const nodes = { [wall.id]: wall } as Record<AnyNodeId, AnyNode>
+    // A wall bounding no room has no room widths to show.
+    expect(extension?.selectionDimensions?.({ node: wall, nodes, faces: 'both' })).toEqual([])
+  })
 })
 
 test('wall top surface follows the effective level-bound height', () => {
@@ -142,14 +155,19 @@ test('curved wall roof builder creates a matching conical sector above it', () =
   const created: Array<{ node: AnyNode; parentId?: AnyNodeId }> = []
   const sceneApi = {
     createMany: (ops) => created.push(...ops),
+    update: () => {},
     nodes: () => nodes,
   } as SceneApi
   const segmentId = createConicalRoofSectorAboveWall(wall, nodes, sceneApi, level.id as AnyNodeId)
-  const roof = created.find((entry) => entry.node.type === 'roof')?.node
+  const roofLevel = created.find((entry) => entry.node.type === 'level')?.node
+  const roof = created.find((entry) => entry.node.type === 'roof')
   const segment = created.find((entry) => entry.node.type === 'roof-segment')?.node
 
   expect(wallDefinition.quickActions).toBeUndefined()
-  expect(roof).toMatchObject({ position: [0, 3, 0], support: { kind: 'walls' } })
+  // On the top floor, the cone goes on a new Roof level, standing on the 3 m wall's top.
+  expect(roofLevel).toMatchObject({ name: 'Roof', level: 1, metadata: { role: 'roof' } })
+  expect(roof?.parentId).toBe(roofLevel?.id)
+  expect(roof?.node).toMatchObject({ position: [0, 0, 0], support: { kind: 'walls' } })
   expect(segment).toMatchObject({
     roofType: 'conical',
     width: 4,
@@ -161,7 +179,7 @@ test('curved wall roof builder creates a matching conical sector above it', () =
   expect(segmentId).toBe(segment?.id)
 })
 
-test('curved wall roof builder parents the roof to the active level', () => {
+test('curved wall roof builder parents the roof to the empty level above the wall', () => {
   const sourceLevel = {
     object: 'node',
     id: 'level_source',
@@ -193,6 +211,7 @@ test('curved wall roof builder parents the roof to the active level', () => {
   const created: Array<{ node: AnyNode; parentId?: AnyNodeId }> = []
   const sceneApi = {
     createMany: (ops) => created.push(...ops),
+    update: () => {},
     nodes: () => nodes,
   } as SceneApi
 
@@ -284,6 +303,7 @@ test('curved wall roof builder follows a lower-floor wall top below the active f
   const created: Array<{ node: AnyNode; parentId?: AnyNodeId }> = []
   const sceneApi = {
     createMany: (ops) => created.push(...ops),
+    update: () => {},
     nodes: () => nodes,
   } as SceneApi
 
@@ -321,6 +341,7 @@ test('curved wall roof builder rejects walls more than one level below', () => {
   const created: Array<{ node: AnyNode; parentId?: AnyNodeId }> = []
   const sceneApi = {
     createMany: (ops) => created.push(...ops),
+    update: () => {},
     nodes: () => nodes,
   } as SceneApi
 

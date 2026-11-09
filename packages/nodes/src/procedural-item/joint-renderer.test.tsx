@@ -10,6 +10,7 @@ import {
   useScene,
 } from '@pascal-app/core'
 import { ProceduralItemNode, parseRecipe, type Recipe } from '@pascal-app/core/procedural-items'
+import { useViewer } from '@pascal-app/viewer'
 import { act, create } from '@react-three/test-renderer'
 import { Mesh, type Object3D, Raycaster, Vector3 } from 'three'
 import jointJson from '../../../core/src/procedural-items/__fixtures__/joint_cabinet.json'
@@ -72,6 +73,45 @@ test('an idle joint tree draws and raycasts only its merged rest pose; playing s
   } finally {
     await renderer.unmount()
     useInteractive.getState().removeProcedural(node.id)
+  }
+})
+
+test('painting library glass suppresses shadows on both rest and moving slot meshes', async () => {
+  const oldViewer = useViewer.getState()
+  useViewer.setState({ textures: true, shading: 'rendered' })
+  const node = {
+    ...install(structuredClone(jointJson) as Recipe),
+    slots: { front: 'library:preset-glass' },
+  }
+  useScene.setState({ nodes: { ...useScene.getState().nodes, [node.id]: node } })
+  const renderer = await create(<ProceduralRenderer node={node} />)
+  try {
+    const meshes: Mesh[] = []
+    sceneRegistry.nodes.get(node.id)!.traverse((child) => {
+      if (child instanceof Mesh && child.userData.slotId) meshes.push(child)
+    })
+    const fronts = meshes.filter((mesh) => mesh.userData.slotId === 'front')
+    expect(fronts.length).toBeGreaterThan(1)
+    expect(fronts.every((mesh) => !mesh.castShadow && mesh.receiveShadow)).toBe(true)
+    expect(
+      meshes.filter((mesh) => mesh.userData.slotId !== 'front').every((mesh) => mesh.castShadow),
+    ).toBe(true)
+
+    const opaque = { ...node, slots: { front: '#5f7d8c' } }
+    await act(async () => {
+      useScene.setState({ nodes: { ...useScene.getState().nodes, [node.id]: opaque } })
+      await renderer.update(<ProceduralRenderer node={opaque} />)
+    })
+    const repainted: Mesh[] = []
+    sceneRegistry.nodes.get(node.id)!.traverse((child) => {
+      if (child instanceof Mesh && child.userData.slotId === 'front') repainted.push(child)
+    })
+    expect(repainted.length).toBe(fronts.length)
+    expect(repainted.every((mesh) => mesh.castShadow && mesh.receiveShadow)).toBe(true)
+  } finally {
+    await renderer.unmount()
+    useInteractive.getState().removeProcedural(node.id)
+    useViewer.setState(oldViewer, true)
   }
 })
 

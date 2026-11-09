@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { type AnyNode, sceneRegistry } from '@pascal-app/core'
+import { type AnyNode, DoorNode, LevelNode, sceneRegistry, WallNode } from '@pascal-app/core'
 import * as THREE from 'three'
 import { collectIfcMeshes, exportPreparedSceneToIfc, ifcFileName } from './ifc-export'
 
@@ -139,3 +139,76 @@ describe('ifcFileName', () => {
     expect(ifcFileName(undefined, 'model')).toBe('model.ifc')
   })
 })
+
+test('material groups retain their surface owner and semantic subpart', () => {
+  const owner = node('item_owner', 'item')
+  const child = node('item_child', 'item', owner.id)
+  const root = identity(new THREE.Group(), owner.id)
+  const geometry = new THREE.BoxGeometry()
+  const material = new THREE.MeshStandardMaterial()
+  const mesh = new THREE.Mesh(
+    geometry,
+    Array.from({ length: 6 }, () => material),
+  )
+  mesh.userData = {
+    surfaceNodeIds: [child.id, child.id, owner.id, owner.id, owner.id, owner.id],
+    pascalIfcRole: 'railing',
+    pascalIfcParts: [
+      { start: 0, count: 6, role: 'railing' },
+      { start: 6, count: 30, role: 'handrail' },
+    ],
+  }
+  root.add(mesh)
+  const { meshes, renderedNodeIds } = collectIfcMeshes(root, {
+    [owner.id]: owner,
+    [child.id]: child,
+  })
+  expect(meshes.get(child.id)).toHaveLength(2)
+  expect(meshes.get(owner.id)).toHaveLength(4)
+  expect(meshes.get(child.id)![0]!.role).toBe('railing')
+  expect(meshes.get(child.id)![1]!.role).toBe('handrail')
+  expect(meshes.get(owner.id)!.every((part) => part.role === 'handrail')).toBe(true)
+  expect(renderedNodeIds.has(child.id)).toBe(true)
+  geometry.dispose()
+  material.dispose()
+})
+
+for (const rotationY of [0, Math.PI]) {
+  test(`IFC opening includes fixed lights and preserves leaf placement facing ${rotationY}`, () => {
+    const level = LevelNode.parse({ id: 'level_entry' })
+    const wall = WallNode.parse({
+      id: 'wall_entry',
+      parentId: level.id,
+      start: [0, 0],
+      end: [5, 0],
+      height: 3,
+      thickness: 0.2,
+    })
+    const door = DoorNode.parse({
+      id: 'door_entry',
+      parentId: wall.id,
+      wallId: wall.id,
+      position: [2.5, 1.05, 0],
+      rotation: [0, rotationY, 0],
+      width: 1,
+      height: 2.1,
+      sidelightLeft: 0.3,
+      sidelightRight: 0.5,
+      transomHeight: 0.4,
+    })
+    const { data } = exportPreparedSceneToIfc(
+      new THREE.Group(),
+      { [level.id]: level, [wall.id]: wall, [door.id]: door },
+      {},
+    )
+    expect(data).toMatch(/IFCRECTANGLEPROFILEDEF\([^\n]*,1\.8,0\.4\)/)
+    expect(data).toMatch(/IFCEXTRUDEDAREASOLID\([^\n]*,2\.5\)/)
+    expect(data).toMatch(/IFCDOOR\([^\n]*,2\.1,1\.,\.DOOR\./)
+    expect(data).toContain(
+      rotationY === 0 ? 'IFCCARTESIANPOINT((2.6,0.,0.))' : 'IFCCARTESIANPOINT((2.4,0.,0.))',
+    )
+    expect(data).toContain(
+      rotationY === 0 ? 'IFCCARTESIANPOINT((-0.1,0.,0.))' : 'IFCCARTESIANPOINT((0.1,0.,0.))',
+    )
+  })
+}

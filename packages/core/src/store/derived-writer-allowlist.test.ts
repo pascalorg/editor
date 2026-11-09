@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test'
 
 // Review guardrail for the writers contract (DECISIONS.md E-012, wiki/architecture/space-detection.md):
 // derived construction — a slab or ceiling marked `boundary: 'auto'` or the
-// legacy `autoFromWalls: true` — is written by the structure kernel and the
+// legacy `autoFromWalls: true`, plus generated porch framing — is written by the structure kernel and the
 // load migrations, and by nobody else. A new writer anywhere under a package's
 // `src` fails here instead of quietly becoming a second construction generator.
 //
@@ -10,7 +10,7 @@ import { expect, test } from 'bun:test'
 // `node.autoFromWalls`) are not writes and never match. Comments are stripped
 // first, but a string literal that spells a marker out verbatim still trips the
 // guard — prose about the contract belongs in a comment or the wiki.
-const ALLOWLIST = new Set([
+const PLATE_WRITERS = new Set([
   // The kernel and its plate builder ARE the generator.
   'packages/core/src/lib/structure-kernel.ts',
   'packages/core/src/lib/floor-plates.ts',
@@ -22,7 +22,17 @@ const ALLOWLIST = new Set([
   'packages/ifc-converter/src/room-first.ts',
 ])
 
-const MARKERS = [/\bboundary:\s*'auto'/, /\bautoFromWalls:\s*true/]
+const PORCH_WRITERS = new Set([
+  'packages/core/src/lib/structure-kernel.ts',
+  'packages/core/src/lib/porch-framing-sync.ts',
+])
+
+const MARKERS = [
+  { pattern: /\bboundary:\s*'auto'/, writers: PLATE_WRITERS },
+  { pattern: /\bautoFromWalls:\s*true/, writers: PLATE_WRITERS },
+  { pattern: /\bporch(?:Of|Part|Seed):/, writers: PORCH_WRITERS },
+]
+const ALLOWLIST = new Set([...PLATE_WRITERS, ...PORCH_WRITERS])
 
 /** Comments describe the markers; only code that writes them counts. */
 function withoutComments(source: string) {
@@ -51,9 +61,10 @@ test('only the structure kernel and the load migrations author derived construct
   const offenders: string[] = []
   for await (const relative of new Bun.Glob(PACKAGE_SOURCES).scan({ cwd: root, onlyFiles: true })) {
     const path = relative.replaceAll('\\', '/')
-    if (isFixtureOrTest(path) || ALLOWLIST.has(path)) continue
+    if (isFixtureOrTest(path)) continue
     const source = withoutComments(await Bun.file(root + relative).text())
-    if (MARKERS.some((marker) => marker.test(source))) offenders.push(path)
+    if (MARKERS.some(({ pattern, writers }) => !writers.has(path) && pattern.test(source)))
+      offenders.push(path)
   }
   expect(offenders).toEqual([])
 })
@@ -62,6 +73,9 @@ test('every allowlisted file still authors derived construction', async () => {
   const root = repoRoot()
   for (const path of ALLOWLIST) {
     const source = withoutComments(await Bun.file(root + path).text())
-    expect([path, MARKERS.some((marker) => marker.test(source))]).toEqual([path, true])
+    expect([
+      path,
+      MARKERS.some(({ pattern, writers }) => writers.has(path) && pattern.test(source)),
+    ]).toEqual([path, true])
   }
 })

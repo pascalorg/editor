@@ -1,10 +1,12 @@
 import { canonicalOpeningRing } from '../lib/canonical-opening-ring'
 import type { NodePatch } from '../lib/structure-kernel'
+import { queryNodes } from '../runtime/node-queries'
 import type { AnyNode, AnyNodeId, FloorOpeningNode, SurfaceHoleMetadata } from '../schema'
 import { FloorOpeningNode as FloorOpeningSchema } from '../schema/nodes/floor-opening'
 import { resolveCeilingHeight } from '../services/level-height'
 import { getLevelElevations } from '../services/storey'
 import { syncAutoElevatorOpenings } from './elevator/elevator-opening-sync'
+import { type StairFootprintAABB, stairFootprintAABB } from './stair/stair-footprint'
 import { syncAutoStairOpenings } from './stair/stair-opening-sync'
 import { resolveStairTotalRise } from './stair/stair-rise-query'
 
@@ -16,7 +18,22 @@ type OwnerPose = {
   rotation: number
   width: number
   runLength: number
+  /**
+   * The stair's footprint in its own frame when the opening was cut: the opening follows it, so an
+   * L or U's opening keeps covering its landing and turned flight. A pose without it (cut before)
+   * scales by the width and the first flight's run, which fit the straight flight it was cut for.
+   */
+  footprint?: StairFootprintAABB
 }
+
+const isBox = (box: unknown): box is StairFootprintAABB => {
+  const { minX, minZ, maxX, maxZ } = (box ?? {}) as Partial<StairFootprintAABB>
+  return [minX, minZ, maxX, maxZ].every(Number.isFinite) && maxX! > minX! && maxZ! > minZ!
+}
+
+/** Where `value` falls along `from`, at the same place along `to`. */
+const rescale = (value: number, from: [number, number], to: [number, number]) =>
+  to[0] + ((value - from[0]) / (from[1] - from[0])) * (to[1] - to[0])
 
 function ownerPose(value: unknown): OwnerPose | undefined {
   if (!value || typeof value !== 'object') return
@@ -37,7 +54,8 @@ function ownerPose(value: unknown): OwnerPose | undefined {
     !(pose.runLength > 0)
   )
     return
-  return pose as OwnerPose
+  const { footprint, ...straight } = pose as OwnerPose
+  return isBox(footprint) ? { ...straight, footprint } : straight
 }
 
 function hashKey(key: string) {
@@ -109,6 +127,69 @@ function cutsFromSurfaces(surfaces: Record<string, AnyNode>, owners: Record<stri
   return cuts
 }
 
+/** The level an authored stair opening is kept on: its source level for a ceiling cut, else its destination. */
+function authoredOpeningTarget(
+  opening: FloorOpeningNode,
+  owner: Extract<AnyNode, { type: 'stair' }>,
+) {
+  return opening.metadata.ownerOpeningTarget === 'source' || opening.drawnOn === 'ceiling'
+    ? owner.fromLevelId
+    : owner.toLevelId
+}
+
+/**
+ * A stair opening reshaped by hand: the floor cut and the ceiling cut below it (the stair's openings
+ * on its own two levels) take `polygon` and become openings the stair owns as drawn, so the plate
+ * and ceiling are cut by that shape (not the derived rectangle) and keep it when the stair is
+ * reselected or re-synced. The stair's current pose is recorded so they still follow it when it
+ * moves or resizes. Returns the patches; empty when `openingId` is not a stair opening that can be
+ * authored this way (an opening on a level between two the stair joins keeps following it).
+ */
+export function authorStairOpeningPatches(
+  nodes: Record<string, AnyNode>,
+  openingId: string,
+  polygon: [number, number][],
+): Array<{ id: AnyNodeId; data: Partial<FloorOpeningNode> }> {
+  const opening = nodes[openingId]
+  if (opening?.type !== 'floor-opening' || opening.source !== 'stair' || !opening.ownerId) return []
+  const owner = nodes[opening.ownerId]
+  if (owner?.type !== 'stair' || authoredOpeningTarget(opening, owner) !== opening.parentId)
+    return []
+  const segment = owner.children
+    .map((id) => nodes[id])
+    .find((node) => node?.type === 'stair-segment')
+  const footprint = stairFootprintAABB({ ...owner, position: [0, 0, 0], rotation: 0 }, nodes)
+  const pose: OwnerPose = {
+    position: owner.position,
+    rotation: owner.rotation,
+    width: owner.width,
+    runLength: segment?.type === 'stair-segment' ? segment.length : 1,
+    ...(isBox(footprint) ? { footprint } : {}),
+  }
+  const ring = canonicalOpeningRing(polygon)
+  return Object.values(nodes).flatMap((node) =>
+    node.type === 'floor-opening' &&
+    node.source === 'stair' &&
+    node.ownerId === owner.id &&
+    authoredOpeningTarget(node, owner) === node.parentId
+      ? [
+          {
+            id: node.id as AnyNodeId,
+            data: {
+              polygon: ring,
+              surfaceId: undefined,
+              legacyPlateCuts: undefined,
+              legacyCeilingCuts: undefined,
+              cutsPrimary: true,
+              cutsAdjacent: false,
+              metadata: { ...node.metadata, ownerPose: pose },
+            },
+          },
+        ]
+      : [],
+  )
+}
+
 export function planOwnedFloorOpenings(
   nodes: Record<string, AnyNode>,
   options: {
@@ -118,9 +199,10 @@ export function planOwnedFloorOpenings(
     materializedNodes?: Record<string, AnyNode>
   } = {},
 ): NodePatch[] {
-  const values = Object.values(nodes)
+  // Owners and their openings first: a scene with none has nothing to plan.
+  const owned = queryNodes(nodes, { type: ['stair', 'elevator', 'floor-opening'] })
   if (
-    !values.some(
+    !owned.some(
       (node) =>
         node.type === 'stair' ||
         node.type === 'elevator' ||
@@ -128,6 +210,7 @@ export function planOwnedFloorOpenings(
     )
   )
     return []
+  const values = Object.values(nodes)
   const existing = values.filter(
     (node): node is FloorOpeningNode =>
       node.type === 'floor-opening' &&
@@ -234,11 +317,17 @@ export function planOwnedFloorOpenings(
       .map((id) => nodes[id])
       .find((node) => node?.type === 'stair-segment')
     const runLength = segment?.type === 'stair-segment' ? segment.length : (oldPose?.runLength ?? 1)
-    const pose = {
+    // With its segments hidden or missing, the stair keeps the footprint it last had.
+    const box = oldPose?.footprint
+      ? (stairFootprintAABB({ ...owner, position: [0, 0, 0], rotation: 0 }, nodes) ??
+        oldPose.footprint)
+      : null
+    const pose: OwnerPose = {
       position: owner.position,
       rotation: owner.rotation,
       width: owner.width,
       runLength,
+      ...(box ? { footprint: box } : {}),
     }
     const target =
       opening.metadata.ownerOpeningTarget === 'source' || opening.drawnOn === 'ceiling'
@@ -253,8 +342,16 @@ export function planOwnedFloorOpenings(
             const dz = z - oldPose.position[2]
             const cosOld = Math.cos(oldPose.rotation)
             const sinOld = Math.sin(oldPose.rotation)
-            const localX = (dx * cosOld - dz * sinOld) * (owner.width / oldPose.width)
-            const localZ = (dx * sinOld + dz * cosOld) * (runLength / oldPose.runLength)
+            const oldX = dx * cosOld - dz * sinOld
+            const oldZ = dx * sinOld + dz * cosOld
+            const was = oldPose.footprint
+            const [localX, localZ] =
+              was && box
+                ? [
+                    rescale(oldX, [was.minX, was.maxX], [box.minX, box.maxX]),
+                    rescale(oldZ, [was.minZ, was.maxZ], [box.minZ, box.maxZ]),
+                  ]
+                : [oldX * (owner.width / oldPose.width), oldZ * (runLength / oldPose.runLength)]
             const cos = Math.cos(owner.rotation)
             const sin = Math.sin(owner.rotation)
             return [

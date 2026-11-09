@@ -6,11 +6,42 @@ import {
   type AnyNodeId,
   calculateLevelMiters,
   getWallPlaneTop,
+  LevelNode,
   WallNode,
 } from '@pascal-app/core'
 import { generateExtrudedWall } from './wall-system'
 
 describe('wall support extension', () => {
+  test.each([
+    [3.6, 3.6],
+    [4.2, 4.25],
+  ])('authored height %s resolves the mesh world top to %s', (height, expectedTop) => {
+    const level = LevelNode.parse({ height: 3.6 })
+    const wall = WallNode.parse({
+      parentId: level.id,
+      start: [0, 0],
+      end: [4, 0],
+      height,
+    })
+    const nodes = { [level.id]: level, [wall.id]: wall }
+    const geometry = generateExtrudedWall(
+      wall,
+      [],
+      calculateLevelMiters([wall]),
+      0.05,
+      0.05,
+      undefined,
+      3.6,
+      undefined,
+      undefined,
+      undefined,
+      nodes,
+    )
+    geometry.computeBoundingBox()
+    expect((geometry.boundingBox?.max.y ?? 0) + 0.05).toBeCloseTo(expectedTop)
+    geometry.dispose()
+  })
+
   test('preserves the raised wall origin and top while filling down to the lower support', () => {
     const wall = WallNode.parse({ start: [0, 0], end: [4, 0], height: 2.5, thickness: 0.1 })
     const geometry = generateExtrudedWall(wall, [], calculateLevelMiters([wall]), 0.6, 0.05)

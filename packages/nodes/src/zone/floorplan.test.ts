@@ -71,6 +71,48 @@ describe('buildZoneFloorplan room documentation', () => {
     ).toBe(true)
   })
 
+  test('the editor canvas labels zones with pills, so it draws no tags or wash; unit painting keeps both', () => {
+    const room = ZoneNode.parse({
+      id: 'zone_pill_room',
+      name: 'Office',
+      spaceRole: 'room',
+      polygon: [
+        [0, 0],
+        [4, 0],
+        [4, 3],
+        [0, 3],
+      ],
+    })
+    const drawn = ZoneNode.parse({ id: 'zone_pill_drawn', name: 'Nook', polygon: room.polygon })
+    const overlay = {
+      ...context,
+      extensions: createFloorplanContextExtensions({ roomLabelOverlay: true }),
+    }
+    const fill = (geometry: FloorplanGeometry | null) =>
+      geometry?.kind === 'group' && 'fillOpacity' in geometry.children[0]!
+        ? geometry.children[0].fillOpacity
+        : undefined
+    for (const zone of [room, drawn]) {
+      const editor = buildZoneFloorplan(zone, overlay)
+      expect(textChildren(editor)).toEqual([])
+      expect(fill(editor)).toBe(0)
+      expect(textChildren(buildZoneFloorplan(zone, context)).length).toBeGreaterThan(0)
+      const painting = buildZoneFloorplan(zone, {
+        ...overlay,
+        viewState: {
+          selected: false,
+          unit: 'metric',
+          highlighted: false,
+          hovered: false,
+          moving: false,
+          focusedUnitId: 'unit_paint',
+        } as never,
+      })
+      expect(textChildren(painting).length).toBeGreaterThan(0)
+      expect(fill(painting)).toBeGreaterThan(0)
+    }
+  })
+
   test('a drafted sheet gets only an invisible outline', () => {
     const room = ZoneNode.parse({
       id: 'zone_sheet',

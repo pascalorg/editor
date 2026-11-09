@@ -16,11 +16,13 @@ import type {
 } from '@pascal-app/core'
 import {
   CABINET_METRIC_DEFAULTS,
+  cabinetSlots,
   findLevelAncestorId,
   selectionProxyIdFromMetadata,
 } from '@pascal-app/core'
 import { findWallOpeningConflicts } from '../shared/wall-opening-clearance'
 import { bakeCabinetAnimationClip } from './animation'
+import { cabinetBatchable } from './batchable'
 import { buildCabinetFloorplan, buildCabinetModuleFloorplan } from './floorplan'
 import { cabinetModuleFloorplanMoveTarget } from './floorplan-move'
 import { cabinetFloorplanSiblingOverrides } from './floorplan-overrides'
@@ -31,6 +33,7 @@ import { cabinetModuleParentFrame } from './move-frame'
 import { cabinetPaint } from './paint'
 import { cabinetModuleUsesFixedApplianceWidth } from './panel-visibility'
 import { cabinetModuleParametrics, cabinetParametrics } from './parametrics'
+import { cabinetPlacementNotice } from './placement-notice'
 import { resolveCabinetGridPosition } from './placement-snap'
 import useCabinetPlacementType from './placement-type'
 import { metadataForSelectedWidth, metadataWithPresetWidthDebt } from './preset-width-debt'
@@ -71,7 +74,6 @@ import {
 } from './run-ops'
 import { cabinetSceneAction } from './scene-action'
 import { CabinetModuleNode, CabinetNode } from './schema'
-import { cabinetSlots } from './slots'
 import {
   backAnchoredModuleZ,
   isHoodCompartmentType,
@@ -755,7 +757,7 @@ function cabinetWallWidthGap(
 
 function isCabinetWidthFiller(module: CabinetModuleNodeType) {
   return (
-    module.moduleKind === 'corner-filler' ||
+    module.moduleKind !== 'standard' ||
     module.name === 'Corner Filler' ||
     module.name === 'Wall Bridge Filler' ||
     module.name === 'Corner Wall Filler'
@@ -2339,6 +2341,9 @@ export const cabinetDefinition: NodeDefinition<typeof CabinetNode> = {
   }),
 
   capabilities: {
+    batchable: cabinetBatchable,
+    reveal: { phase: 'furnishing', style: 'drop', height: 0.3 },
+    revealOnEdit: ['width', 'depth', 'carcassHeight', 'plinthHeight'],
     surfacePlacement: 'floor-only',
     selectable: { hitVolume: 'bbox' },
     movable: {
@@ -2400,6 +2405,7 @@ export const cabinetDefinition: NodeDefinition<typeof CabinetNode> = {
 
   parametrics: cabinetParametrics,
   handles: (node, sceneApi) => cabinetHandles(node, sceneApi).map(withCabinetHostedChildren),
+  placementNotice: cabinetPlacementNotice,
   geometry: buildCabinetGeometry,
   exportAnimation: ({ node, object }) => bakeCabinetAnimationClip(node, object),
   system: {
@@ -2552,6 +2558,7 @@ export const cabinetModuleDefinition: NodeDefinition<typeof CabinetModuleNode> =
   }),
 
   capabilities: {
+    batchable: cabinetBatchable,
     selectable: { hitVolume: 'bbox' },
     surfaces: { hosting: cabinetModuleSurfaceProvider },
     movable: {
@@ -2591,6 +2598,7 @@ export const cabinetModuleDefinition: NodeDefinition<typeof CabinetModuleNode> =
   relations: { hosts: ['cabinet', 'cabinet-module', 'item', 'procedural-item'] },
   parametrics: cabinetModuleParametrics,
   handles: () => cabinetModuleHandles().map(withCabinetHostedChildren),
+  placementNotice: cabinetPlacementNotice,
   geometry: buildCabinetGeometry,
   exportAnimation: ({ node, object }) => bakeCabinetAnimationClip(node, object),
   // `operationState` is deliberately absent — see cabinetDefinition.geometryKey.

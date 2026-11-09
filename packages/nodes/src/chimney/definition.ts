@@ -369,6 +369,7 @@ export const chimneyDefinition: NodeDefinition<typeof ChimneyNode> = {
   },
 
   capabilities: {
+    exterior: true,
     selectable: { hitVolume: 'bbox' },
     duplicable: true,
     deletable: true,

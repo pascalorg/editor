@@ -1,12 +1,12 @@
-import { type AnyNodeId, type ChimneyNode, useScene } from '@pascal-app/core'
+import { type AnyNodeId, type ChimneyNode, useScene, usePascalI18n } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import Image from 'next/image'
 import { memo, useCallback, useState } from 'react'
 import { SnapTargetIcon } from '../../../snap-target-badge'
-import useEditor from './../../../../../store/use-editor'
 import { InlineRenameInput } from './inline-rename-input'
 import { focusTreeNode, handleTreeSelection, TreeNodeWrapper } from './tree-node'
 import { TreeNodeActions } from './tree-node-actions'
+import { nodeLabelDescriptor } from '../../../../../i18n/node-messages'
 
 interface ChimneyTreeNodeProps {
   nodeId: AnyNodeId
@@ -19,6 +19,7 @@ export const ChimneyTreeNode = memo(function ChimneyTreeNode({
   depth,
   isLast,
 }: ChimneyTreeNodeProps) {
+  const i18n = usePascalI18n()
   const [isEditing, setIsEditing] = useState(false)
   const isVisible = useScene((s) => s.nodes[nodeId]?.visible !== false)
   const node = useScene((s) => s.nodes[nodeId] as ChimneyNode | undefined)
@@ -30,20 +31,17 @@ export const ChimneyTreeNode = memo(function ChimneyTreeNode({
   const handleClick = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation()
-      const handled = handleTreeSelection(
+      handleTreeSelection(
         e,
         nodeId,
         useViewer.getState().selection.selectedIds,
         setSelection,
       )
-      if (!handled && useEditor.getState().phase === 'furnish') {
-        useEditor.getState().setPhase('structure')
-      }
     },
     [nodeId, setSelection],
   )
 
-  const defaultName = node?.name || 'Chimney'
+  const defaultName = node?.name || i18n._(nodeLabelDescriptor('chimney', 'Chimney'))
 
   return (
     <TreeNodeWrapper

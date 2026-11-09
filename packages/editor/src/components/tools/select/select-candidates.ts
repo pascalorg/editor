@@ -1,6 +1,7 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  isDerivedNode,
   isRegistrySelectable,
   type LevelNode,
   nodeRegistry,
@@ -15,6 +16,14 @@ function isVisibleSelectableNode(node: AnyNode): boolean {
   if ((node as { visible?: boolean }).visible === false) return false
   return isRegistrySelectable(node.type)
 }
+
+/**
+ * Derived construction (a room's automatic floor plate or ceiling) belongs to its rooms, so a box
+ * never takes it along: a box round a porch would otherwise catch the house's shared floor plate,
+ * and deleting the selection took the floor out from under every room on it. A click still selects
+ * one on its own.
+ */
+const boxSelectable = (node: AnyNode) => !isDerivedNode(node)
 
 export function collectSelectableCandidateIds(): string[] {
   const { levelId } = useViewer.getState().selection
@@ -43,7 +52,8 @@ export function collectSelectableCandidateIds(): string[] {
     )
       return
 
-    if (isRegistrySelectable(node.type)) {
+    // A ceiling's hung lights and fans are still the box's; the ceiling is not.
+    if (isRegistrySelectable(node.type) && boxSelectable(node)) {
       addNode(node)
     }
 
@@ -70,7 +80,8 @@ export function collectSelectableCandidateIds(): string[] {
 
   const buildingId = resolveBuildingForLevel(levelId as AnyNodeId, nodes)
   for (const node of Object.values(nodes)) {
-    if (!node || node.type === 'level' || !isVisibleSelectableNode(node)) continue
+    if (!node || node.type === 'level' || !isVisibleSelectableNode(node) || !boxSelectable(node))
+      continue
 
     const def = nodeRegistry.get(node.type)
     const isBuildingScoped = def?.floorplanScope === 'building'

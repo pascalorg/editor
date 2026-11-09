@@ -4,6 +4,7 @@ import {
   createTerrainField,
   flattenPatch,
   type HeightPatch,
+  heightAt,
   type TerrainField,
 } from '@pascal-app/core'
 import {
@@ -11,6 +12,9 @@ import {
   buildTerrainSkirt,
   HORIZON_PLANE_Y,
   patchUpdateRange,
+  SKIRT_DROP,
+  skirtRing,
+  terrainBlockBase,
   terrainFootprint,
   updateTerrainMesh,
   updateTerrainSkirt,
@@ -529,5 +533,86 @@ describe('terrainFootprint — the horizon punch', () => {
     const footprint = terrainFootprint(createTerrainField({ cols: 1, rows: 1, spacing: 1 }))
     expect(footprint).toHaveLength(4)
     expect(footprint[0]![0]).toBeGreaterThan(footprint[1]![0])
+  })
+})
+
+describe('the lot block — a skirt along the property line', () => {
+  // A dented lot inside a 21 x 21 m field on a 10% grade, wound clockwise on
+  // purpose: the ring must come out in the field perimeter's own direction.
+  const lot: [number, number][] = [
+    [2, 2],
+    [2, 18],
+    [10, 14],
+    [18, 18],
+    [18, 2],
+  ]
+  const field = rampField(0.1, 21, 21, 1)
+
+  test('the ring walks the lot the perimeter’s way round, a point at least every half cell', () => {
+    const ring = skirtRing(field, lot)
+    let area = 0
+    const n = ring.length / 2
+    for (let i = 0; i < n; i++) {
+      const j = (i + 1) % n
+      area +=
+        (ring[i * 2] ?? 0) * (ring[j * 2 + 1] ?? 0) - (ring[j * 2] ?? 0) * (ring[i * 2 + 1] ?? 0)
+      const step = Math.hypot(
+        (ring[j * 2] ?? 0) - (ring[i * 2] ?? 0),
+        (ring[j * 2 + 1] ?? 0) - (ring[i * 2 + 1] ?? 0),
+      )
+      expect(step).toBeLessThanOrEqual(field.spacing / 2 + 1e-6)
+    }
+    expect(area).toBeGreaterThan(0)
+    expect(
+      skirtRing(field, [
+        [0, 0],
+        [1, 1],
+      ]),
+    ).toHaveLength(0)
+  })
+
+  test('its top lies on the ground, its bottom on one flat base under the lowest point', () => {
+    const skirt = buildTerrainSkirt(field, skirtRing(field, lot))
+    const base = terrainBlockBase(field)
+    expect(base).toBeLessThanOrEqual(HORIZON_PLANE_Y - SKIRT_DROP + 1e-6)
+    const count = skirt.positions.length / 6
+    for (let i = 0; i < count; i++) {
+      const top = i * 6
+      const x = skirt.positions[top] ?? 0
+      const z = skirt.positions[top + 2] ?? 0
+      expect(skirt.positions[top + 1] ?? 0).toBeCloseTo(heightAt(field, x, z), 4)
+      expect(skirt.positions[top + 4] ?? 0).toBeCloseTo(base, 5)
+      expect(skirt.positions[top + 4] ?? 0).toBeLessThan(skirt.positions[top + 1] ?? 0)
+    }
+    // thicker uphill: the edge's depth follows the grade
+    const depthAt = (i: number) =>
+      (skirt.positions[i * 6 + 1] ?? 0) - (skirt.positions[i * 6 + 4] ?? 0)
+    const xs = Array.from({ length: count }, (_, i) => skirt.positions[i * 6] ?? 0)
+    const low = xs.indexOf(Math.min(...xs))
+    const high = xs.indexOf(Math.max(...xs))
+    expect(depthAt(high) - depthAt(low)).toBeCloseTo(1.6, 1)
+  })
+
+  test('faces point out of the lot, and a sculpt rewrite matches a rebuild', () => {
+    const ring = skirtRing(field, lot)
+    const skirt = buildTerrainSkirt(field, ring)
+    const n = ring.length / 2
+    let cx = 0
+    let cz = 0
+    for (let i = 0; i < n; i++) {
+      cx += (ring[i * 2] ?? 0) / n
+      cz += (ring[i * 2 + 1] ?? 0) / n
+    }
+    // on the straight west edge (x = 2) the normal is -x
+    const west = Array.from({ length: n }, (_, i) => i).find(
+      (i) => ring[i * 2] === 2 && (ring[i * 2 + 1] ?? 0) > 4 && (ring[i * 2 + 1] ?? 0) < 16,
+    ) as number
+    expect(skirt.normals[west * 6] ?? 0).toBeCloseTo(-1, 5)
+    expect(cx).toBeGreaterThan(2)
+
+    const patch = flattenPatch(field, { minX: 6, minZ: 6, maxX: 14, maxZ: 14 }, -2) as HeightPatch
+    const dug = applyHeightPatch(field, patch)
+    updateTerrainSkirt(dug, skirt)
+    expect(Array.from(skirt.positions)).toEqual(Array.from(buildTerrainSkirt(dug, ring).positions))
   })
 })

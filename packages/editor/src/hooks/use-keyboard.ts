@@ -1,6 +1,7 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  doorPositionForFacing,
   emitter,
   nodeRegistry,
   pauseSpaceDetection,
@@ -26,6 +27,7 @@ import {
 import { steppedRotation } from '../components/tools/item/placement-math'
 import { keyCyclableContinuationContext } from '../lib/continuation'
 import { resolveDirectManipulationNode } from '../lib/direct-manipulation'
+import { isSceneView } from '../lib/editor-views'
 import { cancelGestures } from '../lib/gesture-lifecycle'
 import { guideEmitter } from '../lib/guide-events'
 import { isHistoryShortcut, runRedo, runUndo, shouldCancelDraftOnHistoryJump } from '../lib/history'
@@ -33,11 +35,15 @@ import { isActive } from '../lib/interaction/scope'
 import { paintRegionModeActive } from '../lib/paint-region-mode'
 import { popRoomSelection } from '../lib/room-selection-commands'
 import { copySelectedNodesToEditorClipboard } from '../lib/scene-clipboard'
+import { cycleSelectionAtPointer, trackSelectionCyclePointer } from '../lib/selection-cycle'
 import { sfxEmitter } from '../lib/sfx-bus'
 import { openSidebarPanel } from '../lib/sidebar-panel'
 import { activeSiteNode, clampBrushRadius } from '../lib/terrain-sculpt'
+import { armToolShortcut, toolShortcutForKey } from '../lib/tool-shortcuts'
+import { isTypingTarget } from '../lib/typing-target'
 import { leaveUnitFocus } from '../lib/units'
-import { selectWallDrawVariant } from '../lib/wall-draw-variant'
+import { subscribeWallKindReset } from '../lib/wall-draw-variant'
+import { isWallNudgeKey, nudgeSelectedWall } from '../lib/wall-nudge'
 import useDeleteConfirmation from '../store/use-delete-confirmation'
 import useEditor, { getActiveContinuationContext, getActiveSnapContext } from '../store/use-editor'
 import useInteractionScope, {
@@ -45,6 +51,20 @@ import useInteractionScope, {
   isInteractionSubtreeDraft,
 } from '../store/use-interaction-scope'
 import { groupCurrentSelection, ungroupCurrentSelection } from '../store/use-session-groups'
+import { activeViewLayout } from '../store/view-layout'
+
+const pickKeyFields = (e: KeyboardEvent) => ({
+  code: e.code,
+  shiftKey: e.shiftKey,
+  metaKey: e.metaKey,
+  ctrlKey: e.ctrlKey,
+  altKey: e.altKey,
+})
+
+export function hasSceneKeyboardFocus(): boolean {
+  const layout = activeViewLayout(useEditor.getState())
+  return isSceneView(layout.panes[layout.focus])
+}
 
 // References (guide/scan) are selected via `useEditor.selectedReferenceId`, not
 // the viewer selection, so selection-based key arms (R/T rotate) need this
@@ -120,9 +140,6 @@ const exitToSelectAfterUnconsumedCancel = () => {
     popRoomSelection()
   )
     return
-  const currentPhase = useEditor.getState().phase
-  const currentStructureLayer = useEditor.getState().structureLayer
-
   useInteractionScope
     .getState()
     .endIf(
@@ -131,14 +148,8 @@ const exitToSelectAfterUnconsumedCancel = () => {
         (sc.kind === 'reshaping' && sc.reshape === 'hole'),
     )
 
-  // From zone mode, return to structure select
-  if (currentPhase === 'structure' && currentStructureLayer === 'zones') {
-    useEditor.getState().setStructureLayer('elements')
-    useEditor.getState().armToolMode({ mode: 'select' })
-  } else {
-    // Return to the default select tool while keeping the active building/level context.
-    useEditor.getState().armToolMode({ mode: 'select' })
-  }
+  // Back to the select tool, keeping the active building/level context.
+  useEditor.getState().armToolMode({ mode: 'select' })
 
   useEditor.getState().setFloorplanSelectionTool('click')
 
@@ -209,25 +220,35 @@ export const runHistoryShortcut = (direction: 'undo' | 'redo') => {
 }
 
 /**
- * B: the wall tool on Rectangle — the quickest room — with the Build panel
- * showing, so the lit tile says what is in hand. The panel's tiles still pick
- * another shape for the session.
+ * B: the wall tool on the Rooms shape picked last (Rectangle, Polygon or Walls,
+ * kept with the editor preferences; Rectangle until one is picked), with the
+ * Build panel showing, so the lit tile says what is in hand. The panel opens
+ * before the tool is armed: a host may drop the armed tool when the panel changes.
  */
 export const armWallToolFromShortcut = () => {
-  selectWallDrawVariant('rectangle')
-  const editor = useEditor.getState()
-  editor.setPhase('structure')
-  editor.setStructureLayer('elements')
-  editor.armToolMode({ mode: 'build', tool: 'wall' })
   openSidebarPanel(['build'])
+  useEditor.getState().armToolMode({ mode: 'build', tool: 'wall' })
+}
+
+/** 1: site, 2: the building — each back on the select tool. Returns whether `key` was one. */
+export const switchPhaseFromShortcut = (key: string): boolean => {
+  const phase = key === '1' ? 'site' : key === '2' ? 'building' : null
+  if (!phase) return false
+  useEditor.getState().setPhase(phase)
+  useEditor.getState().armToolMode({ mode: 'select' })
+  return true
+}
+
+/** F: the item tool with the items catalog showing, opened first as B's is. */
+export const openItemCatalogFromShortcut = () => {
+  openSidebarPanel(['items'])
+  useEditor.getState().setActiveSidebarPanel('items')
+  useEditor.getState().armToolMode({ mode: 'build', tool: 'item' })
 }
 
 /** P: paint mode, with the Paint panel showing (the Build panel where a host has no Paint tab). */
 export const armPaintFromShortcut = () => {
-  const editor = useEditor.getState()
-  editor.setPhase('structure')
-  editor.setStructureLayer('elements')
-  editor.armMaterialPaint()
+  useEditor.getState().armMaterialPaint()
   openSidebarPanel(['paint', 'build'])
 }
 
@@ -247,6 +268,8 @@ export const isToolOwnedRotation = () => {
     (editor.tool === 'door' ||
       editor.tool === 'window' ||
       editor.tool === 'roof' ||
+      editor.tool === 'stair' ||
+      editor.tool === 'elevator' ||
       // The item tool is mounted for the build mode, but it only owns R/T
       // when a catalog item is actually selected and a placement draft can
       // exist. Without this check, selecting an existing item in the 2D plan
@@ -272,7 +295,13 @@ export function blocksSnappingShortcut(
 ): boolean {
   if (!target) return false
   if (target.tagName === 'INPUT' && target.hasAttribute('data-run-length-input')) return false
-  return target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable
+  return (
+    target.tagName === 'INPUT' ||
+    target.tagName === 'TEXTAREA' ||
+    target.tagName === 'SELECT' ||
+    target.isContentEditable ||
+    isTypingTarget(target as HTMLElement)
+  )
 }
 
 /** E on one selected node: the kind's own E action, else its mechanism. False when neither applies. */
@@ -296,6 +325,7 @@ export const useKeyboard = ({
     if (disabled) {
       return
     }
+    trackSelectionCyclePointer()
 
     // True while an active placement tool owns R/T. Door/window tools flip the
     // draft, item / lean-to placement rotates its draft, and the roof tool turns
@@ -315,6 +345,11 @@ export const useKeyboard = ({
     let shiftTapClean = false
 
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.defaultPrevented || !hasSceneKeyboardFocus()) {
+        ctrlTapClean = false
+        shiftTapClean = false
+        return
+      }
       if (e.key === 'Shift') {
         shiftTapClean = !e.repeat && !e.metaKey && !e.ctrlKey && !e.altKey
       } else {
@@ -343,12 +378,8 @@ export const useKeyboard = ({
         return
       }
 
-      // Don't handle shortcuts if user is typing in an input
-      if (
-        e.target instanceof HTMLInputElement ||
-        e.target instanceof HTMLTextAreaElement ||
-        (e.target instanceof HTMLElement && e.target.isContentEditable)
-      ) {
+      // Editable controls own their keyboard events.
+      if (isTypingTarget(e.target)) {
         return
       }
 
@@ -413,7 +444,10 @@ export const useKeyboard = ({
           const current = useEditor.getState().getContinuation('fence')
           useEditor
             .getState()
-            .setContinuation('fence', current === 'curved' ? 'continuous' : 'curved')
+            .setContinuation(
+              'fence',
+              current === 'curved' ? 'freehand' : current === 'freehand' ? 'continuous' : 'curved',
+            )
           sfxEmitter.emit('sfx:grid-snap')
           return
         }
@@ -433,7 +467,7 @@ export const useKeyboard = ({
           e.preventDefault()
           if (context === 'fence') {
             const current = useEditor.getState().getContinuation('fence')
-            if (current !== 'curved') {
+            if (current !== 'curved' && current !== 'freehand') {
               useEditor
                 .getState()
                 .setContinuation('fence', current === 'single' ? 'continuous' : 'single')
@@ -445,6 +479,18 @@ export const useKeyboard = ({
           sfxEmitter.emit('sfx:grid-snap')
           return
         }
+      }
+
+      // Drafting tools on Shift with D / W / S / R, where the bare key pans or
+      // rotates (lib/tool-shortcuts). An armed placement keeps Shift+R as its own R.
+      const toolShortcut = isVersionPreviewMode
+        ? null
+        : toolShortcutForKey({ ...pickKeyFields(e), repeat: false })
+      if (toolShortcut && !(toolShortcut === 'roof' && isToolOwnedRotation())) {
+        e.preventDefault()
+        // A held chord repeats: arm once, and never let a repeat fall through to bare R.
+        if (!e.repeat) armToolShortcut(toolShortcut)
+        return
       }
 
       if (e.key === 'Escape') {
@@ -460,37 +506,21 @@ export const useKeyboard = ({
         // Only switch to select mode if no tool had an active mid-action to cancel.
         // (e.g. mid-wall draw or mid-slab polygon should only cancel the action, not exit the tool)
         cancelActiveTool()
-      } else if (e.key === '1' && !e.metaKey && !e.ctrlKey) {
+      } else if (!e.metaKey && !e.ctrlKey && switchPhaseFromShortcut(e.key)) {
         e.preventDefault()
-        useEditor.getState().setPhase('site')
-        useEditor.getState().armToolMode({ mode: 'select' })
-      } else if (e.key === '2' && !e.metaKey && !e.ctrlKey) {
-        e.preventDefault()
-        useEditor.getState().setPhase('structure')
-        useEditor.getState().armToolMode({ mode: 'select' })
-      } else if (e.key === '3' && !e.metaKey && !e.ctrlKey) {
-        e.preventDefault()
-        useEditor.getState().setPhase('furnish')
-        useEditor.getState().armToolMode({ mode: 'select' })
       } else if (e.key === 'f' && !e.metaKey && !e.ctrlKey) {
         if (isVersionPreviewMode) return
         if (isToolOwnedCanopyForm()) return
         e.preventDefault()
-        useEditor.getState().setPhase('furnish')
-        useEditor.getState().armToolMode({ mode: 'build', tool: 'item' })
-        useEditor.getState().setActiveSidebarPanel('items')
+        openItemCatalogFromShortcut()
       } else if (e.key === 'z' && !e.metaKey && !e.ctrlKey) {
         if (isVersionPreviewMode) return
         e.preventDefault()
-        useEditor.getState().setPhase('structure')
-        useEditor.getState().setStructureLayer('zones')
         useEditor.getState().armToolMode({ mode: 'build', tool: 'zone' })
       } else if (e.key === 'm' && !e.metaKey && !e.ctrlKey) {
         if (isVersionPreviewMode) return
         e.preventDefault()
         const editor = useEditor.getState()
-        editor.setPhase('structure')
-        editor.setStructureLayer('elements')
         editor.setToolDefaults('measurement', { kind: editor.lastMeasurementKind })
         editor.armToolMode({ mode: 'build', tool: 'measurement' })
       }
@@ -581,6 +611,31 @@ export const useKeyboard = ({
             }
           }
         }
+      } else if (isWallNudgeKey(e.key) && !e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey) {
+        // Bare arrows nudge a selected wall an inch in the floor plan.
+        const editor = useEditor.getState()
+        if (
+          isVersionPreviewMode ||
+          editor.mode !== 'select' ||
+          useInteractionScope.getState().scope.kind !== 'idle' ||
+          editor.isFirstPersonMode
+        ) {
+          return
+        }
+        if (nudgeSelectedWall(e.key)) e.preventDefault()
+      } else if (e.key === 'Tab' && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        // Tab steps the selection to the next object under the pointer in the
+        // floor plan (Shift+Tab back): a wall hidden under another is reachable.
+        const editor = useEditor.getState()
+        if (
+          isVersionPreviewMode ||
+          editor.mode !== 'select' ||
+          useInteractionScope.getState().scope.kind !== 'idle' ||
+          editor.isFirstPersonMode
+        ) {
+          return
+        }
+        if (cycleSelectionAtPointer(e.shiftKey)) e.preventDefault()
       } else if (
         (e.key === 'r' || e.key === 'R') &&
         !e.metaKey &&
@@ -596,7 +651,7 @@ export const useKeyboard = ({
         // open/close toggle lives on E. Windows still use R to toggle
         // their open/closed state.
         //
-        // Skipped while an item, door, window, or roof placement owns rotation.
+        // Skipped while a placement tool (item, door, window, roof, stair…) owns rotation.
         // The user can still have a node selected during placement; without this
         // guard both the draft and the selection would rotate.
         //
@@ -633,6 +688,11 @@ export const useKeyboard = ({
             useScene.getState().updateNode(node.id, {
               side: node.side === 'front' ? 'back' : 'front',
               rotation: [node.rotation[0], node.rotation[1] + Math.PI, node.rotation[2]],
+              position: doorPositionForFacing(node, [
+                node.rotation[0],
+                node.rotation[1] + Math.PI,
+                node.rotation[2],
+              ]),
             })
             if (node.parentId) {
               useScene.getState().dirtyNodes.add(node.parentId as AnyNodeId)
@@ -781,6 +841,11 @@ export const useKeyboard = ({
       }
     }
     const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.defaultPrevented || !hasSceneKeyboardFocus()) {
+        ctrlTapClean = false
+        shiftTapClean = false
+        return
+      }
       if (e.key === 'Shift') {
         const wasClean = shiftTapClean
         shiftTapClean = false
@@ -815,13 +880,10 @@ export const useKeyboard = ({
     // registry move overlay) — safe only because none of them claim Ctrl/Cmd+G.
     // `e.code` keeps it on the physical G key across keyboard layouts.
     const handleSessionGroupKeyDown = (e: KeyboardEvent) => {
+      if (e.defaultPrevented || !hasSceneKeyboardFocus()) return
       if (e.key !== 'Shift') shiftTapClean = false
       if (e.key !== 'Control' && e.key !== 'Meta') ctrlTapClean = false
-      if (
-        e.target instanceof HTMLInputElement ||
-        e.target instanceof HTMLTextAreaElement ||
-        (e.target instanceof HTMLElement && e.target.isContentEditable)
-      ) {
+      if (isTypingTarget(e.target)) {
         return
       }
       if (useDeleteConfirmation.getState().request) return
@@ -841,7 +903,9 @@ export const useKeyboard = ({
     window.addEventListener('keydown', handleSessionGroupKeyDown, true)
     window.addEventListener('keydown', handleKeyDown)
     window.addEventListener('keyup', handleKeyUp)
+    const unsubscribeWallKind = subscribeWallKindReset()
     return () => {
+      unsubscribeWallKind()
       window.removeEventListener('keydown', handleSessionGroupKeyDown, true)
       window.removeEventListener('keydown', handleKeyDown)
       window.removeEventListener('keyup', handleKeyUp)

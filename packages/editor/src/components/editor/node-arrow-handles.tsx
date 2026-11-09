@@ -6,6 +6,7 @@ import {
   type ArcResizeHandle,
   type CornerRadiusHandle,
   type Cursor,
+  createAngleAccumulator,
   createSceneApi,
   DEFAULT_ANGLE_STEP,
   type HandleDescriptor,
@@ -20,7 +21,6 @@ import {
   useScene,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
-import { Html } from '@react-three/drei'
 import { createPortal, type ThreeEvent, useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
@@ -40,7 +40,6 @@ import {
   Vector3,
 } from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
-
 import { MeshBasicNodeMaterial } from 'three/webgpu'
 import { useCeilingEditCeilingId } from '../../lib/ceiling-edit-session'
 import { EDITOR_LAYER } from '../../lib/constants'
@@ -77,6 +76,7 @@ import {
 import { createLinearResizeDragBinding, linearResizeFactor } from './handles/linear-resize-drag'
 import { resolveResizeSnapValue } from './handles/resize-snap'
 import { type HandleDragControls, useHandleDrag } from './handles/use-handle-drag'
+import { Html } from './localized-html'
 
 // Pooled scratch for the handle rig's world-relative pose mapping.
 const _rigRelative = new Matrix4()
@@ -822,8 +822,16 @@ function LinearArrow({
     }) => {
       dragRideObject.matrixWorld.decompose(_resizePositionW, _resizeQuaternion, _resizeScale)
       _resizeOriginW.set(...position).applyMatrix4(dragRideObject.matrixWorld)
-      axisVector(descriptor.axis, _resizeAxisW).applyQuaternion(_resizeQuaternion).normalize()
-      const localToWorldScale = axisScale(descriptor.axis, _resizeScale)
+      const dragAxis =
+        descriptor.kind === 'linear-resize'
+          ? descriptor.dragAxis?.(initialNode as never, sceneApi)
+          : undefined
+      if (dragAxis) _resizeAxisW.set(...dragAxis).normalize()
+      else axisVector(descriptor.axis, _resizeAxisW)
+      const localToWorldScale = dragAxis
+        ? _resizeAxisW.clone().multiply(_resizeScale).length()
+        : axisScale(descriptor.axis, _resizeScale)
+      _resizeAxisW.applyQuaternion(_resizeQuaternion).normalize()
       if (Math.abs(localToWorldScale) < 1e-6 || _resizeAxisW.lengthSq() === 0) return null
 
       const initialPointer =
@@ -1356,6 +1364,7 @@ function ArcArrow({
         return null
       }
       const initialAngle = angleOf(hitWorld)
+      const accumulateAngle = createAngleAccumulator(initialAngle)
 
       // A distinct label selects rotation snapping instead of resize measurements.
       if (isRotateShape) {
@@ -1375,9 +1384,12 @@ function ArcArrow({
           const hit = new Vector3()
           if (!intersectMovePlane(moveEvent.clientX, moveEvent.clientY, plane, hit)) return null
           const currentAngle = angleOf(hit)
-          let delta = currentAngle - initialAngle
-          while (delta > Math.PI) delta -= 2 * Math.PI
-          while (delta < -Math.PI) delta += 2 * Math.PI
+          let delta = isRotateShape
+            ? Math.atan2(
+                Math.sin(currentAngle - initialAngle),
+                Math.cos(currentAngle - initialAngle),
+              )
+            : accumulateAngle(currentAngle)
 
           if (
             !descriptor.continuous &&

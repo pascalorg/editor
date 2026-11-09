@@ -87,6 +87,9 @@ interface OriginalState {
   metadata: ItemNode['metadata']
 }
 
+/** What a duplicate keeps from the item it copies. */
+export type ItemCopy = Pick<ItemNode, 'slots' | 'collectionIds'>
+
 export interface DraftNodeHandle {
   updateSurface: (data: Partial<ItemNode>, surfaceId: string | null) => void
   /** Current draft item, or null */
@@ -94,13 +97,13 @@ export interface DraftNodeHandle {
   /** Whether the current draft was adopted (move mode) vs created (create mode) */
   readonly isAdopted: boolean
   /** Create a new draft item at the given position. Returns the created node or null.
-   *  `slots` seeds painted slot overrides so duplicates keep their materials. */
+   *  `copied` is the item a duplicate copies: it keeps its painted slots and collections. */
   create: (
     gridPosition: Vector3,
     asset: AssetInput,
     rotation?: [number, number, number],
     scale?: [number, number, number],
-    slots?: ItemNode['slots'],
+    copied?: ItemCopy,
   ) => ItemNode | null
   /** Take ownership of an existing scene node as the draft (for move mode). */
   adopt: (node: ItemNode) => void
@@ -148,7 +151,7 @@ export function useDraftNode(): DraftNodeHandle {
       asset: AssetInput,
       rotation?: [number, number, number],
       scale?: [number, number, number],
-      slots?: ItemNode['slots'],
+      copied?: ItemCopy,
     ): ItemNode | null => {
       const currentLevelId = useViewer.getState().selection.levelId
       if (!currentLevelId) return null
@@ -161,7 +164,8 @@ export function useDraftNode(): DraftNodeHandle {
         asset,
         parentId: currentLevelId,
         metadata: { isTransient: true },
-        ...(slots ? { slots } : {}),
+        ...(copied?.slots ? { slots: copied.slots } : {}),
+        ...(copied?.collectionIds ? { collectionIds: copied.collectionIds } : {}),
       })
 
       releaseHistoryDraft(endHistoryDraftRef)
@@ -368,8 +372,9 @@ export function useDraftNode(): DraftNodeHandle {
         rotation: updateProps.rotation ?? draft.rotation,
         scale: updateProps.scale ?? draft.scale,
         side: updateProps.side ?? draft.side,
-        // Carry painted slot overrides so a duplicated item keeps its materials.
+        // A duplicated item keeps its painted slots and its collections.
         ...(draft.slots ? { slots: draft.slots } : {}),
+        ...(draft.collectionIds ? { collectionIds: draft.collectionIds } : {}),
         // Roof host — see the move-mode commit above for why this must be
         // forwarded explicitly.
         roofSegmentId: updateProps.roofSegmentId,

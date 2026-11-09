@@ -495,130 +495,136 @@ describe('2D item move history', () => {
     [SlabNode, slabDefinition],
     [CeilingNode, ceilingDefinition],
     [ZoneNode, zoneDefinition],
-  ] as const)('a rejected polygon drop retains ownership for an undoable retry (%s)', async (schema, definition) => {
-    if (!nodeRegistry.get(definition.type)) registerNode(definition)
-    const polygon = [
-      [6, 6],
-      [8, 6],
-      [8, 8],
-      [6, 8],
-    ]
-    const node = schema.parse({
-      name: 'Moved polygon',
-      parentId: LEVEL_ID,
-      polygon,
-      autoFromWalls: false,
-    })
-    useScene.getState().createNode(node, LEVEL_ID)
-    clearSceneHistory()
-    const before = useScene.getState().nodes
-    const listeners = spyOn(window, 'addEventListener')
-    useEditor.getState().setMovingNode(node)
-    await act(async () => {
-      renderer = await create(<FloorplanRegistryMoveOverlay />)
-    })
-    const release = listeners.mock.calls.filter(([type]) => type === 'pointerup').at(-1)![1] as (
-      event: PointerEvent,
-    ) => void
-    listeners.mockRestore()
-    await pointer('pointermove', 7, 7)
-    await pointer('pointermove', 9, 9)
-
-    const updateNodes = useScene.getState().updateNodes
-    const fault = new Error('Commit write rejected before publication')
-    const writes = spyOn(useScene.getState(), 'updateNodes').mockImplementation((updates) => {
-      if (useScene.temporal.getState().isTracking && updates.some(({ id }) => id === node.id)) {
-        throw fault
-      }
-      return updateNodes(updates)
-    })
-    let caught: unknown
-    try {
-      await act(async () => {
-        try {
-          // Invoke the actual mounted handler so EventTarget cannot defer the exception.
-          release({ button: 0, clientX: 9, clientY: 9 } as PointerEvent)
-        } catch (error) {
-          caught = error
-        }
+  ] as const)(
+    'a rejected polygon drop retains ownership for an undoable retry (%s)',
+    async (schema, definition) => {
+      if (!nodeRegistry.get(definition.type)) registerNode(definition)
+      const polygon = [
+        [6, 6],
+        [8, 6],
+        [8, 8],
+        [6, 8],
+      ]
+      const node = schema.parse({
+        name: 'Moved polygon',
+        parentId: LEVEL_ID,
+        polygon,
+        autoFromWalls: false,
       })
-    } finally {
-      writes.mockRestore()
-      useScene.setState({ updateNodes })
-    }
-    expect(caught).toBe(fault)
-    expect(useScene.getState().nodes).toEqual(before)
-    expect(useScene.temporal.getState().pastStates).toHaveLength(0)
-    expect(getSceneHistoryPauseDepth()).toBe(0)
-    expect(useScene.temporal.getState().isTracking).toBe(true)
+      useScene.getState().createNode(node, LEVEL_ID)
+      clearSceneHistory()
+      const before = useScene.getState().nodes
+      const listeners = spyOn(window, 'addEventListener')
+      useEditor.getState().setMovingNode(node)
+      await act(async () => {
+        renderer = await create(<FloorplanRegistryMoveOverlay />)
+      })
+      const release = listeners.mock.calls.filter(([type]) => type === 'pointerup').at(-1)![1] as (
+        event: PointerEvent,
+      ) => void
+      listeners.mockRestore()
+      await pointer('pointermove', 7, 7)
+      await pointer('pointermove', 9, 9)
 
-    useScene.getState().updateNode(node.id, { name: 'Renamed while retrying' })
-    expect(useScene.temporal.getState().pastStates).toHaveLength(1)
-    await pointer('pointermove', 10, 10)
-    await pointer('pointerup', 10, 10)
-    await new Promise((resolve) => setTimeout(resolve, 0))
-    expect(useScene.getState().nodes[node.id]).toMatchObject({
-      name: 'Renamed while retrying',
-      polygon: [
-        [9, 9],
-        [11, 9],
-        [11, 11],
-        [9, 11],
-      ],
-    })
-    expect(useScene.temporal.getState().pastStates).toHaveLength(2)
-    const committed = useScene.getState().nodes
-    useScene.temporal.getState().undo()
-    expect(useScene.getState().nodes).toEqual({
-      ...before,
-      [node.id]: { ...before[node.id], name: 'Renamed while retrying' },
-    })
-    useScene.temporal.getState().redo()
-    expect(useScene.getState().nodes).toEqual(committed)
-  })
+      const updateNodes = useScene.getState().updateNodes
+      const fault = new Error('Commit write rejected before publication')
+      const writes = spyOn(useScene.getState(), 'updateNodes').mockImplementation((updates) => {
+        if (useScene.temporal.getState().isTracking && updates.some(({ id }) => id === node.id)) {
+          throw fault
+        }
+        return updateNodes(updates)
+      })
+      let caught: unknown
+      try {
+        await act(async () => {
+          try {
+            // Invoke the actual mounted handler so EventTarget cannot defer the exception.
+            release({ button: 0, clientX: 9, clientY: 9 } as PointerEvent)
+          } catch (error) {
+            caught = error
+          }
+        })
+      } finally {
+        writes.mockRestore()
+        useScene.setState({ updateNodes })
+      }
+      expect(caught).toBe(fault)
+      expect(useScene.getState().nodes).toEqual(before)
+      expect(useScene.temporal.getState().pastStates).toHaveLength(0)
+      expect(getSceneHistoryPauseDepth()).toBe(0)
+      expect(useScene.temporal.getState().isTracking).toBe(true)
+
+      useScene.getState().updateNode(node.id, { name: 'Renamed while retrying' })
+      expect(useScene.temporal.getState().pastStates).toHaveLength(1)
+      await pointer('pointermove', 10, 10)
+      await pointer('pointerup', 10, 10)
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      expect(useScene.getState().nodes[node.id]).toMatchObject({
+        name: 'Renamed while retrying',
+        polygon: [
+          [9, 9],
+          [11, 9],
+          [11, 11],
+          [9, 11],
+        ],
+      })
+      expect(useScene.temporal.getState().pastStates).toHaveLength(2)
+      const committed = useScene.getState().nodes
+      useScene.temporal.getState().undo()
+      expect(useScene.getState().nodes).toEqual({
+        ...before,
+        [node.id]: { ...before[node.id], name: 'Renamed while retrying' },
+      })
+      useScene.temporal.getState().redo()
+      expect(useScene.getState().nodes).toEqual(committed)
+    },
+  )
 
   test.each([
     [SlabNode, slabDefinition],
     [CeilingNode, ceilingDefinition],
     [ZoneNode, zoneDefinition],
-  ] as const)('a polygon drop restores selection and records one undo step (%s)', async (schema, definition) => {
-    if (!nodeRegistry.get(definition.type)) registerNode(definition)
-    const polygon = [
-      [6, 6],
-      [8, 6],
-      [8, 8],
-      [6, 8],
-    ]
-    const node = schema.parse({
-      name: 'Moved polygon',
-      parentId: LEVEL_ID,
-      polygon,
-      autoFromWalls: false,
-    })
-    useScene.getState().createNode(node, LEVEL_ID)
-    clearSceneHistory()
-    useEditor.getState().setMovingNode(node)
-    await act(async () => {
-      renderer = await create(<FloorplanRegistryMoveOverlay />)
-    })
-    await pointer('pointermove', 7, 7)
-    await pointer('pointermove', 9, 9)
-    expect(useScene.temporal.getState().pastStates).toHaveLength(0)
-    await pointer('pointerup', 9, 9)
-    await new Promise((resolve) => setTimeout(resolve, 0))
-    expect(useViewer.getState().selection.selectedIds).toEqual([node.id])
-    expect(useScene.temporal.getState().pastStates).toHaveLength(1)
-    expect(useScene.getState().nodes[node.id]).toMatchObject({
-      polygon: [
+  ] as const)(
+    'a polygon drop restores selection and records one undo step (%s)',
+    async (schema, definition) => {
+      if (!nodeRegistry.get(definition.type)) registerNode(definition)
+      const polygon = [
+        [6, 6],
+        [8, 6],
         [8, 8],
-        [10, 8],
-        [10, 10],
-        [8, 10],
-      ],
-    })
-    useScene.temporal.getState().undo()
-    expect(useScene.getState().nodes[node.id]).toMatchObject({ polygon })
-  })
+        [6, 8],
+      ]
+      const node = schema.parse({
+        name: 'Moved polygon',
+        parentId: LEVEL_ID,
+        polygon,
+        autoFromWalls: false,
+      })
+      useScene.getState().createNode(node, LEVEL_ID)
+      clearSceneHistory()
+      useEditor.getState().setMovingNode(node)
+      await act(async () => {
+        renderer = await create(<FloorplanRegistryMoveOverlay />)
+      })
+      await pointer('pointermove', 7, 7)
+      await pointer('pointermove', 9, 9)
+      expect(useScene.temporal.getState().pastStates).toHaveLength(0)
+      await pointer('pointerup', 9, 9)
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      expect(useViewer.getState().selection.selectedIds).toEqual([node.id])
+      expect(useScene.temporal.getState().pastStates).toHaveLength(1)
+      expect(useScene.getState().nodes[node.id]).toMatchObject({
+        polygon: [
+          [8, 8],
+          [10, 8],
+          [10, 10],
+          [8, 10],
+        ],
+      })
+      useScene.temporal.getState().undo()
+      expect(useScene.getState().nodes[node.id]).toMatchObject({ polygon })
+    },
+  )
 
   test('a wall added mid-carry is its own reconciled step; one undo reverts only the drop', async () => {
     expect(nodesOfType('zone')).toHaveLength(1)

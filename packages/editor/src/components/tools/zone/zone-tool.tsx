@@ -3,10 +3,10 @@ import {
   emitter,
   type GridEvent,
   type LevelNode,
+  newZone,
   runAsSingleSceneHistoryStep,
   snapPointAlongAngleRay,
   useScene,
-  ZoneNode,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef, useState } from 'react'
@@ -34,14 +34,7 @@ const commitZoneDrawing = (levelId: LevelNode['id'], points: Array<[number, numb
 
   const name = nextZoneName(nodes)
 
-  // Default to blue, cycle through palette for subsequent zones
-  const color = '#3b82f6'
-
-  const zone = ZoneNode.parse({
-    name,
-    polygon: points,
-    color,
-  })
+  const zone = newZone({ name, polygon: points })
 
   const focusedUnit = focusedUnitNode()
 
@@ -191,9 +184,9 @@ export const ZoneTool: React.FC = () => {
       updateLines()
     }
 
-    // World-grid snap projected into building-local; rotated buildings
-    // used to pull the snap off the visible grid lines. Grid quantize only
-    // in grid mode; off / lines / angles leave the raw cursor.
+    // Snap on the building's own grid lattice, the one its walls are drafted
+    // on (square to a turned house). Grid quantize only in grid mode; off /
+    // lines / angles leave the raw cursor.
     const gridPointOf = (event: GridEvent): [number, number] =>
       isGridSnapActive()
         ? snapWorldXZForActiveBuilding(

@@ -11,7 +11,9 @@ import type {
 import {
   getDormerWallHorizontalBoundsAtHeight,
   getDormerWallOpeningVerticalBounds,
+  windowSlots,
 } from '@pascal-app/core'
+import { NEW_WINDOW_FRAME_THICKNESS } from '@pascal-app/core/building'
 import type { FloorplanNodeExtension } from '@pascal-app/editor'
 import { curtainOpeningResizeMax } from '../shared/curtain-opening-limits'
 import { windowBatchable } from '../shared/node-batch/batchable'
@@ -26,6 +28,7 @@ import { readRoofFaceHeightMax, readRoofFaceWidthMax } from '../shared/roof-open
 import { buildRoofWallOpeningCut } from '../shared/roof-wall-opening-cut'
 import { scriptedOpeningHandles } from '../shared/scripted-opening-handles'
 import { readHostWallCeiling } from '../shared/wall-opening-ceiling'
+import { openingSeenFromOutside } from '../wall/exterior'
 import { wallFloorplanSiblingOverrides } from '../wall/floorplan-overrides'
 import { buildWindowContextualDimensions } from './contextual-dimensions'
 import { buildWindowFloorplan } from './floorplan'
@@ -34,8 +37,12 @@ import { windowFloorplanMoveTarget } from './floorplan-move'
 import { windowMechanism } from './mechanism'
 import { windowPaint } from './paint'
 import { windowParametrics } from './parametrics'
+import {
+  WINDOW_CORNER_HINTS,
+  WINDOW_PLACEMENT_HINTS,
+  WINDOW_PLAIN_PLACE_VISIBLE,
+} from './placement'
 import { WindowNode } from './schema'
-import { windowSlots } from './slots'
 
 const SIDE_HANDLE_OFFSET = 0.24
 const HEIGHT_HANDLE_OFFSET = 0.24
@@ -271,25 +278,36 @@ export const windowDefinition: NodeDefinition<typeof WindowNode> = {
   kind: 'window',
   snapProfile: 'item',
   facingIndicator: true,
-  schemaVersion: 3,
+  schemaVersion: 4,
   schema: WindowNode,
   category: 'structure',
   extensions: {
     'pascal:editor/floorplan': {
       contextualDimensions: buildWindowContextualDimensions,
       schedule: buildWindowFloorplanSchedule,
+      // Swap a casement's hinge side from the action bar, in 2D and 3D.
+      actionMenu: { actions: () => import('./actions') },
     } satisfies FloorplanNodeExtension<WindowNodeType>,
   },
 
   // Same schema-driven defaults trick as door: parse a stub, strip
   // id/type. Window also has many fields with zod `.default()` set.
   defaults: () => {
-    const stub = WindowNode.parse({ id: 'window_default' as never, type: 'window' })
+    const stub = WindowNode.parse({
+      id: 'window_default' as never,
+      type: 'window',
+      frameThickness: NEW_WINDOW_FRAME_THICKNESS,
+      casingFaceA: true,
+      casingFaceB: true,
+    })
     const { id: _id, type: _type, ...rest } = stub
     return rest
   },
 
   capabilities: {
+    reveal: { phase: 'openings', style: 'cut' },
+    exterior: openingSeenFromOutside,
+    revealOnEdit: ['position', 'width', 'height', 'openingShape', 'windowType'],
     batchable: windowBatchable,
     selectable: { hitVolume: 'bbox' },
     duplicable: true,
@@ -357,7 +375,9 @@ export const windowDefinition: NodeDefinition<typeof WindowNode> = {
   },
 
   toolHints: [
-    { key: 'Left click', label: 'Place window on wall' },
+    { key: 'Left click', label: 'Place window on wall', visible: WINDOW_PLAIN_PLACE_VISIBLE },
+    ...WINDOW_CORNER_HINTS,
+    ...WINDOW_PLACEMENT_HINTS,
     { key: 'R', label: 'Flip side' },
     { key: 'Alt', label: 'Force place' },
     { key: 'Esc', label: 'Cancel' },

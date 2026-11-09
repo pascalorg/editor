@@ -278,14 +278,15 @@ test('support offsets move W while plate-carried face datums stay on their own f
   expect(support.faceBottom.b[0]!.elevation).toBe(0.05)
 })
 
-test.each([
-  0.049, 0.051,
-])('D13 exact millimetre floor %s has its own nonempty plate', (elevation) => {
-  const s = scene(elevation, 0.05, false)
-  const own = plates(s.nodes).find((plate) => plate.plateRole !== 'base')!
-  expect(own).toBeDefined()
-  expect(area([{ outer: own.polygon, holes: own.holes }])).toBeGreaterThan(1)
-})
+test.each([0.049, 0.051])(
+  'D13 exact millimetre floor %s has its own nonempty plate',
+  (elevation) => {
+    const s = scene(elevation, 0.05, false)
+    const own = plates(s.nodes).find((plate) => plate.plateRole !== 'base')!
+    expect(own).toBeDefined()
+    expect(area([{ outer: own.polygon, holes: own.holes }])).toBeGreaterThan(1)
+  },
+)
 
 test('D11 door resizing and wall lowering use the same floor feasibility check', () => {
   const s = scene(0.3)

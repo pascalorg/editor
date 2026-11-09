@@ -1,4 +1,4 @@
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import type { McpServer } from '@modelcontextprotocol/server'
 import { cloneSceneGraph } from '@pascal-app/core/clone-scene-graph'
 import type { AnyNode, AnyNodeId } from '@pascal-app/core/schema'
 import { z } from 'zod'
@@ -6,7 +6,7 @@ import { rehydrateSiteChildren } from '../../lib/rehydrate-site-children'
 import type { SceneOperations } from '../../operations'
 import { isTemplateId, TEMPLATES, type TemplateId } from '../../templates'
 import { DESTRUCTIVE_TOOL_ANNOTATIONS } from '../annotations'
-import { ErrorCode, throwMcpError } from '../errors'
+import { ProtocolErrorCode, throwMcpError } from '../errors'
 import { appendLiveSceneEvent } from '../live-sync'
 import { currentLevelContext, sceneMetaPayload } from '../scene-lifecycle/metadata'
 
@@ -78,14 +78,14 @@ export function registerCreateFromTemplate(server: McpServer, bridge: SceneOpera
       title: 'Create scene from template',
       description:
         'Instantiate a seed Pascal scene template into the bridge. Regenerates all ids before applying. When `save: true` and a SceneStore is wired, also persists the new scene and returns the SceneMeta.',
-      inputSchema: createFromTemplateInput,
-      outputSchema: createFromTemplateOutput,
+      inputSchema: z.object(createFromTemplateInput),
+      outputSchema: z.object(createFromTemplateOutput),
       annotations: DESTRUCTIVE_TOOL_ANNOTATIONS,
     },
     async ({ id, name, save, projectId }) => {
       if (!isTemplateId(id)) {
         throwMcpError(
-          ErrorCode.InvalidParams,
+          ProtocolErrorCode.InvalidParams,
           `unknown_template: ${id}. Call list_templates for the set of valid ids.`,
         )
       }
@@ -103,7 +103,7 @@ export function registerCreateFromTemplate(server: McpServer, bridge: SceneOpera
         bridge.setScene(nodes, rootNodeIds)
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
-        throwMcpError(ErrorCode.InternalError, `apply_failed: ${msg}`)
+        throwMcpError(ProtocolErrorCode.InternalError, `apply_failed: ${msg}`)
       }
 
       const basePayload = {
@@ -162,7 +162,7 @@ export function registerCreateFromTemplate(server: McpServer, bridge: SceneOpera
         }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
-        throwMcpError(ErrorCode.InternalError, `save_failed: ${msg}`)
+        throwMcpError(ProtocolErrorCode.InternalError, `save_failed: ${msg}`)
       }
     },
   )

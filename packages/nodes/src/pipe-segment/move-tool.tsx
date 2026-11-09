@@ -8,9 +8,11 @@ import {
   type GridEvent,
   PipeSegmentNode,
   sceneRegistry,
+  usePascalI18n,
   useScene,
 } from '@pascal-app/core'
 import {
+  copyCollectionIds,
   DragBoundingBox,
   EDITOR_LAYER,
   isAlignmentGuideActive,
@@ -23,6 +25,7 @@ import {
   useEditor,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
+import { Html } from '@react-three/drei'
 import { useEffect, useRef, useState } from 'react'
 import { Vector3 } from 'three'
 import {
@@ -30,8 +33,10 @@ import {
   collectGhostAlignmentCandidates,
   resolveGhostAlignment,
 } from '../shared/ghost-alignment'
+import { INVALID_GHOST_COLOR, VALID_GHOST_COLOR } from '../shared/ghost-materials'
 import { type RunMoveConnectivity, startRunMoveConnectivity } from '../shared/run-move-connectivity'
 import { translateWallRun } from '../shared/wall-run-move'
+import { pipeUpdatesPreserveGrades } from './grade-operation'
 
 type Vec3 = [number, number, number]
 
@@ -98,6 +103,7 @@ function pathAabb(path: readonly Vec3[], r: number): Aabb2D {
  * Wired via `def.affordanceTools.move`.
  */
 export const MovePipeSegmentTool: React.FC<{ node: AnyNode }> = ({ node }) => {
+  const i18n = usePascalI18n()
   const pipe = node as PipeSegmentNode
   const originalPathRef = useRef<Vec3[]>(pipe.path.map((p) => [...p] as Vec3))
 
@@ -113,6 +119,7 @@ export const MovePipeSegmentTool: React.FC<{ node: AnyNode }> = ({ node }) => {
   const activatedAtRef = useRef<number>(Date.now())
   const prevSnapRef = useRef<[number, number] | null>(null)
   const previewAttachmentRef = useRef(pipe.wallAttachment)
+  const [gradeBlocked, setGradeBlocked] = useState(false)
 
   useEffect(() => {
     const nodeId = node.id as AnyNodeId
@@ -147,9 +154,16 @@ export const MovePipeSegmentTool: React.FC<{ node: AnyNode }> = ({ node }) => {
       ? startRunMoveConnectivity(node)
       : null
 
-    const setPreview = (path: Vec3[]) => {
+    // A frame the connected joints cannot follow is not shown: the ghost holds
+    // its last frame, which is what a click commits.
+    const showFrame = (path: Vec3[]): boolean => {
+      const followers = connectivity ? connectivity.preview({ path }) : []
+      if (!followers) return false
+      hasMovedRef.current = true
       previewPathRef.current = path
       setPreviewPath(path)
+      setGradeBlocked(!pipeUpdatesPreserveGrades(useScene.getState().nodes, followers))
+      return true
     }
 
     const onMove = (event: GridEvent) => {
@@ -159,10 +173,7 @@ export const MovePipeSegmentTool: React.FC<{ node: AnyNode }> = ({ node }) => {
       if (pipe.wallAttachment && attachedWall?.type === 'wall') {
         const wallMove = translateWallRun(originalPath, pipe.wallAttachment, attachedWall, event)
         if (wallMove) {
-          hasMovedRef.current = true
-          previewAttachmentRef.current = wallMove.attachment
-          setPreview(wallMove.path)
-          connectivity?.preview({ path: wallMove.path })
+          if (showFrame(wallMove.path)) previewAttachmentRef.current = wallMove.attachment
           return
         }
       }
@@ -200,10 +211,7 @@ export const MovePipeSegmentTool: React.FC<{ node: AnyNode }> = ({ node }) => {
         triggerSFX('sfx:grid-snap')
       }
       prevSnapRef.current = cur
-      hasMovedRef.current = true
-      const nextPath = originalPath.map(([x, y, z]) => [x + dx, y, z + dz] as Vec3)
-      setPreview(nextPath)
-      connectivity?.preview({ path: nextPath })
+      showFrame(originalPath.map(([x, y, z]) => [x + dx, y, z + dz] as Vec3))
     }
 
     const commit = (event: GridEvent) => {
@@ -216,8 +224,19 @@ export const MovePipeSegmentTool: React.FC<{ node: AnyNode }> = ({ node }) => {
         event.nativeEvent?.stopPropagation?.()
         return
       }
-      committed = true
       const finalPath = previewPathRef.current
+      const followUpdates = connectivity ? connectivity.commitUpdates({ path: finalPath }) : []
+      // The drag stays live (history paused, Esc cancels) so the run can be placed elsewhere.
+      if (!followUpdates) {
+        event.nativeEvent?.stopPropagation?.()
+        return
+      }
+      if (!pipeUpdatesPreserveGrades(useScene.getState().nodes, followUpdates)) {
+        setGradeBlocked(true)
+        event.nativeEvent?.stopPropagation?.()
+        return
+      }
+      committed = true
 
       useScene.temporal.getState().resume()
       let selectId = nodeId
@@ -229,12 +248,17 @@ export const MovePipeSegmentTool: React.FC<{ node: AnyNode }> = ({ node }) => {
           metadata: stripPlacementMetadataFlags(node.metadata),
           visible: true,
         })
-        useScene.getState().createNode(created as AnyNode, node.parentId as AnyNodeId)
+        useScene.getState().createNodes([
+          {
+            node: created as AnyNode,
+            parentId: node.parentId as AnyNodeId,
+            collectionIds: copyCollectionIds(node),
+          },
+        ])
         selectId = created.id as AnyNodeId
       } else {
         // Fold connected-fitting / sibling-run follow-updates into the SAME
         // batch as the moved run so the whole joint is one undo step.
-        const followUpdates = connectivity?.commitUpdates({ path: finalPath }) ?? []
         useScene.getState().updateNodes([
           {
             id: nodeId,
@@ -299,25 +323,52 @@ export const MovePipeSegmentTool: React.FC<{ node: AnyNode }> = ({ node }) => {
   const r = pipeRadiusM(pipe)
   const box = pathAabb(previewPath, r)
   const boxY = previewPath[0]?.[1] ?? 0
+  const boxCenter: Vec3 = [(box.minX + box.maxX) / 2, boxY, (box.minZ + box.maxZ) / 2]
+  const ghostColor = gradeBlocked ? INVALID_GHOST_COLOR : GHOST_COLOR
 
   return (
     <group>
       {segments.map((seg, i) => (
-        <GhostSegment a={seg.a} b={seg.b} radius={r} key={`ghost-${i}`} />
+        <GhostSegment a={seg.a} b={seg.b} color={ghostColor} radius={r} key={`ghost-${i}`} />
       ))}
       <DragBoundingBox
         centerY={0}
+        color={gradeBlocked ? INVALID_GHOST_COLOR : VALID_GHOST_COLOR}
         nodeId={node.id}
-        position={[(box.minX + box.maxX) / 2, boxY, (box.minZ + box.maxZ) / 2]}
+        position={boxCenter}
         size={[box.maxX - box.minX, pipe.diameter * IN_TO_M, box.maxZ - box.minZ]}
       />
+      {gradeBlocked && (
+        <Html center position={boxCenter} style={{ pointerEvents: 'none' }}>
+          <div
+            role="status"
+            className="pointer-events-none w-64 rounded border bg-background p-2 text-xs"
+          >
+            {i18n._({
+              id: 'node.pipeSegment.moveTool.connectedGradeBlocked',
+              message:
+                'This move would change a connected pipe’s grade. Choose another position or press Esc to cancel.',
+            })}
+          </div>
+        </Html>
+      )}
     </group>
   )
 }
 
 /** Translucent stand-in for one pipe section — mirrors the draw tool's
  *  `PreviewPipe` so the ghost matches what actually lands. */
-function GhostSegment({ a, b, radius }: { a: Vec3; b: Vec3; radius: number }) {
+function GhostSegment({
+  a,
+  b,
+  color,
+  radius,
+}: {
+  a: Vec3
+  b: Vec3
+  color: string | number
+  radius: number
+}) {
   const start = new Vector3(...a)
   const end = new Vector3(...b)
   const dir = new Vector3().subVectors(end, start)
@@ -336,12 +387,7 @@ function GhostSegment({ a, b, radius }: { a: Vec3; b: Vec3; radius: number }) {
       }}
     >
       <cylinderGeometry args={[radius, radius, length, 24, 1, false]} />
-      <meshBasicMaterial
-        color={GHOST_COLOR}
-        depthTest={false}
-        opacity={GHOST_OPACITY}
-        transparent
-      />
+      <meshBasicMaterial color={color} depthTest={false} opacity={GHOST_OPACITY} transparent />
     </mesh>
   )
 }

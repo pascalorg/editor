@@ -26,15 +26,13 @@
  * drop-in resolved one (`site.parcel.lotAreaSqFt`), else the drawn lot
  * polygon. Pure: reads a scene snapshot, touches no store.
  */
-import type { SceneSnapshot } from '@pascal-app/core'
+import { footprintOutline, levelFootprintLoops, type SceneSnapshot } from '@pascal-app/core'
 import { METRES_PER_FOOT, type Pt, pointInPolygon, polygonArea, polygonBounds } from './geometry'
 import {
   aboveGradeLevels,
   findBuilding,
   findLowestLevel,
   findSite,
-  footprintOutline,
-  levelFootprintLoops,
   type OutdoorPart,
   outdoorParts,
   roofOutlineRings,
@@ -133,7 +131,7 @@ export function computeSiteCoverage(scene: Pick<SceneSnapshot, 'nodes'>): SiteCo
   const levels = storeys.length > 0 ? storeys : ground ? [ground] : []
 
   // the footprint: every storey's wall bands, unioned, outer rings only
-  const loops = levels.flatMap((level) => levelFootprintLoops(snapshot, level, building))
+  const loops = levels.flatMap((level) => levelFootprintLoops(snapshot.nodes, level, building))
   const outline = loops.length > 0 ? footprintOutline(loops) : []
   const buildingM2 = outline.reduce((s, ring) => s + polygonArea(ring), 0)
 

@@ -80,6 +80,8 @@ export function getRidgeVentLinesForSegment(segment: RoofSegmentNode): RidgeVent
   })
   const { width, depth, minX, maxX, minZ, maxZ } = bounds
   if (
+    segment.roofSystem === 'glazed' ||
+    segment.roofType === 'barrel' ||
     segment.roofType === 'flat' ||
     segment.roofType === 'shed' ||
     segment.roofType === 'conical'

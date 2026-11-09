@@ -22,7 +22,8 @@
  * Coordinates are the site plan frame (metres, x east, y south), the frame
  * the lot polygon and the OSM roads share.
  */
-import { edgeLength, outwardNormal, type Pt } from './geometry'
+import { edgeLength, outwardNormal } from '@pascal-app/core'
+import type { Pt } from './geometry'
 import { parseStreetName, sameStreet } from './street-name'
 
 export interface RoadCenterline {

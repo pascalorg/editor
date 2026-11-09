@@ -2,9 +2,14 @@ import { OrthographicCamera, PerspectiveCamera } from '@react-three/drei'
 import { useThree } from '@react-three/fiber'
 import { useEffect } from 'react'
 import type { Layers } from 'three'
+import { isDaylightAtmosphere } from '../../lib/daylight/look'
 import { GRID_LAYER, OVERLAY_LAYER, ZONE_LAYER } from '../../lib/layers'
 import useViewer from '../../store/use-viewer'
+import { useSceneAtmosphere } from './scene-atmosphere'
 import { useSceneGroundReplacement } from './scene-ground-replacement'
+
+/** Far plane of the daylight look (its ground fades into the sky by 2.6 km). */
+const DAYLIGHT_FAR = 6000
 
 const IMMERSIVE_XR_VISIBLE_LAYERS = [OVERLAY_LAYER, ZONE_LAYER, GRID_LAYER] as const
 
@@ -34,7 +39,7 @@ function ImmersiveXRViewLayers({ enabled }: { enabled: boolean }) {
 }
 
 export function viewerCameraClipping(immersiveXR: boolean) {
-  return immersiveXR ? { far: 10_000, near: 0.001 } : { far: 1000, near: 0.1 }
+  return immersiveXR ? { far: 10_000, near: 0.001 } : { far: 1000, near: 0.3 }
 }
 
 export function applyViewerCameraClipping(
@@ -47,6 +52,20 @@ export function applyViewerCameraClipping(
   camera.updateProjectionMatrix()
 }
 
+export function applyWalkthroughCameraClipping(camera: {
+  near: number
+  updateProjectionMatrix(): void
+}) {
+  const previousNear = camera.near
+  // The eye can approach a wall to the capsule's 0.25 m radius.
+  camera.near = Math.min(previousNear, 0.1)
+  camera.updateProjectionMatrix()
+  return () => {
+    camera.near = previousNear
+    camera.updateProjectionMatrix()
+  }
+}
+
 export function viewerUsesPerspectiveCamera(cameraMode: string, immersiveXR: boolean) {
   return immersiveXR || cameraMode === 'perspective'
 }
@@ -54,7 +73,14 @@ export function viewerUsesPerspectiveCamera(cameraMode: string, immersiveXR: boo
 export const ViewerCamera = ({ immersiveXR = false }: { immersiveXR?: boolean }) => {
   const cameraMode = useViewer((state) => state.cameraMode)
   const clipping = viewerCameraClipping(immersiveXR)
-  const far = useSceneGroundReplacement() ? 20_000 : clipping.far
+  const groundReplaced = useSceneGroundReplacement()
+  // The daylight look's ground runs to the horizon: see it out to where it meets the sky.
+  const daylight = isDaylightAtmosphere(useSceneAtmosphere())
+  const far = groundReplaced
+    ? 20_000
+    : daylight
+      ? Math.max(clipping.far, DAYLIGHT_FAR)
+      : clipping.far
 
   return (
     <>

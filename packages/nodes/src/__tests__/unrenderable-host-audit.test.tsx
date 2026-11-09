@@ -25,7 +25,12 @@ import {
 } from '@pascal-app/core'
 import { ProceduralItemNode } from '@pascal-app/core/procedural-items'
 import { AnyNode as AnyNodeSchema } from '@pascal-app/core/schema'
-import { MoveRegistryNodeTool, useEditor, useInteractionScope } from '@pascal-app/editor'
+import {
+  MoveRegistryNodeTool,
+  sceneLayout,
+  useEditor,
+  useInteractionScope,
+} from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { events, type RootStore } from '@react-three/fiber'
 import { act, create } from '@react-three/test-renderer'
@@ -230,7 +235,7 @@ function seed(kind: string, mover: Mover) {
     tool: 'item',
     movingNodeOrigin: '3d',
     placementDragMode: false,
-    viewMode: '3d',
+    viewLayouts: {},
   })
   useEditor.getState().setSnappingMode('item', 'off')
   useViewer.setState({
@@ -1494,7 +1499,7 @@ for (const mover of ['catalog', 'registry'] as const)
         useLiveTransforms.getState().clearAll()
         useScene.setState({ nodes: structuredClone(baseline), dirtyNodes: new Set() })
         useInteractionScope.getState().end()
-        useEditor.setState({ movingNodeOrigin: view, viewMode: view })
+        useEditor.setState({ movingNodeOrigin: view, viewLayouts: { edit: sceneLayout(view) } })
         const source = useScene.getState().nodes[child.id] as typeof child
         const renderer = await create(
           <Scene mover={view === '3d' ? mover : undefined} child={source} />,

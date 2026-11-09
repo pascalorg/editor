@@ -247,7 +247,10 @@ describe('SqliteSceneStore', () => {
       db.close()
     }
 
-    expect(await store.delete('rev', { expectedVersion: 2 })).toBe(true)
+    expect(await store.delete('rev', { expectedVersion: 2 })).toEqual({
+      deleted: true,
+      hidden: false,
+    })
 
     const reopened = new Database(dbPath)
     try {

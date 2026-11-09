@@ -1,4 +1,5 @@
 import type { AnyNodeDefinition, Plugin } from '@pascal-app/core'
+import { beamDefinition } from './beam'
 import { blockDefinition } from './block/definition'
 import { boxVentDefinition } from './box-vent'
 import { buildingDefinition } from './building'
@@ -17,6 +18,7 @@ import { ductTerminalDefinition } from './duct-terminal'
 import { elevatorDefinition } from './elevator'
 import { eyebrowVentDefinition } from './eyebrow-vent'
 import { fenceDefinition } from './fence'
+import { fenceGateDefinition, fenceOpeningDefinition } from './fence-feature/definition'
 import { floorOpeningDefinition } from './floor-opening/definition'
 import { guideDefinition } from './guide'
 import { gutterDefinition } from './gutter'
@@ -81,6 +83,8 @@ export const builtinPlugin: Plugin = {
     floorOpeningDefinition as unknown as AnyNodeDefinition,
     leanToExtensionDefinition as unknown as AnyNodeDefinition,
     fenceDefinition as unknown as AnyNodeDefinition,
+    fenceGateDefinition as unknown as AnyNodeDefinition,
+    fenceOpeningDefinition as unknown as AnyNodeDefinition,
     slabDefinition as unknown as AnyNodeDefinition,
     ceilingDefinition as unknown as AnyNodeDefinition,
     doorDefinition as unknown as AnyNodeDefinition,
@@ -93,6 +97,7 @@ export const builtinPlugin: Plugin = {
     // Stage A — wrap-exports the legacy renderer + system. Legacy
     // panels / move tools / floorplan branches still serve these.
     columnDefinition as unknown as AnyNodeDefinition,
+    beamDefinition as unknown as AnyNodeDefinition,
     elevatorDefinition as unknown as AnyNodeDefinition,
     unitDefinition as unknown as AnyNodeDefinition,
     roofDefinition as unknown as AnyNodeDefinition,
@@ -134,6 +139,8 @@ export const builtinPlugin: Plugin = {
   ],
 }
 
+export { beamDefinition } from './beam'
+export { useBeamDraft } from './beam/draft-settings'
 export {
   applyBlockCommand,
   type BlockCommand,
@@ -147,14 +154,24 @@ export { boxVentDefinition } from './box-vent'
 export { buildingDefinition } from './building'
 export {
   bakeCabinetAnimationClip,
+  beginKitchenPlacement,
   CABINET_PLANNING_TOLERANCE,
   type CabinetPlacementType,
   type CabinetPlanningIssue,
   type CabinetPlanningIssueCode,
   type CabinetPlanningOptions,
   type CabinetPlanningReport,
+  type CabinetPresetId,
   cabinetDefinition,
   cabinetModuleDefinition,
+  cabinetPresetById,
+  findKitchenItems,
+  KITCHEN_ITEM_LABELS,
+  KITCHEN_ITEMS,
+  KitchenCollection,
+  kitchenItemMatches,
+  kitchenPresetForModule,
+  kitchenPresetForPlacedModule,
   MIN_PRACTICAL_TOP_CABINET_HEIGHT,
   poseCabinetMovingParts,
   useCabinetPlacementStatus,
@@ -164,6 +181,13 @@ export {
 export { ceilingDefinition } from './ceiling'
 export { chimneyDefinition } from './chimney'
 export { columnDefinition } from './column'
+export {
+  armFramingPostTool,
+  type FramingPostToolChoices,
+  framingPostsUnderBeam,
+  framingPostToolChoices,
+  framingPostToolDefaults,
+} from './column/post-placement'
 export { constructionDimensionDefinition } from './construction-dimension'
 export { cupolaDefinition } from './cupola'
 export { doorDefinition } from './door'
@@ -174,13 +198,18 @@ export { ductSegmentDefinition } from './duct-segment'
 export { ductTerminalDefinition } from './duct-terminal'
 export { elevatorDefinition } from './elevator'
 export { eyebrowVentDefinition } from './eyebrow-vent'
-export { fenceDefinition } from './fence'
+export { beginFenceFeaturePlacement, fenceDefinition } from './fence'
+export { fenceGateDefinition, fenceOpeningDefinition } from './fence-feature/definition'
 export { floorOpeningDefinition } from './floor-opening/definition'
 export { guideDefinition } from './guide'
 export { gutterDefinition } from './gutter'
 export { hvacEquipmentDefinition } from './hvac-equipment'
 export { importedMeshDefinition } from './imported-mesh'
 export { getPendingItemModelLoadCount, itemDefinition } from './item'
+export {
+  registerWallObjectSceneCheck,
+  wallObjectRenderedObservations,
+} from './item/wall-object-observations'
 export { leanToExtensionDefinition } from './lean-to-extension'
 export { levelDefinition } from './level'
 export { linesetDefinition } from './lineset'
@@ -191,9 +220,13 @@ export { pipeSegmentDefinition } from './pipe-segment'
 export { pipeTrapDefinition } from './pipe-trap'
 export { ridgeVentDefinition } from './ridge-vent'
 export { type RoofFootprintSourceChoice, roofDefinition, useRoofFootprintSource } from './roof'
+export { glazedRoofGeometryAdapter } from './roof/glazed-geometry'
+export { createGlazedRoofMaterials } from './roof/glazed-materials'
+export { createRoofGlazingPreview } from './roof/glazing-preview'
 export { roofSegmentDefinition } from './roof-segment'
 export { scanDefinition } from './scan'
 export { separatorDefinition } from './separator/definition'
+export { default as PipeCollarInspector } from './shared/pipe-collar-inspector'
 export { shelfDefinition } from './shelf'
 export { siteDefinition } from './site'
 export { skylightDefinition } from './skylight'
@@ -201,6 +234,14 @@ export { slabDefinition } from './slab'
 export { solarPanelDefinition } from './solar-panel'
 export { spawnDefinition } from './spawn'
 export { stairDefinition } from './stair'
+export { guardBoxGeometry } from './stair/baluster-geometry'
+export { buildBalusterGuard } from './stair/baluster-guard'
+export { buildBoardsGuard } from './stair/boards-guard'
+export { buildCableGuard } from './stair/cable-guard'
+export { buildGlassGuard } from './stair/glass-guard'
+export { buildMetalGuard } from './stair/metal-guard'
+export { buildFloorplanStairEntry } from './stair/plan-entry'
+export { buildPostAndRailGuard } from './stair/post-and-rail-guard'
 export { stairSegmentDefinition } from './stair-segment'
 export { structuralGridDefinition } from './structural-grid'
 export { turbineVentDefinition } from './turbine-vent'

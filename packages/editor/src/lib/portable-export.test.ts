@@ -69,6 +69,34 @@ describe('portable vertex-color boundary', () => {
     })
   })
 
+  test('spreads a mesh with more faces than one atlas holds over several atlases', () => {
+    withCanvasCapture((capture) => {
+      const faceCount = 256 * 256 + 2
+      const colors = new Float32Array(faceCount * 3 * 4)
+      for (let vertex = 0; vertex < faceCount * 3; vertex++) {
+        colors.set(vertex < (faceCount - 2) * 3 ? [1, 0, 0, 1] : [0, 0, 1, 1], vertex * 4)
+      }
+      const geometry = new BufferGeometry()
+      geometry.setAttribute('position', new Float32BufferAttribute(faceCount * 9, 3))
+      geometry.setAttribute('color', new Float32BufferAttribute(colors, 4))
+      const mesh: Mesh = new Mesh(geometry, new MeshStandardMaterial({ vertexColors: true }))
+      const root = new Group()
+      root.add(mesh)
+
+      expect(normalizePortableScene(root)).toEqual([])
+
+      const materials = mesh.material as MeshStandardMaterial[]
+      expect(materials).toHaveLength(2)
+      expect(materials[0]!.map).not.toBe(materials[1]!.map)
+      expect(mesh.geometry.groups).toEqual([
+        { start: 0, count: (faceCount - 2) * 3, materialIndex: 0 },
+        { start: (faceCount - 2) * 3, count: 6, materialIndex: 1 },
+      ])
+      // The capture holds the last atlas painted: the page with the two blue faces.
+      expect(portableColorAt(mesh, faceCount * 3 - 1, capture)).toEqual([0, 0, 255, 255])
+    })
+  })
+
   test('does not warn when every channel is already portable', () => {
     withCanvasCapture(() => {
       const geometry = triangleGeometry(
@@ -300,7 +328,12 @@ function portableColorAt(mesh: Mesh, vertexIndex: number, capture: () => ImageDa
       Math.round((colors.itemSize >= 4 ? colors.getW(vertexIndex) : 1) * 255),
     ]
   }
-  const material = mesh.material as MeshStandardMaterial
+  const group = mesh.geometry.groups.find(
+    ({ start, count }) => vertexIndex >= start && vertexIndex < start + count,
+  )
+  const material = (
+    Array.isArray(mesh.material) ? mesh.material[group?.materialIndex ?? 0] : mesh.material
+  ) as MeshStandardMaterial
   if (!material.map) throw new Error('Portable color has no material-connected carrier')
   const channel = material.map.channel ?? 0
   const uvName = channel === 0 ? 'uv' : `uv${channel}`

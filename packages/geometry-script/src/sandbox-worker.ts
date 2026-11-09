@@ -44,12 +44,18 @@ for (const name of BLOCKED) {
   }
 }
 
-type Request = { id: number; code: string; params?: Record<string, string | number | boolean> }
+type Request = {
+  id: number
+  code: string
+  params?: Record<string, string | number | boolean>
+  inputs?: Record<string, unknown>
+  usageShape?: boolean
+}
 
 self.addEventListener('message', async (event: MessageEvent<Request>) => {
-  const { id, code, params } = event.data
+  const { id, code, params, inputs, usageShape } = event.data
   try {
-    const output = await compileGeometryScript({ code, params })
+    const output = await compileGeometryScript({ code, params, inputs, usageShape })
     post({ id, ok: true, output }, [output.glb])
   } catch (error) {
     post({ id, ok: false, error: error instanceof Error ? error.message : String(error) })

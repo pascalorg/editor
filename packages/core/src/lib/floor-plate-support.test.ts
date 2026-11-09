@@ -70,24 +70,25 @@ function fixture(highThickness = 0.45) {
   return { walls, slabs, plates, nodes: migrated }
 }
 
-test.each([
-  0.05, 0.45,
-])('base plate carries every wall regardless of legacy thickness %s', (thickness) => {
-  const { walls, plates, nodes } = fixture(thickness)
-  const baseHeight = plates.find((plate) => plate.plateRole === 'base')!.elevation
-  expect(baseHeight).toBe(0.05)
-  expect(plates.every((plate) => plate.floorHeight === undefined)).toBe(true)
-  for (const wall of walls) {
-    const actual = computeWallSlabSupport(wall, plates, walls, undefined, undefined, 0, nodes)
-    expect(actual.elevation).toBe(baseHeight)
-    expect(actual.baseSegments).toEqual([{ start: 0, end: 1, elevation: baseHeight }])
-  }
-  const divider = computeWallSlabSupport(walls[4]!, plates, walls, undefined, undefined, 0, nodes)
-  expect(divider.faceDatum.a[0]!.elevation).toBe(0.05)
-  expect(divider.faceDatum.b[0]!.elevation).toBe(0.45)
-  for (const plate of plates)
-    expect(getRenderableSlabPolygon(plate, { walls, siblingSlabs: plates })).toBe(plate.polygon)
-})
+test.each([0.05, 0.45])(
+  'base plate carries every wall regardless of legacy thickness %s',
+  (thickness) => {
+    const { walls, plates, nodes } = fixture(thickness)
+    const baseHeight = plates.find((plate) => plate.plateRole === 'base')!.elevation
+    expect(baseHeight).toBe(0.05)
+    expect(plates.every((plate) => plate.floorHeight === undefined)).toBe(true)
+    for (const wall of walls) {
+      const actual = computeWallSlabSupport(wall, plates, walls, undefined, undefined, 0, nodes)
+      expect(actual.elevation).toBe(baseHeight)
+      expect(actual.baseSegments).toEqual([{ start: 0, end: 1, elevation: baseHeight }])
+    }
+    const divider = computeWallSlabSupport(walls[4]!, plates, walls, undefined, undefined, 0, nodes)
+    expect(divider.faceDatum.a[0]!.elevation).toBe(0.05)
+    expect(divider.faceDatum.b[0]!.elevation).toBe(0.45)
+    for (const plate of plates)
+      expect(getRenderableSlabPolygon(plate, { walls, siblingSlabs: plates })).toBe(plate.polygon)
+  },
+)
 
 test('a zero-height exterior deck cannot pull a wall off the continuous base', () => {
   const { walls, plates, nodes } = fixture(0.05)

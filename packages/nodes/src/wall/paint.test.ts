@@ -1,5 +1,12 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { type AnyNode, sceneRegistry, useScene, type WallNode, ZoneNode } from '@pascal-app/core'
+import {
+  type AnyNode,
+  sceneRegistry,
+  useScene,
+  WallFaceScript,
+  type WallNode,
+  ZoneNode,
+} from '@pascal-app/core'
 import { BoxGeometry, Mesh, MeshBasicMaterial, Object3D, Ray, Vector3 } from 'three'
 import {
   parseWallPaintRole,
@@ -181,6 +188,7 @@ describe('resolveWallRole', () => {
 
     expect(
       wallPaint.getEffectiveMaterial?.({
+        materials: useScene.getState().materials,
         node: baseWall,
         role: 'aCrown',
         nodes: { [baseWall.id]: baseWall },
@@ -260,6 +268,7 @@ describe('wall paint roles', () => {
     ])
     expect(
       wallPaint.getEffectiveMaterial?.({
+        materials: useScene.getState().materials,
         node: nodes()[wall.id],
         role: wallRoomFaceRole('zone_room', 'a'),
         nodes: nodes(),
@@ -278,7 +287,7 @@ describe('wall paint roles', () => {
     expect(nodes()[wall.id].slots?.a).toBeUndefined()
     expect(nodes()[wall.id].faceRegions).toBeUndefined()
     expect(nodes().zone_room.wallOverrides).toEqual([
-      { wallId: wall.id, face: 'a', finish: 'library:concrete-drywall' },
+      { wallId: wall.id, face: 'a', finish: 'library:preset-seattlegrey' },
     ])
     expect(nodes().zone_room.wallMaterial).toBe('library:new-room')
     expect(
@@ -291,6 +300,31 @@ describe('wall paint roles', () => {
     ).toEqual({})
   })
 
+  test('a face its script builds refuses the commit; the other face takes it', () => {
+    const script = WallFaceScript.parse({
+      kind: 'script',
+      script: 'a'.repeat(64),
+      artifact: 'b'.repeat(64),
+      inputs: 'key',
+      manifest: { bounds: { min: [0, 0, 0], max: [4, 2.5, 0.01] }, triangles: 2 },
+    })
+    const wall = { ...baseWall, finishScripts: { a: script } }
+    useScene.setState({ nodes: scene(wall, [room]), materials: {} } as never)
+    const commit = (role: string) =>
+      wallPaint.commit!({
+        node: useScene.getState().nodes[wall.id]!,
+        role,
+        material: undefined,
+        materialPreset: 'library:tile',
+      })
+    const before = useScene.getState().nodes
+    for (const role of ['a', wallRoomFaceRole('zone_room', 'a')])
+      expect(commit(role)).toMatchObject({ status: 'refused', code: 'wall-face-built-by-script' })
+    expect(useScene.getState().nodes).toBe(before)
+    commit('b')
+    expect((useScene.getState().nodes[wall.id] as WallNode).slots).toEqual({ b: 'library:tile' })
+  })
+
   test('the face picker reads migrated legacy finishes', () => {
     const wall = {
       ...baseWall,
@@ -298,7 +332,12 @@ describe('wall paint roles', () => {
       materialPreset: 'library:legacy-wall',
     }
     const effective = (role: string) =>
-      wallPaint.getEffectiveMaterial?.({ node: wall, role, nodes: { [wall.id]: wall } })
+      wallPaint.getEffectiveMaterial?.({
+        materials: useScene.getState().materials,
+        node: wall,
+        role,
+        nodes: { [wall.id]: wall },
+      })
     expect(effective('b')).toEqual({ material: undefined, materialPreset: 'library:legacy-b' })
     expect(effective('a')).toEqual({ material: undefined, materialPreset: 'library:legacy-wall' })
     expect(wallPaint.roleLabel?.(wall, wallRoomFinishRole('zone_room'))).toBe('Room')

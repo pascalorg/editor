@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
+import { classifyEdges, setbackEnvelope } from '@pascal-app/core'
 import type { Pt } from '../floorplan/site-plan/geometry'
-import { classifyEdges, polygonArea, setbackEnvelope } from '../floorplan/site-plan/geometry'
+import { polygonArea } from '../floorplan/site-plan/geometry'
 import {
   cleanLotRing,
   describeRingCleanup,

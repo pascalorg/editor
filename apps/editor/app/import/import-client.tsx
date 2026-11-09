@@ -127,7 +127,7 @@ export function ImportClient({ src, name }: { src: string | null; name: string |
         return
       }
       const meta = (await response.json()) as { id: string }
-      router.push(`/scene/${meta.id}`)
+      router.push(`/project/${meta.id}`)
     } catch (error) {
       setPhase({
         kind: 'review',

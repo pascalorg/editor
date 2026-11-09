@@ -1,5 +1,12 @@
 import { beforeEach, describe, expect, test } from 'bun:test'
-import type { AnyNode } from '../schema'
+import {
+  getWallBaseElevationForNodes,
+  getWallEffectiveHeightForNodes,
+  spatialGridManager,
+} from '../hooks/spatial-grid/spatial-grid-manager'
+import { initSpatialGridSync } from '../hooks/spatial-grid/spatial-grid-sync'
+import type { AnyNode, AnyNodeId } from '../schema'
+import { getLevelElevations } from '../services/storey'
 import useScene from './use-scene'
 
 type RawNode = Record<string, unknown>
@@ -81,6 +88,7 @@ type WallResult = Extract<AnyNode, { type: 'wall' }>
 type StairResult = Extract<AnyNode, { type: 'stair' }>
 type SlabResult = Extract<AnyNode, { type: 'slab' }>
 type CeilingResult = Extract<AnyNode, { type: 'ceiling' }>
+type RoofResult = Extract<AnyNode, { type: 'roof' }>
 
 describe('scene vertical model migration', () => {
   beforeEach(() => {
@@ -93,7 +101,7 @@ describe('scene vertical model migration', () => {
     useScene.temporal.getState().clear()
   })
 
-  test('default legacy storey derives height 2.5 and keeps walls plane-bound', () => {
+  test('default legacy storey derives height 2.55 and keeps walls plane-bound', () => {
     const nodes = loadScene({
       site_test: site(['building_a']),
       building_a: building('building_a', ['level_a']),
@@ -103,9 +111,99 @@ describe('scene vertical model migration', () => {
       wall_b: wall('wall_b', 'level_a', [4, 0], [4, 4]),
     })
 
-    expect((nodes.level_a as LevelResult).height).toBe(2.5)
+    // The editor drew a wall without a height 2.5 m up from its slab.
+    expect((nodes.level_a as LevelResult).height).toBe(0.05 + 2.5)
     expect('height' in (nodes.wall_a as WallResult)).toBe(false)
     expect('height' in (nodes.wall_b as WallResult)).toBe(false)
+  })
+
+  test('an upper storey on a raised floor keeps its walls under the roof', () => {
+    // The landing page's house, reduced: the first floor stands on a 0.30
+    // floor slab, its walls have no stored height, and a roof sits on the
+    // storey above. The editor used to draw those walls 2.5 m up from the
+    // slab (to 2.55 + 0.30 + 2.5 = 5.35) and stack the roof storey on top of
+    // them, so the roof sat exactly on the wall tops.
+    const BOX: Array<[number, number]> = [
+      [0, 0],
+      [6, 0],
+      [6, 4],
+      [0, 4],
+    ]
+    const ring = (prefix: string, levelId: string) =>
+      Object.fromEntries(
+        BOX.map((start, index) => [
+          `${prefix}_${index}`,
+          wall(`${prefix}_${index}`, levelId, start, BOX[(index + 1) % BOX.length]!),
+        ]),
+      )
+    const groundWalls = ring('wall_ground', 'level_ground')
+    const upperWalls = ring('wall_upper', 'level_upper')
+    const stopSync = initSpatialGridSync()
+    try {
+      const nodes = loadScene({
+        site_test: site(['building_a']),
+        building_a: building('building_a', ['level_ground', 'level_upper', 'level_roof']),
+        level_ground: level('level_ground', 'building_a', 0, [
+          'slab_ground',
+          ...Object.keys(groundWalls),
+        ]),
+        slab_ground: slab('slab_ground', 'level_ground', BOX),
+        ...groundWalls,
+        level_upper: level('level_upper', 'building_a', 1, [
+          'slab_upper',
+          'wall_railing',
+          ...Object.keys(upperWalls),
+        ]),
+        slab_upper: slab('slab_upper', 'level_upper', BOX, 0.3),
+        ...upperWalls,
+        wall_railing: wall('wall_railing', 'level_upper', [1, 2], [5, 2], 1.2),
+        level_roof: level('level_roof', 'building_a', 2, ['roof_a']),
+        roof_a: baseNode('roof_a', 'roof', 'level_roof', {
+          position: [3, 0, 2],
+          rotation: 0,
+          children: ['roof_segment_a'],
+        }),
+        roof_segment_a: baseNode('roof_segment_a', 'roof-segment', 'roof_a', {
+          position: [0, 0, 0],
+          rotation: 0,
+          width: 6,
+          depth: 4,
+          overhang: 0.3,
+          roofType: 'gable',
+          roofHeight: 1.5,
+          wallHeight: 0,
+        }),
+      })
+
+      const elevations = getLevelElevations(nodes as Record<AnyNodeId, AnyNode>)
+      const topOf = (id: string) => {
+        const wallNode = nodes[id] as WallResult
+        return (
+          elevations.get(wallNode.parentId!)!.baseY +
+          getWallBaseElevationForNodes(wallNode, nodes) +
+          getWallEffectiveHeightForNodes(wallNode, nodes)
+        )
+      }
+      const roofSeat =
+        elevations.get('level_roof')!.baseY + (nodes.roof_a as RoofResult).position[1]
+
+      // No wall stands above the roof: each upper wall top meets the seat.
+      for (const id of Object.keys(upperWalls)) {
+        expect(topOf(id) - roofSeat).toBeCloseTo(0, 3)
+      }
+      // And both stay where the editor drew them, to the millimetre.
+      expect(roofSeat).toBeCloseTo(5.35, 3)
+      for (const id of Object.keys(upperWalls)) {
+        expect('height' in (nodes[id] as WallResult)).toBe(false)
+        expect(topOf(id)).toBeCloseTo(5.35, 3)
+      }
+      expect(topOf('wall_railing')).toBeCloseTo(2.55 + 0.3 + 1.2, 3)
+      expect((nodes.level_ground as LevelResult).height).toBeCloseTo(2.55, 9)
+      expect((nodes.level_upper as LevelResult).height).toBeCloseTo(2.8, 9)
+    } finally {
+      stopSync()
+      spatialGridManager.clear()
+    }
   })
 
   test('materializes a finite zero base elevation for legacy levels', () => {

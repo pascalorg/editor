@@ -450,6 +450,7 @@ const OutlinerSync = () => {
   const selection = useViewer((s) => s.selection)
   const externalSelectedIds = useViewer((s) => s.externalSelectedIds)
   const hoveredId = useViewer((s) => s.hoveredId)
+  const pointedIds = useViewer((s) => s.pointedIds)
   const outliner = useViewer((s) => s.outliner)
   const geometryRevision = useViewer((s) => s.geometryRevision)
   const nodes = useScene((s) => s.nodes)
@@ -465,15 +466,21 @@ const OutlinerSync = () => {
       if (obj) outliner.selectedObjects.push(obj)
     }
 
-    // Sync hovered objects
+    // Sync hovered objects, then the ones a chat chip points at (Point and ask).
     outliner.hoveredObjects.length = 0
     if (hoveredId) {
       const hoveredNode = nodes[hoveredId as AnyNodeId]
-      if (hoveredNode?.type === 'slab') return
-      const obj = sceneRegistry.nodes.get(hoveredId)
-      if (obj) outliner.hoveredObjects.push(obj)
+      if (hoveredNode?.type !== 'slab') {
+        const obj = sceneRegistry.nodes.get(hoveredId)
+        if (obj) outliner.hoveredObjects.push(obj)
+      }
     }
-  }, [selection, externalSelectedIds, hoveredId, outliner, nodes, geometryRevision])
+    for (const id of new Set(pointedIds)) {
+      if (nodes[id as AnyNodeId]?.type === 'slab') continue
+      const obj = sceneRegistry.nodes.get(id)
+      if (obj && !outliner.hoveredObjects.includes(obj)) outliner.hoveredObjects.push(obj)
+    }
+  }, [selection, externalSelectedIds, hoveredId, pointedIds, outliner, nodes, geometryRevision])
 
   return null
 }

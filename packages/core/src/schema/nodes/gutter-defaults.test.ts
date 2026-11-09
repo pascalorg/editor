@@ -26,6 +26,22 @@ describe('createDefaultGuttersForSegment', () => {
     expect(gutters.every((gutter) => isDefaultGutterNode(gutter, segment.id))).toBe(true)
   })
 
+  test("a barrel's eave gutters hang where its arch springs; its overhang only lengthens them", () => {
+    const front = (overhang: number) =>
+      getGutterRunsForSegment(
+        RoofSegmentNode.parse({
+          roofType: 'barrel',
+          width: 8,
+          depth: 6,
+          overhang,
+          wallHeight: 0.5,
+        }),
+      ).find((run) => run.side === '+Z')!
+    expect(front(0.3).position[2]).toBe(3)
+    expect(front(1).position).toEqual(front(0.3).position)
+    expect(front(1).length - front(0.3).length).toBeCloseTo(1.4)
+  })
+
   test('spans the full tucked perimeter so four-sided gutters meet at corners', () => {
     const segment = RoofSegmentNode.parse({
       roofType: 'flat',
@@ -42,6 +58,25 @@ describe('createDefaultGuttersForSegment', () => {
     expect(front?.length).toBeCloseTo(8.52)
     expect(right?.position).toEqual([4.26, 0.5, 0])
     expect(right?.length).toBeCloseTo(6.52)
+  })
+
+  test("a gable's eave gutters run out to its rakes: the deck's edge, its own gable overhang", () => {
+    const segment = (gableOverhang?: number) =>
+      RoofSegmentNode.parse({
+        roofType: 'gable',
+        width: 8,
+        depth: 6,
+        overhang: 0.3,
+        wallThickness: 0.2,
+        gableOverhang,
+      })
+    const front = (gableOverhang?: number) =>
+      getGutterRunsForSegment(segment(gableOverhang)).find((run) => run.side === '+Z')
+    // without one, as far as the eaves in plan: half the wall, then the overhang along the 40° slope
+    expect(front()?.length).toBeCloseTo(2 * (4 + 0.1 + 0.3 * Math.cos((40 * Math.PI) / 180) - 0.04))
+    // with one, the walls' half thickness and the gable overhang past their faces
+    expect(front(0.9)?.length).toBeCloseTo(2 * (4 + 0.1 + 0.9 - 0.04))
+    expect(front(0)?.length).toBeCloseTo(2 * (4 + 0.1 - 0.04))
   })
 
   test('omits fully trimmed sides and shortens their adjacent eaves', () => {
@@ -81,11 +116,13 @@ describe('createDefaultGuttersForSegment', () => {
       (run) => run.side === '+Z',
     )
 
+    // from the rake, the deck's edge past half the 0.1 m wall, to the cross gable's tucked eave
+    const rake = 4 + 0.05 + 0.3 * Math.cos((40 * Math.PI) / 180) - 0.04
     expect(frontRuns).toHaveLength(2)
-    expect(frontRuns[0]?.position[0]).toBeCloseTo(-3.26)
-    expect(frontRuns[1]?.position[0]).toBeCloseTo(3.26)
-    expect(frontRuns[0]?.length).toBeCloseTo(2)
-    expect(frontRuns[1]?.length).toBeCloseTo(2)
+    expect(frontRuns[0]?.position[0]).toBeCloseTo(-(rake + 2.26) / 2)
+    expect(frontRuns[1]?.position[0]).toBeCloseTo((rake + 2.26) / 2)
+    expect(frontRuns[0]?.length).toBeCloseTo(rake - 2.26)
+    expect(frontRuns[1]?.length).toBeCloseTo(rake - 2.26)
   })
 
   test('splits an eave around an attached roof-extension range', () => {

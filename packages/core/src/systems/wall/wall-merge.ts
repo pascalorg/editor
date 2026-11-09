@@ -72,11 +72,13 @@ export function wallStyleMismatch(
         Math.abs((a.height ?? 0) - (b.height ?? 0)) > 1e-6
   )
     return 'height'
-  // Faces are compared as the merged wall will carry them: b read in a's direction.
+  // Faces are compared as the merged wall will carry them: b read in a's direction. An unpainted
+  // face's default follows its room side, which room detection reclassifies, so it is set aside.
+  const painted = (wall: WallNode) => ({ ...wall, frontSide: undefined, backSide: undefined })
   for (const face of ['a', 'b'] as const) {
     if (
-      JSON.stringify(resolveWallFaceChain(a, face)) !==
-      JSON.stringify(resolveWallFaceChain(alignedB, face))
+      JSON.stringify(resolveWallFaceChain(painted(a), face)) !==
+      JSON.stringify(resolveWallFaceChain(painted(alignedB), face))
     )
       return `side ${face.toUpperCase()} finish`
   }
@@ -327,12 +329,17 @@ export function resolveMergedWallEndpoints(
  * 0 front / π back). A wall read backwards turns that frame by 180° about Y,
  * so the face and the yaw swap and the caller mirrors depth. Hinges, handles
  * and swing hang off the node's own yaw (the plan symbol flips them from it),
- * so they stay as stored.
+ * so they stay as stored. Door and window casing is kept per wall face, so it
+ * swaps faces too and stays on the same side of the wall.
  */
 function reversedWallChildPatch(child: AnyNode): Partial<AnyNode> {
   const patch: Record<string, unknown> = {}
   if ('side' in child && (child.side === 'front' || child.side === 'back')) {
     patch.side = child.side === 'front' ? 'back' : 'front'
+  }
+  if (child.type === 'door' || child.type === 'window') {
+    const [faceA, faceB] = [child.casingFaceA === true, child.casingFaceB === true]
+    if (faceA !== faceB) Object.assign(patch, { casingFaceA: faceB, casingFaceB: faceA })
   }
   if ('rotation' in child && Array.isArray(child.rotation)) {
     const yaw = child.rotation[1] + Math.PI
@@ -451,16 +458,29 @@ export function planWallMerge(
       }
     }
     if (!(next && joint)) throw Error('Merge walls that touch end to end.')
+    if (!areWallsCollinearAcrossPoint(merged, next, joint))
+      throw Error('Merge walls that continue in a straight line.')
+    // A wall meeting the joint from the side stays T'd into the merged wall's
+    // body there; one running along the line would be buried in it.
+    const runX = merged.end[0] - merged.start[0]
+    const runZ = merged.end[1] - merged.start[1]
+    const alongRun = (wall: WallNode) => {
+      const free = getWallFreeEndpoint(wall, joint)
+      const x = free[0] - joint[0]
+      const z = free[1] - joint[1]
+      const length = Math.hypot(x, z) * Math.hypot(runX, runZ)
+      return length < 1e-12 || Math.abs(x * runZ - z * runX) / length < 1e-4
+    }
     const atJoint = Object.values(virtual).filter(
-      (node) =>
+      (node): node is WallNode =>
         node?.type === 'wall' &&
+        node.id !== merged.id &&
+        node.id !== next.id &&
         (node.parentId ?? null) === levelId &&
         getWallEndpointAtPoint(node, joint) !== null,
     )
-    if (atJoint.length !== 2)
+    if (atJoint.some(alongRun))
       throw Error('Another wall meets this joint, so merging would disconnect it.')
-    if (!areWallsCollinearAcrossPoint(merged, next, joint))
-      throw Error('Merge walls that continue in a straight line.')
     const mismatch = wallStyleMismatch(merged, next, {
       sides: false,
       heightOf: (wall) => getWallEffectiveHeightForNodes(wall, virtual),

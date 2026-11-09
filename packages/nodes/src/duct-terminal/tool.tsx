@@ -12,6 +12,7 @@ import {
   resolveLevelId,
   resolveSupportSlabPatch,
   sceneRegistry,
+  usePascalI18n,
   useScene,
   type WallEvent,
 } from '@pascal-app/core'
@@ -21,9 +22,16 @@ import {
   getSpatialPointerId,
   isGridSnapActive,
   isMagneticSnapActive,
+  isTypingTarget,
   triggerSFX,
   useEditor,
 } from '@pascal-app/editor'
+import {
+  alignDrawPoint,
+  clearDrawAlignment,
+  collectScenePorts,
+  findNearestPort3D,
+} from '@pascal-app/editor/distribution'
 import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
 import { useThree } from '@react-three/fiber'
@@ -31,9 +39,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Euler, Matrix3, Matrix4, Plane, Quaternion, Raycaster, Vector2, Vector3 } from 'three'
 import { subscribeAccessorySnapping } from '../shared/accessory-snapping'
 import { ConnectionFeedback } from '../shared/connection-feedback'
-import { alignDrawPoint, clearDrawAlignment } from '../shared/draw-alignment'
 import { LevelOffsetGroup } from '../shared/level-offset-group'
-import { collectScenePorts, DUCT_PORT_SYSTEMS, findNearestPort3D } from '../shared/ports'
+import { DUCT_PORT_SYSTEMS } from '../shared/port-systems'
 import { ductTerminalDefinition } from './definition'
 import { buildDuctTerminalGeometry } from './geometry'
 import { COLLAR_LENGTH, getDuctTerminalPorts, mountQuaternion } from './ports'
@@ -156,6 +163,7 @@ function resolvePortSnap(
  * yaw ±45°; wall yaw is fixed by the wall it mates to.
  */
 const DuctTerminalTool = () => {
+  const i18n = usePascalI18n()
   const { camera, gl } = useThree()
   const activeLevelId = useViewer((s) => s.selection.levelId)
   const toolDefaults = useEditor((s) => s.toolDefaults['duct-terminal'])
@@ -424,8 +432,7 @@ const DuctTerminalTool = () => {
     }
 
     const onKeyDown = (e: KeyboardEvent) => {
-      const tag = (e.target as HTMLElement | null)?.tagName
-      if (tag === 'INPUT' || tag === 'TEXTAREA') return
+      if (isTypingTarget(e.target)) return
       const key = e.key
       if (key === 'm' || key === 'M') {
         e.preventDefault()
@@ -525,23 +532,40 @@ const DuctTerminalTool = () => {
         <div className="flex items-center gap-2 whitespace-nowrap rounded-full border border-border/60 bg-background/90 px-4 py-1.5 text-xs tabular-nums shadow-sm backdrop-blur">
           {placement.snapped && (
             <>
-              <span className="font-medium text-primary">Snapped to duct</span>
+              <span className="font-medium text-primary">
+                {i18n._({ id: 'node.ductTerminal.tool.snappedToDuct', message: 'Snapped to duct' })}
+              </span>
               <span aria-hidden className="text-muted-foreground">
                 ·
               </span>
             </>
           )}
-          <span className="font-medium text-foreground">Mount {mountLabel}</span>
+          <span className="font-medium text-foreground">
+            {i18n._({
+              id: 'node.ductTerminal.tool.mount',
+              message:
+                '{mount, select, floor {Mount Floor} ceiling {Mount Ceiling} wall {Mount Wall} other {Mount {label}}}',
+              values: { mount: effectiveMount, label: mountLabel },
+            })}
+          </span>
           <span aria-hidden className="text-muted-foreground">
             ·
           </span>
-          <span className="text-muted-foreground">M surface</span>
+          <span className="text-muted-foreground">
+            {i18n._({
+              id: 'node.ductTerminal.tool.mSurface',
+              message: 'M surface',
+              comment: 'Key hint: pressing M switches the mounting surface.',
+            })}
+          </span>
           {effectiveMount !== 'wall' && (
             <>
               <span aria-hidden className="text-muted-foreground">
                 ·
               </span>
-              <span className="text-muted-foreground">R/T rotate</span>
+              <span className="text-muted-foreground">
+                {i18n._({ id: 'node.ductTerminal.tool.rTRotate', message: 'R/T rotate' })}
+              </span>
             </>
           )}
         </div>

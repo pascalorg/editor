@@ -61,17 +61,18 @@ function children(node: AnyNode) {
 
 for (const [writer, write] of Object.entries(writers)) {
   describe.each([false, true])(`${writer}, compiled parser = %s`, (enabled) => {
-    test.each([
-      ...nodeFixtures(),
-    ])('%s keeps existing children when the patch omits them', (_kind, fixture) => {
-      enableCompiledNodeParsers(enabled)
-      const node = { ...fixture, children: [child.id] } as AnyNode
-      seed(node)
-      write(node, { name: 'Edited host' })
-      expect(children(node)).toEqual([child.id])
-      expect(useScene.getState().nodes[node.id]!.name).toBe('Edited host')
-      expect(useScene.getState().nodes[child.id]!.parentId).toBe(node.id)
-    })
+    test.each([...nodeFixtures()])(
+      '%s keeps existing children when the patch omits them',
+      (_kind, fixture) => {
+        enableCompiledNodeParsers(enabled)
+        const node = { ...fixture, children: [child.id] } as AnyNode
+        seed(node)
+        write(node, { name: 'Edited host' })
+        expect(children(node)).toEqual([child.id])
+        expect(useScene.getState().nodes[node.id]!.name).toBe('Edited host')
+        expect(useScene.getState().nodes[child.id]!.parentId).toBe(node.id)
+      },
+    )
   })
 }
 

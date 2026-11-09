@@ -1,6 +1,6 @@
 import * as nodeFs from 'node:fs'
 import path from 'node:path'
-import ts from 'typescript'
+import ts from '@typescript/typescript6'
 
 /**
  * Metadata keys a source file reads or writes (R3 coverage for `metadata.*`,

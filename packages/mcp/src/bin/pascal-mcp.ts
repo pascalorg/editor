@@ -4,10 +4,12 @@ import '../bridge/node-shims'
 
 import { readFileSync } from 'node:fs'
 import { parseArgs } from 'node:util'
+import { sdfChecksFromEnv, setSdfChecks } from '@pascal-app/core/usage-field'
 import { SceneBridge } from '../bridge/scene-bridge'
 import { version } from '../index'
 import { createPascalMcpServer } from '../server'
-import { createSceneStore } from '../storage'
+import { createSceneStore, resolveDefaultDatabasePath } from '../storage'
+import { localGeometryScripts } from '../tools/local-geometry-scripts'
 import { connectHttp } from '../transports/http'
 import { connectStdio } from '../transports/stdio'
 
@@ -53,12 +55,18 @@ async function main(): Promise<void> {
     process.exit(0)
   }
 
+  setSdfChecks(sdfChecksFromEnv(process.env.PASCAL_SDF_CHECKS))
   const store = await createSceneStore()
   const createServer = () => {
     const bridge = new SceneBridge()
     if (values.scene) bridge.loadJSON(readFileSync(values.scene, 'utf8'))
     else bridge.loadDefault()
-    return createPascalMcpServer({ bridge, store })
+    bridge.clearHistory()
+    return createPascalMcpServer({
+      bridge,
+      store,
+      geometryScripts: localGeometryScripts(resolveDefaultDatabasePath()),
+    })
   }
 
   if (values.http) {
@@ -91,7 +99,7 @@ async function main(): Promise<void> {
     process.on('SIGTERM', shutdown)
   } else {
     // --stdio is the default when no transport flag is passed.
-    await connectStdio(createServer())
+    connectStdio(createServer)
     console.error('[pascal-mcp] stdio server running')
   }
 }

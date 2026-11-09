@@ -25,6 +25,21 @@ export function useSceneGroundReplacement(): boolean {
   return useStore(store, (state) => state.owners > 0)
 }
 
+/**
+ * The same claim from outside React (a map layer that hangs its own meshes on
+ * the scene): returns the release. The last release restores the fallback.
+ */
+export function claimSceneGround(scene: Scene): () => void {
+  const store = groundStore(scene)
+  store.setState((state) => ({ owners: state.owners + 1 }))
+  let released = false
+  return () => {
+    if (released) return
+    released = true
+    store.setState((state) => ({ owners: Math.max(0, state.owners - 1) }))
+  }
+}
+
 /** Mount alongside replacement ground. The last release restores the fallback. */
 export function SceneGroundReplacement() {
   const scene = useThree((state) => state.scene)

@@ -242,6 +242,7 @@ export const solarPanelDefinition: NodeDefinition<typeof SolarPanelNode> = {
   },
 
   capabilities: {
+    exterior: true,
     selectable: { hitVolume: 'bbox' },
     duplicable: true,
     deletable: true,

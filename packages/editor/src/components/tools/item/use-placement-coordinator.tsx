@@ -30,7 +30,6 @@ import {
   type WallEvent,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
-import { Html } from '@react-three/drei'
 import { useFrame, useThree } from '@react-three/fiber'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
@@ -59,6 +58,8 @@ import {
   surfaceFramePose,
   updateSurfaceNode as writeSurfaceNode,
 } from '../../../lib/surface-attachment'
+import { isTypingTarget } from '../../../lib/typing-target'
+import { createWallPointerTracker } from '../../../lib/wall-placement-pointer'
 import {
   projectAlignmentGuidesWorldToActiveBuildingLocal,
   resolveAlignmentForActiveBuilding,
@@ -72,6 +73,7 @@ import useEditor, {
 import useFacingPose from '../../../store/use-facing-pose'
 import { getMovingNode } from '../../../store/use-interaction-scope'
 import usePlacementPreview from '../../../store/use-placement-preview'
+import { Html } from '../../editor/localized-html'
 import {
   createItemSurfaceGridDispatch,
   createItemSurfacePointerArbitration,
@@ -102,6 +104,7 @@ import {
 import {
   getDetachedAttachmentPreviewLift,
   getGridAlignedDimensions,
+  getSideFromNormal,
   snapToGrid,
   snapToHalf,
   snapUpToGridStep,
@@ -119,7 +122,7 @@ import {
 } from './placement-strategies'
 import { resolveItemPlacementSurfaceNormal } from './placement-surface'
 import type { PlacementState, TransitionResult } from './placement-types'
-import { type DraftNodeHandle, pausedDraftWrite } from './use-draft-node'
+import { type DraftNodeHandle, type ItemCopy, pausedDraftWrite } from './use-draft-node'
 
 const DEFAULT_DIMENSIONS: [number, number, number] = [1, 1, 1]
 
@@ -276,9 +279,9 @@ export interface PlacementCoordinatorConfig {
    *  (floor / wall / ceiling / item-surface / shelf) instead of snapping the
    *  item's origin under the cursor. */
   preserveDragOffset?: boolean
-  /** Painted slot overrides to seed onto a lazily-created draft (wall/ceiling
-   *  duplicates) so the duplicate keeps its materials. */
-  slots?: ItemNode['slots']
+  /** The item a duplicate copies, for a lazily-created draft (wall/ceiling
+   *  duplicates) to keep its materials and collections. */
+  copied?: ItemCopy
 }
 
 export function usePlacementCoordinator(config: PlacementCoordinatorConfig): React.ReactNode {
@@ -606,6 +609,29 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       if (mesh) reconcileDraftRaycast(mesh)
     }
 
+    // Eat the click the browser fires after a pointer-up that committed, so it
+    // neither commits a second time through a surface `:click` handler nor reaches
+    // the grid, in select mode by then, as a click on empty ground.
+    const swallowNextClick = () => {
+      const swallow = (e: Event) => {
+        e.stopPropagation()
+        e.preventDefault()
+      }
+      window.addEventListener('click', swallow, { capture: true, once: true })
+      setTimeout(() => window.removeEventListener('click', swallow, { capture: true }), 300)
+    }
+    // True between a press's pointer-up and the click the browser fires after it.
+    // Surface `:click` events are synthesized on pointer-up (use-node-events), so a
+    // commit they trigger still has that click to come; a `grid:click` commit is
+    // that click.
+    let releasing = false
+    const onPointerUpCapture = () => {
+      releasing = true
+    }
+    const onClickCapture = () => {
+      releasing = false
+    }
+
     const finishCommittedPlacement = (
       committedId: string | null,
       wasAdopted: boolean,
@@ -628,6 +654,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       // lands on the just-placed (now selected) node instead of a tool-less build
       // limbo. Repeat placements took the early return above and stay armed.
       useEditor.getState().setMode('select')
+      if (releasing) swallowNextClick()
     }
 
     const commitDraft = (
@@ -797,10 +824,13 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       // Alignment guides are floor-only; clear them when the cursor moves
       // onto a wall / ceiling / item surface (only those paths call this).
       useAlignmentGuides.getState().clear()
-      // Roof faces carry no grab anchor, but landing on one still counts as
-      // anchoring elsewhere — a later return to the grabbed wall must center
-      // under the cursor, not restore the stale grab offset.
-      if (result.stateUpdate.surface === 'roof-wall') grabForgotten = true
+      // A floor transition can be a hit gap; other hosted surfaces are a new anchor.
+      if (
+        result.stateUpdate.surface &&
+        result.stateUpdate.surface !== 'floor' &&
+        result.stateUpdate.surface !== 'wall'
+      )
+        grabForgotten = true
       Object.assign(placementState.current, result.stateUpdate)
       gridPosition.current.set(...result.gridPosition)
 
@@ -849,7 +879,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         asset,
         initRotation,
         configRef.current.defaultScale,
-        configRef.current.slots,
+        configRef.current.copied,
       )
 
       const draft = draftNode.current
@@ -924,15 +954,12 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     // for a given host, then offsets every later move by
     // `start + (raw - anchor)` — mirroring the floor path and the door/window
     // move tools so the item tracks the grabbed point instead of teleporting
-    // its origin under the cursor. Reset on host change (re-seeded from the
-    // item's then-current position) by the surface leave handlers.
-    let wallDragAnchor: {
-      wallId: string
-      rawX: number
-      rawY: number
-      startX: number
-      startY: number
-    } | null = null
+    // its origin under the cursor. Changing hosts or faces clears the offset.
+    const wallPointer = createWallPointerTracker(
+      preserveDragOffset && grabStartPosition
+        ? { wallId: grabWallId, side: draftNode.current?.side, position: grabStartPosition }
+        : undefined,
+    )
     let ceilingDragAnchor: {
       ceilingId: string
       rawX: number
@@ -981,9 +1008,9 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
     // Floor grab-offset: the item tracks the grabbed point instead of snapping
     // its origin under the cursor. The offset is computed in building-local space
-    // (`event.localPosition`), but `floorStrategy.move` snaps on the WORLD grid
-    // (`event.position`), so the corrected local point is re-projected to a
-    // corrected world point and both frames carry the offset to stay consistent.
+    // (`event.localPosition`, which `floorStrategy.move` snaps), and the corrected
+    // local point is re-projected to a corrected world point so both frames carry
+    // the offset and stay consistent.
     const applyFloorGrabOffset = (event: GridEvent): GridEvent => {
       if (relativeFloorStart === null) return event
       const rawX = event.localPosition[0]
@@ -1053,16 +1080,6 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     // replays it. Captured once at setup — a fresh coordinator mounts per move.
     const dragMode = useEditor.getState().placementDragMode
     let releaseCommit: (() => void) | null = null
-    // Eat the click the browser fires after pointer-up so the surface
-    // `:click` handlers don't commit a second time.
-    const swallowNextClick = () => {
-      const swallow = (e: Event) => {
-        e.stopPropagation()
-        e.preventDefault()
-      }
-      window.addEventListener('click', swallow, { capture: true, once: true })
-      setTimeout(() => window.removeEventListener('click', swallow, { capture: true }), 300)
-    }
     const onReleaseCommit = () => {
       gridDispatch.flush()
       if (!releaseCommit) return
@@ -1150,6 +1167,8 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       if (!cursorGroupRef.current) return
       const result = floorStrategy.move(getContext(), floorEvent)
       if (!result) return
+      // Attached items cannot land on the floor; its hit can be a gap in their host.
+      if (!asset.attachTo) grabForgotten = true
 
       // Figma-style alignment snap layered on top of the floor strategy's
       // grid snap: when the draft's edge lines up (on X or Z) with another
@@ -1292,7 +1311,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
           asset,
           currentRotation,
           configRef.current.defaultScale,
-          configRef.current.slots,
+          configRef.current.copied,
         )
         const previewBounds = expandBoundsToGrid(
           getFallbackPreviewBounds(draftNode.current, asset, asset.attachTo),
@@ -1379,28 +1398,13 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
       let wallMoveEvent = event
       if (preserveDragOffset && draftNode.current) {
-        const rawX = event.localPosition[0]
-        const rawY = event.localPosition[1]
-        if (!wallDragAnchor || wallDragAnchor.wallId !== event.node.id) {
-          // Preserve the grab offset only on the wall the item was grabbed
-          // from (no teleport under the pointer at grab time). Any OTHER host
-          // centers the item under the cursor — a host change is already a
-          // jump, so tracking the pointer exactly is the expected feel, while
-          // re-seeding from the carried-over position (the old behavior)
-          // baked an arbitrary along-wall offset into the whole stay on that
-          // wall. Once anchored elsewhere the grab is forgotten for good, so
-          // re-entering the original wall centers under the cursor too.
-          const preserveGrab = preserveGrabOn(event.node.id, grabWallId)
-          wallDragAnchor = {
-            wallId: event.node.id,
-            rawX,
-            rawY,
-            startX: preserveGrab && grabStartPosition ? grabStartPosition[0] : rawX,
-            startY: preserveGrab && grabStartPosition ? grabStartPosition[1] : rawY,
-          }
-        }
-        const correctedX = wallDragAnchor.startX + (rawX - wallDragAnchor.rawX)
-        const correctedY = wallDragAnchor.startY + (rawY - wallDragAnchor.rawY)
+        preserveGrabOn(event.node.id, grabWallId)
+        if (grabForgotten) wallPointer.forget()
+        const [correctedX, correctedY] = wallPointer.resolve(
+          event.node.id,
+          getSideFromNormal(event.normal),
+          [event.localPosition[0], event.localPosition[1]],
+        )
         wallMoveEvent = {
           ...event,
           localPosition: [correctedX, correctedY, event.localPosition[2]],
@@ -1503,7 +1507,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     }
 
     const onWallLeave = (event: WallEvent) => {
-      wallDragAnchor = null
+      wallPointer.leave()
       const result = wallStrategy.leave(getContext())
       if (!result) return
 
@@ -1867,6 +1871,11 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
           position: floorPos,
           rotation,
         })
+        // The surface moves published a building-space cursor (the host's top, level height
+        // included) as the live transform. Back on the floor the item renders level-local, so
+        // that stale height lifted it by its level's elevation (a bedside left on a 4th-floor bed
+        // floated ~10 m up) until the next floor move: publish the floor pose now.
+        useLiveTransforms.getState().set(draft.id, { position: floorPos, rotation: rotation[1] })
       }
 
       revalidate()
@@ -2432,9 +2441,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       }
 
       // Don't intercept keys when focus is inside a text input
-      if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) {
-        return
-      }
+      if (isTypingTarget(event.target)) return
 
       const draft = draftNode.current
       if (!draft) return
@@ -2715,13 +2722,31 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
     // ---- Subscribe ----
 
+    // With a level selected, surfaces on other floors don't capture the draft: past the building
+    // edge, through a window or over a stairwell the ray finds a lower floor's furniture, slab or
+    // wall, and adopting it re-parented the item to that floor mid-gesture (and paid a level
+    // change each time). The floor cursor keeps following the selected level instead.
+    const onActiveLevel = (node: AnyNode | undefined) => {
+      const levelId = useViewer.getState().selection.levelId
+      if (!levelId || !node) return true
+      return resolveLevelId(node, useScene.getState().nodes) === levelId
+    }
     const specializedKinds = new Set<string>()
-    const subscribeSpecialized = <E,>(key: string, handler: (event: E) => void) => {
+    const unsubscribeSpecialized: (() => void)[] = []
+    const subscribeSpecialized = <E extends { node?: AnyNode }>(
+      key: string,
+      handler: (event: E) => void,
+    ) => {
       specializedKinds.add(key.slice(0, key.lastIndexOf(':')))
-      emitter.on(key as never, handler as never)
+      const gated = (event: E) => {
+        if (onActiveLevel(event.node)) handler(event)
+      }
+      emitter.on(key as never, gated as never)
+      unsubscribeSpecialized.push(() => emitter.off(key as never, gated as never))
     }
     const genericRoute = (phase: 'enter' | 'move' | 'click' | 'leave') => (event: NodeEvent) => {
       if (specializedKinds.has(event.node.type)) return
+      if (!onActiveLevel(event.node)) return
       if (
         !surfaceOwnership.allows(event.node.id, event.nativeEvent.nativeEvent ?? event.nativeEvent)
       )
@@ -2798,11 +2823,15 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     }
     emitter.on('node:click', commitFloorOnSurfaceClick as never)
     if (dragMode) window.addEventListener('pointerup', onReleaseCommit)
+    window.addEventListener('pointerup', onPointerUpCapture, true)
+    window.addEventListener('click', onClickCapture, true)
 
     return () => {
       tearingDown = true
       feedback.clear()
       if (dragMode) window.removeEventListener('pointerup', onReleaseCommit)
+      window.removeEventListener('pointerup', onPointerUpCapture, true)
+      window.removeEventListener('click', onClickCapture, true)
       unsubDraftWatch()
       useAlignmentGuides.getState().clear()
       // Clear every live preview channel before restoring or deleting the draft.
@@ -2814,38 +2843,11 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       gridDispatch.cancel()
       emitter.off('grid:move', gridDispatch.schedule)
       emitter.off('grid:click', onGridClick)
-      emitter.off('item:enter', onItemEnter)
-      emitter.off('item:move', onItemMove)
-      emitter.off('item:leave', onItemLeave)
-      emitter.off('item:click', onItemClick)
-      emitter.off('wall:enter', onWallEnter)
-      emitter.off('wall:move', onWallMove)
-      emitter.off('wall:click', onWallClick)
-      emitter.off('wall:leave', onWallLeave)
-      emitter.off('roof:enter', onRoofWallEnter)
-      emitter.off('roof:move', onRoofWallMove)
-      emitter.off('roof:click', onRoofWallClick)
-      emitter.off('roof:leave', onRoofWallLeave)
+      for (const unsubscribe of unsubscribeSpecialized) unsubscribe()
       emitter.off('node:enter', onNodeEnter)
       emitter.off('node:move', onNodeMove)
       emitter.off('node:click', onNodeClick)
       emitter.off('node:leave', onNodeLeave)
-      emitter.off('ceiling:enter', onCeilingEnter)
-      emitter.off('ceiling:move', onCeilingMove)
-      emitter.off('ceiling:click', onCeilingClick)
-      emitter.off('ceiling:leave', onCeilingLeave)
-      emitter.off('cabinet:enter', onItemEnter)
-      emitter.off('procedural-item:enter' as never, onItemEnter)
-      emitter.off('cabinet:move', onItemMove)
-      emitter.off('procedural-item:move' as never, onItemMove)
-      emitter.off('cabinet:click', onItemClick)
-      emitter.off('procedural-item:click' as never, onItemClick)
-      emitter.off('cabinet:leave', onItemLeave)
-      emitter.off('procedural-item:leave' as never, onItemLeave)
-      emitter.off('shelf:enter', onShelfEnter)
-      emitter.off('shelf:move', onShelfMove)
-      emitter.off('shelf:click', onShelfClick)
-      emitter.off('shelf:leave', onShelfLeave)
       emitter.off('node:click', commitFloorOnSurfaceClick as never)
       emitter.off('tool:cancel', onCancel)
       window.removeEventListener('keydown', onKeyDown)

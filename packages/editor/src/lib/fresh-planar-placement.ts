@@ -2,18 +2,23 @@ import {
   type AnyNode,
   type AnyNodeId,
   beginSceneHistoryPauseSession,
+  type CloneNodesIntoResult,
   cloneNodesInto,
+  collectionIdsOf,
   collectSubtree,
   createSceneApi,
   type DuplicableConfig,
+  getEffectiveNode,
   getSceneHistoryPauseDepth,
   getSurfaceProvider,
   nodeRegistry,
   resolveSurfacePlacement,
   runSceneHistoryDraftWrite,
   type SurfaceRejectReason,
+  seatRoofs,
   useScene,
 } from '@pascal-app/core'
+import { remapNodeReferences } from '@pascal-app/core/clone-scene-graph'
 import { evaluateRecipe, isProceduralItem } from '@pascal-app/core/procedural-items'
 import useInteractionScope from '../store/use-interaction-scope'
 import usePlacementPreview from '../store/use-placement-preview'
@@ -35,6 +40,61 @@ function cleanPlacementMetadata<N extends AnyNode>(node: N): N {
 function parentIdOf(node: AnyNode): AnyNodeId | undefined {
   const parentId = (node as { parentId?: AnyNodeId | null }).parentId
   return parentId ?? undefined
+}
+
+/**
+ * The nodes the draft root names, outside its subtree and other than its parent, that name it
+ * back (a corner window's partner, joined while the draft was in hand). The commit gives the
+ * root a new id, so they are rewritten to name the committed node, never the deleted draft.
+ */
+function peerReferenceUpdates(
+  nodes: Readonly<Record<string, AnyNode>>,
+  root: AnyNode,
+  subtreeIds: ReadonlySet<string>,
+  committedId: AnyNodeId,
+): { id: AnyNodeId; data: Partial<AnyNode> }[] {
+  const named = new Set<string>()
+  const visit = (value: unknown) => {
+    if (typeof value === 'string') {
+      if (nodes[value] && !subtreeIds.has(value) && value !== root.parentId) named.add(value)
+    } else if (Array.isArray(value)) value.forEach(visit)
+    else if (value && typeof value === 'object') Object.values(value).forEach(visit)
+  }
+  const {
+    id: _id,
+    parentId: _parentId,
+    children: _children,
+    ...fields
+  } = root as AnyNode & {
+    children?: unknown
+  }
+  visit(fields)
+  const ids = new Map([[root.id, committedId as string]])
+  return [...named].flatMap((id) => {
+    const peer = nodes[id]!
+    const remapped = remapNodeReferences(peer, ids) as Record<string, unknown>
+    const data = Object.fromEntries(
+      Object.entries(remapped).filter(
+        ([key, value]) =>
+          JSON.stringify(value) !== JSON.stringify((peer as Record<string, unknown>)[key]),
+      ),
+    )
+    return Object.keys(data).length ? [{ id: id as AnyNodeId, data: data as Partial<AnyNode> }] : []
+  })
+}
+
+/**
+ * Create ops for a clone of scene nodes: each copy joins the collections its
+ * source is in, whatever its kind.
+ */
+export function copyCreateOps(cloned: CloneNodesIntoResult, parentId: AnyNodeId | undefined) {
+  const collections = useScene.getState().collections
+  const sourceIds = new Map([...cloned.idMap].map(([source, copy]) => [copy, source]))
+  return cloned.nodes.map((node, index) => ({
+    node,
+    ...(index === 0 && parentId ? { parentId } : {}),
+    collectionIds: collectionIdsOf(collections, sourceIds.get(node.id as AnyNodeId)!),
+  }))
 }
 
 function duplicableConfigFor(node: AnyNode): DuplicableConfig | null {
@@ -64,6 +124,8 @@ export function prepareFreshPlacementRootDuplicate(node: AnyNode): AnyNode {
     metadata?: unknown
   }
   delete duplicate.id
+  // A copy of one side of a corner window is a plain window: its partner stays with the original.
+  delete duplicate.corner
   if (Array.isArray(duplicate.children)) duplicate.children = []
   duplicate.metadata = {
     ...getPlacementMetadataRecord(stripPlacementMetadataFlags(duplicate.metadata)),
@@ -117,9 +179,7 @@ export function createFreshPlacementSubtree(
   })
 
   scene.applyNodeChanges({
-    create: cloned.nodes.map((node, index) =>
-      index === 0 && parentId ? { node, parentId } : { node },
-    ),
+    create: copyCreateOps(cloned, parentId),
     update: surfaceAttachmentUpdates(cloned.rootId, parentId, surfaceAttachmentId(subtree.root)),
   })
 
@@ -241,9 +301,13 @@ export function commitFreshPlacementSubtree(
     onReject?.(rejection)
     return null
   }
-  const descendants = subtree.descendants.map((node) => cleanPlacementMetadata(node))
+  const descendants = subtree.descendants.map((node) =>
+    cleanPlacementMetadata(getEffectiveNode(node)),
+  )
   const parentId = parentIdOf(root)
   const cloned = cloneNodesInto([root, ...descendants], { rootId, parentId })
+  // The drafts' memberships, read before they are deleted.
+  const create = copyCreateOps(cloned, parentId)
   const updates = surfaceAttachmentUpdates(rootId, null, null)
   for (const update of surfaceAttachmentUpdates(cloned.rootId, parentId, surfaceId)) {
     const attachments = { ...(update.data as { attachments: Record<string, string> }).attachments }
@@ -253,6 +317,12 @@ export function commitFreshPlacementSubtree(
     if (previous === -1) updates.push(merged)
     else updates[previous] = merged
   }
+  const subtreeIds = new Set([rootId, ...descendants.map((node) => node.id)])
+  for (const update of peerReferenceUpdates(scene.nodes, root, subtreeIds, cloned.rootId))
+    if (!updates.some((entry) => entry.id === update.id)) updates.push(update)
+
+  // A roof dropped onto the walls that carry it goes to the level above them, in the same step.
+  const seated = seatRoofs(scene.nodes, { create, update: updates, delete: [rootId] }).changes
 
   const scope = useInteractionScope.getState()
   const factoryCreated =
@@ -266,24 +336,13 @@ export function commitFreshPlacementSubtree(
       useScene.getState().deleteNode(rootId)
     })
     recordPlacementStep(rootId, wasTracking, () =>
-      useScene.getState().applyNodeChanges({
-        create: cloned.nodes.map((node, index) =>
-          index === 0 && parentId ? { node, parentId } : { node },
-        ),
-        update: updates,
-      }),
+      useScene.getState().applyNodeChanges({ create: seated.create, update: seated.update }),
     )
   } else {
     recordPlacementStep(rootId, wasTracking, () => {
       try {
         // applyNodeChanges validates the complete proposed graph before publishing any part of it.
-        scene.applyNodeChanges({
-          delete: [rootId],
-          create: cloned.nodes.map((node, index) =>
-            index === 0 && parentId ? { node, parentId } : { node },
-          ),
-          update: updates,
-        })
+        scene.applyNodeChanges(seated)
         for (const node of [subtree.root, ...subtree.descendants]) scene.clearDirty(node.id)
       } catch (error) {
         // Zustand publishes before notifying subscribers. A subscriber error must restore

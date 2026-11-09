@@ -1,6 +1,7 @@
 import {
   ElevatorNode as ElevatorNodeSchema,
   type ElevatorNode as ElevatorNodeType,
+  elevatorSlots,
   getElevatorCabDepth,
   getElevatorCabWidth,
   getElevatorShaftDepth,
@@ -15,7 +16,6 @@ import { elevatorResizeAffordance, elevatorRotateAffordance } from './floorplan-
 import { elevatorPaint } from './paint'
 import { elevatorParametrics } from './parametrics'
 import { ElevatorNode } from './schema'
-import { elevatorSlots } from './slots'
 
 const SIDE_HANDLE_OFFSET = 0.22
 const HEIGHT_HANDLE_OFFSET = 0.3

@@ -16,7 +16,9 @@ import { useViewer } from '@pascal-app/viewer'
 import { type Camera, Plane, type Raycaster, Vector2, Vector3 } from 'three'
 import { GROUP_MOVE_DRAG_LABEL } from '../../lib/contextual-help'
 import { isHistoryShortcut } from '../../lib/history'
+import type { WallGroupPush } from '../../lib/room-handle-drag'
 import { sfxEmitter } from '../../lib/sfx-bus'
+import { isTypingTarget } from '../../lib/typing-target'
 import useAlignmentGuides from '../../store/use-alignment-guides'
 import useEditor, {
   isAlignmentGuideActive,
@@ -28,6 +30,7 @@ import { useFloorplanGroupDrag } from '../editor-2d/floorplan-group-move'
 import { suppressBoxSelectForPointer } from '../tools/select/box-select-state'
 import { startGroupPickUp } from './group-actions'
 import {
+  beginGroupWallPush,
   classifyParticipant,
   collectParticipants,
   computeGroupBox,
@@ -98,6 +101,8 @@ export function armGroupMove3d(args: {
     startLocal: Vector3
     frameInv: ReturnType<typeof levelFrame>['inverse']
     lastDelta: Vec2 | null
+    /** Walls alone: each moves as its push arrow does instead of the rigid slide. */
+    push: WallGroupPush | null
   }
   let session: Session | null = null
 
@@ -178,6 +183,7 @@ export function armGroupMove3d(args: {
       startLocal,
       frameInv,
       lastDelta: null,
+      push: beginGroupWallPush(starts, levelId),
     }
   }
 
@@ -201,8 +207,14 @@ export function armGroupMove3d(args: {
       : moveLocal.z - s.startLocal.z
 
     // Figma-style alignment layered on top: guides display in every mode
-    // except Off; the magnetic pull applies only in 'lines' mode.
-    if (isAlignmentGuideActive() && s.candidates.length > 0 && s.restAnchors.length > 0) {
+    // except Off; the magnetic pull applies only in 'lines' mode. Pushed walls
+    // don't move as one footprint, so they have no box to align.
+    if (
+      !s.push &&
+      isAlignmentGuideActive() &&
+      s.candidates.length > 0 &&
+      s.restAnchors.length > 0
+    ) {
       const result = resolveAlignment({
         moving: s.restAnchors.map((a) => ({ ...a, x: a.x + dx, z: a.z + dz })),
         candidates: s.candidates,
@@ -225,6 +237,10 @@ export function armGroupMove3d(args: {
     if (!s.lastDelta || s.lastDelta[0] !== dx || s.lastDelta[1] !== dz) {
       sfxEmitter.emit('sfx:grid-snap')
       s.lastDelta = [dx, dz]
+    }
+    if (s.push) {
+      s.push.preview([dx, dz])
+      return
     }
 
     const entries = translateGroupPatches(s.starts, s.links, dx, dz)
@@ -254,6 +270,8 @@ export function armGroupMove3d(args: {
   // current delta — the carried group turns exactly like the idle keyboard
   // rotate, and the commit stays a single updateNodes.
   const rotateSession = (s: Session, direction: 1 | -1) => {
+    // Pushed walls keep their bearing: there is nothing to turn.
+    if (s.push) return
     const pivot = { x: s.restCenter[0], z: s.restCenter[1] }
     const delta = -direction * (Math.PI / 4)
     const rotated = rotateGroupSnapshots(s.starts, s.links, pivot, delta)
@@ -275,6 +293,7 @@ export function armGroupMove3d(args: {
   }
 
   const clearLivePreviews = (s: Session) => {
+    s.push?.cancel()
     const overrides = useLiveNodeOverrides.getState()
     const liveTransforms = useLiveTransforms.getState()
     for (const id of s.affectedIds) {
@@ -341,6 +360,13 @@ export function armGroupMove3d(args: {
     }
     swallowNextClick()
     sfxEmitter.emit('sfx:item-place')
+    if (session.push) {
+      resumeSceneHistory(useScene)
+      session.push.commit()
+      session = null
+      teardown()
+      return
+    }
     const overrides = useLiveNodeOverrides.getState()
     const updates: { id: AnyNodeId; data: Partial<AnyNode> }[] = []
     for (const id of session.affectedIds) {
@@ -380,6 +406,7 @@ export function armGroupMove3d(args: {
   // `use-keyboard` arms, which would otherwise act on stale store state
   // (or clear the multi-selection) mid-session.
   const onKeyDown = (e: KeyboardEvent) => {
+    if (isTypingTarget(e.target)) return
     const key = e.key.toLowerCase()
     if ((key === 'r' || key === 't') && !e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey) {
       // Armed but still under the drag threshold: engage first (exactly what

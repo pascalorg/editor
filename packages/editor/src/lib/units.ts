@@ -13,14 +13,13 @@ import {
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect } from 'react'
-import useEditor, { type StructureLayer } from '../store/use-editor'
+import useEditor from '../store/use-editor'
 import { getActiveBuildingPose } from './world-grid-snap'
 
 type Nodes = Readonly<Record<AnyNodeId, AnyNode>>
 
 // Unit focus is a session gesture: the layer the user was on when focus began
 // comes back when focus ends, unless they switched layers by hand meanwhile.
-let restoreLayer: StructureLayer | null = null
 let entering = false
 let leaving = false
 
@@ -50,11 +49,7 @@ export function enterUnitFocus(unitId: UnitNode['id']): void {
     const unit = nodes[unitId]
     if (unit?.type !== 'unit') return
     const editor = useEditor.getState()
-    if (restoreLayer === null) restoreLayer = editor.structureLayer
-    if (editor.phase !== 'structure') editor.setPhase('structure')
-    if (useEditor.getState().structureLayer !== 'zones') {
-      useEditor.getState().setStructureLayer('zones')
-    }
+    if (editor.phase === 'site') editor.setPhase('building')
     const viewer = useViewer.getState()
     if (viewer.focusedUnitId !== unitId) viewer.setFocusedUnit(unitId)
 
@@ -73,19 +68,7 @@ export function enterUnitFocus(unitId: UnitNode['id']): void {
   }
 }
 
-function finishLeave(unitId: UnitNode['id'], keepLayer: boolean) {
-  const layer = restoreLayer
-  restoreLayer = null
-  const editor = useEditor.getState()
-  if (
-    !keepLayer &&
-    layer &&
-    layer !== 'zones' &&
-    editor.phase === 'structure' &&
-    editor.structureLayer === 'zones'
-  ) {
-    editor.setStructureLayer(layer)
-  }
+function finishLeave(unitId: UnitNode['id']) {
   const { selection, setSelection } = useViewer.getState()
   if (selection.selectedIds.length === 1 && selection.selectedIds[0] === unitId) {
     setSelection({ selectedIds: [] })
@@ -93,7 +76,7 @@ function finishLeave(unitId: UnitNode['id'], keepLayer: boolean) {
 }
 
 /** Ends unit focus. Returns false when no unit was focused. */
-export function leaveUnitFocus(options?: { keepLayer?: boolean }): boolean {
+export function leaveUnitFocus(): boolean {
   const viewer = useViewer.getState()
   const unitId = viewer.focusedUnitId
   if (!unitId) return false
@@ -103,7 +86,7 @@ export function leaveUnitFocus(options?: { keepLayer?: boolean }): boolean {
   } finally {
     leaving = false
   }
-  finishLeave(unitId, options?.keepLayer ?? false)
+  finishLeave(unitId)
   return true
 }
 
@@ -269,32 +252,29 @@ export function createUnitInBuilding(buildingId: BuildingNode['id']): UnitNode['
 /**
  * Keeps unit focus coherent with the rest of the editor: a focus set from
  * anywhere (the unit inspector calls the viewer store directly) gets the full
- * enter treatment, and focus ends when the user switches layer or phase by
- * hand, selects anything other than the focused unit, or the unit is deleted.
+ * enter treatment, and focus ends when the user goes to site, selects
+ * anything other than the focused unit, or the unit is deleted.
  */
 export function useUnitFocusRules(): void {
   useEffect(() => {
     const unsubscribeViewer = useViewer.subscribe((state, prev) => {
       if (state.focusedUnitId !== prev.focusedUnitId) {
         if (state.focusedUnitId) enterUnitFocus(state.focusedUnitId)
-        else if (prev.focusedUnitId && !leaving) finishLeave(prev.focusedUnitId, false)
+        else if (prev.focusedUnitId && !leaving) finishLeave(prev.focusedUnitId)
         return
       }
       const unitId = state.focusedUnitId
       if (!unitId || state.selection === prev.selection) return
       // Selecting a zone keeps focus: renaming or recolouring a zone row is
-      // part of arranging the unit, and zones live on the layer focus uses.
+      // part of arranging the unit.
       const { selectedIds } = state.selection
       const selectsOther =
         selectedIds.length > 0 && !(selectedIds.length === 1 && selectedIds[0] === unitId)
       if (selectsOther) leaveUnitFocus()
     })
     const unsubscribeEditor = useEditor.subscribe((state, prev) => {
-      if (state.structureLayer === prev.structureLayer && state.phase === prev.phase) return
-      if (!useViewer.getState().focusedUnitId) return
-      if (state.phase !== 'structure' || state.structureLayer !== 'zones') {
-        leaveUnitFocus({ keepLayer: true })
-      }
+      if (state.phase === prev.phase || state.phase === 'building') return
+      if (useViewer.getState().focusedUnitId) leaveUnitFocus()
     })
     const unsubscribeScene = useScene.subscribe((state, prev) => {
       if (state.nodes === prev.nodes) return

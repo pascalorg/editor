@@ -1,4 +1,5 @@
 import type { GeometryContext } from '@pascal-app/core'
+import { DUCT_BODY_SLOT_ID } from '@pascal-app/core'
 import type { ColorPreset, RenderShading } from '@pascal-app/viewer'
 import {
   BufferGeometry,
@@ -18,9 +19,8 @@ import {
   buildRectSection,
   buildSection,
   createDuctMaterial,
-  INCHES_TO_METERS,
 } from '../duct-segment/geometry'
-import { DUCT_BODY_SLOT_ID } from '../shared/duct-body-paint'
+import { INCHES_TO_METERS } from '../duct-segment/profile'
 import { buildDuctAccessory } from './accessory-geometry'
 import { adapterShape, localFittingPorts } from './ports'
 import type { DuctFittingNode } from './schema'

@@ -15,11 +15,14 @@ import {
   SiteNode,
   sceneRegistry,
   useScene,
+  WindowNode,
 } from '@pascal-app/core'
 import { evaluateRecipe, ProceduralItemNode, parseRecipe } from '@pascal-app/core/procedural-items'
 import {
   buildDoorPreviewMesh,
+  buildWindowPreviewMesh,
   markViewerPresentationTextureBorrowed,
+  poseWindowMovingParts,
   type ViewerPresentationContribution,
   viewerPresentationRegistry,
 } from '@pascal-app/viewer'
@@ -95,6 +98,43 @@ function sceneWithVisibleAndHiddenBoxes(): {
 }
 
 describe('prepareSceneForExport', () => {
+  test.each([true, false])(
+    'omits registered draft geometry absent from the saved document (onlyVisible=%s)',
+    (onlyVisible) => {
+      const { root, nodes } = sceneWithVisibleAndHiddenBoxes()
+      const draft = sceneRegistry.nodes.get('item_hidden')!
+      draft.name = 'Unplaced preview'
+      nodes.item_hidden!.visible = true
+      delete nodes.item_hidden
+
+      const result = prepareSceneForExport(root, nodes, { onlyVisible })
+      expect(result.scene.getObjectByName('Unplaced preview')).toBeUndefined()
+      expect(result.scene.children).toHaveLength(1)
+      expect(root.getObjectByName('Unplaced preview')).toBe(draft)
+    },
+  )
+
+  test('skips a refused subtree and reports its warning while exporting other objects', () => {
+    const root = new THREE.Group()
+    const refused = new THREE.Group()
+    refused.name = 'Oversized stair'
+    refused.userData.pascalExportRefusal = 'Detailed stair geometry exceeds the computation budget.'
+    refused.add(meshWithNodeMaterial(nodeMaterial()))
+    const accepted = meshWithNodeMaterial(nodeMaterial())
+    accepted.name = 'Retained object'
+    root.add(refused, accepted)
+    const result = prepareSceneForExport(root, {})
+    expect(result.scene.getObjectByName(refused.name)).toBeUndefined()
+    expect(result.scene.getObjectByName(accepted.name)).toBeDefined()
+    expect(
+      result.warnings.some(
+        (warning) => warning.includes(refused.name) && warning.includes('computation budget'),
+      ),
+    ).toBe(true)
+    expect(root.children).toContain(refused)
+    result.dispose()
+  })
+
   test('exports procedural bulb emission on detached materials regardless of live state', async () => {
     const definitionModule = '../../../nodes/src/procedural-item/definition'
     const { proceduralItemDefinition } = await import(definitionModule)
@@ -420,134 +460,133 @@ describe('prepareSceneForExport', () => {
     }
   })
 
-  test.each([
-    'sync',
-    'portable-sync',
-    'portable-async',
-  ] as const)('bakes Site bounds and same-kind sibling reservations through %s hooks', async (mode) => {
-    const restoreRegistry = nodeRegistry._snapshot()
-    try {
-      const kind = 'test:site-context-bake'
-      const nodeId = 'site_context_bake'
-      const site = SiteNode.parse({
-        polygon: {
-          type: 'polygon',
-          points: [
-            [0, 0],
-            [12, 0],
-            [12, 8],
-            [0, 8],
-          ],
-        },
-        children: [nodeId, 'declared_sibling', 'linked_sibling', 'other_kind'],
-      })
-      const otherSite = SiteNode.parse({
-        polygon: {
-          type: 'polygon',
-          points: [
-            [0, 0],
-            [30, 0],
-            [30, 4],
-            [0, 4],
-          ],
-        },
-        children: ['other_site_sibling'],
-      })
-      const buildGeometry = (context: GeometryContext) => {
-        const points = (context.parent as SiteNode | null)?.polygon?.points ?? [[0, 0]]
-        const xs = points.map(([x]) => x)
-        const zs = points.map(([, z]) => z)
-        const reservedWidth = context.siblings.reduce(
-          (width, sibling) => width + Number(sibling.metadata?.reservedWidth ?? 0),
-          0,
-        )
-        return new THREE.Mesh(
-          new THREE.BoxGeometry(
-            Math.max(...xs) - Math.min(...xs) - reservedWidth,
-            1,
-            Math.max(...zs) - Math.min(...zs),
-          ),
-          new THREE.MeshStandardMaterial(),
-        )
-      }
-      registerNode({
-        kind,
-        schemaVersion: 1,
-        schema: DoorNode,
-        category: 'furnish',
-        defaults: () => ({}) as never,
-        capabilities: {},
-        bake: 'replace',
-        ...(mode === 'portable-async'
-          ? { bakeGeometryAsync: async (_node, context) => buildGeometry(context) }
-          : { bakeGeometry: (_node, context) => buildGeometry(context) }),
-      } as AnyNodeDefinition)
-      const nodes = {
-        [site.id]: site,
-        [otherSite.id]: otherSite,
-        [nodeId]: {
-          id: nodeId,
-          type: kind,
-          parentId: null,
-          visible: true,
-          metadata: { reservedWidth: 100 },
-        },
-        declared_sibling: {
-          id: 'declared_sibling',
-          type: kind,
-          parentId: null,
-          metadata: { reservedWidth: 2 },
-        },
-        pointer_sibling: {
-          id: 'pointer_sibling',
-          type: kind,
-          parentId: site.id,
-          metadata: { reservedWidth: 3 },
-        },
-        linked_sibling: {
-          id: 'linked_sibling',
-          type: kind,
-          parentId: site.id,
-          metadata: { reservedWidth: 1 },
-        },
-        other_kind: {
-          id: 'other_kind',
-          type: 'test:other-kind',
-          parentId: site.id,
-          metadata: { reservedWidth: 100 },
-        },
-        other_site_sibling: {
-          id: 'other_site_sibling',
-          type: kind,
-          parentId: otherSite.id,
-          metadata: { reservedWidth: 4 },
-        },
-      } as unknown as Record<string, AnyNode>
-      const root = new THREE.Group()
-      const source = new THREE.Group()
-      root.add(source)
-      sceneRegistry.nodes.set(nodeId, source)
-      const prepare = mode === 'sync' ? prepareSceneForExport : prepareSceneForExportAsync
-      const exportedSize = async () => {
-        const prepared = await prepare(root, nodes)
-        try {
-          const exported = prepared.scene.getObjectByName(nodeId)!
-          return new THREE.Box3().setFromObject(exported).getSize(new THREE.Vector3()).toArray()
-        } finally {
-          prepared.dispose()
+  test.each(['sync', 'portable-sync', 'portable-async'] as const)(
+    'bakes Site bounds and same-kind sibling reservations through %s hooks',
+    async (mode) => {
+      const restoreRegistry = nodeRegistry._snapshot()
+      try {
+        const kind = 'test:site-context-bake'
+        const nodeId = 'site_context_bake'
+        const site = SiteNode.parse({
+          polygon: {
+            type: 'polygon',
+            points: [
+              [0, 0],
+              [12, 0],
+              [12, 8],
+              [0, 8],
+            ],
+          },
+          children: [nodeId, 'declared_sibling', 'linked_sibling', 'other_kind'],
+        })
+        const otherSite = SiteNode.parse({
+          polygon: {
+            type: 'polygon',
+            points: [
+              [0, 0],
+              [30, 0],
+              [30, 4],
+              [0, 4],
+            ],
+          },
+          children: ['other_site_sibling'],
+        })
+        const buildGeometry = (context: GeometryContext) => {
+          const points = (context.parent as SiteNode | null)?.polygon?.points ?? [[0, 0]]
+          const xs = points.map(([x]) => x)
+          const zs = points.map(([, z]) => z)
+          const reservedWidth = context.siblings.reduce(
+            (width, sibling) => width + Number(sibling.metadata?.reservedWidth ?? 0),
+            0,
+          )
+          return new THREE.Mesh(
+            new THREE.BoxGeometry(
+              Math.max(...xs) - Math.min(...xs) - reservedWidth,
+              1,
+              Math.max(...zs) - Math.min(...zs),
+            ),
+            new THREE.MeshStandardMaterial(),
+          )
         }
-      }
+        registerNode({
+          kind,
+          schemaVersion: 1,
+          schema: DoorNode,
+          category: 'furnish',
+          defaults: () => ({}) as never,
+          capabilities: {},
+          bake: 'replace',
+          ...(mode === 'portable-async'
+            ? { bakeGeometryAsync: async (_node, context) => buildGeometry(context) }
+            : { bakeGeometry: (_node, context) => buildGeometry(context) }),
+        } as AnyNodeDefinition)
+        const nodes = {
+          [site.id]: site,
+          [otherSite.id]: otherSite,
+          [nodeId]: {
+            id: nodeId,
+            type: kind,
+            parentId: null,
+            visible: true,
+            metadata: { reservedWidth: 100 },
+          },
+          declared_sibling: {
+            id: 'declared_sibling',
+            type: kind,
+            parentId: null,
+            metadata: { reservedWidth: 2 },
+          },
+          pointer_sibling: {
+            id: 'pointer_sibling',
+            type: kind,
+            parentId: site.id,
+            metadata: { reservedWidth: 3 },
+          },
+          linked_sibling: {
+            id: 'linked_sibling',
+            type: kind,
+            parentId: site.id,
+            metadata: { reservedWidth: 1 },
+          },
+          other_kind: {
+            id: 'other_kind',
+            type: 'test:other-kind',
+            parentId: site.id,
+            metadata: { reservedWidth: 100 },
+          },
+          other_site_sibling: {
+            id: 'other_site_sibling',
+            type: kind,
+            parentId: otherSite.id,
+            metadata: { reservedWidth: 4 },
+          },
+        } as unknown as Record<string, AnyNode>
+        const root = new THREE.Group()
+        const source = new THREE.Group()
+        root.add(source)
+        sceneRegistry.nodes.set(nodeId, source)
+        const prepare = mode === 'sync' ? prepareSceneForExport : prepareSceneForExportAsync
+        const exportedSize = async () => {
+          const prepared = await prepare(root, nodes)
+          try {
+            const exported = prepared.scene.getObjectByName(nodeId)!
+            return new THREE.Box3().setFromObject(exported).getSize(new THREE.Vector3()).toArray()
+          } finally {
+            prepared.dispose()
+          }
+        }
 
-      expect(await exportedSize()).toEqual([6, 1, 8])
-      nodes[nodeId]!.parentId = otherSite.id
-      expect(await exportedSize()).toEqual([26, 1, 4])
-      nodes[nodeId]!.parentId = null
-      site.children = site.children.filter((id) => id !== nodeId)
-      expect(await exportedSize()).toEqual([0, 1, 0])
-    } finally {
-      restoreRegistry()
-    }
-  })
+        expect(await exportedSize()).toEqual([6, 1, 8])
+        nodes[nodeId]!.parentId = otherSite.id
+        expect(await exportedSize()).toEqual([26, 1, 4])
+        nodes[nodeId]!.parentId = null
+        site.children = site.children.filter((id) => id !== nodeId)
+        expect(await exportedSize()).toEqual([0, 1, 0])
+      } finally {
+        restoreRegistry()
+      }
+    },
+  )
 
   test('selective exports omit a procedural kind without changing the live scene or later exports', () => {
     const restoreRegistry = nodeRegistry._snapshot()
@@ -1128,6 +1167,210 @@ describe('prepareSceneForExport', () => {
     expect(hasMesh).toBe(false)
   })
 
+  test.each(['tilt', 'turn'] as const)(
+    'bakes tilt-turn %s with attached hardware and grids at 0, 0.5 and 1',
+    (tiltTurnMode) => {
+      const node = WindowNode.parse({
+        windowType: 'tilt-turn',
+        tiltTurnMode,
+        hingesSide: 'right',
+        operationState: 0.6,
+        sill: false,
+        sashGrid: true,
+        columnRatios: [1, 1],
+        rollerShutter: 'box',
+        rollerShutterOpen: 0.5,
+      })
+      const mesh = buildWindowPreviewMesh(node)
+      const original = mesh.getObjectByName('tilt-turn-window-sash')!.quaternion.clone()
+      const root = new THREE.Group().add(mesh)
+      sceneRegistry.nodes.set(node.id, mesh)
+      const prepared = prepareSceneForExport(root, { [node.id]: node })
+      expect(prepared.animations).toHaveLength(2)
+      const clip = prepared.animations.find((clip) => clip.name === `${node.id}: open`)!
+      expect(clip.tracks).toHaveLength(1)
+      const target = prepared.scene.getObjectByProperty(
+        'uuid',
+        clip.tracks[0]!.name.replace('.quaternion', ''),
+      )!
+      expect(target.getObjectByName('window-handle')).toBeDefined()
+      expect(target.getObjectByName('window-sash-grid')).toBeDefined()
+      const mixer = new THREE.AnimationMixer(prepared.scene)
+      const action = mixer.clipAction(clip)
+      action.setLoop(THREE.LoopOnce, 1)
+      action.clampWhenFinished = true
+      action.play()
+      for (const value of [0, 0.5, 1]) {
+        mixer.setTime(value)
+        const live = buildWindowPreviewMesh({ ...node, operationState: value })
+        const liveSash = live.getObjectByName('tilt-turn-window-sash')!
+        expect(target.quaternion.clone().normalize().angleTo(liveSash.quaternion)).toBeLessThan(
+          1e-6,
+        )
+      }
+      expect(
+        mesh.getObjectByName('tilt-turn-window-sash')!.quaternion.angleTo(original),
+      ).toBeCloseTo(0)
+      mixer.stopAllAction()
+      prepared.dispose()
+    },
+  )
+
+  test.each(
+    (['box', 'concealed'] as const).flatMap((rollerShutter) =>
+      [0, 0.5, 1].map((shutterOpen) => ({ rollerShutter, shutterOpen })),
+    ),
+  )(
+    'bakes saved bifold shutters and $rollerShutter roller at $shutterOpen without changing live previews',
+    ({ shutterOpen, rollerShutter }) => {
+      const node = WindowNode.parse({
+        windowType: 'casement',
+        shutters: 'panel',
+        shutterOpen,
+        width: 2,
+        rollerShutter,
+        rollerShutterOpen: shutterOpen,
+      })
+      const mesh = buildWindowPreviewMesh(node)
+      const saved = mesh.getObjectByName('shutter-left')!.quaternion.clone()
+      poseWindowMovingParts(node, mesh, 0, 1 - shutterOpen)
+      const preview = mesh.getObjectByName('shutter-left')!.quaternion.clone()
+      // Simulate a live roller preview whose topology differs from the saved node.
+      mesh.getObjectByName('window-roller-curtain')!.clear()
+      sceneRegistry.nodes.set(node.id, mesh)
+      const prepared = prepareSceneForExport(new THREE.Group().add(mesh), { [node.id]: node })
+      expect(prepared.animations.map((clip) => clip.name)).toEqual([
+        `${node.id}: open`,
+        `${node.id}: shutters`,
+      ])
+      expect(prepared.animations[0]!.tracks).toHaveLength(1)
+      const extras = prepared.scene.getObjectByName(node.id)!.userData
+      expect(extras.shutters).toBe(true)
+      expect(extras.shuttersOpen).toBe(shutterOpen)
+      expect(extras.openable).toBe(true)
+      expect(extras.clips).toEqual(prepared.animations.map((clip) => clip.name))
+      const shutters = prepared.animations[1]!
+      expect(shutters.duration).toBe(1)
+      const leaves: THREE.Object3D[] = []
+      prepared.scene.traverse((part) => {
+        if (['shutter-left', 'shutter-right', 'shutter-outer'].includes(part.name))
+          leaves.push(part)
+      })
+      for (const leaf of leaves)
+        expect(shutters.tracks.some((track) => track.name === `${leaf.uuid}.quaternion`)).toBe(true)
+      const baked = prepared.scene.getObjectByName('shutter-left')!
+      const outer = baked.getObjectByName('shutter-outer')!
+      const expectedOuter = buildWindowPreviewMesh(node).getObjectByName('shutter-outer')!
+      expect(outer.quaternion.angleTo(expectedOuter.quaternion)).toBeCloseTo(0)
+      expect(baked.quaternion.angleTo(saved)).toBeCloseTo(0)
+      expect(mesh.getObjectByName('shutter-left')!.quaternion.angleTo(preview)).toBeCloseTo(0)
+      const curtain = prepared.scene.getObjectByName('window-roller-curtain')!
+      expect(curtain.children).toHaveLength(1)
+      expect(curtain.position.y).toBe(node.height / 2)
+      expect(curtain.scale.y).toBeCloseTo(1 - 0.98 * shutterOpen)
+      const panel = curtain.children[0] as THREE.Mesh
+      expect(panel.geometry.index!.count).toBe(Math.floor(node.height / 0.04) * 36)
+      const track = shutters.tracks.find((track) => track.name === `${curtain.uuid}.scale`)!
+      expect(Array.from(track.values)).toEqual([1, 1, 1, 1, expect.closeTo(0.02), 1])
+      expect(extras.rollerShutterAnimation).toBe('top-pivot-scale-y')
+      const mixer = new THREE.AnimationMixer(prepared.scene)
+      const action = mixer.clipAction(shutters).setLoop(THREE.LoopOnce, 1)
+      action.clampWhenFinished = true
+      action.play()
+      for (const fraction of [0, 0.25, 0.5, 0.75, 1]) {
+        mixer.setTime(fraction)
+        const expected = buildWindowPreviewMesh({ ...node, shutterOpen: fraction })
+        expect(
+          baked.quaternion
+            .clone()
+            .normalize()
+            .angleTo(expected.getObjectByName('shutter-left')!.quaternion),
+        ).toBeLessThan(1e-6)
+        expect(
+          outer.quaternion
+            .clone()
+            .normalize()
+            .angleTo(expected.getObjectByName('shutter-outer')!.quaternion),
+        ).toBeLessThan(1e-6)
+      }
+      mixer.stopAllAction()
+      prepared.dispose()
+    },
+  )
+
+  test('a shuttered casement exports independent sash and leaf rotations at its saved pose', () => {
+    const node = WindowNode.parse({
+      windowType: 'casement',
+      width: 1,
+      shutters: 'panel',
+      shutterOpen: 0.25,
+      rollerShutter: 'box',
+      rollerShutterOpen: 0.75,
+    })
+    const mesh = buildWindowPreviewMesh(node)
+    sceneRegistry.nodes.set(node.id, mesh)
+    const prepared = prepareSceneForExport(new THREE.Group().add(mesh), { [node.id]: node })
+    expect(prepared.animations.map((clip) => clip.name)).toEqual([
+      `${node.id}: open`,
+      `${node.id}: shutters`,
+    ])
+    const window = prepared.scene.getObjectByName(node.id)!
+    expect(window.userData.shuttersOpen).toBe(0.25)
+    expect(window.userData.rollerShutterOpen).toBe(0.75)
+    const curtain = window.getObjectByName('window-roller-curtain')!
+    expect(curtain.scale.y).toBeCloseTo(1 - 0.98 * 0.75)
+    const top = new THREE.Box3().setFromObject(curtain).max.y
+    const leaves = ['shutter-left', 'shutter-right'].map((name) => window.getObjectByName(name)!)
+    const clip = prepared.animations[1]!
+    expect(clip.tracks.map((track) => track.name)).toEqual([
+      ...leaves.map((leaf) => `${leaf.uuid}.quaternion`),
+      `${curtain.uuid}.scale`,
+    ])
+    for (const leaf of leaves)
+      expect(leaf.quaternion.angleTo(mesh.getObjectByName(leaf.name)!.quaternion)).toBeCloseTo(0)
+    const mixer = new THREE.AnimationMixer(prepared.scene)
+    const action = mixer.clipAction(clip).setLoop(THREE.LoopOnce, 1)
+    action.clampWhenFinished = true
+    action.play()
+    for (const fraction of [0, 0.25, 0.5, 0.75, 1]) {
+      mixer.setTime(fraction)
+      const expected = buildWindowPreviewMesh({ ...node, shutterOpen: fraction })
+      for (const leaf of leaves)
+        expect(
+          leaf.quaternion
+            .clone()
+            .normalize()
+            .angleTo(expected.getObjectByName(leaf.name)!.quaternion),
+        ).toBeLessThan(1e-6)
+      expect(new THREE.Box3().setFromObject(curtain).max.y).toBeCloseTo(top)
+    }
+    mixer.stopAllAction()
+    prepared.dispose()
+  })
+
+  test.each(['panel', 'roller'] as const)(
+    'a fixed window with %s shutters exports only its shutters clip',
+    (kind) => {
+      const node = WindowNode.parse({
+        windowType: 'fixed',
+        ...(kind === 'panel'
+          ? { shutters: 'panel', shutterOpen: 0.3 }
+          : { rollerShutter: 'box', rollerShutterOpen: 0.3 }),
+      })
+      const mesh = buildWindowPreviewMesh(node)
+      sceneRegistry.nodes.set(node.id, mesh)
+      const prepared = prepareSceneForExport(new THREE.Group().add(mesh), { [node.id]: node })
+      expect(prepared.animations.map((clip) => clip.name)).toEqual([`${node.id}: shutters`])
+      expect(mesh.userData.openable).toBeUndefined()
+      const extras = prepared.scene.getObjectByName(node.id)!.userData
+      expect(extras.openable).toBeUndefined()
+      expect(extras.shutters).toBe(true)
+      expect(extras.shuttersOpen).toBe(0.3)
+      expect(extras.clips).toEqual([`${node.id}: shutters`])
+      prepared.dispose()
+    },
+  )
+
   test('bakes a swing door into an open quaternion clip', () => {
     const root = new THREE.Group()
     const doorGroup = new THREE.Group()
@@ -1166,6 +1409,64 @@ describe('prepareSceneForExport', () => {
     const closed = new THREE.Quaternion().fromArray(Array.from(track.values).slice(0, 4))
     expect(closed.angleTo(new THREE.Quaternion())).toBeCloseTo(0)
   })
+
+  for (const doorType of ['hinged', 'double', 'french'] as const) {
+    test(`bakes ${doorType} hardware with the leaf through closed/45/90° poses`, () => {
+      const node = DoorNode.parse({
+        id: `door_hardware_${doorType}`,
+        doorType,
+        swingAngle: Math.PI / 3,
+        position: [2, 1.05, 3],
+        rotation: [0, 0.4, 0],
+      })
+      const mesh = buildDoorPreviewMesh(node)
+      const root = new THREE.Group()
+      root.add(mesh)
+      sceneRegistry.nodes.set(node.id, mesh)
+      const { scene, animations } = prepareSceneForExport(root, { [node.id]: node })
+      expect(animations).toHaveLength(1)
+      const clip = animations[0]!
+      expect(clip.tracks).toHaveLength(doorType === 'hinged' ? 1 : 2)
+      const mixer = new THREE.AnimationMixer(scene)
+      const action = mixer.clipAction(clip)
+      action.setLoop(THREE.LoopOnce, 1)
+      action.clampWhenFinished = true
+      action.play()
+      for (const amount of [0, 0.5, 1]) {
+        mixer.setTime(amount)
+        scene.updateMatrixWorld(true)
+        const live = buildDoorPreviewMesh({ ...node, swingAngle: (amount * Math.PI) / 2 })
+        live.updateMatrixWorld(true)
+        const leaves = live.children.filter((part) => part.userData.pascalSwingLeaf)
+        for (const [i, track] of clip.tracks.entries()) {
+          const target = scene.getObjectByProperty('uuid', track.name.replace('.quaternion', ''))!
+          const exportedHardware = target.children.filter(
+            (part) => part.userData.slotId === 'hardware',
+          )
+          const liveHardware = leaves[i]!.children.filter(
+            (part) => part.userData.slotId === 'hardware',
+          )
+          expect(exportedHardware).toHaveLength(2)
+          for (const [j, part] of exportedHardware.entries()) {
+            const source = liveHardware[j]!
+            expect(
+              part
+                .getWorldPosition(new THREE.Vector3())
+                .distanceTo(source.getWorldPosition(new THREE.Vector3())),
+            ).toBeLessThan(1e-6)
+            expect(
+              part
+                .getWorldQuaternion(new THREE.Quaternion())
+                .angleTo(source.getWorldQuaternion(new THREE.Quaternion())),
+            ).toBeLessThan(1e-6)
+            expect((part as THREE.Mesh).geometry).not.toBe((source as THREE.Mesh).geometry)
+            expect((part as THREE.Mesh).geometry.userData.shared).toBeUndefined()
+          }
+        }
+      }
+      mixer.stopAllAction()
+    })
+  }
 
   test('bakes registry-owned open clips and stamps the node openable', () => {
     const root = new THREE.Group()
@@ -2336,29 +2637,32 @@ describe('plugin bake policies through export', () => {
   test.each([
     ['sync', 'meadow-bake', ['bakeGeometry']],
     ['async', 'meadow-bake-async', ['bakeGeometryAsync']],
-  ] as const)('%s export strips, replaces and keeps static plugin kinds without touching the live tree', async (mode, bakedName, expectedCalls) => {
-    await withBakePlugin([pluginId], async ({ root, live, nodes, calls }) => {
-      const prepared =
-        mode === 'sync'
-          ? prepareSceneForExport(root, nodes)
-          : await prepareSceneForExportAsync(root, nodes)
-      try {
-        const scene = prepared.scene
-        expect(scene.getObjectByName(overlayId)).toBeUndefined()
-        expect(scene.getObjectByName(`${overlayId}-live`)).toBeUndefined()
+  ] as const)(
+    '%s export strips, replaces and keeps static plugin kinds without touching the live tree',
+    async (mode, bakedName, expectedCalls) => {
+      await withBakePlugin([pluginId], async ({ root, live, nodes, calls }) => {
+        const prepared =
+          mode === 'sync'
+            ? prepareSceneForExport(root, nodes)
+            : await prepareSceneForExportAsync(root, nodes)
+        try {
+          const scene = prepared.scene
+          expect(scene.getObjectByName(overlayId)).toBeUndefined()
+          expect(scene.getObjectByName(`${overlayId}-live`)).toBeUndefined()
 
-        const meadow = scene.getObjectByName(meadowId)
-        expect(meadow?.getObjectByName(bakedName)).toBeDefined()
-        expect(meadow?.getObjectByName(`${meadowId}-live`)).toBeUndefined()
+          const meadow = scene.getObjectByName(meadowId)
+          expect(meadow?.getObjectByName(bakedName)).toBeDefined()
+          expect(meadow?.getObjectByName(`${meadowId}-live`)).toBeUndefined()
 
-        expect(scene.getObjectByName(rockId)?.getObjectByName(`${rockId}-live`)).toBeDefined()
-        expect(calls).toEqual([...expectedCalls])
-        expectLiveTreeUntouched(live)
-      } finally {
-        prepared.dispose()
-      }
-    })
-  })
+          expect(scene.getObjectByName(rockId)?.getObjectByName(`${rockId}-live`)).toBeDefined()
+          expect(calls).toEqual([...expectedCalls])
+          expectLiveTreeUntouched(live)
+        } finally {
+          prepared.dispose()
+        }
+      })
+    },
+  )
 
   test('an uninstalled plugin contributes nothing to the export', async () => {
     await withBakePlugin([], async ({ root, live, nodes, calls }) => {
@@ -2374,4 +2678,113 @@ describe('plugin bake policies through export', () => {
       }
     })
   })
+})
+
+test('prepared exports preserve surface identities and IFC subpart roles on registered meshes', () => {
+  const root = new THREE.Group()
+  root.name = 'scene-renderer'
+  const owner = { ...BaseNode.parse({ id: 'item_surface_owner' }), type: 'item' } as AnyNode
+  const child = {
+    ...BaseNode.parse({ id: 'item_surface_child', parentId: owner.id }),
+    type: 'item',
+  } as AnyNode
+  const mesh = meshWithNodeMaterial(nodeMaterial())
+  mesh.userData = {
+    surfaceNodeIds: [child.id],
+    pascalIfcRole: 'railing',
+    pascalIfcParts: [{ start: 0, count: 3, role: 'handrail' }],
+  }
+  root.add(mesh)
+  sceneRegistry.nodes.set(owner.id, mesh)
+  const { scene } = prepareSceneForExport(root, { [owner.id]: owner, [child.id]: child })
+  const exported = scene.getObjectByName(owner.id)!
+  expect(exported.userData.pascalId).toBe(owner.id)
+  expect(exported.userData.surfaceNodeIds).toEqual([child.id])
+  expect(exported.userData.pascalIfcRole).toBe('railing')
+  expect(exported.userData.pascalIfcParts).toEqual([{ start: 0, count: 3, role: 'handrail' }])
+})
+
+test('exports a plugin LOD once without invoking its argument-requiring constructor', () => {
+  class PluginLOD extends THREE.LOD {
+    constructor(model: THREE.Mesh) {
+      super()
+      if (!model) throw new Error('Model is required')
+      this.addLevel(model, 0)
+      this.addLevel(model.clone(), 10)
+    }
+  }
+  const mesh = new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshBasicMaterial())
+  const lod = new PluginLOD(mesh)
+  const root = new THREE.Group()
+  root.add(lod)
+  const { scene } = prepareSceneForExport(root, {})
+  const meshes: THREE.Mesh[] = []
+  scene.traverse((object) => {
+    if (object instanceof THREE.Mesh) meshes.push(object)
+  })
+  expect(meshes).toHaveLength(2)
+  expect(meshes[0]!.geometry).not.toBe(mesh.geometry)
+  expect(lod.levels).toHaveLength(2)
+})
+
+for (const config of [
+  { doorType: 'sliding', leafCount: 3, slidingStyle: 'patio', tracks: 1 },
+  { doorType: 'sliding', leafCount: 4, slidingStyle: 'patio', tracks: 2 },
+  { doorType: 'sliding', leafCount: 4, slidingStyle: 'bypass', tracks: 2 },
+  { doorType: 'folding', leafCount: 6, tracks: 6 },
+  { doorType: 'folding', leafCount: 8, tracks: 8 },
+]) {
+  test(`GLB samples ${config.slidingStyle ?? ''} ${config.doorType} with ${config.leafCount} panels`, () => {
+    const node = DoorNode.parse({
+      ...config,
+      width: 4,
+      slideDirection: 'right',
+      operationState: 0.5,
+    })
+    const mesh = buildDoorPreviewMesh(node)
+    const root = new THREE.Group()
+    root.add(mesh)
+    sceneRegistry.nodes.set(node.id, mesh)
+    try {
+      const { animations } = prepareSceneForExport(root, { [node.id]: node })
+      expect(animations).toHaveLength(1)
+      expect(animations[0]!.tracks).toHaveLength(config.tracks)
+      for (const track of animations[0]!.tracks) {
+        expect(track.times[0]).toBe(0)
+        expect(track.times[8]).toBe(0.5)
+        expect(track.times[16]).toBe(1)
+      }
+    } finally {
+      sceneRegistry.nodes.delete(node.id)
+    }
+  })
+}
+
+test('GLB entry-door clip moves its leaf and keeps sidelights and transom static', () => {
+  const node = DoorNode.parse({
+    width: 1,
+    height: 2.1,
+    sidelightLeft: 0.3,
+    sidelightRight: 0.5,
+    transomHeight: 0.4,
+    swingAngle: 0.6,
+  })
+  const mesh = buildDoorPreviewMesh(node)
+  const root = new THREE.Group()
+  root.add(mesh)
+  sceneRegistry.nodes.set(node.id, mesh)
+  try {
+    const { scene, animations } = prepareSceneForExport(root, { [node.id]: node })
+    expect(animations).toHaveLength(1)
+    const fixed = scene.getObjectByName('door-fixed-lights')!
+    expect(fixed).toBeDefined()
+    const staticIds = new Set<string>()
+    fixed.traverse((part) => staticIds.add(part.uuid))
+    expect(animations[0]!.tracks.length).toBeGreaterThan(0)
+    expect(animations[0]!.tracks.some((track) => staticIds.has(track.name.split('.')[0]!))).toBe(
+      false,
+    )
+  } finally {
+    sceneRegistry.nodes.delete(node.id)
+  }
 })

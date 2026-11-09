@@ -18,7 +18,9 @@ import { useSidebarStore } from '../components/ui/primitives/sidebar'
 import { runRedo, runUndo } from '../lib/history'
 import { meshEditScope } from '../lib/interaction/scope'
 import { setSidebarTabIds } from '../lib/sidebar-panel'
-import useEditor from '../store/use-editor'
+import { armToolShortcut, toolShortcutForKey, withToolShortcut } from '../lib/tool-shortcuts'
+import { getWallDrawVariant, selectWallDrawVariant } from '../lib/wall-draw-variant'
+import useEditor, { normalizePersistedEditorLayoutState } from '../store/use-editor'
 import useInteractionScope from '../store/use-interaction-scope'
 import {
   armPaintFromShortcut,
@@ -26,11 +28,14 @@ import {
   blocksSnappingShortcut,
   canCycleSnappingModeShortcut,
   canRunGlobalRotationShortcut,
+  hasSceneKeyboardFocus,
   isToolOwnedCanopyForm,
   isToolOwnedRotation,
   markToolCancelConsumed,
+  openItemCatalogFromShortcut,
   runHistoryShortcut,
   runNodeInteraction,
+  switchPhaseFromShortcut,
 } from './use-keyboard'
 
 type RafFn = (callback: (time: number) => void) => number
@@ -46,27 +51,75 @@ type RafFn = (callback: (time: number) => void) => number
 const NODE_ID = 'block_history' as AnyNodeId
 
 describe('snapping shortcuts while entering a run length', () => {
+  test('document panes keep copy, delete and editing shortcuts away from the scene until it is focused', () => {
+    useEditor.setState({ viewLayouts: {} })
+    expect(hasSceneKeyboardFocus()).toBe(true)
+    useEditor.getState().showView('document:plan', { beside: true })
+    expect(hasSceneKeyboardFocus()).toBe(false)
+    useEditor.getState().focusViewPane(0)
+    expect(hasSceneKeyboardFocus()).toBe(true)
+    useEditor
+      .getState()
+      .setViewLayout({ split: false, panes: ['document:plan', '3d'], ratio: 0.5, focus: 0 })
+    expect(hasSceneKeyboardFocus()).toBe(false)
+    useEditor.getState().closeView('document:plan')
+  })
   test('allows snap mode and spacing shortcuts in the duct and pipe length field', () => {
-    expect(
-      blocksSnappingShortcut({
-        tagName: 'INPUT',
-        isContentEditable: false,
-        hasAttribute: (name) => name === 'data-run-length-input',
-      }),
-    ).toBe(false)
+    const field = {
+      tagName: 'INPUT',
+      isContentEditable: false,
+      hasAttribute: (name: string) => name === 'data-run-length-input',
+      closest: (): object => field,
+    }
+    expect(blocksSnappingShortcut(field)).toBe(false)
   })
 
   test('continues to protect ordinary text fields and editable content', () => {
-    for (const tagName of ['INPUT', 'TEXTAREA', 'DIV']) {
-      expect(
-        blocksSnappingShortcut({
-          tagName,
-          isContentEditable: tagName === 'DIV',
-          hasAttribute: () => false,
-        }),
-      ).toBe(true)
+    for (const tagName of ['INPUT', 'TEXTAREA', 'SELECT', 'DIV']) {
+      const field = {
+        tagName,
+        isContentEditable: tagName === 'DIV',
+        hasAttribute: () => false,
+        closest: (): object => field,
+      }
+      expect(blocksSnappingShortcut(field)).toBe(true)
     }
     expect(blocksSnappingShortcut(null)).toBe(false)
+  })
+
+  test('honors closest-owned fields and dialogs without claiming ordinary canvas keys', () => {
+    // Model the DOM closest result, not its selector spelling. Native descendant
+    // propagation is checked by the protected browser fixture.
+    for (const role of ['textbox', 'combobox', 'dialog', 'alertdialog']) {
+      const owner = { role }
+      const descendant = {
+        tagName: 'SPAN',
+        isContentEditable: false,
+        hasAttribute: () => false,
+        closest: () => owner,
+      }
+      expect(blocksSnappingShortcut(descendant)).toBe(true)
+    }
+    const canvas = {
+      tagName: 'CANVAS',
+      isContentEditable: false,
+      hasAttribute: () => false,
+      closest: () => null,
+    }
+    expect(blocksSnappingShortcut(canvas)).toBe(false)
+    expect(blocksSnappingShortcut({ ...canvas, tagName: 'SPAN', isContentEditable: true })).toBe(
+      true,
+    )
+  })
+
+  test('reserves the run-length exception for its actual input, not another editable owner', () => {
+    const textarea = {
+      tagName: 'TEXTAREA',
+      isContentEditable: false,
+      hasAttribute: (name: string) => name === 'data-run-length-input',
+      closest: (): object => textarea,
+    }
+    expect(blocksSnappingShortcut(textarea)).toBe(true)
   })
 })
 
@@ -87,7 +140,7 @@ beforeEach(() => {
 afterEach(() => {
   useInteractionScope.getState().end()
   useEditor.getState().armToolMode({ mode: 'select' })
-  useEditor.setState({ selectedItem: null })
+  useEditor.setState({ selectedItem: null, viewLayouts: {} })
   clearSceneHistory()
 })
 
@@ -110,6 +163,14 @@ describe('rotation shortcut ownership', () => {
   test('leaves R and T to the active lean-to placement tool', () => {
     useEditor.getState().armToolMode({ mode: 'build', tool: 'lean-to-extension' })
 
+    expect(isToolOwnedRotation()).toBe(true)
+  })
+
+  test('leaves R and T, and so Shift+R, to the stair and elevator placement tools', () => {
+    useEditor.getState().armToolMode({ mode: 'build', tool: 'stair' })
+    expect(isToolOwnedRotation()).toBe(true)
+
+    useEditor.getState().armToolMode({ mode: 'build', tool: 'elevator' })
     expect(isToolOwnedRotation()).toBe(true)
   })
 
@@ -317,20 +378,111 @@ describe('B and P open their panel', () => {
     useEditor.getState().armToolMode({ mode: 'select' })
   })
 
-  test('B arms the wall tool on Rectangle and shows the Build panel', () => {
+  test('1 goes to site and 2 into the building; 3 is no longer a shortcut', () => {
+    useEditor.getState().armToolMode({ mode: 'build', tool: 'wall' })
+    expect(switchPhaseFromShortcut('1')).toBe(true)
+    expect(useEditor.getState().phase).toBe('site')
+    expect(useEditor.getState().mode).toBe('select')
+    expect(switchPhaseFromShortcut('2')).toBe(true)
+    expect(useEditor.getState().phase).toBe('building')
+    expect(switchPhaseFromShortcut('3')).toBe(false)
+    expect(useEditor.getState().phase).toBe('building')
+  })
+
+  test('F, B and P arm their tool and keep the building', () => {
+    setSidebarTabIds(['site', 'build', 'paint', 'items'])
+    useEditor.getState().setPhase('building')
+    for (const [arm, mode, tool] of [
+      [openItemCatalogFromShortcut, 'build', 'item'],
+      [armWallToolFromShortcut, 'build', 'wall'],
+      [armPaintFromShortcut, 'material-paint', null],
+    ] as const) {
+      arm()
+      expect(useEditor.getState().phase).toBe('building')
+      expect(useEditor.getState().mode).toBe(mode)
+      expect(useEditor.getState().tool).toBe(tool)
+    }
+    openItemCatalogFromShortcut()
+    expect(useEditor.getState().activeSidebarPanel).toBe('items')
+  })
+
+  test('F, B and P also keep Site when arming their tool', () => {
+    setSidebarTabIds(['site', 'build', 'paint', 'items'])
+    for (const arm of [
+      openItemCatalogFromShortcut,
+      armWallToolFromShortcut,
+      armPaintFromShortcut,
+    ]) {
+      useEditor.getState().setPhase('site')
+      useEditor.getState().armToolMode({ mode: 'select' })
+      arm()
+      expect(useEditor.getState().phase).toBe('site')
+    }
+  })
+
+  test('F opens a collapsed catalog sidebar', () => {
+    setSidebarTabIds(['site', 'build', 'items'])
+    useSidebarStore.getState().setIsCollapsed(true)
+    openItemCatalogFromShortcut()
+    expect(useEditor.getState().activeSidebarPanel).toBe('items')
+    expect(useSidebarStore.getState().isCollapsed).toBe(false)
+  })
+
+  test('B arms the wall tool on the Rooms shape picked last and shows the Build panel', () => {
     setSidebarTabIds(['site', 'build', 'paint', 'items'])
     useEditor.getState().setActiveSidebarPanel('items')
     useSidebarStore.getState().setIsCollapsed(true)
-    useEditor.getState().setContinuation('wall', 'single')
+    selectWallDrawVariant('walls')
+    useEditor.getState().armToolMode({ mode: 'select' })
 
     armWallToolFromShortcut()
 
     const editor = useEditor.getState()
     expect(editor.mode).toBe('build')
     expect(editor.tool).toBe('wall')
-    expect(editor.getContinuation('wall')).toBe('rectangle')
+    expect(getWallDrawVariant()).toBe('walls')
     expect(editor.activeSidebarPanel).toBe('build')
     expect(useSidebarStore.getState().isCollapsed).toBe(false)
+    // The pick is a preference: it comes back with the saved editor layout.
+    expect(
+      normalizePersistedEditorLayoutState({ continuationByContext: { wall: 'single' } } as never)
+        .continuationByContext.wall,
+    ).toBe('single')
+  })
+
+  test('B draws a Rectangle until a Rooms shape is picked', () => {
+    expect(normalizePersistedEditorLayoutState({}).continuationByContext.wall).toBe('rectangle')
+    useEditor.setState({
+      continuationByContext: normalizePersistedEditorLayoutState({}).continuationByContext,
+    })
+    armWallToolFromShortcut()
+    expect(getWallDrawVariant()).toBe('rectangle')
+  })
+
+  // A host may drop the armed tool when the panel changes (the community does,
+  // with any placement in flight), so B and F open their panel first.
+  test('B and F keep their tool from another panel where the host disarms on a panel change', () => {
+    setSidebarTabIds(['build', 'paint', 'items', 'ai'])
+    const unsubscribe = useEditor.subscribe((state, prev) => {
+      if (state.activeSidebarPanel !== prev.activeSidebarPanel) {
+        useEditor.getState().armToolMode({ mode: 'select' })
+      }
+    })
+    try {
+      for (const [arm, from, panel, tool] of [
+        [armWallToolFromShortcut, 'ai', 'build', 'wall'],
+        [openItemCatalogFromShortcut, 'paint', 'items', 'item'],
+      ] as const) {
+        useEditor.getState().setActiveSidebarPanel(from)
+        arm()
+        const editor = useEditor.getState()
+        expect(editor.activeSidebarPanel).toBe(panel)
+        expect(editor.mode).toBe('build')
+        expect(editor.tool).toBe(tool)
+      }
+    } finally {
+      unsubscribe()
+    }
   })
 
   test('P arms paint and shows the Paint panel, or Build where the host has none', () => {
@@ -344,5 +496,61 @@ describe('B and P open their panel', () => {
     useEditor.getState().setActiveSidebarPanel('items')
     armPaintFromShortcut()
     expect(useEditor.getState().activeSidebarPanel).toBe('build')
+  })
+})
+
+describe('drafting tool shortcuts', () => {
+  const press = (code: string, mods: Partial<KeyboardEvent> = {}) =>
+    toolShortcutForKey({
+      code,
+      shiftKey: false,
+      metaKey: false,
+      ctrlKey: false,
+      altKey: false,
+      repeat: false,
+      ...mods,
+    })
+
+  afterEach(() => {
+    setSidebarTabIds([])
+    useInteractionScope.getState().endIf(() => true)
+    useEditor.getState().setContinuation('wall', 'room')
+    useEditor.getState().armToolMode({ mode: 'select' })
+  })
+
+  test('keep the bare keys they would collide with: pan, rotate and operate', () => {
+    expect(press('KeyD', { shiftKey: true })).toBe('door')
+    expect(press('KeyW', { shiftKey: true })).toBe('window')
+    expect(press('KeyS', { shiftKey: true })).toBe('stair')
+    expect(press('KeyR', { shiftKey: true })).toBe('roof')
+    expect(press('KeyE', { shiftKey: true })).toBeNull()
+    for (const code of ['KeyD', 'KeyW', 'KeyS', 'KeyR', 'KeyE', 'KeyI', 'KeyA'])
+      expect(press(code)).toBeNull()
+    expect(press('KeyD', { shiftKey: true, ctrlKey: true })).toBeNull()
+    expect(press('KeyD', { shiftKey: true, repeat: true })).toBeNull()
+  })
+
+  test('stand down while a gesture holds Shift', () => {
+    useInteractionScope.getState().begin({ kind: 'box-select' })
+    expect(press('KeyD', { shiftKey: true })).toBeNull()
+  })
+
+  test('arm their tool with the Build panel showing, and name their key in tooltips', () => {
+    setSidebarTabIds(['build', 'items'])
+    useEditor.getState().setActiveSidebarPanel('items')
+    for (const [id, tool] of [
+      ['door', 'door'],
+      ['window', 'window'],
+      ['stair', 'stair'],
+      ['roof', 'roof'],
+    ] as const) {
+      armToolShortcut(id)
+      expect(useEditor.getState().mode).toBe('build')
+      expect(useEditor.getState().tool).toBe(tool)
+      expect(useEditor.getState().activeSidebarPanel).toBe('build')
+    }
+    expect(withToolShortcut('Door', 'door')).toBe('Door (Shift+D)')
+    expect(withToolShortcut('Wall', 'wall')).toBe('Wall (B)')
+    expect(withToolShortcut('Fence', 'fence')).toBe('Fence')
   })
 })

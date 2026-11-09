@@ -3,6 +3,7 @@ import {
   type AnyNode,
   BuildingNode,
   clearSceneHistory,
+  createI18n,
   createZone,
   generateId,
   initSpaceDetectionSync,
@@ -67,6 +68,7 @@ const scene = (...nodes: AnyNode[]): Record<string, AnyNode> =>
 const living = zone('zone_living', 'Living', rect(0, 0, 4, 4))
 const lanai = zone('zone_lanai', 'Lanai', rect(4, 0, 6, 4))
 const keyedLanai = zone('zone_lanai', 'Lanai', rect(4, 0, 6, 4), 'floor_lanai')
+const english = createI18n()
 const length = (meters: number) => `${meters.toFixed(2)} m`
 
 describe('Built on: when the picker shows and what it offers', () => {
@@ -116,7 +118,11 @@ describe('Built on: when the picker shows and what it offers', () => {
     expect(model.shared).toBeNull()
     expect(separateFloorOffset(nodes, keyedLanai.id)).toBeNull()
     expect(
-      separateFloorSummary({ ...model, offset: separateFloorOffset(nodes, keyedLanai.id) }, length),
+      separateFloorSummary(
+        { ...model, offset: separateFloorOffset(nodes, keyedLanai.id) },
+        length,
+        english,
+      ),
     ).toBe('Lanai floor')
   })
 
@@ -159,18 +165,22 @@ describe('Built on: the Floor row summary', () => {
   const lanaiFloor = { name: 'Lanai floor' }
   test('says how a separate floor sits against the shared floor', () => {
     const shared = { name: 'Shared floor' }
-    expect(separateFloorSummary({ current: lanaiFloor, shared, offset: -0.15 }, length)).toBe(
-      'Lanai floor · 0.15 m below Shared floor',
-    )
     expect(
-      separateFloorSummary({ current: lanaiFloor, shared: { name: 'Cabin' }, offset: 0.3 }, length),
+      separateFloorSummary({ current: lanaiFloor, shared, offset: -0.15 }, length, english),
+    ).toBe('Lanai floor · 0.15 m below Shared floor')
+    expect(
+      separateFloorSummary(
+        { current: lanaiFloor, shared: { name: 'Cabin' }, offset: 0.3 },
+        length,
+        english,
+      ),
     ).toBe('Lanai floor · 0.30 m above Cabin')
-    expect(separateFloorSummary({ current: lanaiFloor, shared, offset: 0.002 }, length)).toBe(
-      'Lanai floor · level with Shared floor',
-    )
-    expect(separateFloorSummary({ current: lanaiFloor, shared: null, offset: null }, length)).toBe(
-      'Lanai floor',
-    )
+    expect(
+      separateFloorSummary({ current: lanaiFloor, shared, offset: 0.002 }, length, english),
+    ).toBe('Lanai floor · level with Shared floor')
+    expect(
+      separateFloorSummary({ current: lanaiFloor, shared: null, offset: null }, length, english),
+    ).toBe('Lanai floor')
   })
 
   test("compares the room's walking surface with the shared-floor room beside it, not plate with plate", () => {
@@ -188,7 +198,11 @@ describe('Built on: the Floor row summary', () => {
     expect(separateFloorOffset(nodes, keyedLanai.id)).toBeCloseTo(-0.3)
     const model = roomBuiltOn(nodes, keyedLanai.id)!
     expect(
-      separateFloorSummary({ ...model, offset: separateFloorOffset(nodes, keyedLanai.id) }, length),
+      separateFloorSummary(
+        { ...model, offset: separateFloorOffset(nodes, keyedLanai.id) },
+        length,
+        english,
+      ),
     ).toBe('Lanai floor · 0.30 m below Living floor')
     // Nothing shared across a wall or open side: the shared plate's top.
     expect(separateFloorOffset(scene(raised, keyedLanai, house, own), keyedLanai.id)).toBeCloseTo(

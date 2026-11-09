@@ -1,5 +1,5 @@
 import type { AnyNode } from '@pascal-app/core'
-import { setSurfaceRaycastLayers } from '@pascal-app/viewer'
+import { hasMaterialsForGroups, setSurfaceRaycastLayers } from '@pascal-app/viewer'
 import { type Intersection, Mesh, type Object3D, type Ray, Raycaster } from 'three'
 
 /**
@@ -62,7 +62,9 @@ export function wallHitInOpening(
   ray: Ray,
   hitDistance: number,
 ): boolean {
-  if (!(drawn instanceof Mesh)) return false
+  // A mesh caught between a palette and the groups a preview gave it cannot be
+  // raycast (three reads each group's material); the hit stands this move.
+  if (!(drawn instanceof Mesh && hasMaterialsForGroups(drawn))) return false
   drawnRaycaster.ray.copy(ray)
   drawnRaycaster.far = Number.POSITIVE_INFINITY
   const hits: Intersection[] = []

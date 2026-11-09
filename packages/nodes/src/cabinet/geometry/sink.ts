@@ -11,6 +11,7 @@ import {
   Group,
   type Material,
   Mesh,
+  RingGeometry,
   SphereGeometry,
   TorusGeometry,
 } from 'three'
@@ -24,7 +25,7 @@ import {
 
 export { FAUCET_SETBACK, type SinkBowlSpec, sinkBowls } from '../appliance-layout'
 
-import { createWorldScaleBoxGeometry, stampSlot } from './shared'
+import { createWorldScaleBoxGeometry, refrigeratorDarkTrimMaterial, stampSlot } from './shared'
 
 const BASIN_DEPTH = 0.19
 
@@ -117,10 +118,20 @@ function addBasinShell(
     },
   ]
   for (const wall of walls) {
-    const mesh = stampSlot(
-      new Mesh(createWorldScaleBoxGeometry(...wall.size), applianceMaterial),
-      'appliance',
-    )
+    const geometry = createWorldScaleBoxGeometry(...wall.size)
+    const positions = geometry.getAttribute('position')
+    const taper = Math.min(0.025, innerWidth * 0.12, innerDepth * 0.12)
+    // Keep the countertop opening fixed; pressed steel bowls narrow toward the drain.
+    for (let i = 0; i < positions.count; i++) {
+      const y = positions.getY(i) + wall.position[1]
+      const inset = taper * Math.min(1, Math.max(0, (rimY - y) / BASIN_DEPTH))
+      const px = positions.getX(i) + wall.position[0] - x
+      const pz = positions.getZ(i) + wall.position[2] - centerZ
+      positions.setX(i, px * (1 - (2 * inset) / bowl.width) + x - wall.position[0])
+      positions.setZ(i, pz * (1 - (2 * inset) / bowl.depth) + centerZ - wall.position[2])
+    }
+    geometry.computeVertexNormals()
+    const mesh = stampSlot(new Mesh(geometry, applianceMaterial), 'appliance')
     mesh.name = `${name}-basin-${wall.suffix}`
     mesh.position.set(...wall.position)
     mesh.castShadow = true
@@ -135,6 +146,15 @@ function addBasinShell(
   drain.name = `${name}-drain`
   drain.position.set(x, bottomY + BASIN_WALL + 0.002, centerZ)
   group.add(drain)
+
+  const drainRecess = stampSlot(
+    new Mesh(new RingGeometry(0.009, 0.019, 20), refrigeratorDarkTrimMaterial),
+    'appliance',
+  )
+  drainRecess.name = `${name}-drain-recess`
+  drainRecess.rotation.x = -Math.PI / 2
+  drainRecess.position.set(x, bottomY + BASIN_WALL + 0.0042, centerZ)
+  group.add(drainRecess)
 
   const trap = stampSlot(
     new Mesh(
@@ -175,7 +195,7 @@ function addFaucetHandle(
   const rootInset = 0.022
 
   const saddle = stampSlot(
-    new Mesh(new SphereGeometry(barrelRadius * 1.08, 24, 14), applianceMaterial),
+    new Mesh(new SphereGeometry(barrelRadius * 1.08, 12, 8), applianceMaterial),
     'appliance',
   )
   saddle.name = `${name}-faucet-handle-saddle`
@@ -186,7 +206,7 @@ function addFaucetHandle(
 
   const barrel = stampSlot(
     new Mesh(
-      new CylinderGeometry(barrelRadius, barrelRadius, barrelLength + rootInset, 28),
+      new CylinderGeometry(barrelRadius, barrelRadius, barrelLength + rootInset, 16),
       applianceMaterial,
     ),
     'appliance',
@@ -200,7 +220,7 @@ function addFaucetHandle(
   const endCapThickness = 0.007
   const endCap = stampSlot(
     new Mesh(
-      new CylinderGeometry(barrelRadius * 1.03, barrelRadius * 1.03, endCapThickness, 28),
+      new CylinderGeometry(barrelRadius * 1.03, barrelRadius * 1.03, endCapThickness, 16),
       applianceMaterial,
     ),
     'appliance',
@@ -251,7 +271,7 @@ function addFaucet(
   // Round base flare where the body meets the countertop.
   const flare = stampSlot(
     new Mesh(
-      new CylinderGeometry(FAUCET_BODY_RADIUS + 0.002, FAUCET_BASE_RADIUS, 0.008, 28),
+      new CylinderGeometry(FAUCET_BODY_RADIUS + 0.002, FAUCET_BASE_RADIUS, 0.008, 16),
       applianceMaterial,
     ),
     'appliance',
@@ -264,7 +284,7 @@ function addFaucet(
   // Mixer body: straight Ø52mm column; riser, spout, and handle grow from it.
   const body = stampSlot(
     new Mesh(
-      new CylinderGeometry(FAUCET_BODY_RADIUS, FAUCET_BODY_RADIUS, FAUCET_BODY_HEIGHT, 28),
+      new CylinderGeometry(FAUCET_BODY_RADIUS, FAUCET_BODY_RADIUS, FAUCET_BODY_HEIGHT, 16),
       applianceMaterial,
     ),
     'appliance',
@@ -276,7 +296,7 @@ function addFaucet(
 
   // Domed shoulder capping the body.
   const shoulder = stampSlot(
-    new Mesh(new SphereGeometry(FAUCET_BODY_RADIUS, 24, 16), applianceMaterial),
+    new Mesh(new SphereGeometry(FAUCET_BODY_RADIUS, 12, 8), applianceMaterial),
     'appliance',
   )
   shoulder.name = `${name}-faucet-shoulder`
@@ -317,7 +337,7 @@ function addFaucet(
   // deck) and back down toward the bowl (+Z).
   const gooseneck = stampSlot(
     new Mesh(
-      new TorusGeometry(FAUCET_ARC_RADIUS, FAUCET_TUBE_RADIUS, 14, 32, Math.PI),
+      new TorusGeometry(FAUCET_ARC_RADIUS, FAUCET_TUBE_RADIUS, 8, 20, Math.PI),
       applianceMaterial,
     ),
     'appliance',

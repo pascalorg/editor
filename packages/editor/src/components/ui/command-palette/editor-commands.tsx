@@ -1,7 +1,12 @@
 'use client'
 
-import type { AnyNodeId } from '@pascal-app/core'
-import { DEFAULT_LEVEL_HEIGHT, LevelNode, type UnitNode, useScene } from '@pascal-app/core'
+import {
+  type AnyNodeId,
+  type LevelNode,
+  type UnitNode,
+  usePascalI18n,
+  useScene,
+} from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import {
   AppWindow,
@@ -14,6 +19,7 @@ import {
   Eye,
   EyeOff,
   FileJson,
+  Gauge,
   Grid3X3,
   Group,
   Hexagon,
@@ -22,8 +28,8 @@ import {
   Maximize2,
   Minimize2,
   Moon,
-  MousePointer2,
   Mountain,
+  MousePointer2,
   Package,
   PaintBucket,
   PencilLine,
@@ -37,8 +43,11 @@ import {
   Video,
 } from 'lucide-react'
 import { useEffect } from 'react'
+import { addStoreyOnTop } from '../../../lib/add-storey'
+import { offerExteriorWallCopy } from '../level-wall-copy-prompt'
 import { getHistoryCommandState, runRedo, runUndo } from '../../../lib/history'
 import { deleteLevelWithFallbackSelection } from '../../../lib/level-selection'
+import { getSavedSceneDocument } from '../../../lib/scene'
 import { createUnitInBuilding, enterUnitFocus, leaveUnitFocus } from '../../../lib/units'
 import { useCommandRegistry } from '../../../store/use-command-registry'
 import type { StructureTool } from '../../../store/use-editor'
@@ -46,13 +55,12 @@ import useEditor from '../../../store/use-editor'
 import { useCommandPalette } from './index'
 
 export function EditorCommands() {
+  const i18n = usePascalI18n()
   const register = useCommandRegistry((s) => s.register)
   const { navigateTo, setInputValue, setOpen } = useCommandPalette()
 
-  const setPhase = useEditor((s) => s.setPhase)
   const armToolMode = useEditor((s) => s.armToolMode)
   const armMaterialPaint = useEditor((s) => s.armMaterialPaint)
-  const setStructureLayer = useEditor((s) => s.setStructureLayer)
   const isPreviewMode = useEditor((s) => s.isPreviewMode)
   const setPreviewMode = useEditor((s) => s.setPreviewMode)
 
@@ -78,12 +86,7 @@ export function EditorCommands() {
     )
 
     const activateTool = (tool: StructureTool) => {
-      run(() => {
-        setPhase('structure')
-        if (tool === 'zone') setStructureLayer('zones')
-        else setStructureLayer('elements')
-        armToolMode({ mode: 'build', tool })
-      })
+      run(() => armToolMode({ mode: 'build', tool }))
     }
 
     return register([
@@ -174,11 +177,7 @@ export function EditorCommands() {
         keywords: ['paint', 'material', 'texture', 'bucket', 'surface'],
         shortcut: ['P'],
         execute: () =>
-          run(() => {
-            setPhase('structure')
-            setStructureLayer('elements')
-            armMaterialPaint()
-          }),
+          run(() => armMaterialPaint()),
       },
       {
         id: 'editor.mode.terrain-sculpt',
@@ -213,17 +212,9 @@ export function EditorCommands() {
             const { nodes } = useScene.getState()
             const building = Object.values(nodes).find((n) => n.type === 'building')
             if (!building) return
-            const levelCount = building.children.filter(
-              (childId) => nodes[childId as keyof typeof nodes]?.type === 'level',
-            ).length
-            const newLevel = LevelNode.parse({
-              level: levelCount,
-              height: DEFAULT_LEVEL_HEIGHT,
-              children: [],
-              parentId: building.id,
-            })
-            useScene.getState().createNode(newLevel, building.id)
+            const newLevel = addStoreyOnTop(building.id)
             useViewer.getState().setSelection({ levelId: newLevel.id })
+            offerExteriorWallCopy(newLevel.id)
           }),
       },
       {
@@ -330,20 +321,36 @@ export function EditorCommands() {
           }),
       },
       {
-        id: 'editor.viewer.shading-solid',
-        label: 'Switch to Solid',
+        id: 'editor.viewer.quality-auto',
+        label: i18n._({ id: 'editor.commands.qualityAuto', message: 'Quality: Auto' }),
         group: 'Viewer Controls',
-        icon: <Box className="h-4 w-4" />,
-        keywords: ['solid', 'shading', 'render', 'mode', 'performance'],
-        execute: () => run(() => useViewer.getState().setShading('solid')),
+        icon: <Gauge className="h-4 w-4" />,
+        keywords: ['quality', 'auto', 'device', 'render'],
+        execute: () => run(() => useViewer.getState().setRenderQuality('auto')),
       },
       {
-        id: 'editor.viewer.shading-rendered',
-        label: 'Switch to Rendered',
+        id: 'editor.viewer.quality-low',
+        label: i18n._({ id: 'editor.commands.qualityLow', message: 'Quality: Low' }),
+        group: 'Viewer Controls',
+        icon: <Gauge className="h-4 w-4" />,
+        keywords: ['quality', 'low', 'fast', 'performance', 'solid', 'render'],
+        execute: () => run(() => useViewer.getState().setRenderQuality('low')),
+      },
+      {
+        id: 'editor.viewer.quality-medium',
+        label: i18n._({ id: 'editor.commands.qualityMedium', message: 'Quality: Medium' }),
+        group: 'Viewer Controls',
+        icon: <Gauge className="h-4 w-4" />,
+        keywords: ['quality', 'medium', 'render'],
+        execute: () => run(() => useViewer.getState().setRenderQuality('medium')),
+      },
+      {
+        id: 'editor.viewer.quality-high',
+        label: i18n._({ id: 'editor.commands.qualityHigh', message: 'Quality: High' }),
         group: 'Viewer Controls',
         icon: <Sparkles className="h-4 w-4" />,
-        keywords: ['rendered', 'shading', 'render', 'mode', 'quality'],
-        execute: () => run(() => useViewer.getState().setShading('rendered')),
+        keywords: ['quality', 'high', 'rendered', 'render'],
+        execute: () => run(() => useViewer.getState().setRenderQuality('high')),
       },
       {
         id: 'editor.viewer.camera-snapshot',
@@ -408,7 +415,7 @@ export function EditorCommands() {
         keywords: ['export', 'download', 'json', 'save', 'data'],
         execute: () =>
           run(() => {
-            const { nodes, rootNodeIds } = useScene.getState()
+            const { nodes, rootNodeIds } = getSavedSceneDocument()
             const blob = new Blob([JSON.stringify({ nodes, rootNodeIds }, null, 2)], {
               type: 'application/json',
             })
@@ -462,14 +469,13 @@ export function EditorCommands() {
     navigateTo,
     setInputValue,
     setOpen,
-    setPhase,
     armToolMode,
     armMaterialPaint,
-    setStructureLayer,
     isPreviewMode,
     setPreviewMode,
     exportScene,
     unitListKey,
+    i18n,
   ])
 
   return null

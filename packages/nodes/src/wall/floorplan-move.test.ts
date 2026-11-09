@@ -3,6 +3,8 @@ import {
   CeilingNode,
   initSpaceDetectionSync,
   LevelNode,
+  nodeRegistry,
+  registerNode,
   SlabNode,
   useLiveNodeOverrides,
   useScene,
@@ -10,6 +12,8 @@ import {
   type ZoneNode,
 } from '@pascal-app/core'
 import { migrateCeilingRoomLinks, migrateRoomZones } from '@pascal-app/core/scene-migrations'
+import { getActiveSnappingMode, useAlignmentGuides, useInteractionScope } from '@pascal-app/editor'
+import { wallDefinition } from './definition'
 import { wallFloorplanMoveTarget } from './floorplan-move'
 
 const square = [
@@ -25,7 +29,12 @@ beforeEach(() => {
   globalThis.requestAnimationFrame = () => 0
   globalThis.cancelAnimationFrame = () => {}
 })
+// The parallel-wall tests register the wall kind; put the registry back after.
+let restoreRegistry: (() => void) | null = null
 afterEach(() => {
+  restoreRegistry?.()
+  restoreRegistry = null
+  useInteractionScope.getState().end()
   useLiveNodeOverrides.getState().clearAll()
   globalThis.requestAnimationFrame = originalRaf
   globalThis.cancelAnimationFrame = originalCancelRaf
@@ -124,4 +133,78 @@ test('whole-wall floorplan move previews and commits automatic slab and ceiling 
   } finally {
     stop()
   }
+})
+
+// Two outside walls in line but apart, as when partitions break the outside up.
+function outsideStep() {
+  const level = LevelNode.parse({ id: 'level_parallel', level: 0, height: 3, children: [] })
+  const outside = { frontSide: 'exterior', backSide: 'interior', thickness: 0.15 } as const
+  const top = WallNode.parse({
+    id: 'wall_parallel-top',
+    parentId: level.id,
+    start: [0, 0.07],
+    end: [4, 0.07],
+    ...outside,
+  })
+  const step = WallNode.parse({
+    id: 'wall_parallel-step',
+    parentId: level.id,
+    start: [5, 0.6],
+    end: [8, 0.6],
+    ...outside,
+  })
+  useScene.setState({
+    nodes: {
+      [level.id]: { ...level, children: [top.id, step.id] },
+      [top.id]: top,
+      [step.id]: step,
+    },
+  } as never)
+  // Snapping follows the move's own context, as in the editor.
+  restoreRegistry = nodeRegistry._snapshot()
+  if (!nodeRegistry.has(wallDefinition.kind)) registerNode(wallDefinition)
+  useInteractionScope.getState().begin({
+    kind: 'moving',
+    node: step,
+    nodeId: step.id,
+    nodeType: step.type,
+    view: '2d',
+  })
+  const session = wallFloorplanMoveTarget({
+    node: step,
+    nodes: useScene.getState().nodes,
+    sceneApi: {} as never,
+  })
+  return { step, session }
+}
+
+const plain = { shiftKey: false, altKey: false, ctrlKey: false, metaKey: false }
+
+test('a wall moved near a parallel outside wall lines up with it, off the grid', () => {
+  const { step, session } = outsideStep()
+  expect(getActiveSnappingMode()).not.toBe('off')
+  session.apply({ planPoint: [6.5, 0.6], modifiers: plain })
+  session.apply({ planPoint: [6.5, 0.12], modifiers: plain })
+
+  const preview = useLiveNodeOverrides.getState().get(step.id) as Pick<WallNode, 'start' | 'end'>
+  expect(preview.start[0]).toBe(5)
+  expect(preview.start[1]).toBeCloseTo(0.07, 10)
+  expect(preview.end[1]).toBeCloseTo(0.07, 10)
+  expect(useAlignmentGuides.getState().draft?.lines).toHaveLength(1)
+
+  session.commit?.()
+  const moved = useScene.getState().nodes[step.id] as WallNode
+  expect(moved.start[1]).toBeCloseTo(0.07, 10)
+  expect(useAlignmentGuides.getState().draft).toBeNull()
+})
+
+test('Alt moves a wall exactly with the pointer', () => {
+  const { step, session } = outsideStep()
+  const free = { ...plain, altKey: true }
+  session.apply({ planPoint: [6.5, 0.6], modifiers: free })
+  session.apply({ planPoint: [6.5, 0.6 - 0.0254], modifiers: free })
+  session.commit?.()
+  const moved = useScene.getState().nodes[step.id] as WallNode
+  expect(moved.start[1]).toBeCloseTo(0.6 - 0.0254, 10)
+  expect(moved.end[1]).toBeCloseTo(0.6 - 0.0254, 10)
 })

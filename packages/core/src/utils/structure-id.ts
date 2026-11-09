@@ -1,4 +1,5 @@
 import { comparePlateComponents, floorPlateId } from '../lib/floor-plate-id'
+import { remapPorchOwner } from '../lib/porch-framing-sync'
 import type { SceneNodes } from '../lib/structure-kernel'
 import {
   reconcileSceneStructure,
@@ -6,6 +7,7 @@ import {
   type SceneStructureResult,
   type StructureIdFactory,
 } from '../lib/structure-reconcile'
+import { zoneColorForSeed } from '../lib/zone-colors'
 import type { AnyNode, SlabNode } from '../schema'
 
 export function createStructureIdFactory(nodes: Record<string, unknown>) {
@@ -47,6 +49,11 @@ function remapReferences<T extends object>(value: T, ids: Map<string, string>): 
     const id = fields[key]
     if (typeof id === 'string' && ids.has(id)) changes[key] = ids.get(id)
   }
+  // Only newly minted rooms are remapped; pick their colour from the final id before persistence.
+  if (fields.type === 'zone' && typeof fields.id === 'string' && ids.has(fields.id))
+    changes.color = zoneColorForSeed(ids.get(fields.id)!)
+  const metadata = remapPorchOwner(fields.metadata as Record<string, unknown> | undefined, ids)
+  if (metadata) changes.metadata = metadata
   for (const key of ['children', 'zoneIds', 'members']) {
     const references = fields[key]
     if (Array.isArray(references) && references.some((id) => ids.has(id))) {

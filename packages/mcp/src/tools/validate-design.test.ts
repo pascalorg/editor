@@ -1,6 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { Client } from '@modelcontextprotocol/sdk/client/index.js'
-import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
+import { Client, InMemoryTransport } from '@modelcontextprotocol/client'
 import { DESIGN_EXAMPLE, validateDesign } from '@pascal-app/core/procedural-items'
 import jointCabinetJson from '../../../core/src/procedural-items/__fixtures__/joint_cabinet.json'
 import airHandlerJson from '../../../core/src/procedural-items/__fixtures__/trial-e2-air-handler.json'
@@ -75,7 +74,22 @@ describe('validate_design', () => {
     expect(broken.structuredContent).toMatchObject({
       valid: false,
       diagnostics: [{ code: 'invalid_json' }],
+      schemaUri: 'pascal://schema/design',
+      example: DESIGN_EXAMPLE,
     })
+    const blind = await client.callTool({
+      name: 'validate_design',
+      arguments: { design: { version: 1, mounting: 'floor' } },
+    })
+    expect(blind.isError).toBeFalsy()
+    expect(blind.structuredContent).toMatchObject({ valid: false, example: DESIGN_EXAMPLE })
+    expect((blind.structuredContent as { diagnostics: unknown[] }).diagnostics).toContainEqual(
+      expect.objectContaining({
+        path: 'mounting',
+        received: '"floor"',
+        expected: expect.stringContaining('A floor design leaves mounting out'),
+      }),
+    )
     await client.close()
   })
 

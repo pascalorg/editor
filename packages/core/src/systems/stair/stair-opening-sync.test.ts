@@ -1,14 +1,17 @@
 import { describe, expect, test } from 'bun:test'
-import type { AnyNode } from '../../schema'
 import {
+  type AnyNode,
   BuildingNode,
   CeilingNode,
+  changedStairOpeningOwners,
+  FloorOpeningNode,
   LevelNode,
+  planOwnedFloorOpenings,
   SlabNode,
   StairNode,
   StairSegmentNode,
-} from '../../schema'
-import { syncAutoStairOpenings } from './stair-opening-sync'
+  syncAutoStairOpenings,
+} from '../../index'
 
 describe('syncAutoStairOpenings', () => {
   test('only applies stair holes to destination slabs that overlap the opening', () => {
@@ -74,7 +77,7 @@ describe('syncAutoStairOpenings', () => {
     expect(bedroomUpdate).toBeUndefined()
   })
 
-  test('applies stair holes to a later destination slab when the configured offset overhangs the slab edge', () => {
+  test('pads the required destination clearance cut by the configured offset', () => {
     const building = BuildingNode.parse({ name: 'Building' })
     const ground = LevelNode.parse({ name: 'Ground', level: 0, parentId: building.id })
     const upper = LevelNode.parse({ name: 'Upper', level: 1, parentId: building.id })
@@ -118,7 +121,7 @@ describe('syncAutoStairOpenings', () => {
     const hole = landingUpdate?.data.holes?.[0]
 
     expect(hole).toBeDefined()
-    expect(Math.min(...hole!.map(([, z]) => z))).toBeCloseTo(-0.08)
+    expect(Math.min(...hole!.map(([, z]) => z))).toBeCloseTo(2 * (2.6 / 12) - 0.08)
     expect(landingUpdate?.data.holeMetadata).toEqual([{ source: 'stair', stairId: stair.id }])
   })
 
@@ -560,4 +563,76 @@ describe('syncAutoStairOpenings', () => {
     expect(rectangularHoles).toHaveLength(0)
     expect(landingUpdate?.data.holeMetadata).toEqual([{ source: 'stair', stairId: stair.id }])
   })
+})
+
+test('an unrelated slab edit preserves a loaded stair opening with historical geometry', () => {
+  const building = BuildingNode.parse({})
+  const lower = LevelNode.parse({ parentId: building.id, level: 0, height: 3 })
+  const upper = LevelNode.parse({ parentId: building.id, level: 1 })
+  const segment = StairSegmentNode.parse({ height: 3, length: 4.5 })
+  const stair = StairNode.parse({
+    parentId: lower.id,
+    fromLevelId: lower.id,
+    toLevelId: upper.id,
+    slabOpeningMode: 'destination',
+    totalRise: 3,
+    children: [segment.id],
+  })
+  const slab = SlabNode.parse({
+    parentId: upper.id,
+    polygon: [
+      [-5, -5],
+      [5, -5],
+      [5, 10],
+      [-5, 10],
+    ],
+  })
+  const opening = FloorOpeningNode.parse({
+    parentId: upper.id,
+    source: 'stair',
+    ownerId: stair.id,
+    surfaceId: slab.id,
+    cutsPrimary: true,
+    polygon: [
+      [-0.5, 3.5],
+      [0.5, 3.5],
+      [0.5, 4.5],
+      [-0.5, 4.5],
+    ],
+  })
+  building.children = [lower.id, upper.id]
+  lower.children = [stair.id]
+  upper.children = [slab.id, opening.id]
+  segment.parentId = stair.id
+  const before: Record<string, AnyNode> = Object.fromEntries(
+    [building, lower, upper, segment, stair, slab, opening].map((node) => [node.id, node]),
+  )
+  const after = { ...before, [slab.id]: { ...slab, thickness: slab.thickness + 0.1 } }
+  expect(
+    planOwnedFloorOpenings(after).some((patch) => patch.op === 'update' && patch.id === opening.id),
+  ).toBe(true)
+  expect(
+    planOwnedFloorOpenings(after, { ownerIds: changedStairOpeningOwners(before, after) }),
+  ).toEqual([])
+  const changed = { ...after, [segment.id]: { ...segment, length: segment.length + 1 } }
+  expect(
+    planOwnedFloorOpenings(changed, { ownerIds: changedStairOpeningOwners(after, changed) }).some(
+      (patch) => patch.op === 'update' && patch.id === opening.id,
+    ),
+  ).toBe(true)
+  const middle = LevelNode.parse({ parentId: building.id, level: 1, height: 2 })
+  const top = { ...upper, level: 2 }
+  const spanning = { ...before, [middle.id]: middle, [upper.id]: top }
+  const redistributed = {
+    ...spanning,
+    [lower.id]: { ...lower, height: lower.height! + 0.5 },
+    [middle.id]: { ...middle, height: middle.height! - 0.5 },
+  }
+  expect(changedStairOpeningOwners(spanning, redistributed).has(stair.id)).toBe(true)
+  expect(
+    changedStairOpeningOwners(before, {
+      ...before,
+      [segment.id]: { ...segment, visible: false },
+    }).has(stair.id),
+  ).toBe(true)
 })

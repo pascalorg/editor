@@ -1,4 +1,6 @@
 import type { HandleDescriptor, NodeDefinition, ShelfNode as ShelfNodeType } from '@pascal-app/core'
+import { shelfSlots } from '@pascal-app/core'
+import { staticBatchable } from '../shared/node-batch/batchable'
 import { restingFloorplanAffectedIds } from '../shared/resting-surface-plan'
 import { sanitizeShelfDimensions } from './dimensions'
 import { buildShelfFloorplan } from './floorplan'
@@ -8,7 +10,6 @@ import { buildShelfGeometry, shelfRowSurfaceYs } from './geometry'
 import { shelfPaint } from './paint'
 import { shelfParametrics } from './parametrics'
 import { ShelfNode } from './schema'
-import { shelfSlots } from './slots'
 
 const SIDE_HANDLE_OFFSET = 0.18
 const HEIGHT_HANDLE_OFFSET = 0.22
@@ -165,6 +166,9 @@ export const shelfDefinition: NodeDefinition<typeof ShelfNode> = {
   }),
 
   capabilities: {
+    batchable: staticBatchable,
+    reveal: { phase: 'furnishing', style: 'drop', height: 0.3 },
+    revealOnEdit: ['width', 'depth', 'height', 'thickness', 'rows', 'columns', 'style'],
     movable: { axes: ['x', 'z'], gridSnap: true },
     rotatable: {
       axes: ['y'],

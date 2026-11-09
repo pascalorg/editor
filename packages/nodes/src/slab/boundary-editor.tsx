@@ -19,7 +19,7 @@ import { useCallback, useEffect } from 'react'
  * Phase 5 Stage D — slab boundary editor (registry-driven).
  *
  * Thin wrapper around the shared `PolygonEditor`. Activates when a
- * slab is selected in structure/select mode (not currently editing a
+ * slab is selected in select mode (not currently editing a
  * hole). The heavy lifting — vertex drag, edge slide, snap, history
  * bracketing — lives in `PolygonEditor` itself.
  *

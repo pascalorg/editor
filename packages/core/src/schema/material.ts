@@ -35,6 +35,12 @@ export const MaterialSchema = z.object({
       url: AssetUrl,
       repeat: z.tuple([z.number(), z.number()]).optional(),
       scale: z.number().optional(),
+      /** Shift of the pattern, in texture repeats, applied to every map below. */
+      offset: z.tuple([z.number(), z.number()]).optional(),
+      normalMap: AssetUrl.optional(),
+      normalScale: z.number().optional(),
+      bumpMap: AssetUrl.optional(),
+      bumpScale: z.number().optional(),
     })
     .optional(),
 })

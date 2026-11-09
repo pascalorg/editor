@@ -1,6 +1,6 @@
 'use client'
 
-import { type AnyNodeId, type ShelfNode, useScene } from '@pascal-app/core'
+import { type AnyNodeId, type ShelfNode, useScene, usePascalI18n } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import Image from 'next/image'
 import { memo, useCallback, useEffect, useState } from 'react'
@@ -9,11 +9,11 @@ import { InlineRenameInput } from './inline-rename-input'
 import {
   focusTreeNode,
   handleTreeSelection,
-  routeTreeSelectionToNode,
   TreeNode,
   TreeNodeWrapper,
 } from './tree-node'
 import { TreeNodeActions } from './tree-node-actions'
+import { nodeLabelDescriptor } from '../../../../../i18n/node-messages'
 
 interface ShelfTreeNodeProps {
   nodeId: ShelfNode['id']
@@ -33,6 +33,7 @@ export const ShelfTreeNode = memo(function ShelfTreeNode({
   depth,
   isLast,
 }: ShelfTreeNodeProps) {
+  const i18n = usePascalI18n()
   const [isEditing, setIsEditing] = useState(false)
   const [expanded, setExpanded] = useState(true)
   const isVisible = useScene((s) => s.nodes[nodeId]?.visible !== false)
@@ -70,9 +71,8 @@ export const ShelfTreeNode = memo(function ShelfTreeNode({
     (e: React.MouseEvent) => {
       e.stopPropagation()
       handleTreeSelection(e, nodeId, useViewer.getState().selection.selectedIds, setSelection)
-      routeTreeSelectionToNode(node)
     },
-    [node, nodeId, setSelection],
+    [nodeId, setSelection],
   )
 
   const handleDoubleClick = useCallback(() => focusTreeNode(nodeId), [nodeId])
@@ -99,7 +99,7 @@ export const ShelfTreeNode = memo(function ShelfTreeNode({
       isVisible={isVisible}
       label={
         <InlineRenameInput
-          defaultName="Shelf"
+          defaultName={i18n._(nodeLabelDescriptor('shelf', 'Shelf'))}
           isEditing={isEditing}
           nodeId={nodeId}
           onStartEditing={handleStartEditing}

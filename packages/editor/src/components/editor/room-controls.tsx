@@ -12,7 +12,6 @@ import {
   useScene,
 } from '@pascal-app/core'
 import { getSceneTheme, setSurfaceRaycastLayers, useViewer } from '@pascal-app/viewer'
-import { Html } from '@react-three/drei'
 import { useFrame, useThree } from '@react-three/fiber'
 import { SquareSplitHorizontal } from 'lucide-react'
 import Image from 'next/image'
@@ -60,6 +59,7 @@ import {
 import { isTypingTarget } from '../../lib/typing-target'
 import useEditor from '../../store/use-editor'
 import useInteractionScope from '../../store/use-interaction-scope'
+import { isViewVisible, VIEW_2D } from '../../store/view-layout'
 import { useFloorplanRender } from '../editor-2d/floorplan-render-context'
 import { CursorSphere } from '../tools/shared/cursor-sphere'
 import {
@@ -68,6 +68,7 @@ import {
 } from '../tools/shared/draft-measurement-label'
 import { ActionMenuButton } from './action-menu-button'
 import { getMenuYOffset } from './floating-action-menu'
+import { Html } from './localized-html'
 import { NodeActionMenu } from './node-action-menu'
 import { RoomFloorHighlight3D } from './room-floor-highlight'
 import { RoomHandleDragPreview3D, RoomHandles3D } from './room-handles'
@@ -117,7 +118,6 @@ export function startZoneRoomTransform(node: AnyNode, kind: RoomTransformKind): 
     .update(useScene.getState().nodes)
     .find((room) => room.zoneId === node.id)
   if (!record) return false
-  useEditor.getState().setStructureLayer('elements')
   useViewer.getState().setSelection({ selectedIds: [], zoneId: null })
   useEditor.getState().selectRoom(record.key)
   return startRoomTransform(kind, roomTransformSource(record))
@@ -265,7 +265,7 @@ function RoomFloorplanMenu({
   room: RoomSelectionRecord
   plan: RefObject<SVGGElement | null>
 }) {
-  const planShown = useEditor((s) => s.viewMode !== '3d')
+  const planShown = useEditor((s) => isViewVisible(s, VIEW_2D))
   const [position, setPosition] = useState<{ left: number; top: number } | null>(null)
   const rings = room.geometry.clearPolygon
   useEffect(() => {

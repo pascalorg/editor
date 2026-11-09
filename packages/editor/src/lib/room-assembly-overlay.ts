@@ -6,9 +6,8 @@ import {
   getWallBaseElevationForNodes,
   getWallCurveFrameAt,
   getWallFaceOffsets,
-  getWallPlaneTop,
+  getWallTop,
   resolveCeilingHeight,
-  resolveWallTop,
   roomDrawnFloor,
   type WallNode,
 } from '@pascal-app/core'
@@ -78,7 +77,7 @@ export function resolveRoomAssemblyHeights(
     const wall = nodes[id]
     if (wall?.type !== 'wall') continue
     const base = getWallBaseElevationForNodes(wall, sceneNodes)
-    wallTops.set(id, resolveWallTop(wall, getWallPlaneTop(wall, levelId, sceneNodes), base))
+    wallTops.set(id, getWallTop(wall, levelId, sceneNodes, base))
   }
   const ceilingNode = room.ceilingId ? nodes[room.ceilingId] : undefined
   const ceiling =

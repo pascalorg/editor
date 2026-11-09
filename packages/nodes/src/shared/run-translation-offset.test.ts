@@ -5,9 +5,9 @@ import {
   DuctSegmentNode,
   type PortConnection,
 } from '@pascal-app/core'
+import type { ScenePort } from '@pascal-app/editor/distribution'
 import { getDuctFittingPorts } from '../duct-fitting/ports'
 import { type DuctProfile, planElbowAtPort, profileDiameterIn } from './auto-fitting'
-import type { ScenePort } from './ports'
 import { planRunTranslationOffsets } from './run-translation-offset'
 
 type Point = [number, number, number]

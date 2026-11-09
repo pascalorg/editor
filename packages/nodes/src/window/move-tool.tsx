@@ -1,14 +1,25 @@
 import {
   type AnyNodeId,
+  beginSceneHistoryDraft,
+  type CornerBlock,
+  type CornerSnap,
+  collectionIdsOf,
+  createSnapEaser,
   type DormerEvent,
   dormerWallFacePointToDormer,
   emitter,
+  evaluateCorner,
   type GridEvent,
   getOpeningWallPlacement,
+  getWallThickness,
   holdHiddenWallPointerEvents,
   isCurvedWall,
+  prefersReducedMotion,
   type RoofEvent,
   type RoofNode,
+  resolveHostedOpeningFrameDepth,
+  resolveOpeningFrameDepth,
+  runSceneHistoryDraftWrite,
   sceneRegistry,
   spatialGridManager,
   useLiveNodeOverrides,
@@ -26,6 +37,7 @@ import {
   getSideFromNormal,
   isGridSnapActive,
   isMagneticSnapActive,
+  isTypingTarget,
   isValidWallSideFace,
   publishPlacementSurface,
   snapToHalf,
@@ -47,6 +59,7 @@ import {
   getDormerWindowWorldYaw,
   resolveDormerWindowTarget,
 } from '../shared/dormer-wall-opening-placement'
+import { movedOpeningCasingFaces } from '../shared/opening-casing-move'
 import {
   clearOpeningGuides3D,
   publishOpeningGuidesForWallEvent,
@@ -68,6 +81,8 @@ import {
   collectWallOpeningAlignmentCandidates,
   resolveWallSlideAlignment,
 } from '../shared/wall-opening-alignment'
+import { showCornerCue, snappingTurnedOff } from './corner-cue'
+import { fuseAtCorner, settleMovedWindow } from './corner-fuse'
 import { WindowFloorProjection } from './floor-projection'
 import WindowPreview from './preview'
 import {
@@ -158,6 +173,9 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
         ? (movingWindowNode.metadata as Record<string, unknown>)
         : {}
     const isNew = !!meta.isNew
+    const endDraft = isNew ? null : beginSceneHistoryDraft(movingWindowNode.id, movingWindowNode)
+    const updateDraft = (data: Partial<WindowNode>) =>
+      runSceneHistoryDraftWrite(() => useScene.getState().updateNode(movingWindowNode.id, data))
 
     // Save original state (only used in move mode)
     const original = {
@@ -185,13 +203,16 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
     // preview on the wall and can't be placed consecutively without leaving/re-entering. This
     // mirrors MoveDoorTool.
     if (!isNew) {
-      useScene.getState().updateNode(movingWindowNode.id, {
+      updateDraft({
         metadata: { ...meta, isTransient: true },
       })
     }
 
     // Same-wall moves keep the wall-local plane offset; another host resets it.
     const planeOffsetOn = (wallId: string) => openingPlaneOffsetOnWall(movingWindowNode, wallId)
+    // Another host may name its faces the other way round: the casing keeps to its side of it.
+    const casingOn = (hostId: string, rotation: WindowNode['rotation']) =>
+      movedOpeningCasingFaces(movingWindowNode, hostId, rotation, useScene.getState().nodes)
 
     let currentHostId: string | null = movingWindowNode.parentId
     let committed = false
@@ -253,6 +274,19 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
     // The wall the window was grabbed from. Nulled the first time the anchor
     // seeds on any other host: the grab offset is then forgotten for good.
     let grabWallId: string | null = movingWindowNode.parentId
+    // Dragging near a corner, the same zone as placing: the window snaps its edge to the corner,
+    // the window waiting on the other wall is outlined, and on release they join. Alt drops it
+    // plain.
+    let cornerHeld: CornerSnap['end'] | null = null
+    const cornerEaser = createSnapEaser()
+    let cornerEaseFrame = 0
+    const resetCorner = () => {
+      cornerHeld = null
+      cornerEaser.reset()
+      if (cornerEaseFrame) cancelAnimationFrame(cornerEaseFrame)
+      cornerEaseFrame = 0
+      showCornerCue(null)
+    }
     let lastTarget: {
       wallNode: WallEvent['node']
       wallId: string
@@ -261,6 +295,8 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
       clampedX: number
       clampedY: number
       valid: boolean
+      snap: CornerSnap | null
+      block: CornerBlock | null
       event: WallEvent
     } | null = null
     let lastRoofEvent: RoofEvent | null = null
@@ -309,6 +345,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
       )
 
     const hideCursor = () => {
+      resetCorner()
       if (cursorGroupRef.current) cursorGroupRef.current.visible = false
       useAlignmentGuides.getState().clear()
       clearOpeningGuides3D()
@@ -354,7 +391,10 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
         ownWallIds: [original.wallId, currentHostId],
       })
 
-    const resolveMoveTarget = (event: WallEvent) => {
+    const resolveMoveTarget = (
+      event: WallEvent,
+      plain = event.nativeEvent?.altKey === true || altHeld,
+    ) => {
       if (!isValidWallSideFace(event.normal)) return
       if (isCurvedWall(event.node)) {
         hideCursor()
@@ -412,18 +452,50 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
         // component lives in `snapToHalf` (itself mode-aware).
         applySnap: isMagneticSnapActive(),
       })
-      const { clampedX, clampedY } = clampToWall(
+      const nodes = useScene.getState().nodes
+      const slid = clampToWall(
         event.node,
         localX,
         targetLocalY,
         movingWindowNode.width,
         movingWindowNode.height,
-        useScene.getState().nodes,
+        nodes,
       )
+      const { clampedY } = slid
+      let clampedX = slid.clampedX
+      // The corner zone: the edge snaps to the corner, unless a curtain wall's margin keeps it off.
+      // Alt, or snapping off, places the window where it is dropped.
+      const found =
+        plain || snappingTurnedOff()
+          ? { snap: null, block: null }
+          : evaluateCorner(nodes, {
+              wallId: event.node.id,
+              centreX: clampedX,
+              width: movingWindowNode.width,
+              height: movingWindowNode.height,
+              sillHeight: clampedY - movingWindowNode.height / 2,
+              ignoreId: movingWindowNode.id,
+              held: cornerHeld,
+            })
+      let { snap, block } = found
+      if (snap) {
+        const settled = clampToWall(
+          event.node,
+          snap.centreX,
+          clampedY,
+          movingWindowNode.width,
+          movingWindowNode.height,
+          nodes,
+        )
+        if (Math.abs(settled.clampedX - snap.centreX) > 1e-6) {
+          block = { reason: 'curtain', end: snap.end }
+          snap = null
+        } else clampedX = snap.centreX
+      }
 
       const valid = !hasWallChildOverlap(
         event.node.id,
-        useScene.getState().nodes,
+        nodes,
         clampedX,
         clampedY,
         movingWindowNode.width,
@@ -439,6 +511,8 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
         clampedX,
         clampedY,
         valid,
+        snap,
+        block,
         event,
       }
     }
@@ -450,6 +524,22 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
       // mouse-move even when the window stays in the same along-wall cell.
       // Per-frame guard collapses duplicate wall events on the same pointermove.
       tickGridStep(target.event.nativeEvent?.timeStamp ?? -1, target.clampedX)
+      cornerHeld = (target.snap ?? target.block)?.end ?? null
+      showCornerCue(target.snap, target.block)
+      // The ghost eases into and out of the snap; the drop always lands on the snapped place.
+      const now = performance.now()
+      const shownX = cornerEaser.display(
+        target.clampedX,
+        target.snap !== null,
+        now,
+        prefersReducedMotion(),
+      )
+      if (cornerEaser.active(now) && !cornerEaseFrame) {
+        cornerEaseFrame = requestAnimationFrame(() => {
+          cornerEaseFrame = 0
+          if (!committed && lastTarget) applyPreview(lastTarget)
+        })
+      }
       // Keep the REAL node hidden and show a tinted ghost in the wall opening —
       // green when placeable, red when it collides — matching the free-follow
       // ghost so validity reads at a glance (see MoveDoorTool). Reparenting
@@ -468,7 +558,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
             target.wallNode,
             {
               ...movingWindowNode,
-              position: [target.clampedX, target.clampedY, planeOffsetOn(target.wallId)],
+              position: [shownX, target.clampedY, planeOffsetOn(target.wallId)],
               rotation: [0, target.itemRotation, 0],
             },
             useScene.getState().nodes,
@@ -478,8 +568,8 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
           windowMesh.updateMatrixWorld(true)
         }
       } else {
-        useScene.getState().updateNode(movingWindowNode.id, {
-          position: [target.clampedX, target.clampedY, planeOffsetOn(target.wallId)],
+        updateDraft({
+          position: [shownX, target.clampedY, planeOffsetOn(target.wallId)],
           rotation: [0, target.itemRotation, 0],
           side: target.side,
           parentId: target.wallId,
@@ -494,7 +584,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
         currentHostId = target.wallId
       }
       useLiveTransforms.getState().set(movingWindowNode.id, {
-        position: [target.clampedX, target.clampedY, planeOffsetOn(target.wallId)],
+        position: [shownX, target.clampedY, planeOffsetOn(target.wallId)],
         rotation: target.itemRotation,
       })
       markHostDirtyThrottled(target.wallId)
@@ -510,7 +600,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
       )
       const ghostWorldPos = wallLocalToWorld(
         target.wallNode,
-        target.clampedX,
+        shownX,
         target.clampedY,
         getLevelYOffset(),
         getSlabElevation(target.event),
@@ -534,7 +624,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
           ghostWorldPos[2],
         ],
         rotationY: ghostYaw,
-        depth: movingWindowNode.frameDepth ?? 0.07,
+        depth: resolveOpeningFrameDepth(movingWindowNode, getWallThickness(target.wallNode)),
       })
       // Publish the wall surface so the snap grid tilts into the wall plane at
       // the opening (its outward normal is the window's facing, +Z by `ghostYaw`).
@@ -620,6 +710,8 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
         // Duplicate mode: delete the transient draft while history is still
         // paused, then create the real node as the gesture's ONE tracked
         // write — undo removes the new window entirely.
+        // Read before the delete: the copy joins the collections its draft is in.
+        const collectionIds = collectionIdsOf(useScene.getState().collections, movingWindowNode.id)
         useScene.getState().deleteNode(movingWindowNode.id)
 
         const cloned = structuredClone(movingWindowNode) as any
@@ -633,20 +725,24 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
           side: target.side,
           wallId: target.wallId,
           parentId: target.wallId,
+          ...casingOn(target.wallId, [0, target.itemRotation, 0]),
           roofSegmentId: undefined,
           roofFace: undefined,
           // Hidden during free-follow; the committed window must be visible.
           visible: true,
         })
         history.commitStep(() => {
-          useScene.getState().createNode(node, target.wallId as AnyNodeId)
+          useScene
+            .getState()
+            .createNodes([{ node, parentId: target.wallId as AnyNodeId, collectionIds }])
+          if (target.snap) fuseAtCorner(node.id, target.snap.waitingId)
         })
         placedId = node.id
       } else {
         // Move mode: restore the exact pre-drag state while history is still
         // paused (the clean undo baseline), then apply the drop as the
         // gesture's ONE tracked write — undo reverts to the original state.
-        useScene.getState().updateNode(movingWindowNode.id, {
+        updateDraft({
           position: original.position,
           rotation: original.rotation,
           side: original.side,
@@ -667,9 +763,11 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
             side: target.side,
             parentId: target.wallId,
             wallId: target.wallId,
+            ...casingOn(target.wallId, [0, target.itemRotation, 0]),
             roofSegmentId: undefined,
             visible: true,
           })
+          settleMovedWindow(movingWindowNode.id, target.snap)
         })
 
         if (original.parentId && original.parentId !== target.wallId) {
@@ -684,6 +782,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
       triggerSFX('sfx:structure-build')
       hideCursor()
       selectNode(placedId as AnyNodeId)
+      endDraft?.()
       exitMoveMode()
     }
 
@@ -755,7 +854,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
       // window from the wall's `children` or the CSG cut trails the ghost
       // around the old wall (see the wall-branch note in `applyPreview`).
       if (currentHostId === levelId) {
-        useScene.getState().updateNode(movingWindowNode.id, {
+        updateDraft({
           position: [localX, sillCenterY, localZ],
           rotation: [0, yaw, 0],
           side: sideOverride,
@@ -763,7 +862,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
         })
       } else {
         if (currentHostId && currentHostId !== levelId) markHostDirty(currentHostId)
-        useScene.getState().updateNode(movingWindowNode.id, {
+        updateDraft({
           position: [localX, sillCenterY, localZ],
           rotation: [0, yaw, 0],
           side: sideOverride,
@@ -874,6 +973,8 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
       let placedId: string
 
       if (isNew) {
+        // Read before the delete: the copy joins the collections its draft is in.
+        const collectionIds = collectionIdsOf(useScene.getState().collections, movingWindowNode.id)
         useScene.getState().deleteNode(movingWindowNode.id)
         const cloned = structuredClone(movingWindowNode) as any
         delete cloned.id
@@ -892,11 +993,15 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
           visible: true,
         })
         history.commitStep(() => {
-          useScene.getState().createNode(committedNode, target.dormer.id as AnyNodeId)
+          useScene
+            .getState()
+            .createNodes([
+              { node: committedNode, parentId: target.dormer.id as AnyNodeId, collectionIds },
+            ])
         })
         placedId = committedNode.id
       } else {
-        useScene.getState().updateNode(movingWindowNode.id, {
+        updateDraft({
           position: original.position,
           rotation: original.rotation,
           side: original.side,
@@ -922,6 +1027,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
             roofFace: undefined,
             visible: true,
           })
+          settleMovedWindow(movingWindowNode.id, null)
         })
         if (original.parentId && original.parentId !== target.dormer.id) {
           markHostDirty(original.parentId)
@@ -934,6 +1040,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
       triggerSFX('sfx:structure-build')
       hideCursor()
       selectNode(placedId as AnyNodeId)
+      endDraft?.()
       exitMoveMode()
       event.stopPropagation()
     }
@@ -1080,6 +1187,8 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
       if (isNew) {
         // See commitToWall — delete the draft paused, create as the ONE
         // tracked write.
+        // Read before the delete: the copy joins the collections its draft is in.
+        const collectionIds = collectionIdsOf(useScene.getState().collections, movingWindowNode.id)
         useScene.getState().deleteNode(movingWindowNode.id)
 
         const cloned = structuredClone(movingWindowNode) as any
@@ -1095,16 +1204,19 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
           roofSegmentId: segmentId,
           roofFace: target.face.id,
           parentId: segmentId,
+          ...casingOn(segmentId, [0, 0, 0]),
           visible: true,
         })
         history.commitStep(() => {
-          useScene.getState().createNode(node, segmentId as AnyNodeId)
+          useScene
+            .getState()
+            .createNodes([{ node, parentId: segmentId as AnyNodeId, collectionIds }])
         })
         placedId = node.id
       } else {
         // See commitToWall — restore the pre-drag baseline paused, drop as
         // the ONE tracked write.
-        useScene.getState().updateNode(movingWindowNode.id, {
+        updateDraft({
           position: original.position,
           rotation: original.rotation,
           side: original.side,
@@ -1127,8 +1239,10 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
             wallId: undefined,
             roofSegmentId: segmentId,
             roofFace: target.face.id,
+            ...casingOn(segmentId, [0, 0, 0]),
             visible: true,
           })
+          settleMovedWindow(movingWindowNode.id, null)
         })
 
         if (original.parentId && original.parentId !== segmentId) {
@@ -1143,6 +1257,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
       triggerSFX('sfx:structure-build')
       hideCursor()
       selectNode(placedId as AnyNodeId)
+      endDraft?.()
       exitMoveMode()
       event.stopPropagation()
     }
@@ -1165,7 +1280,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
         useScene.getState().deleteNode(movingWindowNode.id)
         if (currentHostId) markHostDirty(currentHostId)
       } else {
-        useScene.getState().updateNode(movingWindowNode.id, {
+        updateDraft({
           position: original.position,
           rotation: original.rotation,
           side: original.side,
@@ -1185,6 +1300,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
       // entirely. `end` is idempotent — the effect cleanup's end() is a no-op.
       history.end()
       hideCursor()
+      endDraft?.()
       exitMoveMode()
     }
 
@@ -1208,13 +1324,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
     const onKeyDown = (e: KeyboardEvent) => {
       if (committed) return
       if (e.key !== 'r' && e.key !== 'R') return
-      const target = e.target as HTMLElement | null
-      if (
-        target &&
-        (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)
-      ) {
-        return
-      }
+      if (isTypingTarget(e.target)) return
       // Ignore OS key-repeat so a held R doesn't flip many times per press.
       if (e.repeat) return
       e.preventDefault()
@@ -1239,7 +1349,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
       } else {
         // No preview yet (R before the first pointermove): flip the hidden node
         // so the first preview/commit already reflects the chosen side.
-        useScene.getState().updateNode(movingWindowNode.id, {
+        updateDraft({
           side: sideOverride,
           rotation: [0, sideOverride === 'back' ? Math.PI : 0, 0],
         })
@@ -1249,10 +1359,14 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
     // Alt toggles force-place — re-run the on-wall preview so the tint flips
     // green↔red live (pointer stationary). Commit gates still read alt fresh.
     const onAltToggle = (e: KeyboardEvent) => {
-      if (e.key !== 'Alt') return
+      // A field's own Alt (a typed character) is not the placement's.
+      if (e.key !== 'Alt' || isTypingTarget(e.target)) return
       const held = e.type === 'keydown'
       if (held === altHeld) return
       altHeld = held
+      // Alt takes the corner join off the target at once and gives it back on release: the hint
+      // and the drop follow without the pointer moving.
+      if (lastTarget) lastTarget = resolveMoveTarget(lastTarget.event, held) ?? lastTarget
       if (!committed && lastTarget) applyPreview(lastTarget)
     }
 
@@ -1322,6 +1436,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
     }
 
     return () => {
+      resetCorner()
       // Safety cleanup: if still transient on unmount (e.g. phase switch mid-move)
       const current = useScene.getState().nodes[movingWindowNode.id as AnyNodeId] as
         | WindowNode
@@ -1332,7 +1447,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
           useScene.getState().deleteNode(movingWindowNode.id)
           if (currentHostId) markHostDirty(currentHostId)
         } else {
-          useScene.getState().updateNode(movingWindowNode.id, {
+          updateDraft({
             position: original.position,
             rotation: original.rotation,
             side: original.side,
@@ -1351,7 +1466,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
         // Safety net: a fresh (isNew) clone isn't marked `isTransient`; if we
         // unmount mid-free-follow it would be left hidden. Reveal it so it never
         // becomes an invisible orphan (place-preset deletes a true cancel).
-        useScene.getState().updateNode(movingWindowNode.id, { visible: true })
+        updateDraft({ visible: true })
       }
       useLiveNodeOverrides.getState().clear(movingWindowNode.id)
       useLiveTransforms.getState().clear(movingWindowNode.id)
@@ -1361,6 +1476,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
       clearPlacementSurface()
       releaseHiddenWallHold()
       history.end()
+      endDraft?.()
       emitter.off('wall:enter', onWallEnter)
       emitter.off('wall:move', onWallMove)
       emitter.off('wall:click', onWallClick)
@@ -1390,7 +1506,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
     const boxGeo = new BoxGeometry(
       movingWindowNode.width,
       movingWindowNode.height,
-      movingWindowNode.frameDepth ?? 0.07,
+      resolveHostedOpeningFrameDepth(movingWindowNode, useScene.getState().nodes),
     )
     const geo = new EdgesGeometry(boxGeo)
     boxGeo.dispose()

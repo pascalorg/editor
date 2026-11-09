@@ -59,8 +59,8 @@ export function trimChimneyBodyAgainstRoof(
   indexed.clearGroups()
   if (indexCount > 0) indexed.addGroup(0, indexCount, 0)
   ;(
-    indexed as unknown as { computeBoundsTree?: (opts: { maxLeafSize: number }) => void }
-  ).computeBoundsTree?.({ maxLeafSize: 10 })
+    indexed as unknown as { computeBoundsTree?: (opts: { targetLeafSize: number }) => void }
+  ).computeBoundsTree?.({ targetLeafSize: 10 })
 
   const chimneyBrush = new Brush(indexed, visibleMat as unknown as THREE.MeshStandardMaterial)
   chimneyBrush.updateMatrixWorld()

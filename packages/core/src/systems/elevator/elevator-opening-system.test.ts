@@ -126,7 +126,7 @@ describe('ElevatorOpeningSystem scene commit boundary', () => {
     expect(commits[0]?.origin).toBe('local')
     expect(commits[0]?.before.nodes[ELEVATOR_ID]?.visible).toBe(false)
     expect(commits[0]?.current.nodes[ELEVATOR_ID]?.visible).toBe(true)
-    expect((commits[0]?.before.nodes[UPPER_SLAB_ID] as { holes?: unknown[] }).holes).toEqual([])
+    expect((commits[0]!.before.nodes[UPPER_SLAB_ID] as { holes?: unknown[] }).holes).toEqual([])
     expect(getOpeningCenter(commits[0]!.current.nodes)).toEqual([2, 1.5])
     expect(
       Object.values(commits[0]!.current.nodes).some(

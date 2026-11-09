@@ -7,6 +7,22 @@ import { type NodeFrame, PassNode } from 'three/webgpu'
 
 const maskObserver = Symbol('LayerPassIndex.maskObserver')
 
+/**
+ * Bumped on every observed mask change and child insertion or removal, so a per-frame walk can
+ * tell when what is drawable may have changed (scene-matrices.ts). Only meaningful for scenes
+ * with a live index ({@link isLayoutObserved}).
+ */
+let layoutRevision = 0
+const observedScenes = new WeakSet<Object3D>()
+
+export function getLayoutRevision(): number {
+  return layoutRevision
+}
+
+export function isLayoutObserved(scene: Object3D): boolean {
+  return observedScenes.has(scene)
+}
+
 function maskOwner(object: Object3D) {
   const get = Object.getOwnPropertyDescriptor(object.layers, 'mask')?.get as
     | ((() => number) & { [maskObserver]?: Object3D })
@@ -34,6 +50,7 @@ export class LayerPassIndex {
     for (const layer of layers) this.members.set(1 << layer, new Set())
     try {
       this.attach(source)
+      observedScenes.add(source)
     } catch (error) {
       this.dispose()
       throw error
@@ -57,7 +74,10 @@ export class LayerPassIndex {
       throw new Error('LayerPassIndex requires one index per scene and unshared Layers')
     }
     let mask = layers.mask
+    // Passes switch the camera's layers every frame; that changes nothing in the scene.
+    const isCamera = (object as { isCamera?: boolean }).isCamera === true
     const sync = () => {
+      if (!isCamera) layoutRevision++
       for (const [bit, members] of this.members) {
         if ((mask & bit) !== 0 && object !== this.source) members.add(object)
         else members.delete(object)
@@ -96,6 +116,7 @@ export class LayerPassIndex {
   }
 
   private detach(object: Object3D) {
+    layoutRevision++
     for (const child of object.children) this.detach(child)
     this.cleanups.get(object)?.()
     this.cleanups.delete(object)
@@ -138,6 +159,7 @@ export class LayerPassIndex {
   }
 
   dispose() {
+    observedScenes.delete(this.source)
     for (const cleanup of this.cleanups.values()) cleanup()
     this.cleanups.clear()
   }

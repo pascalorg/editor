@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, test } from 'bun:test'
+import { setProjectFileSink } from '@pascal-app/core'
 import { exportSheetsToPdf, type SheetPdfPage } from './sheet-export'
 
 const sheet = (number: string, title: string): SheetPdfPage => ({
@@ -74,6 +75,29 @@ function titles(pdf: string): string[] {
 }
 
 describe('exportSheetsToPdf', () => {
+  test('retains the PDF in project files before downloading and reports a failed save', async () => {
+    let kept: { name: string; blob: Blob } | null = null
+    const clear = setProjectFileSink(async (file) => {
+      kept = file
+    })
+    try {
+      const { filename } = await exportToBytes([sheet('A0.0', 'Cover')], 'Project files')
+      expect(kept!.name).toBe(filename)
+      expect(await kept!.blob.text()).toStartWith('%PDF-')
+    } finally {
+      clear()
+    }
+    const clearFailed = setProjectFileSink(async () => {
+      throw new Error('File could not be saved')
+    })
+    try {
+      await expect(exportToBytes([sheet('A0.0', 'Cover')], 'Project files')).rejects.toThrow(
+        'File could not be saved',
+      )
+    } finally {
+      clearFailed()
+    }
+  })
   test('bookmarks every sheet by its number and title and titles the document', async () => {
     const { pdf, filename } = await exportToBytes(
       [

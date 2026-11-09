@@ -66,6 +66,16 @@ to retain the actual child ID in `children`; renderability alone is insufficient
 hosted child; it does not prevent the kind from hosting other objects. Cabinets,
 columns, stairs, elevators and fences use this child-placement restriction.
 
+`capabilities.surfaces.top` opts a kind into support-height sampling. The viewer
+samples its registered mesh by default. A top surface with a data-defined footprint
+can supply `supportHeight(node, x, z, { nodes })`; return its height where it
+supports a point and `null` elsewhere. Keep footprint and hole rules in the
+kind's definition so viewer code can discover support through the registry.
+
+`capabilities.surfaces.renderOpeningContent(node)` can return false when a host
+renders a door as a gap, without its leaf, frame or threshold. It defaults to true;
+railing walls resolve it per node so ordinary walls keep their door content.
+
 ### `surfaceRole`
 
 A kind may declare `surfaceRole?: SurfaceRole` on its definition. It is a colour token only (`core` stores no material), used to resolve the per-role clay/theme colour for untextured surfaces. See [materials-and-themes](materials-and-themes.md).
@@ -92,6 +102,7 @@ type GeometryContext = {
 - **Shelf, spawn, item, column, fence segment** — builder reads only `node`. `ctx` argument unused.
 - **Wall** — `ctx.siblings` for corner mitering with adjacent walls. `ctx.children` for cutout footprints (doors / windows hosted on the wall).
 - **Door / window** — `ctx.parent` for parent-wall thickness, so the frame depth lines up with the wall it's cut into.
+- **Roof** — `ctx.children` (its segments) and `ctx.siblings` (the level's other roofs) for the merged outline and the ridges, hips and valleys. The editor plan outlines the eave and rake and runs those lines out to them, as the 3D shows the roof from above; a drafted sheet outlines the wall line and dashes the overhang. The roof projects its segments' and siblings' live overrides and transforms (`floorplanSiblingOverrides`), and a segment's live edit rebuilds every roof on its level (`floorplanAffectedIds`), so the plan follows a move, resize or turn as it happens. Selected or moved, the roof draws each segment's wall line too. Moving a roof or a segment, in the plan or in 3D, catches its wall line on the centre lines of its level's and the storey below's walls (`roof/wall-catch.ts`; a wall drawn by a face at its body's centre) in grid and lines, and a segment's side arrows catch the dragged side the same way, ahead of the grid; Alt and off move it freely. A segment drawn, moved or sized onto walls takes their thickness for its gable and heel walls (`bearingWallThickness`), so they stand flush with the walls below. A porch's, deck's or patio's invisible walls and railings are edges, not walls (`RoofEdgeLine`): drawing snaps to the invisible walls' lines and the railings' outside faces (`roofSnapEdges`), a move or side arrow catches the segment's outer face on them, a segment drawn or picked out to them is set in by half its wall thickness so its outer face stands there (`settleRoofOnEdges`), and Room over such a room roofs its outside edge (core's `outdoorRoomRoofOutline`); they give no wall thickness, and no roof sits on a railing's top. A segment's layers (`buildUp`, below) set its deck and covering thickness, so every reader of `deckThickness` and `shingleThickness` (the roof system, prints, sections) draws the build-up.
 
 `GeometryContext` exists so builders stay pure (no `useScene` import, no store mutation) and trivially unit-testable. The generic `<GeometrySystem>` builds `ctx` from the current scene snapshot once per dirty node; the cost is a few `Map.get` calls.
 
@@ -348,6 +359,8 @@ cut-count chip lives there). Select
 mode is not owned by a node definition, so its helper is derived separately from
 selection state, selected-node move/rotate capabilities, and held modifiers.
 
+`placementNotice?(node, { nodes, live })` is a kind's warning about where the node stands, such as an item in a door's way, shown in the same HUD row and in the node's panel through the editor's generic `usePlacementNotice`. It is pure; `live` is the in-flight drag pose, merged in the kind's own frame. See `tools.md` § "Placement notices".
+
 ## Pitfalls
 
 ### `<GeometrySystem>` must not mutate `group.position` / `group.rotation`
@@ -497,6 +510,8 @@ type PaintCapability = {
 }
 ```
 
+**`scopes`** *(optional)* replaces the derived scope set for one surface: `{ scopes, labels?, roleFor? }`, where `roleFor(scope)` names the role a click paints under that scope. The roof's merged shell uses it for a gable (`nodes/src/roof/paint.ts`): `single` paints `gable-left:<segmentId>` (that segment's gable alone), `matching` ("All gables") paints `gables:all` (the roof's edge, every segment's own gable cleared). A wider-scope role carries a `:` so the fan-out routes it through the kind's `commit`.
+
 Implement the capability in a `paint.ts` file next to `definition.ts`. Keep it pure — no `useScene`, no store mutation. Reference implementations: `packages/nodes/src/chimney/paint.ts` (body/top split), `packages/nodes/src/wall/paint.ts` (interior/exterior + normal-based disambiguation).
 
 ```ts
@@ -528,6 +543,15 @@ type AssemblyHostConfig = {
 | `wall` (declared in `nodes/src/wall/definition.ts`) | `front` (+n) or the exterior face (`face: 'exterior'`) | `thickness` | The layer sum; `wallAssemblyPatch` writes both. The Architect's WS5 helpers (`resolveWallAssembly`, `wallAssemblyFinishRef`, `wallAssemblyFraming`, the presets) read F2. Scenes saved with the WS5 `WallAssembly` shape are converted on load by `migrateLegacyWallAssemblies` (`wallAssemblyFromLegacy`: exterior → `finish`, sheathing → `sheathing`, framing → the `core` structure layer, interior → `lining`), and the inspector edits through `wallAssemblyToLegacy`, a WS5 view plugin readers can use too. |
 
 Each kind declares its own host in its definition; core ships none. `resolveAssemblyStack(assembly, host)` returns each layer's depth and thickness exactly as declared, and, on a host that accepts backing, the backing layers with their depth from the body's far face (a ceiling with no body and insulation backing resolves), never throwing; a stored thickness that disagrees with the sum is reported as `assembly.thickness-mismatch`. `getWallLayerBands(wall, assembly, miters)` slices the mitred plan footprint into one band per layer (`back`/`front` offsets from the centreline along +n, and the footprint ∩ strip rings); it draws no bands on a mismatch.
+
+**Typed build-ups: roof planes and ceilings.** A roof segment and a ceiling store their layers as product choices, not an F2 list: `buildUp` (`RoofBuildUp`, `CeilingBuildUp` in `core/src/schema/build-up.ts`), so a framing tool reads the structure it frames (system, lumber size, spacing on centre) and the inspector edits choices. Absent, a node draws as it always did.
+
+| Node | Layers | Derived | Rule |
+|---|---|---|---|
+| `roof-segment` | outside in: roofing, underlayment, sheathing, structure (rafters or trusses: size, spacing), insulation, interior finish | `deckThickness` = finish + framing + rigid insulation + sheathing; `shingleThickness` = roofing + underlayment (`roofBuildUpDepths`) | Writers set both with the layers through `roofBuildUpPatch`; while layers are set, the panel shows the two as readouts. Batt and blown fill the cavity (deeper than the framing, they set it); rigid board adds. |
+| `ceiling` | bottom up from `height`, the finished underside: finish, framing (joists or truss bottom chords), decking, insulation | the thickness (`ceilingBuildUpThickness`) | The underside stays at the height. With ceiling tops shown, the cap stands on the layers, stopped `CEILING_CLAMP_MARGIN` short of a floor slab above (`ceilingCapLift`). |
+
+Presets (`ROOF_BUILD_UP_PRESETS`, `CEILING_BUILD_UP_PRESETS`) carry their `presetId`; editing a layer clears it. The first roof preset is a 0.100 m deck, the deck of a plane without layers. Both kinds' panel models offer the preset to a multi-selection, in one undo step; the plane panel also applies its layers to the other planes of its roof.
 
 ---
 
@@ -598,6 +622,36 @@ mechanism: {
 ```
 
 `item` and `procedural-item` declare it over their own interactive state (`nodes/src/shared/item-interactions.ts`). Its GLB clips come from `exportAnimation`: every node that bakes clips lists them in `extras.clips`, and the baked viewer runs `: loop` clips no other controller owns on click and E, stopped at start. Lights are not part of it yet.
+
+---
+
+### `capabilities.exterior`
+
+Whether a change to a node is seen from outside the building. Hosts that follow a change with a camera (Follow Pascal) frame it from outdoors, with the walls up, instead of through a cutaway, and ask the registry; the editor names no kind.
+
+```ts
+exterior?: boolean | ((node: AnyNode, nodes: Readonly<Record<string, AnyNode>>) => boolean | undefined)
+```
+
+- `true` — the kind always stands outdoors: the roof, roof segments and everything mounted on them (dormer, skylight, chimney, vents, gutters, solar panels), a fence and its gates, the site.
+- `false` — the kind never does and holds what is looked at through a cutaway (level, building, zone). The walk up a node's parents stops at it.
+- a function — decided from the node's fields and its surroundings: a wall with an exterior face; a door or window in such a wall or in a roof segment (`nodes/src/wall/exterior.ts`). Return `undefined` to say nothing.
+- omitted, or `undefined` — what holds the node decides: a node under a `true` kind is outdoors, and so is one that stands in no storey (outdoor furnishing, plants). A sofa in a room is not.
+
+A plugin kind sets it in its own `definition.ts` and is treated as a built-in is (a pool deck sets `exterior: true`).
+
+### `capabilities.revealLayout`
+
+What a kind is in its floor's plan, so a build is revealed room by room instead of in one pulse (see [construction-animation](construction-animation.md)). Both fields are pure functions of the node, in metres on the level's plan.
+
+```ts
+revealLayout?: {
+  room?: (node: AnyNode) => readonly [x: number, z: number][] | null                   // an outline of a room (zone)
+  line?: (node: AnyNode) => readonly [[x: number, z: number], [x: number, z: number]] | null  // bounds rooms along a line (wall)
+}
+```
+
+What stands in a `room` (walls along it, furniture in it) is revealed together around its centre, and the rooms of a floor sweep across it. A `line` stands at its middle: the room on either side of it is its room, and lines in no room run along the lines they meet end to end. The derived plates and ceilings of a level also go out, in a deletion, with the `room` and `line` nodes a commit takes off it. A kind that declares neither is still placed by its own `position`, `polygon` or `start`/`end`.
 
 ---
 

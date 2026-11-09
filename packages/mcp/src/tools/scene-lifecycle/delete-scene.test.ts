@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, test } from 'bun:test'
-import { Client } from '@modelcontextprotocol/sdk/client/index.js'
-import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import { Client } from '@modelcontextprotocol/client'
+import { InMemoryTransport, McpServer } from '@modelcontextprotocol/server'
 import type { SceneGraph } from '@pascal-app/core/clone-scene-graph'
 import { registerDeleteScene } from './delete-scene'
 import {
@@ -27,7 +26,7 @@ describe('delete_scene', () => {
     await Promise.all([server.connect(srvT), client.connect(cliT)])
   })
 
-  test('deletes an existing scene and returns { deleted: true }', async () => {
+  test('deletes an existing scene and returns { deleted: true, hidden: false }', async () => {
     await store.save({ id: 'gone-in-60', name: 'Expendable', graph: emptyGraph })
 
     const result = await client.callTool({
@@ -36,7 +35,7 @@ describe('delete_scene', () => {
     })
     expect(result.isError).toBeFalsy()
     const parsed = parseToolText(result.content as StoredTextContent[])
-    expect(parsed.deleted).toBe(true)
+    expect(parsed).toEqual({ deleted: true, hidden: false })
     expect(await store.load('gone-in-60')).toBeNull()
   })
 

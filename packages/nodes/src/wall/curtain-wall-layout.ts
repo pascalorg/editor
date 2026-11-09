@@ -1,27 +1,11 @@
-import type { CurtainGrid, CurtainPanelType, CurtainWallConfig, DoorNode } from '@pascal-app/core'
-
-export function curtainGridPositions(length: number, grid: CurtainGrid): number[] {
-  if (!Number.isFinite(length) || length <= 0) return [0]
-  const count = grid.layout === 'count' ? grid.count : Math.ceil(length / grid.spacing)
-  const bounded = Math.max(1, Math.min(32, count))
-  if (grid.layout !== 'fixed-spacing' || count > 32) {
-    return Array.from({ length: bounded + 1 }, (_, index) => (length * index) / bounded)
-  }
-  const whole = Math.floor(length / grid.spacing)
-  const remainder = length - whole * grid.spacing
-  const offset =
-    grid.alignment === 'start' ? 0 : grid.alignment === 'end' ? remainder : remainder / 2
-  const positions = [0]
-  for (let index = 0; index <= whole; index++) {
-    const value = offset + index * grid.spacing
-    if (value > 1e-6 && value < length - 1e-6) positions.push(value)
-  }
-  positions.push(length)
-  // A centered remainder can introduce two edge cells.
-  return positions.length <= 33
-    ? positions
-    : Array.from({ length: 33 }, (_, i) => (length * i) / 32)
-}
+import {
+  type CurtainPanelType,
+  type CurtainWallConfig,
+  curtainGridPositions,
+  type DoorNode,
+  getDoorOpeningSize,
+  openingHostFacing,
+} from '@pascal-app/core'
 
 export type CurtainWallPiece = {
   left: number
@@ -54,9 +38,12 @@ export function buildCurtainWallLayout(
   height: number,
   depth: number,
   config: CurtainWallConfig,
-  openings: readonly (Pick<DoorNode, 'position' | 'width' | 'height' | 'openingShape'> & {
-    type: 'door' | 'window'
-  })[] = [],
+  openings: readonly (Pick<DoorNode, 'position' | 'width' | 'height' | 'openingShape'> &
+    Partial<
+      Pick<DoorNode, 'rotation' | 'doorType' | 'sidelightLeft' | 'sidelightRight' | 'transomHeight'>
+    > & {
+      type: 'door' | 'window'
+    })[] = [],
   baseElevation = 0,
 ): CurtainWallPiece[] {
   if (length <= 1e-6 || height <= 1e-6 || depth <= 0) return []
@@ -190,10 +177,12 @@ export function buildCurtainWallLayout(
   let fitted = pieces
   for (const opening of openings) {
     if (opening.openingShape !== 'rectangle') continue
-    const left = opening.position[0] - opening.width / 2
-    const right = opening.position[0] + opening.width / 2
+    const size = getDoorOpeningSize(opening)
+    const centerX = opening.position[0] - size.leafOffsetX * openingHostFacing(opening)
+    const left = centerX - size.width / 2
+    const right = centerX + size.width / 2
     const bottom = opening.position[1] - opening.height / 2 - baseElevation
-    const top = bottom + opening.height
+    const top = bottom + size.height
     if (right <= 0 || left >= length || top <= 0 || bottom >= height) continue
     const outerLeft = Math.max(0, left - config.perimeterWidth)
     const outerRight = Math.min(length, right + config.perimeterWidth)

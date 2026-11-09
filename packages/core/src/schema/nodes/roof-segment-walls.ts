@@ -1,4 +1,5 @@
 import { getWallFaceOffsets } from '../../systems/wall/wall-frame'
+import { getBarrelRoofProfile } from './barrel-roof'
 import type { RoofSegmentNode } from './roof-segment'
 import { getDutchRoofMetrics, getSegmentSlopeFrame } from './roof-segment'
 
@@ -50,6 +51,8 @@ type SegmentWallInputs = Pick<
   Partial<
     Pick<
       RoofSegmentNode,
+      | 'barrelRise'
+      | 'barrelSegments'
       | 'gambrelLowerWidthRatio'
       | 'gambrelLowerHeightRatio'
       | 'mansardSteepWidthRatio'
@@ -75,6 +78,15 @@ type WallVolumeFrame = {
 
 function getWallVolumeFrame(node: SegmentWallInputs): WallVolumeFrame {
   const { activeRh, tanTheta } = getSegmentSlopeFrame(node)
+  if (node.roofType === 'barrel')
+    return {
+      wV: node.width + (node.wallThickness ?? 0.1),
+      dV: node.depth + (node.wallThickness ?? 0.1),
+      eaveY: node.wallHeight,
+      peakY: node.wallHeight + activeRh,
+      tanTheta,
+      hasSlope: true,
+    }
   const wallThickness = node.wallThickness ?? 0.1
   const autoDrop = getWallFaceOffsets({ thickness: wallThickness }).a * tanTheta
   const wV = Math.max(0.01, node.width + wallThickness)
@@ -130,6 +142,23 @@ function buildFaceProfile(
   if (!hasSlope) return rectProfile(length, eaveY)
 
   switch (node.roofType) {
+    case 'barrel': {
+      if (!isEnd) return rectProfile(length, node.wallHeight)
+      const profile = getBarrelRoofProfile(
+        node.depth,
+        getSegmentSlopeFrame(node).activeRh,
+        node.barrelSegments ?? 12,
+      )
+      // The arch springs from the eaves' centre lines, inside the walls' outer faces; the placeable
+      // region stays convex by leaving out the walls' outer halves above their base corners.
+      return [
+        [0, 0],
+        [length, 0],
+        ...profile
+          .reverse()
+          .map(([z, y]): [number, number] => [z + length / 2, y + node.wallHeight]),
+      ]
+    }
     case 'gable': {
       if (!isEnd) return rectProfile(length, eaveY)
       return [

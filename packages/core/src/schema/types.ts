@@ -1,5 +1,6 @@
 import z from 'zod'
 import { ProceduralItemNode } from '../procedural-items/node'
+import { BeamNode } from './nodes/beam'
 import { BlockNode } from './nodes/block'
 import { BoxVentNode } from './nodes/box-vent'
 import { BuildingNode } from './nodes/building'
@@ -18,6 +19,7 @@ import { DuctTerminalNode } from './nodes/duct-terminal'
 import { ElevatorNode } from './nodes/elevator'
 import { EyebrowVentNode } from './nodes/eyebrow-vent'
 import { FenceNode } from './nodes/fence'
+import { FenceGateNode, FenceOpeningNode } from './nodes/fence-feature'
 import { FloorOpeningNode } from './nodes/floor-opening'
 import { GuideNode } from './nodes/guide'
 import { GutterNode } from './nodes/gutter'
@@ -94,6 +96,7 @@ export const AnyNode = nodeUnion([
   LevelNode,
   LeanToExtensionNode,
   ColumnNode,
+  BeamNode,
   ConstructionDimensionNode,
   BlockNode,
   StructuralGridNode,
@@ -101,6 +104,8 @@ export const AnyNode = nodeUnion([
   SeparatorNode,
   FloorOpeningNode,
   FenceNode,
+  FenceGateNode,
+  FenceOpeningNode,
   CabinetNode,
   CabinetModuleNode,
   ItemNode,
@@ -394,19 +399,4 @@ export type DisplayFamily =
 
 export type Discipline = 'mechanical' | 'plumbing' | 'electrical' | 'low-voltage' | 'fire'
 
-/**
- * The project's saved look on the `site` node (owner decision O3, frozen), never
- * a scene-root key. `display` is the saved default for the personal display
- * state; SI-R5 adds `theme`, `sun`, `exposure`, `edges` and `shading` beside
- * it. Precedence: explicit local viewer toggles > `site.presentation` >
- * theme defaults. The canonical bake ignores it.
- */
-export type SitePresentation = {
-  display?: {
-    mode?: DisplayMode
-    families?: Partial<Record<DisplayFamily, boolean>>
-    disciplines?: Partial<Record<Discipline, boolean>>
-    xray?: boolean
-    colorBy?: 'material' | 'service'
-  }
-}
+export type { SitePresentation } from './site-presentation'

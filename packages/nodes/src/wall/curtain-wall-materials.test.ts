@@ -1,5 +1,12 @@
 import { expect, test } from 'bun:test'
-import { CurtainWallConfig, SceneMaterial, WallNode } from '@pascal-app/core'
+import {
+  CurtainWallConfig,
+  MaterialPresetPayloadSchema,
+  registerLibraryMaterials,
+  SceneMaterial,
+  unregisterLibraryMaterials,
+  WallNode,
+} from '@pascal-app/core'
 import { resolveMaterialRef } from '@pascal-app/viewer'
 import { Texture } from 'three'
 import type { MeshStandardNodeMaterial } from 'three/webgpu'
@@ -69,4 +76,44 @@ test('scene material edits update the frame while preserving glass and solid pan
   expect((next.visible[0] as MeshStandardNodeMaterial).color.getHexString()).toBe('ff0000')
   expect((next.visible[0] as MeshStandardNodeMaterial).roughness).toBe(0.2)
   expect(next.visible[1]!.opacity).toBe(0.3)
+})
+
+test('late library frame paint replaces the fallback without turning curtain glass opaque', () => {
+  const id = 'mtl_curtain_continuity'
+  const ref = `library:${id}`
+  const wall = WallNode.parse({
+    start: [0, 0],
+    end: [4, 0],
+    wallType: 'curtain',
+    slots: { 'curtain-frame': ref },
+    curtainWall: { glassOpacity: 0.42, glassRoughness: 0.19 },
+  })
+  const first = getCurtainAwareWallMaterials(wall)
+  try {
+    registerLibraryMaterials([
+      {
+        id,
+        label: 'Late frame paint',
+        category: 'colors',
+        preset: MaterialPresetPayloadSchema.parse({
+          maps: {},
+          mapProperties: { color: '#2468ac', metalness: 0.8, roughness: 0.23 },
+        }),
+      },
+    ])
+    const next = getCurtainAwareWallMaterials(wall)
+    const frame = next.visible[0] as MeshStandardNodeMaterial
+    const glass = next.visible[1] as MeshStandardNodeMaterial
+    expect(frame).not.toBe(first.visible[0])
+    expect(frame).toBe(resolveMaterialRef(ref, undefined, 'rendered'))
+    expect(frame.color.getHexString()).toBe('2468ac')
+    expect(frame.metalness).toBe(0.8)
+    expect(frame.roughness).toBe(0.23)
+    expect(glass.transparent).toBe(true)
+    expect(glass.opacity).toBe(0.42)
+    expect(glass.depthWrite).toBe(false)
+    expect(glass.roughness).toBe(0.19)
+  } finally {
+    unregisterLibraryMaterials([id])
+  }
 })

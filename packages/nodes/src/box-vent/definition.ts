@@ -1,6 +1,7 @@
 import {
   BoxVentNode as BoxVentNodeSchema,
   type BoxVentNode as BoxVentNodeType,
+  boxVentSlots,
   type HandleDescriptor,
   type NodeDefinition,
 } from '@pascal-app/core'
@@ -187,10 +188,8 @@ export const boxVentDefinition: NodeDefinition<typeof BoxVentNode> = {
   },
 
   capabilities: {
-    slots: () => [
-      { slotId: 'base', label: 'Base', default: 'library:preset-softwhite' },
-      { slotId: 'top', label: 'Top', default: 'library:preset-softwhite' },
-    ],
+    exterior: true,
+    slots: boxVentSlots,
     selectable: { hitVolume: 'bbox' },
     duplicable: true,
     deletable: true,

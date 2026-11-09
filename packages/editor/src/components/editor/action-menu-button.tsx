@@ -1,6 +1,8 @@
 'use client'
 
+import { usePascalI18n } from '@pascal-app/core'
 import type { MouseEventHandler, ReactNode } from 'react'
+import { toolHintKey } from '../../i18n/node-messages'
 import { cn } from '../../lib/utils'
 import { shortcutDisplayValue } from '../ui/primitives/shortcut-token'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/primitives/tooltip'
@@ -37,6 +39,7 @@ export function ActionMenuButton({
   pressed?: boolean
   children: ReactNode
 }) {
+  const i18n = usePascalI18n()
   return (
     <Tooltip>
       <TooltipTrigger asChild>
@@ -72,7 +75,7 @@ export function ActionMenuButton({
                 className="rounded border border-background/30 px-1 font-mono text-[10px] leading-4 opacity-80"
                 key={key}
               >
-                {shortcutDisplayValue(key)}
+                {toolHintKey(shortcutDisplayValue(key), i18n)}
               </kbd>
             ))}
           </span>

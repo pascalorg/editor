@@ -233,6 +233,7 @@ export const skylightDefinition: NodeDefinition<typeof SkylightNode> = {
   },
 
   capabilities: {
+    exterior: true,
     selectable: { hitVolume: 'bbox' },
     duplicable: true,
     deletable: true,

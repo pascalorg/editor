@@ -1,0 +1,39 @@
+{
+  "texts": [
+    "Pascal",
+    "Pascal Editor",
+    "GitHub",
+    "Discord",
+    "IFC",
+    "GLB",
+    "glTF",
+    "OBJ",
+    "STL",
+    "DXF",
+    "SVG",
+    "PNG",
+    "JPG",
+    "JPEG",
+    "PDF",
+    "JSON",
+    "MCP",
+    "HVAC",
+    "mm",
+    "cm",
+    "m²",
+    "ft",
+    "ft²",
+    "in",
+    "px",
+    "Ctrl",
+    "Cmd",
+    "Alt",
+    "Shift",
+    "Esc",
+    "OK"
+  ],
+  "paths": {
+    "apps/editor/app/dev/": "developer-only diagnostics routes, never shown to product users",
+    "packages/editor/src/components/debug/": "developer-only debug overlays"
+  }
+}

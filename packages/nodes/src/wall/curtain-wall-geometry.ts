@@ -1,5 +1,6 @@
 import {
   type AnyNode,
+  curtainGridPositions,
   getCurtainWallConfig,
   getWallCurveFrameAt,
   getWallCurveLength,
@@ -18,11 +19,7 @@ import {
 import { BufferGeometry, ExtrudeGeometry, Shape } from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { buildCurtainOpeningFrame, mapCurtainOpeningGeometryToWall } from './curtain-opening-frame'
-import {
-  buildCurtainWallLayout,
-  type CurtainWallPiece,
-  curtainGridPositions,
-} from './curtain-wall-layout'
+import { buildCurtainWallLayout, type CurtainWallPiece } from './curtain-wall-layout'
 import {
   buildStraightCurtainPieces,
   buildStraightCurtainPiecesWithCutouts,

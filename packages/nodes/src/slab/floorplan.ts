@@ -1,8 +1,10 @@
 import {
+  cutterContextNodes,
   type FloorplanGeometry,
   type FloorplanPoint,
   type GeometryContext,
   getRenderableSlabPolygon,
+  hostedCutterHoles,
   isDerivedNode,
   type SlabNode,
   slabPolygonContextFromGeometry,
@@ -59,7 +61,7 @@ export function buildSlabFloorplan(node: SlabNode, ctx: GeometryContext): Floorp
   const segments: string[] = [ring(outer)]
 
   const holes = node.holes ?? []
-  for (const hole of holes) {
+  for (const hole of [...holes, ...hostedCutterHoles(node, cutterContextNodes(node, ctx))]) {
     if (hole.length < 3) continue
     const holePts: FloorplanPoint[] = hole.map(([x, z]) => [x, z] as FloorplanPoint)
     segments.push(ring(holePts))

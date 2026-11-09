@@ -1,4 +1,5 @@
 import type { AnyNode, AnyNodeId } from '@pascal-app/core'
+import { queryNodes } from '@pascal-app/core/runtime'
 
 /**
  * Tag + rewind bookkeeping for auto-routed vertical offsets.
@@ -116,11 +117,12 @@ export function translateAutoOffsetBase(tag: AutoOffsetTag, delta: Point): AutoO
 
 /** Scene updates that drop auto-offset ownership when a participating part is edited manually. */
 export function autoOffsetInvalidationUpdates(
-  nodes: Record<string, AnyNode>,
+  nodes: Readonly<Record<string, AnyNode>>,
   editedNodeId: AnyNodeId,
 ): { id: AnyNodeId; data: Partial<AnyNode> }[] {
   const updates: { id: AnyNodeId; data: Partial<AnyNode> }[] = []
-  for (const node of Object.values(nodes)) {
+  // Only lifted runs carry the tag.
+  for (const node of queryNodes(nodes, { type: ['duct-segment', 'pipe-segment'] })) {
     const tag = readAutoOffsetTag(node)
     const participates =
       tag?.minted.includes(editedNodeId) || tag?.base.some((patch) => patch.id === editedNodeId)

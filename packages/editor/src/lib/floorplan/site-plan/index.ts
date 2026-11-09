@@ -1,8 +1,6 @@
 export {
-  buildingRecentreOffset,
   buildSitePlanDrawing,
   describeSiteEdges,
-  levelFootprintLoops,
   type SitePlanDrawing,
   type SitePlanEdge,
 } from './build-site-plan-drawing'
@@ -37,29 +35,15 @@ export {
 } from './front-edge'
 export {
   type Bounds,
-  boundsInsidePolygon,
   castYardDimensions,
-  castYardDimensionsOriented,
-  classifyEdges,
   compassLabel,
-  edgeHeadingDeg,
-  edgeLength,
   formatFeetInches,
   METRES_PER_FOOT,
-  mostNorthFacingEdge,
-  outwardNormal,
   type Pt,
   pointInPolygon,
   polygonArea,
   polygonBounds,
   polygonCentroid,
-  rayToPolygon,
-  resolveFrontEdge,
-  type SetbackInputs,
-  setbackEnvelope,
-  setbackForRole,
-  type YardDimension,
-  type YardSide,
 } from './geometry'
 export {
   formatStreetName,

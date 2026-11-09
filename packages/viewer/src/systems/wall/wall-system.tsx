@@ -3,9 +3,11 @@ import {
   type AnyNodeId,
   buildWallFinishLayout,
   containsPoint,
+  cornerPair,
   DEFAULT_LEVEL_HEIGHT,
   type DoorNode,
   getAdjacentWallIds,
+  getDoorOpeningSize,
   getEffectiveNode,
   getOpeningWallCut,
   getWallBodyCenterOffset,
@@ -19,8 +21,11 @@ import {
   getWallSurfacePolygon,
   getWallThickness,
   isCurvedWall,
+  isCutterName,
+  openingHostFacing,
   type Point2D,
   pointToKey,
+  resolveCutterHost,
   resolveLevelId,
   resolveWallFaceBottom,
   resolveWallFinish,
@@ -51,7 +56,9 @@ import { computeBoundsTree } from 'three-mesh-bvh'
 import { ensureRenderableGeometryAttributes, prepareBrushForCSG } from '../../lib/csg-utils'
 import { setGroupsSortedByMaterial } from '../../lib/geometry-groups'
 import { timeSpan } from '../../lib/perf-tracks'
+import { isRevealWaiting } from '../../lib/reveal-pending'
 import { buildTerrainPerimeterFillGeometry } from '../../lib/terrain-perimeter-fill'
+import { cornerFrameStale } from '../window/corner-frame'
 import { clearLevelMiterCache, getCachedLevelMiters } from './level-miter-cache'
 import {
   buildOpeningCutoutGeometry,
@@ -72,6 +79,7 @@ import {
 } from './wall-finish-data'
 import { sweepUnbuiltWalls, WALL_PLACEHOLDER_SWEEP_INTERVAL } from './wall-placeholder-sweep'
 import { notifyWallRebuilt } from './wall-rebuild-notifications'
+import { repairWallTJunctions } from './wall-t-junctions'
 
 export { isWallInitialBuildActive } from './wall-build-lifecycle'
 export { drainRebuiltWalls } from './wall-rebuild-notifications'
@@ -86,7 +94,7 @@ const WALL_BAND_SPLIT_EPSILON = 1e-5
 
 function computeGeometryBoundsTree(geometry: THREE.BufferGeometry) {
   ;(geometry as any).computeBoundsTree = computeBoundsTree
-  ;(geometry as any).computeBoundsTree({ maxLeafSize: 10 })
+  ;(geometry as any).computeBoundsTree({ targetLeafSize: 10 })
 }
 
 function csgGeometry(brush: Brush): THREE.BufferGeometry {
@@ -493,6 +501,10 @@ function interpolateSplitVertex(a: SplitVertex, b: SplitVertex, t: number): Spli
   }
 }
 
+function compareSplitVertices(a: SplitVertex, b: SplitVertex): number {
+  return a.x - b.x || a.y - b.y || a.z - b.z
+}
+
 function clipPolygonByPlane(
   polygon: SplitVertex[],
   axis: 'x' | 'y',
@@ -514,9 +526,13 @@ function clipPolygonByPlane(
     const previousInside = isInside(previous)
 
     if (currentInside !== previousInside) {
-      const denom = current[axis] - previous[axis]
+      // Interpolate from the same endpoint whichever way the edge is walked: the
+      // two triangles sharing it then get a bit-identical seam vertex.
+      const [from, to] =
+        compareSplitVertices(previous, current) <= 0 ? [previous, current] : [current, previous]
+      const denom = to[axis] - from[axis]
       if (Math.abs(denom) > WALL_BAND_SPLIT_EPSILON) {
-        out.push(interpolateSplitVertex(previous, current, (plane - previous[axis]) / denom))
+        out.push(interpolateSplitVertex(from, to, (plane - from[axis]) / denom))
       }
     }
     if (currentInside) out.push(current)
@@ -667,14 +683,16 @@ function wallRebuildExitReason(
   let cutouts = 0
   for (const childId of getEffectiveWall(wall).children ?? []) {
     const child = nodes[childId]
-    if (
-      child?.type === 'door' ||
-      child?.type === 'window' ||
-      (child?.type === 'item' &&
-        (
-          sceneRegistry.nodes.get(childId)?.getObjectByName('cutout') as THREE.Mesh | undefined
-        )?.geometry?.getAttribute('position')?.count)
-    ) {
+    let hasCutter = false
+    if (child?.type === 'item') {
+      sceneRegistry.nodes.get(childId)?.traverse((object) => {
+        const mesh = object as THREE.Mesh
+        const name = typeof mesh.userData.name === 'string' ? mesh.userData.name : mesh.name
+        if (mesh.isMesh && isCutterName(name) && mesh.geometry?.getAttribute('position')?.count)
+          hasCutter = true
+      })
+    }
+    if (child?.type === 'door' || child?.type === 'window' || hasCutter) {
       cutouts++
       if (cutouts >= HEAVY_WALL_OPENINGS) return 'heavy'
     }
@@ -1120,7 +1138,7 @@ function updateWallGeometry(
 
   const levelId = resolveLevelId(node, nodes)
   // Covering-clamped plane: a flush/thick slab on the level above shortens
-  // the plane-bound walls below it (explicit-height walls ignore the value).
+  // the plane-bound walls below it.
   const planeTop = getWallPlaneTop(node, levelId, nodes)
   const slabSupport = spatialGridManager.getSlabSupportForWall(
     levelId,
@@ -1135,16 +1153,7 @@ function updateWallGeometry(
   )
   const slabElevation = slabSupport.elevation
 
-  const childrenIds = node.children || []
-  const childrenNodes = childrenIds
-    .map((childId) => nodes[childId])
-    .filter((n): n is AnyNode => n !== undefined)
-    .map((child) => {
-      if (child.type !== 'door' && child.type !== 'window') return child
-      const effective = getEffectiveNode(child)
-      const live = useLiveTransforms.getState().get(child.id)
-      return live?.position ? { ...effective, position: live.position } : effective
-    })
+  const childrenNodes = wallGeometryChildren(node, nodes)
   const prepared = geometryAdapter?.prepareChildren?.(node, childrenNodes, {
     isLive: (id) =>
       useLiveNodeOverrides.getState().get(id) !== undefined ||
@@ -1234,6 +1243,29 @@ function updateWallGeometry(
     for (const child of childrenNodes) useScene.getState().markDirty(child.id)
   }
   mesh.userData.wallFrameKey = frameKey
+  // A wall moved apart from the other wall of a corner window, or back, makes or breaks the pair:
+  // its windows rebuild their frames once (they read the pair only then).
+  for (const child of childrenNodes)
+    if (cornerFrameStale(child, nodes)) useScene.getState().markDirty(child.id)
+}
+
+/**
+ * The children a wall builds around, as they stand live: an opening still waiting for its
+ * construction reveal is left out, so the wall rises whole and is cut at the opening's turn.
+ */
+export function wallGeometryChildren(
+  node: WallNode,
+  nodes: Readonly<Record<string, AnyNode>>,
+): AnyNode[] {
+  return (node.children ?? [])
+    .map((childId) => nodes[childId])
+    .filter((child): child is AnyNode => child !== undefined && !isRevealWaiting(child.id))
+    .map((child) => {
+      if (child.type !== 'door' && child.type !== 'window') return child
+      const effective = getEffectiveNode(child)
+      const live = useLiveTransforms.getState().get(child.id)
+      return live?.position ? { ...effective, position: live.position } : effective
+    })
 }
 
 const WALL_UV_Y_AXIS = new THREE.Vector3(0, 1, 0)
@@ -1489,10 +1521,27 @@ function mergeWallTerrainFill(
 
   bodyGeometry.dispose()
   for (const fill of splitFills) fill.dispose()
-  merged.computeVertexNormals()
-  assignWallMaterialGroups(merged, wall, boundaryEdges, finish)
-  ensureRenderableGeometryAttributes(merged)
-  return merged
+  return finishWallFaces(merged, wall, boundaryEdges, finish)
+}
+
+/**
+ * Classifies the faces into material groups, then removes the T-junctions that
+ * CSG cuts, finish-band splits and fill seams leave behind (they crack open
+ * once a bake quantizes positions). Classification runs first, on the source
+ * triangles, so the repair's sliver pieces inherit their material.
+ */
+function finishWallFaces(
+  geometry: THREE.BufferGeometry,
+  wall: WallNode,
+  boundaryEdges: TaggedWallBoundaryEdge[],
+  finish: WallFinishContext,
+): THREE.BufferGeometry {
+  geometry.computeVertexNormals()
+  assignWallMaterialGroups(geometry, wall, boundaryEdges, finish)
+  const repaired = repairWallTJunctions(geometry)
+  if (repaired !== geometry) repaired.computeVertexNormals()
+  ensureRenderableGeometryAttributes(repaired)
+  return repaired
 }
 
 /** Wall-local x of a support-segment parameter (curve parameter on arcs). */
@@ -1548,7 +1597,10 @@ export function generateExtrudedWall(
 ): THREE.BufferGeometry {
   const wallStart: Point2D = { x: wallNode.start[0], y: wallNode.start[1] }
   const wallEnd: Point2D = { x: wallNode.end[0], y: wallNode.end[1] }
-  const topElevation = resolveWallTop(wallNode, storeyHeight, slabElevation)
+  const levelId = resolveLevelId(wallNode, sceneNodes as Record<string, AnyNode>)
+  const level = sceneNodes[levelId]
+  const authoredStoreyHeight = level?.type === 'level' ? (level.height ?? null) : null
+  const topElevation = resolveWallTop(wallNode, storeyHeight, slabElevation, authoredStoreyHeight)
   const faceDatum = faceBase
   if (faceBase)
     faceBase = {
@@ -1799,10 +1851,12 @@ export function generateExtrudedWall(
     ),
   ]
   if (cutoutBrushes.length === 0) {
-    const splitGeometry = splitGeometryAtPlanes(geometry, finishPlanes.y, finishPlanes.x)
-    splitGeometry.computeVertexNormals()
-    assignWallMaterialGroups(splitGeometry, wallNode, boundaryEdges, finish)
-    ensureRenderableGeometryAttributes(splitGeometry)
+    const splitGeometry = finishWallFaces(
+      splitGeometryAtPlanes(geometry, finishPlanes.y, finishPlanes.x),
+      wallNode,
+      boundaryEdges,
+      finish,
+    )
     return withWallFinishData(
       mergeWallTerrainFill(splitGeometry, belowBaseFills, wallNode, boundaryEdges, finish),
       finish,
@@ -1851,10 +1905,12 @@ export function generateExtrudedWall(
   }
 
   const resultGeometry = csgGeometry(resultBrush)
-  const splitResultGeometry = splitGeometryAtPlanes(resultGeometry, finishPlanes.y, finishPlanes.x)
-  splitResultGeometry.computeVertexNormals()
-  assignWallMaterialGroups(splitResultGeometry, wallNode, boundaryEdges, finish)
-  ensureRenderableGeometryAttributes(splitResultGeometry)
+  const splitResultGeometry = finishWallFaces(
+    splitGeometryAtPlanes(resultGeometry, finishPlanes.y, finishPlanes.x),
+    wallNode,
+    boundaryEdges,
+    finish,
+  )
 
   return withWallFinishData(
     mergeWallTerrainFill(splitResultGeometry, belowBaseFills, wallNode, boundaryEdges, finish),
@@ -1936,16 +1992,26 @@ function collectCutoutBrushes(
   // Get wall's world matrix inverse to transform cutouts to wall-local space
   wallMesh.updateMatrixWorld()
   const wallMatrixInverse = wallMesh.matrixWorld.clone().invert()
+  // A wall child can only bind to its parent, so the wall alone resolves every cutter.
+  const hostNodes = { [wallNode.id]: wallNode }
 
   for (const child of childrenNodes) {
     if (child.type !== 'item' && child.type !== 'window' && child.type !== 'door') continue
 
+    const cutterMeshes: THREE.Mesh[] = []
+    sceneRegistry.nodes.get(child.id)?.traverse((object) => {
+      const name = typeof object.userData.name === 'string' ? object.userData.name : object.name
+      if (
+        (object as THREE.Mesh).isMesh &&
+        resolveCutterHost(child, name, hostNodes)?.id === wallNode.id
+      ) {
+        cutterMeshes.push(object as THREE.Mesh)
+      }
+    })
+
     // A window or door built from a script cuts its `cutout` mesh like an
     // authored item (below); without one, or until it loads, its outline.
-    const scriptedCutout =
-      child.type !== 'item' &&
-      child.source &&
-      sceneRegistry.nodes.get(child.id)?.getObjectByName('cutout')
+    const scriptedCutout = child.type !== 'item' && child.source && cutterMeshes.length > 0
     if ((child.type === 'door' || child.type === 'window') && !scriptedCutout) {
       const nodes = {
         ...sceneNodes,
@@ -1985,6 +2051,7 @@ function collectCutoutBrushes(
             wallThickness,
             getWallBodyCenterOffset(wallNode),
             cut.bottom - elevation,
+            child.type === 'window' ? cornerPair(sceneNodes, child)?.end : undefined,
           ),
         )
         continue
@@ -2049,82 +2116,89 @@ function collectCutoutBrushes(
       continue
     }
 
-    const childMesh = sceneRegistry.nodes.get(child.id)
-    if (!childMesh) continue
+    for (const cutoutMesh of cutterMeshes) {
+      // Get the cutout's bounding box in world space
+      cutoutMesh.updateMatrixWorld()
+      const positions = cutoutMesh.geometry?.attributes?.position
+      if (!positions) continue
 
-    const cutoutMesh = childMesh.getObjectByName('cutout') as THREE.Mesh
-    if (!cutoutMesh) continue
+      // Calculate bounds in wall-local space
+      const v3 = new THREE.Vector3()
+      let minX = Number.POSITIVE_INFINITY,
+        maxX = Number.NEGATIVE_INFINITY
+      let minY = Number.POSITIVE_INFINITY,
+        maxY = Number.NEGATIVE_INFINITY
 
-    // Get the cutout's bounding box in world space
-    cutoutMesh.updateMatrixWorld()
-    const positions = cutoutMesh.geometry?.attributes?.position
-    if (!positions) continue
+      for (let i = 0; i < positions.count; i++) {
+        v3.fromBufferAttribute(positions, i)
+        v3.applyMatrix4(cutoutMesh.matrixWorld)
+        v3.applyMatrix4(wallMatrixInverse)
 
-    // Calculate bounds in wall-local space
-    const v3 = new THREE.Vector3()
-    let minX = Number.POSITIVE_INFINITY,
-      maxX = Number.NEGATIVE_INFINITY
-    let minY = Number.POSITIVE_INFINITY,
-      maxY = Number.NEGATIVE_INFINITY
-
-    for (let i = 0; i < positions.count; i++) {
-      v3.fromBufferAttribute(positions, i)
-      v3.applyMatrix4(cutoutMesh.matrixWorld)
-      v3.applyMatrix4(wallMatrixInverse)
-
-      minX = Math.min(minX, v3.x)
-      maxX = Math.max(maxX, v3.x)
-      minY = Math.min(minY, v3.y)
-      maxY = Math.max(maxY, v3.y)
-    }
-
-    if (!Number.isFinite(minX)) continue
-
-    // An authored object's cutout keeps its shape (an arch, a circle): its own
-    // geometry in wall space, stretched across the wall so it cuts both faces.
-    if (child.source) {
-      const shaped = authoredCutoutBrush(cutoutMesh, wallMatrixInverse, wallThickness, wallNode)
-      if (shaped) {
-        brushes.push(shaped)
-        continue
+        minX = Math.min(minX, v3.x)
+        maxX = Math.max(maxX, v3.x)
+        minY = Math.min(minY, v3.y)
+        maxY = Math.max(maxY, v3.y)
       }
+
+      if (!Number.isFinite(minX)) continue
+
+      // An authored object's cutout keeps its shape (an arch, a circle): its own
+      // geometry in wall space, stretched across the wall so it cuts both faces.
+      if (child.source) {
+        const shaped = authoredCutoutBrush(cutoutMesh, wallMatrixInverse, wallThickness, wallNode)
+        if (shaped) {
+          brushes.push(shaped)
+          continue
+        }
+      }
+
+      // Create a box geometry that extends through the wall thickness
+      const width = maxX - minX
+      const height = maxY - minY
+      const depth = wallThickness * 2 // Extend beyond wall to ensure clean cut
+
+      const boxGeo = new THREE.BoxGeometry(width, height, depth)
+      // Position box at the center of the cutout
+      boxGeo.translate(minX + width / 2, minY + height / 2, getWallBodyCenterOffset(wallNode))
+
+      // Pre-compute BVH with new API to avoid deprecation warning
+      computeGeometryBoundsTree(boxGeo)
+
+      const brush = new Brush(boxGeo)
+      brushes.push(brush)
     }
-
-    // Create a box geometry that extends through the wall thickness
-    const width = maxX - minX
-    const height = maxY - minY
-    const depth = wallThickness * 2 // Extend beyond wall to ensure clean cut
-
-    const boxGeo = new THREE.BoxGeometry(width, height, depth)
-    // Position box at the center of the cutout
-    boxGeo.translate(minX + width / 2, minY + height / 2, getWallBodyCenterOffset(wallNode))
-
-    // Pre-compute BVH with new API to avoid deprecation warning
-    computeGeometryBoundsTree(boxGeo)
-
-    const brush = new Brush(boxGeo)
-    brushes.push(brush)
   }
 
   return brushes
 }
+
+/**
+ * How far a corner window's cut runs past its wall's end: past this wall's half of the corner at any
+ * angle (the miter stops at five thicknesses), so the two sides open the corner between them. The
+ * cut only takes this wall's own geometry, so running past it touches nothing else.
+ */
+const CORNER_CUT_REACH = 6
 
 function createOpeningCutoutBrush(
   opening: DoorNode | WindowNode,
   wallThickness: number,
   centerOffset: number,
   cutBottom?: number,
+  cornerEnd?: 'start' | 'end',
 ): Brush {
-  const halfWidth = opening.width / 2
+  const size = getDoorOpeningSize(opening)
+  const centerX = opening.position[0] - size.leafOffsetX * openingHostFacing(opening)
+  const halfWidth = size.width / 2
   const bottom = cutBottom ?? opening.position[1] - opening.height / 2
   const bottomPadding = getOpeningCutoutBottomPadding(opening, bottom)
+  const reach = CORNER_CUT_REACH * wallThickness
   const geometry = buildOpeningCutoutGeometry(
     opening,
     {
-      left: opening.position[0] - halfWidth,
-      right: opening.position[0] + halfWidth,
+      left: centerX - halfWidth - (cornerEnd === 'start' ? reach : 0),
+      right: centerX + halfWidth + (cornerEnd === 'end' ? reach : 0),
       bottom: bottom - bottomPadding,
-      top: opening.position[1] + opening.height / 2,
+      top: opening.position[1] - opening.height / 2 + size.height,
     },
     wallThickness * 2,
     wallThickness,

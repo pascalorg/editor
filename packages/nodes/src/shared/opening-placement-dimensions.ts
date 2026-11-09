@@ -6,9 +6,11 @@ import {
   type FloorplanGeometry,
   type FloorplanPoint,
   type GeometryContext,
+  getDoorOpeningSize,
   getWallFaceOffsets,
   isCurvedWall,
   type OpeningSpan,
+  openingHostFacing,
   useScene,
   type WallNode,
   type WindowNode,
@@ -83,22 +85,24 @@ export function buildOpeningPlacementDimensions(
     const sibling = ctx.resolve(childId) as AnyNode | undefined
     if (!sibling || (sibling.type !== 'door' && sibling.type !== 'window')) continue
     const sib = sibling as DoorNode | WindowNode
+    const size = getDoorOpeningSize(sib)
     siblings.push({
       id: sib.id,
-      centerS: sib.position[0],
-      width: sib.width,
-      centerY: sib.position[1],
-      height: sib.height,
+      centerS: sib.position[0] - size.leafOffsetX * openingHostFacing(sib),
+      width: size.width,
+      centerY: sib.position[1] + (size.height - sib.height) / 2,
+      height: size.height,
     })
   }
 
+  const size = getDoorOpeningSize(opening)
   const guides = computeOpeningGuides({
     moving: {
       id: opening.id,
-      centerS: opening.position[0],
-      width: opening.width,
-      centerY: opening.position[1],
-      height: opening.height,
+      centerS: opening.position[0] - size.leafOffsetX * openingHostFacing(opening),
+      width: size.width,
+      centerY: opening.position[1] + (size.height - opening.height) / 2,
+      height: size.height,
     },
     siblings,
     wall: {

@@ -1,9 +1,18 @@
 import { describe, expect, test } from 'bun:test'
 import { extractRooms } from '../../lib/room-graph'
-import { WallNode } from '../../schema/nodes/wall'
+import { getMaterialPresetByRef, MATERIAL_CATALOG } from '../../material-library'
+import { wallSlots } from '../../node-slots/wall'
+import { type AnyNode, LevelNode } from '../../schema'
+import {
+  DEFAULT_EXTERIOR_WALL_FINISH,
+  DEFAULT_INTERIOR_WALL_PAINT,
+  getWallFaceDefault,
+  WallNode,
+} from '../../schema/nodes/wall'
 import { ZoneNode } from '../../schema/nodes/zone'
 import {
   buildWallFinishLayout,
+  getWallLevelZones,
   getWallZoneSpans,
   resolveWallFaceChain,
   resolveWallFinish,
@@ -45,7 +54,7 @@ function tJunction(host: Partial<WallNode> = {}) {
       ...extra,
     })
   }
-  return { host: walls[0]!, zone }
+  return { host: walls[0]!, partition: walls[4]!, zone }
 }
 
 const describeHit = (hit: WallFinishHit) =>
@@ -76,6 +85,47 @@ describe('wall face spans from zones', () => {
 })
 
 describe('wall finish resolution order', () => {
+  test('shared and reversed walls keep each room local finish on its geometric face', () => {
+    const { host, partition, zone } = tJunction()
+    const zones = [
+      zone('A', {
+        wallMaterial: 'library:room-a',
+        wallOverrides: [{ wallId: partition.id, face: 'a', finish: 'library:local-a' }],
+      }),
+      zone('B', {
+        wallMaterial: 'library:room-b',
+        wallOverrides: [{ wallId: host.id, face: 'b', finish: 'library:local-b' }],
+      }),
+    ]
+    const shared = buildWallFinishLayout(partition, zones)
+    expect(describeHit(resolveWallFinish(shared, 'a', 2, 1))).toBe('override:library:local-a')
+    expect(describeHit(resolveWallFinish(shared, 'b', 2, 1))).toBe('zone:library:room-b')
+    const reversed = buildWallFinishLayout({ ...host, start: host.end, end: host.start }, zones)
+    expect(describeHit(resolveWallFinish(reversed, 'b', 2, 1))).toBe('override:library:local-b')
+    expect(describeHit(resolveWallFinish(reversed, 'b', 6, 1))).toBe('zone:library:room-a')
+    expect(describeHit(resolveWallFinish(reversed, 'a', 2, 1))).toBe('slot')
+  })
+
+  test('coincident rooms on another storey cannot supply a wall finish', () => {
+    const { host, zone } = tJunction()
+    const ground = zone('A', { wallMaterial: 'library:ground' })
+    const upper = zone('B', {
+      id: 'zone_upper',
+      parentId: 'level_upper',
+      wallMaterial: 'library:upper',
+    })
+    const level = LevelNode.parse({ id: 'level_t', level: 0, children: [host.id, ground.id] })
+    const upstairs = LevelNode.parse({ id: 'level_upper', level: 1, children: [upper.id] })
+    const nodes: Record<string, AnyNode> = Object.fromEntries(
+      [level, upstairs, host, ground, upper].map((node) => [node.id, node]),
+    )
+    const zones = getWallLevelZones(host, nodes)
+    expect(zones.map((entry) => entry.id)).toEqual([ground.id])
+    const layout = buildWallFinishLayout(host, zones)
+    expect(describeHit(resolveWallFinish(layout, 'a', 2, 1))).toBe('zone:library:ground')
+    expect(describeHit(resolveWallFinish(layout, 'a', 6, 1))).toBe('slot')
+  })
+
   // region > zone override for this face > zone wallMaterial > wall face slot > kind default
   test('each level wins over the ones below it, per span of the T-junction', () => {
     const { host, zone } = tJunction({
@@ -113,7 +163,7 @@ describe('wall finish resolution order', () => {
     expect(resolveWallFaceChain(host, 'a')).toEqual({ kind: 'ref', ref: 'library:slot-a' })
     expect(resolveWallFaceChain(host, 'b')).toEqual({
       kind: 'default',
-      ref: 'library:concrete-drywall',
+      ref: 'library:preset-seattlegrey',
     })
   })
 
@@ -138,7 +188,58 @@ describe('wall finish resolution order', () => {
     expect(resolveWallFaceChain(withSlot, 'a')).toEqual({ kind: 'ref', ref: 'library:slot' })
     expect(resolveWallFaceChain(host, 'a')).toEqual({
       kind: 'default',
+      ref: 'library:preset-seattlegrey',
+    })
+  })
+
+  test('an unpainted face wears Seattle grey; a painted face keeps its paint, raw drywall included', () => {
+    const plain = WallNode.parse({ start: [0, 0], end: [4, 0] })
+    expect(DEFAULT_INTERIOR_WALL_PAINT).toBe('library:preset-seattlegrey')
+    expect(getMaterialPresetByRef(DEFAULT_INTERIOR_WALL_PAINT)?.mapProperties.color).toBe('#d8d6d1')
+    expect(MATERIAL_CATALOG.find((m) => m.id === 'preset-seattlegrey')?.label).toBe('Seattle grey')
+    for (const face of ['a', 'b'] as const)
+      expect(resolveWallFaceChain(plain, face)).toEqual({
+        kind: 'default',
+        ref: DEFAULT_INTERIOR_WALL_PAINT,
+      })
+    // Raw drywall is still a finish to pick on purpose.
+    const painted = { ...plain, slots: { a: 'library:concrete-drywall', b: 'library:preset-sage' } }
+    expect(getMaterialPresetByRef('library:concrete-drywall')).not.toBeNull()
+    expect(resolveWallFaceChain(painted, 'a')).toEqual({
+      kind: 'ref',
       ref: 'library:concrete-drywall',
+    })
+    expect(resolveWallFaceChain(painted, 'b')).toEqual({ kind: 'ref', ref: 'library:preset-sage' })
+  })
+
+  test("Seattle grey stays inside: an exterior face keeps raw drywall, a partition's faces go grey", () => {
+    const at = (frontSide: string, backSide: string) => {
+      const wall = WallNode.parse({ start: [0, 0], end: [4, 0], frontSide, backSide })
+      return (['a', 'b'] as const).map((face) => {
+        const chain = resolveWallFaceChain(wall, face)
+        return chain.kind === 'default' ? chain.ref : chain.kind
+      })
+    }
+    expect(DEFAULT_EXTERIOR_WALL_FINISH).toBe('library:concrete-drywall')
+    const grey = DEFAULT_INTERIOR_WALL_PAINT
+    const drywall = DEFAULT_EXTERIOR_WALL_FINISH
+    // An exterior wall: drywall outside (the default before the interior paint), grey inside.
+    expect(at('exterior', 'interior')).toEqual([drywall, grey])
+    expect(at('interior', 'exterior')).toEqual([grey, drywall])
+    expect(at('exterior', 'unknown')).toEqual([drywall, grey])
+    // A partition, or a wall whose rooms are not detected yet: grey both faces.
+    expect(at('interior', 'interior')).toEqual([grey, grey])
+    expect(at('unknown', 'unknown')).toEqual([grey, grey])
+    // Outdoors on both sides: no inside face.
+    expect(at('exterior', 'exterior')).toEqual([drywall, drywall])
+    // The face's slot declaration says the same, and paint on an exterior face still wins.
+    const outside = WallNode.parse({ start: [0, 0], end: [4, 0], frontSide: 'exterior' })
+    expect(getWallFaceDefault(outside, 'a')).toBe(drywall)
+    expect(wallSlots(outside).find((slot) => slot.slotId === 'a')?.default).toBe(drywall)
+    expect(wallSlots(outside).find((slot) => slot.slotId === 'b')?.default).toBe(grey)
+    expect(resolveWallFaceChain({ ...outside, slots: { a: 'library:preset-sage' } }, 'a')).toEqual({
+      kind: 'ref',
+      ref: 'library:preset-sage',
     })
   })
 

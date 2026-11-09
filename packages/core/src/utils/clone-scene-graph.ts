@@ -5,6 +5,7 @@ import {
   remapConstructionDimensionReferences,
   remapMeasurementReferences,
 } from '../lib/measurement-geometry'
+import { remapSurfaceSupportReferences } from '../lib/surface-support-references'
 import type { AnyNode, AnyNodeId } from '../schema'
 import { generateId } from '../schema/base'
 import type { Collection, CollectionId } from '../schema/collections'
@@ -72,7 +73,7 @@ function remapNodeIdStrings(value: unknown, ids: Map<string, string>): unknown {
 // or the first load re-sorts them and the clone saves a change.
 const SORTED_ID_LISTS = ['boundaryWallIds', 'boundarySeparatorIds', 'zoneIds', 'openingIds']
 
-function remapNodeReferences(node: AnyNode, ids: Map<string, string>): AnyNode {
+export function remapNodeReferences(node: AnyNode, ids: Map<string, string>): AnyNode {
   // Provenance source ids are history, not links: clones carry them verbatim (D5).
   const { provenance, ...links } = node as AnyNode & { provenance?: unknown }
   const remapped = remapNodeIdStrings(links, ids) as Record<string, unknown>
@@ -265,10 +266,10 @@ export function cloneSceneGraph(sceneGraph: SceneGraph): SceneGraph {
     .filter((id): id is string => id !== undefined) as AnyNodeId[]
 
   // Clone and remap collections if present
+  const collectionIdMap = new Map<string, CollectionId>()
   let clonedCollections: Record<CollectionId, Collection> | undefined
   if (collections) {
     clonedCollections = {} as Record<CollectionId, Collection>
-    const collectionIdMap = new Map<string, CollectionId>()
 
     for (const collectionId of Object.keys(collections)) {
       collectionIdMap.set(collectionId, generateId('collection'))
@@ -286,21 +287,14 @@ export function cloneSceneGraph(sceneGraph: SceneGraph): SceneGraph {
           ? (idMap.get(collection.controlNodeId) as AnyNodeId | undefined)
           : undefined,
       }
-
-      // Update collectionIds on nodes that reference this collection
-      for (const oldNodeId of collection.nodeIds) {
-        const newNodeId = idMap.get(oldNodeId)
-        if (newNodeId && clonedNodes[newNodeId as AnyNodeId]) {
-          const node = clonedNodes[newNodeId as AnyNodeId] as Record<string, unknown>
-          if ('collectionIds' in node && Array.isArray(node.collectionIds)) {
-            const oldColIds = node.collectionIds as string[]
-            node.collectionIds = oldColIds
-              .map((cid) => collectionIdMap.get(cid))
-              .filter((id): id is CollectionId => id !== undefined)
-          }
-        }
-      }
     }
+  }
+
+  for (const node of Object.values(clonedNodes)) {
+    if ('collectionIds' in node && node.collectionIds)
+      node.collectionIds = node.collectionIds
+        .map((id) => collectionIdMap.get(id))
+        .filter((id): id is CollectionId => id !== undefined)
   }
 
   return {
@@ -440,7 +434,22 @@ export function cloneLevelSubtree(
       ;(cloned as Record<string, unknown>).deckSlabId =
         idMap.get(cloned.deckSlabId) ?? cloned.deckSlabId
     }
+    remapSurfaceSupportReferences(cloned, idMap)
     remapFloorOpeningReferences(cloned, idMap)
+
+    // A corner window's sides are copied together, so the copies join each other; a side copied
+    // alone is a plain window.
+    if (cloned.type === 'window' && cloned.corner) {
+      const partnerId = idMap.get(cloned.corner.partnerId)
+      cloned.corner = partnerId ? { ...cloned.corner, partnerId } : undefined
+    }
+
+    // A copied plate or ceiling stands for the copied rooms, so the guard
+    // accepts it as derived and the reconciler adopts it on the new level.
+    if (cloned.type === 'slab' && cloned.zoneIds)
+      cloned.zoneIds = cloned.zoneIds.map((id) => idMap.get(id) ?? id).sort()
+    if (cloned.type === 'ceiling' && cloned.zoneId)
+      cloned.zoneId = idMap.get(cloned.zoneId) ?? cloned.zoneId
 
     if (cloned.type === 'measurement') {
       cloned.measurement = remapMeasurementReferences(cloned.measurement, idMap)

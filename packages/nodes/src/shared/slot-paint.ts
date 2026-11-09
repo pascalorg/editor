@@ -13,6 +13,7 @@ import {
   type SceneMaterialId,
   sceneRegistry,
   slotDefaultPaintMaterial,
+  slotPaintMaterial,
   toSceneMaterialRef,
   useScene,
 } from '@pascal-app/core'
@@ -190,12 +191,13 @@ function commitSlotPaint(
 export function buildSlotPreviewMaterial(
   material: MaterialSchema | undefined,
   materialPreset: string | undefined,
+  materials: Record<SceneMaterialId, SceneMaterial> = useScene.getState().materials,
 ): Material | null {
   const shading = useViewer.getState().shading
   if (materialPreset) {
     const parsed = parseMaterialRef(materialPreset)
     if (parsed?.kind === 'scene') {
-      const sceneMaterial = useScene.getState().materials[parsed.id as SceneMaterialId]
+      const sceneMaterial = materials[parsed.id as SceneMaterialId]
       return sceneMaterial ? createMaterial(sceneMaterial.material, shading) : null
     }
     return createMaterialFromPresetRef(materialPreset, shading)
@@ -381,15 +383,9 @@ export function createSlotPaintCapability(config: SlotPaintConfig): PaintCapabil
       }
       return Object.assign(() => finish(false), { commit: () => finish(true) })
     },
-    getEffectiveMaterial: ({ node, role }) => {
-      const ref = (node as SlotsNode).slots?.[role]
-      const parsed = parseMaterialRef(ref)
-      if (parsed) {
-        if (parsed.kind === 'library') return { material: undefined, materialPreset: ref }
-        const sceneMaterial = useScene.getState().materials[parsed.id as SceneMaterialId]
-        if (sceneMaterial) return { material: sceneMaterial.material, materialPreset: undefined }
-      }
-      return config.legacyEffective?.(node, role) ?? null
-    },
+    getEffectiveMaterial: ({ node, role, materials = {} }) =>
+      slotPaintMaterial((node as SlotsNode).slots?.[role], materials) ??
+      config.legacyEffective?.(node, role) ??
+      null,
   }
 }

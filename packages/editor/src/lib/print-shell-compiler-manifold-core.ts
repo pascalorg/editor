@@ -27,7 +27,7 @@ type ManifoldFactory = (config?: {
 // emscripten then locates manifold.wasm relative to the glue's own URL. Hosts
 // that can't reach the CDN (offline, CSP) pass their own URLs through
 // configureManifoldRuntime.
-const MANIFOLD_VERSION = '3.5.1'
+const MANIFOLD_VERSION = '3.5.4'
 const FALLBACK_MODULE_URL = `https://cdn.jsdelivr.net/npm/manifold-3d@${MANIFOLD_VERSION}/manifold.js`
 
 function importUntraced(specifier: string): Promise<{ default: ManifoldFactory }> {

@@ -262,7 +262,7 @@ export const BlockNode = BaseNode.extend({
   - topology: persistent vertices, edges, and ordered face loops with stable IDs
   - position/rotation: level-local placement transform
   - supportSlabId: persisted placement surface that prevents later slabs from lifting the mesh
-  - slots: material references keyed by face materialSlot; an unbound body uses the wall-role default
+  - slots: material references (library:<id> / scene:<id>) or plain #rrggbb colours keyed by face materialSlot; an unbound body uses the wall-role default
   - slotNames: user-facing names for stable material slots; body is the permanent default slot
 `)
 

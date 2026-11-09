@@ -185,7 +185,7 @@ describe('already-placed cabinet grid snap', () => {
       [level, wall, door, run, module].map((node) => [node.id, node as AnyNode]),
     ) as Record<AnyNodeId, AnyNode>
     const isValidPosition = (
-      cabinetDefinition.capabilities?.movable as unknown as {
+      cabinetDefinition.capabilities!.movable as unknown as {
         isValidPosition?: (args: Record<string, unknown>) => boolean
       }
     ).isValidPosition

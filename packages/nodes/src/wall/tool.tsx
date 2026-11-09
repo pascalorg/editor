@@ -25,10 +25,12 @@ import {
   chainEndJoinsExistingWall,
   clearPlacementSurface,
   commitWallPolygonDraft,
+  createInvisibleWallOnCurrentLevel,
   createWallOnCurrentLevel,
   DraftMeasurementLabel,
   discardWallPolygonDraft,
   EDITOR_LAYER,
+  endWallPullRun,
   formatAngleRadians,
   formatLinearMeasurement,
   getAngleArcToSegmentReference,
@@ -36,33 +38,45 @@ import {
   getGridEventScreenProjection,
   getSegmentAngleReferenceAtPoint,
   getWallDrawVariant,
+  getWallLineKind,
   type HorizontalConstructionPlane,
+  invisibleWallDraftSnapLines,
   isAlignmentGuideActive,
   isAngleSnapActive,
   isMagneticSnapActive,
+  isWallRunFree,
   markToolCancelConsumed,
   parseMeasurement,
   publishHorizontalConstructionPlane,
   publishPlacementSurface,
+  publishWallRunFeedback,
   resampleTerrainConstructionPlane,
   resolveEventConstructionPlane,
+  resolveLevelConstructionPlane,
   resolvePointerSupportSurface,
   resolveTypedCommitEnd,
   type SegmentAngleReference,
   snapWallDraftPointDetailed,
+  snapWallRunDraftPoint,
   startWallPolygonDraft,
   triggerSFX,
   useAlignmentGuides,
   useEditor,
   useFloorplanDraftPreview,
   useSegmentDraftChain,
+  useWallDraftThickness,
   useWallDraftTyping,
   useWallDrawVariant,
+  useWallPullRun,
   useWallSnapIndicator,
+  visibleScene,
   WALL_CONNECT_SNAP_RADIUS,
   WALL_JOIN_SNAP_RADIUS,
   type WallPlanPoint,
+  type WallPullRun,
+  wallDraftIsRun,
   wallPolygonDraftWalls,
+  wallRunDirection,
 } from '@pascal-app/editor'
 import { getSceneTheme, useViewer } from '@pascal-app/viewer'
 import { useThree } from '@react-three/fiber'
@@ -81,13 +95,22 @@ import RectangleWallTool from './rectangle-tool'
 /**
  * Phase 5 Stage D — wall placement tool (kind-owned).
  *
- * 1:1 port of the legacy `WallTool`. Two-click flow: click 1 sets the
- * start, click 2 creates the wall. Between clicks a vertical preview
- * rectangle + length/angle measurement HUD follow the pointer. Snapping is
- * governed by the global snapping mode (`'off'` is the bypass); Esc cancels.
+ * Walls: click 1 sets the start, click 2 creates the wall, and the tool waits
+ * for the next start. Polygon: each click adds a corner and the next side
+ * chains from it until Esc, a double-click, closing the loop or teeing into
+ * another wall. Between clicks a vertical preview rectangle + length/angle
+ * measurement HUD follow the pointer. Snapping is governed by the global
+ * snapping mode (`'off'` is the bypass): a Walls segment locks to 15° rays from
+ * its start; a Polygon side holds square to the one before and the house's
+ * axes, with projection guides and a labelled snap marker
+ * (`snapWallRunDraftPoint`).
  *
  * Not a `DragAction` — same reasoning as fence/slab/ceiling placement:
  * stateful sequence of grid:click events, not a single drag-up.
+ *
+ * A wall end's pull grip (`startWallPull`) arms a run already started at that
+ * end: the tool seeds its chain from `useWallPullRun`, its first wall square to
+ * the pulled one, and ends the pull when the chain stops.
  *
  * Mounted via `def.tool` from `wall/definition.ts`.
  */
@@ -457,6 +480,30 @@ function getBelowLevelWalls(): WallNode[] {
   return getLevelWalls(belowLevel?.id ?? null, nodes)
 }
 
+/**
+ * The walls the line tool snaps a drafted point against. `walls` is the active
+ * level, which the measurement HUD reports against. `snapWalls` adds an open
+ * Polygon room's sides and, as a reference for the corner and edge snaps, the
+ * floor below. `bodyWalls` leaves the floor below out: a body capture T-joins
+ * the wall it lands in, and a wall on another floor can't be joined, so an end
+ * near a lower wall's face stays where the plan (which only knows the active
+ * level) puts it. An invisible-wall draft also catches the invisible walls
+ * already drawn (`invisibleWallDraftSnapLines`).
+ */
+export function getWallDraftSnapWalls(): {
+  walls: WallNode[]
+  snapWalls: WallNode[]
+  bodyWalls: WallNode[]
+} {
+  const walls = getCurrentLevelWalls()
+  const draftWalls = [...wallPolygonDraftWalls(), ...invisibleWallDraftSnapLines()]
+  return {
+    walls,
+    snapWalls: [...walls, ...getBelowLevelWalls(), ...draftWalls],
+    bodyWalls: [...walls, ...draftWalls],
+  }
+}
+
 const LineWallTool: React.FC = () => {
   const unit = useViewer((state) => state.unit)
   const metricNotation = useViewer((state) => state.metricNotation)
@@ -479,8 +526,7 @@ const LineWallTool: React.FC = () => {
   cameraRef.current = camera
   const previewHeight =
     typeof wallDefaults?.height === 'number' ? wallDefaults.height : activeLevelHeight
-  const previewThickness =
-    typeof wallDefaults?.thickness === 'number' ? wallDefaults.thickness : DRAFT_WALL_THICKNESS
+  const previewThickness = useWallDraftThickness(DRAFT_WALL_THICKNESS)
   const previewHeightRef = useRef(previewHeight)
   previewHeightRef.current = previewHeight
   const previewThicknessRef = useRef(previewThickness)
@@ -639,12 +685,61 @@ const LineWallTool: React.FC = () => {
       useWallSnapIndicator.getState().clear()
       useSegmentDraftChain.getState().clear('wall')
       clearPlacementSurface()
+      seededPullSeq = null
+      runReference = null
+      // A pulled run ends with its chain: back to Select.
+      endWallPullRun()
     }
 
     // In 2D-only view the plan owns wall drafting; this tool stays mounted
     // behind the hidden canvas and still hears the plan's grid events, so it
     // must not also draft (it would add every corner twice).
-    const planOwnsInput = () => useEditor.getState().viewMode === '2d'
+    const planOwnsInput = () => visibleScene(useEditor.getState()) === '2d'
+
+    // The pull run this chain was seeded from.
+    let seededPullSeq: number | null = null
+    // Direction of the run's last wall (the pulled one first); null before one.
+    let runReference: WallPlanPoint | null = null
+    // The floor plan forwards its own snapped moves; it shows their feedback.
+    const fromCanvas = (event: GridEvent) => event.nativeEvent?.target instanceof HTMLCanvasElement
+    // A started run holds square to its last wall and the house's axes.
+    const snapRun = (point: WallPlanPoint, event: GridEvent) => {
+      const runStart = chainFirstVertex.current ?? startingPoint.current
+      return snapWallRunDraftPoint({
+        point,
+        start: [startingPoint.current.x, startingPoint.current.z],
+        runStart: [runStart.x, runStart.z],
+        reference: runReference,
+        walls: getWallDraftSnapWalls().bodyWalls,
+        free: isWallRunFree(event.nativeEvent),
+      })
+    }
+
+    // A wall end's pull grip opens the run at that end: start the chain there,
+    // on the pulled wall's own base, as if its end had been clicked.
+    const seedPull = (run: WallPullRun | null) => {
+      if (!run || run.seq === seededPullSeq || planOwnsInput()) return
+      const { walls } = getWallDraftSnapWalls()
+      const plane =
+        snappedWallConstructionPlane([run.sourceWallId], walls) ?? resolveLevelConstructionPlane()
+      if (!plane) return
+      seededPullSeq = run.seq
+      runReference = run.reference
+      constructionPlane.current = plane
+      flatConstructionBase.current = false
+      chainWallIds.current = []
+      startingPoint.current.set(run.start[0], plane.localY, run.start[1])
+      chainFirstVertex.current = startingPoint.current.clone()
+      endingPoint.current.copy(startingPoint.current)
+      buildingState.current = 1
+      const draftPreview = useFloorplanDraftPreview.getState()
+      draftPreview.setWallDraftStart(run.start)
+      draftPreview.setWallDraftEnd(run.start)
+      cursorRef.current?.position.copy(startingPoint.current)
+      if (wallPreviewRef.current) wallPreviewRef.current.visible = false
+      setDraftMeasurement(null)
+      setAxisGuide({ origin: run.start, endOrigin: null, y: plane.localY, angleLabel: null })
+    }
 
     const onGridMove = (event: GridEvent) => {
       if (!(cursorRef.current && wallPreviewRef.current) || planOwnsInput()) return
@@ -664,50 +759,59 @@ const LineWallTool: React.FC = () => {
         )
       }
 
-      const walls = getCurrentLevelWalls()
-      // Add walls on the floor below as extra snap references so the new wall
-      // can align with the level beneath it. Kept separate from `walls` so the
-      // measurement HUD only reports against the active level.
-      const snapWalls = [...walls, ...getBelowLevelWalls(), ...wallPolygonDraftWalls()]
+      // Walls on the floor below are extra snap references so the new wall can
+      // align with the level beneath it; the measurement HUD reports against
+      // the active level's `walls` only.
+      const { walls, snapWalls, bodyWalls } = getWallDraftSnapWalls()
       const localPoint: WallPlanPoint = pointed?.localPoint
         ? [pointed.localPoint[0], pointed.localPoint[2]]
         : [event.localPosition[0], event.localPosition[2]]
       // Snapping is governed entirely by the snapping mode (grid / lines /
       // angles / off). `'off'` is the bypass — there is no Shift hold-to-bypass.
-      const angleLocked = buildingState.current === 1 && isAngleSnapActive()
-      // Split view (#308): a `grid:move` from the floor-plan panel carries
-      // `screenProjection` (the 3D raycaster never sets it). While a typing
-      // buffer is active that point is already fully resolved — the 2D side
-      // snapped it and projected it onto the typed length. Running it
-      // through magnetic/grid snap again can rotate the draft ray (a nearby
-      // corner pulls the endpoint) so the committed wall no longer matches
-      // the 2D preview (Bugbot 3cd53dd1). Trust it verbatim; native 3D
-      // moves keep the full snap pipeline.
+      // A split-view move forwarded by the floor plan while a length is typed
+      // is already snapped and projected onto that length there; snapping it
+      // again here could pull the ray onto a nearby corner, so the 3D preview
+      // and commit would drift from the plan's.
       const typedFromFloorplan =
         buildingState.current === 1 &&
         useWallDraftTyping.getState().input.length > 0 &&
         getGridEventScreenProjection(event) !== undefined
-      const snapResult = typedFromFloorplan
-        ? null
-        : snapWallDraftPointDetailed({
-            point: localPoint,
-            walls: snapWalls,
-            start: angleLocked ? [startingPoint.current.x, startingPoint.current.z] : undefined,
-            angleSnap: angleLocked,
-            magnetic: isMagneticSnapActive(),
-          })
-      gridPosition = snapResult
-        ? alignPoint(snapResult.point, { applySnap: !angleLocked })
-        : localPoint
-      // Stand the magnetic beacon at the endpoint when it locked onto an
-      // existing wall corner / wall point; clear it for plain grid/angle moves.
-      useWallSnapIndicator
-        .getState()
-        .set(
-          snapResult?.snap
-            ? { x: gridPosition[0], z: gridPosition[1], kind: snapResult.snap }
-            : null,
-        )
+      // Everything here is building-local: the lattice, the 15° rays and the
+      // alignment axes all turn with a building the site planner turned.
+      if (typedFromFloorplan) {
+        gridPosition = localPoint
+        useWallSnapIndicator.getState().set(null)
+      } else if (buildingState.current === 1 && wallDraftIsRun()) {
+        // A started run holds square and shows its guides and snap marker.
+        const runSnap = snapRun(localPoint, event)
+        gridPosition = runSnap.point
+        if (fromCanvas(event)) publishWallRunFeedback(runSnap)
+      } else {
+        // A Walls segment locks to 15° rays from its start.
+        const angleLocked = buildingState.current === 1 && isAngleSnapActive()
+        const snapResult = snapWallDraftPointDetailed({
+          point: localPoint,
+          walls: snapWalls,
+          start: angleLocked ? [startingPoint.current.x, startingPoint.current.z] : undefined,
+          angleSnap: angleLocked,
+          magnetic: isMagneticSnapActive(),
+          captureWallBodies: true,
+          bodyWalls,
+        })
+        // A point locked onto a wall stays on it: alignment only shows its guides.
+        gridPosition = alignPoint(snapResult.point, {
+          applySnap: !angleLocked && snapResult.snap === null,
+        })
+        // Stand the magnetic beacon at the endpoint when it locked onto an
+        // existing wall corner / wall point; clear it for plain grid/angle moves.
+        useWallSnapIndicator
+          .getState()
+          .set(
+            snapResult.snap
+              ? { x: gridPosition[0], z: gridPosition[1], kind: snapResult.snap }
+              : null,
+          )
+      }
 
       if (buildingState.current === 1) {
         // Typed-length editing (#308): while a buffer is active the draft end
@@ -800,8 +904,7 @@ const LineWallTool: React.FC = () => {
         return
       }
 
-      const walls = getCurrentLevelWalls()
-      const snapWalls = [...walls, ...getBelowLevelWalls(), ...wallPolygonDraftWalls()]
+      const { walls, snapWalls, bodyWalls } = getWallDraftSnapWalls()
       const pointed = buildingState.current === 0 ? pointedSurfaceFor(event) : null
       const localClick: WallPlanPoint = pointed?.localPoint
         ? [pointed.localPoint[0], pointed.localPoint[2]]
@@ -812,8 +915,12 @@ const LineWallTool: React.FC = () => {
           point: localClick,
           walls: snapWalls,
           magnetic: isMagneticSnapActive(),
+          captureWallBodies: true,
+          bodyWalls,
         })
-        const snappedStart = alignPoint(snapResult.point)
+        const snappedStart = alignPoint(snapResult.point, {
+          applySnap: snapResult.snap === null,
+        })
         const resolvedPlane =
           (pointed?.sourceNodeId
             ? resolveEventConstructionPlane(event, pointed)
@@ -827,6 +934,7 @@ const LineWallTool: React.FC = () => {
         gridPosition = snappedStart
         startingPoint.current.set(snappedStart[0], plane.localY, snappedStart[1])
         chainFirstVertex.current = startingPoint.current.clone()
+        runReference = null
         endingPoint.current.copy(startingPoint.current)
         buildingState.current = 1
         const draftPreview = useFloorplanDraftPreview.getState()
@@ -881,16 +989,22 @@ const LineWallTool: React.FC = () => {
         const angleLocked = isAngleSnapActive()
         const snappedEnd =
           typedCommit ??
-          alignPoint(
-            snapWallDraftPointDetailed({
-              point: localClick,
-              walls: snapWalls,
-              start: angleLocked ? [startingPoint.current.x, startingPoint.current.z] : undefined,
-              angleSnap: angleLocked,
-              magnetic: isMagneticSnapActive(),
-            }).point,
-            { applySnap: !angleLocked },
-          )
+          (wallDraftIsRun()
+            ? snapRun(localClick, event).point
+            : alignPoint(
+                snapWallDraftPointDetailed({
+                  point: localClick,
+                  walls: snapWalls,
+                  start: angleLocked
+                    ? [startingPoint.current.x, startingPoint.current.z]
+                    : undefined,
+                  angleSnap: angleLocked,
+                  magnetic: isMagneticSnapActive(),
+                  captureWallBodies: true,
+                  bodyWalls,
+                }).point,
+                { applySnap: !angleLocked },
+              ))
         const dx = snappedEnd[0] - startingPoint.current.x
         const dz = snappedEnd[1] - startingPoint.current.z
         if (dx * dx + dz * dz < 0.01 * 0.01) return
@@ -910,29 +1024,44 @@ const LineWallTool: React.FC = () => {
             stopDrafting()
             return
           }
+          runReference = wallRunDirection(
+            [startingPoint.current.x, startingPoint.current.z],
+            snappedEnd,
+          )
           nextStart = snappedEnd
         } else {
           const draftPlane = constructionPlane.current
           const commitPointed =
             draftPlane?.supportSlabId === GROUND_SUPPORT_ID ? null : pointedSurfaceFor(event)
           // Both start and end are building-local ✓
-          const createdWall = createWallOnCurrentLevel(
-            [startingPoint.current.x, startingPoint.current.z],
-            snappedEnd,
-            {
-              supportCap: commitPointed ? commitPointed.elevation : (draftPlane?.elevation ?? null),
-              preferredSupportSlabId: draftPlane?.supportSlabId ?? null,
-              constructionElevation: draftPlane?.elevation ?? null,
-              constructionHeight: previewHeightRef.current,
-              constructionSourceNodeId: constructionPlane.current?.sourceNodeId ?? null,
-              flatConstructionBase: flatConstructionBase.current,
-            },
-          )
+          // The Walls variant's Invisible draws room separators, not walls.
+          const createdWall =
+            getWallLineKind() === 'invisible'
+              ? createInvisibleWallOnCurrentLevel(
+                  [startingPoint.current.x, startingPoint.current.z],
+                  snappedEnd,
+                )
+              : createWallOnCurrentLevel(
+                  [startingPoint.current.x, startingPoint.current.z],
+                  snappedEnd,
+                  {
+                    supportCap: commitPointed
+                      ? commitPointed.elevation
+                      : (draftPlane?.elevation ?? null),
+                    preferredSupportSlabId: draftPlane?.supportSlabId ?? null,
+                    constructionElevation: draftPlane?.elevation ?? null,
+                    constructionHeight: previewHeightRef.current,
+                    constructionSourceNodeId: constructionPlane.current?.sourceNodeId ?? null,
+                    flatConstructionBase: flatConstructionBase.current,
+                  },
+                )
           if (!createdWall) return
           chainWallIds.current.push(createdWall.id)
           // The committed length was typed for this segment only; a stale
           // buffer would silently re-apply it to the next segment.
           useWallDraftTyping.getState().clearInput()
+          // The run's next wall holds square to this one.
+          runReference = wallRunDirection(createdWall.start, createdWall.end)
 
           // The new segment is now a real node — make it an alignment target
           // for the next segment, and drop the just-shown guide.
@@ -940,7 +1069,8 @@ const LineWallTool: React.FC = () => {
           useAlignmentGuides.getState().clear()
           useWallSnapIndicator.getState().clear()
 
-          if (useEditor.getState().getContinuation('wall') === 'single') {
+          // Walls draws one wall per two clicks.
+          if (!wallDraftIsRun()) {
             stopDrafting()
             return
           }
@@ -961,7 +1091,7 @@ const LineWallTool: React.FC = () => {
           if (
             closedToChainStart ||
             chainEndJoinsExistingWall(createdWall.end, levelWalls, chainWallIds.current) ||
-            wallClosesRoom(levelWalls, createdWall)
+            (createdWall.type === 'wall' && wallClosesRoom(levelWalls, createdWall))
           ) {
             stopDrafting()
             return
@@ -1021,7 +1151,7 @@ const LineWallTool: React.FC = () => {
       // see them instead. The panel re-bases its draft onto the chain start
       // this tool publishes, so split view keeps a single owner (this tool)
       // while 2D-only hands the keyboard to the view that commits.
-      if (useEditor.getState().viewMode === '2d') return
+      if (planOwnsInput()) return
       const target = event.target as HTMLElement | null
       if (
         target instanceof HTMLInputElement ||
@@ -1105,10 +1235,13 @@ const LineWallTool: React.FC = () => {
     emitter.on('grid:click', onGridClick)
     emitter.on('tool:cancel', onCancel)
     window.addEventListener('keydown', onKeyDown, true)
+    const stopPullSeeding = useWallPullRun.subscribe((state) => seedPull(state.run))
+    seedPull(useWallPullRun.getState().run)
 
     return () => {
       // Leaving the tool mid-polygon abandons it (nothing was written).
       discardWallPolygonDraft()
+      stopPullSeeding()
       emitter.off('grid:move', onGridMove)
       emitter.off('grid:click', onGridClick)
       emitter.off('tool:cancel', onCancel)
@@ -1219,7 +1352,14 @@ function PolygonDraftGhosts({
 export const WallTool: React.FC = () => {
   // Clear preset-seeded defaults on deactivation so a later manual wall draw
   // isn't built with a stale preset's parameters. Unmount-only.
-  useEffect(() => () => useEditor.getState().setToolDefaults('wall', null), [])
+  useEffect(
+    () => () => {
+      const editor = useEditor.getState()
+      // Remounts keep the active preset; leaving the wall tool releases it.
+      if (editor.tool !== 'wall') editor.setToolDefaults('wall', null)
+    },
+    [],
+  )
 
   // The drawing variant is picked in the Build panel's Rooms group.
   const variant = useWallDrawVariant()

@@ -4,9 +4,13 @@ import {
   CEILING_SURFACE_ROLE,
   type CeilingNode,
   type CeilingSurfaceCell,
+  ceilingCapLift,
   ceilingPaintRegions,
   computeCeilingSurfaceCells,
+  getEffectiveCutterNode,
   getEffectiveNode,
+  hostedCutterHoles,
+  isScriptedNode,
   type MultiPolygon,
   nodeRegistry,
   resolveCeilingHeight,
@@ -21,6 +25,12 @@ import { mergeSurfaceHolePolygons } from '../surface-hole-geometry'
 
 /** Name of the meshes a ceiling draws its paint regions with, one per region. */
 export const CEILING_REGION_MESH = 'ceiling-region'
+
+/**
+ * Name of the mesh that draws a ceiling's upper face while `showCeilingTops` is on. It shares the
+ * grid's geometry, which covers the whole ceiling, and stands on top of the ceiling's build-up.
+ */
+export const CEILING_CAP_MESH = 'ceiling-cap'
 
 /**
  * The material a ceiling draws a region finish with. The ceiling's renderer
@@ -86,11 +96,18 @@ function collectCeilingHoles(
   ceiling: CeilingNode,
   nodes: SceneNodes,
 ): Array<Array<[number, number]>> {
-  const holes: Array<Array<[number, number]>> = []
+  // Only the ceiling's own children can bind to it.
+  const hosted: SceneNodes = { [ceiling.id]: ceiling }
+  for (const childId of ceiling.children ?? []) {
+    const child = nodes[childId as AnyNodeId]
+    if (child) hosted[child.id] = getEffectiveCutterNode(child)
+  }
+  const holes = hostedCutterHoles(ceiling, hosted)
 
   for (const childId of ceiling.children ?? []) {
     const child = nodes[childId as AnyNodeId]
     if (!child) continue
+    if (isScriptedNode(child) && child.source.manifest.cutters?.length) continue
     const def = nodeRegistry.get(child.type)
     const hole = def?.capabilities?.ceilingCut?.buildCeilingHole(child)
     if (hole) holes.push(hole)
@@ -136,6 +153,11 @@ export function updateCeilingGeometry(
   if (gridMesh) {
     gridMesh.geometry.dispose()
     gridMesh.geometry = cells ? newGeo : newGeo.clone()
+    const capMesh = mesh.getObjectByName(CEILING_CAP_MESH) as THREE.Mesh | undefined
+    if (capMesh) {
+      capMesh.geometry = gridMesh.geometry
+      capMesh.position.y = ceilingCapLift(node, nodes)
+    }
   } else if (cells) {
     newGeo.dispose()
   }
@@ -171,6 +193,8 @@ function syncCeilingRegionMeshes(mesh: THREE.Mesh, cells: readonly CeilingSurfac
     if (!region) {
       region = new THREE.Mesh()
       region.name = CEILING_REGION_MESH
+      region.castShadow = true
+      region.receiveShadow = true
       mesh.add(region)
     } else region.geometry.dispose()
     region.geometry = flatCeilingGeometry(cell.polygons)

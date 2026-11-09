@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { AssetUrl } from '../asset-url'
 import { BaseNode, nodeType, objectId } from '../base'
 import type { CollectionId } from '../collections'
-import { GeometryScriptSource } from '../geometry-source'
+import { GeometryScriptSource, LightGlow, LightSpot } from '../geometry-source'
 
 // --- Control descriptors ---
 
@@ -64,6 +64,10 @@ const lightEffectSchema = z.object({
   intensityRange: z.tuple([z.number(), z.number()]),
   distance: z.number().optional(),
   offset: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
+  // A spotlight instead of a point light; its direction turns with the item.
+  spot: LightSpot.optional(),
+  shadows: z.boolean().optional(),
+  glow: LightGlow.optional(),
 })
 
 const effectSchema = z.discriminatedUnion('kind', [animationEffectSchema, lightEffectSchema])

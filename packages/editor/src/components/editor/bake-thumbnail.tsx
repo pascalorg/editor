@@ -12,7 +12,9 @@ import {
   setKeyLightDirectionOverride,
   setProceduralEmission,
   setSlotDefaultOverrides,
+  siteSurfaces,
   temporarilyHideNodeTypes,
+  temporarilyWithoutAmbiance,
   useSceneAtmosphere,
   useViewer,
 } from '@pascal-app/viewer'
@@ -45,8 +47,9 @@ const THUMBNAIL_BACKDROP = { inner: '#FAFAFA', outer: '#E4E4E4' }
 const THUMBNAIL_SHADOW_CATCHER_OPACITY = 0.7
 /** Soft shade hugging the ground-floor walls so the building never floats. */
 const THUMBNAIL_WALL_CONTACT = { opacity: 0.5, spreadM: 0.9 }
-/** Unpainted walls render as smooth plaster rather than the screw-dotted
- *  prepared-drywall default, which reads as unfinished at card size. */
+/** A roof's unpainted trim and gable bands render as smooth plaster rather
+ *  than the screw-dotted prepared-drywall default, which reads as unfinished
+ *  at card size. Unpainted walls already wear the interior paint. */
 const THUMBNAIL_SLOT_DEFAULT_OVERRIDES = {
   'library:concrete-drywall': 'library:concrete-plaster',
 } as const
@@ -90,20 +93,6 @@ async function settledHeroFraming() {
     previous = next
   }
   return framing
-}
-
-/** The site's own surfaces (ground fill, horizon disc, property ribbons) —
- *  not its registered children (buildings, items), which are groups. */
-function siteSurfaces(): Object3D[] {
-  const surfaces: Object3D[] = []
-  for (const siteId of sceneRegistry.byType.site ?? []) {
-    for (const child of sceneRegistry.nodes.get(siteId)?.children ?? []) {
-      if (child.visible && !(child.type === 'Group' && child.children.length > 0)) {
-        surfaces.push(child)
-      }
-    }
-  }
-  return surfaces
 }
 
 /**
@@ -221,6 +210,8 @@ export function BakeThumbnail({
 
     const run = async () => {
       const restoreNodeVisibility = temporarilyHideNodeTypes(['scan', 'guide', 'spawn'])
+      // The hero is the building in the world's own light, wherever the person's eye is.
+      const restoreAmbiance = temporarilyWithoutAmbiance()
       const priorLights = new Map<string, boolean>()
       const restGroups = new Map<string, [number, number, number]>()
       for (const node of Object.values(useScene.getState().nodes)) {
@@ -333,7 +324,7 @@ export function BakeThumbnail({
         }
 
         pipeline.applyEnvironment({
-          theme: useViewer.getState().sceneTheme,
+          theme: useViewer.getState().sceneAppearance,
           transparent: false,
           grade: true,
           edges: useViewer.getState().edges,
@@ -399,6 +390,7 @@ export function BakeThumbnail({
             .getState()
             .setProceduralLights(id as import('@pascal-app/core').AnyNodeId, on)
         restoreNodeVisibility()
+        restoreAmbiance()
       }
     }
 

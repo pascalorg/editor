@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, test } from 'bun:test'
-import { Client } from '@modelcontextprotocol/sdk/client/index.js'
-import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import { Client } from '@modelcontextprotocol/client'
+import { InMemoryTransport, McpServer } from '@modelcontextprotocol/server'
 import { ItemNode } from '@pascal-app/core/schema'
 import { SceneBridge } from '../bridge/scene-bridge'
 import { registerCheckCollisions } from './check-collisions'
@@ -125,7 +124,7 @@ describe('check_collisions', () => {
       idempotentHint: true,
       openWorldHint: false,
     })
-    const candidate = (tool?.inputSchema.properties as Record<string, unknown>).candidate as {
+    const candidate = (tool!.inputSchema.properties as Record<string, unknown>).candidate as {
       properties: Record<string, { items?: unknown; minItems?: number; maxItems?: number }>
     }
     for (const field of ['position', 'dimensions']) {

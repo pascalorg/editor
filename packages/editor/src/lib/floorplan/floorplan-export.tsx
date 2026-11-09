@@ -44,15 +44,11 @@ import { resolveNodeForDrawingType } from './drawing-coordination'
 import {
   type FloorplanMetricNotation,
   type FloorplanSchedule,
-  type FloorplanWallDimensionReference,
+  type FloorplanWallDimensionFaces,
   getFloorplanNodeExtension,
   readFloorplanGeometryMetadata,
 } from './floorplan-extension'
-import {
-  type FloorplanMode,
-  resolveFloorplanAnnotationVisibility,
-  resolveFloorplanWallDimensionReference,
-} from './floorplan-mode'
+import { type FloorplanMode, resolveFloorplanAnnotationVisibility } from './floorplan-mode'
 import { createFloorplanPdfDocument, type FloorplanPdfDocument } from './floorplan-pdfkit-document'
 import { renderFloorplanGeometryToPdfKit } from './floorplan-pdfkit-renderer'
 import { FLOORPLAN_VIEW_ROTATION_DEG } from './geometry'
@@ -131,7 +127,7 @@ const NEUTRAL_VIEW_STATE = {
 export function resolveFloorplanExportViewState(
   unit: 'metric' | 'imperial',
   metricNotation: FloorplanMetricNotation,
-  wallDimensionReference?: FloorplanWallDimensionReference,
+  wallDimensionFaces?: FloorplanWallDimensionFaces,
   automaticDimensions = true,
 ) {
   return {
@@ -139,7 +135,7 @@ export function resolveFloorplanExportViewState(
     automaticDimensions,
     unit,
     metricNotation,
-    wallDimensionReference,
+    wallDimensionFaces,
   }
 }
 
@@ -195,10 +191,7 @@ export async function exportFloorplanPdf(scope: FloorplanExportScope): Promise<v
   const annotationVisibility = resolveFloorplanExportAnnotationVisibility(
     floorplanMode,
     expertAnnotationState.visibility,
-  )
-  const wallDimensionReference = resolveFloorplanWallDimensionReference(
-    floorplanMode,
-    expertAnnotationState.wallDimensionReference,
+    expertAnnotationState.showDimensions,
   )
   const navigationAzimuth = useEditor.getState().navigationSyncPose?.azimuth
   const drawingType = useDrawingView.getState().drawingType
@@ -232,7 +225,7 @@ export async function exportFloorplanPdf(scope: FloorplanExportScope): Promise<v
         metricNotation,
         annotationVisibility,
         drawingType,
-        wallDimensionReference,
+        expertAnnotationState.wallDimensionFaces,
         installedPlugins,
       )
       const schedules = collectFloorplanSchedules(nodes, level.id, unit, scope)
@@ -604,8 +597,12 @@ export function resolveFloorplanScreenUnitsPerPixel(
 export function resolveFloorplanExportAnnotationVisibility(
   mode: FloorplanMode,
   liveVisibility: FloorplanAnnotationVisibility,
+  dimensions: boolean,
 ): FloorplanAnnotationVisibility {
-  return resolveFloorplanAnnotationVisibility(mode, liveVisibility, { target: 'export' })
+  return resolveFloorplanAnnotationVisibility(mode, liveVisibility, {
+    target: 'export',
+    dimensions,
+  })
 }
 
 export function resolveFloorplanExportRotationDeg(
@@ -785,7 +782,7 @@ export function collectFloorplanGeometry(
   metricNotation: FloorplanMetricNotation,
   annotationVisibility: FloorplanAnnotationVisibility,
   drawingType: ConstructionDrawingType,
-  wallDimensionReference: FloorplanWallDimensionReference,
+  wallDimensionFaces: FloorplanWallDimensionFaces,
   /** `undefined` = legacy scene without install state: every loaded kind draws. */
   installedPlugins: readonly string[] | undefined,
 ): ExportGeometry[] {
@@ -907,7 +904,7 @@ export function collectFloorplanGeometry(
       resolveFloorplanExportViewState(
         unit,
         metricNotation,
-        wallDimensionReference,
+        wallDimensionFaces,
         annotationVisibility.automaticDimensions,
       ),
       levelData,

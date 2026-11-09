@@ -1,24 +1,12 @@
 'use client'
 
+import { ZONE_COLOR_PALETTE } from '@pascal-app/core'
 import { useState } from 'react'
 import { cn } from '../../../lib/utils'
 import { Popover, PopoverContent, PopoverTrigger } from './popover'
 import { Tooltip, TooltipContent, TooltipTrigger } from './tooltip'
 
-export const PALETTE_COLORS = [
-  '#ef4444', // Red        0°
-  '#f97316', // Orange    30°
-  '#f59e0b', // Amber     45°
-  '#84cc16', // Lime      85°
-  '#22c55e', // Green    142°
-  '#10b981', // Emerald  160°
-  '#06b6d4', // Cyan     190°
-  '#3b82f6', // Blue     217°
-  '#6366f1', // Indigo   239°
-  '#a855f7', // Violet   270°
-  '#64748b', // Dark gray
-  '#cccccc', // Light gray
-]
+export const PALETTE_COLORS = ZONE_COLOR_PALETTE
 
 interface ColorDotProps {
   color: string

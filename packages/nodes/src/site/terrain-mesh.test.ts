@@ -176,46 +176,91 @@ describe('applyTerrainPatch — conservative bounds and locality', () => {
     }
   }
 
-  test.each([
-    -1200, 900,
-  ])('surface and skirt stay enclosed through new and removed extremes (initial height %i)', (initialHeight) => {
-    let field: TerrainField = {
-      ...createTerrainField({ cols: 9, rows: 7, origin: [-3.17, 2.29], spacing: 0.3 }),
-      heights: new Int16Array(9 * 7).fill(initialHeight),
-    }
-    const target = createTerrainGeometry(field)
-    const surfaceReferences = { ...target.buffers }
-    const skirtReferences = { ...target.skirt.buffers }
-    const positionAttribute = attr(target.geometry, 'position')
-    const normalAttribute = attr(target.geometry, 'normal')
-    try {
-      expectEnclosed(target.geometry, target.buffers.positions)
-      expectEnclosed(target.skirt.geometry, target.skirt.buffers.positions)
-      for (const [col0, row0, height] of [
-        [4, 3, 32767],
-        [8, 6, -32768],
-        [4, 3, 0],
-        [8, 6, 0],
-        [0, 0, 31000],
-        [0, 0, 0],
-        [8, 0, -32000],
-        [8, 0, 0],
-      ] as const) {
-        const patch: HeightPatch = {
-          col0,
-          row0,
-          cols: 1,
-          rows: 1,
-          heights: new Int16Array([height]),
-        }
-        const previous = field
-        const previousHeights = field.heights.slice()
-        field = applyHeightPatch(field, patch)
-        const expectedHeights = field.heights.slice()
-        applyTerrainPatch(target, field, patch)
+  test.each([-1200, 900])(
+    'surface and skirt stay enclosed through new and removed extremes (initial height %i)',
+    (initialHeight) => {
+      let field: TerrainField = {
+        ...createTerrainField({ cols: 9, rows: 7, origin: [-3.17, 2.29], spacing: 0.3 }),
+        heights: new Int16Array(9 * 7).fill(initialHeight),
+      }
+      const target = createTerrainGeometry(field)
+      const surfaceReferences = { ...target.buffers }
+      const skirtReferences = { ...target.skirt.buffers }
+      const positionAttribute = attr(target.geometry, 'position')
+      const normalAttribute = attr(target.geometry, 'normal')
+      try {
+        expectEnclosed(target.geometry, target.buffers.positions)
+        expectEnclosed(target.skirt.geometry, target.skirt.buffers.positions)
+        for (const [col0, row0, height] of [
+          [4, 3, 32767],
+          [8, 6, -32768],
+          [4, 3, 0],
+          [8, 6, 0],
+          [0, 0, 31000],
+          [0, 0, 0],
+          [8, 0, -32000],
+          [8, 0, 0],
+        ] as const) {
+          const patch: HeightPatch = {
+            col0,
+            row0,
+            cols: 1,
+            rows: 1,
+            heights: new Int16Array([height]),
+          }
+          const previous = field
+          const previousHeights = field.heights.slice()
+          field = applyHeightPatch(field, patch)
+          const expectedHeights = field.heights.slice()
+          applyTerrainPatch(target, field, patch)
 
-        const surface = buildTerrainMesh(field)
-        const skirt = buildTerrainSkirt(field)
+          const surface = buildTerrainMesh(field)
+          const skirt = buildTerrainSkirt(field)
+          expect(target.buffers.positions).toEqual(surface.positions)
+          for (let i = 0; i < surface.normals.length; i++) {
+            expect(target.buffers.normals[i]).toBeCloseTo(surface.normals[i]!, 6)
+          }
+          expect(target.skirt.buffers.positions).toEqual(skirt.positions)
+          expectEnclosed(target.geometry, surface.positions)
+          expectEnclosed(target.skirt.geometry, skirt.positions)
+          expect(previous.heights).toEqual(previousHeights)
+          expect(field.heights).toEqual(expectedHeights)
+          expect(field.heights).not.toBe(previous.heights)
+          for (const name of ['positions', 'normals', 'uvs', 'indices'] as const) {
+            expect(target.buffers[name]).toBe(surfaceReferences[name])
+          }
+          for (const name of ['positions', 'normals', 'indices'] as const) {
+            expect(target.skirt.buffers[name]).toBe(skirtReferences[name])
+          }
+          expect(attr(target.geometry, 'position')).toBe(positionAttribute)
+          expect(attr(target.geometry, 'normal')).toBe(normalAttribute)
+        }
+      } finally {
+        disposeTerrainGeometry(target)
+      }
+    },
+  )
+
+  test.each([
+    ['top-left', -1, -1],
+    ['bottom-right', 7, 5],
+  ] as const)(
+    'clipped %s patches preserve the surface, skirt, and safe bounds',
+    (_name, col0, row0) => {
+      const before = createTerrainField({ cols: 9, rows: 7, origin: [-3.17, 2.29], spacing: 0.3 })
+      const patch: HeightPatch = {
+        col0,
+        row0,
+        cols: 3,
+        rows: 3,
+        heights: Int16Array.from({ length: 9 }, (_, i) => (i % 2 ? -32768 : 32767)),
+      }
+      const after = applyHeightPatch(before, patch)
+      const target = createTerrainGeometry(before)
+      try {
+        applyTerrainPatch(target, after, patch)
+        const surface = buildTerrainMesh(after)
+        const skirt = buildTerrainSkirt(after)
         expect(target.buffers.positions).toEqual(surface.positions)
         for (let i = 0; i < surface.normals.length; i++) {
           expect(target.buffers.normals[i]).toBeCloseTo(surface.normals[i]!, 6)
@@ -223,52 +268,11 @@ describe('applyTerrainPatch — conservative bounds and locality', () => {
         expect(target.skirt.buffers.positions).toEqual(skirt.positions)
         expectEnclosed(target.geometry, surface.positions)
         expectEnclosed(target.skirt.geometry, skirt.positions)
-        expect(previous.heights).toEqual(previousHeights)
-        expect(field.heights).toEqual(expectedHeights)
-        expect(field.heights).not.toBe(previous.heights)
-        for (const name of ['positions', 'normals', 'uvs', 'indices'] as const) {
-          expect(target.buffers[name]).toBe(surfaceReferences[name])
-        }
-        for (const name of ['positions', 'normals', 'indices'] as const) {
-          expect(target.skirt.buffers[name]).toBe(skirtReferences[name])
-        }
-        expect(attr(target.geometry, 'position')).toBe(positionAttribute)
-        expect(attr(target.geometry, 'normal')).toBe(normalAttribute)
+      } finally {
+        disposeTerrainGeometry(target)
       }
-    } finally {
-      disposeTerrainGeometry(target)
-    }
-  })
-
-  test.each([
-    ['top-left', -1, -1],
-    ['bottom-right', 7, 5],
-  ] as const)('clipped %s patches preserve the surface, skirt, and safe bounds', (_name, col0, row0) => {
-    const before = createTerrainField({ cols: 9, rows: 7, origin: [-3.17, 2.29], spacing: 0.3 })
-    const patch: HeightPatch = {
-      col0,
-      row0,
-      cols: 3,
-      rows: 3,
-      heights: Int16Array.from({ length: 9 }, (_, i) => (i % 2 ? -32768 : 32767)),
-    }
-    const after = applyHeightPatch(before, patch)
-    const target = createTerrainGeometry(before)
-    try {
-      applyTerrainPatch(target, after, patch)
-      const surface = buildTerrainMesh(after)
-      const skirt = buildTerrainSkirt(after)
-      expect(target.buffers.positions).toEqual(surface.positions)
-      for (let i = 0; i < surface.normals.length; i++) {
-        expect(target.buffers.normals[i]).toBeCloseTo(surface.normals[i]!, 6)
-      }
-      expect(target.skirt.buffers.positions).toEqual(skirt.positions)
-      expectEnclosed(target.geometry, surface.positions)
-      expectEnclosed(target.skirt.geometry, skirt.positions)
-    } finally {
-      disposeTerrainGeometry(target)
-    }
-  })
+    },
+  )
 
   test.each([65, 257])('a tiny interior patch does not scan a %i-square heightfield', (size) => {
     const before = createTerrainField({ cols: size, rows: size, spacing: 0.5 })

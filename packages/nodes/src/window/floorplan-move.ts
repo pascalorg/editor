@@ -1,7 +1,10 @@
 import {
   type AnyNodeId,
+  type CornerSnap,
+  evaluateCorner,
   type FloorplanMoveTarget,
   type FloorplanMoveTargetSession,
+  runAsSingleSceneHistoryStep,
   useLiveNodeOverrides,
   useLiveTransforms,
   useScene,
@@ -18,6 +21,7 @@ import {
   usePlacementPreview,
 } from '@pascal-app/editor'
 import { createFloorplanCursorResolver } from '../shared/floorplan-cursor'
+import { movedOpeningCasingFaces } from '../shared/opening-casing-move'
 import { openingPlaneOffsetOnWall } from '../shared/opening-plane-offset'
 import { getOpeningHostLevelId, getRoofHostedOpeningPlanPoint } from '../shared/roof-opening-host'
 import {
@@ -26,6 +30,8 @@ import {
   resolveOpeningPlacement,
   snapLocalXToNeighbors,
 } from '../shared/wall-attach-target'
+import { showCornerCue, snappingTurnedOff } from './corner-cue'
+import { settleMovedWindow } from './corner-fuse'
 import { clampToWall, DEFAULT_WINDOW_SILL_M, hasWallChildOverlap } from './window-math'
 
 /**
@@ -81,6 +87,8 @@ export const windowFloorplanMoveTarget: FloorplanMoveTarget<WindowNode> = ({ nod
     roofSegmentId: undefined
     roofFace: undefined
     visible: true
+    casingFaceA?: boolean
+    casingFaceB?: boolean
   } | null = null
 
   // R flips the window's facing (front ↔ back) mid-placement — see
@@ -97,6 +105,9 @@ export const windowFloorplanMoveTarget: FloorplanMoveTarget<WindowNode> = ({ nod
   // Alt force-place (last apply's modifier) — lets `canCommit` allow an
   // overlapping placement, matching the 3D move.
   let forcePlace = false
+  // Near a corner, as in the 3D move: the edge snaps to it, the window waiting on the other wall
+  // is outlined, and the drop joins them. Alt drops it plain.
+  let cornerSnap: CornerSnap | null = null
   let liveTransformActive = useLiveTransforms.getState().transforms.has(nodeId)
   let liveOverrideKey: string | null = null
   let placementPreviewActive = usePlacementPreview.getState().node?.id === nodeId
@@ -126,6 +137,8 @@ export const windowFloorplanMoveTarget: FloorplanMoveTarget<WindowNode> = ({ nod
   const freeFollow = (planPoint: readonly [number, number]) => {
     onWall = false
     lastValid = null
+    cornerSnap = null
+    showCornerCue(null)
     if (liveTransformActive) {
       useLiveTransforms.getState().clear(nodeId)
       liveTransformActive = false
@@ -197,14 +210,39 @@ export const windowFloorplanMoveTarget: FloorplanMoveTarget<WindowNode> = ({ nod
             nodes,
           })
       const snappedLocalX = neighborX ?? snapToHalf(hit.localX)
-      const { clampedX, clampedY } = clampToWall(
-        hit.wall,
-        snappedLocalX,
-        startLocalY,
-        node.width,
-        node.height,
-        nodes,
-      )
+      const slid = clampToWall(hit.wall, snappedLocalX, startLocalY, node.width, node.height, nodes)
+      const { clampedY } = slid
+      let clampedX = slid.clampedX
+      // Alt, or snapping off, drops the window where it is.
+      const corner =
+        forcePlace || snappingTurnedOff()
+          ? { snap: null, block: null }
+          : evaluateCorner(nodes, {
+              wallId: hit.wall.id,
+              centreX: clampedX,
+              width: node.width,
+              height: node.height,
+              sillHeight: clampedY - node.height / 2,
+              ignoreId: nodeId,
+              held: cornerSnap?.end ?? null,
+            })
+      cornerSnap = corner.snap
+      // A curtain wall's margin can keep the window off its corner: then it is no corner.
+      if (cornerSnap) {
+        const settled = clampToWall(
+          hit.wall,
+          cornerSnap.centreX,
+          clampedY,
+          node.width,
+          node.height,
+          nodes,
+        )
+        if (Math.abs(settled.clampedX - cornerSnap.centreX) > 1e-6) {
+          corner.block = { reason: 'curtain', end: cornerSnap.end }
+          cornerSnap = null
+        } else clampedX = cornerSnap.centreX
+      }
+      showCornerCue(cornerSnap, corner.block)
 
       // One click per real position step, keyed on the SNAPPED along-wall value
       // so it ticks only when the window actually moves to a new cell.
@@ -216,6 +254,8 @@ export const windowFloorplanMoveTarget: FloorplanMoveTarget<WindowNode> = ({ nod
           : 'front'
         : hit.side
       const itemRotation = hit.itemRotation + (flipped ? Math.PI : 0)
+      // Another wall may be drawn the other way round: the casing keeps to its side.
+      const casing = movedOpeningCasingFaces(node, hit.wall.id, [0, itemRotation, 0], nodes)
 
       lastValid = {
         // Same-wall moves keep the wall-local plane offset; another host resets it.
@@ -229,6 +269,7 @@ export const windowFloorplanMoveTarget: FloorplanMoveTarget<WindowNode> = ({ nod
         roofSegmentId: undefined,
         roofFace: undefined,
         visible: true,
+        ...casing,
       }
 
       setLiveOverride(`wall:${hit.wall.id}:${side}`, {
@@ -238,6 +279,7 @@ export const windowFloorplanMoveTarget: FloorplanMoveTarget<WindowNode> = ({ nod
         roofSegmentId: undefined,
         roofFace: undefined,
         visible: true,
+        ...casing,
       })
       useLiveTransforms.getState().set(nodeId, {
         position: lastValid.position,
@@ -246,6 +288,7 @@ export const windowFloorplanMoveTarget: FloorplanMoveTarget<WindowNode> = ({ nod
       liveTransformActive = true
     },
     canCommit() {
+      showCornerCue(null)
       // Off-wall the window is free-following — not placeable; the overlay
       // reverts to the pre-move snapshot. Matches the 3D move.
       if (!onWall || !lastValid) return false
@@ -273,12 +316,12 @@ export const windowFloorplanMoveTarget: FloorplanMoveTarget<WindowNode> = ({ nod
       // committed move lands on the same `parentId` with identical data.
       // See `doorFloorplanMoveTarget.commit` for the original fix.
       if (!lastValid) return
-      useScene.getState().updateNodes([
-        {
-          id: nodeId,
-          data: lastValid,
-        },
-      ])
+      const placed = lastValid
+      // At a corner the window lands already joined, as one undo step.
+      runAsSingleSceneHistoryStep(useScene, () => {
+        useScene.getState().updateNodes([{ id: nodeId, data: placed }])
+        settleMovedWindow(nodeId, cornerSnap)
+      })
     },
   }
 

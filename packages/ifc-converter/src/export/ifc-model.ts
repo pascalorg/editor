@@ -285,6 +285,7 @@ export const label = (value: string) => typed('IFCLABEL', value)
 export const identifier = (value: string) => typed('IFCIDENTIFIER', value)
 export const text = (value: string) => typed('IFCTEXT', value)
 export const bool = (value: boolean) => typed('IFCBOOLEAN', value)
+export const logical = (value: boolean) => typed('IFCLOGICAL', value)
 export const length = (value: number) => typed('IFCLENGTHMEASURE', value)
 export const ratio = (value: number) => typed('IFCPOSITIVERATIOMEASURE', value)
 export { DERIVED, enumValue, int }

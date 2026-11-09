@@ -11,8 +11,8 @@ import {
   nodeRegistry,
   validateDwv,
 } from '@pascal-app/core'
+import { connectionCompatibility } from '@pascal-app/editor/distribution'
 import { Box3, Ray, Vector3 } from 'three'
-import { connectionCompatibility } from './connection-compatibility'
 import { planRunHangerSlots } from './run-hangers'
 
 export type SystemFinding = {

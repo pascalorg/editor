@@ -3,14 +3,13 @@ import {
   type AnyNodeId,
   planWallMerge,
   runAsSingleSceneHistoryStep,
+  usePascalI18n,
   useScene,
 } from '@pascal-app/core'
 import {
+  ActionMenuButton,
   captureElementActionOrigin,
   completeElementAction,
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
   triggerSFX,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
@@ -18,10 +17,7 @@ import { FoldHorizontal, Scissors } from 'lucide-react'
 import { useMemo } from 'react'
 import { openWallSplit } from './split-session'
 
-const BUTTON =
-  'tooltip-trigger rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-50'
-
-/** The wall's action-menu contributions: Split (one wall) and Merge (several). */
+/** The wall's action-menu contributions: Split (one wall), Merge (several). */
 export default function WallActions() {
   return (
     <>
@@ -32,6 +28,7 @@ export default function WallActions() {
 }
 
 function SplitWallAction() {
+  const i18n = usePascalI18n()
   const selected = useViewer((s) => s.selection.selectedIds)
   const wall = useScene((s) =>
     selected.length === 1 ? s.nodes[selected[0] as AnyNodeId] : undefined,
@@ -39,46 +36,50 @@ function SplitWallAction() {
   const readOnly = useScene((s) => s.readOnly)
   if (wall?.type !== 'wall') return null
   return (
-    <button
-      type="button"
-      aria-label="Split wall"
-      title="Split wall"
+    <ActionMenuButton
       disabled={readOnly}
-      className={BUTTON}
+      label={i18n._({ id: 'node.wall.actions.splitWall', message: 'Split wall' })}
       onClick={(event) => {
         event.stopPropagation()
         openWallSplit(wall)
       }}
     >
       <Scissors className="size-4" />
-    </button>
+    </ActionMenuButton>
   )
 }
 
 /** Joins selected walls that continue each other into one — the inverse of Split. */
 function MergeWallsAction() {
+  const i18n = usePascalI18n()
   const selected = useViewer((s) => s.selection.selectedIds) as AnyNodeId[]
   const nodes = useScene((s) => s.nodes)
   const readOnly = useScene((s) => s.readOnly)
-  // null: not a wall selection (render nothing); otherwise why it can't merge, or null.
+  // null: not a wall selection (render nothing); otherwise why it can't merge (undefined when the
+  // plan gave no reason of its own), or null.
   const merge = useMemo(() => {
     if (selected.length < 2 || selected.some((id) => nodes[id]?.type !== 'wall')) return null
     try {
       planWallMerge(nodes, selected)
       return { reason: null }
     } catch (error) {
-      return { reason: error instanceof Error ? error.message : 'These walls cannot be merged.' }
+      return { reason: error instanceof Error ? error.message : undefined }
     }
   }, [nodes, selected])
   if (!merge) return null
-  const { reason } = merge
-  const button = (
-    <button
-      type="button"
-      aria-label="Merge walls"
-      title={reason ? undefined : 'Merge walls'}
+  // Worded here rather than in the memo, so a change of language reaches it.
+  const reason =
+    merge.reason === undefined
+      ? i18n._({
+          id: 'node.wall.actions.theseWallsCannotBeMerged',
+          message: 'These walls cannot be merged.',
+        })
+      : merge.reason
+  return (
+    <ActionMenuButton
       disabled={readOnly || reason !== null}
-      className={BUTTON}
+      disabledReason={reason ?? undefined}
+      label={i18n._({ id: 'node.wall.actions.mergeWalls', message: 'Merge walls' })}
       onClick={(event) => {
         event.stopPropagation()
         const plan = planWallMerge(useScene.getState().nodes, selected)
@@ -93,16 +94,6 @@ function MergeWallsAction() {
       }}
     >
       <FoldHorizontal className="size-4" />
-    </button>
-  )
-  if (!reason) return button
-  // A disabled button gets no hover events, so the reason hangs off a wrapper.
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <span className="inline-flex">{button}</span>
-      </TooltipTrigger>
-      <TooltipContent side="top">{reason}</TooltipContent>
-    </Tooltip>
+    </ActionMenuButton>
   )
 }

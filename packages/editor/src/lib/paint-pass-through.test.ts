@@ -7,6 +7,7 @@ import {
   Group,
   type Intersection,
   Mesh,
+  MeshBasicMaterial,
   Path,
   Ray,
   Shape,
@@ -73,6 +74,16 @@ describe('paint passes through an empty opening', () => {
 
   it('without a drawn mesh the hit is the wall', () => {
     expect(wallHitInOpening(null, new Ray(), 1)).toBe(false)
+  })
+
+  it('a drawn mesh with a group its material array has no entry for is the wall, without throwing', () => {
+    const torn = new Mesh(drawn.geometry.clone(), [new MeshBasicMaterial()])
+    torn.geometry.clearGroups()
+    torn.geometry.addGroup(0, Number.POSITIVE_INFINITY, 3)
+    torn.updateMatrixWorld(true)
+    const ray = new Ray(new Vector3(2, 1, 5), new Vector3(0, 0, -1))
+    expect(() => wallHitInOpening(torn, ray, 5 - 0.2)).not.toThrow()
+    expect(wallHitInOpening(torn, ray, 5 - 0.2)).toBe(false)
   })
 })
 

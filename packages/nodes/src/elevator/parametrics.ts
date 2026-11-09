@@ -33,7 +33,7 @@ export const elevatorParametrics: ParametricDescriptor<ElevatorNode> = {
           label: 'Wall thickness',
           unit: 'm',
           min: 0.04,
-          max: 0.4,
+          max: 1000,
           step: 0.01,
         },
         {

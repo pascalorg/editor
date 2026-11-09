@@ -5,10 +5,10 @@ import {
   nodeRegistry,
   PipeFittingNode,
 } from '@pascal-app/core'
+import type { ScenePort } from '@pascal-app/editor/distribution'
 import { Euler, Matrix4, Quaternion, Vector3 } from 'three'
 import { getDuctFittingPorts } from '../duct-fitting/ports'
 import { getPipeFittingPorts, WYE_BRANCH_RAD } from '../pipe-fitting/ports'
-import type { ScenePort } from './ports'
 
 type Point = [number, number, number]
 

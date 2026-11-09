@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test } from 'bun:test'
-import { type AnyNodeId, type SiteNode, useScene } from '@pascal-app/core'
+import { type AnyNodeId, generateId, SiteNode, useScene } from '@pascal-app/core'
 import { dropInLot } from './drop-in'
 import type { ParcelResolveData } from './lot-patch'
 import type { ParcelProvider } from './parcel-provider'
@@ -243,6 +243,64 @@ describe('dropInLot on a through lot', () => {
 describe('dropInLot onto a site that already has a lot', () => {
   beforeEach(() => {
     useScene.setState({ nodes: {}, rootNodeIds: [], dirtyNodes: new Set() } as never)
+  })
+
+  test('a terrain response applies the parcel to the hydrated site and preserves its current settings', async () => {
+    let finishTerrain!: () => void
+    let startedTerrain!: () => void
+    const waiting = new Promise<void>((resolve) => {
+      finishTerrain = resolve
+    })
+    const started = new Promise<void>((resolve) => {
+      startedTerrain = resolve
+    })
+    const read = fakeProvider(null, 'sloped')
+    const provider: ParcelProvider = async (endpoint, request) => {
+      if (endpoint === 'elevation') {
+        startedTerrain()
+        await waiting
+      }
+      return read(endpoint, request)
+    }
+    const dropping = dropInLot(
+      { address: GAINESVILLE },
+      {
+        dossier: false,
+        roads: false,
+        provider,
+      },
+    )
+    await started
+    expect(useScene.getState().rootNodeIds).toEqual([])
+    const hydrated = SiteNode.parse({
+      id: generateId('site'),
+      type: 'site',
+      name: 'My site',
+      polygon: { type: 'polygon', points: rect(30, 30) },
+      setbacks: { front: 8, side: 3, rear: 6 },
+      zone: 'Owner verified zone',
+      metadata: { ownerNote: 'Keep the driveway' },
+    })
+    useScene.setState({ nodes: { [hydrated.id]: hydrated }, rootNodeIds: [hydrated.id] } as never)
+    finishTerrain()
+
+    const result = await dropping
+    expect(result.ok).toBe(true)
+    expect(result.siteId).toBe(hydrated.id)
+    expect(useScene.getState().rootNodeIds).toEqual([hydrated.id])
+    const current = site(hydrated.id)
+    const points = current.polygon!.points
+    expect(Math.max(...points.map((p) => p[0])) - Math.min(...points.map((p) => p[0]))).toBe(25)
+    expect(Math.max(...points.map((p) => p[1])) - Math.min(...points.map((p) => p[1]))).toBe(32)
+    expect(current.parcel?.apn).toBe('06075-030-062')
+    expect(current.address?.city).toBe('Gainesville')
+    expect(current.terrain).toBeDefined()
+    expect(current.setbacks).toEqual(hydrated.setbacks)
+    expect(current.zone).toBe(hydrated.zone)
+    expect(current.metadata).toMatchObject({
+      ownerNote: 'Keep the driveway',
+      terrainSample: result.terrain,
+    })
   })
 
   test('the second lot replaces the first lot’s address, APN and county', async () => {

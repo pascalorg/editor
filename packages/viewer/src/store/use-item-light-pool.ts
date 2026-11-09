@@ -6,24 +6,24 @@ import {
   sceneRegistry,
   useInteractive,
 } from '@pascal-app/core'
-import type { Object3D, Vector3 } from 'three'
+import { type Object3D, Quaternion } from 'three'
 import { create } from 'zustand'
+import type { PooledLight } from '../systems/item-light/pooled-lights'
 
-export type LightSource = {
-  key: string
+export type LightSource = PooledLight & {
   nodeId: AnyNodeId
-  color: string
-  distance: number
-  getWorldPosition: (out: Vector3) => boolean
   getIntensity: () => number
   isEligible: () => boolean
 }
+
+const _quaternion = new Quaternion()
 
 export function catalogLightSource(
   key: string,
   nodeId: AnyNodeId,
   effect: LightEffect,
   interactive: Interactive,
+  localScale?: readonly [number, number, number],
 ): LightSource {
   const toggleIndex = interactive.controls.findIndex((control) => control.kind === 'toggle')
   const sliderIndex = interactive.controls.findIndex((control) => control.kind === 'slider')
@@ -33,9 +33,27 @@ export function catalogLightSource(
     nodeId,
     color: effect.color,
     distance: effect.distance ?? 0,
+    spot: effect.spot,
+    shadows: effect.shadows,
+    glow: effect.glow,
+    peak: effect.intensityRange[1],
+    getWorldDirection: (out) => {
+      const object = sceneRegistry.nodes.get(nodeId)
+      out.set(...(effect.spot?.direction ?? [0, -1, 0])).normalize()
+      if (object) out.applyQuaternion(object.getWorldQuaternion(_quaternion))
+    },
     getWorldPosition: (out) => {
       const object = sceneRegistry.nodes.get(nodeId)
       if (!object) return false
+      if (localScale) {
+        out.set(
+          effect.offset[0] * localScale[0],
+          effect.offset[1] * localScale[1],
+          effect.offset[2] * localScale[2],
+        )
+        object.localToWorld(out)
+        return true
+      }
       object.getWorldPosition(out)
       out.set(out.x + effect.offset[0], out.y + effect.offset[1], out.z + effect.offset[2])
       return true

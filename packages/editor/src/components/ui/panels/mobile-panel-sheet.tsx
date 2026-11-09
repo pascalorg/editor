@@ -1,11 +1,12 @@
 'use client'
 
+import { usePascalI18n } from '@pascal-app/core'
 import { X } from 'lucide-react'
 import { AnimatePresence, motion } from 'motion/react'
-import Image from 'next/image'
 import { type ReactNode, useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import useEditor from '../../../store/use-editor'
+import { NodeIconImage } from '../node-icon-image'
 
 interface MobilePanelSheetProps {
   open: boolean
@@ -19,6 +20,7 @@ const HEIGHT_VH = 50
 const DRAG_CLOSE_THRESHOLD_PX = 120
 
 export function MobilePanelSheet({ open, onClose, icon, title, children }: MobilePanelSheetProps) {
+  const i18n = usePascalI18n()
   const [mounted, setMounted] = useState(false)
   const setMobilePanelSheetHeight = useEditor((s) => s.setMobilePanelSheetHeight)
 
@@ -56,7 +58,7 @@ export function MobilePanelSheet({ open, onClose, icon, title, children }: Mobil
       {open && (
         <motion.div
           animate={{ y: 0 }}
-          className="dark fixed right-0 bottom-0 left-0 z-[60] flex flex-col overflow-hidden rounded-t-2xl bg-sidebar text-sidebar-foreground shadow-[0_-8px_24px_rgba(0,0,0,0.24)]"
+          className="fixed right-0 bottom-0 left-0 z-[60] flex flex-col overflow-hidden rounded-t-2xl bg-sidebar text-sidebar-foreground shadow-[0_-8px_24px_rgba(0,0,0,0.24)]"
           drag="y"
           dragConstraints={{ top: 0, bottom: 0 }}
           dragElastic={{ top: 0, bottom: 0.4 }}
@@ -75,7 +77,7 @@ export function MobilePanelSheet({ open, onClose, icon, title, children }: Mobil
           <div className="flex shrink-0 items-center justify-between border-border/50 border-b px-3 pt-1 pb-3">
             <div className="flex min-w-0 items-center gap-2">
               {icon && (
-                <Image
+                <NodeIconImage
                   alt=""
                   className="shrink-0 object-contain"
                   height={18}
@@ -88,8 +90,8 @@ export function MobilePanelSheet({ open, onClose, icon, title, children }: Mobil
               </h2>
             </div>
             <button
-              aria-label="Close"
-              className="flex h-8 w-8 items-center justify-center rounded-md bg-[#2C2C2E] text-muted-foreground transition-colors hover:bg-[#3e3e3e] hover:text-foreground"
+              aria-label={i18n._({ id: 'editor.panels.mobilePanelSheet.close', message: 'Close' })}
+              className="flex h-8 w-8 items-center justify-center rounded-md bg-black/4 dark:bg-[#2C2C2E] text-muted-foreground transition-colors hover:bg-black/8 dark:hover:bg-[#3e3e3e] hover:text-foreground"
               onClick={onClose}
               type="button"
             >

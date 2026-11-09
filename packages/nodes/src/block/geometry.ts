@@ -1,7 +1,9 @@
 import {
+  BLOCK_BODY_SLOT_ID,
   type BlockFace,
   type BlockNode,
   type BlockTopology,
+  blockMaterialSlotIds,
   type GeometryContext,
   getBlockFaceFrame,
   getBlockFaceNormal,
@@ -22,7 +24,6 @@ import {
   Vector2,
   Vector3,
 } from 'three'
-import { BLOCK_BODY_SLOT_ID, blockMaterialSlotIds } from './material-slots'
 
 type Point = [number, number, number]
 const SMOOTH_NORMAL_ANGLE_COSINE = Math.cos(Math.PI / 6)

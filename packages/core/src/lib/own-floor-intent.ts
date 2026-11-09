@@ -1,8 +1,8 @@
 import { boundaries, diffStructure, roomFace } from '../commands/structure/shared'
 import type { AnyNode, AnyNodeId, SlabNode, ZoneNode } from '../schema'
 import { resolveCeilingHeight } from '../services/level-height'
-import { getLevelElevations, getWallPlaneTop } from '../services/storey'
-import { MIN_WALL_HEIGHT, resolveWallTop } from '../systems/wall/wall-top'
+import { getLevelElevations, getWallTop } from '../services/storey'
+import { MIN_WALL_HEIGHT } from '../systems/wall/wall-top'
 import { reconcileStructureWithStableIds } from '../utils/structure-id'
 import { mintFloorFootprintKey } from './floor-footprint-key'
 import { floorPlateHoldsUnderside } from './floor-foundation-datum'
@@ -141,17 +141,9 @@ export function ownFloorIntentChanges(
   for (const old of Object.values(nodes)) {
     const current = next[old.id]
     if (old.type !== 'wall' || current?.type !== 'wall' || !old.parentId) continue
-    const oldTop = resolveWallTop(
-      old,
-      getWallPlaneTop(old, old.parentId, nodes),
-      wallSupportForNodes(old, nodes).elevation,
-    )
+    const oldTop = getWallTop(old, old.parentId, nodes, wallSupportForNodes(old, nodes).elevation)
     const support = wallSupportForNodes(current, next).elevation
-    const newTop = resolveWallTop(
-      current,
-      getWallPlaneTop(current, current.parentId!, next),
-      support,
-    )
+    const newTop = getWallTop(current, current.parentId!, next, support)
     if (Math.abs(oldTop - newTop) <= 1e-6) continue
     if (oldTop - support < MIN_WALL_HEIGHT)
       return refuse(

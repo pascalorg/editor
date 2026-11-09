@@ -1,12 +1,21 @@
 import { describe, expect, test } from 'bun:test'
-import { type AnyNode, WallNode, type WallNode as WallNodeType } from '@pascal-app/core'
+import {
+  type AnyNode,
+  type FloorplanGeometry,
+  WallNode,
+  type WallNode as WallNodeType,
+} from '@pascal-app/core'
+import {
+  createFloorplanContextExtensions,
+  type FloorplanWallDimensionFaces,
+} from '@pascal-app/editor'
 import { constructionDimensionStandard } from '../shared/construction-dimension-standards'
 import {
   buildLevelWallConstructionDimensionPlan,
   type PlannedConstructionDimension,
   renderPlannedConstructionDimensions,
 } from './construction-dimensions'
-import { computeWallFloorplanLevelData } from './floorplan'
+import { buildWallFloorplan, computeWallFloorplanLevelData } from './floorplan'
 
 function wall(overrides: Partial<WallNodeType>): WallNodeType {
   return WallNode.parse({
@@ -89,6 +98,13 @@ function topFacadePlan(
   )
 }
 
+function dimensionTexts(geometry: FloorplanGeometry): string[] {
+  if (geometry.kind === 'group') return geometry.children.flatMap(dimensionTexts)
+  return geometry.kind === 'dimension-string'
+    ? geometry.segments.map((segment) => segment.text ?? '')
+    : []
+}
+
 function tierEntries(
   plan: readonly PlannedConstructionDimension[],
   tier: PlannedConstructionDimension['tier'],
@@ -119,29 +135,32 @@ describe('automatic wall dimension reference policy', () => {
     expect(intersection('structural-face')).toBeCloseTo(3.94)
   })
 
-  test('keeps centerline distinct while all face modes use the wall face', () => {
-    const { nodes, top, walls } = topFacadeFixture(true)
+  test('Measure walls picks the face chains of the finished-face strings', () => {
+    const { nodes, walls } = topFacadeFixture(false, true)
     const levelData = computeWallFloorplanLevelData({ siblings: walls, nodes })
-    const renderedSegments = (reference: 'finished-faces' | 'centerline' | 'stud-faces') => {
-      const partitionChain = tierEntries(
-        levelData.constructionDimensionsByReference[reference].get(top.id) ?? [],
-        'partitions',
-      )
-      const rendered = renderPlannedConstructionDimensions(partitionChain, 'metric')
-      const dimensionString = rendered[0]
-      return dimensionString?.kind === 'dimension-string' ? dimensionString.segments : []
-    }
+    const texts = (wallDimensionFaces: FloorplanWallDimensionFaces) =>
+      walls.flatMap((candidate) => {
+        const geometry = buildWallFloorplan(candidate, {
+          resolve: () => undefined,
+          children: [],
+          siblings: walls.filter((sibling) => sibling.id !== candidate.id),
+          parent: null,
+          levelData,
+          extensions: createFloorplanContextExtensions({ wallDimensionFaces }),
+        })
+        return geometry ? dimensionTexts(geometry) : []
+      })
 
-    expect(renderedSegments('finished-faces').map((segment) => segment.text)).toEqual([
-      '4.04m',
-      '0.12m',
-      '6.04m',
-    ])
-    expect(renderedSegments('centerline').map((segment) => segment.text)).toEqual(['4.1m', '6.1m'])
-    expect(renderedSegments('stud-faces').map((segment) => segment.text)).toEqual([
-      '4.04m',
-      '6.16m',
-    ])
+    // Outside: the facade strings (top and bottom: the partition located on
+    // the facade, then the overall size; left and right: the overall size).
+    const facade = ['4.04m', '0.12m', '6.04m', '10.2m']
+    const outside = [...facade, '6.2m', ...facade, '6.2m']
+    // Inside: the partition's clear span, inside face to inside face.
+    const inside = ['5.8m']
+
+    expect(texts('exterior').sort()).toEqual(outside.sort())
+    expect(texts('interior')).toEqual(inside)
+    expect(texts('both').sort()).toEqual([...outside, ...inside].sort())
   })
 
   test('renders a face-of-stud partition chain with one shared witness', () => {

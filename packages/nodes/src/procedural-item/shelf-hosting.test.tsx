@@ -27,6 +27,7 @@ import {
   type Recipe,
   radiatorRecipe,
 } from '@pascal-app/core/procedural-items'
+import { useAlignmentGuides, usePlacementPreview } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { reconciler } from '@react-three/fiber'
 import { act, create } from '@react-three/test-renderer'
@@ -115,7 +116,7 @@ let savedEditor: ReturnType<typeof useEditor.getState>
 let savedViewer: ReturnType<typeof useViewer.getState>
 let savedScope: ReturnType<typeof useInteractionScope.getState>
 let savedWindow: PropertyDescriptor | undefined
-let savedDocument: typeof document
+let savedDocument: PropertyDescriptor | undefined
 let savedRaf: typeof requestAnimationFrame
 let savedCancelRaf: typeof cancelAnimationFrame
 
@@ -125,7 +126,7 @@ beforeEach(() => {
   savedViewer = useViewer.getState()
   savedScope = useInteractionScope.getState()
   savedWindow = Object.getOwnPropertyDescriptor(globalThis, 'window')
-  savedDocument = globalThis.document
+  savedDocument = Object.getOwnPropertyDescriptor(globalThis, 'document')
   savedRaf = globalThis.requestAnimationFrame
   savedCancelRaf = globalThis.cancelAnimationFrame
   globalThis.requestAnimationFrame = () => 0
@@ -185,12 +186,15 @@ afterEach(() => {
   useEditor.setState(savedEditor, true)
   useViewer.setState(savedViewer, true)
   useInteractionScope.setState(savedScope, true)
+  usePlacementPreview.getState().clear()
+  useAlignmentGuides.getState().clear()
   useScene.temporal.getState().clear()
   useScene.temporal.getState().resume()
   restore()
   if (savedWindow) Object.defineProperty(globalThis, 'window', savedWindow)
   else Reflect.deleteProperty(globalThis, 'window')
-  globalThis.document = savedDocument
+  if (savedDocument) Object.defineProperty(globalThis, 'document', savedDocument)
+  else Reflect.deleteProperty(globalThis, 'document')
   globalThis.requestAnimationFrame = savedRaf
   globalThis.cancelAnimationFrame = savedCancelRaf
 })

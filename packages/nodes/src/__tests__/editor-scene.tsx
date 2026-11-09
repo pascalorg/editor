@@ -24,7 +24,13 @@ import {
   useScene,
 } from '@pascal-app/core'
 import { ProceduralItemNode } from '@pascal-app/core/procedural-items'
-import { MoveRegistryNodeTool, useEditor } from '@pascal-app/editor'
+import {
+  MoveRegistryNodeTool,
+  sceneLayout,
+  useEditor,
+  type VisibleScene,
+  visibleScene,
+} from '@pascal-app/editor'
 import { useViewer, WallSystem } from '@pascal-app/viewer'
 import { events, type RootStore, useThree } from '@react-three/fiber'
 import { act, type create } from '@react-three/test-renderer'
@@ -133,7 +139,7 @@ export function Scene({
   panes?: { plan: boolean; spatial: boolean }
 }) {
   useKeyboard({})
-  const plan = useEditor((s) => s.viewMode === '2d')
+  const plan = useEditor((s) => visibleScene(s) === '2d')
   const activeNode = useMovingNode()
   const source = child ?? activeNode
   const moving = useInteractionScope((s) => s.scope.kind === 'moving' || s.scope.kind === 'placing')
@@ -196,7 +202,7 @@ export function seed(entries: AnyNode[], slab = false) {
     movingNodeOrigin: '3d',
     placementDragMode: false,
     isFloorplanHovered: false,
-    viewMode: '3d',
+    viewLayouts: {},
   })
   useEditor.getState().setSnappingMode('item', 'off')
   useEditor.getState().setContinuation('point', 'single')
@@ -373,7 +379,7 @@ export function select(root: AnyNode, view = '3d') {
   useEditor.setState({
     mode: 'select',
     tool: null,
-    viewMode: view as never,
+    viewLayouts: { edit: sceneLayout(view as VisibleScene) },
     isFloorplanHovered: view === '2d',
   })
   useViewer.getState().setSelection({ selectedIds: [root.id] })

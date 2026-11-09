@@ -109,11 +109,10 @@ describe('standalone history source invalidation', () => {
     `)
   })
 
-  test.each([
-    true,
-    false,
-  ])('discarded preview neighbours rebuild after undo/redo (joined: %s)', (joined) => {
-    runSourceHistoryTest(`
+  test.each([true, false])(
+    'discarded preview neighbours rebuild after undo/redo (joined: %s)',
+    (joined) => {
+      runSourceHistoryTest(`
       const react = await importShared('react')
       mockShared('react', () => ({ ...react, useEffect: () => {} }))
       const frames = []
@@ -152,7 +151,8 @@ describe('standalone history source invalidation', () => {
         assert.deepEqual(Array.from(b.geometry.getAttribute('position').array), canonical)
       }
     `)
-  })
+    },
+  )
 
   test('opening reparent dirties old and new walls on undo and redo', () => {
     runSourceHistoryTest(`
@@ -343,7 +343,12 @@ describe('standalone history source invalidation', () => {
       mockShared('react', () => ({ ...react, useEffect: () => {}, useRef: current => ({ current }) }))
       const frames = []
       const fiber = await importShared('@react-three/fiber')
-      mockShared('@react-three/fiber', () => ({ ...fiber, useFrame: frame => frames.push(frame) }))
+      // DoorSystem and WindowSystem register their materials for scene capture through useThree.
+      mockShared('@react-three/fiber', () => ({
+        ...fiber,
+        useFrame: frame => frames.push(frame),
+        useThree: select => select({ scene: {} }),
+      }))
       const selector = store => Object.assign(fn => fn(store.getState()), store)
       mockShared('@pascal-app/core', () => ({ ...core, useScene: selector(scene), useLiveNodeOverrides: selector(overrides) }))
       const viewer = await importShared('@pascal-app/viewer')
@@ -483,7 +488,8 @@ describe('standalone history source invalidation', () => {
       const effects = []
       mockShared('react', () => ({ ...react, useEffect: effect => effects.push(effect), useRef: current => ({ current }) }))
       const segment = core.StairSegmentNode.parse({ id: 'sseg_history', parentId: 'stair_history', height: 2.5 })
-      const stair = core.StairNode.parse({ id: 'stair_history', parentId: level.id, children: [segment.id] })
+      // Off the slab: the flight rises from the level base, whatever elects the stair's support.
+      const stair = core.StairNode.parse({ id: 'stair_history', parentId: level.id, position: [10, 0, 10], children: [segment.id] })
       scene.setState({ nodes: { ...baseline, [level.id]: { ...level, height: 2.5, children: [stair.id] }, [stair.id]: stair, [segment.id]: segment } })
       const { StairOpeningSystem } = await import(${JSON.stringify(resolve(import.meta.dir, '../../../core/src/systems/stair/stair-opening-system.tsx'))})
       StairOpeningSystem()

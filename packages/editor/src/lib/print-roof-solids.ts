@@ -1,10 +1,15 @@
 import {
   type AnyNode,
+  getBarrelRoofSolidPieces,
   getConicalRoofCoverage,
+  getGlazedRoofPieceFaces,
+  getGlazedRoofPieces,
   getRoofModuleFaces,
+  getRoofSegmentDeckReach,
   getRoofShapeInsets,
   getRoofShapeRatios,
   getSegmentSlopeFrame,
+  isGlazedRoofSegment,
   nodeRegistry,
   normalizeRoofSegmentTrim,
   type RoofSegmentNode,
@@ -411,11 +416,17 @@ function buildRoofModuleGeometry(
 
 function getVolumeFaces(
   node: RoofSegmentNode,
-  options: { widthExtension: number; verticalOffset: number; isVoid: boolean },
+  options: {
+    widthExtension: number
+    /** How far it reaches along x, where a gable's rakes are; `widthExtension` when absent. */
+    rakeExtension?: number
+    verticalOffset: number
+    isVoid: boolean
+  },
 ): RoofFace[] {
   const conicalCoverage = getConicalRoofCoverage(node)
   const { activeRh, tanTheta } = getSegmentSlopeFrame(node)
-  const width = Math.max(0.01, node.width + options.widthExtension * 2)
+  const width = Math.max(0.01, node.width + (options.rakeExtension ?? options.widthExtension) * 2)
   const depth = Math.max(0.01, node.depth + options.widthExtension * 2)
   const autoDrop = options.widthExtension * tanTheta
   const wallHeight = Math.max(0.01, node.wallHeight - autoDrop + options.verticalOffset)
@@ -448,13 +459,13 @@ function getShingleOuterFaces(node: RoofSegmentNode): RoofFace[] {
   const conicalCoverage = getConicalRoofCoverage(node)
   const { activeRh, tanTheta, cosTheta, sinTheta } = getSegmentSlopeFrame(node)
   const shapeRatios = getRoofShapeRatios(node)
-  const horizontalOverhang = node.overhang * cosTheta
-  const deckExtension = node.wallThickness / 2 + horizontalOverhang
+  const reach = getRoofSegmentDeckReach(node)
+  const deckExtension = reach.z
   const deckVerticalThickness = activeRh > 0 ? node.deckThickness / cosTheta : node.deckThickness
   const deckDrop = deckExtension * tanTheta
   const shingleHorizontalThickness = node.shingleThickness * sinTheta
   const shingleVerticalThickness = node.shingleThickness * cosTheta
-  const baseWidth = Math.max(0.01, node.width + deckExtension * 2)
+  const baseWidth = Math.max(0.01, node.width + reach.x * 2)
   const baseDepth = Math.max(0.01, node.depth + deckExtension * 2)
   const baseWallHeight = node.wallHeight - deckDrop + deckVerticalThickness
   const baseRoofHeight =
@@ -529,8 +540,9 @@ function blockingDiagnostics(
     dimensions.some((value) => !Number.isFinite(value) || value < 0) ||
     node.width <= FACE_EPSILON ||
     node.depth <= FACE_EPSILON ||
-    node.wallThickness <= FACE_EPSILON ||
-    node.deckThickness + node.shingleThickness <= FACE_EPSILON
+    (!isGlazedRoofSegment(node) &&
+      (node.wallThickness <= FACE_EPSILON ||
+        node.deckThickness + node.shingleThickness <= FACE_EPSILON))
   ) {
     diagnostics.push({
       severity: 'error',
@@ -581,8 +593,28 @@ export function buildPrintableRoofSegmentSolids(
 ): PrintRoofSolidResult {
   const diagnostics = blockingDiagnostics(node, nodes)
   if (diagnostics.length > 0) return { status: 'blocked', object: null, diagnostics }
+  if (isGlazedRoofSegment(node) || node.roofType === 'barrel') {
+    const root = new THREE.Group()
+    root.name = isGlazedRoofSegment(node) ? 'print-glazed-roof-solids' : 'print-barrel-roof-solids'
+    root.userData = { pascalId: node.id }
+    root.position.set(...node.position)
+    root.rotation.y = node.rotation
+    for (const piece of isGlazedRoofSegment(node)
+      ? getGlazedRoofPieces(node)
+      : getBarrelRoofSolidPieces(node)) {
+      const geometry = geometryFromFaces(getGlazedRoofPieceFaces(piece))
+      if (!geometry) continue
+      const mesh = new THREE.Mesh(geometry)
+      mesh.name = isGlazedRoofSegment(node)
+        ? piece.slot === 0
+          ? 'print-glazing-frame'
+          : 'print-glazing-pane'
+        : 'print-roof-shell'
+      root.add(mesh)
+    }
+    return { status: 'ready', object: root, diagnostics: [] }
+  }
 
-  const { cosTheta } = getSegmentSlopeFrame(node)
   const wallOuter = getVolumeFaces(node, {
     widthExtension: node.wallThickness / 2,
     verticalOffset: 0,
@@ -593,9 +625,10 @@ export function buildPrintableRoofSegmentSolids(
     verticalOffset: 0,
     isVoid: false,
   })
-  const deckExtension = node.wallThickness / 2 + node.overhang * cosTheta
+  const reach = getRoofSegmentDeckReach(node)
   const roofInner = getVolumeFaces(node, {
-    widthExtension: deckExtension,
+    widthExtension: reach.z,
+    rakeExtension: reach.x,
     verticalOffset: 0,
     isVoid: true,
   })

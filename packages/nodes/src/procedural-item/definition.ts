@@ -2,6 +2,7 @@ import type { AnyNode, FloorplanGeometry, HandleDescriptor, NodeDefinition } fro
 import {
   type AnyNodeId,
   getEffectiveNode,
+  proceduralItemSlots,
   toggleMechanism,
   useInteractive,
   useScene,
@@ -128,6 +129,8 @@ export const proceduralItemDefinition: NodeDefinition<typeof ProceduralItemNode>
     },
   },
   capabilities: {
+    reveal: { phase: 'furnishing', style: 'drop', height: 0.3 },
+    revealOnEdit: ['recipe'],
     batchable: {
       scope: 'level',
       // Part lights clone their emissive slot per node, and a playing motion
@@ -181,10 +184,7 @@ export const proceduralItemDefinition: NodeDefinition<typeof ProceduralItemNode>
     rotatable: { axes: ['y'], snapAngles: [0, Math.PI / 4, Math.PI / 2, Math.PI] },
     duplicable: { subtree: 'with-children' },
     deletable: true,
-    slots: (n) => {
-      const node = n as unknown as ProceduralItemNode
-      return node.recipe.slots.map((s) => ({ slotId: s.id, label: s.label, default: s.color }))
-    },
+    slots: (n) => proceduralItemSlots(n as unknown as ProceduralItemNode),
     surfaces: {
       custom: (n) =>
         evaluateRecipe(

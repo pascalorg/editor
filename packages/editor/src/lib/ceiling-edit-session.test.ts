@@ -102,7 +102,7 @@ beforeEach(() => {
     hoveredId: null,
     selection: { buildingId: building.id, levelId: level.id, zoneId: null, selectedIds: [] },
   })
-  useEditor.setState({ phase: 'structure', mode: 'select', room: null, hoveredRoom: null })
+  useEditor.setState({ phase: 'building', mode: 'select', room: null, hoveredRoom: null })
   useInteractionScope.setState({ scope: { kind: 'idle' } })
 })
 
@@ -143,13 +143,13 @@ describe('starting a session', () => {
     expect(getCeilingEditSession()).toBeNull()
   })
 
-  test('the pill switches to the ceiling level and the structure phase', () => {
+  test('the pill switches to the ceiling level and goes inside the building', () => {
     useViewer.setState({
       selection: { buildingId: building.id, levelId: upper.id, zoneId: null, selectedIds: [] },
     })
-    useEditor.setState({ phase: 'furnish' })
+    useEditor.setState({ phase: 'site' })
     expect(startCeilingEdit(zone.id)).toBe(true)
-    expect(useEditor.getState().phase).toBe('structure')
+    expect(useEditor.getState().phase).toBe('building')
     expect(useViewer.getState().selection.levelId).toBe(level.id)
     expect(getCeilingEditSession()?.ceilingId).toBe(ceiling.id)
   })
@@ -213,11 +213,11 @@ describe('ending a session', () => {
       () => useViewer.getState().setSelection({ selectedIds: [manual.id] }),
       () => useViewer.getState().setSelection({ selectedIds: [ceiling.id, manual.id] }),
       () => useViewer.getState().setSelection({ levelId: upper.id }),
-      () => useEditor.getState().setPhase('furnish'),
+      () => useEditor.getState().setPhase('site'),
       () => useScene.getState().deleteNode(ceiling.id as AnyNodeId),
     ]
     for (const end of ends) {
-      useEditor.setState({ phase: 'structure' })
+      useEditor.setState({ phase: 'building' })
       useViewer.setState({
         selection: { buildingId: building.id, levelId: level.id, zoneId: null, selectedIds: [] },
       })

@@ -1,7 +1,9 @@
 import { planWallDeletion } from '../../commands/structure/plan-wall-deletion'
 import type { StructurePlan } from '../../commands/structure/shared'
 import { withoutFloorStepOverrideKeys } from '../../lib/floor-step-finish'
+import { wouldCreateHierarchyCycle } from '../../lib/hierarchy'
 import { isSpaceDetectionPaused } from '../../lib/space-detection'
+import { deletedSurfaceSupportPatch } from '../../lib/surface-support-references'
 import { nodeRegistry } from '../../registry/registry'
 import { validateNodeRelations } from '../../registry/validate-relations'
 import {
@@ -29,7 +31,7 @@ import {
   resolveAutomaticDownspoutLength,
   type WallNode,
 } from '../../schema'
-import type { CollectionId } from '../../schema/collections'
+import type { Collection, CollectionId } from '../../schema/collections'
 import { Provenance } from '../../schema/provenance'
 import { constrainWallCurveOffsetToAvoidIntersections } from '../../systems/wall/wall-curve'
 import {
@@ -42,6 +44,7 @@ import {
   resolveMergedWallEndpoints,
   type WallAttachmentUpdate,
 } from '../../systems/wall/wall-merge'
+import { areSemanticValuesEqual } from '../../utils/semantic-equal'
 import {
   convertDerivedPlateHoleWrites,
   DERIVED_WRITER_TOKEN,
@@ -54,14 +57,40 @@ import {
 import {
   activeSceneCommitNodeIds,
   addActiveSceneCommitNodeIds,
+  noteDerivedNodeWrites,
   runWithSceneCommitNodeIds,
 } from '../history-control'
+import { currentSceneEnvironment } from '../scene-environment'
 import type { SceneState } from '../use-scene'
 
 type AnyContainerNode = AnyNode & { children: string[] }
-type NodeCreateOp = { node: AnyNode; parentId?: AnyNodeId }
+type NodeCreateOp = {
+  node: AnyNode
+  parentId?: AnyNodeId
+  /** Collections the node joins, for any kind; an item's own `collectionIds` otherwise. */
+  collectionIds?: CollectionId[]
+}
 type NodeUpdateOp = { id: AnyNodeId; data: Partial<AnyNode> }
 type NodeDeleteOp = AnyNodeId
+
+/**
+ * What a derived write of `updates` changes, for the commit that carries it: a node, and the fields whose
+ * value differs from the node's own. A write that sets what is already there changes nothing, so it is
+ * not noted and cannot mark a later authored edit of that field as derived.
+ */
+function changedDerivedFields(
+  nodes: Readonly<Record<AnyNodeId, AnyNode>>,
+  updates: NodeUpdateOp[],
+) {
+  return updates.flatMap(({ id, data }) => {
+    const node = nodes[id] as Record<string, unknown> | undefined
+    if (!node) return []
+    const fields = Object.keys(data).filter(
+      (field) => !areSemanticValuesEqual(node[field], (data as Record<string, unknown>)[field]),
+    )
+    return fields.length ? [{ id, fields }] : []
+  })
+}
 type WallMergePlan = {
   primaryWallId: AnyNodeId
   secondaryWallId: AnyNodeId
@@ -74,11 +103,13 @@ type WallMergePlan = {
 }
 
 const DEFAULT_RIDGE_VENT_REFRESH_FIELDS = new Set<string>([
+  'roofSystem',
   'roofType',
   'width',
   'depth',
   'pitch',
   'overhang',
+  'gableOverhang',
   'wallThickness',
   'shingleThickness',
   'gambrelLowerWidthRatio',
@@ -98,6 +129,8 @@ const DEFAULT_GUTTER_REFRESH_FIELDS = new Set<string>([
   'wallHeight',
   'pitch',
   'overhang',
+  'gableOverhang',
+  'wallThickness',
   'trim',
 ])
 
@@ -649,7 +682,7 @@ function parseUpdatedNode(currentNode: AnyNode, data: Partial<AnyNode>): AnyNode
   return mergeNodeUpdate(currentNode, sanitized.value as Partial<AnyNode>)
 }
 
-function shouldRefreshDefaultRidgeVents(data: Partial<AnyNode>) {
+export function shouldRefreshDefaultRidgeVents(data: Partial<AnyNode>) {
   return Object.keys(data).some((key) => DEFAULT_RIDGE_VENT_REFRESH_FIELDS.has(key))
 }
 
@@ -687,7 +720,7 @@ function refreshDefaultRidgeVentsForSegment(
   return nextVents.map((vent) => vent.id as AnyNodeId)
 }
 
-function shouldRefreshDefaultGutters(data: Partial<AnyNode>) {
+export function shouldRefreshDefaultGutters(data: Partial<AnyNode>) {
   return Object.keys(data).some((key) => DEFAULT_GUTTER_REFRESH_FIELDS.has(key))
 }
 
@@ -1059,9 +1092,20 @@ function refreshDefaultGuttersForRoofIds(
   }
 }
 
-// Track pending RAF for updateNodesAction to prevent multiple queued callbacks
-let pendingRafId: number | null = null
-let pendingUpdates: Set<AnyNodeId> = new Set()
+// One frame's pending dirty marks per scene environment, so a detached scene's update never
+// cancels (or receives) the editor's.
+type PendingDirtyMarks = { frame: number | null; ids: Set<AnyNodeId> }
+const PENDING_DIRTY_MARKS = Symbol('pending-dirty-marks')
+const pendingDirtyMarks = () =>
+  currentSceneEnvironment().slot<PendingDirtyMarks>(PENDING_DIRTY_MARKS, () => ({
+    frame: null,
+    ids: new Set(),
+  }))
+
+/** The current environment's authored updates whose deferred dirty intent has not reached render systems yet. */
+export function getPendingNodeUpdateCount(): number {
+  return pendingDirtyMarks().ids.size
+}
 
 function buildWallMergePlans(
   nodes: Record<AnyNodeId, AnyNode>,
@@ -1152,16 +1196,28 @@ const createNodesActionImpl = (
   if (get().readOnly) return
   ops = filterDerivedNodeWrites(get().nodes, { create: ops }, options).create
   if (!ops.length) return
+  if (options?.derivedWriter === DERIVED_WRITER_TOKEN)
+    noteDerivedNodeWrites(ops.map((op) => ({ id: op.node.id })))
   const extraNodesToMarkDirty = new Set<AnyNodeId>()
   const extraNodesToClearDirty = new Set<AnyNodeId>()
   set((state) => {
     const nextNodes = { ...state.nodes }
     const nextRootIds = [...state.rootNodeIds]
+    const nextCollections = { ...state.collections }
 
-    for (const { node, parentId } of ops) {
+    for (const { node, parentId, collectionIds } of ops) {
       const effectiveParentId = parentId ?? (node.parentId as AnyNodeId | null) ?? null
 
-      const newNode = parseCreatedNode(node, effectiveParentId)
+      const newNode = joinCollections(
+        nextCollections,
+        parseCreatedNode(node, effectiveParentId),
+        collectionIds,
+      )
+      if (wouldCreateHierarchyCycle(newNode.id, effectiveParentId, nextNodes)) {
+        throw new Error(
+          `invalid hierarchy: placing "${newNode.id}" under "${effectiveParentId}" would create a cycle`,
+        )
+      }
 
       nextNodes[newNode.id] = newNode
 
@@ -1209,7 +1265,14 @@ const createNodesActionImpl = (
 
     addActiveSceneCommitNodeIds([...extraNodesToMarkDirty, ...extraNodesToClearDirty])
 
-    return { nodes: nextNodes, rootNodeIds: nextRootIds }
+    const joined = Object.entries(nextCollections).some(
+      ([id, collection]) => state.collections[id as CollectionId] !== collection,
+    )
+    return {
+      nodes: nextNodes,
+      rootNodeIds: nextRootIds,
+      ...(joined && { collections: nextCollections }),
+    }
   })
 
   // 4. System Sync
@@ -1222,6 +1285,56 @@ const createNodesActionImpl = (
   for (const id of extraNodesToClearDirty) get().clearDirty(id)
 }
 
+/**
+ * A created node joins the collections it is given, or an item those its mirror
+ * names, so a duplicate or a same-project paste stays a member; ids of
+ * collections this scene lacks (a paste from another project) are dropped.
+ * Writes the joined collections into `collections` and returns the node, an
+ * item with its mirror set to what it joined.
+ */
+export function joinCollections(
+  collections: Record<CollectionId, Collection>,
+  node: AnyNode,
+  requested = node.type === 'item' ? node.collectionIds : undefined,
+): AnyNode {
+  const collectionIds = (requested ?? []).filter((id) => collections[id])
+  for (const id of collectionIds) {
+    const collection = collections[id]!
+    if (!collection.nodeIds.includes(node.id))
+      collections[id] = { ...collection, nodeIds: [...collection.nodeIds, node.id] }
+  }
+  if (node.type !== 'item' || sameIds(node.collectionIds ?? [], collectionIds)) return node
+  return { ...node, collectionIds }
+}
+
+function sameIds(left: readonly CollectionId[], right: readonly CollectionId[]) {
+  return left.length === right.length && left.every((id, index) => right[index] === id)
+}
+
+/** The collections `id` belongs to: membership lives on the collection for every kind. */
+export function collectionIdsOf(
+  collections: Readonly<Record<CollectionId, Collection>>,
+  id: AnyNodeId,
+): CollectionId[] {
+  return (Object.values(collections) as Collection[])
+    .filter((collection) => collection.nodeIds.includes(id))
+    .map((collection) => collection.id)
+}
+
+/** Membership lives on the collection; only items mirror it, so every collection is checked. */
+function removeFromCollections(collections: Record<CollectionId, Collection>, id: AnyNodeId) {
+  for (const [collectionId, collection] of Object.entries(collections) as [
+    CollectionId,
+    Collection,
+  ][]) {
+    if (collection.nodeIds.includes(id))
+      collections[collectionId] = {
+        ...collection,
+        nodeIds: collection.nodeIds.filter((nodeId) => nodeId !== id),
+      }
+  }
+}
+
 const applyNodeChangesActionImpl = (
   set: (fn: (state: SceneState) => Partial<SceneState>) => void,
   get: () => SceneState,
@@ -1232,6 +1345,12 @@ const applyNodeChangesActionImpl = (
   changes = convertDerivedPlateHoleWrites(get().nodes, changes, options)
   changes = filterDerivedNodeWrites(get().nodes, changes, options)
   if (!changes.create?.length && !changes.update?.length && !changes.delete?.length) return
+  if (options?.derivedWriter === DERIVED_WRITER_TOKEN)
+    noteDerivedNodeWrites([
+      ...(changes.create ?? []).map((op) => ({ id: op.node.id })),
+      ...changedDerivedFields(get().nodes, changes.update ?? []),
+      ...(changes.delete ?? []).filter((id) => get().nodes[id]).map((id) => ({ id })),
+    ])
 
   const createOps = changes.create ?? []
   const deletionIntent =
@@ -1259,6 +1378,12 @@ const applyNodeChangesActionImpl = (
       addLeanToHostRoofId(updatedNode, nextNodes, roofsToRefresh)
 
       if (data.parentId !== undefined && data.parentId !== currentNode.parentId) {
+        const newParentId = data.parentId as AnyNodeId | null
+        if (wouldCreateHierarchyCycle(id, newParentId, nextNodes)) {
+          throw new Error(
+            `invalid hierarchy: placing "${id}" under "${newParentId}" would create a cycle`,
+          )
+        }
         const oldParentId = currentNode.parentId as AnyNodeId | null
         if (oldParentId && nextNodes[oldParentId]) {
           const oldParent = nextNodes[oldParentId] as AnyContainerNode
@@ -1269,7 +1394,6 @@ const applyNodeChangesActionImpl = (
           parentsToMarkDirty.add(oldParent.id)
         }
 
-        const newParentId = data.parentId as AnyNodeId | null
         if (newParentId && nextNodes[newParentId]) {
           const newParent = nextNodes[newParentId] as AnyContainerNode
           nextNodes[newParent.id] = {
@@ -1293,9 +1417,18 @@ const applyNodeChangesActionImpl = (
       nodesToMarkDirty.add(id)
     }
 
-    for (const { node, parentId } of createOps) {
+    for (const { node, parentId, collectionIds } of createOps) {
       const effectiveParentId = parentId ?? (node.parentId as AnyNodeId | null) ?? null
-      const newNode = parseCreatedNode(node, effectiveParentId)
+      const newNode = joinCollections(
+        nextCollections,
+        parseCreatedNode(node, effectiveParentId),
+        collectionIds,
+      )
+      if (wouldCreateHierarchyCycle(newNode.id, effectiveParentId, nextNodes)) {
+        throw new Error(
+          `invalid hierarchy: placing "${newNode.id}" under "${effectiveParentId}" would create a cycle`,
+        )
+      }
 
       nextNodes[newNode.id as AnyNodeId] = newNode
       nodesToMarkDirty.add(newNode.id as AnyNodeId)
@@ -1360,19 +1493,12 @@ const applyNodeChangesActionImpl = (
 
       resolvedRootIds = resolvedRootIds.filter((rootId) => rootId !== id)
 
-      if ('collectionIds' in node && node.collectionIds) {
-        for (const collectionId of node.collectionIds as CollectionId[]) {
-          const collection = nextCollections[collectionId]
-          if (collection) {
-            nextCollections[collectionId] = {
-              ...collection,
-              nodeIds: collection.nodeIds.filter((nodeId) => nodeId !== id),
-            }
-          }
-        }
-      }
+      removeFromCollections(nextCollections, id)
 
       delete nextNodes[id]
+      // A mark left on a deleted node would sit in the dirty set for good,
+      // as `deleteNodes` notes: a preview may have marked it before the drop.
+      nodesToClearDirty.add(id)
     }
 
     refreshDefaultGuttersForRoofIds(nextNodes, roofsToRefresh, nodesToMarkDirty, nodesToClearDirty)
@@ -1387,14 +1513,16 @@ const applyNodeChangesActionImpl = (
     return { nodes: nextNodes, rootNodeIds: resolvedRootIds, collections: nextCollections }
   })
 
+  // A store subscriber may already have deleted a node this write touched (the
+  // structure sync merging a room away): nothing is left to rebuild there.
   for (const id of nodesToMarkDirty) {
-    get().markDirty(id)
+    if (get().nodes[id]) get().markDirty(id)
   }
   for (const id of nodesToClearDirty) {
     get().clearDirty(id)
   }
   for (const id of parentsToMarkDirty) {
-    get().markDirty(id)
+    if (get().nodes[id]) get().markDirty(id)
     const parent = get().nodes[id]
     if (parent && 'children' in parent && Array.isArray(parent.children)) {
       for (const childId of parent.children) {
@@ -1419,6 +1547,8 @@ const updateNodesActionImpl = (
   }
   updates = filterDerivedNodeWrites(get().nodes, { update: converted.update ?? [] }, options).update
   if (!updates.length) return
+  if (options?.derivedWriter === DERIVED_WRITER_TOKEN)
+    noteDerivedNodeWrites(changedDerivedFields(get().nodes, updates))
   const parentsToUpdate = new Set<AnyNodeId>()
   const extraNodesToUpdate = new Set<AnyNodeId>()
   const extraNodesToDelete = new Set<AnyNodeId>()
@@ -1452,6 +1582,12 @@ const updateNodesActionImpl = (
 
       // Handle Reparenting Logic
       if (data.parentId !== undefined && data.parentId !== currentNode.parentId) {
+        const newParentId = data.parentId as AnyNodeId | null
+        if (wouldCreateHierarchyCycle(id, newParentId, nextNodes)) {
+          throw new Error(
+            `invalid hierarchy: placing "${id}" under "${newParentId}" would create a cycle`,
+          )
+        }
         // 1. Remove from old parent
         const oldParentId = currentNode.parentId as AnyNodeId | null
         if (oldParentId && nextNodes[oldParentId]) {
@@ -1472,7 +1608,6 @@ const updateNodesActionImpl = (
         // and a spread of `undefined` here throws and aborts the entire
         // `set` callback. Initialising to `[]` matches what the schema's
         // default would have produced.
-        const newParentId = data.parentId as AnyNodeId | null
         if (newParentId && nextNodes[newParentId]) {
           const newParent = nextNodes[newParentId] as AnyContainerNode
           const newChildren = Array.isArray((newParent as { children?: unknown }).children)
@@ -1523,6 +1658,9 @@ const updateNodesActionImpl = (
     return
   }
   // Batch dirty-marking into a single RAF to avoid redundant callbacks during rapid updates
+  const environment = currentSceneEnvironment()
+  const pending = pendingDirtyMarks()
+  const pendingUpdates = pending.ids
   for (const u of updates) {
     // Visibility is applied by React before the deferred dirty callback. Mark
     // it now so render systems can release collective geometry in that same
@@ -1540,17 +1678,25 @@ const updateNodesActionImpl = (
     get().clearDirty(id)
   }
 
-  if (pendingRafId !== null) {
-    cancelAnimationFrame(pendingRafId)
-  }
-
-  pendingRafId = requestAnimationFrame(() => {
+  const flush = () => {
+    pending.frame = null
+    // A disposed scene's frame reaches nothing.
+    if (environment.disposed) return
     pendingUpdates.forEach((id) => {
-      get().markDirty(id)
+      // A node deleted since its update (a room merged away by the same drop)
+      // has nothing left to rebuild; marking it would leave it in the set.
+      if (get().nodes[id]) get().markDirty(id)
     })
     pendingUpdates.clear()
-    pendingRafId = null
-  })
+  }
+  if (typeof requestAnimationFrame === 'function') {
+    if (pending.frame !== null) cancelAnimationFrame(pending.frame)
+    pending.frame = requestAnimationFrame(flush)
+  } else if (pending.frame === null) {
+    // Headless (a worker, a server) there is no frame: the marks land after the current task.
+    pending.frame = -1
+    queueMicrotask(flush)
+  }
 }
 
 /** The scene record a node deletion reads and rewrites. */
@@ -1754,6 +1900,14 @@ export function planNodeDeletion(
     }
   }
 
+  for (const node of Object.values(nextNodes)) {
+    if (allIds.has(node.id)) continue
+    const patch = deletedSurfaceSupportPatch(node, allIds)
+    if (!patch) continue
+    nextNodes[node.id] = { ...node, ...patch } as AnyNode
+    nodesToMarkDirty.add(node.id)
+  }
+
   // A deleted door takes its step paint with it, in the same undo step; every
   // other doorway keeps its own.
   for (const node of Object.values(nextNodes)) {
@@ -1803,14 +1957,7 @@ export function planNodeDeletion(
     nextRootIds = nextRootIds.filter((rid) => rid !== id)
 
     // 3. Remove from any collections it belongs to
-    if ('collectionIds' in node && node.collectionIds) {
-      for (const cid of node.collectionIds as CollectionId[]) {
-        const col = nextCollections[cid]
-        if (col) {
-          nextCollections[cid] = { ...col, nodeIds: col.nodeIds.filter((nid) => nid !== id) }
-        }
-      }
-    }
+    removeFromCollections(nextCollections, id)
 
     // 4. Delete the node itself
     delete nextNodes[id]
@@ -1886,6 +2033,8 @@ const deleteNodesActionImpl = (
   wallDeletionPlan?: StructurePlan,
 ) => {
   if (get().readOnly) return
+  if (options?.derivedWriter === DERIVED_WRITER_TOKEN)
+    noteDerivedNodeWrites(ids.filter((id) => get().nodes[id]).map((id) => ({ id })))
   let deletedIds = new Set<AnyNodeId>()
   let parentsToMarkDirty = new Set<AnyNodeId>()
   let nodesToMarkDirty = new Set<AnyNodeId>()

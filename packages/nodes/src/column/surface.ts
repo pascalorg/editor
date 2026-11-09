@@ -25,6 +25,13 @@ function roundRegion(radius: number, segments: number, yaw = 0): SurfaceRegion {
 }
 
 export function columnTopSurfaces(node: ColumnNode): DeclaredHostSurface[] {
+  if (node.source)
+    return node.source.manifest.surfaces.map((surface, i) => ({
+      id: `top:${i}`,
+      position: [0, surface.y, 0],
+      normal: [0, 1, 0],
+      region: { kind: 'polygon', points: surface.polygon },
+    }))
   if (node.supportStyle !== 'vertical' || node.style === 'cluster') return []
   const layout = columnShaftLayout(node)
   const cap = columnCapitalBlocks(

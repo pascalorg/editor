@@ -2,7 +2,7 @@
 // depend on @types/bun so the import type is unresolved at compile time.
 import { describe, expect, test } from 'bun:test'
 import * as THREE from 'three'
-import { ensureRenderableGeometryAttributes } from './csg-utils'
+import { computeGeometryBoundsTree, ensureRenderableGeometryAttributes } from '../index'
 
 describe('ensureRenderableGeometryAttributes', () => {
   test('fills missing render attributes to match position count', () => {
@@ -69,5 +69,19 @@ describe('ensureRenderableGeometryAttributes', () => {
     expect(geometry.getAttribute('normal')?.count).toBe(3)
     expect(geometry.getAttribute('uv')?.count).toBe(3)
     expect(geometry.getAttribute('uv2')?.count).toBe(3)
+  })
+})
+
+describe('computeGeometryBoundsTree', () => {
+  test('builds a queryable tree for prepared geometry', () => {
+    const geometry = new THREE.BoxGeometry(2, 2, 2)
+    computeGeometryBoundsTree(geometry)
+    const hit = geometry.boundsTree!.raycastFirst(
+      new THREE.Ray(new THREE.Vector3(0, 0, 3), new THREE.Vector3(0, 0, -1)),
+      THREE.FrontSide,
+    )
+    expect(hit?.distance).toBeCloseTo(2)
+    expect(hit?.point.z).toBeCloseTo(1)
+    geometry.dispose()
   })
 })

@@ -1,11 +1,12 @@
 import { expect, test } from 'bun:test'
-import type { AnyNodeDefinition } from '@pascal-app/core'
+import { type AnyNode, type AnyNodeDefinition, itemClipRegistry } from '@pascal-app/core'
 import { builtinPlugin } from '../../index'
 import {
   columnBatchable,
   doorBatchable,
   itemBatchable,
   perNodeGeometryBatchable,
+  staticBatchable,
   surfaceBatchable,
   windowBatchable,
 } from './batchable'
@@ -20,12 +21,15 @@ test('built-in kinds declare the batch behaviour that replaced BATCH_KINDS', () 
   )
   expect(Object.keys(batchable).sort()).toEqual([
     'block',
+    'cabinet',
+    'cabinet-module',
     'ceiling',
     'column',
     'door',
     'imported-mesh',
     'item',
     'procedural-item',
+    'shelf',
     'slab',
     'window',
   ])
@@ -38,4 +42,24 @@ test('built-in kinds declare the batch behaviour that replaced BATCH_KINDS', () 
   expect(batchable.block).toBe(perNodeGeometryBatchable)
   expect(batchable['imported-mesh']).toBe(perNodeGeometryBatchable)
   expect(batchable['procedural-item']?.scope).toBe('level')
+  expect(batchable.shelf).toBe(staticBatchable)
+  expect(batchable.cabinet).toBe(batchable['cabinet-module'])
+})
+
+// A door or window built from a script animates its own subtree (its leaves slide), which a static
+// batch instance would not follow: the source meshes move hidden and the closed pose stays drawn.
+test('a door or window whose script registered clips draws itself', () => {
+  for (const [kind, batchable] of [
+    ['door', doorBatchable],
+    ['window', windowBatchable],
+  ] as const) {
+    const node = { id: `${kind}_clips`, type: kind } as unknown as AnyNode
+    expect(batchable.excluded?.(node)).toBe(false)
+    itemClipRegistry.set(node.id, [] as never)
+    try {
+      expect(batchable.excluded?.(node)).toBe(true)
+    } finally {
+      itemClipRegistry.delete(node.id)
+    }
+  }
 })
