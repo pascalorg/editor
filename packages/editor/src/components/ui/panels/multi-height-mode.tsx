@@ -16,7 +16,7 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import { formatLinearMeasurement } from '../../../lib/measurements'
+import { formatLinearMeasurement } from '@pascal-app/core'
 import { SegmentedControl } from '../controls/segmented-control'
 import { SliderControl } from '../controls/slider-control'
 import {

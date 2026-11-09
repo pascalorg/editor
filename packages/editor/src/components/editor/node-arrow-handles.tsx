@@ -9,6 +9,7 @@ import {
   createAngleAccumulator,
   createSceneApi,
   DEFAULT_ANGLE_STEP,
+  formatAngleRadians,
   type HandleDescriptor,
   type HandlePortal,
   type LatchHandle,
@@ -59,7 +60,6 @@ import useInteractionScope, {
   useMovingNode,
 } from '../../store/use-interaction-scope'
 import useOpeningGuides from '../../store/use-opening-guides'
-import { formatAngleRadians } from '../tools/shared/segment-angle'
 import {
   ARROW_COLOR,
   ARROW_HOVER_COLOR,

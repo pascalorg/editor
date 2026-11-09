@@ -17,7 +17,7 @@ import { type KeyboardEvent, useEffect, useId, useMemo, useRef, useState } from 
 import { startCeilingEdit } from '../../../lib/ceiling-edit-session'
 import { resolveOverlayPolicy } from '../../../lib/interaction/overlay-policy'
 import { finishScriptCode } from '../../../lib/geometry-script/finish-scripts'
-import { formatAreaLabel, formatLinearMeasurement } from '../../../lib/measurements'
+import { formatAreaLabel, formatLinearMeasurement } from '@pascal-app/core'
 import { addMezzanineStairs } from '../../../lib/mezzanine-stairs'
 import { roomFloorBase, roomRelativeFloorHeight } from '../../../lib/room-construction-commands'
 import { mezzanineElevationBounds } from '../../../lib/room-handle-drag'

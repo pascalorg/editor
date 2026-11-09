@@ -114,6 +114,9 @@ jobs:
       - name: Build
         run: bun run build
 
+      - name: Check standalone render bundle
+        run: bun run check:render-bundle
+
       # Serves the build with `next start`: redirects, headers, the proxy,
       # server rendering, scene route handlers and the image optimizer.
       - name: Smoke-test the production editor server

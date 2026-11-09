@@ -232,6 +232,8 @@ export {
   setSlotDefaultOverrides,
   WHITE_PALETTE,
 } from './lib/materials'
+export * from './lib/measurement-label'
+export * from './lib/measurement-presentation'
 export { mergedOutline } from './lib/merged-outline-node'
 export { createNodeTopSurfaceHeightSampler } from './lib/node-top-surface-height'
 export * from './lib/perf-actions'

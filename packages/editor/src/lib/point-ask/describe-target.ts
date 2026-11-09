@@ -1,25 +1,23 @@
 import {
   type AnyNode,
   area,
+  formatLinearMeasurement,
+  getAreaUnitLabel,
   getScaledDimensions,
   getWallCurveLength,
   getWallEffectiveHeightForNodes,
   getWallThickness,
   type ItemNode,
+  type LinearUnit,
+  type MetricNotation,
   resolveLevelId,
   type SlabNode,
   type StairNode,
+  squareMetersToAreaUnit,
   type WallNode,
   type WindowNode,
   type ZoneNode,
 } from '@pascal-app/core'
-import {
-  formatLinearMeasurement,
-  getAreaUnitLabel,
-  type LinearUnit,
-  type MetricNotation,
-  squareMetersToAreaUnit,
-} from '../measurements'
 import type { PointKind, PointTarget } from './types'
 
 // Point and ask names what the finger is on (the owner, 8 October): the label chip and the

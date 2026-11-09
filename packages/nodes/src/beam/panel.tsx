@@ -13,13 +13,13 @@ import {
   beamTopElevation,
   beamTopReferencePatch,
   DEFAULT_FRAMING_POST_SIZE,
+  formatLinearMeasurement,
   usePascalI18n,
   useScene,
 } from '@pascal-app/core'
 import {
   ActionButton,
   ActionGroup,
-  formatLinearMeasurement,
   MetricControl,
   PanelSection,
   PanelWrapper,

@@ -8,20 +8,15 @@ import {
   formatFixed,
   getCurtainWallConfig,
   getEffectiveNode,
+  getLinearUnitLabel,
   getWallCurveLength,
   getWallThickness,
+  linearControlValueToMeters,
+  metersToLinearUnit,
   usePascalI18n,
   type WallNode,
 } from '@pascal-app/core'
-import {
-  getLinearUnitLabel,
-  linearControlValueToMeters,
-  metersToLinearUnit,
-  PanelSection,
-  SegmentedControl,
-  SliderControl,
-  ToggleControl,
-} from '@pascal-app/editor'
+import { PanelSection, SegmentedControl, SliderControl, ToggleControl } from '@pascal-app/editor'
 import { useState } from 'react'
 import { useCurtainPanelHighlight } from './curtain-panel-highlight'
 import { curtainPanelType } from './curtain-wall-layout'

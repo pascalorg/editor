@@ -6,7 +6,7 @@ import {
   isOperableWindowType,
   openWindowOpenState,
   setWindowShuttersOpenState,
-} from '@pascal-app/editor'
+} from '@pascal-app/core'
 import { scriptedOpening } from '../shared/scripted-opening'
 
 /** A window's sash: Open and Close preview it without touching the saved open state. */

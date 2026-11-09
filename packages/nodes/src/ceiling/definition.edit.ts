@@ -1,0 +1,159 @@
+import {
+  type CeilingNode as CeilingNodeType,
+  type HandleDescriptor,
+  resolveCeilingHeight,
+  type SceneApi,
+  useScene,
+} from '@pascal-app/core'
+
+import {
+  clearStructuralElevationGuide,
+  DRAFTING_SURFACE_EXTENSION_KEY,
+  type DraftingSurfaceExtension,
+  type FloorplanNodeExtension,
+  PANEL_MODEL_EXTENSION,
+  publishStructuralElevationGuide,
+  resolveStructuralElevationSnap,
+} from '@pascal-app/editor'
+import type { NodeEditContribution } from '../definition-contributions'
+import { sameOutlineSurfaceCounterparts } from '../shared/surface-counterparts'
+import { buildCeilingFloorplan } from './floorplan'
+import {
+  ceilingAddVertexAffordance,
+  ceilingDeleteVertexAffordance,
+  ceilingMoveEdgeAffordance,
+  ceilingMoveVertexAffordance,
+} from './floorplan-affordances'
+import { ceilingFloorplanMoveTarget } from './floorplan-move'
+import { CEILING_HANDLE_MIN_HEIGHT, ceilingHeightRange } from './height-bounds'
+import { ceilingPaint } from './paint'
+import { ceilingPanelModel } from './panel-model'
+import { ceilingParametrics } from './parametrics'
+import type { CeilingNode } from './schema'
+
+const HEIGHT_HANDLE_OFFSET = 0.22
+
+// Ceilings no longer drive the storey height; the stored level height
+// does. Height writes clamp under min(storey plane, lowest underside of
+// any covering slab from the level above) − CEILING_CLAMP_MARGIN, so a
+// ceiling can poke into neither the level above nor a deck hanging from
+// it (clamp, never ask). On a level above grade the ceiling may hang below
+// the level floor down to grade (soffits owned by a roof level).
+function ceilingHeightBounds(n: CeilingNodeType, sceneApi: SceneApi) {
+  return ceilingHeightRange(n, sceneApi.nodes(), CEILING_HANDLE_MIN_HEIGHT)
+}
+
+function ceilingPolygonCenter(n: CeilingNodeType): [number, number] {
+  const polygon = n.polygon ?? []
+  if (polygon.length === 0) return [0, 0]
+  let cx = 0
+  let cz = 0
+  for (const [x, z] of polygon) {
+    cx += x
+    cz += z
+  }
+  return [cx / polygon.length, cz / polygon.length]
+}
+
+function ceilingElevationGuideSource(n: CeilingNodeType) {
+  return {
+    nodeId: n.id,
+    levelId: n.parentId,
+    anchor: ceilingPolygonCenter(n),
+  }
+}
+
+// Ceiling height arrow — vertical chevron at the polygon centroid,
+// hovering just above the ceiling plane. Drags the `height` field
+// (the Y position of the ceiling surface). `anchor: 'min'` so dragging
+// the cursor upward grows the value directly. Live override + commit
+// flow comes from the shared registry arrow pipeline.
+//
+// `currentValue` resolves through `resolveCeilingHeight`, and `apply`
+// always writes `height` — so dragging a follows-mode ceiling converts
+// it to an explicit custom height, mirroring the wall top-drag.
+//
+// The placement Y is in *mesh-local* coords. CeilingSystem already
+// parks `mesh.position.y = resolved height - 0.01`, so the local Y is
+// just the offset above that plane (NOT `height + offset` — that
+// would double-add the height and push the arrow off-screen).
+function ceilingHeightHandle(): HandleDescriptor<CeilingNodeType> {
+  return {
+    kind: 'linear-resize',
+    axis: 'y',
+    anchor: 'min',
+    min: (n, sceneApi) => ceilingHeightBounds(n, sceneApi).min,
+    max: (n, sceneApi) => ceilingHeightBounds(n, sceneApi).max,
+    currentValue: (n) => resolveCeilingHeight(n, useScene.getState().nodes),
+    magneticSnap: (n, newValue, sceneApi) =>
+      resolveStructuralElevationSnap(ceilingElevationGuideSource(n), newValue, sceneApi.nodes()),
+    onDrag: (n, sceneApi) =>
+      publishStructuralElevationGuide(
+        ceilingElevationGuideSource(n),
+        resolveCeilingHeight(n, sceneApi.nodes()),
+        sceneApi.nodes(),
+      ),
+    onDragEnd: (n) => clearStructuralElevationGuide(n.id),
+    apply: (_n, newValue) => ({ height: newValue }),
+    placement: {
+      position: (n) => {
+        const [cx, cz] = ceilingPolygonCenter(n)
+        return [cx, HEIGHT_HANDLE_OFFSET, cz]
+      },
+    },
+  }
+}
+
+function ceilingHandles(_node: CeilingNodeType): HandleDescriptor<CeilingNodeType>[] {
+  return [ceilingHeightHandle()]
+}
+
+export const ceilingEditContribution: NodeEditContribution<typeof CeilingNode> = {
+  snapProfile: 'structural',
+  extensions: {
+    [DRAFTING_SURFACE_EXTENSION_KEY]: {
+      kind: 'ceiling',
+      raycast: 'underside',
+    } satisfies DraftingSurfaceExtension,
+    'pascal:editor/floorplan': {
+      selectionCounterparts: sameOutlineSurfaceCounterparts,
+    } satisfies FloorplanNodeExtension,
+    [PANEL_MODEL_EXTENSION]: ceilingPanelModel,
+  },
+  capabilities: {
+    paint: ceilingPaint,
+  },
+  parametrics: ceilingParametrics,
+  handles: ceilingHandles,
+  // Stage D: kind-owned placement tool. Multi-click polygon drawing
+  // with a vertical TSL-gradient connector + ground-shadow lines.
+  tool: () => import('./tool'),
+  // Stage D — all four ceiling drag-affordances live in this folder.
+  // 1:1 port of the legacy tools (scene.update per tick + history
+  // dance + preview fill/outline overlay on move).
+  affordanceTools: {
+    'boundary-edit': () => import('./boundary-editor'),
+    'hole-edit': () => import('./hole-editor'),
+    move: () => import('./move-tool'),
+  },
+  floorplan: buildCeilingFloorplan,
+  floorplanDependsOnSiblings: true,
+  // 2D move handler — translates polygon by cursor delta from first
+  // pointer position. Mirror of slab; 3D `MoveCeilingTool` skips
+  // 2D-sourced grid events so they don't double-write on commit.
+  floorplanMoveTarget: ceilingFloorplanMoveTarget,
+  // Sister to `affordanceTools['boundary-edit']`. Same `polygon` field;
+  // SVG vertex handles dispatch to this affordance via the floor-plan
+  // registry layer.
+  floorplanAffordances: {
+    'move-vertex': ceilingMoveVertexAffordance,
+    'add-vertex': ceilingAddVertexAffordance,
+    'move-edge': ceilingMoveEdgeAffordance,
+    'delete-vertex': ceilingDeleteVertexAffordance,
+  },
+  toolHints: [
+    { key: 'Left click', label: 'Trace ceiling outline' },
+    { key: 'Enter', label: 'Finish ceiling', minDraftVertices: 3 },
+    { key: 'Esc', label: 'Cancel' },
+  ],
+}

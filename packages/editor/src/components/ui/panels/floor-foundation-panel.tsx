@@ -36,7 +36,7 @@ import {
   THICK_FLOOR_HINT,
   thickFloorAdvice,
 } from '../../../lib/floor-footprints'
-import { formatLinearMeasurement } from '../../../lib/measurements'
+import { formatLinearMeasurement } from '@pascal-app/core'
 import { FinishSwatch } from '../controls/finish-swatch'
 import { MetricControl } from '../controls/metric-control'
 import { SegmentedControl } from '../controls/segmented-control'

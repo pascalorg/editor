@@ -3,8 +3,10 @@
 import {
   containsPoint,
   emitter,
+  formatAreaLabel,
   type MultiPolygon,
   resolveCeilingHeight,
+  roomFloorElevation,
   sceneRegistry,
   useScene,
 } from '@pascal-app/core'
@@ -60,14 +62,12 @@ import {
 } from '../../lib/floor-region-session'
 import { type FloorRegionPoint, snapFloorRegionPoint } from '../../lib/floor-region-snap'
 import { clientToPlan } from '../../lib/floorplan/plan-coords'
-import { formatAreaLabel } from '../../lib/measurements'
 import {
   cancelMezzanineDraft,
   mezzanineDraftActive,
   useMezzanineDraft,
 } from '../../lib/mezzanine-draft'
 import { usePaintRegionMode } from '../../lib/paint-region-mode'
-import { roomFloorElevation } from '../../lib/room-handle-drag'
 import {
   cancelTerraceDraft,
   terraceDraftActive,

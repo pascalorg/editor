@@ -7,6 +7,7 @@ import {
   DEFAULT_WALL_THICKNESS,
   FIBER_CEMENT,
   faceOnLine,
+  formatLinearMeasurement,
   GROUND_SUPPORT_ID,
   getClampedWallCurveOffset,
   getMaxWallCurveOffset,
@@ -36,7 +37,6 @@ import {
 } from '@pascal-app/core'
 import {
   curveReshapeScope,
-  formatLinearMeasurement,
   type MultiPanelControl,
   type PanelRow,
   triggerSFX,

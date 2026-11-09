@@ -3,6 +3,7 @@
 import {
   emitter,
   type FenceNode,
+  formatAngleRadians,
   type GridEvent,
   getWallCurveLength,
   usePascalI18n,
@@ -11,7 +12,6 @@ import {
 } from '@pascal-app/core'
 import {
   CursorSphere,
-  formatAngleRadians,
   getAngleToSegmentReference,
   getSegmentAngleReferenceAtPoint,
   isTypingTarget,

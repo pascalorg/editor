@@ -1,7 +1,6 @@
 'use client'
 
 import { ElevatorOpeningSystem, stepElevatorRuntimes } from '@pascal-app/core'
-import { useEditor } from '@pascal-app/editor'
 import { ElevatorInteractionSystem } from '@pascal-app/viewer'
 import { useFrame } from '@react-three/fiber'
 
@@ -22,11 +21,10 @@ function ElevatorRuntimeSystem() {
  * `ElevatorOpeningSystem` (wall + slab cutout cascade).
  */
 export default function ElevatorSystem() {
-  const enabled = useEditor((state) => state.mode === 'select' || state.isPreviewMode)
   return (
     <>
       <ElevatorRuntimeSystem />
-      <ElevatorInteractionSystem enabled={enabled} />
+      <ElevatorInteractionSystem />
       <ElevatorOpeningSystem />
     </>
   )

@@ -85,18 +85,16 @@ import { acceleratedRaycast, computeBoundsTree, disposeBoundsTree } from 'three-
 import '../../three-types'
 import {
   closeDoorOpenState,
+  closeWindowOpenState,
   DOOR_SWING_OPEN_ANGLE,
   getDisplayedDoorValue,
-  isOperationDoorType,
-  toggleDoorOpenState,
-} from '../../lib/door-interaction'
-import { isTypingTarget } from '../../lib/typing-target'
-import {
-  closeWindowOpenState,
   getDisplayedWindowValue,
   isOperableWindowType,
+  isOperationDoorType,
+  toggleDoorOpenState,
   toggleWindowOpenState,
-} from '../../lib/window-interaction'
+} from '@pascal-app/core'
+import { isTypingTarget } from '../../lib/typing-target'
 import useEditor from '../../store/use-editor'
 import { useFirstPersonHud, type WalkthroughInteract } from '../../store/use-first-person-hud'
 import { DroneHud, WalkthroughHud } from '../walkthrough-hud'

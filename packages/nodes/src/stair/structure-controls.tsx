@@ -2,6 +2,7 @@
 
 import {
   type AnyNodeId,
+  formatLinearMeasurement,
   type MessageDescriptor,
   type PascalI18n,
   resolveStairStringerLayout,
@@ -15,7 +16,7 @@ import {
   usePascalI18n,
   useScene,
 } from '@pascal-app/core'
-import { formatLinearMeasurement, MetricControl, SelectControl } from '@pascal-app/editor'
+import { MetricControl, SelectControl } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useShallow } from 'zustand/react/shallow'
 

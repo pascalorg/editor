@@ -265,6 +265,7 @@ export {
   planDeckFraming,
 } from './lib/deck-framing'
 export { deepestDrawnY, lowestGroundY } from './lib/deepest-drawn'
+export * from './lib/door-interaction'
 export { doorPositionForFacing, getDoorOpeningSize } from './lib/door-opening'
 export {
   clampDoorOperationState,
@@ -273,6 +274,11 @@ export {
   isOperationDoorType,
   SECTIONAL_GARAGE_RENDER_OPEN_SCALE,
 } from './lib/door-operation'
+export {
+  resolveElevatorNodeSupportY,
+  resolveElevatorSupportLevelId,
+  resolveElevatorSupportY,
+} from './lib/elevator-support'
 export {
   type FinishScriptHost,
   type FinishScriptInputs,
@@ -573,6 +579,7 @@ export {
 } from './lib/roof-overlap'
 export { type RoomDrawnFloor, roomDrawnFloor } from './lib/room-drawn-floor'
 export { type RoomFloorChoice, roomFloorChoices } from './lib/room-floor-choices'
+export * from './lib/room-floor-elevation'
 export {
   checkRoomFloor,
   clampRoomFloorHandle,
@@ -781,6 +788,7 @@ export {
   wallFaceScriptRecord,
   wallFaceScriptSkirtingGap,
 } from './lib/wall-face-script'
+export * from './lib/window-interaction'
 export { ZONE_COLOR_PALETTE, zoneColorForSeed } from './lib/zone-colors'
 export {
   deriveZoneQuantityReport,
@@ -1345,6 +1353,7 @@ export {
 export { wallTrimPatch } from './systems/wall/wall-trim'
 export type { SceneGraph } from './utils/clone-scene-graph'
 export { cloneLevelSubtree, cloneSceneGraph, forkSceneGraph } from './utils/clone-scene-graph'
+export * from './utils/measurement-format'
 export { areSemanticValuesEqual } from './utils/semantic-equal'
 export { isObject } from './utils/types'
 export {

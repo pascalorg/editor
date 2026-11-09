@@ -4,6 +4,7 @@ import {
   type AnyNode,
   type AnyNodeId,
   emitter,
+  formatLinearMeasurement,
   sceneRegistry,
   useScene,
   type WallFace,
@@ -27,7 +28,6 @@ import {
 import { LineBasicNodeMaterial, MeshBasicNodeMaterial } from 'three/webgpu'
 import { markToolCancelConsumed } from '../../../hooks/use-keyboard'
 import { EDITOR_LAYER } from '../../../lib/constants'
-import { formatLinearMeasurement } from '../../../lib/measurements'
 import { paintRegionTargets, usePaintRegionMode } from '../../../lib/paint-region-mode'
 import { isTypingTarget } from '../../../lib/typing-target'
 import {
