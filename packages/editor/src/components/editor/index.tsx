@@ -229,8 +229,9 @@ export interface EditorProps {
   navbarSlot?: ReactNode
   sidebarTabs?: (SidebarTab & { component: React.ComponentType })[]
   /**
-   * The tab (one of `sidebarTabs`) shown on desktop as its own column beside
-   * the side menu, so a tool panel opens next to it instead of in its place.
+   * The tab (one of `sidebarTabs`) shown on desktop in the column beside the
+   * side menu whenever no tool panel is open: a tool panel takes its place
+   * there, and closing the tool brings it back.
    */
   columnTabId?: string
   /** Pinned at the bottom of the side menu (v2 desktop), e.g. recent chats. */
@@ -670,17 +671,10 @@ function ViewerCanvasControlsHint({
   return (
     <div
       className={cn(
-        'pointer-events-none absolute z-40 w-max max-w-[calc(100%-2rem-var(--tool-dock-inset,0px))] -translate-x-1/2',
+        'pointer-events-none absolute left-1/2 z-40 max-w-[calc(100%-2rem)] -translate-x-1/2',
+        !belowTopMenu && 'top-14',
       )}
-      // Centred on what a docked tool panel leaves of the stage. With a panel docked, the level
-      // selector moves beside it into the hint's row, so the hint drops below it (any inset > 0
-      // clamps to the extra 2rem).
-      style={{
-        left: 'calc(50% + var(--tool-dock-inset, 0px) / 2)',
-        top: belowTopMenu
-          ? TOP_MENU_CLEARANCE
-          : 'calc(3.5rem + clamp(0px, var(--tool-dock-inset, 0px) * 1000, 2rem))',
-      }}
+      style={belowTopMenu ? { top: TOP_MENU_CLEARANCE } : undefined}
     >
       <section
         aria-label={i18n._({ id: 'editor.cameraControlsHint', message: 'Camera controls hint' })}
@@ -1428,12 +1422,7 @@ const ViewerCanvas = memo(function ViewerCanvas({
                 key={viewId}
                 onFocusCapture={focusPane(pane)}
                 onPointerDownCapture={focusPane(pane)}
-                // A tool panel docked over the stage's left edge (v2 layout) covers
-                // nothing of a view in the first pane: the view starts beside it.
-                style={{
-                  ...paneStyle(pane),
-                  ...(pane === 0 ? { paddingLeft: 'var(--tool-dock-inset, 0px)' } : {}),
-                }}
+                style={paneStyle(pane)}
               >
                 <HostView key={viewId} view={views.find((view) => view.id === viewId)} />
                 {/* A restored pane's plugin is known only once the project has loaded: until
@@ -1995,18 +1984,8 @@ function EditorContent({
                           </div>
                         </div>
                       ) : (
-                        // Centred on the whole pane, under a docked tool panel's
-                        // reserved foot: it stays put as the panel opens and closes.
-                        <div
-                          className="pointer-events-none absolute inset-y-0 right-0"
-                          style={{
-                            left: 'calc(-1 * var(--scene-region-inset, 0px))',
-                            transform: 'translateZ(0)',
-                          }}
-                        >
-                          <div className="pointer-events-auto">
-                            <ActionMenu placement={actionMenuPlacement} />
-                          </div>
+                        <div className="pointer-events-auto">
+                          <ActionMenu placement={actionMenuPlacement} />
                         </div>
                       ))}
                     {sceneOverlay}
@@ -2040,7 +2019,6 @@ function EditorContent({
               renderTabContent={renderTabContent}
               sidebarOverlay={sidebarOverlay}
               columnTabId={columnTabId}
-              reserveBottomMenu={!dockMenuOnTop}
               sideMenuFooter={sideMenuFooter}
               sidebarTabs={tabBarTabs}
               stageOverlay={stageOverlay}

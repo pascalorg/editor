@@ -15615,6 +15615,24 @@ msgstr "添加插件"
 msgid "editor.sidebar.sideMenu.plugins"
 msgstr "插件"
 
+# English: "Hide menu"
+#: packages/editor/src/components/ui/sidebar/tab-bar.tsx
+#, fuzzy
+msgid "editor.sidebar.sideMenu.hide"
+msgstr "隐藏菜单"
+
+# English: "Menu"
+#: packages/editor/src/components/editor/editor-layout-v2.tsx
+#, fuzzy
+msgid "editor.sidebar.sideMenu.show"
+msgstr "菜单"
+
+# English: "Show menu"
+#: packages/editor/src/components/editor/editor-layout-v2.tsx
+#, fuzzy
+msgid "editor.sidebar.sideMenu.showLabel"
+msgstr "显示菜单"
+
 # Source-Hash: 316a5e154c1e0257
 # Review: required
 # AI-Provider: claude-code

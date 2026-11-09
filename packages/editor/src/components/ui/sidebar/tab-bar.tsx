@@ -1,5 +1,7 @@
 'use client'
 
+import { usePascalI18n } from '@pascal-app/core'
+import { PanelLeftClose } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { triggerSFX } from './../../../lib/sfx-bus'
 import { cn } from './../../../lib/utils'
@@ -76,6 +78,8 @@ interface SideMenuProps {
   onTabClick: (id: string) => void
   /** Pinned under the entries, e.g. the host's recent chats. */
   footer?: ReactNode
+  /** Hides the whole menu; a Menu button above the stage brings it back. */
+  onHide: () => void
 }
 
 /**
@@ -83,7 +87,16 @@ interface SideMenuProps {
  * heading in the order the sections first appear. Entries without a section
  * lead, untitled.
  */
-export function SideMenu({ tabs, activeTab, collapsed, onTabClick, footer }: SideMenuProps) {
+export function SideMenu({
+  tabs,
+  activeTab,
+  collapsed,
+  onTabClick,
+  footer,
+  onHide,
+}: SideMenuProps) {
+  const i18n = usePascalI18n()
+  const hideLabel = i18n._({ id: 'editor.sidebar.sideMenu.hide', message: 'Hide menu' })
   const groups: { section?: string; tabs: SidebarTab[] }[] = []
   for (const tab of tabs) {
     const group = groups.find((g) => g.section === tab.section)
@@ -98,6 +111,16 @@ export function SideMenu({ tabs, activeTab, collapsed, onTabClick, footer }: Sid
       data-surface="icon-rail"
     >
       <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-2 py-2">
+        <button
+          aria-label={hideLabel}
+          className="flex h-8 w-full shrink-0 items-center gap-2 rounded-xl px-2.5 text-muted-foreground text-xs transition-colors hover:bg-sidebar-accent/50 hover:text-foreground"
+          onClick={onHide}
+          title={hideLabel}
+          type="button"
+        >
+          <PanelLeftClose aria-hidden className="size-4" />
+          {hideLabel}
+        </button>
         {groups.map((group) => (
           <div className="flex flex-col gap-0.5" key={group.section ?? ''}>
             {group.section ? (

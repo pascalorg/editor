@@ -15615,6 +15615,24 @@ msgstr "プラグインを追加"
 msgid "editor.sidebar.sideMenu.plugins"
 msgstr "プラグイン"
 
+# English: "Hide menu"
+#: packages/editor/src/components/ui/sidebar/tab-bar.tsx
+#, fuzzy
+msgid "editor.sidebar.sideMenu.hide"
+msgstr "メニューを隠す"
+
+# English: "Menu"
+#: packages/editor/src/components/editor/editor-layout-v2.tsx
+#, fuzzy
+msgid "editor.sidebar.sideMenu.show"
+msgstr "メニュー"
+
+# English: "Show menu"
+#: packages/editor/src/components/editor/editor-layout-v2.tsx
+#, fuzzy
+msgid "editor.sidebar.sideMenu.showLabel"
+msgstr "メニューを表示"
+
 # Source-Hash: 316a5e154c1e0257
 # Review: required
 # AI-Provider: claude-code

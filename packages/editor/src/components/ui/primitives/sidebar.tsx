@@ -46,6 +46,9 @@ type SidebarStore = {
   /** Width of the v2 layout's chat column. */
   chatWidth: number
   setChatWidth: (width: number) => void
+  /** The v2 layout's side menu is hidden, leaving a Menu button above the stage. */
+  isMenuHidden: boolean
+  setIsMenuHidden: (hidden: boolean) => void
 }
 
 export const useSidebarStore = create<SidebarStore>()(
@@ -65,6 +68,8 @@ export const useSidebarStore = create<SidebarStore>()(
       setIsDragging: (isDragging) => set({ isDragging }),
       chatWidth: 360,
       setChatWidth: (chatWidth) => set({ chatWidth }),
+      isMenuHidden: false,
+      setIsMenuHidden: (isMenuHidden) => set({ isMenuHidden }),
     }),
     {
       name: 'sidebar-preferences',
@@ -73,6 +78,7 @@ export const useSidebarStore = create<SidebarStore>()(
         width: state.width,
         isCollapsed: state.isCollapsed,
         chatWidth: state.chatWidth,
+        isMenuHidden: state.isMenuHidden,
       }),
       skipHydration: true,
     },

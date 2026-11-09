@@ -6279,6 +6279,18 @@ msgstr "Add plugin"
 msgid "editor.sidebar.sideMenu.plugins"
 msgstr "Plugins"
 
+#: packages/editor/src/components/ui/sidebar/tab-bar.tsx
+msgid "editor.sidebar.sideMenu.hide"
+msgstr "Hide menu"
+
+#: packages/editor/src/components/editor/editor-layout-v2.tsx
+msgid "editor.sidebar.sideMenu.show"
+msgstr "Menu"
+
+#: packages/editor/src/components/editor/editor-layout-v2.tsx
+msgid "editor.sidebar.sideMenu.showLabel"
+msgstr "Show menu"
+
 #: packages/editor/src/components/editor/editor-layout-v2.tsx
 msgid "editor.sidebar.toolDock.close"
 msgstr "Close panel"
