@@ -1,4 +1,4 @@
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import type { McpServer } from '@modelcontextprotocol/server'
 import { isScriptedNode, scriptedObjectMeta } from '@pascal-app/core'
 import {
   achievedChanges,
@@ -15,6 +15,7 @@ import {
   addWindowOutput as addWindowResult,
   addWindowTool,
   isAgentRefusal,
+  surfaceDescription,
 } from '@pascal-app/core/agent-tools'
 import type {
   AnyNode,
@@ -23,11 +24,13 @@ import type {
   GeometryScriptParamValue,
 } from '@pascal-app/core/schema'
 import { GeometryReuseFields } from '@pascal-app/core/schema'
+import { z } from 'zod'
 import type { SceneOperations } from '../operations'
 import { compileAndStore, type GeometryScriptHost, readScript } from './add-object'
 import { ADDITIVE_TOOL_ANNOTATIONS } from './annotations'
 import { refusalResult, toolError } from './errors'
 import { liveSyncOutput, persistencePayload, publishLiveSceneSnapshot } from './live-sync'
+import { inScene } from './scene-scope'
 import { toPatches } from './shared-tools'
 
 /** The contract's one result (core `addWallOpening`), and the live sync's note. */
@@ -80,10 +83,12 @@ async function rebuildOpening(
         ...GeometryReuseFields.parse(input),
       },
     })
-    outcome = rescriptOpening(
-      nodes,
-      { ...input, compiled },
-      { activeLevelId: bridge.activeLevelId?.() ?? null },
+    outcome = inScene(bridge, () =>
+      rescriptOpening(
+        nodes,
+        { ...input, compiled },
+        { activeLevelId: bridge.activeLevelId?.() ?? null },
+      ),
     )
   } catch (error) {
     if (isAgentRefusal(error)) return refusalResult(error)
@@ -161,9 +166,9 @@ export function registerAddDoor(
     addDoorTool.name,
     {
       title: addDoorTool.title,
-      description: addDoorTool.description,
-      inputSchema: addDoorTool.input,
-      outputSchema: addDoorOutput,
+      description: surfaceDescription(addDoorTool, 'mcp'),
+      inputSchema: z.object(addDoorTool.input),
+      outputSchema: z.object(addDoorOutput),
       annotations: ADDITIVE_TOOL_ANNOTATIONS,
     },
     async (input) => {
@@ -173,11 +178,14 @@ export function registerAddDoor(
       if ('error' in compiled) return compiled.error
       let opening: ReturnType<typeof addWallOpening>
       try {
-        opening = addWallOpening(bridge.getNodes() as SceneNodes, {
-          kind: 'door',
-          ...input,
-          compiled: compiled.script,
-        })
+        // Planned after the compile was awaited: back in the scene's scope for its ids.
+        opening = inScene(bridge, () =>
+          addWallOpening(bridge.getNodes() as SceneNodes, {
+            kind: 'door',
+            ...input,
+            compiled: compiled.script,
+          }),
+        )
       } catch (error) {
         return refusalResult(error)
       }
@@ -197,9 +205,9 @@ export function registerAddWindow(
     addWindowTool.name,
     {
       title: addWindowTool.title,
-      description: addWindowTool.description,
-      inputSchema: addWindowTool.input,
-      outputSchema: addWindowOutput,
+      description: surfaceDescription(addWindowTool, 'mcp'),
+      inputSchema: z.object(addWindowTool.input),
+      outputSchema: z.object(addWindowOutput),
       annotations: ADDITIVE_TOOL_ANNOTATIONS,
     },
     async (input) => {
@@ -209,11 +217,14 @@ export function registerAddWindow(
       if ('error' in compiled) return compiled.error
       let opening: ReturnType<typeof addWallOpening>
       try {
-        opening = addWallOpening(bridge.getNodes() as SceneNodes, {
-          kind: 'window',
-          ...input,
-          compiled: compiled.script,
-        })
+        // Planned after the compile was awaited: back in the scene's scope for its ids.
+        opening = inScene(bridge, () =>
+          addWallOpening(bridge.getNodes() as SceneNodes, {
+            kind: 'window',
+            ...input,
+            compiled: compiled.script,
+          }),
+        )
       } catch (error) {
         return refusalResult(error)
       }

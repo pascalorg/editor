@@ -1,6 +1,6 @@
 import type { NodePort } from '@pascal-app/core'
 import { Euler, Quaternion, Vector3 } from 'three'
-import { equivalentDiameterIn, ovalEquivalentDiameterIn } from '../duct-segment/geometry'
+import { equivalentDiameterIn, ovalEquivalentDiameterIn } from '../duct-segment/profile'
 import type { DuctTerminalNode } from './schema'
 
 /** Collar stub length in meters behind the face. */

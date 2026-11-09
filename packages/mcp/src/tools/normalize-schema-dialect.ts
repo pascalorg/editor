@@ -1,5 +1,4 @@
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import { ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js'
+import type { ListToolsResult, McpServer } from '@modelcontextprotocol/server'
 
 const DIALECT_2020_12 = 'https://json-schema.org/draft/2020-12/schema'
 
@@ -46,8 +45,8 @@ export function normalizeToolSchemaDialect(server: McpServer): void {
   if (!original) return
 
   server.server.removeRequestHandler('tools/list')
-  server.server.setRequestHandler(ListToolsRequestSchema, async (request, extra) => {
-    const result = (await original(request, extra)) as { tools?: unknown }
+  server.server.setRequestHandler('tools/list', async (request, ctx) => {
+    const result = (await original(request, ctx)) as ListToolsResult
     retargetDialect(result.tools)
     return result
   })

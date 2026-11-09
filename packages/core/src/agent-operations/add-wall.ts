@@ -1,27 +1,36 @@
 import { refuse } from '../agent-tools/refusal'
 import { levelFootprintLoops } from '../lib/building-footprint'
+import { foundationReadingOfLevel } from '../lib/foundation-construction'
+import {
+  foundationWallRule,
+  levelHoldsFoundationWalls,
+  withFoundationConstruction,
+} from '../lib/foundation-wall'
 import { lotOverhang } from '../lib/site-placement'
-import { type LevelNode, WallNode } from '../schema'
+import { type LevelNode, railingWallDefaults, WallNode } from '../schema'
 import { normalizeWallCurveOffset } from '../systems/wall/wall-curve'
 import { WALL_MIN_LENGTH } from '../systems/wall/wall-topology'
 import { applySceneChanges } from './apply-changes'
-import { type LevelTargetInput, targetLevel } from './level-target'
+import { targetLevel } from './level-target'
 import { refuseRoofLevel } from './roof-writes'
+import { queryNodes } from './scene-queries'
 import type { AgentOperation } from './types'
+import { wallTypePatch } from './wall-type'
 
 type Pt = [number, number]
-type AddWallInput = LevelTargetInput & {
-  start: number[]
-  end: number[]
-  thickness?: number
-  height?: number
-  curveOffset?: number
-}
+type AddWallInput = z.infer<z.ZodObject<typeof addWallTool.input>>
 
 /** `add_wall`: one wall between two points, named as the editor names walls. */
 export const addWall: AgentOperation<AddWallInput> = (nodes, input, context) => {
   const level = targetLevel(nodes, input, context)
   refuseRoofLevel(nodes, level.id, 'a wall')
+  const railing = input.wallType === 'railing'
+  if (input.railing && !railing)
+    refuse('not_a_railing', 'railing settings require wallType railing.')
+  if (railing && input.type !== undefined)
+    refuse('railing_wall', 'A railing has no assembly: omit type.')
+  const guardDefaults = railing ? railingWallDefaults(input.railing?.style) : undefined
+  const guard = guardDefaults ? { ...guardDefaults.railing, ...input.railing } : undefined
   const start = input.start as Pt
   const end = input.end as Pt
   const length = Math.hypot(end[0] - start[0], end[1] - start[1])
@@ -34,8 +43,9 @@ export const addWall: AgentOperation<AddWallInput> = (nodes, input, context) => 
   const curveOffset = input.curveOffset
     ? normalizeWallCurveOffset({ start, end }, input.curveOffset)
     : 0
-  const walls = Object.values(nodes).filter((node) => node.type === 'wall').length
-  const wall = WallNode.parse({
+  const walls = queryNodes(nodes, { type: 'wall' }).length
+  const assembly = input.type === undefined ? {} : wallTypePatch(nodes, input.type)
+  const drawn = WallNode.parse({
     name: `Wall ${walls + 1}`,
     parentId: level.id,
     start,
@@ -43,7 +53,34 @@ export const addWall: AgentOperation<AddWallInput> = (nodes, input, context) => 
     ...(input.thickness === undefined ? {} : { thickness: input.thickness }),
     ...(input.height === undefined ? {} : { height: input.height }),
     ...(curveOffset ? { curveOffset } : {}),
+    ...assembly,
+    ...(input.wallType === undefined ? {} : { wallType: input.wallType }),
+    ...(guardDefaults && guard
+      ? {
+          ...guardDefaults,
+          railing: guard,
+          height: input.height ?? guardDefaults.height,
+          thickness: guard.postSize,
+        }
+      : {}),
   })
+  const [wall] = railing
+    ? [drawn]
+    : (withFoundationConstruction(
+        nodes,
+        level.id,
+        [...queryNodes<WallNode>(nodes, { type: 'wall', parentId: level.id }), drawn],
+        [drawn],
+        { thickness: input.thickness, ...assembly },
+      ) as [WallNode])
+  const reading = foundationReadingOfLevel(nodes, level.id)
+  const foundation = input.type === undefined && wall.assembly !== undefined
+  const partition =
+    !railing &&
+    !foundation &&
+    input.type === undefined &&
+    input.thickness === undefined &&
+    levelHoldsFoundationWalls(nodes, level.id)
   // the wall's mitred band, curve and all: what crosses the lot line, not only its centreline
   const after = applySceneChanges(nodes, { create: [{ node: wall, parentId: level.id }] })
   const site = lotOverhang(
@@ -60,7 +97,23 @@ export const addWall: AgentOperation<AddWallInput> = (nodes, input, context) => 
       length: Math.round(length * 1000) / 1000,
       ...(curveOffset ? { curveOffset } : {}),
       ...(site ? { site } : {}),
+      ...(foundation
+        ? {
+            construction: {
+              assembly: reading.construction.description,
+              thickness: wall.thickness,
+              region: reading.region,
+              basis: reading.basis,
+            },
+          }
+        : {}),
       message: `Added wall "${wall.name}" on ${level.name ?? level.id}${
+        foundation
+          ? `, a foundation wall against the ground (${reading.construction.description}), ${(wall.thickness ?? 0).toFixed(3)} m thick; ${reading.basis}; a wall given a thickness keeps it`
+          : partition
+            ? `, an ordinary wall: a partition inside the outline of this level's walls; ${foundationWallRule(reading)}`
+            : ''
+      }${
         site
           ? `; it reaches ${site.overhangM} m past the lot line (${site.sides.join(', ')}): the house belongs inside the buildable area (get_site, place_building)`
           : ''
@@ -69,3 +122,6 @@ export const addWall: AgentOperation<AddWallInput> = (nodes, input, context) => 
     changes: { create: [{ node: wall, parentId: level.id }] },
   }
 }
+
+import type { z } from 'zod'
+import type { addWallTool } from '../agent-tools/walls'

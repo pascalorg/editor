@@ -42,32 +42,136 @@ function bindingsFor(clause: string, moduleRef: string): string {
   return out.join(' ')
 }
 
+/** Before a `/`, these leave an operand expected: the slash opens a regular expression. */
+const BEFORE_REGEX = new Set([...'(,=:[!&|?{};+-*%<>~^'])
+const KEYWORD_BEFORE_REGEX =
+  /(?:^|[^\w$])(?:return|typeof|case|in|of|new|delete|void|throw|else|do|yield|await)$/
+
+/**
+ * Which characters of a module are its own code: not inside a string, a template literal's text,
+ * a comment or a regular expression. A module may carry other modules as text (an adapter writes
+ * the modules of a scene), and their `import` and `export` are its data, not its statements.
+ */
+function codeMask(code: string): Uint8Array {
+  const mask = new Uint8Array(code.length)
+  // Each open template expression (`${`) keeps the brace depth it returns at.
+  const templates: number[] = []
+  let depth = 0
+  let last = ''
+  let i = 0
+  const skipQuoted = (quote: string) => {
+    for (i++; i < code.length && code[i] !== quote && code[i] !== '\n'; i++)
+      if (code[i] === '\\') i++
+    i++
+  }
+  /** Template text from i (just past a backtick or a closing brace) to its end or its next `${`. */
+  const skipTemplate = () => {
+    for (; i < code.length; i++) {
+      if (code[i] === '\\') i++
+      else if (code[i] === '`') {
+        i++
+        return
+      } else if (code[i] === '$' && code[i + 1] === '{') {
+        templates.push(depth)
+        depth++
+        i += 2
+        return
+      }
+    }
+  }
+  while (i < code.length) {
+    const c = code[i]!
+    const next = code[i + 1]
+    if (c === '/' && next === '/') {
+      while (i < code.length && code[i] !== '\n') i++
+    } else if (c === '/' && next === '*') {
+      const end = code.indexOf('*/', i + 2)
+      i = end < 0 ? code.length : end + 2
+    } else if (c === "'" || c === '"') {
+      skipQuoted(c)
+      last = c
+    } else if (c === '`') {
+      i++
+      skipTemplate()
+      last = '`'
+    } else if (
+      c === '/' &&
+      (last === '' ||
+        BEFORE_REGEX.has(last) ||
+        KEYWORD_BEFORE_REGEX.test(code.slice(Math.max(0, i - 8), i).trimEnd()))
+    ) {
+      let inClass = false
+      for (i++; i < code.length && code[i] !== '\n'; i++) {
+        if (code[i] === '\\') i++
+        else if (code[i] === '[') inClass = true
+        else if (code[i] === ']') inClass = false
+        else if (code[i] === '/' && !inClass) break
+      }
+      i++
+      last = '/'
+    } else if (c === '}' && templates.length && templates.at(-1) === depth - 1) {
+      templates.pop()
+      depth--
+      i++
+      skipTemplate()
+      last = '`'
+    } else {
+      mask[i] = 1
+      if (c === '{') depth++
+      else if (c === '}') depth--
+      if (!/\s/.test(c)) last = c
+      i++
+    }
+  }
+  return mask
+}
+
+/** `text.replace(pattern, replace)` for the matches whose first word is the module's own code. */
+function replaceInCode(
+  text: string,
+  pattern: RegExp,
+  replace: (match: string, ...groups: string[]) => string,
+): string {
+  const mask = codeMask(text)
+  let done = false
+  return text.replace(
+    new RegExp(pattern.source, `${pattern.flags.replace('g', '')}g`),
+    (...args) => {
+      const match = args[0] as string
+      const offset = args.at(-2) as number
+      if ((done && !pattern.global) || !mask[offset + match.search(/\S/)]) return match
+      done = true
+      return replace(match, ...(args.slice(1, -2) as string[]))
+    },
+  )
+}
+
 export function transformModule(code: string, modules: ModuleTable): string {
   const unknown: string[] = []
-  let body = code.replace(IMPORT_RE, (_all, clause: string, specifier: string) => {
-    const key = moduleKey(specifier)
+  let body = replaceInCode(code, IMPORT_RE, (_all, clause, specifier) => {
+    const key = moduleKey(specifier!)
     if (!key || !(key in modules)) {
-      unknown.push(specifier)
+      unknown.push(specifier!)
       return ''
     }
-    return bindingsFor(clause, `__modules[${JSON.stringify(key)}]`)
+    return bindingsFor(clause!, `__modules[${JSON.stringify(key)}]`)
   })
-  body = body.replace(SIDE_EFFECT_IMPORT_RE, '')
+  body = replaceInCode(body, SIDE_EFFECT_IMPORT_RE, () => '')
   if (unknown.length > 0) {
     const available = Object.keys(modules)
       .map((key) => (key === 'three' || key === 'three-bvh-csg' ? key : `three/addons/…/${key}.js`))
       .join(', ')
     throw new Error(`Unsupported import ${unknown.join(', ')}. Available: ${available}.`)
   }
-  body = body
-    .replace(
-      /export\s+default\s+(async\s+)?function\s*\*?\s*([A-Za-z_$][\w$]*)?\s*\(/,
-      (_m, a, n) =>
-        n ? `const __default = ${a ?? ''}function ${n}(` : `const __default = ${a ?? ''}function (`,
-    )
-    .replace(/export\s+default\s+/, 'const __default = ')
-    .replace(/export\s+(const|let|var|function|class)\s/g, '$1 ')
-    .replace(/export\s*\{[^}]*\}\s*;?/g, '')
+  body = replaceInCode(
+    body,
+    /export\s+default\s+(async\s+)?function\s*\*?\s*([A-Za-z_$][\w$]*)?\s*\(/,
+    (_m, a, n) =>
+      n ? `const __default = ${a ?? ''}function ${n}(` : `const __default = ${a ?? ''}function (`,
+  )
+  body = replaceInCode(body, /export\s+default\s+/, () => 'const __default = ')
+  body = replaceInCode(body, /export\s+(const|let|var|function|class)\s/g, (_m, kind) => `${kind} `)
+  body = replaceInCode(body, /export\s*\{[^}]*\}\s*;?/g, () => '')
   // A block scope lets `import * as THREE from 'three'` shadow the injected THREE.
   return `{
 ${body}

@@ -4,7 +4,10 @@ import type {
   AnyNode,
   BaseNode,
   BuildingNode,
+  GroundBox,
+  LevelGradeStanding,
   LevelNode,
+  SitePresentation,
   UnitNode,
   ZoneNode,
 } from '@pascal-app/core'
@@ -12,13 +15,25 @@ import type { Object3D } from 'three'
 
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+import type { LatLng } from '../lib/daylight/location'
+import type { Weather } from '../lib/daylight/sky'
+import type { TimeOfDay } from '../lib/daylight/solar'
 import type { EdgeMode } from '../lib/edge-style'
 import type { ColorPreset, RenderShading } from '../lib/materials'
-import { SCENE_THEME_IDS } from '../lib/scene-themes'
+import {
+  getSceneTheme,
+  projectSceneTheme,
+  SCENE_THEME_IDS,
+  type SceneTheme,
+} from '../lib/scene-themes'
 
 export type RenderContext = 'editor' | 'viewer'
+export type RenderQuality = 'low' | 'medium' | 'high'
+/** A quality tier, or `auto`: the tier the device was detected for. */
+export type RenderQualityChoice = RenderQuality | 'auto'
 export type MetricNotation = 'meters' | 'millimeters'
 export type WallMode = 'up' | 'cutaway' | 'down' | 'translucent'
+export type WalkthroughMovement = 'walk' | 'drone'
 
 type SelectionPath = {
   buildingId: BuildingNode['id'] | null
@@ -30,6 +45,11 @@ type SelectionPath = {
 type Outliner = {
   selectedObjects: Object3D[]
   hoveredObjects: Object3D[]
+}
+
+type LookDefaults = { theme: string; edges: EdgeMode; shadows: boolean }
+type LocalLook = Partial<LookDefaults> & {
+  shadingByContext?: Partial<Record<RenderContext, RenderShading>>
 }
 
 type ViewerState = {
@@ -56,7 +76,14 @@ type ViewerState = {
   setCameraMode: (mode: 'perspective' | 'orthographic') => void
 
   sceneTheme: string
-  /** The user's own pick, and the only theme that persists. */
+  sceneAppearance: SceneTheme
+  lookDefaults: LookDefaults
+  projectPresentation?: SitePresentation
+  setProjectPresentation: (presentation: SitePresentation | undefined) => void
+  resetProjectLook: () => void
+  previewSceneTheme: string | null
+  contextDefaultShading: RenderShading
+  /** The selected project/global theme before a temporary preview. */
   savedSceneTheme: string
   setSceneTheme: (id: string) => void
   /** Show a theme without saving it (e.g. a project's own mood); `null`
@@ -64,7 +91,7 @@ type ViewerState = {
   showSceneTheme: (id: string | null) => void
 
   renderContext: RenderContext
-  setRenderContext: (context: RenderContext) => void
+  setRenderContext: (context: RenderContext, defaultShading?: RenderShading) => void
 
   /** True during a GLB bake/export pass. Renderers that normally draw via a
    * collective InstancedMesh (`def.system`) and mount only an invisible per-node
@@ -132,6 +159,61 @@ type ViewerState = {
    * is not written.
    */
   nodesRevealing: readonly string[]
+  /**
+   * The level shown lies below grade, the storeys above it hidden. Set by the host's level display
+   * beside `hideLevelsAboveSelection`; never persisted. Whether the ground over it is veiled also
+   * depends on `groundMode`: read both through `groundVeiled`.
+   */
+  belowGrade: boolean
+  /**
+   * The shown level's standing against the sculpted terrain, set beside `belowGrade`:
+   * only partly below grade, the ground veils just where it stands in the way (the ground
+   * window), not wholesale.
+   */
+  gradeStanding: LevelGradeStanding
+  /**
+   * The box the ground window opens for: the shown level, or the whole building when it is
+   * shown. Set by the host (never on the site phase, where the ground is the work); never
+   * persisted. `null` closes the window.
+   */
+  groundWindowBox: GroundBox | null
+  /** Ground stands between the eye and `groundWindowBox` now, set by the site renderer. */
+  groundWindowVeiled: boolean
+  /** The person's choice for the ground over a level below grade. Not persisted. */
+  groundMode: GroundMode
+  setGroundMode: (mode: GroundMode) => void
+  /**
+   * The scene has a level below grade (the below-grade footprint is not empty): set by the site
+   * renderer. The ground materials carry the hole's mask, and the eye's fill light is mounted,
+   * from the moment this is true, so that changing floors changes uniforms and never materials
+   * or the light count; scenes without a level below grade keep plain materials. Never persisted.
+   */
+  hasLevelBelowGrade: boolean
+  /**
+   * The host lets the eye dive under the ground (the editor's orbit may, with the ground on Auto).
+   * The eye's fill light is mounted, from the moment this is true, so that the first crossing of the
+   * ground compiles nothing: a scene with no level below grade is dived under as well. Set by the
+   * host's camera; never persisted.
+   */
+  diveAvailable: boolean
+  /**
+   * The eye lies under the ground at its own position (a free orbit under the lid). Set by the
+   * viewer's underground ambiance from the camera; never persisted.
+   */
+  eyeUnderGround: boolean
+  /**
+   * The world is turned, or turning, to earth (the underground ambiance's factor is above 0).
+   * Its factor itself eases every frame and lives with the shaders, not here; this flips only at
+   * the crossing's ends. Set by the viewer's underground ambiance; never persisted.
+   */
+  ambianceActive: boolean
+  /**
+   * How the ground reads as a medium: the edge of the hole over a level below grade and the
+   * crossing as the eye dives under the ground. Variants the owner and the team choose from;
+   * every one is a uniform, so changing it compiles nothing. Never persisted.
+   */
+  undergroundLook: UndergroundLook
+  setUndergroundLook: (look: Partial<UndergroundLook>) => void
 
   wallMode: WallMode
   setWallMode: (mode: WallMode) => void
@@ -156,8 +238,58 @@ type ViewerState = {
   showZones: boolean
   setShowZones: (show: boolean) => void
 
+  /**
+   * Ceilings also draw their upper face, so they read as solid from above: a roof seen over closed
+   * rooms. Off, a camera above looks into the rooms, the ceiling showing only from below. The
+   * editor drives it from its Ceilings display setting; not persisted.
+   */
+  showCeilingTops: boolean
+  setShowCeilingTops: (show: boolean) => void
+  /**
+   * The house as its frame: a framing plugin draws the studs, plates, headers, joists and rafters of
+   * every storey and hides the shell over them; the foundation stays. Not persisted.
+   */
+  framingOnly: boolean
+  setFramingOnly: (on: boolean) => void
+  /**
+   * The frame in the finished house: a framing plugin draws the studs, joists and rafters with the
+   * shell left as it is, and the roof decks draw open where their rafters are, so the frame shows
+   * where it is exposed (the attic) and stays hidden inside the walls and the finished ceilings.
+   * Framing only wins while both are on. Not persisted.
+   */
+  framingShown: boolean
+  setFramingShown: (on: boolean) => void
+
   transparentBackground: boolean
   setTransparentBackground: (transparent: boolean) => void
+
+  /** Colored appearance: time-of-day preset driving the built-in daylight sun and sky. */
+  timeOfDay: TimeOfDay
+  /** A preset: clears any exact time and the live clock. */
+  setTimeOfDay: (timeOfDay: TimeOfDay) => void
+  /** An exact time (minutes after local mean midnight at the site); null follows `timeOfDay`. */
+  timeOfDayMinutes: number | null
+  setTimeOfDayMinutes: (minutes: number | null) => void
+  /** The sky follows the clock: now, live. */
+  skyLive: boolean
+  setSkyLive: (live: boolean) => void
+  /** Colored appearance: cloud cover preset. */
+  weather: Weather
+  setWeather: (weather: Weather) => void
+  /** A device position the user chose to share; used when the site has no geocoded point. */
+  deviceLocation: LatLng | null
+  setDeviceLocation: (location: LatLng | null) => void
+  /** Post-processing tier of the colored appearance (bloom/AO/AA/shadow resolution) in effect:
+   * the user's pick, or on `auto` the tier detected for the device. */
+  renderQuality: RenderQuality
+  /** What the user picked (persisted); `auto` follows `detectedRenderQuality`. */
+  renderQualityChoice: RenderQualityChoice
+  /** The tier the device's capabilities call for (GPU, memory, form factor); never persisted. */
+  detectedRenderQuality: RenderQuality | null
+  /** The device renders on the CPU (software adapter or rasterizer); never persisted. */
+  softwareRenderer: boolean
+  setRenderQuality: (quality: RenderQualityChoice) => void
+  setDetectedRenderQuality: (quality: RenderQuality, softwareRenderer?: boolean) => void
 
   // Embed-controlled ink-edge opacity override (null = use the per-mode default).
   inkOpacity: number | null
@@ -168,6 +300,7 @@ type ViewerState = {
   projectPreferences: Record<
     string,
     {
+      look?: LocalLook
       showScans?: boolean
       showGuides?: boolean
       showGrid?: boolean
@@ -192,8 +325,13 @@ type ViewerState = {
   debugColors: boolean
   setDebugColors: (enabled: boolean) => void
 
+  /** A first-person camera is active (walk or drone): orbit controls and selection stand aside. */
   walkthroughMode: boolean
   setWalkthroughMode: (mode: boolean) => void
+  /** How the first-person camera moves: on foot (collision, doors) or as a free-flying drone.
+   *  Back to `walk` whenever the walkthrough ends. */
+  walkthroughMovement: WalkthroughMovement
+  setWalkthroughMovement: (movement: WalkthroughMovement) => void
 
   /** Pointer lock temporarily released mid-walkthrough (⌘/PrintScreen — OS
    *  screenshot needs a movable cursor); clicking the canvas re-locks. */
@@ -233,8 +371,42 @@ type PersistedViewerState = Partial<
     | 'levelMode'
     | 'wallMode'
     | 'projectPreferences'
+    | 'timeOfDay'
+    | 'timeOfDayMinutes'
+    | 'skyLive'
+    | 'weather'
+    | 'deviceLocation'
+    | 'renderQualityChoice'
   >
 >
+
+const TIMES_OF_DAY = ['golden', 'midday', 'blue', 'night'] as const
+const WEATHERS = ['clear', 'fair', 'cloudy', 'overcast'] as const
+const RENDER_QUALITY_CHOICES = ['auto', 'low', 'medium', 'high'] as const
+
+/** Until the renderer is up and the device detected: touch devices Medium, others High. */
+function provisionalRenderQuality(): RenderQuality {
+  if (typeof window === 'undefined' || !window.matchMedia) return 'high'
+  return window.matchMedia('(pointer: coarse)').matches ? 'medium' : 'high'
+}
+
+function effectiveRenderQuality(
+  choice: RenderQualityChoice,
+  detected: RenderQuality | null,
+): RenderQuality {
+  return choice === 'auto' ? (detected ?? provisionalRenderQuality()) : choice
+}
+
+function normalizeLatLng(value: unknown): LatLng | null {
+  if (!value || typeof value !== 'object') return null
+  const { lat, lng } = value as Record<string, unknown>
+  return typeof lat === 'number' &&
+    typeof lng === 'number' &&
+    Number.isFinite(lat) &&
+    Number.isFinite(lng)
+    ? { lat, lng }
+    : null
+}
 
 const CAMERA_MODES = ['perspective', 'orthographic'] as const
 const RENDER_SHADINGS = ['solid', 'rendered'] as const
@@ -324,7 +496,25 @@ function normalizeProjectPreferences(value: unknown): ViewerState['projectPrefer
   for (const [projectId, preferences] of Object.entries(value)) {
     if (!preferences || typeof preferences !== 'object' || Array.isArray(preferences)) continue
     const record = preferences as Record<string, unknown>
+    const look =
+      record.look && typeof record.look === 'object'
+        ? (record.look as Record<string, unknown>)
+        : undefined
     next[projectId] = {
+      ...(look
+        ? {
+            look: {
+              ...(typeof look.theme === 'string' && SCENE_THEME_IDS.includes(look.theme)
+                ? { theme: look.theme }
+                : {}),
+              ...(typeof look.edges === 'string' && EDGE_MODES.includes(look.edges as EdgeMode)
+                ? { edges: look.edges as EdgeMode }
+                : {}),
+              ...(typeof look.shadows === 'boolean' ? { shadows: look.shadows } : {}),
+              shadingByContext: normalizeShadingByContext(look.shadingByContext),
+            },
+          }
+        : {}),
       ...(typeof record.showScans === 'boolean' ? { showScans: record.showScans } : {}),
       ...(typeof record.showGuides === 'boolean' ? { showGuides: record.showGuides } : {}),
       ...(typeof record.showGrid === 'boolean' ? { showGrid: record.showGrid } : {}),
@@ -350,7 +540,7 @@ function normalizePersistedViewerState(value: unknown): PersistedViewerState {
     shadingByContext: normalizeShadingByContext(state.shadingByContext),
     textures: typeof state.textures === 'boolean' ? state.textures : true,
     colorPreset: pickString<ColorPreset>(state.colorPreset, COLOR_PRESETS, 'clay'),
-    edges: pickString<EdgeMode>(state.edges, EDGE_MODES, 'soft'),
+    edges: state.edges === 'off' ? 'off' : 'soft',
     shadows: typeof state.shadows === 'boolean' ? state.shadows : true,
     unit: pickString<ViewerState['unit']>(state.unit, UNITS, detectDefaultUnit()),
     metricNotation: pickString<MetricNotation>(state.metricNotation, METRIC_NOTATIONS, 'meters'),
@@ -359,7 +549,82 @@ function normalizePersistedViewerState(value: unknown): PersistedViewerState {
     levelMode: pickString<ViewerState['levelMode']>(state.levelMode, LEVEL_MODES, 'stacked'),
     wallMode: pickString<ViewerState['wallMode']>(state.wallMode, WALL_MODES, 'up'),
     projectPreferences: normalizeProjectPreferences(state.projectPreferences),
+    timeOfDay: pickString<TimeOfDay>(state.timeOfDay, TIMES_OF_DAY, 'midday'),
+    timeOfDayMinutes:
+      typeof state.timeOfDayMinutes === 'number' &&
+      state.timeOfDayMinutes >= 0 &&
+      state.timeOfDayMinutes <= 1440
+        ? state.timeOfDayMinutes
+        : null,
+    skyLive: state.skyLive === true,
+    weather: pickString<Weather>(state.weather, WEATHERS, 'fair'),
+    deviceLocation: normalizeLatLng(state.deviceLocation),
+    // Solid shading was retired into the quality tiers: a saved Solid pick becomes Low.
+    renderQualityChoice: pickString<RenderQualityChoice>(
+      state.renderQuality,
+      RENDER_QUALITY_CHOICES,
+      persistedSolid(state) ? 'low' : 'auto',
+    ),
   }
+}
+
+function persistedSolid(state: Record<string, unknown>): boolean {
+  const byContext = state.shadingByContext
+  return (
+    !!byContext &&
+    typeof byContext === 'object' &&
+    Object.values(byContext as Record<string, unknown>).includes('solid')
+  )
+}
+
+/** The owner's pick (16 Oct): the section cut's clean edge over earth walls, and the simple fade. */
+export const DEFAULT_UNDERGROUND_LOOK: UndergroundLook = {
+  edge: 'section-earth',
+  transition: 'fade',
+}
+
+function resolveLook(state: ViewerState, patch: Partial<ViewerState>): Partial<ViewerState> {
+  const next = { ...state, ...patch }
+  const local = next.projectPreferences[next.projectId ?? '']?.look
+  const savedTheme = local?.theme ?? next.projectPresentation?.theme ?? next.lookDefaults.theme
+  const theme = getSceneTheme(next.previewSceneTheme ?? savedTheme)
+  return {
+    ...patch,
+    savedSceneTheme: savedTheme,
+    sceneTheme: theme.id,
+    sceneAppearance: projectSceneTheme(
+      theme,
+      next.previewSceneTheme === null && !local?.theme ? next.projectPresentation : undefined,
+    ),
+    // Solid (Lambert) shading is retired: the quality tiers replace it (Low is the cheap one).
+    shading: 'rendered',
+    // Edges are on (soft ink) or off; a saved 'strong' reads as on.
+    edges: onOffEdges(local?.edges ?? next.projectPresentation?.edges ?? next.lookDefaults.edges),
+    shadows: local?.shadows ?? next.projectPresentation?.shadows ?? next.lookDefaults.shadows,
+  }
+}
+
+function onOffEdges(edges: EdgeMode): EdgeMode {
+  return edges === 'off' ? 'off' : 'soft'
+}
+
+function chooseLook(state: ViewerState, look: LocalLook): Partial<ViewerState> {
+  const key = state.projectId ?? ''
+  const previous = state.projectPreferences[key]
+  const { shadingByContext, ...defaults } = look
+  return resolveLook(state, {
+    ...(!state.projectId
+      ? {
+          lookDefaults: { ...state.lookDefaults, ...defaults },
+          shadingByContext: { ...state.shadingByContext, ...shadingByContext },
+        }
+      : {}),
+    projectPreferences: {
+      ...state.projectPreferences,
+      [key]: { ...previous, look: { ...previous?.look, ...look } },
+    },
+    ...('theme' in look ? { previewSceneTheme: null } : {}),
+  })
 }
 
 const useViewer = create<ViewerState>()(
@@ -403,12 +668,30 @@ const useViewer = create<ViewerState>()(
       setCameraMode: (mode) => set({ cameraMode: mode }),
 
       sceneTheme: 'studio',
+      sceneAppearance: getSceneTheme('studio'),
+      lookDefaults: { theme: 'studio', edges: 'soft', shadows: true },
+      projectPresentation: undefined,
+      setProjectPresentation: (projectPresentation) =>
+        set((state) => resolveLook(state, { projectPresentation })),
+      resetProjectLook: () =>
+        set((state) => {
+          const projectPreferences = { ...state.projectPreferences }
+          const key = state.projectId ?? ''
+          const { look: _look, ...rest } = projectPreferences[key] ?? {}
+          projectPreferences[key] = rest
+          return resolveLook(state, { projectPreferences, previewSceneTheme: null })
+        }),
+      previewSceneTheme: null,
+      contextDefaultShading: 'rendered',
       savedSceneTheme: 'studio',
-      setSceneTheme: (id) => set({ sceneTheme: id, savedSceneTheme: id }),
-      showSceneTheme: (id) => set((state) => ({ sceneTheme: id ?? state.savedSceneTheme })),
+      setSceneTheme: (id) => set((state) => chooseLook(state, { theme: id })),
+      showSceneTheme: (id) => set((state) => resolveLook(state, { previewSceneTheme: id })),
 
       renderContext: 'editor',
-      setRenderContext: (context) => set({ renderContext: context }),
+      setRenderContext: (context, defaultShading = 'rendered') =>
+        set((state) =>
+          resolveLook(state, { renderContext: context, contextDefaultShading: defaultShading }),
+        ),
 
       isExporting: false,
       setExporting: (value) => set({ isExporting: value }),
@@ -433,10 +716,18 @@ const useViewer = create<ViewerState>()(
 
       shading: 'rendered',
       shadingByContext: {},
+      // Solid is retired into the quality tiers: asking for it picks the Low tier.
       setShading: (shading) =>
         set((state) => ({
-          shading,
-          shadingByContext: { ...state.shadingByContext, [state.renderContext]: shading },
+          ...chooseLook(state, {
+            shadingByContext: {
+              ...state.projectPreferences[state.projectId ?? '']?.look?.shadingByContext,
+              [state.renderContext]: shading,
+            },
+          }),
+          ...(shading === 'solid'
+            ? { renderQuality: 'low' as const, renderQualityChoice: 'low' as const }
+            : {}),
         })),
 
       textures: true,
@@ -446,10 +737,10 @@ const useViewer = create<ViewerState>()(
       setColorPreset: (preset) => set({ colorPreset: preset }),
 
       edges: 'soft',
-      setEdges: (edges) => set({ edges }),
+      setEdges: (edges) => set((state) => chooseLook(state, { edges })),
 
       shadows: true,
-      setShadows: (shadows) => set({ shadows }),
+      setShadows: (shadows) => set((state) => chooseLook(state, { shadows })),
 
       unit: detectDefaultUnit(),
       metricNotation: 'meters',
@@ -463,6 +754,19 @@ const useViewer = create<ViewerState>()(
       hideLevelsAboveSelection: false,
       levelsRevealing: [],
       nodesRevealing: [],
+      belowGrade: false,
+      gradeStanding: 'at-grade',
+      groundWindowBox: null,
+      groundWindowVeiled: false,
+      groundMode: 'auto',
+      setGroundMode: (mode) => set({ groundMode: mode }),
+      hasLevelBelowGrade: false,
+      diveAvailable: false,
+      eyeUnderGround: false,
+      ambianceActive: false,
+      undergroundLook: DEFAULT_UNDERGROUND_LOOK,
+      setUndergroundLook: (look) =>
+        set((state) => ({ undergroundLook: { ...state.undergroundLook, ...look } })),
 
       wallMode: 'up',
       setWallMode: (mode) => set({ wallMode: mode }),
@@ -522,8 +826,42 @@ const useViewer = create<ViewerState>()(
       showZones: true,
       setShowZones: (show) => set({ showZones: show }),
 
+      showCeilingTops: false,
+      setShowCeilingTops: (show) => set({ showCeilingTops: show }),
+      framingOnly: false,
+      setFramingOnly: (on) => set({ framingOnly: on }),
+      framingShown: false,
+      setFramingShown: (on) =>
+        set((state) => (state.framingShown === on ? state : { framingShown: on })),
+
       transparentBackground: false,
       setTransparentBackground: (transparent) => set({ transparentBackground: transparent }),
+
+      timeOfDay: 'midday',
+      setTimeOfDay: (timeOfDay) => set({ timeOfDay, timeOfDayMinutes: null, skyLive: false }),
+      timeOfDayMinutes: null,
+      setTimeOfDayMinutes: (timeOfDayMinutes) => set({ timeOfDayMinutes, skyLive: false }),
+      skyLive: false,
+      setSkyLive: (skyLive) => set({ skyLive }),
+      weather: 'fair',
+      setWeather: (weather) => set({ weather }),
+      deviceLocation: null,
+      setDeviceLocation: (deviceLocation) => set({ deviceLocation }),
+      renderQuality: provisionalRenderQuality(),
+      renderQualityChoice: 'auto',
+      detectedRenderQuality: null,
+      softwareRenderer: false,
+      setRenderQuality: (renderQualityChoice) =>
+        set((state) => ({
+          renderQualityChoice,
+          renderQuality: effectiveRenderQuality(renderQualityChoice, state.detectedRenderQuality),
+        })),
+      setDetectedRenderQuality: (detectedRenderQuality, softwareRenderer = false) =>
+        set((state) => ({
+          detectedRenderQuality,
+          softwareRenderer,
+          renderQuality: effectiveRenderQuality(state.renderQualityChoice, detectedRenderQuality),
+        })),
 
       inkOpacity: null,
       setInkOpacity: (opacity) => set({ inkOpacity: opacity }),
@@ -531,15 +869,21 @@ const useViewer = create<ViewerState>()(
       projectId: null,
       setProjectId: (id) =>
         set((state) => {
-          if (!id) return { projectId: id }
-          const prefs = state.projectPreferences?.[id] || {}
-          return {
+          if (id === state.projectId) return state
+          const prefs = (id && state.projectPreferences?.[id]) || {}
+          const { '': _unscoped, ...projectPreferences } = state.projectPreferences
+          return resolveLook(state, {
             projectId: id,
+            projectPreferences,
+            projectPresentation: undefined,
+            previewSceneTheme: null,
+            framingOnly: false,
+            framingShown: false,
             showScans: prefs.showScans ?? true,
             showGuides: prefs.showGuides ?? true,
             showGrid: prefs.showGrid ?? true,
             showMeasurements: prefs.showMeasurements ?? true,
-          }
+          })
         }),
       projectPreferences: {},
 
@@ -587,7 +931,14 @@ const useViewer = create<ViewerState>()(
       setDebugColors: (enabled) => set({ debugColors: enabled }),
 
       walkthroughMode: false,
-      setWalkthroughMode: (mode) => set({ walkthroughMode: mode, walkthroughSuspended: false }),
+      setWalkthroughMode: (mode) =>
+        set(
+          mode
+            ? { walkthroughMode: true, walkthroughSuspended: false }
+            : { walkthroughMode: false, walkthroughSuspended: false, walkthroughMovement: 'walk' },
+        ),
+      walkthroughMovement: 'walk',
+      setWalkthroughMovement: (movement) => set({ walkthroughMovement: movement }),
 
       walkthroughSuspended: false,
       setWalkthroughSuspended: (suspended) => set({ walkthroughSuspended: suspended }),
@@ -601,29 +952,105 @@ const useViewer = create<ViewerState>()(
       name: 'viewer-preferences',
       merge: (persistedState, currentState) => {
         const persisted = normalizePersistedViewerState(persistedState)
+        const renderQualityChoice =
+          persisted.renderQualityChoice ?? currentState.renderQualityChoice
         return {
           ...currentState,
           ...persisted,
-          savedSceneTheme: persisted.sceneTheme ?? currentState.savedSceneTheme,
+          renderQuality: effectiveRenderQuality(
+            renderQualityChoice,
+            currentState.detectedRenderQuality,
+          ),
+          ...resolveLook(currentState, {
+            ...persisted,
+            lookDefaults: {
+              theme: persisted.sceneTheme ?? currentState.lookDefaults.theme,
+              edges: persisted.edges ?? currentState.lookDefaults.edges,
+              shadows: persisted.shadows ?? currentState.lookDefaults.shadows,
+            },
+          }),
         }
       },
       partialize: (state) => ({
         cameraMode: state.cameraMode,
-        sceneTheme: state.savedSceneTheme,
+        sceneTheme: state.lookDefaults.theme,
         shadingByContext: state.shadingByContext,
         textures: state.textures,
         colorPreset: state.colorPreset,
-        edges: state.edges,
-        shadows: state.shadows,
+        edges: state.lookDefaults.edges,
+        shadows: state.lookDefaults.shadows,
         ...(state.unitExplicit ? { unit: state.unit } : {}),
         metricNotation: state.metricNotation,
         levelMode: state.levelMode,
         wallMode: state.wallMode,
-        projectPreferences: state.projectPreferences,
+        projectPreferences: Object.fromEntries(
+          Object.entries(state.projectPreferences).filter(([key]) => key !== ''),
+        ),
+        timeOfDay: state.timeOfDay,
+        timeOfDayMinutes: state.timeOfDayMinutes,
+        skyLive: state.skyLive,
+        weather: state.weather,
+        deviceLocation: state.deviceLocation,
+        renderQuality: state.renderQualityChoice,
       }),
     },
   ),
 )
+
+/**
+ * Over a level below grade the ground is `auto`: drawn as a faint veil, so the floor under it is
+ * seen and clicked; `solid` keeps it as it is everywhere else.
+ */
+export type GroundMode = 'auto' | 'solid'
+
+/**
+ * The hole's edge seen from above: `noise` the eroded, scalloped border (today's), `quiet` the
+ * same with a fine, faint noise (almost straight from the default camera), `section` an
+ * architect's section cut (a constant offset of the footprint, straight edges, a flat face with a
+ * thin line at grade), `section-earth` the same outline over the earth's walls (topsoil, strata,
+ * a low crumble that is zero at the rim).
+ */
+export type UndergroundEdge = 'noise' | 'quiet' | 'section' | 'section-earth'
+
+/** The dive under the ground: `noise` closes a noise mask over the screen, `fade` fades the whole frame at once. */
+export type UndergroundTransition = 'noise' | 'fade'
+
+export type UndergroundLook = { edge: UndergroundEdge; transition: UndergroundTransition }
+
+/**
+ * Whether the site's ground is drawn as a veil wholesale: a level below grade is shown, the
+ * ground on auto. A level only partly below grade is the exception — there the ground window
+ * veils just the ground in the way, and the rest stays solid. The walkthrough walks on its
+ * floors: its ground is always solid, whatever level the overview had shown.
+ */
+export function groundVeiled(state: {
+  belowGrade: boolean
+  groundMode: GroundMode
+  gradeStanding?: LevelGradeStanding
+  walkthroughMode?: boolean
+}): boolean {
+  return (
+    state.belowGrade &&
+    state.groundMode === 'auto' &&
+    state.gradeStanding !== 'partly-below-grade' &&
+    state.walkthroughMode !== true
+  )
+}
+
+/**
+ * Whether the site draws its own ground. `showGround: false` says other geometry supplies the
+ * ground (an authored landscape), which stands on a level above a basement; while a level below
+ * grade is shown, the level display hides the storeys above it (`belowGrade`) and the landscape
+ * with them. The site's ground stands in then, with its veil, hole and pit, so the basement is
+ * seen through an opening and not through nothing. With a level at or above grade shown, the
+ * landscape is shown and `showGround` is the author's.
+ */
+export function siteGroundShown(
+  site: { showGround?: boolean },
+  state: { belowGrade: boolean },
+): boolean {
+  return site.showGround !== false || state.belowGrade
+}
 
 /** Apply an authoritative country code (e.g. IP-derived by the host app) as
  * the unit default. Stronger signal than the timezone heuristic used at store

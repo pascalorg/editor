@@ -5,6 +5,7 @@ import {
   getEffectiveNode,
   getEffectiveRoofSurfaceMaterial,
   getEffectiveSegmentSurfaceMaterial,
+  getRoofWallBandMaterial,
   getSegmentFasciaMaterial,
   isGlazedRoofSegment,
   type RoofNode,
@@ -18,6 +19,7 @@ import {
   createMaterial,
   getRoofMaterialArray,
   levelWallCladdingRef,
+  levelWallFaceRef,
   resolveMaterialRef,
   SHADOW_ONLY_LAYER,
   useNodeEvents,
@@ -76,9 +78,14 @@ export const RoofSegmentRenderer = ({ node: storedNode }: { node: RoofSegmentNod
   //   slot 1 → 'wall'  (deck top & shingle eave bands)
   //   slot 2 → 'wall'  (interior)
   //   slot 3 → 'top'   (shingle / roof surface)
+  //   slot 4 → the heel band (its own, the roof's, else the walls' below)
+  //   slot 5 / 6 → the left / right gable (its own, else slot 0's)
   // The gable band is clad like the walls below it (their assemblies).
   const wallCladdingRef = useScene((state) =>
     parentNode ? levelWallCladdingRef(state.nodes, parentNode) : null,
+  )
+  const wallFaceRef = useScene((state) =>
+    parentNode ? levelWallFaceRef(state.nodes, parentNode) : null,
   )
   // biome-ignore lint/correctness/useExhaustiveDependencies: deps deliberately list the build inputs; depending on the whole object would rebuild on unrelated field changes.
   const customMaterial = useMemo(() => {
@@ -104,8 +111,18 @@ export const RoofSegmentRenderer = ({ node: storedNode }: { node: RoofSegmentNod
           sceneTheme,
           wallCladdingRef,
           sceneMaterials,
+          wallFaceRef,
         )
       : null
+
+    const resolveSpec = (spec: ReturnType<typeof getRoofWallBandMaterial>) =>
+      spec
+        ? (resolveMaterialRef(spec.materialPreset, sceneMaterials, shading) ??
+          (spec.material !== undefined ? createMaterial(spec.material, shading) : null))
+        : null
+    const heel = resolveSpec(getRoofWallBandMaterial(node, 'heel'))
+    const gableLeft = resolveSpec(getRoofWallBandMaterial(node, 'gable-left'))
+    const gableRight = resolveSpec(getRoofWallBandMaterial(node, 'gable-right'))
 
     const edge = resolveSlot('edge')
     const wall = resolveSlot('wall')
@@ -117,7 +134,7 @@ export const RoofSegmentRenderer = ({ node: storedNode }: { node: RoofSegmentNod
         (fasciaSpec.material !== undefined ? createMaterial(fasciaSpec.material, shading) : null))
       : null
 
-    if (!(edge || wall || top || fascia)) {
+    if (!(edge || wall || top || fascia || heel || gableLeft || gableRight)) {
       return themedArray
     }
 
@@ -126,11 +143,15 @@ export const RoofSegmentRenderer = ({ node: storedNode }: { node: RoofSegmentNod
     // Per-role only, then the themed parent slot — no cross-role fallback, so
     // painting one segment surface never bleeds onto its other surfaces.
     const slot = (i: number) => themedArray?.[i] ?? new THREE.MeshStandardMaterial()
+    const trim = edge ?? slot(0)
     return [
-      edge ?? slot(0),
+      trim,
       wall ?? slot(1),
       fascia ?? wall ?? slot(2),
       top ?? slot(3),
+      heel ?? slot(4),
+      gableLeft ?? trim,
+      gableRight ?? trim,
     ] as THREE.Material[]
   }, [
     node.material,
@@ -144,6 +165,13 @@ export const RoofSegmentRenderer = ({ node: storedNode }: { node: RoofSegmentNod
     node.wallMaterialPreset,
     node.fasciaMaterial,
     node.fasciaMaterialPreset,
+    node.heelMaterial,
+    node.heelMaterialPreset,
+    node.gableLeftMaterial,
+    node.gableLeftMaterialPreset,
+    node.gableRightMaterial,
+    node.gableRightMaterialPreset,
+    wallFaceRef,
     parentNode,
     sceneMaterials,
     shading,

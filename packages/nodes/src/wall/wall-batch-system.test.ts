@@ -26,6 +26,7 @@ const runFrame = (_state?: unknown, _delta?: number) => runBatchFrame(() => unde
 const performanceNow = spyOn(performance, 'now').mockImplementation(() => nowMs)
 
 const registeredIds: string[] = []
+const originalViewer = useViewer.getState()
 
 afterEach(() => {
   useViewer.setState({ wallMode: 'down' } as never)
@@ -38,8 +39,8 @@ afterEach(() => {
     for (const material of materials) material?.dispose()
   }
   sceneRegistry.clear()
-  useScene.setState({ nodes: {}, rootNodeIds: [] } as never)
-  useViewer.setState({ hoverHighlightMode: 'default', hoveredId: null, wallMode: 'up' } as never)
+  useScene.setState({ nodes: {}, rootNodeIds: [], dirtyNodes: new Set() } as never)
+  useViewer.setState(originalViewer, true)
 })
 
 afterAll(() => {
@@ -79,8 +80,8 @@ function setupBatchedLevel(count = 8) {
   const selection = useViewer.getState().selection
   useViewer.setState({
     wallMode: 'cutaway',
-    selection: { ...selection, selectedIds: new Set() },
-    previewSelectedIds: new Set(),
+    selection: { ...selection, selectedIds: [] },
+    previewSelectedIds: [],
     hoveredId: null,
   } as never)
 

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { DoorNode } from '../schema'
+import { DoorNode, doorHandleStyle } from '../schema'
 import { doorTypeChange, doorTypeFields } from './door-types'
 import { doorStyleLook, doorStylesOf } from './opening-style-presets'
 
@@ -20,14 +20,23 @@ describe("the door panel's Type row", () => {
   })
 
   test('a modern door made sliding stays modern', () => {
-    const modern = door(doorStyleLook('modern'))
+    const modern = door({ ...doorStyleLook('modern'), frameThickness: 0.035 })
     const sliding = { ...modern, ...doorTypeChange(modern, 'sliding') } as DoorNode
     expect(doorStylesOf(sliding)).toEqual(['modern'])
-    expect(sliding).toMatchObject({ trackStyle: 'visible', leafCount: 2 })
+    expect(sliding).toMatchObject({ trackStyle: 'visible', leafCount: 2, frameThickness: 0.035 })
   })
 
   test('keeps the door on the floor at the new height', () => {
     const garage = doorTypeChange(door(), 'garage-sectional')
     expect(garage.position).toEqual([1, 1.2, 0])
   })
+})
+
+test('saved doors resolve to lever without storing a handle style', () => {
+  const saved = DoorNode.parse({})
+  expect(saved.handleStyle).toBeUndefined()
+  expect(doorHandleStyle(saved)).toBe('lever')
+  for (const handleStyle of ['lever', 'lever-curved', 'knob', 'bar', 'plate'] as const) {
+    expect(doorHandleStyle(DoorNode.parse({ handleStyle }))).toBe(handleStyle)
+  }
 })

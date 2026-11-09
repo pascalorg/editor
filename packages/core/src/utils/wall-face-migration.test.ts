@@ -38,13 +38,18 @@ function oldSide(node: Raw, face: Face): Side {
       : 'exterior'
 }
 
-function oldChain(node: Raw, side: Side): string {
+function oldChain(node: Raw, face: Face, side: Side): string {
   const ref = node.slots?.[side]
   if (ref) return `ref:${ref}`
   const spec = getEffectiveWallSurfaceMaterial(node, side)
   if (spec.materialPreset) return `preset:${spec.materialPreset}`
   if (spec.material) return `inline:${JSON.stringify(spec.material)}`
-  return 'default:library:concrete-drywall'
+  // The default the migration leaves alone: raw drywall then; now the interior paint, with raw
+  // drywall kept on a face whose stored side is exterior.
+  const stored = face === 'a' ? node.frontSide : node.backSide
+  return stored === 'exterior'
+    ? 'default:library:concrete-drywall'
+    : 'default:library:preset-seattlegrey'
 }
 
 function oldBands(node: Raw) {
@@ -73,7 +78,7 @@ function oldBands(node: Raw) {
 function oldFaceFinish(node: Raw, face: Face, y: number): string {
   const side = oldSide(node, face)
   const bands = oldBands(node)
-  if (!bands.enabled) return oldChain(node, side)
+  if (!bands.enabled) return oldChain(node, face, side)
   const band =
     y < bands.lowerTop
       ? 'lower'
@@ -85,7 +90,7 @@ function oldFaceFinish(node: Raw, face: Face, y: number): string {
             ? 'top'
             : 'upper'
   const ref = node.slots?.[`${band}${SUFFIX[side]}`]
-  return ref ? `ref:${ref}` : oldChain(node, side)
+  return ref ? `ref:${ref}` : oldChain(node, face, side)
 }
 
 function oldTrimFace(node: Raw, side: Side): Face {

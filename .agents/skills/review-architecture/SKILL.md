@@ -20,6 +20,7 @@ Read these before reviewing any diff. They are the source of truth, not your tra
 - `wiki/architecture/node-definitions.md` — the three-checkbox composition model (`geometry` / `renderer` / `system`)
 - `wiki/architecture/plugin-authoring.md` — public contract for external node packs
 - `wiki/architecture/agent-surfaces.md` — MCP ↔ hosted chat ↔ skill parity. Read whenever the diff touches `packages/mcp/**` or `skills/**`.
+- `wiki/architecture/scene-runtime.md` — detached scenes, tracked reads, `reconcileDocument`. Read whenever the diff touches `packages/core/src/agent-operations/**`, `packages/core/src/store/**`, a system that writes saved fields, or `packages/core/src/runtime/**`.
 
 Required on every review. Read the remaining pages on demand when the diff touches their subject area:
 

@@ -4,8 +4,8 @@ import { describe, expect, test } from 'bun:test'
 import * as THREE from 'three'
 import { getPascalTextureRef, stampPascalTextureRef } from './texture-reference'
 
-// The module reads the storage origin lazily on first use, so setting the env
-// here (before any stamp call) pins it for the whole test file.
+// The module reads the storage origin from the env, so a stamp in another file
+// run earlier in the process does not decide it for this one.
 process.env.NEXT_PUBLIC_SUPABASE_URL ??= 'https://test-storage.supabase.co'
 const STORAGE_ORIGIN = new URL(process.env.NEXT_PUBLIC_SUPABASE_URL).origin
 

@@ -1,15 +1,22 @@
 'use client'
 
-import type { ReactNode } from 'react'
+import { usePascalI18n } from '@pascal-app/core'
+import { type ReactNode, useMemo } from 'react'
+import { displayRoomName } from '../lib/room-name-messages'
 import { cn } from '../lib/utils'
 import type { WalkthroughInteract } from '../store/use-first-person-hud'
 
 export type { WalkthroughInteract } from '../store/use-first-person-hud'
 
+/** A control shown in the HUD's key strip: its keys (as printed on the keycaps) and what they do. */
+export type WalkthroughHint = { keys: readonly string[]; action: string }
+
 export type WalkthroughHudProps = {
   floorLabel?: string | null
   zoneLabel?: string | null
   interact?: WalkthroughInteract
+  /** Movement controls listed before the cursor and exit pills. */
+  hints?: readonly WalkthroughHint[]
   /** Pointer lock temporarily released (OS screenshot) — the pill flips to
    *  "Click to resume" and lets clicks fall through to the canvas. */
   suspended?: boolean
@@ -39,6 +46,7 @@ export function WalkthroughHud({
   floorLabel,
   zoneLabel,
   interact = null,
+  hints,
   suspended = false,
   onExit,
   children,
@@ -63,7 +71,7 @@ export function WalkthroughHud({
         )}
         {zoneLabel && (
           <div className="corner-smooth rounded-full border border-border/40 bg-background/80 px-3 py-1 font-medium text-sm shadow-elevation-3 backdrop-blur-xl">
-            {zoneLabel}
+            <WalkthroughZoneName name={zoneLabel} />
           </div>
         )}
         {children}
@@ -83,6 +91,22 @@ export function WalkthroughHud({
           </div>
         ) : (
           <>
+            {hints && hints.length > 0 ? (
+              <div className={pillClass}>
+                {hints.map(({ keys, action }, index) => (
+                  <span className="flex items-center gap-1.5" key={action}>
+                    {index > 0 && <span className="text-muted-foreground/60">·</span>}
+                    {keys.map((key, keyIndex) => (
+                      <span className="flex items-center gap-1" key={key}>
+                        {keyIndex > 0 && <span className="text-muted-foreground/60">/</span>}
+                        <kbd className={kbdClass}>{key}</kbd>
+                      </span>
+                    ))}
+                    {action}
+                  </span>
+                ))}
+              </div>
+            ) : null}
             <div className={pillClass}>
               <kbd className={kbdClass}>P</kbd>
               free cursor
@@ -117,4 +141,53 @@ export function WalkthroughHud({
       )}
     </div>
   )
+}
+
+/** The drone's key strip: the movement controls of the viewer's `DroneController`. */
+function useDroneHints(): readonly WalkthroughHint[] {
+  const i18n = usePascalI18n()
+  return useMemo(
+    () => [
+      {
+        keys: ['WASD'],
+        action: i18n._({ id: 'editor.walkthroughHud.drone.move', message: 'move' }),
+      },
+      {
+        keys: ['Space', 'E'],
+        action: i18n._({ id: 'editor.walkthroughHud.drone.up', message: 'up' }),
+      },
+      {
+        keys: ['Q'],
+        action: i18n._({ id: 'editor.walkthroughHud.drone.down', message: 'down' }),
+      },
+      {
+        keys: ['Shift'],
+        action: i18n._({ id: 'editor.walkthroughHud.drone.boost', message: 'boost' }),
+      },
+      {
+        keys: ['Alt'],
+        action: i18n._({ id: 'editor.walkthroughHud.drone.slow', message: 'slow' }),
+      },
+    ],
+    [i18n],
+  )
+}
+
+/** The walkthrough HUD for the drone: the plain pointer dot and the flight keys, no room or door prompts. */
+export function DroneHud({
+  suspended,
+  onExit,
+  children,
+}: Pick<WalkthroughHudProps, 'suspended' | 'onExit' | 'children'>) {
+  return (
+    <WalkthroughHud hints={useDroneHints()} onExit={onExit} suspended={suspended}>
+      {children}
+    </WalkthroughHud>
+  )
+}
+
+/** The room the walker is in, in the UI language (the scene keeps its stored name). */
+function WalkthroughZoneName({ name }: { name: string }) {
+  const i18n = usePascalI18n()
+  return displayRoomName(name, i18n)
 }

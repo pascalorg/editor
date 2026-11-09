@@ -7,7 +7,10 @@ import {
   type CameraControlFitSceneEvent,
   type CameraControlFrameEvent,
   type CameraPose,
+  deepestDrawnY,
   emitter,
+  groundHeightAt,
+  lowestGroundY,
   sceneRegistry,
   useScene,
 } from '@pascal-app/core'
@@ -53,10 +56,13 @@ import {
   syncKeyboardPanMotion,
 } from '../../lib/keyboard-pan'
 import {
+  diveFloorY,
   MAX_ORBIT_POLAR_ANGLE,
-  ORBIT_FLOOR_CLEARANCE,
   ORBIT_TARGET_HEIGHT,
+  orbitFloorMinY,
+  overviewEyeY,
 } from '../../lib/orbit-floor-clearance'
+import { orbitNearPlane } from '../../lib/orbit-near-plane'
 import { editorOwnsOneFingerDrag } from '../../lib/touch-gesture-priority'
 import { frameViewerCamera } from '../../lib/viewer-selection'
 import { publishCameraPose } from '../../store/camera-pose-store'
@@ -100,6 +106,18 @@ function orbitGroundY(
 ) {
   const floorY = levelId ? getLevelPresentationY(levelId, useScene.getState().nodes, levelMode) : 0
   return floorY + ORBIT_TARGET_HEIGHT
+}
+
+/**
+ * `eyeY` for an overview eye at (x, z) whose pivot is being sent to another level: kept over the
+ * ground it was over (a deep level shown is looked at through the hole, not from under the lid),
+ * unless the person has dived.
+ */
+function keepEyeOverGround(x: number, eyeY: number, z: number, previousEyeY = eyeY): number {
+  const { nodes } = useScene.getState()
+  const siteId = sceneRegistry.byType.site?.values().next().value as AnyNodeId | undefined
+  const groundY = groundHeightAt(siteId ? nodes[siteId] : null, x, z)
+  return overviewEyeY(eyeY, previousEyeY, groundY, useViewer.getState().eyeUnderGround)
 }
 
 function levelOf(nodeId: string): string | null {
@@ -393,7 +411,23 @@ export const CustomCameraControls = ({ paused = false }: { paused?: boolean }) =
     currentLevelId ? getLevelPresentationY(currentLevelId, state.nodes, levelMode) : 0,
   )
   const allowUnderground = !isPreviewMode && allowUndergroundCamera
-  const floorMinY = allowUnderground ? null : floorY + ORBIT_FLOOR_CLEARANCE
+  // With the ground on Auto the eye may dive under any building, down to the dive's floor; Solid
+  // keeps the eye over the ground.
+  const groundMode = useViewer((state) => state.groundMode)
+  const diveFloor = useScene((state) =>
+    groundMode === 'auto'
+      ? diveFloorY(lowestGroundY(state.nodes), deepestDrawnY(state.nodes))
+      : null,
+  )
+  const floorMinY = allowUnderground ? null : orbitFloorMinY(floorY, diveFloor)
+  // The viewer mounts the eye's fill light before the first dive, so crossing the ground compiles nothing.
+  const mayDive = allowUnderground || diveFloor !== null
+  useEffect(() => {
+    useViewer.setState({ diveAvailable: mayDive })
+    return () => {
+      useViewer.setState({ diveAvailable: false })
+    }
+  }, [mayDive])
   const maxPolarAngle =
     allowUnderground || cameraMode === 'perspective'
       ? MAX_ORBIT_POLAR_ANGLE
@@ -594,12 +628,39 @@ export const CustomCameraControls = ({ paused = false }: { paused?: boolean }) =
     if (!controls.current) return
     if (firstLoad.current) {
       firstLoad.current = false
-      controls.current.setLookAt(20, 20 + targetY, 20, 0, targetY, 0, true)
+      controls.current.setLookAt(
+        20,
+        keepEyeOverGround(20, 20 + targetY, 20, 20),
+        20,
+        0,
+        targetY,
+        0,
+        true,
+      )
     }
     controls.current.getOrbitTarget(currentTarget)
     // Idempotence guard: skip when already there — also swallows the thumbnail
     // generator's synchronous stacked→restore levelMode round-trip.
     if (Math.abs(currentTarget.y - targetY) < 1e-3) return
+    // The pivot goes down with the level; the eye follows it unless that would sink it under the
+    // ground (a basement four storeys down): then it stays over the ground, looking down.
+    controls.current.getPosition(tempPosition, false)
+    const movedEyeY = tempPosition.y + targetY - currentTarget.y
+    const eyeY = isPerspectiveCamera(camera)
+      ? keepEyeOverGround(tempPosition.x, movedEyeY, tempPosition.z, tempPosition.y)
+      : movedEyeY
+    if (eyeY > movedEyeY) {
+      controls.current.setLookAt(
+        tempPosition.x,
+        eyeY,
+        tempPosition.z,
+        currentTarget.x,
+        targetY,
+        currentTarget.z,
+        true,
+      )
+      return
+    }
     controls.current.moveTo(currentTarget.x, targetY, currentTarget.z, true)
   }, [
     camera,
@@ -627,8 +688,9 @@ export const CustomCameraControls = ({ paused = false }: { paused?: boolean }) =
     floorSurface.levelId = currentLevelId ?? null
     if (!controls.current) return
     controls.current.floorMinY = floorMinY
-    controls.current.floorSurface = floorSurface
-  }, [camera, currentLevelId, floorMinY, floorSurface, isFirstPersonMode])
+    // The level's floor and the ground hold the eye over them; the dive goes through both.
+    controls.current.floorSurface = diveFloor === null ? floorSurface : null
+  }, [camera, currentLevelId, diveFloor, floorMinY, floorSurface, isFirstPersonMode])
 
   const focusNode = useCallback(
     (nodeId: string) => {
@@ -660,7 +722,11 @@ export const CustomCameraControls = ({ paused = false }: { paused?: boolean }) =
       controls.current.getTarget(tempTarget)
       tempDelta.copy(tempCenter).sub(tempTarget)
 
-      const focusedY = tempPosition.y + tempDelta.y
+      const focusedX = tempPosition.x + tempDelta.x
+      const focusedZ = tempPosition.z + tempDelta.z
+      const focusedY = isPerspectiveCamera(camera)
+        ? keepEyeOverGround(focusedX, tempPosition.y + tempDelta.y, focusedZ, tempPosition.y)
+        : tempPosition.y + tempDelta.y
       const floorMinY = isPerspectiveCamera(camera) ? controls.current.floorLimitY : null
       controls.current.setLookAt(
         tempPosition.x + tempDelta.x,
@@ -701,8 +767,16 @@ export const CustomCameraControls = ({ paused = false }: { paused?: boolean }) =
   }, [camera, isFirstPersonMode, viewportSize])
 
   const handleCameraUpdate = useCallback(() => {
+    const control = controls.current
+    if (control && isPerspectiveCamera(camera)) {
+      const near = orbitNearPlane(control.distance)
+      if (Math.abs(camera.near - near) > 1e-4) {
+        camera.near = near
+        camera.updateProjectionMatrix()
+      }
+    }
     publishCurrentPose()
-  }, [publishCurrentPose])
+  }, [camera, publishCurrentPose])
 
   useEffect(() => {
     publishInitialCameraPose(publishCurrentPose)
@@ -989,7 +1063,10 @@ export const CustomCameraControls = ({ paused = false }: { paused?: boolean }) =
       updateNavigationCursor()
     }
 
-    const onWheel = () => {
+    const onWheel = (event: WheelEvent) => {
+      // Zooming in carries on past the closest orbit, the target with it; zooming out stops at
+      // the farthest, or the eye would drift off the site. Seen before the controls' own listener.
+      if (controls.current) controls.current.infinityDolly = event.deltaY < 0
       beginLocalCameraInteraction()
       cameraDraggingLifecycle.scheduleEnd()
     }
@@ -1315,7 +1392,15 @@ export const CustomCameraControls = ({ paused = false }: { paused?: boolean }) =
       const groundY = orbitGroundY(lastLevelId.current)
       if (!bounds) {
         // Restore default framing pose when no bounds were computed.
-        controls.current.setLookAt(20, 20 + groundY, 20, 0, groundY, 0, true)
+        controls.current.setLookAt(
+          20,
+          keepEyeOverGround(20, 20 + groundY, 20, 20),
+          20,
+          0,
+          groundY,
+          0,
+          true,
+        )
         return
       }
       const [cx, cz] = bounds.center
@@ -1327,7 +1412,7 @@ export const CustomCameraControls = ({ paused = false }: { paused?: boolean }) =
       const height = Math.max(maxExtent * 0.8, 10)
       controls.current.setLookAt(
         cx + distance * 0.7,
-        height + groundY,
+        keepEyeOverGround(cx + distance * 0.7, height + groundY, cz + distance * 0.7, height),
         cz + distance * 0.7,
         cx,
         groundY,
@@ -1379,13 +1464,12 @@ export const CustomCameraControls = ({ paused = false }: { paused?: boolean }) =
     }
   }, [cameraDraggingLifecycle])
 
-  // Preset capture mode frames a single subtree (often a 0.3–2m preset),
-  // so the default 2m minDistance prevents the user from getting close
-  // enough to compose a good thumbnail. Relax the clamp to 0.5m while
-  // capturing presets; reset on exit so general editing keeps the looser
-  // navigation guardrails.
+  // The wheel dollies toward the cursor and, at the closest orbit, carries the
+  // target on (infinity dolly), so the eye goes right up to a window's trim
+  // or through a doorway rather than stopping short of the orbit's pivot.
+  // Preset capture frames a single small subtree and orbits it closer still.
   const isPresetCapture = captureMode.mode === 'preset'
-  const minDistance = isPresetCapture ? 0.5 : 2
+  const minDistance = isPresetCapture ? 0.25 : 0.5
   // Over modeled or mapped surroundings (a neighbourhood instead of the
   // horizon disc) the camera may pull back far enough to take it all in.
   const groundReplaced = useSceneGroundReplacement()
@@ -1398,6 +1482,7 @@ export const CustomCameraControls = ({ paused = false }: { paused?: boolean }) =
   return (
     <CameraControls
       azimuthRotateSpeed={ORBIT_ROTATE_SPEED}
+      dollyToCursor
       makeDefault
       maxDistance={maxDistance}
       impl={FloorAwareCameraControls}

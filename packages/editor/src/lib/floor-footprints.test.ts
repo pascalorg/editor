@@ -4,6 +4,7 @@ import {
   applySceneOperationPatch,
   BuildingNode,
   clearSceneHistory,
+  createI18n,
   createZone,
   floorFootprintName,
   generateId,
@@ -418,7 +419,7 @@ describe('floor footprints', () => {
     // What the notice offers instead: both footprints, together, in one step.
     const together = footprintsToMoveTogether(nodes(), house.id, patch)
     expect(together).toEqual([house.id, shed.id])
-    expect(moveTogetherLabel(together!.length, false)).toBe('Raise both')
+    expect(moveTogetherLabel(together!.length, false, createI18n())).toBe('Raise both')
     const steps = history()
     expect(applyFloorFoundation(together!, patch)).toBeNull()
     expect(history()).toBe(steps + 1)

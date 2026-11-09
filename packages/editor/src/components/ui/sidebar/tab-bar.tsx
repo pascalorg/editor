@@ -121,7 +121,10 @@ export function IconRail({ tabs, activeTab, collapsed, onIconClick }: IconRailPr
 
   return (
     <TooltipProvider delayDuration={0} disableHoverableContent>
-      <div className="flex h-full w-14 shrink-0 flex-col items-center gap-1 border-border/50 border-r py-2">
+      <div
+        className="flex h-full w-14 shrink-0 flex-col items-center gap-1 border-border/50 border-r py-2"
+        data-surface="icon-rail"
+      >
         {defaultTabs.map(renderTab)}
         {pluginTabs.length > 0 && (
           <div className="mt-1 flex w-11 flex-col items-center gap-1 border-border/70 border-t pt-2">

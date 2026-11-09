@@ -11,6 +11,7 @@ export { StairRailingMode, StairRailingStyle } from './stair-types'
 
 import { StairConstruction } from './stair-construction'
 import { StairSegmentNode } from './stair-segment'
+import { StairStructure } from './stair-structure'
 
 export const StairType = z.enum(['straight', 'curved', 'spiral'])
 export const StairTopLandingMode = z.enum(['none', 'integrated'])
@@ -70,6 +71,7 @@ export const StairNode = BaseNode.extend({
   thickness: z.number().default(0.25),
   fillToFloor: z.boolean().default(true),
   construction: StairConstruction.optional(),
+  structure: StairStructure.optional(),
   innerRadius: z.number().default(0.9),
   sweepAngle: z.number().default(Math.PI / 2),
   topLandingMode: StairTopLandingMode.default('none'),
@@ -115,6 +117,7 @@ export const StairNode = BaseNode.extend({
   - totalRise: total stair height
   - stepCount: number of visible steps
   - construction: optional explicit construction and finish details, inherited by child segments; absence preserves legacy bodies
+  - structure: how the stair is built — wood-stringers (2x12 or 2x10 stringers, cut or housed, the count automatic from a maximum spacing of 16 in o.c. unless set; 2x6-pair, 5/4x6-pair, 2x12 or plywood-finish treads; closed risers once it rises over 30 in), concrete (a solid poured flight on a footing) or steel-stringers (steel channels); it draws the body when no explicit construction is set. Absent keeps the original body
   - autoSurfaceSnap: magnetically connect straight flights to nearby registered top surfaces
   - thickness: stair slab / tread thickness
   - fillToFloor: whether the stair mass fills down to the floor or uses tread thickness only

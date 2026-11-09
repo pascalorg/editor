@@ -15,6 +15,7 @@ import {
 import {
   buildMultiNodePatches,
   commitMultiNodeFields,
+  fieldTargetIds,
   fieldVisibleForAll,
   reduceFieldValue,
   reduceHeightBoundMode,
@@ -55,6 +56,32 @@ describe('reduceFieldValue', () => {
     }
     expect(reduceFieldValue(['a', 'b'], 'height', nodes)).toEqual({ kind: 'same', value: 2.4 })
     expect(reduceFieldValue(['a', 'b'], 'thickness', nodes)).toEqual({ kind: 'mixed' })
+  })
+
+  test('an omitted value reads as the field default, not as zero', () => {
+    const nodes = {
+      a: makeNode('a', 'wall'),
+      b: makeNode('b', 'wall', { thickness: 0.1 }),
+      c: makeNode('c', 'wall', { thickness: 0.2 }),
+    }
+    expect(reduceFieldValue(['a', 'b'], 'thickness', nodes, 0.1)).toEqual({
+      kind: 'same',
+      value: 0.1,
+    })
+    expect(reduceFieldValue(['a', 'c'], 'thickness', nodes, 0.1)).toEqual({ kind: 'mixed' })
+  })
+
+  test('a field that names the nodes it applies to edits only those', () => {
+    const nodes = {
+      a: makeNode('a', 'wall', { thickness: 0.2 }),
+      b: makeNode('b', 'wall', { thickness: 0.18, assembly: { layers: [] } }),
+      c: makeNode('c', 'wall', { thickness: 0.2 }),
+    }
+    const plain = (node: AnyNode) => !(node as { assembly?: unknown }).assembly
+    const targets = fieldTargetIds(['a', 'b', 'c'], plain, nodes)
+    expect(targets).toEqual(['a', 'c'])
+    expect(reduceFieldValue(targets, 'thickness', nodes)).toEqual({ kind: 'same', value: 0.2 })
+    expect(fieldTargetIds(['a', 'b'], undefined, nodes)).toEqual(['a', 'b'])
   })
 
   test('vec3 compares elementwise', () => {

@@ -1,15 +1,30 @@
 {
   "name": "@pascal-app/geometry-script",
-  "version": "1.0.4",
+  "version": "1.0.7",
   "description": "Compiles AI-authored three.js and Blender (bpy) geometry scripts into GLB artifacts with a Pascal manifest. Runs in a browser worker, Bun or Node — no DOM, no React.",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
+    "./author-scene": {
+      "types": "./dist/author-scene.d.ts",
+      "import": "./dist/author-scene.js",
+      "default": "./dist/author-scene.js"
+    },
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
+    },
+    "./adapter": {
+      "types": "./dist/adapter.d.ts",
+      "import": "./dist/adapter.js",
+      "default": "./dist/adapter.js"
+    },
+    "./design": {
+      "types": "./dist/design.d.ts",
+      "import": "./dist/design.js",
+      "default": "./dist/design.js"
     },
     "./compile": {
       "types": "./dist/compile.d.ts",
@@ -45,16 +60,16 @@
     "test": "bun test"
   },
   "dependencies": {
-    "@pascal-app/core": "^1.0.4",
+    "@pascal-app/core": "^1.0.7",
     "three-bvh-csg": "^0.0.18"
   },
   "peerDependencies": {
-    "three": "^0.186"
+    "three": "^0.187"
   },
   "devDependencies": {
     "@pascal/typescript-config": "*",
-    "@types/bun": "^1.4.3",
-    "@types/three": "^0.186.0",
+    "@types/bun": "^1.4.4",
+    "@types/three": "^0.187",
     "typescript": "7.0.2"
   },
   "repository": {

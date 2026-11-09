@@ -1,4 +1,5 @@
 import { refuse } from '../agent-tools/refusal'
+import { isSiteFlatwork } from '../lib/site-flatwork'
 import {
   describeSiteBrief,
   placeBuildingPose,
@@ -7,9 +8,9 @@ import {
   siteBrief,
   type YardKey,
 } from '../lib/site-placement'
-import type { AnyNode } from '../schema'
 import { targetBuilding } from './add-level'
 import { pointInPolygon, type Vec2 } from './plan-geometry'
+import { queryNodes } from './scene-queries'
 import type { AgentOperation, SceneNodes } from './types'
 
 type SiteInput = { building?: string; site?: string }
@@ -36,7 +37,7 @@ export const getSite: AgentOperation<SiteInput> = (nodes, input, context) => {
         type: site.type,
       })
   }
-  const anyBuilding = Object.values(nodes).some((node) => node.type === 'building')
+  const anyBuilding = queryNodes(nodes, { type: 'building' }).length > 0
   const building =
     input.building || (anyBuilding && !input.site)
       ? targetBuilding(nodes, input.building, context)
@@ -86,13 +87,9 @@ function outdoorOnLevels(nodes: SceneNodes, buildingId: string, rings: readonly 
   const outside = (x: number, z: number) =>
     !rings.some((ring) => pointInPolygon([x, z], ring as Vec2[]))
   const moved: { id: string; type: string; name?: string }[] = []
-  for (const node of Object.values(nodes) as AnyNode[]) {
+  for (const node of queryNodes(nodes, { type: ['fence', 'slab', 'item'] })) {
     if (!(node.parentId && levels.has(node.parentId))) continue
-    const flatwork =
-      node.type === 'slab' &&
-      typeof node.metadata === 'object' &&
-      node.metadata !== null &&
-      'flatwork' in node.metadata
+    const flatwork = node.type === 'slab' && isSiteFlatwork(node)
     const outdoorItem =
       node.type === 'item' && outside(node.position[0] ?? 0, node.position[2] ?? 0)
     if (node.type === 'fence' || flatwork || outdoorItem)

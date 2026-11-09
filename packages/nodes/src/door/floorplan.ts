@@ -5,12 +5,13 @@ import type {
   GeometryContext,
   WallNode,
 } from '@pascal-app/core'
-import { getWallBodyCenterOffset } from '@pascal-app/core'
+import { getDoorOpeningSize, getWallBodyCenterOffset, openingHostFacing } from '@pascal-app/core'
 import {
   readFloorplanContext,
   readFloorplanGeometryMetadata,
   withFloorplanGeometryMetadata,
 } from '@pascal-app/editor'
+import { buildOpeningCasingPlan } from '../shared/opening-casing'
 import {
   buildOpeningMarkAnnotation,
   type OpeningFloorplanLevelData,
@@ -42,6 +43,8 @@ import { resolveOpeningPlanPlane } from '../shared/opening-plane-offset'
  * with no swing arc.
  *   4. Center line through the cutout (matches the legacy's
  *      `getOpeningCenterLine` segment for visual continuity).
+ *   5. Casing legs standing proud of each cased wall face beside the
+ *      cutout (`buildOpeningCasingPlan`).
  *
  * Requires `ctx.parent` to be a wall (door.parentId is the wall it's
  * mounted on). Returns null when the parent isn't a wall (orphaned
@@ -70,6 +73,8 @@ export function buildDoorFloorplan(node: DoorNode, ctx: GeometryContext): Floorp
 
   const distance = node.position[0]
   const width = node.width
+  const opening = getDoorOpeningSize(node)
+  const openingOffset = -opening.leafOffsetX * openingHostFacing(node)
   const wallDepth = wall.thickness ?? 0.1
   const plane = resolveOpeningPlanPlane(node, wallDepth)
   const depth = plane.depth
@@ -100,18 +105,42 @@ export function buildDoorFloorplan(node: DoorNode, ctx: GeometryContext): Floorp
 
   // Footprint rectangle in the cutout.
   const points: readonly FloorplanPoint[] = [
-    [cx - dirX * halfWidth + perpX * halfDepth, cz - dirZ * halfWidth + perpZ * halfDepth],
-    [cx + dirX * halfWidth + perpX * halfDepth, cz + dirZ * halfWidth + perpZ * halfDepth],
-    [cx + dirX * halfWidth - perpX * halfDepth, cz + dirZ * halfWidth - perpZ * halfDepth],
-    [cx - dirX * halfWidth - perpX * halfDepth, cz - dirZ * halfWidth - perpZ * halfDepth],
+    [
+      cx + dirX * openingOffset - dirX * (opening.width / 2) + perpX * halfDepth,
+      cz + dirZ * openingOffset - dirZ * (opening.width / 2) + perpZ * halfDepth,
+    ],
+    [
+      cx + dirX * openingOffset + dirX * (opening.width / 2) + perpX * halfDepth,
+      cz + dirZ * openingOffset + dirZ * (opening.width / 2) + perpZ * halfDepth,
+    ],
+    [
+      cx + dirX * openingOffset + dirX * (opening.width / 2) - perpX * halfDepth,
+      cz + dirZ * openingOffset + dirZ * (opening.width / 2) - perpZ * halfDepth,
+    ],
+    [
+      cx + dirX * openingOffset - dirX * (opening.width / 2) - perpX * halfDepth,
+      cz + dirZ * openingOffset - dirZ * (opening.width / 2) - perpZ * halfDepth,
+    ],
   ]
 
   const halfWallDepth = wallDepth / 2
   const openingCutoutPoints = (ox: number, oz: number): FloorplanPoint[] => [
-    [ox - dirX * halfWidth + perpX * halfWallDepth, oz - dirZ * halfWidth + perpZ * halfWallDepth],
-    [ox + dirX * halfWidth + perpX * halfWallDepth, oz + dirZ * halfWidth + perpZ * halfWallDepth],
-    [ox + dirX * halfWidth - perpX * halfWallDepth, oz + dirZ * halfWidth - perpZ * halfWallDepth],
-    [ox - dirX * halfWidth - perpX * halfWallDepth, oz - dirZ * halfWidth - perpZ * halfWallDepth],
+    [
+      ox + dirX * openingOffset - dirX * (opening.width / 2) + perpX * halfWallDepth,
+      oz + dirZ * openingOffset - dirZ * (opening.width / 2) + perpZ * halfWallDepth,
+    ],
+    [
+      ox + dirX * openingOffset + dirX * (opening.width / 2) + perpX * halfWallDepth,
+      oz + dirZ * openingOffset + dirZ * (opening.width / 2) + perpZ * halfWallDepth,
+    ],
+    [
+      ox + dirX * openingOffset + dirX * (opening.width / 2) - perpX * halfWallDepth,
+      oz + dirZ * openingOffset + dirZ * (opening.width / 2) - perpZ * halfWallDepth,
+    ],
+    [
+      ox + dirX * openingOffset - dirX * (opening.width / 2) - perpX * halfWallDepth,
+      oz + dirZ * openingOffset - dirZ * (opening.width / 2) - perpZ * halfWallDepth,
+    ],
   ]
 
   const view = ctx.viewState
@@ -159,6 +188,36 @@ export function buildDoorFloorplan(node: DoorNode, ctx: GeometryContext): Floorp
       strokeLinejoin: 'round',
     },
   ]
+
+  for (const [side, extra] of [
+    [-1, node.sidelightLeft ?? 0],
+    [1, node.sidelightRight ?? 0],
+  ] as const) {
+    if (!extra || opening.width === width) continue
+    const sign = side * openingHostFacing(node)
+    const a = (sign * width) / 2
+    const b = sign * (width / 2 + extra)
+    children.push({
+      kind: 'polyline',
+      points: [
+        [cx + dirX * a, cz + dirZ * a],
+        [cx + dirX * b, cz + dirZ * b],
+      ],
+      fill: 'none',
+      stroke: accentColor,
+      strokeWidth: 2,
+      vectorEffect: 'non-scaling-stroke',
+    })
+  }
+
+  // Casing legs on the wall faces beside the cutout, as the 3D door has them.
+  const casing = buildOpeningCasingPlan(node, wall, {
+    fill: fillColor,
+    stroke: accentMuted,
+    strokeWidth: showSelectedChrome ? 1.4 : 1,
+    vectorEffect: 'non-scaling-stroke',
+  })
+  if (casing) children.push(casing)
 
   if (node.openingShape !== 'rectangle') {
     const overheadRise =
@@ -305,8 +364,9 @@ export function buildDoorFloorplan(node: DoorNode, ctx: GeometryContext): Floorp
   // fall through to just the opening footprint (the earlier behaviour).
   const isSwingDoor = node.doorType === 'hinged' || isDoubleLeaf
   // A frameless wall opening — drawn as a bare gap, no leaf / arc / panel
-  // (mirrors the 3D system, which renders only the cutout for openings).
-  const isOpening = node.openingKind === 'opening'
+  // (mirrors the 3D system, which renders only the cutout for openings). A
+  // door on a railing is always one: a gap in the guard.
+  const isOpening = node.openingKind === 'opening' || wall.wallType === 'railing'
 
   if (isOpening) {
     // Open doorway — a frameless gap in the wall. No leaf, arc, or panel;
@@ -320,7 +380,7 @@ export function buildDoorFloorplan(node: DoorNode, ctx: GeometryContext): Floorp
     // The fold span / depth are fixed so the plan symbol stays static
     // regardless of the live open state.
     const FOLD_SPAN_RATIO = 0.8
-    const panelCount = node.leafCount === 2 ? 2 : 4
+    const panelCount = node.leafCount >= 6 ? node.leafCount : node.leafCount === 2 ? 2 : 4
     const panelLen = (width * FOLD_SPAN_RATIO) / panelCount
     const peakDepth = panelLen * 0.7
     // Anchor the accordion's base line on the room-facing wall face (the
@@ -329,7 +389,12 @@ export function buildDoorFloorplan(node: DoorNode, ctx: GeometryContext): Floorp
     const baseOffX = perpX * halfDepth * swingSign
     const baseOffZ = perpZ * halfDepth * swingSign
     // Start at the hinge edge and step toward the opposite jamb.
-    const hingeTangentSign = hingesSide === 'left' ? 1 : -1
+    const hingeTangentSign =
+      panelCount > 4
+        ? (node.slideDirection === 'right' ? -1 : 1) * openingHostFacing(node)
+        : hingesSide === 'left'
+          ? 1
+          : -1
     const startX = cx - dirX * halfWidth * hingeTangentSign + baseOffX
     const startZ = cz - dirZ * halfWidth * hingeTangentSign + baseOffZ
     const stepX = dirX * panelLen * hingeTangentSign
@@ -363,7 +428,8 @@ export function buildDoorFloorplan(node: DoorNode, ctx: GeometryContext): Floorp
     // regardless of the live open state.
     const slideSign = node.slideDirection === 'right' ? 1 : -1
     const panelHalfThick = Math.min(depth * 0.22, 0.03)
-    const panelHalfLen = width * 0.275
+    const panelCount = Math.max(2, Math.min(4, node.leafCount))
+    const panelHalfLen = panelCount === 2 ? width * 0.275 : width / panelCount / 2 + 0.01
     const panelRect = (centerAlong: number, perpSign: number): [number, number][] => {
       const rcx = cx + dirX * centerAlong + perpX * panelHalfThick * perpSign
       const rcz = cz + dirZ * centerAlong + perpZ * panelHalfThick * perpSign
@@ -390,8 +456,17 @@ export function buildDoorFloorplan(node: DoorNode, ctx: GeometryContext): Floorp
       })
     // Left panel toward one face, right panel toward the other; they
     // overlap across the centre.
-    pushPanel(panelRect(-halfWidth + panelHalfLen, 1))
-    pushPanel(panelRect(halfWidth - panelHalfLen, -1))
+    for (let index = 0; index < panelCount; index++) {
+      const front =
+        node.slidingStyle === 'bypass'
+          ? index % 2 === (panelCount === 3 || slideSign < 0 ? 1 : 0)
+          : panelCount === 4
+            ? index === 1 || index === 2
+            : panelCount === 3
+              ? index === 1
+              : index === (slideSign < 0 ? 1 : 0)
+      pushPanel(panelRect(-halfWidth + (width * (index + 0.5)) / panelCount, front ? 1 : -1))
+    }
     // Slide-direction arrow, centred and pushed clear of the wall face
     // so it doesn't overlap the wall or panels.
     const arrowPerp = -(halfDepth + Math.max(panelHalfThick * 4, halfWidth * 0.22))

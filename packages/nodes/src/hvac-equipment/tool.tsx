@@ -5,6 +5,7 @@ import {
   type GridEvent,
   HvacEquipmentNode,
   resolveSupportSlabPatch,
+  usePascalI18n,
   useScene,
 } from '@pascal-app/core'
 import {
@@ -41,6 +42,7 @@ function snap(value: number, step: number): number {
  * inspector after placement.
  */
 const HvacEquipmentTool = () => {
+  const i18n = usePascalI18n()
   const activeLevelId = useViewer((s) => s.selection.levelId)
   const toolDefaults = useEditor((s) => s.toolDefaults['hvac-equipment'])
   const [cursor, setCursor] = useState<[number, number, number] | null>(null)
@@ -154,7 +156,9 @@ const HvacEquipmentTool = () => {
         zIndexRange={[100, 0]}
       >
         <div className="flex items-center gap-2 whitespace-nowrap rounded-full border border-border/60 bg-background/90 px-4 py-1.5 text-xs tabular-nums shadow-sm backdrop-blur">
-          <span className="font-medium text-foreground">R/T rotate</span>
+          <span className="font-medium text-foreground">
+            {i18n._({ id: 'node.hvacEquipment.tool.rTRotate', message: 'R/T rotate' })}
+          </span>
         </div>
       </Html>
     </LevelOffsetGroup>

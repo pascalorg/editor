@@ -1,3 +1,5 @@
+import { getDoorOpeningSize } from '../../lib/door-opening'
+import { openingHostFacing } from '../../lib/opening-casing'
 import {
   type AnyNode,
   type AssetInput,
@@ -242,6 +244,30 @@ const roomOn = (levelId: string) => (result: Record<string, unknown>, nodes: Nod
 const room = (input: Record<string, unknown>) => ({ name: 'Bedroom', polygon: CLEAR, ...input })
 
 export const CREATE_ROOM_CASES: AgentToolCase[] = [
+  ...[CLEAR, [...CLEAR].reverse()].map((polygon): AgentToolCase => ({
+    name: `an asymmetric entry cutout keeps its planned centre after reconcile (${polygon === CLEAR ? 'forward' : 'reverse'})`,
+    tool: 'create_room',
+    scene: roomsScene,
+    input: { levelId: 'level_g', name: 'Entry', polygon, doors: [{ wallIndex: 0, t: 0.35, sidelightLeft: 0.2, sidelightRight: 0.6 }] },
+    expect: {
+      result: { ok: true },
+      check: (result, nodes) => {
+        const door = nodes[(result.doorIds as string[])[0]!]
+        const wall = nodes[door?.parentId ?? '']
+        if (door?.type !== 'door' || wall?.type !== 'wall') return ['entry door or wall missing']
+        const centre = door.position[0] - getDoorOpeningSize(door).leafOffsetX * openingHostFacing(door)
+        const length = Math.hypot(wall.end[0] - wall.start[0], wall.end[1] - wall.start[1])
+        return problems([Math.abs(centre - length * 0.35) < 1e-6, `cutout centre ${centre} moved from planned t`])
+      },
+    },
+  })),
+  {
+    name: 'an entry transom above a room wall is skipped with wall_too_low',
+    tool: 'create_room',
+    scene: roomsScene,
+    input: room({ levelId: 'level_g', wallHeight: 2.5, doors: [{ wallIndex: 0, transomHeight: 0.8 }] }),
+    expect: { result: { ok: true }, contains: { doorIds: [], skippedOpenings: [{ kind: 'door', index: 0, code: 'wall_too_low' }] } },
+  },
   // A door declared with a new room is planned before the host knows the new walls' outside;
   // once the room is derived, a door on an outside wall faces out, as add_door's does.
   {
@@ -960,6 +986,53 @@ export const FURNISH_ROOM_CASES: AgentToolCase[] = [
     expect: {
       result: { ok: true, doorWallIndex: 0, doorsDetected: 2 },
       check: (result, nodes) => [...furnished(result, nodes), ...livingGroupKept(nodes)],
+    },
+  },
+  {
+    name: 'a skip names the other sources, and a set with no skip does not',
+    tool: 'furnish_room',
+    scene: roomScene({
+      outline: roomOutline(7, 4.5),
+      name: 'Living room',
+      open: ['wall_s', 'wall_e', 'wall_w'],
+    }),
+    input: { zoneId: 'zone_bed', roomType: 'living', doorWallIndex: 0 },
+    context: { catalog: CATALOG },
+    expect: {
+      result: { ok: true },
+      check: (result) =>
+        problems(
+          [(result.skipped as string[]).length > 0, 'nothing was skipped: no case here'],
+          [
+            String(result.message).includes(
+              'For what was skipped: add_object builds an object of any shape and size',
+            ),
+            'a skip does not name the sources',
+          ],
+        ),
+    },
+  },
+  {
+    name: 'every piece placed comes with its name, size and id',
+    tool: 'furnish_room',
+    scene: roomScene({ outline: roomOutline(7, 4.5), name: 'Living room', doorsOn: ['wall_s'] }),
+    input: { zoneId: 'zone_bed', roomType: 'living' },
+    context: { catalog: CATALOG },
+    expect: {
+      result: { ok: true, skipped: [] },
+      mentions: ['sofa (2.5 × 1.5 m): item_'],
+      check: (result) => {
+        const pieces = result.pieces as string[]
+        const ids = result.itemIds as string[]
+        return problems(
+          [pieces.length === ids.length && ids.length > 0, 'pieces and ids differ'],
+          [
+            pieces.every((piece, i) => piece.endsWith(`: ${ids[i]}`) && / \(\d[\d.]* × \d[\d.]* m\): /.test(piece)),
+            `a piece lacks its size or its id: ${pieces}`,
+          ],
+          [!String(result.message).includes('add_object'), 'a set with no skip names the sources'],
+        )
+      },
     },
   },
   {

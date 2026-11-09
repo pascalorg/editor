@@ -1,13 +1,17 @@
 import { isAgentRefusal, refuse } from '../agent-tools/refusal'
-import { doorFacing, planWallOpening } from '../building/wall-openings'
+import { doorFacing, planWallOpening, type WallOpeningInput } from '../building/wall-openings'
 import { createZone, walledRoomAt } from '../commands/structure/create-zone'
 import { structureChangeBatch } from '../commands/structure/shared'
 import { levelFootprintLoops } from '../lib/building-footprint'
+import { doorPositionForFacing } from '../lib/door-opening'
+import { foundationReadingOfLevel } from '../lib/foundation-construction'
+import { foundationWallRule, levelHoldsFoundationWalls } from '../lib/foundation-wall'
 import { isAllocatedRoomName } from '../lib/room-name'
 import { lotOverhang } from '../lib/site-placement'
 import {
   type AnyNode,
   type AnyNodeId,
+  type DoorNode,
   generateId,
   type LevelNode,
   type WallNode,
@@ -16,16 +20,46 @@ import {
 import { applySceneChanges } from './apply-changes'
 import { type LevelTargetInput, targetLevel } from './level-target'
 import { polygonArea, type Vec2 } from './plan-geometry'
-import { levelRole } from './scene-queries'
+import { levelRole, queryNodes } from './scene-queries'
 import type { AgentOperation, SceneNodes } from './types'
 
-type OpeningSpec = {
+type OpeningSpec = Pick<
+  WallOpeningInput,
+  | 'doorType'
+  | 'sidelightLeft'
+  | 'sidelightRight'
+  | 'transomHeight'
+  | 'leafCount'
+  | 'slidingStyle'
+  | 'slideDirection'
+  | 'windowType'
+  | 'columns'
+  | 'rows'
+  | 'sashGrid'
+  | 'windowHandle'
+  | 'sillInterior'
+  | 'shutters'
+  | 'shutterWidth'
+  | 'openingDirection'
+  | 'tiltTurnMode'
+  | 'sillOverhang'
+  | 'sillInteriorDepth'
+  | 'sillInteriorThickness'
+  | 'sillInteriorOverhang'
+  | 'shutterOpen'
+  | 'shutterSides'
+  | 'rollerShutter'
+  | 'rollerShutterBoxHeight'
+  | 'rollerShutterOpen'
+> & {
   wallIndex: number
   t?: number
   width?: number
   height?: number
   sillHeight?: number
   hingesSide?: 'left' | 'right'
+  handleStyle?: DoorNode['handleStyle']
+  handleSide?: 'left' | 'right'
   swingDirection?: 'inward' | 'outward'
   style?: string
 }
@@ -67,9 +101,7 @@ export function edgeProjection(a: Vec2, b: Vec2, point: readonly number[]) {
 }
 
 const wallsOn = (nodes: SceneNodes, levelId: string) =>
-  Object.values(nodes).filter(
-    (node): node is WallNode => node.type === 'wall' && node.parentId === levelId,
-  )
+  queryNodes<WallNode>(nodes, { type: 'wall', parentId: levelId })
 
 /** The walls of the level that run along the edge a → b, both ends on its line. */
 function wallsAlong(nodes: SceneNodes, levelId: string, a: Vec2, b: Vec2) {
@@ -99,7 +131,7 @@ function wallAt(nodes: SceneNodes, levelId: string, a: Vec2, b: Vec2, point: Vec
 
 /** The construction the host derived for the room: its floor plate and its ceiling. */
 function derivedSurfaces(nodes: SceneNodes, levelId: string, zoneId: string) {
-  const children = Object.values(nodes).filter((node) => node.parentId === levelId)
+  const children = queryNodes(nodes, { parentId: levelId })
   const slab = children.find(
     (node) => node.type === 'slab' && node.boundary === 'auto' && node.zoneIds?.includes(zoneId),
   )
@@ -235,6 +267,16 @@ export const createRoom: AgentOperation<CreateRoomInput> = (nodes, input, contex
   const raised = new Set(
     roomChanges.create.flatMap((entry) => (entry.node.type === 'wall' ? [entry.node.id] : [])),
   )
+  const holdsFoundation =
+    raised.size > 0 &&
+    !input.outdoor &&
+    input.wallThickness === undefined &&
+    levelHoldsFoundationWalls(scene, level.id)
+  const foundation = holdsFoundation
+    ? [...raised].filter((id) => (scene[id as AnyNodeId] as WallNode | undefined)?.assembly)
+    : []
+  const partitions = holdsFoundation ? raised.size - foundation.length : 0
+  const reading = foundationReadingOfLevel(scene, level.id)
   const site = lotOverhang(scene, level.id, [
     polygon,
     ...levelFootprintLoops(scene, scene[level.id] as LevelNode, null, raised),
@@ -251,11 +293,31 @@ export const createRoom: AgentOperation<CreateRoomInput> = (nodes, input, contex
     windowIds,
     ...(skippedOpenings.length ? { skippedOpenings } : {}),
     ...(site ? { site } : {}),
+    ...(foundation.length
+      ? {
+          construction: {
+            assembly: reading.construction.description,
+            foundationWallIds: foundation,
+            region: reading.region,
+            basis: reading.basis,
+          },
+        }
+      : {}),
     message: [
       plan.renamed
         ? `Named the ${input.outdoor ? 'outdoor room' : 'room'} the walls already enclose "${input.name}" (it was ${plan.renamed}) on ${level.name || level.id}`
         : `Created ${input.outdoor ? 'outdoor room' : 'room'} "${input.name}" on ${level.name || level.id}`,
       ...(reusedWalls ? [`reused ${plural(reusedWalls, 'wall')} already there`] : []),
+      ...(foundation.length
+        ? [
+            `${plural(foundation.length, 'new wall')} against the ground ${foundation.length === 1 ? 'is a foundation wall' : 'are foundation walls'} (${reading.construction.description}; ${reading.basis})`,
+          ]
+        : []),
+      ...(partitions
+        ? [
+            `${plural(partitions, 'new wall')} inside the outline ${partitions === 1 ? 'is an ordinary wall' : 'are ordinary walls'}: ${foundationWallRule(reading)}`,
+          ]
+        : []),
       ...(doorIds.length ? [plural(doorIds.length, 'door')] : []),
       ...(windowIds.length ? [plural(windowIds.length, 'window')] : []),
       ...(skippedOpenings.length
@@ -279,7 +341,9 @@ export const createRoom: AgentOperation<CreateRoomInput> = (nodes, input, contex
         const wall = derived[door?.parentId ?? '']
         if (door?.type !== 'door' || wall?.type !== 'wall') return []
         const facing = doorFacing(wall)
-        return facing.side && facing.side !== door.side ? [{ id, data: facing }] : []
+        return facing.side && facing.side !== door.side
+          ? [{ id, data: { ...facing, position: doorPositionForFacing(door, facing.rotation) } }]
+          : []
       })
       return {
         result: { ...result, ...derivedSurfaces(derived, level.id, plan.zoneId) },

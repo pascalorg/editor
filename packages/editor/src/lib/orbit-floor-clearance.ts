@@ -11,7 +11,30 @@ export const ORBIT_FLOOR_CLEARANCE = 0.45
  */
 export const ORBIT_TARGET_HEIGHT = 1.1
 
+/**
+ * The dive under the ground: with the ground on Auto the orbit's eye may leave the ground for the
+ * earth under any building, down to a floor this far under the lowest ground, or this far under
+ * the deepest thing drawn (a basement's footing), whichever is deeper.
+ */
+export const DIVE_DEPTH = 3
+export const DIVE_MARGIN = 1
+
 const DEGREE = Math.PI / 180
+
+/** The floor of the dive, world Y: the eye's clearance over it is {@link ORBIT_FLOOR_CLEARANCE}. */
+export function diveFloorY(lowestGroundY: number, deepestDrawnY: number | null): number {
+  const underGround = lowestGroundY - DIVE_DEPTH
+  return deepestDrawnY === null ? underGround : Math.min(underGround, deepestDrawnY - DIVE_MARGIN)
+}
+
+/**
+ * The lowest the orbit's eye may sit: the clearance over the selected level's floor, or over the
+ * dive's floor when the person may dive and it lies deeper (`diveFloor` null: no dive). Selecting a
+ * level never lifts the limit above the dive floor, so a dive works from any storey.
+ */
+export function orbitFloorMinY(levelFloorY: number, diveFloor: number | null): number {
+  return Math.min(levelFloorY, diveFloor ?? levelFloorY) + ORBIT_FLOOR_CLEARANCE
+}
 
 /** The steepest an orbit camera looks: straight down is 0, straight up π. */
 export const MAX_ORBIT_POLAR_ANGLE = Math.PI - 0.05
@@ -103,4 +126,29 @@ export function floorLimitAt(surfaceTop: number | null, levelFloorY: number): nu
 export function glideFloorLimit(current: number | null, target: number, delta: number): number {
   if (current === null || !(delta > 0)) return current ?? target
   return target + (current - target) * Math.exp(-delta / FLOOR_GLIDE_SECONDS)
+}
+
+/**
+ * How far over the ground the overview's eye stays when the pivot goes down to a deep level: the
+ * ground is a medium, the eye above it sees the level through the hole and the dive is the
+ * person's own act, so picking a level four storeys under grade does not sink the eye with it.
+ */
+export const OVERVIEW_GROUND_CLEARANCE = 2
+
+/**
+ * The height an overview eye is kept at when its pivot moves to another level: `movedEyeY` as the
+ * move leaves it (the eye following the pivot down), unless that would sink the eye under the
+ * ground (the eye was above it, `wasUnder` false): then the eye stays where it was, over the ground
+ * (at least {@link OVERVIEW_GROUND_CLEARANCE} over it), and looks down at the new pivot. An eye
+ * already under the ground (the person dived) goes where the move puts it.
+ */
+export function overviewEyeY(
+  movedEyeY: number,
+  previousEyeY: number,
+  groundY: number,
+  wasUnder: boolean,
+): number {
+  const lowest = groundY + OVERVIEW_GROUND_CLEARANCE
+  if (wasUnder || movedEyeY >= lowest) return movedEyeY
+  return Math.max(previousEyeY, lowest)
 }

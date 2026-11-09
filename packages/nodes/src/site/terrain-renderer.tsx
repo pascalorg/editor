@@ -1,8 +1,10 @@
 'use client'
 
 import { type Ring, type SiteNode, terrainFieldOf, useLiveTerrain } from '@pascal-app/core'
+import { SITE_GROUND } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef } from 'react'
 import type { Material } from 'three'
+import { GroundVeil } from './ground-veil'
 import { lotMaskedMaterial } from './lot-mask'
 import { skirtRing } from './terrain-geometry'
 import {
@@ -34,12 +36,15 @@ import {
  */
 export const TerrainRenderer = ({
   material,
+  veil,
   site,
   holes,
   polygon,
 }: {
   /** Owned by `SiteRenderer` so the ground material stays defined in one place. */
   material: Material
+  /** The veil drawn in the ground's place over a level below grade, owned there too. */
+  veil: Material
   site: SiteNode
   holes: Ring[]
   /**
@@ -77,6 +82,16 @@ export const TerrainRenderer = ({
     },
     [surfaceMaterial, material],
   )
+  const surfaceVeil = useMemo(
+    () => (polygon && polygon.length >= 3 ? lotMaskedMaterial(veil, polygon) : veil),
+    [veil, polygon],
+  )
+  useEffect(
+    () => () => {
+      if (surfaceVeil !== veil) surfaceVeil.dispose()
+    },
+    [surfaceVeil, veil],
+  )
 
   targetRef.current = target
   useEffect(
@@ -113,14 +128,25 @@ export const TerrainRenderer = ({
 
   return (
     <>
-      <mesh castShadow geometry={target.geometry} material={surfaceMaterial} receiveShadow />
+      <mesh
+        castShadow
+        geometry={target.geometry}
+        material={surfaceMaterial}
+        receiveShadow
+        userData={{ [SITE_GROUND]: 'solid' }}
+      />
+      <GroundVeil geometry={target.geometry} material={surfaceVeil} />
       {target.holeBoundary && (
-        <mesh
-          castShadow
-          geometry={target.holeBoundary.geometry}
-          material={surfaceMaterial}
-          receiveShadow
-        />
+        <>
+          <mesh
+            castShadow
+            geometry={target.holeBoundary.geometry}
+            material={surfaceMaterial}
+            receiveShadow
+            userData={{ [SITE_GROUND]: 'solid' }}
+          />
+          <GroundVeil geometry={target.holeBoundary.geometry} material={surfaceVeil} />
+        </>
       )}
       {/*
         The edge curtain — along the property line when there is one, from the
@@ -129,7 +155,13 @@ export const TerrainRenderer = ({
         round the lot. `receiveShadow` for the same reason the surface has it — a raised edge
         is lit ground that a building next to it should darken.
       */}
-      <mesh geometry={target.skirt.geometry} material={material} receiveShadow />
+      <mesh
+        geometry={target.skirt.geometry}
+        material={material}
+        receiveShadow
+        userData={{ [SITE_GROUND]: 'solid' }}
+      />
+      <GroundVeil geometry={target.skirt.geometry} material={veil} />
     </>
   )
 }

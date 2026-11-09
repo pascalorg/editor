@@ -1,12 +1,12 @@
-import { type LevelNode, useScene } from '@pascal-app/core'
+import { type LevelNode, useLocale, usePascalI18n, useScene } from '@pascal-app/core'
 import { markPerfAction, useViewer } from '@pascal-app/viewer'
 import { Layers } from 'lucide-react'
 import { memo, useCallback, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import { getDefaultLevelName, getLevelDisplayName } from '@pascal-app/core'
 import { InlineRenameInput } from './inline-rename-input'
 import { focusTreeNode, TreeNode, TreeNodeWrapper } from './tree-node'
 import { TreeNodeActions } from './tree-node-actions'
+import { authoredLevelName, localizedLevelName } from '../../../../../i18n/level-name'
 
 interface LevelTreeNodeProps {
   nodeId: LevelNode['id']
@@ -19,6 +19,8 @@ export const LevelTreeNode = memo(function LevelTreeNode({
   depth,
   isLast,
 }: LevelTreeNodeProps) {
+  const i18n = usePascalI18n()
+  const locale = useLocale()
   const [expanded, setExpanded] = useState(true)
   const [isEditing, setIsEditing] = useState(false)
   const isVisible = useScene((s) => s.nodes[nodeId]?.visible !== false)
@@ -40,8 +42,8 @@ export const LevelTreeNode = memo(function LevelTreeNode({
   const handleStartEditing = useCallback(() => setIsEditing(true), [])
   const handleStopEditing = useCallback(() => setIsEditing(false), [])
 
-  const defaultName = getDefaultLevelName(level)
-  const displayName = getLevelDisplayName({ name: levelName, level })
+  const defaultName = localizedLevelName({ level }, i18n, locale)
+  const displayName = localizedLevelName({ name: levelName, level }, i18n, locale)
 
   return (
     <TreeNodeWrapper
@@ -58,6 +60,7 @@ export const LevelTreeNode = memo(function LevelTreeNode({
         <InlineRenameInput
           defaultName={defaultName}
           displayName={displayName}
+          editableName={(name) => authoredLevelName({ name, level })}
           isEditing={isEditing}
           nodeId={nodeId}
           onStartEditing={handleStartEditing}

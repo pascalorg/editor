@@ -25,6 +25,7 @@ import { describeZoneOutline, type RoomSelectionRecord } from '../../lib/room-se
 import useEditor from '../../store/use-editor'
 import useInteractionScope from '../../store/use-interaction-scope'
 import { RoomControls2D, RoomControls3D } from './room-controls'
+import { SelectedWallDimensions3D } from './room-handles'
 
 /**
  * A zone reached as a zone (hovered or selected through its area or pill, not
@@ -188,6 +189,7 @@ export function RoomHighlight3D() {
   return (
     <>
       <RoomControls3D />
+      <SelectedWallDimensions3D />
       {room ? <RoomMesh room={room} /> : null}
     </>
   )

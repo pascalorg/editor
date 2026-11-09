@@ -11,7 +11,12 @@ import {
   useLiveNodeOverrides,
   useScene,
 } from '@pascal-app/core'
-import { getActiveSnapContext, useEditor, useInteractionScope } from '@pascal-app/editor'
+import {
+  cancelActiveTool,
+  getActiveSnapContext,
+  useEditor,
+  useInteractionScope,
+} from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useThree } from '@react-three/fiber'
 import { act } from '@react-three/test-renderer'
@@ -163,7 +168,7 @@ for (const kind of ['duct-fitting', 'lineset'] as const) {
       expect(useScene.temporal.getState().pastStates).toHaveLength(0)
       expect(getSceneHistoryPauseDepth()).toBeGreaterThan(0)
       if (ending === 'unmount') await renderer.unmount()
-      else if (ending === 'escape') await pointer('keydown', undefined, { key: 'Escape' })
+      else if (ending === 'escape') await act(async () => void cancelActiveTool())
       else if (ending === 'scope-change')
         await act(async () =>
           useInteractionScope

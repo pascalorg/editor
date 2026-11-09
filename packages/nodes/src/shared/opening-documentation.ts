@@ -6,7 +6,14 @@ import type {
   WallNode,
   WindowNode,
 } from '@pascal-app/core'
-import { getOpeningFloorDatum, getWallLocalFaceZ, wallSupportForNodes } from '@pascal-app/core'
+import {
+  doorHandleStyle,
+  getDoorOpeningSize,
+  getOpeningFloorDatum,
+  getWallLocalFaceZ,
+  resolveHostedOpeningFrameDepth,
+  wallSupportForNodes,
+} from '@pascal-app/core'
 import {
   type FloorplanSchedule,
   resolveMarkDetail,
@@ -111,10 +118,15 @@ export function buildDoorFloorplanSchedule(args: {
       cells: {
         mark: marks.markById.get(door.id) ?? '—',
         type: door.openingKind === 'opening' ? 'Opening' : titleCase(door.doorType),
-        size: formatSize(door.width, door.height, args.unit, args.profile ?? 'document'),
+        size: formatSize(
+          getDoorOpeningSize(door).width,
+          getDoorOpeningSize(door).height,
+          args.unit,
+          args.profile ?? 'document',
+        ),
         roughOpening: formatRoughOpening(door, args.unit, args.profile ?? 'document'),
         operation: doorOperation(door),
-        frame: `${formatConstructionLength(door.frameThickness, args.unit, args.profile ?? 'document')} / ${formatConstructionLength(door.frameDepth, args.unit, args.profile ?? 'document')}`,
+        frame: `${formatConstructionLength(door.frameThickness, args.unit, args.profile ?? 'document')} / ${formatConstructionLength(resolveHostedOpeningFrameDepth(door, args.nodes), args.unit, args.profile ?? 'document')}`,
         hardware: doorHardware(door),
       },
     })),
@@ -571,7 +583,7 @@ function openingDocumentationDimensions(
 ): { width: number | null; height: number | null } {
   switch (reference) {
     case 'nominal':
-      return { width: opening.width, height: opening.height }
+      return getDoorOpeningSize(opening)
     case 'rough-opening':
       return {
         width: opening.roughOpeningWidth ?? null,
@@ -615,10 +627,20 @@ function doorOperation(door: DoorNode): string {
 
 function doorHardware(door: DoorNode): string {
   if (door.openingKind === 'opening') return 'None'
-  const hardware = []
-  if (door.doorCloser) hardware.push('Closer')
-  if (door.panicBar) hardware.push('Panic bar')
-  if (door.threshold) hardware.push('Threshold')
+  const hardware: string[] = []
+  if (door.handle) {
+    const swing = ['hinged', 'double', 'french'].includes(door.doorType)
+    const labels = {
+      lever: 'Lever',
+      'lever-curved': 'Curved lever',
+      knob: 'Knob',
+      bar: 'Bar pull',
+      plate: 'Plate lever',
+    }
+    hardware.push(swing ? labels[doorHandleStyle(door)] : 'Pull')
+  }
+  if (door.doorCloser) hardware.push(hardware.length ? 'closer' : 'Closer')
+  if (door.panicBar) hardware.push(hardware.length ? 'panic bar' : 'Panic bar')
   return hardware.length > 0 ? hardware.join(', ') : 'Standard'
 }
 

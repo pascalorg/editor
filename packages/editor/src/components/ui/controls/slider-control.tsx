@@ -1,6 +1,6 @@
 'use client'
 
-import { useScene } from '@pascal-app/core'
+import { formatNumber, parseLocalizedNumber, useLocale, useScene, usePascalI18n } from '@pascal-app/core'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { lingoUnitSpec, measurementHint, parseMeasurement } from '../../../lib/measurement-parser'
 import { useLinearDisplay } from '../../../lib/use-linear-display'
@@ -21,6 +21,10 @@ interface SliderControlProps {
   unit?: string
   restoreOnCommit?: boolean
   mixed?: boolean
+}
+
+export function parseSliderBareValue(text: string, locale: string): number | null {
+  return parseLocalizedNumber(text, locale)
 }
 
 function stepPrecision(s: number): number {
@@ -67,14 +71,25 @@ export function SliderControl({
   restoreOnCommit = true,
   mixed = false,
 }: SliderControlProps) {
+  const i18n = usePascalI18n()
+  const locale = useLocale()
   // Values and bounds stay in meters; gestures and input use the displayed unit.
   const { isImperial, displayUnit, parseUnit, precision, step, toDisplay, toStored } =
     useLinearDisplay(unit, storedPrecision, storedStep)
+  const formatDisplay = useCallback(
+    (displayValue: number) =>
+      formatNumber(displayValue, {
+        locale,
+        min: precision,
+        max: precision,
+      }),
+    [locale, precision],
+  )
 
   const [isEditing, setIsEditing] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
   const [isHovered, setIsHovered] = useState(false)
-  const [inputValue, setInputValue] = useState(toDisplay(value).toFixed(precision))
+  const [inputValue, setInputValue] = useState(() => formatDisplay(toDisplay(value)))
   // Live readout while dragging. Multi-edit previews write live overrides
   // instead of the scene, so `value` would otherwise stay frozen even though
   // the meshes are moving.
@@ -116,9 +131,9 @@ export function SliderControl({
 
   useEffect(() => {
     if (!isEditing) {
-      setInputValue(toDisplay(value).toFixed(precision))
+      setInputValue(formatDisplay(toDisplay(value)))
     }
-  }, [value, precision, isEditing, toDisplay])
+  }, [value, isEditing, toDisplay, formatDisplay])
 
   // Wheel support on the label
   useEffect(() => {
@@ -264,8 +279,8 @@ export function SliderControl({
   const handleValueClick = useCallback(() => {
     editingRef.current = true
     setIsEditing(true)
-    setInputValue(toDisplay(value).toFixed(precision))
-  }, [value, precision, toDisplay])
+    setInputValue(formatDisplay(toDisplay(value)))
+  }, [value, toDisplay, formatDisplay])
 
   const parseInputValue = useCallback(
     (text: string) => {
@@ -273,16 +288,17 @@ export function SliderControl({
       const parsed = spec
         ? parseMeasurement(text, spec, {
             bareUnit: parseUnit ?? spec.unitId,
+            locale,
             system: isImperial ? 'us' : 'metric',
           })
         : null
-      const bare = Number(text)
-      const stored = parsed ?? (text.trim() && Number.isFinite(bare) ? toStored(bare) : null)
+      const bare = parseSliderBareValue(text, locale)
+      const stored = parsed ?? (bare === null ? null : toStored(bare))
       return stored === null
         ? null
         : clamp(toStored(Number.parseFloat(toDisplay(stored).toFixed(precision))))
     },
-    [unit, parseUnit, isImperial, toStored, clamp, toDisplay, precision],
+    [unit, parseUnit, locale, isImperial, toStored, clamp, toDisplay, precision],
   )
 
   const submitValue = useCallback(() => {
@@ -291,13 +307,13 @@ export function SliderControl({
     const nextValue = parseInputValue(inputValue)
     if (nextValue === null) {
       onCancel?.()
-      setInputValue(toDisplay(value).toFixed(precision))
+      setInputValue(formatDisplay(toDisplay(value)))
     } else {
       onChange(nextValue)
       onCommit?.(nextValue)
     }
     setIsEditing(false)
-  }, [inputValue, parseInputValue, onCancel, onChange, onCommit, toDisplay, value, precision])
+  }, [inputValue, parseInputValue, onCancel, onChange, onCommit, toDisplay, value, formatDisplay])
 
   const spec = lingoUnitSpec(unit)
   const hint =
@@ -305,6 +321,7 @@ export function SliderControl({
       ? measurementHint(inputValue, spec, {
           bareUnit: parseUnit ?? spec.unitId,
           system: isImperial ? 'us' : 'metric',
+          locale,
           displayUnit: parseUnit ?? spec.unitId,
           precision,
           clamp,
@@ -323,10 +340,10 @@ export function SliderControl({
         const adjustedStep = getAdjustedStep(step, e)
         const newV = applyDisplayDelta(value, direction * adjustedStep, adjustedStep)
         onChange(newV)
-        setInputValue(toDisplay(newV).toFixed(precision))
+        setInputValue(formatDisplay(toDisplay(newV)))
       }
     },
-    [submitValue, cancelEdit, value, precision, step, applyDisplayDelta, onChange, toDisplay],
+    [submitValue, cancelEdit, value, step, applyDisplayDelta, onChange, toDisplay, formatDisplay],
   )
 
   const displayValue = toDisplay(shown)
@@ -411,21 +428,21 @@ export function SliderControl({
         ) : mixed && !isDragging ? (
           <button
             type="button"
-            aria-label={typeof label === 'string' ? `Edit ${label}` : undefined}
+            aria-label={typeof label === 'string' ? i18n._({ id: 'editor.controls.sliderControl.editLabel', message: 'Edit {label}', values: { label } }) : undefined}
             className="flex cursor-text items-center text-muted-foreground transition-colors hover:text-foreground"
             onClick={handleValueClick}
           >
-            <span className="font-mono tracking-tight">Mixed</span>
+            <span className="font-mono tracking-tight">{i18n._({ id: 'editor.controls.sliderControl.mixed', message: 'Mixed' })}</span>
           </button>
         ) : (
           <button
             type="button"
-            aria-label={typeof label === 'string' ? `Edit ${label}` : undefined}
+            aria-label={typeof label === 'string' ? i18n._({ id: 'editor.controls.sliderControl.editLabel', message: 'Edit {label}', values: { label } }) : undefined}
             className="flex cursor-text items-center text-foreground/60 transition-colors hover:text-foreground"
             onClick={handleValueClick}
           >
             <span className="font-mono tabular-nums tracking-tight" suppressHydrationWarning>
-              {Number(displayValue.toFixed(precision)).toFixed(precision)}
+              {formatDisplay(displayValue)}
             </span>
             {displayUnit && <span className="ml-[1px] text-muted-foreground">{displayUnit}</span>}
           </button>

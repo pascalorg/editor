@@ -7,7 +7,8 @@ import {
   MeshStandardMaterial,
   Vector3,
 } from 'three'
-import { createOvalSectionGeometry, INCHES_TO_METERS } from '../duct-segment/geometry'
+import { createOvalSectionGeometry } from '../duct-segment/geometry'
+import { INCHES_TO_METERS } from '../duct-segment/profile'
 import { COLLAR_LENGTH, mountQuaternion, terminalSystem } from './ports'
 import type { DuctTerminalNode } from './schema'
 

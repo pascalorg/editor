@@ -1,6 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { Client } from '@modelcontextprotocol/sdk/client/index.js'
-import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
+import { Client, InMemoryTransport } from '@modelcontextprotocol/client'
 import { DESIGN_EXAMPLE } from '@pascal-app/core/procedural-items'
 import { DoorNode, WallNode, ZoneNode } from '@pascal-app/core/schema'
 import { SceneBridge } from '../bridge/scene-bridge'

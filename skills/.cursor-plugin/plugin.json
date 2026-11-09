@@ -1,7 +1,7 @@
 {
   "name": "pascal-agent-skills",
   "displayName": "Pascal",
-  "version": "0.1.10",
+  "version": "0.1.11",
   "description": "Create, inspect, validate, and assess furniture layouts with bounded next actions in Pascal through MCP.",
   "author": {
     "name": "Pascal",
@@ -14,6 +14,6 @@
   "keywords": ["pascal", "3d", "architecture", "mcp", "furniture", "spatial"],
   "category": "developer-tools",
   "tags": ["3d", "architecture", "floor-plan", "furniture", "mcp"],
-  "skills": ["./pascal-3d", "./furniture-fit"],
+  "skills": ["./pascal-3d", "./furniture-fit", "./architect"],
   "mcpServers": "./.cursor-plugin/mcp.json"
 }

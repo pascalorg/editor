@@ -143,6 +143,39 @@ describe('validateDesign diagnostics', () => {
     expect(byPath['parts[0].shapes[0].slot']).toContain('lowercase snake_case')
   })
 
+  test('a design written blind gets, in one answer, what each path takes and a valid example', () => {
+    const blind = {
+      version: 1,
+      name: 'Test',
+      description: 'test box',
+      mounting: 'floor',
+      parameters: [{ id: 'w', default: 1, min: 0.5, max: 2 }],
+      slots: [{ id: 'wood', default: '#c9a77c' }],
+      parts: [{ id: 'body', shape: 'cylinder', size: ['w', 0.5, 0.4], position: [0, 0.25, 0] }],
+      constraints: [],
+    }
+    const result = validateDesign(blind)
+    const at = Object.fromEntries(result.diagnostics.map((d) => [d.path, d]))
+    expect(result.diagnostics.every((d) => d.expected && d.received)).toBe(true)
+    expect(at.mounting).toMatchObject({ received: '"floor"' })
+    expect(at.mounting!.expected).toContain('A floor design leaves mounting out')
+    expect(at['parameters[0].unit']!.expected).toContain('"m"')
+    expect(at['slots[0]']!.expected).toContain('color')
+    expect(at['parts[0]']!.expected).toContain('shapes')
+    expect(at['parts[0].count']!.expected).toContain('parameter id')
+    expect(result).toMatchObject({ schemaUri: 'pascal://schema/design', example: DESIGN_EXAMPLE })
+    expect(DesignValidationSchema.safeParse(result).success).toBe(true)
+
+    const shape = { id: 'leg', primitive: 'cylinder', slot: 'wood', height: 0.5 }
+    const cylinder = {
+      ...DESIGN_EXAMPLE,
+      parts: [{ ...DESIGN_EXAMPLE.parts[0]!, shapes: [shape] }],
+    }
+    const keys = validateDesign(cylinder).diagnostics.find((d) => d.path === 'parts[0].shapes[0]')
+    expect(keys!.expected).toContain('size, position')
+    expect(keys!.expected).not.toContain('profile')
+  })
+
   test('a bad slot or light color is reported as a color, not an id', () => {
     const design = louver()
     design.slots[0].color = 'white'

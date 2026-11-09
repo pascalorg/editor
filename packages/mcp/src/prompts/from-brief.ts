@@ -1,4 +1,4 @@
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import type { McpServer } from '@modelcontextprotocol/server'
 import { z } from 'zod'
 import type { SceneOperations } from '../operations'
 import { SCENE_DESIGN_GUIDANCE } from './scene-guidance'
@@ -18,7 +18,7 @@ const PREAMBLE = [
   '  - Floor items live under a Level; wall/ceiling-attached items live under their target Wall or Ceiling. Do not place items directly under the Site node.',
   'Use realistic dimensions in meters. Keep wall thickness small (0.1–0.3 m) and ceiling height 2.4–3.0 m unless the brief dictates otherwise.',
   SCENE_DESIGN_GUIDANCE,
-  'Respond ONLY with tool calls. Do not produce verbose narrative or prose; keep any explanations in short tool-call arguments.',
+  'When the work is done, report what `verify_scene` and `get_project_status` confirmed and the project `editorUrl`.',
 ].join('\n')
 
 /**
@@ -51,10 +51,10 @@ export function registerFromBrief(server: McpServer, _bridge: SceneOperations): 
       title: 'Generate a Pascal scene from a brief',
       description:
         'Generate a Pascal 3D scene from a natural-language brief. Binds an active scene, then produces semantic tool calls to realise the design.',
-      argsSchema: {
+      argsSchema: z.object({
         brief: z.string(),
         constraints: z.string().optional(),
-      },
+      }),
     },
     async ({ brief, constraints }) => ({
       messages: [

@@ -1,11 +1,19 @@
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import type { McpServer } from '@modelcontextprotocol/server'
 import {
+  type AddObjectInput,
   AGENT_OPERATIONS,
   type AgentContext,
   type AgentHostRuntime,
   type AgentOperation,
+  type AssetViewLoader,
   achievedChanges,
   applyAgentOutcome,
+  assetViewNeeds,
+  buildBatchObjects,
+  createAssetViewLoader,
+  createFetchAssetViewIO,
+  furnishingRefusal,
+  readCatalog,
   type SceneChanges,
   startOfSession,
   writeCollections,
@@ -16,12 +24,18 @@ import {
   addCornerWindowTool,
   addFenceTool,
   addLevelTool,
+  addObjectTool,
   addWallTool,
   createRoofTool,
   createRoomTool,
   createStairTool,
+  createUnitTool,
+  type DesignBrief,
   deleteNodeTool,
+  designBriefTool,
   duplicateLevelTool,
+  duplicateNodeOutput,
+  duplicateNodeTool,
   findByTypeTool,
   fitStairTool,
   furnishRoomTool,
@@ -30,12 +44,17 @@ import {
   getSiteTool,
   getWallsTool,
   getZonesTool,
+  isAgentRefusal,
   listLevelsTool,
+  listUnitsTool,
   measureStairTool,
   mergeWindowsTool,
+  moveNodeOutput,
+  moveNodeTool,
   moveRoofsToRoofLevelTool,
   paintTool,
   placeBuildingTool,
+  placeDesignTool,
   placeInRoomTool,
   placeItemsTool,
   ROOM_TOOL_CONTRACTS,
@@ -44,13 +63,24 @@ import {
   searchAssetsTool,
   searchMaterialsTool,
   setCheckpointTool,
+  setGroundLevelTool,
+  setUnitMembersTool,
+  setWallTypeTool,
+  surfaceDescription,
+  validateDesignTool,
+  verifySceneModelResult,
   verifySceneTool,
+  viewAssetsTool,
 } from '@pascal-app/core/agent-tools'
+import { DesignValidationSchema } from '@pascal-app/core/procedural-items'
+import { untracked } from '@pascal-app/core/runtime'
 import {
   type AnyNode,
   type AnyNodeId,
+  type CompiledGeometryScript,
   MaterialSchema,
   SceneMaterial,
+  UnitNode,
 } from '@pascal-app/core/schema'
 import { z } from 'zod'
 import type { Patch } from '../bridge/scene-bridge'
@@ -64,6 +94,7 @@ import { type AssetCatalog, builtInCatalog } from './asset-catalog'
 import { registerCollectionTools } from './collections'
 import { refusalResult } from './errors'
 import { liveSyncOutput, persistencePayload, publishLiveSceneSnapshot } from './live-sync'
+import { inScene } from './scene-scope'
 import { ROOM_TOOL_ANNOTATIONS, type RoomToolName, structureOutput } from './structure-tools'
 
 // Tools the MCP and the hosted chat share whole: one contract, one core operation. The MCP only
@@ -81,9 +112,16 @@ export type OperationTool = {
   annotations: AgentToolAnnotations
   outputSchema?: Record<string, z.ZodType>
   envelope?: (bridge: SceneOperations) => Record<string, unknown>
-  /** Reads the host's item library: only these calls wait for it (the hosted one is a query). */
-  catalog?: true
 }
+
+export type PlanReadingHosts = {
+  /** Reads catalog pictures and surfaces before view_assets and paint. */
+  assetViews?: AssetViewLoader
+  /** Compiles one add_object module for a batch before the synchronous operations run. */
+  buildObject?: (input: Omit<AddObjectInput, 'compiled'>) => Promise<CompiledGeometryScript>
+}
+
+const defaultAssetViews = createAssetViewLoader(createFetchAssetViewIO())
 
 type SharedTool = OperationTool & {
   annotations:
@@ -93,6 +131,10 @@ type SharedTool = OperationTool & {
 }
 
 const jsonObject = z.record(z.string(), z.unknown())
+
+function refuseScripts(): never {
+  refuse('scripts_unavailable', 'This Pascal server cannot run geometry scripts.')
+}
 
 /** What the scene holds after a mutating call (core achievedChanges). */
 const achievedOutput = {
@@ -118,6 +160,23 @@ const levelRoleOutput = {
 }
 
 const SHARED_TOOLS: SharedTool[] = [
+  {
+    contract: validateDesignTool,
+    operation: AGENT_OPERATIONS.validate_design,
+    annotations: READ_ONLY_TOOL_ANNOTATIONS,
+    outputSchema: DesignValidationSchema.shape,
+  },
+  {
+    contract: placeDesignTool,
+    operation: AGENT_OPERATIONS.place_design,
+    annotations: ADDITIVE_TOOL_ANNOTATIONS,
+    outputSchema: {
+      designId: z.string(),
+      parentId: z.string(),
+      surfaceId: z.string().nullable(),
+      ...liveSyncOutput,
+    },
+  },
   {
     contract: measureStairTool,
     operation: AGENT_OPERATIONS.measure_stair,
@@ -183,7 +242,11 @@ const SHARED_TOOLS: SharedTool[] = [
     contract: getWallsTool,
     operation: AGENT_OPERATIONS.get_walls,
     annotations: READ_ONLY_TOOL_ANNOTATIONS,
-    outputSchema: { levelId: z.string(), walls: z.array(jsonObject) },
+    outputSchema: {
+      levelId: z.string(),
+      walls: z.array(jsonObject),
+      wallTypes: z.array(jsonObject),
+    },
   },
   {
     contract: getZonesTool,
@@ -210,6 +273,24 @@ const SHARED_TOOLS: SharedTool[] = [
     },
   },
   {
+    contract: setGroundLevelTool,
+    operation: AGENT_OPERATIONS.set_ground_level,
+    annotations: DESTRUCTIVE_TOOL_ANNOTATIONS,
+    outputSchema: {
+      ok: z.boolean(),
+      levelId: z.string(),
+      buildingId: z.string(),
+      floorElevation: z.number(),
+      gradeElevation: z.number().optional(),
+      movedBuildingBy: z.number().optional(),
+      renumbered: z.boolean().optional(),
+      unchanged: z.boolean().optional(),
+      message: z.string(),
+      ...achievedOutput,
+      ...liveSyncOutput,
+    },
+  },
+  {
     contract: verifySceneTool,
     operation: AGENT_OPERATIONS.verify_scene,
     annotations: READ_ONLY_TOOL_ANNOTATIONS,
@@ -229,7 +310,7 @@ const SHARED_TOOLS: SharedTool[] = [
         z.looseObject({
           type: z.string(),
           message: z.string(),
-          severity: z.literal('info').optional(),
+          severity: z.enum(['info', 'warning']).optional(),
           nodeId: z.string().optional(),
           path: z.string().optional(),
           zoneId: z.string().optional(),
@@ -272,9 +353,19 @@ const SHARED_TOOLS: SharedTool[] = [
     annotations: ADDITIVE_TOOL_ANNOTATIONS,
   },
   {
+    contract: designBriefTool,
+    operation: AGENT_OPERATIONS.design_brief,
+    annotations: ADDITIVE_TOOL_ANNOTATIONS,
+  },
+  {
     contract: addWallTool,
     operation: AGENT_OPERATIONS.add_wall,
     annotations: ADDITIVE_TOOL_ANNOTATIONS,
+  },
+  {
+    contract: setWallTypeTool,
+    operation: AGENT_OPERATIONS.set_wall_type,
+    annotations: DESTRUCTIVE_TOOL_ANNOTATIONS,
   },
   {
     contract: addFenceTool,
@@ -315,13 +406,24 @@ const SHARED_TOOLS: SharedTool[] = [
     contract: placeItemsTool,
     operation: AGENT_OPERATIONS.place_items,
     annotations: ADDITIVE_TOOL_ANNOTATIONS,
-    catalog: true,
   },
   {
     contract: deleteNodeTool,
     operation: AGENT_OPERATIONS.delete_node,
     annotations: DESTRUCTIVE_TOOL_ANNOTATIONS,
     outputSchema: { deletedIds: z.array(z.string()), ...achievedOutput, ...liveSyncOutput },
+  },
+  {
+    contract: moveNodeTool,
+    operation: AGENT_OPERATIONS.move_node,
+    annotations: DESTRUCTIVE_TOOL_ANNOTATIONS,
+    outputSchema: { ...moveNodeOutput, ...liveSyncOutput },
+  },
+  {
+    contract: duplicateNodeTool,
+    operation: AGENT_OPERATIONS.duplicate_node,
+    annotations: ADDITIVE_TOOL_ANNOTATIONS,
+    outputSchema: { ...duplicateNodeOutput, ...liveSyncOutput },
   },
   {
     contract: createRoomTool,
@@ -358,7 +460,6 @@ const SHARED_TOOLS: SharedTool[] = [
     contract: furnishRoomTool,
     operation: AGENT_OPERATIONS.furnish_room,
     annotations: ADDITIVE_TOOL_ANNOTATIONS,
-    catalog: true,
     outputSchema: {
       ok: z.literal(true),
       placed: z.number(),
@@ -391,7 +492,6 @@ const SHARED_TOOLS: SharedTool[] = [
     contract: placeInRoomTool,
     operation: AGENT_OPERATIONS.place_in_room,
     annotations: ADDITIVE_TOOL_ANNOTATIONS,
-    catalog: true,
     outputSchema: {
       ok: z.literal(true),
       itemId: z.string(),
@@ -427,7 +527,11 @@ const SHARED_TOOLS: SharedTool[] = [
     contract: searchAssetsTool,
     operation: AGENT_OPERATIONS.search_assets,
     annotations: READ_ONLY_TOOL_ANNOTATIONS,
-    catalog: true,
+  },
+  {
+    contract: viewAssetsTool,
+    operation: AGENT_OPERATIONS.view_assets,
+    annotations: READ_ONLY_TOOL_ANNOTATIONS,
   },
   {
     contract: searchMaterialsTool,
@@ -443,6 +547,55 @@ const SHARED_TOOLS: SharedTool[] = [
       outputSchema: { ...structureOutput, ...achievedOutput },
     }
   }),
+  {
+    contract: createUnitTool,
+    operation: AGENT_OPERATIONS.create_unit,
+    annotations: ADDITIVE_TOOL_ANNOTATIONS,
+    outputSchema: { unitId: z.string(), ...achievedOutput, ...liveSyncOutput },
+  },
+  {
+    contract: setUnitMembersTool,
+    operation: AGENT_OPERATIONS.set_unit_members,
+    annotations: DESTRUCTIVE_TOOL_ANNOTATIONS,
+    outputSchema: {
+      unitId: z.string(),
+      memberCount: z.number(),
+      ...achievedOutput,
+      ...liveSyncOutput,
+    },
+  },
+  {
+    contract: listUnitsTool,
+    operation: AGENT_OPERATIONS.list_units,
+    annotations: READ_ONLY_TOOL_ANNOTATIONS,
+    outputSchema: {
+      units: z.array(
+        z.object({
+          unitId: z.string(),
+          name: z.string(),
+          kind: UnitNode.shape.kind,
+          color: z.string(),
+          members: z.array(z.string()),
+          report: z.object({
+            memberCount: z.number(),
+            levelSpan: z
+              .object({ minOrdinal: z.number(), maxOrdinal: z.number(), count: z.number() })
+              .nullable(),
+            grossAreaM2: z.number(),
+            members: z.array(
+              z.object({
+                zoneId: z.string(),
+                name: z.string(),
+                levelId: z.string().nullable(),
+                levelOrdinal: z.number().nullable(),
+                areaM2: z.number(),
+              }),
+            ),
+          }),
+        }),
+      ),
+    },
+  },
   {
     contract: runBatchTool,
     operation: AGENT_OPERATIONS.run_batch,
@@ -487,13 +640,22 @@ export function agentRuntime(bridge: SceneOperations): AgentHostRuntime {
       const next = toPatches(changes)
       if (next.length) bridge.applyPatch(next)
       if (changes.collections && Object.keys(changes.collections).length)
-        bridge.setCollections(writeCollections(bridge.getCollections(), changes.collections))
+        // Copying the others is not a read: the operation recorded what it read of them.
+        bridge.setCollections(
+          writeCollections(untracked(bridge.getCollections()), changes.collections),
+        )
     },
     reconcile: () => {
       bridge.deriveStructure()
     },
     keep: (keep) => bridge.agentSession?.keep(keep),
   }
+}
+
+export function briefInForce(bridge: SceneOperations): DesignBrief | null | undefined {
+  if (bridge.designBriefRequired === false) return undefined
+  const session = bridge.agentSession
+  return session ? (session.read().designBrief ?? null) : undefined
 }
 
 function writesScene(changes: SceneChanges | undefined): boolean {
@@ -504,12 +666,50 @@ function writesScene(changes: SceneChanges | undefined): boolean {
   )
 }
 
+type FoundAsset = { id: string; name: string; dimensions: unknown; attachTo: string | null }
+
+/**
+ * search_assets as the model reads it: each item's id, name and placement facts; the category
+ * and the floor's null attachTo stay in the structured result.
+ */
+function searchAssetsModelResult(output: Record<string, unknown>) {
+  const groups = output.groups as { results: FoundAsset[] }[]
+  return {
+    ...output,
+    groups: groups.map((group) => ({
+      ...group,
+      results: group.results.map(({ id, name, dimensions, attachTo }) => ({
+        id,
+        name,
+        dimensions,
+        ...(attachTo && { attachTo }),
+      })),
+    })),
+  }
+}
+
+/**
+ * What the model reads of a tool's result: for verify_scene, the findings grouped and trimmed
+ * (`verifySceneModelResult`); for search_assets, the items without what placing them does not
+ * need; every other result as it is. The structured result keeps the whole.
+ */
+function modelResult(
+  name: string,
+  output: Record<string, unknown>,
+  input: Record<string, unknown>,
+) {
+  if (name === verifySceneTool.name) return verifySceneModelResult(output, input)
+  if (name === searchAssetsTool.name) return searchAssetsModelResult(output)
+  return output
+}
+
 export function registerSharedTools(
   server: McpServer,
   bridge: SceneOperations,
   catalog: AssetCatalog = builtInCatalog,
+  hosts: PlanReadingHosts = {},
 ): void {
-  for (const tool of SHARED_TOOLS) registerOperationTool(server, bridge, tool, catalog)
+  for (const tool of SHARED_TOOLS) registerOperationTool(server, bridge, tool, catalog, hosts)
   registerCollectionTools(server, bridge)
 }
 
@@ -522,13 +722,14 @@ export function registerOperationTool(
   bridge: SceneOperations,
   tool: OperationTool,
   catalog: AssetCatalog = builtInCatalog,
+  hosts: PlanReadingHosts = {},
 ): void {
   server.registerTool(
     tool.contract.name,
     {
       title: tool.contract.title,
-      description: tool.contract.description,
-      inputSchema: tool.contract.input,
+      description: surfaceDescription(tool.contract, 'mcp'),
+      inputSchema: z.object(tool.contract.input),
       // Loose: a client that listed the tools rejects any field the schema leaves out, and the
       // operations in core grow fields (verify_scene's guesses) that this list would miss.
       ...(tool.outputSchema ? { outputSchema: z.looseObject(tool.outputSchema) } : {}),
@@ -536,13 +737,34 @@ export function registerOperationTool(
     },
     async (input: Record<string, unknown>) => {
       let outcome: ReturnType<AgentOperation>
+      const nodes = bridge.getNodes() as Record<string, AnyNode>
       // A copy of the map: a host may write its own in place (the hosted bridge does), and a
-      // "before" that grows with the call reads every creation as unchanged.
-      const before = { ...(bridge.getNodes() as Record<string, AnyNode>) }
+      // "before" that grows with the call reads every creation as unchanged. Copying is not a
+      // read: on a detached scene, the operation records what it selects.
+      const before = { ...untracked(nodes) }
       // The agent's session begins with its first call, before anything is written.
       const first = bridge.agentSession && startOfSession(bridge.agentSession.read(), before)
       if (first) bridge.agentSession?.keep(first)
-      const batchPlacesInRoom =
+      // Gate before module compilation. Under an open source the gate reads the catalog's tags to
+      // let technical equipment and plants through; a batch's calls are checked one by one. Any
+      // other refused call reads nothing of the library.
+      const designBrief = briefInForce(bridge)
+      const gateRead =
+        designBrief?.source === 'open'
+          ? await readCatalog(before, tool.contract.name, input, catalog)
+          : undefined
+      if (designBrief !== undefined) {
+        const refusal = furnishingRefusal(tool.contract.name, input, designBrief, {
+          session: bridge.agentSession?.read(),
+          catalog: gateRead?.catalog,
+        })
+        if (refusal) {
+          // A refusal can ask the session to remember what it refused (a catalog piece under an open source).
+          if (refusal.keep) bridge.agentSession?.keep(refusal.keep)
+          return refusalResult(refusal)
+        }
+      }
+      const batchesObjects =
         tool.contract.name === runBatchTool.name &&
         Array.isArray(input.calls) &&
         input.calls.some(
@@ -550,7 +772,7 @@ export function registerOperationTool(
             typeof call === 'object' &&
             call !== null &&
             'tool' in call &&
-            call.tool === placeInRoomTool.name,
+            call.tool === addObjectTool.name,
         )
       const context: AgentContext = {
         activeLevelId: bridge.activeLevelId?.() ?? null,
@@ -559,11 +781,27 @@ export function registerOperationTool(
           : {}),
         ...(bridge.nodeSchema && { nodeSchema: (kind: string) => bridge.nodeSchema!(kind) }),
         session: bridge.agentSession?.read(),
-        ...((tool.catalog || batchPlacesInRoom) && { catalog: await catalog() }),
+        ...(designBrief !== undefined && { designBrief }),
+        // What the call reads of the library: all of a list, or what it names of a source.
+        ...(gateRead ?? (await readCatalog(before, tool.contract.name, input, catalog))),
+        ...(batchesObjects && {
+          batchObjects: await buildBatchObjects(
+            input.calls as { tool?: unknown; input?: unknown }[],
+            hosts.buildObject ?? refuseScripts,
+            designBrief,
+          ),
+        }),
       }
+      const needs = assetViewNeeds(before, tool.contract.name, input, context)
+      if (needs.subjects.length)
+        context.assetViews = await (hosts.assetViews ?? defaultAssetViews)(needs.subjects, {
+          pictures: needs.pictures,
+        })
       try {
-        outcome = tool.operation(before, input as never, context)
+        outcome = inScene(bridge, () => tool.operation(nodes, input as never, context))
       } catch (error) {
+        // A refusal can ask the session to remember what it refused (a catalog piece under an open source).
+        if (isAgentRefusal(error) && error.keep) bridge.agentSession?.keep(error.keep)
         return refusalResult(error)
       }
       let result = outcome.result
@@ -587,8 +825,36 @@ export function registerOperationTool(
         ...(tool.envelope?.(bridge) ?? {}),
         ...persistence,
       }
+      const { previews, ...shown } = payload as typeof payload & {
+        previews?: { label: string; image: string }[]
+      }
+      const pictures = (Array.isArray(previews) ? previews : []).flatMap(({ label, image }) => {
+        const [, mimeType, data] = /^data:(image\/[\w.+-]+);base64,(.+)$/.exec(image) ?? []
+        return mimeType && data
+          ? [
+              { type: 'text' as const, text: label },
+              { type: 'image' as const, data, mimeType },
+            ]
+          : []
+      })
+      if (pictures.length)
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: JSON.stringify(modelResult(tool.contract.name, shown, input)),
+            },
+            ...pictures,
+          ],
+          structuredContent: shown,
+        }
       return {
-        content: [{ type: 'text' as const, text: JSON.stringify(payload) }],
+        content: [
+          {
+            type: 'text' as const,
+            text: JSON.stringify(modelResult(tool.contract.name, payload, input)),
+          },
+        ],
         structuredContent: payload,
       }
     },

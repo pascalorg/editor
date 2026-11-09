@@ -1,11 +1,42 @@
-import { COLUMN_PRESETS, type ColumnNode, type ColumnPresetId } from '@pascal-app/core'
+import {
+  COLUMN_PRESETS,
+  type ColumnNode,
+  type ColumnPresetId,
+  type MessageDescriptor,
+  usePascalI18n,
+} from '@pascal-app/core'
 import { ChevronDown } from 'lucide-react'
 import { useEffect, useRef } from 'react'
 import { columnPresetUpdates } from './presets'
 
-const entries = Object.entries(COLUMN_PRESETS).map(([id, preset]) => ({
+/** Preset names in the UI language; core's `COLUMN_PRESETS` labels stay English. */
+const COLUMN_PRESET_LABELS: Record<ColumnPresetId, MessageDescriptor> = {
+  basicPillar: /* i18n */ { id: 'node.column.preset.basicPillar', message: 'Straight Round' },
+  squarePillar: /* i18n */ { id: 'node.column.preset.squarePillar', message: 'Square Block' },
+  taperedPillar: /* i18n */ { id: 'node.column.preset.taperedPillar', message: 'Tapered Round' },
+  bulgedPillar: /* i18n */ { id: 'node.column.preset.bulgedPillar', message: 'Soft Bulged' },
+  hourglassPillar: /* i18n */ { id: 'node.column.preset.hourglassPillar', message: 'Hourglass' },
+  aFrameSupport: /* i18n */ { id: 'node.column.preset.aFrameSupport', message: 'A-Frame Support' },
+  yFrameSupport: /* i18n */ { id: 'node.column.preset.yFrameSupport', message: 'Y Support' },
+  vFrameSupport: /* i18n */ { id: 'node.column.preset.vFrameSupport', message: 'V Support' },
+  xBraceSupport: /* i18n */ { id: 'node.column.preset.xBraceSupport', message: 'X Brace' },
+  kBraceSupport: /* i18n */ { id: 'node.column.preset.kBraceSupport', message: 'K Brace' },
+  singleStrutSupport: /* i18n */ {
+    id: 'node.column.preset.singleStrutSupport',
+    message: 'Single Strut',
+  },
+  tripodSupport: /* i18n */ { id: 'node.column.preset.tripodSupport', message: 'Tripod Support' },
+  trestleSupport: /* i18n */ { id: 'node.column.preset.trestleSupport', message: 'Trestle Frame' },
+  portalFrameSupport: /* i18n */ {
+    id: 'node.column.preset.portalFrameSupport',
+    message: 'Portal Frame',
+  },
+  boxFrameSupport: /* i18n */ { id: 'node.column.preset.boxFrameSupport', message: 'Box Frame' },
+}
+
+const entries = Object.keys(COLUMN_PRESETS).map((id) => ({
   id: id as ColumnPresetId,
-  label: preset.label,
+  label: COLUMN_PRESET_LABELS[id as ColumnPresetId],
 }))
 
 export function ColumnPresetGallery({
@@ -19,6 +50,7 @@ export function ColumnPresetGallery({
   onCancel: () => void
   onApply: (patch: Partial<ColumnNode>) => void
 }) {
+  const i18n = usePascalI18n()
   const detailsRef = useRef<HTMLDetailsElement>(null)
   const scrolling = useRef(false)
   const cancelPointerPreview = () => {
@@ -66,20 +98,33 @@ export function ColumnPresetGallery({
           className="size-8 shrink-0 object-contain"
         />
         <span className="flex min-w-0 flex-1 flex-col">
-          <span className="text-xs text-muted-foreground">Shape presets</span>
-          <span className="truncate">{selected?.label ?? 'Choose a shape'}</span>
+          <span className="text-xs text-muted-foreground">
+            {i18n._({ id: 'node.column.presetGallery.shapePresets', message: 'Shape presets' })}
+          </span>
+          <span className="truncate">
+            {(selected && i18n._(selected.label)) ??
+              i18n._({ id: 'node.column.presetGallery.chooseAShape', message: 'Choose a shape' })}
+          </span>
         </span>
         <ChevronDown className="size-4 shrink-0 transition-transform group-open/presets:rotate-180" />
       </summary>
       <p className="py-2 text-xs text-muted-foreground">
-        Hover or focus to preview; click to apply. Materials are kept. Escape cancels the preview.
+        {i18n._({
+          id: 'node.column.presetGallery.hoverOrFocusToPreviewClick',
+          message:
+            'Hover or focus to preview; click to apply. Materials are kept. Escape cancels the preview.',
+        })}
       </p>
       <div className="grid max-h-80 grid-cols-3 gap-2 overflow-y-auto p-1">
         {entries.map(({ id, label }) => (
           <button
             type="button"
             key={id}
-            aria-label={`Apply ${label} shape`}
+            aria-label={i18n._({
+              id: 'node.column.presetGallery.applyLabelShape',
+              message: 'Apply {label} shape',
+              values: { label: i18n._(label) },
+            })}
             aria-pressed={selected?.id === id}
             className="rounded-lg border border-border/50 p-1 text-xs hover:bg-orange-400/10 focus-visible:outline focus-visible:outline-orange-400"
             onPointerEnter={(event) => {
@@ -123,7 +168,7 @@ export function ColumnPresetGallery({
               draggable={false}
               className="h-24 w-full object-contain"
             />
-            <span>{label}</span>
+            <span>{i18n._(label)}</span>
           </button>
         ))}
       </div>

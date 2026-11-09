@@ -1031,3 +1031,49 @@ describe('planJoinOpenWallEnd', () => {
     ).toEqual([])
   })
 })
+
+describe('a wall started in a corner block', () => {
+  // Two 0.18 walls turn a corner at the origin.
+  const across = WallNode.parse({
+    id: 'wall_across',
+    parentId: LEVEL_ID,
+    start: [-3, 0],
+    end: [0, 0],
+    thickness: 0.18,
+  })
+  const down = WallNode.parse({
+    id: 'wall_down',
+    parentId: LEVEL_ID,
+    start: [0, 0],
+    end: [0, 3],
+    thickness: 0.18,
+  })
+
+  test('joins the corner instead of splitting a stub off the wall', () => {
+    // 8 cm short of the corner, inside the other wall's body.
+    const result = planWallInsertion(nodeMap([across, down]), {
+      levelId: LEVEL_ID,
+      start: [-0.08, 0],
+      end: [3, 0],
+      joinRadius: 0.05,
+    })
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.plan.resolvedStart).toEqual([0, 0])
+    expect(result.plan.changes.delete).toEqual([])
+    expect(result.plan.insertedWalls).toHaveLength(1)
+  })
+
+  test('past the corner block it still T-joins the wall', () => {
+    const result = planWallInsertion(nodeMap([across, down]), {
+      levelId: LEVEL_ID,
+      start: [-0.5, 0],
+      end: [-0.5, -2],
+      joinRadius: 0.05,
+    })
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.plan.resolvedStart).toEqual([-0.5, 0])
+    expect(result.plan.changes.delete).toEqual(['wall_across'])
+  })
+})

@@ -2,8 +2,16 @@ import { describe, expect, test } from 'bun:test'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { Client } from '@modelcontextprotocol/sdk/client/index.js'
-import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
+import { Client, InMemoryTransport } from '@modelcontextprotocol/client'
+import {
+  AGENT_TOOL_CONTRACTS,
+  type AgentToolContract,
+  designBriefTool,
+  HOSTED_SERVICE_TOOL_CONTRACTS,
+  PROJECT_FILE_TOOL_CONTRACTS,
+  surfaceDescription,
+  viewSceneTool,
+} from '@pascal-app/core/agent-tools'
 import { SceneBridge } from '../bridge/scene-bridge'
 import { createPascalMcpServer } from '../server'
 import { SqliteSceneStore } from '../storage/sqlite-scene-store'
@@ -39,6 +47,7 @@ const TOOL_POLICIES = [
       'search_materials',
       'validate_design',
       'verify_scene',
+      'view_assets',
       'view_scene',
     ],
   },
@@ -69,11 +78,13 @@ const TOOL_POLICIES = [
       'create_roof',
       'create_room',
       'create_stair',
+      'design_brief',
       'set_checkpoint',
       'create_story_shell',
       'create_unit',
       'cut_floor_opening',
       'duplicate_level',
+      'duplicate_node',
       'furnish_room',
       'place_in_room',
       'generate_variants',
@@ -95,7 +106,9 @@ const TOOL_POLICIES = [
       'apply_patch',
       'clear_scene',
       'add_object',
+      'author_scene',
       'add_column',
+      'set_wall_type',
       'edit_collection',
       'create_from_template',
       'create_house_from_brief',
@@ -106,6 +119,7 @@ const TOOL_POLICIES = [
       'delete_zone',
       'divide_zone',
       'duplicate_zone',
+      'move_node',
       'move_zone',
       'place_building',
       'rotate_zone',
@@ -118,20 +132,13 @@ const TOOL_POLICIES = [
       'get_project_status',
       'load_scene',
       'redo',
+      'set_ground_level',
+      'set_unit_members',
       'rename_scene',
       'run_batch',
       'save_scene',
       'undo',
     ],
-  },
-  {
-    annotations: {
-      readOnlyHint: false,
-      destructiveHint: true,
-      idempotentHint: true,
-      openWorldHint: false,
-    },
-    tools: ['set_unit_members'],
   },
   {
     annotations: {
@@ -232,6 +239,66 @@ describe('MCP tool input schemas', () => {
     } finally {
       await client.close()
       await server.close()
+      rmSync(directory, { recursive: true, force: true })
+    }
+  })
+})
+
+// A shared tool's description is true on every surface; what only the MCP does (who renders a
+// view, how long a brief lasts) is the contract's MCP note, which only the MCP lists.
+describe('MCP tool descriptions', () => {
+  test('list each shared tool with its contract text and the MCP note, never the chat note', async () => {
+    const bridge = new SceneBridge()
+    bridge.setScene({}, [])
+    bridge.loadDefault()
+    const directory = mkdtempSync(join(tmpdir(), 'pascal-mcp-descriptions-'))
+    const store = new SqliteSceneStore({ databasePath: join(directory, 'pascal.db') })
+    // The hosted service and file tools register only with their executors; listing calls neither.
+    const unused = async () => {
+      throw new Error('not used while listing tools')
+    }
+    const server = createPascalMcpServer({ bridge, store, services: unused, files: unused })
+    const [serverTransport, clientTransport] = InMemoryTransport.createLinkedPair()
+    const client = new Client({ name: 'description-test-client', version: '0.0.0' })
+    await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
+    try {
+      const listed = new Map(
+        (await client.listTools()).tools.map((tool) => [tool.name, tool.description ?? '']),
+      )
+      const shared: readonly AgentToolContract[] = [
+        ...AGENT_TOOL_CONTRACTS,
+        ...HOSTED_SERVICE_TOOL_CONTRACTS,
+        ...PROJECT_FILE_TOOL_CONTRACTS,
+      ]
+      for (const contract of shared) {
+        const description = listed.get(contract.name) ?? ''
+        const { mcp: note, ...otherNotes } = contract.surfaceNotes ?? {}
+        // From the contract's own fields, not through the helper the server registers with.
+        expect({
+          tool: contract.name,
+          listed: listed.has(contract.name),
+          startsWithShared: description.startsWith(contract.description),
+          endsWithNote: note ? description.endsWith(note) : description === contract.description,
+          otherNotes: Object.values(otherNotes).filter((other) => description.includes(other)),
+        }).toEqual({
+          tool: contract.name,
+          listed: true,
+          startsWithShared: true,
+          endsWithNote: true,
+          otherNotes: [],
+        })
+        expect({ tool: contract.name, description }).toEqual({
+          tool: contract.name,
+          description: surfaceDescription(contract, 'mcp'),
+        })
+      }
+      expect(listed.get(viewSceneTool.name)).toContain('editor_tab_required')
+      expect(listed.get(designBriefTool.name)).toContain('A brief lasts for the session.')
+      expect(listed.get(designBriefTool.name)).not.toContain(designBriefTool.surfaceNotes.chat)
+    } finally {
+      await client.close()
+      await server.close()
+      store.close()
       rmSync(directory, { recursive: true, force: true })
     }
   })

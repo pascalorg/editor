@@ -1,6 +1,7 @@
 // Must precede the lingo import: lingo clones its kind table with
 // structuredClone while its module body evaluates. See the file's own comment.
 import './structured-clone-fallback'
+import { normalizeDecimalInput } from '@pascal-app/core'
 import { type Kind, parseQuantity, quantity } from '@pascal-app/lingo'
 
 /**
@@ -56,6 +57,8 @@ export interface ParseMeasurementOptions {
   bareUnit?: string
   /** Disambiguates gal/ton/cup families; harmless for length/angle. */
   system?: 'metric' | 'us' | 'imperial'
+  /** Locale whose decimal separator is accepted in bare values and quantities. */
+  locale?: string
 }
 
 /**
@@ -68,7 +71,7 @@ export function parseMeasurement(
   spec: LingoUnitSpec,
   options: ParseMeasurementOptions = {},
 ): number | null {
-  const result = parseQuantity(raw, {
+  const result = parseQuantity(normalizeDecimalInput(raw, options.locale), {
     kind: spec.kind,
     unit: options.bareUnit ?? spec.unitId,
     system: options.system,
@@ -105,9 +108,10 @@ export function measurementHint(
   options: MeasurementHintOptions = {},
 ): string | null {
   const trimmed = raw.trim()
-  if (!trimmed || PLAIN_NUMBER.test(trimmed)) return null
+  const normalized = normalizeDecimalInput(trimmed, options.locale)
+  if (!normalized || PLAIN_NUMBER.test(normalized)) return null
 
-  const parsed = parseMeasurement(trimmed, spec, options)
+  const parsed = parseMeasurement(normalized, spec, options)
   if (parsed === null) return null
   const stored = options.clamp ? options.clamp(parsed) : parsed
 

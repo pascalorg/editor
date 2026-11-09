@@ -1,8 +1,21 @@
-import { ElevatorNode, normalizeElevatorDimensions } from '@pascal-app/core'
+import { ElevatorNode, type MessageDescriptor, normalizeElevatorDimensions } from '@pascal-app/core'
 
-export const ELEVATOR_PRESETS = {
+export const ELEVATOR_PRESETS: Record<
+  'passenger' | 'service' | 'glass',
+  Pick<
+    ElevatorNode,
+    | 'width'
+    | 'depth'
+    | 'cabHeight'
+    | 'doorWidth'
+    | 'doorHeight'
+    | 'shaftStyle'
+    | 'doorStyle'
+    | 'doorPanelStyle'
+  > & { label: MessageDescriptor }
+> = {
   passenger: {
-    label: 'Passenger',
+    label: /* i18n */ { id: 'node.elevator.preset.passenger', message: 'Passenger' },
     width: 1.84,
     depth: 1.84,
     cabHeight: 2.35,
@@ -13,7 +26,7 @@ export const ELEVATOR_PRESETS = {
     doorPanelStyle: 'solid-panel',
   },
   service: {
-    label: 'Service',
+    label: /* i18n */ { id: 'node.elevator.preset.service', message: 'Service' },
     width: 2.4,
     depth: 3,
     cabHeight: 2.7,
@@ -24,7 +37,7 @@ export const ELEVATOR_PRESETS = {
     doorPanelStyle: 'segmented-panel',
   },
   glass: {
-    label: 'Glass',
+    label: /* i18n */ { id: 'node.elevator.preset.glass', message: 'Glass' },
     width: 1.84,
     depth: 1.84,
     cabHeight: 2.35,
@@ -34,7 +47,7 @@ export const ELEVATOR_PRESETS = {
     doorStyle: 'center-opening',
     doorPanelStyle: 'glass-frame',
   },
-} as const
+}
 
 export function elevatorPresetPatch(
   node: ElevatorNode,

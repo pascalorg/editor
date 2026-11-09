@@ -1,8 +1,10 @@
 'use client'
 
+import { usePascalI18n } from '@pascal-app/core'
 import type React from 'react'
 import { cn } from '../../lib/utils'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/primitives/tooltip'
+import { SKY_COMPASS_BOTTOM, useSkyPanel } from './sky-control'
 
 export type FloorplanCompassButtonProps = {
   northRotationDeg: number
@@ -18,16 +20,23 @@ export function FloorplanCompassButton({
   needleRef,
   style,
 }: FloorplanCompassButtonProps) {
+  const i18n = usePascalI18n()
+  // Beside the sky chip (not when moved to the plan's right corner), centre on the docks' row.
+  const besideSky = useSkyPanel((s) => s.hosts > 0) && style?.right === undefined
+  const label = i18n._({
+    id: 'viewer.floorplan.alignNorth',
+    message: 'Align view to north',
+  })
   return (
     <Tooltip>
       <TooltipTrigger asChild>
         <button
-          aria-label="Align view to north"
+          aria-label={label}
           className={cn(
             'group pointer-events-auto absolute bottom-3 z-30 flex h-8 w-8 items-center justify-center rounded-full border border-black/10 bg-white/85 shadow-sm backdrop-blur-md transition hover:bg-white hover:shadow-md dark:border-white/10 dark:bg-neutral-900/85 dark:hover:bg-neutral-900',
             !style && 'left-3',
           )}
-          style={style}
+          style={besideSky ? { bottom: SKY_COMPASS_BOTTOM, ...style } : style}
           onClick={(event) => {
             event.preventDefault()
             event.stopPropagation()
@@ -52,7 +61,7 @@ export function FloorplanCompassButton({
           </span>
         </button>
       </TooltipTrigger>
-      <TooltipContent side="right">Align view to north</TooltipContent>
+      <TooltipContent side="right">{label}</TooltipContent>
     </Tooltip>
   )
 }

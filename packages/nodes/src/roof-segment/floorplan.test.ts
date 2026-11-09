@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import {
   type FloorplanGeometry,
   type GeometryContext,
+  getRoofSegmentVisibleTopBounds,
   RoofNode,
   type RoofSegmentNode,
 } from '@pascal-app/core'
@@ -213,5 +214,39 @@ describe('getRoofSegmentPlanLinework', () => {
         [-1.25, 1.5],
       ],
     ])
+  })
+})
+
+describe("a selected roof plane's handles", () => {
+  const roof = RoofNode.parse({ id: 'roof_test', children: ['rseg_test'] })
+  const node = dutchSegment({ parentId: roof.id, roofType: 'gable' })
+  const geometry = buildRoofSegmentFloorplan(node, {
+    parent: roof,
+    viewState: { selected: true },
+  } as GeometryContext) as Extract<FloorplanGeometry, { kind: 'group' }>
+  const eave = getRoofSegmentVisibleTopBounds(node)
+
+  test('the rotate handle sits past the eave corner, sized to a roof', () => {
+    const rotate = geometry.children.find((child) => child.kind === 'rotate-arrow')
+    expect(rotate).toMatchObject({ scale: 2 })
+    const [x, z] = (rotate as Extract<FloorplanGeometry, { kind: 'rotate-arrow' }>).point
+    expect(x).toBeGreaterThan(eave.maxX)
+    expect(z).toBeGreaterThan(eave.maxZ)
+  })
+
+  test('the resize arrows sit past the eaves and rakes', () => {
+    const arrows = geometry.children.filter(
+      (child): child is Extract<FloorplanGeometry, { kind: 'move-arrow' }> =>
+        child.kind === 'move-arrow',
+    )
+    expect(arrows).toHaveLength(4)
+    for (const { point } of arrows) {
+      expect(
+        point[0] > eave.maxX ||
+          point[0] < eave.minX ||
+          point[1] > eave.maxZ ||
+          point[1] < eave.minZ,
+      ).toBe(true)
+    }
   })
 })

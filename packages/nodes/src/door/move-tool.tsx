@@ -3,13 +3,19 @@ import {
   beginSceneHistoryDraft,
   collectionIdsOf,
   DoorNode,
+  doorPositionForFacing,
   emitter,
   type GridEvent,
+  getDoorOpeningSize,
   getOpeningWallPlacement,
+  getWallThickness,
   holdHiddenWallPointerEvents,
   isCurvedWall,
+  openingHostFacing,
   type RoofEvent,
   type RoofNode,
+  resolveHostedOpeningFrameDepth,
+  resolveOpeningFrameDepth,
   runSceneHistoryDraftWrite,
   sceneRegistry,
   spatialGridManager,
@@ -39,6 +45,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { BoxGeometry, EdgesGeometry, type Group, Vector3 } from 'three'
 import { LineBasicNodeMaterial } from 'three/webgpu'
 import { commitOpeningMove } from '../shared/commit-opening-move'
+import { movedOpeningCasingFaces } from '../shared/opening-casing-move'
 import {
   clearOpeningGuides3D,
   publishOpeningGuidesForWallEvent,
@@ -87,6 +94,7 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
     // with the LIVE side — otherwise the preview shows the pre-flip orientation
     // while commit places the flipped one.
     side: DoorNode['side']
+    transomHeight?: number
   } | null>(null)
 
   // Ghost preview node: the moving door with a zeroed transform + the live
@@ -100,10 +108,11 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
     () => ({
       ...movingDoorNode,
       side: ghostSide,
+      transomHeight: ghostPose?.transomHeight ?? movingDoorNode.transomHeight,
       position: [0, 0, 0] as [number, number, number],
       rotation: [0, 0, 0] as [number, number, number],
     }),
-    [movingDoorNode, ghostSide],
+    [movingDoorNode, ghostSide, ghostPose?.transomHeight],
   )
 
   const exitMoveMode = useCallback(() => {
@@ -160,6 +169,9 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
 
     // Same-wall moves keep the wall-local plane offset; another host resets it.
     const planeOffsetOn = (wallId: string) => openingPlaneOffsetOnWall(movingDoorNode, wallId)
+    // Another host may name its faces the other way round: the casing keeps to its side of it.
+    const casingOn = (hostId: string, rotation: DoorNode['rotation']) =>
+      movedOpeningCasingFaces(movingDoorNode, hostId, rotation, useScene.getState().nodes)
 
     let currentHostId: string | null = movingDoorNode.parentId
     let dragAnchor: { wallId: string; rawX: number; startX: number } | null = null
@@ -230,6 +242,7 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
       clampedY: number
       valid: boolean
       event: WallEvent
+      transomHeight?: number
     } | null = null
     let lastRoofEvent: RoofEvent | null = null
 
@@ -265,6 +278,7 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
       )
 
     const hideCursor = () => {
+      useLiveNodeOverrides.getState().clearFields(movingDoorNode.id, ['transomHeight'])
       if (cursorGroupRef.current) cursorGroupRef.current.visible = false
       useAlignmentGuides.getState().clear()
       clearOpeningGuides3D()
@@ -341,31 +355,54 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
           startX: preserveGrab ? original.position[0] : rawLocalX,
         }
       }
-      const targetLocalX = dragAnchor.startX + (rawLocalX - dragAnchor.rawX)
+      const targetLocalX = doorPositionForFacing(
+        {
+          ...movingDoorNode,
+          position: [
+            dragAnchor.startX + (rawLocalX - dragAnchor.rawX),
+            movingDoorNode.position[1],
+            movingDoorNode.position[2],
+          ],
+        },
+        [0, itemRotation, 0],
+      )[0]
       const localX = resolveWallSlideAlignment({
         wallNode: event.node,
-        rawLocalX: targetLocalX,
-        width: movingDoorNode.width,
+        rawLocalX:
+          targetLocalX -
+          getDoorOpeningSize(movingDoorNode).leafOffsetX *
+            openingHostFacing({ rotation: [0, itemRotation, 0] }),
+        width: getDoorOpeningSize(movingDoorNode).width,
         candidates: alignmentCandidates,
         // Along-wall alignment guides display in every snapping mode; the
         // magnetic pull onto them lands only in "lines" mode. The grid
         // component lives in `snapToHalf` (itself mode-aware).
         applySnap: isMagneticSnapActive(),
       })
-      const { clampedX, clampedY } = clampToWall(
+      const { clampedX, clampedY, transomHeight } = clampToWall(
         event.node,
-        localX,
+        localX +
+          getDoorOpeningSize(movingDoorNode).leafOffsetX *
+            openingHostFacing({ rotation: [0, itemRotation, 0] }),
         movingDoorNode.width,
         movingDoorNode.height,
+        { ...movingDoorNode, rotation: [0, itemRotation, 0] },
+        useScene.getState().nodes,
       )
 
+      const fittedSize = getDoorOpeningSize({
+        ...movingDoorNode,
+        transomHeight: transomHeight ?? movingDoorNode.transomHeight,
+      })
       const valid = !hasWallChildOverlap(
         event.node.id,
         useScene.getState().nodes,
-        clampedX,
-        clampedY,
-        movingDoorNode.width,
-        movingDoorNode.height,
+        clampedX -
+          getDoorOpeningSize(movingDoorNode).leafOffsetX *
+            openingHostFacing({ rotation: [0, itemRotation, 0] }),
+        clampedY + (fittedSize.height - movingDoorNode.height) / 2,
+        fittedSize.width,
+        fittedSize.height,
         movingDoorNode.id,
       )
 
@@ -377,12 +414,19 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
         clampedX,
         clampedY,
         valid,
+        transomHeight,
         event,
       }
     }
 
     const applyPreview = (target: NonNullable<typeof lastTarget>) => {
-      useLiveNodeOverrides.getState().clear(movingDoorNode.id)
+      useLiveNodeOverrides
+        .getState()
+        .clearFields(movingDoorNode.id, ['position', 'rotation', 'roofFace'])
+      if (target.transomHeight !== undefined)
+        useLiveNodeOverrides
+          .getState()
+          .set(movingDoorNode.id, { transomHeight: target.transomHeight })
       // One grid-snap tick per real position step, keyed on the SNAPPED
       // along-wall position so it ticks only when the door actually moves to a
       // new cell (not on every micro mouse-move). Per-frame guard collapses any
@@ -464,18 +508,19 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
         rotationY: ghostYaw,
         tint: placement.tint,
         side: target.side,
+        transomHeight: target.transomHeight,
       })
       // Forward-facing triangle (editor-side overlay), in the same building-local
       // frame the ghost renders in. The door's front is its local +Z. Drop it to
-      // the floor under the wall (the ghost Y is the opening centre, ~1m up).
+      // the door's sill (the ghost Y is the opening centre, ~1m up).
       useFacingPose.getState().set({
         position: [
           ghostWorldPos[0],
-          getLevelYOffset() + getSlabElevation(target.event),
+          ghostWorldPos[1] - movingDoorNode.height / 2,
           ghostWorldPos[2],
         ],
         rotationY: ghostYaw,
-        depth: movingDoorNode.frameDepth ?? 0.07,
+        depth: resolveOpeningFrameDepth(movingDoorNode, getWallThickness(target.wallNode)),
       })
       // Publish the wall surface so the snap grid tilts into the wall plane at
       // the opening (its outward normal is the door's facing, +Z by `ghostYaw`).
@@ -484,13 +529,20 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
         new Vector3(Math.sin(ghostYaw), 0, Math.cos(ghostYaw)),
       )
 
+      const fittedSize = getDoorOpeningSize({
+        ...movingDoorNode,
+        transomHeight: target.transomHeight ?? movingDoorNode.transomHeight,
+      })
       publishOpeningGuidesForWallEvent({
         wall: target.wallNode,
         movingId: movingDoorNode.id,
-        centerS: target.clampedX,
-        centerY: target.clampedY,
-        width: movingDoorNode.width,
-        height: movingDoorNode.height,
+        centerS:
+          target.clampedX -
+          getDoorOpeningSize(movingDoorNode).leafOffsetX *
+            openingHostFacing({ rotation: [0, target.itemRotation, 0] }),
+        centerY: target.clampedY + (fittedSize.height - movingDoorNode.height) / 2,
+        width: getDoorOpeningSize(movingDoorNode).width,
+        height: fittedSize.height,
         // Doors sit on the floor — no sill/head or vertical alignment guides.
         includeVertical: false,
         levelYOffset: getLevelYOffset(),
@@ -573,8 +625,10 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
           position: [target.clampedX, target.clampedY, planeOffsetOn(target.wallId)],
           rotation: [0, target.itemRotation, 0],
           side: target.side,
+          ...(target.transomHeight === undefined ? {} : { transomHeight: target.transomHeight }),
           wallId: target.wallId,
           parentId: target.wallId,
+          ...casingOn(target.wallId, [0, target.itemRotation, 0]),
           roofSegmentId: undefined,
           roofFace: undefined,
           // The moving node is hidden during free-follow; the committed door
@@ -608,8 +662,10 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
             position: [target.clampedX, target.clampedY, planeOffsetOn(target.wallId)],
             rotation: [0, target.itemRotation, 0],
             side: target.side,
+            ...(target.transomHeight === undefined ? {} : { transomHeight: target.transomHeight }),
             parentId: target.wallId,
             wallId: target.wallId,
+            ...casingOn(target.wallId, [0, target.itemRotation, 0]),
             roofSegmentId: undefined,
             visible: true,
           })
@@ -755,6 +811,7 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
         width: movingDoorNode.width,
         height: movingDoorNode.height,
         ignoreId: movingDoorNode.id,
+        opening: movingDoorNode,
         vertical: { kind: 'bottom-locked' },
       })
 
@@ -842,6 +899,7 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
           roofSegmentId: segmentId,
           roofFace: target.face.id,
           parentId: segmentId,
+          ...casingOn(segmentId, [0, 0, 0]),
           visible: true,
         })
         history.commitStep(() => {
@@ -874,6 +932,7 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
             wallId: undefined,
             roofSegmentId: segmentId,
             roofFace: target.face.id,
+            ...casingOn(segmentId, [0, 0, 0]),
             visible: true,
           })
         })
@@ -987,9 +1046,11 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
         // No preview yet (R pressed before the first pointermove at initial
         // placement): flip the hidden node so the FIRST preview/commit already
         // reflects the chosen side.
+        const rotation: DoorNode['rotation'] = [0, sideOverride === 'back' ? Math.PI : 0, 0]
         updateDraft({
           side: sideOverride,
-          rotation: [0, sideOverride === 'back' ? Math.PI : 0, 0],
+          rotation,
+          position: doorPositionForFacing(movingDoorNode, rotation),
         })
       }
     }
@@ -1096,6 +1157,7 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
         updateDraft({ visible: true })
       }
       useLiveTransforms.getState().clear(movingDoorNode.id)
+      useLiveNodeOverrides.getState().clearFields(movingDoorNode.id, ['transomHeight'])
       useAlignmentGuides.getState().clear()
       clearOpeningGuides3D()
       useFacingPose.getState().clear()
@@ -1124,7 +1186,7 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
     const boxGeo = new BoxGeometry(
       movingDoorNode.width,
       movingDoorNode.height,
-      movingDoorNode.frameDepth ?? 0.07,
+      resolveHostedOpeningFrameDepth(movingDoorNode, useScene.getState().nodes),
     )
     const geo = new EdgesGeometry(boxGeo)
     boxGeo.dispose()

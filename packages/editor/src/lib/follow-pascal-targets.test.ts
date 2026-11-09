@@ -14,7 +14,7 @@ import {
 } from '@pascal-app/core'
 import type { RevealEvent } from '@pascal-app/viewer'
 import { openingExterior, wallExterior } from './follow-pascal-exterior.test-fixture'
-import { wantFromEvent } from './follow-pascal-targets'
+import { stayOnLevel, wantFromEvent } from './follow-pascal-targets'
 
 // What the camera looks at for each thing the reveal says: a floor when its walls rise, a window when
 // it is cut in, an item when it drops, the roof from above as it assembles, and the whole house when
@@ -222,6 +222,21 @@ describe('what the camera looks at', () => {
     expect(want.eyeAbove).toBeGreaterThan(2.7 + 2.4)
     // The walls settling say nothing about where to look.
     expect(wantFromEvent(group('settle', 'structure', ['wall_0']), house(), 6)).toBeNull()
+  })
+
+  test('the whole house, for a person who stays on one level: that level whole, with no roof to clear and no floor of its own to change', () => {
+    const nodes = house()
+    const whole = wantFromEvent(group('settle', 'furnishing', ['item_h']), nodes, 6)!
+    expect(whole.levelId).toBeUndefined()
+    const stay = stayOnLevel(whole, nodes, 'level_h')
+    expect(stay.kind).toBe('floor')
+    expect(stay.levelId).toBe('level_h')
+    expect(stay.eyeAbove).toBeUndefined()
+    expect(stay.at).toBe(6)
+    // The level's own box, not the house's: the roof level over it is not in it.
+    expect(stay.box.max[1]).toBeLessThan(whole.box.max[1])
+    // A level with nothing to frame still stays where it is.
+    expect(stayOnLevel(whole, nodes, 'level_nowhere').levelId).toBe('level_nowhere')
   })
 
   test('a piece the agent moved is looked at like one it placed, and its settling does not pull back to the whole house', () => {

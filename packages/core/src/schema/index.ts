@@ -10,8 +10,34 @@ export {
 // Assembly layers (F2)
 export { Assembly, AssemblyLayer, AssemblyLayerId, LayerRole } from './assembly'
 // Asset URL allowlist
-export { ALLOWED_ORIGINS_ENV, ALLOWED_SCHEMES, AssetUrl } from './asset-url'
+export {
+  __resetAllowedOriginsCacheForTests,
+  ALLOWED_ORIGINS_ENV,
+  ALLOWED_SCHEMES,
+  type AllowedOriginIssue,
+  AssetUrl,
+  allowedOriginsFrom,
+  parseAllowedOrigins,
+} from './asset-url'
 export { BaseNode, generateId, Material, nodeType, objectId } from './base'
+// Roof-plane and ceiling layer build-ups
+export {
+  CeilingBuildUp,
+  CeilingFraming,
+  InsulationKind,
+  InsulationLayer,
+  InteriorFinishKind,
+  InteriorFinishLayer,
+  NominalLumber,
+  PanelKind,
+  PanelLayer,
+  RoofBuildUp,
+  RoofingKind,
+  RoofingLayer,
+  RoofStructure,
+  UnderlaymentKind,
+  UnderlaymentLayer,
+} from './build-up'
 // Camera
 export { CameraSchema } from './camera'
 // Collections
@@ -45,7 +71,10 @@ export {
   GeometryScriptParamSpec,
   GeometryScriptParamValue,
   GeometryScriptSource,
+  GeometryShape,
   isGeometryScriptMimeType,
+  LightGlow,
+  LightSpot,
 } from './geometry-source'
 export type {
   MaterialMapProperties,
@@ -73,6 +102,15 @@ export {
   planAutomaticDownspouts,
   resolveAutomaticDownspoutLength,
 } from './nodes/automatic-downspout'
+export {
+  BEAM_SIZE_PRESETS,
+  BeamMaterial,
+  BeamNode,
+  BeamPlacement,
+  type BeamSizePreset,
+  type BeamSizePresetId,
+  DEFAULT_BEAM_SIZE_PRESET_ID,
+} from './nodes/beam'
 export {
   BlockEdge,
   BlockFace,
@@ -107,6 +145,7 @@ export {
   ColumnCrossSection,
   ColumnNode,
   ColumnPanelShape,
+  ColumnPostBase,
   type ColumnPresetId,
   ColumnRingPlacement,
   ColumnShaftDetail,
@@ -144,8 +183,10 @@ export {
   getCurtainWallConfig,
 } from './nodes/curtain-wall'
 export {
+  DoorHandleStyle,
   DoorNode,
   DoorSegment,
+  doorHandleStyle,
   FRENCH_DOOR_SEGMENTS,
   OpeningConstructionType,
   OpeningDimensionReference,
@@ -261,6 +302,24 @@ export {
 export { PipeFittingNode } from './nodes/pipe-fitting'
 export { PipeSegmentNode } from './nodes/pipe-segment'
 export { PipeTrapNode } from './nodes/pipe-trap'
+export {
+  DEFAULT_RAILING_WALL,
+  getRailingWallConfig,
+  getRailingWallHeight,
+  isRailingWall,
+  RAILING_GUARD_HEIGHT,
+  RAILING_GUARD_HEIGHT_TALL,
+  RAILING_MAX_POST_SPACING,
+  RAILING_SPHERE_LIMIT,
+  RAILING_STYLE_DEFAULTS,
+  RailingWallConfig,
+  type RailingWallPatch,
+  type RailingWallSlotId,
+  RailingWallStyle,
+  railingOpeningFields,
+  railingWallDefaults,
+  railingWallSlotDefault,
+} from './nodes/railing-wall'
 // Nodes
 export {
   createDefaultRidgeVentsForSegment,
@@ -303,6 +362,7 @@ export type {
   RoofSegmentSurfaceMaterialRole,
   RoofSegmentSurfaceMaterialSpec,
   RoofSegmentVisibleTopBounds,
+  RoofWallBand,
   SegmentSlopeFrame,
 } from './nodes/roof-segment'
 export {
@@ -315,6 +375,7 @@ export {
   getRoofSegmentEndReach,
   getRoofSegmentSurfaceY,
   getRoofSegmentVisibleTopBounds,
+  getRoofWallBandMaterial,
   getSegmentFasciaMaterial,
   getSegmentSlopeFrame,
   hasSegmentMaterialOverride,
@@ -324,10 +385,13 @@ export {
   MIN_ROOF_SEGMENT_TRIM_SPAN,
   normalizeRoofSegmentTrim,
   ROOF_SHAPE_DEFAULTS,
+  ROOF_WALL_BANDS,
+  RoofEaveCut,
   RoofSegmentNode,
   RoofSegmentTrim,
   RoofType,
   roofTypeHasRakes,
+  roofWallBandFields,
 } from './nodes/roof-segment'
 export { getRoofSegmentResizePatch } from './nodes/roof-segment-resize'
 export type {
@@ -401,6 +465,14 @@ export {
 } from './nodes/stair'
 export { StairConstruction } from './nodes/stair-construction'
 export { AttachmentSide, StairSegmentNode, StairSegmentType } from './nodes/stair-segment'
+export {
+  STAIR_STRINGER_SPACINGS_IN,
+  StairStringerStock,
+  StairStringerType,
+  StairStructure,
+  StairStructureType,
+  StairTreadStock,
+} from './nodes/stair-structure'
 export { StructuralGridNode } from './nodes/structural-grid'
 export { SurfaceHoleMetadata } from './nodes/surface-hole-metadata'
 export { SurfacePaintRegion } from './nodes/surface-paint-region'
@@ -416,8 +488,11 @@ export type {
   WallTrimSlotId,
 } from './nodes/wall'
 export {
+  DEFAULT_EXTERIOR_WALL_FINISH,
+  DEFAULT_INTERIOR_WALL_PAINT,
   getEffectiveWallFaceMaterial,
   getEffectiveWallSurfaceMaterial,
+  getWallFaceDefault,
   getWallSurfaceMaterialSignature,
   getWallTrimFaces,
   getWallTrimSlotId,
@@ -437,6 +512,7 @@ export {
   WallAssemblyInteriorFinish,
   WallAssemblySheathingMaterial,
   WallFaceRegion,
+  WallFaceScript,
   WallNode,
   WallTreatmentSide,
   WallTrimProfile,
@@ -447,7 +523,7 @@ export {
   WindowNode,
   WindowType,
 } from './nodes/window'
-export { ZoneNode } from './nodes/zone'
+export { ZoneFloorScript, ZoneNode } from './nodes/zone'
 // Typed source identity (D5)
 export {
   PROVENANCE_MAX_ID_BYTES,
@@ -497,3 +573,9 @@ export type {
 } from './types'
 // Union types
 export { AnyNode, nodeKindOf } from './types'
+export {
+  CUSTOM_WALL_TYPE_PREFIX,
+  newWallTypeId,
+  WallTypeDefinition,
+  WallTypeDefinitionId,
+} from './wall-type'

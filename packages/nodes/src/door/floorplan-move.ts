@@ -1,8 +1,11 @@
 import {
   type AnyNodeId,
   type DoorNode,
+  doorPositionForFacing,
   type FloorplanMoveTarget,
   type FloorplanMoveTargetSession,
+  getDoorOpeningSize,
+  openingHostFacing,
   useLiveNodeOverrides,
   useLiveTransforms,
   useScene,
@@ -18,6 +21,7 @@ import {
   usePlacementPreview,
 } from '@pascal-app/editor'
 import { createFloorplanCursorResolver } from '../shared/floorplan-cursor'
+import { movedOpeningCasingFaces } from '../shared/opening-casing-move'
 import { openingPlaneOffsetOnWall } from '../shared/opening-plane-offset'
 import { getOpeningHostLevelId, getRoofHostedOpeningPlanPoint } from '../shared/roof-opening-host'
 import {
@@ -83,6 +87,9 @@ export const doorFloorplanMoveTarget: FloorplanMoveTarget<DoorNode> = ({ node })
     roofSegmentId: undefined
     roofFace: undefined
     visible: true
+    casingFaceA?: boolean
+    casingFaceB?: boolean
+    transomHeight?: number
   } | null = null
 
   // R flips the door's facing (front ↔ back) mid-placement. `apply` re-derives
@@ -200,17 +207,42 @@ export const doorFloorplanMoveTarget: FloorplanMoveTarget<DoorNode> = ({ node })
       // openings / wall ends); it competes with — and wins over — the grid
       // snap. Follows the magnetic ("lines") mode; the grid component lives in
       // `snapToHalf` (mode-aware → raw when grid is off).
+      const facingX = doorPositionForFacing(
+        { ...node, position: [hit.localX, node.position[1], node.position[2]] },
+        [0, hit.itemRotation + (flipped ? Math.PI : 0), 0],
+      )[0]
       const neighborX = !isMagneticSnapActive()
         ? null
         : snapLocalXToNeighbors({
             wall: hit.wall,
-            localX: hit.localX,
-            width: node.width,
+            localX:
+              facingX -
+              getDoorOpeningSize(node).leafOffsetX *
+                openingHostFacing({ rotation: [0, hit.itemRotation + (flipped ? Math.PI : 0), 0] }),
+            width: getDoorOpeningSize(node).width,
             selfId: nodeId,
             nodes,
           })
-      const snappedLocalX = neighborX ?? snapToHalf(hit.localX)
-      const { clampedX, clampedY } = clampToWall(hit.wall, snappedLocalX, node.width, node.height)
+      const offset =
+        getDoorOpeningSize(node).leafOffsetX *
+        openingHostFacing({ rotation: [0, hit.itemRotation + (flipped ? Math.PI : 0), 0] })
+      const snappedLocalX =
+        neighborX === null
+          ? snapToHalf(facingX - offset) + offset
+          : neighborX +
+            getDoorOpeningSize(node).leafOffsetX *
+              openingHostFacing({ rotation: [0, hit.itemRotation + (flipped ? Math.PI : 0), 0] })
+      const { clampedX, clampedY, transomHeight } = clampToWall(
+        hit.wall,
+        snappedLocalX,
+        node.width,
+        node.height,
+        {
+          ...node,
+          rotation: [0, hit.itemRotation + (flipped ? Math.PI : 0), 0],
+        },
+        nodes,
+      )
 
       // One click per real position step, keyed on the SNAPPED along-wall value
       // so it ticks only when the door actually moves to a new cell.
@@ -219,6 +251,8 @@ export const doorFloorplanMoveTarget: FloorplanMoveTarget<DoorNode> = ({ node })
       // Apply the R-flip on top of the wall-derived side.
       const side: DoorNode['side'] = flipped ? (hit.side === 'front' ? 'back' : 'front') : hit.side
       const itemRotation = hit.itemRotation + (flipped ? Math.PI : 0)
+      // Another wall may be drawn the other way round: the casing keeps to its side.
+      const casing = movedOpeningCasingFaces(node, hit.wall.id, [0, itemRotation, 0], nodes)
 
       lastValid = {
         // Same-wall moves keep the wall-local plane offset; another host resets it.
@@ -232,6 +266,8 @@ export const doorFloorplanMoveTarget: FloorplanMoveTarget<DoorNode> = ({ node })
         roofSegmentId: undefined,
         roofFace: undefined,
         visible: true,
+        ...casing,
+        ...(transomHeight === undefined ? {} : { transomHeight }),
       }
 
       setLiveOverride(`wall:${hit.wall.id}:${side}`, {
@@ -241,6 +277,8 @@ export const doorFloorplanMoveTarget: FloorplanMoveTarget<DoorNode> = ({ node })
         roofSegmentId: undefined,
         roofFace: undefined,
         visible: true,
+        ...casing,
+        ...(transomHeight === undefined ? {} : { transomHeight }),
       })
       useLiveTransforms.getState().set(nodeId, {
         position: lastValid.position,
@@ -262,10 +300,13 @@ export const doorFloorplanMoveTarget: FloorplanMoveTarget<DoorNode> = ({ node })
       const collides = hasWallChildOverlap(
         lastValid.parentId,
         useScene.getState().nodes,
-        lastValid.position[0],
-        lastValid.position[1],
-        live.width,
-        live.height,
+        lastValid.position[0] -
+          getDoorOpeningSize({ ...live, ...lastValid }).leafOffsetX *
+            openingHostFacing({ rotation: lastValid.rotation }),
+        lastValid.position[1] +
+          (getDoorOpeningSize({ ...live, ...lastValid }).height - live.height) / 2,
+        getDoorOpeningSize({ ...live, ...lastValid }).width,
+        getDoorOpeningSize({ ...live, ...lastValid }).height,
         live.id,
       )
       return resolveOpeningPlacement({ collides, forcePlace }).placeable

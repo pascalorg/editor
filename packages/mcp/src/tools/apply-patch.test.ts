@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, test } from 'bun:test'
-import { Client } from '@modelcontextprotocol/sdk/client/index.js'
-import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import { Client } from '@modelcontextprotocol/client'
+import { InMemoryTransport, McpServer } from '@modelcontextprotocol/server'
 import {
   type AnyNode,
   LevelNode,
@@ -53,6 +52,52 @@ describe('apply_patch', () => {
     const stored = bridge.getNode(wall.id)
     expect(stored).not.toBeNull()
     expect((stored as { thickness?: number }).thickness).toBe(0.2)
+  })
+
+  test('can replace site ground presentation without changing the site or its buildings', async () => {
+    const before = structuredClone(bridge.getNodes())
+    const site = Object.values(before).find((node) => node.type === 'site')!
+    const result = await client.callTool({
+      name: 'apply_patch',
+      arguments: { patches: [{ op: 'update', id: site.id, data: { showGround: false } }] },
+    })
+    expect(result.isError).toBeFalsy()
+    expect(bridge.getNodes()).toEqual({
+      ...before,
+      [site.id]: { ...site, showGround: false },
+    })
+    const restored = await client.callTool({
+      name: 'apply_patch',
+      arguments: { patches: [{ op: 'update', id: site.id, data: { showGround: null } }] },
+    })
+    expect(restored.isError).toBeFalsy()
+    expect(bridge.getNodes()).toEqual(before)
+  })
+
+  test('saves and clears project lighting through the existing patch contract', async () => {
+    const site = Object.values(bridge.getNodes()).find((node) => node.type === 'site')!
+    const before = structuredClone(bridge.getNodes())
+    const presentation = {
+      exposure: 0.94,
+      edges: 'off',
+      shading: 'rendered',
+      lighting: {
+        background: '#dce4e5',
+        backgroundSky: null,
+        environment: { source: 'room', intensity: 0.28 },
+      },
+      postprocessing: { ambientOcclusion: false, colorGrading: false },
+    }
+    for (const value of [presentation, null]) {
+      const result = await client.callTool({
+        name: 'apply_patch',
+        arguments: { patches: [{ op: 'update', id: site.id, data: { presentation: value } }] },
+      })
+      expect(result.isError).toBeFalsy()
+      expect((bridge.getNode(site.id) as typeof site).presentation).toEqual(value ?? undefined)
+      for (const [id, node] of Object.entries(before))
+        if (id !== site.id) expect(bridge.getNode(id)).toEqual(node)
+    }
   })
 
   // A pier's `material: {color}` reported applied and stored {}, and

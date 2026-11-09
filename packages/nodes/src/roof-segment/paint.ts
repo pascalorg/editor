@@ -3,9 +3,12 @@ import {
   getEffectiveRoofSurfaceMaterial,
   getEffectiveSegmentSurfaceMaterial,
   getRoofGlazing,
+  getRoofWallBandMaterial,
   isGlazedRoofSegment,
   type PaintCapability,
   type RoofSegmentNode,
+  type RoofWallBand,
+  roofWallBandFields,
   sceneRegistry,
   useScene,
 } from '@pascal-app/core'
@@ -52,8 +55,35 @@ const glazingPaint = createSlotPaintCapability({
   },
 })
 
+// Slots 4–6 are the wall bands split off the wall/trim slot (the viewer's `ROOF_HEEL_MATERIAL_INDEX`…).
+const WALL_BAND_BY_INDEX: Record<number, RoofWallBand> = {
+  4: 'heel',
+  5: 'gable-left',
+  6: 'gable-right',
+}
+const WALL_BAND_LABELS: Record<RoofWallBand, string> = {
+  heel: 'Heel band',
+  'gable-left': 'Left gable',
+  'gable-right': 'Right gable',
+}
+
 function standardRole(index: number | null) {
+  if (index !== null && WALL_BAND_BY_INDEX[index]) return WALL_BAND_BY_INDEX[index]
   return index === 3 ? 'top' : index === 0 ? 'edge' : index === 1 || index === 2 ? 'wall' : null
+}
+
+function isWallBand(role: string): role is RoofWallBand {
+  return role === 'heel' || role === 'gable-left' || role === 'gable-right'
+}
+
+/** A heel or gable paints on its own: its own finish, cleared back to its fallback by the eraser. */
+export function wallBandPatch(
+  band: RoofWallBand,
+  material: RoofSegmentNode['material'],
+  materialPreset: string | undefined,
+): Partial<RoofSegmentNode> {
+  const fields = roofWallBandFields(band)
+  return { [fields.material]: material, [fields.materialPreset]: materialPreset }
 }
 
 export const roofSegmentPaint: PaintCapability = {
@@ -63,9 +93,15 @@ export const roofSegmentPaint: PaintCapability = {
       ? glazingPaint.resolveRole(args)
       : standardRole(args.materialIndex)
   },
+  roleLabel(node, role) {
+    return isWallBand(role) && !isGlazedRoofSegment(node as RoofSegmentNode)
+      ? WALL_BAND_LABELS[role]
+      : null
+  },
   buildPatch(args) {
     if (isGlazedRoofSegment(args.node as RoofSegmentNode)) return glazingPaint.buildPatch(args)
     const role = args.role
+    if (isWallBand(role)) return wallBandPatch(role, args.material, args.materialPreset)
     if (role !== 'top' && role !== 'edge' && role !== 'wall') return {}
     return buildRoofSegmentSurfaceMaterialPatch(
       args.node as RoofSegmentNode,
@@ -93,8 +129,24 @@ export const roofSegmentPaint: PaintCapability = {
     const node = args.node as RoofSegmentNode
     if (isGlazedRoofSegment(node)) return glazingPaint.getEffectiveMaterial?.(args) ?? null
     const role = args.role
-    if (role !== 'top' && role !== 'edge' && role !== 'wall') return null
     const parent = node.parentId ? args.nodes?.[node.parentId as AnyNodeId] : undefined
+    if (isWallBand(role)) {
+      // Unpainted, a gable shows the edge role and the heel band the roof's (else the walls').
+      const own =
+        getRoofWallBandMaterial(node, role) ??
+        (role === 'heel' && parent?.type === 'roof'
+          ? getRoofWallBandMaterial(parent, 'heel')
+          : null)
+      if (own) return { material: own.material, materialPreset: own.materialPreset }
+      if (role === 'heel') return null
+      const edge = getEffectiveSegmentSurfaceMaterial(
+        node,
+        'edge',
+        parent?.type === 'roof' ? getEffectiveRoofSurfaceMaterial(parent, 'edge') : undefined,
+      )
+      return { material: edge.material, materialPreset: edge.materialPreset }
+    }
+    if (role !== 'top' && role !== 'edge' && role !== 'wall') return null
     const spec = getEffectiveSegmentSurfaceMaterial(
       node,
       role,

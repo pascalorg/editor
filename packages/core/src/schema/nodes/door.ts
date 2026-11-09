@@ -3,9 +3,14 @@ import { z } from 'zod'
 import { BaseNode, nodeType, objectId } from '../base'
 import { GeometryScriptSource } from '../geometry-source'
 import { MaterialSchema } from '../material'
-import { DEFAULT_DOOR_CONTENT_PADDING, DoorType, defaultDoorSegments } from './opening-types'
+import {
+  DEFAULT_DOOR_CONTENT_PADDING,
+  DoorHandleStyle,
+  DoorType,
+  defaultDoorSegments,
+} from './opening-types'
 
-export { DoorType } from './opening-types'
+export { DoorHandleStyle, DoorType } from './opening-types'
 
 export const DoorSegment = z.object({
   type: z.enum(['panel', 'glass', 'empty']),
@@ -62,7 +67,7 @@ export const DoorNode = BaseNode.extend({
   type: nodeType('door'),
   material: MaterialSchema.optional(),
   // Per-slot material overrides on the unified slot model. Keys: `panel` (the
-  // door body), `frame`, `glass`, `hardware`. Value = a `MaterialRef`
+  // door body), `frame`, `casing-a`, `casing-b`, `glass`, `hardware`. Value = a `MaterialRef`
   // (`library:<id>` / `scene:<id>`) or a plain `#rrggbb` colour. Absent = the
   // door-wide `material` on panel and frame, else the slot default. Mirrors
   // `ShelfNode.slots`.
@@ -88,9 +93,13 @@ export const DoorNode = BaseNode.extend({
   roofSegmentId: z.string().optional(),
   roofFace: z.enum(['front', 'back', 'right', 'left']).optional(),
 
-  // Overall dimensions
+  // Leaf opening dimensions
   width: z.number().default(0.9),
   height: z.number().default(2.1),
+  sidelightLeft: z.number().min(0).optional(),
+  sidelightRight: z.number().min(0).optional(),
+  transomHeight: z.number().min(0).optional(),
+  slidingStyle: z.enum(['patio', 'bypass']).optional(),
 
   // Construction-document identity. `mark` overrides the deterministic
   // level fallback (101, 102, ...). Rough-opening dimensions stay optional
@@ -109,7 +118,9 @@ export const DoorNode = BaseNode.extend({
   // Door family
   doorCategory: DoorCategory.default('interior'),
   doorType: DoorType.default('hinged'),
-  leafCount: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]).default(1),
+  leafCount: z
+    .union([z.literal(1), z.literal(2), z.literal(3), z.literal(4), z.literal(6), z.literal(8)])
+    .default(1),
   operationState: z.number().min(0).max(1).default(0),
   slideDirection: z.enum(['left', 'right']).default('left'),
   trackStyle: DoorTrackStyle.default('none'),
@@ -126,9 +137,24 @@ export const DoorNode = BaseNode.extend({
 
   // Frame
   frameThickness: z.number().default(0.05),
-  frameDepth: z.number().default(0.07),
+  frameDepth: z
+    .number()
+    .optional()
+    .describe(
+      "Frame depth through the wall; left out, the frame is exactly the host wall's thickness.",
+    ),
   threshold: z.boolean().default(true),
   thresholdHeight: z.number().default(0.02),
+
+  // Casing: flat boards on the finished faces of the host wall around the
+  // opening (head and both legs, none at the floor), never inside it, so the
+  // wall cutout includes the leaf opening and any fixed lights. The faces are the host's `a` / `b`
+  // (WallFace), not the door's front and back, so flipping the swing leaves
+  // the casing where it is. Optional, never defaulted, so loading a saved
+  // opening adds no fields: absent faces are uncased, an absent width is 2 in.
+  casingFaceA: z.boolean().optional(),
+  casingFaceB: z.boolean().optional(),
+  casingWidth: z.number().positive().optional(),
 
   // Swing
   hingesSide: z.enum(['left', 'right']).default('left'),
@@ -144,6 +170,9 @@ export const DoorNode = BaseNode.extend({
 
   // Handle
   handle: z.boolean().default(true),
+  handleStyle: DoorHandleStyle.optional().describe(
+    'Handle style; absent means a straight lever on a rose.',
+  ),
   handleHeight: z.number().default(1.05),
   handleSide: z.enum(['left', 'right']).default('right'),
 
@@ -155,15 +184,31 @@ export const DoorNode = BaseNode.extend({
   // Emergency / commercial hardware
   doorCloser: z.boolean().default(false),
   panicBar: z.boolean().default(false),
+  panicBarStyle: z.enum(['crossbar', 'touchbar']).default('crossbar'),
+  panicBarRods: z.boolean().default(false),
   panicBarHeight: z.number().default(1.0),
 }).describe(dedent`Door node - a parametric door placed on a wall
   - position: center of the door in wall-local coordinate system (Y = height/2, always at floor)
+  - width/height: leaf opening; swing doors add sidelightLeft + sidelightRight to the cutout width and transomHeight above it (metres)
   - doorCategory/doorType: explicit operation family, defaulting old doors to interior hinged
   - openingKind/openingShape: hinged door or frameless wall opening shape
   - segments: rows stacked top to bottom, each defining its own columnRatios
-  - type 'empty' = no leaf fill for that segment, 'panel' = raised/recessed panel, 'glass' = glazed
+  - type 'empty' = no leaf fill for that segment, 'panel' = raised/recessed panel carved into the leaf (never proud of its faces), 'glass' = glazed
+  - contentPadding: leaf margin [x, y] around the segments, the stile and rail width (new doors and the panelled style presets use 0.11 m)
   - hingesSide/swingDirection/swingAngle: which way the door opens and how far it is currently open
+  - frameThickness: width of the frame members (new doors use 0.020 m; absent in saved doors keeps 0.05 m)
+  - casingFaceA/casingFaceB: casing (head and legs) on the host wall's face a / b, around the cutout (absent means off; new openings enable both)
+  - casingWidth: face width of the casing boards (2 in by default)
+  - handleStyle: lever (default), lever-curved, knob, bar, or plate; absent means lever
   - doorCloser/panicBar: commercial and emergency hardware options
+  - panicBarStyle: crossbar tube (default) or flat touchbar push rail
+  - panicBarRods: optional top and bottom latch rods (default off)
+  - panicBarHeight: device height above the leaf bottom, in metres
 `)
 
 export type DoorNode = z.infer<typeof DoorNode>
+
+/** Resolve saved doors without adding a field to their data. */
+export function doorHandleStyle(door: Pick<DoorNode, 'handleStyle'>): DoorHandleStyle {
+  return door.handleStyle ?? 'lever'
+}

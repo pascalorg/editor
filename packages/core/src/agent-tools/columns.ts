@@ -8,13 +8,32 @@ export const addColumnTool = {
   name: 'add_column',
   title: 'Add column',
   description:
-    'Add a structural or decorative column at (x, z), or rebuild one by nodeId. Supports native fields or optional code using the same module and conventions as add_object, with floor mount and its bottom centre at the support point. Params named height, width and depth drive the native size controls. Only add columns when requested.',
+    'Add a structural or decorative column at (x, z), or rebuild one by nodeId. role post makes the Build panel framing post: plain square pressure-treated wood, default 6x6 with no base, reaching the lowest beam above its support or the ceiling plane unless height is given. postSize and postBase use the tile choices. Refused with not_a_post when post choices are given without role post (or an existing post). Supports native fields or optional code using the same module and conventions as add_object, with floor mount and its bottom centre at the support point. Params named height, width and depth drive the native size controls. Only add columns when requested.',
   input: {
     x: z.number().optional().describe('X position of the column center (meters)'),
     z: z.number().optional().describe('Z position of the column center (meters)'),
+    role: z
+      .enum(['ornament', 'post'])
+      .optional()
+      .describe(
+        'post: a framing post; ornament: a decorative column. Omitted keeps existing column behavior.',
+      ),
+    postSize: z
+      .enum(['4x4', '6x6', '8x8'])
+      .optional()
+      .describe(
+        'Nominal post size; actual square sides 0.0889, 0.1397, 0.18415 m. Default for a new post: 6x6. Overrides native width, depth and radius when supplied.',
+      ),
+    postBase: z
+      .enum(['none', 'post-base', 'pier'])
+      .optional()
+      .describe(
+        'Post base: none (default for a new post), a steel post base, or a concrete pier. Updates base geometry and finish together.',
+      ),
     height: measurement('length', 'm', {
       positive: true,
-      description: 'Column height (default: 2.5).',
+      description:
+        'Column height (default: 2.5 m; a new post reaches the beam above or ceiling plane).',
     }).optional(),
     radius: measurement('length', 'm', {
       positive: true,

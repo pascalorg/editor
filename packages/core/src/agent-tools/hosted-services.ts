@@ -34,8 +34,9 @@ const context = {
   pluginId: z
     .string()
     .regex(/^[a-z0-9-]+:[a-z0-9-]+$/)
+    .optional()
     .describe(
-      "The installed Pascal plugin whose service grant this request uses. Read get_scene.installedPlugins or the host's plugin list; an ID is not permission.",
+      "The installed Pascal plugin whose service grant this request uses: a plugin's own agent names it (get_scene.installedPlugins or the host's plugin list; an ID is not permission). Omit it to act as the person in Pascal's own Studio, which offers Studio media only.",
     ),
   projectId: z
     .string()
@@ -61,6 +62,9 @@ const readAnnotations = {
   idempotentHint: true,
   openWorldHint: false,
 }
+/** A frame view_scene answered: its viewId, these exact pixels. */
+const VIEW_ID = /^[0-9a-f]{64}\.(png|jpg|webp|gif)$/
+
 const resultAnnotations = {
   readOnlyHint: false,
   destructiveHint: false,
@@ -73,7 +77,7 @@ export const listPascalServicesTool = {
   action: 'catalog',
   title: 'List Pascal services',
   description:
-    'List the hosted services an installed plugin may use in this project, current prices and available media models. This lookup is free. Discoverability does not grant permission or spend credits.',
+    "List the hosted services this project may use, current prices and available media models: those of an installed plugin, or without pluginId Pascal's own Studio and its default models. This lookup is free. Discoverability does not grant permission or spend credits.",
   input: context,
   annotations: readAnnotations,
 } as const
@@ -118,21 +122,31 @@ export const generateStudioMediaTool = {
   action: 'studio.generate',
   title: 'Generate project media',
   description:
-    "Generate an image, material or video using an available model from list_pascal_services. Charges this project's Pascal wallet up to maxCredits; returns a job ID to read with get_studio_generation. Uses authorized project snapshot/render references. Does not edit the scene. After a lost response, inspect the project's Studio history before submitting again; a new submission may charge again.",
+    "Render an image, material or video of the project with a model from list_pascal_services, charged to this project's Pascal wallet. A call without quoteToken answers a quote (status 'quote': the model, settings, sources and the exact credits) and charges nothing: tell the person what it costs and ask before rendering, then call again with the same input and the quote's quoteToken to submit. When the person said the cost doesn't matter, pass confirm: false with maxCredits to submit at once. A submission answers a job to read with get_studio_generation. Sources are project snapshot or render ids, or a view_scene viewId (type 'view': the frame you looked at, kept in the project's Studio gallery once it is rendered); a source that is gone is refused, never dropped. Keep generationKey for retries: the same key and input never charge twice. Does not edit the scene.",
   input: {
     ...context,
     modelId: z.string().min(1).max(100),
     prompt: z.string().max(400_000).optional(),
     sources: z
       .array(
-        z
-          .object({
-            type: z.enum(['snapshot', 'render']),
-            id: z.string().min(1).max(128),
-            role: z.string().max(100).optional(),
-            frame: z.enum(['start', 'end']).optional(),
-          })
-          .strict(),
+        z.discriminatedUnion('type', [
+          z
+            .object({
+              type: z.enum(['snapshot', 'render']),
+              id: z.string().min(1).max(128),
+              role: z.string().max(100).optional(),
+              frame: z.enum(['start', 'end']).optional(),
+            })
+            .strict(),
+          z
+            .object({
+              type: z.literal('view'),
+              id: z.string().regex(VIEW_ID).describe("A view_scene answer's viewId."),
+              role: z.string().max(100).optional(),
+              frame: z.enum(['start', 'end']).optional(),
+            })
+            .strict(),
+        ]),
       )
       .max(32)
       .optional(),
@@ -145,12 +159,29 @@ export const generateStudioMediaTool = {
       })
       .strict()
       .optional(),
-    maxCredits,
+    generationKey: z
+      .string()
+      .regex(/^[A-Za-z0-9_-]{8,128}$/)
+      .describe(
+        'A unique key for this requested render, the same for its quote and its submission. Reuse it with the same input after a lost response; a different input under it is refused.',
+      ),
+    quoteToken: z
+      .string()
+      .max(4096)
+      .optional()
+      .describe("The quote's token, once the person agreed to its credits: submits the render."),
+    confirm: z
+      .boolean()
+      .optional()
+      .describe(
+        'false only when the person said the cost does not matter: submits without a quote, up to maxCredits.',
+      ),
+    maxCredits: maxCredits.optional(),
   },
   annotations: {
     readOnlyHint: false,
     destructiveHint: true,
-    idempotentHint: false,
+    idempotentHint: true,
     openWorldHint: true,
   },
 } as const
@@ -161,7 +192,16 @@ export const getStudioGenerationTool = {
   title: 'Read project media generation',
   description:
     'Poll or reopen a media job created for this project and plugin without another charge. May reconcile provider completion or failure and its refund. Does not submit another generation or edit the scene.',
-  input: { ...context, id: z.string().min(1).max(128) },
+  input: {
+    ...context,
+    id: z.string().min(1).max(128),
+    includePreview: z
+      .boolean()
+      .optional()
+      .describe(
+        'true to see a finished image: its preview (WebP, at most 1280 px) comes back as a picture. A video has none; give the person its video_url.',
+      ),
+  },
   annotations: resultAnnotations,
 } as const
 

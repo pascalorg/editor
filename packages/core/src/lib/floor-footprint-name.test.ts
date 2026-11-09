@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test'
 import { type AnyNode, SlabNode, ZoneNode } from '../schema'
-import { floorFootprintName } from './floor-footprint-name'
+import { floorFootprintName, floorFootprintNaming } from './floor-footprint-name'
 
 const square = (x: number, size: number): [number, number][] => [
   [x, 0],
@@ -46,4 +46,22 @@ test('footprints never read as levels: Shared floor, then the largest room, then
   const blank = room('zone_blank', square(20, 3), '')
   const unnamed = { ...annex, zoneIds: [blank.id] }
   expect(floorFootprintName({ ...nodes, [blank.id]: blank }, unnamed)).toBe('Floor area')
+})
+
+test('the naming parts let a UI word the footprint names in its own language', () => {
+  const kitchen = room('zone_kitchen', square(0, 6), 'Kitchen')
+  const hall = room('zone_hall', square(6, 2), 'Hall')
+  const nine = room('zone_nine', square(20, 3), 'Room 9')
+  const upper = room('zone_upper', square(30, 3), 'Upper floor')
+  const house = plate('slab_house', square(0, 8), [kitchen.id, hall.id])
+  const annex = plate('slab_annex', square(20, 4), [nine.id])
+  const deck = plate('slab_deck', square(30, 4), [upper.id])
+  const pad = plate('slab_pad', square(40, 2), [], 'Garden foundation')
+  const bare = plate('slab_bare', square(50, 2))
+  const nodes = scene(kitchen, hall, nine, upper, house, annex, deck, pad, bare)
+  expect(floorFootprintNaming(nodes, house)).toEqual({ kind: 'shared' })
+  expect(floorFootprintNaming(nodes, annex)).toEqual({ kind: 'room', room: 'Room 9' })
+  expect(floorFootprintNaming(nodes, deck)).toEqual({ kind: 'named', name: 'Upper floor' })
+  expect(floorFootprintNaming(nodes, pad)).toEqual({ kind: 'named', name: 'Garden foundation' })
+  expect(floorFootprintNaming(nodes, bare)).toEqual({ kind: 'area' })
 })

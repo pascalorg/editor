@@ -12,6 +12,7 @@ import {
   type ZoneNode,
 } from '@pascal-app/core'
 import {
+  groundVeiled,
   type RevealEvent,
   revealChangedNodeIds,
   subscribeRevealEvents,
@@ -31,7 +32,7 @@ import {
 import { anyExterior } from '../../lib/follow-pascal-exterior'
 import { FollowPresentation, type PresentationPort } from '../../lib/follow-pascal-presentation'
 import { FollowSight } from '../../lib/follow-pascal-sight'
-import { wantFromEvent } from '../../lib/follow-pascal-targets'
+import { stayOnLevel, wantFromEvent } from '../../lib/follow-pascal-targets'
 import useEditor from '../../store/use-editor'
 import useFollowPascal from '../../store/use-follow-pascal'
 import { usePointAsk } from '../../store/use-point-ask'
@@ -193,9 +194,18 @@ export function FollowPascal() {
     flying.current = true
   }
 
-  const fly = (want: FollowWant) => {
-    last.current = want
+  const fly = (asked: FollowWant) => {
     const nodes = useScene.getState().nodes
+    // A level below grade is shown, its ground open over it: the look at the whole house that follows
+    // furniture landing, and every finished commit, stays on that level. Showing the floors above would
+    // close the ground, and the next piece on the basement open it again, once for every commit.
+    const { selection, hideLevelsAboveSelection } = useViewer.getState()
+    const staying = hideLevelsAboveSelection && groundVeiled(useViewer.getState())
+    const want =
+      asked.kind === 'group' && !asked.levelId && staying && selection.levelId
+        ? stayOnLevel(asked, nodes, selection.levelId)
+        : asked
+    last.current = want
     const level = want.levelId ? nodes[want.levelId as AnyNodeId] : undefined
     if (level?.type === 'level') {
       const buildingId = resolveBuildingForLevel(level.id as AnyNodeId, nodes)

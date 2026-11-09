@@ -1,4 +1,4 @@
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import type { McpServer } from '@modelcontextprotocol/server'
 import { z } from 'zod'
 import type { SceneOperations } from '../operations'
 import { DESTRUCTIVE_TOOL_ANNOTATIONS } from './annotations'
@@ -25,8 +25,8 @@ export function registerRedo(server: McpServer, bridge: SceneOperations): void {
       title: 'Redo',
       description:
         'Redo the next N previously-undone steps (default 1). Returns the number of steps actually redone.',
-      inputSchema: redoInput,
-      outputSchema: redoOutput,
+      inputSchema: z.object(redoInput),
+      outputSchema: z.object(redoOutput),
       annotations: DESTRUCTIVE_TOOL_ANNOTATIONS,
     },
     async ({ steps }) => {

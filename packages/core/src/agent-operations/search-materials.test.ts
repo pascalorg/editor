@@ -33,6 +33,32 @@ function search(
 const refs = (group: Group) => group.results.map((result) => result.ref)
 
 describe('search_materials', () => {
+  test('a missing finish states nearest and exact colour options', () => {
+    const { result } = AGENT_OPERATIONS.search_materials(
+      {},
+      { queries: [{ query: 'oak floor' }] } as never,
+      {
+        activeLevelId: null,
+      },
+    )
+    expect((result as { message: string }).message).toContain(
+      'paint with color gives the nearest library colour and says how far it moved (ΔE)',
+    )
+    expect((result as { message: string }).message).toContain('keeps the exact colour')
+  })
+
+  test('the facts about a missing finish come only with a missing word', () => {
+    const { result } = AGENT_OPERATIONS.search_materials(
+      {},
+      { queries: [{ query: 'white render' }] } as never,
+      {
+        activeLevelId: null,
+      },
+    )
+    expect((result as { message: string }).message).not.toContain('generate_material')
+    expect((result as { message: string }).message).not.toContain('ΔE')
+  })
+
   test('reads building words as the library writes them', () => {
     const [render, weatherboard, timber] = search(
       { query: 'white render' },

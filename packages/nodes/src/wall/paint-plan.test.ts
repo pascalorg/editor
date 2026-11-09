@@ -135,7 +135,7 @@ describe('wall paint plan', () => {
       'stripe_b',
     ])
     expect(after[room.id].wallOverrides).toEqual([
-      { wallId: WALL_ID, face: 'a', finish: 'library:concrete-drywall' },
+      { wallId: WALL_ID, face: 'a', finish: 'library:preset-seattlegrey' },
     ])
     expect(after[room.id].wallMaterial).toBe('library:room')
     expect(after[other.id]).toEqual(other)

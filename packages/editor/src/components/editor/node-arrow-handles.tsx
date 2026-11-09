@@ -21,7 +21,6 @@ import {
   useScene,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
-import { Html } from '@react-three/drei'
 import { createPortal, type ThreeEvent, useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
@@ -41,7 +40,6 @@ import {
   Vector3,
 } from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
-
 import { MeshBasicNodeMaterial } from 'three/webgpu'
 import { useCeilingEditCeilingId } from '../../lib/ceiling-edit-session'
 import { EDITOR_LAYER } from '../../lib/constants'
@@ -78,6 +76,7 @@ import {
 import { createLinearResizeDragBinding, linearResizeFactor } from './handles/linear-resize-drag'
 import { resolveResizeSnapValue } from './handles/resize-snap'
 import { type HandleDragControls, useHandleDrag } from './handles/use-handle-drag'
+import { Html } from './localized-html'
 
 // Pooled scratch for the handle rig's world-relative pose mapping.
 const _rigRelative = new Matrix4()

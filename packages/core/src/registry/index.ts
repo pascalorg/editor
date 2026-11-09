@@ -18,7 +18,13 @@ export type {
   TapActionHandle,
   TranslateHandle,
 } from './handles'
-export { nodeMechanism, toggleMechanism, toggleNodeMechanism } from './mechanism'
+export {
+  nodeMechanism,
+  nodeMechanismParts,
+  toggleMechanism,
+  toggleMechanismPart,
+  toggleNodeMechanism,
+} from './mechanism'
 export {
   bakePolicyOf,
   discoverPlugins,
@@ -132,6 +138,7 @@ export type {
   MeasurementFeatureGeometry,
   MeasurementSnapKind,
   MechanismCapability,
+  MechanismPart,
   Modifiers,
   MovableConfig,
   MovableParentFrame,
@@ -149,6 +156,8 @@ export type {
   PaintPatchArgs,
   PaintPreviewArgs,
   PaintResolveArgs,
+  PaintScopeId,
+  PaintSurfaceScopes,
   ParamAction,
   ParametricDescriptor,
   ParamField,

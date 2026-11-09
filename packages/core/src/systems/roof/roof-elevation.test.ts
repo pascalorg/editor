@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test'
 import { spatialGridManager } from '../../hooks/spatial-grid/spatial-grid-manager'
 import {
   type AnyNode,
@@ -9,6 +9,7 @@ import {
   SlabNode,
   WallNode,
 } from '../../schema'
+import useScene from '../../store/use-scene'
 import { planWallSplitAtPoint } from '../wall/wall-topology'
 import { resolveRoofElevation } from './roof-elevation'
 
@@ -51,6 +52,19 @@ function scene(heights: Array<number | undefined>) {
 }
 
 describe('resolveRoofElevation', () => {
+  test('resolves a saved scene without reading the browser scene store', () => {
+    const { roof, nodes } = scene([4.5])
+    const browserStore = spyOn(useScene, 'getState').mockImplementation(() => {
+      throw new Error('No browser store in the hosted MCP')
+    })
+    try {
+      expect(resolveRoofElevation(roof, nodes)).toBe(1.5)
+      expect(browserStore).not.toHaveBeenCalled()
+    } finally {
+      browserStore.mockRestore()
+    }
+  })
+
   test("follows walls on the roof's own level when it sits on the top floor", () => {
     const { roof, level, upper, nodes } = scene([2.5])
     // Move the roof onto the walls' level: no storey above, roof and walls share it.
@@ -115,6 +129,17 @@ describe('resolveRoofElevation', () => {
   test('2.5 m walls under a 3 m storey pull the roof down to -0.5 m', () => {
     const { roof, nodes } = scene([2.5])
     expect(resolveRoofElevation(roof, nodes)).toBe(-0.5)
+  })
+
+  // A deck's 36 in guard pulled the roof over it down onto the railing tops.
+  test("a railing's top never seats a roof: the walls' do, else it keeps its height", () => {
+    const { walls, roof, nodes } = scene([2.5])
+    const railing = (wall: WallNode) =>
+      ({ ...wall, wallType: 'railing', height: 36 * 0.0254, thickness: 0.0889 }) as WallNode
+    const deck = { ...nodes, ...Object.fromEntries(walls.map((wall) => [wall.id, railing(wall)])) }
+    expect(resolveRoofElevation(roof, deck)).toBe(0)
+    const leaning = { ...deck, [walls[0]!.id]: walls[0]! }
+    expect(resolveRoofElevation(roof, leaning)).toBe(-0.5)
   })
 
   test('freezes without an enclosure, retaining follow intent', () => {

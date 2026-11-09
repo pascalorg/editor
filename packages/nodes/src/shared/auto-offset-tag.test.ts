@@ -78,10 +78,12 @@ describe('autoOffsetInvalidationUpdates', () => {
   it('clears owner tags when a generated offset part is edited manually', () => {
     const owner = {
       id: 'duct-segment_owner' as AnyNodeId,
+      type: 'duct-segment',
       metadata: withAutoOffsetTag({}, sampleTag()),
     } as AnyNode
     const other = {
       id: 'duct-segment_other' as AnyNodeId,
+      type: 'duct-segment',
       metadata: withAutoOffsetTag({}, { ...sampleTag(), minted: ['duct-fitting_other'] }),
     } as AnyNode
 
@@ -101,6 +103,7 @@ describe('autoOffsetInvalidationUpdates', () => {
   it('clears owner tags when a stored base participant is edited manually', () => {
     const owner = {
       id: 'duct-segment_owner' as AnyNodeId,
+      type: 'duct-segment',
       metadata: withAutoOffsetTag(
         {},
         {

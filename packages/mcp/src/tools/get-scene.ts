@@ -1,4 +1,4 @@
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import type { McpServer } from '@modelcontextprotocol/server'
 import { z } from 'zod'
 import type { SceneOperations } from '../operations'
 import { READ_ONLY_TOOL_ANNOTATIONS } from './annotations'
@@ -19,8 +19,8 @@ export function registerGetScene(server: McpServer, bridge: SceneOperations): vo
       title: 'Get scene',
       description:
         'Returns the full scene graph: flat node dictionary, root node IDs, collections, and explicit installed plugin IDs when present.',
-      inputSchema: getSceneInput,
-      outputSchema: getSceneOutput,
+      inputSchema: z.object(getSceneInput),
+      outputSchema: z.object(getSceneOutput),
       annotations: READ_ONLY_TOOL_ANNOTATIONS,
     },
     async () => {

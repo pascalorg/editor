@@ -2,7 +2,6 @@
 
 import { type OpenWallEnd, sceneRegistry } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
-import { Html } from '@react-three/drei'
 import { useFrame } from '@react-three/fiber'
 import { memo, useEffect, useMemo, useRef } from 'react'
 import { BoxGeometry, CircleGeometry, type Group, RingGeometry } from 'three'
@@ -19,6 +18,7 @@ import { cn } from '../../lib/utils'
 import useEditor from '../../store/use-editor'
 import { isViewVisible, VIEW_3D, visibleScene } from '../../store/view-layout'
 import { JoinWallsPill } from './join-walls-pill'
+import { Html } from './localized-html'
 import { OpenWallEndsHint } from './open-wall-ends-hint'
 
 /**

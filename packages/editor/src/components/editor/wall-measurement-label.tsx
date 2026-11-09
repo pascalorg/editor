@@ -20,11 +20,11 @@ import {
   type WallNode,
 } from '@pascal-app/core'
 import { getSceneTheme, useViewer } from '@pascal-app/viewer'
-import { Html } from '@react-three/drei'
 import { createPortal, useFrame } from '@react-three/fiber'
 import { useMemo, useState } from 'react'
 import * as THREE from 'three'
 import { formatLinearMeasurement } from '../../lib/measurements'
+import { Html } from './localized-html'
 
 const GUIDE_Y_OFFSET = 0.08
 const LABEL_LIFT = 0.08

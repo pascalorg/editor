@@ -12,6 +12,7 @@ import {
   DRAFTING_SURFACE_EXTENSION_KEY,
   type DraftingSurfaceExtension,
   type FloorplanNodeExtension,
+  PANEL_MODEL_EXTENSION,
   publishStructuralElevationGuide,
   resolveStructuralElevationSnap,
 } from '@pascal-app/editor'
@@ -28,6 +29,7 @@ import {
 import { ceilingFloorplanMoveTarget } from './floorplan-move'
 import { CEILING_HANDLE_MIN_HEIGHT, ceilingHeightRange } from './height-bounds'
 import { ceilingPaint } from './paint'
+import { ceilingPanelModel } from './panel-model'
 import { ceilingParametrics } from './parametrics'
 import { CeilingNode } from './schema'
 
@@ -139,6 +141,7 @@ export const ceilingDefinition: NodeDefinition<typeof CeilingNode> = {
     'pascal:editor/floorplan': {
       selectionCounterparts: sameOutlineSurfaceCounterparts,
     } satisfies FloorplanNodeExtension,
+    [PANEL_MODEL_EXTENSION]: ceilingPanelModel,
   },
 
   // Height-less on purpose: a new ceiling follows the level top until the

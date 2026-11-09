@@ -6,6 +6,7 @@ import {
   doorBatchable,
   itemBatchable,
   perNodeGeometryBatchable,
+  staticBatchable,
   surfaceBatchable,
   windowBatchable,
 } from './batchable'
@@ -20,12 +21,15 @@ test('built-in kinds declare the batch behaviour that replaced BATCH_KINDS', () 
   )
   expect(Object.keys(batchable).sort()).toEqual([
     'block',
+    'cabinet',
+    'cabinet-module',
     'ceiling',
     'column',
     'door',
     'imported-mesh',
     'item',
     'procedural-item',
+    'shelf',
     'slab',
     'window',
   ])
@@ -38,6 +42,8 @@ test('built-in kinds declare the batch behaviour that replaced BATCH_KINDS', () 
   expect(batchable.block).toBe(perNodeGeometryBatchable)
   expect(batchable['imported-mesh']).toBe(perNodeGeometryBatchable)
   expect(batchable['procedural-item']?.scope).toBe('level')
+  expect(batchable.shelf).toBe(staticBatchable)
+  expect(batchable.cabinet).toBe(batchable['cabinet-module'])
 })
 
 // A door or window built from a script animates its own subtree (its leaves slide), which a static

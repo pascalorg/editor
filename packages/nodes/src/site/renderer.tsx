@@ -2,14 +2,22 @@
 
 import {
   type AnyNodeId,
+  belowGradeFloorY,
+  belowGradeFootprints,
+  coveredBelowGradeFootprints,
+  groundPitFloorY,
+  intersection,
   type SiteNode,
   sightTriangle,
   siteFrontEdge,
   siteSetbackEnvelope,
   streetCorners,
+  surfaceHeightAt,
   type TerrainField,
   terrainContours,
   terrainFieldOf,
+  terrainOverFloors,
+  union,
   unionPolygons,
   useLiveNodeOverrides,
   useLiveTerrain,
@@ -17,11 +25,16 @@ import {
   useScene,
 } from '@pascal-app/core'
 import {
+  backdropColors,
   backdropGradient,
-  deepSkyColor,
-  getSceneTheme,
-  horizonHazeColor,
+  createDaylightGroundMaterial,
+  DAYLIGHT_PARCEL,
+  groundWindowMaskNode,
+  isDaylightAtmosphere,
   NodeRenderer,
+  SITE_GROUND,
+  siteGroundShown,
+  UNDERGROUND_RIM,
   useImmersiveXRPresentation,
   useNodeEvents,
   useSceneAtmosphere,
@@ -49,6 +62,14 @@ import {
 } from 'three/tsl'
 import { MeshLambertNodeMaterial } from 'three/webgpu'
 import {
+  GroundHole,
+  groundHoleColorNode,
+  groundHoleShadowNode,
+  solidGroundMaskNode,
+} from './ground-hole'
+import { GroundVeil, groundVeilMaterial, horizonVeilMaterial, noopRaycast } from './ground-veil'
+import { GroundWindowSystem } from './ground-window-system'
+import {
   buildPatternedRibbon,
   PROPERTY_LINE_PATTERN,
   SETBACK_LINE_PATTERN,
@@ -66,9 +87,9 @@ import { TerrainRenderer } from './terrain-renderer'
 
 const Y_OFFSET = 0.01
 
-// The horizon disc is presentation-only — clicks must fall through to the
-// real site polygon / grid, so its raycast is a no-op.
-const noopRaycast = () => {}
+/** The flat lot's fill, just under grade; the plan's shapes lie in XY, turned to lie flat. */
+const GROUND_FILL_POSITION: [number, number, number] = [0, -0.05, 0]
+const FLAT_ON_THE_GROUND: [number, number, number] = [-Math.PI / 2, 0, 0]
 
 /**
  * The site boundary line, laid on the ground rather than across it.
@@ -176,16 +197,16 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
 
   useRegistry(node.id, 'site', ref)
 
-  const bgColor = useViewer((state) => getSceneTheme(state.sceneTheme).ground)
-  const backgroundColor = useViewer((state) => getSceneTheme(state.sceneTheme).background)
-  const skyColor = useViewer((state) => {
-    const theme = getSceneTheme(state.sceneTheme)
-    return theme.backgroundSky ?? theme.background
-  })
-  const appearance = useViewer((state) => getSceneTheme(state.sceneTheme).appearance)
-  const maxLightIntensity = useViewer((state) =>
-    Math.max(1, ...getSceneTheme(state.sceneTheme).lights.map((light) => light.intensity)),
-  )
+  const theme = useViewer((state) => state.sceneAppearance)
+  // The colored appearance's daylight look: a neutral parcel, lit by the sky (Standard), on a
+  // squared ground whose horizon the atmosphere's fog blends into the sky.
+  const daylight = isDaylightAtmosphere(atmosphere)
+  // Solid shading is Lambert everywhere (the sky reaches it as a hemisphere light, not the
+  // environment), so the daylight grounds follow it.
+  const solid = useViewer((state) => state.shading === 'solid')
+  const bgColor = daylight ? DAYLIGHT_PARCEL : theme.ground
+  const { background: backgroundColor, sky: skyColor, haze, skyDeep } = backdropColors(theme)
+  const maxLightIntensity = Math.max(1, ...theme.lights.map((light) => light.intensity))
   const livePolygon = useLiveNodeOverrides(
     (state) => (state.overrides.get(node.id)?.polygon as SiteNode['polygon'] | undefined) ?? null,
   )
@@ -226,22 +247,103 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
     return { cx, cz, radius }
   }, [polygonPoints])
 
+  // Where the ground meets the levels below grade. `all` says whether the scene has any (the
+  // ground materials carry the hole's mask from then on); `shown` is what the hole is cut over under
+  // the veil: the level shown and the ones between it and grade, as
+  // the level display hides them. While the level shown is not below grade the last such set is
+  // kept, so a hole easing shut keeps its shape. `covered` is the part of them under the house
+  // itself, whatever level is shown: the ground stands open there (see `holes`).
+  const shownLevelId = useViewer((state) =>
+    state.hideLevelsAboveSelection ? state.selection.levelId : null,
+  )
+  const belowGrade = useViewer((state) => state.belowGrade)
+  const groundMode = useViewer((state) => state.groundMode)
+  const buriedCache = useRef<{
+    all: [number, number][][]
+    shown: [number, number][][]
+    floorY: number | null
+    drawnFloorY: number | null
+    covered: [number, number][][]
+  }>({ all: [], shown: [], floorY: null, drawnFloorY: null, covered: [] })
+  const buried = useScene((state: S) => {
+    const prev = buriedCache.current
+    const found = belowGradeFootprints(state.nodes)
+    const all = polygonsMatch(found, prev.all) ? prev.all : found
+    const foundCovered = all.length > 0 ? coveredBelowGradeFootprints(state.nodes) : []
+    const covered = polygonsMatch(foundCovered, prev.covered) ? prev.covered : foundCovered
+    let shown: [number, number][][] = []
+    let floorY: number | null = null
+    let drawnFloorY: number | null = null
+    if (all.length > 0) {
+      shown = shownLevelId ? belowGradeFootprints(state.nodes, shownLevelId) : []
+      floorY = shownLevelId ? belowGradeFloorY(state.nodes, shownLevelId) : null
+      drawnFloorY = shownLevelId ? groundPitFloorY(state.nodes, shownLevelId) : null
+      if (shown.length === 0) shown = prev.shown.length > 0 ? prev.shown : all
+      floorY ??= prev.floorY
+      drawnFloorY ??= prev.drawnFloorY
+    }
+    if (polygonsMatch(shown, prev.shown)) shown = prev.shown
+    if (
+      all === prev.all &&
+      shown === prev.shown &&
+      floorY === prev.floorY &&
+      drawnFloorY === prev.drawnFloorY &&
+      covered === prev.covered
+    )
+      return prev
+    buriedCache.current = { all, shown, floorY, drawnFloorY, covered }
+    return buriedCache.current
+  })
+  // Where the pit's walls start: the ground itself, flat or the sculpted terrain.
+  const groundTopAt = useMemo(
+    () => (x: number, z: number) =>
+      persistedField ? surfaceHeightAt(persistedField, x, z) : GROUND_FILL_POSITION[1],
+    [persistedField],
+  )
   // Lit (not Basic) so the site ground receives the directional shadow — Basic
   // is unlit, which is why shadows used to stop dead at the slab edge. polygonOffset
   // keeps it tucked behind the grid/slab as before.
+  // The hole's nodes are in the material from the moment the scene has a level below grade (once,
+  // not when a floor is picked), the opening a uniform; without one the materials stay plain.
+  const hasBasement = buried.all.length > 0
   const groundMaterial = useMemo(() => {
-    const material = new MeshLambertNodeMaterial({ color: bgColor })
+    const material = daylight
+      ? createDaylightGroundMaterial(solid, { color: bgColor })
+      : new MeshLambertNodeMaterial({ color: bgColor })
     material.polygonOffset = true
     material.polygonOffsetFactor = 1
     material.polygonOffsetUnits = 1
+    // The ground window cuts the solid ground where it stands in the eye's way (viewer
+    // lib/ground-window), and the hole opens over a level below grade (ground-hole.tsx), its
+    // edge a noise threshold with a thin slate rim; with both closed the mask passes everywhere.
+    if (hasBasement) {
+      ;(material as unknown as { maskNode: unknown }).maskNode = solidGroundMaskNode()
+      material.colorNode = groundHoleColorNode(UNDERGROUND_RIM)
+      material.receivedShadowNode = groundHoleShadowNode()
+    } else {
+      ;(material as unknown as { maskNode: unknown }).maskNode = groundWindowMaskNode()
+    }
     return material
-  }, [bgColor])
+  }, [bgColor, daylight, hasBasement, solid])
 
   // Presentation horizon: a large ground disc under the lot, fading into the
   // active fog radiance (or the theme backdrop when there is no atmosphere) so
   // the scene sits on an "infinite" plane instead of a hard-edged plate. Never pickable.
   const horizonMaterial = useMemo(() => {
     if (!fadeBounds || groundReplaced) return null
+    if (daylight) {
+      const material = createDaylightGroundMaterial(solid, { horizon: atmosphere?.fogRadiance })
+      material.polygonOffset = true
+      material.polygonOffsetFactor = 2
+      material.polygonOffsetUnits = 2
+      if (hasBasement) {
+        ;(material as unknown as { maskNode: unknown }).maskNode = solidGroundMaskNode()
+        material.receivedShadowNode = groundHoleShadowNode()
+      } else {
+        ;(material as unknown as { maskNode: unknown }).maskNode = groundWindowMaskNode()
+      }
+      return material
+    }
     const material = new MeshLambertNodeMaterial({ color: bgColor })
     const center = vec2(fadeBounds.cx, fadeBounds.cz)
     const dist = positionWorld.xz.sub(center).length()
@@ -271,9 +373,9 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
       : backdropGradient({
           dirY: viewDir.y,
           background: color(backgroundColor),
-          haze: color(horizonHazeColor(skyColor, appearance)),
+          haze: color(haze),
           sky: color(skyColor),
-          skyDeep: color(deepSkyColor(skyColor)),
+          skyDeep: color(skyDeep),
         })
     // The halo also scales the in-band emissive: the dissolve starts at 1.05R,
     // so without it the (bright) backdrop dilutes the vignette exactly where
@@ -287,17 +389,39 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
     material.polygonOffset = true
     material.polygonOffsetFactor = 2
     material.polygonOffsetUnits = 2
+    if (hasBasement) {
+      ;(material as unknown as { maskNode: unknown }).maskNode = solidGroundMaskNode()
+      material.receivedShadowNode = groundHoleShadowNode()
+    } else {
+      ;(material as unknown as { maskNode: unknown }).maskNode = groundWindowMaskNode()
+    }
     return material
   }, [
+    solid,
+    daylight,
+    hasBasement,
     atmosphere,
     bgColor,
     backgroundColor,
     skyColor,
-    appearance,
+    haze,
+    skyDeep,
     maxLightIntensity,
     fadeBounds,
     groundReplaced,
   ])
+
+  // Over a level below grade the ground is drawn as a veil (ground-veil.tsx).
+  const groundVeil = useMemo(() => groundVeilMaterial(bgColor), [bgColor])
+  useEffect(() => () => groundVeil.dispose(), [groundVeil])
+  const horizonVeil = useMemo(
+    () =>
+      fadeBounds && polygonPoints && !groundReplaced
+        ? horizonVeilMaterial(bgColor, polygonPoints, fadeBounds)
+        : null,
+    [bgColor, fadeBounds, polygonPoints, groundReplaced],
+  )
+  useEffect(() => () => horizonVeil?.dispose(), [horizonVeil])
 
   // Cache computed polygons to keep the selector stable across unrelated store updates.
   const slabPolygonsCache = useRef<[number, number][][]>([])
@@ -310,6 +434,35 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
     return next
   })
 
+  // Inside a storey's own floor the ground never shows over it: the part of each floor plate the
+  // terrain stands over (a slope interpolated just over a walk-out's floor included) is cut too.
+  const overFloorsCache = useRef<[number, number][][]>([])
+  const overFloors = useScene((state: S) => {
+    const next = terrainOverFloors(state.nodes)
+    if (polygonsMatch(next, overFloorsCache.current)) return overFloorsCache.current
+    overFloorsCache.current = next
+    return next
+  })
+
+  // What the ground is cut open over: the recessed slabs, and the basement under the house. The
+  // house covers that part of a basement, so the ground there is open whatever level is shown:
+  // from outside nothing changes, and a stairwell, a floor opening or a walkthrough on the stair
+  // meets the basement, not a sheet of ground across it. A basement reaching out under the garden
+  // stays closed past the house (no pit in the garden) until its level is shown, and the hole of
+  // the level shown does the rest as it does. The one case it closes: the level display has the
+  // storeys away over a level below grade and the person keeps the ground Solid, nothing covers
+  // it then and Solid asks for solid ground. Clipped to the lot, as a hole past its line breaks
+  // the triangulation.
+  const coverOpen = !(belowGrade && groundMode === 'solid')
+  const holes = useMemo(() => {
+    const open = [...buried.covered, ...overFloors]
+    if (!coverOpen || open.length === 0 || !polygonPoints || polygonPoints.length < 3)
+      return slabPolygons
+    const inLot = intersection(union(open), polygonPoints as [number, number][])
+    const covered = inLot.filter((piece) => piece.holes.length === 0).map((piece) => piece.outer)
+    return covered.length > 0 ? [...slabPolygons, ...covered] : slabPolygons
+  }, [coverOpen, buried.covered, overFloors, polygonPoints, slabPolygons])
+
   // Ground shape: site polygon with slab footprints punched as holes
   const groundShape = useMemo(() => {
     if (!polygonPoints || polygonPoints.length < 3) return null
@@ -320,10 +473,10 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
     for (let i = 1; i < pts.length; i++) shape.lineTo(pts[i]![0], -pts[i]![1])
     shape.closePath()
 
-    addSlabHoles(shape, slabPolygons)
+    addSlabHoles(shape, holes)
 
     return shape
-  }, [polygonPoints, slabPolygons])
+  }, [polygonPoints, holes])
 
   // With terrain the lot is a block — its ground cut to the property line, its
   // skirt dropping to one flat base — and the disc lies just under that base, so
@@ -336,7 +489,8 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
 
   const horizonGeometry = useMemo(() => {
     if (!fadeBounds || groundReplaced) return null
-    const radius = Math.max(fadeBounds.radius * 8, 400)
+    // Daylight: reach the atmosphere's fog end so the ground meets the sky at the horizon.
+    const radius = daylight ? 6000 : Math.max(fadeBounds.radius * 8, 400)
     const shape = new Shape()
     const segments = 64
     shape.moveTo(radius, 0)
@@ -345,9 +499,9 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
       shape.lineTo(Math.cos(angle) * radius, Math.sin(angle) * radius)
     }
     shape.closePath()
-    addSlabHoles(shape, slabPolygons, fadeBounds.cx, fadeBounds.cz)
+    addSlabHoles(shape, holes, fadeBounds.cx, fadeBounds.cz)
     return new ShapeGeometry(shape)
-  }, [fadeBounds, slabPolygons, groundReplaced])
+  }, [daylight, fadeBounds, holes, groundReplaced])
   useEffect(() => () => horizonGeometry?.dispose(), [horizonGeometry])
   useEffect(() => () => horizonMaterial?.dispose(), [horizonMaterial])
 
@@ -549,8 +703,11 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
   // drops the parcel's own presentation — ground fill, sculpted ground, lot
   // line — while everything standing on the site keeps its own flag (the
   // exporter and the 2D plan draw the same line). The horizon disc is a world
-  // backdrop rather than part of the parcel, so it stays either way.
+  // backdrop rather than part of the parcel, so `visible` does not hide it.
+  // `showGround` hides both ground and horizon when authored geometry supplies them, unless a level
+  // below grade is shown: the level display hides that geometry then, and the ground stands in.
   const showSiteSurfaces = node.visible !== false
+  const showGround = siteGroundShown(node, { belowGrade })
 
   if (!(node && lineGeometry)) {
     return null
@@ -558,42 +715,70 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
 
   return (
     <group ref={ref} {...handlers}>
+      <GroundWindowSystem />
+      <GroundHole
+        drawnFloorY={buried.drawnFloorY}
+        floorY={buried.floorY}
+        footprints={buried.shown}
+        present={hasBasement}
+        topAt={groundTopAt}
+        topsoil={bgColor}
+        topY={GROUND_FILL_POSITION[1]}
+      />
       {/* Render children (buildings and items) */}
       {(node.children ?? []).map((childId) => (
         <NodeRenderer key={childId} nodeId={childId as AnyNodeId} />
       ))}
 
       {/* Sculpted ground, when the site has terrain */}
-      {showSiteSurfaces && showTerrain && (
+      {showSiteSurfaces && showGround && showTerrain && (
         <TerrainRenderer
-          holes={slabPolygons}
+          holes={holes}
           material={groundMaterial}
           polygon={polygonPoints}
           site={node}
+          veil={groundVeil}
         />
       )}
 
       {/* Ground fill: site polygon with slab holes, occludes below-grade geometry */}
-      {showSiteSurfaces && groundGeometry && !showTerrain && (
-        <mesh
-          geometry={groundGeometry}
-          material={groundMaterial}
-          position={[0, -0.05, 0]}
-          receiveShadow
-          rotation={[-Math.PI / 2, 0, 0]}
-        />
+      {showSiteSurfaces && showGround && groundGeometry && !showTerrain && (
+        <>
+          <mesh
+            geometry={groundGeometry}
+            material={groundMaterial}
+            position={GROUND_FILL_POSITION}
+            receiveShadow
+            rotation={FLAT_ON_THE_GROUND}
+            userData={{ [SITE_GROUND]: 'solid' }}
+          />
+          <GroundVeil
+            geometry={groundGeometry}
+            material={groundVeil}
+            position={GROUND_FILL_POSITION}
+            rotation={FLAT_ON_THE_GROUND}
+          />
+        </>
       )}
 
       {/* Infinite-ground presentation disc fading into the sky at the horizon */}
-      {!immersiveXR && horizonGeometry && horizonMaterial && fadeBounds && (
+      {showGround && !immersiveXR && horizonGeometry && horizonMaterial && fadeBounds && (
         <mesh
           geometry={horizonGeometry}
           material={horizonMaterial}
           position={[fadeBounds.cx, horizonY, fadeBounds.cz]}
           raycast={noopRaycast}
           receiveShadow
-          rotation={[-Math.PI / 2, 0, 0]}
-          userData={{ pascalExport: 'strip' }}
+          rotation={FLAT_ON_THE_GROUND}
+          userData={{ pascalExport: 'strip', [SITE_GROUND]: 'solid' }}
+        />
+      )}
+      {showGround && !immersiveXR && horizonGeometry && horizonVeil && fadeBounds && (
+        <GroundVeil
+          geometry={horizonGeometry}
+          material={horizonVeil}
+          position={[fadeBounds.cx, horizonY, fadeBounds.cz]}
+          rotation={FLAT_ON_THE_GROUND}
         />
       )}
 

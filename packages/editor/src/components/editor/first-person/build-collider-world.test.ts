@@ -18,6 +18,7 @@ import {
   ShelfNode,
   SiteNode,
   SlabNode,
+  StairNode,
   sceneRegistry,
   useInteractive,
   useScene,
@@ -433,4 +434,163 @@ describe('a door built from a script', () => {
     useInteractive.setState({ items: { door_shoji: { controlValues: [true] } } } as never)
     expect(firstHitAcrossDoorway()).toBeNull()
   })
+})
+
+// The ground is a sheet across the lot, and under a house with a basement the sheet ran across the
+// stairwell: a walker going down the stair met it at grade. The ground is drawn open over what the
+// house covers (`coveredBelowGradeFootprints`), and the walker's ground is cut open over the same.
+describe('a basement under the house', () => {
+  afterEach(() => {
+    sceneRegistry.clear()
+    nodeRegistry._reset()
+    useScene.setState({ nodes: {}, rootNodeIds: [] } as never)
+  })
+
+  type Box = { size: [number, number, number]; at: [number, number, number] }
+
+  function mountBoxes(node: AnyNode, boxes: Box[]) {
+    const group = new Group()
+    for (const { size, at } of boxes) {
+      const mesh = new Mesh(new BoxGeometry(...size), new MeshBasicMaterial())
+      mesh.position.set(...at)
+      group.add(mesh)
+    }
+    group.updateMatrixWorld(true)
+    sceneRegistry.nodes.set(node.id, group)
+    sceneRegistry.byType[node.type]!.add(node.id)
+  }
+
+  const rect = (x0: number, x1: number, z0: number, z1: number): Array<[number, number]> => [
+    [x0, z0],
+    [x1, z0],
+    [x1, z1],
+    [x0, z1],
+  ]
+  const TREADS = 14
+  const RISE = 0.2
+  const FLOOR_G = 0.05
+  const FLOOR_B = -2.95
+
+  /**
+   * An 8 m square house on a flat site (or a flat sculpted one) over a basement whose floor lies at
+   * -2.95 m, its plan 1.3..6.7 × 1.4..6.6. The ground floor is a slab with the stairwell cut out of
+   * it, and a stair of 14 treads, 0.2 m each, goes down along +x from x = 2 at z 3..4.
+   */
+  function house(sculpted: boolean) {
+    registerColliderDefinition('slab', SlabNode, 'structure', 'floor')
+    registerColliderDefinition('stair', StairNode, 'structure')
+    const field = createTerrainField({ cols: 21, rows: 21, spacing: 1, origin: [-6, -6] })
+    const site = SiteNode.parse({
+      id: 'site_test',
+      children: ['building_a'],
+      ...(sculpted ? { terrain: encodeTerrainField(field) } : {}),
+    })
+    const building = BuildingNode.parse({
+      id: 'building_a',
+      parentId: site.id,
+      children: ['level_b', 'level_g'],
+    })
+    const basement = LevelNode.parse({
+      id: 'level_b',
+      parentId: building.id,
+      level: -1,
+      baseElevation: -3,
+      height: 3,
+      children: ['slab_b'],
+    })
+    const ground = LevelNode.parse({
+      id: 'level_g',
+      parentId: building.id,
+      level: 0,
+      height: 3,
+      children: ['slab_g'],
+    })
+    const slabB = SlabNode.parse({
+      id: 'slab_b',
+      parentId: basement.id,
+      polygon: rect(1.3, 6.7, 1.4, 6.6),
+      elevation: 0.05,
+    })
+    const slabG = SlabNode.parse({
+      id: 'slab_g',
+      parentId: ground.id,
+      polygon: rect(0, 8, 0, 8),
+      elevation: FLOOR_G,
+    })
+    const stair = StairNode.parse({ id: 'stair_a', parentId: basement.id })
+    setSceneNodes([site, building, basement, ground, slabB, slabG, stair])
+    mountRegistryGroup(site)
+    mountBoxes(slabB, [{ size: [5.4, 0.1, 5.2], at: [4, FLOOR_B - 0.05, 4] }])
+    // The ground floor around the stairwell (x 2..5.4, z 3..4).
+    mountBoxes(slabG, [
+      { size: [2, 0.1, 8], at: [1, FLOOR_G - 0.05, 4] },
+      { size: [2.6, 0.1, 8], at: [6.7, FLOOR_G - 0.05, 4] },
+      { size: [3.4, 0.1, 3], at: [3.7, FLOOR_G - 0.05, 1.5] },
+      { size: [3.4, 0.1, 4], at: [3.7, FLOOR_G - 0.05, 6] },
+    ])
+    mountBoxes(
+      stair,
+      Array.from({ length: TREADS }, (_, i) => ({
+        size: [0.3, RISE, 1] as [number, number, number],
+        at: [2.15 + 0.3 * i, FLOOR_G - RISE * (i + 1) - RISE / 2, 3.5] as [number, number, number],
+      })),
+    )
+  }
+
+  const UP = new Vector3(0, 1, 0)
+  /** The first upward-facing surface under (x, z), looking down from `from`. */
+  function floorUnder(mesh: Mesh, x: number, z: number, from: number): number | null {
+    const raycaster = new Raycaster()
+    raycaster.set(new Vector3(x, from, z), new Vector3(0, -1, 0))
+    const hit = raycaster
+      .intersectObject(mesh, false)
+      .find(
+        (h) => !h.face || h.face.normal.clone().transformDirection(mesh.matrixWorld).dot(UP) > 0.2,
+      )
+    return hit ? hit.point.y : null
+  }
+
+  for (const sculpted of [false, true]) {
+    describe(sculpted ? 'on sculpted ground' : 'on flat ground', () => {
+      test('a walker goes down the stair from the ground floor to the basement', () => {
+        house(sculpted)
+        const world = buildFirstPersonColliderWorldFromRegistry()!
+        expect(world).not.toBeNull()
+
+        // Eye-level search from half a metre over the floor the walker stands on, a step at a time
+        // along the stair's run: the floor found is the next one he stands on.
+        let floor = floorUnder(world.mesh, 1, 3.5, 3)!
+        expect(floor).toBeCloseTo(FLOOR_G, 6)
+        const floors = [floor]
+        for (let x = 1.1; x < 6.5; x += 0.1) {
+          floor = floorUnder(world.mesh, x, 3.5, floor + 0.5) ?? Number.NaN
+          floors.push(floor)
+        }
+        // He never stands on the ground sheet (0 m) once past the stairwell's edge, and ends on
+        // the basement's floor; no step is deeper than a tread.
+        expect(Math.min(...floors)).toBeCloseTo(FLOOR_B, 6)
+        for (let i = 1; i < floors.length; i += 1)
+          expect(floors[i - 1]! - floors[i]!).toBeLessThanOrEqual(RISE + 1e-6)
+        world.dispose()
+      })
+
+      test('the ground is open over the part of the basement the house covers, and closed past it', () => {
+        house(sculpted)
+        const world = buildFirstPersonColliderWorldFromRegistry()!
+        // Under the ground floor's slab, looking down from just under it: the ground sheet is
+        // there outside the basement's plan and gone inside it, where the basement's floor is.
+        const under = (x: number, z: number) => floorUnder(world.mesh, x, z, FLOOR_G - 0.03)
+        expect(under(1.2, 5)).toBeCloseTo(0, 6)
+        expect(under(1.4, 5)).toBeCloseTo(FLOOR_B, 6)
+        expect(under(6.6, 5)).toBeCloseTo(FLOOR_B, 6)
+        expect(under(6.8, 5)).toBeCloseTo(0, 6)
+        expect(under(4, 1.3)).toBeCloseTo(0, 6)
+        expect(under(4, 1.5)).toBeCloseTo(FLOOR_B, 6)
+        // Outside the house: the garden is walked on as before.
+        expect(floorUnder(world.mesh, 12, 5, 3)).toBeCloseTo(0, 6)
+        expect(floorUnder(world.mesh, -3, -3, 3)).toBeCloseTo(0, 6)
+        world.dispose()
+      })
+    })
+  }
 })

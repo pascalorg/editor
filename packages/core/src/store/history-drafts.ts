@@ -1,4 +1,5 @@
 import type { AnyNode, AnyNodeId } from '../schema/types'
+import { currentSceneEnvironment } from './scene-environment'
 
 /**
  * Nodes an interaction is carrying (a placement or move draft). History never sees the carry:
@@ -44,7 +45,11 @@ type OwnedField = {
   heldKeys?: string[]
 }
 
-const sceneHistoryDrafts = new Map<AnyNodeId, SceneHistoryDraft>()
+const HISTORY_DRAFTS = Symbol('scene-history-drafts')
+
+/** The carried drafts of the current environment's store (scene-environment.ts). */
+const sceneHistoryDrafts = () =>
+  currentSceneEnvironment().slot(HISTORY_DRAFTS, () => new Map<AnyNodeId, SceneHistoryDraft>())
 
 type NodeMap = Record<AnyNodeId, AnyNode>
 
@@ -66,10 +71,11 @@ export function beginSceneHistoryDraft(
   original: AnyNode | null,
   nodes: NodeMap,
 ): () => void {
-  const existing = sceneHistoryDrafts.get(id)
+  const drafts = sceneHistoryDrafts()
+  const existing = drafts.get(id)
   if (existing && !existing.ended) {
     existing.refs += 1
-    return releaseOnce(id, existing)
+    return releaseOnce(drafts, id, existing)
   }
   const parent = original?.parentId ? nodes[original.parentId as AnyNodeId] : undefined
   const draft: SceneHistoryDraft = {
@@ -82,11 +88,15 @@ export function beginSceneHistoryDraft(
     ended: false,
     suspended: false,
   }
-  sceneHistoryDrafts.set(id, draft)
-  return releaseOnce(id, draft)
+  drafts.set(id, draft)
+  return releaseOnce(drafts, id, draft)
 }
 
-function releaseOnce(id: AnyNodeId, draft: SceneHistoryDraft): () => void {
+function releaseOnce(
+  drafts: Map<AnyNodeId, SceneHistoryDraft>,
+  id: AnyNodeId,
+  draft: SceneHistoryDraft,
+): () => void {
   let released = false
   return () => {
     if (released) return
@@ -94,7 +104,7 @@ function releaseOnce(id: AnyNodeId, draft: SceneHistoryDraft): () => void {
     draft.refs -= 1
     if (draft.refs > 0) return
     draft.ended = true
-    if (sceneHistoryDrafts.get(id) === draft) sceneHistoryDrafts.delete(id)
+    if (drafts.get(id) === draft) drafts.delete(id)
   }
 }
 
@@ -103,7 +113,7 @@ function releaseOnce(id: AnyNodeId, draft: SceneHistoryDraft): () => void {
  * gesture drops it (the 3D mover or the 2D move overlay) records the change.
  */
 export function withSceneHistoryDraftSuspended<T>(id: string | undefined, write: () => T): T {
-  const draft = id ? sceneHistoryDrafts.get(id as AnyNodeId) : undefined
+  const draft = id ? sceneHistoryDrafts().get(id as AnyNodeId) : undefined
   if (!(id && draft)) return write()
   // Visible to history for this write, but still the carry's: its own restore can revert it.
   const wasSuspended = draft.suspended
@@ -142,7 +152,7 @@ function heldHostEntries(
 }
 
 export function hasSceneHistoryDrafts(): boolean {
-  return sceneHistoryDrafts.size > 0
+  return sceneHistoryDrafts().size > 0
 }
 
 /**
@@ -151,7 +161,7 @@ export function hasSceneHistoryDrafts(): boolean {
  * the carry wrote. A write back to that earlier value ends the hold.
  */
 export function noteSceneHistoryDraftWrite(before: NodeMap, after: NodeMap): void {
-  for (const [id, draft] of sceneHistoryDrafts) {
+  for (const [id, draft] of sceneHistoryDrafts()) {
     const previous = before[id] as Record<string, unknown> | undefined
     const next = after[id] as Record<string, unknown> | undefined
     if (!(draft.original && previous && next)) continue
@@ -233,7 +243,7 @@ export function sceneHistoryDraftRevertUpdates(
 ): Array<{ id: AnyNodeId; data: Record<string, unknown> }> {
   const updates: Array<{ id: AnyNodeId; data: Record<string, unknown> }> = []
   for (const id of ids) {
-    const draft = sceneHistoryDrafts.get(id)
+    const draft = sceneHistoryDrafts().get(id)
     const live = nodes[id]
     if (!(draft?.original && live)) continue
     const data: Record<string, unknown> = {}
@@ -260,7 +270,7 @@ export function sceneHistoryDraftRevertUpdates(
  */
 export function settleSceneHistoryDrafts(ids: Iterable<AnyNodeId>): void {
   for (const id of ids) {
-    const draft = sceneHistoryDrafts.get(id)
+    const draft = sceneHistoryDrafts().get(id)
     if (!draft) continue
     draft.owned.clear()
     draft.hostEntries.clear()
@@ -268,12 +278,12 @@ export function settleSceneHistoryDrafts(ids: Iterable<AnyNodeId>): void {
 }
 
 export function clearSceneHistoryDrafts(): void {
-  sceneHistoryDrafts.clear()
+  sceneHistoryDrafts().clear()
 }
 
 /** Created drafts: history excludes them (and their subtrees) like fresh-placement nodes. */
 export function createdSceneHistoryDraftIds(): AnyNodeId[] {
-  return [...sceneHistoryDrafts]
+  return [...sceneHistoryDrafts()]
     .filter(([, draft]) => !(draft.original || draft.suspended))
     .map(([id]) => id)
 }
@@ -331,7 +341,7 @@ function placeChild(
  */
 export function withAdoptedDraftsAsOriginal(nodes: NodeMap, historyNodes: NodeMap): NodeMap {
   let result: NodeMap | null = null
-  for (const [id, draft] of sceneHistoryDrafts) {
+  for (const [id, draft] of sceneHistoryDrafts()) {
     if (draft.suspended) continue
     const live = nodes[id]
     const held = draft.original && live ? heldFields(draft, live) : []
@@ -373,7 +383,7 @@ export function withAdoptedDraftsAsOriginal(nodes: NodeMap, historyNodes: NodeMa
  */
 export function withDraftsRestored(before: NodeMap, after: NodeMap): NodeMap | null {
   let result: NodeMap | null = null
-  for (const [id, draft] of sceneHistoryDrafts) {
+  for (const [id, draft] of sceneHistoryDrafts()) {
     if (draft.suspended) continue
     const live = before[id]
     if (!live) continue

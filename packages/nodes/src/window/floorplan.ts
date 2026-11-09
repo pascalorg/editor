@@ -6,8 +6,15 @@ import type {
   WallNode,
   WindowNode,
 } from '@pascal-app/core'
-import { cornerPair, getWallBodyCenterOffset } from '@pascal-app/core'
+import {
+  type AnyNode,
+  cornerPair,
+  getWallBodyCenterOffset,
+  openingExteriorFace,
+  openingHostFacing,
+} from '@pascal-app/core'
 import { floorplanGeometryMetadata, readFloorplanContext } from '@pascal-app/editor'
+import { buildOpeningCasingPlan } from '../shared/opening-casing'
 import {
   buildOpeningMarkAnnotation,
   type OpeningFloorplanLevelData,
@@ -87,6 +94,8 @@ function cornerMitre(node: WindowNode, wall: WallNode, ctx: GeometryContext) {
  *   2. Inset inner outline — the "glass pane" frame inside the cutout.
  *   3. Center mullion line down the middle of the opening, along the
  *      wall direction — the legacy's standard glass divider.
+ *   4. Casing legs standing proud of each cased wall face beside the
+ *      cutout (`buildOpeningCasingPlan`).
  *
  * Skipped vs the full legacy for now: arched / rounded opening shape
  * variants, multi-pane mullion grids.
@@ -264,6 +273,68 @@ export function buildWindowFloorplan(
           vectorEffect: 'non-scaling-stroke',
         },
       ]
+
+  // The mode uses its architectural symbol even while the sash is closed.
+  if (node.windowType === 'tilt-turn' && node.openingKind !== 'opening' && !node.source) {
+    const level = wall.parentId ? ctx.resolve(wall.parentId as AnyNodeId) : undefined
+    const walls = [
+      wall,
+      ...(level?.type === 'level'
+        ? level.children.map((id) => ctx.resolve(id)).filter((entry): entry is AnyNode => !!entry)
+        : []),
+    ]
+    const nodes = Object.fromEntries(walls.map((entry) => [entry.id, entry])) as Record<
+      string,
+      AnyNode
+    >
+    const inward = openingExteriorFace(node, nodes) === 'a' ? -1 : 1
+    const ink = {
+      stroke: drafting ? '#1f2937' : accentColor,
+      strokeWidth: drafting ? 0.008 : 1.1,
+      ...(drafting ? {} : { vectorEffect: 'non-scaling-stroke' as const }),
+    }
+    if (node.tiltTurnMode === 'turn') {
+      const facing = openingHostFacing(node)
+      const hinge = (node.hingesSide === 'right' ? 1 : -1) * facing
+      const radius = Math.max(width - 2 * node.frameThickness, 0.01)
+      const [hx, hz] = plan(distance + (hinge * radius) / 2, across)
+      const [closedX, closedZ] = plan(distance - (hinge * radius) / 2, across)
+      const [tipX, tipZ] = plan(distance + (hinge * radius) / 2, across + inward * radius)
+      children.push({
+        kind: 'path',
+        d: `M ${closedX} ${closedZ} A ${radius} ${radius} 0 0 ${hinge * inward < 0 ? 1 : 0} ${tipX} ${tipZ}`,
+        fill: 'none',
+        ...ink,
+      })
+      children.push({ kind: 'line', x1: hx, y1: hz, x2: tipX, y2: tipZ, ...ink })
+    } else {
+      const left = plan(distance - width * 0.2, across)
+      const tip = plan(distance, across + inward * Math.max(depth, 0.15))
+      const right = plan(distance + width * 0.2, across)
+      children.push({
+        kind: 'path',
+        d: `M ${left[0]} ${left[1]} L ${tip[0]} ${tip[1]} L ${right[0]} ${right[1]}`,
+        fill: 'none',
+        ...ink,
+      })
+    }
+  }
+
+  // Casing legs on the wall faces beside the cutout, as the 3D window has them.
+  const casing = buildOpeningCasingPlan(
+    node,
+    wall,
+    drafting
+      ? { fill: '#ffffff', stroke: '#1f2937', strokeWidth: 0.006 }
+      : {
+          fill: fillColor,
+          stroke: accentColor,
+          strokeWidth: showSelectedChrome || isHovered ? 1.3 : 1,
+          vectorEffect: 'non-scaling-stroke',
+        },
+    mitre?.end,
+  )
+  if (casing) children.push(casing)
 
   // Move handle — orange dot at the window center. Only when selected.
   if (isSelected) {

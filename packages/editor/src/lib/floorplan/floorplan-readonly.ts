@@ -1,7 +1,7 @@
 import type { AnyNode, AnyNodeId, FloorplanPalette, GeometryContext } from '@pascal-app/core'
 import {
   createFloorplanContextExtensions,
-  type FloorplanWallDimensionReference,
+  type FloorplanWallDimensionFaces,
 } from './floorplan-extension'
 
 export type FloorplanViewState = {
@@ -14,7 +14,7 @@ export type FloorplanViewState = {
   drafting?: boolean
   /** Room labels drawn as screen pills (see `FloorplanContextExtension.roomLabelOverlay`). */
   roomLabelOverlay?: boolean
-  wallDimensionReference?: FloorplanWallDimensionReference
+  wallDimensionFaces?: FloorplanWallDimensionFaces
   highlighted: boolean
   hovered: boolean
   moving: boolean
@@ -65,7 +65,7 @@ export function buildFloorplanContext(
       purpose: viewState.purpose ?? 'edit',
       drafting: viewState.drafting === true,
       roomLabelOverlay: viewState.roomLabelOverlay === true,
-      wallDimensionReference: viewState.wallDimensionReference,
+      wallDimensionFaces: viewState.wallDimensionFaces,
     }),
     viewState: viewState.palette
       ? {

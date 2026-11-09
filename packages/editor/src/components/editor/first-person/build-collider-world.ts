@@ -1,6 +1,7 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  coveredBelowGradeFootprints,
   type DoorNode,
   getGarageVisibleOpeningRatio,
   getLevelElevations,
@@ -16,6 +17,7 @@ import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { acceleratedRaycast, computeBoundsTree, disposeBoundsTree } from 'three-mesh-bvh'
 import { computeSceneBoundsXZ } from '../../../lib/scene-bounds'
+import { cutGroundCollider } from './ground-holes'
 import { createTerrainColliderGeometry } from './terrain-collider'
 
 const SKIPPED_MESH_NAMES = new Set(['cutout', 'collision-mesh'])
@@ -161,19 +163,28 @@ function collectLevelFallbackFloorGeometries(nodes: SceneNodes) {
 // player at the datum inside an excavation and bury them inside a hill. Derived
 // from the field rather than the rendered terrain mesh for the same
 // mount-timing reason as the flat slab.
+//
+// Either way the ground is cut open over what the house covers of its basement
+// (`coveredBelowGradeFootprints`, the rings the ground is drawn open over): a sheet
+// across the stairwell would hold the player at grade on the way down, with the
+// stair and the basement's floor below it. The house covers that part, so it is cut
+// whatever the view does with the ground; past it the ground is walked on as before.
 function createSiteGroundColliderGeometry(site: SiteNode, nodes: SceneNodes) {
   if (site.visible === false) return null
 
   const siteObject = sceneRegistry.nodes.get(site.id)
   if (!siteObject?.visible) return null
 
+  const covered = coveredBelowGradeFootprints(nodes)
+
   const field = terrainFieldOf(site)
   if (field) {
     const terrainGeometry = createTerrainColliderGeometry(field)
     if (terrainGeometry) {
+      const cut = cutGroundCollider(terrainGeometry, covered)
       siteObject.updateWorldMatrix(true, false)
-      terrainGeometry.applyMatrix4(siteObject.matrixWorld)
-      return terrainGeometry
+      cut.applyMatrix4(siteObject.matrixWorld)
+      return cut
     }
   }
 
@@ -195,8 +206,9 @@ function createSiteGroundColliderGeometry(site: SiteNode, nodes: SceneNodes) {
   geometry.applyMatrix4(
     new THREE.Matrix4().makeTranslation(centerX, -LEVEL_FALLBACK_FLOOR_THICKNESS / 2, centerZ),
   )
-  geometry.applyMatrix4(siteObject.matrixWorld)
-  return geometry
+  const cut = cutGroundCollider(geometry, covered)
+  cut.applyMatrix4(siteObject.matrixWorld)
+  return cut
 }
 
 function collectSiteGroundColliderGeometries(nodes: SceneNodes) {

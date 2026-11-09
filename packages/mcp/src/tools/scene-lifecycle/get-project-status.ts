@@ -1,8 +1,8 @@
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import type { McpServer } from '@modelcontextprotocol/server'
 import { z } from 'zod'
 import type { SceneOperations } from '../../operations'
 import { DESTRUCTIVE_TOOL_ANNOTATIONS } from '../annotations'
-import { ErrorCode, McpError, throwMcpError } from '../errors'
+import { ProtocolError, ProtocolErrorCode, throwMcpError } from '../errors'
 import { currentLevelContext, projectStatusPayload } from './metadata'
 
 export const getProjectStatusInput = {
@@ -40,15 +40,15 @@ export function registerGetProjectStatus(server: McpServer, operations: SceneOpe
       title: 'Get project status',
       description:
         'Authoritative status/debug call for a Pascal project: editor URL, browser-visible version, latest saved version, published version, node count, and graph hash.',
-      inputSchema: getProjectStatusInput,
-      outputSchema: getProjectStatusOutput,
+      inputSchema: z.object(getProjectStatusInput),
+      outputSchema: z.object(getProjectStatusOutput),
       annotations: DESTRUCTIVE_TOOL_ANNOTATIONS,
     },
     async ({ id }) => {
       try {
         const status = await operations.getProjectStatus(id)
         if (!status) {
-          throwMcpError(ErrorCode.InvalidParams, 'project_not_found', { id })
+          throwMcpError(ProtocolErrorCode.InvalidParams, 'project_not_found', { id })
         }
         const activeScene = operations.getActiveScene()
         if (activeScene?.id !== status.id) {
@@ -71,9 +71,9 @@ export function registerGetProjectStatus(server: McpServer, operations: SceneOpe
           structuredContent: payload,
         }
       } catch (err) {
-        if (err instanceof McpError) throw err
+        if (err instanceof ProtocolError) throw err
         const msg = err instanceof Error ? err.message : String(err)
-        throwMcpError(ErrorCode.InternalError, msg)
+        throwMcpError(ProtocolErrorCode.InternalError, msg)
       }
     },
   )

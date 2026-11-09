@@ -22,6 +22,7 @@ import {
 } from '@pascal-app/core'
 import { findWallOpeningConflicts } from '../shared/wall-opening-clearance'
 import { bakeCabinetAnimationClip } from './animation'
+import { cabinetBatchable } from './batchable'
 import { buildCabinetFloorplan, buildCabinetModuleFloorplan } from './floorplan'
 import { cabinetModuleFloorplanMoveTarget } from './floorplan-move'
 import { cabinetFloorplanSiblingOverrides } from './floorplan-overrides'
@@ -2340,6 +2341,7 @@ export const cabinetDefinition: NodeDefinition<typeof CabinetNode> = {
   }),
 
   capabilities: {
+    batchable: cabinetBatchable,
     reveal: { phase: 'furnishing', style: 'drop', height: 0.3 },
     revealOnEdit: ['width', 'depth', 'carcassHeight', 'plinthHeight'],
     surfacePlacement: 'floor-only',
@@ -2556,6 +2558,7 @@ export const cabinetModuleDefinition: NodeDefinition<typeof CabinetModuleNode> =
   }),
 
   capabilities: {
+    batchable: cabinetBatchable,
     selectable: { hitVolume: 'bbox' },
     surfaces: { hosting: cabinetModuleSurfaceProvider },
     movable: {

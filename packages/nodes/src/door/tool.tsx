@@ -2,13 +2,21 @@ import {
   type AnyNode,
   type AnyNodeId,
   beginSceneHistoryDraft,
+  DEFAULT_WALL_THICKNESS,
   DoorNode,
+  doorPositionForFacing,
   emitter,
   type GridEvent,
+  getDoorOpeningSize,
+  getWallThickness,
   holdHiddenWallPointerEvents,
   isCurvedWall,
+  isRailingWall,
+  openingHostFacing,
   type RoofEvent,
   type RoofNode,
+  railingOpeningFields,
+  resolveOpeningFrameDepth,
   sceneRegistry,
   spatialGridManager,
   useScene,
@@ -53,6 +61,7 @@ import {
 import { clampToWall, hasWallChildOverlap, wallLocalToWorld } from './door-math'
 import { placedDoorFields, useDoorPlacement } from './placement'
 import DoorPreview from './preview'
+import { placementSwing } from './swing'
 
 const edgeMaterial = new LineBasicNodeMaterial({
   color: 0xef_44_44,
@@ -112,11 +121,6 @@ const DoorTool: React.FC = () => {
       }),
     [fallbackPose?.side, placedType, placedStyle],
   )
-  // The frame depth is a fixed parse default (the `side` flip doesn't change
-  // it); a ref lets the facing-pose publish inside the setup effect read it
-  // without re-subscribing every event listener.
-  const frameDepthRef = useRef(ghostStub.frameDepth)
-
   useEffect(() => {
     useScene.temporal.getState().pause()
 
@@ -244,6 +248,7 @@ const DoorTool: React.FC = () => {
       cursorRotationY: number,
       valid: boolean,
       indicatorYOffset: number,
+      hostThickness: number,
     ) => {
       setFallbackPose(null)
       const group = cursorGroupRef.current
@@ -258,7 +263,10 @@ const DoorTool: React.FC = () => {
       useFacingPose.getState().set({
         position: [worldPosition[0], worldPosition[1] + indicatorYOffset, worldPosition[2]],
         rotationY: cursorRotationY,
-        depth: frameDepthRef.current,
+        depth: resolveOpeningFrameDepth(
+          { frameDepth: draftRef.current?.frameDepth },
+          hostThickness,
+        ),
       })
     }
 
@@ -315,29 +323,58 @@ const DoorTool: React.FC = () => {
       height: number,
       applySnap: boolean,
       ignoreId?: string,
+      rotationY = 0,
     ) => {
       // Along-wall alignment guides are DISPLAYED in every snapping mode; the
       // magnetic pull onto them is applied only when `applySnap` (magnetic
       // "lines" mode). The grid component lives in `snapToHalf`, which is itself
       // mode-aware (raw cursor when grid is off).
+      const draft = draftRef.current
+      const size = getDoorOpeningSize({ ...draft, width, height })
+      const offset = size.leafOffsetX * openingHostFacing({ rotation: [0, rotationY, 0] })
+      const facingX = doorPositionForFacing(
+        {
+          ...draft,
+          width,
+          height,
+          rotation: [0, 0, 0],
+          position: [rawLocalX + size.leafOffsetX, height / 2, 0],
+        },
+        [0, rotationY, 0],
+      )[0]
       const localX = resolveWallSlideAlignment({
         wallNode: wall,
-        rawLocalX,
-        width,
+        rawLocalX: facingX - offset,
+        width: size.width,
         candidates: alignmentCandidates,
         applySnap,
       })
-      const { clampedX, clampedY } = clampToWall(wall, localX, width, height)
+      const cut = clampToWall(
+        wall,
+        localX + offset,
+        width,
+        height,
+        { ...draft, rotation: [0, rotationY, 0] },
+        useScene.getState().nodes,
+      )
+      const fittedSize = getDoorOpeningSize({
+        ...draft,
+        width,
+        height,
+        transomHeight: cut.transomHeight ?? draft?.transomHeight,
+      })
+      const clampedX = cut.clampedX
+      const clampedY = cut.clampedY
       const valid = !hasWallChildOverlap(
         wall.id,
         useScene.getState().nodes,
-        clampedX,
-        clampedY,
-        width,
-        height,
+        cut.clampedX - offset,
+        cut.clampedY + (fittedSize.height - height) / 2,
+        fittedSize.width,
+        fittedSize.height,
         ignoreId,
       )
-      return { clampedX, clampedY, valid }
+      return { clampedX, clampedY, valid, transomHeight: cut.transomHeight }
     }
 
     // Shared create/update path for the wall draft — used by the direct
@@ -349,10 +386,11 @@ const DoorTool: React.FC = () => {
       rawLocalX: number
       side: 'front' | 'back'
       itemRotation: number
+      swingSide: 'front' | 'back'
       cursorRotationY: number
       applySnap: boolean
     }) => {
-      const { wall, rawLocalX, side, itemRotation, cursorRotationY, applySnap } = args
+      const { wall, rawLocalX, side, itemRotation, swingSide, cursorRotationY, applySnap } = args
       const placed = placedDoorFields()
       const width = draftRef.current?.width ?? placed.width ?? 0.9
       const height = draftRef.current?.height ?? placed.height ?? 2.1
@@ -371,27 +409,34 @@ const DoorTool: React.FC = () => {
         draftRef.current = node
       }
 
-      const { clampedX, clampedY, valid } = resolveWallPlacement(
+      const { clampedX, clampedY, valid, transomHeight } = resolveWallPlacement(
         wall,
         rawLocalX,
         width,
         height,
         applySnap,
         draftRef.current.id,
+        itemRotation,
       )
+      // The leaf swings into the side the cursor is on (R sends it to the other side).
+      const swingDirection = placementSwing(draftRef.current, itemRotation, swingSide)
 
       if (wall.id === draftRef.current.parentId) {
         useScene.getState().updateNode(draftRef.current.id, {
           position: [clampedX, clampedY, 0],
+          ...(transomHeight === undefined ? {} : { transomHeight }),
           rotation: [0, itemRotation, 0],
           side,
+          swingDirection,
         })
         markHostDirty(wall.id)
       } else {
         useScene.getState().updateNode(draftRef.current.id, {
           position: [clampedX, clampedY, 0],
+          ...(transomHeight === undefined ? {} : { transomHeight }),
           rotation: [0, itemRotation, 0],
           side,
+          swingDirection,
           parentId: wall.id,
           wallId: wall.id,
           // The draft may arrive from a roof-segment face hover.
@@ -411,7 +456,8 @@ const DoorTool: React.FC = () => {
         ),
         cursorRotationY,
         valid,
-        -clampedY,
+        -height / 2,
+        getWallThickness(wall),
       )
 
       if (draftRef.current) {
@@ -438,6 +484,7 @@ const DoorTool: React.FC = () => {
       clampedY: number,
       side: 'front' | 'back',
       itemRotation: number,
+      swingSide: 'front' | 'back',
     ) => {
       const draft = draftRef.current
       if (!draft) return
@@ -456,15 +503,25 @@ const DoorTool: React.FC = () => {
         return w?.parentId === levelId
       }).length
 
+      // On a railing the door becomes a gap in the guard, as tall as the guard.
+      const railingGap = isRailingWall(wall) ? railingOpeningFields(wall) : null
       const node = DoorNode.parse({
-        name: `Door ${doorCount + 1}`,
-        position: [clampedX, clampedY, 0],
+        name: `${railingGap ? 'Opening' : 'Door'} ${doorCount + 1}`,
+        position: [
+          clampedX,
+          railingGap ? clampedY + (railingGap.height - draft.height) / 2 : clampedY,
+          0,
+        ],
         rotation: [0, itemRotation, 0],
         side,
         wallId: wall.id,
         parentId: wall.id,
         width: draft.width,
         height: draft.height,
+        sidelightLeft: draft.sidelightLeft,
+        sidelightRight: draft.sidelightRight,
+        transomHeight: draft.transomHeight,
+        slidingStyle: draft.slidingStyle,
         doorCategory: draft.doorCategory,
         doorType: draft.doorType,
         leafCount: draft.leafCount,
@@ -472,12 +529,14 @@ const DoorTool: React.FC = () => {
         slideDirection: draft.slideDirection,
         trackStyle: draft.trackStyle,
         garagePanelCount: draft.garagePanelCount,
+        casingFaceA: draft.casingFaceA,
+        casingFaceB: draft.casingFaceB,
+        casingWidth: draft.casingWidth,
         frameThickness: draft.frameThickness,
-        frameDepth: draft.frameDepth,
         threshold: draft.threshold,
         thresholdHeight: draft.thresholdHeight,
         hingesSide: draft.hingesSide,
-        swingDirection: draft.swingDirection,
+        swingDirection: placementSwing(draft, itemRotation, swingSide),
         segments: draft.segments,
         contentPadding: draft.contentPadding,
         handle: draft.handle,
@@ -486,6 +545,7 @@ const DoorTool: React.FC = () => {
         doorCloser: draft.doorCloser,
         panicBar: draft.panicBar,
         panicBarHeight: draft.panicBarHeight,
+        ...railingGap,
       })
 
       useScene.getState().createNode(node, wall.id as AnyNodeId)
@@ -517,8 +577,11 @@ const DoorTool: React.FC = () => {
       }
       lastWallEvent = event
 
-      // An outside wall's door faces out whichever face is hovered, as add_door places it.
-      const faceSide = placedDoorFace(event.node, getSideFromNormal(event.normal))
+      // An outside wall's door faces out whichever face is hovered, as add_door places it; the
+      // leaf still swings into the hovered side (R flips facing and swing together).
+      const hovered = getSideFromNormal(event.normal)
+      const swingSide = sideFlip ? (hovered === 'front' ? 'back' : 'front') : hovered
+      const faceSide = placedDoorFace(event.node, hovered)
       const side = sideFlip ? (faceSide === 'front' ? 'back' : 'front') : faceSide
       const flipOffset = sideFlip ? Math.PI : 0
       const itemRotation = (faceSide === 'back' ? Math.PI : 0) + flipOffset
@@ -534,6 +597,7 @@ const DoorTool: React.FC = () => {
         rawLocalX: event.localPosition[0],
         side,
         itemRotation,
+        swingSide,
         cursorRotationY: cursorRotation,
         applySnap: isMagneticSnapActive(),
       })
@@ -550,7 +614,9 @@ const DoorTool: React.FC = () => {
         return
       }
 
-      const faceSide = placedDoorFace(event.node, getSideFromNormal(event.normal))
+      const hovered = getSideFromNormal(event.normal)
+      const swingSide = sideFlip ? (hovered === 'front' ? 'back' : 'front') : hovered
+      const faceSide = placedDoorFace(event.node, hovered)
       const side = sideFlip ? (faceSide === 'front' ? 'back' : 'front') : faceSide
       const itemRotation = (faceSide === 'back' ? Math.PI : 0) + (sideFlip ? Math.PI : 0)
       const { clampedX, clampedY, valid } = resolveWallPlacement(
@@ -560,11 +626,12 @@ const DoorTool: React.FC = () => {
         draftRef.current.height,
         isMagneticSnapActive(),
         draftRef.current.id,
+        itemRotation,
       )
       // Alt force-places over a collision (the draft stays red as a warning).
       if (!valid && event.nativeEvent?.altKey !== true) return
 
-      commitDoorAtWall(event.node, clampedX, clampedY, side, itemRotation)
+      commitDoorAtWall(event.node, clampedX, clampedY, side, itemRotation, swingSide)
       event.stopPropagation()
     }
 
@@ -624,12 +691,20 @@ const DoorTool: React.FC = () => {
         width: draftRef.current?.width ?? 0.9,
         height: draftRef.current?.height ?? 2.1,
         ignoreId: draftRef.current?.id,
+        opening: draftRef.current ?? undefined,
         vertical: { kind: 'bottom-locked' },
       })
 
     const updateRoofCursor = (target: RoofWallOpeningTarget, roof: RoofNode) => {
       const pose = getRoofWallOpeningCursorPose(target, roof)
-      if (pose) updateCursor(pose.position, pose.rotationY, target.valid, -target.position[1])
+      if (pose)
+        updateCursor(
+          pose.position,
+          pose.rotationY,
+          target.valid,
+          -target.position[1],
+          DEFAULT_WALL_THICKNESS,
+        )
     }
 
     const onRoofHover = (event: RoofEvent) => {
@@ -704,6 +779,10 @@ const DoorTool: React.FC = () => {
         parentId: segment.id,
         width: draft.width,
         height: draft.height,
+        sidelightLeft: draft.sidelightLeft,
+        sidelightRight: draft.sidelightRight,
+        transomHeight: draft.transomHeight,
+        slidingStyle: draft.slidingStyle,
         doorCategory: draft.doorCategory,
         doorType: draft.doorType,
         leafCount: draft.leafCount,
@@ -711,8 +790,10 @@ const DoorTool: React.FC = () => {
         slideDirection: draft.slideDirection,
         trackStyle: draft.trackStyle,
         garagePanelCount: draft.garagePanelCount,
+        casingFaceA: draft.casingFaceA,
+        casingFaceB: draft.casingFaceB,
+        casingWidth: draft.casingWidth,
         frameThickness: draft.frameThickness,
-        frameDepth: draft.frameDepth,
         threshold: draft.threshold,
         thresholdHeight: draft.thresholdHeight,
         hingesSide: draft.hingesSide,
@@ -847,7 +928,11 @@ const DoorTool: React.FC = () => {
   // unmount rather than reallocating (and orphaning) an EdgesGeometry on every
   // re-render during placement.
   const edgesGeo = useMemo(() => {
-    const boxGeo = new BoxGeometry(FALLBACK_WIDTH, FALLBACK_HEIGHT, 0.07)
+    const boxGeo = new BoxGeometry(
+      FALLBACK_WIDTH,
+      FALLBACK_HEIGHT,
+      resolveOpeningFrameDepth({}, DEFAULT_WALL_THICKNESS),
+    )
     const geo = new EdgesGeometry(boxGeo)
     boxGeo.dispose()
     return geo

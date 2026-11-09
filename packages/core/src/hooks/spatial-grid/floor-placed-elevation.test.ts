@@ -191,6 +191,114 @@ describe('floor-placed elevation resolver', () => {
     ).toBe(0.05)
   })
 
+  test("what stands on a room's scripted floor stands on the planks' top; beside it, on the plate", () => {
+    registerNode(
+      makeDefinition('item', {
+        floorPlaced: { footprint: () => ({ dimensions: [1, 0.01, 1], rotation: [0, 0, 0] }) },
+      }),
+    )
+    const room: [number, number][] = [
+      [-2, -2],
+      [2, -2],
+      [2, 2],
+      [-2, 2],
+    ]
+    const plate = {
+      id: 'slab_plate',
+      type: 'slab',
+      parentId: LEVEL_ID,
+      boundary: 'auto',
+      plateRole: 'base',
+      polygon: [
+        [-2, -2],
+        [6, -2],
+        [6, 2],
+        [-2, 2],
+      ],
+      holes: [],
+      elevation: 0.05,
+      thickness: 0.05,
+      zoneIds: ['zone_living', 'zone_hall'],
+    } as unknown as SlabNode
+    // 18 mm planks laid from the floor's surface, y = 0.
+    const living = {
+      id: 'zone_living',
+      type: 'zone',
+      parentId: LEVEL_ID,
+      polygon: room,
+      holes: [],
+      floor: { script: { manifest: { bounds: { min: [-2, 0, -2], max: [2, 0.018, 2] } } } },
+    } as unknown as AnyNode
+    const hall = {
+      id: 'zone_hall',
+      type: 'zone',
+      parentId: LEVEL_ID,
+      polygon: room.map(([x, z]) => [x + 4, z]),
+      holes: [],
+    } as unknown as AnyNode
+    const level = { ...makeLevel(), children: [plate.id, living.id, hall.id] } as AnyNode
+    spatialGridManager.handleNodeCreated(plate as AnyNode, LEVEL_ID)
+    const rug = makeFloorNode()
+    const nodes = nodesFor(level, plate as AnyNode, living, hall, rug)
+
+    // The rug lies on the planks (0.05 plate + 1 mm under the build + 18 mm), not in them.
+    expect(getFloorPlacedElevation({ node: rug, nodes, position: [0, 0, 0] })).toBeCloseTo(0.069, 9)
+    // In the hall, which has no floor script, it lies on the plate.
+    expect(getFloorPlacedElevation({ node: rug, nodes, position: [4, 0, 0] })).toBe(0.05)
+    // A support pinned to the plate reads the same surface.
+    const pinned = { ...rug, supportSlabId: plate.id } as AnyNode
+    expect(
+      getFloorPlacedElevation({
+        node: pinned,
+        nodes: { ...nodes, [pinned.id]: pinned },
+        position: [0, 0, 0],
+      }),
+    ).toBeCloseTo(0.069, 9)
+  })
+
+  test("what stands on a slab's scripted surface stands on the build's top; off it, on the level", () => {
+    registerNode(
+      makeDefinition('item', {
+        floorPlaced: { footprint: () => ({ dimensions: [1, 0.01, 1], rotation: [0, 0, 0] }) },
+      }),
+    )
+    // 25 mm decking laid from the terrace's top, y = 0.
+    const terrace = {
+      id: 'slab_terrace',
+      type: 'slab',
+      parentId: LEVEL_ID,
+      polygon: [
+        [-2, -2],
+        [2, -2],
+        [2, 2],
+        [-2, 2],
+      ],
+      holes: [],
+      elevation: 0.3,
+      thickness: 0.3,
+      surfaceScript: { manifest: { bounds: { min: [-2, 0, -2], max: [2, 0.025, 2] } } },
+    } as unknown as SlabNode
+    const level = { ...makeLevel(), children: [terrace.id] } as AnyNode
+    spatialGridManager.handleNodeCreated(terrace as AnyNode, LEVEL_ID)
+    const chair = makeFloorNode()
+    const nodes = nodesFor(level, terrace as AnyNode, chair)
+
+    // The chair stands on the boards (0.3 slab + 1 mm under the build + 25 mm), not in them.
+    expect(getFloorPlacedElevation({ node: chair, nodes, position: [0, 0, 0] })).toBeCloseTo(
+      0.326,
+      9,
+    )
+    expect(getFloorPlacedElevation({ node: chair, nodes, position: [6, 0, 0] })).toBe(0)
+    const bare = { ...terrace, surfaceScript: undefined } as AnyNode
+    expect(
+      getFloorPlacedElevation({
+        node: chair,
+        nodes: { ...nodes, [bare.id]: bare },
+        position: [0, 0, 0],
+      }),
+    ).toBe(0.3)
+  })
+
   test('canPlaceOnFloorFootprints accepts an L-shaped draft in the open corner gap', () => {
     const baseAsset = (makeFloorNode() as { asset: Record<string, unknown> }).asset
     registerNode(

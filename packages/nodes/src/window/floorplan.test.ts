@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import {
   type FloorplanGeometry,
   type GeometryContext,
+  LevelNode,
   WallNode,
   WindowNode,
 } from '@pascal-app/core'
@@ -38,6 +39,13 @@ describe('buildWindowFloorplan wall-local plane offset', () => {
     const [footprint] = polygonSpans()
     expect(footprint?.min).toBeCloseTo(-0.1, 9)
     expect(footprint?.max).toBeCloseTo(0.1, 9)
+  })
+
+  test('an offset auto-depth window is exactly as deep as its wall', () => {
+    const spans = polygonSpans({ position: [2, 1.5, -0.205] })
+    expect(
+      spans.some((span) => Math.abs(span.min + 0.305) < 1e-9 && Math.abs(span.max + 0.105) < 1e-9),
+    ).toBe(true)
   })
 
   test('a frame standing proud of the wall draws outside that face, at its own depth', () => {
@@ -102,4 +110,46 @@ describe('buildWindowFloorplan at a corner window', () => {
     expect(reaches(points, [0, 0.1])).toBe(true)
     expect(reaches(points, [0, -0.1])).toBe(true)
   })
+})
+
+test('tilt-turn plan shows a tilt mark or an inward turn arc, following room topology', () => {
+  const level = LevelNode.parse({ children: [] })
+  const points: [number, number][] = [
+    [0, 0],
+    [4, 0],
+    [4, 4],
+    [0, 4],
+  ]
+  const walls = points.map((start, i) =>
+    WallNode.parse({ parentId: level.id, start, end: points[(i + 1) % 4] }),
+  )
+  level.children = walls.map((wall) => wall.id)
+  const nodes = Object.fromEntries([level, ...walls].map((node) => [node.id, node]))
+  for (const tiltTurnMode of ['tilt', 'turn'] as const) {
+    for (const side of ['front', 'back'] as const) {
+      const node = WindowNode.parse({
+        parentId: walls[0]!.id,
+        position: [2, 1.5, 0],
+        windowType: 'tilt-turn',
+        tiltTurnMode,
+        side,
+        rotation: [0, side === 'front' ? 0 : Math.PI, 0],
+      })
+      const geometry = buildWindowFloorplan(node, {
+        parent: walls[0],
+        children: [],
+        siblings: [],
+        resolve: (id: string) => nodes[id],
+      } as unknown as GeometryContext)
+      const children = geometry?.kind === 'group' ? geometry.children : []
+      const symbol = children.find((child) => child.kind === 'path')
+      expect(symbol?.kind).toBe('path')
+      if (symbol?.kind !== 'path') throw Error('Missing window symbol')
+      expect(symbol.d.includes(' A ')).toBe(tiltTurnMode === 'turn')
+      // The final point is in the room (+z), for either placement face.
+      const numbers = symbol.d.match(/-?[\d.]+/g)!.map(Number)
+      if (tiltTurnMode === 'turn') expect(numbers.at(-1)!).toBeGreaterThan(0)
+      else expect(numbers[3]!).toBeGreaterThan(0)
+    }
+  }
 })

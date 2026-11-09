@@ -262,7 +262,8 @@ function slabHandles(node: SlabNodeType): HandleDescriptor<SlabNodeType>[] {
 /**
  * Slab — Phase 5 batch kind, polygon-based. Stage B: `def.geometry`
  * drives the rebuild via generic <GeometrySystem>; <ParametricNodeRenderer>
- * mounts the empty group. No per-kind renderer or system file.
+ * mounts the empty group, which the slab's renderer composes with the build
+ * of its surface script.
  *
  * Capabilities:
  *  - **No `movable`**: slab's "move" today is whole-slab translation via
@@ -375,6 +376,10 @@ export const slabDefinition: NodeDefinition<typeof SlabNode> = {
     move: () => import('./move-tool'),
   },
 
+  renderer: {
+    kind: 'parametric',
+    module: () => import('./renderer'),
+  },
   // Stage B: pure geometry function.
   geometry: buildSlabGeometry,
   // Dependency tracker only — dirties level slabs when walls / sibling

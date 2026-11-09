@@ -1,6 +1,13 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import type { AnyNode, AnyNodeId } from '@pascal-app/core'
 import { sceneRegistry, useScene } from '@pascal-app/core'
+import {
+  BATCHED_LAYER,
+  hideFromScene,
+  presentLevelsForCapture,
+  SCENE_LAYER,
+  SHADOW_ONLY_LAYER,
+} from '@pascal-app/viewer'
 import { create } from '@react-three/test-renderer'
 import { createElement } from 'react'
 import { Object3D } from 'three'
@@ -161,6 +168,64 @@ describe("the editor's level display", () => {
     expect(objects.every((object) => object.visible && object.layers.isEnabled(0))).toBe(true)
   })
 
+  test('decides from the level index alone: the levels above the selected one hide in every building', async () => {
+    const level = (id: string, parentId: string, index: number) => ({
+      object: 'node',
+      id,
+      type: 'level',
+      parentId,
+      visible: true,
+      metadata: {},
+      children: [],
+      level: index,
+      height: 2.5,
+    })
+    const building = (id: string, children: string[]) => ({
+      object: 'node',
+      id,
+      type: 'building',
+      parentId: null,
+      visible: true,
+      metadata: {},
+      children,
+    })
+    const levels = [
+      level('level_a_m1', 'building_a', -1),
+      level('level_a_g', 'building_a', 0),
+      level('level_b_m1', 'building_b', -1),
+      level('level_b_g', 'building_b', 0),
+    ]
+    useScene.setState({
+      nodes: Object.fromEntries(
+        [
+          building('building_a', ['level_a_m1', 'level_a_g']),
+          building('building_b', ['level_b_m1', 'level_b_g']),
+          ...levels,
+        ].map((node) => [node.id, node]),
+      ) as unknown as Record<AnyNodeId, AnyNode>,
+    })
+    const objects = new Map(
+      levels.map((entry) => {
+        const object = new Object3D()
+        sceneRegistry.nodes.set(entry.id, object)
+        sceneRegistry.byType.level!.add(entry.id)
+        return [entry.id, object] as const
+      }),
+    )
+    // The first house's basement selected: the second house's basement shows as it does, and both
+    // ground floors are hidden, whichever house they belong to.
+    setLevelMode('stacked', 'level_a_m1')
+    useViewer.setState({ hideLevelsAboveSelection: true })
+    await updateLevelPresentation(1 / 12)
+    const drawn = (id: string) => objects.get(id)!.layers.isEnabled(0)
+    expect(['level_a_m1', 'level_a_g', 'level_b_m1', 'level_b_g'].map(drawn)).toEqual([
+      true,
+      false,
+      true,
+      false,
+    ])
+  })
+
   test('a full-building capture shows the hidden upper levels for its render', async () => {
     const { levels, objects } = setupLevels([0, 0])
     setLevelMode('stacked', levels[0]!.id)
@@ -211,6 +276,80 @@ describe('a level a construction reveal is playing on', () => {
 })
 
 describe('snapLevelsToTruePositions', () => {
+  test.each(['missing', 'unmounted', 'unindexed', 'hidden-level', 'hidden-building'])(
+    'refuses Solo for a %s floor before changing the live presentation',
+    (condition) => {
+      const { building, levels, objects } = setupLevels([0.5, 1.25])
+      const selected = levels[1]!
+      if (condition === 'missing') {
+        const nodes = { ...useScene.getState().nodes }
+        delete nodes[selected.id as AnyNodeId]
+        useScene.setState({ nodes })
+      } else if (condition === 'unmounted') sceneRegistry.nodes.delete(selected.id)
+      else if (condition === 'unindexed') sceneRegistry.byType.level!.delete(selected.id)
+      else hideLevel(condition === 'hidden-level' ? selected.id : building.id)
+      const snapshot = () =>
+        objects.map((obj) => ({
+          y: obj.position.y,
+          visible: obj.visible,
+          mask: obj.layers.mask,
+        }))
+      const before = snapshot()
+      const graph = useScene.getState().nodes
+      const preferences = useViewer.getState()
+      expect(() => presentLevelsForCapture({ mode: 'solo', levelId: selected.id })).toThrow()
+      expect(snapshot()).toEqual(before)
+      expect(useScene.getState().nodes).toBe(graph)
+      expect(useViewer.getState()).toBe(preferences)
+    },
+  )
+
+  test('captures exact Solo and Exploded states, retaining batch masks and restoring live state', () => {
+    const { levels, objects } = setupLevels([0.5, 1.25, 0])
+    objects[0]!.visible = false
+    hideFromScene(objects[1]!, 'shadow-only')
+    hideFromScene(objects[2]!, 'isolated')
+    const batchSource = new Object3D()
+    objects[1]!.add(batchSource)
+    hideFromScene(batchSource, 'batched')
+    const snapshot = () =>
+      objects.map((obj) => ({ y: obj.position.y, visible: obj.visible, mask: obj.layers.mask }))
+    const before = snapshot()
+    const graph = useScene.getState().nodes
+    const preferences = useViewer.getState()
+    const batchMask = batchSource.layers.mask
+    let restore = presentLevelsForCapture({ mode: 'exploded' })
+    expect(objects.map((obj) => obj.position.y)).toEqual([0.5, 9.25, 16.75])
+    expect(objects.every((obj) => obj.visible)).toBe(true)
+    expect(objects.map((obj) => obj.layers.isEnabled(SCENE_LAYER))).toEqual([true, true, false])
+    expect(objects[2]!.layers.isEnabled(SHADOW_ONLY_LAYER)).toBe(false)
+    expect(batchSource.layers.isEnabled(BATCHED_LAYER)).toBe(true)
+    expect(batchSource.layers.isEnabled(SCENE_LAYER)).toBe(false)
+    restore()
+    expect(snapshot()).toEqual(before)
+    expect(batchSource.layers.mask).toBe(batchMask)
+    restore = presentLevelsForCapture({ mode: 'solo', levelId: levels[1]!.id })
+    expect(objects.map((obj) => obj.position.y)).toEqual([0.5, 4.25, 6.75])
+    expect(objects[0]!.visible).toBe(false)
+    expect(objects[1]!.layers.isEnabled(SCENE_LAYER)).toBe(true)
+    expect(objects[2]!.layers.isEnabled(SCENE_LAYER)).toBe(false)
+    expect(objects[2]!.layers.isEnabled(SHADOW_ONLY_LAYER)).toBe(false)
+    restore()
+    expect(snapshot()).toEqual(before)
+    restore = presentLevelsForCapture({ mode: 'solo', levelId: levels[2]!.id })
+    expect(objects[2]!.layers.isEnabled(SCENE_LAYER)).toBe(true)
+    restore()
+    expect(snapshot()).toEqual(before)
+    restore = presentLevelsForCapture({ mode: 'stacked' })
+    expect(objects.map((obj) => obj.position.y)).toEqual([0.5, 4.25, 6.75])
+    expect(objects.map((obj) => obj.layers.isEnabled(SCENE_LAYER))).toEqual([true, true, false])
+    restore()
+    expect(snapshot()).toEqual(before)
+    expect(batchSource.layers.mask).toBe(batchMask)
+    expect(useScene.getState().nodes).toBe(graph)
+    expect(useViewer.getState()).toBe(preferences)
+  })
+
   test('bakes offset-aware stacked positions and restores the prior presentation', () => {
     const { objects } = setupLevels([0.5, 1.25])
     objects[0]!.position.y = 10

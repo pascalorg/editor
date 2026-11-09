@@ -4,7 +4,12 @@ import { layoutIssuesFromScene } from './layout-clearance'
 
 /** A 4 × 3 m room (zone and four walls) on one level, with the named pieces standing at the given centres. */
 function room(
-  ...pieces: { asset: string; at: [number, number]; size?: [number, number, number] }[]
+  ...pieces: {
+    asset: string
+    name?: string
+    at: [number, number]
+    size?: [number, number, number]
+  }[]
 ) {
   const corners: [number, number][] = [
     [0, 0],
@@ -35,7 +40,7 @@ function room(
       position: [piece.at[0], 0, piece.at[1]],
       asset: {
         id: piece.asset,
-        name: piece.asset,
+        name: piece.name ?? piece.asset,
         category: 'furniture',
         thumbnail: '',
         src: 'asset://x',
@@ -60,6 +65,35 @@ describe('item_mid_room: a wall-bound piece standing away from every wall', () =
     expect(issues).toHaveLength(1)
     expect(issues[0]?.message).toContain('item_fridge')
     expect(issues[0]?.message).toMatch(/wall/)
+  })
+
+  it('names the piece by what it is, not by the hash of its script', () => {
+    const [issue] = midRoom(
+      room({ asset: 'script_1b81f9fff17d122a', name: 'U1 Fridge', at: [2, 1.5] }),
+    )
+    expect(issue?.message).toContain('a fridge belongs against a wall')
+    expect(issue?.message).not.toContain('a script_')
+  })
+
+  it('lets a sofa and counter stools float: they stand off the wall in an open plan by design', () => {
+    expect(
+      midRoom(
+        room(
+          {
+            asset: 'script_47df4bd3c48150a2',
+            name: 'L-shaped linen sofa',
+            at: [2, 1.5],
+            size: [2.2, 0.9, 1.6],
+          },
+          {
+            asset: 'script_71538f9e74b6d027',
+            name: 'Oak counter stools (3)',
+            at: [1, 1.5],
+            size: [1.6, 0.7, 0.4],
+          },
+        ),
+      ),
+    ).toEqual([])
   })
 
   it('accepts a fridge set against a wall', () => {

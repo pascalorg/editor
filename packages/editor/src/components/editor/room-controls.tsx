@@ -12,7 +12,6 @@ import {
   useScene,
 } from '@pascal-app/core'
 import { getSceneTheme, setSurfaceRaycastLayers, useViewer } from '@pascal-app/viewer'
-import { Html } from '@react-three/drei'
 import { useFrame, useThree } from '@react-three/fiber'
 import { SquareSplitHorizontal } from 'lucide-react'
 import Image from 'next/image'
@@ -69,6 +68,7 @@ import {
 } from '../tools/shared/draft-measurement-label'
 import { ActionMenuButton } from './action-menu-button'
 import { getMenuYOffset } from './floating-action-menu'
+import { Html } from './localized-html'
 import { NodeActionMenu } from './node-action-menu'
 import { RoomFloorHighlight3D } from './room-floor-highlight'
 import { RoomHandleDragPreview3D, RoomHandles3D } from './room-handles'

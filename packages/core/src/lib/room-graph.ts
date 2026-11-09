@@ -73,6 +73,7 @@ export function polygonSignature(points: Point2D[]) {
   const keys = points.map(pointKey)
   const forward = minRotationSignature(keys)
   const reversed = minRotationSignature([...keys].reverse())
+  // biome-ignore lint/complexity/useMathMinMax: lexicographic string comparison
   return forward < reversed ? forward : reversed
 }
 

@@ -139,12 +139,12 @@ function makeHitGeometry(hole: HolePolygon, centerY: number, height: number): Bu
 
 function getSurfaceY(slab: SlabNode): number {
   const elevation = slab.elevation ?? 0.05
-  return (elevation > 0 ? elevation : 0) + SURFACE_OFFSET
+  return Math.max(elevation, 0) + SURFACE_OFFSET
 }
 
 function getHitCenterY(slab: SlabNode): number {
   const elevation = slab.elevation ?? 0.05
-  const surfaceTop = elevation > 0 ? elevation : 0
+  const surfaceTop = Math.max(elevation, 0)
   // Keep the hit box's TOP at the slab surface (never poke above it) so the
   // slab's centre thickness/height handle, which sits on top, always wins the
   // raycast over the hole's selectable area.

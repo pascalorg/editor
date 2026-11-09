@@ -1,3 +1,4 @@
+import { formatLength, type MessageDescriptor, usePascalI18n } from '@pascal-app/core'
 import { Icon } from '@iconify/react'
 import type { ToolHint } from '@pascal-app/core'
 import { Fragment, useEffect, useId, useState, useSyncExternalStore } from 'react'
@@ -6,6 +7,7 @@ import {
   type ContinuationContext,
 } from '../../../lib/continuation'
 import type { ContextualShortcutHint } from '../../../lib/contextual-help'
+import { hintText, nodeLabel, toolHintChipLabel, toolHintLabel } from '../../../i18n/node-messages'
 import type { HudTitle } from '../../../lib/hud-title'
 import { hasActivePaintMaterial } from '../../../lib/material-paint'
 import { usePaintRegionMode } from '../../../lib/paint-region-mode'
@@ -169,10 +171,10 @@ const SNAPPING_MODE_ICONS = {
 } as const
 
 const SNAPPING_MODE_LABELS = {
-  grid: 'Grid',
-  lines: 'Lines',
-  angles: 'Angles',
-  off: 'Off',
+  grid: /* i18n */ { id: 'editor.helpers.contextualHelperPanel.snappingGrid', message: 'Snapping: Grid' },
+  lines: /* i18n */ { id: 'editor.helpers.contextualHelperPanel.snappingLines', message: 'Snapping: Lines' },
+  angles: /* i18n */ { id: 'editor.helpers.contextualHelperPanel.snappingAngles', message: 'Snapping: Angles' },
+  off: /* i18n */ { id: 'editor.helpers.contextualHelperPanel.snappingOff', message: 'Snapping: Off' },
 } as const
 
 const GRID_SNAP_STEPS: GridSnapStep[] = [0.5, 0.25, 0.1, 0.05]
@@ -185,6 +187,7 @@ function nextGridSnapStep(step: GridSnapStep): GridSnapStep {
 // The active interaction's snapping controls, scoped to its context (wall / item
 // / polygon) so each action shows only the modes that make sense for it.
 function SnappingChips({ context }: { context: SnapContext }) {
+  const i18n = usePascalI18n()
   const snappingMode = useEditor((s) => s.snappingModeByContext[context])
   const setSnappingMode = useEditor((s) => s.setSnappingMode)
   const gridSnapStep = useEditor((s) => s.gridSnapStep)
@@ -195,28 +198,36 @@ function SnappingChips({ context }: { context: SnapContext }) {
   return (
     <>
       <ChipRow
-        ariaLabel={`Snapping: ${SNAPPING_MODE_LABELS[snappingMode]}`}
+        ariaLabel={i18n._(SNAPPING_MODE_LABELS[snappingMode])}
         guideTarget="snap-mode"
         icon={SNAPPING_MODE_ICONS[snappingMode]}
-        label={`Snapping: ${SNAPPING_MODE_LABELS[snappingMode]}`}
+        label={i18n._(SNAPPING_MODE_LABELS[snappingMode])}
         onClick={() => {
           setSnappingMode(context, cycleSnappingModeIn(context, snappingMode))
           sfxEmitter.emit('sfx:grid-snap')
         }}
         shortcut="Shift"
-        tooltip="Snapping mode — click or press Shift to cycle"
+        tooltip={i18n._({ id: 'editor.helpers.contextualHelperPanel.snappingModeClickOrPressShift', message: 'Snapping mode — click or press Shift to cycle' })}
       />
       {gridActive ? (
         <ChipRow
-          ariaLabel={`Grid step: ${gridSnapStep.toFixed(2)} m`}
+          ariaLabel={i18n._({
+            id: 'editor.helpers.contextualHelperPanel.gridStepLength',
+            message: 'Grid step: {length}',
+            values: { length: formatLength(gridSnapStep, 'm', { locale: i18n.getLocale(), min: 2, max: 2 }) },
+          })}
           guideTarget="snap-grid-step"
-          label={`Grid: ${gridSnapStep.toFixed(2)} m`}
+          label={i18n._({
+            id: 'editor.helpers.contextualHelperPanel.gridLength',
+            message: 'Grid: {length}',
+            values: { length: formatLength(gridSnapStep, 'm', { locale: i18n.getLocale(), min: 2, max: 2 }) },
+          })}
           onClick={() => {
             setGridSnapStep(nextGridSnapStep(gridSnapStep))
             sfxEmitter.emit('sfx:grid-snap')
           }}
           shortcut="Ctrl"
-          tooltip="Grid step — click or tap Ctrl to cycle"
+          tooltip={i18n._({ id: 'editor.helpers.contextualHelperPanel.gridStepClickOrTapCtrl', message: 'Grid step — click or tap Ctrl to cycle' })}
         />
       ) : null}
     </>
@@ -229,8 +240,12 @@ function SnappingChips({ context }: { context: SnapContext }) {
 // the tool itself) cycles it.
 function ToolHintChipRow({ hint }: { hint: ToolHint & { chip: NonNullable<ToolHint['chip']> } }) {
   const { chip } = hint
+  const i18n = usePascalI18n()
   const value = useSyncExternalStore(chip.subscribe, chip.value, chip.value)
-  const label = chip.labels[value] ?? hint.label
+  const english = chip.labels[value]
+  const label = english
+    ? toolHintChipLabel(value, english, i18n)
+    : toolHintLabel(hint.label, i18n)
   return (
     <ChipRow
       ariaLabel={label}
@@ -238,31 +253,38 @@ function ToolHintChipRow({ hint }: { hint: ToolHint & { chip: NonNullable<ToolHi
       label={label}
       onClick={chip.cycle}
       shortcut={hint.key}
-      tooltip={chip.tooltip}
+      tooltip={chip.tooltip ? toolHintLabel(chip.tooltip, i18n) : undefined}
     />
   )
 }
 
 function ContinuationChip({ context }: { context: ContinuationContext }) {
+  const i18n = usePascalI18n()
   const mode = useEditor((s) => s.getContinuation(context))
   const cycleContinuation = useEditor((s) => s.cycleContinuation)
   const profile = CONTINUATION_PROFILES[context]
-  const label = profile.labels[mode] ?? mode
+  const descriptor = profile.labels[mode]
+  const label = descriptor ? i18n._(descriptor) : mode
   const icon = profile.icons[mode] ?? 'lucide:repeat'
 
   return (
     <ChipRow
-      ariaLabel={`Continuation: ${label}`}
+      ariaLabel={i18n._({
+        id: 'editor.helpers.contextualHelperPanel.continuationLabel',
+        message: 'Continuation: {label}',
+        values: { label },
+      })}
       icon={icon}
       label={label}
       onClick={() => cycleContinuation(context)}
       shortcut="C"
-      tooltip="Continuation — click or press C to cycle"
+      tooltip={i18n._({ id: 'editor.helpers.contextualHelperPanel.continuationClickOrPressCTo', message: 'Continuation — click or press C to cycle' })}
     />
   )
 }
 
 function FenceContinuationChips() {
+  const i18n = usePascalI18n()
   const mode = useEditor((s) => s.getContinuation('fence'))
   const setContinuation = useEditor((s) => s.setContinuation)
   const curveStarted = useFenceCurveDraft((s) => s.pointCount > 0)
@@ -287,13 +309,13 @@ function FenceContinuationChips() {
         label={typeLabel}
         onClick={() => setContinuation('fence', nextType)}
         shortcut="T"
-        tooltip="Fence type — click or press T to switch between straight, curved and freehand"
+        tooltip={i18n._({ id: 'editor.helpers.contextualHelperPanel.fenceTypeClickOrPressT', message: 'Fence type — click or press T to switch between straight, curved and freehand' })}
       />
       <ChipRow
         ariaLabel={`Fence continuation: ${straightMode === 'single' ? 'Single' : 'Continuous'}`}
         disabled={isCurved || isFreehand}
         icon={straightMode === 'single' ? 'lucide:minus' : 'lucide:waypoints'}
-        label={straightMode === 'single' ? 'Straight: Single' : 'Straight: Continuous'}
+        label={straightMode === 'single' ? i18n._({ id: 'editor.helpers.contextualHelperPanel.straightSingle', message: 'Straight: Single' }) : i18n._({ id: 'editor.helpers.contextualHelperPanel.straightContinuous', message: 'Straight: Continuous' })}
         onClick={
           isCurved || isFreehand
             ? undefined
@@ -302,8 +324,8 @@ function FenceContinuationChips() {
         shortcut="C"
         tooltip={
           isCurved || isFreehand
-            ? 'Straight continuation is unavailable for curved or freehand fences'
-            : 'Straight fence continuation — click or press C to toggle'
+            ? i18n._({ id: 'editor.helpers.contextualHelperPanel.straightContinuationIsUnavailableForCurved', message: 'Straight continuation is unavailable for curved or freehand fences' })
+            : i18n._({ id: 'editor.helpers.contextualHelperPanel.straightFenceContinuationClickOrPress', message: 'Straight fence continuation — click or press C to toggle' })
         }
       />
       {/* Curved fences are committed by a closing gesture rather than per-click,
@@ -312,7 +334,7 @@ function FenceContinuationChips() {
       {(isCurved || isFreehand) && curveStarted ? (
         <ChipRow
           icon="lucide:circle-check"
-          label={isFreehand ? 'Drag to draw fence' : 'Finish curve (or double-click)'}
+          label={isFreehand ? i18n._({ id: 'editor.helpers.contextualHelperPanel.dragToDrawFence', message: 'Drag to draw fence' }) : i18n._({ id: 'editor.helpers.contextualHelperPanel.finishCurveOrDoubleClick', message: 'Finish curve (or double-click)' })}
           shortcut={isFreehand ? 'Release' : 'Enter'}
         />
       ) : null}
@@ -340,6 +362,7 @@ function PaintNotice() {
 // derived `paintHover` (scopes + labels), so it works for any kind without a
 // per-target table.
 function PaintScopeChip() {
+  const i18n = usePascalI18n()
   // What the cursor is over (that's what the next click paints). `null` when not
   // over a paintable surface — including an item with no slots.
   const paintHover = useEditor((s) => s.paintHover)
@@ -349,12 +372,30 @@ function PaintScopeChip() {
   const paintMode = usePaintRegionMode((s) => s.mode)
   const paintEraser = paintMode === 'erase'
   const picking = paintMode === 'pick'
-  const verb = picking ? 'Pick' : paintEraser ? 'Erase' : 'Paint'
+  const verb = picking ? 'pick' : paintEraser ? 'erase' : 'paint'
+  const scopeText = (scope: PaintScope) =>
+    ({
+      pick: i18n._({
+        id: 'editor.helpers.contextualHelperPanel.pickScope',
+        message: 'Pick: {scope}',
+        values: { scope: paintScopeLabel(scope, paintHover!) },
+      }),
+      erase: i18n._({
+        id: 'editor.helpers.contextualHelperPanel.eraseScope',
+        message: 'Erase: {scope}',
+        values: { scope: paintScopeLabel(scope, paintHover!) },
+      }),
+      paint: i18n._({
+        id: 'editor.helpers.contextualHelperPanel.paintScope',
+        message: 'Paint: {scope}',
+        values: { scope: paintScopeLabel(scope, paintHover!) },
+      }),
+    })[verb]
 
   // Nothing to paint with yet (no material picked, not erasing) → the first step
   // is choosing a material, so say that before anything about scope or hovering.
   if (!(paintEraser || picking || hasActivePaintMaterial(activePaintMaterial))) {
-    return <ChipRow icon="lucide:palette" label="Select a material to paint" />
+    return <ChipRow icon="lucide:palette" label={i18n._({ id: 'editor.helpers.contextualHelperPanel.selectAMaterialToPaint', message: 'Select a material to paint' })} />
   }
 
   // Not over anything paintable → guide the user to hover, still teaching Shift.
@@ -364,10 +405,10 @@ function PaintScopeChip() {
         icon="lucide:mouse-pointer-click"
         label={
           picking
-            ? 'Hover a surface to pick its material'
+            ? i18n._({ id: 'editor.helpers.contextualHelperPanel.hoverASurfaceToPickIts', message: 'Hover a surface to pick its material' })
             : paintEraser
-              ? 'Hover a painted surface to erase'
-              : 'Hover a surface to paint'
+              ? i18n._({ id: 'editor.helpers.contextualHelperPanel.hoverAPaintedSurfaceToErase', message: 'Hover a painted surface to erase' })
+              : i18n._({ id: 'editor.helpers.contextualHelperPanel.hoverASurfaceToPaint', message: 'Hover a surface to paint' })
         }
         shortcut={picking ? undefined : 'Shift'}
       />
@@ -385,29 +426,43 @@ function PaintScopeChip() {
     return (
       <ChipRow
         icon={picking ? 'lucide:pipette' : PAINT_SCOPE_ICONS[effective]}
-        label={`${verb}: ${paintScopeLabel(picking ? 'single' : effective, paintHover)}`}
+        label={scopeText(picking ? 'single' : effective)}
       />
     )
   }
 
   return (
     <ChipRow
-      ariaLabel={`${verb} scope: ${paintScopeLabel(effective, paintHover)}`}
+      ariaLabel={
+        paintEraser
+          ? i18n._({ id: 'editor.helpers.contextualHelperPanel.eraseScopeLabel', message: 'Erase scope: {scope}', values: { scope: paintScopeLabel(effective, paintHover) } })
+          : i18n._({ id: 'editor.helpers.contextualHelperPanel.paintScopeLabel', message: 'Paint scope: {scope}', values: { scope: paintScopeLabel(effective, paintHover) } })
+      }
       icon={PAINT_SCOPE_ICONS[effective]}
-      label={`${verb}: ${paintScopeLabel(effective, paintHover)}`}
+      label={scopeText(effective)}
       onClick={() => cyclePaintScope()}
       shortcut="Shift"
-      tooltip={`${verb} scope — click or press Shift to cycle`}
+      tooltip={
+        paintEraser
+          ? i18n._({ id: 'editor.helpers.contextualHelperPanel.eraseScopeClickOrPressShift', message: 'Erase scope — click or press Shift to cycle' })
+          : i18n._({ id: 'editor.helpers.contextualHelperPanel.paintScopeClickOrPressShift', message: 'Paint scope — click or press Shift to cycle' })
+      }
     />
   )
 }
 
 // The tool in hand: its icon, name and arming key, over a hairline.
 function HudHeader({ title }: { title: HudTitle }) {
+  const i18n = usePascalI18n()
+  const kind = title.kind
+    ? nodeLabel(title.kind.kind, title.kind.english, i18n).toLocaleLowerCase(i18n.getLocale())
+    : undefined
+  const descriptor: MessageDescriptor = { ...title.label, values: { ...title.label.values, kind } }
+  const label = i18n._(descriptor)
   return (
     <div
       className="col-span-2 mb-0.5 flex items-center gap-2.5 border-border border-b pb-2.5"
-      data-hud-title={title.label}
+      data-hud-title={label}
     >
       {title.icon ? (
         <span className="flex size-7 shrink-0 items-center justify-center">
@@ -415,7 +470,7 @@ function HudHeader({ title }: { title: HudTitle }) {
         </span>
       ) : null}
       <span className="min-w-0 flex-1 truncate font-medium text-[13px] text-foreground leading-tight">
-        {title.label}
+        {label}
       </span>
       {title.shortcut ? <ShortcutToken className={TOKEN_CLASS} value={title.shortcut} /> : null}
     </div>
@@ -430,6 +485,7 @@ const isEscHint = (hint: ContextualShortcutHint) =>
 const isNoteHint = (hint: ContextualShortcutHint) => hint.keys.length === 1 && hint.keys[0] === '!'
 
 function HintRow({ hint }: { hint: ContextualShortcutHint }) {
+  const i18n = usePascalI18n()
   return (
     <div className={cn(ROW_CLASS, 'items-start')}>
       <ShortcutSequence active={hint.active} keys={hint.keys} />
@@ -440,17 +496,20 @@ function HintRow({ hint }: { hint: ContextualShortcutHint }) {
             hint.active ? 'font-medium text-foreground dark:text-white' : 'text-muted-foreground',
           )}
         >
-          {hint.label}
+          {hintText(hint.label, i18n)}
         </div>
         {hint.subtitle ? (
-          <div className="text-[10px] text-muted-foreground/70 leading-snug">{hint.subtitle}</div>
+          <div className="text-[10px] text-muted-foreground/70 leading-snug">
+            {hintText(hint.subtitle, i18n)}
+          </div>
         ) : null}
       </div>
     </div>
   )
 }
 
-const hintKey = (hint: ContextualShortcutHint) => `${hint.keys.join('+')}:${hint.label}`
+const hintKey = (hint: ContextualShortcutHint) =>
+  `${hint.keys.join('+')}:${typeof hint.label === 'string' ? hint.label : hint.label.id}`
 
 export function ContextualHelperPanel({
   hints,
@@ -475,6 +534,7 @@ export function ContextualHelperPanel({
   // A warning about what is in hand (a floor item in a door's way), in the "!" row.
   notice?: string | null
 }) {
+  const i18n = usePascalI18n()
   const inStack = useInRightStack()
   const [showAllHints, setShowAllHints] = useState(false)
   const hintsId = useId()
@@ -486,8 +546,8 @@ export function ContextualHelperPanel({
   if (fenceFeature === 'gate' || fenceFeature === 'opening') return (
     <div className={cn(CARD_CLASS, !inStack && FLOATING_CLASS)} data-hud-card>
       {title ? <HudHeader title={title} /> : null}
-      <ChipRow shortcut="Left click" label={fenceFeature === 'gate' ? 'Place gate on a fence' : 'Place passage on a fence'} />
-      <ChipRow shortcut="Esc" label="Cancel placement" />
+      <ChipRow shortcut="Left click" label={fenceFeature === 'gate' ? i18n._({ id: 'editor.helpers.contextualHelperPanel.placeGateOnAFence', message: 'Place gate on a fence' }) : i18n._({ id: 'editor.helpers.contextualHelperPanel.placePassageOnAFence', message: 'Place passage on a fence' })} />
+      <ChipRow shortcut="Esc" label={i18n._({ id: 'editor.helpers.contextualHelperPanel.cancelPlacement', message: 'Cancel placement' })} />
     </div>
   )
   if (hints.length === 0 && !hasChips && !notice) return null
@@ -518,7 +578,7 @@ export function ContextualHelperPanel({
           onClick={() => setShowAllHints((value) => !value)}
           type="button"
         >
-          {showAllHints ? 'Fewer shortcuts' : 'More shortcuts'}
+          {showAllHints ? i18n._({ id: 'editor.helpers.contextualHelperPanel.fewerShortcuts', message: 'Fewer shortcuts' }) : i18n._({ id: 'editor.helpers.contextualHelperPanel.moreShortcuts', message: 'More shortcuts' })}
         </button>
       ) : null}
       {notice ? <HintRow hint={{ keys: ['!'], label: notice, active: true }} /> : null}

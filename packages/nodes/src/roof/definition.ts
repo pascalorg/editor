@@ -10,16 +10,24 @@ import {
 import {
   DRAFTING_SURFACE_EXTENSION_KEY,
   type DraftingSurfaceExtension,
+  FLOORPLAN_NODE_EXTENSION_KEY,
+  type FloorplanNodeExtension,
   PANEL_MODEL_EXTENSION,
 } from '@pascal-app/editor'
 import { buildRoofFloorplan } from './floorplan'
+import { roofFloorplanAffectedIds, roofFloorplanSiblingOverrides } from './floorplan-overrides'
+import { roofPaint } from './paint'
 import { roofPanelModel } from './panel-model'
 import { roofParametrics } from './parametrics'
-import useRoofFootprintSource from './roof-footprint-source'
+import useRoofFootprintSource, {
+  irregularRoomHintVisibility,
+  noRoomHintVisibility,
+} from './roof-footprint-source'
 import useRoofPlacementMode, {
   conicalRoofToolHintVisibility,
   standardRoofToolHintVisibility,
 } from './roof-placement-mode'
+import useRoofRidgeMode from './roof-ridge-mode'
 import { RoofNode } from './schema'
 
 const MOVE_FRONT_OFFSET = 0.35
@@ -126,6 +134,9 @@ export const roofDefinition: NodeDefinition<typeof RoofNode> = {
     [DRAFTING_SURFACE_EXTENSION_KEY]: {
       kind: 'roof',
     } satisfies DraftingSurfaceExtension,
+    [FLOORPLAN_NODE_EXTENSION_KEY]: {
+      tool: () => import('./floorplan-tool'),
+    } satisfies FloorplanNodeExtension,
   },
 
   defaults: () => {
@@ -136,6 +147,7 @@ export const roofDefinition: NodeDefinition<typeof RoofNode> = {
 
   capabilities: {
     exterior: true,
+    paint: roofPaint,
     reveal: {
       phase: 'roof',
       style: 'assemble',
@@ -229,9 +241,30 @@ export const roofDefinition: NodeDefinition<typeof RoofNode> = {
     },
     {
       key: 'R',
-      label: 'Rotate roof direction 90°',
+      label: 'Ridge direction',
       visible: standardRoofToolHintVisibility,
+      chip: {
+        subscribe: (onChange) => useRoofRidgeMode.subscribe(onChange),
+        value: () => useRoofRidgeMode.getState().mode,
+        cycle: () => useRoofRidgeMode.getState().toggle(),
+        labels: {
+          long: 'Ridge: Long side',
+          short: 'Ridge: Short side',
+        },
+        icons: {
+          long: 'lucide:rectangle-horizontal',
+          short: 'lucide:rectangle-vertical',
+        },
+        tooltip: 'Ridge direction - click or press R to turn it 90°',
+      },
     },
+    // Room makes nothing where there is no room to roof: say why, where a click would do nothing.
+    {
+      key: 'Room',
+      label: 'Not a rectangle: draw this roof instead',
+      visible: irregularRoomHintVisibility,
+    },
+    { key: 'Room', label: 'Point inside a room, porch or deck', visible: noRoomHintVisibility },
     { key: 'Esc', label: 'Cancel' },
   ],
   toolOptions: [
@@ -262,6 +295,8 @@ export const roofDefinition: NodeDefinition<typeof RoofNode> = {
   parametrics: roofParametrics,
   handles: resolveRoofHandles,
   floorplan: buildRoofFloorplan,
+  floorplanSiblingOverrides: roofFloorplanSiblingOverrides,
+  floorplanAffectedIds: roofFloorplanAffectedIds,
 
   rendersChildren: false,
   renderer: {

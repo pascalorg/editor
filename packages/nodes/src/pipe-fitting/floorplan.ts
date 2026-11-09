@@ -1,5 +1,5 @@
 import type { FloorplanGeometry, GeometryContext } from '@pascal-app/core'
-import { INCHES_TO_METERS } from '../duct-segment/geometry'
+import { INCHES_TO_METERS } from '../duct-segment/profile'
 import { accessoryFloorplan } from '../shared/accessory-floorplan'
 import { buildPipeFittingGeometry } from './geometry'
 import { getPipeFittingPorts } from './ports'

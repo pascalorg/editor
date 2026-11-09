@@ -10,6 +10,7 @@ import {
 import {
   createFloorplanContextExtensions,
   readFloorplanGeometryMetadata,
+  WALL_PULL_AFFORDANCE,
   WALL_PUSH_AFFORDANCE,
 } from '@pascal-app/editor'
 import { buildWallFloorplan } from './floorplan'
@@ -36,7 +37,7 @@ function context(
   purpose: 'edit' | 'document',
   selected = false,
   metricNotation: 'meters' | 'millimeters' = 'meters',
-  wallDimensionReference: 'finished-faces' | 'centerline' | 'stud-faces' = 'finished-faces',
+  wallDimensionFaces: 'interior' | 'exterior' | 'both' = 'both',
   automaticDimensions = true,
 ): GeometryContext {
   return {
@@ -56,7 +57,7 @@ function context(
       automaticDimensions,
       metricNotation,
       purpose,
-      wallDimensionReference,
+      wallDimensionFaces,
     }),
   }
 }
@@ -171,10 +172,7 @@ describe('buildWallFloorplan render purpose', () => {
   })
 
   test('does not construct automatic wall dimensions when presentation disables them', () => {
-    const geometry = buildWallFloorplan(
-      wall,
-      context('edit', false, 'meters', 'finished-faces', false),
-    )
+    const geometry = buildWallFloorplan(wall, context('edit', false, 'meters', 'both', false))
     const entries = geometry ? flatten(geometry) : []
 
     expect(
@@ -188,22 +186,22 @@ describe('buildWallFloorplan render purpose', () => {
     expect(entries.some((entry) => entry.kind === 'polygon')).toBe(true)
   })
 
-  test('keeps standalone wall witnesses on the wall face in every intersection mode', () => {
+  test("keeps a standalone wall's outside string on its face, and drops it for Inside", () => {
     const plainWall = WallNode.parse({
       ...wall,
       thickness: 0.1,
     })
-    const witnessY = (reference: 'finished-faces' | 'centerline' | 'stud-faces') => {
-      const geometry = buildWallFloorplan(plainWall, context('edit', false, 'meters', reference))
+    const witnessY = (faces: 'interior' | 'exterior' | 'both') => {
+      const geometry = buildWallFloorplan(plainWall, context('edit', false, 'meters', faces))
       const dimension = geometry
         ? flatten(geometry).find((entry) => entry.kind === 'dimension-string')
         : undefined
       return dimension?.kind === 'dimension-string' ? dimension.segments[0]?.start[1] : undefined
     }
 
-    expect(witnessY('finished-faces')).toBeCloseTo(0.065)
-    expect(witnessY('centerline')).toBeCloseTo(0.065)
-    expect(witnessY('stud-faces')).toBeCloseTo(0.065)
+    expect(witnessY('both')).toBeCloseTo(0.065)
+    expect(witnessY('exterior')).toBeCloseTo(0.065)
+    expect(witnessY('interior')).toBeUndefined()
   })
 
   test('shows an orthogonal depth dimension for a curved wall without a radius leader', () => {
@@ -221,7 +219,11 @@ describe('buildWallFloorplan render purpose', () => {
   test('places selected push arrows on the curved wall midpoint', () => {
     const curved = WallNode.parse({ ...wall, curveOffset: 1 })
     const geometry = buildWallFloorplan(curved, context('edit', true))
-    const arrows = geometry ? flatten(geometry).filter((entry) => entry.kind === 'move-arrow') : []
+    const arrows = geometry
+      ? flatten(geometry).filter(
+          (entry) => entry.kind === 'move-arrow' && entry.affordance === WALL_PUSH_AFFORDANCE,
+        )
+      : []
 
     expect(arrows).toHaveLength(2)
     // Each arrow is the 3D side arrow's push for its face, not a free move.
@@ -242,6 +244,39 @@ describe('buildWallFloorplan render purpose', () => {
     expect(arrows[0].point[1]).toBeCloseTo(-0.885)
     expect(arrows[1].point[0]).toBeCloseTo(2)
     expect(arrows[1].point[1]).toBeCloseTo(-1.115)
+  })
+
+  test('a selected wall carries a pull grip at each end, pointing out along the wall', () => {
+    const unselected = buildWallFloorplan(wall, context('edit', false))
+    const pullsOf = (geometry: FloorplanGeometry | null) =>
+      geometry
+        ? flatten(geometry).filter(
+            (entry) => entry.kind === 'move-arrow' && entry.affordance === WALL_PULL_AFFORDANCE,
+          )
+        : []
+    expect(pullsOf(unselected)).toHaveLength(0)
+
+    const grips = pullsOf(buildWallFloorplan(wall, context('edit', true)))
+    expect(grips).toHaveLength(2)
+    expect(grips[0]).toMatchObject({
+      kind: 'move-arrow',
+      variant: 'pull',
+      point: wall.start,
+      affordance: WALL_PULL_AFFORDANCE,
+      payload: { wallId: wall.id, endpoint: 'start' },
+      title: 'Drag to draw the next wall',
+    })
+    expect(grips[1]).toMatchObject({
+      kind: 'move-arrow',
+      variant: 'pull',
+      point: wall.end,
+      payload: { wallId: wall.id, endpoint: 'end' },
+    })
+    if (grips[0]?.kind !== 'move-arrow' || grips[1]?.kind !== 'move-arrow') return
+    // Out of the wall: back along it from the start, on along it from the end.
+    const along = Math.atan2(wall.end[1] - wall.start[1], wall.end[0] - wall.start[0])
+    expect(Math.cos(grips[1].angle - along)).toBeCloseTo(1)
+    expect(Math.cos(grips[0].angle - along)).toBeCloseTo(-1)
   })
 
   test('places thickness handles on both visible faces of a curved wall', () => {

@@ -1,3 +1,4 @@
+import { getWallBodyCenterOffset, type WallNode } from '@pascal-app/core'
 import { type Object3D, Vector3 } from 'three'
 
 type WallSide = 'front' | 'back'
@@ -54,4 +55,21 @@ export function wallPointerInParent(
 /** Collision mesh winding can differ from the wall frame; the hit identifies the touched side. */
 export function wallSideAtPointer(point: readonly number[]): WallSide {
   return point[2]! >= 0 ? 'front' : 'back'
+}
+
+/**
+ * The face of a straight wall a plan point is on, as a 3D hover reports it: `front` is the wall
+ * frame's +Z (the plan side `(-dz, dx)` of start → end), measured from the wall body's centre so a justified
+ * wall splits at its middle. The plan's stand-in for the hovered face's normal.
+ */
+export function wallSideOfPlanPoint(
+  wall: Pick<WallNode, 'start' | 'end' | 'thickness' | 'justification'>,
+  point: readonly [number, number],
+): WallSide {
+  const dx = wall.end[0] - wall.start[0]
+  const dz = wall.end[1] - wall.start[1]
+  const length = Math.hypot(dx, dz)
+  if (length < 1e-9) return 'front'
+  const across = ((point[0] - wall.start[0]) * -dz + (point[1] - wall.start[1]) * dx) / length
+  return across >= getWallBodyCenterOffset(wall) ? 'front' : 'back'
 }

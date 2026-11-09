@@ -3,12 +3,17 @@
 import { Icon } from '@iconify/react'
 import {
   acquireSceneReadOnlyLease,
+  createI18n,
   getCatalogMaterialById,
   getLibraryMaterialIdFromRef,
+  getMaterialSwatch,
   getSceneMaterialIdFromRef,
   initSpaceDetectionSync,
   initSpatialGridSync,
+  type MessageDescriptor,
+  PascalI18nProvider,
   spatialGridManager,
+  usePascalI18n,
   useScene,
 } from '@pascal-app/core'
 import {
@@ -19,6 +24,7 @@ import {
   SceneEnvironment,
   useViewer,
   Viewer,
+  type ViewerBreadcrumbHandler,
   type ViewerImmersiveSession,
   ViewerPresentations,
 } from '@pascal-app/viewer'
@@ -31,6 +37,7 @@ import {
   useCallback,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
 } from 'react'
@@ -40,9 +47,11 @@ import { type SaveStatus, useAutoSave } from '../../hooks/use-auto-save'
 import { useKeyboard } from '../../hooks/use-keyboard'
 import { useIsMobile } from '../../hooks/use-mobile'
 import { useSaveShortcut } from '../../hooks/use-save-shortcut'
+import { type HINT_KEY_NAMES, toolHintKey, toolHintKeyDescriptor } from '../../i18n/node-messages'
 import { useCeilingEditSessionOwner } from '../../lib/ceiling-edit-session'
 import { showsWholeBuilding, useEditorLevelDisplay } from '../../lib/editor-level-display'
 import { isSceneView } from '../../lib/editor-views'
+import { initFinishScriptRefresh } from '../../lib/geometry-script/finish-scripts'
 import { useGestureLifecycleOwner } from '../../lib/gesture-lifecycle'
 import { shouldShowEditingControls } from '../../lib/interaction/overlay-policy'
 import {
@@ -69,7 +78,7 @@ import useSessionGroups from '../../store/use-session-groups'
 import { paneOfView, VIEW_2D, VIEW_3D, type ViewPaneIndex } from '../../store/view-layout'
 import { PointAskLayer } from '../point-ask/point-ask-layer'
 import { CeilingSelectionAffordanceSystem } from '../systems/ceiling/ceiling-selection-affordance-system'
-import { CeilingSystem } from '../systems/ceiling/ceiling-system'
+import { CeilingSystem, CeilingTopsSync } from '../systems/ceiling/ceiling-system'
 import { RoofEditSystem } from '../systems/roof/roof-edit-system'
 import { SelectionAffordanceManager } from '../systems/selection-affordance-manager'
 import { StairEditSystem } from '../systems/stair/stair-edit-system'
@@ -94,6 +103,8 @@ import { SettingsPanel, type SettingsPanelProps } from '../ui/sidebar/panels/set
 import { SitePanel, type SitePanelProps } from '../ui/sidebar/panels/site-panel'
 import type { SidebarTab } from '../ui/sidebar/tab-bar'
 import { useHostPanels } from '../ui/sidebar/use-plugin-panels'
+import { SKY_DOCK_HEIGHT, SkyControl } from '../viewer/sky-control'
+import { useViewerUiSounds } from '../viewer/use-viewer-ui-sounds'
 import { ViewerHoverLabel } from '../viewer/viewer-hover-label'
 import { ParametricViewerRooms } from '../viewer/viewer-rooms'
 import { ViewerSelectionManager } from '../viewer/viewer-selection-manager'
@@ -183,11 +194,13 @@ const EDITOR_DEFAULT_RENDER = { shading: 'solid' } as const
 function initializeEditorRuntime(): () => void {
   const unsubscribeSpatialGrid = initSpatialGridSync()
   const unsubscribeSpaceDetection = initSpaceDetectionSync(useScene, useEditor)
+  const stopFinishScriptRefresh = initFinishScriptRefresh()
   initSFXBus()
 
   return () => {
     unsubscribeSpatialGrid()
     unsubscribeSpaceDetection?.()
+    stopFinishScriptRefresh()
 
     spatialGridManager.clear()
     disposeSFXBus()
@@ -198,6 +211,8 @@ function initializeEditorRuntime(): () => void {
   }
 }
 export interface EditorProps {
+  /** UI locale. Hosts may also call `setLocale` before mounting. */
+  locale?: string
   // Layout version — 'v1' (default) or 'v2' (navbar + two-column)
   layoutVersion?: 'v1' | 'v2'
   // Viewport edge the tool menu docks to (desktop only; mobile stays at the bottom)
@@ -281,6 +296,9 @@ export interface EditorProps {
   // Thumbnail
   onThumbnailCapture?: (blob: Blob, cameraData: SnapshotCameraData) => void
 
+  /** Viewer diagnostics for the host's error-reporter trail; see `<Viewer onBreadcrumb>`. */
+  onViewerBreadcrumb?: ViewerBreadcrumbHandler
+
   /**
    * When true, skip the viewer post-FX pipeline (same as `?disable=postFx`).
    * Hosts use this for a stable local "light preview" without relying only on
@@ -308,12 +326,22 @@ export interface EditorProps {
 }
 
 function EditorSceneCrashFallback() {
+  const i18n = usePascalI18n()
   return (
     <div className="fixed inset-0 z-80 flex items-center justify-center bg-background/95 p-4 text-foreground">
       <div className="w-full max-w-md rounded-2xl border border-border/60 bg-background p-6 shadow-xl">
-        <h2 className="font-semibold text-lg">The editor scene failed to render</h2>
+        <h2 className="font-semibold text-lg">
+          {i18n._({
+            id: 'editor.theEditorSceneFailedToRender',
+            message: 'The editor scene failed to render',
+          })}
+        </h2>
         <p className="mt-2 text-muted-foreground text-sm">
-          You can retry the scene or return home without reloading the whole app shell.
+          {i18n._({
+            id: 'editor.youCanRetryTheSceneOr',
+            message:
+              'You can retry the scene or return home without reloading the whole app shell.',
+          })}
         </p>
         <div className="mt-4 flex items-center gap-2">
           <button
@@ -321,13 +349,13 @@ function EditorSceneCrashFallback() {
             onClick={() => window.location.reload()}
             type="button"
           >
-            Reload editor
+            {i18n._({ id: 'editor.reloadEditor', message: 'Reload editor' })}
           </button>
           <a
             className="rounded-md border border-border bg-background px-3 py-2 font-medium text-sm hover:bg-accent/40"
             href="/"
           >
-            Back to home
+            {i18n._({ id: 'editor.backToHome', message: 'Back to home' })}
           </a>
         </div>
       </div>
@@ -338,6 +366,7 @@ function EditorSceneCrashFallback() {
 // ── Sidebar slot: in-flow, resizable, collapses to a grab strip ──────────────
 
 function SidebarSlot({ children }: { children: ReactNode }) {
+  const i18n = usePascalI18n()
   const width = useSidebarStore((s) => s.width)
   const isCollapsed = useSidebarStore((s) => s.isCollapsed)
   const setIsCollapsed = useSidebarStore((s) => s.setIsCollapsed)
@@ -409,7 +438,7 @@ function SidebarSlot({ children }: { children: ReactNode }) {
           <div
             className="absolute inset-0 z-10 cursor-col-resize transition-colors hover:bg-primary/20"
             onPointerDown={handleGrabDown}
-            title="Expand sidebar"
+            title={i18n._({ id: 'editor.expandSidebar', message: 'Expand sidebar' })}
           />
         ) : (
           children
@@ -487,26 +516,29 @@ const CAMERA_CONTROL_HINTS: CameraControlHint[] = [
   { action: 'Zoom', keys: [{ value: 'Scroll' }] },
 ]
 
-const CAMERA_SHORTCUT_KEY_META: Record<string, { icon?: string; label: string; text?: string }> = {
+const CAMERA_SHORTCUT_KEY_META: Record<
+  string,
+  { icon?: string; label: MessageDescriptor; text?: string }
+> = {
   'Left click': {
     icon: 'ph:mouse-left-click-fill',
-    label: 'Left click',
+    label: hintKeyName('Left click'),
   },
   'Middle click': {
     icon: 'qlementine-icons:mouse-middle-button-16',
-    label: 'Middle click',
+    label: hintKeyName('Middle click'),
   },
   'Right click': {
     icon: 'ph:mouse-right-click-fill',
-    label: 'Right click',
+    label: hintKeyName('Right click'),
   },
   Scroll: {
     icon: 'qlementine-icons:mouse-middle-button-16',
-    label: 'Scroll wheel',
+    label: hintKeyName('Scroll wheel'),
   },
   Space: {
     icon: 'lucide:space',
-    label: 'Space',
+    label: hintKeyName('Space'),
   },
 }
 
@@ -537,8 +569,21 @@ function writeCameraControlsHintDismissed(dismissed: boolean) {
   } catch {}
 }
 
+/** Key names shared with the tool HUD (`editor.toolHint.key.*`). */
+function hintKeyName(key: (typeof HINT_KEY_NAMES)[number]): MessageDescriptor {
+  return toolHintKeyDescriptor(key) ?? { id: key, message: key }
+}
+
+const CAMERA_HINT_ACTION_LABELS: Record<CameraHintAction, MessageDescriptor> = {
+  Pan: /* i18n */ { id: 'editor.cameraHint.pan', message: 'Pan' },
+  Rotate: /* i18n */ { id: 'editor.cameraHint.rotate', message: 'Rotate' },
+  Zoom: /* i18n */ { id: 'editor.cameraHint.zoom', message: 'Zoom' },
+}
+
 function InlineShortcutKey({ shortcutKey }: { shortcutKey: ShortcutKey }) {
-  const meta = CAMERA_SHORTCUT_KEY_META[shortcutKey.value]
+  const i18n = usePascalI18n()
+  const entry = CAMERA_SHORTCUT_KEY_META[shortcutKey.value]
+  const meta = entry ? { ...entry, label: i18n._(entry.label) } : undefined
 
   if (meta?.icon) {
     return (
@@ -556,7 +601,7 @@ function InlineShortcutKey({ shortcutKey }: { shortcutKey: ShortcutKey }) {
 
   return (
     <span className="font-medium text-[11px] text-foreground/90">
-      {meta?.text ?? shortcutKey.value}
+      {meta?.text ?? toolHintKey(shortcutKey.value, i18n)}
     </span>
   )
 }
@@ -575,10 +620,11 @@ function ShortcutSequence({ keys }: { keys: ShortcutKey[] }) {
 }
 
 function CameraControlHintItem({ hint }: { hint: CameraControlHint }) {
+  const i18n = usePascalI18n()
   return (
     <div className="flex min-w-0 flex-col items-center gap-1.5 px-4 text-center first:pl-0 last:pr-0">
       <span className="font-medium text-[10px] text-muted-foreground/60 tracking-[0.03em]">
-        {hint.action}
+        {i18n._(CAMERA_HINT_ACTION_LABELS[hint.action])}
       </span>
       <div className="flex flex-wrap items-center justify-center gap-1.5">
         <ShortcutSequence keys={hint.keys} />
@@ -600,6 +646,7 @@ function ViewerCanvasControlsHint({
   belowTopMenu?: boolean
   onDismiss: () => void
 }) {
+  const i18n = usePascalI18n()
   const all = CAMERA_CONTROL_HINTS
   // A host teaching one gesture at a time narrows this to the one it is asking
   // for, and to nothing once it is done. Null — the default — is all of them.
@@ -619,7 +666,7 @@ function ViewerCanvasControlsHint({
       style={belowTopMenu ? { top: TOP_MENU_CLEARANCE } : undefined}
     >
       <section
-        aria-label="Camera controls hint"
+        aria-label={i18n._({ id: 'editor.cameraControlsHint', message: 'Camera controls hint' })}
         className="pointer-events-auto flex items-start gap-3 rounded-2xl border border-border/35 bg-background/90 px-3.5 py-2.5 shadow-elevation-4 backdrop-blur-xl"
       >
         <div
@@ -633,7 +680,10 @@ function ViewerCanvasControlsHint({
         <Tooltip>
           <TooltipTrigger asChild>
             <button
-              aria-label="Dismiss camera controls hint"
+              aria-label={i18n._({
+                id: 'editor.dismissCameraControlsHint',
+                message: 'Dismiss camera controls hint',
+              })}
               className="flex h-5 shrink-0 items-center justify-center self-center border-border/18 border-l pl-3 text-muted-foreground/70 transition-colors hover:text-foreground"
               onClick={onDismiss}
               type="button"
@@ -648,7 +698,7 @@ function ViewerCanvasControlsHint({
             </button>
           </TooltipTrigger>
           <TooltipContent side="bottom" sideOffset={8}>
-            Dismiss
+            {i18n._({ id: 'editor.dismiss', message: 'Dismiss' })}
           </TooltipContent>
         </Tooltip>
       </section>
@@ -726,7 +776,17 @@ function getActivePaintMaterialSwatchImageUrl(
   const catalogId =
     getLibraryMaterialIdFromRef(material?.materialPreset) ?? material?.material?.id ?? undefined
   const catalogMaterial = getCatalogMaterialById(catalogId)
-  return catalogMaterial?.previewThumbnailUrl ?? catalogMaterial?.preset.maps.albedoMap
+  return catalogMaterial ? (getMaterialSwatch(catalogMaterial).imageUrl ?? undefined) : undefined
+}
+
+/** Whether the badge's image is a white albedo its colour tints (a siding's profile). */
+function isActivePaintMaterialSwatchTinted(material: ActivePaintMaterial | null) {
+  if (material?.material?.texture?.url || getSceneMaterialIdFromRef(material?.materialPreset))
+    return false
+  const catalogId =
+    getLibraryMaterialIdFromRef(material?.materialPreset) ?? material?.material?.id ?? undefined
+  const catalogMaterial = getCatalogMaterialById(catalogId)
+  return catalogMaterial ? getMaterialSwatch(catalogMaterial).tinted : false
 }
 
 function PaintCursorBadge({
@@ -734,6 +794,7 @@ function PaintCursorBadge({
   state,
   swatchColor,
   swatchImageUrl,
+  swatchTinted = false,
   isEraser,
   isPicker = false,
 }: {
@@ -741,6 +802,8 @@ function PaintCursorBadge({
   state: PaintCursorBadgeState
   swatchColor: string
   swatchImageUrl?: string
+  /** Multiply the image by the colour (a tinted albedo). */
+  swatchTinted?: boolean
   isEraser: boolean
   /** The eyedropper: the swatch is what a click would take. */
   isPicker?: boolean
@@ -814,6 +877,7 @@ function PaintCursorBadge({
                 backgroundImage: swatchImageUrl
                   ? `url(${JSON.stringify(swatchImageUrl)})`
                   : undefined,
+                backgroundBlendMode: swatchImageUrl && swatchTinted ? 'multiply' : undefined,
                 opacity: state === 'aim' ? 0.55 : 1,
               }}
             />
@@ -1077,6 +1141,7 @@ function PaintCursorLayer({
   const swatchMaterial = picking ? picked : activePaintMaterial
   const swatchColor = getActivePaintMaterialSwatchColor(swatchMaterial, sceneMaterials)
   const swatchImageUrl = getActivePaintMaterialSwatchImageUrl(swatchMaterial, sceneMaterials)
+  const swatchTinted = isActivePaintMaterialSwatchTinted(swatchMaterial)
 
   if (!active || !position) return null
 
@@ -1092,6 +1157,7 @@ function PaintCursorLayer({
         state={badgeState}
         swatchColor={swatchColor}
         swatchImageUrl={swatchImageUrl}
+        swatchTinted={swatchTinted}
       />
     </div>
   )
@@ -1112,6 +1178,7 @@ const ViewerCanvas = memo(function ViewerCanvas({
   sceneReadyKey,
   onSceneReadyChange,
   onThumbnailCapture,
+  onViewerBreadcrumb,
   presentationsReady,
   viewerSceneSlot,
   floorplanSceneSlot,
@@ -1130,6 +1197,7 @@ const ViewerCanvas = memo(function ViewerCanvas({
   sceneReadyKey: number
   onSceneReadyChange: (ready: boolean) => void
   onThumbnailCapture?: (blob: Blob, cameraData: SnapshotCameraData) => void
+  onViewerBreadcrumb?: ViewerBreadcrumbHandler
   presentationsReady: boolean
   viewerSceneSlot?: ReactNode
   floorplanSceneSlot?: ReactNode
@@ -1141,6 +1209,9 @@ const ViewerCanvas = memo(function ViewerCanvas({
   const views = useEditorViews()
   const isPreviewMode = useEditor((s) => s.isPreviewMode)
   const isCaptureMode = useEditor((s) => s.isCaptureMode)
+  const textures = useViewer((s) => s.textures)
+  const isMobile = useIsMobile()
+  const planOnRight = layout.split && layout.panes[1] === VIEW_2D
   useUnitFocusRules()
   const wholeBuilding = useEditor((s) =>
     showsWholeBuilding({
@@ -1289,6 +1360,7 @@ const ViewerCanvas = memo(function ViewerCanvas({
                 // Other modes retain the viewer's configured background policy.
                 transparent={presetIsolation === null ? undefined : true}
                 onSceneReadyChange={onSceneReadyChange}
+                onBreadcrumb={onViewerBreadcrumb}
                 renderContext="editor"
                 renderPaused={!show3d && !showLoader}
                 sceneReadyKey={sceneReadyKey}
@@ -1309,6 +1381,22 @@ const ViewerCanvas = memo(function ViewerCanvas({
                   viewerSceneSlot={viewerSceneSlot}
                 />
               </Viewer>
+              {!showLoader &&
+              textures &&
+              !isMobile &&
+              !(
+                isFirstPersonMode ||
+                isStudioMode ||
+                isVersionPreviewMode ||
+                isCaptureMode ||
+                isPreviewMode
+              ) ? (
+                // Beside the compass (which moves to the plan's corner when the plan is on the right).
+                <SkyControl
+                  height={SKY_DOCK_HEIGHT.editor}
+                  style={{ left: planOnRight ? 12 : 52 }}
+                />
+              ) : null}
             </div>
             {showLoader && loadingOverlay}
           </div>
@@ -1317,6 +1405,7 @@ const ViewerCanvas = memo(function ViewerCanvas({
             const viewId = layout.panes[pane]
             return (
               <div
+                aria-busy={isSceneDataLoading}
                 className="relative min-w-0 overflow-hidden"
                 data-view-pane={pane}
                 key={viewId}
@@ -1325,6 +1414,9 @@ const ViewerCanvas = memo(function ViewerCanvas({
                 style={paneStyle(pane)}
               >
                 <HostView key={viewId} view={views.find((view) => view.id === viewId)} />
+                {/* A restored pane's plugin is known only once the project has loaded: until
+                    then it would read "This view isn't available". */}
+                {isSceneDataLoading && loadingOverlay}
               </div>
             )
           })}
@@ -1374,6 +1466,7 @@ function PreviewStage({
   )
 
   useViewerFloorDisplay()
+  useViewerUiSounds()
   const stageMode = isFirstPersonMode || !hasFloorplan ? '3d' : mode
   const stageModes = hasFloorplan && !isFirstPersonMode ? undefined : (['3d'] as const)
 
@@ -1435,6 +1528,7 @@ function EditorContent({
   loadingSlot,
   onLoaderChange,
   onThumbnailCapture,
+  onViewerBreadcrumb,
   disablePostFx = false,
   immersive,
   sidebarOverlay,
@@ -1703,11 +1797,19 @@ function EditorContent({
     }
   }, [isFirstPersonMode, isPreviewMode])
 
+  // The viewer's walkthrough says how the first-person camera moves, for the
+  // viewer-side consumers that tell a walk from a drone flight.
+  const firstPersonMovementMode = useEditor((s) => s.firstPersonMovementMode)
+  useEffect(() => {
+    if (isFirstPersonMode) useViewer.getState().setWalkthroughMovement(firstPersonMovementMode)
+  }, [isFirstPersonMode, firstPersonMovementMode])
+
   const previewViewerContent = (
     <Viewer
       defaultRender={EDITOR_DEFAULT_RENDER}
       disablePostFx={disablePostFx}
       hoverStyles={EDITOR_HOVER_STYLES}
+      onBreadcrumb={onViewerBreadcrumb}
       renderContext="editor"
       selectionManager="custom"
     >
@@ -1749,6 +1851,7 @@ function EditorContent({
       loadingOverlay={loadingOverlay}
       onSceneReadyChange={handleSceneReadyChange}
       onThumbnailCapture={onThumbnailCapture}
+      onViewerBreadcrumb={onViewerBreadcrumb}
       presentationsReady={presentationsReady}
       sceneReadyKey={sceneReadyKey}
       showLoader={showLoader}
@@ -1813,6 +1916,7 @@ function EditorContent({
     return (
       <>
         <FloorplanModeCoordinator />
+        <CeilingTopsSync />
         {!isLoading && isPreviewMode ? (
           <PreviewStage
             isFirstPersonMode={isFirstPersonMode}
@@ -1899,6 +2003,7 @@ function EditorContent({
   return (
     <div className="flex h-full w-full gap-3 bg-neutral-100 p-3 text-foreground">
       <FloorplanModeCoordinator />
+      <CeilingTopsSync />
       {!isLoading && isPreviewMode ? (
         <PreviewStage
           isFirstPersonMode={isFirstPersonMode}
@@ -1947,10 +2052,28 @@ function EditorContent({
   )
 }
 
-export default function Editor(props: EditorProps) {
+function EditorFrame(props: EditorProps) {
   return (
     <Profiler id="editor" onRender={recordEditorRender}>
       <EditorContent {...props} />
     </Profiler>
+  )
+}
+
+function LocalizedEditor(props: EditorProps & { locale: string }) {
+  const i18n = useMemo(() => createI18n({ locale: props.locale }), [props.locale])
+
+  return (
+    <PascalI18nProvider i18n={i18n}>
+      <EditorFrame {...props} />
+    </PascalI18nProvider>
+  )
+}
+
+export default function Editor(props: EditorProps) {
+  return props.locale ? (
+    <LocalizedEditor {...props} locale={props.locale} />
+  ) : (
+    <EditorFrame {...props} />
   )
 }

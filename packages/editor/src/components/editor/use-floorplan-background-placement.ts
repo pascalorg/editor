@@ -19,6 +19,8 @@ import { resolveGenericFloorplanGridEventPoint } from '../../lib/floorplan-grid-
 import { snapRegisteredDraftPoint } from '../../lib/registered-draft-snap'
 import { resolveSlabPlanPointSnap } from '../../lib/slab-plan-snap'
 import { commitWallPolygonDraft, wallPolygonDraftWalls } from '../../lib/wall-polygon-draft'
+import { wallDraftIsRun } from '../../lib/wall-pull'
+import { isWallRunFree, snapWallRunDraftPoint } from '../../lib/wall-run-snap'
 import useAlignmentGuides from '../../store/use-alignment-guides'
 import useEditor, { isAngleSnapActive, isMagneticSnapActive } from '../../store/use-editor'
 import usePlacementPreview from '../../store/use-placement-preview'
@@ -52,6 +54,8 @@ type UseFloorplanBackgroundPlacementArgs = {
     wall: WallNode
   } | null
   floorplanOpeningLocalY: number
+  /** An open wall run's start and the direction of its last wall (null before one). */
+  getWallRunContext: () => { runStart: WallPlanPoint | null; reference: WallPlanPoint | null }
   getSnappedFloorplanPoint: (point: WallPlanPoint) => WallPlanPoint
   handleCeilingItemPlacementClick: (
     planPoint: WallPlanPoint,
@@ -72,12 +76,9 @@ type UseFloorplanBackgroundPlacementArgs = {
   isZoneBuildActive: boolean
   levelId: string | null
   registryToolOwnsSnapping: boolean
-  roofDraftStart: WallPlanPoint | null
   setCursorPoint: React.Dispatch<React.SetStateAction<WallPlanPoint | null>>
   setFenceDraftEnd: React.Dispatch<React.SetStateAction<WallPlanPoint | null>>
   setFenceDraftStart: React.Dispatch<React.SetStateAction<WallPlanPoint | null>>
-  setRoofDraftEnd: React.Dispatch<React.SetStateAction<WallPlanPoint | null>>
-  setRoofDraftStart: React.Dispatch<React.SetStateAction<WallPlanPoint | null>>
   snapWallDraftPoint: (args: {
     point: WallPlanPoint
     walls: WallNode[]
@@ -86,6 +87,7 @@ type UseFloorplanBackgroundPlacementArgs = {
     bypassSnap?: boolean
     step?: number
     gridSnap?: (point: WallPlanPoint) => WallPlanPoint
+    captureWallBodies?: boolean
   }) => WallPlanPoint
   snapPolygonDraftPoint: (args: {
     point: WallPlanPoint
@@ -95,10 +97,9 @@ type UseFloorplanBackgroundPlacementArgs = {
   toPoint2D: (point: WallPlanPoint) => { x: number; y: number }
   walls: WallNode[]
   /**
-   * Snap a building-local plan point to the world XZ grid at `step`.
-   * Injected so the hook doesn't have to know the building's rotation
-   * or position — used by wall / fence branches that snap at variable
-   * step.
+   * Snap a building-local plan point onto the building's grid lattice at
+   * `step` (the lattice the plan draws, which turns with the building).
+   * Injected — used by wall / fence branches that snap at variable step.
    */
   worldGridSnap: (point: WallPlanPoint, step: number) => WallPlanPoint
 }
@@ -115,6 +116,7 @@ export function useFloorplanBackgroundPlacement({
   findClosestWallPoint,
   floorplanOpeningLocalY,
   getSnappedFloorplanPoint,
+  getWallRunContext,
   handleCeilingItemPlacementClick,
   handleCeilingPlacementPoint,
   handleSlabPlacementPoint,
@@ -131,12 +133,9 @@ export function useFloorplanBackgroundPlacement({
   isZoneBuildActive,
   levelId,
   registryToolOwnsSnapping,
-  roofDraftStart,
   setCursorPoint,
   setFenceDraftEnd,
   setFenceDraftStart,
-  setRoofDraftEnd,
-  setRoofDraftStart,
   snapWallDraftPoint,
   snapPolygonDraftPoint,
   toPoint2D,
@@ -219,24 +218,14 @@ export function useFloorplanBackgroundPlacement({
       if (isRoofBuildActive) {
         // Footprint placement (polygon context: grid / lines / off, no angle),
         // mode-driven to match the chip. Alt is force/free at commit time;
-        // alignment display/pull follows the active magnetic mode.
+        // alignment display/pull follows the active magnetic mode. The roof
+        // tool snaps the corner it commits and writes the draft rectangle from
+        // it, so the plan shows exactly the roof the click makes.
         const snappedPoint = alignFloorplanDraftPoint(getSnappedFloorplanPoint(planPoint), {
           applySnap: isMagneticSnapActive(),
         })
         emitFloorplanGridEvent('click', snappedPoint, event)
         setCursorPoint(snappedPoint)
-
-        if (roofFootprintSource !== 'draw') {
-          clearRoofPlacementDraft()
-          return true
-        }
-
-        if (roofDraftStart) {
-          clearRoofPlacementDraft()
-        } else {
-          setRoofDraftStart(snappedPoint)
-          setRoofDraftEnd(snappedPoint)
-        }
         return true
       }
 
@@ -254,8 +243,8 @@ export function useFloorplanBackgroundPlacement({
 
       if (isFenceBuildActive) {
         // Fence draft: mode-driven (matches the chip), same as the move
-        // preview. `grid` snaps to the world XZ grid (rotation-safe via the
-        // `gridSnap` callback), `angles` locks 15° rays from the start, `lines`
+        // preview. `grid` snaps to the building's grid lattice (the `gridSnap`
+        // callback), `angles` locks 15° rays from the start, `lines`
         // pulls onto walls / fences / alignment, `off` is free.
         const fenceStep = getSegmentGridStep()
         const fenceAngleSnap = fenceDraftStart !== null && isAngleSnapActive()
@@ -363,30 +352,48 @@ export function useFloorplanBackgroundPlacement({
       // / draftEnd state in the floor plan would never update, leaving
       // the dashed-line draft preview invisible.
       if (isWallBuildActive) {
-        // Wall draft: mode-driven (matches the chip + the move-preview branch).
-        // `grid` snaps to the world XZ grid (rotation-safe via `gridSnap`),
-        // `angles` locks 15° rays from the start, `lines` pulls the endpoint
-        // onto existing wall corners / edges + alignment, `off` is free.
-        const wallStep = getSegmentGridStep()
-        const wallAngleSnap = draftStart !== null && isAngleSnapActive()
-        const wallSnapped = snapWallDraftPoint({
-          point: planPoint,
-          walls: [...walls, ...wallPolygonDraftWalls()],
-          start: draftStart ?? undefined,
-          angleSnap: wallAngleSnap,
-          gridSnap: (p) => worldGridSnap(p, wallStep),
-        })
-        const wallGridBase = worldGridSnap(planPoint, wallStep)
-        const wallLocked = wallSnapped[0] !== wallGridBase[0] || wallSnapped[1] !== wallGridBase[1]
-        let snappedPoint = wallSnapped
-        if (wallLocked) {
-          useAlignmentGuides.getState().clear()
+        // Wall draft, matching the move-preview branch: mode-driven (matches
+        // the chip). `grid` snaps to the building's grid lattice (`gridSnap`),
+        // `angles` locks a Walls segment to 15° rays from its start, `lines`
+        // pulls the point onto existing wall corners / edges + alignment, `off`
+        // is free, and in every mode but `lines` an end aimed into a wall's body
+        // joins that wall. A run's segment (a Polygon side, a pulled run) lands
+        // where the move showed it (`snapWallRunDraftPoint`).
+        let snappedPoint: WallPlanPoint
+        if (draftStart && wallDraftIsRun()) {
+          const run = getWallRunContext()
+          snappedPoint = snapWallRunDraftPoint({
+            point: planPoint,
+            start: draftStart,
+            runStart: run.runStart ?? draftStart,
+            reference: run.reference,
+            walls: [...walls, ...wallPolygonDraftWalls()],
+            free: isWallRunFree(event),
+          }).point
         } else {
-          // Alignment lines are shown in every mode; the pull applies only when
-          // magnetic ('lines') and the segment isn't angle-locked.
-          snappedPoint = alignFloorplanDraftPoint(wallSnapped, {
-            applySnap: isMagneticSnapActive() && !wallAngleSnap,
+          const wallStep = getSegmentGridStep()
+          const wallAngleSnap = draftStart !== null && isAngleSnapActive()
+          const wallSnapped = snapWallDraftPoint({
+            point: planPoint,
+            walls: [...walls, ...wallPolygonDraftWalls()],
+            start: draftStart ?? undefined,
+            angleSnap: wallAngleSnap,
+            gridSnap: (p) => worldGridSnap(p, wallStep),
+            captureWallBodies: true,
           })
+          const wallGridBase = worldGridSnap(planPoint, wallStep)
+          const wallLocked =
+            wallSnapped[0] !== wallGridBase[0] || wallSnapped[1] !== wallGridBase[1]
+          snappedPoint = wallSnapped
+          if (wallLocked) {
+            useAlignmentGuides.getState().clear()
+          } else {
+            // Alignment lines are shown in every mode; the pull applies only when
+            // magnetic ('lines') and the segment isn't angle-locked.
+            snappedPoint = alignFloorplanDraftPoint(wallSnapped, {
+              applySnap: isMagneticSnapActive() && !wallAngleSnap,
+            })
+          }
         }
 
         emitFloorplanGridEvent('click', snappedPoint, event)
@@ -437,12 +444,12 @@ export function useFloorplanBackgroundPlacement({
       activePolygonDraftPoints,
       ceilingDraftPoints,
       clearFencePlacementDraft,
-      clearRoofPlacementDraft,
       clearWallPlacementDraft,
       emitFloorplanGridEvent,
       fenceDraftStart,
       fences,
       findClosestWallPoint,
+      getWallRunContext,
       floorplanOpeningLocalY,
       getSnappedFloorplanPoint,
       handleCeilingItemPlacementClick,
@@ -459,14 +466,10 @@ export function useFloorplanBackgroundPlacement({
       isWallBuildActive,
       isZoneBuildActive,
       levelId,
-      roofDraftStart,
       registryToolOwnsSnapping,
-      roofFootprintSource,
       setCursorPoint,
       setFenceDraftEnd,
       setFenceDraftStart,
-      setRoofDraftEnd,
-      setRoofDraftStart,
       snapWallDraftPoint,
       snapPolygonDraftPoint,
       toPoint2D,

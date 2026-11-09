@@ -1,6 +1,6 @@
 'use client'
 
-import type { OpenWallEnd } from '@pascal-app/core'
+import type { AnyNodeId, OpenWallEnd } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { memo, useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
@@ -31,7 +31,8 @@ function sceneScreenPoint(point: [number, number]): { left: number; top: number 
  * Shows where walls look joined but are not, so a room can't close: a red dot
  * on each open end, a dashed line to the wall it nearly meets with what is
  * wrong ("4 cm gap"), and — while drawing — the walls that bound no room dimmed. Hover or click a
- * dot for "Join walls", which applies core's join planner as one undo step.
+ * dot for "Join walls", which applies core's join planner as one undo step; a
+ * click on a dot also selects its wall.
  *
  * On while walls or rooms are being drawn (the wall tool's variants, Divide);
  * otherwise only when a wall that bounds no room has a near miss.
@@ -76,7 +77,14 @@ const ActiveOpenWallEndsLayer = memo(function ActiveOpenWallEndsLayer() {
             label={openWallEndLabel(end, unit)}
             onHoverEnd={focus.releaseHover}
             onHoverStart={() => focus.keepHover(key)}
-            onPin={() => focus.togglePin(key)}
+            onPin={() => {
+              focus.togglePin(key)
+              // The dot can cover all of a wall a few centimetres long: its
+              // click selects that wall too, so it can be fixed or deleted.
+              if (!drawing && useEditor.getState().mode === 'select') {
+                useViewer.getState().setSelection({ selectedIds: [end.wallId as AnyNodeId] })
+              }
+            }}
             sceneRotationDeg={sceneRotationDeg}
             unitsPerPixel={unitsPerPixel}
           />

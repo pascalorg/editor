@@ -1,6 +1,7 @@
 import { applySceneChanges } from '../agent-operations/apply-changes'
-import type { SceneChanges } from '../agent-operations/types'
+import type { SceneChanges, SceneNodes } from '../agent-operations/types'
 import { getLevelDisplayName } from '../lib/level-name'
+import { queryNodes } from '../runtime/node-queries'
 import {
   type AnyNode,
   type AnyNodeId,
@@ -22,6 +23,7 @@ import { getLevelBelow, getLevelElevations, type LevelElevation } from './storey
  */
 
 type Nodes = Readonly<Record<string, AnyNode>>
+type LevelElevations = ReturnType<typeof getLevelElevations>
 
 const segmentsOf = (nodes: Nodes, roof: RoofNode) =>
   roof.children
@@ -207,13 +209,13 @@ export function roofsKeptOverStorey(
   before: Nodes,
   after: Nodes,
 ): { id: AnyNodeId; data: Pick<RoofNode, 'position'> }[] {
-  const was = getLevelElevations(before as Record<AnyNodeId, AnyNode>)
-  const now = getLevelElevations(after as Record<AnyNodeId, AnyNode>)
-  const rise = (elevations: typeof now, levelId: string, storeyId: string) =>
-    (elevations.get(levelId)?.baseY ?? 0) - (elevations.get(storeyId)?.baseY ?? 0)
+  // Read only once a roof stands over a storey: elevations read every level of the scene.
+  let elevations: { was: LevelElevations; now: LevelElevations } | undefined
+  const rise = (of: LevelElevations, levelId: string, storeyId: string) =>
+    (of.get(levelId)?.baseY ?? 0) - (of.get(storeyId)?.baseY ?? 0)
   const updates: { id: AnyNodeId; data: Pick<RoofNode, 'position'> }[] = []
-  for (const roof of Object.values(after)) {
-    if (roof.type !== 'roof' || roof.support?.kind !== 'level' || !roof.parentId) continue
+  for (const roof of queryNodes<RoofNode>(after as SceneNodes, { type: 'roof' })) {
+    if (roof.support?.kind !== 'level' || !roof.parentId) continue
     const prior = before[roof.id]
     if (
       prior?.type !== 'roof' ||
@@ -224,6 +226,11 @@ export function roofsKeptOverStorey(
     const storeyId = coveredStoreyId(after, roof)
     if (!storeyId || storeyId === roof.parentId || coveredStoreyId(before, prior) !== storeyId)
       continue
+    elevations ??= {
+      was: getLevelElevations(before as Record<AnyNodeId, AnyNode>),
+      now: getLevelElevations(after as Record<AnyNodeId, AnyNode>),
+    }
+    const { was, now } = elevations
     // A level put in, taken out or reordered between them: the roof moves with its level (#1039).
     const between = levelsBetween(now, storeyId, roof.parentId)
     if (between !== levelsBetween(was, storeyId, roof.parentId)) continue
@@ -280,8 +287,8 @@ export type RoofSeat = {
  */
 export function planRoofSeats(before: Nodes, after: Nodes): RoofSeat | null {
   const byStorey = new Map<string, RoofNode[]>()
-  for (const node of Object.values(after)) {
-    if (node.type !== 'roof' || !node.parentId) continue
+  for (const node of queryNodes<RoofNode>(after as SceneNodes, { type: 'roof' })) {
+    if (!node.parentId) continue
     if (!(touched(before, after, node) && isRoofOnStoreyWalls(after, node.id))) continue
     const prior = before[node.id]
     if (

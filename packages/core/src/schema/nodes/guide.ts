@@ -8,6 +8,8 @@ export const GuideScaleReference = z.object({
   realLengthMeters: z.number().positive(),
   measuredLengthUnits: z.number().positive(),
   metersPerUnit: z.number().positive(),
+  displayLength: z.number().positive().max(1_000_000).optional(),
+  displayUnit: z.enum(['meters', 'centimeters', 'feet', 'inches']).optional(),
   label: z.string(),
 })
 

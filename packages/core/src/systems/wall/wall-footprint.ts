@@ -72,11 +72,11 @@ export function getWallPlanFootprint(wallNode: WallNode, miterData: WallMiterDat
 
   const polygon: Point2D[] = [pStartRight, pEndRight]
   if (endJunction) {
-    polygon.push(endJunction.closing ?? wallEnd)
+    polygon.push(...(endJunction.closingPath ?? [endJunction.closing ?? wallEnd]))
   }
   polygon.push(pEndLeft, pStartLeft)
   if (startJunction) {
-    polygon.push(startJunction.closing ?? wallStart)
+    polygon.push(...(startJunction.closingPath ?? [startJunction.closing ?? wallStart]))
   }
 
   return polygon

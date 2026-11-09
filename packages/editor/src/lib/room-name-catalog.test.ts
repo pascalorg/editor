@@ -8,6 +8,7 @@ import {
   roomNameSections,
   roomNameUseCount,
 } from './room-name-catalog'
+import { ROOM_NAME_MESSAGES, ROOM_NAME_SECTION_TITLES } from './room-name-messages'
 
 const square: [number, number][] = [
   [0, 0],
@@ -87,4 +88,11 @@ describe('room name catalog', () => {
     expect(ids(graph(mezzanine), mezzanine.id)[0]).toBe('mezzanine')
     expect(ids(graph(zone('zone_room')), 'zone_room')).not.toContain('mezzanine')
   })
+})
+
+test('every catalog section and name has a translatable message', () => {
+  for (const section of [...ROOM_NAME_SECTIONS, MEZZANINE_NAME_SECTION]) {
+    expect(ROOM_NAME_SECTION_TITLES[section.id]?.message).toBe(section.title)
+    for (const name of section.names) expect(ROOM_NAME_MESSAGES[name]?.message).toBe(name)
+  }
 })

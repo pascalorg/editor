@@ -7,7 +7,11 @@ import type {
   GeometryScriptParamValue,
 } from '@pascal-app/core'
 import { type Ring, union } from '@pascal-app/core/polygon-boolean'
-import { GEOMETRY_MANIFEST_MAX_BYTES, GEOMETRY_SCRIPT_MAX_BYTES } from '@pascal-app/core/schema'
+import {
+  GEOMETRY_MANIFEST_MAX_BYTES,
+  GEOMETRY_SCRIPT_MAX_BYTES,
+  LightGlow,
+} from '@pascal-app/core/schema'
 import * as THREE from 'three'
 import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js'
 import { ConvexGeometry } from 'three/examples/jsm/geometries/ConvexGeometry.js'
@@ -17,13 +21,27 @@ import { ParametricGeometry } from 'three/examples/jsm/geometries/ParametricGeom
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js'
 import * as BufferGeometryUtils from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { ADDITION, Brush, DIFFERENCE, Evaluator, INTERSECTION, SUBTRACTION } from 'three-bvh-csg'
+import { type Coverage, measureCoverage } from './coverage'
+import { cutToRegion, hostRegion } from './cut'
 import { type ModuleTable, transformModule } from './transform'
+import { readUsageShape } from './usage-shape'
 
 export type { GeometryScriptMount }
 
 export type GeometryScriptCompileInput = {
   code: string
   params?: Record<string, GeometryScriptParamValue>
+  /**
+   * What the host builds the module for (a room floor's `polygon` and `holes` in plan x/z, with
+   * y = 0 the floor's surface; a wall face's `outline` and `holes`): the build reads them in
+   * `params` beside its declared ones, and as `inputs`; they are not among the returned params,
+   * which the scene keeps. A build given them is in the host's frame, so it is not re-origined for
+   * its mount, and it is cut to the floor's polygon or the face's outline, less their holes: the
+   * module lays out, Pascal clips.
+   */
+  inputs?: Record<string, unknown>
+  /** Also write the manifest's `shape`: what the build occupies in plan at each height, for the usage checks. */
+  usageShape?: boolean
 }
 
 export type GeometryScriptCompileOutput = CompiledGeometryScript & { glb: ArrayBuffer }
@@ -36,7 +54,7 @@ export const GEOMETRY_SCRIPT_LIMITS = {
 
 const csg = { ADDITION, Brush, DIFFERENCE, Evaluator, INTERSECTION, SUBTRACTION }
 
-const MODULES: ModuleTable = {
+export const MODULES: ModuleTable = {
   three: THREE as unknown as Record<string, unknown>,
   'three-bvh-csg': csg,
   BufferGeometryUtils: BufferGeometryUtils as unknown as Record<string, unknown>,
@@ -47,7 +65,7 @@ const MODULES: ModuleTable = {
   RoundedBoxGeometry: { RoundedBoxGeometry },
 }
 
-const LIB = {
+export const LIB = {
   BufferGeometryUtils,
   ConvexGeometry,
   LoftGeometry,
@@ -204,21 +222,86 @@ function unmeasurable(root: THREE.Object3D): Error {
   return new Error('The object cannot be measured: its size is not a finite number.')
 }
 
+/**
+ * Every InstancedMesh as a group of plain meshes, one per drawn instance: the bounds, the cut to a
+ * host's floor or face, the coverage, the triangle count and the merge read each mesh's own
+ * geometry and matrixWorld, so an instanced mesh would count as one copy at its own origin. The
+ * group takes its place with its uuid, name, transform, userData and children, so part names and
+ * clip targets hold; `instanceColor` becomes a vertex colour, on a vertex-coloured copy of the
+ * material (times the geometry's own vertex colours when the material already drew them).
+ */
+function expandInstances(root: THREE.Object3D) {
+  const instanced: THREE.InstancedMesh[] = []
+  root.traverse((object) => {
+    if ((object as THREE.InstancedMesh).isInstancedMesh)
+      instanced.push(object as THREE.InstancedMesh)
+  })
+  const matrix = new THREE.Matrix4()
+  const color = new THREE.Color()
+  for (const source of instanced) {
+    const group = THREE.Object3D.prototype.copy.call(
+      new THREE.Group(),
+      source,
+      false,
+    ) as THREE.Group
+    group.uuid = source.uuid
+    for (const child of [...source.children]) group.add(child)
+    const authored = Array.isArray(source.material) ? source.material : [source.material]
+    const tint = source.instanceColor
+    const own = authored.some((m) => m.vertexColors) ? source.geometry.getAttribute('color') : null
+    const materials = tint
+      ? authored.map((m) => Object.assign(m.clone(), { vertexColors: true }))
+      : authored
+    const material = materials.length === 1 ? materials[0]! : materials
+    for (let i = 0; i < source.count; i++) {
+      let geometry = source.geometry
+      if (tint) {
+        source.getColorAt(i, color)
+        geometry = source.geometry.clone()
+        const count = geometry.getAttribute('position').count
+        const size = own?.itemSize ?? 3
+        const values = new Float32Array(count * size)
+        for (let v = 0; v < count; v++) {
+          values[v * size] = color.r * (own ? own.getX(v) : 1)
+          values[v * size + 1] = color.g * (own ? own.getY(v) : 1)
+          values[v * size + 2] = color.b * (own ? own.getZ(v) : 1)
+          if (own && size === 4) values[v * 4 + 3] = own.getW(v)
+        }
+        geometry.setAttribute('color', new THREE.BufferAttribute(values, size))
+      }
+      const mesh = new THREE.Mesh(geometry, material)
+      // A helper stays one: each copy of an instanced cutout or collider is one too.
+      if (isHelper(source)) mesh.name = source.name
+      source.getMatrixAt(i, matrix)
+      matrix.decompose(mesh.position, mesh.quaternion, mesh.scale)
+      group.add(mesh)
+    }
+    source.parent?.add(group).remove(source)
+  }
+}
+
+/** The meshes that draw: helpers (cutout, collider), and anything under one, do not. */
+function visibleMeshes(root: THREE.Object3D): THREE.Mesh[] {
+  const meshes: THREE.Mesh[] = []
+  root.traverse((object) => {
+    const mesh = object as THREE.Mesh
+    if (!mesh.isMesh || isHelper(mesh)) return
+    for (let p: THREE.Object3D | null = mesh; p; p = p.parent) if (isHelper(p)) return
+    meshes.push(mesh)
+  })
+  return meshes
+}
+
 /** Bounds of the visible geometry: helpers (cutout, collider) and lights do not count. */
 function visibleBounds(root: THREE.Object3D): THREE.Box3 {
   const box = new THREE.Box3()
   const meshBox = new THREE.Box3()
   root.updateWorldMatrix(true, true)
-  root.traverse((object) => {
-    const mesh = object as THREE.Mesh
-    if (!mesh.isMesh || isHelper(mesh)) return
-    let hidden = false
-    for (let p: THREE.Object3D | null = mesh; p; p = p.parent) if (isHelper(p)) hidden = true
-    if (hidden) return
+  for (const mesh of visibleMeshes(root)) {
     mesh.geometry.computeBoundingBox()
     meshBox.copy(mesh.geometry.boundingBox!).applyMatrix4(mesh.matrixWorld)
     box.union(meshBox)
-  })
+  }
   return box
 }
 
@@ -231,6 +314,40 @@ function originFor(box: THREE.Box3, mount: GeometryScriptMount): THREE.Vector3 {
 
 const round = (v: number) => Math.round(v * 1e6) / 1e6
 const vec = (v: THREE.Vector3): [number, number, number] => [round(v.x), round(v.y), round(v.z)]
+
+/**
+ * A SpotLight's beam in the artifact frame. A target the script never added to the scene is a
+ * point in the script's own frame, as three.js reads an unparented target in world space.
+ */
+function readSpot(light: THREE.SpotLight, root: THREE.Object3D, id: string) {
+  const from = light.getWorldPosition(new THREE.Vector3())
+  let to: THREE.Vector3
+  if (light.target.parent) to = light.target.getWorldPosition(new THREE.Vector3())
+  else {
+    let frame: THREE.Object3D = light
+    while (frame.parent && frame.parent !== root) frame = frame.parent
+    to = frame.parent ? frame.localToWorld(light.target.position.clone()) : light.target.position
+  }
+  const direction = to.sub(from)
+  if (direction.lengthSq() < 1e-12) throw new Error(`Spot light "${id}" targets its own position`)
+  direction.normalize()
+  return {
+    direction: vec(direction),
+    angle: Math.min(179, Math.max(1, round(THREE.MathUtils.radToDeg(light.angle * 2)))),
+    softness: Math.min(1, Math.max(0, round(light.penumbra))),
+  }
+}
+
+/** `userData.glow = { size, strength }` (strength defaults to 1). */
+function readGlow(value: unknown, id: string) {
+  if (value === undefined) return undefined
+  const glow = LightGlow.safeParse(value)
+  if (!glow.success)
+    throw new Error(
+      `Light "${id}": glow must be { size: metres across (0–5), strength: 0–10 }, got ${JSON.stringify(value)}`,
+    )
+  return glow.data
+}
 
 /**
  * Reads the naming conventions into the manifest and rewrites the output so
@@ -303,6 +420,16 @@ function readConventions(root: THREE.Object3D) {
         color,
         intensity,
         distance,
+        spot: (light as unknown as THREE.SpotLight).isSpotLight
+          ? readSpot(light as unknown as THREE.SpotLight, root, lightId)
+          : undefined,
+        shadows:
+          typeof userData.shadows === 'boolean'
+            ? userData.shadows
+            : light.isLight && light.castShadow
+              ? true
+              : undefined,
+        glow: readGlow(userData.glow, lightId),
       })
       toRemove.push(object)
       return
@@ -534,6 +661,66 @@ function analyseGeometry(root: THREE.Object3D, parts: GeometryArtifactManifest['
         ] as [number, number, number, number],
       })),
   }
+}
+
+function flipWinding(source: THREE.BufferGeometry): THREE.BufferGeometry {
+  const geometry = source.index ? source.toNonIndexed() : source.clone()
+  for (const [name, attribute] of Object.entries(geometry.attributes)) {
+    const { itemSize, array } = attribute as THREE.BufferAttribute
+    for (let vertex = 0; vertex + 2 < attribute.count; vertex += 3) {
+      for (let k = 0; k < itemSize; k++) {
+        const b = (vertex + 1) * itemSize + k
+        const c = (vertex + 2) * itemSize + k
+        const swapped = array[b]!
+        array[b] = array[c]!
+        array[c] = swapped
+      }
+    }
+    if (name === 'normal') for (let i = 0; i < array.length; i++) array[i] = -array[i]!
+  }
+  return geometry
+}
+
+/**
+ * The viewer draws every material front side only (its WebGPU MRT workaround),
+ * so a double-sided plane shows nothing from behind. The back face is baked into
+ * the geometry instead: the triangles again, wound the other way with their
+ * normals negated; a back-side material keeps only that copy. Runs before the
+ * triangle count and the merge, so both see what is exported. Materials turn
+ * front-side only once every mesh is baked: a material shared by several
+ * meshes (a pair of curtains) must still read as double-sided on the last one.
+ */
+function bakeBackFaces(root: THREE.Object3D) {
+  const sided: THREE.Mesh<THREE.BufferGeometry, THREE.Material>[] = []
+  root.traverse((object) => {
+    const mesh = object as THREE.Mesh
+    if (!mesh.isMesh || isHelper(mesh) || Array.isArray(mesh.material)) return
+    if (mesh.material.side !== THREE.FrontSide)
+      sided.push(mesh as THREE.Mesh<THREE.BufferGeometry, THREE.Material>)
+  })
+  for (const mesh of sided) {
+    const back = flipWinding(mesh.geometry)
+    mesh.geometry =
+      mesh.material.side === THREE.BackSide
+        ? back
+        : (BufferGeometryUtils.mergeGeometries([mesh.geometry.toNonIndexed(), back]) ??
+          mesh.geometry)
+  }
+  for (const mesh of sided) mesh.material.side = THREE.FrontSide
+}
+
+/**
+ * The bake and the merge leave every triangle with its own three vertices, three
+ * times what a smooth surface needs: an 82k-triangle bed was a 6 MB GLB.
+ * Vertices equal in every attribute are shared again, so hard edges (their
+ * normals differ) stay split and the exported shape is the same.
+ */
+function weldVertices(root: THREE.Object3D) {
+  root.traverse((object) => {
+    const mesh = object as THREE.Mesh
+    if (mesh.isMesh && !isHelper(mesh) && !mesh.geometry.index)
+      mesh.geometry = BufferGeometryUtils.mergeVertices(mesh.geometry)
+  })
 }
 
 /**
@@ -821,8 +1008,9 @@ async function digest(bytes: BufferSource): Promise<string> {
 
 /**
  * Everything after a module has built its object, whatever the language:
- * re-origins it for its mount, reads the conventions into the manifest, samples
- * its clips and exports the GLB. `built.animations` holds its clips.
+ * re-origins it for its mount (or, built for a host's inputs, cuts it to the
+ * floor or face they describe and measures how much of it the build covers), reads the conventions into the manifest,
+ * samples its clips and exports the GLB. `built.animations` holds its clips.
  */
 export async function finishBuild({
   built,
@@ -831,6 +1019,8 @@ export async function finishBuild({
   params,
   code,
   language,
+  inputs,
+  usageShape,
 }: {
   built: THREE.Object3D
   mount: GeometryScriptMount
@@ -838,10 +1028,19 @@ export async function finishBuild({
   params: Record<string, GeometryScriptParamValue>
   code: string
   language: GeometryScriptLanguage
+  /**
+   * What the host built it for (`compileGeometryScript`'s `inputs`): the build stays where it
+   * stands, in the host's frame, and is cut to the floor or face they describe.
+   */
+  inputs?: Record<string, unknown>
+  usageShape?: boolean
 }): Promise<GeometryScriptCompileOutput> {
   const root = new THREE.Group()
   root.name = 'pascal_script_root'
   root.add(built)
+  expandInstances(root)
+  // A build that is itself an InstancedMesh has given its place to its group.
+  const model = root.children[0]!
   const box = visibleBounds(root)
   if (box.isEmpty()) throw new Error('build() returned no visible meshes')
   if (![box.min.x, box.min.y, box.min.z, box.max.x, box.max.y, box.max.z].every(Number.isFinite)) {
@@ -853,12 +1052,24 @@ export async function finishBuild({
       `The object is ${vec(size).join(' × ')} m; the limit is ${GEOMETRY_SCRIPT_LIMITS.extent} m per side. Units are metres.`,
     )
   }
-  built.position.sub(originFor(box, mount))
+  if (!inputs) model.position.sub(originFor(box, mount))
   root.updateWorldMatrix(true, true)
 
-  const read = readAnimations(built, root)
+  const read = readAnimations(model, root)
   const clips = sampleTransformClips(root, read.clips)
   const animated = read.animated
+  const region = inputs && hostRegion(inputs)
+  let coverage: Coverage | null = null
+  if (region) {
+    cutToRegion(visibleMeshes(root), region, box)
+    if (visibleBounds(root).isEmpty()) {
+      throw new Error(
+        `Nothing the build made lies on its ${region.axis === 'y' ? 'floor' : 'face'}: everything is outside it or in its openings.`,
+      )
+    }
+    coverage = measureCoverage(visibleMeshes(root), region)
+  }
+  bakeBackFaces(root)
   const conventions = readConventions(root)
   if (conventions.triangles > GEOMETRY_SCRIPT_LIMITS.triangles) {
     throw new Error(
@@ -872,7 +1083,9 @@ export async function finishBuild({
   }
 
   const { surfaces, undersides } = analyseGeometry(root, conventions.parts)
+  const shape = usageShape ? readUsageShape(visibleMeshes(root)) : null
   mergeByPartAndMaterial(root, animated)
+  weldVertices(root)
   const bounds = visibleBounds(root)
   const glb = await exportGlb(root, clips)
   return {
@@ -899,12 +1112,14 @@ export async function finishBuild({
       cutout: conventions.cutout,
       collider: conventions.collider,
       triangles: conventions.triangles,
+      ...(shape ? { shape } : {}),
+      ...coverage,
     }),
   }
 }
 
 // A deterrent, not the isolation boundary: hosts run this in a locked-down worker or process.
-const SOURCE_GUARD =
+export const SOURCE_GUARD =
   /\bimport\s*\(|\beval\s*\(|\bFunction\s*\(|\.constructor\s*\(|\bprocess\b|\brequire\s*\(/
 
 export function assertScriptSize(code: string) {
@@ -938,9 +1153,10 @@ export async function compileGeometryScript(
   const specs = readParamSpecs(exported.params)
   const params = resolveParams(specs, input.params ?? {})
 
+  const inputs = input.inputs ?? {}
   const built = await (exported.build as (ctx: unknown) => unknown)({
-    params,
-    inputs: {},
+    params: { ...params, ...inputs },
+    inputs,
     THREE,
     lib: LIB,
   })
@@ -948,5 +1164,14 @@ export async function compileGeometryScript(
     throw new Error('build() must return a THREE.Object3D (usually a THREE.Group)')
   }
 
-  return finishBuild({ built, mount, specs, params, code: input.code, language: 'three' })
+  return finishBuild({
+    built,
+    mount,
+    specs,
+    params,
+    code: input.code,
+    language: 'three',
+    inputs: input.inputs,
+    usageShape: input.usageShape,
+  })
 }

@@ -27,8 +27,10 @@ import {
   Sphere,
   Vector3,
 } from 'three'
+import { useBelowGrade } from './below-grade'
 import { nodeDisplayLabel } from './node-display-label'
 import { roomFloorElevation } from './room-handle-drag'
+import { type DescriptorTranslator, displayRoomName } from './room-name-messages'
 import { RoomSelectionIndex, type RoomSelectionRecord, resolveRoomHit } from './room-selection'
 import type { SelectionModifierKeys } from './selection-routing'
 
@@ -222,13 +224,15 @@ export function resolveViewerHover(
 
 /**
  * The current floor reads as the editor shows it: the levels above it step
- * aside (in the stacked display) so its rooms are in view and in reach. Mount
- * it in the surface's DOM tree, beside the editor's own level display, so one
- * hands the flag to the other in order.
+ * aside (in the stacked display) so its rooms are in view and in reach, and the
+ * ground is veiled over it when it lies below grade. Mount it in the surface's DOM tree,
+ * beside the editor's own level display, so one hands the flag to the other in
+ * order.
  */
 export function useViewerFloorDisplay() {
   // A walkthrough tours the whole building.
   const walking = useViewer((s) => s.walkthroughMode)
+  useBelowGrade(!walking)
   useEffect(() => {
     if (walking) return
     useViewer.setState({ hideLevelsAboveSelection: true })
@@ -452,8 +456,16 @@ export type ViewerCrumb = {
   label: string
 }
 
-export function zoneLabel(zone: ZoneNode): string {
-  return zone.name?.trim() || (zone.spaceRole === 'room' ? 'Room' : 'Zone')
+/**
+ * The viewer chrome's name for a zone, in the editor's UI language (the scene
+ * keeps its stored name). `i18n` is the caller's scoped `usePascalI18n()`.
+ */
+export function zoneLabel(zone: ZoneNode, i18n: DescriptorTranslator): string {
+  const name = zone.name?.trim()
+  if (name) return displayRoomName(name, i18n)
+  return zone.spaceRole === 'room'
+    ? i18n._({ id: 'editor.roomLabel.room', message: 'Room' })
+    : i18n._({ id: 'editor.roomLabel.zone', message: 'Zone' })
 }
 
 /**
@@ -465,6 +477,7 @@ export function viewerBreadcrumb(
   selection: ViewerSelection,
   focusedUnitId: string | null,
   nodes: ViewerNodes,
+  i18n: DescriptorTranslator,
   roomOf: (nodeId: string, levelId: string) => string | null = () => null,
 ): ViewerCrumb[] {
   const crumbs: ViewerCrumb[] = []
@@ -483,7 +496,8 @@ export function viewerBreadcrumb(
   if (unit?.type === 'unit') crumbs.push({ kind: 'unit', id: unit.id, label: unit.name })
   const roomId = selection.zoneId ?? (element ? roomOf(element.id, level.id) : null)
   const room = roomId ? nodes[roomId] : undefined
-  if (room?.type === 'zone') crumbs.push({ kind: 'room', id: room.id, label: zoneLabel(room) })
+  if (room?.type === 'zone')
+    crumbs.push({ kind: 'room', id: room.id, label: zoneLabel(room, i18n) })
   if (element) crumbs.push({ kind: 'node', id: element.id, label: nodeDisplayLabel(element) })
   return crumbs
 }
@@ -528,14 +542,18 @@ export type ViewerSidebarSection = { kind: 'units' | 'rooms' | 'zones'; rows: Vi
  * What sits under the current floor: its units, its rooms, its other zones.
  * An empty section is left out.
  */
-export function viewerSidebarSections(levelId: string, nodes: ViewerNodes): ViewerSidebarSection[] {
+export function viewerSidebarSections(
+  levelId: string,
+  nodes: ViewerNodes,
+  i18n: DescriptorTranslator,
+): ViewerSidebarSection[] {
   const zones = Object.values(nodes).filter(
     (node): node is ZoneNode =>
       node.type === 'zone' && node.parentId === levelId && node.visible !== false,
   )
   const zoneRow = (zone: ZoneNode): ViewerSidebarRow => ({
     id: zone.id,
-    label: zoneLabel(zone),
+    label: zoneLabel(zone, i18n),
     color: zone.color,
     areaM2: area([{ outer: zone.polygon, holes: zone.holes ?? [] }]),
   })

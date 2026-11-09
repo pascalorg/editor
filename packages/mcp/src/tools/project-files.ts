@@ -1,4 +1,4 @@
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import type { McpServer } from '@modelcontextprotocol/server'
 import {
   executeProjectFileTool,
   type ProjectFileToolExecutor,
@@ -7,6 +7,7 @@ import {
   isAgentRefusal,
   PROJECT_FILE_TOOL_CONTRACTS,
   refusalPayload,
+  surfaceDescription,
 } from '@pascal-app/core/agent-tools'
 import { z } from 'zod'
 
@@ -16,13 +17,18 @@ export function registerProjectFileTools(server: McpServer, execute: ProjectFile
       contract.name,
       {
         title: contract.title,
-        description: contract.description,
+        description: surfaceDescription(contract, 'mcp'),
         inputSchema: z.object(contract.input).strict(),
         annotations: contract.annotations,
       },
-      async (input: Record<string, unknown>, extra: { signal: AbortSignal }) => {
+      async (input: Record<string, unknown>, ctx) => {
         try {
-          const result = await executeProjectFileTool(contract.name, input, execute, extra.signal)
+          const result = await executeProjectFileTool(
+            contract.name,
+            input,
+            execute,
+            ctx.mcpReq.signal,
+          )
           return { content: [{ type: 'text' as const, text: JSON.stringify(result) }] }
         } catch (error) {
           const result = isAgentRefusal(error)

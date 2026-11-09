@@ -22,8 +22,9 @@ export const WindowNode = BaseNode.extend({
   type: nodeType('window'),
   material: MaterialSchema.optional(),
   // Per-slot material overrides on the unified slot model. Keys: `frame`,
-  // `glass`. Value = a `MaterialRef` (`library:<id>` / `scene:<id>`) or a plain
-  // `#rrggbb` colour. Absent = the frame/glass default. Mirrors `ShelfNode.slots`.
+  // `glass`, `hardware`, `shutters`, `sill`, `casing-a`, `casing-b`. Value = a
+  // `MaterialRef` (`library:<id>` / `scene:<id>`) or a plain
+  // `#rrggbb` colour. Hardware follows the frame unless painted.
   slots: z.record(z.string(), z.string()).optional(),
   /**
    * A three.js script the window is built from instead of its parametric frame, as on an item:
@@ -74,6 +75,8 @@ export const WindowNode = BaseNode.extend({
   // Window family
   windowType: WindowType.default('fixed'),
   operationState: z.number().min(0).max(1).default(0),
+  openingDirection: z.enum(['outward', 'inward']).optional(),
+  tiltTurnMode: z.enum(['tilt', 'turn']).optional(),
   awningDirection: z.enum(['up', 'down']).default('up'),
   casementStyle: z.enum(['single', 'french']).default('single'),
   hingesSide: z.enum(['left', 'right']).default('left'),
@@ -88,7 +91,18 @@ export const WindowNode = BaseNode.extend({
 
   // Frame
   frameThickness: z.number().default(0.05),
-  frameDepth: z.number().default(0.07),
+  frameDepth: z
+    .number()
+    .optional()
+    .describe(
+      "Frame depth through the wall; left out, the frame is exactly the host wall's thickness.",
+    ),
+
+  windowHandle: z.boolean().optional().describe('Show the operable sash handle (absent = true).'),
+  sashGrid: z
+    .boolean()
+    .optional()
+    .describe('Apply pane divisions per operable sash (absent = false).'),
 
   // Divisions — ratios allow non-uniform panes
   // [0.5, 0.5] = two equal panes
@@ -113,14 +127,50 @@ export const WindowNode = BaseNode.extend({
   sill: z.boolean().default(true),
   sillDepth: z.number().default(0.08),
   sillThickness: z.number().default(0.03),
+
+  sillOverhang: z.number().nonnegative().optional(),
+  sillInterior: z.boolean().optional(),
+  sillInteriorDepth: z.number().positive().optional(),
+  sillInteriorThickness: z.number().positive().optional(),
+  sillInteriorOverhang: z.number().nonnegative().optional(),
+  shutters: z.enum(['none', 'louvered', 'panel', 'board-batten']).optional(),
+  shutterWidth: z.number().positive().optional(),
+  shutterOpen: z.number().min(0).max(1).optional(),
+  shutterSides: z.enum(['both', 'left', 'right']).optional(),
+  rollerShutter: z.enum(['none', 'box', 'concealed']).optional(),
+  rollerShutterBoxHeight: z.number().positive().optional(),
+  rollerShutterOpen: z.number().min(0).max(1).optional(),
+
+  // Casing: flat boards on the finished faces of the host wall around the
+  // opening, never inside it, so the wall cutout stays width × height. The
+  // faces are the host's `a` / `b` (WallFace), not the unit's own front and
+  // back, so flipping the window leaves its casing where it is. Optional, never
+  // defaulted, so loading a saved opening adds no fields: absent faces are
+  // uncased, an absent width is 2 in.
+  casingFaceA: z.boolean().optional(),
+  casingFaceB: z.boolean().optional(),
+  casingWidth: z.number().positive().optional(),
 }).describe(dedent`Window node - a parametric window placed on a wall
   - position: center of the window in wall-local coordinate system
-  - width/height: overall outer dimensions
+  - width/height: overall outer dimensions, which are also the wall cutout
   - windowType: explicit window family, defaulting old windows to fixed
-  - frameThickness: width of the frame members
+  - frameThickness: width of the frame members (new windows use 0.020 m; absent in saved windows keeps 0.05 m)
   - frameDepth: how deep the frame sits within the wall
   - columnRatios/rowRatios: pane division ratios
+  - windowHandle: show the interior handle on casement, awning, hopper and tilt-turn sashes (absent = true)
+  - sashGrid: pane divisions per operable sash (absent = false; saved windows keep no bars)
+  - openingDirection: casement/awning swing toward exterior or interior; absent preserves placement-face motion
+  - tiltTurnMode: tilt inward up to 15 degrees (default), or turn inward up to 90 degrees
+  - sillInterior: room-side stool board (absent = false); depth/thickness/overhang default to 0.06/0.03/0.015 m
+  - sillOverhang: exterior sill extension on each side (absent = 0.4 times sillDepth)
+  - shutterOpen/shutterSides: 0 closed to 1 open (default 1), both/left/right (default both); leaves over 0.75 m bifold and stack when open
+  - rollerShutter/rollerShutterOpen: none (default), box on the exterior wall, or concealed inside the reveal; curtain fraction up (default 1)
+  - rollerShutterBoxHeight: exterior box height in metres (default 0.18), box mount only
+  - concealed roller: 0.03 m lintel strip, 0.025 x 0.03 m jamb guides inside the reveal; curtain 0.02 m outside the frame plane, width minus 0.05 m
+  - shutters/shutterWidth: exterior shutters (absent = none); width per side defaults to width / 2 for both sides or full width for left/right only, uncapped; paired shutters meet with a 0.01 m overlap lip
   - sill: whether to show a window sill
+  - casingFaceA/casingFaceB: picture-frame casing on the host wall's face a / b, around the cutout (absent means off; new openings enable both)
+  - casingWidth: face width of the casing boards (2 in by default)
   - corner: joined to a window on the other wall at this wall's start or end (a corner window)
 `)
 

@@ -5,6 +5,7 @@ import {
   type FenceNode,
   type GridEvent,
   getWallCurveLength,
+  usePascalI18n,
   useScene,
   type WallNode,
 } from '@pascal-app/core'
@@ -95,6 +96,7 @@ function pickAngleLabel(args: {
 }
 
 export const MoveFenceEndpointTool: React.FC<{ target: MovingFenceEndpoint }> = ({ target }) => {
+  const i18n = usePascalI18n()
   const fenceId = target.fence.id
   const endpoint = target.endpoint
   const initialPoint: FencePlanPoint =
@@ -278,7 +280,15 @@ export const MoveFenceEndpointTool: React.FC<{ target: MovingFenceEndpoint }> = 
                 : 'border-border/70 bg-background/90 text-foreground/80'
             }`}
           >
-            {altPressed ? 'Detach endpoint' : 'Drag endpoint'}
+            {altPressed
+              ? i18n._({
+                  id: 'node.fence.moveEndpointTool.detachEndpoint',
+                  message: 'Detach endpoint',
+                })
+              : i18n._({
+                  id: 'node.fence.moveEndpointTool.dragEndpoint',
+                  message: 'Drag endpoint',
+                })}
           </div>
         </div>
       </Html>

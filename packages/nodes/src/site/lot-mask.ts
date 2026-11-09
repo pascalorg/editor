@@ -6,11 +6,12 @@ type Point = readonly [number, number]
 
 /**
  * True for a fragment inside the lot polygon (even-odd crossing count on its
- * local x, z). Unrolled edge by edge into the graph: a parcel has tens of
- * corners, so a loop and a uniform array would buy nothing.
+ * x, z: local, where the geometry is laid out in the site's plan as the
+ * terrain is; world for a mesh placed and turned there). Unrolled edge by edge
+ * into the graph: a parcel has tens of corners, so a loop and a uniform array
+ * would buy nothing.
  */
-export function insideLotNode(polygon: ReadonlyArray<Point>) {
-  const at = positionLocal.xz
+export function insideLotNode(polygon: ReadonlyArray<Point>, at: Node<'vec2'> = positionLocal.xz) {
   let crossings: Node<'float'> = float(0)
   for (let i = 0; i < polygon.length; i++) {
     const [ax, az] = polygon[i] as Point
@@ -35,6 +36,9 @@ export function insideLotNode(polygon: ReadonlyArray<Point>) {
  */
 export function lotMaskedMaterial(material: Material, polygon: ReadonlyArray<Point>): Material {
   const masked = material.clone() as unknown as NodeMaterial
-  masked.maskNode = insideLotNode(polygon)
+  // Keep a mask the material already carries (the ground window's): the ground is cut to
+  // the lot AND out of the window, not one instead of the other.
+  const inside = insideLotNode(polygon)
+  masked.maskNode = masked.maskNode ? (masked.maskNode as Node<'bool'>).and(inside) : inside
   return masked as unknown as Material
 }

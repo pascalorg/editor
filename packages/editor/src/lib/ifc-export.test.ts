@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { type AnyNode, sceneRegistry } from '@pascal-app/core'
+import { type AnyNode, DoorNode, LevelNode, sceneRegistry, WallNode } from '@pascal-app/core'
 import * as THREE from 'three'
 import { collectIfcMeshes, exportPreparedSceneToIfc, ifcFileName } from './ifc-export'
 
@@ -172,3 +172,43 @@ test('material groups retain their surface owner and semantic subpart', () => {
   geometry.dispose()
   material.dispose()
 })
+
+for (const rotationY of [0, Math.PI]) {
+  test(`IFC opening includes fixed lights and preserves leaf placement facing ${rotationY}`, () => {
+    const level = LevelNode.parse({ id: 'level_entry' })
+    const wall = WallNode.parse({
+      id: 'wall_entry',
+      parentId: level.id,
+      start: [0, 0],
+      end: [5, 0],
+      height: 3,
+      thickness: 0.2,
+    })
+    const door = DoorNode.parse({
+      id: 'door_entry',
+      parentId: wall.id,
+      wallId: wall.id,
+      position: [2.5, 1.05, 0],
+      rotation: [0, rotationY, 0],
+      width: 1,
+      height: 2.1,
+      sidelightLeft: 0.3,
+      sidelightRight: 0.5,
+      transomHeight: 0.4,
+    })
+    const { data } = exportPreparedSceneToIfc(
+      new THREE.Group(),
+      { [level.id]: level, [wall.id]: wall, [door.id]: door },
+      {},
+    )
+    expect(data).toMatch(/IFCRECTANGLEPROFILEDEF\([^\n]*,1\.8,0\.4\)/)
+    expect(data).toMatch(/IFCEXTRUDEDAREASOLID\([^\n]*,2\.5\)/)
+    expect(data).toMatch(/IFCDOOR\([^\n]*,2\.1,1\.,\.DOOR\./)
+    expect(data).toContain(
+      rotationY === 0 ? 'IFCCARTESIANPOINT((2.6,0.,0.))' : 'IFCCARTESIANPOINT((2.4,0.,0.))',
+    )
+    expect(data).toContain(
+      rotationY === 0 ? 'IFCCARTESIANPOINT((-0.1,0.,0.))' : 'IFCCARTESIANPOINT((0.1,0.,0.))',
+    )
+  })
+}

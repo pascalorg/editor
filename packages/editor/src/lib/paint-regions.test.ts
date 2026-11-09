@@ -136,10 +136,11 @@ describe('paint region sub-mode', () => {
   })
 
   test('off anything it draws on, the HUD says where to go: a floor for Polygon', () => {
-    expect(paintRegionHints('polygon', null, false).map((hint) => hint.label)).toEqual([
-      'Hover a floor or ceiling',
-      'Cancel',
-    ])
+    expect(
+      paintRegionHints('polygon', null, false).map((hint) =>
+        typeof hint.label === 'string' ? hint.label : hint.label.message,
+      ),
+    ).toEqual(['Hover a floor or ceiling', 'Cancel'])
     expect(paintRegionHints('rectangle', null, false)[0]).toMatchObject({
       label: 'Hover a wall, floor or ceiling',
       active: true,
@@ -158,7 +159,9 @@ describe('paint region sub-mode', () => {
 
 test('the whole-surface HUD says what a click does; only painting teaches the held eyedropper', () => {
   const labels = (mode: Parameters<typeof paintHints>[0]) =>
-    paintHints(mode).map((hint) => hint.label)
+    paintHints(mode).map((hint) =>
+      typeof hint.label === 'string' ? hint.label : (hint.label.message ?? ''),
+    )
   expect(labels('surface')).toEqual(['Hold to pick a material'])
   expect(labels('erase')).toEqual(['Remove a painted part, or reset a surface'])
   expect(labels('erase').some((label) => /pick|colour|color|paint with/i.test(label))).toBe(false)

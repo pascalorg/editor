@@ -1,6 +1,7 @@
 import type { FURNISHED_ROOM_TYPES } from '../agent-tools/furnish-room'
 import { refuse } from '../agent-tools/refusal'
-import { type AnyNode, type AssetInput, ItemNode } from '../schema'
+import { OTHER_SOURCES } from '../agent-tools/sources'
+import { type AssetInput, ItemNode, type WallNode } from '../schema'
 import { edgeProjection } from './create-room'
 import {
   collectDoorKeepouts,
@@ -21,7 +22,7 @@ import {
 } from './layout-clearance'
 import { type LevelTargetInput, targetLevel } from './level-target'
 import { polygonArea, polygonBounds, type Vec2 } from './plan-geometry'
-import { levelIdOf, levelRole } from './scene-queries'
+import { levelIdOf, levelRole, queryNodes } from './scene-queries'
 import type { AgentContext, AgentOperation, SceneNodes } from './types'
 
 type RoomType = (typeof FURNISHED_ROOM_TYPES)[number]
@@ -31,6 +32,19 @@ type FurnishRoomInput = LevelTargetInput & {
   polygon?: number[][]
   roomType: RoomType
   doorWallIndex?: number
+}
+
+/** Every catalog id a room type's set may take, whatever the room's size: what a host reads first. */
+export const FURNISH_ROOM_ASSETS: Readonly<Record<RoomType, readonly string[]>> = {
+  bedroom: ['double-bed', 'single-bed', 'bedside-table', 'dresser', 'closet'],
+  kitchen: ['kitchen', 'kitchen-counter', 'stove', 'fridge'],
+  bathroom: ['toilet', 'bathroom-sink', 'bathtub', 'shower-square'],
+  living: ['sofa', 'coffee-table', 'livingroom-chair', 'tv-stand'],
+  dining: ['dining-table', 'dining-chair'],
+  hallway: ['coat-rack'],
+  entry: ['coat-rack'],
+  laundry: ['washing-machine', 'drying-rack'],
+  storage: ['closet'],
 }
 
 // A door belongs to a room edge when it stands this close to the edge's line, within its span.
@@ -76,8 +90,7 @@ export function roomToFurnish(
 /** The doors of the level that stand on an edge of the room, by where they stand. */
 function doorsOfRoom(nodes: SceneNodes, levelId: string, polygon: Vec2[]) {
   const found: { doorId: string; edge: number }[] = []
-  for (const wall of Object.values(nodes)) {
-    if (wall.type !== 'wall' || wall.parentId !== levelId) continue
+  for (const wall of queryNodes<WallNode>(nodes, { type: 'wall', parentId: levelId })) {
     const length = Math.hypot(wall.end[0] - wall.start[0], wall.end[1] - wall.start[1])
     if (length < 1e-9) continue
     for (const childId of wall.children) {
@@ -300,6 +313,7 @@ export const furnishRoom: AgentOperation<FurnishRoomInput> = (nodes, input, cont
 
   const doors = doorsOfRoom(nodes, levelId, polygon)
   const doorWall = input.doorWallIndex ?? doors[0]?.edge ?? 0
+  // biome-ignore lint/plugin: door keep-outs and occupied footprints resolve each item through its parents
   const all = Object.values(nodes)
   const doorKeepouts = collectDoorKeepouts(all, { levelId })
   const keepouts: PlanAabb[] = doorKeepouts.map((door) => door.aabb)
@@ -315,7 +329,7 @@ export const furnishRoom: AgentOperation<FurnishRoomInput> = (nodes, input, cont
   const { minX, maxX, minZ, maxZ } = polygonBounds(polygon)
   const walls = wallFacesOn(all, levelId)
 
-  const items: AnyNode[] = []
+  const items: ItemNode[] = []
   const skipped: string[] = []
   // How far each piece was moved off the spot the layout gave it, for the pieces that follow it.
   const moved = new Map<string, Vec2>()
@@ -367,15 +381,21 @@ export const furnishRoom: AgentOperation<FurnishRoomInput> = (nodes, input, cont
   }
 
   const itemIds = items.map((item) => item.id)
+  // Each piece with its size and id, as the skips are told: the set is not read back from the scene.
+  const pieces = items.map((item) => {
+    const [width = 1, , depth = 1] = item.asset.dimensions ?? [1, 1, 1]
+    return `${item.name ?? item.asset.name} (${round(width)} × ${round(depth)} m): ${item.id}`
+  })
   return {
     result: {
       ok: true,
       placed: items.length,
       itemIds,
+      pieces,
       skipped,
       doorWallIndex: doorWall,
       doorsDetected: doors.length,
-      message: `Furnished the ${input.roomType} with ${items.length} item${items.length === 1 ? '' : 's'}${skipped.length ? `, skipped ${skipped.length}` : ''}.`,
+      message: `Furnished the ${input.roomType} with ${items.length} item${items.length === 1 ? '' : 's'}${skipped.length ? `, skipped ${skipped.length}` : ''}.${skipped.length ? ` For what was skipped: ${OTHER_SOURCES}` : ''}${input.zoneId && items.length ? ` view_scene with interior { zoneId: "${input.zoneId}" } shows the room from inside, at a person's height.` : ''}`,
     },
     ...(items.length
       ? { changes: { create: items.map((node) => ({ node, parentId: levelId })) } }

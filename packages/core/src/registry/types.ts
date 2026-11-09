@@ -426,6 +426,8 @@ export type ToolOption = {
   /** Row label. Sentence case, e.g. 'Create from'. */
   label: string
   choices: readonly ToolOptionChoice[]
+  /** Optional exact numeric entry instead of choice buttons. */
+  input?: { min?: number; max?: number; step?: number; unit?: string }
   /** Subscribe to live value changes (Zustand-store-like); returns unsubscribe. */
   subscribe: (onChange: () => void) => () => void
   /** Current value token. */
@@ -656,6 +658,16 @@ export type FloorplanGeometry =
        */
       affordance?: string
       payload?: unknown
+      /** The arrow this many times its usual size (a big outline's side push); 1 by default. */
+      scale?: number
+      /**
+       * `pull`: a wall end's "pull to continue" grip — a screen-sized arrow a
+       * few pixels past `point` (the wall end) along `angle`, in its own colour,
+       * so it reads apart from the end's move grip.
+       */
+      variant?: 'pull'
+      /** Tooltip shown while the pointer rests on the arrow. */
+      title?: string
     }
   /**
    * Curved two-headed rotation arrow — the 2D counterpart of the 3D
@@ -685,6 +697,8 @@ export type FloorplanGeometry =
        * already compute the pivot to place the handle should pass it through.
        */
       pivot?: FloorplanPoint
+      /** Size against the default icon (1), for a node far larger than the handle, like a roof. */
+      scale?: number
     }
   /**
    * Centered length / distance label. Renders as a small rounded
@@ -968,13 +982,13 @@ export type FloorplanMoveTarget<N> = (args: {
 
 /**
  * A plugin-contributed section for the floating node inspector card.
- * When a node whose `type` is in `kinds` is selected, the inspector header
- * shows the extension's `icon` as a button. Clicking it swaps the card
- * body to ONLY this extension's `component` (inside a section titled
- * `title`) — extension mode and the kind's own controls are EITHER/OR,
- * never appended together. Clicking the (highlighted) icon again, or the
- * chevron, returns to the regular controls. The mobile sheet has no
- * header icons, so it appends the section after the kind's controls
+ * When a node whose `type` is in `kinds` is selected, the node's action
+ * menu shows the extension's `icon` as a button, `title` as its tooltip.
+ * Clicking it opens the inspector card on ONLY this extension's `component`
+ * (inside a section titled `title`) — extension mode and the kind's own
+ * controls are EITHER/OR, never appended together. The card's chevron
+ * returns to the regular controls. The mobile sheet has no action-menu
+ * buttons for it, so it appends the section after the kind's controls
  * instead.
  *
  * `component` is lazy-loaded on first expand and receives the selected
@@ -995,9 +1009,9 @@ export type InspectorExtension = {
   pluginId: string
   /** Node kinds whose inspector card grows this section. */
   kinds: string[]
-  /** Header-button icon (16px box). */
+  /** The icon of its action-menu button (16px box). */
   icon: IconRef
-  /** Section title, e.g. `Engineering`. */
+  /** Section title and its action-menu tooltip, e.g. `Engineering`. */
   title: string
   /** Lazy section body; receives `{ node }` (the selected node). */
   component: LazyComponent
@@ -1941,6 +1955,17 @@ export type SlotDeclaration = {
   default?: string
 }
 
+/** How far one paint click spreads: the editor's painter application scopes. */
+export type PaintScopeId = 'single' | 'object' | 'matching' | 'room'
+
+/** A surface's own scope set — see `PaintCapability.scopes`. */
+export type PaintSurfaceScopes = {
+  scopes: PaintScopeId[]
+  labels?: Partial<Record<PaintScopeId, string>>
+  /** The role a click paints under `scope`; the hovered role when omitted. */
+  roleFor?: (scope: PaintScopeId) => string
+}
+
 export type PaintCapability = {
   /**
    * Material-picker target represented by this paint capability. Omit when
@@ -1966,6 +1991,15 @@ export type PaintCapability = {
    * back to the user as the raw id. Return `null` to keep the derived label.
    */
   roleLabel?: (node: AnyNode, role: string) => string | null
+  /**
+   * Optional: the application scopes a surface offers itself, in place of the
+   * derived set (`single`, plus `object` / `matching` / `room` from the node's
+   * slots, asset and `roomScope`). `labels` names a scope over its generic
+   * label; `roleFor` is the role a click paints under a wider scope (a roof
+   * gable's `matching` paints every gable of the roof). Return `null` to keep
+   * the derived set.
+   */
+  scopes?: (node: AnyNode, role: string) => PaintSurfaceScopes | null
   /**
    * Build the node-update patch that applies the new material at
    * `role`. Returned partial is merged into the node by the editor.
@@ -2027,6 +2061,16 @@ export type SceneActionCapability<T = unknown> = {
   activate: (node: AnyNode, target: T, sceneApi: SceneApi) => boolean
 }
 
+export type MechanismPart = {
+  id: string
+  label: string
+  icon?: 'shutters'
+  verb?: 'open' | 'run'
+  has: (node: AnyNode) => boolean
+  isOn: (node: AnyNode, state: InteractiveState) => boolean
+  set: (node: AnyNode, on: boolean) => void
+}
+
 /**
  * A kind's moving parts (a fan's spin, doors, an articulated asset's joints).
  * Operating state is transient: `set` writes `useInteractive`, never the node,
@@ -2034,6 +2078,7 @@ export type SceneActionCapability<T = unknown> = {
  * with a single switch keeps it in `useInteractive.mechanisms`.
  */
 export type MechanismCapability = {
+  parts?: MechanismPart[]
   /** Whether this node has anything to run. */
   has: (node: AnyNode) => boolean
   /** Whether any of its mechanisms is running. */
@@ -2450,6 +2495,8 @@ export type SnappableConfig = {
 export type SnapPointKind = 'start' | 'end' | 'midpoint' | 'center' | 'corners'
 
 export type SurfacesConfig = {
+  /** False makes hosted openings gaps without leaf, frame or threshold; defaults to true. */
+  renderOpeningContent?: (node: AnyNode) => boolean
   hosting?: SurfaceProvider | false
   top?: {
     /** Height above the node origin; point, when supplied, is in the parent XZ frame. */
@@ -2581,11 +2628,11 @@ export type FloorPlacedConfig = {
  */
 export type BatchableConfig = {
   /**
-   * Where the node's batches live. `'level'`: the node is a direct child of a
-   * level; hosted or mounted nodes draw themselves, because their host moves
-   * them without a signal the batch sees. `'wall'`: the node is hosted by a
-   * visible wall that is a level child; the wall's edits, tint and gestures
-   * release it.
+   * Where the node's batches live. `'level'`: the node sits under a level,
+   * directly or through visible host nodes (a cabinet module in its run, a
+   * plate on a table, a lamp on a ceiling); a host's edits, tint and gestures
+   * release it. `'wall'`: the node is hosted by a visible wall that is a level
+   * child, released the same way by the wall.
    */
   scope: 'level' | 'wall'
   /** Transient states in which the node draws its own meshes, such as a running animation. */
@@ -2983,6 +3030,15 @@ export type ParamField<N> =
       min?: number
       max?: number
       step?: number
+      /** Shown when the node omits the key (an optional field with a schema-level fallback). */
+      default?: number
+      /**
+       * The nodes the field edits. A multi-selection shows it while any selected
+       * node qualifies and reads and writes only those; a single node that does
+       * not qualify hides it. Unlike `visibleIf`, one non-qualifying node does
+       * not hide it for the whole selection.
+       */
+      appliesTo?: (n: N) => boolean
       visibleIf?: (n: N) => boolean
       customEditor?: ComponentType
     }

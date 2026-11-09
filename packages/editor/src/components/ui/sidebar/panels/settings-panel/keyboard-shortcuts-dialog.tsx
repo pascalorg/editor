@@ -1,3 +1,4 @@
+import { type MessageDescriptor, usePascalI18n } from '@pascal-app/core'
 import { Keyboard } from 'lucide-react'
 import { Button } from './../../../../../components/ui/primitives/button'
 import {
@@ -12,27 +13,31 @@ import {
   ShortcutToken,
   shortcutDisplayValue,
 } from './../../../../../components/ui/primitives/shortcut-token'
+import { TOOL_SHORTCUT_KEYS } from './../../../../../lib/tool-shortcuts'
 
 type Shortcut = {
-  keys: string[]
+  keys: readonly string[]
   action: string
   note?: string
 }
 
 type ShortcutCategory = {
-  title: string
+  title: MessageDescriptor
   shortcuts: Shortcut[]
 }
 
 const SHORTCUT_CATEGORIES: ShortcutCategory[] = [
   {
-    title: 'Editor Navigation',
+    title: /* i18n */ {
+      id: 'editor.sidebar.panels.settingsPanel.keyboardShortcutsDialog.editorNavigation',
+      message: 'Editor Navigation',
+    },
     shortcuts: [
       { keys: ['1'], action: 'Switch to Site' },
       { keys: ['2'], action: 'Switch to Building' },
       { keys: ['\\'], action: 'Open or close the split view' },
-      { keys: ['F'], action: 'Open the items catalog with the item tool' },
-      { keys: ['Z'], action: 'Draw a zone' },
+      { keys: TOOL_SHORTCUT_KEYS.item, action: 'Open the items catalog with the item tool' },
+      { keys: TOOL_SHORTCUT_KEYS.zone, action: 'Draw a zone' },
       {
         keys: ['Cmd/Ctrl', 'Arrow Up'],
         action: 'Select next level in the active building',
@@ -45,12 +50,21 @@ const SHORTCUT_CATEGORIES: ShortcutCategory[] = [
     ],
   },
   {
-    title: 'Modes & History',
+    title: /* i18n */ {
+      id: 'editor.sidebar.panels.settingsPanel.keyboardShortcutsDialog.modesHistory',
+      message: 'Modes & History',
+    },
     shortcuts: [
-      { keys: ['V'], action: 'Switch to Select mode' },
-      { keys: ['B'], action: 'Switch to Build mode' },
-      { keys: ['M'], action: 'Activate the last measurement tool' },
-      { keys: ['X'], action: 'Switch to Delete mode' },
+      { keys: TOOL_SHORTCUT_KEYS.select, action: 'Switch to Select mode' },
+      {
+        keys: TOOL_SHORTCUT_KEYS.wall,
+        action: 'Switch to Build mode, drawing with the last Rooms shape',
+        note: 'Rectangle, Polygon or Walls, whichever you picked last; Rectangle the first time.',
+      },
+      { keys: TOOL_SHORTCUT_KEYS.measurement, action: 'Activate the last measurement tool' },
+      { keys: TOOL_SHORTCUT_KEYS.paint, action: 'Switch to Paint mode' },
+      { keys: TOOL_SHORTCUT_KEYS.terrain, action: 'Sculpt the ground (terrain)' },
+      { keys: TOOL_SHORTCUT_KEYS.delete, action: 'Switch to Delete mode' },
       {
         keys: ['Esc'],
         action: 'Cancel the active tool and return to Select mode',
@@ -63,7 +77,30 @@ const SHORTCUT_CATEGORIES: ShortcutCategory[] = [
     ],
   },
   {
-    title: 'Selection',
+    title: /* i18n */ {
+      id: 'editor.sidebar.panels.settingsPanel.keyboardShortcutsDialog.buildTools',
+      message: 'Build Tools',
+    },
+    shortcuts: [
+      {
+        keys: TOOL_SHORTCUT_KEYS.door,
+        action: 'Place a door',
+        note: 'D alone pans the view. While placing, the door swings toward the side of the wall the cursor is on; R flips it.',
+      },
+      { keys: TOOL_SHORTCUT_KEYS.window, action: 'Place a window', note: 'W alone pans the view.' },
+      { keys: TOOL_SHORTCUT_KEYS.stair, action: 'Place stairs', note: 'S alone pans the view.' },
+      {
+        keys: TOOL_SHORTCUT_KEYS.roof,
+        action: 'Draw a roof',
+        note: "R alone still rotates or flips the selection, and while placing it stays the placement's own R.",
+      },
+    ],
+  },
+  {
+    title: /* i18n */ {
+      id: 'editor.sidebar.panels.settingsPanel.keyboardShortcutsDialog.selection',
+      message: 'Selection',
+    },
     shortcuts: [
       {
         keys: ['Cmd/Ctrl', 'C'],
@@ -78,8 +115,7 @@ const SHORTCUT_CATEGORIES: ShortcutCategory[] = [
       {
         keys: ['Cmd/Ctrl', 'V'],
         action: 'Paste and place copied objects',
-        note:
-          'Carries a preview under the cursor. Click to place it, or press Escape to cancel.',
+        note: 'Carries a preview under the cursor. Click to place it, or press Escape to cancel.',
       },
       {
         keys: ['Cmd/Ctrl', 'Left click'],
@@ -105,13 +141,22 @@ const SHORTCUT_CATEGORIES: ShortcutCategory[] = [
       {
         keys: ['Cmd/Ctrl', 'G'],
         action: 'Group the multi-selection (session only)',
-        note:
-          'Editor-only. Plain click a member later to reselect the whole group. Not saved with the project.',
+        note: 'Editor-only. Plain click a member later to reselect the whole group. Not saved with the project.',
       },
       {
         keys: ['Cmd/Ctrl', 'Shift', 'G'],
         action: 'Ungroup the session selection',
         note: 'Keeps the current selection; only dissolves the session group.',
+      },
+      {
+        keys: ['Arrow keys'],
+        action: 'Nudge the selected wall 1 in (1 cm in metric)',
+        note: 'In the floor plan. Stops where it lines up with a parallel wall; joined walls follow.',
+      },
+      {
+        keys: ['Tab'],
+        action: 'Select the next object under the pointer',
+        note: 'In the floor plan, for walls that overlap or hide under another. Shift+Tab goes back.',
       },
       {
         keys: ['Esc'],
@@ -121,7 +166,10 @@ const SHORTCUT_CATEGORIES: ShortcutCategory[] = [
     ],
   },
   {
-    title: 'Direct Manipulation',
+    title: /* i18n */ {
+      id: 'editor.sidebar.panels.settingsPanel.keyboardShortcutsDialog.directManipulation',
+      message: 'Direct Manipulation',
+    },
     shortcuts: [
       {
         keys: ['Cmd/Ctrl', 'Left click'],
@@ -141,7 +189,10 @@ const SHORTCUT_CATEGORIES: ShortcutCategory[] = [
     ],
   },
   {
-    title: 'Drawing Tools',
+    title: /* i18n */ {
+      id: 'editor.sidebar.panels.settingsPanel.keyboardShortcutsDialog.drawingTools',
+      message: 'Drawing Tools',
+    },
     shortcuts: [
       // Shift and Ctrl each mean one thing held and another tapped, and only
       // the hold was documented — which read as the taps not existing. Both
@@ -157,9 +208,9 @@ const SHORTCUT_CATEGORIES: ShortcutCategory[] = [
         note: 'Tap and release on its own. Use it when the default half-metre grid is too coarse — placing a window, for instance.',
       },
       {
-        keys: ['Shift'],
-        action: 'Bypass guided snapping and angle constraints',
-        note: 'Hold during the active gesture. Passive guide or measurement feedback may stay visible.',
+        keys: ['Alt'],
+        action: 'Bypass snapping, angle constraints and collisions',
+        note: 'Hold during the active gesture; release to snap again. Passive guide or measurement feedback may stay visible.',
       },
       {
         keys: ['Shift'],
@@ -169,7 +220,10 @@ const SHORTCUT_CATEGORIES: ShortcutCategory[] = [
     ],
   },
   {
-    title: 'Item Placement',
+    title: /* i18n */ {
+      id: 'editor.sidebar.panels.settingsPanel.keyboardShortcutsDialog.itemPlacement',
+      message: 'Item Placement',
+    },
     shortcuts: [
       {
         keys: ['R', 'T'],
@@ -177,7 +231,8 @@ const SHORTCUT_CATEGORIES: ShortcutCategory[] = [
       },
       {
         keys: ['E'],
-        action: 'Operate the selected node — doors, windows, and cabinet doors/drawers animate open/closed',
+        action:
+          'Operate the selected node — doors, windows, and cabinet doors/drawers animate open/closed',
       },
       {
         keys: ['Shift'],
@@ -187,12 +242,15 @@ const SHORTCUT_CATEGORIES: ShortcutCategory[] = [
     ],
   },
   {
-    title: 'Camera',
+    title: /* i18n */ {
+      id: 'editor.sidebar.panels.settingsPanel.keyboardShortcutsDialog.camera',
+      message: 'Camera',
+    },
     shortcuts: [
       {
         keys: ['W', 'A', 'S', 'D'],
         action: 'Pan camera',
-        note: 'Moves in screen space, similar to dragging the camera view.',
+        note: 'Moves in screen space, similar to dragging the camera view. With Shift, W, S and D place a window, stairs and a door instead.',
       },
       {
         keys: ['Middle click'],
@@ -208,7 +266,7 @@ const SHORTCUT_CATEGORIES: ShortcutCategory[] = [
   },
 ]
 
-function ShortcutKeys({ keys }: { keys: string[] }) {
+function ShortcutKeys({ keys }: { keys: readonly string[] }) {
   return (
     <div className="flex flex-wrap items-center gap-1">
       {keys.map((key, index) => (
@@ -222,32 +280,44 @@ function ShortcutKeys({ keys }: { keys: string[] }) {
 }
 
 export function KeyboardShortcutsDialog() {
+  const i18n = usePascalI18n()
   return (
     <Dialog>
       <DialogTrigger asChild>
         <Button className="w-full justify-start gap-2" variant="outline">
           <Keyboard className="size-4" />
-          Keyboard shortcuts
+          {i18n._({
+            id: 'editor.sidebar.panels.settingsPanel.keyboardShortcutsDialog.keyboardShortcuts',
+            message: 'Keyboard shortcuts',
+          })}
         </Button>
       </DialogTrigger>
       <DialogContent className="flex max-h-[85vh] flex-col overflow-hidden p-0 sm:max-w-3xl">
         <DialogHeader className="shrink-0 border-b px-6 py-4">
-          <DialogTitle>Keyboard shortcuts</DialogTitle>
+          <DialogTitle>
+            {i18n._({
+              id: 'editor.sidebar.panels.settingsPanel.keyboardShortcutsDialog.keyboardShortcuts',
+              message: 'Keyboard shortcuts',
+            })}
+          </DialogTitle>
           <DialogDescription>
-            Shortcuts are context-aware. Guided constraints are enabled by default; hold Shift
-            during an active gesture to build freely.
+            {i18n._({
+              id: 'editor.sidebar.panels.settingsPanel.keyboardShortcutsDialog.shortcutsAreContextAwareGuidedConstraints',
+              message:
+                'Shortcuts are context-aware. Snapping is a visible mode: tap Shift to cycle it, hold Alt during a gesture to place freely.',
+            })}
           </DialogDescription>
         </DialogHeader>
 
         <div className="flex-1 space-y-5 overflow-y-auto px-6 py-4">
           {SHORTCUT_CATEGORIES.map((category) => (
-            <section className="space-y-2" key={category.title}>
-              <h3 className="font-medium text-sm">{category.title}</h3>
+            <section className="space-y-2" key={category.title.id}>
+              <h3 className="font-medium text-sm">{i18n._(category.title)}</h3>
               <div className="overflow-hidden rounded-md border border-border/80">
                 {category.shortcuts.map((shortcut, index) => (
                   <div
                     className="grid grid-cols-[minmax(130px,220px)_1fr] gap-3 px-3 py-2"
-                    key={`${category.title}-${shortcut.action}`}
+                    key={`${category.title.id}-${shortcut.action}`}
                   >
                     <ShortcutKeys keys={shortcut.keys} />
                     <div>

@@ -8,6 +8,7 @@ import {
   type DoorStyle,
   doorStyleLook,
   doorTypeFields,
+  NEW_DOOR_FRAME_THICKNESS,
 } from '@pascal-app/core/building'
 import { create } from 'zustand'
 
@@ -53,7 +54,14 @@ export const useDoorPlacement = create<DoorPlacementState>((set, get) => ({
 /** The door the tool places: the chips' type and style, written as add_door and the panel write them. */
 export function placedDoorFields(): Partial<DoorNode> {
   const { type, style } = useDoorPlacement.getState()
-  return { ...doorTypeFields(type), ...DOOR_TYPE_SIZES[type], ...doorStyleLook(style) }
+  return {
+    frameThickness: NEW_DOOR_FRAME_THICKNESS,
+    casingFaceA: true,
+    casingFaceB: true,
+    ...doorTypeFields(type),
+    ...DOOR_TYPE_SIZES[type],
+    ...doorStyleLook(style),
+  }
 }
 
 export const DOOR_PLACEMENT_HINTS: ToolHint[] = [

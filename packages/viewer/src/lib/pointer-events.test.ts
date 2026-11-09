@@ -842,11 +842,11 @@ describe('R3F 9.8.2 pointer-event differential', () => {
     try {
       for (const environment of ['production', 'development', 'test']) {
         process.env.NODE_ENV = environment
-        expect(choosePointerEvents('')).toBe(createPascalPointerEvents)
+        expect(choosePointerEvents('')).not.toBe(stockEvents)
         for (const search of ['?stockEvents', '?stockEvents=false']) {
-          expect(choosePointerEvents(search)).toBe(
-            environment === 'production' ? createPascalPointerEvents : stockEvents,
-          )
+          const chosen = choosePointerEvents(search)
+          if (environment === 'production') expect(chosen).not.toBe(stockEvents)
+          else expect(chosen).toBe(stockEvents)
         }
       }
     } finally {

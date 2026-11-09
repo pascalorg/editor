@@ -44,6 +44,8 @@ export const ActionButton = React.forwardRef<HTMLButtonElement, ActionButtonProp
             // These are toggles, not commands: the armed/unarmed state has to be
             // readable without decoding the active-state styling.
             aria-pressed={isActive}
+            // Icon-only: the tooltip text is the button's name.
+            aria-label={label}
             className={cn('relative h-11 w-11 transition-all', className)}
             onClick={(event) => {
               triggerSFX('sfx:menu-click')

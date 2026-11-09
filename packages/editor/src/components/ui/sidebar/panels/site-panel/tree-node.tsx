@@ -1,4 +1,11 @@
-import { type AnyNode, type AnyNodeId, emitter, nodeRegistry, useScene } from '@pascal-app/core'
+import {
+  type AnyNode,
+  type AnyNodeId,
+  emitter,
+  nodeRegistry,
+  usePascalI18n,
+  useScene,
+} from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { ChevronRight } from 'lucide-react'
 import { AnimatePresence, motion } from 'motion/react'
@@ -231,6 +238,7 @@ export const TreeNodeWrapper = forwardRef<HTMLDivElement, TreeNodeWrapperProps>(
     },
     ref,
   ) {
+    const i18n = usePascalI18n()
     const rowRef = useRef<HTMLDivElement>(null)
 
     useEffect(() => {
@@ -286,7 +294,14 @@ export const TreeNodeWrapper = forwardRef<HTMLDivElement, TreeNodeWrapperProps>(
           {/* A row with nothing to fold keeps the space, and a click there selects the row. */}
           {hasChildren ? (
             <button
+              aria-expanded={expanded}
+              aria-label={
+                expanded
+                  ? i18n._({ id: 'editor.layers.collapse', message: 'Collapse' })
+                  : i18n._({ id: 'editor.layers.expand', message: 'Expand' })
+              }
               className="z-10 flex h-4 w-4 shrink-0 items-center justify-center bg-inherit"
+              type="button"
               onClick={(e) => {
                 e.stopPropagation()
                 onToggle()

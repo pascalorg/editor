@@ -7,15 +7,18 @@ import {
   containsPoint,
   DEFAULT_LEVEL_HEIGHT,
   emitter,
+  formatNumber,
+  type PascalI18n,
   type Polygon,
   polygonInteriorPoint,
   type Ring,
   sceneRegistry,
+  useLocale,
+  usePascalI18n,
   useScene,
   type ZoneNode,
 } from '@pascal-app/core'
 import { timeSpan, useViewer } from '@pascal-app/viewer'
-import { Html } from '@react-three/drei'
 import { useFrame, useThree } from '@react-three/fiber'
 import {
   createContext,
@@ -47,17 +50,14 @@ import { useShallow } from 'zustand/react/shallow'
 import { useRoomRecords } from '../../hooks/use-selected-room'
 import { getAreaUnitLabel, type LinearUnit, squareMetersToAreaUnit } from '../../lib/measurements'
 import { roomFloorElevation } from '../../lib/room-handle-drag'
+import { displayRoomName } from '../../lib/room-name-messages'
 import type { RoomSelectionRecord } from '../../lib/room-selection'
-import {
-  clickZoneArea,
-  hoverZoneArea,
-  leaveZoneArea,
-  zoneKindLabel,
-} from '../../lib/room-zone-routing'
+import { clickZoneArea, hoverZoneArea, leaveZoneArea } from '../../lib/room-zone-routing'
 import { selectionModifiersFromEvent } from '../../lib/selection-routing'
 import useEditor from '../../store/use-editor'
 import useInteractionScope from '../../store/use-interaction-scope'
 import { isViewVisible, VIEW_2D, VIEW_3D } from '../../store/view-layout'
+import { Html } from './localized-html'
 
 const CONTEXT_TYPES = new Set(['site', 'building', 'level'])
 
@@ -92,8 +92,12 @@ export function roomLabelsVisible(state: RoomLabelVisibilityState): boolean {
   )
 }
 
-export function formatRoomArea(squareMeters: number, unit: LinearUnit): string {
-  return `${squareMetersToAreaUnit(squareMeters, unit).toFixed(1)} ${getAreaUnitLabel(unit)}`
+export function formatRoomArea(squareMeters: number, unit: LinearUnit, locale?: string): string {
+  return `${formatNumber(squareMetersToAreaUnit(squareMeters, unit), {
+    min: 1,
+    max: 1,
+    locale,
+  })} ${getAreaUnitLabel(unit)}`
 }
 
 function useRoomLabelsVisible() {
@@ -1169,11 +1173,12 @@ export function RoomPillChip({
   onLeave: () => void
 }) {
   const unit = useViewer((s) => s.unit)
-  const areaLabel = formatRoomArea(areaM2, unit)
+  const locale = useLocale()
+  const areaLabel = formatRoomArea(areaM2, unit, locale)
   // biome-ignore lint/correctness/useExhaustiveDependencies: A dot's border box does not resize when its hidden text changes.
   useLayoutEffect(() => {
     if (elements instanceof PillElements) elements.measure(zoneId)
-  }, [areaM2, elements, name, unit, zoneId])
+  }, [areaM2, elements, locale, name, unit, zoneId])
   const register = useCallback(
     (element: HTMLElement | null) => {
       if (element) elements.set(zoneId, element)
@@ -1227,6 +1232,7 @@ export function RoomPillDetail({
   areaM2: number
 }) {
   const unit = useViewer((s) => s.unit)
+  const locale = useLocale()
   return (
     <div
       aria-hidden
@@ -1234,7 +1240,7 @@ export function RoomPillDetail({
       data-room-label-detail={zoneId}
       data-room-label-view={view}
     >
-      <LabelParts areaLabel={formatRoomArea(areaM2, unit)} color={color} full name={name} />
+      <LabelParts areaLabel={formatRoomArea(areaM2, unit, locale)} color={color} full name={name} />
     </div>
   )
 }
@@ -1244,7 +1250,13 @@ function useLabelZone(zoneId: string) {
   return zone && zone.visible !== false ? zone : null
 }
 
-const labelName = (zone: ZoneNode) => zone.name?.trim() || zoneKindLabel(zone)
+const labelName = (zone: ZoneNode, i18n: PascalI18n) => {
+  const name = zone.name?.trim()
+  if (name) return displayRoomName(name, i18n)
+  return zone.spaceRole === 'room'
+    ? i18n._({ id: 'editor.roomLabel.room', message: 'Room' })
+    : i18n._({ id: 'editor.roomLabel.zone', message: 'Zone' })
+}
 
 /**
  * One room's pill in the editor. Hover and click take the same rule as the
@@ -1260,6 +1272,7 @@ function RoomPill({
   view: '2d' | '3d'
   elements: Map<string, HTMLElement>
 }) {
+  const i18n = usePascalI18n()
   const zone = useLabelZone(entry.zoneId)
   // A pill that disappears under the cursor (its click selected something)
   // fires no leave: end the hover it set.
@@ -1270,7 +1283,7 @@ function RoomPill({
       areaM2={entry.area}
       color={zone.color}
       elements={elements}
-      name={labelName(zone)}
+      name={labelName(zone, i18n)}
       onClick={(event) => clickZoneArea(entry.zoneId, selectionModifiersFromEvent(event))}
       onHover={(event) => hoverZoneArea(entry.zoneId, selectionModifiersFromEvent(event))}
       onLeave={() => leaveZoneArea(entry.zoneId)}
@@ -1281,13 +1294,14 @@ function RoomPill({
 }
 
 function RoomDetail({ entry, view }: { entry: LabelEntry; view: '2d' | '3d' }) {
+  const i18n = usePascalI18n()
   const zone = useLabelZone(entry.zoneId)
   if (!zone) return null
   return (
     <RoomPillDetail
       areaM2={entry.area}
       color={zone.color}
-      name={labelName(zone)}
+      name={labelName(zone, i18n)}
       view={view}
       zoneId={entry.zoneId}
     />

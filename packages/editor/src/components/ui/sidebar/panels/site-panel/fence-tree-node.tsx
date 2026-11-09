@@ -1,10 +1,11 @@
-import { type AnyNodeId, type FenceNode, useScene } from '@pascal-app/core'
+import { type AnyNodeId, type FenceNode, useScene, usePascalI18n } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import Image from 'next/image'
 import { memo, useEffect, useState } from 'react'
 import { InlineRenameInput } from './inline-rename-input'
 import { focusTreeNode, handleTreeSelection, TreeNode, TreeNodeWrapper } from './tree-node'
 import { TreeNodeActions } from './tree-node-actions'
+import { nodeLabelDescriptor } from '../../../../../i18n/node-messages'
 
 interface FenceTreeNodeProps {
   nodeId: AnyNodeId
@@ -17,6 +18,7 @@ export const FenceTreeNode = memo(function FenceTreeNode({
   depth,
   isLast,
 }: FenceTreeNodeProps) {
+  const i18n = usePascalI18n()
   const node = useScene((state) => state.nodes[nodeId]) as FenceNode | undefined
   const [isEditing, setIsEditing] = useState(false)
   const [expanded, setExpanded] = useState(true)
@@ -55,7 +57,7 @@ export const FenceTreeNode = memo(function FenceTreeNode({
       isVisible={node.visible !== false}
       label={
         <InlineRenameInput
-          defaultName="Fence"
+          defaultName={i18n._(nodeLabelDescriptor('fence', 'Fence'))}
           isEditing={isEditing}
           nodeId={node.id}
           onStartEditing={() => setIsEditing(true)}

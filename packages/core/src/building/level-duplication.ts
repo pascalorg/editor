@@ -219,7 +219,9 @@ export function buildLevelDuplicateCreateOps({
   // A walled level someone declared the roof level is a storey once copied: the copy is one.
   if (
     isRoofLevel(copy) &&
-    cleanedNodes.some((node) => node.parentId === newLevelId && isStoreyContent(node.type))
+    cleanedNodes.some(
+      (node) => node.parentId === newLevelId && isStoreyContent(node.type, node.metadata),
+    )
   ) {
     const { role: _role, ...metadata } = copy.metadata
     copy.metadata = metadata

@@ -1,12 +1,15 @@
 'use client'
 
 import {
+  type DoorNode,
   getWallCurveFrameAt,
   getWallLocalFaceZ,
   getWallMiterBoundaryPoints,
   getWallTrimFaces,
   getWallTrimSlotId,
   isCurvedWall,
+  openingCasingBoards,
+  resolveOpeningCasingHost,
   type SceneMaterial,
   type SceneMaterialId,
   spatialGridManager,
@@ -21,7 +24,10 @@ import {
   type WallTrimKind,
   type WallTrimProfile,
   type WallTrimSlotId,
+  type WindowNode,
   wallDoorStepRuns,
+  wallFaceBaseOffset,
+  wallFaceScriptSkirtingGap,
 } from '@pascal-app/core'
 import {
   baseMaterial,
@@ -33,6 +39,7 @@ import { memo, useEffect, useMemo } from 'react'
 import * as THREE from 'three'
 import { mergeGeometries as mergeBufferGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { resolveWallOpeningCeiling } from '../shared/wall-opening-ceiling'
+import { skirtingFloorOpeningRanges } from './skirting-floor-gaps'
 import { treatmentMiterDataForProud, type WallTreatmentLevelData } from './treatment-level-data'
 
 const CURVE_SEGMENTS = 24
@@ -44,6 +51,9 @@ type OpeningLike = {
   width?: number
   height?: number
   position?: [number, number, number]
+  casingFaceA?: boolean
+  casingFaceB?: boolean
+  casingWidth?: number
 }
 
 type TrimKind = WallTrimKind
@@ -391,13 +401,23 @@ function subtractOpeningRanges(ranges: Array<[number, number]>, openings: Array<
   return next
 }
 
+/**
+ * Where a trim on `face`, from `yBottom` to `height` above it, breaks for the wall's doors and
+ * windows: across each opening it reaches, and across each casing board on that face it reaches
+ * (the legs beside the cutout, the head over it, a window's bottom board under it), so a skirting
+ * or chair rail stops against the casing instead of running through it. A face the opening is not
+ * cased on breaks at the cutout only.
+ */
 function trimOpeningRanges(
   node: WallNode,
+  face: WallFace,
   childrenNodes: OpeningLike[],
   yBottom: number,
   height: number,
 ) {
   const yTop = yBottom + height
+  const reaches = (bottom: number, top: number) => top > yBottom + EPS && bottom < yTop - EPS
+  const nodes = useScene.getState().nodes
   return childrenNodes
     .filter((child) => child.type === 'door' || child.type === 'window')
     .flatMap((child) => {
@@ -405,9 +425,18 @@ function trimOpeningRanges(
       const childHeight = child.height ?? 0
       const position = child.position ?? [0, 0, 0]
       const childBottom = position[1] - childHeight / 2
-      const childTop = childBottom + childHeight
-      if (childTop <= yBottom + EPS || childBottom >= yTop - EPS) return []
-      return [[position[0] - width / 2, position[0] + width / 2] as [number, number]]
+      const ranges: Array<[number, number]> = []
+      if (reaches(childBottom, childBottom + childHeight))
+        ranges.push([position[0] - width / 2, position[0] + width / 2])
+      const opening = { ...child, position } as DoorNode | WindowNode
+      const host = resolveOpeningCasingHost(opening, nodes, node)
+      if (!host) return ranges
+      for (const board of openingCasingBoards(opening, host)) {
+        const [x, y] = [position[0] + board.center[0], position[1] + board.center[1]]
+        if (board.face === face && reaches(y - board.size[1] / 2, y + board.size[1] / 2))
+          ranges.push([x - board.size[0] / 2, x + board.size[0] / 2])
+      }
+      return ranges
     })
 }
 
@@ -540,15 +569,27 @@ export function buildTrimGeometry(
     const frame = getWallCurveFrameAt(node, t)
     return wallToLocalTransform(node)(frame.point.x, frame.point.y).x
   }
+  const face = resolveTreatmentSideSign(node, side) > 0 ? 'a' : 'b'
+  const faceScript = kind === 'skirting' ? node.finishScripts?.[face] : undefined
+  const floorGaps =
+    kind === 'skirting' ? skirtingFloorOpeningRanges(node, face, useScene.getState().nodes) : []
   const runs = bases.flatMap((base) => {
     const bottom = support ? base.elevation - support.elevation : yBottom
-    const openingRanges = trimOpeningRanges(node, childrenNodes, bottom, height)
+    const openingRanges = [
+      ...trimOpeningRanges(node, face, childrenNodes, bottom, height),
+      ...floorGaps,
+    ]
     if (support)
       for (const child of childrenNodes) {
         for (const run of wallDoorStepRuns(node, child, support.faceDatum, support.elevation))
           if (run.bottom < bottom + height && run.top > bottom)
             openingRanges.push([run.start, run.end])
       }
+    const scripted =
+      faceScript && support
+        ? wallFaceScriptSkirtingGap(faceScript, bottom + height - wallFaceBaseOffset(support, face))
+        : null
+    if (scripted) openingRanges.push(scripted)
     return subtractOpeningRanges([[stationX(base.start), stationX(base.end)]], openingRanges).map(
       ([start, end]) => ({
         start,

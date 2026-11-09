@@ -1,9 +1,15 @@
 import { describe, expect, test } from 'bun:test'
 import {
+  formatMeasurementInputValue,
   isProjectedFloorplanAxisPointVerified,
   resolveFloorplanMeasurementAxisSnap,
   resolveProjectedFloorplanSnap,
 } from './floorplan-measurement-tool-layer'
+
+test('extrusion inputs write values back with the scoped decimal separator', () => {
+  expect(formatMeasurementInputValue(2.75, 'fr')).toBe('2,75')
+  expect(formatMeasurementInputValue(2.75, 'en')).toBe('2.75')
+})
 
 describe('resolveFloorplanMeasurementAxisSnap', () => {
   test('snaps to the closest X or Z axis inside the screen-space threshold', () => {

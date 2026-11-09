@@ -1,7 +1,7 @@
 'use client'
 
 import type { AnyNodeId, CollectionId } from '@pascal-app/core'
-import { useScene } from '@pascal-app/core'
+import { useScene, usePascalI18n } from '@pascal-app/core'
 import {
   Check,
   ChevronDown,
@@ -36,6 +36,7 @@ interface CollectionsPopoverProps {
 }
 
 export function CollectionsPopover({ nodeIds, children }: CollectionsPopoverProps) {
+  const i18n = usePascalI18n()
   const collections = useScene((s) => s.collections)
   const nodes = useScene((s) => s.nodes)
   const createCollection = useScene((s) => s.createCollection)
@@ -102,7 +103,7 @@ export function CollectionsPopover({ nodeIds, children }: CollectionsPopoverProp
           <div className="flex items-center gap-1.5">
             <Layers className="h-3.5 w-3.5 text-muted-foreground" />
             <span className="font-semibold text-foreground text-xs tracking-tight">
-              Collections
+              {i18n._({ id: 'editor.panels.collections.collectionsPopover.collections', message: 'Collections' })}
             </span>
           </div>
           <button
@@ -114,7 +115,7 @@ export function CollectionsPopover({ nodeIds, children }: CollectionsPopoverProp
             type="button"
           >
             <Plus className="h-3 w-3" />
-            New
+            {i18n._({ id: 'editor.panels.collections.collectionsPopover.new', message: 'New' })}
           </button>
         </div>
 
@@ -132,7 +133,7 @@ export function CollectionsPopover({ nodeIds, children }: CollectionsPopoverProp
                   setCreateName('')
                 }
               }}
-              placeholder="Collection name…"
+              placeholder={i18n._({ id: 'editor.panels.collections.collectionsPopover.collectionName', message: 'Collection name…' })}
               value={createName}
             />
             <button
@@ -162,7 +163,7 @@ export function CollectionsPopover({ nodeIds, children }: CollectionsPopoverProp
             <div className="flex flex-col items-center justify-center gap-2 px-4 py-8 text-center">
               <Layers className="h-6 w-6 text-muted-foreground/40" />
               <p className="text-muted-foreground text-xs">
-                No collections yet. Create one to group elements together.
+                {i18n._({ id: 'editor.panels.collections.collectionsPopover.noCollectionsYetCreateOneTo', message: 'No collections yet. Create one to group elements together.' })}
               </p>
             </div>
           ) : (
@@ -182,8 +183,7 @@ export function CollectionsPopover({ nodeIds, children }: CollectionsPopoverProp
                       key={collection.id}
                     >
                       <span className="truncate text-foreground/80 text-xs">
-                        Delete "{collection.name}"?
-                      </span>
+                        {i18n._({ id: 'editor.panels.collections.collectionsPopover.deleteName', message: 'Delete "{name}"?', values: { name: collection.name } })}</span>
                       <div className="flex shrink-0 items-center gap-1">
                         <button
                           className="rounded-md bg-red-500/20 px-2 py-0.5 font-medium text-[11px] text-red-600 dark:text-red-400 transition-colors hover:bg-red-500/30"
@@ -193,14 +193,14 @@ export function CollectionsPopover({ nodeIds, children }: CollectionsPopoverProp
                           }}
                           type="button"
                         >
-                          Delete
+                          {i18n._({ id: 'editor.panels.collections.collectionsPopover.delete', message: 'Delete' })}
                         </button>
                         <button
                           className="rounded-md px-2 py-0.5 font-medium text-[11px] text-muted-foreground transition-colors hover:bg-black/6 dark:hover:bg-white/10"
                           onClick={() => setDeletingId(null)}
                           type="button"
                         >
-                          Cancel
+                          {i18n._({ id: 'editor.panels.collections.collectionsPopover.cancel', message: 'Cancel' })}
                         </button>
                       </div>
                     </li>
@@ -314,14 +314,14 @@ export function CollectionsPopover({ nodeIds, children }: CollectionsPopoverProp
                             }}
                           >
                             <Pencil className="h-3.5 w-3.5" />
-                            Rename
+                            {i18n._({ id: 'editor.panels.collections.collectionsPopover.rename', message: 'Rename' })}
                           </DropdownMenuItem>
                           <DropdownMenuItem
                             onClick={() => setDeletingId(collection.id)}
                             variant="destructive"
                           >
                             <Trash2 className="h-3.5 w-3.5" />
-                            Delete
+                            {i18n._({ id: 'editor.panels.collections.collectionsPopover.delete', message: 'Delete' })}
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>

@@ -19,7 +19,7 @@ import { applySceneChanges } from './apply-changes'
 import { requireLevel } from './level-target'
 import { finishSurface, requireMaterialRef } from './material-refs'
 import { buildingFrame, type RoofRectangle, roofRectangles } from './roof-footprint'
-import { levelRole, levelsOf } from './scene-queries'
+import { levelRole, levelsOf, queryNodes } from './scene-queries'
 import type { AgentContext, AgentOperation, SceneChanges, SceneNodes } from './types'
 
 type Pt = [number, number]
@@ -141,9 +141,7 @@ function coveredStorey(
  * still gaps, got a roof over a few rooms only).
  */
 function wallOutline(nodes: SceneNodes, storeyId: string) {
-  const walls = Object.values(nodes).filter(
-    (node): node is WallNode => node.type === 'wall' && node.parentId === storeyId,
-  )
+  const walls = queryNodes<WallNode>(nodes, { type: 'wall', parentId: storeyId })
   if (walls.length < 3) return []
   const bridges = gapBridges(walls).map(
     (gap, index) =>
@@ -217,10 +215,8 @@ function footprintPolygons(nodes: SceneNodes, storeyId: string): Pt[][] {
   const outline = wallOutline(nodes, storeyId)
   if (outline.length) return outline
   const on = (type: 'slab' | 'zone') =>
-    Object.values(nodes).filter(
+    queryNodes(nodes, { type, parentId: storeyId }).filter(
       (node) =>
-        node.type === type &&
-        node.parentId === storeyId &&
         !(
           node.type === 'slab' &&
           node.metadata &&

@@ -23,8 +23,8 @@ import {
   useScene,
 } from '@pascal-app/core'
 import { nodeLevelFrame, ProceduralItemNode, type Recipe } from '@pascal-app/core/procedural-items'
+import { LocalizedHtml } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
-import { Html } from '@react-three/drei'
 import { act, create } from '@react-three/test-renderer'
 import { Children, cloneElement, isValidElement, type ReactNode, useMemo } from 'react'
 import { Group, Vector3 } from 'three'
@@ -106,7 +106,7 @@ let savedEditor: ReturnType<typeof useEditor.getState>
 let savedViewer: ReturnType<typeof useViewer.getState>
 let savedScope: ReturnType<typeof useInteractionScope.getState>
 let savedWindow: PropertyDescriptor | undefined
-let savedDocument: typeof document
+let savedDocument: PropertyDescriptor | undefined
 let savedRaf: typeof requestAnimationFrame
 let savedCancelRaf: typeof cancelAnimationFrame
 
@@ -116,7 +116,7 @@ beforeEach(() => {
   savedViewer = useViewer.getState()
   savedScope = useInteractionScope.getState()
   savedWindow = Object.getOwnPropertyDescriptor(globalThis, 'window')
-  savedDocument = globalThis.document
+  savedDocument = Object.getOwnPropertyDescriptor(globalThis, 'document')
   savedRaf = globalThis.requestAnimationFrame
   savedCancelRaf = globalThis.cancelAnimationFrame
   globalThis.window = new EventTarget() as Window & typeof globalThis
@@ -178,7 +178,8 @@ afterEach(() => {
   restoreRegistry()
   if (savedWindow) Object.defineProperty(globalThis, 'window', savedWindow)
   else Reflect.deleteProperty(globalThis, 'window')
-  globalThis.document = savedDocument
+  if (savedDocument) Object.defineProperty(globalThis, 'document', savedDocument)
+  else Reflect.deleteProperty(globalThis, 'document')
   globalThis.requestAnimationFrame = savedRaf
   globalThis.cancelAnimationFrame = savedCancelRaf
 })
@@ -225,7 +226,7 @@ function hit(run: Cabinet, local: [number, number, number] = [0, 0.85, 0]): Cabi
 // The mounted coordinator keeps its real cursor refs; DOM-only measurement labels need no canvas test coverage.
 function withoutLabels(element: ReactNode): ReactNode {
   if (!isValidElement<{ children?: ReactNode }>(element)) return element
-  if (element.type === Html) return null
+  if (element.type === LocalizedHtml) return null
   return cloneElement(element, {}, Children.map(element.props.children, withoutLabels))
 }
 function RegistryMover({ node }: { node: AnyNode }) {

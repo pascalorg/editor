@@ -77,7 +77,7 @@ export function arcRuns(points: readonly Pt[], shortM = 4, turnDeg = 35): number
   let runs = 0
   // start the sweep at a long edge when there is one, so a run never wraps across the sweep's seam
   const start = dirs.findIndex((d) => d.len >= shortM)
-  const order = Array.from({ length: n }, (_, k) => ((start < 0 ? 0 : start) + k) % n)
+  const order = Array.from({ length: n }, (_, k) => (Math.max(start, 0) + k) % n)
   for (const i of order) {
     if (run[i] !== -1) continue
     const a = dirs[i] as (typeof dirs)[number]

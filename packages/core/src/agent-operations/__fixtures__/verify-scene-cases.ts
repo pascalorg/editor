@@ -376,6 +376,22 @@ export const VERIFY_SCENE_CASES: AgentToolCase[] = [
     { lacks: ['roof_level_not_on_top'] },
   ),
   verify(
+    'a basement the stack stands at grade is reported, with the tool that seats the building',
+    () => scene(building(), level('level_b', -1), level('level_0', 0), ...room('level_0', 'ground')),
+    { contains: ['basement_at_grade'], mentions: ['set_ground_level'] },
+  ),
+  verify(
+    'a basement standing under the ground is quiet',
+    () =>
+      scene(
+        building(),
+        level('level_b', -1, { baseElevation: -2.8 }),
+        level('level_0', 0),
+        ...room('level_0', 'ground'),
+      ),
+    { lacks: ['basement_at_grade', 'ground_level_unseated'] },
+  ),
+  verify(
     'a roof with no segments on a storey stands on no walls, so nothing is reported to move',
     () =>
       scene(

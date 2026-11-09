@@ -38,6 +38,10 @@ import {
   viewerSidebarSections,
 } from './viewer-selection'
 
+const english = {
+  _: (descriptor: { id: string; message?: string }) => descriptor.message ?? descriptor.id,
+}
+
 const buildingId = 'building_viewer'
 const levelId = 'level_viewer'
 const upperId = 'level_viewer_upper'
@@ -251,10 +255,10 @@ describe('viewer rooms by name', () => {
 
   test('the hover pill names what a click would select', () => {
     const { nodes, kitchen } = scene()
-    expect(viewerHoverLabel(sofa.id, nodes)).toBe('Sofa')
-    expect(viewerHoverLabel(kitchen, nodes)).toBe('Kitchen')
-    expect(viewerHoverLabel('wall_shared', nodes)).toBe('Wall')
-    expect(viewerHoverLabel(null, nodes)).toBeNull()
+    expect(viewerHoverLabel(sofa.id, nodes, english)).toBe('Sofa')
+    expect(viewerHoverLabel(kitchen, nodes, english)).toBe('Kitchen')
+    expect(viewerHoverLabel('wall_shared', nodes, english)).toBe('Wall')
+    expect(viewerHoverLabel(null, nodes, english)).toBeNull()
   })
 })
 
@@ -262,7 +266,7 @@ describe('viewer breadcrumb', () => {
   test('an item reads floor › room › item; the room is shown, not selected', () => {
     const { nodes, kitchen } = scene()
     const selection = { buildingId, levelId, zoneId: null, selectedIds: [sofa.id] }
-    const crumbs = viewerBreadcrumb(selection as ViewerSelection, null, nodes, (id) =>
+    const crumbs = viewerBreadcrumb(selection as ViewerSelection, null, nodes, english, (id) =>
       id === sofa.id ? kitchen : null,
     )
     expect(crumbs.map((crumb) => [crumb.kind, crumb.label])).toEqual([
@@ -277,18 +281,20 @@ describe('viewer breadcrumb', () => {
     const unit = UnitNode.parse({ id: 'unit_a', name: 'Apartment A', parentId: buildingId })
     const { nodes, living } = scene([unit])
     const room = { buildingId, levelId, zoneId: living, selectedIds: [] } as ViewerSelection
-    expect(viewerBreadcrumb(room, null, nodes).map((crumb) => crumb.label)).toEqual([
+    expect(viewerBreadcrumb(room, null, nodes, english).map((crumb) => crumb.label)).toEqual([
       'House',
       'Ground floor',
       'Living',
     ])
     const floor = { ...room, zoneId: null }
-    expect(viewerBreadcrumb(floor, 'unit_a', nodes).map((crumb) => crumb.label)).toEqual([
+    expect(viewerBreadcrumb(floor, 'unit_a', nodes, english).map((crumb) => crumb.label)).toEqual([
       'House',
       'Ground floor',
       'Apartment A',
     ])
-    expect(viewerBreadcrumb(nothing, null, nodes).map((crumb) => crumb.kind)).toEqual(['building'])
+    expect(viewerBreadcrumb(nothing, null, nodes, english).map((crumb) => crumb.kind)).toEqual([
+      'building',
+    ])
   })
 })
 
@@ -305,25 +311,21 @@ describe('viewer sidebar', () => {
       ],
     })
     const plain = scene([terrace])
-    expect(viewerSidebarSections(levelId, plain.nodes).map((section) => section.kind)).toEqual([
-      'rooms',
-      'zones',
-    ])
-    expect(viewerSidebarSections(levelId, plain.nodes)[0]!.rows.map((row) => row.label)).toEqual([
-      'Kitchen',
-      'Living',
-    ])
-    expect(viewerSidebarSections(upperId, plain.nodes)).toEqual([])
+    expect(
+      viewerSidebarSections(levelId, plain.nodes, english).map((section) => section.kind),
+    ).toEqual(['rooms', 'zones'])
+    expect(
+      viewerSidebarSections(levelId, plain.nodes, english)[0]!.rows.map((row) => row.label),
+    ).toEqual(['Kitchen', 'Living'])
+    expect(viewerSidebarSections(upperId, plain.nodes, english)).toEqual([])
 
     const unit = UnitNode.parse({ id: 'unit_a', name: 'Apartment A', parentId: buildingId })
     const withUnit = scene([unit, terrace])
     withUnit.nodes.unit_a = { ...unit, members: [withUnit.kitchen as ZoneNode['id']] }
-    expect(viewerSidebarSections(levelId, withUnit.nodes).map((section) => section.kind)).toEqual([
-      'units',
-      'rooms',
-      'zones',
-    ])
-    expect(viewerSidebarSections(upperId, withUnit.nodes)).toEqual([])
+    expect(
+      viewerSidebarSections(levelId, withUnit.nodes, english).map((section) => section.kind),
+    ).toEqual(['units', 'rooms', 'zones'])
+    expect(viewerSidebarSections(upperId, withUnit.nodes, english)).toEqual([])
   })
 })
 
@@ -546,7 +548,9 @@ test('baked and parametric picks agree for room faces, mezzanine plates, doors, 
   const baked = resolveGlbPick([{ object: foreign, point: new Vector3() }], identity)
   expect(resolveViewerClick(nothing, baked, nodes)).toEqual(nothing)
   expect(
-    viewerBreadcrumb(nothing, null, nodes).some((crumb) => crumb.label === 'Unpublished name'),
+    viewerBreadcrumb(nothing, null, nodes, english).some(
+      (crumb) => crumb.label === 'Unpublished name',
+    ),
   ).toBe(false)
 })
 

@@ -1,31 +1,52 @@
 'use client'
 
 import {
+  type AnyNode,
   type AnyNodeId,
   type BuildingNode,
   type GuideNode,
   type LevelNode,
   type ScanNode,
+  type MessageDescriptor,
   useScene,
+  usePascalI18n,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
-import { Check, ChevronDown, Eye, EyeOff, Layers2, Plus, Trash2, Waypoints } from 'lucide-react'
+import {
+  Check,
+  ChevronDown,
+  Eye,
+  EyeOff,
+  Layers2,
+  Plus,
+  SquareDashed,
+  Trash2,
+  Waypoints,
+} from 'lucide-react'
 import { useCallback, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import { getLevelDisplayName } from '@pascal-app/core'
 import { createLocalGuideImage } from '../../../lib/local-guide-image'
 import { cn } from '../../../lib/utils'
 import useEditor from '../../../store/use-editor'
 import { useUploadStore } from '../../../store/use-upload'
+import {
+  ADJACENT_WALL_COLORS,
+  adjacentLevelIds,
+  useWallsBelowSetting,
+} from '../../editor-2d/floorplan-adjacent-walls-layer'
 import { SliderControl } from '../controls/slider-control'
 import { Popover, PopoverContent, PopoverTrigger } from '../primitives/popover'
+import { Switch } from '../primitives/switch'
 import { ActionButton } from './action-button'
 import { useActionMenuPopupSide } from './placement'
+import { localizedLevelName } from '../../../i18n/level-name'
 
 const MAX_FILE_SIZE = 200 * 1024 * 1024 // 200MB
 const ACCEPTED_FILE_TYPES = '.glb,.gltf,image/jpeg,image/png,image/webp,image/gif'
-const REFERENCES_EMPTY_TEXT =
-  'Upload GLB meshes as scan references or blueprint images as guide references.'
+const REFERENCES_EMPTY_TEXT = /* i18n */ {
+  id: 'editor.actionMenu.viewToggles.referencesEmpty',
+  message: 'Upload GLB meshes as scan references or blueprint images as guide references.',
+}
 
 // ── Helper: get guide images for the current level ──────────────────────────
 
@@ -84,6 +105,7 @@ function useLowerReferenceLevels(): LevelNode[] {
 // ── Shared upload button for dropdowns ──────────────────────────────────────
 
 function UploadButton({ onError }: { onError: (message: string | null) => void }) {
+  const i18n = usePascalI18n()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const levelId = useViewer((s) => s.selection.levelId)
   const setSelection = useViewer((s) => s.setSelection)
@@ -149,7 +171,7 @@ function UploadButton({ onError }: { onError: (message: string | null) => void }
   return (
     <>
       <button
-        aria-label="Upload scan or guide image"
+        aria-label={i18n._({ id: 'editor.actionMenu.viewToggles.uploadScanOrGuideImage', message: 'Upload scan or guide image' })}
         className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-border/40 text-muted-foreground transition-colors hover:bg-black/6 dark:hover:bg-white/10 hover:text-foreground"
         disabled={isAddingGuide}
         onClick={() => fileInputRef.current?.click()}
@@ -171,6 +193,7 @@ function UploadButton({ onError }: { onError: (message: string | null) => void }
 // ── Guides toggle + dropdown ────────────────────────────────────────────────
 
 function GuidesControl() {
+  const i18n = usePascalI18n()
   const popupSide = useActionMenuPopupSide()
   const showGuides = useViewer((state) => state.showGuides)
   const setShowGuides = useViewer((state) => state.setShowGuides)
@@ -212,14 +235,18 @@ function GuidesControl() {
               ? 'bg-black/9 hover:bg-black/9 dark:bg-white/15'
               : 'opacity-60 grayscale hover:bg-black/4 hover:opacity-100 hover:grayscale-0',
           )}
-          label={`Guides: ${showGuides ? 'Visible' : 'Hidden'}`}
+          label={
+            showGuides
+              ? i18n._({ id: 'editor.actionMenu.viewToggles.guidesVisible', message: 'Guides: Visible' })
+              : i18n._({ id: 'editor.actionMenu.viewToggles.guidesHidden', message: 'Guides: Hidden' })
+          }
           onClick={() => setShowGuides(!showGuides)}
           size="icon"
           variant="ghost"
         >
           <div className="relative">
             <img
-              alt="Guides"
+              alt={i18n._({ id: 'editor.actionMenu.viewToggles.guides', message: 'Guides' })}
               className="h-[28px] w-[28px] object-contain"
               src="/icons/floorplan.webp"
             />
@@ -233,7 +260,7 @@ function GuidesControl() {
         <PopoverTrigger asChild>
           <button
             aria-expanded={isOpen}
-            aria-label="Guide image settings"
+            aria-label={i18n._({ id: 'editor.actionMenu.viewToggles.guideImageSettings', message: 'Guide image settings' })}
             className={cn(
               'flex h-11 w-6 items-center justify-center rounded-r-lg transition-colors',
               showGuides
@@ -263,10 +290,10 @@ function GuidesControl() {
               <img alt="" className="h-4 w-4 object-contain" src="/icons/floorplan.webp" />
             </span>
             <div className="min-w-0 flex-1">
-              <p className="font-medium text-foreground text-sm">Guide images</p>
+              <p className="font-medium text-foreground text-sm">{i18n._({ id: 'editor.actionMenu.viewToggles.guideImages', message: 'Guide images' })}</p>
               {hasGuides && (
                 <p className="text-muted-foreground text-xs">
-                  {guides.length} guide image{guides.length !== 1 ? 's' : ''} on this level
+                  {i18n._({ id: 'editor.actionMenu.viewToggles.guideCount', message: '{count, plural, one {# guide image on this level} other {# guide images on this level}}', values: { count: guides.length } })}
                 </p>
               )}
             </div>
@@ -303,14 +330,15 @@ function GuidesControl() {
                         src="/icons/floorplan.webp"
                       />
                       <p className="truncate font-medium text-foreground text-sm">
-                        {guide.name || `Guide image ${index + 1}`}
+                        {guide.name ||
+                          i18n._({ id: 'editor.actionMenu.viewToggles.guideImageNumber', message: 'Guide image {number}', values: { number: index + 1 } })}
                       </p>
                       {selectedReferenceId === guide.id && (
                         <Check className="ml-auto h-3.5 w-3.5 shrink-0 text-foreground/80" />
                       )}
                     </button>
                     <button
-                      aria-label="Delete guide image"
+                      aria-label={i18n._({ id: 'editor.actionMenu.viewToggles.deleteGuideImage', message: 'Delete guide image' })}
                       className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md text-muted-foreground/50 opacity-0 transition-all hover:bg-destructive/10 hover:text-destructive group-hover/item:opacity-100"
                       onClick={(event) => {
                         event.stopPropagation()
@@ -325,7 +353,7 @@ function GuidesControl() {
                     </button>
                   </div>
                   <SliderControl
-                    label="Opacity"
+                    label={i18n._({ id: 'editor.actionMenu.viewToggles.opacity', message: 'Opacity' })}
                     max={100}
                     min={0}
                     onChange={(value) => handleOpacityChange(guide.id, value)}
@@ -339,7 +367,7 @@ function GuidesControl() {
             </div>
           ) : (
             <div className="rounded-xl border border-border/45 border-dashed bg-background/60 px-3 py-4 text-muted-foreground text-sm">
-              {REFERENCES_EMPTY_TEXT}
+              {i18n._(REFERENCES_EMPTY_TEXT)}
             </div>
           )}
         </div>
@@ -351,6 +379,7 @@ function GuidesControl() {
 // ── Scans toggle + dropdown ─────────────────────────────────────────────────
 
 function ScansControl() {
+  const i18n = usePascalI18n()
   const popupSide = useActionMenuPopupSide()
   const showScans = useViewer((state) => state.showScans)
   const setShowScans = useViewer((state) => state.setShowScans)
@@ -392,13 +421,17 @@ function ScansControl() {
               ? 'bg-black/9 hover:bg-black/9 dark:bg-white/15'
               : 'opacity-60 grayscale hover:bg-black/4 hover:opacity-100 hover:grayscale-0',
           )}
-          label={`Scans: ${showScans ? 'Visible' : 'Hidden'}`}
+          label={
+            showScans
+              ? i18n._({ id: 'editor.actionMenu.viewToggles.scansVisible', message: 'Scans: Visible' })
+              : i18n._({ id: 'editor.actionMenu.viewToggles.scansHidden', message: 'Scans: Hidden' })
+          }
           onClick={() => setShowScans(!showScans)}
           size="icon"
           variant="ghost"
         >
           <div className="relative">
-            <img alt="Scans" className="h-[28px] w-[28px] object-contain" src="/icons/mesh.webp" />
+            <img alt={i18n._({ id: 'editor.actionMenu.viewToggles.scans', message: 'Scans' })} className="h-[28px] w-[28px] object-contain" src="/icons/mesh.webp" />
             <span className="absolute -right-1.5 -bottom-1 min-w-[14px] rounded-full bg-black/12 dark:bg-white/20 px-[3px] text-center font-medium text-[9px] text-foreground/70 dark:text-white/70 leading-[14px]">
               {scans.length}
             </span>
@@ -409,7 +442,7 @@ function ScansControl() {
         <PopoverTrigger asChild>
           <button
             aria-expanded={isOpen}
-            aria-label="Scan settings"
+            aria-label={i18n._({ id: 'editor.actionMenu.viewToggles.scanSettings', message: 'Scan settings' })}
             className={cn(
               'flex h-11 w-6 items-center justify-center rounded-r-lg transition-colors',
               showScans
@@ -439,10 +472,10 @@ function ScansControl() {
               <img alt="" className="h-4 w-4 object-contain" src="/icons/mesh.webp" />
             </span>
             <div className="min-w-0 flex-1">
-              <p className="font-medium text-foreground text-sm">Scans</p>
+              <p className="font-medium text-foreground text-sm">{i18n._({ id: 'editor.actionMenu.viewToggles.scans', message: 'Scans' })}</p>
               {hasScans && (
                 <p className="text-muted-foreground text-xs">
-                  {scans.length} scan{scans.length !== 1 ? 's' : ''} on this level
+                  {i18n._({ id: 'editor.actionMenu.viewToggles.scanCount', message: '{count, plural, one {# scan on this level} other {# scans on this level}}', values: { count: scans.length } })}
                 </p>
               )}
             </div>
@@ -479,14 +512,15 @@ function ScansControl() {
                         src="/icons/mesh.webp"
                       />
                       <p className="truncate font-medium text-foreground text-sm">
-                        {scan.name || `Scan ${index + 1}`}
+                        {scan.name ||
+                          i18n._({ id: 'editor.actionMenu.viewToggles.scanNumber', message: 'Scan {number}', values: { number: index + 1 } })}
                       </p>
                       {selectedReferenceId === scan.id && (
                         <Check className="ml-auto h-3.5 w-3.5 shrink-0 text-foreground/80" />
                       )}
                     </button>
                     <button
-                      aria-label="Delete scan"
+                      aria-label={i18n._({ id: 'editor.actionMenu.viewToggles.deleteScan', message: 'Delete scan' })}
                       className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md text-muted-foreground/50 opacity-0 transition-all hover:bg-destructive/10 hover:text-destructive group-hover/item:opacity-100"
                       onClick={(event) => {
                         event.stopPropagation()
@@ -501,7 +535,7 @@ function ScansControl() {
                     </button>
                   </div>
                   <SliderControl
-                    label="Opacity"
+                    label={i18n._({ id: 'editor.actionMenu.viewToggles.opacity', message: 'Opacity' })}
                     max={100}
                     min={0}
                     onChange={(value) => handleOpacityChange(scan.id, value)}
@@ -515,7 +549,7 @@ function ScansControl() {
             </div>
           ) : (
             <div className="rounded-xl border border-border/45 border-dashed bg-background/60 px-3 py-4 text-muted-foreground text-sm">
-              {REFERENCES_EMPTY_TEXT}
+              {i18n._(REFERENCES_EMPTY_TEXT)}
             </div>
           )}
         </div>
@@ -532,7 +566,7 @@ function ScansControl() {
 function ReferenceListSection({
   title,
   iconSrc,
-  noun,
+  kind,
   emptyText,
   nodes,
   show,
@@ -541,13 +575,14 @@ function ReferenceListSection({
 }: {
   title: string
   iconSrc: string
-  noun: string
-  emptyText: string
+  kind: 'scan' | 'guide'
+  emptyText: MessageDescriptor
   nodes: (GuideNode | ScanNode)[]
   show: boolean
   setShow: (show: boolean) => void
   onError: (message: string | null) => void
 }) {
+  const i18n = usePascalI18n()
   const setSelection = useViewer((state) => state.setSelection)
   const updateNode = useScene((state) => state.updateNode)
   const deleteNode = useScene((state) => state.deleteNode)
@@ -574,13 +609,22 @@ function ReferenceListSection({
           <p className="font-medium text-foreground text-sm">{title}</p>
           {hasItems && (
             <p className="text-muted-foreground text-xs">
-              {nodes.length} {noun}
-              {nodes.length !== 1 ? 's' : ''} on this level
+              {kind === 'scan'
+                ? i18n._({ id: 'editor.actionMenu.viewToggles.scanCount', message: '{count, plural, one {# scan on this level} other {# scans on this level}}', values: { count: nodes.length } })
+                : i18n._({ id: 'editor.actionMenu.viewToggles.guideCount', message: '{count, plural, one {# guide image on this level} other {# guide images on this level}}', values: { count: nodes.length } })}
             </p>
           )}
         </div>
         <button
-          aria-label={show ? `Hide ${title.toLowerCase()}` : `Show ${title.toLowerCase()}`}
+          aria-label={
+            kind === 'scan'
+              ? show
+                ? i18n._({ id: 'editor.actionMenu.viewToggles.hideScans', message: 'Hide scans' })
+                : i18n._({ id: 'editor.actionMenu.viewToggles.showScans', message: 'Show scans' })
+              : show
+                ? i18n._({ id: 'editor.actionMenu.viewToggles.hideGuideImages', message: 'Hide guide images' })
+                : i18n._({ id: 'editor.actionMenu.viewToggles.showGuideImages', message: 'Show guide images' })
+          }
           className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-border/40 text-muted-foreground transition-colors hover:bg-black/6 dark:hover:bg-white/10 hover:text-foreground"
           onClick={() => setShow(!show)}
           type="button"
@@ -614,14 +658,21 @@ function ReferenceListSection({
                     src={iconSrc}
                   />
                   <p className="truncate font-medium text-foreground text-sm">
-                    {node.name || `${noun.charAt(0).toUpperCase()}${noun.slice(1)} ${index + 1}`}
+                    {node.name ||
+                      (kind === 'scan'
+                        ? i18n._({ id: 'editor.actionMenu.viewToggles.scanNumber', message: 'Scan {number}', values: { number: index + 1 } })
+                        : i18n._({ id: 'editor.actionMenu.viewToggles.guideImageNumber', message: 'Guide image {number}', values: { number: index + 1 } }))}
                   </p>
                   {selectedReferenceId === node.id && (
                     <Check className="ml-auto h-3.5 w-3.5 shrink-0 text-foreground/80" />
                   )}
                 </button>
                 <button
-                  aria-label={`Delete ${noun}`}
+                  aria-label={
+                    kind === 'scan'
+                      ? i18n._({ id: 'editor.actionMenu.viewToggles.deleteScan', message: 'Delete scan' })
+                      : i18n._({ id: 'editor.actionMenu.viewToggles.deleteGuideImage', message: 'Delete guide image' })
+                  }
                   className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md text-muted-foreground/50 opacity-0 transition-all hover:bg-destructive/10 hover:text-destructive group-hover/item:opacity-100"
                   onClick={(event) => {
                     event.stopPropagation()
@@ -636,7 +687,7 @@ function ReferenceListSection({
                 </button>
               </div>
               <SliderControl
-                label="Opacity"
+                label={i18n._({ id: 'editor.actionMenu.viewToggles.opacity', message: 'Opacity' })}
                 max={100}
                 min={0}
                 onChange={(value) =>
@@ -652,7 +703,7 @@ function ReferenceListSection({
         </div>
       ) : (
         <div className="rounded-xl border border-border/45 border-dashed bg-background/60 px-3 py-3 text-muted-foreground text-sm">
-          {emptyText}
+          {i18n._(emptyText)}
         </div>
       )}
     </div>
@@ -660,6 +711,7 @@ function ReferenceListSection({
 }
 
 function ReferencesControl() {
+  const i18n = usePascalI18n()
   const popupSide = useActionMenuPopupSide()
   const showScans = useViewer((state) => state.showScans)
   const setShowScans = useViewer((state) => state.setShowScans)
@@ -689,14 +741,18 @@ function ReferencesControl() {
               ? 'bg-black/9 hover:bg-black/9 dark:bg-white/15'
               : 'opacity-60 grayscale hover:bg-black/4 hover:opacity-100 hover:grayscale-0',
           )}
-          label={`References: ${anyVisible ? 'Visible' : 'Hidden'}`}
+          label={
+            anyVisible
+              ? i18n._({ id: 'editor.actionMenu.viewToggles.referencesVisible', message: 'References: Visible' })
+              : i18n._({ id: 'editor.actionMenu.viewToggles.referencesHidden', message: 'References: Hidden' })
+          }
           onClick={toggleAll}
           size="icon"
           variant="ghost"
         >
           <div className="relative">
             <img
-              alt="References"
+              alt={i18n._({ id: 'editor.actionMenu.viewToggles.references', message: 'References' })}
               className="h-[28px] w-[28px] object-contain"
               src="/icons/floorplan.webp"
             />
@@ -709,7 +765,7 @@ function ReferencesControl() {
         <PopoverTrigger asChild>
           <button
             aria-expanded={isOpen}
-            aria-label="Reference settings"
+            aria-label={i18n._({ id: 'editor.actionMenu.viewToggles.referenceSettings', message: 'Reference settings' })}
             className={cn(
               'flex h-11 w-6 items-center justify-center rounded-r-lg transition-colors',
               anyVisible
@@ -743,22 +799,22 @@ function ReferencesControl() {
             emptyText={REFERENCES_EMPTY_TEXT}
             iconSrc="/icons/mesh.webp"
             nodes={scans}
-            noun="scan"
+            kind="scan"
             onError={setUploadError}
             setShow={setShowScans}
             show={showScans}
-            title="Scans"
+            title={i18n._({ id: 'editor.actionMenu.viewToggles.scans', message: 'Scans' })}
           />
           <div className="h-px bg-border/45" />
           <ReferenceListSection
             emptyText={REFERENCES_EMPTY_TEXT}
             iconSrc="/icons/floorplan.webp"
             nodes={guides}
-            noun="guide image"
+            kind="guide"
             onError={setUploadError}
             setShow={setShowGuides}
             show={showGuides}
-            title="Guide images"
+            title={i18n._({ id: 'editor.actionMenu.viewToggles.guideImages', message: 'Guide images' })}
           />
         </div>
       </PopoverContent>
@@ -769,6 +825,7 @@ function ReferencesControl() {
 // ── Reference floor control ────────────────────────────────────────────────────────────────────
 
 function ReferenceFloorControl() {
+  const i18n = usePascalI18n()
   const popupSide = useActionMenuPopupSide()
   const showReferenceFloor = useEditor((state) => state.showReferenceFloor)
   const toggleReferenceFloor = useEditor((state) => state.toggleReferenceFloor)
@@ -780,7 +837,7 @@ function ReferenceFloorControl() {
   const lowerLevels = useLowerReferenceLevels()
   const hasLowerLevels = lowerLevels.length > 0
   const selectedLevel = lowerLevels[referenceFloorOffset - 1] ?? lowerLevels[0] ?? null
-  const selectedLevelName = selectedLevel ? getLevelDisplayName(selectedLevel) : null
+  const selectedLevelName = selectedLevel ? localizedLevelName(selectedLevel, i18n, i18n.getLocale()) : null
 
   return (
     <Popover onOpenChange={setIsOpen} open={isOpen}>
@@ -795,8 +852,8 @@ function ReferenceFloorControl() {
           disabled={!hasLowerLevels}
           label={
             selectedLevelName && showReferenceFloor
-              ? `Reference floor: ${selectedLevelName}`
-              : 'Reference floor'
+              ? i18n._({ id: 'editor.actionMenu.viewToggles.referenceFloorSelectedlevelname', message: 'Reference floor: {selectedLevelName}', values: { selectedLevelName } })
+              : i18n._({ id: 'editor.actionMenu.viewToggles.referenceFloor', message: 'Reference floor' })
           }
           onClick={() => {
             if (hasLowerLevels) toggleReferenceFloor()
@@ -815,7 +872,7 @@ function ReferenceFloorControl() {
         <PopoverTrigger asChild>
           <button
             aria-expanded={isOpen}
-            aria-label="Reference floor settings"
+            aria-label={i18n._({ id: 'editor.actionMenu.viewToggles.referenceFloorSettings', message: 'Reference floor settings' })}
             className={cn(
               'flex h-11 w-6 items-center justify-center rounded-r-lg transition-colors',
               showReferenceFloor && selectedLevel
@@ -846,13 +903,13 @@ function ReferenceFloorControl() {
               <Layers2 className="h-4 w-4" />
             </span>
             <div className="min-w-0 flex-1">
-              <p className="font-medium text-foreground text-sm">Reference floor</p>
+              <p className="font-medium text-foreground text-sm">{i18n._({ id: 'editor.actionMenu.viewToggles.referenceFloor', message: 'Reference floor' })}</p>
               {selectedLevelName && (
                 <p className="truncate text-muted-foreground text-xs">{selectedLevelName}</p>
               )}
             </div>
             <button
-              aria-label={showReferenceFloor ? 'Hide reference floor' : 'Show reference floor'}
+              aria-label={showReferenceFloor ? i18n._({ id: 'editor.actionMenu.viewToggles.hideReferenceFloor', message: 'Hide reference floor' }) : i18n._({ id: 'editor.actionMenu.viewToggles.showReferenceFloor', message: 'Show reference floor' })}
               className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-border/40 text-muted-foreground transition-colors hover:bg-black/6 dark:hover:bg-white/10 hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
               disabled={!hasLowerLevels}
               onClick={toggleReferenceFloor}
@@ -871,7 +928,7 @@ function ReferenceFloorControl() {
               <div className="max-h-44 space-y-1 overflow-y-auto rounded-xl border border-border/45 bg-background/60 p-1.5">
                 {lowerLevels.map((level, index) => {
                   const isSelected = referenceFloorOffset === index + 1
-                  const levelName = getLevelDisplayName(level)
+                  const levelName = localizedLevelName(level, i18n, i18n.getLocale())
                   return (
                     <button
                       className={cn(
@@ -896,14 +953,14 @@ function ReferenceFloorControl() {
                         )}
                       />
                       <span className="min-w-0 flex-1 truncate">{levelName}</span>
-                      <span className="text-[10px] text-muted-foreground">{index + 1} below</span>
+                      <span className="text-[10px] text-muted-foreground">{i18n._({ id: 'editor.actionMenu.viewToggles.levelsBelow', message: '{count} below', values: { count: index + 1 } })}</span>
                     </button>
                   )
                 })}
               </div>
 
               <SliderControl
-                label="Opacity"
+                label={i18n._({ id: 'editor.actionMenu.viewToggles.opacity', message: 'Opacity' })}
                 max={0.8}
                 min={0.1}
                 onChange={setReferenceFloorOpacity}
@@ -914,9 +971,155 @@ function ReferenceFloorControl() {
             </>
           ) : (
             <div className="rounded-xl border border-border/45 border-dashed bg-background/60 px-3 py-4 text-muted-foreground text-sm">
-              No lower floor available.
+              {i18n._({ id: 'editor.actionMenu.viewToggles.noLowerFloorAvailable', message: 'No lower floor available.' })}
             </div>
           )}
+        </div>
+      </PopoverContent>
+    </Popover>
+  )
+}
+
+// ── Walls below / above control ─────────────────────────────────────────────
+
+function useAdjacentLevelNames() {
+  const i18n = usePascalI18n()
+  const levelId = useViewer((s) => s.selection.levelId)
+  return useScene(
+    useShallow((state) => {
+      const nodes = state.nodes as Record<string, AnyNode>
+      const ids = adjacentLevelIds(nodes, levelId)
+      const name = (id: string | null) => {
+        const level = id ? nodes[id] : undefined
+        return level?.type === 'level' ? localizedLevelName(level, i18n, i18n.getLocale()) : null
+      }
+      return { below: name(ids.below), above: name(ids.above) }
+    }),
+  )
+}
+
+/**
+ * What the "Walls below / above" button turns each side to: the sides that have a level all on, or
+ * all off when one shows. A side with no level keeps its setting, which persists for the levels
+ * that have one: turning the walls below on from the top storey must not trace walls above later.
+ */
+export function adjacentWallsToggle(
+  active: boolean,
+  levels: { below: string | null; above: string | null },
+): { below?: boolean; above?: boolean } {
+  return {
+    ...(levels.below ? { below: !active } : {}),
+    ...(levels.above ? { above: !active } : {}),
+  }
+}
+
+/**
+ * "Walls below / above": the plan traces the walls of the neighbouring levels as dashed outlines,
+ * blue for the level below (on a roof level, the top storey), magenta for the level above.
+ */
+function AdjacentWallsControl() {
+  const i18n = usePascalI18n()
+  const popupSide = useActionMenuPopupSide()
+  const levelId = useViewer((s) => s.selection.levelId)
+  const { shown: showBelow, setShown: setShowBelow } = useWallsBelowSetting(levelId)
+  const showAbove = useEditor((state) => state.showWallsAbove)
+  const setShowAbove = useEditor((state) => state.setShowWallsAbove)
+  const names = useAdjacentLevelNames()
+  const [isOpen, setIsOpen] = useState(false)
+  const active = (showBelow && !!names.below) || (showAbove && !!names.above)
+  const available = !!(names.below || names.above)
+  const rows = [
+    {
+      key: 'below',
+      label: i18n._({ id: 'editor.actionMenu.viewToggles.wallsBelow', message: 'Walls below' }),
+      level: names.below,
+      checked: showBelow,
+      set: setShowBelow,
+      color: ADJACENT_WALL_COLORS.below,
+    },
+    {
+      key: 'above',
+      label: i18n._({ id: 'editor.actionMenu.viewToggles.wallsAbove', message: 'Walls above' }),
+      level: names.above,
+      checked: showAbove,
+      set: setShowAbove,
+      color: ADJACENT_WALL_COLORS.above,
+    },
+  ] as const
+
+  return (
+    <Popover onOpenChange={setIsOpen} open={isOpen}>
+      <div className="flex items-center">
+        <ActionButton
+          className={cn(
+            'rounded-r-none p-0',
+            active
+              ? 'bg-black/9 hover:bg-black/9 dark:bg-white/15'
+              : 'opacity-60 grayscale hover:bg-black/4 hover:opacity-100 hover:grayscale-0',
+          )}
+          disabled={!available}
+          label={active ? i18n._({ id: 'editor.actionMenu.viewToggles.wallsBelowAndAboveShown', message: 'Walls below and above: shown' }) : i18n._({ id: 'editor.actionMenu.viewToggles.showWallsBelowAndAbove', message: 'Show walls below and above' })}
+          onClick={() => {
+            const next = adjacentWallsToggle(active, names)
+            if (next.below !== undefined) setShowBelow(next.below)
+            if (next.above !== undefined) setShowAbove(next.above)
+          }}
+          size="icon"
+          variant="ghost"
+        >
+          <SquareDashed className="h-4 w-4" />
+        </ActionButton>
+        <PopoverTrigger asChild>
+          <button
+            aria-expanded={isOpen}
+            aria-label={i18n._({ id: 'editor.actionMenu.viewToggles.wallsBelowAndAboveSettings', message: 'Walls below and above settings' })}
+            className={cn(
+              'flex h-11 w-6 items-center justify-center rounded-r-lg transition-colors',
+              active
+                ? 'bg-black/4 dark:bg-white/5 hover:bg-black/5 dark:hover:bg-white/8'
+                : 'opacity-60 hover:bg-black/4 dark:hover:bg-white/5 hover:opacity-100',
+            )}
+            disabled={!available}
+            type="button"
+          >
+            <ChevronDown className={cn('h-3 w-3 transition-transform', isOpen && 'rotate-180')} />
+          </button>
+        </PopoverTrigger>
+      </div>
+      <PopoverContent
+        align="center"
+        className="w-72 rounded-xl border-border/45 bg-background/96 p-3 shadow-elevation-3 backdrop-blur-xl"
+        side={popupSide}
+        sideOffset={14}
+      >
+        <div className="space-y-3" data-adjacent-walls-settings>
+          <div>
+            <p className="font-medium text-foreground text-sm">{i18n._({ id: 'editor.actionMenu.viewToggles.wallsBelowAndAbove', message: 'Walls below and above' })}</p>
+            <p className="text-muted-foreground text-xs">
+              {i18n._({ id: 'editor.actionMenu.viewToggles.dashedOutlinesOfTheNeighbouringLevels', message: 'Dashed outlines of the neighbouring levels’ walls, to line walls up and check a roof against the walls under it.' })}
+            </p>
+          </div>
+          {rows.map((row) => (
+            <label className="flex items-center gap-3" key={row.key}>
+              <span
+                aria-hidden
+                className="h-0 w-5 shrink-0 border-t-2 border-dashed"
+                style={{ borderColor: row.color }}
+              />
+              <span className="flex min-w-0 flex-1 flex-col">
+                <span className="text-foreground text-sm">{row.label}</span>
+                <span className="truncate text-muted-foreground text-xs">
+                  {row.level ?? (row.key === 'below' ? i18n._({ id: 'editor.actionMenu.viewToggles.noLevelBelow', message: 'No level below' }) : i18n._({ id: 'editor.actionMenu.viewToggles.noLevelAbove', message: 'No level above' }))}
+                </span>
+              </span>
+              <Switch
+                aria-label={row.label}
+                checked={row.checked}
+                disabled={!row.level}
+                onCheckedChange={row.set}
+              />
+            </label>
+          ))}
         </div>
       </PopoverContent>
     </Popover>
@@ -926,6 +1129,7 @@ function ReferenceFloorControl() {
 // ── Riser diagram control ────────────────────────────────────────────────────
 
 function RiserControl() {
+  const i18n = usePascalI18n()
   const isRiserOpen = useEditor((state) => state.isRiserOpen)
   const toggleRiserOpen = useEditor((state) => state.toggleRiserOpen)
 
@@ -936,7 +1140,7 @@ function RiserControl() {
           ? 'bg-black/9 hover:bg-black/9 dark:bg-white/15'
           : 'opacity-60 grayscale hover:bg-black/4 hover:opacity-100 hover:grayscale-0',
       )}
-      label="Riser diagram"
+      label={i18n._({ id: 'editor.actionMenu.viewToggles.riserDiagram', message: 'Riser diagram' })}
       onClick={toggleRiserOpen}
       size="icon"
       variant="ghost"
@@ -962,6 +1166,7 @@ export function ViewToggles() {
       <ScansControl />
       <GuidesControl />
       <ReferenceFloorControl />
+      <AdjacentWallsControl />
       <RiserControl />
     </div>
   )

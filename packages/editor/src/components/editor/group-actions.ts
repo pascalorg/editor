@@ -41,6 +41,7 @@ import useFloorplanMode from '../../store/use-floorplan-mode'
 import useInteractionScope from '../../store/use-interaction-scope'
 import { useFloorplanGroupDrag } from '../editor-2d/floorplan-group-move'
 import {
+  beginGroupWallPush,
   classifyParticipant,
   collectParticipants,
   computeGroupBox,
@@ -185,6 +186,9 @@ export function startGroupPickUp(
     handle: GROUP_MOVE_DRAG_LABEL,
   })
   document.body.style.cursor = 'grabbing'
+  // Walls alone move as their push arrows do; copies (paste, duplicate) are
+  // carried rigidly, joined to nothing yet.
+  const push = opts.scopeToSelection ? null : beginGroupWallPush(starts, levelId)
 
   const applyMove = (e: PointerEvent) => {
     const plan = resolvePlanPoint(e)
@@ -202,7 +206,8 @@ export function startGroupPickUp(
     let dx = snap ? Math.round(rawDx / step) * step : rawDx
     let dz = snap ? Math.round(rawDz / step) * step : rawDz
 
-    if (isAlignmentGuideActive() && candidates.length > 0 && restAnchors.length > 0) {
+    // Pushed walls don't move as one footprint, so they have no box to align.
+    if (!push && isAlignmentGuideActive() && candidates.length > 0 && restAnchors.length > 0) {
       const result = resolveAlignment({
         moving: restAnchors.map((a) => ({ ...a, x: a.x + dx, z: a.z + dz })),
         candidates,
@@ -224,6 +229,10 @@ export function startGroupPickUp(
     if (!lastDelta || lastDelta[0] !== dx || lastDelta[1] !== dz) {
       sfxEmitter.emit('sfx:grid-snap')
       lastDelta = [dx, dz]
+    }
+    if (push) {
+      push.preview([dx, dz])
+      return
     }
 
     const entries = translateGroupPatches(starts, links, dx, dz)
@@ -252,6 +261,8 @@ export function startGroupPickUp(
   // the current delta — the carried group turns exactly like the idle
   // keyboard rotate, and the placement stays a single updateNodes.
   const rotateCarried = (direction: 1 | -1) => {
+    // Pushed walls keep their bearing: there is nothing to turn.
+    if (push) return
     const pivot = { x: restCenter[0], z: restCenter[1] }
     const delta = -direction * (Math.PI / 4)
     const rotated = rotateGroupSnapshots(starts, links, pivot, delta)
@@ -271,6 +282,7 @@ export function startGroupPickUp(
   }
 
   const clearLivePreviews = () => {
+    push?.cancel()
     const overrides = useLiveNodeOverrides.getState()
     const liveTransforms = useLiveTransforms.getState()
     for (const id of affectedIds) {
@@ -303,6 +315,12 @@ export function startGroupPickUp(
   const commit = () => {
     swallowNextClick()
     sfxEmitter.emit('sfx:item-place')
+    if (push) {
+      resumeSceneHistory(useScene)
+      push.commit()
+      teardown()
+      return
+    }
     const overrides = useLiveNodeOverrides.getState()
     const updates: { id: AnyNodeId; data: Partial<AnyNode> }[] = []
     for (const id of affectedIds) {

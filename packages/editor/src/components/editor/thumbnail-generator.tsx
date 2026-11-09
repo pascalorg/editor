@@ -3,6 +3,7 @@
 import {
   emitter,
   isCaptureSessionOn,
+  levelGradeStanding,
   sceneRegistry,
   subscribeCaptureSessions,
   type ThumbnailGenerateEvent,
@@ -15,7 +16,9 @@ import {
   GRID_LAYER,
   heroCameraPose,
   holdLiveFrame,
+  itemLightsForCapture,
   pendingSceneBuildCount,
+  presentLevelsForCapture,
   refreshIsolation,
   SNAPSHOT_MAX_EDGE,
   SNAPSHOT_MIME,
@@ -24,9 +27,12 @@ import {
   snapLevelsToTruePositions,
   THUMBNAIL_HEIGHT,
   THUMBNAIL_WIDTH,
+  temporarilyGroundWindowForCapture,
   temporarilyHideNodeTypes,
   temporarilyShowPresentation,
   temporarilyShowShadowOnly,
+  temporarilyVeilGround,
+  temporarilyWithoutAmbiance,
   useSceneAtmosphere,
   useViewer,
 } from '@pascal-app/viewer'
@@ -55,6 +61,7 @@ export interface SnapshotCameraData {
   zoom?: number
   captureMode?: 'standard' | 'viewport' | 'area'
   resolution?: { w: number; h: number }
+  presentation?: ThumbnailGenerateEvent['presentation']
 }
 
 interface ThumbnailGeneratorProps {
@@ -75,6 +82,25 @@ const MAX_SOFTWARE_CAPTURE_PIXELS = 16_000_000
 const TILE_OVERLAP = 96
 
 type CaptureLimits = { passEdge: number; maxPixels: number; software: boolean }
+
+export function captureDimensions(
+  canvasSize: readonly [number, number],
+  event: Pick<ThumbnailGenerateEvent, 'ortho' | 'perspective' | 'standardSize' | 'supersample'>,
+  maxPixels: number,
+): [number, number] {
+  const supersample = event.supersample ?? 1
+  // A requested camera must not inherit the editor pane's aspect or be upscaled from its crop.
+  const size =
+    (event.ortho || event.perspective) && event.standardSize && supersample === 1
+      ? [event.standardSize.w, event.standardSize.h]
+      : canvasSize
+  const scale = Math.min(
+    Math.max(1, supersample),
+    MAX_CAPTURE_EDGE / Math.max(size[0], size[1]),
+    Math.sqrt(maxPixels / (size[0] * size[1])),
+  )
+  return [Math.round(size[0] * scale), Math.round(size[1] * scale)]
+}
 
 /**
  * What one capture may ask of this GPU: a pass no larger than its biggest
@@ -412,13 +438,15 @@ const HOLD_MAX_MS = 300_000
  * What the sheets' pictures are drawn in, whatever the user's view: full-
  * height walls, the storeys stacked at their true heights, the materials'
  * own textures and colours (a white or blueprint palette is a view, not the
- * house). The shading stays the user's: the capture brings its own AO.
+ * house), lit by a fair midday. The shading stays the user's: the capture brings its own AO.
  */
 const FINISHED_PRESENTATION = {
   wallMode: 'up',
   levelMode: 'stacked',
   textures: true,
   colorPreset: 'clay',
+  timeOfDay: 'midday',
+  weather: 'fair',
 } as const
 
 /** The viewer switched to FINISHED_PRESENTATION; the returned function puts the user's view back. */
@@ -444,6 +472,25 @@ export function presentFinished(): () => void {
     const colorPreset = viewer.colorPreset
     viewer.setColorPreset(FINISHED_PRESENTATION.colorPreset)
     restores.push(() => useViewer.getState().setColorPreset(colorPreset))
+  }
+  if (
+    viewer.timeOfDay !== FINISHED_PRESENTATION.timeOfDay ||
+    viewer.timeOfDayMinutes !== null ||
+    viewer.skyLive
+  ) {
+    const { timeOfDay, timeOfDayMinutes, skyLive } = viewer
+    viewer.setTimeOfDay(FINISHED_PRESENTATION.timeOfDay)
+    restores.push(() => {
+      const next = useViewer.getState()
+      next.setTimeOfDay(timeOfDay)
+      if (timeOfDayMinutes !== null) next.setTimeOfDayMinutes(timeOfDayMinutes)
+      if (skyLive) next.setSkyLive(true)
+    })
+  }
+  if (viewer.weather !== FINISHED_PRESENTATION.weather) {
+    const weather = viewer.weather
+    viewer.setWeather(FINISHED_PRESENTATION.weather)
+    restores.push(() => useViewer.getState().setWeather(weather))
   }
   return () => {
     for (const restore of restores.reverse()) restore()
@@ -522,10 +569,18 @@ function clipSceneFor(
  * floors and this floor's roofs and ceilings out of the picture, everything
  * on it cut where core says (sceneViewInterior, from the scene as this editor
  * has it) and its shadows with it, and whatever the user's solo or isolation
- * holds back on it shown.
+ * holds back on it shown. The site's ground follows this floor, not the
+ * user's: veiled wholesale over a floor below grade; over one only partly
+ * below grade, or at grade behind a hillside, veiled only where it stands
+ * between this frame's camera and the floor (the ground window).
  */
-export function interiorCutaway(levelId: string, restore: (callback: () => void) => void) {
-  const { cutHeight, hiddenIds } = sceneViewInterior(useScene.getState().nodes, levelId)
+export function interiorCutaway(
+  levelId: string,
+  restore: (callback: () => void) => void,
+  camera?: THREE.Camera,
+) {
+  const { nodes } = useScene.getState()
+  const { cutHeight, hiddenIds } = sceneViewInterior(nodes, levelId)
   const floor = sceneRegistry.nodes.get(levelId)
   if (!floor) throw new Error('The floor to look inside is not built yet. Try again.')
   for (const id of hiddenIds) {
@@ -538,6 +593,29 @@ export function interiorCutaway(levelId: string, restore: (callback: () => void)
   }
   restore(temporarilyShowPresentation(floor))
   restore(clipSceneFor(floor, [{ normal: [0, -1, 0], constant: cutHeight }], true))
+  const standing = levelGradeStanding(nodes, levelId)
+  if (standing === 'below-grade' || !camera) {
+    restore(temporarilyVeilGround(standing !== 'at-grade'))
+  } else {
+    restore(temporarilyVeilGround(false))
+    restore(temporarilyGroundWindowForCapture(camera, nodes, levelId))
+  }
+}
+
+/**
+ * The ground of an exterior picture, for one render: solid, whatever level the person is
+ * on — but a posed frame (an authored snapshot pose, or the caller's own perspective or
+ * orthographic view, which is how both agent lanes ask) decides its own ground window from
+ * its own camera, never inheriting the person's. An unposed frame (the person's viewport,
+ * the hero shot) makes no such decision: the window is the person's to hold.
+ */
+export function exteriorGroundForCapture(
+  restore: (callback: () => void) => void,
+  posed: boolean,
+  camera: THREE.Camera,
+) {
+  restore(temporarilyVeilGround(false))
+  if (posed) restore(temporarilyGroundWindowForCapture(camera, useScene.getState().nodes))
 }
 
 /**
@@ -700,21 +778,12 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
           // a supersampled frame renders at a multiple of the canvas' size into
           // the capture's own targets; the live canvas is never resized
           const canvasSize: [number, number] = [gl.domElement.width, gl.domElement.height]
+          const pose = ortho ?? perspective
           const limits = captureLimits(gl)
-          const scale = Math.max(
-            1,
-            Math.min(
-              supersample,
-              MAX_CAPTURE_EDGE / Math.max(canvasSize[0], canvasSize[1]),
-              Math.sqrt(limits.maxPixels / (canvasSize[0] * canvasSize[1])),
-            ),
-          )
-          const width = Math.round(canvasSize[0] * scale)
-          const height = Math.round(canvasSize[1] * scale)
+          const [width, height] = captureDimensions(canvasSize, event, limits.maxPixels)
           // a supersampled picture is encoded at the size it could render (the
           // caller asked for canvas × supersample, maybe past this GPU's limits)
           const encodeSize = supersample > 1 ? { w: width, h: height } : standardSize
-          const pose = ortho ?? perspective
           // a background tab draws no frames and (on the WebGL backend) never
           // finishes a readback: a sheet's capture says so at once
           if (pose && isTabHidden()) throw new Error(HIDDEN_TAB)
@@ -813,7 +882,7 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
             }
 
             pipeline?.applyEnvironment({
-              theme: useViewer.getState().sceneTheme,
+              theme: useViewer.getState().sceneAppearance,
               transparent,
               grade: useViewer.getState().shading === 'rendered',
               edges,
@@ -866,6 +935,10 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
             // the scene as the picture wants it, for one render; `restore` puts
             // every change back right after it
             const setUp = (restore: (callback: () => void) => void) => {
+              // A picture is read for its rooms, taken in the world's own light: the earth the
+              // person's view turns to under the ground (sky, fog, vignette, the sky's lights)
+              // is not in it.
+              restore(temporarilyWithoutAmbiance())
               if (snapLevels) {
                 const prevMode = useViewer.getState().levelMode
                 if (prevMode !== 'stacked') {
@@ -906,7 +979,7 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
                   thumbnailCamera.lookAt(hero.target[0], hero.target[1], hero.target[2])
                   thumbnailCamera.updateMatrixWorld()
                   pipeline?.applyEnvironment({
-                    theme: useViewer.getState().sceneTheme,
+                    theme: useViewer.getState().sceneAppearance,
                     transparent,
                     grade: useViewer.getState().shading === 'rendered',
                     edges,
@@ -934,10 +1007,19 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
               // those meshes before either snapshot render path submits them,
               // and restore fog afterwards so the atmosphere never leaks in.
               restore(refreshIsolation(scene))
-              if (interior) {
-                interiorCutaway(interior.levelId, restore)
-                restore(lightInterior(scene, thumbnailCamera))
+              if (event.presentation) {
+                restore(presentLevelsForCapture(event.presentation))
+                cameraData.presentation = event.presentation
               }
+              if (interior) {
+                interiorCutaway(interior.levelId, restore, thumbnailCamera)
+                restore(lightInterior(scene, thumbnailCamera))
+              } else if (snapLevels || pose || cameraPose) {
+                exteriorGroundForCapture(restore, Boolean(cameraPose || pose), thumbnailCamera)
+              }
+              // Last, with the camera where the picture is taken from: the item lights that
+              // matter to it, at full strength.
+              restore(itemLightsForCapture(scene, thumbnailCamera))
             }
             // The scene pass is a FRAME-updated node: it renders once per node
             // frame, and only the animation loop advances that frame. With the
@@ -973,7 +1055,7 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
                   restore(() => thumbnailCamera.clearViewOffset())
                   thumbnailCamera.updateMatrixWorld()
                   pipeline.applyEnvironment({
-                    theme: useViewer.getState().sceneTheme,
+                    theme: useViewer.getState().sceneAppearance,
                     transparent,
                     grade: useViewer.getState().shading === 'rendered',
                     edges,
@@ -1038,7 +1120,8 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
               }
               // a sheet's picture (or a supersampled one) is never drawn into
               // the live canvas the viewport shows
-              if (pose || scale > 1) throw new Error('Snapshot renderer is not ready. Try again.')
+              if (pose || width !== canvasSize[0] || height !== canvasSize[1])
+                throw new Error('Snapshot renderer is not ready. Try again.')
               // Fallback: plain render directly to the canvas
               if (transparent) {
                 const clearColor = (
@@ -1170,7 +1253,7 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
             if (transparent || edgesOverride !== undefined || ortho !== undefined) {
               try {
                 pipelineRef.current?.applyEnvironment({
-                  theme: useViewer.getState().sceneTheme,
+                  theme: useViewer.getState().sceneAppearance,
                   transparent: false,
                   grade: useViewer.getState().shading === 'rendered',
                   edges: useViewer.getState().edges,

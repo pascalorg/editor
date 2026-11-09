@@ -9,21 +9,31 @@ import {
   type LinesetNode,
   type LiquidLineNode,
   type PortConnectivity,
+  pauseSceneHistory,
   resolveConnectivityUpdates,
+  resumeSceneHistory,
   sceneRegistry,
   useLiveNodeOverrides,
   useScene,
 } from '@pascal-app/core'
-import { DimensionPill, isGridSnapActive, triggerSFX, useEditor } from '@pascal-app/editor'
+import {
+  DimensionPill,
+  isGridSnapActive,
+  PATH_POINT_DRAG_LABEL,
+  swallowNextClick,
+  triggerSFX,
+  useEditor,
+} from '@pascal-app/editor'
 import { collectScenePorts, findNearestPortXZ } from '@pascal-app/editor/distribution'
 import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
 import { createPortal, type ThreeEvent, useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { type Group, type Object3D, Plane, Raycaster, Vector2, Vector3 } from 'three'
+import { useHandleDragScope } from './handle-drag-scope'
+import { createLivePreview } from './live-preview'
 import { REFRIGERANT_PORT_SYSTEMS } from './port-systems'
 import { HandleCube, MoveChevron } from './selection-handles'
-import { useNodeHandleDrag } from './use-node-handle-drag'
 
 type RefrigerantLineKind = 'lineset' | 'liquid-line'
 type RefrigerantLineNode = LinesetNode | LiquidLineNode
@@ -113,7 +123,6 @@ function RefrigerantLineEndpointHandles({
   target: Object3D
 }) {
   const { camera, gl } = useThree()
-  const beginDrag = useNodeHandleDrag(line.id)
   const override = useLiveNodeOverrides((state) => state.overrides.get(line.id))
   const displayLine = override ? ({ ...line, ...override } as RefrigerantLineNode) : line
   const outerRef = useRef<Group>(null)
@@ -126,6 +135,7 @@ function RefrigerantLineEndpointHandles({
   })
 
   const unit = useViewer((s) => s.unit)
+  const claimHandleDrag = useHandleDragScope()
   const [draggingIndex, setDraggingIndex] = useState<number | null>(null)
   const [openCluster, setOpenCluster] = useState<number | null>(null)
   const toggleCluster = (index: number) => setOpenCluster((cur) => (cur === index ? null : index))
@@ -133,18 +143,22 @@ function RefrigerantLineEndpointHandles({
     index: number
     initialPath: Point[]
     current: Point
+    cleanup: () => void
     connectivity: PortConnectivity | null
     detached: boolean
   } | null>(null)
 
+  /** Null when the mated joints cannot follow `path`. */
   const followUpdates = (
     connectivity: PortConnectivity | null,
     path: Point[],
-  ): { id: AnyNodeId; data: Partial<AnyNode> }[] => {
+  ): { id: AnyNodeId; data: Partial<AnyNode> }[] | null => {
     if (!connectivity) return []
     const preview = { ...(line as unknown as Record<string, unknown>), path } as AnyNode
-    return resolveConnectivityUpdates(connectivity, preview).filter(
-      (u) => useScene.getState().nodes[u.id],
+    return (
+      resolveConnectivityUpdates(connectivity, preview)?.filter(
+        (u) => useScene.getState().nodes[u.id],
+      ) ?? null
     )
   }
 
@@ -238,7 +252,15 @@ function RefrigerantLineEndpointHandles({
     const initialPath = line.path.map((p) => [...p] as Point)
     const startPoint = initialPath[index]!
     const connectivity = analyzePortConnectivity(line as AnyNode, useScene.getState().nodes)
+    const livePreview = createLivePreview()
+    pauseSceneHistory(useScene)
+    useViewer.getState().setInputDragging(true)
+    document.body.style.cursor = kind.axis === 'y' ? 'ns-resize' : 'grabbing'
     setDraggingIndex(index)
+    const releaseScope = claimHandleDrag(line.id, PATH_POINT_DRAG_LABEL, () => {
+      swallowNextClick()
+      finish(false)
+    })
 
     const isEndpoint = index === 0 || index === initialPath.length - 1
     const swings = kind.axis === 'y' ? kind.along !== true : !kind.along
@@ -249,78 +271,121 @@ function RefrigerantLineEndpointHandles({
       : 0
     const canSwing = swings && isEndpoint && pivot !== null && radius > 1e-6
 
-    dragRef.current = { index, initialPath, current: startPoint, connectivity, detached: false }
-    beginDrag({
-      nodeId: line.id,
-      handle: 'endpoint',
-      cursor: kind.axis === 'y' ? 'ns-resize' : 'grabbing',
-      onEnd: () => {
-        dragRef.current = null
-        setDraggingIndex(null)
-      },
-      onMove: (event, preview) => {
-        const drag = dragRef.current
-        if (!drag) return
-        const step = isGridSnapActive() ? useEditor.getState().gridSnapStep : 0
-        const detached = event.altKey
-        let next: Point | null = null
-        if (canSwing && pivot) {
-          const aim =
-            kind.axis === 'y'
-              ? swingVertical(event, pivot, startPoint)
-              : swingHorizontal(event, pivot, startPoint)
-          if (aim) {
-            next = [
-              snap(pivot[0] + aim[0] * radius, step),
-              Math.max(0, snap(pivot[1] + aim[1] * radius, step)),
-              snap(pivot[2] + aim[2] * radius, step),
-            ]
-          }
-        } else if (kind.axis === 'y') {
-          const y = intersectVerticalY(event.clientX, event.clientY, toWorld(startPoint))
-          if (y !== null) next = [startPoint[0], Math.max(0, snap(y, step)), startPoint[2]]
-        } else {
-          const plane = new Plane().setFromNormalAndCoplanarPoint(UP, toWorld(startPoint))
-          const hit = intersect(event.clientX, event.clientY, plane)
-          if (hit) {
-            const local = toLocal(hit)
-            const [dx, dz] = kind.dir
-            const t = snap((local[0] - startPoint[0]) * dx + (local[2] - startPoint[2]) * dz, step)
-            next = [startPoint[0] + t * dx, startPoint[1], startPoint[2] + t * dz]
-          }
+    const onMove = (event: PointerEvent) => {
+      const drag = dragRef.current
+      if (!drag) return
+      const step = isGridSnapActive() ? useEditor.getState().gridSnapStep : 0
+      const detached = event.altKey
+      let next: Point | null = null
+      if (canSwing && pivot) {
+        const aim =
+          kind.axis === 'y'
+            ? swingVertical(event, pivot, startPoint)
+            : swingHorizontal(event, pivot, startPoint)
+        if (aim) {
+          next = [
+            snap(pivot[0] + aim[0] * radius, step),
+            Math.max(0, snap(pivot[1] + aim[1] * radius, step)),
+            snap(pivot[2] + aim[2] * radius, step),
+          ]
         }
-        if (!next) return
-        if (isEndpoint) {
-          const port = findNearestPortXZ(
-            [next[0], next[1], next[2]],
-            collectScenePorts({
-              excludeNodeId: line.id,
-              systems: REFRIGERANT_PORT_SYSTEMS,
-              levelId: (findLevelAncestorId(line.id, useScene.getState().nodes) ?? undefined) as
-                | AnyNodeId
-                | undefined,
-            }),
-            PORT_SNAP_RADIUS_M,
-          )
-          if (port) next = [port.position[0], port.position[1], port.position[2]]
+      } else if (kind.axis === 'y') {
+        const y = intersectVerticalY(event.clientX, event.clientY, toWorld(startPoint))
+        if (y !== null) next = [startPoint[0], Math.max(0, snap(y, step)), startPoint[2]]
+      } else {
+        const plane = new Plane().setFromNormalAndCoplanarPoint(UP, toWorld(startPoint))
+        const hit = intersect(event.clientX, event.clientY, plane)
+        if (hit) {
+          const local = toLocal(hit)
+          const [dx, dz] = kind.dir
+          const t = snap((local[0] - startPoint[0]) * dx + (local[2] - startPoint[2]) * dz, step)
+          next = [startPoint[0] + t * dx, startPoint[1], startPoint[2] + t * dz]
         }
-        if (
-          next[0] === drag.current[0] &&
-          next[1] === drag.current[1] &&
-          next[2] === drag.current[2] &&
-          detached === drag.detached
+      }
+      if (!next) return
+      if (isEndpoint) {
+        const port = findNearestPortXZ(
+          [next[0], next[1], next[2]],
+          collectScenePorts({
+            excludeNodeId: line.id,
+            levelId: (findLevelAncestorId(line.id, useScene.getState().nodes) ?? undefined) as
+              | AnyNodeId
+              | undefined,
+            systems: REFRIGERANT_PORT_SYSTEMS,
+          }),
+          PORT_SNAP_RADIUS_M,
         )
-          return
-        drag.current = next
-        drag.detached = detached
-        if (step > 0) triggerSFX('sfx:grid-snap')
-        const path = line.path.map((p, i) => (i === drag.index ? next! : p)) as Point[]
-        preview([
-          { id: line.id as AnyNodeId, data: { path } as Partial<AnyNode> },
-          ...(detached ? [] : followUpdates(drag.connectivity, path)),
-        ])
-      },
-    })
+        if (port) next = [port.position[0], port.position[1], port.position[2]]
+      }
+      if (next[0] === drag.current[0] && next[1] === drag.current[1] && next[2] === drag.current[2])
+        return
+      const path = line.path.map((p, i) => (i === drag.index ? next! : p)) as Point[]
+      const follow = detached ? [] : followUpdates(drag.connectivity, path)
+      // Joints that cannot follow hold the last frame, which release commits.
+      if (!follow) return
+      drag.current = next
+      drag.detached = detached
+      if (step > 0) triggerSFX('sfx:grid-snap')
+      livePreview.publish([
+        { id: line.id as AnyNodeId, data: { path } as Partial<AnyNode> },
+        ...follow,
+      ])
+    }
+
+    const finish = (commit: boolean) => {
+      const drag = dragRef.current
+      if (!drag) return
+      drag.cleanup()
+      dragRef.current = null
+      setDraggingIndex(null)
+      const detached = drag.detached
+      const finalPath = drag.initialPath.map((p, i) =>
+        i === drag.index ? drag.current : p,
+      ) as Point[]
+      livePreview.clear()
+      resumeSceneHistory(useScene)
+      if (!commit) return
+      const moved = finalPath[drag.index]!.some(
+        (v, axis) => v !== drag.initialPath[drag.index]![axis],
+      )
+      const follow = moved && (detached ? [] : followUpdates(drag.connectivity, finalPath))
+      if (follow) {
+        useScene
+          .getState()
+          .updateNodes([
+            { id: line.id as AnyNodeId, data: { path: finalPath } as Partial<AnyNode> },
+            ...follow,
+          ])
+      }
+    }
+
+    const onUp = () => {
+      if (!dragRef.current) return
+      swallowNextClick()
+      finish(true)
+    }
+    const onCancel = () => finish(false)
+
+    const cleanup = () => {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+      window.removeEventListener('pointercancel', onCancel)
+      releaseScope()
+      useViewer.getState().setInputDragging(false)
+      document.body.style.cursor = ''
+    }
+
+    dragRef.current = {
+      index,
+      initialPath,
+      current: startPoint,
+      cleanup,
+      connectivity,
+      detached: false,
+    }
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
+    window.addEventListener('pointercancel', onCancel)
   }
 
   const endpointArrows = useMemo(() => getEndpointArrows(line), [line])

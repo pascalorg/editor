@@ -1,5 +1,11 @@
 'use client'
-import { type AnyNodeId, nodeMechanism, useInteractive, useScene } from '@pascal-app/core'
+import {
+  type AnyNodeId,
+  nodeMechanism,
+  useInteractive,
+  usePascalI18n,
+  useScene,
+} from '@pascal-app/core'
 import { ActionMenuButton } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { Lightbulb, LightbulbOff } from 'lucide-react'
@@ -10,6 +16,7 @@ import { itemHasLights, itemLightsOn, toggleItemLights } from './item-interactio
  * comes from the action menu's `capabilities.mechanism` button.
  */
 export default function ItemInteractionActions() {
+  const i18n = usePascalI18n()
   const selected = useViewer((s) => s.selection.selectedIds)
   const node = useScene((s) =>
     selected.length === 1 ? s.nodes[selected[0] as AnyNodeId] : undefined,
@@ -21,7 +28,17 @@ export default function ItemInteractionActions() {
     <ActionMenuButton
       // E runs the mechanism when there is one, and only otherwise the light.
       keys={nodeMechanism(node) ? undefined : ['E']}
-      label={lit ? 'Turn light off' : 'Turn light on'}
+      label={
+        lit
+          ? i18n._({
+              id: 'node.shared.itemInteractionActions.turnLightOff',
+              message: 'Turn light off',
+            })
+          : i18n._({
+              id: 'node.shared.itemInteractionActions.turnLightOn',
+              message: 'Turn light on',
+            })
+      }
       onClick={(event) => {
         event.stopPropagation()
         toggleItemLights(node)

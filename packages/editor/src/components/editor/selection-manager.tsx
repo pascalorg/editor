@@ -15,7 +15,6 @@ import {
   type NodeEvent,
   nodeRegistry,
   type RoofEvent,
-  type RoofNode,
   type RoofSegmentEvent,
   type RoofSegmentNode,
   resolveLevelId,
@@ -27,8 +26,15 @@ import {
   useLiveNodeOverrides,
   useRegistryVersion,
   useScene,
+  wallFaceScriptPaintRefusal,
 } from '@pascal-app/core'
-import { getRoofMaterialArray, registerMaterialCacheCleanup, useViewer } from '@pascal-app/viewer'
+import {
+  markHighlight,
+  ROOF_HEEL_MATERIAL_INDEX,
+  registerMaterialCacheCleanup,
+  tintEmissive,
+  useViewer,
+} from '@pascal-app/viewer'
 import { useThree } from '@react-three/fiber'
 import { useCallback, useEffect, useRef } from 'react'
 import { type BufferGeometry, Color, type Material, type Mesh, type Object3D, Vector3 } from 'three'
@@ -56,7 +62,6 @@ import {
 import { selectionEnabled } from '../../lib/interaction/scope'
 import {
   type ActivePaintMaterial,
-  buildRoofSurfaceMaterialPatch,
   hasActivePaintMaterial,
   resolveActivePaintMaterialFromSelection,
 } from '../../lib/material-paint'
@@ -89,7 +94,6 @@ import {
   paintScopeRole,
   paintSurfaceLabel,
   resolvePaintScopeTargets,
-  slotDisplayLabel,
   type WallPaintHit,
 } from '../../lib/paint-scope'
 import {
@@ -247,9 +251,10 @@ function resolveStairMaterialTarget(
 
 function resolveRoofMaterialTarget(
   event: RoofEvent | RoofSegmentEvent,
-): 'top' | 'edge' | 'wall' | null {
+): 'top' | 'edge' | 'wall' | 'heel' | null {
   const materialIndex = getIntersectionMaterialIndex(getEventObject(event), event.faceIndex)
   if (materialIndex === 3) return 'top'
+  if (materialIndex === ROOF_HEEL_MATERIAL_INDEX) return 'heel'
   if (materialIndex === 0) return 'edge'
   if (materialIndex === 1 || materialIndex === 2) return 'wall'
 
@@ -450,47 +455,12 @@ function resolveSelectModeNodeTarget(event: NodeEvent, drill = false): AnyNode {
   return event.node
 }
 
-function previewMeshMaterial(mesh: Mesh, material: Material | Material[]): PaintPreviewCleanup {
-  const previousMaterial = mesh.material
-  mesh.material = material
-  return () => {
-    mesh.material = previousMaterial
-  }
-}
-
 function previewCursor(cursor: string): PaintPreviewCleanup {
   const previousCursor = document.body.style.cursor
   document.body.style.cursor = cursor
   return () => {
     document.body.style.cursor = previousCursor
   }
-}
-
-function applyRoofPaintPreview(
-  node: RoofNode,
-  role: 'top' | 'edge' | 'wall',
-  material: ActivePaintMaterial,
-): PaintPreviewCleanup | null {
-  const root = getRegisteredNodeObject(node.id)
-  const mesh = root?.getObjectByName('merged-roof') as Mesh | undefined
-  if (!mesh) return null
-
-  const previewNode = {
-    ...node,
-    ...buildRoofSurfaceMaterialPatch(node, role, material.material, material.materialPreset),
-  }
-  const previewMaterial = getRoofMaterialArray(
-    previewNode,
-    useViewer.getState().shading,
-    useViewer.getState().textures,
-    useViewer.getState().colorPreset,
-    useViewer.getState().sceneTheme,
-    null,
-    useScene.getState().materials,
-  )
-  if (!previewMaterial) return null
-
-  return previewMeshMaterial(mesh, previewMaterial)
 }
 
 // Chimney + dormer paint dispatch lives on their NodeDefinition's
@@ -517,16 +487,14 @@ const HIGHLIGHT_PROFILES = {
   delete: {
     color: new Color('#dc2626'),
     blend: 0.76,
-    emissiveBlend: 0.92,
-    emissiveIntensity: 0.46,
+    emissive: 0.92,
   },
   selection: {
     // Keep the real material/texture readable: no albedo tint, just a gentle
     // indigo emissive glow so it reads as selected.
     color: new Color('#818cf8'),
     blend: 0,
-    emissiveBlend: 0.4,
-    emissiveIntensity: 0.12,
+    emissive: 0.12,
   },
 } as const
 
@@ -581,15 +549,7 @@ function createHighlightedMaterial(material: Material, kind: HighlightKind): Mat
     highlightedMaterial.color = highlightedMaterial.color.clone().lerp(profile.color, profile.blend)
   }
 
-  if (highlightedMaterial.emissive instanceof Color) {
-    highlightedMaterial.emissive = highlightedMaterial.emissive
-      .clone()
-      .lerp(profile.color, profile.emissiveBlend)
-    highlightedMaterial.emissiveIntensity = Math.max(
-      highlightedMaterial.emissiveIntensity ?? 0,
-      profile.emissiveIntensity,
-    )
-  }
+  tintEmissive(highlightedMaterial, profile.color, profile.emissive)
 
   if (typeof highlightedMaterial.opacity === 'number' && highlightedMaterial.opacity < 1) {
     highlightedMaterial.transparent = true
@@ -597,7 +557,7 @@ function createHighlightedMaterial(material: Material, kind: HighlightKind): Mat
   }
 
   highlightedMaterial.needsUpdate = true
-  return highlightedMaterial
+  return markHighlight(highlightedMaterial)
 }
 
 function createHighlightedMaterials(
@@ -891,9 +851,7 @@ export const SelectionManager = () => {
 
       // Registry-driven paint dispatch — kinds that declare
       // `capabilities.paint` route hover / click / preview through
-      // their definition. Wall, chimney, and dormer use this; legacy
-      // roof / stair / single-surface arms below stay until they
-      // migrate too.
+      // their definition (wall, chimney, dormer, roof, …).
       const paintCap = nodeRegistry.get(node.type)?.capabilities?.paint
       if (paintCap) {
         const materialIndex = getIntersectionMaterialIndex(getEventObject(event), event.faceIndex)
@@ -982,8 +940,11 @@ export const SelectionManager = () => {
             compatible && role
               ? () => {
                   // A surface with nothing of its own to paint (a footprint's
-                  // top where no room stands) says so instead of painting.
-                  const refusal = floorPlatePaintRefusal(useScene.getState().nodes, node, role)
+                  // top where no room stands), or one a script builds, says
+                  // so instead of painting.
+                  const refusal =
+                    floorPlatePaintRefusal(useScene.getState().nodes, node, role) ??
+                    wallFaceScriptPaintRefusal(node, role)
                   usePaintRegionMode.getState().setNotice(refusal?.message ?? null)
                   if (refusal) return
                   // Spread targets are all the same slot-model kind, so one
@@ -1059,51 +1020,7 @@ export const SelectionManager = () => {
         }
       }
 
-      // A segment paints through its definition's `capabilities.paint`; the merged shell's hit is
-      // the roof's, and fans to it.
-      if (node.type === 'roof') {
-        const role = resolveRoofMaterialTarget(event as RoofEvent)
-        if (isPaintPicking()) return pickInteraction(node, role, event, null)
-        const compatible = role !== null && paintEnabled
-        return {
-          key: `roof:${node.id}:${role ?? 'unsupported'}:${eraser ? 'erase' : 'paint'}`,
-          hoveredId: node.id as AnyNodeId,
-          hoverMode: compatible ? (eraser ? 'erase-ready' : 'paint-ready') : 'paint-disabled',
-          // Roof isn't on the slot model (role-specific fields, custom commit),
-          // so it offers only the single surface — but still labels it.
-          paintHover:
-            compatible && role
-              ? {
-                  scopes: ['single'],
-                  slotLabel: slotDisplayLabel(node, role),
-                  nodeNoun: 'roof',
-                }
-              : null,
-          apply:
-            compatible && role
-              ? () => {
-                  useScene
-                    .getState()
-                    .updateNode(
-                      node.id as AnyNodeId,
-                      buildRoofSurfaceMaterialPatch(
-                        node,
-                        role,
-                        paintSpec.material,
-                        paintSpec.materialPreset,
-                      ),
-                    )
-                }
-              : null,
-          preview:
-            compatible && role
-              ? () => applyRoofPaintPreview(node, role, paintSpec)
-              : () => previewCursor('not-allowed'),
-        }
-      }
-
-      // Only `roof` reaches a legacy paint arm (above) — every
-      // other paintable kind declares `capabilities.paint` and returns from the
+      // Every paintable kind declares `capabilities.paint` and returns from the
       // registry-driven dispatch at the top of this function.
 
       const disabledNodeTypes = ['zone']

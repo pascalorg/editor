@@ -345,6 +345,7 @@ export const placeInRoom: AgentOperation<PlaceInRoomInput> = (nodes, input, cont
       `The room has ${polygon.length} edges (0–${polygon.length - 1}); there is no edge ${input.edge}.`,
     )
 
+  // biome-ignore lint/plugin: door keep-outs and occupied footprints resolve each item through its parents
   const all = Object.values(nodes)
   const bounds = polygonBounds(polygon)
   const room: Room = {

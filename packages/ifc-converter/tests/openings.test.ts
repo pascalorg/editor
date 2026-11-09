@@ -21,6 +21,7 @@ function assertUniqueFills(graph: PascalSceneGraph) {
     fills.map((node) => node.metadata?.expressID).sort((a, b) => Number(a) - Number(b)),
   ).toEqual(fillIds)
   for (const fill of fills) {
+    if (fill.type === 'door') expect(fill.frameThickness).toBe(0.02)
     const parent = fill.parentId ? graph.nodes[fill.parentId] : undefined
     expect(parent).toBeDefined()
     if (parent && 'children' in parent) {

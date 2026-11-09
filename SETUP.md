@@ -2,7 +2,9 @@
 
 ## Prerequisites
 
-- [Bun](https://bun.sh/) 1.3+ and Node.js 22.18+
+- [Bun](https://bun.sh/) 1.3+
+- Node.js 22.23.4 or later on 22.x, 24.22.1 or later on 24.x, or 26.12.1 or later
+  (Node 23 and 25 are not supported)
 
 ## Quick Start
 
@@ -80,7 +82,7 @@ only for shared projects; the files a shared scene references are served to it a
 
 ## CLI-managed editor
 
-Node.js 22.13 or newer can install a persistent local runtime, start it in the
+Node.js 22.23.4+ on 22.x, 24.22.1+ on 24.x, or 26.12.1+ can install a persistent local runtime, start it in the
 background, and open it in the browser without a repository checkout:
 
 ```bash

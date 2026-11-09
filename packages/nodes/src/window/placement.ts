@@ -3,6 +3,7 @@
 import type { CornerBlockReason, ToolHint, WindowNode } from '@pascal-app/core'
 import {
   getWindowStyleOverrides,
+  NEW_WINDOW_FRAME_THICKNESS,
   SILLLESS_WINDOW_TYPES,
   WINDOW_STYLE_CHOICES,
   WINDOW_STYLE_LABELS,
@@ -24,6 +25,7 @@ export const windowTypeOptions: Array<{ label: string; value: WindowNode['window
   { label: 'Sliding', value: 'sliding' },
   { label: 'Casement', value: 'casement' },
   { label: 'Awning', value: 'awning' },
+  { label: 'Tilt and Turn', value: 'tilt-turn' },
   { label: 'Single Hung', value: 'single-hung' },
   { label: 'Double Hung', value: 'double-hung' },
   { label: 'Bay', value: 'bay' },
@@ -61,6 +63,9 @@ export const useWindowPlacement = create<WindowPlacementState>((set, get) => ({
 export function placedWindowFields(): Partial<WindowNode> {
   const { type, style } = useWindowPlacement.getState()
   return {
+    frameThickness: NEW_WINDOW_FRAME_THICKNESS,
+    casingFaceA: true,
+    casingFaceB: true,
     ...windowTypeFields(type),
     sill: !SILLLESS_WINDOW_TYPES.has(type),
     ...(windowTakesStyle(type) ? getWindowStyleOverrides(style) : {}),

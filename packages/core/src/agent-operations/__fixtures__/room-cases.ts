@@ -1,4 +1,4 @@
-import { createZone, cutFloorOpening, divideZone, structureChangeBatch } from '../../commands/structure'
+import { createZone, cutFloorOpening, divideZone, setZoneIntent, structureChangeBatch } from '../../commands/structure'
 import { reconcileSceneStructure } from '../../lib/structure-reconcile'
 import {
   type AnyNode,
@@ -89,6 +89,15 @@ function kitchenScene({ divided, hatch, lamp }: Build = {}): SceneGraph {
     nodes = applySceneChanges(nodes, { create: [{ node: item, parentId: 'ceiling_kitchen' }] })
   }
   return { nodes, rootNodeIds: [building.id] }
+}
+
+const LIT = { artificialLight: true, mechanicalVentilation: true }
+
+/** The kitchen with metadata already on its zone: what a plan import or an earlier edit left. */
+function withKitchenMetadata(metadata: Record<string, unknown>): SceneGraph {
+  const scene = kitchenScene()
+  scene.nodes.zone_kitchen = { ...(scene.nodes.zone_kitchen as ZoneNode), metadata }
+  return scene
 }
 
 export function paintedKitchenScene(): SceneGraph {
@@ -239,6 +248,37 @@ export const ROOM_CASES: AgentToolCase[] = [
     expect: {
       result: { changes: 1 },
       after: { zone_kitchen: { name: 'Studio', floor: { finish: 'wood' } } },
+    },
+  },
+  {
+    name: 'declares a room lit and ventilated by artificial means, beside the rest of its metadata',
+    tool: 'set_zone_intent',
+    scene: () => withKitchenMetadata({ note: 'from the plan' }),
+    input: {
+      zoneId: 'zone_kitchen',
+      patch: { daylight: { artificialLight: true, mechanicalVentilation: true } },
+    },
+    expect: {
+      result: { changes: 1 },
+      check: (_result, nodes) =>
+        JSON.stringify((nodes.zone_kitchen as ZoneNode).metadata) ===
+        JSON.stringify({ note: 'from the plan', daylight: LIT })
+          ? []
+          : [`metadata must hold the note and the declaration: ${JSON.stringify((nodes.zone_kitchen as ZoneNode).metadata)}`],
+    },
+  },
+  {
+    name: 'a null daylight clears the declaration and keeps the rest of the metadata',
+    tool: 'set_zone_intent',
+    scene: () => withKitchenMetadata({ note: 'from the plan', daylight: LIT }),
+    input: { zoneId: 'zone_kitchen', patch: { daylight: null } },
+    expect: {
+      result: { changes: 1 },
+      check: (_result, nodes) =>
+        JSON.stringify((nodes.zone_kitchen as ZoneNode).metadata) ===
+        JSON.stringify({ note: 'from the plan' })
+          ? []
+          : [`metadata must hold the note alone: ${JSON.stringify((nodes.zone_kitchen as ZoneNode).metadata)}`],
     },
   },
   // Single public writes: room commands deliberately are not batchable.
@@ -469,5 +509,63 @@ export const ROOM_CASES: AgentToolCase[] = [
       ],
     },
     expect: { result: {}, check: holds({ zone: 2 }) },
+  },
+]
+
+function outdoorRoomsScene(patch?: Parameters<typeof setZoneIntent>[1]['patch']): SceneGraph {
+  const scene = kitchenScene()
+  let nodes = scene.nodes as Record<string, AnyNode>
+  let sequence = 0
+  const mintId = (kind: string) => kind === 'zone' ? 'zone_outdoor' : `${kind}_outdoor${++sequence}`
+  const porch = createZone(nodes, {
+    levelId: 'level_rooms', name: 'Porch', polygon: [[2, 4], [6, 4], [6, 6], [2, 6]],
+    enclose: false, intent: { roomType: 'porch' }, mintId,
+  })
+  nodes = applySceneChanges(nodes, structureChangeBatch(porch.changes))
+  nodes = { ...reconcileSceneStructure({ nodes, mintId }).nodes } as Record<string, AnyNode>
+  if (patch) {
+    const before = nodes
+    nodes = applySceneChanges(nodes, structureChangeBatch(setZoneIntent(nodes, { zoneId: 'zone_outdoor', patch }).changes))
+    nodes = { ...reconcileSceneStructure({ nodes, previousNodes: before, mintId }).nodes } as Record<string, AnyNode>
+  }
+  return { ...scene, nodes }
+}
+
+export const OUTDOOR_ROOM_READ_CASES: AgentToolCase[] = [
+  {
+    name: 'an ordinary room has roomType room, no step-down and no porch framing',
+    tool: 'get_zones', scene: kitchenScene, input: { levelId: 'level_rooms' },
+    expect: { result: {}, contains: { zones: [{ id: 'zone_kitchen', roomType: 'room', floor: { drop: 0 }, porchFraming: null }] } },
+  },
+  {
+    name: 'a covered porch reports its default step-down, automatic framing and existing generated counts',
+    tool: 'get_zones', scene: () => outdoorRoomsScene(), input: { levelId: 'level_rooms' },
+    expect: { result: {}, contains: { zones: [{ id: 'zone_outdoor', roomType: 'porch', floor: { drop: 1.5 * 0.0254 }, porchFraming: { auto: true, postSize: '6x6', postSpacing: 8 * 0.3048, beamSize: '6x8', postCount: 3, beamCount: 3 } }] } },
+  },
+  {
+    name: 'hand-edited porch framing reports auto false and counts only its own remaining generated parts',
+    tool: 'get_zones', scene: () => {
+      const scene = outdoorRoomsScene({ floor: { drop: 0.05 }, porchFraming: { auto: false, postSize: '4x4', postSpacing: 1.5, beamSize: '6x10' } })
+      const part = Object.values(scene.nodes as Record<string, AnyNode>).find((node) => node.type === 'column' && node.metadata?.porchOf === 'zone_outdoor')!
+      delete scene.nodes[part.id]
+      ;(scene.nodes.level_rooms as LevelNode).children = (scene.nodes.level_rooms as LevelNode).children.filter((id) => id !== part.id)
+      return scene
+    }, input: { levelId: 'level_rooms' },
+    expect: { result: {}, contains: { zones: [{ id: 'zone_outdoor', roomType: 'porch', floor: { drop: 0.05 }, porchFraming: { auto: false, postSize: '4x4', postSpacing: 1.5, beamSize: '6x10', postCount: 2, beamCount: 3 } }, { id: 'zone_kitchen', porchFraming: null }] } },
+  },
+  {
+    name: 'a deck reports its step-down, default boards and no automatic porch roof framing',
+    tool: 'get_zones', scene: () => outdoorRoomsScene({ roomType: 'deck' }), input: { levelId: 'level_rooms' },
+    expect: { result: {}, contains: { zones: [{ id: 'zone_outdoor', roomType: 'deck', floor: { drop: 0.0254 }, porchFraming: { auto: false, postSize: '6x6', postSpacing: 8 * 0.3048, beamSize: '6x8', postCount: 0, beamCount: 0 }, decking: { boardSize: '5/4x6', gap: 0.0254 / 4, direction: 'parallel' } }] } },
+  },
+  {
+    name: 'a patio reports step-down and no automatic porch framing',
+    tool: 'get_zones', scene: () => outdoorRoomsScene({ roomType: 'patio' }), input: { levelId: 'level_rooms' },
+    expect: { result: {}, contains: { zones: [{ id: 'zone_outdoor', roomType: 'patio', floor: { drop: 1.5 * 0.0254 }, porchFraming: { auto: false, postSize: '6x6', postSpacing: 8 * 0.3048, beamSize: '6x8', postCount: 0, beamCount: 0 } }] } },
+  },
+  {
+    name: 'custom deck boards and explicitly enabled roof framing use the set_zone_intent names and units',
+    tool: 'get_zones', scene: () => outdoorRoomsScene({ roomType: 'deck', floor: { drop: 0.02 }, porchFraming: { auto: true, postSize: '8x8' }, decking: { boardSize: 'composite', gap: 0.004, direction: 'diagonal' } }), input: { levelId: 'level_rooms' },
+    expect: { result: {}, contains: { zones: [{ id: 'zone_outdoor', roomType: 'deck', floor: { drop: 0.02 }, porchFraming: { auto: true, postSize: '8x8', postSpacing: 8 * 0.3048, beamSize: '6x8', postCount: 3, beamCount: 3 }, decking: { boardSize: 'composite', gap: 0.004, direction: 'diagonal' } }] } },
   },
 ]

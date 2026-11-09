@@ -546,14 +546,19 @@ export function MoveRegistryNodeTool({ node: source }: { node: AnyNode }) {
     // them through `useLiveNodeOverrides` (transient — no history churn;
     // GeometrySystem merges overrides via getEffectiveNode). Each connected
     // node is re-dirtied so its geometry rebuilds against the new override.
-    const previewConnectivity = (position: [number, number, number], rotationY: number) => {
+    // False, previewing nothing, when the connected joints cannot follow.
+    const previewConnectivity = (
+      position: [number, number, number],
+      rotationY: number,
+    ): boolean => {
       const connectivity = connectivityRef.current
-      if (!connectivity) return
+      if (!connectivity) return true
       const updates = resolveConnectivityUpdates(
         connectivity,
         buildPreviewNode(position, rotationY),
       )
-      if (updates.length === 0) return
+      if (!updates) return false
+      if (updates.length === 0) return true
       useLiveNodeOverrides
         .getState()
         .setMany(updates.map((u) => [u.id, u.data as Record<string, unknown>] as const))
@@ -561,6 +566,7 @@ export function MoveRegistryNodeTool({ node: source }: { node: AnyNode }) {
       for (const u of updates) {
         if (useScene.getState().nodes[u.id]) useScene.getState().markDirty(u.id)
       }
+      return true
     }
 
     const clearConnectivityOverrides = () => {
@@ -1039,6 +1045,10 @@ export function MoveRegistryNodeTool({ node: source }: { node: AnyNode }) {
         ).position
       }
       position = resolvePosition(keepStartingElevation(position, rotationRef.current))
+      // Carry connected ductwork along (preview only — committed on drop). A
+      // position the connected joints cannot follow holds the last frame,
+      // which is what the drop commits.
+      if (!previewConnectivity(position, rotationRef.current)) return
       const visualPosition = getVisualPosition(position)
       hasMovedRef.current = true
       setCursorPosition(visualPosition)
@@ -1066,8 +1076,6 @@ export function MoveRegistryNodeTool({ node: source }: { node: AnyNode }) {
       })
       syncParentFramePreview(position)
       markMovedNodeDirty()
-      // Carry connected ductwork along (preview only — committed on drop).
-      previewConnectivity(position, rotationRef.current)
 
       const soundStep = {
         coords: [x, z],
@@ -1183,8 +1191,9 @@ export function MoveRegistryNodeTool({ node: source }: { node: AnyNode }) {
             ? resolveConnectivityUpdates(
                 connectivityRef.current,
                 buildPreviewNode(position, rotationRef.current),
-              ).filter((u) => useScene.getState().nodes[u.id])
+              )?.filter((u) => useScene.getState().nodes[u.id])
             : []
+          if (!connectivityUpdates) return
           const surfaceId = surfaceAttachmentId(effectiveNode)
           itemSurfaceMove?.restore()
           useScene.temporal.getState().resume()
@@ -1310,7 +1319,6 @@ export function MoveRegistryNodeTool({ node: source }: { node: AnyNode }) {
         attachmentRotationRef.current,
       )
       if (nextFreeRotation === null) return
-      sfxEmitter.emit('sfx:item-rotate')
       const hostedPose = itemSurfaceMove?.rotate(nextFreeRotation)
       let position = hostedPose?.position ?? lastCursorRef.current
       if (
@@ -1331,10 +1339,16 @@ export function MoveRegistryNodeTool({ node: source }: { node: AnyNode }) {
         )
         position = canonicalPositionFromPlan(planOrigin[0], position[1], planOrigin[2])
       }
-      position = keepStartingElevation(position, hostedPose?.rotationY ?? nextFreeRotation)
+      const rotationY = hostedPose?.rotationY ?? nextFreeRotation
+      position = keepStartingElevation(position, rotationY)
+      // Rotating the fitting swings its collars — connected ducts follow. A
+      // swing they cannot follow holds the last frame; a surface-hosted node
+      // has already turned with its host, so its drop refuses instead.
+      if (!previewConnectivity(position, rotationY) && !hostedPose) return
+      sfxEmitter.emit('sfx:item-rotate')
       lastCursorRef.current = position
-      freeRotationRef.current = hostedPose?.rotationY ?? nextFreeRotation
-      rotationRef.current = freeRotationRef.current
+      freeRotationRef.current = rotationY
+      rotationRef.current = rotationY
       setCursorRotationY(previewRotationY(rotationRef.current))
       const visualPosition = getVisualPosition(position)
       setCursorPosition(visualPosition)
@@ -1347,8 +1361,6 @@ export function MoveRegistryNodeTool({ node: source }: { node: AnyNode }) {
         })
       syncParentFramePreview(position)
       markMovedNodeDirty()
-      // Rotating the fitting swings its collars — connected ducts follow.
-      previewConnectivity(position, rotationRef.current)
       // Rotation changes the footprint's collision span — re-check validity.
       if (!itemSurfaceMove?.hosted && itemSurfaceMove?.rejection && lastSurfaceEvent)
         onItemMove(lastSurfaceEvent)

@@ -1,4 +1,5 @@
 import type { WallNode } from '../schema'
+import { isRailingWall } from '../schema/nodes/railing-wall'
 import { getWallSurfacePolygon, isCurvedWall } from '../systems/wall/wall-curve'
 import { calculateLevelMiters, getWallPlanFootprint } from '../systems/wall/wall-footprint'
 import { getWallFaceLine } from '../systems/wall/wall-frame'
@@ -193,6 +194,15 @@ function recoverWallFootprint(
 
 export function roomWallFootprints(rooms: readonly TopologyRoom[]): MultiPolygon {
   return union(boundaryFootprints(rooms).map(({ polygon }) => polygon))
+}
+
+/** The footprints of the railings round `room` (a deck's guard): no house wall among them. */
+export function roomRailingFootprints(room: TopologyRoom): MultiPolygon {
+  return union(
+    boundaryFootprints([room])
+      .filter(({ id }) => isRailingWall(room.context.walls.get(id)))
+      .map(({ polygon }) => polygon),
+  )
 }
 
 export function roomClearPolygon(room: TopologyRoom): MultiPolygon {

@@ -11,7 +11,6 @@ import {
   WindowNode,
   ZoneNode,
 } from '../schema'
-import { CEILING_DRAW_OFFSET } from '../services'
 import { authoredItem } from './__fixtures__/add-object-cases'
 import savedWallScreen from './__fixtures__/wall-screen.json'
 import {
@@ -749,19 +748,23 @@ describe('layout-clearance', () => {
     expect(findItemItemCollisions({ nodes })).toHaveLength(1)
   })
 
-  test('following ceiling height and contact remain conservative', () => {
+  test('a pendant is read at the ceiling it follows: contact is touching, reaching into the furniture beyond what a model sinks is a collision', () => {
     const { level, ceiling, furniture, pendant } = verticalScene()
     const nodes = [level, ceiling, furniture, pendant]
+    // The table is 1 m tall and the pendant, 0.4 m tall, hangs 2 cm under the level's ceiling plane.
     delete ceiling.height
     expect(findItemItemCollisions({ nodes })).toEqual([])
-    level.height = 1.4
+    level.height = 1.3
     expect(findItemItemCollisions({ nodes })).toHaveLength(1)
-    ceiling.height = 1.4 + CEILING_DRAW_OFFSET
+    level.height = 1.38
     expect(findItemItemCollisions({ nodes })).toHaveLength(1)
-    ceiling.height += 0.5e-6
-    expect(findItemItemCollisions({ nodes })).toHaveLength(1)
-    ceiling.height += 1e-4
+    // The pendant's bottom at the table top, then within the 2 cm a model sinks: touching.
+    level.height = 1.42
     expect(findItemItemCollisions({ nodes })).toEqual([])
+    level.height = 1.4
+    expect(findItemItemCollisions({ nodes })).toEqual([])
+    ceiling.height = 1.38
+    expect(findItemItemCollisions({ nodes })).toHaveLength(1)
   })
 
   test('two catalogue recessed lights without raw bounds retain floor and ceiling warnings', () => {

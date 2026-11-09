@@ -3,12 +3,16 @@
 import {
   type AnyNode,
   buildUnitReport,
+  polygonInteriorPoint,
   sceneRegistry,
+  useLocale,
+  usePascalI18n,
   useScene,
   type ZoneNode,
 } from '@pascal-app/core'
-import { useViewer } from '@pascal-app/viewer'
-import { useEffect, useMemo } from 'react'
+import { SelectionCallout, useViewer } from '@pascal-app/viewer'
+import { useCallback, useEffect, useMemo } from 'react'
+import { Vector3 } from 'three'
 import { useShallow } from 'zustand/react/shallow'
 import { resolveRoomAssemblyHeights } from '../../lib/room-assembly-overlay'
 import { roomFloorElevation } from '../../lib/room-handle-drag'
@@ -21,7 +25,9 @@ import {
 } from '../../lib/viewer-selection'
 import { RoomAssemblyMesh } from '../editor/room-highlight'
 import {
+  formatRoomArea,
   RoomLabelAnchor3D,
+  type RoomLabelEntry,
   RoomPillChip,
   RoomPillDetail,
   RoomPillsLayer3D,
@@ -38,6 +44,7 @@ import {
  * mounted at all, so they never catch a click.
  */
 export function ViewerRooms({ source }: { source: ViewerSource }) {
+  const i18n = usePascalI18n()
   useEffect(() => {
     const before = useViewer.getState().showZones
     useViewer.getState().setShowZones(false)
@@ -119,7 +126,7 @@ export function ViewerRooms({ source }: { source: ViewerSource }) {
               <RoomPillDetail
                 areaM2={entry.area}
                 color={zone.color}
-                name={zoneLabel(zone)}
+                name={zoneLabel(zone, i18n)}
                 view="3d"
                 zoneId={zone.id}
               />
@@ -138,7 +145,7 @@ export function ViewerRooms({ source }: { source: ViewerSource }) {
                   areaM2={entry.area}
                   color={zone.color}
                   elements={elements}
-                  name={zoneLabel(zone)}
+                  name={zoneLabel(zone, i18n)}
                   onClick={() => selectViewerRoom(zone.id, source)}
                   onHover={() => useViewer.getState().setHoveredId(zone.id)}
                   onLeave={() => {
@@ -157,7 +164,57 @@ export function ViewerRooms({ source }: { source: ViewerSource }) {
       {highlighted.map((room) => (
         <ViewerRoomHighlight key={room.zoneId} room={room} source={source} />
       ))}
+      {zoneId && levelId && !walkthrough && selectedIds.length === 0
+        ? (() => {
+            const entry = entries.find((candidate) => candidate.zoneId === zoneId)
+            const zone = nodes[zoneId]
+            const level = source.objectFor(levelId)
+            return entry && zone?.type === 'zone' && level ? (
+              <ViewerRoomCallout
+                entry={entry}
+                floorY={roomFloorElevation(nodes as Record<string, AnyNode>, zoneId)}
+                key={zoneId}
+                level={level}
+                name={zoneLabel(zone, i18n)}
+              />
+            ) : null
+          })()
+        : null}
     </>
+  )
+}
+
+/** The selected room's callout: its name and area at a point inside it, and the close button. */
+function ViewerRoomCallout({
+  entry,
+  floorY,
+  level,
+  name,
+}: {
+  entry: RoomLabelEntry
+  floorY: number
+  level: NonNullable<ReturnType<ViewerSource['objectFor']>>
+  name: string
+}) {
+  const unit = useViewer((s) => s.unit)
+  const locale = useLocale()
+  const anchor = useMemo(() => {
+    const [x, z] = polygonInteriorPoint({ polygon: entry.polygon, holes: entry.holes })
+    return new Vector3(x, floorY + 0.05, z)
+  }, [entry.polygon, entry.holes, floorY])
+  const dismiss = useCallback(() => {
+    const { selection, setSelection } = useViewer.getState()
+    if (selection.zoneId === entry.zoneId) setSelection({ zoneId: null })
+  }, [entry.zoneId])
+  return (
+    <SelectionCallout
+      actions={[]}
+      anchor={anchor}
+      object={level}
+      onDismiss={dismiss}
+      subtitle={formatRoomArea(entry.area, unit, locale)}
+      title={name}
+    />
   )
 }
 

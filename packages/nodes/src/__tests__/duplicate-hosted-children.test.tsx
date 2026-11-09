@@ -584,7 +584,6 @@ for (const kind of ['table', 'table-design', 'shelf', 'design', 'nested']) {
         siblingEpoch,
         unit: 'metric',
         metricNotation: 'meters',
-        wallDimensionReference: 'centerline',
         visibilityRootId: undefined,
       })!.base!
     const anchor = (geometry: FloorplanGeometry): readonly number[] => {

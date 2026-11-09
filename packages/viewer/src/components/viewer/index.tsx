@@ -4,6 +4,7 @@ import {
   type AnyNodeId,
   nodeRegistry,
   RoofElevationSystem,
+  type SitePresentation,
   StairOpeningSystem,
   sceneRegistry,
   useInteractive,
@@ -20,16 +21,17 @@ import {
   useState,
 } from 'react'
 import * as THREE from 'three/webgpu'
+import { classifyDevice, isSoftwareRenderer, readDeviceSignals } from '../../lib/device-tier'
 import { hasDrawableGeometry } from '../../lib/drawable-geometry'
 import { PERF_OVERLAY_ENABLED } from '../../lib/gpu-perf'
 import { applyIsolation, clearIsolation } from '../../lib/isolation'
 import { ensureKtx2Support } from '../../lib/ktx2-loader'
 import type { ColorPreset, RenderShading } from '../../lib/materials'
-import { choosePointerEvents } from '../../lib/pointer-events'
+import { choosePointerEvents, type ViewerBreadcrumbHandler } from '../../lib/pointer-events'
 import { initializeGpuRenderer, type RendererPowerPreference } from '../../lib/renderer-capability'
 import { getSceneTheme } from '../../lib/scene-themes'
 import { installTextureNodeNullGuard } from '../../lib/texture-node-guard'
-import useViewer, { type RenderContext } from '../../store/use-viewer'
+import useViewer, { type RenderContext, type RenderQuality } from '../../store/use-viewer'
 import { FloorElevationSystem } from '../../systems/floor-elevation/floor-elevation-system'
 import { GeometrySystem } from '../../systems/geometry/geometry-system'
 import { PerfActionSettleSystem } from '../../systems/perf-action-settle/perf-action-settle-system'
@@ -38,6 +40,7 @@ import { subscribeWallBuildInteractions } from '../../systems/wall/wall-build-li
 import { ImmersiveXRPresentationProvider } from '../../xr/presentation-context'
 import { SceneRenderer } from '../renderers/scene-renderer'
 import { BATCH_SPIKE_ENABLED, BatchedMeshSpike } from './batched-mesh-spike'
+import { DaylightAtmosphere } from './daylight-atmosphere'
 import FrameLimiter from './frame-limiter'
 import { Lights } from './lights'
 import { PerfMonitor } from './perf-monitor'
@@ -257,16 +260,16 @@ function GPUDeviceWatcher({ intentionalWebGL = false }: { intentionalWebGL?: boo
 }
 
 function ToneMappingExposure() {
-  const sceneTheme = useViewer((state) => state.sceneTheme)
+  const appearance = useViewer((state) => state.sceneAppearance)
   const atmosphere = useSceneAtmosphere()
   const gl = useThree((state) => state.gl)
   const invalidate = useThree((state) => state.invalidate)
 
   useEffect(() => {
     if (atmosphere) return
-    gl.toneMappingExposure = getSceneTheme(sceneTheme).toneMappingExposure
+    gl.toneMappingExposure = appearance.toneMappingExposure
     invalidate()
-  }, [atmosphere, gl, invalidate, sceneTheme])
+  }, [atmosphere, gl, invalidate, appearance])
 
   useFrame(() => {
     if (!atmosphere) return
@@ -277,7 +280,7 @@ function ToneMappingExposure() {
 }
 
 function ImmersiveXRBackground() {
-  const background = useViewer((state) => getSceneTheme(state.sceneTheme).background)
+  const background = useViewer((state) => state.sceneAppearance.background)
   return <color args={[background]} attach="background" />
 }
 
@@ -403,6 +406,13 @@ export interface ViewerImmersiveSession {
   onError?: (cause: unknown) => void
 }
 
+const MAX_DPR: Record<RenderQuality, number> = { high: 1.5, medium: 1.25, low: 1 }
+/**
+ * A software renderer can't reach the usual cadence, and chasing it starves the app of the CPU it
+ * rasterizes on: frames are capped lower there.
+ */
+const SOFTWARE_MAX_FPS = 20
+
 interface ViewerProps {
   children?: React.ReactNode
   hoverStyles?: HoverStyles
@@ -416,6 +426,13 @@ interface ViewerProps {
     textures?: boolean
     colorPreset?: ColorPreset
   }
+  /** Saved site appearance when rendering a baked asset without its graph. Null ignores it. */
+  presentation?: SitePresentation | null
+  /**
+   * The colored appearance's built-in daylight (sun, sky, ground, time and weather presets).
+   * Default on; canonical renders (bake) turn it off and keep the neutral studio look.
+   */
+  daylight?: boolean
   /**
    * Visibility filter on the live canvas. When non-null, every registered
    * node group whose id is not in `isolate` (or in the isolated set's
@@ -440,6 +457,12 @@ interface ViewerProps {
    * that must not carry on silently (a bake) fail with its own error.
    */
   onRenderError?: (cause: unknown) => void
+  /**
+   * Called with diagnostics worth keeping on a host's error-reporter trail,
+   * such as `raycast_invalid_material` when a pointer raycast skips a mesh
+   * whose geometry groups point past its material array.
+   */
+  onBreadcrumb?: ViewerBreadcrumbHandler
   /**
    * Wall-clock give-up cap for scene readiness, replacing the default
    * frame-count cap. Set it on hosts whose frame cadence is decoupled from
@@ -495,10 +518,13 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
     renderContext = 'editor',
     transparent,
     defaultRender,
+    presentation: suppliedPresentation,
+    daylight = true,
     isolate,
     sceneReadyKey,
     onSceneReadyChange,
     onRenderError,
+    onBreadcrumb,
     sceneReadyMaxWaitMs,
     maxFps = 50,
     disablePostFx = false,
@@ -537,14 +563,23 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
     }
   }, [isolate])
 
-  const [pointerEvents] = useState(() => choosePointerEvents())
+  const onBreadcrumbRef = useRef(onBreadcrumb)
+  onBreadcrumbRef.current = onBreadcrumb
+  const [pointerEvents] = useState(() =>
+    choosePointerEvents(undefined, (breadcrumb) => onBreadcrumbRef.current?.(breadcrumb)),
+  )
 
   const [rendererInitFailed, setRendererInitFailed] = useState(false)
 
-  const isDark = useViewer((state) => getSceneTheme(state.sceneTheme).appearance === 'dark')
+  const isDark = useViewer((state) => state.sceneAppearance.appearance === 'dark')
   const sceneTheme = useViewer((state) => state.sceneTheme)
   const previousLampTheme = useRef(sceneTheme)
+  // Scene themes drive the lamps only in monochrome; the colored appearance's daylight follows
+  // its time of day instead.
+  const colored = useViewer((state) => state.textures)
+  const themeDrivesLamps = !(daylight && colored)
   useEffect(() => {
+    if (!themeDrivesLamps) return
     useInteractive
       .getState()
       .setLampDefault(
@@ -552,7 +587,7 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
         previousLampTheme.current !== sceneTheme,
       )
     previousLampTheme.current = sceneTheme
-  }, [sceneTheme])
+  }, [sceneTheme, themeDrivesLamps])
   const transparentBackground = useViewer((state) => state.transparentBackground)
   // The shadows toggle drives `renderer.shadowMap.enabled` (via the Canvas
   // `shadows` prop) rather than the lights' `castShadow`: toggling castShadow
@@ -571,15 +606,29 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
     }
   }, [transparent])
 
+  const scenePresentation = useScene((state) => {
+    for (const id of state.rootNodeIds) {
+      const node = state.nodes[id]
+      if (node?.type === 'site') return node.presentation
+    }
+    return undefined
+  })
+  const presentation =
+    suppliedPresentation === undefined ? scenePresentation : (suppliedPresentation ?? undefined)
+  const projectId = useViewer((state) => state.projectId)
+  useLayoutEffect(() => {
+    // Project selection clears the previous look even when both graphs share a preset.
+    if (useViewer.getState().projectId === projectId)
+      useViewer.getState().setProjectPresentation(presentation)
+  }, [presentation, projectId])
+
   const defaultShading = defaultRender?.shading
   const defaultTextures = defaultRender?.textures
   const defaultColorPreset = defaultRender?.colorPreset
   const hasDefaultRender = defaultRender != null
   useEffect(() => {
     const ctx = renderContext
-    useViewer.getState().setRenderContext(ctx)
-    const { shading, shadingByContext, setShading } = useViewer.getState()
-    setShading(shadingByContext[ctx] ?? defaultShading ?? shading)
+    useViewer.getState().setRenderContext(ctx, defaultShading)
 
     if (!hasDefaultRender || typeof window === 'undefined') return
 
@@ -610,8 +659,10 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
   // Coarse-pointer devices (phones/tablets) get a tighter DPR ceiling to keep
   // fragment-shader cost down — saves another ~30% over 1.5x on high-DPI mobile.
   // Desktops (fine pointer) keep the original 1.5 cap.
-  const maxDpr =
-    typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches ? 1.25 : 1.5
+  // Pixel-ratio cap per quality tier (touch devices default to Medium).
+  const renderQuality = useViewer((state) => state.renderQuality)
+  const softwareRenderer = useViewer((state) => state.softwareRenderer)
+  const maxDpr = MAX_DPR[renderQuality]
   const showGpuFallback = rendererInitFailed
   // When we can't mount the GPU canvas, the SceneReadyTracker never mounts and
   // the host editor would otherwise wait on its scene-readiness timeout. Signal
@@ -670,14 +721,21 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
                     trackTimestamp: PERF_OVERLAY_ENABLED,
                   })
                   renderer.toneMapping = THREE.ACESFilmicToneMapping
-                  renderer.toneMappingExposure = getSceneTheme(
-                    useViewer.getState().sceneTheme,
-                  ).toneMappingExposure
+                  renderer.toneMappingExposure =
+                    useViewer.getState().sceneAppearance.toneMappingExposure
                   return renderer
                 },
               })
               if (result.status === 'ready') {
                 installEmptyDrawGuard(result.renderer)
+                // Before the first frame, so the post-processing builds once at the device's tier.
+                const signals = readDeviceSignals(
+                  result.backend,
+                  (result.renderer as any).backend?.device,
+                )
+                useViewer
+                  .getState()
+                  .setDetectedRenderQuality(classifyDevice(signals), isSoftwareRenderer(signals))
                 return result.renderer
               }
 
@@ -708,6 +766,7 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
           {ImmersiveSession ? (
             <ImmersiveSession>
               <ViewerScene
+                daylight={daylight}
                 disablePostFx
                 hoverStyles={hoverStyles}
                 immersiveXR
@@ -726,11 +785,12 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
           ) : (
             <>
               <FrameLimiter
-                fps={maxFps}
+                fps={softwareRenderer ? Math.min(maxFps, SOFTWARE_MAX_FPS) : maxFps}
                 onFrameError={composeRenderErrorHandlers(onRenderError)}
                 paused={renderPaused}
               />
               <ViewerScene
+                daylight={daylight}
                 disablePostFx={disablePostFx}
                 hoverStyles={hoverStyles}
                 renderErrorHandlers={[onRenderError]}
@@ -753,6 +813,7 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
 
 function ViewerScene({
   children,
+  daylight,
   disablePostFx,
   hoverStyles,
   immersiveXR = false,
@@ -766,6 +827,8 @@ function ViewerScene({
   SceneWrapper,
 }: {
   children?: React.ReactNode
+  /** Built-in daylight for the colored appearance (off for canonical renders). */
+  daylight: boolean
   disablePostFx: boolean
   hoverStyles: HoverStyles
   immersiveXR?: boolean
@@ -778,6 +841,8 @@ function ViewerScene({
   useBvh: boolean
   SceneWrapper?: ViewerImmersiveSession['Scene']
 }) {
+  // Colored appearance = the built-in daylight look; monochrome keeps the scene themes.
+  const colored = useViewer((state) => state.textures)
   const renderedScene = useBvh ? (
     <SceneBvh>
       <SceneRenderer />
@@ -811,6 +876,7 @@ function ViewerScene({
         sceneReadyMaxWaitMs={sceneReadyMaxWaitMs}
       />
       <SceneErrorBoundary handlers={renderErrorHandlers}>
+        {daylight && colored && <DaylightAtmosphere />}
         <Lights />
         {SceneWrapper ? <SceneWrapper>{spatialScene}</SceneWrapper> : spatialScene}
         {!immersiveXR && <PostProcessing disablePostFx={disablePostFx} hoverStyles={hoverStyles} />}

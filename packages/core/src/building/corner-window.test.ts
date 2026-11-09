@@ -62,6 +62,11 @@ for (const degrees of [90, 135, 60])
   describe(`a corner window at ${degrees}°`, () => {
     test('one window on each wall, each running to the corner, joined and fused', () => {
       const { windows } = planCornerWindow(cornerScene(degrees), { corner: [0, 0], width: 1.2 })
+      for (const window of windows) {
+        expect(window.frameThickness).toBe(0.02)
+        expect(window.casingFaceA).toBe(true)
+        expect(window.casingFaceB).toBe(true)
+      }
       const [onA, onB] = ['wall_a', 'wall_b'].map((id) => windows.find((w) => w.parentId === id)!)
       // Wall A is 4 m long and ends at the corner; wall B starts there.
       expect(onA!.position[0]).toBeCloseTo(4 - 0.6, 6)
@@ -158,7 +163,9 @@ describe('by hand: wrap, keep in step, unwrap', () => {
 
   test('a window ending at a corner wraps it: its partner takes its width, height and sill', () => {
     const { nodes, window } = plain()
-    const { create, updates } = wrapCorner(nodes, window.id)
+    const adjusted = { ...window, frameThickness: 0.035 }
+    const { create, updates } = wrapCorner({ ...nodes, [window.id]: adjusted }, window.id)
+    expect(create?.frameThickness).toBe(0.035)
     expect(create?.parentId).toBe('wall_b')
     expect([create?.width, create?.height, create?.position[1]]).toEqual([
       window.width,
@@ -168,6 +175,24 @@ describe('by hand: wrap, keep in step, unwrap', () => {
     expect(updates).toEqual({
       [window.id]: { corner: { end: 'end', partnerId: create?.id, post: 'none' } },
     })
+  })
+
+  test('its partner takes its casing, each face on the same side of the corner', () => {
+    const { nodes, window } = plain()
+    const cased = { ...window, casingWidth: 0.1, casingFaceA: true, casingFaceB: false }
+    const casingOf = (partner: WindowNode | null) => [
+      partner?.casingWidth,
+      partner?.casingFaceA,
+      partner?.casingFaceB,
+    ]
+    // wall_a runs into the corner and wall_b on out of it: their `a` faces are on one side.
+    const onward = wrapCorner({ ...nodes, [window.id]: cased }, window.id).create
+    expect(casingOf(onward)).toEqual([0.1, true, false])
+    // wall_b drawn back into the corner: its `a` is on the side of wall_a's `b`.
+    const wallB = nodes.wall_b as WallNode
+    const reversed = { ...wallB, start: wallB.end, end: wallB.start }
+    const back = wrapCorner({ ...nodes, wall_b: reversed, [window.id]: cased }, window.id).create
+    expect(casingOf(back)).toEqual([0.1, false, true])
   })
 
   // A window a few cm short of the corner still has a Corner section to wrap it.

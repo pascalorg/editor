@@ -1,9 +1,9 @@
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import type { McpServer } from '@modelcontextprotocol/server'
 import type { AnyNode, AnyNodeId } from '@pascal-app/core/schema'
 import { z } from 'zod'
 import type { SceneOperations } from '../operations'
 import { READ_ONLY_TOOL_ANNOTATIONS } from './annotations'
-import { ErrorCode, throwMcpError } from './errors'
+import { ProtocolErrorCode, throwMcpError } from './errors'
 import { resolveNodeWorldPoint } from './node-world-point'
 import { NodeIdSchema } from './schemas'
 
@@ -42,18 +42,18 @@ export function registerMeasure(server: McpServer, bridge: SceneOperations): voi
       title: 'Measure',
       description:
         "Measure the distance (in meters) between two nodes, or the net area of a polygon node when fromId === toId. Distance is between world-space reference points, returned as fromPoint/toPoint: a positioned node's origin in its host's frame (an item's base, a door's or window's centre in its wall), a wall's or fence's midpoint at its base, a slab's, ceiling's or zone's polygon centroid on its plane, a block's or imported mesh's vertex-bounds centre, a level's plan centre on its base plane, and another container's descendants' centre. `approximate` lists nodes whose renderer derives the pose from data not modelled here (a downspout at its gutter outlet, a gutter at the eave), with the reason.",
-      inputSchema: measureInput,
-      outputSchema: measureOutput,
+      inputSchema: z.object(measureInput),
+      outputSchema: z.object(measureOutput),
       annotations: READ_ONLY_TOOL_ANNOTATIONS,
     },
     async ({ fromId, toId }) => {
       const from = bridge.getNode(fromId as AnyNodeId)
       if (!from) {
-        throwMcpError(ErrorCode.InvalidParams, `Node not found: ${fromId}`)
+        throwMcpError(ProtocolErrorCode.InvalidParams, `Node not found: ${fromId}`)
       }
       const to = bridge.getNode(toId as AnyNodeId)
       if (!to) {
-        throwMcpError(ErrorCode.InvalidParams, `Node not found: ${toId}`)
+        throwMcpError(ProtocolErrorCode.InvalidParams, `Node not found: ${toId}`)
       }
 
       // Self-measurement: compute area for polygon-bearing nodes.
@@ -92,12 +92,12 @@ export function registerMeasure(server: McpServer, bridge: SceneOperations): voi
         } catch (err) {
           const reason = err instanceof Error ? err.message : String(err)
           throwMcpError(
-            ErrorCode.InvalidRequest,
+            ProtocolErrorCode.InvalidRequest,
             `Cannot derive a world point for ${node.type} ${node.id}: ${reason}`,
           )
         }
         throwMcpError(
-          ErrorCode.InvalidRequest,
+          ProtocolErrorCode.InvalidRequest,
           `Cannot derive a world point for ${node.type} ${node.id}`,
         )
       }

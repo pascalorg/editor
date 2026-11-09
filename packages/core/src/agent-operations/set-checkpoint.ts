@@ -23,6 +23,7 @@ export const setCheckpoint: AgentOperation<{ name: string }> = (nodes, input, co
       `A session keeps at most ${MAX_CHECKPOINTS} checkpoints and has ${names.join(', ')}. Use one of those names to replace it.`,
       { checkpoints: names },
     )
+  // biome-ignore lint/plugin: a checkpoint remembers every node, so its size is the scene's
   const size = Object.keys(nodes).length
   if (size > MAX_CHECKPOINT_NODES)
     refuse(

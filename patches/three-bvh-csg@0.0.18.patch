@@ -1,3 +1,21 @@
+diff --git a/package.json b/package.json
+index c5151081c020a08be7f7316468e4455bf11dfed1..299d702678cc289fa000d286745822ac1d317cfb 100644
+--- a/package.json
++++ b/package.json
+@@ -6,6 +6,13 @@
+   "module": "src/index.js",
+   "type": "module",
+   "types": "src/index.d.ts",
++  "exports": {
++    ".": {
++      "types": "./src/index.d.ts",
++      "import": "./src/index.js",
++      "require": "./build/index.umd.cjs"
++    }
++  },
+   "sideEffects": false,
+   "scripts": {
+     "start": "vite --config ./vite.config.js",
 diff --git a/build/index.module.js b/build/index.module.js
 index 7bf09faa4f35160f127350eefd2c675ebb5fb44b..be287bcacc15f455e6246d12eb3f8321b1119419 100644
 --- a/build/index.module.js

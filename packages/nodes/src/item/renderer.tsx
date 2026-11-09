@@ -190,7 +190,7 @@ const resolveItemMaterial = (
 ): Material => {
   // Monochrome (textures off): collapse to the themed furnishing clay colour.
   if (!textures) return createSurfaceRoleMaterial('furnishing', colorPreset)
-  if (authoredMaterial.name.toLowerCase() === 'glass') return glassMaterial
+  // Authored material names do not opt an asset into a Pascal preset.
   if (slotId != null) {
     const override = resolveMaterialRef(nodeSlots?.[slotId], sceneMaterials, shading)
     if (override) return override

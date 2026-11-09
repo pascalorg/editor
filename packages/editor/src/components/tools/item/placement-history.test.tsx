@@ -22,12 +22,12 @@ import {
   WallNode,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
-import { Html } from '@react-three/drei'
 import { act, create } from '@react-three/test-renderer'
 import { Children, Component, cloneElement, isValidElement, type ReactNode } from 'react'
 import { Group } from 'three'
 import useEditor from '../../../store/use-editor'
 import useInteractionScope from '../../../store/use-interaction-scope'
+import { Html } from '../../editor/localized-html'
 import { useDraftNode } from './use-draft-node'
 import { usePlacementCoordinator } from './use-placement-coordinator'
 

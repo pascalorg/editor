@@ -6,6 +6,9 @@ import {
   VIEW_MAX_PX,
   type VIEW_SIDES,
 } from '../agent-tools/view-scene'
+import { levelGradeStanding } from '../lib/grade-standing'
+import { buildingGroundBox, levelGroundBox, terrainBetweenEyeAndBox } from '../lib/ground-window'
+import { distanceToSegment } from '../lib/room-topology-index'
 import { buildingStreet } from '../lib/site-placement'
 import type {
   AnyNode,
@@ -13,14 +16,20 @@ import type {
   ColumnNode,
   FenceNode,
   ItemNode,
+  LevelNode,
   RoofNode,
   SlabNode,
   StairNode,
   WallNode,
 } from '../schema'
 import { getActiveRoofHeight } from '../schema'
-import { getLevelElevations } from '../services/storey'
+import { isCeilingGeometry, isRoofGeometry } from '../services/roof-level'
+import { EXPLODED_GAP, getLevelElevations } from '../services/storey'
+import { stairFootprintAABB } from '../systems/stair/stair-footprint'
 import { resolveWallExteriorSide } from '../systems/wall/wall-assembly'
+import { itemLevelHeightRange, itemPlanAabbInLevel } from './item-space'
+import { pointInPolygon } from './plan-geometry'
+import { queryNodes } from './scene-queries'
 
 /**
  * Where `view_scene` looks from, the same on every surface; the picture is the host's: the chat's
@@ -36,7 +45,8 @@ export type SceneViewLighting = Exclude<(typeof VIEW_LIGHTING)[number], 'current
 
 export type SceneViewInput = {
   target?: string
-  interior?: SceneViewInterior
+  interior?: SceneViewInteriorInput
+  presentation?: SceneViewPresentation
   from?: SceneViewSide
   position?: number[]
   elevation?: number
@@ -68,10 +78,54 @@ export type SceneViewCurrentCamera = {
 export type SceneViewCrop = { source: string; region: [number, number, number, number] }
 
 /** A look inside one floor; the host cuts it from its own scene with sceneViewInterior. */
-export type SceneViewInterior = { levelId: string }
+export type SceneViewInterior = { levelId: string; roomId?: string }
+
+/** What the agent asks for: a floor to look into, or a room (zone) to stand inside. */
+export type SceneViewInteriorInput = { levelId?: string; zoneId?: string }
+
+export type SceneViewPresentation =
+  | { mode: 'stacked' | 'exploded' }
+  | { mode: 'solo'; levelId: string }
+
+/** Validate against the scene being rendered as well as the scene used to request the view. */
+export function sceneViewPresentationLevel(
+  nodes: Readonly<Record<string, AnyNode>>,
+  presentation: SceneViewPresentation | undefined,
+): LevelNode | undefined {
+  if (presentation?.mode !== 'solo') return undefined
+  const level = nodes[presentation.levelId]
+  if (level?.type !== 'level')
+    refuse('presentation_level_invalid', 'Solo needs an existing level id.', {
+      levelId: presentation.levelId,
+    })
+  if (ancestry(nodes, level).some((node) => node.visible === false && node.type !== 'site'))
+    refuse('presentation_level_hidden', 'Show the level before inspecting it in Solo.', {
+      levelId: level.id,
+    })
+  return level
+}
+
+/** Older renderers may ignore new view options; their frames cannot verify those views. */
+export function confirmSceneViewPresentation(
+  requested: SceneViewPresentation | undefined,
+  applied: SceneViewPresentation | undefined,
+): void {
+  if (
+    requested &&
+    (applied?.mode !== requested.mode ||
+      (requested.mode === 'solo' &&
+        (applied?.mode !== 'solo' || applied.levelId !== requested.levelId)))
+  )
+    refuse(
+      'view_presentation_unconfirmed',
+      'The renderer did not confirm the requested level view. Refresh the renderer and retry; this picture cannot verify Solo or Exploded behavior.',
+      { requested, applied: applied ?? null },
+    )
+}
 
 /** How high up its storey an interior view cuts a floor: low enough to see every room. */
 const INTERIOR_CUT = 0.65
+const INTERIOR_CUT_WORDS = `${INTERIOR_CUT}`
 /** Degrees above the horizon an interior view looks down from, by default. */
 const INTERIOR_ELEVATION = 55
 
@@ -109,11 +163,12 @@ export function sceneViewInterior(
         target: node.id,
       })
   }
+  // biome-ignore lint/plugin: a view hides every level but its own, and what covers it
   const hiddenIds = Object.values(nodes)
     .filter((node) =>
       node.type === 'level'
         ? node.id !== levelId
-        : (node.type === 'roof' || node.type === 'ceiling') &&
+        : (isRoofGeometry(node) || isCeilingGeometry(node)) &&
           ancestry(nodes, node).some((at) => at.id === levelId),
     )
     .map((node) => node.id)
@@ -247,7 +302,7 @@ function streetDirection(
  */
 function framedBuilding(nodes: Readonly<Record<string, AnyNode>>, lookedAt: AnyNode | undefined) {
   if (lookedAt) return ancestry(nodes, lookedAt).find((node) => node.type === 'building') ?? null
-  const buildings = Object.values(nodes).filter((node) => node.type === 'building')
+  const buildings = queryNodes(nodes, { type: 'building' })
   const sites = new Set(buildings.map((building) => building.parentId ?? null))
   if (sites.size > 1)
     refuse(
@@ -580,6 +635,7 @@ function placedBox(box: SceneViewBox, at: Standing): SceneViewBox {
 export function sceneViewBounds(
   nodes: Readonly<Record<string, AnyNode>>,
   targetId?: string,
+  presentation?: SceneViewPresentation,
 ): SceneViewBox {
   const target = targetId ? nodes[targetId] : undefined
   if (targetId && !target)
@@ -587,8 +643,13 @@ export function sceneViewBounds(
       target: targetId,
     })
   const elevations = getLevelElevations(nodes as Record<AnyNodeId, AnyNode>)
-  const baseOf = (levelId: string | null | undefined) =>
-    (levelId ? elevations.get(levelId)?.baseY : undefined) ?? 0
+  const baseOf = (levelId: string | null | undefined) => {
+    const level = levelId ? elevations.get(levelId) : undefined
+    return (
+      (level?.baseY ?? 0) +
+      (presentation?.mode === 'exploded' ? (level?.ordinal ?? 0) * EXPLODED_GAP : 0)
+    )
+  }
   const placed = (box: SceneViewBox, levelId: string | null | undefined) =>
     placedBox(box, standingOf(nodes, levelId))
   const opening = openingOf(nodes, target)
@@ -616,6 +677,7 @@ export function sceneViewBounds(
   const held: SceneViewBox[] = []
   const roofs: SceneViewBox[] = []
   let pluginTop = Number.NEGATIVE_INFINITY
+  // biome-ignore lint/plugin: a view frames whatever the level holds
   for (const node of Object.values(nodes)) {
     const level = levelOf(node)
     if (level?.type !== 'level') continue
@@ -636,10 +698,11 @@ export function sceneViewBounds(
         points: (node.polygon as Pt[]).map((point) => onSite(point, at)),
         levelId: level.id,
       })
-    else if (node.type === 'item') held.push(placedBox(itemBox(node, baseOf(level.id)), at))
+    else if (node.type === 'item')
+      (isRoofGeometry(node) ? roofs : held).push(placedBox(itemBox(node, baseOf(level.id)), at))
     else if (node.type.includes(':')) {
       const storey = elevations.get(level.id)
-      if (storey) pluginTop = Math.max(pluginTop, storey.baseY + storey.height + at.y)
+      if (storey) pluginTop = Math.max(pluginTop, baseOf(level.id) + storey.height + at.y)
     } else {
       const box = levelChildBox(nodes, node, baseOf(level.id))
       if (box) (node.type === 'roof' ? roofs : held).push(placedBox(box, at))
@@ -661,8 +724,8 @@ export function sceneViewBounds(
   for (const { points, levelId } of outlines) {
     const storey = elevations.get(levelId) ?? { baseY: 0, height: 3 }
     const lift = standingOf(nodes, levelId).y
-    min[1] = Math.min(min[1], storey.baseY + lift)
-    max[1] = Math.max(max[1], storey.baseY + storey.height + lift)
+    min[1] = Math.min(min[1], baseOf(levelId) + lift)
+    max[1] = Math.max(max[1], baseOf(levelId) + storey.height + lift)
     for (const [x, z] of points) {
       min[0] = Math.min(min[0], x)
       max[0] = Math.max(max[0], x)
@@ -771,9 +834,55 @@ export function sceneViewPose(box: SceneViewBox, input: SceneViewPoseInput): Sce
   }
 }
 
-/** What a view comes with, on both surfaces: a picture to compare, not a measure. */
-export function sceneViewNote() {
-  return 'A picture to compare with the reference, not a measure: take sizes and counts from the tools.'
+/** What a picture into a floor below grade shows over it, said so the agent describes it right. */
+const BELOW_GRADE_NOTE =
+  'The floor lies below grade: the ground over it is drawn as a faint veil, so its rooms show through it.'
+const PARTLY_BELOW_GRADE_NOTE =
+  'The floor lies partly below grade: the ground stands over part of it.'
+const GROUND_IN_THE_WAY_NOTE =
+  'Ground stands between this viewpoint and the building: where it would hide it, the ground is drawn as a faint veil; the rest of the ground is solid.'
+
+const ROOM_EYE_NOTE = (name: string) =>
+  `The eye stands inside ${name} at a person's height, looking across it: the walls, openings and furniture of its floor are cut at ${INTERIOR_CUT_WORDS} of the storey's height and its ceiling is left out.`
+
+/**
+ * What a view comes with, on both surfaces: a picture to compare, not a measure; a floor below grade
+ * is seen through the veiled ground. With the picture's `pose`, also the fact of ground standing
+ * between that viewpoint and the building, veiled where it would hide it.
+ */
+export function sceneViewNote(
+  nodes?: Readonly<Record<string, AnyNode>>,
+  interior?: SceneViewInterior,
+  pose?: SceneViewPose,
+) {
+  const notes = [
+    'A picture to compare with the reference, not a measure: take sizes and counts from the tools.',
+  ]
+  if (nodes && interior) {
+    const standing = levelGradeStanding(nodes as Record<AnyNodeId, AnyNode>, interior.levelId)
+    if (standing === 'below-grade') notes.push(BELOW_GRADE_NOTE)
+    if (standing === 'partly-below-grade') notes.push(PARTLY_BELOW_GRADE_NOTE)
+  }
+  if (nodes && pose) {
+    const asNodes = nodes as Record<AnyNodeId, AnyNode>
+    const box = interior ? levelGroundBox(asNodes, interior.levelId) : buildingGroundBox(asNodes)
+    if (box && terrainBetweenEyeAndBox(asNodes, pose.position, box))
+      notes.push(GROUND_IN_THE_WAY_NOTE)
+  }
+  const room = interior?.roomId ? nodes?.[interior.roomId] : undefined
+  if (nodes && pose && room?.type === 'zone') {
+    const { bounds } = sceneViewInterior(nodes, interior!.levelId)
+    const { outline, holes } = roomOnSite(nodes, room, bounds.min[1])
+    const eye: Pt = [pose.position[0], pose.position[2]]
+    if (
+      pointInPolygon(eye, outline, false) &&
+      !holes.some((hole) => pointInPolygon(eye, hole)) &&
+      pose.position[1] >= bounds.min[1] &&
+      pose.position[1] <= bounds.max[1]
+    )
+      notes.push(ROOM_EYE_NOTE(room.name || room.id))
+  }
+  return notes.join(' ')
 }
 
 /** A picture of `w` × `h`, made smaller to `maxPx` on its longest side, `VIEW_MAX_PX` at most. */
@@ -812,6 +921,253 @@ function cameraPose(
   }
 }
 
+/** How high a person's eyes stand above the floor: the eye of a room view, unless eyeHeight says. */
+const ROOM_EYE_HEIGHT = 1.6
+/** The field of view of a view from inside a room: wide, as a person takes a room in. */
+const ROOM_FOV = 75
+/** Height of the point a room view looks at: the middle of what stands in the room. */
+const ROOM_AIM_HEIGHT = 1.0
+
+/** What an interior asks for, checked: the floor it looks into, and the room it stands in if any. */
+function interiorRequest(
+  nodes: Readonly<Record<string, AnyNode>>,
+  request: SceneViewInteriorInput,
+): { interior: SceneViewInterior; room?: Extract<AnyNode, { type: 'zone' }> } {
+  const { levelId, zoneId } = request
+  if (Boolean(levelId) === Boolean(zoneId))
+    refuse(
+      'interior_one_of',
+      'interior takes a levelId (look into a floor) or a zoneId (stand inside a room), one of them.',
+    )
+  if (levelId) return { interior: { levelId } }
+  const zone = nodes[zoneId!]
+  if (zone?.type !== 'zone')
+    refuse(
+      'interior_room_invalid',
+      `An interior view of a room needs a zone id (get_zones lists them): ${zoneId} is none.`,
+      { zoneId },
+    )
+  const level = nodes[zone.parentId ?? '']
+  if (level?.type !== 'level' || zone.polygon.length < 3)
+    refuse(
+      'interior_room_invalid',
+      `${zoneId} has no outline on a floor to stand in: give another room, or a levelId.`,
+      { zoneId },
+    )
+  return { interior: { levelId: level.id, roomId: zone.id }, room: zone }
+}
+
+/** A room's outline and holes on the site, and the box of its floor's height over its outline. */
+function roomOnSite(
+  nodes: Readonly<Record<string, AnyNode>>,
+  room: Extract<AnyNode, { type: 'zone' }>,
+  floorY: number,
+) {
+  const at = standingOf(nodes, room.parentId)
+  const outline = (room.polygon as Pt[]).map((point) => onSite(point, at))
+  const holes = (room.holes as Pt[][]).map((hole) => hole.map((point) => onSite(point, at)))
+  const storey = getLevelElevations(nodes as Record<AnyNodeId, AnyNode>).get(room.parentId ?? '')
+  const xs = outline.map((point) => point[0])
+  const zs = outline.map((point) => point[1])
+  const box: SceneViewBox = {
+    min: [Math.min(...xs), floorY, Math.min(...zs)],
+    max: [Math.max(...xs), floorY + (storey?.height ?? 3), Math.max(...zs)],
+  }
+  return { outline, holes, box }
+}
+
+/** How far a point stands from the nearest wall of an outline. */
+function clearanceOf(outline: Pt[], point: Pt): number {
+  return Math.min(
+    ...outline.map((corner, i) =>
+      distanceToSegment(point, corner, outline[(i + 1) % outline.length]!),
+    ),
+  )
+}
+
+/**
+ * The point of a room farthest from its walls: the middle of an L as well as of a square, which
+ * the corners' average is not.
+ */
+function roomMiddle(outline: Pt[], inRoom: (point: Pt) => boolean): Pt {
+  const xs = outline.map((point) => point[0])
+  const zs = outline.map((point) => point[1])
+  const [minX, maxX] = [Math.min(...xs), Math.max(...xs)]
+  const [minZ, maxZ] = [Math.min(...zs), Math.max(...zs)]
+  let best: Pt = [(minX + maxX) / 2, (minZ + maxZ) / 2]
+  let bestClearance = inRoom(best) ? clearanceOf(outline, best) : -1
+  const steps = 24
+  for (let i = 0; i <= steps; i++)
+    for (let j = 0; j <= steps; j++) {
+      const point: Pt = [minX + ((maxX - minX) * i) / steps, minZ + ((maxZ - minZ) * j) / steps]
+      if (!inRoom(point)) continue
+      const room = clearanceOf(outline, point)
+      if (room > bestClearance) [best, bestClearance] = [point, room]
+    }
+  return best
+}
+
+/** How far the eye keeps from a tall piece, so it never stands inside one or against its face. */
+const EYE_ITEM_CLEARANCE = 0.3
+
+/**
+ * The footprints, on the site and grown by EYE_ITEM_CLEARANCE, of what stands on a floor through a
+ * person's eye height (a wardrobe, a fridge, a bookcase, a stair): an eye inside one, or just behind
+ * one, sees a single flat panel. A bed or a counter under the eye does not block it. Pieces hosted
+ * by a wall or hung from a ceiling keep their own frames and are not read.
+ */
+function eyeObstacles(
+  nodes: Readonly<Record<string, AnyNode>>,
+  levelId: string,
+  eyeHeight: number,
+): Pt[][] {
+  const items = queryNodes(nodes, { type: 'item' })
+  const level = nodes[levelId as AnyNodeId]
+  // An item stands on the level through other items only: what the walk below can reach.
+  const byId = new Map<string, AnyNode>(
+    [...items, ...(level ? [level] : [])].map((node) => [node.id, node]),
+  )
+  const at = standingOf(nodes, levelId)
+  const m = EYE_ITEM_CLEARANCE
+  return [...queryNodes(nodes, { type: 'stair', parentId: levelId }), ...items].flatMap((node) => {
+    let box: { minX: number; maxX: number; minZ: number; maxZ: number } | null = null
+    if (node.type === 'stair') box = stairFootprintAABB(node, nodes)
+    else if (node.type === 'item') {
+      let parent = byId.get(node.parentId ?? '')
+      while (parent?.type === 'item') parent = byId.get(parent.parentId ?? '')
+      if (parent?.id !== levelId) return []
+      const height = itemLevelHeightRange(node, byId)
+      if (!height || height.max < eyeHeight - 0.4 || height.min > eyeHeight + 0.2) return []
+      box = itemPlanAabbInLevel(node, byId)
+    }
+    if (!box) return []
+    return [
+      (
+        [
+          [box.minX - m, box.minZ - m],
+          [box.maxX + m, box.minZ - m],
+          [box.maxX + m, box.maxZ + m],
+          [box.minX - m, box.maxZ + m],
+        ] as Pt[]
+      ).map((corner) => onSite(corner, at)),
+    ]
+  })
+}
+
+/** How far ahead the eye's line toward what it looks at must clear every tall piece. */
+const EYE_SIGHT_REACH = 2
+
+/**
+ * A person standing in a room, looking across it: the eye a step in from the corner farthest from
+ * what it looks at (or, given a side, from the corner on that side), at eye height, aimed at the
+ * room's middle or at the target. A step that lands in a tall piece (`blocked`) goes further in,
+ * else another corner is taken; a corner whose first EYE_SIGHT_REACH metres toward what it looks at
+ * cross one is taken only when no other sees past them. Everything is on the site, in metres.
+ */
+function roomEyeView(
+  outline: Pt[],
+  holes: Pt[][],
+  floorY: number,
+  {
+    aim,
+    side,
+    eyeHeight = ROOM_EYE_HEIGHT,
+    fov = ROOM_FOV,
+    blocked = [],
+  }: { aim?: V3; side?: Pt; eyeHeight?: number; fov?: number; blocked?: Pt[][] },
+): SceneViewPose {
+  const inRoom = (point: Pt) =>
+    pointInPolygon(point, outline, false) && !holes.some((hole) => pointInPolygon(point, hole))
+  const clear = (point: Pt) => !blocked.some((footprint) => pointInPolygon(point, footprint))
+  const distance = (a: Pt, b: Pt) => Math.hypot(a[0] - b[0], a[1] - b[1])
+  const middle = roomMiddle(outline, inRoom)
+  const looksAt: Pt = aim ? [aim[0], aim[2]] : middle
+  const seesPast = (point: Pt) => {
+    const reach = Math.min(EYE_SIGHT_REACH, distance(point, looksAt))
+    const length = distance(point, looksAt) || 1
+    for (let r = 0.1; r <= reach; r += 0.1) {
+      const t = r / length
+      if (!clear([point[0] + (looksAt[0] - point[0]) * t, point[1] + (looksAt[1] - point[1]) * t]))
+        return false
+    }
+    return true
+  }
+  const stand = (sighted: boolean) => {
+    let found: Pt | undefined
+    let bestScore = Number.NEGATIVE_INFINITY
+    for (const corner of outline) {
+      const toMiddle = distance(corner, middle) || 1
+      const inward: Pt = [(middle[0] - corner[0]) / toMiddle, (middle[1] - corner[1]) / toMiddle]
+      // A step in from the corner, further in a room too narrow to hold the first.
+      const standing = [0.6, 1, 1.6, 2.2, 3]
+        .filter((step) => step <= toMiddle * 0.8)
+        .map((step): Pt => [corner[0] + inward[0] * step, corner[1] + inward[1] * step])
+        .find(
+          (point) =>
+            inRoom(point) &&
+            clearanceOf(outline, point) >= 0.25 &&
+            clear(point) &&
+            (!sighted || seesPast(point)),
+        )
+      if (!standing) continue
+      const score = side
+        ? ((corner[0] - middle[0]) * side[0] + (corner[1] - middle[1]) * side[1]) / toMiddle
+        : distance(standing, looksAt)
+      if (score > bestScore) [found, bestScore] = [standing, score]
+    }
+    return found
+  }
+  const eye = stand(true) ?? stand(false)
+  if (!eye) {
+    // A room too small for a corner to stand in: from its middle, toward its farthest corner.
+    const far = outline.reduce((a, b) => (distance(b, middle) > distance(a, middle) ? b : a))
+    return {
+      projection: 'perspective',
+      position: [round(middle[0]), round(floorY + eyeHeight), round(middle[1])],
+      target: [round(far[0]), round(floorY + ROOM_AIM_HEIGHT), round(far[1])],
+      fov,
+    }
+  }
+  if (aim)
+    return {
+      projection: 'perspective',
+      position: [round(eye[0]), round(floorY + eyeHeight), round(eye[1])],
+      target: [round(aim[0]), round(aim[1]), round(aim[2])],
+      fov,
+    }
+  // Across the room: the far end of the line from the eye through the room's middle, so the eye
+  // looks level at a wall and not down at the floor a step away.
+  const length = distance(eye, middle) || 1
+  const along: Pt = [(middle[0] - eye[0]) / length, (middle[1] - eye[1]) / length]
+  let far: Pt = middle
+  for (let reach = length; reach < 100; reach += 0.1) {
+    const point: Pt = [eye[0] + along[0] * reach, eye[1] + along[1] * reach]
+    if (!inRoom(point)) break
+    far = point
+  }
+  return {
+    projection: 'perspective',
+    position: [round(eye[0]), round(floorY + eyeHeight), round(eye[1])],
+    target: [round(far[0]), round(floorY + ROOM_AIM_HEIGHT), round(far[1])],
+    fov,
+  }
+}
+
+/**
+ * A level below grade on all of its footprint is seen from inside: from outside, the ground
+ * covers it. One only partly below grade keeps its outside view — the ground in the way is
+ * veiled in the picture instead.
+ */
+function belowGradeInterior(
+  nodes: Readonly<Record<string, AnyNode>>,
+  target: AnyNode | undefined,
+): SceneViewInterior | undefined {
+  return target?.type === 'level' &&
+    levelGradeStanding(nodes as Record<AnyNodeId, AnyNode>, target.id) === 'below-grade'
+    ? { levelId: target.id }
+    : undefined
+}
+
 /**
  * The view to render, its size and its light: through a camera given whole (a photo's, at the
  * photo's aspect so the two lay one beside the other, or the person's own, which the host passes
@@ -827,19 +1183,37 @@ export function sceneViewPlan(
   size: { w: number; h: number }
   crop?: SceneViewCrop
   interior?: SceneViewInterior
+  presentation?: SceneViewPresentation
   lighting?: SceneViewLighting
 } {
   const { camera } = input
+  const presentation = input.presentation
+  if (presentation && input.interior)
+    refuse('presentation_and_interior', 'Choose a level presentation or a clipped interior view.')
+  const solo = sceneViewPresentationLevel(nodes, presentation)
+  if (solo) {
+    if (input.target && !nodes[input.target])
+      refuse('target_not_found', 'The target is not in the scene.', { target: input.target })
+    if (input.target && !ancestry(nodes, nodes[input.target]!).some((node) => node.id === solo.id))
+      refuse('presentation_target_elsewhere', 'The target must belong to the soloed level.', {
+        target: input.target,
+        levelId: solo.id,
+      })
+  }
   const crop = cropOf(input.photo)
-  const inside = input.interior && sceneViewInterior(nodes, input.interior.levelId)
-  const interior = input.interior && { levelId: input.interior.levelId }
+  const target = input.target ? nodes[input.target] : undefined
+  const requested = input.interior ? interiorRequest(nodes, input.interior) : undefined
+  const room = requested?.room
+  // A level below grade is looked into when none is asked for: from outside, the ground covers it.
+  const interior = requested?.interior ?? belowGradeInterior(nodes, target)
+  const inside = interior && sceneViewInterior(nodes, interior.levelId)
   const lighting = input.lighting === 'current' ? undefined : input.lighting
   const extras = {
     ...(crop ? { crop } : {}),
     ...(interior ? { interior } : {}),
+    ...(presentation ? { presentation } : {}),
     ...(lighting ? { lighting } : {}),
   }
-  const target = input.target ? nodes[input.target] : undefined
   // An interior view shows this floor alone, without its roofs and ceilings: a target left out of
   // the picture would frame nothing shown.
   if (interior && inside && target) {
@@ -871,7 +1245,7 @@ export function sceneViewPlan(
   const side = input.from
   const from = side
     ? isStreetSide(side)
-      ? streetDirection(nodes, side, target ?? (input.interior && nodes[input.interior.levelId]))
+      ? streetDirection(nodes, side, target ?? solo ?? (interior && nodes[interior.levelId]))
       : side
     : opening && !input.position
       ? outsideSide(opening.opening, opening.wall, standingOf(nodes, opening.wall.parentId).yaw)
@@ -879,9 +1253,40 @@ export function sceneViewPlan(
   // Inside a floor, the eye looks down into it over the cut walls.
   const lookDown = inside && input.elevation === undefined && input.eyeHeight === undefined
   const { position, elevation, eyeHeight, fov, projection } = input
+  const placedRoom = room && inside && roomOnSite(nodes, room, inside.bounds.min[1])
+  // A room is looked at from inside, a person's height up, unless the eye is put (position) or
+  // lifted over it (elevation, from above, orthographic): then it is the cut room from outside.
+  if (
+    placedRoom &&
+    position === undefined &&
+    elevation === undefined &&
+    side !== 'above' &&
+    projection !== 'orthographic'
+  ) {
+    const aimBox = input.target ? sceneViewBounds(nodes, input.target) : undefined
+    return {
+      pose: roomEyeView(placedRoom.outline, placedRoom.holes, inside.bounds.min[1], {
+        aim: aimBox && [
+          (aimBox.min[0] + aimBox.max[0]) / 2,
+          (aimBox.min[1] + aimBox.max[1]) / 2,
+          (aimBox.min[2] + aimBox.max[2]) / 2,
+        ],
+        side: typeof from === 'string' ? (from === 'above' ? undefined : COMPASS[from]) : from,
+        eyeHeight,
+        fov,
+        blocked: eyeObstacles(nodes, room.parentId!, eyeHeight ?? ROOM_EYE_HEIGHT),
+      }),
+      size: sized(VIEW_SIZE.w, VIEW_SIZE.h, input.maxPx),
+      ...extras,
+    }
+  }
   return {
     pose: sceneViewPose(
-      input.target || !inside ? sceneViewBounds(nodes, input.target) : inside.bounds,
+      input.target || !inside
+        ? sceneViewBounds(nodes, input.target ?? solo?.id, presentation)
+        : placedRoom
+          ? placedRoom.box
+          : inside.bounds,
       {
         position,
         elevation: lookDown ? INTERIOR_ELEVATION : elevation,

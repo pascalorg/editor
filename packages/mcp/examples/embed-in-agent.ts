@@ -10,8 +10,7 @@
  *   bun run packages/mcp/examples/embed-in-agent.ts
  */
 
-import { Client } from '@modelcontextprotocol/sdk/client/index.js'
-import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
+import { Client, InMemoryTransport } from '@modelcontextprotocol/client'
 import { createPascalMcpServer, SceneBridge } from '@pascal-app/mcp'
 
 async function main(): Promise<void> {

@@ -7,17 +7,22 @@ import {
   type Cursor,
   type DuctFittingNode,
   type PortConnectivity,
+  pauseSceneHistory,
   resolveConnectivityUpdates,
+  resumeSceneHistory,
   sceneRegistry,
   useLiveNodeOverrides,
   useScene,
 } from '@pascal-app/core'
 import {
   ARROW_COLOR,
+  AXIS_MOVE_DRAG_LABEL,
   EDITOR_LAYER,
   isAngleSnapActive,
   isGridSnapActive,
+  isMagneticSnapActive,
   isTypingTarget,
+  ROTATE_HANDLE_DRAG_LABEL,
   swallowNextClick,
   triggerSFX,
   useEditor,
@@ -41,7 +46,7 @@ import {
   Vector3,
 } from 'three'
 import { LineBasicNodeMaterial, MeshBasicNodeMaterial } from 'three/webgpu'
-import { INCHES_TO_METERS } from '../duct-segment/geometry'
+import { INCHES_TO_METERS } from '../duct-segment/profile'
 import { autoOffsetInvalidationUpdates } from '../shared/auto-offset-tag'
 import {
   AXIS_VECTORS,
@@ -49,8 +54,9 @@ import {
   ROTATE_STEP_RAD,
   type RotationAxis,
 } from '../shared/fitting-rotation'
+import { useHandleDragScope } from '../shared/handle-drag-scope'
+import { createLivePreview } from '../shared/live-preview'
 import { HandleCube, MoveChevron, RotateArc } from '../shared/selection-handles'
-import { useNodeHandleDrag } from '../shared/use-node-handle-drag'
 import { fittingLegLength } from './ports'
 
 type Point = [number, number, number]
@@ -303,6 +309,8 @@ const DuctFittingSelectionAffordance = () => {
       if (e.key !== 'Alt' || e.repeat) return
       if (isTypingTarget(e.target)) return
       e.preventDefault()
+      // Mid-drag, Alt is the turn's free-rotation modifier, not an axis switch.
+      if (useViewer.getState().inputDragging) return
       cycleRotationAxis()
     }
     window.addEventListener('keydown', onKeyDown)
@@ -342,7 +350,6 @@ const FittingHandles = ({
 }) => {
   const override = useLiveNodeOverrides((state) => state.overrides.get(storedFitting.id))
   const fitting = override ? ({ ...storedFitting, ...override } as DuctFittingNode) : storedFitting
-  const startDrag = useNodeHandleDrag(fitting.id)
   const { camera, gl } = useThree()
   const [frame, setFrame] = useState<Group | null>(null)
   // True while the cluster is latched open. Click the center cube to toggle.
@@ -351,6 +358,7 @@ const FittingHandles = ({
   // pointer handlers own the gesture), exactly like the duct-segment rig.
   const [dragging, setDragging] = useState(false)
   const [sideSign, setSideSign] = useState(1)
+  const claimHandleDrag = useHandleDragScope()
 
   const makeRay = (clientX: number, clientY: number) => {
     const rect = gl.domElement.getBoundingClientRect()
@@ -417,15 +425,18 @@ const FittingHandles = ({
   }
 
   // Follow-updates for runs / fittings mated to this fitting, given a preview
-  // transform. Endpoints whose ports didn't move resolve to a zero delta.
+  // transform. Endpoints whose ports didn't move resolve to a zero delta. Null
+  // when the mated joints cannot follow the transform.
   const connectivityUpdates = (
     connectivity: PortConnectivity | null,
     transform: FittingTransform,
-  ): { id: AnyNodeId; data: Partial<AnyNode> }[] => {
+  ): { id: AnyNodeId; data: Partial<AnyNode> }[] | null => {
     if (!connectivity) return []
     const preview = { ...(fitting as Record<string, unknown>), ...transform } as AnyNode
     const nodes = useScene.getState().nodes
-    return resolveConnectivityUpdates(connectivity, preview)
+    const updates = resolveConnectivityUpdates(connectivity, preview)
+    if (!updates) return null
+    return updates
       .filter((u) => nodes[u.id])
       .map((u) => {
         const node = nodes[u.id]
@@ -449,8 +460,8 @@ const FittingHandles = ({
    */
   const beginDrag =
     (
-      cursor: Cursor,
       handle: string,
+      cursor: Cursor,
       makeCompute: (
         e: ThreeEvent<PointerEvent>,
       ) => (event: PointerEvent) => FittingTransform | null,
@@ -458,30 +469,85 @@ const FittingHandles = ({
     (e: ThreeEvent<PointerEvent>) => {
       e.stopPropagation()
       const connectivity = analyzePortConnectivity(fitting as AnyNode, useScene.getState().nodes)
+      const livePreview = createLivePreview()
       const compute = makeCompute(e)
+      pauseSceneHistory(useScene)
+      useViewer.getState().setInputDragging(true)
       setDragging(true)
-      startDrag({
-        nodeId: fitting.id,
-        handle,
-        cursor,
-        onEnd: () => setDragging(false),
-        onMove: (event, preview) => {
-          const next = compute(event)
-          if (!next) return
-          preview([
-            { id: fitting.id, data: preserveFittingParameters(fitting, next) },
-            ...connectivityUpdates(connectivity, next),
-          ])
-        },
-        commitUpdates: (updates) => [
-          ...updates,
-          ...autoOffsetInvalidationUpdates(useScene.getState().nodes, fitting.id),
-        ],
+      document.body.style.cursor = cursor
+      const releaseScope = claimHandleDrag(fitting.id, handle, () => {
+        swallowNextClick()
+        finish(false)
       })
+      let current: FittingTransform | null = null
+
+      const buildBatch = (
+        t: FittingTransform,
+      ): { id: AnyNodeId; data: Partial<AnyNode> }[] | null => {
+        const followers = connectivityUpdates(connectivity, t)
+        return (
+          followers && [
+            {
+              id: fitting.id as AnyNodeId,
+              data: preserveFittingParameters(fitting, t as Partial<DuctFittingNode>),
+            },
+            ...followers,
+          ]
+        )
+      }
+
+      const onMove = (event: PointerEvent) => {
+        const next = compute(event)
+        if (!next) return
+        // Joints that cannot follow hold the last frame, which release commits.
+        const batch = buildBatch(next)
+        if (!batch) return
+        current = next
+        livePreview.publish(batch)
+      }
+
+      const cleanup = () => {
+        window.removeEventListener('pointermove', onMove)
+        window.removeEventListener('pointerup', onUp)
+        window.removeEventListener('pointercancel', onCancel)
+        releaseScope()
+        useViewer.getState().setInputDragging(false)
+        setDragging(false)
+        if (document.body.style.cursor === cursor) document.body.style.cursor = ''
+      }
+
+      const finish = (commit: boolean) => {
+        cleanup()
+        livePreview.clear()
+        resumeSceneHistory(useScene)
+        if (!commit) return
+        const batch = current && buildBatch(current)
+        if (batch) {
+          const scene = useScene.getState()
+          scene.updateNodes([
+            ...batch,
+            ...autoOffsetInvalidationUpdates(scene.nodes, fitting.id as AnyNodeId),
+          ])
+        }
+      }
+
+      const onUp = () => {
+        // Swallow the trailing synthetic click so it doesn't reach the
+        // background-click deselect handler (cleanup drops `inputDragging`
+        // synchronously here).
+        swallowNextClick()
+        finish(true)
+      }
+      const onCancel = () => finish(false)
+
+      window.addEventListener('pointermove', onMove)
+      window.addEventListener('pointerup', onUp)
+      window.addEventListener('pointercancel', onCancel)
     }
 
   // Move: translate the fitting along one world axis, anchored to the cursor's
-  // start coord so it doesn't jump on grab. Y is clamped at the floor.
+  // start coord so it doesn't jump on grab. Y is clamped at the floor; the
+  // step follows the grid snap mode, and held Alt slides freely.
   const moveCompute =
     (axis: RotationAxis) =>
     (e: ThreeEvent<PointerEvent>): ((event: PointerEvent) => FittingTransform | null) => {
@@ -494,7 +560,7 @@ const FittingHandles = ({
         if (start === null) return null
         const s = sampleAxis(axis, event.clientX, event.clientY, anchorWorld)
         if (s === null) return null
-        const step = isGridSnapActive() ? useEditor.getState().gridSnapStep : 0
+        const step = !event.altKey && isGridSnapActive() ? useEditor.getState().gridSnapStep : 0
         const delta = snap(s - start, step)
         if (delta === lastDelta) return null
         lastDelta = delta
@@ -538,14 +604,13 @@ const FittingHandles = ({
         if (startBearing === null) return null
         const b = bearing(event.clientX, event.clientY)
         if (b === null) return null
-        // The rotation context selects stepped or smooth turns.
+        // Snap the turn to 45° steps while angle snapping is on; held Alt turns freely.
         const raw = b - startBearing
-        const delta = isAngleSnapActive()
-          ? Math.round(raw / ROTATE_STEP_RAD) * ROTATE_STEP_RAD
-          : raw
+        const snapped = !event.altKey && isAngleSnapActive()
+        const delta = snapped ? Math.round(raw / ROTATE_STEP_RAD) * ROTATE_STEP_RAD : raw
         // Tick the rotate SFX each time a fresh snap step is crossed (snapped
-        // turns only — a smooth drag has no discrete steps to mark).
-        if (isAngleSnapActive()) {
+        // turns only — a free turn has no discrete steps to mark).
+        if (snapped) {
           const step = Math.round(raw / ROTATE_STEP_RAD)
           if (step !== lastStep) {
             lastStep = step
@@ -563,6 +628,7 @@ const FittingHandles = ({
     (e: ThreeEvent<PointerEvent>) => {
       e.stopPropagation()
       const baseValue = fitting[dimension]
+      const livePreview = createLivePreview()
       const centerWorld = toWorld(fitting.position as Point)
       const axisWorld = axisToWorld(fitting.position as Point, axisLocal)
       const start = sampleAxisParameter(
@@ -572,33 +638,63 @@ const FittingHandles = ({
         axisWorld,
       )
       const { min, max } = dimensionBounds(dimension)
+      pauseSceneHistory(useScene)
+      useViewer.getState().setInputDragging(true)
       setDragging(true)
-      let lastValue = baseValue
-      startDrag({
-        nodeId: fitting.id,
-        handle: dimension,
-        cursor,
-        onEnd: () => setDragging(false),
-        onMove: (event, preview) => {
-          const rawDeltaM =
-            sampleAxisParameter(event.clientX, event.clientY, centerWorld, axisWorld) - start
-          const nextRaw = baseValue + (rawDeltaM / INCHES_TO_METERS) * 2
-          const nextValue = clamp(
-            isGridSnapActive() ? snap(nextRaw, RESIZE_STEP_IN) : nextRaw,
-            min,
-            max,
-          )
-          if (nextValue === lastValue) return
-          lastValue = nextValue
-          if (isGridSnapActive()) triggerSFX('sfx:grid-snap')
-          preview([
-            {
-              id: fitting.id,
-              data: preserveFittingParameters(fitting, { [dimension]: nextValue }),
-            },
-          ])
-        },
+      document.body.style.cursor = cursor
+      const releaseScope = claimHandleDrag(fitting.id, `resize-${dimension}`, () => {
+        swallowNextClick()
+        finish(false)
       })
+      let current: Partial<DuctFittingNode> | null = null
+      let lastValue = Number.NaN
+
+      const update = (patch: Partial<DuctFittingNode>) => [
+        { id: fitting.id as AnyNodeId, data: preserveFittingParameters(fitting, patch) },
+      ]
+
+      const onMove = (event: PointerEvent) => {
+        const rawDeltaM =
+          sampleAxisParameter(event.clientX, event.clientY, centerWorld, axisWorld) - start
+        const deltaIn = (rawDeltaM / INCHES_TO_METERS) * 2
+        const nextRaw = baseValue + deltaIn
+        // A size has no alignment lines to pull to, so either snapping mode
+        // steps it; held Alt sizes freely.
+        const snapped = !event.altKey && (isGridSnapActive() || isMagneticSnapActive())
+        const nextValue = clamp(snapped ? snap(nextRaw, RESIZE_STEP_IN) : nextRaw, min, max)
+        if (nextValue === lastValue) return
+        lastValue = nextValue
+        current = { [dimension]: nextValue } as Partial<DuctFittingNode>
+        if (snapped) triggerSFX('sfx:grid-snap')
+        livePreview.publish(update(current))
+      }
+
+      const cleanup = () => {
+        window.removeEventListener('pointermove', onMove)
+        window.removeEventListener('pointerup', onUp)
+        window.removeEventListener('pointercancel', onCancel)
+        releaseScope()
+        useViewer.getState().setInputDragging(false)
+        setDragging(false)
+        if (document.body.style.cursor === cursor) document.body.style.cursor = ''
+      }
+
+      const finish = (commit: boolean) => {
+        cleanup()
+        livePreview.clear()
+        resumeSceneHistory(useScene)
+        if (commit && current) useScene.getState().updateNodes(update(current))
+      }
+
+      const onUp = () => {
+        swallowNextClick()
+        finish(true)
+      }
+      const onCancel = () => finish(false)
+
+      window.addEventListener('pointermove', onMove)
+      window.addEventListener('pointerup', onUp)
+      window.addEventListener('pointercancel', onCancel)
     }
 
   const extent = useMemo(() => fittingExtentM(fitting), [fitting])
@@ -791,8 +887,8 @@ const FittingHandles = ({
               cursor={a.cursor}
               key={a.key}
               onPointerDown={beginDrag(
+                AXIS_MOVE_DRAG_LABEL,
                 a.axis === 'y' ? 'ns-resize' : 'grabbing',
-                'move',
                 moveCompute(a.axis),
               )}
               position={a.position}
@@ -803,7 +899,11 @@ const FittingHandles = ({
           {rotateArcs.map((arc) => (
             <RotateArc
               key={arc.key}
-              onPointerDown={beginDrag('grabbing', 'rotate-handle', rotateCompute(arc.axis))}
+              onPointerDown={beginDrag(
+                ROTATE_HANDLE_DRAG_LABEL,
+                'grabbing',
+                rotateCompute(arc.axis),
+              )}
               position={arc.position}
               rotation={arc.rotation}
             />

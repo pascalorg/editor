@@ -84,6 +84,13 @@ test('cabinet creation defaults use the metric 600 mm family', () => {
   }
 })
 
+test('kitchen search also matches the name the picker shows in the UI language', () => {
+  expect(kitchenItemMatches('fridge-single', 'réfrigérateur')).toBe(false)
+  expect(kitchenItemMatches('fridge-single', 'réfrigérateur', 'Réfrigérateur')).toBe(true)
+  // The English names and keywords still match alongside a translated label.
+  expect(kitchenItemMatches('fridge-single', 'fridge', 'Réfrigérateur')).toBe(true)
+})
+
 test('kitchen search discovers appliances by familiar names and finds renamed modules by their contents', () => {
   expect(kitchenItemMatches('fridge-single', 'refrigerator')).toBe(true)
   expect(kitchenItemMatches('drawer-base', 'drawers')).toBe(true)

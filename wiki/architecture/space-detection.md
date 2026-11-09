@@ -17,7 +17,23 @@ cuts overlapping room ceilings, and keeps wall support unchanged. See
 [the vertical model](vertical-model.md#stacked-mezzanine-rooms).
 
 Deleting an auto plate explicitly writes `hasFloor: false` on its linked zones; removing a
-manual cover allows an eligible room to join a generated plate again.
+manual cover allows an eligible room to join a generated plate again. A base plate shared with
+rooms that stand on plates of their own (a porch a step down, a raised platform) is not their
+floor: deleting it leaves theirs (`surfaceIntentZoneIds`).
+
+Porches, decks and patios are rooms with a `roomType` (`lib/outdoor-room`) on these same plates;
+there is no other floor for them. A new room closed off outside the house by invisible walls
+becomes a porch, one fenced by railings alone a deck (`outsideRoomTypes`). Its `floor.drop` steps
+its floor down from the floor it would share, so the generator gives it a plate of its own under
+the house's (a step-down floor, its railings' footprints with it), and tags that plate
+`metadata.floor` (`porch-slab` or `deck`) and `metadata.decking` as interop fields for framing
+plugins (including Bones) and the Architect generator; built-in readers use the plate’s
+`zoneIds` linkage and the room’s `roomType`. A deck's
+plate draws its boards and frame, ledger, joists, rims, beams and posts on concrete piers down to
+the site's terrain (`planDeckFraming`, `nodes/src/slab/deck-geometry.ts`); a porch or patio slab
+runs its concrete edge down to the terrain. A covered porch's posts and beam are columns and beams
+the kernel keeps in the same reconcile (`reconcilePorchFraming`), handed to the user once one is
+edited by hand. Its walls stay exterior whatever covers it (`outdoorRoomIds`).
 
 A room drawn where walls already enclose one (every polygon edge on a wall) names that room
 instead of stacking a second zone on it (`walledRoomAt`, by the reconciler's adoption
@@ -54,9 +70,17 @@ finish renderer is delivered.
 ## Writers contract and the refusal guard
 
 Derived construction is a slab or ceiling marked `boundary: 'auto'` (legacy:
-`autoFromWalls: true`). Everything else states *intent* — walls, separators, and
+`autoFromWalls: true`), plus porch posts and beams tagged with `metadata.porchOf`,
+`porchPart` and `porchSeed`, maintained by the kernel's porch-framing sync. Everything else states *intent* — walls, separators, and
 zones with `spaceRole: 'room'` plus `floor`, `hasFloor` and `hasCeiling` — and the
 reconciler derives the construction from it.
+
+A room's **daylight declaration** is intent of the same kind, kept in the zone's
+`metadata.daylight = { artificialLight, mechanicalVentilation }` (no schema field): the IRC R303.1
+exceptions to daylight, both true when a habitable room (bedroom, living, kitchen) is lit and aired
+by artificial means instead of a window to outside. It is written by the shared `set_zone_intent`
+tool's `daylight` patch (`null` clears it), so the chat and the hosted MCP have it from one
+contract; a check of a room's daylight reads it beside the windows. Nothing derives from it.
 
 `store/derived-node-guard.ts` is the one state-aware validator. It runs at every
 public mutation boundary: the scene store's `createNodes` / `updateNodes` /
@@ -93,7 +117,8 @@ application writes through `useScene.setState`.
 
 `packages/core/src/store/derived-writer-allowlist.test.ts` is the CI guardrail: a
 new file under any package's `src` that writes the derived markers fails unless
-it is on the kernel/migration allowlist. It scans code with comments stripped, so
+it is on the kernel/migration allowlist; porch markers are restricted to the kernel and
+`lib/porch-framing-sync.ts`, including stable room-ID remapping. It scans code with comments stripped, so
 prose that spells a marker out verbatim trips it too.
 
 ## Local commit boundary

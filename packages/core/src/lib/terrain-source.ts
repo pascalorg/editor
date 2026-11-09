@@ -1,4 +1,5 @@
 import type { SiteNode } from '../schema/nodes/site'
+import { livePreviewsVisible } from '../store/live-previews'
 import useLiveTerrain from '../store/use-live-terrain'
 import type { TerrainField } from './terrain-field'
 import { persistedTerrainFieldOf } from './terrain-source-persisted'
@@ -28,7 +29,7 @@ export {
 export function terrainFieldOf(
   site: (Pick<SiteNode, 'terrain'> & { id?: string }) | null | undefined,
 ): TerrainField | null {
-  if (site?.id) {
+  if (site?.id && livePreviewsVisible()) {
     const live = useLiveTerrain.getState().fieldOf(site.id)
     if (live) return live
   }

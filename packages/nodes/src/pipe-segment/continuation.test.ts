@@ -179,3 +179,59 @@ describe('pipe continuation', () => {
     }
   })
 })
+
+test('continuing from either endpoint inherits the signed grade', async () => {
+  const { useEditor } = await import('@pascal-app/editor')
+  const { activatePipeContinuation } = await import('./continuation')
+  const previous = useEditor.getState()
+  const pipe = PipeSegmentNode.parse({
+    path: [
+      [0, 2, 0],
+      [4, 1.92, 0],
+    ],
+    system: 'waste',
+  })
+  try {
+    activatePipeContinuation(pipe, 'end')
+    expect(useEditor.getState().toolDefaults['pipe-segment']).toMatchObject({
+      fall: 'sloped',
+      flowDirection: 'forward',
+    })
+    expect(Number(useEditor.getState().toolDefaults['pipe-segment']?.gradePercent)).toBeCloseTo(2)
+    activatePipeContinuation(pipe, 'start')
+    expect(useEditor.getState().toolDefaults['pipe-segment']?.flowDirection).toBe('reverse')
+  } finally {
+    useEditor.setState(previous)
+  }
+})
+
+test('an open trap collar seeds the exact elevation, direction and material', async () => {
+  const { PipeTrapNode } = await import('@pascal-app/core')
+  const { pipeTrapDefinition } = await import('@pascal-app/nodes')
+  const restore = nodeRegistry._snapshot()
+  try {
+    registerNode(pipeTrapDefinition)
+    registerNode(pipeSegmentDefinition)
+    const trap = PipeTrapNode.parse({
+      position: [1, 2, 3],
+      rotation: Math.PI / 4,
+      diameter: 1.5,
+      pipeMaterial: 'abs',
+    })
+    const port = pipeTrapDefinition.ports!(trap)[1]!
+    const defaults = { continuation: { nodeId: trap.id, portId: port.id } }
+    const seed = resolvePipeContinuationSeed(defaults, { [trap.id]: trap })
+    expect(seed?.port).toEqual({ ...port, nodeId: trap.id })
+    expect(seed?.pipe.diameter).toBe(1.5)
+    expect(seed?.pipe.pipeMaterial).toBe('abs')
+    const occupied = PipeSegmentNode.parse({
+      path: [[...port.position], port.position.map((v, i) => v + port.direction[i]!)],
+    })
+    expect(
+      resolvePipeContinuationSeed(defaults, { [trap.id]: trap, [occupied.id]: occupied }),
+    ).toBeNull()
+    expect(resolvePipeContinuationSeed(defaults, {})).toBeNull()
+  } finally {
+    restore()
+  }
+})

@@ -20,7 +20,7 @@ import { applySceneChanges } from './apply-changes'
 import { requireLevel, targetLevel } from './level-target'
 import { finishSurface, requireMaterialRef } from './material-refs'
 import { refuseRoofLevel } from './roof-writes'
-import { levelsOf } from './scene-queries'
+import { levelsOf, queryNodes } from './scene-queries'
 import type { AgentOperation, SceneChanges, SceneNodes } from './types'
 
 /** The margin round a stair's opening when none is given, as the editor's stair tool cuts it. */
@@ -157,7 +157,7 @@ export const createStair: AgentOperation<CreateStairInput> = (nodes, input, cont
   const withUpper = applySceneChanges(nodes, changes)
   const rotation = input.rotation ?? 0
   const width = input.width ?? 1
-  const stairs = Object.values(nodes).filter((node) => node.type === 'stair').length
+  const stairs = queryNodes(nodes, { type: 'stair' }).length
   const railingMode = input.railingMode ?? 'both'
   // A flight to no level rises as asked, else its storey's height, and keeps that rise; one to a
   // level follows the storey (no totalRise) and keeps tracking it.

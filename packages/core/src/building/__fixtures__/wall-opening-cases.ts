@@ -101,6 +101,7 @@ export const WALL_OPENING_REFUSALS = [
   'position_required',
   'conflicting_position',
   'wall_too_short',
+  'wall_too_low',
   'opening_overlap',
   'style_needs_fixed_window',
 ] as const
@@ -138,6 +139,18 @@ const {
 } = OPENING_SCENE
 
 export const WALL_OPENING_CASES: readonly WallOpeningCase[] = [
+  {
+    name: 'an entry transom above the wall top is refused, even with force',
+    tool: 'add_door',
+    input: { wallId: OPENING_SCENE.main, t: 0.5, transomHeight: 0.5, force: true },
+    expect: { refusal: 'wall_too_low', mentions: ['2.50 m', '2.60 m'] },
+  },
+  {
+    name: 'an entry transom above a plane-bound wall ceiling is refused',
+    tool: 'add_door',
+    input: { wallId: OPENING_SCENE.storey, t: 0.5, transomHeight: 0.8 },
+    expect: { refusal: 'wall_too_low', mentions: ['2.80 m', '2.90 m'] },
+  },
   // Which way it faces. A door's swing and a garage door's track run behind its facing, so a door
   // on an outside wall faces out whichever way the wall was drawn (a garage door's track once ran
   // on the street). An inside wall keeps the wall's front.
@@ -163,6 +176,40 @@ export const WALL_OPENING_CASES: readonly WallOpeningCase[] = [
     tool: 'add_door',
     input: { wallId: main, t: 0.5 },
     expect: { localX: 2, centerY: 1.05, clamped: false, node: { rotation: [0, 0, 0] } },
+  },
+  // Its hardware: the handle hangs opposite the hinges unless placed.
+  {
+    name: 'a right-hinged door takes its handle on the left',
+    tool: 'add_door',
+    input: { wallId: main, t: 0.5, hingesSide: 'right' },
+    expect: {
+      localX: 2,
+      centerY: 1.05,
+      clamped: false,
+      node: { hingesSide: 'right', handleSide: 'left' },
+    },
+  },
+  {
+    name: 'a left-hinged door takes its handle on the right',
+    tool: 'add_door',
+    input: { wallId: main, t: 0.5 },
+    expect: {
+      localX: 2,
+      centerY: 1.05,
+      clamped: false,
+      node: { hingesSide: 'left', handleSide: 'right' },
+    },
+  },
+  {
+    name: 'a handle side given is kept',
+    tool: 'add_door',
+    input: { wallId: main, t: 0.5, hingesSide: 'right', handleSide: 'right' },
+    expect: {
+      localX: 2,
+      centerY: 1.05,
+      clamped: false,
+      node: { hingesSide: 'right', handleSide: 'right' },
+    },
   },
   // Where it goes
   {

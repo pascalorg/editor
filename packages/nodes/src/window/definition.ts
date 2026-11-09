@@ -13,6 +13,7 @@ import {
   getDormerWallOpeningVerticalBounds,
   windowSlots,
 } from '@pascal-app/core'
+import { NEW_WINDOW_FRAME_THICKNESS } from '@pascal-app/core/building'
 import type { FloorplanNodeExtension } from '@pascal-app/editor'
 import { curtainOpeningResizeMax } from '../shared/curtain-opening-limits'
 import { windowBatchable } from '../shared/node-batch/batchable'
@@ -277,20 +278,28 @@ export const windowDefinition: NodeDefinition<typeof WindowNode> = {
   kind: 'window',
   snapProfile: 'item',
   facingIndicator: true,
-  schemaVersion: 3,
+  schemaVersion: 4,
   schema: WindowNode,
   category: 'structure',
   extensions: {
     'pascal:editor/floorplan': {
       contextualDimensions: buildWindowContextualDimensions,
       schedule: buildWindowFloorplanSchedule,
+      // Swap a casement's hinge side from the action bar, in 2D and 3D.
+      actionMenu: { actions: () => import('./actions') },
     } satisfies FloorplanNodeExtension<WindowNodeType>,
   },
 
   // Same schema-driven defaults trick as door: parse a stub, strip
   // id/type. Window also has many fields with zod `.default()` set.
   defaults: () => {
-    const stub = WindowNode.parse({ id: 'window_default' as never, type: 'window' })
+    const stub = WindowNode.parse({
+      id: 'window_default' as never,
+      type: 'window',
+      frameThickness: NEW_WINDOW_FRAME_THICKNESS,
+      casingFaceA: true,
+      casingFaceB: true,
+    })
     const { id: _id, type: _type, ...rest } = stub
     return rest
   },

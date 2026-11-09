@@ -344,6 +344,9 @@ export const PLACE_ITEMS_CASES: AgentToolCase[] = [
     expect: {
       result: { ok: false },
       contains: { items: [{ ok: false, assetId: 'sofa', code: 'outside_rooms' }] },
+      mentions: [
+        'Outside a room, add_object builds an object of any shape and size, and place_design places a procedural design.',
+      ],
     },
   },
   {
@@ -352,7 +355,11 @@ export const PLACE_ITEMS_CASES: AgentToolCase[] = [
     scene: storeysScene,
     input: { levelId: 'level_ground', items: [{ assetId: 'palm', x: 10, z: 10 }] },
     context: library,
-    expect: { result: { ok: true }, contains: { items: [{ ok: true, assetId: 'palm' }] } },
+    expect: {
+      result: { ok: true },
+      contains: { items: [{ ok: true, assetId: 'palm' }] },
+      check: (result) => (JSON.stringify(result).includes('add_object') ? ['names add_object'] : []),
+    },
   },
   {
     name: 'a level without rooms takes items anywhere',

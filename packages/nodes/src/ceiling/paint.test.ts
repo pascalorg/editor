@@ -7,8 +7,9 @@ import {
   useScene,
   ZoneNode,
 } from '@pascal-app/core'
-import { CEILING_REGION_MESH } from '@pascal-app/viewer'
-import { Mesh, MeshBasicMaterial, Object3D } from 'three'
+import { CEILING_REGION_MESH, createMaterial, useViewer } from '@pascal-app/viewer'
+import { BackSide, FrontSide, Mesh, MeshBasicMaterial, Object3D } from 'three'
+import type { MeshStandardNodeMaterial } from 'three/webgpu'
 import { ceilingPaint } from './paint'
 
 // Ceiling paint: a click lands on the region under it or the ceiling's own
@@ -156,4 +157,65 @@ test('the hover preview swaps exactly the region mesh; erase shows the ceiling u
   expect(root.material).toBe(ceilingMaterial)
   recolor?.()
   expect(region.material).toBe(regionMaterial)
+})
+
+test('ceiling paint retains physical finish properties without changing another surface', () => {
+  const viewer = useViewer.getState()
+  useViewer.setState({ shading: 'rendered' })
+  try {
+    const finish = {
+      preset: 'custom' as const,
+      properties: {
+        color: '#c49756',
+        roughness: 0.23,
+        metalness: 0.65,
+        opacity: 1,
+        transparent: false,
+        side: 'front' as const,
+      },
+    }
+    const wallMaterial = createMaterial(finish)
+    const original = new MeshBasicMaterial()
+    const root = new Mesh(undefined, original)
+    const restore = ceilingPaint.applyPreview({
+      node: manual,
+      role: 'surface',
+      material: finish,
+      materialPreset: undefined,
+      root,
+    })
+    const shown = root.material as unknown as MeshStandardNodeMaterial
+    expect(shown.isMeshStandardNodeMaterial).toBe(true)
+    expect(shown.roughness).toBe(0.23)
+    expect(shown.metalness).toBe(0.65)
+    expect(shown.side).toBe(BackSide)
+    expect(wallMaterial.side).toBe(FrontSide)
+    restore?.()
+    expect(root.material).toBe(original)
+
+    ceilingPaint.commit!({
+      node: manual,
+      role: 'surface',
+      material: finish,
+      materialPreset: undefined,
+    })
+    const current = useScene.getState().nodes[manual.id]!
+    const effective = ceilingPaint.getEffectiveMaterial!({
+      materials: useScene.getState().materials,
+      node: current,
+      role: 'surface',
+      nodes: useScene.getState().nodes,
+    })!
+    const restoreSaved = ceilingPaint.applyPreview({
+      node: current,
+      role: 'surface',
+      ...effective,
+      root,
+    })
+    expect((root.material as unknown as MeshStandardNodeMaterial).roughness).toBe(0.23)
+    expect((root.material as unknown as MeshStandardNodeMaterial).metalness).toBe(0.65)
+    restoreSaved?.()
+  } finally {
+    useViewer.setState(viewer)
+  }
 })

@@ -19,7 +19,7 @@ import {
   type StairSegmentNode,
   useScene,
   type WallNode,
-  type WindowNode,
+  type WindowNode, usePascalI18n,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useMemo, useState } from 'react'
@@ -107,6 +107,7 @@ function MobilePanelLayer({
   panel: React.ReactNode
   isReference: boolean
 }) {
+  const i18n = usePascalI18n()
   const setSelection = useViewer((s) => s.setSelection)
   const setSelectedReferenceId = useEditor((s) => s.setSelectedReferenceId)
   const setMovingNode = useEditor((s) => s.setMovingNode)
@@ -146,7 +147,7 @@ function MobilePanelLayer({
 
   if (!(node || isReference)) return null
 
-  const display = getNodeDisplay(node)
+  const display = getNodeDisplay(node, i18n)
 
   return (
     <>
@@ -180,8 +181,9 @@ function MobileMultiPanelLayer({
   panel: React.ReactNode
   type: string | null
 }) {
+  const i18n = usePascalI18n()
   const [isSheetOpen, setIsSheetOpen] = useState(false)
-  const display = type ? getTypeDisplay(type) : { icon: '/icons/select.webp', label: 'Selection' }
+  const display = type ? getTypeDisplay(type, i18n) : { icon: '/icons/select.webp', label: i18n._({ id: 'editor.panels.panelManager.selection', message: 'Selection' }) }
   const title = breakdown || display.label
 
   useEffect(() => {

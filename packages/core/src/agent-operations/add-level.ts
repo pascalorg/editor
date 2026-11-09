@@ -1,9 +1,13 @@
 import { refuse } from '../agent-tools/refusal'
+import { buildLevelBelowChanges } from '../building/level-insertion'
+import { foundationReadingOfLevel } from '../lib/foundation-construction'
+import { foundationWallRule, levelHoldsFoundationWalls } from '../lib/foundation-wall'
 import { BuildingNode, LevelNode, SiteNode } from '../schema'
 import { DEFAULT_LEVEL_HEIGHT } from '../services/level-height'
 import { storeyInsertIndex } from '../services/roof-level'
-import { levelsOf } from './scene-queries'
-import type { AgentContext, AgentOperation, SceneNodes } from './types'
+import { applySceneChanges } from './apply-changes'
+import { levelsOf, queryNodes } from './scene-queries'
+import type { AgentContext, AgentOperation, SceneChanges, SceneNodes } from './types'
 
 type AddLevelInput = {
   buildingId?: string
@@ -31,9 +35,7 @@ export function targetBuilding(
   const viewed = context.activeLevelId ? nodes[context.activeLevelId] : undefined
   const holder = viewed?.parentId ? nodes[viewed.parentId] : undefined
   if (holder?.type === 'building') return holder
-  const buildings = Object.values(nodes).filter(
-    (node): node is BuildingNode => node.type === 'building',
-  )
+  const buildings = queryNodes<BuildingNode>(nodes, { type: 'building' })
   if (buildings.length === 1) return buildings[0]!
   if (!buildings.length) refuse('no_building', 'The scene has no building.')
   return refuse(
@@ -48,7 +50,7 @@ export function targetBuilding(
  * building, the ground level. An agent that cleared the scene to restart begins again here.
  */
 function freshStart(nodes: SceneNodes, input: AddLevelInput) {
-  const standing = Object.values(nodes).find((node) => node.type === 'site')
+  const standing = queryNodes(nodes, { type: 'site' })[0]
   const site = standing ? null : SiteNode.parse({ children: [] })
   const siteId = standing?.id ?? site!.id
   const building = BuildingNode.parse({ parentId: siteId, children: [] })
@@ -85,7 +87,7 @@ function freshStart(nodes: SceneNodes, input: AddLevelInput) {
  * one), or under its lowest level — the editor's +.
  */
 export const addLevel: AgentOperation<AddLevelInput> = (nodes, input, context) => {
-  if (!(input.buildingId || Object.values(nodes).some((node) => node.type === 'building')))
+  if (!(input.buildingId || queryNodes(nodes, { type: 'building' }).length))
     return freshStart(nodes, input)
   const building = targetBuilding(nodes, input.buildingId, context)
   const floors = levelsOf(nodes)
@@ -93,15 +95,40 @@ export const addLevel: AgentOperation<AddLevelInput> = (nodes, input, context) =
     .map((level) => level.level)
   const below = input.position === 'below'
   const above = storeyInsertIndex(nodes, building.id)
-  const floorIndex = below && floors.length ? Math.min(...floors) - 1 : above.floorIndex
+  // A basement goes under the lowest floor and leaves every floor where
+  // it stands, as the editor's "+" below does: the ground floor keeps its grade.
+  const stacked =
+    below && floors.length
+      ? buildLevelBelowChanges({
+          nodes,
+          buildingId: building.id,
+          height: input.height ?? DEFAULT_LEVEL_HEIGHT,
+        })
+      : null
+  const floorIndex = stacked
+    ? stacked.newLevel.level
+    : below && floors.length
+      ? Math.min(...floors) - 1
+      : above.floorIndex
   const shift = below ? [] : above.shift
-  const level = LevelNode.parse({
-    parentId: building.id,
-    level: floorIndex,
-    height: input.height ?? DEFAULT_LEVEL_HEIGHT,
-    children: [],
-    ...(input.name ? { name: input.name } : {}),
-  })
+  const level =
+    stacked?.newLevel ??
+    LevelNode.parse({
+      parentId: building.id,
+      level: floorIndex,
+      height: input.height ?? DEFAULT_LEVEL_HEIGHT,
+      children: [],
+      ...(input.name ? { name: input.name } : {}),
+    })
+  if (stacked && input.name) level.name = input.name
+  const changes: SceneChanges = {
+    create: [{ node: level, parentId: building.id }],
+    update: stacked ? stacked.update : shift,
+  }
+  const after = applySceneChanges(nodes, changes)
+  const foundation = levelHoldsFoundationWalls(after, level.id)
+    ? foundationWallRule(foundationReadingOfLevel(after, level.id))
+    : null
   return {
     result: {
       ok: true,
@@ -110,9 +137,10 @@ export const addLevel: AgentOperation<AddLevelInput> = (nodes, input, context) =
       floorIndex,
       ...(level.name ? { name: level.name } : {}),
       height: level.height,
+      ...(foundation ? { wallConstruction: foundation } : {}),
       ...(shift.length ? { shiftedLevelIds: shift.map(({ id }) => id) } : {}),
-      message: `Added ${level.name ?? `level ${floorIndex}`} ${below ? 'below the existing levels' : shift.length ? 'on top of the storeys, under the roof level' : 'above the existing levels'} of ${building.name ?? building.id}.`,
+      message: `Added ${level.name ?? `level ${floorIndex}`} ${below ? (stacked ? 'below the existing levels, every floor keeping its place' : 'below the existing levels') : shift.length ? 'on top of the storeys, under the roof level' : 'above the existing levels'} of ${building.name ?? building.id}.${foundation ? ` It is below grade: ${foundation}; a wall given a thickness keeps it.` : ''}`,
     },
-    changes: { create: [{ node: level, parentId: building.id }], update: shift },
+    changes,
   }
 }

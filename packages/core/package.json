@@ -1,6 +1,6 @@
 {
   "name": "@pascal-app/core",
-  "version": "1.0.4",
+  "version": "1.0.7",
   "description": "Core library for Pascal 3D building editor",
   "type": "module",
   "main": "./dist/index.js",
@@ -10,6 +10,11 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
+    },
+    "./i18n": {
+      "types": "./dist/i18n/index.d.ts",
+      "import": "./dist/i18n/index.js",
+      "default": "./dist/i18n/index.js"
     },
     "./clone-scene-graph": {
       "types": "./dist/utils/clone-scene-graph.d.ts",
@@ -35,6 +40,11 @@
       "types": "./dist/registry/index.d.ts",
       "import": "./dist/registry/index.js",
       "default": "./dist/registry/index.js"
+    },
+    "./usage-field": {
+      "types": "./dist/spatial/usage-field/index.d.ts",
+      "import": "./dist/spatial/usage-field/index.js",
+      "default": "./dist/spatial/usage-field/index.js"
     },
     "./zone-colors": {
       "types": "./dist/lib/zone-colors.d.ts",
@@ -96,6 +106,16 @@
       "import": "./dist/systems/stair/stair-rise-query.js",
       "default": "./dist/systems/stair/stair-rise-query.js"
     },
+    "./grade-standing": {
+      "types": "./dist/lib/grade-standing.d.ts",
+      "import": "./dist/lib/grade-standing.js",
+      "default": "./dist/lib/grade-standing.js"
+    },
+    "./ground-level": {
+      "types": "./dist/lib/ground-level.d.ts",
+      "import": "./dist/lib/ground-level.js",
+      "default": "./dist/lib/ground-level.js"
+    },
     "./procedural-items": {
       "types": "./dist/procedural-items/index.d.ts",
       "import": "./dist/procedural-items/index.js",
@@ -115,6 +135,11 @@
       "types": "./dist/agent-operations/index.d.ts",
       "import": "./dist/agent-operations/index.js",
       "default": "./dist/agent-operations/index.js"
+    },
+    "./runtime": {
+      "types": "./dist/runtime/index.d.ts",
+      "import": "./dist/runtime/index.js",
+      "default": "./dist/runtime/index.js"
     }
   },
   "files": [
@@ -135,9 +160,11 @@
     "@react-three/drei": "^10",
     "@react-three/fiber": "^9",
     "react": "^18 || ^19",
-    "three": "^0.186"
+    "three": "^0.187"
   },
   "dependencies": {
+    "@lingui/core": "6.12.0",
+    "@lingui/message-utils": "6.12.0",
     "@pascal-app/lingo": "^0.5.0",
     "dedent": "^1.7.2",
     "idb-keyval": "^6.3.0",
@@ -150,11 +177,11 @@
   },
   "devDependencies": {
     "@pascal/typescript-config": "*",
-    "@types/bun": "^1.4.3",
+    "@types/bun": "^1.4.4",
     "@types/react": "19.3.0",
-    "@types/three": "^0.186.0",
+    "@types/three": "^0.187",
     "@typescript/typescript6": "6.0.2",
-    "fake-indexeddb": "^6.2.6",
+    "fake-indexeddb": "^6.2.7",
     "typescript": "7.0.2"
   },
   "keywords": [

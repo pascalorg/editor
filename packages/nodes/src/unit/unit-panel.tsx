@@ -5,15 +5,19 @@ import {
   type AnyNodeId,
   buildUnitReport,
   getLevelDisplayName,
+  type MessageDescriptor,
+  type PascalI18n,
   UNIT_KINDS,
   type UnitKind,
   type UnitNode,
   unitWarnings,
+  usePascalI18n,
   useScene,
 } from '@pascal-app/core'
 import {
   ActionButton,
   ActionGroup,
+  displayRoomName,
   formatAreaLabel,
   PanelSection,
   PanelWrapper,
@@ -24,14 +28,12 @@ import { Trash2, X } from 'lucide-react'
 import { useCallback, useMemo } from 'react'
 import { PanelSelect, PanelTextField } from '../shared/panel-fields'
 
-const UNIT_KIND_LABELS: Record<UnitKind, string> = {
-  apartment: 'Apartment',
-  'hotel-room': 'Hotel room',
-  commercial: 'Commercial',
-  common: 'Common',
+const UNIT_KIND_LABELS: Record<UnitKind, MessageDescriptor> = {
+  apartment: /* i18n */ { id: 'node.unit.kind.apartment', message: 'Apartment' },
+  'hotel-room': /* i18n */ { id: 'node.unit.kind.hotelRoom', message: 'Hotel room' },
+  commercial: /* i18n */ { id: 'node.unit.kind.commercial', message: 'Commercial' },
+  common: /* i18n */ { id: 'node.unit.kind.common', message: 'Common' },
 }
-
-const UNIT_KIND_OPTIONS = UNIT_KINDS.map((value) => ({ label: UNIT_KIND_LABELS[value], value }))
 
 function ReportRow({ label, value }: { label: string; value: string }) {
   return (
@@ -43,6 +45,7 @@ function ReportRow({ label, value }: { label: string; value: string }) {
 }
 
 export default function UnitPanel({ node }: { node: UnitNode }) {
+  const i18n = usePascalI18n()
   const nodes = useScene((state) => state.nodes)
   const updateNode = useScene((state) => state.updateNode)
   const setSelection = useViewer((state) => state.setSelection)
@@ -98,28 +101,37 @@ export default function UnitPanel({ node }: { node: UnitNode }) {
 
   const warningMessages = warnings.map((warning) => {
     if (warning.code === 'non-adjacent-levels') {
-      return 'Members sit on levels that are not adjacent.'
+      return i18n._({
+        id: 'node.unit.panel.nonAdjacentLevels',
+        message: 'Members sit on levels that are not adjacent.',
+      })
     }
-    return 'No zones assigned yet.'
+    return i18n._({ id: 'node.unit.panel.noZonesAssigned', message: 'No zones assigned yet.' })
   })
 
   return (
     <PanelWrapper
       icon="/icons/zone.webp"
       onClose={handleClose}
-      title={node.name || 'Unit'}
+      title={node.name || i18n._({ id: 'node.unit.unitPanel.unit', message: 'Unit' })}
       width={320}
     >
-      <PanelSection title="Unit">
-        <PanelTextField label="Name" onCommit={(name) => update({ name })} value={node.name} />
+      <PanelSection title={i18n._({ id: 'node.unit.unitPanel.unit', message: 'Unit' })}>
+        <PanelTextField
+          label={i18n._({ id: 'node.unit.unitPanel.name', message: 'Name' })}
+          onCommit={(name) => update({ name })}
+          value={node.name}
+        />
         <PanelSelect
-          label="Kind"
+          label={i18n._({ id: 'node.unit.unitPanel.kind', message: 'Kind' })}
           onChange={(kind) => update({ kind: kind as UnitKind })}
-          options={UNIT_KIND_OPTIONS}
+          options={UNIT_KINDS.map((value) => ({ label: i18n._(UNIT_KIND_LABELS[value]), value }))}
           value={node.kind}
         />
         <label className="flex h-10 items-center justify-between gap-3 rounded-lg border border-border/50 bg-black/4 dark:bg-[#2C2C2E] px-3 text-sm">
-          <span className="text-muted-foreground">Color</span>
+          <span className="text-muted-foreground">
+            {i18n._({ id: 'node.unit.unitPanel.color', message: 'Color' })}
+          </span>
           <span className="flex items-center gap-2">
             <span className="font-mono text-muted-foreground text-xs">{node.color}</span>
             <input
@@ -132,10 +144,14 @@ export default function UnitPanel({ node }: { node: UnitNode }) {
         </label>
       </PanelSection>
 
-      <PanelSection title="Members">
+      <PanelSection title={i18n._({ id: 'node.unit.unitPanel.members', message: 'Members' })}>
         {report.members.length === 0 ? (
           <p className="text-muted-foreground text-xs leading-snug">
-            No rooms yet. Pick this unit from a room's panel, or draw zones while it is focused.
+            {i18n._({
+              id: 'node.unit.unitPanel.noRoomsYetPickThisUnit',
+              message:
+                "No rooms yet. Pick this unit from a room's panel, or draw zones while it is focused.",
+            })}
           </p>
         ) : (
           report.members.map((member) => (
@@ -144,7 +160,9 @@ export default function UnitPanel({ node }: { node: UnitNode }) {
               key={member.zoneId}
             >
               <span className="min-w-0 flex-1 truncate text-foreground">
-                {member.name || memberFallbackName(nodes, member.zoneId)}
+                {member.name
+                  ? displayRoomName(member.name, i18n)
+                  : memberFallbackName(nodes, member.zoneId, i18n)}
               </span>
               <span className="shrink-0 truncate text-muted-foreground">
                 {member.levelId ? levelNameById.get(member.levelId) : ''}
@@ -153,7 +171,15 @@ export default function UnitPanel({ node }: { node: UnitNode }) {
                 {formatAreaLabel(member.areaM2, areaUnit, 1)}
               </span>
               <button
-                aria-label={`Remove ${member.name || 'zone'} from unit`}
+                aria-label={
+                  member.name
+                    ? i18n._({
+                        id: 'node.unit.panel.removeMember',
+                        message: 'Remove {name} from unit',
+                        values: { name: displayRoomName(member.name, i18n) },
+                      })
+                    : i18n._({ id: 'node.unit.panel.removeZone', message: 'Remove zone from unit' })
+                }
                 className="shrink-0 rounded-full p-1 text-muted-foreground transition-colors hover:bg-black/8 dark:hover:bg-[#3e3e3e] hover:text-foreground"
                 onClick={() => removeMember(member.zoneId)}
                 type="button"
@@ -172,25 +198,34 @@ export default function UnitPanel({ node }: { node: UnitNode }) {
         ) : null}
       </PanelSection>
 
-      <PanelSection title="Report">
-        <ReportRow label="Members" value={String(report.memberCount)} />
-        <ReportRow label="Levels" value={levelSpanLabel} />
-        <ReportRow label="Gross area" value={formatAreaLabel(report.grossAreaM2, areaUnit, 2)} />
+      <PanelSection title={i18n._({ id: 'node.unit.unitPanel.report', message: 'Report' })}>
+        <ReportRow
+          label={i18n._({ id: 'node.unit.unitPanel.members', message: 'Members' })}
+          value={String(report.memberCount)}
+        />
+        <ReportRow
+          label={i18n._({ id: 'node.unit.unitPanel.levels', message: 'Levels' })}
+          value={levelSpanLabel}
+        />
+        <ReportRow
+          label={i18n._({ id: 'node.unit.unitPanel.grossArea', message: 'Gross area' })}
+          value={formatAreaLabel(report.grossAreaM2, areaUnit, 2)}
+        />
       </PanelSection>
 
-      <PanelSection title="Actions">
+      <PanelSection title={i18n._({ id: 'node.unit.unitPanel.actions', message: 'Actions' })}>
         <ActionGroup>
           {focusedUnitId !== node.id && (
             <ActionButton
               className="rounded-full"
-              label="Focus"
+              label={i18n._({ id: 'node.unit.unitPanel.focus', message: 'Focus' })}
               onClick={() => useViewer.getState().setFocusedUnit(node.id)}
             />
           )}
           <ActionButton
             className="text-destructive hover:text-destructive"
             icon={<Trash2 className="h-3.5 w-3.5" />}
-            label="Delete"
+            label={i18n._({ id: 'node.unit.unitPanel.delete', message: 'Delete' })}
             onClick={handleDelete}
           />
         </ActionGroup>
@@ -200,7 +235,9 @@ export default function UnitPanel({ node }: { node: UnitNode }) {
 }
 
 /** An unnamed member reads as what it is: a room, or another zone. */
-function memberFallbackName(nodes: Record<string, AnyNode>, zoneId: string) {
+function memberFallbackName(nodes: Record<string, AnyNode>, zoneId: string, i18n: PascalI18n) {
   const zone = nodes[zoneId]
-  return zone?.type === 'zone' && zone.spaceRole === 'room' ? 'Room' : 'Zone'
+  return zone?.type === 'zone' && zone.spaceRole === 'room'
+    ? i18n._({ id: 'node.unit.panel.memberRoom', message: 'Room' })
+    : i18n._({ id: 'node.unit.panel.memberZone', message: 'Zone' })
 }

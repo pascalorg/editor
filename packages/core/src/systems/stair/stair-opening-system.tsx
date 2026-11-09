@@ -3,12 +3,14 @@
 import { useEffect } from 'react'
 import { structureChangeBatch } from '../../commands/structure/shared'
 import type { AnyNode, AnyNodeId } from '../../schema'
+import { isSettlingDocument } from '../../store/document-settling'
 import { pauseSceneHistory, resumeSceneHistory } from '../../store/history-control'
 import { isHydrationNormalization, queueSceneNormalization } from '../../store/scene-hydration'
 import useLiveNodeOverrides from '../../store/use-live-node-overrides'
 import useLiveTransforms from '../../store/use-live-transforms'
 import useScene from '../../store/use-scene'
 import { ensureSceneOpenings } from '../../utils/ensure-scene-openings'
+import { changedInputs, isStairOpeningInput } from '../document-reconcile'
 import { planOwnedFloorOpenings } from '../owned-floor-openings'
 import { reconcileOwnedFloorOpeningChanges } from '../reconcile-owned-floor-openings'
 import {
@@ -18,34 +20,6 @@ import {
 } from './stair-opening-preview'
 import { changedStairOpeningOwners, syncAutoStairOpenings } from './stair-opening-sync'
 import { syncStairRises } from './stair-rise'
-
-function isOpeningRelevantNode(node: AnyNode | undefined) {
-  return (
-    node?.type === 'building' ||
-    node?.type === 'ceiling' ||
-    node?.type === 'level' ||
-    node?.type === 'slab' ||
-    node?.type === 'stair' ||
-    node?.type === 'stair-segment'
-  )
-}
-
-function hasOpeningRelevantNodeChange(
-  nextNodes: Record<string, AnyNode>,
-  prevNodes: Record<string, AnyNode>,
-) {
-  if (nextNodes === prevNodes) return false
-
-  const ids = new Set([...Object.keys(nextNodes), ...Object.keys(prevNodes)])
-  for (const id of ids) {
-    const nextNode = nextNodes[id]
-    const prevNode = prevNodes[id]
-    if (nextNode === prevNode) continue
-    if (isOpeningRelevantNode(nextNode) || isOpeningRelevantNode(prevNode)) return true
-  }
-
-  return false
-}
 
 export function initializeStairOpeningSync() {
   let syncingAutoOpenings = false
@@ -63,13 +37,20 @@ export function initializeStairOpeningSync() {
     }
   }
 
-  const applyPreviewUpdates = (updates: ReturnType<typeof syncAutoStairOpenings>) => {
+  // The guard only stops the preview's own override writes from re-entering the refresh. Held
+  // past them (to a microtask), it swallowed the refresh a drop asks for in the same tick, and
+  // the dragged stair's preview cuts stayed drawn on the floor and ceiling until a reload.
+  const writePreview = (write: () => void) => {
     syncingPreviewOpenings = true
-    previewController.apply(updates)
-    queueMicrotask(() => {
+    try {
+      write()
+    } finally {
       syncingPreviewOpenings = false
-    })
+    }
   }
+
+  const applyPreviewUpdates = (updates: ReturnType<typeof syncAutoStairOpenings>) =>
+    writePreview(() => previewController.apply(updates))
 
   const applyOpeningChanges = (skipExistingSurfaces = false, ownerIds?: ReadonlySet<string>) => {
     const changes = planOwnedFloorOpenings(useScene.getState().nodes, {
@@ -82,7 +63,7 @@ export function initializeStairOpeningSync() {
     try {
       const before = useScene.getState().nodes
       useScene.getState().applyNodeChanges(structureChangeBatch(changes))
-      reconcileOwnedFloorOpeningChanges(before, changes)
+      reconcileOwnedFloorOpeningChanges(useScene, before, changes)
     } finally {
       resumeSceneHistory(useScene)
       syncingAutoOpenings = false
@@ -91,11 +72,7 @@ export function initializeStairOpeningSync() {
 
   const clearPreviewUpdates = () => {
     if (previewController.previewSurfaceIds.size === 0) return
-    syncingPreviewOpenings = true
-    previewController.clear()
-    queueMicrotask(() => {
-      syncingPreviewOpenings = false
-    })
+    writePreview(() => previewController.clear())
   }
 
   const refreshLivePreview = () => {
@@ -156,8 +133,13 @@ export function initializeStairOpeningSync() {
   scheduleAutoSync(true)
 
   const unsubscribeScene = useScene.subscribe((state, prevState) => {
-    if (syncingAutoOpenings) return
-    if (!hasOpeningRelevantNodeChange(state.nodes, prevState.nodes)) return
+    if (syncingAutoOpenings || isSettlingDocument(useScene)) return
+    // A level's child list is bookkeeping (furniture re-parenting under it): what joined or left
+    // is an input of its own, as the document reconcile reads it.
+    if (
+      !changedInputs(prevState.nodes, state.nodes, isStairOpeningInput, { ignoreChildLists: true })
+    )
+      return
     scheduleAutoSync(
       isHydrationNormalization() || state.hydrationId !== prevState.hydrationId,
       prevState.nodes,

@@ -1,15 +1,20 @@
 'use client'
 
-import { useScene } from '@pascal-app/core'
+import { usePascalI18n, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { nodeDisplayLabel } from '../../lib/node-display-label'
+import type { DescriptorTranslator } from '../../lib/room-name-messages'
 import { type ViewerNodes, zoneLabel } from '../../lib/viewer-selection'
 
 /** The hovered node's name, for the bottom pill. A room reads as the room. */
-export function viewerHoverLabel(hoveredId: string | null, nodes: ViewerNodes): string | null {
+export function viewerHoverLabel(
+  hoveredId: string | null,
+  nodes: ViewerNodes,
+  i18n: DescriptorTranslator,
+): string | null {
   const node = hoveredId ? nodes[hoveredId] : undefined
   if (!node) return null
-  return node.type === 'zone' ? zoneLabel(node) : nodeDisplayLabel(node)
+  return node.type === 'zone' ? zoneLabel(node, i18n) : nodeDisplayLabel(node)
 }
 
 /**
@@ -19,9 +24,12 @@ export function viewerHoverLabel(hoveredId: string | null, nodes: ViewerNodes): 
  * the parametric scene store unless the surface passes its own graph.
  */
 export function ViewerHoverLabel({ nodes: nodesProp }: { nodes?: ViewerNodes }) {
+  const i18n = usePascalI18n()
   const sceneNodes = useScene((s) => s.nodes)
   const nodes = nodesProp ?? sceneNodes
-  const label = useViewer((s) => (s.walkthroughMode ? null : viewerHoverLabel(s.hoveredId, nodes)))
+  const label = useViewer((s) =>
+    s.walkthroughMode ? null : viewerHoverLabel(s.hoveredId, nodes, i18n),
+  )
   if (!label) return null
   return (
     <div

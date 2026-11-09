@@ -27,11 +27,12 @@ jobs:
 
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 1.3.14
+          bun-version: 1.4.4
 
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+          check-latest: true
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
@@ -56,6 +57,7 @@ jobs:
     outputs:
       version: ${{ steps.version.outputs.version }}
       channel: ${{ steps.version.outputs.channel }}
+      mcp-version: ${{ steps.version.outputs.mcp-version }}
     env:
       # Verbose npm logs show the OIDC token exchange and the registry's
       # rejection reason when trusted publishing is misconfigured; tokens are
@@ -72,7 +74,7 @@ jobs:
 
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 1.3.14
+          bun-version: 1.4.4
 
       # No registry-url here: with it, actions/setup-node writes an .npmrc whose
       # auth token falls back to the placeholder XXXXX-XXXXX-XXXXX-XXXXX, npm
@@ -82,6 +84,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+          check-latest: true
 
       # npm refuses direct publishing with 2FA-bypass tokens (EOTP, see
       # https://gh.io/npm-gat-bypass2fa-deprecation), so no NODE_AUTH_TOKEN is set
@@ -99,6 +102,14 @@ jobs:
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
+
+      # Drafts ship as English until reviewed. A release fails only when an
+      # entry reviewed at the latest @pascal-app/editor@* tag (the package
+      # that ships the catalogs; tagged below) became a draft with the same
+      # English, or when a compiled pack contains a draft. The full-history
+      # checkout above makes the tags available.
+      - name: Check translation review regressions and shipped packs
+        run: bun scripts/i18n.ts release-check
 
       - name: Configure git
         run: |
@@ -205,10 +216,28 @@ jobs:
           # Refresh the lockfile so the release commit remains reproducible.
           bun install
 
+          # The Cursor plugin's CLI pin and server.json quote these versions; a beta
+          # leaves them on the last stable release.
+          bun scripts/sync-agent-versions.ts
+
+      # The mcp-registry job publishes server.json once this job has pushed the tag.
+      - name: Validate MCP Registry manifest
+        env:
+          MCP_PUBLISHER_VERSION: 1.8.1
+          MCP_PUBLISHER_LINUX_AMD64_SHA256: a06c9096dcb9727c13555b6be26c7effa707b01f06a4c561ba7a3635443cf2cc
+        run: |
+          curl --fail --location \
+            "https://github.com/modelcontextprotocol/registry/releases/download/v${MCP_PUBLISHER_VERSION}/mcp-publisher_linux_amd64.tar.gz" \
+            --output "$RUNNER_TEMP/mcp-publisher.tar.gz"
+          echo "${MCP_PUBLISHER_LINUX_AMD64_SHA256}  $RUNNER_TEMP/mcp-publisher.tar.gz" | sha256sum --check
+          tar -xzf "$RUNNER_TEMP/mcp-publisher.tar.gz" -C "$RUNNER_TEMP" mcp-publisher
+          "$RUNNER_TEMP/mcp-publisher" validate
+
       - id: version
         run: |
           echo "version=$RELEASE_VERSION" >> "$GITHUB_OUTPUT"
           echo "channel=$NPM_TAG" >> "$GITHUB_OUTPUT"
+          echo "mcp-version=$(jq -r '.version' packages/mcp/package.json)" >> "$GITHUB_OUTPUT"
 
       # OIDC trusted publishing can only mint a token for a package that already
       # exists on npm with a trusted publisher. A package that was never
@@ -412,6 +441,24 @@ jobs:
           fi
           gh release upload "$TAG" "$ARCHIVE" "$ARCHIVE.sha256" --clobber
           echo "🌐 Uploaded $(basename "$ARCHIVE") to $TAG"
+
+  # A beta, or a bump=none rerun of one, leaves server.json on the last stable version,
+  # which is already listed.
+  mcp-registry:
+    needs: release
+    if: >-
+      inputs.dry-run == false
+      && needs.release.outputs.channel == 'latest'
+      && needs.release.outputs.mcp-version != ''
+      && !contains(needs.release.outputs.mcp-version, '-')
+    permissions:
+      contents: read
+    uses: ./.github/workflows/mcp-registry.yml
+    with:
+      version: ${{ needs.release.outputs.mcp-version }}
+      publish: true
+    secrets:
+      MCP_REGISTRY_PRIVATE_KEY: ${{ secrets.MCP_REGISTRY_PRIVATE_KEY }}
 
   # The self-host image, built from the release tag on native runners (a Next
   # build under QEMU takes most of an hour) and stitched into one multi-arch

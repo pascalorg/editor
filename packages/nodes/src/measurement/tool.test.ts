@@ -319,6 +319,8 @@ describe('parseMeasurementExtrusionHeight', () => {
   test('converts numeric metric and imperial input to meters', () => {
     expect(parseMeasurementExtrusionHeight('2.5', 'metric')).toBeCloseTo(2.5)
     expect(parseMeasurementExtrusionHeight('10', 'imperial')).toBeCloseTo(3.048)
+    expect(parseMeasurementExtrusionHeight('2,5', 'metric', 'fr')).toBe(2.5)
+    expect(parseMeasurementExtrusionHeight('2,5', 'metric', 'en')).toBeNull()
     expect(parseMeasurementExtrusionHeight('', 'metric')).toBeNull()
     expect(parseMeasurementExtrusionHeight('not-a-number', 'imperial')).toBeNull()
   })

@@ -1,9 +1,8 @@
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { Client } from '@modelcontextprotocol/sdk/client/index.js'
-import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import { Client } from '@modelcontextprotocol/client'
+import { InMemoryTransport, McpServer } from '@modelcontextprotocol/server'
 import { nodeRegistry, registerNode } from '@pascal-app/core'
 import { shelfRecipe } from '@pascal-app/core/procedural-items'
 import * as schema from '@pascal-app/core/schema'
@@ -44,6 +43,7 @@ type MeasurePayload = {
 /** Fields a kind needs beyond its schema defaults (mirrors core's node fixtures). */
 const REQUIRED_FIELDS: Record<string, Record<string, unknown>> = {
   'procedural-item': { recipe: shelfRecipe },
+  beam: { start: [0, 0], end: [4, 0] },
   ceiling: {
     polygon: [
       [0, 0],

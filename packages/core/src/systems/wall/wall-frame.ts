@@ -178,6 +178,14 @@ export function reverseWallDirection(wall: WallNode): Partial<WallNode> {
             ...(u0 === undefined ? {} : { u1: length - u0 }),
           })),
         }),
+    ...(wall.finishScripts === undefined
+      ? {}
+      : {
+          finishScripts: {
+            ...(wall.finishScripts.b === undefined ? {} : { a: wall.finishScripts.b }),
+            ...(wall.finishScripts.a === undefined ? {} : { b: wall.finishScripts.a }),
+          },
+        }),
     ...(wall.skirting === undefined ? {} : { skirting: reverseTrim(wall.skirting) }),
     ...(wall.crown === undefined ? {} : { crown: reverseTrim(wall.crown) }),
     ...(wall.chairRail === undefined ? {} : { chairRail: reverseTrim(wall.chairRail) }),

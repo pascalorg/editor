@@ -7,6 +7,7 @@ import {
   DEFAULT_LEVEL_HEIGHT,
   type DoorNode,
   getAdjacentWallIds,
+  getDoorOpeningSize,
   getEffectiveNode,
   getOpeningWallCut,
   getWallBodyCenterOffset,
@@ -21,6 +22,7 @@ import {
   getWallThickness,
   isCurvedWall,
   isCutterName,
+  openingHostFacing,
   type Point2D,
   pointToKey,
   resolveCutterHost,
@@ -77,6 +79,7 @@ import {
 } from './wall-finish-data'
 import { sweepUnbuiltWalls, WALL_PLACEHOLDER_SWEEP_INTERVAL } from './wall-placeholder-sweep'
 import { notifyWallRebuilt } from './wall-rebuild-notifications'
+import { repairWallTJunctions } from './wall-t-junctions'
 
 export { isWallInitialBuildActive } from './wall-build-lifecycle'
 export { drainRebuiltWalls } from './wall-rebuild-notifications'
@@ -498,6 +501,10 @@ function interpolateSplitVertex(a: SplitVertex, b: SplitVertex, t: number): Spli
   }
 }
 
+function compareSplitVertices(a: SplitVertex, b: SplitVertex): number {
+  return a.x - b.x || a.y - b.y || a.z - b.z
+}
+
 function clipPolygonByPlane(
   polygon: SplitVertex[],
   axis: 'x' | 'y',
@@ -519,9 +526,13 @@ function clipPolygonByPlane(
     const previousInside = isInside(previous)
 
     if (currentInside !== previousInside) {
-      const denom = current[axis] - previous[axis]
+      // Interpolate from the same endpoint whichever way the edge is walked: the
+      // two triangles sharing it then get a bit-identical seam vertex.
+      const [from, to] =
+        compareSplitVertices(previous, current) <= 0 ? [previous, current] : [current, previous]
+      const denom = to[axis] - from[axis]
       if (Math.abs(denom) > WALL_BAND_SPLIT_EPSILON) {
-        out.push(interpolateSplitVertex(previous, current, (plane - previous[axis]) / denom))
+        out.push(interpolateSplitVertex(from, to, (plane - from[axis]) / denom))
       }
     }
     if (currentInside) out.push(current)
@@ -1510,10 +1521,27 @@ function mergeWallTerrainFill(
 
   bodyGeometry.dispose()
   for (const fill of splitFills) fill.dispose()
-  merged.computeVertexNormals()
-  assignWallMaterialGroups(merged, wall, boundaryEdges, finish)
-  ensureRenderableGeometryAttributes(merged)
-  return merged
+  return finishWallFaces(merged, wall, boundaryEdges, finish)
+}
+
+/**
+ * Classifies the faces into material groups, then removes the T-junctions that
+ * CSG cuts, finish-band splits and fill seams leave behind (they crack open
+ * once a bake quantizes positions). Classification runs first, on the source
+ * triangles, so the repair's sliver pieces inherit their material.
+ */
+function finishWallFaces(
+  geometry: THREE.BufferGeometry,
+  wall: WallNode,
+  boundaryEdges: TaggedWallBoundaryEdge[],
+  finish: WallFinishContext,
+): THREE.BufferGeometry {
+  geometry.computeVertexNormals()
+  assignWallMaterialGroups(geometry, wall, boundaryEdges, finish)
+  const repaired = repairWallTJunctions(geometry)
+  if (repaired !== geometry) repaired.computeVertexNormals()
+  ensureRenderableGeometryAttributes(repaired)
+  return repaired
 }
 
 /** Wall-local x of a support-segment parameter (curve parameter on arcs). */
@@ -1823,10 +1851,12 @@ export function generateExtrudedWall(
     ),
   ]
   if (cutoutBrushes.length === 0) {
-    const splitGeometry = splitGeometryAtPlanes(geometry, finishPlanes.y, finishPlanes.x)
-    splitGeometry.computeVertexNormals()
-    assignWallMaterialGroups(splitGeometry, wallNode, boundaryEdges, finish)
-    ensureRenderableGeometryAttributes(splitGeometry)
+    const splitGeometry = finishWallFaces(
+      splitGeometryAtPlanes(geometry, finishPlanes.y, finishPlanes.x),
+      wallNode,
+      boundaryEdges,
+      finish,
+    )
     return withWallFinishData(
       mergeWallTerrainFill(splitGeometry, belowBaseFills, wallNode, boundaryEdges, finish),
       finish,
@@ -1875,10 +1905,12 @@ export function generateExtrudedWall(
   }
 
   const resultGeometry = csgGeometry(resultBrush)
-  const splitResultGeometry = splitGeometryAtPlanes(resultGeometry, finishPlanes.y, finishPlanes.x)
-  splitResultGeometry.computeVertexNormals()
-  assignWallMaterialGroups(splitResultGeometry, wallNode, boundaryEdges, finish)
-  ensureRenderableGeometryAttributes(splitResultGeometry)
+  const splitResultGeometry = finishWallFaces(
+    splitGeometryAtPlanes(resultGeometry, finishPlanes.y, finishPlanes.x),
+    wallNode,
+    boundaryEdges,
+    finish,
+  )
 
   return withWallFinishData(
     mergeWallTerrainFill(splitResultGeometry, belowBaseFills, wallNode, boundaryEdges, finish),
@@ -2154,17 +2186,19 @@ function createOpeningCutoutBrush(
   cutBottom?: number,
   cornerEnd?: 'start' | 'end',
 ): Brush {
-  const halfWidth = opening.width / 2
+  const size = getDoorOpeningSize(opening)
+  const centerX = opening.position[0] - size.leafOffsetX * openingHostFacing(opening)
+  const halfWidth = size.width / 2
   const bottom = cutBottom ?? opening.position[1] - opening.height / 2
   const bottomPadding = getOpeningCutoutBottomPadding(opening, bottom)
   const reach = CORNER_CUT_REACH * wallThickness
   const geometry = buildOpeningCutoutGeometry(
     opening,
     {
-      left: opening.position[0] - halfWidth - (cornerEnd === 'start' ? reach : 0),
-      right: opening.position[0] + halfWidth + (cornerEnd === 'end' ? reach : 0),
+      left: centerX - halfWidth - (cornerEnd === 'start' ? reach : 0),
+      right: centerX + halfWidth + (cornerEnd === 'end' ? reach : 0),
       bottom: bottom - bottomPadding,
-      top: opening.position[1] + opening.height / 2,
+      top: opening.position[1] - opening.height / 2 + size.height,
     },
     wallThickness * 2,
     wallThickness,

@@ -1,4 +1,5 @@
 import type { GeometryScriptParamValue } from '@pascal-app/core'
+import { sdfChecksOn } from '@pascal-app/core/usage-field'
 import type { GeometryScriptCompileOutput } from '@pascal-app/geometry-script'
 import type { GeometryScriptWorkerRequest, GeometryScriptWorkerResponse } from './protocol'
 
@@ -138,10 +139,19 @@ function startSandbox(): Promise<Window> {
 export async function compileGeometryScriptInWorker(input: {
   code: string
   params?: Record<string, GeometryScriptParamValue>
+  /** What the host builds it for (a room's floor), in the host's frame. */
+  inputs?: Record<string, unknown>
 }): Promise<GeometryScriptCompileOutput> {
   const target = await startSandbox()
   const id = nextId++
-  const request: GeometryScriptWorkerRequest = { id, code: input.code, params: input.params }
+  const request: GeometryScriptWorkerRequest = {
+    id,
+    code: input.code,
+    params: input.params,
+    inputs: input.inputs,
+    // the sandbox is its own context: the flag travels with the request, only when it is on
+    ...(sdfChecksOn() ? { usageShape: true } : {}),
+  }
   return new Promise((resolve, reject) => {
     const timeout = setTimeout(() => {
       reset(new Error(`The script ran longer than ${COMPILE_TIMEOUT_MS / 1000} s and was stopped`))

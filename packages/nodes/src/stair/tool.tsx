@@ -61,6 +61,11 @@ import { useViewer } from '@pascal-app/viewer'
 import { useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
+import {
+  newStairStructure,
+  pickedStairRailingMode,
+  surfaceFlightRailingMode,
+} from './placement-defaults'
 import { createStairCommitGate, swallowFollowUpBrowserClick } from './stair-click-guard'
 
 const GRID_OFFSET = 0.02
@@ -144,6 +149,16 @@ function createSeedStairSegment(rise: number) {
   })
 }
 
+/** The railing mode picked for the stair tool, when one is. */
+function pickedRailingMode(): StairNode['railingMode'] | null {
+  return pickedStairRailingMode(useEditor.getState().toolDefaults.stair?.railingMode)
+}
+
+/** A deck, porch or patio flight's railing (`surfaceFlightRailingMode`), the tool's pick first. */
+function surfaceSnapRailingMode(snap: StairSurfaceSnap): StairNode['railingMode'] {
+  return surfaceFlightRailingMode(snap, pickedRailingMode())
+}
+
 function createDefaultStairNode({
   name,
   levelId,
@@ -159,7 +174,6 @@ function createDefaultStairNode({
   rotation: number
   segmentId: StairSegmentNode['id']
 }) {
-  const railingMode = useEditor.getState().toolDefaults.stair?.railingMode
   return StairNode.parse({
     name,
     parentId: levelId,
@@ -181,13 +195,8 @@ function createDefaultStairNode({
     showCenterColumn: DEFAULT_SPIRAL_SHOW_CENTER_COLUMN,
     showStepSupports: DEFAULT_SPIRAL_SHOW_STEP_SUPPORTS,
     railingHeight: DEFAULT_STAIR_RAILING_HEIGHT,
-    railingMode:
-      railingMode === 'none' ||
-      railingMode === 'left' ||
-      railingMode === 'right' ||
-      railingMode === 'both'
-        ? railingMode
-        : DEFAULT_STAIR_RAILING_MODE,
+    railingMode: pickedRailingMode() ?? DEFAULT_STAIR_RAILING_MODE,
+    structure: newStairStructure(useEditor.getState().toolDefaults.stair?.structure),
     children: [segmentId],
   })
 }
@@ -241,7 +250,7 @@ function commitStairPlacement(
           stepCount: surfaceSnap.stepCount,
           slabOpeningMode: 'none' as const,
           destinationSurfaceId: surfaceSnap.surfaceId,
-          railingMode: 'none' as const,
+          railingMode: surfaceSnapRailingMode(surfaceSnap),
         }
       : {}),
   })
@@ -419,7 +428,7 @@ export default function StairTool() {
         stair.totalRise = surfaceSnap.totalRise
         stair.destinationSurfaceId = surfaceSnap.surfaceId
         stair.slabOpeningMode = 'none'
-        stair.railingMode = 'none'
+        stair.railingMode = surfaceSnapRailingMode(surfaceSnap)
         segment = {
           ...segment,
           height: surfaceSnap.totalRise,

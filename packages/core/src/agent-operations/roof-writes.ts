@@ -2,6 +2,7 @@ import { AgentRefusal, refuse } from '../agent-tools/refusal'
 import { getLevelDisplayName } from '../lib/level-name'
 import { type AnyNode, parseNode } from '../schema'
 import {
+  isRoofGeometry,
   isRoofLevel,
   isStoreyContent,
   liftRoofLevels,
@@ -91,17 +92,32 @@ export function seatWrittenRoofs(ops: NodeWrite[], scene: SceneNodes): string[] 
             id: write.node.id,
             type: write.node.type,
             parentId: write.parentId ?? write.node.parentId,
+            metadata: after[write.node.id]?.metadata,
           }
-        : write.op === 'update' && typeof write.data.parentId === 'string'
-          ? { id: write.id, type: after[write.id]?.type, parentId: write.data.parentId }
+        : write.op === 'update' &&
+            (typeof write.data.parentId === 'string' ||
+              (isRoofGeometry(scene[write.id]) && !isRoofGeometry(after[write.id])))
+          ? after[write.id]
           : null
-    if (!placed?.parentId || !isStoreyContent(placed.type)) return
-    const prior = scene[placed.parentId]
+    if (!placed?.parentId || !isStoreyContent(placed.type, placed.metadata)) return
+    // A retained assembly's separately addressed children still belong to its level.
+    let parentId = placed.parentId
+    let retainedRoofAncestor = false
+    const seen = new Set<string>()
+    while (after[parentId]?.type === 'item' && !seen.has(parentId)) {
+      seen.add(parentId)
+      retainedRoofAncestor ||= isRoofGeometry(after[parentId])
+      const next = after[parentId]?.parentId
+      if (!next) break
+      parentId = next
+    }
+    if (!retainedRoofAncestor) parentId = placed.parentId
+    const prior = scene[parentId]
     const what = `a ${placed.type}`
-    if (isRoofLevel(after[placed.parentId]))
-      throw onRoofLevel(after, placed.parentId, what, { index, id: placed.id })
+    if (isRoofLevel(after[parentId]))
+      throw onRoofLevel(after, parentId, what, { index, id: placed.id })
     if (prior?.type === 'level' && servesAsRoofLevel(scene, prior))
-      throw onRoofLevel(scene, placed.parentId, what, { index, id: placed.id })
+      throw onRoofLevel(scene, parentId, what, { index, id: placed.id })
   })
 
   writes.forEach((write, index) => {
@@ -110,7 +126,10 @@ export function seatWrittenRoofs(ops: NodeWrite[], scene: SceneNodes): string[] 
     if (!id || roleOf(write) !== 'roof' || isRoofLevel(scene[id]) || level?.type !== 'level') return
     const held = [
       ...new Set(
-        level.children.map((child) => after[child]?.type).filter((type) => isStoreyContent(type)),
+        level.children
+          .map((child) => after[child])
+          .filter((child) => isStoreyContent(child?.type, child?.metadata))
+          .map((child) => child!.type),
       ),
     ]
     if (held.length)

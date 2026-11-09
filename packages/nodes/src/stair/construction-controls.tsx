@@ -5,38 +5,80 @@ import {
   StairConstruction,
   type StairNode,
   type StairSegmentNode,
+  usePascalI18n,
   useScene,
 } from '@pascal-app/core'
 import { MetricControl, SelectControl, ToggleControl } from '@pascal-app/editor'
 
 const OPTIONS = [
-  { label: 'Original', value: 'original' },
-  { label: 'Solid', value: 'solid' },
-  { label: 'Waist', value: 'waist' },
-  { label: 'Open', value: 'open' },
-  { label: 'Side stringers', value: 'side-stringers' },
-  { label: 'Center stringer', value: 'center-stringer' },
+  {
+    label: /* i18n */ { id: 'node.stair.constructionControls.original', message: 'Original' },
+    value: 'original',
+  },
+  {
+    label: /* i18n */ { id: 'node.stair.constructionControls.solid', message: 'Solid' },
+    value: 'solid',
+  },
+  {
+    label: /* i18n */ { id: 'node.stair.constructionControls.waist', message: 'Waist' },
+    value: 'waist',
+  },
+  {
+    label: /* i18n */ { id: 'node.stair.constructionControls.open', message: 'Open' },
+    value: 'open',
+  },
+  {
+    label: /* i18n */ {
+      id: 'node.stair.constructionControls.sideStringers',
+      message: 'Side stringers',
+    },
+    value: 'side-stringers',
+  },
+  {
+    label: /* i18n */ {
+      id: 'node.stair.constructionControls.centerStringer',
+      message: 'Center stringer',
+    },
+    value: 'center-stringer',
+  },
 ]
 
 export function StairConstructionControls({
   node,
   inherited,
+  structured = false,
   onChange,
 }: {
   node: StairNode | StairSegmentNode
   inherited?: StairConstruction
+  /** The stair has a structure: without a body of its own it draws the structure's. */
+  structured?: boolean
   onChange: (construction: StairConstruction | undefined) => void
 }) {
+  const i18n = usePascalI18n()
   const effective = node.construction ?? inherited
   const update = (patch: Partial<StairConstruction>) =>
     onChange(StairConstruction.parse({ ...effective, ...patch }))
   return (
     <div className="space-y-3">
       <SelectControl
-        label="Body"
+        label={i18n._({ id: 'node.stair.constructionControls.body', message: 'Body' })}
         value={node.construction?.mode ?? 'original'}
         options={OPTIONS.map((option) =>
-          option.value === 'original' && inherited ? { ...option, label: 'Inherit' } : option,
+          option.value === 'original' && (inherited || structured)
+            ? {
+                ...option,
+                label: inherited
+                  ? i18n._({
+                      id: 'node.stair.constructionControls.inherit',
+                      message: 'Inherit',
+                    })
+                  : i18n._({
+                      id: 'node.stair.constructionControls.fromStructure',
+                      message: 'From structure',
+                    }),
+              }
+            : { ...option, label: i18n._(option.label) },
         )}
         onChange={(mode) =>
           mode === 'original'
@@ -48,7 +90,10 @@ export function StairConstructionControls({
         <>
           {effective.mode === 'waist' ? (
             <MetricControl
-              label="Waist thickness"
+              label={i18n._({
+                id: 'node.stair.constructionControls.waistThickness',
+                message: 'Waist thickness',
+              })}
               min={0.001}
               value={effective.waistThickness}
               onChange={(waistThickness) => update({ waistThickness })}
@@ -58,7 +103,10 @@ export function StairConstructionControls({
             />
           ) : null}
           <MetricControl
-            label="Tread thickness"
+            label={i18n._({
+              id: 'node.stair.constructionControls.treadThickness',
+              message: 'Tread thickness',
+            })}
             min={0.001}
             value={effective.treadThickness}
             onChange={(treadThickness) => update({ treadThickness })}
@@ -67,7 +115,7 @@ export function StairConstructionControls({
             precision={3}
           />
           <MetricControl
-            label="Nosing"
+            label={i18n._({ id: 'node.stair.constructionControls.nosing', message: 'Nosing' })}
             min={0}
             value={effective.nosing}
             onChange={(nosing) => update({ nosing })}
@@ -76,7 +124,10 @@ export function StairConstructionControls({
             precision={3}
           />
           <MetricControl
-            label="Tread finish"
+            label={i18n._({
+              id: 'node.stair.constructionControls.treadFinish',
+              message: 'Tread finish',
+            })}
             min={0}
             value={effective.finishThickness}
             onChange={(finishThickness) => update({ finishThickness })}
@@ -87,13 +138,19 @@ export function StairConstructionControls({
           {effective.mode === 'solid' || effective.mode === 'waist' ? null : (
             <>
               <ToggleControl
-                label="Closed risers"
+                label={i18n._({
+                  id: 'node.stair.constructionControls.closedRisers',
+                  message: 'Closed risers',
+                })}
                 checked={effective.closedRisers}
                 onChange={(closedRisers) => update({ closedRisers })}
               />
               {effective.closedRisers ? (
                 <MetricControl
-                  label="Riser thickness"
+                  label={i18n._({
+                    id: 'node.stair.constructionControls.riserThickness',
+                    message: 'Riser thickness',
+                  })}
                   min={0.001}
                   value={effective.riserThickness}
                   onChange={(riserThickness) => update({ riserThickness })}
@@ -107,7 +164,10 @@ export function StairConstructionControls({
           {effective.mode === 'side-stringers' || effective.mode === 'center-stringer' ? (
             <>
               <MetricControl
-                label="Stringer width"
+                label={i18n._({
+                  id: 'node.stair.constructionControls.stringerWidth',
+                  message: 'Stringer width',
+                })}
                 min={0.001}
                 value={effective.stringerWidth}
                 onChange={(stringerWidth) => update({ stringerWidth })}
@@ -116,7 +176,10 @@ export function StairConstructionControls({
                 precision={3}
               />
               <MetricControl
-                label="Stringer depth"
+                label={i18n._({
+                  id: 'node.stair.constructionControls.stringerDepth',
+                  message: 'Stringer depth',
+                })}
                 min={0.001}
                 value={effective.stringerDepth}
                 onChange={(stringerDepth) => update({ stringerDepth })}
@@ -142,6 +205,7 @@ export function StairConstructionField({
   return (
     <StairConstructionControls
       node={node}
+      structured={Boolean(node.structure)}
       onChange={(construction) => onUpdate({ construction })}
     />
   )
@@ -158,10 +222,15 @@ export function StairSegmentConstructionField({
     const parent = node.parentId ? state.nodes[node.parentId as AnyNodeId] : undefined
     return parent?.type === 'stair' ? parent.construction : undefined
   })
+  const structured = useScene((state) => {
+    const parent = node.parentId ? state.nodes[node.parentId as AnyNodeId] : undefined
+    return parent?.type === 'stair' && Boolean(parent.structure)
+  })
   return (
     <StairConstructionControls
       node={node}
       inherited={inherited}
+      structured={structured}
       onChange={(construction) => onUpdate({ construction })}
     />
   )

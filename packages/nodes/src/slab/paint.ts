@@ -499,10 +499,11 @@ export const slabPaint: PaintCapability & {
       ? {}
       : base.buildPatch(args),
   commit: (args: PaintPatchArgs) => {
+    const refusal = floorPlatePaintRefusal(useScene.getState().nodes, args.node, args.role)
+    if (refusal) return refusal
     if (args.role === 'surface' && args.node.type === 'slab' && args.node.plateRole === 'base') {
       const role = baseSurfaceRoom(args.node)
-      if (!role)
-        return floorPlatePaintRefusal(useScene.getState().nodes, args.node, args.role) ?? undefined
+      if (!role) return
       commitRoomFinish(role, args.material, args.materialPreset)
       return
     }

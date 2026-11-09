@@ -2,12 +2,12 @@
 
 import { type BuildingNode, sceneRegistry, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
-import { Html } from '@react-three/drei'
 import { useFrame } from '@react-three/fiber'
 import { useCallback, useRef } from 'react'
 import * as THREE from 'three'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import useEditor from '../../store/use-editor'
+import { Html } from './localized-html'
 import { NodeActionMenu } from './node-action-menu'
 
 export function FloatingBuildingActionMenu() {

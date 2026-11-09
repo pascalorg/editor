@@ -1,5 +1,7 @@
+import type { SceneNodes } from '../agent-operations/types'
 import { getDefaultLevelName, getLevelDisplayName } from '../lib/level-name'
 import { nodeRegistry } from '../registry'
+import { queryNodes } from '../runtime/node-queries'
 import { type AnyNode, LevelNode, type RoofNode } from '../schema'
 import { getLevelElevations } from './storey'
 
@@ -27,9 +29,21 @@ const STOREY_CONTENT: ReadonlySet<string> = new Set([
  * rooms, and every kind that stands on a floor (`capabilities.floorPlaced`: cabinets, shelves,
  * columns, …).
  */
-export const isStoreyContent = (type: string | undefined): boolean =>
+export const isStoreyContent = (
+  type: string | undefined,
+  metadata: Record<string, unknown> | undefined,
+): boolean =>
   type !== undefined &&
+  !(type === 'item' && (metadata?.role === 'roof' || metadata?.role === 'ceiling')) &&
   (STOREY_CONTENT.has(type) || nodeRegistry.get(type)?.capabilities?.floorPlaced !== undefined)
+
+/** Retained roof geometry participates in level presentation without becoming parametric. */
+export const isRoofGeometry = (node: AnyNode | undefined): boolean =>
+  node?.type === 'roof' || (node?.type === 'item' && node.metadata?.role === 'roof')
+
+/** Retained ceiling shells can lift with the roof while native room ceilings keep their hosts. */
+export const isCeilingGeometry = (node: AnyNode | undefined): boolean =>
+  node?.type === 'ceiling' || (node?.type === 'item' && node.metadata?.role === 'ceiling')
 
 /** A level declared for its building's roofs (`metadata.role: 'roof'`). */
 export function isRoofLevel(node: AnyNode | undefined): boolean {
@@ -47,8 +61,8 @@ const holdsOnlyRoofs = (nodes: Nodes, level: LevelNode) => {
   if (isSupportLevel(level)) return false
   const children = childrenOf(nodes, level)
   return (
-    children.some((child) => child.type === 'roof') &&
-    !children.some((child) => isStoreyContent(child.type))
+    children.some(isRoofGeometry) &&
+    !children.some((child) => isStoreyContent(child.type, child.metadata))
   )
 }
 
@@ -56,9 +70,8 @@ const holdsOnlyRoofs = (nodes: Nodes, level: LevelNode) => {
 function levelsOf(nodes: Nodes, buildingId: string | null | undefined): LevelNode[] {
   const building = buildingId ? nodes[buildingId] : undefined
   const listed = new Set<string>(building?.type === 'building' ? building.children : [])
-  return Object.values(nodes).filter(
-    (node): node is LevelNode =>
-      node.type === 'level' && (node.parentId === (buildingId ?? null) || listed.has(node.id)),
+  return queryNodes<LevelNode>(nodes as SceneNodes, { type: 'level' }).filter(
+    (node) => node.parentId === (buildingId ?? null) || listed.has(node.id),
   )
 }
 
@@ -73,11 +86,12 @@ function levelsOf(nodes: Nodes, buildingId: string | null | undefined): LevelNod
  */
 export function servesAsRoofLevel(nodes: Nodes, level: LevelNode): boolean {
   if (isRoofLevel(level)) return true
-  if (!holdsOnlyRoofs(nodes, level)) return false
+  // What a level holds is read last: a storey's children are what concurrent edits add to.
   const stack = levelsOf(nodes, level.parentId)
   return (
     !stack.some(isRoofLevel) &&
     stack.some((other) => other.level < level.level) &&
+    holdsOnlyRoofs(nodes, level) &&
     stack.every((other) => other.level <= level.level || holdsOnlyRoofs(nodes, other))
   )
 }

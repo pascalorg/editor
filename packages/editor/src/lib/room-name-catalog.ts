@@ -1,7 +1,14 @@
 import type { AnyNode } from '@pascal-app/core'
 
 /** A titled group of the room-name combobox. */
-export type RoomNameSection = { id: string; title: string; names: readonly string[] }
+export type RoomNameSection = {
+  id: string
+  title: string
+  /** Stored, matched and numbered as data: always the English catalog name. */
+  names: readonly string[]
+  /** What the combobox shows for each name, in the UI language; defaults to the name. */
+  labels?: readonly string[]
+}
 
 /** What the room reads as, which decides the section shown first. */
 export type RoomNameContext = 'room' | 'outdoor' | 'mezzanine'

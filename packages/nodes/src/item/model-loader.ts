@@ -1,3 +1,4 @@
+import { preserveGltfUnlit } from '@pascal-app/viewer'
 import { DefaultLoadingManager, Group, LoadingManager } from 'three'
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js'
 import { type GLTF, GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
@@ -92,6 +93,7 @@ export class ItemGLTFLoader extends GLTFLoader {
 
   constructor(manager?: LoadingManager, retryDelaysMs = DEFAULT_RETRY_DELAYS_MS) {
     super(new LoadingManager())
+    this.register(preserveGltfUnlit)
     this.manager.onError = (url) => {
       this.resourceFailures.set(url, ++this.resourceFailureVersion)
     }

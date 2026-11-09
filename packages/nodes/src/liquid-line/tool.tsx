@@ -6,6 +6,7 @@ import {
   type GridEvent,
   type LinesetNode,
   LiquidLineNode,
+  usePascalI18n,
   useScene,
 } from '@pascal-app/core'
 import {
@@ -264,6 +265,7 @@ function tracePath(target: FollowTarget): Vec3[] | null {
 }
 
 const LiquidLineTool = () => {
+  const i18n = usePascalI18n()
   const activeLevelId = useViewer((s) => s.selection.levelId)
   const unit = useViewer((s) => s.unit)
   const follow = useLiquidLineToolOptions((s) => s.follow)
@@ -579,8 +581,14 @@ const LiquidLineTool = () => {
                   }}
                 >
                   {followTargetRef.current
-                    ? 'Click to trace this lineset run'
-                    : 'Follow: hover a lineset'}
+                    ? i18n._({
+                        id: 'node.liquidLine.tool.clickToTraceThisLinesetRun',
+                        message: 'Click to trace this lineset run',
+                      })
+                    : i18n._({
+                        id: 'node.liquidLine.tool.followHoverALineset',
+                        message: 'Follow: hover a lineset',
+                      })}
                 </div>
               </Html>
             </group>

@@ -380,7 +380,7 @@ function buildCapShape(node: BoxVentNode): THREE.BufferGeometry {
 }
 
 function clamp01(value: number): number {
-  return value < 0 ? 0 : value > 1 ? 1 : value
+  return Math.min(Math.max(value, 0), 1)
 }
 
 // ─── Dome style (bullnose vent) ──────────────────────────────────────

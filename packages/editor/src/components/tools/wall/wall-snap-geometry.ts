@@ -6,6 +6,7 @@
 import {
   getWallCurveFrameAt,
   getWallCurveLength,
+  getWallFaceOffsets,
   isCurvedWall,
   type WallNode,
 } from '@pascal-app/core'
@@ -122,6 +123,142 @@ export function findWallSnapTarget(
   }
 
   return bestTarget
+}
+
+// A drafted segment closer than this to a wall's direction (sine of the angle
+// between them) runs alongside it: the wall topology stacks such walls rather
+// than T-joining them, so the body snap leaves them alone. Two walls meeting
+// closer than this aren't a corner either.
+const WALL_BODY_SNAP_MIN_SINE = 0.5
+
+/** A straight wall's reference line as a frame, with the faces its body spans. */
+type WallBodyFrame = {
+  wall: WallNode
+  length: number
+  ux: number
+  uz: number
+  faces: { a: number; b: number }
+  /** Offset along the wall's left normal, the side its face offsets are measured on. */
+  across: (q: WallPlanPoint) => number
+  /** Station along the reference line from `start`. */
+  along: (q: WallPlanPoint) => number
+}
+
+function wallBodyFrame(wall: WallNode): WallBodyFrame | null {
+  if (isCurvedWall(wall)) return null
+  const [x1, z1] = wall.start
+  const length = Math.hypot(wall.end[0] - x1, wall.end[1] - z1)
+  if (length < 1e-9) return null
+  const ux = (wall.end[0] - x1) / length
+  const uz = (wall.end[1] - z1) / length
+  return {
+    wall,
+    length,
+    ux,
+    uz,
+    faces: getWallFaceOffsets(wall),
+    across: (q) => (q[1] - z1) * ux - (q[0] - x1) * uz,
+    along: (q) => (q[0] - x1) * ux + (q[1] - z1) * uz,
+  }
+}
+
+/**
+ * The corner a join at `target` on `host`'s reference line falls into: where
+ * `host` meets another straight wall, at an L or a T, with `target` inside that
+ * wall's drawn body. A T-join there would split `host` into a stub buried in
+ * the corner block, so the end joins the junction instead. A shared end comes
+ * back exactly; walls meeting at a shallow angle aren't a corner.
+ */
+function cornerJunctionAt(
+  target: WallPlanPoint,
+  host: WallBodyFrame,
+  frames: WallBodyFrame[],
+): WallPlanPoint | null {
+  for (const other of frames) {
+    if (other === host) continue
+    if (Math.abs(host.ux * other.uz - host.uz * other.ux) < WALL_BODY_SNAP_MIN_SINE) continue
+    const offset = other.across(target)
+    if (offset < other.faces.b || offset > other.faces.a) continue
+    const ends = [host.wall.start, host.wall.end, other.wall.start, other.wall.end]
+    const crossing = segmentIntersection(ends[0]!, ends[1]!, ends[2]!, ends[3]!)
+    if (!crossing) continue
+    const sharedEnd = ends.find((end) => distanceSquared(end, crossing) <= 1e-12)
+    return sharedEnd ? [sharedEnd[0], sharedEnd[1]] : crossing
+  }
+  return null
+}
+
+/**
+ * Where a drawn wall end joins a wall it is aimed into: the point on a straight
+ * wall's reference line (`start` → `end`, the line the wall topology T-joins a
+ * partition end on, whatever the wall's justification) for an end inside that
+ * wall's drawn body or within `margin` of either face.
+ *
+ * `point` is the raw cursor and `placed` its grid / angle placement; either one
+ * inside a body captures, so the grid can't leave an end a fraction short of a
+ * face. Given the drafted segment's `start`, the end slides along start →
+ * `placed` onto the line, so a square or angle-locked segment keeps its
+ * direction, and a wall the segment runs alongside (or starts on) is skipped.
+ * Without a start the end drops square onto the line, keeping its position
+ * along the wall. A join that lands inside a corner block, where the wall
+ * meets another at an L or a T, takes the junction itself (`cornerJunctionAt`).
+ * Curved walls are left to the edge snap (`findWallSnapTarget`).
+ */
+export function findWallBodySnapTarget(
+  point: WallPlanPoint,
+  walls: WallNode[],
+  options?: {
+    ignoreWallIds?: string[]
+    placed?: WallPlanPoint
+    start?: WallPlanPoint
+    margin?: number
+  },
+): WallPlanPoint | null {
+  const ignored = new Set(options?.ignoreWallIds ?? [])
+  const placed = options?.placed ?? point
+  const start = options?.start
+  const margin = options?.margin ?? WALL_CONNECT_SNAP_RADIUS
+  const frames = walls.flatMap((wall) => {
+    const frame = ignored.has(wall.id) ? null : wallBodyFrame(wall)
+    return frame ? [frame] : []
+  })
+  let best: WallPlanPoint | null = null
+  let bestOutside = Number.POSITIVE_INFINITY
+
+  for (const frame of frames) {
+    const { length, ux, uz, faces, across, along } = frame
+    const [x1, z1] = frame.wall.start
+    const onWall = (q: WallPlanPoint) => along(q) > 0 && along(q) < length
+    const outsideBody = (q: WallPlanPoint) =>
+      onWall(q) ? Math.max(0, faces.b - across(q), across(q) - faces.a) : Number.POSITIVE_INFINITY
+    const outside = Math.min(outsideBody(point), outsideBody(placed))
+    if (outside > margin || outside >= bestOutside) continue
+
+    let target: WallPlanPoint | null
+    if (Math.abs(across(point)) <= 1e-9 && onWall(point)) {
+      // Already on the line: a joined end snapped again (the plan view hands
+      // the 3D tool its resolved point) stays put.
+      target = [point[0], point[1]]
+    } else if (start) {
+      const dx = placed[0] - start[0]
+      const dz = placed[1] - start[1]
+      const run = Math.hypot(dx, dz)
+      if (run < 1e-9 || Math.abs(dx * uz - dz * ux) / run < WALL_BODY_SNAP_MIN_SINE) continue
+      const startAcross = across(start)
+      const t = startAcross / (startAcross - across(placed))
+      if (!(t > 1e-6)) continue
+      target = [start[0] + dx * t, start[1] + dz * t]
+      if (!onWall(target)) continue
+    } else {
+      const station = along(placed)
+      if (!(station > 0 && station < length)) continue
+      target = [x1 + ux * station, z1 + uz * station]
+    }
+    best = cornerJunctionAt(target, frame, frames) ?? target
+    bestOutside = outside
+  }
+
+  return best
 }
 
 /**

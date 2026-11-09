@@ -3,6 +3,7 @@ import { cornerPair, wallEndPoint, windowCornerEnd } from '../lib/corner-pair'
 import type { WallNode, WindowNode } from '../schema'
 import { achievedChanges } from './achieved'
 import { type LevelTargetInput, targetLevel } from './level-target'
+import { queryNodes } from './scene-queries'
 import type { AgentOperation, SceneChanges } from './types'
 import { registerSceneCheck, type SceneIssue } from './verify-scene'
 
@@ -42,9 +43,7 @@ const round = (value: number) => Math.round(value * 100) / 100
 export function cornerWindowIssues(nodes: Parameters<typeof cornerPair>[0]): SceneIssue[] {
   const issues: SceneIssue[] = []
   const atCorner = new Map<string, WindowNode[]>()
-  for (const node of Object.values(nodes)) {
-    if (node.type !== 'window') continue
-    const window = node as WindowNode
+  for (const window of queryNodes<WindowNode>(nodes, { type: 'window' })) {
     const pair = cornerPair(nodes, window)
     // Informational: what broke the pair (a side deleted or moved, a wall moved) was a choice.
     if (window.corner && !pair) {

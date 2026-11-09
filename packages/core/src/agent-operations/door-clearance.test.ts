@@ -217,3 +217,70 @@ describe('door-clearance', () => {
     expect(keepoutCoversPlanned(glancing, planned)).toBe(false)
   })
 })
+
+describe('a vehicle in its garage', () => {
+  // A 3 m wall along z = 6, 0.15 m thick, its door 2.3 m wide; the car's tail is 0.425 m from the wall face.
+  const garageWall = wall('wall_g', [0, 6], [3, 6])
+  const garageDoor = (doorType: string) => ({ ...door('door_g', 'wall_g', 1.5, 2.3), doorType })
+  const car = (tail: number, category = 'vehicle') => {
+    const base = item('item_car', [1.5, 0, tail - 2.2], [1.8, 1.4, 4.4], 'Hatchback car')
+    return { ...base, asset: { ...base.asset, category } }
+  }
+  const blockedBy = (nodes: unknown[]) =>
+    findBlockedDoors({ nodes: nodes as AnyNode[] }).map((issue) => issue.itemId)
+
+  test('a car parked clear of the garage door is not blocking it: it drives out through it', () => {
+    expect(blockedBy([garageWall, garageDoor('garage-sectional'), car(5.5)])).toEqual([])
+    expect(blockedBy([garageWall, garageDoor('garage-rollup'), car(5.5)])).toEqual([])
+    expect(blockedBy([garageWall, garageDoor('garage-tiltup'), car(5.5)])).toEqual([])
+  })
+
+  test('a car named a car, with no category filed, is a vehicle too', () => {
+    expect(blockedBy([garageWall, garageDoor('garage-sectional'), car(5.5, '')])).toEqual([])
+  })
+
+  test('a car through the door panel is blocking it: it stands in the opening', () => {
+    expect(blockedBy([garageWall, garageDoor('garage-sectional'), car(6.0)])).toEqual(['item_car'])
+  })
+
+  test('a car in the opening says what it blocks: a garage door, with the opening as the zone', () => {
+    const [issue] = findBlockedDoors({
+      nodes: [garageWall, garageDoor('garage-sectional'), car(6.0)] as unknown as AnyNode[],
+    })
+    expect(issue?.message).toStartWith('Door door_g (garage-sectional, 2.30 m wide) on wall wall_g')
+    expect(issue?.clearZone.depthM).toEqual({ inward: 0.075, outward: 0.075 })
+  })
+
+  test('anything else in front of a garage door still blocks it', () => {
+    const shelf = item('item_shelf', [1.5, 0, 5.5], [1, 1.8, 0.4], 'Storage shelf')
+    expect(blockedBy([garageWall, garageDoor('garage-sectional'), shelf])).toEqual(['item_shelf'])
+  })
+
+  test('a car in front of a door with a leaf blocks it: the exemption is the garage door only', () => {
+    expect(blockedBy([garageWall, garageDoor('hinged'), car(5.5)])).toEqual(['item_car'])
+  })
+
+  test('a word that only contains "car" does not make a vehicle', () => {
+    const base = item('item_scarf', [1.5, 0, 5.2], [1, 1.2, 0.4], 'Scarf rack')
+    const scarf = { ...base, asset: { ...base.asset, category: '' } }
+    expect(blockedBy([garageWall, garageDoor('garage-sectional'), scarf])).toEqual(['item_scarf'])
+  })
+})
+
+test('door clearance covers the fixed-light cutout in either host-facing direction', () => {
+  for (const rotationY of [0, Math.PI]) {
+    const keepout = doorKeepoutFromWall(wall('wall_entry', [0, 0], [5, 0]), {
+      id: 'door_entry',
+      position: [2.5, 1.05, 0],
+      rotation: [0, rotationY, 0],
+      width: 1,
+      height: 2.1,
+      sidelightLeft: 0.3,
+      sidelightRight: 0.5,
+      transomHeight: 0.4,
+    })!
+    expect(keepout.width).toBeCloseTo(1.8)
+    expect(keepout.height).toBeCloseTo(2.5)
+    expect(keepout.localX).toBeCloseTo(rotationY === 0 ? 2.6 : 2.4)
+  }
+})

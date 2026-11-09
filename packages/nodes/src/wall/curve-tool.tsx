@@ -93,9 +93,8 @@ export const CurveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
       // nothing clears any more.
       if (wasFinalized) return
       const snapStep = getSegmentGridStep()
-      // Snap the cursor on the WORLD XZ grid (still in building-local
-      // coords for the rest of the math) so a rotated building doesn't
-      // pull the curve handle off the visible grid lines.
+      // Snap the cursor on the building's own grid lattice, the one the
+      // wall tool drafts on (it turns with a turned building).
       const [snappedLocalX, snappedLocalZ] = snapBuildingLocalToWorldGrid(
         [event.localPosition[0], event.localPosition[2]],
         snapStep,
