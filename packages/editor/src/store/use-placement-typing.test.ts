@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, test } from 'bun:test'
 import {
   isPlacementTypingKey,
   PLACEMENT_TYPING_DISTANCE_OFFSET,
-  PLACEMENT_TYPING_LENGTH,
+  PLACEMENT_TYPING_LENGTH_ANGLE,
   routePlacementTypingKey,
   usePlacementTyping,
 } from './use-placement-typing'
@@ -41,12 +41,6 @@ describe('usePlacementTyping', () => {
     expect(usePlacementTyping.getState().activeField).toBe(1)
   })
 
-  test('a one-field session stays on its field', () => {
-    usePlacementTyping.getState().begin({ labels: PLACEMENT_TYPING_LENGTH })
-    usePlacementTyping.getState().toggleField()
-    expect(usePlacementTyping.getState().activeField).toBe(0)
-  })
-
   test('backspace only changes the active field', () => {
     const typing = usePlacementTyping.getState()
     typing.begin({ labels: PLACEMENT_TYPING_DISTANCE_OFFSET })
@@ -71,7 +65,7 @@ describe('usePlacementTyping', () => {
   })
 
   test('clear ends the session and forgets its labels', () => {
-    usePlacementTyping.getState().begin({ labels: PLACEMENT_TYPING_LENGTH })
+    usePlacementTyping.getState().begin({ labels: PLACEMENT_TYPING_LENGTH_ANGLE })
     usePlacementTyping.getState().append('3')
     usePlacementTyping.getState().clear()
     const state = usePlacementTyping.getState()

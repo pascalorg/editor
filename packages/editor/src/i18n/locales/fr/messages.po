@@ -13602,6 +13602,16 @@ msgstr "Supprimer la zone"
 msgid "editor.panels.wallRegionList.paintRegions"
 msgstr "Zones de peinture"
 
+# Source-Hash: c69865ec5d9d1ac9
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Angle"
+#: packages/editor/src/store/use-placement-typing.ts
+#, fuzzy
+msgid "editor.placementTyping.angle"
+msgstr "Angle"
+
 # Source-Hash: fe7ddb094aa8ff4d
 # Review: required
 # AI-Provider: claude-code

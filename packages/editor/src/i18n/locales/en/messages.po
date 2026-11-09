@@ -5473,6 +5473,10 @@ msgid "editor.panels.wallRegionList.paintRegions"
 msgstr "Paint regions"
 
 #: packages/editor/src/store/use-placement-typing.ts
+msgid "editor.placementTyping.angle"
+msgstr "Angle"
+
+#: packages/editor/src/store/use-placement-typing.ts
 msgid "editor.placementTyping.distance"
 msgstr "Distance"
 

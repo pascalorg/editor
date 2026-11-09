@@ -265,7 +265,11 @@ export {
   type WallPullSnapRadii,
   type WallPullSnapResult,
 } from './components/tools/wall/wall-pull-snap'
-export { resolveTypedWallEnd } from './components/tools/wall/wall-typed-entry'
+export {
+  formatWallDraftHeading,
+  resolveTypedWallEnd,
+  wallDraftHeadingDegrees,
+} from './components/tools/wall/wall-typed-entry'
 // `ToolbarLeft` / `ToolbarRight` alias `ViewerToolbarLeft` / `ViewerToolbarRight`
 // (same components) under the names headless hosts compose their toolbars with.
 export {
@@ -1177,7 +1181,7 @@ export {
   isPlacementTypingKey,
   isPlacementTypingStartKey,
   PLACEMENT_TYPING_DISTANCE_OFFSET,
-  PLACEMENT_TYPING_LENGTH,
+  PLACEMENT_TYPING_LENGTH_ANGLE,
   type PlacementTypingField,
   type PlacementTypingKeyOptions,
   type PlacementTypingKeyOutcome,

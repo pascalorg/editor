@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { resolveTypedWallEnd } from './wall-typed-entry'
+import { resolveTypedWallEnd, wallDraftHeadingDegrees } from './wall-typed-entry'
 
 const metric = { bareUnit: 'm', system: 'metric' } as const
 
@@ -36,5 +36,53 @@ describe('resolveTypedWallEnd — length only', () => {
     expect(resolveTypedWallEnd([0, 0], [1, 0], ['abc', ''], metric)).toBeNull()
     expect(resolveTypedWallEnd([0, 0], [1, 0], ['0', ''], metric)).toBeNull()
     expect(resolveTypedWallEnd([2, 2], [2, 2], ['5', ''], metric)).toBeNull()
+  })
+})
+
+describe('resolveTypedWallEnd — angle', () => {
+  test('angle only locks the heading; the pointer projection sets the length', () => {
+    // 90° runs along +Z; a pointer at (1, 3) projects to 3 m along it.
+    expectPoint(resolveTypedWallEnd([0, 0], [1, 3], ['', '90'], metric), [0, 3])
+    // (3, 4) projects to 7/√2 along 45°, landing 3.5 out on each axis.
+    expectPoint(resolveTypedWallEnd([1, 1], [4, 5], ['', '45'], metric), [4.5, 4.5])
+  })
+
+  test('angle only quantises the projected length to the step', () => {
+    expectPoint(resolveTypedWallEnd([0, 0], [0.2, 2.37], ['', '90'], metric, 0.5), [0, 2.5])
+  })
+
+  test('angle only never flips the wall behind its start', () => {
+    expectPoint(resolveTypedWallEnd([0, 0], [-4, 0.1], ['', '0'], metric), [0, 0])
+  })
+
+  test('length and angle fix the endpoint whatever the pointer does', () => {
+    expectPoint(resolveTypedWallEnd([2, 1], [-50, 80], ['4', '180'], metric), [-2, 1])
+    expectPoint(resolveTypedWallEnd([0, 0], [0, 0], ['2', '270'], metric), [0, -2])
+    expectPoint(resolveTypedWallEnd([0, 0], [5, 5], ['1', '-90'], metric), [0, -1])
+  })
+
+  test('accepts degree and radian suffixes', () => {
+    expectPoint(resolveTypedWallEnd([0, 0], [9, 9], ['2', '90°'], metric), [0, 2])
+    expectPoint(resolveTypedWallEnd([0, 0], [9, 9], ['2', `${Math.PI}rad`], metric), [-2, 0])
+  })
+
+  test('an unreadable angle leaves the direction to the pointer', () => {
+    expectPoint(resolveTypedWallEnd([0, 0], [0, 4], ['2', 'x'], metric), [0, 2])
+    expect(resolveTypedWallEnd([0, 0], [0, 4], ['', 'x'], metric)).toBeNull()
+  })
+})
+
+describe('wallDraftHeadingDegrees', () => {
+  test('measures from +X towards +Z in [0, 360)', () => {
+    expect(wallDraftHeadingDegrees([0, 0], [1, 0])).toBeCloseTo(0, 10)
+    expect(wallDraftHeadingDegrees([0, 0], [0, 1])).toBeCloseTo(90, 10)
+    expect(wallDraftHeadingDegrees([0, 0], [-1, 0])).toBeCloseTo(180, 10)
+    expect(wallDraftHeadingDegrees([0, 0], [0, -1])).toBeCloseTo(270, 10)
+    expect(wallDraftHeadingDegrees([1, 1], [1, 1])).toBeNull()
+  })
+
+  test('round-trips through a typed angle', () => {
+    const heading = wallDraftHeadingDegrees([0, 0], [-3, -4])!
+    expectPoint(resolveTypedWallEnd([0, 0], [0, 0], ['5', String(heading)], metric), [-3, -4])
   })
 })

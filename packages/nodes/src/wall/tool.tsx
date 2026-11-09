@@ -32,10 +32,12 @@ import {
   endWallPullRun,
   formatAngleRadians,
   formatLinearMeasurement,
+  formatWallDraftHeading,
   getAngleArcToSegmentReference,
   getAngleToSegmentReference,
   getGridEventScreenProjection,
   getSegmentAngleReferenceAtPoint,
+  getSegmentGridStep,
   getWallDrawVariant,
   getWallLineKind,
   type HorizontalConstructionPlane,
@@ -47,7 +49,7 @@ import {
   isWallRunFree,
   LocalizedHtml,
   markToolCancelConsumed,
-  PLACEMENT_TYPING_LENGTH,
+  PLACEMENT_TYPING_LENGTH_ANGLE,
   PlacementCoordinateInput,
   placementTypingLengthOptions,
   publishHorizontalConstructionPlane,
@@ -758,6 +760,7 @@ const LineWallTool: React.FC = () => {
         pointer,
         typing.fields,
         placementTypingLengthOptions(unit, metricNotation),
+        getSegmentGridStep(),
       )
     }
     const showDraftEnd = (walls: WallNode[]) => {
@@ -1121,15 +1124,19 @@ const LineWallTool: React.FC = () => {
       }
     }
 
-    // Typed entry while a segment is drafted: a digit opens a session. In
-    // 2D-only view the plan commits walls, so its own key handler takes these.
+    // Typed entry while a segment is drafted: a digit opens a session on the
+    // length, Tab one on the angle. In 2D-only view the plan commits walls, so
+    // its own key handler takes these.
     const onKeyDown = (event: KeyboardEvent) => {
       if (buildingState.current !== 1 || planOwnsInput() || isTypingTarget(event.target)) return
       const outcome = routePlacementTypingKey(event, {
-        begin: () => {
-          usePlacementTyping.getState().begin({ labels: PLACEMENT_TYPING_LENGTH })
+        begin: (activeField) => {
+          usePlacementTyping
+            .getState()
+            .begin({ labels: PLACEMENT_TYPING_LENGTH_ANGLE, activeField })
           return true
         },
+        tabBegins: true,
       })
       if (!outcome) return
       event.preventDefault()
@@ -1210,7 +1217,14 @@ const LineWallTool: React.FC = () => {
           style={{ pointerEvents: 'auto', userSelect: 'none' }}
           zIndexRange={[200, 0]}
         >
-          <PlacementCoordinateInput placeholders={[draftMeasurement?.lengthLabel ?? '']} />
+          <PlacementCoordinateInput
+            placeholders={[
+              draftMeasurement?.lengthLabel ?? '',
+              axisGuide?.endOrigin
+                ? formatWallDraftHeading(axisGuide.origin, axisGuide.endOrigin)
+                : '',
+            ]}
+          />
         </LocalizedHtml>
       ) : null}
       {draftMeasurement && (

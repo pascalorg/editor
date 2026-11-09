@@ -195,7 +195,7 @@ import useInteractionScope, {
 } from '../../store/use-interaction-scope'
 import usePlacementPreview from '../../store/use-placement-preview'
 import {
-  PLACEMENT_TYPING_LENGTH,
+  PLACEMENT_TYPING_LENGTH_ANGLE,
   placementTypingLengthOptions,
   routePlacementTypingKey,
   usePlacementTyping,
@@ -270,6 +270,7 @@ import {
   chainEndJoinsExistingWall,
   createInvisibleWallOnCurrentLevel,
   createWallOnCurrentLevel,
+  getSegmentGridStep,
   isSegmentLongEnough,
   snapWallDraftPoint,
   snapWallDraftPointDetailed,
@@ -278,7 +279,7 @@ import {
   WALL_JOIN_SNAP_RADIUS,
   type WallPlanPoint,
 } from '../tools/wall/wall-drafting'
-import { resolveTypedWallEnd } from '../tools/wall/wall-typed-entry'
+import { formatWallDraftHeading, resolveTypedWallEnd } from '../tools/wall/wall-typed-entry'
 import { FloorplanCompassButton } from '../viewer/floorplan-compass-button'
 import { resolveFloorplanBackgroundSelection } from './floorplan-background-selection'
 import {
@@ -4848,7 +4849,10 @@ function FloorplanLinearDraftLayer({
 
       {wallTypingActive && isWallBuildActive && wallDraftStart ? (
         <FloorplanPlacementTypingHud
-          placeholders={[draftWallMeasurement?.lengthLabel ?? '']}
+          placeholders={[
+            draftWallMeasurement?.lengthLabel ?? '',
+            wallDraftEnd ? formatWallDraftHeading(wallDraftStart, wallDraftEnd) : '',
+          ]}
           x={(draftWallMeasurement?.midpoint ?? wallDraftStart)[0]}
           y={(draftWallMeasurement?.midpoint ?? wallDraftStart)[1]}
         />
@@ -7977,6 +7981,7 @@ export function FloorplanPanel({
             pointer,
             state.fields,
             placementTypingLengthOptions(unit, metricNotation),
+            getSegmentGridStep(),
           )) ||
           pointer,
       )
@@ -8427,10 +8432,13 @@ export function FloorplanPanel({
       // and consumes these keys in its capture listener.
       if (isWallBuildActive && draftStart) {
         const outcome = routePlacementTypingKey(event, {
-          begin: () => {
-            usePlacementTyping.getState().begin({ labels: PLACEMENT_TYPING_LENGTH })
+          begin: (activeField) => {
+            usePlacementTyping
+              .getState()
+              .begin({ labels: PLACEMENT_TYPING_LENGTH_ANGLE, activeField })
             return true
           },
+          tabBegins: true,
         })
         if (outcome) {
           event.preventDefault()
@@ -8448,6 +8456,7 @@ export function FloorplanPanel({
               pointer,
               usePlacementTyping.getState().fields,
               placementTypingLengthOptions(unit, metricNotation),
+              getSegmentGridStep(),
             )
             if (typedEnd) wallPlacementPointRef.current?.(pointer)
           }
@@ -9801,6 +9810,7 @@ export function FloorplanPanel({
             snappedPoint,
             wallTyping.fields,
             placementTypingLengthOptions(unit, metricNotation),
+            getSegmentGridStep(),
           )) ||
         snappedPoint
       emitFloorplanGridEvent('move', snappedPoint, event)
@@ -10055,6 +10065,7 @@ export function FloorplanPanel({
               rawPoint,
               typing.fields,
               placementTypingLengthOptions(unit, metricNotation),
+              getSegmentGridStep(),
             )
           : null
       const point: WallPlanPoint = typedEnd ?? rawPoint

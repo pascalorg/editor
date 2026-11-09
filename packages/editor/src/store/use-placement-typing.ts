@@ -16,8 +16,9 @@ export const PLACEMENT_TYPING_DISTANCE_OFFSET: readonly MessageDescriptor[] = [
   /* i18n */ { id: 'editor.placementTyping.offset', message: 'Offset' },
 ]
 
-export const PLACEMENT_TYPING_LENGTH: readonly MessageDescriptor[] = [
+export const PLACEMENT_TYPING_LENGTH_ANGLE: readonly MessageDescriptor[] = [
   /* i18n */ { id: 'editor.placementTyping.length', message: 'Length' },
+  /* i18n */ { id: 'editor.placementTyping.angle', message: 'Angle' },
 ]
 
 export type PlacementTypingSession = {
@@ -85,10 +86,7 @@ export const usePlacementTyping = create<PlacementTypingState>((set) => ({
       return { isActive: true, fields }
     }),
   setActiveField: (activeField) => set({ activeField }),
-  toggleField: () =>
-    set((state) => ({
-      activeField: state.labels.length > 1 && state.activeField === 0 ? 1 : 0,
-    })),
+  toggleField: () => set((state) => ({ activeField: state.activeField === 0 ? 1 : 0 })),
   setProjectedPosition: (projectedPosition) => set({ projectedPosition }),
   requestCommit: () =>
     set((state: PlacementTypingState) => ({ submitRevision: state.submitRevision + 1 })),
