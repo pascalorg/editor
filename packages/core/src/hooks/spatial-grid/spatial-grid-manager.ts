@@ -1394,11 +1394,15 @@ export function getWallBaseElevationForNodes(
  * value always agrees with the rendered wall. One shared resolver for the
  * editor overlays (measurement label, action menu, side handles) that used
  * to copy this derivation locally.
+ *
+ * `t` (0 at the start, 1 at the end) picks a point on a sloped top. Without it
+ * the lower end answers: the height the whole wall clears, which is what
+ * plugins pinned to the public API (written before sloped tops) test against.
  */
 export function getWallEffectiveHeightForNodes(
   wall: WallNode,
   nodes: Record<string, AnyNode>,
-  t: number,
+  t?: number,
 ): number {
   const levelId = resolveNodeLevelId(wall, nodes)
   const support = activeSpatialGrid().getSlabSupportForWall(
@@ -1412,5 +1416,12 @@ export function getWallEffectiveHeightForNodes(
     wall.supportOffset,
     wall.justification,
   )
-  return getWallTop(wall, levelId, nodes, support.elevation, t) - support.elevation
+  const top =
+    t === undefined
+      ? Math.min(
+          getWallTop(wall, levelId, nodes, support.elevation, 0),
+          getWallTop(wall, levelId, nodes, support.elevation, 1),
+        )
+      : getWallTop(wall, levelId, nodes, support.elevation, t)
+  return top - support.elevation
 }
