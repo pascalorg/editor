@@ -194,7 +194,7 @@ test('Alt slides a fitting arrow freely in Grid mode, and a pointercancel drops 
 })
 
 test('a joined run goes back to its start when the fitting slide returns to the start', async () => {
-  const id = seed()
+  const id = seed({ item: 'off' })
   const outlet = getPipeFittingPorts(fittingOf(id)).find((port) => port.id === 'outlet')!
   const collar: Point = [...outlet.position]
   const run = PipeSegmentNode.parse({
@@ -225,16 +225,18 @@ test('a joined run goes back to its start when the fitting slide returns to the 
   expect(runPath()).toEqual(run.path)
 })
 
-test('the fitting arrow slide follows the item mode: lines and off slide freely', async () => {
-  for (const item of ['lines', 'off'] as const) {
+test('the fitting arrow slide steps on the grid in Lines mode, as the resize does, and slides freely when off', async () => {
+  for (const [item, x] of [
+    ['lines', 0.5],
+    ['off', 0.37],
+  ] as const) {
     const id = seed({ item })
     const renderer = await mount(<Scene />)
     await openCluster(renderer)
     await press(renderer, plusXArrow(renderer), CENTER)
-    expect(isGridSnapActive()).toBe(false)
     await pointer('pointermove', [0.37, 1, 0])
     await pointer('pointerup', [0.37, 1, 0])
-    expect(fittingOf(id).position[0]).toBeCloseTo(0.37, 6)
+    expect(fittingOf(id).position[0]).toBeCloseTo(x, 6)
     await renderer.unmount()
   }
 })
