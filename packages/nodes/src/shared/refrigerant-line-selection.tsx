@@ -28,7 +28,8 @@ import { Html } from '@react-three/drei'
 import { createPortal, type ThreeEvent, useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { type Group, type Object3D, Plane, Raycaster, Vector2, Vector3 } from 'three'
-import { claimHandleDragScope } from './handle-drag-scope'
+import { createFollowerFrames } from './follower-frames'
+import { useHandleDragScope } from './handle-drag-scope'
 import { REFRIGERANT_PORT_SYSTEMS } from './port-systems'
 import { HandleCube, MoveChevron } from './selection-handles'
 
@@ -130,6 +131,7 @@ function RefrigerantLineEndpointHandles({
   })
 
   const unit = useViewer((s) => s.unit)
+  const claimHandleDrag = useHandleDragScope()
   const [draggingIndex, setDraggingIndex] = useState<number | null>(null)
   const [openCluster, setOpenCluster] = useState<number | null>(null)
   const toggleCluster = (index: number) => setOpenCluster((cur) => (cur === index ? null : index))
@@ -245,12 +247,14 @@ function RefrigerantLineEndpointHandles({
     e.stopPropagation()
     const initialPath = line.path.map((p) => [...p] as Point)
     const startPoint = initialPath[index]!
-    const connectivity = analyzePortConnectivity(line as AnyNode, useScene.getState().nodes)
+    const startNodes = useScene.getState().nodes
+    const connectivity = analyzePortConnectivity(line as AnyNode, startNodes)
+    const frame = createFollowerFrames(startNodes, line.id as AnyNodeId)
     pauseSceneHistory(useScene)
     useViewer.getState().setInputDragging(true)
     document.body.style.cursor = kind.axis === 'y' ? 'ns-resize' : 'grabbing'
     setDraggingIndex(index)
-    const releaseScope = claimHandleDragScope(line.id, PATH_POINT_DRAG_LABEL, () => {
+    const releaseScope = claimHandleDrag(line.id, PATH_POINT_DRAG_LABEL, () => {
       swallowNextClick()
       finish(false)
     })
@@ -315,7 +319,9 @@ function RefrigerantLineEndpointHandles({
       if (step > 0) triggerSFX('sfx:grid-snap')
       useScene
         .getState()
-        .updateNodes([{ id: line.id as AnyNodeId, data: { path } as Partial<AnyNode> }, ...follow])
+        .updateNodes(
+          frame([{ id: line.id as AnyNodeId, data: { path } as Partial<AnyNode> }, ...follow]),
+        )
     }
 
     const finish = (commit: boolean) => {
@@ -328,13 +334,11 @@ function RefrigerantLineEndpointHandles({
       const finalPath = drag.initialPath.map((p, i) =>
         i === drag.index ? drag.current : p,
       ) as Point[]
-      const revert = detached
-        ? []
-        : (drag.connectivity?.connections ?? []).map((conn) =>
-            conn.kind === 'rigid-node'
-              ? { id: conn.nodeId, data: { position: conn.startPosition } as Partial<AnyNode> }
-              : { id: conn.nodeId, data: { path: conn.startPath } as Partial<AnyNode> },
-          )
+      const revert = (drag.connectivity?.connections ?? []).map((conn) =>
+        conn.kind === 'rigid-node'
+          ? { id: conn.nodeId, data: { position: conn.startPosition } as Partial<AnyNode> }
+          : { id: conn.nodeId, data: { path: conn.startPath } as Partial<AnyNode> },
+      )
       useScene
         .getState()
         .updateNodes([
@@ -362,11 +366,12 @@ function RefrigerantLineEndpointHandles({
       swallowNextClick()
       finish(true)
     }
+    const onCancel = () => finish(false)
 
     const cleanup = () => {
       window.removeEventListener('pointermove', onMove)
       window.removeEventListener('pointerup', onUp)
-      window.removeEventListener('pointercancel', onUp)
+      window.removeEventListener('pointercancel', onCancel)
       releaseScope()
       useViewer.getState().setInputDragging(false)
       document.body.style.cursor = ''
@@ -382,7 +387,7 @@ function RefrigerantLineEndpointHandles({
     }
     window.addEventListener('pointermove', onMove)
     window.addEventListener('pointerup', onUp)
-    window.addEventListener('pointercancel', onUp)
+    window.addEventListener('pointercancel', onCancel)
   }
 
   const endpointArrows = useMemo(() => getEndpointArrows(line), [line])

@@ -4,6 +4,7 @@ import {
   BuildingNode,
   LevelNode,
   PipeFittingNode,
+  PipeSegmentNode,
   SiteNode,
   useScene,
 } from '@pascal-app/core'
@@ -23,6 +24,7 @@ import { act } from '@react-three/test-renderer'
 import { useMemo } from 'react'
 import { type Camera, Vector3 } from 'three'
 import { installMountedScene, LevelScene, mount, settle } from '../__tests__/harness'
+import { getPipeFittingPorts } from './ports'
 import PipeFittingSelectionAffordance from './selection'
 
 installMountedScene()
@@ -130,7 +132,7 @@ async function press(renderer: Renderer, target: ReturnType<typeof hitArea>, at:
 }
 
 async function pointer(
-  type: 'pointermove' | 'pointerup',
+  type: 'pointermove' | 'pointerup' | 'pointercancel',
   at: Point,
   init: { altKey?: boolean } = {},
 ) {
@@ -172,6 +174,55 @@ test('a Select-mode fitting arrow slide claims a handle-drag scope and steps on 
   expect(fittingOf(id).position).toEqual([0.5, 1, 0])
   expect(useScene.temporal.getState().pastStates).toHaveLength(1)
   expect(useInteractionScope.getState().scope.kind).toBe('idle')
+})
+
+test('Alt slides a fitting arrow freely in Grid mode, and a pointercancel drops the drag', async () => {
+  const id = seed({ item: 'grid' })
+  const renderer = await mount(<Scene />)
+  await openCluster(renderer)
+  await press(renderer, plusXArrow(renderer), CENTER)
+  await pointer('pointermove', [0.37, 1, 0], { altKey: true })
+  expect(fittingOf(id).position[0]).toBeCloseTo(0.37, 6)
+
+  await pointer('pointercancel', [0.37, 1, 0])
+  expect(fittingOf(id).position).toEqual(CENTER)
+  expect(useInteractionScope.getState().scope.kind).toBe('idle')
+  expect(useViewer.getState().inputDragging).toBe(false)
+  await pointer('pointerup', [0.37, 1, 0])
+  expect(fittingOf(id).position).toEqual(CENTER)
+  expect(useScene.temporal.getState().pastStates).toHaveLength(0)
+})
+
+test('a joined run goes back to its start when the fitting slide returns to the start', async () => {
+  const id = seed()
+  const outlet = getPipeFittingPorts(fittingOf(id)).find((port) => port.id === 'outlet')!
+  const collar: Point = [...outlet.position]
+  const run = PipeSegmentNode.parse({
+    parentId: level.id,
+    diameter: fittingOf(id).diameter,
+    path: [
+      collar,
+      [collar[0] + outlet.direction[0] * 2, collar[1], collar[2] + outlet.direction[2] * 2],
+    ],
+  })
+  const nodes = useScene.getState().nodes
+  useScene.setState({
+    nodes: { ...nodes, [level.id]: { ...level, children: [id, run.id] }, [run.id]: run },
+    dirtyNodes: new Set([level.id, run.id]),
+  })
+  useScene.temporal.getState().clear()
+  const runPath = () => (useScene.getState().nodes[run.id] as PipeSegmentNode).path
+
+  const renderer = await mount(<Scene />)
+  await openCluster(renderer)
+  await press(renderer, plusXArrow(renderer), CENTER)
+  await pointer('pointermove', [0.37, 1, 0])
+  expect(runPath()[0]![0]).toBeCloseTo(collar[0] + 0.37, 6)
+  await pointer('pointermove', CENTER)
+  expect(fittingOf(id).position).toEqual(CENTER)
+  expect(runPath()).toEqual(run.path)
+  await pointer('pointerup', CENTER)
+  expect(runPath()).toEqual(run.path)
 })
 
 test('the fitting arrow slide follows the item mode: lines and off slide freely', async () => {

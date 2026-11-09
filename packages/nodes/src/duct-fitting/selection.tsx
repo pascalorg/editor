@@ -53,7 +53,8 @@ import {
   ROTATE_STEP_RAD,
   type RotationAxis,
 } from '../shared/fitting-rotation'
-import { claimHandleDragScope } from '../shared/handle-drag-scope'
+import { createFollowerFrames } from '../shared/follower-frames'
+import { useHandleDragScope } from '../shared/handle-drag-scope'
 import { HandleCube, MoveChevron, RotateArc } from '../shared/selection-handles'
 import { fittingLegLength } from './ports'
 
@@ -348,6 +349,7 @@ const FittingHandles = ({ fitting, target }: { fitting: DuctFittingNode; target:
   // pointer handlers own the gesture), exactly like the duct-segment rig.
   const [dragging, setDragging] = useState(false)
   const [sideSign, setSideSign] = useState(1)
+  const claimHandleDrag = useHandleDragScope()
 
   const makeRay = (clientX: number, clientY: number) => {
     const rect = gl.domElement.getBoundingClientRect()
@@ -459,13 +461,15 @@ const FittingHandles = ({ fitting, target }: { fitting: DuctFittingNode; target:
       e.stopPropagation()
       const initialPosition = [...fitting.position] as Point
       const initialRotation = [...fitting.rotation] as Point
-      const connectivity = analyzePortConnectivity(fitting as AnyNode, useScene.getState().nodes)
+      const startNodes = useScene.getState().nodes
+      const connectivity = analyzePortConnectivity(fitting as AnyNode, startNodes)
+      const followerFrame = createFollowerFrames(startNodes, fitting.id as AnyNodeId)
       const compute = makeCompute(e)
       pauseSceneHistory(useScene)
       useViewer.getState().setInputDragging(true)
       setDragging(true)
       document.body.style.cursor = cursor
-      const releaseScope = claimHandleDragScope(fitting.id, handle, () => {
+      const releaseScope = claimHandleDrag(fitting.id, handle, () => {
         swallowNextClick()
         finish(false)
       })
@@ -493,13 +497,13 @@ const FittingHandles = ({ fitting, target }: { fitting: DuctFittingNode; target:
         const batch = buildBatch(next)
         if (!batch) return
         current = next
-        useScene.getState().updateNodes(batch)
+        useScene.getState().updateNodes(followerFrame(batch))
       }
 
       const cleanup = () => {
         window.removeEventListener('pointermove', onMove)
         window.removeEventListener('pointerup', onUp)
-        window.removeEventListener('pointercancel', onUp)
+        window.removeEventListener('pointercancel', onCancel)
         releaseScope()
         useViewer.getState().setInputDragging(false)
         setDragging(false)
@@ -557,15 +561,16 @@ const FittingHandles = ({ fitting, target }: { fitting: DuctFittingNode; target:
         swallowNextClick()
         finish(true)
       }
+      const onCancel = () => finish(false)
 
       window.addEventListener('pointermove', onMove)
       window.addEventListener('pointerup', onUp)
-      window.addEventListener('pointercancel', onUp)
+      window.addEventListener('pointercancel', onCancel)
     }
 
   // Move: translate the fitting along one world axis, anchored to the cursor's
   // start coord so it doesn't jump on grab. Y is clamped at the floor; the
-  // step follows the grid snap mode.
+  // step follows the grid snap mode, and held Alt slides freely.
   const moveCompute =
     (axis: RotationAxis) =>
     (e: ThreeEvent<PointerEvent>): ((event: PointerEvent) => FittingTransform | null) => {
@@ -578,7 +583,7 @@ const FittingHandles = ({ fitting, target }: { fitting: DuctFittingNode; target:
         if (start === null) return null
         const s = sampleAxis(axis, event.clientX, event.clientY, anchorWorld)
         if (s === null) return null
-        const step = isGridSnapActive() ? useEditor.getState().gridSnapStep : 0
+        const step = !event.altKey && isGridSnapActive() ? useEditor.getState().gridSnapStep : 0
         const delta = snap(s - start, step)
         if (delta === lastDelta) return null
         lastDelta = delta
@@ -660,7 +665,7 @@ const FittingHandles = ({ fitting, target }: { fitting: DuctFittingNode; target:
       useViewer.getState().setInputDragging(true)
       setDragging(true)
       document.body.style.cursor = cursor
-      const releaseScope = claimHandleDragScope(fitting.id, `resize-${dimension}`, () => {
+      const releaseScope = claimHandleDrag(fitting.id, `resize-${dimension}`, () => {
         swallowNextClick()
         finish(false)
       })
@@ -695,7 +700,7 @@ const FittingHandles = ({ fitting, target }: { fitting: DuctFittingNode; target:
       const cleanup = () => {
         window.removeEventListener('pointermove', onMove)
         window.removeEventListener('pointerup', onUp)
-        window.removeEventListener('pointercancel', onUp)
+        window.removeEventListener('pointercancel', onCancel)
         releaseScope()
         useViewer.getState().setInputDragging(false)
         setDragging(false)
@@ -713,10 +718,11 @@ const FittingHandles = ({ fitting, target }: { fitting: DuctFittingNode; target:
         swallowNextClick()
         finish(true)
       }
+      const onCancel = () => finish(false)
 
       window.addEventListener('pointermove', onMove)
       window.addEventListener('pointerup', onUp)
-      window.addEventListener('pointercancel', onUp)
+      window.addEventListener('pointercancel', onCancel)
     }
 
   const extent = useMemo(() => fittingExtentM(fitting), [fitting])

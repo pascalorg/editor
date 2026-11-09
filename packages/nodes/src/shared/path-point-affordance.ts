@@ -15,6 +15,7 @@ import {
   type FittingEndpoint,
   planFittingEndpointReaim,
 } from './fitting-endpoint-reaim'
+import { createFollowerFrames } from './follower-frames'
 
 /**
  * Shared "drag a path point" floor-plan affordance for polyline
@@ -86,6 +87,15 @@ export function createPathPointMoveAffordance<N extends PathShape & { id: AnyNod
         ...(fittingEndpoint ? [fittingEndpoint.fitting.id as AnyNodeId] : []),
         ...(connectivity?.connections.map((c) => c.nodeId) ?? []),
       ]
+      // The dispatcher commits what the last frame left in the scene.
+      const frame = createFollowerFrames(nodes, node.id)
+      const write = (updates: { id: AnyNodeId; data: unknown }[]) =>
+        useScene.getState().updateNodes(
+          frame(updates as { id: AnyNodeId; data: Partial<AnyNode> }[]).map((update) => ({
+            id: update.id,
+            data: update.data as Partial<unknown> as never,
+          })),
+        )
 
       const endCapUpdates = (nextPath: [number, number, number][]) => {
         if ((kind !== 'duct-segment' && kind !== 'pipe-segment') || !isEndpoint) return []
@@ -134,19 +144,10 @@ export function createPathPointMoveAffordance<N extends PathShape & { id: AnyNod
           if (!detached && fittingEndpoint) {
             const plan = planFittingEndpointReaim(fittingEndpoint, pointIndex, dragged)
             if (!plan) return
-            useScene.getState().updateNodes([
-              {
-                id: node.id,
-                data: { path: plan.path, wallAttachment: undefined } as Partial<unknown> as never,
-              },
-              {
-                id: plan.fittingUpdate.id,
-                data: plan.fittingUpdate.data as Partial<unknown> as never,
-              },
-              ...endCapUpdates(plan.path).map((update) => ({
-                id: update.id,
-                data: update.data as Partial<unknown> as never,
-              })),
+            write([
+              { id: node.id, data: { path: plan.path, wallAttachment: undefined } },
+              plan.fittingUpdate,
+              ...endCapUpdates(plan.path),
             ])
             return
           }
@@ -154,16 +155,7 @@ export function createPathPointMoveAffordance<N extends PathShape & { id: AnyNod
           const follow = detached ? [] : followUpdates(nextPath)
           // Joints that cannot follow hold the frame, like an out-of-range turn.
           if (!follow) return
-          useScene.getState().updateNodes([
-            {
-              id: node.id,
-              data: { path: nextPath, wallAttachment: undefined } as Partial<unknown> as never,
-            },
-            ...follow.map((u) => ({
-              id: u.id,
-              data: u.data as Partial<unknown> as never,
-            })),
-          ])
+          write([{ id: node.id, data: { path: nextPath, wallAttachment: undefined } }, ...follow])
         },
         canCommit() {
           const final = useScene.getState().nodes[node.id] as N | undefined

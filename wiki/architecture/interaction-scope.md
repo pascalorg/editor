@@ -164,8 +164,10 @@ spots not yet touched (the `event.altKey` alignment bypass and pre-scope `useEdi
    (`{duct,pipe}-segment/selection.tsx`, `{duct,pipe}-fitting/{selection,move-tool}.tsx`,
    `shared/refrigerant-line-selection.tsx`, `shared/path-segment-affordance.ts`). In Select mode those reads
    resolve to off unless the drag claims a scope: the MEP selection handles claim `handle-drag`
-   (`shared/handle-drag-scope.ts`, which also cancels the drag on Escape), and the plan's run point and
-   segment drags map to the same scopes (`floorplanAffordanceReshapeScope`).
+   through the editor's gesture owner (`useHandleDragScope` in `shared/handle-drag-scope.ts`, on
+   `beginGesture`), so Escape, undo or redo, a mode, level or selection change, the node's deletion or
+   the handles unmounting cancels the drag, as a `pointercancel` does; the plan's run point and segment
+   drags map to the same scopes (`floorplanAffordanceReshapeScope`).
    Opening a `moving` scope from a bespoke mover is **not** the migration — `useMovingNode()` reads the scope,
    so `tool-manager` re-mounts the generic `MoveRegistryNodeTool` alongside it (the dual-path FPS/teleport
    bug). Resolve the mode without a global `moving`/`reshaping` scope; see the plan's dual-path note.

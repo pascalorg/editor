@@ -1,32 +1,39 @@
-import { emitter } from '@pascal-app/core'
-import { markToolCancelConsumed, useInteractionScope } from '@pascal-app/editor'
+import { type AnyNodeId, emitter, useScene } from '@pascal-app/core'
+import { beginGesture, type GestureHandle, markToolCancelConsumed } from '@pascal-app/editor'
+import { useEffect, useRef } from 'react'
+
+export type ClaimHandleDrag = (nodeId: string, handle: string, onCancel: () => void) => () => void
 
 /**
- * Claims the `handle-drag` scope for one selection-handle drag. The snap
- * helpers (`isGridSnapActive()` and friends) resolve the kind's snap context
- * from that scope, and the HUD shows its chip; with no scope, Select mode
- * reads every snap mode as off. Escape and a mid-drag undo arrive as
- * `tool:cancel` and go to `onCancel`, which must drop the drag without
- * committing it. The returned release ends only the scope this drag claimed.
+ * Starts one host component's selection-handle drags under the editor's
+ * gesture owner, each claiming the `handle-drag` scope. The snap helpers
+ * (`isGridSnapActive()` and friends) resolve the kind's snap context from that
+ * scope, and the HUD shows its chip; with no scope, Select mode reads every
+ * snap mode as off. `onCancel` must drop the drag without committing it. It
+ * runs on Escape (`tool:cancel`), on any undo or redo, when the mode, level or
+ * selection changes or the scope is replaced, when the node is deleted, and
+ * when the host unmounts. The release a claim returns ends the drag and only
+ * the scope it claimed.
  */
-export function claimHandleDragScope(
-  nodeId: string,
-  handle: string,
-  onCancel: () => void,
-): () => void {
-  useInteractionScope.getState().begin({ kind: 'handle-drag', nodeId, handle })
-  const cancel = () => {
-    markToolCancelConsumed()
-    onCancel()
-  }
-  emitter.on('tool:cancel', cancel)
-  return () => {
-    emitter.off('tool:cancel', cancel)
-    useInteractionScope
-      .getState()
-      .endIf(
-        (scope) =>
-          scope.kind === 'handle-drag' && scope.nodeId === nodeId && scope.handle === handle,
-      )
+export function useHandleDragScope(): ClaimHandleDrag {
+  const live = useRef<GestureHandle | null>(null)
+  useEffect(() => () => live.current?.cancel('unmount'), [])
+  return (nodeId, handle, onCancel) => {
+    const gesture = beginGesture({
+      kind: 'handle-drag',
+      scope: { kind: 'handle-drag', nodeId, handle },
+      onCancel,
+      stale: () => !useScene.getState().nodes[nodeId as AnyNodeId],
+    })
+    live.current = gesture
+    const cancel = () => {
+      markToolCancelConsumed()
+      gesture.cancel('cancel')
+    }
+    emitter.on('tool:cancel', cancel)
+    return () => {
+      emitter.off('tool:cancel', cancel)
+      gesture.end()
+    }
   }
 }
