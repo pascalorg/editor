@@ -60,18 +60,18 @@ function Scene() {
   )
 }
 
-/** Two ducts joined end to end at x = 2, the first one selected. */
-function seed() {
+/** Two ducts joined end to end at x = 2, the first one selected; or the first alone. */
+function seed({ joined = true } = {}) {
   const duct = (path: Point[]) =>
     DuctSegmentNode.parse({ ...ductSegmentDefinition.defaults(), parentId: level.id, path })
   const first = duct(FIRST)
   const second = duct(SECOND)
+  const runs = joined ? [first, second] : [first]
   const entries = [
     { ...site, children: [building.id] },
     { ...building, children: [level.id] },
-    { ...level, children: [first.id, second.id] },
-    first,
-    second,
+    { ...level, children: runs.map((run) => run.id) },
+    ...runs,
   ]
   useScene.setState({
     nodes: Object.fromEntries(entries.map((n) => [n.id, n])),
@@ -169,4 +169,32 @@ test('holding Alt on a duct end drag drops the joined duct from the live preview
   expect(previewOf(first)).toBeUndefined()
   expect(useScene.temporal.getState().pastStates).toHaveLength(1)
   expect(useInteractionScope.getState().scope.kind).toBe('idle')
+})
+
+test('Alt slides a duct run center arrow freely in Grid mode', async () => {
+  for (const [altKey, delta] of [
+    [false, 0.5],
+    [true, 0.37],
+  ] as const) {
+    const { first } = seed({ joined: false })
+    const renderer = await mount(<Scene />)
+    await settle(renderer)
+    await press(
+      renderer,
+      hitArea(renderer, (p) => near(p.x, 1) && near(p.y, 1) && near(p.z, 0)),
+      [1, 1, 0],
+    )
+    const arrow = hitArea(renderer, (p) => p.x > 1.05 && p.x < 1.95 && near(p.y, 1) && near(p.z, 0))
+    const grip = arrow.instance.getWorldPosition(new Vector3())
+    await press(renderer, arrow, [grip.x, grip.y, grip.z])
+    const to: Point = [grip.x + 0.37, grip.y, grip.z]
+    await pointer('pointermove', to, altKey)
+    expect(previewOf(first)?.path?.[0]?.[0]).toBeCloseTo(delta, 6)
+    await pointer('pointerup', to, altKey)
+
+    expect(pathOf(first)[0]![0]).toBeCloseTo(delta, 6)
+    expect(pathOf(first)[1]![0]).toBeCloseTo(2 + delta, 6)
+    expect(useScene.temporal.getState().pastStates).toHaveLength(1)
+    await renderer.unmount()
+  }
 })
