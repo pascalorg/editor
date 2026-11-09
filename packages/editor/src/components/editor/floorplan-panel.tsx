@@ -82,7 +82,6 @@ import {
 import { createPortal } from 'react-dom'
 import { Vector3 } from 'three'
 import { useShallow } from 'zustand/react/shallow'
-import { markToolCancelConsumed } from '../../hooks/use-keyboard'
 import {
   hoverRoomFromHit,
   resolvePlanRoomHit,
@@ -194,12 +193,7 @@ import useInteractionScope, {
   useReshapingNode,
 } from '../../store/use-interaction-scope'
 import usePlacementPreview from '../../store/use-placement-preview'
-import {
-  PLACEMENT_TYPING_LENGTH_ANGLE,
-  placementTypingLengthOptions,
-  routePlacementTypingKey,
-  usePlacementTyping,
-} from '../../store/use-placement-typing'
+import { placementTypingLengthOptions, usePlacementTyping } from '../../store/use-placement-typing'
 import { expandSessionSelectionForNode } from '../../store/use-session-groups'
 import { useStairBuildPreview } from '../../store/use-stair-build-preview'
 import {
@@ -299,6 +293,7 @@ import {
   resolveFloorplanPresentationViewBox,
   setFloorplanCompassRotation,
 } from './floorplan-navigation-presentation'
+import { installFloorplanWallTypingKeys } from './floorplan-wall-typing-keys'
 import { swallowNextClick } from './handles/use-handle-drag'
 import { useFloorplanBackgroundPlacement } from './use-floorplan-background-placement'
 import { useFloorplanHitTesting } from './use-floorplan-hit-testing'
@@ -5126,10 +5121,6 @@ export function FloorplanPanel({
   // Shims keep the `setXDraftEnd(value | prev => …)` call sites unchanged.
   const [draftStart, setDraftStart] = useState<WallPlanPoint | null>(null)
   const [wallChainFirstVertex, setWallChainFirstVertex] = useState<WallPlanPoint | null>(null)
-  // Set when a typed 2D draft's stage-1 Escape just cleared the buffer; the
-  // next `tool:cancel` is that escape arriving and must not clear the draft
-  //. Reset on every other keydown and after commits.
-  const wallTypingEscapeClearedRef = useRef(false)
   const wallConstructionOptionsRef =
     useRef<ReturnType<typeof resolveTerrainWallConstructionOptions>>(undefined)
   // Walls committed by the current 2D-only chain — exclusion set for the
@@ -5139,9 +5130,9 @@ export function FloorplanPanel({
   // resolved end as the chain start. Re-base this panel's draft onto it so a
   // typed Enter in the plan projects from the segment the 3D chain is
   // actually drafting — without this, `draftStart` stays on the last point
-  // the panel itself placed and the typed commit uses a stale origin
-  //. In 2D-only the panel is the committer and never
-  // publishes, so this subscription stays dormant there.
+  // the panel itself placed and the typed commit uses a stale origin. In
+  // 2D-only the panel is the committer and never publishes, so this
+  // subscription stays dormant there.
   useEffect(() => {
     if (!(mode === 'build' && tool === 'wall')) return
     return useSegmentDraftChain.subscribe((state, previousState) => {
@@ -8106,15 +8097,6 @@ export function FloorplanPanel({
 
   useEffect(() => {
     const handleCancel = () => {
-      // Stage-1 `tool:cancel` from a cleared typing buffer: the buffer clear
-      // WAS the cancel — keep the draft alive and consume the escape so the
-      // global handler does not exit the tool. Mirrors the
-      // 3D tool's `onCancel` stage check.
-      if (wallTypingEscapeClearedRef.current) {
-        wallTypingEscapeClearedRef.current = false
-        markToolCancelConsumed()
-        return
-      }
       clearDraft()
     }
 
@@ -8411,11 +8393,33 @@ export function FloorplanPanel({
     return unsubscribe
   }, [movingNode, scheduleMovingFloorplanNodeRefresh])
 
+  // Read by the typed-entry listener, registered once so it stays ahead of
+  // the global shortcuts.
+  const wallTypingSourceRef = useRef({
+    draftStart: null as WallPlanPoint | null,
+    lengthOptions: placementTypingLengthOptions(unit, metricNotation),
+  })
+  wallTypingSourceRef.current = {
+    draftStart: isWallBuildActive ? draftStart : null,
+    lengthOptions: placementTypingLengthOptions(unit, metricNotation),
+  }
+  useEffect(
+    () =>
+      installFloorplanWallTypingKeys({
+        getDraft: () => {
+          const { draftStart: start, lengthOptions } = wallTypingSourceRef.current
+          if (!start) return null
+          const pointer =
+            wallDraftPointerRef.current ?? useFloorplanDraftPreview.getState().wallDraftEnd ?? start
+          return { start, pointer, lengthOptions }
+        },
+        commit: (pointer) => wallPlacementPointRef.current?.(pointer),
+      }),
+    [],
+  )
+
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      // A fresh keydown invalidates any stale stage-1 escape marker — only
-      // the cancel synchronously following the escape itself is stage-1.
-      wallTypingEscapeClearedRef.current = false
       const target = event.target as HTMLElement | null
       const isEditableTarget =
         target instanceof HTMLInputElement ||
@@ -8425,43 +8429,6 @@ export function FloorplanPanel({
 
       if (isEditableTarget) {
         return
-      }
-
-      // Typed entry for the plan's own wall draft, the 3D wall tool's
-      // convention. Split view never reaches here: the 3D tool drafts there
-      // and consumes these keys in its capture listener.
-      if (isWallBuildActive && draftStart) {
-        const outcome = routePlacementTypingKey(event, {
-          begin: (activeField) => {
-            usePlacementTyping
-              .getState()
-              .begin({ labels: PLACEMENT_TYPING_LENGTH_ANGLE, activeField })
-            return true
-          },
-          tabBegins: true,
-        })
-        if (outcome) {
-          event.preventDefault()
-          event.stopPropagation()
-          // `tool:cancel` still fires for this Escape (both listeners sit on
-          // window); the marker tells `handleCancel` it only ended the session.
-          if (outcome === 'clear') wallTypingEscapeClearedRef.current = true
-          if (outcome === 'commit') {
-            const pointer =
-              wallDraftPointerRef.current ??
-              useFloorplanDraftPreview.getState().wallDraftEnd ??
-              draftStart
-            const typedEnd = resolveTypedWallEnd(
-              draftStart,
-              pointer,
-              usePlacementTyping.getState().fields,
-              placementTypingLengthOptions(unit, metricNotation),
-              getSegmentGridStep(),
-            )
-            if (typedEnd) wallPlacementPointRef.current?.(pointer)
-          }
-          return
-        }
       }
 
       if (event.code === 'Space' && isFloorplanOpen) {
