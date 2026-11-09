@@ -456,6 +456,64 @@ describe('apply_patch identity and validation guards', () => {
     }
   })
 
+  test('edits beneath a cycle an old scene already holds apply whole', async () => {
+    const scene = bridge.exportJSON()
+    const site = Object.values(scene.nodes).find((n) => n.type === 'site')!
+    const corners = [
+      [0, 0],
+      [8, 0],
+      [8, 4],
+      [0, 4],
+    ]
+    const room = corners.map((start, i) =>
+      WallNode.parse({ id: `wall_room${i}`, parentId: level.id, start, end: corners[(i + 1) % 4] }),
+    )
+    const divider = WallNode.parse({
+      id: 'wall_divider',
+      parentId: level.id,
+      start: [20, 20],
+      end: [20, 24],
+    })
+    const loop = SiteNode.parse({ id: 'site_loop', parentId: site.id, children: [site.id] })
+    bridge.loadJSON({
+      ...scene,
+      nodes: {
+        ...scene.nodes,
+        ...Object.fromEntries([...room, divider, loop].map((node) => [node.id, node])),
+        [site.id]: {
+          ...site,
+          parentId: loop.id,
+          children: [...(site as { children: string[] }).children, loop.id],
+        } as AnyNode,
+        [level.id]: {
+          ...level,
+          children: [
+            ...(level as { children: string[] }).children,
+            ...room.map((w) => w.id),
+            divider.id,
+          ],
+        } as AnyNode,
+      },
+    })
+    const zones = () => Object.values(bridge.getNodes()).filter((n) => n.type === 'zone').length
+    const before = zones()
+
+    const split = await apply([
+      { op: 'update', id: divider.id, data: { start: [4, 0], end: [4, 4] } },
+    ])
+    expect(split).toMatchObject({ isError: false })
+    expect(zones()).toBe(before + 1)
+    const create = await apply([
+      {
+        op: 'create',
+        node: WallNode.parse({ id: 'wall_new', start: [0, 9], end: [3, 9] }),
+        parentId: level.id,
+      },
+    ])
+    expect(create).toMatchObject({ isError: false })
+    expect(bridge.validateScene().valid).toBe(false)
+  })
+
   test('default gutters a delete regenerates cannot be addressed later in the same patch', async () => {
     const roof = RoofNode.parse({})
     const segment = (x: number) =>

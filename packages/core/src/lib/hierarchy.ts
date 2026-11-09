@@ -4,8 +4,9 @@ type NodeMap = Readonly<Record<string, Pick<AnyNode, 'parentId'>>>
 type NodeLookup = (id: AnyNodeId) => Pick<AnyNode, 'parentId'> | undefined
 
 /**
- * Whether assigning `newParentId` to `nodeId` would make its parent chain
- * cyclic. A pre-existing cycle on that chain is unsafe to extend as well.
+ * Whether assigning `newParentId` to `nodeId` would put `nodeId` on a cycle of
+ * parent links. A cycle the chain already holds without `nodeId` is not one it
+ * creates: counting it would refuse every edit beneath an old cyclic scene.
  */
 export function wouldCreateHierarchyCycle(
   nodeId: AnyNodeId,
@@ -18,7 +19,8 @@ export function wouldCreateHierarchyCycle(
   const seen = new Set<AnyNodeId>()
   let currentId: AnyNodeId | null = newParentId
   while (currentId) {
-    if (currentId === nodeId || seen.has(currentId)) return true
+    if (currentId === nodeId) return true
+    if (seen.has(currentId)) return false
     seen.add(currentId)
     currentId = (nodeAt(currentId)?.parentId as AnyNodeId | null | undefined) ?? null
   }
