@@ -59,8 +59,9 @@ export class RunMoveConnectivity {
     )
   }
 
-  /** Live-preview the followers for the moved node's current drag transform. */
-  preview(transform: MovedTransform): void {
+  /** Live-preview the followers for the moved node's current drag transform,
+   *  returning the follower patches it shows. */
+  preview(transform: MovedTransform): { id: AnyNodeId; data: Partial<AnyNode> }[] {
     const updates = this.updatesFor(transform)
     const overrides = useLiveNodeOverrides.getState()
     const nextIds = updates.map((u) => u.id)
@@ -79,6 +80,7 @@ export class RunMoveConnectivity {
       }
     }
     this.overriddenIds = nextIds
+    return updates
   }
 
   /** Follower patches to fold into the commit `updateNodes` batch. */
