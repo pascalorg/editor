@@ -13,9 +13,8 @@ const HUD_LIFT_PX = 14
  * units, and the plan's `<g>` is zoomed and rotated, so the box is scaled by
  * `unitsPerPixel` and counter-rotated to stay screen-sized and upright. Both
  * come from the caller: the wall draft renders outside `FloorplanRenderProvider`.
- * It sits
- * just above its anchor, and only the HUD itself takes the pointer, so clicks
- * on the ghost or the draft under it still land on the plan.
+ * It sits just above its anchor, and only the HUD itself takes the pointer, so
+ * clicks on the ghost or the draft under it still land on the plan.
  */
 export function FloorplanPlacementTypingHud({
   placeholders,
