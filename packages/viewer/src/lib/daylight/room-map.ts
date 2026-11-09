@@ -368,6 +368,7 @@ export class RoomMap {
     return -1
   }
 
+  /** A level's room at a point; clusters' rects can overlap (a wing around a courtyard pavilion). */
   private levelRoomAt(li: number, x: number, z: number, tx: number, tz: number) {
     for (const c of this.levels[li]!.clusters) {
       const lx = tx - c.tx0
@@ -375,7 +376,7 @@ export class RoomMap {
       if (lx < 0 || lz < 0 || lx >= c.tw || lz >= c.th) continue
       const e = c.entries[lz * c.tw + lx]!
       if (e > 0) return e - 1
-      if (e === 0) return -1
+      if (e === 0) continue
       const a = -e - 1
       const ci = Math.floor((x - this.originX) / CELL) - tx * TILE
       const cj = Math.floor((z - this.originZ) / CELL) - tz * TILE
@@ -383,7 +384,8 @@ export class RoomMap {
       const k =
         ((Math.floor(a / this.atlasTilesW) * TILE + cj) * aw + (a % this.atlasTilesW) * TILE + ci) *
         2
-      return this.atlas[k]! + this.atlas[k + 1]! * 256 - 1
+      const room = this.atlas[k]! + this.atlas[k + 1]! * 256 - 1
+      if (room >= 0) return room
     }
     return -1
   }
@@ -573,9 +575,9 @@ export class RoomMap {
           })
         })
         const level = this.levelTexel0(found)
-        const done = int(0).toVar()
+        // Clusters' rects can overlap: the first one holding a room at the point wins.
         Loop({ start: int(0), end: int(level.z), type: 'int', condition: '<' }, ({ i: c }: N) => {
-          If(done.equal(0), () => {
+          If(room.lessThan(0), () => {
             const base = int(level.y).add(c.mul(2))
             const rect = this.indexTexel(base)
             const local = tile.sub(ivec2(int(rect.x), int(rect.y)))
@@ -586,7 +588,6 @@ export class RoomMap {
                 .and(local.x.lessThan(int(rect.z)))
                 .and(local.y.lessThan(int(rect.w))),
               () => {
-                done.assign(1)
                 const entryStart = int(this.indexTexel(base.add(1)).x)
                 const e = this.indexTexel(entryStart.add(local.y.mul(int(rect.z))).add(local.x)).x
                 If(e.greaterThan(0.5), () => {

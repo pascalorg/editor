@@ -335,6 +335,25 @@ describe('room map edge cases', () => {
     expect(at(5, 8)).toBe('whole floor')
   })
 
+  test('a pavilion in a courtyard keeps its room inside the wing around it', () => {
+    // The C-shaped wing's rooms and the pavilion are far enough apart to form separate clusters,
+    // but the wing's cluster rect covers the courtyard.
+    const rooms = new RoomLighting()
+    rooms.build(
+      bare({
+        levels: [{ y: 0, building: 0 }],
+        zones: [
+          { id: 'west', levelIndex: 0, polygon: rect(0, 0, 6, 40) },
+          { id: 'north', levelIndex: 0, polygon: rect(6, 0, 40, 6) },
+          { id: 'south', levelIndex: 0, polygon: rect(6, 34, 40, 40) },
+          { id: 'pavilion', levelIndex: 0, polygon: rect(20, 17, 26, 23) },
+        ],
+      }),
+    )
+    expect(rooms.rooms[rooms.roomAt(new Vector3(23, 1, 20))]?.zone.id).toBe('pavilion')
+    expect(rooms.roomAt(new Vector3(33, 1, 20))).toBe(-1)
+  })
+
   test('a level opens from above only when every level over it is hidden', () => {
     const rooms = new RoomLighting()
     rooms.build(
@@ -358,6 +377,15 @@ describe('room map edge cases', () => {
     expect(rooms.levelFocused).toEqual([false, false, true])
   })
 })
+
+function rect(x0: number, z0: number, x1: number, z1: number): [number, number][] {
+  return [
+    [x0, z0],
+    [x1, z0],
+    [x1, z1],
+    [x0, z1],
+  ]
+}
 
 function square(x: number, z: number, size: number): [number, number][] {
   return [

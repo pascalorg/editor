@@ -58,6 +58,9 @@ export function useDaylightRooms() {
     dirtyRooms: false,
     /** Dirty nodes left when rooms were last built mid-load (they rebuild as the count falls). */
     builtDirty: Number.POSITIVE_INFINITY,
+    /** Level offsets last frame: rays are cast at stacked heights, so no build while levels move. */
+    offsets: [] as number[],
+    levelsMoved: false,
     live: true,
     bakedRoot: null as Object3D | null,
     levelObjects: [] as (Object3D | undefined)[],
@@ -112,7 +115,12 @@ export function useDaylightRooms() {
     }
     if (s.pendingSince >= 0) {
       s.pendingSince += delta
-      if (s.pendingSince >= REBUILD_DELAY && (!(s.live && dirty) || s.pendingSince > SETTLE_WAIT)) {
+      const exploded = useViewer.getState().levelMode === 'exploded' || s.levelsMoved
+      if (
+        s.pendingSince >= REBUILD_DELAY &&
+        !exploded &&
+        (!(s.live && dirty) || s.pendingSince > SETTLE_WAIT)
+      ) {
         s.pendingSince = -1
         const input = s.live
           ? liveRoomScene(lampDefault)
@@ -149,6 +157,10 @@ export function useDaylightRooms() {
     const offsets = s.levelObjects.map((object, index) =>
       object ? object.getWorldPosition(scratch).y - (levels[index]?.y ?? 0) : 0,
     )
+    s.levelsMoved = offsets.some(
+      (offset, index) => Math.abs(offset - (s.offsets[index] ?? offset)) > 1e-4,
+    )
+    s.offsets = offsets
     const shown = s.levelObjects.map((object) => !!object && presented(object))
     const focus = selectedFocusLevel()
     const selected = s.levelObjects.map((object) => !!object && object === focus)
