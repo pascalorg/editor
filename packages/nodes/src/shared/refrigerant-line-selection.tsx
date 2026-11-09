@@ -17,6 +17,7 @@ import {
 import {
   DimensionPill,
   isGridSnapActive,
+  PATH_POINT_DRAG_LABEL,
   swallowNextClick,
   triggerSFX,
   useEditor,
@@ -27,6 +28,7 @@ import { Html } from '@react-three/drei'
 import { createPortal, type ThreeEvent, useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { type Group, type Object3D, Plane, Raycaster, Vector2, Vector3 } from 'three'
+import { claimHandleDragScope } from './handle-drag-scope'
 import { REFRIGERANT_PORT_SYSTEMS } from './port-systems'
 import { HandleCube, MoveChevron } from './selection-handles'
 
@@ -248,6 +250,10 @@ function RefrigerantLineEndpointHandles({
     useViewer.getState().setInputDragging(true)
     document.body.style.cursor = kind.axis === 'y' ? 'ns-resize' : 'grabbing'
     setDraggingIndex(index)
+    const releaseScope = claimHandleDragScope(line.id, PATH_POINT_DRAG_LABEL, () => {
+      swallowNextClick()
+      finish(false)
+    })
 
     const isEndpoint = index === 0 || index === initialPath.length - 1
     const swings = kind.axis === 'y' ? kind.along !== true : !kind.along
@@ -312,10 +318,9 @@ function RefrigerantLineEndpointHandles({
         .updateNodes([{ id: line.id as AnyNodeId, data: { path } as Partial<AnyNode> }, ...follow])
     }
 
-    const onUp = () => {
+    const finish = (commit: boolean) => {
       const drag = dragRef.current
       if (!drag) return
-      swallowNextClick()
       drag.cleanup()
       dragRef.current = null
       setDraggingIndex(null)
@@ -337,6 +342,7 @@ function RefrigerantLineEndpointHandles({
           ...revert.filter((u) => useScene.getState().nodes[u.id]),
         ])
       resumeSceneHistory(useScene)
+      if (!commit) return
       const moved = finalPath[drag.index]!.some(
         (v, axis) => v !== drag.initialPath[drag.index]![axis],
       )
@@ -351,10 +357,17 @@ function RefrigerantLineEndpointHandles({
       }
     }
 
+    const onUp = () => {
+      if (!dragRef.current) return
+      swallowNextClick()
+      finish(true)
+    }
+
     const cleanup = () => {
       window.removeEventListener('pointermove', onMove)
       window.removeEventListener('pointerup', onUp)
       window.removeEventListener('pointercancel', onUp)
+      releaseScope()
       useViewer.getState().setInputDragging(false)
       document.body.style.cursor = ''
     }

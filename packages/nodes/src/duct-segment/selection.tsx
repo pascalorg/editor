@@ -17,10 +17,13 @@ import {
   useScene,
 } from '@pascal-app/core'
 import {
+  AXIS_MOVE_DRAG_LABEL,
   clearPlacementSurface,
   DimensionPill,
   isAngleSnapActive,
   isGridSnapActive,
+  PATH_POINT_DRAG_LABEL,
+  ROTATE_HANDLE_DRAG_LABEL,
   swallowNextClick,
   triggerSFX,
   useEditor,
@@ -55,6 +58,7 @@ import {
   type FittingEndpoint,
   planFittingEndpointReaim,
 } from '../shared/fitting-endpoint-reaim'
+import { claimHandleDragScope } from '../shared/handle-drag-scope'
 import { DuctSegmentGhost, FittingGhost } from '../shared/mep-ghost'
 import { DUCT_PORT_SYSTEMS } from '../shared/port-systems'
 import { planRunTranslationOffsets } from '../shared/run-translation-offset'
@@ -513,6 +517,10 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
     useViewer.getState().setInputDragging(true)
     document.body.style.cursor = kind.axis === 'y' ? 'ns-resize' : 'grabbing'
     setDraggingIndex(index)
+    const releaseScope = claimHandleDragScope(duct.id, PATH_POINT_DRAG_LABEL, () => {
+      swallowNextClick()
+      finish(false)
+    })
 
     const isEndpoint = index === 0 || index === initialPath.length - 1
 
@@ -625,15 +633,9 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
       publishLivePreview(batch)
     }
 
-    const onUp = () => {
+    const finish = (commit: boolean) => {
       const drag = dragRef.current
       if (!drag) return
-      // Swallow the trailing synthetic click so it doesn't reach the
-      // background-click deselect handler — `cleanup()` drops `inputDragging`
-      // synchronously here, so without this the click that fires after
-      // pointerup would land with the drag gate already down and clear the
-      // selection. Mirrors `useHandleDrag`'s onUp.
-      swallowNextClick()
       drag.cleanup()
       dragRef.current = null
       setDraggingIndex(null)
@@ -644,7 +646,7 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
       // detached — just the duct path).
       const detached = drag.detached
       const moved = drag.current.some((v, axis) => v !== drag.initialPath[drag.index]![axis])
-      const finalBatch = buildDragBatch(drag, drag.current, detached)
+      const finalBatch = commit ? buildDragBatch(drag, drag.current, detached) : null
       resumeSceneHistory(useScene)
       if (moved && finalBatch) {
         // A manual corner edit invalidates any stored auto-offset base (the
@@ -665,10 +667,22 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
       }
     }
 
+    const onUp = () => {
+      if (!dragRef.current) return
+      // Swallow the trailing synthetic click so it doesn't reach the
+      // background-click deselect handler — `cleanup()` drops `inputDragging`
+      // synchronously here, so without this the click that fires after
+      // pointerup would land with the drag gate already down and clear the
+      // selection. Mirrors `useHandleDrag`'s onUp.
+      swallowNextClick()
+      finish(true)
+    }
+
     const cleanup = () => {
       window.removeEventListener('pointermove', onMove)
       window.removeEventListener('pointerup', onUp)
       window.removeEventListener('pointercancel', onUp)
+      releaseScope()
       useViewer.getState().setInputDragging(false)
       document.body.style.cursor = ''
     }
@@ -728,6 +742,10 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
     useViewer.getState().setInputDragging(true)
     document.body.style.cursor = 'grabbing'
     setRolling(true)
+    const releaseScope = claimHandleDragScope(duct.id, ROTATE_HANDLE_DRAG_LABEL, () => {
+      swallowNextClick()
+      finish(false)
+    })
     let current = startRoll
     let lastStep = Number.NaN
 
@@ -735,14 +753,15 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
       if (startBearing === null) return
       const b = bearing(event.clientX, event.clientY)
       if (b === null) return
-      // Snap the roll to 45° steps only in the active angle mode.
+      // Snap the roll to 45° steps only in the active angle mode; held Alt rolls freely.
       const raw = b - startBearing
-      const delta = isAngleSnapActive() ? Math.round(raw / ROLL_STEP_RAD) * ROLL_STEP_RAD : raw
+      const snapped = !event.altKey && isAngleSnapActive()
+      const delta = snapped ? Math.round(raw / ROLL_STEP_RAD) * ROLL_STEP_RAD : raw
       const next = startRoll + delta
       if (next === current) return
       current = next
       // Tick the rotate SFX each time a fresh snapped step is crossed.
-      if (isAngleSnapActive()) {
+      if (snapped) {
         const step = Math.round(raw / ROLL_STEP_RAD)
         if (step !== lastStep) {
           lastStep = step
@@ -753,11 +772,11 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
       useScene.getState().markDirty(duct.id)
     }
 
-    const onUp = () => {
-      swallowNextClick()
+    const finish = (commit: boolean) => {
       window.removeEventListener('pointermove', onMove)
       window.removeEventListener('pointerup', onUp)
       window.removeEventListener('pointercancel', onUp)
+      releaseScope()
       useViewer.getState().setInputDragging(false)
       clearPlacementSurface()
       document.body.style.cursor = ''
@@ -765,12 +784,17 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
       useLiveNodeOverrides.getState().clear(duct.id)
       useScene.getState().markDirty(duct.id)
       resumeSceneHistory(useScene)
-      if (current !== startRoll) {
+      if (commit && current !== startRoll) {
         useScene.getState().updateNode(duct.id, {
           roll: current,
           ...(readAutoOffsetTag(duct) ? { metadata: withoutAutoOffsetTag(duct.metadata) } : {}),
         } as Partial<AnyNode>)
       }
+    }
+
+    const onUp = () => {
+      swallowNextClick()
+      finish(true)
     }
 
     window.addEventListener('pointermove', onMove)
@@ -909,10 +933,14 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
     useViewer.getState().setInputDragging(true)
     document.body.style.cursor = kind.axis === 'y' ? 'ns-resize' : 'grabbing'
     setRunMoving(true)
+    const releaseScope = claimHandleDragScope(duct.id, AXIS_MOVE_DRAG_LABEL, () => {
+      swallowNextClick()
+      finish(false)
+    })
     let delta = 0
     // Last frame's offset outcome (vertical move only): a valid plan to mint on
     // release, an invalid marker (preview-only, snap back), or null for a plain
-    // translate. `onUp` reads it to decide create vs. translate vs. nothing.
+    // translate. `finish` reads it to decide create vs. translate vs. nothing.
     let offsetResult: VerticalOffsetResult = null
 
     // Shift the LOGICAL L: vertical adds the carried `baseDy` plus this drag's
@@ -1109,11 +1137,11 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
       }
     }
 
-    const onUp = () => {
-      swallowNextClick()
+    const finish = (commit: boolean) => {
       window.removeEventListener('pointermove', onMove)
       window.removeEventListener('pointerup', onUp)
       window.removeEventListener('pointercancel', onUp)
+      releaseScope()
       useViewer.getState().setInputDragging(false)
       document.body.style.cursor = ''
       setRunMoving(false)
@@ -1121,7 +1149,7 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
       clearLivePreview()
       setPreviewHidden([])
       resumeSceneHistory(useScene)
-      if (delta === 0) return
+      if (!commit || delta === 0) return
       const dyEff = baseDy + delta
       const result = offsetResult
       // Invalid lift: nothing buildable at this height — keep the prior state
@@ -1257,6 +1285,11 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
         useScene.getState().updateNodes(updates)
         ensureSceneObjectsVisible(updates.map((update) => update.id))
       }
+    }
+
+    const onUp = () => {
+      swallowNextClick()
+      finish(true)
     }
 
     window.addEventListener('pointermove', onMove)

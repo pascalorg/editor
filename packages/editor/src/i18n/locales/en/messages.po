@@ -1866,6 +1866,10 @@ msgid "editor.helpers.helperManager.cancelStroke"
 msgstr "Cancel stroke"
 
 #: packages/editor/src/components/ui/helpers/helper-manager.tsx
+msgid "editor.helpers.helperManager.detachTheJoint"
+msgstr "Detach the joint"
+
+#: packages/editor/src/components/ui/helpers/helper-manager.tsx
 msgid "editor.helpers.helperManager.done"
 msgstr "Done"
 

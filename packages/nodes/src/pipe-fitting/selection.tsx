@@ -15,10 +15,13 @@ import {
 } from '@pascal-app/core'
 import {
   ARROW_COLOR,
+  AXIS_MOVE_DRAG_LABEL,
   EDITOR_LAYER,
   isAngleSnapActive,
   isGridSnapActive,
+  isMagneticSnapActive,
   isTypingTarget,
+  ROTATE_HANDLE_DRAG_LABEL,
   swallowNextClick,
   triggerSFX,
   useEditor,
@@ -48,6 +51,7 @@ import {
   ROTATE_STEP_RAD,
   type RotationAxis,
 } from '../shared/fitting-rotation'
+import { claimHandleDragScope } from '../shared/handle-drag-scope'
 import { HandleCube, MoveChevron, RotateArc } from '../shared/selection-handles'
 import { pipeFittingLegLength } from './ports'
 
@@ -263,6 +267,8 @@ const PipeFittingSelectionAffordance = () => {
       if (e.key !== 'Alt' || e.repeat) return
       if (isTypingTarget(e.target)) return
       e.preventDefault()
+      // Mid-drag, Alt is the turn's free-rotation modifier, not an axis switch.
+      if (useViewer.getState().inputDragging) return
       cycleRotationAxis()
     }
     window.addEventListener('keydown', onKeyDown)
@@ -384,6 +390,7 @@ const FittingHandles = ({ fitting }: { fitting: PipeFittingNode }) => {
 
   const beginDrag =
     (
+      handle: string,
       cursor: Cursor,
       makeCompute: (
         e: ThreeEvent<PointerEvent>,
@@ -399,6 +406,10 @@ const FittingHandles = ({ fitting }: { fitting: PipeFittingNode }) => {
       useViewer.getState().setInputDragging(true)
       setDragging(true)
       document.body.style.cursor = cursor
+      const releaseScope = claimHandleDragScope(fitting.id, handle, () => {
+        swallowNextClick()
+        finish(false)
+      })
       let current: FittingTransform | null = null
 
       const buildBatch = (
@@ -430,13 +441,13 @@ const FittingHandles = ({ fitting }: { fitting: PipeFittingNode }) => {
         window.removeEventListener('pointermove', onMove)
         window.removeEventListener('pointerup', onUp)
         window.removeEventListener('pointercancel', onUp)
+        releaseScope()
         useViewer.getState().setInputDragging(false)
         setDragging(false)
         if (document.body.style.cursor === cursor) document.body.style.cursor = ''
       }
 
-      const onUp = () => {
-        swallowNextClick()
+      const finish = (commit: boolean) => {
         cleanup()
         const reverts: { id: AnyNodeId; data: Partial<AnyNode> }[] = (
           connectivity?.connections ?? []
@@ -466,8 +477,14 @@ const FittingHandles = ({ fitting }: { fitting: PipeFittingNode }) => {
           ...reverts.filter((u) => useScene.getState().nodes[u.id]),
         ])
         resumeSceneHistory(useScene)
+        if (!commit) return
         const batch = current && buildBatch(current)
         if (batch) useScene.getState().updateNodes(batch)
+      }
+
+      const onUp = () => {
+        swallowNextClick()
+        finish(true)
       }
 
       window.addEventListener('pointermove', onMove)
@@ -526,7 +543,7 @@ const FittingHandles = ({ fitting }: { fitting: PipeFittingNode }) => {
         const b = bearing(event.clientX, event.clientY)
         if (b === null) return null
         const raw = b - startBearing
-        const snapped = isAngleSnapActive()
+        const snapped = !event.altKey && isAngleSnapActive()
         const delta = snapped ? Math.round(raw / ROTATE_STEP_RAD) * ROTATE_STEP_RAD : raw
         if (snapped) {
           const step = Math.round(raw / ROTATE_STEP_RAD)
@@ -559,6 +576,10 @@ const FittingHandles = ({ fitting }: { fitting: PipeFittingNode }) => {
       useViewer.getState().setInputDragging(true)
       setDragging(true)
       document.body.style.cursor = cursor
+      const releaseScope = claimHandleDragScope(fitting.id, `resize-${dimension}`, () => {
+        swallowNextClick()
+        finish(false)
+      })
       let current: Partial<PipeFittingNode> | null = null
       let lastValue = Number.NaN
 
@@ -576,7 +597,9 @@ const FittingHandles = ({ fitting }: { fitting: PipeFittingNode }) => {
           sampleAxisParameter(event.clientX, event.clientY, centerWorld, axisWorld) - start
         const deltaIn = (rawDeltaM / INCHES_TO_METERS) * 2
         const nextRaw = baseValue + deltaIn
-        const snapped = isGridSnapActive()
+        // A size has no alignment lines to pull to, so either snapping mode
+        // steps it; held Alt sizes freely.
+        const snapped = !event.altKey && (isGridSnapActive() || isMagneticSnapActive())
         const nextValue = clamp(snapped ? snap(nextRaw, RESIZE_STEP_IN) : nextRaw, 1.25, 8)
         if (nextValue === lastValue) return
         lastValue = nextValue
@@ -589,17 +612,22 @@ const FittingHandles = ({ fitting }: { fitting: PipeFittingNode }) => {
         window.removeEventListener('pointermove', onMove)
         window.removeEventListener('pointerup', onUp)
         window.removeEventListener('pointercancel', onUp)
+        releaseScope()
         useViewer.getState().setInputDragging(false)
         setDragging(false)
         if (document.body.style.cursor === cursor) document.body.style.cursor = ''
       }
 
-      const onUp = () => {
-        swallowNextClick()
+      const finish = (commit: boolean) => {
         cleanup()
         apply(initialPatch)
         resumeSceneHistory(useScene)
-        if (current) apply(current)
+        if (commit && current) apply(current)
+      }
+
+      const onUp = () => {
+        swallowNextClick()
+        finish(true)
       }
 
       window.addEventListener('pointermove', onMove)
@@ -782,6 +810,7 @@ const FittingHandles = ({ fitting }: { fitting: PipeFittingNode }) => {
               cursor={a.cursor}
               key={a.key}
               onPointerDown={beginDrag(
+                AXIS_MOVE_DRAG_LABEL,
                 a.axis === 'y' ? 'ns-resize' : 'grabbing',
                 moveCompute(a.axis),
               )}
@@ -793,7 +822,11 @@ const FittingHandles = ({ fitting }: { fitting: PipeFittingNode }) => {
           {rotateArcs.map((arc) => (
             <RotateArc
               key={arc.key}
-              onPointerDown={beginDrag('grabbing', rotateCompute(arc.axis))}
+              onPointerDown={beginDrag(
+                ROTATE_HANDLE_DRAG_LABEL,
+                'grabbing',
+                rotateCompute(arc.axis),
+              )}
               position={arc.position}
               rotation={arc.rotation}
             />
