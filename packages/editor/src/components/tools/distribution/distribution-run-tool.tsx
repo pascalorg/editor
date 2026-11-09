@@ -666,9 +666,9 @@ export function useDistributionRunTool(config: DistributionRunToolConfig) {
         fallback: explicitRoute ? [...hit.point] : (previous?.point ?? currentStart ?? hit.point),
         clearance: adapter.surfaceClearance?.(target) ?? 0,
       })
+      const routeElevation = currentStart?.[1] ?? adapter.elevation ?? 0
       if (explicitRoute) {
-        const elevation = currentStart?.[1] ?? adapter.elevation ?? 0
-        resolved.point[1] = elevation
+        resolved.point[1] = routeElevation
         if (currentStart && adapter.routingMode === 'vertical') {
           return {
             point: [currentStart[0], adapter.targetElevation ?? currentStart[1], currentStart[2]],
@@ -748,13 +748,21 @@ export function useDistributionRunTool(config: DistributionRunToolConfig) {
         const screen = projectConnection(candidate)
         return !!screen && Math.hypot(screen.x - pointer[0], screen.y - pointer[1]) <= 12
       }
+      // An explicit route may only connect at the height its free end reaches above that
+      // plan point, which includes the adapter's fall.
+      const routeHeightAt = (candidate: readonly number[]): number => {
+        const level: RunPoint = [candidate[0]!, routeElevation, candidate[2]!]
+        return currentStart
+          ? (adapter.resolveFreeEnd?.(currentStart, level, startConnectionRef.current) ?? level)[1]
+          : routeElevation
+      }
+      const onRoute = (candidate: readonly number[]) =>
+        !explicitRoute || Math.abs(candidate[1]! - routeHeightAt(candidate)) < 1e-4
       const resolveConnection = (candidate: RunPoint): ResolvedRunPoint | null => {
         if (bypass || !(isGridSnapActive() || isMagneticSnapActive() || isAngleSnapActive()))
           return null
         const source = startConnectionRef.current.port
-        const ports = adapter
-          .getPorts()
-          .filter((port) => !explicitRoute || Math.abs(port.position[1] - point[1]) < 1e-4)
+        const ports = adapter.getPorts().filter((port) => onRoute(port.position))
         const hit = findScreenPort(ports, pointer, projectConnection, source)
         if (hit) {
           return {
@@ -769,10 +777,15 @@ export function useDistributionRunTool(config: DistributionRunToolConfig) {
           }
         }
         const body =
-          adapter.connectCrossings === false ? null : adapter.findBody(candidate, drawingTarget)
+          adapter.connectCrossings === false
+            ? null
+            : adapter.findBody(
+                explicitRoute ? [candidate[0], routeHeightAt(candidate), candidate[2]] : candidate,
+                drawingTarget,
+              )
         if (
           body &&
-          (!explicitRoute || Math.abs(body.point[1] - point[1]) < 1e-4) &&
+          onRoute(body.point) &&
           acceptsConnection(body.point) &&
           body.nodeId !== source?.nodeId
         ) {
