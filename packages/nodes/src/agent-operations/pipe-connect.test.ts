@@ -110,11 +110,12 @@ test('occupied, wrong-direction, stale and cramped collars refuse atomically', (
   ])
     expect(() => edit(nodes, input, context)).toThrow()
 })
-test('the inspector exposes collar size and elevation', () => {
+test('the inspector names each collar and exposes its size and elevation', () => {
   const node = trap()
   const html = renderToStaticMarkup(createElement(PipeCollarInspector, { node }))
   expect(html).toContain('Draw from collar')
-  expect(html).toContain('1.5 in')
+  expect(html).toContain('Inlet · 1.5 in')
+  expect(html).toContain('Outlet · 1.5 in')
   expect(html).toContain('2.030 m')
 })
 

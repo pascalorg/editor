@@ -58,12 +58,3 @@ export function pipeGradesMatch(initial: readonly Point[], next: readonly Point[
   }
   return true
 }
-
-export function pipeGradeLabel(start: Point, end: Point): string {
-  if (Math.hypot(...start.map((v, i) => v - end[i]!)) < 1e-6) return 'Choose an endpoint'
-  const grade = pipeGrade(start, end)
-  if (grade === null)
-    return `Vertical · ${start[1] > end[1] ? 'start → end' : 'end → start'} (down)`
-  if (Math.abs(grade) < 1e-6) return 'Level · no gravity fall'
-  return `${(Math.abs(grade) * 100).toFixed(2)}% · 1:${(1 / Math.abs(grade)).toFixed(1)} · ${grade > 0 ? 'start → end' : 'end → start'} (down)`
-}

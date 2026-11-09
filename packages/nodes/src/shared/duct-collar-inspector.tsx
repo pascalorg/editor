@@ -1,6 +1,6 @@
 'use client'
 
-import { type AnyNode, nodeRegistry, usePascalI18n, useScene } from '@pascal-app/core'
+import { type AnyNode, formatNumber, nodeRegistry, usePascalI18n, useScene } from '@pascal-app/core'
 import { useEditor } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { Vector3 } from 'three'
@@ -25,10 +25,14 @@ export default function DuctCollarInspector({ node }: { node: AnyNode }) {
             new Vector3(...other.position).distanceTo(new Vector3(...port.position)) < 0.005 &&
             new Vector3(...other.direction).dot(new Vector3(...port.direction)) < -0.99,
         )
+        const locale = i18n.getLocale()
         const size =
-          port.shape && port.shape !== 'round'
-            ? `${port.width} × ${port.height}`
-            : `${port.diameter}`
+          port.shape &&
+          port.shape !== 'round' &&
+          port.width !== undefined &&
+          port.height !== undefined
+            ? `${formatNumber(port.width, { locale })} × ${formatNumber(port.height, { locale })}`
+            : formatNumber(port.diameter, { locale })
         return (
           <button
             key={port.id}

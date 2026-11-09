@@ -26967,6 +26967,56 @@ msgstr "R/T pivoter"
 msgid "node.pipeSegment.description"
 msgstr "Canalisation d’évacuation et de ventilation — tracez à plat ou choisissez la pente et le sens d’écoulement."
 
+# Source-Hash: 1e023cceafd26c49
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Choose an endpoint"
+#: packages/nodes/src/pipe-segment/grade-label.ts
+#, fuzzy
+msgid "node.pipeSegment.grade.chooseEndpoint"
+msgstr "Choisissez une extrémité"
+
+# Source-Hash: 1d12cd840d742517
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Level · no gravity fall"
+#: packages/nodes/src/pipe-segment/grade-label.ts
+#, fuzzy
+msgid "node.pipeSegment.grade.level"
+msgstr "À plat · pas d’écoulement gravitaire"
+
+# Source-Hash: 9ded568026ac7088
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "{percent}%"
+#: packages/nodes/src/pipe-segment/grade-label.ts
+#, fuzzy
+msgid "node.pipeSegment.grade.percent"
+msgstr "{percent} %"
+
+# Source-Hash: adba843f6e1128f2
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "{percent} · 1:{ratio} · {direction, select, forward {start → end} other {end → start}} (down)"
+#: packages/nodes/src/pipe-segment/grade-label.ts
+#, fuzzy
+msgid "node.pipeSegment.grade.sloped"
+msgstr "{percent} · 1:{ratio} · {direction, select, forward {début → fin} other {fin → début}} (descendant)"
+
+# Source-Hash: b25fe0ebcdadc1a1
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "Vertical · {direction, select, forward {start → end} other {end → start}} (down)"
+#: packages/nodes/src/pipe-segment/grade-label.ts
+#, fuzzy
+msgid "node.pipeSegment.grade.vertical"
+msgstr "Vertical · {direction, select, forward {début → fin} other {fin → début}} (descendant)"
+
 # Source-Hash: 1107996c9987dc5a
 # Review: required
 # AI-Provider: cursor-agent
@@ -27426,6 +27476,16 @@ msgstr "Ce tronçon"
 #, fuzzy
 msgid "node.pipeSegment.resizeInspector.unableToResize"
 msgstr "Impossible de redimensionner le tuyau."
+
+# Source-Hash: 4019007983696a57
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+# English: "{grade} · Start {start} m · End {end} m above level"
+#: packages/nodes/src/pipe-segment/tool.tsx
+#, fuzzy
+msgid "node.pipeSegment.tool.gradeDetail"
+msgstr "{grade} · Début {start} m · Fin {end} m au-dessus du niveau"
 
 # Source-Hash: 6d0cdd14d0675e05
 # Review: required
@@ -29920,15 +29980,15 @@ msgstr "Largeur"
 msgid "node.shared.openingDepthPosition.depthPosition"
 msgstr "Position en profondeur"
 
-# Source-Hash: 9067ae38f38ebc6d
+# Source-Hash: dde1a07755fd0e6e
 # Review: required
 # AI-Provider: cursor-agent
 # AI-Model: claude-opus-5-5
-# English: "{port} · {diameter} in · {elevation} m · {state, select, connected {Connected} other {Draw from collar}}"
+# English: "{port, select, inlet {Inlet} outlet {Outlet} branch {Branch} branch2 {Second branch} other {Collar {number}}} · {diameter} in · {elevation} m · {state, select, connected {Connected} other {Draw from collar}}"
 #: packages/nodes/src/shared/pipe-collar-inspector.tsx
 #, fuzzy
 msgid "node.shared.pipeCollarInspector.collarButton"
-msgstr "{port} · {diameter} in · {elevation} m · {state, select, connected {Raccordé} other {Tracer depuis le collier}}"
+msgstr "{port, select, inlet {Entrée} outlet {Sortie} branch {Piquage} branch2 {Second piquage} other {Collier {number}}} · {diameter} in · {elevation} m · {state, select, connected {Raccordé} other {Tracer depuis le collier}}"
 
 # Source-Hash: 88a982140de95dcc
 # Review: required

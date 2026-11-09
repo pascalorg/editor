@@ -10827,6 +10827,26 @@ msgstr "R/T rotate"
 msgid "node.pipeSegment.description"
 msgstr "Drain / waste / vent pipe run — draw level or choose grade and downhill direction."
 
+#: packages/nodes/src/pipe-segment/grade-label.ts
+msgid "node.pipeSegment.grade.chooseEndpoint"
+msgstr "Choose an endpoint"
+
+#: packages/nodes/src/pipe-segment/grade-label.ts
+msgid "node.pipeSegment.grade.level"
+msgstr "Level · no gravity fall"
+
+#: packages/nodes/src/pipe-segment/grade-label.ts
+msgid "node.pipeSegment.grade.percent"
+msgstr "{percent}%"
+
+#: packages/nodes/src/pipe-segment/grade-label.ts
+msgid "node.pipeSegment.grade.sloped"
+msgstr "{percent} · 1:{ratio} · {direction, select, forward {start → end} other {end → start}} (down)"
+
+#: packages/nodes/src/pipe-segment/grade-label.ts
+msgid "node.pipeSegment.grade.vertical"
+msgstr "Vertical · {direction, select, forward {start → end} other {end → start}} (down)"
+
 #: packages/nodes/src/pipe-segment/grade-inspector.tsx
 msgid "node.pipeSegment.gradeInspector.applyGradeToHorizontalLegs"
 msgstr "Apply grade to horizontal legs"
@@ -11010,6 +11030,10 @@ msgstr "This segment"
 #: packages/nodes/src/pipe-segment/resize-inspector.tsx
 msgid "node.pipeSegment.resizeInspector.unableToResize"
 msgstr "Unable to resize pipe."
+
+#: packages/nodes/src/pipe-segment/tool.tsx
+msgid "node.pipeSegment.tool.gradeDetail"
+msgstr "{grade} · Start {start} m · End {end} m above level"
 
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "node.pipeTrap.description"
@@ -12012,7 +12036,7 @@ msgstr "Depth position"
 
 #: packages/nodes/src/shared/pipe-collar-inspector.tsx
 msgid "node.shared.pipeCollarInspector.collarButton"
-msgstr "{port} · {diameter} in · {elevation} m · {state, select, connected {Connected} other {Draw from collar}}"
+msgstr "{port, select, inlet {Inlet} outlet {Outlet} branch {Branch} branch2 {Second branch} other {Collar {number}}} · {diameter} in · {elevation} m · {state, select, connected {Connected} other {Draw from collar}}"
 
 #: packages/nodes/src/shared/pipe-collar-inspector.tsx
 msgid "node.shared.pipeCollarInspector.connectPipe"

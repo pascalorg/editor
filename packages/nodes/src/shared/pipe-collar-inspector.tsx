@@ -24,7 +24,7 @@ export default function PipeCollarInspector({ node }: { node: AnyNode }) {
       <h3 className="text-sm font-medium">
         {i18n._({ id: 'node.shared.pipeCollarInspector.connectPipe', message: 'Connect pipe' })}
       </h3>
-      {pipePorts.map((port) => {
+      {pipePorts.map((port, index) => {
         const occupied = pipeCollarOccupied(nodes, { ...port, nodeId: node.id })
         return (
           <button
@@ -63,9 +63,10 @@ export default function PipeCollarInspector({ node }: { node: AnyNode }) {
             {i18n._({
               id: 'node.shared.pipeCollarInspector.collarButton',
               message:
-                '{port} · {diameter} in · {elevation} m · {state, select, connected {Connected} other {Draw from collar}}',
+                '{port, select, inlet {Inlet} outlet {Outlet} branch {Branch} branch2 {Second branch} other {Collar {number}}} · {diameter} in · {elevation} m · {state, select, connected {Connected} other {Draw from collar}}',
               values: {
                 port: port.id,
+                number: String(index + 1),
                 diameter: formatNumber(port.diameter, { locale: i18n.getLocale() }),
                 elevation: formatFixed(port.position[1], 3, i18n.getLocale()),
                 state: occupied ? 'connected' : 'open',

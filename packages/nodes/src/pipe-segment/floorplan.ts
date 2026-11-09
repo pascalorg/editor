@@ -1,7 +1,13 @@
-import type { FloorplanGeometry, FloorplanPoint, GeometryContext } from '@pascal-app/core'
+import {
+  defaultI18n,
+  type FloorplanGeometry,
+  type FloorplanPoint,
+  type GeometryContext,
+} from '@pascal-app/core'
 import { INCHES_TO_METERS } from '../duct-segment/profile'
 import { runHangerFloorplan } from '../shared/run-hangers'
 import { pipeContinuationHandlePlan, pipeEndpointPort } from './continuation'
+import { formatPipeGradePercent } from './grade-label'
 import type { PipeSegmentNode } from './schema'
 import { pipeGrade } from './slope'
 
@@ -115,7 +121,7 @@ export function buildPipeSegmentFloorplan(
         kind: 'text',
         x: x - dz * 0.18,
         y: z + dx * 0.18,
-        text: `${(Math.abs(grade) * 100).toFixed(2)}%`,
+        text: formatPipeGradePercent(grade, defaultI18n),
         fontSize: 0.12,
         fill: stroke,
         textAnchor: 'middle',

@@ -1,6 +1,12 @@
 'use client'
 
-import { type AnyNode, type PipeFittingNode, PipeSegmentNode } from '@pascal-app/core'
+import {
+  type AnyNode,
+  formatFixed,
+  type PipeFittingNode,
+  PipeSegmentNode,
+  usePascalI18n,
+} from '@pascal-app/core'
 import {
   EDITOR_LAYER,
   triggerSFX,
@@ -46,7 +52,8 @@ import { clearRunContinuation, updateRunDefaults } from '../shared/run-tool-opti
 import { planPipeCollarConnection } from './collar-connection'
 import { currentPipeContinuationSeed, pipeEndpointPort } from './continuation'
 import { pipeSegmentDefinition } from './definition'
-import { applyPipeGrade, pipeGrade, pipeGradeLabel } from './slope'
+import { pipeGradeLabel } from './grade-label'
+import { applyPipeGrade, pipeGrade } from './slope'
 
 const PIPE_DIAMETERS_IN = [1.25, 1.5, 2, 3, 4, 6] as const
 const BODY_SNAP_RADIUS_M = 0.3
@@ -62,6 +69,7 @@ function getConnectionPorts(
 }
 
 const PipeSegmentTool = () => {
+  const i18n = usePascalI18n()
   const { activeLevelId, sceneApi, unit } = useRegistryToolContext()
   const toolDefaults = useEditor((s) => s.toolDefaults['pipe-segment']) as
     | Partial<PipeSegmentNode>
@@ -580,7 +588,15 @@ const PipeSegmentTool = () => {
       <ConnectionFeedback
         detail={
           displayStart && run.cursor
-            ? `${pipeGradeLabel(displayStart, run.cursor)} · Start ${displayStart[1].toFixed(3)} m · End ${run.cursor[1].toFixed(3)} m above level`
+            ? i18n._({
+                id: 'node.pipeSegment.tool.gradeDetail',
+                message: '{grade} · Start {start} m · End {end} m above level',
+                values: {
+                  grade: pipeGradeLabel(displayStart, run.cursor, i18n),
+                  start: formatFixed(displayStart[1], 3, i18n.getLocale()),
+                  end: formatFixed(run.cursor[1], 3, i18n.getLocale()),
+                },
+              })
             : undefined
         }
         point={run.cursor}

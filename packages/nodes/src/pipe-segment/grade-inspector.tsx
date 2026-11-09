@@ -8,10 +8,11 @@ import {
 } from '@pascal-app/core'
 import { useState } from 'react'
 import RunHangerInspector from '../shared/run-hanger-inspector'
+import { pipeGradeLabel } from './grade-label'
 import { editPipeGrade, type PipeGradeInput } from './grade-operation'
 import PipeOffsetInspector from './offset-inspector'
 import PipeResizeInspector from './resize-inspector'
-import { pipeGrade, pipeGradeLabel } from './slope'
+import { pipeGrade } from './slope'
 
 export default function PipeGradeInspector({ node }: { node: PipeSegmentNode }) {
   return (
@@ -71,7 +72,7 @@ function GradeForm({ node }: { node: PipeSegmentNode }) {
             message: 'Leg {number}: {grade}',
             values: {
               number: String(index + 1),
-              grade: pipeGradeLabel(node.path[index]!, point),
+              grade: pipeGradeLabel(node.path[index]!, point, i18n),
             },
           })}
         </p>
