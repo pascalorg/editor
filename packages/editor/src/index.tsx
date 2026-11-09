@@ -476,7 +476,12 @@ export {
   resolveCeilingPlanPointSnap,
 } from './lib/ceiling-plan-snap'
 export { EDITOR_LAYER } from './lib/constants'
-export type { ContextualShortcutHint } from './lib/contextual-help'
+export {
+  AXIS_MOVE_DRAG_LABEL,
+  type ContextualShortcutHint,
+  PATH_POINT_DRAG_LABEL,
+  ROTATE_HANDLE_DRAG_LABEL,
+} from './lib/contextual-help'
 export {
   CONTEXTUAL_HELP_NODE_EXTENSION_KEY,
   type ContextualHelpNodeExtension,

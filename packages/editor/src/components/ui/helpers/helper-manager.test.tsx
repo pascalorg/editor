@@ -1,11 +1,18 @@
 import { describe, expect, test } from 'bun:test'
 import { renderToStaticMarkup } from 'react-dom/server'
+import {
+  AXIS_MOVE_DRAG_LABEL,
+  PATH_POINT_DRAG_LABEL,
+  ROTATE_HANDLE_DRAG_LABEL,
+} from '../../../lib/contextual-help'
 import { SELECT_HUD_TITLE, toolHudTitle } from '../../../lib/hud-title'
 import { snapContextOf } from '../../../lib/snapping-mode'
 import { cornerHintRows } from '../../../store/use-corner-snap-hint'
 import { TooltipProvider } from '../primitives/tooltip'
 import { ContextualHelperPanel } from './contextual-helper-panel'
 import {
+  mepHandleGesture,
+  mepHandleGestureHints,
   mezzanineHints,
   openingHints,
   ROOM_DIVIDE_HINTS,
@@ -125,6 +132,52 @@ describe('HUD header', () => {
       label: expect.objectContaining({ message: 'Select' }),
       shortcut: 'V',
     })
+  })
+})
+
+describe('MEP handle HUD', () => {
+  const english = (hints: ReturnType<typeof mepHandleGestureHints>) =>
+    hints.map((hint) => (typeof hint.label === 'string' ? hint.label : hint.label.message))
+  const drag = (label: string) => ({ nodeId: 'pipe_a', label })
+
+  test('names a run point drag and an axis slide, and leaves rotate and resize to their own HUDs', () => {
+    expect(mepHandleGesture(drag(PATH_POINT_DRAG_LABEL))).toBe('edit-path')
+    expect(mepHandleGesture(drag(AXIS_MOVE_DRAG_LABEL))).toBe('move')
+    expect(mepHandleGesture(drag(ROTATE_HANDLE_DRAG_LABEL))).toBeNull()
+    expect(mepHandleGesture(drag('resize-diameter'))).toBeNull()
+    expect(mepHandleGesture(null)).toBeNull()
+  })
+
+  test('keeps "Alt: Detach the joint" on screen for the whole run point drag', () => {
+    const idle = mepHandleGestureHints('edit-path', false)
+    expect(english(idle)).toEqual(['Detach the joint', 'Cancel'])
+    expect(idle.map((hint) => hint.keys)).toEqual([['Alt'], ['Esc']])
+    expect(idle[0]?.active).toBe(false)
+    expect(mepHandleGestureHints('edit-path', true)[0]?.active).toBe(true)
+    expect(english(mepHandleGestureHints('move', false))).toEqual(['Cancel'])
+
+    const html = renderToStaticMarkup(
+      <TooltipProvider>
+        <ContextualHelperPanel hints={idle} snapContext="polygon" />
+      </TooltipProvider>,
+    )
+    for (const label of ['Detach the joint', 'Cancel', 'Snapping: Grid']) expect(html).toContain(label)
+  })
+
+  test('a handle drag snaps in its kind context, and a rotate arc in angles', () => {
+    const contextOf = (handle: string, profile: 'item' | 'structural') =>
+      snapContextOf({
+        scope: { kind: 'handle-drag', nodeId: 'pipe_a', handle },
+        mode: 'select',
+        tool: null,
+        profileOf: () => undefined,
+        profileOfNode: () => profile,
+      })
+    expect(contextOf(PATH_POINT_DRAG_LABEL, 'structural')).toBe('polygon')
+    expect(contextOf(AXIS_MOVE_DRAG_LABEL, 'structural')).toBe('polygon')
+    expect(contextOf(AXIS_MOVE_DRAG_LABEL, 'item')).toBe('item')
+    expect(contextOf('resize-diameter', 'item')).toBe('item')
+    expect(contextOf(ROTATE_HANDLE_DRAG_LABEL, 'item')).toBe('rotation')
   })
 })
 

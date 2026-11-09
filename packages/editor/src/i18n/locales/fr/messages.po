@@ -4595,6 +4595,16 @@ msgstr "Annuler la sélection"
 msgid "editor.helpers.helperManager.cancelStroke"
 msgstr "Annuler le tracé"
 
+# Source-Hash: 7aaeeaeb3e2f247a
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Detach the joint"
+#: packages/editor/src/components/ui/helpers/helper-manager.tsx
+#, fuzzy
+msgid "editor.helpers.helperManager.detachTheJoint"
+msgstr "Détacher la jonction"
+
 # Source-Hash: 16552c2580bbe8b8
 # Review: required
 # AI-Provider: claude-code

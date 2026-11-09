@@ -16,9 +16,11 @@ import {
   useScene,
 } from '@pascal-app/core'
 import {
+  AXIS_MOVE_DRAG_LABEL,
   clearPlacementSurface,
   DimensionPill,
   isGridSnapActive,
+  PATH_POINT_DRAG_LABEL,
   swallowNextClick,
   triggerSFX,
   useEditor,
@@ -35,6 +37,7 @@ import {
   type FittingEndpoint,
   planFittingEndpointReaim,
 } from '../shared/fitting-endpoint-reaim'
+import { claimHandleDragScope } from '../shared/handle-drag-scope'
 import { PipeFittingGhost, PipeSegmentGhost } from '../shared/mep-ghost'
 import { DWV_PORT_SYSTEMS } from '../shared/port-systems'
 import { ContinuePlusHandle, HandleCube, MoveChevron } from '../shared/selection-handles'
@@ -400,6 +403,10 @@ const PipePointHandles = ({ pipe, target }: { pipe: PipeSegmentNode; target: Obj
     useViewer.getState().setInputDragging(true)
     document.body.style.cursor = kind.axis === 'y' ? 'ns-resize' : 'grabbing'
     setDraggingIndex(index)
+    const releaseScope = claimHandleDragScope(pipe.id, PATH_POINT_DRAG_LABEL, () => {
+      swallowNextClick()
+      finish(false)
+    })
 
     const isEndpoint = index === 0 || index === initialPath.length - 1
     const swings =
@@ -486,10 +493,9 @@ const PipePointHandles = ({ pipe, target }: { pipe: PipeSegmentNode; target: Obj
       publishLivePreview(batch)
     }
 
-    const onUp = () => {
+    const finish = (commit: boolean) => {
       const drag = dragRef.current
       if (!drag) return
-      swallowNextClick()
       drag.cleanup()
       dragRef.current = null
       setDraggingIndex(null)
@@ -501,17 +507,24 @@ const PipePointHandles = ({ pipe, target }: { pipe: PipeSegmentNode; target: Obj
       // detached — just the pipe path).
       const detached = drag.detached
       const moved = drag.current.some((v, axis) => v !== drag.initialPath[drag.index]![axis])
-      const finalBatch = buildDragBatch(drag, drag.current, detached)
+      const finalBatch = commit ? buildDragBatch(drag, drag.current, detached) : null
       resumeSceneHistory(useScene)
       if (moved && finalBatch) {
         useScene.getState().updateNodes(finalBatch)
       }
     }
 
+    const onUp = () => {
+      if (!dragRef.current) return
+      swallowNextClick()
+      finish(true)
+    }
+
     const cleanup = () => {
       window.removeEventListener('pointermove', onMove)
       window.removeEventListener('pointerup', onUp)
       window.removeEventListener('pointercancel', onUp)
+      releaseScope()
       useViewer.getState().setInputDragging(false)
       document.body.style.cursor = ''
     }
@@ -626,6 +639,10 @@ const PipePointHandles = ({ pipe, target }: { pipe: PipeSegmentNode; target: Obj
     useViewer.getState().setInputDragging(true)
     document.body.style.cursor = kind.axis === 'y' ? 'ns-resize' : 'grabbing'
     setRunMoving(true)
+    const releaseScope = claimHandleDragScope(pipe.id, AXIS_MOVE_DRAG_LABEL, () => {
+      swallowNextClick()
+      finish(false)
+    })
     let delta = 0
 
     const onMove = (event: PointerEvent) => {
@@ -653,11 +670,11 @@ const PipePointHandles = ({ pipe, target }: { pipe: PipeSegmentNode; target: Obj
       publishLivePreview(frame.preview)
     }
 
-    const onUp = () => {
-      swallowNextClick()
+    const finish = (commit: boolean) => {
       window.removeEventListener('pointermove', onMove)
       window.removeEventListener('pointerup', onUp)
       window.removeEventListener('pointercancel', onUp)
+      releaseScope()
       useViewer.getState().setInputDragging(false)
       clearPlacementSurface()
       document.body.style.cursor = ''
@@ -667,7 +684,7 @@ const PipePointHandles = ({ pipe, target }: { pipe: PipeSegmentNode; target: Obj
       clearLivePreview()
       setPreviewHidden([])
       resumeSceneHistory(useScene)
-      const change = move.release()
+      const change = commit ? move.release() : null
       if (!change) return
       const scene = useScene.getState()
       if (change.create.length > 0 || change.delete.length > 0) {
@@ -683,6 +700,11 @@ const PipePointHandles = ({ pipe, target }: { pipe: PipeSegmentNode; target: Obj
         ...change.create.map((node) => node.id as AnyNodeId),
         ...change.update.map((update) => update.id),
       ])
+    }
+
+    const onUp = () => {
+      swallowNextClick()
+      finish(true)
     }
 
     window.addEventListener('pointermove', onMove)

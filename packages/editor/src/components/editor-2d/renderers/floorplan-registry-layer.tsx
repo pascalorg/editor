@@ -59,7 +59,11 @@ import {
   useRoomRecords,
 } from '../../../hooks/use-selected-room'
 import { useCeilingEditSession } from '../../../lib/ceiling-edit-session'
-import { ROTATE_HANDLE_DRAG_LABEL } from '../../../lib/contextual-help'
+import {
+  AXIS_MOVE_DRAG_LABEL,
+  PATH_POINT_DRAG_LABEL,
+  ROTATE_HANDLE_DRAG_LABEL,
+} from '../../../lib/contextual-help'
 import {
   canDirectRotateNode,
   resolveDirectManipulationNode,
@@ -321,7 +325,7 @@ export function subscribeFloorplanAffordanceToolCancel(
 // edits that set a direction/shape map to a scope; resize / rotate / body-move
 // affordances return `null` (no polygon/wall snapping chip). Keyed off the
 // affordance name the kinds register (`move-vertex` / `move-edge` / `add-vertex`
-// / `curve` / `move-endpoint`).
+// / `curve` / `move-endpoint` / `move-path-point` / `move-segment`).
 export function floorplanAffordanceReshapeScope(
   affordance: string,
   nodeId: string,
@@ -361,6 +365,14 @@ export function floorplanAffordanceReshapeScope(
   // the drag. The affordance applies the 15° angle step itself.
   if (affordance.includes('rotate')) {
     return { kind: 'handle-drag', nodeId, handle: ROTATE_HANDLE_DRAG_LABEL }
+  }
+  // MEP run point and run segment drags: the same handle-drag scopes as their
+  // 3D arrows, so they snap in the kind's own context (polygon for runs).
+  if (affordance === 'move-path-point') {
+    return { kind: 'handle-drag', nodeId, handle: PATH_POINT_DRAG_LABEL }
+  }
+  if (affordance === 'move-segment') {
+    return { kind: 'handle-drag', nodeId, handle: AXIS_MOVE_DRAG_LABEL }
   }
   return null
 }

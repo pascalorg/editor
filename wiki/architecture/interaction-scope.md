@@ -151,17 +151,21 @@ There is no per-kind snapping switch.
   a clickable HUD chip.
 - **The chip is the scope's.** The contextual HUD shows the active context's mode and is the only place the
   mode is cycled — so a tool that wants its chip must run inside a scope whose `snapContextOf` resolves
-  (a build tool, `drafting`, `placing`/`moving`, or `reshaping`).
+  (a build tool, `drafting`, `placing`/`moving`, `reshaping`, or `handle-drag`).
 
 **Known-legacy (migrate on touch).** Two legacy modifier patterns predate this model and survive in
 spots not yet touched (the `event.altKey` alignment bypass and pre-scope `useEditor` flags). A PR that
 **touches** one must migrate it to the model above, not extend the legacy path:
 
 1. **`event.shiftKey` as a snap bypass with hardcoded steps** — the 2D polygon-centroid drag
-   (`packages/nodes/src/shared/polygon-centroid-move.ts`). Migrated handles read
-   `isGridSnapActive()` / `isAngleSnapActive()` instead (`{duct,pipe}-segment/selection.tsx`,
-   `{duct,pipe}-fitting/{selection,move-tool}.tsx`, `shared/refrigerant-line-selection.tsx`,
-   `shared/path-segment-affordance.ts`).
+   (`packages/nodes/src/shared/polygon-centroid-move.ts`), the building and elevator move tools, and the
+   roof-accessory move tools (box vent, chimney, cupola, eyebrow vent, gutter, ridge vent, skylight, solar
+   panel, turbine vent). Migrated handles read `isGridSnapActive()` / `isAngleSnapActive()` instead
+   (`{duct,pipe}-segment/selection.tsx`, `{duct,pipe}-fitting/{selection,move-tool}.tsx`,
+   `shared/refrigerant-line-selection.tsx`, `shared/path-segment-affordance.ts`). In Select mode those reads
+   resolve to off unless the drag claims a scope: the MEP selection handles claim `handle-drag`
+   (`shared/handle-drag-scope.ts`, which also cancels the drag on Escape), and the plan's run point and
+   segment drags map to the same scopes (`floorplanAffordanceReshapeScope`).
    Opening a `moving` scope from a bespoke mover is **not** the migration — `useMovingNode()` reads the scope,
    so `tool-manager` re-mounts the generic `MoveRegistryNodeTool` alongside it (the dual-path FPS/teleport
    bug). Resolve the mode without a global `moving`/`reshaping` scope; see the plan's dual-path note.

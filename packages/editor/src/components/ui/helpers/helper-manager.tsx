@@ -13,9 +13,11 @@ import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useIsMobile } from '../../../hooks/use-mobile'
 import {
+  AXIS_MOVE_DRAG_LABEL,
   type ContextualShortcutHint,
   GROUP_MOVE_DRAG_LABEL,
   GROUP_ROTATE_DRAG_LABEL,
+  PATH_POINT_DRAG_LABEL,
   ROTATE_HANDLE_DRAG_LABEL,
   resolveRotateHandleHelpHints,
   resolveSelectModeHelpHints,
@@ -294,6 +296,40 @@ export const MEZZANINE_GESTURE_HINTS: Record<MezzanineGesture, ContextualShortcu
   ],
 }
 
+export type MepHandleGesture = 'edit-path' | 'move'
+
+/**
+ * A drag on an MEP handle — a run point, where Alt detaches the joint, or a
+ * fitting, run or run segment slid along an axis — or null. Its HUD names the
+ * kind and the gesture, not "Resize".
+ */
+export function mepHandleGesture(
+  drag: { nodeId: string; label: string } | null,
+): MepHandleGesture | null {
+  if (drag?.label === PATH_POINT_DRAG_LABEL) return 'edit-path'
+  if (drag?.label === AXIS_MOVE_DRAG_LABEL) return 'move'
+  return null
+}
+
+export function mepHandleGestureHints(
+  gesture: MepHandleGesture,
+  altPressed: boolean,
+): ContextualShortcutHint[] {
+  const cancel: ContextualShortcutHint = {
+    keys: ['Esc'],
+    label: /* i18n */ { id: 'editor.helpers.helperManager.cancel', message: 'Cancel' },
+  }
+  if (gesture === 'move') return [cancel]
+  return [
+    {
+      keys: ['Alt'],
+      label: /* i18n */ { id: 'editor.helpers.helperManager.detachTheJoint', message: 'Detach the joint' },
+      active: altPressed,
+    },
+    cancel,
+  ]
+}
+
 /**
  * Whether the armed tool's own hints (`toolHints`) win over the node in hand: a registry tool that
  * holds its draft in a placing scope (the roof's footprint, a fitting, a block) says what its clicks
@@ -340,6 +376,10 @@ export function HelperManager() {
   const reshapingNode = useReshapingNode()
   const activeHandleDrag = useActiveHandleDrag()
   const mezzanineHandle = useScene((s) => mezzanineGesture(activeHandleDrag, s.nodes))
+  const mepHandle = mepHandleGesture(activeHandleDrag)
+  const mepHandleKind = useScene((s) =>
+    mepHandle && activeHandleDrag ? s.nodes[activeHandleDrag.nodeId as AnyNodeId]?.type : undefined,
+  )
   const selectedIds = useViewer((s) => s.selection.selectedIds)
   const isMobile = useIsMobile()
   const modifiers = useActiveModifierKeys()
@@ -514,6 +554,20 @@ export function HelperManager() {
         hints={mezzanineHints(mezzanineShape)}
         snapContext={snapContext}
         title={MEZZANINE_HUD_TITLE}
+      />
+    )
+  }
+
+  if (mepHandle) {
+    return (
+      <ContextualHelperPanel
+        hints={mepHandleGestureHints(mepHandle, modifiers.alt)}
+        snapContext={snapContext}
+        title={
+          mepHandleKind
+            ? nodeKindHudTitle(mepHandleKind, mepHandle === 'move' ? 'move' : 'edit')
+            : null
+        }
       />
     )
   }
