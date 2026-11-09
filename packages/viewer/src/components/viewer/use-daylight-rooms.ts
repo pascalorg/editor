@@ -5,6 +5,7 @@ import { useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useRef } from 'react'
 import { Box3, type Mesh, type Object3D, Vector3 } from 'three'
 import {
+  bakedLevelObjects,
   bakedRoomScene,
   feedLamps,
   lampFeeds,
@@ -48,7 +49,7 @@ export function useDaylightRooms() {
     sinceCheck: CHECK_INTERVAL,
     live: true,
     bakedRoot: null as Object3D | null,
-    levelObjects: [] as Object3D[],
+    levelObjects: [] as Object3D[][],
   })
 
   useEffect(
@@ -102,20 +103,20 @@ export function useDaylightRooms() {
             virtualLampsOn: lampDefault,
           },
         )
-        s.levelObjects = s.live ? liveLevelObjects() : bakedLevels(s.bakedRoot)
+        s.levelObjects = s.live ? liveLevelObjects() : bakedLevelObjects(s.bakedRoot)
         flagGlassMaterials(scene)
         syncLampEmitters()
       }
     }
 
     // Live level heights (stacked / exploded motion) and the camera, in assembled space.
-    const offsets = s.levelObjects.map(
-      (object, index) => object.getWorldPosition(scratch).y - (daylightRooms.levelY[index] ?? 0),
+    const offsets = s.levelObjects.map((objects, index) =>
+      objects[0] ? objects[0].getWorldPosition(scratch).y - (daylightRooms.levelY[index] ?? 0) : 0,
     )
     daylightRooms.setLevelOffsets(offsets)
     const focused = focusedLevelIndex(s.levelObjects)
     daylightRooms.levelShown = s.levelObjects.map(
-      (object, index) => (focused < 0 || index <= focused) && shownInScene(object),
+      (objects, index) => (focused < 0 || index <= focused) && objects.some(shownInScene),
     )
     daylightRooms.cameraY.value = camera.position.y - (offsets[0] ?? 0)
     daylightRooms.focusedLevel.value = focused
@@ -232,24 +233,15 @@ function shownInScene(object: Object3D): boolean {
   return true
 }
 
-function bakedLevels(root: Object3D | null): Object3D[] {
-  if (!root) return []
-  const levels: Object3D[] = []
-  root.traverse((object) => {
-    if ((object.userData as { kind?: string }).kind === 'level') levels.push(object)
-  })
-  return levels.sort((a, b) => a.position.y - b.position.y)
-}
-
 /**
  * The level whose rooms open to the sky because the levels above it are hidden (solo level, or
  * levels above the selection hidden) — the enhanced viewer's "focus level". −1 otherwise.
  */
-function focusedLevelIndex(levelObjects: Object3D[]): number {
+function focusedLevelIndex(levelObjects: Object3D[][]): number {
   const viewer = useViewer.getState()
   const hidesAbove = viewer.levelMode === 'solo' || viewer.hideLevelsAboveSelection
   const levelId = viewer.selection.levelId
   if (!hidesAbove || !levelId) return -1
   const object = sceneRegistry.nodes.get(levelId)
-  return object ? levelObjects.indexOf(object) : -1
+  return object ? levelObjects.findIndex((objects) => objects.includes(object)) : -1
 }

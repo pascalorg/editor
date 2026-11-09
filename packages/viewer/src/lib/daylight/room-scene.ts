@@ -110,17 +110,43 @@ function meshesOf(root: Object3D, skip: (object: Object3D) => boolean): Object3D
   return out
 }
 
+/**
+ * Levels at one height share a room-map layer: buildings side by side each have a ground floor,
+ * and a fragment finds its layer by height alone.
+ */
+function stackLevels<T>(levels: { item: T; y: number }[]): { ys: number[]; groups: T[][] } {
+  const ys: number[] = []
+  const groups: T[][] = []
+  for (const level of [...levels].sort((a, b) => a.y - b.y)) {
+    const last = ys.length - 1
+    if (last >= 0 && level.y - ys[last]! < 0.01) groups[last]!.push(level.item)
+    else {
+      ys.push(level.y)
+      groups.push([level.item])
+    }
+  }
+  return { ys, groups }
+}
+
+function liveLevelStack() {
+  const { nodes } = useScene.getState()
+  const elevations = getLevelElevations(nodes as Record<AnyNodeId, AnyNode>)
+  return stackLevels(
+    Object.values(nodes)
+      .filter((node): node is AnyNode & { type: 'level' } => node?.type === 'level')
+      .map((node) => ({ item: node.id, y: elevations.get(node.id)?.baseY ?? 0 })),
+  )
+}
+
 /** The live parametric scene (registry + node data), or null while it has no zones. */
 export function liveRoomScene(virtualLampsOn: boolean): RoomSceneInput | null {
   const zoneIds = sceneRegistry.byType.zone
   if (!zoneIds || zoneIds.size === 0) return null
   const { nodes } = useScene.getState()
-  const elevations = getLevelElevations(nodes as Record<AnyNodeId, AnyNode>)
-  const levels = Object.values(nodes)
-    .filter((node): node is AnyNode & { type: 'level' } => node?.type === 'level')
-    .map((node) => ({ id: node.id, y: elevations.get(node.id)?.baseY ?? 0 }))
-    .sort((a, b) => a.y - b.y)
-  const levelIndex = new Map<string, number>(levels.map((level, index) => [level.id, index]))
+  const levels = liveLevelStack()
+  const levelIndex = new Map<string, number>(
+    levels.groups.flatMap((ids, index) => ids.map((id) => [id, index] as const)),
+  )
 
   const zones: RoomZone[] = []
   const point = new Vector3()
@@ -166,7 +192,7 @@ export function liveRoomScene(virtualLampsOn: boolean): RoomSceneInput | null {
     for (const [x, z] of zone.polygon) bounds.expandByPoint(point.set(x, 0, z))
   return {
     bounds,
-    levelY: levels.map((level) => level.y),
+    levelY: levels.ys,
     zones,
     covers,
     walls,
@@ -177,15 +203,29 @@ export function liveRoomScene(virtualLampsOn: boolean): RoomSceneInput | null {
   }
 }
 
-/** Live level objects in the room system's level order (for explode offsets). */
-export function liveLevelObjects(): Object3D[] {
-  const { nodes } = useScene.getState()
-  const elevations = getLevelElevations(nodes as Record<AnyNodeId, AnyNode>)
-  return Object.values(nodes)
-    .filter((node): node is AnyNode & { type: 'level' } => node?.type === 'level')
-    .sort((a, b) => (elevations.get(a.id)?.baseY ?? 0) - (elevations.get(b.id)?.baseY ?? 0))
-    .map((node) => sceneRegistry.nodes.get(node.id))
-    .filter((object): object is Object3D => !!object)
+/** Live level objects per room-system layer (for explode offsets, visibility and focus). */
+export function liveLevelObjects(): Object3D[][] {
+  return liveLevelStack().groups.map((ids) =>
+    ids.map((id) => sceneRegistry.nodes.get(id)).filter((object): object is Object3D => !!object),
+  )
+}
+
+function bakedLevelStack(levelObjects: Object3D[]) {
+  const point = new Vector3()
+  return stackLevels(
+    levelObjects.map((object) => ({ item: object, y: object.getWorldPosition(point).y })),
+  )
+}
+
+/** A baked artifact's level objects per room-system layer. */
+export function bakedLevelObjects(root: Object3D | null): Object3D[][] {
+  if (!root) return []
+  const levelObjects: Object3D[] = []
+  root.traverse((object) => {
+    if ((object.userData as BakedExtras).kind === 'level') levelObjects.push(object)
+  })
+  root.updateWorldMatrix(true, true)
+  return bakedLevelStack(levelObjects).groups
 }
 
 /** How open a live door is (0 closed … 1 fully open), the transient state first. */
@@ -243,31 +283,29 @@ export function bakedRoomScene(root: Object3D, virtualLampsOn: boolean): RoomSce
   })
   if (!zoneObjects.length) return null
   root.updateWorldMatrix(true, true)
-  const levels = levelObjects
-    .map((object) => ({ object, y: object.getWorldPosition(new Vector3()).y }))
-    .sort((a, b) => a.y - b.y)
+  const levels = bakedLevelStack(levelObjects)
   const levelOf = (object: Object3D) => {
     for (let x: Object3D | null = object; x; x = x.parent) {
-      const index = levels.findIndex((level) => level.object === x)
-      if (index >= 0) return index
+      const index = levels.groups.findIndex((group) => group.includes(x))
+      if (index >= 0) return { index, frame: x }
     }
-    return 0
+    return { index: 0, frame: null }
   }
   const point = new Vector3()
   const zones: RoomZone[] = []
   for (const object of zoneObjects) {
     const polygon = (object.userData as BakedExtras).polygon
     if (!polygon || polygon.length < 3) continue
-    const levelIndex = levelOf(object)
+    const level = levelOf(object)
     // Polygons are level-local [x, z]: bring them to world XZ through the level's frame.
-    const frame = levels[levelIndex]?.object ?? object.parent ?? object
+    const frame = level.frame ?? object.parent ?? object
     zones.push({
       id: (object.userData as BakedExtras).pascalId ?? object.uuid,
       polygon: polygon.map(([x, z]) => {
         point.set(x, 0, z).applyMatrix4(frame.matrixWorld)
         return [point.x, point.z] as [number, number]
       }),
-      levelIndex,
+      levelIndex: level.index,
     })
   }
   if (!zones.length) return null
@@ -281,7 +319,7 @@ export function bakedRoomScene(root: Object3D, virtualLampsOn: boolean): RoomSce
     for (const [x, z] of zone.polygon) bounds.expandByPoint(point.set(x, 0, z))
   return {
     bounds,
-    levelY: levels.map((level) => level.y),
+    levelY: levels.ys,
     zones,
     covers,
     walls,
