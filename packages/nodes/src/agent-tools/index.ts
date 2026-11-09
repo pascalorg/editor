@@ -21,7 +21,7 @@ export const editDuctTool = {
   name: 'duct_edit' as const,
   title: 'Resize or offset duct',
   description:
-    'Resize a duct segment or its same-profile branch through elbows, couplings, dampers and caps. Stops at junctions, profile changes and equipment; inserts transitions at fixed boundary collars. Center alignment supports connected runs; face alignment supports free straight runs. Offset adds four elbows to a straight horizontal run while preserving endpoints. from and to are bend positions measured in metres from the start; offset is signed vertical displacement in metres. Does not detect obstacles: check clearance. Refuses insufficient fitting space without partial edits. One undo step.',
+    "Resize a duct segment or branch, or offset a straight horizontal run around an obstacle with four elbows, keeping connected collars joined. resize: scope defaults to segment; branch follows the same profile through elbows, couplings, dampers and caps, stopping at junctions, profile changes and equipment. Transitions are inserted at the fixed collars where the resize stops. shape, diameter, width and height default to the run's current values. alignment defaults to center, which supports connected runs; top, bottom, left and right need a free straight run. offset: from and to are the first and last bend positions in metres from the start, and offset is the signed vertical displacement in metres; all three are required, and both original endpoints stay fixed. Does not detect obstacles: check clearance. Refuses duct_not_found, node_capability_unavailable, duct_profile_invalid, duct_alignment_anchored, duct_connection_ambiguous, duct_clearance, duct_offset_route, duct_offset_roll, duct_offset_attachments, duct_offset_clearance or duct_offset_angle without partial edits. One undo step.",
   input: {
     nodeId: z.string(),
     action: z.enum(['resize', 'offset']),
@@ -41,7 +41,7 @@ export const pipeGradeTool = {
   name: 'pipe_grade' as const,
   title: 'Edit pipe grade and elevation',
   description:
-    'Set grade (percent fall over horizontal travel), flow direction, or an anchored elevation above the level. point is a numeric [x, y, z] tuple in level-local metres, not a unit-bearing length string. Endpoint edits preserve each existing leg grade; vertical elevation edits translate the run. Vertical legs retain their rise. Refuses edits that would regrade connected pipes or move fixed equipment. One undo step.',
+    "Set a pipe run's grade or flow direction, move one of its path points, or change its elevation, keeping connected pipes and fittings joined. grade: gradePercent is the percent fall over horizontal travel; flow defaults to forward (falling from start to end), and reverse falls toward the start; anchor defaults to start, the end that keeps its elevation. endpoint: moves path point pointIndex to point, a numeric [x, y, z] tuple in level-local metres (not a unit-bearing length string), preserving each existing leg grade; connected runs and end caps follow unless detach is true (default false), which leaves them in place. elevation: sets the anchor end (default start) to elevation above the level and translates the whole run without changing grades. Vertical legs keep their rise. Refuses pipe_not_found, node_capability_unavailable, pipe_grade_invalid, pipe_elevation_invalid, pipe_endpoint_invalid, pipe_grade_conflict, pipe_connection_angle, pipe_connected_grade or pipe_fixed_connection without partial edits. One undo step.",
   input: {
     nodeId: z.string(),
     action: z.enum(['grade', 'endpoint', 'elevation']),
@@ -59,7 +59,7 @@ export const pipeResizeTool = {
   name: 'pipe_resize' as const,
   title: 'Resize connected pipe',
   description:
-    'Resize a segment or same-size, same-material branch through elbows, couplings and cleanouts. Stops at junctions, reducers and fixed fixture/equipment collars. Resizes caps and inserts reducers at size boundaries while preserving each leg grade. Refuses ambiguous collars or insufficient straight length without partial edits. One undo step.',
+    "Resize a pipe segment or its same-size, same-material branch, inserting reducers at size boundaries while keeping each leg's grade. scope defaults to segment; branch continues through elbows, couplings and cleanouts, stopping at junctions, reducers and fixed fixture or equipment collars. Caps are resized with the run; the same size is a no-op. Refuses pipe_not_found, node_capability_unavailable, pipe_size_invalid, pipe_ambiguous_connection, pipe_connection_angle, pipe_resize_space or pipe_resize_grade without partial edits. One undo step.",
   input: {
     nodeId: z.string(),
     diameter: measurement('length', 'in', { min: 1.25, max: 8 }),
@@ -71,7 +71,7 @@ export const pipeOffsetTool = {
   name: 'pipe_offset' as const,
   title: 'Offset pipe around obstacle',
   description:
-    'Add four bends to a straight non-vertical pipe, keeping both boundary collars fixed and preserving grade on the parallel sections. from and to are horizontal distances in metres from the start to the first and last bend; offset is signed vertical displacement in metres. Connectors each consume abs(offset) horizontal travel. Refuses insufficient fitting space without partial edits. Reports uphill waste connectors; this is geometric routing, not drainage or obstacle-clearance validation. One undo step.',
+    'Offset a straight, non-vertical pipe run around an obstacle with four bends, keeping both boundary collars fixed and the parallel sections at their grade. from and to are horizontal distances in metres from the start to the first and last bend; offset is the signed vertical displacement in metres. Each connector consumes abs(offset) of horizontal travel. Reports uphill waste connectors as warnings; this is geometric routing, not drainage or obstacle-clearance validation. Refuses pipe_not_found, node_capability_unavailable, pipe_offset_route, pipe_offset_attachments, pipe_offset_space, pipe_offset_angle or pipe_offset_grade without partial edits. One undo step.',
   input: {
     nodeId: z.string(),
     from: measurement('length', 'm'),
@@ -84,7 +84,7 @@ export const pipeConnectTool = {
   name: 'pipe_connect' as const,
   title: 'Connect a pipe to a fixed collar',
   description:
-    'Draw from an open registered waste/vent fixture, trap or fitting collar to a free endpoint. end is a numeric [x, y, z] tuple in level-local metres, not a unit-bearing length string. Inherits diameter, material and system. The first section must follow the collar direction; add subsequent bends from the new pipe. A different diameter inserts a reducer without moving the source. Refuses occupied collars, incompatible directions and insufficient reducer space. One undo step. Ordinary catalog models without authored ports are unsupported.',
+    "Draw a new pipe from an open waste or vent collar of a fixture, trap or fitting to a free endpoint, inheriting the collar's size, material and system. portId names the collar on nodeId; end is a numeric [x, y, z] tuple in level-local metres, not a unit-bearing length string. The first section must leave straight along the collar direction; add further bends from the new pipe. diameter defaults to the collar's; a different diameter inserts a reducer without moving the source. Ordinary catalog models without authored ports are unsupported. Refuses pipe_collar_missing, pipe_collar_changed, pipe_collar_system, pipe_collar_occupied, pipe_collar_direction, pipe_collar_space, pipe_endpoint_invalid, pipe_endpoint_occupied or pipe_size_invalid without partial edits. One undo step.",
   input: {
     nodeId: z.string(),
     portId: z.string(),
