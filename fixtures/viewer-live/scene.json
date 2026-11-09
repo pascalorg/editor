@@ -1,0 +1,777 @@
+{
+  "nodes": {
+    "site_fixture": {
+      "object": "node",
+      "id": "site_fixture",
+      "type": "site",
+      "parentId": null,
+      "visible": true,
+      "metadata": {},
+      "polygon": {
+        "type": "polygon",
+        "points": [[-15, -15], [15, -15], [15, 15], [-15, 15]]
+      },
+      "children": ["building_fixture"]
+    },
+    "building_fixture": {
+      "object": "node",
+      "id": "building_fixture",
+      "type": "building",
+      "parentId": "site_fixture",
+      "visible": true,
+      "metadata": {},
+      "children": ["level_fixture"],
+      "position": [0, 0, 0],
+      "rotation": [0, 0, 0]
+    },
+    "level_fixture": {
+      "object": "node",
+      "id": "level_fixture",
+      "type": "level",
+      "parentId": "building_fixture",
+      "visible": true,
+      "metadata": {},
+      "children": [
+        "wall_south",
+        "wall_east",
+        "wall_north",
+        "wall_west",
+        "roof_fixture",
+        "zone_fixture",
+        "measurement_fixture",
+        "separator_fixture",
+        "ceiling_fixture",
+        "item_fixture"
+      ],
+      "level": 0,
+      "baseElevation": 0,
+      "height": 3
+    },
+    "wall_south": {
+      "object": "node",
+      "id": "wall_south",
+      "type": "wall",
+      "parentId": "level_fixture",
+      "visible": true,
+      "metadata": {},
+      "children": ["door_fixture"],
+      "start": [-3, -2],
+      "end": [3, -2],
+      "frontSide": "unknown",
+      "backSide": "unknown"
+    },
+    "wall_east": {
+      "object": "node",
+      "id": "wall_east",
+      "type": "wall",
+      "parentId": "level_fixture",
+      "visible": true,
+      "metadata": {},
+      "children": ["window_fixture"],
+      "start": [3, -2],
+      "end": [3, 2],
+      "frontSide": "unknown",
+      "backSide": "unknown"
+    },
+    "wall_north": {
+      "object": "node",
+      "id": "wall_north",
+      "type": "wall",
+      "parentId": "level_fixture",
+      "visible": true,
+      "metadata": {},
+      "children": [],
+      "start": [3, 2],
+      "end": [-3, 2],
+      "frontSide": "unknown",
+      "backSide": "unknown"
+    },
+    "wall_west": {
+      "object": "node",
+      "id": "wall_west",
+      "type": "wall",
+      "parentId": "level_fixture",
+      "visible": true,
+      "metadata": {},
+      "children": [],
+      "start": [-3, 2],
+      "end": [-3, -2],
+      "frontSide": "unknown",
+      "backSide": "unknown"
+    },
+    "door_fixture": {
+      "object": "node",
+      "id": "door_fixture",
+      "type": "door",
+      "parentId": "wall_south",
+      "visible": true,
+      "metadata": {},
+      "position": [2, 0, 0],
+      "rotation": [0, 0, 0],
+      "floorThresholdVersion": 1,
+      "wallId": "wall_south",
+      "width": 0.9,
+      "height": 2.1,
+      "constructionType": "framed",
+      "dimensionReference": "nominal",
+      "doorCategory": "interior",
+      "doorType": "hinged",
+      "leafCount": 1,
+      "operationState": 0,
+      "slideDirection": "left",
+      "trackStyle": "none",
+      "garagePanelCount": 4,
+      "openingKind": "door",
+      "openingShape": "rectangle",
+      "openingRadiusMode": "all",
+      "openingTopRadii": [0.15, 0.15],
+      "cornerRadius": 0.15,
+      "archHeight": 0.45,
+      "openingRevealRadius": 0.025,
+      "frameThickness": 0.05,
+      "threshold": true,
+      "thresholdHeight": 0.02,
+      "hingesSide": "left",
+      "swingDirection": "inward",
+      "swingAngle": 0,
+      "segments": [
+        {
+          "type": "panel",
+          "heightRatio": 0.4,
+          "columnRatios": [1],
+          "dividerThickness": 0.03,
+          "panelDepth": 0.01,
+          "panelInset": 0.04
+        },
+        {
+          "type": "panel",
+          "heightRatio": 0.6,
+          "columnRatios": [1],
+          "dividerThickness": 0.03,
+          "panelDepth": 0.01,
+          "panelInset": 0.04
+        }
+      ],
+      "handle": true,
+      "handleHeight": 1.05,
+      "handleSide": "right",
+      "contentPadding": [0.11, 0.11],
+      "doorCloser": false,
+      "panicBar": false,
+      "panicBarStyle": "crossbar",
+      "panicBarRods": false,
+      "panicBarHeight": 1
+    },
+    "window_fixture": {
+      "object": "node",
+      "id": "window_fixture",
+      "type": "window",
+      "parentId": "wall_east",
+      "visible": true,
+      "metadata": {},
+      "position": [2, 1, 0],
+      "rotation": [0, 0, 0],
+      "floorThresholdVersion": 1,
+      "wallId": "wall_east",
+      "width": 1.5,
+      "height": 1.5,
+      "constructionType": "framed",
+      "dimensionReference": "nominal",
+      "openingKind": "window",
+      "windowType": "fixed",
+      "operationState": 0,
+      "awningDirection": "up",
+      "casementStyle": "single",
+      "hingesSide": "left",
+      "openingShape": "rectangle",
+      "openingRadiusMode": "all",
+      "openingCornerRadii": [0.15, 0.15, 0.15, 0.15],
+      "cornerRadius": 0.15,
+      "archHeight": 0.35,
+      "openingRevealRadius": 0.025,
+      "frameThickness": 0.05,
+      "columnRatios": [1],
+      "rowRatios": [1],
+      "columnDividerThickness": 0.03,
+      "rowDividerThickness": 0.03,
+      "sill": true,
+      "sillDepth": 0.08,
+      "sillThickness": 0.03
+    },
+    "roof_fixture": {
+      "object": "node",
+      "id": "roof_fixture",
+      "type": "roof",
+      "parentId": "level_fixture",
+      "visible": true,
+      "metadata": {},
+      "position": [0, 2.7, 0],
+      "rotation": 0,
+      "support": {
+        "kind": "level"
+      },
+      "children": ["rseg_fixture"]
+    },
+    "rseg_fixture": {
+      "object": "node",
+      "id": "rseg_fixture",
+      "type": "roof-segment",
+      "parentId": "roof_fixture",
+      "visible": true,
+      "metadata": {},
+      "position": [0, 0, 0],
+      "rotation": 0,
+      "roofType": "gable",
+      "width": 6,
+      "depth": 4,
+      "trim": {
+        "left": 0,
+        "right": 0,
+        "front": 0,
+        "back": 0,
+        "frontLeft": 0,
+        "frontRight": 0,
+        "backLeft": 0,
+        "backRight": 0,
+        "frontLeftX": 0,
+        "frontLeftZ": 0,
+        "frontRightX": 0,
+        "frontRightZ": 0,
+        "backLeftX": 0,
+        "backLeftZ": 0,
+        "backRightX": 0,
+        "backRightZ": 0
+      },
+      "wallHeight": 0,
+      "pitch": 40,
+      "wallThickness": 0.1,
+      "deckThickness": 0.1,
+      "overhang": 0.3,
+      "shingleThickness": 0.05,
+      "managedByParent": false,
+      "wallShell": "auto",
+      "shedInsetEndPanels": false,
+      "gambrelLowerWidthRatio": 0.5,
+      "gambrelLowerHeightRatio": 0.6,
+      "mansardSteepWidthRatio": 0.15,
+      "mansardSteepHeightRatio": 0.7,
+      "dutchHipWidthRatio": 0.25,
+      "dutchHipHeightRatio": 0.5,
+      "dutchWaistLengthRatio": 0.98,
+      "dutchGabletRake": 0.48,
+      "dutchTopRakeThickness": 0.21,
+      "children": [],
+      "topMaterialPreset": "scene:mat_fixture"
+    },
+    "zone_fixture": {
+      "object": "node",
+      "id": "zone_fixture",
+      "type": "zone",
+      "name": "Live room",
+      "parentId": "level_fixture",
+      "visible": true,
+      "metadata": {},
+      "polygon": [[-2.8, -1.8], [2.8, -1.8], [2.8, 1.8], [-2.8, 1.8]],
+      "holes": [],
+      "autoFromWalls": false,
+      "boundaryWallIds": [],
+      "boundarySeparatorIds": ["separator_fixture"],
+      "spaceRole": "generic",
+      "roomNumber": "",
+      "enclosureStatus": "auto",
+      "floorFinish": "",
+      "wallFinish": "",
+      "ceilingFinish": "",
+      "ceilingHeight": 2.7,
+      "occupancy": "",
+      "clearDimensionPolicy": "none",
+      "color": "#3b82f6"
+    },
+    "measurement_fixture": {
+      "object": "node",
+      "id": "measurement_fixture",
+      "type": "measurement",
+      "parentId": "level_fixture",
+      "visible": true,
+      "metadata": {},
+      "measurement": {
+        "kind": "distance",
+        "points": [[-3, 0.1, -2.5], [3, 0.1, -2.5]]
+      }
+    },
+    "separator_fixture": {
+      "object": "node",
+      "id": "separator_fixture",
+      "type": "separator",
+      "parentId": "level_fixture",
+      "visible": true,
+      "metadata": {},
+      "start": [0, -2],
+      "end": [0, 2]
+    },
+    "ceiling_fixture": {
+      "object": "node",
+      "id": "ceiling_fixture",
+      "type": "ceiling",
+      "parentId": "level_fixture",
+      "visible": true,
+      "metadata": {},
+      "children": ["procedural-item_fixture"],
+      "polygon": [[-3, -2], [3, -2], [3, 2], [-3, 2]],
+      "holes": [],
+      "holeMetadata": [],
+      "height": 2.7,
+      "autoFromWalls": false
+    },
+    "procedural-item_fixture": {
+      "object": "node",
+      "id": "procedural-item_fixture",
+      "type": "procedural-item",
+      "parentId": "ceiling_fixture",
+      "visible": true,
+      "metadata": {},
+      "recipe": {
+        "version": 2,
+        "name": "Recessed square downlight",
+        "description": "Square trim flush with the ceiling, an open can recessed into the ceiling and a glowing lens set back inside it.",
+        "classification": {
+          "category": "lighting",
+          "functionTags": ["downlight", "ceiling-light"],
+          "tags": ["recessed"]
+        },
+        "mounting": {
+          "attachTo": "ceiling",
+          "reference": "plane"
+        },
+        "cuts": [
+          {
+            "shape": "rect",
+            "size": ["size", "size"]
+          }
+        ],
+        "surfaces": [
+          {
+            "id": "plane",
+            "label": "Ceiling plane",
+            "position": [0, 0.01, 0],
+            "size": [
+              {
+                "op": "add",
+                "args": ["size", 0.04]
+              },
+              {
+                "op": "add",
+                "args": ["size", 0.04]
+              }
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "id": "size",
+            "label": "Aperture",
+            "default": 0.12,
+            "min": 0.08,
+            "max": 0.2,
+            "step": 0.01,
+            "unit": "m",
+            "axis": "x"
+          },
+          {
+            "id": "depth",
+            "label": "Recess depth",
+            "default": 0.12,
+            "min": 0.08,
+            "max": 0.2,
+            "step": 0.01,
+            "unit": "m"
+          }
+        ],
+        "slots": [
+          {
+            "id": "trim",
+            "label": "Trim",
+            "color": "#f4f4f2",
+            "finish": "metal"
+          },
+          {
+            "id": "can",
+            "label": "Can",
+            "color": "#2b2b2b"
+          },
+          {
+            "id": "lens",
+            "label": "Lens",
+            "color": "#fff4e0"
+          }
+        ],
+        "parts": [
+          {
+            "id": "trim",
+            "label": "Trim",
+            "count": 1,
+            "shapes": [
+              {
+                "id": "north",
+                "primitive": "box",
+                "slot": "trim",
+                "size": [
+                  {
+                    "op": "add",
+                    "args": ["size", 0.04]
+                  },
+                  0.01,
+                  0.02
+                ],
+                "position": [
+                  0,
+                  0.005,
+                  {
+                    "op": "mul",
+                    "args": [
+                      {
+                        "op": "add",
+                        "args": [
+                          {
+                            "op": "div",
+                            "args": ["size", 2]
+                          },
+                          0.01
+                        ]
+                      },
+                      -1
+                    ]
+                  }
+                ]
+              },
+              {
+                "id": "south",
+                "primitive": "box",
+                "slot": "trim",
+                "size": [
+                  {
+                    "op": "add",
+                    "args": ["size", 0.04]
+                  },
+                  0.01,
+                  0.02
+                ],
+                "position": [
+                  0,
+                  0.005,
+                  {
+                    "op": "add",
+                    "args": [
+                      {
+                        "op": "div",
+                        "args": ["size", 2]
+                      },
+                      0.01
+                    ]
+                  }
+                ]
+              },
+              {
+                "id": "east",
+                "primitive": "box",
+                "slot": "trim",
+                "size": [0.02, 0.01, "size"],
+                "position": [
+                  {
+                    "op": "add",
+                    "args": [
+                      {
+                        "op": "div",
+                        "args": ["size", 2]
+                      },
+                      0.01
+                    ]
+                  },
+                  0.005,
+                  0
+                ]
+              },
+              {
+                "id": "west",
+                "primitive": "box",
+                "slot": "trim",
+                "size": [0.02, 0.01, "size"],
+                "position": [
+                  {
+                    "op": "mul",
+                    "args": [
+                      {
+                        "op": "add",
+                        "args": [
+                          {
+                            "op": "div",
+                            "args": ["size", 2]
+                          },
+                          0.01
+                        ]
+                      },
+                      -1
+                    ]
+                  },
+                  0.005,
+                  0
+                ]
+              }
+            ]
+          },
+          {
+            "id": "can",
+            "label": "Can",
+            "count": 1,
+            "shapes": [
+              {
+                "id": "north",
+                "primitive": "box",
+                "slot": "can",
+                "size": ["size", "depth", 0.004],
+                "position": [
+                  0,
+                  {
+                    "op": "add",
+                    "args": [
+                      0.01,
+                      {
+                        "op": "div",
+                        "args": ["depth", 2]
+                      }
+                    ]
+                  },
+                  {
+                    "op": "mul",
+                    "args": [
+                      {
+                        "op": "sub",
+                        "args": [
+                          {
+                            "op": "div",
+                            "args": ["size", 2]
+                          },
+                          0.002
+                        ]
+                      },
+                      -1
+                    ]
+                  }
+                ]
+              },
+              {
+                "id": "south",
+                "primitive": "box",
+                "slot": "can",
+                "size": ["size", "depth", 0.004],
+                "position": [
+                  0,
+                  {
+                    "op": "add",
+                    "args": [
+                      0.01,
+                      {
+                        "op": "div",
+                        "args": ["depth", 2]
+                      }
+                    ]
+                  },
+                  {
+                    "op": "sub",
+                    "args": [
+                      {
+                        "op": "div",
+                        "args": ["size", 2]
+                      },
+                      0.002
+                    ]
+                  }
+                ]
+              },
+              {
+                "id": "east",
+                "primitive": "box",
+                "slot": "can",
+                "size": [
+                  0.004,
+                  "depth",
+                  {
+                    "op": "sub",
+                    "args": ["size", 0.008]
+                  }
+                ],
+                "position": [
+                  {
+                    "op": "sub",
+                    "args": [
+                      {
+                        "op": "div",
+                        "args": ["size", 2]
+                      },
+                      0.002
+                    ]
+                  },
+                  {
+                    "op": "add",
+                    "args": [
+                      0.01,
+                      {
+                        "op": "div",
+                        "args": ["depth", 2]
+                      }
+                    ]
+                  },
+                  0
+                ]
+              },
+              {
+                "id": "west",
+                "primitive": "box",
+                "slot": "can",
+                "size": [
+                  0.004,
+                  "depth",
+                  {
+                    "op": "sub",
+                    "args": ["size", 0.008]
+                  }
+                ],
+                "position": [
+                  {
+                    "op": "mul",
+                    "args": [
+                      {
+                        "op": "sub",
+                        "args": [
+                          {
+                            "op": "div",
+                            "args": ["size", 2]
+                          },
+                          0.002
+                        ]
+                      },
+                      -1
+                    ]
+                  },
+                  {
+                    "op": "add",
+                    "args": [
+                      0.01,
+                      {
+                        "op": "div",
+                        "args": ["depth", 2]
+                      }
+                    ]
+                  },
+                  0
+                ]
+              },
+              {
+                "id": "top",
+                "primitive": "box",
+                "slot": "can",
+                "size": ["size", 0.004, "size"],
+                "position": [
+                  0,
+                  {
+                    "op": "sub",
+                    "args": [
+                      {
+                        "op": "add",
+                        "args": [0.01, "depth"]
+                      },
+                      0.002
+                    ]
+                  },
+                  0
+                ]
+              }
+            ]
+          },
+          {
+            "id": "lens",
+            "label": "Lens",
+            "count": 1,
+            "light": {
+              "position": [0, 0.045, 0],
+              "color": "#fff4e0",
+              "intensity": 1.5,
+              "distance": 4,
+              "emissiveSlot": "lens"
+            },
+            "shapes": [
+              {
+                "id": "lens",
+                "primitive": "box",
+                "slot": "lens",
+                "size": [
+                  {
+                    "op": "sub",
+                    "args": ["size", 0.01]
+                  },
+                  0.006,
+                  {
+                    "op": "sub",
+                    "args": ["size", 0.01]
+                  }
+                ],
+                "position": [0, 0.05, 0]
+              }
+            ]
+          }
+        ],
+        "constraints": []
+      },
+      "parameters": {},
+      "slots": {
+        "trim": "scene:mat_fixture"
+      },
+      "position": [1, 0, 0],
+      "rotation": [0, 0, 0],
+      "children": [],
+      "attachments": {}
+    },
+    "item_fixture": {
+      "object": "node",
+      "id": "item_fixture",
+      "type": "item",
+      "parentId": "level_fixture",
+      "visible": true,
+      "metadata": {},
+      "position": [0, 0, 0],
+      "rotation": [0, 0, 0],
+      "scale": [1, 1, 1],
+      "children": [],
+      "asset": {
+        "id": "fixture",
+        "category": "furniture",
+        "name": "Fixture cube",
+        "thumbnail": "",
+        "source": "library",
+        "src": "/cube.gltf",
+        "dimensions": [1, 1, 1],
+        "offset": [0, 0, 0],
+        "rotation": [0, 0, 0],
+        "scale": [1, 1, 1]
+      },
+      "slots": {
+        "body": "scene:mat_fixture"
+      }
+    }
+  },
+  "rootNodeIds": ["site_fixture"],
+  "materials": {
+    "mat_fixture": {
+      "id": "mat_fixture",
+      "name": "Fixture roof",
+      "material": {
+        "properties": {
+          "color": "#64748b",
+          "roughness": 0.8
+        }
+      }
+    }
+  },
+  "collections": {},
+  "installedPlugins": []
+}

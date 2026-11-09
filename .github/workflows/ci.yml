@@ -21,6 +21,7 @@ jobs:
       pull-requests: read
     outputs:
       runtime: ${{ steps.filter.outputs.runtime }}
+      viewer: ${{ steps.filter.outputs.viewer }}
       skills: ${{ steps.filter.outputs.skills }}
     steps:
       - uses: actions/checkout@v4
@@ -43,6 +44,8 @@ jobs:
               - '!**/__tests__/**'
               - '!**/__fixtures__/**'
               - '!**/__snapshots__/**'
+            viewer:
+              - '{packages/core/**,packages/viewer/**,packages/nodes/**,fixtures/viewer-live/**,scripts/check-viewer-live-fixture.ts,package.json,bun.lock,.github/workflows/ci.yml}'
             # What `bun run skills:validate` reads: the skill bundles, the
             # maintainer skills, plugin evals, every plugin/marketplace manifest
             # and the logos they reference, the root README install lines, and
@@ -160,3 +163,24 @@ jobs:
           bun run build
           bun run stage-runtime
           bun run smoke-runtime
+
+  viewer-live:
+    name: Packed live viewer
+    needs: changes
+    if: needs.changes.outputs.viewer == 'true' || github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.23.4'
+      - uses: rharkor/caching-for-turbo@2238fae6eb9a9936f92356f54cb3660200d105e7
+      - run: bun install --frozen-lockfile
+      - run: bunx playwright-core install --with-deps chromium
+      - run: bun run check:viewer-live

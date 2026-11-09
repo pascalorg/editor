@@ -114,7 +114,7 @@ function clip(
     return normalise(run(inputs.map(quantised)))
   } catch (error) {
     if (throwOnError) throw error
-    if (process.env.NODE_ENV !== 'production') {
+    if (typeof process === 'undefined' || process.env.NODE_ENV !== 'production') {
       const caller = new Error('Polygon clipping caller').stack
         ?.split('\n')
         .slice(1)

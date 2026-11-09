@@ -95,6 +95,7 @@
     "ignoreUnknown": true,
     "includes": [
       "scripts/**/*.ts",
+      "fixtures/viewer-live/**",
       "skills/**/*.json",
       ".agents/plugins/**/*.json",
       ".claude-plugin/**/*.json",

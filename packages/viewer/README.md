@@ -5,13 +5,13 @@
 ## Installation
 
 ```bash
-npm install @pascal-app/core @pascal-app/viewer @pascal-app/editor @pascal-app/nodes
+npm install @pascal-app/core @pascal-app/viewer @pascal-app/nodes
 ```
 
 ## Peer Dependencies
 
 ```bash
-npm install next react react-dom three @react-three/fiber @react-three/drei lucide-react zustand
+npm install react react-dom three @react-three/fiber @react-three/drei lucide-react zustand
 ```
 
 ## What's Included
@@ -25,33 +25,66 @@ npm install next react react-dom three @react-three/fiber @react-three/drei luci
 
 ## Usage
 
-```typescript
-import { loadPlugin } from '@pascal-app/core'
-import { builtinPlugin } from '@pascal-app/nodes'
-import { Viewer } from '@pascal-app/viewer'
-import { useEffect, useState } from 'react'
+The live render entry rebuilds geometry from a scene graph in ordinary React applications,
+including Vite. It requires neither Next.js, Tailwind, nor `@pascal-app/editor`.
 
-const registryReady = loadPlugin(builtinPlugin)
+```tsx
+import { acquireSceneReadOnlyLease, loadPlugin, useScene } from '@pascal-app/core'
+import { renderPlugin } from '@pascal-app/nodes/render'
+import { configureViewer, Viewer } from '@pascal-app/viewer'
+import { OrbitControls } from '@react-three/drei'
+import scene from './scene.json'
+
+configureViewer({
+  assetsBaseUrl: 'https://editor.pascal.app',
+  storageUrl: 'https://your-storage.example',
+  // Optional self-hosted decoder directories (include the trailing slash):
+  // decoders: { dracoPath: '/decoders/draco/', basisPath: '/decoders/basis/' },
+})
+await loadPlugin(renderPlugin)
+const releaseReadOnly = acquireSceneReadOnlyLease()
+useScene.getState().setScene(scene.nodes, scene.rootNodeIds, {
+  materials: scene.materials,
+  collections: scene.collections,
+  installedPlugins: scene.installedPlugins,
+})
 
 function App() {
-  const [ready, setReady] = useState(false)
-
-  useEffect(() => {
-    void registryReady.then(() => setReady(true))
-  }, [])
-
-  if (!ready) return null
-
   return (
     <div style={{ width: '100vw', height: '100vh' }}>
-      <Viewer />
+      <Viewer>
+        <OrbitControls makeDefault target={[0, 1, 0]} />
+      </Viewer>
     </div>
   )
 }
+
+// On teardown, unmount App before releasing the lease:
+// releaseReadOnly()
 ```
 
-Load the built-in plugin once, before mounting any viewer. Without it, the registry has no node
-definitions and scene nodes cannot render. Host-provided plugins use the same `loadPlugin` API.
+Load exactly one built-in plugin per runtime: `renderPlugin` for a viewer, or the full
+`builtinPlugin` from `@pascal-app/nodes` for an editor. Without registration, nodes cannot render.
+The read-only lease suppresses document-writing systems while the live geometry systems rebuild
+from the supplied graph. Keep it until the viewer unmounts.
+
+**One active scene per page/package instance.** `useScene`, `useViewer`, the node registry,
+`sceneRegistry`, loader caches and viewer systems are shared singletons. Concurrent viewers cannot
+own independent graphs. Unmount the previous viewer and release its read-only lease and host
+subscriptions before switching projects; hydrate the new graph and reset the host's viewer
+selection/project presentation before remounting. Use a separate page/iframe for independent graphs.
+
+`configureViewer` resolves asset and storage origins at call time. Without configuration, assets
+use `https://editor.pascal.app`, with the existing `NEXT_PUBLIC_ASSETS_CDN_URL` and
+`NEXT_PUBLIC_SUPABASE_URL` environments used when available. Next hosts should pass those values
+explicitly at bootstrap. Draco defaults to version 1.5.5 and Basis to the Three.js 0.187.0
+transcoder. Configure before loading assets: changing paths does not unload cached models or
+already initialized decoder workers. KTX2 support is detected per renderer and misaligned textures
+retain the RGBA fallback. Denied browser storage disables preference persistence without blocking
+rendering.
+
+See [`fixtures/viewer-live`](../../fixtures/viewer-live) for a complete small graph and the
+isolated packed-package dev/production smoke test.
 
 ## Custom Camera Controls
 
@@ -212,11 +245,11 @@ function ViewerControls() {
 ## Asset CDN Helpers
 
 ```typescript
-import { resolveCdnUrl, ASSETS_CDN_URL } from '@pascal-app/viewer'
+import { resolveCdnUrl } from '@pascal-app/viewer'
 
 // Resolves relative paths to CDN URLs
 const url = resolveCdnUrl('/items/chair/model.glb')
-// → 'https://pascal-cdn.wawasensei.dev/items/chair/model.glb'
+// → 'https://editor.pascal.app/items/chair/model.glb'
 
 // Handles external URLs and asset:// protocol
 const externalUrl = resolveCdnUrl('https://example.com/model.glb')

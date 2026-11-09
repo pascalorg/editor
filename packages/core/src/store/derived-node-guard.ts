@@ -472,7 +472,11 @@ export function convertDerivedPlateHoleWrites<T extends MutableDerivedChanges>(
 const warnedFields = new Set<string>()
 
 function warnFilteredFields(nodeId: string, fields: string[]) {
-  if (process.env.NODE_ENV === 'production' || process.env.NODE_ENV === 'test') return
+  if (
+    typeof process !== 'undefined' &&
+    (process.env.NODE_ENV === 'production' || process.env.NODE_ENV === 'test')
+  )
+    return
   const fresh = fields.filter((field) => !warnedFields.has(`${nodeId}:${field}`))
   if (!fresh.length) return
   for (const field of fresh) warnedFields.add(`${nodeId}:${field}`)

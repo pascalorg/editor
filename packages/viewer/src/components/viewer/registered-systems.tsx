@@ -40,7 +40,7 @@ class SystemErrorBoundary extends Component<
   }
 
   componentDidCatch(error: Error) {
-    if (process.env.NODE_ENV !== 'production') {
+    if (typeof process === 'undefined' || process.env.NODE_ENV !== 'production') {
       console.error(`[viewer] Disabled system ${this.props.systemId}`, error)
     }
   }

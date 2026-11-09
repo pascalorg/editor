@@ -1,5 +1,5 @@
 import type * as THREE from 'three'
-import { ASSETS_CDN_URL } from './asset-url'
+import { getViewerConfig } from './viewer-config'
 
 export type PascalTextureMap =
   | 'basecolor'
@@ -37,7 +37,7 @@ const STORAGE_BUCKET_BY_KIND = {
 // null origin for the rest of the process.
 let cachedStorageOrigin: { url: string | undefined; origin: string | null } | undefined
 function pascalStorageOrigin(): string | null {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const url = getViewerConfig().storageUrl
   if (cachedStorageOrigin && cachedStorageOrigin.url === url) return cachedStorageOrigin.origin
   let origin: string | null = null
   try {
@@ -53,7 +53,10 @@ function pascalStorageOrigin(): string | null {
 function isAppMaterialUrl(src: string): boolean {
   try {
     const url = new URL(src)
-    return url.origin === new URL(ASSETS_CDN_URL).origin && url.pathname.startsWith('/material/')
+    return (
+      url.origin === new URL(getViewerConfig().assetsBaseUrl).origin &&
+      url.pathname.startsWith('/material/')
+    )
   } catch {
     return false
   }

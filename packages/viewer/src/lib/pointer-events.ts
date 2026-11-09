@@ -108,7 +108,8 @@ export function choosePointerEvents(
   search = typeof window !== 'undefined' ? window.location.search : '',
   onBreadcrumb?: ViewerBreadcrumbHandler,
 ): typeof createWebEvents {
-  return process.env.NODE_ENV !== 'production' && new URLSearchParams(search).has('stockEvents')
+  return (typeof process === 'undefined' || process.env.NODE_ENV !== 'production') &&
+    new URLSearchParams(search).has('stockEvents')
     ? createWebEvents
     : (store) => createPascalPointerEvents(store, onBreadcrumb)
 }
@@ -523,6 +524,7 @@ function createEvents(store: RootStore, onBreadcrumb?: ViewerBreadcrumbHandler) 
             stats.lastFallbackReason = reason
             if (
               unsupported &&
+              typeof process !== 'undefined' &&
               process.env.NODE_ENV === 'development' &&
               !warnedRaycastNames.has(reason.fnName)
             ) {
