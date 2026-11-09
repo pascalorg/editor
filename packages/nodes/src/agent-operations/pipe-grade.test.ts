@@ -296,7 +296,7 @@ describe('plan-view endpoint drag on a run whose far end sits on an elbow', () =
     expect(useFloorplanMode.getState().notice).toBeNull()
   })
 
-  test('a turn the elbow cannot make holds the last valid frame and says why', () => {
+  test('a turn the elbow cannot make holds the last valid frame and says why until placed', () => {
     const pipe = run()
     const fitting = elbow()
     const session = drag(pipe, fitting)
@@ -310,6 +310,7 @@ describe('plan-view endpoint drag on a run whose far end sits on an elbow', () =
     expect(session.canCommit()).toBe(true)
     session.commit!()
     expect((useScene.getState().nodes[pipe.id] as PipeSegmentNode).path[0]).toEqual([0.07, 1, -1])
+    expect(useFloorplanMode.getState().notice).toBeNull()
   })
 })
 
