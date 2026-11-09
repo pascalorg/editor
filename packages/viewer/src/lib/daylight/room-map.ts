@@ -14,8 +14,10 @@ import { Fn, floor, If, int, ivec2, Loop, round, texture, uniform } from 'three/
  *
  * Every level keeps its own map of 10 cm cells, cut into square tiles. A tile entirely inside one
  * room (or outside every room) is a single value; only tiles a room edge crosses keep their cells,
- * packed into one shared atlas. Memory then follows the length of the walls, not the site's area,
- * and no texture grows with the number of floors.
+ * packed into one shared atlas. A level's rooms are grouped into clusters, each with its own tile
+ * rect, so open ground between distant rooms costs nothing. Memory then follows the length of the
+ * walls, not the site's area, and no texture grows with the number of floors. Tiles are built one
+ * at a time, so neither does the build.
  *
  * A point finds its level by height within its own building (a coarse directory lists the
  * buildings near it), so neighbouring buildings with different floor heights, or a 40-storey
@@ -29,12 +31,17 @@ export const CELL = 0.1
 /** Cells per tile side. */
 export const TILE = 16
 const TILE_M = CELL * TILE
-/** Tiles per directory cell side. */
-const DIR = 8
-/** Margin around a level's rooms: the 2-cell dilation plus polygon slop. */
+/** Margin around a room: the 2-cell dilation plus polygon slop. */
 const APRON = 0.35
-const INDEX_W = 1024
+/** Cells built around a tile so its 2-pass dilation and its edges' neighbours are exact. */
+const MARGIN = 3
+/** Rooms of a level closer than this (in tiles) share a cluster. */
+const CLUSTER_GAP = 2
 const LEVEL_W = 256
+/** Directory cells, at most (they grow coarser on vast sites). */
+const MAX_DIR_CELLS = 65536
+/** Room ids are stored as two bytes (id + 1). */
+export const MAX_ROOMS = 65535
 /** WebGPU guarantees 8192 texels a side; the renderer asks for no more. */
 export const DEFAULT_TEXTURE_LIMIT = 8192
 
@@ -52,23 +59,27 @@ export type MapRoom = {
   holes?: [number, number][][]
 }
 
-/** One level's dense cell grid while it is being built (dilated, before tiling). */
-export type LevelGrid = {
+/** One tile while it is being built, inside its row's dilated cells (with a margin all round). */
+export type TileCells = {
   level: number
-  /** Cell (0, 0)'s lower corner, world XZ. */
+  /** Site cell index of `cells[0]`. */
+  ci0: number
+  cj0: number
+  /** World XZ of `cells[0]`'s lower corner. */
   x0: number
   z0: number
-  width: number
-  height: number
+  /** Cells per buffer row. */
+  stride: number
+  /** The tile's first cell in the buffer. */
+  i0: number
+  j0: number
   /** Room index + 1 per cell, 0 outside. */
   cells: Uint16Array
-  /** Per tile: true when every cell holds the same value (no edge inside). */
-  uniformTile: (tx: number, tz: number) => boolean
+  /** Every cell of the tile itself holds the same value (no edge inside). */
+  uniform: boolean
 }
 
-type LevelMap = {
-  y: number
-  building: number
+type Cluster = {
   /** Tile rect, in tiles from the site origin. */
   tx0: number
   tz0: number
@@ -77,6 +88,8 @@ type LevelMap = {
   /** Per tile: 0 outside every room, room + 1 when uniform, −(atlas tile + 1) when detailed. */
   entries: Float32Array
 }
+
+type LevelMap = { y: number; building: number; clusters: Cluster[] }
 
 export class RoomMap {
   /** The device's largest 2D texture side; set before `build`. */
@@ -89,9 +102,10 @@ export class RoomMap {
   private buildingRange: [number, number][] = []
   private originX = 0
   private originZ = 0
+  private dirTiles = 8
   private dirW = 0
   private dirH = 0
-  /** Per directory cell: the buildings whose levels reach it. */
+  /** Per directory cell: the buildings whose rooms reach it. */
   private dirLists: number[][] = []
   private atlas = new Uint8Array(2)
   private atlasTilesW = 1
@@ -101,6 +115,7 @@ export class RoomMap {
 
   readonly u = {
     origin: uniform(new Vector2()) as N,
+    dirTiles: uniform(8, 'int'),
     dirW: uniform(0, 'int'),
     dirH: uniform(0, 'int'),
     /** One building: its level range is the only candidate (no directory reads). */
@@ -109,26 +124,16 @@ export class RoomMap {
     /** Binary-search steps for the tallest building. */
     searchSteps: uniform(0, 'int'),
     atlasTilesW: uniform(1, 'int'),
+    indexW: uniform(1, 'int'),
     index: texture(floatTexture(new Float32Array(4), 1, 1)) as N,
     levels: texture(floatTexture(new Float32Array(8), 2, 1)) as N,
     atlas: texture(byteTexture(new Uint8Array(2), 1, 1)) as N,
   }
   private levelData = new Float32Array(8)
 
-  /**
-   * Rebuild from rooms. `onGrid` sees each level's dense grid before it is tiled (the doorway
-   * search walks room edges on it).
-   */
-  build(levels: MapLevel[], rooms: MapRoom[], onGrid?: (grid: LevelGrid) => void) {
-    this.levels = levels.map((l) => ({
-      y: l.y,
-      building: l.building,
-      tx0: 0,
-      tz0: 0,
-      tw: 0,
-      th: 0,
-      entries: new Float32Array(0),
-    }))
+  /** Rebuild from rooms. `onTile` sees every built tile (the doorway search walks room edges). */
+  build(levels: MapLevel[], rooms: MapRoom[], onTile?: (tile: TileCells) => void) {
+    this.levels = levels.map((l) => ({ y: l.y, building: l.building, clusters: [] }))
     this.order = levels
       .map((_, i) => i)
       .sort((a, b) => levels[a]!.building - levels[b]!.building || levels[a]!.y - levels[b]!.y)
@@ -144,104 +149,156 @@ export class RoomMap {
       range[1]++
     })
 
-    // Site origin on the tile grid.
+    if (rooms.length > MAX_ROOMS)
+      console.warn(`[daylight] ${rooms.length} rooms: only the first ${MAX_ROOMS} get room light`)
+    const used = rooms.slice(0, MAX_ROOMS)
+
+    // Site origin on the tile grid; every rect below is in whole tiles from it.
     let minX = Number.POSITIVE_INFINITY
     let minZ = Number.POSITIVE_INFINITY
-    for (const room of rooms)
+    for (const room of used)
       for (const [x, z] of room.polygon) {
         minX = Math.min(minX, x)
         minZ = Math.min(minZ, z)
       }
     if (!Number.isFinite(minX)) minX = minZ = 0
-    this.originX = Math.floor((minX - APRON) / TILE_M) * TILE_M
-    this.originZ = Math.floor((minZ - APRON) / TILE_M) * TILE_M
+    const originTx = Math.floor((minX - APRON) / TILE_M)
+    const originTz = Math.floor((minZ - APRON) / TILE_M)
+    this.originX = originTx * TILE_M
+    this.originZ = originTz * TILE_M
 
-    const byLevel: number[][] = levels.map(() => [])
-    rooms.forEach((room, ri) => {
-      byLevel[room.level]?.push(ri)
+    // Each room's tile rect (padded by the apron).
+    const rects = used.map((room) => {
+      let x0 = Number.POSITIVE_INFINITY
+      let z0 = Number.POSITIVE_INFINITY
+      let x1 = Number.NEGATIVE_INFINITY
+      let z1 = Number.NEGATIVE_INFINITY
+      for (const [x, z] of room.polygon) {
+        x0 = Math.min(x0, x)
+        z0 = Math.min(z0, z)
+        x1 = Math.max(x1, x)
+        z1 = Math.max(z1, z)
+      }
+      return {
+        tx0: Math.floor((x0 - APRON) / TILE_M) - originTx,
+        tz0: Math.floor((z0 - APRON) / TILE_M) - originTz,
+        tx1: Math.floor((x1 + APRON) / TILE_M) - originTx,
+        tz1: Math.floor((z1 + APRON) / TILE_M) - originTz,
+      }
     })
 
     const atlasTilesW = Math.max(1, Math.floor(Math.min(this.textureLimit, 4096) / TILE))
     const atlasCapacity = atlasTilesW * Math.max(1, Math.floor(this.textureLimit / TILE))
     const detailTiles: Uint16Array[] = []
+    let buffer = new Uint16Array(0)
+    let scratch = new Uint16Array(0)
 
+    // Where rooms overlap (an automatic room under drawn ones, a unit around its rooms), the
+    // smallest wins: rasterized last, so each level's rooms go largest first.
+    const area = used.map((room) => Math.abs(ringArea(room.polygon)))
+    const byLevel: number[][] = levels.map(() => [])
+    used.forEach((room, ri) => {
+      byLevel[room.level]?.push(ri)
+    })
+    for (const list of byLevel) list.sort((a, b) => area[b]! - area[a]! || a - b)
     for (let li = 0; li < levels.length; li++) {
       const level = this.levels[li]!
-      const own = byLevel[li]!
-      if (!own.length) continue
-      let x0 = Number.POSITIVE_INFINITY
-      let z0 = Number.POSITIVE_INFINITY
-      let x1 = Number.NEGATIVE_INFINITY
-      let z1 = Number.NEGATIVE_INFINITY
-      for (const ri of own)
-        for (const [x, z] of rooms[ri]!.polygon) {
-          x0 = Math.min(x0, x)
-          z0 = Math.min(z0, z)
-          x1 = Math.max(x1, x)
-          z1 = Math.max(z1, z)
+      for (const members of clusterRooms(byLevel[li]!, rects)) {
+        let tx0 = Number.POSITIVE_INFINITY
+        let tz0 = Number.POSITIVE_INFINITY
+        let tx1 = Number.NEGATIVE_INFINITY
+        let tz1 = Number.NEGATIVE_INFINITY
+        for (const ri of members) {
+          const r = rects[ri]!
+          tx0 = Math.min(tx0, r.tx0)
+          tz0 = Math.min(tz0, r.tz0)
+          tx1 = Math.max(tx1, r.tx1)
+          tz1 = Math.max(tz1, r.tz1)
         }
-      level.tx0 = Math.floor((x0 - APRON - this.originX) / TILE_M)
-      level.tz0 = Math.floor((z0 - APRON - this.originZ) / TILE_M)
-      level.tw = Math.floor((x1 + APRON - this.originX) / TILE_M) - level.tx0 + 1
-      level.th = Math.floor((z1 + APRON - this.originZ) / TILE_M) - level.tz0 + 1
-      const width = level.tw * TILE
-      const height = level.th * TILE
-      const gx0 = this.originX + level.tx0 * TILE_M
-      const gz0 = this.originZ + level.tz0 * TILE_M
-      const cells = new Uint16Array(width * height)
-      for (const ri of own) rasterize(rooms[ri]!, ri + 1, cells, width, height, gx0, gz0)
-      dilate(cells, width, height)
-
-      const uniformTiles = new Uint8Array(level.tw * level.th)
-      level.entries = new Float32Array(level.tw * level.th)
-      for (let tz = 0; tz < level.th; tz++)
-        for (let tx = 0; tx < level.tw; tx++) {
-          const first = cells[tz * TILE * width + tx * TILE]!
-          let same = true
-          for (let j = 0; j < TILE && same; j++) {
-            const row = (tz * TILE + j) * width + tx * TILE
-            for (let i = 0; i < TILE; i++)
-              if (cells[row + i] !== first) {
-                same = false
-                break
+        const cluster: Cluster = {
+          tx0,
+          tz0,
+          tw: tx1 - tx0 + 1,
+          th: tz1 - tz0 + 1,
+          entries: new Float32Array((tx1 - tx0 + 1) * (tz1 - tz0 + 1)),
+        }
+        level.clusters.push(cluster)
+        // Rooms per tile, from each room's own rect.
+        const buckets: number[][] = Array.from({ length: cluster.entries.length }, () => [])
+        for (const ri of members) {
+          const r = rects[ri]!
+          for (let tz = r.tz0; tz <= r.tz1; tz++)
+            for (let tx = r.tx0; tx <= r.tx1; tx++)
+              buckets[(tz - tz0) * cluster.tw + (tx - tx0)]!.push(ri)
+        }
+        // One row of tiles at a time (plus a margin all round): each room rasterizes once per row.
+        const stride = cluster.tw * TILE + 2 * MARGIN
+        const rowH = TILE + 2 * MARGIN
+        if (buffer.length < stride * rowH) {
+          buffer = new Uint16Array(stride * rowH)
+          scratch = new Uint16Array(stride * rowH)
+        }
+        const strip = buffer.subarray(0, stride * rowH)
+        const inRow = new Set<number>()
+        for (let tz = tz0; tz <= tz1; tz++) {
+          inRow.clear()
+          for (let tx = tx0; tx <= tx1; tx++)
+            for (const ri of buckets[(tz - tz0) * cluster.tw + (tx - tx0)]!) inRow.add(ri)
+          if (!inRow.size) continue
+          const ci0 = tx0 * TILE - MARGIN
+          const cj0 = tz * TILE - MARGIN
+          const x0 = this.originX + ci0 * CELL
+          const z0 = this.originZ + cj0 * CELL
+          strip.fill(0)
+          for (const ri of [...inRow].sort((a, b) => area[b]! - area[a]! || a - b))
+            rasterize(used[ri]!, ri + 1, strip, stride, rowH, x0, z0)
+          // Growth only fills empty cells: inside a big room there are none.
+          if (strip.includes(0)) dilate(strip, scratch, stride, rowH)
+          for (let tx = tx0; tx <= tx1; tx++) {
+            const t = (tz - tz0) * cluster.tw + (tx - tx0)
+            if (!buckets[t]!.length) continue
+            const i0 = MARGIN + (tx - tx0) * TILE
+            const first = strip[MARGIN * stride + i0]!
+            let same = true
+            for (let j = MARGIN; j < MARGIN + TILE && same; j++)
+              for (let i = i0; i < i0 + TILE; i++)
+                if (strip[j * stride + i] !== first) {
+                  same = false
+                  break
+                }
+            if (same) cluster.entries[t] = first
+            else if (detailTiles.length >= atlasCapacity) {
+              // Out of atlas: the tile's most common room stands for all of it.
+              if (!this.warnedOverflow) {
+                console.warn('[daylight] room map atlas full: some room edges are coarse')
+                this.warnedOverflow = true
               }
-          }
-          const t = tz * level.tw + tx
-          if (same) {
-            uniformTiles[t] = 1
-            level.entries[t] = first
-            continue
-          }
-          if (detailTiles.length >= atlasCapacity) {
-            // Out of atlas: the tile's most common room stands for all of it.
-            if (!this.warnedOverflow) {
-              console.warn('[daylight] room map atlas full: some room edges are coarse')
-              this.warnedOverflow = true
+              cluster.entries[t] = majority(strip, stride, i0)
+            } else {
+              const tile = new Uint16Array(TILE * TILE)
+              for (let j = 0; j < TILE; j++)
+                tile.set(
+                  strip.subarray((MARGIN + j) * stride + i0, (MARGIN + j) * stride + i0 + TILE),
+                  j * TILE,
+                )
+              detailTiles.push(tile)
+              cluster.entries[t] = -detailTiles.length
             }
-            level.entries[t] = majority(cells, width, tx, tz)
-            continue
+            onTile?.({
+              level: li,
+              ci0,
+              cj0,
+              x0,
+              z0,
+              stride,
+              i0,
+              j0: MARGIN,
+              cells: strip,
+              uniform: same,
+            })
           }
-          const tile = new Uint16Array(TILE * TILE)
-          for (let j = 0; j < TILE; j++)
-            tile.set(
-              cells.subarray(
-                (tz * TILE + j) * width + tx * TILE,
-                (tz * TILE + j) * width + tx * TILE + TILE,
-              ),
-              j * TILE,
-            )
-          detailTiles.push(tile)
-          level.entries[t] = -detailTiles.length
         }
-      onGrid?.({
-        level: li,
-        x0: gx0,
-        z0: gz0,
-        width,
-        height,
-        cells,
-        uniformTile: (tx, tz) => uniformTiles[tz * level.tw + tx] === 1,
-      })
+      }
     }
 
     // Atlas: detailed tiles in rows, two bytes (room + 1) per cell.
@@ -249,8 +306,7 @@ export class RoomMap {
     this.atlasTiles = detailTiles.length
     const atlasRows = Math.max(1, Math.ceil(detailTiles.length / atlasTilesW))
     const aw = atlasTilesW * TILE
-    const ah = atlasRows * TILE
-    this.atlas = new Uint8Array(aw * ah * 2)
+    this.atlas = new Uint8Array(aw * atlasRows * TILE * 2)
     detailTiles.forEach((tile, a) => {
       const ox = (a % atlasTilesW) * TILE
       const oz = Math.floor(a / atlasTilesW) * TILE
@@ -263,34 +319,33 @@ export class RoomMap {
         }
     })
 
-    // Directory: per cell, the buildings whose levels reach it.
+    // Directory: per cell, the buildings whose clusters reach it (coarser cells on vast sites).
     let maxTx = 0
     let maxTz = 0
-    for (const l of this.levels) {
-      if (!l.tw) continue
-      maxTx = Math.max(maxTx, l.tx0 + l.tw)
-      maxTz = Math.max(maxTz, l.tz0 + l.th)
-    }
-    this.dirW = Math.max(1, Math.ceil(maxTx / DIR))
-    this.dirH = Math.max(1, Math.ceil(maxTz / DIR))
-    this.dirLists = Array.from({ length: this.dirW * this.dirH }, () => [])
-    for (let b = 0; b < buildings; b++) {
-      let bx0 = Number.POSITIVE_INFINITY
-      let bz0 = Number.POSITIVE_INFINITY
-      let bx1 = -1
-      let bz1 = -1
-      for (const l of this.levels) {
-        if (l.building !== b || !l.tw) continue
-        bx0 = Math.min(bx0, l.tx0)
-        bz0 = Math.min(bz0, l.tz0)
-        bx1 = Math.max(bx1, l.tx0 + l.tw - 1)
-        bz1 = Math.max(bz1, l.tz0 + l.th - 1)
+    for (const l of this.levels)
+      for (const c of l.clusters) {
+        maxTx = Math.max(maxTx, c.tx0 + c.tw)
+        maxTz = Math.max(maxTz, c.tz0 + c.th)
       }
-      if (bx1 < 0) continue
-      for (let dz = Math.floor(bz0 / DIR); dz <= Math.floor(bz1 / DIR); dz++)
-        for (let dx = Math.floor(bx0 / DIR); dx <= Math.floor(bx1 / DIR); dx++)
-          this.dirLists[dz * this.dirW + dx]!.push(b)
-    }
+    this.dirTiles = Math.max(8, Math.ceil(Math.sqrt((maxTx * maxTz) / MAX_DIR_CELLS)))
+    this.dirW = Math.max(1, Math.ceil(maxTx / this.dirTiles))
+    this.dirH = Math.max(1, Math.ceil(maxTz / this.dirTiles))
+    this.dirLists = Array.from({ length: this.dirW * this.dirH }, () => [])
+    for (const l of this.levels)
+      for (const c of l.clusters)
+        for (
+          let dz = Math.floor(c.tz0 / this.dirTiles);
+          dz <= Math.floor((c.tz0 + c.th - 1) / this.dirTiles);
+          dz++
+        )
+          for (
+            let dx = Math.floor(c.tx0 / this.dirTiles);
+            dx <= Math.floor((c.tx0 + c.tw - 1) / this.dirTiles);
+            dx++
+          ) {
+            const list = this.dirLists[dz * this.dirW + dx]!
+            if (!list.includes(l.building)) list.push(l.building)
+          }
 
     this.upload()
   }
@@ -299,8 +354,8 @@ export class RoomMap {
   roomAt(x: number, y: number, z: number): number {
     const tx = Math.floor((x - this.originX) / TILE_M)
     const tz = Math.floor((z - this.originZ) / TILE_M)
-    const dx = Math.floor(tx / DIR)
-    const dz = Math.floor(tz / DIR)
+    const dx = Math.floor(tx / this.dirTiles)
+    const dz = Math.floor(tz / this.dirTiles)
     if (dx < 0 || dz < 0 || dx >= this.dirW || dz >= this.dirH) return -1
     for (const b of this.dirLists[dz * this.dirW + dx]!) {
       const [start, count] = this.buildingRange[b]!
@@ -314,23 +369,23 @@ export class RoomMap {
   }
 
   private levelRoomAt(li: number, x: number, z: number, tx: number, tz: number) {
-    const l = this.levels[li]!
-    const lx = tx - l.tx0
-    const lz = tz - l.tz0
-    if (lx < 0 || lz < 0 || lx >= l.tw || lz >= l.th) return -1
-    const e = l.entries[lz * l.tw + lx]!
-    if (e > 0) return e - 1
-    if (e === 0) return -1
-    const a = -e - 1
-    const ci = Math.floor((x - this.originX) / CELL) - tx * TILE
-    const cj = Math.floor((z - this.originZ) / CELL) - tz * TILE
-    const aw = this.atlasTilesW * TILE
-    const k =
-      (((Math.floor(a / this.atlasTilesW) * TILE + cj) * aw + (a % this.atlasTilesW) * TILE + ci) *
-        2) |
-      0
-    const v = this.atlas[k]! + this.atlas[k + 1]! * 256
-    return v - 1
+    for (const c of this.levels[li]!.clusters) {
+      const lx = tx - c.tx0
+      const lz = tz - c.tz0
+      if (lx < 0 || lz < 0 || lx >= c.tw || lz >= c.th) continue
+      const e = c.entries[lz * c.tw + lx]!
+      if (e > 0) return e - 1
+      if (e === 0) return -1
+      const a = -e - 1
+      const ci = Math.floor((x - this.originX) / CELL) - tx * TILE
+      const cj = Math.floor((z - this.originZ) / CELL) - tz * TILE
+      const aw = this.atlasTilesW * TILE
+      const k =
+        ((Math.floor(a / this.atlasTilesW) * TILE + cj) * aw + (a % this.atlasTilesW) * TILE + ci) *
+        2
+      return this.atlas[k]! + this.atlas[k + 1]! * 256 - 1
+    }
+    return -1
   }
 
   /** The level stacked right above `level` in its building, or −1. */
@@ -355,18 +410,17 @@ export class RoomMap {
   setPresentation(offsets: number[], shown: boolean[], focused: boolean[]) {
     let changed = false
     this.order.forEach((level, pos) => {
-      const l = this.levels[level]!
       const off = offsets[level] ?? 0
       const flags = (focused[level] ? 1 : 0) + (shown[level] !== false ? 2 : 0)
-      const t0 = pos * 8
-      const liveY = l.y + off
-      if (this.levelData[t0] !== liveY) {
-        this.levelData[t0] = liveY
+      const t = pos * 8
+      const liveY = this.levels[level]!.y + off
+      if (this.levelData[t] !== liveY) {
+        this.levelData[t] = liveY
         changed = true
       }
-      if (this.levelData[t0 + 6] !== off || this.levelData[t0 + 7] !== flags) {
-        this.levelData[t0 + 6] = off
-        this.levelData[t0 + 7] = flags
+      if (this.levelData[t + 6] !== off || this.levelData[t + 7] !== flags) {
+        this.levelData[t + 6] = off
+        this.levelData[t + 7] = flags
         changed = true
       }
     })
@@ -382,13 +436,21 @@ export class RoomMap {
   }
 
   private upload() {
-    // index: [directory cells] [directory lists] [entries per level]
+    // index: [directory cells] [directory lists] [clusters, 2 texels] [entries]
     const dirCells = this.dirW * this.dirH
     const listTexels = this.dirLists.reduce((s, l) => s + l.length, 0)
-    const entryTexels = this.levels.reduce((s, l) => s + l.entries.length, 0)
-    const texels = dirCells + listTexels + entryTexels + 1
-    const rows = Math.max(1, Math.ceil(texels / INDEX_W))
-    const index = new Float32Array(INDEX_W * rows * 4)
+    const clusterCount = this.levels.reduce((s, l) => s + l.clusters.length, 0)
+    const entryTexels = this.levels.reduce(
+      (s, l) => s + l.clusters.reduce((t, c) => t + c.entries.length, 0),
+      0,
+    )
+    const texels = dirCells + listTexels + clusterCount * 2 + entryTexels + 1
+    // As wide as the device allows, so a vast site's directory still fits.
+    const indexW = Math.min(this.textureLimit, 4096)
+    const rows = Math.max(1, Math.ceil(texels / indexW))
+    if (rows > this.textureLimit)
+      console.warn('[daylight] room map index exceeds the device texture limit')
+    const index = new Float32Array(indexW * rows * 4)
     let list = dirCells
     this.dirLists.forEach((buildings, c) => {
       index[c * 4] = list
@@ -400,53 +462,60 @@ export class RoomMap {
         list++
       }
     })
-    let entry = list
-    const entryOffset = new Array<number>(this.levels.length).fill(0)
+    const clusterStart = new Array<number>(this.levels.length).fill(0)
+    let cluster = list
+    let entry = list + clusterCount * 2
     this.levels.forEach((l, li) => {
-      entryOffset[li] = entry
-      for (let k = 0; k < l.entries.length; k++) index[(entry + k) * 4] = l.entries[k]!
-      entry += l.entries.length
+      clusterStart[li] = cluster
+      for (const c of l.clusters) {
+        index.set([c.tx0, c.tz0, c.tw, c.th, entry, 0, 0, 0], cluster * 4)
+        for (let k = 0; k < c.entries.length; k++) index[(entry + k) * 4] = c.entries[k]!
+        entry += c.entries.length
+        cluster += 2
+      }
     })
     this.indexBytes = index.byteLength
 
-    // levels (GPU order): [liveY, tx0, tz0, tw] [th, entryOffset, offset, flags]
+    // levels (GPU order): [liveY, clusterStart, clusterCount, 0] [0, 0, offset, flags]
     const levelRows = Math.max(1, Math.ceil((this.order.length * 2) / LEVEL_W))
     this.levelData = new Float32Array(LEVEL_W * levelRows * 4)
     this.order.forEach((level, pos) => {
       const l = this.levels[level]!
-      this.levelData.set([l.y, l.tx0, l.tz0, l.tw, l.th, entryOffset[level]!, 0, 2], pos * 8)
+      this.levelData.set([l.y, clusterStart[level]!, l.clusters.length, 0, 0, 0, 0, 2], pos * 8)
     })
 
     const aw = this.atlasTilesW * TILE
-    replace(this.u.index, floatTexture(index, INDEX_W, rows))
+    replace(this.u.index, floatTexture(index, indexW, rows))
     replace(this.u.levels, floatTexture(this.levelData, LEVEL_W, levelRows))
     replace(this.u.atlas, byteTexture(this.atlas, aw, this.atlas.length / 2 / aw))
     ;(this.u.origin.value as Vector2).set(this.originX, this.originZ)
+    this.u.indexW.value = indexW
+    this.u.dirTiles.value = this.dirTiles
     this.u.dirW.value = this.dirW
     this.u.dirH.value = this.dirH
+    this.u.atlasTilesW.value = this.atlasTilesW
     this.u.single.value = this.buildingRange.length <= 1 ? 1 : 0
     this.u.singleCount.value = this.buildingRange[0]?.[1] ?? 0
     this.u.searchSteps.value = this.buildingRange.reduce(
       (steps, [, count]) => Math.max(steps, Math.ceil(Math.log2(count + 1))),
       0,
     )
-    this.u.atlasTilesW.value = this.atlasTilesW
   }
 
   // ---- TSL ---------------------------------------------------------------------------------
 
   private indexTexel(i: N): N {
     const k = int(i)
-    return this.u.index.load(ivec2(k.mod(INDEX_W), k.div(INDEX_W)))
+    return this.u.index.load(ivec2(k.mod(this.u.indexW), k.div(this.u.indexW)))
   }
 
-  /** [liveY, tx0, tz0, tw] of the level at GPU position `pos`. */
+  /** [liveY, clusterStart, clusterCount, 0] of the level at GPU position `pos`. */
   levelTexel0(pos: N): N {
     const k = int(pos).mul(2)
     return this.u.levels.load(ivec2(k.mod(LEVEL_W), k.div(LEVEL_W)))
   }
 
-  /** [th, entryOffset, offset, flags] of the level at GPU position `pos`. */
+  /** [0, 0, offset, flags] of the level at GPU position `pos`. */
   levelTexel1(pos: N): N {
     const k = int(pos).mul(2).add(1)
     return this.u.levels.load(ivec2(k.mod(LEVEL_W), k.div(LEVEL_W)))
@@ -464,7 +533,7 @@ export class RoomMap {
     If(u.single.equal(1), () => {
       count.assign(1)
     }).Else(() => {
-      const dir = ivec2((floor as N)(tileF.div(DIR)))
+      const dir = ivec2((floor as N)(tileF.div(u.dirTiles)))
       If(
         dir.x
           .greaterThanEqual(0)
@@ -503,36 +572,40 @@ export class RoomMap {
             })
           })
         })
-        const t0 = this.levelTexel0(found)
-        const t1 = this.levelTexel1(found)
-        const local = tile.sub(ivec2(int(t0.y), int(t0.z)))
-        If(
-          local.x
-            .greaterThanEqual(0)
-            .and(local.y.greaterThanEqual(0))
-            .and(local.x.lessThan(int(t0.w)))
-            .and(local.y.lessThan(int(t1.x))),
-          () => {
-            const e = this.indexTexel(
-              int(t1.y)
-                .add(local.y.mul(int(t0.w)))
-                .add(local.x),
-            ).x
-            If(e.greaterThan(0.5), () => {
-              room.assign(int(round(e)).sub(1))
-            }).ElseIf(e.lessThan(-0.5), () => {
-              const a = int(round(e.negate())).sub(1)
-              const cell = ivec2((floor as N)(p.xz.sub(u.origin).div(CELL))).sub(tile.mul(TILE))
-              const at = ivec2(
-                a.mod(u.atlasTilesW).mul(TILE).add(cell.x),
-                a.div(u.atlasTilesW).mul(TILE).add(cell.y),
-              )
-              const texel = u.atlas.load(at)
-              const id = int(round(texel.x.mul(255))).add(int(round(texel.y.mul(255))).mul(256))
-              room.assign(id.sub(1))
-            })
-          },
-        )
+        const level = this.levelTexel0(found)
+        const done = int(0).toVar()
+        Loop({ start: int(0), end: int(level.z), type: 'int', condition: '<' }, ({ i: c }: N) => {
+          If(done.equal(0), () => {
+            const base = int(level.y).add(c.mul(2))
+            const rect = this.indexTexel(base)
+            const local = tile.sub(ivec2(int(rect.x), int(rect.y)))
+            If(
+              local.x
+                .greaterThanEqual(0)
+                .and(local.y.greaterThanEqual(0))
+                .and(local.x.lessThan(int(rect.z)))
+                .and(local.y.lessThan(int(rect.w))),
+              () => {
+                done.assign(1)
+                const entryStart = int(this.indexTexel(base.add(1)).x)
+                const e = this.indexTexel(entryStart.add(local.y.mul(int(rect.z))).add(local.x)).x
+                If(e.greaterThan(0.5), () => {
+                  room.assign(int(round(e)).sub(1))
+                }).ElseIf(e.lessThan(-0.5), () => {
+                  const a = int(round(e.negate())).sub(1)
+                  const cell = ivec2((floor as N)(p.xz.sub(u.origin).div(CELL))).sub(tile.mul(TILE))
+                  const at = ivec2(
+                    a.mod(u.atlasTilesW).mul(TILE).add(cell.x),
+                    a.div(u.atlasTilesW).mul(TILE).add(cell.y),
+                  )
+                  const texel = u.atlas.load(at)
+                  const id = int(round(texel.x.mul(255))).add(int(round(texel.y.mul(255))).mul(256))
+                  room.assign(id.sub(1))
+                })
+              },
+            )
+          })
+        })
       })
     })
     return room
@@ -540,6 +613,48 @@ export class RoomMap {
 }
 
 // ---- build helpers --------------------------------------------------------------------------
+
+/** Groups a level's rooms whose padded tile rects lie within `CLUSTER_GAP` tiles of each other. */
+function clusterRooms(
+  members: number[],
+  rects: { tx0: number; tz0: number; tx1: number; tz1: number }[],
+): number[][] {
+  const parent = members.map((_, i) => i)
+  const find = (i: number): number => {
+    while (parent[i] !== i) {
+      parent[i] = parent[parent[i]!]!
+      i = parent[i]!
+    }
+    return i
+  }
+  const order = members
+    .map((_, i) => i)
+    .sort((a, b) => rects[members[a]!]!.tx0 - rects[members[b]!]!.tx0)
+  for (let a = 0; a < order.length; a++) {
+    const ra = rects[members[order[a]!]!]!
+    for (let b = a + 1; b < order.length; b++) {
+      const rb = rects[members[order[b]!]!]!
+      if (rb.tx0 > ra.tx1 + CLUSTER_GAP) break
+      if (rb.tz0 <= ra.tz1 + CLUSTER_GAP && ra.tz0 <= rb.tz1 + CLUSTER_GAP)
+        parent[find(order[a]!)] = find(order[b]!)
+    }
+  }
+  const groups = new Map<number, number[]>()
+  members.forEach((ri, i) => {
+    const root = find(i)
+    const group = groups.get(root)
+    if (group) group.push(ri)
+    else groups.set(root, [ri])
+  })
+  return [...groups.values()]
+}
+
+function ringArea(ring: [number, number][]) {
+  let a = 0
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++)
+    a += ring[j]![0] * ring[i]![1] - ring[i]![0] * ring[j]![1]
+  return a / 2
+}
 
 /** Scanline fill of a room (holes subtracted, even-odd) at cell centres. */
 function rasterize(
@@ -581,24 +696,25 @@ function rasterize(
 }
 
 /** Two passes of 4-neighbour growth into empty cells: wall thickness and polygon slop resolve. */
-function dilate(cells: Uint16Array, width: number, height: number) {
+function dilate(cells: Uint16Array, scratch: Uint16Array, width: number, height: number) {
   for (let pass = 0; pass < 2; pass++) {
-    const src = cells.slice()
+    scratch.set(cells)
     for (let j = 1; j < height - 1; j++)
       for (let i = 1; i < width - 1; i++) {
         const k = j * width + i
-        if (src[k]) continue
-        const n = src[k - 1] || src[k + 1] || src[k - width] || src[k + width]
+        if (scratch[k]) continue
+        const n = scratch[k - 1] || scratch[k + 1] || scratch[k - width] || scratch[k + width]
         if (n) cells[k] = n
       }
   }
 }
 
-function majority(cells: Uint16Array, width: number, tx: number, tz: number) {
+/** The most common value among a tile's own cells. */
+function majority(cells: Uint16Array, stride: number, i0: number) {
   const counts = new Map<number, number>()
-  for (let j = 0; j < TILE; j++)
-    for (let i = 0; i < TILE; i++) {
-      const v = cells[(tz * TILE + j) * width + tx * TILE + i]!
+  for (let j = MARGIN; j < MARGIN + TILE; j++)
+    for (let i = i0; i < i0 + TILE; i++) {
+      const v = cells[j * stride + i]!
       counts.set(v, (counts.get(v) ?? 0) + 1)
     }
   let best = 0

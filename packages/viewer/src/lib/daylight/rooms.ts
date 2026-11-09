@@ -40,7 +40,7 @@ import {
   vec3,
   vec4,
 } from 'three/tsl'
-import { CELL, type LevelGrid, type MapLevel, RoomMap, TILE } from './room-map'
+import { CELL, type MapLevel, RoomMap, TILE, type TileCells } from './room-map'
 
 /**
  * "Room-aware" interior light, the game-engine way (ported from the enhanced viewer):
@@ -240,7 +240,7 @@ export class RoomLighting {
     // ---- rooms ---------------------------------------------------------------------------
     const raycaster = new Raycaster()
     input.configureRaycaster?.(raycaster)
-    const coverObjects = input.covers.map((c) => c.object)
+    const coverGrid = new MeshGrid(input.covers.map((c) => c.object))
     const coverKind = new Map<Object3D, string>()
     for (const c of input.covers) c.object.traverse((o) => coverKind.set(o, c.kind))
     const kindOf = (o: Object3D) => {
@@ -273,7 +273,7 @@ export class RoomLighting {
       // Enclosed = something overhead (ceiling / roof / slab above). Open terraces get sky light.
       raycaster.set(new Vector3(c.x, floorY + 1.2, c.y), new Vector3(0, 1, 0))
       raycaster.far = 30
-      const hits = intersectGeometry(raycaster, coverObjects, true)
+      const hits = intersectGeometry(raycaster, coverGrid.near(c.x, c.y, c.x, c.y), false)
       const hit = hits[0]
       const top = hits[hits.length - 1]
       const topKind = top ? kindOf(top.object) : ''
@@ -442,6 +442,8 @@ export class RoomLighting {
    * such, not as a lamplit room it cannot see.
    */
   levelShown: boolean[] = []
+  /** Per level: focused (its rooms open from above when the camera is over their cover). */
+  levelFocused: boolean[] = []
   /** Per level: the highest one shown in its building (its rooms seen from above). */
   private levelTopShown: boolean[] = []
 
@@ -522,10 +524,21 @@ export class RoomLighting {
 
   /**
    * Live level presentation, per level: explode offset (live world Y − assembled), whether it is
-   * shown, and whether it is focused (the level over it hidden: its rooms open from above).
+   * shown, and whether it is the selected level of a cutaway (solo / levels above hidden). A shown
+   * level is focused — its rooms open from above — when selected so, or when every level over it
+   * in its building is hidden.
    */
-  setLevelPresentation(offsets: number[], shown: boolean[], focused: boolean[]) {
+  setLevelPresentation(offsets: number[], shown: boolean[], selected: boolean[]) {
     this.levelShown = shown
+    const focused = this.levels.map((_, i) => {
+      if (shown[i] === false) return false
+      if (selected[i]) return true
+      let up = this.map.levelAbove(i)
+      if (up < 0) return false
+      for (; up >= 0; up = this.map.levelAbove(up)) if (shown[up] !== false) return false
+      return true
+    })
+    this.levelFocused = focused
     this.levelTopShown = this.levels.map((_, i) => {
       if (shown[i] === false) return false
       for (let up = this.map.levelAbove(i); up >= 0; up = this.map.levelAbove(up))
@@ -840,20 +853,20 @@ export class RoomLighting {
       .map((o) => ({ id: o.id, box: new Box3().setFromObject(o.object) }))
     const doorHoles = doors.map((door) => door.box.clone().expandByScalar(0.05))
     ray.far = 0.9
+    const wallGrid = new MeshGrid(input.walls)
     const samples = new Map<string, OpeningSamples>()
     const v = new Vector3()
     const dirV = new Vector3()
 
-    const walk = (grid: LevelGrid) => {
-      const { cells, width: W, height: H, x0, z0, level: l } = grid
+    const walk = (tile: TileCells) => {
+      const { cells, stride, i0, j0, x0, z0, ci0, cj0, level: l } = tile
       const floorY = this.levels[l]?.y ?? 0
       const visit = (i: number, j: number, axis: 'x' | 'z') => {
         const di = axis === 'x' ? 1 : 0
         const dj = axis === 'z' ? 1 : 0
-        if (i + di >= W || j + dj >= H) return
-        if ((axis === 'x' ? j : i) % 2) return // sample every 2nd cell along the edge (0.2 m)
-        const A = cells[j * W + i]!
-        const B = cells[(j + dj) * W + i + di]!
+        if ((axis === 'x' ? cj0 + j : ci0 + i) % 2) return // every 2nd cell along the edge (0.2 m)
+        const A = cells[j * stride + i]!
+        const B = cells[(j + dj) * stride + i + di]!
         if (A === B) return
         const a = A ? A - 1 : -1
         const b = B ? B - 1 : -1
@@ -867,7 +880,13 @@ export class RoomLighting {
           v.set(x, floorY + h, z).addScaledVector(dirV, -0.45)
           ray.set(v, dirV)
           // A doorway is open whatever wall-attached geometry crosses it (finishes, trims).
-          const blocked = intersectGeometry(ray, input.walls, false).some(
+          const near = wallGrid.near(
+            Math.min(v.x, v.x + dirV.x * 0.9),
+            Math.min(v.z, v.z + dirV.z * 0.9),
+            Math.max(v.x, v.x + dirV.x * 0.9),
+            Math.max(v.z, v.z + dirV.z * 0.9),
+          )
+          const blocked = intersectGeometry(ray, near, false).some(
             (hit) => !doorHoles.some((hole) => hole.containsPoint(hit.point)),
           )
           if (blocked) return
@@ -885,21 +904,19 @@ export class RoomLighting {
         s.pts.push(new Vector3(x, floorY, z))
         s.facing.push(new Vector3(di * dir, 0, dj * dir))
       }
-      // A uniform tile has no edge inside: only its borders with the next tiles can hold one.
-      for (let tz = 0; tz < H / TILE; tz++)
-        for (let tx = 0; tx < W / TILE; tx++) {
-          const i0 = tx * TILE
-          const j0 = tz * TILE
-          if (grid.uniformTile(tx, tz)) {
-            for (let j = j0; j < j0 + TILE; j++) visit(i0 + TILE - 1, j, 'x')
-            for (let i = i0; i < i0 + TILE; i++) visit(i, j0 + TILE - 1, 'z')
-            continue
-          }
-          for (let j = j0; j < j0 + TILE; j++)
-            for (let i = i0; i < i0 + TILE; i++) {
-              visit(i, j, 'x')
-              visit(i, j, 'z')
-            }
+      // Each edge belongs to the tile of the cell before it. A uniform tile has none inside: only
+      // its borders with the next tiles can hold one.
+      const iEnd = i0 + TILE
+      const jEnd = j0 + TILE
+      if (tile.uniform) {
+        for (let j = j0; j < jEnd; j++) visit(iEnd - 1, j, 'x')
+        for (let i = i0; i < iEnd; i++) visit(i, jEnd - 1, 'z')
+        return
+      }
+      for (let j = j0; j < jEnd; j++)
+        for (let i = i0; i < iEnd; i++) {
+          visit(i, j, 'x')
+          visit(i, j, 'z')
         }
     }
 
@@ -1320,6 +1337,55 @@ function intersectGeometry(ray: Raycaster, objects: Object3D[], recursive: boole
   for (const object of objects) visit(object)
   return hits.sort((a, b) => a.distance - b.distance)
 }
+
+/**
+ * Meshes (and the meshes under them) bucketed by their world XZ bounds, so a short doorway ray or
+ * a vertical cover ray tests its neighbours, not every wall and slab of the scene.
+ */
+class MeshGrid {
+  private static readonly SIZE = 2
+  private readonly cells = new Map<number, Mesh[]>()
+  private readonly seen = new Set<Mesh>()
+
+  constructor(roots: Object3D[]) {
+    const box = new Box3()
+    for (const root of roots)
+      root.traverse((object) => {
+        const mesh = object as Mesh
+        if (!mesh.isMesh) return
+        const geometry = mesh.geometry
+        if (!geometry.boundingBox) geometry.computeBoundingBox()
+        if (!geometry.boundingBox) return
+        box.copy(geometry.boundingBox).applyMatrix4(mesh.matrixWorld)
+        if (box.isEmpty()) return
+        const s = MeshGrid.SIZE
+        for (let iz = Math.floor(box.min.z / s); iz <= Math.floor(box.max.z / s); iz++)
+          for (let ix = Math.floor(box.min.x / s); ix <= Math.floor(box.max.x / s); ix++) {
+            const key = cellKey(ix, iz)
+            const list = this.cells.get(key)
+            if (list) list.push(mesh)
+            else this.cells.set(key, [mesh])
+          }
+      })
+  }
+
+  /** Meshes whose bounds may reach the XZ rect. */
+  near(minX: number, minZ: number, maxX: number, maxZ: number): Mesh[] {
+    const s = MeshGrid.SIZE
+    const out: Mesh[] = []
+    this.seen.clear()
+    for (let iz = Math.floor(minZ / s); iz <= Math.floor(maxZ / s); iz++)
+      for (let ix = Math.floor(minX / s); ix <= Math.floor(maxX / s); ix++)
+        for (const mesh of this.cells.get(cellKey(ix, iz)) ?? [])
+          if (!this.seen.has(mesh)) {
+            this.seen.add(mesh)
+            out.push(mesh)
+          }
+    return out
+  }
+}
+
+const cellKey = (ix: number, iz: number) => (ix + 1_000_000) * 2_000_003 + (iz + 1_000_000)
 
 function emptyTexture(): DataTexture {
   const tex = new DataTexture(new Float32Array(4), 1, 1, RGBAFormat, FloatType)

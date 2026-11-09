@@ -285,6 +285,80 @@ describe('room lighting', () => {
   })
 })
 
+describe('room map edge cases', () => {
+  test('a room off the tile grid builds and resolves (tile rects in whole tiles)', () => {
+    const rooms = new RoomLighting()
+    rooms.build(
+      bare({
+        levels: [{ y: 0, building: 0 }],
+        zones: [{ id: 'r', levelIndex: 0, polygon: square(27.55, 0, 8) }],
+      }),
+    )
+    expect(rooms.roomAt(new Vector3(31, 1, 4))).toBe(0)
+  })
+
+  test('the index texture stays within the device limit on a vast site', () => {
+    const rooms = new RoomLighting()
+    rooms.map.textureLimit = 2048
+    rooms.build(
+      bare({
+        levels: [{ y: 0, building: 0 }],
+        zones: [
+          { id: 'a', levelIndex: 0, polygon: square(0, 0, 2) },
+          { id: 'b', levelIndex: 0, polygon: square(20000, 20000, 2) },
+        ],
+      }),
+    )
+    const index = (rooms.map.u.index.value as { image: { width: number; height: number } }).image
+    expect(index.width).toBeLessThanOrEqual(2048)
+    expect(index.height).toBeLessThanOrEqual(2048)
+    expect(rooms.roomAt(new Vector3(1, 1, 1))).toBe(0)
+    expect(rooms.roomAt(new Vector3(20001, 1, 20001))).toBe(1)
+  })
+
+  test('where rooms overlap, the smallest wins (a floor-wide room never swallows the rooms in it)', () => {
+    const rooms = new RoomLighting()
+    rooms.build(
+      bare({
+        levels: [{ y: 0, building: 0 }],
+        zones: [
+          { id: 'kitchen', levelIndex: 0, polygon: square(0, 0, 5) },
+          { id: 'bedroom', levelIndex: 0, polygon: square(5, 0, 5) },
+          // Listed last, as an automatic room added after the drawn ones would be.
+          { id: 'whole floor', levelIndex: 0, polygon: square(0, 0, 10) },
+        ],
+      }),
+    )
+    const at = (x: number, z: number) => rooms.rooms[rooms.roomAt(new Vector3(x, 1, z))]?.zone.id
+    expect(at(2, 2)).toBe('kitchen')
+    expect(at(7, 2)).toBe('bedroom')
+    expect(at(5, 8)).toBe('whole floor')
+  })
+
+  test('a level opens from above only when every level over it is hidden', () => {
+    const rooms = new RoomLighting()
+    rooms.build(
+      bare({
+        levels: [
+          { y: 0, building: 0 },
+          { y: 3, building: 0 },
+          { y: 6, building: 0 },
+        ],
+        zones: [0, 1, 2].map((f) => ({ id: `f${f}`, levelIndex: f, polygon: square(0, 0, 8) })),
+      }),
+    )
+    const none = [false, false, false]
+    // A middle floor hidden while the top one shows: the ground floor stays covered.
+    rooms.setLevelPresentation([0, 0, 0], [true, false, true], none)
+    expect(rooms.levelFocused).toEqual([false, false, false])
+    rooms.setLevelPresentation([0, 0, 0], [true, false, false], none)
+    expect(rooms.levelFocused).toEqual([true, false, false])
+    // The selected level of a cutaway is focused even with nothing hidden over it.
+    rooms.setLevelPresentation([0, 0, 0], [true, true, true], [false, false, true])
+    expect(rooms.levelFocused).toEqual([false, false, true])
+  })
+})
+
 function square(x: number, z: number, size: number): [number, number][] {
   return [
     [x, z],

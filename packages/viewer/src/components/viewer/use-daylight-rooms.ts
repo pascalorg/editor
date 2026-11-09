@@ -119,15 +119,9 @@ export function useDaylightRooms() {
       object ? object.getWorldPosition(scratch).y - (levels[index]?.y ?? 0) : 0,
     )
     const shown = s.levelObjects.map((object) => !!object && presented(object))
-    const selected = selectedFocusLevel()
-    const focused = s.levelObjects.map((object, index) => {
-      if (!shown[index]) return false
-      if (object && object === selected) return true
-      // Levels over it hidden (the cutaway shows its rooms from above).
-      const above = daylightRooms.map.levelAbove(index)
-      return above >= 0 && !shown[above]
-    })
-    daylightRooms.setLevelPresentation(offsets, shown, focused)
+    const focus = selectedFocusLevel()
+    const selected = s.levelObjects.map((object) => !!object && object === focus)
+    daylightRooms.setLevelPresentation(offsets, shown, selected)
     daylightRooms.cameraY.value = camera.position.y
 
     // Lamp switches (fed lamps by key; virtual lamps follow the time-of-day default) and doors.
