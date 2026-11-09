@@ -1,3 +1,4 @@
+import { markToolCancelConsumed } from '../../hooks/use-keyboard'
 import type { ParseMeasurementOptions } from '../../lib/measurement-parser'
 import { isTypingTarget } from '../../lib/typing-target'
 import useEditor from '../../store/use-editor'
@@ -57,4 +58,22 @@ export function installFloorplanWallTypingKeys({
   }
   window.addEventListener('keydown', onKeyDown, true)
   return () => window.removeEventListener('keydown', onKeyDown, true)
+}
+
+/**
+ * The plan's `tool:cancel` first stage. A cancel from any source (Escape, ⌘Z,
+ * a toolbar button) while a typed wall session is open only ends that
+ * session: in 2D-only view the plan clears it and consumes the cancel. In
+ * split view the 3D wall tool owns the session and its cancel. Returns true
+ * when the plan's wall draft must be kept.
+ */
+export function endFloorplanWallTypingOnCancel(): boolean {
+  const editor = useEditor.getState()
+  if (!(editor.mode === 'build' && editor.tool === 'wall')) return false
+  if (!usePlacementTyping.getState().isActive) return false
+  if (visibleScene(editor) === '2d') {
+    markToolCancelConsumed()
+    usePlacementTyping.getState().clear()
+  }
+  return true
 }
