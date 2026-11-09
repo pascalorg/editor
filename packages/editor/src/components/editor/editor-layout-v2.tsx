@@ -211,10 +211,15 @@ function ChatColumn({
 // ── Tool column: the picked tool's panel, in the chat's place ───────────────
 
 /** The menu entry whose panel is open in the column, if any. */
-function useOpenTool(tabs: SidebarTab[], toolClosed: boolean): SidebarTab | undefined {
+function useOpenTool(
+  tabs: SidebarTab[],
+  toolClosed: boolean,
+  columnTabId: string | undefined,
+): SidebarTab | undefined {
+  // The same tab list as the menu's: two lists would each pull the shown panel their way.
   const activePanel = useShownSidebarPanel(tabs)
   const tab = tabs.find((t) => t.id === activePanel)
-  return toolClosed || !tab || tab.noPanel ? undefined : tab
+  return toolClosed || !tab || tab.noPanel || tab.id === columnTabId ? undefined : tab
 }
 
 function ToolColumn({
@@ -354,7 +359,10 @@ function RightColumn({
   children,
   overlays,
   stageOverlay,
+  menuButton,
 }: {
+  /** Shown first in the view bar row (or over the stage without one): brings a hidden menu back. */
+  menuButton?: ReactNode
   toolbarLeft?: ReactNode
   toolbarRight?: ReactNode
   viewBar: boolean
@@ -366,7 +374,7 @@ function RightColumn({
     <div className="relative flex min-w-0 flex-1 flex-col overflow-hidden">
       {/* The view bar row sits above the stage, one bar per pane; the host's
           left toolbar rides after the first pane's views. */}
-      {viewBar && <ViewBarRow leading={toolbarLeft} />}
+      {viewBar && <ViewBarRow leading={toolbarLeft} start={menuButton} />}
       <div
         className="relative flex min-h-0 flex-1 flex-col overflow-hidden"
         style={{
@@ -375,9 +383,16 @@ function RightColumn({
           boxShadow: '-4px -2px 16px rgba(0, 0, 0, 0.08), -1px 0 4px rgba(0, 0, 0, 0.04)',
         }}
       >
-        {((!viewBar && toolbarLeft) || toolbarRight) && (
+        {((!viewBar && (toolbarLeft || menuButton)) || toolbarRight) && (
           <StageToolbar
-            toolbarLeft={viewBar ? undefined : toolbarLeft}
+            toolbarLeft={
+              viewBar ? undefined : (
+                <>
+                  {menuButton}
+                  {toolbarLeft}
+                </>
+              )
+            }
             toolbarRight={toolbarRight}
           />
         )}
@@ -472,6 +487,12 @@ export function EditorLayoutV2({
   const toolTabs = columnTab ? sidebarTabs.filter((t) => t !== columnTab) : sidebarTabs
   const showSideColumns = !(isMobile || isCaptureMode) && toolTabs.length > 0
   const isMenuHidden = useSidebarStore((s) => s.isMenuHidden)
+  // A project opens on the column's tab (the chat): tools are one click away in the menu.
+  const columnTabIdOnOpen = useRef(showSideColumns ? columnTab?.id : undefined)
+  useEffect(() => {
+    if (columnTabIdOnOpen.current)
+      useEditor.getState().setActiveSidebarPanel(columnTabIdOnOpen.current)
+  }, [])
   // On a phone the column tab is one more sheet, so it stays a pickable tab.
   const isCollapsed = useSidebarStore((s) => s.isCollapsed)
   // The column tab picked before its column was there to take it (a host
@@ -482,7 +503,7 @@ export function EditorLayoutV2({
       (s.sidebarPanels[s.workspaceMode] ?? s.activeSidebarPanel) === columnTab.id,
   )
   const toolClosed = isCollapsed || (!isMobile && columnPicked)
-  const openTool = useOpenTool(isMobile ? sidebarTabs : toolTabs, toolClosed)
+  const openTool = useOpenTool(sidebarTabs, toolClosed, isMobile ? undefined : columnTab?.id)
 
   if (isMobile) {
     return (
@@ -502,15 +523,6 @@ export function EditorLayoutV2({
 
   const tool = showSideColumns ? openTool : undefined
   const menuButton = showSideColumns && isMenuHidden ? <ShowMenuButton /> : null
-  const leading =
-    menuButton && viewerToolbarLeft ? (
-      <>
-        {menuButton}
-        {viewerToolbarLeft}
-      </>
-    ) : (
-      (menuButton ?? viewerToolbarLeft)
-    )
   return (
     <div className="flex h-full w-full flex-col bg-sidebar text-foreground">
       {/* Top navbar */}
@@ -537,7 +549,8 @@ export function EditorLayoutV2({
         <RightColumn
           overlays={overlays}
           stageOverlay={stageOverlay}
-          toolbarLeft={isCaptureMode ? undefined : leading}
+          menuButton={isCaptureMode ? undefined : menuButton}
+          toolbarLeft={isCaptureMode ? undefined : viewerToolbarLeft}
           toolbarRight={isCaptureMode ? undefined : viewerToolbarRight}
           viewBar={viewBar && !isCaptureMode && !stageOverlay}
         >

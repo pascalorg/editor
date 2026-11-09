@@ -266,7 +266,7 @@ function SplitControls() {
  * views on the left (the first pane followed by the host's `leading` content),
  * the split controls at the right end of the last pane.
  */
-export function ViewBarRow({ leading }: { leading?: ReactNode }) {
+export function ViewBarRow({ start, leading }: { start?: ReactNode; leading?: ReactNode }) {
   const layout = useActiveViewLayout()
   const isMobile = useIsMobile()
   useSplitShortcut(!isMobile)
@@ -284,6 +284,7 @@ export function ViewBarRow({ leading }: { leading?: ReactNode }) {
             key={pane}
             style={{ left: `${left * 100}%`, width: `${(right - left) * 100}%` }}
           >
+            {pane === 0 && start}
             <ViewTabs pane={pane} />
             {isSceneView(layout.panes[pane]) && <GroundModeToggle />}
             {pane === 0 && leading}
