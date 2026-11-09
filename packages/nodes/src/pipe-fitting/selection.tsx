@@ -509,12 +509,7 @@ const FittingHandles = ({ fitting }: { fitting: PipeFittingNode }) => {
         if (start === null) return null
         const s = sampleAxis(axis, event.clientX, event.clientY, anchorWorld)
         if (s === null) return null
-        // The arrow move does not align to lines, so either snapping mode steps
-        // it on the grid, as the resize does; held Alt slides freely.
-        const step =
-          !event.altKey && (isGridSnapActive() || isMagneticSnapActive())
-            ? useEditor.getState().gridSnapStep
-            : 0
+        const step = !event.altKey && isGridSnapActive() ? useEditor.getState().gridSnapStep : 0
         const delta = snap(s - start, step)
         if (delta === lastDelta) return null
         lastDelta = delta
