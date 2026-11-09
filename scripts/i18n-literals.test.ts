@@ -754,11 +754,20 @@ test('the release job fails when a compiled pack ships a draft', () => {
 /** A throwaway repository with the real catalogs, for the release job's base lookup. */
 function releaseRepo(steps: (git: (...args: string[]) => void, root: string) => void): string {
   const root = mkdtempSync(join(tmpdir(), 'pascal-release-'))
+  // A global signing setup would sign every fixture commit (slow, or a prompt)
+  // and make `git tag` demand a message for a signed annotated tag.
+  const config = [
+    'user.name=Test',
+    'user.email=test@example.com',
+    'commit.gpgSign=false',
+    'tag.gpgSign=false',
+  ]
   const git = (...args: string[]) => {
-    const result = Bun.spawnSync(
-      ['git', '-c', 'user.name=Test', '-c', 'user.email=test@example.com', ...args],
-      { cwd: root, stdout: 'ignore', stderr: 'pipe' },
-    )
+    const result = Bun.spawnSync(['git', ...config.flatMap((entry) => ['-c', entry]), ...args], {
+      cwd: root,
+      stdout: 'ignore',
+      stderr: 'pipe',
+    })
     if (result.exitCode !== 0) throw new Error(`git ${args.join(' ')}: ${result.stderr}`)
   }
   git('init', '-q', '-b', 'main')
