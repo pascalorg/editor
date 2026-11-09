@@ -8,6 +8,7 @@ import {
   DuctTerminalNode,
   emitter,
   LevelNode,
+  type PipeFittingNode,
   type PipeSegmentNode,
   PipeTrapNode,
   registerNode,
@@ -85,6 +86,10 @@ const runDefaults = (kind: 'pipe-segment' | 'duct-segment') =>
 const pipes = () =>
   Object.values(useScene.getState().nodes).filter(
     (node): node is PipeSegmentNode => node.type === 'pipe-segment',
+  )
+const fittings = () =>
+  Object.values(useScene.getState().nodes).filter(
+    (node): node is PipeFittingNode => node.type === 'pipe-fitting',
   )
 const ducts = () =>
   Object.values(useScene.getState().nodes).filter(
@@ -212,6 +217,8 @@ test('a pipe run from a fixed collar leaves along its axis, then takes the chose
     const second = pipes()[1]
     expectPoint(second?.path[0], [x + 1, y, z])
     expect(pipeGrade(second!.path[0]!, second!.path.at(-1)!)).toBeCloseTo(0.02, 9)
+    // A 2% fall turns far less than any bend, so only the open end is capped.
+    expect(fittings().map((fitting) => fitting.fittingType)).toEqual(['end-cap'])
   } finally {
     await renderer.unmount()
   }
