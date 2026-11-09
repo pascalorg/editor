@@ -242,7 +242,7 @@ export function wallSettings(
       'End height offset',
       node.endHeightOffset ?? 0,
       -(height - 0.01),
-      1000,
+      Infinity,
       0.05,
       (endHeightOffset) => update({ endHeightOffset }),
     )
