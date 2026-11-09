@@ -76,6 +76,18 @@ describe('wall bodies', () => {
     expect(below.z1).toBeCloseTo(0.9, 3)
     expect(above.z0).toBeCloseTo(2.1, 3)
   })
+
+  test('a sloped wall stands to its taller end and is marked approximate', () => {
+    const w = wall({ height: 2.5, endHeightOffset: -1, children: ['door_1'] })
+    const prisms = wallBodies(scene([w, door({ position: [1, 1.05, 0] })]), 'level_1')
+    expect(prisms.length).toBeGreaterThan(1)
+    for (const prism of prisms) {
+      expect(prism.z1).toBeCloseTo(2.5, 6)
+      expect(prism.shape).toBe('approx')
+      expect(prism.why).toBe('a sloped wall top: drawn at its taller end')
+    }
+    expect(wallBodies(scene([wall({ height: 2.5 })]), 'level_1')[0]!.shape).toBe('exact')
+  })
 })
 
 describe('wall trims', () => {
@@ -92,6 +104,22 @@ describe('wall trims', () => {
     expect(Math.max(...ys.map(Math.abs))).toBeCloseTo(0.05 + 0.02 * 0.9, 3)
     // the door's 0.9 m is left out of the 6 m run
     expect(pieceArea(prisms)).toBeCloseTo((6 - 0.9 - 2 * 0) * 0.018, 2)
+  })
+
+  test('on a sloped wall the crown is approximate, the skirting exact', () => {
+    const w = wall({
+      height: 2.5,
+      endHeightOffset: 0.8,
+      skirting: { enabled: true, sides: 'a' },
+      crown: { enabled: true, sides: 'a' },
+    })
+    const { prisms } = wallTrims(scene([w]), 'level_1')
+    const crown = prisms.filter((p) => p.id.includes('#crown.'))
+    const skirting = prisms.filter((p) => p.id.includes('#skirting.'))
+    expect(crown.length).toBeGreaterThan(0)
+    expect(skirting.length).toBeGreaterThan(0)
+    expect(crown.every((p) => p.shape === 'approx')).toBe(true)
+    expect(skirting.every((p) => p.shape === 'exact')).toBe(true)
   })
 
   test('a wall with no trim enabled adds none', () => {
