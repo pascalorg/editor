@@ -108,9 +108,10 @@ export function createPathPointMoveAffordance<N extends PathShape & { id: AnyNod
           ...(node as unknown as Record<string, unknown>),
           path: nextPath,
         } as AnyNode
-        const updates = resolveConnectivityUpdates(connectivity, preview).filter(
+        const updates = resolveConnectivityUpdates(connectivity, preview)?.filter(
           (u) => useScene.getState().nodes[u.id],
         )
+        if (!updates) return null
         const capUpdates = endCapUpdates(nextPath)
         const capIds = new Set(capUpdates.map((update) => update.id))
         return [...updates.filter((update) => !capIds.has(update.id)), ...capUpdates]
@@ -150,12 +151,15 @@ export function createPathPointMoveAffordance<N extends PathShape & { id: AnyNod
             return
           }
           const nextPath = initialPath.map((p, i) => (i === pointIndex ? dragged : p))
+          const follow = detached ? [] : followUpdates(nextPath)
+          // Joints that cannot follow hold the frame, like an out-of-range turn.
+          if (!follow) return
           useScene.getState().updateNodes([
             {
               id: node.id,
               data: { path: nextPath, wallAttachment: undefined } as Partial<unknown> as never,
             },
-            ...(detached ? [] : followUpdates(nextPath)).map((u) => ({
+            ...follow.map((u) => ({
               id: u.id,
               data: u.data as Partial<unknown> as never,
             })),

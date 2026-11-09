@@ -337,9 +337,11 @@ const PipePointHandles = ({ pipe, target }: { pipe: PipeSegmentNode; target: Obj
       )
     }
     const path = constrained
+    const followers = detached ? [] : connectivityUpdatesForPath(drag.connectivity, path)
+    if (!followers) return null
     const updates = [
       { id: pipe.id as AnyNodeId, data: { path, wallAttachment: attachmentFor(path) } },
-      ...(detached ? [] : connectivityUpdatesForPath(drag.connectivity, path)),
+      ...followers,
     ]
     return checked(detached ? updates : withEndCapFollow(path, updates))
   }
@@ -354,15 +356,18 @@ const PipePointHandles = ({ pipe, target }: { pipe: PipeSegmentNode; target: Obj
 
   // Follow-updates for fittings / pipes mated to this run's endpoints, given
   // the run's live path. Endpoints whose position didn't change resolve to a
-  // zero delta, so only the dragged endpoint's partner actually moves.
+  // zero delta, so only the dragged endpoint's partner actually moves. Null
+  // when the mated joints cannot follow the path.
   const connectivityUpdatesForPath = (
     connectivity: PortConnectivity | null,
     path: Point[],
-  ): { id: AnyNodeId; data: Partial<AnyNode> }[] => {
+  ): { id: AnyNodeId; data: Partial<AnyNode> }[] | null => {
     if (!connectivity) return []
     const preview = { ...(pipe as Record<string, unknown>), path } as AnyNode
-    return resolveConnectivityUpdates(connectivity, preview).filter(
-      (u) => useScene.getState().nodes[u.id],
+    return (
+      resolveConnectivityUpdates(connectivity, preview)?.filter(
+        (u) => useScene.getState().nodes[u.id],
+      ) ?? null
     )
   }
 

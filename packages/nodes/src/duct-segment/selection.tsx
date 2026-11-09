@@ -446,9 +446,11 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
       ])
     }
     const path = drag.initialPath.map((p, i) => (i === drag.index ? next : p)) as Point[]
+    const followers = detached ? [] : connectivityUpdatesForPath(drag.connectivity, path)
+    if (!followers) return null
     const updates = [
       { id: duct.id as AnyNodeId, data: { path, wallAttachment: attachmentFor(path) } },
-      ...(detached ? [] : connectivityUpdatesForPath(drag.connectivity, path)),
+      ...followers,
     ]
     return detached ? updates : withEndCapFollow(path, updates)
   }
@@ -463,15 +465,18 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
 
   // Follow-updates for fittings / ducts mated to this run's endpoints, given
   // the run's live path. Endpoints whose position didn't change resolve to a
-  // zero delta, so only the dragged endpoint's partner actually moves.
+  // zero delta, so only the dragged endpoint's partner actually moves. Null
+  // when the mated joints cannot follow the path.
   const connectivityUpdatesForPath = (
     connectivity: PortConnectivity | null,
     path: Point[],
-  ): { id: AnyNodeId; data: Partial<AnyNode> }[] => {
+  ): { id: AnyNodeId; data: Partial<AnyNode> }[] | null => {
     if (!connectivity) return []
     const preview = { ...(duct as Record<string, unknown>), path } as AnyNode
-    return resolveConnectivityUpdates(connectivity, preview).filter(
-      (u) => useScene.getState().nodes[u.id],
+    return (
+      resolveConnectivityUpdates(connectivity, preview)?.filter(
+        (u) => useScene.getState().nodes[u.id],
+      ) ?? null
     )
   }
 
@@ -924,10 +929,10 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
         }
         return next
       })
-    const batchFor = (path: Point[]): { id: AnyNodeId; data: Partial<AnyNode> }[] => [
-      { id: duct.id as AnyNodeId, data: { path } },
-      ...connectivityUpdatesForPath(connectivity, path),
-    ]
+    const batchFor = (path: Point[]): { id: AnyNodeId; data: Partial<AnyNode> }[] | null => {
+      const followers = connectivityUpdatesForPath(connectivity, path)
+      return followers && [{ id: duct.id as AnyNodeId, data: { path } }, ...followers]
+    }
 
     // Patches restoring every connected partner to its post-rewind (logical-L)
     // pose — runs by path, fittings by position (+ a re-aimed elbow's rotation /
@@ -1031,15 +1036,13 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
       const step = isGridSnapActive() ? useEditor.getState().gridSnapStep : 0
       const next = snap(s - startSample, step)
       if (next === delta) return
-      delta = next
-      if (step > 0) triggerSFX('sfx:grid-snap')
       const dyEff = baseDy + next
       // Vertical move: connected ends stay welded to their (stationary)
       // partner via an auto-routed elbow → riser → elbow offset, planned from
       // the LOGICAL L by the accumulated lift. The planner returns valid (offset
       // fits), invalid (connected but no clean offset at this height), or null
       // (no connections, or dyEff 0 → back at the L → plain translate).
-      offsetResult =
+      const result: VerticalOffsetResult =
         isVertical && dyEff !== 0
           ? planVerticalOffsets({
               duct: logicalDuct,
@@ -1050,6 +1053,19 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
               nodesById,
             })
           : null
+      const followUpdates =
+        result?.status === 'invalid'
+          ? []
+          : connectivityUpdatesForPath(
+              connectivity,
+              result?.status === 'valid' ? result.plan.followPath : shiftedPath(next),
+            )
+      // Joints that cannot follow hold the last shown frame, which is what
+      // release commits.
+      if (!followUpdates) return
+      delta = next
+      offsetResult = result
+      if (step > 0) triggerSFX('sfx:grid-snap')
       if (offsetResult?.status === 'valid') {
         applyLogicalBasePreview()
         // Lift the run to the offset path; trim run-offset partners back one
@@ -1061,7 +1077,6 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
         const scene = useScene.getState()
         const deletePreview = (plan.delete ?? []).filter((id) => scene.nodes[id])
         setPreviewHidden([...mintedIds, ...deletePreview])
-        const followUpdates = connectivityUpdatesForPath(connectivity, plan.followPath)
         const updates = [
           { id: duct.id as AnyNodeId, data: { path: plan.ductPath } },
           ...plan.updates.filter((u) => scene.nodes[u.id]),
@@ -1087,8 +1102,10 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
       } else {
         applyLogicalBasePreview()
         setVerticalGhost(null)
-        const updates = batchFor(shiftedPath(next))
-        publishLivePreview(updates)
+        publishLivePreview([
+          { id: duct.id as AnyNodeId, data: { path: shiftedPath(next) } },
+          ...followUpdates,
+        ])
       }
     }
 
@@ -1128,6 +1145,7 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
           base,
         }
         const followUpdates = connectivityUpdatesForPath(connectivity, plan.followPath)
+        if (!followUpdates) return
         const updates = [
           {
             id: duct.id as AnyNodeId,
@@ -1212,6 +1230,7 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
           return
         }
         const updates = batchFor(finalPath)
+        if (!updates) return
         if (isVertical && existingTag) {
           updates[0] = {
             ...updates[0]!,

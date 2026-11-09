@@ -406,6 +406,44 @@ test('raising one leg of a closed loop with sloped legs is refused rather than h
   ).toThrow('would change a connected pipe')
 })
 
+test('stretching a run whose U loops back to its own start corner is refused, not split', () => {
+  const run = PipeSegmentNode.parse({
+    ...pipeSegmentDefinition.defaults(),
+    parentId: level.id,
+    path: [
+      [0.07, 1, 0],
+      [3.93, 1, 0],
+    ],
+  })
+  const corner = (position: number[], rotationY: number) =>
+    PipeFittingNode.parse({
+      ...pipeFittingDefinition.defaults(),
+      parentId: level.id,
+      position,
+      rotation: [0, rotationY, 0],
+    })
+  const u = PipeSegmentNode.parse({
+    ...pipeSegmentDefinition.defaults(),
+    parentId: level.id,
+    path: [
+      [4, 1, 0.07],
+      [4, 1, 2],
+      [0, 1, 2],
+      [0, 1, 0.07],
+    ],
+  })
+  const nodes = scene(run, corner([4, 1, 0], 0), u, corner([0, 1, 0], Math.PI / 2))
+  // The U translates with the run's end and would drag the start corner off
+  // the run's start, which this edit keeps fixed.
+  expect(() =>
+    edit(
+      nodes,
+      { nodeId: run.id, action: 'endpoint', pointIndex: 1, point: [4.43, 1, 0] },
+      context,
+    ),
+  ).toThrow('pulling a joint apart')
+})
+
 test('grade tool works through MCP and undoes as one edit', async () => {
   const { Client } = await import('@modelcontextprotocol/client')
   const { InMemoryTransport, McpServer } = await import('@modelcontextprotocol/server')

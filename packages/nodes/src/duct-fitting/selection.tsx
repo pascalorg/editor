@@ -408,15 +408,18 @@ const FittingHandles = ({ fitting, target }: { fitting: DuctFittingNode; target:
   }
 
   // Follow-updates for runs / fittings mated to this fitting, given a preview
-  // transform. Endpoints whose ports didn't move resolve to a zero delta.
+  // transform. Endpoints whose ports didn't move resolve to a zero delta. Null
+  // when the mated joints cannot follow the transform.
   const connectivityUpdates = (
     connectivity: PortConnectivity | null,
     transform: FittingTransform,
-  ): { id: AnyNodeId; data: Partial<AnyNode> }[] => {
+  ): { id: AnyNodeId; data: Partial<AnyNode> }[] | null => {
     if (!connectivity) return []
     const preview = { ...(fitting as Record<string, unknown>), ...transform } as AnyNode
     const nodes = useScene.getState().nodes
-    return resolveConnectivityUpdates(connectivity, preview)
+    const updates = resolveConnectivityUpdates(connectivity, preview)
+    if (!updates) return null
+    return updates
       .filter((u) => nodes[u.id])
       .map((u) => {
         const node = nodes[u.id]
@@ -457,19 +460,29 @@ const FittingHandles = ({ fitting, target }: { fitting: DuctFittingNode; target:
       document.body.style.cursor = cursor
       let current: FittingTransform | null = null
 
-      const buildBatch = (t: FittingTransform): { id: AnyNodeId; data: Partial<AnyNode> }[] => [
-        {
-          id: fitting.id as AnyNodeId,
-          data: preserveFittingParameters(fitting, t as Partial<DuctFittingNode>),
-        },
-        ...connectivityUpdates(connectivity, t),
-      ]
+      const buildBatch = (
+        t: FittingTransform,
+      ): { id: AnyNodeId; data: Partial<AnyNode> }[] | null => {
+        const followers = connectivityUpdates(connectivity, t)
+        return (
+          followers && [
+            {
+              id: fitting.id as AnyNodeId,
+              data: preserveFittingParameters(fitting, t as Partial<DuctFittingNode>),
+            },
+            ...followers,
+          ]
+        )
+      }
 
       const onMove = (event: PointerEvent) => {
         const next = compute(event)
         if (!next) return
+        // Joints that cannot follow hold the last frame, which release commits.
+        const batch = buildBatch(next)
+        if (!batch) return
         current = next
-        useScene.getState().updateNodes(buildBatch(next))
+        useScene.getState().updateNodes(batch)
       }
 
       const cleanup = () => {
@@ -518,10 +531,11 @@ const FittingHandles = ({ fitting, target }: { fitting: DuctFittingNode; target:
           ...reverts.filter((u) => useScene.getState().nodes[u.id]),
         ])
         resumeSceneHistory(useScene)
-        if (current) {
+        const batch = current && buildBatch(current)
+        if (batch) {
           const scene = useScene.getState()
           scene.updateNodes([
-            ...buildBatch(current),
+            ...batch,
             ...autoOffsetInvalidationUpdates(scene.nodes, fitting.id as AnyNodeId),
           ])
         }

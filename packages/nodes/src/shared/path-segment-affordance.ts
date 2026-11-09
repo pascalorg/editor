@@ -59,7 +59,8 @@ function makeConnectivity<N extends PathShape>(
 ): {
   connectivity: PortConnectivity | null
   affectedIds: AnyNodeId[]
-  followUpdates: (nextPath: Point[]) => { id: AnyNodeId; data: Partial<AnyNode> }[]
+  /** Null when the mated joints cannot follow `nextPath`. */
+  followUpdates: (nextPath: Point[]) => { id: AnyNodeId; data: Partial<AnyNode> }[] | null
 } {
   const connectivity = analyze ? analyzePortConnectivity(node as unknown as AnyNode, nodes) : null
   const affectedIds: AnyNodeId[] = [
@@ -72,8 +73,10 @@ function makeConnectivity<N extends PathShape>(
       ...(node as unknown as Record<string, unknown>),
       path: nextPath,
     } as AnyNode
-    return resolveConnectivityUpdates(connectivity, preview).filter(
-      (u) => useScene.getState().nodes[u.id],
+    return (
+      resolveConnectivityUpdates(connectivity, preview)?.filter(
+        (u) => useScene.getState().nodes[u.id],
+      ) ?? null
     )
   }
   return { connectivity, affectedIds, followUpdates }
@@ -112,9 +115,12 @@ export function createSegmentMoveAffordance<N extends PathShape>(
               ? ([p[0] + ox, p[1], p[2] + oz] as Point)
               : p,
           )
+          const follow = followUpdates(nextPath)
+          // Joints that cannot follow hold the frame.
+          if (!follow) return
           useScene.getState().updateNodes([
             { id: node.id, data: { path: nextPath } as Partial<unknown> as never },
-            ...followUpdates(nextPath).map((u) => ({
+            ...follow.map((u) => ({
               id: u.id,
               data: u.data as Partial<unknown> as never,
             })),

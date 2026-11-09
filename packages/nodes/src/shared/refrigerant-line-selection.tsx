@@ -134,14 +134,17 @@ function RefrigerantLineEndpointHandles({
     detached: boolean
   } | null>(null)
 
+  /** Null when the mated joints cannot follow `path`. */
   const followUpdates = (
     connectivity: PortConnectivity | null,
     path: Point[],
-  ): { id: AnyNodeId; data: Partial<AnyNode> }[] => {
+  ): { id: AnyNodeId; data: Partial<AnyNode> }[] | null => {
     if (!connectivity) return []
     const preview = { ...(line as unknown as Record<string, unknown>), path } as AnyNode
-    return resolveConnectivityUpdates(connectivity, preview).filter(
-      (u) => useScene.getState().nodes[u.id],
+    return (
+      resolveConnectivityUpdates(connectivity, preview)?.filter(
+        (u) => useScene.getState().nodes[u.id],
+      ) ?? null
     )
   }
 
@@ -291,16 +294,16 @@ function RefrigerantLineEndpointHandles({
       }
       if (next[0] === drag.current[0] && next[1] === drag.current[1] && next[2] === drag.current[2])
         return
+      const path = line.path.map((p, i) => (i === drag.index ? next! : p)) as Point[]
+      const follow = detached ? [] : followUpdates(drag.connectivity, path)
+      // Joints that cannot follow hold the last frame, which release commits.
+      if (!follow) return
       drag.current = next
       drag.detached = detached
       if (step > 0) triggerSFX('sfx:grid-snap')
-      const path = line.path.map((p, i) => (i === drag.index ? next! : p)) as Point[]
       useScene
         .getState()
-        .updateNodes([
-          { id: line.id as AnyNodeId, data: { path } as Partial<AnyNode> },
-          ...(detached ? [] : followUpdates(drag.connectivity, path)),
-        ])
+        .updateNodes([{ id: line.id as AnyNodeId, data: { path } as Partial<AnyNode> }, ...follow])
     }
 
     const onUp = () => {
@@ -331,12 +334,13 @@ function RefrigerantLineEndpointHandles({
       const moved = finalPath[drag.index]!.some(
         (v, axis) => v !== drag.initialPath[drag.index]![axis],
       )
-      if (moved) {
+      const follow = moved && (detached ? [] : followUpdates(drag.connectivity, finalPath))
+      if (follow) {
         useScene
           .getState()
           .updateNodes([
             { id: line.id as AnyNodeId, data: { path: finalPath } as Partial<AnyNode> },
-            ...(detached ? [] : followUpdates(drag.connectivity, finalPath)),
+            ...follow,
           ])
       }
     }

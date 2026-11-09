@@ -173,9 +173,20 @@ export const MoveDuctSegmentTool: React.FC<{ node: AnyNode }> = ({ node }) => {
       width: duct.width,
       height: duct.height,
     }
-    let lastTranslationPlan: RunTranslationOffsetPlan | null = null
+    const translationPlanFor = (path: Vec3[]) =>
+      portConnectivity
+        ? planRunTranslationOffsets({
+            duct,
+            translatedPath: path,
+            profile,
+            connections: portConnectivity.connections,
+            scenePorts,
+            nodesById,
+          })
+        : null
 
     const setPreview = (path: Vec3[]) => {
+      hasMovedRef.current = true
       previewPathRef.current = path
       setPreviewPath(path)
     }
@@ -187,10 +198,10 @@ export const MoveDuctSegmentTool: React.FC<{ node: AnyNode }> = ({ node }) => {
       if (duct.wallAttachment && attachedWall?.type === 'wall') {
         const wallMove = translateWallRun(originalPath, duct.wallAttachment, attachedWall, event)
         if (wallMove) {
-          hasMovedRef.current = true
+          // Connected joints that cannot follow hold the last shown frame.
+          if (connectivity && !connectivity.preview({ path: wallMove.path })) return
           previewAttachmentRef.current = wallMove.attachment
           setPreview(wallMove.path)
-          connectivity?.preview({ path: wallMove.path })
           setTranslationGhost(null)
           return
         }
@@ -229,23 +240,12 @@ export const MoveDuctSegmentTool: React.FC<{ node: AnyNode }> = ({ node }) => {
         triggerSFX('sfx:grid-snap')
       }
       prevSnapRef.current = cur
-      hasMovedRef.current = true
       const nextPath = originalPath.map(([x, y, z]) => [x + dx, y, z + dz] as Vec3)
+      const translationPlan = translationPlanFor(nextPath)
+      if (translationPlan) connectivity?.clear()
+      else if (connectivity && !connectivity.preview({ path: nextPath })) return
       setPreview(nextPath)
-      lastTranslationPlan =
-        existedAtStart && portConnectivity
-          ? planRunTranslationOffsets({
-              duct,
-              translatedPath: nextPath,
-              profile,
-              connections: portConnectivity.connections,
-              scenePorts,
-              nodesById,
-            })
-          : null
-      if (lastTranslationPlan) connectivity?.clear()
-      else connectivity?.preview({ path: nextPath })
-      setTranslationGhost(lastTranslationPlan)
+      setTranslationGhost(translationPlan)
     }
 
     const commit = (event: GridEvent, fromDragRelease = false) => {
@@ -261,12 +261,24 @@ export const MoveDuctSegmentTool: React.FC<{ node: AnyNode }> = ({ node }) => {
         event.nativeEvent?.stopPropagation?.()
         return
       }
-      committed = true
       const finalPath = previewPathRef.current
+      const creating = isNew && !useScene.getState().nodes[nodeId]
+      const translationPlan = creating ? null : translationPlanFor(finalPath)
+      // Fold connected-fitting / sibling-run follow-updates into the SAME
+      // batch as the moved run so the whole joint is one undo step.
+      const followUpdates =
+        creating || translationPlan || !connectivity
+          ? []
+          : connectivity.commitUpdates({ path: finalPath })
+      if (!followUpdates) {
+        event.nativeEvent?.stopPropagation?.()
+        return
+      }
+      committed = true
 
       useScene.temporal.getState().resume()
       let selectId = nodeId
-      if (isNew && !useScene.getState().nodes[nodeId]) {
+      if (creating) {
         const created = DuctSegmentNode.parse({
           ...(node as Record<string, unknown>),
           path: finalPath,
@@ -283,16 +295,6 @@ export const MoveDuctSegmentTool: React.FC<{ node: AnyNode }> = ({ node }) => {
         ])
         selectId = created.id as AnyNodeId
       } else {
-        const translationPlan =
-          portConnectivity &&
-          planRunTranslationOffsets({
-            duct,
-            translatedPath: finalPath,
-            profile,
-            connections: portConnectivity.connections,
-            scenePorts,
-            nodesById,
-          })
         if (translationPlan) {
           useScene.getState().applyNodeChanges({
             create: [...translationPlan.fittings, ...translationPlan.connectors].map((created) => ({
@@ -311,9 +313,6 @@ export const MoveDuctSegmentTool: React.FC<{ node: AnyNode }> = ({ node }) => {
             ],
           })
         } else {
-          // Fold connected-fitting / sibling-run follow-updates into the SAME
-          // batch as the moved run so the whole joint is one undo step.
-          const followUpdates = connectivity?.commitUpdates({ path: finalPath }) ?? []
           useScene.getState().updateNodes([
             {
               id: nodeId,

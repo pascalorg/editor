@@ -355,14 +355,17 @@ const FittingHandles = ({ fitting }: { fitting: PipeFittingNode }) => {
     return axis === 'x' ? local.x : local.z
   }
 
+  /** Null when the mated joints cannot follow the transform. */
   const connectivityUpdates = (
     connectivity: PortConnectivity | null,
     transform: FittingTransform,
-  ): { id: AnyNodeId; data: Partial<AnyNode> }[] => {
+  ): { id: AnyNodeId; data: Partial<AnyNode> }[] | null => {
     if (!connectivity) return []
     const preview = { ...(fitting as Record<string, unknown>), ...transform } as AnyNode
     const nodes = useScene.getState().nodes
-    return resolveConnectivityUpdates(connectivity, preview)
+    const updates = resolveConnectivityUpdates(connectivity, preview)
+    if (!updates) return null
+    return updates
       .filter((u) => nodes[u.id])
       .map((u) => {
         const node = nodes[u.id]
@@ -396,19 +399,29 @@ const FittingHandles = ({ fitting }: { fitting: PipeFittingNode }) => {
       document.body.style.cursor = cursor
       let current: FittingTransform | null = null
 
-      const buildBatch = (t: FittingTransform): { id: AnyNodeId; data: Partial<AnyNode> }[] => [
-        {
-          id: fitting.id as AnyNodeId,
-          data: preserveFittingParameters(fitting, t as Partial<PipeFittingNode>),
-        },
-        ...connectivityUpdates(connectivity, t),
-      ]
+      const buildBatch = (
+        t: FittingTransform,
+      ): { id: AnyNodeId; data: Partial<AnyNode> }[] | null => {
+        const followers = connectivityUpdates(connectivity, t)
+        return (
+          followers && [
+            {
+              id: fitting.id as AnyNodeId,
+              data: preserveFittingParameters(fitting, t as Partial<PipeFittingNode>),
+            },
+            ...followers,
+          ]
+        )
+      }
 
       const onMove = (event: PointerEvent) => {
         const next = compute(event)
         if (!next) return
+        // Joints that cannot follow hold the last frame, which release commits.
+        const batch = buildBatch(next)
+        if (!batch) return
         current = next
-        useScene.getState().updateNodes(buildBatch(next))
+        useScene.getState().updateNodes(batch)
       }
 
       const cleanup = () => {
@@ -451,7 +464,8 @@ const FittingHandles = ({ fitting }: { fitting: PipeFittingNode }) => {
           ...reverts.filter((u) => useScene.getState().nodes[u.id]),
         ])
         resumeSceneHistory(useScene)
-        if (current) useScene.getState().updateNodes(buildBatch(current))
+        const batch = current && buildBatch(current)
+        if (batch) useScene.getState().updateNodes(batch)
       }
 
       window.addEventListener('pointermove', onMove)

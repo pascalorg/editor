@@ -119,6 +119,11 @@ export const editPipeGrade: AgentOperation<PipeGradeInput> = (nodes, input) => {
       )
   }
   const follow = !detached && connectivity ? resolveConnectivityUpdates(connectivity, next) : []
+  if (!follow)
+    return refuse(
+      'pipe_connection_split',
+      'Connected pipes and fittings cannot follow this edit without pulling a joint apart. Adjust the connected route explicitly first.',
+    )
   const caps = detached
     ? []
     : (['start', 'end'] as const).flatMap((end) =>

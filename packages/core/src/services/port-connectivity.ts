@@ -38,7 +38,9 @@ import type { AnyNode, AnyNodeId } from '../schema'
  * pushes it receives per port. In a closed loop whose legs split a push
  * differently (e.g. one sloped leg), every averaging round re-broadcasts
  * through both collars of each fitting, so each joint edge holds only its
- * newest pending push and the walk has a fixed step budget.
+ * newest pending push and the walk has a fixed step budget. A follow that
+ * still leaves a joint open resolves to `null`, so the edit holds its last
+ * welded frame instead of committing the split.
  */
 
 type Point = readonly [number, number, number]
@@ -53,10 +55,15 @@ const COINCIDENT_EPS_M = 0.05
 const DELTA_EPS_M = 1e-4
 const PROPAGATION_EPS_M = 1e-9
 
-/** Walks allowed per joint edge before the resolver keeps its last averaged
- *  state. Loops settle within a few walks per edge; this only bounds one whose
- *  averaging never gets below `PROPAGATION_EPS_M`. */
+/** Walk steps per joint edge, pooled across the component. Loops settle within
+ *  a few steps per edge; this only bounds one whose averaging never gets below
+ *  `PROPAGATION_EPS_M`. */
 const MAX_WALKS_PER_EDGE = 64
+
+/** Widest a joint may open (meters) and still count as welded: above
+ *  `DELTA_EPS_M`, the residue the walk stops chasing, and well inside
+ *  `COINCIDENT_EPS_M`, so the next edit still finds the joint. */
+const WELD_EPS_M = 1e-3
 
 /** A node carried by the edit, plus the snapshot needed to revert it. Kept
  *  deliberately small: the move tools read only `kind` + `nodeId` and the
@@ -368,6 +375,18 @@ function runPathFromPortDeltas(startPath: Point[], portDeltas: Record<string, Po
       return startPath.map((p) => add(p, startDelta))
     }
 
+    // A fitting that follows only this run's far end pushes that end's move
+    // back. Driving the run from one end alone already satisfies such a push;
+    // the compromise below would shift the end again, and the fitting would
+    // echo every shift.
+    for (const [driven, far] of [
+      ['start', 'end'],
+      ['end', 'start'],
+    ] as const) {
+      const path = runPathFromSinglePortDelta(startPath, driven, portDeltas[driven]!)
+      if (nearlyEqual(runEndpointDeltas(startPath, path)[far]!, portDeltas[far]!)) return path
+    }
+
     const startParts = decompose(startDelta, endpointAxis(startPath, 'start'))
     const endParts = decompose(endDelta, endpointAxis(startPath, 'end'))
     const commonPerp = average([startParts.perp, endParts.perp])
@@ -395,11 +414,15 @@ function runPathFromPortDeltas(startPath: Point[], portDeltas: Record<string, Po
  * to neighbouring joints. Port-level output guards stop consistent cycles;
  * coalesced edge pushes and the step budget bound loops that keep averaging,
  * while a looped/shared run still accepts constraints at both endpoints.
+ *
+ * Returns `null` when the result would leave any snapshotted joint open by more
+ * than `WELD_EPS_M` (pushes the followers cannot all satisfy, or a walk that ran
+ * out of budget). Callers hold their last welded frame or refuse the edit.
  */
 export function resolveConnectivityUpdates(
   connectivity: PortConnectivity,
   previewNode: AnyNode,
-): { id: AnyNodeId; data: Partial<AnyNode> }[] {
+): { id: AnyNodeId; data: Partial<AnyNode> }[] | null {
   if (connectivity.customResolver) return connectivity.customResolver(previewNode)
   const { graph, adjacency, startMovedPorts, movedNodeId } = connectivity
   if (Object.keys(graph).length === 0) return []
@@ -502,6 +525,28 @@ export function resolveConnectivityUpdates(
       for (const [nextPortId, nextDelta] of Object.entries(runEndpointDeltas(startPath, path))) {
         if (lenSq(nextDelta) <= DELTA_EPS_M * DELTA_EPS_M) continue
         enqueueMates(nodeId, nextPortId, nextDelta)
+      }
+    }
+  }
+
+  const portDelta = (nodeId: string, portId: string): Point => {
+    if (nodeId === movedNodeId) {
+      const start = startMovedPorts[portId]
+      const now = newMovedPos[portId]
+      return start && now ? sub(now, start) : [0, 0, 0]
+    }
+    const node = graph[nodeId]
+    const data = results[nodeId]?.data as { position?: Point; path?: Point[] } | undefined
+    if (!node || !data) return [0, 0, 0]
+    if (node.role === 'fitting') return sub(data.position!, node.startPosition!)
+    return runEndpointDeltas(node.startPath!, data.path!)[portId === 'start' ? 'start' : 'end']!
+  }
+  for (const [nodeId, byPort] of Object.entries(adjacency)) {
+    for (const [portId, mates] of Object.entries(byPort)) {
+      const delta = portDelta(nodeId, portId)
+      for (const mate of mates) {
+        const gap = sub(delta, portDelta(mate.nodeId, mate.portId))
+        if (lenSq(gap) > WELD_EPS_M * WELD_EPS_M) return null
       }
     }
   }

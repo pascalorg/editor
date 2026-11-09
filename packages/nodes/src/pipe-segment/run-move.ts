@@ -27,7 +27,8 @@ export type PipeRunMoveChange = { create: AnyNode[]; delete: AnyNodeId[]; update
 /**
  * One frame of a selected run's arrow move. A `valid` frame previews exactly the
  * change it commits; `invalid` is a vertical offset that cannot be formed (red
- * ghost, nothing to commit); `blocked` would regrade a connected run.
+ * ghost, nothing to commit); `blocked` would regrade a connected run or pull a
+ * joint apart.
  */
 export type PipeRunMoveFrame =
   | {
@@ -56,9 +57,10 @@ export function planPipeRunMoveFrame(args: RunMoveArgs & { delta: number }): Pip
   const profile = { diameter: pipe.diameter, pipeMaterial: pipe.pipeMaterial }
   const connections = connectivity?.connections ?? []
   const exists = (update: Update) => !!nodesById[update.id]
-  const follow = (path: Point[]): Update[] =>
+  const follow = (path: Point[]): Update[] | null =>
     connectivity
-      ? resolveConnectivityUpdates(connectivity, { ...pipe, path } as AnyNode).filter(exists)
+      ? (resolveConnectivityUpdates(connectivity, { ...pipe, path } as AnyNode)?.filter(exists) ??
+        null)
       : []
   const path = pipe.path.map(
     (p): Point =>
@@ -84,10 +86,12 @@ export function planPipeRunMoveFrame(args: RunMoveArgs & { delta: number }): Pip
     }
     if (offsets?.status === 'valid') {
       const { plan } = offsets
+      const followers = follow(plan.followPath)
+      if (!followers) return { status: 'blocked' }
       const update = [
         { id: pipe.id as AnyNodeId, data: { path: plan.pipePath } },
         ...plan.updates.filter(exists),
-        ...follow(plan.followPath),
+        ...followers,
       ]
       const hidden = (plan.delete ?? []).filter((id) => nodesById[id])
       return guarded({
@@ -126,7 +130,9 @@ export function planPipeRunMoveFrame(args: RunMoveArgs & { delta: number }): Pip
       })
     }
   }
-  const update = [{ id: pipe.id as AnyNodeId, data: { path } }, ...follow(path)]
+  const followers = follow(path)
+  if (!followers) return { status: 'blocked' }
+  const update = [{ id: pipe.id as AnyNodeId, data: { path } }, ...followers]
   return guarded({
     status: 'valid',
     preview: update,
