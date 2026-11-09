@@ -1,5 +1,6 @@
 import {
   Box3,
+  type BufferAttribute,
   type Camera,
   Color,
   DataTexture,
@@ -1353,10 +1354,11 @@ class MeshGrid {
       root.traverse((object) => {
         const mesh = object as Mesh
         if (!mesh.isMesh) return
-        const geometry = mesh.geometry
-        if (!geometry.boundingBox) geometry.computeBoundingBox()
-        if (!geometry.boundingBox) return
-        box.copy(geometry.boundingBox).applyMatrix4(mesh.matrixWorld)
+        // From the vertices as they are now: a cached bounding box can predate geometry that was
+        // rebuilt in place (walls finishing while a large scene loads).
+        const position = mesh.geometry?.getAttribute('position')
+        if (!position || position.count === 0) return
+        box.setFromBufferAttribute(position as BufferAttribute).applyMatrix4(mesh.matrixWorld)
         if (box.isEmpty()) return
         const s = MeshGrid.SIZE
         for (let iz = Math.floor(box.min.z / s); iz <= Math.floor(box.max.z / s); iz++)

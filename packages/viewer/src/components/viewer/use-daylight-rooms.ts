@@ -22,6 +22,8 @@ import useViewer from '../../store/use-viewer'
 /** Seconds between scene-change checks, and the quiet time before a rebuild. */
 const CHECK_INTERVAL = 0.5
 const REBUILD_DELAY = 0.4
+/** Longest wait for the scene to settle before building anyway (seconds). */
+const SETTLE_WAIT = 10
 /**
  * Furniture: what the rooms are built from (walls, slabs, ceilings, roofs, doors, windows,
  * zones) never includes it, so moving or placing it doesn't rebuild them (a rebuild casts
@@ -50,6 +52,12 @@ export function useDaylightRooms() {
     signature: '',
     pendingSince: -1,
     sinceCheck: CHECK_INTERVAL,
+    /** Times the scene finished rebuilding geometry (no dirty nodes left), and whether it is now. */
+    settles: 0,
+    dirty: false,
+    dirtyRooms: false,
+    /** Dirty nodes left when rooms were last built mid-load (they rebuild as the count falls). */
+    builtDirty: Number.POSITIVE_INFINITY,
     live: true,
     bakedRoot: null as Object3D | null,
     levelObjects: [] as (Object3D | undefined)[],
@@ -68,6 +76,23 @@ export function useDaylightRooms() {
     const s = state.current
     const lampDefault = useInteractive.getState().lampDefault
     s.sinceCheck += delta
+    // Rooms are built from finished walls, windows and covers: wait for the scene to settle, and
+    // build again each time it does (walls and openings finish without a geometry revision).
+    const { dirtyNodes, nodes } = useScene.getState()
+    const dirty = dirtyNodes.size > 0
+    if (dirty && !s.dirtyRooms)
+      for (const id of dirtyNodes) {
+        const type = nodes[id]?.type
+        if (type && !FURNITURE_TYPES.has(type)) {
+          s.dirtyRooms = true
+          break
+        }
+      }
+    if (s.dirty && !dirty && s.dirtyRooms) {
+      s.settles++
+      s.dirtyRooms = false
+    }
+    s.dirty = dirty
     if (s.sinceCheck >= CHECK_INTERVAL) {
       s.sinceCheck = 0
       // Items can swap their materials (edits, loads): keep the lamps' own emitters installed.
@@ -76,7 +101,7 @@ export function useDaylightRooms() {
       const baked = live ? null : findBakedRoot(scene)
       const feedKeys = feedSignature()
       const signature = live
-        ? `live|${roomObjectsSignature()}|${nodesVersion.current}|${useViewer.getState().geometryRevision}|${feedKeys}`
+        ? `live|${roomObjectsSignature()}|${nodesVersion.current}|${useViewer.getState().geometryRevision}|${s.settles}|${feedKeys}`
         : `baked|${baked?.uuid ?? ''}|${baked?.children.length ?? 0}|${feedKeys}`
       if (signature !== s.signature) {
         s.signature = signature
@@ -87,7 +112,7 @@ export function useDaylightRooms() {
     }
     if (s.pendingSince >= 0) {
       s.pendingSince += delta
-      if (s.pendingSince >= REBUILD_DELAY) {
+      if (s.pendingSince >= REBUILD_DELAY && (!(s.live && dirty) || s.pendingSince > SETTLE_WAIT)) {
         s.pendingSince = -1
         const input = s.live
           ? liveRoomScene(lampDefault)
@@ -108,6 +133,12 @@ export function useDaylightRooms() {
           },
         )
         s.levelObjects = s.live ? liveLevelObjects() : bakedLevelObjects(s.bakedRoot)
+        // Built before the scene settled (a large scene still building walls and windows): build
+        // again after the next wait while geometry keeps arriving, so the rooms catch up.
+        if (s.live && dirty && dirtyNodes.size < s.builtDirty) {
+          s.builtDirty = dirtyNodes.size
+          s.pendingSince = 0
+        } else if (!dirty) s.builtDirty = Number.POSITIVE_INFINITY
         flagGlassMaterials(scene)
         syncLampEmitters()
       }
