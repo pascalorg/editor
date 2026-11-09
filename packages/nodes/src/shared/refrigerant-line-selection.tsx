@@ -28,6 +28,7 @@ import { Html } from '@react-three/drei'
 import { createPortal, type ThreeEvent, useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { type Group, type Object3D, Plane, Raycaster, Vector2, Vector3 } from 'three'
+import { createFollowerFrames } from './follower-frames'
 import { claimHandleDragScope } from './handle-drag-scope'
 import { REFRIGERANT_PORT_SYSTEMS } from './port-systems'
 import { HandleCube, MoveChevron } from './selection-handles'
@@ -245,7 +246,9 @@ function RefrigerantLineEndpointHandles({
     e.stopPropagation()
     const initialPath = line.path.map((p) => [...p] as Point)
     const startPoint = initialPath[index]!
-    const connectivity = analyzePortConnectivity(line as AnyNode, useScene.getState().nodes)
+    const startNodes = useScene.getState().nodes
+    const connectivity = analyzePortConnectivity(line as AnyNode, startNodes)
+    const frame = createFollowerFrames(startNodes, line.id as AnyNodeId)
     pauseSceneHistory(useScene)
     useViewer.getState().setInputDragging(true)
     document.body.style.cursor = kind.axis === 'y' ? 'ns-resize' : 'grabbing'
@@ -315,7 +318,9 @@ function RefrigerantLineEndpointHandles({
       if (step > 0) triggerSFX('sfx:grid-snap')
       useScene
         .getState()
-        .updateNodes([{ id: line.id as AnyNodeId, data: { path } as Partial<AnyNode> }, ...follow])
+        .updateNodes(
+          frame([{ id: line.id as AnyNodeId, data: { path } as Partial<AnyNode> }, ...follow]),
+        )
     }
 
     const finish = (commit: boolean) => {
@@ -328,13 +333,11 @@ function RefrigerantLineEndpointHandles({
       const finalPath = drag.initialPath.map((p, i) =>
         i === drag.index ? drag.current : p,
       ) as Point[]
-      const revert = detached
-        ? []
-        : (drag.connectivity?.connections ?? []).map((conn) =>
-            conn.kind === 'rigid-node'
-              ? { id: conn.nodeId, data: { position: conn.startPosition } as Partial<AnyNode> }
-              : { id: conn.nodeId, data: { path: conn.startPath } as Partial<AnyNode> },
-          )
+      const revert = (drag.connectivity?.connections ?? []).map((conn) =>
+        conn.kind === 'rigid-node'
+          ? { id: conn.nodeId, data: { position: conn.startPosition } as Partial<AnyNode> }
+          : { id: conn.nodeId, data: { path: conn.startPath } as Partial<AnyNode> },
+      )
       useScene
         .getState()
         .updateNodes([

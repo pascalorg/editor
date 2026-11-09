@@ -53,6 +53,7 @@ import {
   ROTATE_STEP_RAD,
   type RotationAxis,
 } from '../shared/fitting-rotation'
+import { createFollowerFrames } from '../shared/follower-frames'
 import { claimHandleDragScope } from '../shared/handle-drag-scope'
 import { HandleCube, MoveChevron, RotateArc } from '../shared/selection-handles'
 import { fittingLegLength } from './ports'
@@ -459,7 +460,9 @@ const FittingHandles = ({ fitting, target }: { fitting: DuctFittingNode; target:
       e.stopPropagation()
       const initialPosition = [...fitting.position] as Point
       const initialRotation = [...fitting.rotation] as Point
-      const connectivity = analyzePortConnectivity(fitting as AnyNode, useScene.getState().nodes)
+      const startNodes = useScene.getState().nodes
+      const connectivity = analyzePortConnectivity(fitting as AnyNode, startNodes)
+      const followerFrame = createFollowerFrames(startNodes, fitting.id as AnyNodeId)
       const compute = makeCompute(e)
       pauseSceneHistory(useScene)
       useViewer.getState().setInputDragging(true)
@@ -493,7 +496,7 @@ const FittingHandles = ({ fitting, target }: { fitting: DuctFittingNode; target:
         const batch = buildBatch(next)
         if (!batch) return
         current = next
-        useScene.getState().updateNodes(batch)
+        useScene.getState().updateNodes(followerFrame(batch))
       }
 
       const cleanup = () => {

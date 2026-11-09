@@ -383,10 +383,18 @@ const PipePointHandles = ({ pipe, target }: { pipe: PipeSegmentNode; target: Obj
     const livePreviewIds = new Set<AnyNodeId>()
     const publishLivePreview = (updates: { id: AnyNodeId; data: Partial<AnyNode> }[]) => {
       const scene = useScene.getState()
+      const overrides = useLiveNodeOverrides.getState()
       const entries = updates
         .filter((update) => scene.nodes[update.id])
         .map((update) => [update.id, update.data as Record<string, unknown>] as const)
-      useLiveNodeOverrides.getState().setMany(entries)
+      const previewed = new Set(entries.map(([id]) => id))
+      for (const id of livePreviewIds) {
+        if (previewed.has(id)) continue
+        overrides.clear(id)
+        if (scene.nodes[id]) scene.markDirty(id)
+        livePreviewIds.delete(id)
+      }
+      overrides.setMany(entries)
       for (const [id] of entries) {
         livePreviewIds.add(id)
         scene.markDirty(id)
