@@ -66,6 +66,11 @@ import {
 
 type N = any
 const CELL = 0.1
+/**
+ * The room-id map stacks every level along Y of one texture. WebGPU only guarantees 8192 texels
+ * a side (the renderer asks for no more), so a wide site or many levels coarsens the cells.
+ */
+const MAX_MAP_SIZE = 8192
 /** Texels per portal: [center, halfW] [normal, halfH] [radiance, neighbour] [floorY, mainLamp, gain, kind]. */
 const PSTRIDE = 4
 /** Target average lamp irradiance of a room at night (same units as the ~1.5 sky irradiance of day). */
@@ -148,6 +153,15 @@ type Opening = {
   doorId?: string
 }
 
+/** Boundary cells between two rooms (or a room and outside) on one level, each with its grid normal from a to b. */
+type OpeningSamples = {
+  a: number
+  b: number
+  level: number
+  pts: Vector3[]
+  facing: Vector3[]
+}
+
 type Room = {
   zone: RoomZone
   levelIndex: number
@@ -186,6 +200,7 @@ export class RoomLighting {
   private origin = new Vector2()
   private gridW = 1
   private gridH = 1
+  private cell = CELL
   private levels = 1
   private lampTexel = new Map<RoomLamp, number>()
   private lastSky: Parameters<RoomLighting['updateSky']> | null = null
@@ -230,6 +245,7 @@ export class RoomLighting {
     origin: uniform(new Vector2()),
     gridW: uniform(1, 'int'),
     gridH: uniform(1, 'int'),
+    cell: uniform(CELL),
     portalCount: uniform(0, 'int'),
     portalBase: uniform(0, 'int'),
     extLampStart: uniform(0, 'int'),
@@ -253,16 +269,24 @@ export class RoomLighting {
     if (b.isEmpty()) {
       this.levelY = [0]
       this.gridW = this.gridH = this.levels = 1
+      this.cell = CELL
       this.map = new Float32Array(1)
       this.uploadMap()
       this.allocateData()
       return
     }
     this.origin.set(b.min.x - 1, b.min.z - 1)
-    this.gridW = Math.max(1, Math.ceil((b.max.x - b.min.x + 2) / CELL))
-    this.gridH = Math.max(1, Math.ceil((b.max.z - b.min.z + 2) / CELL))
     this.levelY = input.levelY.length ? input.levelY.slice(0, MAX_LEVELS) : [0]
     this.levels = this.levelY.length
+    const spanX = b.max.x - b.min.x + 2
+    const spanZ = b.max.z - b.min.z + 2
+    this.cell = Math.max(
+      CELL,
+      (spanX / MAX_MAP_SIZE) * 1.0001,
+      (spanZ / Math.floor(MAX_MAP_SIZE / this.levels)) * 1.0001,
+    )
+    this.gridW = Math.max(1, Math.ceil(spanX / this.cell))
+    this.gridH = Math.max(1, Math.ceil(spanZ / this.cell))
 
     // ---- rooms ---------------------------------------------------------------------------
     const raycaster = new Raycaster()
@@ -323,15 +347,15 @@ export class RoomLighting {
         minZ = Math.min(minZ, z)
         maxZ = Math.max(maxZ, z)
       }
-      const i0 = Math.max(0, Math.floor((minX - this.origin.x) / CELL))
-      const i1 = Math.min(this.gridW - 1, Math.ceil((maxX - this.origin.x) / CELL))
-      const j0 = Math.max(0, Math.floor((minZ - this.origin.y) / CELL))
-      const j1 = Math.min(this.gridH - 1, Math.ceil((maxZ - this.origin.y) / CELL))
+      const i0 = Math.max(0, Math.floor((minX - this.origin.x) / this.cell))
+      const i1 = Math.min(this.gridW - 1, Math.ceil((maxX - this.origin.x) / this.cell))
+      const j0 = Math.max(0, Math.floor((minZ - this.origin.y) / this.cell))
+      const j1 = Math.min(this.gridH - 1, Math.ceil((maxZ - this.origin.y) / this.cell))
       const rowBase = room.levelIndex * this.gridH
       for (let j = j0; j <= j1; j++) {
-        const z = this.origin.y + (j + 0.5) * CELL
+        const z = this.origin.y + (j + 0.5) * this.cell
         for (let i = i0; i <= i1; i++) {
-          const x = this.origin.x + (i + 0.5) * CELL
+          const x = this.origin.x + (i + 0.5) * this.cell
           if (pointInPolygon(x, z, poly)) map[(rowBase + j) * this.gridW + i] = ri + 1
         }
       }
@@ -480,8 +504,8 @@ export class RoomLighting {
   roomAt(p: Vector3): number {
     let level = 0
     for (let i = 0; i < this.levelY.length; i++) if (this.levelY[i]! <= p.y - 0.12) level = i
-    const i = Math.floor((p.x - this.origin.x) / CELL)
-    const j = Math.floor((p.z - this.origin.y) / CELL)
+    const i = Math.floor((p.x - this.origin.x) / this.cell)
+    const j = Math.floor((p.z - this.origin.y) / this.cell)
     if (i < 0 || j < 0 || i >= this.gridW || j >= this.gridH) return -1
     const v = this.map[(level * this.gridH + j) * this.gridW + i]
     return v ? v - 1 : -1
@@ -865,6 +889,7 @@ export class RoomLighting {
     ;(this.u.origin.value as Vector2).copy(this.origin)
     this.u.gridW.value = this.gridW
     this.u.gridH.value = this.gridH
+    this.u.cell.value = this.cell
     this.u.levelCount.value = this.levels
     this.setLevelOffsets([])
   }
@@ -914,10 +939,7 @@ export class RoomLighting {
       .map((o) => ({ id: o.id, box: new Box3().setFromObject(o.object) }))
     const doorHoles = doors.map((door) => door.box.clone().expandByScalar(0.05))
     ray.far = 0.9
-    const samples = new Map<
-      string,
-      { a: number; b: number; axis: 'x' | 'z'; dir: number; pts: Vector3[]; level: number }
-    >()
+    const samples = new Map<string, OpeningSamples>()
     const W = this.gridW
     const H = this.gridH
     const map = this.map
@@ -941,8 +963,8 @@ export class RoomLighting {
             // Outside openings only from enclosed rooms.
             if (a < 0 && !this.rooms[b]!.enclosed) continue
             if (b < 0 && !this.rooms[a]!.enclosed) continue
-            const x = this.origin.x + (i + 0.5 + di * 0.5) * CELL
-            const z = this.origin.y + (j + 0.5 + dj * 0.5) * CELL
+            const x = this.origin.x + (i + 0.5 + di * 0.5) * this.cell
+            const z = this.origin.y + (j + 0.5 + dj * 0.5) * this.cell
             dirV.set(di, 0, dj)
             let open = true
             for (const h of [0.35, 1.6]) {
@@ -962,66 +984,107 @@ export class RoomLighting {
             const lo = a < 0 ? b : b < 0 ? a : Math.min(a, b)
             const hi = lo === a ? b : a
             const dir = lo === a ? 1 : -1
-            const key = `${l}|${lo}|${hi}|${axis}`
+            const key = `${l}|${lo}|${hi}`
             let s = samples.get(key)
             if (!s) {
-              s = { a: lo, b: hi, axis, dir, pts: [], level: l }
+              s = { a: lo, b: hi, pts: [], facing: [], level: l }
               samples.set(key, s)
             }
             s.pts.push(new Vector3(x, floorY, z))
+            s.facing.push(new Vector3(axis === 'x' ? dir : 0, 0, axis === 'z' ? dir : 0))
           }
         }
       }
     }
     const openings: Opening[] = []
+    // Boundary samples a step apart along an edge belong to one opening. Off the grid axes (a
+    // rotated building) the edge is a staircase of cells, so adjacency is by distance.
+    const gap = Math.max(0.45, this.cell * 3)
     for (const s of samples.values()) {
-      // Cluster along the edge: sort by the coordinate running along the boundary.
-      const along = (p: Vector3) => (s.axis === 'x' ? p.z : p.x)
-      const across = (p: Vector3) => (s.axis === 'x' ? p.x : p.z)
-      s.pts.sort((p, q) => across(p) - across(q) || along(p) - along(q))
-      let run: Vector3[] = []
-      const flush = () => {
-        if (run.length < 3) {
-          run = [] // < 0.5 m
-          return
+      const order = s.pts.map((_, k) => k).sort((p, q) => s.pts[p]!.x - s.pts[q]!.x)
+      const seen = new Uint8Array(order.length)
+      for (let seed = 0; seed < order.length; seed++) {
+        if (seen[seed]) continue
+        seen[seed] = 1
+        const members: number[] = []
+        const queue = [seed]
+        while (queue.length) {
+          const k = queue.pop()!
+          const p = s.pts[order[k]!]!
+          members.push(order[k]!)
+          for (const step of [-1, 1]) {
+            for (let m = k + step; m >= 0 && m < order.length; m += step) {
+              const q = s.pts[order[m]!]!
+              if (Math.abs(q.x - p.x) > gap) break
+              if (seen[m] || Math.hypot(q.x - p.x, q.z - p.z) > gap) continue
+              seen[m] = 1
+              queue.push(m)
+            }
+          }
         }
-        const c = run.reduce((acc, p) => acc.add(p), new Vector3()).multiplyScalar(1 / run.length)
-        const width = along(run[run.length - 1]!) - along(run[0]!) + 0.2
-        const normal = new Vector3(s.axis === 'x' ? s.dir : 0, 0, s.axis === 'z' ? s.dir : 0)
-        const roomA = this.rooms[s.a]!
-        const roomB = s.b >= 0 ? this.rooms[s.b] : undefined
-        const floorY = this.levelY[s.level] ?? 0
-        // Door in this opening? → its height + state. Otherwise floor to the lower ceiling.
-        const door = doors.find((d) =>
-          d.box
-            .clone()
-            .expandByScalar(0.25)
-            .containsPoint(c.clone().setY(floorY + 1)),
-        )
-        const ceil = Math.min(roomA.ceilingY, roomB?.ceilingY ?? roomA.ceilingY)
-        const height = door
-          ? Math.min(door.box.max.y - floorY, ceil - floorY)
-          : Math.max(1.9, ceil - floorY)
-        openings.push({
-          a: s.a,
-          b: s.b,
-          center: c.setY(floorY + height / 2),
-          normal,
-          width: door ? Math.min(width, door.box.getSize(new Vector3()).length()) : width,
-          height,
-          doorId: door?.id,
-        })
-        run = []
+        if (members.length < 3) continue // < 0.5 m
+        openings.push(this.openingFromRun(members, s, doors))
       }
-      for (const p of s.pts) {
-        const last = run[run.length - 1]
-        if (last && (Math.abs(across(p) - across(last)) > 0.11 || along(p) - along(last) > 0.45))
-          flush()
-        run.push(p)
-      }
-      flush()
     }
     return openings
+  }
+
+  /** One opening from its boundary samples: measured along their own line, facing room b. */
+  private openingFromRun(
+    members: number[],
+    s: OpeningSamples,
+    doors: { id: string; box: Box3 }[],
+  ): Opening {
+    const run = members.map((k) => s.pts[k]!)
+    const c = run.reduce((acc, p) => acc.add(p), new Vector3()).multiplyScalar(1 / run.length)
+    // Principal direction of the samples (2×2 covariance in XZ).
+    let xx = 0
+    let xz = 0
+    let zz = 0
+    for (const p of run) {
+      const dx = p.x - c.x
+      const dz = p.z - c.z
+      xx += dx * dx
+      xz += dx * dz
+      zz += dz * dz
+    }
+    const angle = 0.5 * Math.atan2(2 * xz, xx - zz)
+    const tangent = new Vector3(Math.cos(angle), 0, Math.sin(angle))
+    let lo = Number.POSITIVE_INFINITY
+    let hi = Number.NEGATIVE_INFINITY
+    for (const p of run) {
+      const t = (p.x - c.x) * tangent.x + (p.z - c.z) * tangent.z
+      lo = Math.min(lo, t)
+      hi = Math.max(hi, t)
+    }
+    c.addScaledVector(tangent, (lo + hi) / 2)
+    const width = hi - lo + 2 * this.cell
+    const facing = members.reduce((acc, k) => acc.add(s.facing[k]!), new Vector3())
+    const normal = new Vector3(-tangent.z, 0, tangent.x)
+    if (normal.dot(facing) < 0) normal.negate()
+    const roomA = this.rooms[s.a]!
+    const roomB = s.b >= 0 ? this.rooms[s.b] : undefined
+    const floorY = this.levelY[s.level] ?? 0
+    // Door in this opening? → its height + state. Otherwise floor to the lower ceiling.
+    const door = doors.find((d) =>
+      d.box
+        .clone()
+        .expandByScalar(0.25)
+        .containsPoint(c.clone().setY(floorY + 1)),
+    )
+    const ceil = Math.min(roomA.ceilingY, roomB?.ceilingY ?? roomA.ceilingY)
+    const height = door
+      ? Math.min(door.box.max.y - floorY, ceil - floorY)
+      : Math.max(1.9, ceil - floorY)
+    return {
+      a: s.a,
+      b: s.b,
+      center: c.setY(floorY + height / 2),
+      normal,
+      width: door ? Math.min(width, door.box.getSize(new Vector3()).length()) : width,
+      height,
+      doorId: door?.id,
+    }
   }
 
   // ---- TSL ---------------------------------------------------------------------------------
@@ -1041,7 +1104,7 @@ export class RoomLighting {
   roomAtNode = Fn(([p]: [N]) => {
     const u = this.u
     const level = this.levelOfNode(p.y)
-    const cell = ivec2(p.xz.sub(u.origin).div(CELL).floor())
+    const cell = ivec2(p.xz.sub(u.origin).div(u.cell).floor())
     const inside = cell.x
       .greaterThanEqual(0)
       .and(cell.y.greaterThanEqual(0))

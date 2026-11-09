@@ -107,6 +107,41 @@ describe('room lighting', () => {
     expect(rooms.openings[0]!.width).toBeGreaterThan(0.6)
   })
 
+  test('measures a doorway in a rotated building along its wall, never with a negative width', () => {
+    // Off the grid axes the room boundary is a staircase of cells; clustering it as if it ran
+    // along one axis gave negative widths, portals that took light away (black rooms, streaks).
+    const input = twoRooms()
+    const angle = 0.7
+    const turn = (x: number, z: number): [number, number] => [
+      x * Math.cos(angle) + z * Math.sin(angle),
+      -x * Math.sin(angle) + z * Math.cos(angle),
+    ]
+    const building = new Group()
+    building.rotation.y = angle
+    for (const mesh of [...input.walls, ...input.covers.map((c) => c.object)]) building.add(mesh)
+    building.add(input.openings[0]!.object)
+    building.updateMatrixWorld(true)
+    const zones = input.zones.map((zone) => ({
+      ...zone,
+      polygon: zone.polygon.map(([x, z]) => turn(x, z)),
+    }))
+    const bounds = new Box3()
+    for (const zone of zones)
+      for (const [x, z] of zone.polygon) bounds.expandByPoint(new Vector3(x, 0, z))
+    const rooms = new RoomLighting()
+    rooms.build({ ...input, zones, bounds, lamps: [] })
+
+    expect(rooms.openings.every((opening) => opening.width > 0)).toBe(true)
+    const doorway = rooms.openings.filter((o) => new Set([o.a, o.b]).size === 2 && o.b >= 0)
+    expect(doorway).toHaveLength(1)
+    expect(doorway[0]!.width).toBeGreaterThan(0.6)
+    expect(doorway[0]!.width).toBeLessThan(1.6)
+    // It faces across the partition (the building's local x axis).
+    const across = new Vector3(Math.cos(angle), 0, -Math.sin(angle))
+    expect(Math.abs(doorway[0]!.normal.dot(across))).toBeGreaterThan(0.9)
+    expect(rooms.portals.every((portal) => portal.width > 0)).toBe(true)
+  })
+
   test('puts lamps in their room, a virtual lamp in rooms without one, and meters daylight', () => {
     const rooms = new RoomLighting()
     rooms.build(twoRooms())
@@ -163,5 +198,38 @@ describe('room lighting', () => {
       roomsE: 0,
       illuminant: null,
     })
+  })
+
+  test('a street block over eight levels keeps its room map within the WebGPU texture limit', () => {
+    // 103 m north-south at 10 cm cells would stack 8 × 1050 = 8400 rows, past the 8192 a GPU
+    // guarantees: the texture is refused and every frame after errors.
+    const square = (z: number): [number, number][] => [
+      [0, z],
+      [6, z],
+      [6, z + 6],
+      [0, z + 6],
+    ]
+    const rooms = new RoomLighting()
+    rooms.build({
+      bounds: new Box3(new Vector3(0, 0, -51.5), new Vector3(6, 0, 51.5)),
+      levelY: [0, 3, 6, 9, 12, 15, 18, 21],
+      zones: [
+        { id: 'north', levelIndex: 0, polygon: square(-51.5) },
+        { id: 'south', levelIndex: 7, polygon: square(45.5) },
+      ],
+      covers: [],
+      walls: [],
+      openings: [],
+      lamps: [],
+      virtualLampsOn: false,
+    })
+    const map = (
+      rooms as unknown as { u: { map: { value: { image: { width: number; height: number } } } } }
+    ).u.map.value.image
+    expect(map.height).toBeLessThanOrEqual(8192)
+    expect(map.width).toBeLessThanOrEqual(8192)
+    expect(rooms.roomAt(new Vector3(3, 1, -48.5))).toBe(0)
+    expect(rooms.roomAt(new Vector3(3, 22, 48.5))).toBe(1)
+    expect(rooms.roomAt(new Vector3(3, 1, 0))).toBe(-1)
   })
 })
