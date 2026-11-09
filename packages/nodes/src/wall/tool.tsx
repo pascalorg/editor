@@ -763,10 +763,16 @@ const LineWallTool: React.FC = () => {
         getSegmentGridStep(),
       )
     }
+    // Before the first move after a click the pointer still sits on the start.
+    const currentPointer = (): [WallPlanPoint, number] =>
+      draftPointer
+        ? [draftPointer, draftY]
+        : [[startingPoint.current.x, startingPoint.current.z], startingPoint.current.y]
     const showDraftEnd = (walls: WallNode[]) => {
-      if (!(draftPointer && wallPreviewRef.current)) return
-      const snappedLocal = typedDraftEnd(draftPointer) ?? draftPointer
-      endingPoint.current.set(snappedLocal[0], draftY, snappedLocal[1])
+      if (!wallPreviewRef.current) return
+      const [pointer, pointerY] = currentPointer()
+      const snappedLocal = typedDraftEnd(pointer) ?? pointer
+      endingPoint.current.set(snappedLocal[0], pointerY, snappedLocal[1])
       const draftPreview = useFloorplanDraftPreview.getState()
       draftPreview.setWallDraftStart([startingPoint.current.x, startingPoint.current.z])
       draftPreview.setWallDraftEnd(snappedLocal)
@@ -1141,13 +1147,14 @@ const LineWallTool: React.FC = () => {
       if (!outcome) return
       event.preventDefault()
       event.stopPropagation()
-      if (outcome !== 'commit' || !draftPointer) return
-      const typedEnd = typedDraftEnd(draftPointer)
+      if (outcome !== 'commit') return
+      const [pointer, pointerY] = currentPointer()
+      const typedEnd = typedDraftEnd(pointer)
       if (!typedEnd) return
       onGridClick({
         nativeEvent: { detail: 1 } as unknown as GridEvent['nativeEvent'],
-        position: [typedEnd[0], draftY, typedEnd[1]],
-        localPosition: [typedEnd[0], draftY, typedEnd[1]],
+        position: [typedEnd[0], pointerY, typedEnd[1]],
+        localPosition: [typedEnd[0], pointerY, typedEnd[1]],
       } as GridEvent)
     }
 
