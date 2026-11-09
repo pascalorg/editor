@@ -15,9 +15,9 @@ import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
 import { act, create } from '@react-three/test-renderer'
 import { isValidElement, type ReactNode } from 'react'
-import type { Mesh, MeshBasicMaterial } from 'three'
+import type { LineBasicMaterial, LineSegments, Mesh, MeshBasicMaterial } from 'three'
 import { pipeFittingDefinition } from '../pipe-fitting/definition'
-import { INVALID_GHOST_COLOR } from '../shared/ghost-materials'
+import { INVALID_GHOST_COLOR, VALID_GHOST_COLOR } from '../shared/ghost-materials'
 import { pipeSegmentDefinition } from './definition'
 import { MovePipeSegmentTool } from './move-tool'
 import { PipeSegmentNode } from './schema'
@@ -187,6 +187,12 @@ function ghostColors(renderer: Renderer) {
     .map((node) => ((node.instance as Mesh).material as MeshBasicMaterial).color.getHex())
 }
 
+function footprintColors(renderer: Renderer) {
+  return renderer.scene
+    .findAll((node) => (node.instance as LineSegments).isLineSegments === true)
+    .map((node) => ((node.instance as LineSegments).material as LineBasicMaterial).color.getHex())
+}
+
 function noticeText() {
   const notice = notices.at(-1)
   return isValidElement<{ children?: ReactNode }>(notice) ? String(notice.props.children) : null
@@ -205,6 +211,7 @@ describe('pipe run move', () => {
     try {
       await moveTo(2, 0.5)
       expect(ghostColors(renderer)).toEqual([GHOST_HEX])
+      expect(footprintColors(renderer)).toEqual([VALID_GHOST_COLOR])
       expect(notices).toEqual([])
       expect(await click()).toHaveBeenCalledTimes(1)
     } finally {
@@ -238,6 +245,7 @@ describe('pipe run move', () => {
       // tilts the sloped west leg between its fixed corner heights.
       await moveTo(2, 0.5)
       expect(ghostColors(renderer)).toEqual([INVALID_GHOST_COLOR])
+      expect(footprintColors(renderer)).toEqual([INVALID_GHOST_COLOR])
       expect(noticeText()).toContain('would change a connected pipe’s grade')
 
       const stopPropagation = await click()
@@ -250,6 +258,7 @@ describe('pipe run move', () => {
       notices = []
       await moveTo(2, 0)
       expect(ghostColors(renderer)).toEqual([GHOST_HEX])
+      expect(footprintColors(renderer)).toEqual([VALID_GHOST_COLOR])
       expect(notices).toEqual([])
 
       await act(async () => {

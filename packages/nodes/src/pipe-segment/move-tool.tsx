@@ -33,7 +33,7 @@ import {
   collectGhostAlignmentCandidates,
   resolveGhostAlignment,
 } from '../shared/ghost-alignment'
-import { INVALID_GHOST_COLOR } from '../shared/ghost-materials'
+import { INVALID_GHOST_COLOR, VALID_GHOST_COLOR } from '../shared/ghost-materials'
 import { type RunMoveConnectivity, startRunMoveConnectivity } from '../shared/run-move-connectivity'
 import { translateWallRun } from '../shared/wall-run-move'
 import { pipeUpdatesPreserveGrades } from './grade-operation'
@@ -333,6 +333,7 @@ export const MovePipeSegmentTool: React.FC<{ node: AnyNode }> = ({ node }) => {
       ))}
       <DragBoundingBox
         centerY={0}
+        color={gradeBlocked ? INVALID_GHOST_COLOR : VALID_GHOST_COLOR}
         nodeId={node.id}
         position={boxCenter}
         size={[box.maxX - box.minX, pipe.diameter * IN_TO_M, box.maxZ - box.minZ]}
