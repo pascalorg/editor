@@ -338,7 +338,7 @@ export const MovePipeSegmentTool: React.FC<{ node: AnyNode }> = ({ node }) => {
         size={[box.maxX - box.minX, pipe.diameter * IN_TO_M, box.maxZ - box.minZ]}
       />
       {gradeBlocked && (
-        <Html center position={boxCenter}>
+        <Html center position={boxCenter} style={{ pointerEvents: 'none' }}>
           <div
             role="status"
             className="pointer-events-none w-64 rounded border bg-background p-2 text-xs"

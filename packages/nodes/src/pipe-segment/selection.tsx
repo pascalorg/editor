@@ -495,6 +495,7 @@ const PipePointHandles = ({ pipe, target }: { pipe: PipeSegmentNode; target: Obj
       drag.cleanup()
       dragRef.current = null
       setDraggingIndex(null)
+      setGradeNotice('')
       clearLivePreview()
       // Resume history and apply the final batch as one tracked change. The
       // final batch is built the same way as
@@ -865,7 +866,7 @@ const PipePointHandles = ({ pipe, target }: { pipe: PipeSegmentNode; target: Obj
   return (
     <group ref={outerRef}>
       {gradeNotice && runCenter && (
-        <Html position={runCenter} center>
+        <Html center position={runCenter} style={{ pointerEvents: 'none' }}>
           <div
             role="status"
             className="pointer-events-none w-64 rounded border bg-background p-2 text-xs"
