@@ -4,6 +4,7 @@ import { sceneRegistry, useInteractive, useScene } from '@pascal-app/core'
 import { useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useRef } from 'react'
 import { Box3, type Mesh, type Object3D, Vector3 } from 'three'
+import { DEFAULT_TEXTURE_LIMIT } from '../../lib/daylight/room-map'
 import {
   bakedLevelObjects,
   bakedRoomScene,
@@ -15,6 +16,7 @@ import {
   syncLampEmitters,
 } from '../../lib/daylight/room-scene'
 import { daylightRooms } from '../../lib/daylight/rooms'
+import { heldReasons } from '../../lib/scene-visibility'
 import useViewer from '../../store/use-viewer'
 
 /** Seconds between scene-change checks, and the quiet time before a rebuild. */
@@ -42,6 +44,7 @@ const LAMP_POSITION_STEP = 0.05
  */
 export function useDaylightRooms() {
   const scene = useThree((s) => s.scene)
+  const gl = useThree((s) => s.gl)
   const nodesVersion = useRef(0)
   const state = useRef({
     signature: '',
@@ -49,7 +52,7 @@ export function useDaylightRooms() {
     sinceCheck: CHECK_INTERVAL,
     live: true,
     bakedRoot: null as Object3D | null,
-    levelObjects: [] as Object3D[][],
+    levelObjects: [] as (Object3D | undefined)[],
   })
 
   useEffect(
@@ -91,10 +94,11 @@ export function useDaylightRooms() {
           : s.bakedRoot
             ? bakedRoomScene(s.bakedRoot, lampDefault)
             : null
+        daylightRooms.map.textureLimit = textureLimit(gl)
         daylightRooms.build(
           input ?? {
             bounds: emptyBounds,
-            levelY: [0],
+            levels: [],
             zones: [],
             covers: [],
             walls: [],
@@ -109,17 +113,22 @@ export function useDaylightRooms() {
       }
     }
 
-    // Live level heights (stacked / exploded motion) and the camera, in assembled space.
-    const offsets = s.levelObjects.map((objects, index) =>
-      objects[0] ? objects[0].getWorldPosition(scratch).y - (daylightRooms.levelY[index] ?? 0) : 0,
+    // Live level heights (stacked / exploded motion), what is shown, and the camera.
+    const levels = daylightRooms.levels
+    const offsets = s.levelObjects.map((object, index) =>
+      object ? object.getWorldPosition(scratch).y - (levels[index]?.y ?? 0) : 0,
     )
-    daylightRooms.setLevelOffsets(offsets)
-    const focused = focusedLevelIndex(s.levelObjects)
-    daylightRooms.levelShown = s.levelObjects.map(
-      (objects, index) => (focused < 0 || index <= focused) && objects.some(shownInScene),
-    )
-    daylightRooms.cameraY.value = camera.position.y - (offsets[0] ?? 0)
-    daylightRooms.focusedLevel.value = focused
+    const shown = s.levelObjects.map((object) => !!object && presented(object))
+    const selected = selectedFocusLevel()
+    const focused = s.levelObjects.map((object, index) => {
+      if (!shown[index]) return false
+      if (object && object === selected) return true
+      // Levels over it hidden (the cutaway shows its rooms from above).
+      const above = daylightRooms.map.levelAbove(index)
+      return above >= 0 && !shown[above]
+    })
+    daylightRooms.setLevelPresentation(offsets, shown, focused)
+    daylightRooms.cameraY.value = camera.position.y
 
     // Lamp switches (fed lamps by key; virtual lamps follow the time-of-day default) and doors.
     const lit = litFeedKeys()
@@ -227,21 +236,29 @@ function findBakedRoot(scene: Object3D): Object3D | null {
   return found
 }
 
-/** Visible itself and through every ancestor (hidden levels are switched off on their group). */
-function shownInScene(object: Object3D): boolean {
+/**
+ * On screen: visible through every ancestor (hidden levels are switched off on their group) and
+ * not drawn for shadows only (levels hidden above the selection keep shadowing it).
+ */
+function presented(object: Object3D): boolean {
   for (let x: Object3D | null = object; x; x = x.parent) if (!x.visible) return false
-  return true
+  return !heldReasons(object)?.has('shadow-only')
 }
 
-/**
- * The level whose rooms open to the sky because the levels above it are hidden (solo level, or
- * levels above the selection hidden) — the enhanced viewer's "focus level". −1 otherwise.
- */
-function focusedLevelIndex(levelObjects: Object3D[][]): number {
+/** The selected level when the levels over it are hidden (solo, or hide-above), else null. */
+function selectedFocusLevel(): Object3D | null {
   const viewer = useViewer.getState()
   const hidesAbove = viewer.levelMode === 'solo' || viewer.hideLevelsAboveSelection
   const levelId = viewer.selection.levelId
-  if (!hidesAbove || !levelId) return -1
-  const object = sceneRegistry.nodes.get(levelId)
-  return object ? levelObjects.findIndex((objects) => objects.includes(object)) : -1
+  if (!hidesAbove || !levelId) return null
+  return sceneRegistry.nodes.get(levelId) ?? null
+}
+
+/** The device's largest 2D texture side (WebGPU device limits, or the WebGL context's). */
+function textureLimit(gl: unknown): number {
+  const backend = (gl as { backend?: { device?: GPUDevice; gl?: WebGL2RenderingContext } }).backend
+  const limit =
+    backend?.device?.limits?.maxTextureDimension2D ??
+    (backend?.gl?.getParameter(backend.gl.MAX_TEXTURE_SIZE) as number | undefined)
+  return limit && limit > 0 ? limit : DEFAULT_TEXTURE_LIMIT
 }
