@@ -115,8 +115,15 @@ describe('wall opening cutout', () => {
     try {
       const geometry = generateExtrudedWall(wall, [door], calculateLevelMiters([wall]))
       const position = geometry.getAttribute('position')
-      expect(geometry).not.toBeNull()
       expect(position.count).toBeGreaterThan(0)
+      const topAt = (x: number) => {
+        let top = -Infinity
+        for (let i = 0; i < position.count; i++)
+          if (Math.abs(position.getX(i) - x) < 1e-4) top = Math.max(top, position.getY(i))
+        return top
+      }
+      expect(topAt(0)).toBeCloseTo(2.5, 5)
+      expect(topAt(2)).toBeCloseTo(1.5, 5)
       geometry.dispose()
     } finally {
       sceneRegistry.nodes.delete(wall.id)
