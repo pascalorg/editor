@@ -13602,6 +13602,46 @@ msgstr "删除区域"
 msgid "editor.panels.wallRegionList.paintRegions"
 msgstr "涂刷区域"
 
+# Source-Hash: c69865ec5d9d1ac9
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Angle"
+#: packages/editor/src/store/use-placement-typing.ts
+#, fuzzy
+msgid "editor.placementTyping.angle"
+msgstr "角度"
+
+# Source-Hash: fe7ddb094aa8ff4d
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Distance"
+#: packages/editor/src/store/use-placement-typing.ts
+#, fuzzy
+msgid "editor.placementTyping.distance"
+msgstr "距离"
+
+# Source-Hash: 643687bc3adaac76
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Length"
+#: packages/editor/src/store/use-placement-typing.ts
+#, fuzzy
+msgid "editor.placementTyping.length"
+msgstr "长度"
+
+# Source-Hash: 0f0e13abf9b2bb67
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Offset"
+#: packages/editor/src/store/use-placement-typing.ts
+#, fuzzy
+msgid "editor.placementTyping.offset"
+msgstr "偏移"
+
 # Source-Hash: 89ee318aad485f83
 # Review: required
 # AI-Provider: claude-code

@@ -12,9 +12,11 @@ import { useViewer } from '@pascal-app/viewer'
 import { memo, useMemo } from 'react'
 import { formatLinearMeasurement } from '../../../lib/measurements'
 import usePlacementPreview from '../../../store/use-placement-preview'
+import { usePlacementTyping } from '../../../store/use-placement-typing'
 import { useFloorplanRender, useFloorplanSceneRotation } from '../floorplan-render-context'
 import { FloorplanDimensionRenderer } from './floorplan-dimension-renderer'
 import { FloorplanGeometryRenderer } from './floorplan-geometry-renderer'
+import { FloorplanPlacementTypingHud } from './floorplan-placement-typing-hud'
 
 export interface FloorplanNodePreviewProps {
   node: AnyNode
@@ -139,14 +141,24 @@ export const FloorplanPlacementPreviewLayer = memo(function FloorplanPlacementPr
   const dimensions = usePlacementPreview((s) => s.dimensions)
   const activeDimensionId = usePlacementPreview((s) => s.activeDimensionId)
   const dimensionInput = usePlacementPreview((s) => s.dimensionInput)
+  const typingProjectedPosition = usePlacementTyping((s) => s.projectedPosition)
   const unit = useViewer((s) => s.unit)
   const metricNotation = useViewer((s) => s.metricNotation)
   const sceneRotationDeg = useFloorplanSceneRotation()
+  const unitsPerPixel = useFloorplanRender()?.unitsPerPixel ?? 1
   if (!node) return null
 
   return (
     <g data-floorplan-placement-preview>
       <FloorplanNodePreview contextNodes={contextNodes} node={node} parentNode={parentNode} />
+      {typingProjectedPosition ? (
+        <FloorplanPlacementTypingHud
+          sceneRotationDeg={sceneRotationDeg}
+          unitsPerPixel={unitsPerPixel}
+          x={typingProjectedPosition[0]}
+          y={typingProjectedPosition[2]}
+        />
+      ) : null}
       <g data-floorplan-placement-dimensions>
         {dimensions
           .filter((dimension) => dimension.renderInFloorplan !== false)

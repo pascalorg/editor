@@ -48,7 +48,7 @@ function twoRooms(): RoomSceneInput {
   window.updateMatrixWorld(true)
   return {
     bounds: new Box3(new Vector3(0, 0, 0), new Vector3(8, 2.7, 4)),
-    levelY: [0],
+    levels: [{ y: 0, building: 0 }],
     zones: [
       {
         id: 'west',
@@ -200,36 +200,206 @@ describe('room lighting', () => {
     })
   })
 
-  test('a street block over eight levels keeps its room map within the WebGPU texture limit', () => {
-    // 103 m north-south at 10 cm cells would stack 8 × 1050 = 8400 rows, past the 8192 a GPU
-    // guarantees: the texture is refused and every frame after errors.
-    const square = (z: number): [number, number][] => [
-      [0, z],
-      [6, z],
-      [6, z + 6],
-      [0, z + 6],
-    ]
+  test('every floor of a 40-storey tower keeps its own rooms', () => {
+    const levels = Array.from({ length: 40 }, (_, f) => ({ y: f * 3.2, building: 0 }))
     const rooms = new RoomLighting()
-    rooms.build({
-      bounds: new Box3(new Vector3(0, 0, -51.5), new Vector3(6, 0, 51.5)),
-      levelY: [0, 3, 6, 9, 12, 15, 18, 21],
-      zones: [
-        { id: 'north', levelIndex: 0, polygon: square(-51.5) },
-        { id: 'south', levelIndex: 7, polygon: square(45.5) },
-      ],
-      covers: [],
-      walls: [],
-      openings: [],
-      lamps: [],
-      virtualLampsOn: false,
-    })
-    const map = (
-      rooms as unknown as { u: { map: { value: { image: { width: number; height: number } } } } }
-    ).u.map.value.image
-    expect(map.height).toBeLessThanOrEqual(8192)
-    expect(map.width).toBeLessThanOrEqual(8192)
-    expect(rooms.roomAt(new Vector3(3, 1, -48.5))).toBe(0)
-    expect(rooms.roomAt(new Vector3(3, 22, 48.5))).toBe(1)
-    expect(rooms.roomAt(new Vector3(3, 1, 0))).toBe(-1)
+    rooms.build(
+      bare({
+        levels,
+        zones: levels.map((_, f) => ({
+          id: `floor ${f}`,
+          levelIndex: f,
+          polygon: square(0, 0, 8),
+        })),
+      }),
+    )
+    for (let f = 0; f < 40; f++)
+      expect(rooms.rooms[rooms.roomAt(new Vector3(4, f * 3.2 + 1.2, 4))]!.zone.id).toBe(
+        `floor ${f}`,
+      )
+  })
+
+  test('side-by-side buildings with different floor heights each keep their floors', () => {
+    const rooms = new RoomLighting()
+    rooms.build(
+      bare({
+        levels: [
+          { y: 0, building: 0 },
+          { y: 3, building: 0 },
+          { y: 0, building: 1 },
+          { y: 3.6, building: 1 },
+        ],
+        zones: [
+          { id: 'a0', levelIndex: 0, polygon: square(0, 0, 8) },
+          { id: 'a1', levelIndex: 1, polygon: square(0, 0, 8) },
+          { id: 'b0', levelIndex: 2, polygon: square(8.2, 0, 8) },
+          { id: 'b1', levelIndex: 3, polygon: square(8.2, 0, 8) },
+        ],
+      }),
+    )
+    const at = (x: number, y: number) => rooms.rooms[rooms.roomAt(new Vector3(x, y, 4))]?.zone.id
+    expect(at(4, 1.2)).toBe('a0')
+    expect(at(12, 1.2)).toBe('b0')
+    // 3.3 m: building A is on its upper floor, building B still on its ground floor.
+    expect(at(4, 3.3)).toBe('a1')
+    expect(at(12, 3.3)).toBe('b0')
+    expect(at(12, 4.8)).toBe('b1')
+  })
+
+  test('a courtyard (zone hole) is outside the room around it', () => {
+    const rooms = new RoomLighting()
+    rooms.build(
+      bare({
+        levels: [{ y: 0, building: 0 }],
+        zones: [{ id: 'ring', levelIndex: 0, polygon: square(0, 0, 20), holes: [square(6, 6, 8)] }],
+      }),
+    )
+    expect(rooms.roomAt(new Vector3(2, 1, 2))).toBe(0)
+    expect(rooms.roomAt(new Vector3(10, 1, 10))).toBe(-1)
+  })
+
+  test('a 300 × 200 m hall costs memory along its walls, not its area', () => {
+    const rooms = new RoomLighting()
+    rooms.build(
+      bare({
+        levels: [{ y: 0, building: 0 }],
+        zones: [
+          {
+            id: 'hall',
+            levelIndex: 0,
+            polygon: [
+              [0, 0],
+              [300, 0],
+              [300, 200],
+              [0, 200],
+            ],
+          },
+        ],
+      }),
+    )
+    // A dense 10 cm map of the floor would be 6 M cells; the tiled map keeps only the perimeter.
+    expect(rooms.map.memoryBytes()).toBeLessThan(2 * 2 ** 20)
+    expect(rooms.roomAt(new Vector3(150, 1, 100))).toBe(0)
+    expect(rooms.roomAt(new Vector3(0.05, 1, 100))).toBe(0)
+    expect(rooms.roomAt(new Vector3(-2, 1, 100))).toBe(-1)
   })
 })
+
+describe('room map edge cases', () => {
+  test('a room off the tile grid builds and resolves (tile rects in whole tiles)', () => {
+    const rooms = new RoomLighting()
+    rooms.build(
+      bare({
+        levels: [{ y: 0, building: 0 }],
+        zones: [{ id: 'r', levelIndex: 0, polygon: square(27.55, 0, 8) }],
+      }),
+    )
+    expect(rooms.roomAt(new Vector3(31, 1, 4))).toBe(0)
+  })
+
+  test('the index texture stays within the device limit on a vast site', () => {
+    const rooms = new RoomLighting()
+    rooms.map.textureLimit = 2048
+    rooms.build(
+      bare({
+        levels: [{ y: 0, building: 0 }],
+        zones: [
+          { id: 'a', levelIndex: 0, polygon: square(0, 0, 2) },
+          { id: 'b', levelIndex: 0, polygon: square(20000, 20000, 2) },
+        ],
+      }),
+    )
+    const index = (rooms.map.u.index.value as { image: { width: number; height: number } }).image
+    expect(index.width).toBeLessThanOrEqual(2048)
+    expect(index.height).toBeLessThanOrEqual(2048)
+    expect(rooms.roomAt(new Vector3(1, 1, 1))).toBe(0)
+    expect(rooms.roomAt(new Vector3(20001, 1, 20001))).toBe(1)
+  })
+
+  test('where rooms overlap, the smallest wins (a floor-wide room never swallows the rooms in it)', () => {
+    const rooms = new RoomLighting()
+    rooms.build(
+      bare({
+        levels: [{ y: 0, building: 0 }],
+        zones: [
+          { id: 'kitchen', levelIndex: 0, polygon: square(0, 0, 5) },
+          { id: 'bedroom', levelIndex: 0, polygon: square(5, 0, 5) },
+          // Listed last, as an automatic room added after the drawn ones would be.
+          { id: 'whole floor', levelIndex: 0, polygon: square(0, 0, 10) },
+        ],
+      }),
+    )
+    const at = (x: number, z: number) => rooms.rooms[rooms.roomAt(new Vector3(x, 1, z))]?.zone.id
+    expect(at(2, 2)).toBe('kitchen')
+    expect(at(7, 2)).toBe('bedroom')
+    expect(at(5, 8)).toBe('whole floor')
+  })
+
+  test('a pavilion in a courtyard keeps its room inside the wing around it', () => {
+    // The C-shaped wing's rooms and the pavilion are far enough apart to form separate clusters,
+    // but the wing's cluster rect covers the courtyard.
+    const rooms = new RoomLighting()
+    rooms.build(
+      bare({
+        levels: [{ y: 0, building: 0 }],
+        zones: [
+          { id: 'west', levelIndex: 0, polygon: rect(0, 0, 6, 40) },
+          { id: 'north', levelIndex: 0, polygon: rect(6, 0, 40, 6) },
+          { id: 'south', levelIndex: 0, polygon: rect(6, 34, 40, 40) },
+          { id: 'pavilion', levelIndex: 0, polygon: rect(20, 17, 26, 23) },
+        ],
+      }),
+    )
+    expect(rooms.rooms[rooms.roomAt(new Vector3(23, 1, 20))]?.zone.id).toBe('pavilion')
+    expect(rooms.roomAt(new Vector3(33, 1, 20))).toBe(-1)
+  })
+
+  test('a level opens from above only when every level over it is hidden', () => {
+    const rooms = new RoomLighting()
+    rooms.build(
+      bare({
+        levels: [
+          { y: 0, building: 0 },
+          { y: 3, building: 0 },
+          { y: 6, building: 0 },
+        ],
+        zones: [0, 1, 2].map((f) => ({ id: `f${f}`, levelIndex: f, polygon: square(0, 0, 8) })),
+      }),
+    )
+    const none = [false, false, false]
+    // A middle floor hidden while the top one shows: the ground floor stays covered.
+    rooms.setLevelPresentation([0, 0, 0], [true, false, true], none)
+    expect(rooms.levelFocused).toEqual([false, false, false])
+    rooms.setLevelPresentation([0, 0, 0], [true, false, false], none)
+    expect(rooms.levelFocused).toEqual([true, false, false])
+    // The selected level of a cutaway is focused even with nothing hidden over it.
+    rooms.setLevelPresentation([0, 0, 0], [true, true, true], [false, false, true])
+    expect(rooms.levelFocused).toEqual([false, false, true])
+  })
+})
+
+function rect(x0: number, z0: number, x1: number, z1: number): [number, number][] {
+  return [
+    [x0, z0],
+    [x1, z0],
+    [x1, z1],
+    [x0, z1],
+  ]
+}
+
+function square(x: number, z: number, size: number): [number, number][] {
+  return [
+    [x, z],
+    [x + size, z],
+    [x + size, z + size],
+    [x, z + size],
+  ]
+}
+
+/** Rooms without walls, covers or openings: only the room map matters. */
+function bare(input: Pick<RoomSceneInput, 'levels' | 'zones'>): RoomSceneInput {
+  const bounds = new Box3()
+  for (const zone of input.zones)
+    for (const [x, z] of zone.polygon) bounds.expandByPoint(new Vector3(x, 0, z))
+  return { ...input, bounds, covers: [], walls: [], openings: [], lamps: [], virtualLampsOn: false }
+}
