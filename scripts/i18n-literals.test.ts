@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { cpSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { compileMessageOrThrow } from '@lingui/message-utils/compileMessage'
@@ -715,6 +715,22 @@ function markDraft(root: string, id: string): void {
   writeFileSync(path, stringifyPo(po, { foldLength: 0 }))
 }
 
+/** Compiles one of the locale's drafts into its shipped pack. */
+function shipDraft(root: string, locale: string): void {
+  const path = join(root, `${locale}/messages.ts`)
+  const draftId = parsePo(readFileSync(join(root, `${locale}/messages.po`), 'utf8')).items.find(
+    (item) => item.flags.fuzzy,
+  )?.msgid
+  if (!draftId) throw new Error(`fixture has no ${locale} draft`)
+  writeFileSync(
+    path,
+    readFileSync(path, 'utf8').replace(
+      'JSON.parse("{',
+      `JSON.parse("{\\"${draftId}\\":[\\"Draft\\"],`,
+    ),
+  )
+}
+
 test('the release job passes on unchanged catalogs', () => {
   expect(releaseCheckJob(catalogFixture(() => {})).exitCode).toBe(0)
 })
@@ -730,25 +746,12 @@ test('the release job fails when a reviewed entry becomes a draft with the same 
 })
 
 test('the release job fails when a compiled pack ships a draft', () => {
-  const { exitCode, output } = releaseCheckJob(
-    catalogFixture((root) => {
-      const path = join(root, 'fr/messages.ts')
-      const pack = readFileSync(path, 'utf8')
-      const draftId = parsePo(readFileSync(join(root, 'fr/messages.po'), 'utf8')).items.find(
-        (item) => item.flags.fuzzy,
-      )?.msgid
-      if (!draftId) throw new Error('fixture has no draft')
-      writeFileSync(
-        path,
-        pack.replace('JSON.parse("{', `JSON.parse("{\\"${draftId}\\":[\\"Brouillon\\"],`),
-      )
-    }),
-  )
+  const { exitCode, output } = releaseCheckJob(catalogFixture((root) => shipDraft(root, 'fr')))
   expect(exitCode).toBe(1)
   expect(output).toMatch(/fr: compiled pack ships unreviewed "[^"]+"/)
 })
 
-/** A throwaway repository with the real catalogs, for the default base lookup. */
+/** A throwaway repository with the real catalogs, for the release job's base lookup. */
 function releaseRepo(steps: (git: (...args: string[]) => void, root: string) => void): string {
   const root = mkdtempSync(join(tmpdir(), 'pascal-release-'))
   const git = (...args: string[]) => {
@@ -766,13 +769,34 @@ function releaseRepo(steps: (git: (...args: string[]) => void, root: string) => 
 const addCatalogs = (root: string) =>
   cpSync(LOCALES_DIR, join(root, LOCALES_DIR), { recursive: true })
 
-function defaultReleaseCheck(root: string) {
-  const result = Bun.spawnSync(['bun', 'scripts/i18n.ts', 'release-check'], {
+function repoReleaseCheck(root: string, ...args: string[]) {
+  const result = Bun.spawnSync(['bun', 'scripts/i18n.ts', 'release-check', ...args], {
     env: { ...process.env, I18N_ROOT: root, GITHUB_STEP_SUMMARY: '' },
     stdout: 'pipe',
     stderr: 'pipe',
   })
   return { exitCode: result.exitCode, output: `${result.stdout}${result.stderr}` }
+}
+
+/**
+ * A `pre-i18n` commit without catalogs, a release tagged before `locale` was
+ * bundled, then the commit that bundles it.
+ */
+function releaseBeforeLocale(locale: string): string {
+  return releaseRepo((git, root) => {
+    writeFileSync(join(root, 'README.md'), 'before i18n\n')
+    git('add', '.')
+    git('commit', '-q', '-m', 'before i18n')
+    git('tag', 'pre-i18n')
+    addCatalogs(root)
+    rmSync(join(root, LOCALES_DIR, locale), { recursive: true })
+    git('add', '.')
+    git('commit', '-q', '-m', 'release')
+    git('tag', '@pascal-app/editor@9.9.9')
+    addCatalogs(root)
+    git('add', '.')
+    git('commit', '-q', '-m', `bundle ${locale}`)
+  })
 }
 
 test('the release job compares with the latest editor release tag and fails on a reviewed-to-draft change', () => {
@@ -784,7 +808,7 @@ test('the release job compares with the latest editor release tag and fails on a
     git('tag', 'v0.0.1')
     markDraft(join(root, LOCALES_DIR), 'editor.buildPanel.advanced')
   })
-  const { exitCode, output } = defaultReleaseCheck(root)
+  const { exitCode, output } = repoReleaseCheck(root)
   expect(output).toContain('Comparing with @pascal-app/editor@9.9.9')
   expect(exitCode).toBe(1)
   expect(output).toContain(
@@ -806,7 +830,7 @@ test('a release tag without catalogs falls back to the commit that introduced th
     git('commit', '-q', '-m', 'later work')
     markDraft(join(root, LOCALES_DIR), 'editor.buildPanel.advanced')
   })
-  const { exitCode, output } = defaultReleaseCheck(root)
+  const { exitCode, output } = repoReleaseCheck(root)
   expect(output).toContain(
     'the commit that introduced the catalogs (@pascal-app/editor@1.0.0 has no catalogs)',
   )
@@ -820,9 +844,39 @@ test('with no base that has catalogs the release job fails loudly', () => {
     git('add', '.')
     git('commit', '-q', '-m', 'catalogs at HEAD only')
   })
-  const { exitCode, output } = defaultReleaseCheck(root)
+  const { exitCode, output } = repoReleaseCheck(root)
   expect(exitCode).toBe(1)
   expect(output).toContain('release-check: no base with bundled PO catalogs')
+})
+
+test('a locale bundled since the latest release tag is new there and does not block the release', () => {
+  const { exitCode, output } = repoReleaseCheck(releaseBeforeLocale('ja'))
+  expect(output).toContain('Comparing with @pascal-app/editor@9.9.9')
+  expect(output).toContain(
+    'New locales since @pascal-app/editor@9.9.9, with no reviewed entries to keep: ja',
+  )
+  expect(exitCode).toBe(0)
+})
+
+test('with a new locale, the release still compares the other locales and scans every pack', () => {
+  const root = releaseBeforeLocale('ja')
+  markDraft(join(root, LOCALES_DIR), 'editor.buildPanel.advanced')
+  shipDraft(join(root, LOCALES_DIR), 'ja')
+  const { exitCode, output } = repoReleaseCheck(root)
+  expect(output).toContain('Comparing with @pascal-app/editor@9.9.9')
+  expect(exitCode).toBe(1)
+  expect(output).toContain(
+    'fr: "editor.buildPanel.advanced" is reviewed on the base branch with the same English and must stay reviewed',
+  )
+  expect(output).toMatch(/ja: compiled pack ships unreviewed "[^"]+"/)
+})
+
+test('an explicit base may predate a locale but not the catalogs', () => {
+  const root = releaseBeforeLocale('ja')
+  expect(repoReleaseCheck(root, '--base', '@pascal-app/editor@9.9.9').exitCode).toBe(0)
+  const { exitCode, output } = repoReleaseCheck(root, '--base', 'pre-i18n')
+  expect(exitCode).toBe(1)
+  expect(output).toContain('--base pre-i18n has no bundled PO catalogs to compare with')
 })
 
 test('JSX text and attributes decode the HTML references the codebase uses, strictly', () => {
