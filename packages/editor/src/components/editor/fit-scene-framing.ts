@@ -118,3 +118,25 @@ export function planFitSceneOnOrbitResume(input: {
 
   return { action: 'apply', lookAt: computeFitSceneLookAt(input.pending.bounds, input.groundY) }
 }
+
+export type LevelFollowPlan = 'none' | 'default-pose' | 'rest-pivot'
+
+/**
+ * What the level-follow effect does with the orbit pivot.
+ *
+ * Only a scene-less first run takes the default pose. A first run over a
+ * loaded scene is a fresh controls instance (mount, leaving XR, error-boundary
+ * recovery) whose pivot sits at the origin, so it is rested on the level like
+ * a camera change; on a real load the later scene-ready fit still wins.
+ * Afterwards the pivot follows level, level-mode and camera changes only.
+ */
+export function planLevelFollow(input: {
+  firstLoad: boolean
+  sceneEmpty: boolean
+  levelChanged: boolean
+  modeChanged: boolean
+  cameraChanged: boolean
+}): LevelFollowPlan {
+  if (input.firstLoad) return input.sceneEmpty ? 'default-pose' : 'rest-pivot'
+  return input.levelChanged || input.modeChanged || input.cameraChanged ? 'rest-pivot' : 'none'
+}

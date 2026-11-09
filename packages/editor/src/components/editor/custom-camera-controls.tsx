@@ -80,6 +80,7 @@ import {
   type PendingFitScene,
   planFitSceneOnEvent,
   planFitSceneOnOrbitResume,
+  planLevelFollow,
 } from './fit-scene-framing'
 import { FloorAwareCameraControls } from './floor-aware-camera-controls'
 import { FloorSurface } from './floor-surface'
@@ -650,41 +651,36 @@ export const CustomCameraControls = ({ paused = false }: { paused?: boolean }) =
   // when the default camera mounts or changes; it is rested on the floor too.
   useEffect(() => {
     if (isPreviewMode || isFirstPersonMode || isRestoringFirstPersonPose()) return
-    const previousLevelId = previousLevelIdRef.current
-    const previousLevelMode = previousLevelModeRef.current
-    const previousCamera = previousCameraRef.current
-    previousLevelIdRef.current = currentLevelId
-    previousLevelModeRef.current = levelMode
-    previousCameraRef.current = camera
     // Analytic destination, not `sceneRegistry` mesh position: a level created
     // this frame still sits at y=0 (LevelSystem lerps it later), and a mode
     // switch leaves every level mid-lerp - the camera must pan to where the
     // level will settle, in the CURRENT presentation mode.
     const targetY = orbitGroundY(currentLevelId, levelMode)
     if (!controls.current) return
-    if (firstLoad.current) {
-      firstLoad.current = false
-      // A freshly applied scene is framed by the auto-frame emit; only a
-      // scene-less editor gets the default pose. Do not skip later
-      // null → level here: a site-phase load starts with no level, and the
-      // first pick (or a delayed auto-select) still has to pan.
-      if (Object.keys(useScene.getState().nodes).length === 0) {
-        controls.current.setLookAt(
-          20,
-          keepEyeOverGround(20, 20 + targetY, 20, 20),
-          20,
-          0,
-          targetY,
-          0,
-          true,
-        )
-      }
+    const plan = planLevelFollow({
+      firstLoad: firstLoad.current,
+      sceneEmpty: Object.keys(useScene.getState().nodes).length === 0,
+      levelChanged: previousLevelIdRef.current !== currentLevelId,
+      modeChanged: previousLevelModeRef.current !== levelMode,
+      cameraChanged: previousCameraRef.current !== camera,
+    })
+    firstLoad.current = false
+    previousLevelIdRef.current = currentLevelId
+    previousLevelModeRef.current = levelMode
+    previousCameraRef.current = camera
+    if (plan === 'none') return
+    if (plan === 'default-pose') {
+      controls.current.setLookAt(
+        20,
+        keepEyeOverGround(20, 20 + targetY, 20, 20),
+        20,
+        0,
+        targetY,
+        0,
+        true,
+      )
       return
     }
-    const levelChanged = previousLevelId !== currentLevelId
-    const modeChanged = previousLevelMode !== levelMode
-    const cameraChanged = previousCamera !== camera
-    if (!levelChanged && !modeChanged && !cameraChanged) return
     controls.current.getOrbitTarget(currentTarget)
     // Idempotence guard: skip when already there — also swallows the thumbnail
     // generator's synchronous stacked→restore levelMode round-trip.

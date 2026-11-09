@@ -6,6 +6,7 @@ import {
   type PendingFitScene,
   planFitSceneOnEvent,
   planFitSceneOnOrbitResume,
+  planLevelFollow,
 } from './fit-scene-framing'
 
 const sampleBounds = {
@@ -247,5 +248,71 @@ describe('fit-scene framing', () => {
         pending: { bounds: sampleBounds },
       }),
     ).toEqual({ action: 'noop' })
+  })
+})
+
+describe('level follow', () => {
+  type Inputs = { levelId: string | null; levelMode: string; camera: object; sceneEmpty: boolean }
+
+  // The effect's bookkeeping: one instance per mounted CustomCameraControls.
+  function mountLevelFollow(initial: Inputs) {
+    let firstLoad = true
+    let previous = { ...initial }
+    return (next: Inputs) => {
+      const plan = planLevelFollow({
+        firstLoad,
+        sceneEmpty: next.sceneEmpty,
+        levelChanged: previous.levelId !== next.levelId,
+        modeChanged: previous.levelMode !== next.levelMode,
+        cameraChanged: previous.camera !== next.camera,
+      })
+      firstLoad = false
+      previous = { ...next }
+      return plan
+    }
+  }
+
+  const perspective = {}
+  const loaded: Inputs = {
+    levelId: 'level_1',
+    levelMode: 'stacked',
+    camera: perspective,
+    sceneEmpty: false,
+  }
+
+  test('an empty first load takes the default pose', () => {
+    const run = mountLevelFollow({ ...loaded, levelId: null, sceneEmpty: true })
+    expect(run({ ...loaded, levelId: null, sceneEmpty: true })).toBe('default-pose')
+  })
+
+  test('a remount over a loaded scene rests the fresh pivot on the level', () => {
+    const run = mountLevelFollow(loaded)
+    expect(run(loaded)).toBe('rest-pivot')
+    expect(run(loaded)).toBe('none')
+  })
+
+  test('a level-mode change pans the pivot', () => {
+    const run = mountLevelFollow(loaded)
+    run(loaded)
+    expect(run({ ...loaded, levelMode: 'exploded' })).toBe('rest-pivot')
+  })
+
+  test('the first pick after a site-phase load pans to the level', () => {
+    const site = { ...loaded, levelId: null }
+    const run = mountLevelFollow(site)
+    run(site)
+    expect(run(loaded)).toBe('rest-pivot')
+  })
+
+  test('re-picking the same level does not move the pivot', () => {
+    const run = mountLevelFollow(loaded)
+    run(loaded)
+    expect(run({ ...loaded })).toBe('none')
+  })
+
+  test('a camera swap re-rests the new controls pivot', () => {
+    const run = mountLevelFollow(loaded)
+    run(loaded)
+    expect(run({ ...loaded, camera: {} })).toBe('rest-pivot')
   })
 })

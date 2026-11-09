@@ -1747,10 +1747,10 @@ function EditorContent({
   }, [hasLoadedInitialScene, isLoading, isSceneLoading, isViewerSceneReady, sceneReadyKey])
 
   // The useAutoFrame emit can be clobbered by the level-follow effect's
-  // first-run default pose on fast (client-side navigation) loads. Re-emitting
+  // first-run pivot rest on fast (client-side navigation) loads. Re-emitting
   // here is the last word after every load-driven camera effect has run.
   // Once per load: a remounted viewer reports ready again, but only a new
-  // load reframes.
+  // load reframes; remounted controls rest their own pivot on the level.
   const framedSceneReadyKeyRef = useRef<number | null>(null)
   useEffect(() => {
     if (!isViewerSceneReady || framedSceneReadyKeyRef.current === sceneReadyKey) return
