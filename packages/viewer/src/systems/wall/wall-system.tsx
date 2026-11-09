@@ -23,6 +23,7 @@ import {
   getWallThickness,
   isCurvedWall,
   isCutterName,
+  MIN_WALL_END_HEIGHT,
   openingHostFacing,
   type Point2D,
   pointToKey,
@@ -1585,6 +1586,17 @@ function buildWallFinishContext(
 type WallTopLine = { height: number; slope: number }
 
 /**
+ * Wall-local Y of the sloped top at `x`. Mitered corners sample `x` outside
+ * [0, L], where the line can fall below the wall base; the top never drops
+ * under {@link MIN_WALL_END_HEIGHT} (or the flat height, if lower).
+ */
+export function wallTopYAt(wallTop: WallTopLine, x: number): number {
+  const { height, slope } = wallTop
+  if (slope === 0) return height
+  return Math.max(height + slope * x, Math.min(height, MIN_WALL_END_HEIGHT))
+}
+
+/**
  * Tilts a wall's top edge along its length so the `end` side sits taller (or
  * shorter) than the `start` side — e.g. a knee wall following a single-pitch
  * roof slope — instead of requiring a non-rectangular footprint. Only
@@ -1593,7 +1605,8 @@ type WallTopLine = { height: number; slope: number }
  * Evaluates the linear plane equation `slope * localX` continuously across
  * all top vertices (including mitered corner vertices extending beyond [0, L])
  * so the extruded top face remains a single coplanar surface without corner
- * creases or triangulation folds.
+ * creases or triangulation folds — except where {@link wallTopYAt} holds an
+ * extended miter vertex above the base.
  */
 function applyWallEndHeightSlope(geometry: THREE.BufferGeometry, wallTop: WallTopLine): void {
   const { height: topY, slope } = wallTop
@@ -1602,7 +1615,7 @@ function applyWallEndHeightSlope(geometry: THREE.BufferGeometry, wallTop: WallTo
 
   for (let i = 0; i < position.count; i++) {
     if (Math.abs(position.getY(i) - topY) > 1e-4) continue
-    position.setY(i, topY + slope * position.getX(i))
+    position.setY(i, wallTopYAt(wallTop, position.getX(i)))
   }
   position.needsUpdate = true
 }
@@ -2107,7 +2120,7 @@ function collectCutoutBrushes(
       const padding = getOpeningCutoutBottomPadding(child, cut.bottom - elevation)
       const top = Math.min(
         cut.top - elevation,
-        wallTop.height + Math.min(...points.map((point) => wallTop.slope * point.x)),
+        Math.min(...points.map((point) => wallTopYAt(wallTop, point.x))),
       )
       const geometry = new THREE.ExtrudeGeometry(new THREE.Shape(points), {
         depth: top - (cut.bottom - elevation) + padding,
@@ -2242,7 +2255,7 @@ function createOpeningCutoutBrush(
       right: right + (cornerEnd === 'end' ? reach : 0),
       bottom: bottom - bottomPadding,
       top: wallTop
-        ? Math.min(openingTop, wallTop.height + wallTop.slope * (wallTop.slope > 0 ? left : right))
+        ? Math.min(openingTop, wallTopYAt(wallTop, wallTop.slope > 0 ? left : right))
         : openingTop,
     },
     wallThickness * 2,
