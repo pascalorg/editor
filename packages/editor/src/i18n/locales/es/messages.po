@@ -15595,16 +15595,6 @@ msgstr "Actualizar instantánea"
 msgid "editor.sidebar.panels.zonePanel.viewSnapshot"
 msgstr "Ver instantánea"
 
-# Source-Hash: 846b758fbc78ac22
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Add plugin"
-#: packages/editor/src/components/editor/index.tsx
-#, fuzzy
-msgid "editor.sidebar.sideMenu.addPlugin"
-msgstr "Añadir complemento"
-
 # Source-Hash: 9fc7a39bc32f287a
 # Review: required
 # AI-Provider: claude-code
@@ -15632,6 +15622,18 @@ msgstr "Menú"
 #, fuzzy
 msgid "editor.sidebar.sideMenu.showLabel"
 msgstr "Mostrar menú"
+
+# English: "No plugins in this project yet."
+#: packages/editor/src/components/ui/sidebar/plugins-menu-panel.tsx
+#, fuzzy
+msgid "editor.sidebar.pluginsMenu.empty"
+msgstr "Aún no hay complementos en este proyecto."
+
+# English: "Browse plugins"
+#: packages/editor/src/components/ui/sidebar/plugins-menu-panel.tsx
+#, fuzzy
+msgid "editor.sidebar.pluginsMenu.browse"
+msgstr "Explorar complementos"
 
 # Source-Hash: 316a5e154c1e0257
 # Review: required

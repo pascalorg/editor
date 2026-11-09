@@ -31,6 +31,12 @@ export type SidebarTab = {
   onDeselect?: () => void
   /** Heading the v2 side menu groups this entry under, e.g. "Tools". */
   section?: string
+  /**
+   * The v2 side menu entry that stands for this one, e.g. Plugins for each
+   * plugin: this entry is left out of the menu, and that one is lit while its
+   * panel is open.
+   */
+  menuParent?: string
 }
 
 interface TabBarProps {
@@ -76,7 +82,7 @@ interface SideMenuProps {
   collapsed: boolean
   /** Picking an entry: open its panel, or close the panel already open (see layout). */
   onTabClick: (id: string) => void
-  /** Pinned under the entries, e.g. the host's recent chats. */
+  /** Listed after the entries, e.g. the host's recent chats. */
   footer?: ReactNode
   /** Hides the whole menu; a Menu button above the stage brings it back. */
   onHide: () => void
@@ -97,8 +103,10 @@ export function SideMenu({
 }: SideMenuProps) {
   const i18n = usePascalI18n()
   const hideLabel = i18n._({ id: 'editor.sidebar.sideMenu.hide', message: 'Hide menu' })
+  const litTab = tabs.find((t) => t.id === activeTab)?.menuParent ?? activeTab
   const groups: { section?: string; tabs: SidebarTab[] }[] = []
   for (const tab of tabs) {
+    if (tab.menuParent) continue
     const group = groups.find((g) => g.section === tab.section)
     if (group) group.tabs.push(tab)
     else groups.push({ section: tab.section, tabs: [tab] })
@@ -129,7 +137,7 @@ export function SideMenu({
               </p>
             ) : null}
             {group.tabs.map((tab) => {
-              const showActive = activeTab === tab.id && (!collapsed || tab.noPanel === true)
+              const showActive = litTab === tab.id && (!collapsed || tab.noPanel === true)
               return (
                 <button
                   aria-label={tab.label}
@@ -157,8 +165,8 @@ export function SideMenu({
             })}
           </div>
         ))}
+        {footer}
       </div>
-      {footer ? <div className="shrink-0 border-border/50 border-t px-2 py-2">{footer}</div> : null}
     </nav>
   )
 }

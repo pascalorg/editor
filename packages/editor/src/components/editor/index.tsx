@@ -104,6 +104,7 @@ import { AppSidebar } from '../ui/sidebar/app-sidebar'
 import type { ExtraPanel } from '../ui/sidebar/icon-rail'
 import { SettingsPanel, type SettingsPanelProps } from '../ui/sidebar/panels/settings-panel'
 import { SitePanel, type SitePanelProps } from '../ui/sidebar/panels/site-panel'
+import { PluginsMenuPanel } from '../ui/sidebar/plugins-menu-panel'
 import type { SidebarTab } from '../ui/sidebar/tab-bar'
 import { PLUGINS_MANAGER_PANEL_ID, useHostPanels } from '../ui/sidebar/use-plugin-panels'
 import { SKY_DOCK_HEIGHT, SkyControl } from '../viewer/sky-control'
@@ -234,8 +235,14 @@ export interface EditorProps {
    * there, and closing the tool brings it back.
    */
   columnTabId?: string
-  /** Pinned at the bottom of the side menu (v2 desktop), e.g. recent chats. */
+  /** Listed after the side menu's entries (v2 desktop), e.g. recent chats. */
   sideMenuFooter?: ReactNode
+  /**
+   * The v2 side menu heading the one Plugins entry joins, e.g. the host's
+   * "Project". The project's plugins open from that entry instead of each
+   * having its own. Defaults to a Plugins heading of its own.
+   */
+  pluginsMenuSection?: string
   viewerToolbarLeft?: ReactNode
   viewerToolbarRight?: ReactNode
   /**
@@ -1520,6 +1527,7 @@ function EditorContent({
   sidebarTabs,
   columnTabId,
   sideMenuFooter,
+  pluginsMenuSection,
   viewerToolbarLeft,
   viewerToolbarRight,
   stageOverlay,
@@ -1905,7 +1913,19 @@ function EditorContent({
       }
     }
 
+    // The project's plugins fold into the one Plugins entry, whose panel lists them.
+    const hasPluginsEntry = hostRailPanels.some((p) => p.id === PLUGINS_MANAGER_PANEL_ID)
+    const pluginsHeading = i18n._({ id: 'editor.sidebar.sideMenu.plugins', message: 'Plugins' })
+    const isListedPlugin = (p: (typeof hostRailPanels)[number]) =>
+      hasPluginsEntry && p.id !== PLUGINS_MANAGER_PANEL_ID && p.section === pluginsHeading
+    const listedPlugins = hostRailPanels
+      .filter(isListedPlugin)
+      .map((p) => ({ id: p.id, label: p.label, icon: p.icon }))
+
     const renderTabContent = (tabId: string) => {
+      if (tabId === PLUGINS_MANAGER_PANEL_ID) {
+        return <PluginsMenuPanel plugins={listedPlugins} />
+      }
       // Built-in panels
       if (tabId === 'site') {
         return <SitePanel {...sitePanelProps} />
@@ -1934,22 +1954,32 @@ function EditorContent({
       ) ?? []),
       // Host panels appear after the explicit tabs in the rail. The icon
       // doubles as the mobile icon; a half-height sheet is a sensible default.
-      // The plugin directory closes the Plugins section as its way to add one.
-      ...hostRailPanels.map((p) => ({
-        id: p.id,
-        label:
-          p.id === PLUGINS_MANAGER_PANEL_ID
-            ? i18n._({ id: 'editor.sidebar.sideMenu.addPlugin', message: 'Add plugin' })
-            : p.label,
-        section: p.section,
-        mobileDefaultSnap: 0.5,
-        mobileIcon: p.icon,
-        icon: p.icon,
-        noPanel: p.noPanel,
-        onSelect: p.onSelect,
-        stageActive: p.stageActive,
-        onDeselect: p.onDeselect,
-      })),
+      // Plugins is one entry: a panel listing the project's plugins and the
+      // directory, so the menu keeps its room for the host's footer.
+      ...hostRailPanels.map((p) =>
+        p.id === PLUGINS_MANAGER_PANEL_ID
+          ? {
+              id: p.id,
+              label: p.label,
+              section: pluginsMenuSection ?? p.section,
+              mobileDefaultSnap: 0.5,
+              mobileIcon: p.icon,
+              icon: p.icon,
+            }
+          : {
+              id: p.id,
+              label: p.label,
+              section: p.section,
+              menuParent: isListedPlugin(p) ? PLUGINS_MANAGER_PANEL_ID : undefined,
+              mobileDefaultSnap: 0.5,
+              mobileIcon: p.icon,
+              icon: p.icon,
+              noPanel: p.noPanel,
+              onSelect: p.onSelect,
+              stageActive: p.stageActive,
+              onDeselect: p.onDeselect,
+            },
+      ),
     ]
 
     return (

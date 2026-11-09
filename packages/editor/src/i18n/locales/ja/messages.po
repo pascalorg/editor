@@ -15595,16 +15595,6 @@ msgstr "スナップショットを更新"
 msgid "editor.sidebar.panels.zonePanel.viewSnapshot"
 msgstr "スナップショットを表示"
 
-# Source-Hash: 846b758fbc78ac22
-# Review: required
-# AI-Provider: claude-code
-# AI-Model: claude-opus-5-5
-# English: "Add plugin"
-#: packages/editor/src/components/editor/index.tsx
-#, fuzzy
-msgid "editor.sidebar.sideMenu.addPlugin"
-msgstr "プラグインを追加"
-
 # Source-Hash: 9fc7a39bc32f287a
 # Review: required
 # AI-Provider: claude-code
@@ -15632,6 +15622,18 @@ msgstr "メニュー"
 #, fuzzy
 msgid "editor.sidebar.sideMenu.showLabel"
 msgstr "メニューを表示"
+
+# English: "No plugins in this project yet."
+#: packages/editor/src/components/ui/sidebar/plugins-menu-panel.tsx
+#, fuzzy
+msgid "editor.sidebar.pluginsMenu.empty"
+msgstr "このプロジェクトにはまだプラグインがありません。"
+
+# English: "Browse plugins"
+#: packages/editor/src/components/ui/sidebar/plugins-menu-panel.tsx
+#, fuzzy
+msgid "editor.sidebar.pluginsMenu.browse"
+msgstr "プラグインを見る"
 
 # Source-Hash: 316a5e154c1e0257
 # Review: required
