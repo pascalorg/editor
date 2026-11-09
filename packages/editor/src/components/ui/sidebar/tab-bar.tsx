@@ -1,36 +1,34 @@
 'use client'
 
-import { usePascalI18n } from '@pascal-app/core'
-import { PanelLeftClose, PanelLeftOpen } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { triggerSFX } from './../../../lib/sfx-bus'
 import { cn } from './../../../lib/utils'
-import { useSidebarStore } from '../primitives/sidebar'
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../primitives/tooltip'
 
 export type SidebarTab = {
   id: string
   label: string
   mobileDefaultSnap?: number
   mobileIcon?: ReactNode
-  /** Desktop icon shown in the vertical rail (v2 layout). */
+  /** Desktop icon shown in the side menu (v2 layout). */
   icon?: ReactNode
   /**
-   * Rail entry that drives the stage instead of opening a sidebar panel:
-   * activating it hides the panel column (preserving its collapse state) and
-   * keeps the icon highlighted regardless of collapse.
+   * Menu entry that drives the stage instead of opening a tool panel:
+   * activating it closes the panel (preserving its open state) and keeps the
+   * entry highlighted regardless.
    */
   noPanel?: boolean
   /** Runs when the entry is picked — with `noPanel`, to put its surface on the stage. */
   onSelect?: () => void
   /**
    * For a `noPanel` entry whose surface can leave the stage on its own (a view
-   * closed from the view bar): false once it has, and the rail goes back to
+   * closed from the view bar): false once it has, and the menu goes back to
    * the panel that was open before it.
    */
   stageActive?: boolean
-  /** Runs when the rail moves from this entry to another: a stage entry takes its surface down. */
+  /** Runs when the menu moves from this entry to another: a stage entry takes its surface down. */
   onDeselect?: () => void
+  /** Heading the v2 side menu groups this entry under, e.g. "Tools". */
+  section?: string
 }
 
 interface TabBarProps {
@@ -68,95 +66,76 @@ export function TabBar({ tabs, activeTab, onTabChange }: TabBarProps) {
   )
 }
 
-interface IconRailProps {
+interface SideMenuProps {
   tabs: SidebarTab[]
-  /** Highlighted tab. Stays highlighted while the panel is collapsed. */
+  /** Highlighted entry. While its panel is closed it stays lit only as a stage entry. */
   activeTab: string
-  /** True when the panel beside the rail is collapsed. */
+  /** True when no tool panel is open. */
   collapsed: boolean
-  /** Clicking a rail icon: switch tab, or toggle the panel (see layout). */
-  onIconClick: (id: string) => void
+  /** Picking an entry: open its panel, or close the panel already open (see layout). */
+  onTabClick: (id: string) => void
+  /** Pinned under the entries, e.g. the host's recent chats. */
+  footer?: ReactNode
 }
 
 /**
- * Vertical rail for the v2 left column. Always visible (even when the panel is
- * collapsed) so the user can reopen the panel by clicking an entry. It shows
- * each tool's name, and can close back to icons for more room, where the name
- * becomes a hover tooltip.
+ * The v2 layout's side menu: every tool by name, grouped under its section's
+ * heading in the order the sections first appear. Entries without a section
+ * lead, untitled.
  */
-export function IconRail({ tabs, activeTab, collapsed, onIconClick }: IconRailProps) {
-  const i18n = usePascalI18n()
-  const expanded = useSidebarStore((s) => s.railExpanded)
-  const setExpanded = useSidebarStore((s) => s.setRailExpanded)
-  const toggleLabel = i18n._(
-    expanded
-      ? /* i18n */ { id: 'editor.sidebar.rail.collapse', message: 'Hide names' }
-      : /* i18n */ { id: 'editor.sidebar.rail.expand', message: 'Show names' },
-  )
-
-  const renderTab = (tab: SidebarTab) => {
-    const showActive = activeTab === tab.id && (!collapsed || tab.noPanel === true)
-    const button = (
-      <button
-        aria-label={tab.label}
-        aria-pressed={showActive}
-        className={cn(
-          'group flex items-center rounded-xl transition-all duration-200 [&_img]:transition-[opacity,filter] [&_img]:duration-200',
-          expanded ? 'h-10 w-full gap-2 px-1.5' : 'h-11 w-11 justify-center',
-          showActive
-            ? 'bg-sidebar-accent text-foreground shadow-sm [&_img]:opacity-100 [&_img]:grayscale-0'
-            : 'text-muted-foreground hover:bg-sidebar-accent/50 hover:text-foreground [&_img]:opacity-60 [&_img]:grayscale hover:[&_img]:opacity-100 hover:[&_img]:grayscale-0',
-        )}
-        key={tab.id}
-        onClick={() => {
-          triggerSFX('sfx:menu-click')
-          onIconClick(tab.id)
-        }}
-        onMouseEnter={() => triggerSFX('sfx:menu-hover')}
-        type="button"
-      >
-        <span className="flex size-8 shrink-0 items-center justify-center">
-          {tab.icon ?? tab.label.charAt(0)}
-        </span>
-        {expanded ? <span className="truncate font-medium text-sm">{tab.label}</span> : null}
-      </button>
-    )
-    if (expanded) return button
-    return (
-      <Tooltip key={tab.id}>
-        <TooltipTrigger asChild>{button}</TooltipTrigger>
-        <TooltipContent side="right">{tab.label}</TooltipContent>
-      </Tooltip>
-    )
+export function SideMenu({ tabs, activeTab, collapsed, onTabClick, footer }: SideMenuProps) {
+  const groups: { section?: string; tabs: SidebarTab[] }[] = []
+  for (const tab of tabs) {
+    const group = groups.find((g) => g.section === tab.section)
+    if (group) group.tabs.push(tab)
+    else groups.push({ section: tab.section, tabs: [tab] })
   }
+  groups.sort((a, b) => Number(a.section !== undefined) - Number(b.section !== undefined))
 
   return (
-    <TooltipProvider delayDuration={0} disableHoverableContent>
-      <div
-        className={cn(
-          'flex h-full shrink-0 flex-col gap-1 overflow-y-auto border-border/50 border-r py-2',
-          expanded ? 'w-40 px-2' : 'w-14 items-center',
-        )}
-        data-surface="icon-rail"
-      >
-        {tabs.map(renderTab)}
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              aria-label={toggleLabel}
-              className={cn(
-                'mt-auto flex size-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground/70 transition-colors hover:bg-sidebar-accent/50 hover:text-foreground',
-                expanded && 'ml-1.5',
-              )}
-              onClick={() => setExpanded(!expanded)}
-              type="button"
-            >
-              {expanded ? <PanelLeftClose className="size-4" /> : <PanelLeftOpen className="size-4" />}
-            </button>
-          </TooltipTrigger>
-          <TooltipContent side="right">{toggleLabel}</TooltipContent>
-        </Tooltip>
+    <nav
+      className="flex h-full w-44 shrink-0 flex-col border-border/50 border-r"
+      data-surface="icon-rail"
+    >
+      <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-2 py-2">
+        {groups.map((group) => (
+          <div className="flex flex-col gap-0.5" key={group.section ?? ''}>
+            {group.section ? (
+              <p className="px-2 pt-1 pb-1 font-medium text-[11px] text-muted-foreground/70">
+                {group.section}
+              </p>
+            ) : null}
+            {group.tabs.map((tab) => {
+              const showActive = activeTab === tab.id && (!collapsed || tab.noPanel === true)
+              return (
+                <button
+                  aria-label={tab.label}
+                  aria-pressed={showActive}
+                  className={cn(
+                    'group flex h-9 w-full shrink-0 items-center gap-2 rounded-xl px-1.5 transition-colors duration-200 [&_img]:transition-[opacity,filter] [&_img]:duration-200',
+                    showActive
+                      ? 'bg-sidebar-accent text-foreground shadow-sm [&_img]:opacity-100 [&_img]:grayscale-0'
+                      : 'text-muted-foreground hover:bg-sidebar-accent/50 hover:text-foreground [&_img]:opacity-60 [&_img]:grayscale hover:[&_img]:opacity-100 hover:[&_img]:grayscale-0',
+                  )}
+                  key={tab.id}
+                  onClick={() => {
+                    triggerSFX('sfx:menu-click')
+                    onTabClick(tab.id)
+                  }}
+                  onMouseEnter={() => triggerSFX('sfx:menu-hover')}
+                  type="button"
+                >
+                  <span className="flex size-7 shrink-0 items-center justify-center [&_img]:max-h-7 [&_img]:max-w-7">
+                    {tab.icon ?? tab.label.charAt(0)}
+                  </span>
+                  <span className="truncate font-medium text-sm">{tab.label}</span>
+                </button>
+              )
+            })}
+          </div>
+        ))}
       </div>
-    </TooltipProvider>
+      {footer ? <div className="shrink-0 border-border/50 border-t px-2 py-2">{footer}</div> : null}
+    </nav>
   )
 }

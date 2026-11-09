@@ -15595,25 +15595,35 @@ msgstr "スナップショットを更新"
 msgid "editor.sidebar.panels.zonePanel.viewSnapshot"
 msgstr "スナップショットを表示"
 
-# Source-Hash: 655ed27ad65692e6
+# Source-Hash: 846b758fbc78ac22
 # Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Hide names"
-#: packages/editor/src/components/ui/sidebar/tab-bar.tsx
+# English: "Add plugin"
+#: packages/editor/src/components/editor/index.tsx
 #, fuzzy
-msgid "editor.sidebar.rail.collapse"
-msgstr "名前を隠す"
+msgid "editor.sidebar.sideMenu.addPlugin"
+msgstr "プラグインを追加"
 
-# Source-Hash: 5573a321bba586a2
+# Source-Hash: 9fc7a39bc32f287a
 # Review: required
 # AI-Provider: claude-code
 # AI-Model: claude-opus-5-5
-# English: "Show names"
-#: packages/editor/src/components/ui/sidebar/tab-bar.tsx
+# English: "Plugins"
+#: packages/editor/src/components/ui/sidebar/use-plugin-panels.tsx
 #, fuzzy
-msgid "editor.sidebar.rail.expand"
-msgstr "名前を表示"
+msgid "editor.sidebar.sideMenu.plugins"
+msgstr "プラグイン"
+
+# Source-Hash: 316a5e154c1e0257
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "Close panel"
+#: packages/editor/src/components/editor/editor-layout-v2.tsx
+#, fuzzy
+msgid "editor.sidebar.toolDock.close"
+msgstr "パネルを閉じる"
 
 # Source-Hash: 58b05af5b5724efb
 # Review: required

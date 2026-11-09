@@ -43,9 +43,9 @@ type SidebarStore = {
   setIsCollapsed: (collapsed: boolean) => void
   isDragging: boolean
   setIsDragging: (isDragging: boolean) => void
-  /** Whether the rail shows each tool's name, or only its icon. */
-  railExpanded: boolean
-  setRailExpanded: (expanded: boolean) => void
+  /** Width of the v2 layout's chat column. */
+  chatWidth: number
+  setChatWidth: (width: number) => void
 }
 
 export const useSidebarStore = create<SidebarStore>()(
@@ -63,8 +63,8 @@ export const useSidebarStore = create<SidebarStore>()(
       setIsCollapsed: (collapsed) => set({ isCollapsed: collapsed }),
       isDragging: false,
       setIsDragging: (isDragging) => set({ isDragging }),
-      railExpanded: true,
-      setRailExpanded: (railExpanded) => set({ railExpanded }),
+      chatWidth: 360,
+      setChatWidth: (chatWidth) => set({ chatWidth }),
     }),
     {
       name: 'sidebar-preferences',
@@ -72,7 +72,7 @@ export const useSidebarStore = create<SidebarStore>()(
       partialize: (state) => ({
         width: state.width,
         isCollapsed: state.isCollapsed,
-        railExpanded: state.railExpanded,
+        chatWidth: state.chatWidth,
       }),
       skipHydration: true,
     },

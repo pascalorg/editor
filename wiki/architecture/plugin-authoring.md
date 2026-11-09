@@ -206,7 +206,7 @@ export const myHostPanel: EditorHostPanel = {
 }
 ```
 
-The host registers that panel with `registerEditorHostPanel`. Registered plugins appear in the Plugins view (the rail's "+"), while the scene graph's `installedPlugins: string[]` controls which plugin panels appear in that project's icon rail. `defaultInstalled: true` opts a first-party plugin into legacy and newly created projects; Nature uses this today.
+The host registers that panel with `registerEditorHostPanel`. Registered plugins appear in the Plugins view (the side menu's "Add plugin"), while the scene graph's `installedPlugins: string[]` controls which plugin panels appear under Plugins in that project's side menu. `defaultInstalled: true` opts a first-party plugin into legacy and newly created projects; Nature uses this today.
 
 Install/uninstall is a project-level visibility operation. Plugin code and node definitions stay loaded for the browser session because `loadPlugin` is add-only, but an uninstalled plugin's panel, placement UI, renderers, systems, and floor-plan output are disabled. Existing plugin nodes remain serialized in the scene graph and become visible again when the plugin is reinstalled; uninstall never deletes project data.
 

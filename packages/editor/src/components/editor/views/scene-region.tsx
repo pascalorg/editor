@@ -1,6 +1,6 @@
 'use client'
 
-import type { ReactNode } from 'react'
+import type { CSSProperties, ReactNode } from 'react'
 import { isSceneView } from '../../../lib/editor-views'
 import type { ViewLayout } from '../../../store/view-layout'
 import { useActiveViewLayout } from './use-editor-views'
@@ -43,15 +43,22 @@ export function useSceneSpan(): StageSpan | null {
 export function SceneRegion({ children }: { children: ReactNode }) {
   const span = useSceneSpan()
   if (!span) return null
+  // A tool panel docked over the stage's left edge (`--tool-dock-inset`, set
+  // by the v2 layout) moves the chrome of a scene pane on that edge beside it;
+  // `--scene-region-inset` tells chrome that spans the whole pane how far.
+  const inset = span.left === 0 ? 'var(--tool-dock-inset, 0px)' : '0px'
   return (
     <div
       className="pointer-events-none absolute inset-y-0"
       data-scene-region
-      style={{
-        left: `${span.left * 100}%`,
-        width: `${(span.right - span.left) * 100}%`,
-        transform: 'translateZ(0)',
-      }}
+      style={
+        {
+          left: `calc(${span.left * 100}% + ${inset})`,
+          width: `calc(${(span.right - span.left) * 100}% - ${inset})`,
+          transform: 'translateZ(0)',
+          '--scene-region-inset': inset,
+        } as CSSProperties
+      }
     >
       {children}
     </div>

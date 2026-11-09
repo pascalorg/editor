@@ -105,7 +105,7 @@ import type { ExtraPanel } from '../ui/sidebar/icon-rail'
 import { SettingsPanel, type SettingsPanelProps } from '../ui/sidebar/panels/settings-panel'
 import { SitePanel, type SitePanelProps } from '../ui/sidebar/panels/site-panel'
 import type { SidebarTab } from '../ui/sidebar/tab-bar'
-import { useHostPanels } from '../ui/sidebar/use-plugin-panels'
+import { PLUGINS_MANAGER_PANEL_ID, useHostPanels } from '../ui/sidebar/use-plugin-panels'
 import { SKY_DOCK_HEIGHT, SkyControl } from '../viewer/sky-control'
 import { useViewerUiSounds } from '../viewer/use-viewer-ui-sounds'
 import { ViewerHoverLabel } from '../viewer/viewer-hover-label'
@@ -228,6 +228,13 @@ export interface EditorProps {
   // UI slots (v2)
   navbarSlot?: ReactNode
   sidebarTabs?: (SidebarTab & { component: React.ComponentType })[]
+  /**
+   * The tab (one of `sidebarTabs`) shown on desktop as its own column beside
+   * the side menu, so a tool panel opens next to it instead of in its place.
+   */
+  columnTabId?: string
+  /** Pinned at the bottom of the side menu (v2 desktop), e.g. recent chats. */
+  sideMenuFooter?: ReactNode
   viewerToolbarLeft?: ReactNode
   viewerToolbarRight?: ReactNode
   /**
@@ -663,10 +670,14 @@ function ViewerCanvasControlsHint({
   return (
     <div
       className={cn(
-        'pointer-events-none absolute left-1/2 z-40 max-w-[calc(100%-2rem)] -translate-x-1/2',
+        'pointer-events-none absolute z-40 w-max max-w-[calc(100%-2rem-var(--tool-dock-inset,0px))] -translate-x-1/2',
         !belowTopMenu && 'top-14',
       )}
-      style={belowTopMenu ? { top: TOP_MENU_CLEARANCE } : undefined}
+      // Centred on what a docked tool panel leaves of the stage.
+      style={{
+        left: 'calc(50% + var(--tool-dock-inset, 0px) / 2)',
+        ...(belowTopMenu ? { top: TOP_MENU_CLEARANCE } : {}),
+      }}
     >
       <section
         aria-label={i18n._({ id: 'editor.cameraControlsHint', message: 'Camera controls hint' })}
@@ -1414,7 +1425,12 @@ const ViewerCanvas = memo(function ViewerCanvas({
                 key={viewId}
                 onFocusCapture={focusPane(pane)}
                 onPointerDownCapture={focusPane(pane)}
-                style={paneStyle(pane)}
+                // A tool panel docked over the stage's left edge (v2 layout) covers
+                // nothing of a view in the first pane: the view starts beside it.
+                style={{
+                  ...paneStyle(pane),
+                  ...(pane === 0 ? { paddingLeft: 'var(--tool-dock-inset, 0px)' } : {}),
+                }}
               >
                 <HostView key={viewId} view={views.find((view) => view.id === viewId)} />
                 {/* A restored pane's plugin is known only once the project has loaded: until
@@ -1510,6 +1526,8 @@ function EditorContent({
   sidebarTop,
   navbarSlot,
   sidebarTabs,
+  columnTabId,
+  sideMenuFooter,
   viewerToolbarLeft,
   viewerToolbarRight,
   stageOverlay,
@@ -1542,6 +1560,7 @@ function EditorContent({
   extraSidebarPanels,
   commandPaletteEmptyAction,
 }: EditorProps) {
+  const i18n = usePascalI18n()
   const isMobile = useIsMobile()
   // A top-docked menu sits at the top of the scene panes on desktop (layout v2).
   const dockMenuOnTop = actionMenuPlacement === 'top' && !isMobile
@@ -1910,19 +1929,27 @@ function EditorContent({
     }
 
     const tabBarTabs = [
-      ...(sidebarTabs?.map(({ id, label, mobileDefaultSnap, mobileIcon, icon, noPanel }) => ({
-        id,
-        label,
-        mobileDefaultSnap,
-        mobileIcon,
-        icon,
-        noPanel,
-      })) ?? []),
+      ...(sidebarTabs?.map(
+        ({ id, label, mobileDefaultSnap, mobileIcon, icon, noPanel, section }) => ({
+          id,
+          label,
+          mobileDefaultSnap,
+          mobileIcon,
+          icon,
+          noPanel,
+          section,
+        }),
+      ) ?? []),
       // Host panels appear after the explicit tabs in the rail. The icon
       // doubles as the mobile icon; a half-height sheet is a sensible default.
+      // The plugin directory closes the Plugins section as its way to add one.
       ...hostRailPanels.map((p) => ({
         id: p.id,
-        label: p.label,
+        label:
+          p.id === PLUGINS_MANAGER_PANEL_ID
+            ? i18n._({ id: 'editor.sidebar.sideMenu.addPlugin', message: 'Add plugin' })
+            : p.label,
+        section: p.section,
         mobileDefaultSnap: 0.5,
         mobileIcon: p.icon,
         icon: p.icon,
@@ -1965,8 +1992,18 @@ function EditorContent({
                           </div>
                         </div>
                       ) : (
-                        <div className="pointer-events-auto">
-                          <ActionMenu placement={actionMenuPlacement} />
+                        // Centred on the whole pane, under a docked tool panel's
+                        // reserved foot: it stays put as the panel opens and closes.
+                        <div
+                          className="pointer-events-none absolute inset-y-0 right-0"
+                          style={{
+                            left: 'calc(-1 * var(--scene-region-inset, 0px))',
+                            transform: 'translateZ(0)',
+                          }}
+                        >
+                          <div className="pointer-events-auto">
+                            <ActionMenu placement={actionMenuPlacement} />
+                          </div>
                         </div>
                       ))}
                     {sceneOverlay}
@@ -1999,6 +2036,9 @@ function EditorContent({
               }
               renderTabContent={renderTabContent}
               sidebarOverlay={sidebarOverlay}
+              columnTabId={columnTabId}
+              reserveBottomMenu={!dockMenuOnTop}
+              sideMenuFooter={sideMenuFooter}
               sidebarTabs={tabBarTabs}
               stageOverlay={stageOverlay}
               viewBar={viewBar}

@@ -43,6 +43,8 @@ export function ProjectPage({ projectId }: { projectId: string }) {
 | `viewBar`             | Each pane's view bar (v2, default `true`). Turn it off for a host that shows one fixed view.                                                                                                                                                                                                     |
 | `sceneOverlay`        | Chrome over the 3D and 2D panes with the level selector and tool dock, hidden while no scene view is on screen.                                                                                                                                                                                  |
 | `stageOverlay`        | A full-bleed surface over the whole stage; the scene stays mounted underneath. To show something beside the scene, register a view instead.                                                                                                                                                      |
+| `columnTabId`         | One of `sidebarTabs` shown on a desktop as its own column beside the side menu (v2), e.g. a chat. Tool panels then open over the left of the stage, with a close button and Escape, and leave that column on screen. On a phone it stays one of the tabs.                                        |
+| `sideMenuFooter`      | Pinned under the v2 side menu's entries on a desktop, e.g. a list of recent chats. A tab's `section` groups the menu's entries under a heading; a plugin's panel is listed under Plugins.                                                                                                        |
 
 ## Theme
 

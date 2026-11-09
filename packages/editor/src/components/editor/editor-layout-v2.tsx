@@ -1,10 +1,14 @@
 'use client'
 
-import { type ReactNode, useCallback, useEffect, useRef } from 'react'
+import { usePascalI18n } from '@pascal-app/core'
+import { useViewer } from '@pascal-app/viewer'
+import { X } from 'lucide-react'
+import { type CSSProperties, type ReactNode, useCallback, useEffect, useRef } from 'react'
 import { useIsMobile } from '../../hooks/use-mobile'
 import {
   openSidebarPanel,
   SIDEBAR_MIN_WIDTH,
+  setColumnPanelId,
   setSidebarTabIds,
   showSidebarPanel,
   useShownSidebarPanel,
@@ -12,47 +16,60 @@ import {
 import useEditor from '../../store/use-editor'
 
 import { useSidebarStore } from '../ui/primitives/sidebar'
-import { IconRail, type SidebarTab } from '../ui/sidebar/tab-bar'
+import { type SidebarTab, SideMenu } from '../ui/sidebar/tab-bar'
 import { EditorLayoutMobile } from './editor-layout-mobile'
 import { useSceneSpan } from './views/scene-region'
 import { ViewBarRow } from './views/view-bar'
 
 const SIDEBAR_MAX_WIDTH = 800
-const SIDEBAR_COLLAPSE_THRESHOLD = 220
-// Match the rail's `w-14` and `w-40` in <IconRail>; the resize math is relative to them.
-const RAIL_WIDTH = 56
-const RAIL_WIDTH_EXPANDED = 160
+const CHAT_MIN_WIDTH = 320
+const CHAT_MAX_WIDTH = 600
+// A docked tool panel never takes more than this share of the stage.
+const DOCK_MAX_SHARE = '45%'
+const DOCK_MARGIN = 8
+// Under a docked tool panel: room for the tool menu along the stage's foot.
+const DOCK_BOTTOM_MENU_CLEARANCE = 88
 
-// ── Left column: resizable panel with tab bar ────────────────────────────────
+/** Follow the pointer from a resize handle until it is let go. */
+function startResize(onMove: (clientX: number) => void, onEnd?: () => void) {
+  document.body.style.cursor = 'col-resize'
+  document.body.style.userSelect = 'none'
+  const move = (event: PointerEvent) => onMove(event.clientX)
+  const up = () => {
+    document.body.style.cursor = ''
+    document.body.style.userSelect = ''
+    window.removeEventListener('pointermove', move)
+    window.removeEventListener('pointerup', up)
+    onEnd?.()
+  }
+  window.addEventListener('pointermove', move)
+  window.addEventListener('pointerup', up)
+}
 
-function LeftColumn({
+// ── Side menu: every tool by name ────────────────────────────────────────────
+
+function MenuColumn({
   tabs,
-  renderTabContent,
-  sidebarOverlay,
+  footer,
+  dockClosed,
 }: {
   tabs: SidebarTab[]
-  renderTabContent: (tabId: string) => ReactNode
-  sidebarOverlay?: ReactNode
+  footer?: ReactNode
+  dockClosed: boolean
 }) {
-  const width = useSidebarStore((s) => s.width)
   const isCollapsed = useSidebarStore((s) => s.isCollapsed)
   const setIsCollapsed = useSidebarStore((s) => s.setIsCollapsed)
-  const setWidth = useSidebarStore((s) => s.setWidth)
-  const isDragging = useSidebarStore((s) => s.isDragging)
-  const setIsDragging = useSidebarStore((s) => s.setIsDragging)
   const activePanel = useShownSidebarPanel(tabs)
   const setActivePanel = useEditor((s) => s.setActiveSidebarPanel)
 
-  const isResizing = useRef(false)
-
-  // Publish the rail's tabs so keyboard shortcuts (B, P) can open a panel.
+  // Publish the menu's tabs so keyboard shortcuts (B, P) can open a panel.
   useEffect(() => {
     setSidebarTabIds(tabs.map((tab) => tab.id))
     return () => setSidebarTabIds([])
   }, [tabs])
 
   // A stage entry whose surface has left the stage (its view closed from the
-  // view bar) hands the rail back to the panel that was open before it.
+  // view bar) hands the menu back to the panel that was open before it.
   const lastPanelTab = useRef<string | null>(null)
   const activeTab = tabs.find((t) => t.id === activePanel)
   if (activeTab && !activeTab.noPanel) lastPanelTab.current = activeTab.id
@@ -72,7 +89,7 @@ function LeftColumn({
   }, [activePanel])
 
   // Paint mode entered without the panel (command palette, a material's "paint
-  // with") brings the host's Paint panel along, so the rail reflects the mode.
+  // with") brings the host's Paint panel along, so the menu reflects the mode.
   useEffect(
     () =>
       useEditor.subscribe((state, prev) => {
@@ -83,7 +100,7 @@ function LeftColumn({
     [],
   )
 
-  // Closing (collapsing) the sidebar disarms any build tool back to select
+  // Closing the tool panel disarms any build tool back to select
   useEffect(() => {
     if (!isCollapsed) return
     const { mode, setMode } = useEditor.getState()
@@ -92,30 +109,19 @@ function LeftColumn({
     }
   }, [isCollapsed])
 
-  const handleResizerDown = useCallback(
-    (e: React.PointerEvent) => {
-      e.preventDefault()
-      isResizing.current = true
-      setIsDragging(true)
-      document.body.style.cursor = 'col-resize'
-      document.body.style.userSelect = 'none'
-    },
-    [setIsDragging],
-  )
-
-  // Rail click: reopen a collapsed panel (at a usable width), collapse when
-  // re-clicking the open tab, otherwise switch tabs.
-  const handleRailClick = useCallback(
+  // Menu click: open a closed panel (at a usable width), close it when
+  // re-clicking the open entry, otherwise switch panels.
+  const handleTabClick = useCallback(
     (id: string) => {
       const tab = tabs.find((t) => t.id === id)
       if (id !== activePanel) tabs.find((t) => t.id === activePanel)?.onDeselect?.()
       tab?.onSelect?.()
-      // noPanel tabs drive the stage, not the panel — leave collapse state alone.
+      // noPanel entries drive the stage, not the panel — leave its state alone.
       if (tab?.noPanel) {
         setActivePanel(id)
         return
       }
-      if (isCollapsed) {
+      if (dockClosed) {
         showSidebarPanel(id)
         return
       }
@@ -125,71 +131,184 @@ function LeftColumn({
       }
       setActivePanel(id)
     },
-    [tabs, isCollapsed, activePanel, setIsCollapsed, setActivePanel],
+    [tabs, dockClosed, activePanel, setIsCollapsed, setActivePanel],
   )
 
+  return (
+    <SideMenu
+      activeTab={activePanel}
+      collapsed={dockClosed}
+      footer={footer}
+      onTabClick={handleTabClick}
+      tabs={tabs}
+    />
+  )
+}
+
+// ── Chat column: the host's column tab, always beside the menu ───────────────
+
+function ChatColumn({
+  tabId,
+  children,
+  overlay,
+}: {
+  tabId: string
+  children: ReactNode
+  overlay?: ReactNode
+}) {
+  const width = useSidebarStore((s) => s.chatWidth)
+  const setWidth = useSidebarStore((s) => s.setChatWidth)
+  const columnRef = useRef<HTMLDivElement>(null)
+
+  // While the column is on screen, showing its tab leaves the tool panel be.
   useEffect(() => {
-    const handlePointerMove = (e: PointerEvent) => {
-      if (!isResizing.current) return
-      // The rail occupies the left edge; the panel starts after it.
-      const railWidth = useSidebarStore.getState().railExpanded ? RAIL_WIDTH_EXPANDED : RAIL_WIDTH
-      const newWidth = e.clientX - railWidth
-      if (newWidth < SIDEBAR_COLLAPSE_THRESHOLD) {
-        setIsCollapsed(true)
-      } else {
-        setIsCollapsed(false)
-        setWidth(Math.max(SIDEBAR_MIN_WIDTH, Math.min(newWidth, SIDEBAR_MAX_WIDTH)))
-      }
-    }
-    const handlePointerUp = () => {
-      isResizing.current = false
-      setIsDragging(false)
-      document.body.style.cursor = ''
-      document.body.style.userSelect = ''
-    }
-    window.addEventListener('pointermove', handlePointerMove)
-    window.addEventListener('pointerup', handlePointerUp)
-    return () => {
-      window.removeEventListener('pointermove', handlePointerMove)
-      window.removeEventListener('pointerup', handlePointerUp)
-    }
-  }, [setWidth, setIsCollapsed, setIsDragging])
+    setColumnPanelId(tabId)
+    return () => setColumnPanelId(null)
+  }, [tabId])
+
+  const handleResizerDown = useCallback(
+    (e: React.PointerEvent) => {
+      e.preventDefault()
+      const left = columnRef.current?.getBoundingClientRect().left ?? 0
+      startResize((x) => setWidth(Math.max(CHAT_MIN_WIDTH, Math.min(x - left, CHAT_MAX_WIDTH))))
+    },
+    [setWidth],
+  )
 
   return (
-    <div className="relative z-10 flex h-full flex-shrink-0 bg-sidebar text-sidebar-foreground">
-      <IconRail
-        activeTab={activePanel}
-        collapsed={isCollapsed}
-        onIconClick={handleRailClick}
-        tabs={tabs}
+    <div
+      className="relative flex h-full shrink-0 flex-col border-border/50 border-r"
+      data-surface="chat-column"
+      ref={columnRef}
+      style={{ width }}
+    >
+      <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
+        {children}
+        {overlay && <div className="absolute inset-0 z-50">{overlay}</div>}
+      </div>
+      <div
+        className="absolute inset-y-0 -right-1.5 z-[100] w-3 cursor-col-resize"
+        onPointerDown={handleResizerDown}
       />
-      {!isCollapsed && !tabs.find((t) => t.id === activePanel)?.noPanel && (
-        <div
-          className="relative flex h-full flex-col"
-          style={{
-            width,
-            transition: isDragging ? 'none' : 'width 150ms ease',
-          }}
-        >
-          <div className="relative flex flex-1 flex-col overflow-hidden">
-            {renderTabContent(activePanel)}
-            {sidebarOverlay && <div className="absolute inset-0 z-50">{sidebarOverlay}</div>}
-          </div>
-
-          {/* Resize handle + hit area */}
-          <div
-            className="absolute inset-y-0 -right-3 z-[100] flex w-6 cursor-col-resize items-center justify-center"
-            onPointerDown={handleResizerDown}
-          >
-            <div className="h-8 w-1 rounded-full bg-neutral-500" />
-          </div>
-        </div>
-      )}
     </div>
   )
 }
 
-// ── Right column: viewer area with toolbar ───────────────────────────────────
+// ── Tool dock: the picked tool's panel, over the left of the stage ───────────
+
+function dockWidth(width: number): string {
+  return `clamp(${SIDEBAR_MIN_WIDTH}px, ${width}px, ${DOCK_MAX_SHARE})`
+}
+
+/** The menu entry whose panel is docked over the stage, if one is open. */
+function useDockedTab(tabs: SidebarTab[], dockClosed: boolean): SidebarTab | undefined {
+  const activePanel = useShownSidebarPanel(tabs)
+  const tab = tabs.find((t) => t.id === activePanel)
+  return dockClosed || !tab || tab.noPanel ? undefined : tab
+}
+
+function ToolDock({
+  tab,
+  renderTabContent,
+  overlay,
+  reserveBottomMenu,
+}: {
+  tab: SidebarTab
+  renderTabContent: (tabId: string) => ReactNode
+  overlay?: ReactNode
+  reserveBottomMenu: boolean
+}) {
+  const i18n = usePascalI18n()
+  const width = useSidebarStore((s) => s.width)
+  const setWidth = useSidebarStore((s) => s.setWidth)
+  const setIsCollapsed = useSidebarStore((s) => s.setIsCollapsed)
+  const isDragging = useSidebarStore((s) => s.isDragging)
+  const setIsDragging = useSidebarStore((s) => s.setIsDragging)
+  const dockRef = useRef<HTMLDivElement>(null)
+
+  // Esc closes the panel once there is nothing else for it to do: a tool in
+  // hand or a selection goes first (the editor's own Escape), dialogs and
+  // menus keep theirs, and typing keeps it unless the field is in the panel.
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || event.metaKey || event.ctrlKey || event.altKey) return
+      const target = event.target instanceof HTMLElement ? event.target : null
+      if (target?.closest('[role="dialog"],[role="menu"],[data-radix-popper-content-wrapper]')) {
+        return
+      }
+      const inDock = target !== null && dockRef.current?.contains(target) === true
+      if (!inDock) {
+        if (
+          target instanceof HTMLInputElement ||
+          target instanceof HTMLTextAreaElement ||
+          target?.isContentEditable
+        ) {
+          return
+        }
+        // Paint's brush is the panel's own mode: it closes with it.
+        const mode = useEditor.getState().mode
+        if (mode !== 'select' && mode !== 'material-paint') return
+        if (useViewer.getState().selection.selectedIds.length > 0) return
+      }
+      setIsCollapsed(true)
+    }
+    // Capture: decide on the state before the editor's Escape changes it.
+    window.addEventListener('keydown', onKeyDown, true)
+    return () => window.removeEventListener('keydown', onKeyDown, true)
+  }, [setIsCollapsed])
+
+  const handleResizerDown = useCallback(
+    (e: React.PointerEvent) => {
+      e.preventDefault()
+      const left = dockRef.current?.getBoundingClientRect().left ?? 0
+      setIsDragging(true)
+      startResize(
+        (x) => setWidth(Math.max(SIDEBAR_MIN_WIDTH, Math.min(x - left, SIDEBAR_MAX_WIDTH))),
+        () => setIsDragging(false),
+      )
+    },
+    [setWidth, setIsDragging],
+  )
+
+  const closeLabel = i18n._({ id: 'editor.sidebar.toolDock.close', message: 'Close panel' })
+  return (
+    <div
+      className="absolute z-40 flex flex-col overflow-hidden rounded-2xl border border-border/60 bg-sidebar text-sidebar-foreground shadow-2xl"
+      data-surface="tool-panel-dock"
+      ref={dockRef}
+      style={{
+        top: DOCK_MARGIN,
+        bottom: reserveBottomMenu ? DOCK_BOTTOM_MENU_CLEARANCE : DOCK_MARGIN,
+        left: DOCK_MARGIN,
+        width: dockWidth(width),
+        transition: isDragging ? 'none' : 'width 150ms ease',
+      }}
+    >
+      <div className="flex h-11 shrink-0 items-center gap-2 border-border/50 border-b pr-1.5 pl-4">
+        <p className="min-w-0 flex-1 truncate font-medium text-sm">{tab.label}</p>
+        <button
+          aria-label={closeLabel}
+          className="flex size-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-foreground"
+          onClick={() => setIsCollapsed(true)}
+          title={closeLabel}
+          type="button"
+        >
+          <X className="size-4" />
+        </button>
+      </div>
+      <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
+        {renderTabContent(tab.id)}
+        {overlay && <div className="absolute inset-0 z-50">{overlay}</div>}
+      </div>
+      <div
+        className="absolute inset-y-0 right-0 z-[100] w-2 cursor-col-resize"
+        onPointerDown={handleResizerDown}
+      />
+    </div>
+  )
+}
+
+// ── Work area: view tabs over the stage ──────────────────────────────────────
 
 /**
  * Host toolbars floating over the stage. The right one carries scene controls
@@ -230,6 +349,8 @@ function RightColumn({
   children,
   overlays,
   stageOverlay,
+  dock,
+  dockInset,
 }: {
   toolbarLeft?: ReactNode
   toolbarRight?: ReactNode
@@ -237,6 +358,8 @@ function RightColumn({
   children: ReactNode
   overlays?: ReactNode
   stageOverlay?: ReactNode
+  dock?: ReactNode
+  dockInset?: string
 }) {
   return (
     <div className="relative flex min-w-0 flex-1 flex-col overflow-hidden">
@@ -245,11 +368,14 @@ function RightColumn({
       {viewBar && <ViewBarRow leading={toolbarLeft} />}
       <div
         className="relative flex min-h-0 flex-1 flex-col overflow-hidden"
-        style={{
-          borderTopLeftRadius: 16,
-          clipPath: 'inset(0 0 0 0 round 16px 0 0 0)',
-          boxShadow: '-4px -2px 16px rgba(0, 0, 0, 0.08), -1px 0 4px rgba(0, 0, 0, 0.04)',
-        }}
+        style={
+          {
+            borderTopLeftRadius: 16,
+            clipPath: 'inset(0 0 0 0 round 16px 0 0 0)',
+            boxShadow: '-4px -2px 16px rgba(0, 0, 0, 0.08), -1px 0 4px rgba(0, 0, 0, 0.04)',
+            '--tool-dock-inset': dockInset,
+          } as CSSProperties
+        }
       >
         {((!viewBar && toolbarLeft) || toolbarRight) && (
           <StageToolbar
@@ -281,6 +407,7 @@ function RightColumn({
             {overlays}
           </div>
         )}
+        {dock}
       </div>
     </div>
   )
@@ -291,6 +418,12 @@ function RightColumn({
 export interface EditorLayoutV2Props {
   navbarSlot?: ReactNode
   sidebarTabs?: SidebarTab[]
+  /** The tab shown as its own column beside the side menu (desktop). */
+  columnTabId?: string
+  /** Pinned at the bottom of the side menu (desktop). */
+  sideMenuFooter?: ReactNode
+  /** The tool menu runs along the stage's foot: a docked tool panel stops above it. */
+  reserveBottomMenu?: boolean
   renderTabContent: (tabId: string) => ReactNode
   sidebarOverlay?: ReactNode
   viewerToolbarLeft?: ReactNode
@@ -305,6 +438,9 @@ export interface EditorLayoutV2Props {
 export function EditorLayoutV2({
   navbarSlot,
   sidebarTabs = [],
+  columnTabId,
+  sideMenuFooter,
+  reserveBottomMenu = false,
   renderTabContent,
   sidebarOverlay,
   viewerToolbarLeft,
@@ -316,6 +452,21 @@ export function EditorLayoutV2({
 }: EditorLayoutV2Props) {
   const isCaptureMode = useEditor((s) => s.isCaptureMode)
   const isMobile = useIsMobile()
+  const columnTab = sidebarTabs.find((t) => t.id === columnTabId)
+  const menuTabs = columnTab ? sidebarTabs.filter((t) => t !== columnTab) : sidebarTabs
+  const showSideColumns = !(isMobile || isCaptureMode) && menuTabs.length > 0
+  // On a phone the column tab is one more sheet, so it stays a pickable tab.
+  const isCollapsed = useSidebarStore((s) => s.isCollapsed)
+  // The column tab picked before its column was there to take it (a host
+  // asking for the chat as the page opens): the chat shows, no tool panel.
+  const columnPicked = useEditor(
+    (s) =>
+      columnTab !== undefined &&
+      (s.sidebarPanels[s.workspaceMode] ?? s.activeSidebarPanel) === columnTab.id,
+  )
+  const dockClosed = isCollapsed || (!isMobile && columnPicked)
+  const dockedTab = useDockedTab(isMobile ? sidebarTabs : menuTabs, dockClosed)
+  const width = useSidebarStore((s) => s.width)
 
   if (isMobile) {
     return (
@@ -333,21 +484,34 @@ export function EditorLayoutV2({
     )
   }
 
+  const dock = showSideColumns && dockedTab ? dockedTab : undefined
   return (
     <div className="flex h-full w-full flex-col bg-sidebar text-foreground">
       {/* Top navbar */}
       {navbarSlot}
 
-      {/* Main content: left column + right column */}
+      {/* Main content: side menu, chat column, work area */}
       <div className="flex min-h-0 flex-1">
-        {!isCaptureMode && sidebarTabs.length > 0 && (
-          <LeftColumn
-            renderTabContent={renderTabContent}
-            sidebarOverlay={sidebarOverlay}
-            tabs={sidebarTabs}
-          />
+        {showSideColumns && (
+          <MenuColumn dockClosed={dockClosed} footer={sideMenuFooter} tabs={menuTabs} />
+        )}
+        {showSideColumns && columnTab && (
+          <ChatColumn overlay={sidebarOverlay} tabId={columnTab.id}>
+            {renderTabContent(columnTab.id)}
+          </ChatColumn>
         )}
         <RightColumn
+          dock={
+            dock && (
+              <ToolDock
+                overlay={sidebarOverlay}
+                renderTabContent={renderTabContent}
+                reserveBottomMenu={reserveBottomMenu}
+                tab={dock}
+              />
+            )
+          }
+          dockInset={dock ? `calc(${dockWidth(width)} + ${DOCK_MARGIN}px)` : undefined}
           overlays={overlays}
           stageOverlay={stageOverlay}
           toolbarLeft={isCaptureMode ? undefined : viewerToolbarLeft}
