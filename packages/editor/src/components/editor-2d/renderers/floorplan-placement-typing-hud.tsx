@@ -6,12 +6,15 @@ import { useFloorplanRender, useFloorplanSceneRotation } from '../floorplan-rend
 
 const HUD_WIDTH_PX = 236
 const HUD_HEIGHT_PX = 64
+const HUD_LIFT_PX = 14
 
 /**
  * The typed-entry HUD placed in the plan at `x`/`y` (level-local metres).
  * HTML inside a `foreignObject` is laid out in CSS pixels equal to SVG user
  * units, and the plan's `<g>` is zoomed and rotated, so the box is scaled by
- * `unitsPerPixel` and counter-rotated to stay screen-sized and upright.
+ * `unitsPerPixel` and counter-rotated to stay screen-sized and upright. It sits
+ * just above its anchor, and only the HUD itself takes the pointer, so clicks
+ * on the ghost or the draft under it still land on the plan.
  */
 export function FloorplanPlacementTypingHud({
   placeholders,
@@ -32,19 +35,20 @@ export function FloorplanPlacementTypingHud({
       <foreignObject
         height={HUD_HEIGHT_PX * scale}
         overflow="visible"
-        pointerEvents="auto"
+        pointerEvents="none"
         style={{ overflow: 'visible' }}
         width={HUD_WIDTH_PX * scale}
         x={(-HUD_WIDTH_PX / 2) * scale}
-        y={(-HUD_HEIGHT_PX / 2) * scale}
+        y={-(HUD_HEIGHT_PX + HUD_LIFT_PX) * scale}
       >
         <div
           style={{
-            alignItems: 'center',
+            alignItems: 'flex-end',
             display: 'flex',
             height: HUD_HEIGHT_PX,
             justifyContent: 'center',
             overflow: 'visible',
+            pointerEvents: 'none',
             transform: `scale(${scale})`,
             transformOrigin: 'top left',
             width: HUD_WIDTH_PX,
