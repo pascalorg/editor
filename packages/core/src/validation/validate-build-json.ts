@@ -435,6 +435,7 @@ export function validateBuildJson(input: unknown): ValidateBuildJsonResult {
         wall,
         storeyHeight,
         0,
+        storeyHeight,
         chord > 1e-9 ? Math.max(0, Math.min(1, s / chord)) : 0,
       )
     const wallHeight = Math.min(

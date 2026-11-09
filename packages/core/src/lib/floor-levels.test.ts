@@ -68,7 +68,7 @@ test('D1/D2/D3/D5: raising floors retains the base, complete wall bodies and fix
   expect(support.elevation).toBe(0.05)
   expect(support.faceDatum.a[0]!.elevation).toBe(0.55)
   expect(support.faceBottom.a[0]!.elevation).toBe(0.05)
-  expect(resolveWallTop({ ...wall, height: 2.5 }, 3, support.elevation, 0)).toBe(2.55)
+  expect(resolveWallTop({ ...wall, height: 2.5 }, 3, support.elevation)).toBe(2.55)
   const part = computePlateSurfacePartition(
     base,
     plateLevelContext(s.nodes[s.level.id]!, (id) => s.nodes[id]),

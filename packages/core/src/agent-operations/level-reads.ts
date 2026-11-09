@@ -34,7 +34,7 @@ function ofType<T extends AnyNode['type']>(content: readonly AnyNode[], type: T)
  */
 export function wallResolvedHeight(nodes: SceneNodes, wall: WallNode): number {
   const levelId = levelIdOf(nodes, wall.id)
-  if (!levelId) return resolveWallEffectiveHeight(wall, DEFAULT_LEVEL_HEIGHT, 0, 0)
+  if (!levelId) return resolveWallEffectiveHeight(wall, DEFAULT_LEVEL_HEIGHT, 0)
   const onLevel = nodesOnLevel(nodes, levelId)
   const support = computeWallSlabSupport(
     wall,

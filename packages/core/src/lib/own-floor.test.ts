@@ -402,7 +402,6 @@ test('reattaching after a height edit preserves implicit wall tops with explicit
         wall,
         getWallPlaneTop(wall, wall.parentId!, nodes),
         wallSupportForNodes(wall, nodes).elevation,
-        0,
       )
     expect(top(next, joined)).toBeCloseTo(top(old, raised))
   }
@@ -486,7 +485,6 @@ test('conversion preserves explicit wall tops as their plate support changes', a
       nodes[wall.id] as typeof wall,
       3,
       wallSupportForNodes(nodes[wall.id] as typeof wall, nodes).elevation,
-      0,
     )
   const detached = toggle(before, id, true)
   expect(top(detached)).toBeCloseTo(top(before))

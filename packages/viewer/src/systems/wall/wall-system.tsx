@@ -1627,13 +1627,7 @@ export function generateExtrudedWall(
   const levelId = resolveLevelId(wallNode, sceneNodes as Record<string, AnyNode>)
   const level = sceneNodes[levelId]
   const authoredStoreyHeight = level?.type === 'level' ? (level.height ?? null) : null
-  const topElevation = resolveWallTop(
-    wallNode,
-    storeyHeight,
-    slabElevation,
-    0,
-    authoredStoreyHeight,
-  )
+  const topElevation = resolveWallTop(wallNode, storeyHeight, slabElevation, authoredStoreyHeight)
   const effectiveWallHeight = topElevation - slabElevation
   const faceDatum = faceBase
   if (faceBase)

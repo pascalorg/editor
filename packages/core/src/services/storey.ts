@@ -544,8 +544,8 @@ export function getWallTop(
     wall,
     getWallPlaneTop(wall, levelId, nodes),
     electedBase,
-    t,
     authoredStoreyHeight,
+    t,
   )
 }
 

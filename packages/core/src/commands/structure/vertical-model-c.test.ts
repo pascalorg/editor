@@ -130,8 +130,8 @@ test('supported thickness holds the underside, lifts its storey and descendants,
   const newSupport = wallSupportForNodes(after[upperWall.id] as WallNode, after).elevation
   expect(newSupport - oldSupport).toBeCloseTo(0.25)
   expect(
-    resolveWallTop(after[upperWall.id] as WallNode, 3, newSupport, 0) -
-      resolveWallTop(authoredWall, 3, oldSupport, 0),
+    resolveWallTop(after[upperWall.id] as WallNode, 3, newSupport) -
+      resolveWallTop(authoredWall, 3, oldSupport),
   ).toBeCloseTo(0.25)
   expect(getLevelElevations(after).get('level_model_c_2')!.baseY).toBeCloseTo(
     getLevelElevations(before).get('level_model_c_2')!.baseY + 0.25,

@@ -16,8 +16,8 @@ test('raised room has a 0.6 inner face and a grounded outer face without changin
     })
     expect(support.elevation).toBe(0.6)
     expect(support.baseSegments).toEqual([{ start: 0, end: 1, elevation: 0.6 }])
-    expect(resolveWallTop(wall, 3, support.elevation, 0)).toBe(3)
-    expect(resolveWallTop({ ...wall, height: 2.5 }, 3, support.elevation, 0)).toBe(3.1)
+    expect(resolveWallTop(wall, 3, support.elevation)).toBe(3)
+    expect(resolveWallTop({ ...wall, height: 2.5 }, 3, support.elevation)).toBe(3.1)
   }
 })
 
@@ -98,7 +98,7 @@ test('setZoneIntent raises the reconciled floor without moving wall tops or exte
       expect(support.elevation).toBe(0.05)
       expect(support.faceDatum.a).toEqual([{ start: 0, end: 1, elevation: 0.6 }])
       expect(support.faceDatum.b).toEqual([{ start: 0, end: 1, elevation: 0.05 }])
-      expect(resolveWallTop(wall, 3, support.elevation, 0)).toBe(3)
+      expect(resolveWallTop(wall, 3, support.elevation)).toBe(3)
     }
     for (const node of Object.values(before))
       if (node.type === 'ceiling') expect(after[node.id]).toEqual(node)

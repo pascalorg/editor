@@ -179,7 +179,7 @@ describe('legacy corpus loads as the editor drew it', () => {
             slabs as never,
             walls as never,
           ).elevation
-          const top = resolveWallTop(wall as never, plane, base, 0)
+          const top = resolveWallTop(wall as never, plane, base)
           // Never above the storey it belongs to (it would cut the floor or
           // roof above), and moved only by the snap onto the storey plane.
           expect(top).toBeLessThanOrEqual(plane + 1e-9)

@@ -50,15 +50,15 @@ export function wallFollowsStorey(
  * Other explicit walls stand on their elected support; ground-hosted walls
  * always retain their authored body height.
  *
- * Returns the top in level-local Y (same frame as `electedBase`) at normalized position
- * `t` along the wall ($t = 0$ is start, $t = 1$ is end).
+ * Returns the top in level-local Y (same frame as `electedBase`) at chord fraction `t`
+ * ($t = 0$ is the start, $t = 1$ the end); a sloped top differs along the wall.
  */
 export function resolveWallTop(
   wall: Pick<WallNode, 'height' | 'supportSlabId' | 'wallType' | 'endHeightOffset'>,
   storeyHeight: number,
   electedBase: number,
-  t: number,
   authoredStoreyHeight: number | null = storeyHeight,
+  t = 0,
 ): number {
   // Only a railing reaches the fallback with no height of its own.
   const top = wallFollowsStorey(wall, authoredStoreyHeight)
@@ -86,8 +86,8 @@ export function resolveWallEffectiveHeight(
   wall: Pick<WallNode, 'height' | 'supportSlabId' | 'wallType' | 'endHeightOffset'>,
   storeyHeight: number,
   electedBase: number,
-  t: number,
   authoredStoreyHeight: number | null = storeyHeight,
+  t = 0,
 ): number {
-  return resolveWallTop(wall, storeyHeight, electedBase, t, authoredStoreyHeight) - electedBase
+  return resolveWallTop(wall, storeyHeight, electedBase, authoredStoreyHeight, t) - electedBase
 }

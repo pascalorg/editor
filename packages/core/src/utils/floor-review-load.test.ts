@@ -45,7 +45,6 @@ for (const id of ['scene-26', 'scene-07', 'scene-17', 'scene-24', 'scene-06']) {
           wall,
           getWallPlaneTop(wall, wall.parentId!, first),
           wallSupportForNodes(wall, first).elevation,
-          0,
         ),
       ).toBeCloseTo(2.5)
     }
@@ -67,7 +66,6 @@ for (const id of ['scene-26', 'scene-07', 'scene-17', 'scene-24', 'scene-06']) {
           wall,
           getWallPlaneTop(wall, wall.parentId!, first),
           wallSupportForNodes(wall, first).elevation,
-          0,
         ),
       ).toBeCloseTo(4.49)
     }
