@@ -2,7 +2,6 @@
 
 import { usePlacementTyping } from '../../../store/use-placement-typing'
 import { PlacementCoordinateInput } from '../../tools/shared/placement-coordinate-input'
-import { useFloorplanRender, useFloorplanSceneRotation } from '../floorplan-render-context'
 
 const HUD_WIDTH_PX = 236
 const HUD_HEIGHT_PX = 64
@@ -12,22 +11,27 @@ const HUD_LIFT_PX = 14
  * The typed-entry HUD placed in the plan at `x`/`y` (level-local metres).
  * HTML inside a `foreignObject` is laid out in CSS pixels equal to SVG user
  * units, and the plan's `<g>` is zoomed and rotated, so the box is scaled by
- * `unitsPerPixel` and counter-rotated to stay screen-sized and upright. It sits
+ * `unitsPerPixel` and counter-rotated to stay screen-sized and upright. Both
+ * come from the caller: the wall draft renders outside `FloorplanRenderProvider`.
+ * It sits
  * just above its anchor, and only the HUD itself takes the pointer, so clicks
  * on the ghost or the draft under it still land on the plan.
  */
 export function FloorplanPlacementTypingHud({
   placeholders,
+  sceneRotationDeg,
+  unitsPerPixel,
   x,
   y,
 }: {
   placeholders?: readonly string[]
+  sceneRotationDeg: number
+  unitsPerPixel: number
   x: number
   y: number
 }) {
   const isActive = usePlacementTyping((state) => state.isActive)
-  const sceneRotationDeg = useFloorplanSceneRotation()
-  const scale = Math.max(useFloorplanRender()?.unitsPerPixel ?? 1, 1e-6)
+  const scale = Math.max(unitsPerPixel, 1e-6)
   if (!isActive) return null
 
   return (

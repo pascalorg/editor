@@ -4848,6 +4848,8 @@ function FloorplanLinearDraftLayer({
             draftWallMeasurement?.lengthLabel ?? '',
             wallDraftEnd ? formatWallDraftHeading(wallDraftStart, wallDraftEnd) : '',
           ]}
+          sceneRotationDeg={sceneRotationDeg}
+          unitsPerPixel={unitsPerPixel}
           x={(draftWallMeasurement?.midpoint ?? wallDraftStart)[0]}
           y={(draftWallMeasurement?.midpoint ?? wallDraftStart)[1]}
         />

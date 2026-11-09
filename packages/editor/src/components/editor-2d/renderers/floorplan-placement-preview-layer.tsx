@@ -145,6 +145,7 @@ export const FloorplanPlacementPreviewLayer = memo(function FloorplanPlacementPr
   const unit = useViewer((s) => s.unit)
   const metricNotation = useViewer((s) => s.metricNotation)
   const sceneRotationDeg = useFloorplanSceneRotation()
+  const unitsPerPixel = useFloorplanRender()?.unitsPerPixel ?? 1
   if (!node) return null
 
   return (
@@ -152,6 +153,8 @@ export const FloorplanPlacementPreviewLayer = memo(function FloorplanPlacementPr
       <FloorplanNodePreview contextNodes={contextNodes} node={node} parentNode={parentNode} />
       {typingProjectedPosition ? (
         <FloorplanPlacementTypingHud
+          sceneRotationDeg={sceneRotationDeg}
+          unitsPerPixel={unitsPerPixel}
           x={typingProjectedPosition[0]}
           y={typingProjectedPosition[2]}
         />
