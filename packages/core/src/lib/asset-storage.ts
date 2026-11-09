@@ -10,9 +10,6 @@ const urlCache = new Map<string, string>()
 const nanoAssetId = customAlphabet('0123456789abcdefghijklmnopqrstuvwxyz', 16)
 
 /**
- * Save a file to IndexedDB and return a custom protocol URL
- */
-/**
  * Stored shape for assets. Raw bytes go through the portable structured-clone
  * path, which every IndexedDB implementation supports; File/Blob records do
  * not (WebKit has rejected them). The content type is kept so the object URL
