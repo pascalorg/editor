@@ -233,21 +233,6 @@ function planOpeningMove(
       { id: node.id, wallId: wall.id, wallLength: length, width: cutout.width },
     )
   const rawX = desiredLocalX(wall, node, target)
-  if (node.type === 'door') {
-    const wallHeight =
-      wallOpeningCeilingOver(
-        wall,
-        nodes as Record<AnyNodeId, AnyNode>,
-        rawX - cutoutOffsetX - cutout.width / 2,
-        rawX - cutoutOffsetX + cutout.width / 2,
-      ) - (wall.wallType === 'curtain' ? getCurtainWallConfig(wall).perimeterWidth : 0)
-    if (cutout.height > wallHeight + 1e-6)
-      refuse(
-        'wall_too_low',
-        `Wall ${wall.id} is ${wallHeight.toFixed(2)} m high, too low for this ${cutout.height.toFixed(2)} m door.`,
-        { id: node.id, wallId: wall.id, wallHeight, height: cutout.height },
-      )
-  }
   const rawY =
     node.type === 'door'
       ? node.height / 2
@@ -273,6 +258,22 @@ function planOpeningMove(
           nodes as Record<AnyNodeId, AnyNode>,
         )
   if (!fits) refuseOpeningAboveSlope(wall, nodes, node.type, node.width, node.height)
+  // Checked where the clamp put the door: under a sloped top it may have slid to the high end.
+  if (node.type === 'door') {
+    const wallHeight =
+      wallOpeningCeilingOver(
+        wall,
+        nodes as Record<AnyNodeId, AnyNode>,
+        clampedX - cutoutOffsetX - cutout.width / 2,
+        clampedX - cutoutOffsetX + cutout.width / 2,
+      ) - (wall.wallType === 'curtain' ? getCurtainWallConfig(wall).perimeterWidth : 0)
+    if (cutout.height > wallHeight + 1e-6)
+      refuse(
+        'wall_too_low',
+        `Wall ${wall.id} is ${wallHeight.toFixed(2)} m high, too low for this ${cutout.height.toFixed(2)} m door.`,
+        { id: node.id, wallId: wall.id, wallHeight, height: cutout.height },
+      )
+  }
   overlapRefusal(
     nodes,
     wall,

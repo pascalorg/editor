@@ -491,21 +491,6 @@ export function planWallOpening(nodes: Nodes, input: WallOpeningInput) {
     )
 
   const rawX = along * wallLength
-  if (kind === 'door') {
-    const wallHeight =
-      wallOpeningCeilingOver(
-        wall,
-        nodes as Record<AnyNodeId, AnyNode>,
-        rawX - size.width / 2,
-        rawX + size.width / 2,
-      ) - openingMargin(wall)
-    if (size.height > wallHeight + TOUCHING)
-      refuse(
-        'wall_too_low',
-        `Wall ${wallId} is ${metres(wallHeight)} high, too low for a ${metres(size.height)} door.`,
-        { wallId, wallHeight, height: size.height },
-      )
-  }
 
   // A window with no sill given is centred on its wall, taller than the wall or not: the clamp
   // below stands one that is too tall on the floor and reports it clamped. A door stands on the
@@ -542,6 +527,22 @@ export function planWallOpening(nodes: Nodes, input: WallOpeningInput) {
         nodes as Record<AnyNodeId, AnyNode>,
       )
   if (!fits) refuseOpeningAboveSlope(wall, nodes, kind, size.width, size.height)
+  // Checked where the clamp put the door: under a sloped top it may have slid to the high end.
+  if (kind === 'door') {
+    const wallHeight =
+      wallOpeningCeilingOver(
+        wall,
+        nodes as Record<AnyNodeId, AnyNode>,
+        clampedX - size.width / 2,
+        clampedX + size.width / 2,
+      ) - openingMargin(wall)
+    if (size.height > wallHeight + TOUCHING)
+      refuse(
+        'wall_too_low',
+        `Wall ${wallId} is ${metres(wallHeight)} high, too low for a ${metres(size.height)} door.`,
+        { wallId, wallHeight, height: size.height },
+      )
+  }
 
   if (!input.force) {
     const blocking = findWallChildOverlap(

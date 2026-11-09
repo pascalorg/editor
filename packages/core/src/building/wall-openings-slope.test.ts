@@ -138,6 +138,25 @@ describe('agents refuse an opening no stretch of a sloped wall can take', () => 
     expect(refusal(() => planWallOpening(scene({}).nodes as never, tall))).toBeNull()
   })
 
+  test('a door asked for at the low end of a rising wall slides to where it fits', () => {
+    // 1 m at the start rising to 3 m: a 2.1 m door clears from 2.2 m on, centre 2.65 m.
+    const rising = { height: 1, endHeightOffset: 2 }
+    const request = { kind: 'door', wallId: 'wall_slope', t: 0.1, width: 0.9, height: 2.1 } as const
+    const planned = planWallOpening(scene(rising).nodes as never, request)
+    expect(planned.clamped).toBe(true)
+    expect(planned.localX).toBeCloseTo(2.65, 4)
+    expect(
+      refusal(() => planWallOpening(scene(rising).nodes as never, { ...request, height: 3.2 })),
+    ).toBe('wall_too_low')
+    expect(refusal(() => planWallOpening(scene({ height: 2 }).nodes as never, request))).toBe(
+      'wall_too_low',
+    )
+
+    const low = DoorNode.parse({ ...door, position: [0.6, 1.05, 0], height: 2.1 })
+    expect(refusal(() => move(withOpening(rising, low), 'door_slope'))).toBeNull()
+    expect(refusal(() => move(withOpening({ height: 2 }, low), 'door_slope'))).toBe('wall_too_low')
+  })
+
   test('moving a window or a door', () => {
     expect(refusal(() => move(withOpening(sloped, window(2.4)), 'window_slope'))).toBe(
       'wall_too_low',
