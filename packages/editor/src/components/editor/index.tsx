@@ -671,12 +671,15 @@ function ViewerCanvasControlsHint({
     <div
       className={cn(
         'pointer-events-none absolute z-40 w-max max-w-[calc(100%-2rem-var(--tool-dock-inset,0px))] -translate-x-1/2',
-        !belowTopMenu && 'top-14',
       )}
-      // Centred on what a docked tool panel leaves of the stage.
+      // Centred on what a docked tool panel leaves of the stage. With a panel docked, the level
+      // selector moves beside it into the hint's row, so the hint drops below it (any inset > 0
+      // clamps to the extra 2rem).
       style={{
         left: 'calc(50% + var(--tool-dock-inset, 0px) / 2)',
-        ...(belowTopMenu ? { top: TOP_MENU_CLEARANCE } : {}),
+        top: belowTopMenu
+          ? TOP_MENU_CLEARANCE
+          : 'calc(3.5rem + clamp(0px, var(--tool-dock-inset, 0px) * 1000, 2rem))',
       }}
     >
       <section
