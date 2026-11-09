@@ -1,5 +1,11 @@
 'use client'
-import { type AnyNodeId, type PipeSegmentNode, useScene } from '@pascal-app/core'
+import {
+  type AnyNodeId,
+  formatFixed,
+  type PipeSegmentNode,
+  usePascalI18n,
+  useScene,
+} from '@pascal-app/core'
 import { useState } from 'react'
 import RunHangerInspector from '../shared/run-hanger-inspector'
 import { editPipeGrade, type PipeGradeInput } from './grade-operation'
@@ -18,6 +24,7 @@ export default function PipeGradeInspector({ node }: { node: PipeSegmentNode }) 
   )
 }
 function GradeForm({ node }: { node: PipeSegmentNode }) {
+  const i18n = usePascalI18n()
   const initial = pipeGrade(node.path[0]!, node.path[1]!) ?? 0
   const [grade, setGrade] = useState(Math.abs(initial) * 100)
   const [flow, setFlow] = useState<'forward' | 'reverse'>(initial < 0 ? 'reverse' : 'forward')
@@ -44,24 +51,45 @@ function GradeForm({ node }: { node: PipeSegmentNode }) {
   }
   return (
     <section className="space-y-2 border-t pt-3 text-xs">
-      <h3 className="text-sm font-medium">Grade and flow</h3>
+      <h3 className="text-sm font-medium">
+        {i18n._({ id: 'node.pipeSegment.gradeInspector.gradeAndFlow', message: 'Grade and flow' })}
+      </h3>
       <p>
-        Centerline elevations above level: start {node.path[0]![1].toFixed(3)} m · end{' '}
-        {node.path.at(-1)![1].toFixed(3)} m
+        {i18n._({
+          id: 'node.pipeSegment.gradeInspector.centerlineElevations',
+          message: 'Centerline elevations above level: start {start} m · end {end} m',
+          values: {
+            start: formatFixed(node.path[0]![1], 3, i18n.getLocale()),
+            end: formatFixed(node.path.at(-1)![1], 3, i18n.getLocale()),
+          },
+        })}
       </p>
       {node.path.slice(1).map((point, index) => (
         <p key={`${index}:${point.join(',')}`}>
-          Leg {index + 1}: {pipeGradeLabel(node.path[index]!, point)}
+          {i18n._({
+            id: 'node.pipeSegment.gradeInspector.leg',
+            message: 'Leg {number}: {grade}',
+            values: {
+              number: String(index + 1),
+              grade: pipeGradeLabel(node.path[index]!, point),
+            },
+          })}
         </p>
       ))}
       <p className="text-muted-foreground">
-        Arrows show downhill direction. Level runs have no gravity fall. Editing a path point
-        preserves each leg’s grade.
+        {i18n._({
+          id: 'node.pipeSegment.gradeInspector.arrowsShowDownhillDirectionLevelRuns',
+          message:
+            'Arrows show downhill direction. Level runs have no gravity fall. Editing a path point preserves each leg’s grade.',
+        })}
       </p>
       <label className="flex justify-between">
-        Grade (%)
+        {i18n._({ id: 'node.pipeSegment.gradeInspector.grade', message: 'Grade (%)' })}
         <input
-          aria-label="Pipe grade percent"
+          aria-label={i18n._({
+            id: 'node.pipeSegment.gradeInspector.pipeGradePercent',
+            message: 'Pipe grade percent',
+          })}
           type="number"
           min={0}
           step={0.1}
@@ -71,16 +99,26 @@ function GradeForm({ node }: { node: PipeSegmentNode }) {
         />
       </label>
       <select
-        aria-label="Pipe downhill flow"
+        aria-label={i18n._({
+          id: 'node.pipeSegment.gradeInspector.pipeDownhillFlow',
+          message: 'Pipe downhill flow',
+        })}
         className="w-full border bg-background p-1"
         value={flow}
         onChange={(event) => setFlow(event.target.value as typeof flow)}
       >
-        <option value="forward">Start → end</option>
-        <option value="reverse">End → start</option>
+        <option value="forward">
+          {i18n._({ id: 'node.pipeSegment.gradeInspector.startEnd', message: 'Start → end' })}
+        </option>
+        <option value="reverse">
+          {i18n._({ id: 'node.pipeSegment.gradeInspector.endStart', message: 'End → start' })}
+        </option>
       </select>
       <select
-        aria-label="Fixed pipe endpoint"
+        aria-label={i18n._({
+          id: 'node.pipeSegment.gradeInspector.fixedPipeEndpoint',
+          message: 'Fixed pipe endpoint',
+        })}
         className="w-full border bg-background p-1"
         value={anchor}
         onChange={(event) => {
@@ -89,20 +127,44 @@ function GradeForm({ node }: { node: PipeSegmentNode }) {
           setElevation(next === 'start' ? node.path[0]![1] : node.path.at(-1)![1])
         }}
       >
-        <option value="start">Keep start elevation</option>
-        <option value="end">Keep end elevation</option>
+        <option value="start">
+          {i18n._({
+            id: 'node.pipeSegment.gradeInspector.keepStartElevation',
+            message: 'Keep start elevation',
+          })}
+        </option>
+        <option value="end">
+          {i18n._({
+            id: 'node.pipeSegment.gradeInspector.keepEndElevation',
+            message: 'Keep end elevation',
+          })}
+        </option>
       </select>
       <button
         type="button"
         className="w-full rounded border p-1"
         onClick={() => apply({ gradePercent: grade, flow })}
       >
-        Apply grade to horizontal legs
+        {i18n._({
+          id: 'node.pipeSegment.gradeInspector.applyGradeToHorizontalLegs',
+          message: 'Apply grade to horizontal legs',
+        })}
       </button>
       <label className="flex justify-between">
-        {anchor === 'start' ? 'Start' : 'End'} elevation (m)
+        {anchor === 'start'
+          ? i18n._({
+              id: 'node.pipeSegment.gradeInspector.startElevation',
+              message: 'Start elevation (m)',
+            })
+          : i18n._({
+              id: 'node.pipeSegment.gradeInspector.endElevation',
+              message: 'End elevation (m)',
+            })}
         <input
-          aria-label="Pipe anchor elevation"
+          aria-label={i18n._({
+            id: 'node.pipeSegment.gradeInspector.pipeAnchorElevation',
+            message: 'Pipe anchor elevation',
+          })}
           type="number"
           step={0.01}
           value={Number.isFinite(elevation) ? elevation : ''}
@@ -115,7 +177,10 @@ function GradeForm({ node }: { node: PipeSegmentNode }) {
         className="w-full rounded border p-1"
         onClick={() => apply({ action: 'elevation', elevation })}
       >
-        Move elevation, keep grades
+        {i18n._({
+          id: 'node.pipeSegment.gradeInspector.moveElevationKeepGrades',
+          message: 'Move elevation, keep grades',
+        })}
       </button>
       {message && <p role="status">{message}</p>}
     </section>

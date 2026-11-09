@@ -3,6 +3,7 @@
 import {
   type AnyNodeId,
   emitter,
+  formatFixed,
   type GridEvent,
   sceneRegistry,
   usePascalI18n,
@@ -1389,7 +1390,11 @@ export function DistributionRunCursor({
             <DimensionPill parts={parts} primary={primary} unit={unit} />
             {start && routingMode === 'vertical' ? (
               <div className="rounded-full border border-border/60 bg-background/90 px-3 py-1 text-xs shadow-sm">
-                Target elevation: {cursor[1].toFixed(2)} m · click or Enter to place
+                {i18n._({
+                  id: 'editor.tools.distribution.distributionRunTool.targetElevation',
+                  message: 'Target elevation: {elevation} m · click or Enter to place',
+                  values: { elevation: formatFixed(cursor[1], 2, i18n.getLocale()) },
+                })}
               </div>
             ) : start ? (
               <label className="rounded-full border border-border/60 bg-background/90 px-3 py-1 text-[11px] tabular-nums text-muted-foreground shadow-sm backdrop-blur">

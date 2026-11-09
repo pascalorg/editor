@@ -7032,6 +7032,10 @@ msgid "editor.tools.distribution.distributionRunTool.tabDirection"
 msgstr "Tab: direction"
 
 #: packages/editor/src/components/tools/distribution/distribution-run-tool.tsx
+msgid "editor.tools.distribution.distributionRunTool.targetElevation"
+msgstr "Target elevation: {elevation} m · click or Enter to place"
+
+#: packages/editor/src/components/tools/distribution/distribution-run-tool.tsx
 msgid "editor.tools.distribution.distributionRunTool.typeALength"
 msgstr "type a length"
 
@@ -9871,6 +9875,138 @@ msgstr "R/T rotate"
 msgid "node.ductSegment.description"
 msgstr "HVAC duct run — polyline of round, rect, or flat-oval sections."
 
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+msgid "node.ductSegment.editInspector.applyOffset"
+msgstr "Apply offset"
+
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+msgid "node.ductSegment.editInspector.applyResize"
+msgstr "Apply resize"
+
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+msgid "node.ductSegment.editInspector.branchStopsAtJunctionsSizeChanges"
+msgstr "Branch stops at junctions, size changes and equipment. Boundary collars stay fixed."
+
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+msgid "node.ductSegment.editInspector.connectedSameSizeBranch"
+msgstr "Connected same-size branch"
+
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+msgid "node.ductSegment.editInspector.diameter"
+msgstr "Diameter (in)"
+
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+msgid "node.ductSegment.editInspector.ductEdit"
+msgstr "Duct edit"
+
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+msgid "node.ductSegment.editInspector.ductShape"
+msgstr "Duct shape"
+
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+msgid "node.ductSegment.editInspector.editDuctRoute"
+msgstr "Edit duct route"
+
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+msgid "node.ductSegment.editInspector.faceAlignmentAppliesToFreeStraight"
+msgstr "Face alignment applies to free straight runs. Left and right follow the run’s section axes."
+
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+msgid "node.ductSegment.editInspector.firstBend"
+msgstr "First bend from start (m)"
+
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+msgid "node.ductSegment.editInspector.height"
+msgstr "Height (in)"
+
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+msgid "node.ductSegment.editInspector.keepBottomFace"
+msgstr "Keep bottom face"
+
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+msgid "node.ductSegment.editInspector.keepCenterline"
+msgstr "Keep centerline"
+
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+msgid "node.ductSegment.editInspector.keepLeftFace"
+msgstr "Keep left face"
+
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+msgid "node.ductSegment.editInspector.keepRightFace"
+msgstr "Keep right face"
+
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+msgid "node.ductSegment.editInspector.keepTopFace"
+msgstr "Keep top face"
+
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+msgid "node.ductSegment.editInspector.lastBend"
+msgstr "Last bend from start (m)"
+
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+msgid "node.ductSegment.editInspector.offsetAroundObstacle"
+msgstr "Offset around obstacle"
+
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+msgid "node.ductSegment.editInspector.offsetSideElevationPreview"
+msgstr "Offset side elevation preview"
+
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+msgid "node.ductSegment.editInspector.oval"
+msgstr "Oval"
+
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+msgid "node.ductSegment.editInspector.partsSummary"
+msgstr "{affected, plural, one {# existing part affected} other {# existing parts affected}} · {created, plural, one {# new part} other {# new parts}}"
+
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+msgid "node.ductSegment.editInspector.positiveMovesUpNegativeMovesDown"
+msgstr "Positive moves up; negative moves down. Four elbows preserve both endpoints. Check the obstacle’s clearance; this does not detect collisions."
+
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+msgid "node.ductSegment.editInspector.preserveDuctAlignment"
+msgstr "Preserve duct alignment"
+
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+msgid "node.ductSegment.editInspector.rectangular"
+msgstr "Rectangular"
+
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+msgid "node.ductSegment.editInspector.resizeScope"
+msgstr "Resize scope"
+
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+msgid "node.ductSegment.editInspector.resizeWithConnections"
+msgstr "Resize with connections"
+
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+msgid "node.ductSegment.editInspector.round"
+msgstr "Round"
+
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+msgid "node.ductSegment.editInspector.sideElevationDashedLineIsThe"
+msgstr "Side elevation · dashed line is the original route"
+
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+msgid "node.ductSegment.editInspector.thisSegment"
+msgstr "This segment"
+
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+msgid "node.ductSegment.editInspector.unableToApplyEdit"
+msgstr "Unable to apply edit."
+
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+msgid "node.ductSegment.editInspector.unableToPlanEdit"
+msgstr "Unable to plan this edit."
+
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+msgid "node.ductSegment.editInspector.verticalOffset"
+msgstr "Vertical offset (m)"
+
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+msgid "node.ductSegment.editInspector.width"
+msgstr "Width (in)"
+
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "node.ductSegment.label"
 msgstr "Duct"
@@ -10689,11 +10825,187 @@ msgstr "R/T rotate"
 
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "node.pipeSegment.description"
-msgstr "Drain / waste / vent pipe run — draw level or toggle a ¼″ per foot fall with S."
+msgstr "Drain / waste / vent pipe run — draw level or choose grade and downhill direction."
+
+#: packages/nodes/src/pipe-segment/grade-inspector.tsx
+msgid "node.pipeSegment.gradeInspector.applyGradeToHorizontalLegs"
+msgstr "Apply grade to horizontal legs"
+
+#: packages/nodes/src/pipe-segment/grade-inspector.tsx
+msgid "node.pipeSegment.gradeInspector.arrowsShowDownhillDirectionLevelRuns"
+msgstr "Arrows show downhill direction. Level runs have no gravity fall. Editing a path point preserves each leg’s grade."
+
+#: packages/nodes/src/pipe-segment/grade-inspector.tsx
+msgid "node.pipeSegment.gradeInspector.centerlineElevations"
+msgstr "Centerline elevations above level: start {start} m · end {end} m"
+
+#: packages/nodes/src/pipe-segment/grade-inspector.tsx
+msgid "node.pipeSegment.gradeInspector.endElevation"
+msgstr "End elevation (m)"
+
+#: packages/nodes/src/pipe-segment/grade-inspector.tsx
+msgid "node.pipeSegment.gradeInspector.endStart"
+msgstr "End → start"
+
+#: packages/nodes/src/pipe-segment/grade-inspector.tsx
+msgid "node.pipeSegment.gradeInspector.fixedPipeEndpoint"
+msgstr "Fixed pipe endpoint"
+
+#: packages/nodes/src/pipe-segment/grade-inspector.tsx
+msgid "node.pipeSegment.gradeInspector.grade"
+msgstr "Grade (%)"
+
+#: packages/nodes/src/pipe-segment/grade-inspector.tsx
+msgid "node.pipeSegment.gradeInspector.gradeAndFlow"
+msgstr "Grade and flow"
+
+#: packages/nodes/src/pipe-segment/grade-inspector.tsx
+msgid "node.pipeSegment.gradeInspector.keepEndElevation"
+msgstr "Keep end elevation"
+
+#: packages/nodes/src/pipe-segment/grade-inspector.tsx
+msgid "node.pipeSegment.gradeInspector.keepStartElevation"
+msgstr "Keep start elevation"
+
+#: packages/nodes/src/pipe-segment/grade-inspector.tsx
+msgid "node.pipeSegment.gradeInspector.leg"
+msgstr "Leg {number}: {grade}"
+
+#: packages/nodes/src/pipe-segment/grade-inspector.tsx
+msgid "node.pipeSegment.gradeInspector.moveElevationKeepGrades"
+msgstr "Move elevation, keep grades"
+
+#: packages/nodes/src/pipe-segment/grade-inspector.tsx
+msgid "node.pipeSegment.gradeInspector.pipeAnchorElevation"
+msgstr "Pipe anchor elevation"
+
+#: packages/nodes/src/pipe-segment/grade-inspector.tsx
+msgid "node.pipeSegment.gradeInspector.pipeDownhillFlow"
+msgstr "Pipe downhill flow"
+
+#: packages/nodes/src/pipe-segment/grade-inspector.tsx
+msgid "node.pipeSegment.gradeInspector.pipeGradePercent"
+msgstr "Pipe grade percent"
+
+#: packages/nodes/src/pipe-segment/grade-inspector.tsx
+msgid "node.pipeSegment.gradeInspector.startElevation"
+msgstr "Start elevation (m)"
+
+#: packages/nodes/src/pipe-segment/grade-inspector.tsx
+msgid "node.pipeSegment.gradeInspector.startEnd"
+msgstr "Start → end"
 
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "node.pipeSegment.label"
 msgstr "DWV Pipe"
+
+#: packages/nodes/src/pipe-segment/move-tool.tsx
+msgid "node.pipeSegment.moveTool.connectedGradeBlocked"
+msgstr "This move would change a connected pipe’s grade. Choose another position or press Esc to cancel."
+
+#: packages/nodes/src/pipe-segment/offset-inspector.tsx
+msgid "node.pipeSegment.offsetInspector.applyPipeOffset"
+msgstr "Apply pipe offset"
+
+#: packages/nodes/src/pipe-segment/offset-inspector.tsx
+msgid "node.pipeSegment.offsetInspector.checkObstacleClearanceThePreviewDoes"
+msgstr "Check obstacle clearance. The preview does not detect collisions."
+
+#: packages/nodes/src/pipe-segment/offset-inspector.tsx
+msgid "node.pipeSegment.offsetInspector.chooseTheFirstAndLastBend"
+msgstr "Choose the first and last bend by horizontal distance from the start. Positive offset goes up; negative goes down. Each connector uses the offset height in horizontal travel."
+
+#: packages/nodes/src/pipe-segment/offset-inspector.tsx
+msgid "node.pipeSegment.offsetInspector.firstBend"
+msgstr "First bend (m)"
+
+#: packages/nodes/src/pipe-segment/offset-inspector.tsx
+msgid "node.pipeSegment.offsetInspector.lastBend"
+msgstr "Last bend (m)"
+
+#: packages/nodes/src/pipe-segment/offset-inspector.tsx
+msgid "node.pipeSegment.offsetInspector.offsetAppliedInOneUndoStep"
+msgstr "Offset applied in one undo step. End connections stayed fixed."
+
+#: packages/nodes/src/pipe-segment/offset-inspector.tsx
+msgid "node.pipeSegment.offsetInspector.offsetAroundObstacle"
+msgstr "Offset around obstacle"
+
+#: packages/nodes/src/pipe-segment/offset-inspector.tsx
+msgid "node.pipeSegment.offsetInspector.pipeOffsetSideProfilePreview"
+msgstr "Pipe offset side profile preview"
+
+#: packages/nodes/src/pipe-segment/offset-inspector.tsx
+msgid "node.pipeSegment.offsetInspector.sideProfileSchematicFourBendsFive"
+msgstr "Side profile (schematic). Four bends · five pipe sections. Parallel sections keep the original grade; both end connections stay fixed."
+
+#: packages/nodes/src/pipe-segment/offset-inspector.tsx
+msgid "node.pipeSegment.offsetInspector.thisOffsetIncludesAnUphillWaste"
+msgstr "This offset includes an uphill waste section. It does not provide continuous downhill drainage."
+
+#: packages/nodes/src/pipe-segment/offset-inspector.tsx
+msgid "node.pipeSegment.offsetInspector.unableToApplyOffset"
+msgstr "Unable to apply offset."
+
+#: packages/nodes/src/pipe-segment/offset-inspector.tsx
+msgid "node.pipeSegment.offsetInspector.unableToPlanOffset"
+msgstr "Unable to plan offset."
+
+#: packages/nodes/src/pipe-segment/offset-inspector.tsx
+msgid "node.pipeSegment.offsetInspector.verticalOffset"
+msgstr "Vertical offset (m)"
+
+#: packages/nodes/src/pipe-segment/resize-inspector.tsx
+msgid "node.pipeSegment.resizeInspector.applyPipeSize"
+msgstr "Apply pipe size"
+
+#: packages/nodes/src/pipe-segment/resize-inspector.tsx
+msgid "node.pipeSegment.resizeInspector.branchesStopAtJunctionsSizeOr"
+msgstr "Branches stop at junctions, size or material changes, and fixture connections. Reducers keep boundary collars fixed."
+
+#: packages/nodes/src/pipe-segment/resize-inspector.tsx
+msgid "node.pipeSegment.resizeInspector.checkResize"
+msgstr "Check resize"
+
+#: packages/nodes/src/pipe-segment/resize-inspector.tsx
+msgid "node.pipeSegment.resizeInspector.connectedBranch"
+msgstr "Connected branch"
+
+#: packages/nodes/src/pipe-segment/resize-inspector.tsx
+msgid "node.pipeSegment.resizeInspector.currentDiameter"
+msgstr "Current diameter: {diameter} in"
+
+#: packages/nodes/src/pipe-segment/resize-inspector.tsx
+msgid "node.pipeSegment.resizeInspector.diameterIn"
+msgstr "Diameter (in)"
+
+#: packages/nodes/src/pipe-segment/resize-inspector.tsx
+msgid "node.pipeSegment.resizeInspector.pipeResizeDiameter"
+msgstr "Pipe resize diameter"
+
+#: packages/nodes/src/pipe-segment/resize-inspector.tsx
+msgid "node.pipeSegment.resizeInspector.pipeResizeScope"
+msgstr "Pipe resize scope"
+
+#: packages/nodes/src/pipe-segment/resize-inspector.tsx
+msgid "node.pipeSegment.resizeInspector.pipeSize"
+msgstr "Pipe size"
+
+#: packages/nodes/src/pipe-segment/resize-inspector.tsx
+msgid "node.pipeSegment.resizeInspector.resized"
+msgstr "Resized in one undo step. Grades and boundary connections preserved."
+
+#: packages/nodes/src/pipe-segment/resize-inspector.tsx
+msgid "node.pipeSegment.resizeInspector.resizeSummary"
+msgstr "{runs, plural, one {# run} other {# runs}}, {fittings, plural, one {# fitting} other {# fittings}}, {reducers, plural, one {# new reducer} other {# new reducers}}. Grades stay unchanged."
+
+#: packages/nodes/src/pipe-segment/resize-inspector.tsx
+msgid "node.pipeSegment.resizeInspector.thisSegment"
+msgstr "This segment"
+
+#: packages/nodes/src/pipe-segment/resize-inspector.tsx
+msgid "node.pipeSegment.resizeInspector.unableToResize"
+msgstr "Unable to resize pipe."
 
 #: packages/nodes/src/i18n/definition-messages.ts
 msgid "node.pipeTrap.description"
@@ -11662,6 +11974,18 @@ msgstr "{spacing} o.c."
 msgid "node.shared.buildUpControls.woodPlank"
 msgstr "Wood plank"
 
+#: packages/nodes/src/shared/connection-feedback.tsx
+msgid "node.shared.connectionFeedback.routePreview"
+msgstr "Route preview"
+
+#: packages/nodes/src/shared/duct-collar-inspector.tsx
+msgid "node.shared.ductCollarInspector.collarButton"
+msgstr "{system, select, return {Return} other {Supply}} · {size} in · {state, select, connected {Connected} other {Draw from collar}}"
+
+#: packages/nodes/src/shared/duct-collar-inspector.tsx
+msgid "node.shared.ductCollarInspector.connectDuct"
+msgstr "Connect duct"
+
 #: packages/nodes/src/shared/item-interaction-actions.tsx
 msgid "node.shared.itemInteractionActions.turnLightOff"
 msgstr "Turn light off"
@@ -11681,6 +12005,14 @@ msgstr "Width"
 #: packages/nodes/src/shared/opening-depth-position.tsx
 msgid "node.shared.openingDepthPosition.depthPosition"
 msgstr "Depth position"
+
+#: packages/nodes/src/shared/pipe-collar-inspector.tsx
+msgid "node.shared.pipeCollarInspector.collarButton"
+msgstr "{port} · {diameter} in · {elevation} m · {state, select, connected {Connected} other {Draw from collar}}"
+
+#: packages/nodes/src/shared/pipe-collar-inspector.tsx
+msgid "node.shared.pipeCollarInspector.connectPipe"
+msgstr "Connect pipe"
 
 #: packages/nodes/src/shared/run-hanger-inspector.tsx
 msgid "node.shared.runHangerInspector.automaticSupport"

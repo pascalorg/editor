@@ -1,6 +1,6 @@
 'use client'
 
-import { type AnyNodeId, type DuctSegmentNode, useScene } from '@pascal-app/core'
+import { type AnyNodeId, type DuctSegmentNode, usePascalI18n, useScene } from '@pascal-app/core'
 import { useMemo, useState } from 'react'
 import RunHangerInspector from '../shared/run-hanger-inspector'
 import { type DuctEditInput, editDuct } from './edit-operation'
@@ -18,6 +18,7 @@ export default function DuctEditInspector({ node }: { node: DuctSegmentNode }) {
 }
 
 function DuctEditForm({ node }: { node: DuctSegmentNode }) {
+  const i18n = usePascalI18n()
   const nodes = useScene((state) => state.nodes)
   const [input, setInput] = useState<DuctEditInput>({
     nodeId: node.id,
@@ -39,10 +40,16 @@ function DuctEditForm({ node }: { node: DuctSegmentNode }) {
     } catch (error) {
       return {
         outcome: null,
-        error: error instanceof Error ? error.message : 'Unable to plan this edit.',
+        error:
+          error instanceof Error
+            ? error.message
+            : i18n._({
+                id: 'node.ductSegment.editInspector.unableToPlanEdit',
+                message: 'Unable to plan this edit.',
+              }),
       }
     }
-  }, [nodes, input, node.parentId])
+  }, [nodes, input, node.parentId, i18n])
   const update = (patch: Partial<DuctEditInput>) => {
     setInput((previous) => ({ ...previous, ...patch }))
     setNotice('')
@@ -90,75 +97,174 @@ function DuctEditForm({ node }: { node: DuctSegmentNode }) {
   }
   return (
     <section className="space-y-2 border-t pt-3 text-xs">
-      <h3 className="text-sm font-medium">Edit duct route</h3>
+      <h3 className="text-sm font-medium">
+        {i18n._({ id: 'node.ductSegment.editInspector.editDuctRoute', message: 'Edit duct route' })}
+      </h3>
       <select
-        aria-label="Duct edit"
+        aria-label={i18n._({ id: 'node.ductSegment.editInspector.ductEdit', message: 'Duct edit' })}
         className="w-full rounded border bg-background p-1"
         value={input.action}
         onChange={(event) => update({ action: event.target.value as DuctEditInput['action'] })}
       >
-        <option value="resize">Resize with connections</option>
-        <option value="offset">Offset around obstacle</option>
+        <option value="resize">
+          {i18n._({
+            id: 'node.ductSegment.editInspector.resizeWithConnections',
+            message: 'Resize with connections',
+          })}
+        </option>
+        <option value="offset">
+          {i18n._({
+            id: 'node.ductSegment.editInspector.offsetAroundObstacle',
+            message: 'Offset around obstacle',
+          })}
+        </option>
       </select>
       {input.action === 'resize' ? (
         <>
           <select
-            aria-label="Resize scope"
+            aria-label={i18n._({
+              id: 'node.ductSegment.editInspector.resizeScope',
+              message: 'Resize scope',
+            })}
             className="w-full rounded border bg-background p-1"
             value={input.scope}
             onChange={(event) => update({ scope: event.target.value as DuctEditInput['scope'] })}
           >
-            <option value="segment">This segment</option>
-            <option value="branch">Connected same-size branch</option>
+            <option value="segment">
+              {i18n._({
+                id: 'node.ductSegment.editInspector.thisSegment',
+                message: 'This segment',
+              })}
+            </option>
+            <option value="branch">
+              {i18n._({
+                id: 'node.ductSegment.editInspector.connectedSameSizeBranch',
+                message: 'Connected same-size branch',
+              })}
+            </option>
           </select>
           <p className="text-muted-foreground">
-            Branch stops at junctions, size changes and equipment. Boundary collars stay fixed.
+            {i18n._({
+              id: 'node.ductSegment.editInspector.branchStopsAtJunctionsSizeChanges',
+              message:
+                'Branch stops at junctions, size changes and equipment. Boundary collars stay fixed.',
+            })}
           </p>
           <select
-            aria-label="Duct shape"
+            aria-label={i18n._({
+              id: 'node.ductSegment.editInspector.ductShape',
+              message: 'Duct shape',
+            })}
             className="w-full rounded border bg-background p-1"
             value={input.shape}
             onChange={(event) => update({ shape: event.target.value as DuctEditInput['shape'] })}
           >
-            <option value="round">Round</option>
-            <option value="rect">Rectangular</option>
-            <option value="oval">Oval</option>
+            <option value="round">
+              {i18n._({ id: 'node.ductSegment.editInspector.round', message: 'Round' })}
+            </option>
+            <option value="rect">
+              {i18n._({ id: 'node.ductSegment.editInspector.rectangular', message: 'Rectangular' })}
+            </option>
+            <option value="oval">
+              {i18n._({ id: 'node.ductSegment.editInspector.oval', message: 'Oval' })}
+            </option>
           </select>
           {input.shape === 'round' ? (
-            numberField('diameter', 'Diameter (in)')
+            numberField(
+              'diameter',
+              i18n._({ id: 'node.ductSegment.editInspector.diameter', message: 'Diameter (in)' }),
+            )
           ) : (
             <>
-              {numberField('width', 'Width (in)')}
-              {numberField('height', 'Height (in)')}
+              {numberField(
+                'width',
+                i18n._({ id: 'node.ductSegment.editInspector.width', message: 'Width (in)' }),
+              )}
+              {numberField(
+                'height',
+                i18n._({ id: 'node.ductSegment.editInspector.height', message: 'Height (in)' }),
+              )}
             </>
           )}
           <select
-            aria-label="Preserve duct alignment"
+            aria-label={i18n._({
+              id: 'node.ductSegment.editInspector.preserveDuctAlignment',
+              message: 'Preserve duct alignment',
+            })}
             className="w-full rounded border bg-background p-1"
             value={input.alignment}
             onChange={(event) =>
               update({ alignment: event.target.value as DuctEditInput['alignment'] })
             }
           >
-            <option value="center">Keep centerline</option>
-            <option value="top">Keep top face</option>
-            <option value="bottom">Keep bottom face</option>
-            <option value="left">Keep left face</option>
-            <option value="right">Keep right face</option>
+            <option value="center">
+              {i18n._({
+                id: 'node.ductSegment.editInspector.keepCenterline',
+                message: 'Keep centerline',
+              })}
+            </option>
+            <option value="top">
+              {i18n._({
+                id: 'node.ductSegment.editInspector.keepTopFace',
+                message: 'Keep top face',
+              })}
+            </option>
+            <option value="bottom">
+              {i18n._({
+                id: 'node.ductSegment.editInspector.keepBottomFace',
+                message: 'Keep bottom face',
+              })}
+            </option>
+            <option value="left">
+              {i18n._({
+                id: 'node.ductSegment.editInspector.keepLeftFace',
+                message: 'Keep left face',
+              })}
+            </option>
+            <option value="right">
+              {i18n._({
+                id: 'node.ductSegment.editInspector.keepRightFace',
+                message: 'Keep right face',
+              })}
+            </option>
           </select>
           <p className="text-muted-foreground">
-            Face alignment applies to free straight runs. Left and right follow the run’s section
-            axes.
+            {i18n._({
+              id: 'node.ductSegment.editInspector.faceAlignmentAppliesToFreeStraight',
+              message:
+                'Face alignment applies to free straight runs. Left and right follow the run’s section axes.',
+            })}
           </p>
         </>
       ) : (
         <>
-          {numberField('from', 'First bend from start (m)')}
-          {numberField('to', 'Last bend from start (m)')}
-          {numberField('offset', 'Vertical offset (m)')}
+          {numberField(
+            'from',
+            i18n._({
+              id: 'node.ductSegment.editInspector.firstBend',
+              message: 'First bend from start (m)',
+            }),
+          )}
+          {numberField(
+            'to',
+            i18n._({
+              id: 'node.ductSegment.editInspector.lastBend',
+              message: 'Last bend from start (m)',
+            }),
+          )}
+          {numberField(
+            'offset',
+            i18n._({
+              id: 'node.ductSegment.editInspector.verticalOffset',
+              message: 'Vertical offset (m)',
+            }),
+          )}
           <p className="text-muted-foreground">
-            Positive moves up; negative moves down. Four elbows preserve both endpoints. Check the
-            obstacle’s clearance; this does not detect collisions.
+            {i18n._({
+              id: 'node.ductSegment.editInspector.positiveMovesUpNegativeMovesDown',
+              message:
+                'Positive moves up; negative moves down. Four elbows preserve both endpoints. Check the obstacle’s clearance; this does not detect collisions.',
+            })}
           </p>
         </>
       )}
@@ -167,10 +273,18 @@ function DuctEditForm({ node }: { node: DuctSegmentNode }) {
           <svg
             viewBox="0 0 260 116"
             role="img"
-            aria-label="Offset side elevation preview"
+            aria-label={i18n._({
+              id: 'node.ductSegment.editInspector.offsetSideElevationPreview',
+              message: 'Offset side elevation preview',
+            })}
             className="w-full"
           >
-            <title>Offset side elevation preview</title>
+            <title>
+              {i18n._({
+                id: 'node.ductSegment.editInspector.offsetSideElevationPreview',
+                message: 'Offset side elevation preview',
+              })}
+            </title>
             <polyline
               points={node.path.map(project).join(' ')}
               fill="none"
@@ -186,13 +300,24 @@ function DuctEditForm({ node }: { node: DuctSegmentNode }) {
             />
           </svg>
           <figcaption className="text-muted-foreground">
-            Side elevation · dashed line is the original route
+            {i18n._({
+              id: 'node.ductSegment.editInspector.sideElevationDashedLineIsThe',
+              message: 'Side elevation · dashed line is the original route',
+            })}
           </figcaption>
         </figure>
       )}
       <p role="status" className={preview.error ? 'text-amber-600' : 'text-muted-foreground'}>
         {preview.error ||
-          `${changes?.update?.length ?? 0} existing parts affected · ${changes?.create?.length ?? 0} new parts`}
+          i18n._({
+            id: 'node.ductSegment.editInspector.partsSummary',
+            message:
+              '{affected, plural, one {# existing part affected} other {# existing parts affected}} · {created, plural, one {# new part} other {# new parts}}',
+            values: {
+              affected: changes?.update?.length ?? 0,
+              created: changes?.create?.length ?? 0,
+            },
+          })}
       </p>
       <button
         type="button"
@@ -214,11 +339,20 @@ function DuctEditForm({ node }: { node: DuctSegmentNode }) {
               })
             setNotice(String(outcome.result.message))
           } catch (error) {
-            setNotice(error instanceof Error ? error.message : 'Unable to apply edit.')
+            setNotice(
+              error instanceof Error
+                ? error.message
+                : i18n._({
+                    id: 'node.ductSegment.editInspector.unableToApplyEdit',
+                    message: 'Unable to apply edit.',
+                  }),
+            )
           }
         }}
       >
-        Apply {input.action === 'resize' ? 'resize' : 'offset'}
+        {input.action === 'resize'
+          ? i18n._({ id: 'node.ductSegment.editInspector.applyResize', message: 'Apply resize' })
+          : i18n._({ id: 'node.ductSegment.editInspector.applyOffset', message: 'Apply offset' })}
       </button>
       {notice && <p role="status">{notice}</p>}
     </section>

@@ -1,11 +1,12 @@
 'use client'
 
-import { type AnyNode, nodeRegistry, useScene } from '@pascal-app/core'
+import { type AnyNode, nodeRegistry, usePascalI18n, useScene } from '@pascal-app/core'
 import { useEditor } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { Vector3 } from 'three'
 
 export default function DuctCollarInspector({ node }: { node: AnyNode }) {
+  const i18n = usePascalI18n()
   const nodes = useScene((state) => state.nodes)
   const ports = nodeRegistry.get(node.type)?.ports?.(node) ?? []
   const others = Object.values(nodes)
@@ -15,7 +16,9 @@ export default function DuctCollarInspector({ node }: { node: AnyNode }) {
   if (!airPorts.length) return null
   return (
     <section className="space-y-2 border-t pt-3">
-      <h3 className="text-sm font-medium">Connect duct</h3>
+      <h3 className="text-sm font-medium">
+        {i18n._({ id: 'node.shared.ductCollarInspector.connectDuct', message: 'Connect duct' })}
+      </h3>
       {airPorts.map((port) => {
         const occupied = others.some(
           (other) =>
@@ -55,8 +58,16 @@ export default function DuctCollarInspector({ node }: { node: AnyNode }) {
               editor.setTool('duct-segment')
             }}
           >
-            {port.system === 'return' ? 'Return' : 'Supply'} · {size} in ·{' '}
-            {occupied ? 'Connected' : 'Draw from collar'}
+            {i18n._({
+              id: 'node.shared.ductCollarInspector.collarButton',
+              message:
+                '{system, select, return {Return} other {Supply}} · {size} in · {state, select, connected {Connected} other {Draw from collar}}',
+              values: {
+                system: port.system === 'return' ? 'return' : 'supply',
+                size,
+                state: occupied ? 'connected' : 'open',
+              },
+            })}
           </button>
         )
       })}

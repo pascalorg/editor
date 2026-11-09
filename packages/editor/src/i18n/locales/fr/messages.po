@@ -17495,6 +17495,16 @@ msgstr "Longueur : {field} m"
 msgid "editor.tools.distribution.distributionRunTool.tabDirection"
 msgstr "Tab : direction"
 
+# English: "Target elevation: {elevation} m · click or Enter to place"
+# Source-Hash: adbe2d112b739871
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+#: packages/editor/src/components/tools/distribution/distribution-run-tool.tsx
+#, fuzzy
+msgid "editor.tools.distribution.distributionRunTool.targetElevation"
+msgstr "Altitude cible : {elevation} m · cliquez ou appuyez sur Entrée pour placer"
+
 # Source-Hash: abb1d8c8bfb41acf
 # Review: required
 # AI-Provider: claude-code
@@ -24589,6 +24599,336 @@ msgstr "R/T pivoter"
 msgid "node.ductSegment.description"
 msgstr "Réseau de gaines CVC — polyligne de sections rondes, rectangulaires ou oblongues."
 
+# English: "Apply offset"
+# Source-Hash: c63202c40d7fbac5
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+#, fuzzy
+msgid "node.ductSegment.editInspector.applyOffset"
+msgstr "Appliquer le décalage"
+
+# English: "Apply resize"
+# Source-Hash: 79cd694c04938730
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+#, fuzzy
+msgid "node.ductSegment.editInspector.applyResize"
+msgstr "Appliquer le redimensionnement"
+
+# English: "Branch stops at junctions, size changes and equipment. Boundary collars stay fixed."
+# Source-Hash: f97058f9f79a49f7
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+#, fuzzy
+msgid "node.ductSegment.editInspector.branchStopsAtJunctionsSizeChanges"
+msgstr "La branche s’arrête aux jonctions, aux changements de section et aux équipements. Les colliers en limite restent fixes."
+
+# English: "Connected same-size branch"
+# Source-Hash: e5f62ba5c4a2e770
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+#, fuzzy
+msgid "node.ductSegment.editInspector.connectedSameSizeBranch"
+msgstr "Branche raccordée de même section"
+
+# English: "Diameter (in)"
+# Source-Hash: e704515c0fe2a6ca
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+#, fuzzy
+msgid "node.ductSegment.editInspector.diameter"
+msgstr "Diamètre (in)"
+
+# English: "Duct edit"
+# Source-Hash: 3fba7da8f5ce8470
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+#, fuzzy
+msgid "node.ductSegment.editInspector.ductEdit"
+msgstr "Modification de gaine"
+
+# English: "Duct shape"
+# Source-Hash: 4c189ffbaf391531
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+#, fuzzy
+msgid "node.ductSegment.editInspector.ductShape"
+msgstr "Forme de la gaine"
+
+# English: "Edit duct route"
+# Source-Hash: 4196e9dba5038422
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+#, fuzzy
+msgid "node.ductSegment.editInspector.editDuctRoute"
+msgstr "Modifier le tracé de la gaine"
+
+# English: "Face alignment applies to free straight runs. Left and right follow the run’s section axes."
+# Source-Hash: e6ad8e30edf8b8dc
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+#, fuzzy
+msgid "node.ductSegment.editInspector.faceAlignmentAppliesToFreeStraight"
+msgstr "L’alignement sur une face s’applique aux tronçons droits libres. Gauche et droite suivent les axes de section du tronçon."
+
+# English: "First bend from start (m)"
+# Source-Hash: 98b9dbf56de61e41
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+#, fuzzy
+msgid "node.ductSegment.editInspector.firstBend"
+msgstr "Premier coude depuis le début (m)"
+
+# English: "Height (in)"
+# Source-Hash: 46dd5dd1bd2712fd
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+#, fuzzy
+msgid "node.ductSegment.editInspector.height"
+msgstr "Hauteur (in)"
+
+# English: "Keep bottom face"
+# Source-Hash: 13b1dec096cefeda
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+#, fuzzy
+msgid "node.ductSegment.editInspector.keepBottomFace"
+msgstr "Conserver la face inférieure"
+
+# English: "Keep centerline"
+# Source-Hash: 4d1bae9a034eef7b
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+#, fuzzy
+msgid "node.ductSegment.editInspector.keepCenterline"
+msgstr "Conserver l’axe"
+
+# English: "Keep left face"
+# Source-Hash: 66a2843e7ee53206
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+#, fuzzy
+msgid "node.ductSegment.editInspector.keepLeftFace"
+msgstr "Conserver la face gauche"
+
+# English: "Keep right face"
+# Source-Hash: 422d33d91000c6d5
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+#, fuzzy
+msgid "node.ductSegment.editInspector.keepRightFace"
+msgstr "Conserver la face droite"
+
+# English: "Keep top face"
+# Source-Hash: d68b946185860736
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+#, fuzzy
+msgid "node.ductSegment.editInspector.keepTopFace"
+msgstr "Conserver la face supérieure"
+
+# English: "Last bend from start (m)"
+# Source-Hash: 5faa81fe58b2e707
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+#, fuzzy
+msgid "node.ductSegment.editInspector.lastBend"
+msgstr "Dernier coude depuis le début (m)"
+
+# English: "Offset around obstacle"
+# Source-Hash: aac8ab5c8fe8dc80
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+#, fuzzy
+msgid "node.ductSegment.editInspector.offsetAroundObstacle"
+msgstr "Contourner un obstacle"
+
+# English: "Offset side elevation preview"
+# Source-Hash: 57fd5f8ee7415f5c
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+#, fuzzy
+msgid "node.ductSegment.editInspector.offsetSideElevationPreview"
+msgstr "Aperçu du décalage en élévation latérale"
+
+# English: "Oval"
+# Source-Hash: ed6d7b3dd9d5fc69
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+#, fuzzy
+msgid "node.ductSegment.editInspector.oval"
+msgstr "Ovale"
+
+# English: "{affected, plural, one {# existing part affected} other {# existing parts affected}} · {created, plural, one {# new part} other {# new parts}}"
+# Source-Hash: 4196843b0dd8f46c
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+#, fuzzy
+msgid "node.ductSegment.editInspector.partsSummary"
+msgstr "{affected, plural, one {# élément existant concerné} many {# éléments existants concernés} other {# éléments existants concernés}} · {created, plural, one {# nouvel élément} many {# nouveaux éléments} other {# nouveaux éléments}}"
+
+# English: "Positive moves up; negative moves down. Four elbows preserve both endpoints. Check the obstacle’s clearance; this does not detect collisions."
+# Source-Hash: d548731cb7cf5d27
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+#, fuzzy
+msgid "node.ductSegment.editInspector.positiveMovesUpNegativeMovesDown"
+msgstr "Une valeur positive monte ; une valeur négative descend. Quatre coudes conservent les deux extrémités. Vérifiez le dégagement autour de l’obstacle ; les collisions ne sont pas détectées."
+
+# English: "Preserve duct alignment"
+# Source-Hash: 3a046d5727f10a80
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+#, fuzzy
+msgid "node.ductSegment.editInspector.preserveDuctAlignment"
+msgstr "Alignement de gaine à conserver"
+
+# English: "Rectangular"
+# Source-Hash: f29fef1beeb25f22
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+#, fuzzy
+msgid "node.ductSegment.editInspector.rectangular"
+msgstr "Rectangulaire"
+
+# English: "Resize scope"
+# Source-Hash: e8be4487b05f939d
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+#, fuzzy
+msgid "node.ductSegment.editInspector.resizeScope"
+msgstr "Portée du redimensionnement"
+
+# English: "Resize with connections"
+# Source-Hash: c4b16733095ad12f
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+#, fuzzy
+msgid "node.ductSegment.editInspector.resizeWithConnections"
+msgstr "Redimensionner avec les raccordements"
+
+# English: "Round"
+# Source-Hash: ad0457800a1f0eb4
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+#, fuzzy
+msgid "node.ductSegment.editInspector.round"
+msgstr "Rond"
+
+# English: "Side elevation · dashed line is the original route"
+# Source-Hash: bf79b8c8e7a3ba17
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+#, fuzzy
+msgid "node.ductSegment.editInspector.sideElevationDashedLineIsThe"
+msgstr "Élévation latérale · la ligne pointillée montre le tracé d’origine"
+
+# English: "This segment"
+# Source-Hash: d271518d800f3e1c
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+#, fuzzy
+msgid "node.ductSegment.editInspector.thisSegment"
+msgstr "Ce tronçon"
+
+# English: "Unable to apply edit."
+# Source-Hash: 1bbbb491639e18e1
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+#, fuzzy
+msgid "node.ductSegment.editInspector.unableToApplyEdit"
+msgstr "Impossible d’appliquer la modification."
+
+# English: "Unable to plan this edit."
+# Source-Hash: 0283a6615312b133
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+#, fuzzy
+msgid "node.ductSegment.editInspector.unableToPlanEdit"
+msgstr "Impossible de préparer cette modification."
+
+# English: "Vertical offset (m)"
+# Source-Hash: 2dad926bc0e26f4a
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+#, fuzzy
+msgid "node.ductSegment.editInspector.verticalOffset"
+msgstr "Décalage vertical (m)"
+
+# English: "Width (in)"
+# Source-Hash: 087cae2b0e372680
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+#: packages/nodes/src/duct-segment/edit-inspector.tsx
+#, fuzzy
+msgid "node.ductSegment.editInspector.width"
+msgstr "Largeur (in)"
+
 # Source-Hash: e971d82044e2f48e
 # Review: required
 # AI-Provider: claude-code
@@ -26617,15 +26957,185 @@ msgstr "⌥ axe"
 msgid "node.pipeFitting.tool.rTRotate"
 msgstr "R/T pivoter"
 
-# Source-Hash: a0bb4762aa66fa3e
+# English: "Drain / waste / vent pipe run — draw level or choose grade and downhill direction."
+# Source-Hash: a2d9b4f249d256a2
 # Review: required
-# AI-Provider: claude-code
+# AI-Provider: cursor-agent
 # AI-Model: claude-opus-5-5
-# English: "Drain / waste / vent pipe run — draw level or toggle a ¼″ per foot fall with S."
 #: packages/nodes/src/i18n/definition-messages.ts
 #, fuzzy
 msgid "node.pipeSegment.description"
-msgstr "Canalisation d’évacuation et de ventilation — tracez à plat ou basculez une pente de ¼″ par pied avec S."
+msgstr "Canalisation d’évacuation et de ventilation — tracez à plat ou choisissez la pente et le sens d’écoulement."
+
+# English: "Apply grade to horizontal legs"
+# Source-Hash: 1107996c9987dc5a
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+#: packages/nodes/src/pipe-segment/grade-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.gradeInspector.applyGradeToHorizontalLegs"
+msgstr "Appliquer la pente aux tronçons horizontaux"
+
+# English: "Arrows show downhill direction. Level runs have no gravity fall. Editing a path point preserves each leg’s grade."
+# Source-Hash: 6348d1ecbab8e926
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+#: packages/nodes/src/pipe-segment/grade-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.gradeInspector.arrowsShowDownhillDirectionLevelRuns"
+msgstr "Les flèches indiquent le sens de la pente. Les tronçons à plat n’ont pas d’écoulement gravitaire. Modifier un point du tracé conserve la pente de chaque tronçon."
+
+# English: "Centerline elevations above level: start {start} m · end {end} m"
+# Source-Hash: 3c2d7360f5b0ec0f
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+#: packages/nodes/src/pipe-segment/grade-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.gradeInspector.centerlineElevations"
+msgstr "Altitudes de l’axe au-dessus du niveau : début {start} m · fin {end} m"
+
+# English: "End elevation (m)"
+# Source-Hash: 13a82ce00378a76a
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+#: packages/nodes/src/pipe-segment/grade-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.gradeInspector.endElevation"
+msgstr "Altitude de fin (m)"
+
+# English: "End → start"
+# Source-Hash: b9958602c0675e93
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+#: packages/nodes/src/pipe-segment/grade-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.gradeInspector.endStart"
+msgstr "Fin → début"
+
+# English: "Fixed pipe endpoint"
+# Source-Hash: eac5f522f23d244b
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+#: packages/nodes/src/pipe-segment/grade-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.gradeInspector.fixedPipeEndpoint"
+msgstr "Extrémité fixe du tuyau"
+
+# English: "Grade (%)"
+# Source-Hash: f3d8fa71962558e5
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+#: packages/nodes/src/pipe-segment/grade-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.gradeInspector.grade"
+msgstr "Pente (%)"
+
+# English: "Grade and flow"
+# Source-Hash: bf34bb5add643aeb
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+#: packages/nodes/src/pipe-segment/grade-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.gradeInspector.gradeAndFlow"
+msgstr "Pente et écoulement"
+
+# English: "Keep end elevation"
+# Source-Hash: ce41df161aeed7a6
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+#: packages/nodes/src/pipe-segment/grade-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.gradeInspector.keepEndElevation"
+msgstr "Conserver l’altitude de fin"
+
+# English: "Keep start elevation"
+# Source-Hash: a73da2d9b324635d
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+#: packages/nodes/src/pipe-segment/grade-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.gradeInspector.keepStartElevation"
+msgstr "Conserver l’altitude de début"
+
+# English: "Leg {number}: {grade}"
+# Source-Hash: 95b18c4f1c132276
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+#: packages/nodes/src/pipe-segment/grade-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.gradeInspector.leg"
+msgstr "Tronçon {number} : {grade}"
+
+# English: "Move elevation, keep grades"
+# Source-Hash: af7138d6a8a07914
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+#: packages/nodes/src/pipe-segment/grade-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.gradeInspector.moveElevationKeepGrades"
+msgstr "Déplacer en altitude, conserver les pentes"
+
+# English: "Pipe anchor elevation"
+# Source-Hash: a61f74b4b445e76c
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+#: packages/nodes/src/pipe-segment/grade-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.gradeInspector.pipeAnchorElevation"
+msgstr "Altitude d’ancrage du tuyau"
+
+# English: "Pipe downhill flow"
+# Source-Hash: a3628871eae01da3
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+#: packages/nodes/src/pipe-segment/grade-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.gradeInspector.pipeDownhillFlow"
+msgstr "Sens d’écoulement du tuyau"
+
+# English: "Pipe grade percent"
+# Source-Hash: 10c942b544edcbd4
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+#: packages/nodes/src/pipe-segment/grade-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.gradeInspector.pipeGradePercent"
+msgstr "Pente du tuyau en pourcentage"
+
+# English: "Start elevation (m)"
+# Source-Hash: acb2a9b9e601c85b
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+#: packages/nodes/src/pipe-segment/grade-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.gradeInspector.startElevation"
+msgstr "Altitude de début (m)"
+
+# English: "Start → end"
+# Source-Hash: c742d28f93020b10
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+#: packages/nodes/src/pipe-segment/grade-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.gradeInspector.startEnd"
+msgstr "Début → fin"
 
 # Source-Hash: 457155657704f7cc
 # Review: required
@@ -26636,6 +27146,276 @@ msgstr "Canalisation d’évacuation et de ventilation — tracez à plat ou bas
 #, fuzzy
 msgid "node.pipeSegment.label"
 msgstr "Tuyau d’évacuation"
+
+# English: "This move would change a connected pipe’s grade. Choose another position or press Esc to cancel."
+# Source-Hash: 58c093b768f21b93
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+#: packages/nodes/src/pipe-segment/move-tool.tsx
+#, fuzzy
+msgid "node.pipeSegment.moveTool.connectedGradeBlocked"
+msgstr "Ce déplacement modifierait la pente d’un tuyau raccordé. Choisissez une autre position ou appuyez sur Échap pour annuler."
+
+# English: "Apply pipe offset"
+# Source-Hash: 012c10b3fb071052
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+#: packages/nodes/src/pipe-segment/offset-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.offsetInspector.applyPipeOffset"
+msgstr "Appliquer le décalage du tuyau"
+
+# English: "Check obstacle clearance. The preview does not detect collisions."
+# Source-Hash: 6abc3bcf60f7aed7
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+#: packages/nodes/src/pipe-segment/offset-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.offsetInspector.checkObstacleClearanceThePreviewDoes"
+msgstr "Vérifiez le dégagement autour de l’obstacle. L’aperçu ne détecte pas les collisions."
+
+# English: "Choose the first and last bend by horizontal distance from the start. Positive offset goes up; negative goes down. Each connector uses the offset height in horizontal travel."
+# Source-Hash: b23728d37200c667
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+#: packages/nodes/src/pipe-segment/offset-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.offsetInspector.chooseTheFirstAndLastBend"
+msgstr "Choisissez le premier et le dernier coude par leur distance horizontale depuis le début. Un décalage positif monte ; un décalage négatif descend. Chaque raccord parcourt horizontalement une distance égale à la hauteur du décalage."
+
+# English: "First bend (m)"
+# Source-Hash: 03528ff54200e797
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+#: packages/nodes/src/pipe-segment/offset-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.offsetInspector.firstBend"
+msgstr "Premier coude (m)"
+
+# English: "Last bend (m)"
+# Source-Hash: 4e6b6ed646a449cc
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+#: packages/nodes/src/pipe-segment/offset-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.offsetInspector.lastBend"
+msgstr "Dernier coude (m)"
+
+# English: "Offset applied in one undo step. End connections stayed fixed."
+# Source-Hash: 102ac6742f497c2e
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+#: packages/nodes/src/pipe-segment/offset-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.offsetInspector.offsetAppliedInOneUndoStep"
+msgstr "Décalage appliqué en une seule étape d’annulation. Les raccordements d’extrémité sont restés fixes."
+
+# English: "Offset around obstacle"
+# Source-Hash: aac8ab5c8fe8dc80
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+#: packages/nodes/src/pipe-segment/offset-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.offsetInspector.offsetAroundObstacle"
+msgstr "Contourner un obstacle"
+
+# English: "Pipe offset side profile preview"
+# Source-Hash: d6638d559a15dc79
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+#: packages/nodes/src/pipe-segment/offset-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.offsetInspector.pipeOffsetSideProfilePreview"
+msgstr "Aperçu du profil latéral du décalage de tuyau"
+
+# English: "Side profile (schematic). Four bends · five pipe sections. Parallel sections keep the original grade; both end connections stay fixed."
+# Source-Hash: 93186c7801fe54b1
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+#: packages/nodes/src/pipe-segment/offset-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.offsetInspector.sideProfileSchematicFourBendsFive"
+msgstr "Profil latéral (schématique). Quatre coudes · cinq tronçons de tuyau. Les tronçons parallèles conservent la pente d’origine ; les deux raccordements d’extrémité restent fixes."
+
+# English: "This offset includes an uphill waste section. It does not provide continuous downhill drainage."
+# Source-Hash: ab6a00ca812999d5
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+#: packages/nodes/src/pipe-segment/offset-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.offsetInspector.thisOffsetIncludesAnUphillWaste"
+msgstr "Ce décalage comprend un tronçon d’évacuation en contre-pente. Il n’assure pas un écoulement continu vers le bas."
+
+# English: "Unable to apply offset."
+# Source-Hash: 9da65d7ebc4d4ba1
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+#: packages/nodes/src/pipe-segment/offset-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.offsetInspector.unableToApplyOffset"
+msgstr "Impossible d’appliquer le décalage."
+
+# English: "Unable to plan offset."
+# Source-Hash: b9d942406a6029e3
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+#: packages/nodes/src/pipe-segment/offset-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.offsetInspector.unableToPlanOffset"
+msgstr "Impossible de préparer le décalage."
+
+# English: "Vertical offset (m)"
+# Source-Hash: 2dad926bc0e26f4a
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+#: packages/nodes/src/pipe-segment/offset-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.offsetInspector.verticalOffset"
+msgstr "Décalage vertical (m)"
+
+# English: "Apply pipe size"
+# Source-Hash: ab7feb5e8b9ef232
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+#: packages/nodes/src/pipe-segment/resize-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.resizeInspector.applyPipeSize"
+msgstr "Appliquer le diamètre"
+
+# English: "Branches stop at junctions, size or material changes, and fixture connections. Reducers keep boundary collars fixed."
+# Source-Hash: 5a82f77707e6c422
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+#: packages/nodes/src/pipe-segment/resize-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.resizeInspector.branchesStopAtJunctionsSizeOr"
+msgstr "Les branches s’arrêtent aux jonctions, aux changements de diamètre ou de matériau et aux raccordements d’appareils. Les réductions maintiennent fixes les colliers en limite."
+
+# English: "Check resize"
+# Source-Hash: 3406d3fb87431e87
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+#: packages/nodes/src/pipe-segment/resize-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.resizeInspector.checkResize"
+msgstr "Vérifier le redimensionnement"
+
+# English: "Connected branch"
+# Source-Hash: 68e3596ff2fd6e60
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+#: packages/nodes/src/pipe-segment/resize-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.resizeInspector.connectedBranch"
+msgstr "Branche raccordée"
+
+# English: "Current diameter: {diameter} in"
+# Source-Hash: c40570d3f7df8ad2
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+#: packages/nodes/src/pipe-segment/resize-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.resizeInspector.currentDiameter"
+msgstr "Diamètre actuel : {diameter} in"
+
+# English: "Diameter (in)"
+# Source-Hash: e704515c0fe2a6ca
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+#: packages/nodes/src/pipe-segment/resize-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.resizeInspector.diameterIn"
+msgstr "Diamètre (in)"
+
+# English: "Pipe resize diameter"
+# Source-Hash: bf4fd51ca4d3d6c6
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+#: packages/nodes/src/pipe-segment/resize-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.resizeInspector.pipeResizeDiameter"
+msgstr "Nouveau diamètre du tuyau"
+
+# English: "Pipe resize scope"
+# Source-Hash: e31a6978e4744398
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+#: packages/nodes/src/pipe-segment/resize-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.resizeInspector.pipeResizeScope"
+msgstr "Portée du redimensionnement du tuyau"
+
+# English: "Pipe size"
+# Source-Hash: 8b5479cd8378bf76
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+#: packages/nodes/src/pipe-segment/resize-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.resizeInspector.pipeSize"
+msgstr "Diamètre du tuyau"
+
+# English: "Resized in one undo step. Grades and boundary connections preserved."
+# Source-Hash: ad7c5e79e9f545f2
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+#: packages/nodes/src/pipe-segment/resize-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.resizeInspector.resized"
+msgstr "Redimensionné en une seule étape d’annulation. Pentes et raccordements en limite conservés."
+
+# English: "{runs, plural, one {# run} other {# runs}}, {fittings, plural, one {# fitting} other {# fittings}}, {reducers, plural, one {# new reducer} other {# new reducers}}. Grades stay unchanged."
+# Source-Hash: 2681a615278ea7de
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+#: packages/nodes/src/pipe-segment/resize-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.resizeInspector.resizeSummary"
+msgstr "{runs, plural, one {# tronçon} many {# tronçons} other {# tronçons}}, {fittings, plural, one {# raccord} many {# raccords} other {# raccords}}, {reducers, plural, one {# nouvelle réduction} many {# nouvelles réductions} other {# nouvelles réductions}}. Les pentes restent inchangées."
+
+# English: "This segment"
+# Source-Hash: d271518d800f3e1c
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+#: packages/nodes/src/pipe-segment/resize-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.resizeInspector.thisSegment"
+msgstr "Ce tronçon"
+
+# English: "Unable to resize pipe."
+# Source-Hash: 0518760b3747bae1
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+#: packages/nodes/src/pipe-segment/resize-inspector.tsx
+#, fuzzy
+msgid "node.pipeSegment.resizeInspector.unableToResize"
+msgstr "Impossible de redimensionner le tuyau."
 
 # Source-Hash: 6d0cdd14d0675e05
 # Review: required
@@ -29050,6 +29830,36 @@ msgstr "{spacing} d’entraxe"
 msgid "node.shared.buildUpControls.woodPlank"
 msgstr "Lambris"
 
+# English: "Route preview"
+# Source-Hash: 0fe1b70953df9304
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+#: packages/nodes/src/shared/connection-feedback.tsx
+#, fuzzy
+msgid "node.shared.connectionFeedback.routePreview"
+msgstr "Aperçu du tracé"
+
+# English: "{system, select, return {Return} other {Supply}} · {size} in · {state, select, connected {Connected} other {Draw from collar}}"
+# Source-Hash: d4da45e25561382c
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+#: packages/nodes/src/shared/duct-collar-inspector.tsx
+#, fuzzy
+msgid "node.shared.ductCollarInspector.collarButton"
+msgstr "{system, select, return {Reprise} other {Soufflage}} · {size} in · {state, select, connected {Raccordé} other {Tracer depuis le collier}}"
+
+# English: "Connect duct"
+# Source-Hash: 8ef43378888dba30
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+#: packages/nodes/src/shared/duct-collar-inspector.tsx
+#, fuzzy
+msgid "node.shared.ductCollarInspector.connectDuct"
+msgstr "Raccorder une gaine"
+
 # Source-Hash: e7512c891d8da7d8
 # Review: required
 # AI-Provider: claude-code
@@ -29099,6 +29909,26 @@ msgstr "Largeur"
 #, fuzzy
 msgid "node.shared.openingDepthPosition.depthPosition"
 msgstr "Position en profondeur"
+
+# English: "{port} · {diameter} in · {elevation} m · {state, select, connected {Connected} other {Draw from collar}}"
+# Source-Hash: 9067ae38f38ebc6d
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+#: packages/nodes/src/shared/pipe-collar-inspector.tsx
+#, fuzzy
+msgid "node.shared.pipeCollarInspector.collarButton"
+msgstr "{port} · {diameter} in · {elevation} m · {state, select, connected {Raccordé} other {Tracer depuis le collier}}"
+
+# English: "Connect pipe"
+# Source-Hash: 88a982140de95dcc
+# Review: required
+# AI-Provider: cursor-agent
+# AI-Model: claude-opus-5-5
+#: packages/nodes/src/shared/pipe-collar-inspector.tsx
+#, fuzzy
+msgid "node.shared.pipeCollarInspector.connectPipe"
+msgstr "Raccorder un tuyau"
 
 # Source-Hash: ee1c8bc3e27fb550
 # Review: required

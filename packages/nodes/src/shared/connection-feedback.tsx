@@ -1,6 +1,6 @@
 'use client'
 
-import type { AnyNodeId } from '@pascal-app/core'
+import { type AnyNodeId, usePascalI18n } from '@pascal-app/core'
 import {
   EDITOR_LAYER,
   isAngleSnapActive,
@@ -38,6 +38,7 @@ export function ConnectionFeedback({
   screen?: PortScreenPoint | null
   target?: ScenePort | null
 }) {
+  const i18n = usePascalI18n()
   useEditor((state) => state.snappingModeByContext)
   if (
     !point ||
@@ -49,7 +50,13 @@ export function ConnectionFeedback({
   if (!port && !detail && !error) return null
   const feedback = port
     ? connectionCompatibility(profile, port)
-    : { status: 'adapter' as const, label: 'Route preview' }
+    : {
+        status: 'adapter' as const,
+        label: i18n._({
+          id: 'node.shared.connectionFeedback.routePreview',
+          message: 'Route preview',
+        }),
+      }
   const color = COLORS[error ? 'incompatible' : feedback.status]
   const label = (
     <div

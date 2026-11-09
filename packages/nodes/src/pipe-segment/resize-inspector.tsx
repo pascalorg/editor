@@ -1,9 +1,16 @@
 'use client'
-import { type AnyNodeId, type PipeSegmentNode, useScene } from '@pascal-app/core'
+import {
+  type AnyNodeId,
+  formatNumber,
+  type PipeSegmentNode,
+  usePascalI18n,
+  useScene,
+} from '@pascal-app/core'
 import { useState } from 'react'
 import { resizePipe } from './resize-operation'
 
 export default function PipeResizeInspector({ node }: { node: PipeSegmentNode }) {
+  const i18n = usePascalI18n()
   const [diameter, setDiameter] = useState(node.diameter)
   const [scope, setScope] = useState<'segment' | 'branch'>('segment')
   const [message, setMessage] = useState('')
@@ -17,7 +24,16 @@ export default function PipeResizeInspector({ node }: { node: PipeSegmentNode })
       if (preview || !outcome.changes) {
         setMessage(
           outcome.changes
-            ? `${outcome.result.runs} runs, ${outcome.result.fittings} fittings, ${outcome.result.reducers} new reducers. Grades stay unchanged.`
+            ? i18n._({
+                id: 'node.pipeSegment.resizeInspector.resizeSummary',
+                message:
+                  '{runs, plural, one {# run} other {# runs}}, {fittings, plural, one {# fitting} other {# fittings}}, {reducers, plural, one {# new reducer} other {# new reducers}}. Grades stay unchanged.',
+                values: {
+                  runs: Number(outcome.result.runs),
+                  fittings: Number(outcome.result.fittings),
+                  reducers: Number(outcome.result.reducers),
+                },
+              })
             : String(outcome.result.message),
         )
         return
@@ -29,19 +45,42 @@ export default function PipeResizeInspector({ node }: { node: PipeSegmentNode })
         })),
         update: outcome.changes.update?.map((entry) => ({ ...entry, id: entry.id as AnyNodeId })),
       })
-      setMessage('Resized in one undo step. Grades and boundary connections preserved.')
+      setMessage(
+        i18n._({
+          id: 'node.pipeSegment.resizeInspector.resized',
+          message: 'Resized in one undo step. Grades and boundary connections preserved.',
+        }),
+      )
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'Unable to resize pipe.')
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : i18n._({
+              id: 'node.pipeSegment.resizeInspector.unableToResize',
+              message: 'Unable to resize pipe.',
+            }),
+      )
     }
   }
   return (
     <section className="space-y-2 border-t pt-3 text-xs">
-      <h3 className="text-sm font-medium">Pipe size</h3>
-      <p>Current diameter: {node.diameter} in</p>
+      <h3 className="text-sm font-medium">
+        {i18n._({ id: 'node.pipeSegment.resizeInspector.pipeSize', message: 'Pipe size' })}
+      </h3>
+      <p>
+        {i18n._({
+          id: 'node.pipeSegment.resizeInspector.currentDiameter',
+          message: 'Current diameter: {diameter} in',
+          values: { diameter: formatNumber(node.diameter, { locale: i18n.getLocale() }) },
+        })}
+      </p>
       <label className="flex justify-between">
-        Diameter (in)
+        {i18n._({ id: 'node.pipeSegment.resizeInspector.diameterIn', message: 'Diameter (in)' })}
         <input
-          aria-label="Pipe resize diameter"
+          aria-label={i18n._({
+            id: 'node.pipeSegment.resizeInspector.pipeResizeDiameter',
+            message: 'Pipe resize diameter',
+          })}
           type="number"
           min={1.25}
           max={8}
@@ -55,7 +94,10 @@ export default function PipeResizeInspector({ node }: { node: PipeSegmentNode })
         />
       </label>
       <select
-        aria-label="Pipe resize scope"
+        aria-label={i18n._({
+          id: 'node.pipeSegment.resizeInspector.pipeResizeScope',
+          message: 'Pipe resize scope',
+        })}
         value={scope}
         onChange={(event) => {
           setScope(event.target.value as typeof scope)
@@ -63,19 +105,32 @@ export default function PipeResizeInspector({ node }: { node: PipeSegmentNode })
         }}
         className="w-full border bg-background p-1"
       >
-        <option value="segment">This segment</option>
-        <option value="branch">Connected branch</option>
+        <option value="segment">
+          {i18n._({ id: 'node.pipeSegment.resizeInspector.thisSegment', message: 'This segment' })}
+        </option>
+        <option value="branch">
+          {i18n._({
+            id: 'node.pipeSegment.resizeInspector.connectedBranch',
+            message: 'Connected branch',
+          })}
+        </option>
       </select>
       <p className="text-muted-foreground">
-        Branches stop at junctions, size or material changes, and fixture connections. Reducers keep
-        boundary collars fixed.
+        {i18n._({
+          id: 'node.pipeSegment.resizeInspector.branchesStopAtJunctionsSizeOr',
+          message:
+            'Branches stop at junctions, size or material changes, and fixture connections. Reducers keep boundary collars fixed.',
+        })}
       </p>
       <div className="flex gap-2">
         <button type="button" className="flex-1 rounded border p-1" onClick={() => apply(true)}>
-          Check resize
+          {i18n._({ id: 'node.pipeSegment.resizeInspector.checkResize', message: 'Check resize' })}
         </button>
         <button type="button" className="flex-1 rounded border p-1" onClick={() => apply(false)}>
-          Apply pipe size
+          {i18n._({
+            id: 'node.pipeSegment.resizeInspector.applyPipeSize',
+            message: 'Apply pipe size',
+          })}
         </button>
       </div>
       {message && <p role="status">{message}</p>}

@@ -1,19 +1,29 @@
 'use client'
 
-import { type AnyNode, nodeRegistry, useScene } from '@pascal-app/core'
+import {
+  type AnyNode,
+  formatFixed,
+  formatNumber,
+  nodeRegistry,
+  usePascalI18n,
+  useScene,
+} from '@pascal-app/core'
 import { useEditor } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { pipeCollarOccupied } from '../pipe-segment/collar-connection'
 import { pipeGrade } from '../pipe-segment/slope'
 
 export default function PipeCollarInspector({ node }: { node: AnyNode }) {
+  const i18n = usePascalI18n()
   const nodes = useScene((state) => state.nodes)
   const ports = nodeRegistry.get(node.type)?.ports?.(node) ?? []
   const pipePorts = ports.filter((port) => port.system === 'waste' || port.system === 'vent')
   if (!pipePorts.length) return null
   return (
     <section className="space-y-2 border-t pt-3">
-      <h3 className="text-sm font-medium">Connect pipe</h3>
+      <h3 className="text-sm font-medium">
+        {i18n._({ id: 'node.shared.pipeCollarInspector.connectPipe', message: 'Connect pipe' })}
+      </h3>
       {pipePorts.map((port) => {
         const occupied = pipeCollarOccupied(nodes, { ...port, nodeId: node.id })
         return (
@@ -50,8 +60,17 @@ export default function PipeCollarInspector({ node }: { node: AnyNode }) {
               editor.setTool('pipe-segment')
             }}
           >
-            {port.id} · {port.diameter} in · {port.position[1].toFixed(3)} m ·{' '}
-            {occupied ? 'Connected' : 'Draw from collar'}
+            {i18n._({
+              id: 'node.shared.pipeCollarInspector.collarButton',
+              message:
+                '{port} · {diameter} in · {elevation} m · {state, select, connected {Connected} other {Draw from collar}}',
+              values: {
+                port: port.id,
+                diameter: formatNumber(port.diameter, { locale: i18n.getLocale() }),
+                elevation: formatFixed(port.position[1], 3, i18n.getLocale()),
+                state: occupied ? 'connected' : 'open',
+              },
+            })}
           </button>
         )
       })}

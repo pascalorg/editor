@@ -1,10 +1,11 @@
 'use client'
-import { type AnyNodeId, type PipeSegmentNode, useScene } from '@pascal-app/core'
+import { type AnyNodeId, type PipeSegmentNode, usePascalI18n, useScene } from '@pascal-app/core'
 import { useMemo, useState } from 'react'
 import { offsetPipe, type PipeOffsetInput } from './offset-operation'
 
 type Point = [number, number, number]
 export default function PipeOffsetInspector({ node }: { node: PipeSegmentNode }) {
+  const i18n = usePascalI18n()
   const [open, setOpen] = useState(false)
   return (
     <section className="space-y-2 border-t pt-3 text-xs">
@@ -14,13 +15,17 @@ export default function PipeOffsetInspector({ node }: { node: PipeSegmentNode })
         className="w-full text-left text-sm font-medium"
         onClick={() => setOpen(!open)}
       >
-        Offset around obstacle
+        {i18n._({
+          id: 'node.pipeSegment.offsetInspector.offsetAroundObstacle',
+          message: 'Offset around obstacle',
+        })}
       </button>
       {open && <OffsetForm node={node} />}
     </section>
   )
 }
 function OffsetForm({ node }: { node: PipeSegmentNode }) {
+  const i18n = usePascalI18n()
   const nodes = useScene((state) => state.nodes)
   const start = node.path[0]!,
     end = node.path.at(-1)!
@@ -33,16 +38,30 @@ function OffsetForm({ node }: { node: PipeSegmentNode }) {
   })
   const [notice, setNotice] = useState('')
   const [appliedPath, setAppliedPath] = useState<string | null>(null)
+  const fieldLabels = {
+    from: i18n._({ id: 'node.pipeSegment.offsetInspector.firstBend', message: 'First bend (m)' }),
+    to: i18n._({ id: 'node.pipeSegment.offsetInspector.lastBend', message: 'Last bend (m)' }),
+    offset: i18n._({
+      id: 'node.pipeSegment.offsetInspector.verticalOffset',
+      message: 'Vertical offset (m)',
+    }),
+  }
   const preview = useMemo(() => {
     try {
       return { outcome: offsetPipe(nodes, input, { activeLevelId: node.parentId }), error: '' }
     } catch (error) {
       return {
         outcome: null,
-        error: error instanceof Error ? error.message : 'Unable to plan offset.',
+        error:
+          error instanceof Error
+            ? error.message
+            : i18n._({
+                id: 'node.pipeSegment.offsetInspector.unableToPlanOffset',
+                message: 'Unable to plan offset.',
+              }),
       }
     }
-  }, [nodes, input, node.parentId])
+  }, [nodes, input, node.parentId, i18n])
   const paths = (preview.outcome?.result.paths ?? []) as Point[][]
   const all = [start, end, ...paths.flat()]
   const minY = Math.min(...all.map((p) => p[1])),
@@ -63,25 +82,40 @@ function OffsetForm({ node }: { node: PipeSegmentNode }) {
         })),
         update: outcome.changes?.update?.map((entry) => ({ ...entry, id: entry.id as AnyNodeId })),
       })
-      setNotice('Offset applied in one undo step. End connections stayed fixed.')
+      setNotice(
+        i18n._({
+          id: 'node.pipeSegment.offsetInspector.offsetAppliedInOneUndoStep',
+          message: 'Offset applied in one undo step. End connections stayed fixed.',
+        }),
+      )
       const appliedNode = useScene.getState().nodes[node.id]
       setAppliedPath(appliedNode?.type === 'pipe-segment' ? JSON.stringify(appliedNode.path) : null)
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : 'Unable to apply offset.')
+      setNotice(
+        error instanceof Error
+          ? error.message
+          : i18n._({
+              id: 'node.pipeSegment.offsetInspector.unableToApplyOffset',
+              message: 'Unable to apply offset.',
+            }),
+      )
     }
   }
   if (appliedPath === JSON.stringify(node.path)) return <p role="status">{notice}</p>
   return (
     <div className="space-y-2">
       <p>
-        Choose the first and last bend by horizontal distance from the start. Positive offset goes
-        up; negative goes down. Each connector uses the offset height in horizontal travel.
+        {i18n._({
+          id: 'node.pipeSegment.offsetInspector.chooseTheFirstAndLastBend',
+          message:
+            'Choose the first and last bend by horizontal distance from the start. Positive offset goes up; negative goes down. Each connector uses the offset height in horizontal travel.',
+        })}
       </p>
       {(['from', 'to', 'offset'] as const).map((key) => (
         <label key={key} className="flex justify-between gap-2">
-          {{ from: 'First bend (m)', to: 'Last bend (m)', offset: 'Vertical offset (m)' }[key]}
+          {fieldLabels[key]}
           <input
-            aria-label={`Pipe offset ${key}`}
+            aria-label={fieldLabels[key]}
             type="number"
             step={0.05}
             className="w-24 border bg-background p-1"
@@ -98,7 +132,10 @@ function OffsetForm({ node }: { node: PipeSegmentNode }) {
           <svg
             viewBox="0 0 260 120"
             role="img"
-            aria-label="Pipe offset side profile preview"
+            aria-label={i18n._({
+              id: 'node.pipeSegment.offsetInspector.pipeOffsetSideProfilePreview',
+              message: 'Pipe offset side profile preview',
+            })}
             className="w-full rounded border"
           >
             <polyline
@@ -120,19 +157,28 @@ function OffsetForm({ node }: { node: PipeSegmentNode }) {
             })}
           </svg>
           <p>
-            Side profile (schematic). Four bends · five pipe sections. Parallel sections keep the
-            original grade; both end connections stay fixed.
+            {i18n._({
+              id: 'node.pipeSegment.offsetInspector.sideProfileSchematicFourBendsFive',
+              message:
+                'Side profile (schematic). Four bends · five pipe sections. Parallel sections keep the original grade; both end connections stay fixed.',
+            })}
           </p>
           {preview.outcome?.result.uphill === true && (
             <p role="note">
-              This offset includes an uphill waste section. It does not provide continuous downhill
-              drainage.
+              {i18n._({
+                id: 'node.pipeSegment.offsetInspector.thisOffsetIncludesAnUphillWaste',
+                message:
+                  'This offset includes an uphill waste section. It does not provide continuous downhill drainage.',
+              })}
             </p>
           )}
         </>
       )}
       <p className="text-muted-foreground">
-        Check obstacle clearance. The preview does not detect collisions.
+        {i18n._({
+          id: 'node.pipeSegment.offsetInspector.checkObstacleClearanceThePreviewDoes',
+          message: 'Check obstacle clearance. The preview does not detect collisions.',
+        })}
       </p>
       {preview.error && <p role="alert">{preview.error}</p>}
       <button
@@ -141,7 +187,10 @@ function OffsetForm({ node }: { node: PipeSegmentNode }) {
         className="w-full rounded border p-1 disabled:opacity-50"
         onClick={apply}
       >
-        Apply pipe offset
+        {i18n._({
+          id: 'node.pipeSegment.offsetInspector.applyPipeOffset',
+          message: 'Apply pipe offset',
+        })}
       </button>
       {notice && <p role="status">{notice}</p>}
     </div>
