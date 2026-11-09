@@ -1,6 +1,7 @@
 import { nodeRegistry, PipeSegmentNode } from '@pascal-app/core'
 import type { AgentOperation } from '@pascal-app/core/agent-operations'
 import { refuse } from '@pascal-app/core/agent-tools'
+import { queryNodes } from '@pascal-app/core/runtime'
 import { createPipeRunEndCap } from '../shared/automatic-run-end-cap'
 import { pipeCollar, planPipeCollarConnection } from './collar-connection'
 
@@ -38,14 +39,12 @@ export const connectPipe: AgentOperation<PipeConnectInput> = (nodes, input) => {
   )
   // An endpoint at another collar must use the draw tool's two-ended connection planning.
   if (
-    Object.values(nodes).some(
-      (node) =>
-        node.parentId === owner.parentId &&
-        (nodeRegistry.get(node.type)?.ports?.(node) ?? []).some(
-          (other) =>
-            other.system === port.system &&
-            Math.hypot(...other.position.map((v, i) => v - input.end[i]!)) < 0.005,
-        ),
+    queryNodes(nodes, { parentId: owner.parentId }).some((node) =>
+      (nodeRegistry.get(node.type)?.ports?.(node) ?? []).some(
+        (other) =>
+          other.system === port.system &&
+          Math.hypot(...other.position.map((v, i) => v - input.end[i]!)) < 0.005,
+      ),
     )
   )
     return refuse(

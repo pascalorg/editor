@@ -1,4 +1,5 @@
 import { nodeRegistry } from '../registry'
+import { queryNodes } from '../runtime/node-queries'
 import type { AnyNode, AnyNodeId } from '../schema'
 
 /**
@@ -192,14 +193,18 @@ export function analyzePortConnectivity(
   for (const p of movedPorts) startMovedPorts[p.id] = p.position
 
   // Candidate partners: every run + every following fitting in the scene.
+  const followingKinds = [...nodeRegistry.entries()].flatMap(([kind, def]) =>
+    def.ports &&
+    (def.distributionRole === 'run' ||
+      (def.distributionRole === 'fitting' && def.portConnectivityFollow !== false))
+      ? [kind as AnyNode['type']]
+      : [],
+  )
   const candidates: GraphNode[] = []
-  for (const other of Object.values(nodes)) {
-    if (!other || other.id === movedNode.id) continue
+  for (const other of queryNodes(nodes, { type: followingKinds })) {
+    if (other.id === movedNode.id) continue
     const role = roleOf(other)
     if (role !== 'run' && role !== 'fitting') continue
-    if (role === 'fitting' && nodeRegistry.get(other.type)?.portConnectivityFollow === false) {
-      continue
-    }
     const ports = portsOf(other)
     if (!ports) continue
     const startPath =

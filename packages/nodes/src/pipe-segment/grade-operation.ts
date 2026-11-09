@@ -93,7 +93,7 @@ export const editPipeGrade: AgentOperation<PipeGradeInput> = (nodes, input) => {
   }
   const detached = input.action === 'endpoint' && input.detach === true
   const next: PipeSegmentNode = { ...pipe, path, wallAttachment: undefined }
-  const connectivity = analyzePortConnectivity(pipe, { ...nodes })
+  const connectivity = analyzePortConnectivity(pipe, nodes)
   for (const endpoint of ['start', 'end'] as const) {
     if (detached) continue
     const mates = connectivity.adjacency[pipe.id]?.[endpoint] ?? []
@@ -122,7 +122,7 @@ export const editPipeGrade: AgentOperation<PipeGradeInput> = (nodes, input) => {
   const caps = detached
     ? []
     : (['start', 'end'] as const).flatMap((end) =>
-        planRunEndCapFollowUpdates(pipe, next, end, { ...nodes }),
+        planRunEndCapFollowUpdates(pipe, next, end, nodes),
       )
   const capIds = new Set(caps.map((cap) => cap.id))
   const update = [

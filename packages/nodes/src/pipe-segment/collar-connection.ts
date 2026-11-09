@@ -1,5 +1,6 @@
 import { type AnyNode, nodeRegistry, PipeFittingNode } from '@pascal-app/core'
 import { refuse } from '@pascal-app/core/agent-tools'
+import { queryNodes } from '@pascal-app/core/runtime'
 import type { ScenePort } from '@pascal-app/editor/distribution'
 import { Euler, Quaternion, Vector3 } from 'three'
 import { pipeFittingLegLength } from '../pipe-fitting/ports'
@@ -26,10 +27,10 @@ export function pipeCollarOccupied(
   port: ScenePort,
 ): boolean {
   const owner = nodes[port.nodeId]
-  return Object.values(nodes).some(
+  if (!owner) return false
+  return queryNodes(nodes, { parentId: owner.parentId }).some(
     (node) =>
       node.id !== port.nodeId &&
-      node.parentId === owner?.parentId &&
       (nodeRegistry.get(node.type)?.ports?.(node) ?? []).some(
         (other) =>
           other.system === port.system &&

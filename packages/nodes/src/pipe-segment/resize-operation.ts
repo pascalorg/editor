@@ -1,6 +1,7 @@
 import { type AnyNode, nodeRegistry, PipeFittingNode, PipeSegmentNode } from '@pascal-app/core'
 import type { AgentOperation, SceneChanges } from '@pascal-app/core/agent-operations'
 import { refuse } from '@pascal-app/core/agent-tools'
+import { queryNodes } from '@pascal-app/core/runtime'
 import type { ScenePort } from '@pascal-app/editor/distribution'
 import { Euler, Quaternion, Vector3 } from 'three'
 import { pipeFittingLegLength } from '../pipe-fitting/ports'
@@ -25,9 +26,7 @@ export const resizePipe: AgentOperation<PipeResizeInput> = (nodes, input) => {
     )
   if (!PipeSegmentNode.safeParse({ ...root, diameter: input.diameter }).success)
     return refuse('pipe_size_invalid', 'Enter a pipe diameter between 1.25 and 8 inches.')
-  const ports = Object.values(nodes)
-    .filter((node) => node.parentId === root.parentId)
-    .flatMap(portsOf)
+  const ports = queryNodes(nodes, { parentId: root.parentId }).flatMap(portsOf)
   const mates = (port: ScenePort) =>
     ports.filter(
       (other) =>

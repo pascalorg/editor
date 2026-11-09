@@ -1,6 +1,7 @@
 import { type AnyNode, type AnyNodeId, nodeRegistry, PipeSegmentNode } from '@pascal-app/core'
 import type { AgentOperation, SceneChanges } from '@pascal-app/core/agent-operations'
 import { refuse } from '@pascal-app/core/agent-tools'
+import { queryNodes } from '@pascal-app/core/runtime'
 import { Vector3 } from 'three'
 import { planPipeElbowAtPort } from '../shared/auto-fitting'
 import { autoOffsetInvalidationUpdates } from '../shared/auto-offset-tag'
@@ -21,7 +22,7 @@ export const offsetPipe: AgentOperation<PipeOffsetInput> = (nodes, input) => {
   if (pipe.path.length !== 2 || ![input.from, input.to, input.offset].every(Number.isFinite))
     return refuse('pipe_offset_route', 'Choose a straight run and enter finite offset dimensions.')
   if (
-    Object.values(nodes).some((node) => node.parentId === pipe.id) ||
+    queryNodes(nodes, { parentId: pipe.id }).length > 0 ||
     Object.keys(pipe.hangerOverrides ?? {}).length
   )
     return refuse(
@@ -110,7 +111,7 @@ export const offsetPipe: AgentOperation<PipeOffsetInput> = (nodes, input) => {
     ].map((node) => ({ node, parentId: pipe.parentId ?? undefined })),
   }
   changes.update!.push(...transferRunEndCapOwnership(nodes, pipe.id, newRuns.at(-1)!.id, 'end'))
-  for (const entry of autoOffsetInvalidationUpdates({ ...nodes }, pipe.id as AnyNodeId)) {
+  for (const entry of autoOffsetInvalidationUpdates(nodes, pipe.id as AnyNodeId)) {
     const existing = changes.update!.find((update) => update.id === entry.id)
     if (existing) existing.data = { ...existing.data, ...entry.data } as Partial<AnyNode>
     else changes.update!.push(entry)

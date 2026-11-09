@@ -7,6 +7,7 @@ import {
 } from '@pascal-app/core'
 import type { AgentOperation, SceneChanges, SceneNodes } from '@pascal-app/core/agent-operations'
 import { refuse } from '@pascal-app/core/agent-tools'
+import { queryNodes } from '@pascal-app/core/runtime'
 import type { ScenePort } from '@pascal-app/editor/distribution'
 import { Vector3 } from 'three'
 import { fittingLegLength, getDuctFittingPorts } from '../duct-fitting/ports'
@@ -82,7 +83,7 @@ export const editDuct: AgentOperation<DuctEditInput> = (before, input) => {
   const changes: SceneChanges = { create: [], update: [] }
   if (input.action === 'offset') {
     if (
-      Object.values(before).some((node) => node.parentId === duct.id) ||
+      queryNodes(before, { parentId: duct.id }).length > 0 ||
       Object.keys(duct.hangerOverrides ?? {}).length
     )
       return refuse(
@@ -191,8 +192,7 @@ export const editDuct: AgentOperation<DuctEditInput> = (before, input) => {
     const target = targetResult.data
     if (ductProfilesMatch(duct, target))
       return { result: { message: 'The duct already has this profile.', affected: [] }, changes }
-    const levelNodes = Object.values(before).filter((node) => node.parentId === duct.parentId)
-    const ports = levelNodes.flatMap(portsOf)
+    const ports = queryNodes(before, { parentId: duct.parentId }).flatMap(portsOf)
     const selected = new Set<string>([duct.id])
     for (const port of ports.filter((p) => p.nodeId === duct.id)) {
       for (const mate of mates(port, ports)) {
@@ -333,7 +333,7 @@ export const editDuct: AgentOperation<DuctEditInput> = (before, input) => {
     validPaths(before, changes)
   }
   const touched = changes.update!.map((entry) => entry.id as AnyNodeId)
-  const invalidations = touched.flatMap((id) => autoOffsetInvalidationUpdates({ ...before }, id))
+  const invalidations = touched.flatMap((id) => autoOffsetInvalidationUpdates(before, id))
   for (const entry of invalidations) {
     const existing = changes.update!.find((update) => update.id === entry.id)
     if (existing) existing.data = { ...existing.data, ...entry.data } as Partial<AnyNode>

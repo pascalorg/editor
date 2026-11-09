@@ -285,7 +285,16 @@
     },
     // E-018: shared operations select what they read, so a detached scene records a selection.
     {
-      "includes": ["packages/core/src/agent-operations/**/*.ts", "!**/*.test.ts"],
+      "includes": [
+        "packages/core/src/agent-operations/**/*.ts",
+        "packages/core/src/services/port-connectivity.ts",
+        "packages/nodes/src/duct-segment/*-operation.ts",
+        "packages/nodes/src/pipe-segment/*-operation.ts",
+        "packages/nodes/src/pipe-segment/collar-connection.ts",
+        "packages/nodes/src/shared/auto-offset-tag.ts",
+        "packages/nodes/src/shared/automatic-run-end-cap.ts",
+        "!**/*.test.ts"
+      ],
       "plugins": ["./scripts/biome/raw-scene-enumeration.grit"]
     },
     // T-001: tests go through package exports. `warn` while ~50 existing tests still reach into

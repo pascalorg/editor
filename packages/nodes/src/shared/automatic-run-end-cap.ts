@@ -6,6 +6,7 @@ import {
   PipeFittingNode,
   type PipeSegmentNode,
 } from '@pascal-app/core'
+import { queryNodes } from '@pascal-app/core/runtime'
 import type { ScenePort } from '@pascal-app/editor/distribution'
 import { Euler, Quaternion, Vector3 } from 'three'
 import { localFittingPorts } from '../duct-fitting/ports'
@@ -152,8 +153,8 @@ export function findMatedRunEndCapIds(
 ): AnyNodeId[] {
   if (!source) return []
   const ids: AnyNodeId[] = []
-  for (const node of Object.values(nodes)) {
-    if (!node || node.type !== fittingKind || node.fittingType !== 'end-cap') continue
+  for (const node of queryNodes<DuctFittingNode | PipeFittingNode>(nodes, { type: fittingKind })) {
+    if (node.fittingType !== 'end-cap') continue
     if (node.id === source.nodeId) {
       ids.push(node.id)
       continue
@@ -172,16 +173,12 @@ export function findAutomaticRunEndCapIds(
   nodes: Readonly<Record<string, AnyNode>>,
   fittingKind: 'duct-fitting' | 'pipe-fitting',
 ): AnyNodeId[] {
-  return Object.values(nodes).flatMap((node) => {
-    if (
-      !node ||
-      node.type !== fittingKind ||
-      node.fittingType !== 'end-cap' ||
-      node.metadata[END_CAP_OWNER_ID_KEY] !== runId
-    )
-      return []
-    return [node.id]
-  })
+  return queryNodes<DuctFittingNode | PipeFittingNode>(nodes, { type: fittingKind }).flatMap(
+    (node) => {
+      if (node.fittingType !== 'end-cap' || node.metadata[END_CAP_OWNER_ID_KEY] !== runId) return []
+      return [node.id]
+    },
+  )
 }
 
 export function planRunEndCapFollowUpdates(
@@ -222,8 +219,9 @@ export function transferRunEndCapOwnership(
   nextId: AnyNodeId,
   endpoint: 'start' | 'end',
 ): { id: AnyNodeId; data: Partial<AnyNode> }[] {
-  return Object.values(nodes).flatMap((node) =>
-    (node.type === 'pipe-fitting' || node.type === 'duct-fitting') &&
+  return queryNodes<DuctFittingNode | PipeFittingNode>(nodes, {
+    type: ['pipe-fitting', 'duct-fitting'],
+  }).flatMap((node) =>
     node.fittingType === 'end-cap' &&
     node.metadata[END_CAP_OWNER_ID_KEY] === previousId &&
     node.metadata[END_CAP_ENDPOINT_KEY] === endpoint

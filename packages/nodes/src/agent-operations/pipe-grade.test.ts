@@ -8,7 +8,15 @@ import {
   registerNode,
   useLiveNodeOverrides,
   useScene,
+  WallNode,
 } from '@pascal-app/core'
+import {
+  applyPatchWithDependencies,
+  captureRegistryVersions,
+  effectIds,
+  openDetachedScene,
+  type SceneSnapshot,
+} from '@pascal-app/core/runtime'
 import { useFloorplanMode } from '@pascal-app/editor'
 import { pipeFittingDefinition, pipeSegmentDefinition } from '@pascal-app/nodes'
 import { builtinAgentOperations } from '@pascal-app/nodes/agent-operations'
@@ -159,6 +167,46 @@ test('turning a connected collar is refused instead of silently breaking it', ()
   expect(() =>
     edit(scene(pipe, fitting), { nodeId: pipe.id, action: 'grade', gradePercent: 5 }, context),
   ).toThrow('collar')
+})
+test('a grade drafted on a detached scene lands over a wall drawn on another level meanwhile', () => {
+  const pipe = makePipe()
+  const upper = LevelNode.parse({ level: 1 })
+  const base = {
+    nodes: { [level.id]: { ...level, children: [pipe.id] }, [pipe.id]: pipe, [upper.id]: upper },
+    rootNodeIds: [level.id, upper.id],
+    collections: {},
+    materials: {},
+    installedPlugins: [],
+  } as SceneSnapshot
+  const draft = openDetachedScene(base, {
+    base: { kind: 'authority', seq: 1 },
+    context: {
+      activeLevelId: level.id,
+      selection: [],
+      units: 'metric',
+      catalogVersion: 'test',
+      registryVersions: captureRegistryVersions(),
+    },
+    ids: effectIds('grade'),
+  })
+  try {
+    draft.execute(
+      edit,
+      { nodeId: pipe.id, action: 'grade', gradePercent: 3, anchor: 'start' },
+      context,
+    )
+    const wall = WallNode.parse({ parentId: upper.id, start: [0, 0], end: [4, 0] })
+    const current = {
+      ...base,
+      nodes: { ...base.nodes, [upper.id]: { ...upper, children: [wall.id] }, [wall.id]: wall },
+    } as SceneSnapshot
+    const applied = applyPatchWithDependencies(current, draft.patch(), draft.dependencies(), base)
+    expect(applied).toMatchObject({ ok: true })
+    const graded = applied.ok ? (applied.next.nodes[pipe.id] as PipeSegmentNode) : undefined
+    expect(graded?.path[1]?.[1]).toBeCloseTo(1.88)
+  } finally {
+    draft.dispose()
+  }
 })
 test('plan-view editing previews grade without writing the scene until commit', () => {
   const pipe = makePipe()
