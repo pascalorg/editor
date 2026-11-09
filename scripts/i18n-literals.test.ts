@@ -1,4 +1,4 @@
-import { expect, test } from 'bun:test'
+import { afterEach, expect, test } from 'bun:test'
 import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -679,10 +679,16 @@ test('extraction never approves a newly filled translation by itself', () => {
 })
 
 const LOCALES_DIR = 'packages/editor/src/i18n/locales'
+const temporaryRoots: string[] = []
+
+afterEach(() => {
+  for (const path of temporaryRoots.splice(0)) rmSync(path, { recursive: true, force: true })
+})
 
 /** A copy of the real catalogs to run the release job against, edited per case. */
 function catalogFixture(edit: (root: string) => void): { current: string; base: string } {
   const root = mkdtempSync(join(tmpdir(), 'pascal-i18n-'))
+  temporaryRoots.push(root)
   const base = join(root, 'base')
   const current = join(root, 'current')
   cpSync(LOCALES_DIR, base, { recursive: true })
@@ -762,6 +768,7 @@ test('a base directory without catalogs fails the release job', () => {
 /** A throwaway repository with the real catalogs, for the release job's base lookup. */
 function releaseRepo(steps: (git: (...args: string[]) => void, root: string) => void): string {
   const root = mkdtempSync(join(tmpdir(), 'pascal-release-'))
+  temporaryRoots.push(root)
   // A global signing setup would sign every fixture commit (slow, or a prompt)
   // and make `git tag` demand a message for a signed annotated tag.
   const config = [
