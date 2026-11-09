@@ -834,7 +834,13 @@ export { useRegistryVersion } from './registry/use-registry-version'
 export * from './schema'
 export * from './schema/nodes/stair-defaults'
 export * from './services'
-export { isMovable, movePlanToward, moveToward, resolveMovable } from './services/movement'
+export {
+  isMovable,
+  isMoveLocked,
+  movePlanToward,
+  moveToward,
+  resolveMovable,
+} from './services/movement'
 export * from './services/project-file-sink'
 export {
   collectionIdsOf,

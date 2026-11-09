@@ -1,5 +1,13 @@
 import { afterEach, describe, expect, test } from 'bun:test'
-import { ColumnNode, createSceneApi, useScene } from '@pascal-app/core'
+import {
+  ColumnNode,
+  createSceneApi,
+  isMovable,
+  isMoveLocked,
+  nodeRegistry,
+  registerNode,
+  useScene,
+} from '@pascal-app/core'
 import { columnDefinition } from './definition'
 import { columnEditPatch } from './edit-policy'
 
@@ -63,5 +71,18 @@ test('switching to square normalizes both axes, and managed posts reject layout 
   expect(
     columnEditPatch(managed, { width: 2, radius: 1, position: [1, 0, 0], rotation: 1 }),
   ).toEqual({ rotation: 1 })
-  expect(columnDefinition.capabilities.movable?.override?.({ node: managed })).toBeNull()
+  expect(columnDefinition.capabilities.movable?.override?.({ node: managed })).toEqual({
+    axes: [],
+    gridSnap: false,
+  })
+})
+
+test('a lean-to managed post is not movable; a free post is', () => {
+  if (!nodeRegistry.has('column')) registerNode(columnDefinition as never)
+  const free = ColumnNode.parse({})
+  const managed = ColumnNode.parse({ metadata: { managedByLeanTo: 'canopy', leanToRole: 'post' } })
+  expect(isMovable(free)).toBe(true)
+  expect(isMoveLocked(free)).toBe(false)
+  expect(isMovable(managed)).toBe(false)
+  expect(isMoveLocked(managed)).toBe(true)
 })

@@ -371,13 +371,7 @@ export const columnDefinition: NodeDefinition<typeof ColumnNode> = {
     // `floorplanMoveTarget`, which wins the 2D move dispatch.
     movable: {
       override: ({ node }) =>
-        isManagedColumn(node as ColumnNodeType)
-          ? null
-          : {
-              axes: ['x', 'z'],
-              gridSnap: true,
-              groupMoveSnapPose: resolveColumnStructuralGridMoveSnap,
-            },
+        isManagedColumn(node as ColumnNodeType) ? { axes: [], gridSnap: false } : null,
       axes: ['x', 'z'],
       gridSnap: true,
       groupMoveSnapPose: resolveColumnStructuralGridMoveSnap,
