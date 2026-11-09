@@ -1,5 +1,9 @@
 import { describe, expect, test } from 'bun:test'
-import { resolveTypedWallEnd, wallDraftHeadingDegrees } from './wall-typed-entry'
+import {
+  formatWallDraftHeading,
+  resolveTypedWallEnd,
+  wallDraftHeadingDegrees,
+} from './wall-typed-entry'
 
 const metric = { bareUnit: 'm', system: 'metric' } as const
 
@@ -84,5 +88,12 @@ describe('wallDraftHeadingDegrees', () => {
   test('round-trips through a typed angle', () => {
     const heading = wallDraftHeadingDegrees([0, 0], [-3, -4])!
     expectPoint(resolveTypedWallEnd([0, 0], [0, 0], ['5', String(heading)], metric), [-3, -4])
+  })
+
+  test('labels the live heading in the same convention, wrapping 360° to 0°', () => {
+    expect(formatWallDraftHeading([0, 0], [0, 1])).toBe('90°')
+    expect(formatWallDraftHeading([0, 0], [1, -1])).toBe('315°')
+    expect(formatWallDraftHeading([0, 0], [1, -0.001])).toBe('0°')
+    expect(formatWallDraftHeading([0, 0], [0, 0])).toBe('')
   })
 })

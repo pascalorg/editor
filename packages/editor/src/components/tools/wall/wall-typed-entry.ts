@@ -19,7 +19,8 @@ export function wallDraftHeadingDegrees(start: WallPlanPoint, end: WallPlanPoint
 /** The draft's live heading as the angle field's placeholder, e.g. `90°`. */
 export function formatWallDraftHeading(start: WallPlanPoint, end: WallPlanPoint): string {
   const degrees = wallDraftHeadingDegrees(start, end)
-  return degrees === null ? '' : formatAngleRadians((degrees * Math.PI) / 180)
+  if (degrees === null) return ''
+  return formatAngleRadians(((Math.round(degrees) % 360) * Math.PI) / 180)
 }
 
 /**
