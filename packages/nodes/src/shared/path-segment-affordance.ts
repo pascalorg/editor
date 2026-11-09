@@ -8,7 +8,7 @@ import {
   resolveConnectivityUpdates,
   useScene,
 } from '@pascal-app/core'
-import { snapPointToGrid, type WallPlanPoint } from '@pascal-app/editor'
+import { isGridSnapActive, snapPointToGrid, type WallPlanPoint } from '@pascal-app/editor'
 
 /**
  * Shared "side-move a path segment" floor-plan affordance for polyline
@@ -19,7 +19,8 @@ import { snapPointToGrid, type WallPlanPoint } from '@pascal-app/editor'
  *  - **move-segment**: slide one segment perpendicular to itself. Both its
  *    vertices translate by the same plan-normal offset (the offset is the
  *    cursor's projection onto the segment normal); neighbours stretch and any
- *    mated joint follows via port connectivity. Grid-snapped (Shift bypasses).
+ *    mated joint follows via port connectivity. Grid-snapped while grid
+ *    snapping is on.
  *
  * The vertices' Y (elevation) is always held — plan editing never changes
  * height, matching the path-point affordance. Behavioral parity with the 3D
@@ -100,14 +101,13 @@ export function createSegmentMoveAffordance<N extends PathShape>(
 
       return {
         affectedIds,
-        apply({ planPoint, modifiers }) {
+        apply({ planPoint }) {
           // Project the cursor onto the segment normal — that signed distance
-          // is how far the whole segment slides. Grid-snap the magnitude
-          // (Shift bypasses) so the slide lands on the same lattice as the
-          // other plan tools.
+          // is how far the whole segment slides. Grid-snap the magnitude so the
+          // slide lands on the same lattice as the other plan tools.
           const signedRaw =
             (planPoint[0] - mid[0]) * normal[0] + (planPoint[1] - mid[1]) * normal[1]
-          const signed = modifiers.shiftKey ? signedRaw : snapPointToGrid([signedRaw, 0])[0]
+          const signed = isGridSnapActive() ? snapPointToGrid([signedRaw, 0])[0] : signedRaw
           const ox = normal[0] * signed
           const oz = normal[1] * signed
           const nextPath = initialPath.map((p, i) =>

@@ -16,6 +16,8 @@ import {
 import {
   ARROW_COLOR,
   EDITOR_LAYER,
+  isAngleSnapActive,
+  isGridSnapActive,
   isTypingTarget,
   swallowNextClick,
   triggerSFX,
@@ -485,7 +487,7 @@ const FittingHandles = ({ fitting }: { fitting: PipeFittingNode }) => {
         if (start === null) return null
         const s = sampleAxis(axis, event.clientX, event.clientY, anchorWorld)
         if (s === null) return null
-        const step = event.shiftKey ? 0 : useEditor.getState().gridSnapStep
+        const step = isGridSnapActive() ? useEditor.getState().gridSnapStep : 0
         const delta = snap(s - start, step)
         if (delta === lastDelta) return null
         lastDelta = delta
@@ -524,8 +526,9 @@ const FittingHandles = ({ fitting }: { fitting: PipeFittingNode }) => {
         const b = bearing(event.clientX, event.clientY)
         if (b === null) return null
         const raw = b - startBearing
-        const delta = event.shiftKey ? raw : Math.round(raw / ROTATE_STEP_RAD) * ROTATE_STEP_RAD
-        if (!event.shiftKey) {
+        const snapped = isAngleSnapActive()
+        const delta = snapped ? Math.round(raw / ROTATE_STEP_RAD) * ROTATE_STEP_RAD : raw
+        if (snapped) {
           const step = Math.round(raw / ROTATE_STEP_RAD)
           if (step !== lastStep) {
             lastStep = step
@@ -573,11 +576,12 @@ const FittingHandles = ({ fitting }: { fitting: PipeFittingNode }) => {
           sampleAxisParameter(event.clientX, event.clientY, centerWorld, axisWorld) - start
         const deltaIn = (rawDeltaM / INCHES_TO_METERS) * 2
         const nextRaw = baseValue + deltaIn
-        const nextValue = clamp(event.shiftKey ? nextRaw : snap(nextRaw, RESIZE_STEP_IN), 1.25, 8)
+        const snapped = isGridSnapActive()
+        const nextValue = clamp(snapped ? snap(nextRaw, RESIZE_STEP_IN) : nextRaw, 1.25, 8)
         if (nextValue === lastValue) return
         lastValue = nextValue
         current = dimensionPatch(fitting, dimension, nextValue)
-        if (!event.shiftKey) triggerSFX('sfx:grid-snap')
+        if (snapped) triggerSFX('sfx:grid-snap')
         apply(current)
       }
 

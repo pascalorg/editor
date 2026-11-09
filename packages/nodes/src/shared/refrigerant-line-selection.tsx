@@ -14,7 +14,13 @@ import {
   sceneRegistry,
   useScene,
 } from '@pascal-app/core'
-import { DimensionPill, swallowNextClick, triggerSFX, useEditor } from '@pascal-app/editor'
+import {
+  DimensionPill,
+  isGridSnapActive,
+  swallowNextClick,
+  triggerSFX,
+  useEditor,
+} from '@pascal-app/editor'
 import { collectScenePorts, findNearestPortXZ } from '@pascal-app/editor/distribution'
 import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
@@ -255,7 +261,7 @@ function RefrigerantLineEndpointHandles({
     const onMove = (event: PointerEvent) => {
       const drag = dragRef.current
       if (!drag) return
-      const step = event.shiftKey ? 0 : useEditor.getState().gridSnapStep
+      const step = isGridSnapActive() ? useEditor.getState().gridSnapStep : 0
       const detached = event.altKey
       let next: Point | null = null
       if (canSwing && pivot) {

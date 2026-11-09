@@ -157,11 +157,11 @@ There is no per-kind snapping switch.
 spots not yet touched (the `event.altKey` alignment bypass and pre-scope `useEditor` flags). A PR that
 **touches** one must migrate it to the model above, not extend the legacy path:
 
-1. **`event.shiftKey` as a snap bypass with hardcoded steps** — the pipe-fitting and refrigerant-line
-   handles (`packages/nodes/src/pipe-fitting/selection.tsx`, `packages/nodes/src/shared/refrigerant-line-selection.tsx`)
-   and the 2D path-segment and polygon-centroid drags
-   (`packages/nodes/src/shared/{path-segment-affordance,polygon-centroid-move}.ts`). Migrated handles read
-   `isGridSnapActive()` / `isAngleSnapActive()` instead (`duct-segment/selection.tsx`, `duct-fitting/selection.tsx`).
+1. **`event.shiftKey` as a snap bypass with hardcoded steps** — the 2D polygon-centroid drag
+   (`packages/nodes/src/shared/polygon-centroid-move.ts`). Migrated handles read
+   `isGridSnapActive()` / `isAngleSnapActive()` instead (`{duct,pipe}-segment/selection.tsx`,
+   `{duct,pipe}-fitting/{selection,move-tool}.tsx`, `shared/refrigerant-line-selection.tsx`,
+   `shared/path-segment-affordance.ts`).
    Opening a `moving` scope from a bespoke mover is **not** the migration — `useMovingNode()` reads the scope,
    so `tool-manager` re-mounts the generic `MoveRegistryNodeTool` alongside it (the dual-path FPS/teleport
    bug). Resolve the mode without a global `moving`/`reshaping` scope; see the plan's dual-path note.
