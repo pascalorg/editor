@@ -725,7 +725,7 @@ export const definitionMessages = [
   /* i18n */ { id: "node.measurement.label", message: "Measurement" },
   /* i18n */ { id: "node.pipeFitting.description", message: "DWV joint — elbow bend, 45° wye, or sanitary tee." },
   /* i18n */ { id: "node.pipeFitting.label", message: "Pipe Fitting" },
-  /* i18n */ { id: "node.pipeSegment.description", message: "Drain / waste / vent pipe run — draw level or toggle a ¼″ per foot fall with S." },
+  /* i18n */ { id: "node.pipeSegment.description", message: "Drain / waste / vent pipe run — draw level or choose grade and downhill direction." },
   /* i18n */ { id: "node.pipeSegment.label", message: "DWV Pipe" },
   /* i18n */ { id: "node.pipeTrap.description", message: "DWV P-trap — water seal on the waste line. The trap arm runs to the vent." },
   /* i18n */ { id: "node.pipeTrap.label", message: "Trap" },

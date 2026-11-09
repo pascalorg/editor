@@ -16,6 +16,8 @@ import {
 import {
   ARROW_COLOR,
   EDITOR_LAYER,
+  isAngleSnapActive,
+  isGridSnapActive,
   isTypingTarget,
   swallowNextClick,
   triggerSFX,
@@ -40,7 +42,7 @@ import {
   Vector3,
 } from 'three'
 import { LineBasicNodeMaterial, MeshBasicNodeMaterial } from 'three/webgpu'
-import { INCHES_TO_METERS } from '../duct-segment/geometry'
+import { INCHES_TO_METERS } from '../duct-segment/profile'
 import { autoOffsetInvalidationUpdates } from '../shared/auto-offset-tag'
 import {
   AXIS_VECTORS,
@@ -531,8 +533,8 @@ const FittingHandles = ({ fitting, target }: { fitting: DuctFittingNode; target:
     }
 
   // Move: translate the fitting along one world axis, anchored to the cursor's
-  // start coord so it doesn't jump on grab. Y is clamped at the floor; Shift
-  // bypasses grid snapping.
+  // start coord so it doesn't jump on grab. Y is clamped at the floor; the
+  // step follows the grid snap mode.
   const moveCompute =
     (axis: RotationAxis) =>
     (e: ThreeEvent<PointerEvent>): ((event: PointerEvent) => FittingTransform | null) => {
@@ -545,7 +547,7 @@ const FittingHandles = ({ fitting, target }: { fitting: DuctFittingNode; target:
         if (start === null) return null
         const s = sampleAxis(axis, event.clientX, event.clientY, anchorWorld)
         if (s === null) return null
-        const step = event.shiftKey ? 0 : useEditor.getState().gridSnapStep
+        const step = isGridSnapActive() ? useEditor.getState().gridSnapStep : 0
         const delta = snap(s - start, step)
         if (delta === lastDelta) return null
         lastDelta = delta
@@ -589,12 +591,13 @@ const FittingHandles = ({ fitting, target }: { fitting: DuctFittingNode; target:
         if (startBearing === null) return null
         const b = bearing(event.clientX, event.clientY)
         if (b === null) return null
-        // Snap the turn to 45° steps; Shift = smooth (no snap).
+        // Snap the turn to 45° steps while angle snapping is on.
         const raw = b - startBearing
-        const delta = event.shiftKey ? raw : Math.round(raw / ROTATE_STEP_RAD) * ROTATE_STEP_RAD
+        const snapped = isAngleSnapActive()
+        const delta = snapped ? Math.round(raw / ROTATE_STEP_RAD) * ROTATE_STEP_RAD : raw
         // Tick the rotate SFX each time a fresh snap step is crossed (snapped
-        // turns only — a smooth Shift-drag has no discrete steps to mark).
-        if (!event.shiftKey) {
+        // turns only — a free turn has no discrete steps to mark).
+        if (snapped) {
           const step = Math.round(raw / ROTATE_STEP_RAD)
           if (step !== lastStep) {
             lastStep = step
@@ -643,11 +646,12 @@ const FittingHandles = ({ fitting, target }: { fitting: DuctFittingNode; target:
           sampleAxisParameter(event.clientX, event.clientY, centerWorld, axisWorld) - start
         const deltaIn = (rawDeltaM / INCHES_TO_METERS) * 2
         const nextRaw = baseValue + deltaIn
-        const nextValue = clamp(event.shiftKey ? nextRaw : snap(nextRaw, RESIZE_STEP_IN), min, max)
+        const snapped = isGridSnapActive()
+        const nextValue = clamp(snapped ? snap(nextRaw, RESIZE_STEP_IN) : nextRaw, min, max)
         if (nextValue === lastValue) return
         lastValue = nextValue
         current = { [dimension]: nextValue } as Partial<DuctFittingNode>
-        if (!event.shiftKey) triggerSFX('sfx:grid-snap')
+        if (snapped) triggerSFX('sfx:grid-snap')
         apply(current)
       }
 

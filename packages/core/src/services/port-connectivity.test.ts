@@ -351,6 +351,145 @@ describe('port connectivity — joint follow (stretch vs translate)', () => {
   })
 })
 
+// A corner elbow whose collars sit at the node's own offsets from its position.
+stubDef('test:corner-elbow', 'fitting', (node) => {
+  const { position, collars, system } = node as unknown as {
+    position: Point
+    collars: Point[]
+    system: string
+  }
+  return collars.map((offset, index) => ({
+    id: index === 0 ? 'inlet' : 'outlet',
+    position: [position[0] + offset[0], position[1] + offset[1], position[2] + offset[2]],
+    direction: offset,
+    diameter: 6,
+    system,
+  }))
+})
+
+describe('port connectivity — closed loops', () => {
+  // A square loop of four legs and four corner elbows. The west and north legs
+  // fall `drop` metres toward the north-west corner; the south leg is moved.
+  function loop(drop: number) {
+    const low = 1 - drop
+    const corner = (position: Point, collars: Point[]) =>
+      makeNode('test:corner-elbow', { position, collars, system: 'supply' })
+    const leg = (path: Point[]) => makeNode('duct-segment', { path, system: 'supply' })
+    const south = leg([
+      [0.2, 1, 0],
+      [3.8, 1, 0],
+    ])
+    const others = [
+      corner(
+        [4, 1, 0],
+        [
+          [-0.2, 0, 0],
+          [0, 0, 0.2],
+        ],
+      ),
+      leg([
+        [4, 1, 0.2],
+        [4, 1, 3.8],
+      ]),
+      corner(
+        [4, 1, 4],
+        [
+          [0, 0, -0.2],
+          [-0.2, 0, 0],
+        ],
+      ),
+      leg([
+        [0.2, low, 4],
+        [3.8, 1, 4],
+      ]),
+      corner(
+        [0, low, 4],
+        [
+          [0.2, 0, 0],
+          [0, 0, -0.2],
+        ],
+      ),
+      leg([
+        [0, 1, 0.2],
+        [0, low, 3.8],
+      ]),
+      corner(
+        [0, 1, 0],
+        [
+          [0.2, 0, 0],
+          [0, 0, 0.2],
+        ],
+      ),
+    ]
+    return { south, nodes: sceneOf(south, ...others) }
+  }
+
+  function moveSouth(drop: number, delta: Point) {
+    const { south, nodes } = loop(drop)
+    const preview = {
+      ...(south as Record<string, unknown>),
+      path: (south as unknown as { path: Point[] }).path.map((p) => [
+        p[0] + delta[0],
+        p[1] + delta[1],
+        p[2] + delta[2],
+      ]),
+    } as AnyNode
+    const updates = resolveConnectivityUpdates(analyzePortConnectivity(south, nodes), preview)
+    const after: Record<string, AnyNode> = { ...nodes, [south.id]: preview }
+    for (const update of updates) after[update.id] = { ...after[update.id]!, ...update.data }
+    return { nodes, updates, after }
+  }
+
+  test('a leg moved along its own axis carries a loop with a sloped leg rigidly', () => {
+    const delta: Point = [0.5, 0, 0]
+    const { nodes, updates } = moveSouth(0.08, delta)
+
+    expect(updates).toHaveLength(7)
+    for (const { id, data } of updates) {
+      const before = nodes[id] as unknown as { position?: Point; path?: Point[] }
+      const next = data as { position?: Point; path?: Point[] }
+      if (before.position) {
+        expectPointClose(next.position!, [
+          before.position[0] + delta[0],
+          before.position[1],
+          before.position[2],
+        ])
+      }
+      before.path?.forEach((point, index) => {
+        expectPointClose(next.path![index]!, [point[0] + delta[0], point[1], point[2]])
+      })
+    }
+  })
+
+  test.each([
+    ['a level loop moved obliquely', 0, [0.3, -0.1, 0.4]],
+    ['a sloped loop raised', 0.08, [0, 0.2, 0]],
+    ['a sloped loop moved diagonally in plan', 0.08, [-0.4, 0, 0.6]],
+  ] as Array<[string, number, Point]>)('%s settles with every joint welded', (_, drop, delta) => {
+    const { after } = moveSouth(drop, delta)
+
+    const runEnds = Object.values(after)
+      .filter((node) => node.type === 'duct-segment')
+      .flatMap((node) => nodeRegistry.get('duct-segment')!.ports!(node as never))
+    const collars = Object.values(after)
+      .filter((node) => node.type === 'test:corner-elbow')
+      .flatMap((node) => nodeRegistry.get('test:corner-elbow')!.ports!(node as never))
+    expect(collars).toHaveLength(8)
+    for (const collar of collars) {
+      const gap = Math.min(
+        ...runEnds.map((end) =>
+          Math.hypot(
+            end.position[0] - collar.position[0],
+            end.position[1] - collar.position[1],
+            end.position[2] - collar.position[2],
+          ),
+        ),
+      )
+      expect(gap).toBeLessThan(1e-6)
+    }
+  })
+})
+
 test('kind-owned connectivity keeps fixed neighbors and snapshots custom move followers', () => {
   registerNode({
     kind: 'test:connected-equipment',

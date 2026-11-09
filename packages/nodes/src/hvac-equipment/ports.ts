@@ -1,6 +1,6 @@
 import type { NodePort } from '@pascal-app/core'
 import { Vector3 } from 'three'
-import { equivalentDiameterIn, ovalEquivalentDiameterIn } from '../duct-segment/geometry'
+import { equivalentDiameterIn, ovalEquivalentDiameterIn } from '../duct-segment/profile'
 import type { HvacEquipmentNode } from './schema'
 
 type CollarShape = 'round' | 'rect' | 'oval'

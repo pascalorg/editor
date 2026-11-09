@@ -1,4 +1,5 @@
 import { nodeRegistry } from '../registry'
+import { queryNodes } from '../runtime/node-queries'
 import type { AnyNode, AnyNodeId } from '../schema'
 
 /**
@@ -33,9 +34,11 @@ import type { AnyNode, AnyNodeId } from '../schema'
  *   propagates onward to whatever is mated to the far endpoint.
  *
  * Propagation walks the whole connected component so a joint stays welded all
- * the way down the chain, with a visited guard so cycles (looped runs) and
- * shared joints terminate. First-reached (shortest path) wins on a node
- * reachable two ways.
+ * the way down the chain. A node reached along several paths averages the
+ * pushes it receives per port. In a closed loop whose legs split a push
+ * differently (e.g. one sloped leg), every averaging round re-broadcasts
+ * through both collars of each fitting, so each joint edge holds only its
+ * newest pending push and the walk has a fixed step budget.
  */
 
 type Point = readonly [number, number, number]
@@ -49,6 +52,11 @@ const COINCIDENT_EPS_M = 0.05
  *  walk from chasing sub-millimeter perpendicular residue. */
 const DELTA_EPS_M = 1e-4
 const PROPAGATION_EPS_M = 1e-9
+
+/** Walks allowed per joint edge before the resolver keeps its last averaged
+ *  state. Loops settle within a few walks per edge; this only bounds one whose
+ *  averaging never gets below `PROPAGATION_EPS_M`. */
+const MAX_WALKS_PER_EDGE = 64
 
 /** A node carried by the edit, plus the snapshot needed to revert it. Kept
  *  deliberately small: the move tools read only `kind` + `nodeId` and the
@@ -185,14 +193,18 @@ export function analyzePortConnectivity(
   for (const p of movedPorts) startMovedPorts[p.id] = p.position
 
   // Candidate partners: every run + every following fitting in the scene.
+  const followingKinds = [...nodeRegistry.entries()].flatMap(([kind, def]) =>
+    def.ports &&
+    (def.distributionRole === 'run' ||
+      (def.distributionRole === 'fitting' && def.portConnectivityFollow !== false))
+      ? [kind as AnyNode['type']]
+      : [],
+  )
   const candidates: GraphNode[] = []
-  for (const other of Object.values(nodes)) {
-    if (!other || other.id === movedNode.id) continue
+  for (const other of queryNodes(nodes, { type: followingKinds })) {
+    if (other.id === movedNode.id) continue
     const role = roleOf(other)
     if (role !== 'run' && role !== 'fitting') continue
-    if (role === 'fitting' && nodeRegistry.get(other.type)?.portConnectivityFollow === false) {
-      continue
-    }
     const ports = portsOf(other)
     if (!ports) continue
     const startPath =
@@ -380,8 +392,9 @@ function runPathFromPortDeltas(startPath: Point[], portDeltas: Record<string, Po
  * Walks the snapshotted graph, propagating each port delta outward: fittings
  * translate rigidly, runs stretch along their axis and translate across it
  * (never skew when driven from one end), and effective port movement carries on
- * to neighbouring joints. Port-level output guards bound cycles while still
- * allowing a looped/shared run to accept constraints at both endpoints.
+ * to neighbouring joints. Port-level output guards stop consistent cycles;
+ * coalesced edge pushes and the step budget bound loops that keep averaging,
+ * while a looped/shared run still accepts constraints at both endpoints.
  */
 export function resolveConnectivityUpdates(
   connectivity: PortConnectivity,
@@ -395,9 +408,14 @@ export function resolveConnectivityUpdates(
   const newMovedPos: Record<string, Point> = {}
   for (const p of newPorts) newMovedPos[p.id] = p.position
 
-  // Each queue item drives a node's port by a delta ("this collar / endpoint
-  // must move by this much").
-  const queue: Array<{ nodeId: AnyNodeId; portId: string; delta: Point; sourceKey: string }> = []
+  // Each pending push drives a node's port by a delta ("this collar / endpoint
+  // must move by this much"). Keyed per directed joint edge: a newer push along
+  // an edge replaces the queued one, since only the latest per source counts.
+  const queue: string[] = []
+  const pending = new Map<
+    string,
+    { nodeId: AnyNodeId; portId: string; delta: Point; sourceKey: string }
+  >()
   const results: Record<string, { id: AnyNodeId; data: Partial<AnyNode> }> = {}
   const constrainedPorts: Record<string, Record<string, Record<string, Point>>> = {}
   const propagatedPorts: Record<string, Record<string, Point>> = {}
@@ -409,14 +427,17 @@ export function resolveConnectivityUpdates(
     if (previous && propagationEqual(previous, delta)) return
     byPort[portId] = delta
 
+    const sourceKey = `${nodeId}:${portId}`
     for (const mate of adjacency[nodeId]?.[portId] ?? []) {
       if (mate.nodeId === movedNodeId) continue
-      queue.push({
-        nodeId: mate.nodeId,
-        portId: mate.portId,
-        delta,
-        sourceKey: `${nodeId}:${portId}`,
-      })
+      const edgeKey = `${mate.nodeId}:${mate.portId}<${sourceKey}`
+      const queued = pending.get(edgeKey)
+      if (queued) {
+        queued.delta = delta
+        continue
+      }
+      pending.set(edgeKey, { nodeId: mate.nodeId, portId: mate.portId, delta, sourceKey })
+      queue.push(edgeKey)
     }
   }
 
@@ -447,8 +468,17 @@ export function resolveConnectivityUpdates(
     enqueueMates(movedNodeId, portId, delta)
   }
 
-  while (queue.length > 0) {
-    const { nodeId, portId, delta, sourceKey } = queue.shift()!
+  let edgeCount = 0
+  for (const byPort of Object.values(adjacency)) {
+    for (const mates of Object.values(byPort)) edgeCount += mates.length
+  }
+  let budget = MAX_WALKS_PER_EDGE * edgeCount
+
+  while (queue.length > 0 && budget > 0) {
+    budget -= 1
+    const edgeKey = queue.shift()!
+    const { nodeId, portId, delta, sourceKey } = pending.get(edgeKey)!
+    pending.delete(edgeKey)
     const node = graph[nodeId]
     if (!node) continue
     if (!acceptPortDelta(nodeId, portId, sourceKey, delta)) continue

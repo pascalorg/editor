@@ -10,7 +10,9 @@ import {
   type RunContinuationHandlePlan,
   resolvePipeContinuationHandle,
 } from '../shared/elbow-branch-continuation'
-import type { PipeSegmentNode } from './schema'
+import { pipeCollar, pipeCollarOccupied } from './collar-connection'
+import { PipeSegmentNode } from './schema'
+import { pipeGrade } from './slope'
 
 export type PipeEndpoint = 'start' | 'end'
 
@@ -24,6 +26,7 @@ export type PipeContinuationSeed = {
 type PipeContinuationDefaults = {
   continuation?: {
     nodeId?: unknown
+    portId?: unknown
     endpoint?: unknown
     fittingId?: unknown
     segmentIndex?: unknown
@@ -80,6 +83,19 @@ export function resolvePipeContinuationSeed(
   nodes: Record<string, AnyNode>,
 ): PipeContinuationSeed | null {
   const continuation = (defaults as PipeContinuationDefaults | null)?.continuation
+  if (typeof continuation?.nodeId === 'string' && typeof continuation.portId === 'string') {
+    const source = nodes[continuation.nodeId]
+    const port = pipeCollar(nodes, continuation.nodeId, continuation.portId)
+    if (!source || !port || pipeCollarOccupied(nodes, port)) return null
+    const profile = PipeSegmentNode.safeParse({
+      parentId: source.parentId,
+      diameter: port.diameter,
+      system: port.system,
+      pipeMaterial: 'pipeMaterial' in source ? source.pipeMaterial : 'pvc',
+      path: [[...port.position], port.position.map((value, i) => value + port.direction[i]!)],
+    })
+    return profile.success ? { pipe: profile.data, port, body: null } : null
+  }
   const endpoint = continuation?.endpoint
   const nodeId = continuation?.nodeId
   if (endpoint === 'branch' && typeof nodeId === 'string') {
@@ -137,6 +153,9 @@ export function activatePipeBranch(
   if (!pipe.path[segmentIndex] || !pipe.path[segmentIndex + 1]) return
   const editor = useEditor.getState()
   editor.setToolDefaults('pipe-segment', {
+    ...editor.toolDefaults['pipe-segment'],
+    routingMode: 'surface',
+    crossingMode: 'connect',
     continuation: { nodeId: pipe.id, endpoint: 'branch', segmentIndex, point },
   })
   useViewer.getState().setSelection({ selectedIds: [] })
@@ -151,7 +170,22 @@ export function activatePipeContinuation(
   if (!pipeEndpointPort(pipe, endpoint)) return
   const editor = useEditor.getState()
   editor.setToolDefaults('pipe-segment', {
+    ...editor.toolDefaults['pipe-segment'],
+    routingMode: 'surface',
+    crossingMode: 'connect',
     continuation: { nodeId: pipe.id, endpoint, ...(fittingId ? { fittingId } : {}) },
+    ...(() => {
+      const a = endpoint === 'end' ? pipe.path.at(-2)! : pipe.path[1]!
+      const b = endpoint === 'end' ? pipe.path.at(-1)! : pipe.path[0]!
+      const grade = pipeGrade(a, b)
+      return grade === null
+        ? { fall: 'level' }
+        : {
+            fall: Math.abs(grade) > 1e-6 ? 'sloped' : 'level',
+            gradePercent: Math.abs(grade) * 100,
+            flowDirection: grade < 0 ? 'reverse' : 'forward',
+          }
+    })(),
   })
   useViewer.getState().setSelection({ selectedIds: [] })
   editor.setTool('pipe-segment')
