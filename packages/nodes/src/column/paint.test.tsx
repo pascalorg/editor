@@ -4,6 +4,7 @@ import {
   ColumnNode,
   clearSceneHistory,
   columnSlots,
+  NEW_COLUMN_SLOTS,
   sceneRegistry,
   useScene,
 } from '@pascal-app/core'
@@ -29,7 +30,7 @@ const paint = {
 const cases = [
   ...Object.entries(COLUMN_PRESETS).map(([name, preset]) => ({
     name,
-    node: ColumnNode.parse(preset),
+    node: ColumnNode.parse({ ...preset, slots: { ...NEW_COLUMN_SLOTS } }),
   })),
   ...['fluted', 'spiral', 'panelled', 'lathe-turned'].map((shaftDetail) => ({
     name: shaftDetail,
@@ -42,6 +43,7 @@ const cases = [
       lowerBandEnabled: true,
       baseStyle: 'ribbed-lotus',
       capitalStyle: 'corinthian-leaf',
+      slots: { ...NEW_COLUMN_SLOTS },
     }),
   })),
 ]
