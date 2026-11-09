@@ -1,4 +1,4 @@
-import { expect, test } from 'bun:test'
+import { beforeEach, expect, test } from 'bun:test'
 import { emitter } from '@pascal-app/core'
 import { useKeyboard } from '../../hooks/use-keyboard'
 import useEditor from '../../store/use-editor'
@@ -28,6 +28,10 @@ const press = (key: string) => {
   })
   window.dispatchEvent(event)
 }
+
+beforeEach(() => {
+  usePlacementTyping.getState().clear()
+})
 
 test('2D-only typed wall keys run ahead of the global shortcuts', async () => {
   await withSelectionHarness(async ({ render }) => {
