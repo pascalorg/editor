@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test'
+import { measurementHint, parseMeasurement } from '../index'
 import {
   buildMeasurementAngleArcPoints,
   cubicMetersToVolumeUnit,
@@ -17,6 +18,7 @@ import {
   measurementFloorplanPresentationColor,
   measurementPresentationColor,
   metersToLinearUnit,
+  parseLinearMeasurementInput,
   squareMetersToAreaUnit,
 } from './measurements'
 
@@ -128,6 +130,11 @@ describe('linear measurements', () => {
     expect(linearControlValueToMeters(3.5, 'metric')).toBe(3.5)
   })
 
+  test('parses floor-plan measurement input with the scoped locale', () => {
+    expect(parseLinearMeasurementInput('2,75', 'metric', 'fr')).toBe(2.75)
+    expect(parseLinearMeasurementInput('2,75', 'metric', 'en')).toBeNull()
+  })
+
   test('clamps numeric control input after converting to meters', () => {
     expect(linearControlValueToMeters(0.1, 'imperial', { minMeters: 0.1 })).toBe(0.1)
     expect(linearControlValueToMeters(0.3, 'imperial', { minMeters: 0.1 })).toBe(0.1)
@@ -188,5 +195,38 @@ describe('volume measurements', () => {
     expect(formatVolumeLabel(NaN, 'metric')).toBe('--')
     expect(formatVolumeLabel(Infinity, 'imperial')).toBe('--')
     expect(formatVolumeLabel(Number.NEGATIVE_INFINITY, 'metric')).toBe('--')
+  })
+})
+
+describe('typed measurement fields', () => {
+  test('canonicalizes explicit, compound, and scientific dimensions', () => {
+    const length = { kind: 'length', unitId: 'm' } as const
+    expect(parseMeasurement('180cm', length)).toBeCloseTo(1.8)
+    expect(parseMeasurement('1m80', length)).toBeCloseTo(1.8)
+    expect(parseMeasurement(`5'11"`, length)).toBeCloseTo(1.8034)
+    expect(parseMeasurement('1.234e-4 m', length)).toBeCloseTo(0.0001234, 10)
+    expect(parseMeasurement('6', length, { bareUnit: 'ft' })).toBeCloseTo(1.8288)
+    expect(parseMeasurement('180deg', { kind: 'angle', unitId: 'rad' })).toBeCloseTo(Math.PI)
+  })
+
+  test('rejects ranges, incomplete arithmetic, and nonfinite input', () => {
+    const length = { kind: 'length', unitId: 'm' } as const
+    for (const input of ['2+3 m', '2-3 m', 'between 2 and 3 m', '1e999 m']) {
+      expect(parseMeasurement(input, length)).toBeNull()
+      expect(measurementHint(input, length)).toBeNull()
+    }
+    expect(measurementHint('180cm', length)).toBe('= 1.80 m')
+    expect(measurementHint('6', length)).toBeNull()
+  })
+
+  test('only treats the active locale decimal separator as a plain decimal', () => {
+    const length = { kind: 'length', unitId: 'm' } as const
+
+    expect(measurementHint('1,000', length, { locale: 'en' })).not.toBeNull()
+    expect(measurementHint('-1,000', length, { locale: 'en' })).not.toBeNull()
+    expect(measurementHint('1,5', length, { locale: 'en' })).not.toBeNull()
+
+    expect(measurementHint('1,5', length, { locale: 'fr' })).toBeNull()
+    expect(parseMeasurement('2,75 m', length, { locale: 'fr' })).toBe(2.75)
   })
 })

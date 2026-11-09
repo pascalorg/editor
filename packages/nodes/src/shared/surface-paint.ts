@@ -1,6 +1,7 @@
 import type { AnyNode, MaterialSchema } from '@pascal-app/core'
 import type { Mesh, Object3D } from 'three'
 import { buildSlotPreviewMaterial, createSlotPaintCapability } from './slot-paint'
+import { swapPreviewMaterial } from './swap-preview-material'
 
 type LegacySurfaceNode = AnyNode & { material?: MaterialSchema; materialPreset?: string }
 
@@ -13,11 +14,7 @@ export const surfacePaintCapability = createSlotPaintCapability({
     ;(root as Object3D).traverse((object) => {
       const mesh = object as Mesh
       if (!mesh.isMesh) return
-      const previous = mesh.material
-      mesh.material = preview
-      restores.push(() => {
-        mesh.material = previous
-      })
+      restores.push(swapPreviewMaterial(mesh, preview))
     })
     if (restores.length === 0) return null
     return () => {

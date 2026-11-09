@@ -1,6 +1,6 @@
 import { sceneRegistry, useScene } from '@pascal-app/core'
 import { useFrame } from '@react-three/fiber'
-import { useRef } from 'react'
+import { useMemo, useRef } from 'react'
 import { type Group, MathUtils, type Mesh } from 'three'
 import type { MeshBasicNodeMaterial } from 'three/webgpu'
 import useViewer from '../../store/use-viewer'
@@ -9,6 +9,18 @@ const TRANSITION_DURATION = 400 // ms
 const EXIT_DEBOUNCE_MS = 50 // ignore rapid exit→re-enter within this window
 
 export const ZoneSystem = () => {
+  const focusedUnitId = useViewer((state) => state.focusedUnitId)
+  const focusedUnitMembers = useScene((state) => {
+    const unit = focusedUnitId ? state.nodes[focusedUnitId] : undefined
+    return unit?.type === 'unit' ? unit.members : undefined
+  })
+  const focusedZoneIds = useMemo(() => new Set<string>(focusedUnitMembers), [focusedUnitMembers])
+  const selection = useViewer((state) => state.selection)
+  const showZones = useViewer((state) => state.showZones)
+  const lastFocusRef = useRef<typeof focusedUnitId>(null)
+  const lastFocusedZoneIdsRef = useRef<Set<string> | null>(null)
+  const lastSelectionRef = useRef<typeof selection | null>(null)
+  const lastShowZonesRef = useRef(showZones)
   const lastHighlightedZoneRef = useRef<string | null>(null)
   const lastChangeTimeRef = useRef(0)
   const isTransitioningRef = useRef(false)
@@ -58,6 +70,20 @@ export const ZoneSystem = () => {
       isTransitioningRef.current = true
     }
 
+    if (
+      focusedUnitId !== lastFocusRef.current ||
+      focusedZoneIds !== lastFocusedZoneIdsRef.current ||
+      selection !== lastSelectionRef.current ||
+      showZones !== lastShowZonesRef.current
+    ) {
+      lastFocusRef.current = focusedUnitId
+      lastFocusedZoneIdsRef.current = focusedZoneIds
+      lastSelectionRef.current = selection
+      lastShowZonesRef.current = showZones
+      lastChangeTimeRef.current = clock.elapsedTime * 1000
+      isTransitioningRef.current = true
+    }
+
     // Skip frame if not transitioning
     if (!isTransitioningRef.current) return
 
@@ -75,7 +101,11 @@ export const ZoneSystem = () => {
       const zone = sceneRegistry.nodes.get(zoneId)
       if (!zone) return
 
-      const isHighlighted = zoneId === highlightedZone
+      const isHighlighted =
+        zoneId === highlightedZone ||
+        zoneId === selection.zoneId ||
+        selection.selectedIds.includes(zoneId) ||
+        focusedZoneIds.has(zoneId)
       const targetOpacity = isHighlighted ? 1 : 0
 
       const walls = (zone as Group).getObjectByName('walls') as Mesh | undefined

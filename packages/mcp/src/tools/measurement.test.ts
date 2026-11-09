@@ -59,6 +59,14 @@ describe('measurement()', () => {
     expect(r.success).toBe(false)
   })
 
+  test('accepts scientific dimensions without choosing one endpoint of a range', () => {
+    const field = measurement('length', 'm')
+    expect(field.parse('1.234e-4 m')).toBeCloseTo(0.0001234, 10)
+    for (const input of ['2+3 m', '2-3 m', 'between 2 and 3 m']) {
+      expect(field.safeParse(input).success).toBe(false)
+    }
+  })
+
   test('emits a number|string JSON schema advertising natural language', () => {
     const schema = z.toJSONSchema(
       measurement('length', 'm', { min: 0, description: 'Wall thickness.' }),
@@ -66,10 +74,27 @@ describe('measurement()', () => {
         io: 'input',
       },
     )
-    const json = JSON.stringify(schema)
-    expect(json).toContain('anyOf')
-    expect(json).toContain('number')
-    expect(json).toContain('string')
-    expect((schema as { description?: string }).description).toContain('natural-language')
+
+    expect(acceptedJsonTypes(schema)).toEqual(['number', 'string'])
+    expect((schema as { description?: string }).description).toContain('or text with a unit')
   })
 })
+
+/**
+ * The types a JSON Schema node admits, whichever spelling it uses: zod ≤4.4
+ * emitted a primitive union as `anyOf: [{type:'number'},{type:'string'}]`, zod
+ * ≥4.5 folds it to `type: ['number','string']`. Both are draft-2020-12
+ * equivalent (verified against the ajv the MCP SDK ships), so the tool contract
+ * is the accepted type set, not the shape it is written in.
+ */
+function acceptedJsonTypes(schema: unknown): string[] {
+  const node = schema as {
+    anyOf?: { type?: string }[]
+    type?: string | string[]
+  }
+  const types = node.anyOf
+    ? node.anyOf.flatMap((member) => (member.type ? [member.type] : []))
+    : [node.type ?? []].flat()
+
+  return [...new Set(types)].sort()
+}

@@ -40,12 +40,27 @@ export const DuctFittingNode = BaseNode.extend({
   position: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
   // XYZ euler radians.
   rotation: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
-  fittingType: z.enum(['elbow', 'tee', 'cross', 'reducer', 'transition']).default('elbow'),
+  fittingType: z
+    .enum([
+      'elbow',
+      'tee',
+      'cross',
+      'reducer',
+      'transition',
+      'end-cap',
+      'damper',
+      'access-panel',
+      'coupling',
+    ])
+    .default('elbow'),
   // Run-leg cross-section: round collars, or a rect / flat-oval profile
   // matching the trunk the fitting sits in. Reducers ignore the shape.
   // When non-round, `diameter` carries the area-equivalent round size
   // (drives leg lengths + advertised ports).
   shape: z.enum(['round', 'rect', 'oval']).default('rect'),
+  // Adapter end profiles; omitted values use the fitting type's standard profiles.
+  inletShape: z.enum(['round', 'rect', 'oval']).optional(),
+  outletShape: z.enum(['round', 'rect', 'oval']).optional(),
   // Rect / oval run-leg profile in inches (used when shape ≠ 'round').
   width: z.number().min(4).max(60).default(14),
   height: z.number().min(3).max(40).default(8),
@@ -74,17 +89,23 @@ export const DuctFittingNode = BaseNode.extend({
   diameter2: z.number().min(2).max(48).default(6),
   ductMaterial: z.enum(['sheet-metal', 'flex', 'duct-board']).default('sheet-metal'),
   system: z.enum(['supply', 'return']).default('supply'),
+  damperAngle: z.number().finite().min(0).max(90).default(0),
+  panelWidth: z.number().finite().min(0.1).max(1.2).default(0.25),
+  panelHeight: z.number().finite().min(0.1).max(1.2).default(0.15),
   slots: z.record(z.string(), z.string()).optional(),
 }).describe(
   dedent`
   Duct fitting - elbow, tee, cross, reducer, or square-to-round transition between duct runs.
   - position: [x, y, z] level-local meters
   - rotation: [x, y, z] euler radians
-  - fittingType: elbow | tee | cross | reducer | transition (rect end -X, round end +X)
-  - shape: round | rect | oval run legs (matches the trunk; ignored by reducer / transition)
+  - fittingType: elbow | tee | cross | reducer | transition | end-cap | damper | access-panel | coupling
+  - damperAngle: blade opening in degrees, 0 closed, 90 open
+  - panelWidth / panelHeight: access door dimensions in meters; door lies in local XY with outward normal +Z; no flow ports
+  - inletShape / outletShape: round | rect | oval adapter end profiles; defaults are round-to-round for reducer and rect-to-round for transition
+  - shape: round | rect | oval run legs (matches the trunk)
   - width / height: rect / oval run-leg profile in inches (transition: the rect end)
   - shape2: round | rect | oval tee / cross branch (matches the duct drawn off the tap)
-  - width2 / height2: rect / oval branch profile in inches
+  - width2 / height2: rect / oval branch or adapter outlet profile in inches
   - angle: elbow turn in degrees (45 or 90 typical)
   - branchAngle: tee branch angle off the outlet axis (90 straight tee, 45 downstream lateral, 135 upstream); cross branches are always square
   - diameter: main nominal diameter in inches

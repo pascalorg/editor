@@ -11,10 +11,10 @@ import {
   type Group,
   type Mesh,
   MeshBasicMaterial,
-  Vector3,
 } from 'three'
 import { LineBasicNodeMaterial, MeshBasicNodeMaterial } from 'three/webgpu'
 import { EDITOR_LAYER } from '../../lib/constants'
+import { copyOverlayWorldTransform } from '../../lib/overlay-transform'
 
 // How far the outline sits outside the opening's own extents, so it reads as
 // a frame *around* the opening rather than coinciding with its edges.
@@ -23,7 +23,6 @@ const PAD = 0.05
 const ACCENT = 0x83_81_ed
 
 const NO_RAYCAST = () => null
-const scratchScale = new Vector3()
 
 // Indigo accent matching the resize-arrow handles — deliberately distinct
 // from the white selection outline so the highlight reads as "editable child
@@ -182,7 +181,7 @@ function OpeningHighlight({ openingId, depth }: { openingId: string; depth: numb
       return
     }
     group.visible = true
-    obj.matrixWorld.decompose(group.position, group.quaternion, scratchScale)
+    copyOverlayWorldTransform(obj, group)
   })
 
   if (!isOpening || !outlineGeometry || !fillGeometry) return null

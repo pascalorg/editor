@@ -3,8 +3,10 @@ import {
   type FaceHostCapability,
   getBlockFaceFrame,
   type ItemNode,
+  surfaceRegionContainsPoint,
 } from '@pascal-app/core'
 import { Euler, Matrix4, Quaternion, Vector3 } from 'three'
+import { blockTopSurfaces } from './surface'
 
 type FaceBounds = {
   minU: number
@@ -108,6 +110,7 @@ function resolveBlockFaceTargetForFace(
   const vertices = new Map(
     args.host.topology.vertices.map((vertex) => [vertex.id, vertex.position]),
   )
+  const polygon: [number, number][] = []
   let minU = Number.POSITIVE_INFINITY
   let maxU = Number.NEGATIVE_INFINITY
   let minV = Number.POSITIVE_INFINITY
@@ -120,6 +123,7 @@ function resolveBlockFaceTargetForFace(
     const dz = point[2] - frame.origin[2]
     const pointU = dx * xAxis.x + dy * xAxis.y + dz * xAxis.z
     const pointV = dx * yAxis.x + dy * yAxis.y + dz * yAxis.z
+    polygon.push([pointU, pointV])
     minU = Math.min(minU, pointU)
     maxU = Math.max(maxU, pointU)
     minV = Math.min(minV, pointV)
@@ -138,6 +142,14 @@ function resolveBlockFaceTargetForFace(
       ? clampBlockFaceCenterPosition(snappedPosition, faceBounds, [width, depth])
       : clampBlockFacePosition(snappedPosition, faceBounds, [width, height])
   if (!facePosition) return null
+  if (
+    !attachTo &&
+    !surfaceRegionContainsPoint({ kind: 'polygon', points: polygon }, [
+      facePosition[0],
+      facePosition[1],
+    ])
+  )
+    return null
 
   const [u, v] = facePosition
   const normalOffset = attachTo === 'ceiling' && !args.asset.recessed ? args.rawDimensions[1] : 0
@@ -213,6 +225,12 @@ export const blockFaceHost: FaceHostCapability<BlockNode> = {
   isStoredPlacementValid: ({ host, item, asset }) => {
     if (!item.blockFaceId) return false
     const frame = getBlockFaceFrame(host.topology, item.blockFaceId)
-    return !!(frame && blockFaceAcceptsAttachment(frame.normal[1], asset.attachTo))
+    if (!frame || !blockFaceAcceptsAttachment(frame.normal[1], asset.attachTo)) return false
+    if (asset.attachTo) return true
+    const surface = blockTopSurfaces(host).find((surface) => surface.id === item.blockFaceId)
+    const point = new Vector3(...frame.origin)
+      .addScaledVector(new Vector3(...frame.xAxis), item.position[0])
+      .addScaledVector(new Vector3(...frame.yAxis), item.position[1])
+    return !!surface && surfaceRegionContainsPoint(surface.region, [point.x, point.z])
   },
 }

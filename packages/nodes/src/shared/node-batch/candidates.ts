@@ -1,0 +1,303 @@
+import {
+  type AnyNode,
+  type AnyNodeId,
+  type BatchableConfig,
+  getRegistryVersion,
+  nodeRegistry,
+  sceneRegistry,
+  useLiveNodeOverrides,
+  useLiveTransforms,
+  useScene,
+} from '@pascal-app/core'
+import { hideFromScene, SCENE_LAYER, showInScene, useViewer } from '@pascal-app/viewer'
+import { type Material, Matrix4, type Mesh, type Object3D } from 'three'
+import { isSlotPaintPreviewActive } from '../slot-paint'
+import type { BatchCandidate, BatchEntry } from './types'
+
+/**
+ * Candidate collection + source hide/reveal for node batching. Counterpart of
+ * the wall batch's `toCandidate` (../../wall/wall-batch-system.tsx), walking
+ * each node's mounted subtree instead of a single wall mesh.
+ */
+
+let batchKindsVersion = -1
+let batchKinds: ReadonlyMap<string, BatchableConfig> = new Map()
+
+/**
+ * Kinds that declare `capabilities.batchable`, re-read when a plugin
+ * registers. Walls keep their merged-geometry batch.
+ */
+export function batchableKinds(): ReadonlyMap<string, BatchableConfig> {
+  const version = getRegistryVersion()
+  if (version !== batchKindsVersion) {
+    const kinds = new Map<string, BatchableConfig>()
+    for (const [kind, definition] of nodeRegistry.entries()) {
+      const batchable = definition.capabilities?.batchable
+      if (batchable) kinds.set(kind, batchable)
+    }
+    batchKinds = kinds
+    batchKindsVersion = version
+  }
+  return batchKinds
+}
+
+export function batchableConfig(node: AnyNode | undefined): BatchableConfig | undefined {
+  return node ? batchableKinds().get(node.type) : undefined
+}
+
+const rootInverse = new Matrix4()
+
+/** Source meshes currently draw-hidden per node, so reveal needs no candidate. */
+const hiddenMeshesByNode = new Map<string, Mesh[]>()
+
+/**
+ * Batchable meshes of one subtree. Recurses manually and cuts at the first
+ * invisible node — `traverse` would descend into hidden branches (a toggled-off
+ * variant, a cutout group) — and at any HOSTED child node's registered group:
+ * an item can host other items (a shelf's books), whose groups mount inside
+ * the host's. Packing those would freeze the child at the host's join pose
+ * with no release of its own (it is not a store member). A ceiling's cap draws
+ * itself: it shows and hides with a viewer flag that rebuilds nothing, so a
+ * batched copy would stay drawn after it hides.
+ */
+function collectMeshes(object: Object3D, out: Mesh[], hostedRoots: ReadonlySet<Object3D>): void {
+  if (object.visible === false || hostedRoots.has(object)) return
+  const mesh = object as Mesh
+  if (
+    mesh.isMesh &&
+    mesh.name !== 'cutout' &&
+    mesh.name !== 'ceiling-grid' &&
+    mesh.name !== 'ceiling-cap' &&
+    mesh.layers.isEnabled(SCENE_LAYER)
+  ) {
+    out.push(mesh)
+  }
+  for (const child of object.children) collectMeshes(child, out, hostedRoots)
+}
+
+/**
+ * The node's hosts between it and its level, nearest first, or null when the
+ * chain does not reach a level or a host is hidden — a hidden host hides its
+ * children through group visibility, while batch instances hang off the level
+ * root and would keep drawing them — or a host draws itself because it moves
+ * (an animating item, a door mid-swing): what it carries moves with it. A host's edits, gestures and tint release
+ * the nodes it carries ({@link hostsBusy}), so a batched copy never stays
+ * behind when the host moves.
+ */
+export function hostChain(
+  node: AnyNode,
+  nodes: Record<string, AnyNode | undefined>,
+): { levelId: string; hosts: AnyNode[] } | null {
+  const hosts: AnyNode[] = []
+  for (let id = node.parentId; id; ) {
+    const host = nodes[id]
+    if (!host) return null
+    if (host.type === 'level') return { levelId: host.id as string, hosts }
+    if (host.visible === false) return null
+    const batchable = batchableConfig(host)
+    if (batchable?.excluded?.(host)) return null
+    if (batchable?.settled) {
+      const group = sceneRegistry.nodes.get(host.id as string)
+      if (!group || !batchable.settled(group.userData)) return null
+    }
+    hosts.push(host)
+    id = host.parentId
+  }
+  return null
+}
+
+/**
+ * The level this node's batches live under, or null when the node is not in
+ * batchable scope. Level-scoped kinds qualify anywhere under a level; doors
+ * and windows through a wall that is itself parented to a level.
+ */
+function resolveLevelId(
+  node: AnyNode,
+  batchable: BatchableConfig,
+  nodes: Record<string, AnyNode | undefined>,
+): string | null {
+  const chain = hostChain(node, nodes)
+  if (!chain) return null
+  if (batchable.scope === 'level') return chain.levelId
+  return chain.hosts.length === 1 && chain.hosts[0]!.type === 'wall' ? chain.levelId : null
+}
+
+/** Whether any host of `nodeId` (not the node itself) satisfies `busy`. */
+export function hostsBusy(
+  nodeId: string,
+  nodes: Record<string, AnyNode | undefined>,
+  busy: (hostId: string) => boolean,
+): boolean {
+  for (let id = nodes[nodeId]?.parentId; id; id = nodes[id]?.parentId) {
+    const host = nodes[id]
+    if (!host || host.type === 'level') return false
+    if (busy(id)) return true
+  }
+  return false
+}
+
+/** Adds every batchable node carried by `nodeId` (its descendants, at any depth) to `out`. */
+export function addBatchableDescendants(
+  nodeId: string,
+  nodes: Record<string, AnyNode | undefined>,
+  out: Set<string>,
+): void {
+  const children = (nodes[nodeId] as { children?: unknown } | undefined)?.children
+  if (!Array.isArray(children)) return
+  for (const childId of children) {
+    const id = String(childId)
+    if (batchableConfig(nodes[id])) out.add(id)
+    addBatchableDescendants(id, nodes, out)
+  }
+}
+
+export function collectBatchCandidate(nodeId: string): BatchCandidate | null {
+  const nodes = useScene.getState().nodes
+  const node = nodes[nodeId as AnyNodeId]
+  const batchable = batchableConfig(node)
+  if (!node || !batchable || node.visible === false) return null
+
+  const levelId = resolveLevelId(node, batchable, nodes)
+  if (!levelId) return null
+  if (batchable.excluded?.(node) || isSlotPaintPreviewActive(nodeId)) return null
+
+  const group = sceneRegistry.nodes.get(nodeId)
+  if (!group) return null
+  if (batchable.settled && !batchable.settled(group.userData)) return null
+
+  // A live override on the node (or, for hosted openings, on the host wall)
+  // means an in-flight gesture: transforms are moving under our feet and the
+  // commit's dirty mark has not landed yet.
+  const overrides = useLiveNodeOverrides.getState()
+  if (overrides.get(nodeId as AnyNodeId) || useLiveTransforms.getState().get(nodeId)) return null
+  const liveTransforms = useLiveTransforms.getState()
+  if (
+    hostsBusy(
+      nodeId,
+      nodes,
+      (hostId) =>
+        overrides.get(hostId as AnyNodeId) !== undefined ||
+        liveTransforms.get(hostId) !== undefined,
+    )
+  ) {
+    return null
+  }
+
+  const levelRoot = sceneRegistry.nodes.get(levelId)
+  if (!levelRoot) return null
+
+  const hostedRoots = new Set<Object3D>()
+  const children = (node as { children?: unknown }).children
+  if (Array.isArray(children)) {
+    for (const childId of children) {
+      const childGroup = sceneRegistry.nodes.get(String(childId))
+      if (childGroup) hostedRoots.add(childGroup)
+    }
+  }
+
+  const meshes: Mesh[] = []
+  collectMeshes(group, meshes, hostedRoots)
+  if (meshes.length === 0) return null
+
+  levelRoot.updateWorldMatrix(true, false)
+  rootInverse.copy(levelRoot.matrixWorld).invert()
+
+  const entries: BatchEntry[] = []
+  for (const [meshIndex, mesh] of meshes.entries()) {
+    const material = mesh.material as Material | Material[]
+    // Array materials draw per geometry group — a shape BatchedMesh cannot
+    // hold; transparent ones depend on per-object blend ordering (door/window
+    // glass keeps its own draw); `material.visible === false` is the
+    // selection-hitbox idiom — hitboxes must stay pickable sources, never
+    // batch geometry.
+    if (Array.isArray(material)) continue
+    if (!material || material.transparent === true || material.visible === false) continue
+    if (!mesh.geometry?.getAttribute('position')) continue
+
+    mesh.updateWorldMatrix(true, false)
+    entries.push({
+      nodeId,
+      levelId,
+      allocationKey: batchable.batchKey?.(node, meshIndex),
+      mesh,
+      geometry: mesh.geometry,
+      material,
+      castShadow: mesh.castShadow,
+      receiveShadow: mesh.receiveShadow,
+      matrixInLevel: new Matrix4().multiplyMatrices(rootInverse, mesh.matrixWorld),
+    })
+  }
+  if (entries.length === 0) return null
+
+  return { nodeId, levelId, entries }
+}
+
+export function hideBatchedNode(candidate: BatchCandidate): void {
+  const meshes = candidate.entries.map((entry) => entry.mesh)
+  for (const mesh of meshes) hideFromScene(mesh, 'batched')
+  hiddenMeshesByNode.set(candidate.nodeId, meshes)
+}
+
+/**
+ * Belt-and-braces reveal: drops the 'batched' hold from EVERY mesh under
+ * every level root. Per-node reveals track the meshes they hid, but a system
+ * can rebuild a node's children while it is batched (swapping the tracked
+ * refs), and a stale ref means a mesh stays off the scene layer — which the
+ * GLB exporter prunes. `showInScene` is a no-op on unheld meshes, so the
+ * sweep is safe; it runs only on the rare release-everything paths (capture,
+ * appearance switches, isolation).
+ */
+export function revealAllBatchedHolds(): void {
+  for (const levelId of sceneRegistry.byType.level ?? []) {
+    const root = sceneRegistry.nodes.get(levelId)
+    root?.traverse((child) => {
+      if ((child as Mesh).isMesh) showInScene(child, 'batched')
+    })
+  }
+  hiddenMeshesByNode.clear()
+}
+
+export function revealBatchedNode(nodeId: string): void {
+  const meshes = hiddenMeshesByNode.get(nodeId)
+  if (!meshes) return
+  for (const mesh of meshes) showInScene(mesh, 'batched')
+  hiddenMeshesByNode.delete(nodeId)
+}
+
+/**
+ * Nodes the viewer is lighting up — plus nodes whose host is lit or
+ * mid-gesture: a dragged wall carries its doors, a moved cabinet run its
+ * modules, through live overrides and transforms, and a batched copy would
+ * stay behind until commit.
+ */
+export function collectTintedNodes(nodeIds: ReadonlySet<string>): Set<string> {
+  const viewer = useViewer.getState()
+  const lit = new Set<string>()
+  for (const id of viewer.selection.selectedIds) lit.add(id)
+  for (const id of viewer.previewSelectedIds) lit.add(id)
+  for (const id of viewer.externalSelectedIds) lit.add(id)
+  if (viewer.hoveredId) lit.add(viewer.hoveredId)
+  const tinted = new Set<string>()
+  for (const id of lit) if (nodeIds.has(id)) tinted.add(id)
+
+  const nodes = useScene.getState().nodes
+  const overrides = useLiveNodeOverrides.getState()
+  const liveTransforms = useLiveTransforms.getState()
+  const busy = (hostId: string) =>
+    lit.has(hostId) ||
+    overrides.get(hostId as AnyNodeId) !== undefined ||
+    liveTransforms.get(hostId) !== undefined
+  for (const id of nodeIds) {
+    if (!tinted.has(id) && hostsBusy(id, nodes, busy)) tinted.add(id)
+  }
+  return tinted
+}
+
+export function getBatchableNodeIds(): ReadonlySet<string> {
+  const out = new Set<string>()
+  for (const kind of batchableKinds().keys()) {
+    const ids = sceneRegistry.byType[kind]
+    if (ids) for (const id of ids) out.add(id)
+  }
+  return out
+}

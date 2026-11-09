@@ -1,12 +1,12 @@
-import { type LevelNode, useScene } from '@pascal-app/core'
-import { useViewer } from '@pascal-app/viewer'
+import { type LevelNode, useLocale, usePascalI18n, useScene } from '@pascal-app/core'
+import { markPerfAction, useViewer } from '@pascal-app/viewer'
 import { Layers } from 'lucide-react'
 import { memo, useCallback, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import { getDefaultLevelName } from '@pascal-app/core'
 import { InlineRenameInput } from './inline-rename-input'
 import { focusTreeNode, TreeNode, TreeNodeWrapper } from './tree-node'
 import { TreeNodeActions } from './tree-node-actions'
+import { authoredLevelName, localizedLevelName } from '../../../../../i18n/level-name'
 
 interface LevelTreeNodeProps {
   nodeId: LevelNode['id']
@@ -19,6 +19,8 @@ export const LevelTreeNode = memo(function LevelTreeNode({
   depth,
   isLast,
 }: LevelTreeNodeProps) {
+  const i18n = usePascalI18n()
+  const locale = useLocale()
   const [expanded, setExpanded] = useState(true)
   const [isEditing, setIsEditing] = useState(false)
   const isVisible = useScene((s) => s.nodes[nodeId]?.visible !== false)
@@ -26,17 +28,22 @@ export const LevelTreeNode = memo(function LevelTreeNode({
     useShallow((s) => (s.nodes[nodeId] as LevelNode | undefined)?.children ?? []),
   )
   const level = useScene((s) => (s.nodes[nodeId] as LevelNode | undefined)?.level ?? 0)
+  const levelName = useScene((s) => (s.nodes[nodeId] as LevelNode | undefined)?.name)
   const isSelected = useViewer((state) => state.selection.levelId === nodeId)
   const isHovered = useViewer((state) => state.hoveredId === nodeId)
   const setSelection = useViewer((state) => state.setSelection)
 
-  const handleClick = useCallback(() => setSelection({ levelId: nodeId }), [nodeId, setSelection])
+  const handleClick = useCallback(() => {
+    if (!isSelected) markPerfAction('level-switch', nodeId)
+    setSelection({ levelId: nodeId })
+  }, [isSelected, nodeId, setSelection])
   const handleDoubleClick = useCallback(() => focusTreeNode(nodeId), [nodeId])
   const handleToggle = useCallback(() => setExpanded((prev) => !prev), [])
   const handleStartEditing = useCallback(() => setIsEditing(true), [])
   const handleStopEditing = useCallback(() => setIsEditing(false), [])
 
-  const defaultName = getDefaultLevelName(level)
+  const defaultName = localizedLevelName({ level }, i18n, locale)
+  const displayName = localizedLevelName({ name: levelName, level }, i18n, locale)
 
   return (
     <TreeNodeWrapper
@@ -52,6 +59,8 @@ export const LevelTreeNode = memo(function LevelTreeNode({
       label={
         <InlineRenameInput
           defaultName={defaultName}
+          displayName={displayName}
+          editableName={(name) => authoredLevelName({ name, level })}
           isEditing={isEditing}
           nodeId={nodeId}
           onStartEditing={handleStartEditing}

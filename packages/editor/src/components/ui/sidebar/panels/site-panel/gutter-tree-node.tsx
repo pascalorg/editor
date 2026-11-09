@@ -1,12 +1,12 @@
-import { type AnyNodeId, type GutterNode, useScene } from '@pascal-app/core'
+import { type AnyNodeId, type GutterNode, useScene, usePascalI18n } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import Image from 'next/image'
 import { memo, useCallback, useState } from 'react'
 import { SnapTargetIcon } from '../../../snap-target-badge'
-import useEditor from './../../../../../store/use-editor'
 import { InlineRenameInput } from './inline-rename-input'
 import { focusTreeNode, handleTreeSelection, TreeNodeWrapper } from './tree-node'
 import { TreeNodeActions } from './tree-node-actions'
+import { nodeLabelDescriptor } from '../../../../../i18n/node-messages'
 
 interface GutterTreeNodeProps {
   nodeId: AnyNodeId
@@ -19,6 +19,7 @@ export const GutterTreeNode = memo(function GutterTreeNode({
   depth,
   isLast,
 }: GutterTreeNodeProps) {
+  const i18n = usePascalI18n()
   const [isEditing, setIsEditing] = useState(false)
   const isVisible = useScene((s) => s.nodes[nodeId]?.visible !== false)
   const node = useScene((s) => s.nodes[nodeId] as GutterNode | undefined)
@@ -30,20 +31,17 @@ export const GutterTreeNode = memo(function GutterTreeNode({
   const handleClick = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation()
-      const handled = handleTreeSelection(
+      handleTreeSelection(
         e,
         nodeId,
         useViewer.getState().selection.selectedIds,
         setSelection,
       )
-      if (!handled && useEditor.getState().phase === 'furnish') {
-        useEditor.getState().setPhase('structure')
-      }
     },
     [nodeId, setSelection],
   )
 
-  const defaultName = node?.name || 'Gutter'
+  const defaultName = node?.name || i18n._(nodeLabelDescriptor('gutter', 'Gutter'))
 
   return (
     <TreeNodeWrapper

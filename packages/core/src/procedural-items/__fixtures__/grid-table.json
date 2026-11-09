@@ -1,0 +1,148 @@
+{
+  "version": 1,
+  "name": "Grid table",
+  "description": "Four legs in a two by two grid.",
+  "parameters": [
+    {
+      "id": "width",
+      "label": "Width",
+      "default": 0.45,
+      "min": 0.2,
+      "max": 2,
+      "step": 0.01,
+      "unit": "m"
+    },
+    {
+      "id": "depth",
+      "label": "Depth",
+      "default": 0.6,
+      "min": 0.2,
+      "max": 2,
+      "step": 0.01,
+      "unit": "m"
+    },
+    {
+      "id": "leg_thickness",
+      "label": "Leg thickness",
+      "default": 0.04,
+      "min": 0.02,
+      "max": 0.08,
+      "step": 0.01,
+      "unit": "m"
+    }
+  ],
+  "slots": [
+    {
+      "id": "wood",
+      "label": "Wood",
+      "color": "#805030"
+    }
+  ],
+  "parts": [
+    {
+      "id": "top",
+      "label": "Tabletop",
+      "count": 1,
+      "shapes": [
+        {
+          "id": "board",
+          "primitive": "box",
+          "slot": "wood",
+          "size": ["width", 0.04, "depth"],
+          "position": [0, 0.72, 0],
+          "support": true
+        }
+      ]
+    },
+    {
+      "id": "legs",
+      "label": "Legs",
+      "count": 4,
+      "shapes": [
+        {
+          "id": "leg",
+          "primitive": "box",
+          "slot": "wood",
+          "size": ["leg_thickness", 0.7, "leg_thickness"],
+          "position": [
+            {
+              "op": "mul",
+              "args": [
+                {
+                  "op": "sub",
+                  "args": [
+                    {
+                      "op": "mul",
+                      "args": [
+                        {
+                          "op": "floor",
+                          "args": [
+                            {
+                              "op": "div",
+                              "args": ["index", 2]
+                            }
+                          ]
+                        },
+                        2
+                      ]
+                    },
+                    1
+                  ]
+                },
+                {
+                  "op": "sub",
+                  "args": [
+                    {
+                      "op": "div",
+                      "args": ["width", 2]
+                    },
+                    {
+                      "op": "div",
+                      "args": ["leg_thickness", 2]
+                    }
+                  ]
+                }
+              ]
+            },
+            0.35,
+            {
+              "op": "mul",
+              "args": [
+                {
+                  "op": "sub",
+                  "args": [
+                    {
+                      "op": "mul",
+                      "args": [
+                        {
+                          "op": "mod",
+                          "args": ["index", 2]
+                        },
+                        2
+                      ]
+                    },
+                    1
+                  ]
+                },
+                {
+                  "op": "sub",
+                  "args": [
+                    {
+                      "op": "div",
+                      "args": ["depth", 2]
+                    },
+                    {
+                      "op": "div",
+                      "args": ["leg_thickness", 2]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "constraints": []
+}

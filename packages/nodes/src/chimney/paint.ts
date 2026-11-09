@@ -6,6 +6,7 @@ import type {
 } from '@pascal-app/core'
 import { createMaterial, createMaterialFromPresetRef } from '@pascal-app/viewer'
 import type { Material, Mesh } from 'three'
+import { swapPreviewMaterial } from '../shared/swap-preview-material'
 
 /**
  * Resolve a chimney face click to its logical surface role.
@@ -79,19 +80,11 @@ function applyChimneyPreview(
       const idx = role === 'top' ? 1 : 0
       const previousAtIdx = current[idx]
       if (!previousAtIdx) return
-      const previousArray = [...current]
       const nextArray = [...current]
       nextArray[idx] = previewMaterial
-      mesh.material = nextArray
-      restores.push(() => {
-        mesh.material = previousArray
-      })
+      restores.push(swapPreviewMaterial(mesh, nextArray))
     } else if (role === 'body') {
-      const previous = mesh.material
-      mesh.material = previewMaterial
-      restores.push(() => {
-        mesh.material = previous
-      })
+      restores.push(swapPreviewMaterial(mesh, previewMaterial))
     }
   })
   if (restores.length === 0) return null

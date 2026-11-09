@@ -1,0 +1,535 @@
+import { describe, expect, test } from 'bun:test'
+import { applySceneChanges, authorScene, finalizeAuthorScene } from '../agent-operations'
+import { ROOM_OPERATIONS } from '../agent-operations/room-structure'
+import { authorScenePayload } from '../agent-tools/author-scene'
+import {
+  type AnyNode,
+  BuildingNode,
+  DoorNode,
+  LevelNode,
+  SiteNode,
+  SlabNode,
+  WallNode,
+  type WallNode as WallNodeType,
+  ZoneNode,
+} from '../schema'
+import { getOpeningWallCut } from './opening-floor-datum'
+import {
+  classifyPlateSideAt,
+  clearPlateSurfaceCaches,
+  computePlateSurfacePartition,
+  type PlateLevelContext,
+  parseRoomFinishRole,
+  plateDoorwayCuts,
+  plateFinishKey,
+  plateLevelContext,
+  roomFinishRole,
+} from './plate-surface'
+import { area, containsPoint, intersection, union } from './polygon-boolean'
+import { reconcileSceneStructure } from './structure-reconcile'
+
+const WOOD = 'library:wood-woodplank48'
+const TILE = 'library:flooring-tiles3'
+const TERRAZZO = 'library:flooring-terrazzo19'
+
+function wall(id: string, start: [number, number], end: [number, number]) {
+  return WallNode.parse({ id, parentId: 'level_1', start, end, thickness: 0.2, height: 2.5 })
+}
+
+function zone(id: string, polygon: Array<[number, number]>, floor?: ZoneNode['floor']) {
+  return ZoneNode.parse({
+    id,
+    parentId: 'level_1',
+    name: id,
+    polygon,
+    spaceRole: 'room',
+    ...(floor ? { floor } : {}),
+  })
+}
+
+/**
+ * Two 4 × 4 rooms sharing a 0.2 m divider, one with a finish region, plus a
+ * manual slab sitting on the right-hand room's floor.
+ *
+ *   wall centrelines: outer rectangle (0,0)–(8.2,4.2), divider at x = 4.1
+ *   clear polygons:   A = x 0.1…4.0,  B = x 4.2…8.1,  both z 0.1…4.1
+ */
+function twoRoomLevel() {
+  const walls = [
+    wall('wall_n', [0, 0], [8.2, 0]),
+    wall('wall_e', [8.2, 0], [8.2, 4.2]),
+    wall('wall_s', [8.2, 4.2], [0, 4.2]),
+    wall('wall_w', [0, 4.2], [0, 0]),
+    wall('wall_mid', [4.1, 0], [4.1, 4.2]),
+  ]
+  const zones = [
+    zone(
+      'zone_a',
+      [
+        [0, 0],
+        [4.1, 0],
+        [4.1, 4.2],
+        [0, 4.2],
+      ],
+      {
+        finish: WOOD,
+        regions: [
+          {
+            id: 'region_1',
+            finish: TERRAZZO,
+            polygon: [
+              [0.5, 0.5],
+              [2, 0.5],
+              [2, 2],
+              [0.5, 2],
+            ],
+          },
+        ],
+      },
+    ),
+    zone(
+      'zone_b',
+      [
+        [4.1, 0],
+        [8.2, 0],
+        [8.2, 4.2],
+        [4.1, 4.2],
+      ],
+      { finish: TILE },
+    ),
+  ]
+  const plate = SlabNode.parse({
+    id: 'slab_plate',
+    parentId: 'level_1',
+    boundary: 'auto',
+    autoFromWalls: true,
+    zoneIds: ['zone_a', 'zone_b'],
+    elevation: 0.05,
+    thickness: 0.2,
+    polygon: [
+      [-0.1, -0.1],
+      [8.3, -0.1],
+      [8.3, 4.3],
+      [-0.1, 4.3],
+    ],
+  })
+  const manual = SlabNode.parse({
+    id: 'slab_manual',
+    parentId: 'level_1',
+    elevation: 0.05,
+    thickness: 0.05,
+    polygon: [
+      [6, 2],
+      [7.5, 2],
+      [7.5, 3.5],
+      [6, 3.5],
+    ],
+  })
+  const context: PlateLevelContext = { walls, zones, slabs: [plate, manual] }
+  return { plate, manual, context }
+}
+
+function roleAt(
+  partition: NonNullable<ReturnType<typeof computePlateSurfacePartition>>,
+  point: [number, number],
+): string | null {
+  const hits = partition.cells.filter((cell) => containsPoint(cell.polygons, point))
+  expect(hits.length).toBeLessThanOrEqual(1)
+  return hits[0]?.role ?? null
+}
+
+describe('plate top partition', () => {
+  test('room finishes, a region and a manual slab split one plate top', () => {
+    clearPlateSurfaceCaches()
+    const { plate, manual, context } = twoRoomLevel()
+    const partition = computePlateSurfacePartition(plate, context)
+    if (!partition) throw new Error('expected a partition')
+
+    expect(partition.plainTop).toBe(false)
+    // One cell per distinct resolved surface: region, room A, room B, plate.
+    expect(partition.cells.map((cell) => cell.role)).toEqual([
+      roomFinishRole('zone_a', 'region_1'),
+      roomFinishRole('zone_a'),
+      roomFinishRole('zone_b'),
+      'surface',
+    ])
+    expect(partition.cells.map((cell) => cell.materialKey)).toEqual([
+      plateFinishKey(TERRAZZO),
+      plateFinishKey(WOOD),
+      plateFinishKey(TILE),
+      plateFinishKey(undefined),
+    ])
+
+    // Sample points: inside the region, room A outside it, room B, under the
+    // divider, under the outer wall, and where the manual slab masks the plate.
+    expect(roleAt(partition, [1, 1])).toBe(roomFinishRole('zone_a', 'region_1'))
+    expect(roleAt(partition, [3, 3])).toBe(roomFinishRole('zone_a'))
+    expect(roleAt(partition, [0.6, 3.5])).toBe(roomFinishRole('zone_a'))
+    expect(roleAt(partition, [5, 1])).toBe(roomFinishRole('zone_b'))
+    expect(roleAt(partition, [4.1, 2])).toBe('surface')
+    expect(roleAt(partition, [0, 2])).toBe('surface')
+    expect(roleAt(partition, [8.25, 2])).toBe('surface')
+    expect(roleAt(partition, [6.75, 2.75])).toBeNull()
+
+    // The mask is exactly the manual slab, and no cell reaches into it.
+    expect(area(partition.masked)).toBeCloseTo(1.5 * 1.5, 4)
+    for (const cell of partition.cells) {
+      expect(area(intersection(cell.polygons, partition.masked))).toBeLessThan(1e-6)
+    }
+    // The cells plus the mask tile the whole plate top, with no overlap.
+    const total = partition.cells.reduce((sum, cell) => sum + area(cell.polygons), 0)
+    expect(total + area(partition.masked)).toBeCloseTo(8.4 * 4.4, 3)
+    expect(area(union([...partition.cells.flatMap((cell) => cell.polygons)]))).toBeCloseTo(total, 3)
+    expect(manual.polygon).toHaveLength(4)
+  })
+
+  test('the same inputs build the same partition twice', () => {
+    clearPlateSurfaceCaches()
+    const first = computePlateSurfacePartition(twoRoomLevel().plate, twoRoomLevel().context)
+    clearPlateSurfaceCaches()
+    const second = computePlateSurfacePartition(twoRoomLevel().plate, twoRoomLevel().context)
+    expect(JSON.stringify(second)).toBe(JSON.stringify(first))
+  })
+
+  test('a plate with no room finish keeps one plain surface cell', () => {
+    clearPlateSurfaceCaches()
+    const { plate, context } = twoRoomLevel()
+    const bare = context.zones.map((z) => ({ ...z, floor: undefined }))
+    const partition = computePlateSurfacePartition(plate, {
+      ...context,
+      zones: bare,
+      slabs: [plate],
+    })
+    if (!partition) throw new Error('expected a partition')
+    expect(partition.plainTop).toBe(true)
+    expect(partition.cells).toHaveLength(1)
+    expect(partition.cells[0]?.role).toBe('surface')
+  })
+
+  test('a manual slab has no partition', () => {
+    clearPlateSurfaceCaches()
+    const { manual, context } = twoRoomLevel()
+    expect(computePlateSurfacePartition(manual, context)).toBeNull()
+  })
+})
+
+describe('plate side exposure', () => {
+  /**
+   * A raised plate whose north edge stands under a wall, whose east edge steps
+   * down onto a lower plate, and whose south and west edges face the outside.
+   */
+  function steppedLevel() {
+    const plate = SlabNode.parse({
+      id: 'slab_upper',
+      parentId: 'level_1',
+      boundary: 'auto',
+      autoFromWalls: true,
+      zoneIds: ['zone_upper'],
+      elevation: 0.35,
+      thickness: 0.2,
+      polygon: [
+        [0, 0],
+        [4, 0],
+        [4, 4],
+        [0, 4],
+      ],
+    })
+    const lower = SlabNode.parse({
+      id: 'slab_lower',
+      parentId: 'level_1',
+      boundary: 'auto',
+      autoFromWalls: true,
+      zoneIds: ['zone_lower'],
+      elevation: 0.05,
+      thickness: 0.2,
+      polygon: [
+        [4, 0],
+        [8, 0],
+        [8, 4],
+        [4, 4],
+      ],
+    })
+    const context: PlateLevelContext = {
+      walls: [wall('wall_n', [0, 0], [4, 0])],
+      zones: [
+        zone('zone_upper', [
+          [0, 0],
+          [4, 0],
+          [4, 4],
+          [0, 4],
+        ]),
+        zone('zone_lower', [
+          [4, 0],
+          [8, 0],
+          [8, 4],
+          [4, 4],
+        ]),
+      ],
+      slabs: [plate, lower],
+    }
+    return { plate, context }
+  }
+
+  test('classifies exterior, riser and wall-covered edges', () => {
+    clearPlateSurfaceCaches()
+    const { plate, context } = steppedLevel()
+    const partition = computePlateSurfacePartition(plate, context)
+    if (!partition) throw new Error('expected a partition')
+
+    // East: faces the lower plate and the room it carries → a riser.
+    expect(classifyPlateSideAt(partition, [4, 2])).toBe('riser')
+    // South and west: nothing on the far side → exterior edges.
+    expect(classifyPlateSideAt(partition, [2, 4])).toBe('edge')
+    expect(classifyPlateSideAt(partition, [0, 2])).toBe('edge')
+    // The facade covers the top, but its slab thickness remains visible.
+    expect(classifyPlateSideAt(partition, [2, 0])).toBe('edge')
+    expect(partition.sides.some((side) => side.role === 'riser')).toBe(true)
+    expect(
+      partition.sides.some(
+        (side) =>
+          side.role === 'edge' && Math.abs(side.start[1]) < 1e-9 && Math.abs(side.end[1]) < 1e-9,
+      ),
+    ).toBe(true)
+  })
+
+  test('an open hole rim is an edge', () => {
+    clearPlateSurfaceCaches()
+    const { plate, context } = steppedLevel()
+    const withHole = SlabNode.parse({
+      ...plate,
+      holes: [
+        [
+          [1, 1],
+          [2, 1],
+          [2, 2],
+          [1, 2],
+        ],
+      ],
+      holeMetadata: [{ source: 'manual' }],
+    })
+    const partition = computePlateSurfacePartition(withHole, {
+      ...context,
+      slabs: [withHole, ...context.slabs.slice(1)],
+    })
+    if (!partition) throw new Error('expected a partition')
+    expect(classifyPlateSideAt(partition, [1.5, 1])).toBe('edge')
+  })
+  test("a base plate's hole rim belongs to the room around it; its facade edge to none", () => {
+    clearPlateSurfaceCaches()
+    const { plate, context } = twoRoomLevel()
+    const base = SlabNode.parse({
+      ...plate,
+      plateRole: 'base',
+      holes: [
+        [
+          [1, 1],
+          [3, 1],
+          [3, 3],
+          [1, 3],
+        ],
+      ],
+      holeMetadata: [{ source: 'floor-opening', openingId: 'floor-opening_void' }],
+    })
+    const partition = computePlateSurfacePartition(base, {
+      ...context,
+      slabs: [base, ...context.slabs.slice(1)],
+    })
+    if (!partition) throw new Error('expected a partition')
+    const sideAt = ([x, z]: [number, number]) =>
+      partition.sides.find(
+        (side) =>
+          Math.abs(
+            (side.end[0] - side.start[0]) * (z - side.start[1]) -
+              (side.end[1] - side.start[1]) * (x - side.start[0]),
+          ) < 1e-9 &&
+          Math.min(side.start[0], side.end[0]) - 1e-9 <= x &&
+          x <= Math.max(side.start[0], side.end[0]) + 1e-9 &&
+          Math.min(side.start[1], side.end[1]) - 1e-9 <= z &&
+          z <= Math.max(side.start[1], side.end[1]) + 1e-9,
+      )
+    expect(sideAt([2, 1])).toMatchObject({ role: 'edge', zoneId: 'zone_a' })
+    expect(sideAt([1, 2])).toMatchObject({ role: 'edge', zoneId: 'zone_a' })
+    expect(sideAt([2, -0.1])?.zoneId).toBeUndefined()
+  })
+})
+
+describe('room finish roles', () => {
+  test('round-trip a room role and a region role', () => {
+    expect(parseRoomFinishRole(roomFinishRole('zone_1'))).toEqual({
+      zoneId: 'zone_1',
+      regionId: null,
+    })
+    expect(parseRoomFinishRole(roomFinishRole('zone_1', 'region_2'))).toEqual({
+      zoneId: 'zone_1',
+      regionId: 'region_2',
+    })
+    expect(parseRoomFinishRole('surface')).toBeNull()
+    expect(parseRoomFinishRole('edge')).toBeNull()
+  })
+
+  test('equal finishes share a material key, different ones do not', () => {
+    expect(plateFinishKey(WOOD)).toBe(plateFinishKey(WOOD))
+    expect(plateFinishKey(WOOD)).not.toBe(plateFinishKey(TILE))
+    expect(plateFinishKey({ properties: { color: '#ff0000' } })).toBe(
+      plateFinishKey({ properties: { color: '#ff0000' } }),
+    )
+  })
+})
+
+describe('the doorway of an opening reaching below its floor', () => {
+  /**
+   * A house and its garage behind one front wall (as author_scene writes them), the garage's floor
+   * then sunk 0.73 m: the wall stands on the house floor and its garage face goes down. The garage
+   * door's sill is `sill` under the floor the wall stands on.
+   */
+  function garage(sill: number) {
+    const wall = (id: string, start: number[], end: number[], openings?: unknown[]) => ({
+      id,
+      start,
+      end,
+      height: 2.7,
+      thickness: 0.2,
+      ...(openings ? { openings } : {}),
+    })
+    const payload = authorScenePayload.parse({
+      levels: [
+        {
+          name: 'Ground',
+          walls: [
+            wall('n', [0, 0], [10, 0]),
+            wall('e', [10, 0], [10, 6]),
+            wall('s', [10, 6], [0, 6], [{ kind: 'door', along: 2, width: 2.4, height: 2.2, sill }]),
+            wall('w', [0, 6], [0, 0]),
+            wall('mid', [6, 0], [6, 6]),
+          ],
+          rooms: [
+            { name: 'Living', seed: [3, 3] },
+            { name: 'Garage', seed: [8, 3] },
+          ],
+        },
+      ],
+    })
+    const scaffold = {
+      site_1: SiteNode.parse({ id: 'site_1', children: ['building_1'] }),
+      building_1: BuildingNode.parse({
+        id: 'building_1',
+        parentId: 'site_1',
+        children: ['level_0'],
+      }),
+      level_0: LevelNode.parse({ id: 'level_0', parentId: 'building_1', level: 0, children: [] }),
+    } as Record<string, AnyNode>
+    const outcome = authorScene(scaffold, { payload, compiled: {} }, { activeLevelId: 'level_0' })
+    let nodes = applySceneChanges(scaffold, finalizeAuthorScene(scaffold, outcome as never).changes)
+    const zoneId = Object.values(nodes).find((n) => n.type === 'zone' && n.name === 'Garage')!.id
+    for (const floor of [{ footprint: 'new' }, { elevation: -0.68 }]) {
+      const before = nodes
+      nodes = applySceneChanges(
+        nodes,
+        ROOM_OPERATIONS.set_zone_intent(
+          nodes,
+          { zoneId, patch: { floor } },
+          { activeLevelId: null },
+        ).changes!,
+      )
+      let n = 0
+      nodes = {
+        ...reconcileSceneStructure({ nodes, previousNodes: before, mintId: (k) => `${k}_r${n++}` })
+          .nodes,
+      } as typeof nodes
+    }
+    const level = Object.values(nodes).find((n) => n.type === 'level')!
+    const context = plateLevelContext(level, (id) => nodes[id])
+    const door = context.openings![0]!
+    const front = nodes[door.parentId!] as WallNodeType
+    return { context, doorway: getOpeningWallCut(front, door, nodes).aperture }
+  }
+  const cutPlates = (context: PlateLevelContext) =>
+    context.slabs.filter((plate) => area(plateDoorwayCuts(plate, context)) > 0)
+
+  test('is cut out of the floor the wall stands on, open down to the door bottom', () => {
+    clearPlateSurfaceCaches()
+    const { context, doorway } = garage(-0.73)
+    const cut = cutPlates(context)
+    expect(cut.map((plate) => plate.elevation)).toEqual([0.05])
+    for (const plate of context.slabs) {
+      const top = computePlateSurfacePartition(plate, context)?.cells.flatMap((c) => c.polygons)
+      if (top && plate.elevation > -0.68)
+        expect(area(intersection(top, doorway))).toBeLessThan(1e-6)
+    }
+  })
+
+  test('a door on its floor keeps its threshold', () => {
+    clearPlateSurfaceCaches()
+    expect(cutPlates(garage(0).context)).toEqual([])
+  })
+})
+
+test('a plate edge a hair off the wall face leaves no sliver across the doorway', () => {
+  clearPlateSurfaceCaches()
+  const level = 'level_1'
+  const half = (id: string, x0: number, x1: number, elevation: number) =>
+    SlabNode.parse({
+      id,
+      parentId: level,
+      polygon: [
+        [x0, -4],
+        [x1, -4],
+        [x1, 3.9],
+        [x0, 3.9],
+      ],
+      elevation,
+    })
+  // The floor the wall stands on, under its outer half: its outer edge runs 3 mm off the face.
+  const band = SlabNode.parse({
+    id: 'slab_band',
+    parentId: level,
+    boundary: 'auto',
+    plateRole: 'base',
+    polygon: [
+      [0, 4],
+      [5, 4],
+      [5, 4.103],
+      [0, 4.1],
+    ],
+    elevation: 0.05,
+  })
+  const front = WallNode.parse({
+    id: 'wall_front',
+    parentId: level,
+    start: [5, 4],
+    end: [-5, 4],
+    thickness: 0.2,
+    height: 2.7,
+    children: ['door_garage'],
+  })
+  const door = DoorNode.parse({
+    id: 'door_garage',
+    parentId: front.id,
+    wallId: front.id,
+    position: [2.5, -0.73 + 1.1, 0],
+    width: 2.4,
+    height: 2.2,
+  })
+  const slabs = [half('slab_house', -5, 0, 0.05), half('slab_garage', 0, 5, -0.68), band]
+  const nodes = Object.fromEntries(
+    [
+      LevelNode.parse({ id: level, level: 0, children: [...slabs.map((s) => s.id), front.id] }),
+      ...slabs,
+      front,
+      door,
+    ].map((node) => [node.id, node]),
+  )
+  const context: PlateLevelContext = { walls: [front], zones: [], slabs, openings: [door], nodes }
+  expect(area(plateDoorwayCuts(band, context))).toBeGreaterThan(0)
+  // The door spans x 1.3…3.7; across the wall and well past it, nothing of the band is left.
+  const doorway = union([
+    [
+      [1.31, 3.5],
+      [3.69, 3.5],
+      [3.69, 4.5],
+      [1.31, 4.5],
+    ],
+  ])
+  const top = computePlateSurfacePartition(band, context)!.cells.flatMap((cell) => cell.polygons)
+  expect(area(intersection(top, doorway))).toBe(0)
+})

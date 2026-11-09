@@ -23,9 +23,10 @@ import {
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { acceleratedRaycast, computeBoundsTree, disposeBoundsTree } from 'three-mesh-bvh'
 import { useGLTFKTX2 } from '../../hooks/use-gltf-ktx2'
-import { SCENE_LAYER } from '../../lib/layers'
+import { BATCHED_LAYER, SCENE_LAYER } from '../../lib/layers'
 import useViewer from '../../store/use-viewer'
 import BVHEcctrl, { type BVHEcctrlApi, type MovementInput } from './bvh-ecctrl'
+import { applyWalkthroughCameraClipping } from './viewer-camera'
 
 // First-person FOV. The orbit camera is 50° (set on the Canvas), which feels
 // cramped on foot; ~60° vertical (~90° horizontal at 16:9) restores peripheral
@@ -177,9 +178,14 @@ function buildGlbColliderWorld(scene: Object3D): GlbColliderWorld | null {
   scene.traverse((object) => {
     const mesh = object as Mesh
     if (!mesh.isMesh) return
-    // Zone fills live on a separate layer (and never collide).
-    if (!mesh.layers.isEnabled(SCENE_LAYER)) return
+    // Zone fills live on a separate layer (and never collide). Merged originals sit on the
+    // batched layer and still collide; their batches don't (each original keeps its kind rules).
+    if (mesh.userData.glbBatch) return
+    if (!mesh.layers.isEnabled(SCENE_LAYER) && !mesh.layers.isEnabled(BATCHED_LAYER)) return
     if (!isEffectivelyVisible(mesh)) return
+    let ancestor: Object3D | null = mesh
+    while (ancestor && !ancestor.userData.proceduralMotion) ancestor = ancestor.parent
+    if (ancestor) return
     const kind = kindOf(mesh)
     if (kind && COLLIDER_EXCLUDED_KINDS.has(kind)) return
     const position = mesh.geometry?.getAttribute('position')
@@ -205,7 +211,7 @@ function buildGlbColliderWorld(scene: Object3D): GlbColliderWorld | null {
   }
   ;(merged as any).computeBoundsTree = computeBoundsTree
   ;(merged as any).disposeBoundsTree = disposeBoundsTree
-  ;(merged as any).computeBoundsTree({ maxLeafSize: 12, strategy: 0 })
+  ;(merged as any).computeBoundsTree({ targetLeafSize: 12, strategy: 0 })
   merged.computeBoundingBox()
 
   const mesh = new Mesh(merged, colliderMaterial)
@@ -256,7 +262,7 @@ function resolveGlbSpawn(
  * mesh collision) fed a collider built from the artifact's own geometry — so the
  * baked viewer walks the building with the same physics as the editor, without
  * the parametric scene. Pointer-lock drives look; WASD moves; Space jumps; Shift
- * sprints. Door/window interaction stays in `GlbScene` (its centre-ray HUD).
+ * sprints. Interaction stays in `GlbScene` (its centre-ray HUD).
  */
 export function GlbWalkthroughController({ url }: { url: string }) {
   const { camera, gl } = useThree()
@@ -308,6 +314,11 @@ export function GlbWalkthroughController({ url }: { url: string }) {
       cam.fov = prevFov
       cam.updateProjectionMatrix()
     }
+  }, [camera])
+
+  useEffect(() => {
+    if (!(camera as PerspectiveCamera).isPerspectiveCamera) return
+    return applyWalkthroughCameraClipping(camera as PerspectiveCamera)
   }, [camera])
 
   useEffect(() => {

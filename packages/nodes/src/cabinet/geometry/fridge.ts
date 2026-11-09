@@ -1,5 +1,14 @@
-import { BoxGeometry, Group, Mesh, type Object3D } from 'three'
+import {
+  BoxGeometry,
+  BufferGeometry,
+  Float32BufferAttribute,
+  Group,
+  Mesh,
+  type Object3D,
+  PlaneGeometry,
+} from 'three'
 import type { CabinetFridgeCompartmentType } from '../stack'
+import { addHandleFeature, buildFrontGeometry } from './fronts'
 import {
   addApplianceHandle,
   addBox,
@@ -316,22 +325,46 @@ function addFridgeCrisperDrawer(
   name: string,
 ) {
   const wall = 0.008
-  addBox(
-    group,
-    [width, height, depth],
-    [x, y, zCenter],
-    refrigeratorDrawerMaterial,
-    name,
-    'applianceInterior',
-  )
-  addBox(
-    group,
-    [width + wall * 2, wall, depth + wall],
-    [x, y + height / 2 + wall / 2, zCenter],
-    refrigeratorLinerAccentMaterial,
-    `${name}-top-rim`,
-    'applianceInterior',
-  )
+  const ring = (w: number, d: number, h: number) => [
+    [-w / 2, h, -d / 2],
+    [w / 2, h, -d / 2],
+    [w / 2, h, d / 2],
+    [-w / 2, h, d / 2],
+  ]
+  const lower = ring(width, depth, -height / 2)
+  const upper = ring(width, depth, height / 2)
+  const innerLower = ring(width - 2 * wall, depth - 2 * wall, -height / 2 + wall)
+  const innerUpper = ring(width - 2 * wall, depth - 2 * wall, height / 2)
+  const positions: number[] = []
+  const quad = (a: number[], b: number[], c: number[], d: number[]) => {
+    positions.push(...a, ...b, ...c, ...a, ...c, ...d)
+  }
+  quad(lower[0]!, lower[1]!, lower[2]!, lower[3]!)
+  quad(innerLower[3]!, innerLower[2]!, innerLower[1]!, innerLower[0]!)
+  for (let i = 0; i < 4; i++) {
+    const j = (i + 1) % 4
+    quad(lower[i]!, upper[i]!, upper[j]!, lower[j]!)
+    quad(innerLower[j]!, innerUpper[j]!, innerUpper[i]!, innerLower[i]!)
+    quad(upper[i]!, innerUpper[i]!, innerUpper[j]!, upper[j]!)
+  }
+  const geometry = new BufferGeometry()
+  geometry.setAttribute('position', new Float32BufferAttribute(positions, 3))
+  geometry.computeVertexNormals()
+  const normals = geometry.getAttribute('normal')
+  const uvs: number[] = []
+  for (let i = 0; i < normals.count; i++) {
+    const px = positions[i * 3]!
+    const py = positions[i * 3 + 1]!
+    const pz = positions[i * 3 + 2]!
+    uvs.push(Math.abs(normals.getX(i)) > 0.5 ? pz : px, Math.abs(normals.getY(i)) > 0.5 ? pz : py)
+  }
+  geometry.setAttribute('uv', new Float32BufferAttribute(uvs, 2))
+  const bin = stampSlot(new Mesh(geometry, refrigeratorDrawerMaterial), 'applianceInterior')
+  bin.name = name
+  bin.position.set(x, y, zCenter)
+  bin.castShadow = true
+  bin.receiveShadow = true
+  group.add(bin)
   addBox(
     group,
     [width * 0.72, 0.012, 0.01],
@@ -340,14 +373,13 @@ function addFridgeCrisperDrawer(
     `${name}-handle`,
     'appliance',
   )
-  addBox(
-    group,
-    [width * 0.32, 0.004, 0.004],
-    [x, y - height * 0.08, zCenter + depth / 2 + 0.014],
-    refrigeratorLinerAccentMaterial,
-    `${name}-label-plate`,
+  const label = stampSlot(
+    new Mesh(new PlaneGeometry(width * 0.32, 0.004), refrigeratorLinerAccentMaterial),
     'applianceInterior',
   )
+  label.name = `${name}-label-plate`
+  label.position.set(x, y - height * 0.08, zCenter + depth / 2 + 0.016)
+  group.add(label)
   addBox(
     group,
     [width * 0.38, 0.006, 0.005],
@@ -740,7 +772,7 @@ function addFridgeLeaf(
 
   const panel = stampSlot(
     new Mesh(
-      roundedButtonGeometry(width, height, 0.026, Math.min(width, height) * 0.035),
+      roundedButtonGeometry(width, height, 0.026, Math.min(width, height) * 0.012),
       refrigeratorSilverMaterial,
     ),
     'appliance',
@@ -758,6 +790,7 @@ function addFridgeLeaf(
     materials.appliance,
     `${name}-brushed-center`,
     'appliance',
+    true,
   )
   addFridgeDoorCues(leaf, width, height, name)
 
@@ -1092,18 +1125,60 @@ export function addFridgeCompartment(
     const doorHeight = Math.max(0.01, layout.height - doorGap * 2)
     const doorCenterX = shellWidth * layout.xFraction
     const doorCenterY = shellCenterY + layout.y
-    addFridgeLeaf(
-      group,
-      materials,
-      doorWidth,
-      doorHeight,
-      layout.hinge,
-      doorCenterX,
-      doorCenterY,
-      frontZ,
-      `${name}-door-${layout.key}`,
-      layout.section,
-      node.operationState ?? 0,
-    )
+    const doorName = `${name}-door-${layout.key}`
+    if (node.panelReady) {
+      const hingeGroup = new Group()
+      hingeGroup.name = `${doorName}-hinge`
+      hingeGroup.position.set(
+        layout.hinge === 'left' ? doorCenterX - doorWidth / 2 : doorCenterX + doorWidth / 2,
+        doorCenterY,
+        frontZ,
+      )
+      hingeGroup.rotation.y =
+        (layout.hinge === 'left' ? -1 : 1) * (Math.PI * 0.62) * (node.operationState ?? 0)
+      hingeGroup.userData.cabinetPose = {
+        type: 'rotate',
+        axis: 'y',
+        angle: (layout.hinge === 'left' ? -1 : 1) * (Math.PI * 0.62),
+      }
+      const panel = stampSlot(
+        new Mesh(
+          buildFrontGeometry(node, doorWidth, doorHeight, false, layout.hinge),
+          materials.front,
+        ),
+        'front',
+      )
+      panel.name = `${doorName}-panel`
+      panel.position.x = layout.hinge === 'left' ? doorWidth / 2 : -doorWidth / 2
+      panel.castShadow = true
+      panel.receiveShadow = true
+      addHandleFeature(
+        panel,
+        node,
+        materials,
+        doorWidth,
+        doorHeight,
+        layout.hinge,
+        true,
+        false,
+        `${doorName}-handle`,
+      )
+      hingeGroup.add(panel)
+      group.add(hingeGroup)
+    } else {
+      addFridgeLeaf(
+        group,
+        materials,
+        doorWidth,
+        doorHeight,
+        layout.hinge,
+        doorCenterX,
+        doorCenterY,
+        frontZ,
+        doorName,
+        layout.section,
+        node.operationState ?? 0,
+      )
+    }
   }
 }

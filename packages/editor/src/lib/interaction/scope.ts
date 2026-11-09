@@ -19,10 +19,35 @@ export type ReshapeDriver = 'tool' | 'floorplan'
 // node, one in-flight reshape. Grouping them as sub-states of `reshaping`
 // (rather than four sibling scopes) keeps the union small while still making
 // "curving and hole-editing at once" unrepresentable.
-export type ReshapeKind = 'curve' | 'hole' | 'endpoint' | 'boundary' | 'control-point' | 'tangent'
+export type ReshapeKind =
+  | 'curve'
+  | 'hole'
+  | 'endpoint'
+  | 'boundary'
+  | 'control-point'
+  | 'tangent'
+  // A kind's own reshape (wall 'split'): mounted from `def.affordanceTools[reshape]`.
+  | 'split'
 
 export type InteractionScope =
   | { kind: 'idle' }
+  | {
+      kind: 'room-divide'
+      nodeId: string
+      levelId: string
+      // The placed points. The first lies on the room's boundary (an open cut)
+      // or inside the room (an island loop); the rest are free points.
+      points: [number, number][]
+      // The boundary the first point sits on, when it sits on one.
+      startBoundaryId?: string
+      // The live point under the pointer and what clicking it would do: start
+      // the path, add a point, finish on the boundary (`edge`), or close the loop.
+      end: [number, number] | null
+      endKind?: 'start' | 'point' | 'edge' | 'close'
+      endBoundaryId?: string
+      valid: boolean
+      message?: string
+    }
   // Placing a fresh node (catalog/preset/build tool). `pressDrag` is the
   // gizmo press-drag flavour (commit on release) vs click-to-place.
   | {
@@ -86,6 +111,10 @@ export type InteractionScope =
   // (`resolveOverlayPolicy`). A brush that only claimed the scope between
   // pointer-down and -up would flicker all of that back on between dabs.
   | { kind: 'sculpting' }
+  // Point and ask: the pointer belongs to pointing at things for the agent, so selection, handles and
+  // the floating action menu step back (the same active policy as a brush) for as long as the mode
+  // is on. Held by the point-ask session, which leaves the mode if another interaction takes over.
+  | { kind: 'pointing' }
 
 export type InteractionKind = InteractionScope['kind']
 
@@ -105,6 +134,7 @@ export function isActive(scope: InteractionScope): scope is ActiveInteractionSco
 // target no single existing node.
 export function scopeNodeId(scope: InteractionScope): string | null {
   switch (scope.kind) {
+    case 'room-divide':
     case 'placing':
     case 'moving':
     case 'handle-drag':

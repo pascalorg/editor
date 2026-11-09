@@ -242,6 +242,7 @@ export const solarPanelDefinition: NodeDefinition<typeof SolarPanelNode> = {
   },
 
   capabilities: {
+    exterior: true,
     selectable: { hitVolume: 'bbox' },
     duplicable: true,
     deletable: true,
@@ -255,6 +256,7 @@ export const solarPanelDefinition: NodeDefinition<typeof SolarPanelNode> = {
   handles: solarPanelHandles,
   floorplan: buildSolarPanelFloorplan,
 
+  rendersChildren: false,
   renderer: {
     kind: 'parametric',
     module: () => import('./renderer'),

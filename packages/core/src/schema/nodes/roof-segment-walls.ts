@@ -1,3 +1,5 @@
+import { getWallFaceOffsets } from '../../systems/wall/wall-frame'
+import { getBarrelRoofProfile } from './barrel-roof'
 import type { RoofSegmentNode } from './roof-segment'
 import { getDutchRoofMetrics, getSegmentSlopeFrame } from './roof-segment'
 
@@ -16,7 +18,9 @@ import { getDutchRoofMetrics, getSegmentSlopeFrame } from './roof-segment'
  * (`getVol(wallThickness / 2, 0, 0, …)`): the volume is the segment
  * footprint extended outward by `wallThickness / 2`, which drops the eave
  * line by `(wallThickness / 2) · tanθ` and raises the ridge by the same
- * amount so the apex stays at `wallHeight + activeRh`.
+ * amount so the apex stays at `wallHeight + activeRh` unless the eave
+ * hits the CSG minimum. The base stays at 0; the eave is raised to at
+ * least 0.05 above it to avoid sinking the shell into the supporting wall.
  */
 
 export type RoofWallFaceId = 'front' | 'back' | 'right' | 'left'
@@ -47,6 +51,8 @@ type SegmentWallInputs = Pick<
   Partial<
     Pick<
       RoofSegmentNode,
+      | 'barrelRise'
+      | 'barrelSegments'
       | 'gambrelLowerWidthRatio'
       | 'gambrelLowerHeightRatio'
       | 'mansardSteepWidthRatio'
@@ -72,11 +78,20 @@ type WallVolumeFrame = {
 
 function getWallVolumeFrame(node: SegmentWallInputs): WallVolumeFrame {
   const { activeRh, tanTheta } = getSegmentSlopeFrame(node)
+  if (node.roofType === 'barrel')
+    return {
+      wV: node.width + (node.wallThickness ?? 0.1),
+      dV: node.depth + (node.wallThickness ?? 0.1),
+      eaveY: node.wallHeight,
+      peakY: node.wallHeight + activeRh,
+      tanTheta,
+      hasSlope: true,
+    }
   const wallThickness = node.wallThickness ?? 0.1
-  const autoDrop = (wallThickness / 2) * tanTheta
+  const autoDrop = getWallFaceOffsets({ thickness: wallThickness }).a * tanTheta
   const wV = Math.max(0.01, node.width + wallThickness)
   const dV = Math.max(0.01, node.depth + wallThickness)
-  const eaveY = Math.max(0.01, node.wallHeight - autoDrop)
+  const eaveY = Math.max(0.05, node.wallHeight - autoDrop)
   let rh = activeRh
   if (activeRh > 0) {
     rh = activeRh + autoDrop
@@ -127,6 +142,23 @@ function buildFaceProfile(
   if (!hasSlope) return rectProfile(length, eaveY)
 
   switch (node.roofType) {
+    case 'barrel': {
+      if (!isEnd) return rectProfile(length, node.wallHeight)
+      const profile = getBarrelRoofProfile(
+        node.depth,
+        getSegmentSlopeFrame(node).activeRh,
+        node.barrelSegments ?? 12,
+      )
+      // The arch springs from the eaves' centre lines, inside the walls' outer faces; the placeable
+      // region stays convex by leaving out the walls' outer halves above their base corners.
+      return [
+        [0, 0],
+        [length, 0],
+        ...profile
+          .reverse()
+          .map(([z, y]): [number, number] => [z + length / 2, y + node.wallHeight]),
+      ]
+    }
     case 'gable': {
       if (!isEnd) return rectProfile(length, eaveY)
       return [

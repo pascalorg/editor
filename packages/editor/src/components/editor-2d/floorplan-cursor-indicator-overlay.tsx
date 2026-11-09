@@ -2,6 +2,7 @@
 
 import { Icon } from '@iconify/react'
 import { memo, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { wallCursorIcon } from '../../lib/tool-cursor-icon'
 import useEditor, { type FloorplanSelectionTool } from '../../store/use-editor'
 import { useFloorplanDraftPreview } from '../../store/use-floorplan-draft-preview'
 import { furnishTools } from '../ui/action-menu/furnish-tools'
@@ -45,8 +46,8 @@ export const FloorplanCursorIndicatorOverlay = memo(function FloorplanCursorIndi
 }: FloorplanCursorIndicatorOverlayProps) {
   const mode = useEditor((state) => state.mode)
   const tool = useEditor((state) => state.tool)
-  const structureLayer = useEditor((state) => state.structureLayer)
   const catalogCategory = useEditor((state) => state.catalogCategory)
+  const wallMode = useEditor((state) => state.continuationByContext.wall)
   const cursorPoint = useFloorplanDraftPreview((state) => state.cursorPoint)
   const anchorRef = useRef<HTMLDivElement>(null)
   const [projectedCursorPosition, setProjectedCursorPosition] =
@@ -65,15 +66,18 @@ export const FloorplanCursorIndicatorOverlay = memo(function FloorplanCursorIndi
       return furnishTools.find((entry) => entry.catalogCategory === catalogCategory) ?? null
     }
 
+    // The wall shows its Rooms variant, like the 3D cursor bubble.
+    if (tool === 'wall') return wallCursorIcon(wallMode)
+
     return structureTools.find((entry) => entry.id === tool) ?? null
-  }, [catalogCategory, mode, movingOpeningType, tool])
+  }, [catalogCategory, mode, movingOpeningType, tool, wallMode])
 
   const indicator = useMemo<FloorplanCursorIndicator | null>(() => {
     if (activeFloorplanToolConfig) {
       return { kind: 'asset', iconSrc: activeFloorplanToolConfig.iconSrc }
     }
 
-    if (mode === 'select' && floorplanSelectionTool === 'marquee' && structureLayer !== 'zones') {
+    if (mode === 'select' && floorplanSelectionTool === 'marquee') {
       return { kind: 'icon', icon: 'mdi:select-drag' }
     }
 
@@ -86,7 +90,7 @@ export const FloorplanCursorIndicatorOverlay = memo(function FloorplanCursorIndi
     }
 
     return null
-  }, [activeFloorplanToolConfig, floorplanSelectionTool, mode, structureLayer])
+  }, [activeFloorplanToolConfig, floorplanSelectionTool, mode])
 
   useLayoutEffect(() => {
     const anchor = anchorRef.current

@@ -136,70 +136,69 @@ describe('lean-to canopy placement', () => {
     expect(resolveLeanToFreestandingRunPlacement('level_ground', [0, 0], [0.2, 0])).toBeNull()
   })
 
-  test.each([
-    'gable',
-    'butterfly',
-  ] as const)('keeps the %s canopy form throughout a continuous run', (canopyForm) => {
-    const node = resolveLeanToFreestandingRunPlacement(
-      'level_ground',
-      [0, 0],
-      [4, 0],
-      false,
-      canopyForm,
-    )
-    const target = resolveLeanToFreestandingRunTarget({
-      activeLevelId: 'level_ground',
-      canopyForm,
-      start: [4, 0],
-      end: [4, 4],
-      nodes: node ? { [node.id]: node } : {},
-    })
+  test.each(['gable', 'butterfly'] as const)(
+    'keeps the %s canopy form throughout a continuous run',
+    (canopyForm) => {
+      const node = resolveLeanToFreestandingRunPlacement(
+        'level_ground',
+        [0, 0],
+        [4, 0],
+        false,
+        canopyForm,
+      )
+      const target = resolveLeanToFreestandingRunTarget({
+        activeLevelId: 'level_ground',
+        canopyForm,
+        start: [4, 0],
+        end: [4, 4],
+        nodes: node ? { [node.id]: node } : {},
+      })
 
-    expect(node?.canopyForm).toBe(canopyForm)
-    expect(target?.node.canopyForm).toBe(canopyForm)
-  })
+      expect(node?.canopyForm).toBe(canopyForm)
+      expect(target?.node.canopyForm).toBe(canopyForm)
+    },
+  )
 
-  test.each([
-    'mono',
-    'gable',
-    'butterfly',
-  ] as const)('magnetically closes a continuous %s loop at an exposed endpoint', (canopyForm) => {
-    const first = resolveLeanToFreestandingRunPlacement(
-      'level_ground',
-      [0, 0],
-      [4, 0],
-      false,
-      canopyForm,
-    )!
-    const second = resolveLeanToFreestandingRunPlacement(
-      'level_ground',
-      [4, 0],
-      [4, 4],
-      false,
-      canopyForm,
-    )!
-    const third = resolveLeanToFreestandingRunPlacement(
-      'level_ground',
-      [4, 4],
-      [0, 4],
-      false,
-      canopyForm,
-    )!
-    const snap = resolveLeanToFreestandingRunEndpointSnap({
-      activeLevelId: 'level_ground',
-      canopyForm,
-      maxDistance: 0.5,
-      nodes: Object.fromEntries([first, second, third].map((node) => [node.id, node])),
-      proposedEnd: [0.18, 0.12],
-      start: [0, 4],
-    })
+  test.each(['mono', 'gable', 'butterfly'] as const)(
+    'magnetically closes a continuous %s loop at an exposed endpoint',
+    (canopyForm) => {
+      const first = resolveLeanToFreestandingRunPlacement(
+        'level_ground',
+        [0, 0],
+        [4, 0],
+        false,
+        canopyForm,
+      )!
+      const second = resolveLeanToFreestandingRunPlacement(
+        'level_ground',
+        [4, 0],
+        [4, 4],
+        false,
+        canopyForm,
+      )!
+      const third = resolveLeanToFreestandingRunPlacement(
+        'level_ground',
+        [4, 4],
+        [0, 4],
+        false,
+        canopyForm,
+      )!
+      const snap = resolveLeanToFreestandingRunEndpointSnap({
+        activeLevelId: 'level_ground',
+        canopyForm,
+        maxDistance: 0.5,
+        nodes: Object.fromEntries([first, second, third].map((node) => [node.id, node])),
+        proposedEnd: [0.18, 0.12],
+        start: [0, 4],
+      })
 
-    expect(snap).toMatchObject({
-      nodeId: first.id,
-      point: [0, 0],
-      side: 'left',
-    })
-  })
+      expect(snap).toMatchObject({
+        nodeId: first.id,
+        point: [0, 0],
+        side: 'left',
+      })
+    },
+  )
 
   test('does not magnetize to an occupied, incompatible, or out-of-range endpoint', () => {
     const occupied = {

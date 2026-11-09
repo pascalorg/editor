@@ -233,6 +233,7 @@ export const skylightDefinition: NodeDefinition<typeof SkylightNode> = {
   },
 
   capabilities: {
+    exterior: true,
     selectable: { hitVolume: 'bbox' },
     duplicable: true,
     deletable: true,
@@ -250,6 +251,7 @@ export const skylightDefinition: NodeDefinition<typeof SkylightNode> = {
   handles: skylightHandles,
   floorplan: buildSkylightFloorplan,
 
+  rendersChildren: false,
   renderer: {
     kind: 'parametric',
     module: () => import('./renderer'),

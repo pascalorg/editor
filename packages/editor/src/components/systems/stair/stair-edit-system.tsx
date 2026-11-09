@@ -67,9 +67,12 @@ export const StairEditSystem = () => {
       const mergedMesh = group.getObjectByName('merged-stair')
       const segmentsWrapper = group.getObjectByName('segments-wrapper')
       const isActive = activeStairIds.has(stairId)
+      // A straight stair with no segment children has an empty wrapper, so
+      // edit mode would hide the merged body and leave nothing on screen.
+      const isEditable = !isCurved && (stairNode?.children?.length ?? 0) > 0
 
-      if (mergedMesh) mergedMesh.visible = !(isActive || isCurved)
-      if (segmentsWrapper) segmentsWrapper.visible = isActive && !isCurved
+      if (mergedMesh) mergedMesh.visible = !((isActive && isEditable) || isCurved)
+      if (segmentsWrapper) segmentsWrapper.visible = isActive && isEditable
 
       if (stairNode?.children?.length) {
         const wasActive = prevActiveStairIds.current.has(stairId)

@@ -1,3 +1,11 @@
+import { footprintLift } from '../lib/floor-foundation-datum'
+import {
+  levelConstructionDisplacements,
+  upperStoreyFootprints,
+} from '../lib/floor-foundation-stack'
+import { area, intersection } from '../lib/polygon-boolean'
+import { isSiteFlatwork } from '../lib/site-flatwork'
+import { queryNodes } from '../runtime/node-queries'
 import type { BuildingNode, LevelNode, SlabNode, WallNode } from '../schema'
 import type { AnyNode, AnyNodeId } from '../schema/types'
 import {
@@ -5,6 +13,7 @@ import {
   pointOnPolygonBoundary,
   wallOverlapsSlabFootprint,
 } from '../systems/slab/slab-support'
+import { resolveWallTop } from '../systems/wall/wall-top'
 import { DEFAULT_LEVEL_HEIGHT } from './level-height'
 
 /**
@@ -13,6 +22,9 @@ import { DEFAULT_LEVEL_HEIGHT } from './level-height'
  * coincides with the solid above it.
  */
 export const CEILING_CLAMP_MARGIN = 0.01
+
+/** Metres added per level ordinal in Exploded view, also used to frame agent captures. */
+export const EXPLODED_GAP = 5
 
 /**
  * Stored storey height in meters (floor-to-floor). Falls back to
@@ -61,19 +73,35 @@ function resolveLevelBuildingId(
 // frame (WallCutout), which rebuilt an identical Map 1000+ times a frame. Weakly
 // keyed so a closed project's node graph is not pinned by the memo.
 const elevationMemo = new WeakMap<object, Map<string, LevelElevation>>()
+const authoredElevationMemo = new WeakMap<object, Map<string, LevelElevation>>()
 
 export function getLevelElevations(nodes: Record<AnyNodeId, AnyNode>): Map<string, LevelElevation> {
-  const memoized = elevationMemo.get(nodes)
+  const hit = elevationMemo.get(nodes)
+  if (hit) return hit
+  const elevations = new Map(getAuthoredLevelElevations(nodes))
+  if (
+    queryNodes(nodes, { type: 'slab' }).some(
+      (node) => node.type === 'slab' && node.plateRole === 'base',
+    )
+  )
+    for (const [id, lift] of levelConstructionDisplacements(nodes)) {
+      const entry = elevations.get(id)!
+      if (lift) elevations.set(id, { ...entry, baseY: entry.baseY + lift })
+    }
+  elevationMemo.set(nodes, elevations)
+  return elevations
+}
+
+export function getAuthoredLevelElevations(
+  nodes: Readonly<Record<string, AnyNode>>,
+): Map<string, LevelElevation> {
+  const memoized = authoredElevationMemo.get(nodes)
   if (memoized) return memoized
 
-  const buildings = Object.values(nodes).filter(
-    (node): node is BuildingNode => node?.type === 'building',
-  )
+  const buildings = queryNodes<BuildingNode>(nodes, { type: 'building' })
 
   const entries: Array<{ baseElevation: number; levelId: string } & LevelElevation> = []
-  for (const node of Object.values(nodes)) {
-    if (node?.type !== 'level') continue
-    const level = node as LevelNode
+  for (const level of queryNodes<LevelNode>(nodes, { type: 'level' })) {
     entries.push({
       levelId: level.id,
       baseElevation: level.baseElevation ?? 0,
@@ -97,8 +125,124 @@ export function getLevelElevations(nodes: Record<AnyNodeId, AnyNode>): Map<strin
     cumulativeYByBuilding.set(entry.buildingId, baseY + entry.height)
   }
 
-  elevationMemo.set(nodes, elevations)
+  authoredElevationMemo.set(nodes, elevations)
   return elevations
+}
+
+/**
+ * How far under the ground a floor has to sit to be below grade. A ground floor a few centimetres
+ * under the lawn (a basement deeper than it is tall pushes the stack down) stays a ground floor.
+ */
+export const BELOW_GRADE_TOLERANCE = 0.3
+
+/**
+ * The world Y of `levelId`'s own plane, the one its slabs' `elevation`s are measured from: the
+ * stacked base and the building's height on the site. A floor slab's top is this plus its
+ * elevation. `null` for an id that is no level.
+ */
+export function levelPlaneWorldY(
+  nodes: Record<AnyNodeId, AnyNode>,
+  levelId: string,
+): number | null {
+  const elevation = getLevelElevations(nodes).get(levelId)
+  const level = nodes[levelId as LevelNode['id']]
+  if (!elevation || level?.type !== 'level') return null
+  const building = elevation.buildingId ? nodes[elevation.buildingId as AnyNodeId] : undefined
+  const siteY = building?.type === 'building' ? building.position[1] : 0
+  return siteY + elevation.baseY
+}
+
+/**
+ * `levelId`'s world floor: the stacked base, the building's height on the site and the top of
+ * the highest slab it stands on. `null` for an id that is no level. A level with floors at
+ * several heights (a split level) has no single floor: this is the highest, and what asks where
+ * the ground stands over a floor asks per slab ({@link levelPlaneWorldY} plus the slab's
+ * elevation).
+ */
+export function levelFloorWorldY(
+  nodes: Record<AnyNodeId, AnyNode>,
+  levelId: string,
+): number | null {
+  const plane = levelPlaneWorldY(nodes, levelId)
+  const level = nodes[levelId as LevelNode['id']]
+  if (plane === null || level?.type !== 'level') return null
+  return plane + standingSlabTop(nodes, level)
+}
+
+/**
+ * The world Y of the top of the lowest floor slab `levelId` stands on: the floor a pit under the
+ * level has to go down to, the sunken room of a split level included ({@link levelFloorWorldY} is
+ * the highest). The same as `levelFloorWorldY` for a level with one floor, or none. `null` for an
+ * id that is no level.
+ */
+export function levelLowestFloorWorldY(
+  nodes: Record<AnyNodeId, AnyNode>,
+  levelId: string,
+): number | null {
+  const plane = levelPlaneWorldY(nodes, levelId)
+  const level = nodes[levelId as LevelNode['id']]
+  if (plane === null || level?.type !== 'level') return null
+  let lowest: number | null = null
+  for (const childId of level.children) {
+    const child = nodes[childId as AnyNodeId]
+    if (!isFloorSlab(child)) continue
+    lowest = Math.min(lowest ?? child.elevation, child.elevation)
+  }
+  return plane + (lowest ?? 0)
+}
+
+/**
+ * The world Y of the underside of `levelId`'s lowest floor plate, never above the walls' base: the
+ * plane the foundation under the level tops out at, and the one the pit under the hole keeps its
+ * own floor clear of. `null` for an id that is no level.
+ */
+export function levelPlateUndersideWorldY(
+  nodes: Record<AnyNodeId, AnyNode>,
+  levelId: string,
+): number | null {
+  const baseY = levelPlaneWorldY(nodes, levelId)
+  const level = nodes[levelId as LevelNode['id']]
+  if (baseY === null || level?.type !== 'level') return null
+  let underside = baseY
+  for (const childId of level.children) {
+    const child = nodes[childId as AnyNodeId]
+    if (!isFloorSlab(child)) continue
+    underside = Math.min(underside, baseY + child.elevation - child.thickness)
+  }
+  return underside
+}
+
+/**
+ * Whether `levelId` lies wholly below the flat site's grade (Y 0): its standing floor, the highest
+ * of its floor slabs, is under it by more than {@link BELOW_GRADE_TOLERANCE}. The level as a
+ * whole, which is what deriving a building's ground level asks. Sculpted terrain is not consulted,
+ * and neither is a lower floor of a split level: ask `levelGradeStanding`, which judges each floor
+ * against the datum or the terrain. `false` for an id that is no level.
+ */
+export function isLevelBelowGrade(nodes: Record<AnyNodeId, AnyNode>, levelId: string): boolean {
+  const floorY = levelFloorWorldY(nodes, levelId)
+  return floorY !== null && floorY < -BELOW_GRADE_TOLERANCE
+}
+
+/**
+ * Whether a node is a floor slab of the house a level stands on: not a recessed one (a pit or a
+ * basin, drawn down into the floor) and not site flatwork (a lawn, a driveway: outdoors, laid on the
+ * level for its elevation only). Where a level's floors are, how high and how deep, is read off
+ * these alone.
+ */
+function isFloorSlab(node: AnyNode | undefined): node is SlabNode {
+  return node?.type === 'slab' && node.recessed !== true && !isSiteFlatwork(node)
+}
+
+/** The top of the highest floor slab a level stands on, in its own Y; 0 for a level with none. */
+function standingSlabTop(nodes: Record<AnyNodeId, AnyNode>, level: LevelNode): number {
+  let top: number | null = null
+  for (const childId of level.children) {
+    const child = nodes[childId as AnyNodeId]
+    if (!isFloorSlab(child)) continue
+    top = Math.max(top ?? child.elevation, child.elevation)
+  }
+  return top ?? 0
 }
 
 function resolveLevelFloorToFloorHeight(
@@ -205,7 +349,14 @@ type CoveringSlabContext = {
   floorToFloorHeight: number
   /** Non-recessed slab children of the level above. */
   slabs: SlabNode[]
+  planeHeight: number
+  footprintPlanes: Array<{ slab: SlabNode; top: number }>
 }
+
+const coveringMemo = new WeakMap<
+  object,
+  Map<string, { sources: AnyNode[]; context: CoveringSlabContext }>
+>()
 
 /**
  * Storey height of the queried level plus the level-above's covering
@@ -217,6 +368,20 @@ function resolveCoveringSlabContext(
   levelId: string,
   nodes: Record<AnyNodeId, AnyNode>,
 ): CoveringSlabContext | null {
+  const sources = Object.values(nodes)
+  let memo = coveringMemo.get(nodes)
+  if (!memo) {
+    memo = new Map()
+    coveringMemo.set(nodes, memo)
+  }
+  const cached = memo.get(levelId)
+  // Reconciliation replaces entries in its working graph before returning it.
+  if (
+    cached &&
+    sources.length === cached.sources.length &&
+    sources.every((node, i) => node === cached.sources[i])
+  )
+    return cached.context
   const level = nodes[levelId as LevelNode['id']]
   if (level?.type !== 'level') return null
 
@@ -235,12 +400,37 @@ function resolveCoveringSlabContext(
     slabs.push(slab)
   }
 
-  return {
-    floorToFloorHeight:
-      resolveLevelFloorToFloorHeight(levelId, elevations) ??
-      getStoredLevelHeight(level as LevelNode),
+  const floorToFloorHeight =
+    resolveLevelFloorToFloorHeight(levelId, elevations) ?? getStoredLevelHeight(level)
+  const footprints = Object.values(nodes).flatMap((slab) =>
+    slab.type === 'slab' && slab.parentId === levelId && slab.plateRole === 'base'
+      ? [{ slab, lift: footprintLift(nodes, slab) }]
+      : [],
+  )
+  const authoredHeight =
+    resolveLevelFloorToFloorHeight(levelId, getAuthoredLevelElevations(nodes)) ??
+    getStoredLevelHeight(level)
+  // A plate carrying the storey above rises to that storey's floor: when a
+  // neighbouring plate's foundation lifted the storey, this plate's walls grow
+  // taller to meet it instead of stopping short. A plate with nothing above
+  // keeps its own storey height.
+  const carriesStoreyAbove = new Set(
+    (aboveId ? (upperStoreyFootprints(nodes).get(aboveId) ?? []) : []).map((base) => base.id),
+  )
+  const context = {
+    floorToFloorHeight,
+    planeHeight: authoredHeight,
     slabs,
+    footprintPlanes: footprints.map(({ slab, lift }) => ({
+      slab,
+      top: carriesStoreyAbove.has(slab.id)
+        ? Math.max(authoredHeight + lift, floorToFloorHeight)
+        : authoredHeight + lift,
+    })),
   }
+
+  memo.set(levelId, { sources, context })
+  return context
 }
 
 /**
@@ -329,10 +519,8 @@ export function getCoveringSlabUndersideAt(
  * edge's orientation (one wall clamped, its neighbor didn't). Boundary
  * contact counts as covered on every side of the slab.
  *
- * This is THE plane for a plane-bound wall (`height` absent). Explicit-height
- * walls ignore the value (`resolveWallTop` returns their stored height), so
- * passing it wherever a raw storey height feeds `resolveWallTop` /
- * `resolveWallEffectiveHeight` is always safe. Falls back to
+ * Use {@link getWallTop} to resolve a wall's top with its elected base and
+ * raw authored storey height, independently of this plane. Falls back to
  * {@link DEFAULT_LEVEL_HEIGHT} when `levelId` doesn't resolve to a level.
  */
 export function getWallPlaneTop(
@@ -340,10 +528,97 @@ export function getWallPlaneTop(
   levelId: string,
   nodes: Record<AnyNodeId, AnyNode>,
 ): number {
+  return wallPlaneTop(wall, resolveCoveringSlabContext(levelId, nodes))
+}
+
+export function getWallTop(
+  wall: WallNode,
+  levelId: string,
+  nodes: Record<AnyNodeId, AnyNode>,
+  electedBase: number,
+  t: number,
+): number {
+  const level = nodes[levelId as LevelNode['id']]
+  const authoredStoreyHeight = level?.type === 'level' ? (level.height ?? null) : null
+  return resolveWallTop(
+    wall,
+    getWallPlaneTop(wall, levelId, nodes),
+    electedBase,
+    t,
+    authoredStoreyHeight,
+  )
+}
+
+/**
+ * The lowest point of {@link getWallTop} over wall-local `[left, right]`. A sloped top is linear
+ * along the chord (the frame the viewer slopes the extrusion in), so it is lowest at one end.
+ */
+export function getWallTopOver(
+  wall: WallNode,
+  levelId: string,
+  nodes: Record<AnyNodeId, AnyNode>,
+  electedBase: number,
+  left: number,
+  right: number,
+): number {
+  const chord = Math.hypot(wall.end[0] - wall.start[0], wall.end[1] - wall.start[1])
+  const at = (s: number) =>
+    getWallTop(
+      wall,
+      levelId,
+      nodes,
+      electedBase,
+      chord > 1e-9 ? Math.max(0, Math.min(1, s / chord)) : 0,
+    )
+  return Math.min(at(left), at(right))
+}
+
+export function getWallCoveringSlabUnderside(
+  wall: Pick<WallNode, 'start' | 'end'> & Partial<Pick<WallNode, 'thickness' | 'curveOffset'>>,
+  levelId: string,
+  nodes: Record<AnyNodeId, AnyNode>,
+): number | null {
+  const undersides = getWallCoveringSlabs(wall, levelId, nodes).map(({ underside }) => underside)
+  return undersides.length ? Math.min(...undersides) : null
+}
+
+export function getWallCoveringSlabs(
+  wall: Pick<WallNode, 'start' | 'end'> & Partial<Pick<WallNode, 'thickness' | 'curveOffset'>>,
+  levelId: string,
+  nodes: Record<AnyNodeId, AnyNode>,
+): Array<{ slab: SlabNode; underside: number; top: number }> {
   const context = resolveCoveringSlabContext(levelId, nodes)
+  if (!context) return []
+  return context.slabs
+    .filter((slab) => wallOverlapsSlabFootprint(wall, slab.polygon, slab.holes))
+    .map((slab) => ({
+      slab,
+      underside: coveringUndersideY(context.floorToFloorHeight, slab),
+      top: context.floorToFloorHeight + slab.elevation,
+    }))
+}
+
+export function getWallPlaneTops(
+  walls: readonly WallNode[],
+  levelId: string,
+  nodes: Record<AnyNodeId, AnyNode>,
+): Map<string, number> {
+  const context = resolveCoveringSlabContext(levelId, nodes)
+  return new Map(walls.map((wall) => [wall.id, wallPlaneTop(wall, context)]))
+}
+
+function wallPlaneTop(
+  wall: Pick<WallNode, 'start' | 'end'> & Partial<Pick<WallNode, 'thickness' | 'curveOffset'>>,
+  context: CoveringSlabContext | null,
+): number {
   if (!context) return DEFAULT_LEVEL_HEIGHT
 
-  let plane = context.floorToFloorHeight
+  const footprints = context.footprintPlanes.filter(({ slab }) =>
+    wallOverlapsSlabFootprint(wall, slab.polygon),
+  )
+  let plane = footprints.length
+    ? Math.max(...footprints.map(({ top }) => top))
+    : context.planeHeight
   for (const slab of context.slabs) {
     const underside = coveringUndersideY(context.floorToFloorHeight, slab)
     if (underside >= plane) continue
@@ -371,11 +646,18 @@ export function getCeilingClampBound(
   levelId: string,
   nodes: Record<AnyNodeId, AnyNode>,
   polygon: ReadonlyArray<[number, number]>,
+  wallTop?: number,
 ): number {
   const context = resolveCoveringSlabContext(levelId, nodes)
   if (!context) return Number.POSITIVE_INFINITY
 
-  let bound = context.floorToFloorHeight
+  const footprints = context.footprintPlanes.filter(
+    ({ slab }) => area(intersection(slab.polygon, [...polygon])) > 1e-6,
+  )
+  let bound = footprints.length
+    ? Math.min(...footprints.map(({ top }) => top))
+    : context.planeHeight
+  if (wallTop !== undefined) bound = Math.max(bound, wallTop)
   if (polygon.length > 0) {
     let cx = 0
     let cz = 0
@@ -394,4 +676,30 @@ export function getCeilingClampBound(
   }
 
   return bound - CEILING_CLAMP_MARGIN
+}
+
+/**
+ * Lowest height a ceiling on `levelId` may be stored at, in level-local Y.
+ *
+ * A ceiling on a level above grade may hang below that level's floor, down
+ * to grade (world Y 0, the building's lowest floor): eave soffits and porch
+ * ceilings that belong to a roof level explode with it, so they live there
+ * with negative heights. The bound is `-baseY + CEILING_DRAW_OFFSET`, so the
+ * drawn surface lands at grade, or `atGrade` when that is lower. On a level at grade, or one that doesn't resolve, the caller's
+ * `atGrade` floor applies unchanged.
+ */
+/**
+ * The ceiling renderers draw the surface this far under the stored height
+ * (so it never z-fights the slab above); height bounds that promise a drawn
+ * position must add it back.
+ */
+export const CEILING_DRAW_OFFSET = 0.01
+
+export function getCeilingMinHeight(
+  levelId: string,
+  nodes: Record<AnyNodeId, AnyNode>,
+  atGrade: number,
+): number {
+  const baseY = getLevelElevations(nodes).get(levelId)?.baseY ?? 0
+  return baseY > 0 ? Math.min(atGrade, -baseY + CEILING_DRAW_OFFSET) : atGrade
 }

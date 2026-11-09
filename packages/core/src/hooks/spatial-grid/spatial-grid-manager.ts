@@ -1,24 +1,29 @@
+import { liftedManualSlab } from '../../lib/floor-construction-lift'
+import { selectSlabSupportForItem, slabSupportsItemFootprint } from '../../lib/item-slab-support'
+import { type PlanAabb, planFootprintAABB, planFootprintCorners } from '../../lib/plan-footprint'
 import { getRenderableSlabPolygon } from '../../lib/slab-polygon'
 import { levelBaseElevationAt } from '../../lib/terrain-support'
-import { nodeRegistry } from '../../registry'
+import { floorPlacedCollides, nodeRegistry } from '../../registry'
 import type { AnyNode, AnyNodeId, CeilingNode, ItemNode, SlabNode, WallNode } from '../../schema'
 import { getScaledDimensions, isLowProfileItemSurface } from '../../schema'
-import { getWallPlaneTop } from '../../services/storey'
+import { getWallTop } from '../../services/storey'
 import useLiveNodeOverrides, { getEffectiveNode } from '../../store/use-live-node-overrides'
-import useLiveTransforms from '../../store/use-live-transforms'
+import useLiveTerrain from '../../store/use-live-terrain'
+import useLiveTransforms, { type LiveTransform } from '../../store/use-live-transforms'
 import useScene from '../../store/use-scene'
 import {
   computeWallSlabSupport,
   pointInPolygon,
-  SUPPORT_ELEVATION_EPSILON,
   type WallSlabSupport,
+  wallOverlapsPolygon,
 } from '../../systems/slab/slab-support'
 import { DEFAULT_WALL_THICKNESS } from '../../systems/wall/wall-footprint'
-import { resolveWallEffectiveHeight } from '../../systems/wall/wall-top'
+import type { WallJustification } from '../../systems/wall/wall-frame'
 import { getFloorPlacedFootprints } from './floor-placed-elevation'
 import { SpatialGrid } from './spatial-grid'
-import { GROUND_SUPPORT_ID } from './support-host-id'
 import { WallSpatialGrid } from './wall-spatial-grid'
+
+export { itemOverlapsPolygon } from '../../lib/item-polygon-overlap'
 
 export {
   computeWallSlabElevation,
@@ -32,8 +37,15 @@ export {
 } from '../../systems/slab/slab-support'
 
 // ============================================================================
-// GEOMETRY HELPERS
+// GEOMETRY HELPERS (delegate to pure plan-footprint — one source with MCP/editor)
 // ============================================================================
+
+export {
+  type PlanAabb,
+  type PlanVec2,
+  planFootprintAABB,
+  planFootprintCorners,
+} from '../../lib/plan-footprint'
 
 /**
  * Compute the 4 XZ footprint corners of an item given its position, dimensions, and Y rotation.
@@ -44,20 +56,7 @@ function getItemFootprint(
   rotation: [number, number, number],
   inset = 0,
 ): Array<[number, number]> {
-  const [x, , z] = position
-  const [w, , d] = dimensions
-  const yRot = rotation[1]
-  const halfW = Math.max(0, w / 2 - inset)
-  const halfD = Math.max(0, d / 2 - inset)
-  const cos = Math.cos(yRot)
-  const sin = Math.sin(yRot)
-
-  return [
-    [x + (-halfW * cos + halfD * sin), z + (-halfW * sin - halfD * cos)],
-    [x + (halfW * cos + halfD * sin), z + (halfW * sin - halfD * cos)],
-    [x + (halfW * cos - halfD * sin), z + (halfW * sin + halfD * cos)],
-    [x + (-halfW * cos - halfD * sin), z + (-halfW * sin + halfD * cos)],
-  ]
+  return planFootprintCorners(position, dimensions, rotation[1], inset)
 }
 
 /**
@@ -69,18 +68,8 @@ function footprintBoundsXZ(
   position: [number, number, number],
   dimensions: [number, number, number],
   yRot: number,
-): { minX: number; maxX: number; minZ: number; maxZ: number } {
-  const [width, , depth] = dimensions
-  const cos = Math.abs(Math.cos(yRot))
-  const sin = Math.abs(Math.sin(yRot))
-  const rotatedW = width * cos + depth * sin
-  const rotatedD = width * sin + depth * cos
-  return {
-    minX: position[0] - rotatedW / 2,
-    maxX: position[0] + rotatedW / 2,
-    minZ: position[2] - rotatedD / 2,
-    maxZ: position[2] + rotatedD / 2,
-  }
+): PlanAabb {
+  return planFootprintAABB(position, dimensions, yRot)
 }
 
 type ItemLocalBounds = {
@@ -185,119 +174,6 @@ function expandIgnoredNodeIds(
   return ignored
 }
 
-/**
- * Test if two line segments (a1->a2) and (b1->b2) intersect.
- */
-function segmentsIntersect(
-  ax1: number,
-  az1: number,
-  ax2: number,
-  az2: number,
-  bx1: number,
-  bz1: number,
-  bx2: number,
-  bz2: number,
-): boolean {
-  const cross = (ox: number, oz: number, ax: number, az: number, bx: number, bz: number) =>
-    (ax - ox) * (bz - oz) - (az - oz) * (bx - ox)
-
-  const d1 = cross(bx1, bz1, bx2, bz2, ax1, az1)
-  const d2 = cross(bx1, bz1, bx2, bz2, ax2, az2)
-  const d3 = cross(ax1, az1, ax2, az2, bx1, bz1)
-  const d4 = cross(ax1, az1, ax2, az2, bx2, bz2)
-
-  if (((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) && ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0))) {
-    return true
-  }
-
-  // Collinear touching cases
-  const onSeg = (px: number, pz: number, qx: number, qz: number, rx: number, rz: number) =>
-    Math.min(px, qx) <= rx &&
-    rx <= Math.max(px, qx) &&
-    Math.min(pz, qz) <= rz &&
-    rz <= Math.max(pz, qz)
-
-  if (d1 === 0 && onSeg(bx1, bz1, bx2, bz2, ax1, az1)) return true
-  if (d2 === 0 && onSeg(bx1, bz1, bx2, bz2, ax2, az2)) return true
-  if (d3 === 0 && onSeg(ax1, az1, ax2, az2, bx1, bz1)) return true
-  if (d4 === 0 && onSeg(ax1, az1, ax2, az2, bx2, bz2)) return true
-
-  return false
-}
-
-/**
- * Test if a line segment intersects any edge of a polygon.
- */
-function segmentIntersectsPolygon(
-  sx1: number,
-  sz1: number,
-  sx2: number,
-  sz2: number,
-  polygon: Array<[number, number]>,
-): boolean {
-  const n = polygon.length
-  for (let i = 0; i < n; i++) {
-    const j = (i + 1) % n
-    if (
-      segmentsIntersect(
-        sx1,
-        sz1,
-        sx2,
-        sz2,
-        polygon[i]![0],
-        polygon[i]![1],
-        polygon[j]![0],
-        polygon[j]![1],
-      )
-    ) {
-      return true
-    }
-  }
-  return false
-}
-
-/**
- * Test if an item's footprint overlaps with a polygon.
- * Checks: any item corner inside polygon, or any polygon vertex inside item AABB, or edges intersect.
- */
-export function itemOverlapsPolygon(
-  position: [number, number, number],
-  dimensions: [number, number, number],
-  rotation: [number, number, number],
-  polygon: Array<[number, number]>,
-  inset = 0,
-): boolean {
-  const corners = getItemFootprint(position, dimensions, rotation, inset)
-
-  // Check if any item corner is inside the polygon
-  for (const [cx, cz] of corners) {
-    if (pointInPolygon(cx, cz, polygon)) return true
-  }
-
-  // Check if any polygon vertex is inside the item footprint
-  // (handles case where slab is fully inside a large item)
-  for (const [px, pz] of polygon) {
-    if (pointInPolygon(px, pz, corners)) return true
-  }
-
-  // Check if any item edge intersects any polygon edge
-  for (let i = 0; i < 4; i++) {
-    const j = (i + 1) % 4
-    if (
-      segmentIntersectsPolygon(
-        corners[i]![0],
-        corners[i]![1],
-        corners[j]![0],
-        corners[j]![1],
-        polygon,
-      )
-    )
-      return true
-  }
-
-  return false
-}
-
 /** One slab overlapping a queried footprint, as seen by support election. */
 export type SlabSupportCandidate = {
   slabId: string
@@ -323,6 +199,40 @@ export type PointedSupportSurface = ItemSlabSupport & {
   point: [number, number] | null
 }
 
+/**
+ * What a manager reads besides its own index: the scene's nodes and the live previews (field
+ * overrides, translation deltas, terrain sculpting) that support queries honour mid-drag.
+ */
+export type SpatialGridSource = {
+  nodes(): Record<string, AnyNode>
+  overrides(): ReadonlyMap<string, unknown>
+  transforms(): ReadonlyMap<string, LiveTransform>
+  effective<T extends { id: string }>(node: T): T
+  terrain(): ReturnType<typeof useLiveTerrain.getState> | undefined
+}
+
+/** The editor's store and its live previews: the singleton manager's source. */
+export const liveSpatialGridSource: SpatialGridSource = {
+  nodes: () => useScene.getState().nodes,
+  overrides: () => useLiveNodeOverrides.getState().overrides,
+  transforms: () => useLiveTransforms.getState().transforms,
+  effective: getEffectiveNode,
+  terrain: () => useLiveTerrain.getState(),
+}
+
+const NO_PREVIEWS = new Map<string, never>()
+
+/** A fixed set of nodes, without previews: what a detached scene's support queries read. */
+export function snapshotSpatialGridSource(nodes: () => Record<string, AnyNode>): SpatialGridSource {
+  return {
+    nodes,
+    overrides: () => NO_PREVIEWS,
+    transforms: () => NO_PREVIEWS,
+    effective: (node) => node,
+    terrain: () => undefined,
+  }
+}
+
 export class SpatialGridManager {
   private readonly floorGrids = new Map<string, SpatialGrid>() // levelId -> grid
   private readonly wallGrids = new Map<string, WallSpatialGrid>() // levelId -> wall grid
@@ -333,9 +243,89 @@ export class SpatialGridManager {
   private readonly itemCeilingMap = new Map<string, string>() // itemId -> ceilingId (reverse lookup)
 
   private readonly cellSize: number
+  private readonly source: SpatialGridSource
+  /**
+   * Item collision cells (floor, wall, ceiling) are only built when a placement query needs
+   * them: support queries read slabs, walls and ceilings. The editor's manager keeps them live.
+   */
+  private itemsIndexed: boolean
+  private readonly levelIdOf: ((node: AnyNode, nodes: Record<string, AnyNode>) => string) | null
 
-  constructor(cellSize = 0.5) {
+  constructor(
+    cellSize = 0.5,
+    source: SpatialGridSource = liveSpatialGridSource,
+    options: { lazyItems?: (node: AnyNode, nodes: Record<string, AnyNode>) => string } = {},
+  ) {
     this.cellSize = cellSize
+    this.source = source
+    this.levelIdOf = options.lazyItems ?? null
+    this.itemsIndexed = !options.lazyItems
+  }
+
+  private ensureItemIndex() {
+    if (this.itemsIndexed || !this.levelIdOf) return
+    this.itemsIndexed = true
+    const nodes = this.source.nodes()
+    for (const node of Object.values(nodes))
+      if (node.type === 'item') this.handleNodeCreated(node, this.levelIdOf(node, nodes))
+  }
+
+  private dropItemIndex() {
+    if (!this.levelIdOf || !this.itemsIndexed) return
+    this.itemsIndexed = false
+    this.floorGrids.clear()
+    this.wallGrids.clear()
+    this.ceilingGrids.clear()
+    this.itemCeilingMap.clear()
+  }
+
+  /** Indexes `nodes` at once: support structures only, caches dropped once rather than per node. */
+  bulkLoad(nodes: Record<string, AnyNode>) {
+    const levelIdOf = this.levelIdOf
+    if (!levelIdOf) throw new Error('bulkLoad is for snapshot managers')
+    for (const node of Object.values(nodes)) {
+      if (node.type === 'slab')
+        this.getSlabMap(levelIdOf(node, nodes)).set(node.id, node as SlabNode)
+      else if (node.type === 'wall') this.walls.set(node.id, node as WallNode)
+      else if (node.type === 'ceiling') this.ceilings.set(node.id, node as CeilingNode)
+    }
+    this.renderedSlabPolygons.clear()
+    this.supportInputsRevision += 1
+  }
+
+  /**
+   * Brings a snapshot manager from `before` to `after` in place. Returns false, changing nothing,
+   * when a rebuild is simpler and exact: many changes, or a node changing kind or level.
+   */
+  syncSnapshot(before: Record<string, AnyNode>, after: Record<string, AnyNode>): boolean {
+    const levelIdOf = this.levelIdOf
+    if (!levelIdOf) return false
+    const changed: string[] = []
+    for (const id in after) if (after[id] !== before[id]) changed.push(id)
+    for (const id in before) if (!(id in after)) changed.push(id)
+    if (changed.length > 256) return false
+    for (const id of changed) {
+      const previous = before[id]
+      const next = after[id]
+      if (
+        previous &&
+        next &&
+        (previous.type !== next.type || levelIdOf(previous, before) !== levelIdOf(next, after))
+      )
+        return false
+    }
+    for (const id of changed) {
+      const previous = before[id]
+      const next = after[id]
+      if (previous?.type === 'wall' || previous?.type === 'item' || previous?.type === 'ceiling')
+        this.dropItemIndex()
+      if (next?.type === 'wall' || next?.type === 'item' || next?.type === 'ceiling')
+        this.dropItemIndex()
+      if (previous && !next) this.handleNodeDeleted(id, previous.type, levelIdOf(previous, before))
+      else if (!previous && next) this.handleNodeCreated(next, levelIdOf(next, after))
+      else if (next) this.handleNodeUpdated(next, levelIdOf(next, after))
+    }
+    return true
   }
 
   private getFloorGrid(levelId: string): SpatialGrid {
@@ -353,7 +343,7 @@ export class SpatialGridManager {
   }
 
   private getWall(wallId: string): WallNode | undefined {
-    const fromScene = useScene.getState().nodes[wallId as AnyNodeId]
+    const fromScene = this.source.nodes()[wallId as AnyNodeId]
     if (fromScene && fromScene.type === 'wall') {
       this.walls.set(wallId, fromScene as WallNode)
       return fromScene as WallNode
@@ -372,8 +362,20 @@ export class SpatialGridManager {
   private getWallHeight(wallId: string, t: number): number {
     const wall = this.getWall(wallId)
     if (!wall) return 0
-    const nodes = useScene.getState().nodes as Record<string, AnyNode>
-    return getWallEffectiveHeightForNodes(wall, nodes, t)
+    const nodes = this.source.nodes()
+    const levelId = resolveNodeLevelId(wall, nodes)
+    const support = this.getSlabSupportForWall(
+      levelId,
+      wall.start,
+      wall.end,
+      wall.curveOffset ?? 0,
+      wall.thickness,
+      wall.supportSlabId ?? null,
+      undefined,
+      wall.supportOffset,
+      wall.justification,
+    )
+    return getWallTop(wall, levelId, nodes, support.elevation, t) - support.elevation
   }
 
   private getCeilingGrid(ceilingId: string): SpatialGrid {
@@ -417,17 +419,17 @@ export class SpatialGridManager {
    * live-effective records and skip the rendered-polygon cache.
    */
   private levelHasLivePreview(levelId: string): boolean {
-    const nodes = useScene.getState().nodes
+    const nodes = this.source.nodes()
     const structuralOnLevel = (id: string) => {
       const node = nodes[id as AnyNodeId]
       if (!node || (node.type !== 'slab' && node.type !== 'wall')) return false
       return resolveNodeLevelId(node, nodes) === levelId
     }
-    const overrides = useLiveNodeOverrides.getState().overrides
+    const overrides = this.source.overrides()
     for (const id of overrides.keys()) {
       if (structuralOnLevel(id)) return true
     }
-    const transforms = useLiveTransforms.getState().transforms
+    const transforms = this.source.transforms()
     for (const id of transforms.keys()) {
       if (structuralOnLevel(id)) return true
     }
@@ -444,8 +446,8 @@ export class SpatialGridManager {
    * never re-map, or the delta would apply twice.
    */
   private effectiveSlabRecord(slab: SlabNode): SlabNode {
-    let effective = getEffectiveNode(slab)
-    const live = useLiveTransforms.getState().get(slab.id)
+    let effective = this.source.effective(slab)
+    const live = this.source.transforms().get(slab.id)
     if (live) {
       const [dx, dy, dz] = live.position
       if (dx !== 0 || dy !== 0 || dz !== 0) {
@@ -459,7 +461,7 @@ export class SpatialGridManager {
         }
       }
     }
-    return effective
+    return liftedManualSlab(this.source.nodes(), effective)
   }
 
   private getRenderedSlabPolygon(levelId: string, slab: SlabNode): Array<[number, number]> {
@@ -475,7 +477,7 @@ export class SpatialGridManager {
     }
     const walls = this.getLevelWallNodes(levelId)
     const polygon = getRenderableSlabPolygon(slab, {
-      walls: live ? walls.map((wall) => getEffectiveNode(wall)) : walls,
+      walls: live ? walls.map((wall) => this.source.effective(wall)) : walls,
       siblingSlabs,
     })
     if (!live) this.renderedSlabPolygons.set(slab.id, polygon)
@@ -496,15 +498,11 @@ export class SpatialGridManager {
     dimensions: [number, number, number],
     rotation: [number, number, number],
   ): boolean {
-    if (slab.polygon.length < 3) return false
-    const rendered = this.getRenderedSlabPolygon(levelId, slab)
-    if (!itemOverlapsPolygon(position, dimensions, rotation, rendered, 0.01)) return false
-
-    const [cx, , cz] = position
-    for (const hole of slab.holes || []) {
-      if (hole.length >= 3 && pointInPolygon(cx, cz, hole)) return false
-    }
-    return true
+    return slabSupportsItemFootprint(
+      slab,
+      { position, dimensions, rotation },
+      this.getRenderedSlabPolygon(levelId, slab),
+    )
   }
 
   // Called when nodes change
@@ -519,7 +517,7 @@ export class SpatialGridManager {
       this.walls.set(wall.id, wall)
       // Rendered slab polygons adopt wall bands — a new wall can extend them.
       this.invalidateRenderedSlabPolygons(levelId)
-    } else if (node.type === 'item') {
+    } else if (node.type === 'item' && this.itemsIndexed) {
       const item = node as ItemNode
       if (item.asset.attachTo === 'wall' || item.asset.attachTo === 'wall-side') {
         // Wall-attached item - use parentId as the wall ID
@@ -578,7 +576,7 @@ export class SpatialGridManager {
       const wall = node as WallNode
       this.walls.set(wall.id, wall)
       this.invalidateRenderedSlabPolygons(levelId)
-    } else if (node.type === 'item') {
+    } else if (node.type === 'item' && this.itemsIndexed) {
       const item = node as ItemNode
       if (item.asset.attachTo === 'wall' || item.asset.attachTo === 'wall-side') {
         // Remove old placement and re-insert
@@ -648,7 +646,7 @@ export class SpatialGridManager {
       // Remove all items attached to this wall from the spatial grid
       const removedItemIds = this.getWallGrid(levelId).removeWall(nodeId)
       return removedItemIds // Caller can use this to delete the items from scene
-    } else if (nodeType === 'item') {
+    } else if (nodeType === 'item' && this.itemsIndexed) {
       this.getFloorGrid(levelId).remove(nodeId)
       this.getWallGrid(levelId).removeByItemId(nodeId)
       // Also clean up ceiling grid
@@ -681,7 +679,7 @@ export class SpatialGridManager {
     }[],
     ignoreIds?: string[],
   ) {
-    const nodes = useScene.getState().nodes
+    const nodes = this.source.nodes()
     const ignoreSet = expandIgnoredNodeIds(ignoreIds, nodes)
     const draftBounds = footprints.map((footprint) =>
       footprintBoundsXZ(footprint.position, footprint.dimensions, footprint.rotation[1] ?? 0),
@@ -709,7 +707,7 @@ export class SpatialGridManager {
     for (const node of Object.values(nodes)) {
       if (ignoreSet.has(node.id)) continue
       const floorPlaced = nodeRegistry.get(node.type)?.capabilities?.floorPlaced
-      if (!floorPlaced?.collides) continue
+      if (!floorPlaced || !floorPlacedCollides(floorPlaced, node)) continue
       if (floorPlaced.applies && !floorPlaced.applies(node)) continue
       // Low-profile item surfaces (rugs, mats) are stack-on targets, not
       // obstacles — keep the long-standing item-only exemption.
@@ -760,6 +758,7 @@ export class SpatialGridManager {
     side?: 'front' | 'back',
     ignoreIds?: string[],
   ) {
+    this.ensureItemIndex()
     const wallLength = this.getWallLength(wallId)
     if (wallLength === 0) {
       return { valid: false, conflictIds: [] }
@@ -790,7 +789,7 @@ export class SpatialGridManager {
 
     if (!baseResult.valid) return baseResult
 
-    const nodes = useScene.getState().nodes
+    const nodes = this.source.nodes()
     const ignoreSet = new Set(ignoreIds ?? [])
     const draftBounds = {
       minX: localX - itemWidth / 2,
@@ -828,6 +827,7 @@ export class SpatialGridManager {
   }
 
   getWallForItem(levelId: string, itemId: string): string | undefined {
+    this.ensureItemIndex()
     return this.getWallGrid(levelId).getWallForItem(itemId)
   }
 
@@ -901,21 +901,15 @@ export class SpatialGridManager {
     const slabMap = this.slabsByLevel.get(levelId)
     if (!slabMap) return { elevation: 0, slabId: null }
 
-    let winningElevation = Number.NEGATIVE_INFINITY
-    let winnerId: string | null = null
-    for (const stored of slabMap.values()) {
-      const slab = this.effectiveSlabRecord(stored)
-      const elevation = slab.elevation ?? 0.05
-      if (maxElevation != null && elevation > maxElevation + SUPPORT_ELEVATION_EPSILON) continue
-      if (!this.slabSupportsFootprint(levelId, slab, position, dimensions, rotation)) continue
-      if (elevation > winningElevation) {
-        winningElevation = elevation
-        winnerId = slab.id
-      }
-    }
-    return winnerId === null
-      ? { elevation: 0, slabId: null }
-      : { elevation: winningElevation, slabId: winnerId }
+    const winner = selectSlabSupportForItem(
+      Array.from(slabMap.values(), (slab) => this.effectiveSlabRecord(slab)),
+      { position, dimensions, rotation },
+      (slab) => this.getRenderedSlabPolygon(levelId, slab),
+      { maxElevation },
+    )
+    return winner
+      ? { elevation: winner.elevation ?? 0.05, slabId: winner.id }
+      : { elevation: 0, slabId: null }
   }
 
   /**
@@ -1042,9 +1036,19 @@ export class SpatialGridManager {
     curveOffset = 0,
     thickness = DEFAULT_WALL_THICKNESS,
     preferredSlabId?: string | null,
+    justification?: WallJustification,
   ): number {
-    return this.getSlabSupportForWall(levelId, start, end, curveOffset, thickness, preferredSlabId)
-      .elevation
+    return this.getSlabSupportForWall(
+      levelId,
+      start,
+      end,
+      curveOffset,
+      thickness,
+      preferredSlabId,
+      undefined,
+      0,
+      justification,
+    ).elevation
   }
 
   getSlabSupportForWall(
@@ -1056,21 +1060,12 @@ export class SpatialGridManager {
     preferredSlabId?: string | null,
     maxElevation?: number | null,
     supportOffset = 0,
+    justification?: WallJustification,
   ): WallSlabSupport {
     // Sampled at the wall's own start point — the same anchor the mesh is
     // positioned at, so the resolver and the renderer cannot disagree about
     // where the ground is under this wall.
-    const levelBase = levelBaseElevationAt(useScene.getState().nodes, levelId, start[0], start[1])
-
-    if (preferredSlabId === GROUND_SUPPORT_ID) {
-      const elevation = levelBase + supportOffset
-      return {
-        elevation,
-        electedSlabId: null,
-        baseElevation: elevation,
-        baseSegments: [{ start: 0, end: 1, elevation }],
-      }
-    }
+    const levelBase = levelBaseElevationAt(this.source.nodes(), levelId, start[0], start[1])
 
     const slabMap = this.slabsByLevel.get(levelId)
     if (!slabMap) {
@@ -1080,29 +1075,29 @@ export class SpatialGridManager {
         electedSlabId: null,
         baseElevation: elevation,
         baseSegments: [{ start: 0, end: 1, elevation }],
+        faceDatum: { a: [{ start: 0, end: 1, elevation }], b: [{ start: 0, end: 1, elevation }] },
+        faceBottom: { a: [{ start: 0, end: 1, elevation }], b: [{ start: 0, end: 1, elevation }] },
       }
     }
 
     const inputs = this.getSupportInputs(levelId, slabMap)
 
     const support = computeWallSlabSupport(
-      { start, end, curveOffset, thickness },
+      { start, end, curveOffset, thickness, justification, supportOffset },
       inputs.slabs,
       inputs.walls,
       preferredSlabId,
       maxElevation,
       levelBase,
+      inputs.supportNodes,
+      inputs.baseAt,
+      inputs.terrainPlates.some((slab) =>
+        wallOverlapsPolygon({ start, end, curveOffset, thickness, justification }, slab.polygon),
+      )
+        ? this.source.terrain()
+        : undefined,
     )
-    if (supportOffset === 0) return support
-    return {
-      ...support,
-      elevation: support.elevation + supportOffset,
-      baseElevation: support.baseElevation + supportOffset,
-      baseSegments: support.baseSegments.map((segment) => ({
-        ...segment,
-        elevation: segment.elevation + supportOffset,
-      })),
-    }
+    return support
   }
 
   /**
@@ -1122,15 +1117,18 @@ export class SpatialGridManager {
       nodes: object
       overrides: object
       transforms: object
+      terrainPlates: SlabNode[]
+      baseAt: (x: number, z: number) => number
       slabs: SlabNode[]
       walls: WallNode[]
+      supportNodes: Record<string, AnyNode>
     }
   >()
 
   private getSupportInputs(levelId: string, slabMap: Map<string, SlabNode>) {
-    const nodes = useScene.getState().nodes
-    const overrides = useLiveNodeOverrides.getState().overrides
-    const transforms = useLiveTransforms.getState().transforms
+    const nodes = this.source.nodes()
+    const overrides = this.source.overrides()
+    const transforms = this.source.transforms()
     const cached = this.supportInputs.get(levelId)
     if (
       cached &&
@@ -1142,13 +1140,44 @@ export class SpatialGridManager {
       return cached
     }
 
+    const slabs = [...slabMap.values()].map((slab) => {
+      const effective = this.effectiveSlabRecord(slab)
+      const lifted = liftedManualSlab(nodes, slab)
+      return lifted === slab
+        ? effective
+        : { ...effective, elevation: effective.elevation - (lifted.elevation - slab.elevation) }
+    })
+    const supportNodes: Record<string, AnyNode> = slabs.some(
+      (slab) => slab.plateRole === 'base' && slab.floorHeight !== undefined,
+    )
+      ? { ...nodes }
+      : {}
+    for (const slab of slabs)
+      for (const id of slab.zoneIds ?? []) {
+        const zone = nodes[id as AnyNodeId]
+        if (zone?.type === 'zone') supportNodes[id] = this.source.effective(zone)
+      }
+    for (const node of Object.values(nodes))
+      if (node.parentId === levelId && (node.type === 'separator' || node.type === 'zone'))
+        supportNodes[node.id] = this.source.effective(node)
+    for (const node of Object.values(nodes))
+      if (node.type === 'site' || node.type === 'building' || node.type === 'level')
+        supportNodes[node.id] = node
     const next = {
       revision: this.supportInputsRevision,
       nodes,
       overrides,
       transforms,
-      slabs: [...slabMap.values()].map((slab) => this.effectiveSlabRecord(slab)),
-      walls: this.getLevelWallNodes(levelId).map((wall) => getEffectiveNode(wall)),
+      terrainPlates: slabs.filter(
+        (slab) =>
+          slab.boundary === 'auto' &&
+          !slab.recessed &&
+          (slab.elevation - slab.thickness > 1e-4 || slab.elevation < -1e-4),
+      ),
+      baseAt: (x: number, z: number) => levelBaseElevationAt(nodes, levelId, x, z),
+      slabs,
+      supportNodes,
+      walls: this.getLevelWallNodes(levelId).map((wall) => this.source.effective(wall)),
     }
     this.supportInputs.set(levelId, next)
     return next
@@ -1163,7 +1192,7 @@ export class SpatialGridManager {
   private readonly levelWallsCache = new WeakMap<object, Map<string, WallNode[]>>()
 
   private getLevelWallNodes(levelId: string): WallNode[] {
-    const nodes = useScene.getState().nodes
+    const nodes = this.source.nodes()
     let byLevel = this.levelWallsCache.get(nodes)
     if (!byLevel) {
       byLevel = new Map()
@@ -1201,6 +1230,7 @@ export class SpatialGridManager {
     rotation: [number, number, number],
     ignoreIds?: string[],
   ): { valid: boolean; conflictIds: string[] } {
+    this.ensureItemIndex()
     const ceiling = this.ceilings.get(ceilingId)
     if (!ceiling || ceiling.polygon.length < 3) {
       return { valid: false, conflictIds: [] }
@@ -1223,7 +1253,7 @@ export class SpatialGridManager {
       }
     }
 
-    const nodes = useScene.getState().nodes
+    const nodes = this.source.nodes()
     const ignoreSet = new Set(ignoreIds ?? [])
     const [width, , depth] = dimensions
     const yRot = rotation[1]
@@ -1282,13 +1312,70 @@ export class SpatialGridManager {
 // Singleton instance
 export const spatialGridManager = new SpatialGridManager()
 
+const activeGrids: Array<() => SpatialGridManager> = []
+
+/**
+ * The manager support queries read: the editor's singleton, or, inside `withSpatialGrid`, the one
+ * a detached scene builds from its own nodes (scene runtime).
+ */
+export function activeSpatialGrid(): SpatialGridManager {
+  return activeGrids.at(-1)?.() ?? spatialGridManager
+}
+
+export function withSpatialGrid<T>(grid: () => SpatialGridManager, run: () => T): T {
+  activeGrids.push(grid)
+  try {
+    return run()
+  } finally {
+    activeGrids.pop()
+  }
+}
+
+/** A manager indexed over `nodes()` as they are now, without previews. */
+export function createSnapshotSpatialGrid(
+  nodes: () => Record<string, AnyNode>,
+  levelIdOf: (node: AnyNode, nodes: Record<string, AnyNode>) => string,
+): SpatialGridManager {
+  const grid = new SpatialGridManager(0.5, snapshotSpatialGridSource(nodes), {
+    lazyItems: levelIdOf,
+  })
+  grid.bulkLoad(nodes())
+  return grid
+}
+
+type NodesStore = { getState(): { nodes: Record<string, AnyNode> } }
+const supportIndexes = new WeakMap<
+  object,
+  { nodes: Record<string, AnyNode>; grid: SpatialGridManager }
+>()
+
+/**
+ * The support index of a store's saved nodes, kept per store and brought up to date in place on
+ * each use (`syncSnapshot`), rebuilt only when that is simpler: what reconciliation queries.
+ */
+export function supportIndexOf(
+  store: NodesStore,
+  levelIdOf: (node: AnyNode, nodes: Record<string, AnyNode>) => string,
+): SpatialGridManager {
+  const nodes = store.getState().nodes
+  const cached = supportIndexes.get(store)
+  if (cached?.nodes === nodes) return cached.grid
+  if (cached?.grid.syncSnapshot(cached.nodes, nodes)) {
+    cached.nodes = nodes
+    return cached.grid
+  }
+  const grid = createSnapshotSpatialGrid(() => store.getState().nodes, levelIdOf)
+  supportIndexes.set(store, { nodes, grid })
+  return grid
+}
+
 /** Level-local Y where the rendered wall mesh begins. */
 export function getWallBaseElevationForNodes(
   wall: WallNode,
   nodes: Record<string, AnyNode>,
 ): number {
   const levelId = resolveNodeLevelId(wall, nodes)
-  return spatialGridManager.getSlabSupportForWall(
+  return activeSpatialGrid().getSlabSupportForWall(
     levelId,
     wall.start,
     wall.end,
@@ -1297,13 +1384,13 @@ export function getWallBaseElevationForNodes(
     wall.supportSlabId ?? null,
     undefined,
     wall.supportOffset,
+    wall.justification,
   ).elevation
 }
 
 /**
  * Effective (extruded) height of a wall resolved from a nodes record:
- * {@link resolveWallEffectiveHeight} over the covering-clamped plane top
- * (`getWallPlaneTop`) and the singleton manager's slab election — so the
+ * {@link getWallTop} minus the singleton manager's slab election — so the
  * value always agrees with the rendered wall. One shared resolver for the
  * editor overlays (measurement label, action menu, side handles) that used
  * to copy this derivation locally.
@@ -1314,6 +1401,16 @@ export function getWallEffectiveHeightForNodes(
   t: number,
 ): number {
   const levelId = resolveNodeLevelId(wall, nodes)
-  const baseElevation = getWallBaseElevationForNodes(wall, nodes)
-  return resolveWallEffectiveHeight(wall, getWallPlaneTop(wall, levelId, nodes), baseElevation, t)
+  const support = activeSpatialGrid().getSlabSupportForWall(
+    levelId,
+    wall.start,
+    wall.end,
+    wall.curveOffset ?? 0,
+    wall.thickness,
+    wall.supportSlabId ?? null,
+    undefined,
+    wall.supportOffset,
+    wall.justification,
+  )
+  return getWallTop(wall, levelId, nodes, support.elevation, t) - support.elevation
 }

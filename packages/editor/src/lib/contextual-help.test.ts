@@ -1,5 +1,33 @@
 import { describe, expect, test } from 'bun:test'
-import { resolveSelectModeHelpHints } from './contextual-help'
+import type { MessageDescriptor } from '@pascal-app/core'
+import {
+  type ContextualShortcutHint,
+  resolveRotateHandleHelpHints as rotateHints,
+  resolveSelectModeHelpHints as selectHints,
+} from './contextual-help'
+
+// Hints carry message descriptors; these tests read their English.
+const text = (value: MessageDescriptor | string) =>
+  typeof value === 'string' ? value : value.message
+const english = (hints: ContextualShortcutHint[]) =>
+  hints.map(({ label, subtitle, ...hint }) => ({
+    ...hint,
+    label: text(label),
+    ...(subtitle ? { subtitle: text(subtitle) } : {}),
+  }))
+const resolveRotateHandleHelpHints = (...args: Parameters<typeof rotateHints>) =>
+  english(rotateHints(...args))
+const resolveSelectModeHelpHints = (...args: Parameters<typeof selectHints>) =>
+  english(selectHints(...args))
+
+test('rotation advertises Alt as the temporary free-rotation override', () => {
+  expect(resolveRotateHandleHelpHints(false)).toEqual([
+    { keys: ['Alt'], label: 'Hold to rotate freely', active: false },
+  ])
+  expect(resolveRotateHandleHelpHints(true)).toEqual([
+    { keys: ['Alt'], label: 'Rotating freely (no angle step)', active: true },
+  ])
+})
 
 describe('resolveSelectModeHelpHints', () => {
   test('stays hidden in idle select mode with no selection', () => {
@@ -116,5 +144,22 @@ describe('resolveSelectModeHelpHints', () => {
         active: true,
       },
     ])
+  })
+
+  test('shows the single-side radius hint for rounded openings', () => {
+    expect(
+      resolveSelectModeHelpHints({
+        selectedCount: 1,
+        hasMovableSelection: true,
+        hasRotatableSelection: false,
+        hasOpeningRadiusSelection: true,
+        commandPressed: false,
+        shiftPressed: false,
+      }),
+    ).toContainEqual({
+      keys: ['Shift'],
+      label: 'Adjust one side’s corner radius',
+      active: false,
+    })
   })
 })

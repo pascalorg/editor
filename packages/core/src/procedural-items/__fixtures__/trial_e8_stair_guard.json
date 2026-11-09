@@ -1,0 +1,295 @@
+{
+  "version": 1,
+  "name": "Stair guard with turned balusters",
+  "description": "Open-side stair guard: pitched handrail, turned balusters stepping with the treads, square newels with caps, wall brackets and landing return.",
+  "classification": {
+    "category": "stair_part",
+    "functionTags": ["guard", "handrail"],
+    "tags": ["IfcRailing"]
+  },
+  "parameters": [
+    {
+      "id": "riser",
+      "label": "Riser height",
+      "default": 0.1935,
+      "min": 0.15,
+      "max": 0.21,
+      "step": 0.0005,
+      "unit": "m"
+    },
+    {
+      "id": "pitch",
+      "label": "Pitch (rise/run)",
+      "default": 0.762,
+      "min": 0.5,
+      "max": 0.9,
+      "step": 0.001,
+      "unit": "m"
+    },
+    {
+      "id": "baluster_spacing",
+      "label": "Baluster spacing",
+      "default": 0.0896,
+      "min": 0.08,
+      "max": 0.1,
+      "step": 0.0001,
+      "unit": "m"
+    },
+    {
+      "id": "balusters",
+      "label": "Balusters",
+      "default": 7,
+      "min": 1,
+      "max": 12,
+      "step": 1,
+      "unit": "count"
+    }
+  ],
+  "slots": [
+    {
+      "id": "rail",
+      "label": "Handrail",
+      "color": "#6b4a32",
+      "finish": "wood"
+    },
+    {
+      "id": "paint",
+      "label": "Balusters and newels",
+      "color": "#f2efe8"
+    },
+    {
+      "id": "metal",
+      "label": "Brackets",
+      "color": "#8a8d90",
+      "finish": "metal"
+    }
+  ],
+  "parts": [
+    {
+      "id": "handrail",
+      "label": "Handrail",
+      "count": 1,
+      "shapes": [
+        {
+          "id": "rail",
+          "primitive": "box",
+          "slot": "rail",
+          "size": [4.4336, 0.06, 0.058],
+          "position": [1.861, 2.251, 0.0055],
+          "rotation": [0, 0, 0.644584]
+        }
+      ]
+    },
+    {
+      "id": "baluster",
+      "label": "Baluster",
+      "count": "balusters",
+      "shapes": [
+        {
+          "id": "post",
+          "primitive": "box",
+          "slot": "paint",
+          "size": [
+            0.036,
+            {
+              "op": "sub",
+              "args": [
+                {
+                  "op": "add",
+                  "args": [
+                    1.1765,
+                    {
+                      "op": "mul",
+                      "args": ["index", "baluster_spacing", "pitch"]
+                    }
+                  ]
+                },
+                {
+                  "op": "mul",
+                  "args": [
+                    "riser",
+                    {
+                      "op": "add",
+                      "args": [
+                        1,
+                        {
+                          "op": "floor",
+                          "args": [
+                            {
+                              "op": "div",
+                              "args": [
+                                {
+                                  "op": "add",
+                                  "args": ["index", 1]
+                                },
+                                3
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            0.036
+          ],
+          "position": [
+            {
+              "op": "add",
+              "args": [
+                0.159,
+                {
+                  "op": "mul",
+                  "args": ["index", "baluster_spacing"]
+                }
+              ]
+            },
+            {
+              "op": "sub",
+              "args": [
+                {
+                  "op": "div",
+                  "args": [
+                    {
+                      "op": "add",
+                      "args": [
+                        {
+                          "op": "add",
+                          "args": [
+                            1.1765,
+                            {
+                              "op": "mul",
+                              "args": ["index", "baluster_spacing", "pitch"]
+                            }
+                          ]
+                        },
+                        {
+                          "op": "mul",
+                          "args": [
+                            "riser",
+                            {
+                              "op": "add",
+                              "args": [
+                                1,
+                                {
+                                  "op": "floor",
+                                  "args": [
+                                    {
+                                      "op": "div",
+                                      "args": [
+                                        {
+                                          "op": "add",
+                                          "args": ["index", 1]
+                                        },
+                                        3
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    2
+                  ]
+                },
+                0.194
+              ]
+            },
+            0
+          ]
+        }
+      ]
+    },
+    {
+      "id": "newels",
+      "label": "Newels",
+      "count": 1,
+      "shapes": [
+        {
+          "id": "start",
+          "primitive": "box",
+          "slot": "paint",
+          "size": [0.14, 0.939, 0.14],
+          "position": [0.07, 0.4695, 0.0]
+        },
+        {
+          "id": "start_cap",
+          "primitive": "box",
+          "slot": "paint",
+          "size": [0.14, 0.019, 0.14],
+          "position": [0.07, 0.949, 0.0]
+        },
+        {
+          "id": "end",
+          "primitive": "box",
+          "slot": "paint",
+          "size": [0.14, 1.099, 0.14],
+          "position": [0.786, 0.936, 0.0]
+        },
+        {
+          "id": "end_cap",
+          "primitive": "box",
+          "slot": "paint",
+          "size": [0.14, 0.019, 0.14],
+          "position": [0.786, 1.495, 0.0]
+        },
+        {
+          "id": "return",
+          "primitive": "box",
+          "slot": "rail",
+          "size": [0.058, 0.232, 0.201],
+          "position": [3.626, 3.72, -0.0765]
+        }
+      ]
+    },
+    {
+      "id": "brackets",
+      "label": "Wall brackets",
+      "count": 3,
+      "shapes": [
+        {
+          "id": "bracket",
+          "primitive": "box",
+          "slot": "metal",
+          "size": [0.025, 0.07, 0.019],
+          "position": [
+            {
+              "op": "add",
+              "args": [
+                1.133,
+                {
+                  "op": "mul",
+                  "args": ["index", 0.6925]
+                }
+              ]
+            },
+            {
+              "op": "add",
+              "args": [
+                1.673,
+                {
+                  "op": "mul",
+                  "args": ["index", 0.528]
+                }
+              ]
+            },
+            -0.01
+          ]
+        }
+      ]
+    }
+  ],
+  "constraints": [
+    {
+      "left": "balusters",
+      "relation": "lte",
+      "right": 12,
+      "message": "At most 12 balusters"
+    }
+  ]
+}

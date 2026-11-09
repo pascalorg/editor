@@ -97,6 +97,7 @@ export function addDishwasherCompartment(
     doorCenterY + tubHeight * 0.18,
     tubCenterZ,
     `${name}-upper-rack`,
+    Math.min(0.055, tubHeight * 0.12),
   )
   addWireRack(
     group,
@@ -106,6 +107,7 @@ export function addDishwasherCompartment(
     doorCenterY - tubHeight * 0.18,
     tubCenterZ,
     `${name}-lower-rack`,
+    Math.min(0.07, tubHeight * 0.14),
   )
 
   const sprayArmY = doorCenterY - tubHeight * 0.36
@@ -117,11 +119,10 @@ export function addDishwasherCompartment(
   sprayArm.position.set(0, sprayArmY, tubFrontZ - tubDepth * 0.2)
   group.add(sprayArm)
   const sprayHub = stampSlot(
-    new Mesh(new CylinderGeometry(0.018, 0.018, 0.012, 24), refrigeratorLinerAccentMaterial),
+    new Mesh(new CylinderGeometry(0.018, 0.018, 0.012, 12), refrigeratorLinerAccentMaterial),
     'applianceInterior',
   )
   sprayHub.name = `${name}-spray-hub`
-  sprayHub.rotation.x = Math.PI / 2
   sprayHub.position.set(0, sprayArmY, tubFrontZ - tubDepth * 0.2)
   group.add(sprayHub)
 
@@ -143,7 +144,7 @@ export function addDishwasherCompartment(
         doorWidth,
         doorHeight,
         frontThickness,
-        Math.min(doorWidth, doorHeight) * 0.035,
+        Math.min(doorWidth, doorHeight) * 0.012,
       ),
       materials.appliance,
     ),

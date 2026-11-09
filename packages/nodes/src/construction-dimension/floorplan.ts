@@ -14,7 +14,7 @@ import {
   constructionDimensionRequiredAnchorCount,
   getWallArcData,
   getWallCurveFrameAt,
-  getWallThickness,
+  getWallLocalFaceZ,
 } from '@pascal-app/core'
 import {
   readFloorplanContext,
@@ -203,7 +203,7 @@ function wallDatumOffset(
   side: 1 | -1,
 ): number {
   if (policy === 'centerline') return 0
-  return (getWallThickness(wall) / 2) * side
+  return getWallLocalFaceZ(wall, side > 0 ? 'a' : 'b')
 }
 
 function wallEndpointDatumExtension(
@@ -231,7 +231,7 @@ function wallEndpointDatumExtension(
       candidate?.type !== 'wall' ||
       candidate.id === wall.id ||
       getWallArcData(candidate) ||
-      (!pointsCoincide(endpoint, candidate.start) && !pointsCoincide(endpoint, candidate.end))
+      !(pointsCoincide(endpoint, candidate.start) || pointsCoincide(endpoint, candidate.end))
     ) {
       continue
     }
@@ -565,6 +565,10 @@ function dimensionGeometry(
     textPosition: node.textPosition,
     text,
     stroke,
+    // A typed value that could not drive geometry falls back to
+    // `textOverride`; the renderer badges it so the drawing never lies
+    // about being associative.
+    overridden: node.textOverride !== null,
   }
 }
 

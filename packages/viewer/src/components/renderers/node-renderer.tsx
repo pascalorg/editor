@@ -4,10 +4,12 @@ import {
   type AnyNode,
   isNodeKindEnabled,
   nodeRegistry,
+  onRegistryChange,
   type RendererSource,
   useScene,
 } from '@pascal-app/core'
-import { type ComponentType, lazy, Suspense } from 'react'
+import { type ComponentType, lazy, Suspense, useCallback, useSyncExternalStore } from 'react'
+import { useRevealPending } from '../../systems/construction-reveal/construction-reveal'
 import { ParametricNodeRenderer } from './parametric-node-renderer'
 
 // Cache lazy components by their RendererSource so React.lazy isn't re-invoked
@@ -30,9 +32,16 @@ export function getRegistryRenderer(
 export const NodeRenderer = ({ nodeId }: { nodeId: AnyNode['id'] }) => {
   const node = useScene((state) => state.nodes[nodeId])
   const installedPlugins = useScene((state) => state.installedPlugins)
-  if (!node) return null
+  // Plugins register after the first mount (async discovery). Subscribe to this
+  // node's own kind only: a registration re-renders the nodes of that kind and
+  // leaves every other mounted node alone.
+  const kind = node?.type
+  const readDefinition = useCallback(() => (kind ? nodeRegistry.get(kind) : undefined), [kind])
+  const def = useSyncExternalStore(onRegistryChange, readDefinition, readDefinition)
+  // A node an agent just built mounts on its construction-reveal turn.
+  const revealPending = useRevealPending(nodeId)
+  if (!node || revealPending) return null
   if (!isNodeKindEnabled(node.type, installedPlugins)) return null
-  const def = nodeRegistry.get(node.type)
   if (!def) return null
   // Two-checkbox dispatch (see wiki/architecture/node-definitions.md):
   //  1. Custom renderer — JSX-side composition for kinds that need GLB,

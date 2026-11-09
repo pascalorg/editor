@@ -1,0 +1,142 @@
+{
+  "version": 1,
+  "name": "Gable louver 25 x 37 in",
+  "description": "Rectangular gable vent: flat trim ring, stepped frame and 13 fixed 60-degree slats.",
+  "classification": {
+    "category": "vent",
+    "functionTags": ["gable-louver", "attic-ventilation"],
+    "tags": ["roof"]
+  },
+  "mounting": {
+    "attachTo": "wall-side",
+    "reference": "back"
+  },
+  "surfaces": [
+    {
+      "id": "back",
+      "label": "Back",
+      "position": [0, 0.47, 0],
+      "rotation": [-1.5707963267948966, 0, 0],
+      "size": [0.634, 0.94]
+    }
+  ],
+  "parameters": [
+    {
+      "id": "slat_count",
+      "label": "Slats",
+      "default": 13,
+      "min": 8,
+      "max": 13,
+      "step": 1,
+      "unit": "count"
+    }
+  ],
+  "slots": [
+    {
+      "id": "frame",
+      "label": "Frame",
+      "color": "#e9e6df"
+    }
+  ],
+  "parts": [
+    {
+      "id": "trim",
+      "label": "trim",
+      "count": 1,
+      "shapes": [
+        {
+          "id": "bottom",
+          "primitive": "box",
+          "slot": "frame",
+          "size": [0.634, 0.089, 0.051],
+          "position": [0, 0.0445, 0.0505]
+        },
+        {
+          "id": "top",
+          "primitive": "box",
+          "slot": "frame",
+          "size": [0.634, 0.089, 0.051],
+          "position": [0, 0.8955, 0.0505]
+        },
+        {
+          "id": "left",
+          "primitive": "box",
+          "slot": "frame",
+          "size": [0.089, 0.762, 0.051],
+          "position": [-0.2725, 0.47, 0.0505]
+        },
+        {
+          "id": "right",
+          "primitive": "box",
+          "slot": "frame",
+          "size": [0.088, 0.762, 0.051],
+          "position": [0.273, 0.47, 0.0505]
+        }
+      ]
+    },
+    {
+      "id": "frame",
+      "label": "frame",
+      "count": 1,
+      "shapes": [
+        {
+          "id": "bottom",
+          "primitive": "box",
+          "slot": "frame",
+          "size": [0.457, 0.05, 0.051],
+          "position": [0.0005, 0.114, 0.0255]
+        },
+        {
+          "id": "top",
+          "primitive": "box",
+          "slot": "frame",
+          "size": [0.457, 0.051, 0.051],
+          "position": [0.0005, 0.8255, 0.0255]
+        },
+        {
+          "id": "left",
+          "primitive": "box",
+          "slot": "frame",
+          "size": [0.051, 0.661, 0.051],
+          "position": [-0.2025, 0.4695, 0.0255]
+        },
+        {
+          "id": "right",
+          "primitive": "box",
+          "slot": "frame",
+          "size": [0.051, 0.661, 0.051],
+          "position": [0.2035, 0.4695, 0.0255]
+        }
+      ]
+    },
+    {
+      "id": "slats",
+      "label": "Slats",
+      "count": "slat_count",
+      "shapes": [
+        {
+          "id": "slat",
+          "primitive": "box",
+          "slot": "frame",
+          "size": [0.355, 0.0508, 0.011],
+          "rotation": [-0.52354, 0, 0],
+          "position": [
+            0,
+            {
+              "op": "add",
+              "args": [
+                0.16800000000000015,
+                {
+                  "op": "mul",
+                  "args": ["index", 0.0505]
+                }
+              ]
+            },
+            0.028500000000000192
+          ]
+        }
+      ]
+    }
+  ],
+  "constraints": []
+}

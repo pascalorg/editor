@@ -3,6 +3,8 @@ import {
   applyHeightPatch,
   createTerrainField,
   flattenPatch,
+  type HeightPatch,
+  heightAt,
   type TerrainField,
 } from '@pascal-app/core'
 import {
@@ -10,6 +12,9 @@ import {
   buildTerrainSkirt,
   HORIZON_PLANE_Y,
   patchUpdateRange,
+  SKIRT_DROP,
+  skirtRing,
+  terrainBlockBase,
   terrainFootprint,
   updateTerrainMesh,
   updateTerrainSkirt,
@@ -205,6 +210,128 @@ describe('updateTerrainMesh — the dirty-rect path', () => {
       heights: new Int16Array(4),
     })
     expect(mesh.positions).toBe(positions)
+  })
+})
+
+describe('updateTerrainMesh — local brush acceptance', () => {
+  // The established full builder is the oracle, not the dirty updater's algorithm.
+  // Non-binary spacing/origin also exercise rounding in world-space normal sampling.
+  test.each([
+    ['interior', 5, 3, 2, 3],
+    ['top edge', 4, 0, 3, 1],
+    ['bottom edge', 4, 8, 3, 1],
+    ['left edge', 0, 3, 1, 3],
+    ['right edge', 12, 3, 1, 3],
+    ['clipped top-left', -2, -1, 4, 3],
+    ['clipped bottom-right', 11, 7, 4, 4],
+    ['full-width strip', 0, 4, 13, 1],
+    ['full-height strip', 6, 0, 1, 9],
+  ] as const)('matches the full builder at %s', (_name, col0, row0, cols, rows) => {
+    const before: TerrainField = {
+      ...createTerrainField({ cols: 13, rows: 9, origin: [-11.17, 3.29], spacing: 0.3 }),
+      heights: Int16Array.from({ length: 13 * 9 }, (_, i) => {
+        const c = i % 13
+        const r = Math.floor(i / 13)
+        return ((c * 71 + r * 113 + c * r * 19) % 601) - 300
+      }),
+    }
+    const patch: HeightPatch = {
+      col0,
+      row0,
+      cols,
+      rows,
+      heights: Int16Array.from({ length: cols * rows }, (_, i) => (i % 2 ? -1703 : 2309) + i),
+    }
+    const originalHeights = before.heights.slice()
+    const originalPatch = patch.heights.slice()
+    const after = applyHeightPatch(before, patch)
+    const mesh = buildTerrainMesh(before)
+    const references = { ...mesh }
+    const full = buildTerrainMesh(after)
+
+    updateTerrainMesh(after, mesh, patch)
+
+    expect(mesh.positions).toEqual(full.positions)
+    for (let i = 0; i < full.normals.length; i++) {
+      expect(mesh.normals[i]).toBeCloseTo(full.normals[i]!, 6)
+    }
+    expect(mesh.uvs).toEqual(full.uvs)
+    expect(mesh.indices).toEqual(full.indices)
+    for (const name of ['positions', 'normals', 'uvs', 'indices'] as const) {
+      expect(mesh[name]).toBe(references[name])
+    }
+    expect(before.heights).toEqual(originalHeights)
+    expect(patch.heights).toEqual(originalPatch)
+    expect(after.heights).not.toBe(before.heights)
+  })
+
+  test('does not rewrite XZ, UVs, clean Y values, or normals outside the one-cell halo', () => {
+    const before = rampField(0.3, 17, 11, 0.5)
+    const patch: HeightPatch = {
+      col0: 7,
+      row0: 4,
+      cols: 2,
+      rows: 2,
+      heights: new Int16Array([300, -400, 500, -600]),
+    }
+    const after = applyHeightPatch(before, patch)
+    const mesh = buildTerrainMesh(before)
+    const expected = buildTerrainMesh(after)
+    // Distinct, finite sentinels on forbidden destinations expose redundant writes
+    // of the old value, without requiring a particular loop or typed-array API.
+    for (let r = 0; r < before.rows; r++) {
+      for (let c = 0; c < before.cols; c++) {
+        const i = r * before.cols + c
+        const dirty = c >= 7 && c <= 8 && r >= 4 && r <= 5
+        const halo = c >= 6 && c <= 9 && r >= 3 && r <= 6
+        for (let axis = 0; axis < 3; axis++) {
+          const index = i * 3 + axis
+          if (axis !== 1 || !dirty) {
+            mesh.positions[index] = expected.positions[index] = 10000 + index
+          }
+          if (!halo) mesh.normals[index] = expected.normals[index] = -10000 - index
+        }
+      }
+    }
+    mesh.uvs.fill(12345)
+    expected.uvs.fill(12345)
+    const references = { ...mesh }
+
+    updateTerrainMesh(after, mesh, patch)
+
+    expect(mesh.positions).toEqual(expected.positions)
+    expect(mesh.normals).toEqual(expected.normals)
+    expect(mesh.uvs).toEqual(expected.uvs)
+    expect(mesh.indices).toEqual(expected.indices)
+    for (const name of ['positions', 'normals', 'uvs', 'indices'] as const) {
+      expect(mesh[name]).toBe(references[name])
+    }
+  })
+
+  test.each([
+    ['left', -2, 3],
+    ['right', 9, 3],
+    ['above', 3, -2],
+    ['below', 3, 9],
+    ['diagonally outside', 9, 9],
+  ] as const)('does not rewrite buffers for a patch wholly %s', (_name, col0, row0) => {
+    const field = createTerrainField({ cols: 9, rows: 9 })
+    const mesh = buildTerrainMesh(field)
+    mesh.positions.fill(12345)
+    mesh.normals.fill(-12345)
+    mesh.uvs.fill(6789)
+    const expected = {
+      positions: mesh.positions.slice(),
+      normals: mesh.normals.slice(),
+      uvs: mesh.uvs.slice(),
+      indices: mesh.indices.slice(),
+    }
+    const patch: HeightPatch = { col0, row0, cols: 2, rows: 2, heights: new Int16Array(4) }
+
+    updateTerrainMesh(field, mesh, patch)
+
+    expect(mesh).toEqual(expected)
+    expect(patchUpdateRange(field, patch, 3)).toBeNull()
   })
 })
 
@@ -406,5 +533,86 @@ describe('terrainFootprint — the horizon punch', () => {
     const footprint = terrainFootprint(createTerrainField({ cols: 1, rows: 1, spacing: 1 }))
     expect(footprint).toHaveLength(4)
     expect(footprint[0]![0]).toBeGreaterThan(footprint[1]![0])
+  })
+})
+
+describe('the lot block — a skirt along the property line', () => {
+  // A dented lot inside a 21 x 21 m field on a 10% grade, wound clockwise on
+  // purpose: the ring must come out in the field perimeter's own direction.
+  const lot: [number, number][] = [
+    [2, 2],
+    [2, 18],
+    [10, 14],
+    [18, 18],
+    [18, 2],
+  ]
+  const field = rampField(0.1, 21, 21, 1)
+
+  test('the ring walks the lot the perimeter’s way round, a point at least every half cell', () => {
+    const ring = skirtRing(field, lot)
+    let area = 0
+    const n = ring.length / 2
+    for (let i = 0; i < n; i++) {
+      const j = (i + 1) % n
+      area +=
+        (ring[i * 2] ?? 0) * (ring[j * 2 + 1] ?? 0) - (ring[j * 2] ?? 0) * (ring[i * 2 + 1] ?? 0)
+      const step = Math.hypot(
+        (ring[j * 2] ?? 0) - (ring[i * 2] ?? 0),
+        (ring[j * 2 + 1] ?? 0) - (ring[i * 2 + 1] ?? 0),
+      )
+      expect(step).toBeLessThanOrEqual(field.spacing / 2 + 1e-6)
+    }
+    expect(area).toBeGreaterThan(0)
+    expect(
+      skirtRing(field, [
+        [0, 0],
+        [1, 1],
+      ]),
+    ).toHaveLength(0)
+  })
+
+  test('its top lies on the ground, its bottom on one flat base under the lowest point', () => {
+    const skirt = buildTerrainSkirt(field, skirtRing(field, lot))
+    const base = terrainBlockBase(field)
+    expect(base).toBeLessThanOrEqual(HORIZON_PLANE_Y - SKIRT_DROP + 1e-6)
+    const count = skirt.positions.length / 6
+    for (let i = 0; i < count; i++) {
+      const top = i * 6
+      const x = skirt.positions[top] ?? 0
+      const z = skirt.positions[top + 2] ?? 0
+      expect(skirt.positions[top + 1] ?? 0).toBeCloseTo(heightAt(field, x, z), 4)
+      expect(skirt.positions[top + 4] ?? 0).toBeCloseTo(base, 5)
+      expect(skirt.positions[top + 4] ?? 0).toBeLessThan(skirt.positions[top + 1] ?? 0)
+    }
+    // thicker uphill: the edge's depth follows the grade
+    const depthAt = (i: number) =>
+      (skirt.positions[i * 6 + 1] ?? 0) - (skirt.positions[i * 6 + 4] ?? 0)
+    const xs = Array.from({ length: count }, (_, i) => skirt.positions[i * 6] ?? 0)
+    const low = xs.indexOf(Math.min(...xs))
+    const high = xs.indexOf(Math.max(...xs))
+    expect(depthAt(high) - depthAt(low)).toBeCloseTo(1.6, 1)
+  })
+
+  test('faces point out of the lot, and a sculpt rewrite matches a rebuild', () => {
+    const ring = skirtRing(field, lot)
+    const skirt = buildTerrainSkirt(field, ring)
+    const n = ring.length / 2
+    let cx = 0
+    let cz = 0
+    for (let i = 0; i < n; i++) {
+      cx += (ring[i * 2] ?? 0) / n
+      cz += (ring[i * 2 + 1] ?? 0) / n
+    }
+    // on the straight west edge (x = 2) the normal is -x
+    const west = Array.from({ length: n }, (_, i) => i).find(
+      (i) => ring[i * 2] === 2 && (ring[i * 2 + 1] ?? 0) > 4 && (ring[i * 2 + 1] ?? 0) < 16,
+    ) as number
+    expect(skirt.normals[west * 6] ?? 0).toBeCloseTo(-1, 5)
+    expect(cx).toBeGreaterThan(2)
+
+    const patch = flattenPatch(field, { minX: 6, minZ: 6, maxX: 14, maxZ: 14 }, -2) as HeightPatch
+    const dug = applyHeightPatch(field, patch)
+    updateTerrainSkirt(dug, skirt)
+    expect(Array.from(skirt.positions)).toEqual(Array.from(buildTerrainSkirt(dug, ring).positions))
   })
 })

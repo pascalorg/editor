@@ -1,40 +1,53 @@
 'use client'
 
-import { emitter, useScene } from '@pascal-app/core'
+import { emitter, getProjectFileSink, type ProjectFileSink } from '@pascal-app/core'
 import { disposeObject3DResources, snapLevelsToTruePositions, useViewer } from '@pascal-app/viewer'
 import { useThree } from '@react-three/fiber'
 import { useEffect } from 'react'
 import * as THREE from 'three'
 import { OBJExporter } from 'three/examples/jsm/exporters/OBJExporter.js'
 import { STLExporter } from 'three/examples/jsm/exporters/STLExporter.js'
-import { exportSceneToGlb, nextFrames, prepareSceneForExport } from '../../lib/glb-export'
+import { downloadProjectFile } from '../../lib/download-project-file'
+import {
+  exportSceneToGlb,
+  prepareSceneForExport,
+  waitForExportGeometry,
+} from '../../lib/glb-export'
+import { exportPreparedSceneToIfc, ifcFileName } from '../../lib/ifc-export'
 import { exportSceneLevelsForPrint } from '../../lib/level-print-export'
 import type { ModelExport, ModelExportArtifact } from '../../lib/model-export'
+import {
+  expandInstancedMeshes,
+  fixReflectedMeshWinding,
+  freezeDeformedMeshes,
+} from '../../lib/portable-export'
 import { exportSceneToPrint3mf } from '../../lib/print-3mf'
 import { filterPreparedSceneForPrintContent } from '../../lib/print-content-scope'
 import { exportSceneToPrintStl, mergePrintExportDiagnostics } from '../../lib/print-export'
 import { applySemanticPrintFeatureThickness } from '../../lib/print-feature-thickness'
 import { compileSemanticPrintShellWithManifold } from '../../lib/print-shell-compiler-manifold-worker'
+import { getSavedSceneDocument } from '../../lib/scene'
+import { exportSceneToUsdz } from '../../lib/usdz-export'
 import useEditor from '../../store/use-editor'
 
 // prepareSceneForExport neutralises container meshes (door/window hitbox roots,
 // material-less renderables) with an attribute-less geometry — GLTFExporter
 // emits those as plain transform nodes, but STL/OBJExporter read
 // `position.count` unconditionally and crash. Swap in a geometry with an empty
-// (count-0) position so they iterate zero vertices instead. Shared: the export
-// scene is a throwaway clone, only its geometry *ref* is swapped.
-const EMPTY_POSITION_GEOMETRY = new THREE.BufferGeometry()
-EMPTY_POSITION_GEOMETRY.setAttribute(
-  'position',
-  new THREE.Float32BufferAttribute(new Float32Array(0), 3),
-)
+// (count-0) position so they iterate zero vertices instead. Each replacement
+// is export-owned and disposed with its prepared scene.
+function createEmptyPositionGeometry(): THREE.BufferGeometry {
+  const geometry = new THREE.BufferGeometry()
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(0), 3))
+  return geometry
+}
 
 function ensurePositionAttributes(root: THREE.Object3D) {
   root.traverse((object) => {
     const renderable = object as THREE.Mesh & { isLine?: boolean; isPoints?: boolean }
     if (!(renderable.isMesh || renderable.isLine || renderable.isPoints)) return
     if (!renderable.geometry?.getAttribute('position')) {
-      renderable.geometry = EMPTY_POSITION_GEOMETRY
+      renderable.geometry = createEmptyPositionGeometry()
     }
   })
 }
@@ -45,7 +58,11 @@ export function ExportManager() {
   const setModelExport = useEditor((state) => state.setModelExport)
 
   useEffect(() => {
-    const exportFn: ModelExport = async (format = 'glb', options = {}) => {
+    const exportFn: ModelExport = async (format = 'glb', requested = {}) => {
+      const finishArtifact = artifactFinisher(getProjectFileSink())
+      // Resolve once: scene preparation prunes hidden nodes by default, and the
+      // IFC writer must drop the same nodes it rebuilds parametrically.
+      const options = { ...requested, onlyVisible: requested.onlyVisible ?? true }
       // Find the scene renderer group by name
       const sceneGroup = scene.getObjectByName('scene-renderer')
       if (!sceneGroup) {
@@ -61,12 +78,27 @@ export function ExportManager() {
       // without it every plant exports as its raycast collider, a white box).
       useViewer.getState().setExporting(true)
       try {
-        await nextFrames()
+        await waitForExportGeometry(getSavedSceneDocument().nodes, options)
+        const { nodes, collections } = getSavedSceneDocument()
 
         if (format === 'glb') {
-          const buffer = await exportSceneToGlb(sceneGroup, useScene.getState().nodes, options)
+          const warnings: string[] = []
+          const buffer = await exportSceneToGlb(sceneGroup, nodes, {
+            ...options,
+            onWarning: (warning) => warnings.push(warning),
+          })
           const blob = new Blob([buffer], { type: 'model/gltf-binary' })
-          return finishArtifact(blob, `model_${date}.glb`, options.download)
+          return finishArtifact(blob, `model_${date}.glb`, options.download, undefined, warnings)
+        }
+
+        if (format === 'usdz') {
+          const warnings: string[] = []
+          const data = await exportSceneToUsdz(sceneGroup, nodes, {
+            ...options,
+            onWarning: (warning) => warnings.push(warning),
+          })
+          const blob = new Blob([data], { type: 'model/vnd.usdz+zip' })
+          return finishArtifact(blob, `model_${date}.usdz`, options.download, undefined, warnings)
         }
 
         // Hide editor affordances that live on the scene layer (selection handles,
@@ -75,115 +107,144 @@ export function ExportManager() {
         // window, so the export snapshots the clean building, then restore.
         emitter.emit('thumbnail:before-capture', undefined)
         const restoreLevels = snapLevelsToTruePositions()
-        const nodes = useScene.getState().nodes
         let prepared: ReturnType<typeof prepareSceneForExport>
         try {
-          prepared = prepareSceneForExport(sceneGroup, nodes, options)
+          prepared = prepareSceneForExport(sceneGroup, nodes, {
+            ...options,
+            requireSynchronousBake: format === 'stl' || format === 'obj' || format === 'ifc',
+          })
         } finally {
           restoreLevels()
           emitter.emit('thumbnail:after-capture', undefined)
         }
-        let { scene: exportScene } = prepared
-        const printContent = options.printContent ?? 'structure'
-        const isPrintFormat = format === 'print-stl' || format === 'print-3mf'
-        if (isPrintFormat) {
-          exportScene = filterPreparedSceneForPrintContent(exportScene, nodes, printContent)
-        }
-        ensurePositionAttributes(exportScene)
+        try {
+          let { scene: exportScene } = prepared
+          const printContent = options.printContent ?? 'structure'
+          const isPrintFormat = format === 'print-stl' || format === 'print-3mf'
+          if (isPrintFormat) {
+            exportScene = filterPreparedSceneForPrintContent(exportScene, nodes, printContent)
+          }
+          if (!isPrintFormat) {
+            expandInstancedMeshes(exportScene)
+            exportScene.updateMatrixWorld(true)
+            freezeDeformedMeshes(exportScene)
+            fixReflectedMeshWinding(exportScene)
+          }
+          ensurePositionAttributes(exportScene)
 
-        if (isPrintFormat) {
-          const printFormat = format === 'print-3mf' ? '3mf' : 'stl'
-          const scale = options.printScale ?? 100
-          const compileShells = printContent === 'structure'
-          const minimumFeatureMm = compileShells ? options.printMinimumFeatureMm : undefined
-          if (options.printScope === 'levels') {
-            const plinth =
-              options.printBase === 'plinth'
-                ? {
-                    marginMm: options.printPlinthMarginMm ?? 2,
-                    thicknessMm: options.printPlinthThicknessMm ?? 2,
-                  }
-                : undefined
-            const { data, report } = await exportSceneLevelsForPrint(exportScene, nodes, {
-              scale,
-              format: printFormat,
-              plinth,
-              minimumFeatureMm,
-              compileShells,
-              compileShell: compileShells ? compileSemanticPrintShellWithManifold : undefined,
-            })
-            const blob = new Blob([data], {
-              type: printFormat === '3mf' ? 'model/3mf' : 'application/zip',
-            })
-            return finishArtifact(
-              blob,
-              `print_levels_1-${scale}_${date}.${printFormat === '3mf' ? '3mf' : 'zip'}`,
-              options.download,
-              report,
-            )
-          }
-          if (options.printBase === 'plinth') {
-            throw new Error('Plinth generation is available only for per-level print packages.')
-          }
-          const compiled = compileShells
-            ? await compileSemanticPrintShellWithManifold(exportScene, nodes)
-            : null
-          try {
-            const printSource = compiled ? (compiled.scene ?? new THREE.Group()) : exportScene
-            const printOptions = {
-              scale,
-              compiled: compiled?.status === 'compiled',
-              indexedTopology: compiled?.backend === 'manifold-3d',
-            }
-            const output =
-              printFormat === '3mf'
-                ? exportSceneToPrint3mf(printSource, printOptions)
-                : exportSceneToPrintStl(printSource, printOptions)
-            let report = compiled
-              ? mergePrintExportDiagnostics(
-                  output.report,
-                  compiled.diagnostics,
-                  new Set(['compiler_pending']),
-                )
-              : output.report
-            if (compiled) {
-              report = applySemanticPrintFeatureThickness(
-                report,
-                nodes,
-                compiled.sourceNodeIds,
+          if (isPrintFormat) {
+            const printFormat = format === 'print-3mf' ? '3mf' : 'stl'
+            const scale = options.printScale ?? 100
+            const compileShells = printContent === 'structure'
+            const minimumFeatureMm = compileShells ? options.printMinimumFeatureMm : undefined
+            if (options.printScope === 'levels') {
+              const plinth =
+                options.printBase === 'plinth'
+                  ? {
+                      marginMm: options.printPlinthMarginMm ?? 2,
+                      thicknessMm: options.printPlinthThicknessMm ?? 2,
+                    }
+                  : undefined
+              const { data, report } = await exportSceneLevelsForPrint(exportScene, nodes, {
+                scale,
+                format: printFormat,
+                plinth,
                 minimumFeatureMm,
+                compileShells,
+                compileShell: compileShells ? compileSemanticPrintShellWithManifold : undefined,
+              })
+              const blob = new Blob([data], {
+                type: printFormat === '3mf' ? 'model/3mf' : 'application/zip',
+              })
+              return finishArtifact(
+                blob,
+                `print_levels_1-${scale}_${date}.${printFormat === '3mf' ? '3mf' : 'zip'}`,
+                options.download,
+                report,
               )
             }
-            const { buffer } = output
-            const blob = new Blob([buffer], {
-              type: printFormat === '3mf' ? 'model/3mf' : 'model/stl',
+            if (options.printBase === 'plinth') {
+              throw new Error('Plinth generation is available only for per-level print packages.')
+            }
+            const compiled = compileShells
+              ? await compileSemanticPrintShellWithManifold(exportScene, nodes)
+              : null
+            try {
+              const printSource = compiled ? (compiled.scene ?? new THREE.Group()) : exportScene
+              const printOptions = {
+                scale,
+                compiled: compiled?.status === 'compiled',
+                indexedTopology: compiled?.backend === 'manifold-3d',
+              }
+              const output =
+                printFormat === '3mf'
+                  ? exportSceneToPrint3mf(printSource, printOptions)
+                  : exportSceneToPrintStl(printSource, printOptions)
+              let report = compiled
+                ? mergePrintExportDiagnostics(
+                    output.report,
+                    compiled.diagnostics,
+                    new Set(['compiler_pending']),
+                  )
+                : output.report
+              if (compiled) {
+                report = applySemanticPrintFeatureThickness(
+                  report,
+                  nodes,
+                  compiled.sourceNodeIds,
+                  minimumFeatureMm,
+                )
+              }
+              const { buffer } = output
+              const blob = new Blob([buffer], {
+                type: printFormat === '3mf' ? 'model/3mf' : 'model/stl',
+              })
+              return finishArtifact(
+                blob,
+                `print_model_1-${scale}_${date}.${printFormat}`,
+                options.download,
+                report,
+              )
+            } finally {
+              if (compiled?.scene) disposeObject3DResources(compiled.scene)
+            }
+          }
+
+          if (format === 'stl') {
+            const exporter = new STLExporter()
+            const result = exporter.parse(exportScene, { binary: true })
+            const blob = new Blob([result], { type: 'model/stl' })
+            return finishArtifact(blob, `model_${date}.stl`, options.download)
+          }
+
+          if (format === 'ifc') {
+            const { data, warnings } = exportPreparedSceneToIfc(exportScene, nodes, {
+              collections,
+              projectName: options.projectName,
+              onlyVisible: options.onlyVisible,
+              excludedNodeTypes: options.excludedNodeTypes,
             })
+            const blob = new Blob([data], { type: 'application/x-step' })
             return finishArtifact(
               blob,
-              `print_model_1-${scale}_${date}.${printFormat}`,
+              ifcFileName(options.projectName, `model_${date}`),
               options.download,
-              report,
+              undefined,
+              warnings,
             )
-          } finally {
-            if (compiled?.scene) disposeObject3DResources(compiled.scene)
           }
-        }
 
-        if (format === 'stl') {
-          const exporter = new STLExporter()
-          const result = exporter.parse(exportScene, { binary: true })
-          const blob = new Blob([result], { type: 'model/stl' })
-          return finishArtifact(blob, `model_${date}.stl`, options.download)
-        }
+          if (format === 'obj') {
+            const exporter = new OBJExporter()
+            const result = exporter.parse(exportScene)
+            const blob = new Blob([result], { type: 'model/obj' })
+            return finishArtifact(blob, `model_${date}.obj`, options.download)
+          }
 
-        if (format === 'obj') {
-          const exporter = new OBJExporter()
-          const result = exporter.parse(exportScene)
-          const blob = new Blob([result], { type: 'model/obj' })
-          return finishArtifact(blob, `model_${date}.obj`, options.download)
+          return null
+        } finally {
+          prepared.dispose()
         }
-
-        return null
       } finally {
         useViewer.getState().setExporting(false)
       }
@@ -203,21 +264,15 @@ export function ExportManager() {
   return null
 }
 
-function finishArtifact(
-  blob: Blob,
-  filename: string,
-  download: boolean | undefined,
-  metadata?: unknown,
-): ModelExportArtifact {
-  if (download !== false) downloadBlob(blob, filename)
-  return { blob, filename, metadata }
-}
-
-function downloadBlob(blob: Blob, filename: string) {
-  const url = URL.createObjectURL(blob)
-  const link = document.createElement('a')
-  link.href = url
-  link.download = filename
-  link.click()
-  URL.revokeObjectURL(url)
+function artifactFinisher(sink: ProjectFileSink | null) {
+  return async (
+    blob: Blob,
+    filename: string,
+    download: boolean | undefined,
+    metadata?: unknown,
+    warnings?: readonly string[],
+  ): Promise<ModelExportArtifact> => {
+    if (download !== false) await downloadProjectFile(blob, filename, sink)
+    return { blob, filename, metadata, warnings: warnings?.length ? warnings : undefined }
+  }
 }

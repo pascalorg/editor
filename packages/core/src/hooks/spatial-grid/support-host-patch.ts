@@ -8,7 +8,7 @@ import {
   getFloorPlacedElevation,
   getFloorPlacedFootprints,
 } from './floor-placed-elevation'
-import { SUPPORT_ELEVATION_EPSILON, spatialGridManager } from './spatial-grid-manager'
+import { activeSpatialGrid, SUPPORT_ELEVATION_EPSILON } from './spatial-grid-manager'
 
 export type SupportSlabPatch = { supportSlabId: string | undefined }
 
@@ -61,7 +61,7 @@ export function resolveSupportSlabPatch(
     for (const footprint of footprints) {
       const position = footprint.position ?? (node as { position?: unknown }).position
       if (!Array.isArray(position) || position.length !== 3) continue
-      const elevation = spatialGridManager.getHostSlabElevationForFootprint(
+      const elevation = activeSpatialGrid().getHostSlabElevationForFootprint(
         parent.id,
         options.preferredSlabId,
         position as [number, number, number],
@@ -84,7 +84,7 @@ export function resolveSupportSlabPatch(
   for (const footprint of footprints) {
     const position = footprint.position ?? (node as { position?: unknown }).position
     if (!Array.isArray(position) || position.length !== 3) continue
-    const candidates = spatialGridManager.getSupportCandidatesForFootprint(
+    const candidates = activeSpatialGrid().getSupportCandidatesForFootprint(
       parent.id,
       position as [number, number, number],
       footprint.dimensions,
@@ -92,7 +92,7 @@ export function resolveSupportSlabPatch(
     )
     for (const candidate of candidates) candidateElevations.add(candidate.elevation)
 
-    const support = spatialGridManager.getSlabSupportForItem(
+    const support = activeSpatialGrid().getSlabSupportForItem(
       parent.id,
       position as [number, number, number],
       footprint.dimensions,
@@ -136,7 +136,7 @@ export function resolveFrozenFloorPlacementPatch(
   const effectiveNode = {
     ...(node as Record<string, unknown>),
     position: options.position,
-    ...(options.rotation !== undefined ? { rotation: options.rotation } : {}),
+    ...(options.rotation === undefined ? {} : { rotation: options.rotation }),
   } as AnyNode
   const floorPlaced = nodeRegistry.get(effectiveNode.type)?.capabilities?.floorPlaced
   if (!floorPlaced || (floorPlaced.applies && !floorPlaced.applies(effectiveNode))) {
@@ -179,7 +179,7 @@ export function resolveWallSupportSlabPatch(
   // Winner under the pointer cap (when given): a deck hanging above the
   // aimed-at surface can't capture the elected base, so a wall drawn at the
   // floor underneath it persists the floor slab the user actually targeted.
-  const support = spatialGridManager.getSlabSupportForWall(
+  const support = activeSpatialGrid().getSlabSupportForWall(
     parent.id,
     wall.start,
     wall.end,
@@ -187,18 +187,23 @@ export function resolveWallSupportSlabPatch(
     wall.thickness,
     options?.preferredSlabId,
     options?.maxElevation,
+    undefined,
+    wall.justification,
   )
   const candidateElevations = new Set<number>()
   for (const node of Object.values(nodes)) {
     if (node.type !== 'slab' || node.parentId !== parent.id) continue
     const candidate = node as SlabNode
-    const preferred = spatialGridManager.getSlabSupportForWall(
+    const preferred = activeSpatialGrid().getSlabSupportForWall(
       parent.id,
       wall.start,
       wall.end,
       wall.curveOffset,
       wall.thickness,
       candidate.id,
+      undefined,
+      undefined,
+      wall.justification,
     )
     if (preferred.electedSlabId === candidate.id) {
       candidateElevations.add(candidate.elevation)
@@ -319,7 +324,7 @@ export function resolveFenceSupportSlabPatch(
     const rotation: [number, number, number] = [0, Math.atan2(bz - az, bx - ax), 0]
 
     if (options?.preferredSlabId) {
-      const preferredElevation = spatialGridManager.getHostSlabElevationForFootprint(
+      const preferredElevation = activeSpatialGrid().getHostSlabElevationForFootprint(
         parent.id,
         options.preferredSlabId,
         position,
@@ -334,7 +339,7 @@ export function resolveFenceSupportSlabPatch(
       }
     }
 
-    const candidates = spatialGridManager.getSupportCandidatesForFootprint(
+    const candidates = activeSpatialGrid().getSupportCandidatesForFootprint(
       parent.id,
       position,
       dimensions,
@@ -342,7 +347,7 @@ export function resolveFenceSupportSlabPatch(
     )
     for (const candidate of candidates) candidateElevations.add(candidate.elevation)
 
-    const support = spatialGridManager.getSlabSupportForItem(
+    const support = activeSpatialGrid().getSlabSupportForItem(
       parent.id,
       position,
       dimensions,
@@ -365,6 +370,7 @@ export type FenceConstructionOptions = {
   supportCap?: number | null
   preferredSupportSlabId?: string | null
   constructionElevation?: number | null
+  supportSurfaceNodeId?: AnyNodeId | null
 }
 
 export function resolveFenceConstructionSupport(
@@ -373,6 +379,26 @@ export function resolveFenceConstructionSupport(
   nodes: Record<string, AnyNode>,
   options?: FenceConstructionOptions,
 ): FenceNode {
+  const requestedSurface = options?.supportSurfaceNodeId
+    ? nodes[options.supportSurfaceNodeId]
+    : null
+  if (
+    requestedSurface?.parentId === levelId &&
+    nodeRegistry.get(requestedSurface.type)?.capabilities?.surfaces?.top
+  ) {
+    return {
+      ...fence,
+      supportSlabId: undefined,
+      supportSurfaceNodeId: requestedSurface.id,
+    }
+  }
+  const surface = fence.supportSurfaceNodeId ? nodes[fence.supportSurfaceNodeId] : null
+  if (
+    surface?.parentId === levelId &&
+    nodeRegistry.get(surface.type)?.capabilities?.surfaces?.top
+  ) {
+    return { ...fence, supportSlabId: undefined }
+  }
   const supportPatch = resolveFenceSupportSlabPatch({ ...fence, parentId: levelId }, nodes, {
     maxElevation: options?.supportCap ?? null,
     preferredSlabId: options?.preferredSupportSlabId ?? null,
@@ -412,7 +438,7 @@ export function resolveTerrainWallConstructionOptions(
   defaults?: Record<string, unknown>,
 ): WallConstructionOptions | undefined {
   const constructionElevation = terrainSupportLift(nodes, levelId, point[0], point[1])
-  if (constructionElevation == null) return undefined
+  if (constructionElevation == null) return
 
   const level = nodes[levelId]
   const constructionHeight =
@@ -490,7 +516,7 @@ export function resolveWallConstruction(
       maxElevation: wallOptions?.supportCap ?? null,
       preferredSlabId: preferredSupportSlabId,
     })
-    const sourceSupport = spatialGridManager.getSlabSupportForWall(
+    const sourceSupport = activeSpatialGrid().getSlabSupportForWall(
       levelId,
       createdWall.start,
       createdWall.end,
@@ -498,6 +524,8 @@ export function resolveWallConstruction(
       createdWall.thickness,
       supportPatch.supportSlabId,
       wallOptions?.supportCap ?? null,
+      undefined,
+      createdWall.justification,
     )
     const groundDraft =
       preferredSupportSlabId === GROUND_SUPPORT_ID && (terrainBase != null || flatConstructionBase)

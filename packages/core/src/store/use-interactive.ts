@@ -1,6 +1,7 @@
 'use client'
 
 import { create } from 'zustand'
+import type { MotionCommand } from '../procedural-items/motion-controller'
 import type { Interactive } from '../schema/nodes/item'
 import type { AnyNodeId } from '../schema/types'
 
@@ -27,6 +28,8 @@ export type DoorAnimationState = {
 }
 
 export type WindowInteractiveState = {
+  shutterOpen?: number
+  rollerShutterOpen?: number
   operationState?: number
 }
 
@@ -70,13 +73,38 @@ type InteractiveStore = {
   doors: Record<AnyNodeId, DoorInteractiveState>
   doorAnimations: Record<AnyNodeId, DoorAnimationState>
   windows: Record<AnyNodeId, WindowInteractiveState>
-  windowAnimations: Record<AnyNodeId, WindowAnimationState>
+  windowAnimations: Record<
+    AnyNodeId,
+    Partial<Record<keyof WindowInteractiveState, WindowAnimationState>>
+  >
   skylights: Record<AnyNodeId, SkylightInteractiveState>
   skylightAnimations: Record<AnyNodeId, SkylightAnimationState>
   elevators: Record<AnyNodeId, ElevatorInteractiveState>
+  procedural: Record<
+    AnyNodeId,
+    { parts: Record<string, boolean>; lightsOn: boolean; motionCommand?: MotionCommand }
+  >
+  /** On/off of kinds whose mechanism is one switch (`capabilities.mechanism`). */
+  mechanisms: Record<AnyNodeId, boolean>
+  mechanismParts: Record<`${AnyNodeId}:${string}`, boolean>
+  lampDefault: boolean
+  lampItems: Record<AnyNodeId, number[]>
+  setMechanism: (nodeId: AnyNodeId, on: boolean) => void
+  removeMechanism: (nodeId: AnyNodeId) => void
+  setMechanismPart: (nodeId: AnyNodeId, partId: string, on: boolean) => void
+  removeMechanismPart: (nodeId: AnyNodeId, partId: string) => void
+  removeMechanismParts: (nodeId: AnyNodeId) => void
+  setLampDefault: (on: boolean, resetOverrides?: boolean) => void
+  initProcedural: (nodeId: AnyNodeId, partIds: string[], spinPartIds?: string[]) => void
+  toggleProceduralPart: (nodeId: AnyNodeId, partId: string) => void
+  setProceduralParts: (nodeId: AnyNodeId, partIds: string[], on: boolean) => void
+  setProceduralLights: (nodeId: AnyNodeId, on: boolean) => void
+  toggleProceduralLights: (nodeId: AnyNodeId) => void
+  removeProcedural: (nodeId: AnyNodeId) => void
 
   /** Initialize a node's interactive state from its asset definition (idempotent) */
-  initItem: (itemId: AnyNodeId, interactive: Interactive) => void
+  initItem: (itemId: AnyNodeId, interactive: Interactive, nonLightToggleDefault?: boolean) => void
+  toggleItemToggles: (itemId: AnyNodeId, interactive: Interactive) => void
 
   /** Set a single control value */
   setControlValue: (itemId: AnyNodeId, index: number, value: ControlValue) => void
@@ -100,13 +128,13 @@ type InteractiveStore = {
   setWindowOpenState: (windowId: AnyNodeId, value: WindowInteractiveState) => void
 
   /** Clear transient window open state */
-  removeWindowOpenState: (windowId: AnyNodeId) => void
+  removeWindowOpenState: (windowId: AnyNodeId, field?: keyof WindowInteractiveState) => void
 
   /** Queue a window animation for the viewer frame loop */
   startWindowAnimation: (windowId: AnyNodeId, value: WindowAnimationState) => void
 
   /** Cancel a queued window animation */
-  cancelWindowAnimation: (windowId: AnyNodeId) => void
+  cancelWindowAnimation: (windowId: AnyNodeId, field?: keyof WindowInteractiveState) => void
 
   /** Set transient skylight open state without committing it to the scene node */
   setSkylightOpenState: (skylightId: AnyNodeId, value: SkylightInteractiveState) => void
@@ -130,12 +158,26 @@ type InteractiveStore = {
   removeElevator: (elevatorId: AnyNodeId) => void
 }
 
-const defaultControlValue = (interactive: Interactive, index: number): ControlValue => {
+/** What `useInteractive.getState()` returns; mechanism capabilities read it. */
+export type InteractiveState = InteractiveStore
+
+const defaultControlValue = (
+  interactive: Interactive,
+  index: number,
+  lampDefault: boolean,
+  nonLightToggleDefault: boolean,
+): ControlValue => {
   const control = interactive.controls[index]
   if (!control) return false
   switch (control.kind) {
     case 'toggle':
-      return control.default ?? false
+      return (
+        control.default ??
+        (interactive.effects.some((effect) => effect.kind === 'light') &&
+        index === interactive.controls.findIndex((entry) => entry.kind === 'toggle')
+          ? lampDefault
+          : nonLightToggleDefault)
+      )
     case 'slider':
       return control.default ?? control.min
     case 'temperature':
@@ -152,8 +194,139 @@ export const useInteractive = create<InteractiveStore>((set, get) => ({
   skylights: {},
   skylightAnimations: {},
   elevators: {},
+  procedural: {},
+  mechanisms: {},
+  mechanismParts: {},
+  lampDefault: false,
+  lampItems: {},
+  setMechanism: (nodeId, on) =>
+    set((state) =>
+      state.mechanisms[nodeId] === on
+        ? state
+        : { mechanisms: { ...state.mechanisms, [nodeId]: on } },
+    ),
+  removeMechanism: (nodeId) => {
+    get().removeMechanismParts(nodeId)
+    set((state) => {
+      if (!(nodeId in state.mechanisms)) return state
+      const { [nodeId]: _, ...rest } = state.mechanisms
+      return { mechanisms: rest }
+    })
+  },
+  setMechanismPart: (nodeId, partId, on) =>
+    set((state) => {
+      const key = `${nodeId}:${partId}` as const
+      return state.mechanismParts[key] === on
+        ? state
+        : { mechanismParts: { ...state.mechanismParts, [key]: on } }
+    }),
+  removeMechanismPart: (nodeId, partId) =>
+    set((state) => {
+      const key = `${nodeId}:${partId}` as const
+      if (!(key in state.mechanismParts)) return state
+      const { [key]: _, ...rest } = state.mechanismParts
+      return { mechanismParts: rest }
+    }),
+  removeMechanismParts: (nodeId) =>
+    set((state) => {
+      const entries = Object.entries(state.mechanismParts)
+      const remaining = entries.filter(([key]) => !key.startsWith(`${nodeId}:`))
+      return remaining.length === entries.length
+        ? state
+        : { mechanismParts: Object.fromEntries(remaining) }
+    }),
+  setLampDefault: (on, resetOverrides = false) =>
+    set((state) => {
+      if (state.lampDefault === on && !resetOverrides) return state
+      const items = { ...state.items }
+      for (const [id, indices] of Object.entries(state.lampItems)) {
+        const item = items[id as AnyNodeId]
+        if (!item) continue
+        const controlValues = [...item.controlValues]
+        for (const index of indices) controlValues[index] = on
+        items[id as AnyNodeId] = { controlValues }
+      }
+      const procedural = { ...state.procedural }
+      for (const [id, value] of Object.entries(procedural))
+        procedural[id as AnyNodeId] = { ...value, lightsOn: on }
+      return { lampDefault: on, items, procedural }
+    }),
 
-  initItem: (itemId, interactive) => {
+  initProcedural: (nodeId, partIds, spinPartIds = []) =>
+    set((state) => {
+      const current = state.procedural[nodeId]
+      const parts = Object.fromEntries(
+        partIds.map((id) => [id, current?.parts[id] ?? spinPartIds.includes(id)]),
+      )
+      if (current && partIds.every((id) => id in current.parts)) return state
+      return {
+        procedural: {
+          ...state.procedural,
+          [nodeId]: {
+            ...current,
+            parts,
+            lightsOn: current?.lightsOn ?? state.lampDefault,
+          },
+        },
+      }
+    }),
+
+  toggleProceduralPart: (nodeId, partId) =>
+    set((state) => ({
+      procedural: {
+        ...state.procedural,
+        [nodeId]: {
+          parts: {
+            ...state.procedural[nodeId]?.parts,
+            [partId]: !state.procedural[nodeId]?.parts[partId],
+          },
+          lightsOn: state.procedural[nodeId]?.lightsOn ?? state.lampDefault,
+          motionCommand: {
+            sequence: (state.procedural[nodeId]?.motionCommand?.sequence ?? 0) + 1,
+            scope: { partId },
+            target: !state.procedural[nodeId]?.parts[partId],
+          },
+        },
+      },
+    })),
+  setProceduralParts: (nodeId, partIds, on) =>
+    set((state) => ({
+      procedural: {
+        ...state.procedural,
+        [nodeId]: {
+          parts: {
+            ...state.procedural[nodeId]?.parts,
+            ...Object.fromEntries(partIds.map((id) => [id, on])),
+          },
+          lightsOn: state.procedural[nodeId]?.lightsOn ?? state.lampDefault,
+          motionCommand: {
+            sequence: (state.procedural[nodeId]?.motionCommand?.sequence ?? 0) + 1,
+            scope: 'all',
+            target: on,
+          },
+        },
+      },
+    })),
+  setProceduralLights: (nodeId, on) =>
+    set((state) => ({
+      procedural: {
+        ...state.procedural,
+        [nodeId]: {
+          ...state.procedural[nodeId],
+          parts: state.procedural[nodeId]?.parts ?? {},
+          lightsOn: on,
+        },
+      },
+    })),
+  toggleProceduralLights: (nodeId) =>
+    get().setProceduralLights(nodeId, !(get().procedural[nodeId]?.lightsOn ?? get().lampDefault)),
+  removeProcedural: (nodeId) =>
+    set((state) => {
+      const { [nodeId]: _, ...rest } = state.procedural
+      return { procedural: rest }
+    }),
+
+  initItem: (itemId, interactive, nonLightToggleDefault = false) => {
     const { controls } = interactive
     if (controls.length === 0) return
 
@@ -164,10 +337,35 @@ export const useInteractive = create<InteractiveStore>((set, get) => ({
       items: {
         ...state.items,
         [itemId]: {
-          controlValues: controls.map((_, i) => defaultControlValue(interactive, i)),
+          controlValues: controls.map((_, i) =>
+            defaultControlValue(interactive, i, state.lampDefault, nonLightToggleDefault),
+          ),
         },
       },
+      lampItems:
+        interactive.effects.some((effect) => effect.kind === 'light') &&
+        controls.some((control) => control.kind === 'toggle')
+          ? {
+              ...state.lampItems,
+              [itemId]: [controls.findIndex((control) => control.kind === 'toggle')],
+            }
+          : state.lampItems,
     }))
+  },
+
+  toggleItemToggles: (itemId, interactive) => {
+    const indices = interactive.controls.flatMap((control, index) =>
+      control.kind === 'toggle' ? [index] : [],
+    )
+    if (!indices.length) return
+    set((state) => {
+      const item = state.items[itemId]
+      if (!item) return state
+      const on = !indices.some((index) => Boolean(item.controlValues[index]))
+      const controlValues = [...item.controlValues]
+      for (const index of indices) controlValues[index] = on
+      return { items: { ...state.items, [itemId]: { controlValues } } }
+    })
   },
 
   setControlValue: (itemId, index, value) => {
@@ -183,7 +381,8 @@ export const useInteractive = create<InteractiveStore>((set, get) => ({
   removeItem: (itemId) => {
     set((state) => {
       const { [itemId]: _, ...rest } = state.items
-      return { items: rest }
+      const { [itemId]: _lamp, ...lampItems } = state.lampItems
+      return { items: rest, lampItems }
     })
   },
 
@@ -234,10 +433,12 @@ export const useInteractive = create<InteractiveStore>((set, get) => ({
     }))
   },
 
-  removeWindowOpenState: (windowId) => {
+  removeWindowOpenState: (windowId, field) => {
     set((state) => {
-      const { [windowId]: _, ...rest } = state.windows
-      return { windows: rest }
+      const { [windowId]: current, ...rest } = state.windows
+      if (!field) return { windows: rest }
+      const { [field]: _, ...remaining } = current ?? {}
+      return { windows: Object.keys(remaining).length ? { ...rest, [windowId]: remaining } : rest }
     })
   },
 
@@ -245,15 +446,19 @@ export const useInteractive = create<InteractiveStore>((set, get) => ({
     set((state) => ({
       windowAnimations: {
         ...state.windowAnimations,
-        [windowId]: value,
+        [windowId]: { ...state.windowAnimations[windowId], [value.field]: value },
       },
     }))
   },
 
-  cancelWindowAnimation: (windowId) => {
+  cancelWindowAnimation: (windowId, field) => {
     set((state) => {
-      const { [windowId]: _, ...rest } = state.windowAnimations
-      return { windowAnimations: rest }
+      const { [windowId]: current, ...rest } = state.windowAnimations
+      if (!field) return { windowAnimations: rest }
+      const { [field]: _, ...remaining } = current ?? {}
+      return {
+        windowAnimations: Object.keys(remaining).length ? { ...rest, [windowId]: remaining } : rest,
+      }
     })
   },
 

@@ -1,8 +1,14 @@
-export type ModelExportFormat = 'glb' | 'stl' | 'obj' | 'print-stl' | 'print-3mf'
+import type { GlbExportOptions } from './glb-export'
 
-export type ModelExportOptions = {
-  onlyVisible?: boolean
+export type ModelExportFormat = 'glb' | 'usdz' | 'stl' | 'obj' | 'ifc' | 'print-stl' | 'print-3mf'
+
+export type ModelExportOptions = Pick<
+  GlbExportOptions,
+  'onlyVisible' | 'excludedNodeTypes' | 'includedPresentationIds'
+> & {
   download?: boolean
+  /** Names the IFC project and its file. */
+  projectName?: string
   printScale?: number
   printScope?: 'whole' | 'levels'
   printContent?: 'structure' | 'everything'
@@ -16,6 +22,7 @@ export type ModelExportArtifact = {
   blob: Blob
   filename: string
   metadata?: unknown
+  warnings?: readonly string[]
 }
 
 export type ModelExport = (

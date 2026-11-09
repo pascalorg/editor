@@ -369,6 +369,7 @@ export const chimneyDefinition: NodeDefinition<typeof ChimneyNode> = {
   },
 
   capabilities: {
+    exterior: true,
     selectable: { hitVolume: 'bbox' },
     duplicable: true,
     deletable: true,
@@ -395,6 +396,7 @@ export const chimneyDefinition: NodeDefinition<typeof ChimneyNode> = {
   handles: chimneyHandles,
   floorplan: buildChimneyFloorplan,
 
+  rendersChildren: false,
   renderer: {
     kind: 'parametric',
     module: () => import('./renderer'),

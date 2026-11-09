@@ -1,17 +1,16 @@
 # Selection Managers
 
-*Two-layer selection architecture: viewer manager (hierarchy) + editor manager (phase-aware).*
+*Selection architecture: the editor's manager, one model for every viewer surface, and the bare viewer default.*
 
-Applies to: `packages/viewer/src/components/viewer/selection-manager.tsx`, `apps/editor/components/editor/selection-manager.tsx`.
+Applies to: `packages/editor/src/components/editor/selection-manager.tsx`, `packages/editor/src/lib/viewer-selection.ts` (+ `components/viewer/viewer-selection-manager.tsx`, `packages/viewer/src/components/viewer/glb-scene.tsx`), `packages/viewer/src/components/viewer/selection-manager.tsx`.
 
-There are two selection managers. They are separate components, not the same component configured differently.
-
-| Component | Location | Knows about |
+| Component | Location | Used by |
 |---|---|---|
-| `SelectionManager` | `packages/viewer/src/components/viewer/selection-manager.tsx` | Viewer state only |
-| `SelectionManager` (editor) | `apps/editor/components/editor/selection-manager.tsx` | Phase, mode, tool state |
+| `SelectionManager` (editor) | `packages/editor/src/components/editor/selection-manager.tsx` | The editor canvas: phase, mode, tool state |
+| Viewer selection (`lib/viewer-selection.ts`) | `packages/editor` | Every viewer surface: the published viewer (baked GLB and parametric), its `?embed=1`, the editor's Preview |
+| `SelectionManager` (viewer default) | `packages/viewer/src/components/viewer/selection-manager.tsx` | Bare `<Viewer>` mounts with no navigation (bake page, IFC preview, lab) |
 
-The viewer's manager is the default. The editor mounts its own manager as a child of `<Viewer>`, overriding the default behaviour via the viewer-isolation pattern.
+A host replaces the default with `<Viewer selectionManager="custom">` and mounts its own as a child, via the viewer-isolation pattern.
 
 ---
 
@@ -44,7 +43,48 @@ hot-set derivation and the overlay scope matrix.
 
 ---
 
-## Viewer Selection Manager
+## Viewer surfaces
+
+One model and one navigation UI for the published viewer (baked GLB or parametric fallback), its
+embed and the editor's Preview. Renderers are only **hit sources**: the parametric one turns a node
+event into a `ViewerPick` (`viewerPickFromNodeEvent`, mounted as `ViewerSelectionManager`), the
+baked one a raycast over `pascalId` objects (`resolveGlbPick` in `GlbScene`, handed to the host as a
+`GlbPickEvent`). Both picks carry the node id and the hit in its level's local XZ, and go through the
+same rules, against the scene graph (the store for parametric, the published graph for a bake):
+
+- `levelId` is the current floor, `zoneId` the selected room or zone, `selectedIds` the element.
+- Free-form: no building → level → zone progression. A click on a wall, floor or ceiling selects the
+  room it bounds (the editor's `resolveRoomHit`); once that room is selected, its own surfaces select
+  as themselves. Anything else (item, door, stair, roof) selects directly. Alt/Shift/Ctrl/Meta skip
+  the room; Shift/Ctrl/Meta toggle elements on the same floor.
+- A click on empty space clears the room and the element and keeps the floor. A click never moves
+  the camera; the floor follows what is selected.
+- Kinds that only frame (site, building, level, zone, ceiling, scan, guide, spawn) and anything on a
+  hidden floor pass the pointer to what lies behind. Zone meshes are not mounted on these surfaces
+  (`showZones` off), so they never catch a click.
+- Hover shows what a click would select: the room's highlight, or the element's outline.
+- A click that selects an openable on the baked path (door, window, `open` clip, mechanism) also
+  plays it. Walkthrough never selects.
+
+The navigation (`ViewerSceneHeader`, given a `ViewerSource`) is the breadcrumb — building › floor ›
+room › element, where an element shows the room it stands in without selecting it — and the floor
+list with, under the current floor, its Units, Rooms and Zones (empty sections left out). A crumb,
+a floor or a row selects and frames (`camera-controls:frame`: the node's saved view, else its box at
+about 45° along the current heading); the canvas never frames. Hosts frame through the same
+`frameViewerNode`, and a unit through `enterUnitFocus`, as the site panel does. Framing jumps
+instead of gliding under reduced motion. The plan follows the framed camera; with no 3D view on
+screen it answers the request itself, once the selection that came with it has rendered (so a node
+on another floor or building is placed with that building's transform), fitting the node's box to
+the pane at the current turn and aspect, or centring a saved view's target at the current zoom.
+`ViewerRooms` draws the editor's room pills (same visibility rule, same declutter) and the editor's
+room highlight for the selected or hovered room and a focused unit's rooms. `useViewerFloorDisplay`
+hides the levels above the current floor outside the walkthrough.
+
+Preview borrows the shared store: `setPreviewMode(true)` saves the editor's `selection` and
+`focusedUnitId` and opens Preview on the editor's floor with nothing else selected;
+`setPreviewMode(false)` puts them back. The editor's room context (`useEditor.room`) is not touched.
+
+## Bare viewer default
 
 Hierarchical path: **Building → Level → Zone → Elements**
 
@@ -67,17 +107,56 @@ Multi-select: `Ctrl/Meta + click` toggles an ID in `selectedIds`; `Shift + click
 
 ## Editor Selection Manager
 
-Extends selection with phase awareness from `useEditor`. The viewer's `SelectionManager` is **not** mounted in the editor; this one takes its place (injected as a child of `<Viewer>`).
+Extends selection with the editor's `phase` from `useEditor`. The viewer's `SelectionManager` is **not** mounted in the editor; this one takes its place (injected as a child of `<Viewer>`).
 
 ```
-phase: 'site'      → selectable: buildings
-phase: 'structure' → selectable: walls, zones, slabs, ceilings, roofs, doors, windows
-  structureLayer: 'zones'    → only zones
-  structureLayer: 'elements' → all structure types
-phase: 'furnish'   → selectable: furniture items only
+phase: 'site'      → any hit on a house hovers its building; the click selects it and goes inside
+phase: 'building'  → everything on the active level: walls, slabs, ceilings, roofs,
+                     openings, stairs, elevators, spawn, items, plugin kinds
+  room-first walls, slabs and ceilings
 ```
 
-Clicking a node of a different phase auto-switches the phase. Double-click drills into a context level.
+Room label pills (`RoomLabels3D`, `RoomLabels2D`, one `RoomPill`) show while nothing but the
+site, building or level is selected. Once the view rests, each pill shows as much as fits inside
+its room's outline on screen (the part in front of the camera), inside the pane and 4 px clear
+of the others (`placePills`): name and area, the name, its colour dot, or nothing, so the detail
+follows the zoom. A zone drawn inside a room is a hole in it (`roomLabelEntries`). The room under
+the pointer (in 3D where its ray meets each room's floor, whatever mesh is in the way: the nearest
+floor, then the smallest room on it; in 2D the plan point) or a focused pill opens one read-only
+detail chip with the whole label, over the canvas's flags, and the pills it covers fade out;
+Escape closes it. Only a pill takes a click (or Enter or Space), and it goes through
+the same zone-area rule as a zone's fill or label in the plan (`hoverZoneArea` / `clickZoneArea`
+in `lib/room-zone-routing.ts`): a room room-first, a modifier or a zone that bounds no room as the
+zone (its outline, its panel and outline editor). A list that names a zone, the Rooms list or a
+host's chat reference, selects it through `selectZoneOrRoom` (exported for hosts) by the same rule.
+Zones show tinted volumes only while a unit's membership is painted; otherwise a zone looks like a
+room. A new zone is written with a palette colour picked from its id (`newZone` /
+`zoneColorForSeed` in core), a captured room from its capture's id, unless its creator chose one;
+existing zones keep their stored colour.
+
+Inside the building no click changes the phase. Site is entered from the Scene panel's site header
+or `1`, and left by a click on the house or on empty ground, the building row or `2`. Arming a building tool keeps the phase. Double-click on a roof or stair selects the segment
+under the cursor.
+Persisted `structure` / `furnish` values from before the merge read back as `building`.
+
+Building selection first resolves a wall face or floor/ceiling hit to a detected room.
+The editor keeps its transient `{ levelId, roomId }` in `useEditor.room`; `roomKey`
+in `lib/room-selection.ts` derives identity from the sorted unique boundary ID/face pairs in `spans`, excluding
+coordinates and interval extents so moving a boundary preserves selection. This adapter
+is the migration point for future persistent zone IDs.
+`useSelectedRoom()` exposes the clear footprint, boundary spans and matching surfaces.
+Each mounted level shares one incremental topology index and scene subscription.
+
+Live session groups take precedence over room interception in both views.
+Room commands orchestrate viewer selection; editor room actions are plain setters.
+Clicking the room clears `selectedIds`. Its own elements then select individually;
+a hit in another room changes the room context. Escape clears the element first,
+then the room. Empty clicks clear both. Alt bypasses room and session-group picking;
+Shift/Ctrl/Meta and marquee select elements. Selecting a furnishing (a
+non-opening catalog item or a `furnish`-category kind) ends the room context. Free elements
+retain direct selection. Room highlights and the read-only inspector follow
+`resolveOverlayPolicy` and hide during active interaction scopes. Zone-label selection
+still uses `useViewer.selection.zoneId`.
 
 In Select mode, 3D and 2D canvas selection share the same modifier vocabulary:
 
@@ -89,6 +168,54 @@ In Select mode, 3D and 2D canvas selection share the same modifier vocabulary:
 - `Ctrl/Meta + right-drag` on a selected rotatable object starts direct rotation from the
   canvas. Rotation snaps to the default angle increment unless Shift is held during the
   drag.
+- In the 2D plan a wall hit selects the wall, and only a room interior selects the room
+  (the wall's floor-plan extension declares `planHitSelectsNode`, which `resolvePlanRoomHit`
+  reads). 3D stays room-first (E-012): a wall face
+  there selects its room first, then drills into the wall.
+
+### Selected-wall dimensions
+
+With a node selected in Select mode, alone or with others, and no interaction scope or room
+drag running, both views show its kind's `selectionDimensions` (floor-plan extension), unless
+Display → Dimensions is off (`useFloorplanAnnotationVisibility.showDimensions`, persisted,
+default on). `useSelectionDimensionNodes` (in `room-handles-2d.tsx`) picks the selected nodes of
+kinds that have them, on one level, in one subscription; nodes of other kinds in a mixed
+selection add none. Several selected walls each show theirs, merged by
+`mergeSelectionDimensions` (`lib/room-push-dimensions.ts`): a room width or outside size two of
+them measure shows once, owned by the first, by the same `sameRoomDimension` test the
+multi-wall move uses (the outside size is placed from the same end of its stretch whichever
+way the wall was drawn, so opposite walls draw it in one place). The wall's are the push drag's
+dimensions without dragging (`selectedWallDimensions` in
+`lib/room-handle-drag.ts`, from `wallSelectionDimensions` in `lib/room-push-dimensions.ts`):
+each room width the wall bounds, face to face, and, for a wall with rooms on one side only,
+the outside size to the far face of the farthest parallel wall it connects to. A wall between
+two rooms shows room widths only. The plan draws them in `SelectedWallDimensions2D` under the
+`data-node-id` of the wall it runs from, so `FloorplanDimensionEditOverlay` makes each one
+typeable and the typed size moves that wall; 3D labels (`SelectedWallDimensions3D`) open an
+inline input for their own wall. In a multi-selection the plan's dashed group box covers the
+walls: a press on a dimension value under it, or on a member's, is the value box's
+(`typeableDimensionAt`), not a group move or pick-up. Both commit through
+`commitDimensionValue`: a dimension perpendicular to a straight wall with one witness on it
+resolves to a `wall-offset` drive and moves the wall by `commitRoomPush`, so joined walls stay
+attached and the move is one undo step. Input parses with `parseDimensionInput`
+(`12' 6"`, `3.2 m`, bare numbers in the display unit).
+
+The wall's own length dimension in the plan measures faces, not the centerline
+(`buildWallContextualDimensions` in `nodes/src/wall/contextual-dimensions.ts`): ID along the
+room-facing face between the connected walls' inner faces, OD along the exterior face to the
+corner walls' outer faces. Display → Measure walls (Inside ID / Outside OD / Both;
+`useFloorplanAnnotationVisibility.wallDimensionFaces`, `interior` / `exterior` / `both`,
+default `both`, persisted, an unknown stored value reads as `both`) picks which show, here and
+in the temporary dimensions above, in 2D and 3D. It is the only wall-dimension setting: the
+Expert plan's automatic strings always measure finished faces, and the same choice keeps
+their interior chains (the `interior` / `interior-overall` tiers: clear spans inside the
+rooms), their facade chains (every other tier: openings, partitions, columns, jogs, overall)
+or both (`constructionDimensionFace` in `nodes/src/wall/construction-dimensions.ts`); the PDF
+export follows it. A wall with no exterior side keeps one face-to-face span whatever the
+choice. A multi-selection strips its members' handles and dimension chrome but keeps this
+length on the walls that show selection dimensions (`stripHandleChrome` keeps the
+`contextual-dimension` role). Dimensions off also hides the plan's automatic and contextual dimensions
+(`resolveFloorplanAnnotationVisibility`); drawn dimensions and measurements stay.
 
 The floating helper in `packages/editor/src/components/ui/helpers/helper-manager.tsx`
 mirrors these rules from current selection state and held modifiers. Keep that helper and
@@ -109,7 +236,8 @@ opts out. See [selection-groups](selection-groups.md).
 
 - **Never add selection logic to renderers.** Renderers spread `useNodeEvents` events and stop there. All selection decisions live in the selection manager.
 - **Never add editor phase logic to the viewer's SelectionManager.** Phase, mode, and tool awareness belong exclusively in the editor's selection manager.
-- **`useViewer` is the single source of truth for selection state.** Both managers read and write through `setSelection` / `resetSelection`. Nothing else should mutate `selection` directly.
+- **`useViewer.selection` is the selection of whichever surface is on screen.** The editor and its Preview take turns on it: Preview saves the editor's selection on entry and restores it on exit. Every manager writes through `setSelection` / `resetSelection` (the viewer surfaces through `lib/viewer-selection.ts`); nothing mutates `selection` directly.
+- **Viewer surfaces decide in `lib/viewer-selection.ts`, never in a renderer.** A new hit source turns its hit into a `ViewerPick` and calls `applyViewerClick` / `applyViewerHover`.
 - **Outliner arrays are mutated in-place** (not replaced) for performance. Don't assign new arrays to `outliner.selectedObjects` or `outliner.hoveredObjects`.
 - **Hover is a separate scalar** (`hoveredId: string | null`), not part of `selectedIds`. Update it via `setHoveredId`.
 
@@ -119,5 +247,5 @@ opts out. See [selection-groups](selection-groups.md).
 
 1. Add the type to `SelectableNodeType` in the viewer store / selection manager.
 2. Make sure its renderer calls `useNodeEvents(node, type)` and spreads the handlers.
-3. Add a case to whichever selection strategy needs it (viewer hierarchy level or editor phase).
+3. Registry kinds with `capabilities.selectable` are picked inside the building automatically; only a viewer hierarchy level needs a case.
 4. Ensure `useRegistry` is called in the renderer so the outliner can highlight it.

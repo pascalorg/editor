@@ -1,13 +1,16 @@
 import type { SnapProfile } from '@pascal-app/core'
-import { GROUP_MOVE_DRAG_LABEL, ROTATE_HANDLE_DRAG_LABEL } from './contextual-help'
+import {
+  GROUP_MOVE_DRAG_LABEL,
+  GROUP_ROTATE_DRAG_LABEL,
+  ROTATE_HANDLE_DRAG_LABEL,
+} from './contextual-help'
 
 /**
  * Snapping mode is a single global, user-cyclable control that maps onto the
  * two pre-existing snap knobs (`gridSnapStep` grid snap + `magneticSnap`).
- * The default `'grid'` resolves to the exact pair the editor shipped with
- * before this control existed (grid on, magnetic on), so the default path is
- * behaviourally unchanged — only when a user opts into `'lines'` or `'off'`
- * does any snap math get suppressed.
+ * Each context chooses its own default. Item movement defaults to magnetic
+ * alignment so a picked-up group catches neighboring geometry; grid and off
+ * remain explicit alternatives in the contextual chip.
  */
 export type SnappingMode = 'grid' | 'lines' | 'angles' | 'off'
 
@@ -69,29 +72,29 @@ export function nextSnappingMode(mode: SnappingMode): SnappingMode {
 // alignment lines). The mode is remembered per context and shown live, so it's
 // never a silent surprise — it just matches what you're doing.
 
-export type SnapContext = 'wall' | 'item' | 'polygon'
+export type SnapContext = 'wall' | 'item' | 'polygon' | 'rotation'
 
 // The cyclable mode-set for a context (distinct from the node's `SnapProfile`).
 type SnapModeSet = { modes: SnappingMode[]; default: SnappingMode }
 
 // `modes[0]` is the cycle's first entry; `default` is what a context starts at.
-// The 'wall' set is the ONLY one with an angle lock — it applies solely when
-// you're setting a segment's DIRECTION (wall/fence drafting + endpoint drag).
+// The 'wall' set includes angle lock when setting a segment's direction.
 // Translating a whole wall, curving it, or drawing/moving a slab can't change an
 // angle, so those use the no-angle 'polygon' set.
 const SNAP_PROFILES: Record<SnapContext, SnapModeSet> = {
   // Wall / fence drafting + endpoint reshape: direction matters → angle lock.
   wall: { modes: ['grid', 'lines', 'angles', 'off'], default: 'grid' },
-  // Item placement / move: grid by default; lines = magnetic alignment only (no
-  // grid lattice), no angle lock (meaningless for a footprint).
-  item: { modes: ['lines', 'grid', 'off'], default: 'grid' },
+  // Item placement / move: magnetic alignment by default; grid is an explicit
+  // alternative, and angle lock is meaningless for a footprint.
+  item: { modes: ['lines', 'grid', 'off'], default: 'lines' },
   // Structural / surface, no direction to set: slab / ceiling / roof draft+move,
   // whole wall/fence translate, curve reshape, polygon boundary edit. Grid by
   // default, NO angle lock.
   polygon: { modes: ['grid', 'lines', 'off'], default: 'grid' },
+  rotation: { modes: ['angles', 'off'], default: 'angles' },
 }
 
-export const SNAP_CONTEXTS: SnapContext[] = ['wall', 'item', 'polygon']
+export const SNAP_CONTEXTS: SnapContext[] = ['wall', 'item', 'polygon', 'rotation']
 
 export function snappingModesFor(context: SnapContext): SnappingMode[] {
   return SNAP_PROFILES[context].modes
@@ -158,8 +161,12 @@ export function snapContextOf(args: {
   // like `profileOf` so `snapping-mode` need not import the registry; defaults
   // to `true` (the structural draw default) when not supplied.
   draftDirectionalOf?: (typeOrTool: string) => boolean
+  // The paint tool's region sub-mode draws lines and boxes on a surface: the
+  // no-angle 'polygon' set (grid / lines / off), idle or mid-gesture.
+  paintRegion?: boolean
 }): SnapContext | null {
-  const { scope, mode, tool, profileOf, profileOfNode, draftDirectionalOf } = args
+  const { scope, mode, tool, profileOf, profileOfNode, draftDirectionalOf, paintRegion } = args
+  if (paintRegion && mode === 'material-paint') return 'polygon'
   // The group-move gizmo translates the whole selection — same no-angle
   // treatment as a single-node move, so Shift cycles the 'item' modes and the
   // HUD shows the item snapping chips for the drag.
@@ -167,12 +174,16 @@ export function snapContextOf(args: {
     return 'item'
   }
   switch (scope.kind) {
+    // Dividing a room draws a segment like a wall draft: same modes, same keys.
+    case 'room-divide':
+      return 'wall'
     case 'mesh-editing':
       return scope.nodeId
         ? contextForProfile(profileOfNode?.(scope.nodeId), scope.operator === 'rotate')
         : null
     case 'handle-drag':
-      if (scope.handle === ROTATE_HANDLE_DRAG_LABEL) return null
+      if (scope.handle === ROTATE_HANDLE_DRAG_LABEL || scope.handle === GROUP_ROTATE_DRAG_LABEL)
+        return 'rotation'
       return scope.nodeId ? contextForProfile(profileOfNode?.(scope.nodeId), false) : null
     case 'placing':
     case 'moving':

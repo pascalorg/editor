@@ -1,11 +1,29 @@
 import {
+  type AnyNodeId,
   getActiveRoofHeight,
   getPitchFromActiveRoofHeight,
+  getRoofSegmentResizePatch,
   type HandleDescriptor,
   type NodeDefinition,
+  type RoofNode,
   RoofSegmentNode as RoofSegmentNodeSchema,
   type RoofSegmentNode as RoofSegmentNodeType,
+  type SceneApi,
+  snapScalar,
 } from '@pascal-app/core'
+import {
+  getSegmentGridStep,
+  isGridSnapActive,
+  isMagneticSnapActive,
+  PANEL_MODEL_EXTENSION,
+} from '@pascal-app/editor'
+import { roofFloorplanAffectedIds } from '../roof/floorplan-overrides'
+import {
+  bearingWallThickness,
+  catchRoofSideOnWalls,
+  roofCatchWalls,
+  segmentWallLine,
+} from '../roof/wall-catch'
 import { buildRoofSegmentFloorplan } from './floorplan'
 import {
   roofSegmentMoveTarget,
@@ -13,6 +31,8 @@ import {
   roofSegmentRotateAffordance,
 } from './floorplan-affordances'
 import { matchRoofSegmentMeasurementFeature, roofSegmentMeasurementFeatures } from './measurement'
+import { roofSegmentPaint, roofSegmentSlots } from './paint'
+import { roofSegmentPanelModel } from './panel-model'
 import { roofSegmentParametrics } from './parametrics'
 import { RoofSegmentNode } from './schema'
 
@@ -47,6 +67,49 @@ function getSideResizeHandleY(n: RoofSegmentNodeType, localZ: number): number {
   return Math.max(roofY, MIN_WALL_DISPLAY) + ROOF_HANDLE_CLEARANCE
 }
 
+function roofOf(n: RoofSegmentNodeType, sceneApi: SceneApi | undefined): RoofNode | undefined {
+  const roof = n.parentId ? sceneApi?.get<RoofNode>(n.parentId as AnyNodeId) : undefined
+  return roof?.type === 'roof' ? roof : undefined
+}
+
+// A dragged side lands on a wall under it in grid and lines, ahead of the grid, as a move does.
+// The arrows leave `gridSnap` off so the catch sees the raw size, and grid it here when nothing
+// catches; Alt skips this hook, so the side follows the cursor.
+function snapSideOntoWalls(axis: 'x' | 'z', side: 1 | -1) {
+  return (n: RoofSegmentNodeType, value: number, sceneApi: SceneApi): number => {
+    const grid = isGridSnapActive()
+    if (!grid && !isMagneticSnapActive()) return value
+    const roof = roofOf(n, sceneApi)
+    if (roof) {
+      const caught = catchRoofSideOnWalls({
+        line: segmentWallLine(roof, n),
+        axis,
+        side,
+        value,
+        walls: roofCatchWalls(sceneApi.nodes(), roof.parentId),
+      })
+      if (caught !== null) return caught
+    }
+    return grid ? snapScalar(value, getSegmentGridStep()) : value
+  }
+}
+
+// Sized onto the walls under it, a segment's gable and heel walls take their thickness; off them,
+// its own (written either way, so a drag back off the walls drops the thickness it previewed).
+function onBearingWalls(
+  n: RoofSegmentNodeType,
+  patch: Partial<RoofSegmentNodeType>,
+  sceneApi: SceneApi | undefined,
+): Partial<RoofSegmentNodeType> {
+  const roof = roofOf(n, sceneApi)
+  if (!(roof && sceneApi)) return patch
+  const thickness = bearingWallThickness(
+    segmentWallLine(roof, { ...n, ...patch }),
+    roofCatchWalls(sceneApi.nodes(), roof.parentId),
+  )
+  return { ...patch, wallThickness: thickness ?? n.wallThickness }
+}
+
 // Width arrow on the +X (right) or -X (left) side. Asymmetric resize:
 // dragging one arrow grows the segment outward from its own edge while
 // the opposite edge stays world-fixed — the same pattern doors use
@@ -68,22 +131,10 @@ function roofSegmentWidthHandle(side: 'left' | 'right'): HandleDescriptor<RoofSe
     // 'max' = +X edge anchored (left arrow grows the -X edge outward).
     anchor: side === 'right' ? 'min' : 'max',
     min: MIN_ROOF_DIM,
-    gridSnap: true,
+    connectionSnap: snapSideOntoWalls('x', sign),
     currentValue: (n) => n.width,
-    apply: (initial, newWidth) => {
-      const rotY = initial.rotation ?? 0
-      const armX = Math.cos(rotY)
-      const armZ = -Math.sin(rotY)
-      const anchorX = initial.position[0] - sign * (initial.width / 2) * armX
-      const anchorZ = initial.position[2] - sign * (initial.width / 2) * armZ
-      const newCenterX = anchorX + sign * (newWidth / 2) * armX
-      const newCenterZ = anchorZ + sign * (newWidth / 2) * armZ
-      return {
-        width: newWidth,
-        ...(initial.roofType === 'conical' ? { depth: newWidth } : {}),
-        position: [newCenterX, initial.position[1], newCenterZ],
-      }
-    },
+    apply: (initial, newWidth, sceneApi) =>
+      onBearingWalls(initial, getRoofSegmentResizePatch(initial, 'x', sign, newWidth), sceneApi),
     placement: {
       position: (n) => [sign * (n.width / 2 + SIDE_HANDLE_OFFSET), getSideResizeHandleY(n, 0), 0],
       // Flip the left chevron so it points outward toward -X. The
@@ -110,50 +161,10 @@ function roofSegmentDepthHandle(side: 'front' | 'back'): HandleDescriptor<RoofSe
     axis: 'z',
     anchor: side === 'front' ? 'min' : 'max',
     min: MIN_ROOF_DIM,
-    gridSnap: true,
+    connectionSnap: snapSideOntoWalls('z', sign),
     currentValue: (n) => n.depth,
-    apply: (initial, newDepth) => {
-      // Recenter so the anchored Z edge stays at the same world point.
-      // Same math as the width handle but along the Z arm: yaw maps
-      // segment-local +Z to (sin r, cos r) in world.
-      const rotY = initial.rotation ?? 0
-      const armX = Math.sin(rotY)
-      const armZ = Math.cos(rotY)
-      const anchorX = initial.position[0] - sign * (initial.depth / 2) * armX
-      const anchorZ = initial.position[2] - sign * (initial.depth / 2) * armZ
-      const newCenterX = anchorX + sign * (newDepth / 2) * armX
-      const newCenterZ = anchorZ + sign * (newDepth / 2) * armZ
-
-      if (initial.roofType === 'conical') {
-        return {
-          width: newDepth,
-          depth: newDepth,
-          position: [newCenterX, initial.position[1], newCenterZ],
-        }
-      }
-
-      // Preserve peak height — back-solve pitch for the new depth so
-      // the assembled roof height matches what it was before the drag.
-      const originalRoofHeight = getActiveRoofHeight(initial)
-      const newPitch = getPitchFromActiveRoofHeight({
-        roofType: initial.roofType,
-        width: initial.width,
-        depth: newDepth,
-        roofHeight: originalRoofHeight,
-        gambrelLowerWidthRatio: initial.gambrelLowerWidthRatio,
-        gambrelLowerHeightRatio: initial.gambrelLowerHeightRatio,
-        mansardSteepWidthRatio: initial.mansardSteepWidthRatio,
-        mansardSteepHeightRatio: initial.mansardSteepHeightRatio,
-        dutchHipWidthRatio: initial.dutchHipWidthRatio,
-        dutchHipHeightRatio: initial.dutchHipHeightRatio,
-      })
-
-      return {
-        depth: newDepth,
-        position: [newCenterX, initial.position[1], newCenterZ],
-        pitch: Math.max(MIN_PITCH, Math.min(MAX_PITCH, newPitch)),
-      }
-    },
+    apply: (initial, newDepth, sceneApi) =>
+      onBearingWalls(initial, getRoofSegmentResizePatch(initial, 'z', sign, newDepth), sceneApi),
     placement: {
       position: (n) => [
         0,
@@ -233,6 +244,8 @@ function roofSegmentPitchHandle(): HandleDescriptor<RoofSegmentNodeType> {
     visible: (n) => !n.managedByParent,
     apply: (initial, newPeakHeight) => {
       const roofHeight = Math.max(0, newPeakHeight - initial.wallHeight)
+      if (initial.roofType === 'barrel')
+        return { barrelRise: Math.max(0.01, Math.min(initial.depth / 2, roofHeight)) }
       const pitch = getPitchFromActiveRoofHeight({
         roofType: initial.roofType,
         width: initial.width,
@@ -314,7 +327,7 @@ function resolveRoofSegmentHandles(
  */
 export const roofSegmentDefinition: NodeDefinition<typeof RoofSegmentNode> = {
   kind: 'roof-segment',
-  schemaVersion: 5,
+  schemaVersion: 7,
   schema: RoofSegmentNode,
   category: 'structure',
   surfaceRole: 'roof',
@@ -323,6 +336,9 @@ export const roofSegmentDefinition: NodeDefinition<typeof RoofSegmentNode> = {
   // snapping chip and honours the active mode like every other structural
   // move. Resize / rotate run through their own reshaping scope.
   snapProfile: 'structural',
+  extensions: {
+    [PANEL_MODEL_EXTENSION]: roofSegmentPanelModel,
+  },
 
   defaults: () => {
     const stub = RoofSegmentNodeSchema.parse({
@@ -334,6 +350,23 @@ export const roofSegmentDefinition: NodeDefinition<typeof RoofSegmentNode> = {
   },
 
   capabilities: {
+    exterior: true,
+    revealOnEdit: [
+      'roofType',
+      'width',
+      'depth',
+      'wallHeight',
+      'pitch',
+      'overhang',
+      'wallThickness',
+      'deckThickness',
+      'barrelRise',
+      'barrelSegments',
+      'roofSystem',
+      'glazing',
+    ],
+    paint: roofSegmentPaint,
+    slots: (node) => roofSegmentSlots(node as RoofSegmentNodeType),
     selectable: { hitVolume: 'bbox' },
     duplicable: true,
     deletable: true,
@@ -349,11 +382,14 @@ export const roofSegmentDefinition: NodeDefinition<typeof RoofSegmentNode> = {
   parametrics: roofSegmentParametrics,
   handles: resolveRoofSegmentHandles,
 
+  rendersChildren: false,
   renderer: {
     kind: 'parametric',
     module: () => import('./renderer'),
   },
   floorplan: buildRoofSegmentFloorplan,
+  // Its roof draws the outline and creases from it: a live edit rebuilds that roof's plan.
+  floorplanAffectedIds: roofFloorplanAffectedIds,
   measurement: {
     features: (node, ctx) =>
       roofSegmentMeasurementFeatures(node, ctx.parent?.type === 'roof' ? ctx.parent : null),

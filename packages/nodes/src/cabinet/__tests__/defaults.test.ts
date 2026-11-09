@@ -7,6 +7,7 @@ import {
   CabinetNode,
   type SceneApi,
 } from '@pascal-app/core'
+import { kitchenItemMatches, kitchenPresetForModule } from '@pascal-app/nodes'
 import { cabinetDefinition, cabinetModuleDefinition } from '../definition'
 import { CABINET_PRESETS, cabinetPresetById } from '../presets'
 import { addWallChildAbove } from '../run-ops'
@@ -77,8 +78,35 @@ test('cabinet creation defaults use the metric 600 mm family', () => {
     carcassHeight: CABINET_METRIC_DEFAULTS.carcassHeight,
   })
   for (const preset of CABINET_PRESETS) {
-    expect(preset.createPatch().depth).toBeCloseTo(CABINET_METRIC_DEFAULTS.depth)
+    expect(preset.createPatch().depth).toBeCloseTo(
+      preset.id === 'wall-cabinet' ? 0.35 : CABINET_METRIC_DEFAULTS.depth,
+    )
   }
+})
+
+test('kitchen search also matches the name the picker shows in the UI language', () => {
+  expect(kitchenItemMatches('fridge-single', 'réfrigérateur')).toBe(false)
+  expect(kitchenItemMatches('fridge-single', 'réfrigérateur', 'Réfrigérateur')).toBe(true)
+  // The English names and keywords still match alongside a translated label.
+  expect(kitchenItemMatches('fridge-single', 'fridge', 'Réfrigérateur')).toBe(true)
+})
+
+test('kitchen search discovers appliances by familiar names and finds renamed modules by their contents', () => {
+  expect(kitchenItemMatches('fridge-single', 'refrigerator')).toBe(true)
+  expect(kitchenItemMatches('drawer-base', 'drawers')).toBe(true)
+  expect(kitchenItemMatches('cooktop-gas', 'gas stove')).toBe(true)
+  expect(kitchenItemMatches('dishwasher', 'refrigerator')).toBe(false)
+  const fridge = CabinetModuleNode.parse({
+    ...cabinetPresetById('fridge-single').createPatch(),
+    name: 'My cold storage',
+  })
+  expect(kitchenPresetForModule(fridge)).toBe('fridge-single')
+  expect(fridge.carcassHeight).toBeGreaterThan(1.5)
+  expect(fridge.withCountertop).toBe(false)
+  const wall = CabinetModuleNode.parse(cabinetPresetById('wall-cabinet').createPatch())
+  expect(wall.showPlinth).toBe(false)
+  expect(wall.withCountertop).toBe(false)
+  expect(kitchenPresetForModule(wall, CabinetNode.parse({ runTier: 'wall' }))).toBe('wall-cabinet')
 })
 
 test('placed cabinet runs and modules opt into ordinary body dragging', () => {
@@ -153,4 +181,34 @@ test('a wall cabinet added from an inset base starts with overlay fronts', () =>
 
   expect(wallId).not.toBeNull()
   expect(sceneApi.get<CabinetModuleNode>(wallId!)?.frontOverlay).toBe('full')
+})
+
+test('nested wall cabinet width handles resize only the selected wall module', () => {
+  const run = CabinetNode.parse({
+    id: 'cabinet_nested-width-owner-run',
+    children: ['cabinet-module_nested-width-owner-base'],
+  })
+  const base = CabinetModuleNode.parse({
+    id: 'cabinet-module_nested-width-owner-base',
+    parentId: run.id,
+    children: ['cabinet-module_nested-width-owner-wall'],
+    position: [0, 0.1, 0],
+  })
+  const wall = CabinetModuleNode.parse({
+    id: 'cabinet-module_nested-width-owner-wall',
+    parentId: base.id,
+    width: base.width,
+    position: [0, 1.25, 0],
+  })
+  const sceneApi = sceneApiFixture([run as AnyNode, base as AnyNode, wall as AnyNode])
+  const widthHandle = cabinetModuleDefinition
+    .handles(wall, sceneApi)
+    .find((handle) => handle.kind === 'linear-resize' && handle.axis === 'x')
+
+  expect(widthHandle?.overrideTarget?.(wall, sceneApi)).toBeUndefined()
+  const patch = widthHandle?.apply(wall, wall.width + 0.1, sceneApi)
+  expect(patch?.position?.[1]).toBe(wall.position[1])
+  widthHandle?.commit?.(wall, patch!, sceneApi)
+  expect(sceneApi.get<CabinetModuleNode>(base.id)?.width).toBe(base.width)
+  expect(sceneApi.get<CabinetModuleNode>(wall.id)?.width).toBeCloseTo(wall.width + 0.1)
 })

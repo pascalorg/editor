@@ -6,7 +6,12 @@ import type {
   GeometryContext,
   WallNode,
 } from '@pascal-app/core'
-import { resolveLevelId } from '@pascal-app/core'
+import {
+  getWallBodyCenterOffset,
+  getWallBodyLine,
+  getWallFaceOffsets,
+  resolveLevelId,
+} from '@pascal-app/core'
 
 /**
  * Straight-line run layout math — the single home for the "modules sit on the
@@ -26,6 +31,8 @@ type ModuleLike = Pick<CabinetModuleNode, 'id' | 'position' | 'width'>
 type ReflowRunModulesOptions = {
   wallConstraints?: RunWallConstraints
   resizeSide?: 'left' | 'right'
+  consumeAdjacentGap?: boolean
+  adjacentGapSide?: 'left' | 'right'
   eligibleDonorIds?: ReadonlySet<CabinetModuleNode['id']>
   maximumWidth?: number
   maximumWidthById?: ReadonlyMap<CabinetModuleNode['id'], number>
@@ -144,11 +151,18 @@ function wallConstraintAtRunEnd({
     const wallAxis: readonly [number, number] = [dx / length, dz / length]
     const axisDot = runAxis[0] * wallAxis[0] + runAxis[1] * wallAxis[1]
     if (Math.abs(axisDot) > 0.2) continue
-    const closest = closestPointOnSegment(point, wall.start, wall.end)
+    const bodyWall = { ...wall, thickness: wall.thickness ?? 0.2 }
+    const body = getWallBodyLine(bodyWall)
+    const closest = closestPointOnSegment(
+      point,
+      [body.start.x, body.start.y],
+      [body.end.x, body.end.y],
+    )
+    const bodyHalfWidth = getWallFaceOffsets(bodyWall).a - getWallBodyCenterOffset(bodyWall)
     const offsetX = (closest[0] - point[0]) * runAxis[0] + (closest[1] - point[1]) * runAxis[1]
-    const halfThickness = ((wall.thickness ?? 0.2) / 2) * Math.sqrt(1 - axisDot * axisDot)
+    const halfThickness = bodyHalfWidth * Math.sqrt(1 - axisDot * axisDot)
     const distance = Math.hypot(point[0] - closest[0], point[1] - closest[1])
-    if (distance > maxDistance + (wall.thickness ?? 0.2) / 2 + RUN_ADJACENCY_EPSILON) continue
+    if (distance > maxDistance + bodyHalfWidth + RUN_ADJACENCY_EPSILON) continue
     if (direction * offsetX < -halfThickness - RUN_ADJACENCY_EPSILON) continue
     const slack = Math.max(0, direction * offsetX - halfThickness)
     closestSlack = Math.min(closestSlack, slack)
@@ -229,6 +243,11 @@ export type RunSpan = {
   hasCountertop: boolean
 }
 
+type SpanModule = Pick<
+  CabinetModuleNode,
+  'position' | 'width' | 'depth' | 'carcassHeight' | 'cabinetType'
+>
+
 /**
  * Contiguous same-height module groups along the run — the units the
  * countertop, plinth, and appliance-gap logic operate on. A gap, a
@@ -236,16 +255,20 @@ export type RunSpan = {
  * starts a new span.
  */
 export function getRunSpans(
-  modules: readonly Pick<
-    CabinetModuleNode,
-    'position' | 'width' | 'depth' | 'carcassHeight' | 'cabinetType'
-  >[],
+  modules: readonly SpanModule[],
+  opts: { runTier?: CabinetNode['runTier'] } = {},
+): RunSpan[] {
+  return getRunSpanGroups(modules, opts).map((group) => group.span)
+}
+
+export function getRunSpanGroups<T extends SpanModule>(
+  modules: readonly T[],
   opts: {
     runTier?: CabinetNode['runTier']
   } = {},
-): RunSpan[] {
+): Array<{ span: RunSpan; modules: T[] }> {
   const sorted = [...modules].sort((a, b) => a.position[0] - b.position[0])
-  const spans: RunSpan[] = []
+  const groups: Array<{ span: RunSpan; modules: T[] }> = []
   const runTier = opts.runTier ?? 'base'
 
   for (const module of sorted) {
@@ -255,7 +278,8 @@ export function getRunSpans(
     const maxZ = module.position[2] + module.depth / 2
     const topY = module.position[1] + module.carcassHeight
     const hasCountertop = runTier === 'base' && (module.cabinetType ?? 'base') !== 'tall'
-    const current = spans.at(-1)
+    const group = groups.at(-1)
+    const current = group?.span
     if (
       !current ||
       minX - current.maxX > RUN_ADJACENCY_EPSILON ||
@@ -264,21 +288,25 @@ export function getRunSpans(
       Math.abs(current.minZ - minZ) > RUN_ADJACENCY_EPSILON ||
       Math.abs(current.maxZ - maxZ) > RUN_ADJACENCY_EPSILON
     ) {
-      spans.push({
-        minX,
-        maxX,
-        centerX: module.position[0],
-        centerZ: module.position[2],
-        width: module.width,
-        depth: module.depth,
-        minZ,
-        maxZ,
-        topY,
-        hasCountertop,
+      groups.push({
+        modules: [module],
+        span: {
+          minX,
+          maxX,
+          centerX: module.position[0],
+          centerZ: module.position[2],
+          width: module.width,
+          depth: module.depth,
+          minZ,
+          maxZ,
+          topY,
+          hasCountertop,
+        },
       })
       continue
     }
 
+    group!.modules.push(module)
     current.maxX = Math.max(current.maxX, maxX)
     current.minZ = Math.min(current.minZ, minZ)
     current.maxZ = Math.max(current.maxZ, maxZ)
@@ -289,7 +317,7 @@ export function getRunSpans(
     current.topY = Math.max(current.topY, topY)
   }
 
-  return spans
+  return groups
 }
 
 function angleDelta(a: number, b: number): number {
@@ -325,7 +353,7 @@ function childDerivedBaseLegSides(ctx?: GeometryContext): Set<'left' | 'right'> 
 
 function modulesForRun(node: CabinetNode, ctx?: GeometryContext): CabinetModuleNode[] {
   return (node.children ?? [])
-    .map((id) => ctx?.resolve<AnyNode>(id))
+    .map((id) => ctx?.resolve<AnyNode>(id as AnyNodeId))
     .filter((child): child is CabinetModuleNode => child?.type === 'cabinet-module')
 }
 
@@ -480,13 +508,36 @@ export function getRunSpanEnds(
     if (childBaseLegSides.has('left') && spanIndex === 0) leftOverhang = 0
     if (childBaseLegSides.has('right') && spanIndex === spans.length - 1) rightOverhang = 0
 
+    const leftFiller = ctx?.children.find(
+      (child) =>
+        child.type === 'cabinet-module' &&
+        Math.abs(child.position[0] - child.width / 2 - span.minX) < RUN_ADJACENCY_EPSILON,
+    )
+    const rightFiller = ctx?.children.find(
+      (child) =>
+        child.type === 'cabinet-module' &&
+        Math.abs(child.position[0] + child.width / 2 - span.maxX) < RUN_ADJACENCY_EPSILON,
+    )
+    if (leftFiller?.type === 'cabinet-module' && leftFiller.moduleKind === 'wall-filler')
+      leftOverhang = 0
+    if (rightFiller?.type === 'cabinet-module' && rightFiller.moduleKind === 'wall-filler')
+      rightOverhang = 0
     const exposedLeft =
-      spanIndex === 0 && !hasExternalLeftNeighbor && !hasInternalLeftNeighbor && barEdge !== 'left'
+      !(leftFiller?.type === 'cabinet-module' && leftFiller.moduleKind === 'wall-filler') &&
+      spanIndex === 0 &&
+      !hasExternalLeftNeighbor &&
+      !hasInternalLeftNeighbor &&
+      barEdge !== 'left' &&
+      !(cornerLink?.role === 'base-leg' && cornerLink.side === 'right') &&
+      !childBaseLegSides.has('left')
     const exposedRight =
+      !(rightFiller?.type === 'cabinet-module' && rightFiller.moduleKind === 'wall-filler') &&
       spanIndex === spans.length - 1 &&
       !hasExternalRightNeighbor &&
       !hasInternalRightNeighbor &&
-      barEdge !== 'right'
+      barEdge !== 'right' &&
+      !(cornerLink?.role === 'base-leg' && cornerLink.side === 'left') &&
+      !childBaseLegSides.has('right')
 
     return { leftOverhang, rightOverhang, exposedLeft, exposedRight }
   })
@@ -547,8 +598,9 @@ export function sideInsertX({
 /**
  * Re-pack the run after one module's width changes. A single constrained end
  * may consume its wall gap. When both ends are constrained, the run extent is
- * fixed and eligible donors absorb the growth, nearest first. The change is
- * rejected only when their combined capacity is insufficient.
+ * fixed and eligible donors absorb the growth, nearest first. Manual edge
+ * resize may consume an open inter-module gap before shifting its neighbor.
+ * The change is rejected only when their combined capacity is insufficient.
  */
 export function reflowRunModules<T extends ModuleLike>(
   modules: readonly T[],
@@ -576,6 +628,18 @@ export function reflowRunModules<T extends ModuleLike>(
   const widthGrowth = selectedWidth - selected.width
   let remainingGrowth = Math.max(0, widthGrowth)
   const resizeSide = options.resizeSide
+  const layoutGaps = [...gaps]
+  let consumedAdjacentGap = 0
+  if (options.consumeAdjacentGap && widthGrowth > REFLOW_CAPACITY_EPSILON && resizeSide) {
+    const adjacentGapSide = options.adjacentGapSide ?? resizeSide
+    const adjacentGapIndex = adjacentGapSide === 'right' ? selectedIndex : selectedIndex - 1
+    if (adjacentGapIndex >= 0 && adjacentGapIndex < layoutGaps.length) {
+      const adjacentGap = layoutGaps[adjacentGapIndex] ?? 0
+      consumedAdjacentGap = Math.min(widthGrowth, adjacentGap)
+      layoutGaps[adjacentGapIndex] = adjacentGap - consumedAdjacentGap
+    }
+  }
+  remainingGrowth -= consumedAdjacentGap
   const consumedRightSlack =
     rightConstrained && (!preserveExtent || resizeSide === 'right')
       ? Math.min(remainingGrowth, Math.max(0, wallConstraints?.right.slack ?? 0))
@@ -620,7 +684,7 @@ export function reflowRunModules<T extends ModuleLike>(
         const currentWidth = widths.get(module.id) ?? module.width
         const floor = useTrimCapacity
           ? minimumWidth(module)
-          : Math.max(defaultMinimumWidth, minimumWidth(module))
+          : Math.min(currentWidth, Math.max(defaultMinimumWidth, minimumWidth(module)))
         const donation = Math.min(Math.max(0, currentWidth - floor), remainingGrowth)
         widths.set(module.id, Math.max(floor, currentWidth - donation))
         remainingGrowth -= donation
@@ -695,7 +759,7 @@ export function reflowRunModules<T extends ModuleLike>(
   }
 
   const totalWidth = sorted.reduce(
-    (total, module, index) => total + (widths.get(module.id) ?? 0) + (gaps[index] ?? 0),
+    (total, module, index) => total + (widths.get(module.id) ?? 0) + (layoutGaps[index] ?? 0),
     0,
   )
   let nextLeft = runMinX(sorted) - consumedLeftSlack
@@ -711,7 +775,7 @@ export function reflowRunModules<T extends ModuleLike>(
     nextLeft = runMaxX(sorted) + consumedRightSlack - totalWidth
   } else if (preserveRightEdge) {
     nextLeft = runMaxX(sorted) - totalWidth
-  } else if (preserveLeftEdge || (!leftConstrained && !rightConstrained && selectedIndex === 0)) {
+  } else if (preserveLeftEdge || (!(leftConstrained || rightConstrained) && selectedIndex === 0)) {
     nextLeft = preserveLeftEdge ? runMinX(sorted) - consumedLeftSlack : runMaxX(sorted) - totalWidth
   }
   return sorted.map((module, index) => {
@@ -721,9 +785,270 @@ export function reflowRunModules<T extends ModuleLike>(
       module.position[1],
       module.position[2],
     ] as T['position']
-    nextLeft += width + (gaps[index] ?? 0)
+    nextLeft += width + (layoutGaps[index] ?? 0)
     return { id: module.id, position, width }
   })
+}
+
+export type RunModuleWidthEqualizationPlan<T extends ModuleLike> =
+  | {
+      ok: true
+      changed: boolean
+      targetWidth: number
+      equalizedIds: T['id'][]
+      modules: Array<{ id: T['id']; position: T['position']; width: number }>
+    }
+  | {
+      ok: false
+      reason: 'not-enough-modules' | 'width-limits'
+    }
+
+/**
+ * Distribute a run's existing span evenly across the requested modules. The
+ * non-requested modules keep their widths, so fixed appliances and structural
+ * fillers remain part of the run without becoming resize targets.
+ */
+export function planRunModuleWidthEqualization<T extends ModuleLike>({
+  modules,
+  equalizedIds,
+  minimumWidthById,
+  maximumWidthById,
+}: {
+  modules: readonly T[]
+  equalizedIds: ReadonlySet<T['id']>
+  minimumWidthById?: ReadonlyMap<T['id'], number>
+  maximumWidthById?: ReadonlyMap<T['id'], number>
+}): RunModuleWidthEqualizationPlan<T> {
+  const sorted = sortRunModules(modules)
+  const targets = sorted.filter((module) => equalizedIds.has(module.id))
+  if (targets.length < 2) return { ok: false, reason: 'not-enough-modules' }
+
+  const minX = runMinX(sorted)
+  const maxX = runMaxX(sorted)
+  const span = maxX - minX
+  const fixedWidth = sorted
+    .filter((module) => !equalizedIds.has(module.id))
+    .reduce((total, module) => total + module.width, 0)
+  const targetWidth = (span - fixedWidth) / targets.length
+  if (!Number.isFinite(targetWidth) || targetWidth <= REFLOW_CAPACITY_EPSILON) {
+    return { ok: false, reason: 'width-limits' }
+  }
+
+  for (const module of targets) {
+    const minimum = minimumWidthById?.get(module.id) ?? 0.3
+    const maximum = maximumWidthById?.get(module.id) ?? 1.2
+    if (targetWidth < minimum - RUN_ADJACENCY_EPSILON) {
+      return { ok: false, reason: 'width-limits' }
+    }
+    if (targetWidth > maximum + RUN_ADJACENCY_EPSILON) {
+      return { ok: false, reason: 'width-limits' }
+    }
+  }
+
+  let nextLeft = minX
+  const equalizedIdList = targets.map((module) => module.id)
+  const currentById = new Map(sorted.map((module) => [module.id, module]))
+  const planned = sorted.map((module) => {
+    const width = equalizedIds.has(module.id) ? targetWidth : module.width
+    const position: T['position'] = [
+      nextLeft + width / 2,
+      module.position[1],
+      module.position[2],
+    ] as T['position']
+    nextLeft += width
+    return { id: module.id, position, width }
+  })
+  const changed = planned.some(
+    (module) =>
+      Math.abs(module.width - (currentById.get(module.id)?.width ?? 0)) > RUN_ADJACENCY_EPSILON ||
+      Math.abs(module.position[0] - (currentById.get(module.id)?.position[0] ?? 0)) >
+        RUN_ADJACENCY_EPSILON,
+  )
+
+  return {
+    ok: true,
+    changed,
+    targetWidth,
+    equalizedIds: equalizedIdList,
+    modules: planned,
+  }
+}
+
+export type RunModuleInsertionPlan<T extends ModuleLike> =
+  | {
+      ok: true
+      inserted: { id: T['id']; position: T['position']; width: number }
+      modules: Array<{ id: T['id']; position: T['position']; width: number }>
+      pushedSide: 'left' | 'right' | null
+      shrunkFillerIds: T['id'][]
+    }
+  | {
+      ok: false
+      reason: 'invalid-width' | 'duplicate-id' | 'no-space'
+    }
+
+/**
+ * Plan inserting one module at a run-local X coordinate. Existing gaps are
+ * consumed first; a full run is re-packed toward the selected push side, with
+ * only eligible filler modules allowed to donate width when both ends are
+ * wall-constrained.
+ */
+export function planRunModuleInsertion<T extends ModuleLike>({
+  modules,
+  insertion,
+  wallConstraints,
+  fillerIds = new Set<T['id']>(),
+  minimumFillerWidth = 0.05,
+  preserveEnd,
+  preserveEnds,
+  anchorInsertionSide,
+}: {
+  modules: readonly T[]
+  insertion: { id: T['id']; position: T['position']; width: number }
+  wallConstraints?: RunWallConstraints
+  fillerIds?: ReadonlySet<T['id']>
+  minimumFillerWidth?: number
+  preserveEnd?: 'left' | 'right'
+  preserveEnds?: Partial<Record<'left' | 'right', boolean>>
+  anchorInsertionSide?: 'left' | 'right'
+}): RunModuleInsertionPlan<T> {
+  if (!Number.isFinite(insertion.width) || insertion.width <= REFLOW_CAPACITY_EPSILON) {
+    return { ok: false, reason: 'invalid-width' }
+  }
+  if (modules.some((module) => module.id === insertion.id)) {
+    return { ok: false, reason: 'duplicate-id' }
+  }
+
+  const sorted = sortRunModules(modules)
+  const insertionIndexAtCursor = sorted.findIndex(
+    (module) => moduleMaxX(module) > insertion.position[0] + RUN_ADJACENCY_EPSILON,
+  )
+  const normalizedIndexAtCursor =
+    insertionIndexAtCursor < 0 ? sorted.length : insertionIndexAtCursor
+  const leftAtCursor = sorted[normalizedIndexAtCursor - 1]
+  const rightAtCursor = sorted[normalizedIndexAtCursor]
+  const halfWidth = insertion.width / 2
+  const anchoredInsertion =
+    anchorInsertionSide && leftAtCursor && rightAtCursor
+      ? {
+          ...insertion,
+          position: [
+            anchorInsertionSide === 'left'
+              ? moduleMaxX(leftAtCursor) + halfWidth
+              : moduleMinX(rightAtCursor) - halfWidth,
+            insertion.position[1],
+            insertion.position[2],
+          ] as T['position'],
+        }
+      : insertion
+  const insertionX = anchoredInsertion.position[0]
+  const normalizedIndex = normalizedIndexAtCursor
+  const left = leftAtCursor
+  const right = rightAtCursor
+  const leftGap = left ? insertionX - moduleMaxX(left) : Number.POSITIVE_INFINITY
+  const rightGap = right ? moduleMinX(right) - insertionX : Number.POSITIVE_INFINITY
+  const fitsAtRequestedPosition =
+    leftGap >= halfWidth - RUN_ADJACENCY_EPSILON && rightGap >= halfWidth - RUN_ADJACENCY_EPSILON
+
+  if (fitsAtRequestedPosition) {
+    return {
+      ok: true,
+      inserted: anchoredInsertion,
+      modules: sorted.map((module) => ({
+        id: module.id,
+        position: module.position,
+        width: module.width,
+      })),
+      pushedSide: null,
+      shrunkFillerIds: [],
+    }
+  }
+
+  const preserveLeftEnd = preserveEnds?.left === true || preserveEnd === 'left'
+  const preserveRightEnd = preserveEnds?.right === true || preserveEnd === 'right'
+  const effectiveWallConstraints = {
+    left: preserveLeftEnd
+      ? { constrained: true, slack: 0 }
+      : (wallConstraints?.left ?? OPEN_RUN_END),
+    right: preserveRightEnd
+      ? { constrained: true, slack: 0 }
+      : (wallConstraints?.right ?? OPEN_RUN_END),
+  }
+  const leftConstrained = effectiveWallConstraints.left.constrained
+  const rightConstrained = effectiveWallConstraints.right.constrained
+  const leftCapacity = leftConstrained
+    ? Math.max(0, effectiveWallConstraints.left.slack)
+    : Number.POSITIVE_INFINITY
+  const rightCapacity = rightConstrained
+    ? Math.max(0, effectiveWallConstraints.right.slack)
+    : Number.POSITIVE_INFINITY
+  const pushedSide: 'left' | 'right' =
+    preserveRightEnd && !preserveLeftEnd
+      ? 'left'
+      : preserveLeftEnd && !preserveRightEnd
+        ? 'right'
+        : rightCapacity > leftCapacity + RUN_ADJACENCY_EPSILON
+          ? 'right'
+          : leftCapacity > rightCapacity + RUN_ADJACENCY_EPSILON
+            ? 'left'
+            : rightConstrained && !leftConstrained
+              ? 'left'
+              : 'right'
+  const provisionalPosition =
+    left && right
+      ? ([
+          anchorInsertionSide === 'right' ? moduleMinX(right) : moduleMaxX(left),
+          anchoredInsertion.position[1],
+          anchoredInsertion.position[2],
+        ] as T['position'])
+      : anchoredInsertion.position
+  const provisional = {
+    id: insertion.id,
+    position: provisionalPosition,
+    width: 0,
+  } as T
+  const combined = [
+    ...sorted.slice(0, normalizedIndex),
+    provisional,
+    ...sorted.slice(normalizedIndex),
+  ]
+  const reflowed = reflowRunModules(combined, insertion.id, insertion.width, {
+    wallConstraints: effectiveWallConstraints,
+    resizeSide: pushedSide,
+    consumeAdjacentGap: leftGap > RUN_ADJACENCY_EPSILON || rightGap > RUN_ADJACENCY_EPSILON,
+    adjacentGapSide:
+      pushedSide === 'right'
+        ? leftGap > RUN_ADJACENCY_EPSILON
+          ? 'left'
+          : 'right'
+        : rightGap > RUN_ADJACENCY_EPSILON
+          ? 'right'
+          : 'left',
+    eligibleDonorIds: fillerIds,
+    minimumWidthById: new Map([...fillerIds].map((id) => [id, minimumFillerWidth])),
+  })
+  if (reflowed.length !== combined.length) return { ok: false, reason: 'no-space' }
+
+  const plannedInserted = reflowed.find((module) => module.id === insertion.id)
+  if (!plannedInserted || plannedInserted.width <= REFLOW_CAPACITY_EPSILON) {
+    return { ok: false, reason: 'no-space' }
+  }
+  const originalWidths = new Map(sorted.map((module) => [module.id, module.width]))
+  const shrunkFillerIds = reflowed
+    .filter(
+      (module) =>
+        fillerIds.has(module.id) &&
+        module.width < (originalWidths.get(module.id) ?? module.width) - REFLOW_CAPACITY_EPSILON,
+    )
+    .map((module) => module.id)
+
+  return {
+    ok: true,
+    inserted: plannedInserted,
+    modules: reflowed.filter((module) => module.id !== insertion.id),
+    pushedSide,
+    shrunkFillerIds,
+  }
 }
 
 /** Full-run bounds in run-local frame (X along the run). */

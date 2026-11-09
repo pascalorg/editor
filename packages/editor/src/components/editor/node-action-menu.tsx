@@ -1,8 +1,22 @@
 'use client'
 
 import { Icon } from '@iconify/react'
-import { Copy, Group, Move, PencilRuler, Search, Spline, Trash2, Ungroup } from 'lucide-react'
-import type { MouseEventHandler, PointerEventHandler } from 'react'
+import { usePascalI18n } from '@pascal-app/core'
+import {
+  Copy,
+  Group,
+  Move,
+  PencilRuler,
+  RotateCcw,
+  RotateCw,
+  Search,
+  Spline,
+  Trash2,
+  Ungroup,
+} from 'lucide-react'
+import type { MouseEventHandler, PointerEventHandler, ReactNode } from 'react'
+import { ActionMenuButton } from './action-menu-button'
+import { RegistryActionContributions } from './registry-action-contributions'
 
 type NodeActionMenuProps = {
   onFind?: MouseEventHandler<HTMLButtonElement>
@@ -12,6 +26,9 @@ type NodeActionMenuProps = {
   onMove?: MouseEventHandler<HTMLButtonElement>
   onEditMesh?: MouseEventHandler<HTMLButtonElement>
   onCurve?: MouseEventHandler<HTMLButtonElement>
+  /** Quarter turns (a room); sit in the Curve slot (a room has no curve). */
+  onRotateLeft?: MouseEventHandler<HTMLButtonElement>
+  onRotateRight?: MouseEventHandler<HTMLButtonElement>
   /** Session group (Ctrl/Cmd+G) — multi-selection floating pill. */
   onGroup?: MouseEventHandler<HTMLButtonElement>
   /** Dissolve session group (Ctrl/Cmd+Shift+G). */
@@ -20,6 +37,16 @@ type NodeActionMenuProps = {
   onPointerUp?: PointerEventHandler<HTMLDivElement>
   onPointerEnter?: PointerEventHandler<HTMLDivElement>
   onPointerLeave?: PointerEventHandler<HTMLDivElement>
+  /**
+   * Buttons a caller contributes next to the registry contributions — for a
+   * selection that is not a scene-node selection (the room), whose actions the
+   * registry cannot find.
+   */
+  children?: ReactNode
+  /** Tooltip / accessible name of the delete button. */
+  deleteLabel?: string
+  /** Shows the delete button greyed out, its tooltip saying why. */
+  deleteDisabledReason?: string
 }
 
 export function NodeActionMenu({
@@ -30,119 +57,126 @@ export function NodeActionMenu({
   onMove,
   onEditMesh,
   onCurve,
+  onRotateLeft,
+  onRotateRight,
   onGroup,
   onUngroup,
   onPointerDown,
   onPointerUp,
   onPointerEnter,
   onPointerLeave,
+  children,
+  deleteLabel,
+  deleteDisabledReason,
 }: NodeActionMenuProps) {
+  const i18n = usePascalI18n()
   return (
     <div
       className="pointer-events-auto flex items-center gap-1 rounded-lg border border-border bg-background/95 p-1 shadow-xl backdrop-blur-md"
+      data-node-action-menu
       onPointerDown={onPointerDown}
       onPointerEnter={onPointerEnter}
       onPointerLeave={onPointerLeave}
       onPointerUp={onPointerUp}
     >
       {onFind && (
-        <button
-          aria-label="Find in catalog"
-          className="tooltip-trigger rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+        <ActionMenuButton
+          label={i18n._({ id: 'editor.nodeActionMenu.findInCatalog', message: 'Find in catalog' })}
           onClick={onFind}
-          title="Find in catalog"
-          type="button"
         >
           <Search className="h-4 w-4" />
-        </button>
+        </ActionMenuButton>
       )}
       {onMove && (
-        <button
-          aria-label="Move"
-          className="tooltip-trigger rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+        <ActionMenuButton
+          label={i18n._({ id: 'editor.nodeActionMenu.move', message: 'Move' })}
           onClick={onMove}
-          title="Move"
-          type="button"
         >
           <Move className="h-4 w-4" />
-        </button>
+        </ActionMenuButton>
       )}
       {onEditMesh && (
-        <button
-          aria-label="Edit mesh"
-          className="tooltip-trigger rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+        <ActionMenuButton
+          label={i18n._({ id: 'editor.nodeActionMenu.editMesh', message: 'Edit mesh' })}
           onClick={onEditMesh}
-          title="Edit mesh"
-          type="button"
         >
           <PencilRuler className="h-4 w-4" />
-        </button>
+        </ActionMenuButton>
       )}
       {onGroup && (
-        <button
-          aria-label="Group selection"
-          className="tooltip-trigger rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+        <ActionMenuButton
+          keys={['Cmd/Ctrl', 'G']}
+          label={i18n._({ id: 'editor.nodeActionMenu.groupSelection', message: 'Group selection' })}
           onClick={onGroup}
-          title="Group (Ctrl/Cmd+G)"
-          type="button"
         >
           <Group className="h-4 w-4" />
-        </button>
+        </ActionMenuButton>
       )}
       {onUngroup && (
-        <button
-          aria-label="Ungroup selection"
-          className="tooltip-trigger rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+        <ActionMenuButton
+          keys={['Cmd/Ctrl', 'Shift', 'G']}
+          label={i18n._({
+            id: 'editor.nodeActionMenu.ungroupSelection',
+            message: 'Ungroup selection',
+          })}
           onClick={onUngroup}
-          title="Ungroup (Ctrl/Cmd+Shift+G)"
-          type="button"
         >
           <Ungroup className="h-4 w-4" />
-        </button>
+        </ActionMenuButton>
       )}
       {onCurve && (
-        <button
-          aria-label="Curve"
-          className="tooltip-trigger rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+        <ActionMenuButton
+          label={i18n._({ id: 'editor.nodeActionMenu.curve', message: 'Curve' })}
           onClick={onCurve}
-          title="Curve"
-          type="button"
         >
           <Spline className="h-4 w-4" />
-        </button>
+        </ActionMenuButton>
       )}
+      {onRotateLeft && (
+        <ActionMenuButton
+          label={i18n._({ id: 'editor.nodeActionMenu.rotateLeft', message: 'Rotate left' })}
+          onClick={onRotateLeft}
+        >
+          <RotateCcw className="h-4 w-4" />
+        </ActionMenuButton>
+      )}
+      {onRotateRight && (
+        <ActionMenuButton
+          label={i18n._({ id: 'editor.nodeActionMenu.rotateRight', message: 'Rotate right' })}
+          onClick={onRotateRight}
+        >
+          <RotateCw className="h-4 w-4" />
+        </ActionMenuButton>
+      )}
+      <RegistryActionContributions />
+      {children}
       {onDuplicate && (
-        <button
-          aria-label="Duplicate"
-          className="tooltip-trigger rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+        <ActionMenuButton
+          label={i18n._({ id: 'editor.nodeActionMenu.duplicate', message: 'Duplicate' })}
           onClick={onDuplicate}
-          title="Duplicate"
-          type="button"
         >
           <Copy className="h-4 w-4" />
-        </button>
+        </ActionMenuButton>
       )}
       {onAddHole && (
-        <button
-          aria-label="Cut Out"
-          className="tooltip-trigger rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+        <ActionMenuButton
+          label={i18n._({ id: 'editor.nodeActionMenu.cutOut', message: 'Cut out' })}
           onClick={onAddHole}
-          title="Cut Out"
-          type="button"
         >
           <Icon height={16} icon="carbon:cut-out" width={16} />
-        </button>
+        </ActionMenuButton>
       )}
       {onDelete && (
-        <button
-          aria-label="Delete"
-          className="tooltip-trigger rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+        <ActionMenuButton
+          destructive
+          disabled={!!deleteDisabledReason}
+          disabledReason={deleteDisabledReason}
+          keys={['Delete / Backspace']}
+          label={deleteLabel ?? i18n._({ id: 'editor.nodeActionMenu.delete', message: 'Delete' })}
           onClick={onDelete}
-          title="Delete"
-          type="button"
         >
           <Trash2 className="h-4 w-4" />
-        </button>
+        </ActionMenuButton>
       )}
     </div>
   )

@@ -10,13 +10,16 @@ import {
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { memo, useMemo } from 'react'
+import { formatLinearMeasurement } from '../../../lib/measurements'
 import usePlacementPreview from '../../../store/use-placement-preview'
-import { useFloorplanRender } from '../floorplan-render-context'
+import { useFloorplanRender, useFloorplanSceneRotation } from '../floorplan-render-context'
+import { FloorplanDimensionRenderer } from './floorplan-dimension-renderer'
 import { FloorplanGeometryRenderer } from './floorplan-geometry-renderer'
 
 export interface FloorplanNodePreviewProps {
   node: AnyNode
   parentNode?: AnyNode | null
+  contextNodes?: AnyNode[]
   opacity?: number
   className?: string
   selected?: boolean
@@ -33,6 +36,7 @@ export interface FloorplanNodePreviewProps {
 export const FloorplanNodePreview = memo(function FloorplanNodePreview({
   node,
   parentNode = null,
+  contextNodes: previewContextNodes = [],
   opacity = 0.5,
   className,
   selected = false,
@@ -52,6 +56,9 @@ export const FloorplanNodePreview = memo(function FloorplanNodePreview({
     const contextNodes: Record<string, AnyNode> = {
       ...(nodes as Record<string, AnyNode>),
       [node.id]: node,
+    }
+    for (const previewNode of previewContextNodes) {
+      contextNodes[previewNode.id] = previewNode
     }
     if (parentNode) contextNodes[parentNode.id] = parentNode
     const resolvedParent =
@@ -90,7 +97,18 @@ export const FloorplanNodePreview = memo(function FloorplanNodePreview({
     }
 
     return (builder as (n: AnyNode, c: GeometryContext) => FloorplanGeometry | null)(node, ctx)
-  }, [highlighted, hovered, moving, node, nodes, parentNode, renderContext, selected, unit])
+  }, [
+    highlighted,
+    hovered,
+    moving,
+    node,
+    nodes,
+    parentNode,
+    previewContextNodes,
+    renderContext,
+    selected,
+    unit,
+  ])
   if (!geometry) return null
 
   return (
@@ -117,11 +135,42 @@ export const FloorplanNodePreview = memo(function FloorplanNodePreview({
 export const FloorplanPlacementPreviewLayer = memo(function FloorplanPlacementPreviewLayer() {
   const node = usePlacementPreview((s) => s.node)
   const parentNode = usePlacementPreview((s) => s.parentNode)
+  const contextNodes = usePlacementPreview((s) => s.contextNodes)
+  const dimensions = usePlacementPreview((s) => s.dimensions)
+  const activeDimensionId = usePlacementPreview((s) => s.activeDimensionId)
+  const dimensionInput = usePlacementPreview((s) => s.dimensionInput)
+  const unit = useViewer((s) => s.unit)
+  const metricNotation = useViewer((s) => s.metricNotation)
+  const sceneRotationDeg = useFloorplanSceneRotation()
   if (!node) return null
 
   return (
     <g data-floorplan-placement-preview>
-      <FloorplanNodePreview node={node} parentNode={parentNode} />
+      <FloorplanNodePreview contextNodes={contextNodes} node={node} parentNode={parentNode} />
+      <g data-floorplan-placement-dimensions>
+        {dimensions
+          .filter((dimension) => dimension.renderInFloorplan !== false)
+          .map((dimension) => (
+            <FloorplanDimensionRenderer
+              geometry={{
+                kind: 'dimension',
+                start: [dimension.start[0], dimension.start[2]],
+                end: [dimension.end[0], dimension.end[2]],
+                offsetNormal: dimension.offsetNormal,
+                offsetDistance: dimension.offsetDistance,
+                extensionOvershoot: 0.04,
+                text:
+                  dimension.id === activeDimensionId && dimensionInput
+                    ? dimensionInput
+                    : formatLinearMeasurement(dimension.value, unit, metricNotation),
+                stroke: '#6366f1',
+              }}
+              key={dimension.id}
+              onSelect={() => usePlacementPreview.getState().selectDimension(dimension.id)}
+              sceneRotationDeg={sceneRotationDeg}
+            />
+          ))}
+      </g>
     </g>
   )
 })

@@ -11,25 +11,38 @@ import type {
 import {
   getDormerWallHorizontalBoundsAtHeight,
   getDormerWallOpeningVerticalBounds,
+  windowSlots,
 } from '@pascal-app/core'
+import { NEW_WINDOW_FRAME_THICKNESS } from '@pascal-app/core/building'
 import type { FloorplanNodeExtension } from '@pascal-app/editor'
+import { curtainOpeningResizeMax } from '../shared/curtain-opening-limits'
+import { windowBatchable } from '../shared/node-batch/batchable'
 import {
   buildWindowFloorplanSchedule,
   computeWindowFloorplanLevelData,
 } from '../shared/opening-documentation'
 import { publishOpeningResizeGuides } from '../shared/opening-guides-runtime'
+import { createOpeningPropertyPreview } from '../shared/opening-property-preview'
+import { openingPropertyPreviewHost } from '../shared/opening-property-preview-host'
 import { readRoofFaceHeightMax, readRoofFaceWidthMax } from '../shared/roof-opening-host'
 import { buildRoofWallOpeningCut } from '../shared/roof-wall-opening-cut'
+import { scriptedOpeningHandles } from '../shared/scripted-opening-handles'
 import { readHostWallCeiling, readHostWallCeilingMaxWidth } from '../shared/wall-opening-ceiling'
+import { openingSeenFromOutside } from '../wall/exterior'
 import { wallFloorplanSiblingOverrides } from '../wall/floorplan-overrides'
 import { buildWindowContextualDimensions } from './contextual-dimensions'
 import { buildWindowFloorplan } from './floorplan'
 import { windowWidthAffordance } from './floorplan-affordances'
 import { windowFloorplanMoveTarget } from './floorplan-move'
+import { windowMechanism } from './mechanism'
 import { windowPaint } from './paint'
 import { windowParametrics } from './parametrics'
+import {
+  WINDOW_CORNER_HINTS,
+  WINDOW_PLACEMENT_HINTS,
+  WINDOW_PLAIN_PLACE_VISIBLE,
+} from './placement'
 import { WindowNode } from './schema'
-import { windowSlots } from './slots'
 
 const SIDE_HANDLE_OFFSET = 0.24
 const HEIGHT_HANDLE_OFFSET = 0.24
@@ -121,40 +134,22 @@ function windowWidthHandle(side: 'left' | 'right'): HandleDescriptor<WindowNodeT
       // Roof-hosted windows clamp against the face profile.
       const roofMax = readRoofFaceWidthMax(n, scene, sign)
       if (roofMax !== null) return Math.max(MIN_WINDOW_WIDTH, roofMax)
-
-      const length = readWallLength(n, scene)
-      // armX accounts for window rotation (rotation[1]=π flips the window
-      // so its visual right points toward LOWER wall-local S, not higher).
-      const armX = Math.cos(n.rotation[1])
-      // effectiveDirection: +1 = moving edge goes toward higher S (wall end)
-      //                     -1 = moving edge goes toward lower S (wall start)
-      const effectiveDirection = sign * armX
-
-      const anchorLeft = n.position[0] - n.width / 2
-      const anchorRight = n.position[0] + n.width / 2
-
-      // fixedEdgeS: the wall-local S of the edge that stays put.
-      // growSign: direction the MOVING edge travels in wall-local S.
-      // maxWallBound: max width before the moving edge hits the wall boundary.
-      let fixedEdgeS: number
-      let growSign: number
-      let maxWallBound: number
-
-      if (effectiveDirection > 0) {
-        fixedEdgeS = anchorLeft
-        growSign = 1
-        maxWallBound = length - anchorLeft
-      } else {
-        fixedEdgeS = anchorRight
-        growSign = -1
-        maxWallBound = anchorRight
-      }
-
-      const topY = n.position[1] + n.height / 2
-      const hostId = n.wallId || n.parentId
+      const curtainMax = curtainOpeningResizeMax(n, scene.nodes(), 'x', sign)
+      if (curtainMax !== undefined) return curtainMax
+      // rotation[1] = π flips the window, so its visual right edge moves toward lower wall-local S.
+      const growSign = sign * Math.cos(n.rotation[1]) > 0 ? 1 : -1
+      const fixedEdgeS = n.position[0] - (growSign * n.width) / 2
       return Math.max(
         MIN_WINDOW_WIDTH,
-        readHostWallCeilingMaxWidth(hostId, scene as any, fixedEdgeS, growSign, topY, maxWallBound),
+        readHostWallCeilingMaxWidth(
+          n.wallId || n.parentId,
+          scene,
+          fixedEdgeS,
+          growSign,
+          n.position[1] + n.height / 2,
+          readWallLength(n, scene),
+          n,
+        ),
       )
     },
     currentValue: (n) => n.width,
@@ -202,18 +197,9 @@ function windowHeightHandle(edge: 'top' | 'bottom'): HandleDescriptor<WindowNode
       if (roofMax !== null) return Math.max(MIN_WINDOW_HEIGHT, roofMax)
       // Maximum: distance from the anchored edge to the wall's allowed bounds. Top arrow caps at the wall's resolved ceiling - bottom;
       // bottom arrow caps at top (positive Y room above the floor).
-      const hostId = n.wallId || n.parentId
-
-      // A sloped wall's ceiling varies across the window's width. To prevent corners
-      // poking out above the slope, the height limit must be the lowest ceiling
-      // point across the entire span of the window.
-      const leftS = n.position[0] - n.width / 2
-      const rightS = n.position[0] + n.width / 2
-      const wallHLeft = readHostWallCeiling(hostId, scene as any, leftS)
-      const wallHRight = readHostWallCeiling(hostId, scene as any, rightS)
-      const wallHCenter = readHostWallCeiling(hostId, scene as any, n.position[0])
-      const wallH = Math.min(wallHLeft, wallHRight, wallHCenter)
-
+      const curtainMax = curtainOpeningResizeMax(n, scene.nodes(), 'y', sign)
+      if (curtainMax !== undefined) return curtainMax
+      const wallH = readHostWallCeiling(n.wallId || n.parentId, scene, n)
       const anchored = edge === 'top' ? n.position[1] - n.height / 2 : n.position[1] + n.height / 2
       return edge === 'top'
         ? Math.max(MIN_WINDOW_HEIGHT, wallH - anchored)
@@ -241,11 +227,55 @@ function windowHeightHandle(edge: 'top' | 'bottom'): HandleDescriptor<WindowNode
   }
 }
 
+function windowRadiusHandle(index: 0 | 1 | 2 | 3): HandleDescriptor<WindowNodeType> {
+  const corners = [
+    [-1, 1],
+    [1, 1],
+    [1, -1],
+    [-1, -1],
+  ] as const
+  return {
+    kind: 'corner-radius',
+    corner: corners[index],
+    width: (node) => node.width,
+    height: (node) => node.height,
+    currentValue: (node) =>
+      node.openingRadiusMode === 'individual'
+        ? (node.openingCornerRadii[index] ?? 0)
+        : node.cornerRadius,
+    max: (node) => Math.min(node.width, node.height) / 2,
+    apply: (node, radius, _scene, modifiers) => {
+      if (!modifiers.shiftKey) {
+        return { openingShape: 'rounded', openingRadiusMode: 'all', cornerRadius: radius }
+      }
+      const radii =
+        node.openingRadiusMode === 'individual'
+          ? [...node.openingCornerRadii]
+          : [node.cornerRadius, node.cornerRadius, node.cornerRadius, node.cornerRadius]
+      radii[index] = radius
+      return {
+        openingShape: 'rounded',
+        openingRadiusMode: 'individual',
+        openingCornerRadii: radii as [number, number, number, number],
+      }
+    },
+    createPreview: (node) =>
+      createOpeningPropertyPreview<WindowNodeType>(node.id, openingPropertyPreviewHost),
+    visible: (node) => node.openingShape !== 'arch',
+    portal: 'grandparent',
+    portalTarget: resolveWindowHandlePortalTarget,
+  }
+}
+
 const windowHandles: HandleDescriptor<WindowNodeType>[] = [
   windowWidthHandle('left'),
   windowWidthHandle('right'),
   windowHeightHandle('top'),
   windowHeightHandle('bottom'),
+  windowRadiusHandle(0),
+  windowRadiusHandle(1),
+  windowRadiusHandle(2),
+  windowRadiusHandle(3),
 ]
 
 /**
@@ -263,25 +293,37 @@ export const windowDefinition: NodeDefinition<typeof WindowNode> = {
   kind: 'window',
   snapProfile: 'item',
   facingIndicator: true,
-  schemaVersion: 3,
+  schemaVersion: 4,
   schema: WindowNode,
   category: 'structure',
   extensions: {
     'pascal:editor/floorplan': {
       contextualDimensions: buildWindowContextualDimensions,
       schedule: buildWindowFloorplanSchedule,
+      // Swap a casement's hinge side from the action bar, in 2D and 3D.
+      actionMenu: { actions: () => import('./actions') },
     } satisfies FloorplanNodeExtension<WindowNodeType>,
   },
 
   // Same schema-driven defaults trick as door: parse a stub, strip
   // id/type. Window also has many fields with zod `.default()` set.
   defaults: () => {
-    const stub = WindowNode.parse({ id: 'window_default' as never, type: 'window' })
+    const stub = WindowNode.parse({
+      id: 'window_default' as never,
+      type: 'window',
+      frameThickness: NEW_WINDOW_FRAME_THICKNESS,
+      casingFaceA: true,
+      casingFaceB: true,
+    })
     const { id: _id, type: _type, ...rest } = stub
     return rest
   },
 
   capabilities: {
+    reveal: { phase: 'openings', style: 'cut' },
+    exterior: openingSeenFromOutside,
+    revealOnEdit: ['position', 'width', 'height', 'openingShape', 'windowType'],
+    batchable: windowBatchable,
     selectable: { hitVolume: 'bbox' },
     duplicable: true,
     deletable: true,
@@ -302,11 +344,16 @@ export const windowDefinition: NodeDefinition<typeof WindowNode> = {
     // each mesh with its `userData.slotId`; paint writes `node.slots`.
     slots: () => windowSlots(),
     paint: windowPaint,
+    mechanism: windowMechanism,
   },
 
   parametrics: windowParametrics,
-  handles: windowHandles,
+  handles: (node) =>
+    node.source
+      ? scriptedOpeningHandles(node, windowWidthHandle, () => windowHeightHandle('top'))
+      : windowHandles,
 
+  rendersChildren: false,
   renderer: {
     kind: 'parametric',
     module: () => import('./renderer'),
@@ -343,7 +390,9 @@ export const windowDefinition: NodeDefinition<typeof WindowNode> = {
   },
 
   toolHints: [
-    { key: 'Left click', label: 'Place window on wall' },
+    { key: 'Left click', label: 'Place window on wall', visible: WINDOW_PLAIN_PLACE_VISIBLE },
+    ...WINDOW_CORNER_HINTS,
+    ...WINDOW_PLACEMENT_HINTS,
     { key: 'R', label: 'Flip side' },
     { key: 'Alt', label: 'Force place' },
     { key: 'Esc', label: 'Cancel' },

@@ -6,14 +6,75 @@ import type {
   MovableParentFrame,
   ParentFrameSnapMatch,
 } from '@pascal-app/core'
-import { planToRunLocal, runLocalToPlan } from './run-layout'
-import { bumpCabinetRunLayoutRevision, syncCornerRunsFromSourceModule } from './run-ops'
+import { findLevelAncestorId } from '@pascal-app/core'
+import { findWallOpeningConflicts } from '../shared/wall-opening-clearance'
+import { moduleMaxX, moduleMinX, planToRunLocal, runLocalToPlan } from './run-layout'
+import {
+  bumpCabinetRunLayoutRevision,
+  cabinetModulesForRun,
+  cabinetModuleTotalHeight,
+  previewCornerRunsFromRunSources,
+  syncCornerRunsFromSourceModule,
+} from './run-ops'
+import { findClosestCabinetWallInPlan, resolveCabinetWallFaceOffset } from './wall-snap'
 
 /** Matches the generic move tool's Figma-alignment pull (8 cm). */
 const MAGNETIC_THRESHOLD_M = 0.08
 const GUIDE_EPSILON_M = 1e-4
 type PlanTransform = { position: [number, number, number]; rotation: number }
 type PlanPoint = { x: number; z: number }
+
+function modulesOverlap(a: CabinetModuleNodeType, b: CabinetModuleNodeType): boolean {
+  const xOverlap =
+    moduleMinX(a) < moduleMaxX(b) - GUIDE_EPSILON_M &&
+    moduleMaxX(a) > moduleMinX(b) + GUIDE_EPSILON_M
+  const aMinZ = a.position[2] - a.depth / 2
+  const aMaxZ = a.position[2] + a.depth / 2
+  const bMinZ = b.position[2] - b.depth / 2
+  const bMaxZ = b.position[2] + b.depth / 2
+  return xOverlap && aMinZ < bMaxZ - GUIDE_EPSILON_M && aMaxZ > bMinZ + GUIDE_EPSILON_M
+}
+
+function moduleOverlapsWallOpening(
+  module: CabinetModuleNodeType,
+  parent: CabinetNodeType,
+  position: readonly [number, number, number],
+  nodes: Readonly<Record<string, AnyNode>>,
+): boolean {
+  const levelId = findLevelAncestorId(parent.id as AnyNodeId, nodes)
+  if (!levelId) return false
+
+  const planPosition = localToPlan(parent, position, nodes)
+  const hit = findClosestCabinetWallInPlan({
+    excludeIds: [],
+    nodes: nodes as Record<AnyNodeId, AnyNode>,
+    parentLevelId: levelId as AnyNodeId,
+    planPoint: [planPosition[0], planPosition[2]],
+    yaw: frameWorldTransform(parent, nodes).rotation + module.rotation,
+  })
+  if (!hit) return false
+
+  const normalScale = hit.side === 'front' ? 1 : -1
+  const expectedPerp =
+    resolveCabinetWallFaceOffset({
+      hit,
+      nodes: nodes as Record<AnyNodeId, AnyNode>,
+      parentLevelId: levelId as AnyNodeId,
+    }) +
+    normalScale * (module.depth / 2)
+  if (Math.abs(hit.perpDistance - expectedPerp) > 0.12) return false
+
+  return (
+    findWallOpeningConflicts({
+      bottom: planPosition[1],
+      height: cabinetModuleTotalHeight(module),
+      localX: hit.localX,
+      nodes: nodes as Record<AnyNodeId, AnyNode>,
+      wall: hit.wall,
+      width: module.width,
+    }).length > 0
+  )
+}
 
 function frameParent(
   node: AnyNode,
@@ -302,6 +363,30 @@ export const cabinetModuleParentFrame: MovableParentFrame = {
   planToLocal,
   magneticSnap,
   magneticSnapMatches,
+  previewOverrides: ({ node, parent, position, sceneApi }) => {
+    if (node.type !== 'cabinet-module' || parent.type !== 'cabinet') return []
+    return previewCornerRunsFromRunSources({
+      initialOverrides: [[node.id as AnyNodeId, { position: [...position] }]],
+      previousModules: [node as CabinetModuleNodeType],
+      run: parent as CabinetNodeType,
+      sceneApi,
+    }).filter(([id]) => id !== node.id)
+  },
+  isValidPosition: ({ node, parent, position, nodes }) => {
+    if (node.type !== 'cabinet-module' || parent.type !== 'cabinet') return true
+
+    const moving = { ...node, position: [...position] } as CabinetModuleNodeType
+    const siblingConflict = cabinetModulesForRun(parent as CabinetNodeType, nodes).some(
+      (sibling) => {
+        if (sibling.id === moving.id) return false
+        return modulesOverlap(moving, sibling)
+      },
+    )
+    return (
+      !siblingConflict &&
+      !moduleOverlapsWallOpening(moving, parent as CabinetNodeType, position, nodes)
+    )
+  },
   // Module position isn't in the run's geometryKey, so a committed move must
   // bump the layout revision to re-flow spans/countertop — and re-anchor any
   // linked L-corner runs to the module's new edge.

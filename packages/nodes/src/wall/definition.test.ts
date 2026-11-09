@@ -6,12 +6,42 @@ import {
   RoofSegmentNode,
   type SceneApi,
 } from '@pascal-app/core'
-import { getFloorplanNodeExtension } from '@pascal-app/editor'
+import {
+  DRAFTING_SURFACE_EXTENSION_KEY,
+  type DraftingSurfaceExtension,
+  getFloorplanNodeExtension,
+  selectWallDrawVariant,
+} from '@pascal-app/editor'
 import { createConicalRoofSectorAboveWall } from '../roof/conical-roof'
 import { wallDefinition } from './definition'
 
-test('wallDefinition records the lean-to child schema migration', () => {
-  expect(wallDefinition.schemaVersion).toBe(8)
+test('wallDefinition records the F2 assembly schema version', () => {
+  expect(wallDefinition.schemaVersion).toBe(10)
+})
+
+test('walls host F2 assembly layers whose sum is the stored thickness', () => {
+  const host = wallDefinition.capabilities?.assembly
+  const wall = wallDefinition.schema.parse({ id: 'wall_layers', start: [0, 0], end: [4, 0] })
+  expect(host).toMatchObject({ reference: 'front', measure: 'normal' })
+  expect(host?.backing).toBeUndefined()
+  expect(host?.body(wall)).toBe(0.1)
+  expect(host?.body({ ...wall, thickness: 0.2032 })).toBe(0.2032)
+})
+
+test('wall drafting surface classifies its top, ends, and two sides', () => {
+  const wall = wallDefinition.schema.parse({
+    id: 'wall_surface',
+    start: [0, 0],
+    end: [4, 0],
+  })
+  const surface = wallDefinition.extensions?.[
+    DRAFTING_SURFACE_EXTENSION_KEY
+  ] as DraftingSurfaceExtension
+
+  expect(surface.classifyFace?.(wall, [0, 1, 0])).toEqual({ face: 'top' })
+  expect(surface.classifyFace?.(wall, [0, 0, 1])).toEqual({ face: 'side', side: 'front' })
+  expect(surface.classifyFace?.(wall, [0, 0, -1])).toEqual({ face: 'side', side: 'back' })
+  expect(surface.classifyFace?.(wall, [1, 0, 0])).toEqual({ face: 'end' })
 })
 
 describe('wallDefinition floor-plan extension', () => {
@@ -60,6 +90,19 @@ describe('wallDefinition floor-plan extension', () => {
 
     const canCurve = getFloorplanNodeExtension(wallDefinition)?.actionMenu?.canCurve
     expect(canCurve?.({ node: wall, nodes })).toBe(false)
+  })
+  test('takes its own plan hits and shows typeable dimensions only between rooms', () => {
+    const extension = getFloorplanNodeExtension(wallDefinition)
+    expect(extension?.planHitSelectsNode).toBe(true)
+    const wall = wallDefinition.schema.parse({
+      id: 'wall_lone',
+      parentId: 'level_lone',
+      start: [0, 0],
+      end: [4, 0],
+    })
+    const nodes = { [wall.id]: wall } as Record<AnyNodeId, AnyNode>
+    // A wall bounding no room has no room widths to show.
+    expect(extension?.selectionDimensions?.({ node: wall, nodes, faces: 'both' })).toEqual([])
   })
 })
 
@@ -112,14 +155,19 @@ test('curved wall roof builder creates a matching conical sector above it', () =
   const created: Array<{ node: AnyNode; parentId?: AnyNodeId }> = []
   const sceneApi = {
     createMany: (ops) => created.push(...ops),
+    update: () => {},
     nodes: () => nodes,
   } as SceneApi
   const segmentId = createConicalRoofSectorAboveWall(wall, nodes, sceneApi, level.id as AnyNodeId)
-  const roof = created.find((entry) => entry.node.type === 'roof')?.node
+  const roofLevel = created.find((entry) => entry.node.type === 'level')?.node
+  const roof = created.find((entry) => entry.node.type === 'roof')
   const segment = created.find((entry) => entry.node.type === 'roof-segment')?.node
 
   expect(wallDefinition.quickActions).toBeUndefined()
-  expect(roof).toMatchObject({ position: [0, 3, 0] })
+  // On the top floor, the cone goes on a new Roof level, standing on the 3 m wall's top.
+  expect(roofLevel).toMatchObject({ name: 'Roof', level: 1, metadata: { role: 'roof' } })
+  expect(roof?.parentId).toBe(roofLevel?.id)
+  expect(roof?.node).toMatchObject({ position: [0, 0, 0], support: { kind: 'walls' } })
   expect(segment).toMatchObject({
     roofType: 'conical',
     width: 4,
@@ -131,7 +179,7 @@ test('curved wall roof builder creates a matching conical sector above it', () =
   expect(segmentId).toBe(segment?.id)
 })
 
-test('curved wall roof builder parents the roof to the active level', () => {
+test('curved wall roof builder parents the roof to the empty level above the wall', () => {
   const sourceLevel = {
     object: 'node',
     id: 'level_source',
@@ -163,6 +211,7 @@ test('curved wall roof builder parents the roof to the active level', () => {
   const created: Array<{ node: AnyNode; parentId?: AnyNodeId }> = []
   const sceneApi = {
     createMany: (ops) => created.push(...ops),
+    update: () => {},
     nodes: () => nodes,
   } as SceneApi
 
@@ -170,7 +219,7 @@ test('curved wall roof builder parents the roof to the active level', () => {
 
   const createdRoof = created.find((entry) => entry.node.type === 'roof')
   expect(createdRoof?.parentId).toBe(activeLevel.id)
-  expect(createdRoof?.node).toMatchObject({ position: [0, 0, 0] })
+  expect(createdRoof?.node).toMatchObject({ position: [0, 0, 0], support: { kind: 'walls' } })
 })
 
 test('curved wall roof builder reuses its existing hosted roof', () => {
@@ -222,7 +271,7 @@ test('curved wall roof builder reuses its existing hosted roof', () => {
   expect(created).toHaveLength(0)
 })
 
-test('curved wall roof builder clamps a lower-floor wall to the active floor', () => {
+test('curved wall roof builder follows a lower-floor wall top below the active floor', () => {
   const sourceLevel = {
     object: 'node',
     id: 'level_source',
@@ -254,13 +303,14 @@ test('curved wall roof builder clamps a lower-floor wall to the active floor', (
   const created: Array<{ node: AnyNode; parentId?: AnyNodeId }> = []
   const sceneApi = {
     createMany: (ops) => created.push(...ops),
+    update: () => {},
     nodes: () => nodes,
   } as SceneApi
 
   createConicalRoofSectorAboveWall(wall, nodes, sceneApi, activeLevel.id as AnyNodeId)
 
   const createdRoof = created.find((entry) => entry.node.type === 'roof')
-  expect(createdRoof?.node).toMatchObject({ position: [0, 0, 0] })
+  expect(createdRoof?.node).toMatchObject({ position: [0, -2, 0] })
 })
 
 test('curved wall roof builder rejects walls more than one level below', () => {
@@ -291,6 +341,7 @@ test('curved wall roof builder rejects walls more than one level below', () => {
   const created: Array<{ node: AnyNode; parentId?: AnyNodeId }> = []
   const sceneApi = {
     createMany: (ops) => created.push(...ops),
+    update: () => {},
     nodes: () => nodes,
   } as SceneApi
 
@@ -298,4 +349,30 @@ test('curved wall roof builder rejects walls more than one level below', () => {
     createConicalRoofSectorAboveWall(wall, nodes, sceneApi, activeLevel.id as AnyNodeId),
   ).toBeNull()
   expect(created).toEqual([])
+})
+
+describe('wall tool hints', () => {
+  const visibleClickHints = () =>
+    (wallDefinition.toolHints ?? [])
+      .filter((hint) => hint.key === 'Left click' && (hint.visible?.value() ?? true))
+      .map((hint) => hint.label)
+
+  test('carry no Shape chip and no R key: the variant is picked in the Build panel', () => {
+    const hints = wallDefinition.toolHints ?? []
+    expect(hints.some((hint) => hint.chip)).toBe(false)
+    expect(hints.some((hint) => hint.key === 'R')).toBe(false)
+  })
+
+  test('describe the gesture of the variant in hand', () => {
+    try {
+      selectWallDrawVariant('rectangle')
+      expect(visibleClickHints()).toEqual(['Set one corner, then the opposite'])
+      selectWallDrawVariant('polygon')
+      expect(visibleClickHints()).toEqual(['Add a corner · click the first to close'])
+      selectWallDrawVariant('walls')
+      expect(visibleClickHints()).toEqual(['Set wall start / end'])
+    } finally {
+      selectWallDrawVariant('polygon')
+    }
+  })
 })

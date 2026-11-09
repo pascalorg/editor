@@ -1,10 +1,18 @@
 'use client'
 
-import { type AnyNodeId, sceneRegistry, useScene, type WallNode } from '@pascal-app/core'
+import {
+  type AnyNodeId,
+  emitter,
+  getLibraryMaterialsVersion,
+  sceneRegistry,
+  useScene,
+  type WallNode,
+} from '@pascal-app/core'
 import {
   drainRebuiltWalls,
   getPendingWallRebuildCount,
   isIsolationActive,
+  isNodeRevealing,
   SCENE_LAYER,
   useViewer,
   type WallMode,
@@ -12,6 +20,7 @@ import {
 import { useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useRef } from 'react'
 import { type Material, Matrix4, Mesh, type Object3D } from 'three'
+import { isSlotPaintPreviewActive } from '../shared/slot-paint'
 import {
   applyWallBatchGroups,
   buildWallBatch,
@@ -53,6 +62,7 @@ type AppearanceInputs = {
   colorPreset: unknown
   sceneTheme: unknown
   materials: object | null
+  libraryVersion: number
 }
 
 const lastAppearance: AppearanceInputs = {
@@ -61,18 +71,21 @@ const lastAppearance: AppearanceInputs = {
   colorPreset: undefined,
   sceneTheme: undefined,
   materials: null,
+  libraryVersion: -1,
 }
 
 function appearanceChanged(): boolean {
   const viewer = useViewer.getState()
   const materials = useScene.getState().materials as object
+  const libraryVersion = getLibraryMaterialsVersion()
 
   if (
     lastAppearance.shading === viewer.shading &&
     lastAppearance.textures === viewer.textures &&
     lastAppearance.colorPreset === viewer.colorPreset &&
     lastAppearance.sceneTheme === viewer.sceneTheme &&
-    lastAppearance.materials === materials
+    lastAppearance.materials === materials &&
+    lastAppearance.libraryVersion === libraryVersion
   ) {
     return false
   }
@@ -82,6 +95,7 @@ function appearanceChanged(): boolean {
   lastAppearance.colorPreset = viewer.colorPreset
   lastAppearance.sceneTheme = viewer.sceneTheme
   lastAppearance.materials = materials
+  lastAppearance.libraryVersion = libraryVersion
   return true
 }
 
@@ -90,6 +104,7 @@ const batchByNode = new Map<string, BatchRecord>()
 const staleLevels = new Set<string>()
 const changedWalls = new Set<string>()
 const EMPTY_IDS: ReadonlySet<string> = new Set()
+let lastCutawayHiddenWalls: ReadonlySet<string> = EMPTY_IDS
 let knownWallCount = -1
 let lastWallChangeAtMs = 0
 let batchingSuspended = false
@@ -106,6 +121,17 @@ function skipRaycast() {
 function showOwnGeometry(nodeId: string) {
   const mesh = sceneRegistry.nodes.get(nodeId) as Mesh | undefined
   if (mesh) revealBatchedWall(mesh)
+}
+
+export function revealBatchedWallsForCapture(): void {
+  for (const nodeId of batchByNode.keys()) showOwnGeometry(nodeId)
+}
+
+export function holdBatchedWallsAfterCapture(): void {
+  for (const nodeId of batchByNode.keys()) {
+    const mesh = sceneRegistry.nodes.get(nodeId)
+    if (mesh) hideBatchedWall(mesh)
+  }
 }
 
 /** Hands a wall back to itself: the merged mesh stops drawing it, it resumes. */
@@ -149,9 +175,12 @@ function toCandidate(
 ): WallBatchCandidate | null {
   if (excludedNodeIds.has(nodeId)) return null
   if (node.visible === false) return null
+  // Curtain walls use a separate caster that excludes their transparent panes.
+  if (node.wallType === 'curtain') return null
 
   const mesh = sceneRegistry.nodes.get(nodeId) as Mesh | undefined
   if (!mesh?.visible) return null
+  if (mesh.userData.wallHidden === true) return null
   // Solo's shadow-caster-only pass and the viewer's isolation filter both
   // hide a wall by taking it off the scene layer. Sewing it in would put it
   // back on screen through the merged mesh, which neither asked for.
@@ -170,15 +199,14 @@ function toCandidate(
  *
  * The merged mesh captures one material set when it is sewn and nothing
  * re-reads it, so batching is only sound while every batched wall's materials
- * hold still. That is true in one wall mode. `cutaway` re-assigns materials
- * from the camera's facing test as the view turns, `down` makes every wall
- * see-through and `translucent` does the same by definition — in all three the
- * merged copy would keep drawing walls the cutaway pass has since turned to
- * glass. Isolation is the other stand-down: it hides the level root the merged
- * mesh hangs off, which would leave a focused batched wall drawn by nobody.
+ * hold still. That is true in `up`; in `cutaway`, walls stamped `wallHidden`
+ * are released per wall in the same frame because WallCutout runs at priority
+ * 0 and this system at 5. `down` and `translucent` make every wall see-through.
+ * Isolation is the other stand-down: it hides the level root the merged mesh
+ * hangs off, which would leave a focused batched wall drawn by nobody.
  */
 export function canBatchWalls(wallMode: WallMode, isolationActive: boolean): boolean {
-  return !isolationActive && wallMode === 'up'
+  return !isolationActive && (wallMode === 'up' || wallMode === 'cutaway')
 }
 
 /**
@@ -207,10 +235,38 @@ export function collectTintedWalls(wallIds: ReadonlySet<string>): Set<string> {
   const hovered = viewer.hoveredId
   if (hovered && wallIds.has(hovered)) tinted.add(hovered)
 
+  // A paint preview spreads past the hovered wall (a room's walls): each one it
+  // repaints has to draw itself, or the merged copy hides the preview.
+  for (const id of wallIds) if (isSlotPaintPreviewActive(id)) tinted.add(id)
+
   return tinted
 }
 
-function materialSetKey(materials: readonly Material[]): string {
+/**
+ * The materials a wall actually draws, in canonical (uuid) order. Two walls
+ * showing the same finishes batch together however their palettes are laid out
+ * — a room's finish on side a of one wall and side b of the next is one set.
+ */
+export function canonicalWallMaterials(
+  mesh: Pick<Mesh, 'geometry'>,
+  materials: readonly Material[],
+): Material[] {
+  const groups = mesh.geometry.groups
+  const used = new Set<Material>()
+  if (groups.length === 0) {
+    if (materials[0]) used.add(materials[0])
+  } else {
+    for (const group of groups) {
+      const material = materials[group.materialIndex ?? 0]
+      if (material) used.add(material)
+    }
+  }
+  return [...used].sort((left, right) =>
+    left.uuid < right.uuid ? -1 : left.uuid > right.uuid ? 1 : 0,
+  )
+}
+
+export function materialSetKey(materials: readonly Material[]): string {
   return materials.map((material) => material.uuid).join('|')
 }
 
@@ -230,7 +286,7 @@ export function collectWallBatchCandidates(
     const candidate = toCandidate(childId, child as WallNode, excludedNodeIds)
     if (!candidate) continue
 
-    const key = materialSetKey(candidate.materials)
+    const key = materialSetKey(canonicalWallMaterials(candidate.mesh, candidate.materials))
     const bucket = grouped.get(key)
     if (bucket) bucket.push(candidate)
     else grouped.set(key, [candidate])
@@ -247,6 +303,20 @@ export function collectWallBatchCandidates(
  * pays off once enough walls have drifted out, so a single edit leaves the
  * floor's merged mesh exactly where it was.
  */
+/**
+ * A wall still rising from a construction reveal moves every frame, and a
+ * merge would freeze it mid-rise — or, if it were left out, keep it out until
+ * enough walls drift to re-sew the floor. Its level waits for the whole rise.
+ */
+function levelHasRevealingWalls(levelId: string): boolean {
+  const nodes = useScene.getState().nodes
+  const level = nodes[levelId as AnyNodeId]
+  if (level?.type !== 'level') return false
+  return level.children.some(
+    (childId) => nodes[childId]?.type === 'wall' && isNodeRevealing(childId),
+  )
+}
+
 function unbatchedWallCount(
   levelId: string,
   excludedNodeIds: ReadonlySet<string> = EMPTY_IDS,
@@ -284,20 +354,26 @@ function mergeLevel(levelId: string, excludedNodeIds: ReadonlySet<string> = EMPT
   for (const candidates of collectWallBatchCandidates(levelId, excludedNodeIds).values()) {
     if (candidates.length < MIN_BATCH_WALLS) continue
 
+    const canonical = canonicalWallMaterials(candidates[0]!.mesh, candidates[0]!.materials)
     const sources = candidates.map((candidate) => {
       candidate.mesh.updateWorldMatrix(true, false)
       return {
         nodeId: candidate.nodeId,
         geometry: candidate.mesh.geometry,
         matrix: localMatrix.multiplyMatrices(rootInverse, candidate.mesh.matrixWorld).clone(),
+        materialIndexMap: candidate.materials.map((material) => {
+          const index = canonical.indexOf(material)
+          return index < 0 ? undefined : index
+        }),
       }
     })
 
     const batch = buildWallBatch(sources)
     if (!batch) continue
 
-    const mesh = new Mesh(batch.geometry, candidates[0]!.materials)
+    const mesh = new Mesh(batch.geometry, canonical)
     mesh.name = 'wall-batch'
+    mesh.userData.pascalExport = 'strip'
     mesh.castShadow = true
     mesh.receiveShadow = true
     mesh.matrixAutoUpdate = false
@@ -328,12 +404,55 @@ export const WallBatchSystem = () => {
 
   useFrame(() => runBatchFrame(invalidate, wakeRef), 5)
 
+  // Captures and exports clone the scene and prune whatever is off the scene
+  // layer, so the sources come back for the capture and go under again after
+  // it. The node batch used to reveal them as a side effect of its own sweep
+  // (shared hold reason) and nothing ever re-hid them: every batched wall
+  // drew twice for the rest of the session.
+  useEffect(() => {
+    emitter.on('thumbnail:before-capture', revealBatchedWallsForCapture)
+    emitter.on('thumbnail:after-capture', holdBatchedWallsAfterCapture)
+    return () => {
+      emitter.off('thumbnail:before-capture', revealBatchedWallsForCapture)
+      emitter.off('thumbnail:after-capture', holdBatchedWallsAfterCapture)
+    }
+  }, [])
+
+  // Scripted-probe hook, ?perf sessions only (mirrors __itemBatch): the
+  // panel has no row for the merged wall batch, so probes read it here.
+  useEffect(() => {
+    if (!new URLSearchParams(window.location.search).has('perf')) return
+    const probe = {
+      stats: () => {
+        let batches = 0
+        for (const records of batchesByLevel.values()) batches += records.length
+        let hidden = 0
+        for (const nodeId of sceneRegistry.byType.wall ?? EMPTY_IDS) {
+          if (sceneRegistry.nodes.get(nodeId)?.userData.wallHidden === true) hidden++
+        }
+        return {
+          walls: batchByNode.size,
+          batches,
+          levels: batchesByLevel.size,
+          hidden,
+          suspended: batchingSuspended,
+          wallMode: useViewer.getState().wallMode,
+        }
+      },
+    }
+    ;(window as unknown as { __wallBatch?: unknown }).__wallBatch = probe
+    return () => {
+      delete (window as unknown as { __wallBatch?: unknown }).__wallBatch
+    }
+  }, [])
+
   useEffect(
     () => () => {
       if (wakeRef.current) clearTimeout(wakeRef.current)
       for (const levelId of [...batchesByLevel.keys()]) disposeLevelBatches(levelId)
       changedWalls.clear()
       staleLevels.clear()
+      lastCutawayHiddenWalls = EMPTY_IDS
       knownWallCount = -1
       batchingSuspended = false
       lastAppearance.shading = undefined
@@ -341,6 +460,7 @@ export const WallBatchSystem = () => {
       lastAppearance.colorPreset = undefined
       lastAppearance.sceneTheme = undefined
       lastAppearance.materials = null
+      lastAppearance.libraryVersion = -1
     },
     [],
   )
@@ -359,7 +479,7 @@ export const WallBatchSystem = () => {
  * "did this wall move" on its own, and the per-frame cost is the size of the
  * dirty set rather than the size of the floor.
  */
-function runBatchFrame(
+export function runBatchFrame(
   invalidate: () => void,
   wakeRef: { current: ReturnType<typeof setTimeout> | null },
 ) {
@@ -386,6 +506,16 @@ function runBatchFrame(
   }
   changedWalls.clear()
 
+  // A wall going out in a reverse play (an undo) moves its own mesh while the merged mesh keeps
+  // drawing it whole: it draws itself until the host takes it out. Its level waits for it
+  // (`levelHasRevealingWalls`), so it is not sewn back in under the play.
+  for (const [nodeId, record] of [...batchByNode]) {
+    if (!isNodeRevealing(nodeId)) continue
+    staleLevels.add(record.levelId)
+    releaseWall(nodeId)
+    changed = true
+  }
+
   // A tinted wall paints itself through materials the merged mesh never reads,
   // so it goes back to drawing its own geometry for as long as it is lit. It
   // stays out afterwards: one wall short of a batch is not worth re-sewing a
@@ -398,6 +528,35 @@ function runBatchFrame(
     releaseWall(nodeId)
     changed = true
   }
+
+  // Only cutaway hides walls one by one; `up` hides none and the other modes
+  // stand the batch down, so the stamp scan is worth a frame only there.
+  const cutawayHiddenWalls = new Set<string>()
+  if (useViewer.getState().wallMode === 'cutaway') {
+    for (const nodeId of wallIds) {
+      const mesh = sceneRegistry.nodes.get(nodeId)
+      if (mesh?.userData.wallHidden === true) cutawayHiddenWalls.add(nodeId)
+    }
+  }
+  for (const nodeId of cutawayHiddenWalls) {
+    const record = batchByNode.get(nodeId)
+    if (!record) continue
+    releaseWall(nodeId)
+    staleLevels.add(record.levelId)
+    changed = true
+  }
+  // A stamp that lifts hands the wall back to its own draw call, and nothing
+  // else marks the level — so the flip itself has to, or the wall would stay
+  // out of the merged mesh until an unrelated edit re-sews the floor.
+  for (const nodeId of lastCutawayHiddenWalls) {
+    if (cutawayHiddenWalls.has(nodeId)) continue
+    const node = nodes[nodeId as AnyNodeId]
+    if (node?.type === 'wall' && node.parentId) staleLevels.add(node.parentId)
+    changed = true
+  }
+  lastCutawayHiddenWalls = cutawayHiddenWalls
+  const excludedNodeIds = new Set(cutawayHiddenWalls)
+  for (const nodeId of tintedWalls) excludedNodeIds.add(nodeId)
 
   // A theme, texture or material-library switch re-makes every wall's
   // materials without marking a single node, so the merged copies have to be
@@ -421,13 +580,11 @@ function runBatchFrame(
     }
   }
 
-  // Two things make merging unsound, and both are handled the same way: the
-  // batch stands down for as long as they hold, and sews the floors back
-  // together once they lift. Isolation hides everything outside the focused
-  // subtree, and a level's merged mesh hangs off the level root — so it goes
-  // dark with everything else, leaving a focused batched wall drawn by nobody.
-  // Every wall mode but `up` re-assigns wall materials the merged mesh does not
-  // follow. See `canBatchWalls`.
+  // Isolation, `down` and `translucent` make batching unsound, so the batch
+  // stands down while they hold and sews the floors back together once they
+  // lift. `cutaway` stays live because WallCutout stamps hidden walls at
+  // priority 0 and this system releases them per wall at priority 5 in the
+  // same frame. See `canBatchWalls`.
   const suspended = !canBatchWalls(useViewer.getState().wallMode, isIsolationActive())
   if (suspended !== batchingSuspended) {
     batchingSuspended = suspended
@@ -465,10 +622,22 @@ function runBatchFrame(
     return
   }
 
+  const revealingLevels = new Set<string>()
   for (const levelId of staleLevels) {
-    if (unbatchedWallCount(levelId, tintedWalls) >= MIN_BATCH_WALLS) {
-      mergeLevel(levelId, tintedWalls)
+    if (levelHasRevealingWalls(levelId)) {
+      revealingLevels.add(levelId)
+      continue
+    }
+    if (unbatchedWallCount(levelId, excludedNodeIds) >= MIN_BATCH_WALLS) {
+      mergeLevel(levelId, excludedNodeIds)
     }
   }
   staleLevels.clear()
+  if (revealingLevels.size === 0) return
+  for (const levelId of revealingLevels) staleLevels.add(levelId)
+  if (wakeRef.current) clearTimeout(wakeRef.current)
+  wakeRef.current = setTimeout(() => {
+    wakeRef.current = null
+    invalidate()
+  }, BATCH_SETTLE_MS + 20)
 }

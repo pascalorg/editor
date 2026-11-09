@@ -1,7 +1,29 @@
 import { describe, expect, test } from 'bun:test'
-import { healSceneNodes } from './heal-scene-graph'
+import { healSceneNodes, repairClaimedParentLinks, repairHostChildLinks } from './heal-scene-graph'
 
 describe('healSceneNodes', () => {
+  test('repairs missing reverse child links on saved hosts without mutating source nodes', () => {
+    const input = {
+      site_a: { id: 'site_a', type: 'site', parentId: null },
+      building_a: { id: 'building_a', type: 'building', parentId: 'site_a' },
+      level_a: { id: 'level_a', type: 'level', parentId: 'building_a', children: ['item_a'] },
+      item_a: { id: 'item_a', type: 'item', parentId: 'level_a', children: [] },
+      item_b: { id: 'item_b', type: 'item', parentId: 'item_a' },
+    }
+    const snapshot = structuredClone(input)
+    const healed = healSceneNodes(input)
+    expect(healed.nodes.site_a).toMatchObject({ children: ['building_a'] })
+    expect(healed.nodes.building_a).toMatchObject({ children: ['level_a'] })
+    expect(healed.nodes.item_a).toMatchObject({ children: ['item_b'] })
+    expect(healed.nodes.level_a).toBe(input.level_a)
+    expect(input).toEqual(snapshot)
+    expect(healSceneNodes(healed.nodes).repairedChildLinkNodeIds).toEqual([])
+    expect(healSceneNodes(healed.nodes).nodes).toEqual(healed.nodes)
+    expect(healSceneNodes(Object.fromEntries(Object.entries(input).reverse())).nodes).toEqual(
+      healed.nodes,
+    )
+  })
+
   test('strips non-string (null) children entries', () => {
     const { nodes, strippedChildRefs } = healSceneNodes({
       wall_a: {
@@ -175,5 +197,20 @@ describe('healSceneNodes', () => {
     expect(repairedParentLinkNodeIds).toEqual([])
     expect((nodes.site_root as { parentId: null }).parentId).toBeNull()
     expect((nodes.level_gone as { parentId: string }).parentId).toBe('building_missing')
+  })
+
+  // The hosted MCP's load runs the parent repair and this one alone: a level stored without
+  // children gets the same list, in the same order, as the editor's whole heal gives it.
+  test('a level stored without children lists the nodes naming it in scene order, on either load', () => {
+    const input = {
+      level_a: { id: 'level_a', type: 'level', parentId: null },
+      column_z: { id: 'column_z', type: 'column', parentId: 'level_a' },
+      column_a: { id: 'column_a', type: 'column', parentId: 'level_a' },
+    }
+    const healed = healSceneNodes(input)
+    expect(healed.nodes.level_a).toMatchObject({ children: ['column_z', 'column_a'] })
+    expect(healed.repairedChildLinkNodeIds).toEqual(['level_a'])
+    const loaded = repairHostChildLinks(repairClaimedParentLinks(input).nodes)
+    expect(loaded.nodes).toEqual(healed.nodes)
   })
 })

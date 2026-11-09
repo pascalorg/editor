@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, test } from 'bun:test'
-import { Client } from '@modelcontextprotocol/sdk/client/index.js'
-import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import { Client } from '@modelcontextprotocol/client'
+import { InMemoryTransport, McpServer } from '@modelcontextprotocol/server'
 import { SceneBridge } from '../bridge/scene-bridge'
 import { registerExportGlb } from './export-glb'
 
@@ -20,12 +19,12 @@ describe('export_glb', () => {
     await Promise.all([server.connect(srvT), client.connect(cliT)])
   })
 
-  test('returns not_implemented structurally (not an error)', async () => {
+  test('returns not_implemented as a truthful tool error', async () => {
     const result = await client.callTool({
       name: 'export_glb',
       arguments: {},
     })
-    expect(result.isError).toBeFalsy()
+    expect(result.isError).toBe(true)
     const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]!.text)
     expect(parsed.status).toBe('not_implemented')
     expect(typeof parsed.reason).toBe('string')

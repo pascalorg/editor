@@ -1,6 +1,9 @@
-import type { BlockTopology, MaterialRef } from '@pascal-app/core'
-
-export const BLOCK_BODY_SLOT_ID = 'body'
+import {
+  BLOCK_BODY_SLOT_ID,
+  type BlockTopology,
+  blockMaterialSlotIds,
+  type MaterialRef,
+} from '@pascal-app/core'
 
 export type BlockMaterialSlots = Record<string, MaterialRef> | undefined
 export type BlockMaterialSlotNames = Record<string, string> | undefined
@@ -50,18 +53,6 @@ export type BlockAssignedMaterialSlotCreationResult =
       slotNames: BlockMaterialSlotNames
       changed: false
     }
-
-export function blockMaterialSlotIds(
-  topology: BlockTopology,
-  slots: BlockMaterialSlots,
-  slotNames?: BlockMaterialSlotNames,
-): string[] {
-  const slotIds = new Set<string>([BLOCK_BODY_SLOT_ID])
-  for (const slotId of Object.keys(slotNames ?? {})) slotIds.add(slotId)
-  for (const slotId of Object.keys(slots ?? {})) slotIds.add(slotId)
-  for (const face of topology.faces) slotIds.add(face.materialSlot)
-  return [...slotIds]
-}
 
 export function unpaintedBlockMaterialSlotIds(
   topology: BlockTopology,

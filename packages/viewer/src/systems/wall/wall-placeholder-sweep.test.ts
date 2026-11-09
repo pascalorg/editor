@@ -81,3 +81,14 @@ describe('sweepUnbuiltWalls', () => {
     expect(sweep()).toEqual([])
   })
 })
+
+describe('built stamp', () => {
+  test('a degenerate rebuilt geometry is not mistaken for the placeholder', () => {
+    expect(
+      isPlaceholderWallGeometry({
+        userData: { built: true },
+        getAttribute: () => ({ count: 3 }),
+      }),
+    ).toBe(false)
+  })
+})

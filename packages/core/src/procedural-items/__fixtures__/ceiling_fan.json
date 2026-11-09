@@ -1,0 +1,167 @@
+{
+  "version": 1,
+  "name": "Ceiling Fan",
+  "description": "ceiling fan",
+  "parameters": [
+    {
+      "id": "scale",
+      "label": "Scale",
+      "default": 1,
+      "min": 1,
+      "max": 1,
+      "step": 1,
+      "unit": "count"
+    }
+  ],
+  "slots": [
+    {
+      "id": "metal",
+      "label": "Metal",
+      "color": "#777777"
+    },
+    {
+      "id": "wood",
+      "label": "Wood",
+      "color": "#8b6644"
+    }
+  ],
+  "parts": [
+    {
+      "id": "housing",
+      "label": "Housing",
+      "count": 1,
+      "shapes": [
+        {
+          "id": "stem",
+          "primitive": "cylinder",
+          "slot": "metal",
+          "size": [0.08, 0.4, 0.08],
+          "position": [0, 2.3, 0]
+        },
+        {
+          "id": "hub",
+          "primitive": "ellipsoid",
+          "slot": "metal",
+          "size": [0.3, 0.14, 0.3],
+          "position": [0, 2.1, 0]
+        }
+      ]
+    },
+    {
+      "id": "rotor",
+      "label": "Rotor",
+      "count": 5,
+      "shapes": [
+        {
+          "id": "blade",
+          "primitive": "roundedBox",
+          "slot": "wood",
+          "size": [0.85, 0.04, 0.16],
+          "position": [
+            {
+              "op": "mul",
+              "args": [
+                0.53,
+                {
+                  "op": "cos",
+                  "args": [
+                    {
+                      "op": "mul",
+                      "args": [
+                        {
+                          "op": "div",
+                          "args": [
+                            {
+                              "op": "mul",
+                              "args": ["index", 2]
+                            },
+                            5
+                          ]
+                        },
+                        3.141592653589793
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            2.1,
+            {
+              "op": "mul",
+              "args": [
+                0.53,
+                {
+                  "op": "sin",
+                  "args": [
+                    {
+                      "op": "mul",
+                      "args": [
+                        {
+                          "op": "div",
+                          "args": [
+                            {
+                              "op": "mul",
+                              "args": ["index", 2]
+                            },
+                            5
+                          ]
+                        },
+                        3.141592653589793
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          "rotation": [
+            0,
+            {
+              "op": "mul",
+              "args": [
+                -1,
+                {
+                  "op": "mul",
+                  "args": [
+                    {
+                      "op": "div",
+                      "args": [
+                        {
+                          "op": "mul",
+                          "args": ["index", 2]
+                        },
+                        5
+                      ]
+                    },
+                    3.141592653589793
+                  ]
+                }
+              ]
+            },
+            0
+          ],
+          "radius": 0.015
+        }
+      ],
+      "motion": {
+        "kind": "spin",
+        "pivot": [0, 2.1, 0],
+        "axis": "y",
+        "radiansPerSecond": 6
+      }
+    }
+  ],
+  "constraints": [],
+  "mounting": {
+    "attachTo": "ceiling",
+    "reference": "top"
+  },
+  "surfaces": [
+    {
+      "id": "top",
+      "label": "Top",
+      "position": [0, 2.5, 0],
+      "size": [0.1, 0.1]
+    }
+  ]
+}

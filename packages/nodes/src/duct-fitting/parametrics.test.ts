@@ -1,4 +1,4 @@
-import { beforeAll, beforeEach, describe, expect, mock, test } from 'bun:test'
+import { beforeEach, describe, expect, test } from 'bun:test'
 import {
   type AnyNode,
   type AnyNodeId,
@@ -7,9 +7,8 @@ import {
   useScene,
 } from '@pascal-app/core'
 import { readAutoOffsetTag, withAutoOffsetTag } from '../shared/auto-offset-tag'
+import { ductFittingParametrics } from './parametrics'
 import { getDuctFittingPorts } from './ports'
-
-let ductFittingParametrics: typeof import('./parametrics')['ductFittingParametrics']
 
 type Point = [number, number, number]
 
@@ -60,13 +59,6 @@ function verticalRectRunFrom(point: Point, roll: number) {
 }
 
 describe('ductFittingParametrics', () => {
-  beforeAll(async () => {
-    mock.module('@pascal-app/editor', () => ({
-      ActionButton: () => null,
-    }))
-    ;({ ductFittingParametrics } = await import('./parametrics'))
-  })
-
   beforeEach(() => {
     useScene.setState({
       nodes: {},
@@ -102,8 +94,8 @@ describe('ductFittingParametrics', () => {
     const ductUpdate = updates.find((u) => u.id === duct.id)
 
     expect(ductUpdate).toBeDefined()
-    expect((ductUpdate?.data as Partial<DuctSegmentNode>).path).toBeDefined()
-    expect((ductUpdate?.data as Partial<DuctSegmentNode>).roll).toBeUndefined()
+    expect((ductUpdate!.data as Partial<DuctSegmentNode>).path).toBeDefined()
+    expect((ductUpdate!.data as Partial<DuctSegmentNode>).roll).toBeUndefined()
   })
 
   test('resizing a fitting refreshes a connected duct auto-offset base path', () => {
@@ -172,10 +164,10 @@ describe('ductFittingParametrics', () => {
     const inletUpdate = updates.find((u) => u.id === inletRun.id)
 
     // Both mated endpoints snap back to the junction (the original corner).
-    expect((outletUpdate?.data as Partial<DuctSegmentNode>).path?.[0]).toEqual([
+    expect((outletUpdate!.data as Partial<DuctSegmentNode>).path?.[0]).toEqual([
       ...fitting.position,
     ])
-    expect((inletUpdate?.data as Partial<DuctSegmentNode>).path?.[0]).toEqual([...fitting.position])
+    expect((inletUpdate!.data as Partial<DuctSegmentNode>).path?.[0]).toEqual([...fitting.position])
   })
 
   test('delete repair matches the 5 cm live connectivity mate tolerance', () => {
@@ -194,7 +186,7 @@ describe('ductFittingParametrics', () => {
     const updates = ductFittingParametrics.onDelete?.(fitting, nodes) ?? []
     const outletUpdate = updates.find((u) => u.id === outletRun.id)
 
-    expect((outletUpdate?.data as Partial<DuctSegmentNode>).path?.[0]).toEqual([
+    expect((outletUpdate!.data as Partial<DuctSegmentNode>).path?.[0]).toEqual([
       ...fitting.position,
     ])
   })

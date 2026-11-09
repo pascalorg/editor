@@ -8,7 +8,9 @@ import {
   sceneApiPreflight,
   withSceneApiHeaders,
 } from '@/lib/scene-api-security'
+import { deleteSceneShare } from '@/lib/scene-sharing'
 import { getSceneOperations } from '@/lib/scene-store-server'
+import { deleteSceneThumbnail, sceneThumbnailUrl } from '@/lib/scene-thumbnails'
 
 export const dynamic = 'force-dynamic'
 
@@ -48,9 +50,16 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     if (!scene) {
       return sceneApiJson(request, { error: 'not_found' }, { status: 404 })
     }
-    return sceneApiJson(request, scene, {
-      headers: { ETag: `"${scene.version}"` },
-    })
+    return sceneApiJson(
+      request,
+      {
+        ...scene,
+        thumbnailUrl: scene.thumbnailUrl ?? (await sceneThumbnailUrl(id)),
+      },
+      {
+        headers: { ETag: `"${scene.version}"` },
+      },
+    )
   } catch (error) {
     return handleStoreError(request, error)
   }
@@ -137,6 +146,8 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     if (!removed) {
       return sceneApiJson(request, { error: 'not_found' }, { status: 404 })
     }
+    await deleteSceneThumbnail(id).catch(() => {})
+    await deleteSceneShare(id).catch(() => {})
     return withSceneApiHeaders(request, new NextResponse(null, { status: 204 }))
   } catch (error) {
     return handleStoreError(request, error, { includeCurrentVersionFor: id })

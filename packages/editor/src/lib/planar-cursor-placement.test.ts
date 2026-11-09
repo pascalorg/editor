@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import {
+  offsetPlanPositionByLocalCenter,
   resolvePlanarCursorPosition,
   resolvePrioritizedPlanarCursorPosition,
 } from './planar-cursor-placement'
@@ -7,6 +8,83 @@ import {
 const snapHalf = (value: number) => Math.round(value / 0.5) * 0.5
 
 describe('resolvePlanarCursorPosition', () => {
+  test('absolute mode puts the unrotated footprint centre at the snapped cursor', () => {
+    const result = resolvePlanarCursorPosition({
+      cursor: [4.24, 2.26],
+      original: [0, 0],
+      anchor: null,
+      mode: 'absolute',
+      localCenter: [1.3, 0.5, 0.2],
+      snap: snapHalf,
+    })
+
+    expect(result.point).toEqual([2.7, 2.3])
+    expect(result.anchor).toBeNull()
+  })
+
+  test('absolute mode snaps the centre before deriving the rotated origin', () => {
+    const proposals: [number, number][] = []
+    const localCenter: [number, number, number] = [1.3, 0.5, 0.2]
+    const result = resolvePlanarCursorPosition({
+      cursor: [4.24, 2.26],
+      original: [0, 0],
+      anchor: null,
+      mode: 'absolute',
+      localCenter,
+      rotationY: Math.PI / 2,
+      snapPoint: (point) => {
+        proposals.push(point)
+        return [snapHalf(point[0]), snapHalf(point[1])]
+      },
+    })
+
+    expect(proposals).toEqual([[4.24, 2.26]])
+    expect(result.point[0]).toBeCloseTo(3.8)
+    expect(result.point[1]).toBeCloseTo(3.8)
+    const centre = offsetPlanPositionByLocalCenter(
+      [result.point[0], 0, result.point[1]],
+      localCenter,
+      Math.PI / 2,
+    )
+    expect(centre[0]).toBeCloseTo(4)
+    expect(centre[2]).toBeCloseTo(2.5)
+  })
+
+  test('absolute mode follows the unsnapped cursor at an oblique rotation', () => {
+    const localCenter: [number, number, number] = [1.5, 0.5, -0.3]
+    const result = resolvePlanarCursorPosition({
+      cursor: [-2.13, 6.27],
+      original: [0, 0],
+      anchor: null,
+      mode: 'absolute',
+      localCenter,
+      rotationY: -Math.PI / 4,
+    })
+    const centre = offsetPlanPositionByLocalCenter(
+      [result.point[0], 0, result.point[1]],
+      localCenter,
+      -Math.PI / 4,
+    )
+
+    expect(centre[0]).toBeCloseTo(-2.13)
+    expect(centre[2]).toBeCloseTo(6.27)
+  })
+
+  test('relative mode ignores the footprint centre and rotation', () => {
+    const result = resolvePlanarCursorPosition({
+      cursor: [4.9, 5.2],
+      original: [10, 20],
+      anchor: [4.1, 6.1],
+      mode: 'relative',
+      localCenter: [1.3, 0.5, 0.2],
+      rotationY: Math.PI / 2,
+      snap: snapHalf,
+    })
+
+    expect(result.point).toEqual([11, 19])
+    expect(result.anchor).toEqual([4.1, 6.1])
+  })
+
   test('absolute mode places the point directly at the snapped cursor', () => {
     const result = resolvePlanarCursorPosition({
       cursor: [1.24, -2.26],
@@ -103,6 +181,46 @@ describe('resolvePlanarCursorPosition', () => {
 })
 
 describe('resolvePrioritizedPlanarCursorPosition', () => {
+  test('attachment receives the corrected raw origin and returns the final origin', () => {
+    const proposals: [number, number][] = []
+    const result = resolvePrioritizedPlanarCursorPosition({
+      cursor: [4.24, 2.26],
+      original: [0, 0],
+      anchor: null,
+      mode: 'absolute',
+      localCenter: [1.3, 0.5, 0.2],
+      rotationY: Math.PI / 2,
+      snapPoint: () => {
+        throw new Error('Grid snapping must not run after attachment')
+      },
+      resolveAttachment: (proposal) => {
+        proposals.push(proposal)
+        return [3, 5]
+      },
+    })
+
+    expect(proposals).toHaveLength(1)
+    expect(proposals[0]![0]).toBeCloseTo(4.04)
+    expect(proposals[0]![1]).toBeCloseTo(3.56)
+    expect(result.point).toEqual([3, 5])
+    expect(result.attachmentSnapped).toBe(true)
+  })
+
+  test('snaps the footprint centre when attachment declines the corrected origin', () => {
+    const result = resolvePrioritizedPlanarCursorPosition({
+      cursor: [4.24, 2.26],
+      original: [0, 0],
+      anchor: null,
+      mode: 'absolute',
+      localCenter: [1.3, 0.5, 0.2],
+      snapPoint: ([x, z]) => [snapHalf(x), snapHalf(z)],
+      resolveAttachment: () => null,
+    })
+
+    expect(result.point).toEqual([2.7, 2.3])
+    expect(result.attachmentSnapped).toBe(false)
+  })
+
   test('wall attachment receives the raw proposal and wins over grid snapping', () => {
     const attachmentProposals: [number, number][] = []
     const result = resolvePrioritizedPlanarCursorPosition({

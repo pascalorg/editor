@@ -8,6 +8,7 @@ export type RegistryToolContextValue = {
   isCameraDragging: () => boolean
   sceneApi: SceneApi
   selectNode: (nodeId: AnyNodeId) => void
+  unit: 'metric' | 'imperial'
 }
 
 const RegistryToolContext = createContext<RegistryToolContextValue | null>(null)

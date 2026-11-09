@@ -1,4 +1,5 @@
 import type { DoorNode, WindowNode } from '@pascal-app/core'
+import { getDoorOpeningSize } from '@pascal-app/core'
 import * as THREE from 'three'
 
 export type OpeningCutoutNode = DoorNode | WindowNode
@@ -46,7 +47,9 @@ export function buildOpeningCutoutShape(
   const height = Math.max(top - bottom, 1e-6)
   const shape = new THREE.Shape()
 
-  if (opening.openingShape === 'arch') {
+  const size = getDoorOpeningSize(opening)
+  const fixedLights = size.width !== opening.width || size.height !== opening.height
+  if (!fixedLights && opening.openingShape === 'arch') {
     const halfWidth = width / 2
     const centerX = (left + right) / 2
     const archHeight = Math.min(Math.max(opening.archHeight ?? width / 2, 0.01), height)
@@ -67,7 +70,7 @@ export function buildOpeningCutoutShape(
     return shape
   }
 
-  if (opening.openingShape === 'rounded') {
+  if (!fixedLights && opening.openingShape === 'rounded') {
     const radii = getRoundedOpeningRadii(opening, width, height)
     applyRoundedOpeningShape(shape, left, right, bottom, top, radii)
     return shape
@@ -136,7 +139,8 @@ export function getOpeningCutoutBottomPadding(opening: OpeningCutoutNode, bottom
   return bottom < 0.005 && hasFlatOpeningCutoutBottom(opening) ? OPENING_CUTOUT_BOTTOM_PADDING : 0
 }
 
-function getRoundedOpeningRadii(
+/** The corner radii a rounded opening's cutout is cut with, clamped to fit `width` × `height`. */
+export function getRoundedOpeningRadii(
   opening: OpeningCutoutNode,
   width: number,
   height: number,

@@ -3,7 +3,7 @@ import {
   type FloorplanGeometry,
   type FloorplanPoint,
   type GeometryContext,
-  getWallThickness,
+  getWallLocalFaceZ,
   type SpaceBoundaryFace,
   type WallNode,
   type ZoneNode,
@@ -186,7 +186,7 @@ function buildRectilinearClearDimensions(
   stroke: string,
 ): FloorplanGeometry[] {
   const vertices = clearFacePolygon(faceLines)
-  if (!vertices || !isRectilinearPolygon(vertices)) return []
+  if (!(vertices && isRectilinearPolygon(vertices))) return []
 
   const dimensions: FloorplanGeometry[] = []
   const seen = new Set<string>()
@@ -230,7 +230,7 @@ function offsetBoundaryFace(boundary: SpaceBoundaryFace, wall: WallNode): FaceLi
   if (!wallDirection) return null
   const normal: FloorplanPoint = [-wallDirection[1], wallDirection[0]]
   const side = boundary.face === 'front' ? 1 : -1
-  const offset = (getWallThickness(wall) / 2) * side
+  const offset = getWallLocalFaceZ(wall, side > 0 ? 'a' : 'b')
   return {
     start: [first[0] + normal[0] * offset, first[1] + normal[1] * offset],
     end: [last[0] + normal[0] * offset, last[1] + normal[1] * offset],

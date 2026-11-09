@@ -7,11 +7,22 @@ import {
   nodeRegistry,
   registerNode,
 } from '@pascal-app/core'
+import { sdfChecksFromEnv, setSdfChecks } from '@pascal-app/core/usage-field'
 import { registerEditorHostPanel } from '@pascal-app/editor'
 import { builtinPlugin } from '@pascal-app/nodes'
 import { bonesHostPanel, bonesPlugin } from '@pascal-app/plugin-bones'
-import { streetscapeHostPanel, streetscapePlugin } from '@pascal-app/plugin-streetscape'
+import {
+  environmentHostPanel,
+  environmentPlugin,
+  environmentPresentation,
+} from '@pascal-app/plugin-environment'
 import { treesHostPanel, treesPlugin } from '@pascal-app/plugin-trees'
+import { registerViewerPresentation } from '@pascal-app/viewer'
+import { webXRHostPanel, webXRPlugin } from '@webxr/plugin'
+
+// Usage checks (passages, turning circles, flow widths) are off unless the build says so; Next
+// inlines the NEXT_PUBLIC_ mirror of the server's PASCAL_SDF_CHECKS.
+setSdfChecks(sdfChecksFromEnv(process.env.NEXT_PUBLIC_PASCAL_SDF_CHECKS))
 
 // Idempotency guards: HMR can reload this module, but `registerNode`
 // throws on duplicate kinds. Flags live in the module closure so they
@@ -88,18 +99,40 @@ export async function loadExternalPlugins(): Promise<void> {
 // so it is registered separately from the core plugin manifest.
 extendPluginDiscovery(async () => [treesPlugin])
 registerEditorHostPanel(treesHostPanel)
+extendPluginDiscovery(async () => [environmentPlugin])
+registerEditorHostPanel(environmentHostPanel)
+registerViewerPresentation(environmentPresentation)
 extendPluginDiscovery(async () => [bonesPlugin])
 // Opt-in: Bones ships uninstalled — users enable it per scene from the
 // Plugins panel (engineering X-ray is a specialist view, not a default).
 registerEditorHostPanel({ ...bonesHostPanel, defaultInstalled: false })
 extendPluginDiscovery(async () => [mintPlugin])
 registerEditorHostPanel(mintHostPanel)
-extendPluginDiscovery(async () => [streetscapePlugin])
-// The upstream manifest still names 'Pascal' as creator; credit the author.
-registerEditorHostPanel({
-  ...streetscapeHostPanel,
-  creator: { name: 'Sudhir Yadav', url: 'https://github.com/sudhir9297' },
+extendPluginDiscovery(async () => {
+  const { poolHostPanel, poolPlugin } = await import('@pascal-app/plugin-pool')
+  registerEditorHostPanel(poolHostPanel)
+  return [poolPlugin]
 })
+extendPluginDiscovery(async () => {
+  const { landscapeHostPanel, landscapePlugin } = await import('@pascal-app/plugin-landscape')
+  registerEditorHostPanel(landscapeHostPanel)
+  return [landscapePlugin]
+})
+extendPluginDiscovery(async () => {
+  const { bathSpaceHostPanel, bathSpacePlugin } = await import('@pascal-app/plugin-bath-space')
+  registerEditorHostPanel(bathSpaceHostPanel)
+  return [bathSpacePlugin]
+})
+extendPluginDiscovery(async () => {
+  const { streetscapeHostPanel, streetscapePlugin } = await import('@pascal-app/plugin-streetscape')
+  registerEditorHostPanel({
+    ...streetscapeHostPanel,
+    creator: { name: 'Sudhir Yadav', url: 'https://github.com/sudhir9297' },
+  })
+  return [streetscapePlugin]
+})
+extendPluginDiscovery(async () => [webXRPlugin])
+registerEditorHostPanel(webXRHostPanel)
 
 loadBuiltinsSync()
 void loadExternalPlugins()

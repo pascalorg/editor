@@ -1,8 +1,19 @@
 import { describe, expect, test } from 'bun:test'
 import { BoxGeometry, Group, Mesh, MeshBasicMaterial } from 'three'
+import { MeshBasicNodeMaterial } from 'three/webgpu'
 import { disposeObject3DResources } from './dispose-object3d'
 
 describe('disposeObject3DResources', () => {
+  test('disposes a distributed WebGPU node material through the resource lifecycle', () => {
+    const material = new MeshBasicNodeMaterial()
+    let disposals = 0
+    material.addEventListener('dispose', () => disposals++)
+
+    disposeObject3DResources(new Mesh(new BoxGeometry(), material))
+
+    expect(disposals).toBe(1)
+  })
+
   test('disposes nested geometry and materials once', () => {
     const root = new Group()
     const nested = new Group()

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import type { AnyNode, AnyNodeId } from '@pascal-app/core'
+import { type AnyNode, type AnyNodeId, DoorNode, LevelNode, WallNode } from '@pascal-app/core'
 import { cabinetModuleParentFrame } from '../move-frame'
 import { CabinetModuleNode, CabinetNode } from '../schema'
 
@@ -33,6 +33,7 @@ function module(
 
 const magneticSnap = cabinetModuleParentFrame.magneticSnap!
 const magneticSnapMatches = cabinetModuleParentFrame.magneticSnapMatches!
+const isValidPosition = cabinetModuleParentFrame.isValidPosition!
 
 describe('cabinetModuleParentFrame.magneticSnap', () => {
   test('pulls a module flush against a sibling edge within the 8 cm threshold', () => {
@@ -94,6 +95,73 @@ describe('cabinetModuleParentFrame.magneticSnap', () => {
 
     expect(snapped[0]).toBeCloseTo(0.74)
     expect(snapped[0] + moving.width / 2).toBeCloseTo(right.position[0] - right.width / 2)
+  })
+})
+
+describe('cabinetModuleParentFrame.isValidPosition', () => {
+  test('rejects a dragged module while its footprint overlaps a sibling', () => {
+    const moving = module('cabinet-module_moving', [0.65, 0.1, 0])
+    const sibling = module('cabinet-module_sibling', [0, 0.1, 0])
+    const { run, nodes } = runFixture([moving, sibling])
+
+    expect(isValidPosition({ node: moving, parent: run, position: [0.4, 0.1, 0], nodes })).toBe(
+      false,
+    )
+  })
+
+  test('accepts a dragged module once its footprint clears siblings', () => {
+    const moving = module('cabinet-module_moving', [0.65, 0.1, 0])
+    const sibling = module('cabinet-module_sibling', [0, 0.1, 0])
+    const { run, nodes } = runFixture([moving, sibling])
+
+    expect(isValidPosition({ node: moving, parent: run, position: [0.65, 0.1, 0], nodes })).toBe(
+      true,
+    )
+  })
+
+  test('rejects a wall-snapped module that overlaps a door opening', () => {
+    const level = LevelNode.parse({ id: 'level_magnet-opening' })
+    const door = DoorNode.parse({
+      id: 'door_magnet-opening',
+      parentId: 'wall_magnet-opening',
+      position: [1, 1.05, 0],
+      width: 0.9,
+      height: 2.1,
+    })
+    const wall = WallNode.parse({
+      id: 'wall_magnet-opening',
+      parentId: level.id,
+      children: [door.id],
+      start: [0, 0],
+      end: [4, 0],
+    })
+    const run = CabinetNode.parse({
+      id: 'cabinet_magnet-opening',
+      parentId: level.id,
+      children: ['cabinet-module_moving'],
+      position: [0, 0, 0],
+    })
+    const moving = module('cabinet-module_moving', [0, 0.1, 0])
+    const nodes = Object.fromEntries(
+      [level, wall, door, run, moving].map((node) => [node.id, node as AnyNode]),
+    ) as Record<string, AnyNode>
+
+    expect(isValidPosition({ node: moving, parent: run, position: [1, 0.1, 0.39], nodes })).toBe(
+      false,
+    )
+    expect(isValidPosition({ node: moving, parent: run, position: [2, 0.1, 0.39], nodes })).toBe(
+      true,
+    )
+  })
+
+  test('does not reject aligned widths when depth bands are separated', () => {
+    const moving = module('cabinet-module_moving', [0.4, 0.1, 0.8])
+    const sibling = module('cabinet-module_sibling', [0, 0.1, 0])
+    const { run, nodes } = runFixture([moving, sibling])
+
+    expect(isValidPosition({ node: moving, parent: run, position: [0.4, 0.1, 0.8], nodes })).toBe(
+      true,
+    )
   })
 })
 

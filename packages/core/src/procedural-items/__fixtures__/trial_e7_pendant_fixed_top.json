@@ -1,0 +1,1119 @@
+{
+  "version": 1,
+  "name": "Five-drop smoked glass pendant",
+  "description": "Linear canopy with five staggered cord drops, smoked glass bell shades and warm bulbs; each drop is a light.",
+  "classification": {
+    "category": "lighting",
+    "functionTags": ["pendant", "ceiling-light"],
+    "tags": ["dining"]
+  },
+  "mounting": {
+    "attachTo": "ceiling",
+    "reference": "canopy_top"
+  },
+  "surfaces": [
+    {
+      "id": "canopy_top",
+      "label": "Canopy top",
+      "position": [0, 1.025, 0],
+      "size": [1.2, 0.18]
+    }
+  ],
+  "parameters": [
+    {
+      "id": "drop_1",
+      "label": "Drop 1",
+      "default": 0.79,
+      "min": 0.3,
+      "max": 0.9,
+      "step": 0.01,
+      "unit": "m"
+    },
+    {
+      "id": "drop_2",
+      "label": "Drop 2",
+      "default": 0.59,
+      "min": 0.3,
+      "max": 0.9,
+      "step": 0.01,
+      "unit": "m"
+    },
+    {
+      "id": "drop_3",
+      "label": "Drop 3",
+      "default": 0.75,
+      "min": 0.3,
+      "max": 0.9,
+      "step": 0.01,
+      "unit": "m"
+    },
+    {
+      "id": "drop_4",
+      "label": "Drop 4",
+      "default": 0.48,
+      "min": 0.3,
+      "max": 0.9,
+      "step": 0.01,
+      "unit": "m"
+    },
+    {
+      "id": "drop_5",
+      "label": "Drop 5",
+      "default": 0.64,
+      "min": 0.3,
+      "max": 0.9,
+      "step": 0.01,
+      "unit": "m"
+    },
+    {
+      "id": "spacing",
+      "label": "Spacing",
+      "default": 0.24,
+      "min": 0.2,
+      "max": 0.24,
+      "step": 0.01,
+      "unit": "m"
+    }
+  ],
+  "slots": [
+    {
+      "id": "dark",
+      "label": "Canopy and cords",
+      "color": "#1d1e20",
+      "finish": "metal"
+    },
+    {
+      "id": "smoke",
+      "label": "Smoked glass",
+      "color": "#5a4e44",
+      "finish": "glass"
+    },
+    {
+      "id": "bulb",
+      "label": "Bulb",
+      "color": "#ffd9a0"
+    }
+  ],
+  "parts": [
+    {
+      "id": "canopy",
+      "label": "Canopy",
+      "count": 1,
+      "shapes": [
+        {
+          "id": "plate",
+          "primitive": "box",
+          "slot": "dark",
+          "size": [1.2, 0.026, 0.18],
+          "position": [0, 1.012, 0]
+        }
+      ]
+    },
+    {
+      "id": "drop",
+      "label": "Drop",
+      "count": 5,
+      "light": {
+        "position": [
+          {
+            "op": "add",
+            "args": [
+              -0.48,
+              {
+                "op": "mul",
+                "args": ["index", "spacing"]
+              }
+            ]
+          },
+          {
+            "op": "add",
+            "args": [
+              {
+                "op": "sub",
+                "args": [
+                  1.025,
+                  {
+                    "op": "add",
+                    "args": [
+                      {
+                        "op": "mul",
+                        "args": [
+                          "drop_1",
+                          {
+                            "op": "max",
+                            "args": [
+                              0,
+                              {
+                                "op": "sub",
+                                "args": [
+                                  1,
+                                  {
+                                    "op": "abs",
+                                    "args": [
+                                      {
+                                        "op": "sub",
+                                        "args": ["index", 0]
+                                      }
+                                    ]
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "op": "mul",
+                        "args": [
+                          "drop_2",
+                          {
+                            "op": "max",
+                            "args": [
+                              0,
+                              {
+                                "op": "sub",
+                                "args": [
+                                  1,
+                                  {
+                                    "op": "abs",
+                                    "args": [
+                                      {
+                                        "op": "sub",
+                                        "args": ["index", 1]
+                                      }
+                                    ]
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "op": "mul",
+                        "args": [
+                          "drop_3",
+                          {
+                            "op": "max",
+                            "args": [
+                              0,
+                              {
+                                "op": "sub",
+                                "args": [
+                                  1,
+                                  {
+                                    "op": "abs",
+                                    "args": [
+                                      {
+                                        "op": "sub",
+                                        "args": ["index", 2]
+                                      }
+                                    ]
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "op": "mul",
+                        "args": [
+                          "drop_4",
+                          {
+                            "op": "max",
+                            "args": [
+                              0,
+                              {
+                                "op": "sub",
+                                "args": [
+                                  1,
+                                  {
+                                    "op": "abs",
+                                    "args": [
+                                      {
+                                        "op": "sub",
+                                        "args": ["index", 3]
+                                      }
+                                    ]
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "op": "mul",
+                        "args": [
+                          "drop_5",
+                          {
+                            "op": "max",
+                            "args": [
+                              0,
+                              {
+                                "op": "sub",
+                                "args": [
+                                  1,
+                                  {
+                                    "op": "abs",
+                                    "args": [
+                                      {
+                                        "op": "sub",
+                                        "args": ["index", 4]
+                                      }
+                                    ]
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              -0.12
+            ]
+          },
+          0
+        ],
+        "color": "#ffd9a0",
+        "intensity": 1.5,
+        "distance": 4,
+        "emissiveSlot": "bulb"
+      },
+      "shapes": [
+        {
+          "id": "cord",
+          "primitive": "cylinder",
+          "slot": "dark",
+          "size": [
+            0.006,
+            {
+              "op": "add",
+              "args": [
+                {
+                  "op": "mul",
+                  "args": [
+                    "drop_1",
+                    {
+                      "op": "max",
+                      "args": [
+                        0,
+                        {
+                          "op": "sub",
+                          "args": [
+                            1,
+                            {
+                              "op": "abs",
+                              "args": [
+                                {
+                                  "op": "sub",
+                                  "args": ["index", 0]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "op": "mul",
+                  "args": [
+                    "drop_2",
+                    {
+                      "op": "max",
+                      "args": [
+                        0,
+                        {
+                          "op": "sub",
+                          "args": [
+                            1,
+                            {
+                              "op": "abs",
+                              "args": [
+                                {
+                                  "op": "sub",
+                                  "args": ["index", 1]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "op": "mul",
+                  "args": [
+                    "drop_3",
+                    {
+                      "op": "max",
+                      "args": [
+                        0,
+                        {
+                          "op": "sub",
+                          "args": [
+                            1,
+                            {
+                              "op": "abs",
+                              "args": [
+                                {
+                                  "op": "sub",
+                                  "args": ["index", 2]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "op": "mul",
+                  "args": [
+                    "drop_4",
+                    {
+                      "op": "max",
+                      "args": [
+                        0,
+                        {
+                          "op": "sub",
+                          "args": [
+                            1,
+                            {
+                              "op": "abs",
+                              "args": [
+                                {
+                                  "op": "sub",
+                                  "args": ["index", 3]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "op": "mul",
+                  "args": [
+                    "drop_5",
+                    {
+                      "op": "max",
+                      "args": [
+                        0,
+                        {
+                          "op": "sub",
+                          "args": [
+                            1,
+                            {
+                              "op": "abs",
+                              "args": [
+                                {
+                                  "op": "sub",
+                                  "args": ["index", 4]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            0.006
+          ],
+          "position": [
+            {
+              "op": "add",
+              "args": [
+                -0.48,
+                {
+                  "op": "mul",
+                  "args": ["index", "spacing"]
+                }
+              ]
+            },
+            {
+              "op": "sub",
+              "args": [
+                1.025,
+                {
+                  "op": "div",
+                  "args": [
+                    {
+                      "op": "add",
+                      "args": [
+                        {
+                          "op": "mul",
+                          "args": [
+                            "drop_1",
+                            {
+                              "op": "max",
+                              "args": [
+                                0,
+                                {
+                                  "op": "sub",
+                                  "args": [
+                                    1,
+                                    {
+                                      "op": "abs",
+                                      "args": [
+                                        {
+                                          "op": "sub",
+                                          "args": ["index", 0]
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "op": "mul",
+                          "args": [
+                            "drop_2",
+                            {
+                              "op": "max",
+                              "args": [
+                                0,
+                                {
+                                  "op": "sub",
+                                  "args": [
+                                    1,
+                                    {
+                                      "op": "abs",
+                                      "args": [
+                                        {
+                                          "op": "sub",
+                                          "args": ["index", 1]
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "op": "mul",
+                          "args": [
+                            "drop_3",
+                            {
+                              "op": "max",
+                              "args": [
+                                0,
+                                {
+                                  "op": "sub",
+                                  "args": [
+                                    1,
+                                    {
+                                      "op": "abs",
+                                      "args": [
+                                        {
+                                          "op": "sub",
+                                          "args": ["index", 2]
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "op": "mul",
+                          "args": [
+                            "drop_4",
+                            {
+                              "op": "max",
+                              "args": [
+                                0,
+                                {
+                                  "op": "sub",
+                                  "args": [
+                                    1,
+                                    {
+                                      "op": "abs",
+                                      "args": [
+                                        {
+                                          "op": "sub",
+                                          "args": ["index", 3]
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "op": "mul",
+                          "args": [
+                            "drop_5",
+                            {
+                              "op": "max",
+                              "args": [
+                                0,
+                                {
+                                  "op": "sub",
+                                  "args": [
+                                    1,
+                                    {
+                                      "op": "abs",
+                                      "args": [
+                                        {
+                                          "op": "sub",
+                                          "args": ["index", 4]
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    2
+                  ]
+                }
+              ]
+            },
+            0
+          ]
+        },
+        {
+          "id": "cap",
+          "primitive": "cylinder",
+          "slot": "dark",
+          "size": [0.036, 0.045, 0.036],
+          "position": [
+            {
+              "op": "add",
+              "args": [
+                -0.48,
+                {
+                  "op": "mul",
+                  "args": ["index", "spacing"]
+                }
+              ]
+            },
+            {
+              "op": "add",
+              "args": [
+                {
+                  "op": "sub",
+                  "args": [
+                    1.025,
+                    {
+                      "op": "add",
+                      "args": [
+                        {
+                          "op": "mul",
+                          "args": [
+                            "drop_1",
+                            {
+                              "op": "max",
+                              "args": [
+                                0,
+                                {
+                                  "op": "sub",
+                                  "args": [
+                                    1,
+                                    {
+                                      "op": "abs",
+                                      "args": [
+                                        {
+                                          "op": "sub",
+                                          "args": ["index", 0]
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "op": "mul",
+                          "args": [
+                            "drop_2",
+                            {
+                              "op": "max",
+                              "args": [
+                                0,
+                                {
+                                  "op": "sub",
+                                  "args": [
+                                    1,
+                                    {
+                                      "op": "abs",
+                                      "args": [
+                                        {
+                                          "op": "sub",
+                                          "args": ["index", 1]
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "op": "mul",
+                          "args": [
+                            "drop_3",
+                            {
+                              "op": "max",
+                              "args": [
+                                0,
+                                {
+                                  "op": "sub",
+                                  "args": [
+                                    1,
+                                    {
+                                      "op": "abs",
+                                      "args": [
+                                        {
+                                          "op": "sub",
+                                          "args": ["index", 2]
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "op": "mul",
+                          "args": [
+                            "drop_4",
+                            {
+                              "op": "max",
+                              "args": [
+                                0,
+                                {
+                                  "op": "sub",
+                                  "args": [
+                                    1,
+                                    {
+                                      "op": "abs",
+                                      "args": [
+                                        {
+                                          "op": "sub",
+                                          "args": ["index", 3]
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "op": "mul",
+                          "args": [
+                            "drop_5",
+                            {
+                              "op": "max",
+                              "args": [
+                                0,
+                                {
+                                  "op": "sub",
+                                  "args": [
+                                    1,
+                                    {
+                                      "op": "abs",
+                                      "args": [
+                                        {
+                                          "op": "sub",
+                                          "args": ["index", 4]
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                -0.005
+              ]
+            },
+            0
+          ]
+        },
+        {
+          "id": "shade",
+          "primitive": "ellipsoid",
+          "slot": "smoke",
+          "size": [0.24, 0.235, 0.24],
+          "position": [
+            {
+              "op": "add",
+              "args": [
+                -0.48,
+                {
+                  "op": "mul",
+                  "args": ["index", "spacing"]
+                }
+              ]
+            },
+            {
+              "op": "add",
+              "args": [
+                {
+                  "op": "sub",
+                  "args": [
+                    1.025,
+                    {
+                      "op": "add",
+                      "args": [
+                        {
+                          "op": "mul",
+                          "args": [
+                            "drop_1",
+                            {
+                              "op": "max",
+                              "args": [
+                                0,
+                                {
+                                  "op": "sub",
+                                  "args": [
+                                    1,
+                                    {
+                                      "op": "abs",
+                                      "args": [
+                                        {
+                                          "op": "sub",
+                                          "args": ["index", 0]
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "op": "mul",
+                          "args": [
+                            "drop_2",
+                            {
+                              "op": "max",
+                              "args": [
+                                0,
+                                {
+                                  "op": "sub",
+                                  "args": [
+                                    1,
+                                    {
+                                      "op": "abs",
+                                      "args": [
+                                        {
+                                          "op": "sub",
+                                          "args": ["index", 1]
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "op": "mul",
+                          "args": [
+                            "drop_3",
+                            {
+                              "op": "max",
+                              "args": [
+                                0,
+                                {
+                                  "op": "sub",
+                                  "args": [
+                                    1,
+                                    {
+                                      "op": "abs",
+                                      "args": [
+                                        {
+                                          "op": "sub",
+                                          "args": ["index", 2]
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "op": "mul",
+                          "args": [
+                            "drop_4",
+                            {
+                              "op": "max",
+                              "args": [
+                                0,
+                                {
+                                  "op": "sub",
+                                  "args": [
+                                    1,
+                                    {
+                                      "op": "abs",
+                                      "args": [
+                                        {
+                                          "op": "sub",
+                                          "args": ["index", 3]
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "op": "mul",
+                          "args": [
+                            "drop_5",
+                            {
+                              "op": "max",
+                              "args": [
+                                0,
+                                {
+                                  "op": "sub",
+                                  "args": [
+                                    1,
+                                    {
+                                      "op": "abs",
+                                      "args": [
+                                        {
+                                          "op": "sub",
+                                          "args": ["index", 4]
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                -0.1175
+              ]
+            },
+            0
+          ]
+        },
+        {
+          "id": "bulb",
+          "primitive": "ellipsoid",
+          "slot": "bulb",
+          "size": [0.042, 0.042, 0.042],
+          "position": [
+            {
+              "op": "add",
+              "args": [
+                -0.48,
+                {
+                  "op": "mul",
+                  "args": ["index", "spacing"]
+                }
+              ]
+            },
+            {
+              "op": "add",
+              "args": [
+                {
+                  "op": "sub",
+                  "args": [
+                    1.025,
+                    {
+                      "op": "add",
+                      "args": [
+                        {
+                          "op": "mul",
+                          "args": [
+                            "drop_1",
+                            {
+                              "op": "max",
+                              "args": [
+                                0,
+                                {
+                                  "op": "sub",
+                                  "args": [
+                                    1,
+                                    {
+                                      "op": "abs",
+                                      "args": [
+                                        {
+                                          "op": "sub",
+                                          "args": ["index", 0]
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "op": "mul",
+                          "args": [
+                            "drop_2",
+                            {
+                              "op": "max",
+                              "args": [
+                                0,
+                                {
+                                  "op": "sub",
+                                  "args": [
+                                    1,
+                                    {
+                                      "op": "abs",
+                                      "args": [
+                                        {
+                                          "op": "sub",
+                                          "args": ["index", 1]
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "op": "mul",
+                          "args": [
+                            "drop_3",
+                            {
+                              "op": "max",
+                              "args": [
+                                0,
+                                {
+                                  "op": "sub",
+                                  "args": [
+                                    1,
+                                    {
+                                      "op": "abs",
+                                      "args": [
+                                        {
+                                          "op": "sub",
+                                          "args": ["index", 2]
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "op": "mul",
+                          "args": [
+                            "drop_4",
+                            {
+                              "op": "max",
+                              "args": [
+                                0,
+                                {
+                                  "op": "sub",
+                                  "args": [
+                                    1,
+                                    {
+                                      "op": "abs",
+                                      "args": [
+                                        {
+                                          "op": "sub",
+                                          "args": ["index", 3]
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "op": "mul",
+                          "args": [
+                            "drop_5",
+                            {
+                              "op": "max",
+                              "args": [
+                                0,
+                                {
+                                  "op": "sub",
+                                  "args": [
+                                    1,
+                                    {
+                                      "op": "abs",
+                                      "args": [
+                                        {
+                                          "op": "sub",
+                                          "args": ["index", 4]
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                -0.12
+              ]
+            },
+            0
+          ]
+        }
+      ]
+    }
+  ],
+  "constraints": []
+}

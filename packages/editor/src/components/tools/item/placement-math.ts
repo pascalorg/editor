@@ -82,26 +82,6 @@ export function getDetachedAttachmentPreviewLift(
 }
 
 /**
- * Calculate cursor rotation in WORLD space from wall normal and orientation.
- */
-export function calculateCursorRotation(
-  normal: [number, number, number] | undefined,
-  wallStart: [number, number],
-  wallEnd: [number, number],
-): number {
-  if (!normal) return 0
-
-  // Wall direction angle in world XZ plane
-  const wallAngle = Math.atan2(wallEnd[1] - wallStart[1], wallEnd[0] - wallStart[0])
-
-  // In local wall space, front face has normal.z < 0, back face has normal.z > 0
-  if (normal[2] < 0) {
-    return -wallAngle
-  }
-  return Math.PI - wallAngle
-}
-
-/**
  * Calculate item rotation in WALL-LOCAL space from normal.
  * Items are children of the wall mesh, so their rotation is relative to wall's local space.
  */

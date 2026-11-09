@@ -1,7 +1,8 @@
-import { beforeEach, describe, expect, test } from 'bun:test'
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { nodeRegistry } from '../registry/registry'
 import type { AnyNodeDefinition } from '../registry/types'
 import type { AnyNode, AnyNodeId } from '../schema/types'
+import useLiveNodeOverrides from './use-live-node-overrides'
 import useScene from './use-scene'
 
 const untrackedDef = {
@@ -39,6 +40,8 @@ describe('dirty tracking', () => {
   beforeEach(() => {
     if (!nodeRegistry.has(untrackedDef.kind)) nodeRegistry._register(untrackedDef)
     if (!nodeRegistry.has(trackedDef.kind)) nodeRegistry._register(trackedDef)
+    useScene.getState().unloadScene()
+    useScene.setState({ readOnly: false })
     useScene.setState({
       nodes: {
         [UNTRACKED]: makeNode(UNTRACKED, 'test-untracked'),
@@ -46,9 +49,13 @@ describe('dirty tracking', () => {
         [UNREGISTERED]: makeNode(UNREGISTERED, 'unregistered-kind'),
       },
       rootNodeIds: [UNTRACKED, TRACKED, UNREGISTERED],
-      dirtyNodes: new Set(),
       collections: {},
     } as never)
+    useScene.temporal.getState().clear()
+  })
+
+  afterEach(() => {
+    useScene.getState().unloadScene()
     useScene.temporal.getState().clear()
   })
 
@@ -67,12 +74,67 @@ describe('dirty tracking', () => {
     expect(useScene.getState().dirtyNodes.has(UNREGISTERED)).toBe(true)
   })
 
+  test('raw dirtyNodes.add applies the same consumer-kind guard as markDirty', () => {
+    useScene.getState().dirtyNodes.add(UNTRACKED)
+    useScene.getState().dirtyNodes.add(TRACKED)
+    expect(useScene.getState().dirtyNodes.has(UNTRACKED)).toBe(false)
+    expect(useScene.getState().dirtyNodes.has(TRACKED)).toBe(true)
+  })
+
+  test('raw dirtyNodes.add accepts ids with no node yet', () => {
+    const pending = 'item_pending_create' as AnyNodeId
+    useScene.getState().dirtyNodes.add(pending)
+    expect(useScene.getState().dirtyNodes.has(pending)).toBe(true)
+  })
+
+  test('undo clears dirty marks whose node no longer exists', async () => {
+    const NEW = 'item_undone_away' as AnyNodeId
+    // Tracked write: pushes the pre-write state (without NEW) onto pastStates.
+    useScene.setState({
+      nodes: { ...useScene.getState().nodes, [NEW]: makeNode(NEW, 'test-tracked') },
+    } as never)
+    useScene.getState().markDirty(NEW)
+    expect(useScene.getState().dirtyNodes.has(NEW)).toBe(true)
+
+    useScene.temporal.getState().undo()
+    // The sweep runs in the temporal subscriber's microtask.
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(useScene.getState().nodes[NEW]).toBeUndefined()
+    expect(useScene.getState().dirtyNodes.has(NEW)).toBe(false)
+  })
+
   test('deleteNodes removes deleted ids from the dirty set', () => {
     useScene.getState().markDirty(TRACKED)
     expect(useScene.getState().dirtyNodes.has(TRACKED)).toBe(true)
     useScene.getState().deleteNodes([TRACKED])
     expect(useScene.getState().nodes[TRACKED]).toBeUndefined()
     expect(useScene.getState().dirtyNodes.has(TRACKED)).toBe(false)
+  })
+
+  test('a node drawn from a live override rebuilds once the override goes, whoever clears it', () => {
+    const overrides = useLiveNodeOverrides.getState()
+    const dirty = () => useScene.getState().dirtyNodes
+    overrides.set(TRACKED, { polygon: [[0, 0]], holes: [] })
+    dirty().clear()
+    // Updating the preview is the previewer's to mark; nothing is forced here.
+    overrides.set(TRACKED, { polygon: [[1, 1]] })
+    expect(dirty().has(TRACKED)).toBe(false)
+    // Dropping one field rebuilds…
+    overrides.clearFields(TRACKED, ['holes'])
+    expect(dirty().has(TRACKED)).toBe(true)
+    dirty().clear()
+    // …and so does dropping the override, alone or with every other one.
+    overrides.clear(TRACKED)
+    expect(dirty().has(TRACKED)).toBe(true)
+    dirty().clear()
+    overrides.setMany([
+      [TRACKED, { polygon: [] }],
+      ['item_gone', { polygon: [] }],
+    ])
+    dirty().clear()
+    overrides.clearAll()
+    expect([...dirty()]).toEqual([TRACKED])
   })
 
   test('visibility updates mark dirty before the batched RAF callback', () => {

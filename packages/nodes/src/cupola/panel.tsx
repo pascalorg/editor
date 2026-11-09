@@ -3,15 +3,16 @@
 import {
   type AnyNode,
   type AnyNodeId,
-  CupolaNode as CupolaSchema,
   getActiveRoofHeight,
   type RoofSegmentNode,
   useLiveNodeOverrides,
+  usePascalI18n,
   useScene,
 } from '@pascal-app/core'
 import {
   ActionButton,
   ActionGroup,
+  duplicateNodeAndPickUp,
   PanelSection,
   PanelWrapper,
   SegmentedControl,
@@ -30,6 +31,7 @@ import type { CupolaNode } from './schema'
  * flow the placement tool uses. Mirrors the box-vent panel.
  */
 export default function CupolaPanel() {
+  const i18n = usePascalI18n()
   const selectedId = useViewer((s) => s.selection.selectedIds[0])
   const setSelection = useViewer((s) => s.setSelection)
   const updateNode = useScene((s) => s.updateNode)
@@ -88,28 +90,8 @@ export default function CupolaPanel() {
   }, [node, setMovingNode, setSelection])
 
   const handleDuplicate = useCallback(() => {
-    if (!node) return
-    triggerSFX('sfx:item-pick')
-    const parentId = node.roofSegmentId as AnyNodeId | undefined
-    if (!parentId) return
-
-    const state = useScene.getState()
-    const meta =
-      typeof node.metadata === 'object' && node.metadata !== null
-        ? (node.metadata as Record<string, unknown>)
-        : {}
-    const cloneInput = {
-      ...node,
-      id: undefined,
-      metadata: { ...meta, isNew: true },
-    } as Record<string, unknown>
-    const cloned = CupolaSchema.parse(cloneInput) as CupolaNode
-
-    state.createNode(cloned, parentId)
-    state.dirtyNodes.add(parentId)
-    setMovingNode(cloned as never)
-    setSelection({ selectedIds: [] })
-  }, [node, setMovingNode, setSelection])
+    if (node) duplicateNodeAndPickUp(node)
+  }, [node])
 
   const handleDelete = useCallback(() => {
     if (!(selectedId && node)) return
@@ -140,31 +122,37 @@ export default function CupolaPanel() {
       icon="/icons/roof.webp"
       onBack={node.roofSegmentId ? handleBack : undefined}
       onClose={handleClose}
-      title={node.name || 'Cupola'}
+      title={node.name || i18n._({ id: 'node.cupola.panel.cupola', message: 'Cupola' })}
       width={300}
     >
-      <PanelSection title="Style">
+      <PanelSection title={i18n._({ id: 'node.cupola.panel.style', message: 'Style' })}>
         <SegmentedControl
           onChange={(v) => handleUpdate({ roofStyle: v as CupolaNode['roofStyle'] })}
           options={[
-            { label: 'Dome', value: 'dome' },
-            { label: 'Pyramid', value: 'pyramid' },
+            { label: i18n._({ id: 'node.cupola.panel.dome', message: 'Dome' }), value: 'dome' },
+            {
+              label: i18n._({ id: 'node.cupola.panel.pyramid', message: 'Pyramid' }),
+              value: 'pyramid',
+            },
           ]}
           value={node.roofStyle ?? 'dome'}
         />
         <SegmentedControl
           onChange={(v) => handleUpdate({ finial: v === 'on' })}
           options={[
-            { label: 'Finial', value: 'on' },
-            { label: 'No Finial', value: 'off' },
+            { label: i18n._({ id: 'node.cupola.panel.finial', message: 'Finial' }), value: 'on' },
+            {
+              label: i18n._({ id: 'node.cupola.panel.noFinial', message: 'No Finial' }),
+              value: 'off',
+            },
           ]}
           value={(node.finial ?? true) ? 'on' : 'off'}
         />
       </PanelSection>
 
-      <PanelSection title="Dimensions">
+      <PanelSection title={i18n._({ id: 'node.cupola.panel.dimensions', message: 'Dimensions' })}>
         <SliderControl
-          label="Width"
+          label={i18n._({ id: 'node.cupola.panel.width', message: 'Width' })}
           max={1000}
           min={0.3}
           onChange={(v) => previewProp({ width: v })}
@@ -173,10 +161,10 @@ export default function CupolaPanel() {
           restoreOnCommit={false}
           step={0.05}
           unit="m"
-          value={Math.round(node.width * 100) / 100}
+          value={node.width}
         />
         <SliderControl
-          label="Depth"
+          label={i18n._({ id: 'node.cupola.panel.depth', message: 'Depth' })}
           max={1000}
           min={0.3}
           onChange={(v) => previewProp({ depth: v })}
@@ -185,10 +173,10 @@ export default function CupolaPanel() {
           restoreOnCommit={false}
           step={0.05}
           unit="m"
-          value={Math.round(node.depth * 100) / 100}
+          value={node.depth}
         />
         <SliderControl
-          label="Height"
+          label={i18n._({ id: 'node.cupola.panel.height', message: 'Height' })}
           max={1000}
           min={0.4}
           onChange={(v) => previewProp({ height: v })}
@@ -197,11 +185,11 @@ export default function CupolaPanel() {
           restoreOnCommit={false}
           step={0.05}
           unit="m"
-          value={Math.round(node.height * 100) / 100}
+          value={node.height}
         />
       </PanelSection>
 
-      <PanelSection title="Position">
+      <PanelSection title={i18n._({ id: 'node.cupola.panel.position', message: 'Position' })}>
         <SliderControl
           label="X"
           max={Math.round(((segment?.width ?? 10) / 2) * 100) / 100}
@@ -216,7 +204,7 @@ export default function CupolaPanel() {
           restoreOnCommit={false}
           step={0.05}
           unit="m"
-          value={Math.round((node.position[0] ?? 0) * 100) / 100}
+          value={node.position[0] ?? 0}
         />
         <SliderControl
           label="Y"
@@ -235,7 +223,7 @@ export default function CupolaPanel() {
           restoreOnCommit={false}
           step={0.05}
           unit="m"
-          value={Math.round((node.position[1] ?? 0) * 100) / 100}
+          value={node.position[1] ?? 0}
         />
         <SliderControl
           label="Z"
@@ -251,10 +239,10 @@ export default function CupolaPanel() {
           restoreOnCommit={false}
           step={0.05}
           unit="m"
-          value={Math.round((node.position[2] ?? 0) * 100) / 100}
+          value={node.position[2] ?? 0}
         />
         <SliderControl
-          label="Rotation"
+          label={i18n._({ id: 'node.cupola.panel.rotation', message: 'Rotation' })}
           max={180}
           min={-180}
           onChange={(deg) => previewProp({ rotation: (deg * Math.PI) / 180 })}
@@ -267,18 +255,22 @@ export default function CupolaPanel() {
         />
       </PanelSection>
 
-      <PanelSection title="Actions">
+      <PanelSection title={i18n._({ id: 'node.cupola.panel.actions', message: 'Actions' })}>
         <ActionGroup>
-          <ActionButton icon={<Move className="h-3.5 w-3.5" />} label="Move" onClick={handleMove} />
+          <ActionButton
+            icon={<Move className="h-3.5 w-3.5" />}
+            label={i18n._({ id: 'node.cupola.panel.move', message: 'Move' })}
+            onClick={handleMove}
+          />
           <ActionButton
             icon={<Copy className="h-3.5 w-3.5" />}
-            label="Duplicate"
+            label={i18n._({ id: 'node.cupola.panel.duplicate', message: 'Duplicate' })}
             onClick={handleDuplicate}
           />
           <ActionButton
             className="hover:bg-red-500/20"
-            icon={<Trash2 className="h-3.5 w-3.5 text-red-400" />}
-            label="Delete"
+            icon={<Trash2 className="h-3.5 w-3.5 text-red-600 dark:text-red-400" />}
+            label={i18n._({ id: 'node.cupola.panel.delete', message: 'Delete' })}
             onClick={handleDelete}
           />
         </ActionGroup>

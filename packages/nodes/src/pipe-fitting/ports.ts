@@ -1,6 +1,6 @@
 import type { NodePort } from '@pascal-app/core'
 import { Euler, Vector3 } from 'three'
-import { INCHES_TO_METERS } from '../duct-segment/geometry'
+import { INCHES_TO_METERS } from '../duct-segment/profile'
 import type { PipeFittingNode } from './schema'
 
 /** Hub stub length in meters — pipe fittings are stubbier than duct
@@ -23,13 +23,20 @@ type LocalPort = { id: string; position: Vector3; direction: Vector3; diameter: 
  * run along X, two opposed branches on ±Z.
  */
 export function localPipeFittingPorts(node: PipeFittingNode): LocalPort[] {
-  const run = pipeFittingLegLength(node.diameter)
+  const run = pipeFittingLegLength(
+    node.fittingType === 'reducer' ? Math.max(node.diameter, node.diameter2) : node.diameter,
+  )
   const inlet: LocalPort = {
     id: 'inlet',
     position: new Vector3(-run, 0, 0),
     direction: new Vector3(-1, 0, 0),
     diameter: node.diameter,
   }
+  if (
+    node.fittingType === 'end-cap' ||
+    (node.fittingType === 'cleanout' && node.cleanoutStyle === 'end')
+  )
+    return [inlet]
   if (node.fittingType === 'elbow') {
     const theta = (node.angle * Math.PI) / 180
     const outDir = new Vector3(Math.cos(theta), 0, Math.sin(theta))
@@ -49,6 +56,8 @@ export function localPipeFittingPorts(node: PipeFittingNode): LocalPort[] {
     direction: new Vector3(1, 0, 0),
     diameter: node.diameter,
   }
+  if (node.fittingType === 'reducer') return [inlet, { ...outlet, diameter: node.diameter2 }]
+  if (node.fittingType === 'coupling' || node.fittingType === 'cleanout') return [inlet, outlet]
   const branchLeg = pipeFittingLegLength(node.diameter2)
   if (node.fittingType === 'cross') {
     return [

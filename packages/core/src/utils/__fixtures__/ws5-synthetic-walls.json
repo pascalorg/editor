@@ -1,0 +1,1435 @@
+{
+  "source": "Synthetic corner and junction fragments using public WS5 assembly presets.",
+  "nodes": {
+    "level_synthetic_walls": {
+      "object": "node",
+      "id": "level_synthetic_walls",
+      "type": "level",
+      "parentId": null,
+      "children": [
+        "wall_synthetic_00",
+        "wall_synthetic_01",
+        "wall_synthetic_02",
+        "wall_synthetic_03",
+        "wall_synthetic_04",
+        "wall_synthetic_05",
+        "wall_synthetic_06",
+        "wall_synthetic_07",
+        "wall_synthetic_08",
+        "wall_synthetic_09",
+        "wall_synthetic_10",
+        "wall_synthetic_11",
+        "wall_synthetic_12",
+        "wall_synthetic_13",
+        "wall_synthetic_14",
+        "wall_synthetic_15",
+        "wall_synthetic_16",
+        "wall_synthetic_17",
+        "wall_synthetic_18",
+        "wall_synthetic_19",
+        "wall_synthetic_20",
+        "wall_synthetic_21",
+        "wall_synthetic_22",
+        "wall_synthetic_23",
+        "wall_synthetic_24",
+        "wall_synthetic_25",
+        "wall_synthetic_26",
+        "wall_synthetic_27",
+        "wall_synthetic_28",
+        "wall_synthetic_29",
+        "wall_synthetic_30",
+        "wall_synthetic_31",
+        "wall_synthetic_plain"
+      ],
+      "visible": true,
+      "metadata": {
+        "synthetic": true
+      },
+      "level": 0
+    },
+    "wall_synthetic_00": {
+      "object": "node",
+      "id": "wall_synthetic_00",
+      "type": "wall",
+      "name": "Synthetic wall 00",
+      "parentId": "level_synthetic_walls",
+      "children": [],
+      "visible": true,
+      "metadata": {
+        "synthetic": true,
+        "fixtureCase": "exterior-2x4-siding"
+      },
+      "start": [
+        0,
+        0
+      ],
+      "end": [
+        6,
+        0
+      ],
+      "height": 3,
+      "thickness": 0.13176249999999998,
+      "assembly": {
+        "preset": "exterior-2x4-siding",
+        "exterior": {
+          "finish": "siding",
+          "thickness": 0.019049999999999997
+        },
+        "sheathing": {
+          "material": "osb",
+          "thickness": 0.011112499999999999
+        },
+        "framing": {
+          "kind": "wood",
+          "depth": 0.08889999999999999
+        },
+        "interior": {
+          "finish": "drywall",
+          "thickness": 0.0127
+        },
+        "cavityInsulation": "batt, R per climate zone (IRC N1102.1.3)"
+      },
+      "frontSide": "exterior",
+      "backSide": "interior",
+      "slots": {
+        "exterior": "library:siding-lap-white",
+        "interior": "library:concrete-stucco"
+      },
+      "fillToTerrain": true,
+      "underpinning": {
+        "rim": 0.17,
+        "stem": 0.28
+      }
+    },
+    "wall_synthetic_01": {
+      "object": "node",
+      "id": "wall_synthetic_01",
+      "type": "wall",
+      "name": "Synthetic wall 01",
+      "parentId": "level_synthetic_walls",
+      "children": [],
+      "visible": true,
+      "metadata": {
+        "synthetic": true,
+        "fixtureCase": "exterior-2x6-siding"
+      },
+      "start": [
+        6,
+        0
+      ],
+      "end": [
+        6,
+        4
+      ],
+      "height": 3,
+      "thickness": 0.18256249999999996,
+      "assembly": {
+        "preset": "exterior-2x6-siding",
+        "exterior": {
+          "finish": "siding",
+          "thickness": 0.019049999999999997
+        },
+        "sheathing": {
+          "material": "osb",
+          "thickness": 0.011112499999999999
+        },
+        "framing": {
+          "kind": "wood",
+          "depth": 0.1397
+        },
+        "interior": {
+          "finish": "drywall",
+          "thickness": 0.0127
+        },
+        "cavityInsulation": "batt, R per climate zone (IRC N1102.1.3)"
+      },
+      "frontSide": "exterior",
+      "backSide": "interior"
+    },
+    "wall_synthetic_02": {
+      "object": "node",
+      "id": "wall_synthetic_02",
+      "type": "wall",
+      "name": "Synthetic wall 02",
+      "parentId": "level_synthetic_walls",
+      "children": [],
+      "visible": true,
+      "metadata": {
+        "synthetic": true,
+        "fixtureCase": "exterior-2x6-stucco"
+      },
+      "start": [
+        6,
+        4
+      ],
+      "end": [
+        0,
+        4
+      ],
+      "height": 3,
+      "thickness": 0.18573749999999997,
+      "assembly": {
+        "preset": "exterior-2x6-stucco",
+        "exterior": {
+          "finish": "stucco",
+          "thickness": 0.022224999999999998
+        },
+        "sheathing": {
+          "material": "osb",
+          "thickness": 0.011112499999999999
+        },
+        "framing": {
+          "kind": "wood",
+          "depth": 0.1397
+        },
+        "interior": {
+          "finish": "drywall",
+          "thickness": 0.0127
+        },
+        "cavityInsulation": "batt, R per climate zone (IRC N1102.1.3)"
+      },
+      "frontSide": "exterior",
+      "backSide": "interior"
+    },
+    "wall_synthetic_03": {
+      "object": "node",
+      "id": "wall_synthetic_03",
+      "type": "wall",
+      "name": "Synthetic wall 03",
+      "parentId": "level_synthetic_walls",
+      "children": [],
+      "visible": true,
+      "metadata": {
+        "synthetic": true,
+        "fixtureCase": "exterior-2x6-brick"
+      },
+      "start": [
+        0,
+        4
+      ],
+      "end": [
+        0,
+        0
+      ],
+      "height": 3,
+      "thickness": 0.2809875,
+      "assembly": {
+        "preset": "exterior-2x6-brick",
+        "exterior": {
+          "finish": "brick",
+          "thickness": 0.117475
+        },
+        "sheathing": {
+          "material": "osb",
+          "thickness": 0.011112499999999999
+        },
+        "framing": {
+          "kind": "wood",
+          "depth": 0.1397
+        },
+        "interior": {
+          "finish": "drywall",
+          "thickness": 0.0127
+        },
+        "cavityInsulation": "batt, R per climate zone (IRC N1102.1.3)"
+      },
+      "frontSide": "exterior",
+      "backSide": "interior"
+    },
+    "wall_synthetic_04": {
+      "object": "node",
+      "id": "wall_synthetic_04",
+      "type": "wall",
+      "name": "Synthetic wall 04",
+      "parentId": "level_synthetic_walls",
+      "children": [],
+      "visible": true,
+      "metadata": {
+        "synthetic": true,
+        "fixtureCase": "interior-2x4-drywall"
+      },
+      "start": [
+        6,
+        0
+      ],
+      "end": [
+        9,
+        0
+      ],
+      "height": 3,
+      "thickness": 0.11429999999999998,
+      "assembly": {
+        "preset": "interior-2x4-drywall",
+        "framing": {
+          "kind": "wood",
+          "depth": 0.08889999999999999
+        },
+        "interior": {
+          "finish": "drywall",
+          "thickness": 0.0127
+        }
+      },
+      "frontSide": "exterior",
+      "backSide": "interior"
+    },
+    "wall_synthetic_05": {
+      "object": "node",
+      "id": "wall_synthetic_05",
+      "type": "wall",
+      "name": "Synthetic wall 05",
+      "parentId": "level_synthetic_walls",
+      "children": [],
+      "visible": true,
+      "metadata": {
+        "synthetic": true,
+        "fixtureCase": "interior-2x6-plumbing"
+      },
+      "start": [
+        9,
+        0
+      ],
+      "end": [
+        11,
+        2
+      ],
+      "height": 3,
+      "thickness": 0.1651,
+      "assembly": {
+        "preset": "interior-2x6-plumbing",
+        "framing": {
+          "kind": "wood",
+          "depth": 0.1397
+        },
+        "interior": {
+          "finish": "drywall",
+          "thickness": 0.0127
+        }
+      },
+      "frontSide": "exterior",
+      "backSide": "interior"
+    },
+    "wall_synthetic_06": {
+      "object": "node",
+      "id": "wall_synthetic_06",
+      "type": "wall",
+      "name": "Synthetic wall 06",
+      "parentId": "level_synthetic_walls",
+      "children": [],
+      "visible": true,
+      "metadata": {
+        "synthetic": true,
+        "fixtureCase": "exterior-cmu-stucco"
+      },
+      "start": [
+        11,
+        2
+      ],
+      "end": [
+        13,
+        1
+      ],
+      "height": 3,
+      "thickness": 0.24764999999999998,
+      "assembly": {
+        "preset": "exterior-cmu-stucco",
+        "framing": {
+          "kind": "cmu",
+          "depth": 0.19367499999999999
+        },
+        "sheathing": {
+          "material": "none",
+          "thickness": 0
+        },
+        "exterior": {
+          "finish": "stucco",
+          "thickness": 0.022224999999999998
+        },
+        "interior": {
+          "finish": "drywall",
+          "thickness": 0.03175
+        }
+      },
+      "frontSide": "exterior",
+      "backSide": "interior"
+    },
+    "wall_synthetic_07": {
+      "object": "node",
+      "id": "wall_synthetic_07",
+      "type": "wall",
+      "name": "Synthetic wall 07",
+      "parentId": "level_synthetic_walls",
+      "children": [],
+      "visible": true,
+      "metadata": {
+        "synthetic": true,
+        "fixtureCase": "cmu-8-furred-drywall"
+      },
+      "start": [
+        13,
+        1
+      ],
+      "end": [
+        15,
+        1
+      ],
+      "height": 3,
+      "thickness": 0.257175,
+      "assembly": {
+        "preset": "cmu-8-furred-drywall",
+        "framing": {
+          "kind": "cmu",
+          "depth": 0.19367499999999999
+        },
+        "sheathing": {
+          "material": "none",
+          "thickness": 0
+        },
+        "exterior": {
+          "finish": "none",
+          "thickness": 0
+        },
+        "interior": {
+          "finish": "drywall",
+          "thickness": 0.03175
+        }
+      },
+      "frontSide": "exterior",
+      "backSide": "interior"
+    },
+    "wall_synthetic_08": {
+      "object": "node",
+      "id": "wall_synthetic_08",
+      "type": "wall",
+      "name": "Synthetic wall 08",
+      "parentId": "level_synthetic_walls",
+      "children": [],
+      "visible": true,
+      "metadata": {
+        "synthetic": true,
+        "fixtureCase": "exterior-2x4-siding"
+      },
+      "start": [
+        0,
+        12
+      ],
+      "end": [
+        6,
+        12
+      ],
+      "height": 3,
+      "thickness": 0.13176249999999998,
+      "assembly": {
+        "preset": "exterior-2x4-siding",
+        "exterior": {
+          "finish": "siding",
+          "thickness": 0.019049999999999997
+        },
+        "sheathing": {
+          "material": "osb",
+          "thickness": 0.011112499999999999
+        },
+        "framing": {
+          "kind": "wood",
+          "depth": 0.08889999999999999
+        },
+        "interior": {
+          "finish": "drywall",
+          "thickness": 0.0127
+        },
+        "cavityInsulation": "batt, R per climate zone (IRC N1102.1.3)"
+      },
+      "frontSide": "interior",
+      "backSide": "exterior",
+      "slots": {
+        "exterior": "library:siding-lap-white"
+      }
+    },
+    "wall_synthetic_09": {
+      "object": "node",
+      "id": "wall_synthetic_09",
+      "type": "wall",
+      "name": "Synthetic wall 09",
+      "parentId": "level_synthetic_walls",
+      "children": [],
+      "visible": true,
+      "metadata": {
+        "synthetic": true,
+        "fixtureCase": "exterior-2x6-siding"
+      },
+      "start": [
+        6,
+        12
+      ],
+      "end": [
+        6,
+        16
+      ],
+      "height": 3,
+      "thickness": 0.18256249999999996,
+      "assembly": {
+        "preset": "exterior-2x6-siding",
+        "exterior": {
+          "finish": "siding",
+          "thickness": 0.019049999999999997
+        },
+        "sheathing": {
+          "material": "osb",
+          "thickness": 0.011112499999999999
+        },
+        "framing": {
+          "kind": "wood",
+          "depth": 0.1397
+        },
+        "interior": {
+          "finish": "drywall",
+          "thickness": 0.0127
+        },
+        "cavityInsulation": "batt, R per climate zone (IRC N1102.1.3)"
+      },
+      "frontSide": "interior",
+      "backSide": "exterior"
+    },
+    "wall_synthetic_10": {
+      "object": "node",
+      "id": "wall_synthetic_10",
+      "type": "wall",
+      "name": "Synthetic wall 10",
+      "parentId": "level_synthetic_walls",
+      "children": [],
+      "visible": true,
+      "metadata": {
+        "synthetic": true,
+        "fixtureCase": "exterior-2x6-stucco"
+      },
+      "start": [
+        6,
+        16
+      ],
+      "end": [
+        0,
+        16
+      ],
+      "height": 3,
+      "thickness": 0.18573749999999997,
+      "assembly": {
+        "preset": "exterior-2x6-stucco",
+        "exterior": {
+          "finish": "stucco",
+          "thickness": 0.022224999999999998
+        },
+        "sheathing": {
+          "material": "osb",
+          "thickness": 0.011112499999999999
+        },
+        "framing": {
+          "kind": "wood",
+          "depth": 0.1397
+        },
+        "interior": {
+          "finish": "drywall",
+          "thickness": 0.0127
+        },
+        "cavityInsulation": "batt, R per climate zone (IRC N1102.1.3)"
+      },
+      "frontSide": "interior",
+      "backSide": "exterior"
+    },
+    "wall_synthetic_11": {
+      "object": "node",
+      "id": "wall_synthetic_11",
+      "type": "wall",
+      "name": "Synthetic wall 11",
+      "parentId": "level_synthetic_walls",
+      "children": [],
+      "visible": true,
+      "metadata": {
+        "synthetic": true,
+        "fixtureCase": "custom-brick"
+      },
+      "start": [
+        0,
+        16
+      ],
+      "end": [
+        0,
+        12
+      ],
+      "height": 3,
+      "thickness": 0.3086875,
+      "assembly": {
+        "exterior": {
+          "finish": "brick",
+          "thickness": 0.14287499999999997
+        },
+        "sheathing": {
+          "material": "osb",
+          "thickness": 0.011112499999999999
+        },
+        "framing": {
+          "kind": "wood",
+          "depth": 0.1397
+        },
+        "interior": {
+          "finish": "plaster",
+          "thickness": 0.015
+        },
+        "cavityInsulation": "Synthetic cavity note"
+      },
+      "frontSide": "interior",
+      "backSide": "exterior"
+    },
+    "wall_synthetic_12": {
+      "object": "node",
+      "id": "wall_synthetic_12",
+      "type": "wall",
+      "name": "Synthetic wall 12",
+      "parentId": "level_synthetic_walls",
+      "children": [],
+      "visible": true,
+      "metadata": {
+        "synthetic": true,
+        "fixtureCase": "interior-2x4-drywall"
+      },
+      "start": [
+        6,
+        12
+      ],
+      "end": [
+        9,
+        12
+      ],
+      "height": 3,
+      "thickness": 0.11429999999999998,
+      "assembly": {
+        "preset": "interior-2x4-drywall",
+        "framing": {
+          "kind": "wood",
+          "depth": 0.08889999999999999
+        },
+        "interior": {
+          "finish": "drywall",
+          "thickness": 0.0127
+        }
+      },
+      "frontSide": "interior",
+      "backSide": "exterior"
+    },
+    "wall_synthetic_13": {
+      "object": "node",
+      "id": "wall_synthetic_13",
+      "type": "wall",
+      "name": "Synthetic wall 13",
+      "parentId": "level_synthetic_walls",
+      "children": [],
+      "visible": true,
+      "metadata": {
+        "synthetic": true,
+        "fixtureCase": "interior-2x6-plumbing"
+      },
+      "start": [
+        9,
+        12
+      ],
+      "end": [
+        11,
+        14
+      ],
+      "height": 3,
+      "thickness": 0.1651,
+      "assembly": {
+        "preset": "interior-2x6-plumbing",
+        "framing": {
+          "kind": "wood",
+          "depth": 0.1397
+        },
+        "interior": {
+          "finish": "drywall",
+          "thickness": 0.0127
+        }
+      },
+      "frontSide": "interior",
+      "backSide": "exterior"
+    },
+    "wall_synthetic_14": {
+      "object": "node",
+      "id": "wall_synthetic_14",
+      "type": "wall",
+      "name": "Synthetic wall 14",
+      "parentId": "level_synthetic_walls",
+      "children": [],
+      "visible": true,
+      "metadata": {
+        "synthetic": true,
+        "fixtureCase": "exterior-cmu-stucco"
+      },
+      "start": [
+        11,
+        14
+      ],
+      "end": [
+        13,
+        13
+      ],
+      "height": 3,
+      "thickness": 0.24764999999999998,
+      "assembly": {
+        "preset": "exterior-cmu-stucco",
+        "framing": {
+          "kind": "cmu",
+          "depth": 0.19367499999999999
+        },
+        "sheathing": {
+          "material": "none",
+          "thickness": 0
+        },
+        "exterior": {
+          "finish": "stucco",
+          "thickness": 0.022224999999999998
+        },
+        "interior": {
+          "finish": "drywall",
+          "thickness": 0.03175
+        }
+      },
+      "frontSide": "interior",
+      "backSide": "exterior"
+    },
+    "wall_synthetic_15": {
+      "object": "node",
+      "id": "wall_synthetic_15",
+      "type": "wall",
+      "name": "Synthetic wall 15",
+      "parentId": "level_synthetic_walls",
+      "children": [],
+      "visible": true,
+      "metadata": {
+        "synthetic": true,
+        "fixtureCase": "cmu-8-furred-drywall"
+      },
+      "start": [
+        13,
+        13
+      ],
+      "end": [
+        15,
+        13
+      ],
+      "height": 3,
+      "thickness": 0.257175,
+      "assembly": {
+        "preset": "cmu-8-furred-drywall",
+        "framing": {
+          "kind": "cmu",
+          "depth": 0.19367499999999999
+        },
+        "sheathing": {
+          "material": "none",
+          "thickness": 0
+        },
+        "exterior": {
+          "finish": "none",
+          "thickness": 0
+        },
+        "interior": {
+          "finish": "drywall",
+          "thickness": 0.03175
+        }
+      },
+      "frontSide": "interior",
+      "backSide": "exterior"
+    },
+    "wall_synthetic_16": {
+      "object": "node",
+      "id": "wall_synthetic_16",
+      "type": "wall",
+      "name": "Synthetic wall 16",
+      "parentId": "level_synthetic_walls",
+      "children": [],
+      "visible": true,
+      "metadata": {
+        "synthetic": true,
+        "fixtureCase": "exterior-2x4-siding"
+      },
+      "start": [
+        0,
+        24
+      ],
+      "end": [
+        6,
+        24
+      ],
+      "height": 3,
+      "thickness": 0.13176249999999998,
+      "assembly": {
+        "preset": "exterior-2x4-siding",
+        "exterior": {
+          "finish": "siding",
+          "thickness": 0.019049999999999997
+        },
+        "sheathing": {
+          "material": "osb",
+          "thickness": 0.011112499999999999
+        },
+        "framing": {
+          "kind": "wood",
+          "depth": 0.08889999999999999
+        },
+        "interior": {
+          "finish": "drywall",
+          "thickness": 0.0127
+        },
+        "cavityInsulation": "batt, R per climate zone (IRC N1102.1.3)"
+      },
+      "frontSide": "unknown",
+      "backSide": "unknown",
+      "slots": {
+        "exterior": "library:siding-lap-white"
+      }
+    },
+    "wall_synthetic_17": {
+      "object": "node",
+      "id": "wall_synthetic_17",
+      "type": "wall",
+      "name": "Synthetic wall 17",
+      "parentId": "level_synthetic_walls",
+      "children": [],
+      "visible": true,
+      "metadata": {
+        "synthetic": true,
+        "fixtureCase": "exterior-2x6-siding"
+      },
+      "start": [
+        6,
+        24
+      ],
+      "end": [
+        6,
+        28
+      ],
+      "height": 3,
+      "thickness": 0.18256249999999996,
+      "assembly": {
+        "preset": "exterior-2x6-siding",
+        "exterior": {
+          "finish": "siding",
+          "thickness": 0.019049999999999997
+        },
+        "sheathing": {
+          "material": "osb",
+          "thickness": 0.011112499999999999
+        },
+        "framing": {
+          "kind": "wood",
+          "depth": 0.1397
+        },
+        "interior": {
+          "finish": "drywall",
+          "thickness": 0.0127
+        },
+        "cavityInsulation": "batt, R per climate zone (IRC N1102.1.3)"
+      },
+      "frontSide": "unknown",
+      "backSide": "unknown"
+    },
+    "wall_synthetic_18": {
+      "object": "node",
+      "id": "wall_synthetic_18",
+      "type": "wall",
+      "name": "Synthetic wall 18",
+      "parentId": "level_synthetic_walls",
+      "children": [],
+      "visible": true,
+      "metadata": {
+        "synthetic": true,
+        "fixtureCase": "exterior-2x6-stucco"
+      },
+      "start": [
+        6,
+        28
+      ],
+      "end": [
+        0,
+        28
+      ],
+      "height": 3,
+      "thickness": 0.18573749999999997,
+      "assembly": {
+        "preset": "exterior-2x6-stucco",
+        "exterior": {
+          "finish": "stucco",
+          "thickness": 0.022224999999999998
+        },
+        "sheathing": {
+          "material": "osb",
+          "thickness": 0.011112499999999999
+        },
+        "framing": {
+          "kind": "wood",
+          "depth": 0.1397
+        },
+        "interior": {
+          "finish": "drywall",
+          "thickness": 0.0127
+        },
+        "cavityInsulation": "batt, R per climate zone (IRC N1102.1.3)"
+      },
+      "frontSide": "unknown",
+      "backSide": "unknown"
+    },
+    "wall_synthetic_19": {
+      "object": "node",
+      "id": "wall_synthetic_19",
+      "type": "wall",
+      "name": "Synthetic wall 19",
+      "parentId": "level_synthetic_walls",
+      "children": [],
+      "visible": true,
+      "metadata": {
+        "synthetic": true,
+        "fixtureCase": "exterior-2x6-brick"
+      },
+      "start": [
+        0,
+        28
+      ],
+      "end": [
+        0,
+        24
+      ],
+      "height": 3,
+      "thickness": 0.2809875,
+      "assembly": {
+        "preset": "exterior-2x6-brick",
+        "exterior": {
+          "finish": "brick",
+          "thickness": 0.117475
+        },
+        "sheathing": {
+          "material": "osb",
+          "thickness": 0.011112499999999999
+        },
+        "framing": {
+          "kind": "wood",
+          "depth": 0.1397
+        },
+        "interior": {
+          "finish": "drywall",
+          "thickness": 0.0127
+        },
+        "cavityInsulation": "batt, R per climate zone (IRC N1102.1.3)"
+      },
+      "frontSide": "unknown",
+      "backSide": "unknown"
+    },
+    "wall_synthetic_20": {
+      "object": "node",
+      "id": "wall_synthetic_20",
+      "type": "wall",
+      "name": "Synthetic wall 20",
+      "parentId": "level_synthetic_walls",
+      "children": [],
+      "visible": true,
+      "metadata": {
+        "synthetic": true,
+        "fixtureCase": "interior-2x4-drywall"
+      },
+      "start": [
+        6,
+        24
+      ],
+      "end": [
+        9,
+        24
+      ],
+      "height": 3,
+      "thickness": 0.11429999999999998,
+      "assembly": {
+        "preset": "interior-2x4-drywall",
+        "framing": {
+          "kind": "wood",
+          "depth": 0.08889999999999999
+        },
+        "interior": {
+          "finish": "drywall",
+          "thickness": 0.0127
+        }
+      },
+      "frontSide": "unknown",
+      "backSide": "unknown"
+    },
+    "wall_synthetic_21": {
+      "object": "node",
+      "id": "wall_synthetic_21",
+      "type": "wall",
+      "name": "Synthetic wall 21",
+      "parentId": "level_synthetic_walls",
+      "children": [],
+      "visible": true,
+      "metadata": {
+        "synthetic": true,
+        "fixtureCase": "interior-2x6-plumbing"
+      },
+      "start": [
+        9,
+        24
+      ],
+      "end": [
+        11,
+        26
+      ],
+      "height": 3,
+      "thickness": 0.1651,
+      "assembly": {
+        "preset": "interior-2x6-plumbing",
+        "framing": {
+          "kind": "wood",
+          "depth": 0.1397
+        },
+        "interior": {
+          "finish": "drywall",
+          "thickness": 0.0127
+        }
+      },
+      "frontSide": "unknown",
+      "backSide": "unknown"
+    },
+    "wall_synthetic_22": {
+      "object": "node",
+      "id": "wall_synthetic_22",
+      "type": "wall",
+      "name": "Synthetic wall 22",
+      "parentId": "level_synthetic_walls",
+      "children": [],
+      "visible": true,
+      "metadata": {
+        "synthetic": true,
+        "fixtureCase": "exterior-cmu-stucco"
+      },
+      "start": [
+        11,
+        26
+      ],
+      "end": [
+        13,
+        25
+      ],
+      "height": 3,
+      "thickness": 0.24764999999999998,
+      "assembly": {
+        "preset": "exterior-cmu-stucco",
+        "framing": {
+          "kind": "cmu",
+          "depth": 0.19367499999999999
+        },
+        "sheathing": {
+          "material": "none",
+          "thickness": 0
+        },
+        "exterior": {
+          "finish": "stucco",
+          "thickness": 0.022224999999999998
+        },
+        "interior": {
+          "finish": "drywall",
+          "thickness": 0.03175
+        }
+      },
+      "frontSide": "unknown",
+      "backSide": "unknown"
+    },
+    "wall_synthetic_23": {
+      "object": "node",
+      "id": "wall_synthetic_23",
+      "type": "wall",
+      "name": "Synthetic wall 23",
+      "parentId": "level_synthetic_walls",
+      "children": [],
+      "visible": true,
+      "metadata": {
+        "synthetic": true,
+        "fixtureCase": "cmu-8-furred-drywall"
+      },
+      "start": [
+        13,
+        25
+      ],
+      "end": [
+        15,
+        25
+      ],
+      "height": 3,
+      "thickness": 0.257175,
+      "assembly": {
+        "preset": "cmu-8-furred-drywall",
+        "framing": {
+          "kind": "cmu",
+          "depth": 0.19367499999999999
+        },
+        "sheathing": {
+          "material": "none",
+          "thickness": 0
+        },
+        "exterior": {
+          "finish": "none",
+          "thickness": 0
+        },
+        "interior": {
+          "finish": "drywall",
+          "thickness": 0.03175
+        }
+      },
+      "frontSide": "unknown",
+      "backSide": "unknown"
+    },
+    "wall_synthetic_24": {
+      "object": "node",
+      "id": "wall_synthetic_24",
+      "type": "wall",
+      "name": "Synthetic wall 24",
+      "parentId": "level_synthetic_walls",
+      "children": [],
+      "visible": true,
+      "metadata": {
+        "synthetic": true,
+        "fixtureCase": "exterior-2x4-siding"
+      },
+      "start": [
+        0,
+        36
+      ],
+      "end": [
+        6,
+        36
+      ],
+      "height": 3,
+      "thickness": 0.13176249999999998,
+      "assembly": {
+        "preset": "exterior-2x4-siding",
+        "exterior": {
+          "finish": "siding",
+          "thickness": 0.019049999999999997
+        },
+        "sheathing": {
+          "material": "osb",
+          "thickness": 0.011112499999999999
+        },
+        "framing": {
+          "kind": "wood",
+          "depth": 0.08889999999999999
+        },
+        "interior": {
+          "finish": "drywall",
+          "thickness": 0.0127
+        },
+        "cavityInsulation": "batt, R per climate zone (IRC N1102.1.3)"
+      },
+      "slots": {
+        "exterior": "library:siding-lap-white"
+      }
+    },
+    "wall_synthetic_25": {
+      "object": "node",
+      "id": "wall_synthetic_25",
+      "type": "wall",
+      "name": "Synthetic wall 25",
+      "parentId": "level_synthetic_walls",
+      "children": [],
+      "visible": true,
+      "metadata": {
+        "synthetic": true,
+        "fixtureCase": "exterior-2x6-siding"
+      },
+      "start": [
+        6,
+        36
+      ],
+      "end": [
+        6,
+        40
+      ],
+      "height": 3,
+      "thickness": 0.18256249999999996,
+      "assembly": {
+        "preset": "exterior-2x6-siding",
+        "exterior": {
+          "finish": "siding",
+          "thickness": 0.019049999999999997
+        },
+        "sheathing": {
+          "material": "osb",
+          "thickness": 0.011112499999999999
+        },
+        "framing": {
+          "kind": "wood",
+          "depth": 0.1397
+        },
+        "interior": {
+          "finish": "drywall",
+          "thickness": 0.0127
+        },
+        "cavityInsulation": "batt, R per climate zone (IRC N1102.1.3)"
+      }
+    },
+    "wall_synthetic_26": {
+      "object": "node",
+      "id": "wall_synthetic_26",
+      "type": "wall",
+      "name": "Synthetic wall 26",
+      "parentId": "level_synthetic_walls",
+      "children": [],
+      "visible": true,
+      "metadata": {
+        "synthetic": true,
+        "fixtureCase": "exterior-2x6-stucco"
+      },
+      "start": [
+        6,
+        40
+      ],
+      "end": [
+        0,
+        40
+      ],
+      "height": 3,
+      "thickness": 0.18573749999999997,
+      "assembly": {
+        "preset": "exterior-2x6-stucco",
+        "exterior": {
+          "finish": "stucco",
+          "thickness": 0.022224999999999998
+        },
+        "sheathing": {
+          "material": "osb",
+          "thickness": 0.011112499999999999
+        },
+        "framing": {
+          "kind": "wood",
+          "depth": 0.1397
+        },
+        "interior": {
+          "finish": "drywall",
+          "thickness": 0.0127
+        },
+        "cavityInsulation": "batt, R per climate zone (IRC N1102.1.3)"
+      }
+    },
+    "wall_synthetic_27": {
+      "object": "node",
+      "id": "wall_synthetic_27",
+      "type": "wall",
+      "name": "Synthetic wall 27",
+      "parentId": "level_synthetic_walls",
+      "children": [],
+      "visible": true,
+      "metadata": {
+        "synthetic": true,
+        "fixtureCase": "exterior-2x6-brick"
+      },
+      "start": [
+        0,
+        40
+      ],
+      "end": [
+        0,
+        36
+      ],
+      "height": 3,
+      "thickness": 0.2809875,
+      "assembly": {
+        "preset": "exterior-2x6-brick",
+        "exterior": {
+          "finish": "brick",
+          "thickness": 0.117475
+        },
+        "sheathing": {
+          "material": "osb",
+          "thickness": 0.011112499999999999
+        },
+        "framing": {
+          "kind": "wood",
+          "depth": 0.1397
+        },
+        "interior": {
+          "finish": "drywall",
+          "thickness": 0.0127
+        },
+        "cavityInsulation": "batt, R per climate zone (IRC N1102.1.3)"
+      }
+    },
+    "wall_synthetic_28": {
+      "object": "node",
+      "id": "wall_synthetic_28",
+      "type": "wall",
+      "name": "Synthetic wall 28",
+      "parentId": "level_synthetic_walls",
+      "children": [],
+      "visible": true,
+      "metadata": {
+        "synthetic": true,
+        "fixtureCase": "interior-2x4-drywall"
+      },
+      "start": [
+        6,
+        36
+      ],
+      "end": [
+        9,
+        36
+      ],
+      "height": 3,
+      "thickness": 0.11429999999999998,
+      "assembly": {
+        "preset": "interior-2x4-drywall",
+        "framing": {
+          "kind": "wood",
+          "depth": 0.08889999999999999
+        },
+        "interior": {
+          "finish": "drywall",
+          "thickness": 0.0127
+        }
+      }
+    },
+    "wall_synthetic_29": {
+      "object": "node",
+      "id": "wall_synthetic_29",
+      "type": "wall",
+      "name": "Synthetic wall 29",
+      "parentId": "level_synthetic_walls",
+      "children": [],
+      "visible": true,
+      "metadata": {
+        "synthetic": true,
+        "fixtureCase": "interior-2x6-plumbing"
+      },
+      "start": [
+        9,
+        36
+      ],
+      "end": [
+        11,
+        38
+      ],
+      "height": 3,
+      "thickness": 0.1651,
+      "assembly": {
+        "preset": "interior-2x6-plumbing",
+        "framing": {
+          "kind": "wood",
+          "depth": 0.1397
+        },
+        "interior": {
+          "finish": "drywall",
+          "thickness": 0.0127
+        }
+      }
+    },
+    "wall_synthetic_30": {
+      "object": "node",
+      "id": "wall_synthetic_30",
+      "type": "wall",
+      "name": "Synthetic wall 30",
+      "parentId": "level_synthetic_walls",
+      "children": [],
+      "visible": true,
+      "metadata": {
+        "synthetic": true,
+        "fixtureCase": "exterior-cmu-stucco"
+      },
+      "start": [
+        11,
+        38
+      ],
+      "end": [
+        13,
+        37
+      ],
+      "height": 3,
+      "thickness": 0.24764999999999998,
+      "assembly": {
+        "preset": "exterior-cmu-stucco",
+        "framing": {
+          "kind": "cmu",
+          "depth": 0.19367499999999999
+        },
+        "sheathing": {
+          "material": "none",
+          "thickness": 0
+        },
+        "exterior": {
+          "finish": "stucco",
+          "thickness": 0.022224999999999998
+        },
+        "interior": {
+          "finish": "drywall",
+          "thickness": 0.03175
+        }
+      }
+    },
+    "wall_synthetic_31": {
+      "object": "node",
+      "id": "wall_synthetic_31",
+      "type": "wall",
+      "name": "Synthetic wall 31",
+      "parentId": "level_synthetic_walls",
+      "children": [],
+      "visible": true,
+      "metadata": {
+        "synthetic": true,
+        "fixtureCase": "cmu-8-furred-drywall"
+      },
+      "start": [
+        13,
+        37
+      ],
+      "end": [
+        15,
+        37
+      ],
+      "height": 3,
+      "thickness": 0.257175,
+      "assembly": {
+        "preset": "cmu-8-furred-drywall",
+        "framing": {
+          "kind": "cmu",
+          "depth": 0.19367499999999999
+        },
+        "sheathing": {
+          "material": "none",
+          "thickness": 0
+        },
+        "exterior": {
+          "finish": "none",
+          "thickness": 0
+        },
+        "interior": {
+          "finish": "drywall",
+          "thickness": 0.03175
+        }
+      }
+    },
+    "wall_synthetic_plain": {
+      "object": "node",
+      "id": "wall_synthetic_plain",
+      "type": "wall",
+      "name": "Synthetic wall without assembly",
+      "parentId": "level_synthetic_walls",
+      "children": [],
+      "visible": true,
+      "metadata": {
+        "synthetic": true,
+        "fixtureCase": "no-assembly"
+      },
+      "start": [
+        21,
+        2
+      ],
+      "end": [
+        26,
+        5
+      ],
+      "thickness": 0.2,
+      "height": 3
+    }
+  }
+}

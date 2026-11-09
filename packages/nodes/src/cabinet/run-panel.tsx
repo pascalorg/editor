@@ -5,8 +5,17 @@ import type {
   AnyNodeId,
   CabinetModuleNode as CabinetModuleNodeType,
   CabinetNode as CabinetNodeType,
+  SceneApi,
 } from '@pascal-app/core'
-import { createSceneApi, useScene } from '@pascal-app/core'
+import {
+  cascadeDirty,
+  createSceneApi,
+  type PascalI18n,
+  resolveLevelId,
+  runAsSingleSceneHistoryStep,
+  usePascalI18n,
+  useScene,
+} from '@pascal-app/core'
 import {
   ActionButton,
   PanelSection,
@@ -14,10 +23,14 @@ import {
   SegmentedControl,
   SliderControl,
   ToggleControl,
+  usePlacementNotice,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
-import { Plus, Trash } from 'lucide-react'
-import { useCallback, useMemo } from 'react'
+import { Copy, Equal as EqualIcon, Plus, Trash } from 'lucide-react'
+import { useCallback, useMemo, useState } from 'react'
+import { useShallow } from 'zustand/react/shallow'
+import { finishKitchenRun } from './finish-operation'
+import { planCabinetHostedEdit } from './hosted-resize'
 import {
   metadataForSelectedWidth,
   metadataWithPresetWidthDebt,
@@ -38,12 +51,17 @@ import {
   cabinetRevealGapById,
   cabinetRevealGapId,
 } from './reveals'
+import { cabinetWallFillerPlan } from './run-finishing'
 import { runWallConstraints } from './run-layout'
 import {
   addCabinetModuleSide,
   backAlignZ,
   bumpCabinetRunLayoutRevision,
   cabinetMetadataRecord,
+  cabinetRunArrayPlan,
+  cabinetRunWidthEqualizationPlan,
+  duplicateCabinetModuleAlongRun,
+  equalizeCabinetRunWidths,
   nestedCornerRunPositionOverrides,
   resolveCabinetType,
   runModuleBaseY,
@@ -57,6 +75,12 @@ import {
   reflowCabinetRunModules,
   stackForCabinet,
 } from './stack'
+import {
+  CABINET_WALL_HEIGHT_PRESETS,
+  type CabinetWallHeightPresetId,
+  cabinetWallHeightPresetById,
+  cabinetWallHeightPresetId,
+} from './wall-height-presets'
 
 export type CabinetEditableNode = CabinetNodeType | CabinetModuleNodeType
 
@@ -71,37 +95,90 @@ const RUN_MODULE_SYNC_PATCH_KEYS = new Set<keyof CabinetNodeType>([
 const RUN_DEPTH_PATCH_KEY = 'depth'
 const MIN_TRIMMED_CORNER_PRESET_WIDTH = 0.05
 
+function selectCabinetRunPlanningNodes(
+  nodes: Readonly<Record<AnyNodeId, AnyNode>>,
+  runId: AnyNodeId,
+): AnyNode[] {
+  const run = nodes[runId]
+  if (run?.type !== 'cabinet') return []
+
+  const relevantIds = new Set<AnyNodeId>()
+  const addWithAncestors = (node: AnyNode | undefined) => {
+    let current = node
+    const visited = new Set<AnyNodeId>()
+    while (current && !visited.has(current.id as AnyNodeId)) {
+      const currentId = current.id as AnyNodeId
+      visited.add(currentId)
+      relevantIds.add(currentId)
+      current = current.parentId ? nodes[current.parentId as AnyNodeId] : undefined
+    }
+  }
+
+  addWithAncestors(run)
+  for (const childId of run.children ?? []) addWithAncestors(nodes[childId as AnyNodeId])
+
+  const levelId = resolveLevelId(run, nodes as Record<string, AnyNode>)
+  for (const candidate of Object.values(nodes)) {
+    if (
+      candidate?.type === 'wall' &&
+      resolveLevelId(candidate, nodes as Record<string, AnyNode>) === levelId
+    ) {
+      addWithAncestors(candidate)
+    }
+  }
+
+  return [...relevantIds].flatMap((id) => {
+    const node = nodes[id]
+    return node ? [node] : []
+  })
+}
+
 const FRONT_STYLE_OPTIONS = [
-  { value: 'slab', label: 'Slab' },
-  { value: 'shaker', label: 'Shaker' },
-  { value: 'raised-arch', label: 'Raised Arch' },
+  { value: 'slab', label: /* i18n */ { id: 'node.cabinet.runPanel.slab', message: 'Slab' } },
+  { value: 'shaker', label: /* i18n */ { id: 'node.cabinet.runPanel.shaker', message: 'Shaker' } },
+  {
+    value: 'raised-arch',
+    label: /* i18n */ { id: 'node.cabinet.runPanel.raisedArch', message: 'Raised Arch' },
+  },
 ] as const
 
 const FRONT_OVERLAY_OPTIONS = [
-  { value: 'full', label: 'Overlay' },
-  { value: 'inset', label: 'Inset' },
+  { value: 'full', label: /* i18n */ { id: 'node.cabinet.runPanel.overlay', message: 'Overlay' } },
+  { value: 'inset', label: /* i18n */ { id: 'node.cabinet.runPanel.inset', message: 'Inset' } },
 ] as const
 
 const HANDLE_STYLE_OPTIONS = [
-  { value: 'bar', label: 'Bar' },
-  { value: 'knob', label: 'Knob' },
-  { value: 'cutout', label: 'Cutout' },
-  { value: 'hole', label: 'Hole' },
-  { value: 'none', label: 'None' },
+  { value: 'bar', label: /* i18n */ { id: 'node.cabinet.runPanel.bar', message: 'Bar' } },
+  { value: 'knob', label: /* i18n */ { id: 'node.cabinet.runPanel.knob', message: 'Knob' } },
+  { value: 'cutout', label: /* i18n */ { id: 'node.cabinet.runPanel.cutout', message: 'Cutout' } },
+  { value: 'hole', label: /* i18n */ { id: 'node.cabinet.runPanel.hole', message: 'Hole' } },
+  { value: 'none', label: /* i18n */ { id: 'node.cabinet.runPanel.none', message: 'None' } },
 ] as const
 
 const HANDLE_POSITION_OPTIONS = [
-  { value: 'auto', label: 'Auto' },
-  { value: 'top', label: 'Top' },
-  { value: 'center', label: 'Center' },
+  { value: 'auto', label: /* i18n */ { id: 'node.cabinet.runPanel.auto', message: 'Auto' } },
+  { value: 'top', label: /* i18n */ { id: 'node.cabinet.runPanel.top', message: 'Top' } },
+  { value: 'center', label: /* i18n */ { id: 'node.cabinet.runPanel.center', message: 'Center' } },
 ] as const
 
-function moduleSummary(module: CabinetModuleNodeType) {
-  if ((module.cabinetType ?? 'base') === 'tall') return 'Tall cabinet'
+function moduleSummary(module: CabinetModuleNodeType, i18n: PascalI18n) {
+  if ((module.cabinetType ?? 'base') === 'tall')
+    return i18n._({ id: 'node.cabinet.runPanel.summaryTall', message: 'Tall cabinet' })
   const stack = stackForCabinet(module)
-  if (stack.length === 0) return 'Empty'
-  if (stack.length === 1) return stack[0]!.type
-  return `${stack.length} compartments`
+  if (stack.length === 0)
+    return i18n._({ id: 'node.cabinet.runPanel.summaryEmpty', message: 'Empty' })
+  if (stack.length === 1)
+    return i18n._({
+      id: 'node.cabinet.runPanel.summaryCompartment',
+      message:
+        '{type, select, shelf {Shelf} drawer {Drawer} door {Door} oven {Oven} microwave {Microwave} dishwasher {Dishwasher} sink {Sink} cooktop_gas {Gas cooktop} cooktop_induction {Induction cooktop} pull_out_pantry {Pull-out pantry} fridge_single {Fridge} fridge_double {Double fridge} fridge_top_freezer {Top-freezer fridge} fridge_bottom_freezer {Bottom-freezer fridge} hood_pyramid {Pyramid hood} hood_curved_glass {Curved glass hood} other {{raw}}}',
+      values: { type: stack[0]!.type.replaceAll('-', '_'), raw: stack[0]!.type },
+    })
+  return i18n._({
+    id: 'node.cabinet.runPanel.summaryCompartments',
+    message: '{count, plural, one {{number} compartment} other {{number} compartments}}',
+    values: { count: stack.length, number: String(stack.length) },
+  })
 }
 
 export function bumpRunLayoutRevisionViaStore(
@@ -133,7 +210,7 @@ function hasLinkedCornerRun(module: CabinetModuleNodeType): boolean {
   )
 }
 
-export function reflowRunModules({
+export function planCabinetPresetReflow({
   modules,
   parentRun,
   patch,
@@ -145,7 +222,7 @@ export function reflowRunModules({
   patch: Partial<CabinetModuleNodeType>
   scene: ReturnType<typeof useScene.getState>
   selected: CabinetModuleNodeType
-}): boolean {
+}) {
   const wallConstraints = runWallConstraints(
     parentRun,
     modules,
@@ -228,6 +305,23 @@ export function reflowRunModules({
       modules.map((module) => [module.id, presetWidthDebt(module, selected.id)]),
     ),
   })
+  return reflowed
+}
+
+export function reflowRunModules({
+  modules,
+  parentRun,
+  patch,
+  scene,
+  selected,
+}: {
+  modules: CabinetModuleNodeType[]
+  parentRun: CabinetNodeType
+  patch: Partial<CabinetModuleNodeType>
+  scene: ReturnType<typeof useScene.getState>
+  selected: CabinetModuleNodeType
+}): boolean {
+  const reflowed = planCabinetPresetReflow({ modules, parentRun, patch, scene, selected })
   if (reflowed.length === 0) return false
 
   const reflowById = new Map(reflowed.map((entry) => [entry.id, entry]))
@@ -305,17 +399,32 @@ export function reflowRunModules({
   return true
 }
 
-export function updateCabinetRun({
-  modules,
-  node,
-  patch,
-}: {
+export function updateCabinetRun(args: {
   modules: CabinetModuleNodeType[]
   node: CabinetNodeType
   patch: Partial<CabinetNodeType>
 }) {
-  const scene = useScene.getState()
   const sceneApi = createSceneApi(useScene)
+  const updates = planCabinetHostedEdit(sceneApi, (staged) => writeCabinetRun(args, staged))
+  if (!updates) return
+  useScene.getState().updateNodes(updates.map(([id, data]) => ({ id, data })))
+  for (const id of cascadeDirty(args.node.id, { scene: sceneApi }))
+    useScene.getState().markDirty(id)
+}
+
+function writeCabinetRun(
+  {
+    modules,
+    node,
+    patch,
+  }: {
+    modules: CabinetModuleNodeType[]
+    node: CabinetNodeType
+    patch: Partial<CabinetNodeType>
+  },
+  sceneApi: SceneApi,
+) {
+  const nodes = sceneApi.nodes()
   const nextPatch = { ...patch }
   if (typeof nextPatch.carcassHeight === 'number') {
     const minModuleHeight = Math.max(
@@ -325,7 +434,7 @@ export function updateCabinetRun({
     nextPatch.carcassHeight = Math.max(nextPatch.carcassHeight, minModuleHeight)
   }
   const nextNode = { ...node, ...nextPatch }
-  scene.updateNode(node.id, nextPatch)
+  sceneApi.update(node.id, nextPatch)
 
   const shouldSyncDepth = RUN_DEPTH_PATCH_KEY in nextPatch
   const shouldSyncHeight = 'carcassHeight' in nextPatch
@@ -365,15 +474,15 @@ export function updateCabinetRun({
       if ('handlePosition' in nextPatch) modulePatch.handlePosition = nextNode.handlePosition
       if ('frontGap' in nextPatch) modulePatch.frontGap = nextNode.frontGap
     }
-    scene.updateNode(module.id, modulePatch)
+    sceneApi.update(module.id, modulePatch)
 
     if (shouldSyncModules) {
       const wallChild = wallChildOf(
         module,
-        scene.nodes as Record<string, CabinetEditableNode | undefined>,
+        nodes as Record<string, CabinetEditableNode | undefined>,
       )
       if (wallChild) {
-        scene.updateNode(wallChild.id, {
+        sceneApi.update(wallChild.id, {
           frontStyle: nextNode.frontStyle,
           frontOverlay: nextNode.frontOverlay,
           handleStyle: nextNode.handleStyle,
@@ -404,11 +513,94 @@ export function CabinetRunPanel({
   modules: CabinetModuleNodeType[]
   onClose: () => void
 }) {
+  const i18n = usePascalI18n()
   const setSelection = useViewer((s) => s.setSelection)
+  const planningNodeList = useScene(
+    useShallow((state) =>
+      selectCabinetRunPlanningNodes(
+        state.nodes as Record<AnyNodeId, AnyNode>,
+        node.id as AnyNodeId,
+      ),
+    ),
+  )
+  const planningNodes = useMemo(
+    () =>
+      Object.fromEntries(planningNodeList.map((planningNode) => [planningNode.id, planningNode])),
+    [planningNodeList],
+  ) as Record<AnyNodeId, AnyNode>
+  const planningNode = (planningNodes[node.id as AnyNodeId] as CabinetNodeType | undefined) ?? node
   const sortedModules = useMemo(
     () => [...modules].sort((a, b) => a.position[0] - b.position[0]),
     [modules],
   )
+  const moduleNames = sortedModules.map(
+    (module, index) =>
+      module.name ||
+      i18n._({
+        id: 'node.cabinet.runPanel.moduleNumber',
+        message: 'Module {number}',
+        values: { number: index + 1 },
+      }),
+  )
+  const [arraySourceId, setArraySourceId] = useState<AnyNodeId | null>(null)
+  const [arrayCopyCount, setArrayCopyCount] = useState(2)
+  const [arraySpacing, setArraySpacing] = useState(0)
+  const [arrayDirection, setArrayDirection] = useState<'left' | 'right'>('right')
+  const widthEqualization = useMemo(
+    () => cabinetRunWidthEqualizationPlan(planningNode, planningNodes),
+    [planningNode, planningNodes],
+  )
+  const arraySource = useMemo(
+    () =>
+      sortedModules.find(
+        (module) => module.id === arraySourceId && module.moduleKind === 'standard',
+      ) ?? sortedModules.find((module) => module.moduleKind === 'standard'),
+    [arraySourceId, sortedModules],
+  )
+  const arrayPlan = useMemo(
+    () =>
+      cabinetRunArrayPlan(planningNode, planningNodes, {
+        copyCount: arrayCopyCount,
+        direction: arrayDirection,
+        sourceModuleId: arraySource?.id ?? null,
+        spacing: arraySpacing,
+      }),
+    [arrayCopyCount, arrayDirection, arraySource?.id, arraySpacing, planningNode, planningNodes],
+  )
+
+  const placementNotice = usePlacementNotice(node.id)
+  const [finishMessage, setFinishMessage] = useState<string | null>(null)
+  const fillerPlan = cabinetWallFillerPlan(planningNode, sortedModules, planningNodes)
+
+  const finishRun = (action: 'align' | 'fill') => {
+    setFinishMessage(null)
+    try {
+      const outcome = finishKitchenRun(
+        useScene.getState().nodes,
+        { runId: node.id, action },
+        { activeLevelId: null },
+      )
+      if (outcome.changes)
+        runAsSingleSceneHistoryStep(useScene, () =>
+          useScene
+            .getState()
+            .applyNodeChanges(
+              outcome.changes as Parameters<
+                ReturnType<typeof useScene.getState>['applyNodeChanges']
+              >[0],
+            ),
+        )
+    } catch (error) {
+      setFinishMessage(
+        error instanceof Error
+          ? error.message
+          : i18n._({
+              id: 'node.cabinet.runPanel.unableToFinish',
+              message: 'Unable to finish this kitchen run.',
+            }),
+      )
+    }
+  }
 
   const updateRun = useCallback(
     (patch: Partial<CabinetNodeType>) => updateCabinetRun({ modules, node, patch }),
@@ -428,7 +620,80 @@ export function CabinetRunPanel({
     [node, setSelection],
   )
 
+  const equalizeWidths = useCallback(() => {
+    equalizeCabinetRunWidths({ run: node, sceneApi: createSceneApi(useScene) })
+  }, [node])
+
+  const equalizeWidthsTitle = !widthEqualization.ok
+    ? widthEqualization.reason === 'not-enough-modules'
+      ? i18n._({
+          id: 'node.cabinet.runPanel.equalizeNeedsTwo',
+          message: 'At least two standard base cabinets are required',
+        })
+      : i18n._({
+          id: 'node.cabinet.runPanel.equalizeNoFit',
+          message: 'The available run width cannot satisfy the cabinet width limits',
+        })
+    : widthEqualization.changed
+      ? i18n._({
+          id: 'node.cabinet.runPanel.equalizeAll',
+          message: 'Equalize all resizeable standard base cabinets in this run',
+        })
+      : i18n._({
+          id: 'node.cabinet.runPanel.equalizeAlreadyEqual',
+          message: 'The resizeable cabinet widths are already equal',
+        })
+
+  const duplicateAlongRun = useCallback(() => {
+    if (!arraySource) return
+    const copiedIds = duplicateCabinetModuleAlongRun({
+      copyCount: arrayCopyCount,
+      direction: arrayDirection,
+      run: node,
+      sceneApi: createSceneApi(useScene),
+      sourceModuleId: arraySource.id as AnyNodeId,
+      spacing: arraySpacing,
+    })
+    if (copiedIds?.length) setSelection({ selectedIds: [node.id as AnyNodeId] })
+  }, [arrayCopyCount, arrayDirection, arraySpacing, arraySource, node, setSelection])
+
+  const duplicateAlongRunTitle = !arrayPlan.ok
+    ? arrayPlan.reason === 'no-source'
+      ? i18n._({
+          id: 'node.cabinet.runPanel.arrayNoSource',
+          message: 'Choose a standard or appliance module as the source',
+        })
+      : arrayPlan.reason === 'invalid-options'
+        ? i18n._({
+            id: 'node.cabinet.runPanel.arrayInvalidOptions',
+            message: 'Choose a copy count from 1 to 20 and spacing from 0 to 2 m',
+          })
+        : i18n._({
+            id: 'node.cabinet.runPanel.arrayNoRoom',
+            message: 'There is not enough room in this run for the requested array',
+          })
+    : arraySource?.name
+      ? i18n._({
+          id: 'node.cabinet.runPanel.arrayCreateNamed',
+          message:
+            '{count, plural, one {Create {number} {name} copy} other {Create {number} {name} copies}}',
+          values: { count: arrayCopyCount, number: String(arrayCopyCount), name: arraySource.name },
+        })
+      : i18n._({
+          id: 'node.cabinet.runPanel.arrayCreate',
+          message:
+            '{count, plural, one {Create {number} module copy} other {Create {number} module copies}}',
+          values: { count: arrayCopyCount, number: String(arrayCopyCount) },
+        })
+
   const dimensionProfile = cabinetDimensionProfileId(node)
+  const wallHeightPreset = cabinetWallHeightPresetId(node)
+  const applyWallHeightPreset = useCallback(
+    (presetId: CabinetWallHeightPresetId) => {
+      updateRun({ carcassHeight: cabinetWallHeightPresetById(presetId).value })
+    },
+    [updateRun],
+  )
   const applyDimensionProfile = useCallback(
     (profileId: CabinetDimensionProfileId) => {
       const profile = cabinetDimensionProfileById(profileId)
@@ -461,30 +726,123 @@ export function CabinetRunPanel({
     <PanelWrapper
       icon="/icons/item.webp"
       onClose={onClose}
-      title={node.name || 'Modular Cabinet'}
+      title={
+        node.name || i18n._({ id: 'node.cabinet.runPanel.kitchenRun', message: 'Kitchen run' })
+      }
       width={320}
     >
-      <PanelSection title="Modules">
+      {placementNotice && (
+        <p role="status" className="px-3 py-2 text-xs text-amber-600">
+          {placementNotice.line}
+        </p>
+      )}
+      <PanelSection
+        title={i18n._({ id: 'node.cabinet.runPanel.finishAlign', message: 'Finish & align' })}
+      >
+        <div className="flex flex-col gap-2 px-1 pb-2">
+          <ActionButton
+            label={i18n._({
+              id: 'node.cabinet.runPanel.alignCabinetsHandles',
+              message: 'Align cabinets & handles',
+            })}
+            onClick={() => finishRun('align')}
+          />
+          {finishMessage && (
+            <p role="status" className="text-xs text-amber-600">
+              {finishMessage}
+            </p>
+          )}
+          <p className="text-xs text-muted-foreground">
+            {i18n._({
+              id: 'node.cabinet.runPanel.matchBaseHeightsBacksRevealsAnd',
+              message:
+                'Match base heights, backs, reveals and handles. Align upper cabinets; preserve tall appliances and custom compartments.',
+            })}
+          </p>
+          <ToggleControl
+            label={i18n._({
+              id: 'node.cabinet.runPanel.finishedExposedEnds',
+              message: 'Finished exposed ends',
+            })}
+            checked={node.withFinishedEnds}
+            onChange={(checked) => updateRun({ withFinishedEnds: checked })}
+          />
+          <ActionButton
+            label={i18n._({
+              id: 'node.cabinet.runPanel.fitWallFillers',
+              message: 'Fit wall fillers',
+            })}
+            disabled={fillerPlan.length === 0}
+            onClick={() => finishRun('fill')}
+          />
+          <p className="text-xs text-muted-foreground">
+            {fillerPlan.length
+              ? fillerPlan
+                  .map(({ side, width }) =>
+                    i18n._({
+                      id: 'node.cabinet.runPanel.fillerPlanSide',
+                      message: '{side, select, left {Left: {width} mm} other {Right: {width} mm}}',
+                      values: { side, width: String(Math.round(width * 1000)) },
+                    }),
+                  )
+                  .join(' · ')
+              : i18n._({
+                  id: 'node.cabinet.runPanel.fits50150MmGapsAt',
+                  message: 'Fits 50–150 mm gaps at run ends beside perpendicular walls.',
+                })}
+          </p>
+        </div>
+      </PanelSection>
+      <PanelSection title={i18n._({ id: 'node.cabinet.runPanel.modules', message: 'Modules' })}>
         <div className="flex flex-col gap-2 px-1 pb-2">
           {sortedModules.map((module, index) => (
             <div
-              className="flex items-center justify-between rounded-lg border border-border/40 bg-[#252527] px-2 py-2"
+              className="flex items-center justify-between gap-2 rounded-lg border border-border/40 bg-black/3 dark:bg-[#252527] px-2 py-2"
               key={module.id}
             >
               <button
-                className="min-w-0 flex-1 text-left"
+                className="min-h-8 min-w-0 flex-1 py-1 text-left"
                 onClick={() => setSelection({ selectedIds: [module.id] })}
                 type="button"
               >
                 <div className="truncate text-xs font-medium text-foreground">
-                  {module.name || `Module ${index + 1}`}
+                  {moduleNames[index]}
                 </div>
                 <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                  {moduleSummary(module)}
+                  {moduleSummary(module, i18n)}
                 </div>
               </button>
               <button
-                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-red-500/20 bg-red-500/8 text-red-300 transition-colors hover:bg-red-500/15 hover:text-red-200 disabled:opacity-30"
+                aria-label={i18n._({
+                  id: 'node.cabinet.runPanel.useAsArraySource',
+                  message: 'Use {name} as array source',
+                  values: { name: moduleNames[index] },
+                })}
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border/50 text-muted-foreground transition-colors hover:bg-black/5 dark:hover:bg-white/8 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30"
+                disabled={module.moduleKind === 'corner-filler'}
+                onClick={() => setArraySourceId(module.id as AnyNodeId)}
+                title={
+                  module.moduleKind === 'corner-filler'
+                    ? i18n._({
+                        id: 'node.cabinet.runPanel.cornerFillersCannotBeUsedAs',
+                        message: 'Corner fillers cannot be used as array sources',
+                      })
+                    : i18n._({
+                        id: 'node.cabinet.runPanel.useThisModuleAsTheArray',
+                        message: 'Use this module as the array source',
+                      })
+                }
+                type="button"
+              >
+                <Copy className="h-3.5 w-3.5" />
+              </button>
+              <button
+                aria-label={i18n._({
+                  id: 'node.cabinet.runPanel.deleteModule',
+                  message: 'Delete {name}',
+                  values: { name: moduleNames[index] },
+                })}
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-red-500/20 bg-red-500/8 text-red-700 dark:text-red-300 transition-colors hover:bg-red-500/15 hover:text-red-700 dark:hover:text-red-200 disabled:opacity-30"
                 disabled={modules.length <= 1}
                 onClick={() => deleteModule(module)}
                 type="button"
@@ -498,41 +856,180 @@ export function CabinetRunPanel({
           <div className="grid grid-cols-2 gap-2">
             <ActionButton
               icon={<Plus className="h-4 w-4" />}
-              label="Add left"
+              label={i18n._({ id: 'node.cabinet.runPanel.addLeft', message: 'Add left' })}
               onClick={() => addModule('left')}
             />
             <ActionButton
               icon={<Plus className="h-4 w-4" />}
-              label="Add right"
+              label={i18n._({ id: 'node.cabinet.runPanel.addRight', message: 'Add right' })}
               onClick={() => addModule('right')}
             />
           </div>
+          <ActionButton
+            className="mt-2 w-full"
+            disabled={!widthEqualization.ok || !widthEqualization.changed}
+            icon={<EqualIcon className="h-4 w-4" />}
+            label={i18n._({
+              id: 'node.cabinet.runPanel.equalizeWidths',
+              message: 'Equalize widths',
+            })}
+            onClick={equalizeWidths}
+            title={equalizeWidthsTitle}
+          />
+          <p className="px-1 pt-1 text-[10px] leading-4 text-muted-foreground">
+            {i18n._({
+              id: 'node.cabinet.runPanel.balancesStandardBaseCabinetsWhileKeeping',
+              message:
+                'Balances standard base cabinets while keeping appliance and corner-filler widths fixed.',
+            })}
+          </p>
         </div>
       </PanelSection>
 
-      <PanelSection title="Shared Plinth & Countertop">
+      <PanelSection
+        title={i18n._({
+          id: 'node.cabinet.runPanel.duplicateAlongRun',
+          message: 'Duplicate along run',
+        })}
+      >
+        <div className="space-y-2 px-1 pb-2">
+          <div className="rounded-lg border border-border/40 bg-black/3 dark:bg-[#252527] px-2 py-2">
+            <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+              {i18n._({ id: 'node.cabinet.runPanel.sourceModule', message: 'Source module' })}
+            </div>
+            <div className="truncate pt-1 text-xs font-medium text-foreground">
+              {arraySource?.name ||
+                (arraySource
+                  ? moduleSummary(arraySource, i18n)
+                  : i18n._({
+                      id: 'node.cabinet.runPanel.noEligibleModule',
+                      message: 'No eligible module',
+                    }))}
+            </div>
+          </div>
+          <SliderControl
+            label={i18n._({ id: 'node.cabinet.runPanel.copies', message: 'Copies' })}
+            max={20}
+            min={1}
+            onChange={(value) => setArrayCopyCount(Math.round(value))}
+            precision={0}
+            step={1}
+            value={arrayCopyCount}
+          />
+          <SliderControl
+            label={i18n._({ id: 'node.cabinet.runPanel.spacing', message: 'Spacing' })}
+            max={2}
+            min={0}
+            onChange={setArraySpacing}
+            precision={2}
+            step={0.01}
+            unit="m"
+            value={arraySpacing}
+          />
+          <div>
+            <div className="px-1 pb-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+              {i18n._({ id: 'node.cabinet.runPanel.direction', message: 'Direction' })}
+            </div>
+            <SegmentedControl
+              onChange={(value) => setArrayDirection(value as 'left' | 'right')}
+              options={[
+                {
+                  value: 'left',
+                  label: i18n._({ id: 'node.cabinet.runPanel.left', message: 'Left' }),
+                },
+                {
+                  value: 'right',
+                  label: i18n._({ id: 'node.cabinet.runPanel.right', message: 'Right' }),
+                },
+              ]}
+              value={arrayDirection}
+            />
+          </div>
+          <ActionButton
+            className="w-full"
+            disabled={!arrayPlan.ok}
+            icon={<Copy className="h-4 w-4" />}
+            label={i18n._({ id: 'node.cabinet.runPanel.createArray', message: 'Create array' })}
+            onClick={duplicateAlongRun}
+            title={duplicateAlongRunTitle}
+          />
+          <p className="px-1 pt-1 text-[10px] leading-4 text-muted-foreground">
+            {i18n._({
+              id: 'node.cabinet.runPanel.copiesIncludeTheSourceCabinetStructure',
+              message:
+                'Copies include the source cabinet structure and any attached wall cabinet. Existing modules stay fixed; the requested array must fit in the available run space.',
+            })}
+          </p>
+        </div>
+      </PanelSection>
+
+      <PanelSection
+        title={i18n._({
+          id: 'node.cabinet.runPanel.sharedPlinthCountertop',
+          message: 'Shared Plinth & Countertop',
+        })}
+      >
         <div className="space-y-2 px-1 pb-2">
           {node.runTier === 'base' && (
             <div>
               <div className="px-1 pb-1 text-[10px] uppercase tracking-wide text-muted-foreground">
-                Standard dimensions
+                {i18n._({
+                  id: 'node.cabinet.runPanel.standardDimensions',
+                  message: 'Standard dimensions',
+                })}
               </div>
               <SegmentedControl
                 mixed={dimensionProfile === 'custom'}
                 onChange={(value) => applyDimensionProfile(value as CabinetDimensionProfileId)}
                 options={CABINET_DIMENSION_PROFILES.map((profile) => ({
-                  label: profile.label,
+                  label:
+                    profile.id === 'us-base'
+                      ? i18n._({ id: 'node.cabinet.runPanel.usProfile', message: 'US · 24 in' })
+                      : i18n._({
+                          id: 'node.cabinet.runPanel.metricProfile',
+                          message: 'Metric · 600 mm',
+                        }),
                   value: profile.id,
                 }))}
                 value={dimensionProfile === 'us-base' ? 'us-base' : 'metric-base'}
               />
               <p className="px-1 pt-1 text-[10px] leading-4 text-muted-foreground">
-                Applies depth, carcass, plinth, and countertop thickness to this run.
+                {i18n._({
+                  id: 'node.cabinet.runPanel.appliesDepthCarcassPlinthAndCountertop',
+                  message: 'Applies depth, carcass, plinth, and countertop thickness to this run.',
+                })}
+              </p>
+            </div>
+          )}
+          {node.runTier === 'wall' && (
+            <div>
+              <div className="px-1 pb-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+                {i18n._({ id: 'node.cabinet.runPanel.heightPreset', message: 'Height preset' })}
+              </div>
+              <SegmentedControl
+                mixed={wallHeightPreset === 'custom'}
+                onChange={(value) => applyWallHeightPreset(value as CabinetWallHeightPresetId)}
+                options={CABINET_WALL_HEIGHT_PRESETS.map((preset) => ({
+                  label: (
+                    <span className="flex flex-col items-center leading-3">
+                      <span>{preset.label}</span>
+                      <span className="text-[9px] text-muted-foreground">{preset.metricLabel}</span>
+                    </span>
+                  ),
+                  value: preset.id,
+                }))}
+                value={wallHeightPreset === 'custom' ? '18' : wallHeightPreset}
+              />
+              <p className="px-1 pt-1 text-[10px] leading-4 text-muted-foreground">
+                {i18n._({
+                  id: 'node.cabinet.runPanel.commonWallCabinetHeightsUseThe',
+                  message: 'Common wall-cabinet heights. Use the slider below for a custom height.',
+                })}
               </p>
             </div>
           )}
           <SliderControl
-            label="Depth"
+            label={i18n._({ id: 'node.cabinet.runPanel.depth', message: 'Depth' })}
             max={1.2}
             min={0.3}
             onChange={(value) => updateRun({ depth: value })}
@@ -542,7 +1039,7 @@ export function CabinetRunPanel({
             value={node.depth}
           />
           <SliderControl
-            label="Carcass height"
+            label={i18n._({ id: 'node.cabinet.runPanel.carcassHeight', message: 'Carcass height' })}
             max={node.runTier === 'tall' ? 2.4 : 1.4}
             min={Math.max(0.4, ...modules.map((module) => minCabinetCarcassHeightForStack(module)))}
             onChange={(value) => updateRun({ carcassHeight: value })}
@@ -553,12 +1050,12 @@ export function CabinetRunPanel({
           />
           <ToggleControl
             checked={node.showPlinth}
-            label="Show plinth"
+            label={i18n._({ id: 'node.cabinet.runPanel.showPlinth', message: 'Show plinth' })}
             onChange={(checked) => updateRun({ showPlinth: checked })}
           />
           {node.showPlinth && (
             <SliderControl
-              label="Plinth height"
+              label={i18n._({ id: 'node.cabinet.runPanel.plinthHeight', message: 'Plinth height' })}
               max={0.3}
               min={0.02}
               onChange={(value) => updateRun({ plinthHeight: value })}
@@ -570,13 +1067,19 @@ export function CabinetRunPanel({
           )}
           <ToggleControl
             checked={node.withCountertop}
-            label="Show countertop"
+            label={i18n._({
+              id: 'node.cabinet.runPanel.showCountertop',
+              message: 'Show countertop',
+            })}
             onChange={(checked) => updateRun({ withCountertop: checked })}
           />
           {node.withCountertop && (
             <>
               <SliderControl
-                label="Countertop height"
+                label={i18n._({
+                  id: 'node.cabinet.runPanel.countertopHeight',
+                  message: 'Countertop height',
+                })}
                 max={0.08}
                 min={0.005}
                 onChange={(value) => updateRun({ countertopThickness: value })}
@@ -586,7 +1089,10 @@ export function CabinetRunPanel({
                 value={node.countertopThickness}
               />
               <SliderControl
-                label="Countertop depth"
+                label={i18n._({
+                  id: 'node.cabinet.runPanel.countertopDepth',
+                  message: 'Countertop depth',
+                })}
                 max={0.12}
                 min={0}
                 onChange={(value) => updateRun({ countertopOverhang: value })}
@@ -600,11 +1106,16 @@ export function CabinetRunPanel({
         </div>
       </PanelSection>
 
-      <PanelSection title="Island & Bar">
+      <PanelSection
+        title={i18n._({ id: 'node.cabinet.runPanel.islandBar', message: 'Island & Bar' })}
+      >
         <div className="space-y-2 px-1 pb-2">
           {node.withCountertop && node.barLedge?.edge !== 'back' && (
             <SliderControl
-              label="Seating overhang"
+              label={i18n._({
+                id: 'node.cabinet.runPanel.seatingOverhang',
+                message: 'Seating overhang',
+              })}
               max={0.45}
               min={0}
               onChange={(value) => updateRun({ countertopBackOverhang: value })}
@@ -616,19 +1127,23 @@ export function CabinetRunPanel({
           )}
           <ToggleControl
             checked={node.withFinishedBack}
-            label="Finished back"
+            label={i18n._({ id: 'node.cabinet.runPanel.finishedBack', message: 'Finished back' })}
             onChange={(checked) => updateRun({ withFinishedBack: checked })}
           />
+
           {node.withCountertop && (
             <ToggleControl
               checked={node.withWaterfall}
-              label="Waterfall ends"
+              label={i18n._({
+                id: 'node.cabinet.runPanel.waterfallEnds',
+                message: 'Waterfall ends',
+              })}
               onChange={(checked) => updateRun({ withWaterfall: checked })}
             />
           )}
           <ToggleControl
             checked={Boolean(node.barLedge)}
-            label="Bar counter"
+            label={i18n._({ id: 'node.cabinet.runPanel.barCounter', message: 'Bar counter' })}
             onChange={(checked) =>
               updateRun({
                 barLedge: checked ? { edge: 'back', height: 1.06, depth: 0.35 } : undefined,
@@ -644,14 +1159,23 @@ export function CabinetRunPanel({
                   })
                 }
                 options={[
-                  { value: 'back', label: 'Back' },
-                  { value: 'left', label: 'Left' },
-                  { value: 'right', label: 'Right' },
+                  {
+                    value: 'back',
+                    label: i18n._({ id: 'node.cabinet.runPanel.back', message: 'Back' }),
+                  },
+                  {
+                    value: 'left',
+                    label: i18n._({ id: 'node.cabinet.runPanel.left', message: 'Left' }),
+                  },
+                  {
+                    value: 'right',
+                    label: i18n._({ id: 'node.cabinet.runPanel.right', message: 'Right' }),
+                  },
                 ]}
                 value={node.barLedge.edge}
               />
               <SliderControl
-                label="Bar height"
+                label={i18n._({ id: 'node.cabinet.runPanel.barHeight', message: 'Bar height' })}
                 max={1.3}
                 min={0.9}
                 onChange={(value) => updateRun({ barLedge: { ...node.barLedge!, height: value } })}
@@ -661,7 +1185,7 @@ export function CabinetRunPanel({
                 value={node.barLedge.height}
               />
               <SliderControl
-                label="Bar depth"
+                label={i18n._({ id: 'node.cabinet.runPanel.barDepth', message: 'Bar depth' })}
                 max={0.5}
                 min={0.15}
                 onChange={(value) => updateRun({ barLedge: { ...node.barLedge!, depth: value } })}
@@ -675,11 +1199,11 @@ export function CabinetRunPanel({
         </div>
       </PanelSection>
 
-      <PanelSection title="Fronts">
+      <PanelSection title={i18n._({ id: 'node.cabinet.runPanel.fronts', message: 'Fronts' })}>
         <div className="space-y-2 px-1 pb-2">
           <div>
             <div className="px-1 pb-1 text-[10px] uppercase tracking-wide text-muted-foreground">
-              Style
+              {i18n._({ id: 'node.cabinet.runPanel.style', message: 'Style' })}
             </div>
             <SegmentedControl
               onChange={(value) =>
@@ -687,14 +1211,14 @@ export function CabinetRunPanel({
               }
               options={FRONT_STYLE_OPTIONS.map((option) => ({
                 value: option.value,
-                label: option.label,
+                label: i18n._(option.label),
               }))}
               value={node.frontStyle ?? 'slab'}
             />
           </div>
           <div>
             <div className="px-1 pb-1 text-[10px] uppercase tracking-wide text-muted-foreground">
-              Mounting
+              {i18n._({ id: 'node.cabinet.runPanel.mounting', message: 'Mounting' })}
             </div>
             <SegmentedControl
               onChange={(value) =>
@@ -702,14 +1226,14 @@ export function CabinetRunPanel({
               }
               options={FRONT_OVERLAY_OPTIONS.map((option) => ({
                 value: option.value,
-                label: option.label,
+                label: i18n._(option.label),
               }))}
               value={node.frontOverlay ?? 'full'}
             />
           </div>
           <div>
             <div className="px-1 pb-1 text-[10px] uppercase tracking-wide text-muted-foreground">
-              Reveal gap
+              {i18n._({ id: 'node.cabinet.runPanel.revealGap', message: 'Reveal gap' })}
             </div>
             <SegmentedControl
               mixed={cabinetRevealGapId(node.frontGap) === 'custom'}
@@ -732,11 +1256,11 @@ export function CabinetRunPanel({
         </div>
       </PanelSection>
 
-      <PanelSection title="Handles">
+      <PanelSection title={i18n._({ id: 'node.cabinet.runPanel.handles', message: 'Handles' })}>
         <div className="space-y-2 px-1 pb-2">
           <div>
             <div className="px-1 pb-1 text-[10px] uppercase tracking-wide text-muted-foreground">
-              Style
+              {i18n._({ id: 'node.cabinet.runPanel.style', message: 'Style' })}
             </div>
             <SegmentedControl
               onChange={(value) =>
@@ -744,7 +1268,7 @@ export function CabinetRunPanel({
               }
               options={HANDLE_STYLE_OPTIONS.map((option) => ({
                 value: option.value,
-                label: option.label,
+                label: i18n._(option.label),
               }))}
               value={node.handleStyle}
             />
@@ -752,7 +1276,7 @@ export function CabinetRunPanel({
           {(node.handleStyle === 'bar' || node.handleStyle === 'knob') && (
             <div>
               <div className="px-1 pb-1 text-[10px] uppercase tracking-wide text-muted-foreground">
-                Position
+                {i18n._({ id: 'node.cabinet.runPanel.position', message: 'Position' })}
               </div>
               <SegmentedControl
                 onChange={(value) =>
@@ -760,7 +1284,7 @@ export function CabinetRunPanel({
                 }
                 options={HANDLE_POSITION_OPTIONS.map((option) => ({
                   value: option.value,
-                  label: option.label,
+                  label: i18n._(option.label),
                 }))}
                 value={node.handlePosition ?? 'auto'}
               />

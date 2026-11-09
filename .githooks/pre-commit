@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# Biome on staged files, the same check `bun run check` runs in CI.
+# Check only: auto-fixing and re-adding the file would also stage hunks you
+# left unstaged. Run `bun run check:fix` and re-stage to fix.
+# Installed by `bun install` (core.hooksPath). Skip once with --no-verify.
+set -euo pipefail
+files=()
+while IFS= read -r file; do files+=("$file"); done < <(
+  git diff --cached --name-only --diff-filter=ACMR |
+    grep -E '\.(ts|tsx|js|jsx|mjs|cjs|json|jsonc|css|md|mdx)$' || true
+)
+[ ${#files[@]} -eq 0 ] && exit 0
+bun run --silent check --no-errors-on-unmatched --diagnostic-level=error --staged "${files[@]}" ||
+  { echo "pre-commit: run 'bun run check:fix', re-stage, and commit again." >&2; exit 1; }

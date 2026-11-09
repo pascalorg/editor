@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'bun:test'
-import { ROTATE_HANDLE_DRAG_LABEL } from './contextual-help'
+import {
+  GROUP_MOVE_DRAG_LABEL,
+  GROUP_ROTATE_DRAG_LABEL,
+  ROTATE_HANDLE_DRAG_LABEL,
+} from './contextual-help'
 import {
   cycleSnappingModeIn,
   DEFAULT_SNAPPING_MODE,
@@ -49,10 +53,28 @@ describe('resolveSnapFlags', () => {
 })
 
 describe('per-context snapping', () => {
-  it('items default to grid with no angle lock', () => {
-    expect(defaultSnappingModeFor('item')).toBe('grid')
+  it('rotation defaults to angles and cycles independently to free rotation', () => {
+    expect(defaultSnappingModeFor('rotation')).toBe('angles')
+    expect(snappingModesFor('rotation')).toEqual(['angles', 'off'])
+    expect(cycleSnappingModeIn('rotation', 'angles')).toBe('off')
+    expect(cycleSnappingModeIn('rotation', 'off')).toBe('angles')
+  })
+  it('items default to magnetic alignment with no angle lock', () => {
+    expect(defaultSnappingModeFor('item')).toBe('lines')
     expect(snappingModesFor('item')).toEqual(['lines', 'grid', 'off'])
     expect(snappingModesFor('item')).not.toContain('angles')
+  })
+
+  it('group moves use the magnetic item context by default', () => {
+    const context = snapContextOf({
+      scope: { kind: 'handle-drag', handle: GROUP_MOVE_DRAG_LABEL },
+      mode: 'select',
+      tool: null,
+      profileOf: () => undefined,
+    })
+
+    expect(context).toBe('item')
+    expect(resolveSnapFlags(defaultSnappingModeFor(context!)).magnetic).toBe(true)
   })
 
   it('walls default to grid and expose the angle lock; polygons do NOT', () => {
@@ -110,6 +132,10 @@ describe('snapContextOf (profile-driven, node-declared)', () => {
     tool: string | null = null,
   ) => snapContextOf({ scope, mode, tool, profileOf, profileOfNode })
 
+  it('dividing a room draws like a wall draft (wall, with angles)', () => {
+    expect(ctx({ kind: 'room-divide' })).toBe('wall')
+  })
+
   it('translating a whole structural node has no angle (polygon, not wall)', () => {
     expect(ctx({ kind: 'moving', nodeType: 'wall' })).toBe('polygon')
     expect(ctx({ kind: 'moving', nodeType: 'slab' })).toBe('polygon')
@@ -122,7 +148,8 @@ describe('snapContextOf (profile-driven, node-declared)', () => {
     expect(ctx({ kind: 'handle-drag', nodeId: 'unknown_1' })).toBeNull()
     expect(
       ctx({ kind: 'handle-drag', nodeId: 'cabinet-module_1', handle: ROTATE_HANDLE_DRAG_LABEL }),
-    ).toBeNull()
+    ).toBe('rotation')
+    expect(ctx({ kind: 'handle-drag', handle: GROUP_ROTATE_DRAG_LABEL })).toBe('rotation')
   })
 
   it('gives mesh rotation the angle context and other edit operations polygon snapping', () => {

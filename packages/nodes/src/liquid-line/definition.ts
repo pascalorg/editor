@@ -23,6 +23,7 @@ export const liquidLineDefinition: NodeDefinition<typeof LiquidLineNode> = {
   schema: LiquidLineNode,
   category: 'utility',
   distributionRole: 'run',
+  drafting: { cancelOnHistoryJump: true },
   // Directional run: like a wall, drafting sets a direction, so it takes the
   // structural snapping context (grid / lines / angles / off) with a 45° angle
   // lock available as a cyclable mode.

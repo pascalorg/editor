@@ -3,22 +3,34 @@
 // Node registry bootstrap is loaded once at the root via
 // `<ClientBootstrap>` in `app/layout.tsx` — no per-page side-effect
 // import here.
+import { type MessageDescriptor, usePascalI18n } from '@pascal-app/core'
 import {
   applySceneGraphToEditor,
   Editor,
+  ItemsPanel,
   type SceneGraph,
   type SidebarTab,
 } from '@pascal-app/editor'
-import { Hammer, Layers, Settings } from 'lucide-react'
+import { PascalWebXRButton } from '@webxr/plugin/pascal-editor'
+import { Hammer, Layers, Package, Palette, Settings } from 'lucide-react'
 import Image from 'next/image'
-import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { PoolSectionBanner } from '@/components/pool-section-banner'
 import { countGraphNodes, isEmptyGraphOverwrite } from '@/lib/empty-graph-guard'
-import { type PersistedSceneGraph, sceneGraphSignature } from '@/lib/scene-signature'
-import { cn } from '@/lib/utils'
+import { useLocalArtifactStore } from '@/lib/local-artifact-store'
+import {
+  isPendingSceneGraphEcho,
+  type PersistedSceneGraph,
+  sceneGraphSignature,
+} from '@/lib/scene-signature'
+import { useThumbnailAutosave } from '@/lib/use-thumbnail-autosave'
 import { BuildTab } from './build-tab'
-import { CommunityViewerToolbarLeft, CommunityViewerToolbarRight } from './viewer-toolbar'
+import { EditorNavbar } from './editor-navbar'
+import { KitchenCommands } from './kitchen-browser'
+import { PaintPanel } from './paint-panel'
+import { EditorViewerToolbarLeft, EditorViewerToolbarRight } from './viewer-toolbar'
+import { useWebXRFeature, useWebXRInstalled, WebXRFeatureRuntime } from './webxr-feature-gate'
 
 export interface SceneMeta {
   id: string
@@ -33,10 +45,20 @@ export interface SceneMeta {
   nodeCount: number
 }
 
-const SIDEBAR_TABS: (SidebarTab & { component: React.ComponentType })[] = [
+// The open-source editor only ships the built-in catalog (no uploaded items),
+// so the item source chips and tag filters add nothing — drop them and keep
+// the panel to plain categories.
+function EditorItemsPanel() {
+  return <ItemsPanel showSourceFilter={false} showTagFilters={false} />
+}
+
+const SIDEBAR_TABS: (Omit<SidebarTab, 'label'> & {
+  label: MessageDescriptor
+  component: React.ComponentType
+})[] = [
   {
     id: 'site',
-    label: 'Scene',
+    label: /* i18n */ { id: 'app.sceneLoader.scene', message: 'Scene' },
     component: () => null, // Built-in SitePanel handles this
     mobileDefaultSnap: 0.5,
     mobileIcon: <Layers className="h-5 w-5" />,
@@ -52,7 +74,7 @@ const SIDEBAR_TABS: (SidebarTab & { component: React.ComponentType })[] = [
   },
   {
     id: 'build',
-    label: 'Build',
+    label: /* i18n */ { id: 'app.sceneLoader.build', message: 'Build' },
     component: BuildTab,
     mobileDefaultSnap: 0.5,
     mobileIcon: <Hammer className="h-5 w-5" />,
@@ -67,8 +89,40 @@ const SIDEBAR_TABS: (SidebarTab & { component: React.ComponentType })[] = [
     ),
   },
   {
+    id: 'paint',
+    label: /* i18n */ { id: 'app.sceneLoader.paint', message: 'Paint' },
+    component: PaintPanel,
+    mobileDefaultSnap: 0.5,
+    mobileIcon: <Palette className="h-5 w-5" />,
+    icon: (
+      <Image
+        alt=""
+        className="h-8 w-8 object-contain"
+        height={32}
+        src="/icons/paint.webp"
+        width={32}
+      />
+    ),
+  },
+  {
+    id: 'items',
+    label: /* i18n */ { id: 'app.sceneLoader.items', message: 'Items' },
+    component: EditorItemsPanel,
+    mobileDefaultSnap: 0.5,
+    mobileIcon: <Package className="h-5 w-5" />,
+    icon: (
+      <Image
+        alt=""
+        className="h-8 w-8 object-contain"
+        height={32}
+        src="/icons/couch.webp"
+        width={32}
+      />
+    ),
+  },
+  {
     id: 'settings',
-    label: 'Settings',
+    label: /* i18n */ { id: 'app.sceneLoader.settings', message: 'Settings' },
     component: () => null,
     mobileDefaultSnap: 0.5,
     mobileIcon: <Settings className="h-5 w-5" />,
@@ -108,7 +162,39 @@ function isLightPreviewQuery(searchParams: URLSearchParams): boolean {
   return disable.split(',').some((p) => p.trim() === 'postFx')
 }
 
-export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
+export function SceneLoader(props: SceneLoaderProps) {
+  const webXRInstalled = useWebXRInstalled()
+  // The editor follows its host's `.dark` class, and this app keeps the editor
+  // dark: the page root carries it from the first paint, and <body> for the
+  // menus and dialogs the editor portals there.
+  useEffect(() => {
+    document.body.classList.add('dark')
+    return () => document.body.classList.remove('dark')
+  }, [])
+  return (
+    <WebXRFeatureRuntime enabled={webXRInstalled}>
+      <SceneEditor {...props} />
+    </WebXRFeatureRuntime>
+  )
+}
+
+function SceneEditor({ initialScene, meta: initialMeta }: SceneLoaderProps) {
+  const i18n = usePascalI18n()
+  const catalogVersion = i18n.getVersion()
+  // biome-ignore lint/correctness/useExhaustiveDependencies: labels re-translate on a locale switch or a late registerMessages
+  const sidebarTabs = useMemo(
+    () => SIDEBAR_TABS.map((tab) => ({ ...tab, label: i18n._(tab.label) })),
+    [i18n, catalogVersion],
+  )
+  // A rename must reach the autosave body, which sends `meta.name`.
+  const [renamedTo, setRenamedTo] = useState<string | null>(null)
+  const meta = useMemo(
+    () => (renamedTo === null ? initialMeta : { ...initialMeta, name: renamedTo }),
+    [initialMeta, renamedTo],
+  )
+  const vr = useWebXRFeature()
+  useLocalArtifactStore()
+  useThumbnailAutosave({ sceneId: meta.id, enabled: true })
   const router = useRouter()
   const searchParams = useSearchParams()
   const versionRef = useRef(meta.version)
@@ -117,6 +203,7 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
   // store must never overwrite a populated server copy.
   const serverNodeCountRef = useRef(meta.nodeCount)
   const lastRemoteGraphJsonRef = useRef<string | null>(null)
+  const pendingGraphSignaturesRef = useRef(new Set<string>())
   const suppressRemoteSaveUntilRef = useRef(0)
   const [conflict, setConflict] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
@@ -124,6 +211,36 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
   const lightPreview = isLightPreviewQuery(searchParams)
 
   const handleLoad = useCallback(async () => initialScene, [initialScene])
+
+  const handleRename = useCallback(
+    async (name: string) => {
+      try {
+        const response = await fetch(`/api/scenes/${meta.id}`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            'If-Match': String(versionRef.current),
+          },
+          body: JSON.stringify({ name }),
+        })
+        if (response.status === 409) {
+          setConflict(true)
+          return
+        }
+        if (!response.ok) {
+          setSaveError(`Rename failed (${response.status})`)
+          return
+        }
+        const next = (await response.json()) as SceneMeta
+        versionRef.current = next.version
+        setRenamedTo(next.name)
+        setSaveError(null)
+      } catch (error) {
+        setSaveError(error instanceof Error ? error.message : 'Rename failed')
+      }
+    },
+    [meta.id],
+  )
 
   const handleSave = useCallback(
     async (graph: SceneGraph, options?: { keepalive?: boolean }) => {
@@ -149,6 +266,7 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
         return
       }
 
+      pendingGraphSignaturesRef.current.add(graphJson)
       try {
         const response = await fetch(`/api/scenes/${meta.id}`, {
           method: 'PUT',
@@ -185,11 +303,15 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
         }
 
         const next = (await response.json()) as SceneMeta
-        versionRef.current = next.version
-        serverNodeCountRef.current = next.nodeCount
+        if (next.version >= versionRef.current) {
+          versionRef.current = next.version
+          serverNodeCountRef.current = next.nodeCount
+        }
         setSaveError(null)
       } catch (error) {
         setSaveError(error instanceof Error ? error.message : 'Save failed')
+      } finally {
+        pendingGraphSignaturesRef.current.delete(graphJson)
       }
     },
     [meta.id, meta.name],
@@ -210,7 +332,11 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
 
       versionRef.current = payload.version
       serverNodeCountRef.current = countGraphNodes(payload.graph)
-      lastRemoteGraphJsonRef.current = sceneGraphSignature(payload.graph)
+      const signature = sceneGraphSignature(payload.graph)
+      // SSE can deliver our save before its HTTP response. Reapplying that
+      // graph would reset tools and selection while the user keeps editing.
+      if (isPendingSceneGraphEcho(payload.graph, pendingGraphSignaturesRef.current)) return
+      lastRemoteGraphJsonRef.current = signature
       suppressRemoteSaveUntilRef.current = Date.now() + 2500
       applySceneGraphToEditor(payload.graph)
       setConflict(false)
@@ -227,82 +353,83 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
   }, [meta.id])
 
   const handleThumb = useCallback(
-    async (_blob: Blob) => {
-      // TODO(phase7): upload thumbnail via POST /api/scenes/[id]/thumbnail.
-      // Stub endpoint is not yet implemented in v0.1 — skip upload for now.
+    async (blob: Blob, cameraData: { requestId?: string }) => {
+      if (cameraData.requestId) return
       await fetch(`/api/scenes/${meta.id}/thumbnail`, {
         method: 'POST',
-        // Intentionally no body — endpoint is a stub.
-      }).catch(() => {
-        // Swallow errors silently; thumbnail upload is best-effort.
-      })
+        headers: { 'Content-Type': 'image/webp' },
+        body: blob,
+      }).catch(() => {})
     },
     [meta.id],
   )
 
   return (
-    <div className="relative h-screen w-screen">
+    <div className="dark relative h-screen w-screen">
       {conflict && (
-        <div className="pointer-events-auto absolute top-4 left-1/2 z-50 w-full max-w-md -translate-x-1/2 rounded-lg border border-border bg-background p-4 shadow-xl">
-          <h2 className="font-semibold text-sm">Another session saved first — refresh?</h2>
+        <div className="dark pointer-events-auto absolute top-14 left-1/2 z-50 w-full max-w-md -translate-x-1/2 rounded-lg border border-border bg-background p-4 text-foreground shadow-xl">
+          <h2 className="font-semibold text-sm">
+            {i18n._({
+              id: 'app.sceneLoader.anotherSessionSavedFirstRefresh',
+              message: 'Another session saved first — refresh?',
+            })}
+          </h2>
           <p className="mt-1 text-muted-foreground text-xs">
-            Your changes haven&apos;t been saved. Reload to pick up the latest version.
+            {i18n._({
+              id: 'app.sceneLoader.yourChangesHavenTBeenSaved',
+              message: "Your changes haven't been saved. Reload to pick up the latest version.",
+            })}
           </p>
           <div className="mt-3 flex items-center gap-2">
             <button
-              className="rounded-md border border-border bg-accent px-3 py-1.5 font-medium text-xs hover:bg-accent/80"
+              className="rounded-lg bg-primary px-3 py-1.5 font-medium text-primary-foreground text-xs hover:bg-primary/90"
               onClick={() => router.refresh()}
               type="button"
             >
-              Reload
+              {i18n._({ id: 'app.sceneLoader.reload', message: 'Reload' })}
             </button>
             <button
-              className="rounded-md border border-border bg-background px-3 py-1.5 font-medium text-xs hover:bg-accent/40"
+              className="rounded-lg border border-border px-3 py-1.5 font-medium text-xs hover:bg-accent"
               onClick={() => setConflict(false)}
               type="button"
             >
-              Dismiss
+              {i18n._({ id: 'app.sceneLoader.dismiss', message: 'Dismiss' })}
             </button>
           </div>
         </div>
       )}
       {saveError && !conflict && (
-        <div className="pointer-events-auto absolute top-4 left-1/2 z-50 w-full max-w-md -translate-x-1/2 rounded-lg border border-destructive/50 bg-background p-3 shadow-xl">
+        <div className="dark pointer-events-auto absolute top-14 left-1/2 z-50 w-full max-w-md -translate-x-1/2 rounded-lg border border-destructive/50 bg-background px-4 py-2 text-center shadow-xl">
           <p className="font-medium text-destructive text-xs">{saveError}</p>
         </div>
       )}
-      <div className="pointer-events-none absolute top-4 right-4 z-40 flex flex-col items-end gap-1 md:top-14 md:flex-row md:items-center md:gap-2">
-        <button
-          aria-pressed={lightPreview}
-          className={cn(
-            'pointer-events-auto rounded-md border border-border px-3 py-1.5 font-medium text-xs shadow-sm backdrop-blur',
-            lightPreview ? 'bg-accent' : 'bg-background/90 hover:bg-accent/40',
-          )}
-          onClick={() =>
-            router.push(lightPreview ? `/scene/${meta.id}` : `/scene/${meta.id}?disable=postFx`)
-          }
-          title="Skip the post-processing pipeline — lighter on the GPU, no ambient occlusion or selection outlines"
-          type="button"
-        >
-          Light preview
-        </button>
-        <Link
-          className="pointer-events-auto rounded-md border border-border bg-background/90 px-3 py-1.5 font-medium text-xs shadow-sm backdrop-blur hover:bg-accent/40"
-          href="/scenes"
-        >
-          All scenes
-        </Link>
-      </div>
+      <KitchenCommands />
       <Editor
         disablePostFx={lightPreview}
+        immersive={vr?.session ? vr.immersive : undefined}
         layoutVersion="v2"
+        navbarSlot={<EditorNavbar name={meta.name} onRename={handleRename} sceneId={meta.id} />}
         onLoad={handleLoad}
         onSave={handleSave}
         onThumbnailCapture={handleThumb}
         projectId={meta.projectId ?? 'default'}
-        sidebarTabs={SIDEBAR_TABS}
-        viewerToolbarLeft={<CommunityViewerToolbarLeft />}
-        viewerToolbarRight={<CommunityViewerToolbarRight />}
+        projectName={meta.name}
+        sidebarTabs={sidebarTabs}
+        viewerBanner={<PoolSectionBanner />}
+        viewerToolbarLeft={<EditorViewerToolbarLeft />}
+        viewerToolbarRight={
+          <EditorViewerToolbarRight
+            vrButton={
+              vr ? (
+                <PascalWebXRButton
+                  className="flex h-8 w-8 items-center justify-center text-muted-foreground hover:bg-accent disabled:opacity-50"
+                  feature={vr}
+                />
+              ) : null
+            }
+            vrLabel="Enter VR"
+          />
+        }
       />
     </div>
   )

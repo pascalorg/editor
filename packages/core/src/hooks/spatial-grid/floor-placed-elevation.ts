@@ -1,13 +1,18 @@
+import { floorConstructionLift } from '../../lib/floor-construction-lift'
+import { floorFinishTopAt } from '../../lib/floor-script'
 import { levelBaseElevationAt } from '../../lib/terrain-support'
 import { nodeRegistry } from '../../registry'
 import type {
-  FloorPlacedConfig,
   FloorPlacedFootprint,
   FloorPlacedFootprintContext,
   FloorPlacedFootprintsResolver,
 } from '../../registry/types'
-import type { AnyNode, AnyNodeId } from '../../schema'
-import { spatialGridManager } from './spatial-grid-manager'
+import type { AnyNode, AnyNodeId, SlabNode } from '../../schema'
+import { getFloorPlacedFootprints } from './floor-placed-footprints'
+
+export { getFloorPlacedFootprints } from './floor-placed-footprints'
+
+import { activeSpatialGrid } from './spatial-grid-manager'
 
 export { GROUND_SUPPORT_ID } from './support-host-id'
 
@@ -50,18 +55,6 @@ function withPositionAndRotation({
     position,
     ...(rotation !== undefined ? { rotation } : {}),
   } as AnyNode
-}
-
-export function getFloorPlacedFootprints(
-  floorPlaced: FloorPlacedConfig,
-  node: AnyNode,
-  ctx?: FloorPlacedFootprintContext,
-): FloorPlacedFootprint[] {
-  const rawFootprints = floorPlaced.footprints?.(node, ctx)
-  if (rawFootprints) return [...rawFootprints]
-
-  const footprint = floorPlaced.footprint?.(node, ctx)
-  return footprint ? [footprint] : []
 }
 
 export function getFloorPlacedElevation({
@@ -108,9 +101,16 @@ export function getFloorPlacedElevation({
    */
   let groundLiftCache: number | null = null
   const groundLift = (): number => {
-    groundLiftCache ??= levelBaseElevationAt(nodes, resolvedLevelId, position[0], position[2])
+    groundLiftCache ??=
+      levelBaseElevationAt(nodes, resolvedLevelId, position[0], position[2]) +
+      floorConstructionLift(nodes, effectiveNode)
     return groundLiftCache
   }
+
+  // A floor a room's script built (planks, tiles) is the walking surface on its plate: what stands
+  // there stands on the build's top, not inside it.
+  const onFloor = (slabId: string, elevation: number, at: [number, number, number]) =>
+    floorFinishTopAt(nodes, resolvedLevelId, slabId, at[0], at[2]) ?? finiteSlabElevation(elevation)
 
   // A persisted support host pins the elevation while it still exists and
   // overlaps a footprint — deterministic across stacked slabs. A stale
@@ -121,15 +121,34 @@ export function getFloorPlacedElevation({
   const supportSlabId = (effectiveNode as { supportSlabId?: string | null }).supportSlabId
   if (maxElevation == null && supportSlabId) {
     if (supportSlabId === GROUND_SUPPORT_ID) return groundLift()
+    const host = nodes[supportSlabId]
     for (const footprint of footprints) {
-      const hosted = spatialGridManager.getHostSlabElevationForFootprint(
+      if (host?.type === 'slab' && host.plateRole === 'base') {
+        const coverings = activeSpatialGrid()
+          .getSupportCandidatesForFootprint(
+            resolvedLevelId,
+            footprint.position ?? position,
+            footprint.dimensions,
+            footprint.rotation,
+          )
+          .map((candidate) => nodes[candidate.slabId])
+          .filter(
+            (candidate): candidate is SlabNode =>
+              candidate?.type === 'slab' && candidate.plateRole === 'platform',
+          )
+          .sort((a, b) => b.elevation - a.elevation)
+        const covering = coverings[0]
+        if (covering)
+          return onFloor(covering.id, covering.elevation, footprint.position ?? position)
+      }
+      const hosted = activeSpatialGrid().getHostSlabElevationForFootprint(
         resolvedLevelId,
         supportSlabId,
         footprint.position ?? position,
         footprint.dimensions,
         footprint.rotation,
       )
-      if (hosted !== null) return finiteSlabElevation(hosted)
+      if (hosted !== null) return onFloor(supportSlabId, hosted, footprint.position ?? position)
     }
   }
 
@@ -145,7 +164,7 @@ export function getFloorPlacedElevation({
   // sinking into the recess.
   let elected = Number.NEGATIVE_INFINITY
   for (const footprint of footprints) {
-    const support = spatialGridManager.getSlabSupportForItem(
+    const support = activeSpatialGrid().getSlabSupportForItem(
       resolvedLevelId,
       footprint.position ?? position,
       footprint.dimensions,
@@ -153,7 +172,9 @@ export function getFloorPlacedElevation({
       maxElevation,
     )
     const elevation =
-      support.slabId === null ? groundLift() : finiteSlabElevation(support.elevation)
+      support.slabId === null
+        ? groundLift()
+        : onFloor(support.slabId, support.elevation, footprint.position ?? position)
     if (elevation > elected) {
       elected = elevation
     }

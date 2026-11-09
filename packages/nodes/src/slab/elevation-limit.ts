@@ -168,6 +168,7 @@ export function clampSlabElevation(
     context.walls,
     context.slabs,
     context.storeyHeight,
+    nodes,
   )
 }
 
@@ -178,5 +179,5 @@ export function slabElevationUpperBound(
 ): number {
   const context = resolveSlabLevelContext(nodes, slab)
   if (!context) return Number.POSITIVE_INFINITY
-  return getSlabElevationUpperBound(slab, context.walls, context.slabs, context.storeyHeight)
+  return getSlabElevationUpperBound(slab, context.walls, context.slabs, context.storeyHeight, nodes)
 }

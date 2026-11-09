@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test } from 'bun:test'
-import { AnyNode, loadPlugin, nodeRegistry } from '@pascal-app/core'
+import { AnyNode, loadPlugin, nodeKindOf, nodeRegistry } from '@pascal-app/core'
 import { builtinPlugin } from './index'
 
 describe('builtinPlugin', () => {
@@ -19,6 +19,27 @@ describe('builtinPlugin', () => {
     expect(nodeRegistry.size).toBeGreaterThanOrEqual(1)
   })
 
+  test('opening paint reads the body material beneath slot overrides', async () => {
+    await loadPlugin(builtinPlugin)
+    for (const type of ['door', 'window'] as const) {
+      const node = AnyNode.parse({
+        type,
+        wallId: 'wall_test',
+        material: { properties: { color: '#123456' } },
+      })
+      const paint = nodeRegistry.get(type)?.capabilities?.paint
+      const pick = (role: string, painted = node) =>
+        paint?.getEffectiveMaterial?.({ node: painted, role, nodes: {} })
+      expect(pick('frame')?.material?.properties?.color).toBe('#123456')
+      if (type === 'door') expect(pick('panel')?.material?.properties?.color).toBe('#123456')
+      expect(pick('glass')).toBeNull()
+      expect(
+        pick('frame', AnyNode.parse({ ...node, slots: { frame: '#abcdef' } }))?.material?.properties
+          ?.color,
+      ).toBe('#abcdef')
+    }
+  })
+
   test('every AnyNode discriminator is registered in builtinPlugin', async () => {
     // Phase 6 coverage check. The `AnyNode` discriminated union and the
     // `builtinPlugin.nodes` array are both hand-maintained today (full
@@ -31,19 +52,7 @@ describe('builtinPlugin', () => {
     // (the union) and `nodes/src/index.ts` (the plugin), and this test
     // will keep them honest.
     await loadPlugin(builtinPlugin)
-    const unionKinds = new Set(
-      AnyNode.options.map((option) => {
-        // zod v4: the `type` field is a literal, often wrapped in
-        // ZodDefault. Unwrap to the innermost def and read its literal
-        // value from `_zod.def.values` (the v3 `.value` getter is gone).
-        let def = (option as unknown as { shape: Record<string, { _zod: { def: any } }> }).shape
-          .type._zod.def
-        while (def.innerType) {
-          def = def.innerType._zod.def
-        }
-        return def.values?.[0] as string
-      }),
-    )
+    const unionKinds = new Set(AnyNode.options.map(nodeKindOf))
     const registryKinds = new Set(Array.from(nodeRegistry.entries(), ([kind]) => kind))
     const missingFromRegistry = [...unionKinds].filter((k) => !registryKinds.has(k))
     const missingFromUnion = [...registryKinds].filter((k) => !unionKinds.has(k))

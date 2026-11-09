@@ -1,10 +1,14 @@
-import { type AnyNode, type NodeDefinition, useScene } from '@pascal-app/core'
-import { ductBodyPaint, ductBodySlots } from '../shared/duct-body-paint'
+import { type AnyNode, ductBodySlots, type NodeDefinition, useScene } from '@pascal-app/core'
+import { ductBodyPaint } from '../shared/duct-body-paint'
 import { createPathPointMoveAffordance } from '../shared/path-point-affordance'
 import { createSegmentMoveAffordance } from '../shared/path-segment-affordance'
+import { createRunHangerToolHint } from '../shared/run-hanger-mode'
+import { ductRunToolOptions } from '../shared/run-tool-options'
+import { ductBranchAffordance, ductContinuationAffordance } from './continuation'
 import { buildDuctSegmentFloorplan } from './floorplan'
-import { buildDuctSegmentGeometry, ductPortDiameterIn } from './geometry'
+import { buildDuctSegmentGeometry } from './geometry'
 import { ductSegmentParametrics } from './parametrics'
+import { ductPortDiameterIn } from './profile'
 import { DuctSegmentNode } from './schema'
 
 /**
@@ -43,10 +47,11 @@ function rollDuctSegment(node: AnyNode, steps: 1 | -1): void {
 
 export const ductSegmentDefinition: NodeDefinition<typeof DuctSegmentNode> = {
   kind: 'duct-segment',
-  schemaVersion: 1,
+  schemaVersion: 2,
   schema: DuctSegmentNode,
   category: 'utility',
   distributionRole: 'run',
+  drafting: { surfaceQuery: true, cancelOnHistoryJump: true },
   // Directional run: like a wall, drafting sets a direction, so it takes the
   // structural snapping context (grid / lines / angles / off) with a 45° angle
   // lock available as a cyclable mode.
@@ -57,6 +62,10 @@ export const ductSegmentDefinition: NodeDefinition<typeof DuctSegmentNode> = {
     parentId: null,
     visible: true,
     metadata: {},
+    autoHangers: false,
+    hangerStyle: 'single',
+    hangerSpacing: 1.5,
+    hangerMaxReach: 2,
     path: [
       [0, 0, 0],
       [3, 0, 0],
@@ -97,22 +106,13 @@ export const ductSegmentDefinition: NodeDefinition<typeof DuctSegmentNode> = {
     },
   },
 
+  system: {
+    module: async () => ({
+      default: (await import('../shared/run-hanger-system')).DuctHangerSystem,
+    }),
+  },
+  floorplanDependsOnSiblings: true,
   geometry: buildDuctSegmentGeometry,
-  geometryKey: (n) =>
-    JSON.stringify([
-      n.path,
-      n.shape,
-      n.diameter,
-      n.width,
-      n.height,
-      n.roll,
-      n.ductMaterial,
-      n.seamDetail,
-      n.insulated,
-      n.insulationR,
-      n.system,
-      n.slots,
-    ]),
 
   // Open run ends as typed ports — directions point outward along the
   // path tangent so fittings mate flush. Path coords are already
@@ -159,6 +159,8 @@ export const ductSegmentDefinition: NodeDefinition<typeof DuctSegmentNode> = {
     // 2D twin of the 3D side-move arrows: slide a segment perpendicular to
     // itself. (Length editing stays on the per-vertex hex handles.)
     'move-segment': createSegmentMoveAffordance('duct-segment'),
+    'continue-run': ductContinuationAffordance,
+    'branch-run': ductBranchAffordance,
   },
 
   // Selection-time path-point handles (drag to edit a committed run).
@@ -174,14 +176,15 @@ export const ductSegmentDefinition: NodeDefinition<typeof DuctSegmentNode> = {
   },
 
   tool: () => import('./tool'),
+  toolOptions: ductRunToolOptions,
   toolHints: [
     { key: 'Click', label: 'Start segment' },
     { key: 'Click again', label: 'Place and continue' },
     { key: 'Alt + drag', label: 'Go vertical ↕, click to place' },
     { key: '[ / ]', label: 'Duct diameter down / up' },
-    { key: 'Q', label: 'Round / rect trunk' },
-    { key: 'C', label: 'Ceiling / floor height' },
-    { key: 'Esc', label: 'Cancel start point' },
+    { key: 'Q', label: 'Round / rectangular / oval' },
+    createRunHangerToolHint('duct-segment'),
+    { key: 'Esc', label: 'Exit drawing' },
   ],
 
   presentation: {

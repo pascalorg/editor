@@ -10,6 +10,7 @@ import {
 import { useLayoutEffect, useMemo, useRef } from 'react'
 import type { Mesh } from 'three'
 import { RoofFaceHostFrame } from '../shared/roof-face-host'
+import { ScriptedOpeningModel } from '../shared/scripted-opening'
 
 export const WindowRenderer = ({ node }: { node: WindowNode }) => {
   const ref = useRef<Mesh>(null!)
@@ -46,6 +47,7 @@ export const WindowRenderer = ({ node }: { node: WindowNode }) => {
       {...(isTransient ? {} : handlers)}
     >
       <boxGeometry args={[0, 0, 0]} />
+      {renderNode.source && <ScriptedOpeningModel node={renderNode} />}
     </mesh>
   )
 

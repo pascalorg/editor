@@ -1,0 +1,52 @@
+{
+  "version": 1,
+  "name": "Soccer Ball",
+  "description": "soccer ball",
+  "parameters": [
+    {
+      "id": "scale",
+      "label": "Scale",
+      "default": 1,
+      "min": 1,
+      "max": 1,
+      "step": 1,
+      "unit": "count"
+    }
+  ],
+  "slots": [
+    {
+      "id": "white",
+      "label": "White",
+      "color": "#f4f4ee"
+    },
+    {
+      "id": "black",
+      "label": "Black",
+      "color": "#222222"
+    }
+  ],
+  "parts": [
+    {
+      "id": "ball",
+      "label": "Ball",
+      "count": 1,
+      "shapes": [
+        {
+          "id": "sphere",
+          "primitive": "ellipsoid",
+          "slot": "white",
+          "size": [0.22, 0.22, 0.22],
+          "position": [0, 0.11, 0]
+        },
+        {
+          "id": "patch",
+          "primitive": "ellipsoid",
+          "slot": "black",
+          "size": [0.09, 0.01, 0.09],
+          "position": [0, 0.215, 0]
+        }
+      ]
+    }
+  ],
+  "constraints": []
+}

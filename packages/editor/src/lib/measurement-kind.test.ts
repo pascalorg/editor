@@ -19,12 +19,10 @@ describe('creatable measurement kinds', () => {
     }
   })
 
-  test.each([
-    'smart',
-    'unknown',
-    null,
-    undefined,
-  ])('falls back from a non-creatable persisted value: %s', (value) => {
-    expect(normalizeCreatableMeasurementKind(value)).toBe(DEFAULT_CREATABLE_MEASUREMENT_KIND)
-  })
+  test.each(['smart', 'unknown', null, undefined])(
+    'falls back from a non-creatable persisted value: %s',
+    (value) => {
+      expect(normalizeCreatableMeasurementKind(value)).toBe(DEFAULT_CREATABLE_MEASUREMENT_KIND)
+    },
+  )
 })

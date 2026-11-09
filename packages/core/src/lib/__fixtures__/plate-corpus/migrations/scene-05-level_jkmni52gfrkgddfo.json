@@ -1,0 +1,332 @@
+{
+  "sceneId": "scene-05",
+  "levelId": "level_jkmni52gfrkgddfo",
+  "nodes": {
+    "level_jkmni52gfrkgddfo": {
+      "id": "level_jkmni52gfrkgddfo",
+      "type": "level",
+      "level": 0,
+      "object": "node",
+      "visible": true,
+      "children": [
+        "zone_1y65y18ky3zdxyjj",
+        "slab_62v8vmbt6fxkva94",
+        "wall_2nz943v2req0sxhd",
+        "zone_2iqtf438ykwmvh67",
+        "slab_xa42gky75ad7v57e",
+        "wall_b8dif9hv3z53vti8",
+        "wall_cdk3u7n6e5so52w6",
+        "wall_899skb7x6hzhlhth",
+        "slab_z90l9hg6o9dlm97i",
+        "wall_b7fb2elw83c6ku74",
+        "wall_vskhry0v7572vjk1"
+      ],
+      "parentId": null,
+      "height": 2.5
+    },
+    "slab_62v8vmbt6fxkva94": {
+      "id": "slab_62v8vmbt6fxkva94",
+      "type": "slab",
+      "holes": [],
+      "object": "node",
+      "polygon": [
+        [
+          0,
+          0
+        ],
+        [
+          2.2,
+          0
+        ],
+        [
+          2.2,
+          2.2
+        ],
+        [
+          0,
+          2.2
+        ]
+      ],
+      "visible": true,
+      "material": "tiles",
+      "parentId": "level_jkmni52gfrkgddfo",
+      "elevation": 0.05,
+      "holeMetadata": [],
+      "autoFromWalls": false,
+      "thickness": 0.05
+    },
+    "slab_xa42gky75ad7v57e": {
+      "id": "slab_xa42gky75ad7v57e",
+      "type": "slab",
+      "holes": [],
+      "object": "node",
+      "polygon": [
+        [
+          2.2,
+          0
+        ],
+        [
+          6,
+          0
+        ],
+        [
+          6,
+          5
+        ],
+        [
+          0,
+          5
+        ],
+        [
+          0,
+          2.2
+        ],
+        [
+          2.2,
+          2.2
+        ]
+      ],
+      "visible": true,
+      "material": "tiles",
+      "parentId": "level_jkmni52gfrkgddfo",
+      "elevation": 0.05,
+      "holeMetadata": [],
+      "autoFromWalls": false,
+      "thickness": 0.05
+    },
+    "slab_z90l9hg6o9dlm97i": {
+      "id": "slab_z90l9hg6o9dlm97i",
+      "type": "slab",
+      "holes": [],
+      "object": "node",
+      "polygon": [
+        [
+          0,
+          5
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          6,
+          0
+        ],
+        [
+          6,
+          5
+        ]
+      ],
+      "visible": true,
+      "material": "tiles",
+      "parentId": "level_jkmni52gfrkgddfo",
+      "elevation": 0.05,
+      "holeMetadata": [],
+      "autoFromWalls": true,
+      "thickness": 0.05
+    },
+    "wall_2nz943v2req0sxhd": {
+      "id": "wall_2nz943v2req0sxhd",
+      "end": [
+        0,
+        0
+      ],
+      "type": "wall",
+      "start": [
+        0,
+        5
+      ],
+      "object": "node",
+      "visible": true,
+      "backSide": "exterior",
+      "children": [],
+      "material": {
+        "preset": "concrete"
+      },
+      "parentId": "level_jkmni52gfrkgddfo",
+      "frontSide": "interior",
+      "thickness": 0.35,
+      "exteriorMaterialPreset": "library:wall-wood4",
+      "interiorMaterialPreset": "library:wall-wood2"
+    },
+    "wall_899skb7x6hzhlhth": {
+      "id": "wall_899skb7x6hzhlhth",
+      "end": [
+        0,
+        5
+      ],
+      "type": "wall",
+      "start": [
+        6,
+        5
+      ],
+      "object": "node",
+      "visible": true,
+      "backSide": "exterior",
+      "children": [],
+      "material": {
+        "preset": "concrete"
+      },
+      "parentId": "level_jkmni52gfrkgddfo",
+      "frontSide": "interior",
+      "thickness": 0.35
+    },
+    "wall_b7fb2elw83c6ku74": {
+      "id": "wall_b7fb2elw83c6ku74",
+      "end": [
+        2.2,
+        2.2
+      ],
+      "type": "wall",
+      "start": [
+        0,
+        2.2
+      ],
+      "object": "node",
+      "visible": true,
+      "backSide": "unknown",
+      "children": [],
+      "material": {
+        "preset": "concrete"
+      },
+      "parentId": "level_jkmni52gfrkgddfo",
+      "frontSide": "unknown",
+      "thickness": 0.07
+    },
+    "wall_b8dif9hv3z53vti8": {
+      "id": "wall_b8dif9hv3z53vti8",
+      "end": [
+        6,
+        0
+      ],
+      "type": "wall",
+      "start": [
+        0,
+        0
+      ],
+      "object": "node",
+      "visible": true,
+      "backSide": "exterior",
+      "children": [],
+      "material": {
+        "preset": "concrete"
+      },
+      "parentId": "level_jkmni52gfrkgddfo",
+      "frontSide": "interior",
+      "thickness": 0.35,
+      "exteriorMaterialPreset": "library:wall-wood4"
+    },
+    "wall_cdk3u7n6e5so52w6": {
+      "id": "wall_cdk3u7n6e5so52w6",
+      "end": [
+        6,
+        5
+      ],
+      "type": "wall",
+      "start": [
+        6,
+        0
+      ],
+      "object": "node",
+      "visible": true,
+      "backSide": "exterior",
+      "children": [],
+      "material": {
+        "preset": "concrete"
+      },
+      "parentId": "level_jkmni52gfrkgddfo",
+      "frontSide": "interior",
+      "thickness": 0.35
+    },
+    "wall_vskhry0v7572vjk1": {
+      "id": "wall_vskhry0v7572vjk1",
+      "end": [
+        2.2,
+        0
+      ],
+      "type": "wall",
+      "start": [
+        2.2,
+        2.2
+      ],
+      "object": "node",
+      "visible": true,
+      "backSide": "unknown",
+      "children": [],
+      "material": {
+        "preset": "concrete"
+      },
+      "parentId": "level_jkmni52gfrkgddfo",
+      "frontSide": "unknown",
+      "thickness": 0.07
+    },
+    "zone_1y65y18ky3zdxyjj": {
+      "id": "zone_1y65y18ky3zdxyjj",
+      "type": "zone",
+      "color": "#06b6d4",
+      "object": "node",
+      "polygon": [
+        [
+          0,
+          0
+        ],
+        [
+          2.2,
+          0
+        ],
+        [
+          2.2,
+          2.2
+        ],
+        [
+          0,
+          2.2
+        ]
+      ],
+      "visible": true,
+      "material": {
+        "preset": "tiles"
+      },
+      "parentId": "level_jkmni52gfrkgddfo",
+      "name": "Room"
+    },
+    "zone_2iqtf438ykwmvh67": {
+      "id": "zone_2iqtf438ykwmvh67",
+      "type": "zone",
+      "color": "#f97316",
+      "object": "node",
+      "polygon": [
+        [
+          2.2,
+          0
+        ],
+        [
+          6,
+          0
+        ],
+        [
+          6,
+          5
+        ],
+        [
+          0,
+          5
+        ],
+        [
+          0,
+          2.2
+        ],
+        [
+          2.2,
+          2.2
+        ]
+      ],
+      "visible": true,
+      "material": {
+        "preset": "tiles"
+      },
+      "parentId": "level_jkmni52gfrkgddfo",
+      "name": "Room"
+    }
+  }
+}

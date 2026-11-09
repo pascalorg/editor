@@ -1,6 +1,7 @@
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import type { McpServer } from '@modelcontextprotocol/server'
 import { z } from 'zod'
 import type { SceneOperations } from '../operations'
+import { READ_ONLY_TOOL_ANNOTATIONS } from './annotations'
 
 export const getSceneInput = {}
 
@@ -8,6 +9,7 @@ export const getSceneOutput = {
   nodes: z.record(z.string(), z.unknown()),
   rootNodeIds: z.array(z.string()),
   collections: z.record(z.string(), z.unknown()).optional(),
+  installedPlugins: z.array(z.string()).optional(),
 }
 
 export function registerGetScene(server: McpServer, bridge: SceneOperations): void {
@@ -16,9 +18,10 @@ export function registerGetScene(server: McpServer, bridge: SceneOperations): vo
     {
       title: 'Get scene',
       description:
-        'Returns the full scene graph: flat node dictionary, root node IDs, and collections.',
-      inputSchema: getSceneInput,
-      outputSchema: getSceneOutput,
+        'Returns the full scene graph: flat node dictionary, root node IDs, collections, and explicit installed plugin IDs when present.',
+      inputSchema: z.object(getSceneInput),
+      outputSchema: z.object(getSceneOutput),
+      annotations: READ_ONLY_TOOL_ANNOTATIONS,
     },
     async () => {
       const scene = bridge.exportJSON()
@@ -26,6 +29,7 @@ export function registerGetScene(server: McpServer, bridge: SceneOperations): vo
         nodes: scene.nodes as Record<string, unknown>,
         rootNodeIds: scene.rootNodeIds,
         collections: (scene.collections ?? {}) as Record<string, unknown>,
+        ...(scene.installedPlugins ? { installedPlugins: scene.installedPlugins } : {}),
       }
       return {
         content: [{ type: 'text' as const, text: JSON.stringify(payload) }],

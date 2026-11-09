@@ -9,6 +9,8 @@
  * The functions here are stable contract — Phase 3 only adds, never removes.
  */
 
+import type { BuildingPose } from './alignment'
+
 export type Vec2 = readonly [number, number]
 export type Vec3 = readonly [number, number, number]
 
@@ -81,6 +83,22 @@ export function snapWorldXZToBuildingLocal(
     world: [snappedWX, snappedWZ],
     local: [dx * cos - dz * sin, dx * sin + dz * cos],
   }
+}
+
+/** Snap in model-world axes, without presentation transforms affecting the grid. */
+export function snapLocalXZInWorld(
+  local: Vec2,
+  pose: BuildingPose | null,
+  snap: (value: number, axis: 0 | 1) => number,
+): [number, number] {
+  const yaw = pose?.rotationY ?? 0
+  const cos = Math.cos(yaw)
+  const sin = Math.sin(yaw)
+  const px = pose?.position[0] ?? 0
+  const pz = pose?.position[2] ?? 0
+  const x = snap(px + local[0] * cos + local[1] * sin, 0) - px
+  const z = snap(pz - local[0] * sin + local[1] * cos, 1) - pz
+  return [x * cos - z * sin, x * sin + z * cos]
 }
 
 // ─── Angle snap ───────────────────────────────────────────────────────

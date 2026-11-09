@@ -1,7 +1,13 @@
 'use client'
 
 import type { AssetInput } from '@pascal-app/core'
-import { triggerSFX, useDraftNode, useEditor, usePlacementCoordinator } from '@pascal-app/editor'
+import {
+  cameraFacingYaw,
+  triggerSFX,
+  useDraftNode,
+  useEditor,
+  usePlacementCoordinator,
+} from '@pascal-app/editor'
 
 /**
  * Registry-driven item placement tool. Mounted by `ToolManager` when
@@ -28,9 +34,9 @@ function ItemPlacementContent({ selectedItem }: { selectedItem: AssetInput }) {
       // Only floor items get a draft on mount; wall / ceiling items are
       // created lazily by the placement coordinator when the cursor
       // enters a surface (so the draft doesn't appear at world origin
-      // before the first move event).
+      // before the first move event). A new floor item starts facing the view.
       if (selectedItem && !selectedItem.attachTo) {
-        draftNode.create(gridPosition, selectedItem)
+        draftNode.create(gridPosition, selectedItem, [0, cameraFacingYaw(), 0])
       }
     },
     onCommitted: () => {

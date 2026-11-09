@@ -1,10 +1,16 @@
 import { describe, expect, test } from 'bun:test'
 import {
+  BuildingNode,
   clampWallEndHeightOffset,
+  computeWallSlabSupport,
+  getWallTop,
+  LevelNode,
   MIN_WALL_END_HEIGHT,
   resolveWallEffectiveHeight,
   resolveWallTop,
-} from './wall-top'
+  SlabNode,
+  WallNode,
+} from '../../index'
 
 describe('clampWallEndHeightOffset', () => {
   test('returns 0 when offset is undefined or 0', () => {
@@ -47,8 +53,8 @@ describe('resolveWallTop', () => {
     expect(resolveWallTop({ height: 2.5 }, 3, 0.6, 0)).toBeCloseTo(3.1)
   })
 
-  test('explicit height on sunken base keeps the absolute top', () => {
-    expect(resolveWallTop({ height: 2.5 }, 3, -0.4, 0)).toBe(2.5)
+  test('explicit height on sunken support follows its actual support', () => {
+    expect(resolveWallTop({ height: 2.5 }, 3, -0.4, 0)).toBe(2.1)
   })
 
   test('ground-hosted explicit height remains body-relative in a terrain depression', () => {
@@ -107,6 +113,25 @@ describe('resolveWallTop', () => {
     expect(resolveWallTop(wall, 3, -0.5, 0.5)).toBeCloseTo(2.5)
     expect(resolveWallTop(wall, 3, -0.5, 1)).toBeCloseTo(3.0)
   })
+
+  test('a railing never follows its storey: its own height, else a 36 in guard, over its base', () => {
+    expect(resolveWallTop({ wallType: 'railing', height: 1.0668 }, 1.0668, 0.2, 0)).toBeCloseTo(
+      1.2668,
+    )
+    expect(resolveWallTop({ wallType: 'railing' }, 3, 0.2, 0)).toBeCloseTo(0.2 + 0.9144)
+  })
+
+  test('an authored storey-height wall ends at the covering underside, not its support plus height', () => {
+    expect(resolveWallTop({ height: 3.6 }, 3.6, 0.05, 0)).toBeCloseTo(3.6)
+    expect(resolveWallEffectiveHeight({ height: 3.6 }, 3.6, 0.05, 0)).toBeCloseTo(3.55)
+    expect(resolveWallTop({ height: 3.6 }, 3.4, 0.05, 0, 3.6)).toBeCloseTo(3.4)
+    expect(resolveWallTop({ height: 3.6 }, 4.1, 0.55, 0, 3.6)).toBeCloseTo(4.1)
+    expect(resolveWallTop({ height: 4.2 }, 3.6, 0.05, 0, 3.6)).toBeCloseTo(4.25)
+    expect(resolveWallTop({ height: 3.6 }, 3.6, 0.05, 0, null)).toBeCloseTo(3.65)
+    expect(resolveWallTop({ height: 3.6, supportSlabId: 'ground' }, 3.4, 0.2, 0, 3.6)).toBeCloseTo(
+      3.8,
+    )
+  })
 })
 
 describe('resolveWallEffectiveHeight', () => {
@@ -150,5 +175,76 @@ describe('resolveWallEffectiveHeight', () => {
     expect(resolveWallEffectiveHeight(wall, 3, 0, 0)).toBeCloseTo(3.0)
     // Clamped offset = -2.99 -> effective height at t=1 is 0.01 (MIN_WALL_END_HEIGHT)
     expect(resolveWallEffectiveHeight(wall, 3, 0, 1)).toBeCloseTo(MIN_WALL_END_HEIGHT)
+  })
+
+  test('saved storey-height walls meet the upper slab underside without changing authored data', () => {
+    const polygon: [number, number][] = [
+      [0, 0],
+      [4, 0],
+      [4, 4],
+      [0, 4],
+    ]
+    const building = BuildingNode.parse({
+      id: 'building_datum',
+      children: ['level_ground', 'level_upper'],
+    })
+    const ground = LevelNode.parse({
+      id: 'level_ground',
+      parentId: building.id,
+      level: 0,
+      height: 3.6,
+      children: ['slab_ground', 'wall_datum'],
+    })
+    const upper = LevelNode.parse({
+      id: 'level_upper',
+      parentId: building.id,
+      level: 1,
+      height: 3.3,
+      children: ['slab_upper'],
+    })
+    const floor = SlabNode.parse({
+      id: 'slab_ground',
+      parentId: ground.id,
+      polygon,
+      elevation: 0.05,
+      thickness: 0.05,
+    })
+    const cover = SlabNode.parse({
+      id: 'slab_upper',
+      parentId: upper.id,
+      polygon,
+      elevation: 0.05,
+      thickness: 0.05,
+    })
+    const wall = WallNode.parse({
+      id: 'wall_datum',
+      parentId: ground.id,
+      start: [0, 0],
+      end: [4, 0],
+      height: 3.6,
+    })
+    const nodes = Object.fromEntries(
+      [building, ground, upper, floor, cover, wall].map((node) => [node.id, node]),
+    )
+    const base = computeWallSlabSupport(
+      wall,
+      [floor],
+      [wall],
+      undefined,
+      undefined,
+      0,
+      nodes,
+    ).elevation
+    expect(base).toBeCloseTo(0.05)
+    expect(getWallTop(wall, ground.id, nodes, base, 0)).toBeCloseTo(
+      ground.height! + cover.elevation - cover.thickness,
+    )
+    const thicker = { ...nodes, [cover.id]: { ...cover, thickness: 0.25 } }
+    expect(getWallTop(wall, ground.id, thicker, base, 0)).toBeCloseTo(3.4)
+    const taller = { ...wall, height: 4.2 }
+    expect(getWallTop(taller, ground.id, { ...nodes, [wall.id]: taller }, base, 0)).toBeCloseTo(
+      4.25,
+    )
+    expect(wall.height).toBe(3.6)
   })
 })

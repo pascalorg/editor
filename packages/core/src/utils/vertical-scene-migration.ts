@@ -4,6 +4,7 @@ import { deriveLegacyLevelHeight } from '../services/level-height'
 import { getCeilingClampBound } from '../services/storey'
 import { computeWallSlabSupport } from '../systems/slab/slab-support'
 import { DEFAULT_WALL_HEIGHT } from '../systems/wall/wall-footprint'
+import { loadMigration } from './load-migration'
 
 export type VerticalSceneMigration = {
   changed: boolean
@@ -38,7 +39,7 @@ const BURIED_PIN_EPSILON = 1e-3
  * hosted scene authority both call it so they compare and persist the same
  * canonical fields during collaboration.
  */
-export function migrateVerticalSceneNodes(
+function migrateVerticalSceneNodesOnView(
   sourceNodes: Record<string, unknown>,
 ): VerticalSceneMigration {
   const nodes: Record<string, any> = { ...sourceNodes }
@@ -112,6 +113,10 @@ export function migrateVerticalSceneNodes(
         },
         slabs,
         walls,
+        undefined,
+        undefined,
+        0,
+        nodes,
       ).elevation
       const effectiveHeight = wall.height ?? DEFAULT_WALL_HEIGHT
       const top = Math.max(0, electedBase) + effectiveHeight
@@ -134,15 +139,22 @@ export function migrateVerticalSceneNodes(
     }
   }
 
-  // Preserve the exact occupied interval of legacy slabs.
+  // Preserve the exact occupied interval of legacy slabs. The elevation every
+  // renderer assumes for a slab without one is written too: later migrations do
+  // arithmetic on it, and the loader's schema defaults would otherwise supply it
+  // only after them, so a saved and reloaded scene would migrate differently.
   for (const [id, node] of Object.entries(nodes)) {
-    if (node?.type !== 'slab' || 'thickness' in node) continue
+    if (node?.type !== 'slab') continue
     const elevation = getFiniteNumber(node.elevation, 0.05)
+    if ('thickness' in node) {
+      if (node.elevation !== elevation) replaceNode(id, { ...node, elevation })
+      continue
+    }
     replaceNode(
       id,
       elevation < 0
-        ? { ...node, thickness: 0.05, recessed: true }
-        : { ...node, thickness: elevation },
+        ? { ...node, elevation, thickness: 0.05, recessed: true }
+        : { ...node, elevation, thickness: elevation },
     )
   }
 
@@ -199,9 +211,13 @@ export function migrateVerticalSceneNodes(
         },
         siblings.filter((sibling) => sibling.type === 'slab'),
         siblings.filter((sibling) => sibling.type === 'wall'),
+        undefined,
+        undefined,
+        0,
+        nodes,
       )
       const elected = support.electedSlabId ? nodes[support.electedSlabId] : null
-      if (!elected) continue
+      if (!elected || elected.plateRole) continue
       const pinnedBase = getFiniteNumber(node.supportOffset, 0)
       const electedTop = getFiniteNumber(elected.elevation, 0.05)
       const electedBottom = electedTop - getFiniteNumber(elected.thickness, 0.05)
@@ -216,3 +232,9 @@ export function migrateVerticalSceneNodes(
 
   return changed ? { changed, nodes } : { changed, nodes: sourceNodes }
 }
+
+export const migrateVerticalSceneNodes = loadMigration(
+  'vertical migration',
+  migrateVerticalSceneNodesOnView,
+  (nodes) => ({ nodes, changed: false }),
+)

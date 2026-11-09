@@ -7,7 +7,10 @@ import {
   WindowNode,
   ZoneNode,
 } from '@pascal-app/core'
-import { createFloorplanContextExtensions } from '@pascal-app/editor'
+import {
+  createFloorplanContextExtensions,
+  type FloorplanWallDimensionFaces,
+} from '@pascal-app/editor'
 import { buildDoorContextualDimensions } from '../door/contextual-dimensions'
 import { buildItemContextualDimensions } from '../item/floorplan'
 import { buildWallContextualDimensions } from '../wall/contextual-dimensions'
@@ -18,6 +21,7 @@ function context(
   parent: GeometryContext['parent'] = null,
   siblings: GeometryContext['siblings'] = [],
   moving = false,
+  wallDimensionFaces: FloorplanWallDimensionFaces = 'both',
 ): GeometryContext {
   return {
     resolve: () => undefined,
@@ -27,7 +31,7 @@ function context(
     extensions: createFloorplanContextExtensions({
       metricNotation: 'meters',
       purpose: 'edit',
-      wallDimensionReference: 'centerline',
+      wallDimensionFaces,
     }),
     viewState: moving
       ? {
@@ -42,7 +46,7 @@ function context(
 }
 
 describe('contextual floor-plan dimensions', () => {
-  test('uses modeled centerline length for a straight wall', () => {
+  test('a free-standing wall reads its full length along its face', () => {
     const wall = WallNode.parse({
       id: 'wall_primary',
       start: [0, 0],
@@ -51,8 +55,8 @@ describe('contextual floor-plan dimensions', () => {
 
     expect(buildWallContextualDimensions(wall, context())).toMatchObject({
       kind: 'dimension',
-      start: [0, 0],
-      end: [4, 0],
+      start: [0, 0.05],
+      end: [4, 0.05],
       text: '4m',
     })
   })
@@ -84,10 +88,29 @@ describe('contextual floor-plan dimensions', () => {
       WallNode.parse({ id: 'wall_left', start: [0, 6], end: [0, 0] }),
     ]
 
+    // ID inside the room, between the corner walls' inner faces; OD outside, to their outer faces.
     expect(buildWallContextualDimensions(wall, context(null, siblings))).toMatchObject({
-      kind: 'dimension',
-      offsetNormal: [1, 0],
+      kind: 'group',
+      children: [
+        { kind: 'dimension', offsetNormal: [-1, 0], start: [3.95, 0.05], text: '5.9m' },
+        { kind: 'dimension', offsetNormal: [1, 0], start: [4.05, -0.05], text: '6.1m' },
+      ],
     })
+  })
+
+  test('the dimension-faces preference keeps only the interior or the exterior length', () => {
+    const wall = WallNode.parse({ id: 'wall_right', start: [4, 0], end: [4, 6] })
+    const siblings = [
+      WallNode.parse({ id: 'wall_top', start: [0, 0], end: [4, 0] }),
+      WallNode.parse({ id: 'wall_bottom', start: [4, 6], end: [0, 6] }),
+      WallNode.parse({ id: 'wall_left', start: [0, 6], end: [0, 0] }),
+    ]
+    expect(
+      buildWallContextualDimensions(wall, context(null, siblings, false, 'interior')),
+    ).toMatchObject({ kind: 'dimension', offsetNormal: [-1, 0], text: '5.9m' })
+    expect(
+      buildWallContextualDimensions(wall, context(null, siblings, false, 'exterior')),
+    ).toMatchObject({ kind: 'dimension', offsetNormal: [1, 0], text: '6.1m' })
   })
 
   test('shows one internal-wall dimension between the connected stud faces', () => {
@@ -123,7 +146,7 @@ describe('contextual floor-plan dimensions', () => {
     )
   })
 
-  test('measures a selected perimeter wall between connected stud centerlines', () => {
+  test('measures a perimeter wall that abuts its neighbours between their near faces', () => {
     const wall = WallNode.parse({
       id: 'wall_perimeter',
       start: [0, 0],
@@ -146,10 +169,10 @@ describe('contextual floor-plan dimensions', () => {
 
     expect(buildWallContextualDimensions(wall, context(null, [startWall, endWall]))).toMatchObject({
       kind: 'dimension',
-      start: [0, 0],
-      end: [0, 4],
+      start: [0.05, 0.1],
+      end: [0.05, 3.9],
       offsetNormal: [1, 0],
-      text: '4m',
+      text: '3.8m',
     })
   })
 

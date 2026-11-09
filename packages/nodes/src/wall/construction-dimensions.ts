@@ -7,8 +7,8 @@ import {
   type GeometryContext,
   getWallArcData,
   getWallChordFrame,
+  getWallLocalFaceZ,
   getWallMidpointHandlePoint,
-  getWallThickness,
   isCurvedWall,
   type WallNode,
   type WindowNode,
@@ -46,6 +46,17 @@ export type ConstructionDimensionTier =
   | 'structural-overall'
   | 'interior'
   | 'interior-overall'
+
+/**
+ * Which face chain a tier belongs to: the clear spans drawn inside the rooms
+ * are interior (ID); the facade strings — openings, partitions, columns, jogs
+ * and the overall sizes — are measured outside the building (OD).
+ */
+export function constructionDimensionFace(
+  tier: ConstructionDimensionTier,
+): 'interior' | 'exterior' {
+  return tier === 'interior' || tier === 'interior-overall' ? 'interior' : 'exterior'
+}
 
 const TIER_ORDER: readonly ConstructionDimensionTier[] = [
   'opening-widths',
@@ -854,7 +865,7 @@ function isFacadeOccluded(
   outwardNormal: FloorplanPoint,
   network: ReadonlyArray<WallNode>,
 ): boolean {
-  const halfThickness = (wall.thickness ?? 0.1) / 2
+  const halfThickness = wallDatumDistanceToward(wall, 'wall-face', outwardNormal)
   const origin = addScaled(
     [(wall.start[0] + wall.end[0]) / 2, (wall.start[1] + wall.end[1]) / 2],
     outwardNormal,
@@ -1129,7 +1140,7 @@ function selectCanonicalWallFaceIntersection(
 ): FloorplanPoint | undefined {
   const direction = subtract(wall.end, wall.start)
   const length = Math.hypot(direction[0], direction[1])
-  if (length < MIN_SEGMENT_LENGTH) return undefined
+  if (length < MIN_SEGMENT_LENGTH) return
 
   let tangent: FloorplanPoint = [direction[0] / length, direction[1] / length]
   if (
@@ -1474,7 +1485,10 @@ function facadePartitionFaceIntersections(
   outwardNormal: FloorplanPoint,
   datumPolicy: ConstructionDimensionDrawingStandard['datumPolicy'],
 ): FloorplanPoint[] {
-  const halfThickness = wallDatumDistanceToward(facade, 'wall-face', outwardNormal)
+  const halfThickness = wallDatumDistanceToward(facade, 'wall-face', [
+    -outwardNormal[0],
+    -outwardNormal[1],
+  ])
   const insideStart: FloorplanPoint = [
     facade.start[0] - outwardNormal[0] * halfThickness,
     facade.start[1] - outwardNormal[1] * halfThickness,
@@ -1512,7 +1526,7 @@ function wallDatumOffsetOnSide(
   side: 1 | -1,
 ): number {
   if (policy === 'centerline') return 0
-  return (getWallThickness(wall) / 2) * side
+  return getWallLocalFaceZ(wall, side > 0 ? 'a' : 'b')
 }
 
 function wallDatumDistanceToward(

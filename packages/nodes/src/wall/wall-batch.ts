@@ -17,6 +17,12 @@ export type WallBatchSource = {
   geometry: THREE.BufferGeometry
   /** Source-local to batch-root transform, baked into the merged vertices. */
   matrix: THREE.Matrix4
+  /**
+   * Source material index → batch material index. Walls that draw the same
+   * materials in a different palette order share a batch this way; a group
+   * whose index maps nowhere draws nothing and is dropped.
+   */
+  materialIndexMap?: ReadonlyArray<number | undefined>
 }
 
 export type WallBatch = {
@@ -50,7 +56,12 @@ function planSource(source: WallBatchSource): PlannedSource | null {
     const start = Math.max(0, group.start)
     const count = Math.min(group.count, position.count - start)
     if (count <= 0) continue
-    groups.push({ materialIndex: group.materialIndex ?? 0, start, count })
+    const sourceIndex = group.materialIndex ?? 0
+    const materialIndex = source.materialIndexMap
+      ? source.materialIndexMap[sourceIndex]
+      : sourceIndex
+    if (materialIndex === undefined) continue
+    groups.push({ materialIndex, start, count })
   }
 
   return groups.length > 0 ? { source, groups } : null
@@ -221,10 +232,10 @@ export function applyWallBatchGroups(batch: WallBatch, hidden: ReadonlySet<strin
  * its subtree keeps rendering and picking.
  */
 export function hideBatchedWall(mesh: THREE.Object3D): void {
-  hideFromScene(mesh, 'batched')
+  hideFromScene(mesh, 'wall-batched')
 }
 
 /** Hands a wall back its own draw call — unless solo or isolation still hide it. */
 export function revealBatchedWall(mesh: THREE.Object3D): void {
-  showInScene(mesh, 'batched')
+  showInScene(mesh, 'wall-batched')
 }

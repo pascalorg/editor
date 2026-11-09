@@ -1,3 +1,4 @@
+import { RAILING_GUARD_HEIGHT } from '../../schema/nodes/railing-wall'
 import type { WallNode } from '../../schema/nodes/wall'
 
 /**
@@ -25,41 +26,46 @@ export function clampWallEndHeightOffset(
   return clamped === 0 ? 0 : clamped
 }
 
+export function wallFollowsStorey(
+  wall: Pick<WallNode, 'height' | 'supportSlabId' | 'wallType'>,
+  authoredStoreyHeight: number | null,
+): boolean {
+  // A railing is a guard as tall as itself, never the storey (36 in when it says nothing).
+  if (wall.wallType === 'railing') return false
+  return (
+    wall.height == null ||
+    (authoredStoreyHeight !== null &&
+      wall.supportSlabId !== 'ground' &&
+      Math.abs(wall.height - authoredStoreyHeight) <= 1e-6)
+  )
+}
+
 /**
  * Wall-top inversion (vertical building model): a wall with no stored
  * `height` is plane-bound — its top sits at the storey plane (level-local
  * Y = the level's stored height), so a slab lifting the wall's base makes
  * the wall shorter, never taller, and no gap can open at the top of a
- * level. A wall WITH `height` is an explicit exception (half wall,
- * parapet) and keeps the legacy semantics: the top rides a raised elected
- * base (`electedBase + height`), while a zero or sunken slab base leaves
- * the top at `height` (the legacy negative-slab constraint). Explicit
- * ground-hosted walls are the terrain exception: `height` is always body
- * height, including below datum, so sculpting cannot stretch the wall.
+ * level. An explicit height equal to the authored storey height expresses the
+ * same storey-top intent, even when the resolved plane is clamped or lifted.
+ * Other explicit walls stand on their elected support; ground-hosted walls
+ * always retain their authored body height.
  *
  * Returns the top in level-local Y (same frame as `electedBase`) at normalized position
  * `t` along the wall ($t = 0$ is start, $t = 1$ is end).
  */
 export function resolveWallTop(
-  wall: Pick<WallNode, 'height' | 'supportSlabId' | 'endHeightOffset'>,
+  wall: Pick<WallNode, 'height' | 'supportSlabId' | 'wallType' | 'endHeightOffset'>,
   storeyHeight: number,
   electedBase: number,
   t: number,
+  authoredStoreyHeight: number | null = storeyHeight,
 ): number {
-  let top: number
-  if (wall.height == null) {
-    top = storeyHeight
-  } else if (wall.supportSlabId === 'ground') {
-    top = electedBase + wall.height
-  } else {
-    top = electedBase > 0 ? electedBase + wall.height : wall.height
-  }
-  if (wall.endHeightOffset) {
-    const bodyHeight = top - electedBase
-    const clampedOffset = clampWallEndHeightOffset(wall.endHeightOffset, bodyHeight)
-    top += clampedOffset * t
-  }
-  return top
+  // Only a railing reaches the fallback with no height of its own.
+  const top = wallFollowsStorey(wall, authoredStoreyHeight)
+    ? storeyHeight
+    : electedBase + (wall.height ?? RAILING_GUARD_HEIGHT)
+  if (!wall.endHeightOffset) return top
+  return top + clampWallEndHeightOffset(wall.endHeightOffset, top - electedBase) * t
 }
 
 /**
@@ -77,10 +83,11 @@ export function resolveWallTop(
  * policy.
  */
 export function resolveWallEffectiveHeight(
-  wall: Pick<WallNode, 'height' | 'supportSlabId' | 'endHeightOffset'>,
+  wall: Pick<WallNode, 'height' | 'supportSlabId' | 'wallType' | 'endHeightOffset'>,
   storeyHeight: number,
   electedBase: number,
   t: number,
+  authoredStoreyHeight: number | null = storeyHeight,
 ): number {
-  return resolveWallTop(wall, storeyHeight, electedBase, t) - electedBase
+  return resolveWallTop(wall, storeyHeight, electedBase, t, authoredStoreyHeight) - electedBase
 }

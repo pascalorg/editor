@@ -1,17 +1,14 @@
-import { beforeEach, describe, expect, mock, test } from 'bun:test'
+import { beforeEach, describe, expect, test } from 'bun:test'
 import { type AnyNode, type RoofSegmentNode, useScene } from '@pascal-app/core'
 import { getRoofSurfaceFaceBoundsAt } from './roof-surface'
-
-// bun's mock.module is process-global: it replaces the mocked module for
-// every test file that runs after this one in the same `bun test` invocation.
-// Do NOT stub the '@pascal-app/editor' / '@pascal-app/viewer' stores here —
-// the real ones work for this test (guides publish into the real
-// useOpeningGuides store; `useViewer.getState().selection.buildingId` reads
-// the store default), while a stubbed `getState` blinds every later suite
-// (select-candidates, wall-drafting) to its own `setState` calls.
-mock.module('../skylight/frame-csg', () => ({
-  buildFrameGeometry: () => null,
-}))
+import {
+  roofFaceKey,
+  roofGuideBounds,
+  roofSiblingSpacing,
+  roofSiblingSpacingGuides,
+  roofSurfaceFootprintFromNode,
+  snapRoofSurfaceNodeTarget,
+} from './roof-surface-placement-guides'
 
 const fixtureSegment = (overrides?: Partial<RoofSegmentNode>): RoofSegmentNode =>
   ({
@@ -175,9 +172,6 @@ beforeEach(() => {
 
 describe('roofSiblingSpacingGuides', () => {
   test('measures to the nearest aligned roof item bounding-box side', async () => {
-    const { roofFaceKey, roofGuideBounds, roofSiblingSpacingGuides } = await import(
-      './roof-surface-placement-guides'
-    )
     const segment = fixtureSegment({ children: ['near', 'far'] as never })
     useScene.setState({
       nodes: {
@@ -210,9 +204,6 @@ describe('roofSiblingSpacingGuides', () => {
   })
 
   test('marks the roof-edge side as blocked when an aligned item is between them', async () => {
-    const { roofFaceKey, roofGuideBounds, roofSiblingSpacing } = await import(
-      './roof-surface-placement-guides'
-    )
     const segment = fixtureSegment({ children: ['left'] as never })
     useScene.setState({
       nodes: {
@@ -244,9 +235,6 @@ describe('roofSiblingSpacingGuides', () => {
   })
 
   test('measures to a roof item whose bounding box crosses the guide lane', async () => {
-    const { roofFaceKey, roofGuideBounds, roofSiblingSpacingGuides } = await import(
-      './roof-surface-placement-guides'
-    )
     const segment = fixtureSegment({ children: ['offset'] as never })
     useScene.setState({
       nodes: {
@@ -272,9 +260,6 @@ describe('roofSiblingSpacingGuides', () => {
   })
 
   test('adds a red alignment guide when roof item centers align on a lane', async () => {
-    const { roofFaceKey, roofGuideBounds, roofSiblingSpacing } = await import(
-      './roof-surface-placement-guides'
-    )
     const segment = fixtureSegment({ children: ['aligned'] as never })
     useScene.setState({
       nodes: {
@@ -300,9 +285,6 @@ describe('roofSiblingSpacingGuides', () => {
   })
 
   test('adds an alignment guide when roof item bounding-box edges align', async () => {
-    const { roofFaceKey, roofGuideBounds, roofSiblingSpacing } = await import(
-      './roof-surface-placement-guides'
-    )
     const segment = fixtureSegment({ children: ['aligned'] as never })
     useScene.setState({
       nodes: {
@@ -328,7 +310,6 @@ describe('roofSiblingSpacingGuides', () => {
   })
 
   test('snaps a dragged roof item onto a nearby sibling bounding-box alignment', async () => {
-    const { snapRoofSurfaceNodeTarget } = await import('./roof-surface-placement-guides')
     const segment = fixtureSegment({ children: ['aligned'] as never })
     useScene.setState({
       nodes: {
@@ -351,9 +332,6 @@ describe('roofSiblingSpacingGuides', () => {
   })
 
   test('adds equal-spacing badges for a roof item between evenly spaced siblings', async () => {
-    const { roofFaceKey, roofGuideBounds, roofSiblingSpacing } = await import(
-      './roof-surface-placement-guides'
-    )
     const segment = fixtureSegment({ children: ['left', 'right'] as never })
     useScene.setState({
       nodes: {
@@ -386,8 +364,6 @@ describe('roofSiblingSpacingGuides', () => {
   })
 
   test('adds equal-spacing badges for mixed roof item types on the same lane', async () => {
-    const { roofFaceKey, roofGuideBounds, roofSiblingSpacing, roofSurfaceFootprintFromNode } =
-      await import('./roof-surface-placement-guides')
     const segment = fixtureSegment({ children: ['chimney', 'vent'] as never })
     const chimney = chimneyItem('chimney', [0, 0, 1])
     const vent = roofItem('vent', [0, 0, 1], { type: 'turbine-vent', diameter: 0.6, height: 0.7 })
@@ -427,9 +403,6 @@ describe('roofSiblingSpacingGuides', () => {
   })
 
   test('does not measure to a roof item outside the guide lane bounding box', async () => {
-    const { roofFaceKey, roofGuideBounds, roofSiblingSpacingGuides } = await import(
-      './roof-surface-placement-guides'
-    )
     const segment = fixtureSegment({ children: ['offset'] as never })
     useScene.setState({
       nodes: {
@@ -454,9 +427,6 @@ describe('roofSiblingSpacingGuides', () => {
     ['dormer moving next to dormer', dormerItem('sibling', [2, 0, 1])],
     ['dormer moving next to vent', roofItem('sibling', [2, 0, 1])],
   ])('measures mixed roof item spacing: %s', async (_label, sibling) => {
-    const { roofFaceKey, roofGuideBounds, roofSiblingSpacingGuides } = await import(
-      './roof-surface-placement-guides'
-    )
     const segment = fixtureSegment({ children: ['sibling'] as never })
     useScene.setState({
       nodes: {
@@ -488,9 +458,6 @@ describe('roofSiblingSpacingGuides', () => {
     'gutter',
     'dormer',
   ])('recognizes %s as a roof spacing sibling', async (type) => {
-    const { roofFaceKey, roofGuideBounds, roofSiblingSpacingGuides } = await import(
-      './roof-surface-placement-guides'
-    )
     const sibling = supportedRoofSibling(type, 'sibling', [2, 0, 1])
     const segment = fixtureSegment({ children: ['sibling'] as never })
     useScene.setState({

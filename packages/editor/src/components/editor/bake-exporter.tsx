@@ -31,6 +31,11 @@ export function BakeExporter({
         if (!sceneGroup) throw new Error('scene-renderer group not found')
         const buffer = await exportSceneToGlb(sceneGroup, useScene.getState().nodes, {
           textures: 'reference',
+          purpose: 'viewer',
+          // The bake worker owns the deadline (BAKE_CAPTURE_TIMEOUT_MS); under
+          // SwiftShader a moderate scene can legitimately outlast the
+          // interactive default.
+          timeoutMs: Number.POSITIVE_INFINITY,
         })
         onComplete(buffer)
       } catch (err) {

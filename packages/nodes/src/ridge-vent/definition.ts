@@ -172,6 +172,7 @@ export const ridgeVentDefinition: NodeDefinition<typeof RidgeVentNode> = {
   },
 
   capabilities: {
+    exterior: true,
     selectable: { hitVolume: 'bbox' },
     duplicable: true,
     deletable: true,
@@ -187,6 +188,7 @@ export const ridgeVentDefinition: NodeDefinition<typeof RidgeVentNode> = {
   handles: ridgeVentHandles,
   floorplan: buildRidgeVentFloorplan,
 
+  rendersChildren: false,
   renderer: {
     kind: 'parametric',
     module: () => import('./renderer'),

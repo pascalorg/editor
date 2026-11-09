@@ -1,7 +1,8 @@
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import type { McpServer } from '@modelcontextprotocol/server'
 import { z } from 'zod'
 import type { SceneOperations } from '../../operations'
-import { ErrorCode, throwMcpError } from '../errors'
+import { READ_ONLY_TOOL_ANNOTATIONS } from '../annotations'
+import { ProtocolErrorCode, throwMcpError } from '../errors'
 
 const DEFAULT_LIMIT = 100
 
@@ -38,8 +39,9 @@ export function registerListScenes(server: McpServer, operations: SceneOperation
       title: 'List scenes',
       description:
         'List scenes in the SceneStore. Optionally filter by `projectId` and cap results with `limit` (default 100).',
-      inputSchema: listScenesInput,
-      outputSchema: listScenesOutput,
+      inputSchema: z.object(listScenesInput),
+      outputSchema: z.object(listScenesOutput),
+      annotations: READ_ONLY_TOOL_ANNOTATIONS,
     },
     async ({ projectId, limit }) => {
       try {
@@ -54,7 +56,7 @@ export function registerListScenes(server: McpServer, operations: SceneOperation
         }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
-        throwMcpError(ErrorCode.InternalError, msg)
+        throwMcpError(ProtocolErrorCode.InternalError, msg)
       }
     },
   )

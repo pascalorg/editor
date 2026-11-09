@@ -1,16 +1,26 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  beginSceneHistoryDraft,
+  type CornerSnap,
+  createSnapEaser,
+  DEFAULT_WALL_THICKNESS,
   type DormerEvent,
   type DormerNode,
   dormerWallFacePointToDormer,
   emitter,
+  evaluateCorner,
   type GridEvent,
   getEffectiveNode,
+  getWallThickness,
   holdHiddenWallPointerEvents,
   isCurvedWall,
+  isRailingWall,
+  prefersReducedMotion,
   type RoofEvent,
   type RoofNode,
+  resolveOpeningFrameDepth,
+  runAsSingleSceneHistoryStep,
   sceneRegistry,
   spatialGridManager,
   useLiveNodeOverrides,
@@ -21,13 +31,14 @@ import {
   type WindowEvent,
   WindowNode,
 } from '@pascal-app/core'
+import { windowTakesStyle } from '@pascal-app/core/building'
 import {
-  calculateCursorRotation,
   calculateItemRotation,
   clearPlacementSurface,
   EDITOR_LAYER,
   getSideFromNormal,
   isMagneticSnapActive,
+  isTypingTarget,
   isValidWallSideFace,
   publishPlacementSurface,
   snapToHalf,
@@ -49,6 +60,10 @@ import {
   resolveDormerWindowTarget,
 } from '../shared/dormer-wall-opening-placement'
 import {
+  shouldFollowOpeningGrid,
+  shouldHandleOpeningHostLeave,
+} from '../shared/opening-grid-follow'
+import {
   clearOpeningGuides3D,
   publishOpeningGuidesForWallEvent,
   resolveSillSnap,
@@ -59,11 +74,15 @@ import {
   resolveRoofWallOpeningTarget,
   worldToSelectedBuildingLocal,
 } from '../shared/roof-wall-opening-placement'
+import { wallEventFromGrid } from '../shared/wall-event-from-grid'
 import {
   collectWallOpeningAlignmentCandidates,
   resolveWallSlideAlignment,
 } from '../shared/wall-opening-alignment'
+import { showCornerCue, snappingTurnedOff } from './corner-cue'
+import { fuseAtCorner } from './corner-fuse'
 import { WindowFloorProjection } from './floor-projection'
+import { placedWindowFields, useWindowPlacement } from './placement'
 import WindowPreview from './preview'
 import {
   clampToWall,
@@ -121,30 +140,55 @@ const WindowTool: React.FC = () => {
     side: WindowNode['side']
   } | null>(null)
 
-  // Ghost preview node — zeroed transform + the live facing side (rebuilds on R).
+  const placedType = useWindowPlacement((state) => state.type)
+  const placedStyle = useWindowPlacement((state) => state.style)
+  // Ghost preview node — zeroed transform + the live facing side (rebuilds on R) and the
+  // chips' type and style (rebuilds on O / L).
+  // biome-ignore lint/correctness/useExhaustiveDependencies: placedWindowFields reads the chips' store
   const ghostStub = useMemo(
     () =>
       WindowNode.parse({
+        ...placedWindowFields(),
         position: [0, 0, 0],
         rotation: [0, 0, 0],
         side: fallbackPose?.side ?? 'front',
       }),
-    [fallbackPose?.side],
+    [fallbackPose?.side, placedType, placedStyle],
   )
-  // The frame depth is a fixed parse default (the `side` flip doesn't change
-  // it); a ref lets the facing-pose publish inside the setup effect read it
-  // without re-subscribing every event listener.
-  const frameDepthRef = useRef(ghostStub.frameDepth)
-
   useEffect(() => {
     useScene.temporal.getState().pause()
 
+    // The draft is a created carry draft: undo history and every save leave it out
+    // (core `getSceneDocument`), so a reload mid-placement never finds it in the scene.
+    const draftHistoryEnds = new Map<string, () => void>()
+    const createDraft = (node: WindowNode, parentId: AnyNodeId) => {
+      const end = beginSceneHistoryDraft(node.id as AnyNodeId, null)
+      draftHistoryEnds.set(node.id, end)
+      try {
+        useScene.getState().createNode(node, parentId)
+      } catch (error) {
+        end()
+        draftHistoryEnds.delete(node.id)
+        throw error
+      }
+    }
+    const deleteDraft = (id: string) => {
+      try {
+        useScene.getState().deleteNode(id as AnyNodeId)
+      } finally {
+        draftHistoryEnds.get(id)?.()
+        draftHistoryEnds.delete(id)
+      }
+    }
+
     const ownedPreviewIds = new Set<string>()
-    const fallbackPreview = WindowNode.parse({
-      position: [0, 0, 0],
-      rotation: [0, 0, 0],
-      side: 'front',
-    })
+    const fallbackPreview = () =>
+      WindowNode.parse({
+        ...placedWindowFields(),
+        position: [0, 0, 0],
+        rotation: [0, 0, 0],
+        side: 'front',
+      })
     const fallbackWallId = WallNodeSchema.parse({
       end: [1, 0],
       start: [0, 0],
@@ -179,6 +223,24 @@ const WindowTool: React.FC = () => {
     // to the last wall hover so the flip shows live before commit.
     let sideFlip = false
     let lastWallEvent: WallEvent | null = null
+    // Placing near a corner: inside the corner zone the ghost snaps its edge to the corner, the
+    // window waiting on the other wall is outlined, and the HUD says what a click does. Alt places
+    // the window plain.
+    let cornerHeld: CornerSnap['end'] | null = null
+    // Whether Alt is held: from the keys, and from each new pointer event, which also catches a
+    // press made while the canvas did not have focus.
+    let altDown = false
+    // Alt, or snapping off, places the window where it is clicked.
+    const cornerSnapOn = () => !altDown && !snappingTurnedOff()
+    const cornerEaser = createSnapEaser()
+    let cornerEaseFrame = 0
+    const resetCorner = () => {
+      cornerHeld = null
+      cornerEaser.reset()
+      if (cornerEaseFrame) cancelAnimationFrame(cornerEaseFrame)
+      cornerEaseFrame = 0
+      showCornerCue(null)
+    }
     let lastDormerEvent: DormerEvent | null = null
     // Last open-floor cursor point (level-local X/Z) + floor Y, so an R-flip
     // while free-following can re-render the floating ghost with the new facing.
@@ -197,6 +259,7 @@ const WindowTool: React.FC = () => {
         wall.curveOffset ?? 0,
         wall.thickness,
         wall.supportSlabId,
+        wall.justification,
       )
 
     const markHostDirty = (hostId: string) => {
@@ -204,6 +267,7 @@ const WindowTool: React.FC = () => {
     }
 
     const destroyDraft = () => {
+      resetCorner()
       const draft = draftRef.current
       if (!draft) {
         clearPlacementPreview()
@@ -211,7 +275,7 @@ const WindowTool: React.FC = () => {
       }
       const wallId = draft.parentId
       useLiveNodeOverrides.getState().clear(draft.id)
-      useScene.getState().deleteNode(draft.id)
+      deleteDraft(draft.id)
       draftRef.current = null
       clearPlacementPreview()
       // Rebuild wall so it removes the cutout from the deleted draft
@@ -241,6 +305,7 @@ const WindowTool: React.FC = () => {
       cursorRotationY: number,
       valid: boolean,
       indicatorYOffset: number,
+      hostThickness: number,
     ) => {
       setFallbackPose(null)
       const group = cursorGroupRef.current
@@ -255,7 +320,10 @@ const WindowTool: React.FC = () => {
       useFacingPose.getState().set({
         position: [worldPosition[0], worldPosition[1] + indicatorYOffset, worldPosition[2]],
         rotationY: cursorRotationY,
-        depth: frameDepthRef.current,
+        depth: resolveOpeningFrameDepth(
+          { frameDepth: draftRef.current?.frameDepth },
+          hostThickness,
+        ),
       })
     }
 
@@ -271,7 +339,8 @@ const WindowTool: React.FC = () => {
         floorY,
         side: sideFlip ? 'back' : 'front',
       })
-      const halfWidth = fallbackPreview.width / 2 + 0.5
+      const preview = fallbackPreview()
+      const halfWidth = preview.width / 2 + 0.5
       const wall = WallNodeSchema.parse({
         end: [position[0] + halfWidth, position[2]],
         id: fallbackWallId,
@@ -279,10 +348,10 @@ const WindowTool: React.FC = () => {
         thickness: 0.1,
       })
       const ghost = WindowNode.parse({
-        ...fallbackPreview,
+        ...preview,
         metadata: { isTransient: true },
         parentId: wall.id,
-        position: [halfWidth, FALLBACK_SILL_LIFT + fallbackPreview.height / 2, 0],
+        position: [halfWidth, FALLBACK_SILL_LIFT + preview.height / 2, 0],
         rotation: [0, sideFlip ? Math.PI : 0, 0],
         side: sideFlip ? 'back' : 'front',
         wallId: wall.id,
@@ -323,19 +392,7 @@ const WindowTool: React.FC = () => {
       const itemRotation = sideFlip ? Math.PI : 0
 
       if (draftRef.current && draftRef.current.parentId !== event.node.id) destroyDraft()
-      if (!draftRef.current) {
-        const node = WindowNode.parse({
-          position: target.position,
-          rotation: [0, itemRotation, 0],
-          side,
-          parentId: event.node.id,
-          dormerId: event.node.id,
-          dormerFace: target.face,
-          metadata: { isTransient: true },
-        })
-        useScene.getState().createNode(node, event.node.id as AnyNodeId)
-        draftRef.current = node
-      } else {
+      if (draftRef.current) {
         useLiveNodeOverrides.getState().set(draftRef.current.id, {
           position: target.position,
           rotation: [0, itemRotation, 0],
@@ -347,6 +404,19 @@ const WindowTool: React.FC = () => {
           roofSegmentId: undefined,
           roofFace: undefined,
         })
+      } else {
+        const node = WindowNode.parse({
+          ...placedWindowFields(),
+          position: target.position,
+          rotation: [0, itemRotation, 0],
+          side,
+          parentId: event.node.id,
+          dormerId: event.node.id,
+          dormerFace: target.face,
+          metadata: { isTransient: true },
+        })
+        createDraft(node, event.node.id as AnyNodeId)
+        draftRef.current = node
       }
 
       publishDraftPreview(event.node)
@@ -356,7 +426,13 @@ const WindowTool: React.FC = () => {
         new Vector3(...worldPosition),
         getDormerWindowWorldNormal(event, target),
       )
-      updateCursor(worldPosition, getDormerWindowWorldYaw(event, target), target.valid, 0)
+      updateCursor(
+        worldPosition,
+        getDormerWindowWorldYaw(event, target),
+        target.valid,
+        0,
+        DEFAULT_WALL_THICKNESS,
+      )
     }
 
     // Sill alignment (snap + guide): a sibling sill/centre/top wins over the
@@ -395,6 +471,7 @@ const WindowTool: React.FC = () => {
       width: number,
       height: number,
       applySnap: boolean,
+      cornerSnapOn: boolean,
       ignoreId?: string,
     ) => {
       // Along-wall alignment guides are DISPLAYED in every snapping mode; the
@@ -415,26 +492,37 @@ const WindowTool: React.FC = () => {
         width,
         height,
       })
-      const { clampedX, clampedY, fits } = clampToWall(
-        wall,
-        localX,
-        localY,
-        width,
-        height,
-        useScene.getState().nodes,
-      )
+      const nodes = useScene.getState().nodes
+      const slid = clampToWall(wall, localX, localY, width, height, nodes)
+      const { clampedY } = slid
+      let clampedX = slid.clampedX
+      let fits = slid.fits
+      // The corner zone: the edge snaps to the corner, unless a curtain wall's margin keeps it off.
+      const found = cornerSnapOn
+        ? evaluateCorner(nodes, {
+            wallId: wall.id,
+            centreX: clampedX,
+            width,
+            height,
+            sillHeight: clampedY - height / 2,
+            ignoreId,
+            held: cornerHeld,
+          })
+        : { snap: null, block: null }
+      let { snap, block } = found
+      if (snap) {
+        const settled = clampToWall(wall, snap.centreX, clampedY, width, height, nodes)
+        if (Math.abs(settled.clampedX - snap.centreX) > 1e-6) {
+          block = { reason: 'curtain', end: snap.end }
+          snap = null
+        } else {
+          clampedX = snap.centreX
+          fits = settled.fits
+        }
+      }
       const valid =
-        fits &&
-        !hasWallChildOverlap(
-          wall.id,
-          useScene.getState().nodes,
-          clampedX,
-          clampedY,
-          width,
-          height,
-          ignoreId,
-        )
-      return { clampedX, clampedY, valid }
+        fits && !hasWallChildOverlap(wall.id, nodes, clampedX, clampedY, width, height, ignoreId)
+      return { clampedX, clampedY, valid, snap, block }
     }
 
     // Shared create/update path for the wall draft — used by the direct
@@ -449,13 +537,24 @@ const WindowTool: React.FC = () => {
       itemRotation: number
       cursorRotationY: number
       applySnap: boolean
+      cornerSnapOn: boolean
     }) => {
-      const { wall, rawLocalX, rawLocalY, side, itemRotation, cursorRotationY, applySnap } = args
+      const {
+        wall,
+        rawLocalX,
+        rawLocalY,
+        side,
+        itemRotation,
+        cursorRotationY,
+        applySnap,
+        cornerSnapOn,
+      } = args
       const width = draftRef.current?.width ?? 1.5
       const height = draftRef.current?.height ?? 1.5
 
       if (!draftRef.current) {
         const node = WindowNode.parse({
+          ...placedWindowFields(),
           position: [0, DEFAULT_SILL_CENTER_Y, 0],
           rotation: [0, itemRotation, 0],
           side,
@@ -463,23 +562,35 @@ const WindowTool: React.FC = () => {
           parentId: wall.id,
           metadata: { isTransient: true },
         })
-        useScene.getState().createNode(node, wall.id as AnyNodeId)
+        createDraft(node, wall.id as AnyNodeId)
         draftRef.current = node
       }
 
-      const { clampedX, clampedY, valid } = resolveWallPlacement(
+      const { clampedX, clampedY, valid, snap, block } = resolveWallPlacement(
         wall,
         rawLocalX,
         rawLocalY,
         width,
         height,
         applySnap,
+        cornerSnapOn,
         draftRef.current.id,
       )
+      cornerHeld = (snap ?? block)?.end ?? null
+      showCornerCue(snap, block)
+      // The ghost eases into and out of the snap; the click always lands on the snapped place.
+      const now = performance.now()
+      const shownX = cornerEaser.display(clampedX, snap !== null, now, prefersReducedMotion())
+      if (cornerEaser.active(now) && !cornerEaseFrame) {
+        cornerEaseFrame = requestAnimationFrame(() => {
+          cornerEaseFrame = 0
+          if (lastWallEvent) onWallHover(lastWallEvent)
+        })
+      }
 
       if (wall.id === draftRef.current.parentId) {
         useLiveNodeOverrides.getState().set(draftRef.current.id, {
-          position: [clampedX, clampedY, 0],
+          position: [shownX, clampedY, 0],
           rotation: [0, itemRotation, 0],
           side,
         })
@@ -487,7 +598,7 @@ const WindowTool: React.FC = () => {
       } else {
         useLiveNodeOverrides.getState().clear(draftRef.current.id)
         useScene.getState().updateNode(draftRef.current.id, {
-          position: [clampedX, clampedY, 0],
+          position: [shownX, clampedY, 0],
           rotation: [0, itemRotation, 0],
           side,
           parentId: wall.id,
@@ -500,16 +611,11 @@ const WindowTool: React.FC = () => {
       publishDraftPreview(wall)
 
       updateCursor(
-        wallLocalToWorld(
-          wall,
-          clampedX,
-          clampedY,
-          getLevelYOffset(),
-          getSlabElevationForWall(wall),
-        ),
+        wallLocalToWorld(wall, shownX, clampedY, getLevelYOffset(), getSlabElevationForWall(wall)),
         cursorRotationY,
         valid,
         -clampedY,
+        getWallThickness(wall),
       )
 
       if (draftRef.current) {
@@ -536,15 +642,17 @@ const WindowTool: React.FC = () => {
       clampedY: number,
       side: 'front' | 'back',
       itemRotation: number,
+      snap: CornerSnap | null = null,
     ) => {
       const draft = draftRef.current
       if (!draft) return
       clearPlacementPreview()
+      resetCorner()
       draftRef.current = null
       hostKind = null
 
       useLiveNodeOverrides.getState().clear(draft.id)
-      useScene.getState().deleteNode(draft.id)
+      deleteDraft(draft.id)
       useScene.temporal.getState().resume()
 
       const levelId = getLevelId()
@@ -569,8 +677,10 @@ const WindowTool: React.FC = () => {
         awningDirection: draft.awningDirection,
         casementStyle: draft.casementStyle,
         hingesSide: draft.hingesSide,
+        casingFaceA: draft.casingFaceA,
+        casingFaceB: draft.casingFaceB,
+        casingWidth: draft.casingWidth,
         frameThickness: draft.frameThickness,
-        frameDepth: draft.frameDepth,
         columnRatios: draft.columnRatios,
         rowRatios: draft.rowRatios,
         columnDividerThickness: draft.columnDividerThickness,
@@ -580,7 +690,11 @@ const WindowTool: React.FC = () => {
         sillThickness: draft.sillThickness,
       })
 
-      useScene.getState().createNode(node, wall.id as AnyNodeId)
+      // At a corner the window is placed already joined, as one undo step.
+      runAsSingleSceneHistoryStep(useScene, () => {
+        useScene.getState().createNode(node, wall.id as AnyNodeId)
+        if (snap) fuseAtCorner(node.id, snap.waitingId)
+      })
       selectNode(node.id)
       triggerSFX('sfx:structure-build')
       useAlignmentGuides.getState().clear()
@@ -602,7 +716,7 @@ const WindowTool: React.FC = () => {
       hostKind = null
 
       useLiveNodeOverrides.getState().clear(draft.id)
-      useScene.getState().deleteNode(draft.id)
+      deleteDraft(draft.id)
       useScene.temporal.getState().resume()
 
       const state = useScene.getState()
@@ -631,8 +745,10 @@ const WindowTool: React.FC = () => {
         openingCornerRadii: draft.openingCornerRadii,
         cornerRadius: draft.cornerRadius,
         archHeight: draft.archHeight,
+        casingFaceA: draft.casingFaceA,
+        casingFaceB: draft.casingFaceB,
+        casingWidth: draft.casingWidth,
         frameThickness: draft.frameThickness,
-        frameDepth: draft.frameDepth,
         columnRatios: draft.columnRatios,
         rowRatios: draft.rowRatios,
         columnDividerThickness: draft.columnDividerThickness,
@@ -658,23 +774,34 @@ const WindowTool: React.FC = () => {
     const onWallHover = (event: WallEvent) => {
       hostKind = 'wall'
       lastMeshEventTime = event.nativeEvent?.timeStamp ?? -1
+      // A railing takes no window: its openings are gaps a door leaves in the guard.
       if (
         !isValidWallSideFace(event.normal) ||
         isCurvedWall(event.node) ||
+        isRailingWall(event.node) ||
         event.node.parentId !== getLevelId()
       ) {
         destroyDraft()
         showWallFallbackCursor(event)
         return
       }
+      // The Alt toggle re-runs the last event: only a new one says whether Alt is held.
+      if (event !== lastWallEvent) altDown = event.nativeEvent?.altKey === true
       lastWallEvent = event
 
       const faceSide = getSideFromNormal(event.normal)
       const side = sideFlip ? (faceSide === 'front' ? 'back' : 'front') : faceSide
       const flipOffset = sideFlip ? Math.PI : 0
       const itemRotation = calculateItemRotation(event.normal) + flipOffset
-      const cursorRotation =
-        calculateCursorRotation(event.normal, event.node.start, event.node.end) + flipOffset
+      // World yaw of a wall CHILD: the wall group is yawed -wallAngle and the
+      // node carries wall-local `itemRotation` — `calculateCursorRotation` was
+      // π off, pointing the facing triangle at the far side of the wall (see
+      // MoveDoorTool.applyPreview, which fixed the same class for moves).
+      const wallAngle = Math.atan2(
+        event.node.end[1] - event.node.start[1],
+        event.node.end[0] - event.node.start[0],
+      )
+      const cursorRotation = itemRotation - wallAngle
 
       applyWallTarget({
         wall: event.node,
@@ -684,6 +811,7 @@ const WindowTool: React.FC = () => {
         itemRotation,
         cursorRotationY: cursorRotation,
         applySnap: isMagneticSnapActive(),
+        cornerSnapOn: cornerSnapOn(),
       })
       event.stopPropagation()
     }
@@ -693,6 +821,7 @@ const WindowTool: React.FC = () => {
       if (
         !isValidWallSideFace(event.normal) ||
         isCurvedWall(event.node) ||
+        isRailingWall(event.node) ||
         event.node.parentId !== getLevelId()
       ) {
         return
@@ -702,23 +831,32 @@ const WindowTool: React.FC = () => {
       const side = sideFlip ? (faceSide === 'front' ? 'back' : 'front') : faceSide
       const itemRotation = calculateItemRotation(event.normal) + (sideFlip ? Math.PI : 0)
 
-      const { clampedX, clampedY, valid } = resolveWallPlacement(
+      const { clampedX, clampedY, valid, snap } = resolveWallPlacement(
         event.node,
         event.localPosition[0],
         event.localPosition[1],
         draftRef.current.width,
         draftRef.current.height,
         isMagneticSnapActive(),
+        event.nativeEvent?.altKey !== true && cornerSnapOn(),
         draftRef.current.id,
       )
       // Alt force-places over a collision (the draft stays red as a warning).
       if (!valid && event.nativeEvent?.altKey !== true) return
 
-      commitWindowAtWall(event.node, clampedX, clampedY, side, itemRotation)
+      commitWindowAtWall(event.node, clampedX, clampedY, side, itemRotation, snap)
       event.stopPropagation()
     }
 
-    const onWallLeave = () => {
+    // XR selectend produces a grid click without replaying the wall mesh's
+    // R3F pointer-up event. Use the latest valid wall hover for that release.
+    const onXRGridClick = (event: GridEvent) => {
+      if (event.nativeEvent?.pointerType !== 'xr' || !lastWallEvent) return
+      onWallClick(lastWallEvent)
+    }
+
+    const onWallLeave = (event: WallEvent) => {
+      if (!shouldHandleOpeningHostLeave(event.nativeEvent)) return
       if (hostKind !== 'wall') return
       lastWallEvent = null
       destroyDraft()
@@ -736,7 +874,25 @@ const WindowTool: React.FC = () => {
       // timeStamp) — it owns the frame and has snapped the draft, so skip the
       // floor follow this tick.
       const ts = event.nativeEvent?.timeStamp ?? -1
-      if (ts === lastMeshEventTime) return
+      if (
+        !shouldFollowOpeningGrid({
+          eventTime: ts,
+          hasActiveHost: hostKind !== null,
+          lastHostEventTime: lastMeshEventTime,
+          pointerType: event.nativeEvent?.pointerType,
+        })
+      )
+        return
+      const wallEvent = wallEventFromGrid(
+        event,
+        activeLevelId,
+        useScene.getState().nodes,
+        sceneRegistry.nodes,
+      )
+      if (wallEvent) {
+        onWallHover(wallEvent)
+        return
+      }
       // Fresh floor-only frame: the cursor is off any wall/roof. Drop any draft
       // and free-follow the cursor with the invalid (unplaceable) ghost.
       hostKind = null
@@ -744,6 +900,17 @@ const WindowTool: React.FC = () => {
       const [x, y, z] = event.localPosition
       destroyDraft()
       showGhostAt([x, y + FALLBACK_HEIGHT / 2 + FALLBACK_SILL_LIFT, z], y)
+    }
+
+    const onGridPointerUp = (event: GridEvent) => {
+      if (isCameraDragging() || !draftRef.current) return
+      const wallEvent = wallEventFromGrid(
+        event,
+        activeLevelId,
+        useScene.getState().nodes,
+        sceneRegistry.nodes,
+      )
+      if (wallEvent) onWallClick(wallEvent)
     }
 
     // ── Dormer wall faces ──────────────────────────────────────────
@@ -849,7 +1016,14 @@ const WindowTool: React.FC = () => {
 
     const updateRoofCursor = (target: RoofWallOpeningTarget, roof: RoofNode) => {
       const pose = getRoofWallOpeningCursorPose(target, roof)
-      if (pose) updateCursor(pose.position, pose.rotationY, target.valid, -target.position[1])
+      if (pose)
+        updateCursor(
+          pose.position,
+          pose.rotationY,
+          target.valid,
+          -target.position[1],
+          DEFAULT_WALL_THICKNESS,
+        )
     }
 
     const onRoofHover = (event: RoofEvent) => {
@@ -874,6 +1048,7 @@ const WindowTool: React.FC = () => {
         })
       } else {
         const node = WindowNode.parse({
+          ...placedWindowFields(),
           position,
           rotation: [0, 0, 0],
           side: 'front',
@@ -882,7 +1057,7 @@ const WindowTool: React.FC = () => {
           parentId: segment.id,
           metadata: { isTransient: true },
         })
-        useScene.getState().createNode(node, segment.id as AnyNodeId)
+        createDraft(node, segment.id as AnyNodeId)
         draftRef.current = node
       }
       publishDraftPreview(segment)
@@ -906,7 +1081,7 @@ const WindowTool: React.FC = () => {
       hostKind = null
 
       useLiveNodeOverrides.getState().clear(draft.id)
-      useScene.getState().deleteNode(draft.id)
+      deleteDraft(draft.id)
       useScene.temporal.getState().resume()
 
       const state = useScene.getState()
@@ -929,8 +1104,10 @@ const WindowTool: React.FC = () => {
         awningDirection: draft.awningDirection,
         casementStyle: draft.casementStyle,
         hingesSide: draft.hingesSide,
+        casingFaceA: draft.casingFaceA,
+        casingFaceB: draft.casingFaceB,
+        casingWidth: draft.casingWidth,
         frameThickness: draft.frameThickness,
-        frameDepth: draft.frameDepth,
         columnRatios: draft.columnRatios,
         rowRatios: draft.rowRatios,
         columnDividerThickness: draft.columnDividerThickness,
@@ -973,11 +1150,20 @@ const WindowTool: React.FC = () => {
     // guard dropped R off-wall / before the first hover). Then re-renders the
     // current preview so the flip shows live and matches commit.
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key !== 'r' && e.key !== 'R') return
+      const key = e.key.toLowerCase()
+      if (key !== 'r' && key !== 'o' && key !== 'l') return
+      if (key === 'l' && !windowTakesStyle(useWindowPlacement.getState().type)) return
       if (e.repeat) return
-      const t = e.target as HTMLElement | null
-      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return
+      if (isTypingTarget(e.target)) return
+      if (key !== 'r' && (e.metaKey || e.ctrlKey || e.altKey)) return
       e.preventDefault()
+      if (key !== 'r') {
+        // O / L cycle the chips; the store subscription re-previews.
+        if (key === 'o') useWindowPlacement.getState().cycleType()
+        else useWindowPlacement.getState().cycleStyle()
+        triggerSFX('sfx:item-rotate')
+        return
+      }
       sideFlip = !sideFlip
       triggerSFX('sfx:item-rotate')
       if (lastWallEvent) {
@@ -993,6 +1179,7 @@ const WindowTool: React.FC = () => {
     emitter.on('wall:enter', onWallHover)
     emitter.on('wall:move', onWallHover)
     emitter.on('wall:click', onWallClick)
+    emitter.on('grid:click', onXRGridClick)
     emitter.on('wall:leave', onWallLeave)
     emitter.on('roof:enter', onRoofHover)
     emitter.on('roof:move', onRoofHover)
@@ -1007,8 +1194,34 @@ const WindowTool: React.FC = () => {
     emitter.on('window:click', onDormerWindowClick)
     emitter.on('window:leave', onDormerWindowLeave)
     emitter.on('grid:move', onGridFreeFollow)
+    emitter.on('grid:pointerup', onGridPointerUp)
     emitter.on('tool:cancel', onCancel)
+    // Alt turns the corner snap off, and pressing it while hovering says so at once.
+    const onAltToggle = (e: KeyboardEvent) => {
+      // A field's own Alt (a typed character) is not the placement's.
+      if (e.key !== 'Alt' || isTypingTarget(e.target)) return
+      const held = e.type === 'keydown'
+      if (held === altDown) return
+      altDown = held
+      if (lastWallEvent) onWallHover(lastWallEvent)
+    }
     window.addEventListener('keydown', onKeyDown)
+    window.addEventListener('keydown', onAltToggle)
+    window.addEventListener('keyup', onAltToggle)
+    // A chip changed (key or click): the draft takes the new type and style, then re-previews.
+    const unsubscribePlacement = useWindowPlacement.subscribe(() => {
+      const draft = draftRef.current
+      if (draft) {
+        useScene.getState().updateNode(draft.id, placedWindowFields())
+        const live = useScene.getState().nodes[draft.id as AnyNodeId]
+        if (live?.type === 'window') draftRef.current = live
+      }
+      const parent = draft?.parentId ? useScene.getState().nodes[draft.parentId as AnyNodeId] : null
+      if (lastWallEvent) onWallHover(lastWallEvent)
+      else if (lastDormerEvent) onDormerHover(lastDormerEvent)
+      else if (parent) publishDraftPreview(parent)
+      else if (lastFloorPoint) showGhostAt(lastFloorPoint.pos, lastFloorPoint.floorY)
+    })
     // Placement tracks the cursor through wall events; keep walls hidden by
     // the wall-mode pass (X-ray 'down' mode) pointer-targetable while the
     // tool is active so a new window still snaps onto them (see the wall
@@ -1017,7 +1230,9 @@ const WindowTool: React.FC = () => {
 
     return () => {
       destroyDraft()
+      for (const end of draftHistoryEnds.values()) end()
       hideCursor()
+      resetCorner()
       clearPlacementPreview()
       useAlignmentGuides.getState().clear()
       clearOpeningGuides3D()
@@ -1026,6 +1241,7 @@ const WindowTool: React.FC = () => {
       emitter.off('wall:enter', onWallHover)
       emitter.off('wall:move', onWallHover)
       emitter.off('wall:click', onWallClick)
+      emitter.off('grid:click', onXRGridClick)
       emitter.off('wall:leave', onWallLeave)
       emitter.off('roof:enter', onRoofHover)
       emitter.off('roof:move', onRoofHover)
@@ -1040,8 +1256,12 @@ const WindowTool: React.FC = () => {
       emitter.off('window:click', onDormerWindowClick)
       emitter.off('window:leave', onDormerWindowLeave)
       emitter.off('grid:move', onGridFreeFollow)
+      emitter.off('grid:pointerup', onGridPointerUp)
       emitter.off('tool:cancel', onCancel)
       window.removeEventListener('keydown', onKeyDown)
+      window.removeEventListener('keydown', onAltToggle)
+      window.removeEventListener('keyup', onAltToggle)
+      unsubscribePlacement()
     }
   }, [activeLevelId, isCameraDragging, selectNode])
 
@@ -1049,7 +1269,11 @@ const WindowTool: React.FC = () => {
   // dispose on unmount rather than reallocating (and orphaning) an EdgesGeometry
   // on every re-render during placement.
   const edgesGeo = useMemo(() => {
-    const boxGeo = new BoxGeometry(FALLBACK_WIDTH, FALLBACK_HEIGHT, 0.07)
+    const boxGeo = new BoxGeometry(
+      FALLBACK_WIDTH,
+      FALLBACK_HEIGHT,
+      resolveOpeningFrameDepth({}, DEFAULT_WALL_THICKNESS),
+    )
     const geo = new EdgesGeometry(boxGeo)
     boxGeo.dispose()
     return geo

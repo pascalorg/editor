@@ -1,3 +1,5 @@
+import { getProjectFileSink } from '@pascal-app/core'
+import { downloadProjectFile } from '../../../../../lib/download-project-file'
 import { AlertTriangle, Printer } from 'lucide-react'
 import { useState } from 'react'
 import { Button } from '../../../../../components/ui/primitives/button'
@@ -5,7 +7,11 @@ import {
   isPrintLevelBundleReport,
   type PrintLevelBundleReport,
 } from '../../../../../lib/level-print-export'
-import type { ModelExport, ModelExportArtifact } from '../../../../../lib/model-export'
+import type {
+  ModelExport,
+  ModelExportArtifact,
+  ModelExportFormat,
+} from '../../../../../lib/model-export'
 import {
   isPrintExportReport,
   type PrintExportReport,
@@ -17,14 +23,7 @@ type PreparedPrintExport = {
   report: PrintExportReport | PrintLevelBundleReport
 }
 
-function downloadArtifact(artifact: ModelExportArtifact) {
-  const url = URL.createObjectURL(artifact.blob)
-  const link = document.createElement('a')
-  link.href = url
-  link.download = artifact.filename
-  link.click()
-  URL.revokeObjectURL(url)
-}
+type PrintModelExportFormat = Extract<ModelExportFormat, 'print-3mf' | 'print-stl'>
 
 function firstBlockingMessage(report: PrintExportReport | PrintLevelBundleReport) {
   const bundleDiagnostic = report.diagnostics.find((item) => item.severity === 'error')
@@ -39,8 +38,9 @@ function firstBlockingMessage(report: PrintExportReport | PrintLevelBundleReport
 export async function preparePrintExport(
   modelExport: ModelExport,
   onlyVisible: boolean,
+  format: PrintModelExportFormat,
 ): Promise<PreparedPrintExport> {
-  const artifact = await modelExport('print-3mf', {
+  const artifact = await modelExport(format, {
     onlyVisible,
     download: false,
     printScale: 100,
@@ -68,38 +68,51 @@ export async function preparePrintExport(
 
 export function PrintExportButton({ onlyVisible }: { onlyVisible: boolean }) {
   const modelExport = useEditor((state) => state.modelExport)
-  const [isExporting, setIsExporting] = useState(false)
+  const [exportingFormat, setExportingFormat] = useState<PrintModelExportFormat | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  const handleExport = async () => {
+  const handleExport = async (format: PrintModelExportFormat) => {
     if (!modelExport) return
 
-    setIsExporting(true)
+    const fileSink = getProjectFileSink()
+    setExportingFormat(format)
     setError(null)
     try {
-      const prepared = await preparePrintExport(modelExport, onlyVisible)
-      downloadArtifact(prepared.artifact)
+      const prepared = await preparePrintExport(modelExport, onlyVisible, format)
+      await downloadProjectFile(prepared.artifact.blob, prepared.artifact.filename, fileSink)
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : '3D print export failed.')
     } finally {
-      setIsExporting(false)
+      setExportingFormat(null)
     }
   }
+
+  const isExporting = exportingFormat !== null
 
   return (
     <>
       <Button
-        aria-busy={isExporting}
+        aria-busy={exportingFormat === 'print-3mf'}
         className="w-full justify-start gap-2"
         disabled={isExporting || !modelExport}
-        onClick={handleExport}
+        onClick={() => void handleExport('print-3mf')}
         variant="outline"
       >
         <Printer className="size-4" />
-        Export 3D print files
+        Export 3D print 3MF
+      </Button>
+      <Button
+        aria-busy={exportingFormat === 'print-stl'}
+        className="w-full justify-start gap-2"
+        disabled={isExporting || !modelExport}
+        onClick={() => void handleExport('print-stl')}
+        variant="outline"
+      >
+        <Printer className="size-4" />
+        Export 3D print STL
       </Button>
       {error && (
-        <div className="flex gap-2 text-destructive text-xs">
+        <div className="col-span-full flex gap-2 text-destructive text-xs">
           <AlertTriangle className="mt-0.5 size-4 shrink-0" />
           <span>{error}</span>
         </div>

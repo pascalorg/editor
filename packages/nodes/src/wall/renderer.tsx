@@ -4,23 +4,81 @@ import {
   type AnyNode,
   type AnyNodeId,
   hiddenWallPointerEventsHeld,
+  useLiveNodeOverrides,
   useRegistry,
   useScene,
+  type WallFace,
+  type WallFaceScript,
   type WallNode,
+  wallFaceScriptPlacement,
 } from '@pascal-app/core'
-import { getVisibleWallMaterials, NodeRenderer, useNodeEvents, useViewer } from '@pascal-app/viewer'
-import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
+import {
+  getWallFinishRefs,
+  NodeRenderer,
+  SHADOW_ONLY_LAYER,
+  useLibraryMaterialsVersion,
+  useNodeEvents,
+  useViewer,
+} from '@pascal-app/viewer'
+import { type ComponentProps, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import type { Mesh } from 'three'
 import { useShallow } from 'zustand/react/shallow'
+import { FinishScriptModel } from '../shared/finish-script-model'
 import { createPlaceholderGeometry } from '../shared/placeholder-geometry'
+import { getCurtainAwareWallMaterials } from './curtain-wall-materials'
 import {
   extractWallSelectionRay,
   WALL_COLLISION_MESH_NAME,
   wallPointerEventsSuppressed,
 } from './pointer-transparency'
 import { createWallRayHitClassifier } from './selection-hit-owner'
-import { useWallTreatmentLevelData } from './treatment-level-data'
-import { createWallExtraSlotMaterials, WallTreatments } from './treatments'
+import { createWallTreatmentSelector, useWallTreatmentLevelData } from './treatment-level-data'
+import {
+  createWallExtraSlotMaterials,
+  hasWallTreatments,
+  WallTreatments,
+  wallTreatmentProudOffsets,
+} from './treatments'
+
+/**
+ * A face's finish its script built, under the wall like the wall's other face geometry: the
+ * build's frame at the face's base, 1 mm proud of the face, mirrored through the wall for face b.
+ */
+function WallFaceScriptModel({
+  node,
+  face,
+  script,
+}: {
+  node: WallNode
+  face: WallFace
+  script: WallFaceScript
+}) {
+  const placement = useScene(
+    useShallow((state) => {
+      const at = wallFaceScriptPlacement(state.nodes, node.id, face)
+      return at ? [...at.position, at.scale[2]] : []
+    }),
+  )
+  if (placement.length === 0) return null
+  const [x, y, z, out] = placement as [number, number, number, number]
+  return (
+    <group position={[x, y, z]} scale={[1, 1, out]}>
+      <FinishScriptModel ownerId={node.id} parentId={node.parentId} script={script} />
+    </group>
+  )
+}
+
+function WallTreatmentSubscription(
+  props: Omit<ComponentProps<typeof WallTreatments>, 'levelData'>,
+) {
+  const { node } = props
+  const selector = useMemo(
+    () => createWallTreatmentSelector(node, wallTreatmentProudOffsets(node)),
+    [node],
+  )
+  const levelData = useWallTreatmentLevelData(selector)
+  return levelData ? <WallTreatments {...props} levelData={levelData} /> : null
+}
 
 /**
  * Thin wall renderer.
@@ -45,6 +103,7 @@ const WallRenderer = ({ node }: { node: WallNode }) => {
   const ref = useRef<Mesh>(null!)
   const placeholderGeometry = useMemo(() => createPlaceholderGeometry(3), [])
   const collisionPlaceholderGeometry = useMemo(() => createPlaceholderGeometry(), [])
+  const shadowPlaceholderGeometry = useMemo(() => createPlaceholderGeometry(), [])
 
   useRegistry(node.id, 'wall', ref)
 
@@ -56,8 +115,9 @@ const WallRenderer = ({ node }: { node: WallNode }) => {
     return () => {
       placeholderGeometry.dispose()
       collisionPlaceholderGeometry.dispose()
+      shadowPlaceholderGeometry.dispose()
     }
-  }, [collisionPlaceholderGeometry, placeholderGeometry])
+  }, [collisionPlaceholderGeometry, placeholderGeometry, shadowPlaceholderGeometry])
 
   const rawHandlers = useNodeEvents(node, 'wall')
   // Hidden walls participate in hover/selection NEAREST-FIRST: when the
@@ -116,25 +176,35 @@ const WallRenderer = ({ node }: { node: WallNode }) => {
         .filter((child): child is AnyNode => child !== undefined),
     ),
   )
-  const treatmentLevelData = useWallTreatmentLevelData((state) =>
-    node.parentId ? state.byLevelId.get(node.parentId) : undefined,
+  const treatmentOverride = useLiveNodeOverrides((state) => state.overrides.get(node.id))
+  const treatmentNode = useMemo(
+    () => (treatmentOverride ? ({ ...node, ...treatmentOverride } as WallNode) : node),
+    [node, treatmentOverride],
   )
   // Subscribe to the scene-material palette so editing a `scene:` material a
   // wall slot references re-renders the wall live (the wall-system geometry
   // dirty loop never fires for a material-only edit). `getMaterialsForWall`'s
   // content hash keeps unaffected walls on their cached materials.
   const sceneMaterials = useScene((s) => s.materials)
-  const baseMaterials = getVisibleWallMaterials(
-    node,
+  // Same for the dynamic library: AI-generated `library:mtl_*` presets
+  // register after mount, and a dangling ref cached as the slot default must
+  // re-resolve when they land.
+  const libraryMaterialsVersion = useLibraryMaterialsVersion()
+  // Built geometry's groups index its finish palette; WallCutout swaps the
+  // array whenever a rebuild changes that palette.
+  const baseMaterials = getCurtainAwareWallMaterials(
+    treatmentNode,
     shading,
     textures,
     colorPreset,
     sceneTheme,
     sceneMaterials,
-  )
+    getWallFinishRefs(ref.current?.geometry),
+  ).visible
+  // biome-ignore lint/correctness/useExhaustiveDependencies: libraryMaterialsVersion invalidates the ref resolution inside createWallExtraSlotMaterials
   const extraMaterials = useMemo(
     () => createWallExtraSlotMaterials(node, shading, sceneMaterials),
-    [node, sceneMaterials, shading],
+    [node, sceneMaterials, shading, libraryMaterialsVersion],
   )
   useEffect(
     () => () => {
@@ -144,10 +214,12 @@ const WallRenderer = ({ node }: { node: WallNode }) => {
     },
     [baseMaterials, extraMaterials],
   )
+  // Trim and scripted finishes dress a wall's faces: a curtain wall and a railing have none.
+  const hasFaces = node.wallType !== 'curtain' && node.wallType !== 'railing'
 
   return (
     <mesh
-      castShadow
+      castShadow={node.wallType !== 'curtain'}
       geometry={placeholderGeometry}
       material={baseMaterials}
       receiveShadow
@@ -155,20 +227,38 @@ const WallRenderer = ({ node }: { node: WallNode }) => {
       visible={node.visible}
     >
       <mesh
+        name="curtain-wall-shadow"
+        userData={{ pascalExport: 'strip' }}
+        geometry={shadowPlaceholderGeometry}
+        layers={SHADOW_ONLY_LAYER}
+        castShadow
+        visible={node.wallType === 'curtain'}
+        raycast={() => {}}
+      >
+        <meshBasicMaterial />
+      </mesh>
+      <mesh
         geometry={collisionPlaceholderGeometry}
         name={WALL_COLLISION_MESH_NAME}
         visible={false}
         {...handlers}
       />
 
-      {treatmentLevelData && (
-        <WallTreatments
+      {hasFaces && hasWallTreatments(treatmentNode) && (
+        <WallTreatmentSubscription
           childrenNodes={childNodes}
-          levelData={treatmentLevelData}
           materials={extraMaterials}
-          node={node}
+          node={treatmentNode}
         />
       )}
+
+      {hasFaces &&
+        (['a', 'b'] as const).map((face) => {
+          const script = node.finishScripts?.[face]
+          return script ? (
+            <WallFaceScriptModel face={face} key={face} node={node} script={script} />
+          ) : null
+        })}
 
       {(node.children ?? []).map((childId) => (
         <NodeRenderer key={`${node.id}:${childId}`} nodeId={childId} />

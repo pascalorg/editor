@@ -111,7 +111,7 @@ export default function SpawnPanel() {
           precision={2}
           step={0.01}
           unit="m"
-          value={Math.round(node.position[0] * 100) / 100}
+          value={node.position[0]}
         />
         <SliderControl
           label="Y"
@@ -123,7 +123,7 @@ export default function SpawnPanel() {
           precision={2}
           step={0.01}
           unit="m"
-          value={Math.round(node.position[1] * 100) / 100}
+          value={node.position[1]}
         />
         <SliderControl
           label="Z"
@@ -135,7 +135,7 @@ export default function SpawnPanel() {
           precision={2}
           step={0.01}
           unit="m"
-          value={Math.round(node.position[2] * 100) / 100}
+          value={node.position[2]}
         />
       </PanelSection>
 
@@ -157,7 +157,7 @@ export default function SpawnPanel() {
         <ActionGroup>
           <ActionButton icon={<Move className="h-4 w-4" />} label="Move" onClick={handleMove} />
           <ActionButton
-            className="border-red-500/40 text-red-200 hover:bg-red-500/15"
+            className="border-red-500/40 text-red-700 dark:text-red-200 hover:bg-red-500/15"
             icon={<Trash2 className="h-4 w-4" />}
             label="Delete"
             onClick={handleDelete}

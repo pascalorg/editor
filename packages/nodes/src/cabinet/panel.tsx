@@ -6,25 +6,30 @@ import type {
   CabinetModuleNode as CabinetModuleNodeType,
   CabinetNode as CabinetNodeType,
 } from '@pascal-app/core'
-import { createSceneApi, useScene } from '@pascal-app/core'
+import { createSceneApi, formatFixed, usePascalI18n, useScene } from '@pascal-app/core'
 import {
   ActionButton,
   PanelSection,
   PanelWrapper,
   SegmentedControl,
   SliderControl,
+  usePlacementNotice,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { AlertTriangle, Pause, Play, Plus } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { CompartmentCard } from './compartment-card'
+import { CabinetEssentialControls } from './essential-controls'
 import {
   animateCabinetOperationState,
   isCabinetAnimationRunning,
   onCabinetAnimationChange,
   stopCabinetAnimation,
 } from './interaction'
+import { KITCHEN_ITEM_LABELS, kitchenPresetForModule } from './kitchen-catalog'
+import { KitchenCollection } from './kitchen-collection'
+import { KitchenModuleActions } from './kitchen-module-actions'
 import { cabinetModulePanelContext } from './panel-context'
 import {
   cabinetModuleSupportsPresets,
@@ -44,6 +49,7 @@ import {
   backAlignZ,
   type CabinetRunStylePatch,
   cabinetCeilingGap,
+  cabinetModuleCeilingOverflow,
   cabinetModulesForRun,
   resolveCabinetType,
   runModuleBaseY,
@@ -63,6 +69,7 @@ import {
   backAnchoredModuleZ,
   type CabinetCompartment,
   clampCabinetCarcassHeightForStack,
+  isFridgeCompartmentType,
   isHoodCompartmentType,
   minCabinetCarcassHeightForStack,
   newCabinetCompartment,
@@ -74,6 +81,12 @@ import {
 import { resolveCompartmentTransition } from './stack-transitions'
 import { validateCabinetRun } from './validation'
 import {
+  CABINET_WALL_HEIGHT_PRESETS,
+  type CabinetWallHeightPresetId,
+  cabinetWallHeightPresetById,
+  cabinetWallHeightPresetId,
+} from './wall-height-presets'
+import {
   CABINET_STANDARD_WIDTHS,
   type CabinetStandardWidthId,
   cabinetStandardWidthById,
@@ -81,51 +94,66 @@ import {
 } from './widths'
 
 const HANDLE_STYLE_OPTIONS = [
-  { value: 'bar', label: 'Bar' },
-  { value: 'knob', label: 'Knob' },
-  { value: 'cutout', label: 'Cutout' },
-  { value: 'hole', label: 'Hole' },
-  { value: 'none', label: 'None' },
+  { value: 'bar', label: /* i18n */ { id: 'node.cabinet.panel.bar', message: 'Bar' } },
+  { value: 'knob', label: /* i18n */ { id: 'node.cabinet.panel.knob', message: 'Knob' } },
+  { value: 'cutout', label: /* i18n */ { id: 'node.cabinet.panel.cutout', message: 'Cutout' } },
+  { value: 'hole', label: /* i18n */ { id: 'node.cabinet.panel.hole', message: 'Hole' } },
+  { value: 'none', label: /* i18n */ { id: 'node.cabinet.panel.none', message: 'None' } },
 ] as const
 
 const HANDLE_POSITION_OPTIONS = [
-  { value: 'auto', label: 'Auto' },
-  { value: 'top', label: 'Top' },
-  { value: 'center', label: 'Center' },
+  { value: 'auto', label: /* i18n */ { id: 'node.cabinet.panel.auto', message: 'Auto' } },
+  { value: 'top', label: /* i18n */ { id: 'node.cabinet.panel.top', message: 'Top' } },
+  { value: 'center', label: /* i18n */ { id: 'node.cabinet.panel.center', message: 'Center' } },
 ] as const
 
 const FRONT_OVERLAY_OPTIONS = [
-  { value: 'full', label: 'Overlay' },
-  { value: 'inset', label: 'Inset' },
+  { value: 'full', label: /* i18n */ { id: 'node.cabinet.panel.overlay', message: 'Overlay' } },
+  { value: 'inset', label: /* i18n */ { id: 'node.cabinet.panel.inset', message: 'Inset' } },
 ] as const
 
 const FRONT_STYLE_OPTIONS = [
-  { value: 'slab', label: 'Slab' },
-  { value: 'shaker', label: 'Shaker' },
-  { value: 'raised-arch', label: 'Raised Arch' },
+  { value: 'slab', label: /* i18n */ { id: 'node.cabinet.panel.slab', message: 'Slab' } },
+  { value: 'shaker', label: /* i18n */ { id: 'node.cabinet.panel.shaker', message: 'Shaker' } },
+  {
+    value: 'raised-arch',
+    label: /* i18n */ { id: 'node.cabinet.panel.raisedArch', message: 'Raised Arch' },
+  },
 ] as const
 
 const CABINET_TIER_OPTIONS = [
-  { value: 'base', label: 'Base Cabinet' },
-  { value: 'tall', label: 'Tall Cabinet' },
+  {
+    value: 'base',
+    label: /* i18n */ { id: 'node.cabinet.panel.baseCabinet', message: 'Base Cabinet' },
+  },
+  {
+    value: 'tall',
+    label: /* i18n */ { id: 'node.cabinet.panel.tallCabinet', message: 'Tall Cabinet' },
+  },
 ] as const
 
 const TOP_FINISH_OPTIONS = [
-  { value: 'none', label: 'None' },
-  { value: 'top-cabinet', label: 'Top Cabinet' },
-  { value: 'trim', label: 'Trim / Soffit' },
+  { value: 'none', label: /* i18n */ { id: 'node.cabinet.panel.none', message: 'None' } },
+  {
+    value: 'top-cabinet',
+    label: /* i18n */ { id: 'node.cabinet.panel.topCabinet', message: 'Top Cabinet' },
+  },
+  {
+    value: 'trim',
+    label: /* i18n */ { id: 'node.cabinet.panel.trimSoffit', message: 'Trim / Soffit' },
+  },
 ] as const
 
 const EMPTY_MODULES: CabinetModuleNodeType[] = []
 const EMPTY_MODULE_IDS: AnyNodeId[] = []
 
-const PRESET_BUTTON_CLASS =
-  'flex h-9 items-center justify-center rounded-md border border-border/40 bg-[#252527] px-3 py-2 text-center text-xs font-medium text-foreground transition-colors hover:border-border/70 hover:bg-[#303033]'
 const REFLOW_REJECTED_MESSAGE =
   'No space in this run. No base cabinet can shrink enough to fit this item.'
 
 export default function CabinetPanel() {
+  const i18n = usePascalI18n()
   const selectedId = useViewer((s) => s.selection.selectedIds[0])
+  const placementNotice = usePlacementNotice(selectedId)
   const setSelection = useViewer((s) => s.setSelection)
   const [isAnimating, setIsAnimating] = useState(false)
   const [reflowNotice, setReflowNotice] = useState<{ message: string } | null>(null)
@@ -178,7 +206,6 @@ export default function CabinetPanel() {
       s.nodes[selected.parentId as AnyNodeId]?.type === 'cabinet-module'
     )
   })
-
   const showReflowRejected = useCallback(() => {
     setReflowNotice({ message: REFLOW_REJECTED_MESSAGE })
   }, [])
@@ -307,6 +334,8 @@ export default function CabinetPanel() {
           if (liveNode?.type === 'cabinet-module') {
             syncCornerRunsFromSourceModule({
               module: liveNode,
+              previousModule:
+                liveBeforeUpdate?.type === 'cabinet-module' ? liveBeforeUpdate : undefined,
               run: parent,
               sceneApi: createSceneApi(useScene),
             })
@@ -342,10 +371,10 @@ export default function CabinetPanel() {
   // parent-frame routing keeps clicks on child modules targeting the run while
   // it stays the single selected node.
   const backToRun = useCallback(() => {
-    if (node?.type === 'cabinet-module' && node.parentId) {
-      setSelection({ selectedIds: [node.parentId] })
+    if (parentRun) {
+      setSelection({ selectedIds: [parentRun.id] })
     }
-  }, [node, setSelection])
+  }, [parentRun, setSelection])
 
   // Animation lives in ./interaction.ts, shared with the registry E-key
   // action; the panel only mirrors its running state for the Play button.
@@ -381,7 +410,9 @@ export default function CabinetPanel() {
           if (seen.has(run.id as AnyNodeId)) continue
           seen.add(run.id as AnyNodeId)
           reports.push(
-            validateCabinetRun(run, cabinetModulesForRun(run, useScene.getState().nodes)),
+            validateCabinetRun(run, cabinetModulesForRun(run, useScene.getState().nodes), {
+              nodes: useScene.getState().nodes,
+            }),
           )
           for (const childId of run.children ?? []) {
             const child = useScene.getState().nodes[childId as AnyNodeId]
@@ -406,6 +437,13 @@ export default function CabinetPanel() {
     : null
   const isHoodOnlyNode =
     stack.length > 0 && stack.every((compartment) => isHoodCompartmentType(compartment.type))
+  const isFridgeModule =
+    node.type === 'cabinet-module' &&
+    stack.some((compartment) => isFridgeCompartmentType(compartment.type))
+  const ceilingOverflow =
+    node.type === 'cabinet-module'
+      ? cabinetModuleCeilingOverflow(node, useScene.getState().nodes as Record<AnyNodeId, AnyNode>)
+      : 0
   const normalized = normalizeCabinetStack(node)
   const rowHeights = new Map(normalized.map((row) => [row.index, row.height]))
   const rows = stack.map((compartment, index) => ({ compartment, index })).reverse()
@@ -512,6 +550,13 @@ export default function CabinetPanel() {
   const hasWallCabinet = node?.type === 'cabinet-module' ? Boolean(wallChild) : false
 
   const isWallChildModule = node?.type === 'cabinet-module' && parentIsModule
+  const isWallCabinetModule =
+    node?.type === 'cabinet-module' && (isWallChildModule || parentRun?.runTier === 'wall')
+  const wallHeightPreset = isWallCabinetModule ? cabinetWallHeightPresetId(node) : 'custom'
+  const applyWallHeightPreset = (presetId: CabinetWallHeightPresetId) => {
+    if (!isWallCabinetModule) return
+    updateNode({ carcassHeight: cabinetWallHeightPresetById(presetId).value })
+  }
   const canAddTopFinish =
     node.type === 'cabinet-module' &&
     !isHoodOnlyNode &&
@@ -572,38 +617,79 @@ export default function CabinetPanel() {
     return <CabinetRunPanel modules={modules} node={node} onClose={close} />
   }
 
+  if (node.type === 'cabinet-module' && node.moduleKind === 'wall-filler') {
+    return (
+      <PanelWrapper
+        icon="/icons/item.webp"
+        title={i18n._({ id: 'node.cabinet.panel.wallFiller', message: 'Wall filler' })}
+        onBack={backToRun}
+        onClose={close}
+        width={320}
+      >
+        {placementNotice && (
+          <p role="status" className="px-3 py-2 text-xs text-amber-600">
+            {placementNotice.line}
+          </p>
+        )}
+        <PanelSection
+          title={i18n._({ id: 'node.cabinet.panel.dimensions', message: 'Dimensions' })}
+        >
+          <p className="px-2 pb-3 text-xs text-muted-foreground">
+            {i18n._({
+              id: 'node.cabinet.panel.solidMatchingFrontBetweenTheCabinet',
+              message:
+                'Solid matching front between the cabinet and wall. Countertop and toe-kick continue across this filler.',
+            })}
+          </p>
+          <SliderControl
+            label={i18n._({ id: 'node.cabinet.panel.width', message: 'Width' })}
+            value={node.width}
+            min={0.05}
+            max={3}
+            step={0.001}
+            unit="m"
+            onChange={(width) => updateNode({ width })}
+          />
+          <SliderControl
+            label={i18n._({ id: 'node.cabinet.panel.height', message: 'Height' })}
+            value={node.carcassHeight}
+            min={0.4}
+            max={2.4}
+            step={0.01}
+            unit="m"
+            onChange={(carcassHeight) => updateNode({ carcassHeight })}
+          />
+        </PanelSection>
+      </PanelWrapper>
+    )
+  }
+
   return (
     <PanelWrapper
       icon="/icons/item.webp"
       onBack={node.type === 'cabinet-module' ? backToRun : undefined}
       onClose={close}
-      title={node.name || 'Modular Cabinet'}
+      title={
+        node.type === 'cabinet-module'
+          ? i18n._(
+              KITCHEN_ITEM_LABELS[
+                isWallCabinetModule ? 'wall-cabinet' : kitchenPresetForModule(node, parentRun)
+              ],
+            )
+          : node.name || i18n._({ id: 'node.cabinet.panel.kitchenRun', message: 'Kitchen run' })
+      }
       width={320}
     >
-      {node.type === 'cabinet-module' &&
-        parentRun?.type === 'cabinet' &&
-        cabinetModuleSupportsPresets(node) && (
-          <PanelSection title="Presets">
-            <div className="grid grid-cols-2 gap-2 px-1 pb-2">
-              {CABINET_PRESETS.map((preset) => (
-                <button
-                  className={PRESET_BUTTON_CLASS}
-                  key={preset.id}
-                  onClick={() => applyPreset(preset.id)}
-                  type="button"
-                >
-                  <span className="truncate">{preset.label}</span>
-                </button>
-              ))}
-            </div>
-          </PanelSection>
-        )}
-
-      <PanelSection title="Dimensions">
+      {placementNotice && (
+        <p role="status" className="px-3 py-2 text-xs text-amber-600">
+          {placementNotice.line}
+        </p>
+      )}
+      <PanelSection title={i18n._({ id: 'node.cabinet.panel.dimensions', message: 'Dimensions' })}>
         {node.type === 'cabinet-module' && !isHoodOnlyNode && (
           <div className="space-y-1 px-1 pb-2">
             <div className="px-1 pb-1 text-[10px] uppercase tracking-wide text-muted-foreground">
-              Standard width
+              {i18n._({ id: 'node.cabinet.panel.standardWidth', message: 'Standard width' })}
             </div>
             <SegmentedControl
               disabled={usesFixedApplianceWidth}
@@ -621,8 +707,35 @@ export default function CabinetPanel() {
             />
           </div>
         )}
+        {isWallCabinetModule && !isHoodOnlyNode && (
+          <div className="space-y-1 px-1 pb-2">
+            <div className="px-1 pb-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+              {i18n._({ id: 'node.cabinet.panel.heightPreset', message: 'Height preset' })}
+            </div>
+            <SegmentedControl
+              mixed={wallHeightPreset === 'custom'}
+              onChange={(value) => applyWallHeightPreset(value as CabinetWallHeightPresetId)}
+              options={CABINET_WALL_HEIGHT_PRESETS.map((preset) => ({
+                label: (
+                  <span className="flex flex-col items-center leading-3">
+                    <span>{preset.label}</span>
+                    <span className="text-[9px] text-muted-foreground">{preset.metricLabel}</span>
+                  </span>
+                ),
+                value: preset.id,
+              }))}
+              value={wallHeightPreset === 'custom' ? '18' : wallHeightPreset}
+            />
+            <p className="px-1 pt-1 text-[10px] leading-4 text-muted-foreground">
+              {i18n._({
+                id: 'node.cabinet.panel.commonWallCabinetHeightsUseThe',
+                message: 'Common wall-cabinet heights. Use the slider below for a custom height.',
+              })}
+            </p>
+          </div>
+        )}
         <SliderControl
-          label="Width"
+          label={i18n._({ id: 'node.cabinet.panel.width', message: 'Width' })}
           max={3}
           min={0.3}
           onChange={(value) => updateNode({ width: value })}
@@ -634,7 +747,7 @@ export default function CabinetPanel() {
         {!isHoodOnlyNode && (
           <>
             <SliderControl
-              label="Depth"
+              label={i18n._({ id: 'node.cabinet.panel.depth', message: 'Depth' })}
               max={1.2}
               min={0.3}
               onChange={(value) => updateNode({ depth: value })}
@@ -644,7 +757,7 @@ export default function CabinetPanel() {
               value={node.depth}
             />
             <SliderControl
-              label="Carcass height"
+              label={i18n._({ id: 'node.cabinet.panel.height', message: 'Height' })}
               max={
                 node.type === 'cabinet-module' && resolveCabinetType(node, parentRun) === 'tall'
                   ? 2.4
@@ -665,105 +778,17 @@ export default function CabinetPanel() {
         )}
       </PanelSection>
 
-      {node.type === 'cabinet-module' && parentRun?.type === 'cabinet' && !isHoodOnlyNode && (
-        <PanelSection title="Cabinet Type">
-          <div className="space-y-2 px-1 pb-2">
-            <SegmentedControl
-              onChange={(value) => {
-                if (value === 'tall') {
-                  switchToTall()
-                  return
-                }
-                switchToBase()
-              }}
-              options={CABINET_TIER_OPTIONS.map((option) => ({
-                value: option.value,
-                label: option.label,
-              }))}
-              value={resolveCabinetType(node, parentRun)}
-            />
-            {resolveCabinetType(node, parentRun) === 'base' &&
-              (hasWallCabinet ? (
-                <ActionButton label="Remove wall cabinet" onClick={removeWallCabinet} />
-              ) : (
-                <>
-                  <ActionButton label="Add wall cabinet" onClick={addWallCabinetAbove} />
-                  <ActionButton label="Add chimney" onClick={addHoodAbove} />
-                </>
-              ))}
-          </div>
-        </PanelSection>
-      )}
-
-      {canAddTopFinish && (
-        <PanelSection title="Top / Ceiling">
-          <div className="space-y-2 px-1 pb-2">
-            <div>
-              <div className="px-1 pb-1 text-[10px] uppercase tracking-wide text-muted-foreground">
-                Finish
-              </div>
-              <SegmentedControl
-                onChange={(value) =>
-                  updateNode({
-                    topFinish: value as CabinetModuleNodeType['topFinish'],
-                    ...(value !== 'none' && node.topFinish === 'none'
-                      ? { topFinishDepth: node.depth }
-                      : {}),
-                  })
-                }
-                options={TOP_FINISH_OPTIONS.map((option) => ({
-                  label: option.label,
-                  value: option.value,
-                }))}
-                value={node.topFinish ?? 'none'}
-              />
-            </div>
-            {node.topFinish !== 'none' && (
-              <>
-                <ActionButton
-                  label="Fill to ceiling"
-                  onClick={() =>
-                    updateNode({
-                      topFinishHeight: cabinetCeilingGap(
-                        node,
-                        useScene.getState().nodes as Record<AnyNodeId, AnyNode>,
-                      ),
-                    })
-                  }
-                />
-                <SliderControl
-                  label="Top height"
-                  max={1.2}
-                  min={0}
-                  onChange={(value) => updateNode({ topFinishHeight: value })}
-                  precision={2}
-                  step={0.01}
-                  unit="m"
-                  value={node.topFinishHeight}
-                />
-                <SliderControl
-                  label="Top depth"
-                  max={1.2}
-                  min={0.15}
-                  onChange={(value) => updateNode({ topFinishDepth: value })}
-                  precision={2}
-                  step={0.01}
-                  unit="m"
-                  value={node.topFinishDepth}
-                />
-              </>
-            )}
-          </div>
-        </PanelSection>
-      )}
+      <CabinetEssentialControls stack={stack} width={node.width} onReplace={replaceAt} />
 
       {planningReport &&
         (planningReport.errors.length > 0 || planningReport.warnings.length > 0) && (
-          <PanelSection title="Planning checks">
+          <PanelSection
+            title={i18n._({ id: 'node.cabinet.panel.planningChecks', message: 'Planning checks' })}
+          >
             <div className="space-y-1 px-1 pb-2 text-xs leading-5">
               {planningReport.errors.map((planningIssue) => (
                 <div
-                  className="flex gap-1.5 text-red-300"
+                  className="flex gap-1.5 text-red-700 dark:text-red-300"
                   key={`${planningIssue.severity}-${planningIssue.code}-${planningIssue.nodeIds.join('-')}`}
                 >
                   <AlertTriangle className="mt-1 h-3.5 w-3.5 shrink-0" />
@@ -772,7 +797,7 @@ export default function CabinetPanel() {
               ))}
               {planningReport.warnings.map((planningIssue) => (
                 <div
-                  className="flex gap-1.5 text-amber-300"
+                  className={`flex gap-1.5 ${planningIssue.code === 'ceiling-overflow' ? 'text-red-700 dark:text-red-300' : 'text-amber-700 dark:text-amber-300'}`}
                   key={`${planningIssue.severity}-${planningIssue.code}-${planningIssue.nodeIds.join('-')}`}
                 >
                   <AlertTriangle className="mt-1 h-3.5 w-3.5 shrink-0" />
@@ -784,104 +809,54 @@ export default function CabinetPanel() {
         )}
 
       {!isHoodOnlyNode && (
-        <PanelSection title="Open Animation">
-          <div className="flex items-center gap-2 px-1">
-            <div className="min-w-0 flex-1">
-              <SliderControl
-                label="Open"
-                max={100}
-                min={0}
-                onChange={(value) => {
-                  if (isAnimating) stopAnimation()
-                  updateNode({ operationState: value / 100 })
-                }}
-                step={1}
-                unit="%"
-                value={Math.round((node.operationState ?? 0) * 100)}
-              />
-            </div>
-            <button
-              aria-label={
-                isAnimating
-                  ? 'Stop animation'
-                  : (node.operationState ?? 0) >= 0.99
-                    ? 'Close cabinet'
-                    : 'Open cabinet'
-              }
-              className="flex h-7 shrink-0 items-center gap-1.5 rounded-lg border border-border/40 bg-[#2C2C2E] px-2.5 text-[11px] font-medium text-foreground transition-colors hover:bg-[#3e3e3e]"
-              onClick={() => {
-                if (isAnimating) {
-                  stopAnimation()
-                  return
-                }
-                animateOperationState((node.operationState ?? 0) >= 0.99 ? 0 : 1)
-              }}
-              title={
-                isAnimating
-                  ? 'Stop animation'
-                  : (node.operationState ?? 0) >= 0.99
-                    ? 'Close cabinet'
-                    : 'Play animation'
-              }
-              type="button"
-            >
-              {isAnimating ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
-              <span>
-                {isAnimating ? 'Stop' : (node.operationState ?? 0) >= 0.99 ? 'Close' : 'Play'}
-              </span>
-            </button>
-          </div>
-        </PanelSection>
-      )}
-
-      <PanelSection title="Compartments">
-        {reflowNotice ? (
-          <p
-            aria-live="polite"
-            className="px-1 pb-2 text-xs leading-5 text-amber-400"
-            role="status"
-          >
-            {reflowNotice.message}
-          </p>
-        ) : null}
-        <div className="flex flex-col gap-2 px-1 pb-2">
-          {rows.map(({ compartment, index }, displayIndex) => (
-            <CompartmentCard
-              allowHood={isWallChildModule}
-              wallCabinet={isWallChildModule}
-              compartment={compartment}
-              carcassHeight={node.carcassHeight}
-              displayIndex={displayIndex}
-              index={index}
-              key={compartment.id}
-              onMove={(delta) => moveCompartment(index, delta)}
-              onRemove={() => removeAt(index)}
-              onReplace={(next) => replaceAt(index, next)}
-              onResizeHeight={(height) => resizeAt(index, height)}
-              resolvedHeight={
-                rowHeights.get(index) ?? node.carcassHeight / Math.max(stack.length, 1)
-              }
-              total={rows.length}
-              width={node.width}
-            />
-          ))}
-        </div>
-        <div className="px-1 pb-1">
-          <ActionButton
-            icon={<Plus className="h-4 w-4" />}
-            label="Add compartment"
-            onClick={addCompartment}
-          />
-        </div>
-      </PanelSection>
-
-      {!isHoodOnlyNode && (
         <>
-          <PanelSection title="Fronts">
+          {isFridgeModule && (
+            <PanelSection
+              title={i18n._({
+                id: 'node.cabinet.panel.applianceFront',
+                message: 'Appliance front',
+              })}
+            >
+              <div className="space-y-2 px-1 pb-2">
+                <div>
+                  <div className="px-1 pb-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+                    {i18n._({ id: 'node.cabinet.panel.panelReady', message: 'Panel-ready' })}
+                  </div>
+                  <SegmentedControl
+                    onChange={(value) => updateNode({ panelReady: value === 'on' })}
+                    options={[
+                      {
+                        value: 'off',
+                        label: i18n._({ id: 'node.cabinet.panel.appliance', message: 'Appliance' }),
+                      },
+                      {
+                        value: 'on',
+                        label: i18n._({
+                          id: 'node.cabinet.panel.cabinetPanel',
+                          message: 'Cabinet panel',
+                        }),
+                      },
+                    ]}
+                    value={node.panelReady ? 'on' : 'off'}
+                  />
+                </div>
+                {node.panelReady && (
+                  <p className="px-1 text-xs leading-5 text-muted-foreground">
+                    {i18n._({
+                      id: 'node.cabinet.panel.usesTheCabinetFrontStyleReveal',
+                      message:
+                        'Uses the cabinet front style, reveal, handle, and front material settings below.',
+                    })}
+                  </p>
+                )}
+              </div>
+            </PanelSection>
+          )}
+          <PanelSection title={i18n._({ id: 'node.cabinet.panel.finish', message: 'Finish' })}>
             <div className="space-y-2 px-1 pb-2">
               <div>
                 <div className="px-1 pb-1 text-[10px] uppercase tracking-wide text-muted-foreground">
-                  Style
+                  {i18n._({ id: 'node.cabinet.panel.style', message: 'Style' })}
                 </div>
                 <SegmentedControl
                   onChange={(value) =>
@@ -889,56 +864,19 @@ export default function CabinetPanel() {
                   }
                   options={FRONT_STYLE_OPTIONS.map((option) => ({
                     value: option.value,
-                    label: option.label,
+                    label: i18n._(option.label),
                   }))}
                   value={node.frontStyle ?? 'slab'}
-                />
-              </div>
-              <div>
-                <div className="px-1 pb-1 text-[10px] uppercase tracking-wide text-muted-foreground">
-                  Mounting
-                </div>
-                <SegmentedControl
-                  onChange={(value) =>
-                    updateNode({ frontOverlay: value as CabinetNodeType['frontOverlay'] })
-                  }
-                  options={FRONT_OVERLAY_OPTIONS.map((option) => ({
-                    value: option.value,
-                    label: option.label,
-                  }))}
-                  value={node.frontOverlay ?? 'full'}
-                />
-              </div>
-              <div>
-                <div className="px-1 pb-1 text-[10px] uppercase tracking-wide text-muted-foreground">
-                  Reveal gap
-                </div>
-                <SegmentedControl
-                  mixed={cabinetRevealGapId(node.frontGap) === 'custom'}
-                  onChange={(value) =>
-                    updateNode({
-                      frontGap: cabinetRevealGapById(value as CabinetRevealGapId).value,
-                    })
-                  }
-                  options={CABINET_REVEAL_GAPS.map((gap) => ({
-                    value: gap.id,
-                    label: gap.label,
-                  }))}
-                  value={
-                    cabinetRevealGapId(node.frontGap) === 'custom'
-                      ? '3'
-                      : cabinetRevealGapId(node.frontGap)
-                  }
                 />
               </div>
             </div>
           </PanelSection>
 
-          <PanelSection title="Handles">
+          <PanelSection title={i18n._({ id: 'node.cabinet.panel.handles', message: 'Handles' })}>
             <div className="space-y-2 px-1 pb-2">
               <div>
                 <div className="px-1 pb-1 text-[10px] uppercase tracking-wide text-muted-foreground">
-                  Style
+                  {i18n._({ id: 'node.cabinet.panel.style', message: 'Style' })}
                 </div>
                 <SegmentedControl
                   onChange={(value) =>
@@ -946,7 +884,7 @@ export default function CabinetPanel() {
                   }
                   options={HANDLE_STYLE_OPTIONS.map((option) => ({
                     value: option.value,
-                    label: option.label,
+                    label: i18n._(option.label),
                   }))}
                   value={node.handleStyle}
                 />
@@ -954,7 +892,7 @@ export default function CabinetPanel() {
               {(node.handleStyle === 'bar' || node.handleStyle === 'knob') && (
                 <div>
                   <div className="px-1 pb-1 text-[10px] uppercase tracking-wide text-muted-foreground">
-                    Position
+                    {i18n._({ id: 'node.cabinet.panel.position', message: 'Position' })}
                   </div>
                   <SegmentedControl
                     onChange={(value) =>
@@ -962,7 +900,7 @@ export default function CabinetPanel() {
                     }
                     options={HANDLE_POSITION_OPTIONS.map((option) => ({
                       value: option.value,
-                      label: option.label,
+                      label: i18n._(option.label),
                     }))}
                     value={node.handlePosition ?? 'auto'}
                   />
@@ -972,6 +910,339 @@ export default function CabinetPanel() {
           </PanelSection>
         </>
       )}
+      {node.type === 'cabinet-module' &&
+        parentRun?.type === 'cabinet' &&
+        cabinetModuleSupportsPresets(node) && (
+          <PanelSection title={i18n._({ id: 'node.cabinet.panel.kitchen', message: 'Kitchen' })}>
+            <ActionButton
+              label={i18n._({
+                id: 'node.cabinet.panel.editKitchenRun',
+                message: 'Edit kitchen run',
+              })}
+              onClick={backToRun}
+            />
+            <p className="px-1 py-2 text-xs text-muted-foreground">
+              {i18n._({
+                id: 'node.cabinet.panel.sharedCountertopPlinthAndFinishes',
+                message: 'Shared countertop, plinth, and finishes',
+              })}
+            </p>
+            {!parentIsModule && parentRun.runTier !== 'wall' && (
+              <KitchenModuleActions
+                key={node.id}
+                node={node}
+                run={parentRun}
+                onReplace={applyPreset}
+              />
+            )}
+            {(parentIsModule || parentRun.runTier === 'wall') && (
+              <details className="px-1 py-2 text-xs">
+                <summary className="cursor-pointer">
+                  {i18n._({ id: 'node.cabinet.panel.replaceWith', message: 'Replace with…' })}
+                </summary>
+                <KitchenCollection includeWall={false} onSelect={applyPreset} />
+              </details>
+            )}
+          </PanelSection>
+        )}
+
+      <details className="group border-t border-border/50">
+        <summary className="cursor-pointer px-3 py-3 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+          {i18n._({ id: 'node.cabinet.panel.advanced', message: 'Advanced' })}
+        </summary>
+        <p className="px-3 pb-2 text-xs text-muted-foreground">
+          {i18n._({
+            id: 'node.cabinet.panel.cabinetConstructionCompartmentsAndOpeningPreview',
+            message: 'Cabinet construction, compartments, and opening preview.',
+          })}
+        </p>
+        {!isHoodOnlyNode && (
+          <PanelSection
+            title={i18n._({
+              id: 'node.cabinet.panel.frontConstruction',
+              message: 'Front construction',
+            })}
+            defaultExpanded={false}
+          >
+            <div>
+              <div className="px-1 pb-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+                {i18n._({ id: 'node.cabinet.panel.mounting', message: 'Mounting' })}
+              </div>
+              <SegmentedControl
+                onChange={(value) =>
+                  updateNode({ frontOverlay: value as CabinetNodeType['frontOverlay'] })
+                }
+                options={FRONT_OVERLAY_OPTIONS.map((option) => ({
+                  value: option.value,
+                  label: i18n._(option.label),
+                }))}
+                value={node.frontOverlay ?? 'full'}
+              />
+            </div>
+            <div>
+              <div className="px-1 pb-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+                {i18n._({ id: 'node.cabinet.panel.revealGap', message: 'Reveal gap' })}
+              </div>
+              <SegmentedControl
+                mixed={cabinetRevealGapId(node.frontGap) === 'custom'}
+                onChange={(value) =>
+                  updateNode({
+                    frontGap: cabinetRevealGapById(value as CabinetRevealGapId).value,
+                  })
+                }
+                options={CABINET_REVEAL_GAPS.map((gap) => ({
+                  value: gap.id,
+                  label: gap.label,
+                }))}
+                value={
+                  cabinetRevealGapId(node.frontGap) === 'custom'
+                    ? '3'
+                    : cabinetRevealGapId(node.frontGap)
+                }
+              />
+            </div>
+          </PanelSection>
+        )}
+        {node.type === 'cabinet-module' && parentRun?.type === 'cabinet' && !isHoodOnlyNode && (
+          <PanelSection
+            title={i18n._({ id: 'node.cabinet.panel.cabinetType', message: 'Cabinet Type' })}
+            defaultExpanded={false}
+          >
+            <div className="space-y-2 px-1 pb-2">
+              <SegmentedControl
+                onChange={(value) => {
+                  if (value === 'tall') {
+                    switchToTall()
+                    return
+                  }
+                  switchToBase()
+                }}
+                options={CABINET_TIER_OPTIONS.map((option) => ({
+                  value: option.value,
+                  label: i18n._(option.label),
+                }))}
+                value={resolveCabinetType(node, parentRun)}
+              />
+              {resolveCabinetType(node, parentRun) === 'base' &&
+                (hasWallCabinet ? (
+                  <ActionButton
+                    label={i18n._({
+                      id: 'node.cabinet.panel.removeWallCabinet',
+                      message: 'Remove wall cabinet',
+                    })}
+                    onClick={removeWallCabinet}
+                  />
+                ) : (
+                  <>
+                    <ActionButton
+                      label={i18n._({
+                        id: 'node.cabinet.panel.addWallCabinet',
+                        message: 'Add wall cabinet',
+                      })}
+                      onClick={addWallCabinetAbove}
+                    />
+                    <ActionButton
+                      label={i18n._({
+                        id: 'node.cabinet.panel.addChimney',
+                        message: 'Add chimney',
+                      })}
+                      onClick={addHoodAbove}
+                    />
+                  </>
+                ))}
+            </div>
+          </PanelSection>
+        )}
+
+        {canAddTopFinish && (
+          <PanelSection
+            title={i18n._({ id: 'node.cabinet.panel.topCeiling', message: 'Top / Ceiling' })}
+            defaultExpanded={false}
+          >
+            <div className="space-y-2 px-1 pb-2">
+              <div>
+                <div className="px-1 pb-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+                  {i18n._({ id: 'node.cabinet.panel.finish', message: 'Finish' })}
+                </div>
+                <SegmentedControl
+                  onChange={(value) =>
+                    updateNode({
+                      topFinish: value as CabinetModuleNodeType['topFinish'],
+                      ...(value !== 'none' && node.topFinish === 'none'
+                        ? { topFinishDepth: node.depth }
+                        : {}),
+                    })
+                  }
+                  options={TOP_FINISH_OPTIONS.map((option) => ({
+                    label: i18n._(option.label),
+                    value: option.value,
+                  }))}
+                  value={node.topFinish ?? 'none'}
+                />
+              </div>
+              {node.topFinish !== 'none' && (
+                <>
+                  <ActionButton
+                    label={i18n._({
+                      id: 'node.cabinet.panel.fillToCeiling',
+                      message: 'Fill to ceiling',
+                    })}
+                    onClick={() =>
+                      updateNode({
+                        topFinishHeight: cabinetCeilingGap(
+                          node,
+                          useScene.getState().nodes as Record<AnyNodeId, AnyNode>,
+                        ),
+                      })
+                    }
+                  />
+                  <SliderControl
+                    label={i18n._({ id: 'node.cabinet.panel.topHeight', message: 'Top height' })}
+                    max={1.2}
+                    min={0}
+                    onChange={(value) => updateNode({ topFinishHeight: value })}
+                    precision={2}
+                    step={0.01}
+                    unit="m"
+                    value={node.topFinishHeight}
+                  />
+                  <SliderControl
+                    label={i18n._({ id: 'node.cabinet.panel.topDepth', message: 'Top depth' })}
+                    max={1.2}
+                    min={0.15}
+                    onChange={(value) => updateNode({ topFinishDepth: value })}
+                    precision={2}
+                    step={0.01}
+                    unit="m"
+                    value={node.topFinishDepth}
+                  />
+                </>
+              )}
+              {ceilingOverflow > 1e-4 && (
+                <div className="flex gap-1.5 px-1 text-xs leading-5 text-red-700 dark:text-red-300">
+                  <AlertTriangle className="mt-1 h-3.5 w-3.5 shrink-0" />
+                  <span>
+                    {i18n._({
+                      id: 'node.cabinet.panel.aboveCeiling',
+                      message: 'Finished height extends {overflow} mm above the ceiling.',
+                      values: {
+                        overflow: formatFixed(ceilingOverflow * 1000, 0, i18n.getLocale()),
+                      },
+                    })}
+                  </span>
+                </div>
+              )}
+            </div>
+          </PanelSection>
+        )}
+
+        {!isHoodOnlyNode && (
+          <PanelSection
+            title={i18n._({ id: 'node.cabinet.panel.openAnimation', message: 'Open Animation' })}
+          >
+            <div className="flex items-center gap-2 px-1">
+              <div className="min-w-0 flex-1">
+                <SliderControl
+                  label={i18n._({ id: 'node.cabinet.panel.open', message: 'Open' })}
+                  max={100}
+                  min={0}
+                  onChange={(value) => {
+                    if (isAnimating) stopAnimation()
+                    updateNode({ operationState: value / 100 })
+                  }}
+                  step={1}
+                  unit="%"
+                  value={Math.round((node.operationState ?? 0) * 100)}
+                />
+              </div>
+              <button
+                aria-label={
+                  isAnimating
+                    ? i18n._({ id: 'node.cabinet.panel.stopAnimation', message: 'Stop animation' })
+                    : (node.operationState ?? 0) >= 0.99
+                      ? i18n._({ id: 'node.cabinet.panel.closeCabinet', message: 'Close cabinet' })
+                      : i18n._({ id: 'node.cabinet.panel.openCabinet', message: 'Open cabinet' })
+                }
+                className="flex h-7 shrink-0 items-center gap-1.5 rounded-lg border border-border/40 bg-black/4 dark:bg-[#2C2C2E] px-2.5 text-[11px] font-medium text-foreground transition-colors hover:bg-black/8 dark:hover:bg-[#3e3e3e]"
+                onClick={() => {
+                  if (isAnimating) {
+                    stopAnimation()
+                    return
+                  }
+                  animateOperationState((node.operationState ?? 0) >= 0.99 ? 0 : 1)
+                }}
+                title={
+                  isAnimating
+                    ? i18n._({ id: 'node.cabinet.panel.stopAnimation', message: 'Stop animation' })
+                    : (node.operationState ?? 0) >= 0.99
+                      ? i18n._({ id: 'node.cabinet.panel.closeCabinet', message: 'Close cabinet' })
+                      : i18n._({
+                          id: 'node.cabinet.panel.playAnimation',
+                          message: 'Play animation',
+                        })
+                }
+                type="button"
+              >
+                {isAnimating ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                <span>
+                  {isAnimating
+                    ? i18n._({ id: 'node.cabinet.panel.stop', message: 'Stop' })
+                    : (node.operationState ?? 0) >= 0.99
+                      ? i18n._({ id: 'node.cabinet.panel.close', message: 'Close' })
+                      : i18n._({ id: 'node.cabinet.panel.play', message: 'Play' })}
+                </span>
+              </button>
+            </div>
+          </PanelSection>
+        )}
+
+        <PanelSection
+          title={i18n._({ id: 'node.cabinet.panel.compartments', message: 'Compartments' })}
+          defaultExpanded={false}
+        >
+          {reflowNotice ? (
+            <p
+              aria-live="polite"
+              className="px-1 pb-2 text-xs leading-5 text-amber-700 dark:text-amber-400"
+              role="status"
+            >
+              {reflowNotice.message}
+            </p>
+          ) : null}
+          <div className="flex flex-col gap-2 px-1 pb-2">
+            {rows.map(({ compartment, index }, displayIndex) => (
+              <CompartmentCard
+                allowHood={isWallChildModule}
+                wallCabinet={isWallChildModule}
+                compartment={compartment}
+                carcassHeight={node.carcassHeight}
+                displayIndex={displayIndex}
+                index={index}
+                key={compartment.id}
+                onMove={(delta) => moveCompartment(index, delta)}
+                onRemove={() => removeAt(index)}
+                onReplace={(next) => replaceAt(index, next)}
+                onResizeHeight={(height) => resizeAt(index, height)}
+                resolvedHeight={
+                  rowHeights.get(index) ?? node.carcassHeight / Math.max(stack.length, 1)
+                }
+                total={rows.length}
+                width={node.width}
+              />
+            ))}
+          </div>
+          <div className="px-1 pb-1">
+            <ActionButton
+              icon={<Plus className="h-4 w-4" />}
+              label={i18n._({
+                id: 'node.cabinet.panel.addCompartment',
+                message: 'Add compartment',
+              })}
+              onClick={addCompartment}
+            />
+          </div>
+        </PanelSection>
+      </details>
     </PanelWrapper>
   )
 }

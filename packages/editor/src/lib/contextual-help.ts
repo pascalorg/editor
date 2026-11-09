@@ -1,18 +1,20 @@
+import type { MessageDescriptor } from '@pascal-app/core'
+
 export type ContextualShortcutHint = {
   // A combo of keys pressed together (rendered joined by "+"). An entry may
   // itself be an array of alternatives (rendered joined by "/"), e.g.
   // [['Cmd/Ctrl', 'Shift'], 'Left click'] → "⌘ / ⇧ + click".
   keys: Array<string | string[]>
-  label: string
+  label: MessageDescriptor | string
   // Optional secondary line under the label for a terser qualifier
   // (e.g. "disable 15° snap"). The HUD wraps both lines rather than truncating.
-  subtitle?: string
+  subtitle?: MessageDescriptor | string
   active?: boolean
 }
 
 // `activeHandleDrag.label` value a rotate gizmo sets while dragging, so the
-// contextual HUD can surface the Shift = free-rotation toggle for the duration
-// (mirrors how wall drafting advertises Shift). Distinct from resize handles,
+// contextual HUD can surface the rotation snapping mode for the duration.
+// Distinct from resize handles,
 // which route their own measurement label here.
 export const ROTATE_HANDLE_DRAG_LABEL = 'rotate-handle'
 
@@ -29,15 +31,26 @@ export const RESIZE_HANDLE_DRAG_LABEL = 'resize-handle'
 export const GROUP_MOVE_DRAG_LABEL = 'group-move-handle'
 export const GROUP_ROTATE_DRAG_LABEL = 'group-rotate-handle'
 
-// Hints shown while a rotate gizmo is mid-drag: Shift bypasses the angle step
-// (free rotation), the same toggle wall drafting exposes. `active` lights the
-// pill while Shift is held.
-export function resolveRotateHandleHelpHints(shiftPressed: boolean): ContextualShortcutHint[] {
+// `activeHandleDrag.label`s for the MEP handles, in 3D and on the plan: one
+// point of a run, where Alt detaches the joint, and a fitting, a run or one
+// run segment slid along an axis. Their snap context is the kind's own.
+export const PATH_POINT_DRAG_LABEL = 'path-point'
+export const AXIS_MOVE_DRAG_LABEL = 'axis-move'
+
+export function resolveRotateHandleHelpHints(altPressed: boolean): ContextualShortcutHint[] {
   return [
     {
-      keys: [SHIFT_KEY],
-      label: shiftPressed ? 'Rotating freely (no angle step)' : 'Hold to rotate freely',
-      active: shiftPressed,
+      keys: [ALT_KEY],
+      label: altPressed
+        ? /* i18n */ {
+            id: 'editor.lib.contextualHelp.rotatingFreely',
+            message: 'Rotating freely (no angle step)',
+          }
+        : /* i18n */ {
+            id: 'editor.lib.contextualHelp.holdToRotateFreely',
+            message: 'Hold to rotate freely',
+          },
+      active: altPressed,
     },
   ]
 }
@@ -46,6 +59,7 @@ export type SelectModeHelpContext = {
   selectedCount: number
   hasMovableSelection: boolean
   hasRotatableSelection: boolean
+  hasOpeningRadiusSelection?: boolean
   commandPressed: boolean
   shiftPressed: boolean
   // When a single MEP node is selected its in-world handle rig (click a dot to
@@ -67,6 +81,7 @@ export function resolveSelectModeHelpHints({
   selectedCount,
   hasMovableSelection,
   hasRotatableSelection,
+  hasOpeningRadiusSelection = false,
   commandPressed,
   shiftPressed,
   mepSelection = null,
@@ -78,7 +93,10 @@ export function resolveSelectModeHelpHints({
 
     hints.push({
       keys: [[COMMAND_KEY, SHIFT_KEY], LEFT_CLICK],
-      label: 'Add or remove objects from the selection',
+      label: /* i18n */ {
+        id: 'editor.lib.contextualHelp.addOrRemoveObjectsFromThe',
+        message: 'Add or remove objects from the selection',
+      },
       active: true,
     })
     return hints
@@ -90,23 +108,47 @@ export function resolveSelectModeHelpHints({
   if (selectedCount > 1) {
     hints.push({
       keys: [LEFT_CLICK],
-      label: 'Click or drag the selection to move it as one',
+      label: /* i18n */ {
+        id: 'editor.lib.contextualHelp.clickOrDragTheSelectionTo',
+        message: 'Click or drag the selection to move it as one',
+      },
     })
-    hints.push({ keys: [ROTATE_KEYS], label: 'Rotate the selection ±45°' })
+    hints.push({
+      keys: [ROTATE_KEYS],
+      label: /* i18n */ {
+        id: 'editor.lib.contextualHelp.rotateTheSelection45',
+        message: 'Rotate the selection ±45°',
+      },
+    })
     hints.push({
       keys: [COMMAND_KEY, 'G'],
-      label: 'Group selection (session only)',
+      label: /* i18n */ {
+        id: 'editor.lib.contextualHelp.groupSelectionSessionOnly',
+        message: 'Group selection (session only)',
+      },
     })
     hints.push({
       keys: [COMMAND_KEY, SHIFT_KEY, 'G'],
-      label: 'Ungroup session selection',
+      label: /* i18n */ {
+        id: 'editor.lib.contextualHelp.ungroupSessionSelection',
+        message: 'Ungroup session selection',
+      },
     })
     hints.push({
       keys: [[COMMAND_KEY, SHIFT_KEY], LEFT_CLICK],
-      label: 'Add or remove objects from the selection',
+      label: /* i18n */ {
+        id: 'editor.lib.contextualHelp.addOrRemoveObjectsFromThe',
+        message: 'Add or remove objects from the selection',
+      },
       active: commandPressed || shiftPressed,
     })
-    hints.push({ keys: [ESC_KEY], label: 'Clear the selection (or click outside)' })
+    hints.push({
+      keys: [ESC_KEY],
+      label: /* i18n */ {
+        id: 'editor.lib.contextualHelp.clearTheSelectionOrClickOutside',
+        message: 'Clear the selection (or click outside)',
+      },
+    })
     return hints
   }
 
@@ -116,12 +158,39 @@ export function resolveSelectModeHelpHints({
   // detaches the joint mid-drag; a fitting's cluster adds rotate arcs, with
   // R / T (and Alt to switch axis) for keyboard rotation.
   if (mepSelection === 'run') {
-    hints.push({ keys: [CLICK], label: 'Click a handle dot to show move arrows' })
-    hints.push({ keys: [ALT_KEY], label: 'Detach the joint while dragging an arrow' })
+    hints.push({
+      keys: [CLICK],
+      label: /* i18n */ {
+        id: 'editor.lib.contextualHelp.clickAHandleDotToShow',
+        message: 'Click a handle dot to show move arrows',
+      },
+    })
+    hints.push({
+      keys: [ALT_KEY],
+      label: /* i18n */ {
+        id: 'editor.lib.contextualHelp.detachTheJointWhileDraggingAn',
+        message: 'Detach the joint while dragging an arrow',
+      },
+    })
   } else if (mepSelection === 'fitting') {
-    hints.push({ keys: [CLICK], label: 'Click the handle dot to show move + rotate handles' })
-    hints.push({ keys: [ROTATE_KEYS], label: 'Rotate ±45°' })
-    hints.push({ keys: [ALT_KEY], label: 'Switch the rotation axis (Y → X → Z)' })
+    hints.push({
+      keys: [CLICK],
+      label: /* i18n */ {
+        id: 'editor.lib.contextualHelp.clickTheHandleDotToShow',
+        message: 'Click the handle dot to show move + rotate handles',
+      },
+    })
+    hints.push({
+      keys: [ROTATE_KEYS],
+      label: /* i18n */ { id: 'editor.lib.contextualHelp.rotate45', message: 'Rotate ±45°' },
+    })
+    hints.push({
+      keys: [ALT_KEY],
+      label: /* i18n */ {
+        id: 'editor.lib.contextualHelp.switchTheRotationAxisYX',
+        message: 'Switch the rotation axis (Y → X → Z)',
+      },
+    })
   }
 
   // The rows are the same whatever modifier is held — guides/snapping are
@@ -131,20 +200,40 @@ export function resolveSelectModeHelpHints({
   if (hasMovableSelection) {
     hints.push({
       keys: [LEFT_CLICK],
-      label: 'Drag selected movable object',
+      label: /* i18n */ {
+        id: 'editor.lib.contextualHelp.dragSelectedMovableObject',
+        message: 'Drag selected movable object',
+      },
     })
   }
 
   if (hasRotatableSelection) {
     hints.push({
       keys: [COMMAND_KEY, RIGHT_CLICK],
-      label: 'Drag left or right to rotate selected object',
+      label: /* i18n */ {
+        id: 'editor.lib.contextualHelp.dragLeftOrRightToRotate',
+        message: 'Drag left or right to rotate selected object',
+      },
+    })
+  }
+
+  if (hasOpeningRadiusSelection) {
+    hints.push({
+      keys: [SHIFT_KEY],
+      label: /* i18n */ {
+        id: 'editor.lib.contextualHelp.adjustOneSideSCornerRadius',
+        message: 'Adjust one side’s corner radius',
+      },
+      active: shiftPressed,
     })
   }
 
   hints.push({
     keys: [[COMMAND_KEY, SHIFT_KEY], LEFT_CLICK],
-    label: 'Add or remove objects from the selection',
+    label: /* i18n */ {
+      id: 'editor.lib.contextualHelp.addOrRemoveObjectsFromThe',
+      message: 'Add or remove objects from the selection',
+    },
     active: commandPressed || shiftPressed,
   })
 

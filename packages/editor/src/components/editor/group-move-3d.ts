@@ -16,7 +16,9 @@ import { useViewer } from '@pascal-app/viewer'
 import { type Camera, Plane, type Raycaster, Vector2, Vector3 } from 'three'
 import { GROUP_MOVE_DRAG_LABEL } from '../../lib/contextual-help'
 import { isHistoryShortcut } from '../../lib/history'
+import type { WallGroupPush } from '../../lib/room-handle-drag'
 import { sfxEmitter } from '../../lib/sfx-bus'
+import { isTypingTarget } from '../../lib/typing-target'
 import useAlignmentGuides from '../../store/use-alignment-guides'
 import useEditor, {
   isAlignmentGuideActive,
@@ -28,13 +30,16 @@ import { useFloorplanGroupDrag } from '../editor-2d/floorplan-group-move'
 import { suppressBoxSelectForPointer } from '../tools/select/box-select-state'
 import { startGroupPickUp } from './group-actions'
 import {
+  beginGroupWallPush,
   classifyParticipant,
   collectParticipants,
   computeGroupBox,
-  expandToComponent,
+  type GroupPlanBounds,
+  groupPlanBounds,
   levelFrame,
-  participantExtents,
+  planBoundsCenter,
   rotateGroupSnapshots,
+  rotatePlanBounds,
   translateGroupPatches,
   type Vec2,
 } from './group-transform-shared'
@@ -88,11 +93,16 @@ export function armGroupMove3d(args: {
     affectedIds: AnyNodeId[]
     candidates: ReturnType<typeof collectAlignmentAnchors>
     restAnchors: ReturnType<typeof bboxCornerAnchors>
+    startBounds: GroupPlanBounds
+    restBounds: GroupPlanBounds
+    rotation: number
     restCenter: Vec2
     plane: Plane
     startLocal: Vector3
     frameInv: ReturnType<typeof levelFrame>['inverse']
     lastDelta: Vec2 | null
+    /** Walls alone: each moves as its push arrow does instead of the rigid slide. */
+    push: WallGroupPush | null
   }
   let session: Session | null = null
 
@@ -101,16 +111,15 @@ export function armGroupMove3d(args: {
     const participantIds = selectedIds.filter(
       (id) => classifyParticipant(nodes[id as AnyNodeId], levelId, nodes) !== null,
     )
-    // Move the full connected wall/fence component, mirroring the 2D session.
-    const fullIds = expandToComponent(participantIds, nodes, levelId)
-    const { starts, links } = collectParticipants(fullIds, nodes, levelId)
+    // Only the selection moves; connected walls stretch through `links`, as in 2D.
+    const { starts, links } = collectParticipants(participantIds, nodes, levelId)
     if (starts.length === 0) return null
     const affectedIds: AnyNodeId[] = [...starts.map((s) => s.id), ...links.map((l) => l.id)]
 
     // Horizontal drag plane at the group's base; placements live in the level
     // frame, so world-space plane hits convert through it (a rotated building
     // would otherwise drift off-axis from the cursor).
-    const restBox = computeGroupBox(fullIds)
+    const restBox = computeGroupBox(participantIds)
     if (!restBox) return null
     const plane = new Plane(new Vector3(0, 1, 0), -restBox.min.y)
     const { inverse: frameInv } = levelFrame(levelId)
@@ -130,14 +139,14 @@ export function armGroupMove3d(args: {
       if (n && !movingIdSet.has(nid)) staticNodes[nid] = n
     }
     const candidates = collectAlignmentAnchors(staticNodes, '', levelId)
-    const boxMin = restBox.min.clone().applyMatrix4(frameInv)
-    const boxMax = restBox.max.clone().applyMatrix4(frameInv)
+    const restBounds = groupPlanBounds(starts, frameInv)
+    if (!restBounds) return null
     const restAnchors = bboxCornerAnchors(
       'group-move',
-      Math.min(boxMin.x, boxMax.x),
-      Math.min(boxMin.z, boxMax.z),
-      Math.max(boxMin.x, boxMax.x),
-      Math.max(boxMin.z, boxMax.z),
+      restBounds.minX,
+      restBounds.minZ,
+      restBounds.maxX,
+      restBounds.maxZ,
     )
 
     for (const id of affectedIds) {
@@ -154,9 +163,11 @@ export function armGroupMove3d(args: {
       nodeId,
       handle: GROUP_MOVE_DRAG_LABEL,
     })
-    // Rotation pivot for mid-drag R/T — the participant DATA extents' center.
-    const ext = participantExtents(starts)
-    const restCenter: Vec2 = ext ? [(ext.minX + ext.maxX) / 2, (ext.minZ + ext.maxZ) / 2] : [0, 0]
+    // Rotation pivot for mid-drag R/T — the START footprint's center, the same
+    // point the idle keyboard rotate and the rotate gizmos orbit. Fixed for the
+    // whole session: the snapshots are start placements, and `applyDelta` adds
+    // the live drag delta on top of them.
+    const restCenter = planBoundsCenter(restBounds)
 
     return {
       starts,
@@ -164,11 +175,15 @@ export function armGroupMove3d(args: {
       affectedIds,
       candidates,
       restAnchors,
+      startBounds: restBounds,
+      restBounds,
+      rotation: 0,
       restCenter,
       plane,
       startLocal,
       frameInv,
       lastDelta: null,
+      push: beginGroupWallPush(starts, levelId),
     }
   }
 
@@ -192,8 +207,14 @@ export function armGroupMove3d(args: {
       : moveLocal.z - s.startLocal.z
 
     // Figma-style alignment layered on top: guides display in every mode
-    // except Off; the magnetic pull applies only in 'lines' mode.
-    if (isAlignmentGuideActive() && s.candidates.length > 0 && s.restAnchors.length > 0) {
+    // except Off; the magnetic pull applies only in 'lines' mode. Pushed walls
+    // don't move as one footprint, so they have no box to align.
+    if (
+      !s.push &&
+      isAlignmentGuideActive() &&
+      s.candidates.length > 0 &&
+      s.restAnchors.length > 0
+    ) {
       const result = resolveAlignment({
         moving: s.restAnchors.map((a) => ({ ...a, x: a.x + dx, z: a.z + dz })),
         candidates: s.candidates,
@@ -216,6 +237,10 @@ export function armGroupMove3d(args: {
     if (!s.lastDelta || s.lastDelta[0] !== dx || s.lastDelta[1] !== dz) {
       sfxEmitter.emit('sfx:grid-snap')
       s.lastDelta = [dx, dz]
+    }
+    if (s.push) {
+      s.push.preview([dx, dz])
+      return
     }
 
     const entries = translateGroupPatches(s.starts, s.links, dx, dz)
@@ -245,23 +270,30 @@ export function armGroupMove3d(args: {
   // current delta — the carried group turns exactly like the idle keyboard
   // rotate, and the commit stays a single updateNodes.
   const rotateSession = (s: Session, direction: 1 | -1) => {
-    const rotated = rotateGroupSnapshots(
-      s.starts,
-      s.links,
-      { x: s.restCenter[0], z: s.restCenter[1] },
-      -direction * (Math.PI / 4),
-    )
+    // Pushed walls keep their bearing: there is nothing to turn.
+    if (s.push) return
+    const pivot = { x: s.restCenter[0], z: s.restCenter[1] }
+    const delta = -direction * (Math.PI / 4)
+    const rotated = rotateGroupSnapshots(s.starts, s.links, pivot, delta)
     s.starts = rotated.starts
     s.links = rotated.links
-    const ext = participantExtents(rotated.starts)
-    if (ext) {
-      s.restAnchors = bboxCornerAnchors('group-move', ext.minX, ext.minZ, ext.maxX, ext.maxZ)
-    }
+    // Re-fit from the start footprint at the accumulated angle: rotating the
+    // previous axis-aligned fit would inflate the box every step.
+    s.rotation += delta
+    s.restBounds = rotatePlanBounds(s.startBounds, pivot, s.rotation)
+    s.restAnchors = bboxCornerAnchors(
+      'group-move',
+      s.restBounds.minX,
+      s.restBounds.minZ,
+      s.restBounds.maxX,
+      s.restBounds.maxZ,
+    )
     sfxEmitter.emit('sfx:item-rotate')
     applyDelta(s, s.lastDelta?.[0] ?? 0, s.lastDelta?.[1] ?? 0)
   }
 
   const clearLivePreviews = (s: Session) => {
+    s.push?.cancel()
     const overrides = useLiveNodeOverrides.getState()
     const liveTransforms = useLiveTransforms.getState()
     for (const id of s.affectedIds) {
@@ -328,6 +360,13 @@ export function armGroupMove3d(args: {
     }
     swallowNextClick()
     sfxEmitter.emit('sfx:item-place')
+    if (session.push) {
+      resumeSceneHistory(useScene)
+      session.push.commit()
+      session = null
+      teardown()
+      return
+    }
     const overrides = useLiveNodeOverrides.getState()
     const updates: { id: AnyNodeId; data: Partial<AnyNode> }[] = []
     for (const id of session.affectedIds) {
@@ -367,9 +406,25 @@ export function armGroupMove3d(args: {
   // `use-keyboard` arms, which would otherwise act on stale store state
   // (or clear the multi-selection) mid-session.
   const onKeyDown = (e: KeyboardEvent) => {
+    if (isTypingTarget(e.target)) return
     const key = e.key.toLowerCase()
     if ((key === 'r' || key === 't') && !e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey) {
-      if (!session) return
+      // Armed but still under the drag threshold: engage first (exactly what
+      // the next pointer-move would do) so the rotation lands inside this
+      // session. Falling through to the global idle arm instead would write
+      // the scene behind snapshots already captured here, and the first
+      // `applyDelta` would republish them — undoing the rotation.
+      if (!session) {
+        session = engage()
+        if (!session) {
+          // No plane hit yet: swallow the chord and keep the gesture armed so
+          // the next pointer-move can still engage; the idle arm must not run
+          // behind the snapshots captured here.
+          e.preventDefault()
+          e.stopPropagation()
+          return
+        }
+      }
       e.preventDefault()
       e.stopPropagation()
       rotateSession(session, key === 'r' ? 1 : -1)

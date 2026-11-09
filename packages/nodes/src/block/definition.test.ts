@@ -1,5 +1,15 @@
-import { describe, expect, test } from 'bun:test'
-import { BlockNode } from '@pascal-app/core'
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import {
+  type AnyNode,
+  BlockNode,
+  createBoxBlockTopology,
+  floorPlacedCollides,
+  LevelNode,
+  nodeRegistry,
+  registerNode,
+  spatialGridManager,
+  useScene,
+} from '@pascal-app/core'
 import { blockDefinition } from './definition'
 
 describe('block placement bounds', () => {
@@ -114,5 +124,47 @@ describe('block placement bounds', () => {
       position: [11, 2, 22],
       rotation: [0, Math.PI / 2, 0],
     })
+  })
+})
+
+describe('block floor collision', () => {
+  let restore: () => void
+  beforeEach(() => {
+    restore = nodeRegistry._snapshot()
+    registerNode(blockDefinition)
+  })
+  afterEach(() => {
+    restore()
+    useScene.setState({ nodes: {} } as never)
+  })
+
+  /** A 2 × 2 m box at plan (x, 0) spanning heights bottom..top. */
+  function box(id: string, x: number, bottom: number, top: number) {
+    const topology = createBoxBlockTopology(2, top - bottom, 2)
+    for (const vertex of topology.vertices) vertex.position[1] += bottom
+    return BlockNode.parse({ id, parentId: 'level_a', position: [x, 0, 0], topology })
+  }
+
+  test('only a block resting on the floor blocks floor placements', () => {
+    const blocks = {
+      block_counter: box('block_counter', 0, 0, 0.9),
+      block_soffit: box('block_soffit', 5, 2.4, 3),
+      block_pad: box('block_pad', 10, -0.6, 0),
+    }
+    const level = LevelNode.parse({ id: 'level_a', children: Object.keys(blocks) })
+    useScene.setState({ nodes: { level_a: level, ...blocks } as Record<string, AnyNode> } as never)
+    const placeAt = (x: number) =>
+      spatialGridManager.canPlaceOnFloor('level_a', [x, 0, 0], [0.5, 1, 0.5], [0, 0, 0])
+
+    expect(placeAt(0)).toEqual({ valid: false, conflictIds: ['block_counter'] })
+    // Under a soffit or over a buried foundation pad, the floor is free.
+    expect(placeAt(5)).toEqual({ valid: true, conflictIds: [] })
+    expect(placeAt(10)).toEqual({ valid: true, conflictIds: [] })
+
+    // Moving a raised block is not refused over floor items either.
+    const floorPlaced = blockDefinition.capabilities.floorPlaced
+    expect(floorPlacedCollides(floorPlaced, blocks.block_counter)).toBe(true)
+    expect(floorPlacedCollides(floorPlaced, blocks.block_soffit)).toBe(false)
+    expect(floorPlacedCollides(floorPlaced, blocks.block_pad)).toBe(false)
   })
 })

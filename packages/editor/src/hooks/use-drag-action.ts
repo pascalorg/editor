@@ -14,6 +14,7 @@ import {
   type SpatialQuery,
   useScene,
 } from '@pascal-app/core'
+import { beginPerfAction, cancelPerfAction, commitPerfAction } from '@pascal-app/viewer'
 import { useEffect, useRef } from 'react'
 
 const sceneApi = createSceneApi(useScene)
@@ -74,14 +75,26 @@ export function useDragAction<Ctx, Draft>(args: UseDragActionArgs<Ctx, Draft>) {
   useEffect(() => {
     if (!args.active) return
 
+    const initial = argsRef.current.initial
+    const nodeType = initial.node?.type
+    const isEndpoint = initial.handleId === 'start' || initial.handleId === 'end'
+    const actionName = isEndpoint && nodeType ? `drag:${nodeType}-endpoint` : 'drag:move'
+
     const session = createDragSession<Ctx, Draft>(argsRef.current.action, sceneApi, {
       spatialQuery: argsRef.current.spatialQuery,
       childQuery: argsRef.current.childQuery,
-      onCommit: () => argsRef.current.onCommit?.(),
-      onCancel: () => argsRef.current.onCancel?.(),
+      onCommit: () => {
+        commitPerfAction()
+        argsRef.current.onCommit?.()
+      },
+      onCancel: () => {
+        cancelPerfAction()
+        argsRef.current.onCancel?.()
+      },
     })
 
-    session.start(argsRef.current.initial)
+    beginPerfAction(actionName, initial.node?.id ?? nodeType ?? '')
+    session.start(initial)
 
     const activatedAt = Date.now()
     const graceMs = argsRef.current.activationGraceMs ?? 150
@@ -119,6 +132,7 @@ export function useDragAction<Ctx, Draft>(args: UseDragActionArgs<Ctx, Draft>) {
       }
       // If the parent flipped `active` to false (or unmounted) while we were
       // still mid-drag, treat it as a cancel — no dangling history pause.
+      if (session.isActive()) cancelPerfAction()
       session.dispose()
     }
   }, [args.active])

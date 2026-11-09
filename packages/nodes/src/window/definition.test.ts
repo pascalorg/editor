@@ -11,9 +11,12 @@ import {
   WallNode,
   WindowNode,
 } from '@pascal-app/core'
+import { Mesh, MeshStandardMaterial } from 'three'
 import { resolveWindowHandlePortalTarget, windowDefinition } from './definition'
 
-const windowHandles = windowDefinition.handles as HandleDescriptor<WindowNode>[]
+const windowHandles = (
+  windowDefinition.handles as (node: WindowNode) => HandleDescriptor<WindowNode>[]
+)(WindowNode.parse({ id: 'window_handles' }))
 
 function sceneWith(...nodes: AnyNode[]): SceneApi {
   const byId = Object.fromEntries(nodes.map((node) => [node.id, node])) as Record<
@@ -40,7 +43,7 @@ function resizeToMax(index: number, window: WindowNode, scene: SceneApi): Partia
 
 describe('window handle presentation', () => {
   test('does not register the legacy move arrow', () => {
-    const handles = windowDefinition.handles as HandleDescriptor[]
+    const handles = windowHandles as HandleDescriptor[]
 
     expect(handles.some((handle) => 'shape' in handle && handle.shape === 'move-cross')).toBe(false)
   })
@@ -219,4 +222,44 @@ describe('window resize handles on non-wall hosts', () => {
       }
     }
   })
+})
+
+test('windows declare hardware and shutters and inherit the frame for unpainted hardware', () => {
+  const node = WindowNode.parse({ slots: { frame: '#ab7744' }, windowType: 'casement' })
+  const slots = windowDefinition.capabilities?.slots?.(node) ?? []
+  expect(slots).toContainEqual({
+    slotId: 'hardware',
+    label: 'Hardware',
+    default: 'library:preset-softwhite',
+  })
+  expect(slots).toContainEqual({
+    slotId: 'shutters',
+    label: 'Shutters',
+    default: 'library:preset-charcoal',
+  })
+  expect(slots).toContainEqual({
+    slotId: 'sill',
+    label: 'Sill',
+    default: 'library:preset-softwhite',
+  })
+  const paint = windowDefinition.capabilities!.paint!
+  const frame = paint.getEffectiveMaterial!({ node, role: 'frame', nodes: {} })
+  expect(paint.getEffectiveMaterial!({ node, role: 'hardware', nodes: {} })).toEqual(frame)
+  expect(paint.getEffectiveMaterial!({ node, role: 'sill', nodes: {} })).toEqual(frame)
+  const painted = { ...node, slots: { ...node.slots, hardware: '#224466' } }
+  expect(paint.getEffectiveMaterial!({ node: painted, role: 'hardware', nodes: {} })).not.toEqual(
+    frame,
+  )
+  const root = new Mesh(undefined, new MeshStandardMaterial({ color: '#224466' }))
+  root.userData.slotId = 'hardware'
+  const restore = paint.applyPreview({
+    node: painted,
+    role: 'hardware',
+    root,
+    material: undefined,
+    materialPreset: undefined,
+  })
+  expect((root.material as MeshStandardMaterial).color.getHexString()).toBe('ab7744')
+  restore?.()
+  expect((root.material as MeshStandardMaterial).color.getHexString()).toBe('224466')
 })

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from 'bun:test'
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import {
   type AnyNodeId,
   type FloorplanGeometry,
@@ -38,8 +38,35 @@ function selectedContext(): GeometryContext {
 }
 
 describe('fence thickness handles', () => {
+  let previousRaf: typeof requestAnimationFrame
+  let previousCancelRaf: typeof cancelAnimationFrame
+  const frames = new Map<number, FrameRequestCallback>()
+  let nextFrame = 0
+
+  beforeEach(() => {
+    previousRaf = globalThis.requestAnimationFrame
+    previousCancelRaf = globalThis.cancelAnimationFrame
+    globalThis.requestAnimationFrame = (callback) => {
+      frames.set(++nextFrame, callback)
+      return nextFrame
+    }
+    globalThis.cancelAnimationFrame = (id) => {
+      frames.delete(id)
+    }
+    useScene.getState().unloadScene()
+    useScene.setState({ readOnly: false })
+    useScene.temporal.getState().resume()
+    useScene.temporal.getState().clear()
+  })
+
   afterEach(() => {
+    for (const callback of frames.values()) callback(0)
+    frames.clear()
     useLiveNodeOverrides.getState().clearAll()
+    useScene.getState().unloadScene()
+    useScene.temporal.getState().clear()
+    globalThis.requestAnimationFrame = previousRaf
+    globalThis.cancelAnimationFrame = previousCancelRaf
   })
 
   test('places one floor-plan handle on each curved fence face', () => {

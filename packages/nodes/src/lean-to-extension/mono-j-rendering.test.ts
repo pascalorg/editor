@@ -221,8 +221,9 @@ describe('continuous mono canopy rendering', () => {
     expect(extendedChain.overlaps).toBe(0)
   })
 
-  test('miters either turn and slope direction throughout the angle range', () => {
-    for (const angle of Array.from({ length: 90 }, (_, index) => 90 - index)) {
+  test.each(Array.from({ length: 90 }, (_, index) => 90 - index))(
+    'miters either turn and slope direction at %i degrees',
+    (angle) => {
       const radians = (angle * Math.PI) / 180
       const corner: Pt = [8, 0]
       const forwardEnd: Pt = [8 + 6 * Math.cos(radians), 6 * Math.sin(radians)]
@@ -246,8 +247,8 @@ describe('continuous mono canopy rendering', () => {
           expect(result.totalVertical).toBeLessThan(0.05)
         }
       }
-    }
-  }, 15_000)
+    },
+  )
 
   // J-shapes and closed loops use the same corner partitioning as an L at each end.
   const multiJointShapes: Record<string, Pt[]> = {

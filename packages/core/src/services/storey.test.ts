@@ -6,12 +6,15 @@ import { DEFAULT_LEVEL_HEIGHT } from './level-height'
 import {
   CEILING_CLAMP_MARGIN,
   getCeilingClampBound,
+  getCeilingMinHeight,
   getCoveringSlabUndersideAt,
   getLevelAbove,
   getLevelBelow,
   getLevelElevations,
   getStoredLevelHeight,
   getWallPlaneTop,
+  isLevelBelowGrade,
+  levelPlateUndersideWorldY,
 } from './storey'
 
 const buildNodes = (list: AnyNode[]): Record<AnyNodeId, AnyNode> =>
@@ -599,5 +602,126 @@ describe('getCeilingClampBound', () => {
     expect(getCeilingClampBound('level_0', nodes, maxSideStrip)).toBeCloseTo(
       2.2 - CEILING_CLAMP_MARGIN,
     )
+  })
+})
+
+describe('getCeilingMinHeight', () => {
+  // Ground 3.2 m + upper 3.2 m: the roof level's floor sits 6.4 m above grade.
+  const roofStack = () =>
+    buildNodes([
+      building('building_a', ['level_0', 'level_1', 'level_roof']),
+      level('level_0', 0, { height: 3.2, parentId: 'building_a' }),
+      level('level_1', 1, { height: 3.2, parentId: 'building_a' }),
+      level('level_roof', 2, { height: 2.5, parentId: 'building_a' }),
+    ])
+
+  test('a level above grade lets a ceiling hang down to grade', () => {
+    const nodes = roofStack()
+    expect(getCeilingMinHeight('level_roof', nodes, 0.5)).toBeCloseTo(-6.39)
+    expect(getCeilingMinHeight('level_1', nodes, 0)).toBeCloseTo(-3.19)
+  })
+
+  test('the ground storey keeps the caller floor unchanged', () => {
+    const nodes = roofStack()
+    expect(getCeilingMinHeight('level_0', nodes, 0.5)).toBe(0.5)
+    expect(getCeilingMinHeight('level_0', nodes, 0)).toBe(0)
+  })
+
+  test('an unresolvable level keeps the caller floor', () => {
+    expect(getCeilingMinHeight('level_missing', roofStack(), 0.5)).toBe(0.5)
+  })
+})
+
+describe('isLevelBelowGrade', () => {
+  /** A basement and the storey over it, each standing on one slab: the owner's numbers (13 Oct). */
+  const stack = (
+    basement: { baseElevation: number; height: number },
+    slabTop: number,
+    position: [number, number, number] = [0, 0, 0],
+  ) => {
+    const slab = (id: string, parentId: string) =>
+      SlabNode.parse({
+        id,
+        parentId,
+        polygon: [
+          [0, 0],
+          [4, 0],
+          [4, 4],
+        ],
+        elevation: slabTop,
+      })
+    return buildNodes([
+      BuildingNode.parse({ id: 'building_a', children: ['level_b', 'level_g'], position }),
+      level('level_b', -1, { ...basement, parentId: 'building_a', children: ['slab_b'] }),
+      level('level_g', 0, { height: 3, parentId: 'building_a', children: ['slab_g'] }),
+      slab('slab_b', 'level_b'),
+      slab('slab_g', 'level_g'),
+    ])
+  }
+  // The villa: Lower Ground at -3.63 m, 3.4 m tall, on a 0.28 m plate: its floor at -3.35 m.
+  const villa = stack({ baseElevation: -3.63, height: 3.4 }, 0.28)
+  // The Victor: parking at -2.66 m but 2.5 m tall, on 0.05 m slabs: Floor 1 sits at -0.11 m.
+  const victor = stack({ baseElevation: -2.66, height: 2.5 }, 0.05)
+
+  test("the villa's Lower Ground is below grade and the storey over it is not", () => {
+    expect(isLevelBelowGrade(villa, 'level_b')).toBe(true)
+    expect(isLevelBelowGrade(villa, 'level_g')).toBe(false)
+  })
+
+  test("the Victor's parking is below grade; its Floor 1, a few centimetres under the lawn, is not", () => {
+    expect(isLevelBelowGrade(victor, 'level_b')).toBe(true)
+    expect(isLevelBelowGrade(victor, 'level_g')).toBe(false)
+  })
+
+  test("the building's own height on the site lifts its floors", () => {
+    const raised = stack({ baseElevation: -3.63, height: 3.4 }, 0.28, [0, 3.5, 0])
+    expect(isLevelBelowGrade(raised, 'level_b')).toBe(false)
+  })
+
+  test('an id that is no level is not below grade', () => {
+    expect(isLevelBelowGrade(villa, 'level_missing')).toBe(false)
+    expect(isLevelBelowGrade(villa, 'slab_b')).toBe(false)
+  })
+})
+
+describe('levelPlateUndersideWorldY', () => {
+  const house = (
+    slabs: Array<{ id: string; elevation?: number; thickness?: number; recessed?: boolean }>,
+  ) =>
+    buildNodes([
+      BuildingNode.parse({ id: 'building_a', children: ['level_b'], position: [0, -2.7, 0] }),
+      level('level_b', -1, {
+        height: 2.9,
+        parentId: 'building_a',
+        children: slabs.map((slab) => slab.id),
+      }),
+      ...slabs.map((slab) => slabNode(slab.id, { ...slab })),
+    ])
+
+  test('is the underside of the lowest plate, never above the walls’ base', () => {
+    // The default plate: its top is 0.05 over the base and it is 0.05 thick, so the base is the underside.
+    expect(levelPlateUndersideWorldY(house([{ id: 'slab_a' }]), 'level_b')).toBeCloseTo(-2.7, 9)
+    // A thick plate reaches under the base; a raised one leaves the base the lowest.
+    expect(
+      levelPlateUndersideWorldY(house([{ id: 'slab_a', thickness: 0.2 }]), 'level_b'),
+    ).toBeCloseTo(-2.7 + 0.05 - 0.2, 9)
+    expect(
+      levelPlateUndersideWorldY(house([{ id: 'slab_a', elevation: 0.28 }]), 'level_b'),
+    ).toBeCloseTo(-2.7, 9)
+  })
+
+  test('takes the lowest of several plates and skips a recessed one', () => {
+    const nodes = house([
+      { id: 'slab_a' },
+      { id: 'slab_b', elevation: 0, thickness: 0.3 },
+      { id: 'slab_c', elevation: -1, thickness: 0.1, recessed: true },
+    ])
+    expect(levelPlateUndersideWorldY(nodes, 'level_b')).toBeCloseTo(-2.7 - 0.3, 9)
+  })
+
+  test('is the walls’ base for a level with no plate, and null for an id that is no level', () => {
+    expect(levelPlateUndersideWorldY(house([]), 'level_b')).toBeCloseTo(-2.7, 9)
+    expect(levelPlateUndersideWorldY(house([{ id: 'slab_a' }]), 'slab_a')).toBeNull()
+    expect(levelPlateUndersideWorldY(house([]), 'level_missing')).toBeNull()
   })
 })

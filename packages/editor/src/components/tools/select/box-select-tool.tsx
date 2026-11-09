@@ -1,4 +1,4 @@
-import { sceneRegistry, useScene, type ZoneNode } from '@pascal-app/core'
+import { sceneRegistry, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useThree } from '@react-three/fiber'
 import { useCallback, useEffect, useRef } from 'react'
@@ -19,6 +19,7 @@ import {
   isBoxSelectPointerSuppressed,
   markBoxSelectHandled,
 } from './box-select-state'
+import { marqueePolygon } from './marquee-footprint'
 import {
   convexHull2D,
   type Point2,
@@ -223,7 +224,8 @@ function collectNodeIdsInScreenRect(
         | { start?: unknown; end?: unknown; polygon?: unknown }
         | undefined
       if (node) {
-        const { start, end, polygon } = node
+        const { start, end } = node
+        const polygon = marqueePolygon(node)
         if (isVec2(start) && isVec2(end)) {
           if (segmentIntersectsPolygon(start, end, quad)) result.push(id)
           continue
@@ -246,17 +248,7 @@ function collectNodeIdsInScreenRect(
 
 function commitBoxSelection(ids: string[], event: PointerEvent) {
   const shouldAppend = event.metaKey || event.ctrlKey || event.shiftKey
-  const { phase, structureLayer } = useEditor.getState()
   const viewer = useViewer.getState()
-
-  if (phase === 'structure' && structureLayer === 'zones') {
-    if (ids.length > 0) {
-      viewer.setSelection({ zoneId: ids[0] as ZoneNode['id'] })
-    } else if (!shouldAppend) {
-      viewer.setSelection({ zoneId: null })
-    }
-    return
-  }
 
   if (shouldAppend) {
     viewer.setSelection({
@@ -272,7 +264,7 @@ export const BoxSelectTool: React.FC = () => {
   const phase = useEditor((s) => s.phase)
   const mode = useEditor((s) => s.mode)
   const selectionTool = useEditor((s) => s.floorplanSelectionTool)
-  const isActive = mode === 'select' && (phase === 'structure' || phase === 'furnish')
+  const isActive = mode === 'select' && phase === 'building'
 
   if (!isActive) return null
 

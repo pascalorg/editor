@@ -6,6 +6,7 @@ import {
   type WallNode,
   type WindowNode,
 } from '@pascal-app/core'
+import { joinWallEnds, splitCrossingWalls } from './wall-joins'
 
 type SceneNodes = Record<string, AnyNode>
 type OpeningNode = DoorNode | WindowNode
@@ -30,6 +31,8 @@ export type IfcConversionSimplificationStats = {
   mergedWallGroups: number
   removedMergedWalls: number
   removedDuplicateOpenings: number
+  joinedWallEnds: number
+  splitCrossingWalls: number
 }
 
 type WallSegment = {
@@ -75,6 +78,8 @@ function getInitialStats(nodes: SceneNodes): IfcConversionSimplificationStats {
     mergedWallGroups: 0,
     removedMergedWalls: 0,
     removedDuplicateOpenings: 0,
+    joinedWallEnds: 0,
+    splitCrossingWalls: 0,
   }
 }
 
@@ -84,6 +89,13 @@ function finishStats(nodes: SceneNodes, stats: IfcConversionSimplificationStats)
     doors: countNodes(nodes, 'door'),
     windows: countNodes(nodes, 'window'),
   }
+}
+
+/** Walls and openings a Pascal export wrote are kept exactly as they were authored. */
+export function isPascalAuthored(node: AnyNode | undefined) {
+  return (
+    typeof (node?.metadata as { pascalNodeId?: unknown } | undefined)?.pascalNodeId === 'string'
+  )
 }
 
 function isOpeningNode(node: AnyNode | undefined): node is OpeningNode {
@@ -147,7 +159,7 @@ function wallLength(wall: WallNode) {
 
 function pruneTinyWalls(nodes: SceneNodes, stats: IfcConversionSimplificationStats) {
   for (const node of Object.values(nodes)) {
-    if (node.type !== 'wall') continue
+    if (node.type !== 'wall' || isPascalAuthored(node)) continue
     if (wallLength(node) >= MIN_WALL_LENGTH) continue
     if (node.children.length > 0) continue
     delete nodes[node.id]
@@ -430,7 +442,7 @@ function mergeWallFragments(
   options: Required<IfcConversionSimplificationOptions>,
 ) {
   const segments = Object.values(nodes)
-    .filter((node): node is WallNode => node.type === 'wall')
+    .filter((node): node is WallNode => node.type === 'wall' && !isPascalAuthored(node))
     .map(toWallSegment)
     .filter((segment): segment is WallSegment => segment !== null)
 
@@ -493,7 +505,7 @@ function openingSignature(opening: OpeningNode) {
 function dedupeOpenings(nodes: SceneNodes, stats: IfcConversionSimplificationStats) {
   const byWall = new Map<string, OpeningNode[]>()
   for (const node of Object.values(nodes)) {
-    if (!isOpeningNode(node)) continue
+    if (!isOpeningNode(node) || isPascalAuthored(node)) continue
     const wallId = getOpeningWallId(node, nodes)
     if (!wallId) continue
     const openings = byWall.get(wallId)
@@ -519,6 +531,10 @@ function dedupeOpenings(nodes: SceneNodes, stats: IfcConversionSimplificationSta
 export function simplifyConvertedSceneGraph(
   nodes: SceneNodes,
   options: IfcConversionSimplificationOptions = {},
+  context: {
+    wallConnections?: readonly (readonly [number, number])[]
+    wallLinings?: ReadonlyMap<number, number>
+  } = {},
 ): IfcConversionSimplificationStats {
   const stats = getInitialStats(nodes)
 
@@ -535,6 +551,8 @@ export function simplifyConvertedSceneGraph(
   pruneTinyWalls(nodes, stats)
   mergeWallFragments(nodes, stats, resolvedOptions)
   syncWallOpeningChildren(nodes)
+  stats.joinedWallEnds = joinWallEnds(nodes, context.wallConnections, context.wallLinings)
+  stats.splitCrossingWalls = splitCrossingWalls(nodes)
   dedupeOpenings(nodes, stats)
   normalizeChildren(nodes)
   finishStats(nodes, stats)

@@ -3,13 +3,14 @@
 import {
   type AnyNode,
   type AnyNodeId,
-  RidgeVentNode as RidgeVentSchema,
   type RoofSegmentNode,
+  usePascalI18n,
   useScene,
 } from '@pascal-app/core'
 import {
   ActionButton,
   ActionGroup,
+  duplicateNodeAndPickUp,
   PanelSection,
   PanelWrapper,
   SegmentedControl,
@@ -28,6 +29,7 @@ import type { RidgeVentNode } from './schema'
  * Delete actions that route through the kind-owned ghost-drag flow.
  */
 export default function RidgeVentPanel() {
+  const i18n = usePascalI18n()
   const selectedId = useViewer((s) => s.selection.selectedIds[0])
   const setSelection = useViewer((s) => s.setSelection)
   const updateNode = useScene((s) => s.updateNode)
@@ -71,28 +73,8 @@ export default function RidgeVentPanel() {
   }, [node, setMovingNode, setSelection])
 
   const handleDuplicate = useCallback(() => {
-    if (!node) return
-    triggerSFX('sfx:item-pick')
-    const parentId = node.roofSegmentId as AnyNodeId | undefined
-    if (!parentId) return
-
-    const state = useScene.getState()
-    const meta =
-      typeof node.metadata === 'object' && node.metadata !== null
-        ? (node.metadata as Record<string, unknown>)
-        : {}
-    const cloneInput = {
-      ...node,
-      id: undefined,
-      metadata: { ...meta, isNew: true },
-    } as Record<string, unknown>
-    const cloned = RidgeVentSchema.parse(cloneInput) as RidgeVentNode
-
-    state.createNode(cloned, parentId)
-    state.dirtyNodes.add(parentId)
-    setMovingNode(cloned as never)
-    setSelection({ selectedIds: [] })
-  }, [node, setMovingNode, setSelection])
+    if (node) duplicateNodeAndPickUp(node)
+  }, [node])
 
   const handleDelete = useCallback(() => {
     if (!(selectedId && node)) return
@@ -131,32 +113,46 @@ export default function RidgeVentPanel() {
       icon="/icons/roof.webp"
       onBack={node.roofSegmentId ? handleBack : undefined}
       onClose={handleClose}
-      title={node.name || 'Ridge Vent'}
+      title={node.name || i18n._({ id: 'node.ridgeVent.panel.ridgeVent', message: 'Ridge Vent' })}
       width={300}
     >
-      <PanelSection title="Style">
+      <PanelSection title={i18n._({ id: 'node.ridgeVent.panel.style', message: 'Style' })}>
         <SegmentedControl
           onChange={(v) => handleUpdate({ style: v as RidgeVentNode['style'] })}
           options={[
-            { label: 'Standard', value: 'standard' },
-            { label: 'Shingled', value: 'shingled' },
-            { label: 'Flanged', value: 'metal' },
+            {
+              label: i18n._({ id: 'node.ridgeVent.panel.standard', message: 'Standard' }),
+              value: 'standard',
+            },
+            {
+              label: i18n._({ id: 'node.ridgeVent.panel.shingled', message: 'Shingled' }),
+              value: 'shingled',
+            },
+            {
+              label: i18n._({ id: 'node.ridgeVent.panel.flanged', message: 'Flanged' }),
+              value: 'metal',
+            },
           ]}
           value={node.style ?? 'standard'}
         />
         <SegmentedControl
           onChange={(v) => handleUpdate({ endCaps: v === 'yes' })}
           options={[
-            { label: 'End Caps', value: 'yes' },
-            { label: 'Open', value: 'no' },
+            {
+              label: i18n._({ id: 'node.ridgeVent.panel.endCaps', message: 'End Caps' }),
+              value: 'yes',
+            },
+            { label: i18n._({ id: 'node.ridgeVent.panel.open', message: 'Open' }), value: 'no' },
           ]}
           value={(node.endCaps ?? true) ? 'yes' : 'no'}
         />
       </PanelSection>
 
-      <PanelSection title="Dimensions">
+      <PanelSection
+        title={i18n._({ id: 'node.ridgeVent.panel.dimensions', message: 'Dimensions' })}
+      >
         <SliderControl
-          label="Length"
+          label={i18n._({ id: 'node.ridgeVent.panel.length', message: 'Length' })}
           max={1000}
           min={0.5}
           onChange={(v) => handleUpdate({ length: v })}
@@ -165,10 +161,10 @@ export default function RidgeVentPanel() {
           restoreOnCommit={false}
           step={0.05}
           unit="m"
-          value={Math.round(node.length * 100) / 100}
+          value={node.length}
         />
         <SliderControl
-          label="Width"
+          label={i18n._({ id: 'node.ridgeVent.panel.width', message: 'Width' })}
           max={0.6}
           min={0.1}
           onChange={(v) => handleUpdate({ width: v })}
@@ -177,10 +173,10 @@ export default function RidgeVentPanel() {
           restoreOnCommit={false}
           step={0.01}
           unit="m"
-          value={Math.round(node.width * 100) / 100}
+          value={node.width}
         />
         <SliderControl
-          label="Height"
+          label={i18n._({ id: 'node.ridgeVent.panel.height', message: 'Height' })}
           max={0.2}
           min={0.03}
           onChange={(v) => handleUpdate({ height: v })}
@@ -189,11 +185,11 @@ export default function RidgeVentPanel() {
           restoreOnCommit={false}
           step={0.005}
           unit="m"
-          value={Math.round(node.height * 1000) / 1000}
+          value={node.height}
         />
       </PanelSection>
 
-      <PanelSection title="Position">
+      <PanelSection title={i18n._({ id: 'node.ridgeVent.panel.position', message: 'Position' })}>
         <SliderControl
           label="X"
           max={halfW}
@@ -212,7 +208,7 @@ export default function RidgeVentPanel() {
           restoreOnCommit={false}
           step={0.05}
           unit="m"
-          value={Math.round((node.position[0] ?? 0) * 100) / 100}
+          value={node.position[0] ?? 0}
         />
         <SliderControl
           label="Y"
@@ -230,7 +226,7 @@ export default function RidgeVentPanel() {
           restoreOnCommit={false}
           step={0.05}
           unit="m"
-          value={Math.round((node.position[1] ?? 0) * 100) / 100}
+          value={node.position[1] ?? 0}
         />
         <SliderControl
           label="Z"
@@ -250,10 +246,10 @@ export default function RidgeVentPanel() {
           restoreOnCommit={false}
           step={0.05}
           unit="m"
-          value={Math.round((node.position[2] ?? 0) * 100) / 100}
+          value={node.position[2] ?? 0}
         />
         <SliderControl
-          label="Rotation"
+          label={i18n._({ id: 'node.ridgeVent.panel.rotation', message: 'Rotation' })}
           max={180}
           min={-180}
           onChange={(deg) => handleUpdate({ rotation: (deg * Math.PI) / 180 })}
@@ -266,18 +262,22 @@ export default function RidgeVentPanel() {
         />
       </PanelSection>
 
-      <PanelSection title="Actions">
+      <PanelSection title={i18n._({ id: 'node.ridgeVent.panel.actions', message: 'Actions' })}>
         <ActionGroup>
-          <ActionButton icon={<Move className="h-3.5 w-3.5" />} label="Move" onClick={handleMove} />
+          <ActionButton
+            icon={<Move className="h-3.5 w-3.5" />}
+            label={i18n._({ id: 'node.ridgeVent.panel.move', message: 'Move' })}
+            onClick={handleMove}
+          />
           <ActionButton
             icon={<Copy className="h-3.5 w-3.5" />}
-            label="Duplicate"
+            label={i18n._({ id: 'node.ridgeVent.panel.duplicate', message: 'Duplicate' })}
             onClick={handleDuplicate}
           />
           <ActionButton
             className="hover:bg-red-500/20"
-            icon={<Trash2 className="h-3.5 w-3.5 text-red-400" />}
-            label="Delete"
+            icon={<Trash2 className="h-3.5 w-3.5 text-red-600 dark:text-red-400" />}
+            label={i18n._({ id: 'node.ridgeVent.panel.delete', message: 'Delete' })}
             onClick={handleDelete}
           />
         </ActionGroup>

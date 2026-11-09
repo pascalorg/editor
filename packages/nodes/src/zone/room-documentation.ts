@@ -1,9 +1,4 @@
-import {
-  type AnyNode,
-  deriveZoneQuantityReport,
-  resolveAutoZonePolygon,
-  type ZoneNode,
-} from '@pascal-app/core'
+import { type AnyNode, deriveZoneQuantityReport, type ZoneNode } from '@pascal-app/core'
 import type { FloorplanSchedule } from '@pascal-app/editor'
 import {
   type ConstructionLengthProfile,
@@ -23,11 +18,7 @@ export function buildRoomFloorplanSchedule(args: {
 }): FloorplanSchedule | null {
   const rooms = args.siblings
     .filter((zone) => zone.spaceRole === 'room')
-    .map((zone) => {
-      const polygon = resolveAutoZonePolygon(zone, (id) => args.nodes[id])
-      const resolvedZone = polygon === zone.polygon ? zone : { ...zone, polygon }
-      return { zone: resolvedZone, report: deriveZoneQuantityReport(resolvedZone, args.nodes) }
-    })
+    .map((zone) => ({ zone, report: deriveZoneQuantityReport(zone, args.nodes) }))
     .sort((a, b) => compareRooms(a.zone, b.zone))
 
   if (rooms.length === 0) return null

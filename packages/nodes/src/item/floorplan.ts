@@ -5,14 +5,24 @@ import {
   type FloorplanPoint,
   type GeometryContext,
   getBlockFaceFrame,
+  getEffectiveNode,
   getRoofWallFaceFrame,
   getScaledDimensions,
+  getWallBodyCenterOffset,
+  getWallLocalFaceZ,
   type ItemNode,
   type RoofSegmentNode,
   roofFacePointToSegment,
+  scriptImages,
   useLiveTransforms,
 } from '@pascal-app/core'
-import { formatLinearMeasurement, readFloorplanMetricNotationOverride } from '@pascal-app/editor'
+import {
+  formatLinearMeasurement,
+  readFloorplanContext,
+  readFloorplanMetricNotationOverride,
+} from '@pascal-app/editor'
+import { restingNodePlanFrame } from '../shared/resting-surface-plan'
+import { buildPlanItemSymbol, classifyPlanItem, PLAN_SYMBOL_METADATA_KEY } from './plan-symbols'
 
 /**
  * Stage C floor-plan builder for item.
@@ -44,13 +54,68 @@ function rotateVec(x: number, y: number, angle: number): [number, number] {
   return [x * c + y * s, -x * s + y * c]
 }
 
-function resolveItemTransform(
+function needsFullAncestorFrame(item: ItemNode, ctx: GeometryContext): boolean {
+  let id = item.parentId
+  const visited = new Set<string>([item.id])
+  while (id && !visited.has(id)) {
+    visited.add(id)
+    const parent = ctx.resolve(id as AnyNodeId)
+    if (!parent || parent.type === 'level') break
+    if (
+      ![
+        'wall',
+        'ceiling',
+        'roof',
+        'roof-segment',
+        'item',
+        'shelf',
+        'cabinet',
+        'cabinet-module',
+        'procedural-item',
+        'block',
+        'slab',
+      ].includes(parent.type)
+    ) {
+      const effective = getEffectiveNode(parent) as AnyNode & {
+        position?: number[]
+        rotation?: number | number[]
+      }
+      const live = useLiveTransforms.getState().get(parent.id)
+      const position = live?.position ?? effective.position
+      const rotation = effective.rotation
+      // Main's level-local fallback already handles identity plugins directly on a level.
+      if (
+        parent.type === 'column' ||
+        (parent.parentId && ctx.resolve(parent.parentId as AnyNodeId)?.type !== 'level') ||
+        position?.some((v) => v !== 0) ||
+        live?.rotation ||
+        (Array.isArray(rotation) ? rotation.some((v) => v !== 0) : rotation)
+      )
+        return true
+    }
+    id = parent.parentId
+  }
+  return false
+}
+
+export function resolveItemTransform(
   item: ItemNode,
   ctx: GeometryContext,
   cache = new Map<AnyNodeId, Transform | null>(),
 ): Transform | null {
   const cached = cache.get(item.id as AnyNodeId)
   if (cached !== undefined) return cached
+
+  if (needsFullAncestorFrame(item, ctx)) {
+    const f = restingNodePlanFrame(item, ctx.resolve)
+    const result = {
+      x: f.position[0],
+      y: f.position[2],
+      rotation: Math.atan2(f.axes[2][0], f.axes[2][2]),
+    }
+    cache.set(item.id, result)
+    return result
+  }
 
   const localRotation = item.rotation[1] ?? 0
   let result: Transform | null = null
@@ -69,8 +134,9 @@ function resolveItemTransform(
     const wallRotation = -Math.atan2(wall.end[1] - wall.start[1], wall.end[0] - wall.start[0])
     const wallLocalZ =
       item.asset.attachTo === 'wall-side'
-        ? ((wall.thickness ?? 0.1) / 2) * (item.side === 'front' ? 1 : -1)
-        : item.position[2]
+        ? getWallLocalFaceZ(parentNode, item.side === 'front' ? 'a' : 'b')
+        : item.position[2] +
+          (item.asset.attachTo === 'wall' ? getWallBodyCenterOffset(parentNode) : 0)
     const [offsetX, offsetY] = rotateVec(item.position[0], wallLocalZ, wallRotation)
     result = {
       x: wall.start[0] + offsetX,
@@ -87,6 +153,17 @@ function resolveItemTransform(
         y: parentT.y + offsetY,
         rotation: parentT.rotation + localRotation,
       }
+    }
+  } else if (
+    parentNode?.type === 'cabinet' ||
+    parentNode?.type === 'cabinet-module' ||
+    parentNode?.type === 'procedural-item'
+  ) {
+    const f = restingNodePlanFrame(item, ctx.resolve)
+    result = {
+      x: f.position[0],
+      y: f.position[2],
+      rotation: Math.atan2(f.axes[2][0], f.axes[2][2]),
     }
   } else if (parentNode?.type === 'shelf') {
     // Shelf-hosted item: `item.position` is in shelf-local coords. The
@@ -108,6 +185,25 @@ function resolveItemTransform(
       rotation: [number, number, number]
     }
     const live = useLiveTransforms.getState().get(shelf.id as AnyNodeId)
+    if (
+      shelf.parentId &&
+      ['item', 'shelf', 'cabinet', 'cabinet-module', 'procedural-item'].includes(
+        ctx.resolve(shelf.parentId as AnyNodeId)?.type ?? '',
+      )
+    ) {
+      const parentT = resolveItemTransform(
+        {
+          ...shelf,
+          position: live?.position ?? shelf.position,
+          rotation: [0, live?.rotation ?? shelf.rotation[1], 0],
+        } as ItemNode,
+        ctx,
+        cache,
+      )
+      if (!parentT) return null
+      const [x, y] = rotateVec(item.position[0], item.position[2], parentT.rotation)
+      return { x: parentT.x + x, y: parentT.y + y, rotation: parentT.rotation + localRotation }
+    }
     const shelfX = live?.position[0] ?? shelf.position[0]
     const shelfZ = live?.position[2] ?? shelf.position[2]
     const shelfRotationY = live?.rotation ?? shelf.rotation[1] ?? 0
@@ -260,13 +356,41 @@ export function buildItemFloorplan(node: ItemNode, ctx: GeometryContext): Floorp
     return [cx + rx, cy + ry] as FloorplanPoint
   })
 
+  // A sheet (drafting) draws the permit-set symbol — fixtures as labelled
+  // linework, furniture as a light outline — never the sprite or the
+  // editor's amber footprint. Ceiling items and decor draw nothing.
+  if (readFloorplanContext(ctx).drafting) {
+    const planClass = classifyPlanItem(node.asset)
+    const symbol = buildPlanItemSymbol(planClass, {
+      map: (x, y) => {
+        const [rx, ry] = rotateVec(x, y, transform.rotation)
+        return [cx + rx, cy + ry]
+      },
+      width,
+      depth,
+    })
+    // the sheet lays its tags out around fixtures and (more loosely)
+    // furniture; the mark rides on the outline itself, which the sheet's
+    // model / annotation split passes through untouched (it rebuilds groups)
+    const [outline, ...rest] = symbol
+    if (!outline) return null
+    const marked = {
+      ...outline,
+      metadata: {
+        ...(outline as { metadata?: object }).metadata,
+        [PLAN_SYMBOL_METADATA_KEY]: planClass.kind,
+      },
+    } as FloorplanGeometry
+    return { kind: 'group', children: [marked, ...rest] }
+  }
+
   const isSelected = ctx.viewState?.selected ?? false
   // Marquee preview — the about-to-be-selected tint every other kind shows.
   const isHighlighted = ctx.viewState?.highlighted ?? false
   const showSelection = isSelected || isHighlighted
   const isMoving = ctx.viewState?.moving ?? false
   const selectedStroke = ctx.viewState?.palette?.selectedStroke ?? '#3b82f6'
-  const floorPlanUrl = node.asset.floorPlanUrl
+  const floorPlanUrl = scriptImages(node)?.floorPlan ?? node.asset.floorPlanUrl
   const children: FloorplanGeometry[] = [
     {
       kind: 'polygon',

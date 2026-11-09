@@ -171,47 +171,47 @@ describe('curved lean-to floorplan', () => {
     expect(geometry.children.filter((child) => child.kind === 'rect')).toHaveLength(6)
   })
 
-  test.each([
-    'gable',
-    'butterfly',
-  ] as const)('draws the continuous %s roof footprint to the shared diagonal seam', (canopyForm) => {
-    const level = LevelNode.parse({ id: `level_${canopyForm}_floorplan_joint`, level: 0 })
-    const first = resolveLeanToFreestandingRunPlacement(
-      level.id,
-      [0, 0],
-      [4, 0],
-      false,
-      canopyForm,
-    )!
-    const second = resolveLeanToFreestandingRunPlacement(
-      level.id,
-      [4, 0],
-      [4, 4],
-      false,
-      canopyForm,
-    )!
-    const geometry = buildLeanToExtensionFloorplan(first, {
-      children: [],
-      parent: level,
-      resolve: () => undefined,
-      siblings: [second],
-    } as GeometryContext)
+  test.each(['gable', 'butterfly'] as const)(
+    'draws the continuous %s roof footprint to the shared diagonal seam',
+    (canopyForm) => {
+      const level = LevelNode.parse({ id: `level_${canopyForm}_floorplan_joint`, level: 0 })
+      const first = resolveLeanToFreestandingRunPlacement(
+        level.id,
+        [0, 0],
+        [4, 0],
+        false,
+        canopyForm,
+      )!
+      const second = resolveLeanToFreestandingRunPlacement(
+        level.id,
+        [4, 0],
+        [4, 4],
+        false,
+        canopyForm,
+      )!
+      const geometry = buildLeanToExtensionFloorplan(first, {
+        children: [],
+        parent: level,
+        resolve: () => undefined,
+        siblings: [second],
+      } as GeometryContext)
 
-    expect(geometry?.kind).toBe('group')
-    if (geometry?.kind !== 'group') return
-    const roof = geometry.children.find((child) => child.kind === 'polygon')
-    expect(roof?.kind).toBe('polygon')
-    if (roof?.kind !== 'polygon') return
-    const run = first.projection + first.lowOverhang
-    expect(roof.points).toContainEqual([4, 0])
-    expect(
-      roof.points.some(([x, z]) => Math.abs(x - (4 - run)) < 1e-8 && Math.abs(z - run) < 1e-8),
-    ).toBe(true)
-    expect(
-      roof.points.some(([x, z]) => Math.abs(x - (4 + run)) < 1e-8 && Math.abs(z + run) < 1e-8),
-    ).toBe(true)
-    expect(roof.points).not.toContainEqual([4 + first.rightOverhang, run])
-  })
+      expect(geometry?.kind).toBe('group')
+      if (geometry?.kind !== 'group') return
+      const roof = geometry.children.find((child) => child.kind === 'polygon')
+      expect(roof?.kind).toBe('polygon')
+      if (roof?.kind !== 'polygon') return
+      const run = first.projection + first.lowOverhang
+      expect(roof.points).toContainEqual([4, 0])
+      expect(
+        roof.points.some(([x, z]) => Math.abs(x - (4 - run)) < 1e-8 && Math.abs(z - run) < 1e-8),
+      ).toBe(true)
+      expect(
+        roof.points.some(([x, z]) => Math.abs(x - (4 + run)) < 1e-8 && Math.abs(z + run) < 1e-8),
+      ).toBe(true)
+      expect(roof.points).not.toContainEqual([4 + first.rightOverhang, run])
+    },
+  )
 
   test('draws the continuous mono roof footprint to the shared diagonal seam', () => {
     const level = LevelNode.parse({ id: 'level_mono_floorplan_joint', level: 0 })

@@ -1,6 +1,15 @@
-import type { FloorplanGeometry, FloorplanPoint, GeometryContext } from '@pascal-app/core'
-import { INCHES_TO_METERS } from '../duct-segment/geometry'
+import {
+  defaultI18n,
+  type FloorplanGeometry,
+  type FloorplanPoint,
+  type GeometryContext,
+} from '@pascal-app/core'
+import { INCHES_TO_METERS } from '../duct-segment/profile'
+import { runHangerFloorplan } from '../shared/run-hangers'
+import { pipeContinuationHandlePlan, pipeEndpointPort } from './continuation'
+import { formatPipeGradePercent } from './grade-label'
 import type { PipeSegmentNode } from './schema'
+import { pipeGrade } from './slope'
 
 const WASTE_COLOR = '#57534e'
 const VENT_COLOR = '#78716c'
@@ -42,6 +51,7 @@ export function buildPipeSegmentFloorplan(
     return {
       kind: 'group',
       children: [
+        ...runHangerFloorplan(node, ctx),
         {
           kind: 'circle',
           cx: p[0],
@@ -84,6 +94,41 @@ export function buildPipeSegmentFloorplan(
   // Selection chrome: one draggable handle per path vertex (2D twin of the
   // 3D selection handles). Routes to the shared `move-path-point` affordance.
   if (view?.selected) {
+    for (let i = 1; i < node.path.length; i++) {
+      const a = node.path[i - 1]!,
+        b = node.path[i]!
+      const grade = pipeGrade(a, b)
+      if (grade === null || Math.abs(grade) < 1e-6) continue
+      const length = Math.hypot(b[0] - a[0], b[2] - a[2])
+      const sign = Math.sign(grade),
+        dx = ((b[0] - a[0]) / length) * sign,
+        dz = ((b[2] - a[2]) / length) * sign
+      const x = (a[0] + b[0]) / 2,
+        z = (a[2] + b[2]) / 2,
+        size = Math.min(0.12, length / 5)
+      children.push({
+        kind: 'polyline',
+        points: [
+          [x - dx * size - (dz * size) / 2, z - dz * size + (dx * size) / 2],
+          [x, z],
+          [x - dx * size + (dz * size) / 2, z - dz * size - (dx * size) / 2],
+        ],
+        stroke,
+        strokeWidth: 2,
+        vectorEffect: 'non-scaling-stroke',
+      })
+      children.push({
+        kind: 'text',
+        x: x - dz * 0.18,
+        y: z + dx * 0.18,
+        text: formatPipeGradePercent(grade, defaultI18n),
+        fontSize: 0.12,
+        fill: stroke,
+        textAnchor: 'middle',
+        upright: true,
+      })
+    }
+
     for (let k = 0; k < points.length; k++) {
       children.push({
         kind: 'endpoint-handle',
@@ -93,7 +138,48 @@ export function buildPipeSegmentFloorplan(
         payload: { pointIndex: indexMap[k]! },
       })
     }
+    const continuationGap = Math.max(0.28, diameterM / 2 + 0.18)
+    for (const endpoint of ['start', 'end'] as const) {
+      const port = pipeEndpointPort(node, endpoint)
+      const sceneNodes = ctx.sceneNodes ?? { [node.id]: node }
+      const plan = pipeContinuationHandlePlan(node, endpoint, sceneNodes, continuationGap)
+      if (!(port && plan)) continue
+      if (
+        Math.hypot(plan.position[0] - port.position[0], plan.position[2] - port.position[2]) < 1e-6
+      )
+        continue
+      children.push({
+        kind: 'midpoint-handle',
+        point: [plan.position[0], plan.position[2]],
+        activation: 'action',
+        affordance: 'continue-run',
+        payload: { action: 'continue-run', endpoint, fittingId: plan.fittingId },
+      })
+    }
+
+    for (let k = 0; k < points.length - 1; k++) {
+      const a = points[k]!
+      const b = points[k + 1]!
+      const pathIndex = indexMap[k]!
+      const nextPathIndex = indexMap[k + 1]!
+      children.push({
+        kind: 'midpoint-handle',
+        point: [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2],
+        activation: 'action',
+        affordance: 'branch-run',
+        payload: {
+          action: 'branch-run',
+          segmentIndex: pathIndex,
+          point: [
+            (a[0] + b[0]) / 2,
+            (node.path[pathIndex]![1] + node.path[nextPathIndex]![1]) / 2,
+            (a[1] + b[1]) / 2,
+          ],
+        },
+      })
+    }
   }
 
+  children.push(...runHangerFloorplan(node, ctx))
   return { kind: 'group', children }
 }

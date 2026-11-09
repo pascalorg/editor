@@ -1,9 +1,9 @@
-import type { AnyNode, AnyNodeId, WallNode } from '@pascal-app/core'
 import {
-  readHostWallCeiling,
-  toWallCeilingSceneReader,
-  type WallCeilingSceneReader,
-} from '../shared/wall-opening-ceiling'
+  getWallBodyCenterOffset,
+  getWallCurveFrameAt,
+  getWallCurveLength,
+  type WallNode,
+} from '@pascal-app/core'
 
 /**
  * Keep the door handle at the same relative height when the door is resized:
@@ -22,7 +22,8 @@ export function scaleHandleHeight(
 }
 
 /**
- * Converts wall-local (X along wall, Y = height above wall base) to world XYZ.
+ * Converts wall-local (X along wall, Y = height above wall base, Z = offset
+ * from the wall centre plane along its normal) to world XYZ.
  */
 export function wallLocalToWorld(
   wallNode: WallNode,
@@ -30,70 +31,22 @@ export function wallLocalToWorld(
   localY: number,
   levelYOffset = 0,
   slabElevation = 0,
+  localZ = 0,
 ): [number, number, number] {
-  const wallAngle = Math.atan2(
-    wallNode.end[1] - wallNode.start[1],
-    wallNode.end[0] - wallNode.start[0],
-  )
+  const wallLength = getWallCurveLength(wallNode)
+  const frame = getWallCurveFrameAt(wallNode, wallLength > 1e-6 ? localX / wallLength : 0)
+  // `localZ` is measured from the body's centre plane, which a justified wall
+  // sets off its reference line.
+  const across = getWallBodyCenterOffset(wallNode) + localZ
   return [
-    wallNode.start[0] + localX * Math.cos(wallAngle),
+    frame.point.x + frame.normal.x * across,
     slabElevation + localY + levelYOffset,
-    wallNode.start[1] + localX * Math.sin(wallAngle),
+    frame.point.y + frame.normal.y * across,
   ]
 }
 
-/**
- * Clamps door center X so it stays fully within wall bounds.
- * Y is always height/2 — doors sit at floor level.
- */
-export function clampToWall(
-  wallNode: WallNode,
-  localX: number,
-  width: number,
-  height: number,
-  sceneOrNodes: WallCeilingSceneReader | Readonly<Record<AnyNodeId, AnyNode>>,
-): { clampedX: number; clampedY: number; fits: boolean } {
-  const dx = wallNode.end[0] - wallNode.start[0]
-  const dz = wallNode.end[1] - wallNode.start[1]
-  const wallLength = Math.hypot(dx, dz)
-
-  const minX = width / 2
-  const maxX = wallLength - width / 2
-  const clampedY = height / 2 // Doors always sit at floor level
-
-  if (width > wallLength) {
-    return { clampedX: wallLength / 2, clampedY, fits: false }
-  }
-
-  const scene = toWallCeilingSceneReader(sceneOrNodes)
-  const startCeiling = readHostWallCeiling(wallNode.id, scene, 0)
-  const endCeiling = readHostWallCeiling(wallNode.id, scene, wallLength)
-  const slope = (endCeiling - startCeiling) / wallLength
-
-  let fitMinX = minX
-  let fitMaxX = maxX
-
-  if (Math.abs(slope) < 1e-6) {
-    if (startCeiling < height - 1e-4) {
-      return { clampedX: Math.max(minX, Math.min(maxX, localX)), clampedY, fits: false }
-    }
-  } else if (slope > 0) {
-    // Upward slope: lowest point is the left edge (x - width/2)
-    const minCenterForHeight = (height - startCeiling) / slope + width / 2
-    fitMinX = Math.max(minX, minCenterForHeight)
-  } else {
-    // Downward slope: lowest point is the right edge (x + width/2)
-    const maxCenterForHeight = (height - startCeiling) / slope - width / 2
-    fitMaxX = Math.min(maxX, maxCenterForHeight)
-  }
-
-  if (fitMinX > fitMaxX + 1e-4) {
-    return { clampedX: Math.max(minX, Math.min(maxX, localX)), clampedY, fits: false }
-  }
-
-  const clampedX = Math.max(fitMinX, Math.min(fitMaxX, localX))
-  return { clampedX, clampedY, fits: true }
-}
+/** Door centre on its wall: the shared rule in core (`clampDoorToWall`). */
+export { clampDoorToWall as clampToWall } from '@pascal-app/core/building'
 
 // Wall-child overlap is shared by door + window placement (one source of
 // truth in `shared/wall-attach-target.ts`). Re-exported here so existing

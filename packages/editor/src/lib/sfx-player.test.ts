@@ -1,10 +1,10 @@
 import { afterAll, beforeEach, describe, expect, mock, test } from 'bun:test'
+import useAudio from '../store/use-audio'
 
 type FakeContext = { id: string }
 
 let activeContext: FakeContext = { id: 'first' }
 let initialState: 'loaded' | 'loading' = 'loaded'
-let muted = false
 let throwOnPlay = false
 const instances: FakeHowl[] = []
 
@@ -92,12 +92,6 @@ const fakeHowler = {
 }
 
 mock.module('howler', () => ({ Howl: FakeHowl, Howler: fakeHowler }))
-mock.module('../store/use-audio', () => ({
-  default: {
-    getState: () => ({ masterVolume: 100, muted, sfxVolume: 100 }),
-    subscribe: () => () => {},
-  },
-}))
 
 const { disposeSFX, playSFX, preloadSFX, startLoopSFX, stopLoopSFX, updateSFXVolumes } =
   await import('./sfx-player')
@@ -107,7 +101,7 @@ beforeEach(() => {
   disposeSFXBus()
   activeContext = { id: 'first' }
   initialState = 'loaded'
-  muted = false
+  useAudio.setState({ masterVolume: 100, muted: false, sfxVolume: 100 })
   throwOnPlay = false
   instances.length = 0
 })
@@ -118,6 +112,51 @@ afterAll(() => {
 })
 
 describe('SFX audio context lifecycle', () => {
+  test('editor startup warms assets without playing and repeated init does not duplicate delivery', () => {
+    initSFXBus()
+    const warmed = [...instances]
+    expect(warmed.length).toBeGreaterThan(0)
+    expect(warmed.every((sound) => sound.playCount === 0)).toBe(true)
+    initSFXBus()
+    expect(instances).toHaveLength(warmed.length)
+    triggerSFX('sfx:item-place')
+    expect(instances.reduce((sum, sound) => sum + sound.playCount, 0)).toBe(1)
+  })
+
+  test('a one-shot requested before loading is dropped, not replayed on load', () => {
+    initialState = 'loading'
+    initSFXBus()
+    triggerSFX('sfx:item-place')
+    for (const sound of instances) sound.finishLoading()
+    expect(instances.every((sound) => sound.playCount === 0)).toBe(true)
+    // A different fresh cue avoids relying on the per-name repeat clock.
+    triggerSFX('sfx:structure-build')
+    expect(instances.reduce((sum, sound) => sum + sound.playCount, 0)).toBe(1)
+  })
+
+  test('muted startup neither starts audio nor consumes a later fresh cue', () => {
+    useAudio.setState({ muted: true })
+    initSFXBus()
+    triggerSFX('sfx:item-place')
+    expect(instances.every((sound) => sound.playCount === 0)).toBe(true)
+    useAudio.setState({ muted: false })
+    updateSFXVolumes()
+    triggerSFX('sfx:item-place')
+    expect(instances.reduce((sum, sound) => sum + sound.playCount, 0)).toBe(1)
+  })
+
+  test('cleanup detaches delivery and unloads resources once, then remount plays once', () => {
+    initSFXBus()
+    const warmed = [...instances]
+    disposeSFXBus()
+    disposeSFXBus()
+    triggerSFX('sfx:item-place')
+    expect(warmed.every((sound) => sound.playCount === 0 && sound.unloadCount === 1)).toBe(true)
+    initSFXBus()
+    triggerSFX('sfx:item-place')
+    expect(instances.reduce((sum, sound) => sum + sound.playCount, 0)).toBe(1)
+  })
+
   test('reuses the preloaded cache while the Howler context is unchanged', () => {
     preloadSFX()
     const initialCount = instances.length
@@ -234,7 +273,7 @@ describe('SFX audio context lifecycle', () => {
     startLoopSFX('terrainLower')
     const lower = instances.find((sound) => sound.loop && sound.playCount === 1)
 
-    muted = true
+    useAudio.setState({ muted: true })
     updateSFXVolumes()
 
     expect(lower?.fadeCalls.at(-1)).toEqual([0.2, 0, 90, 1])
@@ -262,5 +301,27 @@ describe('SFX audio context lifecycle', () => {
     lower?.finishLoading()
 
     expect(lower?.playCount).toBe(0)
+  })
+
+  test('turn cues play at the master and effects volume, and not in a muted tab', () => {
+    const cues = ['sfx:turn-done', 'sfx:turn-failed', 'sfx:turn-needs-input'] as const
+    useAudio.setState({ masterVolume: 50, muted: true, sfxVolume: 40 })
+    initSFXBus()
+
+    for (const cue of cues) triggerSFX(cue)
+    expect(instances.every((sound) => sound.playCount === 0)).toBe(true)
+
+    useAudio.setState({ muted: false })
+    for (const cue of cues) triggerSFX(cue)
+
+    const played = instances.filter((sound) => sound.playCount === 1)
+    expect(played.map((sound) => sound.src)).toEqual([
+      '/audios/sfx/turn_done.mp3',
+      '/audios/sfx/turn_failed.mp3',
+      '/audios/sfx/turn_needs_input.mp3',
+    ])
+    for (const sound of played) {
+      expect(sound.volumeCalls.find(([, id]) => id === 1)?.[0]).toBeCloseTo(0.2)
+    }
   })
 })

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from 'bun:test'
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import type { AnyNode } from '@pascal-app/core'
 import {
   type ActiveInteractionScope,
@@ -21,6 +21,7 @@ const mockNode = (id: string, type: string): AnyNode => ({ id, type }) as unknow
 function reset() {
   useInteractionScope.getState().end()
 }
+beforeEach(reset)
 afterEach(reset)
 
 describe('use-interaction-scope state machine', () => {

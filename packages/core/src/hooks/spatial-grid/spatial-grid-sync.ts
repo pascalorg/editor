@@ -1,5 +1,13 @@
+import { isDeckSlab } from '../../lib/deck-framing'
+import { resolveLevelId } from '../../lib/node-ancestry'
+import { isFloorPlate } from '../../lib/plate-surface'
+import { subtractPolygonsFromPolygon } from '../../lib/polygon-union'
 import { getRenderableSlabPolygon } from '../../lib/slab-polygon'
-import { isLevelAtSiteDatum, isLevelBaseConsumer } from '../../lib/terrain-support'
+import {
+  isLevelAtSiteDatum,
+  isLevelBaseConsumer,
+  levelBaseElevationAt,
+} from '../../lib/terrain-support'
 import { nodeRegistry } from '../../registry'
 import type { AnyNode, AnyNodeId, LevelNode, SiteNode, SlabNode, WallNode } from '../../schema'
 import { getLevelBelow } from '../../services/storey'
@@ -13,86 +21,11 @@ import {
 } from './spatial-grid-manager'
 import { GROUND_SUPPORT_ID } from './support-host-id'
 
-export function resolveLevelId(node: AnyNode, nodes: Record<string, AnyNode>): string {
-  // If the node itself is a level
-  if (node.type === 'level') return node.id
-
-  // Walk up parent chain to find level
-  // This assumes you track parentId or can derive it
-  let current: AnyNode | undefined = node
-
-  while (current) {
-    if (current.type === 'level') return current.id
-    // Find parent (you might need to add parentId to your schema or derive it)
-    if (current.parentId) {
-      current = nodes[current.parentId]
-    } else {
-      current = undefined
-    }
-  }
-
-  return 'default' // fallback for orphaned items
-}
-
-/**
- * Walks the parent chain of `nodeId` and returns the id of the first ancestor
- * whose `type` is `'level'`, or `null` when no level ancestor exists (orphaned
- * node, top-level building node, etc.). Unlike `resolveLevelId`, this variant:
- *
- * - accepts a node **id** rather than a resolved node, saving the caller a
- *   `nodes[id]` lookup when only the id is at hand.
- * - returns `null` instead of the `'default'` fallback, which lets callers
- *   distinguish "genuinely has no level" from "is a level".
- * - has a loop guard (16 iterations) so a corrupt parent-chain cycle cannot
- *   hang the frame loop.
- */
-export function findLevelAncestorId(
-  nodeId: AnyNodeId,
-  nodes: Record<string, AnyNode>,
-): string | null {
-  let current: AnyNode | undefined = nodes[nodeId]
-  let guard = 0
-  while (current && guard < 16) {
-    if (current.type === 'level') return current.id
-    current = current.parentId ? nodes[current.parentId] : undefined
-    guard += 1
-  }
-  return null
-}
-
-/**
- * Returns the building id that contains the given level, or `null` if
- * the level is unparented or no enclosing building exists.
- *
- * Most scenes record the relationship via `level.parentId →
- * building.id`, but older serialisations occasionally drop `parentId`
- * even though the building's `children` array still references the
- * level. The fallback scan covers that case.
- *
- * Used by `FloorplanRegistryLayer` to discover building-scoped kinds
- * (`def.floorplanScope === 'building'`) without hardcoding any kind
- * name in the editor layer.
- */
-export function resolveBuildingForLevel(
-  levelId: AnyNodeId,
-  nodes: Record<AnyNodeId, AnyNode>,
-): AnyNodeId | null {
-  const level = nodes[levelId] as AnyNode | undefined
-  if (!level) return null
-  const directParent = (level as { parentId?: AnyNodeId | null }).parentId ?? null
-  if (directParent) {
-    const candidate = nodes[directParent]
-    if (candidate?.type === 'building') return candidate.id as AnyNodeId
-  }
-  for (const candidate of Object.values(nodes)) {
-    if (candidate?.type !== 'building') continue
-    const children = (candidate as { children?: AnyNodeId[] }).children
-    if (Array.isArray(children) && children.includes(levelId)) {
-      return candidate.id as AnyNodeId
-    }
-  }
-  return null
-}
+export {
+  findLevelAncestorId,
+  resolveBuildingForLevel,
+  resolveLevelId,
+} from '../../lib/node-ancestry'
 
 // Call this once at app initialization. Returns an unsubscribe function that
 // detaches the scene-store listener (useful when the editor is unmounted so
@@ -111,6 +44,78 @@ export function initSpatialGridSync(): () => void {
 
   // Subscribe to all changes
   const unsubscribeScene = store.subscribe((state, prevState) => {
+    if (state.nodes === prevState.nodes) return
+    // A bulk slab change (scene load/reload, paste, import) used to run
+    // markNodesOverlappingSlab per slab — two full node scans each, O(slabs ×
+    // nodes). Above the threshold, dirty every possible slab dependent once (a
+    // superset of the per-slab result) and skip the per-slab scans below.
+    const bulkSlabs =
+      countBulkSlabChanges(state.nodes, prevState.nodes) >= BULK_SLAB_CHANGE_THRESHOLD
+    if (bulkSlabs) markAllSlabDependents(state.nodes, markDirty)
+    const changedSlabContextLevels = new Set<string>()
+    const changedRoomSupportLevels = new Set<string>()
+    const checkSlabContext = (id: string) => {
+      const previous = prevState.nodes[id as AnyNodeId]
+      const next = state.nodes[id as AnyNodeId]
+      if (previous === next) return
+      const wallChanged =
+        (previous?.type === 'wall' || next?.type === 'wall') &&
+        (previous?.type !== 'wall' ||
+          next?.type !== 'wall' ||
+          previous.parentId !== next.parentId ||
+          previous.start !== next.start ||
+          previous.end !== next.end ||
+          previous.thickness !== next.thickness ||
+          previous.justification !== next.justification ||
+          previous.curveOffset !== next.curveOffset)
+      const slabChanged =
+        (previous?.type === 'slab' || next?.type === 'slab') &&
+        (previous?.type !== 'slab' ||
+          next?.type !== 'slab' ||
+          previous.parentId !== next.parentId ||
+          previous.polygon !== next.polygon ||
+          previous.elevation !== next.elevation)
+      const roomChanged =
+        (previous?.type === 'zone' || next?.type === 'zone') &&
+        (previous?.type !== 'zone' ||
+          next?.type !== 'zone' ||
+          previous.parentId !== next.parentId ||
+          previous.polygon !== next.polygon ||
+          previous.holes !== next.holes ||
+          previous.boundarySeparatorIds !== next.boundarySeparatorIds ||
+          previous.boundaryWallIds !== next.boundaryWallIds ||
+          previous.spaceRole !== next.spaceRole ||
+          previous.floor?.elevation !== next.floor?.elevation ||
+          previous.hasFloor !== next.hasFloor)
+      const separatorChanged =
+        (previous?.type === 'separator' || next?.type === 'separator') &&
+        (previous?.type !== 'separator' ||
+          next?.type !== 'separator' ||
+          previous.parentId !== next.parentId ||
+          previous.start !== next.start ||
+          previous.end !== next.end)
+      if (roomChanged || separatorChanged) {
+        if (previous) changedRoomSupportLevels.add(resolveLevelId(previous, prevState.nodes))
+        if (next) changedRoomSupportLevels.add(resolveLevelId(next, state.nodes))
+      }
+      if (!(wallChanged || slabChanged)) return
+      if (previous) changedSlabContextLevels.add(resolveLevelId(previous, prevState.nodes))
+      if (next) changedSlabContextLevels.add(resolveLevelId(next, state.nodes))
+    }
+
+    for (const id in prevState.nodes) {
+      if (Object.hasOwn(prevState.nodes, id)) checkSlabContext(id)
+    }
+    for (const id in state.nodes) {
+      if (!prevState.nodes[id as AnyNodeId]) checkSlabContext(id)
+    }
+
+    if (changedRoomSupportLevels.size)
+      for (const node of Object.values(state.nodes)) {
+        if (node.type === 'wall' && changedRoomSupportLevels.has(resolveLevelId(node, state.nodes)))
+          markDirty(node.id)
+      }
+
     // Detect added nodes
     for (const [id, node] of Object.entries(state.nodes)) {
       if (!prevState.nodes[id as AnyNode['id']]) {
@@ -118,10 +123,13 @@ export function initSpatialGridSync(): () => void {
         spatialGridManager.handleNodeCreated(node, levelId)
 
         // When a slab is added, mark overlapping items/walls dirty
-        if (node.type === 'slab') {
+        if (node.type === 'slab' && !bulkSlabs) {
           markNodesOverlappingSlab(node as SlabNode, state.nodes, markDirty)
           markCoveringDependentsBelow(levelId, state.nodes, markDirty)
         }
+
+        if (node.type === 'zone' && node.floor?.script)
+          markNodesOverlappingPolygon(levelId, node.polygon, state.nodes, markDirty)
 
         // A site arriving with terrain already on it (scene load, paste,
         // imported elevation data) is the same event as a stroke: ground exists
@@ -139,10 +147,13 @@ export function initSpatialGridSync(): () => void {
         spatialGridManager.handleNodeDeleted(id, node.type, levelId)
 
         // When a slab is removed, mark items/walls that were on it dirty (using current state)
-        if (node.type === 'slab') {
-          markNodesOverlappingSlab(node as SlabNode, state.nodes, markDirty)
+        if (node.type === 'slab' && !bulkSlabs) {
+          markNodesOverlappingSlab(node as SlabNode, state.nodes, markDirty, prevState.nodes)
           markCoveringDependentsBelow(levelId, state.nodes, markDirty)
         }
+
+        if (node.type === 'zone' && node.floor?.script)
+          markNodesOverlappingPolygon(levelId, node.polygon, state.nodes, markDirty)
 
         // Deleting a sculpted site drops the ground back to the datum, so its
         // contents have to come down with it.
@@ -183,7 +194,28 @@ export function initSpatialGridSync(): () => void {
           const levelId = resolveLevelId(node, state.nodes)
           spatialGridManager.handleNodeUpdated(node, levelId)
         }
-        markSlabChangeDependents(prev as SlabNode, node as SlabNode, state.nodes, markDirty)
+        if (!bulkSlabs) {
+          markSlabChangeDependents(
+            prev as SlabNode,
+            node as SlabNode,
+            state.nodes,
+            markDirty,
+            prevState.nodes,
+          )
+        }
+      } else if (node.type === 'zone' && prev.type === 'zone') {
+        // A room's floor script is the surface what stands on the room rests on.
+        if (
+          (node.floor?.script || prev.floor?.script) &&
+          (node.floor?.script !== prev.floor?.script ||
+            node.polygon !== prev.polygon ||
+            node.holes !== prev.holes)
+        ) {
+          const levelId = resolveLevelId(node, state.nodes)
+          markNodesOverlappingPolygon(levelId, prev.polygon, state.nodes, markDirty)
+          if (node.polygon !== prev.polygon)
+            markNodesOverlappingPolygon(levelId, node.polygon, state.nodes, markDirty)
+        }
       } else if (node.type === 'level' && prev.type === 'level') {
         if (node.height !== prev.height) {
           markLevelHeightDependents(node as LevelNode, state.nodes, markDirty)
@@ -202,6 +234,7 @@ export function initSpatialGridSync(): () => void {
           node.end !== prev.end ||
           node.curveOffset !== prev.curveOffset ||
           node.thickness !== prev.thickness ||
+          node.justification !== prev.justification ||
           node.height !== prev.height ||
           node.endHeightOffset !== prev.endHeightOffset ||
           node.supportSlabId !== prev.supportSlabId ||
@@ -211,6 +244,47 @@ export function initSpatialGridSync(): () => void {
           // queries must see the latest node state — reach the manager to
           // refresh its wall map and drop the level's rendered-polygon cache.
           spatialGridManager.handleNodeUpdated(node, resolveLevelId(node, state.nodes))
+        }
+      }
+    }
+
+    // Unchanged slabs can lose an adopted wall band or a sibling seam. Their
+    // stored polygons cannot identify objects standing on the former boundary.
+    if (changedSlabContextLevels.size === 0) return
+    const beforeContext = slabBoundaryContext(prevState.nodes, changedSlabContextLevels)
+    const afterContext = slabBoundaryContext(state.nodes, changedSlabContextLevels)
+    for (const context of afterContext.values()) {
+      for (const slab of context.slabs) {
+        const previous = prevState.nodes[slab.id]
+        if (previous?.type !== 'slab') continue
+        if (
+          slab.parentId !== previous.parentId ||
+          slab.polygon !== previous.polygon ||
+          slab.elevation !== previous.elevation ||
+          slab.holes !== previous.holes
+        )
+          continue
+        const previousContext = beforeContext.get(resolveLevelId(previous, prevState.nodes))!
+        const beforePolygon = cachedSlabPolygon(previous, previousContext)
+        const afterPolygon = cachedSlabPolygon(slab, context)
+        if (
+          beforePolygon.length === afterPolygon.length &&
+          beforePolygon.every((point, i) => arraysEqual(point, afterPolygon[i]!))
+        )
+          continue
+        // Support only changed in the gained/lost bands, not across the slab interior.
+        const changedBands = [
+          ...subtractPolygonsFromPolygon(beforePolygon, [afterPolygon]),
+          ...subtractPolygonsFromPolygon(afterPolygon, [beforePolygon]),
+        ]
+        for (const polygon of changedBands) {
+          markNodesOverlappingPolygon(
+            resolveLevelId(slab, state.nodes),
+            polygon,
+            state.nodes,
+            markDirty,
+            context.consumers,
+          )
         }
       }
     }
@@ -231,7 +305,71 @@ export function initSpatialGridSync(): () => void {
   }
 }
 
-function arraysEqual(a: number[], b: number[]): boolean {
+/**
+ * Bulk slab-change guard. A scene load, reload, paste or import changes tens to
+ * thousands of slabs in one store write, and scanning every node twice per slab
+ * is O(slabs × nodes): a 4,600-slab scene blocked the main thread for ~5 s on
+ * every load. When at least this many slabs are added, removed or reshaped in
+ * one write, `markAllSlabDependents` dirties every node any slab could affect,
+ * once, and the per-slab scans are skipped. The marks are a superset of the
+ * per-slab result — and `setScene` marks every node dirty right after `set()`
+ * regardless — so load-time behaviour is unchanged; the saving is the scans.
+ */
+export const BULK_SLAB_CHANGE_THRESHOLD = 32
+
+export function countBulkSlabChanges(
+  nodes: Record<string, AnyNode>,
+  prevNodes: Record<string, AnyNode>,
+): number {
+  let count = 0
+  for (const id in nodes) {
+    if (!Object.hasOwn(nodes, id)) continue
+    const node = nodes[id]!
+    if (node.type !== 'slab') continue
+    const prev = prevNodes[id]
+    if (
+      prev?.type !== 'slab' ||
+      (prev as SlabNode).polygon !== (node as SlabNode).polygon ||
+      (prev as SlabNode).elevation !== (node as SlabNode).elevation ||
+      (prev as SlabNode).holes !== (node as SlabNode).holes
+    ) {
+      count++
+    }
+  }
+  for (const id in prevNodes) {
+    if (prevNodes[id]!.type === 'slab' && !nodes[id]) count++
+  }
+  return count
+}
+
+/**
+ * Every node a slab change can dirty, without looking at any slab: walls and
+ * ceilings (overlap and covering-below rules), stairs (deck attachment) and
+ * level-hosted floor-placed kinds (the generic re-elevation sweep).
+ */
+export function markAllSlabDependents(
+  nodes: Record<string, AnyNode>,
+  markDirty: (id: AnyNodeId) => void,
+) {
+  for (const id in nodes) {
+    if (!Object.hasOwn(nodes, id)) continue
+    const node = nodes[id]!
+    if (node.type === 'wall' || node.type === 'ceiling' || node.type === 'stair') {
+      markDirty(node.id)
+      continue
+    }
+    const floorPlaced = nodeRegistry.get(node.type)?.capabilities?.floorPlaced
+    if (!floorPlaced) continue
+    if (floorPlaced.applies && !floorPlaced.applies(node)) continue
+    const parentId = node.parentId as AnyNodeId | null
+    const parent = parentId ? nodes[parentId] : null
+    if (parent && parent.type !== 'level') continue
+    markDirty(node.id)
+  }
+}
+
+function arraysEqual(a: unknown, b: unknown): boolean {
+  if (!Array.isArray(a) || !Array.isArray(b)) return a === b
   return a.length === b.length && a.every((v, i) => v === b[i])
 }
 
@@ -286,14 +424,17 @@ export function markSlabChangeDependents(
   next: SlabNode,
   nodes: Record<string, AnyNode>,
   markDirty: (id: AnyNodeId) => void,
+  previousNodes = nodes,
 ) {
   const supportChanged =
+    next.parentId !== previous.parentId ||
     next.polygon !== previous.polygon ||
     next.elevation !== previous.elevation ||
     next.holes !== previous.holes
 
-  if (supportChanged) {
-    markNodesOverlappingSlab(previous, nodes, markDirty)
+  // A slab's surface script is the surface what stands on the slab rests on.
+  if (supportChanged || next.surfaceScript !== previous.surfaceScript) {
+    markNodesOverlappingSlab(previous, nodes, markDirty, previousNodes)
     markNodesOverlappingSlab(next, nodes, markDirty)
   }
   if (next.elevation !== previous.elevation) {
@@ -304,7 +445,14 @@ export function markSlabChangeDependents(
     next.thickness !== previous.thickness ||
     next.recessed !== previous.recessed
   ) {
-    markCoveringDependentsBelow(resolveLevelId(next, nodes), nodes, markDirty)
+    const nextLevelId = resolveLevelId(next, nodes)
+    markCoveringDependentsBelow(nextLevelId, nodes, markDirty)
+    if (next.parentId !== previous.parentId) {
+      const previousLevelId = resolveLevelId(previous, previousNodes)
+      if (previousLevelId !== nextLevelId) {
+        markCoveringDependentsBelow(previousLevelId, nodes, markDirty)
+      }
+    }
   }
 }
 
@@ -328,10 +476,47 @@ export function markSlabChangeDependents(
  * decide whether it drapes at all, so the two cannot disagree about which storey
  * is on the ground.
  */
+const terrainPlateDependents = new WeakMap<object, Set<string>>()
+
 export function markTerrainSupportDependents(
   nodes: Record<string, AnyNode>,
   markDirty: (id: AnyNodeId) => void,
 ) {
+  const plates = Object.values(nodes).filter(
+    (node): node is SlabNode =>
+      node.type === 'slab' &&
+      isFloorPlate(node) &&
+      !node.recessed &&
+      (node.elevation - node.thickness > 1e-4 || node.elevation < -1e-4),
+  )
+  const previous = terrainPlateDependents.get(nodes) ?? new Set<string>()
+  const active = new Set<string>()
+  for (const plate of plates) {
+    if (
+      plate.elevation < -1e-4 ||
+      plate.polygon.some(([x, z], i) => {
+        const [endX, endZ] = plate.polygon[(i + 1) % plate.polygon.length]!
+        const count = Math.max(1, Math.ceil(Math.hypot(endX - x, endZ - z) / 0.25))
+        for (let j = 0; j <= count; j++)
+          if (
+            plate.elevation - plate.thickness >
+            levelBaseElevationAt(
+              nodes,
+              resolveLevelId(plate, nodes),
+              x + ((endX - x) * j) / count,
+              z + ((endZ - z) * j) / count,
+            ) +
+              1e-4
+          )
+            return true
+        return false
+      })
+    )
+      active.add(plate.id)
+  }
+  terrainPlateDependents.set(nodes, active)
+  // Retain one sweep of former dependents when a dab closes their last ground gap.
+  const affected = plates.filter((plate) => active.has(plate.id) || previous.has(plate.id))
   const gradeLevels = new Map<string, boolean>()
   const isGrade = (levelId: string) => {
     let cached = gradeLevels.get(levelId)
@@ -343,13 +528,38 @@ export function markTerrainSupportDependents(
   }
 
   for (const node of Object.values(nodes)) {
-    if (node.type === 'slab' && node.fillToTerrain === true) {
-      if (isGrade(resolveLevelId(node, nodes))) markDirty(node.id)
+    if (node.type === 'slab') {
+      // A deck's posts run down to the ground under each, on whatever storey it stands.
+      if (isDeckSlab(node, (id) => nodes[id])) {
+        markDirty(node.id)
+        continue
+      }
+      const level = nodes[resolveLevelId(node, nodes)]
+      if (
+        node.plateRole === 'base' &&
+        node.foundation?.type === 'solid' &&
+        (isGrade(resolveLevelId(node, nodes)) || (level?.type === 'level' && level.level === 0))
+      ) {
+        markDirty(node.id)
+        continue
+      }
+      if (
+        (node.fillToTerrain === true || (node.elevation > 0 && affected.includes(node))) &&
+        isGrade(resolveLevelId(node, nodes))
+      )
+        markDirty(node.id)
       continue
     }
 
     if (node.type === 'wall') {
-      if (node.supportSlabId !== GROUND_SUPPORT_ID && node.fillToTerrain !== true) continue
+      if (
+        node.supportSlabId !== GROUND_SUPPORT_ID &&
+        node.fillToTerrain !== true &&
+        !affected.some(
+          (plate) => plate.parentId === node.parentId && wallOverlapsPolygon(node, plate.polygon),
+        )
+      )
+        continue
       if (!isGrade(resolveLevelId(node, nodes))) continue
       markDirty(node.id)
       continue
@@ -400,22 +610,8 @@ export function markCoveringDependentsBelow(
   }
 }
 
-/**
- * Mark all floor items and walls that may be affected by a slab change as dirty.
- */
-function markNodesOverlappingSlab(
-  slab: SlabNode,
-  nodes: Record<string, AnyNode>,
-  markDirty: (id: AnyNodeId) => void,
-) {
-  if (slab.polygon.length < 3) return
+function renderableSlabPolygon(slab: SlabNode, nodes: Record<string, AnyNode>) {
   const slabLevelId = resolveLevelId(slab, nodes)
-
-  // Walls AND floor-placed nodes follow the slab's RENDERED footprint
-  // (band-adopted edges reach the wall's outer face), so the dirty gate
-  // must test the same polygon the support queries re-evaluate — a stored
-  // polygon that stops short of the wall body would otherwise never
-  // re-elevate nodes sitting over the adopted band.
   const levelWalls: WallNode[] = []
   const siblingSlabs: SlabNode[] = []
   for (const node of Object.values(nodes)) {
@@ -429,9 +625,33 @@ function markNodesOverlappingSlab(
       siblingSlabs.push(node as SlabNode)
     }
   }
-  const renderedPolygon = getRenderableSlabPolygon(slab, { walls: levelWalls, siblingSlabs })
+  return getRenderableSlabPolygon(slab, { walls: levelWalls, siblingSlabs })
+}
 
-  for (const node of Object.values(nodes)) {
+/**
+ * Mark all floor items and walls that may be affected by a slab change as dirty.
+ */
+function markNodesOverlappingSlab(
+  slab: SlabNode,
+  nodes: Record<string, AnyNode>,
+  markDirty: (id: AnyNodeId) => void,
+  contextNodes = nodes,
+) {
+  if (slab.polygon.length < 3) return
+  const slabLevelId = resolveLevelId(slab, contextNodes)
+  const renderedPolygon = renderableSlabPolygon(slab, contextNodes)
+
+  markNodesOverlappingPolygon(slabLevelId, renderedPolygon, nodes, markDirty)
+}
+
+function markNodesOverlappingPolygon(
+  slabLevelId: string,
+  renderedPolygon: [number, number][],
+  nodes: Record<string, AnyNode>,
+  markDirty: (id: AnyNodeId) => void,
+  candidates: Iterable<AnyNode> = Object.values(nodes),
+) {
+  for (const node of candidates) {
     if (node.type === 'wall') {
       const wall = node as WallNode
       if (resolveLevelId(node, nodes) !== slabLevelId) continue
@@ -442,6 +662,7 @@ function markNodesOverlappingSlab(
             end: wall.end,
             curveOffset: wall.curveOffset ?? 0,
             thickness: wall.thickness,
+            justification: wall.justification,
           },
           renderedPolygon,
         )
@@ -480,4 +701,44 @@ function markNodesOverlappingSlab(
       }
     }
   }
+}
+
+type SlabBoundaryContext = {
+  walls: WallNode[]
+  slabs: SlabNode[]
+  consumers: AnyNode[]
+  polygons: Map<string, [number, number][]>
+}
+
+function slabBoundaryContext(nodes: Record<string, AnyNode>, levels: Set<string>) {
+  const contexts = new Map<string, SlabBoundaryContext>()
+  for (const id in nodes) {
+    if (!Object.hasOwn(nodes, id)) continue
+    const node = nodes[id]!
+    const floorPlaced = nodeRegistry.get(node.type)?.capabilities?.floorPlaced
+    if (node.type !== 'wall' && node.type !== 'slab' && !floorPlaced) continue
+    const levelId = resolveLevelId(node, nodes)
+    if (!levels.has(levelId)) continue
+    let context = contexts.get(levelId)
+    if (!context) {
+      context = { walls: [], slabs: [], consumers: [], polygons: new Map() }
+      contexts.set(levelId, context)
+    }
+    if (node.type === 'wall') context.walls.push(node)
+    if (node.type === 'slab') context.slabs.push(node)
+    if (node.type === 'wall' || floorPlaced) context.consumers.push(node)
+  }
+  return contexts
+}
+
+function cachedSlabPolygon(slab: SlabNode, context: SlabBoundaryContext) {
+  let polygon = context.polygons.get(slab.id)
+  if (!polygon) {
+    polygon = getRenderableSlabPolygon(slab, {
+      walls: context.walls,
+      siblingSlabs: context.slabs.filter((sibling) => sibling.id !== slab.id),
+    })
+    context.polygons.set(slab.id, polygon)
+  }
+  return polygon
 }

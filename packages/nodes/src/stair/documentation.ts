@@ -3,21 +3,23 @@ import {
   type FloorplanPoint,
   type GeometryContext,
   type Point2D,
+  resolveStairArcDimensions,
   resolveStairTotalRise,
+  resolveStairWinder,
   type StairNode,
   useScene,
 } from '@pascal-app/core'
-import type {
-  FloorplanStairArrowEntry,
-  FloorplanStairEntry,
-  FloorplanStairSegmentEntry,
-} from '@pascal-app/editor'
 import { floorplanGeometryMetadata, readFloorplanContext } from '@pascal-app/editor'
 import {
   type ConstructionLengthProfile,
   type ConstructionMetricNotation,
   formatConstructionLength,
 } from '../shared/construction-length'
+import type {
+  FloorplanStairArrowEntry,
+  FloorplanStairEntry,
+  FloorplanStairSegmentEntry,
+} from './plan-entry'
 
 const ANNOTATION_OFFSET = 0.28
 const ANNOTATION_FONT_SIZE = 0.125
@@ -126,6 +128,20 @@ function buildStraightDocumentation(
   let railNotePlaced = false
   for (const segmentEntry of entry.segments) {
     if (segmentEntry.segment.segmentType !== 'stair') continue
+    if (segmentEntry.segment.winder) {
+      const segment = segmentEntry.segment,
+        layout = resolveStairWinder(segment)!
+      const anchor = segmentEntry.polygon[0]!
+      geometries.push(
+        annotationText(
+          { x: anchor.x + 0.18, y: anchor.y + 0.18 },
+          `${segment.stepCount} R @ ${formatConstructionLength(segment.height / segment.stepCount, unit, profile, { metricNotation })} · WINDER T ${formatConstructionLength(layout.going, unit, profile, { metricNotation })} · CLR W ${formatConstructionLength(segment.width, unit, profile, { metricNotation })}`,
+          ANNOTATION_FONT_SIZE,
+          stroke,
+        ),
+      )
+      continue
+    }
     const frame = segmentFrame(segmentEntry)
     if (!frame) continue
     const segment = segmentEntry.segment
@@ -173,16 +189,21 @@ function buildCurvedDocumentation(
   metricNotation: ConstructionMetricNotation,
   stroke: string,
 ): FloorplanGeometry[] {
-  const stairType = stair.stairType === 'spiral' ? 'spiral' : 'curved'
-  const stepCount = Math.max(stairType === 'spiral' ? 6 : 4, Math.round(stair.stepCount))
-  const sweep = normalizedSweep(stair)
+  const layout = resolveStairArcDimensions(
+    stair,
+    resolveStairTotalRise(stair, useScene.getState().nodes),
+  )
+  const {
+    stepCount,
+    sweepAngle: sweep,
+    innerRadius,
+    outerRadius,
+    walkingRadius,
+    riserHeight,
+    going: treadDepth,
+  } = layout
   const startAngle = -stair.rotation - sweep / 2
   const endAngle = startAngle + sweep
-  const innerRadius = Math.max(stairType === 'spiral' ? 0.05 : 0.2, stair.innerRadius)
-  const outerRadius = innerRadius + stair.width
-  const walkingRadius = innerRadius + stair.width / 2
-  const riserHeight = resolveStairTotalRise(stair, useScene.getState().nodes) / stepCount
-  const treadDepth = (Math.abs(sweep) * walkingRadius) / stepCount
   const center = { x: stair.position[0], y: stair.position[2] }
   const noteAngle = (startAngle + endAngle) / 2
   const notePoint = arcPoint(center, outerRadius + ANNOTATION_OFFSET, noteAngle)
@@ -192,7 +213,7 @@ function buildCurvedDocumentation(
   const geometries: FloorplanGeometry[] = [
     annotationText(
       notePoint,
-      `${stepCount} R @ ${formatConstructionLength(riserHeight, unit, profile, { metricNotation })} · T(CL) ${formatConstructionLength(treadDepth, unit, profile, { metricNotation })} · CLR W ${formatConstructionLength(stair.width, unit, profile, { metricNotation })}`,
+      `${stepCount} R @ ${formatConstructionLength(riserHeight, unit, profile, { metricNotation })} · T(CL) ${formatConstructionLength(treadDepth, unit, profile, { metricNotation })} · CLR W ${formatConstructionLength(layout.width, unit, profile, { metricNotation })}`,
       ANNOTATION_FONT_SIZE,
       stroke,
     ),
@@ -308,13 +329,6 @@ function segmentFrame(segmentEntry: FloorplanStairSegmentEntry) {
     leftMid: interpolate(backLeft, frontLeft, 0.5),
     rightMid: interpolate(backRight, frontRight, 0.5),
   }
-}
-
-function normalizedSweep(stair: StairNode): number {
-  const defaultSweep = stair.stairType === 'spiral' ? Math.PI * 2 : Math.PI / 2
-  const sweep = stair.sweepAngle ?? defaultSweep
-  if (Math.abs(sweep) < Math.PI * 2) return sweep
-  return Math.sign(sweep || 1) * (Math.PI * 2 - 0.001)
 }
 
 function arcPoint(center: Point2D, radius: number, angle: number): Point2D {

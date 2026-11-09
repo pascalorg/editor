@@ -124,6 +124,29 @@ describe('cabinet continuous placement', () => {
     )
   })
 
+  test('carries the wall coordinate to the next straight segment', () => {
+    const wallAnchor: StretchAnchor = {
+      ...ANCHOR,
+      snappedToWall: true,
+      wallId: 'wall_continuous' as StretchAnchor['wallId'],
+      wallLocalX: 1,
+    }
+    const stretch = planCabinetContinuousStretch({
+      anchor: wallAnchor,
+      previewWidth: 0.6,
+      rawPlanPosition: [1.2, 0, 0],
+    })
+    const continuation = createCabinetContinuousContinuation({
+      anchor: wallAnchor,
+      previewDepth: 0.58,
+      previewWidth: 0.6,
+      stretch,
+    })
+
+    expect(continuation.straightAnchor.wallId).toBe(wallAnchor.wallId)
+    expect(continuation.straightAnchor.wallLocalX).toBeCloseTo(2.5)
+  })
+
   test('prefers the L turn when the cursor moves more laterally than forward', () => {
     const stretch = planCabinetContinuousStretch({
       anchor: ANCHOR,

@@ -1,5 +1,5 @@
+import type { LeanToSlotId } from '@pascal-app/core'
 import { createSlotPaintCapability, previewGeometrySlot } from '../shared/slot-paint'
-import type { LeanToSlotId } from './slots'
 
 const SLOT_IDS = new Set<LeanToSlotId>([
   'flashing',

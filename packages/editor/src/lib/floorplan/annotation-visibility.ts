@@ -9,6 +9,8 @@ export type FloorplanAnnotationCategory =
   | 'openingMarks'
   | 'structuralGrids'
   | 'roomLabels'
+  | 'roomDetails'
+  | 'roofPlan'
   | 'stairAnnotations'
 
 export type FloorplanAnnotationVisibility = Record<FloorplanAnnotationCategory, boolean>
@@ -21,6 +23,8 @@ export const DEFAULT_FLOORPLAN_ANNOTATION_VISIBILITY: FloorplanAnnotationVisibil
   openingMarks: true,
   structuralGrids: true,
   roomLabels: true,
+  roomDetails: true,
+  roofPlan: false,
   stairAnnotations: true,
 }
 
@@ -66,6 +70,14 @@ export function normalizeFloorplanAnnotationVisibility(
       typeof persisted.roomLabels === 'boolean'
         ? persisted.roomLabels
         : DEFAULT_FLOORPLAN_ANNOTATION_VISIBILITY.roomLabels,
+    roomDetails:
+      typeof persisted.roomDetails === 'boolean'
+        ? persisted.roomDetails
+        : DEFAULT_FLOORPLAN_ANNOTATION_VISIBILITY.roomDetails,
+    roofPlan:
+      typeof persisted.roofPlan === 'boolean'
+        ? persisted.roofPlan
+        : DEFAULT_FLOORPLAN_ANNOTATION_VISIBILITY.roofPlan,
     stairAnnotations:
       typeof persisted.stairAnnotations === 'boolean'
         ? persisted.stairAnnotations
@@ -127,6 +139,11 @@ function annotationCategoryForRole(role: FloorplanAnnotationRole): FloorplanAnno
       return 'structuralGrids'
     case 'room-label':
       return 'roomLabels'
+    case 'room-detail':
+      return 'roomDetails'
+    case 'roof-plan':
+    case 'roof-pitch':
+      return 'roofPlan'
     case 'stair-annotation':
       return 'stairAnnotations'
   }

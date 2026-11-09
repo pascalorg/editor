@@ -11,6 +11,7 @@ import {
   useScene,
 } from '@pascal-app/core'
 import {
+  copyCollectionIds,
   DragBoundingBox,
   EDITOR_LAYER,
   isAlignmentGuideActive,
@@ -202,7 +203,13 @@ export const MoveLiquidLineTool: React.FC<{ node: AnyNode }> = ({ node }) => {
           metadata: stripPlacementMetadataFlags(node.metadata),
           visible: true,
         })
-        useScene.getState().createNode(created as AnyNode, node.parentId as AnyNodeId)
+        useScene.getState().createNodes([
+          {
+            node: created as AnyNode,
+            parentId: node.parentId as AnyNodeId,
+            collectionIds: copyCollectionIds(node),
+          },
+        ])
         selectId = created.id as AnyNodeId
       } else {
         useScene.getState().updateNode(nodeId, { path: finalPath } as Partial<AnyNode>)

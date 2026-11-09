@@ -1,5 +1,5 @@
 import { Icon as IconifyIcon } from '@iconify/react'
-import { type AnyNodeId, nodeRegistry, useScene } from '@pascal-app/core'
+import { type AnyNodeId, nodeRegistry, useScene, usePascalI18n} from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import Image from 'next/image'
 import { memo, useCallback, useEffect, useState, useSyncExternalStore } from 'react'
@@ -10,12 +10,12 @@ import { InlineRenameInput } from './inline-rename-input'
 import {
   focusTreeNode,
   handleTreeSelection,
-  routeTreeSelectionToNode,
   TreeNode,
   TreeNodeWrapper,
 } from './tree-node'
 import { TreeNodeActions } from './tree-node-actions'
 import { resolveTreeChildIds, treeContainsDescendant } from './tree-structure'
+import { nodeLabelDescriptor } from '../../../../../i18n/node-messages'
 
 interface RegistryTreeNodeProps {
   nodeId: AnyNodeId
@@ -35,6 +35,7 @@ export const RegistryTreeNode = memo(function RegistryTreeNode({
   depth,
   isLast,
 }: RegistryTreeNodeProps) {
+  const i18n = usePascalI18n()
   const [isEditing, setIsEditing] = useState(false)
   const [expanded, setExpanded] = useState(true)
   const isVisible = useScene((s) => s.nodes[nodeId]?.visible !== false)
@@ -73,7 +74,11 @@ export const RegistryTreeNode = memo(function RegistryTreeNode({
     )
   const snapTarget = resolveNodeSnapTarget(node)
   const defaultName =
-    node ? tree?.label?.(node, useScene.getState().nodes) || node.name || presentation?.label || 'Node' : 'Node'
+    (node &&
+      (tree?.label?.(node, useScene.getState().nodes) ||
+        node.name ||
+        (presentation?.label && i18n._(nodeLabelDescriptor(node.type, presentation.label))))) ||
+    i18n._({ id: 'editor.layers.defaultName.node', message: 'Node' })
   const hasChildren = children.length > 0 || hasHostChildren
 
   useEffect(() => {
@@ -99,9 +104,8 @@ export const RegistryTreeNode = memo(function RegistryTreeNode({
         useViewer.getState().selection.selectedIds,
         setSelection,
       )
-      routeTreeSelectionToNode(node)
     },
-    [node, nodeId, setSelection],
+    [nodeId, setSelection],
   )
 
   return (

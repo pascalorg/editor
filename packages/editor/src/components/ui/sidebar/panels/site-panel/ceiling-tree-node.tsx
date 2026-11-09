@@ -1,13 +1,14 @@
-import { type AnyNodeId, type CeilingNode, useScene } from '@pascal-app/core'
+import { type AnyNodeId, type CeilingNode, useScene, usePascalI18n} from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import Image from 'next/image'
 import { memo, useCallback, useEffect, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
+import { startCeilingEditFromTreeSelection } from './../../../../../lib/ceiling-edit-session'
 import { formatAreaLabel } from './../../../../../lib/measurements'
-import useEditor from './../../../../../store/use-editor'
 import { InlineRenameInput } from './inline-rename-input'
 import { focusTreeNode, handleTreeSelection, TreeNode, TreeNodeWrapper } from './tree-node'
 import { TreeNodeActions } from './tree-node-actions'
+import { ceilingDefaultName } from './default-names'
 
 interface CeilingTreeNodeProps {
   nodeId: AnyNodeId
@@ -20,6 +21,7 @@ export const CeilingTreeNode = memo(function CeilingTreeNode({
   depth,
   isLast,
 }: CeilingTreeNodeProps) {
+  const i18n = usePascalI18n()
   const [expanded, setExpanded] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
   const isVisible = useScene((s) => s.nodes[nodeId as AnyNodeId]?.visible !== false)
@@ -63,9 +65,9 @@ export const CeilingTreeNode = memo(function CeilingTreeNode({
         useViewer.getState().selection.selectedIds,
         setSelection,
       )
-      if (!handled && useEditor.getState().phase === 'furnish') {
-        useEditor.getState().setPhase('structure')
-      }
+      if (handled) return
+      // Selecting a ceiling in the scene graph opens its Edit ceiling session.
+      startCeilingEditFromTreeSelection(nodeId)
     },
     [nodeId, setSelection],
   )
@@ -77,7 +79,7 @@ export const CeilingTreeNode = memo(function CeilingTreeNode({
   const handleStartEditing = useCallback(() => setIsEditing(true), [])
   const handleStopEditing = useCallback(() => setIsEditing(false), [])
 
-  const defaultName = `Ceiling (${formatAreaLabel(calculatePolygonArea(polygon), unit)})`
+  const defaultName = ceilingDefaultName(i18n, formatAreaLabel(calculatePolygonArea(polygon), unit))
 
   return (
     <TreeNodeWrapper

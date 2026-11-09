@@ -1,5 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { type AnyNode, CeilingNode, SlabNode, WallNode, ZoneNode } from '../schema'
+import { floorStepFixture } from '../systems/slab/__fixtures__/floor-step'
+import { reconcileStructureOnLoad } from '../utils/reconcile-structure-on-load'
 import { detectSpacesForLevel } from './space-detection'
 import { deriveZoneQuantityReport } from './zone-quantities'
 
@@ -218,7 +220,7 @@ describe('deriveZoneQuantityReport', () => {
     })
   })
 
-  test('uses the closed zone boundary when small wall-end seams prevent loop detection', () => {
+  test('closes small wall-end seams into the room boundary', () => {
     const zone = ZoneNode.parse({
       id: 'zone_seamed',
       name: 'Room with modeling seams',
@@ -578,4 +580,18 @@ describe('deriveZoneQuantityReport', () => {
     expect(report.volume.status).toBe('available')
     if (report.volume.status === 'available') expect(report.volume.value).toBeCloseTo(113.75)
   })
+})
+
+test('base and room plates prove the clear floor at the room elevation', () => {
+  const source = floorStepFixture()
+  source.nodes[source.zones[0]!.id] = { ...source.zones[0]!, floor: { elevation: 0.55 } }
+  const { nodes } = reconcileStructureOnLoad(source.nodes)
+  for (const original of source.zones) {
+    const zone = nodes[original.id] as ZoneNode
+    const report = deriveZoneQuantityReport(zone, nodes)
+    expect(report.floorSurface.status).toBe('available')
+    if (report.floorSurface.status === 'available')
+      expect(report.floorSurface.value).toBeCloseTo(3.8 * 3.8)
+    expect(report.volume.status).toBe('available')
+  }
 })

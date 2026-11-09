@@ -8,7 +8,9 @@ export interface PascalPaths {
   plugins: string
   run: string
   logs: string
+  tmp: string
   state: string
+  mcpState: string
   currentRuntime: string
   pluginLock: string
   database: string
@@ -25,7 +27,9 @@ export function resolvePascalPaths(environment: NodeJS.ProcessEnv = process.env)
     plugins: path.join(root, 'plugins'),
     run: path.join(root, 'run'),
     logs: path.join(root, 'logs'),
+    tmp: path.join(root, 'tmp'),
     state: path.join(root, 'run/editor.json'),
+    mcpState: path.join(root, 'run/mcp.json'),
     currentRuntime: path.join(root, 'run/current-runtime.json'),
     pluginLock: path.join(root, 'pascal.plugins.lock'),
     database: path.join(root, 'data/pascal.db'),

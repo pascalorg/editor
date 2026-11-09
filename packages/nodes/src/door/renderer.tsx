@@ -5,6 +5,7 @@ import { useNodeEvents } from '@pascal-app/viewer'
 import { useLayoutEffect, useRef } from 'react'
 import { type Mesh, MeshBasicMaterial } from 'three'
 import { RoofFaceHostFrame } from '../shared/roof-face-host'
+import { ScriptedOpeningModel } from '../shared/scripted-opening'
 
 const doorHitboxMaterial = new MeshBasicMaterial({ visible: false })
 
@@ -34,6 +35,7 @@ export const DoorRenderer = ({ node }: { node: DoorNode }) => {
       {...(isTransient ? {} : handlers)}
     >
       <boxGeometry args={[0, 0, 0]} />
+      {node.source && <ScriptedOpeningModel node={node} />}
     </mesh>
   )
 

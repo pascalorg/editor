@@ -6,25 +6,34 @@ import type {
   RoofSegmentNode,
   WallNode,
 } from '@pascal-app/core'
+import { doorSlots, getDoorOpeningSize } from '@pascal-app/core'
+import { NEW_DOOR_FRAME_THICKNESS } from '@pascal-app/core/building'
 import type { FloorplanNodeExtension } from '@pascal-app/editor'
+import { curtainOpeningResizeMax } from '../shared/curtain-opening-limits'
+import { doorBatchable } from '../shared/node-batch/batchable'
 import {
   buildDoorFloorplanSchedule,
   computeDoorFloorplanLevelData,
 } from '../shared/opening-documentation'
 import { publishOpeningResizeGuides } from '../shared/opening-guides-runtime'
+import { createOpeningPropertyPreview } from '../shared/opening-property-preview'
+import { openingPropertyPreviewHost } from '../shared/opening-property-preview-host'
 import { readRoofFaceHeightMax, readRoofFaceWidthMax } from '../shared/roof-opening-host'
 import { buildRoofWallOpeningCut } from '../shared/roof-wall-opening-cut'
+import { scriptedOpeningHandles } from '../shared/scripted-opening-handles'
 import { readHostWallCeiling, readHostWallCeilingMaxWidth } from '../shared/wall-opening-ceiling'
+import { openingSeenFromOutside } from '../wall/exterior'
 import { wallFloorplanSiblingOverrides } from '../wall/floorplan-overrides'
 import { buildDoorContextualDimensions } from './contextual-dimensions'
 import { scaleHandleHeight } from './door-math'
 import { buildDoorFloorplan } from './floorplan'
 import { doorWidthAffordance } from './floorplan-affordances'
 import { doorFloorplanMoveTarget } from './floorplan-move'
+import { doorMechanism } from './mechanism'
 import { doorPaint } from './paint'
 import { doorParametrics } from './parametrics'
+import { DOOR_PLACEMENT_HINTS } from './placement'
 import { DoorNode } from './schema'
-import { doorSlots } from './slots'
 
 const SIDE_HANDLE_OFFSET = 0.24
 const HEIGHT_HANDLE_OFFSET = 0.24
@@ -58,35 +67,24 @@ function doorWidthHandle(side: 'left' | 'right'): HandleDescriptor<DoorNodeType>
       // Roof-hosted doors clamp against the face profile.
       const roofMax = readRoofFaceWidthMax(n, scene, sign)
       if (roofMax !== null) return Math.max(MIN_DOOR_WIDTH, roofMax)
-
-      const length = readWallLength(n, scene)
-      // armX accounts for door rotation (rotation[1]=π flips the door
-      // so its visual right points toward LOWER wall-local S, not higher).
-      const armX = Math.cos(n.rotation[1])
-      const effectiveDirection = sign * armX
-
-      const anchorLeft = n.position[0] - n.width / 2
-      const anchorRight = n.position[0] + n.width / 2
-
-      let fixedEdgeS: number
-      let growSign: number
-      let maxWallBound: number
-
-      if (effectiveDirection > 0) {
-        fixedEdgeS = anchorLeft
-        growSign = 1
-        maxWallBound = length - anchorLeft
-      } else {
-        fixedEdgeS = anchorRight
-        growSign = -1
-        maxWallBound = anchorRight
-      }
-
-      const topY = n.position[1] + n.height / 2
-      const hostId = n.wallId || n.parentId
+      const curtainMax = curtainOpeningResizeMax(n, scene.nodes(), 'x', sign)
+      if (curtainMax !== undefined) return curtainMax
+      const lengthMax = readWallLength(n, scene) - (getDoorOpeningSize(n).width - n.width)
+      // rotation[1] = π flips the door, so its visual right edge moves toward lower wall-local S.
+      const growSign = sign * Math.cos(n.rotation[1]) > 0 ? 1 : -1
+      const fixedEdgeS = n.position[0] - (growSign * n.width) / 2
+      const topY = n.position[1] - n.height / 2 + getDoorOpeningSize(n).height
       return Math.max(
         MIN_DOOR_WIDTH,
-        readHostWallCeilingMaxWidth(hostId, scene as any, fixedEdgeS, growSign, topY, maxWallBound),
+        readHostWallCeilingMaxWidth(
+          n.wallId || n.parentId,
+          scene,
+          fixedEdgeS,
+          growSign,
+          topY,
+          lengthMax,
+          n,
+        ),
       )
     },
     currentValue: (n) => n.width,
@@ -113,7 +111,12 @@ function doorWidthHandle(side: 'left' | 'right'): HandleDescriptor<DoorNodeType>
     placement: {
       // door-local: +X axis lives along door's own X. Inner ride group
       // applies door.rotation, so we sit purely on door-local +X / -X.
-      position: (n) => [sign * (n.width / 2 + SIDE_HANDLE_OFFSET), 0, 0],
+      position: (n) => [
+        -getDoorOpeningSize(n).leafOffsetX +
+          sign * (getDoorOpeningSize(n).width / 2 + SIDE_HANDLE_OFFSET),
+        0,
+        0,
+      ],
       rotationY: () => (side === 'right' ? 0 : Math.PI),
     },
     portal: 'grandparent',
@@ -129,20 +132,15 @@ function doorHeightHandle(): HandleDescriptor<DoorNodeType> {
     max: (n, scene) => {
       const roofMax = readRoofFaceHeightMax(n, scene, 1)
       if (roofMax !== null) return Math.max(MIN_DOOR_HEIGHT, roofMax)
+      const curtainMax = curtainOpeningResizeMax(n, scene.nodes(), 'y', 1)
+      if (curtainMax !== undefined) return curtainMax
       const bottom = n.position[1] - n.height / 2
-      const hostId = n.wallId || n.parentId
-
-      // A sloped wall's ceiling varies across the door's width. To prevent corners
-      // poking out above the slope, the height limit must be the lowest ceiling
-      // point across the entire span of the door.
-      const leftS = n.position[0] - n.width / 2
-      const rightS = n.position[0] + n.width / 2
-      const wallHLeft = readHostWallCeiling(hostId, scene as any, leftS)
-      const wallHRight = readHostWallCeiling(hostId, scene as any, rightS)
-      const wallHCenter = readHostWallCeiling(hostId, scene as any, n.position[0])
-      const wallH = Math.min(wallHLeft, wallHRight, wallHCenter)
-
-      return Math.max(MIN_DOOR_HEIGHT, wallH - bottom)
+      return Math.max(
+        MIN_DOOR_HEIGHT,
+        readHostWallCeiling(n.wallId || n.parentId, scene, n) -
+          bottom -
+          (getDoorOpeningSize(n).height - n.height),
+      )
     },
     currentValue: (n) => n.height,
     onDrag: (node) => publishOpeningResizeGuides(node, true),
@@ -157,7 +155,7 @@ function doorHeightHandle(): HandleDescriptor<DoorNodeType> {
       }
     },
     placement: {
-      position: (n) => [0, n.height / 2 + HEIGHT_HANDLE_OFFSET, 0],
+      position: (n) => [0, getDoorOpeningSize(n).height - n.height / 2 + HEIGHT_HANDLE_OFFSET, 0],
     },
     portal: 'grandparent',
   }
@@ -181,11 +179,47 @@ function doorMoveHandle(): HandleDescriptor<DoorNodeType> {
   }
 }
 
+function doorRadiusHandle(index: 0 | 1): HandleDescriptor<DoorNodeType> {
+  const sign = index === 0 ? -1 : 1
+  return {
+    kind: 'corner-radius',
+    corner: [sign, 1],
+    width: (node) => node.width,
+    height: (node) => node.height,
+    currentValue: (node) =>
+      node.openingRadiusMode === 'individual'
+        ? (node.openingTopRadii[index] ?? 0)
+        : node.cornerRadius,
+    max: (node) => Math.min(node.width / 2, node.height),
+    apply: (node, radius, _scene, modifiers) => {
+      if (!modifiers.shiftKey) {
+        return { openingShape: 'rounded', openingRadiusMode: 'all', cornerRadius: radius }
+      }
+      const radii =
+        node.openingRadiusMode === 'individual'
+          ? [...node.openingTopRadii]
+          : [node.cornerRadius, node.cornerRadius]
+      radii[index] = radius
+      return {
+        openingShape: 'rounded',
+        openingRadiusMode: 'individual',
+        openingTopRadii: radii as [number, number],
+      }
+    },
+    createPreview: (node) =>
+      createOpeningPropertyPreview<DoorNodeType>(node.id, openingPropertyPreviewHost),
+    visible: (node) => node.openingShape !== 'arch',
+    portal: 'grandparent',
+  }
+}
+
 const doorHandles: HandleDescriptor<DoorNodeType>[] = [
   doorMoveHandle(),
   doorWidthHandle('left'),
   doorWidthHandle('right'),
   doorHeightHandle(),
+  doorRadiusHandle(0),
+  doorRadiusHandle(1),
 ]
 
 /**
@@ -218,6 +252,8 @@ export const doorDefinition: NodeDefinition<typeof DoorNode> = {
     'pascal:editor/floorplan': {
       contextualDimensions: buildDoorContextualDimensions,
       schedule: buildDoorFloorplanSchedule,
+      // Swap hinge / swing side from the action bar, in 2D and 3D.
+      actionMenu: { actions: () => import('./actions') },
     } satisfies FloorplanNodeExtension<DoorNodeType>,
   },
   surfaceRole: 'joinery',
@@ -226,12 +262,32 @@ export const doorDefinition: NodeDefinition<typeof DoorNode> = {
   // full default shape — door has 40+ fields, listing them inline would
   // duplicate the schema. Parse a minimal stub, drop id/type, return rest.
   defaults: () => {
-    const stub = DoorNode.parse({ id: 'door_default' as never, type: 'door' })
+    const stub = DoorNode.parse({
+      id: 'door_default' as never,
+      type: 'door',
+      frameThickness: NEW_DOOR_FRAME_THICKNESS,
+      casingFaceA: true,
+      casingFaceB: true,
+    })
     const { id: _id, type: _type, ...rest } = stub
     return rest
   },
 
   capabilities: {
+    reveal: { phase: 'openings', style: 'cut' },
+    exterior: openingSeenFromOutside,
+    revealOnEdit: [
+      'position',
+      'width',
+      'height',
+      'sidelightLeft',
+      'sidelightRight',
+      'transomHeight',
+      'openingShape',
+      'openingKind',
+      'doorType',
+    ],
+    batchable: doorBatchable,
     selectable: { hitVolume: 'bbox' },
     duplicable: true,
     deletable: true,
@@ -256,11 +312,16 @@ export const doorDefinition: NodeDefinition<typeof DoorNode> = {
     // each mesh with its `userData.slotId`; paint writes `node.slots`.
     slots: () => doorSlots(),
     paint: doorPaint,
+    mechanism: doorMechanism,
   },
 
   parametrics: doorParametrics,
-  handles: doorHandles,
+  handles: (node) =>
+    node.source
+      ? [doorMoveHandle(), ...scriptedOpeningHandles(node, doorWidthHandle, doorHeightHandle)]
+      : doorHandles,
 
+  rendersChildren: false,
   renderer: {
     kind: 'parametric',
     module: () => import('./renderer'),
@@ -308,6 +369,7 @@ export const doorDefinition: NodeDefinition<typeof DoorNode> = {
 
   toolHints: [
     { key: 'Left click', label: 'Place door on wall' },
+    ...DOOR_PLACEMENT_HINTS,
     { key: 'R', label: 'Flip side' },
     { key: 'Alt', label: 'Force place' },
     { key: 'Esc', label: 'Cancel' },

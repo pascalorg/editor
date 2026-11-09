@@ -3,15 +3,16 @@
 import {
   type AnyNode,
   type AnyNodeId,
-  BoxVentNode as BoxVentSchema,
   getActiveRoofHeight,
   type RoofSegmentNode,
   useLiveNodeOverrides,
+  usePascalI18n,
   useScene,
 } from '@pascal-app/core'
 import {
   ActionButton,
   ActionGroup,
+  duplicateNodeAndPickUp,
   PanelSection,
   PanelWrapper,
   SegmentedControl,
@@ -37,6 +38,7 @@ import type { BoxVentNode } from './schema'
  * ghost commits; on Esc it cancels and the original mesh is restored.
  */
 export default function BoxVentPanel() {
+  const i18n = usePascalI18n()
   const selectedId = useViewer((s) => s.selection.selectedIds[0])
   const setSelection = useViewer((s) => s.setSelection)
   const updateNode = useScene((s) => s.updateNode)
@@ -110,33 +112,8 @@ export default function BoxVentPanel() {
   }, [node, setMovingNode, setSelection])
 
   const handleDuplicate = useCallback(() => {
-    if (!node) return
-    triggerSFX('sfx:item-pick')
-    const parentId = node.roofSegmentId as AnyNodeId | undefined
-    if (!parentId) return
-
-    // Clone via the schema parser so the new node gets a fresh ID and
-    // valid defaults. Keep position/rotation/dimensions identical to the
-    // source — the user will drag it to its real destination next.
-    const state = useScene.getState()
-    const meta =
-      typeof node.metadata === 'object' && node.metadata !== null
-        ? (node.metadata as Record<string, unknown>)
-        : {}
-    const cloneInput = {
-      ...node,
-      id: undefined,
-      metadata: { ...meta, isNew: true },
-    } as Record<string, unknown>
-    // Use the schema parser so the new node gets a fresh ID and stays
-    // in sync with the placement-tool defaults.
-    const cloned = BoxVentSchema.parse(cloneInput) as BoxVentNode
-
-    state.createNode(cloned, parentId)
-    state.dirtyNodes.add(parentId)
-    setMovingNode(cloned as never)
-    setSelection({ selectedIds: [] })
-  }, [node, setMovingNode, setSelection])
+    if (node) duplicateNodeAndPickUp(node)
+  }, [node])
 
   const handleDelete = useCallback(() => {
     if (!(selectedId && node)) return
@@ -167,24 +144,24 @@ export default function BoxVentPanel() {
       icon="/icons/roof.webp"
       onBack={node.roofSegmentId ? handleBack : undefined}
       onClose={handleClose}
-      title={node.name || 'Box Vent'}
+      title={node.name || i18n._({ id: 'node.boxVent.panel.boxVent', message: 'Box Vent' })}
       width={300}
     >
-      <PanelSection title="Style">
+      <PanelSection title={i18n._({ id: 'node.boxVent.panel.style', message: 'Style' })}>
         <SegmentedControl
           onChange={(v) => handleUpdate({ style: v as BoxVentNode['style'] })}
           options={[
-            { label: 'Box', value: 'box' },
-            { label: 'Cap', value: 'cap' },
-            { label: 'Dome', value: 'dome' },
+            { label: i18n._({ id: 'node.boxVent.panel.box', message: 'Box' }), value: 'box' },
+            { label: i18n._({ id: 'node.boxVent.panel.cap', message: 'Cap' }), value: 'cap' },
+            { label: i18n._({ id: 'node.boxVent.panel.dome', message: 'Dome' }), value: 'dome' },
           ]}
           value={node.style ?? 'cap'}
         />
       </PanelSection>
 
-      <PanelSection title="Dimensions">
+      <PanelSection title={i18n._({ id: 'node.boxVent.panel.dimensions', message: 'Dimensions' })}>
         <SliderControl
-          label="Width"
+          label={i18n._({ id: 'node.boxVent.panel.width', message: 'Width' })}
           max={1000}
           min={0.15}
           onChange={(v) => previewProp({ width: v })}
@@ -193,10 +170,10 @@ export default function BoxVentPanel() {
           restoreOnCommit={false}
           step={0.01}
           unit="m"
-          value={Math.round(node.width * 100) / 100}
+          value={node.width}
         />
         <SliderControl
-          label="Depth"
+          label={i18n._({ id: 'node.boxVent.panel.depth', message: 'Depth' })}
           max={1000}
           min={0.15}
           onChange={(v) => previewProp({ depth: v })}
@@ -205,10 +182,10 @@ export default function BoxVentPanel() {
           restoreOnCommit={false}
           step={0.01}
           unit="m"
-          value={Math.round(node.depth * 100) / 100}
+          value={node.depth}
         />
         <SliderControl
-          label="Height"
+          label={i18n._({ id: 'node.boxVent.panel.height', message: 'Height' })}
           max={1000}
           min={0.05}
           onChange={(v) => previewProp({ height: v })}
@@ -217,7 +194,7 @@ export default function BoxVentPanel() {
           restoreOnCommit={false}
           step={0.01}
           unit="m"
-          value={Math.round(node.height * 100) / 100}
+          value={node.height}
         />
         {/* Hood Overhang is `cap`-only — the dome shape rolls down to
             the body footprint without a flange skirt, and `box` doesn't
@@ -225,7 +202,7 @@ export default function BoxVentPanel() {
             flare further past the body. */}
         {node.style === 'cap' && (
           <SliderControl
-            label="Hood Overhang"
+            label={i18n._({ id: 'node.boxVent.panel.hoodOverhang', message: 'Hood Overhang' })}
             max={Math.max(0.02, node.width)}
             min={0}
             onChange={(v) => previewProp({ hoodOverhang: v })}
@@ -234,13 +211,13 @@ export default function BoxVentPanel() {
             restoreOnCommit={false}
             step={0.005}
             unit="m"
-            value={Math.round((node.hoodOverhang ?? 0) * 1000) / 1000}
+            value={node.hoodOverhang ?? 0}
           />
         )}
         {node.style === 'box' && (
           <>
             <SliderControl
-              label="Base Inset"
+              label={i18n._({ id: 'node.boxVent.panel.baseInset', message: 'Base Inset' })}
               max={Math.max(0.005, Math.min(node.width, node.depth) / 2 - 0.005)}
               min={0}
               onChange={(v) => previewProp({ baseInset: v })}
@@ -249,10 +226,10 @@ export default function BoxVentPanel() {
               restoreOnCommit={false}
               step={0.005}
               unit="m"
-              value={Math.round((node.baseInset ?? 0.06) * 1000) / 1000}
+              value={node.baseInset ?? 0.06}
             />
             <SliderControl
-              label="Base Height"
+              label={i18n._({ id: 'node.boxVent.panel.baseHeight', message: 'Base Height' })}
               max={Math.max(0.01, node.height - 0.005)}
               min={0.005}
               onChange={(v) => previewProp({ baseHeight: v })}
@@ -261,10 +238,10 @@ export default function BoxVentPanel() {
               restoreOnCommit={false}
               step={0.005}
               unit="m"
-              value={Math.round((node.baseHeight ?? 0.04) * 1000) / 1000}
+              value={node.baseHeight ?? 0.04}
             />
             <SliderControl
-              label="Corner Bevel"
+              label={i18n._({ id: 'node.boxVent.panel.cornerBevel', message: 'Corner Bevel' })}
               max={Math.max(
                 0,
                 Math.min(node.width, node.depth) / 2 - (node.baseInset ?? 0.06) - 0.001,
@@ -276,14 +253,14 @@ export default function BoxVentPanel() {
               restoreOnCommit={false}
               step={0.002}
               unit="m"
-              value={Math.round((node.cornerBevel ?? 0.012) * 1000) / 1000}
+              value={node.cornerBevel ?? 0.012}
             />
           </>
         )}
         {node.style === 'cap' && (
           <>
             <SliderControl
-              label="Cap Height"
+              label={i18n._({ id: 'node.boxVent.panel.capHeight', message: 'Cap Height' })}
               max={Math.max(0.02, node.height - 0.01)}
               min={0.01}
               onChange={(v) => previewProp({ capHeight: v })}
@@ -292,10 +269,10 @@ export default function BoxVentPanel() {
               restoreOnCommit={false}
               step={0.005}
               unit="m"
-              value={Math.round((node.capHeight ?? 0.07) * 1000) / 1000}
+              value={node.capHeight ?? 0.07}
             />
             <SliderControl
-              label="Gap Height"
+              label={i18n._({ id: 'node.boxVent.panel.gapHeight', message: 'Gap Height' })}
               max={Math.max(0, node.height - Math.max(0.01, node.capHeight ?? 0.07) - 0.005)}
               min={0}
               onChange={(v) => previewProp({ capGap: v })}
@@ -304,10 +281,10 @@ export default function BoxVentPanel() {
               restoreOnCommit={false}
               step={0.005}
               unit="m"
-              value={Math.round((node.capGap ?? 0) * 1000) / 1000}
+              value={node.capGap ?? 0}
             />
             <SliderControl
-              label="Top Taper"
+              label={i18n._({ id: 'node.boxVent.panel.topTaper', message: 'Top Taper' })}
               max={1}
               min={0}
               onChange={(v) => previewProp({ topTaper: v })}
@@ -323,7 +300,7 @@ export default function BoxVentPanel() {
         {node.style === 'dome' && (
           <>
             <SliderControl
-              label="Dome Curvature"
+              label={i18n._({ id: 'node.boxVent.panel.domeCurvature', message: 'Dome Curvature' })}
               max={1.5}
               min={0.3}
               onChange={(v) => previewProp({ domeCurvature: v })}
@@ -335,7 +312,7 @@ export default function BoxVentPanel() {
               value={Math.round((node.domeCurvature ?? 1.0) * 100) / 100}
             />
             <SliderControl
-              label="Base Flange"
+              label={i18n._({ id: 'node.boxVent.panel.baseFlange', message: 'Base Flange' })}
               max={0.2}
               min={0}
               onChange={(v) => previewProp({ hoodOverhang: v })}
@@ -344,13 +321,13 @@ export default function BoxVentPanel() {
               restoreOnCommit={false}
               step={0.005}
               unit="m"
-              value={Math.round((node.hoodOverhang ?? 0.04) * 1000) / 1000}
+              value={node.hoodOverhang ?? 0.04}
             />
           </>
         )}
       </PanelSection>
 
-      <PanelSection title="Position">
+      <PanelSection title={i18n._({ id: 'node.boxVent.panel.position', message: 'Position' })}>
         <SliderControl
           label="X"
           max={Math.round(((segment?.width ?? 10) / 2) * 100) / 100}
@@ -369,7 +346,7 @@ export default function BoxVentPanel() {
           restoreOnCommit={false}
           step={0.05}
           unit="m"
-          value={Math.round((node.position[0] ?? 0) * 100) / 100}
+          value={node.position[0] ?? 0}
         />
         <SliderControl
           label="Y"
@@ -392,7 +369,7 @@ export default function BoxVentPanel() {
           restoreOnCommit={false}
           step={0.05}
           unit="m"
-          value={Math.round((node.position[1] ?? 0) * 100) / 100}
+          value={node.position[1] ?? 0}
         />
         <SliderControl
           label="Z"
@@ -412,10 +389,10 @@ export default function BoxVentPanel() {
           restoreOnCommit={false}
           step={0.05}
           unit="m"
-          value={Math.round((node.position[2] ?? 0) * 100) / 100}
+          value={node.position[2] ?? 0}
         />
         <SliderControl
-          label="Rotation"
+          label={i18n._({ id: 'node.boxVent.panel.rotation', message: 'Rotation' })}
           max={180}
           min={-180}
           onChange={(deg) => previewProp({ rotation: (deg * Math.PI) / 180 })}
@@ -428,18 +405,22 @@ export default function BoxVentPanel() {
         />
       </PanelSection>
 
-      <PanelSection title="Actions">
+      <PanelSection title={i18n._({ id: 'node.boxVent.panel.actions', message: 'Actions' })}>
         <ActionGroup>
-          <ActionButton icon={<Move className="h-3.5 w-3.5" />} label="Move" onClick={handleMove} />
+          <ActionButton
+            icon={<Move className="h-3.5 w-3.5" />}
+            label={i18n._({ id: 'node.boxVent.panel.move', message: 'Move' })}
+            onClick={handleMove}
+          />
           <ActionButton
             icon={<Copy className="h-3.5 w-3.5" />}
-            label="Duplicate"
+            label={i18n._({ id: 'node.boxVent.panel.duplicate', message: 'Duplicate' })}
             onClick={handleDuplicate}
           />
           <ActionButton
             className="hover:bg-red-500/20"
-            icon={<Trash2 className="h-3.5 w-3.5 text-red-400" />}
-            label="Delete"
+            icon={<Trash2 className="h-3.5 w-3.5 text-red-600 dark:text-red-400" />}
+            label={i18n._({ id: 'node.boxVent.panel.delete', message: 'Delete' })}
             onClick={handleDelete}
           />
         </ActionGroup>

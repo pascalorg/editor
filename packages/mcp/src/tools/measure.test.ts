@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, test } from 'bun:test'
-import { Client } from '@modelcontextprotocol/sdk/client/index.js'
-import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import { Client } from '@modelcontextprotocol/client'
+import { InMemoryTransport, McpServer } from '@modelcontextprotocol/server'
 import { SlabNode, WallNode, ZoneNode } from '@pascal-app/core/schema'
 import { SceneBridge } from '../bridge/scene-bridge'
 import { registerMeasure } from './measure'
@@ -59,6 +58,7 @@ describe('measure', () => {
     const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]!.text)
     expect(parsed.distanceMeters).toBe(0)
     expect(parsed.areaSqMeters).toBeCloseTo(16, 5)
+    expect(parsed.areaUnits).toBe('square_meters')
   })
 
   test('subtracts slab holes without changing an un-holed slab area', async () => {

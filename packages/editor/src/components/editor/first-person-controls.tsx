@@ -18,16 +18,27 @@ import {
   getLevelDisplayName,
   getLevelElevations,
   getResolvedElevatorDoorStyle,
+  type InteractionSound,
+  itemPrompt,
+  nodeMechanism,
   openElevatorDoor,
+  operateItem,
   pointInPolygon2D,
   requestElevatorLevel,
   resolveElevatorDispatchTarget,
   resolveElevatorLevels,
   sceneRegistry,
+  toggleNodeMechanism,
   useInteractive,
   useScene,
 } from '@pascal-app/core'
 import {
+  operablePartFor,
+  operableParts,
+  type ProceduralItemNode,
+} from '@pascal-app/core/procedural-items'
+import {
+  applyWalkthroughCameraClipping,
   BVHEcctrl,
   type BVHEcctrlApi,
   CROUCH_CAPSULE,
@@ -35,11 +46,20 @@ import {
   CROUCH_FLOAT_HEIGHT,
   CROUCH_RUN_SPEED,
   CROUCH_WALK_SPEED,
+  createDroneInput,
+  DRONE_SLOW_MULTIPLIER,
+  type DroneLook,
   EYE_LERP_SPEED,
   type MovementInput,
+  openingSettled,
+  proceduralSettled,
   STAND_CAPSULE,
   STAND_CLEARANCE,
   STAND_FLOAT_HEIGHT,
+  seedDroneLook,
+  setSurfaceRaycastLayers,
+  stepDroneFlight,
+  turnFirstPersonLook,
   useViewer,
   WALKTHROUGH_FOV,
 } from '@pascal-app/viewer'
@@ -70,6 +90,7 @@ import {
   isOperationDoorType,
   toggleDoorOpenState,
 } from '../../lib/door-interaction'
+import { isTypingTarget } from '../../lib/typing-target'
 import {
   closeWindowOpenState,
   getDisplayedWindowValue,
@@ -78,7 +99,7 @@ import {
 } from '../../lib/window-interaction'
 import useEditor from '../../store/use-editor'
 import { useFirstPersonHud, type WalkthroughInteract } from '../../store/use-first-person-hud'
-import { WalkthroughHud } from '../walkthrough-hud'
+import { DroneHud, WalkthroughHud } from '../walkthrough-hud'
 import {
   buildFirstPersonColliderWorldFromRegistry,
   deriveFirstPersonSpawn,
@@ -86,14 +107,15 @@ import {
   type FirstPersonColliderWorld,
   type FirstPersonSpawn,
 } from './first-person/build-collider-world'
+import {
+  hasNativeLeaf,
+  mechanismHudInteract,
+  mechanismTargetIds,
+  nativeOpeningIds,
+  watchScriptedDoors,
+} from './first-person/mechanism-targets'
 
 const CAMERA_EYE_OFFSET = 0.45
-const LOOK_SENSITIVITY = 0.002
-// Drone mode: metres per second, and how hard Shift boosts it. The smoothing
-// constant is an exponential approach rate, not a linear acceleration.
-const DRONE_SPEED = 7
-const DRONE_RUN_MULTIPLIER = 3
-const DRONE_SMOOTHING = 12
 const CONTROLLER_CENTER_FROM_EYE = 0.85
 const DOOR_INTERACTION_DISTANCE = 2.5
 const DOOR_LEAF_INTERACTION_DEPTH = 0.08
@@ -148,14 +170,14 @@ function focusFirstPersonCanvas(canvas: HTMLCanvasElement) {
 
 const cameraOffset = new Vector3()
 const cameraEuler = new Euler(0, 0, 0, 'YXZ')
-const droneEuler = new Euler(0, 0, 0, 'YXZ')
-const droneForward = new Vector3()
-const droneRight = new Vector3()
-const droneDesiredVelocity = new Vector3()
+const droneInput = createDroneInput()
 const standClearanceRaycaster = new Raycaster()
 const standClearanceUp = new Vector3(0, 1, 0)
 const centerScreenPoint = new Vector2(0, 0)
 const doorInteractionRaycaster = new Raycaster()
+setSurfaceRaycastLayers(doorInteractionRaycaster.layers)
+const proceduralInteractionRaycaster = new Raycaster()
+setSurfaceRaycastLayers(proceduralInteractionRaycaster.layers)
 const doorLeafBox = new Box3()
 const doorLeafInverseMatrix = new Matrix4()
 const doorLeafLocalHit = new Vector3()
@@ -178,6 +200,7 @@ const elevatorColliderMaterial = new MeshBasicMaterial({ visible: false })
 const spawnWorldPosition = new Vector3()
 const spawnWorldEuler = new Euler(0, 0, 0, 'YXZ')
 const windowInteractionRaycaster = new Raycaster()
+setSurfaceRaycastLayers(windowInteractionRaycaster.layers)
 const hudBuildingLocalEyePosition = new Vector3()
 const hudWorldEyePosition = new Vector3()
 const hudLevelBounds = new Box3()
@@ -221,6 +244,20 @@ type FirstPersonInteractableTarget =
   | {
       id: AnyNodeId
       type: 'door' | 'window'
+    }
+  | {
+      id: AnyNodeId
+      type: 'item'
+    }
+  | {
+      id: AnyNodeId
+      partId?: string
+      kind?: 'hinge' | 'slide' | 'spin'
+      type: 'procedural'
+    }
+  | {
+      id: AnyNodeId
+      type: 'mechanism'
     }
   | {
       action: 'open-door' | 'request-level'
@@ -346,6 +383,34 @@ function resolveHudInteract(target: FirstPersonInteractableTarget | null): Walkt
   }
 
   const node = useScene.getState().nodes[target.id]
+  if (target.type === 'mechanism') return node ? mechanismHudInteract(node) : null
+  if (target.type === 'item') {
+    if (node?.type !== 'item' || !node.asset.interactive) return null
+    const { label, verb } = itemPrompt(
+      target.id,
+      node.name ?? node.asset.name,
+      node.asset.interactive,
+    )
+    return { label, verb }
+  }
+  if (target.type === 'procedural') {
+    if (node?.type !== 'procedural-item') return null
+    const procedural = node as ProceduralItemNode
+    const parts = operableParts(procedural.recipe)
+    if (parts.length === 0 && procedural.recipe.parts.some((part) => part.light)) {
+      const state = useInteractive.getState()
+      const isOn = state.procedural[target.id]?.lightsOn ?? state.lampDefault
+      return { label: procedural.name ?? 'Lights', verb: isOn ? 'turn off' : 'turn on' }
+    }
+    const part = target.partId ? parts.find((entry) => entry.id === target.partId) : undefined
+    const active = useInteractive.getState().procedural[target.id]?.parts
+    const isOn = part ? Boolean(active?.[part.id]) : parts.some((entry) => active?.[entry.id])
+    const kind = part?.kind ?? (parts.every((entry) => entry.kind === 'spin') ? 'spin' : 'hinge')
+    return {
+      label: part?.label ?? procedural.name ?? 'item',
+      verb: kind === 'spin' ? (isOn ? 'turn off' : 'turn on') : isOn ? 'close' : 'open',
+    }
+  }
   if (target.type === 'window') {
     if (node?.type !== 'window') return null
     const isOpen = getDisplayedWindowValue(target.id, node.operationState) > 0
@@ -357,6 +422,40 @@ function resolveHudInteract(target: FirstPersonInteractableTarget | null): Walkt
     ? getDisplayedDoorValue(target.id, 'operationState', node.operationState) > 0
     : getDisplayedDoorValue(target.id, 'swingAngle', node.swingAngle) > 0
   return { label: node.name || 'door', verb: isOpen ? 'close' : 'open' }
+}
+
+/** E plays what the viewer's callout plays for the same door, window or switch. */
+function playTargetSound(target: FirstPersonInteractableTarget) {
+  const verb = resolveHudInteract(target)?.verb
+  if (!verb || verb === 'press') return
+  const node = useScene.getState().nodes[target.id]
+  // A recipe's door or lid swings and claps shut, its drawer slides; both land on the motion's end.
+  if (target.type === 'procedural' && (verb === 'open' || verb === 'close')) {
+    if (verb === 'open') {
+      emitter.emit('interaction:sound', 'panel-open')
+      return
+    }
+    if (target.kind !== 'slide') emitter.emit('interaction:sound', 'panel-swing')
+    void proceduralSettled(target.id).then(() => emitter.emit('interaction:sound', 'panel-close'))
+    return
+  }
+  let sound: InteractionSound
+  if (verb !== 'open' && verb !== 'close')
+    sound = verb === 'turn on' || verb === 'play' ? 'switch-on' : 'switch-off'
+  else if (node?.type === 'door' && node.doorType?.startsWith('garage-')) sound = 'garage'
+  else if (node?.type === 'window') sound = verb === 'open' ? 'window-open' : 'window-close'
+  else sound = verb === 'open' ? 'door-open' : 'door-close'
+  // A built-in leaf or sash swings shut, then latches on the frame it lands.
+  if (
+    (sound === 'door-close' || sound === 'window-close') &&
+    (target.type === 'door' || target.type === 'window') &&
+    node
+  ) {
+    emitter.emit('interaction:sound', sound === 'door-close' ? 'door-swing' : 'window-swing')
+    void openingSettled(node).then(() => emitter.emit('interaction:sound', sound))
+    return
+  }
+  emitter.emit('interaction:sound', sound)
 }
 
 function resolveElevatorButtonTarget(object: Object3D): ElevatorButtonTarget | null {
@@ -413,7 +512,9 @@ function getInteractableTargetKey(target: FirstPersonInteractableTarget | null) 
   if (!target) return null
   return target.type === 'elevator'
     ? `${target.type}:${target.id}:${target.levelId}`
-    : `${target.type}:${target.id}`
+    : target.type === 'procedural'
+      ? `${target.type}:${target.id}:${target.partId ?? 'all'}`
+      : `${target.type}:${target.id}`
 }
 
 function isDynamicElevatorCollider(kind: ElevatorColliderKind) {
@@ -454,7 +555,7 @@ function createElevatorColliderMesh(
   ;(bvhGeometry as any).computeBoundsTree = computeBoundsTree
   ;(bvhGeometry as any).disposeBoundsTree = disposeBoundsTree
   bvhGeometry.computeBoundsTree?.({
-    maxLeafSize: 12,
+    targetLeafSize: 12,
     strategy: 0,
   } as never)
   bvhGeometry.computeBoundingBox()
@@ -666,17 +767,18 @@ export const FirstPersonControls = () => {
   const controllerRef = useRef<BVHEcctrlApi | null>(null)
   const movementInputRef = useRef<MovementInput>({ ...inactiveMovementInput })
   const hadPointerLockRef = useRef(false)
-  const yawRef = useRef(0)
-  const pitchRef = useRef(0)
+  const lookRef = useRef<DroneLook>({ yaw: 0, pitch: 0 })
   const interactableTargetRef = useRef<FirstPersonInteractableTarget | null>(null)
   const hudLabelFrameRef = useRef(HUD_LABEL_SAMPLE_FRAMES - 1)
   const crouchKeyRef = useRef(false)
   const droneAscendKeyRef = useRef(false)
+  const droneSlowKeyRef = useRef(false)
   const droneDescendKeyRef = useRef(false)
   const droneVelocityRef = useRef(new Vector3())
   const suspendRef = useRef(false)
   const eyeOffsetRef = useRef(CAMERA_EYE_OFFSET)
   const [crouched, setCrouched] = useState(false)
+  const captureShutterHold = useEditor((state) => state.captureShutterHold)
   const [isElevatorRideLocked, setIsElevatorRideLocked] = useState(false)
   const ridingElevatorRef = useRef<{
     elevatorId: AnyNodeId
@@ -692,6 +794,11 @@ export const FirstPersonControls = () => {
     position: [number, number, number]
     yaw: number
   } | null>(null)
+
+  useEffect(() => {
+    if (!(camera as PerspectiveCamera).isPerspectiveCamera) return
+    return applyWalkthroughCameraClipping(camera as PerspectiveCamera)
+  }, [camera])
 
   useEffect(() => {
     const previousCameraMode = useViewer.getState().cameraMode
@@ -770,6 +877,7 @@ export const FirstPersonControls = () => {
       const node = nodes[doorId as AnyNodeId]
       if (node?.type !== 'door') continue
       if (node.openingKind === 'opening') continue
+      if (!hasNativeLeaf(node)) continue
       if (node.segments.every((segment) => segment.type === 'empty')) continue
 
       const object = sceneRegistry.nodes.get(doorId)
@@ -868,6 +976,7 @@ export const FirstPersonControls = () => {
       const node = nodes[windowId as AnyNodeId]
       if (node?.type !== 'window') continue
       if (node.openingKind === 'opening') continue
+      if (!hasNativeLeaf(node)) continue
       if (!isOperableWindowType(node.windowType)) continue
 
       const object = sceneRegistry.nodes.get(windowId)
@@ -946,16 +1055,145 @@ export const FirstPersonControls = () => {
     const windowId = resolveInteractableWindowId()
     if (windowId) return { id: windowId, type: 'window' }
 
+    camera.updateMatrixWorld(true)
+    proceduralInteractionRaycaster.setFromCamera(centerScreenPoint, camera)
+    proceduralInteractionRaycaster.far = DOOR_INTERACTION_DISTANCE
+    let closest: FirstPersonInteractableTarget | null = null
+    let closestDistance = DOOR_INTERACTION_DISTANCE
+    const nodes = useScene.getState().nodes
+    const covered = new Set<string>()
+    for (const rawId of sceneRegistry.byType['procedural-item'] ?? []) {
+      covered.add(rawId)
+      const id = rawId as AnyNodeId
+      const node = nodes[id]
+      if (node?.type !== 'procedural-item') continue
+      const procedural = node as ProceduralItemNode
+      if (
+        !operableParts(procedural.recipe).length &&
+        !procedural.recipe.parts.some((part) => part.light)
+      )
+        continue
+      const object = sceneRegistry.nodes.get(id)
+      if (!object) continue
+      for (const hit of proceduralInteractionRaycaster.intersectObject(object, true)) {
+        if (hit.distance >= closestDistance) break
+        // Skip what is not drawn: a joint tree's inactive rest or joint meshes.
+        let drawn = true
+        for (let at: Object3D | null = hit.object; at && at !== object; at = at.parent)
+          if (!at.visible) drawn = false
+        if (!drawn) continue
+        let ancestor: Object3D | null = hit.object
+        while (ancestor && ancestor !== object && !ancestor.userData.proceduralMotion)
+          ancestor = ancestor.parent
+        let motion = ancestor?.userData.proceduralMotion as
+          | { nodeId?: string; partId?: string; kind?: 'hinge' | 'slide' | 'spin' }
+          | undefined
+        // An idle joint tree draws one merged mesh per slot; its face ranges name the part.
+        const ranges = hit.object.userData.proceduralRanges as
+          | { end: number; partId: string }[]
+          | undefined
+        if (!motion && ranges && hit.faceIndex != null) {
+          const face = hit.faceIndex
+          const partId = ranges.find((range) => face < range.end)?.partId
+          const part = partId ? operablePartFor(procedural.recipe, partId) : undefined
+          if (part) motion = { nodeId: id, partId: part.id, kind: part.kind }
+        }
+        closest =
+          motion?.nodeId === id && motion.partId
+            ? { id, partId: motion.partId, kind: motion.kind, type: 'procedural' }
+            : { id, type: 'procedural' }
+        closestDistance = hit.distance
+        break
+      }
+    }
+    for (const rawId of sceneRegistry.byType.item ?? []) {
+      covered.add(rawId)
+      const id = rawId as AnyNodeId
+      const node = nodes[id]
+      if (
+        node?.type !== 'item' ||
+        !node.asset.interactive?.controls.some((control) => control.kind === 'toggle')
+      )
+        continue
+      const object = sceneRegistry.nodes.get(id)
+      if (!object) continue
+      const hit = proceduralInteractionRaycaster.intersectObject(object, true)[0]
+      if (hit && hit.distance < closestDistance) {
+        closest = { id, type: 'item' }
+        closestDistance = hit.distance
+      }
+    }
+    // Doors and windows have their own walkthrough targets (resolveInteractable*Id), except those
+    // built from a script: their clips run through the mechanism target below.
+    for (const id of nativeOpeningIds()) covered.add(id)
+    for (const id of mechanismTargetIds(covered)) {
+      const object = sceneRegistry.nodes.get(id)
+      const hit = object && proceduralInteractionRaycaster.intersectObject(object, true)[0]
+      if (hit && hit.distance < closestDistance) {
+        closest = { id, type: 'mechanism' }
+        closestDistance = hit.distance
+      }
+    }
+    if (!closest) {
+      const selectedId = useViewer.getState().selection.selectedIds.at(-1) as AnyNodeId | undefined
+      const selected = selectedId ? nodes[selectedId] : undefined
+      if (
+        selected?.type === 'item' &&
+        selected.asset.interactive?.controls.some((control) => control.kind === 'toggle')
+      )
+        return { id: selected.id, type: 'item' }
+    }
+    if (closest) return closest
+
     return null
-  }, [resolveInteractableDoorId, resolveInteractableElevatorTarget, resolveInteractableWindowId])
+  }, [
+    camera,
+    resolveInteractableDoorId,
+    resolveInteractableElevatorTarget,
+    resolveInteractableWindowId,
+  ])
 
   const toggleInteractableTarget = useCallback(() => {
     // Drone is a camera, not an avatar: the click that re-acquires pointer lock
-    // must not swing a door open under the shot being framed.
+    // must not swing a door open under the shot being framed. (In capture
+    // mode's walk camera the CLICK path is gated at handleMouseDown — there a
+    // locked-pointer click is the shutter — but E/R still open doors, so the
+    // photographer can stage the shot.)
     if (isDroneMode) return
 
     const target = interactableTargetRef.current ?? resolveInteractableTarget()
     if (!target) return
+    playTargetSound(target)
+    if (target.type === 'mechanism') {
+      const node = useScene.getState().nodes[target.id]
+      if (node) toggleNodeMechanism(node)
+      return
+    }
+    if (target.type === 'item') {
+      const node = useScene.getState().nodes[target.id]
+      if (node?.type === 'item' && node.asset.interactive)
+        operateItem(target.id, node.asset.interactive)
+      return
+    }
+
+    if (target.type === 'procedural') {
+      const node = useScene.getState().nodes[target.id]
+      if (node?.type !== 'procedural-item') return
+      const parts = operableParts((node as ProceduralItemNode).recipe).map((part) => part.id)
+      const state = useInteractive.getState()
+      if (parts.length === 0) {
+        state.toggleProceduralLights(target.id)
+        return
+      }
+      if (target.partId) state.toggleProceduralPart(target.id, target.partId)
+      else
+        state.setProceduralParts(
+          target.id,
+          parts,
+          !parts.some((id) => state.procedural[target.id]?.parts[id]),
+        )
+      return
+    }
 
     if (target.type === 'elevator') {
       if (target.buttonKind === 'cab') {
@@ -1014,6 +1252,22 @@ export const FirstPersonControls = () => {
 
     const target = interactableTargetRef.current ?? resolveInteractableTarget()
     if (!target) return
+
+    if (target.type === 'mechanism') {
+      const node = useScene.getState().nodes[target.id]
+      if (node) nodeMechanism(node)?.set(node, false)
+      return
+    }
+
+    if (target.type === 'procedural') {
+      const node = useScene.getState().nodes[target.id]
+      if (node?.type !== 'procedural-item') return
+      const parts = target.partId
+        ? [target.partId]
+        : operableParts((node as ProceduralItemNode).recipe).map((part) => part.id)
+      useInteractive.getState().setProceduralParts(target.id, parts, false)
+      return
+    }
 
     if (target.type === 'elevator') return
 
@@ -1086,9 +1340,12 @@ export const FirstPersonControls = () => {
     if (isDroneMode) return
     emitter.on('door:animation-completed', rebuildColliderWorld)
     emitter.on('window:animation-completed', rebuildColliderWorld)
+    // A door built from a script opens by its model's clip, which reports no animation end.
+    const stopWatching = watchScriptedDoors(rebuildColliderWorld)
     return () => {
       emitter.off('door:animation-completed', rebuildColliderWorld)
       emitter.off('window:animation-completed', rebuildColliderWorld)
+      stopWatching()
     }
   }, [isDroneMode, rebuildColliderWorld])
 
@@ -1101,9 +1358,7 @@ export const FirstPersonControls = () => {
   // Drone picks up wherever the camera currently is — orbit pose or walk eye.
   useEffect(() => {
     if (!isDroneMode) return
-    droneEuler.setFromQuaternion(camera.quaternion)
-    yawRef.current = droneEuler.y
-    pitchRef.current = droneEuler.x
+    seedDroneLook(lookRef.current, camera.quaternion)
     droneVelocityRef.current.set(0, 0, 0)
 
     // Interaction prompts belong to walk; drop whatever its frame left behind.
@@ -1120,8 +1375,8 @@ export const FirstPersonControls = () => {
 
     const spawn = placedSpawn ?? deriveFirstPersonSpawn(camera, world)
     const [x, y, z] = spawn.position
-    yawRef.current = spawn.yaw
-    pitchRef.current = 0
+    lookRef.current.yaw = spawn.yaw
+    lookRef.current.pitch = 0
     setControllerStart({
       position: [x, y - CONTROLLER_CENTER_FROM_EYE, z],
       yaw: spawn.yaw,
@@ -1154,11 +1409,16 @@ export const FirstPersonControls = () => {
     const canvas = gl.domElement
     const handleMouseMove = (e: MouseEvent) => {
       if (document.pointerLockElement !== canvas) return
+      // Shutter hold: the shot is rendering — a mouse twitch must not pan it.
+      if (useEditor.getState().captureShutterHold) return
 
-      yawRef.current -= e.movementX * LOOK_SENSITIVITY
-      pitchRef.current = Math.max(
-        -(Math.PI / 2 - 0.05),
-        Math.min(Math.PI / 2 - 0.05, pitchRef.current - e.movementY * LOOK_SENSITIVITY),
+      turnFirstPersonLook(
+        lookRef.current,
+        e.movementX,
+        e.movementY,
+        useEditor.getState().firstPersonMovementMode === 'drone' && droneSlowKeyRef.current
+          ? DRONE_SLOW_MULTIPLIER
+          : 1,
       )
     }
 
@@ -1174,6 +1434,10 @@ export const FirstPersonControls = () => {
     const handleMouseDown = (event: MouseEvent) => {
       if (document.pointerLockElement !== canvas) return
       if (event.button !== 0) return
+
+      // Capture mode: the locked-pointer click is the SHUTTER (the snapshot
+      // overlay's window-capture listener already fired); doors stay on E/R.
+      if (useEditor.getState().isCaptureMode) return
 
       event.preventDefault()
       event.stopPropagation()
@@ -1192,6 +1456,19 @@ export const FirstPersonControls = () => {
       // Deliberately released (screenshot pause) — stay in first person;
       // clicking the canvas re-locks.
       if (suspendRef.current) return
+
+      // Capture mode: Esc (the browser's own unlock — no keydown reaches us)
+      // acts like P. Dropping back to orbit would throw away the framed pose,
+      // which reads as a crash to anyone who never noticed P.
+      if (
+        hadPointerLockRef.current &&
+        useEditor.getState().isCaptureMode &&
+        useEditor.getState().isFirstPersonMode
+      ) {
+        suspendRef.current = true
+        useViewer.getState().setWalkthroughSuspended(true)
+        return
+      }
 
       if (hadPointerLockRef.current && useEditor.getState().isFirstPersonMode) {
         useEditor.getState().setFirstPersonMode(false)
@@ -1220,9 +1497,7 @@ export const FirstPersonControls = () => {
     const canvas = gl.domElement
 
     const applyMovementKey = (event: KeyboardEvent, active: boolean) => {
-      if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) {
-        return false
-      }
+      if (isTypingTarget(event.target)) return false
 
       const movement = getMovementInputForKey(event.code, active)
       if (!movement) return false
@@ -1237,9 +1512,7 @@ export const FirstPersonControls = () => {
       const handledMovement = applyMovementKey(event, true)
       if (handledMovement) return
 
-      if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) {
-        return
-      }
+      if (isTypingTarget(event.target)) return
 
       if (event.code === 'ControlLeft' || event.code === 'ControlRight') {
         // While paused (P), crouch is frozen as-is — ⌃⇧⌘4 (clipboard
@@ -1254,9 +1527,27 @@ export const FirstPersonControls = () => {
         event.preventDefault()
         event.stopPropagation()
         if (!suspendRef.current) droneAscendKeyRef.current = true
+      } else if ((event.code === 'AltLeft' || event.code === 'AltRight') && isDroneMode) {
+        event.preventDefault()
+        event.stopPropagation()
+        if (!suspendRef.current) droneSlowKeyRef.current = true
       } else if (event.code === 'Escape') {
         event.preventDefault()
         event.stopPropagation()
+        // Capture mode, first Esc frees the cursor (see handlePointerLockChange
+        // — while locked the browser usually unlocks without delivering the
+        // keydown); with the cursor already free, Esc cancels the snapshot
+        // (setCaptureMode(false) also lands the camera back on orbit).
+        if (useEditor.getState().isCaptureMode) {
+          if (document.pointerLockElement === canvas) {
+            suspendRef.current = true
+            useViewer.getState().setWalkthroughSuspended(true)
+            document.exitPointerLock()
+          } else {
+            useEditor.getState().setCaptureMode(false)
+          }
+          return
+        }
         if (document.pointerLockElement === canvas) {
           document.exitPointerLock()
         }
@@ -1296,6 +1587,9 @@ export const FirstPersonControls = () => {
       if (event.code === 'KeyE' && !suspendRef.current) {
         droneAscendKeyRef.current = false
       }
+      if ((event.code === 'AltLeft' || event.code === 'AltRight') && !suspendRef.current) {
+        droneSlowKeyRef.current = false
+      }
       applyMovementKey(event, false)
     }
 
@@ -1304,6 +1598,7 @@ export const FirstPersonControls = () => {
         crouchKeyRef.current = false
         droneAscendKeyRef.current = false
         droneDescendKeyRef.current = false
+        droneSlowKeyRef.current = false
       }
     }
 
@@ -1551,36 +1846,24 @@ export const FirstPersonControls = () => {
     return standClearanceRaycaster.intersectObjects(meshes, false).length === 0
   }, [])
 
-  // Drone: a free camera driven straight from the look angles — no controller,
-  // no gravity or collision clamping. WASD move along the view axes, Space or E
-  // rises, Q (or Ctrl) sinks, and Shift boosts.
+  // Drone: the viewer's free flight (`stepDroneFlight`, also behind the viewer's
+  // `DroneController`) fed from this controller's keys — WASD along the view
+  // axes, Space or E rises, Q (or Ctrl) sinks, Shift boosts, Alt slows.
   useFrame((_, delta) => {
     if (!isDroneMode) return
+    // Shutter hold: freeze the drone mid-air while the shot renders.
+    if (useEditor.getState().captureShutterHold) return
 
-    const step = Math.min(delta, 0.1)
     const movement = movementInputRef.current
-
-    droneEuler.set(pitchRef.current, yawRef.current, 0, 'YXZ')
-    camera.quaternion.setFromEuler(droneEuler)
-    droneForward.set(0, 0, -1).applyEuler(droneEuler)
-    droneRight.set(1, 0, 0).applyEuler(droneEuler)
-
-    droneDesiredVelocity.set(0, 0, 0)
-    if (movement.forward) droneDesiredVelocity.add(droneForward)
-    if (movement.backward) droneDesiredVelocity.sub(droneForward)
-    if (movement.rightward) droneDesiredVelocity.add(droneRight)
-    if (movement.leftward) droneDesiredVelocity.sub(droneRight)
-    if (movement.jump || droneAscendKeyRef.current) droneDesiredVelocity.y += 1
-    if (droneDescendKeyRef.current || crouchKeyRef.current) droneDesiredVelocity.y -= 1
-    if (droneDesiredVelocity.lengthSq() > 0) {
-      droneDesiredVelocity
-        .normalize()
-        .multiplyScalar(DRONE_SPEED * (movement.run ? DRONE_RUN_MULTIPLIER : 1))
-    }
-
-    droneVelocityRef.current.lerp(droneDesiredVelocity, 1 - Math.exp(-step * DRONE_SMOOTHING))
-    camera.position.addScaledVector(droneVelocityRef.current, step)
-    camera.updateMatrixWorld(true)
+    droneInput.forward = movement.forward === true
+    droneInput.backward = movement.backward === true
+    droneInput.leftward = movement.leftward === true
+    droneInput.rightward = movement.rightward === true
+    droneInput.up = movement.jump === true || droneAscendKeyRef.current
+    droneInput.down = droneDescendKeyRef.current || crouchKeyRef.current
+    droneInput.boost = movement.run === true
+    droneInput.slow = droneSlowKeyRef.current
+    stepDroneFlight(camera, lookRef.current, droneInput, droneVelocityRef.current, delta)
   }, 2.5)
 
   useFrame((_, delta) => {
@@ -1624,7 +1907,7 @@ export const FirstPersonControls = () => {
 
     group.rotation.y = 0
     camera.position.copy(group.position).add(cameraOffset)
-    cameraEuler.set(pitchRef.current, yawRef.current, 0, 'YXZ')
+    cameraEuler.set(lookRef.current.pitch, lookRef.current.yaw, 0, 'YXZ')
     camera.quaternion.setFromEuler(cameraEuler)
     camera.updateMatrixWorld(true)
     syncElevatorRide(group)
@@ -1698,7 +1981,7 @@ export const FirstPersonControls = () => {
             maxRunSpeed={crouched ? CROUCH_RUN_SPEED : 5}
             maxSlope={1.2}
             maxWalkSpeed={crouched ? CROUCH_WALK_SPEED : 2}
-            paused={isElevatorRideLocked}
+            paused={isElevatorRideLocked || captureShutterHold}
             position={controllerStart.position}
             ref={setControllerApi}
           />
@@ -1716,6 +1999,7 @@ export const FirstPersonOverlay = ({ onExit }: { onExit: () => void }) => {
   const zoneLabel = useFirstPersonHud((state) => state.zoneLabel)
   const interact = useFirstPersonHud((state) => state.interact)
   const suspended = useViewer((state) => state.walkthroughSuspended)
+  const isDroneMode = useEditor((state) => state.firstPersonMovementMode === 'drone')
 
   const handleExit = useCallback(() => {
     if (document.pointerLockElement) {
@@ -1723,6 +2007,8 @@ export const FirstPersonOverlay = ({ onExit }: { onExit: () => void }) => {
     }
     onExit()
   }, [onExit])
+
+  if (isDroneMode) return <DroneHud onExit={handleExit} suspended={suspended} />
 
   return (
     <WalkthroughHud

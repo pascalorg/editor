@@ -6,6 +6,7 @@ import {
   type RoofNode,
   type RoofSegmentNode,
   sceneRegistry,
+  usePascalI18n,
   useScene,
 } from '@pascal-app/core'
 import { PanelSection, SliderControl } from '@pascal-app/editor'
@@ -34,6 +35,7 @@ export function DormerPositionSection({
   previewProp: (updates: Partial<DormerNode>) => void
   commitProp: (updates: Partial<DormerNode>) => void
 }) {
+  const i18n = usePascalI18n()
   const px = node.position[0]
   const py = node.position[1]
   const pz = node.position[2]
@@ -165,7 +167,9 @@ export function DormerPositionSection({
   }
 
   return (
-    <PanelSection title="Position">
+    <PanelSection
+      title={i18n._({ id: 'node.dormer.panelPositionSection.position', message: 'Position' })}
+    >
       <SliderControl
         label="X"
         max={Math.round(worldMaxX * 10) / 10}
@@ -180,7 +184,7 @@ export function DormerPositionSection({
         restoreOnCommit={false}
         step={0.05}
         unit="m"
-        value={Math.round(worldX_now * 100) / 100}
+        value={worldX_now}
       />
       <SliderControl
         label="Z"
@@ -196,10 +200,10 @@ export function DormerPositionSection({
         restoreOnCommit={false}
         step={0.05}
         unit="m"
-        value={Math.round(worldZ_now * 100) / 100}
+        value={worldZ_now}
       />
       <SliderControl
-        label="Rotation"
+        label={i18n._({ id: 'node.dormer.panelPositionSection.rotation', message: 'Rotation' })}
         max={180}
         min={-180}
         onChange={(degrees) => {

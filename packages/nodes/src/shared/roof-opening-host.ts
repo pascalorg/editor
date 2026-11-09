@@ -6,9 +6,12 @@ import type {
   RoofWallFaceId,
 } from '@pascal-app/core'
 import {
+  type DoorNode,
+  getDoorOpeningSize,
   getMaxRoofRectHeightFromAnchor,
   getMaxRoofRectWidthFromAnchor,
   getRoofSegmentWallFace,
+  openingHostFacing,
   roofFacePointToSegment,
 } from '@pascal-app/core'
 
@@ -26,7 +29,9 @@ type RoofHostedOpening = {
   position: [number, number, number]
   width: number
   height: number
-}
+} & Partial<
+  Pick<DoorNode, 'rotation' | 'doorType' | 'sidelightLeft' | 'sidelightRight' | 'transomHeight'>
+>
 
 type SceneReader = { get: (id: AnyNodeId) => unknown }
 
@@ -49,8 +54,15 @@ export function readRoofFaceWidthMax(
 ): number | null {
   const host = resolveHostFace(node, scene)
   if (!host) return null
-  const anchorU = node.position[0] - (growSign * node.width) / 2
-  return getMaxRoofRectWidthFromAnchor(host.face, anchorU, growSign, node.position[1], node.height)
+  const size = getDoorOpeningSize(node)
+  const centerX = node.position[0] - size.leafOffsetX * openingHostFacing(node)
+  const centerY = node.position[1] + (size.height - node.height) / 2
+  const direction = growSign * openingHostFacing(node)
+  const anchorU = centerX - (direction * size.width) / 2
+  return (
+    getMaxRoofRectWidthFromAnchor(host.face, anchorU, direction, centerY, size.height) -
+    (size.width - node.width)
+  )
 }
 
 /**
@@ -65,8 +77,14 @@ export function readRoofFaceHeightMax(
 ): number | null {
   const host = resolveHostFace(node, scene)
   if (!host) return null
-  const anchorV = node.position[1] - (growSign * node.height) / 2
-  return getMaxRoofRectHeightFromAnchor(host.face, node.position[0], node.width, anchorV, growSign)
+  const size = getDoorOpeningSize(node)
+  const centerX = node.position[0] - size.leafOffsetX * openingHostFacing(node)
+  const centerY = node.position[1] + (size.height - node.height) / 2
+  const anchorV = centerY - (growSign * size.height) / 2
+  return (
+    getMaxRoofRectHeightFromAnchor(host.face, centerX, size.width, anchorV, growSign) -
+    (size.height - node.height)
+  )
 }
 
 /**

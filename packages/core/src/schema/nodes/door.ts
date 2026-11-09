@@ -1,7 +1,16 @@
 import dedent from 'dedent'
 import { z } from 'zod'
 import { BaseNode, nodeType, objectId } from '../base'
+import { GeometryScriptSource } from '../geometry-source'
 import { MaterialSchema } from '../material'
+import {
+  DEFAULT_DOOR_CONTENT_PADDING,
+  DoorHandleStyle,
+  DoorType,
+  defaultDoorSegments,
+} from './opening-types'
+
+export { DoorHandleStyle, DoorType } from './opening-types'
 
 export const DoorSegment = z.object({
   type: z.enum(['panel', 'glass', 'empty']),
@@ -18,6 +27,26 @@ export const DoorSegment = z.object({
 
 export type DoorSegment = z.infer<typeof DoorSegment>
 
+/** Glazed leaves over a low panel: the French door (porte-fenêtre) glazing. */
+export const FRENCH_DOOR_SEGMENTS: DoorSegment[] = [
+  {
+    type: 'glass',
+    heightRatio: 0.76,
+    columnRatios: [1, 1],
+    dividerThickness: 0.025,
+    panelDepth: 0.01,
+    panelInset: 0.04,
+  },
+  {
+    type: 'panel',
+    heightRatio: 0.24,
+    columnRatios: [1],
+    dividerThickness: 0.03,
+    panelDepth: 0.012,
+    panelInset: 0.035,
+  },
+]
+
 export const DoorCategory = z.enum(['interior', 'garage'])
 export const OpeningConstructionType = z.enum(['framed', 'masonry'])
 export const OpeningDimensionReference = z.enum([
@@ -26,24 +55,11 @@ export const OpeningDimensionReference = z.enum([
   'masonry-opening',
   'finish-opening',
 ])
-export const DoorType = z.enum([
-  'hinged',
-  'double',
-  'french',
-  'folding',
-  'pocket',
-  'barn',
-  'sliding',
-  'garage-sectional',
-  'garage-rollup',
-  'garage-tiltup',
-])
 export const DoorTrackStyle = z.enum(['none', 'visible', 'pocket', 'overhead'])
 
 export type DoorCategory = z.infer<typeof DoorCategory>
 export type OpeningConstructionType = z.infer<typeof OpeningConstructionType>
 export type OpeningDimensionReference = z.infer<typeof OpeningDimensionReference>
-export type DoorType = z.infer<typeof DoorType>
 export type DoorTrackStyle = z.infer<typeof DoorTrackStyle>
 
 export const DoorNode = BaseNode.extend({
@@ -51,13 +67,22 @@ export const DoorNode = BaseNode.extend({
   type: nodeType('door'),
   material: MaterialSchema.optional(),
   // Per-slot material overrides on the unified slot model. Keys: `panel` (the
-  // door body), `glass`. Value = a `MaterialRef` (`library:<id>` / `scene:<id>`).
-  // Absent = the body/glass default. Mirrors `ShelfNode.slots`.
+  // door body), `frame`, `casing-a`, `casing-b`, `glass`, `hardware`. Value = a `MaterialRef`
+  // (`library:<id>` / `scene:<id>`) or a plain `#rrggbb` colour. Absent = the
+  // door-wide `material` on panel and frame, else the slot default. Mirrors
+  // `ShelfNode.slots`.
   slots: z.record(z.string(), z.string()).optional(),
+  /**
+   * A three.js script the door is built from instead of its parametric frame, as on an item:
+   * width and height are the compiled bounds and the wall cuts the script's `cutout` mesh.
+   */
+  source: GeometryScriptSource.optional(),
 
   position: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
   rotation: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
   side: z.enum(['front', 'back']).optional(),
+  verticalAnchor: z.enum(['wall', 'floor']).optional(),
+  floorThresholdVersion: z.union([z.literal(0), z.literal(1)]).default(1),
   wallId: z.string().optional(),
   // Alternative host: a roof-segment's generated wall face (base wall
   // under the roof or a coplanar gable end). When set, `position` is
@@ -68,9 +93,13 @@ export const DoorNode = BaseNode.extend({
   roofSegmentId: z.string().optional(),
   roofFace: z.enum(['front', 'back', 'right', 'left']).optional(),
 
-  // Overall dimensions
+  // Leaf opening dimensions
   width: z.number().default(0.9),
   height: z.number().default(2.1),
+  sidelightLeft: z.number().min(0).optional(),
+  sidelightRight: z.number().min(0).optional(),
+  transomHeight: z.number().min(0).optional(),
+  slidingStyle: z.enum(['patio', 'bypass']).optional(),
 
   // Construction-document identity. `mark` overrides the deterministic
   // level fallback (101, 102, ...). Rough-opening dimensions stay optional
@@ -89,7 +118,9 @@ export const DoorNode = BaseNode.extend({
   // Door family
   doorCategory: DoorCategory.default('interior'),
   doorType: DoorType.default('hinged'),
-  leafCount: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]).default(1),
+  leafCount: z
+    .union([z.literal(1), z.literal(2), z.literal(3), z.literal(4), z.literal(6), z.literal(8)])
+    .default(1),
   operationState: z.number().min(0).max(1).default(0),
   slideDirection: z.enum(['left', 'right']).default('left'),
   trackStyle: DoorTrackStyle.default('none'),
@@ -106,9 +137,24 @@ export const DoorNode = BaseNode.extend({
 
   // Frame
   frameThickness: z.number().default(0.05),
-  frameDepth: z.number().default(0.07),
+  frameDepth: z
+    .number()
+    .optional()
+    .describe(
+      "Frame depth through the wall; left out, the frame is exactly the host wall's thickness.",
+    ),
   threshold: z.boolean().default(true),
   thresholdHeight: z.number().default(0.02),
+
+  // Casing: flat boards on the finished faces of the host wall around the
+  // opening (head and both legs, none at the floor), never inside it, so the
+  // wall cutout includes the leaf opening and any fixed lights. The faces are the host's `a` / `b`
+  // (WallFace), not the door's front and back, so flipping the swing leaves
+  // the casing where it is. Optional, never defaulted, so loading a saved
+  // opening adds no fields: absent faces are uncased, an absent width is 2 in.
+  casingFaceA: z.boolean().optional(),
+  casingFaceB: z.boolean().optional(),
+  casingWidth: z.number().positive().optional(),
 
   // Swing
   hingesSide: z.enum(['left', 'right']).default('left'),
@@ -120,45 +166,49 @@ export const DoorNode = BaseNode.extend({
     .default(0),
 
   // Leaf segments — stacked top to bottom, each with its own column split
-  segments: z.array(DoorSegment).default([
-    {
-      type: 'panel',
-      heightRatio: 0.4,
-      columnRatios: [1],
-      dividerThickness: 0.03,
-      panelDepth: 0.01,
-      panelInset: 0.04,
-    },
-    {
-      type: 'panel',
-      heightRatio: 0.6,
-      columnRatios: [1],
-      dividerThickness: 0.03,
-      panelDepth: 0.01,
-      panelInset: 0.04,
-    },
-  ]),
+  segments: z.array(DoorSegment).default(defaultDoorSegments),
 
   // Handle
   handle: z.boolean().default(true),
+  handleStyle: DoorHandleStyle.optional().describe(
+    'Handle style; absent means a straight lever on a rose.',
+  ),
   handleHeight: z.number().default(1.05),
   handleSide: z.enum(['left', 'right']).default('right'),
 
   // Leaf inner margin — space between leaf edge and segment content area [x, y]
-  contentPadding: z.tuple([z.number(), z.number()]).default([0.04, 0.04]),
+  contentPadding: z
+    .tuple([z.number(), z.number()])
+    .default((): [number, number] => [...DEFAULT_DOOR_CONTENT_PADDING]),
 
   // Emergency / commercial hardware
   doorCloser: z.boolean().default(false),
   panicBar: z.boolean().default(false),
+  panicBarStyle: z.enum(['crossbar', 'touchbar']).default('crossbar'),
+  panicBarRods: z.boolean().default(false),
   panicBarHeight: z.number().default(1.0),
 }).describe(dedent`Door node - a parametric door placed on a wall
   - position: center of the door in wall-local coordinate system (Y = height/2, always at floor)
+  - width/height: leaf opening; swing doors add sidelightLeft + sidelightRight to the cutout width and transomHeight above it (metres)
   - doorCategory/doorType: explicit operation family, defaulting old doors to interior hinged
   - openingKind/openingShape: hinged door or frameless wall opening shape
   - segments: rows stacked top to bottom, each defining its own columnRatios
-  - type 'empty' = no leaf fill for that segment, 'panel' = raised/recessed panel, 'glass' = glazed
+  - type 'empty' = no leaf fill for that segment, 'panel' = raised/recessed panel carved into the leaf (never proud of its faces), 'glass' = glazed
+  - contentPadding: leaf margin [x, y] around the segments, the stile and rail width (new doors and the panelled style presets use 0.11 m)
   - hingesSide/swingDirection/swingAngle: which way the door opens and how far it is currently open
+  - frameThickness: width of the frame members (new doors use 0.020 m; absent in saved doors keeps 0.05 m)
+  - casingFaceA/casingFaceB: casing (head and legs) on the host wall's face a / b, around the cutout (absent means off; new openings enable both)
+  - casingWidth: face width of the casing boards (2 in by default)
+  - handleStyle: lever (default), lever-curved, knob, bar, or plate; absent means lever
   - doorCloser/panicBar: commercial and emergency hardware options
+  - panicBarStyle: crossbar tube (default) or flat touchbar push rail
+  - panicBarRods: optional top and bottom latch rods (default off)
+  - panicBarHeight: device height above the leaf bottom, in metres
 `)
 
 export type DoorNode = z.infer<typeof DoorNode>
+
+/** Resolve saved doors without adding a field to their data. */
+export function doorHandleStyle(door: Pick<DoorNode, 'handleStyle'>): DoorHandleStyle {
+  return door.handleStyle ?? 'lever'
+}

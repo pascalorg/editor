@@ -3,7 +3,137 @@
 import { describe, expect, test } from 'bun:test'
 import { type AnyNode, RoofNode, RoofSegmentNode } from '@pascal-app/core'
 import * as THREE from 'three'
-import { generateRoofSegmentGeometry } from './roof-system'
+import { Evaluator, SUBTRACTION } from 'three-bvh-csg'
+import {
+  countPendingRoofShells,
+  generateRoofSegmentGeometry,
+  getRoofSegmentBrushes,
+} from './roof-system'
+
+describe('roof system gable geometry', () => {
+  test('keeps a zero-height gable wall shell exactly on its base', () => {
+    const segment = RoofSegmentNode.parse({
+      roofType: 'gable',
+      width: 8,
+      depth: 6,
+      wallHeight: 0,
+      wallThickness: 0.1,
+      pitch: 40,
+    })
+    const brushes = getRoofSegmentBrushes(segment)
+    expect(brushes).not.toBeNull()
+    if (!brushes) return
+
+    const shell = new Evaluator().evaluate(brushes.wallBrush, brushes.innerBrush, SUBTRACTION)
+    try {
+      brushes.wallBrush.geometry.computeBoundingBox()
+      expect(brushes.wallBrush.geometry.boundingBox!.min.y).toBe(0)
+      expect(shell.geometry.getAttribute('position').count).toBeGreaterThan(0)
+      shell.geometry.computeBoundingBox()
+      expect(shell.geometry.boundingBox!.min.y).toBeCloseTo(0, 12)
+    } finally {
+      shell.geometry.dispose()
+      brushes.wallBrush.geometry.dispose()
+      brushes.innerBrush.geometry.dispose()
+      brushes.deckSlab.geometry.dispose()
+      brushes.shinSlab.geometry.dispose()
+      brushes.rakeBoards?.dispose()
+    }
+  })
+
+  test('lifts the inner cutter with the shell so a flat zero-height roof stays hollow', () => {
+    const segment = RoofSegmentNode.parse({
+      roofType: 'flat',
+      width: 8,
+      depth: 6,
+      wallHeight: 0,
+      wallThickness: 0.1,
+      pitch: 0,
+    })
+    const brushes = getRoofSegmentBrushes(segment)
+    expect(brushes).not.toBeNull()
+    if (!brushes) return
+    try {
+      brushes.wallBrush.geometry.computeBoundingBox()
+      brushes.innerBrush.geometry.computeBoundingBox()
+      expect(brushes.wallBrush.geometry.boundingBox!.min.y).toBe(0)
+      expect(brushes.wallBrush.geometry.boundingBox!.max.y).toBeCloseTo(0.05, 6)
+      expect(brushes.innerBrush.geometry.boundingBox!.max.y).toBeCloseTo(
+        brushes.wallBrush.geometry.boundingBox!.max.y,
+        6,
+      )
+    } finally {
+      brushes.wallBrush.geometry.dispose()
+      brushes.innerBrush.geometry.dispose()
+      brushes.deckSlab.geometry.dispose()
+      brushes.shinSlab.geometry.dispose()
+      brushes.rakeBoards?.dispose()
+    }
+  })
+})
+
+/** Each slot's triangle centroids, segment-local. */
+function slotCentroids(geometry: THREE.BufferGeometry): Map<number, THREE.Vector3[]> {
+  const position = geometry.getAttribute('position')
+  const index = geometry.getIndex()
+  const vertex = (corner: number) => (index ? index.getX(corner) : corner)
+  const slots = new Map<number, THREE.Vector3[]>()
+  for (const group of geometry.groups) {
+    for (let corner = group.start; corner < group.start + group.count; corner += 3) {
+      const centroid = new THREE.Vector3()
+      for (let k = 0; k < 3; k++)
+        centroid.add(new THREE.Vector3().fromBufferAttribute(position, vertex(corner + k)))
+      centroid.multiplyScalar(1 / 3)
+      const list = slots.get(group.materialIndex ?? 0) ?? []
+      list.push(centroid)
+      slots.set(group.materialIndex ?? 0, list)
+    }
+  }
+  return slots
+}
+
+describe('roof wall bands', () => {
+  // A raised heel: the band of wall between the plate and the eaves, under a gable.
+  const heeled = (roofType: 'gable' | 'hip') =>
+    RoofSegmentNode.parse({
+      roofType,
+      width: 8,
+      depth: 6,
+      wallHeight: 0.5,
+      wallThickness: 0.2,
+      pitch: 30,
+    })
+
+  test('a gable segment carries its heel band and each gable end as slots of their own', () => {
+    const geometry = generateRoofSegmentGeometry(heeled('gable'))
+    try {
+      const slots = slotCentroids(geometry)
+      const heel = slots.get(4) ?? []
+      const left = slots.get(5) ?? []
+      const right = slots.get(6) ?? []
+      expect(heel.length).toBeGreaterThan(0)
+      expect(left.length).toBeGreaterThan(0)
+      expect(right.length).toBeGreaterThan(0)
+      // the heel band stands under the eaves; each gable above them, at its own end
+      expect(heel.every((c) => c.y < 0.5)).toBe(true)
+      expect(left.every((c) => c.x < -4 && c.y > 0.45)).toBe(true)
+      expect(right.every((c) => c.x > 4 && c.y > 0.45)).toBe(true)
+    } finally {
+      geometry.dispose()
+    }
+  })
+
+  test('a hip has a heel band but no gables', () => {
+    const geometry = generateRoofSegmentGeometry(heeled('hip'))
+    try {
+      const slots = slotCentroids(geometry)
+      expect(slots.get(4)?.length ?? 0).toBeGreaterThan(0)
+      expect(slots.has(5) || slots.has(6)).toBe(false)
+    } finally {
+      geometry.dispose()
+    }
+  })
+})
 
 describe('roof system shed geometry', () => {
   function inspectShedGeometry(segment: RoofSegmentNode) {
@@ -179,9 +309,11 @@ describe('roof system shed geometry', () => {
       shedInsetEndPanels: true,
       wallShell: 'omit',
     })
-    const { geometry, roofSideX, sideInfillNormals, sideInfillX } = inspectShedGeometry(segment)
+    const { geometry, roofSideX, sideInfillNormals, sideInfillX, wallVertexYs } =
+      inspectShedGeometry(segment)
 
     expect(sideInfillNormals).toHaveLength(2)
+    expect(Math.min(...wallVertexYs)).toBeCloseTo(0.05, 5)
     expect(Math.max(...sideInfillX.map((x) => Math.abs(x)))).toBeCloseTo(infillHalfWidth, 5)
     expect(Math.max(...sideInfillX.map((x) => Math.abs(x)))).toBeGreaterThan(span / 2)
     expect(Math.max(...sideInfillX.map((x) => Math.abs(x)))).toBeLessThan(span / 2 + leftOverhang)
@@ -707,5 +839,23 @@ describe('roof system conical sector geometry', () => {
       ),
     ).toBe(true)
     geometry.dispose()
+  })
+})
+
+// A capture waits for each roof on screen whose merged shell is still to build: a first merge too,
+// whose group has no shell yet. A roof never mounted is not on screen and would hold every capture.
+describe('roofs a capture waits for', () => {
+  test('counts every mounted roof still queued for its shell, and no unmounted one', () => {
+    const merged = new THREE.Group()
+    merged.add(Object.assign(new THREE.Mesh(), { name: 'merged-roof' }))
+    const groups = new Map<string, THREE.Object3D>([
+      ['roof_rebuilt', merged],
+      ['roof_first', new THREE.Group()],
+    ])
+    expect(
+      countPendingRoofShells(['roof_rebuilt', 'roof_first', 'roof_unmounted'], (id) =>
+        groups.get(id),
+      ),
+    ).toBe(2)
   })
 })

@@ -1,44 +1,33 @@
 import { describe, expect, test } from 'bun:test'
-import { WallNode } from '@pascal-app/core'
-import {
-  readHostWallCeiling,
-  readHostWallCeilingMaxWidth,
-  toWallCeilingSceneReader,
-} from './wall-opening-ceiling'
+import { type AnyNodeId, WallNode } from '@pascal-app/core'
+import { readHostWallCeiling, readHostWallCeilingMaxWidth } from './wall-opening-ceiling'
 
-describe('toWallCeilingSceneReader', () => {
+describe('readHostWallCeiling', () => {
   const wall = WallNode.parse({
     id: 'wall_test',
     start: [0, 0],
     end: [4, 0],
     height: 3,
   })
-  const nodes = { [wall.id]: wall }
+  const sloped = WallNode.parse({
+    id: 'wall_sloped_ceiling',
+    start: [0, 0],
+    end: [10, 0],
+    height: 3,
+    endHeightOffset: -2,
+  })
+  const nodes = { [wall.id]: wall, [sloped.id]: sloped }
+  const reader = { get: (id: AnyNodeId) => nodes[id], nodes: () => nodes }
 
-  test('normalizes a raw nodes record', () => {
-    const reader = toWallCeilingSceneReader(nodes)
-    expect(reader.get(wall.id)).toEqual(wall)
-    expect(reader.nodes()).toEqual(nodes)
+  test('reads the flat wall ceiling', () => {
+    expect(readHostWallCeiling(wall.id, reader)).toBe(3)
   })
 
-  test('passes through an existing WallCeilingSceneReader untouched', () => {
-    const existingReader = {
-      get: (id: any) => nodes[id],
-      nodes: () => nodes,
-    }
-    const reader = toWallCeilingSceneReader(existingReader)
-    expect(reader).toBe(existingReader)
-    expect(reader.get(wall.id)).toEqual(wall)
-  })
-
-  test('readHostWallCeiling works identically with both formats', () => {
-    const fromRecord = readHostWallCeiling(wall.id, toWallCeilingSceneReader(nodes))
-    const fromReader = readHostWallCeiling(wall.id, {
-      get: (id: any) => nodes[id],
-      nodes: () => nodes,
-    })
-    expect(fromRecord).toBe(3)
-    expect(fromReader).toBe(3)
+  test('reads the lowest point of a sloped top over the opening span', () => {
+    // Ceiling 3 - 0.2s: the span [4, 6] is lowest at s = 6.
+    expect(
+      readHostWallCeiling(sloped.id, reader, { position: [5, 1, 0], width: 2, height: 1 }),
+    ).toBeCloseTo(1.8)
   })
 })
 
@@ -51,7 +40,7 @@ describe('readHostWallCeilingMaxWidth', () => {
     endHeightOffset: -2, // Slopes from 3m at start to 1m at end (slope = -0.2)
   })
   const nodes = { [wallSloped.id]: wallSloped }
-  const reader = toWallCeilingSceneReader(nodes)
+  const reader = { get: (id: AnyNodeId) => nodes[id], nodes: () => nodes }
 
   test('calculates exact analytical max width growing towards low end', () => {
     // At anchorS = 2.0 (ceiling = 3 - 0.4 = 2.6m), growing right (growSign = +1)

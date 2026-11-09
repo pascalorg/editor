@@ -36,11 +36,13 @@ export {
   canAttach,
   canHostOnTop,
   clampYToHostTop,
+  clearFaceHostItemFields,
   getSurface,
   getTopSurfaceHeight,
   MAX_HOST_DEPTH,
   pickHost,
   type Vec3,
+  wouldCreateHostingCycle,
 } from './hosting'
 export {
   DEFAULT_LEVEL_HEIGHT,
@@ -90,10 +92,49 @@ export {
   type RiserMarker,
 } from './riser-diagram'
 export {
+  type Bearing,
+  type RoofShape,
+  riseAt,
+  seatOn,
+  segmentBearing,
+  segmentShape,
+  shapeOfRect,
+  standsOverStorey,
+  type WallSpan,
+  wallSpans,
+  wallsUnder,
+} from './roof-bearing'
+export {
+  coveredStoreyId,
+  isRoofGeometry,
+  isRoofLevel,
+  isStoreyContent,
+  liftRoofLevels,
+  planRoofLevel,
+  type RoofLevelPlan,
+  roofLevelAbove,
+  roofLevelOrderBreach,
+  roofsOver,
+  servesAsRoofLevel,
+  storeyInsertIndex,
+  storeyOf,
+} from './roof-level'
+export {
+  isRoofOnStoreyWalls,
+  planRoofSeats,
+  planRoofsOffStorey,
+  type RoofMove,
+  type RoofSeat,
+  roofsKeptOverStorey,
+  seatRoofs,
+} from './roof-move'
+export { SHELF_BOARD_INSET, shelfBoardDimensions, shelfRowBoardDimensions } from './shelf-board'
+export {
   DEFAULT_ANGLE_STEP,
   DEFAULT_GRID_STEP,
   type SnapServices,
   snapAngleToList,
+  snapLocalXZInWorld,
   snapPointAlongAngleRay,
   snapPointToAngle,
   snapPointToGrid,
@@ -103,10 +144,19 @@ export {
   snapWorldXZToBuildingLocal,
 } from './snap'
 export {
+  getBoundarySurfaces,
+  resolveStairSurfaceSnap,
+  type StairSurfaceSnap,
+} from './stair-surface-snap'
+export {
+  BELOW_GRADE_TOLERANCE,
   CEILING_CLAMP_MARGIN,
+  CEILING_DRAW_OFFSET,
+  EXPLODED_GAP,
   findLevelAboveId,
   findLevelBelowId,
   getCeilingClampBound,
+  getCeilingMinHeight,
   getCoveringSlabUndersideAt,
   getLevelAbove,
   getLevelBelow,
@@ -114,10 +164,37 @@ export {
   getLevelFloorToFloorHeight,
   getStoredLevelHeight,
   getWallPlaneTop,
+  getWallTop,
+  getWallTopOver,
+  isLevelBelowGrade,
   type LevelElevation,
+  levelFloorWorldY,
 } from './storey'
 export {
+  canHostSurfaceChild,
+  type DeclaredHostSurface,
+  getSurfaceProvider,
+  type HostSurface,
+  hitDerivedSurfaceProvider,
+  itemSurfaceProvider,
+  NON_PHYSICAL_HOST_KINDS,
+  proceduralItemSurfaceProvider,
+  rendersHostedChildren,
+  resolveSurfacePlacement,
+  type SurfaceContext,
+  type SurfaceHit,
+  type SurfaceId,
+  type SurfacePlacement,
+  type SurfaceProvider,
+  type SurfaceRegion,
+  type SurfaceRejectReason,
+  shelfSurfaceProvider,
+} from './surface-hosting'
+export { surfaceRegionContainsFootprint, surfaceRegionContainsPoint } from './surface-region'
+export {
   buildPortComponents,
+  collectSystemPorts,
+  distributionPointToWorld,
   type SystemSummary,
   summarizeSystemFor,
 } from './system-graph'

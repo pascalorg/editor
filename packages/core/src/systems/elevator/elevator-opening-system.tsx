@@ -1,59 +1,46 @@
 'use client'
 
 import { useEffect } from 'react'
-import type { AnyNode } from '../../schema'
+import { structureChangeBatch } from '../../commands/structure/shared'
+import { isSettlingDocument } from '../../store/document-settling'
 import { pauseSceneHistory, resumeSceneHistory } from '../../store/history-control'
+import { isHydrationNormalization } from '../../store/scene-hydration'
 import useScene from '../../store/use-scene'
-import { syncAutoElevatorOpenings } from './elevator-opening-sync'
-
-function isOpeningRelevantNode(node: AnyNode | undefined) {
-  return (
-    node?.type === 'building' ||
-    node?.type === 'ceiling' ||
-    node?.type === 'elevator' ||
-    node?.type === 'level' ||
-    node?.type === 'slab'
-  )
-}
-
-function hasOpeningRelevantNodeChange(
-  nextNodes: Record<string, AnyNode>,
-  prevNodes: Record<string, AnyNode>,
-) {
-  if (nextNodes === prevNodes) return false
-
-  const ids = new Set([...Object.keys(nextNodes), ...Object.keys(prevNodes)])
-  for (const id of ids) {
-    const nextNode = nextNodes[id]
-    const prevNode = prevNodes[id]
-    if (nextNode === prevNode) continue
-    if (isOpeningRelevantNode(nextNode) || isOpeningRelevantNode(prevNode)) return true
-  }
-
-  return false
-}
+import { changedInputs, isElevatorOpeningInput } from '../document-reconcile'
+import { planOwnedFloorOpenings } from '../owned-floor-openings'
+import { reconcileOwnedFloorOpeningChanges } from '../reconcile-owned-floor-openings'
 
 export function initializeElevatorOpeningSync() {
   let syncingAutoOpenings = false
 
-  const applyUpdates = (updates: ReturnType<typeof syncAutoElevatorOpenings>) => {
-    if (updates.length === 0) return
+  const applyChanges = (skipExistingSurfaces = false) => {
+    const changes = planOwnedFloorOpenings(useScene.getState().nodes, { skipExistingSurfaces })
+    if (changes.length === 0) return
     syncingAutoOpenings = true
     pauseSceneHistory(useScene)
     try {
-      useScene.getState().updateNodes(updates)
+      const before = useScene.getState().nodes
+      useScene.getState().applyNodeChanges(structureChangeBatch(changes))
+      reconcileOwnedFloorOpeningChanges(useScene, before, changes)
     } finally {
       resumeSceneHistory(useScene)
       syncingAutoOpenings = false
     }
   }
 
-  applyUpdates(syncAutoElevatorOpenings(useScene.getState().nodes))
+  applyChanges(true)
 
   return useScene.subscribe((state, prevState) => {
-    if (syncingAutoOpenings) return
-    if (!hasOpeningRelevantNodeChange(state.nodes, prevState.nodes)) return
-    applyUpdates(syncAutoElevatorOpenings(state.nodes))
+    if (syncingAutoOpenings || isSettlingDocument(useScene)) return
+    // A level's child list is bookkeeping (furniture re-parenting under it): what joined or left
+    // is an input of its own, as the document reconcile reads it.
+    if (
+      !changedInputs(prevState.nodes, state.nodes, isElevatorOpeningInput, {
+        ignoreChildLists: true,
+      })
+    )
+      return
+    applyChanges(isHydrationNormalization() || state.hydrationId !== prevState.hydrationId)
   })
 }
 

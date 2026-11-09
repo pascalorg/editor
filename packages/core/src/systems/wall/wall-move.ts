@@ -6,20 +6,22 @@ export type WallPlanPoint = [number, number]
 // Unit direction vector (x,z) to constrain move deltas along.
 export type WallMoveAxis = [number, number]
 export type WallMoveEndpoint = 'start' | 'end'
+/** A wall's line as the move planners read it: invisible walls move by the same rules. */
+export type WallMoveLine = Pick<WallNode, 'start' | 'end'> & { id: string }
 
-export type WallMoveBridgePlan<TWall extends Pick<WallNode, 'id' | 'start' | 'end'>> = {
+export type WallMoveBridgePlan<TWall extends WallMoveLine> = {
   wall: TWall
   originalPoint: WallPlanPoint
   movedEndpoint: WallMoveEndpoint
 }
 
-export type WallMoveLinkedWallTargetPlan<TWall extends Pick<WallNode, 'id' | 'start' | 'end'>> = {
+export type WallMoveLinkedWallTargetPlan<TWall extends WallMoveLine> = {
   wall: TWall
   originalPoint: WallPlanPoint
   targetPoint: WallPlanPoint
 }
 
-export type WallMoveJunctionPlan<TWall extends Pick<WallNode, 'id' | 'start' | 'end'>> = {
+export type WallMoveJunctionPlan<TWall extends WallMoveLine> = {
   linkedWallsToMove: TWall[]
   linkedWallTargetPlans: Array<WallMoveLinkedWallTargetPlan<TWall>>
   bridgePlans: Array<WallMoveBridgePlan<TWall>>
@@ -66,7 +68,7 @@ function otherWallEndpoint(wall: Pick<WallNode, 'start' | 'end'>, point: WallPla
 }
 
 type MoveWallRelation = 'same-direction' | 'opposite-direction' | 'off-axis' | 'stationary'
-type RelatedWallEntry<TWall extends Pick<WallNode, 'id' | 'start' | 'end'>> = {
+type RelatedWallEntry<TWall extends WallMoveLine> = {
   wall: TWall
   relation: MoveWallRelation
 }
@@ -111,7 +113,7 @@ function getMoveWallRelation(
  * matchPoint/targetPoint pair encodes the pivot, not the original ↔ next
  * endpoint mapping.
  */
-export function getLinkedWallUpdates<TWall extends Pick<WallNode, 'id' | 'start' | 'end'>>(
+export function getLinkedWallUpdates<TWall extends WallMoveLine>(
   linkedWalls: Array<{
     wall: TWall
     matchPoint?: WallPlanPoint
@@ -150,7 +152,7 @@ export function getLinkedWallUpdates<TWall extends Pick<WallNode, 'id' | 'start'
   })
 }
 
-export function getPlannedLinkedWallUpdates<TWall extends Pick<WallNode, 'id' | 'start' | 'end'>>(
+export function getPlannedLinkedWallUpdates<TWall extends WallMoveLine>(
   plan: WallMoveJunctionPlan<TWall>,
   originalStart: WallPlanPoint,
   originalEnd: WallPlanPoint,
@@ -183,7 +185,7 @@ export function getPlannedLinkedWallUpdates<TWall extends Pick<WallNode, 'id' | 
   )
 }
 
-export function planWallMoveJunctions<TWall extends Pick<WallNode, 'id' | 'start' | 'end'>>(
+export function planWallMoveJunctions<TWall extends WallMoveLine>(
   linkedWalls: TWall[],
   originalStart: WallPlanPoint,
   originalEnd: WallPlanPoint,
@@ -320,4 +322,73 @@ export function planWallMoveJunctions<TWall extends Pick<WallNode, 'id' | 'start
     bridgePlans: Array.from(bridgePlans.values()),
     wallsToDelete: Array.from(wallsToDelete.values()),
   }
+}
+
+// An end within this of a wall's reference line is T'd into it.
+const ATTACH_TOLERANCE = 1e-3
+// Walls within about 1° of each other run alongside, never T'd.
+const ATTACH_MIN_SINE = Math.sin(Math.PI / 180)
+const ATTACHED_MIN_LENGTH = 0.01
+
+/**
+ * Walls T'd into a moving wall (an end on its reference line, between its
+ * ends) stay on it: each such end slides along its own wall onto the moved
+ * line, so a partition stretches or shortens with the wall it meets, as a
+ * framed partition stays nailed to it. An end the move would carry past the
+ * moved wall's ends lets go and stays where it was; walls joined at the moving
+ * wall's ends are the junction planner's (`planWallMoveJunctions`).
+ */
+export function planAttachedWallUpdates<TWall extends WallMoveLine & Pick<WallNode, 'curveOffset'>>(
+  walls: readonly TWall[],
+  originalStart: WallPlanPoint,
+  originalEnd: WallPlanPoint,
+  nextStart: WallPlanPoint,
+  nextEnd: WallPlanPoint,
+): Array<{ id: TWall['id']; start: WallPlanPoint; end: WallPlanPoint }> {
+  const dx = originalEnd[0] - originalStart[0]
+  const dz = originalEnd[1] - originalStart[1]
+  const length = Math.hypot(dx, dz)
+  const mx = nextEnd[0] - nextStart[0]
+  const mz = nextEnd[1] - nextStart[1]
+  const movedLength = Math.hypot(mx, mz)
+  if (length < AXIS_EPSILON || movedLength < AXIS_EPSILON) return []
+  const ux = dx / length
+  const uz = dz / length
+
+  const updates: Array<{ id: TWall['id']; start: WallPlanPoint; end: WallPlanPoint }> = []
+  for (const wall of walls) {
+    if ((wall.curveOffset ?? 0) !== 0) continue
+    if (wallTouchesPoint(wall, originalStart) || wallTouchesPoint(wall, originalEnd)) continue
+    const next = { start: wall.start, end: wall.end }
+    let moved = false
+    for (const end of ['start', 'end'] as const) {
+      const point = wall[end]
+      const along = (point[0] - originalStart[0]) * ux + (point[1] - originalStart[1]) * uz
+      const across = (point[1] - originalStart[1]) * ux - (point[0] - originalStart[0]) * uz
+      if (
+        Math.abs(across) > ATTACH_TOLERANCE ||
+        along <= ATTACH_TOLERANCE ||
+        along >= length - ATTACH_TOLERANCE
+      ) {
+        continue
+      }
+      const other = end === 'start' ? wall.end : wall.start
+      const wx = point[0] - other[0]
+      const wz = point[1] - other[1]
+      const denominator = wx * mz - wz * mx
+      if (Math.abs(denominator) <= ATTACH_MIN_SINE * Math.hypot(wx, wz) * movedLength) continue
+      // other + w·s meets nextStart + m·t.
+      const ox = nextStart[0] - other[0]
+      const oz = nextStart[1] - other[1]
+      const s = (ox * mz - oz * mx) / denominator
+      const t = (ox * wz - oz * wx) / denominator
+      if (t < -AXIS_EPSILON || t > 1 + AXIS_EPSILON) continue
+      const target: WallPlanPoint = [other[0] + wx * s, other[1] + wz * s]
+      if (Math.hypot(target[0] - other[0], target[1] - other[1]) < ATTACHED_MIN_LENGTH) continue
+      next[end] = target
+      moved = true
+    }
+    if (moved) updates.push({ id: wall.id, start: next.start, end: next.end })
+  }
+  return updates
 }

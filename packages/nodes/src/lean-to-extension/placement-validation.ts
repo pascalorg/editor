@@ -4,6 +4,8 @@ import {
   type BuildingNode,
   getActiveRoofHeight,
   getLevelElevations,
+  getRoofSegmentEndReach,
+  getWallFaceOffsets,
   type LeanToExtensionNode,
   type RoofNode,
   type RoofSegmentNode,
@@ -106,7 +108,7 @@ function ancestorBuilding(
     if (parent?.type === 'building') return parent
     current = parent
   }
-  return undefined
+  return
 }
 
 function transformBounds(bounds: Bounds, building?: BuildingNode): Bounds {
@@ -213,7 +215,10 @@ function wallEndHits(
 ): { left: boolean; right: boolean } {
   const start = transformPoint([wall.start[0], wall.start[1]], building)
   const end = transformPoint([wall.end[0], wall.end[1]], building)
-  const tolerance = Math.max(CLEARANCE, (wall.thickness ?? 0.1) / 2 + CLEARANCE)
+  const tolerance = Math.max(
+    CLEARANCE,
+    Math.max(getWallFaceOffsets(wall).a, -getWallFaceOffsets(wall).b) + CLEARANCE,
+  )
   return {
     left: segmentDistance(edges.left[0], edges.left[1], start, end) <= tolerance,
     right: segmentDistance(edges.right[0], edges.right[1], start, end) <= tolerance,
@@ -246,7 +251,7 @@ export function resolveLeanToEndAbutments(
   nodes: Record<AnyNodeId, AnyNode>,
 ): LeanToExtensionNode {
   const hits = adjacentBuildingEndHits(leanTo, wall, nodes)
-  if (!hits.left && !hits.right) return leanTo
+  if (!(hits.left || hits.right)) return leanTo
   return {
     ...leanTo,
     leftEndCondition: hits.left ? 'wall-abutment' : leanTo.leftEndCondition,
@@ -256,7 +261,10 @@ export function resolveLeanToEndAbutments(
 }
 
 function wallWorldBounds(wall: WallNode, building?: BuildingNode): Bounds {
-  const half = Math.max(CLEARANCE, (wall.thickness ?? 0.1) / 2)
+  const half = Math.max(
+    CLEARANCE,
+    Math.max(getWallFaceOffsets(wall).a, -getWallFaceOffsets(wall).b),
+  )
   return transformBounds(
     {
       minX: Math.min(wall.start[0], wall.end[0]) - half,
@@ -286,7 +294,7 @@ function roofSegmentWorldBounds(
 }
 
 function roofSegmentLevelPoints(roof: RoofNode, segment: RoofSegmentNode): [number, number][] {
-  const halfX = segment.width / 2 + segment.overhang
+  const halfX = segment.width / 2 + getRoofSegmentEndReach(segment)
   const halfZ = segment.depth / 2 + segment.overhang
   const segmentCos = Math.cos(segment.rotation)
   const segmentSin = Math.sin(segment.rotation)

@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import type { GeometryContext } from '@pascal-app/core'
 import {
   createFloorplanContextExtensions,
-  normalizeFloorplanWallDimensionReference,
+  normalizeFloorplanWallDimensionFaces,
   readFloorplanContext,
 } from './floorplan-extension'
 
@@ -17,22 +17,21 @@ function context(extensions?: Readonly<Record<string, unknown>>): GeometryContex
 }
 
 describe('floor-plan context extensions', () => {
-  test('defaults wall dimensions to finished faces', () => {
-    expect(readFloorplanContext(context()).wallDimensionReference).toBe('finished-faces')
+  test('measures walls to both faces by default', () => {
+    expect(readFloorplanContext(context()).wallDimensionFaces).toBe('both')
   })
 
-  test('carries the selected centerline or stud-face reference', () => {
-    for (const wallDimensionReference of ['centerline', 'stud-faces'] as const) {
-      const extensions = createFloorplanContextExtensions({ wallDimensionReference })
-      expect(readFloorplanContext(context(extensions)).wallDimensionReference).toBe(
-        wallDimensionReference,
-      )
+  test('carries the Measure walls choice', () => {
+    for (const wallDimensionFaces of ['interior', 'exterior', 'both'] as const) {
+      const extensions = createFloorplanContextExtensions({ wallDimensionFaces })
+      expect(readFloorplanContext(context(extensions)).wallDimensionFaces).toBe(wallDimensionFaces)
     }
   })
 
-  test('normalizes stale persisted references to the finished-face default', () => {
-    expect(normalizeFloorplanWallDimensionReference('unknown')).toBe('finished-faces')
-    expect(normalizeFloorplanWallDimensionReference(null)).toBe('finished-faces')
+  test('normalizes stale persisted values, including the retired references, to Both', () => {
+    for (const stale of ['finished-faces', 'centerline', 'stud-faces', 'unknown', null]) {
+      expect(normalizeFloorplanWallDimensionFaces(stale)).toBe('both')
+    }
   })
 
   test('lets presentation code suppress automatic annotation construction', () => {

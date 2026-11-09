@@ -1,6 +1,10 @@
-import { beforeEach, describe, expect, test } from 'bun:test'
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import {
   BlockNode,
+  BuildingNode,
+  type CeilingEvent,
+  type CeilingNode,
+  type GridEvent,
   ItemNode,
   type LevelNode,
   type NodeEvent,
@@ -8,8 +12,17 @@ import {
   type WallEvent,
   type WallNode,
 } from '@pascal-app/core'
+import { useViewer } from '@pascal-app/viewer'
 import { BufferGeometry, Mesh, MeshBasicMaterial, type Object3D, Vector3 } from 'three'
-import { faceHostStrategy, wallStrategy } from './placement-strategies'
+import { GROUP_MOVE_DRAG_LABEL } from '../../../lib/contextual-help'
+import useEditor from '../../../store/use-editor'
+import useInteractionScope from '../../../store/use-interaction-scope'
+import {
+  ceilingStrategy,
+  faceHostStrategy,
+  floorStrategy,
+  wallStrategy,
+} from './placement-strategies'
 import type { PlacementContext, SpatialValidators } from './placement-types'
 import { registerTestBlockFaceHost } from './test-face-host'
 
@@ -453,5 +466,137 @@ describe('wallStrategy.move', () => {
 
     expect(result.gridPosition[1]).toBeCloseTo(0.05, 6)
     expect(result.cursorPosition[1]).toBeCloseTo(0.4 + 0.05, 6)
+  })
+})
+
+describe('floorStrategy.move', () => {
+  function makeGridEvent(x: number, y: number, z: number): GridEvent {
+    return {
+      position: [x, y, z],
+      localPosition: [x, y, z],
+      nativeEvent: {} as GridEvent['nativeEvent'],
+    }
+  }
+
+  test('follows the live grid Y so a raised placement keeps its height', () => {
+    const context = floorItemContext()
+    context.gridPosition.set(0, 0.9, 0)
+
+    const result = floorStrategy.move(context, makeGridEvent(1.25, 0.9, 2.25))
+    if (!result) throw new Error('expected a placement result')
+
+    expect(result.gridPosition[1]).toBe(0.9)
+    expect(result.cursorPosition[1]).toBe(0.9)
+  })
+
+  // `detachItemSurfaceToFloor` zeroes the grid Y when an item is taken off a
+  // host; the floor path must honour that instead of a Y frozen at drag start,
+  // or the item commits floating at the shelf's height.
+  test('drops to the level plane once un-hosting zeroes the grid Y', () => {
+    const context = floorItemContext()
+    context.gridPosition.set(0, 0, 0)
+
+    const result = floorStrategy.move(context, makeGridEvent(1.25, 0.9, 2.25))
+    if (!result) throw new Error('expected a placement result')
+
+    expect(result.gridPosition[1]).toBe(0)
+    expect(result.cursorPosition[1]).toBe(0)
+    expect(result.nodeUpdate?.position?.[1]).toBe(0)
+  })
+
+  describe('in grid mode', () => {
+    const originalSelection = useViewer.getState().selection
+
+    beforeEach(() => {
+      // The group-move scope resolves to the item snap context without the
+      // node registry; grid mode at a 0.5 m step.
+      useInteractionScope
+        .getState()
+        .begin({ kind: 'handle-drag', nodeId: 'item_test', handle: GROUP_MOVE_DRAG_LABEL })
+      useEditor.getState().setSnappingMode('item', 'grid')
+      useEditor.getState().setGridSnapStep(0.5)
+    })
+
+    afterEach(() => {
+      useInteractionScope.getState().end()
+      useEditor.getState().setSnappingMode('item', 'lines')
+      useViewer.setState({ selection: originalSelection } as never)
+    })
+
+    // A 0.5 m plant centres half a cell off the lattice, its edges on it.
+    test("inside a turned building it lands on the building's lattice, square to the house", () => {
+      const yaw = (17 * Math.PI) / 180
+      const building = BuildingNode.parse({ position: [12.37, 0, -8.91], rotation: [0, yaw, 0] })
+      useScene.setState((state) => ({
+        ...state,
+        nodes: { ...state.nodes, [building.id]: building },
+      }))
+      useViewer.setState({
+        selection: { buildingId: building.id, levelId: null, zoneId: null, selectedIds: [] },
+      } as never)
+      const local: [number, number] = [1.37, 2.61]
+      const cos = Math.cos(yaw)
+      const sin = Math.sin(yaw)
+      const event: GridEvent = {
+        position: [
+          12.37 + local[0] * cos + local[1] * sin,
+          0,
+          -8.91 - local[0] * sin + local[1] * cos,
+        ],
+        localPosition: [local[0], 0, local[1]],
+        nativeEvent: {} as GridEvent['nativeEvent'],
+      }
+
+      const result = floorStrategy.move(floorItemContext(), event)
+      expect(result?.nodeUpdate?.position?.[0]).toBeCloseTo(1.25, 9)
+      expect(result?.nodeUpdate?.position?.[2]).toBeCloseTo(2.75, 9)
+    })
+
+    test('outside any building it keeps the world grid', () => {
+      useViewer.setState({
+        selection: { buildingId: null, levelId: null, zoneId: null, selectedIds: [] },
+      } as never)
+      const result = floorStrategy.move(floorItemContext(), makeGridEvent(5.37, 0, -3.12))
+      expect(result?.nodeUpdate?.position?.[0]).toBeCloseTo(5.25, 9)
+      expect(result?.nodeUpdate?.position?.[2]).toBeCloseTo(-3.25, 9)
+    })
+  })
+})
+
+describe('ceilingStrategy.move', () => {
+  const ceiling = { id: 'ceiling_test', type: 'ceiling' } as unknown as CeilingNode
+  const ceilingEvent = (): CeilingEvent =>
+    ({
+      node: ceiling,
+      position: [1, 2.5, 1],
+      localPosition: [1, 0, 1],
+      object: new Mesh(),
+      stopPropagation: () => {},
+    }) as unknown as CeilingEvent
+  const onCeiling = (draftItem: ItemNode): PlacementContext => ({
+    ...ceilingContext(),
+    asset: draftItem.asset,
+    draftItem,
+    state: { ...ceilingContext().state, surface: 'ceiling', ceilingId: ceiling.id },
+  })
+  const hanging = (source?: unknown) =>
+    ({
+      ...makeDraft(),
+      asset: { ...makeDraft().asset, attachTo: 'ceiling', dimensions: [0.9, 1, 0.6] },
+      ...(source ? { source } : {}),
+    }) as unknown as ItemNode
+
+  test('hangs a catalog model its full height below the ceiling', () => {
+    const result = ceilingStrategy.move(onCeiling(hanging()), ceilingEvent())
+    expect(result?.gridPosition[1]).toBeCloseTo(-1, 6)
+  })
+
+  test('hangs a scripted object from its top, where the compiler put its origin', () => {
+    const source = {
+      kind: 'script',
+      manifest: { bounds: { min: [-0.45, -1, -0.3], max: [0.45, 0, 0.3] } },
+    }
+    const result = ceilingStrategy.move(onCeiling(hanging(source)), ceilingEvent())
+    expect(result?.gridPosition[1]).toBeCloseTo(0, 6)
   })
 })

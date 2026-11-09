@@ -3,7 +3,7 @@ import { WallNode } from '@pascal-app/core'
 import { clampToWall } from './window-math'
 
 describe('clampToWall for windows', () => {
-  test('centers at wallLength / 2 when window is wider than wall', () => {
+  test('does not fit when the window is wider than the wall', () => {
     const wall = WallNode.parse({
       id: 'wall_short',
       start: [0, 0],
@@ -12,8 +12,6 @@ describe('clampToWall for windows', () => {
     })
     const nodes = { [wall.id]: wall }
     const result = clampToWall(wall, 1, 1.5, 3, 1.2, nodes)
-    expect(result.clampedX).toBe(1) // wallLength / 2 = 2 / 2 = 1
-    expect(result.clampedY).toBe(0.6) // height / 2 = 1.2 / 2 = 0.6
     expect(result.fits).toBe(false)
   })
 

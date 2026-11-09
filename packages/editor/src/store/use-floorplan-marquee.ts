@@ -13,6 +13,7 @@
 
 import type { WallPlanPoint } from '@pascal-app/core'
 import { create } from 'zustand'
+import useInteractionScope from './use-interaction-scope'
 
 export type FloorplanMarqueeDrag = {
   pointerId: number
@@ -34,7 +35,10 @@ type FloorplanMarqueeState = {
 
 export const useFloorplanMarquee = create<FloorplanMarqueeState>((set) => ({
   drag: null,
-  begin: (drag) => set({ drag }),
+  begin: (drag) => {
+    useInteractionScope.getState().begin({ kind: 'box-select' })
+    set({ drag })
+  },
   setCurrent: (point) =>
     set((state) => {
       const prev = state.drag
@@ -44,7 +48,13 @@ export const useFloorplanMarquee = create<FloorplanMarqueeState>((set) => ({
       }
       return { drag: { ...prev, currentPlanPoint: point } }
     }),
-  reset: () => set((state) => (state.drag === null ? state : { drag: null })),
+  reset: () => {
+    set((state) => {
+      if (!state.drag) return state
+      useInteractionScope.getState().endIf((scope) => scope.kind === 'box-select')
+      return { drag: null }
+    })
+  },
 }))
 
 export default useFloorplanMarquee

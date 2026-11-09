@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, test } from 'bun:test'
+import { FenceNode, resolveFenceConstructionSupport } from '@pascal-app/core'
 import type { AnyNode, SlabNode } from '../../schema'
 import useScene from '../../store/use-scene'
 import { spatialGridManager } from './spatial-grid-manager'
@@ -177,4 +178,15 @@ describe('resolveFenceSupportSlabPatch', () => {
       supportSlabId: undefined,
     })
   })
+})
+
+test('explicit railing hosts must be top surfaces on the fence level', () => {
+  const deck = makeSlab('slab_deck', DECK_POLYGON, DECK_ELEVATION)
+  const fence = FenceNode.parse({ parentId: LEVEL_ID, start: [0, 0], end: [3, 0] })
+  for (const host of [{ ...deck, parentId: 'level_other' }, makeLevel()]) {
+    const result = resolveFenceConstructionSupport(fence, LEVEL_ID, nodesFor(makeLevel(), host), {
+      supportSurfaceNodeId: host.id,
+    })
+    expect(result.supportSurfaceNodeId).toBeUndefined()
+  }
 })

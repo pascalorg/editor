@@ -1,6 +1,7 @@
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import type { McpServer } from '@modelcontextprotocol/server'
 import { z } from 'zod'
 import type { SceneOperations } from '../operations'
+import { READ_ONLY_TOOL_ANNOTATIONS } from './annotations'
 
 export const exportJsonInput = {
   pretty: z.boolean().optional(),
@@ -17,8 +18,9 @@ export function registerExportJson(server: McpServer, bridge: SceneOperations): 
       title: 'Export JSON',
       description:
         'Return the scene as a serialized JSON string. Pass `pretty: true` to indent with 2 spaces.',
-      inputSchema: exportJsonInput,
-      outputSchema: exportJsonOutput,
+      inputSchema: z.object(exportJsonInput),
+      outputSchema: z.object(exportJsonOutput),
+      annotations: READ_ONLY_TOOL_ANNOTATIONS,
     },
     async ({ pretty }) => {
       const scene = bridge.exportJSON()

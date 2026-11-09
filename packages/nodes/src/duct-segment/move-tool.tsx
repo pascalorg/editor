@@ -13,6 +13,7 @@ import {
 } from '@pascal-app/core'
 import {
   consumePlacementDragRelease,
+  copyCollectionIds,
   DragBoundingBox,
   EDITOR_LAYER,
   isAlignmentGuideActive,
@@ -24,6 +25,7 @@ import {
   useAlignmentGuides,
   useEditor,
 } from '@pascal-app/editor'
+import { collectScenePorts } from '@pascal-app/editor/distribution'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useRef, useState } from 'react'
 import { Matrix4, Vector3 } from 'three'
@@ -33,13 +35,14 @@ import {
   resolveGhostAlignment,
 } from '../shared/ghost-alignment'
 import { DuctSegmentGhost, FittingGhost } from '../shared/mep-ghost'
-import { collectScenePorts, DUCT_PORT_SYSTEMS } from '../shared/ports'
+import { DUCT_PORT_SYSTEMS } from '../shared/port-systems'
 import { type RunMoveConnectivity, startRunMoveConnectivity } from '../shared/run-move-connectivity'
 import {
   planRunTranslationOffsets,
   type RunTranslationOffsetPlan,
 } from '../shared/run-translation-offset'
-import { rectSectionAxes } from './geometry'
+import { translateWallRun } from '../shared/wall-run-move'
+import { rectSectionAxes } from './profile'
 
 type Vec3 = [number, number, number]
 
@@ -49,7 +52,7 @@ const IN_TO_M = 0.0254
 
 /** Snap a coordinate to the editor's live grid step. */
 function snapToGridStep(value: number): number {
-  const step = useEditor.getState().gridSnapStep
+  const step = isGridSnapActive() ? useEditor.getState().gridSnapStep : 0
   if (step <= 0) return value
   return Math.round(value / step) * step
 }
@@ -123,6 +126,7 @@ export const MoveDuctSegmentTool: React.FC<{ node: AnyNode }> = ({ node }) => {
   const hasMovedRef = useRef(false)
   const activatedAtRef = useRef<number>(Date.now())
   const prevSnapRef = useRef<[number, number] | null>(null)
+  const previewAttachmentRef = useRef(duct.wallAttachment)
 
   useEffect(() => {
     const nodeId = node.id as AnyNodeId
@@ -169,14 +173,39 @@ export const MoveDuctSegmentTool: React.FC<{ node: AnyNode }> = ({ node }) => {
       width: duct.width,
       height: duct.height,
     }
-    let lastTranslationPlan: RunTranslationOffsetPlan | null = null
+    const translationPlanFor = (path: Vec3[]) =>
+      portConnectivity
+        ? planRunTranslationOffsets({
+            duct,
+            translatedPath: path,
+            profile,
+            connections: portConnectivity.connections,
+            scenePorts,
+            nodesById,
+          })
+        : null
 
     const setPreview = (path: Vec3[]) => {
+      hasMovedRef.current = true
       previewPathRef.current = path
       setPreviewPath(path)
     }
 
     const onMove = (event: GridEvent) => {
+      const attachedWall = duct.wallAttachment
+        ? (useScene.getState().nodes[duct.wallAttachment.wallId] as AnyNode | undefined)
+        : undefined
+      if (duct.wallAttachment && attachedWall?.type === 'wall') {
+        const wallMove = translateWallRun(originalPath, duct.wallAttachment, attachedWall, event)
+        if (wallMove) {
+          // Connected joints that cannot follow hold the last shown frame.
+          if (connectivity && !connectivity.preview({ path: wallMove.path })) return
+          previewAttachmentRef.current = wallMove.attachment
+          setPreview(wallMove.path)
+          setTranslationGhost(null)
+          return
+        }
+      }
       const snap = isGridSnapActive() ? snapToGridStep : (v: number) => v
       let dx = snap(event.localPosition[0] - centerX)
       let dz = snap(event.localPosition[2] - centerZ)
@@ -211,23 +240,12 @@ export const MoveDuctSegmentTool: React.FC<{ node: AnyNode }> = ({ node }) => {
         triggerSFX('sfx:grid-snap')
       }
       prevSnapRef.current = cur
-      hasMovedRef.current = true
       const nextPath = originalPath.map(([x, y, z]) => [x + dx, y, z + dz] as Vec3)
+      const translationPlan = translationPlanFor(nextPath)
+      if (translationPlan) connectivity?.clear()
+      else if (connectivity && !connectivity.preview({ path: nextPath })) return
       setPreview(nextPath)
-      lastTranslationPlan =
-        existedAtStart && portConnectivity
-          ? planRunTranslationOffsets({
-              duct,
-              translatedPath: nextPath,
-              profile,
-              connections: portConnectivity.connections,
-              scenePorts,
-              nodesById,
-            })
-          : null
-      if (lastTranslationPlan) connectivity?.clear()
-      else connectivity?.preview({ path: nextPath })
-      setTranslationGhost(lastTranslationPlan)
+      setTranslationGhost(translationPlan)
     }
 
     const commit = (event: GridEvent, fromDragRelease = false) => {
@@ -243,31 +261,40 @@ export const MoveDuctSegmentTool: React.FC<{ node: AnyNode }> = ({ node }) => {
         event.nativeEvent?.stopPropagation?.()
         return
       }
-      committed = true
       const finalPath = previewPathRef.current
+      const creating = isNew && !useScene.getState().nodes[nodeId]
+      const translationPlan = creating ? null : translationPlanFor(finalPath)
+      // Fold connected-fitting / sibling-run follow-updates into the SAME
+      // batch as the moved run so the whole joint is one undo step.
+      const followUpdates =
+        creating || translationPlan || !connectivity
+          ? []
+          : connectivity.commitUpdates({ path: finalPath })
+      if (!followUpdates) {
+        event.nativeEvent?.stopPropagation?.()
+        return
+      }
+      committed = true
 
       useScene.temporal.getState().resume()
       let selectId = nodeId
-      if (isNew && !useScene.getState().nodes[nodeId]) {
+      if (creating) {
         const created = DuctSegmentNode.parse({
           ...(node as Record<string, unknown>),
           path: finalPath,
+          wallAttachment: previewAttachmentRef.current,
           metadata: stripPlacementMetadataFlags(node.metadata),
           visible: true,
         })
-        useScene.getState().createNode(created as AnyNode, node.parentId as AnyNodeId)
+        useScene.getState().createNodes([
+          {
+            node: created as AnyNode,
+            parentId: node.parentId as AnyNodeId,
+            collectionIds: copyCollectionIds(node),
+          },
+        ])
         selectId = created.id as AnyNodeId
       } else {
-        const translationPlan =
-          portConnectivity &&
-          planRunTranslationOffsets({
-            duct,
-            translatedPath: finalPath,
-            profile,
-            connections: portConnectivity.connections,
-            scenePorts,
-            nodesById,
-          })
         if (translationPlan) {
           useScene.getState().applyNodeChanges({
             create: [...translationPlan.fittings, ...translationPlan.connectors].map((created) => ({
@@ -275,20 +302,27 @@ export const MoveDuctSegmentTool: React.FC<{ node: AnyNode }> = ({ node }) => {
               parentId: node.parentId as AnyNodeId,
             })),
             update: [
-              { id: nodeId, data: { path: translationPlan.ductPath } as Partial<AnyNode> },
+              {
+                id: nodeId,
+                data: {
+                  path: translationPlan.ductPath,
+                  wallAttachment: previewAttachmentRef.current,
+                } as Partial<AnyNode>,
+              },
               ...translationPlan.updates,
             ],
           })
         } else {
-          // Fold connected-fitting / sibling-run follow-updates into the SAME
-          // batch as the moved run so the whole joint is one undo step.
-          const followUpdates = connectivity?.commitUpdates({ path: finalPath }) ?? []
-          useScene
-            .getState()
-            .updateNodes([
-              { id: nodeId, data: { path: finalPath } as Partial<AnyNode> },
-              ...followUpdates,
-            ])
+          useScene.getState().updateNodes([
+            {
+              id: nodeId,
+              data: {
+                path: finalPath,
+                wallAttachment: previewAttachmentRef.current,
+              } as Partial<AnyNode>,
+            },
+            ...followUpdates,
+          ])
         }
         useScene.getState().markDirty(nodeId)
       }

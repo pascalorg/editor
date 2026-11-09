@@ -93,7 +93,7 @@ export function generateDormerGeometry(
     type: 'roof-segment',
     parentId: null,
     visible: true,
-    metadata: null,
+    metadata: {},
     children: [],
     position: [0, 0, 0],
     rotation: 0,
@@ -138,6 +138,8 @@ export function generateDormerGeometry(
     managedByParent: false,
     wallShell: 'auto',
     shedInsetEndPanels: false,
+    fascia: false,
+    fasciaHighEdge: false,
   }
 
   const dormerBrushes = getRoofSegmentBrushes(virtualSegment)

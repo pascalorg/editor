@@ -17,6 +17,8 @@ type ViewerState = {
   setPreviewSelectedIds: (ids: BaseNode['id'][]) => void
   externalSelectedIds: BaseNode['id'][]
   setExternalSelectedIds: (ids: BaseNode['id'][]) => void
+  pointedIds: BaseNode['id'][]
+  setPointedIds: (ids: BaseNode['id'][] | null) => void
   hoverHighlightMode: string
   setHoverHighlightMode: (mode: string) => void
   hoveredId: AnyNode['id'] | ZoneNode['id'] | null
@@ -38,8 +40,8 @@ type ViewerState = {
   outliner: Outliner
   geometryRevision: number
   bumpGeometryRevision: () => void
-  exportScene: ((format?: 'glb' | 'stl' | 'obj') => Promise<void>) | null
-  setExportScene: (fn: ((format?: 'glb' | 'stl' | 'obj') => Promise<void>) | null) => void
+  exportScene: ((format?: 'glb' | 'usdz' | 'stl' | 'obj') => Promise<void>) | null
+  setExportScene: (fn: ((format?: 'glb' | 'usdz' | 'stl' | 'obj') => Promise<void>) | null) => void
 }
 declare const useViewer: import('zustand').UseBoundStore<import('zustand').StoreApi<ViewerState>>
 export default useViewer

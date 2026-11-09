@@ -1,4 +1,5 @@
 import {
+  DraftMeasurementLabel,
   EDITOR_LAYER,
   formatAngleRadians,
   getAngleArcToSegmentReference,
@@ -6,7 +7,6 @@ import {
   type SegmentAngleReference,
   type WallPlanPoint,
 } from '@pascal-app/editor'
-import { Html } from '@react-three/drei'
 import { useMemo } from 'react'
 import { BufferGeometry, Vector3 } from 'three'
 
@@ -218,36 +218,5 @@ export function DraftAngleArc({ arc, color }: { arc: DraftAngleLabel['arc']; col
         transparent
       />
     </line>
-  )
-}
-
-export function DraftMeasurementLabel({
-  color,
-  label,
-  position,
-  shadowColor,
-}: {
-  color: string
-  label: string
-  position: [number, number, number]
-  shadowColor: string
-}) {
-  return (
-    <Html
-      center
-      position={position}
-      style={{ pointerEvents: 'none', userSelect: 'none' }}
-      zIndexRange={[100, 0]}
-    >
-      <div
-        className="whitespace-nowrap font-bold font-mono text-[15px]"
-        style={{
-          color,
-          textShadow: `-1.5px -1.5px 0 ${shadowColor}, 1.5px -1.5px 0 ${shadowColor}, -1.5px 1.5px 0 ${shadowColor}, 1.5px 1.5px 0 ${shadowColor}, 0 0 4px ${shadowColor}, 0 0 4px ${shadowColor}`,
-        }}
-      >
-        {label}
-      </div>
-    </Html>
   )
 }

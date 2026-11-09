@@ -6,7 +6,9 @@ Thanks for your interest in contributing! We welcome all kinds of contributions 
 
 ### Prerequisites
 
-- [Bun](https://bun.sh/) 1.3+ and Node.js 20.9+
+- [Bun](https://bun.sh/) 1.3+
+- Node.js 22.23.4 or later on 22.x, 24.22.1 or later on 24.x, or 26.12.1 or later
+  (Node 23 and 25 are not supported)
 
 ### Setup
 
@@ -32,7 +34,10 @@ We use [Biome](https://biomejs.dev/) for linting and formatting. Before submitti
 ```bash
 bun check        # Check for issues
 bun check:fix    # Auto-fix issues
+bun run ci       # Everything the CI quality job runs: lint, skills, types, tests, build
 ```
+
+`bun install` points git at `.githooks/`: the pre-commit hook runs Biome on staged files (and fixes what it can), and the pre-push hook lints and runs `check-types` and tests for the packages your branch changes. Skip once with `--no-verify`.
 
 ### Tests
 
@@ -55,6 +60,22 @@ and reports inflated counts. `bun run test` goes through Turborepo, which
 builds workspace dependencies first (several packages import theirs from
 `dist/`) and runs each package's own scoped test script.
 
+### User-visible text
+
+Every string a person reads in the editor (labels, tooltips, `aria-label`,
+`title`, placeholders, menus, dialogs, errors) goes through the i18n catalog:
+
+```tsx
+const i18n = usePascalI18n()
+<button title={i18n._({ id: 'app.editorNavbar.share', message: 'Share' })} />
+```
+
+`bun run i18n:check` (part of `bun run ci`) fails when a file gains a
+hardcoded user-visible literal. Run `bun run i18n:extract` after changing copy.
+Scene data, MCP/agent text and developer errors stay English. See
+[`i18n/README.md`](i18n/README.md) for catalogs, translation review, the
+migration codemod and the pseudo-locale screenshot audit.
+
 ### Project structure
 
 | Package | What it does |
@@ -73,7 +94,7 @@ New node kinds and sidebar panels can ship as a plugin instead of editing the bu
 
 1. **Fork the repo** and create a branch from `main`
 2. **Make your changes** and test locally with `bun dev`
-3. **Run `bun check` and `bun run test`** to make sure linting and tests pass
+3. **Run `bun run ci`** to make sure linting, types, tests and the build pass
 4. **Open a PR** with a clear description of what changed and why
 5. **Link related issues** if applicable (e.g., "Fixes #42")
 
@@ -82,6 +103,20 @@ New node kinds and sidebar panels can ship as a plugin instead of editing the bu
 - Keep PRs focused — one feature or fix per PR
 - Include screenshots or recordings for visual changes
 - If you're unsure about an approach, open an issue or discussion first
+
+## Releases
+
+Maintainers release every `@pascal-app/*` package together from the **Release** workflow; contributors never bump versions in a PR. Two things a PR can change need a maintainer before the next release:
+
+- **A new package.** Add it to `PACKAGES` in `.github/workflows/release.yml`, then a maintainer publishes it to npm once by hand and adds its trusted publisher. Until then the workflow fails at its first step, before anything is published:
+
+  ```bash
+  cd packages/<pkg> && bun run build && npm publish --access public --tag latest --ignore-scripts
+  ```
+
+- **The release push.** The release commit and tags go to `main` with the `RELEASE_DEPLOY_KEY` deploy key, the one identity besides admins that the `main` ruleset lets through. Keep it in the ruleset's bypass list when the ruleset changes.
+
+[Releasing to npm](wiki/npm-release.md) has the trusted-publisher settings, key rotation and recovery steps.
 
 ## Reporting bugs
 

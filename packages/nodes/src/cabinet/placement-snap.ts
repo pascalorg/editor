@@ -17,9 +17,11 @@ export function resolveCabinetLevelPlanFrame(
   const level = nodes[levelId]
   const building = level?.parentId ? nodes[level.parentId] : undefined
   if (building?.type !== 'building') return { position: [0, 0], rotationY: 0 }
+  const position = Array.isArray(building.position) ? building.position : [0, 0, 0]
+  const rotation = Array.isArray(building.rotation) ? building.rotation : [0, 0, 0]
   return {
-    position: [building.position[0], building.position[2]],
-    rotationY: building.rotation[1],
+    position: [position[0] ?? 0, position[2] ?? 0],
+    rotationY: rotation[1] ?? 0,
   }
 }
 
