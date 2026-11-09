@@ -242,6 +242,12 @@ test('a riser drawn from a vertical pipe collar continues on the plan route', as
     expectPoint(riser?.path[0], [x, y, z])
     expectPoint(across?.path.at(-1), [x + 1.5, y + 1, z])
     expect(pipeGrade(across!.path[0]!, across!.path.at(-1)!)).toBeCloseTo(0, 9)
+
+    await setRunDefaults('pipe-segment', { routingMode: 'vertical', targetElevation: y + 2 })
+    await click(x + 2, z)
+    expect(pipes()).toHaveLength(3)
+    expectPoint(pipes()[2]?.path.at(-1), [x + 1.5, y + 2, z])
+    expect(runDefaults('pipe-segment').routingMode).toBe('vertical')
   } finally {
     await renderer.unmount()
   }
@@ -264,6 +270,12 @@ test('a riser drawn from a vertical duct collar continues on the horizontal rout
     const [riser, across] = ducts()
     expectPoint(riser?.path[0], [x, y, z])
     expectPoint(across?.path.at(-1), [x + 1.5, y + 1, z])
+
+    await setRunDefaults('duct-segment', { routingMode: 'vertical', targetElevation: y + 2 })
+    await click(x + 2, z)
+    expect(ducts()).toHaveLength(3)
+    expectPoint(ducts()[2]?.path.at(-1), [x + 1.5, y + 2, z])
+    expect(runDefaults('duct-segment').routingMode).toBe('vertical')
   } finally {
     await renderer.unmount()
   }
