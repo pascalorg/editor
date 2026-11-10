@@ -186,10 +186,16 @@ export function roofWallTop(
 
 const ROOF_ELEVATION_EPSILON = 1e-4
 
-/** Kinds whose change can move a wall-supported roof. */
+/**
+ * Nodes whose change can move a wall-supported roof: the roof, what it is made of (its segments and
+ * its faces, `capabilities.roofs`, whose footprints find its walls) and what it stands on. The one
+ * test the live sync and `reconcileDocument` both go by.
+ */
 export function isRoofElevationInput(node: AnyNode | undefined): boolean {
   return (
     node?.type === 'roof' ||
+    node?.type === 'roof-segment' ||
+    roofFaceOf(node) !== undefined ||
     node?.type === 'wall' ||
     node?.type === 'slab' ||
     node?.type === 'level' ||
