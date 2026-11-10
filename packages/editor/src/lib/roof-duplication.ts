@@ -1,13 +1,16 @@
 'use client'
 
 import {
+  type AnyNode,
   type AnyNodeId,
   collectionIdsOf,
   generateId,
+  nodeRegistry,
   type RoofNode,
   RoofNode as RoofNodeSchema,
   type RoofSegmentNode,
   RoofSegmentNode as RoofSegmentNodeSchema,
+  roofFaceOf,
   sceneRegistry,
   useScene,
 } from '@pascal-app/core'
@@ -121,6 +124,22 @@ export function duplicateRoofSubtree(
     segmentSourceIds.push(childNode.id)
   }
 
+  // Its faces of other kinds (`capabilities.roofs`) are copied by their own schema, in the copy's
+  // frame as in the source's.
+  const faceClones: { node: AnyNode; sourceId: AnyNodeId }[] = []
+  for (const childId of sourceRoof.children ?? []) {
+    const childNode = scene.nodes[childId as AnyNodeId]
+    if (!(childNode && roofFaceOf(childNode))) continue
+    const schema = nodeRegistry.get(childNode.type)?.schema
+    const { id: _id, ...fields } = structuredClone(childNode)
+    const parsed = schema?.safeParse({
+      ...fields,
+      parentId: roofClone.id,
+      metadata: buildDuplicateMetadata(childNode.metadata),
+    })
+    if (parsed?.success) faceClones.push({ node: parsed.data as AnyNode, sourceId: childNode.id })
+  }
+
   // Each copy is in the collections its source is in.
   scene.createNodes([
     { node: roofClone, parentId, collectionIds: collectionIdsOf(scene.collections, sourceRoofId) },
@@ -128,6 +147,11 @@ export function duplicateRoofSubtree(
       node: segment,
       parentId: roofClone.id as AnyNodeId,
       collectionIds: collectionIdsOf(scene.collections, segmentSourceIds[index]!),
+    })),
+    ...faceClones.map(({ node, sourceId }) => ({
+      node,
+      parentId: roofClone.id as AnyNodeId,
+      collectionIds: collectionIdsOf(scene.collections, sourceId),
     })),
   ])
 
@@ -206,7 +230,7 @@ export function clearRoofDuplicateMetadata(
 
   for (const childId of roofNode.children ?? []) {
     const childNode = scene.nodes[childId as AnyNodeId]
-    if (childNode?.type !== 'roof-segment') {
+    if (!childNode) {
       continue
     }
 

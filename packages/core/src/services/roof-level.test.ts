@@ -15,6 +15,7 @@ import {
 } from '../agent-operations/__fixtures__/roof-bearing-cases'
 import { applySceneChanges, applySceneWrites } from '../agent-operations/apply-changes'
 import { verifyScene } from '../agent-operations/verify-scene'
+import { registerRoofPlanes, roofPlane } from '../registry/__fixtures__/roof-planes'
 import {
   type AnyNode,
   type AnyNodeId,
@@ -549,6 +550,55 @@ describe('isRoofOnStoreyWalls', () => {
     expect(isRoofOnStoreyWalls(house({ id: 'level_c', content: 'roof' }), 'roof_level_c')).toBe(
       false,
     )
+  })
+})
+
+// A plugin's solved roof planes (`capabilities.roofs`) carry their own heights, in their roof's
+// frame: the roof stands at its level's origin and its faces say where it bears.
+describe('a roof of faces', () => {
+  /** `wingHouse` with a roof at the origin of `levelId` holding one plane over `rect`, its eave at `eave`. */
+  function facesHouse(levelId: string, rect: [number, number, number, number], eave: number) {
+    registerRoofPlanes()
+    const nodes = wingHouse([])
+    const plane = roofPlane('roofplane_a', rect, eave, { parentId: 'roof_faces' })
+    nodes.roof_faces = RoofNode.parse({ id: 'roof_faces', parentId: levelId, children: [plane.id] })
+    nodes[plane.id] = plane
+    const level = nodes[levelId] as LevelNode
+    nodes[levelId] = { ...level, children: [...level.children, 'roof_faces'] }
+    return nodes
+  }
+
+  test("a lower wing's planes on the storey above, eave on the lower walls, cover the storey below", () => {
+    // The ground floor's walls top out 0.2 m over the upper floor, east of the upper storey.
+    const nodes = facesHouse('level_1', [6, 0, 12, 8], 0.2)
+    expect(roofsOver(nodes, 'level_g').map((roof) => roof.id)).toEqual(['roof_faces'])
+    expect(roofsOver(nodes, 'level_1')).toEqual([])
+    expect(isRoofOnStoreyWalls(nodes, 'roof_faces')).toBe(false)
+  })
+
+  test("planes on their own storey's walls cover that storey, and stand on its walls", () => {
+    // The container stands at the floor; the eave, 2.7 m up on the upper walls, says where it bears.
+    const nodes = facesHouse('level_1', [0, 0, 6, 8], 2.7)
+    expect(roofsOver(nodes, 'level_1').map((roof) => roof.id)).toEqual(['roof_faces'])
+    expect(roofsOver(nodes, 'level_g')).toEqual([])
+    expect(isRoofOnStoreyWalls(nodes, 'roof_faces')).toBe(true)
+  })
+
+  test('moved to the roof level, the roof stands where it stood and its level is as tall as its planes', () => {
+    const nodes = facesHouse('level_1', [0, 0, 6, 8], 2.7)
+    const move = planRoofsOffStorey(nodes, 'level_1')
+    expect(move?.plan.kind).toBe('roof')
+    if (move?.plan.kind !== 'roof') return
+    const moved = applySceneChanges(nodes, move.changes)
+    const roof = moved.roof_faces as RoofNode
+    expect(roof.parentId).toBe(move.plan.levelId)
+    // The planes are untouched: the container drops by the storey under the roof level.
+    expect(moved.roofplane_a).toEqual(nodes.roofplane_a!)
+    const elevations = getLevelElevations(moved as Record<AnyNodeId, AnyNode>)
+    const base = elevations.get(move.plan.levelId)!.baseY
+    expect(base + roof.position[1]).toBeCloseTo(elevations.get('level_1')!.baseY, 6)
+    // 8 m deep at 6 in 12 from an eave 0.2 m over the roof level's floor.
+    expect((moved[move.plan.levelId] as LevelNode).height).toBeCloseTo(0.2 + 8 * 0.5, 6)
   })
 })
 

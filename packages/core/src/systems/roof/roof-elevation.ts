@@ -1,5 +1,6 @@
 import { findLevelAncestorId, resolveLevelId } from '../../lib/node-ancestry'
 import { wallSupportForNodes } from '../../lib/opening-floor-datum'
+import { roofFaceOf, roofFaceShapes } from '../../registry/roofs'
 import { queryNodes } from '../../runtime/node-queries'
 import type {
   AnyNode,
@@ -39,9 +40,10 @@ export function resolveRoofWallTopElevation(
 }
 
 /**
- * The walls among `wallIds` a roof stands on: those under its segments' footprints, closed room or
- * not (a room missing a wall, an L-shaped room whose centre falls outside, or a redrawn enclosure
- * all still hold the roof up); a cone's, its round wall. Null for a roof with no segments yet.
+ * The walls among `wallIds` a roof stands on: those under its segments' footprints and its faces'
+ * outlines (`capabilities.roofs`), closed room or not (a room missing a wall, an L-shaped room whose
+ * centre falls outside, or a redrawn enclosure all still hold the roof up); a cone's, its round
+ * wall. Null for a roof with neither segments nor faces yet.
  */
 function wallsUnderRoof(
   roof: RoofNode,
@@ -51,7 +53,8 @@ function wallsUnderRoof(
   const segments = roof.children
     .map((id) => nodes[id])
     .filter((node): node is RoofSegmentNode => node?.type === 'roof-segment')
-  if (segments.length === 0) return null
+  const faces = roofFaceShapes(roof, nodes).map((face) => face.outline)
+  if (segments.length === 0 && faces.length === 0) return null
   const cos = Math.cos(roof.rotation)
   const sin = Math.sin(roof.rotation)
   const toLevel = (x: number, z: number): [number, number] => [
@@ -90,6 +93,7 @@ function wallsUnderRoof(
       toLevel(segment.position[0] + x * c + z * s, segment.position[2] - x * s + z * c),
     )
   })
+  footprints.push(...faces)
   return wallIds.filter((id) => {
     const wall = nodes[id]
     return (
@@ -164,7 +168,7 @@ export function resolveRoofElevation(
 
 /**
  * The tallest top of `levelId`'s walls a roof stands on, from the floor of the level holding the
- * roof (m); null when it stands on none of them, or has no segments to stand with.
+ * roof (m); null when it stands on none of them, or has neither segments nor faces to stand with.
  */
 export function roofWallTop(
   roof: RoofNode,
@@ -214,10 +218,11 @@ export function planRoofElevationUpdates(
 
 /**
  * The roofs an edit can move, from the nodes it changed. A roof rests on the walls of its own level
- * or the level below, so: a changed roof (or segment); for a changed wall, the roofs on its level
- * and the level above; for a changed slab, the levels whose walls it touches (its own, which it
- * carries, and the one below, whose plane-bound tops it caps) and every level above it in its
- * building (a base plate lifts them). Null, for every roof, when a level, building or site changed.
+ * or the level below, so: a changed roof (or segment, or face); for a changed wall, the roofs on
+ * its level and the level above; for a changed slab, the levels whose walls it touches (its own,
+ * which it carries, and the one below, whose plane-bound tops it caps) and every level above it in
+ * its building (a base plate lifts them). Null, for every roof, when a level, building or site
+ * changed.
  */
 export function roofsAffectedBy(
   before: Readonly<Record<string, AnyNode>>,
@@ -232,7 +237,12 @@ export function roofsAffectedBy(
       if (!node) continue
       if (node.type === 'level' || node.type === 'building' || node.type === 'site') return null
       if (node.type === 'roof') roofs.add(id)
-      else if (node.type === 'roof-segment' && node.parentId) roofs.add(node.parentId)
+      else if (
+        node.parentId &&
+        (node.type === 'roof-segment' ||
+          (roofFaceOf(node) && nodes[node.parentId]?.type === 'roof'))
+      )
+        roofs.add(node.parentId)
       else if (node.type === 'wall' || node.type === 'slab') {
         const levelId = findLevelAncestorId(id as AnyNodeId, nodes as Record<string, AnyNode>)
         if (!levelId) return null

@@ -1,4 +1,5 @@
 import {
+  type AnyNodeId,
   type FloorplanGeometry,
   type FloorplanPoint,
   type GeometryContext,
@@ -335,7 +336,7 @@ export function buildRoofFloorplan(node: RoofNode, ctx: GeometryContext): Floorp
   for (const sibling of ctx.siblings) {
     if (sibling.type !== 'roof') continue
     for (const childId of sibling.children ?? []) {
-      const segment = ctx.resolve<RoofSegmentNode>(childId)
+      const segment = ctx.resolve<RoofSegmentNode>(childId as AnyNodeId)
       if (segment?.type !== 'roof-segment') continue
       entries.push({ roof: sibling, segment, plan: buildSegPlan(sibling, segment, drafting) })
     }

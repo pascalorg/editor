@@ -69,6 +69,11 @@ geometry-only definition inherits child mounting from the framework. The host's
 prefixes. `capabilities.surfaces.hosting: false` opts out as a host;
 `capabilities.surfacePlacement: 'floor-only'` opts out as a hosted child.
 
+A roof holds its segments and the faces of kinds that declare `capabilities.roofs`
+(a solved roof plane): it renders them in its frame and counts them as part of the
+roof, and refuses a child of any other registered kind (see
+[`node-definitions.md`](node-definitions.md#capabilitiesroofs)).
+
 ## Standing on the ground (terrain)
 
 The site carries a sculpted heightfield, so "the floor" is not the plane `y = 0`. A plugin kind that

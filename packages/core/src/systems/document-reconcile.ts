@@ -8,6 +8,7 @@ import { resolveLevelId } from '../lib/node-ancestry'
 import { structureLevelsForChange } from '../lib/space-detection'
 import { applyStructureReconciliation } from '../lib/structure-commit'
 import type { SceneNodes } from '../lib/structure-kernel'
+import { roofFaceOf } from '../registry/roofs'
 import type { AnyNode, AnyNodeId } from '../schema'
 import { generateId } from '../schema/base'
 import { roofsKeptOverStorey } from '../services/roof-move'
@@ -182,7 +183,7 @@ export function reconcileDocument(
             changed.push(id)
         for (const id in roofsFrom) if (!(id in current)) changed.push(id)
         const roofInput = (node: AnyNode | undefined) =>
-          isRoofElevationInput(node) || node?.type === 'roof-segment'
+          isRoofElevationInput(node) || node?.type === 'roof-segment' || !!roofFaceOf(node)
         if (changed.some((id) => roofInput(roofsFrom[id]) || roofInput(current[id]))) {
           const roofs = [
             ...roofsKeptOverStorey(roofsFrom, view()),

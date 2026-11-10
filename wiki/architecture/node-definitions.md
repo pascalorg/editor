@@ -465,6 +465,35 @@ capabilities: {
 
 ---
 
+### `capabilities.roofs`
+
+A kind that roofs: a node of it is one face of the roof that holds it (a plugin's solved roof plane), as a segment is one of the roof's masses. A roof lists its faces in `children` beside its segments.
+
+- **Holding.** `RoofNode.children` keeps any id, a plugin's own prefix (`roofplane_…`) included. The roof's `validateRelations` refuses a child a write adds whose kind is registered and is neither a segment nor roofs; what a roof already held stays, so an old scene still edits, and so does a kind this runtime has not registered.
+- **Rendering.** The roof system merges only the segments into the shell. The roof's renderer mounts each face through the face's own renderer inside the roof's group, so the face stands in the roof's frame, and hiding, selecting, moving or deleting the roof carries it.
+- **Reading.** The roof's readers count a face through `outline` and `heightAt`, which `roofFaceShapes(roof, nodes)` turns into the frame of what holds the roof: the storey a roof covers (`roofsOver`), the walls it stands on and the seat that moves it to the roof level, the height of a roof level that seat makes, a view's frame, a floor plate's support, the site plan's roof outline and the level summary.
+
+```ts
+type RoofsCapability = {
+  outline: (node: AnyNode) => readonly (readonly [x: number, z: number])[] // the roof's plan
+  heightAt: (node: AnyNode, x: number, z: number) => number // over the roof's origin
+}
+```
+
+The frame is the roof's. A roof standing unturned at its level's origin holds its faces in the level's metres, as a plugin's planes store them; a roof moved or turned takes them with it. A face carries its own heights, so a roof of faces stands where it is placed (`support: { kind: 'level' }`, the default). Readers take a face's lowest and highest points at its outline's corners. A face draws in the plan only if its kind declares `floorplan`, which reads the roof's transform from `ctx.parent`.
+
+```ts
+// a plugin's roof plane
+capabilities: {
+  roofs: {
+    outline: (node) => (node as RoofPlaneNode).polygon,
+    heightAt: (node, x, z) => roofPlaneHeightAt(node as RoofPlaneNode, x, z),
+  },
+},
+```
+
+---
+
 ### `capabilities.cuts`
 
 Frozen contract (F5b cut intents), not read by any host yet. A kind that removes material from a host publishes what it removes, and each host kernel intersects the intents with its own faces. It supersedes `cuttable`, which nothing ever read: that field stays as a deprecated, ignored alias until plugin API v2.

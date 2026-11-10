@@ -5,6 +5,7 @@ import { furnishRoomTool, isAgentRefusal, viewSceneTool } from '../agent-tools'
 import hillside from '../lib/__fixtures__/owner-hillside-grade.json'
 import { encodeTerrainField } from '../lib/terrain-codec'
 import { createTerrainField } from '../lib/terrain-field'
+import { registerRoofPlanes, roofPlane } from '../registry/__fixtures__/roof-planes'
 import {
   type AnyNode,
   BuildingNode,
@@ -1048,6 +1049,31 @@ describe('a close-up of a roof', () => {
       expect([r(box.min[1]), r(box.max[1])]).toEqual([0, r(2.45 + 4 * Math.tan(Math.PI / 8))])
       expect([r(box.min[0]), r(box.max[0]), r(box.min[2]), r(box.max[2])]).toEqual([0, 10, 0, 8])
     }
+  })
+
+  test("a roof of a plugin's planes frames them, from their eave to their ridge", () => {
+    registerRoofPlanes()
+    // The architect's roof: two 6-in-12 planes meeting over the 8 m depth, at the level's origin.
+    const nodes = hipHouse()
+    const planes = [
+      roofPlane('roofplane_south', [-0.5, -0.5, 10.5, 4], 0, { parentId: 'roof_planes' }),
+      roofPlane('roofplane_north', [-0.5, 8.5, 10.5, 4], 0, { parentId: 'roof_planes' }),
+    ]
+    nodes.roof_planes = RoofNode.parse({
+      id: 'roof_planes',
+      parentId: 'level_roof',
+      children: planes.map((plane) => plane.id),
+    })
+    for (const plane of planes) nodes[plane.id] = plane
+    nodes.level_roof = { ...nodes.level_roof!, children: ['roof_planes'] } as AnyNode
+    const ridge = 2.45 + 4.5 * 0.5
+
+    const box = sceneViewBounds(nodes, 'roof_planes')
+    expect([r(box.min[0]), r(box.max[0]), r(box.min[2]), r(box.max[2])]).toEqual([
+      -0.5, 10.5, -0.5, 8.5,
+    ])
+    expect([r(box.min[1]), r(box.max[1])]).toEqual([2.45, ridge])
+    expect(r(sceneViewBounds(nodes, 'building_main').max[1])).toBe(ridge)
   })
 
   test('the picture is taken from outside the roof, centred on it', () => {

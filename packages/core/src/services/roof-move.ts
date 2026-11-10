@@ -1,6 +1,7 @@
 import { applySceneChanges } from '../agent-operations/apply-changes'
 import type { SceneChanges, SceneNodes } from '../agent-operations/types'
 import { getLevelDisplayName } from '../lib/level-name'
+import { roofFaceShapes } from '../registry/roofs'
 import { queryNodes } from '../runtime/node-queries'
 import {
   type AnyNode,
@@ -31,11 +32,14 @@ const segmentsOf = (nodes: Nodes, roof: RoofNode) =>
     .filter((child): child is RoofSegmentNode => child?.type === 'roof-segment')
 
 /**
- * Where a roof's segments bear, from the floor of the level holding it (m): the lowest of them;
- * null with none.
+ * Where a roof bears, from the floor of the level holding it (m): the lowest of its segments' bases
+ * and its faces' eaves (`capabilities.roofs`); null with neither.
  */
 function roofBearing(nodes: Nodes, roof: RoofNode): number | null {
-  const heights = segmentsOf(nodes, roof).map((segment) => roof.position[1] + segment.position[1])
+  const heights = [
+    ...segmentsOf(nodes, roof).map((segment) => roof.position[1] + segment.position[1]),
+    ...roofFaceShapes(roof, nodes).map((face) => face.low),
+  ]
   return heights.length ? Math.min(...heights) : null
 }
 
@@ -50,13 +54,24 @@ function bearsOn(nodes: Nodes, roof: RoofNode, levelId: string): boolean {
 }
 
 /**
+ * Whether a roof's faces (`capabilities.roofs`) stand on `levelId`'s walls: their lowest eave on
+ * the tops of the walls under the roof.
+ */
+function facesBearOn(nodes: Nodes, roof: RoofNode, levelId: string): boolean {
+  const eaves = roofFaceShapes(roof, nodes).map((face) => face.low)
+  const top = eaves.length ? roofWallTop(roof, nodes, levelId) : null
+  return top !== null && Math.abs(Math.min(...eaves) - top) <= ON_WALLS
+}
+
+/**
  * A roof held by the storey whose walls carry it (written there before the rule, or by a tool that
  * ignored it): it hides that storey's plan in solo and exploded views; the seat and
  * `planRoofsOffStorey` move it. Some segment bears on the storey's walls (`segmentBearing`: walls
  * along its edges, open air past them) and the roof follows walls, or a segment's base or eave
  * stands at the eave those walls need (knee walls on the plate, or the segment's own walls rising to
- * it). A lower wing's roof on the storey above is not one (its inner edge has rooms past it), nor a
- * porch or portico on posts (no wall along its outer edges), nor a roof on another roof.
+ * it); or its faces' eave stands on the tops of the walls under them. A lower wing's roof on the
+ * storey above is not one (its inner edge has rooms past it), nor a porch or portico on posts (no
+ * wall along its outer edges), nor a roof on another roof.
  */
 export function isRoofOnStoreyWalls(nodes: Nodes, roofId: string): boolean {
   const roof = nodes[roofId]
@@ -68,13 +83,15 @@ export function isRoofOnStoreyWalls(nodes: Nodes, roofId: string): boolean {
     roof.support?.kind === 'roof'
   )
     return false
-  return segmentsOf(nodes, roof).some((segment) => {
-    const { need } = segmentBearing(nodes, segment.id, level.id)
-    if (need === null) return false
-    if (roof.support?.kind === 'walls') return true
-    const base = roof.position[1] + segment.position[1]
-    return [base, base + segment.wallHeight].some((y) => Math.abs(y - need) <= ON_WALLS)
-  })
+  return (
+    segmentsOf(nodes, roof).some((segment) => {
+      const { need } = segmentBearing(nodes, segment.id, level.id)
+      if (need === null) return false
+      if (roof.support?.kind === 'walls') return true
+      const base = roof.position[1] + segment.position[1]
+      return [base, base + segment.wallHeight].some((y) => Math.abs(y - need) <= ON_WALLS)
+    }) || facesBearOn(nodes, roof, level.id)
+  )
 }
 
 export type RoofMove = {
@@ -91,7 +108,18 @@ export type RoofMove = {
 function planRoofMove(nodes: Nodes, storeyId: string, roofs: RoofNode[]): RoofMove {
   const segmentRise = (segment: RoofSegmentNode) =>
     (segment.wallHeight ?? 0) + getActiveRoofHeight(segment)
-  const rise = Math.max(0, ...roofs.flatMap((roof) => segmentsOf(nodes, roof)).map(segmentRise))
+  // How high each of a roof's segments and faces tops out over its container.
+  const tops = (roof: RoofNode) => [
+    ...segmentsOf(nodes, roof).map((segment) => segment.position[1] + segmentRise(segment)),
+    ...roofFaceShapes(roof, nodes).map((face) => face.high - roof.position[1]),
+  ]
+  const rise = Math.max(
+    0,
+    ...roofs.flatMap((roof) => [
+      ...segmentsOf(nodes, roof).map(segmentRise),
+      ...roofFaceShapes(roof, nodes).map((face) => face.high - face.low),
+    ]),
+  )
   const planned = planRoofLevel(nodes, storeyId, rise)
   const made = planned.kind === 'roof' ? planned.create : null
   const declares = planned.kind === 'roof' ? planned.update : []
@@ -128,12 +156,7 @@ function planRoofMove(nodes: Nodes, storeyId: string, roofs: RoofNode[]): RoofMo
     height: Math.max(
       0.2,
       ...roofs.flatMap((roof, index) =>
-        segmentsOf(nodes, roof).map(
-          (segment) =>
-            (moves[index]!.data as RoofNode).position[1] +
-            segment.position[1] +
-            segmentRise(segment),
-        ),
+        tops(roof).map((top) => (moves[index]!.data as RoofNode).position[1] + top),
       ),
     ),
   }
