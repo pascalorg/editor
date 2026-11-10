@@ -31,6 +31,11 @@ export const CELL = 0.1
 /** Cells per tile side. */
 export const TILE = 16
 const TILE_M = CELL * TILE
+/**
+ * A cell is wall when a wall's footprint reaches this close to its centre (on each axis): thin
+ * walls still mark an unbroken line of cells, and a wall cell ends at most ~10 cm past the face.
+ */
+const WALL_REACH = CELL / 4
 /** Margin around a room: the 2-cell dilation plus polygon slop. */
 const APRON = 0.35
 /** Cells built around a tile so its 2-pass dilation and its edges' neighbours are exact. */
@@ -58,6 +63,9 @@ export type MapRoom = {
   polygon: [number, number][]
   holes?: [number, number][][]
 }
+
+/** A level's walls in plan: triangles of their footprints, six numbers each (world XZ × 3). */
+export type MapWalls = { level: number; triangles: ArrayLike<number> }
 
 /** One tile while it is being built, inside its row's dilated cells (with a margin all round). */
 export type TileCells = {
@@ -131,8 +139,16 @@ export class RoomMap {
   }
   private levelData = new Float32Array(8)
 
-  /** Rebuild from rooms. `onTile` sees every built tile (the doorway search walks room edges). */
-  build(levels: MapLevel[], rooms: MapRoom[], onTile?: (tile: TileCells) => void) {
+  /**
+   * Rebuild from rooms. `onTile` sees every built tile (the doorway search walks room edges).
+   * `walls` keep a room from growing out through them: a wall's far side stays outside.
+   */
+  build(
+    levels: MapLevel[],
+    rooms: MapRoom[],
+    onTile?: (tile: TileCells) => void,
+    walls: MapWalls[] = [],
+  ) {
     this.levels = levels.map((l) => ({ y: l.y, building: l.building, clusters: [] }))
     this.order = levels
       .map((_, i) => i)
@@ -192,6 +208,26 @@ export class RoomMap {
     const detailTiles: Uint16Array[] = []
     let buffer = new Uint16Array(0)
     let scratch = new Uint16Array(0)
+    let wallBuffer = new Uint8Array(0)
+    // Wall triangles per level and tile row (a row's strip reaches a margin into the next rows).
+    const wallRows: Map<number, number[]>[] = levels.map(() => new Map())
+    const reach = MARGIN * CELL + WALL_REACH
+    walls.forEach((wall, wi) => {
+      const rows = wallRows[wall.level]
+      if (!rows) return
+      const t = wall.triangles
+      for (let k = 0; k + 5 < t.length; k += 6) {
+        const zMin = Math.min(t[k + 1]!, t[k + 3]!, t[k + 5]!)
+        const zMax = Math.max(t[k + 1]!, t[k + 3]!, t[k + 5]!)
+        const r0 = Math.floor((zMin - reach - this.originZ) / TILE_M)
+        const r1 = Math.floor((zMax + reach - this.originZ) / TILE_M)
+        for (let r = r0; r <= r1; r++) {
+          const list = rows.get(r)
+          if (list) list.push(wi, k)
+          else rows.set(r, [wi, k])
+        }
+      }
+    })
 
     // Where rooms overlap (an automatic room under drawn ones, a unit around its rooms), the
     // smallest wins: rasterized last, so each level's rooms go largest first.
@@ -237,8 +273,10 @@ export class RoomMap {
         if (buffer.length < stride * rowH) {
           buffer = new Uint16Array(stride * rowH)
           scratch = new Uint16Array(stride * rowH)
+          wallBuffer = new Uint8Array(stride * rowH)
         }
         const strip = buffer.subarray(0, stride * rowH)
+        const wallStrip = wallBuffer.subarray(0, stride * rowH)
         const inRow = new Set<number>()
         for (let tz = tz0; tz <= tz1; tz++) {
           inRow.clear()
@@ -253,7 +291,23 @@ export class RoomMap {
           for (const ri of [...inRow].sort((a, b) => area[b]! - area[a]! || a - b))
             rasterize(used[ri]!, ri + 1, strip, stride, rowH, x0, z0)
           // Growth only fills empty cells: inside a big room there are none.
-          if (strip.includes(0)) dilate(strip, scratch, stride, rowH)
+          if (strip.includes(0)) {
+            const rowWalls = wallRows[li]!.get(tz)
+            if (rowWalls) {
+              wallStrip.fill(0)
+              for (let w = 0; w < rowWalls.length; w += 2)
+                markWall(
+                  walls[rowWalls[w]!]!.triangles,
+                  rowWalls[w + 1]!,
+                  wallStrip,
+                  stride,
+                  rowH,
+                  x0,
+                  z0,
+                )
+            }
+            dilate(strip, scratch, stride, rowH, rowWalls ? wallStrip : undefined)
+          }
           for (let tx = tx0; tx <= tx1; tx++) {
             const t = (tz - tz0) * cluster.tw + (tx - tx0)
             if (!buckets[t]!.length) continue
@@ -696,16 +750,76 @@ function rasterize(
   }
 }
 
-/** Two passes of 4-neighbour growth into empty cells: wall thickness and polygon slop resolve. */
-function dilate(cells: Uint16Array, scratch: Uint16Array, width: number, height: number) {
+/** Marks the cells one footprint triangle (`t[at…at+5]`, world XZ) reaches. */
+function markWall(
+  t: ArrayLike<number>,
+  at: number,
+  wall: Uint8Array,
+  width: number,
+  height: number,
+  x0: number,
+  z0: number,
+) {
+  const zMin = Math.min(t[at + 1]!, t[at + 3]!, t[at + 5]!)
+  const zMax = Math.max(t[at + 1]!, t[at + 3]!, t[at + 5]!)
+  const j0 = Math.max(0, Math.ceil((zMin - WALL_REACH - z0) / CELL - 0.5))
+  const j1 = Math.min(height - 1, Math.floor((zMax + WALL_REACH - z0) / CELL - 0.5))
+  for (let j = j0; j <= j1; j++) {
+    // The triangle's x extent inside the band of z this row's cell centres reach.
+    const lo = z0 + (j + 0.5) * CELL - WALL_REACH
+    const hi = lo + 2 * WALL_REACH
+    let xMin = Number.POSITIVE_INFINITY
+    let xMax = Number.NEGATIVE_INFINITY
+    for (let a = 0; a < 3; a++) {
+      const xa = t[at + a * 2]!
+      const za = t[at + a * 2 + 1]!
+      const xb = t[at + ((a + 1) % 3) * 2]!
+      const zb = t[at + ((a + 1) % 3) * 2 + 1]!
+      if (za >= lo && za <= hi) {
+        xMin = Math.min(xMin, xa)
+        xMax = Math.max(xMax, xa)
+      }
+      for (const z of [lo, hi])
+        if (za < z !== zb < z) {
+          const x = xa + ((xb - xa) * (z - za)) / (zb - za)
+          xMin = Math.min(xMin, x)
+          xMax = Math.max(xMax, x)
+        }
+    }
+    if (xMin > xMax) continue
+    const i0 = Math.max(0, Math.ceil((xMin - WALL_REACH - x0) / CELL - 0.5))
+    const i1 = Math.min(width - 1, Math.floor((xMax + WALL_REACH - x0) / CELL - 0.5))
+    if (i1 >= i0) wall.fill(1, j * width + i0, j * width + i1 + 1)
+  }
+}
+
+/**
+ * Two passes of 4-neighbour growth into empty cells: wall thickness and polygon slop resolve.
+ * A room grows into a wall but never out of it: past a wall's far face is outside, wherever the
+ * room's outline runs inside the wall (its centre line, or either face).
+ */
+function dilate(
+  cells: Uint16Array,
+  scratch: Uint16Array,
+  width: number,
+  height: number,
+  wall?: Uint8Array,
+) {
+  const steps = [-1, 1, -width, width]
   for (let pass = 0; pass < 2; pass++) {
     scratch.set(cells)
     for (let j = 1; j < height - 1; j++)
       for (let i = 1; i < width - 1; i++) {
         const k = j * width + i
         if (scratch[k]) continue
-        const n = scratch[k - 1] || scratch[k + 1] || scratch[k - width] || scratch[k + width]
-        if (n) cells[k] = n
+        const open = !wall || wall[k] === 1
+        for (const step of steps) {
+          const n = scratch[k + step]!
+          if (n && (open || !wall?.[k + step])) {
+            cells[k] = n
+            break
+          }
+        }
       }
   }
 }

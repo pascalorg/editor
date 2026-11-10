@@ -39,7 +39,7 @@ function twoRooms(): RoomSceneInput {
     box(0.1, 0.6, 4, -0.05, 2.4, 2),
     box(0.1, 1.2, 1.5, -0.05, 1.5, 0.75),
     box(0.1, 1.2, 1.5, -0.05, 1.5, 3.25),
-  ]
+  ].map((object) => ({ object, levelIndex: 0 }))
   const window = new Group()
   window.position.set(-0.05, 1.5, 2)
   const glass = box(0.02, 1.2, 1, 0, 0, 0)
@@ -118,7 +118,7 @@ describe('room lighting', () => {
     ]
     const building = new Group()
     building.rotation.y = angle
-    for (const mesh of [...input.walls, ...input.covers.map((c) => c.object)]) building.add(mesh)
+    for (const { object } of [...input.walls, ...input.covers]) building.add(object)
     building.add(input.openings[0]!.object)
     building.updateMatrixWorld(true)
     const zones = input.zones.map((zone) => ({
@@ -333,6 +333,61 @@ describe('room map edge cases', () => {
     expect(at(2, 2)).toBe('kitchen')
     expect(at(7, 2)).toBe('bedroom')
     expect(at(5, 8)).toBe('whole floor')
+  })
+
+  test('a room never reaches past its walls, wherever its outline runs inside them', () => {
+    // A house turned 40° off the grid, 0.3 m walls. Its room outline can run along the walls'
+    // outside faces (faces locked to the line), their centres, or their inside faces. A wall's
+    // outside face looks 18 cm out for its room: it must find none anywhere along the wall,
+    // while the wall's own thickness (window reveals) still belongs to the room.
+    const angle = (40 * Math.PI) / 180
+    const turn = (x: number, z: number): [number, number] => [
+      x * Math.cos(angle) + z * Math.sin(angle),
+      -x * Math.sin(angle) + z * Math.cos(angle),
+    ]
+    const thickness = 0.3
+    for (const outline of [0, thickness / 2, thickness]) {
+      // Outside faces on the 8 × 6 m rectangle; the room outline sits `outline` inside them.
+      const building = new Group()
+      building.rotation.y = angle
+      const walls = [
+        box(8, 2.7, thickness, 4, 1.35, thickness / 2),
+        box(8, 2.7, thickness, 4, 1.35, 6 - thickness / 2),
+        box(thickness, 2.7, 6, thickness / 2, 1.35, 3),
+        box(thickness, 2.7, 6, 8 - thickness / 2, 1.35, 3),
+      ]
+      for (const wall of walls) building.add(wall)
+      building.updateMatrixWorld(true)
+      const rooms = new RoomLighting()
+      rooms.build({
+        ...bare({
+          levels: [{ y: 0, building: 0 }],
+          zones: [
+            {
+              id: 'room',
+              levelIndex: 0,
+              polygon: rect(outline, outline, 8 - outline, 6 - outline).map(([x, z]) => turn(x, z)),
+            },
+          ],
+        }),
+        walls: walls.map((object) => ({ object, levelIndex: 0 })),
+      })
+      const at = (x: number, z: number) => {
+        const [wx, wz] = turn(x, z)
+        return rooms.roomAt(new Vector3(wx, 1, wz))
+      }
+      for (let d = 0.02; d < 8; d += 0.02) {
+        expect(at(d, -0.18)).toBe(-1)
+        expect(at(d, 6.18)).toBe(-1)
+      }
+      for (let d = 0.02; d < 6; d += 0.02) {
+        expect(at(-0.18, d)).toBe(-1)
+        expect(at(8.18, d)).toBe(-1)
+      }
+      // Inside the wall, 5 cm past the room's outline, and in the room itself.
+      for (let d = 0.5; d < 7.5; d += 0.02) expect(at(d, Math.max(outline - 0.05, 0.05))).toBe(0)
+      expect(at(4, 3)).toBe(0)
+    }
   })
 
   test('a pavilion in a courtyard keeps its room inside the wing around it', () => {

@@ -175,11 +175,14 @@ export function liveRoomScene(virtualLampsOn: boolean): RoomSceneInput | null {
       if (object) covers.push({ object, kind })
     }
   }
-  const walls: Object3D[] = []
+  const walls: RoomSceneInput['walls'] = []
   for (const id of sceneRegistry.byType.wall ?? []) {
     const object = sceneRegistry.nodes.get(id)
+    if (!object) continue
+    const wallLevel = levelIndex.get(nodes[id as AnyNodeId]?.parentId ?? '') ?? 0
     // Doors, windows and items hang under their wall: a closed leaf mustn't close its doorway.
-    if (object) walls.push(...meshesOf(object, (child) => registered.has(child)))
+    for (const mesh of meshesOf(object, (child) => registered.has(child)))
+      walls.push({ object: mesh, levelIndex: wallLevel })
   }
   const openings: RoomOpeningRoot[] = []
   for (const kind of OPENING_TYPES) {
@@ -318,7 +321,10 @@ export function bakedRoomScene(root: Object3D, virtualLampsOn: boolean): RoomSce
     const kind = (object.userData as BakedExtras).kind
     return kind === 'door' || kind === 'window' || kind === 'item'
   }
-  const walls = wallRoots.flatMap((object) => meshesOf(object, isIdentity))
+  const walls = wallRoots.flatMap((object) => {
+    const levelIndex = levelOf(object).index
+    return meshesOf(object, isIdentity).map((mesh) => ({ object: mesh, levelIndex }))
+  })
   const bounds = new Box3()
   for (const zone of zones)
     for (const [x, z] of zone.polygon) bounds.expandByPoint(point.set(x, 0, z))

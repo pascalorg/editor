@@ -41,7 +41,7 @@ import {
   vec3,
   vec4,
 } from 'three/tsl'
-import { CELL, type MapLevel, RoomMap, TILE, type TileCells } from './room-map'
+import { CELL, type MapLevel, type MapWalls, RoomMap, TILE, type TileCells } from './room-map'
 
 /**
  * "Room-aware" interior light, the game-engine way (ported from the enhanced viewer):
@@ -111,8 +111,11 @@ export type RoomSceneInput = {
   zones: RoomZone[]
   /** Ceilings, roofs and slabs (enclosure rays) with their kind. */
   covers: { object: Object3D; kind: 'ceiling' | 'roof' | 'slab' }[]
-  /** Wall meshes only (openings and their parts excluded), for walkable-opening rays. */
-  walls: Object3D[]
+  /**
+   * Wall meshes only (openings and their parts excluded), each with its level: walkable-opening
+   * rays test them, and their footprints keep rooms from reaching past a wall's far face.
+   */
+  walls: { object: Object3D; levelIndex: number }[]
   openings: RoomOpeningRoot[]
   lamps: RoomLamp[]
   /** Whether rooms without lamps of their own get their virtual ceiling lamp lit. */
@@ -307,6 +310,7 @@ export class RoomLighting {
         holes: room.zone.holes,
       })),
       openings.walk,
+      wallFootprints(input.walls),
     )
     this.openings = openings.finish()
 
@@ -854,7 +858,7 @@ export class RoomLighting {
       .map((o) => ({ id: o.id, box: new Box3().setFromObject(o.object) }))
     const doorHoles = doors.map((door) => door.box.clone().expandByScalar(0.05))
     ray.far = 0.9
-    const wallGrid = new MeshGrid(input.walls)
+    const wallGrid = new MeshGrid(input.walls.map((wall) => wall.object))
     const samples = new Map<string, OpeningSamples>()
     const v = new Vector3()
     const dirV = new Vector3()
@@ -1323,6 +1327,42 @@ export class RoomLighting {
 }
 
 // ---- helpers -------------------------------------------------------------------------------
+
+/**
+ * The walls' footprints per level: every triangle that has an area seen from above (tops,
+ * bottoms, lintels, sills), in world XZ. Read from the vertices as they are now, like `MeshGrid`.
+ */
+function wallFootprints(walls: RoomSceneInput['walls']): MapWalls[] {
+  const byLevel = new Map<number, number[]>()
+  const a = new Vector3()
+  const b = new Vector3()
+  const c = new Vector3()
+  for (const { object, levelIndex } of walls) {
+    const mesh = object as Mesh
+    const position = mesh.isMesh ? mesh.geometry?.getAttribute('position') : undefined
+    if (!position || position.count === 0) continue
+    let triangles = byLevel.get(levelIndex)
+    if (!triangles) {
+      triangles = []
+      byLevel.set(levelIndex, triangles)
+    }
+    const index = mesh.geometry.getIndex()
+    const count = index ? index.count : position.count
+    for (let k = 0; k + 2 < count; k += 3) {
+      a.fromBufferAttribute(position, index ? index.getX(k) : k).applyMatrix4(mesh.matrixWorld)
+      b.fromBufferAttribute(position, index ? index.getX(k + 1) : k + 1).applyMatrix4(
+        mesh.matrixWorld,
+      )
+      c.fromBufferAttribute(position, index ? index.getX(k + 2) : k + 2).applyMatrix4(
+        mesh.matrixWorld,
+      )
+      // Faces seen edge-on from above (the wall's sides) add nothing to its footprint.
+      if (Math.abs((b.x - a.x) * (c.z - a.z) - (c.x - a.x) * (b.z - a.z)) < 1e-6) continue
+      triangles.push(a.x, a.z, b.x, b.z, c.x, c.z)
+    }
+  }
+  return [...byLevel].map(([level, triangles]) => ({ level, triangles }))
+}
 
 /**
  * Ray hits against the meshes' geometry itself, nearest first. Picking overrides (walls hidden
