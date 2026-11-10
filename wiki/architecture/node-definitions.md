@@ -160,7 +160,8 @@ surface that needs its parent site's polygon and terrain, a water body that
 needs its siblings — reads them through its `resolve` prop, which looks up
 any node of the graph the artifact was baked from (same signature as
 `GeometryContext.resolve`). A renderer that reads `useScene` for that context
-draws nothing in the baked viewer. Hosts without the graph omit `resolve`.
+draws nothing in the baked viewer. `GlbScene` builds `resolve` from its
+`sceneNodes` prop; a host that omits `sceneNodes` leaves `resolve` undefined.
 
 ## Export-only geometry
 
