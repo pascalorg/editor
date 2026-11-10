@@ -1070,7 +1070,6 @@ const LineWallTool: React.FC = () => {
                     flatConstructionBase: flatConstructionBase.current,
                   },
                 )
-          let nextStart: WallPlanPoint
           if (!createdWall) {
             const levelWalls = getCurrentLevelWalls()
             const startPt: WallPlanPoint = [startingPoint.current.x, startingPoint.current.z]

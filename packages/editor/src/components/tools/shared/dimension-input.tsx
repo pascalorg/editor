@@ -55,6 +55,14 @@ export function DimensionInput({
     fieldTypeRef.current = state.fieldType
   }, [state.fieldType])
 
+  const focusField = useCallback((field: 'length' | 'angle') => {
+    const target = field === 'length' ? lengthRef.current : angleRef.current
+    if (target) {
+      target.focus()
+      target.select()
+    }
+  }, [])
+
   // Focus the correct input when fieldType changes
   useEffect(() => {
     if (!state.active) return
@@ -88,13 +96,7 @@ export function DimensionInput({
     }
   }, [state, onChange])
 
-  const focusField = useCallback((field: 'length' | 'angle') => {
-    const target = field === 'length' ? lengthRef.current : angleRef.current
-    if (target) {
-      target.focus()
-      target.select()
-    }
-  }, [])
+
 
   const handleLengthKeyDown = useCallback(
     (e: React.KeyboardEvent) => {

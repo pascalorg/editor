@@ -10177,6 +10177,16 @@ export function FloorplanPanel({
       setCursorPoint(nextStart)
       // What was typed belongs to this segment; the next starts afresh.
       usePlacementTyping.getState().clear()
+      const dim = useDimensionDraftStore.getState()
+      useDimensionDraftStore.setState({
+        points: [...dim.points, nextStart],
+        previewPoint: null,
+        lengthValue: '',
+        angleValue: '',
+        lockedLength: null,
+        lockedAngle: null,
+        fieldType: 'length',
+      })
     },
     [
       clearWallPlacementDraft,
@@ -12137,6 +12147,7 @@ export function FloorplanPanel({
                 handleWallPlacementPoint(pt)
               } else if (isFenceBuildActive) {
                 emitFloorplanGridEvent('click', pt, new MouseEvent('click') as any)
+                handleBackgroundPlacementClick(pt, new MouseEvent('click') as any)
               } else if (isPolygonDraftBuildActive) {
                 emitFloorplanGridEvent('click', pt, new MouseEvent('click') as any)
                 if (isZoneBuildActive) {
@@ -12248,9 +12259,10 @@ function FloorplanDimensionInputOverlay({
   const handleConfirm = useCallback(() => {
     const currentDim = useDimensionDraftStore.getState()
     const lastPt =
-      currentDim.points.length > 0
+      draftStart ??
+      (currentDim.points.length > 0
         ? currentDim.points[currentDim.points.length - 1]!
-        : (draftStart ?? cursorPoint)
+        : cursorPoint)
     if (!lastPt) return
 
     const length =
