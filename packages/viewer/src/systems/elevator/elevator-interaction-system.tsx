@@ -8,7 +8,7 @@ import {
 } from '@pascal-app/core'
 import { useThree } from '@react-three/fiber'
 import { useEffect, useRef } from 'react'
-import { type Object3D, Raycaster, Vector2 } from 'three'
+import { Mesh, type Object3D, Raycaster, Vector2 } from 'three'
 
 type ElevatorButtonAction = 'open-door' | 'request-level'
 
@@ -38,6 +38,7 @@ function getElevatorButtonData(object: Object3D): ElevatorButtonUserData | null 
  * whose meshes this capture-phase listener must not trip over.
  */
 export function collectElevatorButtons(object: Object3D, into: Object3D[] = []): Object3D[] {
+  if (!object.visible) return into
   if ((object.userData as { elevatorButton?: unknown }).elevatorButton) {
     into.push(object)
     return into
@@ -46,7 +47,49 @@ export function collectElevatorButtons(object: Object3D, into: Object3D[] = []):
   return into
 }
 
-export function ElevatorInteractionSystem() {
+/** Ignore malformed material groups during transient paint updates, rather than raycasting invalid faces. */
+export function pickElevatorButton(
+  scene: Object3D,
+  raycaster: Raycaster,
+): ElevatorButtonUserData | null {
+  const buttons = collectElevatorButtons(scene)
+  const faces: Object3D[] = []
+  for (const button of buttons)
+    button.traverseVisible((object) => {
+      if (object instanceof Mesh) faces.push(object)
+    })
+  const hit = raycaster.intersectObjects(faces, false)[0]
+  if (!hit) return null
+  const blockers: Mesh[] = []
+  scene.traverseVisible((object) => {
+    if (
+      !(object instanceof Mesh) ||
+      getElevatorButtonData(object) ||
+      object.userData.pascalExport === 'strip'
+    )
+      return
+    if (
+      Array.isArray(object.material) &&
+      object.geometry.groups.some(
+        (group: { materialIndex?: number; count: number }) =>
+          !object.material[group.materialIndex ?? 0] || !Number.isFinite(group.count),
+      )
+    )
+      return
+    blockers.push(object)
+  })
+  const occluded = raycaster.intersectObjects(blockers, false).some((intersection) => {
+    if (intersection.distance >= hit.distance - 0.001) return false
+    const mesh = intersection.object as Mesh
+    const material = Array.isArray(mesh.material)
+      ? mesh.material[intersection.face?.materialIndex ?? 0]
+      : mesh.material
+    return material?.visible && (!material.transparent || material.opacity >= 0.95)
+  })
+  return occluded ? null : getElevatorButtonData(hit.object)
+}
+
+export function ElevatorInteractionSystem({ enabled = true }: { enabled?: boolean }) {
   const camera = useThree((state) => state.camera)
   const gl = useThree((state) => state.gl)
   const scene = useThree((state) => state.scene)
@@ -57,7 +100,7 @@ export function ElevatorInteractionSystem() {
     const canvas = gl.domElement
 
     const handlePointerDown = (event: PointerEvent) => {
-      if (event.button !== 0) return
+      if (event.button !== 0 || !enabled) return
 
       const buttons = collectElevatorButtons(scene)
       if (buttons.length === 0) return
@@ -70,10 +113,7 @@ export function ElevatorInteractionSystem() {
       const raycaster = raycasterRef.current
       raycaster.setFromCamera(pointer, camera)
 
-      const button = raycaster
-        .intersectObjects(buttons, true)
-        .map((intersection) => getElevatorButtonData(intersection.object))
-        .find((data): data is ElevatorButtonUserData => data !== null)
+      const button = pickElevatorButton(scene, raycaster)
 
       if (!button || button.disabled) return
 
@@ -104,7 +144,7 @@ export function ElevatorInteractionSystem() {
     return () => {
       canvas.removeEventListener('pointerdown', handlePointerDown, true)
     }
-  }, [camera, gl, scene])
+  }, [camera, gl, scene, enabled])
 
   return null
 }

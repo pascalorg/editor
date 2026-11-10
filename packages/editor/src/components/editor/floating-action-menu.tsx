@@ -14,6 +14,7 @@ import {
   getWallThickness,
   isCurvedWall,
   isDerivedNode,
+  isNodeDuplicable,
   isRegistryMovable,
   isRegistrySelectable,
   isSplineFence,
@@ -681,6 +682,7 @@ export function FloatingActionMenu() {
                 onDelete={handleDelete}
                 onDuplicate={
                   node &&
+                  isNodeDuplicable(node as AnyNode) &&
                   node.type !== 'spawn' &&
                   !DELETE_ONLY_TYPES.includes(node.type) &&
                   !HOLE_TYPES.includes(node.type)

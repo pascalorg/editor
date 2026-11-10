@@ -5,6 +5,7 @@ import {
   type AnyNodeId,
   analyzePortConnectivity,
   type Cursor,
+  findLevelAncestorId,
   type PipeSegmentNode,
   type PortConnectivity,
   pauseSceneHistory,
@@ -482,6 +483,9 @@ const PipePointHandles = ({ pipe, target }: { pipe: PipeSegmentNode; target: Obj
           [next[0], next[1], next[2]],
           collectScenePorts({
             excludeNodeId: pipe.id,
+            levelId: (findLevelAncestorId(pipe.id, useScene.getState().nodes) ?? undefined) as
+              | AnyNodeId
+              | undefined,
             systems: DWV_PORT_SYSTEMS,
           }),
           PORT_SNAP_RADIUS_M,

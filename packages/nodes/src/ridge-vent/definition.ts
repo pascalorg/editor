@@ -157,6 +157,7 @@ const ridgeVentHandles: HandleDescriptor<RidgeVentNodeType>[] = [
  */
 export const ridgeVentDefinition: NodeDefinition<typeof RidgeVentNode> = {
   kind: 'ridge-vent',
+  snapProfile: 'item',
   schemaVersion: 1,
   schema: RidgeVentNode,
   category: 'structure',

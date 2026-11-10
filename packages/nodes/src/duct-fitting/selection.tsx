@@ -11,6 +11,7 @@ import {
   resolveConnectivityUpdates,
   resumeSceneHistory,
   sceneRegistry,
+  useLiveNodeOverrides,
   useScene,
 } from '@pascal-app/core'
 import {
@@ -53,8 +54,8 @@ import {
   ROTATE_STEP_RAD,
   type RotationAxis,
 } from '../shared/fitting-rotation'
-import { createFollowerFrames } from '../shared/follower-frames'
 import { useHandleDragScope } from '../shared/handle-drag-scope'
+import { createLivePreview } from '../shared/live-preview'
 import { HandleCube, MoveChevron, RotateArc } from '../shared/selection-handles'
 import { fittingLegLength } from './ports'
 
@@ -340,7 +341,15 @@ const DuctFittingSelectionAffordance = () => {
   return createPortal(<FittingHandles fitting={fitting} target={target} />, mount, undefined)
 }
 
-const FittingHandles = ({ fitting, target }: { fitting: DuctFittingNode; target: Object3D }) => {
+const FittingHandles = ({
+  fitting: storedFitting,
+  target,
+}: {
+  fitting: DuctFittingNode
+  target: Object3D
+}) => {
+  const override = useLiveNodeOverrides((state) => state.overrides.get(storedFitting.id))
+  const fitting = override ? ({ ...storedFitting, ...override } as DuctFittingNode) : storedFitting
   const { camera, gl } = useThree()
   const [frame, setFrame] = useState<Group | null>(null)
   // True while the cluster is latched open. Click the center cube to toggle.
@@ -459,11 +468,8 @@ const FittingHandles = ({ fitting, target }: { fitting: DuctFittingNode; target:
     ) =>
     (e: ThreeEvent<PointerEvent>) => {
       e.stopPropagation()
-      const initialPosition = [...fitting.position] as Point
-      const initialRotation = [...fitting.rotation] as Point
-      const startNodes = useScene.getState().nodes
-      const connectivity = analyzePortConnectivity(fitting as AnyNode, startNodes)
-      const followerFrame = createFollowerFrames(startNodes, fitting.id as AnyNodeId)
+      const connectivity = analyzePortConnectivity(fitting as AnyNode, useScene.getState().nodes)
+      const livePreview = createLivePreview()
       const compute = makeCompute(e)
       pauseSceneHistory(useScene)
       useViewer.getState().setInputDragging(true)
@@ -497,7 +503,7 @@ const FittingHandles = ({ fitting, target }: { fitting: DuctFittingNode; target:
         const batch = buildBatch(next)
         if (!batch) return
         current = next
-        useScene.getState().updateNodes(followerFrame(batch))
+        livePreview.publish(batch)
       }
 
       const cleanup = () => {
@@ -512,36 +518,7 @@ const FittingHandles = ({ fitting, target }: { fitting: DuctFittingNode; target:
 
       const finish = (commit: boolean) => {
         cleanup()
-        // Single-undo dance: revert the fitting AND its followers to the
-        // pre-drag state while history is still paused, resume, then re-apply
-        // the final transform as one tracked change.
-        const reverts: { id: AnyNodeId; data: Partial<AnyNode> }[] = (
-          connectivity?.connections ?? []
-        ).map((conn) => {
-          if (conn.kind !== 'rigid-node') {
-            return { id: conn.nodeId, data: { path: conn.startPath } as Partial<AnyNode> }
-          }
-          const node = useScene.getState().nodes[conn.nodeId]
-          return {
-            id: conn.nodeId,
-            data:
-              node?.type === 'duct-fitting'
-                ? preserveFittingParameters(node as DuctFittingNode, {
-                    position: conn.startPosition as Point,
-                  })
-                : ({ position: conn.startPosition } as Partial<AnyNode>),
-          }
-        })
-        useScene.getState().updateNodes([
-          {
-            id: fitting.id as AnyNodeId,
-            data: preserveFittingParameters(fitting, {
-              position: initialPosition,
-              rotation: initialRotation,
-            }),
-          },
-          ...reverts.filter((u) => useScene.getState().nodes[u.id]),
-        ])
+        livePreview.clear()
         resumeSceneHistory(useScene)
         if (!commit) return
         const batch = current && buildBatch(current)
@@ -651,7 +628,7 @@ const FittingHandles = ({ fitting, target }: { fitting: DuctFittingNode; target:
     (e: ThreeEvent<PointerEvent>) => {
       e.stopPropagation()
       const baseValue = fitting[dimension]
-      const initialPatch = { [dimension]: baseValue } as Partial<DuctFittingNode>
+      const livePreview = createLivePreview()
       const centerWorld = toWorld(fitting.position as Point)
       const axisWorld = axisToWorld(fitting.position as Point, axisLocal)
       const start = sampleAxisParameter(
@@ -672,14 +649,9 @@ const FittingHandles = ({ fitting, target }: { fitting: DuctFittingNode; target:
       let current: Partial<DuctFittingNode> | null = null
       let lastValue = Number.NaN
 
-      const apply = (patch: Partial<DuctFittingNode>) => {
-        useScene.getState().updateNodes([
-          {
-            id: fitting.id as AnyNodeId,
-            data: preserveFittingParameters(fitting, patch),
-          },
-        ])
-      }
+      const update = (patch: Partial<DuctFittingNode>) => [
+        { id: fitting.id as AnyNodeId, data: preserveFittingParameters(fitting, patch) },
+      ]
 
       const onMove = (event: PointerEvent) => {
         const rawDeltaM =
@@ -694,7 +666,7 @@ const FittingHandles = ({ fitting, target }: { fitting: DuctFittingNode; target:
         lastValue = nextValue
         current = { [dimension]: nextValue } as Partial<DuctFittingNode>
         if (snapped) triggerSFX('sfx:grid-snap')
-        apply(current)
+        livePreview.publish(update(current))
       }
 
       const cleanup = () => {
@@ -709,9 +681,9 @@ const FittingHandles = ({ fitting, target }: { fitting: DuctFittingNode; target:
 
       const finish = (commit: boolean) => {
         cleanup()
-        apply(initialPatch)
+        livePreview.clear()
         resumeSceneHistory(useScene)
-        if (commit && current) apply(current)
+        if (commit && current) useScene.getState().updateNodes(update(current))
       }
 
       const onUp = () => {

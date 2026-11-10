@@ -1,6 +1,6 @@
 'use client'
 
-import { formatNumber, parseLocalizedNumber, useLocale, useScene } from '@pascal-app/core'
+import { formatNumber, parseLocalizedNumber, useLocale, useScene, usePascalI18n } from '@pascal-app/core'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { lingoUnitSpec, measurementHint, parseMeasurement } from '../../../lib/measurement-parser'
 import { useLinearDisplay } from '../../../lib/use-linear-display'
@@ -71,6 +71,7 @@ export function SliderControl({
   restoreOnCommit = true,
   mixed = false,
 }: SliderControlProps) {
+  const i18n = usePascalI18n()
   const locale = useLocale()
   // Values and bounds stay in meters; gestures and input use the displayed unit.
   const { isImperial, displayUnit, parseUnit, precision, step, toDisplay, toStored } =
@@ -261,6 +262,12 @@ export function SliderControl({
   )
 
   useEffect(() => {
+    const cancelOnBlur = () => { if (dragRef.current || editingRef.current) cancelEdit() }
+    window.addEventListener('blur', cancelOnBlur)
+    return () => window.removeEventListener('blur', cancelOnBlur)
+  }, [cancelEdit])
+
+  useEffect(() => {
     if (!isDragging) return
     const escape = (event: KeyboardEvent) => {
       if (event.key === 'Escape') cancelEdit()
@@ -392,6 +399,7 @@ export function SliderControl({
               </span>
             )}
             <input
+              aria-label={typeof label === 'string' ? label : undefined}
               autoFocus
               className="w-14 bg-transparent p-0 text-right font-mono text-foreground outline-none selection:bg-primary/30"
               onBlur={submitValue}
@@ -418,14 +426,18 @@ export function SliderControl({
             )}
           </>
         ) : mixed && !isDragging ? (
-          <div
+          <button
+            type="button"
+            aria-label={typeof label === 'string' ? i18n._({ id: 'editor.controls.sliderControl.editLabel', message: 'Edit {label}', values: { label } }) : undefined}
             className="flex cursor-text items-center text-muted-foreground transition-colors hover:text-foreground"
             onClick={handleValueClick}
           >
-            <span className="font-mono tracking-tight">Mixed</span>
-          </div>
+            <span className="font-mono tracking-tight">{i18n._({ id: 'editor.controls.sliderControl.mixed', message: 'Mixed' })}</span>
+          </button>
         ) : (
-          <div
+          <button
+            type="button"
+            aria-label={typeof label === 'string' ? i18n._({ id: 'editor.controls.sliderControl.editLabel', message: 'Edit {label}', values: { label } }) : undefined}
             className="flex cursor-text items-center text-foreground/60 transition-colors hover:text-foreground"
             onClick={handleValueClick}
           >
@@ -433,7 +445,7 @@ export function SliderControl({
               {formatDisplay(displayValue)}
             </span>
             {displayUnit && <span className="ml-[1px] text-muted-foreground">{displayUnit}</span>}
-          </div>
+          </button>
         )}
       </div>
     </div>

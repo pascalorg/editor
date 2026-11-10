@@ -5,6 +5,7 @@ import {
   type GroupMoveSnapArgs,
   type GroupMoveSnapResult,
   type HandleDescriptor,
+  NEW_COLUMN_SLOTS,
   type NodeDefinition,
 } from '@pascal-app/core'
 import { withHostedChildren } from '../shared/hosted-resize'
@@ -14,6 +15,8 @@ import {
   collectStructuralGridAxes,
   resolveStructuralGridSnap,
 } from '../structural-grid/coordination'
+import { columnFootprintHalf } from './bounds'
+import { columnEditPatch, isManagedColumn } from './edit-policy'
 import { buildColumnFloorplan, computeColumnFloorplanLevelData } from './floorplan'
 import { columnResizeAffordance, columnRotateAffordance } from './floorplan-affordances'
 import { columnFloorplanMoveTarget } from './floorplan-move'
@@ -68,7 +71,7 @@ function columnRadiusHandle(): HandleDescriptor<ColumnNodeType> {
     axis: 'x',
     min: MIN_COLUMN_RADIUS,
     currentValue: (n) => n.radius,
-    apply: (_n, newValue) => ({ radius: newValue }),
+    apply: (n, newValue) => columnEditPatch(n, { radius: newValue }),
     placement: {
       position: (n) => [n.radius + SIDE_HANDLE_OFFSET, n.height / 2, 0],
     },
@@ -90,7 +93,8 @@ function columnAxisHandle(axis: 'x' | 'z'): HandleDescriptor<ColumnNodeType> {
     anchor: 'center',
     min: axis === 'x' ? MIN_COLUMN_WIDTH : MIN_COLUMN_DEPTH,
     currentValue: (n) => (axis === 'x' ? n.width : n.depth),
-    apply: (_n, newValue) => (axis === 'x' ? { width: newValue } : { depth: newValue }),
+    apply: (n, newValue) =>
+      columnEditPatch(n, axis === 'x' ? { width: newValue } : { depth: newValue }),
     placement: {
       position: (n) => {
         const half = axis === 'x' ? n.width / 2 : n.depth / 2
@@ -111,7 +115,7 @@ function columnUniformHandle(): HandleDescriptor<ColumnNodeType> {
     anchor: 'center',
     min: MIN_COLUMN_WIDTH,
     currentValue: (n) => n.width,
-    apply: (_n, newValue) => ({ width: newValue, depth: newValue }),
+    apply: (n, newValue) => columnEditPatch(n, { width: newValue, depth: newValue }),
     placement: {
       position: (n) => [n.width / 2 + SIDE_HANDLE_OFFSET, n.height / 2, 0],
     },
@@ -198,40 +202,6 @@ const STYLES_WITH_TOP_SPREAD = new Set<ColumnNodeType['supportStyle']>([
   'v-frame',
 ])
 
-function isLeanToManagedColumn(node: ColumnNodeType): boolean {
-  const metadata = node.metadata
-  return (
-    metadata !== null &&
-    typeof metadata === 'object' &&
-    !Array.isArray(metadata) &&
-    metadata.managedByLeanTo !== undefined &&
-    metadata.leanToRole === 'post'
-  )
-}
-
-// Resolve the column's visible XZ footprint half-extents per supportStyle
-// + crossSection. Vertical supports use the shaft geometry (radius for
-// round / octagonal / sixteen-sided, width/depth for square / rectangular);
-// non-vertical supports fall back to the widest sensible brace bound so
-// the rotation handle clears the splay.
-function columnFootprintHalf(n: ColumnNodeType): { halfX: number; halfZ: number } {
-  if (n.source) return { halfX: n.width / 2, halfZ: n.depth / 2 }
-  if (n.supportStyle === 'vertical') {
-    if (ROUND_CROSS_SECTIONS.has(n.crossSection)) {
-      return { halfX: n.radius, halfZ: n.radius }
-    }
-    if (n.crossSection === 'square') {
-      return { halfX: n.width / 2, halfZ: n.width / 2 }
-    }
-    return { halfX: n.width / 2, halfZ: n.depth / 2 }
-  }
-  return {
-    halfX:
-      Math.max(n.width, n.braceWidth ?? 0, n.braceBottomSpread ?? 0, n.braceTopSpread ?? 0) / 2,
-    halfZ: Math.max(n.depth, n.braceDepth ?? 0) / 2,
-  }
-}
-
 // Whole-column rotation gizmo — same pattern as the elevator. Curved
 // two-headed arrow at the +X / +Z corner of the footprint, a guide ring
 // at the corner-diagonal radius on hover/drag. `apply` negates the
@@ -316,7 +286,7 @@ function columnHandles(node: ColumnNodeType): HandleDescriptor<ColumnNodeType>[]
   //    - square                            → uniform width+depth
   //    - rectangular                       → width + depth (independent)
   const handles: HandleDescriptor<ColumnNodeType>[] = []
-  const managedByLeanTo = isLeanToManagedColumn(node)
+  const managedByLeanTo = isManagedColumn(node)
   if (!managedByLeanTo) handles.push(columnHeightHandle())
   if (node.supportStyle !== 'vertical') {
     handles.push(columnBraceHandle('x'), columnBraceHandle('z'))
@@ -382,7 +352,7 @@ export const columnDefinition: NodeDefinition<typeof ColumnNode> = {
   defaults: () => {
     const stub = ColumnNodeSchema.parse({ id: 'column_default' as never, type: 'column' })
     const { id: _id, type: _type, ...rest } = stub
-    return rest
+    return { ...rest, slots: { ...NEW_COLUMN_SLOTS } }
   },
 
   capabilities: {
@@ -395,12 +365,17 @@ export const columnDefinition: NodeDefinition<typeof ColumnNode> = {
       top: { height: (node) => (node as ColumnNodeType).height },
       hosting: columnSurfaceProvider,
     },
-    duplicable: { subtree: true },
+    duplicable: {
+      subtree: true,
+      allow: ({ node }) => !isManagedColumn(node as ColumnNodeType),
+    },
     deletable: true,
     // Generic 3D translate-on-XZ via `MoveRegistryNodeTool` (grid snap + the
     // mode-driven snapping the overhaul standardised). 2D move keeps using
     // `floorplanMoveTarget`, which wins the 2D move dispatch.
     movable: {
+      override: ({ node }) =>
+        isManagedColumn(node as ColumnNodeType) ? { axes: [], gridSnap: false } : null,
       axes: ['x', 'z'],
       gridSnap: true,
       groupMoveSnapPose: resolveColumnStructuralGridMoveSnap,

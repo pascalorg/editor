@@ -9,29 +9,35 @@ import {
   resolveAlignment,
   useScene,
 } from '@pascal-app/core'
-import { useEffect, useMemo, useRef } from 'react'
-import * as THREE from 'three'
-import { resolveCurrentBuildingId, resolveElevatorSupportY } from '../../../lib/elevator-support'
-import { sfxEmitter } from '../../../lib/sfx-bus'
-import { isTypingTarget } from '../../../lib/typing-target'
-import useAlignmentGuides from '../../../store/use-alignment-guides'
-import useEditor, {
+import {
+  CursorSphere,
   isAlignmentGuideActive,
   isGridSnapActive,
   isMagneticSnapActive,
-} from '../../../store/use-editor'
-import usePlacementPreview from '../../../store/use-placement-preview'
-import { CursorSphere } from '../shared/cursor-sphere'
-import {
-  DEFAULT_ELEVATOR_CAB_HEIGHT,
-  DEFAULT_ELEVATOR_DEPTH,
-  DEFAULT_ELEVATOR_DOOR_DURATION_MS,
-  DEFAULT_ELEVATOR_DOOR_HEIGHT,
-  DEFAULT_ELEVATOR_DOOR_WIDTH,
-  DEFAULT_ELEVATOR_DWELL_MS,
-  DEFAULT_ELEVATOR_SPEED,
-  DEFAULT_ELEVATOR_WIDTH,
-} from './elevator-defaults'
+  resolveCurrentBuildingId,
+  resolveElevatorSupportY,
+  triggerSFX,
+  useAlignmentGuides,
+  useEditor,
+  usePlacementPreview,
+  useRegistryToolContext,
+} from '@pascal-app/editor'
+import { useViewer } from '@pascal-app/viewer'
+import { useEffect, useMemo, useRef } from 'react'
+import * as THREE from 'three'
+
+const defaults = ElevatorNode.parse({})
+const DEFAULT_ELEVATOR_WIDTH = defaults.width
+const DEFAULT_ELEVATOR_DEPTH = defaults.depth
+const DEFAULT_ELEVATOR_CAB_HEIGHT = defaults.cabHeight
+const DEFAULT_ELEVATOR_DOOR_WIDTH = defaults.doorWidth
+const DEFAULT_ELEVATOR_DOOR_HEIGHT = defaults.doorHeight
+const DEFAULT_ELEVATOR_SPEED = defaults.speed
+const DEFAULT_ELEVATOR_DOOR_DURATION_MS = defaults.doorDurationMs
+const DEFAULT_ELEVATOR_DWELL_MS = defaults.dwellMs
+const isTypingTarget = (target: EventTarget | null) =>
+  target instanceof HTMLElement &&
+  !!target.closest('input, textarea, select, [contenteditable="true"]')
 
 const GRID_OFFSET = 0.02
 /** Figma-style alignment-snap threshold (meters), matching the move tools. */
@@ -82,7 +88,10 @@ function createElevatorPreviewGeometry(): THREE.BufferGeometry {
 }
 
 function createElevatorPreviewEdgeGeometry(): THREE.BufferGeometry {
-  return new THREE.EdgesGeometry(createElevatorPreviewGeometry())
+  const box = createElevatorPreviewGeometry()
+  const edges = new THREE.EdgesGeometry(box)
+  box.dispose()
+  return edges
 }
 
 function commitElevatorPlacement(
@@ -120,10 +129,13 @@ function commitElevatorPlacement(
 
   createNode(elevator, buildingId)
   onPlaced?.(elevator.id as AnyNodeId, buildingId)
-  sfxEmitter.emit('sfx:structure-build')
+  triggerSFX('sfx:structure-build')
 }
 
-export const ElevatorTool: React.FC<ElevatorToolProps> = ({ buildingId, levelId, onPlaced }) => {
+export default function ElevatorTool() {
+  const { activeLevelId: levelId, selectNode } = useRegistryToolContext()
+  const buildingId = useViewer((state) => state.selection.buildingId)
+  const onPlaced = useMemo(() => (id: AnyNodeId) => selectNode(id), [selectNode])
   const cursorRef = useRef<THREE.Group>(null)
   const previewRef = useRef<THREE.Group>(null)
   const rotationRef = useRef(0)
@@ -242,7 +254,7 @@ export const ElevatorTool: React.FC<ElevatorToolProps> = ({ buildingId, levelId,
         previousGridPosRef.current &&
         (gridX !== previousGridPosRef.current[0] || gridZ !== previousGridPosRef.current[1])
       ) {
-        sfxEmitter.emit('sfx:grid-snap')
+        triggerSFX('sfx:grid-snap')
       }
 
       previousGridPosRef.current = [gridX, gridZ]
@@ -294,7 +306,7 @@ export const ElevatorTool: React.FC<ElevatorToolProps> = ({ buildingId, levelId,
 
       if (rotationDelta !== 0) {
         event.preventDefault()
-        sfxEmitter.emit('sfx:item-rotate')
+        triggerSFX('sfx:item-rotate')
         rotationRef.current += rotationDelta
         if (previewRef.current) previewRef.current.rotation.y = rotationRef.current
         // Reflect the rotation in the 2D ghost immediately (no pointer move

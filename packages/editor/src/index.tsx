@@ -188,6 +188,7 @@ export {
 } from './components/tools/item/use-placement-coordinator'
 export { MoveRegistryNodeTool } from './components/tools/registry/move-registry-node-tool'
 export {
+  type RegistryToolContextValue,
   RegistryToolProvider,
   useRegistryToolContext,
 } from './components/tools/registry-tool-context'

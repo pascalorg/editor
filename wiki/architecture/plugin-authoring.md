@@ -427,6 +427,11 @@ DECISIONS.md E-017. Framework packages never import a node pack to implement the
   object on its original level and visual elevation during a move. Fresh placement
   still follows the chosen support. Stored Y remains an offset from the support,
   not an absolute world height.
+- `capabilities.movable.resolvePosition({ node, position, nodes })` returns the
+  stored position after snapping. The generic 3D mover and the 2D plan mover
+  call it for the live preview and again at commit, so a changed support is
+  re-elected at release (a building-parented elevator's landing height). It is
+  pure: it must not write scene state. Omitted, the proposed position is kept.
 - `capabilities.movable.parentFrame.independent` keeps selection/manipulation on
   the child instead of promoting its parent. The frame's conversion hooks still
   own cursor and rotation conversion in 2D and 3D.

@@ -38,6 +38,7 @@ export {
   hasRegistry3DMoveTool,
   isDrawnViaTool,
   isDrawnViaToolKind,
+  isNodeDuplicable,
   isNodeKindEnabled,
   isPresettable,
   isPresettableKind,

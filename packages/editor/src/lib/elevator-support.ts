@@ -10,7 +10,7 @@ import {
 
 function getBuildingLevels(
   buildingId: string | null | undefined,
-  nodes: Record<string, AnyNode>,
+  nodes: Readonly<Record<string, AnyNode>>,
 ): LevelNode[] {
   if (!buildingId) return []
   const building = nodes[buildingId as AnyNodeId]
@@ -49,11 +49,12 @@ export function resolveCurrentBuildingId({
 export function resolveElevatorSupportLevelId({
   buildingId,
   preferredLevelId,
+  nodes = useScene.getState().nodes,
 }: {
   buildingId: string | null | undefined
   preferredLevelId?: string | null
+  nodes?: Readonly<Record<string, AnyNode>>
 }): LevelNode['id'] | null {
-  const nodes = useScene.getState().nodes
   const preferred = preferredLevelId ? nodes[preferredLevelId as AnyNodeId] : undefined
   const levels = getBuildingLevels(buildingId, nodes)
   const preferredInBuilding = preferredLevelId
@@ -71,13 +72,15 @@ export function resolveElevatorSupportY({
   preferredLevelId,
   x,
   z,
+  nodes,
 }: {
   buildingId: string | null | undefined
   preferredLevelId?: string | null
   x: number
   z: number
+  nodes?: Readonly<Record<string, AnyNode>>
 }): number {
-  const levelId = resolveElevatorSupportLevelId({ buildingId, preferredLevelId })
+  const levelId = resolveElevatorSupportLevelId({ buildingId, preferredLevelId, nodes })
   if (!levelId) return 0
 
   return Math.max(0, spatialGridManager.getSlabElevationAt(levelId, x, z))
@@ -86,11 +89,13 @@ export function resolveElevatorSupportY({
 export function resolveElevatorNodeSupportY(
   node: ElevatorNode,
   position: [number, number, number] = node.position,
+  nodes?: Readonly<Record<string, AnyNode>>,
 ): number {
   return resolveElevatorSupportY({
     buildingId: node.parentId,
     preferredLevelId: node.fromLevelId ?? node.defaultLevelId,
     x: position[0],
     z: position[2],
+    nodes,
   })
 }

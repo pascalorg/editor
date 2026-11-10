@@ -4,6 +4,7 @@ import {
   BuildingNode,
   DuctFittingNode,
   DuctSegmentNode,
+  getEffectiveNode,
   LevelNode,
   SiteNode,
   useScene,
@@ -97,7 +98,8 @@ function seed(item: SnappingMode = 'lines') {
   return fitting.id as AnyNodeId
 }
 
-const fittingOf = (id: AnyNodeId) => useScene.getState().nodes[id] as DuctFittingNode
+const fittingOf = (id: AnyNodeId) =>
+  getEffectiveNode(useScene.getState().nodes[id] as DuctFittingNode)
 
 function client(point: Point) {
   const ndc = new Vector3(...point).project(camera)
@@ -204,7 +206,8 @@ test('a joined duct goes back to its start when the fitting slide returns to the
     dirtyNodes: new Set([level.id, duct.id]),
   })
   useScene.temporal.getState().clear()
-  const ductPath = () => (useScene.getState().nodes[duct.id] as DuctSegmentNode).path
+  const ductPath = () =>
+    getEffectiveNode(useScene.getState().nodes[duct.id] as DuctSegmentNode).path
 
   const renderer = await mount(<Scene />)
   await openCluster(renderer)
