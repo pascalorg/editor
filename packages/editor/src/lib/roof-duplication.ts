@@ -125,19 +125,20 @@ export function duplicateRoofSubtree(
   }
 
   // Its faces of other kinds (`capabilities.roofs`) are copied by their own schema, in the copy's
-  // frame as in the source's.
+  // frame as in the source's; a face that does not parse fails the copy, as a segment does.
   const faceClones: { node: AnyNode; sourceId: AnyNodeId }[] = []
   for (const childId of sourceRoof.children ?? []) {
     const childNode = scene.nodes[childId as AnyNodeId]
-    if (!(childNode && roofFaceOf(childNode))) continue
-    const schema = nodeRegistry.get(childNode.type)?.schema
+    const schema =
+      childNode && roofFaceOf(childNode) ? nodeRegistry.get(childNode.type)?.schema : undefined
+    if (!(childNode && schema)) continue
     const { id: _id, ...fields } = structuredClone(childNode)
-    const parsed = schema?.safeParse({
+    const node = schema.parse({
       ...fields,
       parentId: roofClone.id,
       metadata: buildDuplicateMetadata(childNode.metadata),
-    })
-    if (parsed?.success) faceClones.push({ node: parsed.data as AnyNode, sourceId: childNode.id })
+    }) as AnyNode
+    faceClones.push({ node, sourceId: childNode.id })
   }
 
   // Each copy is in the collections its source is in.
@@ -172,12 +173,12 @@ export function duplicateRoofSubtree(
 
   const segmentIds = segmentClones.map((segment) => segment.id)
   const createdChildIds = (createdRoof.children ?? []) as AnyNodeId[]
-  const missingSegmentId = segmentIds.find(
-    (segmentId) => !createdChildIds.includes(segmentId as AnyNodeId),
+  const missingChildId = [...segmentIds, ...faceClones.map(({ node }) => node.id)].find(
+    (childId) => !createdChildIds.includes(childId as AnyNodeId),
   )
-  if (missingSegmentId) {
+  if (missingChildId) {
     throw new Error(
-      `Duplicated roof "${createdRoof.id}" is missing cloned segment "${missingSegmentId}"`,
+      `Duplicated roof "${createdRoof.id}" is missing cloned child "${missingChildId}"`,
     )
   }
 
