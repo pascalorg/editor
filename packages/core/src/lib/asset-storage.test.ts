@@ -64,6 +64,8 @@ describe('loadAssetUrl', () => {
   test('returns null for a scheme-relative URL and passes an app-relative path through', async () => {
     expect(await loadAssetUrl('//evil.example/x.png')).toBeNull()
     expect(await loadAssetUrl('/\\evil.example/x.png')).toBeNull()
+    expect(await loadAssetUrl(' //evil.example/x.png')).toBeNull()
+    expect(await loadAssetUrl('\u0000\t//evil.example/x.png')).toBeNull()
     expect(await loadAssetUrl('/assets/x.png')).toBe('/assets/x.png')
   })
 })

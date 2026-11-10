@@ -118,9 +118,10 @@ function readAllowedOrigins(): ReadonlySet<string> | undefined {
 
 /**
  * Whether a browser would resolve `url` against another origin even though it
- * has no scheme: `//host/x`, `/\host/x`, `\\host/x` or `\host/x`. Browsers drop
- * tab, LF and CR anywhere and strip leading C0 controls and spaces before
- * parsing, and treat `\` as `/` in http(s) URLs, so this does the same.
+ * has no scheme: `//host/x`, `/\host/x` or `\\host/x`. Browsers drop tab, LF and
+ * CR anywhere and strip leading C0 controls and spaces before parsing, and treat
+ * `\` as `/` in http(s) URLs, so this does the same. A single leading `\` is
+ * also flagged: it is never a form this codebase writes.
  */
 export function isSchemeRelativeUrl(url: string): boolean {
   const withoutTabsOrNewlines = url.replace(/[\t\n\r]/g, '')
