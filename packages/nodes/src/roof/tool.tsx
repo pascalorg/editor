@@ -413,7 +413,7 @@ export const commitRoofPlacement = (
     )
 
     const sibling = targetRoof.children
-      .map((id) => nodes[id])
+      .map((id) => nodes[id as AnyNodeId])
       .find((node) => node?.type === 'roof-segment')
     const drawn = RoofSegmentNode.parse({
       roofSystem: sibling?.type === 'roof-segment' ? sibling.roofSystem : undefined,

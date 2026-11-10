@@ -3,6 +3,7 @@ import { expandFloorIntentChanges } from '../lib/floor-intent-changes'
 import { footprintIoU } from '../lib/floor-plates'
 import { getDefaultLevelName } from '../lib/level-name'
 import { reconcileSceneStructure } from '../lib/structure-reconcile'
+import { roofFaceOf } from '../registry/roofs'
 import {
   type AnyNode,
   type AnyNodeId,
@@ -44,7 +45,8 @@ function shouldKeepNode(node: AnyNode, preset: LevelDuplicatePreset) {
   if (preset === 'everything') return true
   if (preset === 'structure-furniture') return true
   if (preset === 'structure' || preset === 'structure-materials') {
-    return STRUCTURAL_NODE_TYPES.has(node.type)
+    // A roof's faces of other kinds (`capabilities.roofs`) are the roof, as its segments are.
+    return STRUCTURAL_NODE_TYPES.has(node.type) || roofFaceOf(node) !== undefined
   }
   return true
 }

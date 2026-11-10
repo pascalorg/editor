@@ -173,7 +173,8 @@ export function resolveViewerTarget(
     }
   }
   const parent = node.parentId ? nodes[node.parentId] : undefined
-  const owner = node.type === 'roof-segment' && parent?.type === 'roof' ? parent : node
+  // A roof selects whole: its segments and its faces of other kinds (`capabilities.roofs`).
+  const owner = parent?.type === 'roof' ? parent : node
   const nodeId = resolveSelectionProxyId(owner, nodes as Record<string, AnyNode | undefined>)
   return { kind: 'node', levelId, nodeId, zoneId: null }
 }

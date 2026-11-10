@@ -5,7 +5,7 @@
     "build": {
       "dependsOn": ["^build"],
       "inputs": ["$TURBO_DEFAULT$", ".env*"],
-      "outputs": [".next/**", "!.next/cache/**", "dist/**"],
+      "outputs": [".next/**", "!.next/cache/**", "dist/**", "tsconfig.tsbuildinfo"],
       "env": [
         "SKIP_ENV_VALIDATION",
         "BETTER_AUTH_SECRET",
@@ -28,6 +28,18 @@
     },
     "test": {
       "dependsOn": ["^build"],
+      "outputs": []
+    },
+    "@pascal-app/core#test": {
+      "dependsOn": ["build"],
+      "outputs": []
+    },
+    "@pascal-app/viewer#test": {
+      "dependsOn": ["build"],
+      "outputs": []
+    },
+    "@pascal-app/mcp#test": {
+      "dependsOn": ["build"],
       "outputs": []
     },
     "@pascal-app/nodes#test": {

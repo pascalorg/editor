@@ -191,9 +191,15 @@ const MAX_SEGMENTS_PER_FRAME = 3
 /** What each roof's shell was last merged from: its node and its segments, as the store held them. */
 const mergedFrom = new Map<AnyNodeId, Map<string, AnyNode>>()
 
+/** A roof's shell is merged from the roof and its segments; its faces of other kinds draw apart. */
+const shellInputIds = (roof: RoofNode, nodes: Record<string, AnyNode>): string[] => [
+  roof.id,
+  ...(roof.children ?? []).filter((id) => nodes[id]?.type === 'roof-segment'),
+]
+
 function rememberMergedInputs(roof: RoofNode, nodes: Record<string, AnyNode>) {
   const inputs = new Map<string, AnyNode>()
-  for (const id of [roof.id, ...(roof.children ?? [])]) {
+  for (const id of shellInputIds(roof, nodes)) {
     const node = nodes[id]
     if (node) inputs.set(id, node)
   }
@@ -205,7 +211,7 @@ function mergedFromStillHolds(roofId: AnyNodeId, nodes: Record<string, AnyNode>)
   const inputs = mergedFrom.get(roofId)
   const roof = nodes[roofId]
   if (!inputs || roof?.type !== 'roof') return false
-  const ids = [roofId, ...(roof.children ?? [])]
+  const ids = shellInputIds(roof, nodes)
   return ids.length === inputs.size && ids.every((id) => inputs.get(id) === nodes[id])
 }
 
@@ -630,7 +636,7 @@ function getMergedRoofSegmentBrushes(
     ),
     () =>
       getRoofSegmentBrushes(segment, {
-        fascia: wearsFascia(segment, roofNode),
+        fascia: wearsFascia(segment, roofNode, nodes),
         framing: framingDepth,
       }),
   )
@@ -710,10 +716,11 @@ function updateMergedRoofGeometry(
   // Merge each child through `getEffectiveNode` so an in-flight handle
   // drag (live override on width / depth / wallHeight / pitch / rotation)
   // is reflected in the merged shell during the drag, not only on commit.
+  // Faces of other kinds (`capabilities.roofs`) render as their own kind, outside the shell.
   const children = (roofNode.children ?? [])
     .map((id) => {
-      const scn = nodes[id] as RoofSegmentNode | undefined
-      return scn ? getEffectiveNode(scn) : undefined
+      const scn = nodes[id]
+      return scn?.type === 'roof-segment' ? getEffectiveNode(scn) : undefined
     })
     .filter(
       (n): n is RoofSegmentNode =>
@@ -796,7 +803,7 @@ function updateMergedRoofGeometry(
       totalDeckSlab = brushes.deckSlab
     }
 
-    if (!shouldIncludeRoofSegmentWallShell(child, roofNode)) {
+    if (!shouldIncludeRoofSegmentWallShell(child, roofNode, nodes)) {
       brushes.wallBrush.geometry.dispose()
       brushes.innerBrush.geometry.dispose()
     } else {
@@ -875,7 +882,7 @@ function updateMergedRoofGeometry(
       splitRoofWallBandFaces(
         finalGeo,
         csgChildren
-          .filter((child) => shouldIncludeRoofSegmentWallShell(child, roofNode))
+          .filter((child) => shouldIncludeRoofSegmentWallShell(child, roofNode, nodes))
           .map((child) => ({
             node: child,
             inverse: new THREE.Matrix4()
@@ -1087,7 +1094,7 @@ function getMergedRoofSegmentCacheKey(
     roofPosition: roofNode.position ?? [0, 0, 0],
     roofRotation: roofNode.rotation ?? 0,
     // a shed's fascia depends on whether its roof is a composite of pieces
-    composite: (roofNode.children?.length ?? 0) > 1,
+    composite: isCompositeRoof(roofNode, nodes),
     segment,
     accessories: getMergedRoofAccessoryCachePayload(segment, nodes),
     framing,
@@ -1239,7 +1246,20 @@ function readShedOpenEndSides(node: RoofSegmentNode): Set<ShedEndSide> {
   return new Set(value.filter((side): side is ShedEndSide => side === 'left' || side === 'right'))
 }
 
-function shouldIncludeRoofSegmentWallShell(node: RoofSegmentNode, parentRoof?: RoofNode): boolean {
+/**
+ * Whether a roof's shell is pieced from several segments. Its faces of other kinds
+ * (`capabilities.roofs`) are no pieces of it; without the scene, every child counts.
+ */
+function isCompositeRoof(roof: RoofNode, nodes?: Readonly<Record<string, AnyNode>>): boolean {
+  const children = roof.children ?? []
+  return (nodes ? children.filter((id) => nodes[id]?.type === 'roof-segment') : children).length > 1
+}
+
+function shouldIncludeRoofSegmentWallShell(
+  node: RoofSegmentNode,
+  parentRoof?: RoofNode,
+  nodes?: Readonly<Record<string, AnyNode>>,
+): boolean {
   if (node.wallShell === 'include') return true
   if (node.wallShell === 'omit') return false
   if (node.roofType !== 'shed') return true
@@ -1247,7 +1267,7 @@ function shouldIncludeRoofSegmentWallShell(node: RoofSegmentNode, parentRoof?: R
   // Older composite roofs use overlapping shed segments as deck pieces. Their
   // wall volumes were never part of the rendered shell and make CSG grow
   // exponentially when unioned together.
-  return !parentRoof || (parentRoof.children?.length ?? 0) <= 1
+  return !parentRoof || !isCompositeRoof(parentRoof, nodes)
 }
 
 function hasSegmentTrim(node: RoofSegmentNode): boolean {
@@ -1843,11 +1863,15 @@ function buildEaveCuts(
  * one deck (the same pieces whose wall shells are left out), so boards would
  * show between them.
  */
-function wearsFascia(node: RoofSegmentNode, parentRoof?: RoofNode): boolean {
+function wearsFascia(
+  node: RoofSegmentNode,
+  parentRoof?: RoofNode,
+  nodes?: Readonly<Record<string, AnyNode>>,
+): boolean {
   if (node.fascia !== true) return false
   if (node.roofType !== 'shed') return true
   if (isLeanToShedSegment(node)) return false
-  return !parentRoof || (parentRoof.children?.length ?? 0) <= 1
+  return !parentRoof || !isCompositeRoof(parentRoof, nodes)
 }
 
 /** What a framed roof's deck keeps over its open structure band at least: a 7/16 in sheet. */
@@ -2459,7 +2483,7 @@ export function generateRoofSegmentGeometry(
   }
   const brushes = withSegmentUvMatrix(segmentWorldMatrix, () =>
     getRoofSegmentBrushes(node, {
-      fascia: wearsFascia(node, parentRoof),
+      fascia: wearsFascia(node, parentRoof, nodes),
       framing: options.framing ? roofFramingDepth(node) : 0,
     }),
   )
@@ -2485,7 +2509,7 @@ export function generateRoofSegmentGeometry(
     prepareBrushForCSG(shinDeck)
     let combined = shinDeck
     let hollowWall: Brush | null = null
-    if (shouldIncludeRoofSegmentWallShell(node, parentRoof)) {
+    if (shouldIncludeRoofSegmentWallShell(node, parentRoof, nodes)) {
       hollowWall = csgEvaluator.evaluate(wallBrush, innerBrush, SUBTRACTION)
       prepareBrushForCSG(hollowWall)
       combined = csgEvaluator.evaluate(shinDeck, hollowWall, ADDITION)

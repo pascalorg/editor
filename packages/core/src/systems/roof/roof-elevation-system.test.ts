@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { spatialGridManager } from '../../hooks/spatial-grid/spatial-grid-manager'
 import { initSpatialGridSync } from '../../hooks/spatial-grid/spatial-grid-sync'
+import { registerRoofPlanes, roofPlane } from '../../registry/__fixtures__/roof-planes'
 import { type AnyNode, type AnyNodeId, LevelNode, RoofNode, SlabNode, WallNode } from '../../schema'
 import {
   pauseSceneHistory,
@@ -250,6 +251,30 @@ describe('RoofElevationSystem', () => {
     await Promise.resolve()
     expect(currentRoof(roof.id)).toMatchObject({ support: { kind: 'level' }, position: [2, 8, 1] })
     expect(useScene.temporal.getState().pastStates).toHaveLength(0)
+  })
+
+  test("a roof of faces follows the walls under its faces' outlines as a face moves", async () => {
+    // A plugin's planes (`capabilities.roofs`) find the roof's walls by their outlines.
+    registerRoofPlanes()
+    const { level, upper, roof } = setup()
+    const tall = WallNode.parse({ parentId: level.id, start: [10, 0], end: [14, 0], height: 4.2 })
+    const plane = roofPlane('roofplane_a', [-1, -1, 5, 4], 0)
+    useScene.getState().createNode(tall, level.id)
+    useScene.getState().updateNode(roof.id, { position: [0, 0, 0], rotation: 0 })
+    useScene.getState().createNode(plane, roof.id)
+    await Promise.resolve()
+    // Over the 3 m enclosure: the walls' tops are the upper level's floor.
+    expect(currentRoof(roof.id).position[1]).toBeCloseTo(0)
+    expect((useScene.getState().nodes[upper.id] as LevelNode).children).toContain(roof.id)
+
+    const moved = roofPlane('roofplane_a', [9, -1, 15, 1], 0) as AnyNode & { polygon: unknown }
+    useScene.getState().updateNode(plane.id, {
+      polygon: moved.polygon,
+      baseline: (moved as unknown as { baseline: unknown }).baseline,
+    } as Partial<AnyNode>)
+    await Promise.resolve()
+    // Over the 4.2 m wall alone now: 1.2 m over the upper floor.
+    expect(currentRoof(roof.id).position[1]).toBeCloseTo(1.2)
   })
 
   test('coalesces rapid edits, ignores epsilon drift and cancels queued work on disposal', async () => {
