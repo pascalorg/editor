@@ -26,7 +26,12 @@ async function run(command: string[], cwd: string) {
 }
 
 async function withServer(command: string[], cwd: string, check: (url: string) => Promise<void>) {
-  const server = spawn(command[0]!, command.slice(1), { cwd, stdio: ['ignore', 'pipe', 'pipe'] })
+  // CI forces colour, and Vite then splits the printed URL with escape codes.
+  const server = spawn(command[0]!, command.slice(1), {
+    cwd,
+    stdio: ['ignore', 'pipe', 'pipe'],
+    env: { ...process.env, NO_COLOR: '1', FORCE_COLOR: '0' },
+  })
   let output = ''
   let exitCode: number | null = null
   server.stdout.on('data', (chunk) => {
@@ -44,7 +49,7 @@ async function withServer(command: string[], cwd: string, check: (url: string) =
       reject(new Error(output))
     }, 30_000)
     const poll = setInterval(() => {
-      const match = output.match(/http:\/\/127\.0\.0\.1:\d+/)
+      const match = output.replace(/\x1b\[[0-9;]*m/g, '').match(/http:\/\/127\.0\.0\.1:\d+/)
       if (match || exitCode !== null) {
         clearTimeout(deadline)
         clearInterval(poll)
