@@ -8,6 +8,7 @@ import {
   distanceToBoundary,
   EXPLODED_GAP,
   emitter,
+  type GeometryContext,
   itemPrompt,
   operateItem,
   polygonInteriorPoint,
@@ -252,7 +253,9 @@ export function GlbScene({
   /** Clicks and hovers on the building; without it the scene is look-only. */
   onPick?: (event: GlbPickEvent) => void
   onWalkthroughChange?: (state: GlbWalkthrough) => void
-  /** The scene graph's nodes, so the selection callout can say what each element is. */
+  /** Every node of the scene graph the artifact was baked from: the selection
+   *  callout says what each element is, and `replace` renderers resolve their
+   *  parent and siblings. A stable reference. */
   sceneNodes?: Readonly<Record<string, AnyNode>>
 }) {
   const gltf = useGLTFKTX2(url) as unknown as {
@@ -261,6 +264,11 @@ export function GlbScene({
   }
   const rootRef = useRef<THREE.Group>(null!)
   const actions = useClipActions(gltf.animations, rootRef)
+  const resolveNode = useMemo<GeometryContext['resolve'] | undefined>(
+    () =>
+      sceneNodes ? <N = AnyNode>(id: AnyNodeId) => sceneNodes[id] as N | undefined : undefined,
+    [sceneNodes],
+  )
   const proceduralPlayback = useMemo(() => {
     const byNode = new Map<
       string,
@@ -1200,7 +1208,7 @@ export function GlbScene({
       {/* `bake: 'replace'` nodes (plugin trees): baked meshes hidden above, the
           live instanced render portaled per level via each kind's bakeReplaceRenderer. */}
       {replaceNodes?.length ? (
-        <GlbReplaceInstances identity={identity} nodes={replaceNodes} />
+        <GlbReplaceInstances identity={identity} nodes={replaceNodes} resolve={resolveNode} />
       ) : null}
       <GlbDaylightGround root={gltf.scene} />
     </group>
