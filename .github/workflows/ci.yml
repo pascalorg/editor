@@ -21,6 +21,7 @@ jobs:
       pull-requests: read
     outputs:
       runtime: ${{ steps.filter.outputs.runtime }}
+      packaging: ${{ steps.filter.outputs.packaging }}
       viewer: ${{ steps.filter.outputs.viewer }}
       skills: ${{ steps.filter.outputs.skills }}
     steps:
@@ -30,9 +31,9 @@ jobs:
         with:
           predicate-quantifier: every
           filters: |
-            # The packed CLI/runtime smoke (macOS, ~5 min) only has to run
-            # when something that ships in the runtime changed; docs, agent
-            # skills, evals and tests do not.
+            # After a merge, the packed CLI/runtime smoke (macOS, 5-8 min)
+            # only has to run when something that ships in the runtime
+            # changed; docs, agent skills, evals and tests do not.
             runtime:
               - '**'
               - '!**/*.md'
@@ -44,6 +45,12 @@ jobs:
               - '!**/__tests__/**'
               - '!**/__fixtures__/**'
               - '!**/__snapshots__/**'
+            # What decides how the runtime is packed, as opposed to what is
+            # in it: the CLI and its staging scripts, the portable build
+            # switch in the editor's Next config, and the dependency set.
+            packaging:
+              - '{packages/cli/**,apps/editor/next.config.ts,apps/editor/package.json,bun.lock,turbo.json,.github/workflows/ci.yml}'
+              - '!**/*.md'
             viewer:
               - '{packages/core/**,packages/viewer/**,packages/nodes/**,fixtures/viewer-live/**,scripts/check-viewer-live-fixture.ts,package.json,bun.lock,.github/workflows/ci.yml}'
             # What `bun run skills:validate` reads: the skill bundles, the
@@ -195,9 +202,15 @@ jobs:
           echo "static: $STATIC_RESULT, test: $TEST_RESULT, build: $BUILD_RESULT"
           [ "$STATIC_RESULT" = success ] && [ "$TEST_RESULT" = success ] && [ "$BUILD_RESULT" = success ]
 
+  # On a pull request only when the packaging itself changed. In 40 PR runs
+  # this job never failed without `quality` failing too, and it was the
+  # slowest job on every PR; a runtime change is smoked on main right after
+  # the merge, and again by the release workflow before anything is published.
   cli-smoke:
     needs: changes
-    if: needs.changes.outputs.runtime == 'true'
+    if: >-
+      needs.changes.outputs.packaging == 'true' ||
+      (github.event_name == 'push' && needs.changes.outputs.runtime == 'true')
     runs-on: macos-latest
     permissions:
       contents: read
