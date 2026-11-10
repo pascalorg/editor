@@ -390,6 +390,68 @@ describe('room map edge cases', () => {
     }
   })
 
+  test('a building turned off the world axes reads exactly like the same building drawn square', () => {
+    // Two rooms behind 0.3 m walls with the outside faces on the outline, plus a second building
+    // 20 m away at its own angle. Whatever the angles, every point finds the room it finds when
+    // the buildings are square: no stepped edges along the walls.
+    const scene = (angles: [number, number]) => {
+      const zones: RoomSceneInput['zones'] = []
+      const walls: RoomSceneInput['walls'] = []
+      const place = angles.map((angle, b) => {
+        const cos = Math.cos(angle)
+        const sin = Math.sin(angle)
+        // Turned about the site's origin, so the building keeps its place on the cell grid.
+        const at = (x: number, z: number): [number, number] => [
+          (b * 20 + x) * cos + z * sin,
+          -(b * 20 + x) * sin + z * cos,
+        ]
+        const building = new Group()
+        building.position.set(b * 20 * cos, 0, -b * 20 * sin)
+        building.rotation.y = angle
+        const meshes = [
+          box(8, 2.7, 0.3, 4, 1.35, 0.15),
+          box(8, 2.7, 0.3, 4, 1.35, 5.85),
+          box(0.3, 2.7, 6, 0.15, 1.35, 3),
+          box(0.3, 2.7, 6, 7.85, 1.35, 3),
+          box(0.1, 2.7, 6, 4, 1.35, 3),
+        ]
+        for (const mesh of meshes) building.add(mesh)
+        building.updateMatrixWorld(true)
+        for (const object of meshes) walls.push({ object, levelIndex: b })
+        zones.push(
+          { id: `${b} west`, levelIndex: b, polygon: rect(0, 0, 4, 6).map(([x, z]) => at(x, z)) },
+          { id: `${b} east`, levelIndex: b, polygon: rect(4, 0, 8, 6).map(([x, z]) => at(x, z)) },
+        )
+        return at
+      })
+      const rooms = new RoomLighting()
+      rooms.build({
+        ...bare({
+          levels: [
+            { y: 0, building: 0 },
+            { y: 0, building: 1 },
+          ],
+          zones,
+        }),
+        walls,
+      })
+      // Every 3.7 cm across each building and half a metre around it (never on a cell's edge,
+      // where rounding alone would decide).
+      const found: number[] = []
+      for (const at of place)
+        for (let x = -0.4873; x < 8.5; x += 0.037)
+          for (let z = -0.4873; z < 6.5; z += 0.037) {
+            const [wx, wz] = at(x, z)
+            found.push(rooms.roomAt(new Vector3(wx, 1, wz)))
+          }
+      return found
+    }
+    const square = scene([0, 0])
+    expect(new Set(square)).toEqual(new Set([-1, 0, 1, 2, 3]))
+    expect(scene([0.7, 0.7])).toEqual(square)
+    expect(scene([(40 * Math.PI) / 180, -0.3])).toEqual(square)
+  })
+
   test('a pavilion in a courtyard keeps its room inside the wing around it', () => {
     // The C-shaped wing's rooms and the pavilion are far enough apart to form separate clusters,
     // but the wing's cluster rect covers the courtyard.

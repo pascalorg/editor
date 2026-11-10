@@ -47,8 +47,8 @@ import { CELL, type MapLevel, type MapWalls, RoomMap, TILE, type TileCells } fro
  * "Room-aware" interior light, the game-engine way (ported from the enhanced viewer):
  *
  * - Zone polygons are rasterized per level into a top-down room-id map (10 cm cells). A fragment
- *   finds its room by looking up `p + n·0.18` — a wall face looks *into* the room it faces, so
- *   light never leaks through walls and there are no shadow maps to pay for.
+ *   finds its room a step off itself along its normal — a wall face looks *into* the room it
+ *   faces, so light never leaks through walls and there are no shadow maps to pay for.
  * - Each room owns its lamps and window "portals": glass rectangles that emit sky (+ ground
  *   bounce) radiance inwards with an analytic rectangle form factor, plus the internally
  *   reflected component (split-flux) and the sky patch on the floor. Enclosed rooms see only
@@ -865,6 +865,8 @@ export class RoomLighting {
 
     const walk = (tile: TileCells) => {
       const { cells, stride, i0, j0, x0, z0, ci0, cj0, level: l } = tile
+      // The tile lies in its building's turned frame: points and directions go back to the world.
+      const [cos, sin] = tile.turn
       const floorY = this.levels[l]?.y ?? 0
       const visit = (i: number, j: number, axis: 'x' | 'z') => {
         const di = axis === 'x' ? 1 : 0
@@ -878,9 +880,11 @@ export class RoomLighting {
         // Outside openings only from enclosed rooms.
         if (a < 0 && !this.rooms[b]!.enclosed) return
         if (b < 0 && !this.rooms[a]!.enclosed) return
-        const x = x0 + (i + 0.5 + di * 0.5) * CELL
-        const z = z0 + (j + 0.5 + dj * 0.5) * CELL
-        dirV.set(di, 0, dj)
+        const mx = x0 + (i + 0.5 + di * 0.5) * CELL
+        const mz = z0 + (j + 0.5 + dj * 0.5) * CELL
+        const x = mx * cos - mz * sin
+        const z = mx * sin + mz * cos
+        dirV.set(di * cos - dj * sin, 0, di * sin + dj * cos)
         for (const h of [0.35, 1.6]) {
           v.set(x, floorY + h, z).addScaledVector(dirV, -0.45)
           ray.set(v, dirV)
@@ -907,7 +911,7 @@ export class RoomLighting {
           samples.set(key, s)
         }
         s.pts.push(new Vector3(x, floorY, z))
-        s.facing.push(new Vector3(di * dir, 0, dj * dir))
+        s.facing.push(dirV.clone().multiplyScalar(dir))
       }
       // Each edge belongs to the tile of the cell before it. A uniform tile has none inside: only
       // its borders with the next tiles can hold one.
@@ -1025,11 +1029,14 @@ export class RoomLighting {
   roomAtNode = Fn(([p]: [N]) => this.map.roomAtNode(p))
 
   /**
-   * The room a surface faces (probed 18 cm off it along its normal). One node per material: its
-   * lighting and its exterior mask share the lookup.
+   * The room a surface faces, probed off it along its normal: 30 cm sideways, 18 cm up or down.
+   * Sideways it must clear a wall from inside it: a shutter, a door leaf or a pane set half-way
+   * into a 30 cm wall looks out past the wall's face, not into the cells along it, where a wall
+   * off the grid axes reads as room and outside in turn. One node per material: its lighting and
+   * its exterior mask share the lookup.
    */
   probeRoomNode(): N {
-    return this.roomAtNode(positionWorld.add(normalWorld.mul(0.18)))
+    return this.roomAtNode(positionWorld.add(normalWorld.mul(vec3(0.3, 0.18, 0.3))))
   }
 
   /** E' = Emax·(1 − e^(−E/Emax)), on luminance, hue kept — near-field hot spots compress, never blow out. */
