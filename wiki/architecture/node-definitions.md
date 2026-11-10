@@ -471,7 +471,7 @@ A kind that roofs: a node of it is one face of the roof that holds it (a plugin'
 
 - **Holding.** `RoofNode.children` keeps any id, a plugin's own prefix (`roofplane_…`) included. The roof's `validateRelations` refuses a child a write adds whose kind is registered and is neither a segment nor roofs; what a roof already held stays, so an old scene still edits, and so does a kind this runtime has not registered.
 - **Rendering.** The roof system merges only the segments into the shell. The roof's renderer mounts each face through the face's own renderer inside the roof's group, so the face stands in the roof's frame, and hiding, selecting, moving or deleting the roof carries it.
-- **Reading.** The roof's readers count a face through `outline` and `heightAt`, which `roofFaceShapes(roof, nodes)` turns into the frame of what holds the roof: the storey a roof covers (`roofsOver`), the walls it stands on and the seat that moves it to the roof level, the height of a roof level that seat makes, a view's frame, a floor plate's support, the site plan's roof outline and the level summary.
+- **Reading.** The roof's readers count a face through `outline` and `heightAt`, which `roofFaceShapes(roof, nodes)` turns into the frame of what holds the roof: the storey a roof covers (`roofsOver`), where it bears and the walls it follows, the height of a roof level a seat makes, a view's frame, a floor plate's support, the site plan's roof outline and the level summary. A face is not read for the seat that moves a roof off its storey's walls (`isRoofOnStoreyWalls`): an outline and heights cannot tell a porch on posts from a roof on walls, so the face's writer seats it by the roof-level rule.
 
 ```ts
 type RoofsCapability = {

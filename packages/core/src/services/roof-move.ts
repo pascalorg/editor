@@ -54,24 +54,15 @@ function bearsOn(nodes: Nodes, roof: RoofNode, levelId: string): boolean {
 }
 
 /**
- * Whether a roof's faces (`capabilities.roofs`) stand on `levelId`'s walls: their lowest eave on
- * the tops of the walls under the roof.
- */
-function facesBearOn(nodes: Nodes, roof: RoofNode, levelId: string): boolean {
-  const eaves = roofFaceShapes(roof, nodes).map((face) => face.low)
-  const top = eaves.length ? roofWallTop(roof, nodes, levelId) : null
-  return top !== null && Math.abs(Math.min(...eaves) - top) <= ON_WALLS
-}
-
-/**
  * A roof held by the storey whose walls carry it (written there before the rule, or by a tool that
  * ignored it): it hides that storey's plan in solo and exploded views; the seat and
  * `planRoofsOffStorey` move it. Some segment bears on the storey's walls (`segmentBearing`: walls
  * along its edges, open air past them) and the roof follows walls, or a segment's base or eave
  * stands at the eave those walls need (knee walls on the plate, or the segment's own walls rising to
- * it); or its faces' eave stands on the tops of the walls under them. A lower wing's roof on the
- * storey above is not one (its inner edge has rooms past it), nor a porch or portico on posts (no
- * wall along its outer edges), nor a roof on another roof.
+ * it). A lower wing's roof on the storey above is not one (its inner edge has rooms past it), nor
+ * a porch or portico on posts (no wall along its outer edges), nor a roof on another roof. Faces of
+ * other kinds (`capabilities.roofs`) are not read for it: an outline and heights cannot tell a
+ * porch on posts from a roof on walls, so their writer seats them (the roof-level rule).
  */
 export function isRoofOnStoreyWalls(nodes: Nodes, roofId: string): boolean {
   const roof = nodes[roofId]
@@ -83,15 +74,13 @@ export function isRoofOnStoreyWalls(nodes: Nodes, roofId: string): boolean {
     roof.support?.kind === 'roof'
   )
     return false
-  return (
-    segmentsOf(nodes, roof).some((segment) => {
-      const { need } = segmentBearing(nodes, segment.id, level.id)
-      if (need === null) return false
-      if (roof.support?.kind === 'walls') return true
-      const base = roof.position[1] + segment.position[1]
-      return [base, base + segment.wallHeight].some((y) => Math.abs(y - need) <= ON_WALLS)
-    }) || facesBearOn(nodes, roof, level.id)
-  )
+  return segmentsOf(nodes, roof).some((segment) => {
+    const { need } = segmentBearing(nodes, segment.id, level.id)
+    if (need === null) return false
+    if (roof.support?.kind === 'walls') return true
+    const base = roof.position[1] + segment.position[1]
+    return [base, base + segment.wallHeight].some((y) => Math.abs(y - need) <= ON_WALLS)
+  })
 }
 
 export type RoofMove = {

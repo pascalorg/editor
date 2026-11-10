@@ -576,29 +576,33 @@ describe('a roof of faces', () => {
     expect(isRoofOnStoreyWalls(nodes, 'roof_faces')).toBe(false)
   })
 
-  test("planes on their own storey's walls cover that storey, and stand on its walls", () => {
-    // The container stands at the floor; the eave, 2.7 m up on the upper walls, says where it bears.
+  test("planes on their own storey's walls cover that storey; the seat leaves them to their writer", () => {
+    // The container stands at the floor; the eave, 2.7 m up on the upper walls, says which storey.
+    // An outline and heights cannot tell a porch on posts from a roof on walls: no seat moves it.
     const nodes = facesHouse('level_1', [0, 0, 6, 8], 2.7)
     expect(roofsOver(nodes, 'level_1').map((roof) => roof.id)).toEqual(['roof_faces'])
     expect(roofsOver(nodes, 'level_g')).toEqual([])
-    expect(isRoofOnStoreyWalls(nodes, 'roof_faces')).toBe(true)
+    expect(isRoofOnStoreyWalls(nodes, 'roof_faces')).toBe(false)
   })
 
-  test('moved to the roof level, the roof stands where it stood and its level is as tall as its planes', () => {
-    const nodes = facesHouse('level_1', [0, 0, 6, 8], 2.7)
-    const move = planRoofsOffStorey(nodes, 'level_1')
+  test('a roof moved to the roof level carries its planes, and its level is as tall as they rise', () => {
+    registerRoofPlanes()
+    // The bungalow's roof on its walls' level, with a 12-in-12 plane over its 6 m depth beside its
+    // segment, in the roof's frame.
+    const nodes = roofedHouse('level_g', 'level')
+    const plane = roofPlane('roofplane_a', [-4, -3, 4, 3], 0, { pitch: 12, parentId: 'roof_main' })
+    const roof = nodes.roof_main as RoofNode
+    nodes.roof_main = { ...roof, children: [...roof.children, plane.id] }
+    nodes[plane.id] = plane
+    const move = planRoofsOffStorey(nodes, 'level_g')
     expect(move?.plan.kind).toBe('roof')
     if (move?.plan.kind !== 'roof') return
     const moved = applySceneChanges(nodes, move.changes)
-    const roof = moved.roof_faces as RoofNode
-    expect(roof.parentId).toBe(move.plan.levelId)
-    // The planes are untouched: the container drops by the storey under the roof level.
-    expect(moved.roofplane_a).toEqual(nodes.roofplane_a!)
-    const elevations = getLevelElevations(moved as Record<AnyNodeId, AnyNode>)
-    const base = elevations.get(move.plan.levelId)!.baseY
-    expect(base + roof.position[1]).toBeCloseTo(elevations.get('level_1')!.baseY, 6)
-    // 8 m deep at 6 in 12 from an eave 0.2 m over the roof level's floor.
-    expect((moved[move.plan.levelId] as LevelNode).height).toBeCloseTo(0.2 + 8 * 0.5, 6)
+    // The plane is untouched: its container goes down by the storey under the roof level.
+    expect(moved[plane.id]).toEqual(plane)
+    expect(worldEave(moved, 'roof_main')).toBeCloseTo(2.7, 6)
+    // The plane rises 6 m from an eave 0.2 m over the new level's floor, above the gable.
+    expect((moved[move.plan.levelId] as LevelNode).height).toBeCloseTo(0.2 + 6, 6)
   })
 })
 
