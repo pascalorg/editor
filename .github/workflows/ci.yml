@@ -54,9 +54,13 @@ jobs:
             skills:
               - '{skills/**,.agents/**,plugin-evals/**,.claude-plugin/**,.codex-plugin/**,.cursor-plugin/**,plugin.json,mcp.json,gemini-extension.json,assets/pascal-mark*.svg,README.md,package.json,scripts/validate-skills.ts,scripts/path-containment*.ts,scripts/*-policy*.ts,.github/workflows/ci.yml}'
 
-  quality:
+  # Lint, localization, skills and types. The three jobs below ran back to
+  # back in one job (7 to 8 min); side by side the gate takes the slowest one.
+  static:
+    name: Lint, i18n, typecheck
     needs: changes
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: read
     steps:
@@ -111,8 +115,54 @@ jobs:
       - name: Type check
         run: bun run check-types
 
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.23.4'
+
+      - name: Turbo cache
+        uses: rharkor/caching-for-turbo@2238fae6eb9a9936f92356f54cb3660200d105e7 # v2.5.1
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
       - name: Test
         run: bun run test
+
+  build:
+    name: Build and smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.23.4'
+
+      - name: Turbo cache
+        uses: rharkor/caching-for-turbo@2238fae6eb9a9936f92356f54cb3660200d105e7 # v2.5.1
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
 
       - name: Build
         run: bun run build
@@ -126,6 +176,24 @@ jobs:
         working-directory: apps/editor
         timeout-minutes: 5
         run: bun run smoke
+
+  # The required check (`quality` in the main ruleset, wiki/npm-release.md).
+  # It always runs and passes only when all three jobs above succeeded.
+  quality:
+    needs: [static, test, build]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: Static checks, tests and build succeeded
+        env:
+          STATIC_RESULT: ${{ needs.static.result }}
+          TEST_RESULT: ${{ needs.test.result }}
+          BUILD_RESULT: ${{ needs.build.result }}
+        run: |
+          echo "static: $STATIC_RESULT, test: $TEST_RESULT, build: $BUILD_RESULT"
+          [ "$STATIC_RESULT" = success ] && [ "$TEST_RESULT" = success ] && [ "$BUILD_RESULT" = success ]
 
   cli-smoke:
     needs: changes
