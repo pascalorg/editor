@@ -85,6 +85,7 @@ async function withServer(command: string[], cwd: string, check: (url: string) =
   }
 }
 
+let failed = false
 try {
   await run(
     [
@@ -209,10 +210,13 @@ try {
     await browser.close()
   }
   console.log(`Viewer live fixture passed (${elapsed()})`)
+} catch (error) {
+  console.error(error)
+  failed = true
 } finally {
   console.log(`Viewer fixture elapsed: ${elapsed()}`)
   if (process.env.KEEP_VIEWER_LIVE_FIXTURE) console.log(`Kept ${temp}`)
   else await rm(temp, { recursive: true, force: true })
 }
-// Nothing this script started may keep CI waiting once the verdict is printed.
-process.exit(0)
+// Nothing this script started may keep CI waiting once the verdict is printed, pass or fail.
+process.exit(failed ? 1 : 0)
