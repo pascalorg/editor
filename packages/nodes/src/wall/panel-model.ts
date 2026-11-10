@@ -136,7 +136,7 @@ export function wallSettings(
   },
 ): PanelRow[] {
   const rows: PanelRow[] = []
-  const height = resolveWallOpeningCeiling(node, nodes)
+  const height = resolveWallOpeningCeiling(node, nodes, 0)
   const repairBase = () => ({
     supportOffset: undefined,
     ...(node.supportSlabId === GROUND_SUPPORT_ID &&
@@ -236,6 +236,16 @@ export function wallSettings(
       number('Dimensions', 'height', 'Height', node.height, 0.1, 1000, 0.05, (height) =>
         update({ height }),
       )
+    number(
+      'Dimensions',
+      'end-height-offset',
+      'End height offset',
+      node.endHeightOffset ?? 0,
+      -(height - 0.01),
+      Infinity,
+      0.05,
+      (endHeightOffset) => update({ endHeightOffset }),
+    )
     choice(
       'Dimensions',
       'wall-bottom',

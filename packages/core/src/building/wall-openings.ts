@@ -23,9 +23,13 @@ import {
 import { getCurtainWallConfig } from '../schema/nodes/curtain-wall'
 import type { DoorType, WindowType } from '../schema/nodes/opening-types'
 import { isRailingWall, railingOpeningFields } from '../schema/nodes/railing-wall'
-import { getWallTop } from '../services/storey'
+import { getWallTop, getWallTopOver } from '../services/storey'
 import { resolveWallExteriorSide } from '../systems/wall/wall-assembly'
-import { getWallCurveLength, isCurvedWall } from '../systems/wall/wall-curve'
+import {
+  getWallCurveLength,
+  getWallStationAtChordFraction,
+  isCurvedWall,
+} from '../systems/wall/wall-curve'
 import { doorTypeFields, NEW_DOOR_FRAME_THICKNESS } from './door-types'
 import {
   type DoorStyle,
@@ -47,26 +51,75 @@ const lengthOf = (wall: Pick<WallNode, 'start' | 'end'>) =>
   Math.hypot(wall.end[0] - wall.start[0], wall.end[1] - wall.start[1])
 
 /**
- * Available wall-local Y span for an opening hosted on `wall`: the wall's resolved top (storey
- * plane for plane-bound walls, stored height for explicit ones) minus the wall's elected slab
- * base, the ceiling an opening's top edge must stay under.
+ * Available wall-local Y span for an opening hosted on `wall` at chord fraction `t` (0 start,
+ * 1 end; see `getWallChordFractionAt`): the wall's resolved top (storey plane for plane-bound walls, stored height for explicit
+ * ones, sloped by `endHeightOffset`) minus the wall's elected slab base, the ceiling an opening's
+ * top edge must stay under.
  */
 export function resolveWallOpeningCeiling(
   wall: WallNode,
   nodes: Readonly<Record<AnyNodeId, AnyNode>>,
+  t: number,
 ): number {
   const support = wallSupportForNodes(wall, nodes)
   return (
-    getWallTop(wall, wall.parentId ?? '', nodes as Record<string, AnyNode>, support.elevation) -
+    getWallTop(wall, wall.parentId ?? '', nodes as Record<string, AnyNode>, support.elevation, t) -
     support.elevation
   )
+}
+
+/** The lowest opening ceiling over arc-length stations `[left, right]` (see `getWallTopOver`). */
+export function wallOpeningCeilingOver(
+  wall: WallNode,
+  nodes: Readonly<Record<AnyNodeId, AnyNode>>,
+  left: number,
+  right: number,
+): number {
+  const support = wallSupportForNodes(wall, nodes)
+  return (
+    getWallTopOver(
+      wall,
+      wall.parentId ?? '',
+      nodes as Record<string, AnyNode>,
+      support.elevation,
+      left,
+      right,
+    ) - support.elevation
+  )
+}
+
+/**
+ * The centres in `[min, max]` where a span `width` wide stays under a sloped top at `need`, or
+ * null when there are none. A flat top keeps the whole range: there the editor clamps and the
+ * agent path refuses an opening that is too tall, exactly as before tops could slope.
+ */
+function centresUnderCeiling(
+  wall: WallNode,
+  nodes: Readonly<Record<AnyNodeId, AnyNode>>,
+  width: number,
+  need: number,
+  min: number,
+  max: number,
+): [number, number] | null {
+  const start = resolveWallOpeningCeiling(wall, nodes, 0)
+  const rise = resolveWallOpeningCeiling(wall, nodes, 1) - start
+  if (Math.abs(rise) < 1e-6) return [min, max]
+  if (min > max) return null
+  // The top is linear along the chord: past this station it is lower than `need`.
+  const limit = getWallStationAtChordFraction(wall, (need - start) / rise)
+  const lo = rise > 0 ? Math.max(min, limit + width / 2) : min
+  const hi = rise > 0 ? max : Math.min(max, limit - width / 2)
+  return lo > hi + 1e-4 ? null : [lo, Math.max(lo, hi)]
 }
 
 /** A curtain wall keeps its perimeter frame clear of openings. */
 const openingMargin = (wall: WallNode) =>
   wall.wallType === 'curtain' ? getCurtainWallConfig(wall).perimeterWidth : 0
 
-/** A door's centre: slid along the wall to stay on it, standing on the floor. */
+/**
+ * A door's centre: slid along the wall to stay on it, standing on the floor, and under a sloped
+ * top. `fits` is false when no position along the wall clears the door.
+ */
 export function clampDoorToWall(
   wall: WallNode,
   localX: number,
@@ -74,31 +127,40 @@ export function clampDoorToWall(
   height: number,
   door?: Partial<DoorNode>,
   nodes: Readonly<Record<AnyNodeId, AnyNode>> = {},
-): { clampedX: number; clampedY: number; transomHeight?: number } {
+): { clampedX: number; clampedY: number; fits: boolean; transomHeight?: number } {
   const margin = openingMargin(wall)
   const length = getWallCurveLength(wall)
   const size = getDoorOpeningSize({ ...door, width, height })
   const offset = size.leafOffsetX * openingHostFacing(door ?? {})
-  const clampedX =
-    Math.max(margin + size.width / 2, Math.min(length - margin - size.width / 2, localX - offset)) +
-    offset
+  const min = margin + size.width / 2
+  const max = length - margin - size.width / 2
+  const fit = centresUnderCeiling(wall, nodes, size.width, height + margin, min, max)
+  const [lo, hi] = fit ?? [min, max]
+  const centre = Math.max(lo, Math.min(hi, localX - offset))
   const transomHeight =
     door?.transomHeight !== undefined && size.height > height
       ? Math.min(
           door.transomHeight,
-          Math.max(0, resolveWallOpeningCeiling(wall, nodes) - margin - height),
+          Math.max(
+            0,
+            wallOpeningCeilingOver(wall, nodes, centre - size.width / 2, centre + size.width / 2) -
+              margin -
+              height,
+          ),
         )
       : undefined
   return {
-    clampedX,
+    clampedX: centre + offset,
     clampedY: height / 2,
+    fits: fit !== null,
     ...(transomHeight === undefined ? {} : { transomHeight }),
   }
 }
 
 /**
  * A window's centre: slid to stay on the wall, and between the wall's bottom and its ceiling. The
- * bottom is the floor, or lower where the wall fills down beside a sunken floor (a garage).
+ * bottom is the floor, or lower where the wall fills down beside a sunken floor (a garage). Under
+ * a sloped top the window slides to where its span clears; `fits` is false when nowhere does.
  */
 export function clampWindowToWall(
   wall: WallNode,
@@ -107,11 +169,15 @@ export function clampWindowToWall(
   width: number,
   height: number,
   nodes: Readonly<Record<AnyNodeId, AnyNode>>,
-): { clampedX: number; clampedY: number } {
-  const ceiling = resolveWallOpeningCeiling(wall, nodes)
+): { clampedX: number; clampedY: number; fits: boolean } {
   const margin = openingMargin(wall)
   const length = getWallCurveLength(wall)
-  const clampedX = Math.max(margin + width / 2, Math.min(length - margin - width / 2, localX))
+  const min = margin + width / 2
+  const max = length - margin - width / 2
+  const fit = centresUnderCeiling(wall, nodes, width, height + 2 * margin, min, max)
+  const [lo, hi] = fit ?? [min, max]
+  const clampedX = Math.max(lo, Math.min(hi, localX))
+  const ceiling = wallOpeningCeilingOver(wall, nodes, clampedX - width / 2, clampedX + width / 2)
   const support = wallSupportForNodes(wall, nodes)
   const floor = Math.min(
     0,
@@ -122,7 +188,7 @@ export function clampWindowToWall(
     floor + margin + height / 2,
     Math.min(ceiling - margin - height / 2, localY),
   )
-  return { clampedX, clampedY }
+  return { clampedX, clampedY, fits: fit !== null }
 }
 
 /**
@@ -270,6 +336,28 @@ const DEFAULTS = {
 const metres = (value: number) => `${value.toFixed(2)} m`
 
 /**
+ * Refuses an opening that no stretch of a sloped wall can take under its top, which the wall
+ * clamps report as `fits: false`. The editor refuses the same placement; a flat wall always fits.
+ */
+export function refuseOpeningAboveSlope(
+  wall: WallNode,
+  nodes: Readonly<Record<AnyNodeId, AnyNode>>,
+  kind: 'door' | 'window',
+  width: number,
+  height: number,
+): never {
+  const wallHeight = Math.max(
+    resolveWallOpeningCeiling(wall, nodes, 0),
+    resolveWallOpeningCeiling(wall, nodes, 1),
+  )
+  refuse(
+    'wall_too_low',
+    `Wall ${wall.id} slopes to at most ${metres(wallHeight)}, and nowhere along it does a ${metres(width)} wide, ${metres(height)} tall ${kind} fit under its top. Use a smaller ${kind}, or raise the wall's low end.`,
+    { wallId: wall.id, wallHeight, height },
+  )
+}
+
+/**
  * The sill that centres a window of `height` vertically on the lowest of `walls`, or 0 when it is
  * taller than they are. What a window with no sill given takes, on every agent surface.
  */
@@ -278,7 +366,9 @@ export function centredWindowSill(
   height: number,
   nodes: Readonly<Record<AnyNodeId, AnyNode>>,
 ): number {
-  const ceiling = Math.min(...walls.map((wall) => resolveWallOpeningCeiling(wall, nodes)))
+  const ceiling = Math.min(
+    ...walls.map((wall) => wallOpeningCeilingOver(wall, nodes, 0, getWallCurveLength(wall))),
+  )
   return Math.max(0, (ceiling - height) / 2)
 }
 
@@ -400,18 +490,8 @@ export function planWallOpening(nodes: Nodes, input: WallOpeningInput) {
       { wallId, wallLength, width },
     )
 
-  if (kind === 'door') {
-    const wallHeight =
-      resolveWallOpeningCeiling(wall, nodes as Record<AnyNodeId, AnyNode>) - openingMargin(wall)
-    if (size.height > wallHeight + TOUCHING)
-      refuse(
-        'wall_too_low',
-        `Wall ${wallId} is ${metres(wallHeight)} high, too low for a ${metres(size.height)} door.`,
-        { wallId, wallHeight, height: size.height },
-      )
-  }
-
   const rawX = along * wallLength
+
   // A window with no sill given is centred on its wall, taller than the wall or not: the clamp
   // below stands one that is too tall on the floor and reports it clamped. A door stands on the
   // floor unless given a sill (rare: down to a floor sunk beside the wall); with one it keeps
@@ -423,9 +503,21 @@ export function planWallOpening(nodes: Nodes, input: WallOpeningInput) {
       ? sill + height / 2
       : kind === 'door'
         ? height / 2
-        : resolveWallOpeningCeiling(wall, nodes as Record<AnyNodeId, AnyNode>) / 2
-  const { clampedX, clampedY } = onFloor
-    ? clampDoorToWall(wall, rawX, size.width, size.height)
+        : wallOpeningCeilingOver(
+            wall,
+            nodes as Record<AnyNodeId, AnyNode>,
+            rawX - size.width / 2,
+            rawX + size.width / 2,
+          ) / 2
+  const { clampedX, clampedY, fits } = onFloor
+    ? clampDoorToWall(
+        wall,
+        rawX,
+        size.width,
+        size.height,
+        undefined,
+        nodes as Record<AnyNodeId, AnyNode>,
+      )
     : clampWindowToWall(
         wall,
         rawX,
@@ -434,6 +526,23 @@ export function planWallOpening(nodes: Nodes, input: WallOpeningInput) {
         size.height,
         nodes as Record<AnyNodeId, AnyNode>,
       )
+  if (!fits) refuseOpeningAboveSlope(wall, nodes, kind, size.width, size.height)
+  // Checked where the clamp put the door: under a sloped top it may have slid to the high end.
+  if (kind === 'door') {
+    const wallHeight =
+      wallOpeningCeilingOver(
+        wall,
+        nodes as Record<AnyNodeId, AnyNode>,
+        clampedX - size.width / 2,
+        clampedX + size.width / 2,
+      ) - openingMargin(wall)
+    if (size.height > wallHeight + TOUCHING)
+      refuse(
+        'wall_too_low',
+        `Wall ${wallId} is ${metres(wallHeight)} high, too low for a ${metres(size.height)} door.`,
+        { wallId, wallHeight, height: size.height },
+      )
+  }
 
   if (!input.force) {
     const blocking = findWallChildOverlap(

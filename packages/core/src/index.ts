@@ -1233,11 +1233,13 @@ export {
   getClampedWallCurveOffset,
   getMaxWallCurveOffset,
   getWallArcData,
+  getWallChordFractionAt,
   getWallChordFrame,
   getWallCurveFrameAt,
   getWallCurveLength,
   getWallCurveStationAtPoint,
   getWallMidpointHandlePoint,
+  getWallStationAtChordFraction,
   getWallStraightSnapOffset,
   getWallSurfacePolygon,
   isCurvedWall,
@@ -1322,6 +1324,8 @@ export { plannedWallIds, planWallPaint } from './systems/wall/wall-paint-plan'
 export { roomSideFaces } from './systems/wall/wall-room-sides'
 export { wallDoorStepRuns } from './systems/wall/wall-step-openings'
 export {
+  clampWallEndHeightOffset,
+  MIN_WALL_END_HEIGHT,
   MIN_WALL_HEIGHT,
   resolveWallEffectiveHeight,
   resolveWallTop,

@@ -206,7 +206,7 @@ function wallPushHandle(
   const offsets = getWallFaceOffsets(wall)
   const face = side === 'a' ? offsets.a : -offsets.b
   const offset = Math.max(face + HANDLE_OFFSET, HANDLE_MIN_OFFSET)
-  const wallHeight = getWallEffectiveHeightForNodes(wall, nodes)
+  const wallHeight = getWallEffectiveHeightForNodes(wall, nodes, 0.5)
   return {
     key,
     wallId: wall.id,
@@ -642,7 +642,7 @@ function previewPushPlan(
             start: change.node.start,
             end: change.node.end,
             thickness: change.node.thickness ?? 0.1,
-            height: getWallEffectiveHeightForNodes(change.node, nodes),
+            height: getWallEffectiveHeightForNodes(change.node, nodes, 0),
           },
         ]
       : []
@@ -1403,7 +1403,7 @@ export function beginWallGroupPush(wallIds: readonly string[], levelId: string):
       {
         wall,
         base,
-        top: base + getWallEffectiveHeightForNodes(wall, nodes),
+        top: base + getWallEffectiveHeightForNodes(wall, nodes, 0),
         normal: wallPushNormal(wall),
         rooms: pushDimensionRooms(nodes, levelId, { wallId: wall.id, t0: 0, t1: 1 }, base),
       },

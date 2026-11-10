@@ -115,7 +115,7 @@ const roomOfWall = (nodes: Nodes, levelId: string, wallId: string) =>
 
 function wallHeight(wall: WallNode, nodes: Nodes): number {
   try {
-    const height = getWallEffectiveHeightForNodes(wall, nodes as Record<string, AnyNode>)
+    const height = getWallEffectiveHeightForNodes(wall, nodes as Record<string, AnyNode>, 0)
     if (Number.isFinite(height) && height > 0) return height
   } catch {
     // No slab election to consult in a bare scene: the wall's own height stands.

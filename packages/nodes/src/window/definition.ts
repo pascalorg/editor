@@ -27,7 +27,7 @@ import { openingPropertyPreviewHost } from '../shared/opening-property-preview-h
 import { readRoofFaceHeightMax, readRoofFaceWidthMax } from '../shared/roof-opening-host'
 import { buildRoofWallOpeningCut } from '../shared/roof-wall-opening-cut'
 import { scriptedOpeningHandles } from '../shared/scripted-opening-handles'
-import { readHostWallCeiling } from '../shared/wall-opening-ceiling'
+import { readHostWallCeiling, readHostWallCeilingMaxWidth } from '../shared/wall-opening-ceiling'
 import { openingSeenFromOutside } from '../wall/exterior'
 import { wallFloorplanSiblingOverrides } from '../wall/floorplan-overrides'
 import { buildWindowContextualDimensions } from './contextual-dimensions'
@@ -66,9 +66,10 @@ export function resolveWindowHandlePortalTarget(
 }
 
 function readWallLength(w: WindowNodeType, scene: { get: (id: AnyNodeId) => unknown }): number {
-  if (!w.wallId) return Number.POSITIVE_INFINITY
-  const wall = scene.get(w.wallId as AnyNodeId) as WallNode | undefined
-  if (!wall) return Number.POSITIVE_INFINITY
+  const hostId = w.wallId || w.parentId
+  if (!hostId) return Number.POSITIVE_INFINITY
+  const wall = scene.get(hostId as AnyNodeId) as WallNode | undefined
+  if (wall?.type !== 'wall' || !wall.start || !wall.end) return Number.POSITIVE_INFINITY
   return Math.hypot(wall.end[0] - wall.start[0], wall.end[1] - wall.start[1])
 }
 
@@ -130,11 +131,26 @@ function windowWidthHandle(side: 'left' | 'right'): HandleDescriptor<WindowNodeT
     max: (n, scene) => {
       const dormerMax = readDormerFaceWidthMax(n, scene, sign)
       if (dormerMax !== null) return Math.max(MIN_WINDOW_WIDTH, dormerMax)
-      // Roof-hosted windows clamp against the face profile (the
-      // wall-based limits read Infinity when wallId is unset).
+      // Roof-hosted windows clamp against the face profile.
       const roofMax = readRoofFaceWidthMax(n, scene, sign)
       if (roofMax !== null) return Math.max(MIN_WINDOW_WIDTH, roofMax)
-      return curtainOpeningResizeMax(n, scene.nodes(), 'x', sign) ?? readWallLength(n, scene)
+      const curtainMax = curtainOpeningResizeMax(n, scene.nodes(), 'x', sign)
+      if (curtainMax !== undefined) return curtainMax
+      // rotation[1] = π flips the window, so its visual right edge moves toward lower wall-local S.
+      const growSign = sign * Math.cos(n.rotation[1]) > 0 ? 1 : -1
+      const fixedEdgeS = n.position[0] - (growSign * n.width) / 2
+      return Math.max(
+        MIN_WINDOW_WIDTH,
+        readHostWallCeilingMaxWidth(
+          n.wallId || n.parentId,
+          scene,
+          fixedEdgeS,
+          growSign,
+          n.position[1] + n.height / 2,
+          readWallLength(n, scene),
+          n,
+        ),
+      )
     },
     currentValue: (n) => n.width,
     onDrag: (node) => publishOpeningResizeGuides(node, true),
@@ -179,12 +195,11 @@ function windowHeightHandle(edge: 'top' | 'bottom'): HandleDescriptor<WindowNode
       if (dormerMax !== null) return Math.max(MIN_WINDOW_HEIGHT, dormerMax)
       const roofMax = readRoofFaceHeightMax(n, scene, sign)
       if (roofMax !== null) return Math.max(MIN_WINDOW_HEIGHT, roofMax)
-      // Maximum: distance from the anchored edge to the wall's allowed Y
-      // bounds. Top arrow caps at the wall's resolved ceiling - bottom;
+      // Maximum: distance from the anchored edge to the wall's allowed bounds. Top arrow caps at the wall's resolved ceiling - bottom;
       // bottom arrow caps at top (positive Y room above the floor).
       const curtainMax = curtainOpeningResizeMax(n, scene.nodes(), 'y', sign)
       if (curtainMax !== undefined) return curtainMax
-      const wallH = readHostWallCeiling(n.wallId, scene, n)
+      const wallH = readHostWallCeiling(n.wallId || n.parentId, scene, n)
       const anchored = edge === 'top' ? n.position[1] - n.height / 2 : n.position[1] + n.height / 2
       return edge === 'top'
         ? Math.max(MIN_WINDOW_HEIGHT, wallH - anchored)

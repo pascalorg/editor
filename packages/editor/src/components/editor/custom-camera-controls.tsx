@@ -29,6 +29,7 @@ import {
   type Camera,
   type OrthographicCamera,
   type PerspectiveCamera,
+  Sphere,
   Spherical,
   Vector3,
 } from 'three'
@@ -74,6 +75,13 @@ import {
 } from '../../store/use-interaction-scope'
 import { visibleScene } from '../../store/view-layout'
 import { createCameraDraggingLifecycle } from './camera-dragging-lifecycle'
+import {
+  type FitSceneLookAt,
+  type PendingFitScene,
+  planFitSceneOnEvent,
+  planFitSceneOnOrbitResume,
+  planLevelFollow,
+} from './fit-scene-framing'
 import { FloorAwareCameraControls } from './floor-aware-camera-controls'
 import { FloorSurface } from './floor-surface'
 
@@ -84,6 +92,7 @@ const tempDelta = new Vector3()
 const tempPosition = new Vector3()
 const tempSize = new Vector3()
 const tempTarget = new Vector3()
+const fitSceneSphere = new Sphere()
 const transitionFreezePosition = new Vector3()
 const transitionFreezeTarget = new Vector3()
 const keyboardPanSpherical = new Spherical()
@@ -118,6 +127,23 @@ function keepEyeOverGround(x: number, eyeY: number, z: number, previousEyeY = ey
   const siteId = sceneRegistry.byType.site?.values().next().value as AnyNodeId | undefined
   const groundY = groundHeightAt(siteId ? nodes[siteId] : null, x, z)
   return overviewEyeY(eyeY, previousEyeY, groundY, useViewer.getState().eyeUnderGround)
+}
+
+function applyFitLookAt(control: CameraControlsImpl, lookAt: FitSceneLookAt) {
+  control.setLookAt(
+    lookAt.eyeX,
+    keepEyeOverGround(lookAt.eyeX, lookAt.eyeY, lookAt.eyeZ, lookAt.eyeHeight),
+    lookAt.eyeZ,
+    lookAt.targetX,
+    lookAt.targetY,
+    lookAt.targetZ,
+    true,
+  )
+  if (isOrthographicCamera(control.camera)) {
+    fitSceneSphere.center.set(...lookAt.fitSphere.center)
+    fitSceneSphere.radius = lookAt.fitSphere.radius
+    control.fitToSphere(fitSceneSphere, true)
+  }
 }
 
 function levelOf(nodeId: string): string | null {
@@ -407,6 +433,9 @@ export const CustomCameraControls = ({ paused = false }: { paused?: boolean }) =
   if (selection.levelId) lastLevelId.current = selection.levelId
   const currentLevelId = lastLevelId.current
   const firstLoad = useRef(true)
+  // Survives first-person (orbit unmounted) so scene-ready fit still applies
+  // once CameraControls remount.
+  const pendingFitSceneRef = useRef<PendingFitScene | null>(null)
   const floorY = useScene((state) =>
     currentLevelId ? getLevelPresentationY(currentLevelId, state.nodes, levelMode) : 0,
   )
@@ -615,19 +644,32 @@ export const CustomCameraControls = ({ paused = false }: { paused?: boolean }) =
     }
   }, [scene, gl, camera])
 
+  const previousLevelIdRef = useRef<string | null>(null)
+  const previousLevelModeRef = useRef(levelMode)
+  const previousCameraRef = useRef(camera)
   // `camera` too: drei builds a fresh controls instance (pivot at the origin)
   // when the default camera mounts or changes; it is rested on the floor too.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: camera re-runs this on a new instance
   useEffect(() => {
     if (isPreviewMode || isFirstPersonMode || isRestoringFirstPersonPose()) return
     // Analytic destination, not `sceneRegistry` mesh position: a level created
     // this frame still sits at y=0 (LevelSystem lerps it later), and a mode
-    // switch leaves every level mid-lerp — the camera must pan to where the
+    // switch leaves every level mid-lerp - the camera must pan to where the
     // level will settle, in the CURRENT presentation mode.
     const targetY = orbitGroundY(currentLevelId, levelMode)
     if (!controls.current) return
-    if (firstLoad.current) {
-      firstLoad.current = false
+    const plan = planLevelFollow({
+      firstLoad: firstLoad.current,
+      sceneEmpty: Object.keys(useScene.getState().nodes).length === 0,
+      levelChanged: previousLevelIdRef.current !== currentLevelId,
+      modeChanged: previousLevelModeRef.current !== levelMode,
+      cameraChanged: previousCameraRef.current !== camera,
+    })
+    firstLoad.current = false
+    previousLevelIdRef.current = currentLevelId
+    previousLevelModeRef.current = levelMode
+    previousCameraRef.current = camera
+    if (plan === 'none') return
+    if (plan === 'default-pose') {
       controls.current.setLookAt(
         20,
         keepEyeOverGround(20, 20 + targetY, 20, 20),
@@ -637,6 +679,7 @@ export const CustomCameraControls = ({ paused = false }: { paused?: boolean }) =
         0,
         true,
       )
+      return
     }
     controls.current.getOrbitTarget(currentTarget)
     // Idempotence guard: skip when already there — also swallows the thumbnail
@@ -691,6 +734,19 @@ export const CustomCameraControls = ({ paused = false }: { paused?: boolean }) =
     // The level's floor and the ground hold the eye over them; the dive goes through both.
     controls.current.floorSurface = diveFloor === null ? floorSurface : null
   }, [camera, currentLevelId, diveFloor, floorMinY, floorSurface, isFirstPersonMode])
+
+  const flushPendingFitScene = useCallback(() => {
+    const plan = planFitSceneOnOrbitResume({
+      isPreviewMode,
+      isFirstPersonMode: useEditor.getState().isFirstPersonMode,
+      hasControls: !!controls.current,
+      pending: pendingFitSceneRef.current,
+      groundY: orbitGroundY(lastLevelId.current),
+    })
+    if (plan.action !== 'apply' || !controls.current) return
+    pendingFitSceneRef.current = null
+    applyFitLookAt(controls.current, plan.lookAt)
+  }, [isPreviewMode])
 
   const focusNode = useCallback(
     (nodeId: string) => {
@@ -1388,37 +1444,22 @@ export const CustomCameraControls = ({ paused = false }: { paused?: boolean }) =
     }
 
     const handleFitScene = ({ bounds }: CameraControlFitSceneEvent) => {
-      if (isFirstPersonMode || !controls.current || isPreviewMode) return
-      const groundY = orbitGroundY(lastLevelId.current)
-      if (!bounds) {
-        // Restore default framing pose when no bounds were computed.
-        controls.current.setLookAt(
-          20,
-          keepEyeOverGround(20, 20 + groundY, 20, 20),
-          20,
-          0,
-          groundY,
-          0,
-          true,
-        )
+      const plan = planFitSceneOnEvent({
+        isPreviewMode,
+        isFirstPersonMode,
+        hasControls: !!controls.current,
+        bounds: bounds ?? null,
+        groundY: orbitGroundY(lastLevelId.current),
+      })
+      if (plan.action === 'ignore') return
+      if (plan.action === 'queue') {
+        pendingFitSceneRef.current = plan.pending
+        // Orbit path with a not-yet-attached ref: retry next frame.
+        if (!isFirstPersonMode) requestAnimationFrame(flushPendingFitScene)
         return
       }
-      const [cx, cz] = bounds.center
-      const [w, d] = bounds.size
-      // Use the longer horizontal extent to size the orbit radius so the whole
-      // footprint sits in view regardless of aspect ratio.
-      const maxExtent = Math.max(w, d)
-      const distance = Math.max(maxExtent * 1.4, 15)
-      const height = Math.max(maxExtent * 0.8, 10)
-      controls.current.setLookAt(
-        cx + distance * 0.7,
-        keepEyeOverGround(cx + distance * 0.7, height + groundY, cz + distance * 0.7, height),
-        cz + distance * 0.7,
-        cx,
-        groundY,
-        cz,
-        true,
-      )
+      pendingFitSceneRef.current = null
+      if (controls.current) applyFitLookAt(controls.current, plan.lookAt)
     }
 
     emitter.on('camera-controls:capture', handleNodeCapture)
@@ -1440,7 +1481,22 @@ export const CustomCameraControls = ({ paused = false }: { paused?: boolean }) =
       emitter.off('camera-controls:orbit-ccw', handleOrbitCCW)
       emitter.off('camera-controls:fit-scene', handleFitScene)
     }
-  }, [camera, cancelPoseApplication, focusNode, isPreviewMode, isFirstPersonMode])
+  }, [
+    camera,
+    cancelPoseApplication,
+    flushPendingFitScene,
+    focusNode,
+    isPreviewMode,
+    isFirstPersonMode,
+  ])
+
+  // Apply a fit that arrived while first-person (orbit unmounted). Wait one
+  // frame so CameraControls can remount and attach its ref.
+  useEffect(() => {
+    if (isFirstPersonMode || isPreviewMode || !pendingFitSceneRef.current) return
+    const frame = requestAnimationFrame(flushPendingFitScene)
+    return () => cancelAnimationFrame(frame)
+  }, [flushPendingFitScene, isFirstPersonMode, isPreviewMode])
 
   const onTransitionStart = useCallback(() => {
     cameraDraggingLifecycle.begin()

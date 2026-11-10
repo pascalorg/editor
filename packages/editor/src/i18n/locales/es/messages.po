@@ -36231,6 +36231,16 @@ msgstr "Dimensiones"
 msgid "node.wall.panel.drywall"
 msgstr "Placa de yeso"
 
+# Source-Hash: 99ae1e9f13fca0ad
+# Review: required
+# AI-Provider: claude-code
+# AI-Model: claude-opus-5-5
+# English: "End height offset"
+#: packages/nodes/src/wall/panel.tsx
+#, fuzzy
+msgid "node.wall.panel.endHeightOffset"
+msgstr "Desfase de altura en el extremo"
+
 # Source-Hash: d6ba089e1ca40cdf
 # Review: required
 # AI-Provider: claude-code

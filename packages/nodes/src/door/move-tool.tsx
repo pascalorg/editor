@@ -341,12 +341,11 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
       if (event.node.parentId !== getLevelId()) return
 
       const { side, itemRotation } = getPlacementOrientation(event)
-
       const rawLocalX = event.localPosition[0]
       if (!dragAnchor || dragAnchor.wallId !== event.node.id) {
         // Grab offset survives only on the original wall and only until the
-        // door anchors on any other host — after that every wall (the
-        // original included) centers the door under the cursor.
+        // door anchors on any other host — after that every wall (the original
+        // included) centers the door under the cursor.
         const preserveGrab = event.node.id === grabWallId
         if (!preserveGrab) grabWallId = null
         dragAnchor = {
@@ -379,7 +378,7 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
         // component lives in `snapToHalf` (itself mode-aware).
         applySnap: isMagneticSnapActive(),
       })
-      const { clampedX, clampedY, transomHeight } = clampToWall(
+      const { clampedX, clampedY, fits, transomHeight } = clampToWall(
         event.node,
         localX +
           getDoorOpeningSize(movingDoorNode).leafOffsetX *
@@ -394,17 +393,19 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
         ...movingDoorNode,
         transomHeight: transomHeight ?? movingDoorNode.transomHeight,
       })
-      const valid = !hasWallChildOverlap(
-        event.node.id,
-        useScene.getState().nodes,
-        clampedX -
-          getDoorOpeningSize(movingDoorNode).leafOffsetX *
-            openingHostFacing({ rotation: [0, itemRotation, 0] }),
-        clampedY + (fittedSize.height - movingDoorNode.height) / 2,
-        fittedSize.width,
-        fittedSize.height,
-        movingDoorNode.id,
-      )
+      const valid =
+        fits &&
+        !hasWallChildOverlap(
+          event.node.id,
+          useScene.getState().nodes,
+          clampedX -
+            getDoorOpeningSize(movingDoorNode).leafOffsetX *
+              openingHostFacing({ rotation: [0, itemRotation, 0] }),
+          clampedY + (fittedSize.height - movingDoorNode.height) / 2,
+          fittedSize.width,
+          fittedSize.height,
+          movingDoorNode.id,
+        )
 
       return {
         wallNode: event.node,

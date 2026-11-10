@@ -13,6 +13,7 @@ import {
   pointOnPolygonBoundary,
   wallOverlapsSlabFootprint,
 } from '../systems/slab/slab-support'
+import { getWallChordFractionAt } from '../systems/wall/wall-curve'
 import { resolveWallTop } from '../systems/wall/wall-top'
 import { DEFAULT_LEVEL_HEIGHT } from './level-height'
 
@@ -536,6 +537,7 @@ export function getWallTop(
   levelId: string,
   nodes: Record<AnyNodeId, AnyNode>,
   electedBase: number,
+  t: number,
 ): number {
   const level = nodes[levelId as LevelNode['id']]
   const authoredStoreyHeight = level?.type === 'level' ? (level.height ?? null) : null
@@ -544,7 +546,25 @@ export function getWallTop(
     getWallPlaneTop(wall, levelId, nodes),
     electedBase,
     authoredStoreyHeight,
+    t,
   )
+}
+
+/**
+ * The lowest point of {@link getWallTop} over arc-length stations `[left, right]`. A sloped top is
+ * linear along the chord (the frame the viewer slopes the extrusion in), so it is lowest at one end.
+ */
+export function getWallTopOver(
+  wall: WallNode,
+  levelId: string,
+  nodes: Record<AnyNodeId, AnyNode>,
+  electedBase: number,
+  left: number,
+  right: number,
+): number {
+  const at = (station: number) =>
+    getWallTop(wall, levelId, nodes, electedBase, getWallChordFractionAt(wall, station))
+  return Math.min(at(left), at(right))
 }
 
 export function getWallCoveringSlabUnderside(

@@ -9,7 +9,7 @@ import {
   WINDOW_STYLES,
   type WindowStyle,
 } from '../building/opening-style-presets'
-import { doorFacing, resolveWallOpeningCeiling } from '../building/wall-openings'
+import { doorFacing, wallOpeningCeilingOver } from '../building/wall-openings'
 import {
   NEW_WINDOW_FRAME_THICKNESS,
   windowTakesStyle,
@@ -1079,8 +1079,12 @@ export function authorScene(
         }
         if (o.kind === 'door') {
           const wallHeight =
-            resolveWallOpeningCeiling(node, draft) -
-            (node.wallType === 'curtain' ? getCurtainWallConfig(node).perimeterWidth : 0)
+            wallOpeningCeilingOver(
+              node,
+              draft,
+              o.along - size.width / 2,
+              o.along + size.width / 2,
+            ) - (node.wallType === 'curtain' ? getCurtainWallConfig(node).perimeterWidth : 0)
           if (o.sill + size.height > wallHeight + 1e-6) {
             defect(
               id,

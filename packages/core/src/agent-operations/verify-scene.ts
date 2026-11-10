@@ -503,7 +503,10 @@ export const verifyScene: AgentOperation<VerifySceneInput | undefined> = (
   for (const level of levels) {
     for (const wall of ofType(onLevel(level.levelId), 'wall')) {
       const base = wallSupportForNodes(wall, nodes).elevation
-      const wallTop = getWallTop(wall, level.levelId, nodes, base)
+      const wallTop = Math.max(
+        getWallTop(wall, level.levelId, nodes, base, 0),
+        getWallTop(wall, level.levelId, nodes, base, 1),
+      )
       for (const { slab, top: slabTop, underside: slabUnderside } of getWallCoveringSlabs(
         wall,
         level.levelId,

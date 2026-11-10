@@ -365,15 +365,17 @@ const DoorTool: React.FC = () => {
       })
       const clampedX = cut.clampedX
       const clampedY = cut.clampedY
-      const valid = !hasWallChildOverlap(
-        wall.id,
-        useScene.getState().nodes,
-        cut.clampedX - offset,
-        cut.clampedY + (fittedSize.height - height) / 2,
-        fittedSize.width,
-        fittedSize.height,
-        ignoreId,
-      )
+      const valid =
+        cut.fits &&
+        !hasWallChildOverlap(
+          wall.id,
+          useScene.getState().nodes,
+          cut.clampedX - offset,
+          cut.clampedY + (fittedSize.height - height) / 2,
+          fittedSize.width,
+          fittedSize.height,
+          ignoreId,
+        )
       return { clampedX, clampedY, valid, transomHeight: cut.transomHeight }
     }
 

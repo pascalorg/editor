@@ -1,12 +1,17 @@
 import { beforeEach, expect, test } from 'bun:test'
 import { emitter } from '@pascal-app/core'
-import { useKeyboard } from '../../hooks/use-keyboard'
+import { cancelActiveTool, useKeyboard } from '../../hooks/use-keyboard'
 import useEditor from '../../store/use-editor'
-import { placementTypingLengthOptions, usePlacementTyping } from '../../store/use-placement-typing'
+import {
+  PLACEMENT_TYPING_LENGTH_ANGLE,
+  placementTypingLengthOptions,
+  usePlacementTyping,
+} from '../../store/use-placement-typing'
 import { sceneLayout } from '../../store/view-layout'
 import { withSelectionHarness } from '../../test-utils/selection-harness'
 import type { WallPlanPoint } from '../tools/wall/wall-drafting'
 import {
+  endFloorplanWallTypingOnCancel,
   type FloorplanWallTypingDraft,
   installFloorplanWallTypingKeys,
 } from './floorplan-wall-typing-keys'
@@ -103,5 +108,45 @@ test('Enter commits the pointer the typed fields re-project, only in 2D-only vie
       uninstall()
       usePlacementTyping.getState().clear()
     }
+  })
+})
+
+test('in 2D-only view a cancel from any source first ends the typed session, then the draft', async () => {
+  await withSelectionHarness(async () => {
+    useEditor.getState().setViewLayout(sceneLayout('2d'))
+    useEditor.getState().armToolMode({ mode: 'build', tool: 'wall' })
+    let draftKept = true
+    // The plan's own `tool:cancel` handler.
+    const onCancel = () => {
+      if (endFloorplanWallTypingOnCancel()) return
+      draftKept = false
+    }
+    emitter.on('tool:cancel', onCancel)
+    try {
+      usePlacementTyping.getState().begin({ labels: PLACEMENT_TYPING_LENGTH_ANGLE })
+      usePlacementTyping.getState().append('3')
+
+      // The path ⌘Z takes mid-draft, not a keydown the plan sees itself.
+      expect(cancelActiveTool()).toBe(true)
+      expect(usePlacementTyping.getState().isActive).toBe(false)
+      expect(draftKept).toBe(true)
+      expect(useEditor.getState().mode).toBe('build')
+      expect(useEditor.getState().tool).toBe('wall')
+
+      cancelActiveTool()
+      expect(draftKept).toBe(false)
+    } finally {
+      emitter.off('tool:cancel', onCancel)
+    }
+  })
+})
+
+test('in split view the typed session and its cancel stay with the 3D wall tool', async () => {
+  await withSelectionHarness(async () => {
+    useEditor.getState().setViewLayout(sceneLayout('split'))
+    useEditor.getState().armToolMode({ mode: 'build', tool: 'wall' })
+    usePlacementTyping.getState().begin({ labels: PLACEMENT_TYPING_LENGTH_ANGLE })
+    expect(endFloorplanWallTypingOnCancel()).toBe(true)
+    expect(usePlacementTyping.getState().isActive).toBe(true)
   })
 })

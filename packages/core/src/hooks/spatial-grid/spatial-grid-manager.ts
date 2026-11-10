@@ -342,18 +342,26 @@ export class SpatialGridManager {
     return this.wallGrids.get(levelId)!
   }
 
+  private getWall(wallId: string): WallNode | undefined {
+    const fromScene = this.source.nodes()[wallId as AnyNodeId]
+    if (fromScene && fromScene.type === 'wall') {
+      this.walls.set(wallId, fromScene as WallNode)
+      return fromScene as WallNode
+    }
+    return this.walls.get(wallId)
+  }
+
   private getWallLength(wallId: string): number {
-    const wall = this.walls.get(wallId)
+    const wall = this.getWall(wallId)
     if (!wall) return 0
     const dx = wall.end[0] - wall.start[0]
     const dy = wall.end[1] - wall.start[1]
-    return Math.sqrt(dx * dx + dy * dy)
+    return Math.hypot(dx, dy)
   }
 
-  private getWallHeight(wallId: string): number {
-    const wall = this.walls.get(wallId)
+  private getWallHeight(wallId: string, t: number): number {
+    const wall = this.getWall(wallId)
     if (!wall) return 0
-
     const nodes = this.source.nodes()
     const levelId = resolveNodeLevelId(wall, nodes)
     const support = this.getSlabSupportForWall(
@@ -367,7 +375,7 @@ export class SpatialGridManager {
       wall.supportOffset,
       wall.justification,
     )
-    return getWallTop(wall, levelId, nodes, support.elevation) - support.elevation
+    return getWallTop(wall, levelId, nodes, support.elevation, t) - support.elevation
   }
 
   private getCeilingGrid(ceilingId: string): SpatialGrid {
@@ -755,10 +763,17 @@ export class SpatialGridManager {
     if (wallLength === 0) {
       return { valid: false, conflictIds: [] }
     }
-    const wallHeight = this.getWallHeight(wallId)
+    const [itemWidth, itemHeight] = dimensions
     // Convert local X position to parametric t (0-1)
     const tCenter = localX / wallLength
-    const [itemWidth, itemHeight] = dimensions
+    const halfW = itemWidth / wallLength / 2
+    const tStart = Math.max(0, Math.min(1, tCenter - halfW))
+    const tEnd = Math.max(0, Math.min(1, tCenter + halfW))
+    const hStart = this.getWallHeight(wallId, tStart)
+    const hEnd = this.getWallHeight(wallId, tEnd)
+    const hCenter = this.getWallHeight(wallId, tCenter)
+    const wallHeight = Math.min(hStart, hEnd, hCenter)
+
     const baseResult = this.getWallGrid(levelId).canPlaceOnWall(
       wallId,
       wallLength,
@@ -1379,10 +1394,15 @@ export function getWallBaseElevationForNodes(
  * value always agrees with the rendered wall. One shared resolver for the
  * editor overlays (measurement label, action menu, side handles) that used
  * to copy this derivation locally.
+ *
+ * `t` (0 at the start, 1 at the end) picks a point on a sloped top. Without it
+ * the lower end answers: the height the whole wall clears, which is what
+ * plugins pinned to the public API (written before sloped tops) test against.
  */
 export function getWallEffectiveHeightForNodes(
   wall: WallNode,
   nodes: Record<string, AnyNode>,
+  t?: number,
 ): number {
   const levelId = resolveNodeLevelId(wall, nodes)
   const support = activeSpatialGrid().getSlabSupportForWall(
@@ -1396,5 +1416,12 @@ export function getWallEffectiveHeightForNodes(
     wall.supportOffset,
     wall.justification,
   )
-  return getWallTop(wall, levelId, nodes, support.elevation) - support.elevation
+  const top =
+    t === undefined
+      ? Math.min(
+          getWallTop(wall, levelId, nodes, support.elevation, 0),
+          getWallTop(wall, levelId, nodes, support.elevation, 1),
+        )
+      : getWallTop(wall, levelId, nodes, support.elevation, t)
+  return top - support.elevation
 }

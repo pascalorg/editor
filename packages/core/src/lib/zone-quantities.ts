@@ -329,7 +329,7 @@ export function deriveZoneQuantityReport(
       0,
       sceneNodes,
     )
-    return getWallTop(wall, levelId ?? '', sceneNodes, support.elevation) - support.elevation
+    return getWallTop(wall, levelId ?? '', sceneNodes, support.elevation, 0.5) - support.elevation
   }
   const edgeLengths = [zone.polygon, ...(zone.holes ?? [])].flatMap((ring) =>
     ring.map((start, index) => {

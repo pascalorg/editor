@@ -46,7 +46,7 @@ export function wallResolvedHeight(nodes: SceneNodes, wall: WallNode): number {
     nodes as Record<AnyNodeId, AnyNode>,
   )
   return (
-    getWallTop(wall, levelId, nodes as Record<AnyNodeId, AnyNode>, support.elevation) -
+    getWallTop(wall, levelId, nodes as Record<AnyNodeId, AnyNode>, support.elevation, 0) -
     support.elevation
   )
 }
